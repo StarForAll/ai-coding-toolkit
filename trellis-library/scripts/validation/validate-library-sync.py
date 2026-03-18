@@ -437,9 +437,9 @@ def validate_relations(
                 if source_mtime > target_mtime:
                     add_finding(
                         findings,
-                        "WARN",
+                        "INFO",
                         "stale-related-asset",
-                        f"Target asset appears older than source for review-on-change relation",
+                        "Target asset appears older than source for review-on-change relation; mtime-only drift is informational",
                         details={"from": source, "to": target},
                     )
 

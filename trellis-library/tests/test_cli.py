@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import shutil
 import tempfile
@@ -80,6 +81,19 @@ class TrellisLibraryCliTests(unittest.TestCase):
             result.stdout,
             msg=result.stdout + result.stderr,
         )
+
+    def test_validate_command_does_not_fail_on_mtime_only_related_asset_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            library_root = self.create_library_copy(temp_root)
+            source_path = library_root / "specs/universal-domains/contracts/api-contracts"
+            target_path = library_root / "templates/universal-domains/contracts/api-contract-template.md"
+
+            stale_target_time = source_path.stat().st_mtime - 120
+            os.utime(target_path, (stale_target_time, stale_target_time))
+
+            result = self.run_cli("validate", "--library-root", str(library_root), "--strict-warnings")
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
     def test_assemble_command_runs_dry_run(self) -> None:
         with tempfile.TemporaryDirectory() as target_dir:
