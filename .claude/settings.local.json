@@ -44,7 +44,12 @@
       "Bash(do)",
       "Bash(echo \"=== $f \\(last 5 lines\\) ===\")",
       "Read(//ops/projects/personal/ai-coding-toolkit/**)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(gh run:*)",
+      "Bash(gh api:*)",
+      "mcp__grok-search__web_search",
+      "mcp__exa-pool__exa_answer",
+      "Bash(/ops/softwares/python/bin/python3 --version && python3 --version 2>/dev/null || echo \"no python3 in PATH\")"
     ]
   }
 }

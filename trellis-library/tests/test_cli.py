@@ -9,7 +9,11 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PYTHON = "/ops/softwares/python/bin/python3"
+PYTHON = (
+    "/ops/softwares/python/bin/python3"
+    if Path("/ops/softwares/python/bin/python3").exists()
+    else shutil.which("python3") or shutil.which("python")
+)
 CLI = REPO_ROOT / "trellis-library" / "cli.py"
 GO_PACKAGE_ASSET = "spec.technologies.languages.go-package-structure"
 GO_PACKAGE_OVERVIEW = (
