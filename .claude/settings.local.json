@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3:*)",
+      "mcp__deepwiki__ask_question",
+      "mcp__exa-pool__exa_search",
+      "WebFetch(domain:docs.augmentcode.com)",
+      "mcp__grok-search__web_fetch",
+      "Bash(ls:*)",
+      "Bash(/ops/softwares/python/bin/python3 /ops/projects/personal/ai-coding-toolkit/trellis-library/scripts/validation/validate-library-sync.py --help 2>&1 | head -20)",
+      "Bash(/ops/softwares/python/bin/python3 /ops/projects/personal/ai-coding-toolkit/trellis-library/scripts/validation/validate-library-sync.py 2>&1 | tail -30)",
+      "Bash(/ops/softwares/python/bin/python3 /ops/projects/personal/ai-coding-toolkit/trellis-library/scripts/assembly/assemble-init-set.py --help 2>&1)",
+      "Bash(/ops/softwares/python/bin/python3 /ops/projects/personal/ai-coding-toolkit/trellis-library/scripts/assembly/assemble-init-set.py --target /tmp/test-target --pack pack.go-service-foundation --dry-run 2>&1)"
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "trellis-library/manifest/library-manifest.schema.json",
+  "title": "Trellis Library Manifest",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "version",
+    "library",
+    "policies",
+    "assets",
+    "relations",
+    "packs"
+  ]
+}

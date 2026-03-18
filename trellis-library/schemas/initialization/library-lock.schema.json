@@ -1,0 +1,371 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "trellis-library/schemas/initialization/library-lock.schema.json",
+  "title": "Trellis Library Lock",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "version",
+    "library",
+    "project",
+    "selection",
+    "imports",
+    "compiled",
+    "sync",
+    "history"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "library": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "id",
+        "source",
+        "source_path",
+        "manifest_version",
+        "manifest_checksum",
+        "imported_at"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "local",
+            "git",
+            "remote"
+          ]
+        },
+        "source_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "manifest_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "manifest_checksum": {
+          "type": "string"
+        },
+        "imported_at": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "target_root",
+        "trellis_root"
+      ],
+      "properties": {
+        "target_root": {
+          "type": "string",
+          "minLength": 1
+        },
+        "trellis_root": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "packs",
+        "assets"
+      ],
+      "properties": {
+        "packs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "imports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "asset_id",
+          "type",
+          "source_path",
+          "target_path",
+          "import_mode",
+          "source_version",
+          "source_checksum",
+          "imported_at",
+          "upstream_sync",
+          "local_state",
+          "last_local_scan_at",
+          "last_local_checksum",
+          "contribution",
+          "relations",
+          "notes"
+        ],
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "spec",
+              "template",
+              "checklist",
+              "example",
+              "schema",
+              "script"
+            ]
+          },
+          "source_path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "target_path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "import_mode": {
+            "type": "string",
+            "enum": [
+              "file",
+              "directory"
+            ]
+          },
+          "source_version": {
+            "type": "string"
+          },
+          "source_checksum": {
+            "type": "string"
+          },
+          "imported_at": {
+            "type": "string",
+            "minLength": 1
+          },
+          "upstream_sync": {
+            "type": "string",
+            "enum": [
+              "follow-upstream",
+              "pinned",
+              "local-only"
+            ]
+          },
+          "local_state": {
+            "type": "string",
+            "enum": [
+              "clean",
+              "modified",
+              "diverged",
+              "missing"
+            ]
+          },
+          "last_local_scan_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_local_checksum": {
+            "type": "string"
+          },
+          "contribution": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "eligible",
+              "mode",
+              "reviewed",
+              "proposed",
+              "last_proposed_at"
+            ],
+            "properties": {
+              "eligible": {
+                "type": "boolean"
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "selective",
+                  "full"
+                ]
+              },
+              "reviewed": {
+                "type": "boolean"
+              },
+              "proposed": {
+                "type": "boolean"
+              },
+              "last_proposed_at": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "relations": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "depends_on",
+              "sync_targets"
+            ],
+            "properties": {
+              "depends_on": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "sync_targets": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "compiled": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "enabled",
+        "last_built_at",
+        "outputs"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "last_built_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "outputs": {
+          "type": "array"
+        }
+      }
+    },
+    "sync": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "last_sync_at",
+        "last_sync_status",
+        "last_diff_at",
+        "last_diff_status",
+        "local_overrides"
+      ],
+      "properties": {
+        "last_sync_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last_sync_status": {
+          "type": "string",
+          "enum": [
+            "never",
+            "pass",
+            "warn",
+            "fail"
+          ]
+        },
+        "last_diff_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "last_diff_status": {
+          "type": "string",
+          "enum": [
+            "never",
+            "pass",
+            "warn",
+            "fail"
+          ]
+        },
+        "local_overrides": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "at",
+          "action",
+          "asset_id",
+          "status",
+          "notes"
+        ],
+        "properties": {
+          "at": {
+            "type": "string",
+            "minLength": 1
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "import",
+              "sync-down",
+              "diff",
+              "propose-upstream",
+              "rebuild-compiled",
+              "remove"
+            ]
+          },
+          "asset_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

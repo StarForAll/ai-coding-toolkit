@@ -1,0 +1,200 @@
+# Trellis Library
+
+Reusable source assets for Trellis-based project initialization.
+
+This directory is the source library, not a target project's live `.trellis/`
+workspace. It exists so future Trellis projects can selectively take reusable
+specs, templates, checklists, and pack definitions, then initialize their own
+project-local Trellis assets from a stable source of truth.
+
+## Purpose
+
+This library is designed to solve three related problems:
+
+* keep reusable Trellis assets in one maintained source directory
+* let different target projects select only the assets they actually need
+* support controlled downstream sync and selective upstream contribution
+
+The library keeps source assets split and atomic. Target projects should import
+complete concern directories or registered files rather than manually copying
+fragments.
+
+## Directory Map
+
+* `specs/`
+  Reusable normative rules.
+* `templates/`
+  Reusable artifact and document templates.
+* `checklists/`
+  Reusable execution and review checklists.
+* `examples/`
+  Example assembled packs and selection references.
+* `schemas/`
+  Machine-readable schemas for manifest and lock-file validation.
+* `scripts/`
+  Automation for selection, assembly, validation, downstream sync, and upstream
+  proposal flow.
+* `manifest.yaml`
+  Source-library registry for all registered assets, relations, and packs.
+* `taxonomy.md`
+  Short taxonomy reference for the library structure.
+
+## Specs Taxonomy
+
+`specs/` is organized by four axes:
+
+* `specs/universal-domains/`
+  Stable cross-project rules such as requirements, governance, contracts,
+  security, testing, verification, AI execution, context engineering, and
+  delivery operations.
+* `specs/scenarios/`
+  Process situations such as debugging, refactoring, release verification,
+  rollback decisions, migration safety, and handoff readiness.
+* `specs/platforms/`
+  Runtime-platform rules such as browser behavior and backend-service runtime
+  constraints.
+* `specs/technologies/`
+  Language-, framework-, runtime-, and tool-specific rules.
+
+Boundary rule:
+
+* `platforms/` and `technologies/` should not directly cross-reference each
+  other.
+* Common reusable rules should move up into `specs/universal-domains/`.
+
+## Asset Shape
+
+This library uses two source-asset shapes:
+
+* complex concern directories
+  Usually a directory with files such as `overview.md`,
+  `scope-boundary.md`, `normative-rules.md`, and `verification.md`
+* simple single-file assets
+  Usually a standalone template, checklist, schema, example, or script
+
+Target projects should treat the concern directory as the smallest import unit
+for complex specs.
+
+## How Target Projects Use This Library
+
+Recommended flow:
+
+1. Select assets or packs from `manifest.yaml`.
+2. Assemble them into the target project's `.trellis/` directory.
+3. Write the target project's `.trellis/library-lock.yaml`.
+4. Optionally generate compiled views for reading convenience.
+5. Use controlled downstream sync to receive source-library updates.
+6. Use diff and proposal workflows for selective upstream contribution.
+
+Source-library assets remain the source of truth. Generated compiled views are
+derived outputs and should not be manually maintained.
+
+## Recommended Pack Guide
+
+Use packs as a starting point, then add or remove individual assets based on the
+target project's real constraints.
+
+Suggested entry points:
+
+* requirements-heavy discovery work
+  `pack.requirements-discovery-foundation`
+* security and review focused delivery
+  `pack.security-and-review-foundation`
+* architecture and data shaping work
+  `pack.architecture-and-data-foundation`
+* debugging, bugfix, and refactoring heavy work
+  `pack.debugging-and-refactoring-workbench`
+* general API-first backend service
+  `pack.api-service-minimal`
+* incident-ready backend service
+  `pack.incident-ready-service`
+* service with frequent cross-layer changes
+  `pack.cross-layer-change-heavy-service`
+* AI-agent or multi-agent workflow project
+  `pack.ai-agent-project-foundation`
+* TypeScript web-platform baseline
+  `pack.typescript-web-platform-foundation`
+* Vue web application baseline
+  `pack.vue-web-app-foundation`
+* React web application baseline
+  `pack.react-web-app-foundation`
+* Java Spring service baseline
+  `pack.java-spring-service-foundation`
+* Python backend baseline
+  `pack.python-backend-foundation`
+* Go service baseline
+  `pack.go-service-foundation`
+
+For concrete pack composition examples, see:
+
+* `examples/assembled-packs/`
+
+## Sync Model
+
+This library supports two directions:
+
+* downstream sync
+  `trellis-library` -> target Trellis project
+* upstream contribution
+  target Trellis project -> proposal -> controlled apply back into
+  `trellis-library`
+
+The expected control points are:
+
+* `manifest.yaml`
+  source-library registry
+* `.trellis/library-lock.yaml`
+  target-project import and state record
+* validation scripts
+  structural and sync health checks
+* proposal / apply scripts
+  controlled upstream contribution flow
+
+Any meaningful change to the library's sync model, asset shape, selection flow,
+or directory semantics should also update this root `README.md` so the library's
+entry documentation stays aligned with actual behavior.
+
+## Main Scripts
+
+Important automation entry points:
+
+* `scripts/validation/validate-library-sync.py`
+  Validate source-library registration and sync consistency.
+* `scripts/assembly/assemble-init-set.py`
+  Assemble selected assets into a target project.
+* `scripts/assembly/write-library-lock.py`
+  Write the target project's `.trellis/library-lock.yaml`.
+* `scripts/sync/sync-library-assets.py`
+  Perform downstream sync into a target project.
+* `scripts/sync/diff-library-assets.py`
+  Compare target-project local assets against source-library assets.
+* `scripts/sync/propose-library-sync.py`
+  Generate controlled upstream proposals.
+* `scripts/sync/apply-library-sync.py`
+  Apply approved upstream proposals back into the source library.
+
+## Validation
+
+Use the manifest as the registry and run the validator before claiming library
+health:
+
+```bash
+/ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --strict-warnings
+```
+
+Current validation schemas live under:
+
+* `schemas/manifest/`
+* `schemas/initialization/`
+
+## Usage Notes
+
+* Register assets in `manifest.yaml`; do not rely on ad hoc files.
+* Keep source assets atomic and reusable; avoid project-private wording in the
+  library.
+* When changing taxonomy, sync flow, pack strategy, or script responsibilities,
+  update this root `README.md` in the same change set.
+* When a target project improves an imported asset, use diff and proposal
+  workflows instead of directly overwriting source assets.
+* Keep examples and packs aligned so selection guidance matches actual
+  registered assets.
