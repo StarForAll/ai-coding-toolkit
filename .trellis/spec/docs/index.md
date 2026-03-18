@@ -1,12 +1,24 @@
-# Documentation Specification Guidelines
+# Project Documentation Guidelines
 
-> How to write and organize documentation in this project.
+> Project-local rules for writing and organizing documentation in this repository.
 
 ---
 
 ## Overview
 
-This project contains various documentation types: READMEs, guides, specifications, and reference materials. This guide ensures consistency across all documentation.
+This directory is the **project-local documentation layer**.
+It complements imported governance specs under `.trellis/spec/universal-domains/`
+instead of replacing them.
+
+Use the imported governance specs for:
+- requirement clarity and scope decisions
+- acceptance criteria and verification expectations
+- change management and evidence requirements
+
+Use this document for:
+- README and repository-document structure
+- formatting and linking conventions
+- documentation maintenance habits specific to this repo
 
 ---
 
@@ -19,6 +31,16 @@ This project contains various documentation types: READMEs, guides, specificatio
 | Specifications | `specs/`, `docs/specs/` | Technical specifications |
 | References | `references/`, `docs/refs/` | API references, manuals |
 | Changelogs | `CHANGELOG.md` | Version history |
+
+---
+
+## Boundary
+
+Do not duplicate generic planning or governance rules here if they already live
+under `.trellis/spec/universal-domains/`.
+
+This directory should stay focused on repository-specific documentation
+conventions and examples.
 
 ---
 

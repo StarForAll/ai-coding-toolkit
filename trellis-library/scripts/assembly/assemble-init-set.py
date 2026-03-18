@@ -36,6 +36,25 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def target_relative_path(asset: dict[str, Any]) -> Path:
+    source_rel = Path(asset["path"])
+    if asset["type"] == "spec":
+        parts = list(source_rel.parts)
+        if parts and parts[0] == "specs":
+            parts[0] = "spec"
+        return Path(*parts)
+    return source_rel
+
+
+def should_auto_include_dependency(asset: dict[str, Any], include_examples: bool) -> bool:
+    asset_type = asset["type"]
+    if asset_type in COPYABLE_TYPES:
+        return True
+    if include_examples and asset_type == "example":
+        return True
+    return False
+
+
 def copy_asset(library_root: Path, target_root: Path, asset: dict[str, Any], include_examples: bool, dry_run: bool) -> None:
     asset_type = asset["type"]
     if asset_type not in COPYABLE_TYPES and not (include_examples and asset_type == "example"):
@@ -43,7 +62,7 @@ def copy_asset(library_root: Path, target_root: Path, asset: dict[str, Any], inc
 
     source = library_root / asset["path"]
     if asset_type in COPYABLE_TYPES:
-        destination = target_root / ".trellis" / asset["path"]
+        destination = target_root / ".trellis" / target_relative_path(asset)
     else:
         destination = target_root / ".trellis" / "library-assets" / asset["path"]
 
@@ -60,21 +79,24 @@ def copy_asset(library_root: Path, target_root: Path, asset: dict[str, Any], inc
         shutil.copy2(source, destination)
 
 
-def expand_selection(manifest: dict[str, Any], pack_ids: list[str], asset_ids: list[str]) -> list[str]:
+def expand_selection(manifest: dict[str, Any], pack_ids: list[str], asset_ids: list[str], include_examples: bool) -> list[str]:
     asset_map = {asset["id"]: asset for asset in manifest.get("assets", []) if isinstance(asset, dict) and "id" in asset}
     pack_map = {pack["id"]: pack for pack in manifest.get("packs", []) if isinstance(pack, dict) and "id" in pack}
+    explicitly_selected = set(asset_ids)
 
     ordered: list[str] = []
     seen: set[str] = set()
 
-    def add_asset(asset_id: str) -> None:
+    def add_asset(asset_id: str, is_dependency: bool = False) -> None:
         if asset_id in seen:
             return
         asset = asset_map.get(asset_id)
         if not asset:
             raise SystemExit(f"Unknown asset id: {asset_id}")
+        if is_dependency and not should_auto_include_dependency(asset, include_examples):
+            return
         for dependency in asset.get("dependencies", []) or []:
-            add_asset(dependency)
+            add_asset(dependency, is_dependency=True)
         seen.add(asset_id)
         ordered.append(asset_id)
 
@@ -98,7 +120,7 @@ def main() -> int:
     manifest = load_yaml(library_root / "manifest.yaml")
     asset_map = {asset["id"]: asset for asset in manifest.get("assets", []) if isinstance(asset, dict) and "id" in asset}
 
-    selected = expand_selection(manifest, args.pack, args.asset)
+    selected = expand_selection(manifest, args.pack, args.asset, args.include_examples)
     if not selected:
         raise SystemExit("No assets selected. Use --pack and/or --asset.")
 

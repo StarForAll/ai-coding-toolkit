@@ -15,6 +15,9 @@ from typing import Any
 import yaml
 
 
+COPYABLE_TYPES = {"spec", "template", "checklist"}
+
+
 def iso_now() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
@@ -96,6 +99,56 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def target_relative_path(asset: dict[str, Any]) -> Path:
+    source_rel = Path(asset["path"])
+    if asset["type"] == "spec":
+        parts = list(source_rel.parts)
+        if parts and parts[0] == "specs":
+            parts[0] = "spec"
+        return Path(*parts)
+    return source_rel
+
+
+def should_auto_include_dependency(asset: dict[str, Any]) -> bool:
+    return asset["type"] in COPYABLE_TYPES
+
+
+def expand_selected_asset_ids(
+    asset_map: dict[str, dict[str, Any]],
+    pack_map: dict[str, dict[str, Any]],
+    selected_asset_ids: list[str],
+    selected_pack_ids: list[str],
+) -> list[str]:
+    explicit_ids = list(dict.fromkeys(selected_asset_ids))
+    ordered: list[str] = []
+    seen: set[str] = set()
+
+    def add_asset(asset_id: str, is_dependency: bool = False) -> None:
+        if asset_id in seen:
+            return
+        asset = asset_map.get(asset_id)
+        if not asset:
+            raise SystemExit(f"Unknown asset id: {asset_id}")
+        if is_dependency and not should_auto_include_dependency(asset):
+            return
+        for dependency in asset.get("dependencies", []) or []:
+            add_asset(dependency, is_dependency=True)
+        seen.add(asset_id)
+        ordered.append(asset_id)
+
+    for pack_id in selected_pack_ids:
+        pack = pack_map.get(pack_id)
+        if not pack:
+            raise SystemExit(f"Unknown pack id: {pack_id}")
+        for asset_id in pack.get("selection", {}).get("assets", []):
+            add_asset(asset_id)
+
+    for asset_id in explicit_ids:
+        add_asset(asset_id)
+
+    return ordered
+
+
 def main() -> int:
     args = parse_args()
     library_root = Path(args.library_root).resolve()
@@ -109,13 +162,12 @@ def main() -> int:
 
     selected_asset_ids = list(dict.fromkeys(args.asset))
     selected_pack_ids = list(dict.fromkeys(args.pack))
-
-    for pack_id in selected_pack_ids:
-        pack = pack_map.get(pack_id)
-        if not pack:
-            raise SystemExit(f"Unknown pack id: {pack_id}")
-        selected_asset_ids.extend(pack.get("selection", {}).get("assets", []))
-    selected_asset_ids = list(dict.fromkeys(selected_asset_ids))
+    selected_asset_ids = expand_selected_asset_ids(
+        asset_map,
+        pack_map,
+        selected_asset_ids,
+        selected_pack_ids,
+    )
 
     imports: list[dict[str, Any]] = []
     for asset_id in selected_asset_ids:
@@ -127,7 +179,7 @@ def main() -> int:
         source_path = library_root / source_rel
 
         if asset["type"] in {"spec", "template", "checklist"}:
-            target_path = target_root / ".trellis" / source_rel
+            target_path = target_root / ".trellis" / target_relative_path(asset)
         else:
             target_path = target_root / ".trellis" / "library-assets" / source_rel
 

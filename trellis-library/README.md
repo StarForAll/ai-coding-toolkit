@@ -90,6 +90,8 @@ Recommended flow:
 
 1. Select assets or packs from `manifest.yaml`.
 2. Assemble them into the target project's `.trellis/` directory.
+   Spec assets are copied into `.trellis/spec/`; template and checklist assets
+   keep their source-relative paths under `.trellis/`.
 3. Write the target project's `.trellis/library-lock.yaml`.
 4. Optionally generate compiled views for reading convenience.
 5. Use controlled downstream sync to receive source-library updates.

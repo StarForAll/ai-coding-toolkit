@@ -20,6 +20,10 @@ GO_PACKAGE_ASSET = "spec.technologies.languages.go-package-structure"
 GO_PACKAGE_OVERVIEW = (
     "specs/technologies/languages/go/package-structure/overview.md"
 )
+GO_PACKAGE_TARGET_OVERVIEW = (
+    "spec/technologies/languages/go/package-structure/overview.md"
+)
+GO_PACKAGE_TARGET_DIR = "spec/technologies/languages/go/package-structure"
 
 
 class TrellisLibraryCliTests(unittest.TestCase):
@@ -111,6 +115,75 @@ class TrellisLibraryCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("COPY", result.stdout)
         self.assertIn("DRY RUN: lock file not written", result.stdout)
+        self.assertIn(".trellis/spec/", result.stdout)
+        self.assertNotIn(".trellis/specs/", result.stdout)
+
+    def test_assemble_command_writes_specs_into_dot_trellis_spec_and_records_lock_path(self) -> None:
+        with tempfile.TemporaryDirectory() as target_dir:
+            result = self.run_cli(
+                "assemble",
+                "--library-root",
+                "trellis-library",
+                "--target",
+                target_dir,
+                "--asset",
+                GO_PACKAGE_ASSET,
+            )
+
+            target_file = Path(target_dir) / ".trellis" / GO_PACKAGE_TARGET_OVERVIEW
+            legacy_target_file = Path(target_dir) / ".trellis" / GO_PACKAGE_OVERVIEW
+            lock_path = Path(target_dir) / ".trellis" / "library-lock.yaml"
+            lock_data = json.loads(json.dumps({}))
+            target_exists = target_file.exists()
+            legacy_exists = legacy_target_file.exists()
+            if lock_path.exists():
+                import yaml
+
+                lock_data = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertTrue(target_exists, msg=result.stdout + result.stderr)
+        self.assertFalse(legacy_exists, msg=result.stdout + result.stderr)
+        self.assertIn(
+            ".trellis/" + GO_PACKAGE_TARGET_DIR,
+            [item["target_path"] for item in lock_data["imports"]],
+        )
+
+    def test_assemble_command_does_not_auto_import_script_dependencies_for_specs(self) -> None:
+        with tempfile.TemporaryDirectory() as target_dir:
+            result = self.run_cli(
+                "assemble",
+                "--library-root",
+                "trellis-library",
+                "--target",
+                target_dir,
+                "--asset",
+                "spec.universal-domains.project-governance.library-sync-governance",
+            )
+
+            lock_path = Path(target_dir) / ".trellis" / "library-lock.yaml"
+            script_asset_path = (
+                Path(target_dir)
+                / ".trellis"
+                / "library-assets"
+                / "scripts"
+                / "validation"
+                / "validate-library-sync.py"
+            )
+            import yaml
+
+            lock_data = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertFalse(script_asset_path.exists(), msg=result.stdout + result.stderr)
+        self.assertNotIn(
+            "script.validation.validate-library-sync",
+            lock_data["selection"]["assets"],
+        )
+        self.assertFalse(
+            any(item["type"] == "script" for item in lock_data["imports"]),
+            msg=lock_data,
+        )
 
     def test_sync_downstream_mode_runs_against_assembled_target(self) -> None:
         with tempfile.TemporaryDirectory() as target_dir:
@@ -152,7 +225,7 @@ class TrellisLibraryCliTests(unittest.TestCase):
             )
             self.assertEqual(assemble.returncode, 0, msg=assemble.stdout + assemble.stderr)
 
-            target_file = Path(target_dir) / ".trellis" / GO_PACKAGE_OVERVIEW
+            target_file = Path(target_dir) / ".trellis" / GO_PACKAGE_TARGET_OVERVIEW
             original = target_file.read_text(encoding="utf-8")
             target_file.write_text(
                 original + "\nGeneralized testing note for upstream proposal coverage.\n",
@@ -193,7 +266,7 @@ class TrellisLibraryCliTests(unittest.TestCase):
             )
             self.assertEqual(assemble.returncode, 0, msg=assemble.stdout + assemble.stderr)
 
-            target_file = Path(target_dir) / ".trellis" / GO_PACKAGE_OVERVIEW
+            target_file = Path(target_dir) / ".trellis" / GO_PACKAGE_TARGET_OVERVIEW
             target_file.write_text(
                 target_file.read_text(encoding="utf-8")
                 + "\nGeneralized testing note for upstream proposal coverage.\n",
@@ -266,7 +339,7 @@ class TrellisLibraryCliTests(unittest.TestCase):
             )
             self.assertEqual(assemble.returncode, 0, msg=assemble.stdout + assemble.stderr)
 
-            target_file = target_dir / ".trellis" / GO_PACKAGE_OVERVIEW
+            target_file = target_dir / ".trellis" / GO_PACKAGE_TARGET_OVERVIEW
             appended_line = "Generalized apply-mode testing note.\n"
             target_file.write_text(
                 target_file.read_text(encoding="utf-8") + "\n" + appended_line,

@@ -50,7 +50,10 @@
       "mcp__grok-search__web_search",
       "mcp__exa-pool__exa_answer",
       "Bash(/ops/softwares/python/bin/python3 --version && python3 --version 2>/dev/null || echo \"no python3 in PATH\")",
-      "Bash(/ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --library-root trellis-library --json 2>/dev/null | /ops/softwares/python/bin/python3 -c \"\nimport json, sys\ndata = json.load\\(sys.stdin\\)\nwarnings = [f for f in data if f['level'] == 'WARN']\nprint\\(f'Warnings: {len\\(warnings\\)}'\\)\nfor w in warnings[:5]:\n    print\\(f'  {w[\\\\\"code\\\\\"]}: {w.get\\(\\\\\"path\\\\\",\\\\\"\\\\\"\\)} — {w[\\\\\"message\\\\\"][:80]}'\\)\n\" 2>&1)"
+      "Bash(/ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --library-root trellis-library --json 2>/dev/null | /ops/softwares/python/bin/python3 -c \"\nimport json, sys\ndata = json.load\\(sys.stdin\\)\nwarnings = [f for f in data if f['level'] == 'WARN']\nprint\\(f'Warnings: {len\\(warnings\\)}'\\)\nfor w in warnings[:5]:\n    print\\(f'  {w[\\\\\"code\\\\\"]}: {w.get\\(\\\\\"path\\\\\",\\\\\"\\\\\"\\)} — {w[\\\\\"message\\\\\"][:80]}'\\)\n\" 2>&1)",
+      "Bash(for layer:*)",
+      "Bash(echo \"=== $layer ===\")",
+      "Read(//ops/projects/personal/ai-coding-toolkit/.trellis/spec/$layer/**)"
     ]
   }
 }
