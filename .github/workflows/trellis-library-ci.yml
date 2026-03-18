@@ -1,0 +1,36 @@
+name: Trellis Library CI
+
+on:
+  pull_request:
+    paths:
+      - "trellis-library/**"
+      - ".github/workflows/trellis-library-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "trellis-library/**"
+      - ".github/workflows/trellis-library-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  trellis-library:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade pip PyYAML
+
+      - name: Run trellis-library CLI tests
+        run: python -m unittest trellis-library/tests/test_cli.py
+
+      - name: Run trellis-library validation
+        run: python trellis-library/scripts/validation/validate-library-sync.py --strict-warnings

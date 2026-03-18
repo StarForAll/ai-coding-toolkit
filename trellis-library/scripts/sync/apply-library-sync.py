@@ -121,8 +121,14 @@ def main() -> int:
         temp_patch_path = Path(temp_patch.name)
 
     try:
-        apply_cmd = ["git", "apply", "--directory", str(library_root), str(temp_patch_path)]
-        result = subprocess.run(apply_cmd, check=False, capture_output=True, text=True)
+        apply_cmd = ["git", "apply", str(temp_patch_path)]
+        result = subprocess.run(
+            apply_cmd,
+            check=False,
+            capture_output=True,
+            text=True,
+            cwd=library_root,
+        )
         if result.returncode != 0:
             raise SystemExit(f"git apply failed: {result.stderr.strip() or result.stdout.strip()}")
     finally:
