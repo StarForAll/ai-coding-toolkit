@@ -4112,6 +4112,170 @@ assets:
       generated: false
       notes: ""
 
+  - id: spec.platforms.android-app-lifecycle
+    type: spec
+    format: directory
+    path: specs/platforms/android/app-lifecycle
+    title: Android App Lifecycle
+    summary: Reusable Android-specific rules for lifecycle, recreation, backgrounding, and state restoration
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: android
+    concern: app-lifecycle
+    atomicity: complex
+    tags:
+      - platforms
+      - android
+      - lifecycle
+      - runtime
+    applicability:
+      project_types: []
+      lifecycle_stages:
+        - design
+        - implementation
+        - verification
+      platforms:
+        - android
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.universal-domains.verification.verification-gates
+    optional_dependencies: []
+    provides:
+      - android-lifecycle-rules
+    change_impact:
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: true
+      generated: false
+      notes: ""
+
+  - id: spec.platforms.ios-app-lifecycle
+    type: spec
+    format: directory
+    path: specs/platforms/ios/app-lifecycle
+    title: iOS App Lifecycle
+    summary: Reusable iOS-specific rules for lifecycle, suspension, restoration, and scene-driven state transitions
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: ios
+    concern: app-lifecycle
+    atomicity: complex
+    tags:
+      - platforms
+      - ios
+      - lifecycle
+      - runtime
+    applicability:
+      project_types: []
+      lifecycle_stages:
+        - design
+        - implementation
+        - verification
+      platforms:
+        - ios
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.universal-domains.verification.verification-gates
+    optional_dependencies: []
+    provides:
+      - ios-lifecycle-rules
+    change_impact:
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: true
+      generated: false
+      notes: ""
+
+  - id: spec.platforms.harmonyos-application-runtime
+    type: spec
+    format: directory
+    path: specs/platforms/harmonyos/application-runtime
+    title: HarmonyOS Application Runtime
+    summary: Reusable HarmonyOS-specific rules for runtime behavior, lifecycle transitions, and state continuity
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: harmonyos
+    concern: application-runtime
+    atomicity: complex
+    tags:
+      - platforms
+      - harmonyos
+      - runtime
+      - lifecycle
+    applicability:
+      project_types: []
+      lifecycle_stages:
+        - design
+        - implementation
+        - verification
+      platforms:
+        - harmonyos
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.universal-domains.verification.verification-gates
+    optional_dependencies: []
+    provides:
+      - harmonyos-runtime-rules
+    change_impact:
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: true
+      generated: false
+      notes: ""
+
+  - id: spec.platforms.miniapp-host-runtime
+    type: spec
+    format: directory
+    path: specs/platforms/miniapp/host-runtime
+    title: Miniapp Host Runtime
+    summary: Reusable miniapp-platform rules for host-controlled lifecycle, capability limits, and container runtime assumptions
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: miniapp
+    concern: host-runtime
+    atomicity: complex
+    tags:
+      - platforms
+      - miniapp
+      - host
+      - runtime
+    applicability:
+      project_types: []
+      lifecycle_stages:
+        - design
+        - implementation
+        - verification
+      platforms:
+        - miniapp
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.universal-domains.verification.verification-gates
+    optional_dependencies: []
+    provides:
+      - miniapp-runtime-rules
+    change_impact:
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: true
+      generated: false
+      notes: ""
+
   - id: spec.platforms.web-browser-security
     type: spec
     format: directory
@@ -5291,6 +5455,224 @@ assets:
       generated: false
       notes: ""
 
+  - id: template.platforms.desktop.runtime-assumptions-template
+    type: template
+    format: file
+    path: templates/platforms/desktop/runtime-assumptions-template.md
+    title: Desktop Runtime Assumptions Template
+    summary: Reusable template for documenting lifecycle, storage, and OS-integration assumptions in desktop applications
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: desktop
+    concern: runtime-assumptions-template
+    atomicity: simple
+    tags:
+      - desktop
+      - runtime
+      - template
+    applicability:
+      project_types:
+        - desktop-app
+      lifecycle_stages:
+        - planning
+        - design
+        - verification
+      platforms:
+        - desktop
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.desktop-shared-application-runtime
+      - spec.platforms.desktop-shared-system-integration
+    optional_dependencies: []
+    provides:
+      - desktop-runtime-assumptions-document
+    change_impact:
+      level: medium
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: false
+      generated: false
+      notes: ""
+
+  - id: template.platforms.cli.command-contract-template
+    type: template
+    format: file
+    path: templates/platforms/cli/command-contract-template.md
+    title: CLI Command Contract Template
+    summary: Reusable template for documenting command invocation, output, and exit-code expectations for CLI workflows
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: cli
+    concern: command-contract-template
+    atomicity: simple
+    tags:
+      - cli
+      - command
+      - contract
+      - template
+    applicability:
+      project_types: []
+      lifecycle_stages:
+        - planning
+        - design
+        - verification
+      platforms:
+        - cli
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.cli-command-interface
+    optional_dependencies: []
+    provides:
+      - cli-command-contract-document
+    change_impact:
+      level: medium
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: false
+      generated: false
+      notes: ""
+
+  - id: template.platforms.desktop.macos-permission-plan-template
+    type: template
+    format: file
+    path: templates/platforms/desktop/macos-permission-plan-template.md
+    title: macOS Permission Plan Template
+    summary: Reusable template for documenting permission-gated features and recovery paths on macOS
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: desktop-macos
+    concern: permission-plan-template
+    atomicity: simple
+    tags:
+      - desktop
+      - macos
+      - permissions
+      - template
+    applicability:
+      project_types:
+        - desktop-app
+      lifecycle_stages:
+        - planning
+        - design
+        - verification
+      platforms:
+        - desktop
+        - macos
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.desktop-macos-system-permissions
+    optional_dependencies: []
+    provides:
+      - macos-permission-plan-document
+    change_impact:
+      level: medium
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: false
+      generated: false
+      notes: ""
+
+  - id: template.platforms.mobile.lifecycle-state-template
+    type: template
+    format: file
+    path: templates/platforms/mobile/lifecycle-state-template.md
+    title: Mobile Lifecycle State Template
+    summary: Reusable template for documenting lifecycle-sensitive state and restoration expectations on mobile platforms
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: mobile
+    concern: lifecycle-state-template
+    atomicity: simple
+    tags:
+      - mobile
+      - lifecycle
+      - template
+    applicability:
+      project_types:
+        - mobile-app
+      lifecycle_stages:
+        - planning
+        - design
+        - verification
+      platforms:
+        - android
+        - ios
+        - harmonyos
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.android-app-lifecycle
+      - spec.platforms.ios-app-lifecycle
+    optional_dependencies:
+      - spec.platforms.harmonyos-application-runtime
+    provides:
+      - mobile-lifecycle-state-document
+    change_impact:
+      level: medium
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: false
+      generated: false
+      notes: ""
+
+  - id: template.platforms.miniapp.host-capability-matrix-template
+    type: template
+    format: file
+    path: templates/platforms/miniapp/host-capability-matrix-template.md
+    title: Miniapp Host Capability Matrix Template
+    summary: Reusable template for documenting host capabilities, restrictions, and fallback behavior in miniapp environments
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: miniapp
+    concern: host-capability-matrix-template
+    atomicity: simple
+    tags:
+      - miniapp
+      - host
+      - runtime
+      - template
+    applicability:
+      project_types:
+        - miniapp
+      lifecycle_stages:
+        - planning
+        - design
+        - verification
+      platforms:
+        - miniapp
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.miniapp-host-runtime
+    optional_dependencies: []
+    provides:
+      - miniapp-capability-matrix-document
+    change_impact:
+      level: medium
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: false
+      generated: false
+      notes: ""
+
   - id: checklist.universal-domains.contracts.api-contract-review-checklist
     type: checklist
     format: file
@@ -6052,6 +6434,343 @@ assets:
       generated: false
       notes: ""
 
+  - id: checklist.platforms.desktop.runtime-readiness-checklist
+    type: checklist
+    format: file
+    path: checklists/platforms/desktop/runtime-readiness-checklist.md
+    title: Desktop Runtime Readiness Checklist
+    summary: Review checklist aligned with shared desktop runtime and system-integration rules
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: desktop
+    concern: runtime-readiness-checklist
+    atomicity: simple
+    tags:
+      - desktop
+      - runtime
+      - checklist
+    applicability:
+      project_types:
+        - desktop-app
+      lifecycle_stages:
+        - design
+        - verification
+      platforms:
+        - desktop
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.desktop-shared-application-runtime
+      - spec.platforms.desktop-shared-system-integration
+    optional_dependencies: []
+    provides:
+      - desktop-runtime-checklist
+    change_impact:
+      level: medium
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: false
+      generated: false
+      notes: ""
+
+  - id: checklist.platforms.cli.command-interface-readiness-checklist
+    type: checklist
+    format: file
+    path: checklists/platforms/cli/command-interface-readiness-checklist.md
+    title: CLI Command Interface Readiness Checklist
+    summary: Review checklist aligned with CLI invocation, help, and exit-code behavior rules
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: cli
+    concern: command-interface-readiness-checklist
+    atomicity: simple
+    tags:
+      - cli
+      - command
+      - interface
+      - checklist
+    applicability:
+      project_types: []
+      lifecycle_stages:
+        - design
+        - verification
+      platforms:
+        - cli
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.cli-command-interface
+    optional_dependencies: []
+    provides:
+      - cli-command-interface-checklist
+    change_impact:
+      level: medium
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: false
+      generated: false
+      notes: ""
+
+  - id: checklist.platforms.desktop.macos-permission-readiness-checklist
+    type: checklist
+    format: file
+    path: checklists/platforms/desktop/macos-permission-readiness-checklist.md
+    title: macOS Permission Readiness Checklist
+    summary: Review checklist aligned with macOS permission-gated capability rules
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: desktop-macos
+    concern: permission-readiness-checklist
+    atomicity: simple
+    tags:
+      - desktop
+      - macos
+      - permissions
+      - checklist
+    applicability:
+      project_types:
+        - desktop-app
+      lifecycle_stages:
+        - design
+        - verification
+      platforms:
+        - desktop
+        - macos
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.desktop-macos-system-permissions
+    optional_dependencies: []
+    provides:
+      - macos-permission-checklist
+    change_impact:
+      level: medium
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: false
+      generated: false
+      notes: ""
+
+  - id: checklist.platforms.desktop.windows-filesystem-readiness-checklist
+    type: checklist
+    format: file
+    path: checklists/platforms/desktop/windows-filesystem-readiness-checklist.md
+    title: Windows Filesystem Readiness Checklist
+    summary: Review checklist aligned with Windows filesystem and path behavior rules
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: desktop-windows
+    concern: filesystem-readiness-checklist
+    atomicity: simple
+    tags:
+      - desktop
+      - windows
+      - filesystem
+      - checklist
+    applicability:
+      project_types:
+        - desktop-app
+      lifecycle_stages:
+        - design
+        - verification
+      platforms:
+        - desktop
+        - windows
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.desktop-windows-filesystem-and-paths
+    optional_dependencies: []
+    provides:
+      - windows-filesystem-checklist
+    change_impact:
+      level: medium
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: false
+      generated: false
+      notes: ""
+
+  - id: checklist.platforms.desktop.linux-runtime-readiness-checklist
+    type: checklist
+    format: file
+    path: checklists/platforms/desktop/linux-runtime-readiness-checklist.md
+    title: Linux Runtime Readiness Checklist
+    summary: Review checklist aligned with Linux runtime-environment rules
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: desktop-linux
+    concern: runtime-readiness-checklist
+    atomicity: simple
+    tags:
+      - desktop
+      - linux
+      - runtime
+      - checklist
+    applicability:
+      project_types:
+        - desktop-app
+      lifecycle_stages:
+        - design
+        - verification
+      platforms:
+        - desktop
+        - linux
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.desktop-linux-runtime-environment
+    optional_dependencies: []
+    provides:
+      - linux-runtime-checklist
+    change_impact:
+      level: medium
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: false
+      generated: false
+      notes: ""
+
+  - id: checklist.platforms.mobile-app-lifecycle-readiness-checklist
+    type: checklist
+    format: file
+    path: checklists/platforms/mobile-app-lifecycle-readiness-checklist.md
+    title: Mobile App Lifecycle Readiness Checklist
+    summary: Review checklist aligned with Android and iOS lifecycle rules
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: mobile
+    concern: lifecycle-readiness-checklist
+    atomicity: simple
+    tags:
+      - mobile
+      - lifecycle
+      - checklist
+    applicability:
+      project_types:
+        - mobile-app
+      lifecycle_stages:
+        - design
+        - verification
+      platforms:
+        - android
+        - ios
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.android-app-lifecycle
+      - spec.platforms.ios-app-lifecycle
+    optional_dependencies: []
+    provides:
+      - mobile-lifecycle-checklist
+    change_impact:
+      level: medium
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: false
+      generated: false
+      notes: ""
+
+  - id: checklist.platforms.harmonyos-runtime-readiness-checklist
+    type: checklist
+    format: file
+    path: checklists/platforms/harmonyos-runtime-readiness-checklist.md
+    title: HarmonyOS Runtime Readiness Checklist
+    summary: Review checklist aligned with HarmonyOS runtime and lifecycle rules
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: harmonyos
+    concern: runtime-readiness-checklist
+    atomicity: simple
+    tags:
+      - harmonyos
+      - runtime
+      - checklist
+    applicability:
+      project_types:
+        - mobile-app
+      lifecycle_stages:
+        - design
+        - verification
+      platforms:
+        - harmonyos
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.harmonyos-application-runtime
+    optional_dependencies: []
+    provides:
+      - harmonyos-runtime-checklist
+    change_impact:
+      level: medium
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: false
+      generated: false
+      notes: ""
+
+  - id: checklist.platforms.miniapp-host-runtime-readiness-checklist
+    type: checklist
+    format: file
+    path: checklists/platforms/miniapp-host-runtime-readiness-checklist.md
+    title: Miniapp Host Runtime Readiness Checklist
+    summary: Review checklist aligned with miniapp host-runtime and capability-limit rules
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: miniapp
+    concern: host-runtime-readiness-checklist
+    atomicity: simple
+    tags:
+      - miniapp
+      - runtime
+      - checklist
+    applicability:
+      project_types:
+        - miniapp
+      lifecycle_stages:
+        - design
+        - verification
+      platforms:
+        - miniapp
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.miniapp-host-runtime
+    optional_dependencies: []
+    provides:
+      - miniapp-runtime-checklist
+    change_impact:
+      level: medium
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: false
+      generated: false
+      notes: ""
+
   - id: checklist.universal-domains.security.security-review-checklist
     type: checklist
     format: file
@@ -6798,6 +7517,345 @@ assets:
       - spec.platforms.web-accessibility
       - spec.platforms.web-networking
       - spec.platforms.web-rendering-and-performance
+    optional_dependencies: []
+    provides:
+      - example-pack
+    change_impact:
+      level: low
+      review_required: false
+      sync_targets: []
+    metadata:
+      source_of_truth: false
+      generated: false
+      notes: ""
+
+  - id: example.assembled-packs.desktop-platform-foundation
+    type: example
+    format: file
+    path: examples/assembled-packs/desktop-platform-foundation.md
+    title: Desktop Platform Foundation Example Pack
+    summary: Example selection for cross-platform desktop applications with explicit runtime and system-integration boundaries
+    status: active
+    version: 1.0.0
+    domain_axis: scenarios
+    domain: assembled-packs
+    concern: desktop-platform-foundation
+    atomicity: simple
+    tags:
+      - example
+      - pack
+      - desktop
+      - cross-platform
+    applicability:
+      project_types:
+        - desktop-app
+      lifecycle_stages:
+        - initialization
+      platforms:
+        - desktop
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.desktop-shared-application-runtime
+      - spec.platforms.desktop-shared-system-integration
+    optional_dependencies: []
+    provides:
+      - example-pack
+    change_impact:
+      level: low
+      review_required: false
+      sync_targets: []
+    metadata:
+      source_of_truth: false
+      generated: false
+      notes: ""
+
+  - id: example.assembled-packs.cli-command-foundation
+    type: example
+    format: file
+    path: examples/assembled-packs/cli-command-foundation.md
+    title: CLI Command Foundation Example Pack
+    summary: Example selection for projects that need explicit CLI invocation, help, and exit semantics
+    status: active
+    version: 1.0.0
+    domain_axis: scenarios
+    domain: assembled-packs
+    concern: cli-command-foundation
+    atomicity: simple
+    tags:
+      - example
+      - pack
+      - cli
+      - commands
+    applicability:
+      project_types: []
+      lifecycle_stages:
+        - initialization
+      platforms:
+        - cli
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.cli-command-interface
+    optional_dependencies: []
+    provides:
+      - example-pack
+    change_impact:
+      level: low
+      review_required: false
+      sync_targets: []
+    metadata:
+      source_of_truth: false
+      generated: false
+      notes: ""
+
+  - id: example.assembled-packs.desktop-macos-foundation
+    type: example
+    format: file
+    path: examples/assembled-packs/desktop-macos-foundation.md
+    title: Desktop macOS Foundation Example Pack
+    summary: Example selection for macOS desktop applications with explicit runtime, system-integration, and permission rules
+    status: active
+    version: 1.0.0
+    domain_axis: scenarios
+    domain: assembled-packs
+    concern: desktop-macos-foundation
+    atomicity: simple
+    tags:
+      - example
+      - pack
+      - desktop
+      - macos
+    applicability:
+      project_types:
+        - desktop-app
+      lifecycle_stages:
+        - initialization
+      platforms:
+        - desktop
+        - macos
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.desktop-shared-application-runtime
+      - spec.platforms.desktop-shared-system-integration
+      - spec.platforms.desktop-macos-system-permissions
+    optional_dependencies: []
+    provides:
+      - example-pack
+    change_impact:
+      level: low
+      review_required: false
+      sync_targets: []
+    metadata:
+      source_of_truth: false
+      generated: false
+      notes: ""
+
+  - id: example.assembled-packs.desktop-windows-foundation
+    type: example
+    format: file
+    path: examples/assembled-packs/desktop-windows-foundation.md
+    title: Desktop Windows Foundation Example Pack
+    summary: Example selection for Windows desktop applications with explicit runtime, integration, and filesystem/path rules
+    status: active
+    version: 1.0.0
+    domain_axis: scenarios
+    domain: assembled-packs
+    concern: desktop-windows-foundation
+    atomicity: simple
+    tags:
+      - example
+      - pack
+      - desktop
+      - windows
+    applicability:
+      project_types:
+        - desktop-app
+      lifecycle_stages:
+        - initialization
+      platforms:
+        - desktop
+        - windows
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.desktop-shared-application-runtime
+      - spec.platforms.desktop-shared-system-integration
+      - spec.platforms.desktop-windows-filesystem-and-paths
+    optional_dependencies: []
+    provides:
+      - example-pack
+    change_impact:
+      level: low
+      review_required: false
+      sync_targets: []
+    metadata:
+      source_of_truth: false
+      generated: false
+      notes: ""
+
+  - id: example.assembled-packs.desktop-linux-foundation
+    type: example
+    format: file
+    path: examples/assembled-packs/desktop-linux-foundation.md
+    title: Desktop Linux Foundation Example Pack
+    summary: Example selection for Linux desktop applications with explicit runtime, integration, and environment rules
+    status: active
+    version: 1.0.0
+    domain_axis: scenarios
+    domain: assembled-packs
+    concern: desktop-linux-foundation
+    atomicity: simple
+    tags:
+      - example
+      - pack
+      - desktop
+      - linux
+    applicability:
+      project_types:
+        - desktop-app
+      lifecycle_stages:
+        - initialization
+      platforms:
+        - desktop
+        - linux
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.desktop-shared-application-runtime
+      - spec.platforms.desktop-shared-system-integration
+      - spec.platforms.desktop-linux-runtime-environment
+    optional_dependencies: []
+    provides:
+      - example-pack
+    change_impact:
+      level: low
+      review_required: false
+      sync_targets: []
+    metadata:
+      source_of_truth: false
+      generated: false
+      notes: ""
+
+  - id: example.assembled-packs.mobile-app-lifecycle-foundation
+    type: example
+    format: file
+    path: examples/assembled-packs/mobile-app-lifecycle-foundation.md
+    title: Mobile App Lifecycle Foundation Example Pack
+    summary: Example selection for mobile applications that need explicit Android and iOS lifecycle rules
+    status: active
+    version: 1.0.0
+    domain_axis: scenarios
+    domain: assembled-packs
+    concern: mobile-app-lifecycle-foundation
+    atomicity: simple
+    tags:
+      - example
+      - pack
+      - mobile
+      - lifecycle
+    applicability:
+      project_types:
+        - mobile-app
+      lifecycle_stages:
+        - initialization
+      platforms:
+        - android
+        - ios
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.android-app-lifecycle
+      - spec.platforms.ios-app-lifecycle
+    optional_dependencies: []
+    provides:
+      - example-pack
+    change_impact:
+      level: low
+      review_required: false
+      sync_targets: []
+    metadata:
+      source_of_truth: false
+      generated: false
+      notes: ""
+
+  - id: example.assembled-packs.harmonyos-app-foundation
+    type: example
+    format: file
+    path: examples/assembled-packs/harmonyos-app-foundation.md
+    title: HarmonyOS App Foundation Example Pack
+    summary: Example selection for HarmonyOS applications with explicit runtime and lifecycle rules
+    status: active
+    version: 1.0.0
+    domain_axis: scenarios
+    domain: assembled-packs
+    concern: harmonyos-app-foundation
+    atomicity: simple
+    tags:
+      - example
+      - pack
+      - harmonyos
+      - mobile
+    applicability:
+      project_types:
+        - mobile-app
+      lifecycle_stages:
+        - initialization
+      platforms:
+        - harmonyos
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.harmonyos-application-runtime
+    optional_dependencies: []
+    provides:
+      - example-pack
+    change_impact:
+      level: low
+      review_required: false
+      sync_targets: []
+    metadata:
+      source_of_truth: false
+      generated: false
+      notes: ""
+
+  - id: example.assembled-packs.miniapp-runtime-foundation
+    type: example
+    format: file
+    path: examples/assembled-packs/miniapp-runtime-foundation.md
+    title: Miniapp Runtime Foundation Example Pack
+    summary: Example selection for miniapp projects with explicit host-runtime and capability-limit rules
+    status: active
+    version: 1.0.0
+    domain_axis: scenarios
+    domain: assembled-packs
+    concern: miniapp-runtime-foundation
+    atomicity: simple
+    tags:
+      - example
+      - pack
+      - miniapp
+      - runtime
+    applicability:
+      project_types:
+        - miniapp
+      lifecycle_stages:
+        - initialization
+      platforms:
+        - miniapp
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.miniapp-host-runtime
     optional_dependencies: []
     provides:
       - example-pack
@@ -8439,6 +9497,870 @@ relations:
     sync_policy: validate-reference
     notes: The example pack references manual verification readiness.
 
+  - id: rel.spec-desktop-shared-application-runtime.template-desktop-runtime-assumptions
+    from: spec.platforms.desktop-shared-application-runtime
+    to: template.platforms.desktop.runtime-assumptions-template
+    kind: implements-template-for
+    required: true
+    sync_policy: review-on-change
+    notes: Template should stay aligned with shared desktop runtime rules.
+
+  - id: rel.spec-desktop-shared-system-integration.template-desktop-runtime-assumptions
+    from: spec.platforms.desktop-shared-system-integration
+    to: template.platforms.desktop.runtime-assumptions-template
+    kind: implements-template-for
+    required: true
+    sync_policy: review-on-change
+    notes: Template should stay aligned with shared desktop integration rules.
+
+  - id: rel.template-desktop-runtime-assumptions.spec-desktop-shared-application-runtime
+    from: template.platforms.desktop.runtime-assumptions-template
+    to: spec.platforms.desktop-shared-application-runtime
+    kind: depends-on
+    required: true
+    sync_policy: validate-reference
+    notes: Template depends on the shared desktop runtime spec.
+
+  - id: rel.template-desktop-runtime-assumptions.spec-desktop-shared-system-integration
+    from: template.platforms.desktop.runtime-assumptions-template
+    to: spec.platforms.desktop-shared-system-integration
+    kind: depends-on
+    required: true
+    sync_policy: validate-reference
+    notes: Template depends on the shared desktop system integration spec.
+
+  - id: rel.spec-desktop-macos-system-permissions.template-macos-permission-plan
+    from: spec.platforms.desktop-macos-system-permissions
+    to: template.platforms.desktop.macos-permission-plan-template
+    kind: implements-template-for
+    required: true
+    sync_policy: review-on-change
+    notes: Template should stay aligned with macOS permission rules.
+
+  - id: rel.template-macos-permission-plan.spec-desktop-macos-system-permissions
+    from: template.platforms.desktop.macos-permission-plan-template
+    to: spec.platforms.desktop-macos-system-permissions
+    kind: depends-on
+    required: true
+    sync_policy: validate-reference
+    notes: Template depends on the macOS system permissions spec.
+
+  - id: rel.spec-android-app-lifecycle.template-mobile-lifecycle-state
+    from: spec.platforms.android-app-lifecycle
+    to: template.platforms.mobile.lifecycle-state-template
+    kind: implements-template-for
+    required: true
+    sync_policy: review-on-change
+    notes: Template should stay aligned with Android lifecycle rules.
+
+  - id: rel.spec-ios-app-lifecycle.template-mobile-lifecycle-state
+    from: spec.platforms.ios-app-lifecycle
+    to: template.platforms.mobile.lifecycle-state-template
+    kind: implements-template-for
+    required: true
+    sync_policy: review-on-change
+    notes: Template should stay aligned with iOS lifecycle rules.
+
+  - id: rel.spec-harmonyos-application-runtime.template-mobile-lifecycle-state
+    from: spec.platforms.harmonyos-application-runtime
+    to: template.platforms.mobile.lifecycle-state-template
+    kind: implements-template-for
+    required: true
+    sync_policy: review-on-change
+    notes: Template should stay aligned with HarmonyOS runtime rules.
+
+  - id: rel.template-mobile-lifecycle-state.spec-android-app-lifecycle
+    from: template.platforms.mobile.lifecycle-state-template
+    to: spec.platforms.android-app-lifecycle
+    kind: depends-on
+    required: true
+    sync_policy: validate-reference
+    notes: Template depends on the Android app lifecycle spec.
+
+  - id: rel.template-mobile-lifecycle-state.spec-ios-app-lifecycle
+    from: template.platforms.mobile.lifecycle-state-template
+    to: spec.platforms.ios-app-lifecycle
+    kind: depends-on
+    required: true
+    sync_policy: validate-reference
+    notes: Template depends on the iOS app lifecycle spec.
+
+  - id: rel.template-mobile-lifecycle-state.spec-harmonyos-application-runtime
+    from: template.platforms.mobile.lifecycle-state-template
+    to: spec.platforms.harmonyos-application-runtime
+    kind: depends-on
+    required: true
+    sync_policy: validate-reference
+    notes: Template depends on the HarmonyOS application runtime spec.
+
+  - id: rel.spec-miniapp-host-runtime.template-miniapp-host-capability-matrix
+    from: spec.platforms.miniapp-host-runtime
+    to: template.platforms.miniapp.host-capability-matrix-template
+    kind: implements-template-for
+    required: true
+    sync_policy: review-on-change
+    notes: Template should stay aligned with miniapp host runtime rules.
+
+  - id: rel.template-miniapp-host-capability-matrix.spec-miniapp-host-runtime
+    from: template.platforms.miniapp.host-capability-matrix-template
+    to: spec.platforms.miniapp-host-runtime
+    kind: depends-on
+    required: true
+    sync_policy: validate-reference
+    notes: Template depends on the miniapp host runtime spec.
+
+  - id: rel.spec-desktop-shared-application-runtime.checklist-desktop-runtime-readiness
+    from: spec.platforms.desktop-shared-application-runtime
+    to: checklist.platforms.desktop.runtime-readiness-checklist
+    kind: verified-by
+    required: true
+    sync_policy: review-on-change
+    notes: Checklist should stay aligned with shared desktop runtime rules.
+
+  - id: rel.spec-desktop-shared-system-integration.checklist-desktop-runtime-readiness
+    from: spec.platforms.desktop-shared-system-integration
+    to: checklist.platforms.desktop.runtime-readiness-checklist
+    kind: verified-by
+    required: true
+    sync_policy: review-on-change
+    notes: Checklist should stay aligned with shared desktop integration rules.
+
+  - id: rel.checklist-desktop-runtime-readiness.spec-desktop-shared-application-runtime
+    from: checklist.platforms.desktop.runtime-readiness-checklist
+    to: spec.platforms.desktop-shared-application-runtime
+    kind: depends-on
+    required: true
+    sync_policy: validate-reference
+    notes: Checklist depends on the shared desktop runtime spec.
+
+  - id: rel.checklist-desktop-runtime-readiness.spec-desktop-shared-system-integration
+    from: checklist.platforms.desktop.runtime-readiness-checklist
+    to: spec.platforms.desktop-shared-system-integration
+    kind: depends-on
+    required: true
+    sync_policy: validate-reference
+    notes: Checklist depends on the shared desktop system integration spec.
+
+  - id: rel.spec-desktop-macos-system-permissions.checklist-macos-permission-readiness
+    from: spec.platforms.desktop-macos-system-permissions
+    to: checklist.platforms.desktop.macos-permission-readiness-checklist
+    kind: verified-by
+    required: true
+    sync_policy: review-on-change
+    notes: Checklist should stay aligned with macOS permission rules.
+
+  - id: rel.checklist-macos-permission-readiness.spec-desktop-macos-system-permissions
+    from: checklist.platforms.desktop.macos-permission-readiness-checklist
+    to: spec.platforms.desktop-macos-system-permissions
+    kind: depends-on
+    required: true
+    sync_policy: validate-reference
+    notes: Checklist depends on the macOS system permissions spec.
+
+  - id: rel.spec-desktop-windows-filesystem-and-paths.checklist-windows-filesystem-readiness
+    from: spec.platforms.desktop-windows-filesystem-and-paths
+    to: checklist.platforms.desktop.windows-filesystem-readiness-checklist
+    kind: verified-by
+    required: true
+    sync_policy: review-on-change
+    notes: Checklist should stay aligned with Windows filesystem and path rules.
+
+  - id: rel.checklist-windows-filesystem-readiness.spec-desktop-windows-filesystem-and-paths
+    from: checklist.platforms.desktop.windows-filesystem-readiness-checklist
+    to: spec.platforms.desktop-windows-filesystem-and-paths
+    kind: depends-on
+    required: true
+    sync_policy: validate-reference
+    notes: Checklist depends on the Windows filesystem and paths spec.
+
+  - id: rel.spec-desktop-linux-runtime-environment.checklist-linux-runtime-readiness
+    from: spec.platforms.desktop-linux-runtime-environment
+    to: checklist.platforms.desktop.linux-runtime-readiness-checklist
+    kind: verified-by
+    required: true
+    sync_policy: review-on-change
+    notes: Checklist should stay aligned with Linux runtime environment rules.
+
+  - id: rel.checklist-linux-runtime-readiness.spec-desktop-linux-runtime-environment
+    from: checklist.platforms.desktop.linux-runtime-readiness-checklist
+    to: spec.platforms.desktop-linux-runtime-environment
+    kind: depends-on
+    required: true
+    sync_policy: validate-reference
+    notes: Checklist depends on the Linux runtime environment spec.
+
+  - id: rel.spec-android-app-lifecycle.checklist-mobile-app-lifecycle-readiness
+    from: spec.platforms.android-app-lifecycle
+    to: checklist.platforms.mobile-app-lifecycle-readiness-checklist
+    kind: verified-by
+    required: true
+    sync_policy: review-on-change
+    notes: Checklist should stay aligned with Android lifecycle rules.
+
+  - id: rel.spec-ios-app-lifecycle.checklist-mobile-app-lifecycle-readiness
+    from: spec.platforms.ios-app-lifecycle
+    to: checklist.platforms.mobile-app-lifecycle-readiness-checklist
+    kind: verified-by
+    required: true
+    sync_policy: review-on-change
+    notes: Checklist should stay aligned with iOS lifecycle rules.
+
+  - id: rel.checklist-mobile-app-lifecycle-readiness.spec-android-app-lifecycle
+    from: checklist.platforms.mobile-app-lifecycle-readiness-checklist
+    to: spec.platforms.android-app-lifecycle
+    kind: depends-on
+    required: true
+    sync_policy: validate-reference
+    notes: Checklist depends on the Android app lifecycle spec.
+
+  - id: rel.checklist-mobile-app-lifecycle-readiness.spec-ios-app-lifecycle
+    from: checklist.platforms.mobile-app-lifecycle-readiness-checklist
+    to: spec.platforms.ios-app-lifecycle
+    kind: depends-on
+    required: true
+    sync_policy: validate-reference
+    notes: Checklist depends on the iOS app lifecycle spec.
+
+  - id: rel.spec-harmonyos-application-runtime.checklist-harmonyos-runtime-readiness
+    from: spec.platforms.harmonyos-application-runtime
+    to: checklist.platforms.harmonyos-runtime-readiness-checklist
+    kind: verified-by
+    required: true
+    sync_policy: review-on-change
+    notes: Checklist should stay aligned with HarmonyOS runtime rules.
+
+  - id: rel.checklist-harmonyos-runtime-readiness.spec-harmonyos-application-runtime
+    from: checklist.platforms.harmonyos-runtime-readiness-checklist
+    to: spec.platforms.harmonyos-application-runtime
+    kind: depends-on
+    required: true
+    sync_policy: validate-reference
+    notes: Checklist depends on the HarmonyOS application runtime spec.
+
+  - id: rel.spec-miniapp-host-runtime.checklist-miniapp-host-runtime-readiness
+    from: spec.platforms.miniapp-host-runtime
+    to: checklist.platforms.miniapp-host-runtime-readiness-checklist
+    kind: verified-by
+    required: true
+    sync_policy: review-on-change
+    notes: Checklist should stay aligned with miniapp host runtime rules.
+
+  - id: rel.checklist-miniapp-host-runtime-readiness.spec-miniapp-host-runtime
+    from: checklist.platforms.miniapp-host-runtime-readiness-checklist
+    to: spec.platforms.miniapp-host-runtime
+    kind: depends-on
+    required: true
+    sync_policy: validate-reference
+    notes: Checklist depends on the miniapp host runtime spec.
+
+  - id: rel.example-desktop-platform-foundation.spec-desktop-shared-application-runtime
+    from: example.assembled-packs.desktop-platform-foundation
+    to: spec.platforms.desktop-shared-application-runtime
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the shared desktop application runtime spec.
+
+  - id: rel.example-desktop-platform-foundation.spec-desktop-shared-system-integration
+    from: example.assembled-packs.desktop-platform-foundation
+    to: spec.platforms.desktop-shared-system-integration
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the shared desktop system integration spec.
+
+  - id: rel.example-desktop-platform-foundation.template-desktop-runtime-assumptions
+    from: example.assembled-packs.desktop-platform-foundation
+    to: template.platforms.desktop.runtime-assumptions-template
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the desktop runtime assumptions template.
+
+  - id: rel.example-desktop-platform-foundation.checklist-desktop-runtime-readiness
+    from: example.assembled-packs.desktop-platform-foundation
+    to: checklist.platforms.desktop.runtime-readiness-checklist
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the desktop runtime readiness checklist.
+
+  - id: rel.spec-desktop-shared-application-runtime.example-desktop-platform-foundation
+    from: spec.platforms.desktop-shared-application-runtime
+    to: example.assembled-packs.desktop-platform-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the shared desktop application runtime spec.
+
+  - id: rel.spec-desktop-shared-system-integration.example-desktop-platform-foundation
+    from: spec.platforms.desktop-shared-system-integration
+    to: example.assembled-packs.desktop-platform-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the shared desktop system integration spec.
+
+  - id: rel.template-desktop-runtime-assumptions.example-desktop-platform-foundation
+    from: template.platforms.desktop.runtime-assumptions-template
+    to: example.assembled-packs.desktop-platform-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the desktop runtime assumptions template.
+
+  - id: rel.checklist-desktop-runtime-readiness.example-desktop-platform-foundation
+    from: checklist.platforms.desktop.runtime-readiness-checklist
+    to: example.assembled-packs.desktop-platform-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the desktop runtime readiness checklist.
+
+  - id: rel.example-desktop-macos-foundation.spec-desktop-shared-application-runtime
+    from: example.assembled-packs.desktop-macos-foundation
+    to: spec.platforms.desktop-shared-application-runtime
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the shared desktop application runtime spec.
+
+  - id: rel.example-desktop-macos-foundation.spec-desktop-shared-system-integration
+    from: example.assembled-packs.desktop-macos-foundation
+    to: spec.platforms.desktop-shared-system-integration
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the shared desktop system integration spec.
+
+  - id: rel.example-desktop-macos-foundation.spec-desktop-macos-system-permissions
+    from: example.assembled-packs.desktop-macos-foundation
+    to: spec.platforms.desktop-macos-system-permissions
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the macOS system permissions spec.
+
+  - id: rel.example-desktop-macos-foundation.template-desktop-runtime-assumptions
+    from: example.assembled-packs.desktop-macos-foundation
+    to: template.platforms.desktop.runtime-assumptions-template
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the desktop runtime assumptions template.
+
+  - id: rel.example-desktop-macos-foundation.template-macos-permission-plan
+    from: example.assembled-packs.desktop-macos-foundation
+    to: template.platforms.desktop.macos-permission-plan-template
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the macOS permission plan template.
+
+  - id: rel.example-desktop-macos-foundation.checklist-desktop-runtime-readiness
+    from: example.assembled-packs.desktop-macos-foundation
+    to: checklist.platforms.desktop.runtime-readiness-checklist
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the desktop runtime readiness checklist.
+
+  - id: rel.example-desktop-macos-foundation.checklist-macos-permission-readiness
+    from: example.assembled-packs.desktop-macos-foundation
+    to: checklist.platforms.desktop.macos-permission-readiness-checklist
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the macOS permission readiness checklist.
+
+  - id: rel.spec-desktop-shared-application-runtime.example-desktop-macos-foundation
+    from: spec.platforms.desktop-shared-application-runtime
+    to: example.assembled-packs.desktop-macos-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the shared desktop application runtime spec.
+
+  - id: rel.spec-desktop-shared-system-integration.example-desktop-macos-foundation
+    from: spec.platforms.desktop-shared-system-integration
+    to: example.assembled-packs.desktop-macos-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the shared desktop system integration spec.
+
+  - id: rel.spec-desktop-macos-system-permissions.example-desktop-macos-foundation
+    from: spec.platforms.desktop-macos-system-permissions
+    to: example.assembled-packs.desktop-macos-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the macOS system permissions spec.
+
+  - id: rel.template-desktop-runtime-assumptions.example-desktop-macos-foundation
+    from: template.platforms.desktop.runtime-assumptions-template
+    to: example.assembled-packs.desktop-macos-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the desktop runtime assumptions template.
+
+  - id: rel.template-macos-permission-plan.example-desktop-macos-foundation
+    from: template.platforms.desktop.macos-permission-plan-template
+    to: example.assembled-packs.desktop-macos-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the macOS permission plan template.
+
+  - id: rel.checklist-desktop-runtime-readiness.example-desktop-macos-foundation
+    from: checklist.platforms.desktop.runtime-readiness-checklist
+    to: example.assembled-packs.desktop-macos-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the desktop runtime readiness checklist.
+
+  - id: rel.checklist-macos-permission-readiness.example-desktop-macos-foundation
+    from: checklist.platforms.desktop.macos-permission-readiness-checklist
+    to: example.assembled-packs.desktop-macos-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the macOS permission readiness checklist.
+
+  - id: rel.example-desktop-windows-foundation.spec-desktop-shared-application-runtime
+    from: example.assembled-packs.desktop-windows-foundation
+    to: spec.platforms.desktop-shared-application-runtime
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the shared desktop application runtime spec.
+
+  - id: rel.example-desktop-windows-foundation.spec-desktop-shared-system-integration
+    from: example.assembled-packs.desktop-windows-foundation
+    to: spec.platforms.desktop-shared-system-integration
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the shared desktop system integration spec.
+
+  - id: rel.example-desktop-windows-foundation.spec-desktop-windows-filesystem-and-paths
+    from: example.assembled-packs.desktop-windows-foundation
+    to: spec.platforms.desktop-windows-filesystem-and-paths
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the Windows filesystem and paths spec.
+
+  - id: rel.example-desktop-windows-foundation.template-desktop-runtime-assumptions
+    from: example.assembled-packs.desktop-windows-foundation
+    to: template.platforms.desktop.runtime-assumptions-template
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the desktop runtime assumptions template.
+
+  - id: rel.example-desktop-windows-foundation.checklist-desktop-runtime-readiness
+    from: example.assembled-packs.desktop-windows-foundation
+    to: checklist.platforms.desktop.runtime-readiness-checklist
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the desktop runtime readiness checklist.
+
+  - id: rel.example-desktop-windows-foundation.checklist-windows-filesystem-readiness
+    from: example.assembled-packs.desktop-windows-foundation
+    to: checklist.platforms.desktop.windows-filesystem-readiness-checklist
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the Windows filesystem readiness checklist.
+
+  - id: rel.spec-desktop-shared-application-runtime.example-desktop-windows-foundation
+    from: spec.platforms.desktop-shared-application-runtime
+    to: example.assembled-packs.desktop-windows-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the shared desktop application runtime spec.
+
+  - id: rel.spec-desktop-shared-system-integration.example-desktop-windows-foundation
+    from: spec.platforms.desktop-shared-system-integration
+    to: example.assembled-packs.desktop-windows-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the shared desktop system integration spec.
+
+  - id: rel.spec-desktop-windows-filesystem-and-paths.example-desktop-windows-foundation
+    from: spec.platforms.desktop-windows-filesystem-and-paths
+    to: example.assembled-packs.desktop-windows-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the Windows filesystem and paths spec.
+
+  - id: rel.template-desktop-runtime-assumptions.example-desktop-windows-foundation
+    from: template.platforms.desktop.runtime-assumptions-template
+    to: example.assembled-packs.desktop-windows-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the desktop runtime assumptions template.
+
+  - id: rel.checklist-desktop-runtime-readiness.example-desktop-windows-foundation
+    from: checklist.platforms.desktop.runtime-readiness-checklist
+    to: example.assembled-packs.desktop-windows-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the desktop runtime readiness checklist.
+
+  - id: rel.checklist-windows-filesystem-readiness.example-desktop-windows-foundation
+    from: checklist.platforms.desktop.windows-filesystem-readiness-checklist
+    to: example.assembled-packs.desktop-windows-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the Windows filesystem readiness checklist.
+
+  - id: rel.example-desktop-linux-foundation.spec-desktop-shared-application-runtime
+    from: example.assembled-packs.desktop-linux-foundation
+    to: spec.platforms.desktop-shared-application-runtime
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the shared desktop application runtime spec.
+
+  - id: rel.example-desktop-linux-foundation.spec-desktop-shared-system-integration
+    from: example.assembled-packs.desktop-linux-foundation
+    to: spec.platforms.desktop-shared-system-integration
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the shared desktop system integration spec.
+
+  - id: rel.example-desktop-linux-foundation.spec-desktop-linux-runtime-environment
+    from: example.assembled-packs.desktop-linux-foundation
+    to: spec.platforms.desktop-linux-runtime-environment
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the Linux runtime environment spec.
+
+  - id: rel.example-desktop-linux-foundation.template-desktop-runtime-assumptions
+    from: example.assembled-packs.desktop-linux-foundation
+    to: template.platforms.desktop.runtime-assumptions-template
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the desktop runtime assumptions template.
+
+  - id: rel.example-desktop-linux-foundation.checklist-desktop-runtime-readiness
+    from: example.assembled-packs.desktop-linux-foundation
+    to: checklist.platforms.desktop.runtime-readiness-checklist
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the desktop runtime readiness checklist.
+
+  - id: rel.example-desktop-linux-foundation.checklist-linux-runtime-readiness
+    from: example.assembled-packs.desktop-linux-foundation
+    to: checklist.platforms.desktop.linux-runtime-readiness-checklist
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the Linux runtime readiness checklist.
+
+  - id: rel.spec-desktop-shared-application-runtime.example-desktop-linux-foundation
+    from: spec.platforms.desktop-shared-application-runtime
+    to: example.assembled-packs.desktop-linux-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the shared desktop application runtime spec.
+
+  - id: rel.spec-desktop-shared-system-integration.example-desktop-linux-foundation
+    from: spec.platforms.desktop-shared-system-integration
+    to: example.assembled-packs.desktop-linux-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the shared desktop system integration spec.
+
+  - id: rel.spec-desktop-linux-runtime-environment.example-desktop-linux-foundation
+    from: spec.platforms.desktop-linux-runtime-environment
+    to: example.assembled-packs.desktop-linux-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the Linux runtime environment spec.
+
+  - id: rel.template-desktop-runtime-assumptions.example-desktop-linux-foundation
+    from: template.platforms.desktop.runtime-assumptions-template
+    to: example.assembled-packs.desktop-linux-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the desktop runtime assumptions template.
+
+  - id: rel.checklist-desktop-runtime-readiness.example-desktop-linux-foundation
+    from: checklist.platforms.desktop.runtime-readiness-checklist
+    to: example.assembled-packs.desktop-linux-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the desktop runtime readiness checklist.
+
+  - id: rel.checklist-linux-runtime-readiness.example-desktop-linux-foundation
+    from: checklist.platforms.desktop.linux-runtime-readiness-checklist
+    to: example.assembled-packs.desktop-linux-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the Linux runtime readiness checklist.
+
+  - id: rel.example-mobile-app-lifecycle-foundation.spec-android-app-lifecycle
+    from: example.assembled-packs.mobile-app-lifecycle-foundation
+    to: spec.platforms.android-app-lifecycle
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the Android app lifecycle spec.
+
+  - id: rel.example-mobile-app-lifecycle-foundation.spec-ios-app-lifecycle
+    from: example.assembled-packs.mobile-app-lifecycle-foundation
+    to: spec.platforms.ios-app-lifecycle
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the iOS app lifecycle spec.
+
+  - id: rel.example-mobile-app-lifecycle-foundation.template-mobile-lifecycle-state
+    from: example.assembled-packs.mobile-app-lifecycle-foundation
+    to: template.platforms.mobile.lifecycle-state-template
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the mobile lifecycle state template.
+
+  - id: rel.example-mobile-app-lifecycle-foundation.checklist-mobile-app-lifecycle-readiness
+    from: example.assembled-packs.mobile-app-lifecycle-foundation
+    to: checklist.platforms.mobile-app-lifecycle-readiness-checklist
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the mobile app lifecycle readiness checklist.
+
+  - id: rel.spec-android-app-lifecycle.example-mobile-app-lifecycle-foundation
+    from: spec.platforms.android-app-lifecycle
+    to: example.assembled-packs.mobile-app-lifecycle-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the Android app lifecycle spec.
+
+  - id: rel.spec-ios-app-lifecycle.example-mobile-app-lifecycle-foundation
+    from: spec.platforms.ios-app-lifecycle
+    to: example.assembled-packs.mobile-app-lifecycle-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the iOS app lifecycle spec.
+
+  - id: rel.template-mobile-lifecycle-state.example-mobile-app-lifecycle-foundation
+    from: template.platforms.mobile.lifecycle-state-template
+    to: example.assembled-packs.mobile-app-lifecycle-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the mobile lifecycle state template.
+
+  - id: rel.checklist-mobile-app-lifecycle-readiness.example-mobile-app-lifecycle-foundation
+    from: checklist.platforms.mobile-app-lifecycle-readiness-checklist
+    to: example.assembled-packs.mobile-app-lifecycle-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the mobile app lifecycle readiness checklist.
+
+  - id: rel.example-harmonyos-app-foundation.spec-harmonyos-application-runtime
+    from: example.assembled-packs.harmonyos-app-foundation
+    to: spec.platforms.harmonyos-application-runtime
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the HarmonyOS application runtime spec.
+
+  - id: rel.example-harmonyos-app-foundation.template-mobile-lifecycle-state
+    from: example.assembled-packs.harmonyos-app-foundation
+    to: template.platforms.mobile.lifecycle-state-template
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the mobile lifecycle state template.
+
+  - id: rel.example-harmonyos-app-foundation.checklist-harmonyos-runtime-readiness
+    from: example.assembled-packs.harmonyos-app-foundation
+    to: checklist.platforms.harmonyos-runtime-readiness-checklist
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the HarmonyOS runtime readiness checklist.
+
+  - id: rel.spec-harmonyos-application-runtime.example-harmonyos-app-foundation
+    from: spec.platforms.harmonyos-application-runtime
+    to: example.assembled-packs.harmonyos-app-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the HarmonyOS application runtime spec.
+
+  - id: rel.template-mobile-lifecycle-state.example-harmonyos-app-foundation
+    from: template.platforms.mobile.lifecycle-state-template
+    to: example.assembled-packs.harmonyos-app-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the mobile lifecycle state template.
+
+  - id: rel.checklist-harmonyos-runtime-readiness.example-harmonyos-app-foundation
+    from: checklist.platforms.harmonyos-runtime-readiness-checklist
+    to: example.assembled-packs.harmonyos-app-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the HarmonyOS runtime readiness checklist.
+
+  - id: rel.example-miniapp-runtime-foundation.spec-miniapp-host-runtime
+    from: example.assembled-packs.miniapp-runtime-foundation
+    to: spec.platforms.miniapp-host-runtime
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the miniapp host runtime spec.
+
+  - id: rel.example-miniapp-runtime-foundation.template-miniapp-host-capability-matrix
+    from: example.assembled-packs.miniapp-runtime-foundation
+    to: template.platforms.miniapp.host-capability-matrix-template
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the miniapp host capability matrix template.
+
+  - id: rel.example-miniapp-runtime-foundation.checklist-miniapp-host-runtime-readiness
+    from: example.assembled-packs.miniapp-runtime-foundation
+    to: checklist.platforms.miniapp-host-runtime-readiness-checklist
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the miniapp host runtime readiness checklist.
+
+  - id: rel.spec-miniapp-host-runtime.example-miniapp-runtime-foundation
+    from: spec.platforms.miniapp-host-runtime
+    to: example.assembled-packs.miniapp-runtime-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the miniapp host runtime spec.
+
+  - id: rel.template-miniapp-host-capability-matrix.example-miniapp-runtime-foundation
+    from: template.platforms.miniapp.host-capability-matrix-template
+    to: example.assembled-packs.miniapp-runtime-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the miniapp host capability matrix template.
+
+  - id: rel.checklist-miniapp-host-runtime-readiness.example-miniapp-runtime-foundation
+    from: checklist.platforms.miniapp-host-runtime-readiness-checklist
+    to: example.assembled-packs.miniapp-runtime-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the miniapp host runtime readiness checklist.
+
+  - id: rel.spec-cli-command-interface.template-cli-command-contract
+    from: spec.platforms.cli-command-interface
+    to: template.platforms.cli.command-contract-template
+    kind: implements-template-for
+    required: true
+    sync_policy: review-on-change
+    notes: Template should stay aligned with CLI command interface rules.
+
+  - id: rel.template-cli-command-contract.spec-cli-command-interface
+    from: template.platforms.cli.command-contract-template
+    to: spec.platforms.cli-command-interface
+    kind: depends-on
+    required: true
+    sync_policy: validate-reference
+    notes: Template depends on the CLI command interface spec.
+
+  - id: rel.spec-cli-command-interface.checklist-cli-command-interface-readiness
+    from: spec.platforms.cli-command-interface
+    to: checklist.platforms.cli.command-interface-readiness-checklist
+    kind: verified-by
+    required: true
+    sync_policy: review-on-change
+    notes: Checklist should stay aligned with CLI command interface rules.
+
+  - id: rel.checklist-cli-command-interface-readiness.spec-cli-command-interface
+    from: checklist.platforms.cli.command-interface-readiness-checklist
+    to: spec.platforms.cli-command-interface
+    kind: depends-on
+    required: true
+    sync_policy: validate-reference
+    notes: Checklist depends on the CLI command interface spec.
+
+  - id: rel.example-cli-command-foundation.spec-cli-command-interface
+    from: example.assembled-packs.cli-command-foundation
+    to: spec.platforms.cli-command-interface
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the CLI command interface spec.
+
+  - id: rel.example-cli-command-foundation.template-cli-command-contract
+    from: example.assembled-packs.cli-command-foundation
+    to: template.platforms.cli.command-contract-template
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the CLI command contract template.
+
+  - id: rel.example-cli-command-foundation.checklist-cli-command-interface-readiness
+    from: example.assembled-packs.cli-command-foundation
+    to: checklist.platforms.cli.command-interface-readiness-checklist
+    kind: includes
+    required: true
+    sync_policy: validate-reference
+    notes: Example pack includes the CLI command interface readiness checklist.
+
+  - id: rel.spec-cli-command-interface.example-cli-command-foundation
+    from: spec.platforms.cli-command-interface
+    to: example.assembled-packs.cli-command-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the CLI command interface spec.
+
+  - id: rel.template-cli-command-contract.example-cli-command-foundation
+    from: template.platforms.cli.command-contract-template
+    to: example.assembled-packs.cli-command-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the CLI command contract template.
+
+  - id: rel.checklist-cli-command-interface-readiness.example-cli-command-foundation
+    from: checklist.platforms.cli.command-interface-readiness-checklist
+    to: example.assembled-packs.cli-command-foundation
+    kind: related-to
+    required: true
+    sync_policy: validate-reference
+    notes: The example pack references the CLI command interface readiness checklist.
+
 packs:
   - id: pack.api-service-minimal
     title: API Service Minimal Pack
@@ -8459,6 +10381,25 @@ packs:
     target_layout:
       profile: single-repo
     notes: Intended as a baseline pack for new API service projects.
+
+  - id: pack.cli-command-foundation
+    title: CLI Command Foundation Pack
+    summary: Reusable asset selection for projects that need explicit CLI invocation, help, and exit semantics
+    status: active
+    selection:
+      assets:
+        - spec.platforms.cli-command-interface
+        - template.platforms.cli.command-contract-template
+        - checklist.platforms.cli.command-interface-readiness-checklist
+        - example.assembled-packs.cli-command-foundation
+    applicability:
+      project_types: []
+      lifecycle_stages:
+        - initialization
+        - design
+    target_layout:
+      profile: single-repo
+    notes: Intended as a baseline pack for command-line tools and scriptable CLI workflows.
 
   - id: pack.ai-agent-project-foundation
     title: AI Agent Project Foundation Pack
@@ -8863,5 +10804,157 @@ packs:
     target_layout:
       profile: single-repo
     notes: Intended as a baseline pack for React-based web applications.
+
+  - id: pack.desktop-platform-foundation
+    title: Desktop Platform Foundation Pack
+    summary: Reusable asset selection for cross-platform desktop applications with explicit runtime and system-integration rules
+    status: active
+    selection:
+      assets:
+        - spec.platforms.desktop-shared-application-runtime
+        - spec.platforms.desktop-shared-system-integration
+        - template.platforms.desktop.runtime-assumptions-template
+        - checklist.platforms.desktop.runtime-readiness-checklist
+        - example.assembled-packs.desktop-platform-foundation
+    applicability:
+      project_types:
+        - desktop-app
+      lifecycle_stages:
+        - initialization
+        - design
+    target_layout:
+      profile: single-repo
+    notes: Intended as a baseline pack for cross-platform desktop applications before adding OS-specific constraints.
+
+  - id: pack.desktop-macos-foundation
+    title: Desktop macOS Foundation Pack
+    summary: Reusable asset selection for macOS desktop applications with explicit runtime, integration, and permission rules
+    status: active
+    selection:
+      assets:
+        - spec.platforms.desktop-shared-application-runtime
+        - spec.platforms.desktop-shared-system-integration
+        - spec.platforms.desktop-macos-system-permissions
+        - template.platforms.desktop.runtime-assumptions-template
+        - template.platforms.desktop.macos-permission-plan-template
+        - checklist.platforms.desktop.runtime-readiness-checklist
+        - checklist.platforms.desktop.macos-permission-readiness-checklist
+        - example.assembled-packs.desktop-macos-foundation
+    applicability:
+      project_types:
+        - desktop-app
+      lifecycle_stages:
+        - initialization
+        - design
+    target_layout:
+      profile: single-repo
+    notes: Intended as a baseline pack for macOS desktop applications.
+
+  - id: pack.desktop-windows-foundation
+    title: Desktop Windows Foundation Pack
+    summary: Reusable asset selection for Windows desktop applications with explicit runtime, integration, and filesystem/path rules
+    status: active
+    selection:
+      assets:
+        - spec.platforms.desktop-shared-application-runtime
+        - spec.platforms.desktop-shared-system-integration
+        - spec.platforms.desktop-windows-filesystem-and-paths
+        - template.platforms.desktop.runtime-assumptions-template
+        - checklist.platforms.desktop.runtime-readiness-checklist
+        - checklist.platforms.desktop.windows-filesystem-readiness-checklist
+        - example.assembled-packs.desktop-windows-foundation
+    applicability:
+      project_types:
+        - desktop-app
+      lifecycle_stages:
+        - initialization
+        - design
+    target_layout:
+      profile: single-repo
+    notes: Intended as a baseline pack for Windows desktop applications.
+
+  - id: pack.desktop-linux-foundation
+    title: Desktop Linux Foundation Pack
+    summary: Reusable asset selection for Linux desktop applications with explicit runtime, integration, and environment rules
+    status: active
+    selection:
+      assets:
+        - spec.platforms.desktop-shared-application-runtime
+        - spec.platforms.desktop-shared-system-integration
+        - spec.platforms.desktop-linux-runtime-environment
+        - template.platforms.desktop.runtime-assumptions-template
+        - checklist.platforms.desktop.runtime-readiness-checklist
+        - checklist.platforms.desktop.linux-runtime-readiness-checklist
+        - example.assembled-packs.desktop-linux-foundation
+    applicability:
+      project_types:
+        - desktop-app
+      lifecycle_stages:
+        - initialization
+        - design
+    target_layout:
+      profile: single-repo
+    notes: Intended as a baseline pack for Linux desktop applications.
+
+  - id: pack.mobile-app-lifecycle-foundation
+    title: Mobile App Lifecycle Foundation Pack
+    summary: Reusable asset selection for mobile applications that need explicit Android and iOS lifecycle rules
+    status: active
+    selection:
+      assets:
+        - spec.platforms.android-app-lifecycle
+        - spec.platforms.ios-app-lifecycle
+        - template.platforms.mobile.lifecycle-state-template
+        - checklist.platforms.mobile-app-lifecycle-readiness-checklist
+        - example.assembled-packs.mobile-app-lifecycle-foundation
+    applicability:
+      project_types:
+        - mobile-app
+      lifecycle_stages:
+        - initialization
+        - design
+    target_layout:
+      profile: single-repo
+    notes: Intended as a baseline pack for mobile applications that need lifecycle discipline across Android and iOS.
+
+  - id: pack.harmonyos-app-foundation
+    title: HarmonyOS App Foundation Pack
+    summary: Reusable asset selection for HarmonyOS applications with explicit runtime and lifecycle rules
+    status: active
+    selection:
+      assets:
+        - spec.platforms.harmonyos-application-runtime
+        - template.platforms.mobile.lifecycle-state-template
+        - checklist.platforms.harmonyos-runtime-readiness-checklist
+        - example.assembled-packs.harmonyos-app-foundation
+    applicability:
+      project_types:
+        - mobile-app
+      lifecycle_stages:
+        - initialization
+        - design
+    target_layout:
+      profile: single-repo
+    notes: Intended as a baseline pack for HarmonyOS applications.
+
+  - id: pack.miniapp-runtime-foundation
+    title: Miniapp Runtime Foundation Pack
+    summary: Reusable asset selection for miniapp projects with explicit host-runtime and capability-limit rules
+    status: active
+    selection:
+      assets:
+        - spec.platforms.miniapp-host-runtime
+        - template.platforms.miniapp.host-capability-matrix-template
+        - checklist.platforms.miniapp-host-runtime-readiness-checklist
+        - example.assembled-packs.miniapp-runtime-foundation
+    applicability:
+      project_types:
+        - miniapp
+      lifecycle_stages:
+        - initialization
+        - design
+    target_layout:
+      profile: single-repo
+    notes: Intended as a baseline pack for miniapp projects.
 
 migrations: []

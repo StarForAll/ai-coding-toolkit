@@ -22,18 +22,26 @@ fragments.
 ## Directory Map
 
 * `specs/`
-  Reusable normative rules.
+  Reusable normative rules split by universal domains, scenarios, platforms, and
+  technologies.
 * `templates/`
-  Reusable artifact and document templates.
+  Reusable artifact and document templates, including platform-oriented planning
+  templates.
 * `checklists/`
-  Reusable execution and review checklists.
+  Reusable execution and review checklists, including platform readiness
+  checklists.
 * `examples/`
-  Example assembled packs and selection references.
+  Example assembled packs and selection references that mirror real pack
+  composition.
 * `schemas/`
   Machine-readable schemas for manifest and lock-file validation.
 * `scripts/`
   Automation for selection, assembly, validation, downstream sync, and upstream
   proposal flow.
+* `tests/`
+  Black-box tests for the unified CLI and sync workflow coverage.
+* `cli.py`
+  Unified command entry point for validation, assembly, and sync workflows.
 * `manifest.yaml`
   Source-library registry for all registered assets, relations, and packs.
 * `taxonomy.md`
@@ -51,8 +59,9 @@ fragments.
   Process situations such as debugging, refactoring, release verification,
   rollback decisions, migration safety, and handoff readiness.
 * `specs/platforms/`
-  Runtime-platform rules such as browser behavior and backend-service runtime
-  constraints.
+  Runtime-platform rules such as web/browser behavior, backend-service runtime
+  constraints, CLI command contracts, desktop shared and OS-specific behavior,
+  Android/iOS lifecycle, HarmonyOS runtime, and miniapp host constraints.
 * `specs/technologies/`
   Language-, framework-, runtime-, and tool-specific rules.
 
@@ -118,6 +127,22 @@ Suggested entry points:
   `pack.vue-web-app-foundation`
 * React web application baseline
   `pack.react-web-app-foundation`
+* CLI command baseline
+  `pack.cli-command-foundation`
+* Cross-platform desktop baseline
+  `pack.desktop-platform-foundation`
+* macOS desktop baseline
+  `pack.desktop-macos-foundation`
+* Windows desktop baseline
+  `pack.desktop-windows-foundation`
+* Linux desktop baseline
+  `pack.desktop-linux-foundation`
+* Android/iOS mobile lifecycle baseline
+  `pack.mobile-app-lifecycle-foundation`
+* HarmonyOS application baseline
+  `pack.harmonyos-app-foundation`
+* Miniapp runtime baseline
+  `pack.miniapp-runtime-foundation`
 * Java Spring service baseline
   `pack.java-spring-service-foundation`
 * Python backend baseline
@@ -128,6 +153,19 @@ Suggested entry points:
 For concrete pack composition examples, see:
 
 * `examples/assembled-packs/`
+
+Platform-oriented starting points currently available:
+
+* desktop
+  Shared cross-platform desktop, plus macOS, Windows, and Linux variants with
+  corresponding templates and readiness checklists.
+* mobile
+  Android/iOS lifecycle baseline plus HarmonyOS runtime baseline.
+* miniapp
+  Host runtime baseline with capability-matrix template and readiness checklist.
+* cli
+  Command-interface spec for command contracts, help behavior, and exit
+  semantics.
 
 ## Sync Model
 
@@ -158,6 +196,8 @@ entry documentation stays aligned with actual behavior.
 
 Important automation entry points:
 
+* `cli.py`
+  Unified wrapper for day-to-day `validate`, `assemble`, and `sync` usage.
 * `scripts/validation/validate-library-sync.py`
   Validate source-library registration and sync consistency.
 * `scripts/assembly/assemble-init-set.py`
@@ -217,16 +257,18 @@ Examples:
 * `--mode apply`
   Run `scripts/sync/apply-library-sync.py`
 
-## Validation
+## Verification
 
-Use the manifest as the registry and run the validator before claiming library
-health:
+Use the manifest as the registry and run both structure validation and CLI tests
+before claiming library health:
 
 ```bash
 /ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --strict-warnings
+
+/ops/softwares/python/bin/python3 -m unittest trellis-library/tests/test_cli.py
 ```
 
-Or through the unified CLI:
+The validation command can also be run through the unified CLI:
 
 ```bash
 /ops/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings
@@ -237,14 +279,20 @@ Current validation schemas live under:
 * `schemas/manifest/`
 * `schemas/initialization/`
 
+CI also enforces the same baseline through
+[`/.github/workflows/trellis-library-ci.yml`](/ops/projects/personal/ai-coding-toolkit/.github/workflows/trellis-library-ci.yml),
+running on `pull_request`, on `push` to `main`, and on manual dispatch when
+`trellis-library/**` or the workflow itself changes.
+
 ## Usage Notes
 
 * Register assets in `manifest.yaml`; do not rely on ad hoc files.
 * Keep source assets atomic and reusable; avoid project-private wording in the
   library.
-* When changing taxonomy, sync flow, pack strategy, or script responsibilities,
-  update this root `README.md` in the same change set.
+* When changing taxonomy, relation model, sync flow, pack strategy, test
+  coverage expectations, or script responsibilities, update this root
+  `README.md` in the same change set.
 * When a target project improves an imported asset, use diff and proposal
   workflows instead of directly overwriting source assets.
-* Keep examples and packs aligned so selection guidance matches actual
-  registered assets.
+* Keep examples, packs, templates, checklists, and manifest relations aligned
+  so selection guidance matches actual registered assets.

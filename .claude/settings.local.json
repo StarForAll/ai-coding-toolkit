@@ -10,7 +10,16 @@
       "Bash(/ops/softwares/python/bin/python3 /ops/projects/personal/ai-coding-toolkit/trellis-library/scripts/validation/validate-library-sync.py --help 2>&1 | head -20)",
       "Bash(/ops/softwares/python/bin/python3 /ops/projects/personal/ai-coding-toolkit/trellis-library/scripts/validation/validate-library-sync.py 2>&1 | tail -30)",
       "Bash(/ops/softwares/python/bin/python3 /ops/projects/personal/ai-coding-toolkit/trellis-library/scripts/assembly/assemble-init-set.py --help 2>&1)",
-      "Bash(/ops/softwares/python/bin/python3 /ops/projects/personal/ai-coding-toolkit/trellis-library/scripts/assembly/assemble-init-set.py --target /tmp/test-target --pack pack.go-service-foundation --dry-run 2>&1)"
+      "Bash(/ops/softwares/python/bin/python3 /ops/projects/personal/ai-coding-toolkit/trellis-library/scripts/assembly/assemble-init-set.py --target /tmp/test-target --pack pack.go-service-foundation --dry-run 2>&1)",
+      "mcp__ace__enhance_prompt",
+      "Bash(find:*)",
+      "Bash(/ops/softwares/python/bin/python3 /ops/projects/personal/ai-coding-toolkit/trellis-library/cli.py --help 2>&1)",
+      "Bash(/ops/softwares/python/bin/python3 -m unittest trellis-library/tests/test_cli.py 2>&1 | tail -20)",
+      "Bash(/ops/softwares/python/bin/python3 /ops/projects/personal/ai-coding-toolkit/trellis-library/scripts/validation/validate-library-sync.py --strict-warnings 2>&1)",
+      "Bash(cp:*)",
+      "Bash(/ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --strict-warnings 2>&1)",
+      "Bash(/ops/softwares/python/bin/python3 -m unittest trellis-library/tests/test_cli.py 2>&1)",
+      "Bash(git add:*)"
     ]
   }
 }
