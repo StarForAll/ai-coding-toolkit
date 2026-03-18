@@ -275,3 +275,128 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: Sync Trellis Specs From Library
+
+**Date**: 2026-03-18
+**Task**: Sync Trellis Specs From Library
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Spec cleanup | Removed non-applicable `.trellis/spec/frontend` and `.trellis/spec/backend` entries from the current project |
+| Spec import | Imported governance-focused reusable specs from `trellis-library` into `.trellis/spec/universal-domains/` |
+| Sync model | Added `.trellis/library-lock.yaml` and aligned the project to library-managed spec imports |
+| Script behavior | Changed `trellis-library` assembly/lock generation so spec assets map to `.trellis/spec/` instead of `.trellis/specs/` |
+| Dependency control | Prevented unrelated validation scripts from being auto-synced into target projects when importing `library-sync-governance` |
+| Spec structure | Reworked `.trellis/spec/index.md`, `docs/index.md`, and `guides/index.md` to distinguish imported governance specs from project-local supplemental rules |
+| Guide refinement | Rewrote `cross-layer-thinking-guide.md` to focus on repository boundary changes instead of traditional frontend/backend layering |
+
+**Updated Files**:
+- `.trellis/spec/index.md`
+- `.trellis/spec/docs/index.md`
+- `.trellis/spec/guides/index.md`
+- `.trellis/spec/guides/cross-layer-thinking-guide.md`
+- `.trellis/spec/universal-domains/...`
+- `.trellis/library-lock.yaml`
+- `trellis-library/README.md`
+- `trellis-library/scripts/assembly/assemble-init-set.py`
+- `trellis-library/scripts/assembly/write-library-lock.py`
+- `trellis-library/tests/test_cli.py`
+
+**Verification**:
+- `python3 trellis-library/scripts/validation/validate-library-sync.py --library-root trellis-library --strict-warnings`
+- `python3 -m py_compile trellis-library/scripts/validation/validate-library-sync.py trellis-library/scripts/assembly/assemble-init-set.py trellis-library/scripts/assembly/write-library-lock.py trellis-library/scripts/sync/diff-library-assets.py trellis-library/scripts/sync/propose-library-sync.py trellis-library/scripts/sync/apply-library-sync.py trellis-library/scripts/sync/sync-library-assets.py trellis-library/cli.py trellis-library/tests/test_cli.py`
+- `python3 -m unittest trellis-library/tests/test_cli.py`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fce93a1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 8: Fix GitHub Actions CI + trellis-library spec 分析
+
+**Date**: 2026-03-18
+**Task**: Fix GitHub Actions CI + trellis-library spec 分析
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+## CI 修复
+
+| 文件 | 修复内容 |
+|------|---------|
+| `trellis-library/scripts/sync/apply-library-sync.py` | shebang → `#!/usr/bin/env python3`；subprocess 调用改用 `_PYTHON` fallback（优先 `/ops/softwares/python/bin/python3`，否则 `sys.executable`） |
+| `trellis-library/tests/test_cli.py` | `PYTHON` 硬编码路径 → `shutil.which()` fallback（优先 `/ops/softwares/python/bin/python3`，否则 PATH） |
+| `.github/workflows/trellis-library-ci.yml` | `actions/checkout@v4` → `@v5`；`actions/setup-python@v5` → `@v6`（消除 Node.js 20 deprecation 警告） |
+| `trellis-library/cli.py` | CLI help 示例中的 `/ops/softwares/python/bin/python3` → `python3` |
+| `trellis-library/README.md` | 示例文档中的硬编码路径全部 → `python3` |
+
+**CI 根因**：`apply-library-sync.py` 的 subprocess 调用硬编码了 `/ops/softwares/python/bin/python3`，CI 环境无此路径导致 FileNotFoundError。验证通过。
+
+## library-sync-governance 作用说明
+
+当前项目 `ai-coding-toolkit` 是 trellis-library 的 target project，governance 规范定义了资产同步的双向规则：
+
+- **下游 sync**（源库 → 目标项目）：只自动更新 `follow-upstream` + `clean` 状态的资产
+- **上游贡献**（目标项目 → 源库）：必须走 `propose → apply` 流程，禁止自动回写
+- **验证强制**：`validate-library-sync --strict-warnings` 作为 CI 验证
+
+当前项目仅启用了 governance 的**初始化**和**验证**两个环节，downstream sync 和 upstream 贡献尚未使用。
+
+## trellis-library spec 资产分析
+
+分析了 `trellis-library/` 的全部资产（59 个 spec、27 个 checklist、24 个 example），与当前 `.trellis/spec`（7 个层）比对。建议优先级：
+
+- **高**：scenarios/defect-and-debugging（替换 /trellis:break-loop）、context-engineering（补充 guides 层）、verification（新建层）
+- **中**：architecture 规范补充 guides、cli command-interface 补充 commands 层
+- **低**：contracts 层、cross-layer-change-review
+
+待人工确认后执行。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4e06a40` | (see git log) |
+| `3bcac92` | (see git log) |
+| `1fe6ee9` | (see git log) |
+| `7cc2e8c` | (see git log) |
+| `fce93a1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

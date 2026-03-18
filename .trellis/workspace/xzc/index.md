@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 6
+- **Total Sessions**: 8
 - **Last Active**: 2026-03-18
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~277 | Active |
+| `journal-1.md` | ~402 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,8 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits |
 |---|------|-------|---------|
+| 8 | 2026-03-18 | Fix GitHub Actions CI + trellis-library spec 分析 | `4e06a40`, `3bcac92`, `1fe6ee9`, `7cc2e8c`, `fce93a1` |
+| 7 | 2026-03-18 | Sync Trellis Specs From Library | `fce93a1` |
 | 6 | 2026-03-18 | Fix Electron/Next.js spec issues - links, commands, placeholders, Prisma cleanup | `66eb001`, `0b86caf` |
 | 5 | 2026-03-18 | Trellis library framework specs expansion and validation hardening | `66eb001`, `0b86caf` |
 | 4 | 2026-03-18 | 修复 Electron/Next.js overview 链接、pnpm 统一、Next.js 适用性说明 | - |
