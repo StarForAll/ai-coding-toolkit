@@ -173,6 +173,50 @@ Important automation entry points:
 * `scripts/sync/apply-library-sync.py`
   Apply approved upstream proposals back into the source library.
 
+## Unified CLI
+
+For day-to-day usage, prefer the unified CLI entry point:
+
+```bash
+/ops/softwares/python/bin/python3 trellis-library/cli.py <command> [options]
+```
+
+Available commands:
+
+* `validate`
+  Run `scripts/validation/validate-library-sync.py`
+* `assemble`
+  Run `scripts/assembly/assemble-init-set.py`
+* `sync`
+  Run sync workflows through `--mode`
+
+Examples:
+
+```bash
+/ops/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings
+
+/ops/softwares/python/bin/python3 trellis-library/cli.py assemble \
+  --target /tmp/test-target \
+  --pack pack.go-service-foundation \
+  --dry-run
+
+/ops/softwares/python/bin/python3 trellis-library/cli.py sync \
+  --mode downstream \
+  --target /tmp/test-target \
+  --dry-run
+```
+
+`sync` mode mapping:
+
+* `--mode downstream`
+  Run `scripts/sync/sync-library-assets.py`
+* `--mode diff`
+  Run `scripts/sync/diff-library-assets.py`
+* `--mode propose`
+  Run `scripts/sync/propose-library-sync.py`
+* `--mode apply`
+  Run `scripts/sync/apply-library-sync.py`
+
 ## Validation
 
 Use the manifest as the registry and run the validator before claiming library
@@ -180,6 +224,12 @@ health:
 
 ```bash
 /ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --strict-warnings
+```
+
+Or through the unified CLI:
+
+```bash
+/ops/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings
 ```
 
 Current validation schemas live under:

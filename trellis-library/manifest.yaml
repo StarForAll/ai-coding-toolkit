@@ -3860,6 +3860,258 @@ assets:
       generated: false
       notes: ""
 
+  - id: spec.platforms.cli-command-interface
+    type: spec
+    format: directory
+    path: specs/platforms/cli/command-interface
+    title: Command Interface
+    summary: Reusable CLI-platform rules for invocation contracts, exit semantics, and user-visible command behavior
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: cli
+    concern: command-interface
+    atomicity: complex
+    tags:
+      - platforms
+      - cli
+      - commands
+      - interface
+    applicability:
+      project_types: []
+      lifecycle_stages:
+        - design
+        - implementation
+        - verification
+      platforms:
+        - cli
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.universal-domains.verification.verification-gates
+    optional_dependencies: []
+    provides:
+      - cli-interface-rules
+    change_impact:
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: true
+      generated: false
+      notes: ""
+
+  - id: spec.platforms.desktop-shared-application-runtime
+    type: spec
+    format: directory
+    path: specs/platforms/desktop/shared/application-runtime
+    title: Desktop Application Runtime
+    summary: Reusable desktop-platform rules for lifecycle, local runtime assumptions, and desktop-visible degradation shared across operating systems
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: desktop
+    concern: shared-application-runtime
+    atomicity: complex
+    tags:
+      - platforms
+      - desktop
+      - runtime
+      - lifecycle
+    applicability:
+      project_types: []
+      lifecycle_stages:
+        - design
+        - implementation
+        - verification
+      platforms:
+        - desktop
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.universal-domains.verification.verification-gates
+    optional_dependencies: []
+    provides:
+      - desktop-runtime-rules
+    change_impact:
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: true
+      generated: false
+      notes: ""
+
+  - id: spec.platforms.desktop-shared-system-integration
+    type: spec
+    format: directory
+    path: specs/platforms/desktop/shared/system-integration
+    title: Desktop System Integration
+    summary: Reusable desktop-platform rules for local OS service boundaries, capability access, and user-visible system integration behavior
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: desktop
+    concern: shared-system-integration
+    atomicity: complex
+    tags:
+      - platforms
+      - desktop
+      - system-integration
+      - os
+    applicability:
+      project_types: []
+      lifecycle_stages:
+        - design
+        - implementation
+        - verification
+      platforms:
+        - desktop
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.desktop-shared-application-runtime
+    optional_dependencies: []
+    provides:
+      - desktop-system-integration-rules
+    change_impact:
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: true
+      generated: false
+      notes: ""
+
+  - id: spec.platforms.desktop-macos-system-permissions
+    type: spec
+    format: directory
+    path: specs/platforms/desktop/macos/system-permissions
+    title: macOS System Permissions
+    summary: Reusable macOS-specific rules for permission-gated desktop capabilities, consent flow behavior, and settings-based recovery
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: desktop-macos
+    concern: system-permissions
+    atomicity: complex
+    tags:
+      - platforms
+      - desktop
+      - macos
+      - permissions
+      - privacy
+    applicability:
+      project_types: []
+      lifecycle_stages:
+        - design
+        - implementation
+        - verification
+      platforms:
+        - desktop
+        - macos
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.desktop-shared-system-integration
+    optional_dependencies: []
+    provides:
+      - macos-permission-rules
+    change_impact:
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: true
+      generated: false
+      notes: ""
+
+  - id: spec.platforms.desktop-windows-filesystem-and-paths
+    type: spec
+    format: directory
+    path: specs/platforms/desktop/windows/filesystem-and-paths
+    title: Windows Filesystem And Paths
+    summary: Reusable Windows-specific desktop rules for path handling, writable locations, and filesystem behavior differences
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: desktop-windows
+    concern: filesystem-and-paths
+    atomicity: complex
+    tags:
+      - platforms
+      - desktop
+      - windows
+      - filesystem
+      - paths
+    applicability:
+      project_types: []
+      lifecycle_stages:
+        - design
+        - implementation
+        - verification
+      platforms:
+        - desktop
+        - windows
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.desktop-shared-application-runtime
+    optional_dependencies: []
+    provides:
+      - windows-filesystem-rules
+    change_impact:
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: true
+      generated: false
+      notes: ""
+
+  - id: spec.platforms.desktop-linux-runtime-environment
+    type: spec
+    format: directory
+    path: specs/platforms/desktop/linux/runtime-environment
+    title: Linux Runtime Environment
+    summary: Reusable Linux-specific desktop rules for environment-driven runtime behavior, XDG-style paths, and session assumptions
+    status: active
+    version: 1.0.0
+    domain_axis: platforms
+    domain: desktop-linux
+    concern: runtime-environment
+    atomicity: complex
+    tags:
+      - platforms
+      - desktop
+      - linux
+      - environment
+      - runtime
+    applicability:
+      project_types: []
+      lifecycle_stages:
+        - design
+        - implementation
+        - verification
+      platforms:
+        - desktop
+        - linux
+      technologies: []
+    owners:
+      - core-library
+    dependencies:
+      - spec.platforms.desktop-shared-application-runtime
+    optional_dependencies: []
+    provides:
+      - linux-runtime-environment-rules
+    change_impact:
+      review_required: true
+      sync_targets: []
+    metadata:
+      source_of_truth: true
+      generated: false
+      notes: ""
+
   - id: spec.platforms.web-browser-security
     type: spec
     format: directory
