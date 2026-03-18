@@ -222,6 +222,20 @@ def discover_candidates(library_root: Path) -> dict[str, set[str]]:
     return candidates
 
 
+def is_covered_by_registered_directory_asset(
+    rel_path: str,
+    registered: set[str],
+    discovered_for_type: set[str],
+) -> bool:
+    parent = Path(rel_path).parent
+    while str(parent) not in {"", "."}:
+        parent_rel = parent.as_posix()
+        if parent_rel in registered and parent_rel in discovered_for_type:
+            return True
+        parent = parent.parent
+    return False
+
+
 def relation_reverse_exists(relations: list[dict[str, Any]], source: dict[str, Any]) -> bool:
     source_from = source.get("from")
     source_to = source.get("to")
@@ -501,6 +515,8 @@ def validate_registration_drift(
                 continue
             # Only compare against discovered set for roots we scan.
             if expected_root and rel_path.startswith(expected_root + "/") and rel_path not in discovered_for_type:
+                if is_covered_by_registered_directory_asset(rel_path, registered, discovered_for_type):
+                    continue
                 # Registered path exists but did not match candidate scan heuristics.
                 add_finding(
                     findings,

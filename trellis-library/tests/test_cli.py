@@ -67,6 +67,16 @@ class TrellisLibraryCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("PASS", result.stdout)
 
+    def test_validate_command_does_not_flag_nested_assets_under_registered_directory_assets(self) -> None:
+        result = self.run_cli("validate", "--library-root", "trellis-library", "--strict-warnings")
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertNotIn(
+            "registered-asset-not-discoverable",
+            result.stdout,
+            msg=result.stdout + result.stderr,
+        )
+
     def test_assemble_command_runs_dry_run(self) -> None:
         with tempfile.TemporaryDirectory() as target_dir:
             result = self.run_cli(
