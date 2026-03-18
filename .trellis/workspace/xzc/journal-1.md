@@ -194,3 +194,84 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: Trellis library framework specs expansion and validation hardening
+
+**Date**: 2026-03-18
+**Task**: Trellis library framework specs expansion and validation hardening
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Summary |
+|------|---------|
+| Framework specs | Added large Electron and Next.js framework spec sets under `trellis-library/specs/technologies/frameworks/`, including overview pages, frontend/backend/main-process/renderer/shared sections, and implementation guides. |
+| Pitfall scenarios | Added Electron and Next.js defect/debugging scenario specs under `trellis-library/specs/scenarios/defect-and-debugging/`. |
+| Assembled examples | Added `electron-app-foundation` and `nextjs-fullstack-foundation` assembled-pack examples and aligned manifest registration. |
+| Validation | Updated `validate-library-sync.py`, added `validate-links.py` and `validate-overview-links.py`, and extended CLI tests to cover the revised sync behavior. |
+| Cleanup | Removed generated `__pycache__` artifacts from tracked files. |
+
+**Verification**:
+- `/ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --strict-warnings`
+- `/ops/softwares/python/bin/python3 -m py_compile trellis-library/scripts/validation/validate-library-sync.py`
+
+**Notes**:
+- Worktree was clean when recording.
+- No active Trellis tasks required archiving for this session.
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `66eb001` | (see git log) |
+| `0b86caf` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 6: Fix Electron/Next.js spec issues - links, commands, placeholders, Prisma cleanup
+
+**Date**: 2026-03-18
+**Task**: Fix Electron/Next.js spec issues - links, commands, placeholders, Prisma cleanup
+
+### Summary
+
+修复 Electron 和 Next.js 规范文档的多轮质量问题：断链修复、命令风格统一、占位符体系完善、Prisma 内容清除、跨框架类比表述去化。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `66eb001` | (see git log) |
+| `0b86caf` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
