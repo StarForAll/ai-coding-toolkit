@@ -1,4 +1,4 @@
-#!/ops/softwares/python/bin/python3
+#!/usr/bin/env python3
 """
 Validate trellis-library manifest registration and sync consistency.
 

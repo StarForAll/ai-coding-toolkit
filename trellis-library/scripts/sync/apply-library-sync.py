@@ -1,4 +1,4 @@
-#!/ops/softwares/python/bin/python3
+#!/usr/bin/env python3
 """
 Apply an approved upstream sync proposal to trellis-library.
 """
@@ -8,12 +8,20 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+_PYTHON = (
+    "/ops/softwares/python/bin/python3"
+    if Path("/ops/softwares/python/bin/python3").exists()
+    else sys.executable
+)
 
 
 def sha256_for_path(path: Path) -> str:
@@ -141,7 +149,7 @@ def main() -> int:
 
     if not args.skip_validate:
         validate_cmd = [
-            "/ops/softwares/python/bin/python3",
+            _PYTHON,
             str(library_root / "scripts" / "validation" / "validate-library-sync.py"),
             "--library-root",
             str(library_root),

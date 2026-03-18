@@ -1,4 +1,4 @@
-#!/ops/softwares/python/bin/python3
+#!/usr/bin/env python3
 """
 Sync trellis-library assets downstream into a target project's .trellis tree.
 """

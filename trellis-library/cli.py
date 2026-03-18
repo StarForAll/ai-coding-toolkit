@@ -1,4 +1,4 @@
-#!/ops/softwares/python/bin/python3
+#!/usr/bin/env python3
 """
 Unified CLI entry point for trellis-library maintenance workflows.
 """

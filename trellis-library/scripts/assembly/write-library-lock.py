@@ -1,4 +1,4 @@
-#!/ops/softwares/python/bin/python3
+#!/usr/bin/env python3
 """
 Write .trellis/library-lock.yaml for a target project.
 """

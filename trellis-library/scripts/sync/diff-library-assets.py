@@ -1,4 +1,4 @@
-#!/ops/softwares/python/bin/python3
+#!/usr/bin/env python3
 """
 Diff target-project Trellis assets against trellis-library source assets.
 """
