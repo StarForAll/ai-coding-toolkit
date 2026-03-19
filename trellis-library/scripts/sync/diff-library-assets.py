@@ -6,48 +6,29 @@ Diff target-project Trellis assets against trellis-library source assets.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+LIBRARY_ROOT = Path(__file__).resolve().parents[2]
+if str(LIBRARY_ROOT) not in sys.path:
+    sys.path.insert(0, str(LIBRARY_ROOT))
 
-KEY_FILES = {
-    "overview.md",
-    "scope-boundary.md",
-    "normative-rules.md",
-    "verification.md",
-}
-
-PROJECT_PRIVATE_HINTS = {
-    ".trellis/",
-    "src/",
-    "apps/",
-    "packages/",
-    "customer",
-    "internal-only",
-    "project-specific",
-}
+from _internal.asset_state import (  # noqa: E402
+    determine_contribution_eligibility,
+    determine_diff_status,
+    is_managed_target_path,
+    managed_target_path_error,
+    sha256_for_path,
+)
 
 
 def iso_now() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
-
-
-def sha256_for_path(path: Path) -> str:
-    digest = hashlib.sha256()
-    if not path.exists():
-        return ""
-    if path.is_file():
-        digest.update(path.read_bytes())
-        return digest.hexdigest()
-    for child in sorted(p for p in path.rglob("*") if p.is_file()):
-        digest.update(str(child.relative_to(path)).encode("utf-8"))
-        digest.update(child.read_bytes())
-    return digest.hexdigest()
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -110,98 +91,6 @@ def write_yaml(path: Path, data: dict[str, Any]) -> None:
     path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
 
-def relative_file_set(path: Path) -> set[str]:
-    if not path.exists():
-        return set()
-    if path.is_file():
-        return {path.name}
-    return {str(child.relative_to(path).as_posix()) for child in path.rglob("*") if child.is_file()}
-
-
-def content_has_private_hints(path: Path) -> bool:
-    if not path.exists():
-        return False
-    files = [path] if path.is_file() else [p for p in path.rglob("*") if p.is_file() and p.suffix == ".md"]
-    for file in files:
-        try:
-            content = file.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        lowered = content.lower()
-        if any(hint in lowered for hint in PROJECT_PRIVATE_HINTS):
-            return True
-    return False
-
-
-def determine_change_scope(source_path: Path, target_path: Path) -> str:
-    if not source_path.exists() or not target_path.exists():
-        return "structure-change"
-    if source_path.is_file() != target_path.is_file():
-        return "structure-change"
-
-    if source_path.is_file():
-        return "content-change" if sha256_for_path(source_path) != sha256_for_path(target_path) else "none"
-
-    source_files = relative_file_set(source_path)
-    target_files = relative_file_set(target_path)
-    if source_files != target_files:
-        return "structure-change"
-    return "content-change" if sha256_for_path(source_path) != sha256_for_path(target_path) else "none"
-
-
-def determine_diff_status(import_item: dict[str, Any], source_path: Path, target_path: Path) -> tuple[str, str]:
-    if not target_path.exists():
-        return "missing", "structure-change"
-    if not source_path.exists():
-        return "migration-required", "structure-change"
-
-    if source_path.is_file() != target_path.is_file():
-        return "diverged", "structure-change"
-
-    change_scope = determine_change_scope(source_path, target_path)
-    if change_scope == "none":
-        return "unchanged", "none"
-
-    if source_path.is_dir():
-        source_files = relative_file_set(source_path)
-        target_files = relative_file_set(target_path)
-        if KEY_FILES - target_files:
-            return "diverged", "structure-change"
-        if source_files != target_files:
-            return "diverged", "structure-change"
-        if content_has_private_hints(target_path):
-            return "modified", "content-change"
-        return "modified", "content-change"
-
-    # file asset
-    if content_has_private_hints(target_path):
-        return "modified", "content-change"
-    return "modified", "content-change"
-
-
-def determine_contribution_eligibility(
-    asset: dict[str, Any],
-    diff_status: str,
-    change_scope: str,
-    target_path: Path,
-) -> tuple[bool, str, str]:
-    if diff_status == "unchanged":
-        return False, "no-local-diff", "keep-local-and-follow-upstream"
-    if diff_status == "missing":
-        return False, "asset-missing-locally", "restore-from-upstream"
-    if diff_status == "migration-required":
-        return False, "source-asset-missing-or-renamed", "migration-required"
-    if diff_status == "diverged":
-        return False, "asset-boundary-or-structure-changed", "manual-review-required"
-    if change_scope == "structure-change":
-        return False, "structure-change-not-eligible", "manual-review-required"
-    if asset.get("type") != "spec":
-        return False, "only-spec-assets-are-upstream-eligible-by-default", "keep-local-and-pin"
-    if content_has_private_hints(target_path):
-        return False, "project-private-content-detected", "keep-local-and-pin"
-    return True, "generalizable-content-change", "propose-upstream-selective"
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Diff target-project assets against trellis-library source assets")
     parser.add_argument("--library-root", default="trellis-library", help="Path to trellis-library root")
@@ -256,8 +145,23 @@ def main() -> int:
             continue
 
         source_path = library_root / asset["path"]
-        target_path = target_root / import_item["target_path"]
-        diff_status, change_scope = determine_diff_status(import_item, source_path, target_path)
+        target_path_str = import_item.get("target_path", "")
+        if not is_managed_target_path(target_path_str):
+            result = {
+                "asset_id": asset_id,
+                "diff_status": "diverged",
+                "change_scope": "structure-change",
+                "contribution_eligible": False,
+                "contribution_reason": "asset-boundary-or-structure-changed",
+                "recommended_action": "manual-review-required",
+            }
+            results.append(result)
+            has_warn = True
+            import_item["local_state"] = "diverged"
+            import_item["notes"] = managed_target_path_error(target_path_str)
+            continue
+        target_path = target_root / target_path_str
+        diff_status, change_scope = determine_diff_status(source_path, target_path)
         eligible, reason, action = determine_contribution_eligibility(asset, diff_status, change_scope, target_path)
 
         current_checksum = sha256_for_path(target_path)

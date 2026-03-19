@@ -1187,6 +1187,137 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+- id: spec.universal-domains.product-and-requirements.prd-documentation
+  type: spec
+  format: directory
+  path: specs/universal-domains/product-and-requirements/prd-documentation
+  title: PRD Documentation
+  summary: Shared rules for structuring PRD documentation and keeping customer-facing
+    and developer-facing variants aligned
+  status: active
+  version: 1.0.0
+  domain_axis: universal-domains
+  domain: product-and-requirements
+  concern: prd-documentation
+  atomicity: complex
+  tags:
+  - product
+  - requirements
+  - prd
+  - documentation
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - discovery
+    - planning
+    - implementation
+    - verification
+    platforms: []
+    technologies: []
+  owners:
+  - core-library
+  dependencies:
+  - spec.universal-domains.product-and-requirements.problem-definition
+  - spec.universal-domains.product-and-requirements.scope-boundary
+  - spec.universal-domains.product-and-requirements.acceptance-criteria
+  optional_dependencies: []
+  provides:
+  - prd-documentation-rules
+  change_impact:
+    level: medium
+    review_required: true
+    sync_targets: []
+  metadata:
+    source_of_truth: true
+    generated: false
+    notes: ''
+- id: spec.universal-domains.product-and-requirements.prd-documentation-customer-facing
+  type: spec
+  format: directory
+  path: specs/universal-domains/product-and-requirements/prd-documentation-customer-facing
+  title: Customer-Facing PRD Documentation
+  summary: Reusable rules for writing PRDs that are clear, accessible, and understandable
+    for customers and stakeholders without technical backgrounds
+  status: active
+  version: 1.1.0
+  domain_axis: universal-domains
+  domain: product-and-requirements
+  concern: prd-documentation-customer-facing
+  atomicity: complex
+  tags:
+  - product
+  - requirements
+  - prd
+  - documentation
+  - customer-facing
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - discovery
+    - planning
+    platforms: []
+    technologies: []
+  owners:
+  - core-library
+  dependencies:
+  - spec.universal-domains.product-and-requirements.prd-documentation
+  - spec.universal-domains.product-and-requirements.problem-definition
+  - spec.universal-domains.product-and-requirements.requirement-clarification
+  optional_dependencies: []
+  provides:
+  - customer-prd-rules
+  change_impact:
+    level: medium
+    review_required: true
+    sync_targets: []
+  metadata:
+    source_of_truth: true
+    generated: false
+    notes: ''
+- id: spec.universal-domains.product-and-requirements.prd-documentation-developer-facing
+  type: spec
+  format: directory
+  path: specs/universal-domains/product-and-requirements/prd-documentation-developer-facing
+  title: Developer-Facing PRD Documentation
+  summary: Reusable rules for writing technical PRDs that provide detailed specifications,
+    technical constraints, and implementation guidance for development teams
+  status: active
+  version: 1.1.0
+  domain_axis: universal-domains
+  domain: product-and-requirements
+  concern: prd-documentation-developer-facing
+  atomicity: complex
+  tags:
+  - product
+  - requirements
+  - prd
+  - documentation
+  - developer-facing
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - planning
+    - implementation
+    - verification
+    platforms: []
+    technologies: []
+  owners:
+  - core-library
+  dependencies:
+  - spec.universal-domains.product-and-requirements.prd-documentation
+  - spec.universal-domains.product-and-requirements.acceptance-criteria
+  - spec.universal-domains.architecture.system-boundaries
+  optional_dependencies: []
+  provides:
+  - developer-prd-rules
+  change_impact:
+    level: medium
+    review_required: true
+    sync_targets: []
+  metadata:
+    source_of_truth: true
+    generated: false
+    notes: ''
 - id: spec.universal-domains.architecture.system-boundaries
   type: spec
   format: directory

@@ -6,7 +6,6 @@ Apply an approved upstream sync proposal to trellis-library.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import shutil
 import subprocess
@@ -17,24 +16,17 @@ from typing import Any
 
 import yaml
 
+LIBRARY_ROOT = Path(__file__).resolve().parents[2]
+if str(LIBRARY_ROOT) not in sys.path:
+    sys.path.insert(0, str(LIBRARY_ROOT))
+
+from _internal.asset_state import sha256_for_path  # noqa: E402
+
 _PYTHON = (
     "/ops/softwares/python/bin/python3"
     if Path("/ops/softwares/python/bin/python3").exists()
     else sys.executable
 )
-
-
-def sha256_for_path(path: Path) -> str:
-    digest = hashlib.sha256()
-    if not path.exists():
-        return ""
-    if path.is_file():
-        digest.update(path.read_bytes())
-        return digest.hexdigest()
-    for child in sorted(p for p in path.rglob("*") if p.is_file()):
-        digest.update(str(child.relative_to(path)).encode("utf-8"))
-        digest.update(child.read_bytes())
-    return digest.hexdigest()
 
 
 def load_yaml(path: Path) -> dict[str, Any]:

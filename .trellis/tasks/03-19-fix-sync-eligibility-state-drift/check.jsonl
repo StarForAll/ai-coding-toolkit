@@ -1,0 +1,6 @@
+{"file": ".opencode/commands/trellis/finish-work.md", "reason": "Finish work checklist"}
+{"file": ".opencode/commands/trellis/check.md", "reason": "Code quality check spec"}
+{"file": ".trellis/spec/scripts/python-conventions.md", "reason": "Python script conventions for trellis-library sync tooling"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Validate lock and sync/propose boundary alignment"}
+{"file": ".trellis/spec/universal-domains/verification/verification-gates/verification.md", "reason": "Require auditable failing and passing test evidence for bug fixes"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Ensure helper extraction removes duplicated checksum/state logic"}

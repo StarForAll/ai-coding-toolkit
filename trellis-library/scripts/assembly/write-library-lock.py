@@ -6,13 +6,19 @@ Write .trellis/library-lock.yaml for a target project.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+LIBRARY_ROOT = Path(__file__).resolve().parents[2]
+if str(LIBRARY_ROOT) not in sys.path:
+    sys.path.insert(0, str(LIBRARY_ROOT))
+
+from _internal.asset_state import sha256_for_path  # noqa: E402
 
 
 COPYABLE_TYPES = {"spec", "template", "checklist"}
@@ -20,18 +26,6 @@ COPYABLE_TYPES = {"spec", "template", "checklist"}
 
 def iso_now() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
-
-
-def sha256_for_path(path: Path) -> str:
-    digest = hashlib.sha256()
-    if path.is_file():
-        digest.update(path.read_bytes())
-        return digest.hexdigest()
-
-    for child in sorted(p for p in path.rglob("*") if p.is_file()):
-        digest.update(str(child.relative_to(path)).encode("utf-8"))
-        digest.update(child.read_bytes())
-    return digest.hexdigest()
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -186,6 +180,18 @@ def merge_locks(existing: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]
             existing_imports[asset_id]["last_local_checksum"] = imp.get("last_local_checksum", existing_imports[asset_id].get("last_local_checksum", ""))
             existing_imports[asset_id]["local_state"] = imp.get("local_state", existing_imports[asset_id].get("local_state", "clean"))
             existing_imports[asset_id]["last_local_scan_at"] = imp.get("last_local_scan_at", existing_imports[asset_id].get("last_local_scan_at"))
+            existing_imports[asset_id]["last_observed_checksum"] = imp.get(
+                "last_observed_checksum",
+                existing_imports[asset_id].get("last_observed_checksum", ""),
+            )
+            existing_imports[asset_id]["last_blocked_at"] = imp.get(
+                "last_blocked_at",
+                existing_imports[asset_id].get("last_blocked_at"),
+            )
+            existing_imports[asset_id]["blocked_count"] = imp.get(
+                "blocked_count",
+                existing_imports[asset_id].get("blocked_count", 0),
+            )
         else:
             existing_imports[asset_id] = imp
     merged["imports"] = list(existing_imports.values())
@@ -241,6 +247,9 @@ def build_fresh_lock(
                 "local_state": "clean",
                 "last_local_scan_at": None,
                 "last_local_checksum": sha256_for_path(target_path) if target_path.exists() else "",
+                "last_observed_checksum": sha256_for_path(target_path) if target_path.exists() else "",
+                "last_blocked_at": None,
+                "blocked_count": 0,
                 "contribution": {
                     "eligible": asset["type"] == "spec",
                     "mode": "selective" if asset["type"] == "spec" else "none",

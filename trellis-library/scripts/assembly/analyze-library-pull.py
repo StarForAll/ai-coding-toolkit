@@ -6,14 +6,22 @@ Analyze trellis-library asset pull: 3-way comparison, local file detection, clas
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
+import sys
 from typing import Any
 
 import yaml
+
+LIBRARY_ROOT = Path(__file__).resolve().parents[2]
+if str(LIBRARY_ROOT) not in sys.path:
+    sys.path.insert(0, str(LIBRARY_ROOT))
+
+from _internal.asset_state import relative_file_set, sha256_for_path  # noqa: E402
+from _internal.asset_state import is_managed_target_path, managed_target_path_error  # noqa: E402
+from _internal.drift_scan import scan_existing_imports as scan_existing_imports_shared  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -90,19 +98,6 @@ def iso_now() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
-def sha256_for_path(path: Path) -> str:
-    digest = hashlib.sha256()
-    if not path.exists():
-        return ""
-    if path.is_file():
-        digest.update(path.read_bytes())
-        return digest.hexdigest()
-    for child in sorted(p for p in path.rglob("*") if p.is_file()):
-        digest.update(str(child.relative_to(path)).encode("utf-8"))
-        digest.update(child.read_bytes())
-    return digest.hexdigest()
-
-
 def load_yaml(path: Path) -> dict[str, Any]:
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
@@ -116,13 +111,7 @@ def load_yaml(path: Path) -> dict[str, Any]:
 
 def collect_all_files(root: Path) -> set[str]:
     """Collect all file paths under root (relative to root)."""
-    if not root.exists():
-        return set()
-    return {
-        str(child.relative_to(root).as_posix())
-        for child in root.rglob("*")
-        if child.is_file()
-    }
+    return relative_file_set(root)
 
 
 def build_tracked_set(lock: dict[str, Any], target_root: Path) -> set[str]:
@@ -132,6 +121,8 @@ def build_tracked_set(lock: dict[str, Any], target_root: Path) -> set[str]:
     for imp in lock.get("imports", []):
         target_path = imp.get("target_path", "")
         if not target_path:
+            continue
+        if not is_managed_target_path(target_path):
             continue
         # target_path is like ".trellis/spec/..." relative to target_root
         # Convert to relative to .trellis/
@@ -167,6 +158,8 @@ def detect_local_only_files(
     import_mode: str,
 ) -> list[LocalFile]:
     """Detect files in asset target path that are NOT tracked by any import."""
+    if not is_managed_target_path(asset_target_path):
+        return []
     trellis_dir = target_root / ".trellis"
     if not trellis_dir.exists():
         return []
@@ -297,6 +290,11 @@ def classify_asset(
 
     # Case 1: Already imported (existing)
     if import_item is not None:
+        if not is_managed_target_path(import_item.get("target_path", "")):
+            analysis.category = "structural-conflict"
+            analysis.needs_review = True
+            analysis.message = managed_target_path_error(import_item.get("target_path", ""))
+            return analysis
         # Check if it's already in lock and unchanged
         source_checksum = sha256_for_path(source_abs)
         stored_source_checksum = import_item.get("source_checksum", "")
@@ -392,76 +390,6 @@ def _target_relative_path(asset: dict[str, Any]) -> Path:
             parts[0] = "spec"
         return Path(*parts)
     return source_rel
-
-
-# ---------------------------------------------------------------------------
-# Drift scan for existing imports
-# ---------------------------------------------------------------------------
-
-def scan_existing_imports(
-    lock: dict[str, Any],
-    library_root: Path,
-    target_root: Path,
-    exclude_ids: set[str],
-    asset_map: dict[str, dict[str, Any]],
-) -> list[DriftItem]:
-    """Scan existing imports for upstream/local drift. Returns items that have changed."""
-    items: list[DriftItem] = []
-
-    for imp in lock.get("imports", []):
-        asset_id = imp.get("asset_id", "")
-        if not asset_id or asset_id in exclude_ids:
-            continue
-
-        # Get current source checksum
-        asset = asset_map.get(asset_id)
-        if not asset:
-            items.append(DriftItem(
-                asset_id=asset_id,
-                drift_type="upstream-and-local-changed",
-                message="资产已从 manifest 中移除",
-            ))
-            continue
-
-        source_abs = library_root / asset["path"]
-        current_source_checksum = sha256_for_path(source_abs)
-        stored_source_checksum = imp.get("source_checksum", "")
-
-        # Get current target checksum
-        target_path_str = imp.get("target_path", "")
-        target_abs = target_root / target_path_str
-        current_target_checksum = sha256_for_path(target_abs) if target_abs.exists() else ""
-        stored_local_checksum = imp.get("last_local_checksum", "")
-
-        source_changed = bool(stored_source_checksum) and current_source_checksum != stored_source_checksum
-        target_changed = bool(stored_local_checksum) and current_target_checksum != stored_local_checksum
-
-        if not source_changed and not target_changed:
-            continue  # synced, no report
-
-        source_version = asset.get("version", "")
-        stored_version = imp.get("source_version", "")
-
-        if source_changed and target_changed:
-            items.append(DriftItem(
-                asset_id=asset_id,
-                drift_type="upstream-and-local-changed",
-                message=f"上游已更新 ({stored_version} → {source_version})，本地也有修改。建议: 单独运行 assemble --asset {asset_id} 进行更新",
-            ))
-        elif source_changed:
-            items.append(DriftItem(
-                asset_id=asset_id,
-                drift_type="upstream-changed",
-                message=f"上游已更新 ({stored_version} → {source_version})，本地未修改。建议: 单独运行 assemble --asset {asset_id} 进行更新",
-            ))
-        elif target_changed:
-            items.append(DriftItem(
-                asset_id=asset_id,
-                drift_type="local-changed",
-                message="本地有修改，上游未变。如需贡献上游可运行 diff/propose",
-            ))
-
-    return items
 
 
 # ---------------------------------------------------------------------------
@@ -607,6 +535,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--asset", action="append", default=[], help="Asset id to analyze (repeatable)")
     parser.add_argument("--pack", action="append", default=[], help="Pack id to analyze (repeatable)")
     parser.add_argument("--scan-all-imports", action="store_true", help="Also scan existing imports for upstream/local drift")
+    parser.add_argument("--no-scan-all-imports", action="store_true", help="Disable merge-mode drift scan for existing imports")
     parser.add_argument("--json", action="store_true", help="Emit JSON output")
     return parser.parse_args()
 
@@ -719,14 +648,20 @@ def main() -> int:
 
     # Drift scan for existing imports (merge mode only)
     drift_items: list[DriftItem] = []
-    if mode == "merge" and args.scan_all_imports:
-        drift_items = scan_existing_imports(
-            lock=lock,
-            library_root=library_root,
-            target_root=target_root,
-            exclude_ids=set(selected),
-            asset_map=asset_map,
-        )
+    should_scan_all_imports = mode == "merge" and not args.no_scan_all_imports
+    if args.scan_all_imports:
+        should_scan_all_imports = True
+    if should_scan_all_imports:
+        drift_items = [
+            DriftItem(**item)
+            for item in scan_existing_imports_shared(
+                lock=lock,
+                library_root=library_root,
+                target_root=target_root,
+                exclude_ids=set(selected),
+                asset_map=asset_map,
+            )
+        ]
 
     report = SimulationReport(
         timestamp=iso_now(),

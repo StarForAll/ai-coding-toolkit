@@ -8,23 +8,29 @@ from __future__ import annotations
 import argparse
 import difflib
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+LIBRARY_ROOT = Path(__file__).resolve().parents[2]
+if str(LIBRARY_ROOT) not in sys.path:
+    sys.path.insert(0, str(LIBRARY_ROOT))
+
+from _internal.asset_state import (  # noqa: E402
+    DEFAULT_PRIVATE_HINTS,
+    determine_contribution_eligibility,
+    determine_diff_status,
+    is_managed_target_path,
+    managed_target_path_error,
+    path_contains_hints,
+    relative_file_set,
+)
+
 
 ALLOWED_SCOPES = {"asset", "file", "fragment"}
-PRIVATE_HINTS = {
-    ".trellis/",
-    "src/",
-    "apps/",
-    "packages/",
-    "customer",
-    "internal-only",
-    "project-specific",
-}
 
 
 def iso_now() -> str:
@@ -89,27 +95,6 @@ def validate_against_schema(data: Any, schema: dict[str, Any], path: str = "$") 
 def write_yaml(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
-
-
-def relative_file_set(path: Path) -> set[str]:
-    if not path.exists():
-        return set()
-    if path.is_file():
-        return {path.name}
-    return {str(child.relative_to(path).as_posix()) for child in path.rglob("*") if child.is_file()}
-
-
-def contains_private_hints(path: Path) -> bool:
-    files = [path] if path.is_file() else [p for p in path.rglob("*") if p.is_file()]
-    for file in files:
-        try:
-            content = file.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        lowered = content.lower()
-        if any(hint in lowered for hint in PRIVATE_HINTS):
-            return True
-    return False
 
 
 def collect_changed_files(source_path: Path, target_path: Path) -> list[str]:
@@ -222,15 +207,25 @@ def main() -> int:
     if asset.get("type") != "spec":
         raise SystemExit("Only spec assets are proposal-eligible in the current implementation")
 
-    if import_item.get("local_state") not in {"modified"}:
-        raise SystemExit(f"Asset '{args.asset}' must be in local_state=modified before proposal generation")
-
-    contribution = import_item.get("contribution", {})
-    if not contribution.get("eligible", False):
-        raise SystemExit(f"Asset '{args.asset}' is not marked as contribution eligible")
-
     source_path = library_root / asset["path"]
     target_path = target_root / import_item["target_path"]
+    if not is_managed_target_path(import_item.get("target_path", "")):
+        raise SystemExit(managed_target_path_error(import_item.get("target_path", "")))
+    diff_status, change_scope = determine_diff_status(source_path, target_path)
+    if diff_status != "modified":
+        raise SystemExit(
+            f"Asset '{args.asset}' must have a modified local diff before proposal generation"
+        )
+
+    eligible, reason, recommended_action = determine_contribution_eligibility(
+        asset,
+        diff_status,
+        change_scope,
+        target_path,
+    )
+    if not eligible:
+        raise SystemExit(f"Asset '{args.asset}' is not marked as contribution eligible")
+
     if not source_path.exists() or not target_path.exists():
         raise SystemExit("Source or target asset path does not exist")
 
@@ -249,7 +244,7 @@ def main() -> int:
     if args.scope in {"file", "fragment"} and not selected_items:
         raise SystemExit("At least one changed file must be selected")
 
-    private_hint_detected = contains_private_hints(target_path)
+    private_hint_detected = path_contains_hints(target_path, hints=DEFAULT_PRIVATE_HINTS)
 
     proposal_id = f"proposal.{args.asset}.{datetime.now().strftime('%Y%m%d%H%M%S')}"
     proposal = {
@@ -263,10 +258,10 @@ def main() -> int:
         "expected_base_checksum": import_item.get("source_checksum", ""),
         "generated_at": iso_now(),
         "source_project": str(target_root),
-        "diff_status": import_item.get("local_state"),
-        "contribution_eligible": contribution.get("eligible", False),
-        "contribution_reason": "generalizable-content-change" if contribution.get("eligible", False) else "not-eligible",
-        "recommended_action": "propose-upstream-selective",
+        "diff_status": diff_status,
+        "contribution_eligible": eligible,
+        "contribution_reason": reason,
+        "recommended_action": recommended_action,
         "selected_scope": args.scope,
         "selected_items": selected_items,
         "excluded_items": excluded_items,
@@ -307,6 +302,8 @@ def main() -> int:
 
     if args.update_lock:
         import_item.setdefault("contribution", {})
+        import_item["local_state"] = diff_status
+        import_item["contribution"]["eligible"] = eligible
         import_item["contribution"]["reviewed"] = True
         import_item["contribution"]["proposed"] = True
         import_item["contribution"]["last_proposed_at"] = proposal["generated_at"]

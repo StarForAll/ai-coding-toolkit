@@ -100,6 +100,12 @@ Recommended flow:
 Source-library assets remain the source of truth. Generated compiled views are
 derived outputs and should not be manually maintained.
 
+Downstream sync expectations:
+
+* imported `target_path` entries in `.trellis/library-lock.yaml` are expected to remain inside `.trellis/`
+* merge-mode analysis scans other imported assets for drift by default so scoped operations still surface pending divergence
+* `pinned` assets stay read-only by default and only update when the caller explicitly opts in for that sync run
+
 ## Recommended Pack Guide
 
 Use packs as a starting point, then add or remove individual assets based on the

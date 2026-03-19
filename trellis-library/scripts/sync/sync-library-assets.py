@@ -6,7 +6,6 @@ Sync trellis-library assets downstream into a target project's .trellis tree.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import shutil
 import subprocess
@@ -16,6 +15,18 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+LIBRARY_ROOT = Path(__file__).resolve().parents[2]
+if str(LIBRARY_ROOT) not in sys.path:
+    sys.path.insert(0, str(LIBRARY_ROOT))
+
+from _internal.asset_state import determine_local_state as _determine_local_state  # noqa: E402
+from _internal.asset_state import (  # noqa: E402
+    is_managed_target_path,
+    managed_target_path_error,
+    sha256_for_path,
+)
+from _internal.drift_scan import scan_existing_imports as scan_existing_imports_shared  # noqa: E402
 
 
 PYTHON = (
@@ -27,21 +38,6 @@ PYTHON = (
 
 def iso_now() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
-
-
-def sha256_for_path(path: Path) -> str:
-    digest = hashlib.sha256()
-    if not path.exists():
-        return ""
-    if path.is_file():
-        digest.update(path.read_bytes())
-        return digest.hexdigest()
-
-    for child in sorted(p for p in path.rglob("*") if p.is_file()):
-        digest.update(str(child.relative_to(path)).encode("utf-8"))
-        digest.update(child.read_bytes())
-    return digest.hexdigest()
-
 
 def load_yaml(path: Path) -> dict[str, Any]:
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -126,20 +122,15 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def determine_local_state(import_item: dict[str, Any], target_abs: Path) -> str:
-    expected_mode = import_item.get("import_mode")
-    if not target_abs.exists():
-        return "missing"
-    if expected_mode == "file" and not target_abs.is_file():
-        return "diverged"
-    if expected_mode == "directory" and not target_abs.is_dir():
-        return "diverged"
-
-    current_checksum = sha256_for_path(target_abs)
-    last_local_checksum = import_item.get("last_local_checksum", "")
-    if last_local_checksum and current_checksum != last_local_checksum:
-        return "modified"
-    return "clean"
+def determine_local_state(
+    import_item: dict[str, Any],
+    target_abs: Path,
+    source_abs: Path | None = None,
+) -> str:
+    resolved_source = source_abs
+    if resolved_source is None and import_item.get("source_path"):
+        resolved_source = Path(__file__).resolve().parents[2] / str(import_item["source_path"])
+    return _determine_local_state(import_item, target_abs, resolved_source)
 
 
 def sync_decision(
@@ -153,7 +144,17 @@ def sync_decision(
         return "skipped-local-only"
 
     if upstream_sync == "pinned":
-        return "skipped-pinned" if include_pinned or source_changed else "unchanged"
+        if not include_pinned:
+            return "skipped-pinned" if source_changed else "unchanged"
+        if local_state == "diverged":
+            return "blocked-diverged"
+        if local_state == "modified":
+            return "blocked-modified"
+        if local_state == "missing":
+            return "restored-missing" if restore_missing else "blocked-missing"
+        if local_state == "clean":
+            return "updated" if source_changed else "unchanged"
+        return "error"
 
     if upstream_sync != "follow-upstream":
         return "error"
@@ -198,6 +199,22 @@ def _print_contribution_candidates(planned_actions: list[dict[str, Any]]) -> lis
         for action in candidates:
             print(f"    📝 [{action['asset_id']}] {action['drift_type']}")
     return candidates
+
+
+def _emit_other_drift_items(other_drift_items: list[dict[str, str]], json_mode: bool) -> None:
+    if not other_drift_items:
+        return
+    lines = [
+        "",
+        f"  检测到 {len(other_drift_items)} 个已导入但本次未操作的资产存在漂移:",
+    ]
+    for item in other_drift_items:
+        lines.append(f"    [{item['asset_id']}] {item['drift_type']} - {item['message']}")
+    output = "\n".join(lines)
+    if json_mode:
+        print(output, file=sys.stderr)
+    else:
+        print(output)
 
 
 def main() -> int:
@@ -245,11 +262,27 @@ def main() -> int:
             continue
 
         source_abs = library_root / asset["path"]
-        target_abs = target_root / import_item["target_path"]
+        target_path_str = import_item.get("target_path", "")
+        if not is_managed_target_path(target_path_str):
+            planned_actions.append({
+                "asset_id": asset_id,
+                "decision": "unmanaged-target-path",
+                "message": managed_target_path_error(target_path_str),
+                "needs_confirm": False,
+                "import_item": import_item,
+                "asset": asset,
+            })
+            has_warn = True
+            import_item["local_state"] = "diverged"
+            continue
+        target_abs = target_root / target_path_str
         upstream_sync = import_item.get("upstream_sync", "follow-upstream")
-        local_state = determine_local_state(import_item, target_abs)
+        local_state = determine_local_state(import_item, target_abs, source_abs)
         import_item["local_state"] = local_state
         import_item["last_local_scan_at"] = iso_now()
+        import_item["last_observed_checksum"] = (
+            sha256_for_path(target_abs) if target_abs.exists() else ""
+        )
 
         source_checksum = sha256_for_path(source_abs)
         previous_source_checksum = import_item.get("source_checksum", "")
@@ -288,6 +321,15 @@ def main() -> int:
 
     # Phase 2: Show summary and ask for confirmation
     actions_to_confirm = [a for a in planned_actions if a["needs_confirm"]]
+    other_drift_items: list[dict[str, str]] = []
+    if selected_ids:
+        other_drift_items = scan_existing_imports_shared(
+            lock=lock,
+            library_root=library_root,
+            target_root=target_root,
+            exclude_ids=selected_ids,
+            asset_map=asset_map,
+        )
 
     if actions_to_confirm:
         print("=== Sync 计划 ===\n")
@@ -318,6 +360,7 @@ def main() -> int:
             else:
                 for item in results:
                     print(f"{item['result']}: {item['asset_id']} - {item['message']}")
+            _emit_other_drift_items(other_drift_items, args.json)
             _print_contribution_candidates(planned_actions)
             return 0
 
@@ -365,15 +408,24 @@ def main() -> int:
             message = "Local-only asset excluded from downstream sync"
         elif decision == "blocked-modified":
             message = "Local modifications detected; manual review required"
+            import_item["last_blocked_at"] = iso_now()
+            import_item["blocked_count"] = int(import_item.get("blocked_count", 0)) + 1
             has_warn = True
         elif decision == "blocked-diverged":
             message = "Local asset diverged; manual review required"
+            import_item["last_blocked_at"] = iso_now()
+            import_item["blocked_count"] = int(import_item.get("blocked_count", 0)) + 1
             has_warn = True
         elif decision == "blocked-missing":
             message = "Asset missing locally and auto-restore disabled"
+            import_item["last_blocked_at"] = iso_now()
+            import_item["blocked_count"] = int(import_item.get("blocked_count", 0)) + 1
             has_warn = True
         elif decision == "migration-required":
             message = "Migration required due to manifest drift"
+            has_warn = True
+        elif decision == "unmanaged-target-path":
+            message = action["message"]
             has_warn = True
         else:
             message = "Unhandled sync condition"
@@ -420,6 +472,7 @@ def main() -> int:
         for item in results:
             print(f"{item['result']}: {item['asset_id']} - {item['message']}")
 
+    _emit_other_drift_items(other_drift_items, args.json)
     contribution_candidates = _print_contribution_candidates(planned_actions)
     if contribution_candidates:
         if not args.dry_run and not args.force:

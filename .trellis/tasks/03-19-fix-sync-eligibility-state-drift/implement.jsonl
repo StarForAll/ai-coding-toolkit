@@ -1,0 +1,5 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend development guide"}
+{"file": ".trellis/spec/scripts/python-conventions.md", "reason": "Python script conventions for trellis-library sync tooling"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Change crosses source assets, lock state, and sync/propose scripts"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Shared checksum and state classification logic should not stay duplicated"}

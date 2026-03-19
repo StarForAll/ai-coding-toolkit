@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 import difflib
-import hashlib
 import json
 import sys
 from dataclasses import dataclass, field, asdict
@@ -17,6 +16,12 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+LIBRARY_ROOT = Path(__file__).resolve().parents[2]
+if str(LIBRARY_ROOT) not in sys.path:
+    sys.path.insert(0, str(LIBRARY_ROOT))
+
+from _internal.asset_state import relative_file_set, sha256_for_path  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -74,32 +79,11 @@ def iso_now() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
-def sha256_for_path(path: Path) -> str:
-    digest = hashlib.sha256()
-    if not path.exists():
-        return ""
-    if path.is_file():
-        digest.update(path.read_bytes())
-        return digest.hexdigest()
-    for child in sorted(p for p in path.rglob("*") if p.is_file()):
-        digest.update(str(child.relative_to(path)).encode("utf-8"))
-        digest.update(child.read_bytes())
-    return digest.hexdigest()
-
-
 def load_yaml(path: Path) -> dict[str, Any]:
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise SystemExit(f"Expected YAML mapping in {path}")
     return data
-
-
-def relative_file_set(path: Path) -> set[str]:
-    if not path.exists():
-        return set()
-    if path.is_file():
-        return {path.name}
-    return {str(child.relative_to(path).as_posix()) for child in path.rglob("*") if child.is_file()}
 
 
 # ---------------------------------------------------------------------------

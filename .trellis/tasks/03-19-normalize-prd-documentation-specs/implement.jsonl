@@ -1,0 +1,5 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/library-assets/spec-authoring.md", "reason": "Spec structure and content rules for trellis-library assets"}
+{"file": ".trellis/spec/library-assets/manifest-maintenance.md", "reason": "Manifest path, concern, and registration requirements"}
+{"file": ".trellis/spec/universal-domains/product-and-requirements/problem-definition/normative-rules.md", "reason": "Problem definition expectations that PRD docs should align with"}
+{"file": ".trellis/spec/universal-domains/product-and-requirements/acceptance-criteria/normative-rules.md", "reason": "Acceptance criteria quality expectations for PRD format guidance"}
