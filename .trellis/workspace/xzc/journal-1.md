@@ -565,3 +565,67 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 13: 修正 spec 拉取与同步交互
+
+**Date**: 2026-03-19
+**Task**: 修正 spec 拉取与同步交互
+
+### Summary
+
+修复 assemble/sync 交互缺陷：manual-review 现在展示 unified diff 后再决定；sync 增加本地漂移与贡献引导；目录型 preserve 提示改为诚实语义；清理 no_restore_missing 拼写问题。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bbba079` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 14: 分析 trellis-library 拉取机制缺陷并修复测试回归
+
+**Date**: 2026-03-19
+**Task**: 分析 trellis-library 拉取机制缺陷并修复测试回归
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bbba079` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

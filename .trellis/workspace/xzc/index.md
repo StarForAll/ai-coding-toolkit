@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 12
+- **Total Sessions**: 14
 - **Last Active**: 2026-03-19
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~567 | Active |
+| `journal-1.md` | ~631 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,8 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits |
 |---|------|-------|---------|
+| 14 | 2026-03-19 | 分析 trellis-library 拉取机制缺陷并修复测试回归 | `bbba079` |
+| 13 | 2026-03-19 | 修正 spec 拉取与同步交互 | `bbba079` |
 | 12 | 2026-03-19 | 修正项目级 spec 与实际状态对齐 | `d23cfbc` |
 | 11 | 2026-03-19 | 适配 .trellis/spec 为元项目实际结构 | `d23cfbc` |
 | 10 | 2026-03-19 | spec 目录适配性分析与清理 | `d23cfbc`, `8ad606c` |
