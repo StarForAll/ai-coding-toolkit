@@ -58,11 +58,14 @@ git status && git log --oneline -10              # Git state
 **CRITICAL**: Read guidelines before writing any code:
 
 ```bash
-# Discover available packages and spec layers
-python3 ./.trellis/scripts/get_context.py --mode packages
+# Read the master spec index to see all available guidelines
+cat .trellis/spec/index.md
 
-# Read the spec index for each relevant module
-cat .trellis/spec/<package>/<layer>/index.md
+# Then read the specific guidelines relevant to your task:
+cat .trellis/spec/library-assets/index.md   # If working on trellis-library assets
+cat .trellis/spec/scripts/index.md          # If writing scripts
+cat .trellis/spec/agents/index.md           # If defining agents
+cat .trellis/spec/skills/index.md           # If defining skills
 
 # Always read shared guides
 cat .trellis/spec/guides/index.md
@@ -79,8 +82,8 @@ Based on your task, read the **detailed** guideline files listed in each spec in
 
 ```bash
 # The index points to specific files — read those, not just the index
-cat .trellis/spec/<package>/<layer>/error-handling.md
-cat .trellis/spec/<package>/<layer>/conventions.md
+cat .trellis/spec/library-assets/spec-authoring.md
+cat .trellis/spec/scripts/python-conventions.md
 # etc. — based on what the Pre-Development Checklist lists
 ```
 
@@ -128,16 +131,31 @@ cat .trellis/spec/<package>/<layer>/conventions.md
 |   +-- {MM}-{DD}-{name}/
 |       +-- task.json
 |-- spec/                # [!] MUST READ before coding
-|   |-- frontend/        # Frontend guidelines (if applicable)
-|   |   |-- index.md               # Start here - guidelines index
-|   |   +-- *.md                   # Topic-specific docs
-|   |-- backend/         # Backend guidelines (if applicable)
-|   |   |-- index.md               # Start here - guidelines index
-|   |   +-- *.md                   # Topic-specific docs
-|   +-- guides/          # Thinking guides
-|       |-- index.md                      # Guides index
-|       |-- cross-layer-thinking-guide.md # Pre-implementation checklist
-|       +-- *.md                          # Other guides
+|   |-- index.md                      # Master index
+|   |-- library-assets/               # trellis-library asset authoring
+|   |   |-- index.md
+|   |   |-- spec-authoring.md
+|   |   |-- template-authoring.md
+|   |   |-- checklist-authoring.md
+|   |   +-- manifest-maintenance.md
+|   |-- scripts/                      # Script conventions
+|   |   |-- index.md
+|   |   |-- python-conventions.md
+|   |   +-- shell-conventions.md
+|   |-- agents/                       # Agent definitions
+|   |   +-- index.md
+|   |-- commands/                     # Command workflows
+|   |   +-- index.md
+|   |-- skills/                       # Skill definitions
+|   |   +-- index.md
+|   |-- docs/                         # Documentation conventions
+|   |   +-- index.md
+|   |-- guides/                       # Thinking guides
+|   |   |-- index.md
+|   |   |-- cross-layer-thinking-guide.md
+|   |   +-- *.md
+|   +-- universal-domains/            # Imported governance specs
+|       +-- ...
 +-- workflow.md             # This document
 ```
 
@@ -164,14 +182,17 @@ python3 ./.trellis/scripts/get_context.py --json
 Based on what you'll develop, read the corresponding guidelines:
 
 ```bash
-# Discover available packages and spec layers
-python3 ./.trellis/scripts/get_context.py --mode packages
+# Read the master spec index
+cat .trellis/spec/index.md
 
-# Read spec indexes for relevant modules
-cat .trellis/spec/<package>/<layer>/index.md
+# Read specific guidelines based on task type:
+cat .trellis/spec/library-assets/spec-authoring.md   # If authoring specs
+cat .trellis/spec/scripts/python-conventions.md      # If writing Python
+cat .trellis/spec/agents/index.md                    # If defining agents
+cat .trellis/spec/commands/index.md                  # If defining commands
 
-# For cross-layer features
-cat .trellis/spec/guides/cross-layer-thinking-guide.md
+# Always read shared guides
+cat .trellis/spec/guides/index.md
 ```
 
 ### Step 3: Select Task to Develop
@@ -222,9 +243,9 @@ python3 ./.trellis/scripts/task.py create "<title>" --slug <task-name>
 - [OK] Manual feature testing passes
 
 **Project-specific checks**:
-- See `.trellis/spec/<package>/<layer>/quality-guidelines.md` for package-specific checks
-- For this repository's `trellis-library`, use:
-  `/ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --strict-warnings`
+- For `trellis-library` asset changes: `python3 trellis-library/cli.py validate --strict-warnings`
+- For skills: `./scripts/validate-skills.sh`
+- See `.trellis/spec/index.md` for full list of applicable guidelines
 
 ---
 
@@ -282,18 +303,35 @@ workspace/
 
 **Purpose**: Documented standards for consistent development
 
-**Structure** (Multi-doc format):
+**Structure** (Meta-project adapted):
 ```
 spec/
-|-- frontend/           # Frontend docs (if applicable)
-|   |-- index.md        # Start here
-|   +-- *.md            # Topic-specific docs
-|-- backend/            # Backend docs (if applicable)
-|   |-- index.md        # Start here
-|   +-- *.md            # Topic-specific docs
-+-- guides/             # Thinking guides
-    |-- index.md        # Start here
-    +-- *.md            # Guide-specific docs
+|-- index.md                  # Master index (start here)
+|-- library-assets/           # trellis-library asset authoring
+|   |-- index.md
+|   |-- spec-authoring.md
+|   |-- template-authoring.md
+|   |-- checklist-authoring.md
+|   +-- manifest-maintenance.md
+|-- scripts/                  # Python/Shell script conventions
+|   |-- index.md
+|   |-- python-conventions.md
+|   +-- shell-conventions.md
+|-- agents/                   # OpenCode agent definitions
+|   +-- index.md
+|-- commands/                 # Trellis command workflows
+|   +-- index.md
+|-- skills/                   # Skill definition patterns
+|   +-- index.md
+|-- config/                   # Configuration organization
+|   +-- index.md
+|-- docs/                     # Documentation conventions
+|   +-- index.md
+|-- guides/                   # Thinking guides
+|   |-- index.md
+|   +-- *.md
++-- universal-domains/        # Imported governance specs
+    +-- ...
 ```
 
 **When to update**:
@@ -362,9 +400,15 @@ python3 ./.trellis/scripts/task.py list-archive    # List archived tasks
 
 | Task Type | Must-read Document |
 |-----------|-------------------|
-| Frontend work | `frontend/index.md` → relevant docs |
-| Backend work | `backend/index.md` → relevant docs |
-| Cross-Layer Feature | `guides/cross-layer-thinking-guide.md` |
+| Author a spec (trellis-library) | `library-assets/spec-authoring.md` + `manifest-maintenance.md` |
+| Author a template/checklist | `library-assets/template-authoring.md` or `checklist-authoring.md` |
+| Modify manifest.yaml | `library-assets/manifest-maintenance.md` |
+| Write/modify Python scripts | `scripts/python-conventions.md` |
+| Write/modify Shell scripts | `scripts/shell-conventions.md` |
+| Define an agent | `agents/index.md` |
+| Define a command | `commands/index.md` |
+| Define a skill | `skills/index.md` |
+| Any task | `guides/index.md` (always) |
 
 ### Commit Convention
 

@@ -220,7 +220,7 @@ Important automation entry points:
 For day-to-day usage, prefer the unified CLI entry point:
 
 ```bash
-/ops/softwares/python/bin/python3 trellis-library/cli.py <command> [options]
+python3 trellis-library/cli.py <command> [options]
 ```
 
 Available commands:
@@ -235,14 +235,14 @@ Available commands:
 Examples:
 
 ```bash
-/ops/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings
+python3 trellis-library/cli.py validate --strict-warnings
 
-/ops/softwares/python/bin/python3 trellis-library/cli.py assemble \
+python3 trellis-library/cli.py assemble \
   --target /tmp/test-target \
   --pack pack.go-service-foundation \
   --dry-run
 
-/ops/softwares/python/bin/python3 trellis-library/cli.py sync \
+python3 trellis-library/cli.py sync \
   --mode downstream \
   --target /tmp/test-target \
   --dry-run
@@ -265,15 +265,15 @@ Use the manifest as the registry and run both structure validation and CLI tests
 before claiming library health:
 
 ```bash
-/ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --strict-warnings
+python3 trellis-library/scripts/validation/validate-library-sync.py --strict-warnings
 
-/ops/softwares/python/bin/python3 -m unittest trellis-library/tests/test_cli.py
+python3 -m unittest trellis-library/tests/test_cli.py
 ```
 
 The validation command can also be run through the unified CLI:
 
 ```bash
-/ops/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings
+python3 trellis-library/cli.py validate --strict-warnings
 ```
 
 Current validation schemas live under:

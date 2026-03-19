@@ -1,95 +1,112 @@
 # Project Specifications
 
-> Development guidelines for this AI Coding Toolkit project.
+> Development guidelines for the ai-coding-toolkit project.
 
 ---
 
-## Overview
+## Project Nature
 
-This project is an **AI Coding Toolkit** (meta-project), not a traditional web application.
-It contains reusable assets for AI-assisted programming:
-- Custom agents for different AI tools
-- Reusable commands and scripts
-- Installable skills (for Skills CLI)
-- Configuration files for various AI assistants
+This is a **meta-project** — a "specs-as-code" asset library. It does not contain a runnable application. Its deliverables are:
+
+- **Markdown** specs, templates, checklists, examples
+- **YAML** configuration (manifest.yaml, schemas)
+- **Python** automation scripts (cli.py, validation, assembly, sync)
+- **Shell** validation scripts
+- **SKILL.md** skill definitions (YAML frontmatter + markdown)
+- **Agent** source assets (`agents/<id>/`) deployed to `.claude/agents/` `.opencode/agents/` `.iflow/agents/`
+- **Command** source assets (`commands/<tool>/`) deployed to `.claude/commands/` `.opencode/commands/` `.iflow/commands/`
 
 ---
 
 ## Specification Index
 
-| Category | Description | Status |
-|----------|-------------|--------|
-| [agents](./agents/index.md) | AI agent configuration patterns | ✅ Ready |
-| [commands](./commands/index.md) | Command/script patterns | ✅ Ready |
-| [skills](./skills/index.md) | Skill definition patterns | ✅ Ready |
-| [config](./config/index.md) | Configuration organization | ✅ Ready |
-| [docs](./docs/index.md) | Project-specific documentation conventions | ✅ Ready |
-| [guides](./guides/index.md) | Project-specific supplemental thinking guides | ✅ Ready |
+### Project-Specific Specs
 
-## Imported Governance Specs
+| Spec Layer | Path | Status | Purpose |
+|-----------|------|--------|---------|
+| [library-assets](./library-assets/index.md) | `.trellis/spec/library-assets/` | ✅ Implemented | How to author specs, templates, checklists for trellis-library |
+| [scripts](./scripts/index.md) | `.trellis/spec/scripts/` | ✅ Implemented | Python and Shell script conventions |
+| [agents](./agents/index.md) | `.trellis/spec/agents/` | ⚠️ Design | 源资产层未实现，当前采用直接编辑模式 |
+| [commands](./commands/index.md) | `.trellis/spec/commands/` | ⚠️ Design | 源资产层未实现，当前采用直接编辑模式 |
+| [skills](./skills/index.md) | `.trellis/spec/skills/` | ✅ Implemented | How to define installable skills (`skills/`) |
+| [docs](./docs/index.md) | `.trellis/spec/docs/` | ✅ Implemented | Documentation conventions |
 
-The following reusable governance concerns are imported from `trellis-library`
-and should be treated as the primary source for cross-project planning,
-verification, and sync rules in this repository:
+> **Status Legend**:
+> - ✅ **Implemented**: source asset layer is populated, spec reflects live practice
+> - ⚠️ **Design**: source asset layer is empty, current practice is direct editing in tool directories
+
+### Imported Governance Specs
+
+Reusable governance concerns imported from `trellis-library` under `universal-domains/`:
 
 | Domain | Concerns |
 |--------|----------|
-| Product and Requirements | `problem-definition`, `requirement-clarification`, `scope-boundary`, `acceptance-criteria` |
-| Project Governance | `change-management`, `risk-tiering`, `library-sync-governance` |
-| Verification | `evidence-requirements`, `verification-gates` |
+| **Product & Requirements** | `problem-definition`, `requirement-clarification`, `scope-boundary`, `acceptance-criteria` |
+| **Project Governance** | `change-management`, `risk-tiering`, `library-sync-governance` |
+| **Verification** | `evidence-requirements`, `verification-gates` |
 
-Imported files live under:
+### Supplemental Guides
 
-- `./universal-domains/product-and-requirements/`
-- `./universal-domains/project-governance/`
-- `./universal-domains/verification/`
-
----
-
-## Quick Start
-
-1. **For scope and requirement clarity**: read `./universal-domains/product-and-requirements/`
-2. **For change approval and sync governance**: read `./universal-domains/project-governance/`
-3. **For evidence and verification expectations**: read `./universal-domains/verification/`
-4. **For agent development**: read [agents/index.md](./agents/index.md)
-5. **For command/script development**: read [commands/index.md](./commands/index.md)
-6. **For skill development**: read [skills/index.md](./skills/index.md)
-7. **For configuration**: read [config/index.md](./config/index.md)
-8. **For project-local documentation conventions**: read [docs/index.md](./docs/index.md)
-9. **For project-local supplemental guides**: read [guides/index.md](./guides/index.md)
+| Guide | Path |
+|-------|------|
+| [Thinking Guides](./guides/index.md) | `.trellis/spec/guides/` |
+| [Code Reuse Thinking](./guides/code-reuse-thinking-guide.md) | Pattern identification |
+| [Cross-Layer Thinking](./guides/cross-layer-thinking-guide.md) | Data flow across layers |
 
 ---
 
-## Project Type Note
+## Quick Start by Task Type
 
-This is a **meta-project** - a project that manages configurations for other tools.
-
-- ❌ No traditional backend API surface
-- ❌ No frontend UI/component development surface
-- ✅ Configuration files (JSON, YAML, Markdown)
-- ✅ Scripts (Shell, Python)
-- ✅ Skills (Markdown with YAML frontmatter)
-- ✅ Agent definitions (Markdown)
-- ✅ Project-local process and documentation rules
+| Task | Must-Read Specs |
+|------|----------------|
+| Author a new spec in trellis-library | `library-assets/spec-authoring.md` |
+| Author a new template | `library-assets/template-authoring.md` |
+| Author a new checklist | `library-assets/checklist-authoring.md` |
+| Update manifest.yaml | `library-assets/manifest-maintenance.md` |
+| Write/modify Python scripts | `scripts/python-conventions.md` |
+| Write/modify Shell scripts | `scripts/shell-conventions.md` |
+| Define an agent (source + deploy) | `agents/index.md` |
+| Define a command (source + deploy) | `commands/index.md` |
+| Define a skill | `skills/index.md` |
+| Any task | `guides/index.md` (always) |
 
 ---
 
-## How to Fill Guidelines
+## Pre-Development Checklist
 
-The guidelines in this directory document **how this project works**, not ideals.
-Only keep directories that are truly applicable to this repository. Do not keep
-placeholder spec categories for work the project does not do.
+Before writing ANY code or content:
 
-Imported governance concerns under `universal-domains/` come from
-`trellis-library` and should not be manually forked unless there is a deliberate
-project-local divergence. When divergence is necessary, record it explicitly and
-prefer contributing generalizable improvements back upstream.
+1. [ ] Identify which spec layers apply to your task (see table above)
+2. [ ] Read the relevant index files
+3. [ ] Read the specific guideline files listed in each index
+4. [ ] Read `guides/index.md` for thinking supplements
+5. [ ] If modifying trellis-library assets, also read `library-assets/manifest-maintenance.md`
 
-For each area:
-1. Document actual patterns from the codebase
-2. Include real file paths as examples
-3. List anti-patterns to avoid
-4. Add common mistakes the team has made
+---
+
+## Validation Commands
+
+```bash
+# Validate trellis-library manifest and asset sync
+python3 trellis-library/cli.py validate --strict-warnings
+
+# Validate skills structure
+./scripts/validate-skills.sh
+
+```
+
+---
+
+## Meta-Project Note
+
+This project has NO traditional frontend/backend layers. Do not create frontend/ or backend/ spec directories. All development falls into:
+
+1. **Asset authoring** (specs, templates, checklists, examples) → see `library-assets/`
+2. **Script development** (Python, Shell) → see `scripts/`
+3. **Agent assets** (source definitions in `agents/` → deployed to `.claude/` `.opencode/` `.iflow/`) → see `agents/`
+4. **Command assets** (source in `commands/` → slash commands in `.claude/` `.opencode/` `.iflow/`) → see `commands/`
+5. **Skill definitions** → see `skills/`
+6. **Documentation** → see `docs/`
 
 ---
 

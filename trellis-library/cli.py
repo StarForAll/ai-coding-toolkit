@@ -37,9 +37,9 @@ def print_main_help() -> None:
                 "  sync       Run downstream or upstream sync workflows",
                 "",
                 "Examples:",
-                "  /ops/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings",
-                "  /ops/softwares/python/bin/python3 trellis-library/cli.py assemble --target /tmp/project --pack pack.go-service-foundation --dry-run",
-                "  /ops/softwares/python/bin/python3 trellis-library/cli.py sync --mode downstream --target /tmp/project --dry-run",
+                "  python3 trellis-library/cli.py validate --strict-warnings",
+                "  python3 trellis-library/cli.py assemble --target /tmp/project --pack pack.go-service-foundation --dry-run",
+                "  python3 trellis-library/cli.py sync --mode downstream --target /tmp/project --dry-run",
                 "",
                 "Use `cli.py sync --help` to see sync modes.",
             ]
@@ -60,10 +60,10 @@ def print_sync_help() -> None:
                 "  apply       Apply an approved upstream contribution proposal",
                 "",
                 "Examples:",
-                "  /ops/softwares/python/bin/python3 trellis-library/cli.py sync --mode downstream --target /tmp/project --dry-run",
-                "  /ops/softwares/python/bin/python3 trellis-library/cli.py sync --mode diff --target /tmp/project --only-modified",
-                "  /ops/softwares/python/bin/python3 trellis-library/cli.py sync --mode propose --target /tmp/project --asset spec.example --scope asset",
-                "  /ops/softwares/python/bin/python3 trellis-library/cli.py sync --mode apply --proposal proposal.yaml --patch change.patch",
+                "  python3 trellis-library/cli.py sync --mode downstream --target /tmp/project --dry-run",
+                "  python3 trellis-library/cli.py sync --mode diff --target /tmp/project --only-modified",
+                "  python3 trellis-library/cli.py sync --mode propose --target /tmp/project --asset spec.example --scope asset",
+                "  python3 trellis-library/cli.py sync --mode apply --proposal proposal.yaml --patch change.patch",
             ]
         )
     )

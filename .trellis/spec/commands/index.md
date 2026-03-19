@@ -1,185 +1,127 @@
-# Command Specification Guidelines
+# Command Asset Specification
 
-> How to create and organize reusable commands/scripts in this project.
+> **⚠️ IMPORTANT**: This spec describes the TARGET architecture, not current practice.
+> Current workflow: Edit directly in `.claude/commands/`、`.opencode/commands/`、`.iflow/commands/`
+> To implement this architecture: populate `commands/<tool>/<id>/` source layer, then enable sync to tool directories
 
----
-
-## Overview
-
-This project stores reusable commands, scripts, and workflows that standardize common operations across AI coding assistants.
+> How to author command source assets for multiple AI CLI tools.
 
 ---
 
-## Directory Structure
+## Current State
+
+**Source asset directories** (`commands/claude/<id>/`、`commands/codex/<id>/`、`commands/shell/<id>/`) are empty — only top-level README files exist, no actual scripts.
+
+**Tool command directories** (`.claude/commands/`、`.opencode/commands/`、`.iflow/commands/`) contain live commands,
+but are **not synchronized** from `commands/<tool>/` source.
+Current practice is **direct editing** in tool directories.
+
+**To close the gap:** populate `commands/<tool>/<id>/` with real scripts, then apply the deployment mapping.
+
+---
+
+## Scope
+
+This spec covers the **source asset layer**: `commands/claude/`, `commands/codex/`, `commands/shell/`.
+
+**Out of scope:**
+- `.claude/commands/`, `.opencode/commands/`, `.iflow/commands/` — these are each tool's internal command discovery directories, managed independently by each tool
+- Trellis workflow commands (start, brainstorm, finish-work, etc.) — these live directly in tool deployment directories and are not part of this spec
+
+---
+
+## Source Asset Structure
 
 ```
 commands/
-  <platform>/
+  claude/             # Claude Code 特有的自定义命令/脚本
     <command-id>/
-      README.md        # Purpose, usage, examples
-      script.sh        # Main script (or .py, .js, etc.)
-      config.json      # Configuration (optional)
-  codex/              # Codex CLI commands
-  claude/             # Claude Code commands
-  shell/              # Platform-agnostic shell scripts
+      README.md       # 用途、依赖、运行方式、副作用（必需）
+      script.sh       # 主脚本（或 .py, .js 等）
+      config.json     # 配置（可选）
+  codex/              # Codex CLI 特有的自定义命令/脚本
+    <command-id>/
+      README.md
+      script.sh
+  shell/              # 平台无关的通用脚本
+    <command-id>.sh
+    README.md
 ```
 
 ---
 
 ## Naming Conventions
 
-- **Command IDs**: Use kebab-case: `deploy-helper`, `test-runner`
-- **Platform prefixes**: `codex/`, `claude/`, `shell/`
-- **Script files**: Match command ID: `deploy-helper.sh`
+- Command IDs: kebab-case: `deploy-helper`, `test-runner`, `validate-skills`
+- Script files: Match command ID: `deploy-helper.sh`
+- Subdirectories: One per command (or group of strongly related commands)
 
 ---
 
-## Required Files
-
-### README.md (Required)
+## README.md per Command (Required)
 
 Must include:
 - **Problem**: What problem this command solves
-- **Dependencies**: Required tools, environment
+- **Dependencies**: Required tools, environment, languages
 - **Usage**: How to run with common parameters
 - **Side Effects**: What files it modifies, git state changes
-
-### Script File (Required)
-
-- Executable (`chmod +x`)
-- Shebang line (`#!/bin/bash`, `#!/usr/bin/env python3`)
-- Error handling with exit codes
-- Usage function for help
+- **Target Tool(s)**: Which AI CLI this command is designed for
 
 ---
 
-## Quality Standards
+## Subdirectory Conventions
 
-### Must Have
+### `commands/claude/`
 
-- [ ] README with usage examples
-- [ ] Error handling (exit on critical failure)
-- [ ] Help output (`--help`, `-h`)
-- [ ] Required dependencies documented
+Claude Code specific commands. These may include:
+- MCP tool definitions
+- Hook scripts for Claude Code lifecycle events
+- Claude-specific workflow scripts
 
-### Should Have
+### `commands/codex/`
 
-- [ ] Config file for customization
-- [ ] Dry-run mode (`--dry-run`)
-- [ ] Verbose mode (`-v`, `--verbose`)
-- [ ] Exit code conventions (0=success, 1=error)
+OpenAI Codex CLI specific commands. These may include:
+- Custom Codex CLI commands
+- Codex-specific prompt templates
 
-### Anti-Patterns
+### `commands/shell/`
 
-- **Hardcoded paths**: Use environment variables or config
-- **Silent failures**: Always report status
-- **No validation**: Check inputs before processing
-- **Missing documentation**: Commands without README
+Platform-agnostic shell scripts usable by any tool. Follow [shell-conventions.md](../scripts/shell-conventions.md).
 
 ---
 
-## Script Template
+## Deployment
 
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
+Source assets in `commands/<tool>/` are deployed to the corresponding tool's command discovery directory:
 
-# Configuration
-COMMAND_NAME="my-command"
-VERSION="1.0.0"
+| Source | Deploy Target | Method |
+|--------|--------------|--------|
+| `commands/claude/<id>/` | `.claude/commands/<namespace>/<name>.md` | Manual copy/adapt |
+| `commands/codex/<id>/` | Codex CLI config | Manual |
+| `commands/shell/<id>.sh` | Referenced directly | Symlink or copy |
 
-# Usage function
-usage() {
-    cat << EOF
-Usage: $COMMAND_NAME [OPTIONS]
-
-Description of what this command does.
-
-OPTIONS:
-    -h, --help      Show this help message
-    -v, --verbose   Enable verbose output
-    -n, --dry-run   Show what would be done without executing
-    --config PATH  Custom config file
-
-EXAMPLES:
-    $COMMAND_NAME --dry-run
-    $COMMAND_NAME --config /path/to/config.yaml
-
-EOF
-    exit 1
-}
-
-# Parse arguments
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        -h|--help) usage ;;
-        -v|--verbose) VERBOSE=1 ;;
-        -n|--dry-run) DRY_RUN=1 ;;
-        --config) CONFIG="$2"; shift ;;
-        *) echo "Unknown option: $1"; usage ;;
-    esac
-    shift
-done
-
-# Main logic
-main() {
-    # Validate dependencies
-    command -v required-tool >/dev/null 2>&1 || { echo "Error: required-tool not found"; exit 1; }
-
-    # Implementation
-    echo "Command executed"
-}
-
-main "$@"
-```
+The deployment format (slash command markdown, frontmatter, etc.) is tool-specific and documented by each tool, not by this spec.
 
 ---
 
-## Platform-Specific Guidelines
+## Quality Checklist
 
-### Shell Scripts (`shell/`)
+Before finalizing a new command source asset:
 
-- Use bash with `set -euo pipefail`
-- Prefer POSIX-compliant commands
-- Document required utilities
-
-### Claude Code (`claude/`)
-
-- Create MCP tools or slash commands
-- Follow Claude Code's tool conventions
-- Document in `.claude/commands/`
-
-### Codex (`codex/`)
-
-- Create custom commands for Codex CLI
-- Follow Codex command format
-- Document in `.codex/`
+- [ ] Directory exists in `commands/<tool>/<command-id>/`
+- [ ] README.md documents purpose, dependencies, usage, side effects
+- [ ] Script has shebang, error handling, `--help` support
+- [ ] Follows [shell-conventions.md](../scripts/shell-conventions.md) for shell scripts
+- [ ] Has been deployed to target tool and verified working
 
 ---
 
-## Configuration Files
+## Anti-Patterns
 
-When commands need configuration:
-
-```yaml
-# config.yaml example
-defaults:
-  output_dir: ./output
-  verbose: false
-
-commands:
-  deploy:
-    timeout: 300
-    retry: 3
-```
-
----
-
-## Versioning
-
-- Add version constant at top of scripts
-- Document changes in README
-- Use semantic versioning
+- **No README**: Commands without documentation
+- **Hardcoded paths**: Use environment variables or config, not absolute paths
+- **Silent failures**: Always report status to stdout/stderr
+- **Mixed tool concerns**: Don't put Claude-specific logic in `commands/shell/`
 
 ---
 

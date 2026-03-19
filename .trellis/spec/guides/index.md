@@ -23,12 +23,12 @@ add value beyond those shared governance concerns.
 **Many bugs and tech debt still come from "didn't think of that"** in places
 where project-local habits matter:
 
-- Didn't think about what happens at layer boundaries → cross-layer bugs
-- Didn't think about code patterns repeating → duplicated code everywhere
-- Didn't think about edge cases → runtime errors
-- Didn't think about future maintainers → unreadable code
+- Didn't think about source-to-deployment sync → tools behave differently
+- Didn't think about cross-tool consistency → agents diverge across .claude/ .opencode/ .iflow/
+- Didn't think about manifest-asset alignment → validation failures
+- Didn't think about future maintainers → undocumented conventions
 
-These guides help you **ask the right project-specific questions before coding**.
+These guides help you **ask the right project-specific questions before making changes**.
 
 ---
 
@@ -56,20 +56,29 @@ Keep guides here only when they are:
 
 ### When to Think About Cross-Layer Issues
 
-- [ ] Feature touches 3+ layers (API, Service, Component, Database)
-- [ ] Data format changes between layers
-- [ ] Multiple consumers need the same data
-- [ ] You're not sure where to put some logic
+- [ ] Change touches 2+ repository layers (see list below)
+- [ ] Asset ID or path rename (affects manifest + library-lock + tool deployments)
+- [ ] Agent/command content changed but not synced across all tool directories
+- [ ] Validation rule change affects multiple scripts or CI
+- [ ] You're not sure which layer owns the source of truth
+
+**Repository layers to consider:**
+- `trellis-library/` source assets (specs, templates, checklists)
+- `manifest.yaml` registry
+- `.trellis/spec/universal-domains/` imported governance
+- `agents/` source → `.claude/agents/` → `.opencode/agents/` → `.iflow/agents/`
+- `commands/` source → `.claude/commands/` → `.opencode/commands/` → `.iflow/commands/`
+- `scripts/` validation and sync tooling
 
 → Read [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md)
 
 ### When to Think About Code Reuse
 
-- [ ] You're writing similar code to something that exists
-- [ ] You see the same pattern repeated 3+ times
-- [ ] You're adding a new field to multiple places
-- [ ] **You're modifying any constant or config**
-- [ ] **You're creating a new utility/helper function** ← Search first!
+- [ ] You're writing similar logic to something that exists in another tool's deployment
+- [ ] You see the same pattern repeated across .claude/ .opencode/ .iflow/
+- [ ] You're adding a new field to manifest.yaml entries
+- [ ] **You're modifying any constant, path, or config that appears in multiple layers**
+- [ ] **You're creating a new validation or sync script** ← Search existing scripts first!
 
 → Read [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md)
 
@@ -90,9 +99,10 @@ This single habit prevents most "forgot to update X" bugs.
 
 ## How to Use This Directory
 
-1. **Before coding**: Skim the relevant thinking guide
-2. **During coding**: If something feels repetitive or complex, check the guides
-3. **After bugs**: Add new insights to the relevant guide (learn from mistakes)
+1. **Before making changes**: Skim the relevant thinking guide
+2. **When touching multiple layers**: Run through cross-layer checklist
+3. **When modifying existing values**: Search across all tool directories first
+4. **After bugs**: Add new insights to the relevant guide (learn from mistakes)
 
 ---
 
