@@ -96,6 +96,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--asset", action="append", default=[], help="Selected asset id (repeatable)")
     parser.add_argument("--pack", action="append", default=[], help="Selected pack id (repeatable)")
     parser.add_argument("--output", default=None, help="Optional explicit lock file path")
+    parser.add_argument("--merge", action="store_true", help="Merge with existing lock instead of overwriting")
     return parser.parse_args()
 
 
@@ -149,25 +150,68 @@ def expand_selected_asset_ids(
     return ordered
 
 
-def main() -> int:
-    args = parse_args()
-    library_root = Path(args.library_root).resolve()
-    target_root = Path(args.target).resolve()
+def merge_locks(existing: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
+    """Merge new lock data into existing lock. Existing data takes priority for preserved fields."""
+    merged = dict(new)
+
+    # Preserve original library.imported_at
+    merged["library"]["imported_at"] = existing.get("library", {}).get("imported_at", new["library"]["imported_at"])
+
+    # Update library.source_path to current (handles library migration)
+    # source_path, manifest_version, manifest_checksum always reflect current state
+    # (these are updated from new lock which uses current library_root)
+
+    # Merge selection (union)
+    existing_packs = set(existing.get("selection", {}).get("packs", []))
+    existing_assets = set(existing.get("selection", {}).get("assets", []))
+    new_packs = set(new.get("selection", {}).get("packs", []))
+    new_assets = set(new.get("selection", {}).get("assets", []))
+    merged["selection"]["packs"] = sorted(existing_packs | new_packs)
+    merged["selection"]["assets"] = sorted(existing_assets | new_assets)
+
+    # Merge imports (by asset_id: existing entries preserved, new entries added, updated entries refreshed)
+    existing_imports = {
+        imp["asset_id"]: dict(imp)
+        for imp in existing.get("imports", [])
+        if isinstance(imp, dict) and "asset_id" in imp
+    }
+    for imp in new.get("imports", []):
+        asset_id = imp.get("asset_id")
+        if not asset_id:
+            continue
+        if asset_id in existing_imports:
+            # Update existing entry with new checksums/version, preserve other fields
+            existing_imports[asset_id]["source_version"] = imp.get("source_version", existing_imports[asset_id].get("source_version", ""))
+            existing_imports[asset_id]["source_checksum"] = imp.get("source_checksum", existing_imports[asset_id].get("source_checksum", ""))
+            existing_imports[asset_id]["last_local_checksum"] = imp.get("last_local_checksum", existing_imports[asset_id].get("last_local_checksum", ""))
+            existing_imports[asset_id]["local_state"] = imp.get("local_state", existing_imports[asset_id].get("local_state", "clean"))
+            existing_imports[asset_id]["last_local_scan_at"] = imp.get("last_local_scan_at", existing_imports[asset_id].get("last_local_scan_at"))
+        else:
+            existing_imports[asset_id] = imp
+    merged["imports"] = list(existing_imports.values())
+
+    # Preserve history
+    merged["history"] = existing.get("history", []) + new.get("history", [])
+
+    # Preserve sync state
+    merged["sync"] = existing.get("sync", new["sync"])
+
+    # Preserve compiled state
+    merged["compiled"] = existing.get("compiled", new["compiled"])
+
+    return merged
+
+
+def build_fresh_lock(
+    manifest: dict[str, Any],
+    library_root: Path,
+    target_root: Path,
+    asset_map: dict[str, dict[str, Any]],
+    selected_asset_ids: list[str],
+    selected_pack_ids: list[str],
+) -> dict[str, Any]:
+    """Build a fresh lock from scratch."""
     manifest_path = library_root / "manifest.yaml"
-    manifest = load_yaml(manifest_path)
-
-    assets = manifest.get("assets", [])
-    asset_map = {asset["id"]: asset for asset in assets if isinstance(asset, dict) and "id" in asset}
-    pack_map = {pack["id"]: pack for pack in manifest.get("packs", []) if isinstance(pack, dict) and "id" in pack}
-
-    selected_asset_ids = list(dict.fromkeys(args.asset))
-    selected_pack_ids = list(dict.fromkeys(args.pack))
-    selected_asset_ids = expand_selected_asset_ids(
-        asset_map,
-        pack_map,
-        selected_asset_ids,
-        selected_pack_ids,
-    )
 
     imports: list[dict[str, Any]] = []
     for asset_id in selected_asset_ids:
@@ -212,7 +256,7 @@ def main() -> int:
             }
         )
 
-    lock = {
+    return {
         "version": 1,
         "library": {
             "id": manifest.get("library", {}).get("id", "trellis-library"),
@@ -246,13 +290,51 @@ def main() -> int:
         "history": [],
     }
 
+
+def main() -> int:
+    args = parse_args()
+    library_root = Path(args.library_root).resolve()
+    target_root = Path(args.target).resolve()
+    manifest_path = library_root / "manifest.yaml"
+    manifest = load_yaml(manifest_path)
+
+    assets = manifest.get("assets", [])
+    asset_map = {asset["id"]: asset for asset in assets if isinstance(asset, dict) and "id" in asset}
+    pack_map = {pack["id"]: pack for pack in manifest.get("packs", []) if isinstance(pack, dict) and "id" in pack}
+
+    selected_asset_ids = list(dict.fromkeys(args.asset))
+    selected_pack_ids = list(dict.fromkeys(args.pack))
+    selected_asset_ids = expand_selected_asset_ids(
+        asset_map,
+        pack_map,
+        selected_asset_ids,
+        selected_pack_ids,
+    )
+
+    output = Path(args.output).resolve() if args.output else (target_root / ".trellis" / "library-lock.yaml")
     schema_path = library_root / "schemas" / "initialization" / "library-lock.schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
+
+    # Build new lock data
+    new_lock = build_fresh_lock(
+        manifest, library_root, target_root,
+        asset_map, selected_asset_ids, selected_pack_ids,
+    )
+
+    # Merge mode: load existing lock and merge
+    if args.merge and output.exists():
+        try:
+            existing_lock = load_yaml(output)
+        except yaml.YAMLError as exc:
+            raise SystemExit(f"Error: existing library-lock.yaml is corrupted: {exc}")
+        lock = merge_locks(existing_lock, new_lock)
+    else:
+        lock = new_lock
+
     errors = validate_against_schema(lock, schema)
     if errors:
         raise SystemExit("Generated library-lock.yaml does not satisfy schema:\n" + "\n".join(errors))
 
-    output = Path(args.output).resolve() if args.output else (target_root / ".trellis" / "library-lock.yaml")
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(yaml.safe_dump(lock, sort_keys=False, allow_unicode=True), encoding="utf-8")
     print(output)

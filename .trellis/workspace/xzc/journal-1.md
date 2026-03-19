@@ -533,3 +533,35 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 12: 修正项目级 spec 与实际状态对齐
+
+**Date**: 2026-03-19
+**Task**: 修正项目级 spec 与实际状态对齐
+
+### Summary
+
+更新 .trellis/spec 与 README 的仓库整体视角判断，明确 agents/commands 为设计态，移除失效的 validate-tool-sync 校验路径，并同步 workflow 文档。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d23cfbc` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

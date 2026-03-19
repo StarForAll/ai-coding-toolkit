@@ -1,0 +1,8 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend development guide"}
+{"file": ".trellis/spec/scripts/python-conventions.md", "reason": "Python coding conventions for scripts"}
+{"file": "trellis-library/scripts/assembly/write-library-lock.py", "reason": "Existing lock writing script to be modified"}
+{"file": "trellis-library/scripts/assembly/assemble-init-set.py", "reason": "Existing assemble script to be modified"}
+{"file": "trellis-library/scripts/sync/sync-library-assets.py", "reason": "Reference for sync decision logic patterns"}
+{"file": "trellis-library/schemas/initialization/library-lock.schema.json", "reason": "Lock schema for validation"}
+{"file": "trellis-library/cli.py", "reason": "CLI dispatcher to be modified"}

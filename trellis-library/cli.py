@@ -13,6 +13,7 @@ from pathlib import Path
 SCRIPT_MAP = {
     "validate": "scripts/validation/validate-library-sync.py",
     "assemble": "scripts/assembly/assemble-init-set.py",
+    "contribute": "scripts/contribution/verify-upstream-contribution.py",
 }
 
 SYNC_MODE_MAP = {
@@ -32,13 +33,16 @@ def print_main_help() -> None:
                 "Unified entry point for trellis-library workflows.",
                 "",
                 "Commands:",
-                "  validate   Run trellis-library validation checks",
-                "  assemble   Assemble selected assets into a target project",
-                "  sync       Run downstream or upstream sync workflows",
+                "  validate    Run trellis-library validation checks",
+                "  assemble    Assemble selected assets into a target project (two-phase flow)",
+                "  sync        Run downstream or upstream sync workflows",
+                "  contribute  Verify and propose upstream contributions from target project",
                 "",
                 "Examples:",
                 "  python3 trellis-library/cli.py validate --strict-warnings",
                 "  python3 trellis-library/cli.py assemble --target /tmp/project --pack pack.go-service-foundation --dry-run",
+                "  python3 trellis-library/cli.py assemble --target /tmp/project --asset spec.auth --analyze-only",
+                "  python3 trellis-library/cli.py contribute --target /tmp/project --asset spec.auth",
                 "  python3 trellis-library/cli.py sync --mode downstream --target /tmp/project --dry-run",
                 "",
                 "Use `cli.py sync --help` to see sync modes.",

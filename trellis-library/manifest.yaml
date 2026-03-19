@@ -8227,12 +8227,51 @@ assets:
   - core-library
   dependencies:
   - script.assembly.write-library-lock
+  - script.assembly.analyze-library-pull
   optional_dependencies: []
   provides:
   - init-assembly
   change_impact:
     level: medium
     review_required: true
+    sync_targets: []
+  metadata:
+    source_of_truth: true
+    generated: false
+    notes: ''
+- id: script.assembly.analyze-library-pull
+  type: script
+  format: file
+  path: scripts/assembly/analyze-library-pull.py
+  title: Analyze Library Pull
+  summary: "3-way comparison analysis for asset pull: classifies changes, detects local-only files, generates simulation reports"
+  status: active
+  version: 1.0.0
+  domain_axis: universal-domains
+  domain: project-governance
+  concern: analyze-library-pull
+  atomicity: simple
+  tags:
+  - assembly
+  - analysis
+  - automation
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - initialization
+    - maintenance
+    platforms: []
+    technologies: []
+  owners:
+  - core-library
+  dependencies: []
+  optional_dependencies: []
+  provides:
+  - pull-analysis
+  - simulation-report
+  change_impact:
+    level: medium
+    review_required: false
     sync_targets: []
   metadata:
     source_of_truth: true
@@ -8392,6 +8431,47 @@ assets:
   - upstream-apply
   change_impact:
     level: high
+    review_required: true
+    sync_targets: []
+  metadata:
+    source_of_truth: true
+    generated: false
+    notes: ''
+- id: script.contribution.verify-upstream-contribution
+  type: script
+  format: file
+  path: scripts/contribution/verify-upstream-contribution.py
+  title: "Verify Upstream Contribution"
+  summary: "Verify upstream contributions: check upstream status, validate format, summarize, interactive per-file approval, generate proposals"
+  status: active
+  version: 1.0.0
+  domain_axis: universal-domains
+  domain: project-governance
+  concern: verify-upstream-contribution
+  atomicity: simple
+  tags:
+  - contribution
+  - verify
+  - upstream
+  - approval
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - contribution
+    - maintenance
+    platforms: []
+    technologies: []
+  owners:
+  - core-library
+  dependencies:
+  - script.sync.propose-library-sync
+  - script.sync.apply-library-sync
+  optional_dependencies: []
+  provides:
+  - contribution-verification
+  - upstream-proposal
+  change_impact:
+    level: medium
     review_required: true
     sync_targets: []
   metadata:

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 11
+- **Total Sessions**: 12
 - **Last Active**: 2026-03-19
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~535 | Active |
+| `journal-1.md` | ~567 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits |
 |---|------|-------|---------|
+| 12 | 2026-03-19 | 修正项目级 spec 与实际状态对齐 | `d23cfbc` |
 | 11 | 2026-03-19 | 适配 .trellis/spec 为元项目实际结构 | `d23cfbc` |
 | 10 | 2026-03-19 | spec 目录适配性分析与清理 | `d23cfbc`, `8ad606c` |
 | 9 | 2026-03-19 | 分析 .trellis/spec 目录适配性 | `d23cfbc` |

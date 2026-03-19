@@ -9,11 +9,20 @@ import argparse
 import hashlib
 import json
 import shutil
+import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+
+PYTHON = (
+    "/ops/softwares/python/bin/python3"
+    if Path("/ops/softwares/python/bin/python3").exists()
+    else sys.executable
+)
 
 
 def iso_now() -> str:
@@ -112,6 +121,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--include-pinned", action="store_true", help="Include pinned assets in analysis (still not auto-updated)")
     parser.add_argument("--no-restore-missing", action="store_true", help="Do not auto-restore missing follow-upstream assets")
     parser.add_argument("--dry-run", action="store_true", help="Show planned actions without writing changes")
+    parser.add_argument("--force", action="store_true", help="Skip confirmation, auto-execute all changes (CI mode)")
     parser.add_argument("--json", action="store_true", help="Emit JSON summary")
     return parser.parse_args()
 
@@ -159,6 +169,37 @@ def sync_decision(
     return "error"
 
 
+def _run_contribute(
+    library_root: Path,
+    target_root: Path,
+    asset_ids: list[str],
+) -> None:
+    script = library_root / "scripts" / "contribution" / "verify-upstream-contribution.py"
+    cmd = [
+        PYTHON, str(script),
+        "--library-root", str(library_root),
+        "--target", str(target_root),
+    ]
+    for asset_id in asset_ids:
+        cmd.extend(["--asset", asset_id])
+
+    result = subprocess.run(cmd, check=False)
+    if result.returncode != 0:
+        print(f"  贡献验证返回码: {result.returncode}")
+
+
+def _print_contribution_candidates(planned_actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    candidates = [
+        action for action in planned_actions
+        if action.get("drift_type") in {"local-changed", "upstream-and-local-changed"}
+    ]
+    if candidates:
+        print(f"\n  检测到 {len(candidates)} 个资产存在可贡献的本地漂移:")
+        for action in candidates:
+            print(f"    📝 [{action['asset_id']}] {action['drift_type']}")
+    return candidates
+
+
 def main() -> int:
     args = parse_args()
     library_root = Path(args.library_root).resolve()
@@ -175,9 +216,10 @@ def main() -> int:
     asset_map = {asset["id"]: asset for asset in manifest.get("assets", []) if isinstance(asset, dict) and "id" in asset}
 
     selected_ids = set(args.asset)
-    restore_missing = not args.no_restore_mising if hasattr(args, "no_restore_mising") else not args.no_restore_missing
+    restore_missing = not args.no_restore_missing
 
-    results: list[dict[str, Any]] = []
+    # Phase 1: Collect all planned actions
+    planned_actions: list[dict[str, Any]] = []
     has_error = False
     has_warn = False
 
@@ -190,12 +232,14 @@ def main() -> int:
 
         asset = asset_map.get(asset_id)
         if not asset:
-            result = {
+            planned_actions.append({
                 "asset_id": asset_id,
-                "result": "migration-required",
+                "decision": "migration-required",
                 "message": "Asset no longer exists in source manifest",
-            }
-            results.append(result)
+                "needs_confirm": False,
+                "import_item": import_item,
+                "asset": None,
+            })
             has_warn = True
             import_item["local_state"] = "diverged"
             continue
@@ -219,19 +263,102 @@ def main() -> int:
             include_pinned=args.include_pinned,
         )
 
+        # Determine if this action needs user confirmation
+        needs_confirm = decision in {"updated", "restored-missing"}
+
+        planned_actions.append({
+            "asset_id": asset_id,
+            "decision": decision,
+            "local_state": local_state,
+            "source_changed": source_changed,
+            "needs_confirm": needs_confirm,
+            "import_item": import_item,
+            "asset": asset,
+            "source_abs": source_abs,
+            "target_abs": target_abs,
+            "source_checksum": source_checksum,
+            "drift_type": (
+                "upstream-and-local-changed"
+                if decision == "blocked-modified" and source_changed
+                else "local-changed"
+                if decision == "blocked-modified"
+                else ""
+            ),
+        })
+
+    # Phase 2: Show summary and ask for confirmation
+    actions_to_confirm = [a for a in planned_actions if a["needs_confirm"]]
+
+    if actions_to_confirm:
+        print("=== Sync 计划 ===\n")
+        for a in actions_to_confirm:
+            version_info = ""
+            if a.get("asset"):
+                version_info = f" ({a['asset'].get('version', '')})"
+            action_label = {
+                "updated": "覆盖目标 (源已更新)",
+                "restored-missing": "恢复目标 (目标缺失)",
+            }.get(a["decision"], a["decision"])
+            print(f"  [{a['asset_id']}]{version_info} → {action_label}")
+
+        # Show non-actionable items for awareness
+        non_actionable = [a for a in planned_actions if not a["needs_confirm"] and a["decision"] not in ("unchanged", "skipped-local-only", "skipped-pinned")]
+        if non_actionable:
+            print(f"\n  其他状态 ({len(non_actionable)} 项):")
+            for a in non_actionable:
+                print(f"    [{a['asset_id']}] {a['decision']}")
+
+        # Ask for confirmation
+        if args.dry_run:
+            print(f"\nDRY RUN: 以上 {len(actions_to_confirm)} 项操作不会执行")
+            # Still generate results for output
+            results = _build_results(planned_actions)
+            if args.json:
+                print(json.dumps(results, indent=2, ensure_ascii=False))
+            else:
+                for item in results:
+                    print(f"{item['result']}: {item['asset_id']} - {item['message']}")
+            _print_contribution_candidates(planned_actions)
+            return 0
+
+        if not args.force:
+            print(f"\n  共 {len(actions_to_confirm)} 项操作将修改目标文件。")
+            try:
+                choice = input("  确认执行? [y]es / [n]o / [a]ll: ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print("\n  已取消")
+                return 0
+
+            if choice == "n":
+                print("  已取消 sync。")
+                return 0
+            elif choice in ("y", "a"):
+                pass  # proceed
+            else:
+                print("  无效选择，已取消。")
+                return 0
+        print()
+
+    # Phase 3: Execute
+    results: list[dict[str, Any]] = []
+
+    for action in planned_actions:
+        decision = action["decision"]
+        import_item = action["import_item"]
+
         message = ""
         if decision in {"updated", "restored-missing"}:
             message = "Source asset copied to target"
             if not args.dry_run:
-                copy_path(source_abs, target_abs)
-                import_item["source_version"] = asset.get("version", import_item.get("source_version", ""))
-                import_item["source_checksum"] = source_checksum
-                import_item["last_local_checksum"] = sha256_for_path(target_abs)
+                copy_path(action["source_abs"], action["target_abs"])
+                import_item["source_version"] = action["asset"].get("version", import_item.get("source_version", ""))
+                import_item["source_checksum"] = action["source_checksum"]
+                import_item["last_local_checksum"] = sha256_for_path(action["target_abs"])
                 import_item["local_state"] = "clean"
         elif decision == "unchanged":
             message = "No source change detected"
-            if target_abs.exists():
-                import_item["last_local_checksum"] = sha256_for_path(target_abs)
+            if action.get("target_abs") and action["target_abs"].exists():
+                import_item["last_local_checksum"] = sha256_for_path(action["target_abs"])
         elif decision == "skipped-pinned":
             message = "Pinned asset not auto-updated"
         elif decision == "skipped-local-only":
@@ -252,16 +379,14 @@ def main() -> int:
             message = "Unhandled sync condition"
             has_error = True
 
-        results.append(
-            {
-                "asset_id": asset_id,
-                "result": decision,
-                "local_state": import_item.get("local_state"),
-                "upstream_sync": upstream_sync,
-                "source_changed": source_changed,
-                "message": message,
-            }
-        )
+        results.append({
+            "asset_id": action["asset_id"],
+            "result": decision,
+            "local_state": import_item.get("local_state"),
+            "upstream_sync": import_item.get("upstream_sync", "follow-upstream"),
+            "source_changed": action.get("source_changed", False),
+            "message": message,
+        })
 
     lock.setdefault("sync", {})
     lock["sync"]["last_sync_at"] = iso_now()
@@ -295,11 +420,58 @@ def main() -> int:
         for item in results:
             print(f"{item['result']}: {item['asset_id']} - {item['message']}")
 
+    contribution_candidates = _print_contribution_candidates(planned_actions)
+    if contribution_candidates:
+        if not args.dry_run and not args.force:
+            try:
+                choice = input("\n  [c] 贡献验证 / [i] 忽略: ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                choice = "i"
+
+            if choice == "c":
+                _run_contribute(
+                    library_root,
+                    target_root,
+                    [item["asset_id"] for item in contribution_candidates],
+                )
+
     if has_error:
         return 1
     if has_warn:
         return 2
     return 0
+
+
+def _build_results(planned_actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Build results list from planned actions (for dry-run output)."""
+    results = []
+    for action in planned_actions:
+        decision = action["decision"]
+        message = ""
+        if decision in {"updated", "restored-missing"}:
+            message = "Source asset copied to target"
+        elif decision == "unchanged":
+            message = "No source change detected"
+        elif decision == "skipped-pinned":
+            message = "Pinned asset not auto-updated"
+        elif decision == "skipped-local-only":
+            message = "Local-only asset excluded from downstream sync"
+        elif decision == "blocked-modified":
+            message = "Local modifications detected; manual review required"
+        elif decision == "blocked-diverged":
+            message = "Local asset diverged; manual review required"
+        elif decision == "blocked-missing":
+            message = "Asset missing locally and auto-restore disabled"
+        elif decision == "migration-required":
+            message = "Migration required due to manifest drift"
+        else:
+            message = "Unhandled sync condition"
+        results.append({
+            "asset_id": action["asset_id"],
+            "result": decision,
+            "message": message,
+        })
+    return results
 
 
 if __name__ == "__main__":
