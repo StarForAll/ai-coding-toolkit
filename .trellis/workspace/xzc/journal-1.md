@@ -479,3 +479,57 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 11: 适配 .trellis/spec 为元项目实际结构
+
+**Date**: 2026-03-19
+**Task**: 适配 .trellis/spec 为元项目实际结构
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 变更 | 说明 |
+|------|------|
+| `.trellis/spec/index.md` | 重写总索引，按元项目实际分层（library-assets/scripts/agents/commands/skills/docs/guides），注册全部验证命令 |
+| `.trellis/spec/library-assets/` | 新增 5 个文件：index, spec-authoring, template-authoring, checklist-authoring, manifest-maintenance |
+| `.trellis/spec/scripts/` | 新增 3 个文件：index, python-conventions, shell-conventions |
+| `.trellis/spec/agents/index.md` | 重写为源资产层规范 + 多工具部署映射（.claude/.opencode/.iflow） |
+| `.trellis/spec/commands/index.md` | 重写为源资产层规范，移除越界的 Trellis 内部命令描述 |
+| `.trellis/spec/config/` | 删除——内容被 agents/index.md 和 commands/index.md 完全覆盖 |
+| `.trellis/spec/guides/index.md` | 触发条件从业务应用分层（API/Service/Component/Database）改为资产仓库分层 |
+| `.trellis/workflow.md` | 移除 frontend/backend 引用，替换为实际 spec 目录结构 |
+| `README.md` | 重写，补全 trellis-library/、.trellis/、多工具配置等实际结构 |
+| `scripts/validate-tool-sync.sh` | 新增，检测 agent/command 多工具漂移（文件集差异 + body 一致性 + 源资产缺失） |
+
+**关键决策**：
+- agents/commands 采用源资产层 → 工具部署层的双层架构
+- config/ 目录删除（冗余）
+- Trellis 内部命令（.claude/commands/trellis/ 等）不在 commands spec 管辖范围
+- validate-tool-sync.sh 首次运行检出 7 个已有漂移问题（plan/trellis-plan 命名不一致、agent body 跨工具不同步）
+
+**遗留状态**：
+- agents/ 源资产层为空（task 03-19-implement-agents-source blocked）
+- commands/ 源资产层为空（task 03-19-implement-commands-source blocked）
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d23cfbc` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
