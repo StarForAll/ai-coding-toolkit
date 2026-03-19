@@ -432,3 +432,50 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 10: spec 目录适配性分析与清理
+
+**Date**: 2026-03-19
+**Task**: spec 目录适配性分析与清理
+
+### Summary
+
+分析 .trellis/spec 各层与本项目整体作用的适配性，完成清理和标注工作
+
+### Main Changes
+
+| 变更项 | 内容 |
+|--------|------|
+| `spec/agents/index.md` | 添加 ⚠️ Design 状态标记、Current State 小节，说明当前直接编辑模式 |
+| `spec/commands/index.md` | 同上结构，对应 commands 层 |
+| `spec/index.md` | 新增 Status 列（✅ Implemented / ⚠️ Design），更新 legend，移除 validate-tool-sync 引用 |
+| `workflow.md` | 移除 validate-tool-sync 引用 |
+| `scripts/validate-tool-sync.sh` | 删除——脚本假设三工具 agent 集合必须完全一致，但各工具能力集本身不同，该假设不成立 |
+| `tasks/03-19-implement-agents-source/` | 新建任务 PRD，标注前置条件：需先在 agents/<id>/ 下有真实资产 |
+| `tasks/03-19-implement-commands-source/` | 新建任务 PRD，标注前置条件：需先在 commands/<tool>/<id>/ 下有真实脚本 |
+
+**关键结论**：
+- `library-assets/`、`scripts/`、`skills/`、`guides/` 四层 ✅ 与本项目适配
+- `agents/`、`commands/`、`config/` 三层 ⚠️ 需要真实实践后才能完成规范落地
+- `validate-tool-sync.sh` 假设错误（工具差异≠错误），已删除
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d23cfbc` | (see git log) |
+| `8ad606c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
