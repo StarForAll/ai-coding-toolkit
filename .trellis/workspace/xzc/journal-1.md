@@ -930,3 +930,52 @@ cli.py contribute --target /project --asset X  # 贡献验证
 ### Next Steps
 
 - None - task complete
+
+
+## Session 20: trellis-library 术语和格式一致性检查与修复
+
+**Date**: 2026-03-20
+**Task**: trellis-library 术语和格式一致性检查与修复
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 修改项 | 说明 |
+|--------|------|
+| P0: manifest.yaml | 补全 184 个 asset 的 `change_impact.level`（medium）和 `metadata` 默认值 |
+| P1: scope-boundary.md | PRD 相关 2 个文件措辞统一：`This specification` → `This concern` |
+| P1: checklist | `acceptance-quality-checklist.md` scoring 标题统一：`Scoring Guide` → `Scoring System` |
+| P2: schema | 修复 `library-manifest.schema.json` 的 `$id` 路径 + 补充完整属性定义 |
+| P3: taxonomy.md | 添加术语表（verification/validation、source-library/target-project 等定义） |
+
+**验证结果**:
+- `validate-library-sync.py --strict-warnings` 通过（0 ERROR）
+- `unittest test_cli.py` 29/29 通过
+- manifest 所有 asset 字段完整，路径存在，依赖引用无断裂
+
+**未修改（有意保留）**:
+- scope-boundary.md 的列表式/段落式格式共存（两种都是有效的结构选择）
+- checklist/template 的 tight/expanded 分裂（PRD 系列需要更丰富的结构）
+- "does not cover" vs "does not replace" vs "does not define" 措辞差异（语义不同）
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d0bb177` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
