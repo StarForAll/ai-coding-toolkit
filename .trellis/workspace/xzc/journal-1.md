@@ -979,3 +979,57 @@ cli.py contribute --target /project --asset X  # 贡献验证
 ### Next Steps
 
 - None - task complete
+
+
+## Session 21: trellis-library 校验与文档同步
+
+**Date**: 2026-03-20
+**Task**: trellis-library 校验与文档同步
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| CLI docs | 对齐 `trellis-library/README.md` 与 `cli.py` 的公开命令面，补充 `contribute` 命令说明与示例 |
+| Validation | 为 `validate-library-sync.py` 增加 cross-axis 直接引用检测，以及 spec/template/checklist 的结构校验 |
+| Manifest policy | 在 `manifest.yaml` 中增加 `policies.allowed_direct_cross_axis_refs`，用于显式记录存量跨轴例外 |
+| Tests | 为 CLI 帮助、README 对齐、cross-axis 检测和资产结构校验补充回归测试 |
+| Code-spec docs | 更新 `.trellis/spec/library-assets/`，记录新的 manifest 策略字段、边界规则与校验行为 |
+
+**Updated Files**:
+- `.trellis/spec/library-assets/checklist-authoring.md`
+- `.trellis/spec/library-assets/manifest-maintenance.md`
+- `.trellis/spec/library-assets/spec-authoring.md`
+- `.trellis/spec/library-assets/template-authoring.md`
+- `trellis-library/README.md`
+- `trellis-library/manifest.yaml`
+- `trellis-library/scripts/validation/validate-library-sync.py`
+- `trellis-library/tests/test_cli.py`
+
+**Verification**:
+- `/ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --strict-warnings`
+- `/ops/softwares/python/bin/python3 -m py_compile trellis-library/scripts/validation/validate-library-sync.py`
+- `/ops/softwares/python/bin/python3 -m unittest trellis-library/tests/test_cli.py`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d6c30b2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
