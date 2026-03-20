@@ -450,6 +450,90 @@ class TrellisLibraryCliTests(unittest.TestCase):
         payload = json.loads(propose.stdout)
         self.assertTrue(payload["contribution_eligible"])
 
+    def test_sync_propose_mode_reports_structural_drift_for_directory_asset_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as target_dir:
+            assemble = self.run_cli(
+                "assemble",
+                "--library-root",
+                "trellis-library",
+                "--target",
+                target_dir,
+                "--pack",
+                "pack.go-service-foundation",
+            )
+            self.assertEqual(assemble.returncode, 0, msg=assemble.stdout + assemble.stderr)
+
+            target_dir_path = Path(target_dir) / ".trellis" / GO_PACKAGE_TARGET_DIR
+            (target_dir_path / "extra-local-file.md").write_text(
+                "Extra local file\n",
+                encoding="utf-8",
+            )
+
+            propose = self.run_cli(
+                "sync",
+                "--mode",
+                "propose",
+                "--library-root",
+                "trellis-library",
+                "--target",
+                target_dir,
+                "--asset",
+                GO_PACKAGE_ASSET,
+                "--scope",
+                "file",
+                "--file",
+                "overview.md",
+            )
+
+        self.assertNotEqual(propose.returncode, 0, msg=propose.stdout + propose.stderr)
+        self.assertIn("structural drift", propose.stderr)
+        self.assertIn("modified content diffs", propose.stderr)
+
+    def test_sync_downstream_reports_migration_required_when_source_asset_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            library_root = self.create_library_copy(temp_root)
+            target_dir = Path(temp_root) / "target-project"
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            assemble = self.run_cli(
+                "assemble",
+                "--library-root",
+                str(library_root),
+                "--target",
+                str(target_dir),
+                "--asset",
+                GO_PACKAGE_ASSET,
+            )
+            self.assertEqual(assemble.returncode, 0, msg=assemble.stdout + assemble.stderr)
+
+            source_dir = library_root / GO_PACKAGE_OVERVIEW.rsplit("/", 1)[0]
+            shutil.rmtree(source_dir)
+
+            sync = self.run_cli(
+                "sync",
+                "--mode",
+                "downstream",
+                "--library-root",
+                str(library_root),
+                "--target",
+                str(target_dir),
+                "--asset",
+                GO_PACKAGE_ASSET,
+                "--dry-run",
+                "--json",
+            )
+
+        self.assertEqual(sync.returncode, 2, msg=sync.stdout + sync.stderr)
+        sync_payload = json.loads(sync.stdout.split("\n\n", 1)[0])
+        self.assertEqual(sync_payload[0]["decision"], "migration-required")
+        self.assertEqual(sync_payload[0]["pre_sync_diff_status"], "migration-required")
+        self.assertEqual(sync_payload[0]["pre_sync_change_scope"], "structure-change")
+        self.assertEqual(sync_payload[0]["pre_sync_local_state"], "migration-required")
+        self.assertEqual(sync_payload[0]["expected_post_sync_diff_status"], "migration-required")
+        self.assertTrue(sync_payload[0]["pre_sync_state_consistent"])
+        self.assertIsNone(sync_payload[0]["pre_sync_anomaly_reason"])
+        self.assertIn("Source asset is missing or renamed", sync_payload[0]["message"])
+
     def test_sync_directory_file_set_drift_is_classified_as_diverged_consistently(self) -> None:
         with tempfile.TemporaryDirectory() as target_dir:
             assemble = self.run_cli(
@@ -482,6 +566,18 @@ class TrellisLibraryCliTests(unittest.TestCase):
                 "--dry-run",
                 "--json",
             )
+            human_sync = self.run_cli(
+                "sync",
+                "--mode",
+                "downstream",
+                "--library-root",
+                "trellis-library",
+                "--target",
+                target_dir,
+                "--asset",
+                GO_PACKAGE_ASSET,
+                "--dry-run",
+            )
             diff = self.run_cli(
                 "sync",
                 "--mode",
@@ -499,8 +595,132 @@ class TrellisLibraryCliTests(unittest.TestCase):
         self.assertEqual(diff.returncode, 2, msg=diff.stdout + diff.stderr)
         sync_payload = json.loads(sync.stdout.split("\n\n", 1)[0])
         diff_payload = json.loads(diff.stdout)
-        self.assertEqual(sync_payload[0]["result"], "blocked-diverged")
+        self.assertEqual(sync_payload[0]["decision"], "blocked-diverged")
+        self.assertEqual(sync_payload[0]["pre_sync_change_scope"], "structure-change")
         self.assertEqual(diff_payload[0]["diff_status"], "diverged")
+        self.assertEqual(human_sync.returncode, 2, msg=human_sync.stdout + human_sync.stderr)
+        self.assertIn("pre_diff=diverged", human_sync.stdout)
+        self.assertIn("pre_scope=structure-change", human_sync.stdout)
+
+
+    def test_assess_local_state_exposes_diff_details_for_directory_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as target_dir:
+            assemble = self.run_cli(
+                "assemble",
+                "--library-root",
+                "trellis-library",
+                "--target",
+                target_dir,
+                "--asset",
+                GO_PACKAGE_ASSET,
+            )
+            self.assertEqual(assemble.returncode, 0, msg=assemble.stdout + assemble.stderr)
+
+            lock_path = Path(target_dir) / ".trellis" / "library-lock.yaml"
+            import yaml
+
+            lock_data = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
+            import_item = next(
+                item for item in lock_data["imports"] if item["asset_id"] == GO_PACKAGE_ASSET
+            )
+            target_path = Path(target_dir) / import_item["target_path"]
+            source_path = REPO_ROOT / "trellis-library" / import_item["source_path"]
+            (target_path / "extra-local-file.md").write_text("Extra local file\n", encoding="utf-8")
+
+            module = self.load_script_module(
+                REPO_ROOT / "trellis-library" / "scripts" / "sync" / "sync-library-assets.py",
+                "sync_library_assets_assess_test",
+            )
+            assessment = module.assess_local_state(import_item, target_path, source_path)
+
+        self.assertEqual(assessment.baseline_state, "diverged")
+        self.assertEqual(assessment.diff_status, "diverged")
+        self.assertEqual(assessment.change_scope, "structure-change")
+        self.assertEqual(assessment.normalized_baseline_state, "diverged")
+
+    def test_assess_local_state_marks_modified_even_without_baseline_checksum(self) -> None:
+        with tempfile.TemporaryDirectory() as target_dir:
+            assemble = self.run_cli(
+                "assemble",
+                "--library-root",
+                "trellis-library",
+                "--target",
+                target_dir,
+                "--asset",
+                GO_PACKAGE_ASSET,
+            )
+            self.assertEqual(assemble.returncode, 0, msg=assemble.stdout + assemble.stderr)
+
+            lock_path = Path(target_dir) / ".trellis" / "library-lock.yaml"
+            import yaml
+
+            lock_data = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
+            import_item = next(
+                item for item in lock_data["imports"] if item["asset_id"] == GO_PACKAGE_ASSET
+            )
+            import_item["last_local_checksum"] = ""
+            target_path = Path(target_dir) / import_item["target_path"]
+            source_path = REPO_ROOT / "trellis-library" / import_item["source_path"]
+            target_file = target_path / "overview.md"
+            target_file.write_text(
+                target_file.read_text(encoding="utf-8") + "\nModified without stored baseline.\n",
+                encoding="utf-8",
+            )
+
+            module = self.load_script_module(
+                REPO_ROOT / "trellis-library" / "scripts" / "sync" / "sync-library-assets.py",
+                "sync_library_assets_missing_baseline_test",
+            )
+            assessment = module.assess_local_state(import_item, target_path, source_path)
+
+        self.assertEqual(assessment.baseline_state, "modified")
+        self.assertEqual(assessment.diff_status, "modified")
+        self.assertEqual(assessment.change_scope, "content-change")
+        self.assertEqual(assessment.normalized_baseline_state, "modified")
+
+    def test_assess_local_state_marks_inconsistent_modified_state_with_anomaly_reason(self) -> None:
+        with tempfile.TemporaryDirectory() as target_dir:
+            assemble = self.run_cli(
+                "assemble",
+                "--library-root",
+                "trellis-library",
+                "--target",
+                target_dir,
+                "--asset",
+                GO_PACKAGE_ASSET,
+            )
+            self.assertEqual(assemble.returncode, 0, msg=assemble.stdout + assemble.stderr)
+
+            lock_path = Path(target_dir) / ".trellis" / "library-lock.yaml"
+            import yaml
+
+            lock_data = yaml.safe_load(lock_path.read_text(encoding="utf-8"))
+            import_item = next(
+                item for item in lock_data["imports"] if item["asset_id"] == GO_PACKAGE_ASSET
+            )
+            target_path = Path(target_dir) / import_item["target_path"]
+            source_path = REPO_ROOT / "trellis-library" / import_item["source_path"]
+            target_file = target_path / "overview.md"
+            target_file.write_text(
+                target_file.read_text(encoding="utf-8") + "\nPinned local divergence kept as baseline.\n",
+                encoding="utf-8",
+            )
+
+            module = self.load_script_module(
+                REPO_ROOT / "trellis-library" / "scripts" / "sync" / "sync-library-assets.py",
+                "sync_library_assets_anomaly_test",
+            )
+            import_item["source_checksum"] = module.sha256_for_path(source_path)
+            import_item["last_local_checksum"] = module.sha256_for_path(target_path)
+            assessment = module.assess_local_state(import_item, target_path, source_path)
+
+        self.assertEqual(assessment.baseline_state, "modified")
+        self.assertEqual(assessment.diff_status, "modified")
+        self.assertEqual(
+            assessment.anomaly_reason,
+            "diff-modified-without-source-or-local-baseline-drift",
+        )
+        self.assertFalse(assessment.state_consistent)
 
     def test_determine_local_state_marks_directory_file_set_drift_as_diverged(self) -> None:
         with tempfile.TemporaryDirectory() as target_dir:
@@ -532,6 +752,17 @@ class TrellisLibraryCliTests(unittest.TestCase):
             local_state = module.determine_local_state(import_item, target_path)
 
         self.assertEqual(local_state, "diverged")
+
+    def test_apply_rejects_paths_outside_proposal_whitelist_with_english_message(self) -> None:
+        module = self.load_script_module(
+            REPO_ROOT / "trellis-library" / "scripts" / "sync" / "apply-library-sync.py",
+            "apply_library_sync_test",
+        )
+
+        with self.assertRaises(SystemExit) as ctx:
+            module.ensure_whitelisted_paths({"specs/other.md"}, ["specs/allowed.md"])
+
+        self.assertIn("outside proposal whitelist", str(ctx.exception))
 
     def test_sync_blocked_modified_persists_observed_checksum_and_block_metadata_without_overwriting_baseline(self) -> None:
         with tempfile.TemporaryDirectory() as target_dir:

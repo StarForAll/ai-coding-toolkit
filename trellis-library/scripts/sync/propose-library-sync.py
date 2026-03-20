@@ -183,6 +183,29 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def proposal_diff_error(asset_id: str, diff_status: str, change_scope: str) -> str:
+    if diff_status == "unchanged":
+        return f"Asset '{asset_id}' has no local diff to propose"
+    if diff_status == "missing":
+        return f"Asset '{asset_id}' is missing locally; proposal generation requires an existing local diff"
+    if diff_status == "migration-required":
+        return (
+            f"Asset '{asset_id}' no longer exists in the source library; "
+            "proposal generation cannot proceed"
+        )
+    if diff_status == "diverged":
+        if change_scope == "structure-change":
+            return (
+                f"Asset '{asset_id}' has structural drift (added/removed files or a file-vs-directory mismatch); "
+                "proposal generation only supports modified content diffs"
+            )
+        return f"Asset '{asset_id}' is diverged; proposal generation only supports modified content diffs"
+    return (
+        f"Asset '{asset_id}' has diff status '{diff_status}' ({change_scope}); "
+        "proposal generation only supports modified content diffs"
+    )
+
+
 def main() -> int:
     args = parse_args()
     library_root = Path(args.library_root).resolve()
@@ -213,9 +236,7 @@ def main() -> int:
         raise SystemExit(managed_target_path_error(import_item.get("target_path", "")))
     diff_status, change_scope = determine_diff_status(source_path, target_path)
     if diff_status != "modified":
-        raise SystemExit(
-            f"Asset '{args.asset}' must have a modified local diff before proposal generation"
-        )
+        raise SystemExit(proposal_diff_error(args.asset, diff_status, change_scope))
 
     eligible, reason, recommended_action = determine_contribution_eligibility(
         asset,

@@ -62,7 +62,7 @@ def ensure_whitelisted_paths(paths: set[str], target_paths: list[str]) -> None:
         if path == "/dev/null":
             continue
         if not any(path == target or path.startswith(target + "/") for target in target_paths):
-            raise SystemExit(f"Patch path خارج proposal whitelist: {path}")
+            raise SystemExit(f"Patch path outside proposal whitelist: {path}")
 
 
 def main() -> int:

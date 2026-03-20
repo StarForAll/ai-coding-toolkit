@@ -6,6 +6,7 @@ Shared checksum and asset-state helpers for trellis-library sync workflows.
 from __future__ import annotations
 
 import hashlib
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -155,26 +156,79 @@ def determine_contribution_eligibility(
     return True, "generalizable-content-change", "propose-upstream-selective"
 
 
+@dataclass(frozen=True)
+class LocalStateAssessment:
+    baseline_state: str
+    diff_status: str
+    change_scope: str
+    anomaly_reason: str | None = None
+
+    @property
+    def local_state(self) -> str:
+        return self.baseline_state
+
+    @property
+    def normalized_baseline_state(self) -> str:
+        return "unchanged" if self.baseline_state == "clean" else self.baseline_state
+
+    @property
+    def state_consistent(self) -> bool:
+        return self.anomaly_reason is None
+
+
+def assess_local_state(
+    import_item: dict[str, object],
+    target_abs: Path,
+    source_abs: Path | None = None,
+) -> LocalStateAssessment:
+    expected_mode = import_item.get("import_mode")
+
+    if not target_abs.exists():
+        return LocalStateAssessment("missing", "missing", "structure-change")
+    if expected_mode == "file" and not target_abs.is_file():
+        return LocalStateAssessment("diverged", "diverged", "structure-change")
+    if expected_mode == "directory" and not target_abs.is_dir():
+        return LocalStateAssessment("diverged", "diverged", "structure-change")
+
+    current_checksum = sha256_for_path(target_abs)
+    last_local_checksum = str(import_item.get("last_local_checksum", ""))
+    local_changed = bool(last_local_checksum) and current_checksum != last_local_checksum
+
+    if source_abs is not None:
+        if not source_abs.exists():
+            return LocalStateAssessment("migration-required", "migration-required", "structure-change")
+
+        diff_status, change_scope = determine_diff_status(source_abs, target_abs)
+        if diff_status == "missing":
+            return LocalStateAssessment("missing", diff_status, change_scope)
+        if diff_status in {"migration-required", "diverged"}:
+            return LocalStateAssessment(diff_status, diff_status, change_scope)
+        if diff_status == "modified":
+            current_source_checksum = sha256_for_path(source_abs)
+            last_source_checksum = str(import_item.get("source_checksum", ""))
+            source_changed = bool(last_source_checksum) and current_source_checksum != last_source_checksum
+            if local_changed or not last_local_checksum:
+                return LocalStateAssessment("modified", diff_status, change_scope)
+            if source_changed:
+                return LocalStateAssessment("clean", diff_status, change_scope)
+            return LocalStateAssessment(
+                "modified",
+                diff_status,
+                change_scope,
+                anomaly_reason="diff-modified-without-source-or-local-baseline-drift",
+            )
+    else:
+        diff_status = "unchanged"
+        change_scope = "none"
+
+    if local_changed:
+        return LocalStateAssessment("modified", diff_status, change_scope)
+    return LocalStateAssessment("clean", diff_status, change_scope)
+
+
 def determine_local_state(
     import_item: dict[str, object],
     target_abs: Path,
     source_abs: Path | None = None,
 ) -> str:
-    expected_mode = import_item.get("import_mode")
-    if not target_abs.exists():
-        return "missing"
-    if expected_mode == "file" and not target_abs.is_file():
-        return "diverged"
-    if expected_mode == "directory" and not target_abs.is_dir():
-        return "diverged"
-
-    if source_abs is not None and source_abs.exists():
-        diff_status, _ = determine_diff_status(source_abs, target_abs)
-        if diff_status == "diverged":
-            return "diverged"
-
-    current_checksum = sha256_for_path(target_abs)
-    last_local_checksum = str(import_item.get("last_local_checksum", ""))
-    if last_local_checksum and current_checksum != last_local_checksum:
-        return "modified"
-    return "clean"
+    return assess_local_state(import_item, target_abs, source_abs).baseline_state

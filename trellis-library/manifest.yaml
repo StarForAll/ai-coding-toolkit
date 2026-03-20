@@ -4894,6 +4894,91 @@ assets:
     source_of_truth: false
     generated: false
     notes: ''
+- id: template.universal-domains.product-and-requirements.customer-facing-prd-template
+  type: template
+  format: file
+  path: templates/universal-domains/product-and-requirements/customer-facing-prd-template.md
+  title: Customer-Facing PRD Template
+  summary: Reusable template for creating customer-facing Product Requirement Documents
+    that are clear and accessible for non-technical stakeholders
+  status: active
+  version: 1.0.0
+  domain_axis: universal-domains
+  domain: product-and-requirements
+  concern: customer-facing-prd-template
+  atomicity: simple
+  tags:
+  - product
+  - requirements
+  - prd
+  - customer-facing
+  - template
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - discovery
+    - planning
+    platforms: []
+    technologies: []
+  owners:
+  - core-library
+  dependencies:
+  - spec.universal-domains.product-and-requirements.prd-documentation-customer-facing
+  - spec.universal-domains.product-and-requirements.acceptance-criteria
+  optional_dependencies: []
+  provides:
+  - customer-prd-document
+  change_impact:
+    level: medium
+    review_required: true
+    sync_targets: []
+  metadata:
+    source_of_truth: false
+    generated: false
+    notes: ''
+- id: template.universal-domains.product-and-requirements.developer-facing-prd-template
+  type: template
+  format: file
+  path: templates/universal-domains/product-and-requirements/developer-facing-prd-template.md
+  title: Developer-Facing PRD Template
+  summary: Reusable template for creating developer-facing Product Requirement Documents
+    that provide detailed technical specifications and implementation guidance
+  status: active
+  version: 1.0.0
+  domain_axis: universal-domains
+  domain: product-and-requirements
+  concern: developer-facing-prd-template
+  atomicity: simple
+  tags:
+  - product
+  - requirements
+  - prd
+  - developer-facing
+  - template
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - planning
+    - implementation
+    - verification
+    platforms: []
+    technologies: []
+  owners:
+  - core-library
+  dependencies:
+  - spec.universal-domains.product-and-requirements.prd-documentation-developer-facing
+  - spec.universal-domains.product-and-requirements.acceptance-criteria
+  optional_dependencies: []
+  provides:
+  - developer-prd-document
+  change_impact:
+    level: medium
+    review_required: true
+    sync_targets: []
+  metadata:
+    source_of_truth: false
+    generated: false
+    notes: ''
 - id: template.universal-domains.project-governance.change-request-template
   type: template
   format: file
@@ -5890,6 +5975,92 @@ assets:
   optional_dependencies: []
   provides:
   - acceptance-quality-checklist
+  change_impact:
+    level: medium
+    review_required: true
+    sync_targets: []
+  metadata:
+    source_of_truth: false
+    generated: false
+    notes: ''
+- id: checklist.universal-domains.product-and-requirements.customer-facing-prd-checklist
+  type: checklist
+  format: file
+  path: checklists/universal-domains/product-and-requirements/customer-facing-prd-checklist.md
+  title: Customer-Facing PRD Checklist
+  summary: Review checklist for validating customer-facing Product Requirement Documents
+    for clarity, completeness, and stakeholder accessibility
+  status: active
+  version: 1.0.0
+  domain_axis: universal-domains
+  domain: product-and-requirements
+  concern: customer-facing-prd-checklist
+  atomicity: simple
+  tags:
+  - product
+  - requirements
+  - prd
+  - customer-facing
+  - checklist
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - discovery
+    - planning
+    - review
+    platforms: []
+    technologies: []
+  owners:
+  - core-library
+  dependencies:
+  - spec.universal-domains.product-and-requirements.prd-documentation-customer-facing
+  - spec.universal-domains.product-and-requirements.acceptance-criteria
+  optional_dependencies: []
+  provides:
+  - customer-prd-validation-checklist
+  change_impact:
+    level: medium
+    review_required: true
+    sync_targets: []
+  metadata:
+    source_of_truth: false
+    generated: false
+    notes: ''
+- id: checklist.universal-domains.product-and-requirements.developer-facing-prd-checklist
+  type: checklist
+  format: file
+  path: checklists/universal-domains/product-and-requirements/developer-facing-prd-checklist.md
+  title: Developer-Facing PRD Checklist
+  summary: Review checklist for validating developer-facing Product Requirement Documents
+    for technical completeness, specificity, and implementation readiness
+  status: active
+  version: 1.0.0
+  domain_axis: universal-domains
+  domain: product-and-requirements
+  concern: developer-facing-prd-checklist
+  atomicity: simple
+  tags:
+  - product
+  - requirements
+  - prd
+  - developer-facing
+  - checklist
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - planning
+    - implementation
+    - verification
+    platforms: []
+    technologies: []
+  owners:
+  - core-library
+  dependencies:
+  - spec.universal-domains.product-and-requirements.prd-documentation-developer-facing
+  - spec.universal-domains.product-and-requirements.acceptance-criteria
+  optional_dependencies: []
+  provides:
+  - developer-prd-validation-checklist
   change_impact:
     level: medium
     review_required: true
@@ -9946,6 +10117,143 @@ assets:
   tags:
   - scenarios
   - nextjs
+  notes: Intended as a baseline pack for Next.js full-stack applications.
+- id: example.universal-domains.product-and-requirements.product-and-requirements-examples
+  type: example
+  format: directory
+  path: examples/universal-domains/product-and-requirements
+  title: Product and Requirements Examples
+  summary: Example documents for product requirements specifications including customer-facing
+    and developer-facing PRD examples
+  status: active
+  version: 1.0.0
+  domain_axis: universal-domains
+  domain: product-and-requirements
+  concern: product-and-requirements-examples
+  atomicity: simple
+  tags:
+  - product
+  - requirements
+  - prd
+  - example
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - discovery
+    - planning
+    - implementation
+    - verification
+    platforms: []
+    technologies: []
+  owners:
+  - core-library
+  dependencies:
+  - spec.universal-domains.product-and-requirements.prd-documentation-customer-facing
+  - spec.universal-domains.product-and-requirements.prd-documentation-developer-facing
+  - template.universal-domains.product-and-requirements.customer-facing-prd-template
+  - template.universal-domains.product-and-requirements.developer-facing-prd-template
+  - checklist.universal-domains.product-and-requirements.customer-facing-prd-checklist
+  - checklist.universal-domains.product-and-requirements.developer-facing-prd-checklist
+  optional_dependencies: []
+  provides:
+  - prd-examples
+  change_impact:
+    level: low
+    review_required: false
+    sync_targets: []
+  metadata:
+    source_of_truth: false
+    generated: false
+    notes: ''
+- id: example.universal-domains.product-and-requirements.customer-facing-prd-example
+  type: example
+  format: file
+  path: examples/universal-domains/product-and-requirements/customer-facing-prd-example.md
+  title: Customer-Facing PRD Example
+  summary: Example customer-facing Product Requirement Document demonstrating clear,
+    accessible requirements for non-technical stakeholders using an online education
+    platform course purchase feature
+  status: active
+  version: 1.0.0
+  domain_axis: universal-domains
+  domain: product-and-requirements
+  concern: customer-facing-prd-example
+  atomicity: simple
+  tags:
+  - product
+  - requirements
+  - prd
+  - customer-facing
+  - example
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - discovery
+    - planning
+    platforms: []
+    technologies: []
+  owners:
+  - core-library
+  dependencies:
+  - spec.universal-domains.product-and-requirements.prd-documentation-customer-facing
+  - template.universal-domains.product-and-requirements.customer-facing-prd-template
+  - checklist.universal-domains.product-and-requirements.customer-facing-prd-checklist
+  optional_dependencies: []
+  provides:
+  - customer-prd-example
+  change_impact:
+    level: low
+    review_required: false
+    sync_targets: []
+  metadata:
+    source_of_truth: false
+    generated: false
+    notes: ''
+- id: example.universal-domains.product-and-requirements.developer-facing-prd-example
+  type: example
+  format: file
+  path: examples/universal-domains/product-and-requirements/developer-facing-prd-example.md
+  title: Developer-Facing PRD Example
+  summary: Example developer-facing Product Requirement Document demonstrating detailed
+    technical specifications and implementation guidance using an online education platform
+    course purchase feature
+  status: active
+  version: 1.0.0
+  domain_axis: universal-domains
+  domain: product-and-requirements
+  concern: developer-facing-prd-example
+  atomicity: simple
+  tags:
+  - product
+  - requirements
+  - prd
+  - developer-facing
+  - example
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - planning
+    - implementation
+    - verification
+    platforms: []
+    technologies: []
+  owners:
+  - core-library
+  dependencies:
+  - spec.universal-domains.product-and-requirements.prd-documentation-developer-facing
+  - template.universal-domains.product-and-requirements.developer-facing-prd-template
+  - checklist.universal-domains.product-and-requirements.developer-facing-prd-checklist
+  optional_dependencies: []
+  provides:
+  - developer-prd-example
+  change_impact:
+    level: low
+    review_required: false
+    sync_targets: []
+  metadata:
+    source_of_truth: false
+    generated: false
+    notes: ''
 relations:
 - id: rel.spec-api-contracts.template-api-contract-template
   from: spec.universal-domains.contracts.api-contracts
@@ -12004,8 +12312,15 @@ packs:
     - spec.universal-domains.product-and-requirements.scope-boundary
     - spec.universal-domains.product-and-requirements.requirement-clarification
     - spec.universal-domains.product-and-requirements.acceptance-criteria
+    - spec.universal-domains.product-and-requirements.prd-documentation-customer-facing
+    - spec.universal-domains.product-and-requirements.prd-documentation-developer-facing
     - template.universal-domains.product-and-requirements.acceptance-criteria-template
+    - template.universal-domains.product-and-requirements.customer-facing-prd-template
+    - template.universal-domains.product-and-requirements.developer-facing-prd-template
     - checklist.universal-domains.product-and-requirements.acceptance-quality-checklist
+    - checklist.universal-domains.product-and-requirements.customer-facing-prd-checklist
+    - checklist.universal-domains.product-and-requirements.developer-facing-prd-checklist
+    - example.universal-domains.product-and-requirements.product-and-requirements-examples
     - spec.scenarios.discovery-and-planning.solution-comparison
     - example.assembled-packs.requirements-discovery-foundation
   applicability:
