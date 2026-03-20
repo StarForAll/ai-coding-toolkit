@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 14
-- **Last Active**: 2026-03-19
+- **Total Sessions**: 17
+- **Last Active**: 2026-03-20
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~631 | Active |
+| `journal-1.md` | ~836 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,9 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits |
 |---|------|-------|---------|
+| 17 | 2026-03-20 | 实现 spec 多次拉取的模拟-执行两阶段流程及上游贡献验证 | `8c41fde`, `bbba079` |
+| 16 | 2026-03-19 | 修正 sync 机制并归档相关任务 | `8c41fde` |
+| 15 | 2026-03-19 | Sync governance fix and PRD documentation normalization | `8c41fde` |
 | 14 | 2026-03-19 | 分析 trellis-library 拉取机制缺陷并修复测试回归 | `bbba079` |
 | 13 | 2026-03-19 | 修正 spec 拉取与同步交互 | `bbba079` |
 | 12 | 2026-03-19 | 修正项目级 spec 与实际状态对齐 | `d23cfbc` |

@@ -629,3 +629,208 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 15: Sync governance fix and PRD documentation normalization
+
+**Date**: 2026-03-19
+**Task**: Sync governance fix and PRD documentation normalization
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Sync governance | Fixed sync eligibility and structural drift handling across diff, propose, sync, and pull-analysis workflows. |
+| Shared helpers | Introduced shared internal helpers for asset state and drift scanning to remove duplicated checksum and classification logic. |
+| PRD specs | Normalized the PRD documentation concerns into a shared concern plus customer-facing and developer-facing variants with clearer format rules and verification criteria. |
+| Governance docs | Updated project-local library sync governance spec to reflect the stricter contribution and drift rules. |
+
+**Updated Assets**:
+- `trellis-library/scripts/sync/*.py`
+- `trellis-library/scripts/assembly/*.py`
+- `trellis-library/scripts/contribution/verify-upstream-contribution.py`
+- `trellis-library/_internal/asset_state.py`
+- `trellis-library/_internal/drift_scan.py`
+- `trellis-library/specs/universal-domains/product-and-requirements/prd-documentation*`
+- `trellis-library/manifest.yaml`
+- `.trellis/spec/universal-domains/project-governance/library-sync-governance/*`
+
+**Verification**:
+- `/ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --strict-warnings`
+- `/ops/softwares/python/bin/python3 -m py_compile trellis-library/scripts/validation/validate-library-sync.py`
+- `/ops/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8c41fde` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 16: 修正 sync 机制并归档相关任务
+
+**Date**: 2026-03-19
+**Task**: 修正 sync 机制并归档相关任务
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Sync state | Unified diff/sync/propose state classification, directory checksum handling, and contribution eligibility recomputation |
+| Lock metadata | Added observed checksum and blocked metadata tracking without overwriting accepted baseline checksum |
+| Workflow behavior | Enforced managed `.trellis/` target path boundary, enabled merge-mode drift scanning by default, and made `--include-pinned` perform explicit pinned updates |
+| Documentation | Updated library sync governance spec and README to document managed target paths, default drift scans, and explicit pinned overrides |
+| Tasks | Archived `03-19-fix-sync-eligibility-state-drift` and `03-19-normalize-prd-documentation-specs` |
+
+**Verification**:
+- `/ops/softwares/python/bin/python3 -m unittest trellis-library/tests/test_cli.py` (23 passed)
+- `/ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --strict-warnings` (pass)
+- `/ops/softwares/python/bin/python3 -m py_compile trellis-library/scripts/validation/validate-library-sync.py` (pass)
+
+**Notes**:
+- Code changes were already committed by the human in `8c41fde` before recording this session.
+- This session records `.trellis/workspace` and `.trellis/tasks` metadata only.
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8c41fde` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 17: 实现 spec 多次拉取的模拟-执行两阶段流程及上游贡献验证
+
+**Date**: 2026-03-20
+**Task**: 实现 spec 多次拉取的模拟-执行两阶段流程及上游贡献验证
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+## 概要
+
+实现了 trellis-library 中 spec 多次拉取到目标项目时的两阶段流程（模拟→确认→执行），并补充了上游贡献验证机制。修复了多个 sync/assemble 缺陷。
+
+## 主要功能实现
+
+### 1. 两阶段拉取流程（核心）
+- **新建**: `scripts/assembly/analyze-library-pull.py` — 三方对比分析脚本
+  - 3-way 对比: 源 vs 目标 vs 基准(checksum)
+  - 本地文件检测: 扫描 `.trellis/` 下不在 lock 中的文件
+  - 分类: New / Identical / Source Updated / Target Modified / Both Modified / Local-Conflict
+  - Source path 迁移检测: lock 中 source_path 失效时警告并自动更新
+  
+- **修改**: `scripts/assembly/assemble-init-set.py` — 集成两阶段流程
+  - Phase 1: 调用 analyze-library-pull.py 模拟分析
+  - 决策点: 无冲突直接执行 / 有冲突展示报告并交互
+  - Phase 2: 批量执行用户确认的操作
+  - Drift 检测后提供贡献到上游入口
+  
+- **修改**: `scripts/assembly/write-library-lock.py` — 支持 --merge 模式
+  - `merge_locks()`: selection 并集、import 去重、history 保留
+  - source_path 在 merge 时自动更新为当前路径
+
+### 2. 上游贡献验证流程
+- **新建**: `scripts/contribution/verify-upstream-contribution.py`
+  - 上游状态检查: 上游不存在(全新) / 上游存在且不同 / 上游存在且相同
+  - 格式校验: 新增文件检查 frontmatter、章节结构、私有引用
+  - 信息概略: 行数统计、上游状态、私有标记、格式问题
+  - 逐项验证: 每个文件必须用户显式 approve/reject
+  - Proposal 生成: 仅对 approved 文件生成 report + patch
+  
+- **修改**: `cli.py` — 新增 `contribute` 子命令
+
+### 3. 缺陷修复
+| 缺陷 | 修复内容 |
+|------|---------|
+| sync 缺少确认流程 (P0) | sync 添加三阶段流程: 收集计划→展示确认→执行，新增 `--force` flag |
+| sync 缺少漂移报告+贡献引导 (P1) | sync 末尾提供贡献引导，与 assemble 一致 |
+| manual-review 不展示 diff (P2) | 新增 `_print_manual_review_diff()` 展示 unified diff |
+| keep-local 不更新 checksum (P1) | keep-local 时更新 lock 中 source_checksum 和 last_local_checksum |
+| preserve 实际是 skip (P2) | 修改提示为"目录型资产不支持 preserve；此前该选项实际不会产生任何变更" |
+| no_restore_mising 拼写错误 (P2) | 修正为 no_restore_missing |
+| source_path 迁移检测 (Defect 6) | 新增 `detect_source_path_change()` 检测并提示 |
+
+## 修改的文件
+
+| 文件 | 操作 |
+|------|------|
+| `scripts/assembly/analyze-library-pull.py` | 新建 |
+| `scripts/contribution/verify-upstream-contribution.py` | 新建 |
+| `scripts/assembly/assemble-init-set.py` | 重写 |
+| `scripts/assembly/write-library-lock.py` | 修改（--merge） |
+| `scripts/sync/sync-library-assets.py` | 修改（确认流程、drift、typo） |
+| `cli.py` | 修改（contribute 子命令） |
+| `manifest.yaml` | 注册新脚本 |
+
+## CLI Flags 新增
+
+```bash
+# assemble 新增
+--analyze-only    # 仅模拟分析
+--auto            # CI模式跳过交互
+--force           # 跳过分析直接覆盖
+--json            # JSON 输出
+
+# sync 新增
+--force           # 跳过确认直接执行
+
+# 新命令
+cli.py contribute --target /project --asset X  # 贡献验证
+```
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8c41fde` | (see git log) |
+| `bbba079` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
