@@ -28,6 +28,7 @@ policies:
   require_unique_ids: true              # No duplicate IDs
   require_reverse_links: true           # Bidirectional relations
   allow_unregistered_files: false       # Unregistered = ERROR
+  allowed_direct_cross_axis_refs: []    # Temporary allowlist for legacy platforms <-> technologies direct refs
 enums:
   asset_types: [spec, template, checklist, example, schema, script]
   asset_statuses: [draft, active, deprecated, archived]
@@ -162,6 +163,35 @@ Relation kinds:
 - `replaced-by` — source is replaced by target
 - `related-to` — general relationship
 
+## Cross-Axis Boundary Rule
+
+`platforms/` and `technologies/` are parallel axes and should not directly reference
+one another through `dependencies`, `optional_dependencies`, or `relations`.
+
+When shared reusable rules are needed:
+
+- move the shared rule into `specs/universal-domains/`
+- keep platform + technology combinations in packs, examples, or applicability metadata
+
+The validator reports non-allowlisted direct references as `cross-axis-direct-reference`.
+With `--strict-warnings`, that warning becomes a blocking failure.
+
+### Temporary Legacy Allowlist
+
+Use `policies.allowed_direct_cross_axis_refs` only for existing legacy pairs that
+cannot be migrated in the same change.
+
+```yaml
+policies:
+  allowed_direct_cross_axis_refs:
+    - spec.technologies.frameworks.react-component-model->spec.platforms.web-accessibility
+```
+
+Rules:
+- keep this list small and explicit
+- prefer removing entries over adding new ones
+- do not use the allowlist for new assets unless a migration is already scheduled
+
 ---
 
 ## Validation
@@ -179,11 +209,12 @@ python3 trellis-library/cli.py validate --strict-warnings
 python3 trellis-library/cli.py validate --json
 ```
 
-Common validation errors:
+Common validation findings:
 - `missing-asset-path-on-disk` — path in manifest doesn't exist
 - `duplicate-asset-id` — same ID registered twice
 - `asset-type-root-mismatch` — path prefix doesn't match type
 - `unknown-asset-dependency` — dependency references non-existent asset
+- `cross-axis-direct-reference` — direct platforms <-> technologies dependency or relation that is not allowlisted
 
 ---
 

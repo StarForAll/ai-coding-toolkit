@@ -20,7 +20,7 @@ specs/
 
 ## Standard Structure (Complex Concern)
 
-Most specs use a **4-file directory** format:
+Most leaf spec concerns use a **4-file directory** format:
 
 ```
 specs/{axis}/{domain}/{concern-name}/
@@ -106,6 +106,10 @@ Check the following:
 - Frame as "check that X" rather than abstract criteria
 - Cover all normative rules — every rule should have a corresponding check
 
+**Validator note:** if a registered spec directory already uses this standard concern
+shape, `python3 trellis-library/cli.py validate --strict-warnings` will fail when any
+of the 4 required files is missing.
+
 ---
 
 ## Alternative: Flat File Format
@@ -126,6 +130,21 @@ specs/{axis}/{domain}/{concern-name}/
 ├── topic-2.md
 └── ...
 ```
+
+This pattern is also used for aggregate/index directories that group nested concerns.
+If a registered directory only provides `overview.md` plus nested child directories,
+it is treated as an aggregate node rather than a leaf concern and is not required to
+carry the full 4-file structure.
+
+## Axis Boundary Rule
+
+Do not add direct `dependencies`, `optional_dependencies`, or `relations` between
+`platforms/` and `technologies/` specs.
+
+Instead:
+- move shared reusable rules into `universal-domains`
+- combine platform and technology assets through packs or examples
+- use manifest allowlist exceptions only for temporary legacy migrations
 
 ---
 

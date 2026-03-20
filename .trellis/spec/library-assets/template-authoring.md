@@ -60,6 +60,10 @@ Examples:
 - Keep placeholders descriptive enough that users know what to put
 - Use `<placeholder>` or `<!-- instructions -->` for guidance
 
+**Validator note:** `python3 trellis-library/cli.py validate --strict-warnings` now fails
+with `invalid-template-structure` if a registered template is missing the top-level
+`#` title or the `## Purpose` section.
+
 ---
 
 ## Example

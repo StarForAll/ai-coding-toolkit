@@ -17,6 +17,11 @@ policies:
   deletion_policy: block-if-referenced
   rename_policy: require-explicit-migration
   version_bump_policy: semantic
+  allowed_direct_cross_axis_refs:
+  - spec.technologies.frameworks.vue-component-model->spec.platforms.web-accessibility
+  - spec.technologies.frameworks.vue-routing->spec.platforms.web-routing-and-url
+  - spec.technologies.frameworks.react-component-model->spec.platforms.web-accessibility
+  - spec.technologies.frameworks.react-routing->spec.platforms.web-routing-and-url
 enums:
   asset_types:
   - spec

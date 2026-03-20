@@ -50,6 +50,10 @@ Examples:
 - Use concrete, observable language — avoid vague criteria
 - Order items by logical flow (what to check first → last)
 
+**Validator note:** `python3 trellis-library/cli.py validate --strict-warnings` now fails
+with `invalid-checklist-structure` if a registered checklist is missing the top-level
+`#` title or has no checkable bullet items.
+
 ---
 
 ## Example

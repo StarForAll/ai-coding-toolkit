@@ -17,6 +17,7 @@ PYTHON = (
     else shutil.which("python3") or shutil.which("python")
 )
 CLI = REPO_ROOT / "trellis-library" / "cli.py"
+README = REPO_ROOT / "trellis-library" / "README.md"
 ANALYZE_SCRIPT = REPO_ROOT / "trellis-library" / "scripts" / "assembly" / "analyze-library-pull.py"
 GO_PACKAGE_ASSET = "spec.technologies.languages.go-package-structure"
 GO_PACKAGE_OVERVIEW = (
@@ -67,6 +68,15 @@ class TrellisLibraryCliTests(unittest.TestCase):
         self.assertIn("validate", result.stdout)
         self.assertIn("assemble", result.stdout)
         self.assertIn("sync", result.stdout)
+        self.assertIn("contribute", result.stdout)
+
+    def test_readme_documents_cli_commands_including_contribute(self) -> None:
+        readme = README.read_text(encoding="utf-8")
+
+        self.assertIn("* `validate`", readme)
+        self.assertIn("* `assemble`", readme)
+        self.assertIn("* `sync`", readme)
+        self.assertIn("* `contribute`", readme)
 
     def test_sync_help_lists_modes(self) -> None:
         result = self.run_cli("sync", "--help")
@@ -118,6 +128,104 @@ class TrellisLibraryCliTests(unittest.TestCase):
             result = self.run_cli("validate", "--library-root", str(library_root), "--strict-warnings")
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+    def test_validate_command_warns_on_unallowlisted_cross_axis_dependency(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            library_root = self.create_library_copy(temp_root)
+            manifest_path = library_root / "manifest.yaml"
+
+            import yaml
+
+            manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+            asset = next(
+                item
+                for item in manifest["assets"]
+                if item["id"] == "spec.technologies.frameworks.react-state-and-dataflow"
+            )
+            asset["dependencies"].append("spec.platforms.web-networking")
+            manifest_path.write_text(
+                yaml.safe_dump(manifest, sort_keys=False, allow_unicode=True),
+                encoding="utf-8",
+            )
+
+            result = self.run_cli("validate", "--library-root", str(library_root), "--strict-warnings")
+
+        self.assertEqual(result.returncode, 2, msg=result.stdout + result.stderr)
+        self.assertIn("cross-axis-direct-reference", result.stdout)
+        self.assertIn("react-state-and-dataflow", result.stdout)
+        self.assertIn("web-networking", result.stdout)
+
+    def test_validate_command_warns_on_unallowlisted_cross_axis_relation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            library_root = self.create_library_copy(temp_root)
+            manifest_path = library_root / "manifest.yaml"
+
+            import yaml
+
+            manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+            manifest["relations"].append(
+                {
+                    "id": "rel-test-cross-axis-platform-tech",
+                    "kind": "related-to",
+                    "from": "spec.platforms.web-browser-runtime",
+                    "to": "spec.technologies.frameworks.react-component-model",
+                    "required": False,
+                    "sync_policy": "none",
+                }
+            )
+            manifest_path.write_text(
+                yaml.safe_dump(manifest, sort_keys=False, allow_unicode=True),
+                encoding="utf-8",
+            )
+
+            result = self.run_cli("validate", "--library-root", str(library_root), "--strict-warnings")
+
+        self.assertEqual(result.returncode, 2, msg=result.stdout + result.stderr)
+        self.assertIn("cross-axis-direct-reference", result.stdout)
+        self.assertIn("web-browser-runtime", result.stdout)
+        self.assertIn("react-component-model", result.stdout)
+
+    def test_validate_command_rejects_spec_missing_required_standard_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            library_root = self.create_library_copy(temp_root)
+            target_path = library_root / "specs" / "universal-domains" / "contracts" / "api-contracts" / "verification.md"
+            target_path.unlink()
+
+            result = self.run_cli("validate", "--library-root", str(library_root), "--strict-warnings")
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("invalid-spec-structure", result.stdout)
+        self.assertIn("verification.md", result.stdout)
+
+    def test_validate_command_rejects_template_missing_purpose_section(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            library_root = self.create_library_copy(temp_root)
+            target_path = library_root / "templates" / "universal-domains" / "contracts" / "api-contract-template.md"
+            target_path.write_text(
+                "# API Contract Template\n\n## Sections\n\n### Request\n\n<placeholder>\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_cli("validate", "--library-root", str(library_root), "--strict-warnings")
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("invalid-template-structure", result.stdout)
+        self.assertIn("api-contract-template.md", result.stdout)
+
+    def test_validate_command_rejects_checklist_without_checkable_items(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            library_root = self.create_library_copy(temp_root)
+            target_path = library_root / "checklists" / "universal-domains" / "verification" / "release-readiness-checklist.md"
+            target_path.write_text(
+                "# Release Readiness Checklist\n\n## Notes\n\nAdd items later.\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_cli("validate", "--library-root", str(library_root), "--strict-warnings")
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("invalid-checklist-structure", result.stdout)
+        self.assertIn("release-readiness-checklist.md", result.stdout)
 
     def test_assemble_command_runs_dry_run(self) -> None:
         with tempfile.TemporaryDirectory() as target_dir:

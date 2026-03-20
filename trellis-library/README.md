@@ -205,13 +205,15 @@ entry documentation stays aligned with actual behavior.
 Important automation entry points:
 
 * `cli.py`
-  Unified wrapper for day-to-day `validate`, `assemble`, and `sync` usage.
+  Unified wrapper for day-to-day `validate`, `assemble`, `contribute`, and `sync` usage.
 * `scripts/validation/validate-library-sync.py`
   Validate source-library registration and sync consistency.
 * `scripts/assembly/assemble-init-set.py`
   Assemble selected assets into a target project.
 * `scripts/assembly/write-library-lock.py`
   Write the target project's `.trellis/library-lock.yaml`.
+* `scripts/contribution/verify-upstream-contribution.py`
+  Verify whether local target-project changes are eligible for upstream contribution.
 * `scripts/sync/sync-library-assets.py`
   Perform downstream sync into a target project.
 * `scripts/sync/diff-library-assets.py`
@@ -235,6 +237,8 @@ Available commands:
   Run `scripts/validation/validate-library-sync.py`
 * `assemble`
   Run `scripts/assembly/assemble-init-set.py`
+* `contribute`
+  Run `scripts/contribution/verify-upstream-contribution.py`
 * `sync`
   Run sync workflows through `--mode`
 
@@ -247,6 +251,10 @@ python3 trellis-library/cli.py assemble \
   --target /tmp/test-target \
   --pack pack.go-service-foundation \
   --dry-run
+
+python3 trellis-library/cli.py contribute \
+  --target /tmp/test-target \
+  --asset spec.technologies.languages.go-package-structure
 
 python3 trellis-library/cli.py sync \
   --mode downstream \

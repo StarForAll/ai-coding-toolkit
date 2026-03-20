@@ -46,6 +46,9 @@ FILE_EXTENSIONS_BY_TYPE = {
     "schema": {".json", ".yaml", ".yml"},
     "script": {".py", ".sh"},
 }
+SPEC_REQUIRED_FILES = ("overview.md", "scope-boundary.md", "normative-rules.md", "verification.md")
+DIRECT_CROSS_AXIS = frozenset({"platforms", "technologies"})
+CHECKLIST_ITEM_PREFIXES = ("* ", "- ")
 
 
 @dataclass
@@ -247,6 +250,88 @@ def relation_reverse_exists(relations: list[dict[str, Any]], source: dict[str, A
     return False
 
 
+def has_markdown_heading(text: str, heading: str) -> bool:
+    return any(line.strip() == heading for line in text.splitlines())
+
+
+def has_checklist_items(text: str) -> bool:
+    return any(line.lstrip().startswith(prefix) for line in text.splitlines() for prefix in CHECKLIST_ITEM_PREFIXES)
+
+
+def allowed_direct_cross_axis_refs(manifest: dict[str, Any]) -> set[str]:
+    policies = manifest.get("policies", {})
+    raw_values = policies.get("allowed_direct_cross_axis_refs", []) if isinstance(policies, dict) else []
+    if not isinstance(raw_values, list):
+        return set()
+    return {str(item) for item in raw_values if isinstance(item, str)}
+
+
+def is_direct_cross_axis_reference(source_asset: dict[str, Any], target_asset: dict[str, Any]) -> bool:
+    source_axis = source_asset.get("domain_axis")
+    target_axis = target_asset.get("domain_axis")
+    return (
+        isinstance(source_axis, str)
+        and isinstance(target_axis, str)
+        and source_axis != target_axis
+        and {source_axis, target_axis} == DIRECT_CROSS_AXIS
+    )
+
+
+def validate_asset_structure(
+    asset_id: str,
+    asset_type: str,
+    fmt: str,
+    abs_path: Path,
+    rel_path: str,
+    findings: list[Finding],
+) -> None:
+    if asset_type == "spec" and fmt == "directory":
+        present_standard_files = [name for name in SPEC_REQUIRED_FILES if (abs_path / name).is_file()]
+        if not present_standard_files:
+            return
+
+        has_nested_concerns = any(child.is_dir() and not child.name.startswith(".") for child in abs_path.iterdir())
+        if has_nested_concerns and present_standard_files == ["overview.md"]:
+            return
+
+        missing = [name for name in SPEC_REQUIRED_FILES if name not in present_standard_files]
+        if not missing:
+            return
+
+        add_finding(
+            findings,
+            "ERROR",
+            "invalid-spec-structure",
+            f"Spec asset '{asset_id}' is missing required standard files: {', '.join(missing)}",
+            path=rel_path,
+            details={"missing_files": missing},
+        )
+        return
+
+    if asset_type == "template" and fmt == "file":
+        text = abs_path.read_text(encoding="utf-8")
+        if not text.startswith("# ") or not has_markdown_heading(text, "## Purpose"):
+            add_finding(
+                findings,
+                "ERROR",
+                "invalid-template-structure",
+                f"Template asset '{asset_id}' must include a title and a '## Purpose' section",
+                path=rel_path,
+            )
+        return
+
+    if asset_type == "checklist" and fmt == "file":
+        text = abs_path.read_text(encoding="utf-8")
+        if not text.startswith("# ") or not has_checklist_items(text):
+            add_finding(
+                findings,
+                "ERROR",
+                "invalid-checklist-structure",
+                f"Checklist asset '{asset_id}' must include a title and at least one checkable bullet item",
+                path=rel_path,
+            )
+
+
 def add_finding(
     findings: list[Finding],
     level: str,
@@ -297,6 +382,7 @@ def validate_assets(
     by_id: dict[str, dict[str, Any]] = {}
     by_path: dict[str, dict[str, Any]] = {}
     registered_by_type: dict[str, set[str]] = defaultdict(set)
+    allowed_cross_axis_refs = allowed_direct_cross_axis_refs(manifest)
 
     id_counter = Counter()
     path_counter = Counter()
@@ -353,6 +439,9 @@ def validate_assets(
         if fmt == "directory" and not abs_path.is_dir():
             add_finding(findings, "ERROR", "asset-format-mismatch", f"Asset '{asset_id}' expected a directory", path=norm_path)
 
+        if (fmt == "file" and abs_path.is_file()) or (fmt == "directory" and abs_path.is_dir()):
+            validate_asset_structure(asset_id, asset_type, fmt, abs_path, norm_path, findings)
+
         dependencies = asset.get("dependencies", [])
         optional_dependencies = asset.get("optional_dependencies", [])
         if dependencies and not isinstance(dependencies, list):
@@ -379,6 +468,22 @@ def validate_assets(
                         f"Asset '{asset_id}' references unknown dependency '{dependency}'",
                         details={"dependency_kind": dep_kind},
                     )
+                    continue
+
+                target_asset = by_id[dependency]
+                ref_key = f"{asset_id}->{dependency}"
+                if is_direct_cross_axis_reference(asset, target_asset) and ref_key not in allowed_cross_axis_refs:
+                    add_finding(
+                        findings,
+                        "WARN",
+                        "cross-axis-direct-reference",
+                        (
+                            f"Direct {'optional dependency' if dep_kind == 'optional_dependencies' else 'dependency'} crosses 'platforms' and 'technologies': "
+                            f"'{asset_id}' -> '{dependency}'. Move shared rules into universal-domains or compose through packs/examples."
+                        ),
+                        path=str(asset.get("path", "")) or None,
+                        details={"reference_kind": dep_kind, "from": asset_id, "to": dependency},
+                    )
 
     return by_id, by_path, registered_by_type
 
@@ -392,6 +497,7 @@ def validate_relations(
     relations = manifest.get("relations", [])
     policies = manifest.get("policies", {})
     require_reverse_links = bool(policies.get("require_reverse_links", False))
+    allowed_cross_axis_refs = allowed_direct_cross_axis_refs(manifest)
 
     relation_ids = Counter()
     for relation in relations:
@@ -413,6 +519,22 @@ def validate_relations(
         if not target or target not in by_id:
             add_finding(findings, "ERROR", "unknown-relation-target", f"Relation references unknown target asset '{target}'")
             continue
+
+        source_asset = by_id[source]
+        target_asset = by_id[target]
+        ref_key = f"{source}->{target}"
+        if is_direct_cross_axis_reference(source_asset, target_asset) and ref_key not in allowed_cross_axis_refs:
+            add_finding(
+                findings,
+                "WARN",
+                "cross-axis-direct-reference",
+                (
+                    f"Direct relation crosses 'platforms' and 'technologies': '{source}' -> '{target}'. "
+                    "Move shared rules into universal-domains or compose through packs/examples."
+                ),
+                path=relation_id,
+                details={"reference_kind": "relation", "from": source, "to": target},
+            )
 
         if require_reverse_links and relation.get("required", False) and not relation_reverse_exists(relations, relation):
             add_finding(
