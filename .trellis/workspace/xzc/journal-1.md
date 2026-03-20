@@ -1033,3 +1033,55 @@ cli.py contribute --target /project --asset X  # 贡献验证
 ### Next Steps
 
 - None - task complete
+
+
+## Session 22: 创建 multi-cli-review skill
+
+**Date**: 2026-03-20
+**Task**: 创建 multi-cli-review skill
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+## Multi-CLI Review Skill 创建
+
+创建了两个独立的 skill，用于多 CLI 协作的问题分析和优化流程：
+
+### multi-cli-review（CLI 1）
+- 负责分析问题并输出问题报告
+- 步骤 1：质疑问题描述 → 分析问题 → 输出 md 文件 A
+- 步骤 3：读取 md 文件 B + 最新文件内容 → 重新分析 → 更新 md 文件 A
+- 最大迭代次数 5 次
+
+### multi-cli-review-action（CLI 2）
+- 负责审查、讨论和执行优化操作
+- 基于实际情况选择性质疑问题点
+- 用户确认后执行操作
+- 执行失败时重复执行，多次失败后确认新方案
+- 输出 md 文件 B
+
+**Updated Files**:
+- `skills/multi-cli-review/SKILL.md`
+- `skills/multi-cli-review-action/SKILL.md`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `575d430` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
