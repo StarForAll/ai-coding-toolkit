@@ -887,3 +887,46 @@ cli.py contribute --target /project --asset X  # 贡献验证
 ### Next Steps
 
 - None - task complete
+
+
+## Session 19: 修正 spec 拉取同步机制并完善 PRD 规范
+
+**Date**: 2026-03-20
+**Task**: 修正 spec 拉取同步机制并完善 PRD 规范
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Sync state model | Refined local-state assessment for downstream sync, including structured assessment fields, anomaly metadata, and clearer expected post-sync output semantics. |
+| Sync CLI output | Clarified machine-readable sync results with decision, pre-sync state, expected post-sync state, and human-readable diff/scope hints. |
+| Proposal/apply UX | Improved proposal error messages for structural drift and normalized apply whitelist messaging. |
+| Product requirement assets | Registered and completed customer-facing and developer-facing PRD-related templates, checklists, examples, and supporting spec content so validation passes. |
+
+**Verification**:
+- `/ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --strict-warnings`
+- `/ops/softwares/python/bin/python3 -m py_compile trellis-library/scripts/validation/validate-library-sync.py`
+- Focused unittest regressions for sync state assessment and sync output contract passed before commit.
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `da45b7a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
