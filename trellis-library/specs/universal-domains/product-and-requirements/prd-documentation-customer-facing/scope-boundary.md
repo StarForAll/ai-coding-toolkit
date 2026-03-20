@@ -2,7 +2,7 @@
 
 ## Scope Covered
 
-This specification covers the requirements, writing style, structure, and review checks for PRDs intended for customers and non-technical stakeholders. Specifically, it includes:
+This concern covers the requirements, writing style, structure, and review checks for PRDs intended for customers and non-technical stakeholders. Specifically, it includes:
 
 ### Document Types Covered
 - Customer-facing PRDs and requirement summaries
@@ -22,7 +22,7 @@ This specification covers the requirements, writing style, structure, and review
 
 ## Scope Not Covered
 
-This specification does not replace:
+This concern does not replace:
 
 ### Technical Documentation
 - Developer-facing PRDs and technical specifications

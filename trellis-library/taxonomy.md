@@ -77,5 +77,29 @@ Target projects should import a complete concern directory for complex specs.
 * validation, diff, proposal, and apply scripts
   controlled sync workflow
 
+## Terminology
+
+Key terms used consistently across the library:
+
+* **concern**
+  a named area of rules; the `concern:` field in manifest entries and the
+  directory name under a domain
+* **concern directory**
+  the directory containing `overview.md`, `scope-boundary.md`,
+  `normative-rules.md`, and `verification.md` for a complex spec
+* **verification**
+  the spec domain about completion evidence and gates; file `verification.md`
+  checks whether work meets acceptance criteria
+* **validation**
+  structural and format checks performed by scripts in `scripts/validation/`;
+  also a security subdomain (`input-validation`). Validation checks *shape*;
+  verification checks *completeness*
+* **source-library**
+  hyphenated as compound modifier (`source-library assets`); two words as
+  standalone noun (`the source library`)
+* **target-project**
+  same pattern: hyphenated modifier (`target-project lock state`); two words
+  as standalone noun (`a target project`)
+
 If the library taxonomy, sync model, or asset boundaries change, this file and
 the root `README.md` should be updated together.

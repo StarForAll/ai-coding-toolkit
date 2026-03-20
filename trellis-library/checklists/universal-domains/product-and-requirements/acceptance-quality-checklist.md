@@ -36,7 +36,7 @@ This checklist helps verify that acceptance criteria are well-defined, measurabl
 - [ ] **Dependency Identification**: Dependencies that affect acceptance are identified
 - [ ] **Risk Acknowledgment**: Risks that might affect acceptance are noted
 
-## Scoring Guide
+## Scoring System
 
 ### Compliance Levels
 - **Fully Compliant (✓)**: Criterion is completely and clearly met

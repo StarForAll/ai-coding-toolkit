@@ -2,7 +2,7 @@
 
 ## Scope Covered
 
-This specification covers the requirements, technical detail level, structure, and review checks for PRDs used by development and engineering teams. Specifically, it includes:
+This concern covers the requirements, technical detail level, structure, and review checks for PRDs used by development and engineering teams. Specifically, it includes:
 
 ### Document Types Covered
 - Developer-facing PRDs and technical specifications
@@ -23,7 +23,7 @@ This specification covers the requirements, technical detail level, structure, a
 
 ## Scope Not Covered
 
-This specification does not replace:
+This concern does not replace:
 
 ### Business Documentation
 - Customer-facing PRDs and business requirement documents

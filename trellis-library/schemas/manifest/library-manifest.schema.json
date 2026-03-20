@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "trellis-library/manifest/library-manifest.schema.json",
+  "$id": "trellis-library/schemas/manifest/library-manifest.schema.json",
   "title": "Trellis Library Manifest",
   "type": "object",
   "additionalProperties": true,
@@ -11,5 +11,116 @@
     "assets",
     "relations",
     "packs"
-  ]
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "library": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "title", "description", "status", "owners", "default_language"],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive", "archived"] },
+        "owners": { "type": "array", "items": { "type": "string" } },
+        "default_language": { "type": "string" }
+      }
+    },
+    "policies": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "require_manifest_registration": { "type": "boolean" },
+        "require_unique_ids": { "type": "boolean" },
+        "require_reverse_links": { "type": "boolean" },
+        "require_related_asset_check": { "type": "boolean" },
+        "allow_unregistered_files": { "type": "boolean" },
+        "sync_mode": { "type": "string" },
+        "deletion_policy": { "type": "string" },
+        "rename_policy": { "type": "string" },
+        "version_bump_policy": { "type": "string" }
+      }
+    },
+    "enums": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "asset_types": { "type": "array", "items": { "type": "string" } },
+        "asset_formats": { "type": "array", "items": { "type": "string" } },
+        "asset_statuses": { "type": "array", "items": { "type": "string" } },
+        "domain_axes": { "type": "array", "items": { "type": "string" } },
+        "atomicity_levels": { "type": "array", "items": { "type": "string" } },
+        "relation_kinds": { "type": "array", "items": { "type": "string" } },
+        "sync_policies": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["id", "type", "format", "path", "title", "summary", "status", "version", "domain_axis", "domain", "concern", "atomicity", "change_impact", "metadata"],
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string" },
+          "format": { "type": "string", "enum": ["file", "directory"] },
+          "path": { "type": "string" },
+          "title": { "type": "string" },
+          "summary": { "type": "string" },
+          "status": { "type": "string", "enum": ["draft", "active", "deprecated", "archived"] },
+          "version": { "type": "string" },
+          "domain_axis": { "type": "string" },
+          "domain": { "type": "string" },
+          "concern": { "type": "string" },
+          "atomicity": { "type": "string", "enum": ["simple", "complex"] },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "applicability": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "project_types": { "type": "array", "items": { "type": "string" } },
+              "lifecycle_stages": { "type": "array", "items": { "type": "string" } },
+              "platforms": { "type": "array", "items": { "type": "string" } },
+              "technologies": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "owners": { "type": "array", "items": { "type": "string" } },
+          "dependencies": { "type": "array", "items": { "type": "string" } },
+          "optional_dependencies": { "type": "array", "items": { "type": "string" } },
+          "provides": { "type": "array", "items": { "type": "string" } },
+          "change_impact": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["level", "review_required", "sync_targets"],
+            "properties": {
+              "level": { "type": "string", "enum": ["low", "medium", "high"] },
+              "review_required": { "type": "boolean" },
+              "sync_targets": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "source_of_truth": { "type": "boolean" },
+              "generated": { "type": "boolean" },
+              "notes": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "relations": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "packs": {
+      "type": "array",
+      "items": { "type": "object" }
+    }
+  }
 }
