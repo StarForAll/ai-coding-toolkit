@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 23
+- **Total Sessions**: 24
 - **Last Active**: 2026-03-21
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1137 | Active |
+| `journal-1.md` | ~1184 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits |
 |---|------|-------|---------|
+| 24 | 2026-03-21 | 新项目开发工作流命令体系 + 制作规范 | `35017d5` |
 | 23 | 2026-03-21 | 完善问题多cli反馈处理skill | `4435a21` |
 | 22 | 2026-03-20 | 创建 multi-cli-review skill | `575d430` |
 | 21 | 2026-03-20 | trellis-library 校验与文档同步 | `d6c30b2` |

@@ -1135,3 +1135,50 @@ cli.py contribute --target /project --asset X  # 贡献验证
 ### Next Steps
 
 - None - task complete
+
+
+## Session 24: 新项目开发工作流命令体系 + 制作规范
+
+**Date**: 2026-03-21
+**Task**: 新项目开发工作流命令体系 + 制作规范
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 内容 | 说明 |
+|------|------|
+| 6 个自定义命令 | feasibility, design, plan, test-first, self-review, delivery |
+| 安装/卸载/升级脚本 | Python stdlib，零外部依赖 |
+| 自然语言触发词 | 每个命令含用户实际说话的触发词 |
+| 分支式下一步推荐 | 每个命令末尾输出多路径推荐 |
+| Phase Router | start.md 注入阶段路由器 |
+| 跨平台适配器 | Cursor / OpenCode / Codex+Gemini |
+| 制作规范文档 | docs/workflows/自定义工作流制作规范.md |
+
+**关键决策**：
+- 源文件在 docs/workflows/ 子目录，不直接放 .claude/
+- 安装记录存 .trellis/workflow-installed.json，不依赖 trellis-local
+- Phase Router 注入块独立为 start-patch-phase-router.md
+- 当前项目仅作工具用，不嵌入自身
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `35017d5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
