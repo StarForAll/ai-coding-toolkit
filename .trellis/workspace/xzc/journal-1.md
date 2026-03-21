@@ -1085,3 +1085,53 @@ cli.py contribute --target /project --asset X  # 贡献验证
 ### Next Steps
 
 - None - task complete
+
+
+## Session 23: 完善问题多cli反馈处理skill
+
+**Date**: 2026-03-21
+**Task**: 完善问题多cli反馈处理skill
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Item | Description |
+|------|-------------|
+| Trigger & composition | 为 `multi-cli-review` 增加组合触发规则、自然语言触发条件和与 `$start` / `/trellis:brainstorm` 的串行阶段说明 |
+| Path protocol | 引入 `tmp/multi-cli-review/<run-id>/` 目录协议，明确首次分配、续跑规则与路径回显要求 |
+| CLI 2 behavior | 为 `multi-cli-review-action` 增加显式路径优先、最新 run-id 兜底、异常处理和路径回显 |
+| Failure loop | 为 `multi-cli-review` 补充 CLI 2 返回 `blocked` / `abandoned` 时 CLI 1 的默认行为 |
+| Review artifacts | 产出并维护 `tmp/multi-cli-review/1/cur_defect.md` 和 `tmp/multi-cli-review/1/optimize.md`，完成多轮 CLI 2 审查闭环 |
+
+**Updated Files**:
+- `skills/multi-cli-review/SKILL.md`
+- `skills/multi-cli-review-action/SKILL.md`
+- `tmp/multi-cli-review/1/cur_defect.md`
+- `tmp/multi-cli-review/1/optimize.md`
+
+**Verification**:
+- `./scripts/validate-skills.sh`
+- `/ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --strict-warnings`
+- `/ops/softwares/python/bin/python3 -m py_compile trellis-library/scripts/validation/validate-library-sync.py`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4435a21` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
