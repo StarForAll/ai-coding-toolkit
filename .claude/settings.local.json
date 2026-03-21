@@ -55,7 +55,9 @@
       "Bash(echo \"=== $layer ===\")",
       "Read(//ops/projects/personal/ai-coding-toolkit/.trellis/spec/$layer/**)",
       "Bash(sed:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(/ops/softwares/python/bin/python3 /ops/projects/personal/ai-coding-toolkit/trellis-library/scripts/validation/validate-library-sync.py --library-root trellis-library --strict-warnings 2>&1 | head -50)",
+      "Bash(/ops/softwares/python/bin/python3 /ops/projects/personal/ai-coding-toolkit/trellis-library/scripts/validation/validate-library-sync.py --library-root /ops/projects/personal/ai-coding-toolkit/trellis-library --strict-warnings 2>&1 | head -50)"
     ]
   }
 }
