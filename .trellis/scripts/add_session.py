@@ -17,7 +17,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -31,6 +30,7 @@ from common.paths import (
 )
 from common.developer import ensure_developer
 from common.tasks import load_task
+from common.git import auto_commit_paths
 from common.config import (
     get_packages,
     get_session_commit_message,
@@ -288,32 +288,21 @@ def update_index(
 # Main Function
 # =============================================================================
 
-def _auto_commit_workspace(repo_root: Path) -> None:
+def _auto_commit_workspace(repo_root: Path) -> bool:
     """Stage .trellis/workspace and .trellis/tasks, then commit with a configured message."""
     commit_msg = get_session_commit_message(repo_root)
-    subprocess.run(
-        ["git", "add", "-A", ".trellis/workspace", ".trellis/tasks"],
-        cwd=repo_root,
-        capture_output=True,
+    status, detail = auto_commit_paths(
+        [".trellis/workspace", ".trellis/tasks"], repo_root, commit_msg
     )
-    # Check if there are staged changes
-    result = subprocess.run(
-        ["git", "diff", "--cached", "--quiet", "--", ".trellis/workspace", ".trellis/tasks"],
-        cwd=repo_root,
-    )
-    if result.returncode == 0:
-        print("[OK] No workspace changes to commit.", file=sys.stderr)
-        return
-    commit_result = subprocess.run(
-        ["git", "commit", "-m", commit_msg],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-    )
-    if commit_result.returncode == 0:
+    if status == "clean":
+        print("[OK] No workspace/task changes to commit.", file=sys.stderr)
+        return True
+    if status == "committed":
         print(f"[OK] Auto-committed: {commit_msg}", file=sys.stderr)
-    else:
-        print(f"[WARN] Auto-commit failed: {commit_result.stderr.strip()}", file=sys.stderr)
+        return True
+
+    print(f"[WARN] Auto-commit failed: {detail}", file=sys.stderr)
+    return False
 
 
 def add_session(
@@ -400,7 +389,8 @@ def add_session(
     # Auto-commit workspace changes
     if auto_commit:
         print("", file=sys.stderr)
-        _auto_commit_workspace(repo_root)
+        if not _auto_commit_workspace(repo_root):
+            return 1
 
     return 0
 

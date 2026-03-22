@@ -1408,3 +1408,47 @@ Record session after the recommit that restored task metadata
 ### Next Steps
 
 - None - task complete
+
+
+## Session 30: 新项目工作流自动化检查矩阵补充
+
+**Date**: 2026-03-22
+**Task**: 新项目工作流自动化检查矩阵补充
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Workflow Gate | 在技术架构确认后新增“项目自动化检查矩阵”门禁，要求按项目真实技术栈明确检查项与命令。 |
+| Plan Template | 为 `task_plan.md` 模板新增自动化检查矩阵表格，并将验收标准从默认 `Lint` 改为项目化检查基线。 |
+| Command Mapping | 同步修正 `命令映射.md` 的版本号到 V1.1.2，并更新关联说明。 |
+| Consistency Fixes | 对齐 `工作流总纲.md` 与 `commands/plan.md` 的 `/trellis:plan` 职责表述，并为安全/依赖检查补充示例命令。 |
+
+**Updated Files**:
+- `docs/workflows/新项目开发工作流/工作流总纲.md`
+- `docs/workflows/新项目开发工作流/commands/plan.md`
+- `docs/workflows/新项目开发工作流/命令映射.md`
+- `.trellis/tasks/03-22-workflow-automation-checks/prd.md`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `017d07b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

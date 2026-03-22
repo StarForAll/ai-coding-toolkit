@@ -60,6 +60,24 @@ pnpm test && pnpm type-check && pnpm lint
 
 项目复盘：效率指标 + Bug 知识沉淀 + 改进项
 
+### Step 8: 收尾记录校验
+
+进入 `/trellis:record-session` 前，先确认：
+
+- 已完成内容已由人工测试并提交
+- 已完成任务先归档，未完成任务不要误归档
+- `task.py archive` 与 `add_session.py` 一旦修改 `.trellis/tasks` 或 `.trellis/workspace`，必须真实自动提交，不接受“脚本提示成功但 git 仍脏”的状态
+
+```bash
+git status --short .trellis/tasks
+git status --short .trellis/workspace .trellis/tasks
+```
+
+判定规则：
+
+- 输出为空：可以视为归档/记录闭环完成
+- 仍有 `.trellis/tasks` 或 `.trellis/workspace` 变更：`/trellis:record-session` 不算完成，先处理自动提交失败原因
+
 ---
 
 ## 输出
@@ -80,10 +98,10 @@ $TASK_DIR/delivery/
 
 | 验收结果 | 推荐命令 | 说明 |
 |---------|---------|------|
-| 全部通过，准备收尾 | `/trellis:record-session` | **默认推荐**。记录会话，准备提交 |
+| 全部通过，准备收尾 | `/trellis:record-session` | **默认推荐**。记录会话，并确认 `.trellis` 元数据已自动提交 |
 | 有 P0/P1 缺陷 | `/trellis:break-loop` | 深度分析 Bug 根因 |
 | 有 P2/P3 缺陷 | `/trellis:start` | 回到实施阶段修复 |
 | 需要更新规范文档 | `/trellis:update-spec` | 沉淀新发现的模式到 spec |
 | 需要请求代码审查 | Skill: `requesting-code-review` | PR 前外部审查 |
-| 需要归档任务 | `python3 ./.trellis/scripts/task.py archive <name>` | 项目完成归档 |
-| 不确定下一步 | `/trellis:record-session` | 先记录会话再决定 |
+| 需要归档任务 | `python3 ./.trellis/scripts/task.py archive <name>` | 项目完成归档，并检查 `.trellis/tasks` 已自动提交 |
+| 不确定下一步 | `/trellis:record-session` | 先记录会话，但只有 `.trellis` 元数据自动提交成功后才算完成 |

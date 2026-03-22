@@ -7,6 +7,8 @@ description: "Record work progress after human has tested and committed code"
 
 **Do NOT run `git commit` directly** — the scripts below handle their own commits for `.trellis/` metadata. You only need to read git history (`git log`, `git status`, `git diff`) and run the Python scripts.
 
+**Postcondition is mandatory**: if `task.py archive` or `add_session.py` modified `.trellis/tasks` or `.trellis/workspace`, those metadata changes must be auto-committed by the scripts. Do not stop at “session added successfully” or “task archived” — verify the `.trellis/` metadata is actually committed.
+
 ---
 
 ## Record Work Progress
@@ -25,6 +27,15 @@ python3 ./.trellis/scripts/get_context.py --mode record
 ```bash
 python3 ./.trellis/scripts/task.py archive <task-name>
 ```
+
+After archive:
+
+```bash
+git status --short .trellis/tasks
+```
+
+- Expected: clean output
+- If `.trellis/tasks` is still dirty, treat archive auto-commit as failed and resolve it before continuing
 
 ### Step 2: One-Click Add Session
 
@@ -48,11 +59,21 @@ cat << 'EOF' | python3 ./.trellis/scripts/add_session.py --stdin --title "Title"
 EOF
 ```
 
+After session recording:
+
+```bash
+git status --short .trellis/workspace .trellis/tasks
+```
+
+- Expected: clean output
+- If `.trellis/workspace` or `.trellis/tasks` is still dirty, treat record-session as incomplete
+- Do not claim “recorded” until the metadata auto-commit has actually happened
+
 **Auto-completes**:
 - [OK] Appends session to journal-N.md
 - [OK] Auto-detects line count, creates new file if >2000 lines
 - [OK] Updates index.md (Total Sessions +1, Last Active, line stats, history)
-- [OK] Auto-commits .trellis/workspace and .trellis/tasks changes
+- [OK] Auto-commits `.trellis/workspace` and `.trellis/tasks` changes; command should be treated as failed if this step does not actually happen
 
 ---
 
