@@ -1452,3 +1452,51 @@ Record session after the recommit that restored task metadata
 ### Next Steps
 
 - None - task complete
+
+
+## Session 31: record-session 自动提交失败处理补充
+
+**Date**: 2026-03-22
+**Task**: record-session 自动提交失败处理补充
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Record Session Reliability | 修复 `record-session` 在 `.trellis` 元数据自动提交失败时的假阳性问题，不再把 `git add` 失败误报为“无变更可提交”。 |
+| Shared Git Helper | 在 `.trellis/scripts/common/git.py` 增加 `auto_commit_paths()`，统一处理 stage / diff / commit 返回值。 |
+| Task Archive | 让 `task.py archive` 在自动提交失败时返回失败，并输出明确原因。 |
+| Session Recording | 让 `add_session.py` 在自动提交失败时返回失败，并要求以 git 状态校验 `.trellis/workspace`、`.trellis/tasks` 是否已清空。 |
+| Workflow Docs | 将上述约束同步补充到 `record-session` skill 和 `docs/workflows/新项目开发工作流`。 |
+
+**Updated Files**:
+- `.trellis/scripts/common/git.py`
+- `.trellis/scripts/common/task_store.py`
+- `.trellis/scripts/add_session.py`
+- `.agents/skills/record-session/SKILL.md`
+- `docs/workflows/新项目开发工作流/工作流总纲.md`
+- `docs/workflows/新项目开发工作流/commands/delivery.md`
+- `docs/workflows/新项目开发工作流/命令映射.md`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a7dc0ee` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
