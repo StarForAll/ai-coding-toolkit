@@ -42,7 +42,7 @@ def main():
         rec = json.loads(rec_file.read_text(encoding="utf-8"))
         cmds = rec.get("commands", [])
     else:
-        cmds = ["feasibility", "design", "plan", "test-first", "self-review", "delivery"]
+        cmds = ["feasibility", "design", "plan", "test-first", "self-review", "check", "delivery"]
 
     print()
     print("╔══════════════════════════════════════╗")

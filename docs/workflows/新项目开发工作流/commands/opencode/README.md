@@ -15,6 +15,7 @@ OpenCode 使用 `opencode.json` 的 `instructions` 字段加载指令。
     "docs/workflows/新项目开发工作流/commands/plan.md",
     "docs/workflows/新项目开发工作流/commands/test-first.md",
     "docs/workflows/新项目开发工作流/commands/self-review.md",
+    "docs/workflows/新项目开发工作流/commands/check.md",
     "docs/workflows/新项目开发工作流/commands/delivery.md"
   ]
 }

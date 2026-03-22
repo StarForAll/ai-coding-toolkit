@@ -58,7 +58,7 @@ def main():
     # ── 需部署的文件（根据你的工作流修改这里）──
     NEW_COMMANDS = [
         "feasibility", "design", "plan",
-        "test-first", "self-review", "delivery",
+        "test-first", "self-review", "check", "delivery",
     ]
     HELPER_SCRIPTS = [
         "feasibility-check.py", "design-export.py",

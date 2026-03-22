@@ -33,6 +33,15 @@ python3 docs/workflows/新项目开发工作流/commands/shell/self-review-check
 然后按照指引执行可行性评估。
 ```
 
+任务级补充审查场景可改为：
+
+```text
+请先阅读以下工作流指引：
+@docs/workflows/新项目开发工作流/commands/check.md
+
+然后按照指引判断是否需要任务级多 CLI 补充审查。
+```
+
 ### 方式 3: AGENTS.md / CONTEXT.md
 
 将命令摘要写入各 CLI 的全局配置文件：

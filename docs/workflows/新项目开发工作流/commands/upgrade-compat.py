@@ -45,7 +45,7 @@ def main():
     dst_scripts = root / ".trellis" / "scripts" / "workflow"
     rec_file = root / ".trellis" / "workflow-installed.json"
 
-    NEW_COMMANDS = ["feasibility", "design", "plan", "test-first", "self-review", "delivery"]
+    NEW_COMMANDS = ["feasibility", "design", "plan", "test-first", "self-review", "check", "delivery"]
     HELPER_SCRIPTS = ["feasibility-check.py", "design-export.py", "plan-validate.py", "self-review-check.py"]
 
     # 读取版本

@@ -137,6 +137,7 @@ get_context.py 输出
 | "先写测试" "用 TDD 方式" "测试先行" | `/trellis:test-first` |
 | "开始写代码" "实现这个功能" "动手做吧" | 实施阶段（本命令 Task Workflow） |
 | "自检一下" "对照 spec 看看" "有没有偏差" | `/trellis:self-review` |
+| "补充审查一下" "让其他 CLI 看一下" "多人审查" "check 一下" | `/trellis:check` |
 | "准备交付" "跑一下验收" "整理交付物" | `/trellis:delivery` |
 | "收尾" "提交前检查" "准备 commit" | `/trellis:finish-work` |
 | "继续上次的工作" "上次做到哪了" | 继续现有任务 |

@@ -51,7 +51,7 @@ python3 docs/workflows/新项目开发工作流/commands/shell/self-review-check
 
 | L0 低风险 | L1 中风险 | L2 高风险 |
 |----------|----------|----------|
-| 快速自审 → 门禁 | 完整自审 → Check Agent | 完整自审 → 人工审查 |
+| 快速自审 → `/trellis:check` 判定是否跳过补充审查 | 完整自审 → `/trellis:check` 补充审查门禁 | 完整自审 → `/trellis:check` + 人工裁决 |
 
 ## 下一步推荐
 
@@ -61,10 +61,10 @@ python3 docs/workflows/新项目开发工作流/commands/shell/self-review-check
 
 | 偏差清单结论 | 推荐命令 | 说明 |
 |------------|---------|------|
-| 合规度高，可直接审查 | `/trellis:check` | **默认推荐**。Check Agent 基于偏差清单重点验证 |
+| 需要判断是否进入补充审查 | `/trellis:check` | **默认推荐**。由 `/trellis:check` 决定 `required / recommended / skip` |
 | 合规度低，需先修复 | `/trellis:start` | 回到实施阶段修复偏差项 |
-| L2 高风险，需人工审查 | `/trellis:finish-work` | 跳过 Check Agent，直接人工级检查 |
+| L2 高风险，需人工裁决 | `/trellis:check` | 先进入补充审查门禁，必要时停在人工决策点 |
 | 发现上下文污染 | `/trellis:start` | 停止当前会话，开新会话并注入决策摘要 |
 | 测试未覆盖 | `/trellis:test-first` | 补充测试用例后再自审 |
 | 偏差来自需求理解 | `/trellis:brainstorm` | 回到需求层澄清 |
-| 不确定下一步 | `/trellis:check` | 先让 Check Agent 处理 |
+| 不确定下一步 | `/trellis:check` | 先做任务级补充审查门禁判断 |
