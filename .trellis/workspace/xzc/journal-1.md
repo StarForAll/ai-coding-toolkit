@@ -1214,3 +1214,49 @@ Pruned unrelated local spec content, rewrote repo-local spec indexes and guides,
 ### Next Steps
 
 - None - task complete
+
+
+## Session 26: 重新提交后的会话记录
+
+**Date**: 2026-03-22
+**Task**: 重新提交后的会话记录
+
+### Summary
+
+Record session after the recommit that restored task metadata
+
+### Main Changes
+
+| Item | Description |
+|------|-------------|
+| Recommit | Recorded the follow-up commit `4159e88` after the workflow/spec update work |
+| Task metadata state | Current repository contains both an active and an archived copy of `03-22-new-project-workflow-prd-spec`; session recording proceeds without re-archiving to avoid nesting the archive path |
+| Record action | Added a new workspace session entry tied to the recommit so journal history matches current git history |
+
+**Context**:
+- Recent commit: `4159e88` (`重新提交`)
+- Current task pointer: none
+- Active task list still includes `03-22-new-project-workflow-prd-spec/`, while archive already contains `archive/2026-03/03-22-new-project-workflow-prd-spec/`
+
+**Verification**:
+- `git status --short` was clean before recording
+- `python3 ./.trellis/scripts/get_context.py --mode record`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4159e88` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
