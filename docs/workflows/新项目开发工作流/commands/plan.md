@@ -27,8 +27,9 @@ description: 设计好了？拆任务 — AI 驱动任务拆解、排期、DoR/D
 - 技术架构已经过用户明确确认
 - 已根据技术架构，从 `trellis-library` 导入合适 spec 到当前项目 `.trellis/spec/`（任务 1，必须先于任务 2 完成）
 - 已结合当前项目作用、背景、技术架构，对当前项目 `.trellis/spec/` 完成分析完善（任务 2，仅在任务 1 完成后执行）
+- 已基于当前项目实际技术栈，明确自动化检查矩阵（任务 3，仅在任务 1、任务 2 完成后执行；不得只写默认 `Lint`，可按项目补充 SonarQube 等检查）
 
-`/trellis:plan` 的职责是任务拆解与生成 `task_plan.md`，不负责替代上述 spec 导入与 spec 修订动作。
+`/trellis:plan` 的职责是任务拆解与生成 `task_plan.md`，不负责替代上述 spec 导入、spec 修订与自动化检查矩阵定义动作。
 
 ---
 
