@@ -1,3 +1,6 @@
 {"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
 {"file": ".trellis/spec/docs/index.md", "reason": "文档层写作与链接规范"}
 {"file": ".trellis/spec/library-assets/index.md", "reason": "确认 trellis-library 资产类型与预开发检查"}
+{"file": "docs/workflows/新项目开发工作流/工作流总纲.md", "reason": "主流程阶段衔接与新增门禁落点"}
+{"file": "docs/workflows/新项目开发工作流/commands/design.md", "reason": "设计完成后的下一步推荐与前置门禁"}
+{"file": "docs/workflows/新项目开发工作流/commands/plan.md", "reason": "明确 plan 只负责任务拆解与 task_plan.md"}

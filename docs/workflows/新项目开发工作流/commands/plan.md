@@ -20,6 +20,16 @@ description: 设计好了？拆任务 — AI 驱动任务拆解、排期、DoR/D
 
 > 简单任务（1-2 文件）？跳过，直接 `/trellis:start`。
 
+## 前置条件
+
+进入 `/trellis:plan` 前，应满足以下条件：
+
+- 技术架构已经过用户明确确认
+- 已根据技术架构，从 `trellis-library` 导入合适 spec 到当前项目 `.trellis/spec/`（任务 1，必须先于任务 2 完成）
+- 已结合当前项目作用、背景、技术架构，对当前项目 `.trellis/spec/` 完成分析完善（任务 2，仅在任务 1 完成后执行）
+
+`/trellis:plan` 的职责是任务拆解与生成 `task_plan.md`，不负责替代上述 spec 导入与 spec 修订动作。
+
 ---
 
 ## 流程
@@ -32,9 +42,16 @@ description: 设计好了？拆任务 — AI 驱动任务拆解、排期、DoR/D
 # 读取输入
 cat "$TASK_DIR/prd.md"
 cat "$TASK_DIR/design/index.md" 2>/dev/null
+# 当前项目 `.trellis/spec/` 应已完成对齐，作为任务拆解约束输入
 ```
 
-AI 自动生成 `task_plan.md`：任务拆解 + 依赖分析 + 文件清单 + 验收标准
+AI 自动生成 `task_plan.md`：任务拆解 + 依赖分析 + 文件清单 + 验收标准。
+
+输入侧重点：
+
+- 已确认的需求与设计文档
+- 当前项目 `.trellis/spec/` 中已经落地的项目约束
+- 基于项目 spec 提炼出的实现边界、验证要求和依赖关系
 
 ### Step 2: 排期
 

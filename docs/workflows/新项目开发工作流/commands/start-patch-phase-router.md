@@ -90,6 +90,12 @@ get_context.py 输出
     ├── PRD 冻结 + 无设计文档
     │   └── 路由 → /trellis:design（设计阶段）
     │
+    ├── 设计完成 + 技术架构已获用户确认 + 当前项目 `.trellis/spec/` 未完成对齐
+    │   └── 先完成两项串行任务：
+    │       1. 根据技术架构从 `trellis-library` 导入合适 spec 到项目 `.trellis/spec/`
+    │       2. 基于项目作用/背景/技术架构完善当前项目 `.trellis/spec/`
+    │       备注：这是补课门禁。补齐后重新执行决策树；若 `task_plan.md` 已存在，则按后续现状继续路由
+    │
     ├── 设计完成 + 无 task_plan.md
     │   └── 路由 → /trellis:plan（任务拆解）
     │
