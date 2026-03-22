@@ -1305,3 +1305,51 @@ Record session after the recommit that restored task metadata
 ### Next Steps
 
 - None - task complete
+
+
+## Session 28: 清理任务归档嵌套状态
+
+**Date**: 2026-03-22
+**Task**: 清理任务归档嵌套状态
+
+### Summary
+
+清理 .trellis/tasks/archive 下的重复嵌套归档目录，统一保留外层归档路径并恢复较新的任务内容。
+
+### Main Changes
+
+| Item | Description |
+|------|-------------|
+| Archive Cleanup | 清理 `.trellis/tasks/archive/2026-03/` 下的嵌套归档目录，消除同名任务被套娃归档的脏状态 |
+| Retention Rule | 保留外层归档路径作为最终任务位置，将较新的任务内容提升到外层 |
+| Affected Tasks | 处理 `03-18-trellis-library-analysis` 和 `03-22-new-project-workflow-prd-spec` 两个归档目录 |
+| Scope Decision | 仅修复当前归档数据状态，不修改归档脚本逻辑 |
+
+**Updated Files**:
+- `.trellis/tasks/archive/2026-03/03-18-trellis-library-analysis/prd.md`
+- `.trellis/tasks/archive/2026-03/03-22-new-project-workflow-prd-spec/check.jsonl`
+- `.trellis/tasks/archive/2026-03/03-22-new-project-workflow-prd-spec/implement.jsonl`
+- `.trellis/tasks/archive/2026-03/03-22-new-project-workflow-prd-spec/prd.md`
+
+**Removed Nested Paths**:
+- `.trellis/tasks/archive/2026-03/03-18-trellis-library-analysis/03-18-trellis-library-analysis/`
+- `.trellis/tasks/archive/2026-03/03-22-new-project-workflow-prd-spec/03-22-new-project-workflow-prd-spec/`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ec0b904` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
