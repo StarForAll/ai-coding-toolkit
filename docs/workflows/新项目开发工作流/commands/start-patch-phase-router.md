@@ -9,10 +9,77 @@
 python3 ./.trellis/scripts/get_context.py
 ```
 
+### 首次嵌入后的初始化门禁
+
+如果当前项目刚完成自定义工作流嵌入，先补需求发现基础资产，再进入常规阶段路由。
+
+默认补充 `trellis-library` 的 `pack.requirements-discovery-foundation`。
+
+最低要求至少覆盖：
+
+- 需求发现核心规范：
+  - `spec.universal-domains.product-and-requirements.problem-definition`
+  - `spec.universal-domains.product-and-requirements.scope-boundary`
+  - `spec.universal-domains.product-and-requirements.requirement-clarification`
+  - `spec.universal-domains.product-and-requirements.acceptance-criteria`
+- PRD 文档规范：
+  - `spec.universal-domains.product-and-requirements.prd-documentation-customer-facing`
+  - `spec.universal-domains.product-and-requirements.prd-documentation-developer-facing`
+- 配套产物：
+  - `template.universal-domains.product-and-requirements.acceptance-criteria-template`
+  - `template.universal-domains.product-and-requirements.customer-facing-prd-template`
+  - `template.universal-domains.product-and-requirements.developer-facing-prd-template`
+  - `checklist.universal-domains.product-and-requirements.acceptance-quality-checklist`
+  - `checklist.universal-domains.product-and-requirements.customer-facing-prd-checklist`
+  - `checklist.universal-domains.product-and-requirements.developer-facing-prd-checklist`
+
+说明：以上 `spec.*` ID 指向 concern directory，实际展开为 `overview.md`、`scope-boundary.md`、`normative-rules.md`、`verification.md` 四个子文件。`pack.requirements-discovery-foundation` 默认还会带入示例与 `solution-comparison` 等扩展资产，但它们不是本门禁的最低集合。
+
+### 触发门禁的具体检测信号
+
+这一步不是 `get_context.py` 的内建字段，而是 `/trellis:start` 在读取上下文后追加的初始化检查。
+
+当同时满足以下条件时，判定命中门禁：
+
+- `.trellis/workflow-installed.json` 存在，说明自定义工作流已嵌入
+- `.trellis/library-lock.yaml` 不存在，或其中缺少最低要求中的关键 asset id
+
+可用下面的检查方式：
+
+```bash
+test -f .trellis/workflow-installed.json && (
+  ! test -f .trellis/library-lock.yaml ||
+  ! rg -q "spec.universal-domains.product-and-requirements.problem-definition" .trellis/library-lock.yaml ||
+  ! rg -q "spec.universal-domains.product-and-requirements.prd-documentation-customer-facing" .trellis/library-lock.yaml ||
+  ! rg -q "spec.universal-domains.product-and-requirements.prd-documentation-developer-facing" .trellis/library-lock.yaml
+)
+```
+
+若目标项目已接入 `trellis-library` 组装流程，可先执行：
+
+```bash
+python3 trellis-library/cli.py assemble \
+  --target <project-root> \
+  --pack pack.requirements-discovery-foundation \
+  --dry-run
+```
+
+确认无误后再正式执行导入，然后继续后续阶段路由。
+
+若目标项目尚未接入 `trellis-library` CLI，则使用手动降级路径：
+
+- 从 `trellis-library` 源库手动复制上述最低要求中的 `spec/`、`template/`、`checklist/` 资产到目标项目 `.trellis/` 对应目录
+- 或由维护者先完成 `trellis-library` 接入，再重新执行本门禁
+
+当前仓库未定义 `skip-library-gate` 一类的跳过配置；如无上述资产基线，不建议继续进入需求发现阶段。
+
 ### 路由决策树
 
 ```
 get_context.py 输出
+    │
+    ├── `.trellis/workflow-installed.json` 存在 + `.trellis/library-lock.yaml` 缺失或缺少最低资产集
+    │   └── 先补 `pack.requirements-discovery-foundation` 或手动补齐最低要求资产；补齐后重新执行本决策树
     │
     ├── 无当前任务 + 用户描述新项目
     │   └── 路由 → /trellis:feasibility（可行性评估）
@@ -61,6 +128,8 @@ get_context.py 输出
 
 检测到触发词后，**直接执行对应命令的完整流程**。
 
+若命中“首次嵌入后的初始化门禁”，则不得跳过 PRD 规范基线补充动作。
+
 ### 下一步推荐输出格式
 
 **每个命令执行完毕后，AI 必须在末尾输出「下一步推荐」区块**。
@@ -76,4 +145,3 @@ get_context.py 输出
 | <意图> | `/trellis:yyy` | <说明> |
 | 不确定下一步 | `/trellis:start` | 用 Phase Router 自动检测 |
 ```
-

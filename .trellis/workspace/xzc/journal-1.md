@@ -1182,3 +1182,35 @@ cli.py contribute --target /project --asset X  # 贡献验证
 ### Next Steps
 
 - None - task complete
+
+
+## Session 25: Prune irrelevant .trellis spec content
+
+**Date**: 2026-03-22
+**Task**: Prune irrelevant .trellis spec content
+
+### Summary
+
+Pruned unrelated local spec content, rewrote repo-local spec indexes and guides, and aligned cross-layer guidance with manifest.yaml plus library-assets authoring boundaries.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1e79857` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
