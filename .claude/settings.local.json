@@ -57,7 +57,9 @@
       "Bash(sed:*)",
       "Bash(cat:*)",
       "Bash(/ops/softwares/python/bin/python3 /ops/projects/personal/ai-coding-toolkit/trellis-library/scripts/validation/validate-library-sync.py --library-root trellis-library --strict-warnings 2>&1 | head -50)",
-      "Bash(/ops/softwares/python/bin/python3 /ops/projects/personal/ai-coding-toolkit/trellis-library/scripts/validation/validate-library-sync.py --library-root /ops/projects/personal/ai-coding-toolkit/trellis-library --strict-warnings 2>&1 | head -50)"
+      "Bash(/ops/softwares/python/bin/python3 /ops/projects/personal/ai-coding-toolkit/trellis-library/scripts/validation/validate-library-sync.py --library-root /ops/projects/personal/ai-coding-toolkit/trellis-library --strict-warnings 2>&1 | head -50)",
+      "Bash(TASK_DIR=\".trellis/tasks/03-22-enhance-multi-cli-review-skills\" && \\\\\npython3 ./.trellis/scripts/task.py add-context \"$TASK_DIR\" implement \".trellis/spec/skills/index.md\" \"SKILL.md 编写规范\" && \\\\\npython3 ./.trellis/scripts/task.py add-context \"$TASK_DIR\" check \".trellis/spec/skills/index.md\" \"验证 skill 结构符合规范\" && \\\\\npython3 ./.trellis/scripts/task.py add-context \"$TASK_DIR\" implement \".trellis/spec/guides/cross-layer-thinking-guide.md\" \"跨层变更检查\" && \\\\\npython3 ./.trellis/scripts/task.py add-context \"$TASK_DIR\" check \".trellis/spec/guides/code-reuse-thinking-guide.md\" \"代码复用检查\")",
+      "Bash(./scripts/validate-skills.sh)"
     ]
   }
 }

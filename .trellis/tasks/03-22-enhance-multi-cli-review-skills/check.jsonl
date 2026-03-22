@@ -1,0 +1,4 @@
+{"file": ".opencode/commands/trellis/finish-work.md", "reason": "Finish work checklist"}
+{"file": ".opencode/commands/trellis/check.md", "reason": "Code quality check spec"}
+{"file": ".trellis/spec/skills/index.md", "reason": "验证 skill 结构符合规范"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "代码复用检查"}
