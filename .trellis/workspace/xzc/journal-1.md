@@ -1353,3 +1353,58 @@ Record session after the recommit that restored task metadata
 ### Next Steps
 
 - None - task complete
+
+
+## Session 29: 任务依赖与并行执行工作流补充
+
+**Date**: 2026-03-22
+**Task**: 任务依赖与并行执行工作流补充
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项目 | 说明 |
+|------|------|
+| 工作流文档 | 补充了任务依赖顺序、并行执行、执行安排、任务执行矩阵、状态流转与实施闭环说明 |
+| Plan 阶段 | 明确 `task_plan.md` 完整结构、并行属性、状态枚举、最小可执行示例与下游使用要求 |
+| 路由与阶段衔接 | 补充了 Phase Router 对执行矩阵的处理，以及阶段五基于执行矩阵推进与收尾的规则 |
+| 验证脚本 | 增强 `plan-validate.py`，使其校验章节结构、矩阵列、状态枚举、并行属性、等待原因与可执行判断 |
+| 脚本测试 | 新增 `test_plan_validate.py`，覆盖成功、缺少矩阵、非法状态、缺少等待原因、全部已完成等场景 |
+
+**Updated Files**:
+- `docs/workflows/新项目开发工作流/工作流总纲.md`
+- `docs/workflows/新项目开发工作流/commands/plan.md`
+- `docs/workflows/新项目开发工作流/commands/start-patch-phase-router.md`
+- `docs/workflows/新项目开发工作流/commands/test-first.md`
+- `docs/workflows/新项目开发工作流/commands/shell/plan-validate.py`
+- `docs/workflows/新项目开发工作流/commands/shell/test_plan_validate.py`
+- `docs/workflows/新项目开发工作流/命令映射.md`
+
+**Verification**:
+- `/ops/softwares/python/bin/python3 -m py_compile docs/workflows/新项目开发工作流/commands/shell/plan-validate.py docs/workflows/新项目开发工作流/commands/shell/test_plan_validate.py`
+- `/ops/softwares/python/bin/python3 -m unittest discover docs/workflows/新项目开发工作流/commands/shell -p test_plan_validate.py`
+- `/ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --strict-warnings`
+- `/ops/softwares/python/bin/python3 -m py_compile trellis-library/scripts/validation/validate-library-sync.py`
+- `git diff --check`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2751ef3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
