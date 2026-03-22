@@ -1,32 +1,31 @@
 # Thinking Guides
 
-> **Purpose**: Provide project-local supplemental thinking prompts that sit beside imported governance specs.
+> **Purpose**: Provide project-local thinking prompts for maintaining this asset repository safely.
 
 ---
 
 ## What This Directory Is For
 
-Imported governance specs under `.trellis/spec/universal-domains/` now cover the
-primary rules for:
+This directory keeps lightweight checklists for mistakes that are common in this
+repository but do not belong in a deeper implementation spec.
 
-- requirement clarification
-- scope control
-- change management
-- risk tiering
-- evidence and verification gates
+The focus here is repo maintenance:
 
-This directory should only keep **project-specific supplemental guides** that
-add value beyond those shared governance concerns.
+- source-of-truth versus deployed copies
+- path, ID, and metadata drift
+- keeping `.trellis/spec/library-assets/` aligned with live `trellis-library/` authoring rules
+- repeated patterns across agents, commands, skills, and docs
+- keeping tooling and instructions aligned
 
-## Why Supplemental Guides Still Matter?
+## Why These Guides Matter
 
 **Many bugs and tech debt still come from "didn't think of that"** in places
-where project-local habits matter:
+where this repository has unusual handoffs:
 
-- Didn't think about source-to-deployment sync → tools behave differently
-- Didn't think about cross-tool consistency → agents diverge across .claude/ .opencode/ .iflow/
-- Didn't think about manifest-asset alignment → validation failures
-- Didn't think about future maintainers → undocumented conventions
+- Didn't think about source-to-deployment sync → tool instances behave differently
+- Didn't think about cross-tool consistency → agents or commands diverge across `.claude/`, `.opencode/`, `.iflow/`
+- Didn't think about manifest-asset alignment → validation fails or sync drifts
+- Didn't think about future maintainers → docs and instructions stop matching the repo
 
 These guides help you **ask the right project-specific questions before making changes**.
 
@@ -37,18 +36,18 @@ These guides help you **ask the right project-specific questions before making c
 | Guide | Purpose | When to Use |
 |-------|---------|-------------|
 | [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md) | Identify patterns and reduce duplication | When you notice repeated patterns |
-| [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md) | Think through data flow across layers | Features spanning multiple layers |
+| [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md) | Think through repo boundary changes | Features spanning multiple layers |
 
 ## Boundary
 
 Before adding a new guide here, check whether it should instead live as a
-reusable concern in `trellis-library`.
+deeper repo spec or as a reusable library asset in `trellis-library`.
 
 Keep guides here only when they are:
 
 - clearly project-specific
-- lightweight supplements rather than primary governance rules
-- not better expressed as shared reusable specs
+- lightweight supplements rather than full authoring specs
+- not better expressed inside `library-assets/`, `scripts/`, `agents/`, `commands/`, `skills/`, or `docs/`
 
 ---
 
@@ -57,15 +56,16 @@ Keep guides here only when they are:
 ### When to Think About Cross-Layer Issues
 
 - [ ] Change touches 2+ repository layers (see list below)
-- [ ] Asset ID or path rename (affects manifest + library-lock + tool deployments)
+- [ ] Asset ID or path rename (affects manifest, tool deployments, docs, or scripts)
 - [ ] Agent/command content changed but not synced across all tool directories
 - [ ] Validation rule change affects multiple scripts or CI
 - [ ] You're not sure which layer owns the source of truth
 
 **Repository layers to consider:**
 - `trellis-library/` source assets (specs, templates, checklists)
+- `.trellis/spec/library-assets/` authoring guidance for those assets
 - `manifest.yaml` registry
-- `.trellis/spec/universal-domains/` imported governance
+- `.trellis/spec/` project-local maintenance specs
 - `agents/` source → `.claude/agents/` → `.opencode/agents/` → `.iflow/agents/`
 - `commands/` source → `.claude/commands/` → `.opencode/commands/` → `.iflow/commands/`
 - `scripts/` validation and sync tooling
@@ -75,8 +75,8 @@ Keep guides here only when they are:
 ### When to Think About Code Reuse
 
 - [ ] You're writing similar logic to something that exists in another tool's deployment
-- [ ] You see the same pattern repeated across .claude/ .opencode/ .iflow/
-- [ ] You're adding a new field to manifest.yaml entries
+- [ ] You see the same pattern repeated across `.claude/`, `.opencode/`, `.iflow/`
+- [ ] You're adding a new field to `manifest.yaml` entries
 - [ ] **You're modifying any constant, path, or config that appears in multiple layers**
 - [ ] **You're creating a new validation or sync script** ← Search existing scripts first!
 
@@ -90,7 +90,7 @@ Keep guides here only when they are:
 
 ```bash
 # Search for the value you're about to change
-grep -r "value_to_change" .
+rg -n "value_to_change" .
 ```
 
 This single habit prevents most "forgot to update X" bugs.
@@ -100,9 +100,9 @@ This single habit prevents most "forgot to update X" bugs.
 ## How to Use This Directory
 
 1. **Before making changes**: Skim the relevant thinking guide
-2. **When touching multiple layers**: Run through cross-layer checklist
+2. **When touching multiple layers**: Run through the cross-layer checklist
 3. **When modifying existing values**: Search across all tool directories first
-4. **After bugs**: Add new insights to the relevant guide (learn from mistakes)
+4. **After bugs**: Add new insights to the relevant guide
 
 ---
 
@@ -112,4 +112,4 @@ Found a new "didn't think of that" moment? Add it to the relevant guide.
 
 ---
 
-**Core Principle**: 30 minutes of thinking saves 3 hours of debugging.
+**Core Principle**: A short repo-boundary review prevents most drift bugs.

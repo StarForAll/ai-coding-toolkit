@@ -6,19 +6,12 @@
 
 ## Overview
 
-This directory is the **project-local documentation layer**.
-It complements imported governance specs under `.trellis/spec/universal-domains/`
-instead of replacing them.
-
-Use the imported governance specs for:
-- requirement clarity and scope decisions
-- acceptance criteria and verification expectations
-- change management and evidence requirements
+This directory is the **repo-local documentation layer** for `ai-coding-toolkit`.
 
 Use this document for:
-- README and repository-document structure
-- formatting and linking conventions
-- documentation maintenance habits specific to this repo
+- README and directory-level structure in this repo
+- workflow docs and maintenance notes that describe real repository behavior
+- formatting, linking, and update habits for asset-library documentation
 
 ---
 
@@ -26,18 +19,19 @@ Use this document for:
 
 | Type | Location | Purpose |
 |------|----------|---------|
-| README | Project root, subdirectories | Quick start, overview |
-| Guides | `docs/guides/` | How-to tutorials |
-| Specifications | `specs/`, `docs/specs/` | Technical specifications |
-| References | `references/`, `docs/refs/` | API references, manuals |
-| Changelogs | `CHANGELOG.md` | Version history |
+| Repository README | `README.md` | Explain what this repo contains and how the asset layers relate |
+| Asset README | `agents/README.md`, `commands/*/README.md`, `docs/README.md` | Clarify scope and structure of one asset area |
+| Workflow docs | `docs/workflows/**` | Human-facing workflow notes and command references |
+| Trellis spec docs | `.trellis/spec/**` | Repo-local maintenance guidance |
+| Library docs | `trellis-library/README.md`, `trellis-library/taxonomy.md` | Source-library architecture and taxonomy |
 
 ---
 
 ## Boundary
 
-Do not duplicate generic planning or governance rules here if they already live
-under `.trellis/spec/universal-domains/`.
+Do not add generic application README templates, frontend/backend doc advice, or
+API-reference scaffolds here. This repository is an asset library and workflow
+tooling repo, not a runnable app.
 
 This directory should stay focused on repository-specific documentation
 conventions and examples.
@@ -46,20 +40,15 @@ conventions and examples.
 
 ## Directory Structure
 
-```
+```text
 docs/
-  guides/
-    getting-started.md
-    advanced-usage.md
-  specs/
-    architecture/
-      overview.md
-    api/
-      v1/
-        endpoints.md
-  refs/
-    glossary.md
-    faq.md
+  README.md
+  workflows/
+    新项目开发工作流/
+      工作流总纲.md
+      commands/
+    旧项目重构工作流/
+      工作流总纲.md
 ```
 
 ---
@@ -70,18 +59,19 @@ docs/
 
 Must include:
 - **Project title**: Clear, searchable name
-- **One-line description**: What the project does
-- **Quick start**: 3-5 lines to get running
-- **Key features**: Bullet points
-- **Installation**: How to install/setup
-- **Links**: To more detailed docs
+- **One-line description**: What reusable assets this repo contains
+- **Repository map**: Core directories and what each one owns
+- **Source-of-truth explanation**: Which directories are source assets versus derived tool deployments
+- **Validation commands**: How to run repo checks that matter
+- **Links**: To workflow docs, `trellis-library`, and relevant spec indexes
 
 ### Directory README
 
 For subdirectories:
 - **Purpose**: What this directory contains
-- **Structure**: Overview of files
-- **Usage**: How to use these files
+- **Structure**: Overview of files or subdirectories
+- **Source/deploy boundary**: If this directory feeds other tool-specific copies
+- **Usage**: How to modify or validate these files
 
 ---
 
@@ -89,14 +79,14 @@ For subdirectories:
 
 ### Language
 
-- **Default**: English (matching project's primary language)
-- **Consistency**: Pick one language, stick with it
-- **Code comments**: English
+- **Default**: Match the directory's established language
+- **Consistency**: Keep one document internally consistent
+- **Commands / identifiers**: Preserve exact paths, filenames, and command names
 
 ### Formatting
 
 - **Markdown**: Use standard MD syntax
-- **Code blocks**: Language-specific syntax highlighting
+- **Code blocks**: Language-specific syntax highlighting where useful
 - **Links**: Relative paths for internal links
 - **Headings**: Use ATX-style (`#`, `##`, `###`)
 
@@ -104,78 +94,32 @@ For subdirectories:
 
 - **Concise**: Get to the point
 - **Actionable**: Tell reader what to do
-- **Complete**: Include prerequisites, steps, verification
+- **Complete**: Include prerequisites, steps, and verification when behavior is procedural
 - **Current**: Keep up to date with code
 
 ---
 
-## Template: README.md
+## Template: Directory README.md
 
 ```markdown
-# Project Name
+# Directory Name
 
-Brief description (one line).
+Brief description of what this directory owns.
 
-## Quick Start
+## Purpose
 
-```bash
-# Install
-npm install
+What belongs here and what does not.
 
-# Run
-npm start
-```
+## Structure
 
-## Features
+- `path-a/` - explanation
+- `path-b/` - explanation
 
-- Feature 1
-- Feature 2
+## Update Notes
 
-## Documentation
-
-- [Guide 1](./docs/guide1.md)
-- [Guide 2](./docs/guide2.md)
-
-## Contributing
-
-See CONTRIBUTING.md
-
-## License
-
-MIT
-```
-
----
-
-## Template: Guide Document
-
-```markdown
-# Guide Title
-
-Brief introduction.
-
-## Prerequisites
-
-- Requirement 1
-- Requirement 2
-
-## Steps
-
-### Step 1: Title
-
-Description...
-
-### Step 2: Title
-
-Description...
-
-## Verification
-
-How to verify it worked.
-
-## Troubleshooting
-
-Common issues and solutions.
+- How to modify safely
+- How to validate changes
+- Related source-of-truth or deployment paths
 ```
 
 ---
@@ -186,15 +130,14 @@ Common issues and solutions.
 
 - [ ] Clear title and purpose
 - [ ] Logical structure with headings
-- [ ] Code examples where applicable
+- [ ] Exact repo paths and commands where applicable
 - [ ] Links to related docs
 
 ### Should Have
 
-- [ ] Version info for versioned docs
-- [ ] Last updated date
+- [ ] Small examples for non-obvious workflows
+- [ ] Validation note for change-heavy docs
 - [ ] Table of contents for long docs
-- [ ] Examples section
 
 ### Anti-Patterns
 
@@ -202,6 +145,7 @@ Common issues and solutions.
 - **Incomplete steps**: "Do X" without explaining how
 - **No context**: "Run this command" without explaining why
 - **Broken links**: Internal links that don't work
+- **App-centric boilerplate**: Installation or runtime sections for software this repo does not ship
 - **Inconsistent formatting**: Mixed styles in same doc
 
 ---
@@ -211,17 +155,14 @@ Common issues and solutions.
 ### Good
 
 ```bash
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
+# Validate skill structure
+./scripts/validate-skills.sh
 ```
 
 ### Bad
 
-```
-Run npm install and then npm run dev
+```text
+Run the validator
 ```
 
 ---
@@ -231,14 +172,14 @@ Run npm install and then npm run dev
 ### Internal Links
 
 ```markdown
-[Guide](./docs/guides/getting-started.md)
-[API](./docs/api/reference.md)
+[Workflow](../../../docs/workflows/新项目开发工作流/工作流总纲.md)
+[Spec Index](../index.md)
 ```
 
 ### External Links
 
 ```markdown
-[Node.js](https://nodejs.org)
+[Skills CLI](https://www.npmjs.com/package/skills)
 ```
 
 ---
@@ -246,9 +187,9 @@ Run npm install and then npm run dev
 ## Maintenance
 
 - Review docs when code changes
-- Update version history
 - Remove obsolete information
-- Test all code examples
+- Check sample commands still work
+- Re-test links when moving files
 
 ---
 
@@ -260,4 +201,4 @@ Run npm install and then npm run dev
 
 ---
 
-**Language**: English
+**Language**: Match the document's existing language and audience

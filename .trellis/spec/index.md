@@ -9,12 +9,12 @@
 This is a **meta-project** — a "specs-as-code" asset library. It does not contain a runnable application. Its deliverables are:
 
 - **Markdown** specs, templates, checklists, examples
-- **YAML** configuration (manifest.yaml, schemas)
-- **Python** automation scripts (cli.py, validation, assembly, sync)
+- **YAML** configuration (`manifest.yaml`, schemas)
+- **Python** automation scripts (`cli.py`, validation, assembly, sync)
 - **Shell** validation scripts
 - **SKILL.md** skill definitions (YAML frontmatter + markdown)
-- **Agent** source assets (`agents/<id>/`) deployed to `.claude/agents/` `.opencode/agents/` `.iflow/agents/`
-- **Command** source assets (`commands/<tool>/`) deployed to `.claude/commands/` `.opencode/commands/` `.iflow/commands/`
+- **Agent** source assets (`agents/<id>/`) deployed to `.claude/agents/`, `.opencode/agents/`, `.iflow/agents/`
+- **Command** source assets (`commands/<tool>/`) deployed to tool-specific command directories
 
 ---
 
@@ -24,34 +24,39 @@ This is a **meta-project** — a "specs-as-code" asset library. It does not cont
 
 | Spec Layer | Path | Status | Purpose |
 |-----------|------|--------|---------|
-| [library-assets](./library-assets/index.md) | `.trellis/spec/library-assets/` | ✅ Implemented | How to author specs, templates, checklists for trellis-library |
+| [library-assets](./library-assets/index.md) | `.trellis/spec/library-assets/` | ✅ Implemented | How to author specs, templates, checklists for `trellis-library` |
 | [scripts](./scripts/index.md) | `.trellis/spec/scripts/` | ✅ Implemented | Python and Shell script conventions |
-| [agents](./agents/index.md) | `.trellis/spec/agents/` | ⚠️ Design | 源资产层未实现，当前采用直接编辑模式 |
-| [commands](./commands/index.md) | `.trellis/spec/commands/` | ⚠️ Design | 源资产层未实现，当前采用直接编辑模式 |
-| [skills](./skills/index.md) | `.trellis/spec/skills/` | ✅ Implemented | How to define installable skills (`skills/`) |
-| [docs](./docs/index.md) | `.trellis/spec/docs/` | ✅ Implemented | Documentation conventions |
+| [agents](./agents/index.md) | `.trellis/spec/agents/` | ⚠️ Design | Agent source-layer guidance while live edits still happen in tool directories |
+| [commands](./commands/index.md) | `.trellis/spec/commands/` | ⚠️ Design | Command source-layer guidance while live edits still happen in tool directories |
+| [skills](./skills/index.md) | `.trellis/spec/skills/` | ✅ Implemented | How to define installable skills in `skills/` |
+| [docs](./docs/index.md) | `.trellis/spec/docs/` | ✅ Implemented | Repository documentation conventions |
 
 > **Status Legend**:
 > - ✅ **Implemented**: source asset layer is populated, spec reflects live practice
-> - ⚠️ **Design**: source asset layer is empty, current practice is direct editing in tool directories
+> - ⚠️ **Design**: source asset layer is incomplete, current practice still relies on direct editing in tool directories
 
-### Imported Governance Specs
-
-Reusable governance concerns imported from `trellis-library` under `universal-domains/`:
-
-| Domain | Concerns |
-|--------|----------|
-| **Product & Requirements** | `problem-definition`, `requirement-clarification`, `scope-boundary`, `acceptance-criteria` |
-| **Project Governance** | `change-management`, `risk-tiering`, `library-sync-governance` |
-| **Verification** | `evidence-requirements`, `verification-gates` |
-
-### Supplemental Guides
+### Repo-Specific Thinking Guides
 
 | Guide | Path |
 |-------|------|
 | [Thinking Guides](./guides/index.md) | `.trellis/spec/guides/` |
 | [Code Reuse Thinking](./guides/code-reuse-thinking-guide.md) | Pattern identification |
-| [Cross-Layer Thinking](./guides/cross-layer-thinking-guide.md) | Data flow across layers |
+| [Cross-Layer Thinking](./guides/cross-layer-thinking-guide.md) | Repo boundary and drift prevention |
+
+### Scope Boundary
+
+`.trellis/spec/` is the repository-local maintenance layer for this project.
+
+Keep only guidance that directly helps maintain these live assets and workflows:
+
+- `trellis-library/` source assets and `manifest.yaml`
+- `.trellis/scripts/` and repository automation
+- `agents/`, `commands/`, `skills/`, `docs/`
+- repo-specific thinking guides for sync, reuse, and drift prevention
+
+Do not mirror generic product-planning or cross-project governance content here.
+Those belong in `trellis-library/specs/` as reusable library assets, not in this
+repo's local maintenance spec.
 
 ---
 
@@ -59,16 +64,16 @@ Reusable governance concerns imported from `trellis-library` under `universal-do
 
 | Task | Must-Read Specs |
 |------|----------------|
-| Author a new spec in trellis-library | `library-assets/spec-authoring.md` |
+| Author a new spec in `trellis-library` | `library-assets/spec-authoring.md` |
 | Author a new template | `library-assets/template-authoring.md` |
 | Author a new checklist | `library-assets/checklist-authoring.md` |
-| Update manifest.yaml | `library-assets/manifest-maintenance.md` |
+| Update `manifest.yaml` | `library-assets/manifest-maintenance.md` |
 | Write/modify Python scripts | `scripts/python-conventions.md` |
 | Write/modify Shell scripts | `scripts/shell-conventions.md` |
 | Define an agent (source + deploy) | `agents/index.md` |
 | Define a command (source + deploy) | `commands/index.md` |
 | Define a skill | `skills/index.md` |
-| Any task | `guides/index.md` (always) |
+| Any repo-maintenance task | `guides/index.md` |
 
 ---
 
@@ -76,11 +81,11 @@ Reusable governance concerns imported from `trellis-library` under `universal-do
 
 Before writing ANY code or content:
 
-1. [ ] Identify which spec layers apply to your task (see table above)
+1. [ ] Identify which spec layers apply to your task
 2. [ ] Read the relevant index files
 3. [ ] Read the specific guideline files listed in each index
-4. [ ] Read `guides/index.md` for thinking supplements
-5. [ ] If modifying trellis-library assets, also read `library-assets/manifest-maintenance.md`
+4. [ ] Read `guides/index.md` for repo-specific thinking supplements
+5. [ ] If modifying `trellis-library` assets, also read `library-assets/manifest-maintenance.md`
 
 ---
 
@@ -92,19 +97,19 @@ python3 trellis-library/cli.py validate --strict-warnings
 
 # Validate skills structure
 ./scripts/validate-skills.sh
-
 ```
 
 ---
 
 ## Meta-Project Note
 
-This project has NO traditional frontend/backend layers. Do not create frontend/ or backend/ spec directories. All development falls into:
+This project has no traditional frontend/backend app layers. Do not create
+`frontend/` or `backend/` spec directories here. All development falls into:
 
 1. **Asset authoring** (specs, templates, checklists, examples) → see `library-assets/`
 2. **Script development** (Python, Shell) → see `scripts/`
-3. **Agent assets** (source definitions in `agents/` → deployed to `.claude/` `.opencode/` `.iflow/`) → see `agents/`
-4. **Command assets** (source in `commands/` → slash commands in `.claude/` `.opencode/` `.iflow/`) → see `commands/`
+3. **Agent assets** (source definitions in `agents/` → deployed to tool directories) → see `agents/`
+4. **Command assets** (source in `commands/` → deployed to tool directories) → see `commands/`
 5. **Skill definitions** → see `skills/`
 6. **Documentation** → see `docs/`
 

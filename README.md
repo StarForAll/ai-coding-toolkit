@@ -47,9 +47,9 @@ agents/<id>/SYSTEM.md       ──→    .claude/agents/<role>.md
                              ──→    .iflow/agents/<role>.md
 
 commands/<tool>/            ──→    .<tool>/commands/<ns>/<name>.md
-
-trellis-library/specs/      ──→    .trellis/spec/universal-domains/（导入）
 ```
+
+`.trellis/spec/` 是本仓库自己的维护规范层，不是 `trellis-library/specs/` 的镜像目录。
 
 修改源资产后需要同步到对应的工具部署层。详见 `.trellis/spec/agents/index.md` 和 `.trellis/spec/commands/index.md`。
 

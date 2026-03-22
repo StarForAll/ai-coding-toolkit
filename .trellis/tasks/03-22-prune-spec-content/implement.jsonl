@@ -1,0 +1,4 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/guides/index.md", "reason": "Thinking guides must match asset-maintenance layers"}
+{"file": ".trellis/spec/index.md", "reason": "Master spec index being narrowed to repo-relevant layers"}
+{"file": ".trellis/spec/docs/index.md", "reason": "Project-local docs guidance needs repo-specific scope"}

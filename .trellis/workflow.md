@@ -154,8 +154,6 @@ cat .trellis/spec/scripts/python-conventions.md
 |   |   |-- index.md
 |   |   |-- cross-layer-thinking-guide.md
 |   |   +-- *.md
-|   +-- universal-domains/            # Imported governance specs
-|       +-- ...
 +-- workflow.md             # This document
 ```
 
@@ -323,15 +321,11 @@ spec/
 |   +-- index.md
 |-- skills/                   # Skill definition patterns
 |   +-- index.md
-|-- config/                   # Configuration organization
-|   +-- index.md
 |-- docs/                     # Documentation conventions
 |   +-- index.md
 |-- guides/                   # Thinking guides
 |   |-- index.md
 |   +-- *.md
-+-- universal-domains/        # Imported governance specs
-    +-- ...
 ```
 
 **When to update**:

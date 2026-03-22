@@ -10,10 +10,11 @@
 single file.
 
 Common boundary bugs here:
-- `trellis-library` source assets change but target-project imports or lock data do not
+- `trellis-library` source assets change but `manifest.yaml`, examples, or validation logic do not
+- `trellis-library` asset structures evolve but `.trellis/spec/library-assets/` still describes the old authoring model
 - a command changes behavior but the matching docs, skill text, or config shape do not
-- a spec directory moves but assembly, sync, or validation tooling still assumes the old path
-- multiple project layers describe the same workflow differently and drift over time
+- an agent or command source changes but deployed tool copies drift
+- multiple project layers describe the same workflow differently over time
 
 ---
 
@@ -22,8 +23,8 @@ Common boundary bugs here:
 Use this guide when a change crosses two or more of these repository layers:
 
 - source library assets in `trellis-library/`
-- imported project-local specs in `.trellis/spec/`
-- target-project state in `.trellis/library-lock.yaml`
+- project-local maintenance specs in `.trellis/spec/`
+- registry or metadata state in `trellis-library/manifest.yaml`
 - commands and automation scripts
 - agent or skill instructions
 - config or metadata files that shape behavior
@@ -40,17 +41,21 @@ usually unnecessary.
 Write the actual handoff path for the change:
 
 ```text
-Source of truth → copied/imported form → metadata/lock state → command/tooling behavior → verification
+Source of truth → derived copy or metadata → command/tooling behavior → verification
 ```
 
 Examples in this repo:
 
 ```text
-trellis-library spec -> .trellis/spec import -> .trellis/library-lock.yaml -> sync/propose/apply flow
+trellis-library asset -> manifest.yaml -> cli/validation/sync flow
 ```
 
 ```text
-command spec -> command implementation -> README / skill instructions -> verification checklist
+trellis-library authoring pattern -> .trellis/spec/library-assets guidance -> contributor behavior
+```
+
+```text
+source asset -> tool deployment copy -> README / skill instructions -> verification checklist
 ```
 
 For each arrow, ask:
@@ -62,8 +67,9 @@ For each arrow, ask:
 
 | Boundary | Common Issues In This Repo |
 |----------|----------------------------|
-| `trellis-library` ↔ `.trellis/spec` | imported spec drift, wrong target path, stale copied directories |
-| asset content ↔ `.trellis/library-lock.yaml` | lock metadata no longer matches actual imports |
+| `trellis-library` ↔ `manifest.yaml` | source asset added or moved but registry not updated |
+| `trellis-library` ↔ `.trellis/spec/library-assets/` | source library structure or authoring rules change but local guidance still teaches the old workflow |
+| source asset ↔ tool deployment copy | content diverges across `.claude/`, `.opencode/`, `.iflow/` |
 | command/script ↔ docs/skills | behavior changes but instructions stay outdated |
 | config ↔ agent/command behavior | allowed paths, flags, or conventions drift |
 | spec ↔ validation flow | rules say one thing, tooling enforces another |
@@ -82,18 +88,26 @@ For each boundary, make the contract explicit:
 
 ### Mistake 1: Hidden Source of Truth
 
-**Bad**: Editing imported project files and forgetting whether source of truth is
-the local copy or `trellis-library`
+**Bad**: Editing a deployed tool file and forgetting whether the real source of
+truth lives in a source asset directory, a repo script, or a spec doc
 
-**Good**: State clearly whether the change belongs in project-local spec,
-`trellis-library`, or both
+**Good**: State clearly whether the change belongs in a source asset directory,
+tool deployment copy, repo-local spec, or `trellis-library`
 
 ### Mistake 2: Metadata Drift
 
-**Bad**: Moving or remapping files without checking `.trellis/library-lock.yaml`
-or script path assumptions
+**Bad**: Moving or remapping files without checking `manifest.yaml`, README
+examples, or script path assumptions
 
-**Good**: Update path mapping, lock metadata, and tests together
+**Good**: Update path mapping, metadata, and tests together
+
+### Mistake 2.5: Authoring Guide Drift
+
+**Bad**: Changing `trellis-library` asset layout or conventions while leaving
+`.trellis/spec/library-assets/` on the old model
+
+**Good**: When source-library authoring rules change, update the local
+authoring spec in the same change or explicitly record why it remains different
 
 ### Mistake 3: Instruction / Tooling Mismatch
 
@@ -113,8 +127,8 @@ Before implementation:
 - [ ] Chosen the commands or tests that verify the boundary
 
 After implementation:
-- [ ] Verified copied/imported paths match the intended layout
-- [ ] Verified lock/config/metadata reflects the actual state on disk
+- [ ] Verified copied/deployed paths match the intended layout
+- [ ] Verified config/metadata reflects the actual state on disk
 - [ ] Verified related docs/instructions were updated if behavior changed
 - [ ] Verified the relevant command/test path still passes end to end
 
@@ -123,7 +137,8 @@ After implementation:
 ## When to Write Extra Flow Notes
 
 Write explicit boundary notes when:
-- a change touches `trellis-library` and the project-local `.trellis/` tree
-- a path remapping or import rule changes
+- a change touches `trellis-library` and project-local specs or tooling
+- a change updates source-library authoring rules that contributors read via `.trellis/spec/library-assets/`
+- a path remapping or deployment rule changes
 - a command behavior change affects docs, skills, or config
 - a bug was caused by drift between source assets and derived state
