@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 31
+- **Total Sessions**: 32
 - **Last Active**: 2026-03-22
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1502 | Active |
+| `journal-1.md` | ~1534 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits |
 |---|------|-------|---------|
+| 32 | 2026-03-22 | 完善 multi-cli-review 和 multi-cli-review-action 支持任务级多 reviewer 模式 | `fadff8d` |
 | 31 | 2026-03-22 | record-session 自动提交失败处理补充 | `a7dc0ee` |
 | 30 | 2026-03-22 | 新项目工作流自动化检查矩阵补充 | `017d07b` |
 | 29 | 2026-03-22 | 任务依赖与并行执行工作流补充 | `2751ef3` |

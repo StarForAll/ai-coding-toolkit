@@ -1500,3 +1500,35 @@ Record session after the recommit that restored task metadata
 ### Next Steps
 
 - None - task complete
+
+
+## Session 32: 完善 multi-cli-review 和 multi-cli-review-action 支持任务级多 reviewer 模式
+
+**Date**: 2026-03-22
+**Task**: 完善 multi-cli-review 和 multi-cli-review-action 支持任务级多 reviewer 模式
+
+### Summary
+
+将两个 skill 从单 run-id、单报告协议升级为任务级多 reviewer 协作协议。multi-cli-review 新增 Reviewer ID Rules 章节集中定义规则；multi-cli-review-action 新增 Early Stop Conditions 章节区分主动关闭与必须人工介入的场景。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fadff8d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
