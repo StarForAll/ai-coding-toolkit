@@ -1,5 +1,0 @@
-{"file": ".opencode/commands/trellis/finish-work.md", "reason": "Finish work checklist"}
-{"file": ".opencode/commands/trellis/check.md", "reason": "Code quality check spec"}
-{"file": ".trellis/spec/docs/index.md", "reason": "检查 workflow 文档是否符合 repo 文档规范"}
-{"file": ".trellis/spec/library-assets/index.md", "reason": "检查 workflow 中引用的 trellis-library 资产是否表达准确"}
-{"file": "docs/workflows/新项目开发工作流/commands/plan.md", "reason": "检查 plan 前置条件表述是否清晰"}

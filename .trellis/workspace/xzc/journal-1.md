@@ -1260,3 +1260,48 @@ Record session after the recommit that restored task metadata
 ### Next Steps
 
 - None - task complete
+
+
+## Session 27: 技术架构确认后补全项目 spec 门禁
+
+**Date**: 2026-03-22
+**Task**: 技术架构确认后补全项目 spec 门禁
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Item | Description |
+|------|-------------|
+| Workflow Gate | 在新项目开发工作流中新增“技术架构经用户确认后”的项目 spec 对齐门禁 |
+| Design Step | 明确 design 阶段结束后，必须先完成 spec 导入与项目化完善，再进入 `/trellis:plan` |
+| Plan Scope | 收紧 `/trellis:plan` 职责，只负责任务拆解与 `task_plan.md` 生成，不替代 spec 导入/修订 |
+| Router Logic | 在 phase router 中加入“spec 未对齐”的补课分支，并说明补齐后按现状继续路由 |
+
+**Updated Files**:
+- `docs/workflows/新项目开发工作流/工作流总纲.md`
+- `docs/workflows/新项目开发工作流/commands/design.md`
+- `docs/workflows/新项目开发工作流/commands/plan.md`
+- `docs/workflows/新项目开发工作流/commands/start-patch-phase-router.md`
+- `.trellis/tasks/03-22-new-project-workflow-prd-spec/prd.md`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `aca122f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

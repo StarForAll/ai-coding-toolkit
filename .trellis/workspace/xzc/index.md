@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 26
+- **Total Sessions**: 27
 - **Last Active**: 2026-03-22
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1262 | Active |
+| `journal-1.md` | ~1307 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits |
 |---|------|-------|---------|
+| 27 | 2026-03-22 | 技术架构确认后补全项目 spec 门禁 | `aca122f` |
 | 26 | 2026-03-22 | 重新提交后的会话记录 | `4159e88` |
 | 25 | 2026-03-22 | Prune irrelevant .trellis spec content | `1e79857` |
 | 24 | 2026-03-21 | 新项目开发工作流命令体系 + 制作规范 | `35017d5` |
