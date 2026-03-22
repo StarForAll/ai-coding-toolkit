@@ -1532,3 +1532,63 @@ Record session after the recommit that restored task metadata
 ### Next Steps
 
 - None - task complete
+
+
+## Session 33: 任务级多 CLI 补充审查机制与多 reviewer skill
+
+**Date**: 2026-03-22
+**Task**: 任务级多 CLI 补充审查机制与多 reviewer skill
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Feature | Description |
+|---------|-------------|
+| Multi-reviewer skills | 完善 `multi-cli-review` 与 `multi-cli-review-action`，支持任务级总目录、多 reviewer 报告、去重、冲突标记、人工介入阈值与重新验证要求 |
+| Workflow gate | 在新项目开发工作流中新增 `/trellis:check`，作为当前 CLI 完成任务原本 review 后的任务级多 CLI 补充审查门禁 |
+| Trigger policy | 将触发机制定义为“硬条件 + 分层门槛”，并明确默认 2 个 reviewer、最多 4 个 reviewer、最多 3 轮、提前关闭与人工介入规则 |
+| Cross-CLI deployment | 同步更新安装/卸载/升级脚本与 Cursor、OpenCode、Codex/Gemini 适配文档，确保 `check` 命令可部署和引用 |
+
+**Updated Files**:
+- `skills/multi-cli-review/SKILL.md`
+- `skills/multi-cli-review-action/SKILL.md`
+- `docs/workflows/新项目开发工作流/工作流总纲.md`
+- `docs/workflows/新项目开发工作流/命令映射.md`
+- `docs/workflows/新项目开发工作流/commands/check.md`
+- `docs/workflows/新项目开发工作流/commands/self-review.md`
+- `docs/workflows/新项目开发工作流/commands/start-patch-phase-router.md`
+- `docs/workflows/新项目开发工作流/commands/install-workflow.py`
+- `docs/workflows/新项目开发工作流/commands/upgrade-compat.py`
+- `docs/workflows/新项目开发工作流/commands/uninstall-workflow.py`
+- `docs/workflows/新项目开发工作流/commands/cursor/README.md`
+- `docs/workflows/新项目开发工作流/commands/opencode/README.md`
+- `docs/workflows/新项目开发工作流/commands/codex-gemini/README.md`
+
+**Verification**:
+- `/ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --strict-warnings`
+- `/ops/softwares/python/bin/python3 -m py_compile trellis-library/scripts/validation/validate-library-sync.py`
+- `/ops/softwares/python/bin/python3 -m py_compile docs/workflows/新项目开发工作流/commands/install-workflow.py docs/workflows/新项目开发工作流/commands/upgrade-compat.py docs/workflows/新项目开发工作流/commands/uninstall-workflow.py`
+- `git diff --check -- docs/workflows/新项目开发工作流/...`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fadff8d` | (see git log) |
+| `59bc8d9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
