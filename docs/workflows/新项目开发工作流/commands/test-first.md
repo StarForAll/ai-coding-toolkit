@@ -66,5 +66,5 @@ $TASK_DIR/tests/
 | 开始实现代码 | `/trellis:start` | **默认推荐**。测试门禁就绪，进入实施 |
 | 测试不够完善 | `/trellis:test-first` | 补充测试用例 |
 | 测试策略需要调整 | `/trellis:plan` | 回退到任务拆解调整验收标准 |
-| 需要并行实现多个任务 | `/trellis:parallel` | 多个子任务用 worktree 隔离 |
+| 需要并行实现多个任务 | Git worktree 或 `/trellis:parallel` | 如当前项目已安装 `/trellis:parallel` 则优先使用，否则手工用 worktree 隔离 |
 | 不确定下一步 | `/trellis:start` | 用 Phase Router 自动检测 |
