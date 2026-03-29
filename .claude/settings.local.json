@@ -107,7 +107,9 @@
       "Bash(/ops/softwares/python/bin/python3 ./.trellis/scripts/add_session.py --stdin --title \"10组 .new 文件合并分析与执行\" --commit \"bbac21b,5dc247d\" --summary \"分析仓库中10组.new后缀文件与原文件的差异，在Trellis框架内完成合并/择一处理。#3 add_session.py采用合并策略A（保留auto_commit_paths + 植入branch功能），其余9组直接择一。所有.new文件已清理完毕。\")",
       "Bash(/ops/softwares/python/bin/python3 -m py_compile .trellis/scripts/common/git.py .trellis/scripts/add_session.py)",
       "Bash(/ops/softwares/python/bin/python3 -c \"from common.git import auto_commit_paths, run_git; print\\('OK'\\)\")",
-      "Bash(/ops/softwares/python/bin/python3 -c \"from common.git import auto_commit_paths, run_git; print\\(''OK''\\)\")"
+      "Bash(/ops/softwares/python/bin/python3 -c \"from common.git import auto_commit_paths, run_git; print\\(''OK''\\)\")",
+      "Bash(for d:*)",
+      "Bash(do echo:*)"
     ]
   }
 }
