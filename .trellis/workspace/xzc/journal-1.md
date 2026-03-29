@@ -1592,3 +1592,65 @@ Record session after the recommit that restored task metadata
 ### Next Steps
 
 - None - task complete
+
+
+## Session 34: 10组 .new 文件合并分析与执行
+
+**Date**: 2026-03-29
+**Task**: 10组 .new 文件合并分析与执行
+**Branch**: `main`
+
+### Summary
+
+分析仓库中10组.new后缀文件与原文件的差异，在Trellis框架内完成合并/择一处理。#3 add_session.py采用合并策略A（保留auto_commit_paths + 植入branch功能），其余9组直接择一。所有.new文件已清理完毕。
+
+### Main Changes
+
+| # | 文件组 | 处理方式 | 说明 |
+|---|--------|----------|------|
+| 1 | `common/git.py` | 择一：选 .new | 新增 `auto_commit_paths()` 共享工具函数 |
+| 2 | `common/task_store.py` | 择一：选 .new | 使用 `auto_commit_paths`，改进错误处理 |
+| 3 | `add_session.py` | **合并A** | 保留当前版 `auto_commit_paths` + 植入 .new 的 `--branch` 功能 |
+| 4 | `.agents/skills/finish-work/` | 择一：保留原文件 | .new 为通用化回退，原文件已针对本仓库改进 |
+| 5 | `.agents/skills/record-session/` | 择一：保留原文件 | .new 移除了 postcondition 校验，原文件更严谨 |
+| 6 | `.agents/skills/update-spec/` | 择一：选 .new | frontmatter description 增强 |
+| 7 | `.kiro/skills/update-spec/` | 择一：选 .new | 同上 |
+| 8 | `.claude/commands/trellis/finish-work.md` | 择一：选 .new | 新增 trellis-library 校验 Section 7 |
+| 9 | `.iflow/commands/trellis/finish-work.md` | 择一：选 .new | 同上 |
+| 10 | `.trellis/worktree.yaml` | 择一：选 .new | verify 注释改为 trellis-library 验证命令 |
+
+**合并要点（add_session.py）**:
+- 保留 `from common.git import auto_commit_paths, run_git` 架构
+- 植入 `--branch` CLI 参数及三级自动检测（CLI → task.json → git branch）
+- session content 和 index history 表新增 Branch 列
+- 旧版 4/6 列表头自动迁移为 5 列格式
+
+**验证结果**:
+- [OK] Python 语法检查通过（py_compile）
+- [OK] .new 残留文件数 = 0
+- [OK] import 链正确（git.py → task_store.py → add_session.py）
+
+**会话末尾补充修复**:
+- git.py 中 auto_commit_paths 因 commit bbac21b 操作顺序问题被意外删除，导致 add_session 运行时 ImportError
+- 已将 auto_commit_paths 重新植入 common/git.py
+- 修复后验证：import 链路正常，语法检查通过
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bbac21b` | (see git log) |
+| `5dc247d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
