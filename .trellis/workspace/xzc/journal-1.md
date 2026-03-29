@@ -1768,3 +1768,59 @@ Record session after the recommit that restored task metadata
 ### Next Steps
 
 - None - task complete
+
+
+## Session 38: Trellis升级兼容机制/tmp验证与修复
+
+**Date**: 2026-03-29
+**Task**: Trellis升级兼容机制/tmp验证与修复
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Black-box validation | 在 `/tmp` 构造最小 Trellis 项目夹具，复测 install / check / merge / force / uninstall 生命周期 |
+| Bugs fixed | 修复 `upgrade-compat.py` 的同版本漂移漏检、helper script 漏检、`--force` 假成功，以及 `uninstall-workflow.py` 对损坏安装记录无容错 |
+| Regression coverage | 新增 `test_workflow_installers.py`，固定 4 个回归场景 |
+| Docs sync | 同步更新 `docs/workflows/新项目开发工作流/命令映射.md` 与 `docs/workflows/自定义工作流制作规范.md` 的升级机制口径 |
+
+**Updated Files**:
+- `docs/workflows/新项目开发工作流/commands/upgrade-compat.py`
+- `docs/workflows/新项目开发工作流/commands/uninstall-workflow.py`
+- `docs/workflows/新项目开发工作流/commands/test_workflow_installers.py`
+- `docs/workflows/新项目开发工作流/命令映射.md`
+- `docs/workflows/自定义工作流制作规范.md`
+- `.trellis/tasks/archive/2026-03/03-29-trellis-upgrade-mechanism-tmp-test/prd.md`
+- `.trellis/tasks/archive/2026-03/03-29-trellis-upgrade-mechanism-tmp-test/findings.md`
+
+**Verification**:
+- `/ops/softwares/python/bin/python3 -m unittest docs.workflows.新项目开发工作流.commands.test_workflow_installers`
+- `/ops/softwares/python/bin/python3 -m py_compile docs/workflows/新项目开发工作流/commands/upgrade-compat.py docs/workflows/新项目开发工作流/commands/uninstall-workflow.py docs/workflows/新项目开发工作流/commands/test_workflow_installers.py`
+- `/ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --strict-warnings`
+- `/ops/softwares/python/bin/python3 -m py_compile trellis-library/scripts/validation/validate-library-sync.py`
+- `git diff --check -- docs/workflows/新项目开发工作流/commands/upgrade-compat.py docs/workflows/新项目开发工作流/commands/uninstall-workflow.py docs/workflows/新项目开发工作流/commands/test_workflow_installers.py docs/workflows/新项目开发工作流/命令映射.md docs/workflows/自定义工作流制作规范.md`
+- `/tmp` 黑盒回归：install / check / merge / force / uninstall 全链路通过
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e03b05e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
