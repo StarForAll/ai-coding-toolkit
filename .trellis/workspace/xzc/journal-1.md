@@ -1824,3 +1824,56 @@ Record session after the recommit that restored task metadata
 ### Next Steps
 
 - None - task complete
+
+
+## Session 39: Drift Migration: 62 资产同步到 lock
+
+**Date**: 2026-03-29
+**Task**: Drift Migration: 62 资产同步到 lock
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项目 | 说明 |
+|------|------|
+| 迁移策略 | Plan B: Phased Alignment (Baseline → Pilot → Batch → Cleanup) |
+| 同步资产 | 62/298 (21%) 跨 5 个 type |
+| 验证 | 全部 62 资产 diff_status=unchanged, schema 15/15 fields ✓ |
+| 单元测试 | 35/35 passed |
+| 文档 | .trellis/docs/DRIFT-MIGRATION-PLAN.md 记录完整过程 |
+
+**分批同步明细**:
+
+| Batch | 资产数 | 域 |
+|-------|--------|------|
+| Pilot | 6 | project-governance, verification, product-and-requirements |
+| Batch 1 | 18 | ai-execution, context-engineering, agent-collaboration, scripts/validation |
+| Batch 2 | 15 | project-governance, verification, platforms/cli, scripts/sync+assembly+contribution |
+| Batch 3 | 23 | product-and-requirements, verification, project-governance |
+
+**Lock 统计**:
+- spec: 28, script: 11, checklist: 11, template: 9, example: 3
+- 236 资产未同步 (frameworks, platforms, assembled-packs 等不相关域)
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8ac7e92` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

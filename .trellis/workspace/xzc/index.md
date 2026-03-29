@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 38
+- **Total Sessions**: 39
 - **Last Active**: 2026-03-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1826 | Active |
+| `journal-1.md` | ~1879 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 39 | 2026-03-29 | Drift Migration: 62 资产同步到 lock | `8ac7e92` | `main` |
 | 38 | 2026-03-29 | Trellis升级兼容机制/tmp验证与修复 | `e03b05e` | `main` |
 | 37 | 2026-03-29 | Trellis 升级兼容机制全面测试与修复 | `a8c9cd9` | `main` |
 | 36 | 2026-03-29 | Trellis 升级兼容性验证与修复-2 | `5558d6a` | `main` |
