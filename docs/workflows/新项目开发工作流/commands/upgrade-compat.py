@@ -2,9 +2,10 @@
 """Trellis 版本升级后重新嵌入工作流。
 
 用法:
-  python3 upgrade-compat.py --check    # 检测冲突（默认）
-  python3 upgrade-compat.py --merge    # 自动合并
-  python3 upgrade-compat.py --force    # 强制覆盖
+  python3 upgrade-compat.py --check              # 检测冲突（默认）
+  python3 upgrade-compat.py --merge              # 自动合并
+  python3 upgrade-compat.py --force              # 强制覆盖
+  python3 upgrade-compat.py --project-root /path # 指定项目根目录
 """
 import argparse
 import json
@@ -21,6 +22,10 @@ def err(m): print(f"{R}❌ {m}{N}")
 def info(m): print(f"{C}ℹ️  {m}{N}")
 
 
+# Phase Router 精确检测标记（必须与 start-patch-phase-router.md 的标题完全一致）
+_PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
+
+
 def find_root() -> Path:
     cur = Path(__file__).resolve().parent
     for _ in range(10):
@@ -32,15 +37,40 @@ def find_root() -> Path:
     sys.exit(f"{R}未找到 .claude/ 目录{N}")
 
 
+def has_phase_router(start_md: Path) -> bool:
+    """精确检测 Phase Router 是否已注入 start.md。"""
+    if not start_md.exists():
+        return False
+    return _PHASE_ROUTER_MARKER in start_md.read_text(encoding="utf-8")
+
+
+def load_install_record(rec_file: Path) -> dict:
+    """安全读取安装记录，损坏时返回空 dict。"""
+    if not rec_file.exists():
+        return {}
+    try:
+        return json.loads(rec_file.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        warn(f"workflow-installed.json 损坏: {e}")
+        return {}
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--check", action="store_const", const="check", dest="mode", default="check")
     p.add_argument("--merge", action="store_const", const="merge", dest="mode")
     p.add_argument("--force", action="store_const", const="force", dest="mode")
+    p.add_argument("--project-root", type=Path, default=None,
+                   help="项目根目录（默认自动检测）")
     args = p.parse_args()
 
     src = Path(__file__).resolve().parent
-    root = find_root()
+    if args.project_root:
+        root = args.project_root.resolve()
+        if not (root / ".claude").is_dir():
+            sys.exit(f"{R}指定的项目根目录不含 .claude/{N}")
+    else:
+        root = find_root()
     dst_cmds = root / ".claude" / "commands" / "trellis"
     dst_scripts = root / ".trellis" / "scripts" / "workflow"
     rec_file = root / ".trellis" / "workflow-installed.json"
@@ -49,11 +79,10 @@ def main():
     HELPER_SCRIPTS = ["feasibility-check.py", "design-export.py", "plan-validate.py", "self-review-check.py"]
 
     # 读取版本
-    cur_ver = ((root / ".trellis" / ".version").read_text().strip()
+    cur_ver = ((root / ".trellis" / ".version").read_text(encoding="utf-8").strip()
                if (root / ".trellis" / ".version").exists() else "unknown")
-    inst_ver = "unknown"
-    if rec_file.exists():
-        inst_ver = json.loads(rec_file.read_text()).get("trellis_version", "unknown")
+    rec = load_install_record(rec_file)
+    inst_ver = rec.get("trellis_version", "unknown")
 
     print()
     print("╔══════════════════════════════════════╗")
@@ -71,7 +100,7 @@ def main():
     # 冲突检测
     conflicts = 0
     start = dst_cmds / "start.md"
-    if not (start.exists() and "Phase Router" in start.read_text()):
+    if not has_phase_router(start):
         err("start.md: Phase Router 丢失")
         conflicts += 1
     else:
@@ -116,7 +145,7 @@ def main():
             ok(f"/trellis:{cmd}")
 
     # 合并 start.md
-    if not (start.exists() and "Phase Router" in start.read_text()):
+    if not has_phase_router(start):
         patch = src / "start-patch-phase-router.md"
         if patch.exists() and start.exists():
             content = start.read_text(encoding="utf-8")
@@ -125,6 +154,12 @@ def main():
                 before, after = content.split(marker, 1)
                 start.write_text(before + patch.read_text(encoding="utf-8") + "\n" + marker + after, encoding="utf-8")
                 ok("Phase Router 已注入")
+            else:
+                warn("start.md 中未找到 '## Operation Types'，无法自动注入 Phase Router")
+        elif not patch.exists():
+            err("start-patch-phase-router.md 缺失，Phase Router 无法恢复，请手动检查源目录")
+        elif not start.exists():
+            err("start.md 不存在，Phase Router 无法恢复")
 
     # 重新部署脚本
     dst_scripts.mkdir(parents=True, exist_ok=True)
@@ -145,6 +180,16 @@ def main():
         "scripts": HELPER_SCRIPTS,
     }, ensure_ascii=False, indent=2), encoding="utf-8")
     ok(f"版本标记已更新: {cur_ver}")
+
+    # 清理旧的升级备份（保留最新 2 个）
+    old_backups = sorted(
+        [d for d in dst_cmds.iterdir() if d.is_dir() and d.name.startswith(".backup-upgrade-")],
+        key=lambda d: d.name,
+    )
+    if len(old_backups) > 2:
+        for d in old_backups[:-2]:
+            shutil.rmtree(d)
+            warn(f"清理旧备份: {d.name}")
 
     print()
     print("✅ 升级兼容处理完成")

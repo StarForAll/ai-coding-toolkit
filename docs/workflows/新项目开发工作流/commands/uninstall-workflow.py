@@ -82,6 +82,11 @@ def main():
     if backup.exists():
         shutil.rmtree(backup)
         ok("备份目录已删除")
+    # 清理升级备份
+    for d in dst_cmds.iterdir():
+        if d.is_dir() and d.name.startswith(".backup-upgrade-"):
+            shutil.rmtree(d)
+            ok(f"升级备份已删除: {d.name}")
 
     print()
     print("✅ 卸载完成 — Trellis 已恢复原始状态")

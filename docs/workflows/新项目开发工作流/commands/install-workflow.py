@@ -44,6 +44,10 @@ def inject_phase_router(start_md: Path):
         err("start.md 中未找到 '## Operation Types'，跳过注入")
 
 
+# Phase Router 精确检测标记（必须与 start-patch-phase-router.md 的标题完全一致）
+_PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
+
+
 def main():
     p = argparse.ArgumentParser(description="安装自定义工作流到 Trellis")
     p.add_argument("--project-root", type=Path, default=None)
@@ -106,7 +110,7 @@ def main():
 
     # ── 注入 Phase Router ──
     print("🔄 start.md...")
-    if start.exists() and "Phase Router" in start.read_text(encoding="utf-8"):
+    if start.exists() and _PHASE_ROUTER_MARKER in start.read_text(encoding="utf-8"):
         ok("已有 Phase Router，跳过")
     elif (src / "start-patch-phase-router.md").exists():
         inject_phase_router(start)
