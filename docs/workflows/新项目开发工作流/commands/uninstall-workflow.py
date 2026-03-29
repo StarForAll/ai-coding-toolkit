@@ -3,6 +3,7 @@
 
 用法: python3 uninstall-workflow.py [--project-root /path/to/project]
 """
+
 import json
 import shutil
 import sys
@@ -10,8 +11,15 @@ from pathlib import Path
 
 
 G, Y, R, N = "\033[0;32m", "\033[1;33m", "\033[0;31m", "\033[0m"
-def ok(m): print(f"{G}✅ {m}{N}")
-def warn(m): print(f"{Y}⚠️  {m}{N}")
+DEFAULT_COMMANDS = ["feasibility", "design", "plan", "test-first", "self-review", "check", "delivery"]
+
+
+def ok(message: str) -> None:
+    print(f"{G}✅ {message}{N}")
+
+
+def warn(message: str) -> None:
+    print(f"{Y}⚠️  {message}{N}")
 
 
 def find_root(start: Path) -> Path:
@@ -25,11 +33,22 @@ def find_root(start: Path) -> Path:
     sys.exit(f"{R}未找到 .claude/ 目录{N}")
 
 
-def main():
+def load_install_record(rec_file: Path) -> dict:
+    if not rec_file.exists():
+        return {}
+    try:
+        return json.loads(rec_file.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        warn(f"workflow-installed.json 损坏，将使用默认卸载列表: {exc}")
+        return {}
+
+
+def main() -> int:
     import argparse
-    p = argparse.ArgumentParser()
-    p.add_argument("--project-root", type=Path, default=None)
-    args = p.parse_args()
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--project-root", type=Path, default=None)
+    args = parser.parse_args()
 
     root = args.project_root or find_root(Path(__file__))
     dst_cmds = root / ".claude" / "commands" / "trellis"
@@ -37,12 +56,8 @@ def main():
     backup = dst_cmds / ".backup-original"
     rec_file = root / ".trellis" / "workflow-installed.json"
 
-    # 从安装记录读取命令列表，若无则用默认
-    if rec_file.exists():
-        rec = json.loads(rec_file.read_text(encoding="utf-8"))
-        cmds = rec.get("commands", [])
-    else:
-        cmds = ["feasibility", "design", "plan", "test-first", "self-review", "check", "delivery"]
+    record = load_install_record(rec_file)
+    commands = record.get("commands") or DEFAULT_COMMANDS
 
     print()
     print("╔══════════════════════════════════════╗")
@@ -50,48 +65,44 @@ def main():
     print("╚══════════════════════════════════════╝")
     print()
 
-    # 删除命令
-    n = 0
-    for c in cmds:
-        p = dst_cmds / f"{c}.md"
-        if p.exists():
-            p.unlink()
-            ok(f"删除 {c}.md")
-            n += 1
-    print(f"   {n} 个命令\n")
+    removed = 0
+    for command in commands:
+        candidate = dst_cmds / f"{command}.md"
+        if candidate.exists():
+            candidate.unlink()
+            ok(f"删除 {command}.md")
+            removed += 1
+    print(f"   {removed} 个命令\n")
 
-    # 恢复 start.md
-    bk = backup / "start.md"
-    if bk.exists():
-        shutil.copy2(bk, dst_cmds / "start.md")
+    backup_start = backup / "start.md"
+    if backup_start.exists():
+        shutil.copy2(backup_start, dst_cmds / "start.md")
         ok("start.md 已恢复")
     else:
         warn("无备份，start.md 未修改")
 
-    # 删除脚本
     if dst_scripts.is_dir():
         shutil.rmtree(dst_scripts)
         ok(".trellis/scripts/workflow/ 已删除")
 
-    # 删除安装记录
     if rec_file.exists():
         rec_file.unlink()
         ok("workflow-installed.json 已删除")
 
-    # 清理备份
     if backup.exists():
         shutil.rmtree(backup)
         ok("备份目录已删除")
-    # 清理升级备份
-    for d in dst_cmds.iterdir():
-        if d.is_dir() and d.name.startswith(".backup-upgrade-"):
-            shutil.rmtree(d)
-            ok(f"升级备份已删除: {d.name}")
+
+    for directory in dst_cmds.iterdir():
+        if directory.is_dir() and directory.name.startswith(".backup-upgrade-"):
+            shutil.rmtree(directory)
+            ok(f"升级备份已删除: {directory.name}")
 
     print()
     print("✅ 卸载完成 — Trellis 已恢复原始状态")
     print()
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

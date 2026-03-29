@@ -1,0 +1,4 @@
+{"file": ".opencode/commands/trellis/finish-work.md", "reason": "Finish work checklist"}
+{"file": ".opencode/commands/trellis/check.md", "reason": "Code quality check spec"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Cross-layer drift and source/deploy boundary checks"}
+{"file": ".trellis/spec/scripts/python-conventions.md", "reason": "Script behavior and CLI verification conventions"}
