@@ -9,7 +9,7 @@
 | 目录 | 说明 |
 |------|------|
 | `trellis-library/` | **核心资产库**：specs、templates、checklists、examples、schemas、scripts，通过 `manifest.yaml` 注册管理 |
-| `.trellis/spec/` | **项目本地开发规范**：定义如何编写和维护本仓库的所有资产 |
+| `.trellis/spec/` | **项目活规范工作区**：定义如何编写和维护本仓库资产，以及如何设计 `docs/workflows/**` 工作流资产 |
 | `skills/` | 可被 **Skills CLI**（`npx skills`）发现与安装的技能 |
 
 ### 源资产层（Source Assets）
@@ -49,7 +49,8 @@ agents/<id>/SYSTEM.md       ──→    .claude/agents/<role>.md
 commands/<tool>/            ──→    .<tool>/commands/<ns>/<name>.md
 ```
 
-`.trellis/spec/` 是本仓库自己的维护规范层，不是 `trellis-library/specs/` 的镜像目录。
+`.trellis/spec/` 是本仓库自己的活规范工作区，不是 `trellis-library/specs/` 的完整镜像目录。
+这里既包含本仓库的维护规范，也包含当前工作流资产实际依赖的工作流方法规范与配套模板入口。
 
 修改源资产后需要同步到对应的工具部署层。详见 `.trellis/spec/agents/index.md` 和 `.trellis/spec/commands/index.md`。
 

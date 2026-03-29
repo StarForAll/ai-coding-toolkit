@@ -11,6 +11,7 @@ This directory is the **repo-local documentation layer** for `ai-coding-toolkit`
 Use this document for:
 - README and directory-level structure in this repo
 - workflow docs and maintenance notes that describe real repository behavior
+- workflow-asset documentation under `docs/workflows/**`
 - formatting, linking, and update habits for asset-library documentation
 
 ---
@@ -22,7 +23,7 @@ Use this document for:
 | Repository README | `README.md` | Explain what this repo contains and how the asset layers relate |
 | Asset README | `agents/README.md`, `commands/*/README.md`, `docs/README.md` | Clarify scope and structure of one asset area |
 | Workflow docs | `docs/workflows/**` | Human-facing workflow notes and command references |
-| Trellis spec docs | `.trellis/spec/**` | Repo-local maintenance guidance |
+| Trellis spec docs | `.trellis/spec/**` | Repo-local maintenance guidance plus workflow-authoring rules used by this repo |
 | Library docs | `trellis-library/README.md`, `trellis-library/taxonomy.md` | Source-library architecture and taxonomy |
 
 ---
