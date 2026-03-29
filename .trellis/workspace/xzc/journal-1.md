@@ -1735,3 +1735,36 @@ Record session after the recommit that restored task metadata
 ### Next Steps
 
 - None - task complete
+
+
+## Session 37: Trellis 升级兼容机制全面测试与修复
+
+**Date**: 2026-03-29
+**Task**: Trellis 升级兼容机制全面测试与修复
+**Branch**: `main`
+
+### Summary
+
+在 /tmp 模拟环境中对 upgrade-compat.py / install-workflow.py / uninstall-workflow.py 进行了 93 项全面测试，发现并修复 5 个问题：JSON 损坏崩溃、patch 缺失无告警、备份累积、缺少 --project-root、Phase Router 检测逻辑脆弱。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a8c9cd9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
