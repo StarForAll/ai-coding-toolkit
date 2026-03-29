@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 35
+- **Total Sessions**: 36
 - **Last Active**: 2026-03-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1704 | Active |
+| `journal-1.md` | ~1737 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 36 | 2026-03-29 | Trellis 升级兼容性验证与修复-2 | `5558d6a` | `main` |
 | 35 | 2026-03-29 | Trellis 升级兼容性验证与修复 | `4e291de` | `main` |
 | 34 | 2026-03-29 | 10组 .new 文件合并分析与执行 | `bbac21b`, `5dc247d` | `main` |
 | 33 | 2026-03-22 | 任务级多 CLI 补充审查机制与多 reviewer skill | `fadff8d`, `59bc8d9` |

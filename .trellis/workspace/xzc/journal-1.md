@@ -1702,3 +1702,36 @@ Record session after the recommit that restored task metadata
 ### Next Steps
 
 - None - task complete
+
+
+## Session 36: Trellis 升级兼容性验证与修复-2
+
+**Date**: 2026-03-29
+**Task**: Trellis 升级兼容性验证与修复-2
+**Branch**: `main`
+
+### Summary
+
+测试 Trellis 组件兼容性，修复 multi_agent/status.py 相对导入错误，清理升级残留任务目录
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5558d6a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
