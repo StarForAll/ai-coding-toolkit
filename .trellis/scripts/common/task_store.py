@@ -27,7 +27,7 @@ from .config import (
     resolve_package,
     validate_package,
 )
-from .git import auto_commit_paths, run_git
+from .git import run_git
 from .io import read_json, write_json
 from .log import Colors, colored
 from .paths import (
@@ -299,9 +299,8 @@ def cmd_archive(args: argparse.Namespace) -> int:
         print(colored(f"Archived: {dir_name} -> archive/{year_month}/", Colors.GREEN), file=sys.stderr)
 
         # Auto-commit unless --no-commit
-        auto_commit_ok = True
         if not getattr(args, "no_commit", False):
-            auto_commit_ok = _auto_commit_archive(dir_name, repo_root)
+            _auto_commit_archive(dir_name, repo_root)
 
         # Return the archive path
         print(f"{DIR_WORKFLOW}/{DIR_TASKS}/{DIR_ARCHIVE}/{year_month}/{dir_name}")
@@ -309,24 +308,30 @@ def cmd_archive(args: argparse.Namespace) -> int:
         # Run hooks with the archived path
         archived_json = archive_dest / FILE_TASK_JSON
         run_task_hooks("after_archive", archived_json, repo_root)
-        return 0 if auto_commit_ok else 1
+        return 0
 
     return 1
 
 
-def _auto_commit_archive(task_name: str, repo_root: Path) -> bool:
+def _auto_commit_archive(task_name: str, repo_root: Path) -> None:
     """Stage .trellis/tasks/ changes and commit after archive."""
     tasks_rel = f"{DIR_WORKFLOW}/{DIR_TASKS}"
-    status, detail = auto_commit_paths([tasks_rel], repo_root, f"chore(task): archive {task_name}")
-    if status == "clean":
-        print("[OK] No task changes to commit.", file=sys.stderr)
-        return True
-    if status == "committed":
-        print(f"[OK] Auto-committed: chore(task): archive {task_name}", file=sys.stderr)
-        return True
+    run_git(["add", "-A", tasks_rel], cwd=repo_root)
 
-    print(f"[WARN] Auto-commit failed: {detail}", file=sys.stderr)
-    return False
+    # Check if there are staged changes
+    rc, _, _ = run_git(
+        ["diff", "--cached", "--quiet", "--", tasks_rel], cwd=repo_root
+    )
+    if rc == 0:
+        print("[OK] No task changes to commit.", file=sys.stderr)
+        return
+
+    commit_msg = f"chore(task): archive {task_name}"
+    rc, _, err = run_git(["commit", "-m", commit_msg], cwd=repo_root)
+    if rc == 0:
+        print(f"[OK] Auto-committed: {commit_msg}", file=sys.stderr)
+    else:
+        print(f"[WARN] Auto-commit failed: {err.strip()}", file=sys.stderr)
 
 
 # =============================================================================

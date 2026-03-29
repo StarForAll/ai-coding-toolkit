@@ -67,5 +67,11 @@
       }
     ]
   },
-  "enabledPlugins": {}
+  "enabledPlugins": {},
+  "permissions": {
+    "deny": [
+      "WebFetch",
+      "WebSearch"
+    ]
+  }
 }

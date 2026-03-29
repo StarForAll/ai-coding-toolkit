@@ -43,6 +43,5 @@ post_create:
 # If configured, Ralph Loop will run these commands - all must pass to allow completion
 # If not configured or empty, trusts agent's completion markers
 verify:
-  # Configure project-appropriate verification commands here.
-  # Example for this repository's docs/spec library:
-  # - /ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --strict-warnings
+  # - pnpm lint
+  # - pnpm typecheck
