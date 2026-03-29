@@ -1910,3 +1910,45 @@ Record session after the recommit that restored task metadata
 ### Next Steps
 
 - None - task complete
+
+
+## Session 41: 盘点仓库漂移数据，同步更新根 README
+
+**Date**: 2026-03-29
+**Task**: 盘点仓库漂移数据，同步更新根 README
+**Branch**: `main`
+
+### Summary
+
+扫描 agents/commands/skills/scripts/trellis-library/spec 各层实际内容，修正 README.md 与现状的 7 类不一致：工具部署数量、源资产骨架状态、skills 列表、其他目录、架构说明等。
+
+### Main Changes
+
+| 变更项 | 内容 |
+|--------|------|
+| `.trellis/spec/` | 补充 11 个规范层列表 |
+| 源资产层 | 新增 ⚠️ 警示，agents/commands 仅含 README 骨架 |
+| 工具部署层 | 新增 `.codex/`、`.agents/`、`.kiro/`，各工具补充 agents/commands/hooks 数量 |
+| Skills 列表 | 从 1 个扩展为 4 个（collaborating-with-claude、demand-risk-assessment、multi-cli-review、multi-cli-review-action） |
+| 其他目录 | 新增 `reference-data/`（空）、`tmp/`（已 gitignore）、`.github/`、`.ace-tool/`（已 gitignore） |
+| 架构区块 | 标注 agents/commands 源资产层尚未建立 |
+| Trellis Library 文档 | 新增 `trellis-library/README.md` 链接 |
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e21c15c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

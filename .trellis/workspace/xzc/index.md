@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 40
+- **Total Sessions**: 41
 - **Last Active**: 2026-03-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1912 | Active |
+| `journal-1.md` | ~1954 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 41 | 2026-03-29 | 盘点仓库漂移数据，同步更新根 README | `e21c15c` | `main` |
 | 40 | 2026-03-29 | 收缩 .trellis/spec 到当前项目实际作用 | `1f36c6d` | `main` |
 | 39 | 2026-03-29 | Drift Migration: 62 资产同步到 lock | `8ac7e92` | `main` |
 | 38 | 2026-03-29 | Trellis升级兼容机制/tmp验证与修复 | `e03b05e` | `main` |
