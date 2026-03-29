@@ -1877,3 +1877,36 @@ Record session after the recommit that restored task metadata
 ### Next Steps
 
 - None - task complete
+
+
+## Session 40: 收缩 .trellis/spec 到当前项目实际作用
+
+**Date**: 2026-03-29
+**Task**: 收缩 .trellis/spec 到当前项目实际作用
+**Branch**: `main`
+
+### Summary
+
+重定义 .trellis/spec 定位，移除弱相关与冗余 spec/support assets，并同步 library-lock 与支持清单。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1f36c6d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
