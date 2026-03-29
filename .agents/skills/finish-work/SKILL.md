@@ -39,10 +39,10 @@ Before submitting or committing, use this checklist to ensure work completeness.
 ### 2. Code-Spec Sync
 
 **Code-Spec Docs**:
-- [ ] Does `.trellis/spec/backend/` need updates?
-  - New patterns, new modules, new conventions
-- [ ] Does `.trellis/spec/frontend/` need updates?
-  - New components, new hooks, new patterns
+- [ ] Does `.trellis/spec/scripts/` need updates?
+  - New script conventions, workflow contracts, CLI behavior
+- [ ] Does another relevant layer under `.trellis/spec/` need updates?
+  - `agents/`, `commands/`, `docs/`, `library-assets/`, `skills/`
 - [ ] Does `.trellis/spec/guides/` need updates?
   - New cross-layer flows, lessons from bugs
 

@@ -130,11 +130,11 @@ git diff main...HEAD --name-only
 
 ### 2. Categorized Review
 
-**Frontend files** (`apps/web/`):
-- Reference `.trellis/spec/frontend/index.md`
+**Script / workflow files** (`.trellis/scripts/`, hooks, automation):
+- Reference `.trellis/spec/scripts/index.md`
 
-**Backend files** (`packages/api/`):
-- Reference `.trellis/spec/backend/index.md`
+**Asset / documentation files** (`agents/`, `commands/`, `docs/`, `skills/`):
+- Reference the matching layer index under `.trellis/spec/` (for example `.trellis/spec/commands/index.md`)
 
 ### 3. Output Review Report
 
