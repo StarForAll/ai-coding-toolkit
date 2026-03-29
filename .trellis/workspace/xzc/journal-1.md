@@ -1654,3 +1654,51 @@ Record session after the recommit that restored task metadata
 ### Next Steps
 
 - None - task complete
+
+
+## Session 35: Trellis 升级兼容性验证与修复
+
+**Date**: 2026-03-29
+**Task**: Trellis 升级兼容性验证与修复
+**Branch**: `main`
+
+### Summary
+
+验证 Trellis 升级后的关键脚本、hook 与文档，修复 init-context 默认 spec 路径回归并清理过期指引。
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Validation | 运行 task context 校验、Trellis hook 执行、library sync 校验、skills 校验与 trellis-library 单元测试 |
+| Root Cause | 定位 `task.py init-context` 仍硬编码旧的 `.trellis/spec/backend/index.md` / `.trellis/spec/frontend/index.md` |
+| Fix | 将默认 spec 注入改为按磁盘上真实存在的 spec 索引回退，并去重 context 条目 |
+| Docs | 修正 `.claude/`、`.opencode/`、`.iflow/` 中 `create-command` 的过期 spec 路径示例 |
+| Workflow | 修正 `$finish-work` 技能中不再适用于当前仓库的 backend/frontend spec 检查项 |
+
+**Updated Files**:
+- `.trellis/scripts/common/task_context.py`
+- `.claude/commands/trellis/create-command.md`
+- `.opencode/commands/trellis/create-command.md`
+- `.iflow/commands/trellis/create-command.md`
+- `.agents/skills/finish-work/SKILL.md`
+- `.trellis/tasks/archive/2026-03/03-29-trellis-upgrade-compat-check/prd.md`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4e291de` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
