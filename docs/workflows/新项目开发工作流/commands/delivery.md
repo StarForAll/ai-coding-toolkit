@@ -43,6 +43,11 @@ pnpm test && pnpm type-check && pnpm lint
 
 ### Step 4: 外部项目交付控制门禁（如适用）
 
+> **📋 前置依赖**
+>
+> 本项目应已在 `/trellis:feasibility` 阶段确定交付控制轨道，在 `/trellis:plan` 阶段已将移交任务拆分为独立任务。
+> 若 `assessment.md` 中缺少 `delivery_control_track` 或 `delivery_control_handover_trigger` 字段，请先回到 `/trellis:feasibility` 补齐基线。
+
 若项目属于外包、定制开发或新客户项目，进入正式交付前先检查 `assessment.md` / 合同中约定的交付控制轨道：
 
 - **首选轨：托管部署**

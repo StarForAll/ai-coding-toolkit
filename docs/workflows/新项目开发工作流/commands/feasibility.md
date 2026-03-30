@@ -94,6 +94,15 @@ python3 docs/workflows/新项目开发工作流/commands/shell/feasibility-check
   - **备选轨：试运行授权**，仅在双方明确接受授权方案时使用
 - 不允许把“隐藏后门”“未披露的失效逻辑”“不可恢复的锁定机制”当作风险控制手段写入方案。
 
+> **📋 双轨交付控制基线输出**
+>
+> 本步骤确定的交付控制轨道将作为贯穿后续阶段的决策基线：
+> - `delivery_control_track` → `/trellis:design` 阶段选择必选 spec
+> - `delivery_control_track` + `trial_authorization_terms.*` → `/trellis:plan` 阶段拆分双轨任务
+> - `delivery_control_handover_trigger` → `/trellis:delivery` 阶段判断是否允许最终移交
+>
+> 详见工作流总纲 §1.4.1、§4、§7.2.1
+
 ### Step 4: 确认与初始化
 
 ```bash
