@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""可行性评估辅助脚本。
+"""Generate compliance prompts and a structured feasibility assessment template.
 
 用法:
   python3 feasibility-check.py --step compliance    # 合规性审查清单
   python3 feasibility-check.py --step estimate      # 生成评估模板
 """
+from __future__ import annotations
+
 import argparse
-import sys
 from pathlib import Path
 
 
-def step_compliance():
+def step_compliance() -> None:
     print("=== 合规性审查清单 ===")
     print("□ 项目领域是否受法律法规限制？")
     print("□ 是否涉及数据隐私/跨境传输（GDPR、个保法）？")
@@ -22,19 +23,28 @@ def step_compliance():
 
 TEMPLATE = """# 项目可行性评估
 
+## 概览
+- 总体决策：接 / 谈判后接 / 暂停 / 拒绝
+- 是否可做：
+- 是否值得做：
+- 如何做更稳：
+- 是否允许进入 brainstorm：是 / 否
+- 当前结论的前提：
+
 ## 需求摘要
 - 核心目标：
 - 目标用户：
-- 核心功能：
+- 核心功能（≤3）：
 - 技术约束：
 - 时间窗口：
 
-## 工作量评估
-| 模块 | 开发 | 评审 | 测试 | 文档 | 小计 |
-|------|------|------|------|------|------|
+## 红线与关键信号
+- 合规红线：
+- 付款 / 验收 / 范围风险：
+- AI / LLM 特有风险（如适用）：
 
-## 风险评估
-| 类型 | 描述 | 级别 | 应对 |
+## 关键风险 Top 5
+| 风险 | 类型 | 级别 | 应对 |
 |------|------|------|------|
 
 ## 成本估算
@@ -42,14 +52,22 @@ TEMPLATE = """# 项目可行性评估
 - AI 成本：
 - 总成本区间：
 
-## 报价方案
-- 基础版范围：
-- 变更单价规则：
-- 交付 SLO 草案：
+## 必须谈判条件
+- 条件 1：
+- 条件 2：
+
+## 最小补充信息集
+- 缺口 1：
+- 缺口 2：
+
+## 下一步建议
+- 若允许进入 brainstorm：带着哪些边界与假设继续
+- 若不允许：补信息 / 谈判 / 终止
 """
 
 
-def step_estimate(task_dir: Path):
+def step_estimate(task_dir: Path) -> None:
+    task_dir.mkdir(parents=True, exist_ok=True)
     assessment = task_dir / "assessment.md"
     if assessment.exists():
         print("当前 assessment.md 内容：")
@@ -59,17 +77,25 @@ def step_estimate(task_dir: Path):
         print(f"已创建 {assessment} 模板")
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="可行性评估辅助")
     parser.add_argument("--step", default="compliance", choices=["compliance", "estimate"])
     parser.add_argument("--task-dir", type=Path, default=Path("."))
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
     args = parser.parse_args()
 
     if args.step == "compliance":
         step_compliance()
-    elif args.step == "estimate":
+        return 0
+    if args.step == "estimate":
         step_estimate(args.task_dir)
+        return 0
+    return 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

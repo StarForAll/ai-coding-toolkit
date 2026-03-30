@@ -109,7 +109,8 @@
       "Bash(/ops/softwares/python/bin/python3 -c \"from common.git import auto_commit_paths, run_git; print\\('OK'\\)\")",
       "Bash(/ops/softwares/python/bin/python3 -c \"from common.git import auto_commit_paths, run_git; print\\(''OK''\\)\")",
       "Bash(for d:*)",
-      "Bash(do echo:*)"
+      "Bash(do echo:*)",
+      "Bash(/ops/softwares/python/bin/python3 ./.trellis/scripts/get_context.py --mode record)"
     ]
   }
 }

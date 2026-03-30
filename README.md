@@ -62,6 +62,25 @@ commands/<tool>/            ──→    .<tool>/commands/<ns>/<name>.md
 > agent 与 command 资产暂直接维护于各工具部署目录（`.claude/`、`.opencode/`、`.iflow/`、`commands/` 待填充）。
 > 详见 `.trellis/spec/agents/index.md` 和 `.trellis/spec/commands/index.md`。
 
+### 关于自动化工作流的说明
+
+**本项目不使用全自动化 AI 开发工作流。** 参考案例：
+
+- [ralph-claude-code](https://github.com/frankbria/ralph-claude-code) — 夜间自动化工作流
+- [loki-mode](https://github.com/asklokesh/loki-mode) — 全自动化工作流
+
+**本项目不采用此类方案的原因：**
+
+1. **自动化带来的不确定性**
+   - 执行权限不足时会卡顿
+   - 影响范围过大时可能导致误删其他文件
+
+2. **当前模型性能限制**
+   - 全自动化会持续积累技术负债
+   - 必须有人工干预才能确保质量
+
+如果能够解决以上问题，可以大幅降低中低级开发人员的工作复杂度。
+
 ## Skills（用于 `npx skills add`）
 
 本仓库的 `skills/` 保持符合 Skills CLI 的可发现结构，可直接从 git 仓库安装。

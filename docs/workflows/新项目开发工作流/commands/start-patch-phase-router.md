@@ -84,6 +84,12 @@ get_context.py 输出
     ├── 无当前任务 + 用户描述新项目
     │   └── 路由 → /trellis:feasibility（可行性评估）
     │
+    ├── 新项目 / 新客户需求 + 已有任务，但缺少有效 `assessment.md`
+    │   └── 路由 → /trellis:feasibility（先补接单/风险评估，不直接进入 brainstorm）
+    │
+    ├── 新项目 / 新客户需求 + `assessment.md` 存在，但明确 `是否允许进入 brainstorm = 否`
+    │   └── 路由 → /trellis:feasibility（补信息 / 谈判 / 重新评估）
+    │
     ├── 有任务 + 无 PRD 或 PRD 未冻结
     │   └── 路由 → /trellis:brainstorm（需求发现）
     │
@@ -147,6 +153,12 @@ get_context.py 输出
 检测到触发词后，**直接执行对应命令的完整流程**。
 
 若命中“首次嵌入后的初始化门禁”，则不得跳过 PRD 规范基线补充动作。
+
+若命中“新项目 feasibility 门禁”：
+
+- 缺少 `assessment.md` 时，不得直接进入 `/trellis:brainstorm`
+- `assessment.md` 明确写有 `是否允许进入 brainstorm = 否` 时，不得直接进入 `/trellis:brainstorm`
+- 只有存在有效评估记录且允许继续时，才进入需求发现
 
 若进入实施阶段，且 `task_plan.md` 已包含“任务执行矩阵”：
 
