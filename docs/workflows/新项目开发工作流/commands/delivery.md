@@ -118,7 +118,7 @@ pnpm test && pnpm type-check && pnpm lint
 
 - 已完成内容已由人工测试并提交
 - 已完成任务先归档，未完成任务不要误归档
-- `task.py archive` 与 `add_session.py` 一旦修改 `.trellis/tasks` 或 `.trellis/workspace`，必须真实自动提交，不接受“脚本提示成功但 git 仍脏”的状态
+- `task.py archive` 与 `add_session.py` 一旦修改 `.trellis/tasks` 或 `.trellis/workspace`，必须真实自动提交，不接受"脚本提示成功但 git 仍脏"的状态
 
 ```bash
 git status --short .trellis/tasks
@@ -129,6 +129,8 @@ git status --short .trellis/workspace .trellis/tasks
 
 - 输出为空：可以视为归档/记录闭环完成
 - 仍有 `.trellis/tasks` 或 `.trellis/workspace` 变更：`/trellis:record-session` 不算完成，先处理自动提交失败原因
+
+> **详细流程**：参见 [元数据自动提交辅助流程](./metadata-auto-commit.md)
 
 ---
 
