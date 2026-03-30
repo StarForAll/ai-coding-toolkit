@@ -144,3 +144,53 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 46: 双轨交付控制 spec 与 workflow 对齐
+
+**Date**: 2026-03-30
+**Task**: 双轨交付控制 spec 与 workflow 对齐
+**Branch**: `main`
+
+### Summary
+
+重构 trellis-library 双轨交付控制资产，并将新项目开发工作流收敛为可验证的字段、资产、计划与交付门禁闭环。
+
+### Main Changes
+
+| 项目 | 内容 |
+|------|------|
+| trellis-library | 将 `delivery-control` 收敛为总控 concern，将 `authorization-management` 收敛为 `trial_authorization` 条件 concern，并更新 `transfer-checklist` 与 `manifest.yaml` |
+| workflow docs | 在 `docs/workflows/新项目开发工作流/` 中补齐双轨交付控制的总纲、完整流程演练、字段映射、资产映射、任务门禁、交付事件门禁 |
+| shell template | 更新 `commands/shell/feasibility-check.py`，使生成的 `assessment.md` 模板与新的双轨字段契约一致 |
+| reusable docs | 保留 `docs/workflows/完整流程演练模板.md` 与 `docs/workflows/自定义工作流制作规范.md` 中的 walkthrough 规范 |
+
+**Archived Tasks**:
+- `03-30-brainstorm-dual-track-spec-review`
+- `03-30-dual-track-e2e-simulation`
+
+**Verification**:
+- `/ops/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings`
+- `/ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --strict-warnings`
+- `/ops/softwares/python/bin/python3 -m py_compile docs/workflows/新项目开发工作流/commands/shell/feasibility-check.py`
+- `git diff --check`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2e5a3d1` | (see git log) |
+| `76d0c58` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
