@@ -194,3 +194,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 47: trellis-library consistency normalization
+
+**Date**: 2026-03-30
+**Task**: trellis-library consistency normalization
+**Branch**: `main`
+
+### Summary
+
+Normalized registered trellis-library assets to English, synchronized linked templates, added default-language consistency validation, and updated related tests/docs.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7cebf8a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
