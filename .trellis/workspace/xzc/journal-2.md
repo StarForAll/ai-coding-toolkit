@@ -274,3 +274,94 @@ Normalized registered trellis-library assets to English, synchronized linked tem
 ### Next Steps
 
 - None - task complete
+
+
+## Session 49: 双轨交付控制验证增强 (方案B)
+
+**Date**: 2026-03-30
+**Task**: 双轨交付控制验证增强 (方案B)
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+## 工作概述
+
+完善"新项目开发工作流"中的双轨交付控制步骤，执行方案B的中等增强。
+
+## 具体更改
+
+### 1. 增强 feasibility-check.py
+- 新增 `--step validate` 子命令
+- 验证 `assessment.md` 中双轨交付控制字段的完整性：
+  - `delivery_control_track` (hosted_deployment/trial_authorization/undecided)
+  - `delivery_control_handover_trigger`
+  - `delivery_control_retained_scope`
+  - `trial_authorization_terms.*` (5个字段，试运行授权轨道)
+  - `是否允许进入 brainstorm`
+  - `总体决策`
+
+### 2. 新增 delivery-control-validate.py
+完整的双轨交付控制验证脚本：
+- `--phase feasibility`: 验证 assessment.md
+- `--phase plan`: 验证 task_plan.md 交付控制任务拆分
+- `--phase delivery`: 验证 delivery/ 目录交付文档
+- `--all`: 验证所有阶段
+
+### 3. 更新命令映射.md
+- 补充 `§4 plan` 阶段的"必须冻结/检查的字段"列
+- 补充 `§6+§7 delivery` 阶段的字段和关键动作
+- 新增"双轨验证命令"小节
+
+### 4. 更新 install-workflow.py
+- 将 `delivery-control-validate.py` 添加到部署列表
+
+## 验证结果
+
+所有脚本通过语法检查和功能测试：
+- ✅ feasibility-check.py --step validate
+- ✅ delivery-control-validate.py --phase {feasibility,plan,delivery}
+- ✅ delivery-control-validate.py --all
+
+## 涉及的文件
+
+| 文件 | 变更 |
+|------|------|
+| `commands/shell/feasibility-check.py` | 增强 |
+| `commands/shell/delivery-control-validate.py` | 新增 |
+| `commands/install-workflow.py` | 修改 |
+| `命令映射.md` | 更新 |
+
+## 验证命令示例
+
+```bash
+# 验证 assessment.md 双轨字段完整性
+python3 docs/workflows/新项目开发工作流/commands/shell/feasibility-check.py \
+  --step validate --task-dir <task-dir>
+
+# 验证所有阶段的双轨交付控制
+python3 docs/workflows/新项目开发工作流/commands/shell/delivery-control-validate.py \
+  --all --task-dir <task-dir>
+```
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b37feec` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

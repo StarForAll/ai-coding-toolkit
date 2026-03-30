@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 48
+- **Total Sessions**: 49
 - **Last Active**: 2026-03-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~276 | Active |
+| `journal-2.md` | ~367 | Active |
 | `journal-1.md` | ~1987 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 49 | 2026-03-30 | 双轨交付控制验证增强 (方案B) | `b37feec` | `main` |
 | 48 | 2026-03-30 | trellis-library术语与格式一致性修正 | `fb639de` | `main` |
 | 47 | 2026-03-30 | trellis-library consistency normalization | `7cebf8a` | `main` |
 | 46 | 2026-03-30 | 双轨交付控制 spec 与 workflow 对齐 | `2e5a3d1`, `76d0c58` | `main` |
