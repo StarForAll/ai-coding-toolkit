@@ -7,8 +7,8 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-1.md`
-- **Total Sessions**: 42
+- **Active File**: `journal-2.md`
+- **Total Sessions**: 43
 - **Last Active**: 2026-03-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1987 | Active |
+| `journal-2.md` | ~40 | Active |
+| `journal-1.md` | ~1987 | Archived |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 43 | 2026-03-30 | 工作流集成 demand-risk-assessment 风险分析步骤 | `9c9075b` | `main` |
 | 42 | 2026-03-30 | 新项目工作流补充 feasibility 前置门禁 | `26de251` | `main` |
 | 41 | 2026-03-29 | 盘点仓库漂移数据，同步更新根 README | `e21c15c` | `main` |
 | 40 | 2026-03-29 | 收缩 .trellis/spec 到当前项目实际作用 | `1f36c6d` | `main` |
