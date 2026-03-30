@@ -563,3 +563,65 @@ python3 docs/workflows/新项目开发工作流/commands/shell/delivery-control-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 55: 需求冻结后变更分流与对客话术补全
+
+**Date**: 2026-03-30
+**Task**: 需求冻结后变更分流与对客话术补全
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Workflow Routing | Added frozen-after-change routing rule: formal changes go to `§2.5`, clarifications stay in current phase |
+| Command Docs | Updated design/plan/test-first/self-review/check/delivery to align frozen-change handling |
+| Walkthrough | Expanded dual-track walkthrough with lightweight change-request and clarification examples |
+| Client Communication | Added customer-facing freeze/change wording and practical response templates |
+
+**Updated Files**:
+- `docs/workflows/新项目开发工作流/工作流总纲.md`
+- `docs/workflows/新项目开发工作流/命令映射.md`
+- `docs/workflows/新项目开发工作流/完整流程演练.md`
+- `docs/workflows/新项目开发工作流/commands/start-patch-phase-router.md`
+- `docs/workflows/新项目开发工作流/commands/design.md`
+- `docs/workflows/新项目开发工作流/commands/plan.md`
+- `docs/workflows/新项目开发工作流/commands/test-first.md`
+- `docs/workflows/新项目开发工作流/commands/self-review.md`
+- `docs/workflows/新项目开发工作流/commands/check.md`
+- `docs/workflows/新项目开发工作流/commands/delivery.md`
+- `.trellis/tasks/archive/2026-03/03-30-dual-track-e2e-simulation/prd.md`
+- `.trellis/tasks/archive/2026-03/03-30-dual-track-e2e-simulation/task_plan.md`
+- `.trellis/tasks/archive/2026-03/03-30-dual-track-e2e-simulation/delivery/acceptance.md`
+- `.trellis/tasks/archive/2026-03/03-30-dual-track-e2e-simulation/run-report.md`
+- `.trellis/tasks/archive/2026-03/03-30-dual-track-e2e-simulation/change-request-example.md`
+- `.trellis/tasks/archive/2026-03/03-30-dual-track-e2e-simulation/clarification-example.md`
+
+**Verification**:
+- `/ops/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings` passed
+- `/ops/softwares/python/bin/python3 -m unittest trellis-library/tests/test_cli.py` passed
+- `git diff --check` passed
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5e6dc38` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
