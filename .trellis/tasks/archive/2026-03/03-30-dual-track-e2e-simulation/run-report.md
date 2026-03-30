@@ -51,6 +51,7 @@
   - 源码移交
   - 控制权移交
   - 密钥配置移交
+  - 冻结后正式变更先评估再并入的门禁说明
 
 ### 5. Delivery
 
@@ -61,6 +62,20 @@
   - `deliverables.md`
   - `transfer-checklist.md`
   - `retrospective.md`
+
+### 6. Change Request Example
+
+- 输出：`change-request-example.md`
+- 作用：
+  - 演示设计阶段客户临时提改动时，如何用轻量变更单记录
+  - 演示对客说明如何与“冻结后变更流程”保持一致
+
+### 7. Clarification Example
+
+- 输出：`clarification-example.md`
+- 作用：
+  - 演示客户提出“纯澄清”时，如何留在当前阶段处理
+  - 演示纯澄清不触发正式变更流程时，最小记录应该怎么写
 
 ## 验证命令
 
@@ -74,3 +89,5 @@
 - 新的 `delivery_control_track` / `trial_authorization_terms` 契约已能从 feasibility 阶段贯穿到 delivery 阶段
 - `authorization-management` 可作为条件资产被实际导入，而不是无条件强绑
 - `transfer-checklist` 已可表达“交付事件”而不只是假设一次性最终移交
+- 冻结后的小型正式变更可以通过轻量变更单快速落地，而不破坏主链交付边界
+- 纯澄清和正式变更现在都有对应轻量样例，便于在实际沟通中快速分流

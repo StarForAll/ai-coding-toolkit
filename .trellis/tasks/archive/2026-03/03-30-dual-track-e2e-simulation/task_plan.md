@@ -40,12 +40,15 @@
 - 条件导入资产：
   - `spec.universal-domains.project-governance.authorization-management`
   - `spec.universal-domains.security.secrets-and-config`
+- 冻结后新增 / 修改 / 删除需求：先进入 `§2.5 需求变更管理`，获批后再回到受影响的最早阶段更新计划
+- 冻结后纯澄清：若不改变范围、接口契约、验收标准、成本、工期，可留在当前阶段直接处理
 
 ## 依赖关系
 
 - 前置任务：`assessment.md` 明确试运行授权轨与最终移交门禁
 - 阻塞任务：尾款到账前，T3/T4/T5/T6 不得实际移交
 - 并行任务：T1 与 T2 可并行；T4/T5/T6 在支付触发后串行推进
+- 变更门禁：冻结后若出现新增 / 修改 / 删除需求，先暂停当前计划执行，待变更评估与审批完成后再恢复主链
 
 ## 执行安排
 
