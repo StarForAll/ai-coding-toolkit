@@ -6,10 +6,12 @@
   python3 feasibility-check.py --step estimate      # 生成评估模板
   python3 feasibility-check.py --step risk-analysis # 风险分析（demand-risk-assessment skill 集成）
   python3 feasibility-check.py --step risk-analysis --requirement-file <path> # 从文件读取需求
+  python3 feasibility-check.py --step validate --task-dir <path>  # 验证 assessment.md 双轨字段完整性
 """
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -135,6 +137,129 @@ def step_estimate(task_dir: Path) -> None:
     else:
         assessment.write_text(TEMPLATE, encoding="utf-8")
         print(f"已创建 {assessment} 模板")
+
+
+def step_validate(task_dir: Path) -> int:
+    """验证 assessment.md 中双轨交付控制字段的完整性"""
+    print("=== 双轨交付控制字段验证 ===")
+    
+    assessment = task_dir / "assessment.md"
+    if not assessment.exists():
+        print(f"❌ {assessment} 不存在")
+        return 1
+    
+    content = assessment.read_text(encoding="utf-8")
+    errors = []
+    warnings = []
+    
+    # 检查是否为外部项目（通过是否存在双轨字段判断）
+    has_delivery_control = "delivery_control_track" in content
+    
+    if not has_delivery_control:
+        print("ℹ️ 未检测到双轨交付控制字段，假设为内部项目，跳过验证")
+        return 0
+    
+    print("检测到外部项目，开始验证双轨字段...")
+    
+    # 1. 检查 delivery_control_track
+    track_match = re.search(r'`delivery_control_track`:\s*`([^`]+)`', content)
+    if not track_match:
+        errors.append("缺少 `delivery_control_track` 字段")
+    else:
+        track_value = track_match.group(1)
+        valid_tracks = ["hosted_deployment", "trial_authorization", "undecided"]
+        if track_value not in valid_tracks:
+            errors.append(f"`delivery_control_track` 值无效: {track_value}，应为: {', '.join(valid_tracks)}")
+        else:
+            print(f"✅ `delivery_control_track`: {track_value}")
+    
+    # 2. 检查 delivery_control_handover_trigger
+    trigger_match = re.search(r'`delivery_control_handover_trigger`:\s*(.+)', content)
+    if not trigger_match:
+        errors.append("缺少 `delivery_control_handover_trigger` 字段")
+    else:
+        trigger_value = trigger_match.group(1).strip()
+        if trigger_value in ["...", "", "例如"]:
+            errors.append("`delivery_control_handover_trigger` 未填写具体值")
+        else:
+            print(f"✅ `delivery_control_handover_trigger`: {trigger_value}")
+    
+    # 3. 检查 delivery_control_retained_scope
+    scope_match = re.search(r'`delivery_control_retained_scope`:\s*(.+)', content)
+    if not scope_match:
+        errors.append("缺少 `delivery_control_retained_scope` 字段")
+    else:
+        scope_value = scope_match.group(1).strip()
+        if scope_value in ["...", ""]:
+            errors.append("`delivery_control_retained_scope` 未填写具体值（若无保留范围，应写 `none`）")
+        else:
+            print(f"✅ `delivery_control_retained_scope`: {scope_value}")
+    
+    # 4. 如果是 trial_authorization，检查 trial_authorization_terms
+    if track_match and track_match.group(1) == "trial_authorization":
+        print("\n检测到试运行授权轨道，检查授权条款...")
+        required_terms = [
+            "trial_authorization_terms.validity",
+            "trial_authorization_terms.clock_source_or_usage_basis",
+            "trial_authorization_terms.expiration_behavior",
+            "trial_authorization_terms.renewal_policy",
+            "trial_authorization_terms.permanent_authorization_trigger",
+        ]
+        
+        for term in required_terms:
+            term_match = re.search(rf'`{re.escape(term)}`:\s*(.+)', content)
+            if not term_match:
+                errors.append(f"缺少 `{term}` 字段")
+            else:
+                term_value = term_match.group(1).strip()
+                if term_value in ["...", "", "."]:
+                    errors.append(f"`{term}` 未填写具体值")
+                else:
+                    print(f"✅ `{term}`: {term_value}")
+    
+    # 5. 检查是否允许进入 brainstorm
+    brainstorm_match = re.search(r'是否允许进入 brainstorm：\s*(\S+)', content)
+    if not brainstorm_match:
+        warnings.append("未明确标注 `是否允许进入 brainstorm`")
+    else:
+        brainstorm_value = brainstorm_match.group(1)
+        if brainstorm_value not in ["是", "否"]:
+            warnings.append(f"`是否允许进入 brainstorm` 值异常: {brainstorm_value}")
+        else:
+            print(f"\n✅ `是否允许进入 brainstorm`: {brainstorm_value}")
+    
+    # 6. 检查总体决策
+    decision_match = re.search(r'总体决策：\s*(\S+)', content)
+    if not decision_match:
+        warnings.append("未明确标注 `总体决策`")
+    else:
+        decision_value = decision_match.group(1)
+        valid_decisions = ["接", "谈判后接", "暂停", "拒绝"]
+        if decision_value not in valid_decisions:
+            warnings.append(f"`总体决策` 值异常: {decision_value}")
+        else:
+            print(f"✅ `总体决策`: {decision_value}")
+    
+    # 输出结果
+    print("\n" + "=" * 40)
+    if warnings:
+        print(f"⚠️  警告 ({len(warnings)}):")
+        for w in warnings:
+            print(f"  - {w}")
+    
+    if errors:
+        print(f"❌ 错误 ({len(errors)}):")
+        for e in errors:
+            print(f"  - {e}")
+        print("\n❌ 双轨交付控制字段验证未通过，请补充后重试")
+        return 1
+    
+    if not warnings:
+        print("✅ 双轨交付控制字段验证通过")
+    else:
+        print("✅ 双轨交付控制字段基本通过，但有警告")
+    
+    return 0
 
 
 RISK_ANALYSIS_PROMPT = """## 风险分析执行指引
@@ -329,12 +454,13 @@ def step_risk_analysis(task_dir: Path, requirement_file: Path = None) -> None:
     print("1. 请使用 AI 加载 demand-risk-assessment skill")
     print(f"2. 参考 {guide_file} 执行风险分析")
     print(f"3. 将分析结果写入 {assessment}")
-    print("4. 根据分析结论决定是否进入 /trellis:brainstorm")
+    print("4. 运行验证: python3 feasibility-check.py --step validate --task-dir <path>")
+    print("5. 根据分析结论决定是否进入 /trellis:brainstorm")
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="可行性评估辅助")
-    parser.add_argument("--step", default="compliance", choices=["compliance", "estimate", "risk-analysis"])
+    parser.add_argument("--step", default="compliance", choices=["compliance", "estimate", "risk-analysis", "validate"])
     parser.add_argument("--task-dir", type=Path, default=Path("."))
     parser.add_argument("--requirement-file", type=Path, help="需求文本文件路径")
     return parser
@@ -353,6 +479,8 @@ def main() -> int:
     if args.step == "risk-analysis":
         step_risk_analysis(args.task_dir, args.requirement_file)
         return 0
+    if args.step == "validate":
+        return step_validate(args.task_dir)
     return 1
 
 
