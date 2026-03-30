@@ -4,10 +4,13 @@
 用法:
   python3 feasibility-check.py --step compliance    # 合规性审查清单
   python3 feasibility-check.py --step estimate      # 生成评估模板
+  python3 feasibility-check.py --step risk-analysis # 风险分析（demand-risk-assessment skill 集成）
+  python3 feasibility-check.py --step risk-analysis --requirement-file <path> # 从文件读取需求
 """
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 
@@ -77,10 +80,175 @@ def step_estimate(task_dir: Path) -> None:
         print(f"已创建 {assessment} 模板")
 
 
+RISK_ANALYSIS_PROMPT = """## 风险分析执行指引
+
+请使用 `demand-risk-assessment` skill 执行以下风险评估流程：
+
+### 执行步骤
+
+1. **阶段0：结构化抽取**
+   - 从需求文本中抽取关键字段（范围边界、交付物清单、验收口径、付款结构、工期/里程碑、关键依赖、数据合规要点、决策/验收负责人）
+   - 为每个字段标注状态：明确/暗示(假设)/缺失/冲突
+   - 输出信息充分性评分：X/8
+
+2. **阶段0.25：踩坑信号扫描**
+   - 检查是否存在常见踩坑信号（如"合同后补"、"结果付款+验收不清"、"应急插队"等）
+   - 输出命中的踩坑信号及证据锚点
+
+3. **阶段0.5：冲突检测**
+   - 检测关键冲突（如范围与工期矛盾、预算与复杂度不匹配等）
+   - 输出冲突项及影响
+
+4. **阶段1：红线检查**
+   - 检查是否存在红线问题（如违法用途、严重合规风险等）
+   - 输出红线检查结果：✅ 通过 / ❌ 不通过 / ⚠️ 信息不足需补充
+
+5. **阶段2：结构化评分（仅当红线未命中时）**
+   - 按维度评分：合规风险(30%)、可交付性(20%)、工期可行性(20%)、价格与收益匹配(20%)、协作与沟通风险(10%)
+   - 输出总分及区间
+
+6. **阶段3-5：Pre-mortem → 风险登记表 → 决策/谈判条件**
+   - 输出最可能的失败链路
+   - 输出风险登记表
+   - 输出决策结论及谈判条件
+
+### 输出格式
+
+请将分析结果写入 `assessment.md`，格式如下：
+
+```markdown
+# 项目可行性评估
+
+## 概览
+- 总体决策：接 / 谈判后接 / 暂停 / 拒绝
+- 是否可做：
+- 是否值得做：
+- 如何做更稳：
+- 是否允许进入 brainstorm：是 / 否
+- 当前结论的前提：
+- 场景标签：
+- 总体置信度：高/中/低
+- 信息充分性：X/8
+- 承诺门：G0/G1/G2/G3
+
+## 关键字段快照
+| 关键字段 | 状态(明确/暗示/缺失/冲突) | 证据锚点 | 关键假设/缺口备注 |
+|----------|---------------------------|----------|------------------|
+| 范围边界 | ... | ... | ... |
+| 交付物清单 | ... | ... | ... |
+| 验收口径 | ... | ... | ... |
+| 付款结构 | ... | ... | ... |
+| 工期/里程碑 | ... | ... | ... |
+| 关键依赖 | ... | ... | ... |
+| 数据合规要点 | ... | ... | ... |
+| 决策/验收负责人 | ... | ... | ... |
+
+## 红线检查
+✅ 通过 / ❌ 不通过 / ⚠️ 信息不足需补充
+- [检查项]: 通过/不通过/不足 - 证据锚点或缺口
+
+## 踩坑信号扫描
+- 命中: [话术/信号] - 证据锚点 - 影响
+
+## 冲突检测
+- 命中项: ...（证据锚点）
+- 影响: ...
+
+## 评分总览（如适用）
+总分(base): XX/100 | 区间(best~worst): AA~BB/100
+
+| 维度(权重) | 维度得分(0-5) | 贡献分(/100) | 置信度 | 证据/缺口/冲突 |
+|------------|---------------|--------------|--------|----------------|
+| 合规风险(30) | x | yy.y | ... | ... |
+| 可交付性(20) | x | yy.y | ... | ... |
+| 工期可行性(20) | x | yy.y | ... | ... |
+| 价格与收益匹配(20) | x | yy.y | ... | ... |
+| 协作与沟通风险(10) | x | yy.y | ... | ... |
+
+## Pre-mortem：最可能的失败链路
+1. ...
+2. ...
+3. ...
+
+## 风险登记表
+| 风险 | 影响类型 | 概率(1-5) | 影响(1-5) | 优先级(P*I) | 缓解动作 | Kill Criteria |
+|------|----------|-----------|-----------|--------------|----------|--------------|
+| ... | ... | ... | ... | ... | ... | ... |
+
+## 必须谈判条件
+- [ ] 条件 1（映射：失败链路/风险项）
+- [ ] 条件 2
+
+## 最小补充信息集
+1. ...（关联维度/为什么会改结论）
+
+## 下一步建议
+- 若允许进入 brainstorm：带着哪些边界与假设继续
+- 若不允许：补信息 / 谈判 / 终止
+```
+
+### 约束
+- `是否允许进入 brainstorm = 否` 时，不应直接进入 `/trellis:brainstorm`
+- `总体决策 = 暂停` 时，下一步默认是"补信息后重跑 feasibility"
+- `总体决策 = 拒绝` 时，下一步默认是"终止项目并保留 assessment 记录"
+"""
+
+
+def step_risk_analysis(task_dir: Path, requirement_file: Path = None) -> None:
+    """生成风险分析提示词并引导 AI 执行 demand-risk-assessment skill"""
+    task_dir.mkdir(parents=True, exist_ok=True)
+    
+    # 读取需求文本
+    requirement_text = ""
+    if requirement_file and requirement_file.exists():
+        requirement_text = requirement_file.read_text(encoding="utf-8")
+        print(f"已从 {requirement_file} 读取需求文本")
+    else:
+        print("请输入需求文本（按 Ctrl+D 结束输入）：")
+        try:
+            requirement_text = sys.stdin.read()
+        except KeyboardInterrupt:
+            print("\n已取消输入")
+            return
+    
+    if not requirement_text.strip():
+        print("错误：需求文本为空，无法进行风险分析")
+        return
+    
+    # 生成风险分析指引
+    risk_analysis_guide = f"""# 风险分析指引
+
+## 需求文本
+
+{requirement_text}
+
+{RISK_ANALYSIS_PROMPT}
+"""
+    
+    # 写入风险分析指引文件
+    guide_file = task_dir / "risk-analysis-guide.md"
+    guide_file.write_text(risk_analysis_guide, encoding="utf-8")
+    print(f"已生成风险分析指引：{guide_file}")
+    
+    # 检查是否存在 assessment.md
+    assessment = task_dir / "assessment.md"
+    if not assessment.exists():
+        assessment.write_text(TEMPLATE, encoding="utf-8")
+        print(f"已创建 {assessment} 模板")
+    
+    print()
+    print("=== 下一步操作 ===")
+    print("1. 请使用 AI 加载 demand-risk-assessment skill")
+    print(f"2. 参考 {guide_file} 执行风险分析")
+    print(f"3. 将分析结果写入 {assessment}")
+    print("4. 根据分析结论决定是否进入 /trellis:brainstorm")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="可行性评估辅助")
-    parser.add_argument("--step", default="compliance", choices=["compliance", "estimate"])
+    parser.add_argument("--step", default="compliance", choices=["compliance", "estimate", "risk-analysis"])
     parser.add_argument("--task-dir", type=Path, default=Path("."))
+    parser.add_argument("--requirement-file", type=Path, help="需求文本文件路径")
     return parser
 
 
@@ -93,6 +261,9 @@ def main() -> int:
         return 0
     if args.step == "estimate":
         step_estimate(args.task_dir)
+        return 0
+    if args.step == "risk-analysis":
+        step_risk_analysis(args.task_dir, args.requirement_file)
         return 0
     return 1
 
