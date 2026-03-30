@@ -398,3 +398,50 @@ python3 docs/workflows/新项目开发工作流/commands/shell/delivery-control-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 51: 补充元数据自动提交辅助流程文档
+
+**Date**: 2026-03-30
+**Task**: 补充元数据自动提交辅助流程文档
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 文档 | 说明 |
+|------|------|
+| metadata-auto-commit.md | 新增独立文档（195行），包含7个章节：目的与适用范围、核心原则、自动提交流程、校验清单、失败处理、集成点、相关文件 |
+
+**更新的文件**：
+- `工作流总纲.md` §7.4 —— 添加详细流程引用
+- `delivery.md` Step 10 —— 添加详细流程引用
+- `命令映射.md` —— 补充约束添加元数据提交说明
+
+**核心内容**：
+- 解决脚本输出"成功"不等于元数据已真实提交的问题
+- 明确 git 状态是唯一可信来源
+- 提供完整的校验清单和失败处理流程
+- 建立与其他文档的交叉引用
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `231ffde` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
