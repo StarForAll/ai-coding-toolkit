@@ -523,3 +523,43 @@ python3 docs/workflows/新项目开发工作流/commands/shell/delivery-control-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 54: 完善新项目开发工作流的收尾元数据闭环
+
+**Date**: 2026-03-30
+**Task**: 完善新项目开发工作流的收尾元数据闭环
+**Branch**: `main`
+
+### Summary
+
+将元数据自动提交辅助流程收敛为 record-session 最终收尾子流程，新增单一 helper，更新安装链与测试。
+
+### Main Changes
+
+- 重构 `docs/workflows/新项目开发工作流/` 下的收尾规则：`archive` 保持显式步骤，`record-session` 仅用于当前任务完成后的最终收尾记录。
+- 更新 `delivery.md`、`工作流总纲.md`、`命令映射.md`，移除独立 metadata-auto-commit 流程定位。
+- 新增 `commands/shell/record-session-helper.py` 与 `commands/record-session-patch-metadata-closure.md`。
+- 收敛 `metadata-autocommit-guard.py`，为 `record-session` 增加 `.trellis/tasks` 必须 clean` 的前置检查。
+- 更新 `install-workflow.py`、`upgrade-compat.py`、`uninstall-workflow.py`，改为部署 helper 并增强目标项目 `record-session.md`。
+- 删除旧的 `metadata-archive-wrapper.py` 和 `metadata-record-session-wrapper.py`。
+- 补充并通过相关 installer / guard 单元测试与 Python 语法校验。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e73f3f0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
