@@ -187,3 +187,7 @@ Configure in `tsconfig.json`:
 - Mixing feature code with shared utilities
 - Importing internal module files directly (use barrel exports)
 - Creating "utils" folders that become dumping grounds
+
+---
+
+**Language**: English

@@ -458,4 +458,4 @@ function validateTimestamp(value: unknown): number {
 
 ---
 
-**Language**: All documentation should be written in **English**.
+**Language**: English

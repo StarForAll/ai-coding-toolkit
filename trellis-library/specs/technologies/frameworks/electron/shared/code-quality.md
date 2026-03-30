@@ -230,3 +230,7 @@ it('should create a project', async () => {
 | Semantic naming         | Readability         |
 | Structured errors       | Consistent handling |
 | Never swallow errors    | Debuggability       |
+
+---
+
+**Language**: English

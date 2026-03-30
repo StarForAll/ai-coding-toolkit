@@ -253,3 +253,7 @@ if (type === "tool-output-available") {
 | Use useRef for toolName mapping | Avoid React state timing issues |
 | onData for real-time UI | useEffect for history restore |
 | Show thought process | Better UX for tool-heavy flows |
+
+---
+
+**Language**: English

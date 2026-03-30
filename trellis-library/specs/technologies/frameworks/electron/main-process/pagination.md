@@ -245,3 +245,7 @@ export function listAdminItems(input: ListAdminItemsInput): ListAdminItemsOutput
 | Fetch `limit + 1`               | Efficient hasMore check       |
 | Encode cursor as base64         | URL-safe, opaque              |
 | Reserve offset for admin        | Only when page jumping needed |
+
+---
+
+**Language**: English

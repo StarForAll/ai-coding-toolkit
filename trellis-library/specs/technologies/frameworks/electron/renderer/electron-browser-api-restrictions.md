@@ -386,4 +386,4 @@ const title = prompt('Enter name:');
 
 ---
 
-**Language**: All documentation must be written in **English**.
+**Language**: English

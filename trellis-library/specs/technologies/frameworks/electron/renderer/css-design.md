@@ -390,4 +390,4 @@ h4 {
 
 ---
 
-**Language**: All documentation must be written in **English**.
+**Language**: English

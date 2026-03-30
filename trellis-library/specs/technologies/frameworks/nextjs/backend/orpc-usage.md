@@ -813,3 +813,7 @@ describe("createItem", () => {
 | `@your-app/logs` | Structured logger package | Your monorepo's logs package path |
 | `@your-app/database` | Database package barrel export | Your monorepo's database package path |
 | `@your-app/database/drizzle/schema` | Drizzle schema table exports | Your monorepo's schema path |
+
+---
+
+**Language**: English

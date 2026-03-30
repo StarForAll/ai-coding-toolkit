@@ -286,3 +286,7 @@ After Change:
 ---
 
 **Core Principle**: Semantic changes are high-risk because they're invisible. The code looks the same, but means something different. Explicit is better than implicit.
+
+---
+
+**Language**: English

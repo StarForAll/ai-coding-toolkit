@@ -150,3 +150,7 @@ Do NOT create a new domain for:
 
 - Single utility functions (put in existing domain's `lib/`)
 - Cross-cutting concerns (put in `services/` root, e.g., `logger.ts`)
+
+---
+
+**Language**: English

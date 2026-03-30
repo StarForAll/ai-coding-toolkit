@@ -106,3 +106,7 @@ These guidelines can be used as:
 2. **Reference Documentation** - Consult specific guides when implementing features
 3. **Code Review Checklist** - Verify implementations against established patterns
 4. **Onboarding Material** - Help new developers understand project conventions
+
+---
+
+**Language**: English

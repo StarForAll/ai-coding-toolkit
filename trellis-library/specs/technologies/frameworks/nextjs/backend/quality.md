@@ -86,3 +86,7 @@ if (!resource) {
 |-------------|---------|--------------|
 | `@your-app/utils` | Shared utilities package | Your monorepo's utils package path |
 | `@your-app/logs` | Structured logger package | Your monorepo's logs package path |
+
+---
+
+**Language**: English

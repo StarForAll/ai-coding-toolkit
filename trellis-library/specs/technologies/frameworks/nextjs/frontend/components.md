@@ -452,3 +452,7 @@ export function Modal({ open, onClose, children }: ModalProps) {
 - Inline styles instead of Tailwind classes
 - Missing accessibility attributes
 - Components with too many responsibilities
+
+---
+
+**Language**: English

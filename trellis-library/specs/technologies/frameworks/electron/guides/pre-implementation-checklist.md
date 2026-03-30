@@ -185,3 +185,7 @@ if (size > CONFIG.MAX_SIZE) {
 ---
 
 **Core Principle**: 5 minutes of checklist thinking saves 50 minutes of refactoring.
+
+---
+
+**Language**: English

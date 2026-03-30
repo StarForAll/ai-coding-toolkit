@@ -379,3 +379,7 @@ module.exports = {
 5. **Mobile First**: Build up from smallest screens
 6. **Consistent Z-Index**: Use a defined scale
 7. **Respect Accessibility**: Honor motion preferences
+
+---
+
+**Language**: English

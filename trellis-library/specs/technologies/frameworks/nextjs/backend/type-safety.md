@@ -321,3 +321,7 @@ type UpdateOrderInput = Partial<Omit<CreateOrderInput, "id">>;
 |-------------|---------|--------------|
 | `@your-app/database/drizzle/schema/postgres` | PostgreSQL schema table exports | Your monorepo's schema path |
 | `@your-app/utils` | Shared utilities package | Your monorepo's utils package path |
+
+---
+
+**Language**: English

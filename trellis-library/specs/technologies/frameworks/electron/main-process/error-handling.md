@@ -169,3 +169,7 @@ return { error: 'Failed to save data' };
 | Non-critical failure | `logger.warn()` + continue     |
 | Critical failure     | `return { success: false }`    |
 | Transaction helper   | `throw Error()` on any failure |
+
+---
+
+**Language**: English

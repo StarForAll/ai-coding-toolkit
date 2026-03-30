@@ -476,4 +476,4 @@ function Button({ isLoading, children, ...props }: ButtonProps) {
 
 ---
 
-**Language**: All documentation must be written in **English**.
+**Language**: English

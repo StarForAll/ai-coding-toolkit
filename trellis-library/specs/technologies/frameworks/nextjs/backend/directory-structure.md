@@ -263,3 +263,7 @@ Avoid creating modules for:
 | `@your-app/database` | Database package barrel export | Your monorepo's database package path |
 | `@your-app/database/drizzle/schema/postgres` | PostgreSQL schema table exports | Your monorepo's schema path |
 | `@your-app/logs` | Structured logger package | Your monorepo's logs package path |
+
+---
+
+**Language**: English

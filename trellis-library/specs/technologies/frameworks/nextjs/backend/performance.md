@@ -496,3 +496,7 @@ for await (const order of streamOrders(userId)) {
   await processOrder(order);
 }
 ```
+
+---
+
+**Language**: English

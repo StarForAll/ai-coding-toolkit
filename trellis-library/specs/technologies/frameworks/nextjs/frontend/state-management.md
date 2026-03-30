@@ -370,3 +370,7 @@ function DebugContext() {
 - Deep nesting of providers
 - Not memoizing context actions
 - Duplicating URL state in useState
+
+---
+
+**Language**: English

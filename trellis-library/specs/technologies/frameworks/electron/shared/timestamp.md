@@ -189,3 +189,7 @@ Using milliseconds prevents this class of bugs.
 | Logic   | number     | `Date.getTime()`       |
 | Schema  | z.number() | Unix milliseconds      |
 | Display | string     | Format for UI only     |
+
+---
+
+**Language**: English

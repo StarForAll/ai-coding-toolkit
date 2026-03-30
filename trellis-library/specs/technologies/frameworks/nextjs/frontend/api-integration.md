@@ -470,3 +470,7 @@ export function useResilientQuery() {
 | Placeholder | Meaning | Replace With |
 |-------------|---------|--------------|
 | `@your-app/api/client` | API package client barrel export | Your monorepo's API client path (e.g., `@acme/api/client`) |
+
+---
+
+**Language**: English

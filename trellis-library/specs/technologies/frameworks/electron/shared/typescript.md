@@ -254,3 +254,7 @@ doSomething(validArg);
 | Generics              | Reusability                 |
 | Utility types         | DRY types                   |
 | Avoid `any`           | Type safety                 |
+
+---
+
+**Language**: English

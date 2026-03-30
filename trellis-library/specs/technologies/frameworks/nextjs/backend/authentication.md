@@ -729,3 +729,7 @@ const { data: session, isPending } = authClient.useSession();
 | `@your-app/database` | Database package barrel export | Your monorepo's database package path |
 | `@your-app/auth` | Auth package main barrel export | Your monorepo's auth package path |
 | `@your-app/auth/client` | Auth client for frontend use | Your monorepo's auth client path |
+
+---
+
+**Language**: English

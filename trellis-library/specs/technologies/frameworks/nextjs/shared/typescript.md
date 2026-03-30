@@ -439,3 +439,7 @@ export function toOrderViewModel(order: Order): OrderViewModel {
 | No `@ts-expect-error`       | Masks real issues             |
 | `import type`               | Clear separation, tree-shake  |
 | Explicit return types       | Documentation, catch errors   |
+
+---
+
+**Language**: English

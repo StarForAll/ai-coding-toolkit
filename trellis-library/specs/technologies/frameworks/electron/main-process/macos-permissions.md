@@ -288,3 +288,7 @@ async function ensurePermissions(): Promise<boolean> {
   return true;
 }
 ```
+
+---
+
+**Language**: English

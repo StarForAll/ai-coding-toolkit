@@ -73,7 +73,7 @@ Define the session context type and create the context:
 
 ```typescript
 // lib/session-context.ts
-import type { Session } from "@your-app/auth"; 
+import type { Session } from "@your-app/auth";
 import React from "react";
 
 export const SessionContext = React.createContext<
@@ -94,7 +94,7 @@ Wrap your application with a SessionProvider to manage session state:
 ```typescript
 // components/SessionProvider.tsx
 "use client";
-import { authClient } from "@your-app/auth/client"; 
+import { authClient } from "@your-app/auth/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useState } from "react";
 import { SessionContext } from "../lib/session-context";
@@ -313,7 +313,7 @@ function ProtectedContent() {
 
 ```typescript
 "use client";
-import { authClient } from "@your-app/auth/client"; 
+import { authClient } from "@your-app/auth/client";
 import { useRouter } from "next/navigation";
 
 function LoginForm() {
@@ -374,7 +374,7 @@ const signInWithMagicLink = async (email: string) => {
 
 ```typescript
 "use client";
-import { authClient } from "@your-app/auth/client"; 
+import { authClient } from "@your-app/auth/client";
 
 function SocialSigninButton({ provider }: { provider: string }) {
   const redirectPath = "/app/dashboard";
@@ -411,7 +411,7 @@ const signInWithPasskey = async () => {
 ### Sign Out
 
 ```typescript
-import { authClient } from "@your-app/auth/client"; 
+import { authClient } from "@your-app/auth/client";
 
 const onLogout = () => {
   authClient.signOut({
@@ -457,7 +457,7 @@ function UserProfile() {
 
 ```typescript
 "use client";
-import { authClient } from "@your-app/auth/client"; 
+import { authClient } from "@your-app/auth/client";
 import { useSession } from "@/hooks/use-session";
 
 function ChangeNameForm() {
@@ -525,7 +525,7 @@ For server components, access the session directly:
 ```typescript
 // lib/server.ts
 import "server-only";
-import { auth } from "@your-app/auth"; 
+import { auth } from "@your-app/auth";
 import { headers } from "next/headers";
 import { cache } from "react";
 
@@ -753,3 +753,7 @@ export const useSessionQuery = () => {
 |-------------|---------|--------------|
 | `@your-app/auth` | Auth package main barrel export | Your monorepo's auth package path |
 | `@your-app/auth/client` | Auth client barrel export | Your monorepo's auth client path |
+
+---
+
+**Language**: English

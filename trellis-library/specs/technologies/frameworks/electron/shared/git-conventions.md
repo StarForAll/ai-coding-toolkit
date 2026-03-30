@@ -179,3 +179,7 @@ Brief description of changes.
 | Branch name    | `type/description`         | `feat/oauth-login`            |
 | Commit body    | Optional context           | Multi-line explanation        |
 | PR title       | Same as commit             | `feat(auth): add OAuth login` |
+
+---
+
+**Language**: English

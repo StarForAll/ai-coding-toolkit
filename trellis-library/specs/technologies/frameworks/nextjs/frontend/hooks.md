@@ -120,7 +120,7 @@ export function useUpdateOrderStatus() {
 
 ## Overriding Mutation Callbacks
 
-When overriding mutation callbacks at the call site, you MUST add explicit generics to maintain type safety:
+When overriding mutation callbacks at the call site, you must add explicit generics to maintain type safety:
 
 ### Problem: Lost Type Safety
 
@@ -326,3 +326,7 @@ export function useUserOrders(userId: string) {
 - Missing `enabled` flag for conditional queries
 - Not providing explicit generics when overriding callbacks
 - Creating too many small hooks instead of compound hooks
+
+---
+
+**Language**: English

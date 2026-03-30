@@ -362,3 +362,7 @@ SELECT * FROM table_name WHERE typeof(column_name) != 'integer' LIMIT 10;
 ---
 
 **Core Principle**: Database schema change = code + migration + data cleanup + verification. None can be skipped.
+
+---
+
+**Language**: English

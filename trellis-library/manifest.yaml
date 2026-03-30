@@ -8616,7 +8616,7 @@ assets:
   status: active
   version: 1.0.0
   domain_axis: universal-domains
-  domain: validation
+  domain: project-governance
   concern: validate-library-sync
   atomicity: simple
   tags:
@@ -8652,7 +8652,7 @@ assets:
   status: active
   version: 1.0.0
   domain_axis: universal-domains
-  domain: validation
+  domain: project-governance
   concern: validate-links
   atomicity: simple
   tags:
@@ -8688,7 +8688,7 @@ assets:
   status: active
   version: 1.0.0
   domain_axis: universal-domains
-  domain: validation
+  domain: project-governance
   concern: validate-overview-links
   atomicity: simple
   tags:
@@ -9377,8 +9377,7 @@ assets:
   format: file
   path: specs/technologies/frameworks/electron/renderer/electron-browser-api-restrictions.md
   title: Electron Browser API Restrictions
-  summary: '**Critical**: Certain browser APIs that work in regular web browsers do NOT work in Electron''s renderer process.
-    Using these APIs will cause runtime errors.'
+  summary: Rules for browser API restrictions in the Electron renderer process
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -9585,7 +9584,7 @@ assets:
   format: file
   path: specs/technologies/frameworks/electron/shared/pnpm-electron-setup.md
   title: pnpm + Electron Setup Guide
-  summary: '**Purpose**: Provide a complete setup guide for managing Electron projects with pnpm, including monorepo layout, native-module handling, and packaging configuration.'
+  summary: Complete setup guide for managing Electron projects with pnpm including workspace configuration
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -9608,7 +9607,7 @@ assets:
   format: file
   path: specs/technologies/frameworks/electron/shared/timestamp.md
   title: Timestamp Specification
-  summary: '**Rule**: All timestamps use **Unix milliseconds (integer)** throughout the entire stack.'
+  summary: Rules for consistent timestamp handling using Unix milliseconds across the entire Electron stack
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -9654,7 +9653,7 @@ assets:
   format: file
   path: specs/technologies/frameworks/electron/guides/bug-root-cause-thinking.md
   title: Bug Root Cause Thinking Guide
-  summary: '**Purpose**: Analyze bugs systematically to understand whether they could have been prevented.'
+  summary: Thinking guide for systematic bug root cause analysis in Electron projects
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -9677,7 +9676,7 @@ assets:
   format: file
   path: specs/technologies/frameworks/electron/guides/code-reuse-thinking.md
   title: Code Reuse Thinking Guide
-  summary: '**Purpose**: Identify patterns and reduce duplication before they become tech debt.'
+  summary: Thinking guide for identifying code reuse opportunities in Electron projects
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -9700,7 +9699,7 @@ assets:
   format: file
   path: specs/technologies/frameworks/electron/guides/cross-layer-thinking.md
   title: Cross-Layer Thinking Guide
-  summary: '**Purpose**: Pre-implementation checklist for features that span multiple layers.'
+  summary: Thinking guide for managing cross-layer changes in Electron projects
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -9723,7 +9722,7 @@ assets:
   format: file
   path: specs/technologies/frameworks/electron/guides/db-schema-change.md
   title: Database Schema Change Thinking Guide
-  summary: '**Purpose**: Ensure schema changes are fully deployed with data migration'
+  summary: Guide for safely making database schema changes in Electron apps
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -9746,7 +9745,7 @@ assets:
   format: file
   path: specs/technologies/frameworks/electron/guides/pre-implementation-checklist.md
   title: Pre-Implementation Checklist
-  summary: '**Purpose**: Ask the right questions **before** writing code to avoid common architectural mistakes.'
+  summary: Pre-implementation checklist for Electron feature development
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -9769,8 +9768,7 @@ assets:
   format: file
   path: specs/technologies/frameworks/electron/guides/semantic-change.md
   title: Semantic Change Checklist
-  summary: '**Purpose**: When changing core semantics (how the system interprets data), ensure all dependent code is updated
-    consistently.'
+  summary: Guide for handling semantic changes and backward compatibility in Electron apps
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -9793,7 +9791,7 @@ assets:
   format: file
   path: specs/technologies/frameworks/electron/guides/transaction-consistency.md
   title: Transaction Consistency Guide
-  summary: '**Purpose**: Ensure data consistency when writing to multiple tables or when data flows through multiple paths.'
+  summary: Guide for ensuring database transaction consistency in Electron apps
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -9839,7 +9837,7 @@ assets:
   format: file
   path: specs/scenarios/defect-and-debugging/electron-pitfalls/bluetooth-hid-device.md
   title: Bluetooth HID Device Integration
-  summary: '**Severity**: P2 - Feature doesn''t work as expected'
+  summary: Pitfall guide for Bluetooth HID device integration issues in Electron
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -9862,7 +9860,7 @@ assets:
   format: file
   path: specs/scenarios/defect-and-debugging/electron-pitfalls/css-flex-centering.md
   title: Visual vs Mathematical Centering in Flex Layouts
-  summary: '**Severity**: P2 - UI appears misaligned'
+  summary: Pitfall guide for CSS flexbox centering behavior differences in Electron
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -9885,7 +9883,7 @@ assets:
   format: file
   path: specs/scenarios/defect-and-debugging/electron-pitfalls/global-keyboard-hooks.md
   title: Global Keyboard Hooks with uiohook-napi
-  summary: '**Severity**: P2 - Feature limited or conflicts with system'
+  summary: Pitfall guide for global keyboard hook registration issues in Electron
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -9908,7 +9906,7 @@ assets:
   format: file
   path: specs/scenarios/defect-and-debugging/electron-pitfalls/ipc-handler-registration.md
   title: IPC Handler Registration Issues
-  summary: '**Severity**: P1 - Feature completely broken'
+  summary: Pitfall guide for IPC handler registration order issues in Electron
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -9931,7 +9929,7 @@ assets:
   format: file
   path: specs/scenarios/defect-and-debugging/electron-pitfalls/native-module-complex-deps.md
   title: Native Modules with Complex JavaScript Dependencies
-  summary: '**Severity**: P0 - App fails to start after packaging'
+  summary: Pitfall guide for native module complex dependency resolution in Electron
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -9954,7 +9952,7 @@ assets:
   format: file
   path: specs/scenarios/defect-and-debugging/electron-pitfalls/native-module-packaging.md
   title: Native Module Packaging with Electron Forge + Vite
-  summary: '**Severity**: P0 - App fails to start after packaging'
+  summary: Pitfall guide for native module packaging and distribution issues in Electron
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -9977,7 +9975,7 @@ assets:
   format: file
   path: specs/scenarios/defect-and-debugging/electron-pitfalls/network-stack-differences.md
   title: 'Network Stack Differences: Node fetch vs Electron net.fetch'
-  summary: '**Severity**: P1 - Network requests fail in main process'
+  summary: Pitfall guide for network stack behavioral differences in Electron vs browsers
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -10000,7 +9998,7 @@ assets:
   format: file
   path: specs/scenarios/defect-and-debugging/electron-pitfalls/react-usestate-function.md
   title: 'React useState: Function Values Executed as Updaters'
-  summary: '**Severity**: P2 - Unexpected behavior, state resets'
+  summary: Pitfall guide for React useState function initializer misuse in Electron
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -10023,7 +10021,7 @@ assets:
   format: file
   path: specs/scenarios/defect-and-debugging/electron-pitfalls/timestamp-precision.md
   title: 'Timestamp Precision: Seconds vs Milliseconds'
-  summary: '**Severity**: P1 - Data sync fails, validation errors'
+  summary: Pitfall guide for timestamp precision and consistency issues in Electron
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -10046,7 +10044,7 @@ assets:
   format: file
   path: specs/scenarios/defect-and-debugging/electron-pitfalls/transaction-silent-failure.md
   title: Transaction Helper Functions Silent Failure
-  summary: '**Severity**: P1 - Data loss, sync failures'
+  summary: Pitfall guide for silent transaction failure patterns in Electron SQLite usage
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -10069,7 +10067,7 @@ assets:
   format: file
   path: specs/technologies/frameworks/nextjs/backend/ai-sdk-integration.md
   title: AI SDK Backend Integration Guidelines
-  summary: '## 1. Overview'
+  summary: Rules for integrating the AI SDK into Next.js backend routes and server actions
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -10185,7 +10183,7 @@ assets:
   format: file
   path: specs/technologies/frameworks/nextjs/backend/orpc-usage.md
   title: oRPC Backend Usage Guidelines
-  summary: '## 1. Overview'
+  summary: Rules for using oRPC in Next.js backend for type-safe API procedures
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -10277,7 +10275,7 @@ assets:
   format: file
   path: specs/technologies/frameworks/nextjs/frontend/ai-sdk-integration.md
   title: AI SDK Frontend Integration
-  summary: '## 1. Overview'
+  summary: Rules for integrating the AI SDK into Next.js frontend components and hooks
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -10605,7 +10603,7 @@ assets:
   format: file
   path: specs/technologies/frameworks/nextjs/guides/cross-layer-thinking.md
   title: Cross-Layer Thinking Guide
-  summary: '**Purpose**: Pre-implementation checklist for features that span multiple layers.'
+  summary: Thinking guide for managing cross-layer changes in Next.js projects
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -10628,7 +10626,7 @@ assets:
   format: file
   path: specs/technologies/frameworks/nextjs/guides/pre-implementation-checklist.md
   title: Pre-Implementation Checklist
-  summary: '**Purpose**: Ask the right questions **before** writing code to avoid common architectural mistakes.'
+  summary: Pre-implementation checklist for Next.js feature development
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -10674,7 +10672,7 @@ assets:
   format: file
   path: specs/scenarios/defect-and-debugging/nextjs-pitfalls/postgres-json-jsonb.md
   title: PostgreSQL JSON vs JSONB Type Issues with Drizzle ORM
-  summary: '## Problem'
+  summary: Pitfall guide for handling Postgres JSON and JSONB type mismatches in Next.js
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -10697,7 +10695,7 @@ assets:
   format: file
   path: specs/scenarios/defect-and-debugging/nextjs-pitfalls/sentry-nextintl-conflict.md
   title: Sentry and next-intl Build Configuration Conflict
-  summary: '## Problem'
+  summary: Pitfall guide for resolving Sentry and next-intl middleware conflicts in Next.js
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -10720,7 +10718,7 @@ assets:
   format: file
   path: specs/scenarios/defect-and-debugging/nextjs-pitfalls/turbopack-webpack-flexbox.md
   title: Turbopack vs Webpack Flexbox Layout Differences
-  summary: '## Problem'
+  summary: Pitfall guide for flexbox rendering differences between Turbopack and Webpack in Next.js
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -10743,7 +10741,7 @@ assets:
   format: file
   path: specs/scenarios/defect-and-debugging/nextjs-pitfalls/webkit-tap-highlight.md
   title: WebKit Tap Highlight and Border-Radius Issues on Mobile
-  summary: '## Problem'
+  summary: Pitfall guide for WebKit tap highlight behavior in Next.js mobile web views
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -11031,7 +11029,6 @@ assets:
   tags:
   - scenarios
   - nextjs
-  notes: Intended as a baseline pack for Next.js full-stack applications.
   change_impact:
     level: medium
     review_required: true
@@ -11039,7 +11036,7 @@ assets:
   metadata:
     source_of_truth: true
     generated: false
-    notes: ''
+    notes: Intended as a baseline pack for Next.js full-stack applications.
 - id: example.universal-domains.product-and-requirements.product-and-requirements-examples
   type: example
   format: directory

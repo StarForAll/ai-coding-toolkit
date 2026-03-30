@@ -270,3 +270,7 @@ Each procedure test should cover:
 | Use structured logging       | Searchable logs     |
 | Test with mocks              | Fast, isolated      |
 | 80% coverage for procedures  | Quality assurance   |
+
+---
+
+**Language**: English

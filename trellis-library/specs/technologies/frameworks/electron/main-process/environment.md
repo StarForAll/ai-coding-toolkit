@@ -107,3 +107,7 @@ const getDbPath = () => {
 | Use `app.isPackaged`        | Most reliable detection    |
 | Set path in separate module | ESM hoisting               |
 | Import env-setup first      | Before any userData access |
+
+---
+
+**Language**: English

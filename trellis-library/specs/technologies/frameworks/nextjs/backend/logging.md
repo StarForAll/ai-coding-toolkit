@@ -344,3 +344,7 @@ logger.info("Order created", {
 | Placeholder | Meaning | Replace With |
 |-------------|---------|--------------|
 | `@your-app/logs` | Structured logger package | Your monorepo's logs package path |
+
+---
+
+**Language**: English

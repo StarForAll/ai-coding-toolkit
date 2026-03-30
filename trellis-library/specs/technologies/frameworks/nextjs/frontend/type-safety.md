@@ -15,8 +15,8 @@ This document covers TypeScript best practices for maintaining type safety acros
 
 ```typescript
 // Good: Import types from the API package
-import type { User, Order, Product } from '@your-app/api/modules/users/types'; 
-import type { OrderStatus } from '@your-app/api/modules/orders/types'; 
+import type { User, Order, Product } from '@your-app/api/modules/users/types';
+import type { OrderStatus } from '@your-app/api/modules/orders/types';
 ```
 
 ### DON'T: Redefine Backend Types
@@ -124,7 +124,7 @@ queryClient.setQueryData<UserListData>(['users'], (old) => {
 const user = data as User;
 
 // Good: Runtime validation with Zod
-import { userSchema } from '@your-app/api/modules/users/types'; 
+import { userSchema } from '@your-app/api/modules/users/types';
 const user = userSchema.parse(data);
 
 // Good: Type guard
@@ -144,7 +144,7 @@ When the frontend needs additional computed properties, create view models that 
 
 ```typescript
 // types/index.ts
-import type { Order } from '@your-app/api/modules/orders/types'; 
+import type { Order } from '@your-app/api/modules/orders/types';
 
 // Extend backend type with frontend-specific computed properties
 export interface OrderViewModel extends Order {
@@ -283,3 +283,7 @@ Before committing, verify:
 |-------------|---------|--------------|
 | `@your-app/api/modules/users/types` | User API module type exports | Your monorepo's user API types path |
 | `@your-app/api/modules/orders/types` | Order API module type exports | Your monorepo's order API types path |
+
+---
+
+**Language**: English

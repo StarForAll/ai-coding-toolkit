@@ -135,3 +135,7 @@ import Image from 'next/image';
   Tap
 </button>
 ```
+
+---
+
+**Language**: English

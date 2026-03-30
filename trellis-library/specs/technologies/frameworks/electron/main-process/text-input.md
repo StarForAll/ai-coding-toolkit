@@ -16,7 +16,7 @@ When building voice-to-text or similar features, you need to insert text at the 
 | Save/Restore Clipboard     | Partial\*           | Slow  | Universal     | Medium     |
 | Direct Keyboard Simulation | No                  | Fast  | Good\*\*      | Medium     |
 
-\* Clipboard manager apps may still capture the temporary content  
+\* Clipboard manager apps may still capture the temporary content
 \*\* Some apps may not accept keyboard-simulated input
 
 ---
@@ -238,3 +238,7 @@ function checkAndPromptRestart(): void {
 3. **Handle errors gracefully** - not all apps accept simulated input
 4. **Test extensively** - different apps behave differently
 5. **Configure as native module** in both Vite and Forge configs
+
+---
+
+**Language**: English

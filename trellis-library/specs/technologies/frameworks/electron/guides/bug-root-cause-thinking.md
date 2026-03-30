@@ -386,3 +386,7 @@ After analyzing a bug, add lessons to the appropriate guide:
 | Third-Party Hook Fallback | Yes          | Check fallback behavior when params are undefined        |
 
 **Core Principle**: Most preventable bugs come from **implicit assumptions**. Make assumptions explicit.
+
+---
+
+**Language**: English

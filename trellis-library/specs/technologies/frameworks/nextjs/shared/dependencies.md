@@ -171,3 +171,7 @@ When updating dependencies:
 3. Run `pnpm install` from the root directory
 4. Run `pnpm type-check` to verify TypeScript compatibility
 5. Run `pnpm build` to ensure production build works
+
+---
+
+**Language**: English

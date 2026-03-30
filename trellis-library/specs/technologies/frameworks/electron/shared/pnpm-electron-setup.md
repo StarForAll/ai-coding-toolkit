@@ -501,3 +501,7 @@ When starting a new Electron + pnpm project:
 - [Electron Forge](https://www.electronforge.io/)
 - [electron-rebuild](https://github.com/electron/rebuild)
 - [Native Module Packaging Guide](../../../../scenarios/defect-and-debugging/electron-pitfalls/native-module-packaging.md)
+
+---
+
+**Language**: English

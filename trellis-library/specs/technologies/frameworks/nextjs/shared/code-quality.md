@@ -241,7 +241,7 @@ function processOrder(order: Order) {
 ## Lint and Type Check Before Commit
 
 ```bash
-# MUST pass before every commit
+# Must pass before every commit
 pnpm lint
 pnpm type-check
 
@@ -313,3 +313,7 @@ describe('OrderService', () => {
 | Structured errors              | Consistent handling |
 | Never swallow errors           | Debuggability       |
 | Remove dead code               | Maintainability     |
+
+---
+
+**Language**: English

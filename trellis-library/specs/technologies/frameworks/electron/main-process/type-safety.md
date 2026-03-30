@@ -140,3 +140,7 @@ function process(data: unknown) { ... }
 | `import type` for types     | Clear separation       |
 | Explicit return types       | Documentation          |
 | Avoid `any`                 | Type safety            |
+
+---
+
+**Language**: English

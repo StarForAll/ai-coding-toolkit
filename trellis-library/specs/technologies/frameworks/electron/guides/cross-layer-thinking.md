@@ -390,4 +390,4 @@ If you encounter a cross-layer bug:
 
 ---
 
-**Language**: All documentation should be written in **English**.
+**Language**: English

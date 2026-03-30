@@ -231,3 +231,7 @@ db.select().from(project).where(eq(project.isDeleted, false)).all();
 | net.fetch         | External API calls |
 | Upsert            | Insert or update   |
 | Soft delete       | Data recovery      |
+
+---
+
+**Language**: English

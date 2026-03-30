@@ -175,3 +175,7 @@ export function runMigrations() {
 | Use transactions   | Atomic operations     |
 | Use `inArray`      | Avoid N+1 queries     |
 | Filter `isDeleted` | Exclude soft-deleted  |
+
+---
+
+**Language**: English

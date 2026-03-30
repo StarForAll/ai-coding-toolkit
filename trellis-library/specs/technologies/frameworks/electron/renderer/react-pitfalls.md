@@ -304,4 +304,4 @@ When a hook uses an `id` to manage state, assume the state resets on `id` change
 
 ---
 
-**Language**: All documentation must be written in **English**.
+**Language**: English

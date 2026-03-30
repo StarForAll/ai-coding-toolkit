@@ -331,7 +331,7 @@ type UserRoles = Record<string, User[]>;
 
 ---
 
-**Language**: All documentation must be written in **English**.
+**Language**: English
 
 ## Project-Specific Placeholders
 

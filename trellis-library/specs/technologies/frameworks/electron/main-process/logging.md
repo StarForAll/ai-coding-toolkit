@@ -118,3 +118,7 @@ new FusesPlugin({
 | Mark native modules external     | Vite compatibility         |
 | Copy native modules in Forge     | Runtime availability       |
 | Set `OnlyLoadAppFromAsar: false` | Allow unpacked .node files |
+
+---
+
+**Language**: English

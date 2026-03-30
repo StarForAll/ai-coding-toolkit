@@ -287,3 +287,7 @@ export async function ItemList() {
 ---
 
 **Core Principle**: 5 minutes of checklist thinking saves 50 minutes of refactoring.
+
+---
+
+**Language**: English

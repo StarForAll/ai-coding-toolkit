@@ -426,4 +426,4 @@ export function useTabs(): TabsContextValue {
 
 ---
 
-**Language**: All documentation must be written in **English**.
+**Language**: English

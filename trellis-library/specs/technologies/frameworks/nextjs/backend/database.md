@@ -423,3 +423,7 @@ const ordersWithDetails = await db.query.order.findMany({
 | Placeholder | Meaning | Replace With |
 |-------------|---------|--------------|
 | `@your-app/database` | Database package barrel export | Your monorepo's database package path |
+
+---
+
+**Language**: English

@@ -237,3 +237,7 @@ When creating a new service domain:
 - [ ] Create thin IPC handler in `ipc/{domain}.handler.ts`
 - [ ] Register handler in `ipc/index.ts`
 - [ ] Add IPC channels in `shared/constants/channels.ts`
+
+---
+
+**Language**: English
