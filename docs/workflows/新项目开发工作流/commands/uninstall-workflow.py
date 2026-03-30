@@ -81,6 +81,13 @@ def main() -> int:
     else:
         warn("无备份，start.md 未修改")
 
+    backup_record_session = backup / "record-session.md"
+    if backup_record_session.exists():
+        shutil.copy2(backup_record_session, dst_cmds / "record-session.md")
+        ok("record-session.md 已恢复")
+    else:
+        warn("无 record-session 备份，record-session.md 未修改")
+
     if dst_scripts.is_dir():
         shutil.rmtree(dst_scripts)
         ok(".trellis/scripts/workflow/ 已删除")

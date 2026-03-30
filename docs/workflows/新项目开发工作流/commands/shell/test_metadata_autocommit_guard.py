@@ -95,6 +95,21 @@ class MetadataAutocommitGuardTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
         self.assertIn("outside metadata scope", result.stdout + result.stderr)
 
+    def test_pre_record_session_fails_when_tasks_are_still_dirty(self) -> None:
+        repo_root, task_dir, _ = self.create_repo()
+        (task_dir / "task.json").write_text('{"status": "completed"}\n', encoding="utf-8")
+
+        result = self.run_script(
+            repo_root,
+            "--mode",
+            "record-session",
+            "--check",
+            "pre",
+        )
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn(".trellis/tasks must be clean", result.stdout + result.stderr)
+
     def test_post_archive_detects_dirty_current_task_pointer(self) -> None:
         repo_root, _, _ = self.create_repo()
         current_task = repo_root / ".trellis" / ".current-task"

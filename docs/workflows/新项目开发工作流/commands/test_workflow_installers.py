@@ -18,6 +18,7 @@ INSTALL_SCRIPT = COMMANDS_DIR / "install-workflow.py"
 UPGRADE_SCRIPT = COMMANDS_DIR / "upgrade-compat.py"
 UNINSTALL_SCRIPT = COMMANDS_DIR / "uninstall-workflow.py"
 PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
+RECORD_SESSION_MARKER = "## Record-Session Metadata Closure `[AI]`"
 
 
 class WorkflowInstallerTests(unittest.TestCase):
@@ -44,13 +45,26 @@ class WorkflowInstallerTests(unittest.TestCase):
             "| `[USER]` | user actions |\n",
             encoding="utf-8",
         )
+        (root / ".claude" / "commands" / "trellis" / "record-session.md").write_text(
+            "# /trellis:record-session\n\n"
+            "## Record Work Progress\n\n"
+            "### Step 1: Get Context & Check Tasks\n\n"
+            "```bash\n"
+            "python3 ./.trellis/scripts/get_context.py --mode record\n"
+            "```\n\n"
+            "### Step 2: One-Click Add Session\n\n"
+            "```bash\n"
+            "python3 ./.trellis/scripts/add_session.py --title \"Title\" --commit \"hash\"\n"
+            "```\n",
+            encoding="utf-8",
+        )
         (root / ".trellis" / ".version").write_text("2.0.0\n", encoding="utf-8")
         return root
 
     def install_workflow(self, fixture_root: Path) -> subprocess.CompletedProcess[str]:
         return self.run_script(INSTALL_SCRIPT, "--project-root", str(fixture_root))
 
-    def test_install_deploys_metadata_autocommit_guard_helper(self) -> None:
+    def test_install_deploys_record_session_closure_helper_and_patch(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
 
@@ -59,10 +73,15 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         helper = fixture / ".trellis" / "scripts" / "workflow" / "metadata-autocommit-guard.py"
         self.assertTrue(helper.exists(), "metadata-autocommit-guard.py should be deployed")
+        record_helper = fixture / ".trellis" / "scripts" / "workflow" / "record-session-helper.py"
+        self.assertTrue(record_helper.exists(), "record-session-helper.py should be deployed")
+        record_session = fixture / ".claude" / "commands" / "trellis" / "record-session.md"
+        self.assertIn(RECORD_SESSION_MARKER, record_session.read_text(encoding="utf-8"))
 
         record = fixture / ".trellis" / "workflow-installed.json"
         self.assertTrue(record.exists(), "workflow-installed.json should be created")
         self.assertIn("metadata-autocommit-guard.py", record.read_text(encoding="utf-8"))
+        self.assertIn("record-session-helper.py", record.read_text(encoding="utf-8"))
 
     def test_upgrade_check_detects_phase_router_drift_even_when_versions_match(self) -> None:
         fixture = self.create_fixture()
@@ -87,7 +106,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
 
-        helper = fixture / ".trellis" / "scripts" / "workflow" / "plan-validate.py"
+        helper = fixture / ".trellis" / "scripts" / "workflow" / "record-session-helper.py"
         helper.unlink()
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
@@ -95,7 +114,24 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("辅助脚本缺失", result.stdout)
-        self.assertIn("plan-validate.py", result.stdout)
+        self.assertIn("record-session-helper.py", result.stdout)
+
+    def test_upgrade_check_detects_record_session_patch_drift(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        record_session = fixture / ".claude" / "commands" / "trellis" / "record-session.md"
+        content = record_session.read_text(encoding="utf-8").replace(RECORD_SESSION_MARKER, "## Missing Marker")
+        record_session.write_text(content, encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(UPGRADE_SCRIPT, "--check", "--project-root", str(fixture))
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("record-session.md: 元数据闭环说明缺失", result.stdout)
 
     def test_force_recovers_start_from_backup_when_injection_marker_is_missing(self) -> None:
         fixture = self.create_fixture()
@@ -135,6 +171,10 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertFalse(record.exists())
         self.assertFalse((fixture / ".trellis" / "scripts" / "workflow").exists())
         self.assertTrue((fixture / ".claude" / "commands" / "trellis" / "start.md").exists())
+        self.assertNotIn(
+            RECORD_SESSION_MARKER,
+            (fixture / ".claude" / "commands" / "trellis" / "record-session.md").read_text(encoding="utf-8"),
+        )
 
 
 if __name__ == "__main__":

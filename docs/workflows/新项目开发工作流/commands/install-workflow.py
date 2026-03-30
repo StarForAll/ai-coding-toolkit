@@ -6,6 +6,7 @@
 卸载: python3 uninstall-workflow.py
 """
 import argparse
+import json
 import shutil
 import sys
 from datetime import datetime, timezone
@@ -46,6 +47,35 @@ def inject_phase_router(start_md: Path):
 
 # Phase Router 精确检测标记（必须与 start-patch-phase-router.md 的标题完全一致）
 _PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
+_RECORD_SESSION_MARKER = "## Record-Session Metadata Closure `[AI]`"
+_RECORD_SESSION_INJECTION_MARKER = "### Step 2: One-Click Add Session"
+
+
+def inject_record_session_patch(src: Path, record_session_md: Path) -> bool:
+    """Inject metadata-closure guidance into record-session.md."""
+    patch = src / "record-session-patch-metadata-closure.md"
+    if not patch.exists():
+        err("record-session-patch-metadata-closure.md 不存在，无法注入")
+        return False
+    if not record_session_md.exists():
+        err("record-session.md 不存在，无法注入元数据闭环说明")
+        return False
+
+    content = record_session_md.read_text(encoding="utf-8")
+    if _RECORD_SESSION_MARKER in content:
+        ok("record-session.md 已包含元数据闭环说明，跳过")
+        return True
+    if _RECORD_SESSION_INJECTION_MARKER not in content:
+        err("record-session.md 中未找到 Step 2 注入点，跳过注入")
+        return False
+
+    before, after = content.split(_RECORD_SESSION_INJECTION_MARKER, 1)
+    record_session_md.write_text(
+        before + patch.read_text(encoding="utf-8") + "\n" + _RECORD_SESSION_INJECTION_MARKER + after,
+        encoding="utf-8",
+    )
+    ok("record-session 元数据闭环说明已注入")
+    return True
 
 
 def main():
@@ -69,6 +99,7 @@ def main():
         "plan-validate.py", "self-review-check.py",
         "delivery-control-validate.py",
         "metadata-autocommit-guard.py",
+        "record-session-helper.py",
     ]
 
     print()
@@ -87,12 +118,22 @@ def main():
     print("📦 备份...")
     backup.mkdir(parents=True, exist_ok=True)
     start = dst_cmds / "start.md"
+    record_session = dst_cmds / "record-session.md"
     bk = backup / "start.md"
     if start.exists() and not bk.exists():
         shutil.copy2(start, bk)
         ok(f"start.md → {bk}")
     else:
         warn("备份已存在，跳过")
+    if not record_session.exists():
+        err("record-session.md 不存在，无法安装收尾增强")
+        sys.exit(1)
+    record_bk = backup / "record-session.md"
+    if not record_bk.exists():
+        shutil.copy2(record_session, record_bk)
+        ok(f"record-session.md → {record_bk}")
+    else:
+        warn("record-session 备份已存在，跳过")
     print()
 
     # ── 部署命令 ──
@@ -120,6 +161,11 @@ def main():
         warn("start-patch-phase-router.md 不存在，跳过注入")
     print()
 
+    print("🔄 record-session.md...")
+    if not inject_record_session_patch(src, record_session):
+        sys.exit(1)
+    print()
+
     # ── 部署辅助脚本 ──
     print("📦 辅助脚本...")
     dst_scripts.mkdir(parents=True, exist_ok=True)
@@ -137,7 +183,6 @@ def main():
     now = datetime.now(timezone.utc).isoformat()
     ver = (root / ".trellis" / ".version").read_text(encoding="utf-8").strip() if (root / ".trellis" / ".version").exists() else "unknown"
     rec = root / ".trellis" / "workflow-installed.json"
-    import json
     rec.write_text(json.dumps({
         "trellis_version": ver,
         "installed": now,

@@ -37,6 +37,8 @@ def info(message: str) -> None:
 
 _PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 _INJECTION_MARKER = "## Operation Types"
+_RECORD_SESSION_MARKER = "## Record-Session Metadata Closure `[AI]`"
+_RECORD_SESSION_INJECTION_MARKER = "### Step 2: One-Click Add Session"
 NEW_COMMANDS = ["feasibility", "design", "plan", "test-first", "self-review", "check", "delivery"]
 HELPER_SCRIPTS = [
     "feasibility-check.py",
@@ -45,6 +47,7 @@ HELPER_SCRIPTS = [
     "self-review-check.py",
     "delivery-control-validate.py",
     "metadata-autocommit-guard.py",
+    "record-session-helper.py",
 ]
 
 
@@ -65,6 +68,12 @@ def has_phase_router(start_md: Path) -> bool:
     return _PHASE_ROUTER_MARKER in start_md.read_text(encoding="utf-8")
 
 
+def has_record_session_patch(record_session_md: Path) -> bool:
+    if not record_session_md.exists():
+        return False
+    return _RECORD_SESSION_MARKER in record_session_md.read_text(encoding="utf-8")
+
+
 def load_install_record(rec_file: Path) -> dict:
     if not rec_file.exists():
         return {}
@@ -78,6 +87,7 @@ def load_install_record(rec_file: Path) -> dict:
 def detect_conflicts(dst_cmds: Path, dst_scripts: Path) -> int:
     conflicts = 0
     start = dst_cmds / "start.md"
+    record_session = dst_cmds / "record-session.md"
 
     if not has_phase_router(start):
         err("start.md: Phase Router 丢失")
@@ -92,6 +102,12 @@ def detect_conflicts(dst_cmds: Path, dst_scripts: Path) -> int:
         conflicts += len(missing_commands)
     else:
         ok("所有命令存在")
+
+    if not has_record_session_patch(record_session):
+        err("record-session.md: 元数据闭环说明缺失")
+        conflicts += 1
+    else:
+        ok("record-session.md: 元数据闭环说明正常")
 
     missing_scripts = [name for name in HELPER_SCRIPTS if not (dst_scripts / name).exists()]
     if missing_scripts:
@@ -110,6 +126,9 @@ def backup_deployed_state(dst_cmds: Path, start: Path) -> None:
     backup_dir.mkdir(parents=True, exist_ok=True)
     if start.exists():
         shutil.copy2(start, backup_dir / "start.md")
+    record_session = dst_cmds / "record-session.md"
+    if record_session.exists():
+        shutil.copy2(record_session, backup_dir / "record-session.md")
     for name in NEW_COMMANDS:
         candidate = dst_cmds / f"{name}.md"
         if candidate.exists():
@@ -136,6 +155,17 @@ def deploy_scripts(src: Path, dst_scripts: Path) -> None:
             shutil.copy2(source_path, dst_scripts / name)
             (dst_scripts / name).chmod(0o755)
     ok("辅助脚本已更新")
+
+
+def restore_command_from_original_backup(dst_cmds: Path, command_name: str) -> bool:
+    backup_path = dst_cmds / ".backup-original" / f"{command_name}.md"
+    target_path = dst_cmds / f"{command_name}.md"
+    if not backup_path.exists():
+        err(f"缺少 .backup-original/{command_name}.md，无法执行强制恢复")
+        return False
+    shutil.copy2(backup_path, target_path)
+    ok(f"{command_name}.md 已从 .backup-original 恢复")
+    return True
 
 
 def restore_start_from_original_backup(dst_cmds: Path, start: Path) -> bool:
@@ -165,6 +195,32 @@ def inject_phase_router(src: Path, start: Path) -> bool:
     before, after = content.split(_INJECTION_MARKER, 1)
     start.write_text(before + patch.read_text(encoding="utf-8") + "\n" + _INJECTION_MARKER + after, encoding="utf-8")
     ok("Phase Router 已注入")
+    return True
+
+
+def inject_record_session_patch(src: Path, record_session_md: Path) -> bool:
+    patch = src / "record-session-patch-metadata-closure.md"
+    if not patch.exists():
+        err("record-session-patch-metadata-closure.md 缺失，无法恢复 record-session 注入")
+        return False
+    if not record_session_md.exists():
+        err("record-session.md 不存在，无法恢复元数据闭环说明")
+        return False
+
+    content = record_session_md.read_text(encoding="utf-8")
+    if _RECORD_SESSION_MARKER in content:
+        ok("record-session 元数据闭环说明已存在")
+        return True
+    if _RECORD_SESSION_INJECTION_MARKER not in content:
+        warn("record-session.md 中未找到 Step 2 注入点，无法自动注入元数据闭环说明")
+        return False
+
+    before, after = content.split(_RECORD_SESSION_INJECTION_MARKER, 1)
+    record_session_md.write_text(
+        before + patch.read_text(encoding="utf-8") + "\n" + _RECORD_SESSION_INJECTION_MARKER + after,
+        encoding="utf-8",
+    )
+    ok("record-session 元数据闭环说明已注入")
     return True
 
 
@@ -218,6 +274,7 @@ def main() -> int:
     dst_scripts = root / ".trellis" / "scripts" / "workflow"
     rec_file = root / ".trellis" / "workflow-installed.json"
     start = dst_cmds / "start.md"
+    record_session = dst_cmds / "record-session.md"
 
     current_version = (
         (root / ".trellis" / ".version").read_text(encoding="utf-8").strip()
@@ -264,8 +321,13 @@ def main() -> int:
 
     if args.mode == "force" and not restore_start_from_original_backup(dst_cmds, start):
         return 1
+    if args.mode == "force" and not restore_command_from_original_backup(dst_cmds, "record-session"):
+        return 1
     if not has_phase_router(start) and not inject_phase_router(src, start):
         err("Phase Router 恢复失败，未更新版本标记")
+        return 1
+    if not has_record_session_patch(record_session) and not inject_record_session_patch(src, record_session):
+        err("record-session 元数据闭环说明恢复失败，未更新版本标记")
         return 1
 
     deploy_scripts(src, dst_scripts)

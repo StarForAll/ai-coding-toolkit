@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""元数据自动提交前后置门禁检查。
+"""收尾型 record-session 的元数据闭环门禁检查。
 
 用法:
   python3 metadata-autocommit-guard.py --mode archive --check pre --task-dir <path>
@@ -78,6 +78,15 @@ def get_staged_paths(repo_root: Path) -> tuple[bool, list[str] | str]:
     return True, paths
 
 
+def get_dirty_lines(repo_root: Path, *paths: str) -> tuple[bool, list[str] | str]:
+    """Return git status --short lines for the given paths."""
+    rc, out, err = run_git(repo_root, "status", "--short", "--", *paths)
+    if rc != 0:
+        return False, err.strip() or "git status --short failed"
+    lines = [line.strip() for line in out.splitlines() if line.strip()]
+    return True, lines
+
+
 def validate_pre_check(repo_root: Path, mode: str, task_dir: Path | None) -> int:
     current_task = get_current_task(repo_root)
     if not current_task:
@@ -111,6 +120,21 @@ def validate_pre_check(repo_root: Path, mode: str, task_dir: Path | None) -> int
         for path in outside_scope:
             print(f"  - {path}", file=sys.stderr)
         return 1
+
+    if mode == "record-session":
+        ok, dirty_lines = get_dirty_lines(repo_root, ".trellis/tasks")
+        if not ok:
+            print(f"❌ record-session blocked: {dirty_lines}", file=sys.stderr)
+            return 1
+        assert isinstance(dirty_lines, list)
+        if dirty_lines:
+            print(
+                "❌ record-session blocked: .trellis/tasks must be clean before final close-out",
+                file=sys.stderr,
+            )
+            for line in dirty_lines:
+                print(f"  - {line}", file=sys.stderr)
+            return 1
 
     print(f"✅ metadata auto-commit pre-check passed ({mode})")
     return 0
