@@ -700,3 +700,50 @@ python3 docs/workflows/新项目开发工作流/commands/shell/delivery-control-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 58: 需求变更管理流程精简
+
+**Date**: 2026-03-31
+**Task**: 需求变更管理流程精简
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 变更 | 说明 |
+|------|------|
+| §2.5.3 变更处理流程 | 9步压缩为4步核心（估价→确认→执行→验证）+ 按级别路由 |
+| §2.5.2 变更影响评估 | 明确仅重大变更（>2天）使用完整评估表 |
+| §2.5.5 快速估价公式 | AI资产附加3因子合并为单一AI系数；删除需求定价推到合同层面 |
+| §2.5.6 变更单模板 | 删除6类企业级文档清单，只保留轻量+完整两套模板 |
+| §2.5.7 变更沟通机制 | 删除独立沟通流程，合并到核心流程沟通节点表 |
+| 累计变更阈值 | 固定10%/20%改为范围表述10-25% |
+| 文档版本 | V1.1.4 → V1.1.5 |
+| 命令映射.md | 版本号引用同步更新 |
+
+**修改文件**:
+- `docs/workflows/新项目开发工作流/工作流总纲.md` (113 ins / 297 del)
+- `docs/workflows/新项目开发工作流/命令映射.md` (1 ins / 1 del)
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a9a2f9e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
