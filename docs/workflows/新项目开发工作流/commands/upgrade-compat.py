@@ -38,7 +38,14 @@ def info(message: str) -> None:
 _PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 _INJECTION_MARKER = "## Operation Types"
 NEW_COMMANDS = ["feasibility", "design", "plan", "test-first", "self-review", "check", "delivery"]
-HELPER_SCRIPTS = ["feasibility-check.py", "design-export.py", "plan-validate.py", "self-review-check.py"]
+HELPER_SCRIPTS = [
+    "feasibility-check.py",
+    "design-export.py",
+    "plan-validate.py",
+    "self-review-check.py",
+    "delivery-control-validate.py",
+    "metadata-autocommit-guard.py",
+]
 
 
 def find_root() -> Path:

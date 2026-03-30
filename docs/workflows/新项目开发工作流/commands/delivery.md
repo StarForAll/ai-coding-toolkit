@@ -117,18 +117,35 @@ pnpm test && pnpm type-check && pnpm lint
 进入 `/trellis:record-session` 前，先确认：
 
 - 已完成内容已由人工测试并提交
-- 已完成任务先归档，未完成任务不要误归档
+- 当前执行任务已完成，且本轮收尾只围绕**当前任务**
+- 已完成任务先归档，未完成任务不要误归档；非当前任务不要借本轮收尾顺手自动提交
+- staged 区不得混入非目标变更；若存在 staged 污染，必须先中断处理
 - `task.py archive` 与 `add_session.py` 一旦修改 `.trellis/tasks` 或 `.trellis/workspace`，必须真实自动提交，不接受"脚本提示成功但 git 仍脏"的状态
 
 ```bash
+python3 docs/workflows/新项目开发工作流/commands/shell/metadata-autocommit-guard.py \
+  --mode archive --check pre --task-dir <current-task>
+
+python3 docs/workflows/新项目开发工作流/commands/shell/metadata-autocommit-guard.py \
+  --mode record-session --check pre
+
 git status --short .trellis/tasks
 git status --short .trellis/workspace .trellis/tasks
+git status --short .trellis/.current-task
 ```
 
 判定规则：
 
 - 输出为空：可以视为归档/记录闭环完成
-- 仍有 `.trellis/tasks` 或 `.trellis/workspace` 变更：`/trellis:record-session` 不算完成，先处理自动提交失败原因
+- 仍有 `.trellis/tasks`、`.trellis/workspace` 或 `.trellis/.current-task` 变更：`/trellis:record-session` 不算完成，先处理自动提交失败原因
+- 若目标不是当前任务，或 staged 区存在非目标变更：不进入自动提交，视为前置条件失败
+
+收尾后可追加：
+
+```bash
+python3 docs/workflows/新项目开发工作流/commands/shell/metadata-autocommit-guard.py \
+  --mode record-session --check post
+```
 
 > **详细流程**：参见 [元数据自动提交辅助流程](./metadata-auto-commit.md)
 
@@ -153,10 +170,10 @@ $TASK_DIR/delivery/
 
 | 验收结果 | 推荐命令 | 说明 |
 |---------|---------|------|
-| 全部通过，准备收尾 | `/trellis:record-session` | **默认推荐**。记录会话，并确认 `.trellis` 元数据已自动提交 |
+| 全部通过，准备收尾 | `/trellis:record-session` | **默认推荐**。仅用于当前任务收尾，并确认 `.trellis` 元数据已自动提交 |
 | 有 P0/P1 缺陷 | `/trellis:break-loop` | 深度分析 Bug 根因 |
 | 有 P2/P3 缺陷 | `/trellis:start` | 回到实施阶段修复 |
 | 需要更新规范文档 | `/trellis:update-spec` | 沉淀新发现的模式到 spec |
 | 需要请求代码审查 | Skill: `requesting-code-review` | PR 前外部审查 |
-| 需要归档任务 | `python3 ./.trellis/scripts/task.py archive <name>` | 项目完成归档，并检查 `.trellis/tasks` 已自动提交 |
+| 需要归档任务 | `python3 ./.trellis/scripts/task.py archive <name>` | 仅当前任务完成后使用，并检查 `.trellis/tasks` 已自动提交 |
 | 不确定下一步 | `/trellis:record-session` | 先记录会话，但只有 `.trellis` 元数据自动提交成功后才算完成 |

@@ -68,6 +68,7 @@ def main():
         "feasibility-check.py", "design-export.py",
         "plan-validate.py", "self-review-check.py",
         "delivery-control-validate.py",
+        "metadata-autocommit-guard.py",
     ]
 
     print()

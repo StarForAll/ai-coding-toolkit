@@ -50,6 +50,20 @@ class WorkflowInstallerTests(unittest.TestCase):
     def install_workflow(self, fixture_root: Path) -> subprocess.CompletedProcess[str]:
         return self.run_script(INSTALL_SCRIPT, "--project-root", str(fixture_root))
 
+    def test_install_deploys_metadata_autocommit_guard_helper(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        helper = fixture / ".trellis" / "scripts" / "workflow" / "metadata-autocommit-guard.py"
+        self.assertTrue(helper.exists(), "metadata-autocommit-guard.py should be deployed")
+
+        record = fixture / ".trellis" / "workflow-installed.json"
+        self.assertTrue(record.exists(), "workflow-installed.json should be created")
+        self.assertIn("metadata-autocommit-guard.py", record.read_text(encoding="utf-8"))
+
     def test_upgrade_check_detects_phase_router_drift_even_when_versions_match(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)

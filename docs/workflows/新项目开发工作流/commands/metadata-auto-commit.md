@@ -1,195 +1,267 @@
 # /trellis:metadata-auto-commit
 
-元数据自动提交辅助流程 —— 确保 `.trellis/` 目录的元数据变更被可靠地自动提交。
+元数据自动提交辅助流程 —— 约束 `.trellis/` 元数据在“当前任务收尾”场景中的自动提交边界。
 
 ---
 
-## 1. 目的与适用范围
+## 1. 目的与定位
 
-### 1.1 解决的问题
+本流程解决的不是“如何让脚本顺手 commit 一下”，而是：
 
-在 AI 辅助开发工作流中，以下脚本会修改 `.trellis/` 目录的元数据文件：
+- 避免把不该提交的代码或元数据误带进自动提交
+- 避免把“脚本打印成功”误当成“元数据已真实闭环”
+- 避免在非当前任务、批量补记、补归档等场景中扩大自动提交边界
 
-- `task.py archive` —— 归档任务，移动 `.trellis/tasks/active/` → `.trellis/tasks/archive/`
-- `add_session.py` —— 记录会话，追加 `.trellis/workspace/<developer>/journal-N.md`
-- 其他元数据操作 —— 更新索引、统计等
+**结论先行**：
 
-**核心问题**：脚本输出"成功"不等于元数据已真实提交。若自动提交失败，会导致：
-- 任务状态与实际不符
-- 会话记录丢失
-- 多开发者协作冲突
-
-### 1.2 适用范围
-
-| 场景 | 触发脚本 | 提交范围 |
-|------|----------|----------|
-| 任务归档 | `task.py archive <name>` | `.trellis/tasks/` |
-| 会话记录 | `add_session.py` | `.trellis/workspace/`, `.trellis/tasks/` |
-| 其他元数据操作 | 各类元数据脚本 | `.trellis/` 相关目录 |
+- 自动 commit 只服务于**当前执行任务已完成后的收尾**
+- 任何超出该边界的场景，默认不允许自动 commit
+- 若 git 状态未清空，视为收尾未完成
 
 ---
 
-## 2. 核心原则
+## 2. 适用范围
 
-### 2.1 脚本输出 ≠ 实际完成
+### 2.1 允许自动 commit 的场景
 
-- 不要仅凭脚本输出的 "task archived" 或 "session added successfully" 判定完成
-- 脚本执行成功仅表示**尝试**了自动提交，不代表**实际**提交成功
+| 场景 | 触发脚本 | 提交目标 | 约束 |
+|------|----------|----------|------|
+| 当前任务归档 | `task.py archive <current-task>` | `.trellis/tasks/` 及归档副作用文件 | 仅当前任务完成后允许 |
+| 当前任务会话记录 | `add_session.py` | `.trellis/workspace/`, `.trellis/tasks/` | 仅当前任务完成后允许 |
 
-### 2.2 git 状态是唯一可信来源
+### 2.2 不允许自动 commit 的场景
 
-- 自动提交后，必须通过 `git status --short` 验证目标目录是否已清空
-- 预期输出：**空**（无任何变更）
+- 非当前任务的归档、补归档、批量归档
+- 进行中任务的状态推进或 phase 变更
+- `set-branch` / `set-base-branch` / `set-scope` 这类任务配置修改
+- `.trellis/.current-task` 的普通切换
+- 任何“只是顺手修改了 `.trellis/`，但不属于当前任务完成收尾”的动作
 
-### 2.3 失败必须阻断流程
+### 2.3 例外模式
 
-- 若 `.trellis/` 目录仍有未提交的变更，视为元数据操作未完成
-- 必须先解决失败原因，才能继续后续流程
+`--no-commit` 只能视为**调试 / 例外模式**：
 
----
-
-## 3. 自动提交流程
-
-### 3.1 实现机制
-
-```python
-# .trellis/scripts/common/git.py::auto_commit_paths()
-def auto_commit_paths(paths: list[str], cwd: Path, commit_msg: str) -> tuple[str, str]:
-    """
-    Returns:
-        ("committed", "")  —— 成功创建提交
-        ("clean", "")      —— 无变更需要提交
-        ("failed", "<reason>") —— 失败，附带原因
-    """
-```
-
-流程：
-1. `git add -A -- <paths>` —— 暂存目标路径
-2. `git diff --cached --quiet -- <paths>` —— 检查是否有 staged 变更
-3. `git commit -m <msg>` —— 创建提交
-
-### 3.2 返回状态处理
-
-| 状态 | 含义 | 处理方式 |
-|------|------|----------|
-| `committed` | 成功创建新提交 | 流程正常完成 |
-| `clean` | 无变更需要提交 | 流程正常完成（幂等） |
-| `failed` | 提交失败 | 必须中断流程，排查原因 |
+- 它不是正式闭环路径
+- 使用后不能宣称“record-session 已完成”或“archive 已完成”
+- 使用后必须由操作者自行处理后续 git 校验与提交
 
 ---
 
-## 4. 校验清单
+## 3. P0 规则
 
-### 4.1 任务归档后的校验
+### 3.1 当前任务边界
+
+P0 必须满足：
+
+- 自动 commit 前必须确认目标任务就是 `.trellis/.current-task` 指向的当前任务
+- 若检测到“已完成但非当前任务”的归档或收尾意图，必须**硬阻断**
+- 不允许通过自动 commit 顺手清理其他任务的元数据
+
+### 3.2 staged 污染硬阻断
+
+P0 必须满足：
+
+- 自动 commit 前必须检查 index / staged 区
+- 若 staged 区混入了非本次元数据提交目标的变更，必须**硬阻断**
+- 不接受仅靠文档提醒“请先清空 staged 区”；应在脚本层明确拒绝
+
+**原因**：
+当前自动提交流程最终会执行 `git commit -m <msg>`。若 index 已混入其他 staged 变更，这些变更会被一并提交，风险高于“提交失败”。
+
+### 3.3 git 状态是唯一可信校验
+
+- 不要仅凭 `task archived` 或 `session added successfully` 判定完成
+- 自动提交后必须检查目标 `.trellis/` 路径是否已清空
+- 若校验后仍有目标路径变更，视为收尾失败
+
+---
+
+## 4. 当前实现与文档边界
+
+本文件描述的是**当前工作流要求 + P0/P1 约束**，不是对现状实现的美化。
+
+### 4.1 当前已确认现状
+
+- `add_session.py` 已使用共享自动提交 helper
+- `task.py archive` 当前仍有独立自动提交逻辑，失败语义未完全统一
+- 归档时除 `.trellis/tasks/` 外，还可能影响 `.trellis/.current-task`
+
+### 4.2 当前文档必须避免的误导
+
+- 不要写成任务从 `.trellis/tasks/active/` 移动到 `archive/`
+- 不要写成 `task.py archive` 已与 `add_session.py` 完全共享同一自动提交语义
+- 不要把“其他元数据脚本”笼统纳入自动 commit 范围
+
+### 4.3 P1 补强项
+
+P1 再处理：
+
+- `task.py archive` 自动提交失败强阻断
+- `archive` 与 `add_session` 的失败语义统一
+- 共享 helper 进一步收敛
+
+---
+
+## 5. 执行前检查
+
+### 5.1 任务边界检查
+
+执行 `task.py archive` 或 `add_session.py` 前，必须先确认：
+
+- 当前任务已完成
+- 待归档 / 待收尾的目标就是当前任务
+- 不是在补记其他任务、批量处理多个任务、或顺手清理历史任务
+
+### 5.2 git 检查
+
+执行前至少确认：
 
 ```bash
-# 执行归档
-python3 ./.trellis/scripts/task.py archive <task-name>
+python3 docs/workflows/新项目开发工作流/commands/shell/metadata-autocommit-guard.py \
+  --mode archive --check pre --task-dir <current-task>
 
-# 校验：.trellis/tasks 目录应为空
+python3 docs/workflows/新项目开发工作流/commands/shell/metadata-autocommit-guard.py \
+  --mode record-session --check pre
+
+git status --short
+git diff --cached --name-only
+```
+
+重点检查：
+
+- staged 区是否已经混入无关变更
+- 本次操作是否会把非目标内容带入自动提交
+
+---
+
+## 6. 校验清单
+
+### 6.1 当前任务归档后的校验
+
+```bash
+python3 ./.trellis/scripts/task.py archive <current-task>
+
+python3 docs/workflows/新项目开发工作流/commands/shell/metadata-autocommit-guard.py \
+  --mode archive --check post
+
 git status --short .trellis/tasks
+git status --short .trellis/.current-task
 ```
 
-**预期输出**：空（无任何内容）
+**预期输出**：空
 
-### 4.2 会话记录后的校验
+说明：
+
+- 若 `.trellis/tasks` 仍有变更，归档未闭环
+- 若 `.trellis/.current-task` 仍有异常残留，说明当前任务指针未正确清理
+
+### 6.2 当前任务会话记录后的校验
 
 ```bash
-# 执行记录
 python3 ./.trellis/scripts/add_session.py \
   --title "Session Title" \
   --commit "hash1,hash2"
 
-# 校验：workspace 和 tasks 目录应为空
+python3 docs/workflows/新项目开发工作流/commands/shell/metadata-autocommit-guard.py \
+  --mode record-session --check post
+
 git status --short .trellis/workspace .trellis/tasks
 ```
 
-**预期输出**：空（无任何内容）
+**预期输出**：空
 
-### 4.3 快速校验命令
+### 6.3 收尾总校验
 
 ```bash
-# 统一校验（推荐）
-git status --short .trellis/workspace .trellis/tasks
+git status --short .trellis
 ```
+
+用途：
+
+- 当局部校验有歧义时，用于确认 `.trellis/` 范围内是否仍有遗漏的副作用文件
 
 ---
 
-## 5. 失败处理
+## 7. 失败处理
 
-### 5.1 常见失败原因
+### 7.1 常见失败类型
 
-| 原因 | 症状 | 解决方案 |
+| 类型 | 含义 | P0 处理 |
 |------|------|----------|
-| git add 失败 | 权限不足、路径不存在 | 检查文件权限，确认路径正确 |
-| git commit 失败 | 作者信息缺失、pre-commit hook 失败 | 配置 git user，检查 hook |
-| 磁盘/IO 错误 | 写入失败、磁盘满 | 检查磁盘空间，重试 |
+| staged 污染 | staged 区已有非目标变更 | 硬阻断，先清理 |
+| 非当前任务收尾 | 目标不是当前任务 | 硬阻断，拒绝自动 commit |
+| git add / commit 失败 | 权限、hook、作者信息等问题 | 中断并排查 |
+| `--no-commit` 例外模式 | 明确跳过自动 commit | 不得宣称闭环完成 |
 
-### 5.2 诊断步骤
+### 7.2 诊断步骤
 
 ```bash
-# 1. 查看详细状态
-git status .trellis/
+# 1. 看整体状态
+git status --short .trellis
 
-# 2. 查看 staged 变更
-git diff --cached .trellis/
+# 2. 看 staged 区到底有什么
+git diff --cached --name-only
 
-# 3. 手动尝试提交（查看错误信息）
-git add .trellis/workspace .trellis/tasks
-git commit -m "debug: manual commit"
+# 3. 看当前任务指针
+cat .trellis/.current-task 2>/dev/null || true
 ```
 
-### 5.3 修复与重试
+### 7.3 恢复原则
 
-1. **解决根本原因**（权限、配置、磁盘等）
-2. **手动提交**（如需立即恢复）：
-   ```bash
-   git add .trellis/workspace .trellis/tasks
-   git commit -m "chore(trellis): manual metadata commit"
-   ```
-3. **验证修复**：重新运行校验命令，确认输出为空
+1. 先确认边界是否正确：
+   - 是否真的是当前任务
+   - 是否真的进入了完成收尾阶段
+2. 再清理 staged 污染或修复 git 失败原因
+3. 最后重新执行局部校验与总校验
 
 ---
 
-## 6. 集成点
+## 8. 集成点
 
-### 6.1 在 delivery 阶段的调用
+### 8.1 在 delivery 阶段的调用
 
-在 `/trellis:delivery` 的 Step 10（收尾记录校验）中：
-- 执行 `record-session` 前确认代码已提交
-- 执行后必须校验 `.trellis/` 元数据已自动提交
+`/trellis:delivery` 的收尾阶段必须把本流程当作门禁：
 
-参见：[delivery.md Step 10](./delivery.md#step-10-收尾记录校验)
+- 当前任务未完成，不进入自动提交
+- 目标不是当前任务，不进入自动提交
+- staged 区不干净，不进入自动提交
 
-### 6.2 在 record-session 中的调用
+推荐显式执行：
 
-`add_session.py` 自动调用 `auto_commit_paths()` 提交 `.trellis/workspace` 和 `.trellis/tasks` 的变更。
+```bash
+python3 docs/workflows/新项目开发工作流/commands/shell/metadata-autocommit-guard.py \
+  --mode record-session --check pre
+```
 
-参见：[record-session Skill](../../../../../.agents/skills/record-session/SKILL.md)
+### 8.2 在 record-session 中的调用
 
-### 6.3 在 task archive 中的调用
+`add_session.py` 的自动提交只应被视为**当前任务收尾的一部分**，而不是通用 `.trellis` 提交器。
 
-`task.py archive` 自动调用 `auto_commit_paths()` 提交 `.trellis/tasks` 的变更。
+### 8.3 在 task archive 中的调用
+
+`task.py archive` 只有在归档目标就是当前任务时，才允许进入自动提交路径。
 
 ---
 
-## 7. 相关文件
+## 9. 相关文件
 
 | 文件 | 用途 |
 |------|------|
-| `.trellis/scripts/common/git.py` | `auto_commit_paths()` 实现 |
-| `.trellis/scripts/task.py` | 任务管理，含归档功能 |
-| `.trellis/scripts/add_session.py` | 会话记录，含自动提交 |
-| `.agents/skills/record-session/SKILL.md` | 会话记录 Skill |
+| `docs/workflows/新项目开发工作流/commands/shell/metadata-autocommit-guard.py` | 工作流源脚本：元数据自动提交前后置门禁 |
+| `.trellis/scripts/common/git.py` | 自动提交 helper |
+| `.trellis/scripts/task.py` | 任务管理入口 |
+| `.trellis/scripts/common/task_store.py` | 归档逻辑与自动提交 |
+| `.trellis/scripts/add_session.py` | 会话记录与自动提交 |
 
 ---
 
 ## 下一步
 
-完成元数据自动提交校验后：
+完成 P0 后，文档与实现至少应满足：
 
-| 场景 | 推荐命令 |
-|------|----------|
-| 交付阶段完成 | `/trellis:record-session` |
-| 需要更新规范 | `/trellis:update-spec` |
-| 交付物检查 | 参见 [delivery.md](./delivery.md) |
+- 当前任务边界明确
+- staged 污染会被硬阻断
+- 非当前任务收尾会被硬阻断
+- git 状态校验是完成判定的最终依据
+
+P1 再继续统一 `archive` 与 `record-session` 的失败语义。
