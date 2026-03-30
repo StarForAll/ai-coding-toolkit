@@ -1,0 +1,45 @@
+{
+  "id": "metadata-auto-commit-docs",
+  "name": "metadata-auto-commit-docs",
+  "title": "补充元数据自动提交辅助流程文档",
+  "description": "",
+  "status": "completed",
+  "dev_type": "docs",
+  "scope": "docs",
+  "package": null,
+  "priority": "P2",
+  "creator": "xzc",
+  "assignee": "xzc",
+  "createdAt": "2026-03-30",
+  "completedAt": "2026-03-30",
+  "branch": "docs/metadata-auto-commit",
+  "base_branch": "main",
+  "worktree_path": null,
+  "current_phase": 0,
+  "next_action": [
+    {
+      "phase": 1,
+      "action": "implement"
+    },
+    {
+      "phase": 2,
+      "action": "check"
+    },
+    {
+      "phase": 3,
+      "action": "finish"
+    },
+    {
+      "phase": 4,
+      "action": "create-pr"
+    }
+  ],
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
