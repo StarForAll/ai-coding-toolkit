@@ -445,3 +445,48 @@ python3 docs/workflows/新项目开发工作流/commands/shell/delivery-control-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 52: 工作流中元数据自动提交辅助流程完善
+
+**Date**: 2026-03-30
+**Task**: 工作流中元数据自动提交辅助流程完善
+**Branch**: `main`
+
+### Summary
+
+完善新项目开发工作流中的元数据自动提交边界与源脚本实现
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Workflow Docs | 统一 `metadata-auto-commit`、`delivery`、`工作流总纲`、`命令映射` 的口径，明确只允许当前任务收尾自动提交，补充 staged 污染与非当前任务硬阻断约束。 |
+| Workflow Script | 新增 `commands/shell/metadata-autocommit-guard.py`，为 `archive` / `record-session` 提供前后置门禁检查。 |
+| Install Chain | 更新 `install-workflow.py` 与 `upgrade-compat.py`，确保新 helper 会被部署并纳入升级检查。 |
+| Tests | 新增 `test_metadata_autocommit_guard.py`，并扩展 `test_workflow_installers.py` 覆盖新 helper 的安装链路。 |
+
+**Verification**:
+- `/ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --strict-warnings`
+- `/ops/softwares/python/bin/python3 -m py_compile docs/workflows/新项目开发工作流/commands/install-workflow.py docs/workflows/新项目开发工作流/commands/upgrade-compat.py docs/workflows/新项目开发工作流/commands/shell/metadata-autocommit-guard.py docs/workflows/新项目开发工作流/commands/shell/test_metadata_autocommit_guard.py`
+- `/ops/softwares/python/bin/python3 docs/workflows/新项目开发工作流/commands/test_workflow_installers.py`
+- `/ops/softwares/python/bin/python3 docs/workflows/新项目开发工作流/commands/shell/test_metadata_autocommit_guard.py`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6ab8e2c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
