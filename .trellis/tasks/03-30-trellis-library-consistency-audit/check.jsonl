@@ -1,0 +1,5 @@
+{"file": ".opencode/commands/trellis/finish-work.md", "reason": "Finish work checklist"}
+{"file": ".opencode/commands/trellis/check.md", "reason": "Code quality check spec"}
+{"file": ".trellis/spec/library-assets/spec-authoring.md", "reason": "Check allowed spec shapes after normalization"}
+{"file": ".trellis/spec/library-assets/checklist-authoring.md", "reason": "Check checklist structure after edits"}
+{"file": ".trellis/spec/library-assets/template-authoring.md", "reason": "Check template structure after edits"}

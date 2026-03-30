@@ -18,7 +18,7 @@ Use this template to create a task for transferring administrative control of in
 |-------|-------|
 | Task ID | DELIVERY-CTRL-001 |
 | Task Name | Transfer Control and Admin Access |
-| Task Type | 交付任务 |
+| Task Type | Delivery Task |
 | Risk Level | L2 (high) - security and access control |
 | AI Execution Mode | Human-led (access control changes require care) |
 | Evaluation Set | Access verification tests |
@@ -100,7 +100,7 @@ Use this template to create a task for transferring administrative control of in
 - Payment not received (for payment-triggered transfer)
 - Critical services are in unstable state (avoid transferring broken systems)
 
-**Parallel属性**: 可与 `DELIVERY-SECRETS`、`DELIVERY-SRC` 并行，但应在 `DELIVERY-PERMANENT` 主链中
+**Parallel Execution**: Can run in parallel with `DELIVERY-SECRETS` and `DELIVERY-SRC`, but should still remain inside the `DELIVERY-PERMANENT` main handover chain
 
 ---
 

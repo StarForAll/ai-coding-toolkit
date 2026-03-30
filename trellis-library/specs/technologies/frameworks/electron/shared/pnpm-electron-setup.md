@@ -1,82 +1,89 @@
-# pnpm + Electron 项目配置指南
+# pnpm + Electron Setup Guide
 
-> **Purpose**: 使用 pnpm 管理 Electron 项目的完整配置指南，包括 monorepo 设置、native modules 处理和打包配置。
+> **Purpose**: Provide a complete setup guide for managing Electron projects
+> with pnpm, including monorepo layout, native-module handling, and packaging
+> configuration.
 
 ---
 
-## 为什么 Electron 项目使用 pnpm 需要特殊配置？
+## Why Electron Projects Need Special pnpm Configuration
 
-pnpm 默认使用 **符号链接 + 内容寻址存储**，创建非扁平的 `node_modules` 结构：
+pnpm uses a **symlinked, content-addressable store** by default, which produces
+a non-flat `node_modules` layout:
 
 ```
 node_modules/
-├── .pnpm/                    # 实际包存储
+├── .pnpm/                    # Actual package store
 │   ├── better-sqlite3@9.0.0/
 │   │   └── node_modules/
 │   │       └── better-sqlite3/
 │   └── bindings@1.5.0/
-└── your-package -> .pnpm/... # 符号链接
+└── your-package -> .pnpm/... # Symlink
 ```
 
-**问题**：
+**Problems**:
 
-1. **Native modules 路径解析失败** - Electron 打包时无法正确处理符号链接
-2. **electron-rebuild 找不到模块** - 需要扁平结构才能正确重建
-3. **asar 打包问题** - 符号链接不能被打包进 asar
+1. **Native module path resolution fails** because Electron packaging does not
+   always handle symlinks correctly.
+2. **`electron-rebuild` cannot find modules** reliably without a flatter
+   layout.
+3. **asar packaging breaks** because symlinks are not packaged into asar
+   archives.
 
-**解决方案**：使用 `shamefully-hoist` 创建类似 npm 的扁平结构。
+**Recommended fix**: use `shamefully-hoist` to emulate an npm-like flat
+dependency layout.
 
 ---
 
-## 基础配置
+## Base Configuration
 
-### 1. .npmrc 配置（必需）
+### 1. `.npmrc` Configuration (Required)
 
 ```ini
 # .npmrc
 
-# 使用 hoisted 的 node_modules 结构（类似 npm）
+# Use a hoisted node_modules layout similar to npm
 node-linker=hoisted
 
-# 将所有依赖提升到根 node_modules（Electron 必需）
+# Hoist dependencies into the root node_modules directory
 shamefully-hoist=true
 
-# 可选：如果遇到 peer dependency 警告
+# Optional: relax peer-dependency failures
 strict-peer-dependencies=false
 
-# 可选：加速安装
+# Optional: speed up repeated installs
 prefer-offline=true
 ```
 
-**配置说明**：
+**Why these settings matter**:
 
-| 配置                             | 作用                      | 为什么需要                |
-| -------------------------------- | ------------------------- | ------------------------- |
-| `node-linker=hoisted`            | 使用扁平化的 node_modules | Electron 打包需要         |
-| `shamefully-hoist=true`          | 提升所有依赖到根目录      | Native modules 路径解析   |
-| `strict-peer-dependencies=false` | 忽略 peer 依赖警告        | Electron 生态包版本常冲突 |
+| Setting | Effect | Why it matters |
+| ------- | ------ | -------------- |
+| `node-linker=hoisted` | Uses a flat `node_modules` tree | Electron packaging expects this layout more often |
+| `shamefully-hoist=true` | Hoists dependencies to the root | Helps native-module resolution |
+| `strict-peer-dependencies=false` | Ignores peer-dependency warnings | Electron ecosystem packages often have version friction |
 
-### 2. pnpm-workspace.yaml（Monorepo）
+### 2. `pnpm-workspace.yaml` for Monorepos
 
 ```yaml
 # pnpm-workspace.yaml
 
 packages:
-  - 'apps/*' # Electron 应用
-  - 'packages/*' # 共享包
-  - '!**/dist' # 排除构建产物
-  - '!**/out' # 排除 Electron 打包产物
+  - 'apps/*' # Electron applications
+  - 'packages/*' # Shared packages
+  - '!**/dist' # Exclude build output
+  - '!**/out' # Exclude Electron packaging output
 ```
 
-**典型 Monorepo 结构**：
+**Typical monorepo structure**:
 
 ```
 my-electron-project/
 ├── .npmrc
 ├── pnpm-workspace.yaml
-├── package.json              # 根 package.json
+├── package.json              # Root package.json
 ├── apps/
-│   └── desktop/              # Electron 应用
+│   └── desktop/              # Electron application
 │       ├── package.json
 │       ├── forge.config.ts
 │       ├── src/
@@ -85,13 +92,13 @@ my-electron-project/
 │       │   └── preload/      # Preload scripts
 │       └── ...
 └── packages/
-    ├── shared/               # 共享代码
+    ├── shared/               # Shared code
     │   └── package.json
-    └── ui/                   # 共享 UI 组件
+    └── ui/                   # Shared UI components
         └── package.json
 ```
 
-### 3. 根 package.json
+### 3. Root `package.json`
 
 ```json
 {
@@ -119,13 +126,14 @@ my-electron-project/
 
 ---
 
-## Native Modules 配置
+## Native Module Configuration
 
-### 问题：Native Modules 需要为 Electron 重新编译
+### Problem: Native Modules Must Be Rebuilt for Electron
 
-Native modules（如 `better-sqlite3`）包含 C++ 代码，必须针对 Electron 的 Node.js 版本编译。
+Native modules such as `better-sqlite3` contain compiled C++ code and must be
+built against Electron's Node.js ABI, not stock Node.js.
 
-### 解决方案 1：electron-rebuild（推荐）
+### Option 1: `electron-rebuild` (Recommended)
 
 ```json
 // apps/desktop/package.json
@@ -140,10 +148,10 @@ Native modules（如 `better-sqlite3`）包含 C++ 代码，必须针对 Electro
 }
 ```
 
-### 解决方案 2：electron-builder install-app-deps
+### Option 2: `electron-builder install-app-deps`
 
 ```json
-// 根 package.json
+// root package.json
 {
   "scripts": {
     "postinstall": "electron-builder install-app-deps"
@@ -154,9 +162,9 @@ Native modules（如 `better-sqlite3`）包含 C++ 代码，必须针对 Electro
 }
 ```
 
-### 解决方案 3：Electron Forge 自动处理
+### Option 3: Let Electron Forge Handle It
 
-如果使用 Electron Forge，配置 `rebuildConfig`：
+If you use Electron Forge, configure `rebuildConfig`:
 
 ```typescript
 // forge.config.ts
@@ -164,7 +172,7 @@ import type { ForgeConfig } from '@electron-forge/shared-types';
 
 const config: ForgeConfig = {
   rebuildConfig: {
-    force: true, // 强制重建所有 native modules
+    force: true, // Force all native modules to rebuild
   },
   // ...
 };
@@ -174,9 +182,9 @@ export default config;
 
 ---
 
-## Electron Forge + pnpm 配置
+## Electron Forge + pnpm Configuration
 
-### forge.config.ts 完整配置
+### Full `forge.config.ts` Example
 
 ```typescript
 // apps/desktop/forge.config.ts
@@ -187,20 +195,20 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 import path from 'path';
 import { cp, mkdir } from 'fs/promises';
 
-// Native modules 及其依赖
+// Native modules and the packages they depend on
 const nativeModules = ['better-sqlite3', 'bindings', 'file-uri-to-path'];
 
 const config: ForgeConfig = {
   packagerConfig: {
     asar: {
-      // 从 asar 中提取 native 二进制文件
+      // Extract native binaries outside the asar bundle
       unpack: '*.{node,dll}',
     },
-    // 只包含必要的 node_modules
+    // Include only the node_modules entries that are actually required
     ignore: [
-      // 排除所有 node_modules，除了 native modules
+      // Exclude all node_modules except the allowlisted native modules
       new RegExp(`node_modules/(?!(${nativeModules.join('|')})/)`),
-      // 排除开发文件
+      // Exclude development files
       /\.git/,
       /\.vscode/,
       /\.idea/,
@@ -215,7 +223,7 @@ const config: ForgeConfig = {
   },
 
   hooks: {
-    // 打包后复制 native modules
+    // Copy native modules after packaging
     packageAfterCopy: async (_forgeConfig, buildPath) => {
       const sourceNodeModules = path.resolve(__dirname, 'node_modules');
       const destNodeModules = path.resolve(buildPath, 'node_modules');
@@ -253,7 +261,7 @@ const config: ForgeConfig = {
       [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
       [FuseV1Options.EnableNodeCliInspectArguments]: false,
       [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
-      [FuseV1Options.OnlyLoadAppFromAsar]: false, // 允许加载 unpacked 文件
+      [FuseV1Options.OnlyLoadAppFromAsar]: false, // Allow unpacked files
     }),
   ],
 };
@@ -261,7 +269,7 @@ const config: ForgeConfig = {
 export default config;
 ```
 
-### Vite 配置：外部化 Native Modules
+### Vite Configuration: Externalize Native Modules
 
 ```typescript
 // vite.main.config.ts
@@ -273,12 +281,12 @@ export default defineConfig({
       external: [
         'electron',
         'better-sqlite3',
-        // 其他 native modules
+        // Other native modules
       ],
     },
   },
   resolve: {
-    // 确保 Node.js 内置模块正确解析
+    // Ensure Node.js built-ins resolve correctly
     conditions: ['node'],
     mainFields: ['module', 'jsnext:main', 'jsnext'],
   },
@@ -287,60 +295,60 @@ export default defineConfig({
 
 ---
 
-## 常见问题排查
+## Common Troubleshooting Cases
 
-### 问题 1：`Cannot find module 'better-sqlite3'`
+### Issue 1: `Cannot find module 'better-sqlite3'`
 
-**原因**：Native module 未被正确打包。
+**Cause**: the native module was not packaged correctly.
 
-**检查步骤**：
+**Checks**:
 
 ```bash
-# 1. 确认 .npmrc 配置正确
+# 1. Confirm .npmrc is correct
 cat .npmrc
-# 应该包含：
+# Expected:
 # node-linker=hoisted
 # shamefully-hoist=true
 
-# 2. 重新安装依赖
+# 2. Reinstall dependencies
 rm -rf node_modules pnpm-lock.yaml
 pnpm install
 
-# 3. 检查 node_modules 结构
+# 3. Check node_modules layout
 ls -la node_modules/better-sqlite3
-# 应该是实际目录，不是符号链接
+# This should be a real directory, not a symlink
 
-# 4. 重建 native modules
+# 4. Rebuild the native module
 pnpm rebuild better-sqlite3
 ```
 
-### 问题 2：`NODE_MODULE_VERSION mismatch`
+### Issue 2: `NODE_MODULE_VERSION mismatch`
 
-**错误信息**：
+**Error**:
 
 ```
 Error: The module was compiled against a different Node.js version
 ```
 
-**原因**：Native module 是为 Node.js 编译的，不是 Electron。
+**Cause**: the native module was built for Node.js instead of Electron.
 
-**解决**：
+**Fix**:
 
 ```bash
-# 强制重建所有 native modules
+# Force a rebuild of all native modules
 npx electron-rebuild -f
 
-# 或在 forge.config.ts 中设置
+# Or set this in forge.config.ts
 rebuildConfig: {
   force: true,
 }
 ```
 
-### 问题 3：Monorepo 中找不到共享包
+### Issue 3: Shared Packages Cannot Be Resolved in a Monorepo
 
-**原因**：Workspace 协议配置问题。
+**Cause**: the workspace protocol or workspace file is configured incorrectly.
 
-**解决**：
+**Fix**:
 
 ```json
 // apps/desktop/package.json
@@ -351,23 +359,23 @@ rebuildConfig: {
 }
 ```
 
-确保 `pnpm-workspace.yaml` 包含了共享包路径。
+Make sure `pnpm-workspace.yaml` includes the shared package paths.
 
-### 问题 4：打包后应用启动失败
+### Issue 4: Packaged App Fails to Start
 
-**调试步骤**：
+**Debug steps**:
 
 ```bash
-# 1. 查看打包产物
+# 1. Inspect the packaged resources
 ls -la out/*/resources/
 
-# 2. 检查 asar 内容
+# 2. Inspect the asar archive
 npx asar list out/*/resources/app.asar
 
-# 3. 检查 unpacked 文件
+# 3. Inspect unpacked files
 ls -la out/*/resources/app.asar.unpacked/
 
-# 4. 运行打包后的应用并查看日志
+# 4. Run the packaged app and inspect logs
 # macOS
 ./out/MyApp-darwin-x64/MyApp.app/Contents/MacOS/MyApp
 
@@ -375,40 +383,40 @@ ls -la out/*/resources/app.asar.unpacked/
 ./out/MyApp-win32-x64/MyApp.exe
 ```
 
-### 问题 5：pnpm install 后 electron-rebuild 失败
+### Issue 5: `electron-rebuild` Fails After `pnpm install`
 
-**原因**：可能是 Python 或 C++ 构建工具缺失。
+**Cause**: Python or C++ build tools may be missing.
 
-**解决**：
+**Fix**:
 
 ```bash
 # macOS
 xcode-select --install
 
-# Windows（管理员 PowerShell）
-# OS-level exception: native module compilation tools must be installed via npm global,
-# as there is no pnpm-equivalent for global system tools.
+# Windows (Administrator PowerShell)
+# OS-level exception: native-module build tooling still comes from npm global
+# installation because pnpm does not provide an equivalent global system-tool flow.
 npm install --global windows-build-tools
 
-# 或者安装 Visual Studio Build Tools
+# Or install Visual Studio Build Tools directly
 ```
 
 ---
 
-## 最佳实践
+## Best Practices
 
-### 1. 锁定 Electron 版本
+### 1. Pin the Electron Version
 
 ```json
 // package.json
 {
   "devDependencies": {
-    "electron": "28.0.0" // 使用精确版本，不用 ^
+    "electron": "28.0.0" // Pin the exact version instead of using ^
   }
 }
 ```
 
-### 2. 使用 packageManager 字段
+### 2. Declare `packageManager`
 
 ```json
 // package.json
@@ -421,7 +429,7 @@ npm install --global windows-build-tools
 }
 ```
 
-### 3. CI/CD 配置
+### 3. Configure CI/CD Explicitly
 
 ```yaml
 # .github/workflows/build.yml
@@ -454,7 +462,7 @@ jobs:
         run: pnpm package
 ```
 
-### 4. 开发脚本
+### 4. Keep Development Scripts Consistent
 
 ```json
 // apps/desktop/package.json
@@ -473,21 +481,21 @@ jobs:
 
 ---
 
-## 配置检查清单
+## Setup Checklist
 
-新建 Electron + pnpm 项目时：
+When starting a new Electron + pnpm project:
 
-- [ ] 创建 `.npmrc`，包含 `shamefully-hoist=true` 和 `node-linker=hoisted`
-- [ ] 创建 `pnpm-workspace.yaml`（如果是 monorepo）
-- [ ] 添加 `postinstall` 脚本运行 `electron-rebuild`
-- [ ] 在 `forge.config.ts` 中配置 `rebuildConfig.force = true`
-- [ ] 在 Vite 配置中将 native modules 设为 external
-- [ ] 在 `packagerConfig.ignore` 中正确处理 node_modules
-- [ ] 测试打包：`pnpm package` 后运行打包产物
+- [ ] Create `.npmrc` with `shamefully-hoist=true` and `node-linker=hoisted`
+- [ ] Create `pnpm-workspace.yaml` if the project is a monorepo
+- [ ] Add a `postinstall` script that runs `electron-rebuild`
+- [ ] Configure `rebuildConfig.force = true` in `forge.config.ts`
+- [ ] Mark native modules as external in the Vite configuration
+- [ ] Handle `node_modules` correctly in `packagerConfig.ignore`
+- [ ] Test packaging by running `pnpm package` and launching the packaged app
 
 ---
 
-## 参考资源
+## References
 
 - [pnpm Documentation](https://pnpm.io/)
 - [Electron Forge](https://www.electronforge.io/)

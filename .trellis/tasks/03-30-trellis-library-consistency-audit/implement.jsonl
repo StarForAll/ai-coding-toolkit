@@ -1,0 +1,7 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/index.md", "reason": "Project spec index"}
+{"file": ".trellis/spec/library-assets/spec-authoring.md", "reason": "Spec asset shapes and English authoring rules"}
+{"file": ".trellis/spec/library-assets/template-authoring.md", "reason": "Template structure and language expectations"}
+{"file": ".trellis/spec/library-assets/checklist-authoring.md", "reason": "Checklist structure and verification alignment"}
+{"file": ".trellis/spec/library-assets/manifest-maintenance.md", "reason": "Manifest relation and registration consistency"}
+{"file": ".trellis/spec/scripts/python-conventions.md", "reason": "Validation script changes must follow Python CLI conventions"}

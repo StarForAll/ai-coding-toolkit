@@ -172,20 +172,20 @@ def validate_format(target_file: Path, source_path: Path, is_new: bool) -> list[
                 source_has_fm = source_content.startswith("---")
                 target_has_fm = content.startswith("---")
                 if source_has_fm and not target_has_fm:
-                    issues.append("缺少 frontmatter（上游文件有 frontmatter）")
+                    issues.append("Missing frontmatter even though the upstream file includes it")
                 if not source_has_fm and target_has_fm:
-                    issues.append("新增了 frontmatter（上游文件无 frontmatter）")
+                    issues.append("Added frontmatter even though the upstream file does not include it")
 
         # Check section structure for overview.md
         if target_file.name == "overview.md":
             if "## " not in content:
-                issues.append("overview.md 缺少 ## 章节结构")
+                issues.append("overview.md is missing `##` section structure")
 
         # Check private references
         lowered = content.lower()
         for hint in PRIVATE_HINTS:
             if hint in lowered:
-                issues.append(f"检测到私有引用: '{hint}'")
+                issues.append(f"Detected private reference: '{hint}'")
 
     return issues
 
@@ -197,21 +197,21 @@ def validate_format(target_file: Path, source_path: Path, is_new: bool) -> list[
 def generate_summary(av: AssetVerification) -> str:
     """Generate brief summary for an asset verification."""
     lines = [
-        f"  {av.asset_id}: {av.total_count} 文件待验证",
+        f"  {av.asset_id}: {av.total_count} file(s) to verify",
     ]
     for fv in av.files:
         status_label = {
-            "new": "全新",
-            "different": "不同",
-            "identical": "相同",
+            "new": "new",
+            "different": "different",
+            "identical": "identical",
         }.get(fv.upstream_status, fv.upstream_status)
 
         diff_str = f"+{fv.line_added}/-{fv.line_removed}" if fv.upstream_status == "different" else f"+{fv.line_added}"
-        private_str = " ⚠️有私有标记" if fv.has_private_hints else ""
-        format_str = f" ⚠️格式问题:{len(fv.format_issues)}" if fv.format_issues else ""
+        private_str = " ⚠️private hints" if fv.has_private_hints else ""
+        format_str = f" ⚠️format issues:{len(fv.format_issues)}" if fv.format_issues else ""
 
         lines.append(
-            f"    {fv.relative_path:<40s} {diff_str:<12s} 上游:{status_label}{private_str}{format_str}"
+            f"    {fv.relative_path:<40s} {diff_str:<12s} upstream:{status_label}{private_str}{format_str}"
         )
     return "\n".join(lines)
 
@@ -230,13 +230,15 @@ def generate_aggregate_summary(verifications: list[AssetVerification]) -> str:
     )
 
     lines = [
-        "--- 概略 ---",
+        "--- Summary ---",
     ]
     for av in verifications:
         lines.append(generate_summary(av))
 
     lines.append("")
-    lines.append(f"总计: {total_files} 文件 (全新:{new_count}, 不同:{different_count}, 含私有标记:{private_count})")
+    lines.append(
+        f"Total: {total_files} file(s) (new:{new_count}, different:{different_count}, with private hints:{private_count})"
+    )
     return "\n".join(lines)
 
 
@@ -255,8 +257,8 @@ def show_file_detail(fv: FileVerification, source_path: Path, target_path: Path)
     diff = difflib.unified_diff(
         source_lines,
         target_lines,
-        fromfile=f"上游/{fv.relative_path}",
-        tofile=f"本地/{fv.relative_path}",
+        fromfile=f"upstream/{fv.relative_path}",
+        tofile=f"local/{fv.relative_path}",
     )
     print("".join(diff))
 
@@ -270,38 +272,38 @@ def verify_file_interactive(
 ) -> str:
     """Interactive verification for a single file. Returns action: approve/reject/skip."""
     status_label = {
-        "new": "全新文件 (上游不存在)",
-        "different": "上游存在且不同",
-        "identical": "上游存在且相同",
+        "new": "new file (not present upstream)",
+        "different": "exists upstream and differs",
+        "identical": "exists upstream and matches",
     }.get(fv.upstream_status, fv.upstream_status)
 
     print(f"\n[{index}/{total}] {fv.relative_path} — {status_label}")
 
     if fv.upstream_status == "different":
-        diff_str = f"+{fv.line_added}行/-{fv.line_removed}行"
-        print(f"  变更: {diff_str}")
+        diff_str = f"+{fv.line_added} line(s)/-{fv.line_removed} line(s)"
+        print(f"  Changes: {diff_str}")
     else:
-        print(f"  内容: {fv.line_added}行")
+        print(f"  Content: {fv.line_added} line(s)")
 
     if fv.has_private_hints:
-        print(f"  ⚠️ 私有标记: {', '.join(fv.private_hint_details)}")
+        print(f"  ⚠️ Private hints: {', '.join(fv.private_hint_details)}")
 
     if fv.format_issues:
-        print(f"  ⚠️ 格式问题:")
+        print("  ⚠️ Format issues:")
         for issue in fv.format_issues:
             print(f"    - {issue}")
 
     if fv.upstream_status == "different":
-        print(f"\n  ⚠️ 上游已存在此文件且内容不同，需人工判断")
-        print(f"  操作: [a]pprove / [r]eject / [v]iew diff")
+        print("\n  ⚠️ This file already exists upstream and differs; manual review is required")
+        print("  Actions: [a]pprove / [r]eject / [v]iew diff")
     else:
-        print(f"\n  操作: [a]pprove / [r]eject / [v]iew content")
+        print("\n  Actions: [a]pprove / [r]eject / [v]iew content")
 
     while True:
         try:
-            choice = input("  选择: ").strip().lower()
+            choice = input("  Choose: ").strip().lower()
         except (EOFError, KeyboardInterrupt):
-            print("\n  已取消")
+            print("\n  Cancelled")
             return "skip"
 
         if choice in ("a", ""):
@@ -312,21 +314,21 @@ def verify_file_interactive(
             if fv.upstream_status == "new":
                 target_file = target_path / fv.relative_path
                 if target_file.exists():
-                    print(f"\n--- 内容预览: {fv.relative_path} ---")
+                    print(f"\n--- Content Preview: {fv.relative_path} ---")
                     print(target_file.read_text(encoding="utf-8")[:2000])
-                    print("--- 预览结束 ---\n")
+                    print("--- End Preview ---\n")
             else:
                 print(f"\n--- Diff: {fv.relative_path} ---")
                 show_file_detail(fv, source_path, target_path)
-                print("--- Diff 结束 ---\n")
-            print(f"  操作: [a]pprove / [r]eject")
+                print("--- End Diff ---\n")
+            print("  Actions: [a]pprove / [r]eject")
         else:
-            print(f"  无效选择，请输入: a / r / v")
+            print("  Invalid choice. Enter: a / r / v")
 
 
 def verify_asset_interactive(av: AssetVerification, source_path: Path, target_path: Path) -> None:
     """Interactive verification for all files in an asset."""
-    print(f"\n=== 验证: {av.asset_id} ===")
+    print(f"\n=== Verification: {av.asset_id} ===")
 
     for i, fv in enumerate(av.files, 1):
         action = verify_file_interactive(fv, source_path, target_path, i, av.total_count)
@@ -335,7 +337,7 @@ def verify_asset_interactive(av: AssetVerification, source_path: Path, target_pa
             fv.approved = True
             av.approved_count += 1
 
-    print(f"\n  结果: {av.approved_count}/{av.total_count} 文件已批准")
+    print(f"\n  Result: {av.approved_count}/{av.total_count} file(s) approved")
 
 
 # ---------------------------------------------------------------------------
@@ -424,18 +426,18 @@ def generate_proposal(
     ]
     for fv in approved_files:
         if fv.upstream_status == "new":
-            report_lines.append(f"- `{fv.relative_path}` (全新文件, +{fv.line_added}行)")
+            report_lines.append(f"- `{fv.relative_path}` (new file, +{fv.line_added} line(s))")
         else:
-            report_lines.append(f"- `{fv.relative_path}` (+{fv.line_added}/-{fv.line_removed}行)")
+            report_lines.append(f"- `{fv.relative_path}` (+{fv.line_added}/-{fv.line_removed} line(s))")
     report_lines.append("")
 
     rejected_files = [fv for fv in av.files if not fv.approved]
     if rejected_files:
         report_lines.append("## Rejected Files")
         for fv in rejected_files:
-            reason = "用户拒绝"
+            reason = "rejected by user"
             if fv.has_private_hints:
-                reason += f" (私有标记: {', '.join(fv.private_hint_details)})"
+                reason += f" (private hints: {', '.join(fv.private_hint_details)})"
             report_lines.append(f"- `{fv.relative_path}` — {reason}")
         report_lines.append("")
 
@@ -593,7 +595,7 @@ def main() -> int:
             if imp.get("local_state") in ("modified",):
                 asset_ids.append(imp["asset_id"])
         if not asset_ids:
-            print("没有检测到本地变更的资产。")
+            print("No locally modified assets detected.")
             return 0
 
     # Phase 1: Verify each asset
@@ -601,31 +603,31 @@ def main() -> int:
     for asset_id in asset_ids:
         av = verify_asset(asset_id, library_root, target_root, manifest, lock)
         if av.total_count == 0:
-            print(f"  [{asset_id}] 无变更文件，跳过")
+            print(f"  [{asset_id}] no changed files, skipping")
             continue
         verifications.append(av)
 
     if not verifications:
-        print("没有需要验证的变更。")
+        print("No changes require verification.")
         return 0
 
     # Phase 2: Show summary
-    print("\n=== 贡献验证 ===\n")
+    print("\n=== Contribution Verification ===\n")
     print(generate_aggregate_summary(verifications))
 
     # Phase 3: Interactive verification
     if args.non_interactive:
-        print("\n--non-interactive 模式: 跳过人工验证，所有文件默认 reject")
+        print("\n--non-interactive mode: skipping manual verification; all files default to reject")
     else:
         print()
         try:
-            choice = input("  [v] 逐项验证 / [s] 退出: ").strip().lower()
+            choice = input("  [v] verify item by item / [s] stop: ").strip().lower()
         except (EOFError, KeyboardInterrupt):
-            print("\n  已取消")
+            print("\n  Cancelled")
             return 0
 
         if choice != "v":
-            print("  已退出验证。")
+            print("  Exited verification.")
             return 0
 
         for av in verifications:
@@ -658,17 +660,17 @@ def main() -> int:
             artifacts.extend(result)
 
     if artifacts:
-        print(f"\n--- Proposal 已生成 ---")
+        print("\n--- Proposal Generated ---")
         for art in artifacts:
             print(f"  {art['type']}: {art['path']}")
-        print(f"\n运行以下命令 apply 到上游:")
+        print("\nRun the following command(s) to apply the proposal upstream:")
         for av in verifications:
             if av.approved_count > 0:
                 yaml_path = output_dir / "contribution-proposals" / f"{av.asset_id}.yaml"
                 patch_path = output_dir / "contribution-patches" / f"{av.asset_id}.patch"
                 print(f"  cli.py sync --mode apply --proposal {yaml_path} --patch {patch_path} --apply")
     else:
-        print("\n没有文件被批准，未生成 proposal。")
+        print("\nNo files were approved, so no proposal was generated.")
 
     if args.json:
         result = {

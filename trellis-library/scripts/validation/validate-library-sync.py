@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -46,9 +47,11 @@ FILE_EXTENSIONS_BY_TYPE = {
     "schema": {".json", ".yaml", ".yml"},
     "script": {".py", ".sh"},
 }
+TEXT_CONSISTENCY_SUFFIXES = {".md", ".py", ".sh", ".yaml", ".yml"}
 SPEC_REQUIRED_FILES = ("overview.md", "scope-boundary.md", "normative-rules.md", "verification.md")
 DIRECT_CROSS_AXIS = frozenset({"platforms", "technologies"})
 CHECKLIST_ITEM_PREFIXES = ("* ", "- ")
+CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 
 
 @dataclass
@@ -223,6 +226,79 @@ def discover_candidates(library_root: Path) -> dict[str, set[str]]:
             candidates[asset_type].add(rel)
 
     return candidates
+
+
+def iter_registered_text_files(
+    library_root: Path,
+    manifest: dict[str, Any],
+) -> list[tuple[str, Path]]:
+    seen: set[str] = set()
+    items: list[tuple[str, Path]] = []
+
+    def add_file(path: Path) -> None:
+        rel = str(path.relative_to(library_root).as_posix())
+        if rel in seen or path.suffix not in TEXT_CONSISTENCY_SUFFIXES:
+            return
+        seen.add(rel)
+        items.append((rel, path))
+
+    for rel_path in ["README.md", "taxonomy.md", "manifest.yaml"]:
+        path = library_root / rel_path
+        if path.exists() and path.is_file():
+            add_file(path)
+
+    for asset in manifest.get("assets", []):
+        if not isinstance(asset, dict):
+            continue
+        rel_path = asset.get("path")
+        if not isinstance(rel_path, str):
+            continue
+        abs_path = library_root / normalize_rel_path(rel_path)
+        if abs_path.is_file():
+            add_file(abs_path)
+            continue
+        if abs_path.is_dir():
+            for child in sorted(abs_path.rglob("*")):
+                if child.is_file() and not should_ignore_file(child):
+                    add_file(child)
+
+    return items
+
+
+def validate_default_language_consistency(
+    library_root: Path,
+    manifest: dict[str, Any],
+    findings: list[Finding],
+) -> None:
+    default_language = manifest.get("library", {}).get("default_language")
+    if default_language != "en":
+        return
+
+    for rel_path, abs_path in iter_registered_text_files(library_root, manifest):
+        try:
+            lines = abs_path.read_text(encoding="utf-8").splitlines()
+        except OSError as exc:
+            add_finding(
+                findings,
+                "WARN",
+                "consistency-scan-read-failed",
+                f"Could not read file during default-language consistency scan: {exc}",
+                path=rel_path,
+            )
+            continue
+
+        hit_lines = [index for index, line in enumerate(lines, start=1) if CJK_RE.search(line)]
+        if not hit_lines:
+            continue
+
+        add_finding(
+            findings,
+            "WARN",
+            "non-default-language-content",
+            "File contains CJK characters even though library.default_language is 'en'",
+            path=rel_path,
+            details={"lines": hit_lines[:10], "total_lines": len(hit_lines)},
+        )
 
 
 def is_covered_by_registered_directory_asset(
@@ -728,6 +804,7 @@ def main() -> int:
     validate_relations(manifest, by_id, library_root, findings)
     validate_packs(manifest, by_id, findings)
     validate_registration_drift(manifest, library_root, registered_by_type, findings)
+    validate_default_language_consistency(library_root, manifest, findings)
 
     # Root file hints.
     root_docs = {str(path.relative_to(library_root).as_posix()) for path in find_top_level_docs(library_root)}

@@ -18,7 +18,7 @@ Use this template to create a task for transferring complete source code and bui
 |-------|-------|
 | Task ID | DELIVERY-SRC-001 |
 | Task Name | Transfer Source Code and Build Artifacts |
-| Task Type | 交付任务 |
+| Task Type | Delivery Task |
 | Risk Level | L2 (high) - irreversible transfer of IP |
 | AI Execution Mode | Automated packaging + human verification |
 | Evaluation Set | Checksum verification, build-from-source test |
@@ -90,7 +90,7 @@ Use this template to create a task for transferring complete source code and bui
 - Payment not yet received (for payment-triggered handover)
 - Build system incomplete or broken
 
-**Parallel属性**: 可与 `DELIVERY-SECRETS` 并行，但应在 `DELIVERY-PERMANENT` 串行主链中
+**Parallel Execution**: Can run in parallel with `DELIVERY-SECRETS`, but should still remain within the sequential `DELIVERY-PERMANENT` handover chain
 
 ---
 

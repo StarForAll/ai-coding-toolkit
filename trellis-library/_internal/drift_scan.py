@@ -35,7 +35,7 @@ def scan_existing_imports(
                 {
                     "asset_id": asset_id,
                     "drift_type": "upstream-and-local-changed",
-                    "message": "资产已从 manifest 中移除",
+                    "message": "Asset was removed from the manifest",
                 }
             )
             continue
@@ -74,8 +74,8 @@ def scan_existing_imports(
                     "asset_id": asset_id,
                     "drift_type": "upstream-and-local-changed",
                     "message": (
-                        f"上游已更新 ({stored_version} → {source_version})，本地也有修改。"
-                        f"建议: 单独运行 assemble --asset {asset_id} 进行更新"
+                        f"Upstream changed ({stored_version} -> {source_version}) and local content also changed. "
+                        f"Recommendation: run assemble --asset {asset_id} separately to review the update"
                     ),
                 }
             )
@@ -85,8 +85,8 @@ def scan_existing_imports(
                     "asset_id": asset_id,
                     "drift_type": "upstream-changed",
                     "message": (
-                        f"上游已更新 ({stored_version} → {source_version})，本地未修改。"
-                        f"建议: 单独运行 assemble --asset {asset_id} 进行更新"
+                        f"Upstream changed ({stored_version} -> {source_version}) while the local copy stayed unmodified. "
+                        f"Recommendation: run assemble --asset {asset_id} separately to apply the update"
                     ),
                 }
             )
@@ -95,7 +95,7 @@ def scan_existing_imports(
                 {
                     "asset_id": asset_id,
                     "drift_type": "local-changed",
-                    "message": "本地有修改，上游未变。如需贡献上游可运行 diff/propose",
+                    "message": "Local content changed while upstream stayed the same. Run diff/propose if you want to contribute upstream.",
                 }
             )
 

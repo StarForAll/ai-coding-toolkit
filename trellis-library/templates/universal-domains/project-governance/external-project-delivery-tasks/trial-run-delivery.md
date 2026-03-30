@@ -18,7 +18,7 @@ Use this template to create a task for preparing and delivering a trial version 
 |-------|-------|
 | Task ID | DELIVERY-TRIAL-001 (adjust as needed) |
 | Task Name | Prepare Trial Version Delivery |
-| Task Type |交付任务 |
+| Task Type | Delivery Task |
 | Risk Level | L1 (medium) - involves client-facing deliverable |
 | AI Execution Mode | Human-led with AI assistance (legal/business terms require human judgment) |
 | Evaluation Set | N/A (manual verification) |
@@ -88,7 +88,7 @@ Use this template to create a task for preparing and delivering a trial version 
 - Core functionality incomplete
 - Authorization mechanism not ready
 
-**Parallel属性**: 独立任务，但与 `DELIVERY-PERMANENT` 互斥（同一项目只能选一个轨道）
+**Parallel Execution**: Independent task, but mutually exclusive with `DELIVERY-PERMANENT` because a project can use only one delivery track
 
 ---
 

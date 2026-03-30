@@ -215,6 +215,7 @@ Common validation findings:
 - `asset-type-root-mismatch` — path prefix doesn't match type
 - `unknown-asset-dependency` — dependency references non-existent asset
 - `cross-axis-direct-reference` — direct platforms <-> technologies dependency or relation that is not allowlisted
+- `non-default-language-content` — a registered text asset contains content outside the library's default language policy
 
 ---
 

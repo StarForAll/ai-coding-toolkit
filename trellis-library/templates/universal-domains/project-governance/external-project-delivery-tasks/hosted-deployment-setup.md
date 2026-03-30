@@ -19,7 +19,7 @@ Use this template to create a task for preparing and configuring a hosted trial 
 |-------|-------|
 | Task ID | DELIVERY-HOSTED-001 |
 | Task Name | Setup Hosted Trial Environment |
-| Task Type | 交付任务 |
+| Task Type | Delivery Task |
 | Risk Level | L1 (medium) - involves client-accessible environment |
 | AI Execution Mode | Semi-automated (infrastructure as code preferred) |
 | Evaluation Set | Infrastructure validation tests |
@@ -90,7 +90,7 @@ Use this template to create a task for preparing and configuring a hosted trial 
 - Infrastructure automation not ready
 - Client payment terms not finalized
 
-**Parallel属性**: 可与 `DELIVERY-TRIAL-xxx` 并行（如果意外选择了两个轨道则冲突，但逻辑上互斥）
+**Parallel Execution**: Can run in parallel with `DELIVERY-TRIAL-xxx` only in planning terms; the two tracks are logically mutually exclusive and should not both be active
 
 ---
 

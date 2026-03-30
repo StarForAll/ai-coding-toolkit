@@ -75,31 +75,32 @@ Boundary rule:
 
 ### Project Governance — External Delivery Control
 
-For外包、定制开发、新客户项目，新增以下 spec 和模板支持双轨交付控制：
+For outsourcing, custom-development, and new-client projects, the following
+specs, templates, and checklist support the dual-track delivery-control model:
 
 **Specs** (`specs/universal-domains/project-governance/`):
 
 | Spec ID | Title | Purpose |
 |---------|-------|---------|
-| `spec.universal-domains.project-governance.delivery-control` | Delivery Control | 定义托管部署 vs 试运行授权双轨、尾款约束、禁止项 |
-| `spec.universal-domains.project-governance.authorization-management` | Authorization Management | 试运行授权生命周期、到期行为、永久授权切换 |
+| `spec.universal-domains.project-governance.delivery-control` | Delivery Control | Defines the hosted-deployment vs. trial-authorization tracks, payment-gated handover, and prohibited control patterns |
+| `spec.universal-domains.project-governance.authorization-management` | Authorization Management | Defines the trial-authorization lifecycle, expiration behavior, renewal, and permanent-authorization transition |
 
 **Checklists** (`checklists/universal-domains/project-governance/`):
 
 | Checklist ID | Title | Purpose |
 |--------------|-------|---------|
-| `checklist.universal-domains.project-governance.transfer-checklist` | Transfer Checklist | 按交付事件检查 retained-control delivery / final control transfer 是否完整且边界清晰 |
+| `checklist.universal-domains.project-governance.transfer-checklist` | Transfer Checklist | Checks each delivery event to ensure retained-control delivery or final control transfer stays complete and explicit |
 
 **Templates** (`templates/universal-domains/project-governance/external-project-delivery-tasks/`):
 
 | Template ID | Title | Use Case |
 |-------------|-------|----------|
-| `template.universal-domains.project-governance.external-project-trial-delivery-task` | Trial Run Delivery Task | 试运行版交付（试运行授权轨） |
-| `template.universal-domains.project-governance.external-project-hosted-deployment-task` | Hosted Deployment Setup Task | 托管部署环境搭建（托管部署轨） |
-| `template.universal-domains.project-governance.external-project-permanent-delivery-task` | Permanent Authorization Delivery Task | 最终永久授权交付（两轨通用） |
-| `template.universal-domains.project-governance.external-project-source-transfer-task` | Source Code Transfer Task | 源码移交 |
-| `template.universal-domains.project-governance.external-project-control-handover-task` | Control Handover Task | 基础设施控制权移交 |
-| `template.universal-domains.project-governance.external-project-secrets-transfer-task` | Secrets and Configuration Transfer Task | 密钥配置安全移交 |
+| `template.universal-domains.project-governance.external-project-trial-delivery-task` | Trial Run Delivery Task | Trial-version delivery on the trial-authorization track |
+| `template.universal-domains.project-governance.external-project-hosted-deployment-task` | Hosted Deployment Setup Task | Hosted deployment environment setup on the hosted-deployment track |
+| `template.universal-domains.project-governance.external-project-permanent-delivery-task` | Permanent Authorization Delivery Task | Final permanent-authorization handover for either track |
+| `template.universal-domains.project-governance.external-project-source-transfer-task` | Source Code Transfer Task | Source-code transfer handover |
+| `template.universal-domains.project-governance.external-project-control-handover-task` | Control Handover Task | Infrastructure control transfer |
+| `template.universal-domains.project-governance.external-project-secrets-transfer-task` | Secrets and Configuration Transfer Task | Secure secrets and configuration transfer |
 
 **Applicability**: These assets are only relevant for external projects (outsourcing, custom development, new clients). Internal projects should not import them. `delivery-control` is the external-project baseline; `authorization-management` is only imported when `assessment.md` selects `delivery_control_track = trial_authorization`; `transfer-checklist` is used for each formal delivery event, not only a one-time final handover.
 
@@ -321,6 +322,10 @@ The validation command can also be run through the unified CLI:
 ```bash
 python3 trellis-library/cli.py validate --strict-warnings
 ```
+
+The validation flow now also checks that registered text assets stay consistent
+with `library.default_language` in `manifest.yaml`. In the current library, that
+means registered docs and scripts are expected to remain English-only.
 
 Current validation schemas live under:
 

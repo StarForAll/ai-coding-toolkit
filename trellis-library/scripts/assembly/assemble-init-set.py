@@ -314,14 +314,14 @@ def _print_manual_review_diff(
         for line in diff_lines:
             print(f"    {line.rstrip()}")
     else:
-        print("    (无可展示的行级 diff；可能仅有结构差异或当前文件内容一致)")
+        print("    (no line-level diff to show; this may be a structural difference or the current file content may already match)")
 
 
 def _prompt_after_manual_review() -> str:
-    print("\n  Manual Review 后请选择:")
-    print("    [o] Overwrite  — 用源版本覆盖目标")
-    print("    [k] Keep Local — 保留本地版本并更新基线")
-    print("    [s] Skip       — 跳过此资产")
+    print("\n  Choose an action after manual review:")
+    print("    [o] Overwrite  — replace the target with the source version")
+    print("    [k] Keep Local — keep the local version and update the baseline")
+    print("    [s] Skip       — skip this asset")
 
     followup_options = {
         "o": "overwrite",
@@ -331,14 +331,14 @@ def _prompt_after_manual_review() -> str:
 
     while True:
         try:
-            choice = input("\n  Review 后选择: ").strip().lower()
+            choice = input("\n  Choice after review: ").strip().lower()
         except (EOFError, KeyboardInterrupt):
-            print("\n  已取消")
+            print("\n  Cancelled")
             sys.exit(1)
 
         if choice in followup_options:
             return followup_options[choice]
-        print(f"  无效选择，请输入: {', '.join(followup_options.keys())}")
+        print(f"  Invalid choice. Enter: {', '.join(followup_options.keys())}")
 
 
 def prompt_user_for_asset(
@@ -352,48 +352,48 @@ def prompt_user_for_asset(
     local_files = analysis.get("local_only_files", [])
     import_mode = analysis.get("import_mode", "file")
 
-    print(f"\n--- 待确认: [{asset_id}] {category} ---")
+    print(f"\n--- Needs Confirmation: [{asset_id}] {category} ---")
 
     if analysis.get("source_changes"):
-        print("  源变更:")
+        print("  Source changes:")
         for change in analysis["source_changes"]:
             print(f"    {change}")
 
     if analysis.get("target_changes"):
-        print("  目标变更:")
+        print("  Target changes:")
         for change in analysis["target_changes"]:
             print(f"    {change}")
 
     if local_files:
-        print(f"  本地文件 (不在 lock 中):")
+        print("  Local-only files (not tracked in lock):")
         for lf in local_files:
             print(f"    {lf['path']}  ({lf.get('modified', '')})")
 
     if local_files:
-        print("\n  请选择:")
-        print("    [b] Backup    — 备份到 .trellis/local-backups/，再全量拉取")
-        print("    [c] Convert   — 将本地文件标为 local-only 加入 lock，再全量拉取")
-        print("    [o] Overwrite — 直接覆盖 (本地文件丢失)")
-        print("    [s] Skip      — 跳过此资产")
+        print("\n  Choose an action:")
+        print("    [b] Backup    — back up to .trellis/local-backups/ and then pull everything")
+        print("    [c] Convert   — mark local files as local-only in the lock and then pull everything")
+        print("    [o] Overwrite — overwrite directly (local files will be lost)")
+        print("    [s] Skip      — skip this asset")
         if import_mode == "file":
-            print("    [p] Preserve  — 保留本地文件，本次不导入该资产")
+            print("    [p] Preserve  — keep the local file and do not import this asset in this run")
             options = USER_OPTIONS_LOCAL_CONFLICT
         else:
-            print("    [说明] 目录型资产不支持 preserve；此前该选项实际不会产生任何变更")
+            print("    [note] Directory assets do not support preserve; that option would not make any changes")
             options = {k: v for k, v in USER_OPTIONS_LOCAL_CONFLICT.items() if k != "p"}
     else:
-        print("\n  请选择:")
-        print("    [m] Manual Review — 展示 unified diff 后再决定 (默认)")
-        print("    [o] Overwrite     — 用源版本覆盖目标")
-        print("    [k] Keep Local    — 保留本地版本")
-        print("    [s] Skip          — 跳过此资产")
+        print("\n  Choose an action:")
+        print("    [m] Manual Review — show the unified diff before deciding (default)")
+        print("    [o] Overwrite     — replace the target with the source version")
+        print("    [k] Keep Local    — keep the local version")
+        print("    [s] Skip          — skip this asset")
         options = USER_OPTIONS_FILE_CONFLICT
 
     while True:
         try:
-            choice = input("\n  选择: ").strip().lower()
+            choice = input("\n  Choice: ").strip().lower()
         except (EOFError, KeyboardInterrupt):
-            print("\n  已取消")
+            print("\n  Cancelled")
             sys.exit(1)
 
         if not choice and "m" in options:
@@ -404,7 +404,7 @@ def prompt_user_for_asset(
             return _prompt_after_manual_review()
         if choice in options:
             return options[choice]
-        print(f"  无效选择，请输入: {', '.join(options.keys())}")
+        print(f"  Invalid choice. Enter: {', '.join(options.keys())}")
 
 
 def collect_user_decisions(
@@ -420,14 +420,14 @@ def collect_user_decisions(
         return decisions
 
     print(f"\n{'='*50}")
-    print(f"  {len(needs_review)} 项资产需要确认处理方式")
+    print(f"  {len(needs_review)} asset(s) require a decision")
     print(f"{'='*50}")
 
     for analysis in needs_review:
         asset_id = analysis["asset_id"]
         decision = prompt_user_for_asset(analysis, library_root, target_root)
         decisions[asset_id] = decision
-        print(f"  → [{asset_id}] 已选择: {decision}")
+        print(f"  -> [{asset_id}] selected: {decision}")
 
     return decisions
 
@@ -532,7 +532,7 @@ def execute_pull(
                     "asset_id": asset_id,
                     "action": "skip",
                     "category": analysis["category"],
-                    "note": "目录型资产不支持 preserve；本次未执行任何变更，需手动处理",
+                    "note": "Directory assets do not support preserve; no changes were applied and manual handling is required",
                 })
             continue
 
@@ -592,11 +592,11 @@ def main() -> int:
 
         if not args.dry_run:
             _run_lock_writer(library_root, target_root, args.asset, args.pack, merge=lock_path.exists())
-        print("FORCE: 所有资产已直接覆盖")
+        print("FORCE: all assets were overwritten directly")
         return 0
 
     # --- Phase 1: Simulation ---
-    print("=== 阶段 1: 模拟分析 ===\n")
+    print("=== Phase 1: Simulation Analysis ===\n")
 
     is_merge_mode = lock_path.exists()
     report = run_analysis(library_root, target_root, args.asset, args.pack, scan_all_imports=is_merge_mode)
@@ -627,7 +627,7 @@ def main() -> int:
                     decisions[analysis["asset_id"]] = "backup"
                 else:
                     decisions[analysis["asset_id"]] = "overwrite"
-            print("\n--auto 模式: 使用默认处理方式 --")
+            print("\n--auto mode: using default conflict handling --")
             for aid, dec in decisions.items():
                 print(f"  [{aid}] → {dec}")
         else:
@@ -635,7 +635,7 @@ def main() -> int:
             decisions = collect_user_decisions(report, library_root, target_root)
 
     # --- Phase 2: Execute ---
-    print("\n=== 阶段 2: 执行 ===\n")
+    print("\n=== Phase 2: Execute ===\n")
 
     results = execute_pull(
         library_root=library_root,
@@ -648,7 +648,7 @@ def main() -> int:
     )
 
     if args.dry_run:
-        print("DRY RUN: lock 文件未更新")
+        print("DRY RUN: lock file was not updated")
         return 0
 
     # --- Update lock ---
@@ -664,7 +664,7 @@ def main() -> int:
         _apply_checksum_updates(lock_path, checksum_updates)
 
     # --- Summary ---
-    print("\n--- 执行完成 ---")
+    print("\n--- Execution Complete ---")
     for r in results:
         print(f"  {r['asset_id']}: {r['action']} ({r['category']})")
 
@@ -675,11 +675,11 @@ def main() -> int:
         if d.get("drift_type") in ("local-changed", "upstream-and-local-changed")
     ]
     if local_changed and not args.auto and not args.dry_run:
-        print(f"\n  检测到 {len(local_changed)} 个资产有本地变更，可贡献到上游:")
+        print(f"\n  Detected {len(local_changed)} asset(s) with local changes that can be proposed upstream:")
         for item in local_changed:
             print(f"    📝 [{item['asset_id']}] {item['drift_type']}")
         try:
-            choice = input("\n  [c] 贡献验证 / [i] 忽略: ").strip().lower()
+            choice = input("\n  [c] contribution verification / [i] ignore: ").strip().lower()
         except (EOFError, KeyboardInterrupt):
             choice = "i"
 
@@ -737,7 +737,7 @@ def _run_contribute(
 
     result = subprocess.run(cmd, check=False)
     if result.returncode != 0:
-        print(f"  贡献验证返回码: {result.returncode}")
+        print(f"  Contribution verification exit code: {result.returncode}")
 
 
 def _apply_checksum_updates(
@@ -779,22 +779,22 @@ def _print_simulation_summary(report: dict[str, Any]) -> None:
     review = report.get("needs_review", [])
 
     if auto:
-        print(f"  自动处理 (无冲突): {len(auto)} 项")
+        print(f"  Auto-handled (no conflicts): {len(auto)} item(s)")
         for a in auto:
             print(f"    [{a['asset_id']}] {a['category']} → {a['message']}")
 
     if review:
-        print(f"  需要处理 (有冲突): {len(review)} 项")
+        print(f"  Needs review (has conflicts): {len(review)} item(s)")
         for a in review:
             print(f"    [{a['asset_id']}] {a['category']} ⚠️ → {a['message']}")
     else:
-        print("  无冲突，可直接执行")
+        print("  No conflicts detected; ready to execute")
 
     # Drift scan results
     drift_items = report.get("drift_items", [])
     if drift_items:
         print()
-        print(f"  --- 上游变更检测 (已拉取但本次未操作的资产): {len(drift_items)} 项 ---")
+        print(f"  --- Upstream drift detected for imported assets not touched in this run: {len(drift_items)} item(s) ---")
         for item in drift_items:
             flag = "⚠️" if item["drift_type"] == "upstream-and-local-changed" else ("⬆️" if item["drift_type"] == "upstream-changed" else "📝")
             print(f"    {flag} [{item['asset_id']}] {item['drift_type']}")

@@ -1091,7 +1091,7 @@ class TrellisLibraryCliTests(unittest.TestCase):
             )
 
         self.assertEqual(sync.returncode, 0, msg=sync.stdout + sync.stderr)
-        self.assertIn("已导入但本次未操作的资产存在漂移", sync.stdout)
+        self.assertIn("Detected drift in 1 imported asset(s) not touched in this run", sync.stdout)
         self.assertIn(other_import["asset_id"], sync.stdout)
 
     def test_sync_include_pinned_updates_pinned_asset_when_source_changes(self) -> None:

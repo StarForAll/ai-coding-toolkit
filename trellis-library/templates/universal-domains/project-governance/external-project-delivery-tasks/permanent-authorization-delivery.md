@@ -18,7 +18,7 @@ Use this template to create a task for delivering permanent authorization and fu
 |-------|-------|
 | Task ID | DELIVERY-PERMANENT-001 |
 | Task Name | Permanent Authorization and Final Handover |
-| Task Type | 交付任务 |
+| Task Type | Delivery Task |
 | Risk Level | L2 (high) - irreversible transfer of control |
 | AI Execution Mode | Human-led with AI documentation assistance |
 | Evaluation Set | Transfer checklist completeness |
@@ -94,7 +94,7 @@ Use this template to create a task for delivering permanent authorization and fu
 - Client has outstanding acceptance issues
 - Delivery checklist incomplete
 
-**Parallel属性**: 无（final handover 必须串行且完整）
+**Parallel Execution**: None. Final handover must remain sequential and complete.
 
 ---
 

@@ -18,7 +18,7 @@ Use this template to create a task for securely transferring all secrets, certif
 |-------|-------|
 | Task ID | DELIVERY-SECRETS-001 |
 | Task Name | Transfer Secrets and Configuration |
-| Task Type | 交付任务 |
+| Task Type | Delivery Task |
 | Risk Level | L2 (high) - security-sensitive |
 | AI Execution Mode | Human-led (security-critical) |
 | Evaluation Set | Access verification, rotation tests |
@@ -100,7 +100,7 @@ Use this template to create a task for securely transferring all secrets, certif
 - Configuration not yet finalized (secrets may still be in flux)
 - Payment not received (for payment-triggered delivery)
 
-**Parallel属性**: 可与 `DELIVERY-SRC`、`DELIVERY-CTRL` 并行
+**Parallel Execution**: Can run in parallel with `DELIVERY-SRC` and `DELIVERY-CTRL`
 
 ---
 

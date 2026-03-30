@@ -244,15 +244,15 @@ def simple_diff_describe(source_path: Path, target_path: Path) -> tuple[list[str
     common_files = source_files & target_files
 
     for f in sorted(added_files):
-        source_changes.append(f"+ 新增文件: {f}")
+        source_changes.append(f"+ New file in source: {f}")
     for f in sorted(removed_files):
-        target_changes.append(f"+ 本地文件: {f} (不在源中)")
+        target_changes.append(f"+ Local-only file in target: {f} (not present in source)")
 
     for f in sorted(common_files):
         src_content = (source_path / f).read_text(encoding="utf-8") if (source_path / f).exists() else ""
         tgt_content = (target_path / f).read_text(encoding="utf-8") if (target_path / f).exists() else ""
         if src_content != tgt_content:
-            source_changes.append(f"~ 修改文件: {f}")
+            source_changes.append(f"~ Modified file: {f}")
 
     return source_changes, target_changes
 
@@ -309,7 +309,7 @@ def classify_asset(
 
         if not source_changed and not target_changed and target_abs.exists():
             analysis.category = "identical"
-            analysis.message = "无变更"
+            analysis.message = "No changes"
             return analysis
 
         # Get change descriptions
@@ -325,29 +325,29 @@ def classify_asset(
         if analysis.local_only_files:
             analysis.category = "local-conflict"
             analysis.needs_review = True
-            analysis.message = f"检测到 {len(analysis.local_only_files)} 个本地文件不在 lock 中"
+            analysis.message = f"Detected {len(analysis.local_only_files)} local file(s) not tracked in the lock"
         elif source_changed and not target_changed:
             analysis.category = "source-updated"
             analysis.needs_review = True
-            analysis.message = "源已更新，目标未修改"
+            analysis.message = "Source changed while target remained unmodified"
         elif not source_changed and target_changed:
             analysis.category = "target-modified"
             analysis.needs_review = True
-            analysis.message = "源未变，目标已被修改"
+            analysis.message = "Source unchanged while target was modified locally"
         elif source_changed and target_changed:
             analysis.category = "both-modified"
             analysis.needs_review = True
-            analysis.message = "源和目标都已修改"
+            analysis.message = "Both source and target changed"
         else:
             analysis.category = "existing"
-            analysis.message = "已在 lock 中，无变更"
+            analysis.message = "Already tracked in lock with no effective change"
 
         return analysis
 
     # Case 2: Not yet imported
     if not target_abs.exists():
         analysis.category = "new"
-        analysis.message = "目标不存在，将自动复制"
+        analysis.message = "Target path does not exist and will be copied automatically"
         return analysis
 
     # Case 3: Target exists but not in lock (local-only file at target path)
@@ -362,7 +362,7 @@ def classify_asset(
     if target_rel_str not in tracked:
         analysis.category = "local-conflict"
         analysis.needs_review = True
-        analysis.message = f"目标文件已存在但不在 lock 中（本地创建）"
+        analysis.message = "Target path already exists but is not tracked in the lock (local-only content)"
         # Add the target file itself as local-only
         if not analysis.local_only_files:
             full = target_root / ".trellis" / target_rel
@@ -376,7 +376,7 @@ def classify_asset(
     else:
         # Target exists and is tracked - re-analyze as existing import
         analysis.category = "new"
-        analysis.message = "目标存在但不在 lock 中"
+        analysis.message = "Target path exists but is not represented by a matching lock import"
         analysis.needs_review = True
 
     return analysis
@@ -417,23 +417,23 @@ def detect_source_path_change(
     # Case 1: stored path no longer exists (library was moved/deleted)
     if not stored_path.exists():
         return (
-            f"source_path 迁移检测:\n"
-            f"  Lock 中记录的源路径: {stored_source_path} (不存在)\n"
-            f"  当前 --library-root: {current_path}\n"
-            f"  这表明 trellis-library 目录可能已迁移。\n"
-            f"  分析将基于当前路径执行，lock 中的 source_path 将在执行后自动更新。"
+            f"source_path migration detected:\n"
+            f"  Source path recorded in lock: {stored_source_path} (missing)\n"
+            f"  Current --library-root: {current_path}\n"
+            f"  This suggests the trellis-library directory may have moved.\n"
+            f"  Analysis will proceed from the current path, and the lock source_path will update after execution."
         )
 
     # Case 2: stored path exists but differs from current (possible migration or wrong path)
     if stored_path != current_path:
         return (
-            f"source_path 不一致检测:\n"
-            f"  Lock 中记录的源路径: {stored_source_path}\n"
-            f"  当前 --library-root: {current_path}\n"
-            f"  两个路径都存在但不一致。这可能是:\n"
-            f"    - trellis-library 目录已迁移\n"
-            f"    - 使用了不同的 --library-root 参数\n"
-            f"  分析将基于当前路径执行，lock 中的 source_path 将在执行后自动更新。"
+            f"source_path mismatch detected:\n"
+            f"  Source path recorded in lock: {stored_source_path}\n"
+            f"  Current --library-root: {current_path}\n"
+            f"  Both paths exist but do not match. This may mean:\n"
+            f"    - the trellis-library directory moved\n"
+            f"    - a different --library-root value is being used\n"
+            f"  Analysis will proceed from the current path, and the lock source_path will update after execution."
         )
 
     return ""
@@ -446,11 +446,11 @@ def detect_source_path_change(
 def generate_report(report: SimulationReport) -> str:
     """Generate human-readable simulation report."""
     lines = [
-        "=== 拉取模拟报告 ===",
-        f"时间: {report.timestamp}",
-        f"目标: {report.target_root}",
-        f"待拉取: {', '.join(report.assets_requested)}",
-        f"模式: {'合并' if report.mode == 'merge' else '初始化'}",
+        "=== Pull Simulation Report ===",
+        f"Timestamp: {report.timestamp}",
+        f"Target: {report.target_root}",
+        f"Requested assets: {', '.join(report.assets_requested)}",
+        f"Mode: {'merge' if report.mode == 'merge' else 'initialization'}",
         "",
     ]
 
@@ -461,18 +461,18 @@ def generate_report(report: SimulationReport) -> str:
 
     # Auto-handled section
     if report.auto_handled:
-        lines.append(f"--- 自动处理 (无冲突): {len(report.auto_handled)} 项 ---")
+        lines.append(f"--- Auto-handled (no conflicts): {len(report.auto_handled)} item(s) ---")
         lines.append("")
         for item in report.auto_handled:
             label = CATEGORY_LABELS.get(item.category, item.category)
             lines.append(f"[{item.asset_id}] {label}")
-            lines.append(f"  目标: {item.target_path}")
-            lines.append(f"  → {item.message}")
+            lines.append(f"  Target: {item.target_path}")
+            lines.append(f"  -> {item.message}")
             lines.append("")
 
     # Needs review section
     if report.needs_review:
-        lines.append(f"--- 需要处理 (有冲突): {len(report.needs_review)} 项 ---")
+        lines.append(f"--- Needs review (has conflicts): {len(report.needs_review)} item(s) ---")
         lines.append("")
         for item in report.needs_review:
             label = CATEGORY_LABELS.get(item.category, item.category)
@@ -480,33 +480,35 @@ def generate_report(report: SimulationReport) -> str:
             lines.append(f"[{item.asset_id}] {label}{flag}")
 
             if item.source_changes:
-                lines.append(f"  源变更:")
+                lines.append("  Source changes:")
                 for change in item.source_changes:
                     lines.append(f"    {change}")
 
             if item.target_changes:
-                lines.append(f"  目标变更:")
+                lines.append("  Target changes:")
                 for change in item.target_changes:
                     lines.append(f"    {change}")
 
             if item.local_only_files:
-                lines.append(f"  本地文件 (不在 lock 中):")
+                lines.append("  Local-only files (not tracked in lock):")
                 for lf in item.local_only_files:
                     lines.append(f"    {lf.path}  ({lf.modified})")
 
-            lines.append(f"  说明: {item.message}")
+            lines.append(f"  Notes: {item.message}")
             lines.append("")
 
     # Summary
     if not report.needs_review:
-        lines.append("--- 无冲突，可直接执行 ---")
+        lines.append("--- No conflicts detected; ready to execute ---")
     else:
-        lines.append(f"--- 共 {len(report.needs_review)} 项需要确认处理方式 ---")
+        lines.append(f"--- {len(report.needs_review)} item(s) require a decision before execution ---")
 
     # Drift scan section
     if report.drift_items:
         lines.append("")
-        lines.append(f"--- 上游变更检测 (已拉取但本次未操作的资产): {len(report.drift_items)} 项 ---")
+        lines.append(
+            f"--- Upstream drift detected for imported assets not selected in this run: {len(report.drift_items)} item(s) ---"
+        )
         lines.append("")
         for item in report.drift_items:
             if item.drift_type == "upstream-and-local-changed":

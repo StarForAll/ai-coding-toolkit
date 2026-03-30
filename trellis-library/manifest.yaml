@@ -9584,8 +9584,8 @@ assets:
   type: spec
   format: file
   path: specs/technologies/frameworks/electron/shared/pnpm-electron-setup.md
-  title: pnpm + Electron 项目配置指南
-  summary: '**Purpose**: 使用 pnpm 管理 Electron 项目的完整配置指南，包括 monorepo 设置、native modules 处理和打包配置。'
+  title: pnpm + Electron Setup Guide
+  summary: '**Purpose**: Provide a complete setup guide for managing Electron projects with pnpm, including monorepo layout, native-module handling, and packaging configuration.'
   status: active
   version: 1.0.0
   domain_axis: technologies
