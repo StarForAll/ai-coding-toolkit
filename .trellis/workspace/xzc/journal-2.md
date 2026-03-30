@@ -227,3 +227,50 @@ Normalized registered trellis-library assets to English, synchronized linked tem
 ### Next Steps
 
 - None - task complete
+
+
+## Session 48: trellis-library术语与格式一致性修正
+
+**Date**: 2026-03-30
+**Task**: trellis-library术语与格式一致性修正
+**Branch**: `main`
+
+### Summary
+
+统一 trellis-library 中的 Language 尾注、manifest 异形 summary，并收敛 product-and-requirements PRD checklist 的格式。
+
+### Main Changes
+
+| Area | Change |
+|------|--------|
+| Framework specs | Unified `**Language**: English` footer style across the touched Electron and Next.js spec files |
+| Manifest metadata | Normalized remaining non-uniform `title` and `summary` entries in `trellis-library/manifest.yaml` |
+| PRD checklists | Reworked the three `product-and-requirements` checklists back to the library's standard flat checklist structure |
+
+**Verification**:
+- `/ops/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings`
+- `/ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --strict-warnings`
+- `/ops/softwares/python/bin/python3 -m py_compile trellis-library/scripts/validation/validate-library-sync.py`
+
+**Notes**:
+- Archived task: `03-30-trellis-library-consistency-review`
+- The archive auto-commit did not trigger during `task.py archive`, so metadata was committed via the existing workspace/task auto-commit helper before recording the session.
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fb639de` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
