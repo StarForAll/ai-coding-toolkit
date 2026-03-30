@@ -77,7 +77,17 @@ $TASK_DIR/design/
 
 技术架构已经过用户明确确认后，必须先完成以下两个前置任务，才能进入 `/trellis:plan`：
 
-1. 根据技术架构，从 `trellis-library` 选择并导入合适 spec 到当前项目 `.trellis/spec/`
+1. **根据技术架构，从 `trellis-library` 选择并导入合适 spec 到当前项目 `.trellis/spec/`**
+   - 必选基础 spec（所有项目）：
+     - `spec.universal-domains.product-and-requirements.*`（PRD 相关）
+     - `spec.universal-domains.architecture.*`（架构相关）
+     - `spec.universal-domains.verification.*`（验证相关）
+   - 若为**外部项目**（外包、定制开发、新客户），**额外必选**：
+     - `spec.universal-domains.project-governance.delivery-control`
+     - `spec.universal-domains.project-governance.authorization-management`
+     - `checklist.universal-domains.project-governance.transfer-checklist`
+   - 根据技术栈按需选择：`spec.universal-domains.security.*`、`spec.universal-domains.data.*` 等
+
 2. 基于当前项目作用/背景/技术架构，对当前项目 `.trellis/spec/` 做分析完善，删除错误内容并补齐缺失内容
 
 根据你的意图：
