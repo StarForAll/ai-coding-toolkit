@@ -247,21 +247,74 @@ python3 docs/workflows/新项目开发工作流/commands/shell/metadata-autocomm
 
 | 文件 | 用途 |
 |------|------|
-| `docs/workflows/新项目开发工作流/commands/shell/metadata-autocommit-guard.py` | 工作流源脚本：元数据自动提交前后置门禁 |
-| `.trellis/scripts/common/git.py` | 自动提交 helper |
-| `.trellis/scripts/task.py` | 任务管理入口 |
-| `.trellis/scripts/common/task_store.py` | 归档逻辑与自动提交 |
-| `.trellis/scripts/add_session.py` | 会话记录与自动提交 |
+| `docs/workflows/新项目开发工作流/commands/shell/metadata-autocommit-guard.py` | Guard 检查脚本 |
+| `docs/workflows/新项目开发工作流/commands/shell/metadata-archive-wrapper.py` | 归档一键执行 Wrapper |
+| `docs/workflows/新项目开发工作流/commands/shell/metadata-record-session-wrapper.py` | 会话记录一键执行 Wrapper |
+| `.trellis/scripts/task.py` | 项目脚本：任务管理入口（不可修改） |
+| `.trellis/scripts/add_session.py` | 项目脚本：会话记录（不可修改） |
+
+---
+
+## 10. 简化工作流（Convenience Wrappers）
+
+由于项目脚本 `.trellis/scripts/` 不可修改，工作流提供了 Python 简化脚本，自动串联 guard 检查与实际执行：
+
+### 10.1 归档 Wrapper
+
+```bash
+# 归档当前任务（自动 guard 检查）
+python3 docs/workflows/新项目开发工作流/commands/shell/metadata-archive-wrapper.py <task-name>
+
+# 跳过自动提交
+python3 docs/workflows/新项目开发工作流/commands/shell/metadata-archive-wrapper.py <task-name> --no-commit
+```
+
+**自动执行**:
+1. Guard pre-check（当前任务边界 + staged 污染检测）
+2. `task.py archive`（归档）
+3. Guard post-check（验证 git 已清空）
+
+### 10.2 记录会话 Wrapper
+
+```bash
+# 记录会话（自动 guard 检查）
+python3 docs/workflows/新项目开发工作流/commands/shell/metadata-record-session-wrapper.py \
+  --title "Session Title" \
+  --commit "hash1,hash2"
+
+# 跳过自动提交
+python3 docs/workflows/新项目开发工作流/commands/shell/metadata-record-session-wrapper.py \
+  --title "Session Title" \
+  --commit "hash" \
+  --no-commit
+```
+
+**自动执行**:
+1. Guard pre-check（当前任务边界 + staged 污染检测）
+2. `add_session.py`（记录）
+3. Guard post-check（验证 git 已清空）
+
+### 10.3 为什么需要 Wrapper
+
+| 问题 | 解决方案 |
+|------|----------|
+| 项目脚本不可修改 | 在 docs/workflows 下添加 wrapper |
+| 手动执行容易遗漏步骤 | Wrapper 自动串联 guard 检查 |
+| 需记忆多个命令 | 单一入口，自动完成全流程 |
 
 ---
 
 ## 下一步
 
-完成 P0 后，文档与实现至少应满足：
+**当前约束**：项目脚本 `.trellis/scripts/` 不可修改
 
-- 当前任务边界明确
-- staged 污染会被硬阻断
-- 非当前任务收尾会被硬阻断
-- git 状态校验是完成判定的最终依据
+因此采用文档层增强方案：
 
-P1 再继续统一 `archive` 与 `record-session` 的失败语义。
+- ✅ Guard 脚本已实现（`metadata-autocommit-guard.py`）
+- ✅ Wrapper 脚本已实现（`metadata-*-wrapper.py`）
+- ✅ 手动执行流程已文档化
+
+开发者可选择：
+
+1. **推荐**：使用 Wrapper 一键执行
+2. **高级**：手动执行 guard 检查 + 项目脚本

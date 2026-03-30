@@ -8,124 +8,127 @@ description: "Finish Work - Pre-Commit Checklist"
 Before submitting or committing, use this checklist to ensure work completeness.
 
 **Timing**: After code is written and tested, before commit
+**Project**: ai-coding-toolkit（元项目，非应用）
 
 ---
 
 ## Checklist
 
-### 1. Code Quality
+### 1. trellis-library 校验（修改 trellis-library/ 目录时必须通过）
 
 ```bash
-# Run the checks that actually apply to this project
-# Examples:
-# - Application/package project: lint / type-check / test
-# - Docs/spec library project: manifest/schema/sync validation, script syntax checks
+# 1. 运行官方验证脚本（必须通过）
+python3 trellis-library/cli.py validate --strict-warnings
+
+# 2. 运行单元测试（必须通过）
+python3 -m unittest trellis-library/tests/test_cli.py
+
+# 3. 验证 CLI 基本功能
+python3 trellis-library/cli.py --help
+python3 trellis-library/cli.py validate --help
+python3 trellis-library/cli.py assemble --help
+python3 trellis-library/cli.py sync --help
 ```
 
-- [ ] Applicable validation commands pass?
-- [ ] If code exists, project-specific lint/type-check/test commands pass?
-- [ ] If this is a docs/spec/library project, structure and sync validation pass?
-- [ ] If executable application code changed, no stray `console.log` statements remain?
-- [ ] If typed code changed, no unnecessary non-null assertions (`x!`) were introduced?
-- [ ] If typed code changed, no avoidable `any` types were introduced?
+#### 1.1 manifest.yaml 必填字段检查
 
-**For this project**:
+- [ ] `library` 部分包含: `id`, `title`, `description`, `status`, `owners`
+- [ ] `policies` 部分存在且包含关键策略
+- [ ] `enums` 部分定义所有枚举值
+- [ ] `assets` 列表中每个资产包含必填字段: `id`, `type`, `format`, `path`, `title`, `summary`, `status`, `version`
 
-```bash
-/ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --strict-warnings
-/ops/softwares/python/bin/python3 -m py_compile trellis-library/scripts/validation/validate-library-sync.py
-```
+#### 1.2 资产路径校验（必须匹配类型）
+
+| 资产类型 | 路径前缀 | 文件格式 |
+|----------|----------|----------|
+| spec | `specs/` | `.md` 目录或文件 |
+| template | `templates/` | `.md` 目录或文件 |
+| checklist | `checklists/` | `.md` 目录或文件 |
+| example | `examples/` | `.md` 目录或文件 |
+| schema | `schemas/` | `.json/.yaml/.yml` |
+| script | `scripts/` | `.py/.sh` |
+
+- [ ] 所有 `format: directory` 的资产路径必须指向实际存在的目录
+- [ ] 所有 `format: file` 的资产路径必须指向实际存在的文件
+
+#### 1.3 依赖完整性校验
+
+- [ ] `dependencies` 中的每个资产 ID 都必须在 manifest 中存在
+- [ ] `optional_dependencies` 中的每个资产 ID 都必须在 manifest 中存在
+- [ ] `relations` 中的 `from` 和 `to` 必须引用已注册的资产
+
+#### 1.4 SPEC 文件内容校验
+
+**目录结构校验**:
+- [ ] spec 目录必须有 `overview.md` (含 `# Purpose` 和 `# Applicability`) 或 `normative-rules.md` 或 `scope-boundary.md` 或 `verification.md`
+
+**overview.md 内容校验**:
+- [ ] 必须包含 `# Purpose` 章节
+- [ ] 必须包含 `# Applicability` 章节
+
+**normative-rules.md 内容校验**:
+- [ ] 必须包含具体的规范条目（不能是宽泛原则）
+- [ ] 不能包含占位符文本如 `(to be filled)`
+
+**scope-boundary.md 内容校验**:
+- [ ] 必须包含 "This concern covers..." 语句
+- [ ] 必须包含 "It does not..." 语句
+
+**verification.md 内容校验**:
+- [ ] 必须包含 `# Verification` 标题
+- [ ] 必须包含具体的验证检查项
+
+#### 1.5 CHECKLIST 文件内容校验
+
+- [ ] 必须包含具体检查项（以 `*` 或 `-` 开头）
+- [ ] 检查项必须描述可验证的行为或状态
+
+#### 1.6 TEMPLATE 文件内容校验
+
+- [ ] 必须包含模板变量标记（如 `{{variable}}`）
+- [ ] 必须包含使用说明或示例
+
+---
 
 ### 2. Code-Spec Sync
 
 **Code-Spec Docs**:
-- [ ] Does `.trellis/spec/scripts/` need updates?
-  - New script conventions, workflow contracts, CLI behavior
-- [ ] Does another relevant layer under `.trellis/spec/` need updates?
-  - `agents/`, `commands/`, `docs/`, `library-assets/`, `skills/`
-- [ ] Does `.trellis/spec/guides/` need updates?
-  - New cross-layer flows, lessons from bugs
+- [ ] `.trellis/spec/scripts/` 需要更新?
+- [ ] `.trellis/spec/agents/` 需要更新?
+- [ ] `.trellis/spec/commands/` 需要更新?
+- [ ] `.trellis/spec/guides/` 需要更新?
 
 **Key Question**: 
-> "If I fixed a bug or discovered something non-obvious, should I document it so future me (or others) won't hit the same issue?"
+> "如果我修复了一个 bug 或发现了显而易见的问题，是否应该记录下来?"
 
-If YES -> Update the relevant code-spec doc.
+如果是 → 更新相关的 code-spec doc。
 
-### 2.5. Code-Spec Hard Block (Infra/Cross-Layer)
+### 2.1 Code-Spec Hard Block (Infra/Cross-Layer)
 
-If this change touches infra or cross-layer contracts, this is a blocking checklist:
+如果变更涉及基础架构或跨层合约:
 
-- [ ] Spec content is executable (real signatures/contracts), not principle-only text
-- [ ] Includes file path + command/API name + payload field names
-- [ ] Includes validation and error matrix
-- [ ] Includes Good/Base/Bad cases
-- [ ] Includes required tests and assertion points
+- [ ] Spec 内容可执行（真实签名/合约）
+- [ ] 包含文件路径 + 命令/API 名称
+- [ ] 包含验证矩阵和错误矩阵
+- [ ] 包含 Good/Base/Bad 案例
+- [ ] 包含必需的测试和断言点
 
-**Block Rule**:
-If infra/cross-layer changed but the related spec is still abstract, do NOT finish. Run `$update-spec` manually first.
-
-### 3. API Changes
-
-If you modified API endpoints:
-
-- [ ] Input schema updated?
-- [ ] Output schema updated?
-- [ ] API documentation updated?
-- [ ] Client code updated to match?
-
-### 4. Database Changes
-
-If you modified database schema:
-
-- [ ] Migration file created?
-- [ ] Schema file updated?
-- [ ] Related queries updated?
-- [ ] Seed data updated (if applicable)?
-
-### 5. Cross-Layer Verification
-
-If the change spans multiple layers:
-
-- [ ] Data flows correctly through all layers?
-- [ ] Error handling works at each boundary?
-- [ ] Types are consistent across layers?
-- [ ] Loading states handled?
-
-### 6. Manual Testing
-
-- [ ] If a browser/app feature changed, the feature works in browser/app?
-- [ ] If user-facing behavior changed, edge cases were tested?
-- [ ] If user-facing behavior changed, error states were tested?
-- [ ] If browser/app behavior changed, it still works after page refresh?
+**阻塞规则**:
+如果相关 spec 仍然是抽象的，不要完成。先运行 `$update-spec`。
 
 ---
 
 ## Quick Check Flow
 
 ```bash
-# 1. Run checks that apply to this project
-# Examples:
-# /ops/softwares/python/bin/python3 trellis-library/scripts/validation/validate-library-sync.py --strict-warnings
+# 1. 验证 trellis-library
+python3 trellis-library/cli.py validate --strict-warnings
+python3 -m unittest trellis-library/tests/test_cli.py
 
-# 2. View changes
+# 2. 查看变更
 git status
 git diff --name-only
-
-# 3. Based on changed files, check relevant items above
 ```
-
----
-
-## Common Oversights
-
-| Oversight | Consequence | Check |
-|-----------|-------------|-------|
-| Code-spec docs not updated | Others don't know the change | Check .trellis/spec/ |
-| Spec text is abstract only | Easy regressions in infra/cross-layer changes | Require signature/contract/matrix/cases/tests |
-| Migration not created | Schema out of sync | Check db/migrations/ |
-| Types not synced | Runtime errors | Check shared types |
-| Applicable validation not run | False confidence | Run project-appropriate checks |
-| Debug-only code left in executable paths | Noisy logs or unstable behavior | Search changed code paths |
 
 ---
 
@@ -133,24 +136,24 @@ git diff --name-only
 
 ```
 Development Flow:
-  Write code -> Test -> $finish-work -> git commit -> $record-session
+  Write code -> Test -> /trellis:finish-work -> git commit -> /trellis:record-session
                           |                              |
                    Ensure completeness              Record progress
                    
 Debug Flow:
-  Hit bug -> Fix -> $break-loop -> Knowledge capture
+  Hit bug -> Fix -> /trellis:break-loop -> Knowledge capture
                        |
                   Deep analysis
 ```
 
-- `$finish-work` - Check work completeness (this skill)
-- `$record-session` - Record session and commits
-- `$break-loop` - Deep analysis after debugging
+- `/trellis:finish-work` - Check work completeness
+- `/trellis:record-session` - Record session and commits
+- `/trellis:break-loop` - Deep analysis after debugging
 
 ---
 
 ## Core Principle
 
-> **Delivery includes not just code, but also documentation, verification, and knowledge capture.**
+> **交付不仅包括代码，还包括文档、验证和知识捕获。**
 
 Complete work = Code + Docs + Tests + Verification
