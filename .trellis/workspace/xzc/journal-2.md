@@ -38,3 +38,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 44: 新项目工作流补充双轨交付控制
+
+**Date**: 2026-03-30
+**Task**: 新项目工作流补充双轨交付控制
+**Branch**: `main`
+
+### Summary
+
+为新项目开发工作流补充托管部署优先、试运行授权备选的双轨交付控制，并在 feasibility、plan、delivery 与命令映射中同步源码移交和尾款门禁。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `90c50c4` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
