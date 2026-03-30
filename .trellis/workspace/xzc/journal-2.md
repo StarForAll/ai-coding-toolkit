@@ -490,3 +490,36 @@ python3 docs/workflows/新项目开发工作流/commands/shell/delivery-control-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 53: 工作流中元数据自动提交辅助流程完善
+
+**Date**: 2026-03-30
+**Task**: 工作流中元数据自动提交辅助流程完善
+**Branch**: `main`
+
+### Summary
+
+新增 metadata-archive-wrapper.py 和 metadata-record-session-wrapper.py，简化元数据归档和会话记录流程
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4911bd7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
