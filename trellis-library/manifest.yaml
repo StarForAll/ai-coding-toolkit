@@ -237,9 +237,9 @@ assets:
   format: directory
   path: specs/universal-domains/project-governance/delivery-control
   title: Delivery Control
-  summary: Reusable rules for external project delivery control, including dual-track delivery (hosted vs trial), payment-triggered handover, and prohibition of undisclosed termination
+  summary: Reusable rules for external-project delivery track selection, payment-gated handover, retained-control boundaries, and prohibited control mechanisms
   status: active
-  version: 1.0.0
+  version: 1.1.0
   domain_axis: universal-domains
   domain: project-governance
   concern: delivery-control
@@ -253,6 +253,7 @@ assets:
     project_types:
     - external-project
     lifecycle_stages:
+    - design
     - planning
     - implementation
     - verification
@@ -281,9 +282,9 @@ assets:
   format: directory
   path: specs/universal-domains/project-governance/authorization-management
   title: Authorization Management
-  summary: Reusable rules for trial authorization lifecycle, validity periods, expiration behavior, and permanent authorization transition
+  summary: Reusable rules for the trial-authorization track, covering terms, expiration behavior, visibility, and permanent-authorization transition
   status: active
-  version: 1.0.0
+  version: 1.1.0
   domain_axis: universal-domains
   domain: project-governance
   concern: authorization-management
@@ -298,6 +299,7 @@ assets:
     - external-project
     lifecycle_stages:
     - design
+    - planning
     - implementation
     - verification
     platforms: []
@@ -6389,10 +6391,10 @@ assets:
   type: checklist
   format: file
   path: checklists/universal-domains/project-governance/transfer-checklist.md
-  title: External Project Transfer Checklist
-  summary: Comprehensive checklist for external project delivery handover, covering source code, secrets, infrastructure, and final verification
+  title: Transfer Checklist
+  summary: Practical checklist for external-project delivery events, covering retained-control boundaries, final transfer, and disclosed trial-authorization handover conditions
   status: active
-  version: 1.0.0
+  version: 1.1.0
   domain_axis: universal-domains
   domain: project-governance
   concern: transfer-checklist

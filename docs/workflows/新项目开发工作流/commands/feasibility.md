@@ -126,6 +126,9 @@ $TASK_DIR/
 - 是否值得做：
 - 如何做更稳：
 - 是否允许进入 brainstorm：是 / 否
+- `delivery_control_track`: `hosted_deployment` / `trial_authorization` / `undecided`
+- `delivery_control_handover_trigger`: 例如 `final_payment_received`
+- `delivery_control_retained_scope`: 尾款前仍由开发者保留的环境、账号、密钥、部署控制范围；若无则写 `none`
 - 交付控制轨道：托管部署 / 试运行授权 / 未确定
 - 当前结论的前提：
 - 场景标签：
@@ -148,6 +151,13 @@ $TASK_DIR/
 | 关键依赖 | ... | ... | ... |
 | 数据合规要点 | ... | ... | ... |
 | 决策/验收负责人 | ... | ... | ... |
+
+## Trial Authorization Terms（仅当 `delivery_control_track = trial_authorization`）
+- `trial_authorization_terms.validity`: ...
+- `trial_authorization_terms.clock_source_or_usage_basis`: ...
+- `trial_authorization_terms.expiration_behavior`: ...
+- `trial_authorization_terms.renewal_policy`: ...
+- `trial_authorization_terms.permanent_authorization_trigger`: ...
 
 ## 红线检查
 ✅ 通过 / ❌ 不通过 / ⚠️ 信息不足需补充
@@ -201,11 +211,25 @@ $TASK_DIR/
 - 若不允许：补信息 / 谈判 / 终止
 ```
 
+### 双轨字段映射表
+
+| 字段 | 填写位置 | 作用 | 下游消费点 |
+|---|---|---|---|
+| `delivery_control_track` | `## 概览` | 决定交付轨道 | `/trellis:design` 选择必选 spec；`/trellis:plan` 决定是否拆试运行授权任务 |
+| `delivery_control_handover_trigger` | `## 概览` | 定义最终控制权移交触发条件 | `/trellis:plan` 设置前置依赖；`/trellis:delivery` 判断是否允许最终移交 |
+| `delivery_control_retained_scope` | `## 概览` | 明确尾款前仍由开发者保留的控制范围 | `/trellis:plan` 拆 retained-control 任务；`/trellis:delivery` 校验未提前移交 |
+| `trial_authorization_terms.*` | `## Trial Authorization Terms` | 冻结试运行授权条款 | `/trellis:design` 导入 `authorization-management`；`/trellis:delivery` 校验到期行为与永久授权触发条件 |
+| 源码/密钥/管理员权限移交时点 | `## 关键字段快照` | 补足正式移交边界 | `/trellis:design` 判断是否导入 `secrets-and-config`；`/trellis:plan` 拆移交任务 |
+| 尾款比例、付款结构、逾期处理 | `## 关键字段快照` + `## 必须谈判条件` | 冻结付款与移交关系 | `/trellis:plan` 标记触发依赖；`/trellis:delivery` 作为最终移交门禁依据 |
+
 约束：
 
 - `是否允许进入 brainstorm = 否` 时，不应直接进入 `/trellis:brainstorm`
 - `总体决策 = 暂停` 时，下一步默认是“补信息后重跑 feasibility”
 - `总体决策 = 拒绝` 时，下一步默认是“终止项目并保留 assessment 记录”
+- 外部项目至少填完前三个 `delivery_control_*` 字段，不能只写中文描述不写机器字段
+- 若 `delivery_control_track = trial_authorization`，`trial_authorization_terms.*` 不得留空
+- 若当前只能做假设，必须在“关键字段快照”或“最小补充信息集”里写明证据缺口
 
 ## 下一步推荐
 

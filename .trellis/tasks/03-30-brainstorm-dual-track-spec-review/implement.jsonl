@@ -1,0 +1,5 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/library-assets/spec-authoring.md", "reason": "trellis-library spec files must follow 4-file concern format and modal-rule style"}
+{"file": ".trellis/spec/library-assets/checklist-authoring.md", "reason": "transfer checklist structure must stay single-file and binary-checkable"}
+{"file": ".trellis/spec/library-assets/manifest-maintenance.md", "reason": "manifest metadata, dependencies, and relations must stay aligned with asset changes"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "this task spans trellis-library assets, manifest, and workflow docs"}

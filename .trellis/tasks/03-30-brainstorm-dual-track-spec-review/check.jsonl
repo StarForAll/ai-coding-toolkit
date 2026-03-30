@@ -1,0 +1,5 @@
+{"file": ".opencode/commands/trellis/finish-work.md", "reason": "Finish work checklist"}
+{"file": ".opencode/commands/trellis/check.md", "reason": "Code quality check spec"}
+{"file": ".trellis/spec/library-assets/checklist-authoring.md", "reason": "review checklist structure and checkability"}
+{"file": ".trellis/spec/library-assets/spec-authoring.md", "reason": "review spec structure and wording against library format rules"}
+{"file": ".trellis/spec/library-assets/manifest-maintenance.md", "reason": "review manifest updates for asset alignment"}

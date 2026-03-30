@@ -82,13 +82,30 @@ $TASK_DIR/design/
      - `spec.universal-domains.product-and-requirements.*`（PRD 相关）
      - `spec.universal-domains.architecture.*`（架构相关）
      - `spec.universal-domains.verification.*`（验证相关）
-   - 若为**外部项目**（外包、定制开发、新客户），**额外必选**：
+   - 若为**外部项目**（外包、定制开发、新客户），**额外基础必选**：
      - `spec.universal-domains.project-governance.delivery-control`
-     - `spec.universal-domains.project-governance.authorization-management`
      - `checklist.universal-domains.project-governance.transfer-checklist`
+   - 若 `assessment.md` 中 `delivery_control_track = trial_authorization`，**额外条件必选**：
+     - `spec.universal-domains.project-governance.authorization-management`
+   - 若本项目会在正式移交时交付密钥、环境变量、第三方平台配置，**额外条件必选**：
+     - `spec.universal-domains.security.secrets-and-config`
    - 根据技术栈按需选择：`spec.universal-domains.security.*`、`spec.universal-domains.data.*` 等
 
 2. 基于当前项目作用/背景/技术架构，对当前项目 `.trellis/spec/` 做分析完善，删除错误内容并补齐缺失内容
+
+### 双轨资产导入映射表
+
+| 上游字段 / 场景 | 必选资产 | 条件资产 | 设计文档里至少要体现 |
+|---|---|---|---|
+| 内部项目 | `product-and-requirements.*` `architecture.*` `verification.*` | 按技术栈补 `security.*` `data.*` | 常规 BRD/TAD/DDD/IDD/AID/ODD |
+| 外部项目 + `delivery_control_track = hosted_deployment` | `delivery-control` `transfer-checklist` | 若正式移交含密钥/配置，再加 `secrets-and-config` | TAD 中写清 retained-control 边界；IDD/ODD 中写清交付事件与环境边界 |
+| 外部项目 + `delivery_control_track = trial_authorization` | `delivery-control` `transfer-checklist` `authorization-management` | 若正式移交含密钥/配置，再加 `secrets-and-config` | BRD/IDD 中写清授权状态与到期行为；TAD/ODD 中写清正式授权切换与最终移交门禁 |
+
+最低对齐要求：
+
+- `assessment.md` 里的 `delivery_control_track` 必须能在设计文档中找到对应交付模型。
+- 若导入了 `authorization-management`，设计文档里必须出现试运行有效期、到期行为、永久授权触发条件。
+- 若判断需要 `secrets-and-config`，设计文档里必须明确哪些密钥/配置属于最终移交范围，不能只在 checklist 再补。
 
 根据你的意图：
 

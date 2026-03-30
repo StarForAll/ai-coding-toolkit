@@ -1,22 +1,5 @@
-# Delivery Control — Scope Boundary
+# Scope Boundary
 
-## In Scope
+This concern covers delivery track selection, retained-control versus full-transfer boundaries, payment-gated handover, and prohibited delivery-control practices.
 
-- External projects (outsourcing, custom development, new clients) where developer retains control until final payment
-- Trial authorization agreements with explicit terms
-- Payment-triggered handover of source code, secrets, admin credentials, deployment control
-- Prohibited delivery practices definition and enforcement
-
-## Out of Scope
-
-- Internal projects within same organization (no payment-triggered handover)
-- Open source public releases
-- Continuous delivery pipelines for SaaS products
-- Ongoing maintenance contracts after project completion
-- Third-party software distribution where developer never retains control
-
-## Cross-Domain Dependencies
-
-- `spec.universal-domains.project-governance.change-management`: Delivery track changes must follow change management
-- `spec.universal-domains.security.secrets-and-config`: Secrets handover rules
-- `spec.universal-domains.verification.release-readiness`: Release readiness includes delivery control compliance
+It does not define pricing strategy, legal contract drafting, general authorization-system design, or the detailed runtime behavior of a trial license after the trial track has been chosen.
