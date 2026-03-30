@@ -1952,3 +1952,36 @@ Record session after the recommit that restored task metadata
 ### Next Steps
 
 - None - task complete
+
+
+## Session 42: 新项目工作流补充 feasibility 前置门禁
+
+**Date**: 2026-03-30
+**Task**: 新项目工作流补充 feasibility 前置门禁
+**Branch**: `main`
+
+### Summary
+
+完善新项目开发工作流源资产，明确 feasibility 是进入 brainstorm 前的默认门禁，补充 assessment.md 输出契约并升级辅助模板脚本。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `26de251` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
