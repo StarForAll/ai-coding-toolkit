@@ -978,3 +978,61 @@ python3 docs/workflows/新项目开发工作流/commands/shell/delivery-control-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 65: 工作流经验反馈机制闭环修复
+
+**Date**: 2026-03-31
+**Task**: 工作流经验反馈机制闭环修复
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+## 修改内容
+
+| 文件 | 修改 | 说明 |
+|------|------|------|
+| `工作流总纲.md` §6.6.4 | 删除两段重复流程定义 | 改为引用 §7.3.1 为唯一权威定义，消除 §6.6.4 与 §7.3.1 的流程描述冲突 |
+| `工作流总纲.md` §7.3.1 | 内联模板增加快速捕获格式 | 与 TEMPLATE.md 的快速捕获格式对齐，支持 30 秒速记 |
+| `commands/start-patch-phase-router.md` | 增加 AI 隐式信号主动检测规则 | 同一命令连续失败/重复错误/用户挫败表达 → AI 主动询问是否记录 learn/ |
+| `commands/delivery.md` Step 9 | 前置 retrospective.md vs learn/ 分工说明 | 用对比表+一句话判断规则，将分工说明从 Step 9b 底部提升至 Step 9 开头 |
+| `learn/TEMPLATE.md` | 增加快速捕获格式 | 3 行结构：踩坑位置/现象/可能原因，降低开发中记录门槛 |
+| `learn/README.md` | 同步模板说明 | 更新为两种格式的描述 |
+
+## 核心修复
+
+1. **§6.6.4 权威性错位**：两段重复流程定义（步骤③互相矛盾：一个说 AI 在 tmp/ 起草，一个说直接写 learn/）已删除，改为引用 §7.3.1
+2. **触发链路断裂**：start-patch 增加了 AI 隐式信号检测（连续失败/重复错误/挫败表达），不再仅依赖用户显式表达触发词
+3. **执行摩擦偏高**：TEMPLATE.md 增加快速捕获格式，开发中 30 秒可记完
+4. **分工说明不清晰**：retrospective.md vs learn/ 的分工说明前置到 Step 9 开头
+
+## 分析过程
+
+用户要求从整体工作流角度分析"工作流补充工作流去缺陷反馈优化机制"的完善程度。经过 4 轮筛选（忽略 tmp/ 中转、§6.6.4/§7.3.1 重叠、时间约束、12/13 等问题），最终识别并修复了 4 个 P0-P2 级问题。版本记录为 V1.1.10。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `65e8b2a` | (see git log) |
+| `deba09c` | (see git log) |
+| `96269bc` | (see git log) |
+| `4ebaa95` | (see git log) |
+| `e7f25c4` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
