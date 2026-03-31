@@ -916,3 +916,65 @@ python3 docs/workflows/新项目开发工作流/commands/shell/delivery-control-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 64: 工作流经验反馈机制实操优化 V1.1.9
+
+**Date**: 2026-03-31
+**Task**: 工作流经验反馈机制实操优化 V1.1.9
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+
+## 改动概述
+
+将 learn 经验反馈机制从"规范层闭环"落地为可执行的 AI 起草 → tmp/ 交接 → 人工决策流程。
+
+### 核心变更
+
+| 要素 | 改动前 | 改动后 |
+|------|--------|--------|
+| 起草方式 | 人手动写 learn/*.md | AI 在 tmp/ 起草，人确认后移动 |
+| 要素引导 | 无明确最小要素 | 四要素：现象/阶段/影响/初步判断，缺则追问 |
+| 文件存放 | 直接写 learn/ | tmp/workflow-feedback-YYYY-MM-DD-短名.md |
+| 模板复杂度 | 10 个 section, 81 行 | 两阶段模板（起草+结论）, 57 行 |
+| 遗漏防护 | 无 | delivery Step 9a 显式检查 tmp/ 待处理文件 |
+| 文档去重 | §7.3.1 与 README 重复 | §7.3.1 管起草交接，README 管目录使用原则 |
+
+### 修改文件
+
+- `工作流总纲.md` — §7.3.1 完全重写 + §6.6.4 对齐 + 版本历史 V1.1.9
+- `commands/delivery.md` — Step 9 拆分为 9a(tmp 检查) + 9b(项目复盘)
+- `learn/README.md` — 去重，聚焦目录使用原则
+- `learn/TEMPLATE.md` — 简化为两阶段模板
+
+### 验证
+
+- trellis-library validate: 通过（仅 informational warning）
+- 跨引用一致性检查: 通过
+- 工作流命令映射.md: 无 drift
+- 完整流程演练.md: 无 drift
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `96269bcd6a690f4b28a1fbeb2abe55c8c0586cf6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
