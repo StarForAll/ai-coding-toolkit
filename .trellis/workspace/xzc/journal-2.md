@@ -1135,3 +1135,50 @@ python3 docs/workflows/新项目开发工作流/commands/shell/delivery-control-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 69: 补充新项目工作流 todo 初始化约定
+
+**Date**: 2026-03-31
+**Task**: 补充新项目工作流 todo 初始化约定
+**Branch**: `main`
+
+### Summary
+
+补充新项目工作流初始化时生成 todo.txt 的约定与安装实现，并补安装测试。
+
+### Main Changes
+
+| Feature | Description |
+|---------|-------------|
+| Workflow doc | 在新项目工作流初始化阶段补充项目根 `todo.txt` 约定，并要求根 `README.md` 说明其用途 |
+| Installer | 安装工作流时若目标项目缺少 `todo.txt`，自动创建默认内容 `文档内容需要和实际当前的代码同步` |
+| Tests | 补充安装器测试，覆盖 `todo.txt` 创建与已有文件保留行为 |
+
+**Updated Files**:
+- `docs/workflows/新项目开发工作流/工作流总纲.md`
+- `docs/workflows/新项目开发工作流/commands/install-workflow.py`
+- `docs/workflows/新项目开发工作流/commands/test_workflow_installers.py`
+
+**Verification**:
+- `/ops/softwares/python/bin/python3 -m py_compile docs/workflows/新项目开发工作流/commands/install-workflow.py docs/workflows/新项目开发工作流/commands/test_workflow_installers.py`
+- `/ops/softwares/python/bin/python3 -m unittest docs/workflows/新项目开发工作流/commands/test_workflow_installers.py`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `07534c5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
