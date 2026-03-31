@@ -1069,3 +1069,36 @@ python3 docs/workflows/新项目开发工作流/commands/shell/delivery-control-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 67: 工作流 spec 对齐门禁一致性收敛
+
+**Date**: 2026-03-31
+**Task**: 工作流 spec 对齐门禁一致性收敛
+**Branch**: `main`
+
+### Summary
+
+统一新项目工作流中 §3.7 的主定义口径，收敛 design、plan、命令映射和完整流程演练的承接口径，并澄清阶段一与阶段三 spec 导入边界。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7f87219` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

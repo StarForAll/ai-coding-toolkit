@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 66
+- **Total Sessions**: 67
 - **Last Active**: 2026-03-31
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~1071 | Active |
+| `journal-2.md` | ~1104 | Active |
 | `journal-1.md` | ~1987 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 67 | 2026-03-31 | 工作流 spec 对齐门禁一致性收敛 | `7f87219` | `main` |
 | 66 | 2026-03-31 | 评估并最小修正工作流经验反馈机制 | `bcc1c50` | `main` |
 | 65 | 2026-03-31 | 工作流经验反馈机制闭环修复 | `65e8b2a`, `deba09c`, `96269bc`, `4ebaa95`, `e7f25c4` | `main` |
 | 64 | 2026-03-31 | 工作流经验反馈机制实操优化 V1.1.9 | `96269bcd6a690f4b28a1fbeb2abe55c8c0586cf6` | `main` |
