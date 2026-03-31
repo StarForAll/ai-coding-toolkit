@@ -29,6 +29,24 @@ description: 需求冻结了？开始设计 — UI/UX、架构选型、接口设
 
 **Skill**: `ui-ux-pro-max` — AI 生成页面布局粗稿、组件建议、交互流程
 
+**强制提醒**：
+
+- 只要当前项目进入了“需要页面视觉设计、页面布局设计、交互原型设计”的阶段，就必须明确提醒用户：这一步需要去外部 UI 设计工具完成，不要只停留在当前 CLI 里讨论。
+- 推荐外部操作顺序：
+  1. 先去 [UI Prompt Styles](https://www.uiprompt.site/zh/styles) 获取接近目标风格的 UI 提示词
+  2. 再去 [Stitch](https://stitch.withgoogle.com/) 粘贴整理后的提示词，生成页面级 UI 原型
+
+**建议引导话术**：
+
+> 现在已经进入需要外部 UI 设计的阶段。请先去 `https://www.uiprompt.site/zh/styles` 选择合适的 UI 风格提示词，再把页面目标、关键模块、交互要求和风格提示词整理后带到 `https://stitch.withgoogle.com/` 生成 UI 原型。完成后，再回到当前工作流继续补齐设计说明和技术方案。
+
+**最小执行步骤**：
+
+1. 从 PRD 提取页面目标、用户角色、关键流程、品牌/风格约束
+2. 在 `https://www.uiprompt.site/zh/styles` 选择合适风格，生成或整理可直接复用的 UI 提示词
+3. 将页面需求和 UI 提示词一起带到 `https://stitch.withgoogle.com/`，生成首版页面原型
+4. 回到当前任务，把确认后的页面结构、组件清单、交互要点沉淀到 `design/specs/` 与 `design/pages/`
+
 ### Step 2: 功能规格说明
 
 为每个模块生成 `design/specs/<module>.md`
