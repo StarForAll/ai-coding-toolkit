@@ -1102,3 +1102,36 @@ python3 docs/workflows/新项目开发工作流/commands/shell/delivery-control-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 68: 完善新项目开发工作流任务生成规则
+
+**Date**: 2026-03-31
+**Task**: 完善新项目开发工作流任务生成规则
+**Branch**: `main`
+
+### Summary
+
+新增 brainstorm 入口命令并补齐需求准确性校验、L0/L1/L2 复杂度判定、子任务拆分与历史数据防漂移约束，同步更新 plan/总纲/命令映射及安装升级脚本。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1ac9efe` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
