@@ -817,3 +817,36 @@ python3 docs/workflows/新项目开发工作流/commands/shell/delivery-control-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 61: 补充UI设计阶段外部站点提醒
+
+**Date**: 2026-03-31
+**Task**: 补充UI设计阶段外部站点提醒
+**Branch**: `main`
+
+### Summary
+
+补充新项目开发工作流，在设计阶段强制提醒用户先到 UI Prompt 获取提示词，再到 Stitch 生成 UI 原型，并同步更新设计命令与总纲说明。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0f4e420` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
