@@ -747,3 +747,36 @@ python3 docs/workflows/新项目开发工作流/commands/shell/delivery-control-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 59: 收缩需求变更管理文档
+
+**Date**: 2026-03-31
+**Task**: 收缩需求变更管理文档
+**Branch**: `main`
+
+### Summary
+
+收缩新项目开发工作流中的需求变更管理：删除审批权限与公式化系数表，保留轻量闭环与两档变更单，并压缩各阶段命令中的重复门禁说明。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `df9e825` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
