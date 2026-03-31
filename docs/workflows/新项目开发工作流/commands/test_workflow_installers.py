@@ -71,6 +71,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         install = self.install_workflow(fixture)
 
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        brainstorm = fixture / ".claude" / "commands" / "trellis" / "brainstorm.md"
+        self.assertTrue(brainstorm.exists(), "brainstorm.md should be deployed")
         helper = fixture / ".trellis" / "scripts" / "workflow" / "metadata-autocommit-guard.py"
         self.assertTrue(helper.exists(), "metadata-autocommit-guard.py should be deployed")
         record_helper = fixture / ".trellis" / "scripts" / "workflow" / "record-session-helper.py"
@@ -80,6 +82,7 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         record = fixture / ".trellis" / "workflow-installed.json"
         self.assertTrue(record.exists(), "workflow-installed.json should be created")
+        self.assertIn("brainstorm", record.read_text(encoding="utf-8"))
         self.assertIn("metadata-autocommit-guard.py", record.read_text(encoding="utf-8"))
         self.assertIn("record-session-helper.py", record.read_text(encoding="utf-8"))
 

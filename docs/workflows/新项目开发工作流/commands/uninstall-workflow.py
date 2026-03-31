@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 G, Y, R, N = "\033[0;32m", "\033[1;33m", "\033[0;31m", "\033[0m"
-DEFAULT_COMMANDS = ["feasibility", "design", "plan", "test-first", "self-review", "check", "delivery"]
+DEFAULT_COMMANDS = ["feasibility", "brainstorm", "design", "plan", "test-first", "self-review", "check", "delivery"]
 
 
 def ok(message: str) -> None:

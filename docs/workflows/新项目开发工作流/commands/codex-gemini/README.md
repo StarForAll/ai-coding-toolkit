@@ -28,9 +28,10 @@ python3 docs/workflows/新项目开发工作流/commands/shell/self-review-check
 
 ```
 请先阅读以下工作流指引：
+@docs/workflows/新项目开发工作流/commands/brainstorm.md
 @docs/workflows/新项目开发工作流/commands/feasibility.md
 
-然后按照指引执行可行性评估。
+然后先按 `brainstorm` 规则确认需求准确性、复杂度和是否需要拆任务，再决定是否继续执行可行性评估或进入后续阶段。
 ```
 
 任务级补充审查场景可改为：

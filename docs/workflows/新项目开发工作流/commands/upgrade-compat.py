@@ -39,7 +39,7 @@ _PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 _INJECTION_MARKER = "## Operation Types"
 _RECORD_SESSION_MARKER = "## Record-Session Metadata Closure `[AI]`"
 _RECORD_SESSION_INJECTION_MARKER = "### Step 2: One-Click Add Session"
-NEW_COMMANDS = ["feasibility", "design", "plan", "test-first", "self-review", "check", "delivery"]
+NEW_COMMANDS = ["feasibility", "brainstorm", "design", "plan", "test-first", "self-review", "check", "delivery"]
 HELPER_SCRIPTS = [
     "feasibility-check.py",
     "design-export.py",
