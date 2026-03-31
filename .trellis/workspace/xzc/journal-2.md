@@ -850,3 +850,36 @@ python3 docs/workflows/新项目开发工作流/commands/shell/delivery-control-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 62: 收口任务级多 CLI 补充审查层
+
+**Date**: 2026-03-31
+**Task**: 收口任务级多 CLI 补充审查层
+**Branch**: `main`
+
+### Summary
+
+统一任务级多 CLI 补充审查层的定位、默认 reviewer 数、skill 前置条件与 reviewer 边界，并归档对应 brainstorm 任务。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f4fef30` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
