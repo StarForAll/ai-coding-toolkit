@@ -49,6 +49,8 @@ def inject_phase_router(start_md: Path):
 _PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 _RECORD_SESSION_MARKER = "## Record-Session Metadata Closure `[AI]`"
 _RECORD_SESSION_INJECTION_MARKER = "### Step 2: One-Click Add Session"
+_TODO_FILE_NAME = "todo.txt"
+_TODO_DEFAULT_LINE = "文档内容需要和实际当前的代码同步\n"
 
 
 def inject_record_session_patch(src: Path, record_session_md: Path) -> bool:
@@ -76,6 +78,17 @@ def inject_record_session_patch(src: Path, record_session_md: Path) -> bool:
     )
     ok("record-session 元数据闭环说明已注入")
     return True
+
+
+def ensure_project_todo(root: Path) -> None:
+    """Create the default project todo.txt if it does not exist yet."""
+    todo_path = root / _TODO_FILE_NAME
+    if todo_path.exists():
+        warn(f"{_TODO_FILE_NAME} 已存在，保留现有内容")
+        return
+
+    todo_path.write_text(_TODO_DEFAULT_LINE, encoding="utf-8")
+    ok(f"初始化提醒 → {_TODO_FILE_NAME}")
 
 
 def main():
@@ -192,6 +205,10 @@ def main():
     ok(f"安装记录 → {rec.name} (Trellis {ver})")
 
     print()
+    print("📝 项目级协作提醒...")
+    ensure_project_todo(root)
+
+    print()
     print("╔══════════════════════════════════════╗")
     print("║   ✅ 安装完成                         ║")
     print("╚══════════════════════════════════════╝")
@@ -203,7 +220,8 @@ def main():
     print("    2. 最低要求：补齐 problem-definition / scope-boundary / requirement-clarification / acceptance-criteria")
     print("       再补 customer-facing / developer-facing PRD spec、template、checklist")
     print("    3. 若未接入 trellis-library CLI，则手动复制最低资产集到目标项目 .trellis/")
-    print("    4. 打开 Claude Code → /trellis:start")
+    print("    4. 在目标项目根 README.md 中说明 todo.txt 的存在与用途")
+    print("    5. 打开 Claude Code → /trellis:start")
     print(f"  卸载: python3 {src}/uninstall-workflow.py")
     print()
 

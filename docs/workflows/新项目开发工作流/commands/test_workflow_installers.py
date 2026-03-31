@@ -19,6 +19,7 @@ UPGRADE_SCRIPT = COMMANDS_DIR / "upgrade-compat.py"
 UNINSTALL_SCRIPT = COMMANDS_DIR / "uninstall-workflow.py"
 PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 RECORD_SESSION_MARKER = "## Record-Session Metadata Closure `[AI]`"
+DEFAULT_PROJECT_TODO = "文档内容需要和实际当前的代码同步\n"
 
 
 class WorkflowInstallerTests(unittest.TestCase):
@@ -85,6 +86,29 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("brainstorm", record.read_text(encoding="utf-8"))
         self.assertIn("metadata-autocommit-guard.py", record.read_text(encoding="utf-8"))
         self.assertIn("record-session-helper.py", record.read_text(encoding="utf-8"))
+
+    def test_install_initializes_project_todo_file(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        todo_path = fixture / "todo.txt"
+        self.assertTrue(todo_path.exists(), "todo.txt should be created during installation")
+        self.assertEqual(todo_path.read_text(encoding="utf-8"), DEFAULT_PROJECT_TODO)
+
+    def test_install_preserves_existing_project_todo_file(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+        todo_path = fixture / "todo.txt"
+        todo_path.write_text("已有内容\n", encoding="utf-8")
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.assertEqual(todo_path.read_text(encoding="utf-8"), "已有内容\n")
+        self.assertIn("todo.txt 已存在", install.stdout)
 
     def test_upgrade_check_detects_phase_router_drift_even_when_versions_match(self) -> None:
         fixture = self.create_fixture()
