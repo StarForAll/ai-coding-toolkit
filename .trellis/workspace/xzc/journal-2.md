@@ -883,3 +883,36 @@ python3 docs/workflows/新项目开发工作流/commands/shell/delivery-control-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 63: 工作流经验反馈优化机制
+
+**Date**: 2026-03-31
+**Task**: 工作流经验反馈优化机制
+**Branch**: `main`
+
+### Summary
+
+补充 learn 机制的自然触发与命令触发，新增实战复盘写法和样例，并完成工作流安装/卸载验证
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e7f25c4` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
