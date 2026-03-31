@@ -77,7 +77,7 @@ $TASK_DIR/design/
 
 **当前状态**: 设计文档已输出，`design/` 目录已就绪。
 
-技术架构已经过用户明确确认后，必须先完成以下两个前置任务，才能进入 `/trellis:plan`：
+技术架构已经过用户明确确认后，必须先完成以下前置任务，才能进入 `/trellis:plan`：
 
 1. **根据技术架构，从 `trellis-library` 选择并导入合适 spec 到当前项目 `.trellis/spec/`**
    - 必选基础 spec（所有项目）：
@@ -93,7 +93,21 @@ $TASK_DIR/design/
      - `spec.universal-domains.security.secrets-and-config`
    - 根据技术栈按需选择：`spec.universal-domains.security.*`、`spec.universal-domains.data.*` 等
 
-2. 基于当前项目作用/背景/技术架构，对当前项目 `.trellis/spec/` 做分析完善，删除错误内容并补齐缺失内容
+2. **基于当前项目作用/背景/技术架构，对当前项目 `.trellis/spec/` 做分析完善，删除错误内容并补齐缺失内容**
+
+3. **同步做收尾命令的项目化适配**
+   - **`/trellis:finish-work`：在本阶段一次定准**
+     - 基于已经确认的语言、框架、包管理器、CI、部署方式、安全要求
+     - 把当前项目真实会执行的 lint / typecheck / test / build / scan / delivery gate 写进对应项目的 `finish-work`
+     - 不允许继续保留“默认检查”“按项目自行运行”这类空泛表述
+   - **`/trellis:record-session`：在本阶段先定基线**
+     - 先明确当前项目的记录入口、是否必须走 helper、归档前置条件、哪些元数据允许自动提交
+     - 先写清“什么情况下允许进入 record-session”
+     - 如果后续 `§4 plan` 拆解任务后，任务归档边界、里程碑节点、记录粒度变得更明确，可以再做一次**轻量校正**，但不应推迟到开发结束才第一次处理
+
+4. **确认 `§4 plan` 之后是否需要对 `record-session` 做轻量校正**
+   - 若任务拆解后，发现“完成任务”的定义、归档节点、交付节点、会话记录粒度和 `§3.7` 基线不一致，再补一次轻量修正
+   - 一般不需要在 `§4` 后再次大改 `finish-work`，除非计划阶段新增了新的强制检查门禁
 
 ### 双轨资产导入映射表
 
@@ -108,6 +122,11 @@ $TASK_DIR/design/
 - `assessment.md` 里的 `delivery_control_track` 必须能在设计文档中找到对应交付模型。
 - 若导入了 `authorization-management`，设计文档里必须出现试运行有效期、到期行为、永久授权触发条件。
 - 若判断需要 `secrets-and-config`，设计文档里必须明确哪些密钥/配置属于最终移交范围，不能只在 checklist 再补。
+
+阶段结论：
+
+- `/trellis:finish-work` 的项目化适配主阶段是当前 `design -> spec 对齐` 阶段
+- `/trellis:record-session` 的基线适配也在当前阶段完成，`§4 plan` 后仅允许做一次轻量校正
 
 根据你的意图：
 
