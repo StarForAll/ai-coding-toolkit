@@ -81,11 +81,11 @@ Multi-CLI Review Action 是多 CLI 协作流程中**当前 CLI（唯一修复者
    - 扫描 `{task-dir}/review-round-{N}/` 下的所有 `.md` 文件
    - 排除 `summary-*.md` 和 `action.md`
    - 按 `reviewer-id` 识别来源
-   - **数量边界**：默认 2 个 reviewer，最多 4 个 reviewer
+   - **数量边界**：默认 1 个 reviewer，最多 4 个 reviewer
    - **扫描时校验**：
      - 若扫描到 0 个报告 → 报错：无可处理报告
      - 若扫描到 > 4 个报告 → 报错并拒绝处理，提示超出规模上限
-     - 若扫描到 < 2 个报告 → 输出警告（单 reviewer 模式），但仍可继续
+     - 若扫描到 1 个报告 → 作为默认单 reviewer 模式继续处理
 
 2. **读取已处理记录**（可选）：
    - 检查 `{task-dir}/.processed.json` 是否存在
@@ -113,9 +113,9 @@ Multi-CLI Review Action 是多 CLI 协作流程中**当前 CLI（唯一修复者
 1. **解析参数**：确认 `--task-dir` 和 `--round`
 2. **扫描报告**：读取 `{task-dir}/review-round-{N}/` 下所有 reviewer 报告
 3. **校验 reviewer 数量**：
-   - 默认 2 个 reviewer，最多 4 个
+   - 默认 1 个 reviewer，最多 4 个
    - 超过 4 个 → 报错拒绝处理
-   - 不足 2 个 → 输出警告（单 reviewer 模式），可继续
+   - 1 个 reviewer 即为默认模式，可继续
 4. **检查已处理**：跳过已处理的报告（除非 `--force`）
 5. **解析内容**：提取每个报告中的问题清单
 

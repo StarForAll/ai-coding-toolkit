@@ -334,7 +334,9 @@ protocol: task-level
 
 ### 目录不存在
 
-- 自动创建所需目录结构
+- **报错并停止**
+- 明确提示：应由协调者先创建 `{task-dir}/review-round-{N}/`
+- reviewer **不得**擅自创建目录结构
 
 ### 旧协议兜底警告
 
