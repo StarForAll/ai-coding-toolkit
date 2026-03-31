@@ -153,6 +153,7 @@ get_context.py 输出
 | "自检一下" "对照 spec 看看" "有没有偏差" | `/trellis:self-review` |
 | "补充审查一下" "让其他 CLI 看一下" "多人审查" "check 一下" | `/trellis:check` |
 | "准备交付" "跑一下验收" "整理交付物" | `/trellis:delivery` |
+| "这个流程有坑" "这一步老容易漏" "这个命令说明有歧义" "先把这次踩坑记一下" "这个工作流后面得优化" | 优先触发经验反馈机制：开发中先补 `learn/*.md`；若已进入收尾链路则路由到 `/trellis:delivery` 的 Step 9 |
 | "收尾" "提交前检查" "准备 commit" | `/trellis:finish-work` |
 | "继续上次的工作" "上次做到哪了" | 继续现有任务 |
 
@@ -167,6 +168,13 @@ get_context.py 输出
 - 缺少 `assessment.md` 时，不得直接进入 `/trellis:brainstorm`
 - `assessment.md` 明确写有 `是否允许进入 brainstorm = 否` 时，不得直接进入 `/trellis:brainstorm`
 - 只有存在有效评估记录且允许继续时，才进入需求发现
+
+若命中“经验反馈”类自然触发：
+
+- 不要求等到项目结束再记录
+- 若当前还在开发 / 设计 / 验证中，先在 `docs/workflows/新项目开发工作流/learn/` 新增一条记录，记下这次具体踩坑点
+- 若当前已经进入收尾链路，优先走 `/trellis:delivery`，在 Step 9 一并完成项目复盘和工作流经验沉淀
+- 若用户同时要求“现在就优化工作流”，也先记录问题，再由人工确认是否把它升级成正式流程改动
 
 若 PRD 已冻结且命中需求讨论：
 
