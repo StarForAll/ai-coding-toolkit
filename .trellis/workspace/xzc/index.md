@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 59
+- **Total Sessions**: 60
 - **Last Active**: 2026-03-31
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~782 | Active |
+| `journal-2.md` | ~819 | Active |
 | `journal-1.md` | ~1987 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 60 | 2026-03-31 | workflow: 补充收尾命令自适应阶段 | `b5b27d7` | `main` |
 | 59 | 2026-03-31 | 收缩需求变更管理文档 | `df9e825` | `main` |
 | 58 | 2026-03-31 | 需求变更管理流程精简 | `a9a2f9e` | `main` |
 | 57 | 2026-03-30 | 需求变更管理流程避免形式化改进 | `2170465` | `main` |

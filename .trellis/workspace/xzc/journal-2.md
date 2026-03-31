@@ -780,3 +780,40 @@ python3 docs/workflows/新项目开发工作流/commands/shell/delivery-control-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 60: workflow: 补充收尾命令自适应阶段
+
+**Date**: 2026-03-31
+**Task**: workflow: 补充收尾命令自适应阶段
+**Branch**: `main`
+
+### Summary
+
+明确新项目工作流中 finish-work 与 record-session 的项目自适应阶段，并补 walkthrough 收尾样例
+
+### Main Changes
+
+- 更新 §3.7 阶段职责：`/trellis:finish-work` 在 design/spec 对齐阶段定准，`/trellis:record-session` 在同阶段定基线，`§4 plan` 后仅允许轻量校正。
+- 同步更新工作流总纲、design 命令、命令映射和 walkthrough，确保阶段说明一致。
+- 在 walkthrough 中补充最小收尾样例，明确 finish-work 证据清单与 record-session helper 入口。
+- 相关文件：`docs/workflows/新项目开发工作流/工作流总纲.md`、`docs/workflows/新项目开发工作流/commands/design.md`、`docs/workflows/新项目开发工作流/命令映射.md`、`docs/workflows/新项目开发工作流/完整流程演练.md`。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b5b27d7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
