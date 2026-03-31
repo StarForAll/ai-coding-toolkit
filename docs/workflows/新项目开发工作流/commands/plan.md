@@ -30,6 +30,8 @@ description: 设计好了？拆任务 — AI 驱动任务拆解、排期、DoR/D
 - 已根据技术架构，从 `trellis-library` 选择并导入合适 spec 到当前项目 `.trellis/spec/`（任务 1，必须先于任务 2 完成）
 - 已结合当前项目作用、背景、技术架构，对当前项目 `.trellis/spec/` 完成分析完善（任务 2，仅在任务 1 完成后执行）
 - 已基于当前项目实际技术栈，明确自动化检查矩阵（任务 3，仅在任务 1、任务 2 完成后执行；不得只写默认 `Lint`，可按项目补充 SonarQube 等检查）
+- 已基于任务 3 中写清的自动化检查矩阵，完成当前项目 `/trellis:finish-work` 的首次项目化适配（任务 4）
+- 已完成当前项目 `/trellis:record-session` 的基线适配，至少明确记录入口、archive 前置条件、元数据边界与阻断条件（任务 5）
 - 若属于外包、定制开发或新客户项目（外部项目），已在 `assessment.md` 中明确 `delivery_control_track`（默认 `hosted_deployment`，必要时使用 `trial_authorization`），**并且已按轨道导入交付控制相关 spec**：
   - 外部项目基础必选：
     - `spec.universal-domains.project-governance.delivery-control`
@@ -40,7 +42,7 @@ description: 设计好了？拆任务 — AI 驱动任务拆解、排期、DoR/D
     - `spec.universal-domains.security.secrets-and-config`
 - 内部项目（非外部交付）则不需要导入上述交付控制相关 spec
 
-`/trellis:plan` 的职责是任务拆解与生成 `task_plan.md`，不负责替代上述 spec 导入、spec 修订与自动化检查矩阵定义动作。
+`/trellis:plan` 的职责是任务拆解与生成 `task_plan.md`，不负责替代上述 spec 导入、spec 修订、自动化检查矩阵定义，以及 `finish-work` / `record-session` 的首次项目化适配动作。若任务粒度在 `plan` 阶段变得更明确，只允许对 `record-session` 再做一次轻量校正。
 
 ---
 
