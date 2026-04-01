@@ -39,7 +39,7 @@ commands/
       README.md       # 用途、依赖、运行方式、副作用（必需）
       script.sh       # 主脚本（或 .py, .js 等）
       config.json     # 配置（可选）
-  codex/              # Codex CLI 特有的自定义命令/脚本
+  codex/              # Codex CLI 特有的辅助资产（非项目级 slash command 目录）
     <command-id>/
       README.md
       script.sh
@@ -80,9 +80,15 @@ Claude Code specific commands. These may include:
 
 ### `commands/codex/`
 
-OpenAI Codex CLI specific commands. These may include:
-- Custom Codex CLI commands
-- Codex-specific prompt templates
+OpenAI Codex CLI specific helper assets. These may include:
+- Codex-specific config snippets or bootstrap helpers
+- Codex workflow packaging helpers that emit skills / hooks / agent assets
+- Codex-specific prompt templates used by scripts or installation flows
+
+Do **not** treat this directory as a project-level slash command source equivalent to
+`.claude/commands/` or `.opencode/commands/`. In this repository's current multi-CLI
+workflow model, Codex project integration is primarily carried by `AGENTS.md`,
+hooks, skills, and subagents.
 
 ### `commands/shell/`
 
@@ -97,7 +103,7 @@ Source assets in `commands/<tool>/` are deployed to the corresponding tool's com
 | Source | Deploy Target | Method |
 |--------|--------------|--------|
 | `commands/claude/<id>/` | `.claude/commands/<namespace>/<name>.md` | Manual copy/adapt |
-| `commands/codex/<id>/` | Codex CLI config | Manual |
+| `commands/codex/<id>/` | Codex CLI config / skills / helper assets | Manual |
 | `commands/shell/<id>.sh` | Referenced directly | Symlink or copy |
 
 The deployment format (slash command markdown, frontmatter, etc.) is tool-specific and documented by each tool, not by this spec.

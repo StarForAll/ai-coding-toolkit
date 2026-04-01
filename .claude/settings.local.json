@@ -110,7 +110,12 @@
       "Bash(/ops/softwares/python/bin/python3 -c \"from common.git import auto_commit_paths, run_git; print\\(''OK''\\)\")",
       "Bash(for d:*)",
       "Bash(do echo:*)",
-      "Bash(/ops/softwares/python/bin/python3 ./.trellis/scripts/get_context.py --mode record)"
+      "Bash(/ops/softwares/python/bin/python3 ./.trellis/scripts/get_context.py --mode record)",
+      "Bash(xargs -I{} basename {})",
+      "Bash(TMPROOT=/tmp/trellis-cli-test)",
+      "Bash(mkdir -p \"$TMPROOT\")",
+      "Bash(mkdir -p .claude .opencode .codex .agents)",
+      "Bash(trellis init:*)"
     ]
   }
 }

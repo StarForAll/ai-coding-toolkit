@@ -6,7 +6,7 @@ description: 设计好了？拆任务 — AI 驱动任务拆解、排期、DoR/D
 # /trellis:plan — AI 驱动任务拆解
 
 > **Workflow Position**: §4 → 前: `/trellis:design` → 后: `/trellis:test-first` 或 `/trellis:start`
-> **Cross-CLI**: ✅ Claude Code · ✅ Cursor (命令名: plan) · ⚠️ OpenCode（可原生承载；见 `opencode/README.md`） · ⚠️ Codex（可原生承载但采用 skills/agents 模型；见 `codex/README.md`） · ⚠️ Gemini（兼容层；见 `gemini/README.md`）
+> **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:plan`） · ✅ Cursor（命令名: plan） · ✅ OpenCode（TUI: `/trellis:plan`；CLI: `trellis/plan`；见 `opencode/README.md`） · ⚠️ Codex（同项目会安装 `plan` skill；通过自然语言或显式 skill 触发，不提供项目级 `/trellis:plan` 命令；见 `codex/README.md`） · ⚠️ Gemini（兼容层；见 `gemini/README.md`）
 
 ---
 

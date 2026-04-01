@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """一键将自定义工作流嵌入 Trellis 框架（多 CLI 支持）。
 
-支持 Claude Code / OpenCode / Codex CLI，按各 CLI 原生模型自动检测并部署。
+默认行为：自动检测目标项目中已存在的 Claude Code / OpenCode / Codex 配置，
+并在同一个项目中同时部署对应适配层；`--cli` 仅用于过滤本次安装目标。
 
-前提: 已运行 trellis init（Claude Code / OpenCode）或项目已有 .agents/ 目录（Codex）
+前提:
+- 目标项目已执行 trellis init，且存在对应 CLI 目录
+- Codex 至少存在 .agents/skills/ 或 .codex/skills/ 之一
+
 用法: python3 install-workflow.py [--project-root /path/to/project] [--cli claude,opencode,codex] [--dry-run]
 卸载: python3 uninstall-workflow.py
 """
@@ -72,7 +76,7 @@ def find_root(start: Path) -> Path:
 
 
 def detect_cli_types(root: Path, requested: list[str] | None = None) -> list[str]:
-    """检测项目中存在的 CLI 类型，可按 requested 过滤。"""
+    """检测项目中存在的 CLI 类型；默认返回全部检测到的 CLI，可按 requested 过滤。"""
     found = []
     for cli_type, cli_dir in _CLI_DIRS.items():
         if requested and cli_type not in requested:
@@ -290,7 +294,7 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool) -> dict:
 
 # ── Codex CLI 部署 ──
 def deploy_codex(src: Path, root: Path, dry_run: bool) -> dict:
-    """部署到 .agents/skills/*/SKILL.md（Codex 无自定义命令目录，使用 skills 模型）"""
+    """部署到 skills 目录（Codex 无项目自定义命令目录，workflow 入口采用 skills 模型）。"""
     # 优先使用 .agents/skills/，其次 .codex/skills/
     skills_dir = root / ".agents" / "skills"
     if not skills_dir.is_dir():
@@ -311,7 +315,7 @@ def deploy_codex(src: Path, root: Path, dry_run: bool) -> dict:
                 c = prepare_command_content(s)
                 d.parent.mkdir(parents=True, exist_ok=True)
                 d.write_text(c, encoding="utf-8")
-                ok(f"[Codex] skill: {cmd} → .agents/skills/{cmd}/SKILL.md")
+                ok(f"[Codex] skill: {cmd} → {d.relative_to(root)}")
             result["commands"] += 1
         else:
             warn(f"[Codex] 源文件缺失: {cmd}.md")
@@ -382,11 +386,11 @@ def ensure_project_todo(root: Path) -> None:
 # ── 主流程 ──
 def main():
     p = argparse.ArgumentParser(
-        description="安装自定义工作流到 Trellis（支持 Claude Code / OpenCode / Codex CLI）"
+        description="安装自定义工作流到 Trellis（默认同一项目同时部署已检测到的 Claude Code / OpenCode / Codex 适配层）"
     )
     p.add_argument("--project-root", type=Path, default=None, help="项目根目录（默认自动检测）")
     p.add_argument("--cli", type=str, default=None,
-                   help="指定 CLI 类型，逗号分隔: claude,opencode,codex（默认全部自动检测）")
+                   help="指定 CLI 类型，逗号分隔: claude,opencode,codex（默认安装全部检测到的 CLI；此参数仅用于过滤）")
     p.add_argument("--dry-run", action="store_true", help="预览安装结果，不实际写入")
     args = p.parse_args()
 
@@ -407,6 +411,8 @@ def main():
     print("╚══════════════════════════════════════════╝")
     print()
     info(f"检测到 CLI: {', '.join(cli_types)}")
+    if not args.cli:
+        info("默认策略: 在同一目标项目中同时部署全部检测到的 CLI 适配层；如需过滤请使用 --cli")
     if args.dry_run:
         warn("DRY RUN 模式 — 不实际写入文件")
     print()
@@ -469,13 +475,14 @@ def main():
         print("       再补 customer-facing / developer-facing PRD spec、template、checklist")
         print("    3. 若未接入 trellis-library CLI，则手动复制最低资产集到目标项目 .trellis/")
         print("    4. 在目标项目根 README.md 中说明 todo.txt 的存在与用途")
+        print("    5. 同一目标项目中各 CLI 的入口协议不同，请分别按各自原生入口使用")
         for cli_type in cli_types:
             if cli_type == "claude":
-                print("    5. 打开 Claude Code → /trellis:start")
+                print("       - Claude Code → /trellis:start")
             elif cli_type == "opencode":
-                print("    5. 打开 OpenCode → /trellis:start（TUI）或 trellis/start（CLI）")
+                print("       - OpenCode → /trellis:start（TUI）或 trellis/start（CLI）")
             elif cli_type == "codex":
-                print("    5. 打开 Codex → 描述需求，skills 将自动触发对应阶段")
+                print("       - Codex → 描述需求或显式触发对应 skill；不要期待项目级 /trellis:start")
         print(f"  卸载: python3 {src}/uninstall-workflow.py")
     print()
 
