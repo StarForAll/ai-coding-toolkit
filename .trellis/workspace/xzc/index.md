@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 72
+- **Total Sessions**: 73
 - **Last Active**: 2026-04-01
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~1298 | Active |
+| `journal-2.md` | ~1331 | Active |
 | `journal-1.md` | ~1987 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 73 | 2026-04-01 | workflow: align multi-cli install narrative and verify /tmp flow | `9c0b9f9` | `main` |
 | 72 | 2026-04-01 | 分析新项目开发工作流的多AI CLI支持 | - | `main` |
 | 71 | 2026-04-01 | 工作流多CLI适配：install/uninstall/upgrade脚本重构 | `5cbc4cee64215eaa7545646a47b33e5b10a7a7fd` | `main` |
 | 70 | 2026-04-01 | 多 CLI 工作流适配与任务收口 | `c84ede0` | `main` |

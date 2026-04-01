@@ -1296,3 +1296,36 @@ python3 docs/workflows/新项目开发工作流/commands/shell/delivery-control-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 73: workflow: align multi-cli install narrative and verify /tmp flow
+
+**Date**: 2026-04-01
+**Task**: workflow: align multi-cli install narrative and verify /tmp flow
+**Branch**: `main`
+
+### Summary
+
+Updated workflow docs/specs to clarify default multi-CLI co-install with distinct Claude/OpenCode/Codex entry models, validated installer tests, and ran a /tmp trellis init plus workflow embedding walkthrough.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9c0b9f9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
