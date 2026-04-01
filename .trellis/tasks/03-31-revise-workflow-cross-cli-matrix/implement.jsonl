@@ -1,0 +1,4 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/index.md", "reason": "Project spec index"}
+{"file": ".trellis/spec/docs/index.md", "reason": "Workflow shared docs live under docs/workflows/** and must stay concise, current, and repo-specific."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "This change touches shared workflow docs plus command docs, so source-of-truth and wording drift must be aligned together."}

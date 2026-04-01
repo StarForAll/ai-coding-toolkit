@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/platforms/cli/command-interface/overview.md", "reason": "Debug any remaining confusion between platform-native commands and workflow command models."}
+{"file": "docs/workflows/新项目开发工作流/命令映射.md", "reason": "Debug shared wording regressions in the parent integration doc."}

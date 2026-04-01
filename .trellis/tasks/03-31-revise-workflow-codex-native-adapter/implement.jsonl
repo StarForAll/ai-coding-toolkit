@@ -1,0 +1,4 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/index.md", "reason": "Project spec index"}
+{"file": ".trellis/spec/docs/index.md", "reason": "Rewrite workflow docs under docs/workflows and split Codex/Gemini guidance into stable repo-local docs."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Splitting Codex/Gemini docs requires shared doc references and platform-specific docs to stay aligned."}

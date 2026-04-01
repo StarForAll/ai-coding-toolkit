@@ -6,7 +6,7 @@ description: 需求冻结了？开始设计 — UI/UX、架构选型、接口设
 # /trellis:design — 设计阶段引导
 
 > **Workflow Position**: §3 → 前: `/trellis:brainstorm` → 后: `/trellis:plan`
-> **Cross-CLI**: ✅ Claude Code · ✅ Cursor (命令名: design) · ⚠️ OpenCode · ⚠️ Codex/Gemini
+> **Cross-CLI**: ✅ Claude Code · ✅ Cursor (命令名: design) · ⚠️ OpenCode（可原生承载；见 `opencode/README.md`） · ⚠️ Codex（可原生承载但采用 skills/agents 模型；见 `codex/README.md`） · ⚠️ Gemini（兼容层；见 `gemini/README.md`）
 
 ---
 

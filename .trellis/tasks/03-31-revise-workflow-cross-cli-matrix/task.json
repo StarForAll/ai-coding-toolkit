@@ -1,0 +1,45 @@
+{
+  "id": "revise-workflow-cross-cli-matrix",
+  "name": "revise-workflow-cross-cli-matrix",
+  "title": "修订多 CLI 兼容矩阵与共用文案",
+  "description": "修订工作流总纲、命令映射、自定义工作流制作规范中的多 CLI 兼容矩阵、支持级别和共用表述。",
+  "status": "review",
+  "dev_type": "backend",
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "xzc",
+  "assignee": "xzc",
+  "createdAt": "2026-03-31",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "current_phase": 0,
+  "next_action": [
+    {
+      "phase": 1,
+      "action": "implement"
+    },
+    {
+      "phase": 2,
+      "action": "check"
+    },
+    {
+      "phase": 3,
+      "action": "finish"
+    },
+    {
+      "phase": 4,
+      "action": "create-pr"
+    }
+  ],
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "03-31-analyze-workflow-multi-cli-support",
+  "relatedFiles": [],
+  "notes": "2026-04-01: shared matrix and common wording landed in working tree. Acceptance criteria satisfied by edits in docs/workflows shared docs and main command Cross-CLI headers. Remaining closure: human test plus commit, then record-session.",
+  "meta": {}
+}

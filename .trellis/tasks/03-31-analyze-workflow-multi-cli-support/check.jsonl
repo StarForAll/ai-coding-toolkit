@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/docs/index.md", "reason": "Check shared workflow documentation for current wording, links, and repo-local doc consistency."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Check parent-task edits for shared-doc drift across matrix docs and platform adapter READMEs."}
+{"file": ".trellis/spec/platforms/cli/command-interface/overview.md", "reason": "Cross-CLI wording must keep platform command models and invocation boundaries distinct."}
+{"file": "docs/workflows/新项目开发工作流/命令映射.md", "reason": "Primary shared doc that summarizes cross-CLI participation after subtask integration."}

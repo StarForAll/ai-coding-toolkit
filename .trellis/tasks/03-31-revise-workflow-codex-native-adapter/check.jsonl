@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/docs/index.md", "reason": "Check repo-local workflow documentation stays current and internally linked after the Codex/Gemini split."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Codex adapter updates must stay aligned with the shared workflow docs and transition entry."}
+{"file": ".trellis/spec/platforms/cli/command-interface/overview.md", "reason": "Codex README must distinguish built-in slash commands from workflow-specific skills and hooks."}
+{"file": "docs/workflows/新项目开发工作流/commands/codex/README.md", "reason": "Primary platform-specific adapter doc to review in the check phase."}

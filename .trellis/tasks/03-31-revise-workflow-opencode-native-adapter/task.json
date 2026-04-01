@@ -1,0 +1,45 @@
+{
+  "id": "revise-workflow-opencode-native-adapter",
+  "name": "revise-workflow-opencode-native-adapter",
+  "title": "重写 OpenCode 原生适配说明",
+  "description": "按 OpenCode 当前官方能力重写 commands/opencode/README.md，并回填各命令的 OpenCode 适配边界。",
+  "status": "review",
+  "dev_type": "backend",
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "xzc",
+  "assignee": "xzc",
+  "createdAt": "2026-03-31",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "current_phase": 0,
+  "next_action": [
+    {
+      "phase": 1,
+      "action": "implement"
+    },
+    {
+      "phase": 2,
+      "action": "check"
+    },
+    {
+      "phase": 3,
+      "action": "finish"
+    },
+    {
+      "phase": 4,
+      "action": "create-pr"
+    }
+  ],
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "03-31-analyze-workflow-multi-cli-support",
+  "relatedFiles": [],
+  "notes": "2026-04-01: OpenCode native adapter README rewrite landed in working tree. Acceptance criteria satisfied by the rewritten commands/opencode/README.md and existing smoke evidence at /tmp/opencode-workflow-smoke/run-report.md. Remaining closure: human test plus commit, then record-session.",
+  "meta": {}
+}

@@ -1,0 +1,4 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/index.md", "reason": "Project spec index"}
+{"file": ".trellis/spec/docs/index.md", "reason": "Rewrite workflow README under docs/workflows with current, actionable platform-specific guidance."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "OpenCode README must stay aligned with shared workflow docs and actual .opencode deployment behavior."}

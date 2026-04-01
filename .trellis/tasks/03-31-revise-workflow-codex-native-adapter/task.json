@@ -1,0 +1,45 @@
+{
+  "id": "revise-workflow-codex-native-adapter",
+  "name": "revise-workflow-codex-native-adapter",
+  "title": "重写 Codex 原生适配说明",
+  "description": "拆分 codex-gemini README，基于 Codex 官方 AGENTS/hooks/skills/subagents 模型重写 Codex workflow 适配说明。",
+  "status": "review",
+  "dev_type": "backend",
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "xzc",
+  "assignee": "xzc",
+  "createdAt": "2026-03-31",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "current_phase": 0,
+  "next_action": [
+    {
+      "phase": 1,
+      "action": "implement"
+    },
+    {
+      "phase": 2,
+      "action": "check"
+    },
+    {
+      "phase": 3,
+      "action": "finish"
+    },
+    {
+      "phase": 4,
+      "action": "create-pr"
+    }
+  ],
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "03-31-analyze-workflow-multi-cli-support",
+  "relatedFiles": [],
+  "notes": "2026-03-31 handoff: formal record-session deferred because user requested no commit. Codex native adapter docs are rewritten and split from Gemini. Smoke test evidence: /tmp/codex-workflow-smoke/run-report.md. OpenCode evidence from prior subtask: /tmp/opencode-workflow-smoke/run-report.md. Recommended next step: parent integration is done; remaining closure is human test plus commit, and record-session.",
+  "meta": {}
+}

@@ -1,0 +1,4 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/index.md", "reason": "Project spec index"}
+{"file": ".trellis/spec/docs/index.md", "reason": "Parent task integrates shared workflow docs and platform adapter references under docs/workflows."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Shared matrix text must stay aligned with platform-specific adapter docs and command files."}
