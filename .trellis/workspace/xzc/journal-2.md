@@ -1616,3 +1616,36 @@ Updated workflow docs/specs to clarify default multi-CLI co-install with distinc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 80: 工作流三维度优化与安装链路校验
+
+**Date**: 2026-04-01
+**Task**: 工作流三维度优化与安装链路校验
+**Branch**: `main`
+
+### Summary
+
+统一新项目工作流文档中的多 CLI 入口、下一步推荐与 MCP/Skill 路由口径，修复 install/uninstall 对 AGENTS.md 路由和默认 todo.txt 的对称性，并补齐安装器回归测试与 smoke 验证。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `97385ea` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
