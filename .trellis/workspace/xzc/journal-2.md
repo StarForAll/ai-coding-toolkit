@@ -1465,3 +1465,60 @@ Updated workflow docs/specs to clarify default multi-CLI co-install with distinc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 77: 工作流命令 NL 触发 + 下一步推荐
+
+**Date**: 2026-04-01
+**Task**: 工作流命令 NL 触发 + 下一步推荐
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+## 目标
+
+让 `docs/workflows/新项目开发工作流/` 的工作流命令在 Claude Code、Codex、OpenCode 三个 CLI 中支持自然语言触发 + 每次输出推荐下一步命令。
+
+## 变更
+
+| 文件 | 变更 |
+|------|------|
+| `命令映射.md` | 新增完整 NL 路由表 section（21 个命令 + 歧义消解 + 部署方式） |
+| `start-patch-phase-router.md` | 扩展触发词表（+9 框架命令）+ 歧义消解规则 |
+| `install-workflow.py` | 新增 `deploy_agents_md_routing()` 函数，安装时注入路由表到 AGENTS.md |
+
+## 技术决策
+
+- **NL 触发策略**: Phase Router 增强 — 集中路由表 + context 注入，不创建 Skill wrapper
+- **下一步推荐**: 命令内嵌入（8 个工作流命令已有，无需修改）
+- **无 hooks 降级**: AGENTS.md 注入（OpenCode/Codex 可用）
+- **歧义消解**: 上下文 > 精确匹配 > 阶段顺序 > 模糊语义 > 兜底 start
+
+## 关键设计
+
+- 路由表数据维护在 3 处保持同步：命令映射.md（文档）/ Phase Router patch（Claude/iFlow context）/ install-workflow.py（AGENTS.md 部署）
+- AGENTS.md 注入使用 HTML comment markers 实现幂等替换
+- 修改范围严格限制在 `docs/workflows/新项目开发工作流/` 目录，不修改当前项目框架命令
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2c7810b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
