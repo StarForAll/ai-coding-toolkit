@@ -1,0 +1,7 @@
+{"file": ".opencode/commands/trellis/finish-work.md", "reason": "Finish work checklist"}
+{"file": ".opencode/commands/trellis/check.md", "reason": "Code quality check spec"}
+{"file": "docs/workflows/新项目开发工作流/工作流总纲.md", "reason": "校验总纲与主演练职责边界一致"}
+{"file": ".trellis/spec/docs/index.md", "reason": "检查文档结构、链接与命令精确性"}
+{"file": "docs/workflows/新项目开发工作流/命令映射.md", "reason": "校验 skill 映射与导航顺序"}
+{"file": "docs/workflows/新项目开发工作流/多CLI通用新项目完整流程演练.md", "reason": "校验主演练主链、CLI 入口差异与回链"}
+{"file": "docs/workflows/新项目开发工作流/多CLI通用新项目完整流程演练.md", "reason": "校验主演练主链、CLI 入口差异与回链"}

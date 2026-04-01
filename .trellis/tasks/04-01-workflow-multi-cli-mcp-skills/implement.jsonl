@@ -1,0 +1,7 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/docs/index.md", "reason": "workflow 文档写作约束与链接规范"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "本轮会同时改主演练文档与旧文档回链"}
+{"file": "docs/workflows/新项目开发工作流/工作流总纲.md", "reason": "总纲需改第一入口说明与职责边界"}
+{"file": "docs/workflows/新项目开发工作流/命令映射.md", "reason": "命令映射需修正 skill 名与新增主演练入口"}
+{"file": "docs/workflows/新项目开发工作流/完整流程演练.md", "reason": "专项案例文档需补首次阅读导流说明"}
+{"file": "docs/workflows/新项目开发工作流/多CLI通用新项目完整流程演练.md", "reason": "新增主演练文档，作为目录第一入口"}

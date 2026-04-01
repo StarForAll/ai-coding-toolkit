@@ -1,0 +1,50 @@
+{
+  "id": "workflow-multi-cli-mcp-skills",
+  "name": "workflow-multi-cli-mcp-skills",
+  "title": "brainstorm: 新项目开发工作流多CLI原生适配与MCP/Skills增强",
+  "description": "",
+  "status": "planning",
+  "dev_type": "docs",
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "xzc",
+  "assignee": "xzc",
+  "createdAt": "2026-04-01",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "current_phase": 0,
+  "next_action": [
+    {
+      "phase": 1,
+      "action": "implement"
+    },
+    {
+      "phase": 2,
+      "action": "check"
+    },
+    {
+      "phase": 3,
+      "action": "finish"
+    },
+    {
+      "phase": 4,
+      "action": "create-pr"
+    }
+  ],
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "docs/workflows/新项目开发工作流/多CLI通用新项目完整流程演练.md",
+    "docs/workflows/新项目开发工作流/工作流总纲.md",
+    "docs/workflows/新项目开发工作流/命令映射.md",
+    "docs/workflows/新项目开发工作流/完整流程演练.md"
+  ],
+  "notes": "2026-04-01: landed the new first-entry walkthrough `多CLI通用新项目完整流程演练.md`, added reverse reading hints in `工作流总纲.md` / `命令映射.md` / `完整流程演练.md`, and corrected the `brainstorming` skill reference to `brainstorm` in the mapping doc. Verification run this session: `git diff --check -- docs/workflows/新项目开发工作流/...` -> pass; `/ops/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings` -> pass with 2 informational `stale-related-asset` notices only. Remaining closure: human review/test as needed, commit, then record-session.",
+  "meta": {}
+}
