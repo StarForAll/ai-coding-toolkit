@@ -451,7 +451,7 @@ def step_risk_analysis(task_dir: Path, requirement_file: Path = None) -> None:
     
     print()
     print("=== 下一步操作 ===")
-    print("1. 请使用 AI 加载 demand-risk-assessment skill")
+    print("1. 请使用 Skill 工具执行 demand-risk-assessment")
     print(f"2. 参考 {guide_file} 执行风险分析")
     print(f"3. 将分析结果写入 {assessment}")
     print("4. 运行验证: python3 feasibility-check.py --step validate --task-dir <path>")

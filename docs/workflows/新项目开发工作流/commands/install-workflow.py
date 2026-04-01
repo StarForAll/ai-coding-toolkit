@@ -67,36 +67,40 @@ _NL_ROUTING_SECTION = """\
 
 ## 自然语言命令路由
 
-> 由工作流安装器自动生成。当用户用自然语言描述意图时，按本表匹配命令执行。
+> 由工作流安装器自动生成。当用户用自然语言描述意图时，按本表匹配阶段入口执行。
+>
+> 入口约束：
+> - Claude Code / OpenCode：优先使用项目级 `/trellis:xxx` 命令；OpenCode CLI 可使用 `trellis/xxx`
+> - Codex：通过 `AGENTS.md` 自然语言路由或显式触发对应 skill；不要期待项目级 `/trellis:xxx` 命令目录
 
 ### 工作流阶段命令
 
-| 触发关键词 | 命令 | 说明 |
-|-----------|------|------|
-| 评估、能做吗、报价、新项目、风险、可行性 | `/trellis:feasibility` | §1 可行性评估 |
-| 需求、PRD、明确需求、需求文档 | `/trellis:brainstorm` | §2 需求发现 |
-| 设计、架构、选型、接口设计、技术方案 | `/trellis:design` | §3 设计阶段 |
-| 拆任务、排期、计划、任务分解 | `/trellis:plan` | §4 任务拆解 |
-| 写测试、TDD、测试驱动、先写测试 | `/trellis:test-first` | §4.3 测试先行 |
-| 自审、自检、自查 | `/trellis:self-review` | §5.1.x 自审 |
-| 代码审查、review、检查代码质量 | `/trellis:check` | §5.1.y 补充审查 |
-| 提交前检查、准备提交、commit 前 | `/trellis:finish-work` | §6 提交检查 |
-| 交付、部署、上线、发布 | `/trellis:delivery` | §6+§7 测试交付 |
-| 记录、保存进度、收工 | `/trellis:record-session` | §7 会话记录 |
+| 触发关键词 | Claude / OpenCode 入口 | Codex 入口 | 说明 |
+|-----------|------------------------|------------|------|
+| 评估、能做吗、报价、新项目、风险、可行性 | `/trellis:feasibility` | 描述可行性评估意图，或显式触发 `feasibility` skill | §1 可行性评估 |
+| 需求、PRD、明确需求、需求文档 | `/trellis:brainstorm` | 描述需求澄清意图，或显式触发 `brainstorm` skill | §2 需求发现 |
+| 设计、架构、选型、接口设计、技术方案 | `/trellis:design` | 描述设计阶段意图，或显式触发 `design` skill | §3 设计阶段 |
+| 拆任务、排期、计划、任务分解 | `/trellis:plan` | 描述任务拆解意图，或显式触发 `plan` skill | §4 任务拆解 |
+| 写测试、TDD、测试驱动、先写测试 | `/trellis:test-first` | 描述测试先行意图，或显式触发 `test-first` skill | §4.3 测试先行 |
+| 自审、自检、自查 | `/trellis:self-review` | 描述自审意图，或显式触发 `self-review` skill | §5.1.x 自审 |
+| 代码审查、review、检查代码质量 | `/trellis:check` | 描述补充审查意图，或显式触发 `check` skill | §5.1.y 补充审查 |
+| 提交前检查、准备提交、commit 前 | `/trellis:finish-work` | 描述提交前检查意图，或显式触发 `finish-work` skill | §6 提交检查 |
+| 交付、部署、上线、发布 | `/trellis:delivery` | 描述交付收尾意图，或显式触发 `delivery` skill | §6+§7 测试交付 |
+| 记录、保存进度、收工 | `/trellis:record-session` | 描述会话收尾意图，或显式触发 `record-session` skill | §7 会话记录 |
 
 ### 框架通用命令
 
-| 触发关键词 | 命令 | 说明 |
-|-----------|------|------|
-| 开始、新会话、继续、下一步 | `/trellis:start` | Phase Router 自动检测 |
-| 卡住了、反复出错、死循环 | `/trellis:break-loop` | 深度 bug 分析 |
-| 并行、worktree、同时开发 | `/trellis:parallel` | 并行任务管理 |
-| 更新规范、沉淀经验 | `/trellis:update-spec` | 规范更新 |
-| 跨层检查、跨模块影响 | `/trellis:check-cross-layer` | 跨层检查 |
-| 集成 skill、添加 skill | `/trellis:integrate-skill` | Skill 集成 |
-| 读规范、开发前准备 | `/trellis:before-dev` | 开发前读规范 |
-| 新人入门、项目介绍 | `/trellis:onboard` | 项目 onboarding |
-| 创建命令、新命令 | `/trellis:create-command` | 创建新命令 |
+| 触发关键词 | Claude / OpenCode 入口 | Codex 入口 | 说明 |
+|-----------|------------------------|------------|------|
+| 开始、新会话、继续、下一步 | `/trellis:start` | 描述当前意图，或显式触发 `start` skill | Phase Router 自动检测 |
+| 卡住了、反复出错、死循环 | `/trellis:break-loop` | 描述排障意图，或显式触发 `break-loop` skill | 深度 bug 分析 |
+| 并行、worktree、同时开发 | `/trellis:parallel` | 描述并行开发意图，或显式触发 `parallel` skill | 并行任务管理 |
+| 更新规范、沉淀经验 | `/trellis:update-spec` | 描述规范更新意图，或显式触发 `update-spec` skill | 规范更新 |
+| 跨层检查、跨模块影响 | `/trellis:check-cross-layer` | 描述跨层检查意图，或显式触发 `check-cross-layer` skill | 跨层检查 |
+| 集成 skill、添加 skill | `/trellis:integrate-skill` | 描述 skill 集成意图，或显式触发 `integrate-skill` skill | Skill 集成 |
+| 读规范、开发前准备 | `/trellis:before-dev` | 描述开发前准备意图，或显式触发 `before-dev` skill | 开发前读规范 |
+| 新人入门、项目介绍 | `/trellis:onboard` | 描述 onboarding 意图，或显式触发 `onboard` skill | 项目 onboarding |
+| 创建命令、新命令 | `/trellis:create-command` | 描述创建命令意图，或显式触发 `create-command` skill | 创建新命令 |
 
 ### 歧义消解
 
@@ -203,7 +207,10 @@ def deploy_claude(src: Path, root: Path, dry_run: bool) -> dict:
                             before + patch.read_text(encoding="utf-8") + "\n" + marker + after,
                             encoding="utf-8",
                         )
-                    ok("[Claude] Phase Router 已注入 start.md")
+                    if dry_run:
+                        info("[Claude] 将注入 Phase Router 到 start.md")
+                    else:
+                        ok("[Claude] Phase Router 已注入 start.md")
                     result["patches"] += 1
                 else:
                     warn("[Claude] start.md 中未找到注入点 '## Operation Types'")
@@ -225,7 +232,10 @@ def deploy_claude(src: Path, root: Path, dry_run: bool) -> dict:
                         before + patch.read_text(encoding="utf-8") + "\n" + _RECORD_SESSION_INJECTION_MARKER + after,
                         encoding="utf-8",
                     )
-                ok("[Claude] record-session 元数据闭环已注入")
+                if dry_run:
+                    info("[Claude] 将注入 record-session 元数据闭环")
+                else:
+                    ok("[Claude] record-session 元数据闭环已注入")
                 result["patches"] += 1
             elif not patch.exists():
                 warn("[Claude] record-session-patch-metadata-closure.md 不存在")
@@ -304,7 +314,10 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool) -> dict:
                             before + patch.read_text(encoding="utf-8") + "\n" + marker + after,
                             encoding="utf-8",
                         )
-                    ok("[OpenCode] Phase Router 已注入 start.md")
+                    if dry_run:
+                        info("[OpenCode] 将注入 Phase Router 到 start.md")
+                    else:
+                        ok("[OpenCode] Phase Router 已注入 start.md")
                     result["patches"] += 1
                 else:
                     warn("[OpenCode] start.md 中未找到注入点 '## Operation Types'")
@@ -326,7 +339,10 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool) -> dict:
                         before + patch.read_text(encoding="utf-8") + "\n" + _RECORD_SESSION_INJECTION_MARKER + after,
                         encoding="utf-8",
                     )
-                ok("[OpenCode] record-session 元数据闭环已注入")
+                if dry_run:
+                    info("[OpenCode] 将注入 record-session 元数据闭环")
+                else:
+                    ok("[OpenCode] record-session 元数据闭环已注入")
                 result["patches"] += 1
             elif not patch.exists():
                 warn("[OpenCode] record-session-patch-metadata-closure.md 不存在")
@@ -419,7 +435,10 @@ def write_install_record(root: Path, cli_types: list[str], dry_run: bool) -> Non
             "commands": NEW_COMMANDS,
             "scripts": HELPER_SCRIPTS,
         }, ensure_ascii=False, indent=2), encoding="utf-8")
-    ok(f"安装记录 → {rec.name} (Trellis {ver}, CLI: {', '.join(cli_types)})")
+    if dry_run:
+        info(f"将写入安装记录 → {rec.name} (Trellis {ver}, CLI: {', '.join(cli_types)})")
+    else:
+        ok(f"安装记录 → {rec.name} (Trellis {ver}, CLI: {', '.join(cli_types)})")
 
 
 # ── todo.txt ──
@@ -449,14 +468,20 @@ def deploy_agents_md_routing(root: Path, dry_run: bool) -> bool:
         new_content = content[:start_idx] + _NL_ROUTING_SECTION.rstrip() + content[end_idx:]
         if not dry_run:
             agents_md.write_text(new_content, encoding="utf-8")
-        ok("AGENTS.md NL 路由表已更新")
+        if dry_run:
+            info("将更新 AGENTS.md NL 路由表")
+        else:
+            ok("AGENTS.md NL 路由表已更新")
         return True
 
     # 不存在则追加到末尾
     if not dry_run:
         with agents_md.open("a", encoding="utf-8") as f:
             f.write("\n\n" + _NL_ROUTING_SECTION)
-    ok("AGENTS.md NL 路由表已注入")
+    if dry_run:
+        info("将注入 AGENTS.md NL 路由表")
+    else:
+        ok("AGENTS.md NL 路由表已注入")
     return True
 
 

@@ -32,7 +32,13 @@ class WorkflowInstallerTests(unittest.TestCase):
             check=False,
         )
 
-    def create_fixture(self) -> Path:
+    def create_fixture(
+        self,
+        *,
+        include_opencode: bool = False,
+        include_codex: bool = False,
+        include_agents_md: bool = False,
+    ) -> Path:
         root = Path(tempfile.mkdtemp(prefix="workflow-installers-"))
         (root / ".claude" / "commands" / "trellis").mkdir(parents=True)
         (root / ".trellis").mkdir(parents=True)
@@ -60,6 +66,33 @@ class WorkflowInstallerTests(unittest.TestCase):
             encoding="utf-8",
         )
         (root / ".trellis" / ".version").write_text("2.0.0\n", encoding="utf-8")
+        if include_opencode:
+            (root / ".opencode" / "commands" / "trellis").mkdir(parents=True)
+            (root / ".opencode" / "commands" / "trellis" / "start.md").write_text(
+                "# /trellis:start\n\n"
+                "Original OpenCode baseline start command for fixture testing.\n\n"
+                "## Operation Types\n\n"
+                "| Marker | Meaning |\n"
+                "|--------|---------|\n"
+                "| `[AI]` | tool calls |\n"
+                "| `[USER]` | user actions |\n",
+                encoding="utf-8",
+            )
+            (root / ".opencode" / "commands" / "trellis" / "record-session.md").write_text(
+                "# /trellis:record-session\n\n"
+                "### Step 2: One-Click Add Session\n\n"
+                "```bash\n"
+                "python3 ./.trellis/scripts/add_session.py --title \"Title\" --commit \"hash\"\n"
+                "```\n",
+                encoding="utf-8",
+            )
+        if include_codex:
+            (root / ".agents" / "skills").mkdir(parents=True)
+            (root / ".codex" / "hooks").mkdir(parents=True)
+            (root / ".codex" / "hooks.json").write_text("{}", encoding="utf-8")
+            (root / ".codex" / "hooks" / "session-start.py").write_text("# hook\n", encoding="utf-8")
+        if include_agents_md:
+            (root / "AGENTS.md").write_text("# Project Rules\n", encoding="utf-8")
         return root
 
     def install_workflow(self, fixture_root: Path) -> subprocess.CompletedProcess[str]:
@@ -109,6 +142,35 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         self.assertEqual(todo_path.read_text(encoding="utf-8"), "已有内容\n")
         self.assertIn("todo.txt 已存在", install.stdout)
+
+    def test_install_injects_agents_md_routing_and_multi_cli_assets(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.assertTrue((fixture / ".opencode" / "commands" / "trellis" / "brainstorm.md").exists())
+        self.assertTrue((fixture / ".agents" / "skills" / "brainstorm" / "SKILL.md").exists())
+
+        agents_md = (fixture / "AGENTS.md").read_text(encoding="utf-8")
+        self.assertIn("Claude / OpenCode 入口 | Codex 入口", agents_md)
+        self.assertIn("Codex：通过 `AGENTS.md` 自然语言路由或显式触发对应 skill", agents_md)
+
+    def test_install_dry_run_reports_preview_without_writing_files(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        result = self.run_script(INSTALL_SCRIPT, "--project-root", str(fixture), "--dry-run")
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("将写入安装记录", result.stdout)
+        self.assertIn("将注入 AGENTS.md NL 路由表", result.stdout)
+        self.assertNotIn("✅ 安装记录 → workflow-installed.json", result.stdout)
+        self.assertNotIn("✅ AGENTS.md NL 路由表已注入", result.stdout)
+        self.assertFalse((fixture / ".trellis" / "workflow-installed.json").exists())
+        self.assertFalse((fixture / ".agents" / "skills" / "brainstorm").exists())
+        self.assertNotIn("workflow-nl-routing-start", (fixture / "AGENTS.md").read_text(encoding="utf-8"))
 
     def test_upgrade_check_detects_phase_router_drift_even_when_versions_match(self) -> None:
         fixture = self.create_fixture()
@@ -202,6 +264,49 @@ class WorkflowInstallerTests(unittest.TestCase):
             RECORD_SESSION_MARKER,
             (fixture / ".claude" / "commands" / "trellis" / "record-session.md").read_text(encoding="utf-8"),
         )
+
+    def test_uninstall_removes_agents_md_routing_section(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.assertIn("workflow-nl-routing-start", (fixture / "AGENTS.md").read_text(encoding="utf-8"))
+
+        result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("AGENTS.md NL 路由表已删除", result.stdout)
+        self.assertNotIn("workflow-nl-routing-start", (fixture / "AGENTS.md").read_text(encoding="utf-8"))
+
+    def test_uninstall_removes_default_todo_file(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.assertTrue((fixture / "todo.txt").exists())
+
+        result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("todo.txt 已删除", result.stdout)
+        self.assertFalse((fixture / "todo.txt").exists())
+
+    def test_uninstall_preserves_modified_todo_file(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        todo_path = fixture / "todo.txt"
+        todo_path.write_text("自定义提醒\n", encoding="utf-8")
+
+        result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("todo.txt 已被修改，保留现有内容", result.stdout)
+        self.assertEqual(todo_path.read_text(encoding="utf-8"), "自定义提醒\n")
 
 
 if __name__ == "__main__":

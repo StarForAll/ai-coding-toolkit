@@ -22,6 +22,10 @@ _CLI_ALT_DIRS = {
     "codex": ".agents",
 }
 _ALL_CLI_TYPES = ["claude", "opencode", "codex"]
+_AGENTS_NL_ROUTING_MARKER = "<!-- workflow-nl-routing-start -->"
+_AGENTS_NL_ROUTING_END = "<!-- workflow-nl-routing-end -->"
+_TODO_FILE_NAME = "todo.txt"
+_TODO_DEFAULT_LINE = "文档内容需要和实际当前的代码同步\n"
 
 
 def ok(message: str) -> None:
@@ -195,6 +199,41 @@ def uninstall_codex(root: Path, commands: list[str]) -> None:
         warn("[Codex] 未找到 skills 目录，跳过")
 
 
+def remove_agents_md_routing(root: Path) -> None:
+    """移除安装器注入的 AGENTS.md 自然语言路由表。"""
+    agents_md = root / "AGENTS.md"
+    if not agents_md.exists():
+        return
+
+    content = agents_md.read_text(encoding="utf-8")
+    if _AGENTS_NL_ROUTING_MARKER not in content:
+        return
+
+    start_idx = content.index(_AGENTS_NL_ROUTING_MARKER)
+    end_idx = content.index(_AGENTS_NL_ROUTING_END) + len(_AGENTS_NL_ROUTING_END)
+    prefix = content[:start_idx].rstrip()
+    suffix = content[end_idx:].lstrip()
+    new_content = prefix + ("\n\n" if prefix and suffix else "") + suffix
+    if new_content and not new_content.endswith("\n"):
+        new_content += "\n"
+    agents_md.write_text(new_content, encoding="utf-8")
+    ok("AGENTS.md NL 路由表已删除")
+
+
+def remove_project_todo(root: Path) -> None:
+    """删除安装器默认创建且未被修改的 todo.txt。"""
+    todo_path = root / _TODO_FILE_NAME
+    if not todo_path.exists():
+        return
+
+    content = todo_path.read_text(encoding="utf-8")
+    if content == _TODO_DEFAULT_LINE:
+        todo_path.unlink()
+        ok("todo.txt 已删除")
+    else:
+        warn("todo.txt 已被修改，保留现有内容")
+
+
 def main() -> int:
     import argparse
 
@@ -250,6 +289,12 @@ def main() -> int:
     if rec_file.exists():
         rec_file.unlink()
         ok("workflow-installed.json 已删除")
+
+    # 删除 AGENTS.md 路由表注入
+    remove_agents_md_routing(root)
+
+    # 删除安装器默认创建的 todo.txt
+    remove_project_todo(root)
 
     print()
     print("✅ 卸载完成 — Trellis 已恢复原始状态")

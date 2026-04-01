@@ -6,7 +6,7 @@ description: 需求冻结了？开始设计 — UI/UX、架构选型、接口设
 # /trellis:design — 设计阶段引导
 
 > **Workflow Position**: §3 → 前: `/trellis:brainstorm` → 后: `/trellis:plan`
-> **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:design`） · ✅ Cursor（命令名: design） · ✅ OpenCode（TUI: `/trellis:design`；CLI: `trellis/design`；见 `opencode/README.md`） · ⚠️ Codex（同项目会安装 `design` skill；通过自然语言或显式 skill 触发，不提供项目级 `/trellis:design` 命令；见 `codex/README.md`） · ⚠️ Gemini（兼容层；见 `gemini/README.md`）
+> **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:design`） · ✅ Cursor（命令名: design） · ✅ OpenCode（TUI: `/trellis:design`；CLI: `trellis/design`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:design` 命令；见 `codex/README.md`） · ⚠️ Gemini（兼容层；见 `gemini/README.md`）
 
 ---
 
@@ -27,7 +27,7 @@ description: 需求冻结了？开始设计 — UI/UX、架构选型、接口设
 
 ### Step 1: UI/UX 设计（如有前端）
 
-**Skill**: `ui-ux-pro-max` — AI 生成页面布局粗稿、组件建议、交互流程
+**调用 Skill**：使用 Skill 工具执行 `ui-ux-pro-max`，生成页面布局粗稿、组件建议、交互流程。若该 skill 不可用，手动从 PRD 提取页面目标后直接进入外部工具设计。
 
 **强制提醒**：
 
@@ -59,28 +59,28 @@ description: 需求冻结了？开始设计 — UI/UX、架构选型、接口设
 
 为每个页面生成 `design/pages/<page>.md`
 
-### Step 4.5: MCP 能力路由（按需）
+### Step 4.5: MCP 能力路由
 
-| 场景 | 调用能力 | 说明 |
-|------|---------|------|
-| 参考 GitHub 开源架构 | `deepwiki` | 回退：`exa_search` |
-| 技术选型深度研究 | `exa_create_research` | 回退：`grok-search` |
-| 复杂架构推理 | `sequential-thinking` | 多步推理、分支探索 |
-| 架构图可视化 | `markmap` | 模块依赖图、技术栈确认 |
-| 框架 / SDK API 文档 | `Context7` | 技术选型时查阅官方文档 |
+| 场景 | 调用能力 | 调用级别 | 说明 |
+|------|---------|---------|------|
+| 参考 GitHub 开源架构 | `deepwiki` | 按需 | 回退：`exa_search` |
+| 技术选型深度研究 | `exa_create_research` | 按需 | 回退：`grok-search` |
+| 复杂架构推理 | `sequential-thinking` | 按需 | 当架构决策涉及 ≥3 个技术方案对比或推理步骤 >3 步时触发 |
+| 架构图可视化 | `markmap` | 按需 | 模块依赖图、技术栈确认 |
+| 框架 / SDK API 文档 | `Context7` | 默认 | 技术选型时必须查阅官方文档作为决策依据，不依赖训练数据中的过时信息。无法获取时标记 `[Evidence Gap]` |
 
 ### Step 5: 技术方案设计
 
-**MCP 能力路由（按需）**
+**MCP 能力路由**
 
-| 场景 | 调用能力 | 说明 |
-|------|---------|------|
-| 参考 GitHub 开源架构 | `deepwiki` | 回退：`exa_search` |
-| 技术选型深度研究 | `exa_create_research` | 回退：`grok-search` |
-| 复杂架构推理 | `sequential-thinking` | 多步推理、分支探索 |
-| 架构图可视化 | `markmap` | 架构图/模块依赖图 |
+| 场景 | 调用能力 | 调用级别 | 说明 |
+|------|---------|---------|------|
+| 参考 GitHub 开源架构 | `deepwiki` | 按需 | 回退：`exa_search` |
+| 技术选型深度研究 | `exa_create_research` | 按需 | 回退：`grok-search`。没有官方文档证据时，不下 API/框架细节结论，只保留待验证设计假设 |
+| 复杂架构推理 | `sequential-thinking` | 按需 | 当架构决策涉及 ≥3 个技术方案对比或推理步骤 >3 步时触发 |
+| 架构图可视化 | `markmap` | 按需 | 架构图/模块依赖图 |
 
-按需加载 Skills：
+**按需调用 Skill**（根据领域选择，使用 Skill 工具执行对应 skill）：
 
 | 领域 | Skill |
 |------|-------|

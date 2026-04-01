@@ -6,7 +6,7 @@ description: 设计好了？拆任务 — AI 驱动任务拆解、排期、DoR/D
 # /trellis:plan — AI 驱动任务拆解
 
 > **Workflow Position**: §4 → 前: `/trellis:design` → 后: `/trellis:test-first` 或 `/trellis:start`
-> **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:plan`） · ✅ Cursor（命令名: plan） · ✅ OpenCode（TUI: `/trellis:plan`；CLI: `trellis/plan`；见 `opencode/README.md`） · ⚠️ Codex（同项目会安装 `plan` skill；通过自然语言或显式 skill 触发，不提供项目级 `/trellis:plan` 命令；见 `codex/README.md`） · ⚠️ Gemini（兼容层；见 `gemini/README.md`）
+> **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:plan`） · ✅ Cursor（命令名: plan） · ✅ OpenCode（TUI: `/trellis:plan`；CLI: `trellis/plan`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:plan` 命令；见 `codex/README.md`） · ⚠️ Gemini（兼容层；见 `gemini/README.md`）
 
 ---
 
@@ -58,16 +58,16 @@ description: 设计好了？拆任务 — AI 驱动任务拆解、排期、DoR/D
 
 ### Step 1: 生成 Plan.md
 
-**Skills**: `project-planner` `writing-plans`
+**调用 Skill**：使用 Skill 工具执行 `project-planner` 和 `writing-plans`，生成结构化任务拆解。若 skill 不可用，手动按范围/风险/验收/依赖/回归五列拆任务，对不确定项单独列为待补信息。
 
-**MCP 能力路由（按需）**
+**MCP 能力路由**
 
-| 场景 | 调用能力 | 说明 |
-|------|---------|------|
-| 复杂依赖推理 | `sequential-thinking` | 多步推理、分支探索 |
-| 任务依赖可视化 | `markmap` | 生成任务依赖图 |
-| 参考 GitHub 项目结构 | `deepwiki` | 回退：`exa_search` |
-| 技术方案深度研究 | `exa_create_research` | 回退：`grok-search` |
+| 场景 | 调用能力 | 调用级别 | 说明 |
+|------|---------|---------|------|
+| 复杂依赖推理 | `sequential-thinking` | 按需 | 当任务依赖链 ≥3 层或并行冲突判定涉及 ≥3 个条件时触发 |
+| 任务依赖可视化 | `markmap` | 按需 | 生成任务依赖图 |
+| 参考 GitHub 项目结构 | `deepwiki` | 按需 | 回退：`exa_search` |
+| 技术方案深度研究 | `exa_create_research` | 按需 | 回退：`grok-search` |
 
 ```bash
 # 读取输入
