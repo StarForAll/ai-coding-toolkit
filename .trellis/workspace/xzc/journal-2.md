@@ -1569,3 +1569,50 @@ Updated workflow docs/specs to clarify default multi-CLI co-install with distinc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 79: brainstorm: 新项目开发工作流三维度优化分析
+
+**Date**: 2026-04-01
+**Task**: brainstorm: 新项目开发工作流三维度优化分析
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 维度 | 修改内容 | 状态 |
+|------|---------|------|
+| P0: CLI 适配 | 统一 Codex 入口描述为"通过 AGENTS.md NL 路由触发" | ✅ 完成（8个命令文件） |
+| P0: Skill 引用指令化 | 标签式 → `**调用 Skill**：使用 Skill 工具执行 xxx`，补降级路径 | ✅ 完成（feasibility, brainstorm, design, plan, test-first） |
+| P1: MCP 路由细化 | 加"调用级别"列，sequential-thinking 触发条件，按需/默认区分 | ✅ 完成（feasibility, brainstorm, design, plan, test-first） |
+| P1: 降级路径内联 | 无法联网/Skill 不可用时标记 [Evidence Gap] / [Skill Gap] | ✅ 完成（feasibility, brainstorm, design, plan, test-first） |
+
+**未完成文件**（用户中断）：
+- `self-review.md` — 需加 MCP 调用级别、sequential-thinking 触发、降级路径内联；修复重复 Skill 行
+- `check.md` — 需加 MCP 调用级别、sequential-thinking 触发、降级路径内联
+- `delivery.md` — 需加 MCP 调用级别、降级路径内联
+
+**说明**：
+- 用户确认修改方向为 P0 + P1
+- 修改范围：仅 `./docs/workflows/新项目开发工作流/commands/*.md`
+- 先记录会话，不 commit；后续继续完成剩余 3 个文件
+
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
