@@ -1329,3 +1329,51 @@ Updated workflow docs/specs to clarify default multi-CLI co-install with distinc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 74: 工作流补强 MCP / Skills 配置与渐进性披露
+
+**Date**: 2026-04-01
+**Task**: 工作流补强 MCP / Skills 配置与渐进性披露
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Workflow rules | 在工作流总纲中新增 MCP / Skills 配置原则，定义渐进性披露、配置分层与能力路由基线 |
+| Mapping | 在命令映射中新增配置层矩阵与能力路由矩阵，明确 Claude Code / OpenCode / Codex 的配置落点 |
+| Claude Code | 新增独立平台 README，说明 commands、AGENTS、settings、hooks、agents 的承载边界 |
+| Platform alignment | 补齐 OpenCode / Codex README 的渐进性披露口径，统一多 CLI 配置说明 |
+
+**Updated Files**:
+- `docs/workflows/新项目开发工作流/工作流总纲.md`
+- `docs/workflows/新项目开发工作流/命令映射.md`
+- `docs/workflows/新项目开发工作流/commands/claude/README.md`
+- `docs/workflows/新项目开发工作流/commands/opencode/README.md`
+- `docs/workflows/新项目开发工作流/commands/codex/README.md`
+- `.trellis/tasks/archive/2026-04/04-01-strengthen-workflow-mcp-skills/prd.md`
+- `.trellis/tasks/archive/2026-04/04-01-strengthen-workflow-mcp-skills/task.json`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4c89e14` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
