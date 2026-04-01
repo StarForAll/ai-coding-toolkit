@@ -70,17 +70,31 @@
 - 最新事实/版本/新闻：优先 live 检索
 - 需求模糊：优先 `ace.enhance_prompt`
 - 复杂分支推理：优先 `sequential-thinking`
+- 阶段文档列出的 MCP / skills 默认视为**先调用的主能力**，不是可有可无的装饰项；只有能力不可用时才降级
 - 关键能力不可用：必须显式写 `[Evidence Gap]`
+
+### 统一对话收尾约定
+
+每个阶段执行完后，都应在本轮回复末尾输出「下一步推荐」。
+
+- Claude Code：优先推荐项目命令，如 `/trellis:brainstorm`
+- OpenCode：优先推荐项目命令；若是在 CLI 语境，可补充 `trellis/brainstorm`
+- Codex：优先推荐“自然语言意图 + 对应 skill 名”，如“继续需求澄清，或显式触发 `brainstorm` skill”
+- 不要把 `/trellis:xxx` 当作 Codex 的唯一入口协议
+- 用户不确定下一步时：
+  - Claude / OpenCode：推荐 `/trellis:start`
+  - Codex：推荐描述当前意图，或显式触发 `start` skill
 
 ### 统一阶段模板
 
-阅读下方每个阶段时，都只抓 5 件事：
+阅读下方每个阶段时，都只抓 6 件事：
 
 1. 这个阶段要解决什么问题
 2. 三个 CLI 分别怎么进入
 3. 推荐调用什么 MCP / skills
 4. 没有这些能力时怎么降级
 5. 满足什么门禁后才能进入下一步
+6. 本轮结束时应该如何用当前 CLI 的原生入口表达“下一步推荐”
 
 ---
 

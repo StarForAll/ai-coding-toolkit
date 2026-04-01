@@ -254,11 +254,11 @@ $TASK_DIR/
 
 根据评估结果和你的意图：
 
-| 你的意图 | 推荐命令 | 说明 |
-|---------|---------|------|
-| 继续推进项目 | `/trellis:brainstorm` | **默认推荐**。评估通过，进入详细需求发现 |
-| 信息不足，先补充再评估 | `/trellis:feasibility` | 默认用于 `暂停` 结论；补齐缺口、谈判后重跑 |
-| 评估不通过，终止 | — | 记录原因，保留 `assessment.md` 作为拒绝依据 |
-| 需求已经很明确，跳过 brainstorm | `/trellis:design` | 如果 PRD 内容已足够详细 |
-| 需求简单，直接写代码 | `/trellis:start` | 跳过设计+拆解，适合小改动 |
-| 不确定下一步 | `/trellis:start` | 用 Phase Router 自动检测 |
+| 你的意图 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
+|---------|---------------------------|----------------|------|
+| 继续推进项目 | `/trellis:brainstorm` | 继续需求发现，或显式触发 `brainstorm` skill | **默认推荐**。评估通过，进入详细需求发现 |
+| 信息不足，先补充再评估 | `/trellis:feasibility` | 补信息后重跑评估，或显式触发 `feasibility` skill | 默认用于 `暂停` 结论；补齐缺口、谈判后重跑 |
+| 评估不通过，终止 | — | — | 记录原因，保留 `assessment.md` 作为拒绝依据 |
+| 需求已经很明确，跳过 brainstorm | `/trellis:design` | 直接进入设计，或显式触发 `design` skill | 如果 PRD 内容已足够详细 |
+| 需求简单，直接写代码 | `/trellis:start` | 直接进入实施，或显式触发 `start` skill | 跳过设计+拆解，适合小改动 |
+| 不确定下一步 | `/trellis:start` | 描述当前意图，或显式触发 `start` skill | 用 Phase Router / skill 路由自动检测 |

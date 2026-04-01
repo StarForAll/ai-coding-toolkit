@@ -212,11 +212,11 @@ tmp/multi-cli-review/<task-id>/
 
 根据判定结果：
 
-| 判定结果 | 推荐命令 | 说明 |
-|---------|---------|------|
-| `skip`，可直接提交前检查 | `/trellis:finish-work` | **默认推荐**。无需进入多 CLI 审查 |
-| `required` 或接受 `recommended` | 在已具备 `multi-cli-review` 能力的其他 CLI 中运行 `multi-cli-review` | 若目标 CLI 尚未具备该 skill，先补齐能力再执行 |
-| 报告已就绪，准备汇总修复 | Skill: `multi-cli-review-action` | 当前 CLI 聚合报告、执行修复、重新验证 |
-| 审查发现需回到实现阶段 | `/trellis:start` | 回到当前任务修复问题 |
-| 审查发现冻结后新增 / 修改 / 删除需求 | `§2.5 需求变更管理` | 先处理评估与基线更新，再回到受影响的最早阶段 |
-| 出现冲突或超阈值 | 用户人工决策 | 停止自动推进，先做人工裁决 |
+| 判定结果 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
+|---------|---------------------------|----------------|------|
+| `skip`，可直接提交前检查 | `/trellis:finish-work` | 进入提交前检查，或显式触发 `finish-work` skill | **默认推荐**。无需进入多 CLI 审查 |
+| `required` 或接受 `recommended` | 在已具备 `multi-cli-review` 能力的其他 CLI 中运行 `multi-cli-review` | 在目标 CLI 中发起多 CLI 审查，或显式触发 `multi-cli-review` skill | 若目标 CLI 尚未具备该 skill，先补齐能力再执行 |
+| 报告已就绪，准备汇总修复 | `multi-cli-review-action` 能力 | `multi-cli-review-action` skill | 当前 CLI 聚合报告、执行修复、重新验证 |
+| 审查发现需回到实现阶段 | `/trellis:start` | 回到实施阶段，或显式触发 `start` skill | 回到当前任务修复问题 |
+| 审查发现冻结后新增 / 修改 / 删除需求 | `§2.5 需求变更管理` | 同上 | 先处理评估与基线更新，再回到受影响的最早阶段 |
+| 出现冲突或超阈值 | 用户人工决策 | 用户人工决策 | 停止自动推进，先做人工裁决 |

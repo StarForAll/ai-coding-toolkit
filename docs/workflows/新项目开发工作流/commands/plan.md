@@ -247,12 +247,12 @@ $TASK_DIR/
 
 根据你的意图：
 
-| 你的意图 | 推荐命令 | 说明 |
-|---------|---------|------|
-| 测试先行 | `/trellis:test-first` | **默认推荐（复杂项目）**。先写测试再实现 |
-| 直接写代码 | `/trellis:start` | 简单任务可跳过测试先行 |
-| 拆解不合理，重新拆 | `/trellis:plan` | 重新执行拆解流程 |
-| 设计有问题 | `/trellis:design` | 回退到设计阶段 |
-| 冻结后出现新增 / 修改 / 删除需求 | `§2.5 需求变更管理` | 先冻结当前计划；获批后再回到受影响的最早阶段更新计划 |
-| 需要并行开发多个任务 | Git worktree 或 `/trellis:parallel` | 如当前项目已安装 `/trellis:parallel` 则优先使用，否则手工使用 Git worktree 隔离开发 |
-| 不确定下一步 | `/trellis:start` | 用 Phase Router 自动检测 |
+| 你的意图 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
+|---------|---------------------------|----------------|------|
+| 测试先行 | `/trellis:test-first` | 进入测试驱动，或显式触发 `test-first` skill | **默认推荐（复杂项目）**。先写测试再实现 |
+| 直接写代码 | `/trellis:start` | 直接进入实施，或显式触发 `start` skill | 简单任务可跳过测试先行 |
+| 拆解不合理，重新拆 | `/trellis:plan` | 继续任务拆解，或显式触发 `plan` skill | 重新执行拆解流程 |
+| 设计有问题 | `/trellis:design` | 回退设计阶段，或显式触发 `design` skill | 回退到设计阶段 |
+| 冻结后出现新增 / 修改 / 删除需求 | `§2.5 需求变更管理` | 同上 | 先冻结当前计划；获批后再回到受影响的最早阶段更新计划 |
+| 需要并行开发多个任务 | Git worktree 或 `/trellis:parallel` | Git worktree，或显式触发 `parallel` skill | 如当前项目已安装 `/trellis:parallel` 则优先使用，否则手工使用 Git worktree 隔离开发 |
+| 不确定下一步 | `/trellis:start` | 描述当前意图，或显式触发 `start` skill | 用 Phase Router / skill 路由自动检测 |

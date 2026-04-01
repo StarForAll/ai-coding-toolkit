@@ -172,13 +172,13 @@ $TASK_DIR/design/
 
 根据你的意图：
 
-| 你的意图 | 推荐命令 | 说明 |
-|---------|---------|------|
-| 拆解任务 | `/trellis:plan` | **默认推荐**。前提是已完成项目 `.trellis/spec/` 对齐门禁，再将设计转化为可执行任务 |
-| 项目简单，不需要拆任务 | `/trellis:test-first` | 直接进入测试驱动 |
-| 更简单，直接写代码 | `/trellis:start` | 跳过 plan + test-first |
-| 设计不完善，回退修改 | `/trellis:design` | 重新执行某一步骤 |
-| 冻结后出现新增 / 修改 / 删除需求 | `§2.5 需求变更管理` | 不直接吸收，获批后再回到受影响的最早阶段 |
-| 冻结后仅需纯澄清 | 留在当前阶段 | 仅限不改变范围、接口契约、验收标准、成本、工期 |
-| 检查跨层一致性 | `/trellis:check-cross-layer` | 设计涉及多层时建议执行 |
-| 不确定下一步 | `/trellis:start` | 用 Phase Router 自动检测 |
+| 你的意图 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
+|---------|---------------------------|----------------|------|
+| 拆解任务 | `/trellis:plan` | 进入任务拆解，或显式触发 `plan` skill | **默认推荐**。前提是已完成项目 `.trellis/spec/` 对齐门禁，再将设计转化为可执行任务 |
+| 项目简单，不需要拆任务 | `/trellis:test-first` | 直接进入测试驱动，或显式触发 `test-first` skill | 直接进入测试驱动 |
+| 更简单，直接写代码 | `/trellis:start` | 直接进入实施，或显式触发 `start` skill | 跳过 plan + test-first |
+| 设计不完善，回退修改 | `/trellis:design` | 继续补设计，或显式触发 `design` skill | 重新执行某一步骤 |
+| 冻结后出现新增 / 修改 / 删除需求 | `§2.5 需求变更管理` | 同上 | 不直接吸收，获批后再回到受影响的最早阶段 |
+| 冻结后仅需纯澄清 | 留在当前阶段 | 留在当前阶段 | 仅限不改变范围、接口契约、验收标准、成本、工期 |
+| 检查跨层一致性 | `/trellis:check-cross-layer` | 检查跨层影响，或显式触发 `check-cross-layer` skill | 设计涉及多层时建议执行 |
+| 不确定下一步 | `/trellis:start` | 描述当前意图，或显式触发 `start` skill | 用 Phase Router / skill 路由自动检测 |

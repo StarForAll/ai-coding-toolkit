@@ -226,14 +226,20 @@ get_context.py 输出
 
 **每个命令执行完毕后，AI 必须在末尾输出「下一步推荐」区块**。
 
+入口表达约束：
+
+- Claude Code：继续使用 `/trellis:xxx`
+- OpenCode：TUI 使用 `/trellis:xxx`；CLI 可补 `trellis/xxx`
+- Codex：若同一阶段语义被复用到 skills / AGENTS / hooks 侧，必须改写为“自然语言意图 + 对应 skill 名”，不要把 `/trellis:xxx` 当成 Codex 的唯一入口
+
 ```markdown
 ## 下一步推荐
 
 **当前状态**: <一句话描述>
 
-| 你的意图 | 推荐命令 | 说明 |
-|---------|---------|------|
-| <意图> | `/trellis:xxx` | **默认推荐**。<说明> |
-| <意图> | `/trellis:yyy` | <说明> |
-| 不确定下一步 | `/trellis:start` | 用 Phase Router 自动检测 |
+| 你的意图 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
+|---------|---------------------------|----------------|------|
+| <意图> | `/trellis:xxx` | 自然语言继续该阶段，或显式触发 `xxx` skill | **默认推荐**。<说明> |
+| <意图> | `/trellis:yyy` | 自然语言转入对应阶段，或显式触发 `yyy` skill | <说明> |
+| 不确定下一步 | `/trellis:start` | 描述当前意图，或显式触发 `start` skill | 用 Phase Router / skill 路由自动检测 |
 ```

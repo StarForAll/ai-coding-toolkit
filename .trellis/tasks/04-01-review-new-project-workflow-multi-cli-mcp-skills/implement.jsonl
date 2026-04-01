@@ -1,0 +1,5 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/index.md", "reason": "Project spec index"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "This change spans main workflow docs, routing docs, and Codex platform guidance; keep layers aligned."}
+{"file": ".trellis/spec/docs/index.md", "reason": "Workflow docs under docs/workflows must stay clear, actionable, and internally consistent."}
+{"file": ".trellis/spec/platforms/cli/command-interface/normative-rules.md", "reason": "Command guidance must keep invocation contracts explicit across CLI variants."}
