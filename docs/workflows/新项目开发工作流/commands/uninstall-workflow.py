@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""卸载工作流，恢复 Trellis 原始状态。
+"""卸载工作流，恢复 Trellis 原始状态（多 CLI 支持）。
 
-用法: python3 uninstall-workflow.py [--project-root /path/to/project]
+用法: python3 uninstall-workflow.py [--project-root /path/to/project] [--cli claude,opencode,codex]
 """
 
 import json
@@ -10,8 +10,18 @@ import sys
 from pathlib import Path
 
 
-G, Y, R, N = "\033[0;32m", "\033[1;33m", "\033[0;31m", "\033[0m"
+G, Y, R, C, N = "\033[0;32m", "\033[1;33m", "\033[0;31m", "\033[0;36m", "\033[0m"
 DEFAULT_COMMANDS = ["feasibility", "brainstorm", "design", "plan", "test-first", "self-review", "check", "delivery"]
+
+_CLI_DIRS = {
+    "claude": ".claude",
+    "opencode": ".opencode",
+    "codex": ".codex",
+}
+_CLI_ALT_DIRS = {
+    "codex": ".agents",
+}
+_ALL_CLI_TYPES = ["claude", "opencode", "codex"]
 
 
 def ok(message: str) -> None:
@@ -22,15 +32,40 @@ def warn(message: str) -> None:
     print(f"{Y}⚠️  {message}{N}")
 
 
+def err(message: str) -> None:
+    print(f"{R}❌ {message}{N}")
+
+
+def info(message: str) -> None:
+    print(f"{C}ℹ️  {message}{N}")
+
+
 def find_root(start: Path) -> Path:
+    """向上查找包含任一 CLI 目录的项目根目录。"""
+    all_dirs = list(_CLI_DIRS.values()) + list(_CLI_ALT_DIRS.values())
     cur = start.resolve().parent
     for _ in range(10):
-        if (cur / ".claude").is_dir():
-            return cur
+        for d in all_dirs:
+            if (cur / d).is_dir():
+                return cur
         if cur.parent == cur:
             break
         cur = cur.parent
-    sys.exit(f"{R}未找到 .claude/ 目录{N}")
+    dirs_str = "、".join(f"{d}/" for d in all_dirs)
+    sys.exit(f"{R}未找到任何 CLI 目录（{dirs_str}）{N}")
+
+
+def detect_cli_types(root: Path, requested: list[str] | None = None) -> list[str]:
+    """检测项目中存在的 CLI 类型，可按 requested 过滤。"""
+    found = []
+    for cli_type, cli_dir in _CLI_DIRS.items():
+        if requested and cli_type not in requested:
+            continue
+        if (root / cli_dir).is_dir():
+            found.append(cli_type)
+        elif cli_type in _CLI_ALT_DIRS and (root / _CLI_ALT_DIRS[cli_type]).is_dir():
+            found.append(cli_type)
+    return found
 
 
 def load_install_record(rec_file: Path) -> dict:
@@ -43,67 +78,178 @@ def load_install_record(rec_file: Path) -> dict:
         return {}
 
 
-def main() -> int:
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--project-root", type=Path, default=None)
-    args = parser.parse_args()
-
-    root = args.project_root or find_root(Path(__file__))
+def uninstall_claude(root: Path, commands: list[str]) -> None:
+    """卸载 Claude Code 部署的工作流。"""
     dst_cmds = root / ".claude" / "commands" / "trellis"
-    dst_scripts = root / ".trellis" / "scripts" / "workflow"
     backup = dst_cmds / ".backup-original"
-    rec_file = root / ".trellis" / "workflow-installed.json"
 
-    record = load_install_record(rec_file)
-    commands = record.get("commands") or DEFAULT_COMMANDS
+    if not dst_cmds.is_dir():
+        warn("[Claude] .claude/commands/trellis/ 不存在，跳过")
+        return
 
-    print()
-    print("╔══════════════════════════════════════╗")
-    print("║   自定义工作流 → 卸载                 ║")
-    print("╚══════════════════════════════════════╝")
-    print()
-
+    # 删除 workflow 命令
     removed = 0
     for command in commands:
         candidate = dst_cmds / f"{command}.md"
         if candidate.exists():
             candidate.unlink()
-            ok(f"删除 {command}.md")
+            ok(f"[Claude] 删除 {command}.md")
             removed += 1
-    print(f"   {removed} 个命令\n")
+    info(f"[Claude] 已删除 {removed} 个命令")
 
+    # 恢复 start.md
     backup_start = backup / "start.md"
     if backup_start.exists():
         shutil.copy2(backup_start, dst_cmds / "start.md")
-        ok("start.md 已恢复")
+        ok("[Claude] start.md 已恢复")
     else:
-        warn("无备份，start.md 未修改")
+        warn("[Claude] 无 start.md 备份，未恢复")
 
+    # 恢复 record-session.md
     backup_record_session = backup / "record-session.md"
     if backup_record_session.exists():
         shutil.copy2(backup_record_session, dst_cmds / "record-session.md")
-        ok("record-session.md 已恢复")
+        ok("[Claude] record-session.md 已恢复")
     else:
-        warn("无 record-session 备份，record-session.md 未修改")
+        warn("[Claude] 无 record-session.md 备份，未恢复")
 
+    # 清理备份目录
+    if backup.exists():
+        shutil.rmtree(backup)
+        ok("[Claude] 备份目录已删除")
+
+    # 清理升级备份
+    for directory in dst_cmds.iterdir():
+        if directory.is_dir() and directory.name.startswith(".backup-upgrade-"):
+            shutil.rmtree(directory)
+            ok(f"[Claude] 升级备份已删除: {directory.name}")
+
+
+def uninstall_opencode(root: Path, commands: list[str]) -> None:
+    """卸载 OpenCode 部署的工作流。"""
+    dst_cmds = root / ".opencode" / "commands" / "trellis"
+    backup = dst_cmds / ".backup-original"
+
+    if not dst_cmds.is_dir():
+        warn("[OpenCode] .opencode/commands/trellis/ 不存在，跳过")
+        return
+
+    # 删除 workflow 命令
+    removed = 0
+    for command in commands:
+        candidate = dst_cmds / f"{command}.md"
+        if candidate.exists():
+            candidate.unlink()
+            ok(f"[OpenCode] 删除 {command}.md")
+            removed += 1
+    info(f"[OpenCode] 已删除 {removed} 个命令")
+
+    # 恢复 start.md
+    backup_start = backup / "start.md"
+    if backup_start.exists():
+        shutil.copy2(backup_start, dst_cmds / "start.md")
+        ok("[OpenCode] start.md 已恢复")
+    else:
+        warn("[OpenCode] 无 start.md 备份，未恢复")
+
+    # 恢复 record-session.md
+    backup_record_session = backup / "record-session.md"
+    if backup_record_session.exists():
+        shutil.copy2(backup_record_session, dst_cmds / "record-session.md")
+        ok("[OpenCode] record-session.md 已恢复")
+    else:
+        warn("[OpenCode] 无 record-session.md 备份，未恢复")
+
+    # 清理备份目录
+    if backup.exists():
+        shutil.rmtree(backup)
+        ok("[OpenCode] 备份目录已删除")
+
+    # 清理升级备份
+    for directory in dst_cmds.iterdir():
+        if directory.is_dir() and directory.name.startswith(".backup-upgrade-"):
+            shutil.rmtree(directory)
+            ok(f"[OpenCode] 升级备份已删除: {directory.name}")
+
+
+def uninstall_codex(root: Path, commands: list[str]) -> None:
+    """卸载 Codex CLI 部署的工作流 skills。"""
+    # 优先检查 .agents/skills/，其次 .codex/skills/
+    skills_dirs = [root / ".agents" / "skills", root / ".codex" / "skills"]
+    found_any = False
+
+    for skills_dir in skills_dirs:
+        if not skills_dir.is_dir():
+            continue
+        found_any = True
+        removed = 0
+        for command in commands:
+            skill_dir = skills_dir / command
+            if skill_dir.is_dir():
+                shutil.rmtree(skill_dir)
+                ok(f"[Codex] 删除 skill: {command}")
+                removed += 1
+        info(f"[Codex] {skills_dir} 已删除 {removed} 个 skills")
+
+    if not found_any:
+        warn("[Codex] 未找到 skills 目录，跳过")
+
+
+def main() -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="卸载自定义工作流（支持 Claude Code / OpenCode / Codex CLI）"
+    )
+    parser.add_argument("--project-root", type=Path, default=None, help="项目根目录（默认自动检测）")
+    parser.add_argument("--cli", type=str, default=None,
+                        help="指定 CLI 类型，逗号分隔: claude,opencode,codex（默认全部自动检测）")
+    args = parser.parse_args()
+
+    root = args.project_root or find_root(Path(__file__))
+
+    # 检测 CLI 类型
+    requested = [x.strip() for x in args.cli.split(",")] if args.cli else None
+    cli_types = detect_cli_types(root, requested)
+
+    rec_file = root / ".trellis" / "workflow-installed.json"
+    record = load_install_record(rec_file)
+    commands = record.get("commands") or DEFAULT_COMMANDS
+    installed_cli_types = record.get("cli_types") or cli_types
+
+    # 优先使用安装记录中的 CLI 类型
+    target_cli_types = installed_cli_types if installed_cli_types else cli_types
+    if requested:
+        target_cli_types = [t for t in target_cli_types if t in requested]
+
+    print()
+    print("╔══════════════════════════════════════════╗")
+    print("║   自定义工作流 → 卸载（多CLI）             ║")
+    print("╚══════════════════════════════════════════╝")
+    print()
+    info(f"目标 CLI: {', '.join(target_cli_types)}")
+    info(f"待卸载命令: {', '.join(commands)}")
+    print()
+
+    for cli_type in target_cli_types:
+        if cli_type == "claude":
+            uninstall_claude(root, commands)
+        elif cli_type == "opencode":
+            uninstall_opencode(root, commands)
+        elif cli_type == "codex":
+            uninstall_codex(root, commands)
+        print()
+
+    # 删除辅助脚本
+    dst_scripts = root / ".trellis" / "scripts" / "workflow"
     if dst_scripts.is_dir():
         shutil.rmtree(dst_scripts)
         ok(".trellis/scripts/workflow/ 已删除")
 
+    # 删除安装记录
     if rec_file.exists():
         rec_file.unlink()
         ok("workflow-installed.json 已删除")
-
-    if backup.exists():
-        shutil.rmtree(backup)
-        ok("备份目录已删除")
-
-    for directory in dst_cmds.iterdir():
-        if directory.is_dir() and directory.name.startswith(".backup-upgrade-"):
-            shutil.rmtree(directory)
-            ok(f"升级备份已删除: {directory.name}")
 
     print()
     print("✅ 卸载完成 — Trellis 已恢复原始状态")

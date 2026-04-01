@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Trellis 版本升级后重新嵌入工作流。
+"""Trellis 版本升级后重新嵌入工作流（多 CLI 支持）。
 
 用法:
   python3 upgrade-compat.py --check              # 检测冲突（默认）
   python3 upgrade-compat.py --merge              # 自动合并
   python3 upgrade-compat.py --force              # 强制覆盖
   python3 upgrade-compat.py --project-root /path # 指定项目根目录
+  python3 upgrade-compat.py --cli claude,opencode,codex  # 指定 CLI 类型
 """
 
 import argparse
@@ -35,6 +36,7 @@ def info(message: str) -> None:
     print(f"{C}ℹ️  {message}{N}")
 
 
+# ── 常量 ──
 _PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 _INJECTION_MARKER = "## Operation Types"
 _RECORD_SESSION_MARKER = "## Record-Session Metadata Closure `[AI]`"
@@ -50,16 +52,43 @@ HELPER_SCRIPTS = [
     "record-session-helper.py",
 ]
 
+_CLI_DIRS = {
+    "claude": ".claude",
+    "opencode": ".opencode",
+    "codex": ".codex",
+}
+_CLI_ALT_DIRS = {
+    "codex": ".agents",
+}
+_ALL_CLI_TYPES = ["claude", "opencode", "codex"]
+
 
 def find_root() -> Path:
+    """向上查找包含任一 CLI 目录的项目根目录。"""
+    all_dirs = list(_CLI_DIRS.values()) + list(_CLI_ALT_DIRS.values())
     cur = Path(__file__).resolve().parent
     for _ in range(10):
-        if (cur / ".claude").is_dir():
-            return cur
+        for d in all_dirs:
+            if (cur / d).is_dir():
+                return cur
         if cur.parent == cur:
             break
         cur = cur.parent
-    sys.exit(f"{R}未找到 .claude/ 目录{N}")
+    dirs_str = "、".join(f"{d}/" for d in all_dirs)
+    sys.exit(f"{R}未找到任何 CLI 目录（{dirs_str}）{N}")
+
+
+def detect_cli_types(root: Path, requested: list[str] | None = None) -> list[str]:
+    """检测项目中存在的 CLI 类型。"""
+    found = []
+    for cli_type, cli_dir in _CLI_DIRS.items():
+        if requested and cli_type not in requested:
+            continue
+        if (root / cli_dir).is_dir():
+            found.append(cli_type)
+        elif cli_type in _CLI_ALT_DIRS and (root / _CLI_ALT_DIRS[cli_type]).is_dir():
+            found.append(cli_type)
+    return found
 
 
 def has_phase_router(start_md: Path) -> bool:
@@ -84,42 +113,109 @@ def load_install_record(rec_file: Path) -> dict:
         return {}
 
 
-def detect_conflicts(dst_cmds: Path, dst_scripts: Path) -> int:
+# ── Claude Code 冲突检测 ──
+def detect_conflicts_claude(dst_cmds: Path, dst_scripts: Path) -> int:
     conflicts = 0
     start = dst_cmds / "start.md"
     record_session = dst_cmds / "record-session.md"
 
     if not has_phase_router(start):
-        err("start.md: Phase Router 丢失")
+        err("[Claude] start.md: Phase Router 丢失")
         conflicts += 1
     else:
-        ok("start.md: Phase Router 正常")
+        ok("[Claude] start.md: Phase Router 正常")
 
     missing_commands = [name for name in NEW_COMMANDS if not (dst_cmds / f"{name}.md").exists()]
     if missing_commands:
         for name in missing_commands:
-            warn(f"命令缺失: /trellis:{name}")
+            warn(f"[Claude] 命令缺失: /trellis:{name}")
         conflicts += len(missing_commands)
     else:
-        ok("所有命令存在")
+        ok("[Claude] 所有命令存在")
 
     if not has_record_session_patch(record_session):
-        err("record-session.md: 元数据闭环说明缺失")
+        err("[Claude] record-session.md: 元数据闭环说明缺失")
         conflicts += 1
     else:
-        ok("record-session.md: 元数据闭环说明正常")
+        ok("[Claude] record-session.md: 元数据闭环说明正常")
 
     missing_scripts = [name for name in HELPER_SCRIPTS if not (dst_scripts / name).exists()]
     if missing_scripts:
         for name in missing_scripts:
-            warn(f"辅助脚本缺失: {name}")
+            warn(f"[Claude] 辅助脚本缺失: {name}")
         conflicts += len(missing_scripts)
     else:
-        ok("所有辅助脚本存在")
+        ok("[Claude] 所有辅助脚本存在")
 
     return conflicts
 
 
+# ── OpenCode 冲突检测 ──
+def detect_conflicts_opencode(dst_cmds: Path, dst_scripts: Path) -> int:
+    conflicts = 0
+    start = dst_cmds / "start.md"
+    record_session = dst_cmds / "record-session.md"
+
+    if not has_phase_router(start):
+        err("[OpenCode] start.md: Phase Router 丢失")
+        conflicts += 1
+    else:
+        ok("[OpenCode] start.md: Phase Router 正常")
+
+    missing_commands = [name for name in NEW_COMMANDS if not (dst_cmds / f"{name}.md").exists()]
+    if missing_commands:
+        for name in missing_commands:
+            warn(f"[OpenCode] 命令缺失: {name}")
+        conflicts += len(missing_commands)
+    else:
+        ok("[OpenCode] 所有命令存在")
+
+    if not has_record_session_patch(record_session):
+        err("[OpenCode] record-session.md: 元数据闭环说明缺失")
+        conflicts += 1
+    else:
+        ok("[OpenCode] record-session.md: 元数据闭环说明正常")
+
+    # 辅助脚本共享，不重复计数
+    return conflicts
+
+
+# ── Codex 冲突检测 ──
+def detect_conflicts_codex(root: Path) -> int:
+    conflicts = 0
+    skills_dir = root / ".agents" / "skills"
+    if not skills_dir.is_dir():
+        skills_dir = root / ".codex" / "skills"
+    if not skills_dir.is_dir():
+        warn("[Codex] 未找到 skills 目录")
+        return 0
+
+    missing_skills = [name for name in NEW_COMMANDS if not (skills_dir / name / "SKILL.md").exists()]
+    if missing_skills:
+        for name in missing_skills:
+            warn(f"[Codex] skill 缺失: {name}")
+        conflicts += len(missing_skills)
+    else:
+        ok("[Codex] 所有 skills 存在")
+
+    hooks_json = root / ".codex" / "hooks.json"
+    if hooks_json.exists():
+        ok("[Codex] hooks.json 存在")
+    else:
+        warn("[Codex] hooks.json 缺失")
+        conflicts += 1
+
+    session_start = root / ".codex" / "hooks" / "session-start.py"
+    if session_start.exists():
+        ok("[Codex] session-start.py 存在")
+    else:
+        warn("[Codex] session-start.py 缺失")
+        conflicts += 1
+
+    return conflicts
+
+
+# ── 备份 ──
 def backup_deployed_state(dst_cmds: Path, start: Path) -> None:
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
     backup_dir = dst_cmds / f".backup-upgrade-{ts}"
@@ -136,13 +232,19 @@ def backup_deployed_state(dst_cmds: Path, start: Path) -> None:
     ok(f"备份 → {backup_dir.name}")
 
 
+# ── 命令部署 ──
+def prepare_command_content(source_path: Path) -> str:
+    content = source_path.read_text(encoding="utf-8")
+    content = content.replace("docs/workflows/新项目开发工作流/commands/shell/", ".trellis/scripts/workflow/")
+    return content
+
+
 def deploy_commands(src: Path, dst_cmds: Path) -> None:
     for name in NEW_COMMANDS:
         source_path = src / f"{name}.md"
         target_path = dst_cmds / f"{name}.md"
         if source_path.exists():
-            content = source_path.read_text(encoding="utf-8")
-            content = content.replace("docs/workflows/新项目开发工作流/commands/shell/", ".trellis/scripts/workflow/")
+            content = prepare_command_content(source_path)
             target_path.write_text(content, encoding="utf-8")
             ok(f"/trellis:{name}")
 
@@ -157,6 +259,25 @@ def deploy_scripts(src: Path, dst_scripts: Path) -> None:
     ok("辅助脚本已更新")
 
 
+def deploy_codex_skills(src: Path, root: Path) -> None:
+    skills_dir = root / ".agents" / "skills"
+    if not skills_dir.is_dir():
+        skills_dir = root / ".codex" / "skills"
+    if not skills_dir.is_dir():
+        warn("[Codex] 未找到 skills 目录，跳过")
+        return
+
+    for name in NEW_COMMANDS:
+        source_path = src / f"{name}.md"
+        target_path = skills_dir / name / "SKILL.md"
+        if source_path.exists():
+            content = prepare_command_content(source_path)
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            target_path.write_text(content, encoding="utf-8")
+            ok(f"[Codex] skill: {name}")
+
+
+# ── 恢复 ──
 def restore_command_from_original_backup(dst_cmds: Path, command_name: str) -> bool:
     backup_path = dst_cmds / ".backup-original" / f"{command_name}.md"
     target_path = dst_cmds / f"{command_name}.md"
@@ -224,13 +345,14 @@ def inject_record_session_patch(src: Path, record_session_md: Path) -> bool:
     return True
 
 
-def write_install_record(rec_file: Path, current_version: str, previous_version: str) -> None:
+def write_install_record(rec_file: Path, current_version: str, previous_version: str, cli_types: list[str]) -> None:
     now = datetime.now(timezone.utc).isoformat()
     rec_file.write_text(
         json.dumps(
             {
                 "trellis_version": current_version,
                 "previous_version": previous_version,
+                "cli_types": cli_types,
                 "updated": now,
                 "commands": NEW_COMMANDS,
                 "scripts": HELPER_SCRIPTS,
@@ -260,21 +382,26 @@ def main() -> int:
     parser.add_argument("--merge", action="store_const", const="merge", dest="mode")
     parser.add_argument("--force", action="store_const", const="force", dest="mode")
     parser.add_argument("--project-root", type=Path, default=None, help="项目根目录（默认自动检测）")
+    parser.add_argument("--cli", type=str, default=None,
+                        help="指定 CLI 类型，逗号分隔: claude,opencode,codex（默认全部自动检测）")
     args = parser.parse_args()
 
     src = Path(__file__).resolve().parent
     if args.project_root:
         root = args.project_root.resolve()
-        if not (root / ".claude").is_dir():
-            sys.exit(f"{R}指定的项目根目录不含 .claude/{N}")
+        all_dirs = list(_CLI_DIRS.values()) + list(_CLI_ALT_DIRS.values())
+        if not any((root / d).is_dir() for d in all_dirs):
+            dirs_str = "、".join(f"{d}/" for d in all_dirs)
+            sys.exit(f"{R}指定的项目根目录不含任何 CLI 目录（{dirs_str}）{N}")
     else:
         root = find_root()
 
-    dst_cmds = root / ".claude" / "commands" / "trellis"
-    dst_scripts = root / ".trellis" / "scripts" / "workflow"
+    # 检测 CLI 类型
+    requested = [x.strip() for x in args.cli.split(",")] if args.cli else None
+    cli_types = detect_cli_types(root, requested)
+
     rec_file = root / ".trellis" / "workflow-installed.json"
-    start = dst_cmds / "start.md"
-    record_session = dst_cmds / "record-session.md"
+    dst_scripts = root / ".trellis" / "scripts" / "workflow"
 
     current_version = (
         (root / ".trellis" / ".version").read_text(encoding="utf-8").strip()
@@ -286,25 +413,36 @@ def main() -> int:
     version_changed = current_version != installed_version
 
     print()
-    print("╔══════════════════════════════════════╗")
-    print("║   Trellis 版本升级兼容处理            ║")
-    print("╚══════════════════════════════════════╝")
+    print("╔══════════════════════════════════════════╗")
+    print("║   Trellis 版本升级兼容处理（多CLI）        ║")
+    print("╚══════════════════════════════════════════╝")
     print()
 
     info(f"当前版本: {current_version}  |  安装时版本: {installed_version}")
+    info(f"目标 CLI: {', '.join(cli_types)}")
     if version_changed:
         warn(f"版本变化: {installed_version} → {current_version}")
     else:
         info("版本一致，继续检查部署完整性")
     print()
 
-    conflicts = detect_conflicts(dst_cmds, dst_scripts)
-    print(f"   冲突: {conflicts}")
+    # 冲突检测
+    total_conflicts = 0
+    for cli_type in cli_types:
+        if cli_type == "claude":
+            dst_cmds = root / ".claude" / "commands" / "trellis"
+            total_conflicts += detect_conflicts_claude(dst_cmds, dst_scripts)
+        elif cli_type == "opencode":
+            dst_cmds = root / ".opencode" / "commands" / "trellis"
+            total_conflicts += detect_conflicts_opencode(dst_cmds, dst_scripts)
+        elif cli_type == "codex":
+            total_conflicts += detect_conflicts_codex(root)
+    print(f"   总冲突: {total_conflicts}")
     print()
 
     if args.mode == "check":
-        if conflicts:
-            err(f"发现 {conflicts} 个冲突，运行 --merge 修复")
+        if total_conflicts:
+            err(f"发现 {total_conflicts} 个冲突，运行 --merge 修复")
             return 1
         if version_changed:
             warn("检测通过，但版本记录已落后；如需重新部署并刷新版本标记，请运行 --merge")
@@ -312,27 +450,60 @@ def main() -> int:
             ok("版本一致，部署完整")
         return 0
 
-    if not version_changed and conflicts == 0:
+    if not version_changed and total_conflicts == 0:
         ok("版本一致且部署完整，无需重新部署")
         return 0
 
-    backup_deployed_state(dst_cmds, start)
-    deploy_commands(src, dst_cmds)
+    # 合并/修复
+    for cli_type in cli_types:
+        if cli_type == "claude":
+            dst_cmds = root / ".claude" / "commands" / "trellis"
+            start = dst_cmds / "start.md"
+            record_session = dst_cmds / "record-session.md"
+            backup_deployed_state(dst_cmds, start)
+            deploy_commands(src, dst_cmds)
+            if args.mode == "force":
+                if not restore_start_from_original_backup(dst_cmds, start):
+                    return 1
+                if not restore_command_from_original_backup(dst_cmds, "record-session"):
+                    return 1
+            if not has_phase_router(start) and not inject_phase_router(src, start):
+                err("[Claude] Phase Router 恢复失败")
+                return 1
+            if not has_record_session_patch(record_session) and not inject_record_session_patch(src, record_session):
+                err("[Claude] record-session 元数据闭环恢复失败")
+                return 1
+        elif cli_type == "opencode":
+            dst_cmds = root / ".opencode" / "commands" / "trellis"
+            start = dst_cmds / "start.md"
+            record_session = dst_cmds / "record-session.md"
+            backup_deployed_state(dst_cmds, start)
+            deploy_commands(src, dst_cmds)
+            if args.mode == "force":
+                if not restore_start_from_original_backup(dst_cmds, start):
+                    return 1
+                if not restore_command_from_original_backup(dst_cmds, "record-session"):
+                    return 1
+            if not has_phase_router(start) and not inject_phase_router(src, start):
+                err("[OpenCode] Phase Router 恢复失败")
+                return 1
+            if not has_record_session_patch(record_session) and not inject_record_session_patch(src, record_session):
+                err("[OpenCode] record-session 元数据闭环恢复失败")
+                return 1
+        elif cli_type == "codex":
+            deploy_codex_skills(src, root)
 
-    if args.mode == "force" and not restore_start_from_original_backup(dst_cmds, start):
-        return 1
-    if args.mode == "force" and not restore_command_from_original_backup(dst_cmds, "record-session"):
-        return 1
-    if not has_phase_router(start) and not inject_phase_router(src, start):
-        err("Phase Router 恢复失败，未更新版本标记")
-        return 1
-    if not has_record_session_patch(record_session) and not inject_record_session_patch(src, record_session):
-        err("record-session 元数据闭环说明恢复失败，未更新版本标记")
-        return 1
-
+    # 辅助脚本
     deploy_scripts(src, dst_scripts)
-    write_install_record(rec_file, current_version, installed_version)
-    cleanup_old_backups(dst_cmds)
+
+    # 更新安装记录
+    write_install_record(rec_file, current_version, installed_version, cli_types)
+
+    # 清理旧备份
+    for cli_type in cli_types:
+        if cli_type in ("claude", "opencode"):
+            dst_cmds = root / f".{cli_type}" / "commands" / "trellis"
+            cleanup_old_backups(dst_cmds)
 
     print()
     print("✅ 升级兼容处理完成")
