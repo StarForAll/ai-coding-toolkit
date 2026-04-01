@@ -66,7 +66,8 @@ description: 需求冻结了？开始设计 — UI/UX、架构选型、接口设
 | 参考 GitHub 开源架构 | `deepwiki` | 回退：`exa_search` |
 | 技术选型深度研究 | `exa_create_research` | 回退：`grok-search` |
 | 复杂架构推理 | `sequential-thinking` | 多步推理、分支探索 |
-| 架构图可视化 | `markmap` | 模块依赖图、技术栈确认 | `Context7` | 框架 API 文档 |
+| 架构图可视化 | `markmap` | 模块依赖图、技术栈确认 |
+| 框架 / SDK API 文档 | `Context7` | 技术选型时查阅官方文档 |
 
 ### Step 5: 技术方案设计
 
