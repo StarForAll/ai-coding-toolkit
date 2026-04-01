@@ -49,7 +49,15 @@ python3 docs/workflows/新项目开发工作流/commands/shell/feasibility-check
 
 1. 核心目标 → 2. 目标用户 → 3. 核心功能(≤3) → 4. 技术约束 → 5. 时间窗口
 
-### Step 2.5: 风险分析（demand-risk-assessment skill 集成）
+### Step 2.5: MCP 能力路由（按需）
+
+| 场景 | 调用能力 | 说明 |
+|------|---------|------|
+| 竞品分析、技术方案深度调研 | `exa_create_research` | 回退：`grok-search` |
+| 风险评估复杂推理 | `sequential-thinking` | 多步推理、分支探索 |
+| 参考 GitHub 开源项目 | `deepwiki` | 回退：`exa_search` |
+
+### Step 2.7: 风险分析（demand-risk-assessment skill 集成）
 
 ```bash
 # 从文件读取需求文本

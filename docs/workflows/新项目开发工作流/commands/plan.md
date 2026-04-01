@@ -60,6 +60,15 @@ description: 设计好了？拆任务 — AI 驱动任务拆解、排期、DoR/D
 
 **Skills**: `project-planner` `writing-plans`
 
+**MCP 能力路由（按需）**
+
+| 场景 | 调用能力 | 说明 |
+|------|---------|------|
+| 复杂依赖推理 | `sequential-thinking` | 多步推理、分支探索 |
+| 任务依赖可视化 | `markmap` | 生成任务依赖图 |
+| 参考 GitHub 项目结构 | `deepwiki` | 回退：`exa_search` |
+| 技术方案深度研究 | `exa_create_research` | 回退：`grok-search` |
+
 ```bash
 # 读取输入
 cat "$TASK_DIR/prd.md"
