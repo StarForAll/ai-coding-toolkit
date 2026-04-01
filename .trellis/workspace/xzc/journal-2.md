@@ -1377,3 +1377,36 @@ Updated workflow docs/specs to clarify default multi-CLI co-install with distinc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 75: 工作流补强 MCP / Skills 主入口演练与回链收口
+
+**Date**: 2026-04-01
+**Task**: 工作流补强 MCP / Skills 主入口演练与回链收口
+**Branch**: `main`
+
+### Summary
+
+新增多 CLI 通用新项目主演练文档，补总纲/命令映射/专项案例导流，并完成 04-01 任务归档与记录。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2e33215` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
