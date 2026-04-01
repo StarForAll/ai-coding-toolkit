@@ -1265,3 +1265,34 @@ python3 docs/workflows/新项目开发工作流/commands/shell/delivery-control-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 72: 分析新项目开发工作流的多AI CLI支持
+
+**Date**: 2026-04-01
+**Task**: 分析新项目开发工作流的多AI CLI支持
+**Branch**: `main`
+
+### Summary
+
+对 ./docs/workflows/新项目开发工作流/ 进行多 AI CLI 支持分析，验证 install-workflow.py 的实际行为。结论：工作流多 CLI 支持完整且正确，install/uninstall 脚本正常工作，Codex hooks 由 trellis init 提供。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
