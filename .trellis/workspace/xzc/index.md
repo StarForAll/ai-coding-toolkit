@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 77
+- **Total Sessions**: 78
 - **Last Active**: 2026-04-01
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~1524 | Active |
+| `journal-2.md` | ~1571 | Active |
 | `journal-1.md` | ~1987 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 78 | 2026-04-01 | 审查并修复新项目工作流多CLI推荐口径 | `c54027a` | `main` |
 | 77 | 2026-04-01 | 工作流命令 NL 触发 + 下一步推荐 | `2c7810b` | `main` |
 | 76 | 2026-04-01 | 工作流MCP/Skills利用率分析与修正 | `f171a21` | `main` |
 | 75 | 2026-04-01 | 工作流补强 MCP / Skills 主入口演练与回链收口 | `2e33215` | `main` |

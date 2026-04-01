@@ -1522,3 +1522,50 @@ Updated workflow docs/specs to clarify default multi-CLI co-install with distinc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 78: 审查并修复新项目工作流多CLI推荐口径
+
+**Date**: 2026-04-01
+**Task**: 审查并修复新项目工作流多CLI推荐口径
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项目 | 变更 |
+|------|------|
+| 多 CLI 主链文档 | 前移原生入口、自然语言触发与下一步推荐规则 |
+| 命令映射 | 增加跨 CLI 推荐输出口径，并强调 MCP / skills 默认优先使用 |
+| 阶段命令源文件 | 将 Codex 的下一步推荐改为自然语言/skill 入口，而非仅 `/trellis:xxx` |
+
+**本轮结果**:
+- 统一了 Claude Code / OpenCode / Codex 的推荐输出口径
+- 把“每轮对话输出下一步推荐”的要求前移到主链可见位置
+- 保持命令源文件、映射层和主入口文档的口径一致
+
+**验证**:
+- `git diff --check -- <modified docs>`
+- `/ops/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c54027a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
