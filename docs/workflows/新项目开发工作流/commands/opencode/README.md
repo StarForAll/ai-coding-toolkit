@@ -16,6 +16,22 @@ OpenCode 已具备承载这套 workflow 的原生命令、rules、agents、skill
 - workflow 文档与补充指引：通过 `opencode.json` 的 `instructions` 引入
 - 通用辅助脚本：继续放在 `.trellis/scripts/workflow/` 或 `docs/workflows/.../commands/shell/`
 
+## 渐进性披露
+
+OpenCode 下的 MCP / skills 配置不应全部堆进 `instructions`。
+
+推荐拆分：
+
+- 主规则层：`工作流总纲.md` + `AGENTS.md`
+- 映射层：`命令映射.md` + `.opencode/commands/trellis/*.md`
+- 平台展开层：本 README
+
+其中：
+
+- `instructions` 负责把 workflow 文档挂进会话
+- OpenCode 原生配置负责挂接平台侧能力
+- 长配置示例与平台细节只保留在平台展开层，不默认注入
+
 ## 在多 CLI 同装中的定位
 
 同一个目标项目里，默认会并存：
@@ -65,6 +81,7 @@ OpenCode 的规则层不要只靠单一入口。
 
 - `AGENTS.md`：放项目级长期稳定规则，例如执行原则、验证门禁、语言策略、风险边界
 - `opencode.json.instructions`：挂载 workflow 文档、阶段说明、补充指引
+- 平台原生 MCP / provider 配置：负责把 workflow 需要的能力真正启用
 
 `instructions` 更适合加载“这套工作流文档本身”，而不是替代命令系统。
 
