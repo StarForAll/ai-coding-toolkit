@@ -37,9 +37,7 @@
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": [
-    "03-31-revise-workflow-codex-native-adapter"
-  ],
+  "children": [],
   "parent": null,
   "relatedFiles": [],
   "notes": "2026-04-01: parent analysis and document integration are complete at the workspace level. Acceptance criteria in the parent PRD are all checked, and child tasks are synchronized to review status. Remaining closure: human test, commit, and $record-session before any completed/archive transition.",
