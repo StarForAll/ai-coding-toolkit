@@ -1649,3 +1649,36 @@ Updated workflow docs/specs to clarify default multi-CLI co-install with distinc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 81: workflow: close fix-workflow-issues
+
+**Date**: 2026-04-01
+**Task**: workflow: close fix-workflow-issues
+**Branch**: `main`
+
+### Summary
+
+Aligned workflow routing and trigger words, reverted negative optimizations, and validated installer/runtime behavior for fix-workflow-issues.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f4877835beebe8a7cf5df23926715d2507857391` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
