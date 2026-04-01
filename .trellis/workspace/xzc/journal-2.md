@@ -1232,3 +1232,36 @@ python3 docs/workflows/新项目开发工作流/commands/shell/delivery-control-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 71: 工作流多CLI适配：install/uninstall/upgrade脚本重构
+
+**Date**: 2026-04-01
+**Task**: 工作流多CLI适配：install/uninstall/upgrade脚本重构
+**Branch**: `main`
+
+### Summary
+
+重构install-workflow.py、uninstall-workflow.py、upgrade-compat.py三个脚本，从仅支持Claude Code扩展为自动检测并部署到Claude Code/OpenCode/Codex CLI。各CLI按原生最佳实践适配：Claude Code用commands模型，OpenCode用commands+agents模型，Codex用hooks+skills+agents模型。find_root()改为检测所有CLI目录，安装记录增加cli_types字段。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5cbc4cee64215eaa7545646a47b33e5b10a7a7fd` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

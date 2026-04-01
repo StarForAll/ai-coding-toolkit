@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 70
+- **Total Sessions**: 71
 - **Last Active**: 2026-04-01
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~1234 | Active |
+| `journal-2.md` | ~1267 | Active |
 | `journal-1.md` | ~1987 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 71 | 2026-04-01 | 工作流多CLI适配：install/uninstall/upgrade脚本重构 | `5cbc4cee64215eaa7545646a47b33e5b10a7a7fd` | `main` |
 | 70 | 2026-04-01 | 多 CLI 工作流适配与任务收口 | `c84ede0` | `main` |
 | 69 | 2026-03-31 | 补充新项目工作流 todo 初始化约定 | `07534c5` | `main` |
 | 68 | 2026-03-31 | 完善新项目开发工作流任务生成规则 | `1ac9efe` | `main` |
