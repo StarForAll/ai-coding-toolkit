@@ -58,6 +58,55 @@ _RECORD_SESSION_INJECTION_MARKER = "### Step 2: One-Click Add Session"
 _TODO_FILE_NAME = "todo.txt"
 _TODO_DEFAULT_LINE = "文档内容需要和实际当前的代码同步\n"
 
+# AGENTS.md NL 路由表标记
+_AGENTS_NL_ROUTING_MARKER = "<!-- workflow-nl-routing-start -->"
+_AGENTS_NL_ROUTING_END = "<!-- workflow-nl-routing-end -->"
+
+_NL_ROUTING_SECTION = """\
+<!-- workflow-nl-routing-start -->
+
+## 自然语言命令路由
+
+> 由工作流安装器自动生成。当用户用自然语言描述意图时，按本表匹配命令执行。
+
+### 工作流阶段命令
+
+| 触发关键词 | 命令 | 说明 |
+|-----------|------|------|
+| 评估、能做吗、报价、新项目、风险、可行性 | `/trellis:feasibility` | §1 可行性评估 |
+| 需求、PRD、明确需求、需求文档 | `/trellis:brainstorm` | §2 需求发现 |
+| 设计、架构、选型、接口设计、技术方案 | `/trellis:design` | §3 设计阶段 |
+| 拆任务、排期、计划、任务分解 | `/trellis:plan` | §4 任务拆解 |
+| 写测试、TDD、测试驱动、先写测试 | `/trellis:test-first` | §4.3 测试先行 |
+| 自审、自检、自查 | `/trellis:self-review` | §5.1.x 自审 |
+| 代码审查、review、检查代码质量 | `/trellis:check` | §5.1.y 补充审查 |
+| 提交前检查、准备提交、commit 前 | `/trellis:finish-work` | §6 提交检查 |
+| 交付、部署、上线、发布 | `/trellis:delivery` | §6+§7 测试交付 |
+| 记录、保存进度、收工 | `/trellis:record-session` | §7 会话记录 |
+
+### 框架通用命令
+
+| 触发关键词 | 命令 | 说明 |
+|-----------|------|------|
+| 开始、新会话、继续、下一步 | `/trellis:start` | Phase Router 自动检测 |
+| 卡住了、反复出错、死循环 | `/trellis:break-loop` | 深度 bug 分析 |
+| 并行、worktree、同时开发 | `/trellis:parallel` | 并行任务管理 |
+| 更新规范、沉淀经验 | `/trellis:update-spec` | 规范更新 |
+| 跨层检查、跨模块影响 | `/trellis:check-cross-layer` | 跨层检查 |
+| 集成 skill、添加 skill | `/trellis:integrate-skill` | Skill 集成 |
+| 读规范、开发前准备 | `/trellis:before-dev` | 开发前读规范 |
+| 新人入门、项目介绍 | `/trellis:onboard` | 项目 onboarding |
+| 创建命令、新命令 | `/trellis:create-command` | 创建新命令 |
+
+### 歧义消解
+
+- 多个命令匹配时：当前阶段上下文 > 精确关键词 > 阶段顺序推断 > 模糊语义
+- 无法确定时：路由到 `/trellis:start`（Phase Router 自动检测）
+- top-2 优先级接近时：向用户确认意图
+
+<!-- workflow-nl-routing-end -->
+"""
+
 
 # ── 项目根检测 ──
 def find_root(start: Path) -> Path:
@@ -383,6 +432,34 @@ def ensure_project_todo(root: Path) -> None:
     ok(f"初始化提醒 → {_TODO_FILE_NAME}")
 
 
+# ── AGENTS.md NL 路由表注入 ──
+def deploy_agents_md_routing(root: Path, dry_run: bool) -> bool:
+    """将 NL 路由表注入到项目 AGENTS.md（为无 hooks 的 CLI 提供路由信息）。"""
+    agents_md = root / "AGENTS.md"
+    if not agents_md.exists():
+        warn("AGENTS.md 不存在，跳过 NL 路由表注入")
+        return False
+
+    content = agents_md.read_text(encoding="utf-8")
+
+    # 已存在则替换
+    if _AGENTS_NL_ROUTING_MARKER in content:
+        start_idx = content.index(_AGENTS_NL_ROUTING_MARKER)
+        end_idx = content.index(_AGENTS_NL_ROUTING_END) + len(_AGENTS_NL_ROUTING_END)
+        new_content = content[:start_idx] + _NL_ROUTING_SECTION.rstrip() + content[end_idx:]
+        if not dry_run:
+            agents_md.write_text(new_content, encoding="utf-8")
+        ok("AGENTS.md NL 路由表已更新")
+        return True
+
+    # 不存在则追加到末尾
+    if not dry_run:
+        with agents_md.open("a", encoding="utf-8") as f:
+            f.write("\n\n" + _NL_ROUTING_SECTION)
+    ok("AGENTS.md NL 路由表已注入")
+    return True
+
+
 # ── 主流程 ──
 def main():
     p = argparse.ArgumentParser(
@@ -438,6 +515,11 @@ def main():
 
     # 安装记录
     write_install_record(root, cli_types, args.dry_run)
+
+    # NL 路由表注入 AGENTS.md（为无 hooks 的 CLI 提供路由支持）
+    print()
+    print("📋 NL 路由表...")
+    deploy_agents_md_routing(root, args.dry_run)
 
     # todo.txt
     if not args.dry_run:

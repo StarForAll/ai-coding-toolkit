@@ -115,7 +115,13 @@
       "Bash(TMPROOT=/tmp/trellis-cli-test)",
       "Bash(mkdir -p \"$TMPROOT\")",
       "Bash(mkdir -p .claude .opencode .codex .agents)",
-      "Bash(trellis init:*)"
+      "Bash(trellis init:*)",
+      "Bash(/ops/softwares/python/bin/python3 ./.trellis/scripts/task.py archive 04-01-workflow-multi-cli-mcp)",
+      "Bash(/ops/softwares/python/bin/python3 ./.trellis/scripts/add_session.py --stdin --title \"工作流MCP/Skills利用率分析与修正\" --commit \"f171a21\")",
+      "Bash(/ops/softwares/python/bin/python3 ./.trellis/scripts/task.py create \"brainstorm: 工作流命令原生适配多CLI + 自然语言触发 + 下一步推荐\" --slug workflow-cli-native-commands)",
+      "Bash(/ops/softwares/python/bin/python3 ./.trellis/scripts/task.py start .trellis/tasks/04-01-workflow-cli-native-commands)",
+      "Bash(git checkout:*)",
+      "Bash(/ops/softwares/python/bin/python3 -c \"import ast; ast.parse\\(open\\('docs/workflows/新项目开发工作流/commands/install-workflow.py'\\).read\\(\\)\\); print\\('syntax OK'\\)\")"
     ]
   }
 }

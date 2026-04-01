@@ -156,6 +156,26 @@ get_context.py 输出
 | "这个流程有坑" "这一步老容易漏" "这个命令说明有歧义" "先把这次踩坑记一下" "这个工作流后面得优化" | 优先触发经验反馈机制：开发中先在 `tmp/` 起草反馈草稿，用户确认后移入 `learn/`；若已进入收尾链路则路由到 `/trellis:delivery` 的 Step 9 |
 | "收尾" "提交前检查" "准备 commit" | `/trellis:finish-work` |
 | "继续上次的工作" "上次做到哪了" | 继续现有任务 |
+| "卡住了" "反复出错" "这个 bug 改不好" "死循环" | `/trellis:break-loop` |
+| "并行" "同时做两个任务" "worktree" | `/trellis:parallel` |
+| "把这次踩坑记到规范" "更新 spec" "规范要改" | `/trellis:update-spec` |
+| "跨层检查" "跨模块影响" "检查影响面" | `/trellis:check-cross-layer` |
+| "集成这个 skill" "添加 skill" "把 skill 加进来" | `/trellis:integrate-skill` |
+| "写代码前先看看规范" "读一下规范" "开发前准备" | `/trellis:before-dev` |
+| "帮我了解这个项目" "新人入门" "项目介绍" "怎么用 trellis" | `/trellis:onboard` |
+| "创建一个新命令" "加个命令" "新建 slash command" | `/trellis:create-command` |
+
+### 歧义消解规则
+
+当用户输入同时匹配多个命令时，按以下优先级排序：
+
+1. **当前阶段上下文** — 正在 §3 design，用户说"检查" → `/trellis:check-cross-layer`（而非 `/trellis:check`）
+2. **精确关键词** — 用户说"TDD" → `/trellis:test-first`（精确匹配优先）
+3. **阶段顺序推断** — 刚完成 brainstorm → "下一步" → `/trellis:design`
+4. **模糊语义** — 根据上下文推断最合理的命令
+5. **兜底** — 无法确定 → `/trellis:start`（Phase Router 自动检测）
+
+当 top-2 候选优先级接近时，向用户确认意图而非自动选择。
 
 ### 路由执行
 
