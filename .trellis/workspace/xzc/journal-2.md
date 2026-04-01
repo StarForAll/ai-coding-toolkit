@@ -1182,3 +1182,53 @@ python3 docs/workflows/新项目开发工作流/commands/shell/delivery-control-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 70: 多 CLI 工作流适配与任务收口
+
+**Date**: 2026-04-01
+**Task**: 多 CLI 工作流适配与任务收口
+**Branch**: `main`
+
+### Summary
+
+完成 OpenCode / Codex / Gemini 适配文档拆分与共享兼容矩阵修订，并收口父子任务元数据。
+
+### Main Changes
+
+| Area | Result |
+|------|--------|
+| Shared docs | 修订 `docs/workflows/自定义工作流制作规范.md`、`docs/workflows/新项目开发工作流/命令映射.md`，统一 Cross-CLI 口径 |
+| OpenCode | 将 `commands/opencode/README.md` 改写为原生命令 / rules / agents / skills 适配说明 |
+| Codex | 新增 `commands/codex/README.md`，新增 `commands/gemini/README.md`，并将 `commands/codex-gemini/README.md` 改为过渡说明 |
+| Task closure | 父任务与 3 个子任务的 PRD / task.json 已同步到 review，并在 record-session 前全部归档 |
+
+**Verification**:
+- `/tmp/opencode-workflow-smoke/run-report.md` 存在
+- `/tmp/codex-workflow-smoke/run-report.md` 存在
+- 共享文档中的旧口径已清理，主命令 `Cross-CLI` 行已改为分列引用平台 README
+
+**Archived Tasks**:
+- `03-31-revise-workflow-cross-cli-matrix`
+- `03-31-revise-workflow-opencode-native-adapter`
+- `03-31-revise-workflow-codex-native-adapter`
+- `03-31-analyze-workflow-multi-cli-support`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c84ede0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
