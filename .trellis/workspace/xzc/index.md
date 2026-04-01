@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 75
+- **Total Sessions**: 76
 - **Last Active**: 2026-04-01
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~1412 | Active |
+| `journal-2.md` | ~1467 | Active |
 | `journal-1.md` | ~1987 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 76 | 2026-04-01 | 工作流MCP/Skills利用率分析与修正 | `f171a21` | `main` |
 | 75 | 2026-04-01 | 工作流补强 MCP / Skills 主入口演练与回链收口 | `2e33215` | `main` |
 | 74 | 2026-04-01 | 工作流补强 MCP / Skills 配置与渐进性披露 | `4c89e14` | `main` |
 | 73 | 2026-04-01 | workflow: align multi-cli install narrative and verify /tmp flow | `9c0b9f9` | `main` |

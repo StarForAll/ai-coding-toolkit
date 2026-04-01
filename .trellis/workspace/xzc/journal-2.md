@@ -1410,3 +1410,58 @@ Updated workflow docs/specs to clarify default multi-CLI co-install with distinc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 76: 工作流MCP/Skills利用率分析与修正
+
+**Date**: 2026-04-01
+**Task**: 工作流MCP/Skills利用率分析与修正
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+## 目标
+
+分析 `docs/workflows/新项目开发工作流/` 中 8 个命令源文件的 MCP/Skills 覆盖度，修正发现的 4 处缺漏。
+
+## 改动
+
+| 文件 | 改动 | 类型 |
+|------|------|------|
+| `commands/brainstorm.md` | 新增 Step 1.6：`prd` skill 调用指导 | 补缺 |
+| `commands/design.md` | 修复 Step 4.5 表格：`markmap` 和 `Context7` 拆为独立行 | 格式修复 |
+| `commands/check.md` | 新增 Step 2 MCP 路由表（`sequential-thinking` + `exa_search`） | 补缺 |
+| `命令映射.md` | 删除不存在的 `brainstorm` skill；映射表和复用总表同步修正 | 修正 |
+
+## 分析结论
+
+8 个命令中 6 个已有完整 MCP 路由表 + Skills 显式调用，整体集成度较高。实际需修正项仅 4 处小改（+14/-3）。
+
+## 防漂移措施
+
+- 未修改已有 Step 编号和逻辑
+- 删除的 `brainstorm` skill 是从未实际存在的独立 skill 引用
+- Codex 的 `brainstorm` skill（workflow 入口 skill）不受影响
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f171a21` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
