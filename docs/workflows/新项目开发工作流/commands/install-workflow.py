@@ -77,15 +77,15 @@ _NL_ROUTING_SECTION = """\
 
 | 触发关键词 | Claude / OpenCode 入口 | Codex 入口 | 说明 |
 |-----------|------------------------|------------|------|
-| 评估、能做吗、报价、新项目、风险、可行性 | `/trellis:feasibility` | 描述可行性评估意图，或显式触发 `feasibility` skill | §1 可行性评估 |
-| 需求、PRD、明确需求、需求文档 | `/trellis:brainstorm` | 描述需求澄清意图，或显式触发 `brainstorm` skill | §2 需求发现 |
-| 设计、架构、选型、接口设计、技术方案 | `/trellis:design` | 描述设计阶段意图，或显式触发 `design` skill | §3 设计阶段 |
-| 拆任务、排期、计划、任务分解 | `/trellis:plan` | 描述任务拆解意图，或显式触发 `plan` skill | §4 任务拆解 |
-| 写测试、TDD、测试驱动、先写测试 | `/trellis:test-first` | 描述测试先行意图，或显式触发 `test-first` skill | §4.3 测试先行 |
-| 自审、自检、自查 | `/trellis:self-review` | 描述自审意图，或显式触发 `self-review` skill | §5.1.x 自审 |
-| 代码审查、review、检查代码质量 | `/trellis:check` | 描述补充审查意图，或显式触发 `check` skill | §5.1.y 补充审查 |
-| 提交前检查、准备提交、commit 前 | `/trellis:finish-work` | 描述提交前检查意图，或显式触发 `finish-work` skill | §6 提交检查 |
-| 交付、部署、上线、发布 | `/trellis:delivery` | 描述交付收尾意图，或显式触发 `delivery` skill | §6+§7 测试交付 |
+| 评估、能做吗、报价、新项目、风险、可行性、看看这个项目、能不能接、估个价、接私活、外包项目、客户需求 | `/trellis:feasibility` | 描述可行性评估意图，或显式触发 `feasibility` skill | §1 可行性评估 |
+| 需求、PRD、明确需求、需求文档、需求分析、梳理需求、讨论方案、判断要不要拆任务 | `/trellis:brainstorm` | 描述需求澄清意图，或显式触发 `brainstorm` skill | §2 需求发现 |
+| 设计、架构、架构设计、选型、接口设计、技术方案、开始设计、画架构图、设计方案 | `/trellis:design` | 描述设计阶段意图，或显式触发 `design` skill | §3 设计阶段 |
+| 拆任务、排期、计划、任务分解、做计划、工作分解、里程碑、工作计划 | `/trellis:plan` | 描述任务拆解意图，或显式触发 `plan` skill | §4 任务拆解 |
+| 写测试、TDD、测试驱动、先写测试、测试用例、验收测试 | `/trellis:test-first` | 描述测试先行意图，或显式触发 `test-first` skill | §4.3 测试先行 |
+| 自审、自检、自查、审查一下、有没有偏差、对照 spec、对照规范、检查偏差 | `/trellis:self-review` | 描述自审意图，或显式触发 `self-review` skill | §5.1.x 自审 |
+| 代码审查、review、质量检查、检查代码质量、补充审查、多人审查、check 一下、让其他 CLI 看一下 | `/trellis:check` | 描述补充审查意图，或显式触发 `check` skill | §5.1.y 补充审查 |
+| 提交前检查、准备提交、commit 前、收尾 | `/trellis:finish-work` | 描述提交前检查意图，或显式触发 `finish-work` skill | §6 提交检查 |
+| 交付、部署、上线、发布、准备交付、跑验收、整理交付物、项目收尾 | `/trellis:delivery` | 描述交付收尾意图，或显式触发 `delivery` skill | §6+§7 测试交付 |
 | 记录、保存进度、收工 | `/trellis:record-session` | 描述会话收尾意图，或显式触发 `record-session` skill | §7 会话记录 |
 
 ### 框架通用命令
@@ -149,7 +149,7 @@ def detect_cli_types(root: Path, requested: list[str] | None = None) -> list[str
 def prepare_command_content(src: Path) -> str:
     """读取命令文件并替换路径引用。"""
     c = src.read_text(encoding="utf-8")
-    c = c.replace("docs/workflows/新项目开发工作流/commands/shell/", ".trellis/scripts/workflow/")
+    c = c.replace("<WORKFLOW_DIR>/commands/shell/", ".trellis/scripts/workflow/")
     return c
 
 

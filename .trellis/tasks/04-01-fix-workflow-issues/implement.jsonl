@@ -1,0 +1,6 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/index.md", "reason": "Project spec index"}
+{"file": ".trellis/spec/docs/index.md", "reason": "工作流命令文档修改需要遵循仓库文档规范"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "文档命令与安装脚本之间存在路径与行为联动"}
+{"file": ".trellis/spec/scripts/python-conventions.md", "reason": "安装脚本是 Python CLI，需要遵循脚本约定"}
+{"file": ".trellis/spec/platforms/cli/command-interface/normative-rules.md", "reason": "工作流命令文本本身定义了命令接口契约"}

@@ -1,0 +1,3 @@
+{"file": ".opencode/commands/trellis/finish-work.md", "reason": "Finish work checklist"}
+{"file": ".opencode/commands/trellis/check.md", "reason": "Code quality check spec"}
+{"file": ".trellis/spec/platforms/cli/command-interface/verification.md", "reason": "需要验证命令接口说明和安装替换逻辑未失配"}

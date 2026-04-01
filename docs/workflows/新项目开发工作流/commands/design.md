@@ -1,6 +1,6 @@
 ---
 name: design
-description: 需求冻结了？开始设计 — UI/UX、架构选型、接口设计、文档输出。触发词：开始设计、画架构图、技术选型、设计方案
+description: 需求冻结了？开始设计 — UI/UX、架构选型、接口设计、文档输出。触发词：开始设计、画架构图、技术选型、设计方案、架构设计、技术方案、选型、接口设计
 ---
 
 # /trellis:design — 设计阶段引导
@@ -27,7 +27,7 @@ description: 需求冻结了？开始设计 — UI/UX、架构选型、接口设
 
 ### Step 1: UI/UX 设计（如有前端）
 
-**调用 Skill**：使用 Skill 工具执行 `ui-ux-pro-max`，生成页面布局粗稿、组件建议、交互流程。若该 skill 不可用，手动从 PRD 提取页面目标后直接进入外部工具设计。
+**调用 Skill**：`ui-ux-pro-max` — 生成页面布局粗稿、组件建议和交互流程。降级：手动从 PRD 提取页面目标后进入外部工具设计。
 
 **强制提醒**：
 
@@ -61,26 +61,27 @@ description: 需求冻结了？开始设计 — UI/UX、架构选型、接口设
 
 ### Step 4.5: MCP 能力路由
 
-| 场景 | 调用能力 | 调用级别 | 说明 |
+| 场景 | 调用能力 | 触发条件 | 说明 |
 |------|---------|---------|------|
-| 参考 GitHub 开源架构 | `deepwiki` | 按需 | 回退：`exa_search` |
-| 技术选型深度研究 | `exa_create_research` | 按需 | 回退：`grok-search` |
-| 复杂架构推理 | `sequential-thinking` | 按需 | 当架构决策涉及 ≥3 个技术方案对比或推理步骤 >3 步时触发 |
-| 架构图可视化 | `markmap` | 按需 | 模块依赖图、技术栈确认 |
-| 框架 / SDK API 文档 | `Context7` | 默认 | 技术选型时必须查阅官方文档作为决策依据，不依赖训练数据中的过时信息。无法获取时标记 `[Evidence Gap]` |
+| 参考 GitHub 开源架构 | `deepwiki` | 当需要参考外部开源项目时 | 回退：`exa_search` |
+| 技术选型深度研究 | `exa_create_research` | 当需要进行技术方案深度调研时 | 回退：`grok-search` |
+| 复杂架构推理 | `sequential-thinking` | 当涉及 ≥3 个技术方案对比或推理步骤 >3 步时 | 复杂决策场景 |
+| 架构图可视化 | `markmap` | 当需要生成架构图或模块依赖图时 | 模块依赖图、技术栈确认 |
+| 框架 / SDK API 文档 | `Context7` | 当需要查询第三方库或框架官方文档时 | 技术选型必查；无法获取时标记 `[Evidence Gap]` |
 
 ### Step 5: 技术方案设计
 
 **MCP 能力路由**
 
-| 场景 | 调用能力 | 调用级别 | 说明 |
+| 场景 | 调用能力 | 触发条件 | 说明 |
 |------|---------|---------|------|
-| 参考 GitHub 开源架构 | `deepwiki` | 按需 | 回退：`exa_search` |
-| 技术选型深度研究 | `exa_create_research` | 按需 | 回退：`grok-search`。没有官方文档证据时，不下 API/框架细节结论，只保留待验证设计假设 |
-| 复杂架构推理 | `sequential-thinking` | 按需 | 当架构决策涉及 ≥3 个技术方案对比或推理步骤 >3 步时触发 |
-| 架构图可视化 | `markmap` | 按需 | 架构图/模块依赖图 |
+| 参考 GitHub 开源架构 | `deepwiki` | 当需要参考外部开源项目时 | 回退：`exa_search` |
+| 技术选型深度研究 | `exa_create_research` | 当需要进行技术方案深度调研时 | 回退：`grok-search`。没有官方文档证据时，不下 API/框架细节结论，只保留待验证设计假设 |
+| 复杂架构推理 | `sequential-thinking` | 当涉及 ≥3 个技术方案对比或推理步骤 >3 步时 | 复杂决策场景 |
+| 架构图可视化 | `markmap` | 当需要生成架构图或模块依赖图时 | 架构图/模块依赖图 |
+| 框架 / SDK API 文档 | `Context7` | 当需要查询第三方库或框架官方文档时 | 技术选型必查 |
 
-**按需调用 Skill**（根据领域选择，使用 Skill 工具执行对应 skill）：
+**调用 Skill**：按下表选择对应专项 skill 输出设计建议。降级：按 PRD 与既有设计模板手动整理设计决策。
 
 | 领域 | Skill |
 |------|-------|
@@ -93,7 +94,7 @@ description: 需求冻结了？开始设计 — UI/UX、架构选型、接口设
 ### Step 6: 文档输出
 
 ```bash
-python3 docs/workflows/新项目开发工作流/commands/shell/design-export.py --validate
+python3 <WORKFLOW_DIR>/commands/shell/design-export.py --validate
 ```
 
 输出文档体系：`design/BRD.md` `TAD.md` `DDD.md` `IDD.md` `AID.md` `ODD.md`

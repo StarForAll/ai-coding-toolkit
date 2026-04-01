@@ -235,7 +235,7 @@ def backup_deployed_state(dst_cmds: Path, start: Path) -> None:
 # ── 命令部署 ──
 def prepare_command_content(source_path: Path) -> str:
     content = source_path.read_text(encoding="utf-8")
-    content = content.replace("docs/workflows/新项目开发工作流/commands/shell/", ".trellis/scripts/workflow/")
+    content = content.replace("<WORKFLOW_DIR>/commands/shell/", ".trellis/scripts/workflow/")
     return content
 
 
