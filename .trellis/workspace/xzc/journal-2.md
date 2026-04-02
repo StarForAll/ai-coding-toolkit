@@ -1875,3 +1875,47 @@ Aligned workflow routing and trigger words, reverted negative optimizations, and
 ### Next Steps
 
 - None - task complete
+
+
+## Session 86: 工作流文档一致性轻量收敛
+
+**Date**: 2026-04-02
+**Task**: 工作流文档一致性轻量收敛
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项目 | 内容 |
+|------|------|
+| 审查范围 | 对 `docs/workflows/新项目开发工作流/` 做轻量一致性审查，聚焦主文档、平台 README 与关键阶段命令 |
+| 主要结论 | 主叙事已基本统一，重点问题集中在历史残留引用、Codex skill 路径表述和非目标 CLI 口径降权 |
+| 实际修订 | 删除 `codex-gemini` 残留引用；统一 Codex skill 路径为 `*/SKILL.md`；将 Claude 改为三种原生适配之一；弱化 Cursor/Gemini 在主链中的结构性权重 |
+
+**Updated Files**:
+- `docs/workflows/新项目开发工作流/命令映射.md`
+- `docs/workflows/新项目开发工作流/commands/claude/README.md`
+- `docs/workflows/新项目开发工作流/commands/codex/README.md`
+- `.trellis/tasks/04-02-brainstorm-workflow-doc-unification/prd.md`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `da2855b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
