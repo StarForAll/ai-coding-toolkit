@@ -55,7 +55,15 @@
 
 ### 这是嵌入在 Trellis 上的 workflow，不是替换 Trellis 基线
 
-这套 workflow 的默认使用前提是：**目标项目已经先执行过 `trellis init`**。
+这套 workflow 的默认使用前提是：**目标项目本身已经是 Git 项目，且已经先执行过 `trellis init`**。
+
+也就是说，至少要同时满足：
+
+- 项目根存在 Git 仓库标记
+- 项目根已经有 Trellis 基线目录和对应 CLI 基线资产
+- 能检测到 `trellis init` 初始化产物，例如 `.trellis/.version`
+
+如果少了其中任意一个前提，就不应把当前 workflow 视为“已经可以直接嵌入使用”。
 
 因此这里说的“进入某个阶段”，不等于当前 workflow 会从零分发整套阶段命令，而是分成三类：
 
@@ -70,6 +78,34 @@
 - `record-session` 是 **Trellis 原生命令/技能基线 + workflow 元数据闭环补丁**
 
 如果忽略这层嵌入关系，就容易把“继承基线”误判成“workflow 漏了命令”。
+
+### 安装时序
+
+这套 workflow 的嵌入方式不是“给 AI CLI 一份目录就算装好了”，而是严格按下面时序执行：
+
+1. 先在目标项目执行 `trellis init`
+2. 再运行当前 workflow 目录里的 `commands/install-workflow.py`
+3. 安装脚本把这套 workflow 嵌入到目标项目
+4. 最后在目标项目里按原生入口直接使用
+
+标准安装命令：
+
+```bash
+/ops/softwares/python/bin/python3 \
+docs/workflows/新项目开发工作流/commands/install-workflow.py \
+--project-root <target-project>
+```
+
+如果只想装部分 CLI，再加 `--cli` 过滤。
+
+所以这里说的“嵌入”，默认指的是**`trellis init` 之后再执行安装脚本，把 workflow 直接装进目标项目**。
+
+安装完成后，这套 workflow 的实际使用仍然可以是**渐进性披露**的：
+
+- 先进入当前阶段
+- 再按当前阶段按需展开命令、文档、MCP、skills
+
+这里的渐进性披露描述的是“安装后的使用方式”，不是“是否已经安装成功”。
 
 ### 多 CLI 同装，但入口协议不同
 

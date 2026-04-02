@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""一键将自定义工作流嵌入 Trellis 框架（多 CLI 支持）。
+"""在 trellis init 之后将当前自定义工作流安装到目标项目（多 CLI 支持）。
 
 默认行为：自动检测目标项目中已存在的 Claude Code / OpenCode / Codex 配置，
 并在同一个项目中同时部署对应适配层；`--cli` 仅用于过滤本次安装目标。
 
 重要边界：
-- 目标项目必须已经执行过 `trellis init`
+- 目标项目必须是 Git 仓库，且已经执行过 `trellis init`
 - 当前 workflow 是“嵌入 + 增强”模型，不会重建 Trellis 原生命令全集
 - `feasibility` 到 `delivery` 这类阶段资产由当前 workflow 分发
 - `start` / `finish-work` / `record-session` 默认来自 Trellis 基线，其中 `start` / `record-session`
   允许由当前 workflow 追加补丁增强
 
 前提:
-- 目标项目已执行 trellis init，且存在对应 CLI 目录
+- 目标项目是 Git 仓库，已执行 trellis init，且存在对应 CLI 目录
 - Codex 至少存在 .agents/skills/ 或 .codex/skills/ 之一
 
 用法: python3 install-workflow.py [--project-root /path/to/project] [--cli claude,opencode,codex] [--dry-run]
@@ -155,6 +155,20 @@ def detect_cli_types(root: Path, requested: list[str] | None = None) -> list[str
         dirs_str = "、".join(f"{d}/" for d in _CLI_DIRS.values())
         sys.exit(f"{R}未找到任何 CLI 目录（{dirs_str}），请先初始化目标 CLI{N}")
     return found
+
+
+def ensure_project_prereqs(root: Path) -> None:
+    """校验目标项目满足 workflow 嵌入前提。"""
+    git_marker = root / ".git"
+    trellis_dir = root / ".trellis"
+    trellis_version = trellis_dir / ".version"
+
+    if not git_marker.exists():
+        sys.exit(f"{R}目标项目不是 Git 仓库：缺少 .git，请先在项目根初始化 Git{N}")
+    if not trellis_dir.is_dir():
+        sys.exit(f"{R}目标项目未执行 trellis init：缺少 .trellis/ 目录{N}")
+    if not trellis_version.is_file():
+        sys.exit(f"{R}目标项目未检测到有效的 trellis init 产物：缺少 .trellis/.version{N}")
 
 
 # ── 命令文件预处理 ──
@@ -500,7 +514,7 @@ def deploy_agents_md_routing(root: Path, dry_run: bool) -> bool:
 # ── 主流程 ──
 def main():
     p = argparse.ArgumentParser(
-        description="安装自定义工作流到 Trellis（默认同一项目同时部署已检测到的 Claude Code / OpenCode / Codex 适配层）"
+        description="安装自定义工作流到 Trellis Git 项目（默认同一项目同时部署已检测到的 Claude Code / OpenCode / Codex 适配层）"
     )
     p.add_argument("--project-root", type=Path, default=None, help="项目根目录（默认自动检测）")
     p.add_argument("--cli", type=str, default=None,
@@ -510,6 +524,7 @@ def main():
 
     src = Path(__file__).resolve().parent
     root = args.project_root or find_root(Path(__file__))
+    ensure_project_prereqs(root)
 
     # 检测 CLI 类型
     requested = [x.strip() for x in args.cli.split(",")] if args.cli else None

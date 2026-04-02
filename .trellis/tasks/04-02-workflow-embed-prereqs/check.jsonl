@@ -1,0 +1,5 @@
+{"file": ".opencode/commands/trellis/finish-work.md", "reason": "Finish work checklist"}
+{"file": ".opencode/commands/trellis/check.md", "reason": "Code quality check spec"}
+{"file": ".trellis/spec/docs/index.md", "reason": "检查文档路径、内部链接与说明口径一致性"}
+{"file": ".trellis/spec/scripts/python-conventions.md", "reason": "检查脚本 CLI 帮助、退出路径和提示信息是否一致"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "检查文档说明、安装器行为和平台 README 是否无漂移"}

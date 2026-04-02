@@ -16,9 +16,35 @@ OpenCode 已具备承载这套 workflow 的原生命令、rules、agents、skill
 - workflow 文档与必要补充：通过 `opencode.json` 的 `instructions` 引入
 - 通用辅助脚本：继续放在 `.trellis/scripts/workflow/` 或 `docs/workflows/.../commands/shell/`
 
-## 渐进性披露
+前置条件：
+
+- 目标项目本身必须是 Git 项目
+- 目标项目必须已经执行过 `trellis init`
+- 目标项目应能检测到 `trellis init` 产物，例如 `.trellis/.version`
+
+在此前提下，正确顺序是：先完成 `trellis init`，再执行当前 workflow 自带的安装脚本；原生命令与 agents 由安装脚本按平台方式落到目标项目。
+
+## 安装时序
+
+如果你的目标是让 OpenCode 在目标项目里直接可用这套 workflow，推荐做法是：
+
+1. 确认目标项目满足 `Git + trellis init`
+2. 运行：
+
+```bash
+/ops/softwares/python/bin/python3 \
+docs/workflows/新项目开发工作流/commands/install-workflow.py \
+--project-root <target-project> \
+--cli opencode
+```
+
+3. 安装完成后，在目标项目内直接使用 `/trellis:<phase>` 或 `trellis/<phase>`
+
+## 渐进性披露（安装后的使用层）
 
 OpenCode 下的 MCP / skills 配置不应全部堆进 `instructions`。
+
+这里的“渐进性披露”只描述：**当前 workflow 已经安装到目标项目之后**，OpenCode 在实际使用时如何按需展开上下文；它不替代前面的安装时序。
 
 推荐拆分：
 

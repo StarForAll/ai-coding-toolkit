@@ -1,0 +1,5 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/index.md", "reason": "Project spec index"}
+{"file": ".trellis/spec/docs/index.md", "reason": "文档更新需遵守仓库文档结构、链接和表述规范"}
+{"file": ".trellis/spec/scripts/python-conventions.md", "reason": "安装脚本若修改需符合 Python CLI 约定和错误处理规范"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "本次改动跨文档与安装脚本，需要同步源说明和行为边界"}

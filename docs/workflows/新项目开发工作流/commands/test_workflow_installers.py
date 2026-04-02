@@ -38,10 +38,16 @@ class WorkflowInstallerTests(unittest.TestCase):
         include_opencode: bool = False,
         include_codex: bool = False,
         include_agents_md: bool = False,
+        include_git: bool = True,
+        include_trellis: bool = True,
+        include_trellis_version: bool = True,
     ) -> Path:
         root = Path(tempfile.mkdtemp(prefix="workflow-installers-"))
+        if include_git:
+            (root / ".git").mkdir(parents=True)
         (root / ".claude" / "commands" / "trellis").mkdir(parents=True)
-        (root / ".trellis").mkdir(parents=True)
+        if include_trellis:
+            (root / ".trellis").mkdir(parents=True)
         (root / ".claude" / "commands" / "trellis" / "start.md").write_text(
             "# /trellis:start\n\n"
             "Original baseline start command for fixture testing.\n\n"
@@ -65,7 +71,8 @@ class WorkflowInstallerTests(unittest.TestCase):
             "```\n",
             encoding="utf-8",
         )
-        (root / ".trellis" / ".version").write_text("2.0.0\n", encoding="utf-8")
+        if include_trellis and include_trellis_version:
+            (root / ".trellis" / ".version").write_text("2.0.0\n", encoding="utf-8")
         if include_opencode:
             (root / ".opencode" / "commands" / "trellis").mkdir(parents=True)
             (root / ".opencode" / "commands" / "trellis" / "start.md").write_text(
@@ -142,6 +149,33 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         self.assertEqual(todo_path.read_text(encoding="utf-8"), "已有内容\n")
         self.assertIn("todo.txt 已存在", install.stdout)
+
+    def test_install_requires_git_repository(self) -> None:
+        fixture = self.create_fixture(include_git=False)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+
+        self.assertNotEqual(install.returncode, 0)
+        self.assertIn("目标项目不是 Git 仓库", install.stderr)
+
+    def test_install_requires_trellis_init(self) -> None:
+        fixture = self.create_fixture(include_trellis=False)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+
+        self.assertNotEqual(install.returncode, 0)
+        self.assertIn("目标项目未执行 trellis init", install.stderr)
+
+    def test_install_requires_trellis_version_marker(self) -> None:
+        fixture = self.create_fixture(include_trellis=True, include_trellis_version=False)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+
+        self.assertNotEqual(install.returncode, 0)
+        self.assertIn("缺少 .trellis/.version", install.stderr)
 
     def test_install_injects_agents_md_routing_and_multi_cli_assets(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
