@@ -1919,3 +1919,49 @@ Aligned workflow routing and trigger words, reverted negative optimizations, and
 ### Next Steps
 
 - None - task complete
+
+
+## Session 87: 补充工作流全局流转说明
+
+**Date**: 2026-04-02
+**Task**: 补充工作流全局流转说明
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项目 | 内容 |
+|------|------|
+| 目标 | 为 `docs/workflows/新项目开发工作流/` 生成一份通俗、全局、便于上手的流程执行说明 |
+| 主要产物 | 新增《工作流全局流转说明（通俗版）》并在通用演练文档顶部加入口链接 |
+| 可视化 | 生成一张覆盖主链、CLI 入口差异、常见分流点的 mind map |
+
+**Updated Files**:
+- `docs/workflows/新项目开发工作流/工作流全局流转说明（通俗版）.md`
+- `docs/workflows/新项目开发工作流/多CLI通用新项目完整流程演练.md`
+- `.trellis/tasks/04-02-workflow-big-picture-guide/prd.md`
+
+**Artifacts**:
+- `/home/xzc/Downloads/tmp/markmap-1775102964459.html`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `25f99a6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
