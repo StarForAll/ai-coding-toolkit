@@ -13,7 +13,7 @@ OpenCode 已具备承载这套 workflow 的原生命令、rules、agents、skill
 - workflow 命令：部署到 `.opencode/commands/trellis/`
 - workflow agents：部署到 `.opencode/agents/`
 - 项目级稳定规则：放在项目 `AGENTS.md`
-- workflow 文档与补充指引：通过 `opencode.json` 的 `instructions` 引入
+- workflow 文档与必要补充：通过 `opencode.json` 的 `instructions` 引入
 - 通用辅助脚本：继续放在 `.trellis/scripts/workflow/` 或 `docs/workflows/.../commands/shell/`
 
 ## 渐进性披露
@@ -28,7 +28,7 @@ OpenCode 下的 MCP / skills 配置不应全部堆进 `instructions`。
 
 其中：
 
-- `instructions` 负责把 workflow 文档挂进会话
+- `instructions` 只负责挂载**主入口文档**与**必要补充**
 - OpenCode 原生配置负责挂接平台侧能力
 - 长配置示例与平台细节只保留在平台展开层，不默认注入
 
@@ -90,28 +90,34 @@ OpenCode 的规则层不要只靠单一入口。
 推荐分工：
 
 - `AGENTS.md`：放项目级长期稳定规则，例如执行原则、验证门禁、语言策略、风险边界
-- `opencode.json.instructions`：挂载 workflow 文档、阶段说明、补充指引
+- `opencode.json.instructions`：挂载主入口文档与必要补充，不默认全量挂载所有阶段文档
 - 平台原生 MCP / provider 配置：负责把 workflow 需要的能力真正启用
 
-`instructions` 更适合加载“这套工作流文档本身”，而不是替代命令系统。
+`instructions` 更适合加载“主入口 + 当前会话真正需要的补充”，而不是替代命令系统。
+
+推荐默认策略：
+
+- 常驻挂载：`多CLI通用新项目完整流程演练.md`
+- 按需补充：`命令映射.md` 或当前正在执行的单个阶段命令
+- 不要默认把 `工作流总纲.md` 与全部阶段命令一次性挂进 `instructions`
 
 示例：
 
 ```json
 {
   "instructions": [
-    "docs/workflows/新项目开发工作流/工作流总纲.md",
-    "docs/workflows/新项目开发工作流/commands/feasibility.md",
-    "docs/workflows/新项目开发工作流/commands/brainstorm.md",
-    "docs/workflows/新项目开发工作流/commands/design.md",
-    "docs/workflows/新项目开发工作流/commands/plan.md",
-    "docs/workflows/新项目开发工作流/commands/test-first.md",
-    "docs/workflows/新项目开发工作流/commands/self-review.md",
-    "docs/workflows/新项目开发工作流/commands/check.md",
-    "docs/workflows/新项目开发工作流/commands/delivery.md"
+    "docs/workflows/新项目开发工作流/多CLI通用新项目完整流程演练.md",
+    "docs/workflows/新项目开发工作流/命令映射.md",
+    "docs/workflows/新项目开发工作流/commands/brainstorm.md"
   ]
 }
 ```
+
+上例表示：
+
+- 主入口文档始终可用
+- `命令映射.md` 作为必要补充，帮助做阶段路由
+- 当前只额外挂载 `brainstorm` 阶段，不默认把其他阶段一起塞进会话
 
 ### 3. Agents：用 `.opencode/agents/` 承载子代理
 
@@ -162,7 +168,7 @@ OpenCode 不应被写成“和 Claude 完全等价”，因为它在 hook / suba
 | Trellis 原生命令基线 | `.opencode/commands/trellis/start.md` `finish-work.md` `record-session.md` | 由 `trellis init` 提供；当前 workflow 只对 `start` / `record-session` 做增强，不重新分发完整基线 |
 | 子代理定义 | `.opencode/agents/*.md` | research / implement / check / debug / dispatch |
 | 项目长期规则 | `AGENTS.md` | 稳定执行规则、风险边界、语言策略 |
-| workflow 文档注入 | `opencode.json.instructions` | 补充 workflow 文档与阶段说明 |
+| workflow 文档注入 | `opencode.json.instructions` | 只挂主入口与必要补充，不默认全量挂载所有阶段文档 |
 | 通用脚本 | `.trellis/scripts/workflow/` 或 `commands/shell/` | 被命令或人工直接调用 |
 
 ## 何时仍可用脚本降级
@@ -253,4 +259,4 @@ OpenCode 对这套 workflow 的正确描述应该是：
 
 - **不是**“命令系统 TBD”
 - **不是**“只能靠 instructions + 自然语言触发”
-- 而是“具备原生命令 / rules / agents / skills 能力，但在 hook / subagent 注入链路上要单独验证”
+- 而是“具备原生命令 / rules / agents / skills 能力，`instructions` 只挂主入口和必要补充，hook / subagent 注入链路另行验证”

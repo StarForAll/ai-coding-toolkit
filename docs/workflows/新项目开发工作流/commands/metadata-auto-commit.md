@@ -15,3 +15,7 @@ Current rule:
 - `record-session` should run through the workflow helper
 
 This file is kept temporarily as a migration note to avoid stale references during the transition.
+
+Removal condition:
+
+- Delete this file once old references to `metadata-auto-commit` have been cleared from workflow docs, install/upgrade compatibility paths, and downstream project copies.

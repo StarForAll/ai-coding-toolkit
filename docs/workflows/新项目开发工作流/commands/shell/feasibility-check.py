@@ -26,7 +26,7 @@ def step_compliance() -> None:
     print("提示：如发现不合规，应立即终止项目。")
 
 
-TEMPLATE = """# 项目可行性评估
+ASSESSMENT_TEMPLATE = """# 项目可行性评估
 
 ## 概览
 - 总体决策：接 / 谈判后接 / 暂停 / 拒绝
@@ -135,7 +135,7 @@ def step_estimate(task_dir: Path) -> None:
         print("当前 assessment.md 内容：")
         print(assessment.read_text(encoding="utf-8"))
     else:
-        assessment.write_text(TEMPLATE, encoding="utf-8")
+        assessment.write_text(ASSESSMENT_TEMPLATE, encoding="utf-8")
         print(f"已创建 {assessment} 模板")
 
 
@@ -262,7 +262,7 @@ def step_validate(task_dir: Path) -> int:
     return 0
 
 
-RISK_ANALYSIS_PROMPT = """## 风险分析执行指引
+RISK_ANALYSIS_PROMPT = f"""## 风险分析执行指引
 
 请使用 `demand-risk-assessment` skill 执行以下风险评估流程：
 
@@ -299,105 +299,7 @@ RISK_ANALYSIS_PROMPT = """## 风险分析执行指引
 请将分析结果写入 `assessment.md`，格式如下：
 
 ```markdown
-# 项目可行性评估
-
-## 概览
-- 总体决策：接 / 谈判后接 / 暂停 / 拒绝
-- 是否可做：
-- 是否值得做：
-- 如何做更稳：
-- 是否允许进入 brainstorm：是 / 否
-- `delivery_control_track`: `hosted_deployment` / `trial_authorization` / `undecided`
-- `delivery_control_handover_trigger`: 例如 `final_payment_received`
-- `delivery_control_retained_scope`: 尾款前仍由开发者保留的环境、账号、密钥、部署控制范围；若无则写 `none`
-- 当前结论的前提：
-- 交付控制轨道：托管部署 / 试运行授权 / 未确定
-- 场景标签：
-- 总体置信度：高/中/低
-- 信息充分性：X/8
-- 承诺门：G0/G1/G2/G3
-
-## 关键字段快照
-| 关键字段 | 状态(明确/暗示/缺失/冲突) | 证据锚点 | 关键假设/缺口备注 |
-|----------|---------------------------|----------|------------------|
-| 范围边界 | ... | ... | ... |
-| 交付物清单 | ... | ... | ... |
-| 验收口径 | ... | ... | ... |
-| 付款结构 | ... | ... | ... |
-| 工期/里程碑 | ... | ... | ... |
-| 源码移交时点 | ... | ... | ... |
-| 管理员权限/密钥移交时点 | ... | ... | ... |
-| 托管部署或试运行授权方案 | ... | ... | ... |
-| 授权到期行为/永久授权触发条件 | ... | ... | ... |
-| 关键依赖 | ... | ... | ... |
-| 数据合规要点 | ... | ... | ... |
-| 决策/验收负责人 | ... | ... | ... |
-
-## Trial Authorization Terms（仅当 `delivery_control_track = trial_authorization`）
-- `trial_authorization_terms.validity`: ...
-- `trial_authorization_terms.clock_source_or_usage_basis`: ...
-- `trial_authorization_terms.expiration_behavior`: ...
-- `trial_authorization_terms.renewal_policy`: ...
-- `trial_authorization_terms.permanent_authorization_trigger`: ...
-
-## 双轨字段速查
-| 字段 | 最低要求 | 下游影响 |
-|------|----------|----------|
-| `delivery_control_track` | 外部项目必填，取值为 `hosted_deployment` / `trial_authorization` / `undecided` | 决定 design 阶段的交付治理 spec 选择 |
-| `delivery_control_handover_trigger` | 明确最终控制权移交触发条件 | 决定 plan / delivery 阶段何时允许最终移交 |
-| `delivery_control_retained_scope` | 写清尾款前保留的环境、账号、密钥、部署控制范围 | 决定 retained-control 交付边界 |
-| `trial_authorization_terms.*` | 若走 `trial_authorization` 则不得留空 | 决定授权管理 spec、到期行为和永久授权切换门禁 |
-
-## 红线检查
-✅ 通过 / ❌ 不通过 / ⚠️ 信息不足需补充
-- [检查项]: 通过/不通过/不足 - 证据锚点或缺口
-
-## 踩坑信号扫描
-- 命中: [话术/信号] - 证据锚点 - 影响
-
-## 冲突检测
-- 命中项: ...（证据锚点）
-- 影响: ...
-
-## 评分总览（如适用）
-总分(base): XX/100 | 区间(best~worst): AA~BB/100
-
-| 维度(权重) | 维度得分(0-5) | 贡献分(/100) | 置信度 | 证据/缺口/冲突 |
-|------------|---------------|--------------|--------|----------------|
-| 合规风险(30) | x | yy.y | ... | ... |
-| 可交付性(20) | x | yy.y | ... | ... |
-| 工期可行性(20) | x | yy.y | ... | ... |
-| 价格与收益匹配(20) | x | yy.y | ... | ... |
-| 协作与沟通风险(10) | x | yy.y | ... | ... |
-
-## Pre-mortem：最可能的失败链路
-1. ...
-2. ...
-3. ...
-
-## 风险登记表
-| 风险 | 影响类型 | 概率(1-5) | 影响(1-5) | 优先级(P*I) | 缓解动作 | Kill Criteria |
-|------|----------|-----------|-----------|--------------|----------|--------------|
-| ... | ... | ... | ... | ... | ... | ... |
-
-## 必须谈判条件
-- [ ] 条件 1（映射：失败链路/风险项）
-- [ ] 条件 2
-
-若项目采用双轨交付控制，上述条件至少应覆盖：
-
-- [ ] 选择哪条交付控制轨道：托管部署 / 试运行授权
-- [ ] 尾款比例、触发条件、逾期处理
-- [ ] 源码仓库、源码包、管理员账号、密钥、生产权限的移交时点
-- [ ] 若采用试运行授权：有效期、续期方式、到期行为、永久授权交付条件
-- [ ] 若采用托管部署：演示/试运行环境的访问范围、SLO、数据责任边界
-
-## 最小补充信息集
-1. ...（关联维度/为什么会改结论）
-
-## 下一步建议
-- 若允许进入 brainstorm：带着哪些边界与假设继续
-- 若不允许：补信息 / 谈判 / 终止
+{ASSESSMENT_TEMPLATE}
 ```
 
 ### 约束
