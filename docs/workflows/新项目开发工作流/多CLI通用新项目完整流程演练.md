@@ -51,6 +51,24 @@
 
 ## 使用前提
 
+### 这是嵌入在 Trellis 上的 workflow，不是替换 Trellis 基线
+
+这套 workflow 的默认使用前提是：**目标项目已经先执行过 `trellis init`**。
+
+因此这里说的“进入某个阶段”，不等于当前 workflow 会从零分发整套阶段命令，而是分成三类：
+
+- **Trellis 原生基线**：目标项目初始化后本来就存在的命令/技能
+- **workflow 新增分发**：当前 workflow 自己额外嵌入到目标项目的阶段命令或技能
+- **workflow 补丁增强**：保留 Trellis 原生命令/技能，再额外注入当前 workflow 的规则或收尾门禁
+
+在当前这套新项目 workflow 里，至少要记住：
+
+- `start` 是 **Trellis 原生命令 + workflow Phase Router 增强**
+- `finish-work` 是 **Trellis 原生命令/技能基线**，不是当前 workflow 新增分发的独立源文件
+- `record-session` 是 **Trellis 原生命令/技能基线 + workflow 元数据闭环补丁**
+
+如果忽略这层嵌入关系，就容易把“继承基线”误判成“workflow 漏了命令”。
+
 ### 多 CLI 同装，但入口协议不同
 
 同一个目标项目里，可以同时存在 Claude Code、OpenCode、Codex 的适配层，但三者入口协议不同：

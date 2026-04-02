@@ -60,7 +60,7 @@ YYYY-MM-DD-主题短名.md
 例如：
 
 ```text
-2026-03-31-record-session-closure-gap.md
+2026-03-31-learn-feedback-mechanism-sample.md
 2026-04-02-phase-router-misroute.md
 ```
 

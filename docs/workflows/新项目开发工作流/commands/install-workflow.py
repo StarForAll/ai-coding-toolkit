@@ -4,6 +4,13 @@
 默认行为：自动检测目标项目中已存在的 Claude Code / OpenCode / Codex 配置，
 并在同一个项目中同时部署对应适配层；`--cli` 仅用于过滤本次安装目标。
 
+重要边界：
+- 目标项目必须已经执行过 `trellis init`
+- 当前 workflow 是“嵌入 + 增强”模型，不会重建 Trellis 原生命令全集
+- `feasibility` 到 `delivery` 这类阶段资产由当前 workflow 分发
+- `start` / `finish-work` / `record-session` 默认来自 Trellis 基线，其中 `start` / `record-session`
+  允许由当前 workflow 追加补丁增强
+
 前提:
 - 目标项目已执行 trellis init，且存在对应 CLI 目录
 - Codex 至少存在 .agents/skills/ 或 .codex/skills/ 之一
@@ -39,6 +46,9 @@ _CLI_ALT_DIRS = {
 }
 _ALL_CLI_TYPES = ["claude", "opencode", "codex"]
 
+# 当前 workflow 新增分发的阶段命令。
+# `start` / `finish-work` / `record-session` 属于 Trellis 原生命令基线，
+# 不应在这里误加成“重新分发完整命令源”。
 NEW_COMMANDS = [
     "feasibility", "brainstorm", "design", "plan",
     "test-first", "self-review", "check", "delivery",
@@ -51,7 +61,8 @@ HELPER_SCRIPTS = [
     "record-session-helper.py",
 ]
 
-# Phase Router 精确检测标记
+# 对 Trellis 原生命令做增强时使用的补丁标记。
+# 当前 workflow 会增强 `start.md` 与 `record-session.md`，而不是重写它们的全部基线内容。
 _PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 _RECORD_SESSION_MARKER = "## Record-Session Metadata Closure `[AI]`"
 _RECORD_SESSION_INJECTION_MARKER = "### Step 2: One-Click Add Session"

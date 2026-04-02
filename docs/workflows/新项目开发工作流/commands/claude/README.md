@@ -59,6 +59,16 @@ Claude Code 的用户入口仍是项目命令：
 └── delivery.md
 ```
 
+上面这棵树表示的是**当前 workflow 新增分发的命令资产**，不是目标项目里的完整 Trellis 命令全集。
+
+因为这套 workflow 是在 `trellis init` 之后嵌入的，目标项目里还会保留 Trellis 原生命令，例如：
+
+- `start.md`：保留基线命令，再由 workflow 注入 Phase Router
+- `finish-work.md`：保留 Trellis 原生基线
+- `record-session.md`：保留基线命令，再由 workflow 注入元数据闭环补丁
+
+因此，不要把“当前 workflow 命令树只列到 `delivery`”理解成“目标项目没有 `finish-work` / `record-session`”。
+
 这层负责：
 
 - 显式阶段入口
@@ -144,6 +154,7 @@ Claude Code 的 hooks 是这套 workflow 的关键承载层之一。当前仓库
 | 工作流资产 | Claude Code 目标位置 | 说明 |
 |-----------|----------------------|------|
 | 阶段命令 | `.claude/commands/trellis/*.md` | 用户显式触发的 workflow 命令 |
+| Trellis 原生命令基线 | `.claude/commands/trellis/start.md` `finish-work.md` `record-session.md` | 由 `trellis init` 提供；当前 workflow 只对 `start` / `record-session` 做增强，不重新定义完整基线 |
 | 项目长期规则 | `AGENTS.md` | 稳定执行规则、证据门禁、能力优先级 |
 | 共享运行时基线 | `.claude/settings.json` | hooks 接线、默认 deny / shared baseline |
 | 本机权限扩展 | `.claude/settings.local.json` | MCP allowlist、本地调试权限 |

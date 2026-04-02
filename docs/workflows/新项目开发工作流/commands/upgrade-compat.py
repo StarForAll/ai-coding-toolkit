@@ -7,6 +7,11 @@
   python3 upgrade-compat.py --force              # 强制覆盖
   python3 upgrade-compat.py --project-root /path # 指定项目根目录
   python3 upgrade-compat.py --cli claude,opencode,codex  # 指定 CLI 类型
+
+重要边界：
+- 目标项目应已先执行 `trellis init`
+- 当前 workflow 只重新部署自身新增的阶段命令资产
+- `start.md` / `record-session.md` 属于 Trellis 基线命令，升级脚本负责恢复并重新注入 workflow 补丁
 """
 
 import argparse
@@ -41,6 +46,9 @@ _PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 _INJECTION_MARKER = "## Operation Types"
 _RECORD_SESSION_MARKER = "## Record-Session Metadata Closure `[AI]`"
 _RECORD_SESSION_INJECTION_MARKER = "### Step 2: One-Click Add Session"
+# 当前 workflow 自己分发的阶段命令。
+# `start` / `finish-work` / `record-session` 不是这里的新增命令，它们来自 Trellis 基线，
+# 其中 `start` / `record-session` 可能需要重新注入 workflow 补丁。
 NEW_COMMANDS = ["feasibility", "brainstorm", "design", "plan", "test-first", "self-review", "check", "delivery"]
 HELPER_SCRIPTS = [
     "feasibility-check.py",
