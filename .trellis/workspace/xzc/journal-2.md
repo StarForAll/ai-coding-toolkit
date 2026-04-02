@@ -1819,3 +1819,59 @@ Aligned workflow routing and trigger words, reverted negative optimizations, and
 ### Next Steps
 
 - None - task complete
+
+
+## Session 85: 工作流文档一致性与历史数据漂移修复
+
+**Date**: 2026-04-02
+**Task**: 工作流文档一致性与历史数据漂移修复
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 变更项 | 说明 |
+|--------|------|
+| CLI 适配范围声明 | 工作流总纲和命令映射顶部增加"原生适配范围：Claude Code / OpenCode / Codex" |
+| Cross-CLI 字段清理 | 8 个命令文件移除 Cursor/Gemini 引用 |
+| 文件结构重组 | cursor/gemini/codex-gemini 从主树移入"扩展适配"；新增 learn/、补丁文件到结构树 |
+| 术语统一 | "AI Workflow" → "AI 辅助开发实战工作流"；"CLI 原生挂接/运行时配置" → "CLI 原生配置层" |
+| 冗余消除 | 命令映射中能力路由矩阵改为引用工作流总纲 |
+| 编号修复 | §2.4.x → §2.4.5 |
+| 清理残留 | iFlow 引用删除；codex-gemini/ 过渡目录删除 |
+
+**修改文件**:
+- `docs/workflows/新项目开发工作流/工作流总纲.md`
+- `docs/workflows/新项目开发工作流/命令映射.md`
+- `docs/workflows/新项目开发工作流/commands/brainstorm.md`
+- `docs/workflows/新项目开发工作流/commands/check.md`
+- `docs/workflows/新项目开发工作流/commands/delivery.md`
+- `docs/workflows/新项目开发工作流/commands/design.md`
+- `docs/workflows/新项目开发工作流/commands/feasibility.md`
+- `docs/workflows/新项目开发工作流/commands/plan.md`
+- `docs/workflows/新项目开发工作流/commands/self-review.md`
+- `docs/workflows/新项目开发工作流/commands/test-first.md`
+- `docs/workflows/新项目开发工作流/commands/codex-gemini/README.md` (deleted)
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5bb472e` | (see git log) |
+| `d202f2c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
