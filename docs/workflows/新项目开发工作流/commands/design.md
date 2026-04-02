@@ -141,15 +141,20 @@ $TASK_DIR/design/
    - 写清真实会执行的 lint / typecheck / test / build / scan / delivery gate
    - 不允许继续保留“默认检查”“按项目自行运行”这类空泛表述
 
-4. **同步适配当前项目的 `/trellis:finish-work`**
+4. **在技术架构确认后，由用户明确 `test-first` 阶段的项目化输入**
+   - 这里要单独确认的是 `test-first` 阶段真正要执行的具体测试/验证命令
+   - 同时确认测试文件目录、命名约定，以及是否需要评估集 / fixture / contract test 一类额外产物
+   - 这一步不从自动化检查矩阵自动推导，也不允许把这些内容留到 `/trellis:test-first` 阶段再猜默认值
+
+5. **同步适配当前项目的 `/trellis:finish-work`**
    - 这是 `finish-work` 的主适配阶段
    - 必须基于任务 3 中已经写清的自动化检查矩阵完成项目化改写
 
-5. **同步适配当前项目的 `/trellis:record-session` 基线**
+6. **同步适配当前项目的 `/trellis:record-session` 基线**
    - 先明确当前项目的记录入口、是否必须走 helper、归档前置条件、哪些元数据允许自动提交
    - 先写清“什么情况下允许进入 record-session”
 
-6. **标记 `§4 plan` 之后是否需要对 `record-session` 做轻量校正**
+7. **标记 `§4 plan` 之后是否需要对 `record-session` 做轻量校正**
    - 若任务拆解后，发现“完成任务”的定义、归档节点、交付节点、会话记录粒度和 `§3.7` 基线不一致，再补一次轻量修正
    - 一般不需要在 `§4` 后再次大改 `finish-work`，除非计划阶段新增了新的强制检查门禁
 
@@ -170,8 +175,9 @@ $TASK_DIR/design/
 阶段结论：
 
 - `/trellis:finish-work` 的项目化适配主阶段是当前 `design -> spec 对齐` 阶段
+- `/trellis:test-first` 所需的具体测试/验证命令，也在当前阶段于技术架构确认后由用户先行确定
 - `/trellis:record-session` 的基线适配也在当前阶段完成，`§4 plan` 后仅允许做一次轻量校正
-- 进入 `/trellis:plan` 前，至少要完成上述 1-5；第 6 项只负责标记是否需要在 `plan` 后补一次轻量修正，不阻止进入 `plan`
+- 进入 `/trellis:plan` 前，至少要完成上述 1-6；第 7 项只负责标记是否需要在 `plan` 后补一次轻量修正，不阻止进入 `plan`
 
 根据你的意图：
 

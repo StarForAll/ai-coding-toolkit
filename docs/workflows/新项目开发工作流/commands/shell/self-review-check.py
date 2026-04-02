@@ -1,45 +1,28 @@
 #!/usr/bin/env python3
 """自审辅助检查。
 
-用法: python3 self-review-check.py [task_dir]
+用法: python3 self-review-check.py [task_dir] [--test-cmd CMD] [--lint-cmd CMD] [--typecheck-cmd CMD]
 """
 
 from __future__ import annotations
 
+import argparse
 import subprocess
 import sys
 from pathlib import Path
 
 
-PACKAGE_MANAGER_LOCKFILES = (
-    ("pnpm", "pnpm-lock.yaml"),
-    ("yarn", "yarn.lock"),
-    ("npm", "package-lock.json"),
-    ("bun", "bun.lockb"),
-)
-
-PACKAGE_MANAGER_COMMANDS = {
-    "pnpm": {
-        "测试状态": "pnpm test 2>/dev/null",
-        "Lint 状态": "pnpm lint 2>/dev/null",
-        "Type Check 状态": "pnpm type-check 2>/dev/null",
-    },
-    "yarn": {
-        "测试状态": "yarn test 2>/dev/null",
-        "Lint 状态": "yarn lint 2>/dev/null",
-        "Type Check 状态": "yarn type-check 2>/dev/null",
-    },
-    "npm": {
-        "测试状态": "npm test 2>/dev/null",
-        "Lint 状态": "npm run lint 2>/dev/null",
-        "Type Check 状态": "npm run type-check 2>/dev/null",
-    },
-    "bun": {
-        "测试状态": "bun test 2>/dev/null",
-        "Lint 状态": "bun run lint 2>/dev/null",
-        "Type Check 状态": "bun run type-check 2>/dev/null",
-    },
-}
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run self-review checks with project-confirmed commands.")
+    parser.add_argument("task_dir", nargs="?", default=".", help="Task directory used to inspect self-review.md")
+    parser.add_argument("--test-cmd", dest="test_cmd", help="User-confirmed test command for the current project")
+    parser.add_argument("--lint-cmd", dest="lint_cmd", help="User-confirmed lint command for the current project")
+    parser.add_argument(
+        "--typecheck-cmd",
+        dest="typecheck_cmd",
+        help="User-confirmed type-check command for the current project",
+    )
+    return parser.parse_args(argv)
 
 
 def run_check(cmd: str, label: str) -> bool | None:
@@ -62,36 +45,30 @@ def run_check(cmd: str, label: str) -> bool | None:
         return None
 
 
-def detect_package_manager(project_root: Path) -> str:
-    for manager, lockfile in PACKAGE_MANAGER_LOCKFILES:
-        if (project_root / lockfile).exists():
-            return manager
-    return "npm"
+def run_optional_check(cmd: str | None, label: str) -> bool | None:
+    if not cmd:
+        print(f"\n--- {label} ---")
+        print("⚠️  未提供已确认命令，跳过")
+        return None
+    return run_check(cmd, label)
 
 
 def main() -> int:
-    task_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(".")
+    args = parse_args(sys.argv[1:])
+    task_dir = Path(args.task_dir)
 
     print("=== 自审检查 ===")
 
+    print("说明：测试 / lint / type-check 命令必须来自技术架构确认后由用户明确的项目化输入。")
+
     # 1. 测试
-    project_root = Path(".")
-    has_package_json = (project_root / "package.json").exists()
-    if has_package_json:
-        package_manager = detect_package_manager(project_root)
-        commands = PACKAGE_MANAGER_COMMANDS[package_manager]
-        run_check(commands["测试状态"], "测试状态")
-    else:
-        print("\n--- 测试状态 ---")
-        print("⚠️  未检测到 package.json，跳过测试检查")
+    run_optional_check(args.test_cmd, "测试状态")
 
     # 2. Lint
-    if has_package_json:
-        run_check(commands["Lint 状态"], "Lint 状态")
+    run_optional_check(args.lint_cmd, "Lint 状态")
 
     # 3. Type check
-    if has_package_json:
-        run_check(commands["Type Check 状态"], "Type Check 状态")
+    run_optional_check(args.typecheck_cmd, "Type Check 状态")
 
     # 4. Git 状态
     print("\n--- Git 状态 ---")

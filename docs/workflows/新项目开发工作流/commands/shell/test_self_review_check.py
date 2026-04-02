@@ -19,12 +19,12 @@ SCRIPT = REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "comman
 
 
 class SelfReviewCheckScriptTests(unittest.TestCase):
-    def run_script(self, project_dir: Path) -> subprocess.CompletedProcess[str]:
+    def run_script(self, project_dir: Path, *extra_args: str) -> subprocess.CompletedProcess[str]:
         fake_bin = project_dir / "fake-bin"
         env = os.environ.copy()
         env["PATH"] = f"{fake_bin}{os.pathsep}{env.get('PATH', '')}"
         return subprocess.run(
-            [PYTHON, str(SCRIPT), str(project_dir)],
+            [PYTHON, str(SCRIPT), str(project_dir), *extra_args],
             cwd=project_dir,
             text=True,
             capture_output=True,
@@ -49,40 +49,37 @@ class SelfReviewCheckScriptTests(unittest.TestCase):
         )
         script.chmod(0o755)
 
-    def test_uses_npm_commands_when_package_lock_exists(self) -> None:
+    def test_runs_explicit_commands_from_arguments(self) -> None:
         with tempfile.TemporaryDirectory() as temp_root:
             project_dir = Path(temp_root)
-            (project_dir / "package.json").write_text("{}", encoding="utf-8")
-            (project_dir / "package-lock.json").write_text("{}", encoding="utf-8")
             self.write_package_manager_stub(project_dir, "npm")
+            self.write_package_manager_stub(project_dir, "pytest")
 
-            result = self.run_script(project_dir)
+            result = self.run_script(
+                project_dir,
+                "--test-cmd",
+                "pytest -q",
+                "--lint-cmd",
+                "npm run lint",
+                "--typecheck-cmd",
+                "npm run type-check",
+            )
 
             log_text = (project_dir / "commands.log").read_text(encoding="utf-8")
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        self.assertIn("npm test", log_text)
+        self.assertIn("pytest -q", log_text)
         self.assertIn("npm run lint", log_text)
         self.assertIn("npm run type-check", log_text)
 
-    def test_prefers_pnpm_when_multiple_lockfiles_exist(self) -> None:
+    def test_skips_checks_when_commands_are_not_provided(self) -> None:
         with tempfile.TemporaryDirectory() as temp_root:
             project_dir = Path(temp_root)
-            (project_dir / "package.json").write_text("{}", encoding="utf-8")
-            (project_dir / "package-lock.json").write_text("{}", encoding="utf-8")
-            (project_dir / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'", encoding="utf-8")
-            self.write_package_manager_stub(project_dir, "npm")
-            self.write_package_manager_stub(project_dir, "pnpm")
-
             result = self.run_script(project_dir)
 
-            log_text = (project_dir / "commands.log").read_text(encoding="utf-8")
-
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        self.assertIn("pnpm test", log_text)
-        self.assertIn("pnpm lint", log_text)
-        self.assertIn("pnpm type-check", log_text)
-        self.assertNotIn("npm run lint", log_text)
+        self.assertIn("未提供已确认命令，跳过", result.stdout)
+        self.assertFalse((project_dir / "commands.log").exists())
 
 
 if __name__ == "__main__":
