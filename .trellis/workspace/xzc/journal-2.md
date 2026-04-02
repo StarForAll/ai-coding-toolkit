@@ -1775,3 +1775,47 @@ Aligned workflow routing and trigger words, reverted negative optimizations, and
 ### Next Steps
 
 - None - task complete
+
+
+## Session 84: 工作流一致性审查与漂移修复
+
+**Date**: 2026-04-02
+**Task**: 工作流一致性审查与漂移修复
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Workflow review | 对 `docs/workflows/新项目开发工作流/` 做全量一致性审查，重点检查历史数据漂移、重复表述、术语与门禁口径统一性 |
+| OpenCode docs | 收敛 `opencode.json.instructions` 口径，明确只挂主入口和必要补充，不默认全量挂载全部阶段文档 |
+| Structure docs | 修正 `命令映射.md` 中文件结构说明，使其与当前 8 个阶段命令和补丁/迁移说明一致 |
+| Feasibility script | 将 `assessment.md` 模板收敛为单一来源，避免 `feasibility-check.py` 内部双份模板后续漂移 |
+| Migration note | 为 `metadata-auto-commit.md` 补充移除条件，明确其仅为兼容旧引用的过渡说明 |
+
+**Verification**:
+- `/ops/softwares/python/bin/python3 -m py_compile docs/workflows/新项目开发工作流/commands/shell/feasibility-check.py docs/workflows/新项目开发工作流/commands/install-workflow.py docs/workflows/新项目开发工作流/commands/uninstall-workflow.py docs/workflows/新项目开发工作流/commands/upgrade-compat.py`
+- `/ops/softwares/python/bin/python3 -m unittest docs.workflows.新项目开发工作流.commands.test_workflow_installers docs.workflows.新项目开发工作流.commands.shell.test_plan_validate docs.workflows.新项目开发工作流.commands.shell.test_self_review_check docs.workflows.新项目开发工作流.commands.shell.test_metadata_autocommit_guard`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d202f2c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
