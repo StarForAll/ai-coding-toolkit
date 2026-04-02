@@ -142,6 +142,38 @@ class PlanValidateScriptTests(unittest.TestCase):
         self.assertIn("等待中任务未写明有效等待原因", result.stdout)
         self.assertIn("结构验证未通过", result.stdout)
 
+    def test_non_waiting_task_with_empty_wait_reason_still_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            task_dir = Path(temp_root)
+            content = VALID_PLAN.replace(
+                "| TASK-A | 无 | 可开始 | 需求、接口、环境、资源已就绪 | 无 | 候选可并行 | 当前可与 TASK-A2 并行，不可与其后续依赖任务并行 |",
+                "| TASK-A | 无 | 可开始 | 需求、接口、环境、资源已就绪 |  | 候选可并行 | 当前可与 TASK-A2 并行，不可与其后续依赖任务并行 |",
+            )
+            self.write_plan(task_dir, content)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("开始条件与等待原因填写完整", result.stdout)
+        self.assertIn("task_plan.md 结构验证通过", result.stdout)
+
+    def test_bracket_references_are_treated_as_meaningful_text(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            task_dir = Path(temp_root)
+            content = (
+                VALID_PLAN
+                .replace("TASK-A 完成后可开始", "[TASK-A] 完成后可开始", 1)
+                .replace("等待 TASK-A 完成", "[TASK-A] 尚未完成", 1)
+                .replace("依赖 TASK-A 输出", "[TASK-A] 输出未就绪", 1)
+            )
+            self.write_plan(task_dir, content)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("并行属性与冲突说明填写完整", result.stdout)
+        self.assertIn("task_plan.md 结构验证通过", result.stdout)
+
     def test_all_completed_plan_still_passes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_root:
             task_dir = Path(temp_root)

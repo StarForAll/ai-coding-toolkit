@@ -3,12 +3,46 @@
 
 用法: python3 self-review-check.py [task_dir]
 """
+
+from __future__ import annotations
+
 import subprocess
 import sys
 from pathlib import Path
 
 
-def run_check(cmd, label):
+PACKAGE_MANAGER_LOCKFILES = (
+    ("pnpm", "pnpm-lock.yaml"),
+    ("yarn", "yarn.lock"),
+    ("npm", "package-lock.json"),
+    ("bun", "bun.lockb"),
+)
+
+PACKAGE_MANAGER_COMMANDS = {
+    "pnpm": {
+        "测试状态": "pnpm test 2>/dev/null",
+        "Lint 状态": "pnpm lint 2>/dev/null",
+        "Type Check 状态": "pnpm type-check 2>/dev/null",
+    },
+    "yarn": {
+        "测试状态": "yarn test 2>/dev/null",
+        "Lint 状态": "yarn lint 2>/dev/null",
+        "Type Check 状态": "yarn type-check 2>/dev/null",
+    },
+    "npm": {
+        "测试状态": "npm test 2>/dev/null",
+        "Lint 状态": "npm run lint 2>/dev/null",
+        "Type Check 状态": "npm run type-check 2>/dev/null",
+    },
+    "bun": {
+        "测试状态": "bun test 2>/dev/null",
+        "Lint 状态": "bun run lint 2>/dev/null",
+        "Type Check 状态": "bun run type-check 2>/dev/null",
+    },
+}
+
+
+def run_check(cmd: str, label: str) -> bool | None:
     """运行检查命令并报告结果。"""
     print(f"\n--- {label} ---")
     try:
@@ -28,26 +62,36 @@ def run_check(cmd, label):
         return None
 
 
-def main():
+def detect_package_manager(project_root: Path) -> str:
+    for manager, lockfile in PACKAGE_MANAGER_LOCKFILES:
+        if (project_root / lockfile).exists():
+            return manager
+    return "npm"
+
+
+def main() -> int:
     task_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(".")
 
     print("=== 自审检查 ===")
 
     # 1. 测试
-    has_package_json = Path("package.json").exists()
+    project_root = Path(".")
+    has_package_json = (project_root / "package.json").exists()
     if has_package_json:
-        run_check("pnpm test --reporter=dot 2>/dev/null", "测试状态")
+        package_manager = detect_package_manager(project_root)
+        commands = PACKAGE_MANAGER_COMMANDS[package_manager]
+        run_check(commands["测试状态"], "测试状态")
     else:
         print("\n--- 测试状态 ---")
         print("⚠️  未检测到 package.json，跳过测试检查")
 
     # 2. Lint
     if has_package_json:
-        run_check("pnpm lint 2>/dev/null", "Lint 状态")
+        run_check(commands["Lint 状态"], "Lint 状态")
 
     # 3. Type check
     if has_package_json:
-        run_check("pnpm type-check 2>/dev/null", "Type Check 状态")
+        run_check(commands["Type Check 状态"], "Type Check 状态")
 
     # 4. Git 状态
     print("\n--- Git 状态 ---")
@@ -72,7 +116,8 @@ def main():
     print()
     print("=== 自审检查完成 ===")
     print("下一步：根据以上结果生成 self-review.md 偏差清单")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

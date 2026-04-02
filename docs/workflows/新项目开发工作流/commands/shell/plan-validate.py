@@ -35,7 +35,7 @@ REQUIRED_MATRIX_COLUMNS = [
     "并行属性",
     "冲突说明",
 ]
-PLACEHOLDER_MARKERS = ("[", "待补充", "TBD")
+PLACEHOLDER_MARKERS = ("待补充", "TBD")
 
 
 def find_section_lines(lines: list[str], title: str) -> list[str]:
@@ -198,8 +198,6 @@ def main() -> int:
             if not has_meaningful_text(start_condition):
                 start_wait_ok = False
             if status == "等待中" and (not has_meaningful_text(wait_reason) or wait_reason == "无"):
-                start_wait_ok = False
-            if status != "等待中" and not wait_reason.strip():
                 start_wait_ok = False
             if not has_meaningful_text(conflict_reason):
                 conflict_ok = False
