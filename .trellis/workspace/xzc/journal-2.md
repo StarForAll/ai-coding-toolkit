@@ -1682,3 +1682,63 @@ Aligned workflow routing and trigger words, reverted negative optimizations, and
 ### Next Steps
 
 - None - task complete
+
+
+## Session 82: workflow: 收敛新项目工作流设计边界
+
+**Date**: 2026-04-02
+**Task**: workflow: 收敛新项目工作流设计边界
+**Branch**: `main`
+
+### Summary
+
+收敛新项目工作流文档中的路由口径、历史数据漂移边界与多 CLI 入口说明
+
+### Main Changes
+
+| Area | Change |
+|------|--------|
+| Task PRD | 重判 6 个质疑点，区分 frontmatter 问题、Codex 协议适配、阶段状态依赖与多 CLI 入口边界 |
+| Routing Wording | 将自然语言路由与 Phase Router 表述从“自动执行”收敛为“候选入口/阶段检测/需确认” |
+| Next-Step Output | 在映射层、阶段命令和 walkthrough 中统一补充“下一步推荐是输出契约，不是自动跳转保证” |
+| History Drift | 明确矩阵状态切换、archive、record-session 只作用于当前活动任务，不回填旧任务、旧 session 或已归档记录 |
+| Walkthroughs | 补齐多 CLI 通用 walkthrough 与完整流程演练中的收尾边界与历史数据约束 |
+
+**Updated Files**:
+- `.trellis/tasks/04-02-fix-workflow-defects/prd.md`
+- `docs/workflows/新项目开发工作流/命令映射.md`
+- `docs/workflows/新项目开发工作流/多CLI通用新项目完整流程演练.md`
+- `docs/workflows/新项目开发工作流/完整流程演练.md`
+- `docs/workflows/新项目开发工作流/commands/install-workflow.py`
+- `docs/workflows/新项目开发工作流/commands/start-patch-phase-router.md`
+- `docs/workflows/新项目开发工作流/commands/feasibility.md`
+- `docs/workflows/新项目开发工作流/commands/brainstorm.md`
+- `docs/workflows/新项目开发工作流/commands/design.md`
+- `docs/workflows/新项目开发工作流/commands/plan.md`
+- `docs/workflows/新项目开发工作流/commands/test-first.md`
+- `docs/workflows/新项目开发工作流/commands/self-review.md`
+- `docs/workflows/新项目开发工作流/commands/check.md`
+- `docs/workflows/新项目开发工作流/commands/delivery.md`
+
+**Verification**:
+- `python -m py_compile docs/workflows/新项目开发工作流/commands/install-workflow.py`
+- `/ops/softwares/python/bin/python3 docs/workflows/新项目开发工作流/commands/test_workflow_installers.py` → `Ran 13 tests ... OK`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `84a4719` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
