@@ -1,6 +1,6 @@
 # Claude Code 适配
 
-Claude Code 仍是当前 workflow 的原生命令基线平台，但这并不意味着所有 MCP / skills 细节都应直接写进命令正文或主 workflow 文档。
+Claude Code 是当前 workflow 维护的三种原生适配之一，并保留项目命令入口承载方式；但这并不意味着所有 MCP / skills 细节都应直接写进命令正文或主 workflow 文档。
 
 在这套 workflow 里，Claude Code 的正确承载模型是：
 
