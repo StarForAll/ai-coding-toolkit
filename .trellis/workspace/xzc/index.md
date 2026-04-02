@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 82
+- **Total Sessions**: 83
 - **Last Active**: 2026-04-02
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~1744 | Active |
+| `journal-2.md` | ~1777 | Active |
 | `journal-1.md` | ~1987 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 83 | 2026-04-02 | 澄清 workflow 嵌入模型并补齐说明 | `383c8a4` | `main` |
 | 82 | 2026-04-02 | workflow: 收敛新项目工作流设计边界 | `84a4719` | `main` |
 | 81 | 2026-04-01 | workflow: close fix-workflow-issues | `f4877835beebe8a7cf5df23926715d2507857391` | `main` |
 | 80 | 2026-04-01 | 工作流三维度优化与安装链路校验 | `97385ea` | `main` |

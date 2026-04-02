@@ -1742,3 +1742,36 @@ Aligned workflow routing and trigger words, reverted negative optimizations, and
 ### Next Steps
 
 - None - task complete
+
+
+## Session 83: 澄清 workflow 嵌入模型并补齐说明
+
+**Date**: 2026-04-02
+**Task**: 澄清 workflow 嵌入模型并补齐说明
+**Branch**: `main`
+
+### Summary
+
+修正新项目工作流对 Trellis 原生命令继承关系的说明，补充嵌入式 workflow 边界，并同步修正文档与安装升级脚本注释。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `383c8a4` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
