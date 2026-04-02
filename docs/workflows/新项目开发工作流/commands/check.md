@@ -210,6 +210,8 @@ tmp/multi-cli-review/<task-id>/
 
 **当前状态**: `/trellis:check` 已完成当前任务的补充审查判定。
 
+> 本节定义的是阶段完成后的推荐输出口径，用于帮助当前 CLI 或协作者说明下一步；它不是框架层自动跳转保证。
+
 根据判定结果：
 
 | 判定结果 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |

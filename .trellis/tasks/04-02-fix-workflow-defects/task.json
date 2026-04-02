@@ -1,10 +1,10 @@
 {
   "id": "fix-workflow-defects",
   "name": "fix-workflow-defects",
-  "title": "修复工作流脚本3个真实缺陷",
-  "description": "",
+  "title": "评估新项目工作流设计疑点并收敛修复建议",
+  "description": "仅针对 docs/workflows/新项目开发工作流/ 这套 workflow 设计资产，重新判断 6 个质疑点哪些成立、哪些只是边界或表述问题，并输出合理的文档级修复建议。不将 .trellis/scripts 或当前仓库运行时实现纳入修复范围。",
   "status": "planning",
-  "dev_type": "python",
+  "dev_type": "docs",
   "scope": null,
   "package": null,
   "priority": "P2",

@@ -115,6 +115,8 @@ $TASK_DIR/design/
 
 **当前状态**: 设计文档已输出，`design/` 目录已就绪。
 
+> 本节定义的是阶段完成后的推荐输出口径，用于帮助当前 CLI 或协作者说明下一步；它不是框架层自动跳转保证。
+
 技术架构已经过用户明确确认后，必须先完成 `工作流总纲 §3.7 技术架构确认后的项目 Spec 对齐`，才能进入 `/trellis:plan`。下列内容是执行摘要；若与总纲不一致，以 `§3.7` 为准。
 
 1. **根据技术架构，从 `trellis-library` 选择并导入合适 spec 到当前项目 `.trellis/spec/`**
@@ -182,4 +184,4 @@ $TASK_DIR/design/
 | 冻结后出现新增 / 修改 / 删除需求 | `§2.5 需求变更管理` | 同上 | 不直接吸收，获批后再回到受影响的最早阶段 |
 | 冻结后仅需纯澄清 | 留在当前阶段 | 留在当前阶段 | 仅限不改变范围、接口契约、验收标准、成本、工期 |
 | 检查跨层一致性 | `/trellis:check-cross-layer` | 检查跨层影响，或显式触发 `check-cross-layer` skill | 设计涉及多层时建议执行 |
-| 不确定下一步 | `/trellis:start` | 描述当前意图，或显式触发 `start` skill | 用 Phase Router / skill 路由自动检测 |
+| 不确定下一步 | `/trellis:start` | 描述当前意图，或显式触发 `start` skill | 用 Phase Router / skill 路由做阶段检测 |

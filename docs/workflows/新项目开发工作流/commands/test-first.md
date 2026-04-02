@@ -68,6 +68,8 @@ $TASK_DIR/tests/
 
 **当前状态**: 测试套件已生成，门禁已就绪。
 
+> 本节定义的是阶段完成后的推荐输出口径，用于帮助当前 CLI 或协作者说明下一步；它不是框架层自动跳转保证。
+
 根据你的意图：
 
 | 你的意图 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
@@ -77,4 +79,4 @@ $TASK_DIR/tests/
 | 冻结后出现新增 / 修改 / 删除需求 | `§2.5 需求变更管理` | 同上 | 先完成评估与基线更新，再回到受影响的最早阶段重建测试门禁 |
 | 仅测试策略需要调整，需求基线不变 | `/trellis:plan` | 回退任务拆解，或显式触发 `plan` skill | 回退到任务拆解调整验收标准或测试拆分方式 |
 | 需要并行实现多个任务 | Git worktree 或 `/trellis:parallel` | Git worktree，或显式触发 `parallel` skill | 如当前项目已安装 `/trellis:parallel` 则优先使用，否则手工用 worktree 隔离 |
-| 不确定下一步 | `/trellis:start` | 描述当前意图，或显式触发 `start` skill | 用 Phase Router / skill 路由自动检测 |
+| 不确定下一步 | `/trellis:start` | 描述当前意图，或显式触发 `start` skill | 用 Phase Router / skill 路由做阶段检测 |

@@ -1,108 +1,99 @@
-# 修复工作流脚本3个真实缺陷
+# 评估新项目工作流设计疑点并收敛修复建议
 
 ## Goal
 
-修复 `docs/workflows/新项目开发工作流/commands/shell/` 下的3个确认缺陷，确保工作流脚本在实际开发使用中行为正确。
+仅针对 `docs/workflows/新项目开发工作流/` 这套 workflow 设计资产，重新判断此前提出的 6 个质疑点哪些成立、哪些不成立、哪些只是边界或表述问题，并收敛出合理的文档级修复建议。
 
-## 缺陷清单
+## Scope
 
-### 缺陷 1（高）：plan-validate.py — 等待原因验证逻辑反转
+### 评估范围
 
-**位置**：`commands/shell/plan-validate.py:202-203`
+- `docs/workflows/新项目开发工作流/工作流总纲.md`
+- `docs/workflows/新项目开发工作流/命令映射.md`
+- `docs/workflows/新项目开发工作流/多CLI通用新项目完整流程演练.md`
+- `docs/workflows/新项目开发工作流/完整流程演练.md`
+- `docs/workflows/新项目开发工作流/commands/*.md`
+- `docs/workflows/新项目开发工作流/commands/*/README.md`
+- `docs/workflows/新项目开发工作流/commands/install-workflow.py`
 
-**现状代码**：
-```python
-if status != "等待中" and not wait_reason.strip():
-    start_wait_ok = False
-```
+### 不纳入范围
 
-**问题**：非等待状态（"可开始"、"进行中"、"已完成"）的任务，如果等待原因为空，就会被判定为验证失败。这在语义上是反的——只有"等待中"的任务才需要填写等待原因，非等待任务没有等待原因是正常的。
+- `.trellis/scripts/` 当前仓库运行时脚本
+- 当前仓库 task/status/context 的实际执行机制
+- `docs/workflows/新项目开发工作流/commands/shell/*.py` 的代码缺陷修复
+- 不在 `docs/workflows/新项目开发工作流/` 内的其他 workflow 或平台资产
 
-**实际影响**：用户按规范创建 `task_plan.md`，把"可开始"任务的等待原因留空（合理行为），`plan-validate.py` 报错，导致验证无法通过。
+## 待判断问题
 
-**修复方向**：删除 202-203 行（该逻辑无意义），或改为检查非等待任务不应有等待原因（互斥校验）。
+1. 自然语言路由的可靠性问题
+2. “下一步推荐”输出的执行问题
+3. Codex Skill 部署格式问题
+4. MCP/Skills 路由的实际执行问题
+5. 阶段状态管理的表达与依赖问题
+6. 多 CLI 入口差异处理问题
 
----
+## 判断原则
 
-### 缺陷 2（中）：plan-validate.py — 占位符标记子字符串匹配导致误判
+- 必须区分 `workflow 规范性要求` 与 `运行时机制描述`
+- 规范性要求可以保留强约束，不因“没有自动校验器”就直接判为错误
+- 只有当文档把提示层、映射层、适配层写成“框架已强制保证”的机制时，才判定为表述问题
+- 不以当前仓库 `.trellis/scripts` 是否实现某个机制，反推 workflow 设计本身有缺陷
 
-**位置**：`commands/shell/plan-validate.py:38, 64`
+## 当前判断结论
 
-**现状代码**：
-```python
-PLACEHOLDER_MARKERS = ("[", "待补充", "TBD")
+### 1. 自然语言路由可靠性
 
-def has_meaningful_text(value: str) -> bool:
-    stripped = value.strip()
-    if not stripped:
-        return False
-    return not any(marker in stripped for marker in PLACEHOLDER_MARKERS)
-```
+- `部分成立`
+- 问题不在“不能这样设计”，而在部分文案已带有“确定匹配后直接执行”的机制化口吻，容易把候选入口映射误写成硬路由器
 
-**问题**：`"["` 作为占位符标记使用 `in` 子字符串匹配，导致任何包含 `[` 的合法内容都被误判为占位符。在任务执行矩阵中，开始条件写成 `[T1] 完成后开始`（引用任务 ID）是自然用法，但会被 `has_meaningful_text` 判定为无意义文本，触发验证失败。
+### 2. “下一步推荐”输出
 
-**实际影响**：用户在开始条件、等待原因、冲突说明等字段中使用方括号引用（`[T1]`、`[Phase 2]`），验证误报失败。
+- `基本不成立`
+- 它更接近阶段命令的推荐输出契约；需要补清“推荐口径不等于框架自动跳转保证”，而不是削弱这项要求本身
 
-**修复方向**：将 `"["` 改为更精确的占位符模式匹配，例如检查整个值是否匹配 `[xxx]` 格式（全值被方括号包裹），而非包含 `[` 即判定。或者从 PLACEHOLDER_MARKERS 中移除 `"["`，仅保留 `"待补充"` 和 `"TBD"`。
+### 3. Codex Skill 部署格式
 
----
+- `需拆分判断`
+- 若质疑点是“缺少 YAML frontmatter”，则 `不成立`；若质疑点是“直接复用阶段命令正文后，Codex skill 入口协议仍混入 /trellis:xxx 口径”，则 `部分成立`
 
-### 缺陷 3（中）：self-review-check.py — 硬编码 pnpm 包管理器
+### 4. MCP/Skills 路由
 
-**位置**：`commands/shell/self-review-check.py:39, 46, 50`
+- `部分成立`
+- 它是阶段规则与能力优先级设计，不是自动调度器；若文档写得像自动触发，则需修正表述
 
-**现状代码**：
-```python
-run_check("pnpm test --reporter=dot 2>/dev/null", "测试状态")
-run_check("pnpm lint 2>/dev/null", "Lint 状态")
-run_check("pnpm type-check 2>/dev/null", "Type Check 状态")
-```
+### 5. 阶段状态管理
 
-**问题**：自审检查脚本硬编码 `pnpm` 作为包管理器。该工作流系统设计上支持多 CLI、多项目部署，但自审脚本假设所有项目都用 pnpm。对于使用 npm/yarn/bun 的项目，这些检查命令会失败或产生误导性结果。
+- `成立`
+- 问题不在当前仓库运行时是否实现，而在部分 workflow 文档直接依赖特定文件名、状态枚举与执行矩阵表达，超出了纯设计层的抽象边界
 
-**实际影响**：非 pnpm 项目执行自审时，测试/lint/type-check 三项检查全部失败或报"命令不存在"，用户无法获得有效的自审反馈。
+### 6. 多 CLI 入口差异
 
-**修复方向**：检测项目实际使用的包管理器（通过 lockfile 类型判断：`pnpm-lock.yaml` → pnpm，`yarn.lock` → yarn，`package-lock.json` → npm，`bun.lockb` → bun），然后使用对应的命令。
-
-## 修复范围
-
-### 涉及文件
-
-| 文件 | 修改内容 |
-|------|----------|
-| `docs/workflows/新项目开发工作流/commands/shell/plan-validate.py` | 修复缺陷1、缺陷2 |
-| `docs/workflows/新项目开发工作流/commands/shell/self-review-check.py` | 修复缺陷3 |
-
-### 不涉及文件
-
-- 命令文档（`.md` 文件）中的 `<WORKFLOW_DIR>` 占位符 —— 部署时由 `install-workflow.py` 自动替换
-- `feasibility-check.py` 的反引号 regex —— 匹配模板预期格式，非缺陷
-- `record-session-helper.py` 的 `raise SystemExit` —— 合法 Python 退出模式
-- §3.7 跨文档循环引用 —— 文档组织改进，不影响脚本执行
+- `部分成立`
+- 现有文档已写出多 CLI 入口差异；剩余问题主要是同一阶段源文档在复用到 Codex skill 时仍保留命令口径，需进一步补清“共存适配”与“原生入口协议”的边界
 
 ## Acceptance Criteria
 
-- [ ] plan-validate.py: 删除或修复 202-203 行的逻辑反转问题
-- [ ] plan-validate.py: 修复占位符标记误判问题（方括号合法使用不被误判）
-- [ ] self-review-check.py: 自动检测包管理器（pnpm/yarn/npm/bun）并执行对应命令
-- [ ] 所有修复保持向后兼容，不破坏现有功能
-- [ ] 修复后脚本在 Python 3.8+ 环境下可正常运行
+- [ ] 6 个质疑点都给出基于 workflow 设计层的重新判断
+- [ ] 明确区分“规范性强要求”与“机制性表述”
+- [ ] 输出的建议只落在 `docs/workflows/新项目开发工作流/` 范围内
+- [ ] 不再把 `.trellis/scripts` 或当前仓库运行时实现纳入修复范围
+- [ ] 形成可执行的文档级修复清单：保留、微调、回退
 
 ## Definition of Done
 
-- 修复代码已提交
-- 修复后的脚本通过基本功能测试
-- 相关文档无需更新（纯缺陷修复，无行为变更需说明）
+- 当前任务描述与实际工作范围一致
+- PRD 已反映修正后的判断框架
+- 后续所有修改都严格限制在 workflow 设计资产内
 
 ## Out of Scope
 
-- 新增功能或增强
-- 重构或代码风格优化
-- 文档内容改进
-- 其他未确认的"潜在问题"
+- 修改当前仓库 Trellis 运行时脚本
+- 为 workflow 新增真实运行时框架能力
+- 对 `commands/shell/*.py` 做代码缺陷修复
+- 脱离这 6 个问题另起一套重构
 
 ## Technical Notes
 
-- 包管理器检测优先级：`pnpm-lock.yaml` > `yarn.lock` > `package-lock.json` > `bun.lockb`
-- 如果未检测到 lockfile，默认使用 `npm`（最通用）
-- 修复应保持脚本无外部依赖（Python stdlib only）
+- 当前重点不是“削弱所有强要求”，而是修正“把规范写成已强制实现”的句子
+- 平台展开层 README 可以明确最小验证边界
+- 阶段命令文档中的输出契约、门禁、冻结规则，原则上仍可保留强约束

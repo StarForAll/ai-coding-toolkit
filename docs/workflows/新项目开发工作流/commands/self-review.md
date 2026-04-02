@@ -66,6 +66,8 @@ python3 <WORKFLOW_DIR>/commands/shell/self-review-check.py
 
 **当前状态**: 自审完成，`self-review.md`（偏差清单）已生成。
 
+> 本节定义的是阶段完成后的推荐输出口径，用于帮助当前 CLI 或协作者说明下一步；它不是框架层自动跳转保证。
+
 根据偏差清单结论：
 
 | 偏差清单结论 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
