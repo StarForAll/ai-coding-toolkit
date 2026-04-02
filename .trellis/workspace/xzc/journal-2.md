@@ -1965,3 +1965,36 @@ Aligned workflow routing and trigger words, reverted negative optimizations, and
 ### Next Steps
 
 - None - task complete
+
+
+## Session 88: workflow: fix test-first command determination
+
+**Date**: 2026-04-02
+**Task**: workflow: fix test-first command determination
+**Branch**: `main`
+
+### Summary
+
+Align workflow docs so test-first commands are confirmed after architecture is fixed and consumed consistently by test-first, self-review, and delivery.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9683551` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
