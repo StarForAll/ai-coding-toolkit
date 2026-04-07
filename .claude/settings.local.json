@@ -122,7 +122,9 @@
       "Bash(/ops/softwares/python/bin/python3 ./.trellis/scripts/task.py start .trellis/tasks/04-01-workflow-cli-native-commands)",
       "Bash(git checkout:*)",
       "Bash(/ops/softwares/python/bin/python3 -c \"import ast; ast.parse\\(open\\('docs/workflows/新项目开发工作流/commands/install-workflow.py'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
-      "Bash(/ops/softwares/python/bin/python3 ./.trellis/scripts/task.py archive 04-01-workflow-cli-native-commands)"
+      "Bash(/ops/softwares/python/bin/python3 ./.trellis/scripts/task.py archive 04-01-workflow-cli-native-commands)",
+      "Read(//usr/lib/**)",
+      "Bash(nvidia-smi)"
     ]
   }
 }

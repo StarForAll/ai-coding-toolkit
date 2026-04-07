@@ -11,7 +11,7 @@
 重要边界：
 - 目标项目应已先执行 `trellis init`
 - 当前 workflow 只重新部署自身新增的阶段命令资产
-- `start.md` / `record-session.md` 属于 Trellis 基线命令，升级脚本负责恢复并重新注入 workflow 补丁
+- `start.md` / `finish-work.md` / `record-session.md` 属于 Trellis 基线命令，升级脚本负责恢复并重新注入 workflow 补丁
 """
 
 import argparse
@@ -44,11 +44,14 @@ def info(message: str) -> None:
 # ── 常量 ──
 _PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 _INJECTION_MARKER = "## Operation Types"
+_FINISH_WORK_MARKER = "<!-- finish-work-projectization-patch -->"
+_FINISH_WORK_START_HEADING = "### 1. Code Quality"
+_FINISH_WORK_END_HEADING = "### 1.5. Test Coverage"
 _RECORD_SESSION_MARKER = "## Record-Session Metadata Closure `[AI]`"
 _RECORD_SESSION_INJECTION_MARKER = "### Step 2: One-Click Add Session"
 # 当前 workflow 自己分发的阶段命令。
 # `start` / `finish-work` / `record-session` 不是这里的新增命令，它们来自 Trellis 基线，
-# 其中 `start` / `record-session` 可能需要重新注入 workflow 补丁。
+# 其中 `start` / `finish-work` / `record-session` 可能需要重新注入 workflow 补丁。
 NEW_COMMANDS = ["feasibility", "brainstorm", "design", "plan", "test-first", "self-review", "check", "delivery"]
 HELPER_SCRIPTS = [
     "feasibility-check.py",
@@ -111,6 +114,41 @@ def has_record_session_patch(record_session_md: Path) -> bool:
     return _RECORD_SESSION_MARKER in record_session_md.read_text(encoding="utf-8")
 
 
+def has_finish_work_patch(finish_work_path: Path) -> bool:
+    if not finish_work_path.exists():
+        return False
+    return _FINISH_WORK_MARKER in finish_work_path.read_text(encoding="utf-8")
+
+
+def resolve_codex_skills_dir(root: Path) -> Path | None:
+    skills_dir = root / ".agents" / "skills"
+    if skills_dir.is_dir():
+        return skills_dir
+    skills_dir = root / ".codex" / "skills"
+    if skills_dir.is_dir():
+        return skills_dir
+    return None
+
+
+def build_finish_work_content(content: str, patch_text: str) -> str | None:
+    if _FINISH_WORK_MARKER in content:
+        return content
+
+    start_idx = content.find(_FINISH_WORK_START_HEADING)
+    end_idx = content.find(_FINISH_WORK_END_HEADING)
+    if start_idx == -1:
+        return None
+    if end_idx == -1 or end_idx <= start_idx:
+        next_heading_idx = content.find("\n### ", start_idx + len(_FINISH_WORK_START_HEADING))
+        if next_heading_idx == -1:
+            return None
+        end_idx = next_heading_idx + 1
+
+    prefix = content[:start_idx]
+    suffix = content[end_idx:].lstrip("\n")
+    return prefix + patch_text.rstrip() + "\n\n" + suffix
+
+
 def load_install_record(rec_file: Path) -> dict:
     if not rec_file.exists():
         return {}
@@ -125,6 +163,7 @@ def load_install_record(rec_file: Path) -> dict:
 def detect_conflicts_claude(dst_cmds: Path, dst_scripts: Path) -> int:
     conflicts = 0
     start = dst_cmds / "start.md"
+    finish_work = dst_cmds / "finish-work.md"
     record_session = dst_cmds / "record-session.md"
 
     if not has_phase_router(start):
@@ -141,7 +180,19 @@ def detect_conflicts_claude(dst_cmds: Path, dst_scripts: Path) -> int:
     else:
         ok("[Claude] 所有命令存在")
 
-    if not has_record_session_patch(record_session):
+    if not finish_work.exists():
+        err("[Claude] finish-work.md: 文件缺失")
+        conflicts += 1
+    elif not has_finish_work_patch(finish_work):
+        err("[Claude] finish-work.md: 项目化补丁缺失")
+        conflicts += 1
+    else:
+        ok("[Claude] finish-work.md: 项目化补丁正常")
+
+    if not record_session.exists():
+        err("[Claude] record-session.md: 文件缺失")
+        conflicts += 1
+    elif not has_record_session_patch(record_session):
         err("[Claude] record-session.md: 元数据闭环说明缺失")
         conflicts += 1
     else:
@@ -162,6 +213,7 @@ def detect_conflicts_claude(dst_cmds: Path, dst_scripts: Path) -> int:
 def detect_conflicts_opencode(dst_cmds: Path, dst_scripts: Path) -> int:
     conflicts = 0
     start = dst_cmds / "start.md"
+    finish_work = dst_cmds / "finish-work.md"
     record_session = dst_cmds / "record-session.md"
 
     if not has_phase_router(start):
@@ -178,7 +230,19 @@ def detect_conflicts_opencode(dst_cmds: Path, dst_scripts: Path) -> int:
     else:
         ok("[OpenCode] 所有命令存在")
 
-    if not has_record_session_patch(record_session):
+    if not finish_work.exists():
+        err("[OpenCode] finish-work.md: 文件缺失")
+        conflicts += 1
+    elif not has_finish_work_patch(finish_work):
+        err("[OpenCode] finish-work.md: 项目化补丁缺失")
+        conflicts += 1
+    else:
+        ok("[OpenCode] finish-work.md: 项目化补丁正常")
+
+    if not record_session.exists():
+        err("[OpenCode] record-session.md: 文件缺失")
+        conflicts += 1
+    elif not has_record_session_patch(record_session):
         err("[OpenCode] record-session.md: 元数据闭环说明缺失")
         conflicts += 1
     else:
@@ -191,10 +255,8 @@ def detect_conflicts_opencode(dst_cmds: Path, dst_scripts: Path) -> int:
 # ── Codex 冲突检测 ──
 def detect_conflicts_codex(root: Path) -> int:
     conflicts = 0
-    skills_dir = root / ".agents" / "skills"
-    if not skills_dir.is_dir():
-        skills_dir = root / ".codex" / "skills"
-    if not skills_dir.is_dir():
+    skills_dir = resolve_codex_skills_dir(root)
+    if skills_dir is None:
         warn("[Codex] 未找到 skills 目录")
         return 0
 
@@ -205,6 +267,14 @@ def detect_conflicts_codex(root: Path) -> int:
         conflicts += len(missing_skills)
     else:
         ok("[Codex] 所有 skills 存在")
+
+    finish_work_skill = skills_dir / "finish-work" / "SKILL.md"
+    if finish_work_skill.exists():
+        if has_finish_work_patch(finish_work_skill):
+            ok("[Codex] finish-work skill: 项目化补丁正常")
+        else:
+            err("[Codex] finish-work skill: 项目化补丁缺失")
+            conflicts += 1
 
     hooks_json = root / ".codex" / "hooks.json"
     if hooks_json.exists():
@@ -224,12 +294,16 @@ def detect_conflicts_codex(root: Path) -> int:
 
 
 # ── 备份 ──
-def backup_deployed_state(dst_cmds: Path, start: Path) -> None:
+def backup_deployed_state(dst_cmds: Path) -> None:
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
     backup_dir = dst_cmds / f".backup-upgrade-{ts}"
     backup_dir.mkdir(parents=True, exist_ok=True)
+    start = dst_cmds / "start.md"
     if start.exists():
         shutil.copy2(start, backup_dir / "start.md")
+    finish_work = dst_cmds / "finish-work.md"
+    if finish_work.exists():
+        shutil.copy2(finish_work, backup_dir / "finish-work.md")
     record_session = dst_cmds / "record-session.md"
     if record_session.exists():
         shutil.copy2(record_session, backup_dir / "record-session.md")
@@ -268,10 +342,8 @@ def deploy_scripts(src: Path, dst_scripts: Path) -> None:
 
 
 def deploy_codex_skills(src: Path, root: Path) -> None:
-    skills_dir = root / ".agents" / "skills"
-    if not skills_dir.is_dir():
-        skills_dir = root / ".codex" / "skills"
-    if not skills_dir.is_dir():
+    skills_dir = resolve_codex_skills_dir(root)
+    if skills_dir is None:
         warn("[Codex] 未找到 skills 目录，跳过")
         return
 
@@ -307,6 +379,18 @@ def restore_start_from_original_backup(dst_cmds: Path, start: Path) -> bool:
     return True
 
 
+def restore_codex_finish_work(skills_dir: Path) -> bool:
+    backup_path = skills_dir / ".backup-original" / "finish-work" / "SKILL.md"
+    target_path = skills_dir / "finish-work" / "SKILL.md"
+    if not backup_path.exists():
+        err("缺少 .backup-original/finish-work/SKILL.md，无法执行强制恢复")
+        return False
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(backup_path, target_path)
+    ok("[Codex] finish-work skill 已从 .backup-original 恢复")
+    return True
+
+
 def inject_phase_router(src: Path, start: Path) -> bool:
     patch = src / "start-patch-phase-router.md"
     if not patch.exists():
@@ -324,6 +408,30 @@ def inject_phase_router(src: Path, start: Path) -> bool:
     before, after = content.split(_INJECTION_MARKER, 1)
     start.write_text(before + patch.read_text(encoding="utf-8") + "\n" + _INJECTION_MARKER + after, encoding="utf-8")
     ok("Phase Router 已注入")
+    return True
+
+
+def inject_finish_work_patch(src: Path, finish_work_path: Path, target_label: str) -> bool:
+    patch = src / "finish-work-patch-projectization.md"
+    if not patch.exists():
+        err("finish-work-patch-projectization.md 缺失，无法恢复 finish-work 项目化补丁")
+        return False
+    if not finish_work_path.exists():
+        err(f"{target_label} 不存在，无法恢复项目化补丁")
+        return False
+
+    content = finish_work_path.read_text(encoding="utf-8")
+    if _FINISH_WORK_MARKER in content:
+        ok(f"{target_label} 项目化补丁已存在")
+        return True
+
+    new_content = build_finish_work_content(content, patch.read_text(encoding="utf-8"))
+    if new_content is None:
+        warn(f"{target_label} 中未找到可替换的 Code Quality 区块，无法自动恢复项目化补丁")
+        return False
+
+    finish_work_path.write_text(new_content, encoding="utf-8")
+    ok(f"{target_label} 项目化补丁已注入")
     return True
 
 
@@ -467,16 +575,22 @@ def main() -> int:
         if cli_type == "claude":
             dst_cmds = root / ".claude" / "commands" / "trellis"
             start = dst_cmds / "start.md"
+            finish_work = dst_cmds / "finish-work.md"
             record_session = dst_cmds / "record-session.md"
-            backup_deployed_state(dst_cmds, start)
+            backup_deployed_state(dst_cmds)
             deploy_commands(src, dst_cmds)
             if args.mode == "force":
                 if not restore_start_from_original_backup(dst_cmds, start):
+                    return 1
+                if not restore_command_from_original_backup(dst_cmds, "finish-work"):
                     return 1
                 if not restore_command_from_original_backup(dst_cmds, "record-session"):
                     return 1
             if not has_phase_router(start) and not inject_phase_router(src, start):
                 err("[Claude] Phase Router 恢复失败")
+                return 1
+            if not has_finish_work_patch(finish_work) and not inject_finish_work_patch(src, finish_work, "finish-work.md"):
+                err("[Claude] finish-work 项目化补丁恢复失败")
                 return 1
             if not has_record_session_patch(record_session) and not inject_record_session_patch(src, record_session):
                 err("[Claude] record-session 元数据闭环恢复失败")
@@ -484,22 +598,39 @@ def main() -> int:
         elif cli_type == "opencode":
             dst_cmds = root / ".opencode" / "commands" / "trellis"
             start = dst_cmds / "start.md"
+            finish_work = dst_cmds / "finish-work.md"
             record_session = dst_cmds / "record-session.md"
-            backup_deployed_state(dst_cmds, start)
+            backup_deployed_state(dst_cmds)
             deploy_commands(src, dst_cmds)
             if args.mode == "force":
                 if not restore_start_from_original_backup(dst_cmds, start):
+                    return 1
+                if not restore_command_from_original_backup(dst_cmds, "finish-work"):
                     return 1
                 if not restore_command_from_original_backup(dst_cmds, "record-session"):
                     return 1
             if not has_phase_router(start) and not inject_phase_router(src, start):
                 err("[OpenCode] Phase Router 恢复失败")
                 return 1
+            if not has_finish_work_patch(finish_work) and not inject_finish_work_patch(src, finish_work, "finish-work.md"):
+                err("[OpenCode] finish-work 项目化补丁恢复失败")
+                return 1
             if not has_record_session_patch(record_session) and not inject_record_session_patch(src, record_session):
                 err("[OpenCode] record-session 元数据闭环恢复失败")
                 return 1
         elif cli_type == "codex":
             deploy_codex_skills(src, root)
+            skills_dir = resolve_codex_skills_dir(root)
+            if skills_dir is None:
+                continue
+            finish_work_skill = skills_dir / "finish-work" / "SKILL.md"
+            if args.mode == "force" and finish_work_skill.exists():
+                if not restore_codex_finish_work(skills_dir):
+                    return 1
+            if finish_work_skill.exists() and not has_finish_work_patch(finish_work_skill):
+                if not inject_finish_work_patch(src, finish_work_skill, "finish-work skill"):
+                    err("[Codex] finish-work 项目化补丁恢复失败")
+                    return 1
 
     # 辅助脚本
     deploy_scripts(src, dst_scripts)

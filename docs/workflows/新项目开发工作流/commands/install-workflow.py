@@ -5,14 +5,14 @@
 并在同一个项目中同时部署对应适配层；`--cli` 仅用于过滤本次安装目标。
 
 重要边界：
-- 目标项目必须是 Git 仓库，且已经执行过 `trellis init`
+- 目标项目必须是 Git 仓库，`origin` 至少有两个 push URL，且已经执行过 `trellis init`
 - 当前 workflow 是“嵌入 + 增强”模型，不会重建 Trellis 原生命令全集
 - `feasibility` 到 `delivery` 这类阶段资产由当前 workflow 分发
-- `start` / `finish-work` / `record-session` 默认来自 Trellis 基线，其中 `start` / `record-session`
-  允许由当前 workflow 追加补丁增强
+- `start` / `finish-work` / `record-session` 默认来自 Trellis 基线，允许由当前 workflow 追加补丁增强
+- 安装器会自动导入 `pack.requirements-discovery-foundation`，并删除 `00-bootstrap-guidelines`
 
 前提:
-- 目标项目是 Git 仓库，已执行 trellis init，且存在对应 CLI 目录
+- 目标项目是 Git 仓库，`origin` 至少有两个 push URL，已执行 trellis init，且存在对应 CLI 目录
 - Codex 至少存在 .agents/skills/ 或 .codex/skills/ 之一
 
 用法: python3 install-workflow.py [--project-root /path/to/project] [--cli claude,opencode,codex] [--dry-run]
@@ -20,6 +20,7 @@
 """
 import argparse
 import json
+import subprocess
 import shutil
 import sys
 from datetime import datetime, timezone
@@ -62,12 +63,20 @@ HELPER_SCRIPTS = [
 ]
 
 # 对 Trellis 原生命令做增强时使用的补丁标记。
-# 当前 workflow 会增强 `start.md` 与 `record-session.md`，而不是重写它们的全部基线内容。
+# 当前 workflow 会增强 `start.md`、`finish-work.md` 与 `record-session.md`，
+# 而不是重写它们的全部基线内容。
 _PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
+_FINISH_WORK_MARKER = "<!-- finish-work-projectization-patch -->"
+_FINISH_WORK_START_HEADING = "### 1. Code Quality"
+_FINISH_WORK_END_HEADING = "### 1.5. Test Coverage"
 _RECORD_SESSION_MARKER = "## Record-Session Metadata Closure `[AI]`"
 _RECORD_SESSION_INJECTION_MARKER = "### Step 2: One-Click Add Session"
 _TODO_FILE_NAME = "todo.txt"
 _TODO_DEFAULT_LINE = "文档内容需要和实际当前的代码同步\n"
+_REQUIREMENTS_FOUNDATION_PACK = "pack.requirements-discovery-foundation"
+_BOOTSTRAP_TASK_NAME = "00-bootstrap-guidelines"
+_ORIGIN_REMOTE_NAME = "origin"
+_MIN_ORIGIN_PUSH_URLS = 2
 
 # AGENTS.md NL 路由表标记
 _AGENTS_NL_ROUTING_MARKER = "<!-- workflow-nl-routing-start -->"
@@ -157,6 +166,65 @@ def detect_cli_types(root: Path, requested: list[str] | None = None) -> list[str
     return found
 
 
+def resolve_git_dir(root: Path) -> Path | None:
+    """解析目标项目实际 Git 目录，兼容 .git 目录和 gitdir 文件。"""
+    git_marker = root / ".git"
+    if git_marker.is_dir():
+        return git_marker
+    if not git_marker.is_file():
+        return None
+
+    try:
+        first_line = git_marker.read_text(encoding="utf-8").splitlines()[0].strip()
+    except (OSError, IndexError):
+        return None
+
+    prefix = "gitdir:"
+    if not first_line.lower().startswith(prefix):
+        return None
+
+    git_dir = first_line[len(prefix):].strip()
+    if not git_dir:
+        return None
+    git_dir_path = Path(git_dir)
+    if not git_dir_path.is_absolute():
+        git_dir_path = (root / git_dir_path).resolve()
+    return git_dir_path
+
+
+def count_origin_push_urls(root: Path) -> int:
+    """统计 origin remote 下配置的 pushurl 数量。"""
+    git_dir = resolve_git_dir(root)
+    if git_dir is None:
+        return 0
+
+    config_path = git_dir / "config"
+    if not config_path.is_file():
+        return 0
+
+    try:
+        lines = config_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return 0
+
+    in_origin_block = False
+    count = 0
+    target_header = f'[remote "{_ORIGIN_REMOTE_NAME}"]'
+
+    for raw_line in lines:
+        stripped = raw_line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            in_origin_block = stripped == target_header
+            continue
+        if not in_origin_block or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        if key.strip().lower() == "pushurl" and value.strip():
+            count += 1
+
+    return count
+
+
 def ensure_project_prereqs(root: Path) -> None:
     """校验目标项目满足 workflow 嵌入前提。"""
     git_marker = root / ".git"
@@ -169,6 +237,14 @@ def ensure_project_prereqs(root: Path) -> None:
         sys.exit(f"{R}目标项目未执行 trellis init：缺少 .trellis/ 目录{N}")
     if not trellis_version.is_file():
         sys.exit(f"{R}目标项目未检测到有效的 trellis init 产物：缺少 .trellis/.version{N}")
+    push_url_count = count_origin_push_urls(root)
+    if push_url_count < _MIN_ORIGIN_PUSH_URLS:
+        sys.exit(
+            f"{R}目标项目未满足 workflow 前置校验：`{_ORIGIN_REMOTE_NAME}` 至少需要 {_MIN_ORIGIN_PUSH_URLS} 个 push URL。\n"
+            "请先为同一个 origin 配置多个 push 远端，例如：\n"
+            "git remote set-url --add --push origin git@github.com:xxx/yyy.git\n"
+            f"git remote set-url --add --push origin git@gitee.com:xxx/yyy.git{N}"
+        )
 
 
 # ── 命令文件预处理 ──
@@ -177,6 +253,74 @@ def prepare_command_content(src: Path) -> str:
     c = src.read_text(encoding="utf-8")
     c = c.replace("<WORKFLOW_DIR>/commands/shell/", ".trellis/scripts/workflow/")
     return c
+
+
+def resolve_codex_skills_dir(root: Path) -> Path | None:
+    """优先返回 .agents/skills/，其次 .codex/skills/。"""
+    skills_dir = root / ".agents" / "skills"
+    if skills_dir.is_dir():
+        return skills_dir
+    skills_dir = root / ".codex" / "skills"
+    if skills_dir.is_dir():
+        return skills_dir
+    return None
+
+
+def build_finish_work_content(content: str, patch_text: str) -> str | None:
+    """将 finish-work 的默认 Code Quality 区块替换为项目化补丁。"""
+    if _FINISH_WORK_MARKER in content:
+        return content
+
+    start_idx = content.find(_FINISH_WORK_START_HEADING)
+    end_idx = content.find(_FINISH_WORK_END_HEADING)
+    if start_idx == -1:
+        return None
+    if end_idx == -1 or end_idx <= start_idx:
+        next_heading_idx = content.find("\n### ", start_idx + len(_FINISH_WORK_START_HEADING))
+        if next_heading_idx == -1:
+            return None
+        end_idx = next_heading_idx + 1
+
+    prefix = content[:start_idx]
+    suffix = content[end_idx:].lstrip("\n")
+    return prefix + patch_text.rstrip() + "\n\n" + suffix
+
+
+def inject_finish_work_patch(
+    src: Path,
+    target_path: Path,
+    *,
+    dry_run: bool,
+    cli_label: str,
+    target_label: str,
+) -> bool:
+    """为 finish-work 基线注入项目化补丁。"""
+    if not target_path.exists():
+        warn(f"[{cli_label}] {target_label} 不存在，跳过项目化补丁注入")
+        return False
+
+    content = target_path.read_text(encoding="utf-8")
+    if _FINISH_WORK_MARKER in content:
+        ok(f"[{cli_label}] {target_label} 项目化补丁已存在")
+        return False
+
+    patch = src / "finish-work-patch-projectization.md"
+    if not patch.exists():
+        warn(f"[{cli_label}] finish-work-patch-projectization.md 不存在")
+        return False
+
+    new_content = build_finish_work_content(content, patch.read_text(encoding="utf-8"))
+    if new_content is None:
+        warn(f"[{cli_label}] {target_label} 中未找到可替换的 Code Quality 区块")
+        return False
+
+    if not dry_run:
+        target_path.write_text(new_content, encoding="utf-8")
+    if dry_run:
+        info(f"[{cli_label}] 将注入 {target_label} 项目化补丁")
+    else:
+        ok(f"[{cli_label}] {target_label} 项目化补丁已注入")
+    return True
 
 
 # ── Claude Code 部署 ──
@@ -195,10 +339,14 @@ def deploy_claude(src: Path, root: Path, dry_run: bool) -> dict:
     if not dry_run:
         backup.mkdir(parents=True, exist_ok=True)
         start = dst_cmds / "start.md"
+        finish_work = dst_cmds / "finish-work.md"
         record_session = dst_cmds / "record-session.md"
         if start.exists() and not (backup / "start.md").exists():
             shutil.copy2(start, backup / "start.md")
             ok(f"[Claude] start.md → 备份")
+        if finish_work.exists() and not (backup / "finish-work.md").exists():
+            shutil.copy2(finish_work, backup / "finish-work.md")
+            ok(f"[Claude] finish-work.md → 备份")
         if record_session.exists() and not (backup / "record-session.md").exists():
             shutil.copy2(record_session, backup / "record-session.md")
             ok(f"[Claude] record-session.md → 备份")
@@ -244,6 +392,16 @@ def deploy_claude(src: Path, root: Path, dry_run: bool) -> dict:
                 warn("[Claude] start-patch-phase-router.md 不存在")
         else:
             ok("[Claude] Phase Router 已存在")
+
+    finish_work = dst_cmds / "finish-work.md"
+    if inject_finish_work_patch(
+        src,
+        finish_work,
+        dry_run=dry_run,
+        cli_label="Claude",
+        target_label="finish-work.md",
+    ):
+        result["patches"] += 1
 
     # 注入元数据闭环
     record_session = dst_cmds / "record-session.md"
@@ -302,10 +460,14 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool) -> dict:
     if not dry_run:
         backup.mkdir(parents=True, exist_ok=True)
         start = dst_cmds / "start.md"
+        finish_work = dst_cmds / "finish-work.md"
         record_session = dst_cmds / "record-session.md"
         if start.exists() and not (backup / "start.md").exists():
             shutil.copy2(start, backup / "start.md")
             ok(f"[OpenCode] start.md → 备份")
+        if finish_work.exists() and not (backup / "finish-work.md").exists():
+            shutil.copy2(finish_work, backup / "finish-work.md")
+            ok(f"[OpenCode] finish-work.md → 备份")
         if record_session.exists() and not (backup / "record-session.md").exists():
             shutil.copy2(record_session, backup / "record-session.md")
             ok(f"[OpenCode] record-session.md → 备份")
@@ -352,6 +514,16 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool) -> dict:
         else:
             ok("[OpenCode] Phase Router 已存在")
 
+    finish_work = dst_cmds / "finish-work.md"
+    if inject_finish_work_patch(
+        src,
+        finish_work,
+        dry_run=dry_run,
+        cli_label="OpenCode",
+        target_label="finish-work.md",
+    ):
+        result["patches"] += 1
+
     # 注入元数据闭环
     record_session = dst_cmds / "record-session.md"
     if record_session.exists():
@@ -386,14 +558,19 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool) -> dict:
 # ── Codex CLI 部署 ──
 def deploy_codex(src: Path, root: Path, dry_run: bool) -> dict:
     """部署到 skills 目录（Codex 无项目自定义命令目录，workflow 入口采用 skills 模型）。"""
-    # 优先使用 .agents/skills/，其次 .codex/skills/
-    skills_dir = root / ".agents" / "skills"
-    if not skills_dir.is_dir():
-        skills_dir = root / ".codex" / "skills"
-    if not skills_dir.is_dir():
+    skills_dir = resolve_codex_skills_dir(root)
+    if skills_dir is None:
         return {"commands": 0, "scripts": 0, "patches": 0, "errors": ["未找到 .agents/skills/ 或 .codex/skills/ 目录"]}
 
     result = {"commands": 0, "scripts": 0, "patches": 0, "errors": []}
+
+    if not dry_run:
+        backup_dir = skills_dir / ".backup-original" / "finish-work"
+        finish_work_skill = skills_dir / "finish-work" / "SKILL.md"
+        if finish_work_skill.exists() and not (backup_dir / "SKILL.md").exists():
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(finish_work_skill, backup_dir / "SKILL.md")
+            ok(f"[Codex] finish-work skill → 备份")
 
     # 部署 skills（从命令文件转换为 skills 格式）
     for cmd in NEW_COMMANDS:
@@ -410,6 +587,16 @@ def deploy_codex(src: Path, root: Path, dry_run: bool) -> dict:
             result["commands"] += 1
         else:
             warn(f"[Codex] 源文件缺失: {cmd}.md")
+
+    finish_work_skill = skills_dir / "finish-work" / "SKILL.md"
+    if inject_finish_work_patch(
+        src,
+        finish_work_skill,
+        dry_run=dry_run,
+        cli_label="Codex",
+        target_label="finish-work skill",
+    ):
+        result["patches"] += 1
 
     # Codex 通过 session-start.py hook 注入上下文，不需要注入 start.md
     # 验证 hook 是否已就绪
@@ -447,6 +634,43 @@ def deploy_helper_scripts(src: Path, root: Path, dry_run: bool) -> int:
     return count
 
 
+def import_requirements_foundation(root: Path, dry_run: bool) -> bool:
+    """安装后自动导入需求发现基础资产。"""
+    repo_root = Path(__file__).resolve().parents[4]
+    cli_path = repo_root / "trellis-library" / "cli.py"
+    command = [
+        sys.executable,
+        str(cli_path),
+        "assemble",
+        "--target",
+        str(root),
+        "--pack",
+        _REQUIREMENTS_FOUNDATION_PACK,
+        "--auto",
+    ]
+    if dry_run:
+        info(f"将导入初始 spec 基线 → {_REQUIREMENTS_FOUNDATION_PACK}")
+        return True
+
+    result = subprocess.run(
+        command,
+        cwd=repo_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        err(f"导入初始 spec 基线失败 → {_REQUIREMENTS_FOUNDATION_PACK}")
+        if result.stdout:
+            print(result.stdout.rstrip())
+        if result.stderr:
+            print(result.stderr.rstrip(), file=sys.stderr)
+        return False
+
+    ok(f"初始 spec 基线已导入 → {_REQUIREMENTS_FOUNDATION_PACK}")
+    return True
+
+
 # ── 安装记录 ──
 def write_install_record(root: Path, cli_types: list[str], dry_run: bool) -> None:
     now = datetime.now(timezone.utc).isoformat()
@@ -460,6 +684,8 @@ def write_install_record(root: Path, cli_types: list[str], dry_run: bool) -> Non
             "cli_types": cli_types,
             "commands": NEW_COMMANDS,
             "scripts": HELPER_SCRIPTS,
+            "initial_pack": _REQUIREMENTS_FOUNDATION_PACK,
+            "bootstrap_task_removed": True,
         }, ensure_ascii=False, indent=2), encoding="utf-8")
     if dry_run:
         info(f"将写入安装记录 → {rec.name} (Trellis {ver}, CLI: {', '.join(cli_types)})")
@@ -475,6 +701,22 @@ def ensure_project_todo(root: Path) -> None:
         return
     todo_path.write_text(_TODO_DEFAULT_LINE, encoding="utf-8")
     ok(f"初始化提醒 → {_TODO_FILE_NAME}")
+
+
+def remove_bootstrap_task(root: Path, dry_run: bool) -> None:
+    """安装 workflow 后删除 Trellis init 创建的 bootstrap task。"""
+    task_dir = root / ".trellis" / "tasks" / _BOOTSTRAP_TASK_NAME
+    if not task_dir.exists():
+        info(f"{_BOOTSTRAP_TASK_NAME} 不存在，跳过清理")
+        return
+    if dry_run:
+        info(f"将删除 Trellis bootstrap 任务 → .trellis/tasks/{_BOOTSTRAP_TASK_NAME}")
+        return
+    if task_dir.is_dir():
+        shutil.rmtree(task_dir)
+    else:
+        task_dir.unlink()
+    ok(f"Trellis bootstrap 任务已删除 → {_BOOTSTRAP_TASK_NAME}")
 
 
 # ── AGENTS.md NL 路由表注入 ──
@@ -512,7 +754,7 @@ def deploy_agents_md_routing(root: Path, dry_run: bool) -> bool:
 
 
 # ── 主流程 ──
-def main():
+def main() -> int:
     p = argparse.ArgumentParser(
         description="安装自定义工作流到 Trellis Git 项目（默认同一项目同时部署已检测到的 Claude Code / OpenCode / Codex 适配层）"
     )
@@ -565,6 +807,15 @@ def main():
         info(f"辅助脚本: {script_count}/{len(HELPER_SCRIPTS)} 个")
     print()
 
+    if not any(t and t["errors"] for t in total.values()):
+        print("📚 初始 spec 基线...")
+        if not import_requirements_foundation(root, args.dry_run):
+            return 1
+        print()
+        print("🧹 Trellis bootstrap 清理...")
+        remove_bootstrap_task(root, args.dry_run)
+        print()
+
     # 安装记录
     write_install_record(root, cli_types, args.dry_run)
 
@@ -602,14 +853,11 @@ def main():
     print()
     if not args.dry_run:
         print("  下一步（推荐）:")
-        print("    1. 若目标项目已接入 trellis-library 组装流程，先补 requirements-discovery-foundation")
-        print("       python3 trellis-library/cli.py assemble --target <project-root> --pack pack.requirements-discovery-foundation --dry-run")
-        print("       确认 dry-run 输出无误后，去掉 --dry-run 正式执行")
-        print("    2. 最低要求：补齐 problem-definition / scope-boundary / requirement-clarification / acceptance-criteria")
-        print("       再补 customer-facing / developer-facing PRD spec、template、checklist")
-        print("    3. 若未接入 trellis-library CLI，则手动复制最低资产集到目标项目 .trellis/")
-        print("    4. 在目标项目根 README.md 中说明 todo.txt 的存在与用途")
-        print("    5. 同一目标项目中各 CLI 的入口协议不同，请分别按各自原生入口使用")
+        print(f"    1. 安装器已自动导入 {_REQUIREMENTS_FOUNDATION_PACK}，并清理 {_BOOTSTRAP_TASK_NAME}")
+        print("       请先确认 .trellis/library-lock.yaml 已包含需求发现基础资产")
+        print("    2. 技术架构确认后，再使用 trellis-library/cli.py assemble 为当前项目补充真实 spec 集合")
+        print("    3. 在目标项目根 README.md 中说明 todo.txt 的存在与用途")
+        print("    4. 同一目标项目中各 CLI 的入口协议不同，请分别按各自原生入口使用")
         for cli_type in cli_types:
             if cli_type == "claude":
                 print("       - Claude Code → /trellis:start")
@@ -619,7 +867,8 @@ def main():
                 print("       - Codex → 描述需求或显式触发对应 skill；不要期待项目级 /trellis:start")
         print(f"  卸载: python3 {src}/uninstall-workflow.py")
     print()
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

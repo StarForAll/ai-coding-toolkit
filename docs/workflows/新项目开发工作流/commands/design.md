@@ -119,11 +119,12 @@ $TASK_DIR/design/
 
 技术架构已经过用户明确确认后，必须先完成 `工作流总纲 §3.7 技术架构确认后的项目 Spec 对齐`，才能进入 `/trellis:plan`。下列内容是执行摘要；若与总纲不一致，以 `§3.7` 为准。
 
-1. **根据技术架构，从 `trellis-library` 选择并导入合适 spec 到当前项目 `.trellis/spec/`**
+1. **根据技术架构，使用 `trellis-library/cli.py assemble` 选择并导入合适 spec 到当前项目 `.trellis/spec/`**
    - 所有项目至少应覆盖与当前项目直接相关的三类基线约束：
      - `product-and-requirements` 相关 spec：保证需求、范围、验收口径有约束
      - `architecture` 相关 spec：保证系统边界、模块结构、依赖方向等与当前架构一致
      - `verification` 相关 spec：保证 DoD、证据要求、验证门禁可落地
+   - 这里要求通过脚本导入，不靠人工复制资产或口头提示“补装”
    - 这里强调的是“选择适配当前项目的最小充分集合”，不是把 `product-and-requirements.*`、`architecture.*`、`verification.*` 整个命名空间全部导入
    - 若为**外部项目**（外包、定制开发、新客户），**额外基础必选**：
      - `spec.universal-domains.project-governance.delivery-control`

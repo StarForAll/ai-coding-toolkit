@@ -55,13 +55,21 @@
 
 ### 这是嵌入在 Trellis 上的 workflow，不是替换 Trellis 基线
 
-这套 workflow 的默认使用前提是：**目标项目本身已经是 Git 项目，且已经先执行过 `trellis init`**。
+这套 workflow 的默认使用前提是：**目标项目本身已经是 Git 项目，`origin` 已至少配置两个 push URL，且已经先执行过 `trellis init`**。
 
 也就是说，至少要同时满足：
 
 - 项目根存在 Git 仓库标记
+- `origin` 已至少配置两个 push URL
 - 项目根已经有 Trellis 基线目录和对应 CLI 基线资产
 - 能检测到 `trellis init` 初始化产物，例如 `.trellis/.version`
+
+参考配置命令：
+
+```bash
+git remote set-url --add --push origin git@github.com:xxx/yyy.git
+git remote set-url --add --push origin git@gitee.com:xxx/yyy.git
+```
 
 如果少了其中任意一个前提，就不应把当前 workflow 视为“已经可以直接嵌入使用”。
 
@@ -74,10 +82,12 @@
 在当前这套新项目 workflow 里，至少要记住：
 
 - `start` 是 **Trellis 原生命令 + workflow Phase Router 增强**
-- `finish-work` 是 **Trellis 原生命令/技能基线**，不是当前 workflow 新增分发的独立源文件
+- `finish-work` 是 **Trellis 原生命令/技能基线 + workflow 项目化补丁**，不是当前 workflow 新增分发的独立源文件
 - `record-session` 是 **Trellis 原生命令/技能基线 + workflow 元数据闭环补丁**
 
 如果忽略这层嵌入关系，就容易把“继承基线”误判成“workflow 漏了命令”。
+
+还要额外记住一条：`finish-work` 的项目化补丁虽然会按 Claude Code / OpenCode / Codex 各自原生格式落地，但它承载的**项目检查矩阵含义必须一致**，因为这部分由项目技术架构决定，不由 CLI 类型决定。
 
 ### 安装时序
 
@@ -85,8 +95,9 @@
 
 1. 先在目标项目执行 `trellis init`
 2. 再运行当前 workflow 目录里的 `commands/install-workflow.py`
-3. 安装脚本把这套 workflow 嵌入到目标项目
-4. 最后在目标项目里按原生入口直接使用
+3. 安装脚本把这套 workflow 嵌入到目标项目，并按各 CLI 官方原生格式完成内容适配
+4. 安装脚本自动导入 `pack.requirements-discovery-foundation`，并删除 `00-bootstrap-guidelines`
+5. 最后在目标项目里按原生入口直接使用
 
 标准安装命令：
 
@@ -99,6 +110,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 如果只想装部分 CLI，再加 `--cli` 过滤。
 
 所以这里说的“嵌入”，默认指的是**`trellis init` 之后再执行安装脚本，把 workflow 直接装进目标项目**。
+安装后的初始需求发现基础资产由脚本导入，不再通过手工复制或自然语言提示“补装”。
 
 安装完成后，这套 workflow 的实际使用仍然可以是**渐进性披露**的：
 

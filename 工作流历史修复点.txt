@@ -1,0 +1,9 @@
+1. 前置校验:
+使用该工作流的项目必须是一个git项目且存在多个remote仓库,其对应添加远程仓库参考命令如下:
+git remote set-url --add --push origin git@github.com:xxx/yyy.git
+git remote set-url --add --push origin git@gitee.com:xxx/yyy.git
+
+2. 初始阶段导入的spec应该是使用对应的脚本进行导入而非用户输入提示进行安装
+
+3. trellis init创建的任务00-bootstrap-guidelines在安装这个工作流之后需要删除，finish-work中的 pnpm校验删除，后续技术架构确定之后补充明确的内容
+

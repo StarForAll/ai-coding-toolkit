@@ -11,9 +11,9 @@ python3 ./.trellis/scripts/get_context.py
 
 ### 首次嵌入后的初始化门禁
 
-如果当前项目刚完成自定义工作流嵌入，先补需求发现基础资产，再进入常规阶段路由。
+如果当前项目刚完成自定义工作流嵌入，安装器应已先通过脚本补齐需求发现基础资产，再进入常规阶段路由。
 
-默认补充 `trellis-library` 的 `pack.requirements-discovery-foundation`。
+默认由安装脚本补充 `trellis-library` 的 `pack.requirements-discovery-foundation`。`/trellis:start` 在这里负责校验是否完整，不再要求用户手工复制资产或通过自然语言提示“补装”初始 spec。
 
 最低要求至少覆盖：
 
@@ -55,21 +55,16 @@ test -f .trellis/workflow-installed.json && (
 )
 ```
 
-若目标项目已接入 `trellis-library` 组装流程，可先执行：
+若命中该门禁，说明安装不完整。优先由维护者重新执行 workflow 安装脚本；若只需修复需求发现基线，也可直接执行对应脚本：
 
 ```bash
 python3 trellis-library/cli.py assemble \
   --target <project-root> \
   --pack pack.requirements-discovery-foundation \
-  --dry-run
+  --auto
 ```
 
-确认无误后再正式执行导入，然后继续后续阶段路由。
-
-若目标项目尚未接入 `trellis-library` CLI，则使用手动降级路径：
-
-- 从 `trellis-library` 源库手动复制上述最低要求中的 `spec/`、`template/`、`checklist/` 资产到目标项目 `.trellis/` 对应目录
-- 或由维护者先完成 `trellis-library` 接入，再重新执行本门禁
+修复完成后，再继续后续阶段路由。
 
 当前仓库未定义 `skip-library-gate` 一类的跳过配置；如无上述资产基线，不建议继续进入需求发现阶段。
 
@@ -79,7 +74,7 @@ python3 trellis-library/cli.py assemble \
 get_context.py 输出
     │
     ├── `.trellis/workflow-installed.json` 存在 + `.trellis/library-lock.yaml` 缺失或缺少最低资产集
-    │   └── 先补 `pack.requirements-discovery-foundation` 或手动补齐最低要求资产；补齐后重新执行本决策树
+    │   └── 先重新执行安装脚本，或用 `trellis-library/cli.py assemble --pack pack.requirements-discovery-foundation --auto` 补齐；补齐后重新执行本决策树
     │
     ├── 无当前任务 + 用户描述新项目
     │   └── 路由 → /trellis:feasibility（可行性评估）

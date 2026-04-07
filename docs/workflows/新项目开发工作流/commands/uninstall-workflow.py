@@ -109,6 +109,14 @@ def uninstall_claude(root: Path, commands: list[str]) -> None:
     else:
         warn("[Claude] 无 start.md 备份，未恢复")
 
+    # 恢复 finish-work.md
+    backup_finish_work = backup / "finish-work.md"
+    if backup_finish_work.exists():
+        shutil.copy2(backup_finish_work, dst_cmds / "finish-work.md")
+        ok("[Claude] finish-work.md 已恢复")
+    else:
+        warn("[Claude] 无 finish-work.md 备份，未恢复")
+
     # 恢复 record-session.md
     backup_record_session = backup / "record-session.md"
     if backup_record_session.exists():
@@ -156,6 +164,14 @@ def uninstall_opencode(root: Path, commands: list[str]) -> None:
     else:
         warn("[OpenCode] 无 start.md 备份，未恢复")
 
+    # 恢复 finish-work.md
+    backup_finish_work = backup / "finish-work.md"
+    if backup_finish_work.exists():
+        shutil.copy2(backup_finish_work, dst_cmds / "finish-work.md")
+        ok("[OpenCode] finish-work.md 已恢复")
+    else:
+        warn("[OpenCode] 无 finish-work.md 备份，未恢复")
+
     # 恢复 record-session.md
     backup_record_session = backup / "record-session.md"
     if backup_record_session.exists():
@@ -194,6 +210,25 @@ def uninstall_codex(root: Path, commands: list[str]) -> None:
                 ok(f"[Codex] 删除 skill: {command}")
                 removed += 1
         info(f"[Codex] {skills_dir} 已删除 {removed} 个 skills")
+
+        backup_finish_work = skills_dir / ".backup-original" / "finish-work" / "SKILL.md"
+        if backup_finish_work.exists():
+            finish_work_skill = skills_dir / "finish-work" / "SKILL.md"
+            finish_work_skill.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(backup_finish_work, finish_work_skill)
+            ok(f"[Codex] 恢复 finish-work skill")
+        else:
+            warn(f"[Codex] {skills_dir} 无 finish-work skill 备份，未恢复")
+
+        backup_dir = skills_dir / ".backup-original"
+        if backup_dir.exists():
+            shutil.rmtree(backup_dir)
+            ok(f"[Codex] 删除备份目录: {backup_dir}")
+
+        for directory in skills_dir.iterdir():
+            if directory.is_dir() and directory.name.startswith(".backup-upgrade-"):
+                shutil.rmtree(directory)
+                ok(f"[Codex] 升级备份已删除: {directory.name}")
 
     if not found_any:
         warn("[Codex] 未找到 skills 目录，跳过")
