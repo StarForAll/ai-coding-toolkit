@@ -7,9 +7,9 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-2.md`
-- **Total Sessions**: 88
-- **Last Active**: 2026-04-02
+- **Active File**: `journal-3.md`
+- **Total Sessions**: 89
+- **Last Active**: 2026-04-07
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~2000 | Active |
+| `journal-3.md` | ~65 | Active |
+| `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -30,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 89 | 2026-04-07 | 修正新项目开发工作流 | `8769fa2`, `9683551`, `5b2adb8` | `main` |
 | 88 | 2026-04-02 | workflow: fix test-first command determination | `9683551` | `main` |
 | 87 | 2026-04-02 | 补充工作流全局流转说明 | `25f99a6` | `main` |
 | 86 | 2026-04-02 | 工作流文档一致性轻量收敛 | `da2855b` | `main` |
