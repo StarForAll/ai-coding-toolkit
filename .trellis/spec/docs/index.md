@@ -98,6 +98,13 @@ For subdirectories:
 - **Complete**: Include prerequisites, steps, and verification when behavior is procedural
 - **Current**: Keep up to date with code
 
+### Workflow Boundary
+
+- **Separate ownership layers**: Distinguish source-repo authoring files, task-local runtime artifacts, and target-project outputs
+- **Name the target explicitly**: If a workflow creates or updates files in the consuming project, say "target project" and give the target path
+- **Do not conflate artifacts**: Explain different roles when both task-local working files and project-level formal docs exist
+- **Preserve deploy semantics**: When source docs are installed into other tool/runtime locations, state whether the rule applies to the source copy, deployed copy, or target project filesystem
+
 ---
 
 ## Template: Directory README.md
@@ -148,6 +155,8 @@ What belongs here and what does not.
 - **Broken links**: Internal links that don't work
 - **App-centric boilerplate**: Installation or runtime sections for software this repo does not ship
 - **Inconsistent formatting**: Mixed styles in same doc
+- **Target-project ambiguity**: Referencing paths like `docs/...` without saying whether they live in this repo, a task directory, or the installed target project
+- **Artifact conflation**: Treating task-local files such as `$TASK_DIR/prd.md` as equivalent to long-lived project requirement documents
 
 ---
 

@@ -109,6 +109,17 @@ examples, or script path assumptions
 **Good**: When source-library authoring rules change, update the local
 authoring spec in the same change or explicitly record why it remains different
 
+### Mistake 2.6: Target-Project Boundary Drift
+
+**Bad**: Updating a workflow to require files like `docs/requirements/*.md`
+without stating whether they belong to the source repo, a task runtime
+directory, or the installed target project
+
+**Good**: State the full handoff explicitly: source workflow docs define the
+rule, installer/runtime carries it, and the consuming target project owns the
+resulting files; keep task-local working artifacts separate from project-level
+deliverables
+
 ### Mistake 3: Instruction / Tooling Mismatch
 
 **Bad**: Changing command behavior while README, AGENTS instructions, or skill
@@ -124,12 +135,14 @@ Before implementation:
 - [ ] Mapped the full repository handoff path
 - [ ] Identified source-of-truth files and derived files
 - [ ] Identified path, ID, or metadata fields that must stay aligned
+- [ ] Identified whether new or changed artifacts live in the source repo, task runtime, or target project
 - [ ] Chosen the commands or tests that verify the boundary
 
 After implementation:
 - [ ] Verified copied/deployed paths match the intended layout
 - [ ] Verified config/metadata reflects the actual state on disk
 - [ ] Verified related docs/instructions were updated if behavior changed
+- [ ] Verified ambiguous paths are labeled as source repo, task runtime, or target project
 - [ ] Verified the relevant command/test path still passes end to end
 
 ---

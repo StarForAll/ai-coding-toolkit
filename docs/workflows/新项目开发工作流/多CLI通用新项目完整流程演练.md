@@ -214,7 +214,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 目标
 
-确认需求描述是否准确，统一做 `L0/L1/L2` 分类，并决定是否需要先补信息或拆子任务。
+确认需求描述是否准确，统一做 `L0/L1/L2` 分类，并在进入下一阶段前补齐项目级双需求文档。
 
 ### CLI 入口差异
 
@@ -246,8 +246,16 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 - 需求描述达到“已准确”
 - 已完成 `L0/L1/L2` 分类
+- 已在目标项目 `docs/requirements/` 下生成：
+  - `customer-facing-prd.md`
+  - `developer-facing-prd.md`
+- 两份项目级需求文档语义一致，且后续需求变更将持续同步回写
 - 已决定走 `design`、`plan` 还是极小任务直进 `start`
 
+> 这条门禁约束的是**使用该 workflow 的目标项目**，不是当前 workflow 仓库本身必须先有这两份文档。
+>
+> `task_dir/prd.md` 仍然可以作为阶段内工作底稿，但它不是项目级正式需求文档的替代品。
+>
 > 通用新项目默认继续走 `design`。只有边界极小、单上下文可闭环的 `L0` 事项，才建议直接进 `start`。
 
 ---

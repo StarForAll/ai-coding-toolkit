@@ -7,3 +7,5 @@ git remote set-url --add --push origin git@gitee.com:xxx/yyy.git
 
 3. trellis init创建的任务00-bootstrap-guidelines在安装这个工作流之后需要删除，finish-work中的 pnpm校验删除，后续技术架构确定之后补充明确的内容
 
+4. 在Brainstorm阶段确认完成之后需要在当前项目下的docs目录中生成完全可用的两份项目级需求文档文档；一份面向客户，一份面向开发人员
+

@@ -104,6 +104,7 @@ Claude Code 的用户入口仍是项目命令：
 - 显式阶段入口
 - 阶段性操作规则
 - 对应 shell/helper 脚本的调用关系
+- 承载 Brainstorm 完成前的项目级双需求文档门禁：`docs/requirements/customer-facing-prd.md` 与 `docs/requirements/developer-facing-prd.md`
 
 这层不负责：
 

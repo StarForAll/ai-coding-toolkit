@@ -88,6 +88,9 @@ get_context.py 输出
     ├── 有任务 + 无 PRD 或 PRD 未冻结
     │   └── 路由 → /trellis:brainstorm（需求发现）
     │
+    ├── PRD 已冻结，但缺少 `docs/requirements/customer-facing-prd.md` 或 `docs/requirements/developer-facing-prd.md`
+    │   └── 路由 → /trellis:brainstorm（先补项目级双需求文档，再进入下一阶段）
+    │
     ├── PRD 已冻结 + 用户输入命中正式变更（新增/修改/删除）
     │   └── 进入 §2.5 需求变更管理（先做影响评估、成本/工期确认与审批；完成后回到受影响的最早阶段）
     │
