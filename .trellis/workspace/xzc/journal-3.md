@@ -15,7 +15,7 @@
 
 ### Summary
 
-(Add summary)
+收敛新项目开发工作流的前置校验、初始 spec 导入、`finish-work` 项目化补丁、安装/卸载/升级链路，以及 3 轮 multi-cli review 闭环。
 
 ### Main Changes
 
