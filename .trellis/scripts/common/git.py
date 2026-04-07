@@ -29,33 +29,3 @@ def run_git(args: list[str], cwd: Path | None = None) -> tuple[int, str, str]:
         return result.returncode, result.stdout, result.stderr
     except Exception as e:
         return 1, "", str(e)
-
-
-def auto_commit_paths(
-    paths: list[str], cwd: Path, commit_msg: str,
-) -> tuple[str, str]:
-    """Stage and commit the given paths.
-
-    Returns:
-        ("committed", "") when a commit was created
-        ("clean", "") when no staged changes exist for the given paths
-        ("failed", "<reason>") when staging, diff, or commit fails
-    """
-    rc, _, err = run_git(["add", "-A", "--", *paths], cwd=cwd)
-    if rc != 0:
-        reason = err.strip() or "git add failed"
-        return "failed", f"git add failed: {reason}"
-
-    rc, _, err = run_git(["diff", "--cached", "--quiet", "--", *paths], cwd=cwd)
-    if rc == 0:
-        return "clean", ""
-    if rc != 1:
-        reason = err.strip() or "git diff --cached failed"
-        return "failed", f"git diff --cached failed: {reason}"
-
-    rc, out, err = run_git(["commit", "-m", commit_msg], cwd=cwd)
-    if rc != 0:
-        reason = err.strip() or out.strip() or "git commit failed"
-        return "failed", f"git commit failed: {reason}"
-
-    return "committed", ""

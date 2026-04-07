@@ -1,6 +1,6 @@
 ---
 name: finish-work
-description: "Finish Work - Pre-Commit Checklist"
+description: "Pre-commit checklist for this meta-project. Focuses on trellis-library validation, asset integrity, code-spec sync, and cross-layer executable-spec checks before human commit."
 ---
 
 # Finish Work - Pre-Commit Checklist
@@ -132,23 +132,34 @@ git diff --name-only
 
 ---
 
+## Common Oversights
+
+| Oversight | Consequence | Check |
+|-----------|-------------|-------|
+| trellis-library 校验未运行 | 资产校验或组装失败 | 运行 `validate --strict-warnings` 和 CLI 基本帮助命令 |
+| manifest / relations 引用失配 | 资产注册与依赖漂移 | 检查 `manifest.yaml`、`dependencies`、`relations` |
+| 相关 code-spec 未更新 | 后续维护者不知道规则已变 | 检查 `.trellis/spec/scripts/`、`.trellis/spec/agents/`、`.trellis/spec/commands/`、`.trellis/spec/guides/` |
+| spec 仍停留在抽象原则 | 基础设施或跨层改动容易回归 | 补齐真实签名/字段/矩阵/案例/断言点 |
+
+---
+
 ## Relationship to Other Commands
 
 ```
 Development Flow:
-  Write code -> Test -> /trellis:finish-work -> git commit -> /trellis:record-session
+  Write code -> Test -> $finish-work -> git commit -> $record-session
                           |                              |
                    Ensure completeness              Record progress
                    
 Debug Flow:
-  Hit bug -> Fix -> /trellis:break-loop -> Knowledge capture
+  Hit bug -> Fix -> $break-loop -> Knowledge capture
                        |
                   Deep analysis
 ```
 
-- `/trellis:finish-work` - Check work completeness
-- `/trellis:record-session` - Record session and commits
-- `/trellis:break-loop` - Deep analysis after debugging
+- `$finish-work` - Check work completeness (this skill)
+- `$record-session` - Record session and commits
+- `$break-loop` - Deep analysis after debugging
 
 ---
 

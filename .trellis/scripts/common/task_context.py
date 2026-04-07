@@ -45,67 +45,20 @@ def get_implement_base() -> list[dict]:
     ]
 
 
-def _relpath(path: Path, repo_root: Path) -> str:
-    """Convert an absolute path to a repo-relative POSIX path."""
-    return path.relative_to(repo_root).as_posix()
-
-
-def _resolve_default_spec_entry(
-    repo_root: Path, area: str, package: str | None = None,
-) -> dict:
-    """Resolve the most specific spec index that exists for a dev type.
-
-    Trellis can be used in app repos that expose `spec/<package>/<area>/index.md`
-    and in meta-projects like this repo that only expose layer indexes under
-    `.trellis/spec/`. Fall back to the nearest real index instead of emitting
-    stale paths that make the task context invalid.
-    """
-    spec_root = repo_root / DIR_WORKFLOW / DIR_SPEC
-    candidates: list[tuple[Path, str]] = []
-
-    if package:
-        package_root = spec_root / package
-        candidates.extend([
-            (package_root / area / "index.md", f"{area.capitalize()} development guide"),
-            (package_root / "index.md", f"Package spec index ({package})"),
-        ])
-
-    candidates.extend([
-        (spec_root / area / "index.md", f"{area.capitalize()} development guide"),
-        (spec_root / "index.md", "Project spec index"),
-    ])
-
-    for path, reason in candidates:
-        if path.is_file():
-            return {"file": _relpath(path, repo_root), "reason": reason}
-
-    # The project spec index is mandatory in Trellis-managed repos. If it is
-    # somehow missing, preserve the conventional fallback so validation can
-    # report the missing source of truth explicitly.
-    return {"file": f"{DIR_WORKFLOW}/{DIR_SPEC}/index.md", "reason": "Project spec index"}
-
-
-def get_implement_backend(repo_root: Path, package: str | None = None) -> list[dict]:
+def get_implement_backend(package: str | None = None) -> list[dict]:
     """Get backend implement context entries."""
-    return [_resolve_default_spec_entry(repo_root, "backend", package)]
+    spec_base = f"{DIR_SPEC}/{package}" if package else DIR_SPEC
+    return [
+        {"file": f"{DIR_WORKFLOW}/{spec_base}/backend/index.md", "reason": "Backend development guide"},
+    ]
 
 
-def get_implement_frontend(repo_root: Path, package: str | None = None) -> list[dict]:
+def get_implement_frontend(package: str | None = None) -> list[dict]:
     """Get frontend implement context entries."""
-    return [_resolve_default_spec_entry(repo_root, "frontend", package)]
-
-
-def _dedupe_entries(entries: list[dict]) -> list[dict]:
-    """Preserve order while removing duplicate context file entries."""
-    seen: set[str] = set()
-    deduped: list[dict] = []
-    for entry in entries:
-        file_path = entry.get("file")
-        if not isinstance(file_path, str) or file_path in seen:
-            continue
-        seen.add(file_path)
-        deduped.append(entry)
-    return deduped
+    spec_base = f"{DIR_SPEC}/{package}" if package else DIR_SPEC
+    return [
+        {"file": f"{DIR_WORKFLOW}/{spec_base}/frontend/index.md", "reason": "Frontend development guide"},
+    ]
 
 
 def get_check_context(repo_root: Path) -> list[dict]:
@@ -204,14 +157,12 @@ def cmd_init_context(args: argparse.Namespace) -> int:
     print(colored("Creating implement.jsonl...", Colors.CYAN))
     implement_entries = get_implement_base()
     if dev_type in ("backend", "test"):
-        implement_entries.extend(get_implement_backend(repo_root, package))
+        implement_entries.extend(get_implement_backend(package))
     elif dev_type == "frontend":
-        implement_entries.extend(get_implement_frontend(repo_root, package))
+        implement_entries.extend(get_implement_frontend(package))
     elif dev_type == "fullstack":
-        implement_entries.extend(get_implement_backend(repo_root, package))
-        implement_entries.extend(get_implement_frontend(repo_root, package))
-
-    implement_entries = _dedupe_entries(implement_entries)
+        implement_entries.extend(get_implement_backend(package))
+        implement_entries.extend(get_implement_frontend(package))
 
     implement_file = target_dir / "implement.jsonl"
     _write_jsonl(implement_file, implement_entries)

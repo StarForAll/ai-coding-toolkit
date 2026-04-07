@@ -1,4 +1,8 @@
 {
+  "statusLine": {
+    "type": "command",
+    "command": "python3 .claude/hooks/statusline.py"
+  },
   "hooks": {
     "SessionStart": [
       {
@@ -67,11 +71,5 @@
       }
     ]
   },
-  "enabledPlugins": {},
-  "permissions": {
-    "deny": [
-      "WebFetch",
-      "WebSearch"
-    ]
-  }
+  "enabledPlugins": {}
 }
