@@ -63,3 +63,42 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 90: 修正新项目开发工作流的项目级需求文档门禁
+
+**Date**: 2026-04-07
+**Task**: 修正新项目开发工作流的项目级需求文档门禁
+**Branch**: `main`
+
+### Summary
+
+统一 Brainstorm 阶段的项目级双需求文档门禁，补齐三套 CLI 适配说明，并把目标项目边界规则沉淀到 .trellis/spec。
+
+### Main Changes
+
+| Area | Change |
+|------|--------|
+| Workflow docs | 将 Brainstorm 完成后的强制门禁明确为生成目标项目的双需求文档 |
+| CLI adaptation | 同步 Claude Code / Codex / OpenCode 的原生指令口径 |
+| Spec capture | 在 .trellis/spec 中补充 workflow 目标项目边界与 artifact 区分规则 |
+| Validation | 运行 workflow installer 测试、trellis-library 校验与 CLI 基础 help 检查 |
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8bc94aa` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
