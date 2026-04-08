@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""自审辅助检查。
+"""质量检查辅助脚本。
 
-用法: python3 self-review-check.py [task_dir] [--test-cmd CMD] [--lint-cmd CMD] [--typecheck-cmd CMD]
+用法: python3 check-quality.py [task_dir] [--test-cmd CMD] [--lint-cmd CMD] [--typecheck-cmd CMD]
 """
 
 from __future__ import annotations
@@ -13,8 +13,8 @@ from pathlib import Path
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run self-review checks with project-confirmed commands.")
-    parser.add_argument("task_dir", nargs="?", default=".", help="Task directory used to inspect self-review.md")
+    parser = argparse.ArgumentParser(description="Run workflow quality checks with project-confirmed commands.")
+    parser.add_argument("task_dir", nargs="?", default=".", help="Task directory used to inspect check.md")
     parser.add_argument("--test-cmd", dest="test_cmd", help="User-confirmed test command for the current project")
     parser.add_argument("--lint-cmd", dest="lint_cmd", help="User-confirmed lint command for the current project")
     parser.add_argument(
@@ -57,7 +57,7 @@ def main() -> int:
     args = parse_args(sys.argv[1:])
     task_dir = Path(args.task_dir)
 
-    print("=== 自审检查 ===")
+    print("=== 质量检查 ===")
 
     print("说明：测试 / lint / type-check 命令必须来自技术架构确认后由用户明确的项目化输入。")
 
@@ -82,17 +82,17 @@ def main() -> int:
     except Exception:
         print("⚠️  git 不可用")
 
-    # 5. 历史自审
-    print("\n--- 历史自审 ---")
-    review_file = task_dir / "self-review.md"
+    # 5. 历史检查
+    print("\n--- 历史检查 ---")
+    review_file = task_dir / "check.md"
     if review_file.exists():
-        print("⚠️  已有 self-review.md，建议对比差异")
+        print("⚠️  已有 check.md，建议对比差异")
     else:
-        print("ℹ️  首次自审")
+        print("ℹ️  首次质量检查")
 
     print()
-    print("=== 自审检查完成 ===")
-    print("下一步：根据以上结果生成 self-review.md 偏差清单")
+    print("=== 质量检查完成 ===")
+    print("下一步：根据以上结果生成 check.md 检查结果")
     return 0
 
 

@@ -11,7 +11,9 @@ from pathlib import Path
 
 
 G, Y, R, C, N = "\033[0;32m", "\033[1;33m", "\033[0;31m", "\033[0;36m", "\033[0m"
-DEFAULT_COMMANDS = ["feasibility", "brainstorm", "design", "plan", "test-first", "self-review", "check", "delivery"]
+OVERLAY_BASELINE_COMMANDS = ["brainstorm", "check"]
+ADDED_COMMANDS = ["feasibility", "design", "plan", "test-first", "review-gate", "delivery"]
+DEFAULT_COMMANDS = ["feasibility", "brainstorm", "design", "plan", "test-first", "check", "review-gate", "delivery"]
 
 _CLI_DIRS = {
     "claude": ".claude",
@@ -82,7 +84,30 @@ def load_install_record(rec_file: Path) -> dict:
         return {}
 
 
-def uninstall_claude(root: Path, commands: list[str]) -> None:
+def split_commands(commands: list[str], overlay_commands: list[str] | None, added_commands: list[str] | None) -> tuple[list[str], list[str]]:
+    if overlay_commands:
+        resolved_overlay = overlay_commands
+    else:
+        resolved_overlay = [name for name in commands if name in OVERLAY_BASELINE_COMMANDS]
+    if added_commands:
+        resolved_added = added_commands
+    else:
+        resolved_added = [name for name in commands if name not in resolved_overlay]
+    return resolved_overlay, resolved_added
+
+
+def restore_backed_up_command(backup: Path, target_dir: Path, command: str, cli_label: str) -> bool:
+    backup_path = backup / f"{command}.md"
+    target_path = target_dir / f"{command}.md"
+    if not backup_path.exists():
+        warn(f"[{cli_label}] 无 {command}.md 备份，保留当前文件")
+        return False
+    shutil.copy2(backup_path, target_path)
+    ok(f"[{cli_label}] {command}.md 已恢复")
+    return True
+
+
+def uninstall_claude(root: Path, added_commands: list[str], overlay_commands: list[str]) -> None:
     """卸载 Claude Code 部署的工作流。"""
     dst_cmds = root / ".claude" / "commands" / "trellis"
     backup = dst_cmds / ".backup-original"
@@ -91,15 +116,22 @@ def uninstall_claude(root: Path, commands: list[str]) -> None:
         warn("[Claude] .claude/commands/trellis/ 不存在，跳过")
         return
 
-    # 删除 workflow 命令
+    # 删除 workflow 新增命令
     removed = 0
-    for command in commands:
+    for command in added_commands:
         candidate = dst_cmds / f"{command}.md"
         if candidate.exists():
             candidate.unlink()
             ok(f"[Claude] 删除 {command}.md")
             removed += 1
-    info(f"[Claude] 已删除 {removed} 个命令")
+    info(f"[Claude] 已删除 {removed} 个新增命令")
+
+    restored = 0
+    for command in overlay_commands:
+        if restore_backed_up_command(backup, dst_cmds, command, "Claude"):
+            restored += 1
+    if overlay_commands:
+        info(f"[Claude] 已恢复 {restored}/{len(overlay_commands)} 个同名基线命令")
 
     # 恢复 start.md
     backup_start = backup / "start.md"
@@ -137,7 +169,7 @@ def uninstall_claude(root: Path, commands: list[str]) -> None:
             ok(f"[Claude] 升级备份已删除: {directory.name}")
 
 
-def uninstall_opencode(root: Path, commands: list[str]) -> None:
+def uninstall_opencode(root: Path, added_commands: list[str], overlay_commands: list[str]) -> None:
     """卸载 OpenCode 部署的工作流。"""
     dst_cmds = root / ".opencode" / "commands" / "trellis"
     backup = dst_cmds / ".backup-original"
@@ -146,15 +178,22 @@ def uninstall_opencode(root: Path, commands: list[str]) -> None:
         warn("[OpenCode] .opencode/commands/trellis/ 不存在，跳过")
         return
 
-    # 删除 workflow 命令
+    # 删除 workflow 新增命令
     removed = 0
-    for command in commands:
+    for command in added_commands:
         candidate = dst_cmds / f"{command}.md"
         if candidate.exists():
             candidate.unlink()
             ok(f"[OpenCode] 删除 {command}.md")
             removed += 1
-    info(f"[OpenCode] 已删除 {removed} 个命令")
+    info(f"[OpenCode] 已删除 {removed} 个新增命令")
+
+    restored = 0
+    for command in overlay_commands:
+        if restore_backed_up_command(backup, dst_cmds, command, "OpenCode"):
+            restored += 1
+    if overlay_commands:
+        info(f"[OpenCode] 已恢复 {restored}/{len(overlay_commands)} 个同名基线命令")
 
     # 恢复 start.md
     backup_start = backup / "start.md"
@@ -192,7 +231,7 @@ def uninstall_opencode(root: Path, commands: list[str]) -> None:
             ok(f"[OpenCode] 升级备份已删除: {directory.name}")
 
 
-def uninstall_codex(root: Path, commands: list[str]) -> None:
+def uninstall_codex(root: Path, added_commands: list[str], overlay_commands: list[str]) -> None:
     """卸载 Codex CLI 部署的工作流 skills。"""
     # 优先检查 .agents/skills/，其次 .codex/skills/
     skills_dirs = [root / ".agents" / "skills", root / ".codex" / "skills"]
@@ -203,13 +242,27 @@ def uninstall_codex(root: Path, commands: list[str]) -> None:
             continue
         found_any = True
         removed = 0
-        for command in commands:
+        for command in added_commands:
             skill_dir = skills_dir / command
             if skill_dir.is_dir():
                 shutil.rmtree(skill_dir)
                 ok(f"[Codex] 删除 skill: {command}")
                 removed += 1
-        info(f"[Codex] {skills_dir} 已删除 {removed} 个 skills")
+        info(f"[Codex] {skills_dir} 已删除 {removed} 个新增 skills")
+
+        restored = 0
+        for command in overlay_commands:
+            backup_skill = skills_dir / ".backup-original" / command / "SKILL.md"
+            target_skill = skills_dir / command / "SKILL.md"
+            if backup_skill.exists():
+                target_skill.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(backup_skill, target_skill)
+                ok(f"[Codex] 恢复 {command} skill")
+                restored += 1
+            else:
+                warn(f"[Codex] {skills_dir} 无 {command} skill 备份，保留当前文件")
+        if overlay_commands:
+            info(f"[Codex] 已恢复 {restored}/{len(overlay_commands)} 个同名基线 skills")
 
         backup_finish_work = skills_dir / ".backup-original" / "finish-work" / "SKILL.md"
         if backup_finish_work.exists():
@@ -289,6 +342,11 @@ def main() -> int:
     rec_file = root / ".trellis" / "workflow-installed.json"
     record = load_install_record(rec_file)
     commands = record.get("commands") or DEFAULT_COMMANDS
+    overlay_commands, added_commands = split_commands(
+        commands,
+        record.get("overlay_commands"),
+        record.get("added_commands"),
+    )
     installed_cli_types = record.get("cli_types") or cli_types
 
     # 优先使用安装记录中的 CLI 类型
@@ -303,15 +361,17 @@ def main() -> int:
     print()
     info(f"目标 CLI: {', '.join(target_cli_types)}")
     info(f"待卸载命令: {', '.join(commands)}")
+    info(f"同名基线命令: {', '.join(overlay_commands) or '无'}")
+    info(f"纯新增命令: {', '.join(added_commands) or '无'}")
     print()
 
     for cli_type in target_cli_types:
         if cli_type == "claude":
-            uninstall_claude(root, commands)
+            uninstall_claude(root, added_commands, overlay_commands)
         elif cli_type == "opencode":
-            uninstall_opencode(root, commands)
+            uninstall_opencode(root, added_commands, overlay_commands)
         elif cli_type == "codex":
-            uninstall_codex(root, commands)
+            uninstall_codex(root, added_commands, overlay_commands)
         print()
 
     # 删除辅助脚本

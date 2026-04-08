@@ -127,6 +127,14 @@ text still describe the old workflow
 
 **Good**: Treat docs and instructions as part of the change surface
 
+### Mistake 4: Existence-Only Drift Checks
+
+**Bad**: Treating deployed workflow commands or helper scripts as healthy just
+because the file still exists
+
+**Good**: For source-to-target workflow deployments, verify the deployed copy
+still matches the current source contract, not just the path shape
+
 ---
 
 ## Checklist for Boundary-Crossing Changes
@@ -144,6 +152,7 @@ After implementation:
 - [ ] Verified related docs/instructions were updated if behavior changed
 - [ ] Verified ambiguous paths are labeled as source repo, task runtime, or target project
 - [ ] Verified the relevant command/test path still passes end to end
+- [ ] Verified source-to-target drift detection checks content when the deployment contract depends on exact command/helper text, not just file presence
 
 ---
 

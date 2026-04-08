@@ -49,6 +49,15 @@ BASELINE_OPENCODE_RECORD_SESSION_CONTENT = (
     "python3 ./.trellis/scripts/add_session.py --title \"Title\" --commit \"hash\"\n"
     "```\n"
 )
+BASELINE_CHECK_CONTENT = (
+    "# /trellis:check\n\n"
+    "Check if the code you just wrote follows the development guidelines.\n\n"
+    "1. Identify changed files.\n"
+)
+BASELINE_BRAINSTORM_CONTENT = (
+    "# /trellis:brainstorm\n\n"
+    "Clarify requirements before implementation.\n"
+)
 BASELINE_FINISH_WORK_CONTENT = (
     "# Finish Work - Pre-Commit Checklist\n\n"
     "Before submitting or committing, use this checklist to ensure work completeness.\n\n"
@@ -145,6 +154,14 @@ class WorkflowInstallerTests(unittest.TestCase):
             BASELINE_START_CONTENT,
             encoding="utf-8",
         )
+        (root / ".claude" / "commands" / "trellis" / "brainstorm.md").write_text(
+            BASELINE_BRAINSTORM_CONTENT,
+            encoding="utf-8",
+        )
+        (root / ".claude" / "commands" / "trellis" / "check.md").write_text(
+            BASELINE_CHECK_CONTENT,
+            encoding="utf-8",
+        )
         (root / ".claude" / "commands" / "trellis" / "finish-work.md").write_text(
             BASELINE_FINISH_WORK_CONTENT,
             encoding="utf-8",
@@ -161,6 +178,14 @@ class WorkflowInstallerTests(unittest.TestCase):
                 BASELINE_START_CONTENT.replace("Original baseline", "Original OpenCode baseline"),
                 encoding="utf-8",
             )
+            (root / ".opencode" / "commands" / "trellis" / "brainstorm.md").write_text(
+                BASELINE_BRAINSTORM_CONTENT,
+                encoding="utf-8",
+            )
+            (root / ".opencode" / "commands" / "trellis" / "check.md").write_text(
+                BASELINE_CHECK_CONTENT,
+                encoding="utf-8",
+            )
             (root / ".opencode" / "commands" / "trellis" / "finish-work.md").write_text(
                 BASELINE_FINISH_WORK_CONTENT,
                 encoding="utf-8",
@@ -174,6 +199,16 @@ class WorkflowInstallerTests(unittest.TestCase):
             (root / ".agents" / "skills" / "finish-work").mkdir(parents=True)
             (root / ".agents" / "skills" / "finish-work" / "SKILL.md").write_text(
                 BASELINE_FINISH_WORK_CONTENT,
+                encoding="utf-8",
+            )
+            (root / ".agents" / "skills" / "brainstorm").mkdir(parents=True)
+            (root / ".agents" / "skills" / "brainstorm" / "SKILL.md").write_text(
+                BASELINE_BRAINSTORM_CONTENT,
+                encoding="utf-8",
+            )
+            (root / ".agents" / "skills" / "check").mkdir(parents=True)
+            (root / ".agents" / "skills" / "check" / "SKILL.md").write_text(
+                BASELINE_CHECK_CONTENT,
                 encoding="utf-8",
             )
             (root / ".codex" / "hooks").mkdir(parents=True)
@@ -209,6 +244,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         record = fixture / ".trellis" / "workflow-installed.json"
         self.assertTrue(record.exists(), "workflow-installed.json should be created")
         self.assertIn("brainstorm", record.read_text(encoding="utf-8"))
+        self.assertIn("overlay_commands", record.read_text(encoding="utf-8"))
         self.assertIn("metadata-autocommit-guard.py", record.read_text(encoding="utf-8"))
         self.assertIn("record-session-helper.py", record.read_text(encoding="utf-8"))
         self.assertIn("pack.requirements-discovery-foundation", record.read_text(encoding="utf-8"))
@@ -343,7 +379,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertNotIn("✅ 安装记录 → workflow-installed.json", result.stdout)
         self.assertNotIn("✅ AGENTS.md NL 路由表已注入", result.stdout)
         self.assertFalse((fixture / ".trellis" / "workflow-installed.json").exists())
-        self.assertFalse((fixture / ".agents" / "skills" / "brainstorm").exists())
+        self.assertFalse((fixture / ".agents" / "skills" / "review-gate").exists())
         self.assertNotIn("workflow-nl-routing-start", (fixture / "AGENTS.md").read_text(encoding="utf-8"))
 
     def test_upgrade_check_detects_phase_router_drift_even_when_versions_match(self) -> None:
@@ -379,6 +415,23 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("辅助脚本缺失", result.stdout)
         self.assertIn("record-session-helper.py", result.stdout)
 
+    def test_upgrade_check_detects_helper_script_drift_for_opencode_only(self) -> None:
+        fixture = self.create_fixture(include_opencode=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        helper = fixture / ".trellis" / "scripts" / "workflow" / "check-quality.py"
+        helper.write_text(helper.read_text(encoding="utf-8") + "\n# drift\n", encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(UPGRADE_SCRIPT, "--check", "--cli", "opencode", "--project-root", str(fixture))
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("辅助脚本内容漂移", result.stdout)
+        self.assertIn("check-quality.py", result.stdout)
+
     def test_upgrade_check_detects_record_session_patch_drift(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
@@ -395,6 +448,38 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("record-session.md: 元数据闭环说明缺失", result.stdout)
+
+    def test_upgrade_check_detects_brainstorm_command_drift(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        brainstorm = fixture / ".claude" / "commands" / "trellis" / "brainstorm.md"
+        brainstorm.write_text("# drifted brainstorm\n", encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(UPGRADE_SCRIPT, "--check", "--project-root", str(fixture))
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("命令内容漂移: /trellis:brainstorm", result.stdout)
+
+    def test_upgrade_check_detects_check_command_drift(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        check = fixture / ".claude" / "commands" / "trellis" / "check.md"
+        check.write_text("# drifted check\n", encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(UPGRADE_SCRIPT, "--check", "--project-root", str(fixture))
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("命令内容漂移: /trellis:check", result.stdout)
 
     def test_upgrade_check_detects_finish_work_patch_drift(self) -> None:
         fixture = self.create_fixture()
@@ -532,6 +617,44 @@ class WorkflowInstallerTests(unittest.TestCase):
         restored_text = patched_skill.read_text(encoding="utf-8")
         self.assertNotIn(FINISH_WORK_MARKER, restored_text)
         self.assertIn("pnpm lint", restored_text)
+
+    def test_uninstall_restores_overlapped_baseline_check_command(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        patched_check = fixture / ".claude" / "commands" / "trellis" / "check.md"
+        self.assertIn("/trellis:check", patched_check.read_text(encoding="utf-8"))
+        self.assertEqual(
+            (fixture / ".claude" / "commands" / "trellis" / ".backup-original" / "check.md").read_text(encoding="utf-8"),
+            BASELINE_CHECK_CONTENT,
+        )
+
+        result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        restored_text = patched_check.read_text(encoding="utf-8")
+        self.assertEqual(restored_text, BASELINE_CHECK_CONTENT)
+
+    def test_uninstall_restores_overlapped_baseline_brainstorm_command(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        patched_brainstorm = fixture / ".claude" / "commands" / "trellis" / "brainstorm.md"
+        self.assertIn("/trellis:brainstorm", patched_brainstorm.read_text(encoding="utf-8"))
+        self.assertEqual(
+            (fixture / ".claude" / "commands" / "trellis" / ".backup-original" / "brainstorm.md").read_text(encoding="utf-8"),
+            BASELINE_BRAINSTORM_CONTENT,
+        )
+
+        result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        restored_text = patched_brainstorm.read_text(encoding="utf-8")
+        self.assertEqual(restored_text, BASELINE_BRAINSTORM_CONTENT)
 
     def test_uninstall_removes_agents_md_routing_section(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)

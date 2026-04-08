@@ -15,10 +15,10 @@ PYTHON = (
     if Path("/ops/softwares/python/bin/python3").exists()
     else shutil.which("python3") or shutil.which("python")
 )
-SCRIPT = REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "commands" / "shell" / "self-review-check.py"
+SCRIPT = REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "commands" / "shell" / "check-quality.py"
 
 
-class SelfReviewCheckScriptTests(unittest.TestCase):
+class CheckQualityScriptTests(unittest.TestCase):
     def run_script(self, project_dir: Path, *extra_args: str) -> subprocess.CompletedProcess[str]:
         fake_bin = project_dir / "fake-bin"
         env = os.environ.copy()

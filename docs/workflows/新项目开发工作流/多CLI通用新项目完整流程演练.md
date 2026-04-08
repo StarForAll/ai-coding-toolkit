@@ -214,7 +214,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 目标
 
-确认需求描述是否准确，统一做 `L0/L1/L2` 分类，并在进入下一阶段前补齐项目级双需求文档。
+先按 task-first 建立或更新 `prd.md` 工作底稿，自动读取上下文并在必要时 research-first；然后确认需求描述是否准确，统一做 `L0/L1/L2` 分类，并在进入下一阶段前补齐项目级双需求文档。
 
 ### CLI 入口差异
 
@@ -225,12 +225,14 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 ### 推荐 MCP / Skills
 
 - `brainstorm`
+- `prd`
 - `ace.enhance_prompt`
 - `sequential-thinking`
 - `markmap`
 
 ### 典型降级方式
 
+- 无完整研究条件时，先把 repo 中已知约束、现有模式和边界写入 `prd.md`
 - 无 `ace.enhance_prompt` 时，人工补齐“目标 / 范围 / 验收 / 边界”四项后再分类
 - 无可视化工具时，用纯 markdown 列表表达“需求 → 功能 → 验收”
 
@@ -393,17 +395,17 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ---
 
-## 阶段 6：Self-Review + Check
+## 阶段 6：Check + Review-Gate
 
 ### 目标
 
-先做本 CLI 的自审，再判断是否需要进入多 CLI 补充审查门禁。
+先做本 CLI 的质量检查，再判断是否需要进入多 CLI 补充审查门禁。
 
 ### CLI 入口差异
 
-- Claude Code：`/trellis:self-review` → `/trellis:check`
-- OpenCode：TUI 用 `/trellis:self-review`、`/trellis:check`；CLI 用 `trellis/self-review`、`trellis/check`
-- Codex：自然语言描述或显式触发 `self-review`、`check` skill
+- Claude Code：`/trellis:check` → `/trellis:review-gate`
+- OpenCode：TUI 用 `/trellis:check`、`/trellis:review-gate`；CLI 用 `trellis/check`、`trellis/review-gate`
+- Codex：自然语言描述或显式触发 `check`、`review-gate` skill
 
 ### 推荐 MCP / Skills
 
@@ -415,7 +417,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 ### 典型降级方式
 
 - 没有 reviewer skill 时，不伪造多 CLI 审查，直接记录“未执行原因 + 当前残余风险”
-- 只要出现安全、跨层 contract、数据迁移、高 blast radius，就不要把 `check` 当成可有可无
+- 只要出现安全、跨层 contract、数据迁移、高 blast radius，就不要把 `review-gate` 当成可有可无
 
 ### 外部交付项目分支
 
@@ -423,8 +425,8 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 退出门禁
 
-- 自审结论已写清
-- `check` 结果已明确为 `required` / `recommended` / `skip`
+- `check` 结果已写清
+- `review-gate` 结果已明确为 `required` / `recommended` / `skip`
 - 所有审查发现已修复或已留风险说明
 
 ---

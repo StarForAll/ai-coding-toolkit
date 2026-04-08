@@ -114,7 +114,7 @@ get_context.py 输出
     │
     ├── 测试就绪 + 任务执行矩阵全部为 `已完成`
     │   └── 优先进入收尾链路：
-    │       - 未完成自审/提交前检查 → /trellis:self-review 或 /trellis:finish-work
+    │       - 未完成质量检查/提交前检查 → /trellis:check 或 /trellis:finish-work
     │       - 已完成提交前检查 → /trellis:delivery
     │
     ├── 测试就绪 + 任务执行矩阵中存在 `可开始` 任务
@@ -126,11 +126,11 @@ get_context.py 输出
     ├── 测试就绪 + 代码未实现
     │   └── 路由 → 实施阶段（本命令 §Task Workflow；若已有任务执行矩阵，则按矩阵优先）
     │
-    ├── 代码实现完成 + 无 self-review.md
-    │   └── 路由 → /trellis:self-review（自审）
+    ├── 代码实现完成 + 无 check.md
+    │   └── 路由 → /trellis:check（质量检查）
     │
-    ├── 自审完成
-    │   └── 路由 → /trellis:check → /trellis:finish-work
+    ├── 质量检查完成
+    │   └── 路由 → /trellis:review-gate → /trellis:finish-work
     │
     └── 用户要求继续/跳到某阶段
         └── 直接跳转到指定命令
@@ -148,8 +148,8 @@ get_context.py 输出
 | "拆一下任务" "做个工作计划" "把需求分解成小任务" | `/trellis:plan` |
 | "先写测试" "用 TDD 方式" "测试先行" | `/trellis:test-first` |
 | "开始写代码" "实现这个功能" "动手做吧" | 实施阶段（本命令 Task Workflow） |
-| "自检一下" "对照 spec 看看" "有没有偏差" | `/trellis:self-review` |
-| "补充审查一下" "让其他 CLI 看一下" "多人审查" "check 一下" | `/trellis:check` |
+| "检查一下这次改动" "对照 spec 看看" "做一轮质量检查" | `/trellis:check` |
+| "补充审查一下" "让其他 CLI 看一下" "多人审查" "进入 review-gate" | `/trellis:review-gate` |
 | "准备交付" "跑一下验收" "整理交付物" "项目收尾" | `/trellis:delivery` |
 | "这个流程有坑" "这一步老容易漏" "这个命令说明有歧义" "先把这次踩坑记一下" "这个工作流后面得优化" | 优先触发经验反馈机制：开发中先在 `tmp/` 起草反馈草稿，用户确认后移入 `learn/`；若已进入收尾链路则路由到 `/trellis:delivery` 的 Step 9 |
 | "收尾" "提交前检查" "准备 commit" | `/trellis:finish-work` |
@@ -167,7 +167,7 @@ get_context.py 输出
 
 当用户输入同时匹配多个命令时，按以下优先级排序：
 
-1. **当前阶段上下文** — 正在 §3 design，用户说"检查" → `/trellis:check-cross-layer`（而非 `/trellis:check`）
+1. **当前阶段上下文** — 正在 §3 design，用户说"检查" → `/trellis:check-cross-layer`（而非 `/trellis:review-gate`）
 2. **精确关键词** — 用户说"TDD" → `/trellis:test-first`（精确匹配优先）
 3. **阶段顺序推断** — 刚完成 brainstorm → "下一步" → `/trellis:design`
 4. **模糊语义** — 根据上下文推断最合理的命令
@@ -202,7 +202,7 @@ get_context.py 输出
 若 AI 检测到隐式踩坑信号（非用户显式表达）：
 
 - 同一命令连续失败或重试（如 finish-work 前忘 archive 报错后重跑）
-- self-review 中出现“同类错误重复出现”或上下文污染迹象
+- check 中出现“同类错误重复出现”或上下文污染迹象
 - 用户表达挫败但未明确指向流程（“算了先这样”“为什么这么麻烦”）
 
 → AI 应主动问一句：“这次踩坑是否需要记录到 learn/？”

@@ -84,12 +84,12 @@ Claude Code 的用户入口仍是项目命令：
 ├── design.md
 ├── plan.md
 ├── test-first.md
-├── self-review.md
 ├── check.md
+├── review-gate.md
 └── delivery.md
 ```
 
-上面这棵树表示的是**当前 workflow 新增分发的命令资产**，不是目标项目里的完整 Trellis 命令全集。
+上面这棵树表示的是**当前 workflow 分发的阶段命令资产**，其中既包含纯新增命令，也包含与 Trellis 基线同名、但由当前 workflow 提供合并语义的 `brainstorm` / `check`；它不是目标项目里的完整 Trellis 命令全集。
 
 因为这套 workflow 是在 `trellis init` 之后嵌入的，目标项目里还会保留 Trellis 原生命令，例如：
 
@@ -151,7 +151,7 @@ Claude Code 的 hooks 是这套 workflow 的关键承载层之一。当前仓库
 .claude/agents/
 ├── research.md
 ├── implement.md
-├── check.md
+├── review-gate.md
 ├── debug.md
 └── dispatch.md
 ```

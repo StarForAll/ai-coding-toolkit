@@ -10,7 +10,7 @@
 
 重要边界：
 - 目标项目应已先执行 `trellis init`
-- 当前 workflow 只重新部署自身新增的阶段命令资产
+- 当前 workflow 会重新部署合并型 + 纯新增型阶段命令资产
 - `start.md` / `finish-work.md` / `record-session.md` 属于 Trellis 基线命令，升级脚本负责恢复并重新注入 workflow 补丁
 """
 
@@ -49,15 +49,17 @@ _FINISH_WORK_START_HEADING = "### 1. Code Quality"
 _FINISH_WORK_END_HEADING = "### 1.5. Test Coverage"
 _RECORD_SESSION_MARKER = "## Record-Session Metadata Closure `[AI]`"
 _RECORD_SESSION_INJECTION_MARKER = "### Step 2: One-Click Add Session"
-# 当前 workflow 自己分发的阶段命令。
-# `start` / `finish-work` / `record-session` 不是这里的新增命令，它们来自 Trellis 基线，
-# 其中 `start` / `finish-work` / `record-session` 可能需要重新注入 workflow 补丁。
-NEW_COMMANDS = ["feasibility", "brainstorm", "design", "plan", "test-first", "self-review", "check", "delivery"]
+# 当前 workflow 分发的阶段命令。
+# `brainstorm` / `check` 与 Trellis 基线同名，但当前 workflow 采用合并后的阶段语义；
+# `start` / `finish-work` / `record-session` 仍来自 Trellis 基线，并由当前 workflow 注入补丁。
+OVERLAY_BASELINE_COMMANDS = ["brainstorm", "check"]
+ADDED_COMMANDS = ["feasibility", "design", "plan", "test-first", "review-gate", "delivery"]
+DISTRIBUTED_COMMANDS = ["feasibility", "brainstorm", "design", "plan", "test-first", "check", "review-gate", "delivery"]
 HELPER_SCRIPTS = [
     "feasibility-check.py",
     "design-export.py",
     "plan-validate.py",
-    "self-review-check.py",
+    "check-quality.py",
     "delivery-control-validate.py",
     "metadata-autocommit-guard.py",
     "record-session-helper.py",
@@ -159,8 +161,34 @@ def load_install_record(rec_file: Path) -> dict:
         return {}
 
 
+def read_text(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        warn(f"无法按 UTF-8 读取文件，跳过内容比对: {path}")
+        return None
+
+
+def expected_command_content(src: Path, name: str) -> str | None:
+    source_path = src / f"{name}.md"
+    if not source_path.exists():
+        err(f"源命令缺失，无法校验: {source_path.name}")
+        return None
+    return prepare_command_content(source_path)
+
+
+def expected_helper_script_content(src: Path, name: str) -> str | None:
+    source_path = src / "shell" / name
+    if not source_path.exists():
+        err(f"源辅助脚本缺失，无法校验: {source_path.name}")
+        return None
+    return read_text(source_path)
+
+
 # ── Claude Code 冲突检测 ──
-def detect_conflicts_claude(dst_cmds: Path, dst_scripts: Path) -> int:
+def detect_conflicts_claude(src: Path, dst_cmds: Path) -> int:
     conflicts = 0
     start = dst_cmds / "start.md"
     finish_work = dst_cmds / "finish-work.md"
@@ -172,13 +200,25 @@ def detect_conflicts_claude(dst_cmds: Path, dst_scripts: Path) -> int:
     else:
         ok("[Claude] start.md: Phase Router 正常")
 
-    missing_commands = [name for name in NEW_COMMANDS if not (dst_cmds / f"{name}.md").exists()]
-    if missing_commands:
-        for name in missing_commands:
+    command_conflicts = 0
+    for name in DISTRIBUTED_COMMANDS:
+        target_path = dst_cmds / f"{name}.md"
+        if not target_path.exists():
             warn(f"[Claude] 命令缺失: /trellis:{name}")
-        conflicts += len(missing_commands)
+            command_conflicts += 1
+            continue
+        expected = expected_command_content(src, name)
+        actual = read_text(target_path)
+        if expected is None or actual is None:
+            command_conflicts += 1
+            continue
+        if actual != expected:
+            err(f"[Claude] 命令内容漂移: /trellis:{name}")
+            command_conflicts += 1
+    if command_conflicts:
+        conflicts += command_conflicts
     else:
-        ok("[Claude] 所有命令存在")
+        ok("[Claude] 所有分发命令内容一致")
 
     if not finish_work.exists():
         err("[Claude] finish-work.md: 文件缺失")
@@ -198,19 +238,11 @@ def detect_conflicts_claude(dst_cmds: Path, dst_scripts: Path) -> int:
     else:
         ok("[Claude] record-session.md: 元数据闭环说明正常")
 
-    missing_scripts = [name for name in HELPER_SCRIPTS if not (dst_scripts / name).exists()]
-    if missing_scripts:
-        for name in missing_scripts:
-            warn(f"[Claude] 辅助脚本缺失: {name}")
-        conflicts += len(missing_scripts)
-    else:
-        ok("[Claude] 所有辅助脚本存在")
-
     return conflicts
 
 
 # ── OpenCode 冲突检测 ──
-def detect_conflicts_opencode(dst_cmds: Path, dst_scripts: Path) -> int:
+def detect_conflicts_opencode(src: Path, dst_cmds: Path) -> int:
     conflicts = 0
     start = dst_cmds / "start.md"
     finish_work = dst_cmds / "finish-work.md"
@@ -222,13 +254,25 @@ def detect_conflicts_opencode(dst_cmds: Path, dst_scripts: Path) -> int:
     else:
         ok("[OpenCode] start.md: Phase Router 正常")
 
-    missing_commands = [name for name in NEW_COMMANDS if not (dst_cmds / f"{name}.md").exists()]
-    if missing_commands:
-        for name in missing_commands:
+    command_conflicts = 0
+    for name in DISTRIBUTED_COMMANDS:
+        target_path = dst_cmds / f"{name}.md"
+        if not target_path.exists():
             warn(f"[OpenCode] 命令缺失: {name}")
-        conflicts += len(missing_commands)
+            command_conflicts += 1
+            continue
+        expected = expected_command_content(src, name)
+        actual = read_text(target_path)
+        if expected is None or actual is None:
+            command_conflicts += 1
+            continue
+        if actual != expected:
+            err(f"[OpenCode] 命令内容漂移: {name}")
+            command_conflicts += 1
+    if command_conflicts:
+        conflicts += command_conflicts
     else:
-        ok("[OpenCode] 所有命令存在")
+        ok("[OpenCode] 所有分发命令内容一致")
 
     if not finish_work.exists():
         err("[OpenCode] finish-work.md: 文件缺失")
@@ -248,25 +292,36 @@ def detect_conflicts_opencode(dst_cmds: Path, dst_scripts: Path) -> int:
     else:
         ok("[OpenCode] record-session.md: 元数据闭环说明正常")
 
-    # 辅助脚本共享，不重复计数
     return conflicts
 
 
 # ── Codex 冲突检测 ──
-def detect_conflicts_codex(root: Path) -> int:
+def detect_conflicts_codex(src: Path, root: Path) -> int:
     conflicts = 0
     skills_dir = resolve_codex_skills_dir(root)
     if skills_dir is None:
         warn("[Codex] 未找到 skills 目录")
         return 0
 
-    missing_skills = [name for name in NEW_COMMANDS if not (skills_dir / name / "SKILL.md").exists()]
-    if missing_skills:
-        for name in missing_skills:
+    skill_conflicts = 0
+    for name in DISTRIBUTED_COMMANDS:
+        target_path = skills_dir / name / "SKILL.md"
+        if not target_path.exists():
             warn(f"[Codex] skill 缺失: {name}")
-        conflicts += len(missing_skills)
+            skill_conflicts += 1
+            continue
+        expected = expected_command_content(src, name)
+        actual = read_text(target_path)
+        if expected is None or actual is None:
+            skill_conflicts += 1
+            continue
+        if actual != expected:
+            err(f"[Codex] skill 内容漂移: {name}")
+            skill_conflicts += 1
+    if skill_conflicts:
+        conflicts += skill_conflicts
     else:
-        ok("[Codex] 所有 skills 存在")
+        ok("[Codex] 所有分发 skills 内容一致")
 
     finish_work_skill = skills_dir / "finish-work" / "SKILL.md"
     if finish_work_skill.exists():
@@ -293,6 +348,27 @@ def detect_conflicts_codex(root: Path) -> int:
     return conflicts
 
 
+def detect_shared_script_conflicts(src: Path, dst_scripts: Path) -> int:
+    conflicts = 0
+    for name in HELPER_SCRIPTS:
+        target_path = dst_scripts / name
+        if not target_path.exists():
+            warn(f"[Shared] 辅助脚本缺失: {name}")
+            conflicts += 1
+            continue
+        expected = expected_helper_script_content(src, name)
+        actual = read_text(target_path)
+        if expected is None or actual is None:
+            conflicts += 1
+            continue
+        if actual != expected:
+            err(f"[Shared] 辅助脚本内容漂移: {name}")
+            conflicts += 1
+    if conflicts == 0:
+        ok("[Shared] 所有辅助脚本内容一致")
+    return conflicts
+
+
 # ── 备份 ──
 def backup_deployed_state(dst_cmds: Path) -> None:
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -307,7 +383,7 @@ def backup_deployed_state(dst_cmds: Path) -> None:
     record_session = dst_cmds / "record-session.md"
     if record_session.exists():
         shutil.copy2(record_session, backup_dir / "record-session.md")
-    for name in NEW_COMMANDS:
+    for name in DISTRIBUTED_COMMANDS:
         candidate = dst_cmds / f"{name}.md"
         if candidate.exists():
             shutil.copy2(candidate, backup_dir / f"{name}.md")
@@ -322,7 +398,7 @@ def prepare_command_content(source_path: Path) -> str:
 
 
 def deploy_commands(src: Path, dst_cmds: Path) -> None:
-    for name in NEW_COMMANDS:
+    for name in DISTRIBUTED_COMMANDS:
         source_path = src / f"{name}.md"
         target_path = dst_cmds / f"{name}.md"
         if source_path.exists():
@@ -347,7 +423,7 @@ def deploy_codex_skills(src: Path, root: Path) -> None:
         warn("[Codex] 未找到 skills 目录，跳过")
         return
 
-    for name in NEW_COMMANDS:
+    for name in DISTRIBUTED_COMMANDS:
         source_path = src / f"{name}.md"
         target_path = skills_dir / name / "SKILL.md"
         if source_path.exists():
@@ -470,7 +546,9 @@ def write_install_record(rec_file: Path, current_version: str, previous_version:
                 "previous_version": previous_version,
                 "cli_types": cli_types,
                 "updated": now,
-                "commands": NEW_COMMANDS,
+                "commands": DISTRIBUTED_COMMANDS,
+                "overlay_commands": OVERLAY_BASELINE_COMMANDS,
+                "added_commands": ADDED_COMMANDS,
                 "scripts": HELPER_SCRIPTS,
             },
             ensure_ascii=False,
@@ -547,12 +625,13 @@ def main() -> int:
     for cli_type in cli_types:
         if cli_type == "claude":
             dst_cmds = root / ".claude" / "commands" / "trellis"
-            total_conflicts += detect_conflicts_claude(dst_cmds, dst_scripts)
+            total_conflicts += detect_conflicts_claude(src, dst_cmds)
         elif cli_type == "opencode":
             dst_cmds = root / ".opencode" / "commands" / "trellis"
-            total_conflicts += detect_conflicts_opencode(dst_cmds, dst_scripts)
+            total_conflicts += detect_conflicts_opencode(src, dst_cmds)
         elif cli_type == "codex":
-            total_conflicts += detect_conflicts_codex(root)
+            total_conflicts += detect_conflicts_codex(src, root)
+    total_conflicts += detect_shared_script_conflicts(src, dst_scripts)
     print(f"   总冲突: {total_conflicts}")
     print()
 

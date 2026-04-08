@@ -1,224 +1,179 @@
 ---
 name: check
-description: 自审完了？做任务级补充审查门禁 — 判断是否需要多 CLI 审查，生成 reviewer 指令包，汇总修复并重新验证。触发词：补充审查、多人审查、让其他 CLI 看一下、check 一下、代码检查、review、质量检查
+description: 代码写完了？检查一下 — 基于真实改动范围和项目 spec 执行质量检查，运行项目化验证命令，输出偏差清单与下一步建议。触发词：检查一下、质量检查、对照 spec、对照规范、自检、有没有偏差
 ---
 
-# /trellis:check — 任务级多 CLI 补充审查门禁
+# /trellis:check — 实现后质量检查
 
-> **Workflow Position**: §5.1.x → 前: `/trellis:self-review` → 后: `/trellis:finish-work`
+> **Workflow Position**: §5.1.x → 前: `/trellis:start` 实施完成 → 后: `/trellis:review-gate` → `/trellis:finish-work`
 > **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:check`） · ✅ OpenCode（TUI: `/trellis:check`；CLI: `trellis/check`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:check` 命令；见 `codex/README.md`）
 
 ---
 
 ## When to Use (自然触发)
 
-- "check 一下这个任务"
-- "让其他 CLI 看一下"
-- "做个补充审查"
-- "多人审查一下"
-- 当前 CLI 已完成任务原本 review，且需要判断是否进入多 CLI 审查
+- "检查一下这次改动"
+- "对照 spec 看看有没有问题"
+- "做一轮质量检查"
+- "实现写完了，先 check 一下"
+- 当前任务代码已完成，需要在进入 `review-gate` 或 `finish-work` 之前先做一次任务级质量检查
 
-> 若补充审查识别到的是冻结后的需求讨论，按 `§2.5` 分流：纯澄清留在当前阶段；新增 / 修改 / 删除进入需求变更管理，不直接回实现吸收。
+> 以下场景不要误路由到本命令：
+>
+> - 需要跨层影响排查 → `/trellis:check-cross-layer`
+> - 需要多 CLI 补充审查门禁 → `/trellis:review-gate`
+> - 需要提交前完整收尾检查 → `/trellis:finish-work`
 
 ---
 
 ## 核心目标
 
-`/trellis:check` 不是简单重复 `self-review`，而是做三件事：
+`/trellis:check` 的目标不是重复实现阶段，也不是替代 `review-gate`，而是完成四件事：
 
-1. 判断当前任务是否需要进入**任务级多 CLI 补充审查层**
-2. 若需要，生成给其他 CLI 直接执行的**标准化命令包**
-3. 在其他 CLI 返回报告后，由当前 CLI 统一汇总、修复、回归验证
-
-它的定位是：**高风险 / 高不确定任务的补充审查门禁**。普通任务多数应落在 `skip`，而不是默认进入多 CLI 审查。
+1. 基于真实改动范围定位适用的 spec / guideline
+2. 执行项目确认过的验证命令并记录证据
+3. 检查实现偏差、边界风险、安全与性能问题
+4. 输出结构化 `check.md`，供 `review-gate` / `finish-work` 消费
 
 ---
 
 ## 流程
 
-### Step 1: 读取当前任务上下文
+### Step 1: 识别改动范围
 
-至少读取：
+先识别这次实际变更了哪些文件：
 
-- `$TASK_DIR/self-review.md`
-- 当前任务的目标 / 验收标准 / 关联设计文档
-- 当前任务改动范围、验证结果、风险点
+```bash
+git diff --name-only HEAD
+```
 
-### Step 2: 触发判定
+必要时补做影响面分析：
 
 **MCP 能力路由**
 
 | 场景 | 调用能力 | 触发条件 | 说明 |
 |------|---------|---------|------|
-| 复杂影响面推理 | `sequential-thinking` | 当影响面涉及 ≥3 层或 ≥3 个高风险条件时 | blast radius 分析、多条件分支判定 |
-| 依赖安全公告检查 | `exa_search` | 当改动涉及依赖升级或外部组件风险时 | 若无法联网，标记 `[Evidence Gap]`，不要给出“无已知漏洞”的结论 |
+| 代码影响面分析 | `ace.search_context` | 默认优先 | 查找相似代码、调用关系、潜在遗漏点。若不可用，改用 `rg` / 上下文阅读，并标记 `[Evidence Gap]` |
+| 复杂验证链路推理 | `sequential-thinking` | 当验证链路涉及 ≥3 个条件组合、异常分支或交叉影响时 | 用于梳理验证优先级和风险路径 |
 
-判定模型：**硬条件 + 软条件分层门槛**
+### Step 2: 定位并读取适用 spec / guideline
 
-**硬条件（命中即触发）**
-- 认证、授权、权限边界、敏感信息处理
-- 数据迁移、schema 变更、删除与回填
-- 公共 API、跨层 contract、外部系统集成
-- 支付、队列、缓存一致性、并发状态
-- 核心共享模块且 blast radius 明显
-- 用户显式要求执行任务级多 CLI 审查
+根据改动路径判断适用模块：
 
-**软条件门槛**
-- 复杂度层：改动文件数、改动行数、涉及模块/层数、异常路径数量
-- 影响面层：公共模块、跨层边界、外部集成、blast radius
-- 可信度层：测试覆盖不足、当前 CLI 不确定性高、AI 生成比例高、历史缺陷密度高
-
-**判定结果**
-- `required`：必须执行多 CLI 审查
-- `recommended`：建议执行；若现有验证已足够且用户接受风险，可跳过并写明原因
-- `skip`：无需执行，直接进入 `/trellis:finish-work`
-
-将判定写入：
-
-```text
-$TASK_DIR/check/review-gate-round-<N>.md
+```bash
+python3 ./.trellis/scripts/get_context.py --mode packages
 ```
 
-### Step 3: 确认能力前置并生成 reviewer 指令包
+然后执行：
 
-若结果为 `required` 或用户接受 `recommended`：
+1. 读取对应 `.trellis/spec/<package>/<layer>/index.md`
+2. 跟随 `Quality Check` section 找到实际 guideline 文件
+3. 阅读具体 guideline，而不是只停留在 index
 
-先确认：
+最低要求：
 
-- 当前 CLI 已具备 `multi-cli-review-action` 能力
-- 目标 reviewer CLI 已具备 `multi-cli-review` 能力
+- 不能只凭记忆判断“应该没问题”
+- 不能跳过与当前改动直接相关的质量规则
+- 若 spec / guideline 缺失，必须标记 `[Evidence Gap]`
 
-若任一能力缺失：
+### Step 3: 执行项目化验证
 
-- 先提示用户在对应 CLI 中补齐对应 skill
-- **不要**降级为临时上下文注入或其他兼容协议继续该审查层
+**调用 Skill**：`verification-before-completion` — 坚持“证据先于断言”完成验证。降级：明确列出验证命令、关键输出和 `pass / fail / not run` 结论。
 
-1. 当前 CLI 创建：
-
-```text
-tmp/multi-cli-review/<task-id>/review-round-<N>/
+```bash
+python3 <WORKFLOW_DIR>/commands/shell/check-quality.py \
+  <task_dir> \
+  --test-cmd "<user-confirmed test command>" \
+  --lint-cmd "<user-confirmed lint command>" \
+  --typecheck-cmd "<user-confirmed type-check command>"
 ```
-
-2. 当前 CLI 生成：
-
-```text
-$TASK_DIR/check/reviewer-commands-round-<N>.md
-```
-
-内容至少包括：
-
-- 任务摘要
-- 审查重点
-- 目标路径 / 关键文件
-- 实际轮次 `N`
-- `task-dir`
-- reviewer-id 分配
-- 供其他 CLI 直接复制执行的完整 `multi-cli-review` 命令
 
 约束：
 
-- 默认 reviewer 数：1
-- 最大 reviewer 数：4
-- reviewer 只允许使用 `multi-cli-review`
-- reviewer 不得直接修改代码
-- reviewer 不得创建目录；目录只能由当前 CLI/协调者创建
-- 不转交当前完整对话上下文，只给标准化命令包
+- test / lint / typecheck 命令必须来自技术架构确认后的项目化输入
+- 若当前项目没有某一项检查，则省略对应参数，并在结果中标记 `not run`
+- 不猜默认命令，不把其他项目习惯硬套到当前项目
 
-### Step 4: 其他 CLI 执行独立审查
+### Step 4: 扩展质量检查清单
 
-用户在其他 CLI 中手动执行标准命令，例如：
+在原生 `check` 的基础上，继续补做以下检查：
 
-```text
-/multi-cli-review "<任务级审查描述>" <目标路径> --task-dir tmp/multi-cli-review/<task-id> --reviewer-id claude --round <N> --review-focus "边界条件与风险"
-```
+- Spec 对照：实现是否满足需求 / 设计 / contract
+- 验证证据：测试 / lint / typecheck 是否覆盖当前改动
+- 边界场景：空值、极值、异常值、失败分支
+- 安全风险：注入、越权、泄露、fail-open、危险配置
+- 性能影响：复杂度、资源占用、慢路径
+- 上下文健康：是否出现重复修错、方向漂移、明显遗漏
 
-每个 reviewer 产出：
+**调用 Skill**：`sharp-edges` — 检查危险 API 和配置。降级：手动检查 fail-open 默认值、危险配置和易误用接口。
 
-```text
-tmp/multi-cli-review/<task-id>/review-round-<N>/<reviewer-id>.md
-```
+### Step 5: 生成检查结果
 
-### Step 5: 当前 CLI 汇总并修复
-
-其他 CLI 报告就绪后，当前 CLI 执行：
+写入：
 
 ```text
-/multi-cli-review-action --task-dir tmp/multi-cli-review/<task-id> --round <N>
+$TASK_DIR/check.md
 ```
 
-`multi-cli-review-action` 负责：
+最少包含：
 
-- 聚合多个 reviewer 报告
-- 去重
-- 冲突标记
-- 采纳 / 忽略 / 需人工裁决
-- 执行统一修复
-- 输出 `summary-round-<N>.md` 与 `action.md`
+- 改动范围
+- 适用 spec / guideline
+- 验证命令与 `pass / fail / not run`
+- 偏差清单
+- 未覆盖风险
+- 建议人工关注模块
+- 推荐下一步
 
-### Step 6: 重新验证与关闭
+建议结构：
 
-当前 CLI 根据修复结果重新跑该任务原本的 review / 验证：
+```markdown
+# Check Report
 
-- 必要的 lint / typecheck / tests
-- 当前任务的关键回归检查
-- 如有必要，重写或更新 `$TASK_DIR/self-review.md`
+## Changed Scope
 
-只有在以下任一条件成立时，当前任务才允许关闭：
+## Applied Specs
 
-- 本轮判定为 `skip`
-- 多 CLI 审查已完成，且修复后重新验证通过
-- 当前轮没有新的有效修复建议，且剩余问题均已明确忽略或关闭
+## Verification Results
 
----
+## Deviations
 
-## 提前关闭与人工介入
+## Uncovered Risks
 
-### 可提前关闭
+## Suggested Next Step
+```
 
-- 当前轮所有 reviewer 都没有新的有效修复建议
-- 当前 CLI 判断新增问题均为重复、低价值或不成立
-- 修复后验证通过，且无剩余高优先级问题
+### Step 6: 上下文污染检测
 
-### 必须人工介入
-
-- reviewer 建议互斥
-- 高优先级问题 2+ 轮未收敛
-- 建议超出当前任务边界
-- 建议可能违反项目规范或带来安全风险
-- 当前 CLI 无法判断建议是否应采纳
-- 达到 **3 轮上限** 且仍有未解决问题
+- 重复已修复的错误？→ 停止，开新会话
+- 输出方向偏离？→ 导出决策摘要
+- 若风险仍不明确，不直接进入 `finish-work`，先走 `review-gate`
 
 ---
 
 ## 输出
 
 ```text
-$TASK_DIR/check/
-├── review-gate-round-<N>.md
-└── reviewer-commands-round-<N>.md
-
-tmp/multi-cli-review/<task-id>/
-├── review-round-<N>/<reviewer-id>.md
-├── summary-round-<N>.md
-├── action.md
-└── .processed.json
+$TASK_DIR/check.md
 ```
 
 ---
 
 ## 下一步推荐
 
-**当前状态**: `/trellis:check` 已完成当前任务的补充审查判定。
+**当前状态**: 质量检查完成，`check.md` 已生成。
 
 > 本节定义的是阶段完成后的推荐输出口径，用于帮助当前 CLI 或协作者说明下一步；它不是框架层自动跳转保证。
 
-根据判定结果：
+根据检查结果：
 
-| 判定结果 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
+| 检查结果 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
-| `skip`，可直接提交前检查 | `/trellis:finish-work` | 进入提交前检查，或显式触发 `finish-work` skill | **默认推荐**。无需进入多 CLI 审查 |
-| `required` 或接受 `recommended` | 在已具备 `multi-cli-review` 能力的其他 CLI 中运行 `multi-cli-review` | 在目标 CLI 中发起多 CLI 审查，或显式触发 `multi-cli-review` skill | 若目标 CLI 尚未具备该 skill，先补齐能力再执行 |
-| 报告已就绪，准备汇总修复 | `multi-cli-review-action` 能力 | `multi-cli-review-action` skill | 当前 CLI 聚合报告、执行修复、重新验证 |
-| 审查发现需回到实现阶段 | `/trellis:start` | 回到实施阶段，或显式触发 `start` skill | 回到当前任务修复问题 |
-| 审查发现冻结后新增 / 修改 / 删除需求 | `§2.5 需求变更管理` | 同上 | 先处理评估与基线更新，再回到受影响的最早阶段 |
-| 出现冲突或超阈值 | 用户人工决策 | 用户人工决策 | 停止自动推进，先做人工裁决 |
+| 基本合规，需判断是否进入补充审查 | `/trellis:review-gate` | 进入补充审查判断，或显式触发 `review-gate` skill | **默认推荐**。由 `review-gate` 决定 `required / recommended / skip` |
+| 存在实现偏差，需先修复 | `/trellis:start` | 回到实施阶段，或显式触发 `start` skill | 先修复偏差项，再重新执行 `check` |
+| 测试或验证证据不足 | `/trellis:test-first` | 回到测试驱动，或显式触发 `test-first` skill | 先补验证证据，再重新执行 `check` |
+| 风险较高但事实已整理完成 | `/trellis:review-gate` | 进入补充审查判断，或显式触发 `review-gate` skill | 让 gate 基于 `check.md` 做门禁判定 |
+| 发现上下文污染 | `/trellis:start` | 开新会话并重新描述当前意图，或显式触发 `start` skill | 停止当前会话，开新会话并注入决策摘要 |
+| 偏差来自冻结后新增 / 修改 / 删除需求 | `§2.5 需求变更管理` | 同上 | 先完成评估与确认；获批后再回到受影响的最早阶段 |
+| 偏差仅是纯澄清 | 留在当前阶段 | 留在当前阶段 | 仅限不改变范围、接口契约、验收标准、成本、工期 |
+| 不确定下一步 | `/trellis:review-gate` | 描述当前审查意图，或显式触发 `review-gate` skill | 先做任务级补充审查门禁判断 |

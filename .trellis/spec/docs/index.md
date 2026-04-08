@@ -23,6 +23,7 @@ Use this document for:
 | Repository README | `README.md` | Explain what this repo contains and how the asset layers relate |
 | Asset README | `agents/README.md`, `commands/*/README.md`, `docs/README.md` | Clarify scope and structure of one asset area |
 | Workflow docs | `docs/workflows/**` | Human-facing workflow notes and command references |
+| Workflow authoring spec | `docs/workflows/自定义工作流制作规范.md` | Cross-workflow authoring rules, including Trellis upgrade-compat baseline requirements |
 | Trellis spec docs | `.trellis/spec/**` | Repo-local maintenance guidance plus workflow-authoring rules used by this repo |
 | Library docs | `trellis-library/README.md`, `trellis-library/taxonomy.md` | Source-library architecture and taxonomy |
 
@@ -104,6 +105,7 @@ For subdirectories:
 - **Name the target explicitly**: If a workflow creates or updates files in the consuming project, say "target project" and give the target path
 - **Do not conflate artifacts**: Explain different roles when both task-local working files and project-level formal docs exist
 - **Preserve deploy semantics**: When source docs are installed into other tool/runtime locations, state whether the rule applies to the source copy, deployed copy, or target project filesystem
+- **Use a clean Trellis baseline for source-workflow compatibility maintenance**: When documenting how this repository updates Trellis-based workflow source content after a Trellis upgrade, reference the `/tmp` fixture created by `trellis init`, not this repository's already customized `.trellis/` or CLI directories; do not present that rule as the target project's own upgrade-compat standard
 
 ---
 

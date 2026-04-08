@@ -47,16 +47,17 @@ _CLI_ALT_DIRS = {
 }
 _ALL_CLI_TYPES = ["claude", "opencode", "codex"]
 
-# 当前 workflow 新增分发的阶段命令。
+# 当前 workflow 分发的阶段命令分两类：
+# 1. 与 Trellis 基线同名、但由当前 workflow 提供合并版语义的命令
+# 2. 当前 workflow 纯新增命令
 # `start` / `finish-work` / `record-session` 属于 Trellis 原生命令基线，
-# 不应在这里误加成“重新分发完整命令源”。
-NEW_COMMANDS = [
-    "feasibility", "brainstorm", "design", "plan",
-    "test-first", "self-review", "check", "delivery",
-]
+# 当前 workflow 仅做补丁增强，不重新分发完整命令源。
+OVERLAY_BASELINE_COMMANDS = ["brainstorm", "check"]
+ADDED_COMMANDS = ["feasibility", "design", "plan", "test-first", "review-gate", "delivery"]
+DISTRIBUTED_COMMANDS = ["feasibility", "brainstorm", "design", "plan", "test-first", "check", "review-gate", "delivery"]
 HELPER_SCRIPTS = [
     "feasibility-check.py", "design-export.py",
-    "plan-validate.py", "self-review-check.py",
+    "plan-validate.py", "check-quality.py",
     "delivery-control-validate.py",
     "metadata-autocommit-guard.py",
     "record-session-helper.py",
@@ -103,8 +104,8 @@ _NL_ROUTING_SECTION = """\
 | 设计、架构、架构设计、选型、接口设计、技术方案、开始设计、画架构图、设计方案 | `/trellis:design` | 描述设计阶段意图，或显式触发 `design` skill | §3 设计阶段 |
 | 拆任务、排期、计划、任务分解、做计划、工作分解、里程碑、工作计划 | `/trellis:plan` | 描述任务拆解意图，或显式触发 `plan` skill | §4 任务拆解 |
 | 写测试、TDD、测试驱动、先写测试、测试用例、验收测试 | `/trellis:test-first` | 描述测试先行意图，或显式触发 `test-first` skill | §4.3 测试先行 |
-| 自审、自检、自查、审查一下、有没有偏差、对照 spec、对照规范、检查偏差 | `/trellis:self-review` | 描述自审意图，或显式触发 `self-review` skill | §5.1.x 自审 |
-| 代码审查、review、质量检查、检查代码质量、补充审查、多人审查、check 一下、让其他 CLI 看一下 | `/trellis:check` | 描述补充审查意图，或显式触发 `check` skill | §5.1.y 补充审查 |
+| 检查一下、质量检查、对照 spec、对照规范、自检、有没有偏差 | `/trellis:check` | 描述质量检查意图，或显式触发 `check` skill | §5.1.x 质量检查 |
+| 补充审查、多 CLI 审查、多人审查、让其他 CLI 看一下、review-gate、审查门禁 | `/trellis:review-gate` | 描述补充审查意图，或显式触发 `review-gate` skill | §5.1.y 补充审查 |
 | 提交前检查、准备提交、commit 前、收尾 | `/trellis:finish-work` | 描述提交前检查意图，或显式触发 `finish-work` skill | §6 提交检查 |
 | 交付、部署、上线、发布、准备交付、跑验收、整理交付物、项目收尾 | `/trellis:delivery` | 描述交付收尾意图，或显式触发 `delivery` skill | §6+§7 测试交付 |
 | 记录、保存进度、收工 | `/trellis:record-session` | 描述会话收尾意图，或显式触发 `record-session` skill | §7 会话记录 |
@@ -341,6 +342,7 @@ def deploy_claude(src: Path, root: Path, dry_run: bool) -> dict:
         start = dst_cmds / "start.md"
         finish_work = dst_cmds / "finish-work.md"
         record_session = dst_cmds / "record-session.md"
+        baseline_overlaps = [dst_cmds / f"{name}.md" for name in OVERLAY_BASELINE_COMMANDS]
         if start.exists() and not (backup / "start.md").exists():
             shutil.copy2(start, backup / "start.md")
             ok(f"[Claude] start.md → 备份")
@@ -350,9 +352,14 @@ def deploy_claude(src: Path, root: Path, dry_run: bool) -> dict:
         if record_session.exists() and not (backup / "record-session.md").exists():
             shutil.copy2(record_session, backup / "record-session.md")
             ok(f"[Claude] record-session.md → 备份")
+        for baseline_cmd in baseline_overlaps:
+            backup_target = backup / baseline_cmd.name
+            if baseline_cmd.exists() and not backup_target.exists():
+                shutil.copy2(baseline_cmd, backup_target)
+                ok(f"[Claude] {baseline_cmd.name} → 备份")
 
     # 部署命令
-    for cmd in NEW_COMMANDS:
+    for cmd in DISTRIBUTED_COMMANDS:
         s = src / f"{cmd}.md"
         d = dst_cmds / f"{cmd}.md"
         if s.exists():
@@ -462,6 +469,7 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool) -> dict:
         start = dst_cmds / "start.md"
         finish_work = dst_cmds / "finish-work.md"
         record_session = dst_cmds / "record-session.md"
+        baseline_overlaps = [dst_cmds / f"{name}.md" for name in OVERLAY_BASELINE_COMMANDS]
         if start.exists() and not (backup / "start.md").exists():
             shutil.copy2(start, backup / "start.md")
             ok(f"[OpenCode] start.md → 备份")
@@ -471,9 +479,14 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool) -> dict:
         if record_session.exists() and not (backup / "record-session.md").exists():
             shutil.copy2(record_session, backup / "record-session.md")
             ok(f"[OpenCode] record-session.md → 备份")
+        for baseline_cmd in baseline_overlaps:
+            backup_target = backup / baseline_cmd.name
+            if baseline_cmd.exists() and not backup_target.exists():
+                shutil.copy2(baseline_cmd, backup_target)
+                ok(f"[OpenCode] {baseline_cmd.name} → 备份")
 
     # 部署命令（与 Claude Code 完全相同的文件格式）
-    for cmd in NEW_COMMANDS:
+    for cmd in DISTRIBUTED_COMMANDS:
         s = src / f"{cmd}.md"
         d = dst_cmds / f"{cmd}.md"
         if s.exists():
@@ -565,15 +578,16 @@ def deploy_codex(src: Path, root: Path, dry_run: bool) -> dict:
     result = {"commands": 0, "scripts": 0, "patches": 0, "errors": []}
 
     if not dry_run:
-        backup_dir = skills_dir / ".backup-original" / "finish-work"
-        finish_work_skill = skills_dir / "finish-work" / "SKILL.md"
-        if finish_work_skill.exists() and not (backup_dir / "SKILL.md").exists():
-            backup_dir.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(finish_work_skill, backup_dir / "SKILL.md")
-            ok(f"[Codex] finish-work skill → 备份")
+        for name in [*OVERLAY_BASELINE_COMMANDS, "finish-work"]:
+            skill_path = skills_dir / name / "SKILL.md"
+            backup_path = skills_dir / ".backup-original" / name / "SKILL.md"
+            if skill_path.exists() and not backup_path.exists():
+                backup_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(skill_path, backup_path)
+                ok(f"[Codex] {name} skill → 备份")
 
     # 部署 skills（从命令文件转换为 skills 格式）
-    for cmd in NEW_COMMANDS:
+    for cmd in DISTRIBUTED_COMMANDS:
         s = src / f"{cmd}.md"
         d = skills_dir / cmd / "SKILL.md"
         if s.exists():
@@ -682,7 +696,9 @@ def write_install_record(root: Path, cli_types: list[str], dry_run: bool) -> Non
             "trellis_version": ver,
             "installed": now,
             "cli_types": cli_types,
-            "commands": NEW_COMMANDS,
+            "commands": DISTRIBUTED_COMMANDS,
+            "overlay_commands": OVERLAY_BASELINE_COMMANDS,
+            "added_commands": ADDED_COMMANDS,
             "scripts": HELPER_SCRIPTS,
             "initial_pack": _REQUIREMENTS_FOUNDATION_PACK,
             "bootstrap_task_removed": True,
@@ -847,7 +863,7 @@ def main() -> int:
             for e in result["errors"]:
                 err(f"[{cli_type}] {e}")
         else:
-            ok(f"[{cli_type}] 命令: {result['commands']}/{len(NEW_COMMANDS)}, "
+            ok(f"[{cli_type}] 命令: {result['commands']}/{len(DISTRIBUTED_COMMANDS)}, "
                f"补丁: {result['patches']}, 脚本: {result['scripts']}")
 
     print()

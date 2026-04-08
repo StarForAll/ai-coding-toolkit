@@ -6,12 +6,13 @@
 
 ## Overview
 
-This project uses two types of automation scripts:
+This project uses three script surfaces:
 
 | Type | Locations | Purpose |
 |------|-----------|---------|
 | **Python** | `trellis-library/scripts/`, `.trellis/scripts/` | CLI tools, validation, assembly, sync |
 | **Shell** | `scripts/`, `trellis-library/scripts/` | Lightweight validation, CI helpers |
+| **Workflow Python** | `docs/workflows/**/commands/*.py`, `docs/workflows/**/commands/shell/*.py` | Workflow installer, upgrade, uninstall, and helper contracts for target-project embedding |
 
 ---
 
@@ -21,6 +22,7 @@ This project uses two types of automation scripts:
 |----------|-------------|
 | [python-conventions.md](./python-conventions.md) | Writing or modifying Python scripts |
 | [shell-conventions.md](./shell-conventions.md) | Writing or modifying Shell scripts |
+| [workflow-installer-upgrade-contracts.md](./workflow-installer-upgrade-contracts.md) | Modifying workflow installer / upgrade scripts under `docs/workflows/**/commands/` |
 
 ---
 
@@ -69,6 +71,13 @@ trellis-library/
 
 scripts/
 └── validate-skills.sh              # Skill structure validation
+
+docs/workflows/**/commands/
+├── install-workflow.py             # Workflow embed installer
+├── uninstall-workflow.py           # Workflow removal / baseline restore
+├── upgrade-compat.py               # Workflow upgrade drift detection and recovery
+└── shell/
+    └── *.py                        # Workflow helper scripts copied into target projects
 ```
 
 ---
