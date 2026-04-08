@@ -102,3 +102,49 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 91: 工作流 trellis 兼容升级与 spec 收口
+
+**Date**: 2026-04-08
+**Task**: 工作流 trellis 兼容升级与 spec 收口
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 模块 | 变更 |
+|------|------|
+| 新项目工作流 | 在 `docs/workflows/新项目开发工作流/` 内完成 Trellis 兼容升级收口，明确 `patch-based baseline / overlay baseline / added commands` 三类资产模型 |
+| 命令调整 | `brainstorm` 改为基于 Trellis 原生命令的合并方案；`self-review` 并入新 `check`；旧 `check` 更名为 `review-gate` |
+| 升级机制 | `upgrade-compat.py` 增加对分发命令与 helper scripts 的 source-vs-deployed 内容一致性检测，不再只做存在性检查 |
+| 验证 | 补充 `test_workflow_installers.py` 与 `test_check_quality.py`，并在 `/tmp/trellis-workflow-realtest` 完成 `trellis init -> install-workflow -> upgrade-compat --check/--merge/--force` 实测回归 |
+| Spec | 新增 `.trellis/spec/scripts/workflow-installer-upgrade-contracts.md`，并同步更新 `scripts/index.md`、总 `spec index` 与 `cross-layer-thinking-guide.md` |
+
+**本次结果**:
+- workflow 与文档口径统一到新的 `check -> review-gate -> finish-work` 链路
+- `brainstorm` / `check` 的 Trellis 同名命令处理方式收敛为“合并”
+- 当前仓库内维护 workflow 兼容升级时，纯净 Trellis 基线统一以 `/tmp + trellis init` 为参考
+- 已将任务 `04-07-workflow-trellis-upgrade` 归档到 `.trellis/tasks/archive/2026-04/`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2096576` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
