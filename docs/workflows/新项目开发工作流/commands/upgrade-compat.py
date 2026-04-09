@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""Trellis 版本升级后重新嵌入工作流（多 CLI 支持）。
+"""Analyze drift and repair low-risk workflow upgrades after Trellis updates.
 
 用法:
   python3 upgrade-compat.py --check              # 检测冲突（默认）
-  python3 upgrade-compat.py --merge              # 自动合并
-  python3 upgrade-compat.py --force              # 强制覆盖
+  python3 upgrade-compat.py --merge              # 低风险重部署/补丁恢复
+  python3 upgrade-compat.py --force              # 依赖原始备份的强制恢复
   python3 upgrade-compat.py --project-root /path # 指定项目根目录
   python3 upgrade-compat.py --cli claude,opencode,codex  # 指定 CLI 类型
 
 重要边界：
 - 目标项目应已先执行 `trellis init`
+- 建议先完成三态分析（A 纯净基线 / B 最新 workflow 期望状态 / C 目标项目真实状态）
 - 当前 workflow 会重新部署合并型 + 纯新增型阶段命令资产
 - `start.md` / `finish-work.md` / `record-session.md` 属于 Trellis 基线命令，升级脚本负责恢复并重新注入 workflow 补丁
+- 若 Trellis 或 workflow 自身发生结构性 breaking change，本脚本不替代人工迁移判断
 """
 
 import argparse
@@ -20,6 +22,17 @@ import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+from workflow_assets import (
+    ADDED_COMMANDS,
+    ALL_CLI_TYPES,
+    CLI_ALT_DIRS,
+    CLI_DIRS,
+    DISTRIBUTED_COMMANDS,
+    HELPER_SCRIPTS,
+    OVERLAY_BASELINE_COMMANDS,
+    resolve_codex_skills_dir,
+)
 
 
 G, Y, R, C, N = "\033[0;32m", "\033[1;33m", "\033[0;31m", "\033[0;36m", "\033[0m"
@@ -52,28 +65,9 @@ _RECORD_SESSION_INJECTION_MARKER = "### Step 2: One-Click Add Session"
 # 当前 workflow 分发的阶段命令。
 # `brainstorm` / `check` 与 Trellis 基线同名，但当前 workflow 采用合并后的阶段语义；
 # `start` / `finish-work` / `record-session` 仍来自 Trellis 基线，并由当前 workflow 注入补丁。
-OVERLAY_BASELINE_COMMANDS = ["brainstorm", "check"]
-ADDED_COMMANDS = ["feasibility", "design", "plan", "test-first", "review-gate", "delivery"]
-DISTRIBUTED_COMMANDS = ["feasibility", "brainstorm", "design", "plan", "test-first", "check", "review-gate", "delivery"]
-HELPER_SCRIPTS = [
-    "feasibility-check.py",
-    "design-export.py",
-    "plan-validate.py",
-    "check-quality.py",
-    "delivery-control-validate.py",
-    "metadata-autocommit-guard.py",
-    "record-session-helper.py",
-]
-
-_CLI_DIRS = {
-    "claude": ".claude",
-    "opencode": ".opencode",
-    "codex": ".codex",
-}
-_CLI_ALT_DIRS = {
-    "codex": ".agents",
-}
-_ALL_CLI_TYPES = ["claude", "opencode", "codex"]
+_CLI_DIRS = CLI_DIRS
+_CLI_ALT_DIRS = CLI_ALT_DIRS
+_ALL_CLI_TYPES = ALL_CLI_TYPES
 
 
 def find_root() -> Path:
@@ -120,16 +114,6 @@ def has_finish_work_patch(finish_work_path: Path) -> bool:
     if not finish_work_path.exists():
         return False
     return _FINISH_WORK_MARKER in finish_work_path.read_text(encoding="utf-8")
-
-
-def resolve_codex_skills_dir(root: Path) -> Path | None:
-    skills_dir = root / ".agents" / "skills"
-    if skills_dir.is_dir():
-        return skills_dir
-    skills_dir = root / ".codex" / "skills"
-    if skills_dir.is_dir():
-        return skills_dir
-    return None
 
 
 def build_finish_work_content(content: str, patch_text: str) -> str | None:
@@ -608,7 +592,7 @@ def main() -> int:
 
     print()
     print("╔══════════════════════════════════════════╗")
-    print("║   Trellis 版本升级兼容处理（多CLI）        ║")
+    print("║   Trellis 工作流低风险修复（多CLI）        ║")
     print("╚══════════════════════════════════════════╝")
     print()
 
@@ -618,6 +602,8 @@ def main() -> int:
         warn(f"版本变化: {installed_version} → {current_version}")
     else:
         info("版本一致，继续检查部署完整性")
+    if args.mode in ("merge", "force"):
+        warn("建议先完成 A/B/C 三态分析；当前命令主要用于低风险漂移修复，不替代结构性升级迁移。")
     print()
 
     # 冲突检测

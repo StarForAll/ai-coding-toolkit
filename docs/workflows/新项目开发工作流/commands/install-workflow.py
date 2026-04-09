@@ -26,6 +26,17 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from workflow_assets import (
+    ADDED_COMMANDS,
+    ALL_CLI_TYPES,
+    CLI_ALT_DIRS,
+    CLI_DIRS,
+    DISTRIBUTED_COMMANDS,
+    HELPER_SCRIPTS,
+    OVERLAY_BASELINE_COMMANDS,
+    resolve_codex_skills_dir,
+)
+
 
 # ── ANSI ──
 G, Y, R, C, N = "\033[0;32m", "\033[1;33m", "\033[0;31m", "\033[0;36m", "\033[0m"
@@ -36,32 +47,9 @@ def info(m): print(f"{C}ℹ️  {m}{N}")
 
 
 # ── 常量 ──
-_CLI_DIRS = {
-    "claude": ".claude",
-    "opencode": ".opencode",
-    "codex": ".codex",
-}
-# Codex 也接受 .agents/ 作为 skills 目录
-_CLI_ALT_DIRS = {
-    "codex": ".agents",
-}
-_ALL_CLI_TYPES = ["claude", "opencode", "codex"]
-
-# 当前 workflow 分发的阶段命令分两类：
-# 1. 与 Trellis 基线同名、但由当前 workflow 提供合并版语义的命令
-# 2. 当前 workflow 纯新增命令
-# `start` / `finish-work` / `record-session` 属于 Trellis 原生命令基线，
-# 当前 workflow 仅做补丁增强，不重新分发完整命令源。
-OVERLAY_BASELINE_COMMANDS = ["brainstorm", "check"]
-ADDED_COMMANDS = ["feasibility", "design", "plan", "test-first", "review-gate", "delivery"]
-DISTRIBUTED_COMMANDS = ["feasibility", "brainstorm", "design", "plan", "test-first", "check", "review-gate", "delivery"]
-HELPER_SCRIPTS = [
-    "feasibility-check.py", "design-export.py",
-    "plan-validate.py", "check-quality.py",
-    "delivery-control-validate.py",
-    "metadata-autocommit-guard.py",
-    "record-session-helper.py",
-]
+_CLI_DIRS = CLI_DIRS
+_CLI_ALT_DIRS = CLI_ALT_DIRS
+_ALL_CLI_TYPES = ALL_CLI_TYPES
 
 # 对 Trellis 原生命令做增强时使用的补丁标记。
 # 当前 workflow 会增强 `start.md`、`finish-work.md` 与 `record-session.md`，
@@ -254,17 +242,6 @@ def prepare_command_content(src: Path) -> str:
     c = src.read_text(encoding="utf-8")
     c = c.replace("<WORKFLOW_DIR>/commands/shell/", ".trellis/scripts/workflow/")
     return c
-
-
-def resolve_codex_skills_dir(root: Path) -> Path | None:
-    """优先返回 .agents/skills/，其次 .codex/skills/。"""
-    skills_dir = root / ".agents" / "skills"
-    if skills_dir.is_dir():
-        return skills_dir
-    skills_dir = root / ".codex" / "skills"
-    if skills_dir.is_dir():
-        return skills_dir
-    return None
 
 
 def build_finish_work_content(content: str, patch_text: str) -> str | None:

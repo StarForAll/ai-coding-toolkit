@@ -9,21 +9,21 @@ import shutil
 import sys
 from pathlib import Path
 
+from workflow_assets import (
+    ALL_CLI_TYPES,
+    CLI_ALT_DIRS,
+    CLI_DIRS,
+    DISTRIBUTED_COMMANDS,
+    OVERLAY_BASELINE_COMMANDS,
+)
+
 
 G, Y, R, C, N = "\033[0;32m", "\033[1;33m", "\033[0;31m", "\033[0;36m", "\033[0m"
-OVERLAY_BASELINE_COMMANDS = ["brainstorm", "check"]
-ADDED_COMMANDS = ["feasibility", "design", "plan", "test-first", "review-gate", "delivery"]
-DEFAULT_COMMANDS = ["feasibility", "brainstorm", "design", "plan", "test-first", "check", "review-gate", "delivery"]
+DEFAULT_COMMANDS = DISTRIBUTED_COMMANDS
 
-_CLI_DIRS = {
-    "claude": ".claude",
-    "opencode": ".opencode",
-    "codex": ".codex",
-}
-_CLI_ALT_DIRS = {
-    "codex": ".agents",
-}
-_ALL_CLI_TYPES = ["claude", "opencode", "codex"]
+_CLI_DIRS = CLI_DIRS
+_CLI_ALT_DIRS = CLI_ALT_DIRS
+_ALL_CLI_TYPES = ALL_CLI_TYPES
 _AGENTS_NL_ROUTING_MARKER = "<!-- workflow-nl-routing-start -->"
 _AGENTS_NL_ROUTING_END = "<!-- workflow-nl-routing-end -->"
 _TODO_FILE_NAME = "todo.txt"

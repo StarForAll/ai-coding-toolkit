@@ -1,6 +1,6 @@
 # Workflow Installer / Upgrade Contracts
 
-> Executable contracts for workflow installer and upgrade scripts under `docs/workflows/**/commands/`.
+> Executable contracts for workflow installer, upgrade-analysis, and low-risk repair scripts under `docs/workflows/**/commands/`.
 
 ---
 
@@ -10,14 +10,18 @@
 
 - Trigger: modifying `docs/workflows/**/commands/install-workflow.py`
 - Trigger: modifying `docs/workflows/**/commands/uninstall-workflow.py`
+- Trigger: modifying `docs/workflows/**/commands/analyze-upgrade.py`
 - Trigger: modifying `docs/workflows/**/commands/upgrade-compat.py`
-- Trigger: changing the distributed workflow command set, helper script set, or target deployment layout
-- Trigger: changing how source workflow assets are compared with deployed target-project copies
+- Trigger: modifying `docs/workflows/**/commands/workflow_assets.py`
+- Trigger: changing the distributed workflow command set, helper script set, install record schema, or target deployment layout
+- Trigger: changing how workflow source assets are compared with deployed target-project copies
+- Trigger: changing the target-project upgrade flow from analysis-first to another sequence
 
 This concern is required when the change crosses these layers:
 
 ```text
-workflow source assets -> target project deployed copies -> install record / drift detection -> recovery path
+workflow source assets -> expected deployed copies -> target-project live copies
+-> install record / analysis report -> low-risk repair path / structural migration boundary
 ```
 
 ---
@@ -39,6 +43,18 @@ python3 docs/workflows/<name>/commands/install-workflow.py \
 python3 docs/workflows/<name>/commands/uninstall-workflow.py \
   [--project-root /path/to/project] \
   [--cli claude,opencode,codex]
+```
+
+#### analyze-upgrade.py
+
+```bash
+python3 docs/workflows/<name>/commands/analyze-upgrade.py \
+  --baseline-root /path/to/A \
+  --expected-root /path/to/B \
+  --target-root /path/to/C \
+  [--cli claude,opencode,codex] \
+  [--report /tmp/report.md] \
+  [--json]
 ```
 
 #### upgrade-compat.py
@@ -65,7 +81,7 @@ Target-project install record:
 .trellis/workflow-installed.json
 ```
 
-Expected keys:
+Current required keys:
 
 - `trellis_version`
 - `cli_types`
@@ -82,6 +98,19 @@ Optional lifecycle keys may differ between install and upgrade paths, such as:
 - `initial_pack`
 - `bootstrap_task_removed`
 
+Optional versioning keys for future upgrade routing:
+
+- `workflow_version`
+- `workflow_schema_version`
+
+Contract when these versioning keys are missing:
+
+- do not block current upgrade analysis
+- treat the target project as `legacy/unknown`
+- do not infer historical workflow structure from the absence alone
+- continue with `A/B/C` analysis first
+- after compatibility upgrade or structural migration completes, the confirmed values may be written back
+
 ---
 
 ### 3. Contracts
@@ -92,6 +121,7 @@ Workflow source assets must be treated as the source of truth:
 
 - command source: `docs/workflows/<name>/commands/*.md`
 - helper scripts: `docs/workflows/<name>/commands/shell/*.py`
+- managed asset registry: `docs/workflows/<name>/commands/workflow_assets.py`
 
 Target-project deployed copies are derived state:
 
@@ -100,9 +130,18 @@ Target-project deployed copies are derived state:
 - Codex: `.agents/skills/*/SKILL.md` or `.codex/skills/*/SKILL.md`
 - shared helper scripts: `.trellis/scripts/workflow/*.py`
 
+`workflow_assets.py` must remain the single shared definition of:
+
+- supported CLI layouts
+- patch-based baseline commands
+- overlay baseline commands
+- added commands
+- helper scripts
+- managed asset enumeration / detection helpers
+
 #### 3.2 Asset Classes
 
-Workflow embed / upgrade scripts must distinguish three asset classes:
+Workflow embed / analysis / repair scripts must distinguish three asset classes:
 
 1. **Patch-based baseline commands**
    - `start`
@@ -111,7 +150,7 @@ Workflow embed / upgrade scripts must distinguish three asset classes:
    - Contract: keep Trellis baseline content, then inject workflow patch content
 
 2. **Overlay baseline commands**
-   - same-name commands whose deployed file is fully distributed by the workflow while semantically merging with Trellis baseline
+   - same-name commands whose deployed file is fully distributed by the workflow while semantically replacing the live baseline copy
    - current known set:
      - `brainstorm`
      - `check`
@@ -127,7 +166,31 @@ Workflow embed / upgrade scripts must distinguish three asset classes:
      - `review-gate`
      - `delivery`
 
-#### 3.3 Drift Detection Contract
+#### 3.3 Analysis-First Upgrade Contract
+
+Target-project workflow upgrade must use an analysis-first sequence:
+
+1. current repository finishes workflow source-asset compatibility maintenance
+2. target project completes the Trellis official upgrade and resolves only official baseline conflicts
+3. `analyze-upgrade.py` compares:
+   - `A`: clean Trellis baseline
+   - `B`: expected state after installing the current workflow onto `A`
+   - `C`: target-project live state after official Trellis upgrade
+4. analysis classifies each managed asset into:
+   - `keep`
+   - `add`
+   - `replace`
+   - `merge`
+   - `delete`
+5. only low-risk drift may continue into `upgrade-compat.py`
+
+This means:
+
+- `upgrade-compat.py` is not the default upgrade strategy by itself
+- a target project may still be upgraded without `workflow_version` / `workflow_schema_version`
+- structural migration is a branch conclusion from the analysis result, not the default entry point
+
+#### 3.4 Drift Detection and Repair Contract
 
 `upgrade-compat.py --check` must not treat distributed workflow commands as “present = healthy”.
 
@@ -148,7 +211,13 @@ For current workflow scripts, “after preprocessing” means at least applying 
 <WORKFLOW_DIR>/commands/shell/ -> .trellis/scripts/workflow/
 ```
 
-#### 3.4 Source-Maintenance vs Target-Project Boundary
+Repair-path boundary:
+
+- `--merge` may redeploy low-risk drifted assets and reapply patch injections
+- `--force` may restore from stored baseline backup only when the target project is still within the same structural model
+- neither `--merge` nor `--force` should be documented as the main path for structural breaks
+
+#### 3.5 Source-Maintenance vs Target-Project Boundary
 
 When maintaining workflow source content in this repository after a Trellis upgrade:
 
@@ -157,23 +226,36 @@ When maintaining workflow source content in this repository after a Trellis upgr
 
 When upgrading an already-installed target project:
 
-- `upgrade-compat.py` is the local automation layer
-- it uses the target project's deployed state and install record
-- it is not a substitute for the source-maintenance clean-baseline comparison
+- first resolve the Trellis official baseline upgrade
+- then generate `A/B/C` and run `analyze-upgrade.py`
+- then choose file-level actions
+- then optionally use `upgrade-compat.py` for low-risk repair
+
+When analysis shows any of the following, stop treating the case as ordinary compatibility upgrade:
+
+- patch anchors / headings no longer support the old injection model
+- command naming, staging, or file layout changed
+- managed assets are dominated by `merge`
+- `.backup-original` is not a reliable restore base
+
+That branch becomes structural migration and must not be collapsed into `upgrade-compat.py --force`.
 
 ---
 
 ### 4. Validation & Error Matrix
 
-| Condition | `--check` | `--merge` | `--force` |
-|-----------|-----------|-----------|-----------|
-| version unchanged + deployed state matches source/patch contract | return `0` | no-op or return success | no-op or return success |
-| patch marker missing in `start` / `finish-work` / `record-session` | return non-zero | redeploy and reinject patch | restore baseline backup, then reinject patch |
-| overlay/add command file missing | return non-zero | redeploy command | redeploy command |
-| overlay/add command content drift | return non-zero | redeploy command from source | redeploy command from source |
-| helper script missing | return non-zero | recopy helper script | recopy helper script |
-| helper script content drift | return non-zero | recopy helper script | recopy helper script |
-| missing baseline backup during force path | return non-zero | n/a | fail clearly and keep error visible |
+| Condition | `analyze-upgrade.py` | `--check` | `--merge` | `--force` |
+|-----------|----------------------|-----------|-----------|-----------|
+| `C == B` for a managed asset | classify `keep` | return `0` if all managed assets are healthy | no-op or return success | no-op or return success |
+| `A != B` and `C == A` for an existing managed asset | classify `replace` | return non-zero if deployed state is stale | redeploy current workflow copy | restore baseline backup, then reapply patch only if same structural model still holds |
+| asset exists only in `B` | classify `add` | return non-zero if missing in `C` | deploy asset | deploy asset |
+| `C != A` and `C != B` | classify `merge` and keep it visible | may return non-zero if drift is detected | do not claim semantic merge; only safe redeploy when drift is low-risk | not a structural-migration substitute |
+| asset removed from latest workflow but still exists in `C` | classify `delete` | may stay non-zero or advisory depending on script scope | optional manual cleanup only | optional manual cleanup only |
+| patch marker missing in `start` / `finish-work` / `record-session` | may present as `replace` or `merge` depending on `A/B/C` | return non-zero | redeploy and reinject patch when injection model still holds | restore baseline backup, then reinject patch when backup is valid |
+| helper script missing or drifted | classify `add` / `replace` / `merge` based on `A/B/C` | return non-zero | recopy helper script | recopy helper script |
+| missing `workflow_version` / `workflow_schema_version` | annotate as `legacy/unknown` context only | do not fail on absence alone | do not synthesize historical version | do not synthesize historical version |
+| missing baseline backup during force path | analysis may still proceed | n/a | n/a | fail clearly and keep error visible |
+| structural break detected | flag structural migration recommendation | may still show drift, but is not sufficient by itself | do not treat as primary resolution | do not treat as primary resolution |
 
 Failure messages must stay human-readable and identify the affected asset by file / command / skill name.
 
@@ -183,24 +265,28 @@ Failure messages must stay human-readable and identify the affected asset by fil
 
 #### Good
 
-- `brainstorm` deployed copy was manually edited
-- `upgrade-compat.py --check` reports content drift
-- `upgrade-compat.py --merge` redeploys the workflow copy
+- target project completes Trellis official upgrade first
+- `analyze-upgrade.py` reports most assets as `keep` / `replace`, with a small number of `merge`
+- low-risk drift is repaired by `upgrade-compat.py --merge`
 - follow-up `--check` passes
 
 #### Base
 
-- version unchanged
-- patch markers present
+- `A/B/C` are prepared correctly
+- version fields may be absent, but the project is explicitly treated as `legacy/unknown`
+- patch markers present where expected
 - distributed command contents match source
 - helper scripts match source
-- `--check` returns success
+- `analyze-upgrade.py` produces a readable report
+- `--check` returns success after low-risk repair
 
 #### Bad
 
-- a distributed file still exists, but only existence is checked
-- source workflow content has changed while target-project copy is stale
-- `--check` reports success even though deployed behavior is outdated
+- skip `A/B/C` analysis and jump directly to `--force`
+- treat distributed workflow files as healthy just because they exist
+- let `--merge` stand in for a real semantic merge of target-project private edits
+- treat missing `workflow_version` fields as proof of a specific old structure
+- use the current repository's customized Trellis directories as the clean baseline for source-maintenance upgrade analysis
 
 ---
 
@@ -210,25 +296,33 @@ When modifying these contracts, update or add tests that prove:
 
 1. install writes `overlay_commands` and `added_commands` into `workflow-installed.json`
 2. uninstall restores overlay baseline commands from backup
-3. `--check` fails when:
+3. `analyze-upgrade.py` classifies at least:
+   - `keep`
+   - `add`
+   - `replace`
+   - `merge`
+   - `delete`
+4. `--check` fails when:
    - patch markers drift
    - overlay command content drifts
    - added command content drifts
    - helper script content drifts
-4. `--merge` restores drifted command and helper-script content
-5. `--force` can restore baseline-backed patch commands and reapply patches
+5. `--merge` restores drifted command and helper-script content for low-risk cases
+6. `--force` can restore baseline-backed patch commands and reapply patches inside the same structural model
 
-Current regression anchor:
+Current regression anchors:
 
 ```text
 docs/workflows/新项目开发工作流/commands/test_workflow_installers.py
+docs/workflows/新项目开发工作流/commands/test_upgrade_analysis.py
 ```
 
 Recommended assertion points:
 
 - command-specific drift message is emitted
 - helper-script drift message is emitted
-- follow-up `--check` returns success after `--merge` / `--force`
+- analysis report includes action classification for each managed asset
+- follow-up `--check` returns success after `--merge` / `--force` in supported scenarios
 
 ---
 
@@ -239,14 +333,19 @@ Recommended assertion points:
 - treat all workflow-distributed commands as “new commands”
 - let `--check` validate only file existence
 - skip helper-script content drift checks because the file is present
-- use the current repository's customized Trellis directories as the clean baseline for source-maintenance upgrade analysis
+- skip `A/B/C` analysis and use `upgrade-compat.py` as the only upgrade decision layer
+- document `--force` as the solution for structural breaks
+- assume missing workflow version fields prove a specific migration path
 
 #### Correct
 
 - classify workflow assets as patch-based baseline, overlay baseline, and added commands
+- keep `workflow_assets.py` as the shared source for asset enumeration and deployment layout
+- use `A/B/C` analysis to decide `keep / add / replace / merge / delete`
 - use source-vs-deployed content checks for distributed commands and helper scripts
 - keep backup / restore semantics explicit for overlay baseline commands
 - use `/tmp` + `trellis init` as the clean baseline when maintaining workflow source compatibility after Trellis upgrades
+- treat structural migration as a separate branch conclusion when ordinary compatibility upgrade no longer explains the target-project state
 
 ---
 
@@ -254,6 +353,11 @@ Recommended assertion points:
 
 - `docs/workflows/新项目开发工作流/commands/install-workflow.py`
 - `docs/workflows/新项目开发工作流/commands/uninstall-workflow.py`
+- `docs/workflows/新项目开发工作流/commands/analyze-upgrade.py`
 - `docs/workflows/新项目开发工作流/commands/upgrade-compat.py`
+- `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
 - `docs/workflows/新项目开发工作流/commands/test_workflow_installers.py`
+- `docs/workflows/新项目开发工作流/commands/test_upgrade_analysis.py`
+- `docs/workflows/新项目开发工作流/目标项目兼容升级方案指导.md`
+- `docs/workflows/新项目开发工作流/结构性迁移设计.md`
 - `docs/workflows/新项目开发工作流/命令映射.md`
