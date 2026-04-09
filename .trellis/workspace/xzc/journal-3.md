@@ -148,3 +148,52 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 92: 工作流目标项目兼容升级方案与结构性迁移设计
+
+**Date**: 2026-04-09
+**Task**: 工作流目标项目兼容升级方案与结构性迁移设计
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| 升级主链 | 将目标项目 workflow 升级主链收敛为 `A/B/C` 三态分析优先，`upgrade-compat.py` 仅处理低风险漂移修复 |
+| 脚本调整 | 新增 `analyze-upgrade.py` 与 `workflow_assets.py`；安装、卸载、兼容修复脚本复用共享资产定义 |
+| 文档补齐 | 新增《目标项目兼容升级方案指导》《结构性迁移设计》，并同步《工作流总纲》《命令映射》与 `.trellis/spec/scripts/workflow-installer-upgrade-contracts.md` |
+| 回归验证 | 补充 `test_upgrade_analysis.py`，修复 `delete` 分类缺口；`py_compile`、`git diff --check`、`unittest` 均通过 |
+
+**Key Decisions**:
+- 缺失 `workflow_version / workflow_schema_version` 时按 `legacy/unknown` 处理，不阻塞当前兼容升级分析。
+- 结构性迁移不是默认流程，只在兼容升级分析命中结构性 break 时进入。
+- `workflow_assets.py` 作为 workflow 托管资产的单一来源，减少安装/卸载/升级脚本漂移。
+
+**Verification**:
+- `/ops/softwares/python/bin/python3 -m py_compile docs/workflows/新项目开发工作流/commands/install-workflow.py docs/workflows/新项目开发工作流/commands/uninstall-workflow.py docs/workflows/新项目开发工作流/commands/upgrade-compat.py docs/workflows/新项目开发工作流/commands/analyze-upgrade.py docs/workflows/新项目开发工作流/commands/workflow_assets.py docs/workflows/新项目开发工作流/commands/test_upgrade_analysis.py`
+- `git diff --check -- .trellis/spec/scripts/workflow-installer-upgrade-contracts.md docs/workflows/新项目开发工作流`
+- `/ops/softwares/python/bin/python3 -m unittest docs/workflows/新项目开发工作流/commands/test_upgrade_analysis.py docs/workflows/新项目开发工作流/commands/test_workflow_installers.py`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a9e9c41` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
