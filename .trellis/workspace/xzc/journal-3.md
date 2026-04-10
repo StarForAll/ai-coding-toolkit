@@ -114,7 +114,7 @@
 
 ### Summary
 
-(Add summary)
+完成新项目工作流兼容升级记录链的补全：一方面落地并验证了 `browser_bookmark_cleaner_rchiver` 的目标项目兼容升级与后续自适应修正，另一方面修复了当前 workflow source-of-truth 中的 `brainstorm` 错误示例，并把 `workflow_version` 正式接入安装/升级脚本与测试链。
 
 ### Main Changes
 
@@ -250,3 +250,54 @@
 ### Next Steps
 
 - 等待用户确认是否按蓝图对目标项目执行实际兼容升级
+
+
+## Session 94: 工作流兼容升级机制补全
+
+**Date**: 2026-04-10
+**Task**: 工作流兼容升级机制补全
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Item | Description |
+|------|-------------|
+| Target project compatibility | Completed browser_bookmark_cleaner_rchiver workflow compatibility upgrade and follow-up adaptive fixes |
+| Source-of-truth repair | Fixed `docs/workflows/新项目开发工作流/commands/brainstorm.md` invalid `--slug <auto>` example and documented auto-slug behavior |
+| Install record versioning | Added `workflow_version` write-back through workflow install/upgrade scripts with shared constant `1.1.19` |
+| Validation hardening | Added latest-Trellis prerequisite handling and expanded workflow installer / upgrade tests |
+| Review handling | Processed multi-review rounds, updated migration blueprint, and preserved target-project adaptive drift as an accepted exception |
+
+**Verification**:
+- `/ops/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings`
+- `/ops/softwares/python/bin/python3 -m py_compile docs/workflows/新项目开发工作流/commands/analyze-upgrade.py docs/workflows/新项目开发工作流/commands/install-workflow.py docs/workflows/新项目开发工作流/commands/upgrade-compat.py docs/workflows/新项目开发工作流/commands/workflow_assets.py docs/workflows/新项目开发工作流/commands/test_workflow_installers.py docs/workflows/新项目开发工作流/commands/test_upgrade_analysis.py`
+- `/ops/softwares/python/bin/python3 -m unittest docs.workflows.新项目开发工作流.commands.test_workflow_installers docs.workflows.新项目开发工作流.commands.test_upgrade_analysis`
+
+**Notes**:
+- Accepted exception: target project keeps further adaptive edits, so downstream `upgrade-compat --check` drift can be treated as expected when judged against older deployed copies.
+- Task `04-09-workflow-compat-plan-browser-bookmark-cleaner-rchiver` archived after manual commit and verification.
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9845ab6` | 工作流兼容升级机制补全 |
+
+### Testing
+
+- [OK] `/ops/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings`
+- [OK] `/ops/softwares/python/bin/python3 -m py_compile docs/workflows/新项目开发工作流/commands/analyze-upgrade.py docs/workflows/新项目开发工作流/commands/install-workflow.py docs/workflows/新项目开发工作流/commands/upgrade-compat.py docs/workflows/新项目开发工作流/commands/workflow_assets.py docs/workflows/新项目开发工作流/commands/test_workflow_installers.py docs/workflows/新项目开发工作流/commands/test_upgrade_analysis.py`
+- [OK] `/ops/softwares/python/bin/python3 -m unittest docs.workflows.新项目开发工作流.commands.test_workflow_installers docs.workflows.新项目开发工作流.commands.test_upgrade_analysis`（`Ran 35 tests in 56.002s`, `OK`）
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
