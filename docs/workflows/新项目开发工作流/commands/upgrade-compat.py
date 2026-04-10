@@ -10,6 +10,7 @@
 
 重要边界：
 - 目标项目应已先执行 `trellis init`
+- 目标项目必须已完成当前最新 Trellis 官方升级；否则连只读分析和本脚本都不允许执行
 - 建议先完成三态分析（A 纯净基线 / B 最新 workflow 期望状态 / C 目标项目真实状态）
 - 当前 workflow 会重新部署合并型 + 纯新增型阶段命令资产
 - `start.md` / `finish-work.md` / `record-session.md` 属于 Trellis 基线命令，升级脚本负责恢复并重新注入 workflow 补丁
@@ -31,6 +32,9 @@ from workflow_assets import (
     DISTRIBUTED_COMMANDS,
     HELPER_SCRIPTS,
     OVERLAY_BASELINE_COMMANDS,
+    WORKFLOW_VERSION,
+    check_latest_trellis_prerequisite,
+    read_project_trellis_version,
     resolve_codex_skills_dir,
 )
 
@@ -534,6 +538,7 @@ def write_install_record(rec_file: Path, current_version: str, previous_version:
                 "overlay_commands": OVERLAY_BASELINE_COMMANDS,
                 "added_commands": ADDED_COMMANDS,
                 "scripts": HELPER_SCRIPTS,
+                "workflow_version": WORKFLOW_VERSION,
             },
             ensure_ascii=False,
             indent=2,
@@ -581,11 +586,12 @@ def main() -> int:
     rec_file = root / ".trellis" / "workflow-installed.json"
     dst_scripts = root / ".trellis" / "scripts" / "workflow"
 
-    current_version = (
-        (root / ".trellis" / ".version").read_text(encoding="utf-8").strip()
-        if (root / ".trellis" / ".version").exists()
-        else "unknown"
-    )
+    prerequisite_ok, prerequisite_message = check_latest_trellis_prerequisite(root)
+    if not prerequisite_ok:
+        err(prerequisite_message)
+        return 1
+
+    current_version = read_project_trellis_version(root) or "unknown"
     record = load_install_record(rec_file)
     installed_version = record.get("trellis_version", "unknown")
     version_changed = current_version != installed_version

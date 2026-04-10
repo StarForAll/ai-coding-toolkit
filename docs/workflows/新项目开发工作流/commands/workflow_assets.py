@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -16,6 +18,7 @@ CLI_ALT_DIRS = {
     "codex": ".agents",
 }
 ALL_CLI_TYPES = ["claude", "opencode", "codex"]
+WORKFLOW_VERSION = "1.1.19"
 
 PATCH_BASELINE_COMMANDS = ["start", "finish-work", "record-session"]
 OVERLAY_BASELINE_COMMANDS = ["brainstorm", "check"]
@@ -39,6 +42,7 @@ HELPER_SCRIPTS = [
     "metadata-autocommit-guard.py",
     "record-session-helper.py",
 ]
+LATEST_TRELLIS_VERSION_ENV = "TRELLIS_LATEST_VERSION"
 
 
 @dataclass(frozen=True)
@@ -150,3 +154,66 @@ def build_managed_asset_specs(cli_types: list[str]) -> list[ManagedAssetSpec]:
             )
 
     return specs
+
+
+def read_project_trellis_version(root: Path) -> str | None:
+    version_path = root / ".trellis" / ".version"
+    if not version_path.exists():
+        return None
+    try:
+        content = version_path.read_text(encoding="utf-8").strip()
+    except UnicodeDecodeError:
+        return None
+    return content or None
+
+
+def resolve_latest_trellis_version() -> tuple[str | None, str]:
+    overridden = os.environ.get(LATEST_TRELLIS_VERSION_ENV, "").strip()
+    if overridden:
+        return overridden, LATEST_TRELLIS_VERSION_ENV
+
+    try:
+        result = subprocess.run(
+            ["trellis", "-v"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError as exc:
+        return None, f"trellis -v failed: {exc}"
+
+    output = (result.stdout or result.stderr).strip()
+    if result.returncode != 0:
+        detail = output or f"exit {result.returncode}"
+        return None, f"trellis -v failed: {detail}"
+    if not output:
+        return None, "trellis -v returned empty output"
+    return output.splitlines()[-1].strip(), "trellis -v"
+
+
+def check_latest_trellis_prerequisite(target_root: Path) -> tuple[bool, str]:
+    target_version = read_project_trellis_version(target_root)
+    if target_version is None:
+        return (
+            False,
+            "目标项目缺少 .trellis/.version，无法确认是否已升级到当前最新 Trellis；"
+            "禁止执行当前步骤（包含只读 A/B/C 分析与兼容升级）。",
+        )
+
+    latest_version, source = resolve_latest_trellis_version()
+    if latest_version is None:
+        return (
+            False,
+            "无法解析当前最新 Trellis 版本，不能确认兼容升级前置条件。"
+            f"版本来源检查失败：{source}。",
+        )
+
+    if target_version != latest_version:
+        return (
+            False,
+            "目标项目尚未升级到当前最新 Trellis。"
+            f"目标项目版本: {target_version}；当前最新版本: {latest_version}（来源: {source}）。"
+            "必须先完成 Trellis 官方升级；禁止执行当前步骤（包含只读 A/B/C 分析与兼容升级）。",
+        )
+
+    return True, f"目标项目已升级到当前最新 Trellis: {target_version}（来源: {source}）。"

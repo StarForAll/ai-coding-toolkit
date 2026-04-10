@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+import json
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -99,13 +101,22 @@ BASELINE_FINISH_WORK_WITHOUT_TEST_COVERAGE_CONTENT = (
 
 
 class WorkflowInstallerTests(unittest.TestCase):
-    def run_script(self, script: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    def run_script(
+        self,
+        script: Path,
+        *args: str,
+        env: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        merged_env = os.environ.copy()
+        if env:
+            merged_env.update(env)
         return subprocess.run(
             [PYTHON, str(script), *args],
             cwd=REPO_ROOT,
             text=True,
             capture_output=True,
             check=False,
+            env=merged_env,
         )
 
     def create_fixture(
@@ -221,6 +232,10 @@ class WorkflowInstallerTests(unittest.TestCase):
     def install_workflow(self, fixture_root: Path) -> subprocess.CompletedProcess[str]:
         return self.run_script(INSTALL_SCRIPT, "--project-root", str(fixture_root))
 
+    def latest_env_for(self, fixture_root: Path) -> dict[str, str]:
+        version_path = fixture_root / ".trellis" / ".version"
+        return {"TRELLIS_LATEST_VERSION": version_path.read_text(encoding="utf-8").strip()}
+
     def test_install_deploys_record_session_closure_helper_and_patch(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
@@ -243,11 +258,13 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         record = fixture / ".trellis" / "workflow-installed.json"
         self.assertTrue(record.exists(), "workflow-installed.json should be created")
-        self.assertIn("brainstorm", record.read_text(encoding="utf-8"))
-        self.assertIn("overlay_commands", record.read_text(encoding="utf-8"))
-        self.assertIn("metadata-autocommit-guard.py", record.read_text(encoding="utf-8"))
-        self.assertIn("record-session-helper.py", record.read_text(encoding="utf-8"))
-        self.assertIn("pack.requirements-discovery-foundation", record.read_text(encoding="utf-8"))
+        record_data = json.loads(record.read_text(encoding="utf-8"))
+        self.assertIn("brainstorm", record_data["commands"])
+        self.assertEqual(record_data["overlay_commands"], ["brainstorm", "check"])
+        self.assertIn("metadata-autocommit-guard.py", record_data["scripts"])
+        self.assertIn("record-session-helper.py", record_data["scripts"])
+        self.assertEqual(record_data["workflow_version"], "1.1.19")
+        self.assertEqual(record_data["initial_pack"], "pack.requirements-discovery-foundation")
 
     def test_install_patches_finish_work_for_opencode_and_codex(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
@@ -393,7 +410,13 @@ class WorkflowInstallerTests(unittest.TestCase):
         target_start = fixture / ".claude" / "commands" / "trellis" / "start.md"
         shutil.copy2(backup_start, target_start)
 
-        result = self.run_script(UPGRADE_SCRIPT, "--check", "--project-root", str(fixture))
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
 
         self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("Phase Router 丢失", result.stdout)
@@ -409,11 +432,36 @@ class WorkflowInstallerTests(unittest.TestCase):
         helper.unlink()
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
-        result = self.run_script(UPGRADE_SCRIPT, "--check", "--project-root", str(fixture))
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
 
         self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("辅助脚本缺失", result.stdout)
         self.assertIn("record-session-helper.py", result.stdout)
+
+    def test_upgrade_check_blocks_when_target_is_not_latest_trellis(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env={"TRELLIS_LATEST_VERSION": "2.1.0"},
+        )
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("尚未升级到当前最新 Trellis", result.stdout)
+        self.assertIn("禁止执行当前步骤", result.stdout)
 
     def test_upgrade_check_detects_helper_script_drift_for_opencode_only(self) -> None:
         fixture = self.create_fixture(include_opencode=True)
@@ -426,7 +474,15 @@ class WorkflowInstallerTests(unittest.TestCase):
         helper.write_text(helper.read_text(encoding="utf-8") + "\n# drift\n", encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
-        result = self.run_script(UPGRADE_SCRIPT, "--check", "--cli", "opencode", "--project-root", str(fixture))
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--cli",
+            "opencode",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
 
         self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("辅助脚本内容漂移", result.stdout)
@@ -444,7 +500,13 @@ class WorkflowInstallerTests(unittest.TestCase):
         record_session.write_text(content, encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
-        result = self.run_script(UPGRADE_SCRIPT, "--check", "--project-root", str(fixture))
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
 
         self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("record-session.md: 元数据闭环说明缺失", result.stdout)
@@ -460,7 +522,13 @@ class WorkflowInstallerTests(unittest.TestCase):
         brainstorm.write_text("# drifted brainstorm\n", encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
-        result = self.run_script(UPGRADE_SCRIPT, "--check", "--project-root", str(fixture))
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
 
         self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("命令内容漂移: /trellis:brainstorm", result.stdout)
@@ -476,7 +544,13 @@ class WorkflowInstallerTests(unittest.TestCase):
         check.write_text("# drifted check\n", encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
-        result = self.run_script(UPGRADE_SCRIPT, "--check", "--project-root", str(fixture))
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
 
         self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("命令内容漂移: /trellis:check", result.stdout)
@@ -493,7 +567,13 @@ class WorkflowInstallerTests(unittest.TestCase):
         finish_work.write_text(content, encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
-        result = self.run_script(UPGRADE_SCRIPT, "--check", "--project-root", str(fixture))
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
 
         self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("finish-work.md: 项目化补丁缺失", result.stdout)
@@ -513,7 +593,13 @@ class WorkflowInstallerTests(unittest.TestCase):
         )
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
-        result = self.run_script(UPGRADE_SCRIPT, "--force", "--project-root", str(fixture))
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--force",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn(PHASE_ROUTER_MARKER, broken_start.read_text(encoding="utf-8"))
@@ -529,7 +615,13 @@ class WorkflowInstallerTests(unittest.TestCase):
         (fixture / ".claude" / "commands" / "trellis" / "record-session.md").unlink()
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
-        result = self.run_script(UPGRADE_SCRIPT, "--check", "--project-root", str(fixture))
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
 
         self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("record-session.md: 文件缺失", result.stdout)
@@ -549,14 +641,29 @@ class WorkflowInstallerTests(unittest.TestCase):
         record_session.write_text(BASELINE_RECORD_SESSION_CONTENT, encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
-        merge = self.run_script(UPGRADE_SCRIPT, "--merge", "--project-root", str(fixture))
+        merge = self.run_script(
+            UPGRADE_SCRIPT,
+            "--merge",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
 
         self.assertEqual(merge.returncode, 0, msg=merge.stdout + merge.stderr)
         self.assertIn(PHASE_ROUTER_MARKER, start.read_text(encoding="utf-8"))
         self.assertIn(FINISH_WORK_MARKER, finish_work.read_text(encoding="utf-8"))
         self.assertIn(RECORD_SESSION_MARKER, record_session.read_text(encoding="utf-8"))
+        record_data = json.loads((fixture / ".trellis" / "workflow-installed.json").read_text(encoding="utf-8"))
+        self.assertEqual(record_data["workflow_version"], "1.1.19")
+        self.assertEqual(record_data["previous_version"], "2.0.0")
 
-        followup_check = self.run_script(UPGRADE_SCRIPT, "--check", "--project-root", str(fixture))
+        followup_check = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
         self.assertEqual(followup_check.returncode, 0, msg=followup_check.stdout + followup_check.stderr)
 
     def test_force_restores_finish_work_from_backup_and_reapplies_patch(self) -> None:
@@ -570,7 +677,13 @@ class WorkflowInstallerTests(unittest.TestCase):
         finish_work.write_text("# broken finish-work\n\nmissing expected sections\n", encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
-        result = self.run_script(UPGRADE_SCRIPT, "--force", "--project-root", str(fixture))
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--force",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         restored_text = finish_work.read_text(encoding="utf-8")

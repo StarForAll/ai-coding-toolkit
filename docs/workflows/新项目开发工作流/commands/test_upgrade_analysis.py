@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -19,13 +20,17 @@ ANALYZE_SCRIPT = COMMANDS_DIR / "analyze-upgrade.py"
 
 
 class UpgradeAnalysisTests(unittest.TestCase):
-    def run_script(self, *args: str) -> subprocess.CompletedProcess[str]:
+    def run_script(self, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+        merged_env = os.environ.copy()
+        if env:
+            merged_env.update(env)
         return subprocess.run(
             [PYTHON, str(ANALYZE_SCRIPT), *args],
             cwd=REPO_ROOT,
             text=True,
             capture_output=True,
             check=False,
+            env=merged_env,
         )
 
     def make_root(self, prefix: str) -> Path:
@@ -37,6 +42,9 @@ class UpgradeAnalysisTests(unittest.TestCase):
         path = root / rel_path
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
+
+    def latest_env(self, version: str) -> dict[str, str]:
+        return {"TRELLIS_LATEST_VERSION": version}
 
     def test_analyze_upgrade_classifies_add_replace_merge_and_keep(self) -> None:
         baseline = self.make_root("upgrade-baseline-")
@@ -54,6 +62,7 @@ class UpgradeAnalysisTests(unittest.TestCase):
         self.write_file(target, ".claude/commands/trellis/start.md", "baseline start\n")
         self.write_file(target, ".claude/commands/trellis/brainstorm.md", "target custom brainstorm\n")
         self.write_file(target, ".trellis/scripts/workflow/check-quality.py", "# helper\n")
+        self.write_file(target, ".trellis/.version", "2.1.0\n")
 
         result = self.run_script(
             "--baseline-root",
@@ -65,6 +74,7 @@ class UpgradeAnalysisTests(unittest.TestCase):
             "--cli",
             "claude",
             "--json",
+            env=self.latest_env("2.1.0"),
         )
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
@@ -88,6 +98,7 @@ class UpgradeAnalysisTests(unittest.TestCase):
 
         self.write_file(target, ".agents/skills/brainstorm/SKILL.md", "baseline brainstorm\n")
         self.write_file(target, ".agents/skills/finish-work/SKILL.md", "baseline finish-work\n")
+        self.write_file(target, ".trellis/.version", "2.1.0\n")
 
         result = self.run_script(
             "--baseline-root",
@@ -99,6 +110,7 @@ class UpgradeAnalysisTests(unittest.TestCase):
             "--cli",
             "codex",
             "--json",
+            env=self.latest_env("2.1.0"),
         )
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
@@ -129,6 +141,7 @@ class UpgradeAnalysisTests(unittest.TestCase):
                 ensure_ascii=False,
             ),
         )
+        self.write_file(target, ".trellis/.version", "2.1.0\n")
 
         result = self.run_script(
             "--baseline-root",
@@ -140,12 +153,37 @@ class UpgradeAnalysisTests(unittest.TestCase):
             "--cli",
             "claude",
             "--json",
+            env=self.latest_env("2.1.0"),
         )
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         payload = json.loads(result.stdout)
         actions = {item["asset_id"]: item["action"] for item in payload["findings"]}
         self.assertEqual(actions["claude:retired-command"], "delete")
+
+    def test_analyze_upgrade_blocks_when_target_is_not_latest_trellis(self) -> None:
+        baseline = self.make_root("upgrade-baseline-stale-")
+        expected = self.make_root("upgrade-expected-stale-")
+        target = self.make_root("upgrade-target-stale-")
+
+        self.write_file(target, ".claude/commands/trellis/start.md", "baseline start\n")
+        self.write_file(target, ".trellis/.version", "2.0.0\n")
+
+        result = self.run_script(
+            "--baseline-root",
+            str(baseline),
+            "--expected-root",
+            str(expected),
+            "--target-root",
+            str(target),
+            "--cli",
+            "claude",
+            env=self.latest_env("2.1.0"),
+        )
+
+        self.assertEqual(result.returncode, 2, msg=result.stdout + result.stderr)
+        self.assertIn("尚未升级到当前最新 Trellis", result.stderr)
+        self.assertIn("禁止执行当前步骤", result.stderr)
 
 
 if __name__ == "__main__":

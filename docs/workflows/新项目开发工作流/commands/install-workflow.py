@@ -34,6 +34,7 @@ from workflow_assets import (
     DISTRIBUTED_COMMANDS,
     HELPER_SCRIPTS,
     OVERLAY_BASELINE_COMMANDS,
+    WORKFLOW_VERSION,
     resolve_codex_skills_dir,
 )
 
@@ -677,6 +678,7 @@ def write_install_record(root: Path, cli_types: list[str], dry_run: bool) -> Non
             "overlay_commands": OVERLAY_BASELINE_COMMANDS,
             "added_commands": ADDED_COMMANDS,
             "scripts": HELPER_SCRIPTS,
+            "workflow_version": WORKFLOW_VERSION,
             "initial_pack": _REQUIREMENTS_FOUNDATION_PACK,
             "bootstrap_task_removed": True,
         }, ensure_ascii=False, indent=2), encoding="utf-8")

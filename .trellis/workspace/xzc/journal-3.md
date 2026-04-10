@@ -54,7 +54,9 @@
 
 ### Testing
 
-- [OK] (Add test results)
+- [OK] `/ops/softwares/python/bin/python3 -m py_compile ...`
+- [OK] `/ops/softwares/python/bin/python3 -m unittest discover -s docs/workflows/新项目开发工作流/commands -p 'test_*.py'`
+- [OK] `/ops/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings`
 
 ### Status
 
@@ -62,7 +64,7 @@
 
 ### Next Steps
 
-- None - task complete
+- 等待用户确认是否按蓝图对目标项目执行实际兼容升级
 
 
 ## Session 90: 修正新项目开发工作流的项目级需求文档门禁
@@ -197,3 +199,54 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 93: 分析 browser_bookmark_cleaner_rchiver 工作流兼容升级方案
+
+**Date**: 2026-04-09
+**Task**: 分析 browser_bookmark_cleaner_rchiver 工作流兼容升级方案
+**Branch**: `main`
+
+### Summary
+
+完成兼容升级蓝图、两轮多 CLI 审查、round-2 审查命令与验证记录；本次为无关联 commit 的规划会话
+
+### Main Changes
+
+| 产物 | 说明 |
+|------|------|
+| `migration-blueprint.md` | 产出目标项目 workflow 兼容升级蓝图，补齐 source-of-truth、安装记录、语义迁移、验证与回退契约 |
+| `summary-round-1.md` / `summary-round-2.md` | 汇总两轮多 reviewer 审查结论，完成去重、采纳与忽略决策 |
+| `action.md` / `.processed.json` | 记录 multi-cli-review-action 执行结果与处理状态 |
+| `reviewer-commands-round-2.md` | 生成第二轮 reviewer 命令包，支持复核 round-1 修订后的蓝图 |
+
+**验证结果**
+
+- `/ops/softwares/python/bin/python3 -m py_compile ...`：pass
+- `/ops/softwares/python/bin/python3 -m unittest discover -s docs/workflows/新项目开发工作流/commands -p 'test_*.py'`：pass，`Ran 35 tests in 56.523s`，`OK`
+- `/ops/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings`：pass，仅 `2` 条 `INFO stale-related-asset`
+
+**补充说明**
+
+- 本次任务目标是“只做分析与可执行方案，不落地目标项目修改”，已按该边界完成。
+- 由于用户明确要求忽略 commit 前置条件，本条 session 未绑定代码提交，按 planning session 记录。
+- 当前剩余风险：`.opencode/package.json` 中 `@opencode-ai/plugin` 从 `1.4.0` 升到 `1.4.1` 仅做了 diff 检查，未做 Node 侧安装或构建验证。
+
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] `/ops/softwares/python/bin/python3 -m py_compile ...`
+- [OK] `/ops/softwares/python/bin/python3 -m unittest discover -s docs/workflows/新项目开发工作流/commands -p 'test_*.py'`
+- [OK] `/ops/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings`
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 等待用户确认是否按蓝图对目标项目执行实际兼容升级

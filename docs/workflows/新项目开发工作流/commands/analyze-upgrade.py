@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Analyze target-project workflow upgrade actions with baseline/expected/target comparison."""
+"""Analyze target-project workflow upgrade actions with baseline/expected/target comparison.
+
+This script is hard-blocked until the target project has been upgraded to the current latest Trellis version.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +17,7 @@ from workflow_assets import (
     ALL_CLI_TYPES,
     ManagedAssetSpec,
     build_managed_asset_specs,
+    check_latest_trellis_prerequisite,
     detect_cli_types,
 )
 
@@ -212,6 +216,10 @@ def main() -> int:
     for root in roots:
         if not root.is_dir():
             parser.error(f"Directory does not exist: {root}")
+
+    prerequisite_ok, prerequisite_message = check_latest_trellis_prerequisite(args.target_root)
+    if not prerequisite_ok:
+        parser.exit(2, f"ERROR: {prerequisite_message}\n")
 
     requested_cli_types: list[str] | None = None
     if args.cli:

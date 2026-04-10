@@ -105,10 +105,10 @@ Optional versioning keys for future upgrade routing:
 
 Contract when these versioning keys are missing:
 
-- do not block current upgrade analysis
+- do not block current upgrade analysis after the target project is already on the latest Trellis version
 - treat the target project as `legacy/unknown`
 - do not infer historical workflow structure from the absence alone
-- continue with `A/B/C` analysis first
+- continue with `A/B/C` analysis first only after the latest-Trellis prerequisite is satisfied
 - after compatibility upgrade or structural migration completes, the confirmed values may be written back
 
 ---
@@ -172,22 +172,24 @@ Target-project workflow upgrade must use an analysis-first sequence:
 
 1. current repository finishes workflow source-asset compatibility maintenance
 2. target project completes the Trellis official upgrade and resolves only official baseline conflicts
-3. `analyze-upgrade.py` compares:
+3. target project `.trellis/.version` must match the current latest Trellis version
+4. `analyze-upgrade.py` compares:
    - `A`: clean Trellis baseline
    - `B`: expected state after installing the current workflow onto `A`
    - `C`: target-project live state after official Trellis upgrade
-4. analysis classifies each managed asset into:
+5. analysis classifies each managed asset into:
    - `keep`
    - `add`
    - `replace`
    - `merge`
    - `delete`
-5. only low-risk drift may continue into `upgrade-compat.py`
+6. only low-risk drift may continue into `upgrade-compat.py`
 
 This means:
 
 - `upgrade-compat.py` is not the default upgrade strategy by itself
-- a target project may still be upgraded without `workflow_version` / `workflow_schema_version`
+- neither read-only `A/B/C` analysis nor `upgrade-compat.py` may run before the target project is on the latest Trellis version
+- a target project may still be upgraded without `workflow_version` / `workflow_schema_version` once it is already on the latest Trellis version
 - structural migration is a branch conclusion from the analysis result, not the default entry point
 
 #### 3.4 Drift Detection and Repair Contract
@@ -227,9 +229,16 @@ When maintaining workflow source content in this repository after a Trellis upgr
 When upgrading an already-installed target project:
 
 - first resolve the Trellis official baseline upgrade
+- confirm the target-project `.trellis/.version` already equals the current latest Trellis version
 - then generate `A/B/C` and run `analyze-upgrade.py`
 - then choose file-level actions
 - then optionally use `upgrade-compat.py` for low-risk repair
+
+If that latest-version prerequisite cannot be proven:
+
+- `analyze-upgrade.py` must fail fast
+- `upgrade-compat.py --check/--merge/--force` must fail fast
+- failure messages must explicitly say that read-only analysis is also blocked
 
 When analysis shows any of the following, stop treating the case as ordinary compatibility upgrade:
 
@@ -247,13 +256,14 @@ That branch becomes structural migration and must not be collapsed into `upgrade
 | Condition | `analyze-upgrade.py` | `--check` | `--merge` | `--force` |
 |-----------|----------------------|-----------|-----------|-----------|
 | `C == B` for a managed asset | classify `keep` | return `0` if all managed assets are healthy | no-op or return success | no-op or return success |
+| target project is not on latest Trellis | fail fast before classification | fail fast | fail fast | fail fast |
 | `A != B` and `C == A` for an existing managed asset | classify `replace` | return non-zero if deployed state is stale | redeploy current workflow copy | restore baseline backup, then reapply patch only if same structural model still holds |
 | asset exists only in `B` | classify `add` | return non-zero if missing in `C` | deploy asset | deploy asset |
 | `C != A` and `C != B` | classify `merge` and keep it visible | may return non-zero if drift is detected | do not claim semantic merge; only safe redeploy when drift is low-risk | not a structural-migration substitute |
 | asset removed from latest workflow but still exists in `C` | classify `delete` | may stay non-zero or advisory depending on script scope | optional manual cleanup only | optional manual cleanup only |
 | patch marker missing in `start` / `finish-work` / `record-session` | may present as `replace` or `merge` depending on `A/B/C` | return non-zero | redeploy and reinject patch when injection model still holds | restore baseline backup, then reinject patch when backup is valid |
 | helper script missing or drifted | classify `add` / `replace` / `merge` based on `A/B/C` | return non-zero | recopy helper script | recopy helper script |
-| missing `workflow_version` / `workflow_schema_version` | annotate as `legacy/unknown` context only | do not fail on absence alone | do not synthesize historical version | do not synthesize historical version |
+| missing `workflow_version` / `workflow_schema_version` while target project is already on latest Trellis | annotate as `legacy/unknown` context only | do not fail on absence alone | do not synthesize historical version | do not synthesize historical version |
 | missing baseline backup during force path | analysis may still proceed | n/a | n/a | fail clearly and keep error visible |
 | structural break detected | flag structural migration recommendation | may still show drift, but is not sufficient by itself | do not treat as primary resolution | do not treat as primary resolution |
 
