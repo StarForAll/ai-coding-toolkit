@@ -260,7 +260,7 @@
 
 ### Summary
 
-(Add summary)
+完成新项目工作流兼容升级机制补全：在目标项目 `browser_bookmark_cleaner_rchiver` 上完成兼容升级与自适应修正，同时修复 workflow source-of-truth 中的 `brainstorm` 错误示例，并把 `workflow_version` 正式接入安装/升级脚本和测试链。
 
 ### Main Changes
 
