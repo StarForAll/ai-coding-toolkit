@@ -301,3 +301,53 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 95: fix: 修正新项目开发工作流文档和脚本漂移问题
+
+**Date**: 2026-04-11
+**Task**: fix: 修正新项目开发工作流文档和脚本漂移问题
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 变更 | 说明 |
+|------|------|
+| Bug fix | feasibility-check.py: TEMPLATE→ASSESSMENT_TEMPLATE 变量名修复 |
+| Bug fix | metadata-autocommit-guard.py: record-session 模式不再要求 current task（archive 之后才需要） |
+| 重写 | record-session-patch-metadata-closure.md: 收尾顺序改为 record-session→archive（安装器分发到目标项目的 patch 文件） |
+| 文档修正 | delivery.md: Step10 主流程+底部表格收尾顺序一致化，新增 delivery-control-validate 验证 |
+| 文档修正 | design.md: 必需/可选文件标注修正（AID/ODD 为可选） |
+| 文档修正 | 工作流总纲、全局流转说明、命令映射、完整流程演练: 收尾顺序统一 |
+| 文档修正 | claude/codex/opencode README: 部署映射表新增安装器管理列 |
+| 测试 | test_workflow_installers.py: 新增 patch 内容顺序断言 |
+| 新测试 | test_feasibility_check.py (10 cases), test_design_export.py (8 cases), test_delivery_control_validate.py (10 cases) |
+
+**关键修复**:
+- 收尾顺序从 archive→record-session 统一修正为 record-session→archive（跨 6+ 文件保持一致）
+- 安装器分发的 patch 文件内 record-session-helper 必须在 task.py archive 之前
+
+**验证**: 59 个测试全部通过，py_compile 全部通过
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9276d8a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

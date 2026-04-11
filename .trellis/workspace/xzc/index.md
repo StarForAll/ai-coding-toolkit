@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 94
-- **Last Active**: 2026-04-10
+- **Total Sessions**: 95
+- **Last Active**: 2026-04-11
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~301 | Active |
+| `journal-3.md` | ~353 | Active |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 95 | 2026-04-11 | fix: 修正新项目开发工作流文档和脚本漂移问题 | `9276d8a` | `main` |
 | 94 | 2026-04-10 | 工作流兼容升级机制补全 | `9845ab6` | `main` |
 | 93 | 2026-04-09 | 分析 browser_bookmark_cleaner_rchiver 工作流兼容升级方案 | - | `main` |
 | 92 | 2026-04-09 | 工作流目标项目兼容升级方案与结构性迁移设计 | `a9e9c41` | `main` |
