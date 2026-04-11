@@ -254,7 +254,18 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(FINISH_WORK_MARKER, finish_work_text)
         self.assertNotIn("pnpm lint", finish_work_text)
         record_session = fixture / ".claude" / "commands" / "trellis" / "record-session.md"
-        self.assertIn(RECORD_SESSION_MARKER, record_session.read_text(encoding="utf-8"))
+        rs_text = record_session.read_text(encoding="utf-8")
+        self.assertIn(RECORD_SESSION_MARKER, rs_text)
+        # Verify close-out order: record-session-helper must appear before archive
+        helper_pos = rs_text.find("record-session-helper.py")
+        archive_pos = rs_text.find("task.py archive")
+        if helper_pos >= 0 and archive_pos >= 0:
+            self.assertLess(
+                helper_pos,
+                archive_pos,
+                "record-session-helper.py must appear before 'task.py archive' in the patch — "
+                "close-out order is record-session first, then archive",
+            )
 
         record = fixture / ".trellis" / "workflow-installed.json"
         self.assertTrue(record.exists(), "workflow-installed.json should be created")

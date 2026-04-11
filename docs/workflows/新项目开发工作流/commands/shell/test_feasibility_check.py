@@ -1,0 +1,142 @@
+from __future__ import annotations
+
+import shutil
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+
+
+REPO_ROOT = Path(__file__).resolve().parents[5]
+PYTHON = (
+    "/ops/softwares/python/bin/python3"
+    if Path("/ops/softwares/python/bin/python3").exists()
+    else shutil.which("python3") or shutil.which("python")
+)
+SCRIPT = REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "commands" / "shell" / "feasibility-check.py"
+
+
+class FeasibilityCheckTests(unittest.TestCase):
+    def run_script(self, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [PYTHON, str(SCRIPT), *args],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    # ── compliance step ──
+
+    def test_compliance_step_prints_checklist(self) -> None:
+        result = self.run_script("--step", "compliance")
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("合规性审查清单", result.stdout)
+
+    # ── estimate step ──
+
+    def test_estimate_creates_template_when_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            result = self.run_script("--step", "estimate", "--task-dir", td)
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+            assessment = Path(td) / "assessment.md"
+            self.assertTrue(assessment.exists())
+            text = assessment.read_text(encoding="utf-8")
+            self.assertIn("项目可行性评估", text)
+            self.assertIn("delivery_control_track", text)
+
+    def test_estimate_prints_existing_assessment(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            assessment = Path(td) / "assessment.md"
+            assessment.write_text("# existing\n", encoding="utf-8")
+            result = self.run_script("--step", "estimate", "--task-dir", td)
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+            self.assertIn("当前 assessment.md 内容", result.stdout)
+
+    # ── risk-analysis step ──
+
+    def test_risk_analysis_creates_assessment_from_requirement_file(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            req = Path(td) / "req.md"
+            req.write_text("build a login page", encoding="utf-8")
+            result = self.run_script(
+                "--step", "risk-analysis",
+                "--task-dir", td,
+                "--requirement-file", str(req),
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+            self.assertTrue((Path(td) / "assessment.md").exists())
+            self.assertTrue((Path(td) / "risk-analysis-guide.md").exists())
+
+    def test_risk_analysis_fails_on_empty_requirement(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            req = Path(td) / "req.md"
+            req.write_text("   \n", encoding="utf-8")
+            result = self.run_script(
+                "--step", "risk-analysis",
+                "--task-dir", td,
+                "--requirement-file", str(req),
+            )
+            self.assertIn("需求文本为空", result.stdout)
+
+    # ── validate step ──
+
+    def test_validate_fails_when_assessment_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            result = self.run_script("--step", "validate", "--task-dir", td)
+            self.assertEqual(result.returncode, 1)
+
+    def test_validate_skips_for_internal_project(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "assessment.md").write_text("# no delivery fields\n", encoding="utf-8")
+            result = self.run_script("--step", "validate", "--task-dir", td)
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+            self.assertIn("内部项目", result.stdout)
+
+    def test_validate_passes_for_complete_hosted_deployment(self) -> None:
+        content = (
+            "# 评估\n"
+            "- 总体决策：接\n"
+            "- 是否允许进入 brainstorm：是\n"
+            "- `delivery_control_track`: `hosted_deployment`\n"
+            "- `delivery_control_handover_trigger`: `final_payment_received`\n"
+            "- `delivery_control_retained_scope`: source code and keys\n"
+        )
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
+            result = self.run_script("--step", "validate", "--task-dir", td)
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+            self.assertIn("验证通过", result.stdout)
+
+    def test_validate_fails_when_track_invalid(self) -> None:
+        content = (
+            "# 评估\n"
+            "- 总体决策：接\n"
+            "- 是否允许进入 brainstorm：是\n"
+            "- `delivery_control_track`: `invalid_value`\n"
+            "- `delivery_control_handover_trigger`: `final_payment_received`\n"
+            "- `delivery_control_retained_scope`: none\n"
+        )
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
+            result = self.run_script("--step", "validate", "--task-dir", td)
+            self.assertEqual(result.returncode, 1)
+
+    def test_validate_checks_trial_authorization_terms(self) -> None:
+        content = (
+            "# 评估\n"
+            "- 总体决策：接\n"
+            "- 是否允许进入 brainstorm：是\n"
+            "- `delivery_control_track`: `trial_authorization`\n"
+            "- `delivery_control_handover_trigger`: `final_payment_received`\n"
+            "- `delivery_control_retained_scope`: source code\n"
+        )
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
+            result = self.run_script("--step", "validate", "--task-dir", td)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("trial_authorization_terms", result.stdout + result.stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()

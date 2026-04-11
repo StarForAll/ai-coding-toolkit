@@ -124,7 +124,10 @@
       "Bash(/ops/softwares/python/bin/python3 -c \"import ast; ast.parse\\(open\\('docs/workflows/新项目开发工作流/commands/install-workflow.py'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
       "Bash(/ops/softwares/python/bin/python3 ./.trellis/scripts/task.py archive 04-01-workflow-cli-native-commands)",
       "Read(//usr/lib/**)",
-      "Bash(nvidia-smi)"
+      "Bash(nvidia-smi)",
+      "Bash(/ops/softwares/python/bin/python3 -m py_compile docs/workflows/新项目开发工作流/commands/shell/feasibility-check.py)",
+      "Bash(/ops/softwares/python/bin/python3 -m py_compile docs/workflows/新项目开发工作流/commands/shell/metadata-autocommit-guard.py)",
+      "Bash(/ops/softwares/python/bin/python3 -m py_compile docs/workflows/新项目开发工作流/commands/shell/check-quality.py)"
     ]
   }
 }

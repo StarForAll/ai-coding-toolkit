@@ -89,11 +89,11 @@ def get_dirty_lines(repo_root: Path, *paths: str) -> tuple[bool, list[str] | str
 
 def validate_pre_check(repo_root: Path, mode: str, task_dir: Path | None) -> int:
     current_task = get_current_task(repo_root)
-    if not current_task:
-        print("❌ Auto-commit blocked: no current task", file=sys.stderr)
-        return 1
 
     if mode == "archive":
+        if not current_task:
+            print("❌ Auto-commit blocked: no current task", file=sys.stderr)
+            return 1
         if task_dir is None:
             print("❌ Auto-commit blocked: archive pre-check requires --task-dir", file=sys.stderr)
             return 1

@@ -97,7 +97,7 @@ description: 需求冻结了？开始设计 — UI/UX、架构选型、接口设
 python3 <WORKFLOW_DIR>/commands/shell/design-export.py --validate
 ```
 
-输出文档体系：`design/BRD.md` `TAD.md` `DDD.md` `IDD.md` `AID.md` `ODD.md`
+输出文档体系：`design/index.md` `BRD.md` `TAD.md` `DDD.md` `IDD.md`（必需）；`AID.md` `ODD.md`（可选）
 
 ---
 
@@ -106,9 +106,10 @@ python3 <WORKFLOW_DIR>/commands/shell/design-export.py --validate
 ```
 $TASK_DIR/design/
 ├── index.md
-├── BRD/TAD/DDD/IDD/ODD.md
-├── specs/<module>.md
-└── pages/<page>.md
+├── BRD.md / TAD.md / DDD.md / IDD.md  （必需）
+├── AID.md / ODD.md  （可选）
+├── specs/<module>.md  （可选，由 validate 提示但不强制）
+└── pages/<page>.md  （scaffold 自动创建，validate 不校验）
 ```
 
 ## 下一步推荐

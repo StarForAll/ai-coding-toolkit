@@ -194,14 +194,14 @@ OpenCode 不应被写成“和 Claude 完全等价”，因为它在 hook / suba
 
 ## 推荐部署映射
 
-| 工作流资产 | OpenCode 目标位置 | 说明 |
-|-----------|------------------|------|
-| 阶段命令 | `.opencode/commands/trellis/*.md` | 用户显式触发的 workflow 命令 |
-| Trellis 原生命令基线 | `.opencode/commands/trellis/start.md` `finish-work.md` `record-session.md` | 由 `trellis init` 提供；当前 workflow 会对 `start` / `finish-work` / `record-session` 注入补丁，但不重新分发完整基线 |
-| 子代理定义 | `.opencode/agents/*.md` | research / implement / check / debug / dispatch |
-| 项目长期规则 | `AGENTS.md` | 稳定执行规则、风险边界、语言策略 |
-| workflow 文档注入 | `opencode.json.instructions` | 只挂主入口与必要补充，不默认全量挂载所有阶段文档 |
-| 通用脚本 | `.trellis/scripts/workflow/` 或 `commands/shell/` | 被命令或人工直接调用 |
+| 工作流资产 | OpenCode 目标位置 | 说明 | 安装器管理 |
+|-----------|------------------|------|-----------|
+| 阶段命令 | `.opencode/commands/trellis/*.md` | 用户显式触发的 workflow 命令 | ✅ `install-workflow.py` |
+| Trellis 原生命令基线 | `.opencode/commands/trellis/start.md` `finish-work.md` `record-session.md` | 由 `trellis init` 提供；当前 workflow 会对 `start` / `finish-work` / `record-session` 注入补丁，但不重新分发完整基线 | ✅ 补丁由安装器注入 |
+| 子代理定义 | `.opencode/agents/*.md` | research / implement / check / debug / dispatch | ❌ 手动维护 |
+| 项目长期规则 | `AGENTS.md` | 稳定执行规则、风险边界、语言策略 | ❌ 手动维护 |
+| workflow 文档注入 | `opencode.json.instructions` | 只挂主入口与必要补充，不默认全量挂载所有阶段文档 | ❌ 手动维护 |
+| 通用脚本 | `.trellis/scripts/workflow/` | 被命令或人工直接调用 | ✅ `install-workflow.py` |
 
 ## 何时仍可用脚本降级
 

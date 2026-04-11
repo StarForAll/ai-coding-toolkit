@@ -348,7 +348,7 @@ def step_risk_analysis(task_dir: Path, requirement_file: Path = None) -> None:
     # 检查是否存在 assessment.md
     assessment = task_dir / "assessment.md"
     if not assessment.exists():
-        assessment.write_text(TEMPLATE, encoding="utf-8")
+        assessment.write_text(ASSESSMENT_TEMPLATE, encoding="utf-8")
         print(f"已创建 {assessment} 模板")
     
     print()

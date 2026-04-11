@@ -182,16 +182,16 @@ Claude Code 的 hooks 是这套 workflow 的关键承载层之一。当前仓库
 
 ## 推荐部署映射
 
-| 工作流资产 | Claude Code 目标位置 | 说明 |
-|-----------|----------------------|------|
-| 阶段命令 | `.claude/commands/trellis/*.md` | 用户显式触发的 workflow 命令 |
-| Trellis 原生命令基线 | `.claude/commands/trellis/start.md` `finish-work.md` `record-session.md` | 由 `trellis init` 提供；当前 workflow 会对 `start` / `finish-work` / `record-session` 注入补丁，但不重新定义完整基线 |
-| 项目长期规则 | `AGENTS.md` | 稳定执行规则、证据门禁、能力优先级 |
-| 共享运行时基线 | `.claude/settings.json` | hooks 接线、默认 deny / shared baseline |
-| 本机权限扩展 | `.claude/settings.local.json` | MCP allowlist、本地调试权限 |
-| 会话与子代理 hooks | `.claude/hooks/*.py` | 会话启动、上下文注入、收口逻辑 |
-| 子代理定义 | `.claude/agents/*.md` | research / implement / check / debug / dispatch |
-| 通用辅助脚本 | `.trellis/scripts/workflow/` 或 `commands/shell/` | 校验、导出、静态验证脚本 |
+| 工作流资产 | Claude Code 目标位置 | 说明 | 安装器管理 |
+|-----------|----------------------|------|-----------|
+| 阶段命令 | `.claude/commands/trellis/*.md` | 用户显式触发的 workflow 命令 | ✅ `install-workflow.py` |
+| Trellis 原生命令基线 | `.claude/commands/trellis/start.md` `finish-work.md` `record-session.md` | 由 `trellis init` 提供；当前 workflow 会对 `start` / `finish-work` / `record-session` 注入补丁，但不重新定义完整基线 | ✅ 补丁由安装器注入 |
+| 项目长期规则 | `AGENTS.md` | 稳定执行规则、证据门禁、能力优先级 | ❌ 手动维护 |
+| 共享运行时基线 | `.claude/settings.json` | hooks 接线、默认 deny / shared baseline | ❌ 手动维护 |
+| 本机权限扩展 | `.claude/settings.local.json` | MCP allowlist、本地调试权限 | ❌ 手动维护 |
+| 会话与子代理 hooks | `.claude/hooks/*.py` | 会话启动、上下文注入、收口逻辑 | ❌ 手动维护 |
+| 子代理定义 | `.claude/agents/*.md` | research / implement / check / debug / dispatch | ❌ 手动维护 |
+| 通用辅助脚本 | `.trellis/scripts/workflow/` | 校验、导出、静态验证脚本 | ✅ `install-workflow.py` |
 
 ## 何时仍可用脚本降级
 

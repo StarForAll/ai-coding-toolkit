@@ -2,25 +2,9 @@
 
 Use `/trellis:record-session` here only for the **final close-out of the current completed task**.
 
-Before continuing:
+**Close-out order: record-session first, then archive.** The session record needs the current task context; archive clears `.current-task`, so it must come after.
 
-- Archive the current completed task explicitly:
-
-```bash
-python3 ./.trellis/scripts/task.py archive <current-task>
-```
-
-- Verify task metadata is already closed out:
-
-```bash
-git status --short .trellis/tasks .trellis/.current-task
-```
-
-Expected output: empty.
-
-If `.trellis/tasks` or `.trellis/.current-task` is still dirty, stop here and fix archive / metadata issues before recording the session.
-
-For the final session record, use the workflow helper instead of calling `add_session.py` directly:
+### Step 1: Record the session
 
 ```bash
 python3 ./.trellis/scripts/workflow/record-session-helper.py \
@@ -30,3 +14,18 @@ python3 ./.trellis/scripts/workflow/record-session-helper.py \
 ```
 
 This helper runs the metadata closure checks before and after `add_session.py`.
+If the helper returns non-zero, do NOT proceed to archive — fix the failure first.
+
+### Step 2: Archive the completed task
+
+```bash
+python3 ./.trellis/scripts/task.py archive <current-task>
+```
+
+### Step 3: Verify clean state
+
+```bash
+git status --short .trellis/tasks .trellis/.current-task
+```
+
+Expected output: empty. If still dirty, fix the metadata issues before considering the close-out complete.
