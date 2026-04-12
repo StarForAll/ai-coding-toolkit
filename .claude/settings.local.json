@@ -127,7 +127,18 @@
       "Bash(nvidia-smi)",
       "Bash(/ops/softwares/python/bin/python3 -m py_compile docs/workflows/新项目开发工作流/commands/shell/feasibility-check.py)",
       "Bash(/ops/softwares/python/bin/python3 -m py_compile docs/workflows/新项目开发工作流/commands/shell/metadata-autocommit-guard.py)",
-      "Bash(/ops/softwares/python/bin/python3 -m py_compile docs/workflows/新项目开发工作流/commands/shell/check-quality.py)"
+      "Bash(/ops/softwares/python/bin/python3 -m py_compile docs/workflows/新项目开发工作流/commands/shell/check-quality.py)",
+      "Skill(agent-browser)",
+      "Read(//usr/local/bin/**)",
+      "Read(//home/xzc/.npm-global/bin/**)",
+      "Read(//ops/**)",
+      "Bash(npm install:*)",
+      "Bash(agent-browser eval:*)",
+      "Bash(agent-browser screenshot:*)",
+      "Bash(agent-browser open:*)",
+      "Bash(agent-browser wait:*)",
+      "Bash(agent-browser snapshot:*)",
+      "Bash(agent-browser get:*)"
     ]
   }
 }

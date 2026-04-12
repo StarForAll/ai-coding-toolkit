@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 辅助开发实战工作流 V1.1.19 - 思维导图</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#0d1117;color:#c9d1d9;overflow:auto}
+#wrap{position:relative;padding:40px}
+svg{position:absolute;top:0;left:0;pointer-events:none;z-index:0}
+.nd{position:absolute;border-radius:8px;z-index:1;white-space:nowrap}
+.L0{background:linear-gradient(135deg,#1a1b26,#24283b);border:2px solid #7aa2f7;padding:14px 28px;font-size:22px;font-weight:700;color:#7aa2f7}
+.L1{border:2px solid;padding:12px 20px;font-size:17px;font-weight:700}
+.L1 .cmd{font-size:12px;font-weight:400;color:#8b949e;font-family:monospace;margin-top:2px}
+.L2{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 16px;font-size:14px;font-weight:600;color:#e6edf3}
+.L2 .det{font-size:12px;font-weight:400;color:#8b949e;line-height:1.45;margin-top:3px;white-space:normal;max-width:260px}
+.L3{background:#1c2333;border:1px dashed #3fb950;border-radius:6px;padding:8px 14px}
+.L3 .cn{font-size:13px;font-weight:700;color:#3fb950;font-family:"Cascadia Code","Fira Code",monospace}
+.L3 .cp{font-size:11px;color:#8b949e;font-family:monospace;max-width:280px;word-break:break-all;margin-top:2px}
+.L3 .cd{font-size:12px;color:#c9d1d9;margin-top:2px}
+.SK{background:#1a1f2e;border:1px solid #bb9af7;border-radius:6px;padding:7px 14px}
+.SK .sn{font-size:12px;font-weight:600;color:#bb9af7}
+.SK .su{font-size:11px;color:#8b949e}
+.GT{background:#2d1f1f;border:2px solid #f0883e;border-radius:6px;padding:8px 14px;font-size:13px;color:#f0883e;font-weight:600}
+.BR{background:#1a1b22;border:2px solid #d2a8ff;border-radius:6px;padding:10px 18px;font-size:14px;font-weight:600;color:#d2a8ff}
+.BR .bdesc{font-size:12px;font-weight:400;color:#8b949e;line-height:1.45;margin-top:3px;white-space:normal;max-width:240px}
+.BR .btrig{font-size:11px;color:#d2a8ff;font-family:monospace;margin-top:2px;opacity:0.8}
+.c1{border-color:#ff9e64;color:#ff9e64}.c2{border-color:#7aa2f7;color:#7aa2f7}.c3{border-color:#bb9af7;color:#bb9af7}
+.c4{border-color:#2ac3de;color:#2ac3de}.c5{border-color:#9ece6a;color:#9ece6a}.c6{border-color:#f7768e;color:#f7768e}.c7{border-color:#e0af68;color:#e0af68}
+.c1 .det,.c1 .cmd{color:#ff9e64}.c2 .det,.c2 .cmd{color:#7aa2f7}.c3 .det,.c3 .cmd{color:#bb9af7}
+.c4 .det,.c4 .cmd{color:#2ac3de}.c5 .det,.c5 .cmd{color:#9ece6a}.c6 .det,.c6 .cmd{color:#f7768e}.c7 .det,.c7 .cmd{color:#e0af68}
+</style>
+</head>
+<body>
+<div id="wrap"><svg id="svg"></svg></div>
+<script>
+const W = document.getElementById('wrap');
+const sv = document.getElementById('svg');
+const svgNS = 'http://www.w3.org/2000/svg';
+
+/* ═══════════════ DATA — single tree per spec 2.2 ═══════════════ */
+
+const tree = [
+  {
+    html: 'AI 辅助开发实战工作流<br>V1.1.19',
+    level: 0, id: 'root',
+    children: [
+      { html:'§1 可行性评估', cls:'L1 c1', id:'p1', sub:'<span class="cmd">/trellis:feasibility</span>', children:[
+        { html:'1.1 合法性审查',       cls:'L2', det:'法律合规性检查<br>不合规则终止项目', id:'p1_1' },
+        { html:'1.2 粗略需求沟通',     cls:'L2', det:'明确需求方向和范围<br>识别核心功能和技术难点', id:'p1_2' },
+        { html:'1.3 项目评估与报价',   cls:'L2', det:'工作量/时间/资源/AI成本<br>风险预判 · 报价输出', id:'p1_3' },
+        { html:'1.4 项目确认与初始化', cls:'L2', det:'客户确认报价 & 签署合同<br>项目级初始化 · todo.txt', id:'p1_4' },
+        { html:'门禁: assessment.md',  cls:'GT', id:'p1_g', det:'决策: 接/谈判后接/暂停/拒绝' },
+        { html:'/trellis:feasibility', cls:'L3', id:'p1_c', cp:'.claude/commands/trellis/feasibility.md', cd:'可行性评估主命令' },
+        { html:'demand-risk-assessment', cls:'SK', id:'p1_s', su:'§1 风险评估 skill' },
+        { html:'install-workflow.py',  cls:'L3', id:'p1_i', cp:'trellis init → install', cd:'导入需求发现基础资产' },
+      ]},
+      { html:'§2 需求明确与确认', cls:'L1 c2', id:'p2', sub:'<span class="cmd">/trellis:brainstorm</span>', children:[
+        { html:'2.1 详细需求分析',   cls:'L2', det:'Task-first / Research-first<br>Diverge→Converge<br>L0/L1/L2 复杂度分类', id:'p2_1' },
+        { html:'2.2 需求说明书编制', cls:'L2', det:'客户版 PRD<br>开发人员版 PRD<br>用户故事/功能边界/验收标准', id:'p2_2' },
+        { html:'2.3 需求确认循环',   cls:'L2', det:'客户版确认循环<br>开发人员版确认循环', id:'p2_3' },
+        { html:'2.4 需求冻结',       cls:'L2', det:'冻结业务意图与验收证据<br>不冻结实现细节 · AI意图映射确认', id:'p2_4' },
+        { html:'2.5 需求变更管理',   cls:'L2', det:'估价→确认→执行→验证<br>轻微/一般/重大/紧急', id:'p2_5' },
+        { html:'门禁: 双需求文档',   cls:'GT', id:'p2_g', det:'customer-facing-prd.md<br>developer-facing-prd.md' },
+        { html:'/trellis:brainstorm', cls:'L3', id:'p2_c', cp:'.claude/commands/trellis/brainstorm.md', cd:'需求发现 · 合并原生brainstorm' },
+        { html:'prd', cls:'SK', id:'p2_s', su:'§2 PRD 编写 skill' },
+      ]},
+      { html:'§3 设计阶段', cls:'L1 c3', id:'p3', sub:'<span class="cmd">/trellis:design</span>', children:[
+        { html:'3.1 UI/UX 设计',           cls:'L2', det:'AI粗稿生成<br>外部工具: Stitch/Figma', id:'p3_1' },
+        { html:'3.2 功能规格说明',         cls:'L2', det:'模块/业务规则<br>输入输出/异常处理/接口', id:'p3_2' },
+        { html:'3.3 可执行原型',           cls:'L2', det:'HTML/Figma/Storybook 三选一<br>状态完整性', id:'p3_3' },
+        { html:'3.4 页面与交互说明',       cls:'L2', det:'页面清单/定位/结构<br>状态变化/交互说明', id:'p3_4' },
+        { html:'3.5 技术方案设计',         cls:'L2', det:'模块结构/选型/详细设计<br>数据与接口约束/AI执行约束', id:'p3_5' },
+        { html:'3.6 详细规划文档',         cls:'L2', det:'技术实现路径<br>关键风险点 · AI任务边界', id:'p3_6' },
+        { html:'§3.7 Spec 对齐',           cls:'GT', id:'p3_g', det:'导入spec → 完善.trellis/spec/<br>自动化检查矩阵<br>适配finish-work & record-session' },
+        { html:'/trellis:design',           cls:'L3', id:'p3_c', cp:'.claude/commands/trellis/design.md', cd:'设计阶段主命令' },
+        { html:'ui-ux-pro-max / architecture-patterns', cls:'SK', id:'p3_s', su:'§3 设计辅助 skills' },
+      ]},
+      { html:'§4 任务分解与准备', cls:'L1 c4', id:'p4', sub:'<span class="cmd">/trellis:plan</span>', children:[
+        { html:'4.1 AI驱动任务拆解', cls:'L2', det:'Plan.md 生成<br>DoR/DoD 模板 · 并行规则', id:'p4_1' },
+        { html:'4.2 任务排期',       cls:'L2', det:'基于 Plan.md 排期<br>识别可并行任务', id:'p4_2' },
+        { html:'4.3 Test-First AI',  cls:'L2', det:'AI自动生成测试<br>人工审核确认<br>测试代码=验证标准', id:'p4_3' },
+        { html:'/trellis:plan',      cls:'L3', id:'p4_c1', cp:'.claude/commands/trellis/plan.md', cd:'任务拆解 · 输出 task_plan.md' },
+        { html:'/trellis:test-first',cls:'L3', id:'p4_c2', cp:'.claude/commands/trellis/test-first.md', cd:'测试驱动开发' },
+        { html:'project-planner / writing-plans', cls:'SK', id:'p4_s', su:'§4 计划 skills' },
+      ]},
+      { html:'§5 开发实施循环', cls:'L1 c5', id:'p5', sub:'<span class="cmd">/trellis:start</span>', children:[
+        { html:'5.1 单需求开发 9步', cls:'L2', det:'①选任务→②DoR→③先测后改<br>④AI实现→⑤本地门禁→⑥风险评审<br>⑦CI→⑧状态更新→⑨上下文检查', id:'p5_1' },
+        { html:'5.1.x 反思/批判',   cls:'L2', det:'实现后质量检查<br>多CLI审查门禁 review-gate<br>双模态执行 · 上下文污染检测', id:'p5_2' },
+        { html:'5.2 人工介入机制',   cls:'L2', det:'连续2轮未解决 · 超时50%<br>安全高危 · 模型不稳定', id:'p5_3' },
+        { html:'5.5 代码文档同步',   cls:'L2', det:'任务粒度同步<br>即时优先原则', id:'p5_4' },
+        { html:'/trellis:check',     cls:'L3', id:'p5_c1', cp:'.claude/commands/trellis/check.md', cd:'质量检查 · 对照Spec核对' },
+        { html:'/trellis:review-gate',cls:'L3', id:'p5_c2', cp:'.claude/commands/trellis/review-gate.md', cd:'多CLI补充审查' },
+        { html:'coding-standards / simplify', cls:'SK', id:'p5_s', su:'§5 编码 skills' },
+      ]},
+      { html:'§6 项目整体测试', cls:'L1 c6', id:'p6', sub:'<span class="cmd">/trellis:finish-work → delivery</span>', children:[
+        { html:'6.1 自动化测试',   cls:'L2', det:'执行自动化测试脚本<br>AI生成代码专项测试', id:'p6_1' },
+        { html:'6.2 可用性测试',   cls:'L2', det:'业务流程/需求实现<br>用户场景测试', id:'p6_2' },
+        { html:'6.3 性能测试',     cls:'L2', det:'响应时间/吞吐量<br>TTFT/ITL/AI API延迟', id:'p6_3' },
+        { html:'6.4 验收测试',     cls:'L2', det:'基于客户版PRD<br>核心场景100%通过', id:'p6_4' },
+        { html:'6.5 Bug修复流程',  cls:'L2', det:'收集→创建→领取→分析<br>修复→自测→提交→审核<br>优先级 P0-P3', id:'p6_5' },
+        { html:'6.6 Bug反馈学习',  cls:'L2', det:'5Why分析 · 知识沉淀<br>预防措施 · 定期复盘', id:'p6_6' },
+        { html:'/trellis:finish-work', cls:'L3', id:'p6_c1', cp:'.claude/commands/trellis/finish-work.md', cd:'提交前检查' },
+        { html:'/trellis:delivery',    cls:'L3', id:'p6_c2', cp:'.claude/commands/trellis/delivery.md', cd:'测试交付 · 验收清单' },
+        { html:'/trellis:break-loop',  cls:'L3', id:'p6_c3', cp:'.claude/commands/trellis/break-loop.md', cd:'缺陷反复 · 深根因分析' },
+      ]},
+      { html:'§7 交付与沉淀', cls:'L1 c7', id:'p7', sub:'<span class="cmd">/trellis:record-session</span>', children:[
+        { html:'7.1 文档更新',   cls:'L2', det:'客户版: 不含AI<br>开发版: 含AI', id:'p7_1' },
+        { html:'7.2 项目交付',   cls:'L2', det:'客户/开发交付物<br>双轨交付门禁<br>尾款后最终移交', id:'p7_2' },
+        { html:'7.3 经验沉淀',   cls:'L2', det:'AI经验沉淀<br>learn/ 目录<br>AI起草→人工确认→回流', id:'p7_3' },
+        { html:'7.4 会话记录',   cls:'L2', det:'record-session<br>先记录再archive<br>元数据闭环校验', id:'p7_4' },
+        { html:'/trellis:record-session', cls:'L3', id:'p7_c', cp:'.trellis/scripts/add_session.py', cd:'会话记录 · workflow helper' },
+        { html:'learn/',          cls:'L3', id:'p7_d', cp:'docs/workflows/.../learn/', cd:'经验反馈沉淀目录' },
+      ]},
+      // ── Left-side branch flows (expand leftward) ──
+      { html:'冻结后需求变更', cls:'BR', id:'br_change', bdesc:'§3→§7 任一阶段出现<br>新增/修改/删除需求', btrig:'→ §2.5 需求变更管理<br>→ 回到受影响最早阶段', side:'left', children:[
+        { html:'纯澄清', cls:'L2', det:'不改变范围/接口契约<br>验收标准/成本/工期<br>→ 留在当前阶段', id:'br_ch_1' },
+        { html:'新增/修改/删除', cls:'L2', det:'评估影响→确认<br>→ 回写双PRD<br>→ 回到最早受影响阶段', id:'br_ch_2' },
+        { html:'变更未获批', cls:'L2', det:'维持冻结基线<br>不混入当前交付', id:'br_ch_3' },
+      ]},
+      { html:'回退修改流', cls:'BR', id:'br_fallback', bdesc:'质量检查/审查/交付<br>发现偏差', btrig:'check → start 修复<br>review-gate → start 修复<br>delivery → start 修复', side:'left', children:[
+        { html:'check 有偏差', cls:'L2', det:'§5.1.x 质量检查未通过<br>→ 回到 start 修复', id:'br_fb_1' },
+        { html:'review-gate 未收敛', cls:'L2', det:'多CLI审查未通过<br>→ 回到 start 修复', id:'br_fb_2' },
+        { html:'delivery 有缺陷', cls:'L2', det:'§6+§7 测试交付未通过<br>→ break-loop 或回到 start', id:'br_fb_3' },
+      ]},
+      { html:'跳阶段前进', cls:'BR', id:'br_skip', bdesc:'满足前置条件时<br>可跳过中间阶段', btrig:'仅限特定场景', side:'left', children:[
+        { html:'L0 直接 Start', cls:'L2', det:'单上下文可闭环<br>影响面小<br>不需重设计', id:'br_sk_1' },
+        { html:'跳过 brainstorm', cls:'L2', det:'已有有效 assessment<br>且允许跳过时<br>→ 直接 design/start', id:'br_sk_2' },
+      ]},
+      { html:'终止/暂停', cls:'BR', id:'br_stop', bdesc:'可行性评估不通过', btrig:'assessment.md 决策分支', side:'left', children:[
+        { html:'拒绝项目', cls:'L2', det:'不合规或不值得做<br>→ 记录原因 终止', id:'br_st_1' },
+        { html:'暂停项目', cls:'L2', det:'信息不足/条件未成熟<br>→ 补信息后重评估', id:'br_st_2' },
+        { html:'谈判后接', cls:'L2', det:'条件调整后再评估<br>→ 回到 feasibility', id:'br_st_3' },
+      ]},
+      { html:'并行开发', cls:'BR', id:'br_parallel', bdesc:'多任务同时推进', btrig:'/trellis:parallel<br>/trellis:worktree', side:'left', children:[
+        { html:'worktree 隔离', cls:'L2', det:'独立分支开发<br>各自门禁验证<br>最后合并', id:'br_pa_1' },
+      ]},
+    ]
+  }
+];
+
+/* ═══════════════ LAYOUT ENGINE — measure-first, bidirectional ═══════════════ */
+
+const VGAP = [60, 28, 18];  // vertical gaps by depth: phases 60, details 28, commands 18
+function gv(d) { return VGAP[Math.min(d, VGAP.length - 1)]; }
+const COL_GAP = 60;         // horizontal gap between columns
+
+// ── Step 1: Build flat maps ──
+const rightKids = tree[0].children.filter(c => !c.side || c.side !== 'left');
+const leftKids  = tree[0].children.filter(c => c.side === 'left');
+const rFlat = {}, lFlat = {};
+
+function walkSide(items, flat, parentId, depth) {
+  items.forEach(item => {
+    const n = { ...item, _depth: depth, _parent: parentId, _kids: [], _top: 0, _h: 0 };
+    flat[item.id] = n;
+    if (parentId && flat[parentId]) flat[parentId]._kids.push(item.id);
+    if (item.children) walkSide(item.children, flat, item.id, depth + 1);
+  });
+}
+walkSide(rightKids, rFlat, 'root', 1);
+walkSide(leftKids,  lFlat, 'root', 1);
+
+// ── Step 2: Render ALL nodes off-screen to measure real heights ──
+const elMap = {};
+const measureBox = document.createElement('div');
+measureBox.style.cssText = 'position:fixed;top:-99999px;left:-99999px;visibility:hidden;';
+document.body.appendChild(measureBox);
+
+function renderInner(n) {
+  if (n.sub) return n.html + n.sub;
+  if (n.bdesc) return n.html + '<div class="bdesc">' + n.bdesc + '</div>' + (n.btrig ? '<div class="btrig">' + n.btrig + '</div>' : '');
+  if (n.det) return n.html + '<div class="det">' + n.det + '</div>';
+  if (n.cp) return '<div class="cn">' + n.html + '</div><div class="cp">' + n.cp + '</div>' + (n.cd ? '<div class="cd">' + n.cd + '</div>' : '');
+  if (n.su) return '<div class="sn">' + n.html + '</div><div class="su">' + n.su + '</div>';
+  return n.html;
+}
+
+function measureNode(id, cls, html) {
+  const div = document.createElement('div');
+  div.className = 'nd ' + (cls || 'L2');
+  div.innerHTML = html;
+  measureBox.appendChild(div);
+  const h = div.offsetHeight;
+  const w = div.offsetWidth;
+  measureBox.removeChild(div);
+  return { h, w };
+}
+
+// Root node
+const rootMeasure = measureNode('root', 'L0', tree[0].html);
+const ROOT_H = rootMeasure.h;
+const ROOT_W = rootMeasure.w;
+
+// Measure and store own heights for all nodes
+function measureAll(flat) {
+  Object.keys(flat).forEach(id => {
+    const n = flat[id];
+    const m = measureNode(id, n.cls || 'L2', renderInner(n));
+    n._ownH = m.h;  // node's own rendered height
+    n._h = m.h;     // will become subtree height after subH
+    n._w = m.w;
+  });
+}
+measureAll(rFlat);
+measureAll(lFlat);
+
+// ── Step 3: Compute subtree heights bottom-up ──
+function subH(flat, id) {
+  const n = flat[id];
+  if (!n._kids.length) return n._h;
+  let h = 0;
+  n._kids.forEach((cid, i) => {
+    h += subH(flat, cid);
+    if (i) h += gv(n._depth);
+  });
+  n._h = Math.max(h, n._ownH);  // _h = subtree total height
+  return n._h;
+}
+Object.keys(rFlat).forEach(id => { if (rFlat[id]._parent === 'root') subH(rFlat, id); });
+Object.keys(lFlat).forEach(id => { if (lFlat[id]._parent === 'root') subH(lFlat, id); });
+
+// ── Step 4: Placement — bottom-up, parent always centered on children ──
+// placeBlock: place subtree rooted at `id` starting at `top`, return bottom y
+function placeBlock(flat, id, top) {
+  const n = flat[id];
+  if (!n._kids.length) {
+    n._top = top;
+    return top + n._h;
+  }
+  // Place children sequentially
+  let cursor = top;
+  n._kids.forEach((cid, i) => {
+    cursor = placeBlock(flat, cid, cursor);
+    if (i < n._kids.length - 1) cursor += gv(n._depth);
+  });
+  // Center parent on children (use own height, not subtree height)
+  const fk = flat[n._kids[0]];
+  const lk = flat[n._kids[n._kids.length - 1]];
+  n._top = (fk._top + lk._top + lk._h) / 2 - n._ownH / 2;
+  return cursor; // bottom of last child
+}
+
+// Place RIGHT side: sequential from top
+const rRoots = Object.keys(rFlat).filter(id => rFlat[id]._parent === 'root');
+let rCursor = 40;
+rRoots.forEach((id, i) => {
+  rCursor = placeBlock(rFlat, id, rCursor);
+  if (i < rRoots.length - 1) rCursor += gv(0);
+});
+const rFirst = rFlat[rRoots[0]];
+const rLast  = rFlat[rRoots[rRoots.length - 1]];
+const rCenter = (rFirst._top + rLast._top + rLast._h) / 2;
+
+// Place LEFT side: centered at same vertical position as right side
+const lRoots = Object.keys(lFlat).filter(id => lFlat[id]._parent === 'root');
+const lBranchH = lRoots.reduce((s, id) => s + lFlat[id]._h, 0) + (lRoots.length - 1) * gv(0);
+let lCursor = rCenter - lBranchH / 2;
+lRoots.forEach((id, i) => {
+  lCursor = placeBlock(lFlat, id, lCursor);
+  if (i < lRoots.length - 1) lCursor += gv(0);
+});
+
+// ── Step 5: Create DOM elements and position them ──
+
+// Create root node
+const rootEl = document.createElement('div');
+rootEl.id = 'nd-root';
+rootEl.className = 'nd L0';
+rootEl.innerHTML = tree[0].html;
+rootEl.style.left = '900px';  // center in viewport, leaving room for left branches
+rootEl.style.top = '0px';
+W.appendChild(rootEl);
+elMap['root'] = rootEl;
+
+function makeEl(n) {
+  const div = document.createElement('div');
+  div.id = 'nd-' + n.id;
+  div.className = 'nd ' + (n.cls || 'L2');
+  div.innerHTML = renderInner(n);
+  div.style.top = n._top + 'px';
+  div.style.left = '0px';
+  W.appendChild(div);
+  elMap[n.id] = div;
+}
+Object.keys(rFlat).forEach(id => makeEl(rFlat[id]));
+Object.keys(lFlat).forEach(id => makeEl(lFlat[id]));
+
+// Re-center all parent nodes using actual rendered heights
+function recenterAll(flat) {
+  // Process bottom-up: leaves first, then parents
+  const ids = Object.keys(flat);
+  const processed = new Set();
+  function recenter(id) {
+    const n = flat[id];
+    if (processed.has(id)) return;
+    if (n._kids.length) {
+      n._kids.forEach(cid => recenter(cid));
+      const fkEl = elMap[n._kids[0]];
+      const lkEl = elMap[n._kids[n._kids.length - 1]];
+      const kidsCenter = (fkEl.offsetTop + lkEl.offsetTop + lkEl.offsetHeight) / 2;
+      const parentH = elMap[id].offsetHeight;
+      elMap[id].style.top = (kidsCenter - parentH / 2) + 'px';
+      n._top = kidsCenter - parentH / 2;
+    }
+    processed.add(id);
+  }
+  ids.forEach(id => recenter(id));
+}
+recenterAll(rFlat);
+recenterAll(lFlat);
+
+// Center root vertically between left and right
+const lFirst = lFlat[lRoots[0]];
+const lLast  = lFlat[lRoots[lRoots.length - 1]];
+const allMins = [rFirst._top, lFirst ? lFirst._top : Infinity];
+const allMaxs = [rLast._top + rLast._h, lLast ? lLast._top + lLast._h : -Infinity];
+const globalCenter = (Math.min(...allMins) + Math.max(...allMaxs)) / 2;
+rootEl.style.top = (globalCenter - rootEl.offsetHeight / 2) + 'px';
+
+// Position X: right side
+const rChildMap = {};
+Object.keys(rFlat).forEach(id => { if (rFlat[id]._kids.length) rChildMap[id] = rFlat[id]._kids; });
+const lChildMap = {};
+Object.keys(lFlat).forEach(id => { if (lFlat[id]._kids.length) lChildMap[id] = lFlat[id]._kids; });
+
+rRoots.forEach(id => {
+  elMap[id].style.left = (parseInt(rootEl.style.left) + rootEl.offsetWidth + COL_GAP) + 'px';
+});
+Object.keys(rChildMap).forEach(pid => {
+  const pEl = elMap[pid];
+  rChildMap[pid].forEach(cid => {
+    elMap[cid].style.left = (parseInt(pEl.style.left) + pEl.offsetWidth + COL_GAP) + 'px';
+  });
+});
+
+// Position X: left side
+lRoots.forEach(id => {
+  elMap[id].style.left = (parseInt(rootEl.style.left) - elMap[id].offsetWidth - COL_GAP) + 'px';
+});
+Object.keys(lChildMap).forEach(pid => {
+  const pEl = elMap[pid];
+  lChildMap[pid].forEach(cid => {
+    elMap[cid].style.left = (parseInt(pEl.style.left) - elMap[cid].offsetWidth - COL_GAP) + 'px';
+  });
+});
+
+// Remove measuring box
+document.body.removeChild(measureBox);
+
+// ── Step 6: Build edges ──
+const allEdges = [];
+Object.keys(rFlat).forEach(id => { allEdges.push({ from: rFlat[id]._parent || 'root', to: id, side: 'right' }); });
+Object.keys(lFlat).forEach(id => { allEdges.push({ from: lFlat[id]._parent || 'root', to: id, side: 'left' }); });
+
+// Canvas size
+let mxR = 0, mxB = 0, mxL = Infinity;
+Object.keys(elMap).forEach(id => {
+  const el = elMap[id];
+  mxR = Math.max(mxR, el.offsetLeft + el.offsetWidth);
+  mxB = Math.max(mxB, el.offsetTop + el.offsetHeight);
+  mxL = Math.min(mxL, el.offsetLeft);
+});
+const shift = Math.max(0, 60 - mxL);
+if (shift > 0) {
+  Object.keys(elMap).forEach(id => {
+    elMap[id].style.left = (parseInt(elMap[id].style.left) + shift) + 'px';
+  });
+  mxR += shift;
+}
+W.style.width = (mxR + 60) + 'px';
+W.style.height = (mxB + 60) + 'px';
+sv.setAttribute('width', W.style.width);
+sv.setAttribute('height', W.style.height);
+
+/* ═══════════════ SVG EDGES — spec 4.3 ═══════════════ */
+
+const phC = { p1:'#ff9e64', p2:'#7aa2f7', p3:'#bb9af7', p4:'#2ac3de', p5:'#9ece6a', p6:'#f7768e', p7:'#e0af68' };
+
+allEdges.forEach(e => {
+  const fEl = elMap[e.from], tEl = elMap[e.to];
+  if (!fEl || !tEl) return;
+  const isL = e.side === 'left';
+  let fx, fy, tx, ty;
+  if (isL) {
+    fx = fEl.offsetLeft; fy = fEl.offsetTop + fEl.offsetHeight / 2;
+    tx = tEl.offsetLeft + tEl.offsetWidth; ty = tEl.offsetTop + tEl.offsetHeight / 2;
+  } else {
+    fx = fEl.offsetLeft + fEl.offsetWidth; fy = fEl.offsetTop + fEl.offsetHeight / 2;
+    tx = tEl.offsetLeft; ty = tEl.offsetTop + tEl.offsetHeight / 2;
+  }
+  const cpx = isL ? fx - 40 : fx + 40;
+  const p = document.createElementNS(svgNS, 'path');
+  p.setAttribute('d', `M ${fx} ${fy} C ${cpx} ${fy}, ${cpx} ${ty}, ${tx} ${ty}`);
+  p.setAttribute('fill', 'none');
+  let col = '#30363d', sw = 1.2;
+  if (e.from === 'root') {
+    if (!isL) { col = phC[e.to] || '#30363d'; sw = 2; }
+    else { col = '#d2a8ff'; sw = 1.8; }
+  }
+  p.setAttribute('stroke', col); p.setAttribute('stroke-width', sw);
+  p.setAttribute('opacity', '0.55');
+  sv.appendChild(p);
+});
+</script>
+</body>
+</html>

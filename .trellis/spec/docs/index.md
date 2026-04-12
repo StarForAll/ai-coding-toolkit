@@ -48,10 +48,23 @@ docs/
   workflows/
     新项目开发工作流/
       工作流总纲.md
+      工作流思维导图.html    ← generated per workflow-mindmap-spec.md
       commands/
     旧项目重构工作流/
       工作流总纲.md
 ```
+
+---
+
+## Mindmap Generation
+
+When a workflow document needs a visual companion mindmap, follow
+[workflow-mindmap-spec.md](./workflow-mindmap-spec.md).
+
+Key contracts:
+- Output: self-contained `.html` file, no external deps
+- Layout: right-expanding tree, parent centered on children block
+- Data: inline JS `const tree = [...]` array with typed node classes
 
 ---
 
