@@ -351,3 +351,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 96: 修复新项目开发工作流门禁与安装器契约
+
+**Date**: 2026-04-12
+**Task**: 修复新项目开发工作流门禁与安装器契约
+**Branch**: `main`
+
+### Summary
+
+将新项目 main 分支门禁收敛为 workflow 首次入口判断，固定 sonar-scanner 为跨语言质量门禁，补强 install-workflow.py 失败边界与回归测试，并完成三轮 multi-cli review 收口。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `942c5e3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
