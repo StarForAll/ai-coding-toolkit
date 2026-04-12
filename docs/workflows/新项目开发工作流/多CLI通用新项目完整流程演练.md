@@ -204,6 +204,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 退出门禁
 
+- 若是新建目标项目，则在**第一次进入 workflow 的实际入口阶段**（可能是 `feasibility`，也可能是 `brainstorm`）前，本地主分支和初始分支已统一为 `main`；若目标项目已存在本地提交历史，则只记录现状，不强制改分支
 - 形成 `assessment.md`
 - 明确是否允许进入 `brainstorm`
 - 若为外部项目，交付控制轨道已定
@@ -253,6 +254,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
   - `developer-facing-prd.md`
 - 两份项目级需求文档语义一致，且后续需求变更将持续同步回写
 - 已决定走 `design`、`plan` 还是极小任务直进 `start`
+- 若下一步进入 `design`，已明确会在 `design -> 3.7` 把 `sonar-scanner` 纳入项目自动化检查矩阵
 
 > 这条门禁约束的是**使用该 workflow 的目标项目**，不是当前 workflow 仓库本身必须先有这两份文档。
 >
@@ -309,7 +311,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 ### 退出门禁
 
 - 关键设计文档与项目 spec 已对齐
-- 自动化检查矩阵已明确
+- 自动化检查矩阵已明确，且无论语言如何都显式包含 `sonar-scanner`
 - `finish-work` / `record-session` 的项目化基线已定
 
 ---

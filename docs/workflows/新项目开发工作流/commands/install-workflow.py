@@ -6,6 +6,7 @@
 
 重要边界：
 - 目标项目必须是 Git 仓库，`origin` 至少有两个 push URL，且已经执行过 `trellis init`
+- 若是新建目标项目，本地主分支和初始分支必须为 `main`；已有本地提交历史的存量项目不强制切换
 - 当前 workflow 是“嵌入 + 增强”模型，不会重建 Trellis 原生命令全集
 - `feasibility` 到 `delivery` 这类阶段资产由当前 workflow 分发
 - `start` / `finish-work` / `record-session` 默认来自 Trellis 基线，允许由当前 workflow 追加补丁增强
@@ -13,6 +14,7 @@
 
 前提:
 - 目标项目是 Git 仓库，`origin` 至少有两个 push URL，已执行 trellis init，且存在对应 CLI 目录
+- 新建目标项目默认使用 `main` 作为本地主分支 / 初始分支；已有本地提交历史的项目可保留当前分支
 - Codex 至少存在 .agents/skills/ 或 .codex/skills/ 之一
 
 用法: python3 install-workflow.py [--project-root /path/to/project] [--cli claude,opencode,codex] [--dry-run]
@@ -67,6 +69,10 @@ _REQUIREMENTS_FOUNDATION_PACK = "pack.requirements-discovery-foundation"
 _BOOTSTRAP_TASK_NAME = "00-bootstrap-guidelines"
 _ORIGIN_REMOTE_NAME = "origin"
 _MIN_ORIGIN_PUSH_URLS = 2
+_PRIMARY_BRANCH_NAME = "main"
+_HEAD_FILE_NAME = "HEAD"
+_REFS_HEADS_PREFIX = "refs/heads/"
+_PACKED_REFS_FILE = "packed-refs"
 
 # AGENTS.md NL 路由表标记
 _AGENTS_NL_ROUTING_MARKER = "<!-- workflow-nl-routing-start -->"
@@ -182,6 +188,103 @@ def resolve_git_dir(root: Path) -> Path | None:
     return git_dir_path
 
 
+def read_head_reference(git_dir: Path) -> tuple[str | None, bool]:
+    """读取 HEAD 指向；返回 (ref_or_hash, is_symbolic_ref)。"""
+    head_path = git_dir / _HEAD_FILE_NAME
+    if not head_path.is_file():
+        return None, False
+    try:
+        raw = head_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None, False
+    if not raw:
+        return None, False
+    prefix = "ref:"
+    if raw.lower().startswith(prefix):
+        return raw[len(prefix):].strip(), True
+    return raw, False
+
+
+def resolve_head_branch(root: Path) -> str | None:
+    """解析当前本地分支名；detached HEAD 时返回 None。"""
+    git_dir = resolve_git_dir(root)
+    if git_dir is None:
+        return None
+    ref_or_hash, is_symbolic_ref = read_head_reference(git_dir)
+    if not is_symbolic_ref or not ref_or_hash:
+        return None
+    if ref_or_hash.startswith(_REFS_HEADS_PREFIX):
+        return ref_or_hash[len(_REFS_HEADS_PREFIX):]
+    return ref_or_hash
+
+
+def git_ref_exists(git_dir: Path, ref_name: str) -> bool:
+    """检查 ref 是否已落地到本地 Git 元数据中。"""
+    ref_path = git_dir / ref_name
+    if ref_path.is_file():
+        try:
+            return bool(ref_path.read_text(encoding="utf-8").strip())
+        except OSError:
+            return False
+
+    packed_refs = git_dir / _PACKED_REFS_FILE
+    if not packed_refs.is_file():
+        return False
+    try:
+        lines = packed_refs.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return False
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or stripped.startswith("^"):
+            continue
+        parts = stripped.split(" ", 1)
+        if len(parts) == 2 and parts[1].strip() == ref_name and parts[0].strip():
+            return True
+    return False
+
+
+def has_local_commit_history(root: Path) -> bool:
+    """判断当前仓库是否已有本地提交历史。"""
+    git_dir = resolve_git_dir(root)
+    if git_dir is None:
+        return False
+    ref_or_hash, is_symbolic_ref = read_head_reference(git_dir)
+    if not ref_or_hash:
+        return False
+    if is_symbolic_ref:
+        return git_ref_exists(git_dir, ref_or_hash)
+    return True
+
+
+def enforce_initial_main_branch_policy(root: Path) -> None:
+    """对新建目标项目执行 main 分支门禁；已有历史项目仅提醒。"""
+    branch_name = resolve_head_branch(root)
+    has_history = has_local_commit_history(root)
+
+    if branch_name == _PRIMARY_BRANCH_NAME:
+        return
+
+    if has_history:
+        current = branch_name or "detached HEAD"
+        warn(
+            f"目标项目当前为 `{current}` 且已存在本地提交历史，workflow 不强制改为 `{_PRIMARY_BRANCH_NAME}`；"
+            "若这仍是新建项目，请尽早统一默认分支。"
+        )
+        return
+
+    if branch_name is None:
+        sys.exit(
+            f"{R}目标项目当前未处于可识别的本地分支；新建项目的主分支和初始分支必须使用 `{_PRIMARY_BRANCH_NAME}`。\n"
+            f"请先执行：git checkout -b {_PRIMARY_BRANCH_NAME}{N}"
+        )
+
+    sys.exit(
+        f"{R}目标项目当前本地分支为 `{branch_name}`；新建项目的主分支和初始分支必须使用 `{_PRIMARY_BRANCH_NAME}`。\n"
+        f"请先执行：git branch -M {_PRIMARY_BRANCH_NAME}{N}"
+    )
+
+
 def count_origin_push_urls(root: Path) -> int:
     """统计 origin remote 下配置的 pushurl 数量。"""
     git_dir = resolve_git_dir(root)
@@ -235,6 +338,7 @@ def ensure_project_prereqs(root: Path) -> None:
             "git remote set-url --add --push origin git@github.com:xxx/yyy.git\n"
             f"git remote set-url --add --push origin git@gitee.com:xxx/yyy.git{N}"
         )
+    enforce_initial_main_branch_policy(root)
 
 
 # ── 命令文件预处理 ──
@@ -581,6 +685,10 @@ def deploy_codex(src: Path, root: Path, dry_run: bool) -> dict:
             warn(f"[Codex] 源文件缺失: {cmd}.md")
 
     finish_work_skill = skills_dir / "finish-work" / "SKILL.md"
+    if not finish_work_skill.exists():
+        result["errors"].append("缺少 Trellis 基线 finish-work skill，无法注入 workflow 项目化补丁")
+        return result
+
     if inject_finish_work_patch(
         src,
         finish_work_skill,
@@ -795,6 +903,20 @@ def main() -> int:
         elif cli_type == "codex":
             total["codex"] = deploy_codex(src, root, args.dry_run)
         print()
+
+    if any(result and result["errors"] for result in total.values()):
+        print("╔══════════════════════════════════════════╗")
+        print("║   ❌ 安装失败                           ║")
+        print("╚══════════════════════════════════════════╝")
+        print()
+        for cli_type, result in total.items():
+            if result is None:
+                continue
+            if result["errors"]:
+                for e in result["errors"]:
+                    err(f"[{cli_type}] {e}")
+        print()
+        return 1
 
     # 辅助脚本（共享）
     if not any(t and t["errors"] for t in total.values()):

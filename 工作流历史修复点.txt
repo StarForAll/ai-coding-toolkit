@@ -11,4 +11,4 @@ git remote set-url --add --push origin git@gitee.com:xxx/yyy.git
 
 5. 开启新的任务时需要判断对应的任务是否要求前一个任务必须完成，如果是则需要先进行校验，如果前一个任务完成了才真正开始当前任务
 
-6. 
+6. 初始阶段校验当前分支是main分支且在Brainstorm阶段结束之后添加的门禁中补充使用 sonar-scanner 

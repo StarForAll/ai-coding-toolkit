@@ -142,6 +142,16 @@ $TASK_DIR/design/
    - 基于已经确认的语言、框架、包管理器、CI、部署方式、安全要求
    - 写清真实会执行的 lint / typecheck / test / build / scan / delivery gate
    - 不允许继续保留“默认检查”“按项目自行运行”这类空泛表述
+   - 不论目标项目采用何种编程语言，当前项目的全局质量门禁都必须显式包含 `sonar-scanner`
+   - `sonar-scanner` 至少应以当前项目可执行的真实命令骨架写入检查矩阵，例如：
+
+     ```bash
+     sonar-scanner \
+       -Dsonar.projectKey=<target-project-key> \
+       -Dsonar.token=$SONAR_TOKEN \
+       -Dsonar.host.url=https://sonarqube.xzc.com:13785 \
+       -Dsonar.sources=.
+     ```
 
 4. **在技术架构确认后，由用户明确 `test-first` 阶段的项目化输入**
    - 这里要单独确认的是 `test-first` 阶段真正要执行的具体测试/验证命令
@@ -151,6 +161,7 @@ $TASK_DIR/design/
 5. **同步适配当前项目的 `/trellis:finish-work`**
    - 这是 `finish-work` 的主适配阶段
    - 必须基于任务 3 中已经写清的自动化检查矩阵完成项目化改写
+   - `finish-work` 中记录的质量平台门禁必须与任务 3 保持一致，不得遗漏 `sonar-scanner`
 
 6. **同步适配当前项目的 `/trellis:record-session` 基线**
    - 先明确当前项目的记录入口、是否必须走 helper、归档前置条件、哪些元数据允许自动提交

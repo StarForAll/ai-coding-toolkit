@@ -111,6 +111,12 @@ Contract when these versioning keys are missing:
 - continue with `A/B/C` analysis first only after the latest-Trellis prerequisite is satisfied
 - after compatibility upgrade or structural migration completes, the confirmed values may be written back
 
+Install-record write boundary:
+
+- `workflow-installed.json` may be written only after all requested CLI deployments complete without deployment errors
+- if any CLI deployment reports an error, the installer must exit non-zero before writing `workflow-installed.json`
+- failed installs must not leave a misleading success-like install record behind
+
 ---
 
 ### 3. Contracts
@@ -166,6 +172,24 @@ Workflow embed / analysis / repair scripts must distinguish three asset classes:
      - `review-gate`
      - `delivery`
 
+#### 3.2.1 Initial Branch Gate
+
+For this workflow variant, installer-time repository gating must distinguish two target-project states:
+
+1. **New repository / no local commit history**
+   - the local primary branch and initial branch must be `main`
+   - if the current branch is not `main`, installer must fail fast with a concrete remediation command
+
+2. **Existing repository / has local commit history**
+   - installer must not force-rename the current branch to `main`
+   - installer may warn and record the boundary in docs, but must allow the install path to continue
+
+This branch gate is a workflow-entry contract, not a generic Git rule:
+
+- the effective first workflow entry may be `feasibility` or `brainstorm`
+- target-project docs may describe the gate at the workflow-entry layer
+- installer enforcement must still follow the same underlying rule when install is attempted
+
 #### 3.3 Analysis-First Upgrade Contract
 
 Target-project workflow upgrade must use an analysis-first sequence:
@@ -218,6 +242,23 @@ Repair-path boundary:
 - `--merge` may redeploy low-risk drifted assets and reapply patch injections
 - `--force` may restore from stored baseline backup only when the target project is still within the same structural model
 - neither `--merge` nor `--force` should be documented as the main path for structural breaks
+
+#### 3.4.1 Install Failure Boundary
+
+Installer success-only side effects must be gated behind a clean deployment result:
+
+- deploy per-CLI assets first and collect deployment errors
+- if any CLI deployment fails:
+  - return a non-zero exit code
+  - keep the failure visible in stdout/stderr
+  - do not write `workflow-installed.json`
+  - do not continue into other success-only side effects such as post-install guidance that assumes successful embed
+- only when all requested CLI deployments succeed may the installer continue to:
+  - copy shared helper scripts
+  - import the initial requirements foundation pack
+  - remove the bootstrap task
+  - write `workflow-installed.json`
+  - apply post-install routing / reminders
 
 #### 3.5 Source-Maintenance vs Target-Project Boundary
 
@@ -305,20 +346,22 @@ Failure messages must stay human-readable and identify the affected asset by fil
 When modifying these contracts, update or add tests that prove:
 
 1. install writes `overlay_commands` and `added_commands` into `workflow-installed.json`
-2. uninstall restores overlay baseline commands from backup
-3. `analyze-upgrade.py` classifies at least:
+2. installer enforces `main` branch for new repositories but allows existing-history repositories to keep a non-`main` branch
+3. installer does not write `workflow-installed.json` when any CLI deployment fails
+4. uninstall restores overlay baseline commands from backup
+5. `analyze-upgrade.py` classifies at least:
    - `keep`
    - `add`
    - `replace`
    - `merge`
    - `delete`
-4. `--check` fails when:
+6. `--check` fails when:
    - patch markers drift
    - overlay command content drifts
    - added command content drifts
    - helper script content drifts
-5. `--merge` restores drifted command and helper-script content for low-risk cases
-6. `--force` can restore baseline-backed patch commands and reapply patches inside the same structural model
+7. `--merge` restores drifted command and helper-script content for low-risk cases
+8. `--force` can restore baseline-backed patch commands and reapply patches inside the same structural model
 
 Current regression anchors:
 

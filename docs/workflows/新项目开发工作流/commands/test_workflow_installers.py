@@ -130,6 +130,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         include_trellis: bool = True,
         include_trellis_version: bool = True,
         include_bootstrap_task: bool = True,
+        current_branch: str = "main",
+        has_local_history: bool = False,
     ) -> Path:
         root = Path(tempfile.mkdtemp(prefix="workflow-installers-"))
         if include_git:
@@ -152,6 +154,11 @@ class WorkflowInstallerTests(unittest.TestCase):
             ]
             config_lines.extend(f"\tpushurl = {url}" for url in push_urls)
             (root / ".git" / "config").write_text("\n".join(config_lines) + "\n", encoding="utf-8")
+            (root / ".git" / "HEAD").write_text(f"ref: refs/heads/{current_branch}\n", encoding="utf-8")
+            if has_local_history:
+                ref_path = root / ".git" / "refs" / "heads" / current_branch
+                ref_path.parent.mkdir(parents=True, exist_ok=True)
+                ref_path.write_text("0123456789abcdef0123456789abcdef01234567\n", encoding="utf-8")
         (root / ".claude" / "commands" / "trellis").mkdir(parents=True)
         if include_trellis:
             (root / ".trellis").mkdir(parents=True)
@@ -253,6 +260,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         finish_work_text = finish_work.read_text(encoding="utf-8")
         self.assertIn(FINISH_WORK_MARKER, finish_work_text)
         self.assertNotIn("pnpm lint", finish_work_text)
+        self.assertIn("sonar-scanner", finish_work_text)
+        self.assertIn("https://sonarqube.xzc.com:13785", finish_work_text)
         record_session = fixture / ".claude" / "commands" / "trellis" / "record-session.md"
         rs_text = record_session.read_text(encoding="utf-8")
         self.assertIn(RECORD_SESSION_MARKER, rs_text)
@@ -286,10 +295,16 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         opencode_finish_work = fixture / ".opencode" / "commands" / "trellis" / "finish-work.md"
         codex_finish_work = fixture / ".agents" / "skills" / "finish-work" / "SKILL.md"
-        self.assertIn(FINISH_WORK_MARKER, opencode_finish_work.read_text(encoding="utf-8"))
-        self.assertIn(FINISH_WORK_MARKER, codex_finish_work.read_text(encoding="utf-8"))
-        self.assertNotIn("pnpm test", opencode_finish_work.read_text(encoding="utf-8"))
-        self.assertNotIn("pnpm test", codex_finish_work.read_text(encoding="utf-8"))
+        opencode_text = opencode_finish_work.read_text(encoding="utf-8")
+        codex_text = codex_finish_work.read_text(encoding="utf-8")
+        self.assertIn(FINISH_WORK_MARKER, opencode_text)
+        self.assertIn(FINISH_WORK_MARKER, codex_text)
+        self.assertNotIn("pnpm test", opencode_text)
+        self.assertNotIn("pnpm test", codex_text)
+        self.assertIn("sonar-scanner", opencode_text)
+        self.assertIn("sonar-scanner", codex_text)
+        self.assertIn("https://sonarqube.xzc.com:13785", opencode_text)
+        self.assertIn("https://sonarqube.xzc.com:13785", codex_text)
 
     def test_install_patches_finish_work_when_test_coverage_heading_is_missing(self) -> None:
         fixture = self.create_fixture()
@@ -362,6 +377,36 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertNotEqual(install.returncode, 0)
         self.assertIn("origin", install.stderr)
         self.assertIn("至少需要 2 个 push URL", install.stderr)
+
+    def test_install_requires_main_branch_for_new_project(self) -> None:
+        fixture = self.create_fixture(current_branch="master", has_local_history=False)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+
+        self.assertNotEqual(install.returncode, 0)
+        self.assertIn("主分支和初始分支必须使用 `main`", install.stderr)
+        self.assertIn("git branch -M main", install.stderr)
+
+    def test_install_allows_existing_project_to_keep_non_main_branch(self) -> None:
+        fixture = self.create_fixture(current_branch="release/1.x", has_local_history=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.assertIn("不强制改为 `main`", install.stdout)
+
+    def test_install_requires_codex_baseline_finish_work_skill(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+        (fixture / ".agents" / "skills" / "finish-work" / "SKILL.md").unlink()
+
+        install = self.install_workflow(fixture)
+
+        self.assertNotEqual(install.returncode, 0)
+        self.assertIn("缺少 Trellis 基线 finish-work skill", install.stdout + install.stderr)
+        self.assertFalse((fixture / ".trellis" / "workflow-installed.json").exists())
 
     def test_install_requires_trellis_init(self) -> None:
         fixture = self.create_fixture(include_trellis=False)

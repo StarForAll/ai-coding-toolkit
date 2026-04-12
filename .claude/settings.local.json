@@ -138,7 +138,8 @@
       "Bash(agent-browser open:*)",
       "Bash(agent-browser wait:*)",
       "Bash(agent-browser snapshot:*)",
-      "Bash(agent-browser get:*)"
+      "Bash(agent-browser get:*)",
+      "WebFetch(domain:skills.sh)"
     ]
   }
 }
