@@ -22,6 +22,7 @@ UNINSTALL_SCRIPT = COMMANDS_DIR / "uninstall-workflow.py"
 PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 FINISH_WORK_MARKER = "<!-- finish-work-projectization-patch -->"
 RECORD_SESSION_MARKER = "## Record-Session Metadata Closure `[AI]`"
+PARALLEL_DISABLED_MARKER = "<!-- workflow-parallel-disabled -->"
 DEFAULT_PROJECT_TODO = "文档内容需要和实际当前的代码同步\n"
 BASELINE_START_CONTENT = (
     "# /trellis:start\n\n"
@@ -59,6 +60,10 @@ BASELINE_CHECK_CONTENT = (
 BASELINE_BRAINSTORM_CONTENT = (
     "# /trellis:brainstorm\n\n"
     "Clarify requirements before implementation.\n"
+)
+BASELINE_PARALLEL_CONTENT = (
+    "# /trellis:parallel\n\n"
+    "Run a worktree-based parallel pipeline and finish with a PR.\n"
 )
 BASELINE_FINISH_WORK_CONTENT = (
     "# Finish Work - Pre-Commit Checklist\n\n"
@@ -180,6 +185,10 @@ class WorkflowInstallerTests(unittest.TestCase):
             BASELINE_CHECK_CONTENT,
             encoding="utf-8",
         )
+        (root / ".claude" / "commands" / "trellis" / "parallel.md").write_text(
+            BASELINE_PARALLEL_CONTENT,
+            encoding="utf-8",
+        )
         (root / ".claude" / "commands" / "trellis" / "finish-work.md").write_text(
             BASELINE_FINISH_WORK_CONTENT,
             encoding="utf-8",
@@ -202,6 +211,10 @@ class WorkflowInstallerTests(unittest.TestCase):
             )
             (root / ".opencode" / "commands" / "trellis" / "check.md").write_text(
                 BASELINE_CHECK_CONTENT,
+                encoding="utf-8",
+            )
+            (root / ".opencode" / "commands" / "trellis" / "parallel.md").write_text(
+                BASELINE_PARALLEL_CONTENT,
                 encoding="utf-8",
             )
             (root / ".opencode" / "commands" / "trellis" / "finish-work.md").write_text(
@@ -229,6 +242,11 @@ class WorkflowInstallerTests(unittest.TestCase):
                 BASELINE_CHECK_CONTENT,
                 encoding="utf-8",
             )
+            (root / ".agents" / "skills" / "parallel").mkdir(parents=True)
+            (root / ".agents" / "skills" / "parallel" / "SKILL.md").write_text(
+                BASELINE_PARALLEL_CONTENT,
+                encoding="utf-8",
+            )
             (root / ".codex" / "hooks").mkdir(parents=True)
             (root / ".codex" / "hooks.json").write_text("{}", encoding="utf-8")
             (root / ".codex" / "hooks" / "session-start.py").write_text("# hook\n", encoding="utf-8")
@@ -252,6 +270,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         brainstorm = fixture / ".claude" / "commands" / "trellis" / "brainstorm.md"
         self.assertTrue(brainstorm.exists(), "brainstorm.md should be deployed")
+        project_audit = fixture / ".claude" / "commands" / "trellis" / "project-audit.md"
+        self.assertTrue(project_audit.exists(), "project-audit.md should be deployed")
         helper = fixture / ".trellis" / "scripts" / "workflow" / "metadata-autocommit-guard.py"
         self.assertTrue(helper.exists(), "metadata-autocommit-guard.py should be deployed")
         record_helper = fixture / ".trellis" / "scripts" / "workflow" / "record-session-helper.py"
@@ -280,11 +300,19 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertTrue(record.exists(), "workflow-installed.json should be created")
         record_data = json.loads(record.read_text(encoding="utf-8"))
         self.assertIn("brainstorm", record_data["commands"])
+        self.assertIn("project-audit", record_data["commands"])
         self.assertEqual(record_data["overlay_commands"], ["brainstorm", "check"])
+        self.assertEqual(record_data["disabled_commands"], ["parallel"])
+        self.assertEqual(
+            record_data["patched_baseline_commands"],
+            ["start", "finish-work", "record-session"],
+        )
         self.assertIn("metadata-autocommit-guard.py", record_data["scripts"])
         self.assertIn("record-session-helper.py", record_data["scripts"])
         self.assertEqual(record_data["workflow_version"], "1.1.19")
         self.assertEqual(record_data["initial_pack"], "pack.requirements-discovery-foundation")
+        parallel = fixture / ".claude" / "commands" / "trellis" / "parallel.md"
+        self.assertIn(PARALLEL_DISABLED_MARKER, parallel.read_text(encoding="utf-8"))
 
     def test_install_patches_finish_work_for_opencode_and_codex(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
@@ -295,6 +323,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         opencode_finish_work = fixture / ".opencode" / "commands" / "trellis" / "finish-work.md"
         codex_finish_work = fixture / ".agents" / "skills" / "finish-work" / "SKILL.md"
+        opencode_parallel = fixture / ".opencode" / "commands" / "trellis" / "parallel.md"
+        codex_parallel = fixture / ".agents" / "skills" / "parallel" / "SKILL.md"
         opencode_text = opencode_finish_work.read_text(encoding="utf-8")
         codex_text = codex_finish_work.read_text(encoding="utf-8")
         self.assertIn(FINISH_WORK_MARKER, opencode_text)
@@ -305,6 +335,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("sonar-scanner", codex_text)
         self.assertIn("https://sonarqube.xzc.com:13785", opencode_text)
         self.assertIn("https://sonarqube.xzc.com:13785", codex_text)
+        self.assertIn(PARALLEL_DISABLED_MARKER, opencode_parallel.read_text(encoding="utf-8"))
+        self.assertIn(PARALLEL_DISABLED_MARKER, codex_parallel.read_text(encoding="utf-8"))
 
     def test_install_patches_finish_work_when_test_coverage_heading_is_missing(self) -> None:
         fixture = self.create_fixture()
@@ -543,6 +575,35 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("辅助脚本内容漂移", result.stdout)
         self.assertIn("check-quality.py", result.stdout)
+
+    def test_upgrade_check_detects_install_record_schema_drift(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        record_path = fixture / ".trellis" / "workflow-installed.json"
+        record_data = json.loads(record_path.read_text(encoding="utf-8"))
+        record_data.pop("patched_baseline_commands", None)
+        record_data.pop("initial_pack", None)
+        record_data.pop("bootstrap_task_removed", None)
+        record_path.write_text(json.dumps(record_data, ensure_ascii=False, indent=2), encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("workflow-installed.json 缺少字段", result.stdout)
+        self.assertIn("patched_baseline_commands", result.stdout)
+        self.assertIn("initial_pack", result.stdout)
+        self.assertIn("bootstrap_task_removed", result.stdout)
 
     def test_upgrade_check_detects_record_session_patch_drift(self) -> None:
         fixture = self.create_fixture()
@@ -824,6 +885,25 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         restored_text = patched_brainstorm.read_text(encoding="utf-8")
         self.assertEqual(restored_text, BASELINE_BRAINSTORM_CONTENT)
+
+    def test_uninstall_restores_disabled_parallel_command(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        patched_parallel = fixture / ".claude" / "commands" / "trellis" / "parallel.md"
+        self.assertIn(PARALLEL_DISABLED_MARKER, patched_parallel.read_text(encoding="utf-8"))
+        self.assertEqual(
+            (fixture / ".claude" / "commands" / "trellis" / ".backup-original" / "parallel.md").read_text(encoding="utf-8"),
+            BASELINE_PARALLEL_CONTENT,
+        )
+
+        result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        restored_text = patched_parallel.read_text(encoding="utf-8")
+        self.assertEqual(restored_text, BASELINE_PARALLEL_CONTENT)
 
     def test_uninstall_removes_agents_md_routing_section(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)

@@ -125,7 +125,7 @@ python3 <WORKFLOW_DIR>/commands/shell/delivery-control-validate.py --phase deliv
 
 ### Step 8: 代码审查
 
-**调用 Skill**：`requesting-code-review` — 完成 PR 前审查清单。降级：手动列出审查范围、验证证据和剩余风险。
+**调用 Skill**：`requesting-code-review` — 完成提交前审查清单。降级：手动列出审查范围、验证证据和剩余风险。
 
 ### Step 9: 经验沉淀
 
@@ -247,6 +247,6 @@ $TASK_DIR/delivery/
 | 有 P2/P3 缺陷 | `/trellis:start` | 回到实施阶段，或显式触发 `start` skill | 回到实施阶段修复 |
 | 验收中出现冻结后新增 / 修改 / 删除需求 | `§2.5 需求变更管理` | 同上 | 先完成变更评估与确认；不要直接混入当前交付 |
 | 需要更新规范文档 | `/trellis:update-spec` | 记录并更新规范，或显式触发 `update-spec` skill | 沉淀新发现的模式到 spec |
-| 需要请求代码审查 | `requesting-code-review` 能力 | `requesting-code-review` skill | PR 前外部审查 |
+| 需要请求代码审查 | `requesting-code-review` 能力 | `requesting-code-review` skill | 提交前外部审查 |
 | 需要归档任务 | `python3 ./.trellis/scripts/task.py archive <name>` | 同左 | 仅在 record-session 完成后使用；archive 会清除 `.current-task` |
 | 不确定下一步 | `/trellis:record-session` | 描述当前收尾意图，或显式触发 `record-session` skill | 仅在当前任务已完成但尚未归档时使用；先 record-session 再 archive |

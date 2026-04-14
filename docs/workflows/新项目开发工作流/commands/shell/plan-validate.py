@@ -17,6 +17,7 @@ from pathlib import Path
 
 ALLOWED_STATUSES = {"可开始", "等待中", "进行中", "已完成"}
 ALLOWED_PARALLEL_ATTRIBUTES = {"候选可并行", "依赖不可并行"}
+ALLOWED_TASK_DOMAINS = {"代码相关", "非代码相关", "项目级审查"}
 REQUIRED_SECTIONS = [
     "概述",
     "任务拆解 Checklist",
@@ -28,6 +29,7 @@ REQUIRED_SECTIONS = [
 ]
 REQUIRED_MATRIX_COLUMNS = [
     "任务ID",
+    "任务域",
     "前置任务",
     "当前状态",
     "开始条件",
@@ -170,26 +172,34 @@ def main() -> int:
     )
 
     status_ok = True
+    task_domain_ok = True
     parallel_ok = True
     start_wait_ok = True
     conflict_ok = True
     actionable_ok = False
     all_completed = True
+    project_audit_count = 0
+    code_task_incomplete = False
+    project_audit_statuses: list[str] = []
 
     if has_matrix and matrix_columns_ok:
         for row in rows:
             if len(row) != len(header):
-                status_ok = parallel_ok = start_wait_ok = conflict_ok = False
+                status_ok = task_domain_ok = parallel_ok = start_wait_ok = conflict_ok = False
                 all_completed = False
                 continue
 
             data = dict(zip(header, row))
+            task_id = data["任务ID"]
+            task_domain = data["任务域"]
             status = data["当前状态"]
             parallel = data["并行属性"]
             start_condition = data["开始条件"]
             wait_reason = data["等待原因"]
             conflict_reason = data["冲突说明"]
 
+            if task_domain not in ALLOWED_TASK_DOMAINS:
+                task_domain_ok = False
             if status not in ALLOWED_STATUSES:
                 status_ok = False
                 all_completed = False
@@ -205,14 +215,29 @@ def main() -> int:
                 actionable_ok = True
             if status != "已完成":
                 all_completed = False
+            if task_domain == "代码相关" and status != "已完成":
+                code_task_incomplete = True
+            if task_domain == "项目级审查":
+                project_audit_count += 1
+                project_audit_statuses.append(status)
+                if "PROJECT-AUDIT" not in task_id.upper():
+                    task_domain_ok = False
 
     actionable_or_complete_ok = actionable_ok or all_completed
+    project_audit_gate_ok = not (code_task_incomplete and "可开始" in project_audit_statuses)
 
     checks += 1
     passed += print_result(
         status_ok,
         "当前状态只使用约定枚举",
         f"当前状态只能使用: {', '.join(sorted(ALLOWED_STATUSES))}",
+    )
+
+    checks += 1
+    passed += print_result(
+        task_domain_ok,
+        "任务域只使用约定枚举，且项目级审查任务命名正确",
+        f"任务域只能使用: {', '.join(sorted(ALLOWED_TASK_DOMAINS))}，且项目级审查任务 ID 应包含 PROJECT-AUDIT",
     )
 
     checks += 1
@@ -241,6 +266,20 @@ def main() -> int:
         actionable_or_complete_ok,
         "任务执行矩阵可支持当前执行判断",
         "任务执行矩阵中既未找到任何“可开始”任务，也不是“全部已完成”状态",
+    )
+
+    checks += 1
+    passed += print_result(
+        project_audit_count == 1,
+        "存在且仅存在一个 project-audit 项目级审查任务",
+        "任务执行矩阵必须包含且只包含一个 `任务域=项目级审查` 的 PROJECT-AUDIT 任务",
+    )
+
+    checks += 1
+    passed += print_result(
+        project_audit_gate_ok,
+        "project-audit 解锁门禁正确",
+        "仍有代码相关任务未完成时，PROJECT-AUDIT 不能标记为“可开始”",
     )
 
     print(f"📊 待执行任务数: {checklist_items}")

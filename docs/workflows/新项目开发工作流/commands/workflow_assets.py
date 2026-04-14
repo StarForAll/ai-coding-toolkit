@@ -22,13 +22,15 @@ WORKFLOW_VERSION = "1.1.19"
 
 PATCH_BASELINE_COMMANDS = ["start", "finish-work", "record-session"]
 OVERLAY_BASELINE_COMMANDS = ["brainstorm", "check"]
-ADDED_COMMANDS = ["feasibility", "design", "plan", "test-first", "review-gate", "delivery"]
+OPTIONAL_DISABLED_BASELINE_COMMANDS = ["parallel"]
+ADDED_COMMANDS = ["feasibility", "design", "plan", "test-first", "project-audit", "review-gate", "delivery"]
 DISTRIBUTED_COMMANDS = [
     "feasibility",
     "brainstorm",
     "design",
     "plan",
     "test-first",
+    "project-audit",
     "check",
     "review-gate",
     "delivery",

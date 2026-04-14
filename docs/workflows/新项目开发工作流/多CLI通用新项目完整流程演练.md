@@ -397,7 +397,32 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ---
 
-## 阶段 6：Check + Review-Gate
+## 阶段 6：Project-Audit
+
+### 目标
+
+当全部代码相关任务完成后，从项目全局角度统一做一次代码审查与查缺补漏。
+
+这一步不是单任务 `check` 的重复，而是项目级总复核，固定分三步：
+
+- 先分析项目整体代码并与用户讨论
+- 再确认修正方案
+- 最后统一修改
+
+### CLI 入口差异
+
+- Claude Code：`/trellis:project-audit`
+- OpenCode：TUI 用 `/trellis:project-audit`，CLI 用 `trellis/project-audit`
+- Codex：自然语言描述或显式触发 `project-audit` skill
+
+### 退出门禁
+
+- 若是正式模式：全部 `代码相关` 任务已完成，且 `PROJECT-AUDIT` 任务已完成
+- 若是手动预审模式：已记录本轮发现与修改，但不替代最终正式 `project-audit`
+
+---
+
+## 阶段 7：Check + Review-Gate
 
 ### 目标
 
@@ -433,7 +458,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ---
 
-## 阶段 7：Finish-Work
+## 阶段 8：Finish-Work
 
 ### 目标
 
@@ -466,7 +491,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ---
 
-## 阶段 8：Delivery
+## 阶段 9：Delivery
 
 ### 目标
 
@@ -505,7 +530,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ---
 
-## 阶段 9：Record-Session
+## 阶段 10：Record-Session
 
 ### 目标
 

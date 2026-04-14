@@ -88,6 +88,10 @@ Current required keys:
 - `commands`
 - `overlay_commands`
 - `added_commands`
+- `disabled_commands`
+- `patched_baseline_commands`
+- `initial_pack`
+- `bootstrap_task_removed`
 - `scripts`
 
 Optional lifecycle keys may differ between install and upgrade paths, such as:
@@ -142,6 +146,7 @@ Target-project deployed copies are derived state:
 - patch-based baseline commands
 - overlay baseline commands
 - added commands
+- optional disabled baseline commands
 - helper scripts
 - managed asset enumeration / detection helpers
 
@@ -169,8 +174,19 @@ Workflow embed / analysis / repair scripts must distinguish three asset classes:
      - `design`
      - `plan`
      - `test-first`
+     - `project-audit`
      - `review-gate`
      - `delivery`
+
+4. **Optional disabled baseline commands**
+   - baseline commands or skills that may exist in target projects, but are intentionally overridden by this workflow into a disabled state
+   - current known set:
+     - `parallel`
+   - Contract:
+     - installer must back up the original baseline copy if present
+     - installer may overwrite the target copy with a workflow-managed disabled notice
+     - uninstall / force-restore paths must restore the original baseline copy when a backup exists
+     - drift detection must compare the deployed disabled copy against the workflow source of truth
 
 #### 3.2.1 Initial Branch Gate
 

@@ -112,6 +112,9 @@ get_context.py 输出
     ├── task_plan.md 存在 + 无测试文件
     │   └── 路由 → /trellis:test-first（测试先行）
     │
+    ├── 测试就绪 + 全部 `任务域=代码相关` 的任务已完成，且 `任务域=项目级审查` 的 PROJECT-AUDIT 未完成
+    │   └── 路由 → /trellis:project-audit（项目级全局审查）
+    │
     ├── 测试就绪 + 任务执行矩阵全部为 `已完成`
     │   └── 优先进入收尾链路：
     │       - 未完成质量检查/提交前检查 → /trellis:check 或 /trellis:finish-work
@@ -148,6 +151,7 @@ get_context.py 输出
 | "拆一下任务" "做个工作计划" "把需求分解成小任务" | `/trellis:plan` |
 | "先写测试" "用 TDD 方式" "测试先行" | `/trellis:test-first` |
 | "开始写代码" "实现这个功能" "动手做吧" | 实施阶段（本命令 Task Workflow） |
+| "做项目全局审查" "全局代码审查" "代码查缺补漏" "项目审计" "project-audit" | `/trellis:project-audit` |
 | "检查一下这次改动" "对照 spec 看看" "做一轮质量检查" | `/trellis:check` |
 | "补充审查一下" "让其他 CLI 看一下" "多人审查" "进入 review-gate" | `/trellis:review-gate` |
 | "准备交付" "跑一下验收" "整理交付物" "项目收尾" | `/trellis:delivery` |
@@ -155,7 +159,6 @@ get_context.py 输出
 | "收尾" "提交前检查" "准备 commit" | `/trellis:finish-work` |
 | "继续上次的工作" "上次做到哪了" | 继续现有任务 |
 | "卡住了" "反复出错" "这个 bug 改不好" "死循环" | `/trellis:break-loop` |
-| "并行" "同时做两个任务" "worktree" | `/trellis:parallel` |
 | "把这次踩坑记到规范" "更新 spec" "规范要改" | `/trellis:update-spec` |
 | "跨层检查" "跨模块影响" "检查影响面" | `/trellis:check-cross-layer` |
 | "集成这个 skill" "添加 skill" "把 skill 加进来" | `/trellis:integrate-skill` |
@@ -174,6 +177,8 @@ get_context.py 输出
 5. **兜底** — 无法确定 → `/trellis:start`（Phase Router 自动检测）
 
 当 top-2 候选优先级接近时，向用户确认意图而非自动选择。
+
+当前 workflow 明确禁用基于 `/trellis:parallel` 的后台 worktree + PR 完成路径；若用户提到“并行”“worktree”，应优先回到 `/trellis:plan` 重新整理依赖与优先级，而不是再路由到 `parallel`。
 
 ### 路由执行
 
@@ -220,10 +225,10 @@ get_context.py 输出
 若进入实施阶段，且 `task_plan.md` 已包含“任务执行矩阵”：
 
 - 单线程模式下，先读取矩阵，定位一个 `当前状态=可开始` 的任务作为本轮实施对象
-- 若采用 Git worktree 或已安装的 `/trellis:parallel` 并行实施，则可从“推荐并行组”中拆分多个 `可开始` 任务分别处理
 - 将该任务状态改为 `进行中`
 - 同步更新“执行安排”中的当前可开始任务、等待中任务、推荐并行组、串行主链
 - 若不存在任何 `可开始` 任务，则不应盲目实现，应先分析阻塞原因
+- 若存在 `任务域=项目级审查` 的 PROJECT-AUDIT 任务，则只有在全部 `代码相关` 任务完成后，才允许将其从 `等待中` 解锁为 `可开始`
 
 边界：
 

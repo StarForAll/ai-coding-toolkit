@@ -8,7 +8,7 @@
 - 目标项目必须是 Git 仓库，`origin` 至少有两个 push URL，且已经执行过 `trellis init`
 - 若是新建目标项目，本地主分支和初始分支必须为 `main`；已有本地提交历史的存量项目不强制切换
 - 当前 workflow 是“嵌入 + 增强”模型，不会重建 Trellis 原生命令全集
-- `feasibility` 到 `delivery` 这类阶段资产由当前 workflow 分发
+- `feasibility` 到 `delivery`（含 `project-audit`）这类阶段资产由当前 workflow 分发
 - `start` / `finish-work` / `record-session` 默认来自 Trellis 基线，允许由当前 workflow 追加补丁增强
 - 安装器会自动导入 `pack.requirements-discovery-foundation`，并删除 `00-bootstrap-guidelines`
 
@@ -34,8 +34,11 @@ from workflow_assets import (
     CLI_ALT_DIRS,
     CLI_DIRS,
     DISTRIBUTED_COMMANDS,
+    detect_cli_types as detect_cli_types_shared,
     HELPER_SCRIPTS,
+    OPTIONAL_DISABLED_BASELINE_COMMANDS,
     OVERLAY_BASELINE_COMMANDS,
+    PATCH_BASELINE_COMMANDS,
     WORKFLOW_VERSION,
     resolve_codex_skills_dir,
 )
@@ -73,6 +76,7 @@ _PRIMARY_BRANCH_NAME = "main"
 _HEAD_FILE_NAME = "HEAD"
 _REFS_HEADS_PREFIX = "refs/heads/"
 _PACKED_REFS_FILE = "packed-refs"
+_PARALLEL_DISABLED_MARKER = "<!-- workflow-parallel-disabled -->"
 
 # AGENTS.md NL 路由表标记
 _AGENTS_NL_ROUTING_MARKER = "<!-- workflow-nl-routing-start -->"
@@ -99,6 +103,7 @@ _NL_ROUTING_SECTION = """\
 | 设计、架构、架构设计、选型、接口设计、技术方案、开始设计、画架构图、设计方案 | `/trellis:design` | 描述设计阶段意图，或显式触发 `design` skill | §3 设计阶段 |
 | 拆任务、排期、计划、任务分解、做计划、工作分解、里程碑、工作计划 | `/trellis:plan` | 描述任务拆解意图，或显式触发 `plan` skill | §4 任务拆解 |
 | 写测试、TDD、测试驱动、先写测试、测试用例、验收测试 | `/trellis:test-first` | 描述测试先行意图，或显式触发 `test-first` skill | §4.3 测试先行 |
+| 项目全局审查、全局代码审查、查缺补漏、代码补漏、项目审计、项目收尾前审查 | `/trellis:project-audit` | 描述项目级审查意图，或显式触发 `project-audit` skill | §5.1 项目全局审查 |
 | 检查一下、质量检查、对照 spec、对照规范、自检、有没有偏差 | `/trellis:check` | 描述质量检查意图，或显式触发 `check` skill | §5.1.x 质量检查 |
 | 补充审查、多 CLI 审查、多人审查、让其他 CLI 看一下、review-gate、审查门禁 | `/trellis:review-gate` | 描述补充审查意图，或显式触发 `review-gate` skill | §5.1.y 补充审查 |
 | 提交前检查、准备提交、commit 前、收尾 | `/trellis:finish-work` | 描述提交前检查意图，或显式触发 `finish-work` skill | §6 提交检查 |
@@ -111,7 +116,6 @@ _NL_ROUTING_SECTION = """\
 |-----------|------------------------|------------|------|
 | 开始、新会话、继续、下一步 | `/trellis:start` | 描述当前意图，或显式触发 `start` skill | Phase Router 自动检测 |
 | 卡住了、反复出错、死循环 | `/trellis:break-loop` | 描述排障意图，或显式触发 `break-loop` skill | 深度 bug 分析 |
-| 并行、worktree、同时开发 | `/trellis:parallel` | 描述并行开发意图，或显式触发 `parallel` skill | 并行任务管理 |
 | 更新规范、沉淀经验 | `/trellis:update-spec` | 描述规范更新意图，或显式触发 `update-spec` skill | 规范更新 |
 | 跨层检查、跨模块影响 | `/trellis:check-cross-layer` | 描述跨层检查意图，或显式触发 `check-cross-layer` skill | 跨层检查 |
 | 集成 skill、添加 skill | `/trellis:integrate-skill` | 描述 skill 集成意图，或显式触发 `integrate-skill` skill | Skill 集成 |
@@ -123,6 +127,7 @@ _NL_ROUTING_SECTION = """\
 
 - 多个命令匹配时：当前阶段上下文 > 精确关键词 > 阶段顺序推断 > 模糊语义
 - 无法确定时：路由到 `/trellis:start`（Phase Router 自动检测）
+- 当前 workflow 明确禁用基于 `parallel/worktree` 的后台 dispatch + PR 完成路径；如用户提到并行开发，应先回到 `/trellis:plan` 重新安排任务依赖，不再默认路由到 `parallel`
 - top-2 优先级接近时：向用户确认意图，而不是假定已经完成自动精确路由
 
 <!-- workflow-nl-routing-end -->
@@ -147,15 +152,9 @@ def find_root(start: Path) -> Path:
 
 def detect_cli_types(root: Path, requested: list[str] | None = None) -> list[str]:
     """检测项目中存在的 CLI 类型；默认返回全部检测到的 CLI，可按 requested 过滤。"""
-    found = []
-    for cli_type, cli_dir in _CLI_DIRS.items():
-        if requested and cli_type not in requested:
-            continue
-        if (root / cli_dir).is_dir():
-            found.append(cli_type)
-        elif cli_type in _CLI_ALT_DIRS and (root / _CLI_ALT_DIRS[cli_type]).is_dir():
-            # Codex 可用 .agents/ 替代 .codex/
-            found.append(cli_type)
+    found = detect_cli_types_shared(root)
+    if requested:
+        found = [cli_type for cli_type in found if cli_type in requested]
     if not found:
         dirs_str = "、".join(f"{d}/" for d in _CLI_DIRS.values())
         sys.exit(f"{R}未找到任何 CLI 目录（{dirs_str}），请先初始化目标 CLI{N}")
@@ -349,6 +348,64 @@ def prepare_command_content(src: Path) -> str:
     return c
 
 
+def prepare_parallel_disabled_content(src: Path) -> str | None:
+    """读取禁用 parallel 的覆盖内容。"""
+    source_path = src / "parallel-disabled.md"
+    if not source_path.exists():
+        return None
+    return prepare_command_content(source_path)
+
+
+def disable_parallel_command(src: Path, target_path: Path, *, dry_run: bool, cli_label: str) -> bool:
+    """如目标项目存在 baseline parallel 命令，则覆盖为禁用说明。"""
+    if not target_path.exists():
+        return False
+
+    content = target_path.read_text(encoding="utf-8")
+    if _PARALLEL_DISABLED_MARKER in content:
+        ok(f"[{cli_label}] parallel 命令已禁用")
+        return False
+
+    disabled_content = prepare_parallel_disabled_content(src)
+    if disabled_content is None:
+        warn(f"[{cli_label}] parallel-disabled.md 不存在，无法禁用 parallel")
+        return False
+
+    if not dry_run:
+        target_path.write_text(disabled_content, encoding="utf-8")
+    if dry_run:
+        info(f"[{cli_label}] 将禁用 parallel 命令")
+    else:
+        ok(f"[{cli_label}] parallel 命令已禁用")
+    return True
+
+
+def disable_parallel_skill(src: Path, skills_dir: Path, *, dry_run: bool, cli_label: str) -> bool:
+    """如目标项目存在 baseline parallel skill，则覆盖为禁用说明。"""
+    target_path = skills_dir / "parallel" / "SKILL.md"
+    if not target_path.exists():
+        return False
+
+    content = target_path.read_text(encoding="utf-8")
+    if _PARALLEL_DISABLED_MARKER in content:
+        ok(f"[{cli_label}] parallel skill 已禁用")
+        return False
+
+    disabled_content = prepare_parallel_disabled_content(src)
+    if disabled_content is None:
+        warn(f"[{cli_label}] parallel-disabled.md 不存在，无法禁用 parallel skill")
+        return False
+
+    if not dry_run:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(disabled_content, encoding="utf-8")
+    if dry_run:
+        info(f"[{cli_label}] 将禁用 parallel skill")
+    else:
+        ok(f"[{cli_label}] parallel skill 已禁用")
+    return True
+
+
 def build_finish_work_content(content: str, patch_text: str) -> str | None:
     """将 finish-work 的默认 Code Quality 区块替换为项目化补丁。"""
     if _FINISH_WORK_MARKER in content:
@@ -410,7 +467,6 @@ def inject_finish_work_patch(
 def deploy_claude(src: Path, root: Path, dry_run: bool) -> dict:
     """部署到 .claude/commands/trellis/"""
     dst_cmds = root / ".claude" / "commands" / "trellis"
-    dst_scripts = root / ".trellis" / "scripts" / "workflow"
     backup = dst_cmds / ".backup-original"
     result = {"commands": 0, "scripts": 0, "patches": 0, "errors": []}
 
@@ -424,6 +480,7 @@ def deploy_claude(src: Path, root: Path, dry_run: bool) -> dict:
         start = dst_cmds / "start.md"
         finish_work = dst_cmds / "finish-work.md"
         record_session = dst_cmds / "record-session.md"
+        parallel = dst_cmds / "parallel.md"
         baseline_overlaps = [dst_cmds / f"{name}.md" for name in OVERLAY_BASELINE_COMMANDS]
         if start.exists() and not (backup / "start.md").exists():
             shutil.copy2(start, backup / "start.md")
@@ -434,6 +491,9 @@ def deploy_claude(src: Path, root: Path, dry_run: bool) -> dict:
         if record_session.exists() and not (backup / "record-session.md").exists():
             shutil.copy2(record_session, backup / "record-session.md")
             ok(f"[Claude] record-session.md → 备份")
+        if parallel.exists() and not (backup / "parallel.md").exists():
+            shutil.copy2(parallel, backup / "parallel.md")
+            ok("[Claude] parallel.md → 备份")
         for baseline_cmd in baseline_overlaps:
             backup_target = backup / baseline_cmd.name
             if baseline_cmd.exists() and not backup_target.exists():
@@ -519,16 +579,8 @@ def deploy_claude(src: Path, root: Path, dry_run: bool) -> dict:
     else:
         warn("[Claude] record-session.md 不存在，跳过元数据闭环注入")
 
-    # 部署辅助脚本（共享）
-    dst_scripts.mkdir(parents=True, exist_ok=True)
-    for f in HELPER_SCRIPTS:
-        s = src / "shell" / f
-        d = dst_scripts / f
-        if s.exists():
-            if not dry_run:
-                shutil.copy2(s, d)
-                d.chmod(0o755)
-            result["scripts"] += 1
+    if disable_parallel_command(src, dst_cmds / "parallel.md", dry_run=dry_run, cli_label="Claude"):
+        result["patches"] += 1
 
     return result
 
@@ -551,6 +603,7 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool) -> dict:
         start = dst_cmds / "start.md"
         finish_work = dst_cmds / "finish-work.md"
         record_session = dst_cmds / "record-session.md"
+        parallel = dst_cmds / "parallel.md"
         baseline_overlaps = [dst_cmds / f"{name}.md" for name in OVERLAY_BASELINE_COMMANDS]
         if start.exists() and not (backup / "start.md").exists():
             shutil.copy2(start, backup / "start.md")
@@ -561,6 +614,9 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool) -> dict:
         if record_session.exists() and not (backup / "record-session.md").exists():
             shutil.copy2(record_session, backup / "record-session.md")
             ok(f"[OpenCode] record-session.md → 备份")
+        if parallel.exists() and not (backup / "parallel.md").exists():
+            shutil.copy2(parallel, backup / "parallel.md")
+            ok("[OpenCode] parallel.md → 备份")
         for baseline_cmd in baseline_overlaps:
             backup_target = backup / baseline_cmd.name
             if baseline_cmd.exists() and not backup_target.exists():
@@ -646,6 +702,9 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool) -> dict:
     else:
         warn("[OpenCode] record-session.md 不存在，跳过元数据闭环注入")
 
+    if disable_parallel_command(src, dst_cmds / "parallel.md", dry_run=dry_run, cli_label="OpenCode"):
+        result["patches"] += 1
+
     # 辅助脚本已在 Claude Code 部署时处理，此处不重复计数
     return result
 
@@ -660,7 +719,7 @@ def deploy_codex(src: Path, root: Path, dry_run: bool) -> dict:
     result = {"commands": 0, "scripts": 0, "patches": 0, "errors": []}
 
     if not dry_run:
-        for name in [*OVERLAY_BASELINE_COMMANDS, "finish-work"]:
+        for name in [*OVERLAY_BASELINE_COMMANDS, *OPTIONAL_DISABLED_BASELINE_COMMANDS, "finish-work"]:
             skill_path = skills_dir / name / "SKILL.md"
             backup_path = skills_dir / ".backup-original" / name / "SKILL.md"
             if skill_path.exists() and not backup_path.exists():
@@ -712,6 +771,9 @@ def deploy_codex(src: Path, root: Path, dry_run: bool) -> dict:
         ok("[Codex] session-start.py hook 已存在")
     else:
         warn("[Codex] session-start.py 不存在，会话上下文注入不可用")
+
+    if disable_parallel_skill(src, skills_dir, dry_run=dry_run, cli_label="Codex"):
+        result["patches"] += 1
 
     # 辅助脚本已在 Claude Code 部署时处理
     return result
@@ -785,6 +847,8 @@ def write_install_record(root: Path, cli_types: list[str], dry_run: bool) -> Non
             "commands": DISTRIBUTED_COMMANDS,
             "overlay_commands": OVERLAY_BASELINE_COMMANDS,
             "added_commands": ADDED_COMMANDS,
+            "disabled_commands": OPTIONAL_DISABLED_BASELINE_COMMANDS,
+            "patched_baseline_commands": PATCH_BASELINE_COMMANDS,
             "scripts": HELPER_SCRIPTS,
             "workflow_version": WORKFLOW_VERSION,
             "initial_pack": _REQUIREMENTS_FOUNDATION_PACK,

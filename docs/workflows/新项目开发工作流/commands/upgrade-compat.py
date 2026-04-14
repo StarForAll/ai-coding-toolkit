@@ -30,8 +30,11 @@ from workflow_assets import (
     CLI_ALT_DIRS,
     CLI_DIRS,
     DISTRIBUTED_COMMANDS,
+    detect_cli_types as detect_cli_types_shared,
     HELPER_SCRIPTS,
+    OPTIONAL_DISABLED_BASELINE_COMMANDS,
     OVERLAY_BASELINE_COMMANDS,
+    PATCH_BASELINE_COMMANDS,
     WORKFLOW_VERSION,
     check_latest_trellis_prerequisite,
     read_project_trellis_version,
@@ -66,12 +69,25 @@ _FINISH_WORK_START_HEADING = "### 1. Code Quality"
 _FINISH_WORK_END_HEADING = "### 1.5. Test Coverage"
 _RECORD_SESSION_MARKER = "## Record-Session Metadata Closure `[AI]`"
 _RECORD_SESSION_INJECTION_MARKER = "### Step 2: One-Click Add Session"
+_PARALLEL_DISABLED_MARKER = "<!-- workflow-parallel-disabled -->"
 # 当前 workflow 分发的阶段命令。
 # `brainstorm` / `check` 与 Trellis 基线同名，但当前 workflow 采用合并后的阶段语义；
 # `start` / `finish-work` / `record-session` 仍来自 Trellis 基线，并由当前 workflow 注入补丁。
 _CLI_DIRS = CLI_DIRS
 _CLI_ALT_DIRS = CLI_ALT_DIRS
 _ALL_CLI_TYPES = ALL_CLI_TYPES
+_REQUIRED_INSTALL_RECORD_KEYS = {
+    "trellis_version",
+    "cli_types",
+    "commands",
+    "overlay_commands",
+    "added_commands",
+    "disabled_commands",
+    "patched_baseline_commands",
+    "scripts",
+    "initial_pack",
+    "bootstrap_task_removed",
+}
 
 
 def find_root() -> Path:
@@ -91,14 +107,9 @@ def find_root() -> Path:
 
 def detect_cli_types(root: Path, requested: list[str] | None = None) -> list[str]:
     """检测项目中存在的 CLI 类型。"""
-    found = []
-    for cli_type, cli_dir in _CLI_DIRS.items():
-        if requested and cli_type not in requested:
-            continue
-        if (root / cli_dir).is_dir():
-            found.append(cli_type)
-        elif cli_type in _CLI_ALT_DIRS and (root / _CLI_ALT_DIRS[cli_type]).is_dir():
-            found.append(cli_type)
+    found = detect_cli_types_shared(root)
+    if requested:
+        found = [cli_type for cli_type in found if cli_type in requested]
     return found
 
 
@@ -149,6 +160,20 @@ def load_install_record(rec_file: Path) -> dict:
         return {}
 
 
+def detect_install_record_schema_conflicts(record: dict) -> int:
+    if not record:
+        warn("workflow-installed.json 缺失或不可读，跳过 schema 完整性校验")
+        return 0
+
+    missing = sorted(key for key in _REQUIRED_INSTALL_RECORD_KEYS if key not in record)
+    if not missing:
+        ok("workflow-installed.json schema 完整")
+        return 0
+
+    err(f"workflow-installed.json 缺少字段: {', '.join(missing)}")
+    return len(missing)
+
+
 def read_text(path: Path) -> str | None:
     if not path.exists():
         return None
@@ -175,12 +200,28 @@ def expected_helper_script_content(src: Path, name: str) -> str | None:
     return read_text(source_path)
 
 
+def expected_parallel_disabled_content(src: Path) -> str | None:
+    source_path = src / "parallel-disabled.md"
+    if not source_path.exists():
+        err("parallel-disabled.md 缺失，无法校验 parallel 禁用覆盖")
+        return None
+    return prepare_command_content(source_path)
+
+
+def is_parallel_disabled(path: Path) -> bool:
+    text = read_text(path)
+    if text is None:
+        return False
+    return _PARALLEL_DISABLED_MARKER in text
+
+
 # ── Claude Code 冲突检测 ──
 def detect_conflicts_claude(src: Path, dst_cmds: Path) -> int:
     conflicts = 0
     start = dst_cmds / "start.md"
     finish_work = dst_cmds / "finish-work.md"
     record_session = dst_cmds / "record-session.md"
+    parallel = dst_cmds / "parallel.md"
 
     if not has_phase_router(start):
         err("[Claude] start.md: Phase Router 丢失")
@@ -226,6 +267,17 @@ def detect_conflicts_claude(src: Path, dst_cmds: Path) -> int:
     else:
         ok("[Claude] record-session.md: 元数据闭环说明正常")
 
+    if parallel.exists():
+        expected_parallel = expected_parallel_disabled_content(src)
+        actual_parallel = read_text(parallel)
+        if expected_parallel is None or actual_parallel is None:
+            conflicts += 1
+        elif actual_parallel != expected_parallel:
+            err("[Claude] parallel.md: 禁用覆盖漂移")
+            conflicts += 1
+        else:
+            ok("[Claude] parallel.md: 禁用覆盖正常")
+
     return conflicts
 
 
@@ -235,6 +287,7 @@ def detect_conflicts_opencode(src: Path, dst_cmds: Path) -> int:
     start = dst_cmds / "start.md"
     finish_work = dst_cmds / "finish-work.md"
     record_session = dst_cmds / "record-session.md"
+    parallel = dst_cmds / "parallel.md"
 
     if not has_phase_router(start):
         err("[OpenCode] start.md: Phase Router 丢失")
@@ -279,6 +332,17 @@ def detect_conflicts_opencode(src: Path, dst_cmds: Path) -> int:
         conflicts += 1
     else:
         ok("[OpenCode] record-session.md: 元数据闭环说明正常")
+
+    if parallel.exists():
+        expected_parallel = expected_parallel_disabled_content(src)
+        actual_parallel = read_text(parallel)
+        if expected_parallel is None or actual_parallel is None:
+            conflicts += 1
+        elif actual_parallel != expected_parallel:
+            err("[OpenCode] parallel.md: 禁用覆盖漂移")
+            conflicts += 1
+        else:
+            ok("[OpenCode] parallel.md: 禁用覆盖正常")
 
     return conflicts
 
@@ -333,6 +397,18 @@ def detect_conflicts_codex(src: Path, root: Path) -> int:
         warn("[Codex] session-start.py 缺失")
         conflicts += 1
 
+    parallel_skill = skills_dir / "parallel" / "SKILL.md"
+    if parallel_skill.exists():
+        expected_parallel = expected_parallel_disabled_content(src)
+        actual_parallel = read_text(parallel_skill)
+        if expected_parallel is None or actual_parallel is None:
+            conflicts += 1
+        elif actual_parallel != expected_parallel:
+            err("[Codex] parallel skill: 禁用覆盖漂移")
+            conflicts += 1
+        else:
+            ok("[Codex] parallel skill: 禁用覆盖正常")
+
     return conflicts
 
 
@@ -371,6 +447,9 @@ def backup_deployed_state(dst_cmds: Path) -> None:
     record_session = dst_cmds / "record-session.md"
     if record_session.exists():
         shutil.copy2(record_session, backup_dir / "record-session.md")
+    parallel = dst_cmds / "parallel.md"
+    if parallel.exists():
+        shutil.copy2(parallel, backup_dir / "parallel.md")
     for name in DISTRIBUTED_COMMANDS:
         candidate = dst_cmds / f"{name}.md"
         if candidate.exists():
@@ -393,6 +472,15 @@ def deploy_commands(src: Path, dst_cmds: Path) -> None:
             content = prepare_command_content(source_path)
             target_path.write_text(content, encoding="utf-8")
             ok(f"/trellis:{name}")
+
+
+def deploy_parallel_disabled(src: Path, target_path: Path, label: str) -> bool:
+    expected = expected_parallel_disabled_content(src)
+    if expected is None or not target_path.exists():
+        return False
+    target_path.write_text(expected, encoding="utf-8")
+    ok(f"{label} 已更新为禁用版本")
+    return True
 
 
 def deploy_scripts(src: Path, dst_scripts: Path) -> None:
@@ -420,6 +508,13 @@ def deploy_codex_skills(src: Path, root: Path) -> None:
             target_path.write_text(content, encoding="utf-8")
             ok(f"[Codex] skill: {name}")
 
+    parallel_skill = skills_dir / "parallel" / "SKILL.md"
+    if parallel_skill.exists():
+        expected = expected_parallel_disabled_content(src)
+        if expected is not None:
+            parallel_skill.write_text(expected, encoding="utf-8")
+            ok("[Codex] parallel skill 已更新为禁用版本")
+
 
 # ── 恢复 ──
 def restore_command_from_original_backup(dst_cmds: Path, command_name: str) -> bool:
@@ -427,6 +522,16 @@ def restore_command_from_original_backup(dst_cmds: Path, command_name: str) -> b
     target_path = dst_cmds / f"{command_name}.md"
     if not backup_path.exists():
         err(f"缺少 .backup-original/{command_name}.md，无法执行强制恢复")
+        return False
+    shutil.copy2(backup_path, target_path)
+    ok(f"{command_name}.md 已从 .backup-original 恢复")
+    return True
+
+
+def restore_optional_command_from_original_backup(dst_cmds: Path, command_name: str) -> bool:
+    backup_path = dst_cmds / ".backup-original" / f"{command_name}.md"
+    target_path = dst_cmds / f"{command_name}.md"
+    if not backup_path.exists():
         return False
     shutil.copy2(backup_path, target_path)
     ok(f"{command_name}.md 已从 .backup-original 恢复")
@@ -452,6 +557,17 @@ def restore_codex_finish_work(skills_dir: Path) -> bool:
     target_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(backup_path, target_path)
     ok("[Codex] finish-work skill 已从 .backup-original 恢复")
+    return True
+
+
+def restore_optional_codex_skill(skills_dir: Path, skill_name: str) -> bool:
+    backup_path = skills_dir / ".backup-original" / skill_name / "SKILL.md"
+    target_path = skills_dir / skill_name / "SKILL.md"
+    if not backup_path.exists():
+        return False
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(backup_path, target_path)
+    ok(f"[Codex] {skill_name} skill 已从 .backup-original 恢复")
     return True
 
 
@@ -525,20 +641,34 @@ def inject_record_session_patch(src: Path, record_session_md: Path) -> bool:
     return True
 
 
-def write_install_record(rec_file: Path, current_version: str, previous_version: str, cli_types: list[str]) -> None:
+def write_install_record(
+    rec_file: Path,
+    current_version: str,
+    previous_version: str,
+    cli_types: list[str],
+    prior_record: dict,
+) -> None:
     now = datetime.now(timezone.utc).isoformat()
+    installed = prior_record.get("installed", now)
+    initial_pack = prior_record.get("initial_pack", "pack.requirements-discovery-foundation")
+    bootstrap_task_removed = prior_record.get("bootstrap_task_removed", True)
     rec_file.write_text(
         json.dumps(
             {
                 "trellis_version": current_version,
+                "installed": installed,
                 "previous_version": previous_version,
                 "cli_types": cli_types,
                 "updated": now,
                 "commands": DISTRIBUTED_COMMANDS,
                 "overlay_commands": OVERLAY_BASELINE_COMMANDS,
                 "added_commands": ADDED_COMMANDS,
+                "disabled_commands": OPTIONAL_DISABLED_BASELINE_COMMANDS,
+                "patched_baseline_commands": PATCH_BASELINE_COMMANDS,
                 "scripts": HELPER_SCRIPTS,
                 "workflow_version": WORKFLOW_VERSION,
+                "initial_pack": initial_pack,
+                "bootstrap_task_removed": bootstrap_task_removed,
             },
             ensure_ascii=False,
             indent=2,
@@ -614,6 +744,7 @@ def main() -> int:
 
     # 冲突检测
     total_conflicts = 0
+    total_conflicts += detect_install_record_schema_conflicts(record)
     for cli_type in cli_types:
         if cli_type == "claude":
             dst_cmds = root / ".claude" / "commands" / "trellis"
@@ -648,6 +779,7 @@ def main() -> int:
             start = dst_cmds / "start.md"
             finish_work = dst_cmds / "finish-work.md"
             record_session = dst_cmds / "record-session.md"
+            parallel = dst_cmds / "parallel.md"
             backup_deployed_state(dst_cmds)
             deploy_commands(src, dst_cmds)
             if args.mode == "force":
@@ -657,6 +789,7 @@ def main() -> int:
                     return 1
                 if not restore_command_from_original_backup(dst_cmds, "record-session"):
                     return 1
+                restore_optional_command_from_original_backup(dst_cmds, "parallel")
             if not has_phase_router(start) and not inject_phase_router(src, start):
                 err("[Claude] Phase Router 恢复失败")
                 return 1
@@ -666,11 +799,16 @@ def main() -> int:
             if not has_record_session_patch(record_session) and not inject_record_session_patch(src, record_session):
                 err("[Claude] record-session 元数据闭环恢复失败")
                 return 1
+            if parallel.exists() and not is_parallel_disabled(parallel):
+                if not deploy_parallel_disabled(src, parallel, "parallel.md"):
+                    err("[Claude] parallel 禁用覆盖恢复失败")
+                    return 1
         elif cli_type == "opencode":
             dst_cmds = root / ".opencode" / "commands" / "trellis"
             start = dst_cmds / "start.md"
             finish_work = dst_cmds / "finish-work.md"
             record_session = dst_cmds / "record-session.md"
+            parallel = dst_cmds / "parallel.md"
             backup_deployed_state(dst_cmds)
             deploy_commands(src, dst_cmds)
             if args.mode == "force":
@@ -680,6 +818,7 @@ def main() -> int:
                     return 1
                 if not restore_command_from_original_backup(dst_cmds, "record-session"):
                     return 1
+                restore_optional_command_from_original_backup(dst_cmds, "parallel")
             if not has_phase_router(start) and not inject_phase_router(src, start):
                 err("[OpenCode] Phase Router 恢复失败")
                 return 1
@@ -689,6 +828,10 @@ def main() -> int:
             if not has_record_session_patch(record_session) and not inject_record_session_patch(src, record_session):
                 err("[OpenCode] record-session 元数据闭环恢复失败")
                 return 1
+            if parallel.exists() and not is_parallel_disabled(parallel):
+                if not deploy_parallel_disabled(src, parallel, "parallel.md"):
+                    err("[OpenCode] parallel 禁用覆盖恢复失败")
+                    return 1
         elif cli_type == "codex":
             deploy_codex_skills(src, root)
             skills_dir = resolve_codex_skills_dir(root)
@@ -698,16 +841,25 @@ def main() -> int:
             if args.mode == "force" and finish_work_skill.exists():
                 if not restore_codex_finish_work(skills_dir):
                     return 1
+                restore_optional_codex_skill(skills_dir, "parallel")
             if finish_work_skill.exists() and not has_finish_work_patch(finish_work_skill):
                 if not inject_finish_work_patch(src, finish_work_skill, "finish-work skill"):
                     err("[Codex] finish-work 项目化补丁恢复失败")
                     return 1
+            parallel_skill = skills_dir / "parallel" / "SKILL.md"
+            if parallel_skill.exists() and not is_parallel_disabled(parallel_skill):
+                expected_parallel = expected_parallel_disabled_content(src)
+                if expected_parallel is None:
+                    err("[Codex] parallel 禁用覆盖恢复失败")
+                    return 1
+                parallel_skill.write_text(expected_parallel, encoding="utf-8")
+                ok("[Codex] parallel skill 已更新为禁用版本")
 
     # 辅助脚本
     deploy_scripts(src, dst_scripts)
 
     # 更新安装记录
-    write_install_record(rec_file, current_version, installed_version, cli_types)
+    write_install_record(rec_file, current_version, installed_version, cli_types, record)
 
     # 清理旧备份
     for cli_type in cli_types:

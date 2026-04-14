@@ -87,9 +87,11 @@ const tree = [
       ]},
       { html:'§5 开发实施循环', cls:'L1 c5', id:'p5', sub:'<span class="cmd">/trellis:start</span>', children:[
         { html:'5.1 单需求开发 9步', cls:'L2', det:'①选任务→②DoR→③先测后改<br>④AI实现→⑤本地门禁→⑥风险评审<br>⑦CI→⑧状态更新→⑨上下文检查', id:'p5_1' },
-        { html:'5.1.x 反思/批判',   cls:'L2', det:'实现后质量检查<br>多CLI审查门禁 review-gate<br>双模态执行 · 上下文污染检测', id:'p5_2' },
+        { html:'5.1 项目级审查',   cls:'L2', det:'全部代码任务完成后<br>project-audit 三步闭环<br>分析→方案→修改', id:'p5_2' },
+        { html:'5.1.x 反思/批判',   cls:'L2', det:'实现后质量检查<br>多CLI审查门禁 review-gate<br>双模态执行 · 上下文污染检测', id:'p5_2x' },
         { html:'5.2 人工介入机制',   cls:'L2', det:'连续2轮未解决 · 超时50%<br>安全高危 · 模型不稳定', id:'p5_3' },
         { html:'5.5 代码文档同步',   cls:'L2', det:'任务粒度同步<br>即时优先原则', id:'p5_4' },
+        { html:'/trellis:project-audit', cls:'L3', id:'p5_c0', cp:'.claude/commands/trellis/project-audit.md', cd:'项目级全局代码审查' },
         { html:'/trellis:check',     cls:'L3', id:'p5_c1', cp:'.claude/commands/trellis/check.md', cd:'质量检查 · 对照Spec核对' },
         { html:'/trellis:review-gate',cls:'L3', id:'p5_c2', cp:'.claude/commands/trellis/review-gate.md', cd:'多CLI补充审查' },
         { html:'coding-standards / simplify', cls:'SK', id:'p5_s', su:'§5 编码 skills' },
@@ -132,9 +134,6 @@ const tree = [
         { html:'拒绝项目', cls:'L2', det:'不合规或不值得做<br>→ 记录原因 终止', id:'br_st_1' },
         { html:'暂停项目', cls:'L2', det:'信息不足/条件未成熟<br>→ 补信息后重评估', id:'br_st_2' },
         { html:'谈判后接', cls:'L2', det:'条件调整后再评估<br>→ 回到 feasibility', id:'br_st_3' },
-      ]},
-      { html:'并行开发', cls:'BR', id:'br_parallel', bdesc:'多任务同时推进', btrig:'/trellis:parallel<br>/trellis:worktree', side:'left', children:[
-        { html:'worktree 隔离', cls:'L2', det:'独立分支开发<br>各自门禁验证<br>最后合并', id:'br_pa_1' },
       ]},
     ]
   }

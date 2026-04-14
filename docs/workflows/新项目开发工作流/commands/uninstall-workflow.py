@@ -13,7 +13,9 @@ from workflow_assets import (
     ALL_CLI_TYPES,
     CLI_ALT_DIRS,
     CLI_DIRS,
+    detect_cli_types as detect_cli_types_shared,
     DISTRIBUTED_COMMANDS,
+    OPTIONAL_DISABLED_BASELINE_COMMANDS,
     OVERLAY_BASELINE_COMMANDS,
 )
 
@@ -63,14 +65,9 @@ def find_root(start: Path) -> Path:
 
 def detect_cli_types(root: Path, requested: list[str] | None = None) -> list[str]:
     """检测项目中存在的 CLI 类型，可按 requested 过滤。"""
-    found = []
-    for cli_type, cli_dir in _CLI_DIRS.items():
-        if requested and cli_type not in requested:
-            continue
-        if (root / cli_dir).is_dir():
-            found.append(cli_type)
-        elif cli_type in _CLI_ALT_DIRS and (root / _CLI_ALT_DIRS[cli_type]).is_dir():
-            found.append(cli_type)
+    found = detect_cli_types_shared(root)
+    if requested:
+        found = [cli_type for cli_type in found if cli_type in requested]
     return found
 
 
@@ -107,6 +104,15 @@ def restore_backed_up_command(backup: Path, target_dir: Path, command: str, cli_
     return True
 
 
+def restore_optional_disabled_command(backup: Path, target_dir: Path, command: str, cli_label: str) -> None:
+    backup_path = backup / f"{command}.md"
+    target_path = target_dir / f"{command}.md"
+    if not backup_path.exists():
+        return
+    shutil.copy2(backup_path, target_path)
+    ok(f"[{cli_label}] {command}.md 已恢复")
+
+
 def uninstall_claude(root: Path, added_commands: list[str], overlay_commands: list[str]) -> None:
     """卸载 Claude Code 部署的工作流。"""
     dst_cmds = root / ".claude" / "commands" / "trellis"
@@ -132,6 +138,9 @@ def uninstall_claude(root: Path, added_commands: list[str], overlay_commands: li
             restored += 1
     if overlay_commands:
         info(f"[Claude] 已恢复 {restored}/{len(overlay_commands)} 个同名基线命令")
+
+    for command in OPTIONAL_DISABLED_BASELINE_COMMANDS:
+        restore_optional_disabled_command(backup, dst_cmds, command, "Claude")
 
     # 恢复 start.md
     backup_start = backup / "start.md"
@@ -194,6 +203,9 @@ def uninstall_opencode(root: Path, added_commands: list[str], overlay_commands: 
             restored += 1
     if overlay_commands:
         info(f"[OpenCode] 已恢复 {restored}/{len(overlay_commands)} 个同名基线命令")
+
+    for command in OPTIONAL_DISABLED_BASELINE_COMMANDS:
+        restore_optional_disabled_command(backup, dst_cmds, command, "OpenCode")
 
     # 恢复 start.md
     backup_start = backup / "start.md"
@@ -263,6 +275,14 @@ def uninstall_codex(root: Path, added_commands: list[str], overlay_commands: lis
                 warn(f"[Codex] {skills_dir} 无 {command} skill 备份，保留当前文件")
         if overlay_commands:
             info(f"[Codex] 已恢复 {restored}/{len(overlay_commands)} 个同名基线 skills")
+
+        for command in OPTIONAL_DISABLED_BASELINE_COMMANDS:
+            backup_skill = skills_dir / ".backup-original" / command / "SKILL.md"
+            target_skill = skills_dir / command / "SKILL.md"
+            if backup_skill.exists():
+                target_skill.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(backup_skill, target_skill)
+                ok(f"[Codex] 恢复 {command} skill")
 
         backup_finish_work = skills_dir / ".backup-original" / "finish-work" / "SKILL.md"
         if backup_finish_work.exists():
