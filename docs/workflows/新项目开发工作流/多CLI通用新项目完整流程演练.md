@@ -409,6 +409,15 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 再确认修正方案
 - 最后统一修改
 
+补充规则：
+
+- `project-audit` 新发现的高风险问题留在当前阶段内处理，不回挂具体任务
+- 默认先由当前 CLI 完成发现与方案讨论
+- 只有当问题本身高不确定、强争议、跨模块因果难判断，或用户显式要求时，才在分析/方案阶段提前引入 `multi-cli-review`
+- 若在 `project-audit` 内部使用多 CLI 审查，默认 2 个 reviewer，最多 4 个；建议优先在 3 轮内收敛，超过建议轮次需用户明确要求继续
+- 修复执行阶段可继续使用 `multi-cli-review` / `multi-cli-review-action`
+- 这些多 CLI 能力属于 `project-audit` 内部手段，不等于进入任务级 `review-gate`
+
 ### CLI 入口差异
 
 - Claude Code：`/trellis:project-audit`
@@ -428,6 +437,9 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 先做本 CLI 的质量检查，再判断是否需要进入多 CLI 补充审查门禁。
 
+这里的 `review-gate` 仅适用于任务闭环，不属于 `project-audit` 之后的默认项目级收尾阶段。
+这里展示的是项目收尾链路中的 `check`；在单任务开发循环内，每次 `start` 完成后也会执行对应任务级 `check`。
+
 ### CLI 入口差异
 
 - Claude Code：`/trellis:check` → （默认）`/trellis:finish-work`；高风险条件触发时 → `/trellis:review-gate`
@@ -436,10 +448,10 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 推荐 MCP / Skills
 
-- `verification-before-completion`
-- `sharp-edges`
-- `multi-cli-review`
-- `multi-cli-review-action`
+- `verification-before-completion`（默认）
+- `sharp-edges`（默认）
+- `multi-cli-review`（条件触发，经 `review-gate` 判定后使用）
+- `multi-cli-review-action`（补充审查执行阶段使用）
 
 ### 典型降级方式
 

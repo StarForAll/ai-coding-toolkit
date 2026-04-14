@@ -120,8 +120,11 @@ $TASK_DIR/review-gate/reviewer-commands-round-<N>.md
 
 约束：
 
-- 默认 reviewer 数：1
+- 默认 reviewer 数：2（其他 CLI）
 - 最大 reviewer 数：4
+- 建议轮次：3；若超过建议轮次，需用户显式要求继续
+- 若使用双 reviewer，默认生成两条**审查描述相同、`review-focus` 相同、仅 `reviewer-id` 不同**的命令
+- 只有在明确需要角色分工时，才允许为不同 reviewer 编写不同的审查描述或不同的审查重点
 - reviewer 只允许使用 `multi-cli-review`
 - reviewer 不得直接修改代码
 - reviewer 不得创建目录；目录只能由当前 CLI/协调者创建
@@ -189,7 +192,7 @@ tmp/multi-cli-review/<task-id>/review-round-<N>/<reviewer-id>.md
 - 建议超出当前任务边界
 - 建议可能违反项目规范或带来安全风险
 - 当前 CLI 无法判断建议是否应采纳
-- 达到 **3 轮上限** 且仍有未解决问题
+- 已超过建议轮次（3 轮）且用户未明确要求继续
 
 ---
 
@@ -220,8 +223,8 @@ tmp/multi-cli-review/<task-id>/
 | 判定结果 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
 | `skip`，可直接提交前检查 | `/trellis:finish-work` | 进入提交前检查，或显式触发 `finish-work` skill | **默认推荐**。无需进入多 CLI 审查 |
-| `required` 或接受 `recommended` | 在已具备 `multi-cli-review` 能力的其他 CLI 中运行 `multi-cli-review` | 在目标 CLI 中发起多 CLI 审查，或显式触发 `multi-cli-review` skill | 若目标 CLI 尚未具备该 skill，先补齐能力再执行 |
+| `required` 或接受 `recommended` | 在已具备 `multi-cli-review` 能力的其他 CLI 中运行 `multi-cli-review` | 在目标 CLI 中发起多 CLI 审查，或显式触发 `multi-cli-review` skill | 默认 reviewer 数为 2；若目标 CLI 尚未具备该 skill，先补齐能力再执行 |
 | 报告已就绪，准备汇总修复 | `multi-cli-review-action` 能力 | `multi-cli-review-action` skill | 当前 CLI 聚合报告、执行修复、重新验证 |
 | 审查发现需回到实现阶段 | `/trellis:start` | 回到实施阶段，或显式触发 `start` skill | 回到当前任务修复问题 |
 | 审查发现冻结后新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先处理评估与基线更新，再回到受影响的最早阶段 |
-| 出现冲突或超阈值 | 用户人工决策 | 用户人工决策 | 停止自动推进，先做人工裁决 |
+| 出现冲突或超过建议轮次仍未收敛 | 用户人工决策 | 用户人工决策 | 若用户未明确要求继续下一轮，先做人工裁决 |

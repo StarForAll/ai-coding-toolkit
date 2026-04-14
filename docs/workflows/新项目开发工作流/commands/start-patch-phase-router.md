@@ -117,7 +117,7 @@ get_context.py 输出
     │
     ├── 测试就绪 + 任务执行矩阵全部为 `已完成`
     │   └── 优先进入收尾链路：
-    │       - 未完成质量检查/提交前检查 → /trellis:check 或 /trellis:finish-work
+    │       - 未完成质量检查/提交前检查 → /trellis:check（检查后可能条件触发 /trellis:review-gate）或 /trellis:finish-work
     │       - 已完成提交前检查 → /trellis:delivery
     │
     ├── 测试就绪 + 任务执行矩阵中存在 `可开始` 任务

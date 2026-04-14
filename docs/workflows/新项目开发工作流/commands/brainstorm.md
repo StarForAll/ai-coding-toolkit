@@ -267,7 +267,7 @@ TASK_DIR=$(python3 ./.trellis/scripts/task.py create "brainstorm: <short goal>")
 |------|---------|-------------------|------------|
 | **Lite** | L0 / 内部小任务 | 单份轻量需求基线即可（`prd.md`），不要求双 PRD | brainstorm → start → check → finish-work → delivery → record-session |
 | **Standard** | L1 / 多文件任务 | 完整双 PRD | brainstorm → design → plan → start → check → finish-work → delivery → record-session |
-| **Strict** | L2 / 外包 / 新客户 / 高风险 / 跨层 | 完整双 PRD + feasibility + design 3.7 + 交付控制 + project-audit + review-gate | 保留当前严格全链路 |
+| **Strict** | L2 / 外包 / 新客户 / 高风险 / 跨层 | 完整双 PRD + feasibility + design 3.7 + 交付控制 + project-audit（项目级） + review-gate（任务级条件触发） | 保留当前严格全链路 |
 
 **L0 降级规则**：L0 任务可不强制生成双 PRD，但 `prd.md` 工作底稿仍需覆盖目标、范围、验收、边界四项。若后续发现任务复杂度超出预期，应在进入 design/plan 前补齐双 PRD。
 

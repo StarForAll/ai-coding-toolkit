@@ -147,7 +147,7 @@ $TASK_DIR/check.md
 
 - 重复已修复的错误？→ 停止，开新会话
 - 输出方向偏离？→ 导出决策摘要
-- 若风险仍不明确，不直接进入 `finish-work`，先走 `review-gate`
+- 若风险仍不明确，先进入 `/trellis:review-gate` 做正式判定（可能判定为 `skip`），不直接跳到 `finish-work`
 
 ---
 
