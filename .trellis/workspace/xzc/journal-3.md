@@ -384,3 +384,50 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 97: 修复新项目工作流：禁用PR并新增project-audit
+
+**Date**: 2026-04-14
+**Task**: 修复新项目工作流：禁用PR并新增project-audit
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Workflow Routing | Removed default `parallel/worktree/dispatch/create-pr` path and unified direct-in-project execution model |
+| Project Audit | Added `project-audit` as a project-level final code audit stage with formal mode and manual pre-audit mode |
+| Install/Upgrade | Updated installer, uninstall, upgrade, and asset registry to distribute `project-audit`, disable `parallel`, and keep install-record schema consistent |
+| Planning Model | Added `任务域` to task matrix and enforced `PROJECT-AUDIT` gating in `plan-validate.py` |
+| Docs | Synced main workflow docs, command mapping, CLI README files, walkthrough docs, and mindmap HTML |
+| Review Loop | Processed multi-cli review rounds and folded accepted findings back into code and docs |
+
+**Verification**:
+- `/ops/softwares/python/bin/python3 docs/workflows/新项目开发工作流/commands/test_workflow_installers.py`
+- `/ops/softwares/python/bin/python3 docs/workflows/新项目开发工作流/commands/test_upgrade_analysis.py`
+- `/ops/softwares/python/bin/python3 docs/workflows/新项目开发工作流/commands/shell/test_plan_validate.py`
+- `/ops/softwares/python/bin/python3 -m py_compile docs/workflows/新项目开发工作流/commands/install-workflow.py docs/workflows/新项目开发工作流/commands/uninstall-workflow.py docs/workflows/新项目开发工作流/commands/upgrade-compat.py docs/workflows/新项目开发工作流/commands/analyze-upgrade.py docs/workflows/新项目开发工作流/commands/workflow_assets.py docs/workflows/新项目开发工作流/commands/test_workflow_installers.py docs/workflows/新项目开发工作流/commands/test_upgrade_analysis.py docs/workflows/新项目开发工作流/commands/shell/plan-validate.py docs/workflows/新项目开发工作流/commands/shell/test_plan_validate.py`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `50a5bbd9aa8d30534d3d8778d25fcd826e47e617` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
