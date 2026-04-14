@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 97
+- **Total Sessions**: 98
 - **Last Active**: 2026-04-14
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~433 | Active |
+| `journal-3.md` | ~466 | Active |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 98 | 2026-04-14 | 文档规则多轮修正与跨文档传播 | `5078fce` | `main` |
 | 97 | 2026-04-14 | 修复新项目工作流：禁用PR并新增project-audit | `50a5bbd9aa8d30534d3d8778d25fcd826e47e617` | `main` |
 | 96 | 2026-04-12 | 修复新项目开发工作流门禁与安装器契约 | `942c5e3` | `main` |
 | 95 | 2026-04-11 | fix: 修正新项目开发工作流文档和脚本漂移问题 | `9276d8a` | `main` |
