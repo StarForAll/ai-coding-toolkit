@@ -30,13 +30,13 @@ python3 ./.trellis/scripts/task.py archive <task-name>
 
 ```bash
 # Method 1: Simple parameters
-python3 ./.trellis/scripts/add_session.py \
+python3 ./.trellis/scripts/workflow/record-session-helper.py \
   --title "Session Title" \
   --commit "hash1,hash2" \
   --summary "Brief summary of what was done"
 
 # Method 2: Pass detailed content via stdin
-cat << 'EOF' | python3 ./.trellis/scripts/add_session.py --stdin --title "Title" --commit "hash"
+cat << 'EOF' | python3 ./.trellis/scripts/workflow/record-session-helper.py --stdin --title "Title" --commit "hash"
 | Feature | Description |
 |---------|-------------|
 | New API | Added user authentication endpoint |
@@ -53,7 +53,9 @@ EOF
 - [OK] Auto-detects line count, creates new file if >2000 lines
 - [OK] Auto-detects Branch context (`--branch` override; otherwise Branch = task.json -> current git branch; missing values are omitted gracefully)
 - [OK] Updates index.md (Total Sessions +1, Last Active, line stats, history)
-- [OK] Auto-commits .trellis/workspace and .trellis/tasks changes
+- [OK] Runs metadata closure checks before and after session write
+- [OK] Auto-commits .trellis/workspace and .trellis/tasks changes in helper commit-only mode
+- [OK] If metadata commit fails in read-only/restricted env, prints a `--resume` command for retry in writable environment
 
 ---
 
@@ -62,6 +64,6 @@ EOF
 | Command | Purpose |
 |---------|---------|
 | `python3 ./.trellis/scripts/get_context.py --mode record` | Get context for record-session |
-| `python3 ./.trellis/scripts/add_session.py --title "..." --commit "..."` | **One-click add session (recommended, branch auto-complete)** |
+| `python3 ./.trellis/scripts/workflow/record-session-helper.py --title "..." --commit "..."` | **One-click add session (recommended, branch auto-complete, metadata closure aware)** |
 | `python3 ./.trellis/scripts/task.py archive <name>` | Archive completed task (auto-commits) |
 | `python3 ./.trellis/scripts/task.py list` | List active tasks |
