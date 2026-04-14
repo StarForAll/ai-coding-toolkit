@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 101
+- **Total Sessions**: 102
 - **Last Active**: 2026-04-14
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~607 | Active |
+| `journal-3.md` | ~657 | Active |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 102 | 2026-04-14 | 修复 task archive 自动提交缺口 | `d16e572` | `main` |
 | 101 | 2026-04-14 | 当前项目补充 record-session 自动提交失败恢复机制 | `6a37368` | `main` |
 | 100 | 2026-04-14 | 修复新项目开发工作流 task-first 与 before-dev 主链 | `d773ca2` | `main` |
 | 99 | 2026-04-14 | 收敛 project-audit 与 review-gate 阶段边界 | `3887c77` | `main` |
