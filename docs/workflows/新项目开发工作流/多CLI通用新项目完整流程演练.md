@@ -215,7 +215,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 目标
 
-先按 task-first 建立或更新 `prd.md` 工作底稿，自动读取上下文并在必要时 research-first；然后确认需求描述是否准确，统一做 `L0/L1/L2` 分类，并在进入下一阶段前补齐项目级双需求文档。
+先按 task-first 建立或更新 `prd.md` 工作底稿，自动读取上下文并在必要时 research-first；然后确认需求描述是否准确，统一做 `L0/L1/L2` 分类；`L1/L2` 在进入下一阶段前需补齐项目级双需求文档，`L0` 单任务闭环可只保留 `prd.md` 轻量基线。
 
 ### CLI 入口差异
 
@@ -311,7 +311,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 ### 退出门禁
 
 - 关键设计文档与项目 spec 已对齐
-- 自动化检查矩阵已明确，且无论语言如何都显式包含 `sonar-scanner`
+- 自动化检查矩阵已明确，且已包含明确质量平台门禁（采用 Sonar 的项目必须写真实命令，未采用时必须写替代门禁和原因）
 - `finish-work` / `record-session` 的项目化基线已定
 
 ---
@@ -422,7 +422,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ---
 
-## 阶段 7：Check + Review-Gate
+## 阶段 7：Check（+ 条件触发 Review-Gate）
 
 ### 目标
 
@@ -430,9 +430,9 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### CLI 入口差异
 
-- Claude Code：`/trellis:check` → `/trellis:review-gate`
-- OpenCode：TUI 用 `/trellis:check`、`/trellis:review-gate`；CLI 用 `trellis/check`、`trellis/review-gate`
-- Codex：自然语言描述或显式触发 `check`、`review-gate` skill
+- Claude Code：`/trellis:check` → （默认）`/trellis:finish-work`；高风险条件触发时 → `/trellis:review-gate`
+- OpenCode：TUI 用 `/trellis:check`、`/trellis:finish-work`（或条件触发 `/trellis:review-gate`）；CLI 用 `trellis/check`、`trellis/finish-work`
+- Codex：自然语言描述或显式触发 `check`、`finish-work` skill；条件触发时再用 `review-gate` skill
 
 ### 推荐 MCP / Skills
 
@@ -453,7 +453,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 ### 退出门禁
 
 - `check` 结果已写清
-- `review-gate` 结果已明确为 `required` / `recommended` / `skip`
+- 若触发了 `review-gate`，结果已明确为 `required` / `recommended` / `skip`
 - 所有审查发现已修复或已留风险说明
 
 ---
@@ -559,9 +559,10 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 退出门禁
 
-- 当前任务已 archive 或满足项目约定的收尾前置条件
+- 通过 `record-session-helper.py` 完成收尾记录（最终收尾入口，不要直接调用 `add_session.py`）
 - session 已记录成功
 - 元数据闭环完成
+- 然后再执行 archive（顺序永远是 record-session → archive）
 
 ---
 

@@ -175,6 +175,42 @@ What belongs here and what does not.
 
 ---
 
+## Workflow Rule Propagation
+
+When a workflow rule changes in a canonical command file (e.g., `commands/brainstorm.md`),
+the change must be verified across **all documents that reference the rule**. A rule change
+is not complete until every referencing document has been updated.
+
+### Propagation Checklist
+
+After changing a workflow rule in any command file:
+
+1. `grep` the entire `docs/workflows/<workflow-name>/` directory for the old wording
+2. Check these categories of referencing documents:
+   - Other command files (`commands/*.md`)
+   - `工作流总纲.md` (the authority layer)
+   - `命令映射.md` (the routing layer)
+   - `多CLI通用新项目完整流程演练.md` and `完整流程演练.md` (the walkthrough layer)
+   - `工作流全局流转说明（通俗版）.md` (the overview layer)
+   - Platform README files (`commands/opencode/README.md`, `commands/codex/README.md`)
+   - `learn/README.md` (examples and gotchas)
+   - Test files (`test_workflow_installers.py`)
+   - Validation scripts (`shell/plan-validate.py`)
+   - HTML mindmap (`工作流思维导图.html`)
+3. Verify: no residual references to the old rule remain
+
+### Known Propagation-Prone Rules
+
+These rules have historically required cross-document propagation:
+
+- **sonar-scanner conditionalization**: "必须有明确质量平台门禁；采用 Sonar 的项目写真实命令，未采用时写替代门禁和原因" — appears in 总纲, design, plan, finish-work, brainstorm, 命令映射, walkthrough, test
+- **L0/Lite dual-PRD relaxation**: "L0 不强制双 PRD" — appears in brainstorm, 命令映射, walkthrough
+- **review-gate conditional trigger**: "check 默认进 finish-work，条件触发 review-gate" — appears in check, review-gate, start phase router, 总纲, walkthrough, 通俗版
+- **record-session → archive order**: "先 record-session 再 archive" — appears in 总纲, 命令映射, walkthrough, 通俗版, learn, helper patch
+- **project-audit conditional generation**: "不是所有项目都强制" — appears in brainstorm, plan, project-audit, plan-validate.py
+
+---
+
 ## Code Examples
 
 ### Good

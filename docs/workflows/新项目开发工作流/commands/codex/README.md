@@ -197,6 +197,8 @@ Codex 官方内建 slash commands 是平台级控制能力，例如：
 
 ## 推荐部署映射
 
+> 完整的三平台资产分类矩阵见 [CLI原生适配边界矩阵.md](../../CLI原生适配边界矩阵.md)。
+
 | 工作流资产 | Codex 目标位置 | 说明 | 安装器管理 |
 |-----------|----------------|------|-----------|
 | 项目长期规则 | `AGENTS.md` | 长期稳定的项目规则和执行原则 | ❌ 手动维护 |
@@ -205,6 +207,15 @@ Codex 官方内建 slash commands 是平台级控制能力，例如：
 | workflow 技能 | `.agents/skills/*/SKILL.md` 或 `.codex/skills/*/SKILL.md` | `start`、`brainstorm`、`finish-work` 等阶段入口；若已有基线 `finish-work` skill，则由安装器追加项目化补丁 | ✅ `install-workflow.py` |
 | 子代理 | `.codex/agents/*.toml` | research / implement / check | ❌ 手动维护 |
 | 辅助脚本 | `.trellis/scripts/workflow/` | 校验、导出、静态验证脚本 | ✅ `install-workflow.py` |
+
+**安装器不负责的 Codex 原生资产**（需手动维护）：
+
+- `.codex/config.toml` — Codex 项目级配置
+- `.codex/hooks.json` + `.codex/hooks/*.py` — 会话启动 hooks
+- `.codex/agents/*.toml` — 子代理定义
+- `AGENTS.md` — 项目级长期规则
+
+这些文件缺失不表示安装失败，但会导致 Codex 无法正常运行 workflow。
 
 ## 何时仍可用脚本降级
 
@@ -248,14 +259,25 @@ Codex 有 slash commands，但当前 workflow 入口更适合建成 skills。
 
 ## `/tmp` 最小验证建议
 
-### 静态装配验证
+### 安装器产物验证
+
+以下文件由 `install-workflow.py` 负责部署，缺失表示安装未完成：
+
+```bash
+test -f .agents/skills/start/SKILL.md 2>/dev/null || test -f .codex/skills/start/SKILL.md
+test -f .agents/skills/brainstorm/SKILL.md 2>/dev/null || test -f .codex/skills/brainstorm/SKILL.md
+test -f .agents/skills/check/SKILL.md 2>/dev/null || test -f .codex/skills/check/SKILL.md
+```
+
+### 平台前置资产验证
+
+以下文件由项目开发者手动维护，缺失不表示安装失败，但会导致 Codex 无法正常运行：
 
 ```bash
 test -f AGENTS.md
 test -f .codex/config.toml
 test -f .codex/hooks.json
 test -f .codex/hooks/session-start.py
-test -f .agents/skills/start/SKILL.md
 test -f .codex/agents/implement.toml
 ```
 

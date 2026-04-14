@@ -195,6 +195,8 @@ OpenCode 不应被写成“和 Claude 完全等价”，因为它在 hook / suba
 
 ## 推荐部署映射
 
+> 完整的三平台资产分类矩阵见 [CLI原生适配边界矩阵.md](../../CLI原生适配边界矩阵.md)。
+
 | 工作流资产 | OpenCode 目标位置 | 说明 | 安装器管理 |
 |-----------|------------------|------|-----------|
 | 阶段命令 | `.opencode/commands/trellis/*.md` | 用户显式触发的 workflow 命令 | ✅ `install-workflow.py` |
@@ -203,6 +205,14 @@ OpenCode 不应被写成“和 Claude 完全等价”，因为它在 hook / suba
 | 项目长期规则 | `AGENTS.md` | 稳定执行规则、风险边界、语言策略 | ❌ 手动维护 |
 | workflow 文档注入 | `opencode.json.instructions` | 只挂主入口与必要补充，不默认全量挂载所有阶段文档 | ❌ 手动维护 |
 | 通用脚本 | `.trellis/scripts/workflow/` | 被命令或人工直接调用 | ✅ `install-workflow.py` |
+
+**安装器不负责的 OpenCode 原生资产**（需手动维护）：
+
+- `.opencode/agents/*.md` — 子代理定义
+- `opencode.json` — instructions / provider / MCP 配置
+- `AGENTS.md` — 项目级长期规则
+
+这些文件缺失不表示安装失败，但会导致 OpenCode 无法正常运行 workflow。
 
 ## 何时仍可用脚本降级
 
@@ -237,16 +247,26 @@ OpenCode 不应被写成“和 Claude 完全等价”，因为它在 hook / suba
 
 ## `/tmp` 最小验证建议
 
-### 静态装配验证
+### 安装器产物验证
 
-在纯净目录中检查以下内容是否齐全：
+以下文件由 `install-workflow.py` 负责部署，缺失表示安装未完成：
 
 ```bash
 test -f .opencode/commands/trellis/start.md
 test -f .opencode/commands/trellis/review-gate.md
-test -f .opencode/agents/implement.md
+test -f .opencode/commands/trellis/brainstorm.md
+test -f .opencode/commands/trellis/check.md
+test -f .opencode/commands/trellis/delivery.md
+```
+
+### 平台前置资产验证
+
+以下文件由项目开发者手动维护，缺失不表示安装失败，但会导致 OpenCode 无法正常运行：
+
+```bash
 test -f AGENTS.md
 test -f opencode.json
+test -f .opencode/agents/implement.md  # 如使用子代理
 ```
 
 ### CLI 基础可执行验证

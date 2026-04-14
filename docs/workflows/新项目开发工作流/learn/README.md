@@ -79,7 +79,7 @@ YYYY-MM-DD-主题短名.md
 
 比起"流程优化建议如下"，更有用的写法通常是：
 
-- "我以为 `record-session` 到这一步就能直接跑，结果 `.trellis/tasks` 还没 clean，来回查了两次才发现得先 archive。"
+- "我以为 `record-session` 到这一步就能直接跑，结果 `.trellis/tasks` 还没 clean，来回查了两次才发现得先走 `record-session-helper.py` 闭环，再 archive。"
 - "`delivery` 里虽然提了复盘，但没有明确让我把流程层问题单独记到 `learn/`，所以第一次做的时候我只写进了 `retrospective.md`。"
 
 ---

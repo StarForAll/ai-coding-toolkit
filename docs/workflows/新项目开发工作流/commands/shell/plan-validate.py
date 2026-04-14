@@ -269,10 +269,13 @@ def main() -> int:
     )
 
     checks += 1
+    has_project_audit = project_audit_count == 1
+    no_project_audit = project_audit_count == 0
+    project_audit_ok = has_project_audit or no_project_audit
     passed += print_result(
-        project_audit_count == 1,
-        "存在且仅存在一个 project-audit 项目级审查任务",
-        "任务执行矩阵必须包含且只包含一个 `任务域=项目级审查` 的 PROJECT-AUDIT 任务",
+        project_audit_ok,
+        "project-audit 项目级审查任务数量合法（0 或 1）",
+        "任务执行矩阵中 `任务域=项目级审查` 的 PROJECT-AUDIT 任务最多一个；L0 单任务闭环可不生成，多任务/跨模块/高 blast radius 条件触发时应生成",
     )
 
     checks += 1

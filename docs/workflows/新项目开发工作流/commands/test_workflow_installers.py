@@ -280,8 +280,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         finish_work_text = finish_work.read_text(encoding="utf-8")
         self.assertIn(FINISH_WORK_MARKER, finish_work_text)
         self.assertNotIn("pnpm lint", finish_work_text)
-        self.assertIn("sonar-scanner", finish_work_text)
-        self.assertIn("https://sonarqube.xzc.com:13785", finish_work_text)
+        # 补丁已条件化：验证质量平台门禁口径，不再硬断言特定 sonar 内容
+        self.assertIn("质量平台门禁", finish_work_text)
         record_session = fixture / ".claude" / "commands" / "trellis" / "record-session.md"
         rs_text = record_session.read_text(encoding="utf-8")
         self.assertIn(RECORD_SESSION_MARKER, rs_text)
@@ -331,10 +331,9 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(FINISH_WORK_MARKER, codex_text)
         self.assertNotIn("pnpm test", opencode_text)
         self.assertNotIn("pnpm test", codex_text)
-        self.assertIn("sonar-scanner", opencode_text)
-        self.assertIn("sonar-scanner", codex_text)
-        self.assertIn("https://sonarqube.xzc.com:13785", opencode_text)
-        self.assertIn("https://sonarqube.xzc.com:13785", codex_text)
+        # 补丁已条件化：验证质量平台门禁口径，不再硬断言特定 sonar 内容
+        self.assertIn("质量平台门禁", opencode_text)
+        self.assertIn("质量平台门禁", codex_text)
         self.assertIn(PARALLEL_DISABLED_MARKER, opencode_parallel.read_text(encoding="utf-8"))
         self.assertIn(PARALLEL_DISABLED_MARKER, codex_parallel.read_text(encoding="utf-8"))
 
