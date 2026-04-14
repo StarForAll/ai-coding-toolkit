@@ -51,12 +51,13 @@ PLAN_WITH_DELIVERY = """\
 ### 交付触发条件
 - 尾款到账后触发控制权移交（handover_trigger: final_payment_received）
 
-## 任务执行矩阵
+## Trellis Task 清单
 
-| 任务ID | 前置任务 | 当前状态 |
-|-------|---------|---------|
-| 部署 | 无 | 可开始 |
-| 移交 | 部署 | 等待中 |
+| 任务路径 | 类型 | 项目域 | 说明 |
+|---------|------|--------|------|
+| .trellis/tasks/04-14-hosted-deploy | implementation | delivery | 托管部署任务 |
+| .trellis/tasks/04-14-source-handover | delivery | delivery | 源码移交任务 |
+| .trellis/tasks/04-14-control-handover | delivery | delivery | 控制权移交任务 |
 """
 
 DELIVERY_DIR_CONTENT = {
@@ -133,6 +134,10 @@ class DeliveryControlValidateTests(unittest.TestCase):
     def test_plan_passes_with_delivery_tasks(self) -> None:
         d = self._make_task_dir()
         (d / "assessment.md").write_text(COMPLETE_HOSTED_ASSESSMENT, encoding="utf-8")
+        task_root = d / ".trellis" / "tasks"
+        task_root.mkdir(parents=True)
+        for name in ("04-14-hosted-deploy", "04-14-source-handover", "04-14-control-handover"):
+            (task_root / name).mkdir(parents=True)
         (d / "task_plan.md").write_text(PLAN_WITH_DELIVERY, encoding="utf-8")
         result = self.run_script("--phase", "plan", "--task-dir", str(d))
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
@@ -160,6 +165,10 @@ class DeliveryControlValidateTests(unittest.TestCase):
     def test_all_phases_reports_total(self) -> None:
         d = self._make_task_dir()
         (d / "assessment.md").write_text(COMPLETE_HOSTED_ASSESSMENT, encoding="utf-8")
+        task_root = d / ".trellis" / "tasks"
+        task_root.mkdir(parents=True)
+        for name in ("04-14-hosted-deploy", "04-14-source-handover", "04-14-control-handover"):
+            (task_root / name).mkdir(parents=True)
         (d / "task_plan.md").write_text(PLAN_WITH_DELIVERY, encoding="utf-8")
         delivery = d / "delivery"
         delivery.mkdir()

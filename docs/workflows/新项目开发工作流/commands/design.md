@@ -155,10 +155,11 @@ $TASK_DIR/design/
 
    - 未采用 Sonar 的项目，必须显式写出替代质量门禁（如 ESLint strict / CodeQL / 其他 SAST 工具）及其未采用 Sonar 的原因
 
-4. **在技术架构确认后，由用户明确 `test-first` 阶段的项目化输入**
-   - 这里要单独确认的是 `test-first` 阶段真正要执行的具体测试/验证命令
-   - 同时确认测试文件目录、命名约定，以及是否需要评估集 / fixture / contract test 一类额外产物
-   - 这一步不从自动化检查矩阵自动推导，也不允许把这些内容留到 `/trellis:test-first` 阶段再猜默认值
+4. **在技术架构确认后，明确项目级全局测试基线**
+   - 这里只确认“所有 task 都统一强制适用”的全局测试/验证要求
+   - 例如：统一的测试框架、测试目录约定、必须执行的全局 test / lint / typecheck / build / quality gate
+   - 不在当前阶段替每个具体 task 预造测试门禁
+   - 每个 task 的具体测试门禁，必须在进入该 task 实现前，由 `/trellis:start` 自动执行 `before-dev` 后补到 `$TASK_DIR/before-dev.md`
 
 5. **同步适配当前项目的 `/trellis:finish-work`**
    - 这是 `finish-work` 的主适配阶段
@@ -190,7 +191,7 @@ $TASK_DIR/design/
 阶段结论：
 
 - `/trellis:finish-work` 的项目化适配主阶段是当前 `design -> spec 对齐` 阶段
-- `/trellis:test-first` 所需的具体测试/验证命令，也在当前阶段于技术架构确认后由用户先行确定
+- 当前阶段只定义项目级全局测试基线；task 级具体测试门禁延后到实施前补充
 - `/trellis:record-session` 的基线适配也在当前阶段完成，`§4 plan` 后仅允许做一次轻量校正
 - 进入 `/trellis:plan` 前，至少要完成上述 1-6；第 7 项只负责标记是否需要在 `plan` 后补一次轻量修正，不阻止进入 `plan`
 
@@ -199,8 +200,9 @@ $TASK_DIR/design/
 | 你的意图 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
 | 拆解任务 | `/trellis:plan` | 进入任务拆解，或显式触发 `plan` skill | **默认推荐**。前提是已完成项目 `.trellis/spec/` 对齐门禁，再将设计转化为可执行任务 |
-| 项目简单，不需要拆任务 | `/trellis:test-first` | 直接进入测试驱动，或显式触发 `test-first` skill | 直接进入测试驱动 |
-| 更简单，直接写代码 | `/trellis:start` | 直接进入实施，或显式触发 `start` skill | 跳过 plan + test-first |
+| 项目简单，不需要拆任务 | `/trellis:start` | 直接进入实施，或显式触发 `start` skill | 直接进入实施；start 会自动执行 before-dev 并补 task 门禁 |
+| 需要显式先测某个 task | `/trellis:test-first` | 进入手动测试驱动，或显式触发 `test-first` skill | 非默认主链；仅在明确要先测/补测试证据时进入 |
+| 更简单，直接写代码 | `/trellis:start` | 直接进入实施，或显式触发 `start` skill | 跳过显式 test-first；但不跳过 before-dev 自动前置 |
 | 设计不完善，回退修改 | `/trellis:design` | 继续补设计，或显式触发 `design` skill | 重新执行某一步骤 |
 | 冻结后出现新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 不直接吸收，获批后再回到受影响的最早阶段 |
 | 冻结后仅需纯澄清 | 留在当前阶段 | 留在当前阶段 | 仅限不改变范围、接口契约、验收标准、成本、工期 |

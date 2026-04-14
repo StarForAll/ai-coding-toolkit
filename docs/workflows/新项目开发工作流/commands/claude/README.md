@@ -99,6 +99,12 @@ Claude Code 的用户入口仍是项目命令：
 - `finish-work.md`：保留基线命令，再由 workflow 注入项目化补丁
 - `record-session.md`：保留基线命令，再由 workflow 注入元数据闭环补丁
 
+其中 `start.md` 的增强还包括：
+
+- 自动选择当前要执行的具体 task
+- 自动执行 before-dev 步骤
+- 自动生成或刷新当前 task 的 `before-dev.md`
+
 因此，不要把“当前 workflow 命令树只列到 `delivery`”理解成“目标项目没有 `finish-work` / `record-session`”。
 
 这层负责：

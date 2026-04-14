@@ -320,7 +320,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 目标
 
-把冻结后的需求与设计拆成可闭环、可验证、可收尾的任务执行矩阵。
+把冻结后的需求与设计拆成真实 Trellis task，并生成只保留摘要的 `task_plan.md`。
 
 ### CLI 入口差异
 
@@ -352,23 +352,24 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 退出门禁
 
-- `task_plan.md` 或等价执行矩阵已形成
-- 每个任务都有验收与回归边界
-- 已决定进入 `test-first + start`
+- `task_plan.md` 摘要已形成
+- 真实 Trellis task / child task 已拆出
+- 每个 task 的全局门禁来源已明确
+- 已决定进入 `start` 主链（需要显式先测时才额外进入 `test-first`）
 
 ---
 
-## 阶段 5：Test-First + Start
+## 阶段 5：Start 主链（可选手动 Test-First）
 
 ### 目标
 
-先把验收标准转成测试或最小验证门禁，再进入实现闭环。
+先选定当前 task，再由 `start` 自动执行 `before-dev`、补当前 task 的门禁，之后进入实现闭环。
 
 ### CLI 入口差异
 
-- Claude Code：`/trellis:test-first` → `/trellis:start`
-- OpenCode：TUI 用 `/trellis:test-first`、`/trellis:start`；CLI 用 `trellis/test-first`、`trellis/start`
-- Codex：自然语言描述或显式触发 `test-first`、`start` skill
+- Claude Code：默认 `/trellis:start`；只有显式先测时才 `/trellis:test-first`
+- OpenCode：默认 TUI 用 `/trellis:start`、CLI 用 `trellis/start`；只有显式先测时才进入 `test-first`
+- Codex：默认描述当前实现意图或显式触发 `start` skill；只有显式先测时才进入 `test-first`
 
 ### 推荐 MCP / Skills
 
@@ -381,7 +382,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 典型降级方式
 
-- 无法先写自动化测试时，至少先写手工验证步骤与证据口径
+- 无法先写自动化测试时，至少在 `before-dev.md` 中写清手工验证步骤与证据口径
 - 无 `Context7` 时，只引用项目内既有模式或已确认官方文档
 - 若不确定当前该进哪个阶段，用 `start` 作为 Phase Router 兜底
 

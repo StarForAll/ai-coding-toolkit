@@ -176,20 +176,18 @@ def validate_task_plan(plan_file: Path, is_trial: bool) -> tuple[int, int]:
         else:
             checks -= 1  # 非必须任务，不计入检查
     
-    # 3. 检查任务执行矩阵中是否有交付控制任务
+    # 3. 检查 task 图摘要 / task 清单中是否有交付控制任务
     checks += 1
-    matrix_section = re.search(r'## 任务执行矩阵.*?(?=## |\Z)', content, re.DOTALL)
-    if matrix_section:
-        matrix_content = matrix_section.group(0)
-        # 检查是否有交付控制相关任务ID
+    has_task_summary = "## Trellis Task 清单" in content or "## 任务图摘要" in content
+    if has_task_summary:
         delivery_tasks = ["交付", "移交", "授权", "部署"]
-        has_delivery_task = any(task in matrix_content for task in delivery_tasks)
+        has_delivery_task = any(task in content for task in delivery_tasks)
         if has_delivery_task:
-            passed += print_result(True, "任务执行矩阵包含交付控制任务", "")
+            passed += print_result(True, "task 图摘要包含交付控制任务", "")
         else:
-            passed += print_result(False, "", "任务执行矩阵缺少交付控制相关任务")
+            passed += print_result(False, "", "task 图摘要缺少交付控制相关任务")
     else:
-        passed += print_result(False, "", "未找到 `任务执行矩阵` 章节")
+        passed += print_result(False, "", "未找到 `Trellis Task 清单` 或 `任务图摘要` 章节")
     
     # 4. 检查是否有明确的触发条件依赖
     checks += 1

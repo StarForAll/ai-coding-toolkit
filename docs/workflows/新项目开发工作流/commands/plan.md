@@ -1,11 +1,11 @@
 ---
 name: plan
-description: 设计好了？拆任务 — AI 驱动任务拆解、排期、DoR/DoD。触发词：拆任务、做计划、工作分解、排期、任务分解、里程碑、工作计划
+description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做任务图规划，`task_plan.md` 只保留摘要。触发词：拆任务、做计划、工作分解、排期、任务分解、里程碑、工作计划
 ---
 
-# /trellis:plan — AI 驱动任务拆解
+# /trellis:plan — 基于 Trellis task 的任务拆解
 
-> **Workflow Position**: §4 → 前: `/trellis:design` → 后: `/trellis:test-first` 或 `/trellis:start`
+> **Workflow Position**: §4 → 前: `/trellis:design` → 后: `/trellis:start`
 > **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:plan`） · ✅ OpenCode（TUI: `/trellis:plan`；CLI: `trellis/plan`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:plan` 命令；见 `codex/README.md`）
 
 ---
@@ -18,11 +18,9 @@ description: 设计好了？拆任务 — AI 驱动任务拆解、排期、DoR/D
 - "怎么排期"
 - "需要制定实现步骤"
 
-> 简单任务（1-2 文件）？跳过，直接 `/trellis:start`。
+> 简单任务（`L0`、单上下文可闭环）？跳过，直接 `/trellis:start`。
 
-> 若 `PRD` 已冻结后命中需求讨论，按 [需求变更管理执行卡](../需求变更管理执行卡.md) 分流：纯澄清留在当前阶段；新增 / 修改 / 删除进入变更管理，不直接写入当前 `task_plan.md`。
-
-> 进入 `/trellis:plan` 前，建议先完成 `/trellis:brainstorm` 的前置判定：需求描述已准确，且复杂度判定为 `L1` 或 `L2`。`L0` 单任务闭环通常不需要进入本命令。
+> 若 `PRD` 已冻结后命中需求讨论，按 [需求变更管理执行卡](../需求变更管理执行卡.md) 分流：纯澄清留在当前阶段；新增 / 修改 / 删除进入变更管理，不直接顺手改当前 `task_plan.md` 或 task 图。
 
 ## 前置条件
 
@@ -34,19 +32,17 @@ description: 设计好了？拆任务 — AI 驱动任务拆解、排期、DoR/D
 - 已基于当前项目实际技术栈，明确自动化检查矩阵（任务 3，仅在任务 1、任务 2 完成后执行；不得只写默认 `Lint`，必须有明确质量平台门禁；采用 Sonar 的项目必须写真实命令，未采用时必须写替代门禁和原因）
 - 已基于任务 3 中写清的自动化检查矩阵，完成当前项目 `/trellis:finish-work` 的首次项目化适配（任务 4）
 - 已完成当前项目 `/trellis:record-session` 的基线适配，至少明确记录入口、archive 前置条件、元数据边界与阻断条件（任务 5）
-- 若属于外包、定制开发或新客户项目（外部项目），已在 `assessment.md` 中明确 `delivery_control_track`（默认 `hosted_deployment`，必要时使用 `trial_authorization`），**并且已按轨道导入交付控制相关 spec**：
-  - 外部项目基础必选：
-    - `spec.universal-domains.project-governance.delivery-control`
-    - `checklist.universal-domains.project-governance.transfer-checklist`
-  - 若 `delivery_control_track = trial_authorization`：
-    - `spec.universal-domains.project-governance.authorization-management`
-  - 若正式移交包含密钥、环境变量、第三方平台配置：
-    - `spec.universal-domains.security.secrets-and-config`
-- 内部项目（非外部交付）则不需要导入上述交付控制相关 spec
+- 若属于外包、定制开发或新客户项目（外部项目），已在 `assessment.md` 中明确 `delivery_control_track`（默认 `hosted_deployment`，必要时使用 `trial_authorization`），**并且已按轨道导入交付控制相关 spec**
 
-`/trellis:plan` 的职责是任务拆解与生成 `task_plan.md`，不负责替代上述 spec 导入、spec 修订、自动化检查矩阵定义，以及 `finish-work` / `record-session` 的首次项目化适配动作。若任务粒度在 `plan` 阶段变得更明确，只允许对 `record-session` 再做一次轻量校正。
+`/trellis:plan` 的职责是：
 
-历史数据防漂移要求：
+1. 把已确认需求拆成真实 Trellis task
+2. 规划依赖与任务图
+3. 产出摘要型 `task_plan.md`
+
+它**不负责**替代 spec 导入、spec 修订、自动化检查矩阵定义，以及 `finish-work` / `record-session` 的首次项目化适配动作。
+
+## 历史数据防漂移要求
 
 - 本命令默认只为本轮确认后的 `L1/L2` 任务生成或更新 `task_plan.md`
 - 不为了匹配新规则而回写旧版 `task_plan.md`、旧任务执行矩阵或历史任务状态
@@ -54,221 +50,189 @@ description: 设计好了？拆任务 — AI 驱动任务拆解、排期、DoR/D
 
 ---
 
+## 核心原则
+
+1. **Trellis task 才是主执行单元**
+   `task_plan.md` 只保留摘要；真实执行状态依赖 `.trellis/tasks/<task>/task.json`、`.current-task`、`before-dev.md`、`check.md` 等任务产物。
+
+2. **复杂任务继续拆**
+   若某个 task 过大、跨越太多上下文、无法单上下文闭环，就必须继续拆成多个串行 task，不允许长期把复杂子阶段堆在单个 `task_plan.md` 里。
+
+3. **同项目域内默认串行**
+   单个项目域内，task 默认串行执行。
+   若目标项目包含多个相对独立的项目域 / 端（如前台、后台、管理端），允许按项目域分 lane；但每个 lane 内仍默认串行。
+
+4. **串行不等于自动续跑**
+   即使前一个 task 已收口，也不会被解释成“默认自动开始下一个”。下一 task 仍需显式进入 `/trellis:start` 并重新选定实施对象。
+
+5. **task 级门禁不在 plan 阶段虚构**
+   `plan` 只记录全局门禁摘要。每个 task 的具体测试门禁，在进入该 task 实现前由 `/trellis:start` 自动触发 `before-dev` 后补到 `$TASK_DIR/before-dev.md`。
+
+---
+
 ## 流程
 
-### Step 1: 生成 Plan.md
+### Step 1: 读取输入并识别执行域
 
-**调用 Skill**：`project-planner` + `writing-plans` — 生成结构化任务拆解。降级：手动按范围/风险/验收/依赖/回归五列拆任务，对不确定项单独列为待补信息。
-
-**MCP 能力路由**
-
-| 场景 | 调用能力 | 触发条件 | 说明 |
-|------|---------|---------|------|
-| 复杂依赖推理 | `sequential-thinking` | 当任务依赖链 ≥3 层或并行冲突判定涉及 ≥3 个条件时 | 复杂依赖场景 |
-| 任务依赖可视化 | `markmap` | 当需要生成任务依赖图时 | 生成任务依赖图 |
-| 参考 GitHub 项目结构 | `deepwiki` | 当需要参考外部开源项目时 | 回退：`exa_search` |
-| 技术方案深度研究 | `exa_create_research` | 当需要进行技术方案深度调研时 | 回退：`grok-search` |
-| 框架 / SDK API 文档 | `Context7` | 当需要查询第三方库或框架官方文档时 | 技术选型必查 |
+**调用 Skill**：`project-planner` + `writing-plans`
 
 ```bash
-# 读取输入
 cat "$TASK_DIR/prd.md"
 cat "$TASK_DIR/design/index.md" 2>/dev/null
-# 当前项目 `.trellis/spec/` 应已完成对齐，作为任务拆解约束输入
 ```
-
-AI 自动生成 `task_plan.md`：任务拆解 + 依赖分析 + 执行安排 + 文件清单 + 验收标准。
 
 输入侧重点：
 
 - 已确认的需求与设计文档
 - 当前项目 `.trellis/spec/` 中已经落地的项目约束
-- 基于项目 spec 提炼出的实现边界、验证要求和依赖关系
-- 若为外部项目，必须把 `assessment.md` 中约定的交付控制轨道、源码移交时点、权限移交时点作为计划输入，而不是在交付阶段临时决定
+- 当前项目的自动化检查矩阵
+- 若为外部项目，`assessment.md` 中约定的交付控制轨道、源码移交时点、权限移交时点
 
-生成 `task_plan.md` 时，除了“前置任务 / 阻塞任务 / 并行任务”字段，还必须补齐以下执行信息：
+先判断任务是否属于：
 
-- 每个任务的开始条件：什么时候允许启动
-- 每个任务的等待条件：当前为什么不能开始
-- 每个任务的并行属性：是否属于可并行候选集，以及冲突点是什么
-- 计划级执行安排：当前可开始任务、等待中任务、推荐并行组、串行主链
-- 任务执行矩阵：逐任务列出任务域、前置任务、当前状态、开始条件、等待原因、并行属性、冲突说明
-- 至少一个真实示例，说明依赖链任务必须等待、独立任务可以并行
-- 条件生成项目级终局任务 `project-audit`（不是所有项目都强制）：
-  - 满足以下任一条件时生成：多任务/跨模块/发版前/高blast radius/外包交付前
-  - L0 单任务闭环且无跨模块影响时可不生成
-  - 生成时：任务域固定为 `项目级审查`，前置条件为”全部 `代码相关` 任务完成”，默认初始状态 `等待中`
+- 单项目域单链路
+- 多项目域 / 多端并行 lane
 
-`任务执行矩阵` 中“当前状态”默认只使用以下四个固定值：
+若属于后者，先划清项目域边界，再在每个项目域内部做串行 task 链。
 
-- `可开始`
-- `等待中`
-- `进行中`
-- `已完成`
+### Step 2: 创建或补齐真实 Trellis task
 
-`并行属性` 字段默认使用以下两类值：
+真实执行单元必须优先落成 Trellis task，而不是只写在 `task_plan.md` 里。
 
-- `候选可并行`：表示该任务当前可以进入可并行候选集，但不代表可与所有任务并行
-- `依赖不可并行`：表示该任务当前仍受前置依赖限制，不能作为可并行候选任务启动
+最少动作：
 
-`任务域` 字段默认只使用以下三类值：
+```bash
+python3 ./.trellis/scripts/task.py create "<title>" --slug <name>
+python3 ./.trellis/scripts/task.py create "<child-title>" --slug <child-name> --parent "$TASK_DIR"
+python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
+```
 
-- `代码相关`
-- `非代码相关`
-- `项目级审查`
+拆分规则：
 
-其中：
+- 一个 task 只承载一个可闭环实现目标
+- 若 task 超出单上下文预算，继续拆子 task
+- 若 task 的输出会改变下一个 task 的实现前提，必须串行，不要伪装并行
+- 若多个项目域彼此独立，可分别建立 lane，但 lane 内不自动续跑
 
-- 会修改代码、测试、配置、schema、脚本、接口实现的任务，默认归入 `代码相关`
-- 纯文档、纯整理、纯交付、纯行政类任务，默认归入 `非代码相关`
-- `project-audit` 固定归入 `项目级审查`
+### Step 3: 生成摘要型 `task_plan.md`
 
-推荐示例：
+`task_plan.md` 只保留摘要，不再承载实时执行矩阵。
 
-- `A → B → C` 为串行主链
-- `A2` 与上述主链无依赖、无冲突
-- 执行 `A` 时，只能并行执行 `A2`，不能提前开始 `B` 或 `C`
-
-### Step 2: 排期
-
-识别可并行任务，制定里程碑。
-
-排期时至少完成以下判断：
-
-- 先识别关键前置任务，优先安排主链路
-- 再识别无依赖且无冲突的独立任务，组成可并行组
-- 若两个任务共享同一模块、核心文件、环境资源或人工确认点，则不应直接判定为可并行
-- 若冲突边界无法快速确认，默认改为串行安排
-
-### Step 3: DoR/DoD
-
-每个任务定义 Ready 和 Done 标准
-
-> **📋 承接 `/trellis:feasibility` 确定的交付控制基线**
->
-> 基于 `assessment.md` 中已确定的字段进行任务拆解：
-> - `delivery_control_track` 决定是否需要拆分试运行授权相关任务
-> - `delivery_control_handover_trigger` 决定移交类任务的前置依赖
-> - `delivery_control_retained_scope` 明确尾款前保留控制范围
-> - `trial_authorization_terms.*` 冻结试运行授权条款（若适用）
->
-> 若上述字段未在 `assessment.md` 中明确，应先回到 `/trellis:feasibility` 补齐，而非在计划阶段临时决定。
-
-若项目采用“托管部署 / 试运行授权”的双轨交付控制，`task_plan.md` 中还应显式拆出以下任务，不要与普通功能开发混写：
-
-- `试运行版交付任务`：仅在选择试运行授权轨时存在，负责限制说明、授权文件、演示/只读行为验证
-- `托管部署任务`：默认存在，负责试运行环境、访问方式、运维边界与演示数据准备
-- `永久授权切换任务`：尾款到账后执行，交付永久授权或移除试运行限制
-- `源码移交任务`：尾款到账后移交源码仓库、源码包、构建材料
-- `控制权移交任务`：尾款到账后移交管理员账号、密钥、部署权限、回滚资料
-
-推荐规则：
-
-- 功能开发任务可以在尾款前完成并验收
-- `源码移交任务` 与 `控制权移交任务` 默认不得标记为 `可开始`，直到尾款到账
-- 若采用试运行授权，必须为“到期行为不破坏数据”单独增加验证项
-
-### 双轨任务门禁速查表
-
-| 任务类型 | 允许进入 `可开始` 的前置条件 | 默认不得提前完成的项 | 计划中至少要写清 |
-|---|---|---|---|
-| 功能开发任务 | 需求、设计、测试边界已冻结 | 不得顺带标记源码/控制权已移交 | 影响范围、验收标准、回归范围 |
-| 托管部署任务 | 演示/试运行环境已明确，访问边界已确认 | 不得把生产密钥、管理员账号、最终部署权限算作已交付 | 环境地址、SLO、数据责任边界、保留控制范围 |
-| 试运行版交付任务 | `delivery_control_track = trial_authorization`，授权条款已冻结 | 不得把永久授权、完整源码、最终控制权算作已完成 | 有效期、到期行为、续期方式、验证方式 |
-| 永久授权切换任务 | `delivery_control_handover_trigger` 已满足 | 不得在尾款到账前完成 | 触发证据、切换步骤、回退方案 |
-| 源码移交任务 | 尾款到账，且交付范围已确认 | 不得提前标记源码仓库/源码包已移交 | 仓库权限、源码包、构建材料、交接记录 |
-| 控制权移交任务 | 尾款到账，且管理员账号/密钥/部署权限范围已确认 | 不得提前标记生产控制权已移交 | 账号、密钥、平台权限、回滚资料、责任边界 |
-
-建议 `task_plan.md` 至少包含以下完整结构：
+建议结构：
 
 ```markdown
 ## 概述
-## 任务拆解 Checklist
-## 文件修改清单
-## 验收标准
-## 外部项目交付控制（如适用）
+## 项目域执行策略
+## Trellis Task 清单
 ## 依赖关系
-## 执行安排
-## 任务执行矩阵
-```
-
-建议直接按下面的最小片段生成，再根据具体任务替换内容：
-
-```markdown
-## 执行安排
-
-- 当前可开始任务：TASK-A, TASK-A2
-- 等待中任务：
-  - TASK-B（等待 TASK-A 完成）
-  - TASK-C（等待 TASK-B 完成）
-- 推荐并行组：TASK-A + TASK-A2
-- 串行主链：TASK-A → TASK-B → TASK-C
-
-## 任务执行矩阵
-
-| 任务ID | 任务域 | 前置任务 | 当前状态 | 开始条件 | 等待原因 | 并行属性 | 冲突说明 |
-|-------|-------|---------|---------|---------|---------|---------|---------|
-| TASK-A | 代码相关 | 无 | 可开始 | 需求、接口、环境、资源已就绪 | 无 | 候选可并行 | 当前可与 TASK-A2 并行，不可与其后续依赖任务并行 |
-| TASK-B | 代码相关 | TASK-A | 等待中 | TASK-A 完成后可开始 | 等待 TASK-A 完成 | 依赖不可并行 | 依赖 TASK-A 输出 |
-| TASK-C | 代码相关 | TASK-B | 等待中 | TASK-B 完成后可开始 | 等待 TASK-B 完成 | 依赖不可并行 | 依赖 TASK-B 输出 |
-| TASK-A2 | 代码相关 | 无 | 可开始 | 需求、接口、环境、资源已就绪 | 无 | 候选可并行 | 不修改主链核心模块 |
-| PROJECT-AUDIT | 项目级审查 | TASK-A,TASK-B,TASK-C,TASK-A2 | 等待中 | 全部代码相关任务完成后可开始 | 等待全部代码相关任务完成 | 依赖不可并行 | 项目级终局审查任务，不与代码任务并行 |
-```
-
-状态切换时遵循最小规则：
-
-- `可开始 → 进行中`：任务正式启动
-- `进行中 → 已完成`：任务满足当前阶段完成条件
-- `等待中 → 可开始`：等待原因消除
-- `进行中 → 等待中`：执行中遇到新的外部阻塞，必须补写等待原因
-
-下游实施阶段必须持续使用这两个结构：
-
-- 单线程实施模式下，开始实现前先读取“任务执行矩阵”，选定一个 `可开始` 任务并标记为 `进行中`
-- 当前 workflow 不再提供 `/trellis:parallel` 或后台 worktree + PR 流水线；若团队要人工并行安排，必须自行管理冲突边界，且不属于本 workflow 默认链路
-- 每次任务状态变更后，同步更新“执行安排”，确保计划级视图不落后于矩阵
-- 级联解锁只基于 `前置任务` 列判断；“开始条件”中的接口、环境、资源等附加约束，在进入下一轮 DoR 时再验证
-- `project-audit` 只有在全部 `代码相关` 任务为 `已完成` 时，才允许从 `等待中` 解锁为 `可开始`
-
-历史数据边界：
-
-- 以上状态切换与同步更新只针对**当前活动 `task_plan.md`**；不为了对齐新规则而回填旧版计划、历史执行矩阵或已归档任务状态
-- 若发现历史计划与现规则不一致，应记录差异并按 [需求变更管理执行卡](../需求变更管理执行卡.md) 或人工决策处理，而不是静默改写历史任务数据
-
-### Step 4: 验证拆分
-
-```bash
-python3 <WORKFLOW_DIR>/commands/shell/plan-validate.py
+## 门禁摘要
+## 任务图摘要
+## 外部项目交付控制（如适用）
 ```
 
 说明：
 
-- 该脚本负责校验 `task_plan.md` 的结构完整性与关键字段一致性
-- 它会检查章节结构、执行安排、任务执行矩阵、状态枚举、任务域、并行属性、开始条件与等待原因
-- 它不负责判断依赖设计是否最优、冲突分析是否准确、或 Token 预算是否真正可行，这些仍需人工复核
+- `Trellis Task 清单`：列出现实存在的 task / child task / project-audit task
+- `依赖关系`：只描述依赖和顺序，不写实时状态
+- `门禁摘要`：只写项目级全局门禁；task 级具体门禁在执行前写入 `$TASK_DIR/before-dev.md`
+- `任务图摘要`：用于人类快速理解 lane、主链、project-audit 触发条件
 
-- [ ] 单任务独立可测试
-- [ ] 单上下文可完整实现（Token 预算内）
-- [ ] 依赖关系清晰
-- [ ] 开始条件与等待原因明确
-- [ ] 并行属性与冲突说明已明确
-- [ ] 任务执行矩阵可直接支持“现在开始做什么”的判断
-- [ ] 当前状态只使用约定枚举，未混用自定义状态
-- [ ] 若满足 project-audit 触发条件，则已存在且仅存在一个 `任务域=项目级审查` 的 `project-audit` 任务；L0 单任务闭环可不生成
+推荐最小模板：
+
+```markdown
+## 概述
+
+- 来源：<prd / design / requirements>
+- 目标：<一句话目标>
+
+## 项目域执行策略
+
+- <项目域 A>：TASK-A → TASK-B → TASK-C（域内串行，不自动续跑）
+- <项目域 B>：TASK-D → TASK-E（域内串行，不自动续跑）
+
+## Trellis Task 清单
+
+| 任务路径 | 类型 | 项目域 | 说明 |
+|---------|------|--------|------|
+| .trellis/tasks/04-14-task-a | implementation | 项目域 A | ... |
+| .trellis/tasks/04-14-task-b | implementation | 项目域 A | ... |
+| .trellis/tasks/04-14-project-audit | project-audit | 全局 | 全部代码相关 task 完成后才允许开始 |
+
+## 依赖关系
+
+- TASK-B 依赖 TASK-A
+- TASK-C 依赖 TASK-B
+- PROJECT-AUDIT 依赖全部代码相关 task 完成
+
+## 门禁摘要
+
+- 项目级全局门禁：
+  - <lint / typecheck / test / build / quality gate / delivery gate>
+- task 级门禁：
+  - 不在本阶段预造；进入某个 task 实现前，由 `/trellis:start` 自动执行 `before-dev`
+  - 自动生成 `$TASK_DIR/before-dev.md`，补该 task 的当前测试门禁与实现前约束
+
+## 任务图摘要
+
+- 主链：TASK-A → TASK-B → TASK-C
+- 全局终局任务：PROJECT-AUDIT（条件触发）
+
+## 外部项目交付控制（如适用）
+
+- <试运行版交付任务 / 托管部署任务 / 永久授权切换任务 / 源码移交任务 / 控制权移交任务>
+```
+
+### Step 4: 项目级终局任务与外部交付任务
+
+满足以下任一条件时，生成 `PROJECT-AUDIT`：
+
+- 多任务 / 跨模块项目
+- 发版前或交付前
+- 高 blast radius
+- 外包 / 新客户项目
+
+外部项目若采用“托管部署 / 试运行授权”的双轨交付控制，仍需在 `task_plan.md` 摘要中显式列出：
+
+- `试运行版交付任务`
+- `托管部署任务`
+- `永久授权切换任务`
+- `源码移交任务`
+- `控制权移交任务`
+
+但这些任务也应优先落成真实 Trellis task，而不是只留在摘要里。
+
+### Step 5: 验证拆分结果
+
+```bash
+python3 <WORKFLOW_DIR>/commands/shell/plan-validate.py <task-dir>
+```
+
+校验重点：
+
+- `task_plan.md` 结构是否完整
+- `task_plan.md` 中列出的关键 task 是否已真实存在
+- 是否写清项目域执行策略、依赖关系、门禁摘要、任务图摘要
+- 是否仍残留旧版执行矩阵字段
+
+不负责判断：
+
+- 依赖设计是否最优
+- 任务图是否绝对最省工时
+- lane 划分是否唯一正确
 
 ---
 
 ## 输出
 
-```
+```text
 $TASK_DIR/
-├── task_plan.md   ← 任务拆解计划
-└── ...
+├── task_plan.md     ← 摘要型计划，不是执行真源
+└── ...              ← 对应的真实 Trellis tasks / child tasks / project-audit task
 ```
 
 ## 下一步推荐
 
-**当前状态**: `task_plan.md` 已生成，任务拆解、依赖关系与执行安排已明确。
+**当前状态**: 真实 Trellis task 已拆出，`task_plan.md` 仅保留任务图与门禁摘要。
 
 > 本节定义的是阶段完成后的推荐输出口径，用于帮助当前 CLI 或协作者说明下一步；它不是框架层自动跳转保证。
 
@@ -276,10 +240,10 @@ $TASK_DIR/
 
 | 你的意图 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
-| 测试先行 | `/trellis:test-first` | 进入测试驱动，或显式触发 `test-first` skill | **默认推荐（复杂项目）**。先写测试再实现 |
-| 直接写代码 | `/trellis:start` | 直接进入实施，或显式触发 `start` skill | 简单任务可跳过测试先行 |
+| 开始做某个具体 task | `/trellis:start` | 直接进入实施，或显式触发 `start` skill | **默认推荐**。先选定 task，再由 start 自动执行 before-dev 并补 task 门禁 |
+| 显式先测某个 task | `/trellis:test-first` | 进入测试驱动，或显式触发 `test-first` skill | 非默认主链；仅在明确要 TDD / 补验证证据时使用 |
 | 拆解不合理，重新拆 | `/trellis:plan` | 继续任务拆解，或显式触发 `plan` skill | 重新执行拆解流程 |
 | 设计有问题 | `/trellis:design` | 回退设计阶段，或显式触发 `design` skill | 回退到设计阶段 |
 | 冻结后出现新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先冻结当前计划；获批后再回到受影响的最早阶段更新计划 |
-| 需要项目级全局代码审查 | `/trellis:project-audit` | 进入项目级审查，或显式触发 `project-audit` skill | 仅在全部代码相关任务完成后自动进入；中途也可手动预审 |
+| 需要项目级全局代码审查 | `/trellis:project-audit` | 进入项目级审查，或显式触发 `project-audit` skill | 仅在全部代码相关 task 完成后自动进入；中途也可手动预审 |
 | 不确定下一步 | `/trellis:start` | 描述当前意图，或显式触发 `start` skill | 用 Phase Router / skill 路由做阶段检测 |

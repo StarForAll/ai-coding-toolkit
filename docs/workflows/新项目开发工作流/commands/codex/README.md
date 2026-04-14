@@ -67,6 +67,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 - `feasibility`、`brainstorm`、`design`、`plan`、`test-first`、`check`、`review-gate`、`delivery` 这类阶段技能，通常来自当前 workflow 的嵌入资产
 - `start`、`finish-work`、`record-session` 这类技能/入口，默认应先理解为 **Trellis 基线能力**；其中当前 workflow 会在目标项目已有 `finish-work` skill 时注入项目化补丁，其余入口继续按基线能力与 workflow 文档约束承载
+- `start` 在当前 workflow 里的增强包括：自动选择具体 task、自动执行 before-dev 步骤、自动生成或刷新当前 task 的 `before-dev.md`
 
 如果忽略“先有 Trellis，再嵌入 workflow”这层关系，就会误把继承资产看成 workflow 漏装或少定义。
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI 辅助开发实战工作流 V1.1.19 - 思维导图</title>
+<title>AI 辅助开发实战工作流 V1.1.20 - 思维导图</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#0d1117;color:#c9d1d9;overflow:auto}
@@ -43,7 +43,7 @@ const svgNS = 'http://www.w3.org/2000/svg';
 
 const tree = [
   {
-    html: 'AI 辅助开发实战工作流<br>V1.1.19',
+    html: 'AI 辅助开发实战工作流<br>V1.1.20',
     level: 0, id: 'root',
     children: [
       { html:'§1 可行性评估', cls:'L1 c1', id:'p1', sub:'<span class="cmd">/trellis:feasibility</span>', children:[
@@ -78,15 +78,15 @@ const tree = [
         { html:'ui-ux-pro-max / architecture-patterns', cls:'SK', id:'p3_s', su:'§3 设计辅助 skills' },
       ]},
       { html:'§4 任务分解与准备', cls:'L1 c4', id:'p4', sub:'<span class="cmd">/trellis:plan</span>', children:[
-        { html:'4.1 AI驱动任务拆解', cls:'L2', det:'Plan.md 生成<br>DoR/DoD 模板 · 并行规则', id:'p4_1' },
-        { html:'4.2 任务排期',       cls:'L2', det:'基于 Plan.md 排期<br>识别可并行任务', id:'p4_2' },
-        { html:'4.3 Test-First AI',  cls:'L2', det:'AI自动生成测试<br>人工审核确认<br>测试代码=验证标准', id:'p4_3' },
-        { html:'/trellis:plan',      cls:'L3', id:'p4_c1', cp:'.claude/commands/trellis/plan.md', cd:'任务拆解 · 输出 task_plan.md' },
-        { html:'/trellis:test-first',cls:'L3', id:'p4_c2', cp:'.claude/commands/trellis/test-first.md', cd:'测试驱动开发' },
+        { html:'4.1 AI驱动任务拆解', cls:'L2', det:'拆真实 Trellis task<br>task_plan.md 只保留摘要', id:'p4_1' },
+        { html:'4.2 任务排期',       cls:'L2', det:'按项目域规划串行 lane<br>不把并行当默认主链', id:'p4_2' },
+        { html:'4.3 手动 Test-First',  cls:'L2', det:'仅在显式先测/补证据时进入<br>非默认主链', id:'p4_3' },
+        { html:'/trellis:plan',      cls:'L3', id:'p4_c1', cp:'.claude/commands/trellis/plan.md', cd:'任务拆解 · 输出 task 图摘要' },
+        { html:'/trellis:test-first',cls:'L3', id:'p4_c2', cp:'.claude/commands/trellis/test-first.md', cd:'手动测试驱动入口' },
         { html:'project-planner / writing-plans', cls:'SK', id:'p4_s', su:'§4 计划 skills' },
       ]},
       { html:'§5 开发实施循环', cls:'L1 c5', id:'p5', sub:'<span class="cmd">/trellis:start</span>', children:[
-        { html:'5.1 单需求开发 9步', cls:'L2', det:'①选任务→②DoR→③先测后改<br>④AI实现→⑤本地门禁→⑥风险评审<br>⑦CI→⑧状态更新→⑨上下文检查', id:'p5_1' },
+        { html:'5.1 单需求开发主链', cls:'L2', det:'①选 task→②自动 before-dev→③生成 before-dev.md<br>④DoR→⑤AI实现→⑥本地门禁→⑦收口', id:'p5_1' },
         { html:'5.1 项目级审查',   cls:'L2', det:'全部代码任务完成后<br>project-audit 三步闭环<br>分析→方案→修改', id:'p5_2' },
         { html:'5.1.x 反思/批判',   cls:'L2', det:'实现后质量检查<br>多CLI审查门禁 review-gate<br>双模态执行 · 上下文污染检测', id:'p5_2x' },
         { html:'5.2 人工介入机制',   cls:'L2', det:'连续2轮未解决 · 超时50%<br>安全高危 · 模型不稳定', id:'p5_3' },

@@ -12,3 +12,5 @@ git remote set-url --add --push origin git@gitee.com:xxx/yyy.git
 5. 开启新的任务时需要判断对应的任务是否要求前一个任务必须完成，如果是则需要先进行校验，如果前一个任务完成了才真正开始当前任务
 
 6. 初始阶段校验当前分支是main分支且在Brainstorm阶段结束之后添加的门禁中补充使用 sonar-scanner 
+
+7. 任务信息分配给具体的任务不能挤压到 task_plan.md 文件中而是使用trellis的任务机制且每一个具体的任务需要在执行前补充其任务相关的测试门禁

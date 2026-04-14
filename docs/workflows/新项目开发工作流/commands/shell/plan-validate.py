@@ -1,43 +1,56 @@
 #!/usr/bin/env python3
-"""任务拆解结构验证。
+"""任务拆解摘要结构验证。
 
 用法: python3 plan-validate.py [task_dir]
 
-本脚本校验 `task_plan.md` 的结构完整性与关键字段一致性，不负责判断
-依赖设计是否最优、冲突分析是否正确、或 Token 预算是否真实可行。
-这些仍需人工复核。
+本脚本校验 `task_plan.md` 是否符合新的摘要型契约：
+- 真实执行单元以 Trellis task 为主
+- `task_plan.md` 只保留任务图、依赖与门禁摘要
+- 不再使用旧版执行矩阵字段
 """
 
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
 
-ALLOWED_STATUSES = {"可开始", "等待中", "进行中", "已完成"}
-ALLOWED_PARALLEL_ATTRIBUTES = {"候选可并行", "依赖不可并行"}
-ALLOWED_TASK_DOMAINS = {"代码相关", "非代码相关", "项目级审查"}
 REQUIRED_SECTIONS = [
     "概述",
-    "任务拆解 Checklist",
-    "文件修改清单",
-    "验收标准",
+    "项目域执行策略",
+    "Trellis Task 清单",
     "依赖关系",
-    "执行安排",
-    "任务执行矩阵",
+    "门禁摘要",
+    "任务图摘要",
 ]
-REQUIRED_MATRIX_COLUMNS = [
-    "任务ID",
-    "任务域",
-    "前置任务",
-    "当前状态",
-    "开始条件",
-    "等待原因",
+OPTIONAL_SECTIONS = {"外部项目交付控制（如适用）"}
+REQUIRED_TASK_COLUMNS = ["任务路径", "类型", "项目域", "说明"]
+LEGACY_MARKERS = [
+    "任务执行矩阵",
+    "当前可开始任务",
+    "等待中任务",
+    "推荐并行组",
     "并行属性",
     "冲突说明",
 ]
-PLACEHOLDER_MARKERS = ("待补充", "TBD")
+PLACEHOLDER_MARKERS = ("待补充", "TBD", "...")
+
+
+def print_result(ok: bool, success: str, failure: str) -> int:
+    if ok:
+        print(f"✅ {success}")
+        return 1
+    print(f"❌ {failure}")
+    return 0
+
+
+def find_repo_root(start: Path) -> Path:
+    current = start.resolve()
+    while current != current.parent:
+        if (current / ".trellis").is_dir():
+            return current
+        current = current.parent
+    return start.resolve()
 
 
 def find_section_lines(lines: list[str], title: str) -> list[str]:
@@ -52,243 +65,169 @@ def find_section_lines(lines: list[str], title: str) -> list[str]:
 
     end = len(lines)
     for index in range(start, len(lines)):
-        stripped = lines[index].strip()
-        if stripped.startswith("## "):
+        if lines[index].strip().startswith("## "):
             end = index
             break
     return lines[start:end]
-
-
-def has_meaningful_text(value: str) -> bool:
-    stripped = value.strip()
-    if not stripped:
-        return False
-    return not any(marker in stripped for marker in PLACEHOLDER_MARKERS)
 
 
 def parse_markdown_row(line: str) -> list[str]:
     return [cell.strip() for cell in line.strip().strip("|").split("|")]
 
 
-def extract_matrix(section_lines: list[str]) -> tuple[list[str], list[list[str]]]:
+def extract_table(section_lines: list[str]) -> tuple[list[str], list[list[str]]]:
     table_lines = [line for line in section_lines if line.strip().startswith("|")]
     if len(table_lines) < 2:
         return [], []
-
     header = parse_markdown_row(table_lines[0])
     rows = [parse_markdown_row(line) for line in table_lines[2:]]
     return header, rows
 
 
-def print_result(ok: bool, success: str, failure: str) -> int:
-    if ok:
-        print(f"✅ {success}")
-        return 1
-    print(f"❌ {failure}")
-    return 0
+def has_meaningful_text(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped:
+        return False
+    return not any(marker in stripped for marker in PLACEHOLDER_MARKERS)
+
+
+def resolve_task_path(repo_root: Path, task_path: str) -> Path:
+    normalized = task_path.strip().replace("\\", "/")
+    if normalized.startswith(".trellis/"):
+        return repo_root / normalized
+    return repo_root / normalized
 
 
 def main() -> int:
     task_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(".")
     plan_file = task_dir / "task_plan.md"
 
-    print("=== 任务拆解结构验证 ===")
+    print("=== 任务拆解摘要结构验证 ===")
 
     if not plan_file.exists():
         print("❌ task_plan.md 不存在")
         return 1
     print("✅ task_plan.md 存在")
 
+    repo_root = find_repo_root(task_dir)
     content = plan_file.read_text(encoding="utf-8")
     lines = content.splitlines()
     checks = 0
     passed = 0
 
-    checklist_items = len(re.findall(r"^-\s*\[[ x]\]", content, re.MULTILINE))
-    has_phases = bool(re.search(r"^#{1,3}\s*Phase", content, re.MULTILINE))
-    has_task_breakdown = has_phases or checklist_items > 0
-    checks += 1
-    passed += print_result(
-        has_task_breakdown,
-        "包含任务拆解",
-        "缺少任务拆解 (Phase 或 Checklist)",
-    )
-
     missing_sections = [title for title in REQUIRED_SECTIONS if not find_section_lines(lines, title)]
     checks += 1
     passed += print_result(
         not missing_sections,
-        "包含完整章节结构",
+        "包含新的摘要型章节结构",
         f"缺少章节: {', '.join(missing_sections)}",
     )
 
-    acceptance_section = find_section_lines(lines, "验收标准")
-    has_acceptance = bool(acceptance_section) and ("验收" in "\n".join(acceptance_section) or "- [ ]" in "\n".join(acceptance_section))
+    has_legacy_markers = any(marker in content for marker in LEGACY_MARKERS)
     checks += 1
     passed += print_result(
-        has_acceptance,
-        "包含验收标准",
-        "缺少验收标准",
+        not has_legacy_markers,
+        "未残留旧版执行矩阵字段",
+        "仍包含旧版执行矩阵字段（任务执行矩阵 / 当前可开始任务 / 推荐并行组 等）",
     )
 
-    dependency_section = find_section_lines(lines, "依赖关系")
-    dependency_text = "\n".join(dependency_section)
-    has_dependency_fields = all(label in dependency_text for label in ["前置任务", "阻塞任务", "并行任务"])
+    lane_section = "\n".join(find_section_lines(lines, "项目域执行策略"))
+    has_lane_rule = "串行" in lane_section and "不自动续跑" in lane_section
     checks += 1
     passed += print_result(
-        has_dependency_fields,
-        "依赖关系字段完整",
-        "依赖关系章节缺少前置任务/阻塞任务/并行任务字段",
+        has_lane_rule,
+        "项目域执行策略已写清串行与不自动续跑",
+        "项目域执行策略未写清“域内串行、不自动续跑”",
     )
 
-    execution_section = find_section_lines(lines, "执行安排")
-    execution_text = "\n".join(execution_section)
-    has_execution_fields = all(
-        label in execution_text for label in ["当前可开始任务", "等待中任务", "推荐并行组", "串行主链"]
-    )
+    gates_section = "\n".join(find_section_lines(lines, "门禁摘要"))
+    has_gate_summary = "项目级全局门禁" in gates_section and "before-dev.md" in gates_section
     checks += 1
     passed += print_result(
-        has_execution_fields,
-        "执行安排字段完整",
-        "执行安排章节缺少当前可开始任务/等待中任务/推荐并行组/串行主链字段",
+        has_gate_summary,
+        "门禁摘要已区分项目级与 task 级门禁",
+        "门禁摘要缺少项目级全局门禁或 before-dev.md 说明",
     )
 
-    matrix_section = find_section_lines(lines, "任务执行矩阵")
-    header, rows = extract_matrix(matrix_section)
-    has_matrix = bool(header) and bool(rows)
+    graph_section = "\n".join(find_section_lines(lines, "任务图摘要"))
+    has_graph_summary = has_meaningful_text(graph_section) and ("→" in graph_section or "PROJECT-AUDIT" in graph_section)
     checks += 1
     passed += print_result(
-        has_matrix,
-        "任务执行矩阵存在",
-        "任务执行矩阵缺少表头或数据行",
+        has_graph_summary,
+        "任务图摘要已写明主链或终局任务",
+        "任务图摘要为空，或未写主链/终局任务",
     )
 
-    matrix_columns_ok = header == REQUIRED_MATRIX_COLUMNS
+    task_section = find_section_lines(lines, "Trellis Task 清单")
+    header, rows = extract_table(task_section)
+    has_task_table = bool(header) and bool(rows)
     checks += 1
     passed += print_result(
-        matrix_columns_ok,
-        "任务执行矩阵列名正确",
-        f"任务执行矩阵列名应为: {' | '.join(REQUIRED_MATRIX_COLUMNS)}",
+        has_task_table,
+        "Trellis Task 清单存在",
+        "Trellis Task 清单缺少表头或数据行",
     )
 
-    status_ok = True
-    task_domain_ok = True
-    parallel_ok = True
-    start_wait_ok = True
-    conflict_ok = True
-    actionable_ok = False
-    all_completed = True
+    header_ok = header == REQUIRED_TASK_COLUMNS
+    checks += 1
+    passed += print_result(
+        header_ok,
+        "Trellis Task 清单列名正确",
+        f"Trellis Task 清单列名应为: {' | '.join(REQUIRED_TASK_COLUMNS)}",
+    )
+
+    task_paths_ok = True
+    meaningful_rows_ok = True
     project_audit_count = 0
-    code_task_incomplete = False
-    project_audit_statuses: list[str] = []
-
-    if has_matrix and matrix_columns_ok:
+    if has_task_table and header_ok:
         for row in rows:
             if len(row) != len(header):
-                status_ok = task_domain_ok = parallel_ok = start_wait_ok = conflict_ok = False
-                all_completed = False
+                meaningful_rows_ok = False
+                task_paths_ok = False
                 continue
-
             data = dict(zip(header, row))
-            task_id = data["任务ID"]
-            task_domain = data["任务域"]
-            status = data["当前状态"]
-            parallel = data["并行属性"]
-            start_condition = data["开始条件"]
-            wait_reason = data["等待原因"]
-            conflict_reason = data["冲突说明"]
-
-            if task_domain not in ALLOWED_TASK_DOMAINS:
-                task_domain_ok = False
-            if status not in ALLOWED_STATUSES:
-                status_ok = False
-                all_completed = False
-            if parallel not in ALLOWED_PARALLEL_ATTRIBUTES:
-                parallel_ok = False
-            if not has_meaningful_text(start_condition):
-                start_wait_ok = False
-            if status == "等待中" and (not has_meaningful_text(wait_reason) or wait_reason == "无"):
-                start_wait_ok = False
-            if not has_meaningful_text(conflict_reason):
-                conflict_ok = False
-            if status == "可开始":
-                actionable_ok = True
-            if status != "已完成":
-                all_completed = False
-            if task_domain == "代码相关" and status != "已完成":
-                code_task_incomplete = True
-            if task_domain == "项目级审查":
+            if not all(has_meaningful_text(data[col]) for col in REQUIRED_TASK_COLUMNS):
+                meaningful_rows_ok = False
+            task_path = data["任务路径"]
+            resolved = resolve_task_path(repo_root, task_path)
+            if not resolved.is_dir():
+                task_paths_ok = False
+            if data["类型"] == "project-audit":
                 project_audit_count += 1
-                project_audit_statuses.append(status)
-                if "PROJECT-AUDIT" not in task_id.upper():
-                    task_domain_ok = False
-
-    actionable_or_complete_ok = actionable_ok or all_completed
-    project_audit_gate_ok = not (code_task_incomplete and "可开始" in project_audit_statuses)
 
     checks += 1
     passed += print_result(
-        status_ok,
-        "当前状态只使用约定枚举",
-        f"当前状态只能使用: {', '.join(sorted(ALLOWED_STATUSES))}",
+        meaningful_rows_ok,
+        "Trellis Task 清单填写完整",
+        "Trellis Task 清单存在空值或占位内容",
     )
 
     checks += 1
     passed += print_result(
-        task_domain_ok,
-        "任务域只使用约定枚举，且项目级审查任务命名正确",
-        f"任务域只能使用: {', '.join(sorted(ALLOWED_TASK_DOMAINS))}，且项目级审查任务 ID 应包含 PROJECT-AUDIT",
+        task_paths_ok,
+        "Trellis Task 清单引用的任务目录真实存在",
+        "Trellis Task 清单中存在不存在的任务路径",
     )
 
     checks += 1
     passed += print_result(
-        parallel_ok,
-        "并行属性只使用约定枚举",
-        f"并行属性只能使用: {', '.join(sorted(ALLOWED_PARALLEL_ATTRIBUTES))}",
+        project_audit_count <= 1,
+        "project-audit 任务数量合法（0 或 1）",
+        "Trellis Task 清单中的 project-audit 任务超过 1 个",
     )
 
+    dependency_section = "\n".join(find_section_lines(lines, "依赖关系"))
+    dependency_ok = has_meaningful_text(dependency_section)
     checks += 1
     passed += print_result(
-        start_wait_ok,
-        "开始条件与等待原因填写完整",
-        "开始条件缺失，或等待中任务未写明有效等待原因",
+        dependency_ok,
+        "依赖关系章节已填写",
+        "依赖关系章节为空或仍是占位内容",
     )
 
-    checks += 1
-    passed += print_result(
-        conflict_ok,
-        "并行属性与冲突说明填写完整",
-        "冲突说明缺失，或仍使用占位内容",
-    )
-
-    checks += 1
-    passed += print_result(
-        actionable_or_complete_ok,
-        "任务执行矩阵可支持当前执行判断",
-        "任务执行矩阵中既未找到任何“可开始”任务，也不是“全部已完成”状态",
-    )
-
-    checks += 1
-    has_project_audit = project_audit_count == 1
-    no_project_audit = project_audit_count == 0
-    project_audit_ok = has_project_audit or no_project_audit
-    passed += print_result(
-        project_audit_ok,
-        "project-audit 项目级审查任务数量合法（0 或 1）",
-        "任务执行矩阵中 `任务域=项目级审查` 的 PROJECT-AUDIT 任务最多一个；L0 单任务闭环可不生成，多任务/跨模块/高 blast radius 条件触发时应生成",
-    )
-
-    checks += 1
-    passed += print_result(
-        project_audit_gate_ok,
-        "project-audit 解锁门禁正确",
-        "仍有代码相关任务未完成时，PROJECT-AUDIT 不能标记为“可开始”",
-    )
-
-    print(f"📊 待执行任务数: {checklist_items}")
     print()
     print(f"验证结果: {passed}/{checks} 通过")
-    print("说明: 本脚本校验结构完整性；依赖是否合理、冲突是否准确仍需人工复核。")
+    print("说明: 本脚本校验摘要结构与任务路径存在性；依赖是否最优仍需人工复核。")
 
     if passed != checks:
         print("❌ task_plan.md 结构验证未通过，请补充后重试")

@@ -119,7 +119,7 @@ _NL_ROUTING_SECTION = """\
 | 更新规范、沉淀经验 | `/trellis:update-spec` | 描述规范更新意图，或显式触发 `update-spec` skill | 规范更新 |
 | 跨层检查、跨模块影响 | `/trellis:check-cross-layer` | 描述跨层检查意图，或显式触发 `check-cross-layer` skill | 跨层检查 |
 | 集成 skill、添加 skill | `/trellis:integrate-skill` | 描述 skill 集成意图，或显式触发 `integrate-skill` skill | Skill 集成 |
-| 读规范、开发前准备 | `/trellis:before-dev` | 描述开发前准备意图，或显式触发 `before-dev` skill | 开发前读规范 |
+| 读规范、开发前准备 | `/trellis:before-dev` | 描述开发前准备意图，或显式触发 `before-dev` skill | 开发前读规范；默认主链里也会由 start 自动执行 |
 | 新人入门、项目介绍 | `/trellis:onboard` | 描述 onboarding 意图，或显式触发 `onboard` skill | 项目 onboarding |
 | 创建命令、新命令 | `/trellis:create-command` | 描述创建命令意图，或显式触发 `create-command` skill | 创建新命令 |
 
