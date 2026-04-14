@@ -302,7 +302,8 @@ def cmd_archive(args: argparse.Namespace) -> int:
 
         # Auto-commit unless --no-commit
         if not getattr(args, "no_commit", False):
-            _auto_commit_archive(dir_name, repo_root)
+            if not _auto_commit_archive(dir_name, repo_root):
+                return 1
 
         # Return the archive path
         print(f"{DIR_WORKFLOW}/{DIR_TASKS}/{DIR_ARCHIVE}/{year_month}/{dir_name}")
@@ -315,10 +316,17 @@ def cmd_archive(args: argparse.Namespace) -> int:
     return 1
 
 
-def _auto_commit_archive(task_name: str, repo_root: Path) -> None:
-    """Stage .trellis/tasks/ changes and commit after archive."""
+def _auto_commit_archive(task_name: str, repo_root: Path) -> bool:
+    """Stage .trellis/tasks/ changes and commit after archive.
+
+    Returns True when the metadata commit succeeded or there was genuinely
+    nothing to commit. Returns False when staging or commit fails.
+    """
     tasks_rel = f"{DIR_WORKFLOW}/{DIR_TASKS}"
-    run_git(["add", "-A", tasks_rel], cwd=repo_root)
+    rc, _, err = run_git(["add", "-A", tasks_rel], cwd=repo_root)
+    if rc != 0:
+        print(f"[WARN] git add failed: {err.strip()}", file=sys.stderr)
+        return False
 
     # Check if there are staged changes
     rc, _, _ = run_git(
@@ -326,14 +334,16 @@ def _auto_commit_archive(task_name: str, repo_root: Path) -> None:
     )
     if rc == 0:
         print("[OK] No task changes to commit.", file=sys.stderr)
-        return
+        return True
 
     commit_msg = f"chore(task): archive {task_name}"
     rc, _, err = run_git(["commit", "-m", commit_msg], cwd=repo_root)
     if rc == 0:
         print(f"[OK] Auto-committed: {commit_msg}", file=sys.stderr)
+        return True
     else:
         print(f"[WARN] Auto-commit failed: {err.strip()}", file=sys.stderr)
+        return False
 
 
 # =============================================================================
