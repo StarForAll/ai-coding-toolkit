@@ -1,12 +1,14 @@
 ---
 name: design
-description: 需求冻结了？开始设计 — UI/UX、架构选型、接口设计、文档输出。触发词：开始设计、画架构图、技术选型、设计方案、架构设计、技术方案、选型、接口设计
+description: 需求冻结了？开始设计 — 先核对设计输入，再做技术选型研究，用户确认技术架构后分块落盘设计文档、项目文档和工程化联动。触发词：开始设计、画架构图、技术选型、设计方案、架构设计、技术方案、选型、接口设计
 ---
 
-# /trellis:design — 设计阶段引导
+# /trellis:design — 强门禁设计阶段
 
 > **Workflow Position**: §3 → 前: `/trellis:brainstorm` → 后: `/trellis:plan`
 > **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:design`） · ✅ OpenCode（TUI: `/trellis:design`；CLI: `trellis/design`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:design` 命令；见 `codex/README.md`）
+>
+> **Gate Rule**: 当前阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束。设计阶段只能在当前已确认阶段内重入，不能因为“设计文档看起来差不多齐了”就自动进入 `/trellis:plan`。
 
 ---
 
@@ -23,9 +25,99 @@ description: 需求冻结了？开始设计 — UI/UX、架构选型、接口设
 
 ---
 
+## 强门禁规则
+
+1. `/trellis:design` 只允许重入当前已确认的 design 阶段，不允许自动切到 `/trellis:plan`
+2. 当前阶段判定只看：
+   - `.trellis/.current-task`
+   - 当前叶子任务
+   - `$TASK_DIR/workflow-state.json`
+3. 设计阶段完成前，AI 只能给出“下一步推荐”，不能自行推进阶段
+4. 技术架构确认前，只有产品信息和功能需求允许同步到目标项目正式文档
+5. 技术架构确认后，design 后半段仍需按子块执行；每完成一个子块，都必须停下来给用户确认后才能继续
+
+---
+
+## 前置条件与正式文档边界
+
+进入 `/trellis:design` 前，至少应满足：
+
+- 当前 task 已在 `.trellis/.current-task` 中明确
+- 当前 task 为叶子任务
+- 当前 task 已初始化 `workflow-state.json`
+- 需求已冻结，且已形成目标项目的：
+  - `docs/requirements/customer-facing-prd.md`
+
+此时**不要求**已经存在：
+
+- `docs/requirements/developer-facing-prd.md`
+
+### 文档边界
+
+#### 技术架构确认前，可进入目标项目正式文档的内容
+
+- `docs/requirements/customer-facing-prd.md` 中的产品背景、目标、功能需求、范围、验收口径
+
+#### 技术架构确认前，必须留在 task 工作底稿的内容
+
+- 技术选型候选
+- 技术架构结论
+- 设计决策
+- `.trellis/spec` 对齐
+- 自动化检查矩阵
+- `finish-work` / `record-session` 项目化适配
+- README 中的技术架构部分
+- `docs/requirements/developer-facing-prd.md`
+
+---
+
 ## 流程
 
-### Step 1: UI/UX 设计（如有前端）
+### Step 0: 初始化/校验 design 状态
+
+```bash
+python3 docs/workflows/新项目开发工作流/commands/shell/workflow-state.py validate <task-dir>
+```
+
+若在目标项目内通过安装后的 helper 执行，则改用：
+
+```bash
+python3 .trellis/scripts/workflow/workflow-state.py validate <task-dir>
+```
+
+设计阶段初始化建议：
+
+- `stage = design`
+- `stage_status = in_progress`
+- `current_block = input-review`
+- `checkpoints.architecture_confirmed = false`
+
+缺少 `workflow-state.json` 时，不允许自动猜当前 design 子阶段，只允许先恢复状态。
+
+### Step 1: 设计输入核对
+
+先做 gap review，只输出：
+
+- 已完成
+- 缺失项
+- 冲突项
+- 待确认项
+
+当前步骤只允许核对：
+
+- `customer-facing-prd.md`
+- 任务工作底稿 `prd.md`
+- 需求冻结状态
+- 现有 UI 目录 / 原型资产位置
+- 已存在的设计文档或历史草稿
+
+当前步骤**禁止**：
+
+- 直接生成整套正式设计文档
+- 因为发现 UI 目录存在，就默认 design 已接近完成
+- 未讨论就覆盖已有设计内容
+
+### Step 2: UI/UX 设计（如有前端）
 
 **调用 Skill**：`ui-ux-pro-max` — 生成页面布局粗稿、组件建议和交互流程。降级：手动从 PRD 提取页面目标后进入外部工具设计。
 
@@ -41,111 +133,43 @@ description: 需求冻结了？开始设计 — UI/UX、架构选型、接口设
   - 允许作为主执行器的 CLI 只有 Claude Code / OpenCode
   - Codex 只能参与文档整理、Prompt 文本润色、原型结果回收，不得继续推荐“用 Codex 直接完成 UI 原型”
 
-**建议引导话术**：
-
-> 现在已经进入需要外部 UI 设计的阶段。请先去 `https://www.uiprompt.site/zh/styles` 选择合适的 UI 风格提示词，再在当前 CLI 中按固定模板整理 `design/STITCH-PROMPT.md`，然后把其中对应页面/流程的 Prompt 带到 `https://stitch.withgoogle.com/` 逐个生成 UI 原型。注意：`UI 原型生成` 这一步不能使用 Codex 作为主执行 CLI，必须改用 Claude Code 或 OpenCode。完成后，再回到当前工作流继续补齐设计说明和技术方案。
-
 **最小执行步骤**：
 
 1. 从 PRD 提取页面目标、用户角色、关键流程、品牌/风格约束
 2. 在 `https://www.uiprompt.site/zh/styles` 选择合适风格，整理风格提示词
-3. 在当前 CLI 中生成 `design/STITCH-PROMPT.md`
+3. 在当前 CLI 中生成 `design/STITCH-PROMPT.md` 草稿
 4. 按页面 / 流程从 `design/STITCH-PROMPT.md` 中提取执行 Prompt，带到 `https://stitch.withgoogle.com/` 逐个生成原型
-5. 回到当前任务，把确认后的页面结构、组件清单、交互要点沉淀到 `design/specs/` 与 `design/pages/`
+5. 把确认后的页面结构、组件清单、交互要点记录回 task 工作底稿
 
-### Step 1.5: Stitch Prompt 固定模板（如有前端）
+### Step 3: 当前步骤允许同步的正式文档
 
-`design/STITCH-PROMPT.md` 必须采用固定骨架，而不是每次临时拼 Prompt。
+在 `checkpoints.architecture_confirmed = false` 时，design 阶段只允许继续同步：
 
-固定要求：
+- `docs/requirements/customer-facing-prd.md`
 
-- 一个文件同时包含：
-  - 项目级总上下文 Prompt
-  - 各页面 / 各流程的执行 Prompt 小节
-- 默认以**单页面 / 单流程**方式给 Stitch 执行，不使用“整站一次性大 Prompt”
-- 仅当页面明显复杂时，才允许拆出额外页面级 Prompt 文件
-- 必须包含全局“去 AI 味”反例约束，且项目级只允许增补，不允许删除全局基线项
+此时**不允许**正式生成：
 
-模板至少要覆盖：
+- `docs/requirements/developer-facing-prd.md`
+- `design/TAD.md`
+- `design/DDD.md` / `IDD.md` / `AID.md`
+- `.trellis/spec` 对齐结果
+- 自动化检查矩阵
+- `finish-work` / `record-session` 项目化补丁
 
-1. 产品 / 页面目标
-2. 目标用户与使用场景
-3. 页面 / 模块清单
-4. 核心流程
-5. 必要功能与组件要求
-6. 来自 `uiprompt.site` 的风格提示词
-7. 贴近主题、避免 AI 味的反例禁止项
-8. Stitch 执行范围（当前页面 / 当前流程）
+### Step 4: 条件文档触发面判断（仅判断，不正式落盘）
 
-建议默认的全局禁止项至少包括：
+在技术架构确认前，只允许先判断当前项目是否会涉及：
 
-- 不要通用 SaaS 模板感
-- 不要廉价渐变和无意义炫光装饰
-- 不要过度圆角、过度玻璃拟态、过度悬浮阴影
-- 不要无信息密度的卡片堆砌
-- 不要与业务无关的装饰性图形或占位文案
-- 不要“英雄区 + 三栏卖点 + 泛化插画”的通用 AI 生成组合
+1. 数据库 / 持久化 / 缓存数据模型
+2. API / 接口契约 / 第三方集成接口
+3. AI / LLM 方案
+4. 页面视觉原型
 
-### Step 2: 设计文档矩阵
+这一步只产出“是否需要”的判断，不正式生成完整文档。
 
-设计阶段不再把 `BRD.md` 放在 `design/` 目录中。业务需求主文档由目标项目的 `docs/requirements/customer-facing-prd.md` 承担；开发实现需求主文档由 `docs/requirements/developer-facing-prd.md` 承担。
+### Step 5: 技术选型（研究阶段）
 
-在技术架构确认后，设计文档应按三层来组织：
-
-| 类型 | 文档 | 规则 |
-|------|------|------|
-| 前置正式需求文档 | `docs/requirements/customer-facing-prd.md` | **必需**；承担 BRD 主文档职责 |
-| 前置正式需求文档 | `docs/requirements/developer-facing-prd.md` | **必需**；需求实现说明、模块拆解与任务边界、场景/规则/验收映射；接口/数据库正文改为跳转链接 |
-| 设计阶段硬必选 | `design/TAD.md` | **必需** |
-| 设计阶段硬必选 | `design/ODD-dev.md` | **必需** |
-| 设计阶段硬必选 | `design/ODD-user.md` | **必需** |
-| 设计阶段硬必选 | 项目根 `README.md` | **必需**；此阶段只要求最低可用版 |
-| 设计阶段条件必选 | `design/DDD.md` | 涉及数据库 / 持久化 / 缓存数据模型 / 迁移时创建 |
-| 设计阶段条件必选 | `design/IDD.md` | 涉及 API / 接口契约 / 第三方集成接口时创建 |
-| 设计阶段条件必选 | `design/AID.md` | 涉及 AI / LLM 方案时创建 |
-| 设计阶段条件必选 | `design/STITCH-PROMPT.md` | 涉及页面视觉原型时创建 |
-| 设计阶段条件必选 | `design/specs/<module>.md` | 复杂模块时创建 |
-| 设计阶段条件必选 | `design/pages/<page>.md` | 页面复杂时创建 |
-
-### Step 3: 条件文档判定（技术架构确认后立即执行）
-
-在输出 `TAD.md` 时，必须同步完成以下判断，不能拖到实现阶段再补：
-
-1. 是否涉及数据库 / 持久化 / 缓存数据模型
-2. 是否涉及 API / 接口契约 / 第三方集成接口
-3. 是否涉及 AI / LLM 方案
-4. 是否涉及页面视觉原型
-
-若判断“涉及”，则在当前 design 阶段直接创建并细化对应文档：
-
-- `design/DDD.md`
-- `design/IDD.md`
-- `design/AID.md`
-- `design/STITCH-PROMPT.md`
-
-### Step 4: 功能规格说明
-
-为每个模块生成 `design/specs/<module>.md`
-
-### Step 5: 可执行原型验证
-
-覆盖 1 主流程 + 1 异常 + 1 空数据
-
-### Step 6: 页面与交互说明
-
-为每个页面生成 `design/pages/<page>.md`
-
-### Step 6.5: MCP 能力路由
-
-| 场景 | 调用能力 | 触发条件 | 说明 |
-|------|---------|---------|------|
-| 参考 GitHub 开源架构 | `deepwiki` | 当需要参考外部开源项目时 | 回退：`exa_search` |
-| 技术选型深度研究 | `exa_create_research` | 当需要进行技术方案深度调研时 | 回退：`grok-search` |
-| 复杂架构推理 | `sequential-thinking` | 当涉及 ≥3 个技术方案对比或推理步骤 >3 步时 | 复杂决策场景 |
-| 架构图可视化 | `markmap` | 当需要生成架构图或模块依赖图时 | 模块依赖图、技术栈确认 |
-| 框架 / SDK API 文档 | `Context7` | 当需要查询第三方库或框架官方文档时 | 技术选型必查；无法获取时标记 `[Evidence Gap]` |
-
-### Step 7: 技术方案设计
+> 这是 design 阶段当前版本的**正式 Step 5**。它不是直接把实现技术写入正式文档，而是 research-first 的技术选型讨论步骤。
 
 **MCP 能力路由**
 
@@ -167,20 +191,62 @@ description: 需求冻结了？开始设计 — UI/UX、架构选型、接口设
 | 数据库 | `postgresql-table-design` |
 | 文档撰写 | `doc-coauthoring` |
 
-### Step 8: 文档输出与后续前端基线任务
+执行要求：
 
-```bash
-python3 docs/workflows/新项目开发工作流/commands/shell/design-export.py --validate <design-dir>
-```
+- 必须基于最新有效信息给出多个可行候选，而不是单一路径拍板
+- 需要写清：
+  - 候选方案
+  - 适用场景
+  - 主要优点
+  - 主要缺点
+  - 不选其他方案的原因
+- 在用户确认前，只能写入 task 工作底稿，不能直接落到目标项目正式技术文档
 
-若在目标项目内通过安装后的 helper 执行，则改用目标项目对应的 helper 路径；当前源仓库内维护 workflow 内容时，以上命令可直接使用。
+### Step 6: 用户确认技术架构（硬确认点）
 
-输出文档体系：
+只有用户明确确认技术架构后，才允许进入 design 后半段。
 
-- `design/index.md` `TAD.md` `ODD-dev.md` `ODD-user.md`（必需）
-- `DDD.md` `IDD.md` `AID.md` `STITCH-PROMPT.md`（条件文档）
-- `specs/<module>.md` `pages/<page>.md`（按需）
-- 项目根 `README.md`（最低可用版，单独维护）
+确认前：
+
+- `checkpoints.architecture_confirmed = false`
+- `stage_status` 不得切到 `completed`
+- 不得进入 `/trellis:plan`
+
+确认后：
+
+- `checkpoints.architecture_confirmed = true`
+- `current_block` 进入后半段子块
+
+### Step 7: 架构确认后的分块落盘
+
+design 后半段不得一次性跑完，而要按多个子块分段执行。每完成一个子块，都必须停下来给用户确认。
+
+#### 块 A：开发侧正式需求落盘
+
+在当前子块中，正式生成：
+
+- `docs/requirements/developer-facing-prd.md`
+
+要求：
+
+- 只承接已确认架构下的开发实现需求
+- 不把尚未确认的后续工程化动作提前写成既定结论
+
+#### 块 B：设计文档落盘
+
+在当前子块中正式生成：
+
+- `design/TAD.md`
+- `design/ODD-dev.md`
+- `design/ODD-user.md`
+- 条件文档：
+  - `design/DDD.md`
+  - `design/IDD.md`
+  - `design/AID.md`
+  - `design/STITCH-PROMPT.md`
+- 按需：
+  - `design/specs/<module>.md`
+  - `design/pages/<page>.md`
 
 若项目包含前端视觉落地链路，进入 `/trellis:plan` 时还必须为“`UI -> 首版代码界面`”单独拆出一个前端基线 task，并约束：
 
@@ -189,123 +255,121 @@ python3 docs/workflows/新项目开发工作流/commands/shell/design-export.py 
 - 该 task 完成时，必须沉淀 `design/frontend-ui-spec.md`
 - 后续任意 CLI 修改前端时，默认都要以 `design/frontend-ui-spec.md` 为统一约束来源
 
+#### 块 C：项目级文档同步
+
+在当前子块中正式生成或更新：
+
+- 项目根 `README.md`（最低可用版）
+- 目标项目 `docs/` 下与已确认技术架构对应的正式说明文档
+
+#### 块 D：工程化联动
+
+在当前子块中完成：
+
+1. 根据技术架构，使用 `trellis-library/cli.py assemble` 选择并导入合适 spec 到当前项目 `.trellis/spec/`
+2. 基于当前项目作用/背景/技术架构，对当前项目 `.trellis/spec/` 做分析完善
+3. 明确项目自动化检查矩阵
+4. 同步适配当前项目的 `/trellis:finish-work`
+5. 同步适配当前项目的 `/trellis:record-session`
+
+自动化检查矩阵要求：
+
+- 基于已经确认的语言、框架、包管理器、CI、部署方式、安全要求
+- 写清真实会执行的 lint / typecheck / test / build / scan / delivery gate
+- 不允许继续保留“默认检查”“按项目自行运行”这类空泛表述
+- 必须有明确的质量平台门禁
+- 采用 Sonar 的项目必须写真实命令，未采用时必须写替代门禁和原因
+
+采用 Sonar 的项目，`sonar-scanner` 至少应以当前项目可执行的真实命令骨架写入检查矩阵，例如：
+
+```bash
+sonar-scanner \
+  -Dsonar.projectKey=<target-project-key> \
+  -Dsonar.token=$SONAR_TOKEN \
+  -Dsonar.host.url=https://sonarqube.xzc.com:13785 \
+  -Dsonar.sources=.
+```
+
+#### 块 C / 块 D 的顺序
+
+- 块 C 与块 D 允许按项目情况调序
+- 但两者都必须留在 design 阶段内完成
+- 每完成一个子块，都必须停下来给用户确认，不能一次性连续执行到底
+- 若块 C 先于块 D 执行，README 或项目 `docs/` 中引用的检查矩阵、spec 结论或收尾门禁应明确标注为“待 design 阶段块 D 最终确认”，避免被误认为已经定稿
+
+### Step 8: design 退出检查
+
+先执行 task-local 设计文档校验：
+
+```bash
+python3 docs/workflows/新项目开发工作流/commands/shell/design-export.py --validate <design-dir>
+```
+
+再执行状态与正式文档边界校验：
+
+```bash
+python3 docs/workflows/新项目开发工作流/commands/shell/workflow-state.py validate <task-dir>
+```
+
+退出前必须明确输出：
+
+- 已完成
+- 未完成
+- 缺失项
+- 当前是否仍在等待用户确认
+
+完成退出清单后：
+
+- 先把 `stage_status` 置为 `awaiting_user_confirmation`
+- 等用户明确确认 design 阶段完成
+- 确认后才允许把下一阶段切到 `/trellis:plan`
+
 ---
 
 ## 输出
 
-```
+### 架构确认前
+
+- 目标项目正式文档：
+  - `docs/requirements/customer-facing-prd.md`
+- task 工作底稿：
+  - 技术选型候选
+  - UI 资产位置与原型分析
+  - 条件文档触发判断
+
+### 架构确认后
+
+目标项目或 task 内最终会形成：
+
+```text
+docs/requirements/
+├── customer-facing-prd.md
+└── developer-facing-prd.md
+
 $TASK_DIR/design/
 ├── index.md
-├── TAD.md / ODD-dev.md / ODD-user.md                 （必需）
-├── DDD.md / IDD.md / AID.md / STITCH-PROMPT.md       （条件文档）
+├── TAD.md / ODD-dev.md / ODD-user.md
+├── DDD.md / IDD.md / AID.md / STITCH-PROMPT.md
 ├── frontend-ui-spec.md                               （仅 UI -> 首版代码界面任务完成后必补）
-├── specs/<module>.md                                 （复杂模块时补）
-└── pages/<page>.md                                   （页面复杂时补）
+├── specs/<module>.md
+└── pages/<page>.md
+
+README.md
+.trellis/spec/
 ```
 
-目标项目根目录：
-
-```
-docs/requirements/
-├── customer-facing-prd.md    # 承担 BRD 主文档职责
-└── developer-facing-prd.md   # 开发实现需求主文档（需求实现说明、模块拆解与任务边界、场景/规则/验收映射）
-
-README.md                     # design 阶段最低可用版
-```
+---
 
 ## 下一步推荐
 
-**当前状态**: 设计文档已输出，`design/` 目录已就绪。
-
-> 本节定义的是阶段完成后的推荐输出口径，用于帮助当前 CLI 或协作者说明下一步；它不是框架层自动跳转保证。
-
-技术架构已经过用户明确确认后，必须先完成 `工作流总纲 §3.7 技术架构确认后的项目 Spec 对齐`，才能进入 `/trellis:plan`。下列内容是执行摘要；若与总纲不一致，以 `§3.7` 为准。
-
-1. **根据技术架构，使用 `trellis-library/cli.py assemble` 选择并导入合适 spec 到当前项目 `.trellis/spec/`**
-   - 所有项目至少应覆盖与当前项目直接相关的三类基线约束：
-     - `product-and-requirements` 相关 spec：保证需求、范围、验收口径有约束
-     - `architecture` 相关 spec：保证系统边界、模块结构、依赖方向等与当前架构一致
-     - `verification` 相关 spec：保证 DoD、证据要求、验证门禁可落地
-   - 这里要求通过脚本导入，不靠人工复制资产或口头提示“补装”
-   - 这里强调的是“选择适配当前项目的最小充分集合”，不是把 `product-and-requirements.*`、`architecture.*`、`verification.*` 整个命名空间全部导入
-   - 若为**外部项目**（外包、定制开发、新客户），**额外基础必选**：
-     - `spec.universal-domains.project-governance.delivery-control`
-     - `checklist.universal-domains.project-governance.transfer-checklist`
-   - 若 `assessment.md` 中 `delivery_control_track = trial_authorization`，**额外条件必选**：
-     - `spec.universal-domains.project-governance.authorization-management`
-   - 若本项目会在正式移交时交付密钥、环境变量、第三方平台配置，**额外条件必选**：
-     - `spec.universal-domains.security.secrets-and-config`
-   - 根据技术栈按需选择：`spec.universal-domains.security.*`、`spec.universal-domains.data.*` 等
-
-2. **基于当前项目作用/背景/技术架构，对当前项目 `.trellis/spec/` 做分析完善，删除错误内容并补齐缺失内容**
-
-3. **明确项目自动化检查矩阵**
-   - 基于已经确认的语言、框架、包管理器、CI、部署方式、安全要求
-   - 写清真实会执行的 lint / typecheck / test / build / scan / delivery gate
-   - 不允许继续保留”默认检查””按项目自行运行”这类空泛表述
-   - 必须有明确的质量平台门禁；采用 Sonar 的项目必须写真实命令，未采用时必须写替代门禁和原因
-   - 采用 Sonar 的项目，`sonar-scanner` 至少应以当前项目可执行的真实命令骨架写入检查矩阵，例如：
-
-     ```bash
-     sonar-scanner \
-       -Dsonar.projectKey=<target-project-key> \
-       -Dsonar.token=$SONAR_TOKEN \
-       -Dsonar.host.url=https://sonarqube.xzc.com:13785 \
-       -Dsonar.sources=.
-     ```
-
-   - 未采用 Sonar 的项目，必须显式写出替代质量门禁（如 ESLint strict / CodeQL / 其他 SAST 工具）及其未采用 Sonar 的原因
-
-4. **在技术架构确认后，明确项目级全局测试基线**
-   - 这里只确认“所有 task 都统一强制适用”的全局测试/验证要求
-   - 例如：统一的测试框架、测试目录约定、必须执行的全局 test / lint / typecheck / build / quality gate
-   - 不在当前阶段替每个具体 task 预造测试门禁
-   - 每个 task 的具体测试门禁，必须在进入该 task 实现前，由 `/trellis:start` 自动执行 `before-dev` 后补到 `$TASK_DIR/before-dev.md`
-
-5. **同步适配当前项目的 `/trellis:finish-work`**
-   - 这是 `finish-work` 的主适配阶段
-   - 必须基于任务 3 中已经写清的自动化检查矩阵完成项目化改写
-   - `finish-work` 中记录的质量平台门禁必须与任务 3 保持一致（采用 Sonar 的项目写真实命令，未采用时写替代门禁和原因）
-
-6. **同步适配当前项目的 `/trellis:record-session` 基线**
-   - 先明确当前项目的记录入口、是否必须走 helper、归档前置条件、哪些元数据允许自动提交
-   - 先写清“什么情况下允许进入 record-session”
-
-7. **标记 `§4 plan` 之后是否需要对 `record-session` 做轻量校正**
-   - 若任务拆解后，发现“完成任务”的定义、归档节点、交付节点、会话记录粒度和 `§3.7` 基线不一致，再补一次轻量修正
-   - 一般不需要在 `§4` 后再次大改 `finish-work`，除非计划阶段新增了新的强制检查门禁
-
-### 双轨资产导入映射表
-
-| 上游字段 / 场景 | 必选资产 | 条件资产 | 设计文档里至少要体现 |
-|---|---|---|---|
-| 内部项目 | 按项目实际选择的 `product-and-requirements` / `architecture` / `verification` 基线 spec 集合 | 按技术栈补 `security.*` `data.*` | `customer-facing-prd` / `developer-facing-prd` + `TAD` + `ODD-dev` / `ODD-user`；`DDD` / `IDD` / `AID` / `STITCH-PROMPT` 视是否涉及而定 |
-| 外部项目 + `delivery_control_track = hosted_deployment` | `delivery-control` `transfer-checklist` | 若正式移交含密钥/配置，再加 `secrets-and-config` | TAD 中写清 retained-control 边界；IDD 与 ODD-dev / ODD-user 中写清交付事件与环境边界 |
-| 外部项目 + `delivery_control_track = trial_authorization` | `delivery-control` `transfer-checklist` `authorization-management` | 若正式移交含密钥/配置，再加 `secrets-and-config` | `customer-facing-prd` / IDD 中写清授权状态与到期行为；TAD 与 ODD-dev / ODD-user 中写清正式授权切换与最终移交门禁 |
-
-最低对齐要求：
-
-- `assessment.md` 里的 `delivery_control_track` 必须能在设计文档中找到对应交付模型。
-- 若导入了 `authorization-management`，设计文档里必须出现试运行有效期、到期行为、永久授权触发条件。
-- 若判断需要 `secrets-and-config`，设计文档里必须明确哪些密钥/配置属于最终移交范围，不能只在 checklist 再补。
-
-阶段结论：
-
-- `/trellis:finish-work` 的项目化适配主阶段是当前 `design -> spec 对齐` 阶段
-- 当前阶段只定义项目级全局测试基线；task 级具体测试门禁延后到实施前补充
-- `/trellis:record-session` 的基线适配也在当前阶段完成，`§4 plan` 后仅允许做一次轻量校正
-- 进入 `/trellis:plan` 前，至少要完成上述 1-6；第 7 项只负责标记是否需要在 `plan` 后补一次轻量修正，不阻止进入 `plan`
-
-根据你的意图：
+**当前状态**: 仍处于 design 阶段；只有在退出清单完成且用户明确确认后，才允许进入 `/trellis:plan`。
 
 | 你的意图 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
-| 拆解任务 | `/trellis:plan` | 进入任务拆解，或显式触发 `plan` skill | **默认推荐**。前提是已完成项目 `.trellis/spec/` 对齐门禁，再将设计转化为可执行任务 |
-| 项目简单，不需要拆任务 | `/trellis:start` | 直接进入实施，或显式触发 `start` skill | 直接进入实施；start 会自动执行 before-dev 并补 task 门禁。若当前 task 是 `UI -> 首版代码界面`，主执行 CLI 仍必须改用 Claude Code / OpenCode |
-| 需要显式先测某个 task | `/trellis:test-first` | 进入手动测试驱动，或显式触发 `test-first` skill | 非默认主链；仅在明确要先测/补测试证据时进入 |
-| 更简单，直接写代码 | `/trellis:start` | 直接进入实施，或显式触发 `start` skill | 跳过显式 test-first；但不跳过 before-dev 自动前置。若属于视觉前端首版落地 task，Codex 不能作为主执行器 |
-| 设计不完善，回退修改 | `/trellis:design` | 继续补设计，或显式触发 `design` skill | 重新执行某一步骤 |
-| 冻结后出现新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 不直接吸收，获批后再回到受影响的最早阶段 |
-| 冻结后仅需纯澄清 | 留在当前阶段 | 留在当前阶段 | 仅限不改变范围、接口契约、验收标准、成本、工期 |
+| 继续当前 design 子块 | `/trellis:design` | 继续 design 阶段，或显式触发 `design` skill | **默认推荐**。只重入当前 design 子块，不跨阶段 |
+| 在 design 内切到另一个已允许子块 | `/trellis:design` | 继续 design 阶段，或显式触发 `design` skill | 仍留在 design 阶段内 |
+| design 已完成，准备进入 plan | `/trellis:plan` | 进入任务拆解，或显式触发 `plan` skill | 仅在 design 退出清单完成且用户明确确认后才允许 |
+| 设计不完善，回退补讨论/补文档 | `/trellis:design` | 继续 design 阶段，或显式触发 `design` skill | 先做 gap review，不直接整批重生成内容 |
+| 冻结后出现新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 不直接在当前阶段吸收 |
 | 检查跨层一致性 | `/trellis:check-cross-layer` | 检查跨层影响，或显式触发 `check-cross-layer` skill | 设计涉及多层时建议执行 |
-| 不确定下一步 | `/trellis:start` | 描述当前意图，或显式触发 `start` skill | 用 Phase Router / skill 路由做阶段检测 |
+| 不确定当前任务/状态 | `/trellis:start` | 描述当前状态恢复意图，或显式触发 `start` skill | 回到当前已确认阶段的状态恢复分支 |

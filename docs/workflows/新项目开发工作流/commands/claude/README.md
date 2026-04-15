@@ -112,7 +112,7 @@ Claude Code 的用户入口仍是项目命令：
 - 显式阶段入口
 - 阶段性操作规则
 - 对应 shell/helper 脚本的调用关系
-- 承载 Brainstorm 完成前的项目级双需求文档门禁：`docs/requirements/customer-facing-prd.md` 与 `docs/requirements/developer-facing-prd.md`
+- 承载 Brainstorm 完成前的项目级正式需求文档门禁：进入 design 前至少已同步 `docs/requirements/customer-facing-prd.md`；`docs/requirements/developer-facing-prd.md` 等到技术架构确认后再正式生成
 
 对前端视觉落地链路，还要额外记一条：
 

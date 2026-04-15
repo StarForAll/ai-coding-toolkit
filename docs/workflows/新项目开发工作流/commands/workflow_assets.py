@@ -18,7 +18,7 @@ CLI_ALT_DIRS = {
     "codex": ".agents",
 }
 ALL_CLI_TYPES = ["claude", "opencode", "codex"]
-WORKFLOW_VERSION = "1.1.20"
+WORKFLOW_VERSION = "1.1.22"
 
 PATCH_BASELINE_COMMANDS = ["start", "finish-work", "record-session"]
 OVERLAY_BASELINE_COMMANDS = ["brainstorm", "check"]
@@ -38,6 +38,7 @@ DISTRIBUTED_COMMANDS = [
 HELPER_SCRIPTS = [
     "feasibility-check.py",
     "design-export.py",
+    "workflow-state.py",
     "plan-validate.py",
     "check-quality.py",
     "delivery-control-validate.py",

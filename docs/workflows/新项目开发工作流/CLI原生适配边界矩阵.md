@@ -117,6 +117,7 @@ test -f .claude/commands/trellis/brainstorm.md
 test -f .claude/commands/trellis/check.md
 test -f .claude/commands/trellis/delivery.md
 test -d .trellis/scripts/workflow/
+test -f .trellis/scripts/workflow/workflow-state.py
 
 # OpenCode
 test -f .opencode/commands/trellis/brainstorm.md

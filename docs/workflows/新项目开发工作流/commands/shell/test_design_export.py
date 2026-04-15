@@ -55,6 +55,7 @@ class DesignExportTests(unittest.TestCase):
         result = self.run_script("--validate", str(d))
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("完整性检查通过", result.stdout)
+        self.assertIn("不等于 design 阶段可退出", result.stdout)
 
     def test_validate_marks_optional_files(self) -> None:
         d = self._make_design_dir()

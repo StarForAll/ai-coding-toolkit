@@ -166,6 +166,13 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 5. 满足什么门禁后才能进入下一步
 6. 本轮结束时应该如何用当前 CLI 的原生入口表达“下一步推荐”
 
+补充总规则：
+
+- 当前 workflow 采用 [阶段状态机与强门禁协议](./阶段状态机与强门禁协议.md)
+- 当前阶段只允许按 `.current-task -> 当前叶子任务 -> workflow-state.json` 判定
+- 每个阶段完成后都必须停在 `awaiting_user_confirmation`，用户确认后才允许切到下一阶段
+- `/trellis:start` 只重入当前已确认阶段，不自动跨阶段推进
+
 ---
 
 ## 阶段 1：Feasibility
@@ -215,7 +222,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 目标
 
-先按 task-first 建立或更新 `prd.md` 工作底稿，自动读取上下文并在必要时 research-first；然后确认需求描述是否准确，统一做 `L0/L1/L2` 分类；`L1/L2` 在进入下一阶段前需补齐项目级双需求文档，`L0` 单任务闭环可只保留 `prd.md` 轻量基线。
+先按 task-first 建立或更新 `prd.md` 工作底稿，自动读取上下文并在必要时 research-first；然后确认需求描述是否准确，统一做 `L0/L1/L2` 分类；进入 design 前至少需补齐 `customer-facing-prd.md`，`developer-facing-prd.md` 等到 design 阶段技术架构确认后再正式生成；`L0` 单任务闭环可只保留 `prd.md` 轻量基线。
 
 ### CLI 入口差异
 
@@ -251,10 +258,10 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 已完成 `L0/L1/L2` 分类
 - 已在目标项目 `docs/requirements/` 下生成：
   - `customer-facing-prd.md`
-  - `developer-facing-prd.md`
-- 两份项目级需求文档语义一致，且后续需求变更将持续同步回写
+- `developer-facing-prd.md` 不在此时强制生成；它等到 design 阶段技术架构确认后再正式落盘
 - 已决定走 `design`、`plan` 还是极小任务直进 `start`
 - 若下一步进入 `design`，已明确会在 `design -> 3.7` 把 `sonar-scanner` 纳入项目自动化检查矩阵
+- 已进入“等待用户确认是否切换阶段”的状态，而不是自动跳转
 
 > 这条门禁约束的是**使用该 workflow 的目标项目**，不是当前 workflow 仓库本身必须先有这两份文档。
 >
@@ -269,6 +276,20 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 ### 目标
 
 冻结关键设计决策，补齐项目 spec 基线，并同步适配后续 `finish-work` / `record-session` 的项目化门禁。
+
+当前阶段拆成两段：
+
+- 前半段：输入核对、UI 资产核对、技术选型研究
+- 后半段：技术架构确认后的正式落盘与工程化联动
+
+后半段固定按子块理解：
+
+- 块 A：`developer-facing-prd.md`
+- 块 B：设计文档落盘
+- 块 C：项目级文档同步
+- 块 D：工程化联动
+
+其中块 C 与块 D 可按项目情况调序，但每完成一个子块都必须停下来等用户确认。
 
 ### CLI 入口差异
 
@@ -294,6 +315,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 - 进入 design 前必须已存在的前置正式需求文档：
   - `docs/requirements/customer-facing-prd.md`（承担 BRD 主文档职责）
+- 技术架构确认后才正式生成：
   - `docs/requirements/developer-facing-prd.md`（需求实现说明、模块拆解与任务边界、场景/规则/验收映射；接口/数据库正文以跳转链接承接）
 - 设计阶段硬必选：
   - `design/TAD.md`
@@ -347,6 +369,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 已完成 `DDD.md` / `IDD.md` / `AID.md` / `STITCH-PROMPT.md` 的条件判定；凡判定涉及者，已在当前阶段直接细化
 - 自动化检查矩阵已明确，且已包含明确质量平台门禁（采用 Sonar 的项目必须写真实命令，未采用时必须写替代门禁和原因）
 - `finish-work` / `record-session` 的项目化基线已定
+- 已完成 design 退出检查，且用户已明确确认允许进入 plan
 
 ---
 
@@ -390,6 +413,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 真实 Trellis task / child task 已拆出
 - 每个 task 的全局门禁来源已明确
 - 已决定进入 `start` 主链（需要显式先测时才额外进入 `test-first`）
+- 已明确当前要执行的叶子 task，并把状态停在“等待用户确认是否进入 implementation/test-first”
 
 ---
 

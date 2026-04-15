@@ -78,7 +78,10 @@ def validate(design_dir: Path) -> int:
     else:
         print("⚠️  pages/ 目录不存在（页面复杂时补充）")
 
-    print("ℹ️  本脚本只检查 design/ 目录内资产；README.md 与 customer-facing-prd.md / developer-facing-prd.md 需在项目主链中单独检查")
+    print(
+        "ℹ️  本脚本只检查 design/ 目录内资产；README.md、正式 PRD、workflow-state.json 与用户确认点"
+        " 需在项目主链中单独检查"
+    )
     print()
 
     if missing:
@@ -86,6 +89,7 @@ def validate(design_dir: Path) -> int:
         return 1
 
     print("✅ 设计文档完整性检查通过")
+    print("ℹ️  注意：这不等于 design 阶段可退出；仍需校验 workflow-state.json 并等待用户确认")
     return 0
 
 

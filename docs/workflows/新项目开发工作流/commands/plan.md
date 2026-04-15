@@ -37,6 +37,15 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
   - `DDD.md` / `IDD.md` / `AID.md` / `STITCH-PROMPT.md` 是否需要创建
   - 后续需要单独拆出 `UI -> 首版代码界面` 的前端基线 task
 - 若属于外包、定制开发或新客户项目（外部项目），已在 `assessment.md` 中明确 `delivery_control_track`（默认 `hosted_deployment`，必要时使用 `trial_authorization`），**并且已按轨道导入交付控制相关 spec**
+- 当前 task 的 `workflow-state.json` 已明确切换到 `stage = plan`
+- 当前阶段切换已经过用户明确确认，而不是由 `/trellis:start` 或“下一步推荐”自动推进
+
+## 强门禁规则
+
+- 当前阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束
+- `/trellis:plan` 只允许重入当前已确认的 plan 阶段，不允许顺手自动进入实现
+- `plan` 完成后，必须先输出已完成/未完成/缺失项，再等待用户确认
+- 只有用户确认后，才允许把执行态切到具体叶子 task 的 implementation / test-first 分支
 
 `/trellis:plan` 的职责是：
 
@@ -242,9 +251,14 @@ $TASK_DIR/
 └── ...              ← 对应的真实 Trellis tasks / child tasks / project-audit task
 ```
 
+补充状态约束：
+
+- 如果当前 root task 在 plan 阶段拆出了 children，则继续实施前应把 `.current-task` 切到实际要执行的叶子任务
+- 父任务只保留汇总意义，不应继续作为执行态叶子任务持有 `workflow-state.json`
+
 ## 下一步推荐
 
-**当前状态**: 真实 Trellis task 已拆出，`task_plan.md` 仅保留任务图与门禁摘要。
+**当前状态**: 真实 Trellis task 已拆出，`task_plan.md` 仅保留任务图与门禁摘要；在用户明确确认前，仍停留在 plan 阶段。
 
 > 本节定义的是阶段完成后的推荐输出口径，用于帮助当前 CLI 或协作者说明下一步；它不是框架层自动跳转保证。
 
@@ -252,10 +266,10 @@ $TASK_DIR/
 
 | 你的意图 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
-| 开始做某个具体 task | `/trellis:start` | 直接进入实施，或显式触发 `start` skill | **默认推荐**。先选定 task，再由 start 自动执行 before-dev 并补 task 门禁 |
+| 开始做某个具体 task | `/trellis:start` | 直接进入实施，或显式触发 `start` skill | **默认推荐**。仅在用户明确确认 plan 已完成后才允许；先切换到目标叶子 task，再由 start 自动执行 before-dev 并补 task 门禁 |
 | 显式先测某个 task | `/trellis:test-first` | 进入测试驱动，或显式触发 `test-first` skill | 非默认主链；仅在明确要 TDD / 补验证证据时使用 |
 | 拆解不合理，重新拆 | `/trellis:plan` | 继续任务拆解，或显式触发 `plan` skill | 重新执行拆解流程 |
 | 设计有问题 | `/trellis:design` | 回退设计阶段，或显式触发 `design` skill | 回退到设计阶段 |
 | 冻结后出现新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先冻结当前计划；获批后再回到受影响的最早阶段更新计划 |
-| 需要项目级全局代码审查 | `/trellis:project-audit` | 进入项目级审查，或显式触发 `project-audit` skill | 仅在全部代码相关 task 完成后自动进入；中途也可手动预审 |
+| 需要项目级全局代码审查 | `/trellis:project-audit` | 进入项目级审查，或显式触发 `project-audit` skill | 仅在全部代码相关 task 完成且用户明确确认后进入；中途也可手动预审 |
 | 不确定下一步 | `/trellis:start` | 描述当前意图，或显式触发 `start` skill | 用 Phase Router / skill 路由做阶段检测 |
