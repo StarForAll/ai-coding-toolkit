@@ -114,6 +114,19 @@ Claude Code 的用户入口仍是项目命令：
 - 对应 shell/helper 脚本的调用关系
 - 承载 Brainstorm 完成前的项目级双需求文档门禁：`docs/requirements/customer-facing-prd.md` 与 `docs/requirements/developer-facing-prd.md`
 
+对前端视觉落地链路，还要额外记一条：
+
+- `UI 原型生成`
+- `UI -> 首版代码界面`
+
+这两个子阶段允许 Claude Code 作为主执行入口；当前 workflow 不允许 Codex 在这两步里承担主执行器。
+
+若项目存在 `UI -> 首版代码界面` task，该 task 完成时还必须同步产出：
+
+- `design/frontend-ui-spec.md`
+
+供后续任意 CLI 修改前端时统一遵循。
+
 这层不负责：
 
 - 保存凭据

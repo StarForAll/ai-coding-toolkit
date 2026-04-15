@@ -32,6 +32,10 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
 - 已基于当前项目实际技术栈，明确自动化检查矩阵（任务 3，仅在任务 1、任务 2 完成后执行；不得只写默认 `Lint`，必须有明确质量平台门禁；采用 Sonar 的项目必须写真实命令，未采用时必须写替代门禁和原因）
 - 已基于任务 3 中写清的自动化检查矩阵，完成当前项目 `/trellis:finish-work` 的首次项目化适配（任务 4）
 - 已完成当前项目 `/trellis:record-session` 的基线适配，至少明确记录入口、archive 前置条件、元数据边界与阻断条件（任务 5）
+- 若项目包含前端视觉落地链路，已在 `design` 阶段明确：
+  - `customer-facing-prd.md` 承担 BRD 主文档职责
+  - `DDD.md` / `IDD.md` / `AID.md` / `STITCH-PROMPT.md` 是否需要创建
+  - 后续需要单独拆出 `UI -> 首版代码界面` 的前端基线 task
 - 若属于外包、定制开发或新客户项目（外部项目），已在 `assessment.md` 中明确 `delivery_control_track`（默认 `hosted_deployment`，必要时使用 `trial_authorization`），**并且已按轨道导入交付控制相关 spec**
 
 `/trellis:plan` 的职责是：
@@ -113,6 +117,11 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 - 若 task 超出单上下文预算，继续拆子 task
 - 若 task 的输出会改变下一个 task 的实现前提，必须串行，不要伪装并行
 - 若多个项目域彼此独立，可分别建立 lane，但 lane 内不自动续跑
+- 若项目包含前端视觉落地链路，必须额外拆出一个独立 task：`UI -> 首版代码界面`
+  - 该 task 只负责把已确认 UI 原型落成第一版代码界面
+  - 该 task **禁止**使用 Codex 作为主执行器，必须改用 Claude Code / OpenCode
+  - 该 task 的完成定义必须包含 `design/frontend-ui-spec.md`
+  - 后续所有前端视觉相关 task 默认依赖这份 `frontend-ui-spec.md`
 
 ### Step 3: 生成摘要型 `task_plan.md`
 
@@ -136,6 +145,9 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 - `依赖关系`：只描述依赖和顺序，不写实时状态
 - `门禁摘要`：只写项目级全局门禁；task 级具体门禁在执行前写入 `$TASK_DIR/before-dev.md`
 - `任务图摘要`：用于人类快速理解 lane、主链、project-audit 触发条件
+- 若存在前端视觉落地链路，必须在 `门禁摘要` 或 `任务图摘要` 中明确：
+  - `UI -> 首版代码界面` task 的专属边界
+  - `design/frontend-ui-spec.md` 是后续前端任务的统一约束来源
 
 推荐最小模板：
 

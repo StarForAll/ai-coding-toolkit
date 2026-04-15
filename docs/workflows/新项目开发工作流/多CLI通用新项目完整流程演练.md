@@ -290,6 +290,39 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 没有官方文档证据时，不下 API / 框架细节结论，只保留待验证设计假设
 - 没有完整架构样板时，先冻结接口/数据/错误矩阵，再补实现细节
 
+### 关键设计文档矩阵
+
+- 进入 design 前必须已存在的前置正式需求文档：
+  - `docs/requirements/customer-facing-prd.md`（承担 BRD 主文档职责）
+  - `docs/requirements/developer-facing-prd.md`（需求实现说明、模块拆解与任务边界、场景/规则/验收映射；接口/数据库正文以跳转链接承接）
+- 设计阶段硬必选：
+  - `design/TAD.md`
+  - `design/ODD-dev.md`
+  - `design/ODD-user.md`
+  - 项目根 `README.md`（最低可用版）
+- 设计阶段条件必选：
+  - `design/DDD.md`
+  - `design/IDD.md`
+  - `design/AID.md`
+  - `design/STITCH-PROMPT.md`
+  - `design/specs/*.md`
+  - `design/pages/*.md`
+
+### 前端视觉落地边界
+
+- `UI 原型生成`：Codex 不能作为主执行器，必须改用 Claude Code / OpenCode
+- `UI -> 首版代码界面`：Codex 也不能作为主执行器，必须改用 Claude Code / OpenCode
+- 该首版前端落地 task 完成时，必须产出 `design/frontend-ui-spec.md`
+- 后续任意 CLI 再改前端时，都默认以 `design/frontend-ui-spec.md` 为统一约束来源
+
+### Stitch Prompt 口径
+
+- 先去 `uiprompt.site` 选择风格词
+- 再由当前 CLI 生成固定骨架的 `design/STITCH-PROMPT.md`
+- 最后按**单页面 / 单流程**给 Stitch 执行，不采用整站一次性大 Prompt
+- 默认一个 `STITCH-PROMPT.md` 即可；页面复杂时再补页面级 Prompt 文件
+- 必须包含“去 AI 味”全局禁止项；项目只能增补，不能删减基线项。默认基线以 [工作流总纲 §3.1.2](./工作流总纲.md) 为准
+
 ### 外部交付项目分支
 
 这里要显式导入和对齐外部交付基线：
@@ -311,6 +344,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 ### 退出门禁
 
 - 关键设计文档与项目 spec 已对齐
+- 已完成 `DDD.md` / `IDD.md` / `AID.md` / `STITCH-PROMPT.md` 的条件判定；凡判定涉及者，已在当前阶段直接细化
 - 自动化检查矩阵已明确，且已包含明确质量平台门禁（采用 Sonar 的项目必须写真实命令，未采用时必须写替代门禁和原因）
 - `finish-work` / `record-session` 的项目化基线已定
 

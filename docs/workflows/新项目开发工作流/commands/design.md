@@ -32,34 +32,110 @@ description: 需求冻结了？开始设计 — UI/UX、架构选型、接口设
 **强制提醒**：
 
 - 只要当前项目进入了“需要页面视觉设计、页面布局设计、交互原型设计”的阶段，就必须明确提醒用户：这一步需要去外部 UI 设计工具完成，不要只停留在当前 CLI 里讨论。
-- 推荐外部操作顺序：
+- 推荐外部操作顺序固定为：
   1. 先去 [UI Prompt Styles](https://www.uiprompt.site/zh/styles) 获取接近目标风格的 UI 提示词
-  2. 再去 [Stitch](https://stitch.withgoogle.com/) 粘贴整理后的提示词，生成页面级 UI 原型
+  2. 再在当前 CLI 中按固定骨架整理 `design/STITCH-PROMPT.md`
+  3. 最后去 [Stitch](https://stitch.withgoogle.com/) 按页面 / 流程逐个生成 UI 原型
+- **执行边界（强制）**：
+  - `UI 原型生成` 这一步**禁止**使用 Codex 作为主执行器
+  - 允许作为主执行器的 CLI 只有 Claude Code / OpenCode
+  - Codex 只能参与文档整理、Prompt 文本润色、原型结果回收，不得继续推荐“用 Codex 直接完成 UI 原型”
 
 **建议引导话术**：
 
-> 现在已经进入需要外部 UI 设计的阶段。请先去 `https://www.uiprompt.site/zh/styles` 选择合适的 UI 风格提示词，再把页面目标、关键模块、交互要求和风格提示词整理后带到 `https://stitch.withgoogle.com/` 生成 UI 原型。完成后，再回到当前工作流继续补齐设计说明和技术方案。
+> 现在已经进入需要外部 UI 设计的阶段。请先去 `https://www.uiprompt.site/zh/styles` 选择合适的 UI 风格提示词，再在当前 CLI 中按固定模板整理 `design/STITCH-PROMPT.md`，然后把其中对应页面/流程的 Prompt 带到 `https://stitch.withgoogle.com/` 逐个生成 UI 原型。注意：`UI 原型生成` 这一步不能使用 Codex 作为主执行 CLI，必须改用 Claude Code 或 OpenCode。完成后，再回到当前工作流继续补齐设计说明和技术方案。
 
 **最小执行步骤**：
 
 1. 从 PRD 提取页面目标、用户角色、关键流程、品牌/风格约束
-2. 在 `https://www.uiprompt.site/zh/styles` 选择合适风格，生成或整理可直接复用的 UI 提示词
-3. 将页面需求和 UI 提示词一起带到 `https://stitch.withgoogle.com/`，生成首版页面原型
-4. 回到当前任务，把确认后的页面结构、组件清单、交互要点沉淀到 `design/specs/` 与 `design/pages/`
+2. 在 `https://www.uiprompt.site/zh/styles` 选择合适风格，整理风格提示词
+3. 在当前 CLI 中生成 `design/STITCH-PROMPT.md`
+4. 按页面 / 流程从 `design/STITCH-PROMPT.md` 中提取执行 Prompt，带到 `https://stitch.withgoogle.com/` 逐个生成原型
+5. 回到当前任务，把确认后的页面结构、组件清单、交互要点沉淀到 `design/specs/` 与 `design/pages/`
 
-### Step 2: 功能规格说明
+### Step 1.5: Stitch Prompt 固定模板（如有前端）
+
+`design/STITCH-PROMPT.md` 必须采用固定骨架，而不是每次临时拼 Prompt。
+
+固定要求：
+
+- 一个文件同时包含：
+  - 项目级总上下文 Prompt
+  - 各页面 / 各流程的执行 Prompt 小节
+- 默认以**单页面 / 单流程**方式给 Stitch 执行，不使用“整站一次性大 Prompt”
+- 仅当页面明显复杂时，才允许拆出额外页面级 Prompt 文件
+- 必须包含全局“去 AI 味”反例约束，且项目级只允许增补，不允许删除全局基线项
+
+模板至少要覆盖：
+
+1. 产品 / 页面目标
+2. 目标用户与使用场景
+3. 页面 / 模块清单
+4. 核心流程
+5. 必要功能与组件要求
+6. 来自 `uiprompt.site` 的风格提示词
+7. 贴近主题、避免 AI 味的反例禁止项
+8. Stitch 执行范围（当前页面 / 当前流程）
+
+建议默认的全局禁止项至少包括：
+
+- 不要通用 SaaS 模板感
+- 不要廉价渐变和无意义炫光装饰
+- 不要过度圆角、过度玻璃拟态、过度悬浮阴影
+- 不要无信息密度的卡片堆砌
+- 不要与业务无关的装饰性图形或占位文案
+- 不要“英雄区 + 三栏卖点 + 泛化插画”的通用 AI 生成组合
+
+### Step 2: 设计文档矩阵
+
+设计阶段不再把 `BRD.md` 放在 `design/` 目录中。业务需求主文档由目标项目的 `docs/requirements/customer-facing-prd.md` 承担；开发实现需求主文档由 `docs/requirements/developer-facing-prd.md` 承担。
+
+在技术架构确认后，设计文档应按三层来组织：
+
+| 类型 | 文档 | 规则 |
+|------|------|------|
+| 前置正式需求文档 | `docs/requirements/customer-facing-prd.md` | **必需**；承担 BRD 主文档职责 |
+| 前置正式需求文档 | `docs/requirements/developer-facing-prd.md` | **必需**；需求实现说明、模块拆解与任务边界、场景/规则/验收映射；接口/数据库正文改为跳转链接 |
+| 设计阶段硬必选 | `design/TAD.md` | **必需** |
+| 设计阶段硬必选 | `design/ODD-dev.md` | **必需** |
+| 设计阶段硬必选 | `design/ODD-user.md` | **必需** |
+| 设计阶段硬必选 | 项目根 `README.md` | **必需**；此阶段只要求最低可用版 |
+| 设计阶段条件必选 | `design/DDD.md` | 涉及数据库 / 持久化 / 缓存数据模型 / 迁移时创建 |
+| 设计阶段条件必选 | `design/IDD.md` | 涉及 API / 接口契约 / 第三方集成接口时创建 |
+| 设计阶段条件必选 | `design/AID.md` | 涉及 AI / LLM 方案时创建 |
+| 设计阶段条件必选 | `design/STITCH-PROMPT.md` | 涉及页面视觉原型时创建 |
+| 设计阶段条件必选 | `design/specs/<module>.md` | 复杂模块时创建 |
+| 设计阶段条件必选 | `design/pages/<page>.md` | 页面复杂时创建 |
+
+### Step 3: 条件文档判定（技术架构确认后立即执行）
+
+在输出 `TAD.md` 时，必须同步完成以下判断，不能拖到实现阶段再补：
+
+1. 是否涉及数据库 / 持久化 / 缓存数据模型
+2. 是否涉及 API / 接口契约 / 第三方集成接口
+3. 是否涉及 AI / LLM 方案
+4. 是否涉及页面视觉原型
+
+若判断“涉及”，则在当前 design 阶段直接创建并细化对应文档：
+
+- `design/DDD.md`
+- `design/IDD.md`
+- `design/AID.md`
+- `design/STITCH-PROMPT.md`
+
+### Step 4: 功能规格说明
 
 为每个模块生成 `design/specs/<module>.md`
 
-### Step 3: 可执行原型验证
+### Step 5: 可执行原型验证
 
 覆盖 1 主流程 + 1 异常 + 1 空数据
 
-### Step 4: 页面与交互说明
+### Step 6: 页面与交互说明
 
 为每个页面生成 `design/pages/<page>.md`
 
-### Step 4.5: MCP 能力路由
+### Step 6.5: MCP 能力路由
 
 | 场景 | 调用能力 | 触发条件 | 说明 |
 |------|---------|---------|------|
@@ -69,7 +145,7 @@ description: 需求冻结了？开始设计 — UI/UX、架构选型、接口设
 | 架构图可视化 | `markmap` | 当需要生成架构图或模块依赖图时 | 模块依赖图、技术栈确认 |
 | 框架 / SDK API 文档 | `Context7` | 当需要查询第三方库或框架官方文档时 | 技术选型必查；无法获取时标记 `[Evidence Gap]` |
 
-### Step 5: 技术方案设计
+### Step 7: 技术方案设计
 
 **MCP 能力路由**
 
@@ -91,13 +167,27 @@ description: 需求冻结了？开始设计 — UI/UX、架构选型、接口设
 | 数据库 | `postgresql-table-design` |
 | 文档撰写 | `doc-coauthoring` |
 
-### Step 6: 文档输出
+### Step 8: 文档输出与后续前端基线任务
 
 ```bash
-python3 <WORKFLOW_DIR>/commands/shell/design-export.py --validate
+python3 docs/workflows/新项目开发工作流/commands/shell/design-export.py --validate <design-dir>
 ```
 
-输出文档体系：`design/index.md` `BRD.md` `TAD.md` `DDD.md` `IDD.md`（必需）；`AID.md` `ODD.md`（可选）
+若在目标项目内通过安装后的 helper 执行，则改用目标项目对应的 helper 路径；当前源仓库内维护 workflow 内容时，以上命令可直接使用。
+
+输出文档体系：
+
+- `design/index.md` `TAD.md` `ODD-dev.md` `ODD-user.md`（必需）
+- `DDD.md` `IDD.md` `AID.md` `STITCH-PROMPT.md`（条件文档）
+- `specs/<module>.md` `pages/<page>.md`（按需）
+- 项目根 `README.md`（最低可用版，单独维护）
+
+若项目包含前端视觉落地链路，进入 `/trellis:plan` 时还必须为“`UI -> 首版代码界面`”单独拆出一个前端基线 task，并约束：
+
+- 该 task **禁止**使用 Codex 作为主执行器
+- 该 task 只能由 Claude Code / OpenCode 承担主执行入口
+- 该 task 完成时，必须沉淀 `design/frontend-ui-spec.md`
+- 后续任意 CLI 修改前端时，默认都要以 `design/frontend-ui-spec.md` 为统一约束来源
 
 ---
 
@@ -106,10 +196,21 @@ python3 <WORKFLOW_DIR>/commands/shell/design-export.py --validate
 ```
 $TASK_DIR/design/
 ├── index.md
-├── BRD.md / TAD.md / DDD.md / IDD.md  （必需）
-├── AID.md / ODD.md  （可选）
-├── specs/<module>.md  （可选，由 validate 提示但不强制）
-└── pages/<page>.md  （scaffold 自动创建，validate 不校验）
+├── TAD.md / ODD-dev.md / ODD-user.md                 （必需）
+├── DDD.md / IDD.md / AID.md / STITCH-PROMPT.md       （条件文档）
+├── frontend-ui-spec.md                               （仅 UI -> 首版代码界面任务完成后必补）
+├── specs/<module>.md                                 （复杂模块时补）
+└── pages/<page>.md                                   （页面复杂时补）
+```
+
+目标项目根目录：
+
+```
+docs/requirements/
+├── customer-facing-prd.md    # 承担 BRD 主文档职责
+└── developer-facing-prd.md   # 开发实现需求主文档（需求实现说明、模块拆解与任务边界、场景/规则/验收映射）
+
+README.md                     # design 阶段最低可用版
 ```
 
 ## 下一步推荐
@@ -178,9 +279,9 @@ $TASK_DIR/design/
 
 | 上游字段 / 场景 | 必选资产 | 条件资产 | 设计文档里至少要体现 |
 |---|---|---|---|
-| 内部项目 | 按项目实际选择的 `product-and-requirements` / `architecture` / `verification` 基线 spec 集合 | 按技术栈补 `security.*` `data.*` | 常规 BRD/TAD/DDD/IDD/AID/ODD |
-| 外部项目 + `delivery_control_track = hosted_deployment` | `delivery-control` `transfer-checklist` | 若正式移交含密钥/配置，再加 `secrets-and-config` | TAD 中写清 retained-control 边界；IDD/ODD 中写清交付事件与环境边界 |
-| 外部项目 + `delivery_control_track = trial_authorization` | `delivery-control` `transfer-checklist` `authorization-management` | 若正式移交含密钥/配置，再加 `secrets-and-config` | BRD/IDD 中写清授权状态与到期行为；TAD/ODD 中写清正式授权切换与最终移交门禁 |
+| 内部项目 | 按项目实际选择的 `product-and-requirements` / `architecture` / `verification` 基线 spec 集合 | 按技术栈补 `security.*` `data.*` | `customer-facing-prd` / `developer-facing-prd` + `TAD` + `ODD-dev` / `ODD-user`；`DDD` / `IDD` / `AID` / `STITCH-PROMPT` 视是否涉及而定 |
+| 外部项目 + `delivery_control_track = hosted_deployment` | `delivery-control` `transfer-checklist` | 若正式移交含密钥/配置，再加 `secrets-and-config` | TAD 中写清 retained-control 边界；IDD 与 ODD-dev / ODD-user 中写清交付事件与环境边界 |
+| 外部项目 + `delivery_control_track = trial_authorization` | `delivery-control` `transfer-checklist` `authorization-management` | 若正式移交含密钥/配置，再加 `secrets-and-config` | `customer-facing-prd` / IDD 中写清授权状态与到期行为；TAD 与 ODD-dev / ODD-user 中写清正式授权切换与最终移交门禁 |
 
 最低对齐要求：
 
@@ -200,9 +301,9 @@ $TASK_DIR/design/
 | 你的意图 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
 | 拆解任务 | `/trellis:plan` | 进入任务拆解，或显式触发 `plan` skill | **默认推荐**。前提是已完成项目 `.trellis/spec/` 对齐门禁，再将设计转化为可执行任务 |
-| 项目简单，不需要拆任务 | `/trellis:start` | 直接进入实施，或显式触发 `start` skill | 直接进入实施；start 会自动执行 before-dev 并补 task 门禁 |
+| 项目简单，不需要拆任务 | `/trellis:start` | 直接进入实施，或显式触发 `start` skill | 直接进入实施；start 会自动执行 before-dev 并补 task 门禁。若当前 task 是 `UI -> 首版代码界面`，主执行 CLI 仍必须改用 Claude Code / OpenCode |
 | 需要显式先测某个 task | `/trellis:test-first` | 进入手动测试驱动，或显式触发 `test-first` skill | 非默认主链；仅在明确要先测/补测试证据时进入 |
-| 更简单，直接写代码 | `/trellis:start` | 直接进入实施，或显式触发 `start` skill | 跳过显式 test-first；但不跳过 before-dev 自动前置 |
+| 更简单，直接写代码 | `/trellis:start` | 直接进入实施，或显式触发 `start` skill | 跳过显式 test-first；但不跳过 before-dev 自动前置。若属于视觉前端首版落地 task，Codex 不能作为主执行器 |
 | 设计不完善，回退修改 | `/trellis:design` | 继续补设计，或显式触发 `design` skill | 重新执行某一步骤 |
 | 冻结后出现新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 不直接吸收，获批后再回到受影响的最早阶段 |
 | 冻结后仅需纯澄清 | 留在当前阶段 | 留在当前阶段 | 仅限不改变范围、接口契约、验收标准、成本、工期 |

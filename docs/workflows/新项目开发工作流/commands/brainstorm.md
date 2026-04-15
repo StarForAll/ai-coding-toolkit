@@ -370,7 +370,7 @@ docs/requirements/
 | 你的意图 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
 | 继续澄清需求 | `/trellis:brainstorm` | 继续需求澄清，或显式触发 `brainstorm` skill | 信息不足或需求仍有歧义 |
-| 做设计 | `/trellis:design` | 进入设计阶段，或显式触发 `design` skill | 前提：项目级双需求文档已生成并同步；进入 `design` 时需明确项目自动化检查矩阵（采用 Sonar 的项目必须写真实命令，未采用时必须写替代门禁和原因） |
+| 做设计 | `/trellis:design` | 进入设计阶段，或显式触发 `design` skill | 前提：项目级双需求文档已生成并同步，其中 `customer-facing-prd.md` 承担 BRD 主文档职责；进入 `design` 时需明确设计阶段文档矩阵、项目自动化检查矩阵，以及是否需要 `DDD.md` / `IDD.md` / `AID.md` / `STITCH-PROMPT.md` |
 | 拆任务 | `/trellis:plan` | 进入任务拆解，或显式触发 `plan` skill | `L1/L2` 默认走这里；plan 会优先拆成真实 Trellis tasks，并只输出摘要型 `task_plan.md` |
 | 直接做单任务 | `/trellis:start` | 直接进入实施，或显式触发 `start` skill | 仅限 `L0`、单上下文可闭环；进入实现前 start 会自动执行 before-dev 并补 task 门禁 |
 | 冻结后出现正式变更 | [需求变更管理执行卡](../需求变更管理执行卡.md) | 同上 | 不直接改现有任务基线 |

@@ -115,6 +115,12 @@ $TASK_DIR/before-dev.md
    - 即使前一个 task 已完成，也不会自动开始下一个
    - 仍需再次进入 `/trellis:start`，明确当前要做哪个 task
 
+6. **前端视觉首版落地 task 有额外执行边界**
+   - 若当前选定 task 是 `UI -> 首版代码界面`，Codex 不能作为主执行器
+   - 该 task 必须改由 Claude Code / OpenCode 承担主执行入口
+   - 该 task 完成时，必须同步沉淀 `design/frontend-ui-spec.md`
+   - 后续前端视觉相关 task 默认都应把 `design/frontend-ui-spec.md` 作为统一约束来源
+
 ### 自然语言触发词
 
 | 用户说 | 触发命令 |

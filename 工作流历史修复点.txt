@@ -14,3 +14,5 @@ git remote set-url --add --push origin git@gitee.com:xxx/yyy.git
 6. 初始阶段校验当前分支是main分支且在Brainstorm阶段结束之后添加的门禁中补充使用 sonar-scanner 
 
 7. 任务信息分配给具体的任务不能挤压到 task_plan.md 文件中而是使用trellis的任务机制且每一个具体的任务需要在执行前补充其任务相关的测试门禁
+
+8. 项目包含多种文档以及禁止codex使用原型实现前端界面,design阶段需要尽可能完善在stitch生成原型所需要的提示词
