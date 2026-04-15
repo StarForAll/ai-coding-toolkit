@@ -193,6 +193,7 @@ After changing a workflow rule in any command file:
    - `多CLI通用新项目完整流程演练.md` and `完整流程演练.md` (the walkthrough layer)
    - `工作流全局流转说明（通俗版）.md` (the overview layer)
    - Platform README files (`commands/opencode/README.md`, `commands/codex/README.md`)
+   - Command-derived skill entrypoints (`.agents/skills/*/SKILL.md`, `.qoder/skills/*/SKILL.md`) when the workflow is consumed through skills
    - `learn/README.md` (examples and gotchas)
    - Test files (`test_workflow_installers.py`)
    - Validation scripts (`shell/plan-validate.py`)
@@ -206,7 +207,7 @@ These rules have historically required cross-document propagation:
 - **sonar-scanner conditionalization**: "必须有明确质量平台门禁；采用 Sonar 的项目写真实命令，未采用时写替代门禁和原因" — appears in 总纲, design, plan, finish-work, brainstorm, 命令映射, walkthrough, test
 - **L0/Lite dual-PRD relaxation**: "L0 不强制双 PRD" — appears in brainstorm, 命令映射, walkthrough
 - **review-gate conditional trigger**: "check 默认进 finish-work，条件触发 review-gate" — appears in check, review-gate, start phase router, 总纲, walkthrough, 通俗版
-- **record-session → archive order**: "先 record-session 再 archive" — appears in 总纲, 命令映射, walkthrough, 通俗版, learn, helper patch
+- **record-session → archive order**: "先 record-session 再 archive" — appears in 总纲, 命令映射, walkthrough, 通俗版, learn, helper patch, and any command-derived `record-session` skill entrypoints
 - **project-audit conditional generation**: "不是所有项目都强制" — appears in brainstorm, plan, project-audit, plan-validate.py
 
 ---
