@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 107
+- **Total Sessions**: 108
 - **Last Active**: 2026-04-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~890 | Active |
+| `journal-3.md` | ~936 | Active |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 108 | 2026-04-16 | 修复 archive auto-commit pathspec 失败 | `57f1897` | `main` |
 | 107 | 2026-04-16 | 修复新项目开发工作流门禁与任务说明 | `b962127` | `main` |
 | 106 | 2026-04-16 | 让自动任务状态变更一起自动提交 | `9fcb49c` | `main` |
 | 105 | 2026-04-16 | 修复新项目开发工作流 design-plan 阶段边界 | `83a9cf7` | `main` |
