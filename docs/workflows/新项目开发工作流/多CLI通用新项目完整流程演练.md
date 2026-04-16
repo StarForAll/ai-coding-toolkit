@@ -84,8 +84,11 @@ git remote set-url --add --push origin git@gitee.com:xxx/yyy.git
 - `start` 是 **Trellis 原生命令 + workflow Phase Router 增强**
 - `finish-work` 是 **Trellis 原生命令/技能基线 + workflow 项目化补丁**，不是当前 workflow 新增分发的独立源文件
 - `record-session` 是 **Trellis 原生命令/技能基线 + workflow 元数据闭环补丁**
+- `archive` 仍直接复用目标项目 Trellis 基线里的 `python3 ./.trellis/scripts/task.py archive`，不是当前 workflow 额外分发的一份 helper
 
 如果忽略这层嵌入关系，就容易把“继承基线”误判成“workflow 漏了命令”。
+
+对应到本次 close-out 行为，还要再加一条：若目标项目不是通过当前最新 Trellis 初始化/升级得到的，那么即使 workflow 本身已经安装成功，`record-session -> archive` 这条链路也可能仍然继承旧基线中的 archive bug。
 
 还要额外记住一条：`finish-work` 的项目化补丁虽然会按 Claude Code / OpenCode / Codex 各自原生格式落地，但它承载的**项目检查矩阵含义必须一致**，因为这部分由项目技术架构决定，不由 CLI 类型决定。
 

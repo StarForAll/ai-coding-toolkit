@@ -22,6 +22,8 @@ If the helper returns non-zero, do NOT proceed to archive — fix the failure fi
 python3 ./.trellis/scripts/task.py archive <current-task>
 ```
 
+> 注意：这里的 `archive` 仍直接调用目标项目 Trellis 基线 `task.py`。若目标项目不是当前最新 Trellis 基线，可能还会继承旧基线中的 archive metadata auto-commit 问题；此时应先升级 Trellis，再继续使用当前 workflow 的 close-out 链路。
+
 ### Step 3: Verify clean state
 
 ```bash

@@ -107,6 +107,8 @@ Claude Code 的用户入口仍是项目命令：
 
 因此，不要把“当前 workflow 命令树只列到 `delivery`”理解成“目标项目没有 `finish-work` / `record-session`”。
 
+还要补一条 close-out 边界：`record-session` 虽然会被当前 workflow 注入元数据闭环补丁，但 `archive` 仍直接调用目标项目 Trellis 基线里的 `python3 ./.trellis/scripts/task.py archive`。因此，目标项目最好先升级到当前最新 Trellis；否则即使 workflow 已安装成功，收尾链路仍可能继承旧基线中的 archive metadata auto-commit 问题。
+
 这层负责：
 
 - 显式阶段入口

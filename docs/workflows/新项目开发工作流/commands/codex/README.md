@@ -71,6 +71,8 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 如果忽略“先有 Trellis，再嵌入 workflow”这层关系，就会误把继承资产看成 workflow 漏装或少定义。
 
+还要补一条 close-out 边界：`record-session` 仍按 Trellis 基线能力与 workflow 文档约束承载，而最终的 `archive` 继续直接调用目标项目 Trellis 基线里的 `python3 ./.trellis/scripts/task.py archive`。因此，目标项目最好先升级到当前最新 Trellis；否则即使 workflow 已安装成功，收尾链路仍可能继承旧基线中的 archive metadata auto-commit 问题。
+
 ## 渐进性披露（安装后的使用层）
 
 Codex 下的 MCP / skills 配置也不应全部堆进 `AGENTS.md` 或启动注入内容。

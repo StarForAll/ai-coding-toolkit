@@ -10,6 +10,7 @@
 - 当前 workflow 是“嵌入 + 增强”模型，不会重建 Trellis 原生命令全集
 - `feasibility` 到 `delivery`（含 `project-audit`）这类阶段资产由当前 workflow 分发
 - `start` / `finish-work` / `record-session` 默认来自 Trellis 基线，允许由当前 workflow 追加补丁增强
+- close-out 中的 `archive` 仍直接复用目标项目 Trellis 基线 `task.py`；若目标项目不是当前最新 Trellis 基线，可能不包含 archive auto-commit pathspec 修复
 - 安装器会自动导入 `pack.requirements-discovery-foundation`，并删除 `00-bootstrap-guidelines`
 
 前提:
@@ -1038,6 +1039,7 @@ def main() -> int:
         print(f"    1. 安装器已自动导入 {_REQUIREMENTS_FOUNDATION_PACK}，并清理 {_BOOTSTRAP_TASK_NAME}")
         print("       请先确认 .trellis/library-lock.yaml 已包含需求发现基础资产")
         print("    2. 技术架构确认后，再使用 trellis-library/cli.py assemble 为当前项目补充真实 spec 集合")
+        print("    2.1 若目标项目不是当前最新 Trellis 基线，先升级 Trellis；当前 workflow 的 archive 收尾仍直接复用基线 task.py 行为")
         print("    3. 在目标项目根 README.md 中说明 todo.txt 的存在与用途")
         print("    4. 同一目标项目中各 CLI 的入口协议不同，请分别按各自原生入口使用")
         for cli_type in cli_types:

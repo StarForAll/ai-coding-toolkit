@@ -88,6 +88,22 @@
 
 ---
 
+## 收尾基线依赖
+
+| 资产/行为 | 实际位置 | 分类 | 说明 |
+|-----------|----------|------|------|
+| `record-session` 元数据闭环增强 | `record-session` 基线入口 + workflow patch | 安装器管理 | 当前 workflow 会对 Trellis 基线 `record-session` 注入补丁增强 |
+| `archive` 任务归档行为 | `.trellis/scripts/task.py` / `.trellis/scripts/common/task_store.py` | 运行前置/仅校验 | 仍由目标项目 Trellis 基线提供，当前 workflow **不分发** 这段基线代码 |
+| archive metadata auto-commit pathspec 修复 | Trellis 基线 close-out 实现 | 运行前置/仅校验 | 若目标项目不是当前最新 Trellis 基线，收尾链路仍可能继承旧基线中的 archive bug；建议先升级 Trellis，再使用当前 workflow 的 `record-session -> archive` 收尾链路 |
+
+补充约束：
+
+- `record-session` 虽然会被当前 workflow 注入元数据闭环补丁，但最终的 `archive` 仍直接调用目标项目 Trellis 基线里的 `python3 ./.trellis/scripts/task.py archive`
+- 因此，这类 close-out 行为是否稳定，取决于目标项目当前 Trellis 基线是否已包含相应修复，而不是取决于 workflow 是否额外分发了 helper
+- 若要验证该前提，优先检查目标项目 `.trellis/.version` 是否已升级到当前最新 Trellis 版本
+
+---
+
 ## 前端视觉落地补充边界
 
 | 子阶段 | Claude | OpenCode | Codex |

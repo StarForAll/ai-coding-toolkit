@@ -213,6 +213,9 @@ python3 <WORKFLOW_DIR>/commands/shell/record-session-helper.py \
 
 python3 ./.trellis/scripts/task.py archive <current-task>
 
+# 注意：archive 仍直接复用目标项目 Trellis 基线里的 task.py；若目标项目不是当前最新 Trellis 基线，
+# 可能仍缺少 archive metadata auto-commit 的 pathspec 修复，需先升级 Trellis 再继续收尾。
+
 git status --short .trellis/tasks .trellis/.current-task
 ```
 
