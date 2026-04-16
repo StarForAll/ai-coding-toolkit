@@ -326,11 +326,18 @@ def _auto_commit_archive(task_name: str, repo_root: Path) -> bool:
     Returns True when the metadata commit succeeded or there was genuinely
     nothing to commit. Returns False when staging or commit fails.
     """
-    commit_targets = [
-        f"{DIR_WORKFLOW}/{DIR_TASKS}",
-        f"{DIR_WORKFLOW}/{FILE_CURRENT_TASK}",
-    ]
-    rc, _, err = run_git(["add", "-A", *commit_targets], cwd=repo_root)
+    tasks_rel = f"{DIR_WORKFLOW}/{DIR_TASKS}"
+    current_task_rel = f"{DIR_WORKFLOW}/{FILE_CURRENT_TASK}"
+    commit_targets = [tasks_rel]
+
+    current_task_abs = repo_root / current_task_rel
+    current_task_tracked, _, _ = run_git(
+        ["ls-files", "--error-unmatch", "--", current_task_rel], cwd=repo_root
+    )
+    if current_task_abs.exists() or current_task_tracked == 0:
+        commit_targets.append(current_task_rel)
+
+    rc, _, err = run_git(["add", "-A", "--", *commit_targets], cwd=repo_root)
     if rc != 0:
         print(f"[WARN] git add failed: {err.strip()}", file=sys.stderr)
         return False
