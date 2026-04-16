@@ -34,6 +34,7 @@ from .paths import (
     DIR_ARCHIVE,
     DIR_TASKS,
     DIR_WORKFLOW,
+    FILE_CURRENT_TASK,
     FILE_TASK_JSON,
     clear_current_task,
     generate_task_date_prefix,
@@ -317,23 +318,29 @@ def cmd_archive(args: argparse.Namespace) -> int:
 
 
 def _auto_commit_archive(task_name: str, repo_root: Path) -> bool:
-    """Stage .trellis/tasks/ changes and commit after archive.
+    """Stage task archive metadata changes and commit after archive.
+
+    This includes both `.trellis/tasks/` mutations and `.trellis/.current-task`
+    cleanup so the close-out metadata lands in one auto-commit.
 
     Returns True when the metadata commit succeeded or there was genuinely
     nothing to commit. Returns False when staging or commit fails.
     """
-    tasks_rel = f"{DIR_WORKFLOW}/{DIR_TASKS}"
-    rc, _, err = run_git(["add", "-A", tasks_rel], cwd=repo_root)
+    commit_targets = [
+        f"{DIR_WORKFLOW}/{DIR_TASKS}",
+        f"{DIR_WORKFLOW}/{FILE_CURRENT_TASK}",
+    ]
+    rc, _, err = run_git(["add", "-A", *commit_targets], cwd=repo_root)
     if rc != 0:
         print(f"[WARN] git add failed: {err.strip()}", file=sys.stderr)
         return False
 
-    # Check if there are staged changes
+    # Check if there are staged changes in the archive metadata scope
     rc, _, _ = run_git(
-        ["diff", "--cached", "--quiet", "--", tasks_rel], cwd=repo_root
+        ["diff", "--cached", "--quiet", "--", *commit_targets], cwd=repo_root
     )
     if rc == 0:
-        print("[OK] No task changes to commit.", file=sys.stderr)
+        print("[OK] No task metadata changes to commit.", file=sys.stderr)
         return True
 
     commit_msg = f"chore(task): archive {task_name}"
