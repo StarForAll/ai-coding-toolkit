@@ -128,7 +128,7 @@ const tree = [
       ]},
       { html:'跳阶段前进', cls:'BR', id:'br_skip', bdesc:'满足前置条件时<br>可跳过中间阶段', btrig:'仅限特定场景', side:'left', children:[
         { html:'L0 直接 Start', cls:'L2', det:'单上下文可闭环<br>影响面小<br>不需重设计', id:'br_sk_1' },
-        { html:'跳过 brainstorm', cls:'L2', det:'已有有效 assessment<br>且允许跳过时<br>→ 直接 design/start', id:'br_sk_2' },
+        { html:'复用 feasibility 结果', cls:'L2', det:'已有有效 assessment<br>且前提未变化时<br>→ 不重跑 feasibility，继续 brainstorm', id:'br_sk_2' },
       ]},
       { html:'终止/暂停', cls:'BR', id:'br_stop', bdesc:'可行性评估不通过', btrig:'assessment.md 决策分支', side:'left', children:[
         { html:'拒绝项目', cls:'L2', det:'不合规或不值得做<br>→ 记录原因 终止', id:'br_st_1' },

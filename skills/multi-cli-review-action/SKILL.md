@@ -75,9 +75,34 @@ Multi-CLI Review Action 是多 CLI 协作流程中**当前 CLI（唯一修复者
 
 ## Path Resolution
 
+### 项目根目录优先规则
+
+> **关键约束**：只要传入的是**相对路径**，都必须相对于“正在使用该 skill 的项目根目录”解析。
+>
+> 这里的“项目根目录”指当前 CLI 实际工作所在的项目目录，而不是：
+>
+> - 当前 skill 仓库根目录
+> - 用户家目录
+> - 系统级 `/tmp`
+> - 某个 CLI 自己的安装目录
+
+适用范围：
+
+- `--task-dir`
+- 旧协议下显式传入的报告路径
+- 旧协议兼容模式下自动扫描的默认目录
+
+项目根目录判定顺序：
+
+1. 若当前 CLI / agent 运行环境已经明确提供项目根目录或 repo root，优先使用它
+2. 若未显式提供，但当前工作目录就在某个项目内，则使用该项目的根目录，而不是任意子目录
+3. 若只能确认当前命令是在某个目录下执行，且无法再向上解析 repo root，则退回到该命令的当前工作目录
+4. 若以上信息都不存在或互相冲突，停止自动推断，要求用户传入明确的绝对路径；**不得**猜成系统 `/tmp` 或用户家目录
+
 ### 新协议路径解析
 
 1. **扫描 reviewer 报告**：
+   - 若 `--task-dir` 是相对路径：先按“调用该 skill 的项目根目录”解析
    - 扫描 `{task-dir}/review-round-{N}/` 下的所有 `.md` 文件
    - 排除 `summary-*.md` 和 `action.md`
    - 按 `reviewer-id` 识别来源
@@ -94,11 +119,16 @@ Multi-CLI Review Action 是多 CLI 协作流程中**当前 CLI（唯一修复者
 3. **确定输出文件**：
    - Summary：`{task-dir}/summary-round-{N}.md`
    - Action：`{task-dir}/action.md`
+   - 若 `task-dir` 为相对路径，则上述路径都相对当前项目根目录，不相对系统 `/tmp`
 
 ### 旧协议路径解析（兼容）
 
-1. 显式传入 `md-a` / `md-b` → 直接使用
-2. 未传路径 → 扫描最新 run-id
+1. 显式传入 `md-a` / `md-b`
+   - 绝对路径：直接使用
+   - 相对路径：按“调用该 skill 的项目根目录”解析
+2. 未传路径
+   - 扫描 `<project-root>/tmp/multi-cli-review/` 下最新 run-id
+   - 不扫描系统 `/tmp/multi-cli-review/`
 
 ## Workflow
 
@@ -181,8 +211,8 @@ Multi-CLI Review Action 是多 CLI 协作流程中**当前 CLI（唯一修复者
 ```
 ✅ 执行完成
 
-📄 summary: tmp/multi-cli-review/{task-id}/summary-round-{N}.md
-📄 action: tmp/multi-cli-review/{task-id}/action.md
+📄 summary: <project-root>/tmp/multi-cli-review/{task-id}/summary-round-{N}.md
+📄 action: <project-root>/tmp/multi-cli-review/{task-id}/action.md
 
 📊 统计：
 - 已采纳：3
@@ -477,7 +507,7 @@ def func():
 ```
 ✅ 多 CLI 审查汇总完成
 
-📁 task-dir: tmp/multi-cli-review/my-task
+📁 task-dir: <project-root>/tmp/multi-cli-review/my-task
 🔄 round: 1
 
 📊 报告统计：
@@ -494,8 +524,8 @@ def func():
 - 需人工裁决：1
 
 📄 输出文件：
-- summary: tmp/multi-cli-review/my-task/summary-round-1.md
-- action: tmp/multi-cli-review/my-task/action.md
+- summary: <project-root>/tmp/multi-cli-review/my-task/summary-round-1.md
+- action: <project-root>/tmp/multi-cli-review/my-task/action.md
 ```
 
 ## Error Handling
@@ -581,7 +611,7 @@ CLI（当前 CLI）：
 
 ✅ 多 CLI 审查汇总完成
 
-📁 task-dir: tmp/multi-cli-review/skill-review
+📁 task-dir: <project-root>/tmp/multi-cli-review/skill-review
 🔄 round: 1
 
 📊 报告统计：
@@ -596,8 +626,8 @@ CLI（当前 CLI）：
 - 需人工裁决：1
 
 📄 输出文件：
-- summary: tmp/multi-cli-review/skill-review/summary-round-1.md
-- action: tmp/multi-cli-review/skill-review/action.md
+- summary: <project-root>/tmp/multi-cli-review/skill-review/summary-round-1.md
+- action: <project-root>/tmp/multi-cli-review/skill-review/action.md
 ```
 
 ### 示例 2：指定轮次

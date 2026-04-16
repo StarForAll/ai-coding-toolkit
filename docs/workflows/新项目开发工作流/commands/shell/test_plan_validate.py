@@ -32,6 +32,16 @@ VALID_PLAN = """# Task Plan: Sample
 | .trellis/tasks/04-14-task-b | implementation | 后端域 | 依赖 task-a |
 | .trellis/tasks/04-14-project-audit | project-audit | 全局 | 全部代码相关 task 完成后才允许开始 |
 
+## 当前推荐执行任务（待确认）
+- 任务路径：.trellis/tasks/04-14-task-a
+- 任务标题：TASK-A
+- 本轮目标：完成基础能力
+- 本轮不做：不推进 task-b
+- 前置依赖：无
+- 验收锚点：基础能力可验证
+- 风险提醒：边界变化先回 plan
+- 推荐主执行 CLI：Codex
+
 ## 依赖关系
 
 - .trellis/tasks/04-14-task-b 依赖 .trellis/tasks/04-14-task-a

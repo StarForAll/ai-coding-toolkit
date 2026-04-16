@@ -31,7 +31,7 @@ class FeasibilityCheckTests(unittest.TestCase):
     def test_compliance_step_prints_checklist(self) -> None:
         result = self.run_script("--step", "compliance")
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        self.assertIn("合规性审查清单", result.stdout)
+        self.assertIn("法律与合规风险初筛清单", result.stdout)
 
     # ── estimate step ──
 
@@ -86,9 +86,33 @@ class FeasibilityCheckTests(unittest.TestCase):
             result = self.run_script("--step", "validate", "--task-dir", td)
             self.assertEqual(result.returncode, 1)
 
-    def test_validate_skips_for_internal_project(self) -> None:
+    def test_validate_fails_when_missing_legal_gate(self) -> None:
+        content = (
+            "# 评估\n"
+            "- 总体决策：接\n"
+            "- 是否允许进入 brainstorm：是\n"
+            "\n"
+            "## 红线检查\n"
+            "✅ 通过\n"
+        )
         with tempfile.TemporaryDirectory() as td:
-            (Path(td) / "assessment.md").write_text("# no delivery fields\n", encoding="utf-8")
+            (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
+            result = self.run_script("--step", "validate", "--task-dir", td)
+            self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+            self.assertIn("法律/合规风险结论", result.stdout + result.stderr)
+
+    def test_validate_passes_for_internal_project_with_generic_gate(self) -> None:
+        content = (
+            "# 评估\n"
+            "- 总体决策：接\n"
+            "- 法律/合规风险结论：通过\n"
+            "- 是否允许进入 brainstorm：是\n"
+            "\n"
+            "## 红线检查\n"
+            "✅ 通过\n"
+        )
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
             result = self.run_script("--step", "validate", "--task-dir", td)
             self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
             self.assertIn("内部项目", result.stdout)
@@ -97,7 +121,11 @@ class FeasibilityCheckTests(unittest.TestCase):
         content = (
             "# 评估\n"
             "- 总体决策：接\n"
+            "- 法律/合规风险结论：通过\n"
             "- 是否允许进入 brainstorm：是\n"
+            "\n"
+            "## 红线检查\n"
+            "✅ 通过\n"
             "- `delivery_control_track`: `hosted_deployment`\n"
             "- `delivery_control_handover_trigger`: `final_payment_received`\n"
             "- `delivery_control_retained_scope`: source code and keys\n"
@@ -112,7 +140,11 @@ class FeasibilityCheckTests(unittest.TestCase):
         content = (
             "# 评估\n"
             "- 总体决策：接\n"
+            "- 法律/合规风险结论：通过\n"
             "- 是否允许进入 brainstorm：是\n"
+            "\n"
+            "## 红线检查\n"
+            "✅ 通过\n"
             "- `delivery_control_track`: `invalid_value`\n"
             "- `delivery_control_handover_trigger`: `final_payment_received`\n"
             "- `delivery_control_retained_scope`: none\n"
@@ -126,7 +158,11 @@ class FeasibilityCheckTests(unittest.TestCase):
         content = (
             "# 评估\n"
             "- 总体决策：接\n"
+            "- 法律/合规风险结论：通过\n"
             "- 是否允许进入 brainstorm：是\n"
+            "\n"
+            "## 红线检查\n"
+            "✅ 通过\n"
             "- `delivery_control_track`: `trial_authorization`\n"
             "- `delivery_control_handover_trigger`: `final_payment_received`\n"
             "- `delivery_control_retained_scope`: source code\n"

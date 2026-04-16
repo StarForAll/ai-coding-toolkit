@@ -20,7 +20,7 @@ OpenCode 已具备承载这套 workflow 的原生命令、rules、agents、skill
 前置条件：
 
 - 目标项目本身必须是 Git 项目
-- 若是新建目标项目，本地主分支和初始分支必须是 `main`；若目标项目已存在本地提交历史，则不强制切换
+- 若是新建仓库（尚无本地提交历史），在第一次进入 workflow 前，本地主分支和初始分支必须是 `main`；若目标项目已存在本地提交历史，则不强制切换，仅记录现状
 - `origin` 必须至少配置两个 push URL
 - 目标项目必须已经执行过 `trellis init`
 - 目标项目应能检测到 `trellis init` 产物，例如 `.trellis/.version`
@@ -33,7 +33,7 @@ OpenCode 已具备承载这套 workflow 的原生命令、rules、agents、skill
 
 如果你的目标是让 OpenCode 在目标项目里直接可用这套 workflow，推荐做法是：
 
-1. 确认目标项目满足 `Git + 新项目默认 main（存量项目可保留现状） + origin 至少两个 push URL + trellis init`
+1. 确认目标项目满足 `Git + 新建仓库首次进入 workflow 前为 main（存量项目可保留现状） + origin 至少两个 push URL + trellis init`
 2. 运行：
 
 ```bash

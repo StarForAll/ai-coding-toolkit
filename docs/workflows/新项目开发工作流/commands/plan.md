@@ -102,7 +102,7 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
    即使前一个 task 已收口，也不会被解释成“默认自动开始下一个”。下一 task 仍需显式进入 `/trellis:start` 并重新选定实施对象。
 
 5. **task 级门禁不在 plan 阶段虚构**
-   `plan` 只记录全局门禁摘要。每个 task 的具体测试门禁，在进入该 task 实现前由 `/trellis:start` 自动触发 `before-dev` 后补到 `$TASK_DIR/before-dev.md`。
+   `plan` 只记录全局门禁摘要。每个 task 的具体测试门禁，在进入该 task 实现前由 `/trellis:start` 自动触发 `before-dev` 后生成或刷新 `$TASK_DIR/before-dev.md`。
 
 6. **plan 不是执行阶段**
    `plan` 里只能定义“接下来做什么”，不能开始“已经在做什么”。
@@ -168,6 +168,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 ## 概述
 ## 项目域执行策略
 ## Trellis Task 清单
+## 当前推荐执行任务（待确认）
 ## 依赖关系
 ## 门禁摘要
 ## 任务图摘要
@@ -177,6 +178,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 说明：
 
 - `Trellis Task 清单`：列出现实存在的 task / child task / project-audit task
+- `当前推荐执行任务（待确认）`：输出当前准备进入 implementation / test-first 的叶子 task 说明卡，至少写清任务路径、任务标题、本轮目标、本轮不做、前置依赖、验收锚点、风险提醒、推荐主执行 CLI
 - `依赖关系`：只描述依赖和顺序，不写实时状态
 - `门禁摘要`：只写项目级全局门禁；task 级具体门禁在执行前写入 `$TASK_DIR/before-dev.md`
 - `任务图摘要`：用于人类快速理解 lane、主链、project-audit 触发条件
@@ -205,6 +207,17 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 | .trellis/tasks/04-14-task-b | implementation | 项目域 A | ... |
 | .trellis/tasks/04-14-project-audit | project-audit | 全局 | 全部代码相关 task 完成后才允许开始 |
 
+## 当前推荐执行任务（待确认）
+
+- 任务路径：.trellis/tasks/04-14-task-a
+- 任务标题：TASK-A
+- 本轮目标：完成当前唯一可开工的闭环任务
+- 本轮不做：不顺手推进其他 task 或跨域改动
+- 前置依赖：无 / 已满足
+- 验收锚点：与 `prd.md`、设计文档和检查矩阵对齐
+- 风险提醒：若边界变化，先回 `plan` 或更早阶段
+- 推荐主执行 CLI：Claude Code / OpenCode / Codex（按任务边界选择）
+
 ## 依赖关系
 
 - TASK-B 依赖 TASK-A
@@ -217,7 +230,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
   - <lint / typecheck / test / build / quality gate / delivery gate>
 - task 级门禁：
   - 不在本阶段预造；进入某个 task 实现前，由 `/trellis:start` 自动执行 `before-dev`
-  - 自动生成 `$TASK_DIR/before-dev.md`，补该 task 的当前测试门禁与实现前约束
+  - 自动生成或刷新 `$TASK_DIR/before-dev.md`，补该 task 的当前测试门禁与实现前约束
 
 ## 任务图摘要
 
@@ -282,11 +295,12 @@ $TASK_DIR/
 补充状态约束：
 
 - 如果当前 root task 在 plan 阶段拆出了 children，则继续实施前应把 `.current-task` 切到实际要执行的叶子任务
+- 在进入 implementation / test-first 前，必须先用“当前推荐执行任务（待确认）”说明卡向用户说明本轮要开的 task 信息，再等待用户确认
 - 父任务只保留汇总意义，不应继续作为执行态叶子任务持有 `workflow-state.json`
 
 ## 下一步推荐
 
-**当前状态**: 真实 Trellis task 已拆出，`task_plan.md` 仅保留任务图与门禁摘要；在用户明确确认前，仍停留在 plan 阶段。
+**当前状态**: 真实 Trellis task 已拆出，`task_plan.md` 已包含当前推荐执行任务说明卡、任务图与门禁摘要；在用户明确确认前，仍停留在 plan 阶段。
 
 > 本节定义的是阶段完成后的推荐输出口径，用于帮助当前 CLI 或协作者说明下一步；它不是框架层自动跳转保证。
 

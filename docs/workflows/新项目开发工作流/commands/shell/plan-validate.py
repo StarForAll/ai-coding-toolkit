@@ -19,6 +19,7 @@ REQUIRED_SECTIONS = [
     "概述",
     "项目域执行策略",
     "Trellis Task 清单",
+    "当前推荐执行任务（待确认）",
     "依赖关系",
     "门禁摘要",
     "任务图摘要",
@@ -34,6 +35,7 @@ LEGACY_MARKERS = [
     "冲突说明",
 ]
 PLACEHOLDER_MARKERS = ("待补充", "TBD", "...")
+TASK_CARD_MARKERS = ("任务路径", "任务标题", "本轮目标", "本轮不做", "前置依赖", "验收锚点", "风险提醒", "推荐主执行 CLI")
 
 
 def print_result(ok: bool, success: str, failure: str) -> int:
@@ -156,6 +158,15 @@ def main() -> int:
         has_graph_summary,
         "任务图摘要已写明主链或终局任务",
         "任务图摘要为空，或未写主链/终局任务",
+    )
+
+    task_card_section = "\n".join(find_section_lines(lines, "当前推荐执行任务（待确认）"))
+    has_task_card = has_meaningful_text(task_card_section) and all(marker in task_card_section for marker in TASK_CARD_MARKERS)
+    checks += 1
+    passed += print_result(
+        has_task_card,
+        "当前推荐执行任务说明卡已完整填写",
+        "当前推荐执行任务（待确认）缺少任务说明卡字段（任务路径/任务标题/本轮目标/本轮不做/前置依赖/验收锚点/风险提醒/推荐主执行 CLI）",
     )
 
     task_section = find_section_lines(lines, "Trellis Task 清单")

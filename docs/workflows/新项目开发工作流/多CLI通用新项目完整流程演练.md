@@ -207,11 +207,11 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - `delivery_control_handover_trigger`
 - `delivery_control_retained_scope`
 
-内部项目通常不需要双轨交付字段，但仍要写是否允许进入 `brainstorm`。
+内部项目通常不需要双轨交付字段，但仍必须写明法律/合规风险结论、红线检查结论，以及是否允许进入 `brainstorm`。
 
 ### 退出门禁
 
-- 若是新建目标项目，则在**第一次进入 workflow 的实际入口阶段**（可能是 `feasibility`，也可能是 `brainstorm`）前，本地主分支和初始分支已统一为 `main`；若目标项目已存在本地提交历史，则只记录现状，不强制改分支
+- 若是新建目标项目，则在**第一次进入 workflow** 前，本地主分支和初始分支已统一为 `main`；若此时还没有有效 `assessment.md`，就必须先进入 `feasibility`；若目标项目已存在本地提交历史，则只记录现状，不强制改分支
 - 形成 `assessment.md`
 - 明确是否允许进入 `brainstorm`
 - 若为外部项目，交付控制轨道已定
@@ -414,6 +414,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - `task_plan.md` 摘要已形成
 - 真实 Trellis task / child task 已拆出
 - 每个 task 的全局门禁来源已明确
+- 已生成当前推荐执行任务说明卡，先向用户说明该 task 的目标、边界、依赖、验收与风险
 - 已决定进入 `start` 主链（需要显式先测时才额外进入 `test-first`），但尚未开工
 - 已明确当前要执行的叶子 task，并把状态停在“等待用户确认是否进入 implementation/test-first”
 - 进入 `implementation` / `test-first` 前，必须通过 `workflow-state` 显式设置 `checkpoints.execution_authorized = true`，并记录 `last_confirmed_transition`
@@ -425,7 +426,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 目标
 
-先选定当前 task，再由 `start` 自动执行 `before-dev`、补当前 task 的门禁，之后进入实现闭环。
+先选定当前 task，先向用户说明这次要开的 task 信息，再由 `start` 自动执行 `before-dev`、补当前 task 的门禁，之后进入实现闭环。
 
 ### CLI 入口差异
 

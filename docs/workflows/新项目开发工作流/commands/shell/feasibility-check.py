@@ -17,13 +17,14 @@ from pathlib import Path
 
 
 def step_compliance() -> None:
-    print("=== 合规性审查清单 ===")
+    print("=== 法律与合规风险初筛清单 ===")
     print("□ 项目领域是否受法律法规限制？")
     print("□ 是否涉及数据隐私/跨境传输（GDPR、个保法）？")
     print("□ 是否涉及金融、医疗、教育等强监管行业？")
     print("□ 是否涉及知识产权风险（竞业、专利、开源许可证）？")
+    print("□ 是否存在明显违法用途、灰产用途或不可接受的合规红线？")
     print()
-    print("提示：如发现不合规，应立即终止项目。")
+    print("提示：本清单是 feasibility 阶段的起始硬门禁；如发现不合规，应立即终止项目。")
 
 
 ASSESSMENT_TEMPLATE = """# 项目可行性评估
@@ -33,6 +34,7 @@ ASSESSMENT_TEMPLATE = """# 项目可行性评估
 - 是否可做：
 - 是否值得做：
 - 如何做更稳：
+- 法律/合规风险结论：通过 / 不通过 / 待补充
 - 是否允许进入 brainstorm：是 / 否
 - `delivery_control_track`: `hosted_deployment` / `trial_authorization` / `undecided`
 - `delivery_control_handover_trigger`: 例如 `final_payment_received`
@@ -140,125 +142,141 @@ def step_estimate(task_dir: Path) -> None:
 
 
 def step_validate(task_dir: Path) -> int:
-    """验证 assessment.md 中双轨交付控制字段的完整性"""
-    print("=== 双轨交付控制字段验证 ===")
-    
+    """验证 assessment.md 是否满足 feasibility 阶段的通用门禁与外部项目附加字段。"""
+    print("=== Feasibility 门禁验证 ===")
+
     assessment = task_dir / "assessment.md"
     if not assessment.exists():
         print(f"❌ {assessment} 不存在")
         return 1
-    
+
     content = assessment.read_text(encoding="utf-8")
-    errors = []
-    warnings = []
-    
-    # 检查是否为外部项目（通过是否存在双轨字段判断）
-    has_delivery_control = "delivery_control_track" in content
-    
-    if not has_delivery_control:
-        print("ℹ️ 未检测到双轨交付控制字段，假设为内部项目，跳过验证")
-        return 0
-    
-    print("检测到外部项目，开始验证双轨字段...")
-    
-    # 1. 检查 delivery_control_track
-    track_match = re.search(r'`delivery_control_track`:\s*`([^`]+)`', content)
-    if not track_match:
-        errors.append("缺少 `delivery_control_track` 字段")
-    else:
-        track_value = track_match.group(1)
-        valid_tracks = ["hosted_deployment", "trial_authorization", "undecided"]
-        if track_value not in valid_tracks:
-            errors.append(f"`delivery_control_track` 值无效: {track_value}，应为: {', '.join(valid_tracks)}")
-        else:
-            print(f"✅ `delivery_control_track`: {track_value}")
-    
-    # 2. 检查 delivery_control_handover_trigger
-    trigger_match = re.search(r'`delivery_control_handover_trigger`:\s*(.+)', content)
-    if not trigger_match:
-        errors.append("缺少 `delivery_control_handover_trigger` 字段")
-    else:
-        trigger_value = trigger_match.group(1).strip()
-        if trigger_value in ["...", "", "例如"]:
-            errors.append("`delivery_control_handover_trigger` 未填写具体值")
-        else:
-            print(f"✅ `delivery_control_handover_trigger`: {trigger_value}")
-    
-    # 3. 检查 delivery_control_retained_scope
-    scope_match = re.search(r'`delivery_control_retained_scope`:\s*(.+)', content)
-    if not scope_match:
-        errors.append("缺少 `delivery_control_retained_scope` 字段")
-    else:
-        scope_value = scope_match.group(1).strip()
-        if scope_value in ["...", ""]:
-            errors.append("`delivery_control_retained_scope` 未填写具体值（若无保留范围，应写 `none`）")
-        else:
-            print(f"✅ `delivery_control_retained_scope`: {scope_value}")
-    
-    # 4. 如果是 trial_authorization，检查 trial_authorization_terms
-    if track_match and track_match.group(1) == "trial_authorization":
-        print("\n检测到试运行授权轨道，检查授权条款...")
-        required_terms = [
-            "trial_authorization_terms.validity",
-            "trial_authorization_terms.clock_source_or_usage_basis",
-            "trial_authorization_terms.expiration_behavior",
-            "trial_authorization_terms.renewal_policy",
-            "trial_authorization_terms.permanent_authorization_trigger",
-        ]
-        
-        for term in required_terms:
-            term_match = re.search(rf'`{re.escape(term)}`:\s*(.+)', content)
-            if not term_match:
-                errors.append(f"缺少 `{term}` 字段")
-            else:
-                term_value = term_match.group(1).strip()
-                if term_value in ["...", "", "."]:
-                    errors.append(f"`{term}` 未填写具体值")
-                else:
-                    print(f"✅ `{term}`: {term_value}")
-    
-    # 5. 检查是否允许进入 brainstorm
-    brainstorm_match = re.search(r'是否允许进入 brainstorm：\s*(\S+)', content)
-    if not brainstorm_match:
-        warnings.append("未明确标注 `是否允许进入 brainstorm`")
-    else:
-        brainstorm_value = brainstorm_match.group(1)
-        if brainstorm_value not in ["是", "否"]:
-            warnings.append(f"`是否允许进入 brainstorm` 值异常: {brainstorm_value}")
-        else:
-            print(f"\n✅ `是否允许进入 brainstorm`: {brainstorm_value}")
-    
-    # 6. 检查总体决策
-    decision_match = re.search(r'总体决策：\s*(\S+)', content)
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    decision_match = re.search(r'总体决策[：:]\s*(\S+)', content)
     if not decision_match:
-        warnings.append("未明确标注 `总体决策`")
+        errors.append("缺少 `总体决策` 字段")
     else:
         decision_value = decision_match.group(1)
         valid_decisions = ["接", "谈判后接", "暂停", "拒绝"]
         if decision_value not in valid_decisions:
-            warnings.append(f"`总体决策` 值异常: {decision_value}")
+            errors.append(f"`总体决策` 值异常: {decision_value}")
         else:
             print(f"✅ `总体决策`: {decision_value}")
-    
-    # 输出结果
+
+    legal_match = re.search(r'法律(?:/|与)?合规风险结论[：:]\s*(\S+)', content)
+    if not legal_match:
+        errors.append("缺少 `法律/合规风险结论` 字段")
+    else:
+        legal_value = legal_match.group(1)
+        valid_legal = ["通过", "不通过", "待补充"]
+        if legal_value not in valid_legal:
+            errors.append(f"`法律/合规风险结论` 值异常: {legal_value}")
+        else:
+            print(f"✅ `法律/合规风险结论`: {legal_value}")
+
+    brainstorm_match = re.search(r'是否允许进入 brainstorm[：:]\s*(\S+)', content)
+    if not brainstorm_match:
+        errors.append("未明确标注 `是否允许进入 brainstorm`")
+    else:
+        brainstorm_value = brainstorm_match.group(1)
+        if brainstorm_value not in ["是", "否"]:
+            errors.append(f"`是否允许进入 brainstorm` 值异常: {brainstorm_value}")
+        else:
+            print(f"✅ `是否允许进入 brainstorm`: {brainstorm_value}")
+
+    redline_match = re.search(r'## 红线检查(?P<section>.*?)(?:\n## |\Z)', content, re.S)
+    if not redline_match:
+        errors.append("缺少 `## 红线检查` 章节")
+    else:
+        redline_section = redline_match.group("section")
+        if "✅ 通过" in redline_section:
+            print("✅ `红线检查`: 通过")
+        elif "❌ 不通过" in redline_section:
+            print("✅ `红线检查`: 不通过（已记录）")
+        elif "⚠️ 信息不足需补充" in redline_section:
+            print("✅ `红线检查`: 信息不足需补充（已记录）")
+        else:
+            errors.append("`## 红线检查` 章节未明确写出结论（✅/❌/⚠️）")
+
+    has_delivery_control = "delivery_control_track" in content
+
+    if not has_delivery_control:
+        print("ℹ️ 未检测到双轨交付控制字段，按内部项目处理；通用法律/合规门禁已覆盖")
+    else:
+        print("检测到外部项目，开始验证双轨字段...")
+
+        track_match = re.search(r'`delivery_control_track`:\s*`([^`]+)`', content)
+        if not track_match:
+            errors.append("缺少 `delivery_control_track` 字段")
+        else:
+            track_value = track_match.group(1)
+            valid_tracks = ["hosted_deployment", "trial_authorization", "undecided"]
+            if track_value not in valid_tracks:
+                errors.append(f"`delivery_control_track` 值无效: {track_value}，应为: {', '.join(valid_tracks)}")
+            else:
+                print(f"✅ `delivery_control_track`: {track_value}")
+
+        trigger_match = re.search(r'`delivery_control_handover_trigger`:\s*(.+)', content)
+        if not trigger_match:
+            errors.append("缺少 `delivery_control_handover_trigger` 字段")
+        else:
+            trigger_value = trigger_match.group(1).strip()
+            if trigger_value in ["...", "", "例如"]:
+                errors.append("`delivery_control_handover_trigger` 未填写具体值")
+            else:
+                print(f"✅ `delivery_control_handover_trigger`: {trigger_value}")
+
+        scope_match = re.search(r'`delivery_control_retained_scope`:\s*(.+)', content)
+        if not scope_match:
+            errors.append("缺少 `delivery_control_retained_scope` 字段")
+        else:
+            scope_value = scope_match.group(1).strip()
+            if scope_value in ["...", ""]:
+                errors.append("`delivery_control_retained_scope` 未填写具体值（若无保留范围，应写 `none`）")
+            else:
+                print(f"✅ `delivery_control_retained_scope`: {scope_value}")
+
+        if track_match and track_match.group(1) == "trial_authorization":
+            print("\n检测到试运行授权轨道，检查授权条款...")
+            required_terms = [
+                "trial_authorization_terms.validity",
+                "trial_authorization_terms.clock_source_or_usage_basis",
+                "trial_authorization_terms.expiration_behavior",
+                "trial_authorization_terms.renewal_policy",
+                "trial_authorization_terms.permanent_authorization_trigger",
+            ]
+
+            for term in required_terms:
+                term_match = re.search(rf'`{re.escape(term)}`:\s*(.+)', content)
+                if not term_match:
+                    errors.append(f"缺少 `{term}` 字段")
+                else:
+                    term_value = term_match.group(1).strip()
+                    if term_value in ["...", "", "."]:
+                        errors.append(f"`{term}` 未填写具体值")
+                    else:
+                        print(f"✅ `{term}`: {term_value}")
+
     print("\n" + "=" * 40)
     if warnings:
         print(f"⚠️  警告 ({len(warnings)}):")
-        for w in warnings:
-            print(f"  - {w}")
-    
+        for warning in warnings:
+            print(f"  - {warning}")
+
     if errors:
         print(f"❌ 错误 ({len(errors)}):")
-        for e in errors:
-            print(f"  - {e}")
-        print("\n❌ 双轨交付控制字段验证未通过，请补充后重试")
+        for error in errors:
+            print(f"  - {error}")
+        print("\n❌ Feasibility 门禁验证未通过，请补充 assessment.md 后重试")
         return 1
-    
+
     if not warnings:
-        print("✅ 双轨交付控制字段验证通过")
+        print("✅ Feasibility 门禁验证通过")
     else:
-        print("✅ 双轨交付控制字段基本通过，但有警告")
-    
+        print("✅ Feasibility 门禁基本通过，但有警告")
+
     return 0
 
 

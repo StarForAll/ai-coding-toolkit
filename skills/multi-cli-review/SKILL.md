@@ -115,27 +115,70 @@ tmp/multi-cli-review/<run-id>/
 
 ## Path Resolution
 
+### 项目根目录优先规则
+
+> **关键约束**：只要传入的是**相对路径**，都必须相对于“正在使用该 skill 的项目根目录”解析。
+>
+> 这里的“项目根目录”指当前 CLI 实际工作所在的项目目录，而不是：
+>
+> - 当前 skill 仓库根目录
+> - 用户家目录
+> - 系统级 `/tmp`
+> - 某个 CLI 自己的安装目录
+
+适用范围：
+
+- `--task-dir`
+- `--output`
+- `--md-a`
+- `--md-b`
+- 旧协议下默认扫描的 `tmp/multi-cli-review/`
+
+项目根目录判定顺序：
+
+1. 若当前 CLI / agent 运行环境已经明确提供项目根目录或 repo root，优先使用它
+2. 若未显式提供，但当前工作目录就在某个项目内，则使用该项目的根目录，而不是任意子目录
+3. 若只能确认当前命令是在某个目录下执行，且无法再向上解析 repo root，则退回到该命令的当前工作目录
+4. 若以上信息都不存在或互相冲突，停止自动推断，要求用户传入明确的绝对路径；**不得**猜成系统 `/tmp` 或用户家目录
+
+示例：
+
+- 若在项目 `my-app/` 中执行 `--task-dir tmp/multi-cli-review/task-a`
+  - 实际目录应理解为 `my-app/tmp/multi-cli-review/task-a`
+  - **不是** `/tmp/multi-cli-review/task-a`
+  - **不是** `<当前 skill 所在仓库>/tmp/multi-cli-review/task-a`
+
 ### 新协议路径解析
 
 > **前提**：新协议必须由当前 CLI（协调者）在启动多 reviewer 任务时通过 `--task-dir` 明确指定目录。
 > Reviewer 端**不负责**创建目录，只负责写入报告文件。
 
 1. **显式 `--task-dir` + `--reviewer-id`**：
+   - 若 `--task-dir` 是相对路径：先按“调用该 skill 的项目根目录”解析
    - 输出路径：`{task-dir}/review-round-{N}/{reviewer-id}.md`
    - 轮次 N：若未指定，默认取最大轮次 + 1
    - 若 `{task-dir}/review-round-{N}/` 目录不存在 → **报错**，要求协调者重新传入正确的 `--task-dir`
 
 2. **显式 `--output`**：
-   - 直接使用指定路径，不做解析
+   - 若 `--output` 是绝对路径：直接使用
+   - 若 `--output` 是相对路径：按“调用该 skill 的项目根目录”解析
+   - 不允许把相对 `--output` 默认为用户目录或系统 `/tmp`
 
 ### 旧协议路径解析（兼容）
 
-1. 显式 `--md-a`：直接使用指定路径
-2. 只传 `--md-b`：根据同级目录推导 `cur_defect.md`
-3. 两者都未传：扫描 `tmp/multi-cli-review/` 下已有数字目录，取最大 + 1，输出 `cur_defect.md`
+1. 显式 `--md-a`：
+   - 绝对路径：直接使用
+   - 相对路径：按“调用该 skill 的项目根目录”解析
+2. 只传 `--md-b`：
+   - 先按相同规则解析 `--md-b`
+   - 再根据其同级目录推导 `cur_defect.md`
+3. 两者都未传：
+   - 扫描 `<project-root>/tmp/multi-cli-review/` 下已有数字目录
+   - 取最大 + 1，输出 `<project-root>/tmp/multi-cli-review/<run-id>/cur_defect.md`
 
 > ⚠️ **无显式参数兜底规则**：不传入任何定位参数时，仅走旧协议并输出 `cur_defect.md`。
 > **严禁**在无显式 `--task-dir` 时自动生成 `task-{时间戳}` 目录并使用新协议格式。
+> **严禁**把旧协议兜底目录解释成系统 `/tmp/multi-cli-review/`。
 
 ## Reviewer ID Rules
 
@@ -243,7 +286,7 @@ protocol: task-level
 ## 迭代状态
 - 当前迭代次数：1
 - 上次分析时间：2026-03-20
-- 当前运行目录：tmp/multi-cli-review/<run-id>/
+- 当前运行目录：<project-root>/tmp/multi-cli-review/<run-id>/
 - 协议版本：legacy
 ```
 
@@ -275,10 +318,10 @@ protocol: task-level
    ```
    ✅ 多 CLI 审查报告已生成
 
-   📁 task-dir: tmp/multi-cli-review/{task-id}
+   📁 task-dir: <project-root>/tmp/multi-cli-review/{task-id}
    🔄 round: {N}
    👤 reviewer-id: {reviewer-id}
-   📄 输出文件: tmp/multi-cli-review/{task-id}/review-round-{N}/{reviewer-id}.md
+   📄 输出文件: <project-root>/tmp/multi-cli-review/{task-id}/review-round-{N}/{reviewer-id}.md
    ```
 
 ### 旧协议：单 Reviewer 模式（兼容）
@@ -307,10 +350,10 @@ protocol: task-level
 ```
 ✅ 审查报告已生成
 
-📁 task-dir: tmp/multi-cli-review/my-task
+📁 task-dir: <project-root>/tmp/multi-cli-review/my-task
 🔄 round: 2
 👤 reviewer-id: claude-code
-📄 输出文件: tmp/multi-cli-review/my-task/review-round-2/claude-code.md
+📄 输出文件: <project-root>/tmp/multi-cli-review/my-task/review-round-2/claude-code.md
 ```
 
 ## Iteration Rules
@@ -366,9 +409,10 @@ protocol: task-level
 ## Tips
 
 1. **新协议优先**：多 reviewer 场景默认使用 `--task-dir` 模式
-2. **review-focus 要明确**：帮助其他 reviewer 理解本次审查侧重点
-3. **保留"必须解决原因"**：这是后续聚合和决策的重要依据
-4. **保留"建议修复方向"**：包含具体的修复建议，不只是问题描述
+2. **回显解析后的真实路径**：让协调者能看到最终落盘位置，而不是只看到原始参数
+3. **review-focus 要明确**：帮助其他 reviewer 理解本次审查侧重点
+4. **保留"必须解决原因"**：这是后续聚合和决策的重要依据
+5. **保留"建议修复方向"**：包含具体的修复建议，不只是问题描述
 
 ## Examples
 
@@ -379,17 +423,18 @@ protocol: task-level
 
 CLI Reviewer：
 1. 解析参数：task-dir=tmp/multi-cli-review/skill-review, reviewer-id=codex, round=1
-2. 检查目录存在性：确认 `tmp/multi-cli-review/skill-review/review-round-1/` 存在（如不存在则报错）
-3. 分析问题
-4. 写入报告
-5. 回显执行结果
+2. 先按当前项目根目录解析 `tmp/multi-cli-review/skill-review`
+3. 检查目录存在性：确认 `<project-root>/tmp/multi-cli-review/skill-review/review-round-1/` 存在（如不存在则报错）
+4. 分析问题
+5. 写入报告
+6. 回显执行结果
 
 ✅ 审查报告已生成
 
-📁 task-dir: tmp/multi-cli-review/skill-review
+📁 task-dir: <project-root>/tmp/multi-cli-review/skill-review
 🔄 round: 1
 👤 reviewer-id: codex
-📄 输出文件: tmp/multi-cli-review/skill-review/review-round-1/codex.md
+📄 输出文件: <project-root>/tmp/multi-cli-review/skill-review/review-round-1/codex.md
 ```
 
 ### 示例 2：新协议多 Reviewer
@@ -398,12 +443,12 @@ CLI Reviewer：
 用户（CLI 1）：/multi-cli-review 分析 skills/multi-cli-review 存在的问题 --task-dir tmp/multi-cli-review/skill-review --reviewer-id gemini
 
 CLI Reviewer（Gemini）：
-分析完成，写入 tmp/multi-cli-review/skill-review/review-round-1/gemini.md
+分析完成，写入 <project-root>/tmp/multi-cli-review/skill-review/review-round-1/gemini.md
 
 用户（CLI 1）：/multi-cli-review 分析 skills/multi-cli-review 存在的问题 --task-dir tmp/multi-cli-review/skill-review --reviewer-id claude
 
 CLI Reviewer（Claude）：
-分析完成，写入 tmp/multi-cli-review/skill-review/review-round-1/claude.md
+分析完成，写入 <project-root>/tmp/multi-cli-review/skill-review/review-round-1/claude.md
 
 当前 CLI（CLI 1）使用 multi-cli-review-action 汇总两份报告，执行修复
 ```
@@ -414,9 +459,9 @@ CLI Reviewer（Claude）：
 用户：/multi-cli-review 分析 ./docs/api.md
 
 CLI：
-1. 扫描 tmp/multi-cli-review/，发现已有 run-id=3
+1. 扫描 <project-root>/tmp/multi-cli-review/，发现已有 run-id=3
 2. 使用 run-id=4
-3. 输出到 tmp/multi-cli-review/4/cur_defect.md
+3. 输出到 <project-root>/tmp/multi-cli-review/4/cur_defect.md
 4. 回显路径
 ```
 

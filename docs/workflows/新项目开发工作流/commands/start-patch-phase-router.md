@@ -55,6 +55,9 @@ get_context.py + .current-task + workflow-state.json
     ├── `.trellis/workflow-installed.json` 存在 + `.trellis/library-lock.yaml` 缺失或缺少最低资产集
     │   └── 先补齐安装基线；补齐后重新执行本决策树
     │
+    ├── 无 `.current-task` + 已存在有效 `assessment.md` + 用户意图是继续同一轮需求推进
+    │   └── 允许复用既有 assessment；优先路由 → /trellis:brainstorm
+    │
     ├── 无 `.current-task` + 用户描述的是新项目/新客户/首次立项
     │   └── 路由 → /trellis:feasibility
     │
@@ -113,6 +116,8 @@ get_context.py + .current-task + workflow-state.json
 
 1. **一次只推进一个具体叶子 task**
    - 不能把多个 task 混在同一上下文里一起做
+   - 若本次是从 `plan` 切入 `implementation` / `test-first`，先用任务说明卡向用户说明当前叶子 task 的目标、边界、依赖、验收与风险，再继续实施
+   - 这里的“任务说明卡”即 `plan.md` 中的 `当前推荐执行任务（待确认）` 区块
 
 2. **每次进入实现前都自动执行 before-dev**
    - 不要求用户显式输入 `/trellis:before-dev`
