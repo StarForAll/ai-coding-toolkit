@@ -42,6 +42,7 @@ STAGE_STATUSES = {
     "awaiting_user_confirmation",
     "completed",
 }
+EXECUTION_STAGES = {"implementation", "test-first"}
 SUPPORTED_STATE_VERSION = 1
 
 
@@ -104,6 +105,7 @@ def build_default_state(stage: str) -> dict[str, Any]:
         "notes": [],
         "checkpoints": {
             "architecture_confirmed": False,
+            "execution_authorized": False,
         },
         "updated_at": now_iso(),
     }
@@ -200,14 +202,47 @@ def validate_state_shape(state: dict[str, Any], errors: list[str]) -> None:
         architecture_confirmed = checkpoints.get("architecture_confirmed")
         if not isinstance(architecture_confirmed, bool):
             errors.append("checkpoints.architecture_confirmed 必须是布尔值")
+        execution_authorized = checkpoints.get("execution_authorized")
+        if not isinstance(execution_authorized, bool):
+            errors.append("checkpoints.execution_authorized 必须是布尔值")
 
     transition = state.get("last_confirmed_transition")
     if transition is not None:
         if not isinstance(transition, dict):
             errors.append("last_confirmed_transition 必须是对象或 null")
         else:
+            if not isinstance(transition.get("from"), str):
+                errors.append("last_confirmed_transition.from 必须存在且为字符串")
             if not isinstance(transition.get("to"), str):
                 errors.append("last_confirmed_transition.to 必须存在且为字符串")
+            if not isinstance(transition.get("confirmed_at"), str):
+                errors.append("last_confirmed_transition.confirmed_at 必须存在且为字符串")
+
+
+def validate_execution_boundary(state: dict[str, Any], errors: list[str]) -> None:
+    stage = state.get("stage")
+    checkpoints = state.get("checkpoints", {})
+    execution_authorized = checkpoints.get("execution_authorized", False)
+    transition = state.get("last_confirmed_transition")
+
+    if stage in EXECUTION_STAGES:
+        if execution_authorized is not True:
+            errors.append(
+                f"当前 stage={stage!r} 时，checkpoints.execution_authorized 必须为 true"
+            )
+        if not isinstance(transition, dict):
+            errors.append(
+                f"当前 stage={stage!r} 时，必须保留 last_confirmed_transition 作为进入执行阶段的确认记录"
+            )
+        elif transition.get("to") != stage:
+            errors.append(
+                f"当前 stage={stage!r} 时，last_confirmed_transition.to 必须等于当前 stage"
+            )
+    else:
+        if execution_authorized is True:
+            errors.append(
+                f"当前 stage={stage!r} 不是执行阶段，checkpoints.execution_authorized 必须为 false"
+            )
 
 
 def validate_current_task_pointer(task_dir: Path, repo_root: Path, current_task_file: Path, errors: list[str]) -> None:
@@ -302,12 +337,32 @@ def cmd_set(args: argparse.Namespace) -> int:
     if args.architecture_confirmed is not None:
         checkpoints = state.setdefault("checkpoints", {})
         checkpoints["architecture_confirmed"] = args.architecture_confirmed
+    if args.execution_authorized is not None:
+        checkpoints = state.setdefault("checkpoints", {})
+        checkpoints["execution_authorized"] = args.execution_authorized
+    if args.clear_last_transition:
+        state["last_confirmed_transition"] = None
+    elif args.transition_from is not None:
+        state["last_confirmed_transition"] = {
+            "from": args.transition_from,
+            "to": state.get("stage"),
+            "confirmed_at": now_iso(),
+        }
     if args.note:
         notes = state.setdefault("notes", [])
         if not isinstance(notes, list):
             notes = []
             state["notes"] = notes
         notes.append(args.note)
+
+    set_errors: list[str] = []
+    validate_state_shape(state, set_errors)
+    validate_execution_boundary(state, set_errors)
+    if set_errors:
+        for message in set_errors:
+            print(f"❌ {message}")
+        print("❌ 拒绝写入非法 workflow-state；请一次性完成合法的阶段切换参数")
+        return 1
 
     state["updated_at"] = now_iso()
     write_json(state_path, state)
@@ -329,6 +384,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
     print(f"✅ 找到 {state_path.name}")
 
     validate_state_shape(state, errors)
+    validate_execution_boundary(state, errors)
 
     should_check_current_task = not args.skip_current_task_check
     if should_check_current_task:
@@ -381,6 +437,9 @@ def build_parser() -> argparse.ArgumentParser:
     set_parser.add_argument("--allowed-next")
     set_parser.add_argument("--awaiting-user-confirmation", type=bool_arg)
     set_parser.add_argument("--architecture-confirmed", type=bool_arg)
+    set_parser.add_argument("--execution-authorized", type=bool_arg)
+    set_parser.add_argument("--transition-from", choices=sorted(STAGES))
+    set_parser.add_argument("--clear-last-transition", action="store_true")
     set_parser.add_argument("--note")
     set_parser.set_defaults(func=cmd_set)
 

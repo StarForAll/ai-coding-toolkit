@@ -46,6 +46,8 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
 - `/trellis:plan` 只允许重入当前已确认的 plan 阶段，不允许顺手自动进入实现
 - `plan` 完成后，必须先输出已完成/未完成/缺失项，再等待用户确认
 - 只有用户确认后，才允许把执行态切到具体叶子 task 的 implementation / test-first 分支
+- `plan` 阶段内必须保持 `checkpoints.execution_authorized = false`
+- `execution_authorized` 的状态门禁由 `workflow-state.py validate` 强制校验；未满足条件的执行态切换必须拒绝
 
 `/trellis:plan` 的职责是：
 
@@ -54,6 +56,27 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
 3. 产出摘要型 `task_plan.md`
 
 它**不负责**替代 spec 导入、spec 修订、自动化检查矩阵定义，以及 `finish-work` / `record-session` 的首次项目化适配动作。
+
+## plan 阶段硬禁令
+
+`plan` 只允许做“任务划分与规划”，不允许做“具体任务执行”。
+
+只允许：
+
+- 创建 / 补齐真实 Trellis task 与 child task
+- 生成 / 更新摘要型 `task_plan.md`
+- 写清依赖关系、项目域 lane、门禁摘要、任务图摘要
+- 给出候选叶子 task 与候选下一阶段
+- 停在等待用户确认的状态
+
+明确禁止：
+
+- 生成项目基础代码、脚手架代码、页面初版、接口实现、迁移脚本
+- 编写或修改任何属于具体 task 执行范围的实现代码
+- 借“先补个基础文件”“先做一点”为名提前开工
+- 因重新进入 `/trellis:plan` 而自动恢复某个 task 的 implementation
+- 在未获用户明确确认前，把 `.current-task` 切到实施叶子 task
+- 在未获用户明确确认前，把任何 `workflow-state.stage` 改成 `implementation` / `test-first`
 
 ## 历史数据防漂移要求
 
@@ -80,6 +103,9 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
 
 5. **task 级门禁不在 plan 阶段虚构**
    `plan` 只记录全局门禁摘要。每个 task 的具体测试门禁，在进入该 task 实现前由 `/trellis:start` 自动触发 `before-dev` 后补到 `$TASK_DIR/before-dev.md`。
+
+6. **plan 不是执行阶段**
+   `plan` 里只能定义“接下来做什么”，不能开始“已经在做什么”。
 
 ---
 
@@ -226,6 +252,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 
 ```bash
 python3 <WORKFLOW_DIR>/commands/shell/plan-validate.py <task-dir>
+python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 ```
 
 校验重点：
@@ -234,6 +261,7 @@ python3 <WORKFLOW_DIR>/commands/shell/plan-validate.py <task-dir>
 - `task_plan.md` 中列出的关键 task 是否已真实存在
 - 是否写清项目域执行策略、依赖关系、门禁摘要、任务图摘要
 - 是否仍残留旧版执行矩阵字段
+- `plan` 阶段是否仍保持 `execution_authorized = false`
 
 不负责判断：
 
@@ -266,7 +294,7 @@ $TASK_DIR/
 
 | 你的意图 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
-| 开始做某个具体 task | `/trellis:start` | 直接进入实施，或显式触发 `start` skill | **默认推荐**。仅在用户明确确认 plan 已完成后才允许；先切换到目标叶子 task，再由 start 自动执行 before-dev 并补 task 门禁 |
+| 确认进入某个具体 task 的 implementation | `/trellis:start` | 直接进入实施，或显式触发 `start` skill | **默认推荐**。仅在用户明确确认 plan 已完成后才允许；先切换到目标叶子 task，再由 start 自动执行 before-dev 并补 task 门禁 |
 | 显式先测某个 task | `/trellis:test-first` | 进入测试驱动，或显式触发 `test-first` skill | 非默认主链；仅在明确要 TDD / 补验证证据时使用 |
 | 拆解不合理，重新拆 | `/trellis:plan` | 继续任务拆解，或显式触发 `plan` skill | 重新执行拆解流程 |
 | 设计有问题 | `/trellis:design` | 回退设计阶段，或显式触发 `design` skill | 回退到设计阶段 |

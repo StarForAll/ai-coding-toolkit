@@ -67,7 +67,7 @@ const tree = [
         { html:'prd', cls:'SK', id:'p2_s', su:'§2 PRD 编写 skill' },
       ]},
       { html:'§3 设计阶段', cls:'L1 c3', id:'p3', sub:'<span class="cmd">/trellis:design</span>', children:[
-        { html:'3.1 UI/UX 设计',           cls:'L2', det:'uiprompt.site → STITCH-PROMPT → Stitch<br>Codex 禁止承担前两步主执行', id:'p3_1' },
+        { html:'3.1 UI/UX 设计',           cls:'L2', det:'uiprompt.site → STITCH-PROMPT → Stitch<br>Codex 禁止承担前两步主执行<br>原型只作参考，不直接带入正式实现', id:'p3_1' },
         { html:'3.2 功能规格说明',         cls:'L2', det:'模块/业务规则<br>输入输出/异常处理/接口', id:'p3_2' },
         { html:'3.3 当前边界',             cls:'L2', det:'架构确认前只同步 customer-facing-prd.md<br>其余技术结论留在 task 工作底稿', id:'p3_3' },
         { html:'3.4 页面与交互说明',       cls:'L2', det:'页面清单/定位/结构<br>状态变化/交互说明', id:'p3_4' },
@@ -78,7 +78,7 @@ const tree = [
         { html:'ui-ux-pro-max / architecture-patterns', cls:'SK', id:'p3_s', su:'§3 设计辅助 skills' },
       ]},
       { html:'§4 任务分解与准备', cls:'L1 c4', id:'p4', sub:'<span class="cmd">/trellis:plan</span>', children:[
-        { html:'4.1 AI驱动任务拆解', cls:'L2', det:'拆真实 Trellis task<br>task_plan.md 只保留摘要', id:'p4_1' },
+        { html:'4.1 AI驱动任务拆解', cls:'L2', det:'拆真实 Trellis task<br>task_plan.md 只保留摘要<br>plan 只规划，不执行具体任务', id:'p4_1' },
         { html:'4.2 任务排期',       cls:'L2', det:'按项目域规划串行 lane<br>不把并行当默认主链', id:'p4_2' },
         { html:'4.3 手动 Test-First',  cls:'L2', det:'仅在显式先测/补证据时进入<br>非默认主链', id:'p4_3' },
         { html:'/trellis:plan',      cls:'L3', id:'p4_c1', cp:'.claude/commands/trellis/plan.md', cd:'任务拆解 · 输出 task 图摘要' },

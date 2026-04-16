@@ -127,6 +127,12 @@ Claude Code 的用户入口仍是项目命令：
 
 供后续任意 CLI 修改前端时统一遵循。
 
+补充边界：
+
+- UI 原型文件、原型导出代码、临时网页源码都只属于参考资产，不能直接作为正式实现输入
+- `plan` 阶段在 Claude Code 下也仍然只是规划阶段，不允许生成基础代码或直接进入 implementation
+- `plan` 阶段的 `execution_authorized` 必须保持为 `false`；只有用户明确确认进入 `implementation` / `test-first` 后，才允许显式设为 `true`
+
 这层不负责：
 
 - 保存凭据

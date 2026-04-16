@@ -32,6 +32,12 @@ $TASK_DIR/before-dev.md
 - `before-dev.md` 已给出 task 门禁，但验证证据仍不足
 - `check` 明确指出“先补测试再回来”
 
+补充门禁：
+
+- `test-first` 与 `implementation` 同属执行阶段
+- 进入 `/trellis:test-first` 前，必须经过用户明确确认，并把 `checkpoints.execution_authorized = true`
+- 若仍停留在 `plan` 阶段或 `execution_authorized = false`，不得进入 `test-first`
+
 ## When to Use (自然触发)
 
 - "先写测试吧"

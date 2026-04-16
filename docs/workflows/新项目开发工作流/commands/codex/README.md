@@ -180,6 +180,12 @@ Codex 在这两步里只允许承担：
 
 后续任何 CLI 再修改前端时，都默认要以这份文档作为统一约束来源，避免样式和效果漂移。
 
+补充边界：
+
+- UI 原型文件、原型导出代码、临时网页源码都只属于参考资产，Codex 不应把它们直接当作正式实现输入
+- `plan` skill 在 Codex 下也只能做任务划分与规划，不允许生成基础代码或直接进入 implementation
+- `plan` 阶段的 `execution_authorized` 必须保持为 `false`；只有用户明确确认进入 `implementation` / `test-first` 后，才允许显式设为 `true`
+
 ### 4. Subagents：用 `.codex/agents/*.toml` 承载研究/实现/检查角色
 
 Codex 官方支持 subagents。对 Trellis workflow，推荐用它承载：

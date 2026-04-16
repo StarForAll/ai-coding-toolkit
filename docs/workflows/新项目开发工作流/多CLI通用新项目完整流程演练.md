@@ -336,6 +336,8 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - `UI -> 首版代码界面`：Codex 也不能作为主执行器，必须改用 Claude Code / OpenCode
 - 该首版前端落地 task 完成时，必须产出 `design/frontend-ui-spec.md`
 - 后续任意 CLI 再改前端时，都默认以 `design/frontend-ui-spec.md` 为统一约束来源
+- UI 原型文件、原型导出代码、临时网页源码都只算参考资产，不能直接作为正式实现输入
+- 真正允许带入实现的，只能是已经回收并转写好的交互 / 视觉结论
 
 ### Stitch Prompt 口径
 
@@ -412,8 +414,10 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - `task_plan.md` 摘要已形成
 - 真实 Trellis task / child task 已拆出
 - 每个 task 的全局门禁来源已明确
-- 已决定进入 `start` 主链（需要显式先测时才额外进入 `test-first`）
+- 已决定进入 `start` 主链（需要显式先测时才额外进入 `test-first`），但尚未开工
 - 已明确当前要执行的叶子 task，并把状态停在“等待用户确认是否进入 implementation/test-first”
+- 进入 `implementation` / `test-first` 前，必须通过 `workflow-state` 显式设置 `checkpoints.execution_authorized = true`，并记录 `last_confirmed_transition`
+- `plan` 阶段未生成基础代码、未编写实现代码、未直接执行任何具体 task
 
 ---
 

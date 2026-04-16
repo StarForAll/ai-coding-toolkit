@@ -141,6 +141,20 @@ python3 .trellis/scripts/workflow/workflow-state.py validate <task-dir>
 4. 按页面 / 流程从 `design/STITCH-PROMPT.md` 中提取执行 Prompt，带到 `https://stitch.withgoogle.com/` 逐个生成原型
 5. 把确认后的页面结构、组件清单、交互要点记录回 task 工作底稿
 
+**原型资产隔离（强制）**：
+
+- 下列内容**禁止**直接带入正式实现：
+  - 照片、截图、录屏、预览图
+  - Figma / Stitch / HTML / Storybook 原型文件或分享链接
+  - 原型工具导出的组件代码、页面源码、临时演示代码
+- 下列结论允许保留，但必须先转写成结构化设计输入：
+  - 页面层级、区块划分、组件清单
+  - 交互流程、状态集合、反馈方式
+  - 视觉方向、布局约束、可访问性 / 动效结论
+- 允许保留的结论应优先沉淀到 task 工作底稿、`design/pages/*.md`、`design/specs/*.md`；若后续存在 `UI -> 首版代码界面` task，则再沉淀到 `design/frontend-ui-spec.md`
+- 即使原型提供了网页源码或可导出代码，也不能把该代码直接作为正式实现输入
+- 以 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 中的 design 参考资产隔离规则为准
+
 ### Step 3: 当前步骤允许同步的正式文档
 
 在 `checkpoints.architecture_confirmed = false` 时，design 阶段只允许继续同步：

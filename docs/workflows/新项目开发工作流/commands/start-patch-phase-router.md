@@ -10,6 +10,8 @@
 - `.trellis/.current-task` 不能为空；为空时不允许自动识别阶段
 - 只有当前执行中的叶子任务允许持有 `workflow-state.json`
 - 每个阶段完成后都必须先进入 `awaiting_user_confirmation`，用户确认后才能切到下一阶段
+- `plan` 阶段内 `checkpoints.execution_authorized` 必须保持为 `false`
+- 只有进入 `implementation` / `test-first` 时，`checkpoints.execution_authorized` 才允许为 `true`
 
 建议先执行：
 
@@ -78,12 +80,12 @@ get_context.py + .current-task + workflow-state.json
     │   └── 重入 /trellis:design
     │
     ├── `workflow-state.stage = plan`
-    │   └── 重入 /trellis:plan
+    │   └── 重入 /trellis:plan（只做任务划分与规划，禁止借 start 直接开工）
     │
-    ├── `workflow-state.stage = test-first`
+    ├── `workflow-state.stage = test-first` + `checkpoints.execution_authorized = true`
     │   └── 重入 /trellis:test-first
     │
-    ├── `workflow-state.stage = implementation`
+    ├── `workflow-state.stage = implementation` + `checkpoints.execution_authorized = true`
     │   └── 重入实施主链（仍需 before-dev 自动前置）
     │
     ├── `workflow-state.stage = project-audit`
@@ -127,11 +129,15 @@ $TASK_DIR/before-dev.md
    - `design` / `plan` 只定义项目级全局测试基线与任务图摘要
    - 具体 task 的测试门禁，必须在进入该 task 实现前补到 `before-dev.md`
 
-5. **串行不等于自动续跑**
+5. **plan 未授权时不得进入实施**
+   - 若当前状态仍处于 `plan`，或 `execution_authorized = false`，`/trellis:start` 只能停留在规划/恢复分支
+   - 不允许借“开始写代码”“动手做吧”这类自然语言绕过 plan 的确认门禁
+
+6. **串行不等于自动续跑**
    - 即使前一个 task 已完成，也不会自动开始下一个
    - 仍需再次进入 `/trellis:start`，但只能重入当前已确认阶段，不能自动跨阶段
 
-6. **前端视觉首版落地 task 有额外执行边界**
+7. **前端视觉首版落地 task 有额外执行边界**
    - 若当前选定 task 是 `UI -> 首版代码界面`，Codex 不能作为主执行器
    - 该 task 必须改由 Claude Code / OpenCode 承担主执行入口
    - 该 task 完成时，必须同步沉淀 `design/frontend-ui-spec.md`
