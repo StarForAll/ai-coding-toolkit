@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 104
-- **Last Active**: 2026-04-15
+- **Total Sessions**: 105
+- **Last Active**: 2026-04-16
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~723 | Active |
+| `journal-3.md` | ~786 | Active |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 105 | 2026-04-16 | 修复新项目开发工作流 design-plan 阶段边界 | `83a9cf7` | `main` |
 | 104 | 2026-04-15 | 强化新项目工作流强门禁状态机 | `2a6b3b3` | `main` |
 | 103 | 2026-04-15 | 修复新项目开发工作流设计阶段与前端视觉边界 | `c76a4e1` | `main` |
 | 102 | 2026-04-14 | 修复 task archive 自动提交缺口 | `d16e572` | `main` |
