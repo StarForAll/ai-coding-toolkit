@@ -152,6 +152,10 @@ Claude Code 的用户入口仍是项目命令：
   - 放 repo 共享的 hooks 接线、默认 deny 或共享运行时基线
 - `.claude/settings.local.json`
   - 放本机 / 本环境相关的 allowlist、MCP 可用性与调试权限扩展
+- 若项目启用源码水印与归属证明门禁：
+  - 长期策略（是否启用、边界、默认验证要求）放 `AGENTS.md`
+  - 具体设计与交付产物放 `$TASK_DIR/design/source-watermark-plan.md`、`$TASK_DIR/delivery/ownership-proof.md`、`$TASK_DIR/delivery/source-watermark-verification.md`
+  - 阶段校验使用 `.trellis/scripts/workflow/ownership-proof-validate.py`
 
 当前仓库里的典型结构就是：
 
@@ -220,6 +224,7 @@ Claude Code 的 hooks 是这套 workflow 的关键承载层之一。当前仓库
 | 会话与子代理 hooks | `.claude/hooks/*.py` | 会话启动、上下文注入、收口逻辑 | ❌ 手动维护 |
 | 子代理定义 | `.claude/agents/*.md` | research / implement / check / debug | ❌ 手动维护 |
 | 通用辅助脚本 | `.trellis/scripts/workflow/` | 校验、导出、静态验证脚本 | ✅ `install-workflow.py` |
+| 源码水印与归属证明产物 | `$TASK_DIR/design/`、`$TASK_DIR/delivery/` | 设计计划、提取验证、交付证明 | ❌ 人工维护 / workflow 阶段产出 |
 
 ## 何时仍可用脚本降级
 

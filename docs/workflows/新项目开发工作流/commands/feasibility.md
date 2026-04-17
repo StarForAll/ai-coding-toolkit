@@ -177,6 +177,11 @@ $TASK_DIR/
 - `delivery_control_track`: `hosted_deployment` / `trial_authorization` / `undecided`
 - `delivery_control_handover_trigger`: 例如 `final_payment_received`
 - `delivery_control_retained_scope`: 尾款前仍由开发者保留的环境、账号、密钥、部署控制范围；若无则写 `none`
+- `source_watermark_level`: `none` / `basic` / `hybrid` / `forensic`
+- `source_watermark_channels`: 例如 `visible,zero-width,subtle-markers,zero-watermark`
+- `zero_width_watermark_enabled`: `yes` / `no`
+- `subtle_code_marker_enabled`: `yes` / `no`
+- `ownership_proof_required`: `yes` / `no`
 - 交付控制轨道：托管部署 / 试运行授权 / 未确定
 - 当前结论的前提：
 - 场景标签：
@@ -196,6 +201,7 @@ $TASK_DIR/
 | 管理员权限/密钥移交时点 | ... | ... | ... |
 | 托管部署或试运行授权方案 | ... | ... | ... |
 | 授权到期行为/永久授权触发条件 | ... | ... | ... |
+| 源码水印策略 | ... | ... | ... |
 | 关键依赖 | ... | ... | ... |
 | 数据合规要点 | ... | ... | ... |
 | 决策/验收负责人 | ... | ... | ... |
@@ -251,6 +257,14 @@ $TASK_DIR/
 - [ ] 若采用试运行授权：有效期、续期方式、到期行为、永久授权交付条件
 - [ ] 若采用托管部署：演示/试运行环境的访问范围、SLO、数据责任边界
 
+若项目需要作者归属保护或希望降低被冒名顶替风险，上述条件还应至少覆盖：
+
+- [ ] 是否要求源码水印与归属证明门禁（`ownership_proof_required`）
+- [ ] 源码水印档位（`source_watermark_level`）
+- [ ] 是否启用零宽字符水印（仅允许注释 / 文档字符串 / Markdown）
+- [ ] 是否启用不起眼代码标识
+- [ ] 是否要求交付时提供 `ownership-proof.md` 与 `source-watermark-verification.md`
+
 ## 最小补充信息集
 1. ...（关联维度/为什么会改结论）
 
@@ -269,6 +283,25 @@ $TASK_DIR/
 | `trial_authorization_terms.*` | `## Trial Authorization Terms` | 冻结试运行授权条款 | `/trellis:design` 导入 `authorization-management`；`/trellis:delivery` 校验到期行为与永久授权触发条件 |
 | 源码/密钥/管理员权限移交时点 | `## 关键字段快照` | 补足正式移交边界 | `/trellis:design` 判断是否导入 `secrets-and-config`；`/trellis:plan` 拆移交任务 |
 | 尾款比例、付款结构、逾期处理 | `## 关键字段快照` + `## 必须谈判条件` | 冻结付款与移交关系 | `/trellis:plan` 标记触发依赖；`/trellis:delivery` 作为最终移交门禁依据 |
+| `source_watermark_level` | `## 概览` | 冻结源码水印档位 | `/trellis:design` 生成 `source-watermark-plan.md`；`/trellis:plan` 拆水印任务 |
+| `source_watermark_channels` | `## 概览` | 冻结采用的源码水印通道 | `/trellis:design` 约束零宽字符与隐蔽标识边界；`/trellis:delivery` 校验交付证明 |
+| `zero_width_watermark_enabled` / `subtle_code_marker_enabled` | `## 概览` | 明确是否启用零宽字符水印与不起眼代码标识 | `/trellis:plan` 拆对应 task；`ownership-proof-validate.py` 校验一致性 |
+| `ownership_proof_required` | `## 概览` | 冻结是否启用归属证明门禁 | `/trellis:delivery` 决定是否必须产出归属证明包 |
+
+### 源码水印档位速查
+
+| 档位 | 含义 | 最低要求 |
+|---|---|---|
+| `none` | 不启用源码水印与归属证明门禁 | 不要求 |
+| `basic` | 最低档：至少要求可见源码水印 | `source_watermark_channels` 至少包含 `visible` |
+| `hybrid` | 默认推荐档：可见水印 + 若干隐蔽辅助层 | `source_watermark_channels` 至少包含 `visible`，其他通道按需组合 |
+| `forensic` | 取证强化档：尽量保留多层水印与证明 | `source_watermark_channels` 至少包含 `visible`，建议启用全部已确认通道 |
+
+说明：
+
+- 是否真正启用后续 design / plan / delivery 的归属证明门禁，仍以 `ownership_proof_required` 为准
+- 只要启用了归属证明门禁，当前 workflow 默认要求保留 `visible` 通道
+- `basic` / `hybrid` / `forensic` 主要表达策略强度与默认期望；真正决定后续实际校验范围的，仍是 `source_watermark_channels`
 
 约束：
 
@@ -278,6 +311,8 @@ $TASK_DIR/
 - `总体决策 = 拒绝` 时，下一步默认是“终止项目并保留 assessment 记录”
 - 外部项目至少填完前三个 `delivery_control_*` 字段，不能只写中文描述不写机器字段
 - 若 `delivery_control_track = trial_authorization`，`trial_authorization_terms.*` 不得留空
+- 需要作者归属保护的项目，不得只写“会做水印”这种自然语言描述；必须显式填写 `source_watermark_*` 与 `ownership_proof_required`
+- 若启用零宽字符水印，后续 design 阶段必须遵守 [源码水印与归属证据链执行卡](../源码水印与归属证据链执行卡.md) 中的“只允许注释 / 文档字符串 / Markdown”边界
 - 若当前只能做假设，必须在“关键字段快照”或“最小补充信息集”里写明证据缺口
 
 ## 下一步推荐

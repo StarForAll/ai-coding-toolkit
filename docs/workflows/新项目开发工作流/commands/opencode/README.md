@@ -153,6 +153,10 @@ OpenCode 的规则层不要只靠单一入口。
 - `AGENTS.md`：放项目级长期稳定规则，例如执行原则、验证门禁、语言策略、风险边界
 - `opencode.json.instructions`：挂载主入口文档与必要补充，不默认全量挂载所有阶段文档
 - 平台原生 MCP / provider 配置：负责把 workflow 需要的能力真正启用
+- 若项目启用源码水印与归属证明门禁：
+  - 长期策略（是否启用、零宽字符边界、不起眼代码标识禁区）放 `AGENTS.md`
+  - 阶段产物放 `$TASK_DIR/design/source-watermark-plan.md`、`$TASK_DIR/delivery/ownership-proof.md`、`$TASK_DIR/delivery/source-watermark-verification.md`
+  - 静态校验使用 `.trellis/scripts/workflow/ownership-proof-validate.py`
 
 `instructions` 更适合加载“主入口 + 当前会话真正需要的补充”，而不是替代命令系统。
 
@@ -232,6 +236,7 @@ OpenCode 不应被写成“和 Claude 完全等价”，因为它在 hook / suba
 | 项目长期规则 | `AGENTS.md` | 稳定执行规则、风险边界、语言策略 | ❌ 手动维护 |
 | workflow 文档注入 | `opencode.json.instructions` | 只挂主入口与必要补充，不默认全量挂载所有阶段文档 | ❌ 手动维护 |
 | 通用脚本 | `.trellis/scripts/workflow/` | 被命令或人工直接调用 | ✅ `install-workflow.py` |
+| 源码水印与归属证明产物 | `$TASK_DIR/design/`、`$TASK_DIR/delivery/` | 设计计划、提取验证、交付证明 | ❌ 人工维护 / workflow 阶段产出 |
 
 **安装器不负责的 OpenCode 原生资产**（需手动维护）：
 

@@ -278,6 +278,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertTrue(record_helper.exists(), "record-session-helper.py should be deployed")
         workflow_state_helper = fixture / ".trellis" / "scripts" / "workflow" / "workflow-state.py"
         self.assertTrue(workflow_state_helper.exists(), "workflow-state.py should be deployed")
+        ownership_helper = fixture / ".trellis" / "scripts" / "workflow" / "ownership-proof-validate.py"
+        self.assertTrue(ownership_helper.exists(), "ownership-proof-validate.py should be deployed")
         finish_work = fixture / ".claude" / "commands" / "trellis" / "finish-work.md"
         finish_work_text = finish_work.read_text(encoding="utf-8")
         self.assertIn(FINISH_WORK_MARKER, finish_work_text)
@@ -310,9 +312,10 @@ class WorkflowInstallerTests(unittest.TestCase):
             ["start", "finish-work", "record-session"],
         )
         self.assertIn("metadata-autocommit-guard.py", record_data["scripts"])
+        self.assertIn("ownership-proof-validate.py", record_data["scripts"])
         self.assertIn("record-session-helper.py", record_data["scripts"])
         self.assertIn("workflow-state.py", record_data["scripts"])
-        self.assertEqual(record_data["workflow_version"], "1.1.22")
+        self.assertEqual(record_data["workflow_version"], "1.1.23")
         self.assertEqual(record_data["initial_pack"], "pack.requirements-discovery-foundation")
         parallel = fixture / ".claude" / "commands" / "trellis" / "parallel.md"
         self.assertIn(PARALLEL_DISABLED_MARKER, parallel.read_text(encoding="utf-8"))
@@ -773,7 +776,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(FINISH_WORK_MARKER, finish_work.read_text(encoding="utf-8"))
         self.assertIn(RECORD_SESSION_MARKER, record_session.read_text(encoding="utf-8"))
         record_data = json.loads((fixture / ".trellis" / "workflow-installed.json").read_text(encoding="utf-8"))
-        self.assertEqual(record_data["workflow_version"], "1.1.22")
+        self.assertEqual(record_data["workflow_version"], "1.1.23")
         self.assertEqual(record_data["previous_version"], "2.0.0")
 
         followup_check = self.run_script(

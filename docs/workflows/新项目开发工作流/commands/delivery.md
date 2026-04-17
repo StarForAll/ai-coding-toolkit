@@ -87,6 +87,36 @@ python3 <WORKFLOW_DIR>/commands/shell/delivery-control-validate.py --phase deliv
 此验证覆盖 `assessment.md` 双轨字段完整性、`task_plan.md` 中的交付控制 task 图摘要结构、以及 `delivery/` 交付事件文档。若验证失败，不得进入正式交付。
 此处的 `task_plan.md` 仅作为交付控制 task 图摘要；真实执行完成情况仍以对应 Trellis task 为准。
 
+### Step 4.5: 源码水印与归属证明门禁（如适用）
+
+若 `assessment.md` 中 `ownership_proof_required = yes`，进入正式交付前还必须确认：
+
+- `$TASK_DIR/design/source-watermark-plan.md` 已冻结
+- 可见源码水印已落地
+- 零宽字符水印（若启用）已按“仅注释 / 文档字符串 / Markdown”边界落地
+- 不起眼代码标识（若启用）已落地且未污染业务关键逻辑
+- `ownership-proof.md` 与 `source-watermark-verification.md` 已生成
+
+按当前 workflow 口径：
+
+- `visible` 通道是启用归属证明门禁时的最低要求
+- `zero-width` / `subtle-markers` / `zero-watermark` 是否必须验证，以 `source_watermark_channels` 的实际声明为准
+- `basic` / `hybrid` / `forensic` 本身不会直接切换 validator 代码路径；当前 workflow 仍按 `source_watermark_channels` 的实际声明决定本阶段要验证哪些通道
+
+验证命令：
+
+```bash
+python3 <WORKFLOW_DIR>/commands/shell/ownership-proof-validate.py --phase delivery --task-dir <task-dir>
+```
+
+若需要一次性检查冻结字段、设计计划、任务拆分和交付证明，可执行：
+
+```bash
+python3 <WORKFLOW_DIR>/commands/shell/ownership-proof-validate.py --all --task-dir <task-dir>
+```
+
+失败时不允许进入正式交付，也不应把“已交付源码 / 已完成归属证明”写入交付清单。
+
 ### Step 5: 交付物生成
 
 **调用 Skill**：`doc-coauthoring` — 协同撰写交付文档。降级：手动按“客户交付物 / 开发交付物 / 验收证据”三段结构整理。
@@ -235,6 +265,8 @@ $TASK_DIR/delivery/
 ├── acceptance.md
 ├── deliverables.md
 ├── transfer-checklist.md
+├── ownership-proof.md
+├── source-watermark-verification.md
 └── retrospective.md
 ```
 

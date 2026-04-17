@@ -85,6 +85,7 @@ git remote set-url --add --push origin git@gitee.com:xxx/yyy.git
 - `finish-work` 是 **Trellis 原生命令/技能基线 + workflow 项目化补丁**，不是当前 workflow 新增分发的独立源文件
 - `record-session` 是 **Trellis 原生命令/技能基线 + workflow 元数据闭环补丁**
 - `archive` 仍直接复用目标项目 Trellis 基线里的 `python3 ./.trellis/scripts/task.py archive`，不是当前 workflow 额外分发的一份 helper
+- 若项目启用作者归属保护，源码水印与归属证明也应视为 workflow 的正式产物层，而不是交付前临时想起的补丁动作
 
 如果忽略这层嵌入关系，就容易把“继承基线”误判成“workflow 漏了命令”。
 
@@ -255,6 +256,17 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 尾款前不交什么
 - 变更如何计入下一轮
 
+若项目启用了作者归属保护，还要在 feasibility 一并定准：
+
+| 档位 | 含义 | 最低要求 |
+|---|---|---|
+| `none` | 不启用源码水印与归属证明门禁 | 不要求 |
+| `basic` | 最低档：至少要求可见源码水印 | `source_watermark_channels` 至少包含 `visible` |
+| `hybrid` | 默认推荐档：可见水印 + 若干隐蔽辅助层 | `source_watermark_channels` 至少包含 `visible` |
+| `forensic` | 取证强化档：尽量保留多层水印与证明 | `source_watermark_channels` 至少包含 `visible`，建议启用全部已确认通道 |
+
+这里的 level 主要表达策略强度；真正决定后续 design / plan / delivery 实际检查范围的，仍是 `source_watermark_channels`。
+
 ### 退出门禁
 
 - 需求描述达到“已准确”
@@ -331,7 +343,8 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
   - `design/AID.md`
   - `design/STITCH-PROMPT.md`
   - `design/specs/*.md`
-  - `design/pages/*.md`
+- `design/pages/*.md`
+- `design/source-watermark-plan.md`（若 `ownership_proof_required = yes`）
 
 ### 前端视觉落地边界
 
@@ -362,6 +375,11 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 - `/trellis:finish-work` 的首次项目化适配
 - `/trellis:record-session` 的基线适配
+- 若 `ownership_proof_required = yes`，同步冻结：
+  - `WMID`
+  - 零宽字符水印边界（只允许注释 / 文档字符串 / Markdown）
+  - 不起眼代码标识的允许位置与禁区
+  - 后续 `ownership-proof.md` / `source-watermark-verification.md` 的最低契约
 
 边界：
 
@@ -408,6 +426,11 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 - 试运行版交付
 - 永久授权切换
+- 可见源码水印
+- 零宽字符水印（若启用）
+- 隐蔽代码标识（若启用）
+- 水印验证
+- 归属证明包
 - 源码移交
 - 生产权限移交
 - 最终控制权移交
@@ -606,6 +629,11 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 验收结果清晰
 - 交付物已整理
 - 若为外部项目，当前交付事件类型与允许移交范围已写清
+- 若 `ownership_proof_required = yes`，已通过：
+
+```bash
+python3 <WORKFLOW_DIR>/commands/shell/ownership-proof-validate.py --phase delivery --task-dir <task-dir>
+```
 
 ---
 

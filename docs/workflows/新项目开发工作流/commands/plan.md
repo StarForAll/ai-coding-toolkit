@@ -37,6 +37,7 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
   - `DDD.md` / `IDD.md` / `AID.md` / `STITCH-PROMPT.md` 是否需要创建
   - 后续需要单独拆出 `UI -> 首版代码界面` 的前端基线 task
 - 若属于外包、定制开发或新客户项目（外部项目），已在 `assessment.md` 中明确 `delivery_control_track`（默认 `hosted_deployment`，必要时使用 `trial_authorization`），**并且已按轨道导入交付控制相关 spec**
+- 若 `assessment.md` 中 `ownership_proof_required = yes`，已在 design 阶段冻结 `$TASK_DIR/design/source-watermark-plan.md`
 - 当前 task 的 `workflow-state.json` 已明确切换到 `stage = plan`
 - 当前阶段切换已经过用户明确确认，而不是由 `/trellis:start` 或“下一步推荐”自动推进
 
@@ -126,6 +127,7 @@ cat "$TASK_DIR/design/index.md" 2>/dev/null
 - 当前项目 `.trellis/spec/` 中已经落地的项目约束
 - 当前项目的自动化检查矩阵
 - 若为外部项目，`assessment.md` 中约定的交付控制轨道、源码移交时点、权限移交时点
+- 若启用了作者归属保护，`assessment.md` 中约定的 `source_watermark_*` 字段与 `$TASK_DIR/design/source-watermark-plan.md`
 
 先判断任务是否属于：
 
@@ -157,6 +159,12 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
   - 该 task **禁止**使用 Codex 作为主执行器，必须改用 Claude Code / OpenCode
   - 该 task 的完成定义必须包含 `design/frontend-ui-spec.md`
   - 后续所有前端视觉相关 task 默认依赖这份 `frontend-ui-spec.md`
+- 若 `ownership_proof_required = yes`，至少还必须拆出以下 task：
+  - `可见源码水印任务`（必选；只要启用了归属证明门禁，默认必须存在）
+  - `零宽字符水印任务`（当 `zero_width_watermark_enabled = yes`）
+  - `隐蔽代码标识任务`（当 `subtle_code_marker_enabled = yes`）
+  - `水印验证任务`
+  - `归属证明包任务`
 
 ### Step 3: 生成摘要型 `task_plan.md`
 
@@ -240,6 +248,11 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 ## 外部项目交付控制（如适用）
 
 - <试运行版交付任务 / 托管部署任务 / 永久授权切换任务 / 源码移交任务 / 控制权移交任务>
+
+## 源码水印与归属证明（如适用）
+
+- `source-watermark-plan.md`：已冻结 / 待补齐
+- <可见源码水印任务 / 零宽字符水印任务 / 隐蔽代码标识任务 / 水印验证任务 / 归属证明包任务>
 ```
 
 ### Step 4: 项目级终局任务与外部交付任务
@@ -260,6 +273,16 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 - `控制权移交任务`
 
 但这些任务也应优先落成真实 Trellis task，而不是只留在摘要里。
+
+若 `ownership_proof_required = yes`，`task_plan.md` 摘要中还需显式列出：
+
+- `可见源码水印任务`
+- `零宽字符水印任务`（若启用）
+- `隐蔽代码标识任务`（若启用）
+- `水印验证任务`
+- `归属证明包任务`
+
+这些任务同样应优先落成真实 Trellis task，而不是只留在摘要里。
 
 ### Step 5: 验证拆分结果
 
