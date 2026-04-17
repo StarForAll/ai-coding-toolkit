@@ -188,6 +188,21 @@ Workflow embed / analysis / repair scripts must distinguish three asset classes:
      - uninstall / force-restore paths must restore the original baseline copy when a backup exists
      - drift detection must compare the deployed disabled copy against the workflow source of truth
 
+5. **Phase-gate helper scripts**
+   - helper scripts referenced as mandatory validation gates inside workflow source commands
+   - current examples may include:
+     - `delivery-control-validate.py`
+     - `ownership-proof-validate.py`
+     - `record-session-helper.py`
+   - Contract:
+     - source command docs may reference `<WORKFLOW_DIR>/commands/shell/...` in source form
+     - deployment must rewrite those references to `.trellis/scripts/workflow/...`
+     - any newly added mandatory helper must be registered in `HELPER_SCRIPTS`
+     - installer must copy it into the target project
+     - install record `scripts` must include it
+     - installer regression tests must assert both deployment presence and install-record inclusion
+     - if a helper becomes a required phase gate, the relevant walkthrough / mapping docs must mention the validation command
+
 #### 3.2.1 Initial Branch Gate
 
 For this workflow variant, installer-time repository gating must distinguish two target-project states:
@@ -258,6 +273,25 @@ Repair-path boundary:
 - `--merge` may redeploy low-risk drifted assets and reapply patch injections
 - `--force` may restore from stored baseline backup only when the target project is still within the same structural model
 - neither `--merge` nor `--force` should be documented as the main path for structural breaks
+
+#### 3.4.2 Phase-Gate Helper Distribution Contract
+
+When a workflow introduces or changes a helper script that is invoked as a mandatory phase gate:
+
+- update `workflow_assets.py` first
+- keep install / uninstall / upgrade detection behavior aligned through the shared helper list
+- update source command docs and target-project path rewrite assumptions together
+- update tests that prove:
+  - the helper is deployed into `.trellis/scripts/workflow/`
+  - `workflow-installed.json["scripts"]` contains the helper
+  - target-project-facing guidance mentions the helper when the gate is user-visible
+
+Examples of user-visible gate contracts:
+
+- a delivery-phase command that blocks formal delivery until a helper returns success
+- a record-session close-out flow that must run helper pre/post checks before archive
+
+Do not treat phase-gate helpers as "nice to have" copied scripts once their command docs make them required.
 
 #### 3.4.1 Install Failure Boundary
 
@@ -376,8 +410,10 @@ When modifying these contracts, update or add tests that prove:
    - overlay command content drifts
    - added command content drifts
    - helper script content drifts
+   - a required phase-gate helper is missing from deployed target scripts or missing from install-record `scripts`
 7. `--merge` restores drifted command and helper-script content for low-risk cases
 8. `--force` can restore baseline-backed patch commands and reapply patches inside the same structural model
+9. newly added required helper scripts are reflected in user-visible install guidance when the workflow gate is exposed to target-project users
 
 Current regression anchors:
 
