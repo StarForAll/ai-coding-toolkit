@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 110
+- **Total Sessions**: 111
 - **Last Active**: 2026-04-17
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~1048 | Active |
+| `journal-3.md` | ~1094 | Active |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 111 | 2026-04-17 | 工作流补充项目总工时估算 | `8f4dbc7` | `main` |
 | 110 | 2026-04-17 | 工作流补充项目级水印 | `be1431f` | `main` |
 | 109 | 2026-04-16 | 明确 workflow 对 Trellis 基线 close-out 的依赖边界 | `d97d712` | `main` |
 | 108 | 2026-04-16 | 修复 archive auto-commit pathspec 失败 | `57f1897` | `main` |
