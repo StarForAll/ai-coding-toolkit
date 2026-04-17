@@ -1,0 +1,3 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/docs/index.md", "reason": "Workflow docs propagation and target-project boundary rules"}
+{"file": ".trellis/spec/scripts/python-conventions.md", "reason": "Workflow gate validator script changes must follow Python CLI conventions"}

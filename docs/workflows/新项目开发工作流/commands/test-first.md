@@ -37,6 +37,9 @@ $TASK_DIR/before-dev.md
 - `test-first` 与 `implementation` 同属执行阶段
 - 进入 `/trellis:test-first` 前，必须经过用户明确确认，并把 `checkpoints.execution_authorized = true`
 - 若仍停留在 `plan` 阶段或 `execution_authorized = false`，不得进入 `test-first`
+- 进入 `/trellis:test-first` 前，必须已经补齐项目级粗估：
+  - `task_dir/prd.md` 中的 `## 项目级粗估`
+- 若当前路径仍依赖正式客户向 PRD（例如 `design` / `plan` 已要求其存在），则该门禁仍以 `workflow-state.py validate` 为准；`test-first` 本身不能绕过已确认的粗估约束
 
 ## When to Use (自然触发)
 
@@ -57,6 +60,7 @@ $TASK_DIR/before-dev.md
 - 当前要处理的具体 task 已明确
 - 项目级全局测试基线已在上游阶段定义
 - 当前 task 的 `before-dev.md` 已存在，或能明确当前 task 的实现边界与门禁
+- 当前 task 的 `prd.md` 已包含 `## 项目级粗估`
 
 若以上内容仍未明确，先回到：
 
@@ -67,6 +71,7 @@ $TASK_DIR/before-dev.md
 
 1. 先通过 `/trellis:start` 进入一次主链，让当前 task 自动生成 `before-dev.md`
 2. 如果仍需显式先测，再进入 `/trellis:test-first` 补测试或补验证证据
+3. 若是 `L0` 从 `brainstorm` 直接进入 `test-first` / `start` 的轻量路径，也不能跳过项目级粗估；至少要先在 `task_dir/prd.md` 完成粗估落盘
 
 边界说明：
 

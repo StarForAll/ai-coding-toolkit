@@ -1,0 +1,4 @@
+{"file": ".opencode/commands/trellis/finish-work.md", "reason": "Finish work checklist"}
+{"file": ".opencode/commands/trellis/check.md", "reason": "Code quality check spec"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Need to keep command docs, workflow-state gate, walkthroughs, and tests aligned"}
+{"file": ".trellis/spec/scripts/workflow-installer-upgrade-contracts.md", "reason": "Workflow source command changes must remain source-of-truth and consistent with downstream deployment assumptions"}

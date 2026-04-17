@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI 辅助开发实战工作流 V1.1.20 - 思维导图</title>
+<title>AI 辅助开发实战工作流 V1.1.23 - 思维导图</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#0d1117;color:#c9d1d9;overflow:auto}
@@ -43,26 +43,26 @@ const svgNS = 'http://www.w3.org/2000/svg';
 
 const tree = [
   {
-    html: 'AI 辅助开发实战工作流<br>V1.1.20',
+    html: 'AI 辅助开发实战工作流<br>V1.1.23',
     level: 0, id: 'root',
     children: [
       { html:'§1 可行性评估', cls:'L1 c1', id:'p1', sub:'<span class="cmd">/trellis:feasibility</span>', children:[
         { html:'1.1 合法性审查',       cls:'L2', det:'法律合规性检查<br>不合规则终止项目', id:'p1_1' },
         { html:'1.2 粗略需求沟通',     cls:'L2', det:'明确需求方向和范围<br>识别核心功能和技术难点', id:'p1_2' },
         { html:'1.3 项目评估与报价',   cls:'L2', det:'工作量/时间/资源/AI成本<br>风险预判 · 报价输出', id:'p1_3' },
-        { html:'1.4 项目确认与初始化', cls:'L2', det:'客户确认报价 & 签署合同<br>项目级初始化 · todo.txt', id:'p1_4' },
+        { html:'1.4 项目确认与初始化', cls:'L2', det:'确认继续推进与预算框架<br>项目级初始化 · todo.txt', id:'p1_4' },
         { html:'门禁: assessment.md',  cls:'GT', id:'p1_g', det:'决策: 接/谈判后接/暂停/拒绝' },
         { html:'/trellis:feasibility', cls:'L3', id:'p1_c', cp:'.claude/commands/trellis/feasibility.md', cd:'可行性评估主命令' },
         { html:'demand-risk-assessment', cls:'SK', id:'p1_s', su:'§1 风险评估 skill' },
         { html:'install-workflow.py',  cls:'L3', id:'p1_i', cp:'trellis init → install', cd:'导入需求发现基础资产' },
       ]},
       { html:'§2 需求明确与确认', cls:'L1 c2', id:'p2', sub:'<span class="cmd">/trellis:brainstorm</span>', children:[
-        { html:'2.1 详细需求分析',   cls:'L2', det:'Task-first / Research-first<br>Diverge→Converge<br>L0/L1/L2 复杂度分类', id:'p2_1' },
+        { html:'2.1 详细需求分析',   cls:'L2', det:'Task-first / Research-first<br>Diverge→Converge<br>L0/L1/L2 复杂度分类<br>离开前补齐项目级粗估', id:'p2_1' },
         { html:'2.2 需求说明书编制', cls:'L2', det:'客户版 PRD<br>开发人员版 PRD<br>用户故事/功能边界/验收标准', id:'p2_2' },
         { html:'2.3 需求确认循环',   cls:'L2', det:'客户版确认循环<br>开发人员版确认循环', id:'p2_3' },
         { html:'2.4 需求冻结',       cls:'L2', det:'冻结业务意图与验收证据<br>不冻结实现细节 · AI意图映射确认', id:'p2_4' },
         { html:'2.5 需求变更管理',   cls:'L2', det:'估价→确认→执行→验证<br>轻微/一般/重大/紧急', id:'p2_5' },
-        { html:'门禁: 正式需求文档', cls:'GT', id:'p2_g', det:'进入 design 前先有 customer-facing-prd.md<br>developer-facing-prd.md 在架构确认后生成' },
+        { html:'门禁: 正式需求文档 + 粗估', cls:'GT', id:'p2_g', det:'进入 design 前先有 customer-facing-prd.md<br>并补齐项目级粗估摘要<br>developer-facing-prd.md 在架构确认后生成' },
         { html:'/trellis:brainstorm', cls:'L3', id:'p2_c', cp:'.claude/commands/trellis/brainstorm.md', cd:'需求发现 · 合并原生brainstorm' },
         { html:'prd', cls:'SK', id:'p2_s', su:'§2 PRD 编写 skill' },
       ]},

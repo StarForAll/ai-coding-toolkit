@@ -90,7 +90,7 @@ echo "需求文本" | python3 <WORKFLOW_DIR>/commands/shell/feasibility-check.py
 
 > ⚠️ 硬门禁：Step 1.5 未完成前，Step 2 / Step 3 / Step 4 一律视为未开放，不允许提前执行。
 
-### Step 2: 需求粗估（一次一个问题）
+### Step 2: 需求初聊补充（一次一个问题）
 
 1. 核心目标 → 2. 目标用户 → 3. 核心功能(≤3) → 4. 技术约束 → 5. 时间窗口
 
@@ -102,7 +102,7 @@ echo "需求文本" | python3 <WORKFLOW_DIR>/commands/shell/feasibility-check.py
 | 风险评估复杂推理 | `sequential-thinking` | 当风险评估涉及 ≥3 个决策分支或推理步骤 >3 步时 | 复杂风险场景 |
 | 参考 GitHub 开源项目 | `deepwiki` | 当需要参考外部开源项目时 | 回退：`exa_search` |
 
-### Step 3: 风险评估与报价
+### Step 3: 风险评估与商务预判
 
 **调用 Skill**：`demand-risk-assessment` — 按框架执行风险评估，输出决策建议。降级：手动五维度评估。
 
@@ -115,6 +115,8 @@ python3 <WORKFLOW_DIR>/commands/shell/feasibility-check.py --step estimate
 - 先产出 `assessment.md` 骨架，再使用 `demand-risk-assessment` 填充结论与证据。
 - 不允许只给口头结论，必须把 go / no-go / pause 判断写回 `assessment.md`。
 - `assessment.md` 必须明确写出“是否允许进入 brainstorm”，作为阶段二的前置判断。
+- 本阶段允许输出**商务预判**、预算区间策略和是否值得继续推进，但**不承担需求澄清后的正式项目级工期承诺**。
+- 需求与客户讨论清楚后的正式项目级粗估，必须在 `brainstorm` 收口前写入 `task_dir/prd.md` 与 `docs/requirements/customer-facing-prd.md`，不能在这里跳过后移。
 - 若属于外包、定制开发或新客户项目，必须同步明确交付控制轨道：
   - **首选轨：托管部署**，尾款前只提供开发者控制的试运行环境
   - **备选轨：试运行授权**，仅在双方明确接受授权方案时使用

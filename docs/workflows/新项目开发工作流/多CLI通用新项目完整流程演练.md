@@ -226,7 +226,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 目标
 
-先按 task-first 建立或更新 `prd.md` 工作底稿，自动读取上下文并在必要时 research-first；然后确认需求描述是否准确，统一做 `L0/L1/L2` 分类；进入 design 前至少需补齐 `customer-facing-prd.md`，`developer-facing-prd.md` 等到 design 阶段技术架构确认后再正式生成；`L0` 单任务闭环可只保留 `prd.md` 轻量基线。
+先按 task-first 建立或更新 `prd.md` 工作底稿，自动读取上下文并在必要时 research-first；然后确认需求描述是否准确，统一做 `L0/L1/L2` 分类；离开 brainstorm 前必须先补齐不可跳过的项目级粗估：`task_dir/prd.md` 中的 `## 项目级粗估` 与 `customer-facing-prd.md` 中的 `## 项目级粗估摘要`；进入 design 前至少需补齐 `customer-facing-prd.md`，`developer-facing-prd.md` 等到 design 阶段技术架构确认后再正式生成；`L0` 单任务闭环可只保留 `prd.md` 轻量基线，但仍不能跳过粗估。
 
 ### CLI 入口差异
 
@@ -271,8 +271,11 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 - 需求描述达到“已准确”
 - 已完成 `L0/L1/L2` 分类
-- 已在目标项目 `docs/requirements/` 下生成：
+- 已在 `task_dir/prd.md` 中补齐 `## 项目级粗估`
+- 若走 `L1/L2 -> design` 路径，已在目标项目 `docs/requirements/` 下生成：
   - `customer-facing-prd.md`
+- 若走 `L1/L2 -> design` 路径，`customer-facing-prd.md` 已补齐 `## 项目级粗估摘要`
+- 若走 `L0 -> start` / `test-first` 路径，则 `customer-facing-prd.md` 不强制，但 `task_dir/prd.md` 中的项目级粗估仍不可跳过
 - `developer-facing-prd.md` 不在此时强制生成；它等到 design 阶段技术架构确认后再正式落盘
 - 已决定走 `design`、`plan` 还是极小任务直进 `start`
 - 若下一步进入 `design`，已明确会在 `design -> 3.7` 把 `sonar-scanner` 纳入项目自动化检查矩阵

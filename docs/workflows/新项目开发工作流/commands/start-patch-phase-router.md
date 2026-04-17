@@ -20,6 +20,11 @@ python3 ./.trellis/scripts/get_context.py
 python3 .trellis/scripts/workflow/workflow-state.py validate <task-dir>
 ```
 
+其中 `workflow-state.py validate` 现在会同时校验：
+
+- 目标项目正式 PRD 边界
+- `brainstorm` 收口前必须落盘的项目级粗估门禁
+
 在当前源仓库维护 workflow 内容时，可直接使用：
 
 ```bash
@@ -197,6 +202,7 @@ $TASK_DIR/before-dev.md
 - `task_plan.md`：摘要层，不再承载实时执行矩阵
 - `before-dev.md`：当前 task 进入实现前的有效门禁快照
 - `workflow-state.json`：当前叶子任务的强门禁阶段状态
+- `brainstorm` 阶段的项目级粗估门禁：若 `task_dir/prd.md` 缺少 `## 项目级粗估`，或目标项目 `customer-facing-prd.md` 缺少 `## 项目级粗估摘要`，则 design 及后续阶段不得通过校验
 - 真实执行状态：以 `.current-task`、叶子任务 `task.json`、`workflow-state.json`、`check.md` 等任务产物为准
 
 ### 下一步推荐输出格式

@@ -21,6 +21,7 @@ CURRENT_TASK_FILE = ".trellis/.current-task"
 REQUIREMENTS_DIR = Path("docs/requirements")
 CUSTOMER_PRD = REQUIREMENTS_DIR / "customer-facing-prd.md"
 DEVELOPER_PRD = REQUIREMENTS_DIR / "developer-facing-prd.md"
+TASK_PRD = Path("prd.md")
 
 STAGES = {
     "feasibility",
@@ -44,6 +45,27 @@ STAGE_STATUSES = {
 }
 EXECUTION_STAGES = {"implementation", "test-first"}
 SUPPORTED_STATE_VERSION = 1
+PROJECT_ESTIMATE_REQUIRED_STAGES = STAGES - {"feasibility", "brainstorm"}
+# 只在 design/plan 校验 customer-facing PRD 的粗估摘要。
+# 原因：L0 可在 brainstorm 收口后直接进入 start/implementation 或显式进入 test-first，
+# 这些路径允许只保留 task-local prd.md 而不强制正式 customer-facing PRD。
+# design/plan 负责第一次校验正式 customer-facing PRD 的粗估摘要；
+# feasibility/brainstorm 之后的全部后续阶段则持续依赖 task-local prd.md 中的项目级粗估。
+PROJECT_ESTIMATE_DOC_STAGES = {"design", "plan"}
+TASK_ESTIMATE_MARKERS = (
+    "## 项目级粗估",
+    "预计总工时",
+    "预计总工期",
+    "预计完工窗口",
+    "估算置信度",
+    "估算前提",
+)
+CUSTOMER_ESTIMATE_MARKERS = (
+    "## 项目级粗估摘要",
+    "预计总工期",
+    "预计完工窗口",
+    "估算说明",
+)
 
 
 def now_iso() -> str:
@@ -272,16 +294,47 @@ def validate_leaf_task(task_dir: Path, errors: list[str]) -> None:
         errors.append("当前 task 已有 children，不应继续作为执行态叶子任务持有 workflow-state")
 
 
-def validate_project_doc_boundary(state: dict[str, Any], project_root: Path, errors: list[str]) -> None:
+def find_missing_markers(path: Path, markers: tuple[str, ...]) -> list[str]:
+    try:
+        content = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return list(markers)
+    return [marker for marker in markers if marker not in content]
+
+
+def validate_project_doc_boundary(
+    state: dict[str, Any],
+    project_root: Path,
+    task_dir: Path,
+    errors: list[str],
+) -> None:
     stage = state.get("stage")
     checkpoints = state.get("checkpoints", {})
     architecture_confirmed = checkpoints.get("architecture_confirmed", False)
 
     customer_prd = project_root / CUSTOMER_PRD
     developer_prd = project_root / DEVELOPER_PRD
+    task_prd = task_dir / TASK_PRD
 
-    if stage in {"brainstorm", "design", "plan"} and not customer_prd.is_file():
+    if stage in {"design", "plan"} and not customer_prd.is_file():
         errors.append(f"缺少 {CUSTOMER_PRD.as_posix()}，当前阶段不满足正式需求文档门禁")
+
+    if stage in PROJECT_ESTIMATE_REQUIRED_STAGES:
+        if not task_prd.is_file():
+            errors.append(f"缺少 {TASK_PRD.as_posix()}，当前阶段不满足项目级粗估门禁")
+        else:
+            missing_task_markers = find_missing_markers(task_prd, TASK_ESTIMATE_MARKERS)
+            if missing_task_markers:
+                errors.append(
+                    f"{TASK_PRD.as_posix()} 缺少项目级粗估字段: {', '.join(missing_task_markers)}"
+                )
+
+    if stage in PROJECT_ESTIMATE_DOC_STAGES and customer_prd.is_file():
+        missing_customer_markers = find_missing_markers(customer_prd, CUSTOMER_ESTIMATE_MARKERS)
+        if missing_customer_markers:
+            errors.append(
+                f"{CUSTOMER_PRD.as_posix()} 缺少项目级粗估摘要字段: {', '.join(missing_customer_markers)}"
+            )
 
     if stage == "design" and architecture_confirmed is False and developer_prd.exists():
         errors.append(
@@ -400,9 +453,9 @@ def cmd_validate(args: argparse.Namespace) -> int:
             validate_leaf_task(task_dir, errors)
 
     if args.project_root:
-        validate_project_doc_boundary(state, Path(args.project_root).resolve(), errors)
+        validate_project_doc_boundary(state, Path(args.project_root).resolve(), task_dir, errors)
     elif repo_root is not None:
-        validate_project_doc_boundary(state, repo_root, errors)
+        validate_project_doc_boundary(state, repo_root, task_dir, errors)
 
     if errors:
         for message in errors:
