@@ -115,11 +115,16 @@ python3 <WORKFLOW_DIR>/commands/shell/feasibility-check.py --step estimate
 - 先产出 `assessment.md` 骨架，再使用 `demand-risk-assessment` 填充结论与证据。
 - 不允许只给口头结论，必须把 go / no-go / pause 判断写回 `assessment.md`。
 - `assessment.md` 必须明确写出“是否允许进入 brainstorm”，作为阶段二的前置判断。
+- `assessment.md` 必须明确写出项目类别判断：`project_engagement_type = external_outsourcing` / `non_outsourcing`。
 - 本阶段允许输出**商务预判**、预算区间策略和是否值得继续推进，但**不承担需求澄清后的正式项目级工期承诺**。
 - 需求与客户讨论清楚后的正式项目级粗估，必须在 `brainstorm` 收口前写入 `task_dir/prd.md` 与 `docs/requirements/customer-facing-prd.md`，不能在这里跳过后移。
-- 若属于外包、定制开发或新客户项目，必须同步明确交付控制轨道：
+- 若判定为外包、定制开发或新客户项目（`project_engagement_type = external_outsourcing`），必须同步执行以下控制判断：
+  - 启动款门禁：首款比例至少为 `30%`，默认建议 `30%` 或 `40%`
+  - 开工状态：在 `kickoff_payment_received = yes` 前，不得进入 implementation / test-first
+  - 交付控制轨道必须明确，不允许停留在“未确定”
   - **首选轨：托管部署**，尾款前只提供开发者控制的试运行环境
   - **备选轨：试运行授权**，仅在双方明确接受授权方案时使用
+- 若判定为非外包项目（`project_engagement_type = non_outsourcing`），继续走通用主链，但不启用首/尾款与外部交付控制手段。
 - 不允许把“隐藏后门”“未披露的失效逻辑”“不可恢复的锁定机制”当作风险控制手段写入方案。
 
 > **📋 双轨交付控制基线输出**
@@ -176,9 +181,12 @@ $TASK_DIR/
 - 如何做更稳：
 - 法律/合规风险结论：通过 / 不通过 / 待补充
 - 是否允许进入 brainstorm：是 / 否
-- `delivery_control_track`: `hosted_deployment` / `trial_authorization` / `undecided`
-- `delivery_control_handover_trigger`: 例如 `final_payment_received`
-- `delivery_control_retained_scope`: 尾款前仍由开发者保留的环境、账号、密钥、部署控制范围；若无则写 `none`
+- `project_engagement_type`: `external_outsourcing` / `non_outsourcing`
+- `kickoff_payment_ratio`: 例如 `30%` / `40%`（仅当 `project_engagement_type = external_outsourcing`）
+- `kickoff_payment_received`: `yes` / `no`（仅当 `project_engagement_type = external_outsourcing`）
+- `delivery_control_track`: `hosted_deployment` / `trial_authorization`（仅当 `project_engagement_type = external_outsourcing`）
+- `delivery_control_handover_trigger`: 例如 `final_payment_received`（仅当 `project_engagement_type = external_outsourcing`）
+- `delivery_control_retained_scope`: 尾款前仍由开发者保留的环境、账号、密钥、部署控制范围；若无则写 `none`（仅当 `project_engagement_type = external_outsourcing`）
 - `source_watermark_level`: `none` / `basic` / `hybrid` / `forensic`
 - `source_watermark_channels`: 例如 `visible,zero-width,subtle-markers,zero-watermark`
 - `zero_width_watermark_enabled`: `yes` / `no`
@@ -195,6 +203,7 @@ $TASK_DIR/
 | 关键字段 | 状态(明确/暗示/缺失/冲突) | 证据锚点 | 关键假设/缺口备注 |
 |----------|---------------------------|----------|------------------|
 | 范围边界 | ... | ... | ... |
+| 项目类别判定 | ... | ... | ... |
 | 交付物清单 | ... | ... | ... |
 | 验收口径 | ... | ... | ... |
 | 付款结构 | ... | ... | ... |
@@ -253,6 +262,8 @@ $TASK_DIR/
 
 若项目采用双轨交付控制，上述条件至少应覆盖：
 
+- [ ] 项目类别是否判定为外包项目；若是，外包控制规则全部启用
+- [ ] 首款比例是否至少为 `30%`，是否在开工前到账
 - [ ] 选择哪条交付控制轨道：托管部署 / 试运行授权
 - [ ] 尾款比例、触发条件、逾期处理
 - [ ] 源码仓库、源码包、管理员账号、密钥、生产权限的移交时点
@@ -275,10 +286,13 @@ $TASK_DIR/
 - 若不允许：补信息 / 谈判 / 终止
 ```
 
-### 双轨字段映射表
+### 项目类别与控制字段映射表
 
 | 字段 | 填写位置 | 作用 | 下游消费点 |
 |---|---|---|---|
+| `project_engagement_type` | `## 概览` | 判断是否启用外包项目控制分支 | 所有后续阶段先判定项目类别；非外包项目不启用首/尾款控制 |
+| `kickoff_payment_ratio` | `## 概览` | 冻结外包项目的最低启动款比例 | `/trellis:start` / `workflow-state.py` 判断 implementation / test-first 是否允许开启 |
+| `kickoff_payment_received` | `## 概览` | 冻结外包项目是否已满足开工门禁 | `/trellis:start` / `workflow-state.py` 阻止在首款未到账时开工 |
 | `delivery_control_track` | `## 概览` | 决定交付轨道 | `/trellis:design` 选择必选 spec；`/trellis:plan` 决定是否拆试运行授权任务 |
 | `delivery_control_handover_trigger` | `## 概览` | 定义最终控制权移交触发条件 | `/trellis:plan` 设置前置依赖；`/trellis:delivery` 判断是否允许最终移交 |
 | `delivery_control_retained_scope` | `## 概览` | 明确尾款前仍由开发者保留的控制范围 | `/trellis:plan` 拆 retained-control 任务；`/trellis:delivery` 校验未提前移交 |
@@ -311,7 +325,10 @@ $TASK_DIR/
 - `法律/合规风险结论 = 待补充` 时，不应把当前 `assessment.md` 视为可直接复用的有效评估结果
 - `总体决策 = 暂停` 时，下一步默认是“补信息后重跑 feasibility”
 - `总体决策 = 拒绝` 时，下一步默认是“终止项目并保留 assessment 记录”
-- 外部项目至少填完前三个 `delivery_control_*` 字段，不能只写中文描述不写机器字段
+- 所有项目都必须填写 `project_engagement_type`，不能跳过项目类别判断
+- 外包项目必须填写 `kickoff_payment_ratio` 与 `kickoff_payment_received`
+- 外包项目至少填完 `delivery_control_*` 字段，不能只写中文描述不写机器字段
+- 外包项目在 `kickoff_payment_received != yes` 时，不得进入 implementation / test-first
 - 若 `delivery_control_track = trial_authorization`，`trial_authorization_terms.*` 不得留空
 - 需要作者归属保护的项目，不得只写“会做水印”这种自然语言描述；必须显式填写 `source_watermark_*` 与 `ownership_proof_required`
 - 若启用零宽字符水印，后续 design 阶段必须遵守 [源码水印与归属证据链执行卡](../源码水印与归属证据链执行卡.md) 中的“只允许注释 / 文档字符串 / Markdown”边界

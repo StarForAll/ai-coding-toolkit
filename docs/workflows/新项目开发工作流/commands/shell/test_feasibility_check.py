@@ -43,6 +43,7 @@ class FeasibilityCheckTests(unittest.TestCase):
             self.assertTrue(assessment.exists())
             text = assessment.read_text(encoding="utf-8")
             self.assertIn("项目可行性评估", text)
+            self.assertIn("project_engagement_type", text)
             self.assertIn("delivery_control_track", text)
 
     def test_estimate_prints_existing_assessment(self) -> None:
@@ -107,6 +108,7 @@ class FeasibilityCheckTests(unittest.TestCase):
             "- 总体决策：接\n"
             "- 法律/合规风险结论：通过\n"
             "- 是否允许进入 brainstorm：是\n"
+            "- `project_engagement_type`: `non_outsourcing`\n"
             "\n"
             "## 红线检查\n"
             "✅ 通过\n"
@@ -123,6 +125,9 @@ class FeasibilityCheckTests(unittest.TestCase):
             "- 总体决策：接\n"
             "- 法律/合规风险结论：通过\n"
             "- 是否允许进入 brainstorm：是\n"
+            "- `project_engagement_type`: `external_outsourcing`\n"
+            "- `kickoff_payment_ratio`: `30%`\n"
+            "- `kickoff_payment_received`: `yes`\n"
             "\n"
             "## 红线检查\n"
             "✅ 通过\n"
@@ -142,6 +147,9 @@ class FeasibilityCheckTests(unittest.TestCase):
             "- 总体决策：接\n"
             "- 法律/合规风险结论：通过\n"
             "- 是否允许进入 brainstorm：是\n"
+            "- `project_engagement_type`: `external_outsourcing`\n"
+            "- `kickoff_payment_ratio`: `30%`\n"
+            "- `kickoff_payment_received`: `yes`\n"
             "\n"
             "## 红线检查\n"
             "✅ 通过\n"
@@ -160,6 +168,9 @@ class FeasibilityCheckTests(unittest.TestCase):
             "- 总体决策：接\n"
             "- 法律/合规风险结论：通过\n"
             "- 是否允许进入 brainstorm：是\n"
+            "- `project_engagement_type`: `external_outsourcing`\n"
+            "- `kickoff_payment_ratio`: `40%`\n"
+            "- `kickoff_payment_received`: `yes`\n"
             "\n"
             "## 红线检查\n"
             "✅ 通过\n"
@@ -172,6 +183,44 @@ class FeasibilityCheckTests(unittest.TestCase):
             result = self.run_script("--step", "validate", "--task-dir", td)
             self.assertEqual(result.returncode, 1)
             self.assertIn("trial_authorization_terms", result.stdout + result.stderr)
+
+    def test_validate_fails_when_project_engagement_type_missing(self) -> None:
+        content = (
+            "# 评估\n"
+            "- 总体决策：接\n"
+            "- 法律/合规风险结论：通过\n"
+            "- 是否允许进入 brainstorm：是\n"
+            "\n"
+            "## 红线检查\n"
+            "✅ 通过\n"
+        )
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
+            result = self.run_script("--step", "validate", "--task-dir", td)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("project_engagement_type", result.stdout + result.stderr)
+
+    def test_validate_warns_when_external_project_kickoff_not_received(self) -> None:
+        content = (
+            "# 评估\n"
+            "- 总体决策：谈判后接\n"
+            "- 法律/合规风险结论：通过\n"
+            "- 是否允许进入 brainstorm：是\n"
+            "- `project_engagement_type`: `external_outsourcing`\n"
+            "- `kickoff_payment_ratio`: `30%`\n"
+            "- `kickoff_payment_received`: `no`\n"
+            "\n"
+            "## 红线检查\n"
+            "✅ 通过\n"
+            "- `delivery_control_track`: `hosted_deployment`\n"
+            "- `delivery_control_handover_trigger`: `final_payment_received`\n"
+            "- `delivery_control_retained_scope`: source code and keys\n"
+        )
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
+            result = self.run_script("--step", "validate", "--task-dir", td)
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+            self.assertIn("启动款到账", result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

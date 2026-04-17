@@ -207,18 +207,26 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 外包、定制开发、新客户项目必须在这里明确：
 
+- `project_engagement_type = external_outsourcing`
+- `kickoff_payment_ratio`
+- `kickoff_payment_received`
 - `delivery_control_track`
 - `delivery_control_handover_trigger`
 - `delivery_control_retained_scope`
 
-内部项目通常不需要双轨交付字段，但仍必须写明法律/合规风险结论、红线检查结论，以及是否允许进入 `brainstorm`。
+内部项目通常不需要双轨交付字段，但仍必须写明：
+
+- `project_engagement_type = non_outsourcing`
+- 法律/合规风险结论
+- 红线检查结论
+- 是否允许进入 `brainstorm`
 
 ### 退出门禁
 
 - 若是新建目标项目，则在**第一次进入 workflow** 前，本地主分支和初始分支已统一为 `main`；若此时还没有有效 `assessment.md`，就必须先进入 `feasibility`；若目标项目已存在本地提交历史，则只记录现状，不强制改分支
 - 形成 `assessment.md`
 - 明确是否允许进入 `brainstorm`
-- 若为外部项目，交付控制轨道已定
+- 若为外部项目，项目类别、启动款门禁与交付控制轨道已定；在 `kickoff_payment_received = yes` 前，不得进入 implementation / test-first
 
 ---
 

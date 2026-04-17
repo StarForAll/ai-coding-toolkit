@@ -34,3 +34,5 @@ git remote set-url --add --push origin git@gitee.com:xxx/yyy.git
 16. 项目个人水印,防止项目被冒用或者个人水印
 
 17. 项目总工时估算
+
+18. 外包项目全款收取的保险措施

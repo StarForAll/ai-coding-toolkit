@@ -119,6 +119,8 @@ For subdirectories:
 - **Do not conflate artifacts**: Explain different roles when both task-local working files and project-level formal docs exist
 - **Preserve deploy semantics**: When source docs are installed into other tool/runtime locations, state whether the rule applies to the source copy, deployed copy, or target project filesystem
 - **Use a clean Trellis baseline for source-workflow compatibility maintenance**: When documenting how this repository updates Trellis-based workflow source content after a Trellis upgrade, reference the `/tmp` fixture created by `trellis init`, not this repository's already customized `.trellis/` or CLI directories; do not present that rule as the target project's own upgrade-compat standard
+- **Keep pre-release workflow versions below 1.0**: For workflow source assets under `docs/workflows/**` that are not yet officially declared production-ready, the active version must use `0.x.y`; reserve `1.0.0+` for workflows explicitly declared formally available
+- **Keep active version references aligned**: When the current workflow version changes, update the single-source version in code plus every active-source reference together, including `commands/workflow_assets.py`, the workflow's `工作流总纲.md` title and current version-history row, `命令映射.md`, walkthrough docs, mindmap HTML title/root label, and installer tests that assert `workflow_version`
 
 ---
 
@@ -172,6 +174,7 @@ What belongs here and what does not.
 - **Inconsistent formatting**: Mixed styles in same doc
 - **Target-project ambiguity**: Referencing paths like `docs/...` without saying whether they live in this repo, a task directory, or the installed target project
 - **Artifact conflation**: Treating task-local files such as `$TASK_DIR/prd.md` as equivalent to long-lived project requirement documents
+- **Version drift across workflow source files**: Updating `WORKFLOW_VERSION` or a workflow title without synchronizing the other active references, installer assertions, or generated companion docs
 
 ---
 

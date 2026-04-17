@@ -19,6 +19,9 @@ COMPLETE_HOSTED_ASSESSMENT = """\
 # 评估
 - 总体决策：接
 - 是否允许进入 brainstorm：是
+- `project_engagement_type`: `external_outsourcing`
+- `kickoff_payment_ratio`: `30%`
+- `kickoff_payment_received`: `yes`
 - `delivery_control_track`: `hosted_deployment`
 - `delivery_control_handover_trigger`: `final_payment_received`
 - `delivery_control_retained_scope`: source code and keys
@@ -28,6 +31,9 @@ COMPLETE_TRIAL_ASSESSMENT = """\
 # 评估
 - 总体决策：接
 - 是否允许进入 brainstorm：是
+- `project_engagement_type`: `external_outsourcing`
+- `kickoff_payment_ratio`: `40%`
+- `kickoff_payment_received`: `yes`
 - `delivery_control_track`: `trial_authorization`
 - `delivery_control_handover_trigger`: `final_payment_received`
 - `delivery_control_retained_scope`: source code
@@ -44,9 +50,13 @@ PLAN_WITH_DELIVERY = """\
 ## 外部项目交付控制
 
 ### 交付控制任务
+- 开工授权确认任务
 - 托管部署任务
 - 源码移交任务
 - 控制权移交任务
+
+### 开工触发条件
+- 首款到账后才允许 implementation（kickoff_payment_received: yes）
 
 ### 交付触发条件
 - 尾款到账后触发控制权移交（handover_trigger: final_payment_received）
@@ -91,7 +101,10 @@ class DeliveryControlValidateTests(unittest.TestCase):
 
     def test_feasibility_passes_for_internal_project(self) -> None:
         d = self._make_task_dir()
-        (d / "assessment.md").write_text("# no delivery fields\n", encoding="utf-8")
+        (d / "assessment.md").write_text(
+            "# 评估\n- `project_engagement_type`: `non_outsourcing`\n",
+            encoding="utf-8",
+        )
         result = self.run_script("--phase", "feasibility", "--task-dir", str(d))
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
@@ -108,6 +121,9 @@ class DeliveryControlValidateTests(unittest.TestCase):
             "# 评估\n"
             "- 总体决策：接\n"
             "- 是否允许进入 brainstorm：是\n"
+            "- `project_engagement_type`: `external_outsourcing`\n"
+            "- `kickoff_payment_ratio`: `30%`\n"
+            "- `kickoff_payment_received`: `yes`\n"
             "- `delivery_control_track`: `trial_authorization`\n"
             "- `delivery_control_handover_trigger`: `final_payment_received`\n"
             "- `delivery_control_retained_scope`: source code\n"
@@ -142,6 +158,15 @@ class DeliveryControlValidateTests(unittest.TestCase):
         result = self.run_script("--phase", "plan", "--task-dir", str(d))
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
+    def test_plan_passes_for_internal_project(self) -> None:
+        d = self._make_task_dir()
+        (d / "assessment.md").write_text(
+            "# 评估\n- `project_engagement_type`: `non_outsourcing`\n",
+            encoding="utf-8",
+        )
+        result = self.run_script("--phase", "plan", "--task-dir", str(d))
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
     # ── delivery phase ──
 
     def test_delivery_fails_when_dir_missing(self) -> None:
@@ -150,6 +175,13 @@ class DeliveryControlValidateTests(unittest.TestCase):
         result = self.run_script("--phase", "delivery", "--task-dir", str(d))
         self.assertEqual(result.returncode, 1)
 
+    def test_feasibility_fails_when_project_type_missing(self) -> None:
+        d = self._make_task_dir()
+        (d / "assessment.md").write_text("# 评估\n", encoding="utf-8")
+        result = self.run_script("--phase", "feasibility", "--task-dir", str(d))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("project_engagement_type", result.stdout + result.stderr)
+
     def test_delivery_passes_with_complete_docs(self) -> None:
         d = self._make_task_dir()
         (d / "assessment.md").write_text(COMPLETE_HOSTED_ASSESSMENT, encoding="utf-8")
@@ -157,6 +189,15 @@ class DeliveryControlValidateTests(unittest.TestCase):
         delivery.mkdir()
         for name, content in DELIVERY_DIR_CONTENT.items():
             (delivery / name).write_text(content, encoding="utf-8")
+        result = self.run_script("--phase", "delivery", "--task-dir", str(d))
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+    def test_delivery_passes_for_internal_project(self) -> None:
+        d = self._make_task_dir()
+        (d / "assessment.md").write_text(
+            "# 评估\n- `project_engagement_type`: `non_outsourcing`\n",
+            encoding="utf-8",
+        )
         result = self.run_script("--phase", "delivery", "--task-dir", str(d))
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
@@ -177,6 +218,15 @@ class DeliveryControlValidateTests(unittest.TestCase):
         result = self.run_script("--all", "--task-dir", str(d))
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("总计", result.stdout)
+
+    def test_all_phases_pass_for_internal_project(self) -> None:
+        d = self._make_task_dir()
+        (d / "assessment.md").write_text(
+            "# 评估\n- `project_engagement_type`: `non_outsourcing`\n",
+            encoding="utf-8",
+        )
+        result = self.run_script("--all", "--task-dir", str(d))
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

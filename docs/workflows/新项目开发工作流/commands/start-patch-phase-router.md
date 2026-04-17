@@ -24,6 +24,7 @@ python3 .trellis/scripts/workflow/workflow-state.py validate <task-dir>
 
 - 目标项目正式 PRD 边界
 - `brainstorm` 收口前必须落盘的项目级粗估门禁
+- `assessment.md` 中的项目类别判断，以及外包项目的启动款开工门禁
 
 在当前源仓库维护 workflow 内容时，可直接使用：
 
@@ -57,6 +58,9 @@ python3 trellis-library/cli.py assemble \
 ```text
 get_context.py + .current-task + workflow-state.json
     │
+    ├── 当前是第一次进入新项目主链
+    │   └── 无论是否外包项目，先路由 → /trellis:feasibility
+    │
     ├── `.trellis/workflow-installed.json` 存在 + `.trellis/library-lock.yaml` 缺失或缺少最低资产集
     │   └── 先补齐安装基线；补齐后重新执行本决策树
     │
@@ -89,6 +93,10 @@ get_context.py + .current-task + workflow-state.json
     │
     ├── `workflow-state.stage = plan`
     │   └── 重入 /trellis:plan（只做任务划分与规划，禁止借 start 直接开工）
+    │
+    ├── `assessment.md` 判定 `project_engagement_type = external_outsourcing`
+    │   + `kickoff_payment_received != yes`
+    │   └── 停止进入 implementation / test-first；先完成开工授权确认
     │
     ├── `workflow-state.stage = test-first` + `checkpoints.execution_authorized = true`
     │   └── 重入 /trellis:test-first
@@ -143,11 +151,15 @@ $TASK_DIR/before-dev.md
    - 若当前状态仍处于 `plan`，或 `execution_authorized = false`，`/trellis:start` 只能停留在规划/恢复分支
    - 不允许借“开始写代码”“动手做吧”这类自然语言绕过 plan 的确认门禁
 
-6. **串行不等于自动续跑**
+6. **外包项目在启动款到账前不得开工**
+   - 若 `assessment.md` 判定 `project_engagement_type = external_outsourcing`，则 `kickoff_payment_received = yes` 是进入 implementation / test-first 的额外硬门禁
+   - 未满足时，只能停留在 feasibility / plan / 开工授权确认分支，不能借自然语言跳过
+
+7. **串行不等于自动续跑**
    - 即使前一个 task 已完成，也不会自动开始下一个
    - 仍需再次进入 `/trellis:start`，但只能重入当前已确认阶段，不能自动跨阶段
 
-7. **前端视觉首版落地 task 有额外执行边界**
+8. **前端视觉首版落地 task 有额外执行边界**
    - 若当前选定 task 是 `UI -> 首版代码界面`，Codex 不能作为主执行器
    - 该 task 必须改由 Claude Code / OpenCode 承担主执行入口
    - 该 task 完成时，必须同步沉淀 `design/frontend-ui-spec.md`

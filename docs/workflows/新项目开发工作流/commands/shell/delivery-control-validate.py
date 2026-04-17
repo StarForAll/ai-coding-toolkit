@@ -18,6 +18,12 @@ from pathlib import Path
 from typing import Optional
 
 
+VALID_ENGAGEMENT_TYPES = {"external_outsourcing", "non_outsourcing"}
+VALID_EXTERNAL_TRACKS = {"hosted_deployment", "trial_authorization"}
+VALID_BOOLEAN_VALUES = {"yes", "no"}
+MIN_KICKOFF_PAYMENT_RATIO = 30.0
+
+
 def print_result(ok: bool, success: str, failure: str) -> int:
     """打印验证结果，返回 1 表示通过，0 表示失败"""
     if ok:
@@ -25,6 +31,14 @@ def print_result(ok: bool, success: str, failure: str) -> int:
         return 1
     print(f"❌ {failure}")
     return 0
+
+
+def extract_backticked_field(content: str, field_name: str) -> str | None:
+    match = re.search(rf'`{re.escape(field_name)}`:\s*`?(.+?)`?(?:\n|$)', content)
+    if not match:
+        return None
+    value = match.group(1).strip()
+    return value or None
 
 
 def validate_assessment(assessment_file: Path) -> tuple[int, int, bool]:
@@ -44,53 +58,87 @@ def validate_assessment(assessment_file: Path) -> tuple[int, int, bool]:
     passed = 0
     is_trial = False
     
-    # 检查是否为外部项目
-    has_delivery_control = "delivery_control_track" in content
-    if not has_delivery_control:
-        print("ℹ️  未检测到双轨交付控制字段，假设为内部项目")
-        return 0, 0, False
-    
-    print("检测到外部项目，验证双轨字段...")
-    
-    # 1. 检查 delivery_control_track
-    track_match = re.search(r'`delivery_control_track`:\s*`([^`]+)`', content)
+    # 1. 检查项目类别
+    engagement_type = extract_backticked_field(content, "project_engagement_type")
     checks += 1
-    if track_match:
-        track_value = track_match.group(1)
-        valid_tracks = ["hosted_deployment", "trial_authorization", "undecided"]
-        if track_value in valid_tracks:
+    if engagement_type is None:
+        passed += print_result(False, "", "缺少 `project_engagement_type` 字段")
+        return passed, checks, False
+    if engagement_type not in VALID_ENGAGEMENT_TYPES:
+        passed += print_result(False, "", f"`project_engagement_type` 值无效: {engagement_type}")
+        return passed, checks, False
+    passed += print_result(True, f"`project_engagement_type`: {engagement_type}", "")
+
+    if engagement_type != "external_outsourcing":
+        print("ℹ️  项目类别判定为非外包项目；跳过外包项目交付控制校验")
+        return passed, checks, False
+
+    print("检测到外包项目，验证开工款与交付控制字段...")
+
+    # 2. 检查 kickoff_payment_ratio
+    ratio_value = extract_backticked_field(content, "kickoff_payment_ratio")
+    checks += 1
+    if ratio_value:
+        percentages = [float(value) for value in re.findall(r"(\d+(?:\.\d+)?)\s*%", ratio_value)]
+        if percentages and min(percentages) >= MIN_KICKOFF_PAYMENT_RATIO:
+            passed += print_result(True, f"`kickoff_payment_ratio`: {ratio_value}", "")
+        elif percentages:
+            passed += print_result(
+                False,
+                "",
+                f"`kickoff_payment_ratio` 至少应为 {int(MIN_KICKOFF_PAYMENT_RATIO)}%",
+            )
+        else:
+            passed += print_result(False, "", "`kickoff_payment_ratio` 未写明有效百分比")
+    else:
+        passed += print_result(False, "", "缺少 `kickoff_payment_ratio` 字段")
+
+    # 3. 检查 kickoff_payment_received
+    kickoff_received = extract_backticked_field(content, "kickoff_payment_received")
+    checks += 1
+    if kickoff_received:
+        if kickoff_received in VALID_BOOLEAN_VALUES:
+            passed += print_result(True, f"`kickoff_payment_received`: {kickoff_received}", "")
+        else:
+            passed += print_result(False, "", "`kickoff_payment_received` 只能填写 `yes` / `no`")
+    else:
+        passed += print_result(False, "", "缺少 `kickoff_payment_received` 字段")
+
+    # 4. 检查 delivery_control_track
+    track_value = extract_backticked_field(content, "delivery_control_track")
+    checks += 1
+    if track_value:
+        if track_value in VALID_EXTERNAL_TRACKS:
             passed += print_result(True, f"`delivery_control_track`: {track_value}", "")
             is_trial = (track_value == "trial_authorization")
         else:
             passed += print_result(False, "", f"`delivery_control_track` 值无效: {track_value}")
     else:
         passed += print_result(False, "", "缺少 `delivery_control_track` 字段")
-    
-    # 2. 检查 delivery_control_handover_trigger
-    trigger_match = re.search(r'`delivery_control_handover_trigger`:\s*(.+?)(?:\n|$)', content)
+
+    # 5. 检查 delivery_control_handover_trigger
+    trigger_value = extract_backticked_field(content, "delivery_control_handover_trigger")
     checks += 1
-    if trigger_match:
-        trigger_value = trigger_match.group(1).strip()
-        if trigger_value and trigger_value not in ["...", "例如"]:
+    if trigger_value:
+        if trigger_value not in ["...", "例如"]:
             passed += print_result(True, f"`delivery_control_handover_trigger`: {trigger_value}", "")
         else:
             passed += print_result(False, "", "`delivery_control_handover_trigger` 未填写具体值")
     else:
         passed += print_result(False, "", "缺少 `delivery_control_handover_trigger` 字段")
-    
-    # 3. 检查 delivery_control_retained_scope
-    scope_match = re.search(r'`delivery_control_retained_scope`:\s*(.+?)(?:\n|$)', content)
+
+    # 6. 检查 delivery_control_retained_scope
+    scope_value = extract_backticked_field(content, "delivery_control_retained_scope")
     checks += 1
-    if scope_match:
-        scope_value = scope_match.group(1).strip()
-        if scope_value and scope_value != "...":
+    if scope_value:
+        if scope_value != "...":
             passed += print_result(True, f"`delivery_control_retained_scope`: {scope_value}", "")
         else:
             passed += print_result(False, "", "`delivery_control_retained_scope` 未填写（若无保留范围，应写 `none`）")
     else:
         passed += print_result(False, "", "缺少 `delivery_control_retained_scope` 字段")
-    
-    # 4. 如果是 trial_authorization，检查 trial_authorization_terms
+
+    # 7. 如果是 trial_authorization，检查 trial_authorization_terms
     if is_trial:
         print("\n检测到试运行授权轨道，检查授权条款...")
         required_terms = [
@@ -155,6 +203,7 @@ def validate_task_plan(plan_file: Path, is_trial: bool) -> tuple[int, int]:
     
     # 2. 检查是否拆分了关键交付控制任务
     required_tasks = [
+        ("开工授权确认任务", True),
         ("托管部署任务", True),  # (任务名, 是否必须)
         ("源码移交任务", True),
         ("控制权移交任务", True),
@@ -189,14 +238,23 @@ def validate_task_plan(plan_file: Path, is_trial: bool) -> tuple[int, int]:
     else:
         passed += print_result(False, "", "未找到 `Trellis Task 清单` 或 `任务图摘要` 章节")
     
-    # 4. 检查是否有明确的触发条件依赖
+    # 4. 检查是否有明确的开工款触发条件依赖
     checks += 1
-    trigger_patterns = ["尾款", "final_payment", "handover_trigger"]
-    has_trigger = any(p in content for p in trigger_patterns)
-    if has_trigger:
-        passed += print_result(True, "任务计划包含触发条件依赖", "")
+    kickoff_trigger_patterns = ["启动款", "首款", "kickoff_payment", "开工授权"]
+    has_kickoff_trigger = any(p in content for p in kickoff_trigger_patterns)
+    if has_kickoff_trigger:
+        passed += print_result(True, "任务计划包含开工款触发条件依赖", "")
     else:
-        passed += print_result(False, "", "任务计划未明确触发条件（如尾款到账）")
+        passed += print_result(False, "", "任务计划未明确开工款触发条件（如首款到账）")
+
+    # 5. 检查是否有明确的最终移交触发条件依赖
+    checks += 1
+    final_trigger_patterns = ["尾款", "final_payment", "handover_trigger"]
+    has_final_trigger = any(p in content for p in final_trigger_patterns)
+    if has_final_trigger:
+        passed += print_result(True, "任务计划包含最终移交触发条件依赖", "")
+    else:
+        passed += print_result(False, "", "任务计划未明确最终移交触发条件（如尾款到账）")
     
     print(f"\n计划阶段验证: {passed}/{checks} 通过")
     return passed, checks
@@ -277,6 +335,13 @@ def validate_delivery(delivery_dir: Path, is_trial: bool) -> tuple[int, int]:
     return passed, checks
 
 
+def load_engagement_type(assessment_file: Path) -> str | None:
+    if not assessment_file.exists():
+        return None
+    content = assessment_file.read_text(encoding="utf-8")
+    return extract_backticked_field(content, "project_engagement_type")
+
+
 def validate_all_phases(task_dir: Path) -> int:
     """验证所有阶段的双轨交付控制完整性"""
     print("=" * 50)
@@ -292,7 +357,7 @@ def validate_all_phases(task_dir: Path) -> int:
     total_passed += passed
     total_checks += checks
     
-    if checks == 0:
+    if load_engagement_type(assessment_file) != "external_outsourcing":
         print("\n⚠️  未检测到外部项目特征，跳过后续验证")
         return 0
     
@@ -370,8 +435,11 @@ def main() -> int:
         return 0 if passed == checks else 1
     
     if args.phase == "plan":
-        # 先检查是否为试运行授权
         assessment_file = args.task_dir / "assessment.md"
+        engagement_type = load_engagement_type(assessment_file)
+        if engagement_type == "non_outsourcing":
+            print("ℹ️  非外包项目无需执行外包项目交付控制 plan 校验")
+            return 0
         is_trial = False
         if assessment_file.exists():
             content = assessment_file.read_text(encoding="utf-8")
@@ -381,8 +449,11 @@ def main() -> int:
         return 0 if passed == checks else 1
     
     if args.phase == "delivery":
-        # 先检查是否为试运行授权
         assessment_file = args.task_dir / "assessment.md"
+        engagement_type = load_engagement_type(assessment_file)
+        if engagement_type == "non_outsourcing":
+            print("ℹ️  非外包项目无需执行外包项目交付控制 delivery 校验")
+            return 0
         is_trial = False
         if assessment_file.exists():
             content = assessment_file.read_text(encoding="utf-8")

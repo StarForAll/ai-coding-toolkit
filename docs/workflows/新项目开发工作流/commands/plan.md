@@ -37,6 +37,10 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
   - `DDD.md` / `IDD.md` / `AID.md` / `STITCH-PROMPT.md` 是否需要创建
   - 后续需要单独拆出 `UI -> 首版代码界面` 的前端基线 task
 - 若属于外包、定制开发或新客户项目（外部项目），已在 `assessment.md` 中明确 `delivery_control_track`（默认 `hosted_deployment`，必要时使用 `trial_authorization`），**并且已按轨道导入交付控制相关 spec**
+- 若属于外部项目，已在 `assessment.md` 中明确：
+  - `project_engagement_type = external_outsourcing`
+  - `kickoff_payment_ratio` 不低于 `30%`
+  - `kickoff_payment_received` 当前状态已冻结
 - 若 `assessment.md` 中 `ownership_proof_required = yes`，已在 design 阶段冻结 `$TASK_DIR/design/source-watermark-plan.md`
 - 当前 task 的 `workflow-state.json` 已明确切换到 `stage = plan`
 - 当前阶段切换已经过用户明确确认，而不是由 `/trellis:start` 或“下一步推荐”自动推进
@@ -127,6 +131,7 @@ cat "$TASK_DIR/design/index.md" 2>/dev/null
 - 当前项目 `.trellis/spec/` 中已经落地的项目约束
 - 当前项目的自动化检查矩阵
 - 若为外部项目，`assessment.md` 中约定的交付控制轨道、源码移交时点、权限移交时点
+- 若为外部项目，`assessment.md` 中约定的项目类别、启动款比例、开工状态、最终移交触发条件
 - 若启用了作者归属保护，`assessment.md` 中约定的 `source_watermark_*` 字段与 `$TASK_DIR/design/source-watermark-plan.md`
 
 先判断任务是否属于：
@@ -266,6 +271,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 
 外部项目若采用“托管部署 / 试运行授权”的双轨交付控制，仍需在 `task_plan.md` 摘要中显式列出：
 
+- `开工授权确认任务`
 - `试运行版交付任务`
 - `托管部署任务`
 - `永久授权切换任务`
@@ -273,6 +279,11 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 - `控制权移交任务`
 
 但这些任务也应优先落成真实 Trellis task，而不是只留在摘要里。
+
+其中：
+
+- `开工授权确认任务` 负责把“启动款比例是否达标、启动款是否已到账、是否允许进入 implementation / test-first”单独落盘
+- 若 `kickoff_payment_received != yes`，该任务只能停在等待确认或阻断状态，不得把执行态推进到 implementation / test-first
 
 若 `ownership_proof_required = yes`，`task_plan.md` 摘要中还需显式列出：
 

@@ -315,7 +315,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("ownership-proof-validate.py", record_data["scripts"])
         self.assertIn("record-session-helper.py", record_data["scripts"])
         self.assertIn("workflow-state.py", record_data["scripts"])
-        self.assertEqual(record_data["workflow_version"], "1.1.23")
+        self.assertEqual(record_data["workflow_version"], "0.1.24")
         self.assertEqual(record_data["initial_pack"], "pack.requirements-discovery-foundation")
         parallel = fixture / ".claude" / "commands" / "trellis" / "parallel.md"
         self.assertIn(PARALLEL_DISABLED_MARKER, parallel.read_text(encoding="utf-8"))
@@ -776,7 +776,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(FINISH_WORK_MARKER, finish_work.read_text(encoding="utf-8"))
         self.assertIn(RECORD_SESSION_MARKER, record_session.read_text(encoding="utf-8"))
         record_data = json.loads((fixture / ".trellis" / "workflow-installed.json").read_text(encoding="utf-8"))
-        self.assertEqual(record_data["workflow_version"], "1.1.23")
+        self.assertEqual(record_data["workflow_version"], "0.1.24")
         self.assertEqual(record_data["previous_version"], "2.0.0")
 
         followup_check = self.run_script(

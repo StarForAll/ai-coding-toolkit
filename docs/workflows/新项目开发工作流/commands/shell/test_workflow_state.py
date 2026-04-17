@@ -31,6 +31,39 @@ class WorkflowStateScriptTests(unittest.TestCase):
 - 估算说明：基于当前已确认范围的区间粗估，若范围变化需重新评估
 """
 
+    VALID_INTERNAL_ASSESSMENT = """# assessment
+- `project_engagement_type`: `non_outsourcing`
+- 法律/合规风险结论：通过
+- 是否允许进入 brainstorm：是
+"""
+
+    VALID_EXTERNAL_ASSESSMENT = """# assessment
+- `project_engagement_type`: `external_outsourcing`
+- `kickoff_payment_ratio`: `30%`
+- `kickoff_payment_received`: `yes`
+- `delivery_control_track`: `hosted_deployment`
+- `delivery_control_handover_trigger`: `final_payment_received`
+- `delivery_control_retained_scope`: source code and production keys
+- 法律/合规风险结论：通过
+- 是否允许进入 brainstorm：是
+"""
+
+    VALID_EXTERNAL_TRIAL_ASSESSMENT = """# assessment
+- `project_engagement_type`: `external_outsourcing`
+- `kickoff_payment_ratio`: `40%`
+- `kickoff_payment_received`: `yes`
+- `delivery_control_track`: `trial_authorization`
+- `delivery_control_handover_trigger`: `final_payment_received`
+- `delivery_control_retained_scope`: source code
+- `trial_authorization_terms.validity`: 90天
+- `trial_authorization_terms.clock_source_or_usage_basis`: 首次部署日
+- `trial_authorization_terms.expiration_behavior`: 只读模式
+- `trial_authorization_terms.renewal_policy`: 续费延长
+- `trial_authorization_terms.permanent_authorization_trigger`: 尾款到账
+- 法律/合规风险结论：通过
+- 是否允许进入 brainstorm：是
+"""
+
     def run_script(self, *args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [PYTHON, str(SCRIPT), *args],
@@ -60,6 +93,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         *,
         task_prd_suffix: str = "",
         customer_prd_suffix: str = "",
+        assessment_content: str | None = None,
     ) -> None:
         requirements_dir = root / "docs" / "requirements"
         requirements_dir.mkdir(parents=True, exist_ok=True)
@@ -71,6 +105,10 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (requirements_dir / "customer-facing-prd.md").write_text(
             "# customer-facing prd\n\n"
             f"{customer_prd_suffix}",
+            encoding="utf-8",
+        )
+        (task_dir / "assessment.md").write_text(
+            assessment_content or self.VALID_INTERNAL_ASSESSMENT,
             encoding="utf-8",
         )
 
@@ -256,6 +294,126 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
 
+    def test_validate_fails_when_post_feasibility_stage_has_no_assessment(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (task_dir / "assessment.md").unlink()
+
+        self.run_script("init", str(task_dir), "--stage", "design")
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("缺少 assessment.md", validate.stdout)
+
+    def test_validate_blocks_external_execution_until_kickoff_received(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+            assessment_content=self.VALID_EXTERNAL_ASSESSMENT.replace("`yes`", "`no`", 1),
+        )
+
+        self.run_script("init", str(task_dir), "--stage", "implementation")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--execution-authorized",
+            "true",
+            "--transition-from",
+            "plan",
+        )
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("启动款未确认到账前，不得进入 implementation / test-first", validate.stdout)
+
+    def test_validate_allows_external_execution_after_kickoff_received(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+            assessment_content=self.VALID_EXTERNAL_ASSESSMENT,
+        )
+
+        self.run_script("init", str(task_dir), "--stage", "implementation")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--execution-authorized",
+            "true",
+            "--transition-from",
+            "plan",
+        )
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
+
+    def test_validate_blocks_external_stage_when_handover_trigger_missing(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+            assessment_content=self.VALID_EXTERNAL_ASSESSMENT.replace(
+                "- `delivery_control_handover_trigger`: `final_payment_received`\n",
+                "",
+            ),
+        )
+
+        self.run_script("init", str(task_dir), "--stage", "design")
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("delivery_control_handover_trigger", validate.stdout)
+
+    def test_validate_blocks_external_stage_when_retained_scope_missing(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+            assessment_content=self.VALID_EXTERNAL_ASSESSMENT.replace(
+                "- `delivery_control_retained_scope`: source code and production keys\n",
+                "",
+            ),
+        )
+
+        self.run_script("init", str(task_dir), "--stage", "plan")
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("delivery_control_retained_scope", validate.stdout)
+
+    def test_validate_blocks_trial_authorization_when_terms_missing(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+            assessment_content=self.VALID_EXTERNAL_TRIAL_ASSESSMENT.replace(
+                "- `trial_authorization_terms.renewal_policy`: 续费延长\n",
+                "",
+            ),
+        )
+
+        self.run_script("init", str(task_dir), "--stage", "design")
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("trial_authorization_terms.renewal_policy", validate.stdout)
+
     def test_set_rejects_plan_to_implementation_without_execution_authorization(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
@@ -342,6 +500,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
     def test_validate_passes_when_brainstorm_has_no_customer_prd_yet(self) -> None:
         root, task_dir = self.make_fixture()
         (task_dir / "prd.md").write_text("# sample brainstorm draft\n", encoding="utf-8")
+        (task_dir / "assessment.md").write_text(self.VALID_INTERNAL_ASSESSMENT, encoding="utf-8")
 
         self.run_script("init", str(task_dir), "--stage", "brainstorm")
         validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
@@ -355,6 +514,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             f"{self.VALID_BRAINSTORM_ESTIMATE}",
             encoding="utf-8",
         )
+        (task_dir / "assessment.md").write_text(self.VALID_INTERNAL_ASSESSMENT, encoding="utf-8")
 
         self.run_script("init", str(task_dir), "--stage", "implementation")
         self.run_script(
@@ -378,6 +538,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             f"{self.VALID_BRAINSTORM_ESTIMATE}",
             encoding="utf-8",
         )
+        (task_dir / "assessment.md").write_text(self.VALID_INTERNAL_ASSESSMENT, encoding="utf-8")
         (requirements_dir / "customer-facing-prd.md").write_text(
             "# customer-facing prd\n\n"
             "## 需求概览\n- 这是 L0 路径下自愿创建的正式 PRD\n",

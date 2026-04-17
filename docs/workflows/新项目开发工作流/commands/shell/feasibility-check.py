@@ -16,6 +16,29 @@ import sys
 from pathlib import Path
 
 
+VALID_ENGAGEMENT_TYPES = {"external_outsourcing", "non_outsourcing"}
+VALID_EXTERNAL_TRACKS = {"hosted_deployment", "trial_authorization"}
+VALID_BOOLEAN_VALUES = {"yes", "no"}
+MIN_KICKOFF_PAYMENT_RATIO = 30.0
+
+
+def extract_backticked_field(content: str, field_name: str) -> str | None:
+    match = re.search(rf'`{re.escape(field_name)}`:\s*`?(.+?)`?(?:\n|$)', content)
+    if not match:
+        return None
+    value = match.group(1).strip()
+    return value or None
+
+
+def parse_kickoff_payment_ratio(raw_value: str) -> tuple[bool, str]:
+    percentages = [float(value) for value in re.findall(r"(\d+(?:\.\d+)?)\s*%", raw_value)]
+    if not percentages:
+        return False, "未识别到百分比"
+    if min(percentages) < MIN_KICKOFF_PAYMENT_RATIO:
+        return False, f"启动款比例至少应为 {int(MIN_KICKOFF_PAYMENT_RATIO)}%"
+    return True, ", ".join(f"{value:g}%" for value in percentages)
+
+
 def step_compliance() -> None:
     print("=== 法律与合规风险初筛清单 ===")
     print("□ 项目领域是否受法律法规限制？")
@@ -36,9 +59,13 @@ ASSESSMENT_TEMPLATE = """# 项目可行性评估
 - 如何做更稳：
 - 法律/合规风险结论：通过 / 不通过 / 待补充
 - 是否允许进入 brainstorm：是 / 否
-- `delivery_control_track`: `hosted_deployment` / `trial_authorization` / `undecided`
-- `delivery_control_handover_trigger`: 例如 `final_payment_received`
-- `delivery_control_retained_scope`: 尾款前仍由开发者保留的环境、账号、密钥、部署控制范围；若无则写 `none`
+- `project_engagement_type`: `external_outsourcing` / `non_outsourcing`
+- `kickoff_payment_ratio`: 例如 `30%` / `40%`（仅当 `project_engagement_type = external_outsourcing`）
+- `kickoff_payment_received`: `yes` / `no`（仅当 `project_engagement_type = external_outsourcing`）
+- `delivery_control_track`: `hosted_deployment` / `trial_authorization`（仅当 `project_engagement_type = external_outsourcing`）
+- `delivery_control_handover_trigger`: 例如 `final_payment_received`（仅当 `project_engagement_type = external_outsourcing`）
+- `delivery_control_retained_scope`: 尾款前仍由开发者保留的环境、账号、密钥、部署控制范围；若无则写 `none`（仅当 `project_engagement_type = external_outsourcing`）
+- 项目类别判定：外包项目 / 非外包项目
 - 交付控制轨道：托管部署 / 试运行授权 / 未确定
 - 当前结论的前提：
 - 场景标签：
@@ -50,6 +77,7 @@ ASSESSMENT_TEMPLATE = """# 项目可行性评估
 | 关键字段 | 状态(明确/暗示/缺失/冲突) | 证据锚点 | 关键假设/缺口备注 |
 |----------|---------------------------|----------|------------------|
 | 范围边界 | ... | ... | ... |
+| 项目类别判定 | ... | ... | ... |
 | 交付物清单 | ... | ... | ... |
 | 验收口径 | ... | ... | ... |
 | 付款结构 | ... | ... | ... |
@@ -69,12 +97,15 @@ ASSESSMENT_TEMPLATE = """# 项目可行性评估
 - `trial_authorization_terms.renewal_policy`: ...
 - `trial_authorization_terms.permanent_authorization_trigger`: ...
 
-## 双轨字段速查
+## 项目类别与控制字段速查
 | 字段 | 最低要求 | 下游影响 |
 |------|----------|----------|
-| `delivery_control_track` | 外部项目必填，取值为 `hosted_deployment` / `trial_authorization` / `undecided` | 决定 design 阶段的交付治理 spec 选择 |
-| `delivery_control_handover_trigger` | 明确最终控制权移交触发条件 | 决定 plan / delivery 阶段何时允许最终移交 |
-| `delivery_control_retained_scope` | 写清尾款前保留的环境、账号、密钥、部署控制范围 | 决定 retained-control 交付边界 |
+| `project_engagement_type` | 所有项目必填；外包项目填 `external_outsourcing`，其余填 `non_outsourcing` | 决定是否启用外包项目商务与交付控制门禁 |
+| `kickoff_payment_ratio` | 外包项目必填，且最低不少于 `30%` | 决定 implementation / test-first 的开工前提 |
+| `kickoff_payment_received` | 外包项目必填，取值为 `yes` / `no` | 决定是否允许开工 |
+| `delivery_control_track` | 外包项目必填，取值为 `hosted_deployment` / `trial_authorization` | 决定 design 阶段的交付治理 spec 选择 |
+| `delivery_control_handover_trigger` | 外包项目必填，明确最终控制权移交触发条件 | 决定 plan / delivery 阶段何时允许最终移交 |
+| `delivery_control_retained_scope` | 外包项目必填，写清尾款前保留的环境、账号、密钥、部署控制范围 | 决定 retained-control 交付边界 |
 | `trial_authorization_terms.*` | 若走 `trial_authorization` 则不得留空 | 决定授权管理 spec、到期行为和永久授权切换门禁 |
 
 ## 红线检查
@@ -200,45 +231,73 @@ def step_validate(task_dir: Path) -> int:
         else:
             errors.append("`## 红线检查` 章节未明确写出结论（✅/❌/⚠️）")
 
-    has_delivery_control = "delivery_control_track" in content
-
-    if not has_delivery_control:
-        print("ℹ️ 未检测到双轨交付控制字段，按内部项目处理；通用法律/合规门禁已覆盖")
+    engagement_type = extract_backticked_field(content, "project_engagement_type")
+    if engagement_type is None:
+        errors.append("缺少 `project_engagement_type` 字段")
+        is_external_project = False
+    elif engagement_type not in VALID_ENGAGEMENT_TYPES:
+        errors.append(
+            "`project_engagement_type` 值无效: "
+            f"{engagement_type}，应为: {', '.join(sorted(VALID_ENGAGEMENT_TYPES))}"
+        )
+        is_external_project = False
     else:
-        print("检测到外部项目，开始验证双轨字段...")
+        is_external_project = engagement_type == "external_outsourcing"
+        print(f"✅ `project_engagement_type`: {engagement_type}")
 
-        track_match = re.search(r'`delivery_control_track`:\s*`([^`]+)`', content)
-        if not track_match:
+    if not is_external_project:
+        print("ℹ️ 项目类别判定为非外包项目（内部项目/自有项目）；继续使用通用 workflow 主链，不启用首/尾款控制门禁")
+    else:
+        print("检测到外包项目，开始验证开工款与交付控制字段...")
+
+        kickoff_ratio = extract_backticked_field(content, "kickoff_payment_ratio")
+        if kickoff_ratio is None:
+            errors.append("缺少 `kickoff_payment_ratio` 字段")
+        else:
+            ratio_ok, ratio_message = parse_kickoff_payment_ratio(kickoff_ratio)
+            if not ratio_ok:
+                errors.append(f"`kickoff_payment_ratio` 无效: {ratio_message}")
+            else:
+                print(f"✅ `kickoff_payment_ratio`: {ratio_message}")
+
+        kickoff_received = extract_backticked_field(content, "kickoff_payment_received")
+        if kickoff_received is None:
+            errors.append("缺少 `kickoff_payment_received` 字段")
+        elif kickoff_received not in VALID_BOOLEAN_VALUES:
+            errors.append("`kickoff_payment_received` 只能填写 `yes` / `no`")
+        else:
+            print(f"✅ `kickoff_payment_received`: {kickoff_received}")
+            if kickoff_received == "no":
+                warnings.append("外包项目尚未确认启动款到账；后续不得进入 implementation / test-first")
+
+        track_value = extract_backticked_field(content, "delivery_control_track")
+        if track_value is None:
             errors.append("缺少 `delivery_control_track` 字段")
+        elif track_value not in VALID_EXTERNAL_TRACKS:
+            errors.append(
+                "`delivery_control_track` 值无效: "
+                f"{track_value}，应为: {', '.join(sorted(VALID_EXTERNAL_TRACKS))}"
+            )
         else:
-            track_value = track_match.group(1)
-            valid_tracks = ["hosted_deployment", "trial_authorization", "undecided"]
-            if track_value not in valid_tracks:
-                errors.append(f"`delivery_control_track` 值无效: {track_value}，应为: {', '.join(valid_tracks)}")
-            else:
-                print(f"✅ `delivery_control_track`: {track_value}")
+            print(f"✅ `delivery_control_track`: {track_value}")
 
-        trigger_match = re.search(r'`delivery_control_handover_trigger`:\s*(.+)', content)
-        if not trigger_match:
+        trigger_value = extract_backticked_field(content, "delivery_control_handover_trigger")
+        if trigger_value is None:
             errors.append("缺少 `delivery_control_handover_trigger` 字段")
+        elif trigger_value in {"...", "", "例如"}:
+            errors.append("`delivery_control_handover_trigger` 未填写具体值")
         else:
-            trigger_value = trigger_match.group(1).strip()
-            if trigger_value in ["...", "", "例如"]:
-                errors.append("`delivery_control_handover_trigger` 未填写具体值")
-            else:
-                print(f"✅ `delivery_control_handover_trigger`: {trigger_value}")
+            print(f"✅ `delivery_control_handover_trigger`: {trigger_value}")
 
-        scope_match = re.search(r'`delivery_control_retained_scope`:\s*(.+)', content)
-        if not scope_match:
+        scope_value = extract_backticked_field(content, "delivery_control_retained_scope")
+        if scope_value is None:
             errors.append("缺少 `delivery_control_retained_scope` 字段")
+        elif scope_value in {"...", ""}:
+            errors.append("`delivery_control_retained_scope` 未填写具体值（若无保留范围，应写 `none`）")
         else:
-            scope_value = scope_match.group(1).strip()
-            if scope_value in ["...", ""]:
-                errors.append("`delivery_control_retained_scope` 未填写具体值（若无保留范围，应写 `none`）")
-            else:
-                print(f"✅ `delivery_control_retained_scope`: {scope_value}")
+            print(f"✅ `delivery_control_retained_scope`: {scope_value}")
 
-        if track_match and track_match.group(1) == "trial_authorization":
+        if track_value == "trial_authorization":
             print("\n检测到试运行授权轨道，检查授权条款...")
             required_terms = [
                 "trial_authorization_terms.validity",
@@ -249,15 +308,13 @@ def step_validate(task_dir: Path) -> int:
             ]
 
             for term in required_terms:
-                term_match = re.search(rf'`{re.escape(term)}`:\s*(.+)', content)
-                if not term_match:
+                term_value = extract_backticked_field(content, term)
+                if term_value is None:
                     errors.append(f"缺少 `{term}` 字段")
+                elif term_value in {"...", "", "."}:
+                    errors.append(f"`{term}` 未填写具体值")
                 else:
-                    term_value = term_match.group(1).strip()
-                    if term_value in ["...", "", "."]:
-                        errors.append(f"`{term}` 未填写具体值")
-                    else:
-                        print(f"✅ `{term}`: {term_value}")
+                    print(f"✅ `{term}`: {term_value}")
 
     print("\n" + "=" * 40)
     if warnings:

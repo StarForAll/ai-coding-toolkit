@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,6 +23,9 @@ REQUIREMENTS_DIR = Path("docs/requirements")
 CUSTOMER_PRD = REQUIREMENTS_DIR / "customer-facing-prd.md"
 DEVELOPER_PRD = REQUIREMENTS_DIR / "developer-facing-prd.md"
 TASK_PRD = Path("prd.md")
+ASSESSMENT_FILE = Path("assessment.md")
+VALID_ENGAGEMENT_TYPES = {"external_outsourcing", "non_outsourcing"}
+MIN_KICKOFF_PAYMENT_RATIO = 30.0
 
 STAGES = {
     "feasibility",
@@ -294,6 +298,149 @@ def validate_leaf_task(task_dir: Path, errors: list[str]) -> None:
         errors.append("当前 task 已有 children，不应继续作为执行态叶子任务持有 workflow-state")
 
 
+def load_task_json(path: Path) -> dict[str, Any] | None:
+    data = read_json(path / TASK_FILE_NAME)
+    if isinstance(data, dict):
+        return data
+    return None
+
+
+def iter_task_lineage(task_dir: Path, repo_root: Path) -> list[Path]:
+    lineage: list[Path] = []
+    tasks_root = repo_root / ".trellis" / "tasks"
+    current = task_dir.resolve()
+    visited: set[Path] = set()
+
+    while current not in visited and current.is_dir():
+        visited.add(current)
+        lineage.append(current)
+        task_data = load_task_json(current)
+        if not task_data:
+            break
+        parent_name = task_data.get("parent")
+        if not isinstance(parent_name, str) or not parent_name:
+            break
+        parent_dir = tasks_root / parent_name
+        if not parent_dir.is_dir():
+            break
+        current = parent_dir.resolve()
+
+    return lineage
+
+
+def find_assessment_file(task_dir: Path, repo_root: Path) -> Path | None:
+    for candidate_dir in iter_task_lineage(task_dir, repo_root):
+        assessment = candidate_dir / ASSESSMENT_FILE
+        if assessment.is_file():
+            return assessment
+    return None
+
+
+def extract_backticked_field(content: str, field_name: str) -> str | None:
+    pattern = re.compile(rf'`{re.escape(field_name)}`:\s*`?(.+?)`?(?:\n|$)')
+    match = pattern.search(content)
+    if not match:
+        return None
+    value = match.group(1).strip()
+    return value or None
+
+
+def validate_external_project_controls(
+    task_dir: Path,
+    repo_root: Path,
+    state: dict[str, Any],
+    errors: list[str],
+) -> None:
+    stage = state.get("stage")
+    if stage == "feasibility":
+        return
+
+    assessment_file = find_assessment_file(task_dir, repo_root)
+    if assessment_file is None:
+        errors.append("缺少 assessment.md；任何项目都必须先经过 feasibility 并完成项目类别判断")
+        return
+
+    content = assessment_file.read_text(encoding="utf-8")
+    engagement_type = extract_backticked_field(content, "project_engagement_type")
+    if engagement_type is None:
+        errors.append(f"{assessment_file.relative_to(repo_root).as_posix()} 缺少 `project_engagement_type` 字段")
+        return
+    if engagement_type not in VALID_ENGAGEMENT_TYPES:
+        errors.append(
+            f"{assessment_file.relative_to(repo_root).as_posix()} 的 `project_engagement_type` 取值无效: {engagement_type}"
+        )
+        return
+
+    if engagement_type != "external_outsourcing":
+        return
+
+    kickoff_ratio = extract_backticked_field(content, "kickoff_payment_ratio")
+    if kickoff_ratio is None:
+        errors.append(f"{assessment_file.relative_to(repo_root).as_posix()} 缺少 `kickoff_payment_ratio` 字段")
+    else:
+        percentages = [float(value) for value in re.findall(r"(\d+(?:\.\d+)?)\s*%", kickoff_ratio)]
+        if not percentages or min(percentages) < MIN_KICKOFF_PAYMENT_RATIO:
+            errors.append(
+                f"{assessment_file.relative_to(repo_root).as_posix()} 的 `kickoff_payment_ratio` "
+                f"必须写明且最低不少于 {int(MIN_KICKOFF_PAYMENT_RATIO)}%"
+            )
+
+    kickoff_received = extract_backticked_field(content, "kickoff_payment_received")
+    if kickoff_received is None:
+        errors.append(f"{assessment_file.relative_to(repo_root).as_posix()} 缺少 `kickoff_payment_received` 字段")
+    elif kickoff_received not in {"yes", "no"}:
+        errors.append(
+            f"{assessment_file.relative_to(repo_root).as_posix()} 的 `kickoff_payment_received` 只能填写 `yes` / `no`"
+        )
+    elif stage in EXECUTION_STAGES and kickoff_received != "yes":
+        errors.append("外包项目在启动款未确认到账前，不得进入 implementation / test-first")
+
+    delivery_track = extract_backticked_field(content, "delivery_control_track")
+    if delivery_track is None:
+        errors.append(f"{assessment_file.relative_to(repo_root).as_posix()} 缺少 `delivery_control_track` 字段")
+    elif delivery_track not in {"hosted_deployment", "trial_authorization"}:
+        errors.append(
+            f"{assessment_file.relative_to(repo_root).as_posix()} 的 `delivery_control_track` 必须为 "
+            "`hosted_deployment` 或 `trial_authorization`"
+        )
+
+    handover_trigger = extract_backticked_field(content, "delivery_control_handover_trigger")
+    if handover_trigger is None:
+        errors.append(
+            f"{assessment_file.relative_to(repo_root).as_posix()} 缺少 `delivery_control_handover_trigger` 字段"
+        )
+    elif handover_trigger in {"...", "", "例如"}:
+        errors.append(
+            f"{assessment_file.relative_to(repo_root).as_posix()} 的 `delivery_control_handover_trigger` 未填写具体值"
+        )
+
+    retained_scope = extract_backticked_field(content, "delivery_control_retained_scope")
+    if retained_scope is None:
+        errors.append(
+            f"{assessment_file.relative_to(repo_root).as_posix()} 缺少 `delivery_control_retained_scope` 字段"
+        )
+    elif retained_scope in {"...", ""}:
+        errors.append(
+            f"{assessment_file.relative_to(repo_root).as_posix()} 的 `delivery_control_retained_scope` 未填写具体值"
+        )
+
+    if delivery_track == "trial_authorization":
+        required_terms = [
+            "trial_authorization_terms.validity",
+            "trial_authorization_terms.clock_source_or_usage_basis",
+            "trial_authorization_terms.expiration_behavior",
+            "trial_authorization_terms.renewal_policy",
+            "trial_authorization_terms.permanent_authorization_trigger",
+        ]
+        for term in required_terms:
+            term_value = extract_backticked_field(content, term)
+            if term_value is None:
+                errors.append(f"{assessment_file.relative_to(repo_root).as_posix()} 缺少 `{term}` 字段")
+            elif term_value in {"...", ".", ""}:
+                errors.append(
+                    f"{assessment_file.relative_to(repo_root).as_posix()} 的 `{term}` 未填写具体值"
+                )
+
 def find_missing_markers(path: Path, markers: tuple[str, ...]) -> list[str]:
     try:
         content = path.read_text(encoding="utf-8")
@@ -451,6 +598,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
             )
             validate_current_task_pointer(task_dir, repo_root, current_task_file, errors)
             validate_leaf_task(task_dir, errors)
+            validate_external_project_controls(task_dir, repo_root, state, errors)
 
     if args.project_root:
         validate_project_doc_boundary(state, Path(args.project_root).resolve(), task_dir, errors)

@@ -18,7 +18,7 @@ CLI_ALT_DIRS = {
     "codex": ".agents",
 }
 ALL_CLI_TYPES = ["claude", "opencode", "codex"]
-WORKFLOW_VERSION = "1.1.23"
+WORKFLOW_VERSION = "0.1.24"
 
 PATCH_BASELINE_COMMANDS = ["start", "finish-work", "record-session"]
 OVERLAY_BASELINE_COMMANDS = ["brainstorm", "check"]
