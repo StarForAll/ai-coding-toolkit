@@ -11,7 +11,7 @@
 - `feasibility` 到 `delivery`（含 `project-audit`）这类阶段资产由当前 workflow 分发
 - `start` / `finish-work` / `record-session` 默认来自 Trellis 基线，允许由当前 workflow 追加补丁增强
 - close-out 中的 `archive` 仍直接复用目标项目 Trellis 基线 `task.py`；若目标项目不是当前最新 Trellis 基线，可能不包含 archive auto-commit pathspec 修复
-- 安装器会自动导入 `pack.requirements-discovery-foundation`，并删除 `00-bootstrap-guidelines`
+- 安装器会自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines` 则清理，不存在则跳过
 
 前提:
 - 目标项目是 Git 仓库，`origin` 至少有两个 push URL，已执行 trellis init，且存在对应 CLI 目录
@@ -37,9 +37,11 @@ from workflow_assets import (
     DISTRIBUTED_COMMANDS,
     detect_cli_types as detect_cli_types_shared,
     HELPER_SCRIPTS,
+    list_all_codex_skills_dirs,
     OPTIONAL_DISABLED_BASELINE_COMMANDS,
     OVERLAY_BASELINE_COMMANDS,
     PATCH_BASELINE_COMMANDS,
+    WORKFLOW_SCHEMA_VERSION,
     WORKFLOW_VERSION,
     resolve_codex_skills_dir,
 )
@@ -713,54 +715,71 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool) -> dict:
 
 # ── Codex CLI 部署 ──
 def deploy_codex(src: Path, root: Path, dry_run: bool) -> dict:
-    """部署到 skills 目录（Codex 无项目自定义命令目录，workflow 入口采用 skills 模型）。"""
-    skills_dir = resolve_codex_skills_dir(root)
-    if skills_dir is None:
+    """部署到所有 skills 目录（Codex 无项目自定义命令目录，workflow 入口采用 skills 模型）。"""
+    skills_dirs = list_all_codex_skills_dirs(root)
+    if not skills_dirs:
         return {"commands": 0, "scripts": 0, "patches": 0, "errors": ["未找到 .agents/skills/ 或 .codex/skills/ 目录"]}
 
     result = {"commands": 0, "scripts": 0, "patches": 0, "errors": []}
 
+    # 备份（对所有存在的 skills 目录执行）
     if not dry_run:
-        for name in [*OVERLAY_BASELINE_COMMANDS, *OPTIONAL_DISABLED_BASELINE_COMMANDS, "finish-work"]:
-            skill_path = skills_dir / name / "SKILL.md"
-            backup_path = skills_dir / ".backup-original" / name / "SKILL.md"
-            if skill_path.exists() and not backup_path.exists():
-                backup_path.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(skill_path, backup_path)
-                ok(f"[Codex] {name} skill → 备份")
+        for skills_dir in skills_dirs:
+            for name in [*OVERLAY_BASELINE_COMMANDS, *OPTIONAL_DISABLED_BASELINE_COMMANDS, "finish-work"]:
+                skill_path = skills_dir / name / "SKILL.md"
+                backup_path = skills_dir / ".backup-original" / name / "SKILL.md"
+                if skill_path.exists() and not backup_path.exists():
+                    backup_path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(skill_path, backup_path)
+                    ok(f"[Codex] {name} skill → {skills_dir.relative_to(root)}/.backup-original")
 
-    # 部署 skills（从命令文件转换为 skills 格式）
+    # 部署 skills（从命令文件转换为 skills 格式，对所有目录同步写入）
     for cmd in DISTRIBUTED_COMMANDS:
         s = src / f"{cmd}.md"
-        d = skills_dir / cmd / "SKILL.md"
         if s.exists():
-            if dry_run:
-                info(f"[Codex] 将部署 skill: {cmd}")
-            else:
-                c = prepare_command_content(s)
-                d.parent.mkdir(parents=True, exist_ok=True)
-                d.write_text(c, encoding="utf-8")
-                ok(f"[Codex] skill: {cmd} → {d.relative_to(root)}")
+            for skills_dir in skills_dirs:
+                d = skills_dir / cmd / "SKILL.md"
+                if dry_run:
+                    info(f"[Codex] 将部署 skill: {cmd} → {skills_dir.relative_to(root)}")
+                else:
+                    c = prepare_command_content(s)
+                    d.parent.mkdir(parents=True, exist_ok=True)
+                    d.write_text(c, encoding="utf-8")
+                    ok(f"[Codex] skill: {cmd} → {d.relative_to(root)}")
             result["commands"] += 1
         else:
             warn(f"[Codex] 源文件缺失: {cmd}.md")
 
-    finish_work_skill = skills_dir / "finish-work" / "SKILL.md"
-    if not finish_work_skill.exists():
-        result["errors"].append("缺少 Trellis 基线 finish-work skill，无法注入 workflow 项目化补丁")
-        return result
+    # 注入 finish-work 补丁（对所有目录，但 patches 只计一次）
+    finish_work_patched = False
+    any_finish_work_exists = False
+    for skills_dir in skills_dirs:
+        finish_work_skill = skills_dir / "finish-work" / "SKILL.md"
+        if not finish_work_skill.exists():
+            info(
+                f"[Codex] {skills_dir.relative_to(root)} 缺少 finish-work 基线，"
+                "跳过该项目化补丁"
+            )
+            continue
+        any_finish_work_exists = True
+        if inject_finish_work_patch(
+            src,
+            finish_work_skill,
+            dry_run=dry_run,
+            cli_label="Codex",
+            target_label="finish-work skill",
+        ):
+            if not finish_work_patched:
+                result["patches"] += 1
+                finish_work_patched = True
 
-    if inject_finish_work_patch(
-        src,
-        finish_work_skill,
-        dry_run=dry_run,
-        cli_label="Codex",
-        target_label="finish-work skill",
-    ):
-        result["patches"] += 1
+    if not any_finish_work_exists:
+        result["errors"].append(
+            "所有 skills 目录均缺少 finish-work 基线，无法注入 workflow 项目化补丁"
+        )
 
     # Codex 通过 session-start.py hook 注入上下文，不需要注入 start.md
-    # 验证 hook 是否已就绪
+    # 验证 hook 是否已就绪（全局只检查一次）
     hooks_json = root / ".codex" / "hooks.json"
     if hooks_json.exists():
         ok("[Codex] hooks.json 已存在")
@@ -774,8 +793,13 @@ def deploy_codex(src: Path, root: Path, dry_run: bool) -> dict:
     else:
         warn("[Codex] session-start.py 不存在，会话上下文注入不可用")
 
-    if disable_parallel_skill(src, skills_dir, dry_run=dry_run, cli_label="Codex"):
-        result["patches"] += 1
+    # 禁用 parallel（对所有目录，但 patches 只计一次）
+    parallel_patched = False
+    for skills_dir in skills_dirs:
+        if disable_parallel_skill(src, skills_dir, dry_run=dry_run, cli_label="Codex"):
+            if not parallel_patched:
+                result["patches"] += 1
+                parallel_patched = True
 
     # 辅助脚本已在 Claude Code 部署时处理
     return result
@@ -836,11 +860,18 @@ def import_requirements_foundation(root: Path, dry_run: bool) -> bool:
 
 
 # ── 安装记录 ──
-def write_install_record(root: Path, cli_types: list[str], dry_run: bool) -> None:
+def write_install_record(
+    root: Path,
+    cli_types: list[str],
+    dry_run: bool,
+    *,
+    bootstrap_cleanup: str = "unknown",
+) -> None:
     now = datetime.now(timezone.utc).isoformat()
     ver = (root / ".trellis" / ".version").read_text(encoding="utf-8").strip() \
         if (root / ".trellis" / ".version").exists() else "unknown"
     rec = root / ".trellis" / "workflow-installed.json"
+    bootstrap_task_removed = bootstrap_cleanup in {"removed", "dry-run-removed"}
     if not dry_run:
         rec.write_text(json.dumps({
             "trellis_version": ver,
@@ -853,8 +884,10 @@ def write_install_record(root: Path, cli_types: list[str], dry_run: bool) -> Non
             "patched_baseline_commands": PATCH_BASELINE_COMMANDS,
             "scripts": HELPER_SCRIPTS,
             "workflow_version": WORKFLOW_VERSION,
+            "workflow_schema_version": WORKFLOW_SCHEMA_VERSION,
             "initial_pack": _REQUIREMENTS_FOUNDATION_PACK,
-            "bootstrap_task_removed": True,
+            "bootstrap_task_removed": bootstrap_task_removed,
+            "bootstrap_cleanup_status": bootstrap_cleanup,
         }, ensure_ascii=False, indent=2), encoding="utf-8")
     if dry_run:
         info(f"将写入安装记录 → {rec.name} (Trellis {ver}, CLI: {', '.join(cli_types)})")
@@ -872,20 +905,28 @@ def ensure_project_todo(root: Path) -> None:
     ok(f"初始化提醒 → {_TODO_FILE_NAME}")
 
 
-def remove_bootstrap_task(root: Path, dry_run: bool) -> None:
-    """安装 workflow 后删除 Trellis init 创建的 bootstrap task。"""
+def remove_bootstrap_task(root: Path, dry_run: bool) -> str:
+    """安装 workflow 后删除 Trellis init 创建的 bootstrap task。
+
+    返回值表示本次清理的实际状态：
+
+    - ``"removed"``  : 目标项目存在 bootstrap task，且已实际删除
+    - ``"absent"``   : 目标项目本就没有 bootstrap task（例如目标 Trellis 基线不再生成）
+    - ``"dry-run-removed"`` : dry-run 模式下识别到了存在的 bootstrap task
+    """
     task_dir = root / ".trellis" / "tasks" / _BOOTSTRAP_TASK_NAME
     if not task_dir.exists():
         info(f"{_BOOTSTRAP_TASK_NAME} 不存在，跳过清理")
-        return
+        return "absent"
     if dry_run:
         info(f"将删除 Trellis bootstrap 任务 → .trellis/tasks/{_BOOTSTRAP_TASK_NAME}")
-        return
+        return "dry-run-removed"
     if task_dir.is_dir():
         shutil.rmtree(task_dir)
     else:
         task_dir.unlink()
     ok(f"Trellis bootstrap 任务已删除 → {_BOOTSTRAP_TASK_NAME}")
+    return "removed"
 
 
 # ── AGENTS.md NL 路由表注入 ──
@@ -996,11 +1037,13 @@ def main() -> int:
             return 1
         print()
         print("🧹 Trellis bootstrap 清理...")
-        remove_bootstrap_task(root, args.dry_run)
+        bootstrap_cleanup = remove_bootstrap_task(root, args.dry_run)
+    else:
+        bootstrap_cleanup = "skipped"
         print()
 
     # 安装记录
-    write_install_record(root, cli_types, args.dry_run)
+    write_install_record(root, cli_types, args.dry_run, bootstrap_cleanup=bootstrap_cleanup)
 
     # NL 路由表注入 AGENTS.md（为无 hooks 的 CLI 提供路由支持）
     print()
@@ -1036,7 +1079,12 @@ def main() -> int:
     print()
     if not args.dry_run:
         print("  下一步（推荐）:")
-        print(f"    1. 安装器已自动导入 {_REQUIREMENTS_FOUNDATION_PACK}，并清理 {_BOOTSTRAP_TASK_NAME}")
+        if bootstrap_cleanup == "removed":
+            print(f"    1. 安装器已自动导入 {_REQUIREMENTS_FOUNDATION_PACK}，并清理 {_BOOTSTRAP_TASK_NAME}")
+        elif bootstrap_cleanup == "absent":
+            print(f"    1. 安装器已自动导入 {_REQUIREMENTS_FOUNDATION_PACK}；目标项目未创建 {_BOOTSTRAP_TASK_NAME}，清理已跳过")
+        else:
+            print(f"    1. 安装器已自动导入 {_REQUIREMENTS_FOUNDATION_PACK}；{_BOOTSTRAP_TASK_NAME} 清理状态: {bootstrap_cleanup}")
         print("       请先确认 .trellis/library-lock.yaml 已包含需求发现基础资产")
         print("    2. 技术架构确认后，再使用 trellis-library/cli.py assemble 为当前项目补充真实 spec 集合")
         print("    2.1 若目标项目不是当前最新 Trellis 基线，先升级 Trellis；当前 workflow 的 archive 收尾仍直接复用基线 task.py 行为")

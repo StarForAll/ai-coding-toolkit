@@ -32,9 +32,11 @@ from workflow_assets import (
     DISTRIBUTED_COMMANDS,
     detect_cli_types as detect_cli_types_shared,
     HELPER_SCRIPTS,
+    list_all_codex_skills_dirs,
     OPTIONAL_DISABLED_BASELINE_COMMANDS,
     OVERLAY_BASELINE_COMMANDS,
     PATCH_BASELINE_COMMANDS,
+    WORKFLOW_SCHEMA_VERSION,
     WORKFLOW_VERSION,
     check_latest_trellis_prerequisite,
     read_project_trellis_version,
@@ -87,6 +89,10 @@ _REQUIRED_INSTALL_RECORD_KEYS = {
     "scripts",
     "initial_pack",
     "bootstrap_task_removed",
+}
+_LEGACY_OPTIONAL_VERSION_KEYS = {
+    "workflow_version",
+    "workflow_schema_version",
 }
 
 
@@ -165,13 +171,23 @@ def detect_install_record_schema_conflicts(record: dict) -> int:
         warn("workflow-installed.json 缺失或不可读，跳过 schema 完整性校验")
         return 0
 
-    missing = sorted(key for key in _REQUIRED_INSTALL_RECORD_KEYS if key not in record)
-    if not missing:
-        ok("workflow-installed.json schema 完整")
+    missing_required = sorted(key for key in _REQUIRED_INSTALL_RECORD_KEYS if key not in record)
+    missing_legacy_versions = sorted(key for key in _LEGACY_OPTIONAL_VERSION_KEYS if key not in record)
+
+    if missing_required:
+        err(f"workflow-installed.json 缺少字段: {', '.join(missing_required)}")
+        return len(missing_required)
+
+    if missing_legacy_versions:
+        warn(
+            "workflow-installed.json 缺少 legacy 可接受版本字段: "
+            + ", ".join(missing_legacy_versions)
+            + "；按 legacy/unknown 继续"
+        )
         return 0
 
-    err(f"workflow-installed.json 缺少字段: {', '.join(missing)}")
-    return len(missing)
+    ok("workflow-installed.json schema 完整")
+    return 0
 
 
 def read_text(path: Path) -> str | None:
@@ -350,39 +366,50 @@ def detect_conflicts_opencode(src: Path, dst_cmds: Path) -> int:
 # ── Codex 冲突检测 ──
 def detect_conflicts_codex(src: Path, root: Path) -> int:
     conflicts = 0
-    skills_dir = resolve_codex_skills_dir(root)
-    if skills_dir is None:
+    skills_dirs = list_all_codex_skills_dirs(root)
+    if not skills_dirs:
         warn("[Codex] 未找到 skills 目录")
         return 0
 
-    skill_conflicts = 0
-    for name in DISTRIBUTED_COMMANDS:
-        target_path = skills_dir / name / "SKILL.md"
-        if not target_path.exists():
-            warn(f"[Codex] skill 缺失: {name}")
-            skill_conflicts += 1
-            continue
-        expected = expected_command_content(src, name)
-        actual = read_text(target_path)
-        if expected is None or actual is None:
-            skill_conflicts += 1
-            continue
-        if actual != expected:
-            err(f"[Codex] skill 内容漂移: {name}")
-            skill_conflicts += 1
-    if skill_conflicts:
-        conflicts += skill_conflicts
-    else:
-        ok("[Codex] 所有分发 skills 内容一致")
-
-    finish_work_skill = skills_dir / "finish-work" / "SKILL.md"
-    if finish_work_skill.exists():
-        if has_finish_work_patch(finish_work_skill):
-            ok("[Codex] finish-work skill: 项目化补丁正常")
+    # 对每个 skills 目录分别检查分发 skills
+    total_skill_conflicts = 0
+    for skills_dir in skills_dirs:
+        skill_conflicts = 0
+        for name in DISTRIBUTED_COMMANDS:
+            target_path = skills_dir / name / "SKILL.md"
+            if not target_path.exists():
+                warn(f"[Codex] skill 缺失: {name} ({skills_dir.relative_to(root)})")
+                skill_conflicts += 1
+                continue
+            expected = expected_command_content(src, name)
+            actual = read_text(target_path)
+            if expected is None or actual is None:
+                skill_conflicts += 1
+                continue
+            if actual != expected:
+                err(f"[Codex] skill 内容漂移: {name} ({skills_dir.relative_to(root)})")
+                skill_conflicts += 1
+        if skill_conflicts:
+            total_skill_conflicts += skill_conflicts
         else:
-            err("[Codex] finish-work skill: 项目化补丁缺失")
-            conflicts += 1
+            ok(f"[Codex] {skills_dir.relative_to(root)} 分发 skills 内容一致")
+    if total_skill_conflicts:
+        conflicts += total_skill_conflicts
 
+    # 对每个 skills 目录分别检查 finish-work 补丁
+    finish_work_conflicts = 0
+    for skills_dir in skills_dirs:
+        finish_work_skill = skills_dir / "finish-work" / "SKILL.md"
+        if finish_work_skill.exists():
+            if has_finish_work_patch(finish_work_skill):
+                ok(f"[Codex] finish-work skill ({skills_dir.relative_to(root)}): 项目化补丁正常")
+            else:
+                err(f"[Codex] finish-work skill ({skills_dir.relative_to(root)}): 项目化补丁缺失")
+                finish_work_conflicts += 1
+    if finish_work_conflicts:
+        conflicts += finish_work_conflicts
+
+    # hooks 是全局的，只检查一次
     hooks_json = root / ".codex" / "hooks.json"
     if hooks_json.exists():
         ok("[Codex] hooks.json 存在")
@@ -397,17 +424,22 @@ def detect_conflicts_codex(src: Path, root: Path) -> int:
         warn("[Codex] session-start.py 缺失")
         conflicts += 1
 
-    parallel_skill = skills_dir / "parallel" / "SKILL.md"
-    if parallel_skill.exists():
-        expected_parallel = expected_parallel_disabled_content(src)
-        actual_parallel = read_text(parallel_skill)
-        if expected_parallel is None or actual_parallel is None:
-            conflicts += 1
-        elif actual_parallel != expected_parallel:
-            err("[Codex] parallel skill: 禁用覆盖漂移")
-            conflicts += 1
-        else:
-            ok("[Codex] parallel skill: 禁用覆盖正常")
+    # 对每个 skills 目录分别检查 parallel 禁用
+    parallel_conflicts = 0
+    for skills_dir in skills_dirs:
+        parallel_skill = skills_dir / "parallel" / "SKILL.md"
+        if parallel_skill.exists():
+            expected_parallel = expected_parallel_disabled_content(src)
+            actual_parallel = read_text(parallel_skill)
+            if expected_parallel is None or actual_parallel is None:
+                parallel_conflicts += 1
+            elif actual_parallel != expected_parallel:
+                err(f"[Codex] parallel skill ({skills_dir.relative_to(root)}): 禁用覆盖漂移")
+                parallel_conflicts += 1
+            else:
+                ok(f"[Codex] parallel skill ({skills_dir.relative_to(root)}): 禁用覆盖正常")
+    if parallel_conflicts:
+        conflicts += parallel_conflicts
 
     return conflicts
 
@@ -494,26 +526,27 @@ def deploy_scripts(src: Path, dst_scripts: Path) -> None:
 
 
 def deploy_codex_skills(src: Path, root: Path) -> None:
-    skills_dir = resolve_codex_skills_dir(root)
-    if skills_dir is None:
+    skills_dirs = list_all_codex_skills_dirs(root)
+    if not skills_dirs:
         warn("[Codex] 未找到 skills 目录，跳过")
         return
 
     for name in DISTRIBUTED_COMMANDS:
         source_path = src / f"{name}.md"
-        target_path = skills_dir / name / "SKILL.md"
         if source_path.exists():
             content = prepare_command_content(source_path)
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-            target_path.write_text(content, encoding="utf-8")
-            ok(f"[Codex] skill: {name}")
+            for skills_dir in skills_dirs:
+                target_path = skills_dir / name / "SKILL.md"
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                target_path.write_text(content, encoding="utf-8")
+                ok(f"[Codex] skill: {name} → {target_path.relative_to(root)}")
 
-    parallel_skill = skills_dir / "parallel" / "SKILL.md"
-    if parallel_skill.exists():
-        expected = expected_parallel_disabled_content(src)
-        if expected is not None:
-            parallel_skill.write_text(expected, encoding="utf-8")
-            ok("[Codex] parallel skill 已更新为禁用版本")
+    expected_parallel = expected_parallel_disabled_content(src)
+    for skills_dir in skills_dirs:
+        parallel_skill = skills_dir / "parallel" / "SKILL.md"
+        if parallel_skill.exists() and expected_parallel is not None:
+            parallel_skill.write_text(expected_parallel, encoding="utf-8")
+            ok(f"[Codex] parallel skill 已更新为禁用版本 → {parallel_skill.relative_to(root)}")
 
 
 # ── 恢复 ──
@@ -652,6 +685,7 @@ def write_install_record(
     installed = prior_record.get("installed", now)
     initial_pack = prior_record.get("initial_pack", "pack.requirements-discovery-foundation")
     bootstrap_task_removed = prior_record.get("bootstrap_task_removed", True)
+    bootstrap_cleanup_status = prior_record.get("bootstrap_cleanup_status", "unknown")
     rec_file.write_text(
         json.dumps(
             {
@@ -667,8 +701,10 @@ def write_install_record(
                 "patched_baseline_commands": PATCH_BASELINE_COMMANDS,
                 "scripts": HELPER_SCRIPTS,
                 "workflow_version": WORKFLOW_VERSION,
+                "workflow_schema_version": WORKFLOW_SCHEMA_VERSION,
                 "initial_pack": initial_pack,
                 "bootstrap_task_removed": bootstrap_task_removed,
+                "bootstrap_cleanup_status": bootstrap_cleanup_status,
             },
             ensure_ascii=False,
             indent=2,
@@ -834,26 +870,32 @@ def main() -> int:
                     return 1
         elif cli_type == "codex":
             deploy_codex_skills(src, root)
-            skills_dir = resolve_codex_skills_dir(root)
-            if skills_dir is None:
+            skills_dirs = list_all_codex_skills_dirs(root)
+            if not skills_dirs:
                 continue
-            finish_work_skill = skills_dir / "finish-work" / "SKILL.md"
-            if args.mode == "force" and finish_work_skill.exists():
-                if not restore_codex_finish_work(skills_dir):
-                    return 1
-                restore_optional_codex_skill(skills_dir, "parallel")
-            if finish_work_skill.exists() and not has_finish_work_patch(finish_work_skill):
-                if not inject_finish_work_patch(src, finish_work_skill, "finish-work skill"):
-                    err("[Codex] finish-work 项目化补丁恢复失败")
-                    return 1
-            parallel_skill = skills_dir / "parallel" / "SKILL.md"
-            if parallel_skill.exists() and not is_parallel_disabled(parallel_skill):
-                expected_parallel = expected_parallel_disabled_content(src)
-                if expected_parallel is None:
-                    err("[Codex] parallel 禁用覆盖恢复失败")
-                    return 1
-                parallel_skill.write_text(expected_parallel, encoding="utf-8")
-                ok("[Codex] parallel skill 已更新为禁用版本")
+            expected_parallel = expected_parallel_disabled_content(src)
+            for skills_dir in skills_dirs:
+                finish_work_skill = skills_dir / "finish-work" / "SKILL.md"
+                if args.mode == "force":
+                    if finish_work_skill.exists():
+                        if not restore_codex_finish_work(skills_dir):
+                            return 1
+                    restore_optional_codex_skill(skills_dir, "parallel")
+                if finish_work_skill.exists() and not has_finish_work_patch(finish_work_skill):
+                    if not inject_finish_work_patch(
+                        src,
+                        finish_work_skill,
+                        f"finish-work skill ({skills_dir.relative_to(root)})",
+                    ):
+                        err("[Codex] finish-work 项目化补丁恢复失败")
+                        return 1
+                parallel_skill = skills_dir / "parallel" / "SKILL.md"
+                if parallel_skill.exists() and not is_parallel_disabled(parallel_skill):
+                    if expected_parallel is None:
+                        err("[Codex] parallel 禁用覆盖恢复失败")
+                        return 1
+                    parallel_skill.write_text(expected_parallel, encoding="utf-8")
+                    ok(f"[Codex] parallel skill 已更新为禁用版本 → {parallel_skill.relative_to(root)}")
 
     # 辅助脚本
     deploy_scripts(src, dst_scripts)

@@ -27,7 +27,7 @@ OpenCode 已具备承载这套 workflow 的原生命令、rules、agents、skill
 
 这里要求同一个 `origin` 至少配置两个 push URL，是因为当前 workflow 默认服务于“同仓双推镜像”交付模型，常见配置就是 GitHub / Gitee 双推；如果你的项目没有这类远端同步要求，就不要把当前约束误解成通用 Git 最低要求。
 
-在此前提下，正确顺序是：先完成 `trellis init`，再执行当前 workflow 自带的安装脚本；原生命令与 agents 由安装脚本按平台方式落到目标项目，并自动导入 `pack.requirements-discovery-foundation`、删除 `00-bootstrap-guidelines`。
+在此前提下，正确顺序是：先完成 `trellis init`，再执行当前 workflow 自带的安装脚本；原生命令与 agents 由安装脚本按平台方式落到目标项目，并自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines`，安装脚本会一并清理，否则跳过。
 
 ## 安装时序
 
@@ -76,6 +76,14 @@ OpenCode 下的 MCP / skills 配置不应全部堆进 `instructions`。
 - TUI 中仍按 `/trellis:start`
 - CLI 中仍按 `trellis/start`
 - 不应因为同项目里还安装了 Codex skills，就把 OpenCode 写成“只靠自然语言触发”
+
+> 注意：`.agents/skills/*/SKILL.md` 并不是“只与 Codex 相关”。按 OpenCode 官方 skills 文档（<https://opencode.ai/docs/skills/>），OpenCode 从当前工作目录向上回溯到 git worktree 时，会同时扫描：
+>
+> - `.opencode/skills/*/SKILL.md`
+> - `.claude/skills/*/SKILL.md`
+> - `.agents/skills/*/SKILL.md`
+>
+> 也就是说，`.agents/skills/` 既是 Codex / amp 等工具的通用 skills 位置，也是 OpenCode 的原生 skills 扫描路径之一。当前 workflow 把阶段 skills 部署到 `.agents/skills/` 时，同一份 skills 会同时影响 OpenCode 与 Codex。升级/装后核对 skills 漂移，必须把 OpenCode 也算在影响面内。
 
 ## 推荐承载方式
 
@@ -210,12 +218,15 @@ OpenCode 不应被写成“和 Claude 完全等价”，因为它在 hook / suba
 
 - OpenCode 可以原生命令化，也可以原生定义 agents
 - 但项目级 plugin 对 subagent hook 的拦截能力有限
-- 如果 workflow 依赖“对子代理自动注入上下文”，仅靠项目内 `.opencode/plugin/` 可能不够
+- 如果 workflow 依赖“对子代理自动注入上下文”，仅靠项目内 `.opencode/plugins/` 可能不够
 
 当前仓库里已经把这个限制显式记录在：
 
-- `.opencode/plugin/inject-subagent-context.js`
+- `.opencode/plugins/inject-subagent-context.js`
+- `.opencode/plugins/session-start.js`
 - `.opencode/lib/trellis-context.js`
+
+> 说明：`trellis init` 实际落盘的是 `.opencode/plugins/*.js` + `.opencode/package.json`（并以 `@opencode-ai/plugin` 作为依赖），而不是旧文档写过的 `.opencode/plugin/` 单数目录。若目标项目出现 `.opencode/plugin/`，多为历史遗留，需要手工收敛到 `.opencode/plugins/`。
 
 因此，对 OpenCode 的正确定位是：
 

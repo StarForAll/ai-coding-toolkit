@@ -100,7 +100,7 @@ git remote set-url --add --push origin git@gitee.com:xxx/yyy.git
 1. 先在目标项目执行 `trellis init`
 2. 再运行当前 workflow 目录里的 `commands/install-workflow.py`
 3. 安装脚本把这套 workflow 嵌入到目标项目，并按各 CLI 官方原生格式完成内容适配
-4. 安装脚本自动导入 `pack.requirements-discovery-foundation`，并删除 `00-bootstrap-guidelines`
+4. 安装脚本自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines`，则一并清理，否则跳过
 5. 最后在目标项目里按原生入口直接使用
 
 标准安装命令：

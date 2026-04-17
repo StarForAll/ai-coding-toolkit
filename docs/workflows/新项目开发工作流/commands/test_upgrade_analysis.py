@@ -119,6 +119,41 @@ class UpgradeAnalysisTests(unittest.TestCase):
         self.assertEqual(actions["codex:brainstorm"], "replace")
         self.assertEqual(actions["codex:finish-work"], "replace")
 
+    def test_analyze_upgrade_detects_codex_secondary_skills_dir_and_parallel_drift(self) -> None:
+        baseline = self.make_root("upgrade-baseline-codex-multi-")
+        expected = self.make_root("upgrade-expected-codex-multi-")
+        target = self.make_root("upgrade-target-codex-multi-")
+
+        self.write_file(baseline, ".codex/skills/parallel/SKILL.md", "baseline parallel\n")
+
+        self.write_file(expected, ".agents/skills/delivery/SKILL.md", "workflow delivery\n")
+        self.write_file(expected, ".codex/skills/delivery/SKILL.md", "workflow delivery\n")
+        self.write_file(expected, ".codex/skills/parallel/SKILL.md", "disabled parallel\n")
+
+        self.write_file(target, ".agents/skills/delivery/SKILL.md", "workflow delivery\n")
+        self.write_file(target, ".codex/skills/delivery/SKILL.md", "drifted delivery\n")
+        self.write_file(target, ".codex/skills/parallel/SKILL.md", "drifted parallel\n")
+        self.write_file(target, ".trellis/.version", "2.1.0\n")
+
+        result = self.run_script(
+            "--baseline-root",
+            str(baseline),
+            "--expected-root",
+            str(expected),
+            "--target-root",
+            str(target),
+            "--cli",
+            "codex",
+            "--json",
+            env=self.latest_env("2.1.0"),
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        actions = {item["asset_id"]: item["action"] for item in payload["findings"]}
+        self.assertEqual(actions["codex[.codex/skills]:delivery"], "merge")
+        self.assertEqual(actions["codex[.codex/skills]:parallel"], "merge")
+
     def test_analyze_upgrade_classifies_delete_from_target_install_record(self) -> None:
         baseline = self.make_root("upgrade-baseline-delete-")
         expected = self.make_root("upgrade-expected-delete-")

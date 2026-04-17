@@ -81,7 +81,7 @@ Target-project install record:
 .trellis/workflow-installed.json
 ```
 
-Current required keys:
+Current installer-written keys:
 
 - `trellis_version`
 - `cli_types`
@@ -93,6 +93,12 @@ Current required keys:
 - `initial_pack`
 - `bootstrap_task_removed`
 - `scripts`
+- `workflow_version`
+- `workflow_schema_version`
+
+For legacy target projects, missing `workflow_version` / `workflow_schema_version`
+must not block compatibility analysis by themselves once the target project is
+already on the latest Trellis version.
 
 Optional lifecycle keys may differ between install and upgrade paths, such as:
 
@@ -101,11 +107,7 @@ Optional lifecycle keys may differ between install and upgrade paths, such as:
 - `previous_version`
 - `initial_pack`
 - `bootstrap_task_removed`
-
-Optional versioning keys for future upgrade routing:
-
-- `workflow_version`
-- `workflow_schema_version`
+- `bootstrap_cleanup_status`
 
 Contract when these versioning keys are missing:
 
@@ -306,7 +308,7 @@ Installer success-only side effects must be gated behind a clean deployment resu
 - only when all requested CLI deployments succeed may the installer continue to:
   - copy shared helper scripts
   - import the initial requirements foundation pack
-  - remove the bootstrap task
+  - remove the bootstrap task if it exists, otherwise skip cleanup
   - write `workflow-installed.json`
   - apply post-install routing / reminders
 

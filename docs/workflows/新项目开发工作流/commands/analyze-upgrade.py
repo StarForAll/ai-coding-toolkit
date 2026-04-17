@@ -19,6 +19,7 @@ from workflow_assets import (
     build_managed_asset_specs,
     check_latest_trellis_prerequisite,
     detect_cli_types,
+    list_all_codex_skills_dirs,
 )
 
 
@@ -55,6 +56,46 @@ def read_text(path: Path | None) -> str | None:
     if path is None or not path.exists():
         return None
     return path.read_text(encoding="utf-8")
+
+
+def collect_codex_skill_dir_labels(*roots: Path) -> list[str]:
+    labels: list[str] = []
+    seen: set[str] = set()
+    for root in roots:
+        for skills_dir in list_all_codex_skills_dirs(root):
+            label = skills_dir.relative_to(root).as_posix()
+            if label in seen:
+                continue
+            seen.add(label)
+            labels.append(label)
+    return labels
+
+
+def iter_asset_states(
+    spec: ManagedAssetSpec,
+    baseline_root: Path,
+    expected_root: Path,
+    target_root: Path,
+) -> list[tuple[str, str | None, str | None, str | None]]:
+    if spec.cli_type == "codex" and spec.kind == "skill":
+        dir_labels = collect_codex_skill_dir_labels(baseline_root, expected_root, target_root)
+        if not dir_labels:
+            return [(spec.asset_id, None, None, None)]
+
+        asset_prefix, _, asset_name = spec.asset_id.partition(":")
+        variants: list[tuple[str, str | None, str | None, str | None]] = []
+        for label in dir_labels:
+            baseline = read_text(baseline_root / label / spec.name / "SKILL.md")
+            expected = read_text(expected_root / label / spec.name / "SKILL.md")
+            target = read_text(target_root / label / spec.name / "SKILL.md")
+            asset_id = spec.asset_id if len(dir_labels) == 1 else f"{asset_prefix}[{label}]:{asset_name}"
+            variants.append((asset_id, baseline, expected, target))
+        return variants
+
+    baseline = read_text(spec.locate(baseline_root))
+    expected = read_text(spec.locate(expected_root))
+    target = read_text(spec.locate(target_root))
+    return [(spec.asset_id, baseline, expected, target)]
 
 
 def load_install_record(root: Path) -> dict[str, object]:
@@ -239,23 +280,26 @@ def main() -> int:
 
     findings: list[Finding] = []
     for spec in [*current_specs, *legacy_specs]:
-        baseline = read_text(spec.locate(args.baseline_root))
-        expected = read_text(spec.locate(args.expected_root))
-        target = read_text(spec.locate(args.target_root))
-        action, rationale = classify_asset(baseline, expected, target)
-        if action == "ignore":
-            continue
-        findings.append(
-            Finding(
-                asset_id=spec.asset_id,
-                category=spec.category,
-                action=action,
-                rationale=rationale,
-                baseline_exists=baseline is not None,
-                expected_exists=expected is not None,
-                target_exists=target is not None,
+        for asset_id, baseline, expected, target in iter_asset_states(
+            spec,
+            args.baseline_root,
+            args.expected_root,
+            args.target_root,
+        ):
+            action, rationale = classify_asset(baseline, expected, target)
+            if action == "ignore":
+                continue
+            findings.append(
+                Finding(
+                    asset_id=asset_id,
+                    category=spec.category,
+                    action=action,
+                    rationale=rationale,
+                    baseline_exists=baseline is not None,
+                    expected_exists=expected is not None,
+                    target_exists=target is not None,
+                )
             )
-        )
 
     findings.sort(key=lambda item: (item.action, item.asset_id))
 

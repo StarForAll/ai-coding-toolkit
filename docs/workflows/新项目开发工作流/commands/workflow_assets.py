@@ -19,6 +19,7 @@ CLI_ALT_DIRS = {
 }
 ALL_CLI_TYPES = ["claude", "opencode", "codex"]
 WORKFLOW_VERSION = "0.1.24"
+WORKFLOW_SCHEMA_VERSION = "1"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增
 
 PATCH_BASELINE_COMMANDS = ["start", "finish-work", "record-session"]
 OVERLAY_BASELINE_COMMANDS = ["brainstorm", "check"]
@@ -58,6 +59,13 @@ class ManagedAssetSpec:
     name: str
 
     def locate(self, root: Path) -> Path | None:
+        """Locate the primary path for this managed asset.
+
+        For Codex skills this preserves the historical "active directory" lookup
+        via ``resolve_codex_skills_dir``. Callers that need full multi-directory
+        coverage must use ``list_all_codex_skills_dirs`` and expand paths
+        themselves.
+        """
         if self.kind == "script":
             return root / ".trellis" / "scripts" / "workflow" / self.name
         if self.kind == "command":
@@ -78,6 +86,20 @@ def resolve_codex_skills_dir(root: Path) -> Path | None:
     if skills_dir.is_dir():
         return skills_dir
     return None
+
+
+def list_all_codex_skills_dirs(root: Path) -> list[Path]:
+    """返回目标项目中所有存在的 Codex skills 目录（包括 .agents/skills/ 和 .codex/skills/）。
+
+    注意：resolve_codex_skills_dir 只返回"活动目录"（第一个存在的），
+    而本函数返回全部。当 trellis init 同时创建了两个目录时，
+    需要用本函数避免影子目录残留。
+    """
+    dirs: list[Path] = []
+    for p in [root / ".agents" / "skills", root / ".codex" / "skills"]:
+        if p.is_dir():
+            dirs.append(p)
+    return dirs
 
 
 def detect_cli_types(*roots: Path) -> list[str]:
@@ -144,6 +166,16 @@ def build_managed_asset_specs(cli_types: list[str]) -> list[ManagedAssetSpec]:
                     name="finish-work",
                 )
             )
+            for name in OPTIONAL_DISABLED_BASELINE_COMMANDS:
+                specs.append(
+                    ManagedAssetSpec(
+                        asset_id=f"codex:{name}",
+                        category="disabled-baseline",
+                        cli_type="codex",
+                        kind="skill",
+                        name=name,
+                    )
+                )
 
     if cli_types:
         for name in HELPER_SCRIPTS:

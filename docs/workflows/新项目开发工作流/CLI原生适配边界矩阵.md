@@ -20,7 +20,8 @@
 | 阶段命令（feasibility / brainstorm / design / plan / test-first / project-audit / check / review-gate / delivery） | `.claude/commands/trellis/*.md` | 安装器管理 | 同源 Markdown + 路径改写 |
 | Trellis 基线命令补丁（start / finish-work / record-session） | `.claude/commands/trellis/start.md` 等 | 安装器管理 | 保留基线 → 注入补丁 |
 | 通用辅助脚本 | `.trellis/scripts/workflow/` | 安装器管理 | shell helper 脚本 |
-| 项目长期规则 | `AGENTS.md` | 手动维护 | 稳定执行规则、证据门禁 |
+| 项目长期规则 | `AGENTS.md` | 半托管（手动维护为主） | 稳定执行规则、证据门禁由人工维护；`<!-- TRELLIS:START ... TRELLIS:END -->` 由 `trellis init` 托管，`<!-- workflow-nl-routing-start ... workflow-nl-routing-end -->` 由 workflow 安装器托管 |
+| AGENTS.md NL 路由块 | `AGENTS.md` 内 `workflow-nl-routing` 区段 | 安装器管理 | 由 `install-workflow.py` 注入/更新，不要手工覆盖 |
 | 共享运行时基线 | `.claude/settings.json` | 手动维护 | hooks 接线、默认 deny |
 | 本机权限扩展 | `.claude/settings.local.json` | 手动维护 | MCP allowlist、本地调试 |
 | 会话与子代理 hooks | `.claude/hooks/*.py` | 手动维护 | session-start / inject-subagent-context |
@@ -37,8 +38,9 @@
 | 阶段命令（feasibility / brainstorm / design / plan / test-first / project-audit / check / review-gate / delivery） | `.opencode/commands/trellis/*.md` | 安装器管理 | 与 Claude 同源 Markdown + 路径改写 |
 | Trellis 基线命令补丁（start / finish-work / record-session） | `.opencode/commands/trellis/start.md` 等 | 安装器管理 | 保留基线 → 注入补丁 |
 | 通用辅助脚本 | `.trellis/scripts/workflow/` | 安装器管理 | 与 Claude 共用，不重复部署 |
+| 阶段 skills（跨 CLI 共享） | `.agents/skills/*/SKILL.md` | 安装器管理（与 Codex 共享单份落盘） | OpenCode 官方 skills 扫描链路会命中 `.agents/skills/`，因此同一份 skills 同时影响 OpenCode 与 Codex；升级/核对时必须把该路径算在 OpenCode 影响面内 |
 | 子代理定义 | `.opencode/agents/*.md` | 手动维护 | research / implement / check / debug |
-| 项目长期规则 | `AGENTS.md` | 手动维护 | 与 Claude/Codex 共用同一文件 |
+| 项目长期规则 | `AGENTS.md` | 半托管（手动维护为主） | 与 Claude/Codex 共用同一文件；`TRELLIS` managed block 与 `workflow-nl-routing` 区段由 `trellis init` / `install-workflow.py` 分别托管 |
 | workflow 文档注入 | `opencode.json.instructions` | 手动维护 | 只挂主入口与必要补充 |
 | 项目 Git 前置条件 | `origin ≥ 2 push URL` | 运行前置/仅校验 | 安装器校验 |
 | Trellis init 产物 | `.trellis/.version` | 运行前置/仅校验 | 安装器校验 |
@@ -47,7 +49,8 @@
 
 - `.opencode/agents/*.md` — 子代理定义
 - `opencode.json` — instructions / provider / MCP 配置
-- `AGENTS.md` — 项目级长期规则
+- `AGENTS.md` 的手动段（workflow 不托管的章节）
+- `.opencode/plugins/*.js` + `.opencode/package.json` — plugin 层（`trellis init` 产物，workflow 不重复分发）
 
 ---
 
@@ -55,10 +58,11 @@
 
 | 资产 | 目标位置 | 分类 | 说明 |
 |------|---------|------|------|
-| workflow 阶段 skills（feasibility / brainstorm / design / plan / test-first / project-audit / check / review-gate / delivery） | `.agents/skills/<phase>/SKILL.md` 或 `.codex/skills/<phase>/SKILL.md` | 安装器管理 | 同源 Markdown 转换为 skill 格式 |
-| Trellis 基线 skill 补丁（finish-work） | `.agents/skills/finish-work/SKILL.md` | 安装器管理 | 已有基线时追加项目化补丁 |
+| workflow 阶段 skills（feasibility / brainstorm / design / plan / test-first / project-audit / check / review-gate / delivery） | `.agents/skills/<phase>/SKILL.md` + `.codex/skills/<phase>/SKILL.md` | 安装器管理（同步写入所有存在的目录） | 同源 Markdown 转换为 skill 格式；安装器通过 `list_all_codex_skills_dirs` 获取全部目录，向每个目录同步写入阶段 skills |
+| Trellis 基线 skill 补丁（finish-work） | 各 skills 目录下的 `finish-work/SKILL.md` | 安装器管理（条件注入） | **只在存在 finish-work 基线的目录**追加项目化补丁；若某目录缺少该基线（如 trellis init 未写入），则 info 跳过，不报错 |
+| parallel skill 禁用覆盖 | 各 skills 目录下的 `parallel/SKILL.md` | 安装器管理（条件覆盖） | **只在存在 parallel 的目录**执行禁用覆盖；若不存在则跳过 |
 | 通用辅助脚本 | `.trellis/scripts/workflow/` | 安装器管理 | 与 Claude/OpenCode 共用 |
-| 项目长期规则 | `AGENTS.md` | 手动维护 | 与 Claude/OpenCode 共用 |
+| 项目长期规则 | `AGENTS.md` | 半托管（手动维护为主） | 与 Claude/OpenCode 共用；`TRELLIS` managed block 与 `workflow-nl-routing` 区段由 `trellis init` / `install-workflow.py` 分别托管 |
 | Codex 项目配置 | `.codex/config.toml` | 手动维护 | `AGENTS.md` fallback 等项目配置 |
 | 会话启动注入 | `.codex/hooks.json` + `.codex/hooks/*.py` | 手动维护 | SessionStart hook 注入 Trellis 上下文 |
 | 子代理定义 | `.codex/agents/*.toml` | 手动维护 | research / implement / check |
@@ -70,7 +74,32 @@
 - `.codex/config.toml` — Codex 项目级配置
 - `.codex/hooks.json` + `.codex/hooks/*.py` — 会话启动 hooks
 - `.codex/agents/*.toml` — 子代理定义
-- `AGENTS.md` — 项目级长期规则
+- `AGENTS.md` 的手动段（workflow 不托管的章节）
+
+### 多 skills 目录同步边界
+
+`trellis init` 可能同时落盘 `.agents/skills/` 与 `.codex/skills/` 两个目录（例如本仓库实际观察到：主体 skills 落在 `.agents/skills/`，`parallel` 落在 `.codex/skills/`）。当前安装器不再区分"活动目录"与"影子目录"，而是对所有存在的 skills 目录一视同仁：
+
+- `install-workflow.py` 向**所有 skills 目录**同步写入阶段 skills
+- `finish-work` 补丁按"有基线就打补丁，没有就跳过"处理，**不要求所有目录都必须有 finish-work**
+- `parallel` 禁用覆盖按"存在才覆盖，不存在就跳过"处理
+- `upgrade-compat.py --check` 对**所有 skills 目录**分别检查内容、补丁与禁用覆盖状态
+
+这意味着"漏掉影子目录"的问题已被修复，但引入了新的边界：
+
+- `trellis init` 未必在每个 skills 目录都写入相同的基线集合（例如 `.codex/skills/` 可能没有 `finish-work`）
+- 因此安装器不会强制"补齐缺失基线"，而是接受"某些目录有、某些目录没有"的现实
+
+装后/升级后核对仍建议显式检查两条路径，确认两边已同步为一致状态：
+
+```bash
+# 所有 skills 目录
+ls -d .agents/skills/ .codex/skills/ 2>/dev/null
+
+# 核对 parallel 是否已在所有目录被禁用
+ls .agents/skills/parallel/SKILL.md 2>/dev/null
+ls .codex/skills/parallel/SKILL.md 2>/dev/null
+```
 
 ---
 
@@ -78,12 +107,12 @@
 
 | 资产类型 | Claude | OpenCode | Codex |
 |---------|--------|----------|-------|
-| 阶段命令入口 | `.claude/commands/trellis/*.md` ✅ 安装器 | `.opencode/commands/trellis/*.md` ✅ 安装器 | `.agents/skills/*/SKILL.md` ✅ 安装器 |
+| 阶段命令入口 | `.claude/commands/trellis/*.md` ✅ 安装器 | `.opencode/commands/trellis/*.md` ✅ 安装器 | `.agents/skills/*/SKILL.md` ✅ 安装器（同一份也被 OpenCode 原生 skills 扫描命中） |
 | 基线补丁 | start / finish-work / record-session ✅ | start / finish-work / record-session ✅ | finish-work ✅ |
 | 辅助脚本 | `.trellis/scripts/workflow/` ✅ | 共用 ✅ | 共用 ✅ |
-| 项目规则 | `AGENTS.md` ❌ 手动 | `AGENTS.md` ❌ 手动 | `AGENTS.md` ❌ 手动 |
+| 项目规则 | `AGENTS.md` ⚠️ 半托管 | `AGENTS.md` ⚠️ 半托管 | `AGENTS.md` ⚠️ 半托管 |
 | 平台配置 | `.claude/settings*.json` ❌ 手动 | `opencode.json` ❌ 手动 | `.codex/config.toml` ❌ 手动 |
-| Hooks | `.claude/hooks/*.py` ❌ 手动 | plugin 层 ❌ 手动 | `.codex/hooks.json` + `.codex/hooks/*.py` ❌ 手动 |
+| Hooks | `.claude/hooks/*.py` ❌ 手动 | `.opencode/plugins/*.js` ❌ 手动（trellis init 分发） | `.codex/hooks.json` + `.codex/hooks/*.py` ❌ 手动 |
 | 子代理 | `.claude/agents/*.md` ❌ 手动 | `.opencode/agents/*.md` ❌ 手动 | `.codex/agents/*.toml` ❌ 手动 |
 
 ---
