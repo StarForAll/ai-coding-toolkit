@@ -37,9 +37,7 @@
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": [
-    "04-18-agents-source-workflow-convergence"
-  ],
+  "children": [],
   "parent": null,
   "relatedFiles": [],
   "notes": "",
