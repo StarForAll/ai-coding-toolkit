@@ -1203,3 +1203,36 @@ Strengthened workflow source contracts, added shared .trellis/workflow.md patchi
 ### Next Steps
 
 - None - task complete
+
+
+## Session 115: 当前项目 Trellis 版本升级
+
+**Date**: 2026-04-18
+**Task**: 当前项目 Trellis 版本升级
+**Branch**: `main`
+
+### Summary
+
+升级当前项目实际使用的 Trellis 基线与入口：同步 record-session 元数据闭环顺序，优化 session-start hooks 为 workflow 索引注入，更新状态栏编码处理、CLI adapter 平台支持与根目录 workflow 收尾说明，并完成 check/finish-work 验证。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `73397c4` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
