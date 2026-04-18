@@ -228,8 +228,10 @@ python3 ./.trellis/scripts/task.py create "<title>" --slug <task-name>
    --> git commit -m "type(scope): description"
        Format: feat/fix/docs/refactor/test/chore
 
-5. Record session (one command)
-   --> python3 ./.trellis/scripts/add_session.py --title "Title" --commit "hash"
+5. Final close-out
+   --> python3 ./.trellis/scripts/workflow/record-session-helper.py --title "Title" --commit "hash"
+   --> python3 ./.trellis/scripts/task.py archive <task-name>
+   --> git status --short .trellis/tasks .trellis/.current-task
 ```
 
 ### Code Quality Checklist
@@ -251,13 +253,16 @@ python3 ./.trellis/scripts/task.py create "<title>" --slug <task-name>
 
 ### One-Click Session Recording
 
-After code is committed, use:
+After the human has tested and committed the code, record the session first and archive second:
 
 ```bash
-python3 ./.trellis/scripts/add_session.py \
+python3 ./.trellis/scripts/workflow/record-session-helper.py \
   --title "Session Title" \
   --commit "abc1234" \
   --summary "Brief summary"
+
+python3 ./.trellis/scripts/task.py archive <task-name>
+git status --short .trellis/tasks .trellis/.current-task
 ```
 
 This automatically:
@@ -265,15 +270,18 @@ This automatically:
 2. Creates new file if 2000-line limit exceeded
 3. Appends session content
 4. Updates index.md (sessions count, history table)
+5. Runs metadata closure checks before and after session write
+6. Auto-commits `.trellis/workspace` and `.trellis/tasks` metadata changes
 
 ### Pre-end Checklist
 
 Use `/trellis:finish-work` command to run through:
 1. [OK] All code committed, commit message follows convention
-2. [OK] Session recorded via `add_session.py`
+2. [OK] Session recorded via `record-session-helper.py`
 3. [OK] No lint/test errors
-4. [OK] Working directory clean (or WIP noted)
-5. [OK] Spec docs updated if needed
+4. [OK] `record-session-helper.py` completed before `task.py archive`
+5. [OK] `.trellis/tasks` and `.trellis/.current-task` clean after archive
+6. [OK] Spec docs updated if needed
 
 ---
 
@@ -375,7 +383,7 @@ python3 ./.trellis/scripts/task.py list-archive    # List archived tasks
    - Use `/trellis:finish-work` for completion checklist
    - After fix bug, use `/trellis:break-loop` for deep analysis
    - Human commits after testing passes
-   - Use `add_session.py` to record progress
+   - Use `record-session-helper.py`, then archive the completed task
 
 ### [X] DON'T - Should Not Do
 
@@ -418,7 +426,7 @@ git commit -m "type(scope): description"
 ```bash
 # Session management
 python3 ./.trellis/scripts/get_context.py    # Get full context
-python3 ./.trellis/scripts/add_session.py    # Record session
+python3 ./.trellis/scripts/workflow/record-session-helper.py    # Record session with metadata closure
 
 # Task management
 python3 ./.trellis/scripts/task.py list      # List tasks
