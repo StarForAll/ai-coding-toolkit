@@ -1170,3 +1170,36 @@ sonar-scanner条件化、L0轻量化、review-gate条件触发、record-session�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 114: workflow: absorb target-project strengths into source workflow
+
+**Date**: 2026-04-18
+**Task**: workflow: absorb target-project strengths into source workflow
+**Branch**: `main`
+
+### Summary
+
+Strengthened workflow source contracts, added shared .trellis/workflow.md patching across install/uninstall/upgrade/analyze paths, synchronized propagation docs, processed multi-cli review rounds, and verified with trellis-library validation, CLI tests, py_compile, and 45 workflow installer tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2a72162` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

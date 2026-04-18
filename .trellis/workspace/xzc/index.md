@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 113
-- **Last Active**: 2026-04-17
+- **Total Sessions**: 114
+- **Last Active**: 2026-04-18
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~1172 | Active |
+| `journal-3.md` | ~1205 | Active |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 114 | 2026-04-18 | workflow: absorb target-project strengths into source workflow | `2a72162` | `main` |
 | 113 | 2026-04-17 | 工作流兼容升级链修正 | `52a983a` | `main` |
 | 112 | 2026-04-17 | 工作流补充外包项目门禁与版本治理 | `f3805c1` | `main` |
 | 111 | 2026-04-17 | 工作流补充项目总工时估算 | `8f4dbc7` | `main` |
