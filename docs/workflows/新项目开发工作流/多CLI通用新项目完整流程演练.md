@@ -545,7 +545,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 先做本 CLI 的质量检查，再判断是否需要进入多 CLI 补充审查门禁。
 
 这里的 `review-gate` 仅适用于任务闭环，不属于 `project-audit` 之后的默认项目级收尾阶段。
-这里展示的是项目收尾链路中的 `check`；在单任务开发循环内，每次 `start` 完成后也会执行对应任务级 `check`。
+这里展示的是项目收尾链路中的正式 `check`；在单任务开发循环内，`start` 所重入的 implementation 阶段内部先执行 `research -> implement -> check-agent`，然后在用户确认后再进入正式 `check`。
 
 ### CLI 入口差异
 

@@ -49,7 +49,13 @@ HELPER_SCRIPTS = [
     "metadata-autocommit-guard.py",
     "record-session-helper.py",
 ]
+MANAGED_IMPLEMENTATION_AGENTS = ["research", "implement", "check"]
 LATEST_TRELLIS_VERSION_ENV = "TRELLIS_LATEST_VERSION"
+AGENT_SUFFIXES = {
+    "claude": ".md",
+    "opencode": ".md",
+    "codex": ".toml",
+}
 
 
 def prepare_command_content(source_path: Path) -> str:
@@ -94,6 +100,9 @@ class ManagedAssetSpec:
             if skills_dir is None:
                 return None
             return skills_dir / self.name / "SKILL.md"
+        if self.kind == "agent":
+            suffix = AGENT_SUFFIXES[self.cli_type]
+            return root / CLI_DIRS[self.cli_type] / "agents" / f"{self.name}{suffix}"
         raise ValueError(f"Unsupported asset kind: {self.kind}")
 
 
@@ -164,6 +173,16 @@ def build_managed_asset_specs(cli_types: list[str]) -> list[ManagedAssetSpec]:
                         name=name,
                     )
                 )
+            for name in MANAGED_IMPLEMENTATION_AGENTS:
+                specs.append(
+                    ManagedAssetSpec(
+                        asset_id=f"{cli_type}:agent:{name}",
+                        category="implementation-agent",
+                        cli_type=cli_type,
+                        kind="agent",
+                        name=name,
+                    )
+                )
         elif cli_type == "codex":
             for name in CODEX_PATCH_BASELINE_SKILLS:
                 specs.append(
@@ -193,6 +212,16 @@ def build_managed_asset_specs(cli_types: list[str]) -> list[ManagedAssetSpec]:
                         category="disabled-baseline",
                         cli_type="codex",
                         kind="skill",
+                        name=name,
+                    )
+                )
+            for name in MANAGED_IMPLEMENTATION_AGENTS:
+                specs.append(
+                    ManagedAssetSpec(
+                        asset_id=f"codex:agent:{name}",
+                        category="implementation-agent",
+                        cli_type="codex",
+                        kind="agent",
                         name=name,
                     )
                 )

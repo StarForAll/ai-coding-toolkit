@@ -32,6 +32,7 @@ from pathlib import Path
 from workflow_assets import (
     ADDED_COMMANDS,
     ALL_CLI_TYPES,
+    AGENT_SUFFIXES,
     CODEX_PATCH_BASELINE_SKILLS,
     CLI_ALT_DIRS,
     CLI_DIRS,
@@ -39,6 +40,7 @@ from workflow_assets import (
     detect_cli_types as detect_cli_types_shared,
     HELPER_SCRIPTS,
     list_all_codex_skills_dirs,
+    MANAGED_IMPLEMENTATION_AGENTS,
     OPTIONAL_DISABLED_BASELINE_COMMANDS,
     OVERLAY_BASELINE_COMMANDS,
     PATCH_BASELINE_COMMANDS,
@@ -568,12 +570,59 @@ def inject_workflow_patch(src: Path, root: Path, *, dry_run: bool) -> bool:
     return True
 
 
+def source_agent_path(src: Path, cli_type: str, agent_name: str) -> Path:
+    suffix = AGENT_SUFFIXES[cli_type]
+    return src / cli_type / "agents" / f"{agent_name}{suffix}"
+
+
+def target_agent_dir(root: Path, cli_type: str) -> Path:
+    return root / CLI_DIRS[cli_type] / "agents"
+
+
+def deploy_managed_agents(
+    src: Path,
+    root: Path,
+    *,
+    cli_type: str,
+    cli_label: str,
+    dry_run: bool,
+) -> dict:
+    dst_agents = target_agent_dir(root, cli_type)
+    backup_dir = dst_agents / ".backup-original"
+    result = {"agents": 0, "errors": []}
+
+    if not dst_agents.is_dir():
+        result["errors"].append(f"{dst_agents.relative_to(root)}/ 不存在，请先运行 trellis init")
+        return result
+
+    if not dry_run:
+        backup_dir.mkdir(parents=True, exist_ok=True)
+
+    for agent_name in MANAGED_IMPLEMENTATION_AGENTS:
+        source_path = source_agent_path(src, cli_type, agent_name)
+        target_path = dst_agents / f"{agent_name}{AGENT_SUFFIXES[cli_type]}"
+        if not source_path.exists():
+            result["errors"].append(f"源 agent 缺失: {source_path.relative_to(src)}")
+            continue
+        if not dry_run and target_path.exists() and not (backup_dir / target_path.name).exists():
+            shutil.copy2(target_path, backup_dir / target_path.name)
+            ok(f"[{cli_label}] {target_path.name} → 备份")
+        if dry_run:
+            info(f"[{cli_label}] 将部署 agent: {agent_name}")
+        else:
+            target_path.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
+            ok(f"[{cli_label}] agent: {agent_name}")
+        result["agents"] += 1
+
+    return result
+
+
 # ── Claude Code 部署 ──
 def deploy_claude(src: Path, root: Path, dry_run: bool) -> dict:
     """部署到 .claude/commands/trellis/"""
     dst_cmds = root / ".claude" / "commands" / "trellis"
     backup = dst_cmds / ".backup-original"
-    result = {"commands": 0, "scripts": 0, "patches": 0, "errors": []}
+    result = {"commands": 0, "scripts": 0, "patches": 0, "agents": 0, "errors": []}
 
     if not dst_cmds.is_dir():
         result["errors"].append(".claude/commands/trellis/ 不存在，请先运行: trellis init")
@@ -687,6 +736,10 @@ def deploy_claude(src: Path, root: Path, dry_run: bool) -> dict:
     if disable_parallel_command(src, dst_cmds / "parallel.md", dry_run=dry_run, cli_label="Claude"):
         result["patches"] += 1
 
+    agent_result = deploy_managed_agents(src, root, cli_type="claude", cli_label="Claude", dry_run=dry_run)
+    result["agents"] = agent_result["agents"]
+    result["errors"].extend(agent_result["errors"])
+
     return result
 
 
@@ -696,7 +749,7 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool) -> dict:
     dst_cmds = root / ".opencode" / "commands" / "trellis"
     dst_scripts = root / ".trellis" / "scripts" / "workflow"
     backup = dst_cmds / ".backup-original"
-    result = {"commands": 0, "scripts": 0, "patches": 0, "errors": []}
+    result = {"commands": 0, "scripts": 0, "patches": 0, "agents": 0, "errors": []}
 
     if not dst_cmds.is_dir():
         result["errors"].append(".opencode/commands/trellis/ 不存在，请先初始化 OpenCode")
@@ -810,6 +863,10 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool) -> dict:
     if disable_parallel_command(src, dst_cmds / "parallel.md", dry_run=dry_run, cli_label="OpenCode"):
         result["patches"] += 1
 
+    agent_result = deploy_managed_agents(src, root, cli_type="opencode", cli_label="OpenCode", dry_run=dry_run)
+    result["agents"] = agent_result["agents"]
+    result["errors"].extend(agent_result["errors"])
+
     # 辅助脚本已在 Claude Code 部署时处理，此处不重复计数
     return result
 
@@ -819,9 +876,9 @@ def deploy_codex(src: Path, root: Path, dry_run: bool) -> dict:
     """部署到所有 skills 目录（Codex 无项目自定义命令目录，workflow 入口采用 skills 模型）。"""
     skills_dirs = list_all_codex_skills_dirs(root)
     if not skills_dirs:
-        return {"commands": 0, "scripts": 0, "patches": 0, "errors": ["未找到 .agents/skills/ 或 .codex/skills/ 目录"]}
+        return {"commands": 0, "scripts": 0, "patches": 0, "agents": 0, "errors": ["未找到 .agents/skills/ 或 .codex/skills/ 目录"]}
 
-    result = {"commands": 0, "scripts": 0, "patches": 0, "errors": []}
+    result = {"commands": 0, "scripts": 0, "patches": 0, "agents": 0, "errors": []}
 
     # 备份（对所有存在的 skills 目录执行）
     if not dry_run:
@@ -927,6 +984,10 @@ def deploy_codex(src: Path, root: Path, dry_run: bool) -> dict:
             if not parallel_patched:
                 result["patches"] += 1
                 parallel_patched = True
+
+    agent_result = deploy_managed_agents(src, root, cli_type="codex", cli_label="Codex", dry_run=dry_run)
+    result["agents"] = agent_result["agents"]
+    result["errors"].extend(agent_result["errors"])
 
     # 辅助脚本已在 Claude Code 部署时处理
     return result
@@ -1204,7 +1265,7 @@ def main() -> int:
                 err(f"[{cli_type}] {e}")
         else:
             ok(f"[{cli_type}] 命令: {result['commands']}/{len(DISTRIBUTED_COMMANDS)}, "
-               f"补丁: {result['patches']}, 脚本: {result['scripts']}")
+               f"补丁: {result['patches']}, Agents: {result['agents']}, 脚本: {result['scripts']}")
 
     print()
     if not args.dry_run:

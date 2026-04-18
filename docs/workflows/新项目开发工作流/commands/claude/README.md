@@ -196,6 +196,17 @@ Claude Code 的 hooks 是这套 workflow 的关键承载层之一。当前仓库
 - 角色级工具暴露
 - 子代理工作边界
 
+当前 workflow 对 agent 的托管边界已收紧为：
+
+- `research` / `implement` / `check`：由 workflow 源资产统一治理并部署
+- `debug`：仍保留为 Trellis / 项目侧手动维护能力，不纳入当前 workflow 托管集合
+
+其中 `research` 角色还需要遵守统一证据门禁：
+
+- 外部技术搜索优先 `exa`
+- 第三方库 / 框架 / SDK 官方文档必须先 `Context7`
+- 未经过 `Context7`，不得输出 API / 配置 / 版本结论；若能力不可用，必须标记 `[Evidence Gap]`
+
 ### 5. Skills / MCP：定义路由规则与运行时挂接，不混写
 
 在 Claude Code 下，MCP / skills 推荐这样拆：
@@ -224,7 +235,7 @@ Claude Code 的 hooks 是这套 workflow 的关键承载层之一。当前仓库
 | 共享运行时基线 | `.claude/settings.json` | hooks 接线、默认 deny / shared baseline | ❌ 手动维护 |
 | 本机权限扩展 | `.claude/settings.local.json` | MCP allowlist、本地调试权限 | ❌ 手动维护 |
 | 会话与子代理 hooks | `.claude/hooks/*.py` | 会话启动、上下文注入、收口逻辑 | ❌ 手动维护 |
-| 子代理定义 | `.claude/agents/*.md` | research / implement / check / debug | ❌ 手动维护 |
+| 子代理定义 | `.claude/agents/*.md` | `research` / `implement` / `check` 由 workflow 安装器管理；`debug` 仍手动维护 | ✅ 部分由 `install-workflow.py` 管理 |
 | 通用辅助脚本 | `.trellis/scripts/workflow/` | 校验、导出、静态验证脚本 | ✅ `install-workflow.py` |
 | 源码水印与归属证明产物 | `$TASK_DIR/design/`、`$TASK_DIR/delivery/` | 设计计划、提取验证、交付证明 | ❌ 人工维护 / workflow 阶段产出 |
 
@@ -248,7 +259,9 @@ test -f .claude/settings.json
 test -f .claude/hooks/session-start.py
 test -f .claude/hooks/inject-subagent-context.py
 test -f .claude/commands/trellis/start.md
+test -f .claude/agents/research.md
 test -f .claude/agents/implement.md
+test -f .claude/agents/check.md
 ```
 
 ### 配置层验证

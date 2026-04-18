@@ -206,6 +206,17 @@ OpenCode 的规则层不要只靠单一入口。
 
 这层负责 planner / research / implement / check 一类子代理职责，不应混在命令文案里。
 
+当前 workflow 对 OpenCode agents 的托管边界已收紧为：
+
+- `research` / `implement` / `check`：由 workflow 源资产统一治理并部署
+- `debug`：仍保留为 Trellis / 项目侧手动维护能力，不纳入当前 workflow 托管集合
+
+其中 `research` 角色还需要遵守统一证据门禁：
+
+- 外部技术搜索优先 `exa`
+- 第三方库 / 框架 / SDK 官方文档必须先 `Context7`
+- 未经过 `Context7`，不得输出 API / 配置 / 版本结论；若能力不可用，必须标记 `[Evidence Gap]`
+
 ### 4. Skills：保留技能层，而不是把所有逻辑硬塞进命令
 
 OpenCode 可以复用技能目录与项目内现有技能资产。对这套 workflow，像 `multi-cli-review`、`multi-cli-review-action`、`verification-before-completion` 这类能力仍应按 skill 组织，而不是全部写死在命令正文中。
@@ -243,7 +254,7 @@ OpenCode 不应被写成“和 Claude 完全等价”，因为它在 hook / suba
 |-----------|------------------|------|-----------|
 | 阶段命令 | `.opencode/commands/trellis/*.md` | 用户显式触发的 workflow 命令 | ✅ `install-workflow.py` |
 | Trellis 原生命令基线 | `.opencode/commands/trellis/start.md` `finish-work.md` `record-session.md` | 由 `trellis init` 提供；当前 workflow 会对 `start` / `finish-work` / `record-session` 注入补丁，但不重新分发完整基线 | ✅ 补丁由安装器注入 |
-| 子代理定义 | `.opencode/agents/*.md` | research / implement / check / debug | ❌ 手动维护 |
+| 子代理定义 | `.opencode/agents/*.md` | `research` / `implement` / `check` 由 workflow 安装器管理；`debug` 仍手动维护 | ✅ 部分由 `install-workflow.py` 管理 |
 | 项目长期规则 | `AGENTS.md` | 稳定执行规则、风险边界、语言策略 | ❌ 手动维护 |
 | workflow 文档注入 | `opencode.json.instructions` | 只挂主入口与必要补充，不默认全量挂载所有阶段文档 | ❌ 手动维护 |
 | 通用脚本 | `.trellis/scripts/workflow/` | 被命令或人工直接调用 | ✅ `install-workflow.py` |
@@ -251,11 +262,11 @@ OpenCode 不应被写成“和 Claude 完全等价”，因为它在 hook / suba
 
 **安装器不负责的 OpenCode 原生资产**（需手动维护）：
 
-- `.opencode/agents/*.md` — 子代理定义
+- `.opencode/agents/debug.md` 或其他非 `research / implement / check` 子代理
 - `opencode.json` — instructions / provider / MCP 配置
 - `AGENTS.md` — 项目级长期规则
 
-这些文件缺失不表示安装失败，但会导致 OpenCode 无法正常运行 workflow。
+这些文件缺失不表示安装失败，但会导致 OpenCode 无法完整运行 workflow。
 
 ## 何时仍可用脚本降级
 
@@ -300,6 +311,9 @@ test -f .opencode/commands/trellis/review-gate.md
 test -f .opencode/commands/trellis/brainstorm.md
 test -f .opencode/commands/trellis/check.md
 test -f .opencode/commands/trellis/delivery.md
+test -f .opencode/agents/research.md
+test -f .opencode/agents/implement.md
+test -f .opencode/agents/check.md
 ```
 
 ### 平台前置资产验证
@@ -309,7 +323,8 @@ test -f .opencode/commands/trellis/delivery.md
 ```bash
 test -f AGENTS.md
 test -f opencode.json
-test -f .opencode/agents/implement.md  # 如使用子代理
+test -f .opencode/plugins/session-start.js
+test -f .opencode/plugins/inject-subagent-context.js
 ```
 
 ### CLI 基础可执行验证

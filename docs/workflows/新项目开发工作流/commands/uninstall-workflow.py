@@ -10,12 +10,14 @@ import sys
 from pathlib import Path
 
 from workflow_assets import (
+    AGENT_SUFFIXES,
     ALL_CLI_TYPES,
     CODEX_PATCH_BASELINE_SKILLS,
     CLI_ALT_DIRS,
     CLI_DIRS,
     detect_cli_types as detect_cli_types_shared,
     DISTRIBUTED_COMMANDS,
+    MANAGED_IMPLEMENTATION_AGENTS,
     OPTIONAL_DISABLED_BASELINE_COMMANDS,
     OVERLAY_BASELINE_COMMANDS,
 )
@@ -114,6 +116,36 @@ def restore_optional_disabled_command(backup: Path, target_dir: Path, command: s
     ok(f"[{cli_label}] {command}.md 已恢复")
 
 
+def uninstall_managed_agents(root: Path, cli_type: str, cli_label: str) -> None:
+    target_dir = root / CLI_DIRS[cli_type] / "agents"
+    backup_dir = target_dir / ".backup-original"
+    suffix = AGENT_SUFFIXES[cli_type]
+
+    if not target_dir.is_dir():
+        warn(f"[{cli_label}] {target_dir.relative_to(root)}/ 不存在，跳过 managed agents 卸载")
+        return
+
+    restored = 0
+    for agent_name in MANAGED_IMPLEMENTATION_AGENTS:
+        backup_agent = backup_dir / f"{agent_name}{suffix}"
+        target_agent = target_dir / f"{agent_name}{suffix}"
+        if backup_agent.exists():
+            shutil.copy2(backup_agent, target_agent)
+            ok(f"[{cli_label}] 恢复 agent: {agent_name}")
+            restored += 1
+        elif target_agent.exists():
+            target_agent.unlink()
+            ok(f"[{cli_label}] 删除 install 新建的 agent: {agent_name}")
+        else:
+            warn(f"[{cli_label}] 无 {agent_name}{suffix} 备份，保留当前文件")
+
+    if backup_dir.exists():
+        shutil.rmtree(backup_dir)
+        ok(f"[{cli_label}] agent 备份目录已删除")
+
+    info(f"[{cli_label}] 已恢复 {restored}/{len(MANAGED_IMPLEMENTATION_AGENTS)} 个 managed agents")
+
+
 def uninstall_claude(root: Path, added_commands: list[str], overlay_commands: list[str]) -> None:
     """卸载 Claude Code 部署的工作流。"""
     dst_cmds = root / ".claude" / "commands" / "trellis"
@@ -177,6 +209,8 @@ def uninstall_claude(root: Path, added_commands: list[str], overlay_commands: li
         if directory.is_dir() and directory.name.startswith(".backup-upgrade-"):
             shutil.rmtree(directory)
             ok(f"[Claude] 升级备份已删除: {directory.name}")
+
+    uninstall_managed_agents(root, "claude", "Claude")
 
 
 def uninstall_opencode(root: Path, added_commands: list[str], overlay_commands: list[str]) -> None:
@@ -242,6 +276,8 @@ def uninstall_opencode(root: Path, added_commands: list[str], overlay_commands: 
         if directory.is_dir() and directory.name.startswith(".backup-upgrade-"):
             shutil.rmtree(directory)
             ok(f"[OpenCode] 升级备份已删除: {directory.name}")
+
+    uninstall_managed_agents(root, "opencode", "OpenCode")
 
 
 def uninstall_codex(
@@ -312,6 +348,8 @@ def uninstall_codex(
 
     if not found_any:
         warn("[Codex] 未找到 skills 目录，跳过")
+
+    uninstall_managed_agents(root, "codex", "Codex")
 
 
 def remove_agents_md_routing(root: Path) -> None:

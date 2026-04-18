@@ -92,12 +92,15 @@ class UpgradeAnalysisTests(unittest.TestCase):
 
         self.write_file(baseline, ".agents/skills/brainstorm/SKILL.md", "baseline brainstorm\n")
         self.write_file(baseline, ".agents/skills/finish-work/SKILL.md", "baseline finish-work\n")
+        self.write_file(baseline, ".codex/agents/check.toml", 'name = "check"\nsandbox_mode = "read-only"\n')
 
         self.write_file(expected, ".agents/skills/brainstorm/SKILL.md", "workflow brainstorm\n")
         self.write_file(expected, ".agents/skills/finish-work/SKILL.md", "workflow finish-work\n")
+        self.write_file(expected, ".codex/agents/check.toml", 'name = "check"\nsandbox_mode = "workspace-write"\n')
 
         self.write_file(target, ".agents/skills/brainstorm/SKILL.md", "baseline brainstorm\n")
         self.write_file(target, ".agents/skills/finish-work/SKILL.md", "baseline finish-work\n")
+        self.write_file(target, ".codex/agents/check.toml", 'name = "check"\nsandbox_mode = "read-only"\n')
         self.write_file(target, ".trellis/.version", "2.1.0\n")
 
         result = self.run_script(
@@ -118,6 +121,63 @@ class UpgradeAnalysisTests(unittest.TestCase):
         actions = {item["asset_id"]: item["action"] for item in payload["findings"]}
         self.assertEqual(actions["codex:brainstorm"], "replace")
         self.assertEqual(actions["codex:finish-work"], "replace")
+        self.assertEqual(actions["codex:agent:check"], "replace")
+
+    def test_analyze_upgrade_supports_claude_agents(self) -> None:
+        baseline = self.make_root("upgrade-baseline-claude-agent-")
+        expected = self.make_root("upgrade-expected-claude-agent-")
+        target = self.make_root("upgrade-target-claude-agent-")
+
+        self.write_file(baseline, ".claude/agents/research.md", "baseline research\n")
+        self.write_file(expected, ".claude/agents/research.md", "workflow research\n")
+        self.write_file(target, ".claude/agents/research.md", "baseline research\n")
+        self.write_file(target, ".trellis/.version", "2.1.0\n")
+
+        result = self.run_script(
+            "--baseline-root",
+            str(baseline),
+            "--expected-root",
+            str(expected),
+            "--target-root",
+            str(target),
+            "--cli",
+            "claude",
+            "--json",
+            env=self.latest_env("2.1.0"),
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        actions = {item["asset_id"]: item["action"] for item in payload["findings"]}
+        self.assertEqual(actions["claude:agent:research"], "replace")
+
+    def test_analyze_upgrade_supports_opencode_agents(self) -> None:
+        baseline = self.make_root("upgrade-baseline-opencode-agent-")
+        expected = self.make_root("upgrade-expected-opencode-agent-")
+        target = self.make_root("upgrade-target-opencode-agent-")
+
+        self.write_file(baseline, ".opencode/agents/check.md", "baseline check\n")
+        self.write_file(expected, ".opencode/agents/check.md", "workflow check\n")
+        self.write_file(target, ".opencode/agents/check.md", "baseline check\n")
+        self.write_file(target, ".trellis/.version", "2.1.0\n")
+
+        result = self.run_script(
+            "--baseline-root",
+            str(baseline),
+            "--expected-root",
+            str(expected),
+            "--target-root",
+            str(target),
+            "--cli",
+            "opencode",
+            "--json",
+            env=self.latest_env("2.1.0"),
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        actions = {item["asset_id"]: item["action"] for item in payload["findings"]}
+        self.assertEqual(actions["opencode:agent:check"], "replace")
 
     def test_analyze_upgrade_detects_codex_secondary_skills_dir_and_parallel_drift(self) -> None:
         baseline = self.make_root("upgrade-baseline-codex-multi-")

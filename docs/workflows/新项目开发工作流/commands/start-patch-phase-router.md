@@ -165,6 +165,11 @@ $TASK_DIR/before-dev.md
    - 该 task 完成时，必须同步沉淀 `design/frontend-ui-spec.md`
    - 后续前端视觉相关 task 默认都应把 `design/frontend-ui-spec.md` 作为统一约束来源
 
+9. **implementation 阶段采用内部角色链**
+   - 当前 workflow 将 `research -> implement -> check-agent` 视为 implementation 阶段内部链
+   - 其中 `check-agent` 是 implementation 内部自检角色，不等于正式 `/trellis:check`
+   - 内部链完成后，只能把 `/trellis:check` 作为候选下一阶段等待用户确认，不能自动切换
+
 ### 状态恢复分支
 
 以下任一情况都不允许自动猜阶段，只能进入恢复分支：

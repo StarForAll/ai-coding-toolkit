@@ -70,4 +70,17 @@ Before writing implementation code:
 3. Run before-dev and write or refresh `$TASK_DIR/before-dev.md`.
 4. Keep work scoped to the selected leaf task only.
 
+Within `implementation`, use this internal role chain:
+
+```text
+research -> implement -> check-agent
+```
+
+Rules:
+
+- treat the chain above as implementation-internal execution, not as a stage transition
+- the internal `check-agent` is not the same as the formal `check` stage
+- after the implementation-internal chain completes, only recommend the `check` skill as the candidate next stage and wait for explicit user confirmation
+- if the formal `check` stage fails, return to `implementation`, then run the internal chain again
+
 For external outsourcing projects, do not enter implementation or test-first until `assessment.md` records `kickoff_payment_received = yes`.

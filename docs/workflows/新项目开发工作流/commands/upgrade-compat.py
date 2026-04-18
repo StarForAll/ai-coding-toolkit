@@ -26,6 +26,7 @@ from pathlib import Path
 
 from workflow_assets import (
     ADDED_COMMANDS,
+    AGENT_SUFFIXES,
     ALL_CLI_TYPES,
     CODEX_PATCH_BASELINE_SKILLS,
     CLI_ALT_DIRS,
@@ -34,6 +35,7 @@ from workflow_assets import (
     detect_cli_types as detect_cli_types_shared,
     HELPER_SCRIPTS,
     list_all_codex_skills_dirs,
+    MANAGED_IMPLEMENTATION_AGENTS,
     OPTIONAL_DISABLED_BASELINE_COMMANDS,
     OVERLAY_BASELINE_COMMANDS,
     PATCH_BASELINE_COMMANDS,
@@ -261,6 +263,14 @@ def expected_helper_script_content(src: Path, name: str) -> str | None:
     return read_text(source_path)
 
 
+def expected_agent_content(src: Path, cli_type: str, name: str) -> str | None:
+    source_path = src / cli_type / "agents" / f"{name}{AGENT_SUFFIXES[cli_type]}"
+    if not source_path.exists():
+        err(f"源 agent 缺失，无法校验: {source_path.relative_to(src)}")
+        return None
+    return read_text(source_path)
+
+
 def expected_parallel_disabled_content(src: Path) -> str | None:
     source_path = src / "parallel-disabled.md"
     if not source_path.exists():
@@ -421,6 +431,32 @@ def detect_conflicts_workflow_doc(src: Path, root: Path) -> int:
         return 1
     ok("[Shared] .trellis/workflow.md: 项目化补丁正常")
     return 0
+
+
+def detect_conflicts_managed_agents(src: Path, root: Path, cli_type: str, cli_label: str) -> int:
+    target_dir = root / CLI_DIRS[cli_type] / "agents"
+    if not target_dir.is_dir():
+        warn(f"[{cli_label}] {target_dir.relative_to(root)}/ 不存在，跳过 managed agents 检查")
+        return 0
+
+    conflicts = 0
+    for agent_name in MANAGED_IMPLEMENTATION_AGENTS:
+        target_path = target_dir / f"{agent_name}{AGENT_SUFFIXES[cli_type]}"
+        if not target_path.exists():
+            err(f"[{cli_label}] agent 缺失: {target_path.relative_to(root)}")
+            conflicts += 1
+            continue
+        expected = expected_agent_content(src, cli_type, agent_name)
+        actual = read_text(target_path)
+        if expected is None or actual is None:
+            conflicts += 1
+            continue
+        if actual != expected:
+            err(f"[{cli_label}] agent 内容漂移: {agent_name}")
+            conflicts += 1
+        else:
+            ok(f"[{cli_label}] agent 正常: {agent_name}")
+    return conflicts
 
 
 # ── Codex 冲突检测 ──
@@ -601,6 +637,22 @@ def deploy_scripts(src: Path, dst_scripts: Path) -> None:
             shutil.copy2(source_path, dst_scripts / name)
             (dst_scripts / name).chmod(0o755)
     ok("辅助脚本已更新")
+
+
+def deploy_managed_agents(src: Path, root: Path, cli_type: str, cli_label: str) -> None:
+    target_dir = root / CLI_DIRS[cli_type] / "agents"
+    if not target_dir.is_dir():
+        warn(f"[{cli_label}] {target_dir.relative_to(root)}/ 不存在，跳过 managed agents 重部署")
+        return
+
+    for agent_name in MANAGED_IMPLEMENTATION_AGENTS:
+        source_path = src / cli_type / "agents" / f"{agent_name}{AGENT_SUFFIXES[cli_type]}"
+        target_path = target_dir / f"{agent_name}{AGENT_SUFFIXES[cli_type]}"
+        if not source_path.exists():
+            err(f"[{cli_label}] 源 agent 缺失，无法重部署: {source_path.relative_to(src)}")
+            continue
+        target_path.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
+        ok(f"[{cli_label}] agent 已重部署: {agent_name}")
 
 
 def deploy_codex_skills(src: Path, root: Path) -> None:
@@ -965,11 +1017,14 @@ def main() -> int:
         if cli_type == "claude":
             dst_cmds = root / ".claude" / "commands" / "trellis"
             total_conflicts += detect_conflicts_claude(src, dst_cmds)
+            total_conflicts += detect_conflicts_managed_agents(src, root, "claude", "Claude")
         elif cli_type == "opencode":
             dst_cmds = root / ".opencode" / "commands" / "trellis"
             total_conflicts += detect_conflicts_opencode(src, dst_cmds)
+            total_conflicts += detect_conflicts_managed_agents(src, root, "opencode", "OpenCode")
         elif cli_type == "codex":
             total_conflicts += detect_conflicts_codex(src, root)
+            total_conflicts += detect_conflicts_managed_agents(src, root, "codex", "Codex")
     total_conflicts += detect_shared_script_conflicts(src, dst_scripts)
     total_conflicts += detect_conflicts_workflow_doc(src, root)
     print(f"   总冲突: {total_conflicts}")
@@ -1028,6 +1083,7 @@ def main() -> int:
                 if not deploy_parallel_disabled(src, parallel, "parallel.md"):
                     err("[Claude] parallel 禁用覆盖恢复失败")
                     return 1
+            deploy_managed_agents(src, root, "claude", "Claude")
         elif cli_type == "opencode":
             dst_cmds = root / ".opencode" / "commands" / "trellis"
             start = dst_cmds / "start.md"
@@ -1057,6 +1113,7 @@ def main() -> int:
                 if not deploy_parallel_disabled(src, parallel, "parallel.md"):
                     err("[OpenCode] parallel 禁用覆盖恢复失败")
                     return 1
+            deploy_managed_agents(src, root, "opencode", "OpenCode")
         elif cli_type == "codex":
             deploy_codex_skills(src, root)
             skills_dirs = list_all_codex_skills_dirs(root)
@@ -1097,6 +1154,7 @@ def main() -> int:
                         return 1
                     parallel_skill.write_text(expected_parallel, encoding="utf-8")
                     ok(f"[Codex] parallel skill 已更新为禁用版本 → {parallel_skill.relative_to(root)}")
+            deploy_managed_agents(src, root, "codex", "Codex")
 
     cleanup_old_workflow_backups(root)
 

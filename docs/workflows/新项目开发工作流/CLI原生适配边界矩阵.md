@@ -26,7 +26,7 @@
 | 共享运行时基线 | `.claude/settings.json` | 手动维护 | hooks 接线、默认 deny |
 | 本机权限扩展 | `.claude/settings.local.json` | 手动维护 | MCP allowlist、本地调试 |
 | 会话与子代理 hooks | `.claude/hooks/*.py` | 手动维护 | session-start / inject-subagent-context |
-| 子代理定义 | `.claude/agents/*.md` | 手动维护 | research / implement / check / debug |
+| 子代理定义 | `.claude/agents/*.md` | 部分安装器管理 | `research` / `implement` / `check` 由 workflow 部署；`debug` 仍手动维护 |
 | 项目 Git 前置条件 | `origin ≥ 2 push URL` | 运行前置/仅校验 | 安装器校验，不负责配置 |
 | Trellis init 产物 | `.trellis/.version` | 运行前置/仅校验 | 安装器校验，由 `trellis init` 负责 |
 
@@ -41,7 +41,7 @@
 | 通用辅助脚本 | `.trellis/scripts/workflow/` | 安装器管理 | 与 Claude 共用，不重复部署 |
 | Trellis 基线 workflow 指南补丁 | `.trellis/workflow.md` | 安装器管理 | 与 Claude / Codex 共用同一份目标项目 workflow 指南，保持 close-out 与 child-task 规则一致 |
 | 阶段 skills（跨 CLI 共享） | `.agents/skills/*/SKILL.md` | 安装器管理（与 Codex 共享单份落盘） | OpenCode 官方 skills 扫描链路会命中 `.agents/skills/`，因此同一份 skills 同时影响 OpenCode 与 Codex；升级/核对时必须把该路径算在 OpenCode 影响面内 |
-| 子代理定义 | `.opencode/agents/*.md` | 手动维护 | research / implement / check / debug |
+| 子代理定义 | `.opencode/agents/*.md` | 部分安装器管理 | `research` / `implement` / `check` 由 workflow 部署；`debug` 仍手动维护 |
 | 项目长期规则 | `AGENTS.md` | 半托管（手动维护为主） | 与 Claude/Codex 共用同一文件；`TRELLIS` managed block 与 `workflow-nl-routing` 区段由 `trellis init` / `install-workflow.py` 分别托管 |
 | workflow 文档注入 | `opencode.json.instructions` | 手动维护 | 只挂主入口与必要补充 |
 | 项目 Git 前置条件 | `origin ≥ 2 push URL` | 运行前置/仅校验 | 安装器校验 |
@@ -49,7 +49,7 @@
 
 **安装器不负责的 OpenCode 原生资产**（需手动维护）：
 
-- `.opencode/agents/*.md` — 子代理定义
+- `.opencode/agents/debug.md` 或其他非 `research / implement / check` 子代理
 - `opencode.json` — instructions / provider / MCP 配置
 - `AGENTS.md` 的手动段（workflow 不托管的章节）
 - `.opencode/plugins/*.js` + `.opencode/package.json` — plugin 层（`trellis init` 产物，workflow 不重复分发）
@@ -68,7 +68,7 @@
 | 项目长期规则 | `AGENTS.md` | 半托管（手动维护为主） | 与 Claude/OpenCode 共用；`TRELLIS` managed block 与 `workflow-nl-routing` 区段由 `trellis init` / `install-workflow.py` 分别托管 |
 | Codex 项目配置 | `.codex/config.toml` | 手动维护 | `AGENTS.md` fallback 等项目配置 |
 | 会话启动注入 | `.codex/hooks.json` + `.codex/hooks/*.py` | 手动维护 | SessionStart hook 注入 Trellis 上下文 |
-| 子代理定义 | `.codex/agents/*.toml` | 手动维护 | research / implement / check |
+| 子代理定义 | `.codex/agents/*.toml` | 部分安装器管理 | `research` / `implement` / `check` 由 workflow 部署并纳入升级分析；其他 agent 仍手动维护 |
 | 项目 Git 前置条件 | `origin ≥ 2 push URL` | 运行前置/仅校验 | 安装器校验 |
 | Trellis init 产物 | `.trellis/.version` | 运行前置/仅校验 | 安装器校验 |
 
@@ -76,7 +76,7 @@
 
 - `.codex/config.toml` — Codex 项目级配置
 - `.codex/hooks.json` + `.codex/hooks/*.py` — 会话启动 hooks
-- `.codex/agents/*.toml` — 子代理定义
+- 其他非 `research / implement / check` 的 `.codex/agents/*.toml`
 - `AGENTS.md` 的手动段（workflow 不托管的章节）
 
 ### 多 skills 目录同步边界
@@ -116,7 +116,7 @@ ls .codex/skills/parallel/SKILL.md 2>/dev/null
 | 项目规则 | `AGENTS.md` ⚠️ 半托管 | `AGENTS.md` ⚠️ 半托管 | `AGENTS.md` ⚠️ 半托管 |
 | 平台配置 | `.claude/settings*.json` ❌ 手动 | `opencode.json` ❌ 手动 | `.codex/config.toml` ❌ 手动 |
 | Hooks | `.claude/hooks/*.py` ❌ 手动 | `.opencode/plugins/*.js` ❌ 手动（trellis init 分发） | `.codex/hooks.json` + `.codex/hooks/*.py` ❌ 手动 |
-| 子代理 | `.claude/agents/*.md` ❌ 手动 | `.opencode/agents/*.md` ❌ 手动 | `.codex/agents/*.toml` ❌ 手动 |
+| 子代理 | `research / implement / check` ✅ 部分安装器（由 workflow 部署）；其他手动 | `research / implement / check` ✅ 部分安装器（由 workflow 部署）；其他手动 | `research / implement / check` ✅ 部分安装器（由 workflow 部署）；其他手动 |
 
 ---
 
@@ -207,7 +207,8 @@ test -f .claude/hooks/session-start.py
 # OpenCode
 test -f AGENTS.md
 test -f opencode.json
-test -f .opencode/agents/implement.md  # 如使用子代理
+test -f .opencode/plugins/session-start.js
+test -f .opencode/plugins/inject-subagent-context.js
 
 # Codex
 test -f AGENTS.md

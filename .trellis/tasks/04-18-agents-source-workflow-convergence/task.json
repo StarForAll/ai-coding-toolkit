@@ -1,7 +1,7 @@
 {
-  "id": "implement-agents-source",
-  "name": "implement-agents-source",
-  "title": "实现 agents/ 源资产层，完善 spec/agents 规范",
+  "id": "agents-source-workflow-convergence",
+  "name": "agents-source-workflow-convergence",
+  "title": "agents 源资产层：收敛 workflow agents 为仓库级 source-of-truth",
   "description": "",
   "status": "planning",
   "dev_type": null,
@@ -10,7 +10,7 @@
   "priority": "P2",
   "creator": "xzc",
   "assignee": "xzc",
-  "createdAt": "2026-03-19",
+  "createdAt": "2026-04-18",
   "completedAt": null,
   "branch": null,
   "base_branch": "main",
@@ -19,28 +19,34 @@
   "next_action": [
     {
       "phase": 1,
-      "action": "implement"
+      "action": "brainstorm"
     },
     {
       "phase": 2,
-      "action": "check"
+      "action": "research"
     },
     {
       "phase": 3,
-      "action": "finish"
+      "action": "implement"
     },
     {
       "phase": 4,
-      "action": "create-pr"
+      "action": "check"
+    },
+    {
+      "phase": 5,
+      "action": "update-spec"
+    },
+    {
+      "phase": 6,
+      "action": "record-session"
     }
   ],
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": [
-    "04-18-agents-source-workflow-convergence"
-  ],
-  "parent": null,
+  "children": [],
+  "parent": "03-19-implement-agents-source",
   "relatedFiles": [],
   "notes": "",
   "meta": {}

@@ -141,6 +141,10 @@ Target-project deployed copies are derived state:
 - Claude: `.claude/commands/trellis/*.md`
 - OpenCode: `.opencode/commands/trellis/*.md`
 - Codex: `.agents/skills/*/SKILL.md` or `.codex/skills/*/SKILL.md`
+- managed implementation agents:
+  - Claude: `.claude/agents/{research,implement,check}.md`
+  - OpenCode: `.opencode/agents/{research,implement,check}.md`
+  - Codex: `.codex/agents/{research,implement,check}.toml`
 - shared helper scripts: `.trellis/scripts/workflow/*.py`
 - shared project workflow guide patch: `.trellis/workflow.md`
 
@@ -151,6 +155,7 @@ Target-project deployed copies are derived state:
 - overlay baseline commands
 - added commands
 - optional disabled baseline commands
+- managed implementation agents
 - helper scripts
 - managed asset enumeration / detection helpers
 
@@ -216,6 +221,35 @@ Workflow embed / analysis / repair scripts must distinguish three asset classes:
      - uninstall / force-restore paths must restore the original baseline copy when a backup exists
      - drift detection must at minimum verify the workflow patch marker is still present
      - if the source patch changes, the workflow author must propagate the resulting rule changes to walkthrough / mapping docs that summarize the same behavior
+
+7. **Managed implementation agents**
+   - workflow-managed implementation-internal role assets
+   - current known set:
+     - Claude:
+       - `.claude/agents/research.md`
+       - `.claude/agents/implement.md`
+       - `.claude/agents/check.md`
+     - OpenCode:
+       - `.opencode/agents/research.md`
+       - `.opencode/agents/implement.md`
+       - `.opencode/agents/check.md`
+     - Codex:
+       - `.codex/agents/research.toml`
+       - `.codex/agents/implement.toml`
+       - `.codex/agents/check.toml`
+   - Contract:
+     - these assets are part of the workflow-managed implementation-stage internal chain
+     - installer must back up any pre-existing target copy before first overwrite
+     - if a target copy does not exist at install time, installer may create it from the workflow source of truth
+     - `upgrade-compat.py --check` must detect drift against the workflow source of truth
+     - `--merge` may redeploy the workflow-managed agent content
+     - uninstall must restore the backed-up target copy when a backup exists
+     - uninstall must delete an install-created managed agent when no baseline backup exists
+     - the formal workflow stage `/trellis:check` is distinct from the internal `check-agent` role and docs must keep that boundary explicit
+     - research-agent source contracts must keep:
+       - Exa-first external search
+       - Context7-first library/framework/SDK documentation lookup
+       - explicit `[Evidence Gap]` fallback wording when Context7 is unavailable
 
 #### 3.2.1 Initial Branch Gate
 

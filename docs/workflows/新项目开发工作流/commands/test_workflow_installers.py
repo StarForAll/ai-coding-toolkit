@@ -132,6 +132,42 @@ BASELINE_WORKFLOW_CONTENT = (
     "## File Descriptions\n\n"
     "### 1. workspace/ - Developer Workspaces\n"
 )
+BASELINE_AGENT_RESEARCH_MD = (
+    "---\n"
+    "name: research\n"
+    "description: baseline research\n"
+    "---\n\n"
+    "# Research Agent\n"
+)
+BASELINE_AGENT_IMPLEMENT_MD = (
+    "---\n"
+    "name: implement\n"
+    "description: baseline implement\n"
+    "---\n\n"
+    "# Implement Agent\n"
+)
+BASELINE_AGENT_CHECK_MD = (
+    "---\n"
+    "name: check\n"
+    "description: baseline check\n"
+    "---\n\n"
+    "# Check Agent\n"
+)
+BASELINE_CODEX_RESEARCH_TOML = (
+    'name = "research"\n'
+    'description = "baseline research"\n'
+    'sandbox_mode = "read-only"\n'
+)
+BASELINE_CODEX_IMPLEMENT_TOML = (
+    'name = "implement"\n'
+    'description = "baseline implement"\n'
+    'sandbox_mode = "workspace-write"\n'
+)
+BASELINE_CODEX_CHECK_TOML = (
+    'name = "check"\n'
+    'description = "baseline check"\n'
+    'sandbox_mode = "read-only"\n'
+)
 
 
 class WorkflowInstallerTests(unittest.TestCase):
@@ -230,6 +266,10 @@ class WorkflowInstallerTests(unittest.TestCase):
             BASELINE_RECORD_SESSION_CONTENT,
             encoding="utf-8",
         )
+        (root / ".claude" / "agents").mkdir(parents=True, exist_ok=True)
+        (root / ".claude" / "agents" / "research.md").write_text(BASELINE_AGENT_RESEARCH_MD, encoding="utf-8")
+        (root / ".claude" / "agents" / "implement.md").write_text(BASELINE_AGENT_IMPLEMENT_MD, encoding="utf-8")
+        (root / ".claude" / "agents" / "check.md").write_text(BASELINE_AGENT_CHECK_MD, encoding="utf-8")
         if include_trellis and include_trellis_version:
             (root / ".trellis" / ".version").write_text("2.0.0\n", encoding="utf-8")
         if include_opencode:
@@ -258,6 +298,10 @@ class WorkflowInstallerTests(unittest.TestCase):
                 BASELINE_OPENCODE_RECORD_SESSION_CONTENT,
                 encoding="utf-8",
             )
+            (root / ".opencode" / "agents").mkdir(parents=True)
+            (root / ".opencode" / "agents" / "research.md").write_text(BASELINE_AGENT_RESEARCH_MD, encoding="utf-8")
+            (root / ".opencode" / "agents" / "implement.md").write_text(BASELINE_AGENT_IMPLEMENT_MD, encoding="utf-8")
+            (root / ".opencode" / "agents" / "check.md").write_text(BASELINE_AGENT_CHECK_MD, encoding="utf-8")
         if include_codex:
             (root / ".agents" / "skills").mkdir(parents=True)
             (root / ".agents" / "skills" / "start").mkdir(parents=True)
@@ -286,8 +330,12 @@ class WorkflowInstallerTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".codex" / "hooks").mkdir(parents=True)
+            (root / ".codex" / "agents").mkdir(parents=True)
             (root / ".codex" / "hooks.json").write_text("{}", encoding="utf-8")
             (root / ".codex" / "hooks" / "session-start.py").write_text("# hook\n", encoding="utf-8")
+            (root / ".codex" / "agents" / "research.toml").write_text(BASELINE_CODEX_RESEARCH_TOML, encoding="utf-8")
+            (root / ".codex" / "agents" / "implement.toml").write_text(BASELINE_CODEX_IMPLEMENT_TOML, encoding="utf-8")
+            (root / ".codex" / "agents" / "check.toml").write_text(BASELINE_CODEX_CHECK_TOML, encoding="utf-8")
         if include_agents_md:
             (root / "AGENTS.md").write_text("# Project Rules\n", encoding="utf-8")
         return root
@@ -425,6 +473,30 @@ class WorkflowInstallerTests(unittest.TestCase):
             ),
             BASELINE_START_SKILL_CONTENT,
         )
+
+    def test_install_deploys_managed_agents_and_aligns_codex_check_agent(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        claude_research = (fixture / ".claude" / "agents" / "research.md").read_text(encoding="utf-8")
+        opencode_research = (fixture / ".opencode" / "agents" / "research.md").read_text(encoding="utf-8")
+        codex_research = (fixture / ".codex" / "agents" / "research.toml").read_text(encoding="utf-8")
+        codex_implement = (fixture / ".codex" / "agents" / "implement.toml").read_text(encoding="utf-8")
+        codex_check = (fixture / ".codex" / "agents" / "check.toml").read_text(encoding="utf-8")
+        self.assertIn("Context7", claude_research)
+        self.assertIn("Context7", opencode_research)
+        self.assertIn('sandbox_mode = "read-only"', codex_research)
+        self.assertIn("Context7", codex_research)
+        self.assertIn("Exa", codex_research)
+        self.assertIn("[Evidence Gap]", codex_research)
+        self.assertIn('sandbox_mode = "workspace-write"', codex_implement)
+        self.assertIn('sandbox_mode = "workspace-write"', codex_check)
+        self.assertIn("implementation-stage check-agent", codex_check)
+        self.assertTrue((fixture / ".claude" / "agents" / ".backup-original" / "check.md").exists())
+        self.assertTrue((fixture / ".codex" / "agents" / ".backup-original" / "check.toml").exists())
 
     def test_install_patches_finish_work_when_test_coverage_heading_is_missing(self) -> None:
         fixture = self.create_fixture()
@@ -882,6 +954,211 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn(".codex/skills", result.stdout)
         self.assertIn("parallel skill (.codex/skills): 禁用覆盖漂移", result.stdout)
+
+    def test_upgrade_check_detects_codex_managed_agent_drift(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        codex_check = fixture / ".codex" / "agents" / "check.toml"
+        codex_check.write_text('name = "check"\nsandbox_mode = "read-only"\n', encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("agent 内容漂移: check", result.stdout)
+
+    def test_upgrade_check_detects_claude_managed_agent_drift(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        claude_research = fixture / ".claude" / "agents" / "research.md"
+        claude_research.write_text("# drifted research\n", encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("agent 内容漂移: research", result.stdout)
+
+    def test_upgrade_check_detects_opencode_managed_agent_drift(self) -> None:
+        fixture = self.create_fixture(include_opencode=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        opencode_check = fixture / ".opencode" / "agents" / "check.md"
+        opencode_check.write_text("# drifted check\n", encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("agent 内容漂移: check", result.stdout)
+
+    def test_upgrade_merge_restores_codex_managed_check_agent(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        codex_check = fixture / ".codex" / "agents" / "check.toml"
+        codex_check.write_text('name = "check"\nsandbox_mode = "read-only"\n', encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--merge",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        updated = codex_check.read_text(encoding="utf-8")
+        self.assertIn('sandbox_mode = "workspace-write"', updated)
+        self.assertIn("implementation-stage check-agent", updated)
+
+    def test_upgrade_merge_restores_claude_managed_agent(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        claude_research = fixture / ".claude" / "agents" / "research.md"
+        claude_research.write_text("# drifted research\n", encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--merge",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        updated = claude_research.read_text(encoding="utf-8")
+        self.assertIn("Context7", updated)
+        self.assertIn("Use Exa-first", updated)
+
+    def test_upgrade_merge_restores_opencode_managed_agent(self) -> None:
+        fixture = self.create_fixture(include_opencode=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        opencode_check = fixture / ".opencode" / "agents" / "check.md"
+        opencode_check.write_text("# drifted check\n", encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--merge",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        updated = opencode_check.read_text(encoding="utf-8")
+        self.assertIn("implementation-stage Check Agent", updated)
+
+    def test_uninstall_restores_codex_managed_agents(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        codex_check = fixture / ".codex" / "agents" / "check.toml"
+        self.assertIn('sandbox_mode = "workspace-write"', codex_check.read_text(encoding="utf-8"))
+
+        result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        restored = codex_check.read_text(encoding="utf-8")
+        self.assertIn('sandbox_mode = "read-only"', restored)
+        self.assertFalse((fixture / ".codex" / "agents" / ".backup-original").exists())
+
+    def test_uninstall_restores_claude_managed_agents(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        claude_research = fixture / ".claude" / "agents" / "research.md"
+        self.assertIn("Context7", claude_research.read_text(encoding="utf-8"))
+
+        result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        restored = claude_research.read_text(encoding="utf-8")
+        self.assertEqual(restored, BASELINE_AGENT_RESEARCH_MD)
+        self.assertFalse((fixture / ".claude" / "agents" / ".backup-original").exists())
+
+    def test_uninstall_restores_opencode_managed_agents(self) -> None:
+        fixture = self.create_fixture(include_opencode=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        opencode_check = fixture / ".opencode" / "agents" / "check.md"
+        self.assertIn("implementation-stage Check Agent", opencode_check.read_text(encoding="utf-8"))
+
+        result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        restored = opencode_check.read_text(encoding="utf-8")
+        self.assertEqual(restored, BASELINE_AGENT_CHECK_MD)
+        self.assertFalse((fixture / ".opencode" / "agents" / ".backup-original").exists())
+
+    def test_uninstall_removes_managed_agent_created_without_backup(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        created_by_install = fixture / ".codex" / "agents" / "research.toml"
+        created_by_install.unlink()
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.assertTrue(created_by_install.exists())
+        self.assertFalse((fixture / ".codex" / "agents" / ".backup-original" / "research.toml").exists())
+
+        result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertFalse(created_by_install.exists())
 
     def test_upgrade_check_detects_record_session_patch_drift(self) -> None:
         fixture = self.create_fixture()
