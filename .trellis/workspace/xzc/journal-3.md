@@ -1236,3 +1236,36 @@ Strengthened workflow source contracts, added shared .trellis/workflow.md patchi
 ### Next Steps
 
 - None - task complete
+
+
+## Session 116: 工作流与 Trellis 0.4.0 兼容升级
+
+**Date**: 2026-04-18
+**Task**: 工作流与 Trellis 0.4.0 兼容升级
+**Branch**: `main`
+
+### Summary
+
+验证并修复 docs/workflows/新项目开发工作流 在 Trellis 0.4.0 初始化目标项目中的嵌入兼容性，补齐 Codex start skill Phase Router 补丁、schema v2 安装记录、legacy 兼容、目标项目路径清理、feasibility 首次任务目录流程、plan-validate help 行为，以及多轮 multi-cli-review 记录与测试覆盖。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `19b16ec` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

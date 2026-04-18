@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 115
+- **Total Sessions**: 116
 - **Last Active**: 2026-04-18
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~1238 | Active |
+| `journal-3.md` | ~1271 | Active |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 116 | 2026-04-18 | 工作流与 Trellis 0.4.0 兼容升级 | `19b16ec` | `main` |
 | 115 | 2026-04-18 | 当前项目 Trellis 版本升级 | `73397c4` | `main` |
 | 114 | 2026-04-18 | workflow: absorb target-project strengths into source workflow | `2a72162` | `main` |
 | 113 | 2026-04-17 | 工作流兼容升级链修正 | `52a983a` | `main` |
