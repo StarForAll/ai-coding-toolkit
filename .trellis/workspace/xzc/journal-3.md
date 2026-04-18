@@ -1269,3 +1269,82 @@ Strengthened workflow source contracts, added shared .trellis/workflow.md patchi
 ### Next Steps
 
 - None - task complete
+
+
+## Session 117: 工作流补充 trellis 原生 subagent 能力
+
+**Date**: 2026-04-18
+**Task**: 工作流补充 trellis 原生 subagent 能力
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Summary |
+|------|---------|
+| Workflow model | 明确当前 workflow 不采用 Trellis 原生 `plan / dispatch agent`，并将 `research -> implement -> check-agent` 定义为 implementation 内部链 |
+| Managed agents | 将 Claude / OpenCode / Codex 的 `research` / `implement` / `check` 纳入 workflow 兼容治理，新增 workflow source-of-truth agent 文件并接入 install / uninstall / upgrade / analyze 链路 |
+| Codex parity | 将 Codex `check.toml` 对齐为 workspace-write 的可修复 check-agent，并保留 hooks / config 为 verify-only 边界 |
+| Research rules | 统一 research agent 外部搜索能力：外部技术搜索优先 `exa`，第三方库 / 框架 / SDK 文档必须先 `Context7`，无官方文档证据时必须标记 `[Evidence Gap]` |
+| Verification | 补齐 upgrade-analysis、installer、uninstall、round-1/2 reviewer 修复对应的回归测试，并验证通过 |
+
+**Updated Files**:
+- `.trellis/spec/scripts/workflow-installer-upgrade-contracts.md`
+- `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
+- `docs/workflows/新项目开发工作流/commands/install-workflow.py`
+- `docs/workflows/新项目开发工作流/commands/uninstall-workflow.py`
+- `docs/workflows/新项目开发工作流/commands/analyze-upgrade.py`
+- `docs/workflows/新项目开发工作流/commands/upgrade-compat.py`
+- `docs/workflows/新项目开发工作流/commands/test_upgrade_analysis.py`
+- `docs/workflows/新项目开发工作流/commands/test_workflow_installers.py`
+- `docs/workflows/新项目开发工作流/commands/claude/README.md`
+- `docs/workflows/新项目开发工作流/commands/opencode/README.md`
+- `docs/workflows/新项目开发工作流/commands/codex/README.md`
+- `docs/workflows/新项目开发工作流/CLI原生适配边界矩阵.md`
+- `docs/workflows/新项目开发工作流/命令映射.md`
+- `docs/workflows/新项目开发工作流/工作流总纲.md`
+- `docs/workflows/新项目开发工作流/工作流全局流转说明（通俗版）.md`
+- `docs/workflows/新项目开发工作流/多CLI通用新项目完整流程演练.md`
+- `docs/workflows/新项目开发工作流/目标项目兼容升级方案指导.md`
+- `docs/workflows/新项目开发工作流/commands/check.md`
+- `docs/workflows/新项目开发工作流/commands/start-patch-phase-router.md`
+- `docs/workflows/新项目开发工作流/commands/start-skill-patch-phase-router.md`
+- `docs/workflows/新项目开发工作流/commands/claude/agents/research.md`
+- `docs/workflows/新项目开发工作流/commands/claude/agents/implement.md`
+- `docs/workflows/新项目开发工作流/commands/claude/agents/check.md`
+- `docs/workflows/新项目开发工作流/commands/opencode/agents/research.md`
+- `docs/workflows/新项目开发工作流/commands/opencode/agents/implement.md`
+- `docs/workflows/新项目开发工作流/commands/opencode/agents/check.md`
+- `docs/workflows/新项目开发工作流/commands/codex/agents/research.toml`
+- `docs/workflows/新项目开发工作流/commands/codex/agents/implement.toml`
+- `docs/workflows/新项目开发工作流/commands/codex/agents/check.toml`
+
+**Validation**:
+- `/ops/softwares/python/bin/python3 -m py_compile docs/workflows/新项目开发工作流/commands/workflow_assets.py docs/workflows/新项目开发工作流/commands/install-workflow.py docs/workflows/新项目开发工作流/commands/uninstall-workflow.py docs/workflows/新项目开发工作流/commands/upgrade-compat.py docs/workflows/新项目开发工作流/commands/analyze-upgrade.py docs/workflows/新项目开发工作流/commands/test_workflow_installers.py docs/workflows/新项目开发工作流/commands/test_upgrade_analysis.py`
+- `/ops/softwares/python/bin/python3 -m unittest docs.workflows.新项目开发工作流.commands.test_upgrade_analysis`
+- `/ops/softwares/python/bin/python3 docs/workflows/新项目开发工作流/commands/test_workflow_installers.py`
+
+**Follow-up**:
+- 新建后续子任务：`04-18-agents-source-workflow-convergence`，仅落盘 PRD，未开始实现
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `aaa20b4` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
