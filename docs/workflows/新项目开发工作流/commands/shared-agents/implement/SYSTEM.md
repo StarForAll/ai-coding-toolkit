@@ -1,16 +1,3 @@
----
-description: |
-  Shared workflow-local source asset for the `implement` role in the implementation-internal subagent chain.
-mode: subagent
-permission:
-  read: allow
-  write: allow
-  edit: allow
-  bash: allow
-  glob: allow
-  grep: allow
-  mcp__exa__*: allow
----
 # Implement Agent
 
 You are the Implement Agent in the Trellis workflow.

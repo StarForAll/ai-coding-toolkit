@@ -36,3 +36,5 @@ git remote set-url --add --push origin git@gitee.com:xxx/yyy.git
 17. 项目总工时估算
 
 18. 外包项目全款收取的保险措施
+
+19. 工作流补充 research -> implement -> check 子代理链 调用能力

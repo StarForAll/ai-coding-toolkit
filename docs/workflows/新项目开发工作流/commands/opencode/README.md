@@ -211,6 +211,12 @@ OpenCode 的规则层不要只靠单一入口。
 - `research` / `implement` / `check`：由 workflow 源资产统一治理并部署
 - `debug`：仍保留为 Trellis / 项目侧手动维护能力，不纳入当前 workflow 托管集合
 
+source-of-truth 边界需要单独说清：
+
+- 当前 workflow 安装器实际读取的是 `docs/workflows/新项目开发工作流/commands/opencode/agents/`
+- 目标项目 `.opencode/agents/` 是安装结果，不是当前 workflow 的唯一源层
+- 若后续要继续收敛，也应优先在 workflow 命令目录内完成，而不是上收到仓库根目录
+
 其中 `research` 角色还需要遵守统一证据门禁：
 
 - 外部技术搜索优先 `exa`
@@ -254,7 +260,7 @@ OpenCode 不应被写成“和 Claude 完全等价”，因为它在 hook / suba
 |-----------|------------------|------|-----------|
 | 阶段命令 | `.opencode/commands/trellis/*.md` | 用户显式触发的 workflow 命令 | ✅ `install-workflow.py` |
 | Trellis 原生命令基线 | `.opencode/commands/trellis/start.md` `finish-work.md` `record-session.md` | 由 `trellis init` 提供；当前 workflow 会对 `start` / `finish-work` / `record-session` 注入补丁，但不重新分发完整基线 | ✅ 补丁由安装器注入 |
-| 子代理定义 | `.opencode/agents/*.md` | `research` / `implement` / `check` 由 workflow 安装器管理；`debug` 仍手动维护 | ✅ 部分由 `install-workflow.py` 管理 |
+| 子代理定义 | `.opencode/agents/*.md` | `research` / `implement` / `check` 由 workflow source-of-truth `commands/opencode/agents/` 部署；`debug` 仍手动维护 | ✅ 部分由 `install-workflow.py` 管理 |
 | 项目长期规则 | `AGENTS.md` | 稳定执行规则、风险边界、语言策略 | ❌ 手动维护 |
 | workflow 文档注入 | `opencode.json.instructions` | 只挂主入口与必要补充，不默认全量挂载所有阶段文档 | ❌ 手动维护 |
 | 通用脚本 | `.trellis/scripts/workflow/` | 被命令或人工直接调用 | ✅ `install-workflow.py` |

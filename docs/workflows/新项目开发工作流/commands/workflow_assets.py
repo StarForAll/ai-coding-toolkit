@@ -56,6 +56,127 @@ AGENT_SUFFIXES = {
     "opencode": ".md",
     "codex": ".toml",
 }
+SHARED_AGENTS_DIR = "shared-agents"
+
+
+def workflow_managed_agent_source_path(commands_root: Path, cli_type: str, agent_name: str) -> Path:
+    """Return the workflow-local shared source path for an implementation agent."""
+    return commands_root / SHARED_AGENTS_DIR / agent_name
+
+
+def workflow_managed_agent_adapter_path(commands_root: Path, cli_type: str, agent_name: str) -> Path:
+    """Return the per-CLI workflow adapter path for an implementation agent."""
+    suffix = AGENT_SUFFIXES[cli_type]
+    return commands_root / cli_type / "agents" / f"{agent_name}{suffix}"
+
+
+def workflow_managed_agent_target_path(root: Path, cli_type: str, agent_name: str) -> Path:
+    """Return the target-project path for a managed implementation agent."""
+    suffix = AGENT_SUFFIXES[cli_type]
+    return root / CLI_DIRS[cli_type] / "agents" / f"{agent_name}{suffix}"
+
+
+def _read_shared_agent_text(agent_dir: Path, name: str) -> str:
+    path = agent_dir / name
+    if not path.exists():
+        raise FileNotFoundError(path)
+    return path.read_text(encoding="utf-8").strip()
+
+
+def render_workflow_managed_agent(commands_root: Path, cli_type: str, agent_name: str) -> str:
+    """Render a per-CLI workflow-managed agent from the shared workflow-local source."""
+    agent_dir = workflow_managed_agent_source_path(commands_root, cli_type, agent_name)
+    readme = _read_shared_agent_text(agent_dir, "README.md")
+    system = _read_shared_agent_text(agent_dir, "SYSTEM.md")
+    tools = _read_shared_agent_text(agent_dir, "TOOLS.md")
+
+    description = ""
+    for line in readme.splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            description = stripped
+            break
+    if not description:
+        description = f"{agent_name} agent"
+
+    if cli_type == "claude":
+        tools_line = {
+            "research": "Read, Glob, Grep, mcp__exa__web_search_exa, mcp__exa__get_code_context_exa, mcp__Context7__*, Skill, mcp__chrome-devtools__*",
+            "implement": "Read, Write, Edit, Bash, Glob, Grep, mcp__exa__web_search_exa, mcp__exa__get_code_context_exa",
+            "check": "Read, Write, Edit, Bash, Glob, Grep, mcp__exa__web_search_exa, mcp__exa__get_code_context_exa",
+        }[agent_name]
+        return (
+            "---\n"
+            f"name: {agent_name}\n"
+            "description: |\n"
+            f"  {description}\n"
+            f"tools: {tools_line}\n"
+            "model: opus\n"
+            "---\n"
+            f"{system}\n"
+        )
+
+    if cli_type == "opencode":
+        permission_block = {
+            "research": [
+                "  read: allow",
+                "  write: deny",
+                "  edit: deny",
+                "  bash: deny",
+                "  glob: allow",
+                "  grep: allow",
+                "  mcp__exa__*: allow",
+                "  mcp__Context7__*: allow",
+                "  mcp__chrome-devtools__*: allow",
+            ],
+            "implement": [
+                "  read: allow",
+                "  write: allow",
+                "  edit: allow",
+                "  bash: allow",
+                "  glob: allow",
+                "  grep: allow",
+                "  mcp__exa__*: allow",
+            ],
+            "check": [
+                "  read: allow",
+                "  write: allow",
+                "  edit: allow",
+                "  bash: allow",
+                "  glob: allow",
+                "  grep: allow",
+                "  mcp__exa__*: allow",
+            ],
+        }[agent_name]
+        return (
+            "---\n"
+            "description: |\n"
+            f"  {description}\n"
+            "mode: subagent\n"
+            "permission:\n"
+            + "\n".join(permission_block)
+            + "\n---\n"
+            f"{system}\n"
+        )
+
+    if cli_type == "codex":
+        sandbox_mode = {
+            "research": "read-only",
+            "implement": "workspace-write",
+            "check": "workspace-write",
+        }[agent_name]
+        return (
+            f'name = "{agent_name}"\n'
+            f'description = "{description}"\n'
+            f'sandbox_mode = "{sandbox_mode}"\n\n'
+            'developer_instructions = """\n'
+            f"{system}\n\n"
+            "## Tool Contract\n\n"
+            f"{tools}\n"
+            '"""\n'
+        )
+
+    raise ValueError(f"Unsupported cli_type for managed agent render: {cli_type}")
 
 
 def prepare_command_content(source_path: Path) -> str:
@@ -101,8 +222,7 @@ class ManagedAssetSpec:
                 return None
             return skills_dir / self.name / "SKILL.md"
         if self.kind == "agent":
-            suffix = AGENT_SUFFIXES[self.cli_type]
-            return root / CLI_DIRS[self.cli_type] / "agents" / f"{self.name}{suffix}"
+            return workflow_managed_agent_target_path(root, self.cli_type, self.name)
         raise ValueError(f"Unsupported asset kind: {self.kind}")
 
 

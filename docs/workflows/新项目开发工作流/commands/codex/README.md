@@ -248,6 +248,12 @@ Codex 官方支持 subagents。对 Trellis workflow，推荐用它承载：
 
 当前 workflow 已将 `.codex/agents/*.toml` 中的 `research` / `implement` / `check` 纳入兼容治理，并与 Claude / OpenCode 的 implementation 内部角色链对齐。
 
+source-of-truth 边界同样要明确：
+
+- 当前 workflow 安装链实际读取的是 `docs/workflows/新项目开发工作流/commands/codex/agents/*.toml`
+- 目标项目 `.codex/agents/*.toml` 是安装结果，不是当前 workflow 的唯一源层
+- 若后续要继续收敛，也应优先在 workflow 命令目录内完成，而不是上收到仓库根目录
+
 这里的对齐规则不是“复制 Claude 的 hook 机制”，而是：
 
 - 对齐 agent 角色语义
@@ -310,7 +316,7 @@ Codex 官方内建 slash commands 是平台级控制能力，例如：
 | Codex 项目配置 | `.codex/config.toml` | 指定 `AGENTS.md` fallback 等项目级配置 | ❌ 手动维护 |
 | 会话启动注入 | `.codex/hooks.json` + `.codex/hooks/*.py` | 自动注入 Trellis workflow 上下文 | ❌ 手动维护 |
 | workflow 技能 | `.agents/skills/*/SKILL.md` 或 `.codex/skills/*/SKILL.md` | `start`、`brainstorm`、`finish-work` 等阶段入口；若已有基线 `finish-work` skill，则由安装器追加项目化补丁 | ✅ `install-workflow.py` |
-| 子代理 | `.codex/agents/*.toml` | `research` / `implement` / `check` 由 workflow 安装器管理 | ✅ 部分由 `install-workflow.py` 管理 |
+| 子代理 | `.codex/agents/*.toml` | `research` / `implement` / `check` 由 workflow source-of-truth `commands/codex/agents/` 部署 | ✅ 部分由 `install-workflow.py` 管理 |
 | 辅助脚本 | `.trellis/scripts/workflow/` | 校验、导出、静态验证脚本 | ✅ `install-workflow.py` |
 | 源码水印与归属证明产物 | `$TASK_DIR/design/`、`$TASK_DIR/delivery/` | 设计计划、提取验证、交付证明 | ❌ 人工维护 / workflow 阶段产出 |
 

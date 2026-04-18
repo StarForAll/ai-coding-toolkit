@@ -48,7 +48,9 @@ from workflow_assets import (
     WORKFLOW_SCHEMA_VERSION,
     WORKFLOW_VERSION,
     prepare_command_content,
+    render_workflow_managed_agent,
     resolve_codex_skills_dir,
+    workflow_managed_agent_target_path,
 )
 
 
@@ -570,11 +572,6 @@ def inject_workflow_patch(src: Path, root: Path, *, dry_run: bool) -> bool:
     return True
 
 
-def source_agent_path(src: Path, cli_type: str, agent_name: str) -> Path:
-    suffix = AGENT_SUFFIXES[cli_type]
-    return src / cli_type / "agents" / f"{agent_name}{suffix}"
-
-
 def target_agent_dir(root: Path, cli_type: str) -> Path:
     return root / CLI_DIRS[cli_type] / "agents"
 
@@ -599,10 +596,11 @@ def deploy_managed_agents(
         backup_dir.mkdir(parents=True, exist_ok=True)
 
     for agent_name in MANAGED_IMPLEMENTATION_AGENTS:
-        source_path = source_agent_path(src, cli_type, agent_name)
-        target_path = dst_agents / f"{agent_name}{AGENT_SUFFIXES[cli_type]}"
-        if not source_path.exists():
-            result["errors"].append(f"源 agent 缺失: {source_path.relative_to(src)}")
+        target_path = workflow_managed_agent_target_path(root, cli_type, agent_name)
+        try:
+            rendered = render_workflow_managed_agent(src, cli_type, agent_name)
+        except FileNotFoundError as exc:
+            result["errors"].append(f"源 agent 缺失: {exc.filename}")
             continue
         if not dry_run and target_path.exists() and not (backup_dir / target_path.name).exists():
             shutil.copy2(target_path, backup_dir / target_path.name)
@@ -610,7 +608,7 @@ def deploy_managed_agents(
         if dry_run:
             info(f"[{cli_label}] 将部署 agent: {agent_name}")
         else:
-            target_path.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
+            target_path.write_text(rendered, encoding="utf-8")
             ok(f"[{cli_label}] agent: {agent_name}")
         result["agents"] += 1
 

@@ -44,8 +44,10 @@ from workflow_assets import (
     WORKFLOW_VERSION,
     check_latest_trellis_prerequisite,
     prepare_command_content,
+    render_workflow_managed_agent,
     read_project_trellis_version,
     resolve_codex_skills_dir,
+    workflow_managed_agent_target_path,
 )
 
 
@@ -264,11 +266,11 @@ def expected_helper_script_content(src: Path, name: str) -> str | None:
 
 
 def expected_agent_content(src: Path, cli_type: str, name: str) -> str | None:
-    source_path = src / cli_type / "agents" / f"{name}{AGENT_SUFFIXES[cli_type]}"
-    if not source_path.exists():
-        err(f"源 agent 缺失，无法校验: {source_path.relative_to(src)}")
+    try:
+        return render_workflow_managed_agent(src, cli_type, name)
+    except FileNotFoundError as exc:
+        err(f"源 agent 缺失，无法校验: {exc.filename}")
         return None
-    return read_text(source_path)
 
 
 def expected_parallel_disabled_content(src: Path) -> str | None:
@@ -441,7 +443,7 @@ def detect_conflicts_managed_agents(src: Path, root: Path, cli_type: str, cli_la
 
     conflicts = 0
     for agent_name in MANAGED_IMPLEMENTATION_AGENTS:
-        target_path = target_dir / f"{agent_name}{AGENT_SUFFIXES[cli_type]}"
+        target_path = workflow_managed_agent_target_path(root, cli_type, agent_name)
         if not target_path.exists():
             err(f"[{cli_label}] agent 缺失: {target_path.relative_to(root)}")
             conflicts += 1
@@ -646,12 +648,13 @@ def deploy_managed_agents(src: Path, root: Path, cli_type: str, cli_label: str) 
         return
 
     for agent_name in MANAGED_IMPLEMENTATION_AGENTS:
-        source_path = src / cli_type / "agents" / f"{agent_name}{AGENT_SUFFIXES[cli_type]}"
-        target_path = target_dir / f"{agent_name}{AGENT_SUFFIXES[cli_type]}"
-        if not source_path.exists():
-            err(f"[{cli_label}] 源 agent 缺失，无法重部署: {source_path.relative_to(src)}")
+        target_path = workflow_managed_agent_target_path(root, cli_type, agent_name)
+        try:
+            rendered = render_workflow_managed_agent(src, cli_type, agent_name)
+        except FileNotFoundError as exc:
+            err(f"[{cli_label}] 源 agent 缺失，无法重部署: {exc.filename}")
             continue
-        target_path.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
+        target_path.write_text(rendered, encoding="utf-8")
         ok(f"[{cli_label}] agent 已重部署: {agent_name}")
 
 

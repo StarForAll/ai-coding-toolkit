@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 import json
 
-from workflow_assets import HELPER_SCRIPTS
+from workflow_assets import HELPER_SCRIPTS, render_workflow_managed_agent
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -497,6 +497,19 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("implementation-stage check-agent", codex_check)
         self.assertTrue((fixture / ".claude" / "agents" / ".backup-original" / "check.md").exists())
         self.assertTrue((fixture / ".codex" / "agents" / ".backup-original" / "check.toml").exists())
+
+    def test_checked_in_agent_adapters_match_rendered_shared_source(self) -> None:
+        for cli_type, suffix in [("claude", ".md"), ("opencode", ".md"), ("codex", ".toml")]:
+            for agent_name in ("research", "implement", "check"):
+                checked_in = (COMMANDS_DIR / cli_type / "agents" / f"{agent_name}{suffix}").read_text(
+                    encoding="utf-8"
+                )
+                rendered = render_workflow_managed_agent(COMMANDS_DIR, cli_type, agent_name)
+                self.assertEqual(
+                    checked_in,
+                    rendered,
+                    f"{cli_type}/{agent_name} adapter should match rendered shared source",
+                )
 
     def test_install_patches_finish_work_when_test_coverage_heading_is_missing(self) -> None:
         fixture = self.create_fixture()

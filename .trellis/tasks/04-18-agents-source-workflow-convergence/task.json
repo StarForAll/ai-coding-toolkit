@@ -1,11 +1,11 @@
 {
   "id": "agents-source-workflow-convergence",
   "name": "agents-source-workflow-convergence",
-  "title": "agents 源资产层：收敛 workflow agents 为仓库级 source-of-truth",
-  "description": "",
+  "title": "workflow agents 源定义：收敛 implementation 子代理链为工作流内单一 source-of-truth",
+  "description": "分析并收敛 workflow implementation agents 在 docs/workflows/新项目开发工作流/commands/ 内的 source-of-truth、部署适配和迁移边界，产出可执行的工作流内收敛方案与后续实现路径。",
   "status": "planning",
-  "dev_type": null,
-  "scope": null,
+  "dev_type": "docs",
+  "scope": "agents",
   "package": null,
   "priority": "P2",
   "creator": "xzc",
@@ -47,7 +47,15 @@
   "subtasks": [],
   "children": [],
   "parent": "03-19-implement-agents-source",
-  "relatedFiles": [],
-  "notes": "",
+  "relatedFiles": [
+    ".trellis/spec/agents/index.md",
+    "docs/workflows/新项目开发工作流/commands/workflow_assets.py",
+    "docs/workflows/新项目开发工作流/commands/claude/agents/",
+    "docs/workflows/新项目开发工作流/commands/opencode/agents/",
+    "docs/workflows/新项目开发工作流/commands/codex/agents/",
+    ".trellis/tasks/03-19-implement-agents-source/prd.md",
+    ".trellis/tasks/archive/2026-04/04-18-trellis-native-workflow-compat/prd.md"
+  ],
+  "notes": "2026-04-18: current focus is to finish brainstorm/research preparation by clarifying acceptance criteria, migration decision points, and task context before any implementation starts. User clarified that this task must stay inside docs/workflows/新项目开发工作流 and should not move agents to the repo root. Current direction is workflow-local source-of-truth consolidation inside commands/. Shared source has now landed at commands/shared-agents/{research,implement,check}, and workflow install/upgrade contracts read rendered per-CLI adapters from that workflow-local source.",
   "meta": {}
 }

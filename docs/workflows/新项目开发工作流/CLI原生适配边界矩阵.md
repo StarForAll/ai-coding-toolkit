@@ -3,6 +3,112 @@
 > 本文档是"安装器管理什么 / 项目自己维护什么 / 运行前需满足什么"的**单一事实源**。
 > 各平台 README、命令映射.md、多CLI通用新项目完整流程演练.md 应引用本文档，不再各自扩写。
 
+## 当前真实边界
+
+在当前 `docs/workflows/新项目开发工作流` 版本里，需要先区分三层概念：
+
+1. **workflow source-of-truth（当前真实）**
+   - `docs/workflows/新项目开发工作流/commands/{claude,opencode,codex}/agents/`
+   - 安装器 / 升级分析 / 卸载脚本当前都直接读取这一层作为 managed agents 的源文件
+2. **workflow-managed subset（当前真实）**
+   - Claude / OpenCode / Codex 的 `research / implement / check`
+   - 这是当前 workflow 安装器、升级分析、卸载、回归测试共同覆盖的子集
+3. **workflow-local integrated architecture（后续可选，不是现状）**
+   - 仍然留在 `docs/workflows/新项目开发工作流/commands/` 内收敛共享 agent source
+   - 不把 source 上收到仓库根目录
+
+补充说明：
+
+- `.iflow/agents/` 当前属于仓库级 live deployment 范围，但**不在**本 workflow 安装器的 managed subset 内
+- 因此，若当前问题与 `research / implement / check` 的安装、升级、卸载、漂移检测有关，修复应优先限制在 `docs/workflows/新项目开发工作流/**`
+
+## 未来 workflow 内部 source 收敛合同（未启用）
+
+本节描述：如果未来要把 managed implementation agents 从当前 `commands/{claude,opencode,codex}/agents/`
+收敛到 workflow 命令目录内的共享 source，workflow 内部必须如何保持不漂移。
+
+它是**迁移设计合同**，不是当前现状说明。
+
+### 迁移后的目标链路
+
+若未来启用内部共享 source，建议 workflow 内部收敛为：
+
+```text
+workflow-local shared source
+  -> workflow adapter layer
+  -> target project managed agents
+```
+
+对应到当前仓库，预期是：
+
+```text
+docs/workflows/新项目开发工作流/commands/<shared-agent-source>/
+  -> docs/workflows/新项目开发工作流/commands/{claude,opencode,codex}/agents/*
+  -> target project .claude/.opencode/.codex managed agents
+```
+
+关键约束：
+
+- workflow 命令目录内的共享 agent source 负责主体语义
+- `commands/{claude,opencode,codex}/agents/` 负责 per-CLI adapter 包装
+- `install-workflow.py`、`upgrade-compat.py`、`uninstall-workflow.py` 面向的仍然是 workflow adapter 层，而不是直接面向工作流外的仓库根目录
+
+### Adapter 生成最小规则
+
+| Canonical source field | Claude adapter | OpenCode adapter | Codex adapter |
+|------------------------|----------------|------------------|---------------|
+| `README.md` 中的用途 / 触发条件摘要 | frontmatter `description` | frontmatter `description` | `description =` |
+| `SYSTEM.md` 主体职责与边界 | Markdown 正文 | Markdown 正文 | `developer_instructions` 字符串正文 |
+| `TOOLS.md` 的抽象权限需求 | `tools:` 列表 | `permission:` block | `sandbox_mode =` + 必要的说明性约束 |
+| workflow 特有差异 | 保留最小 frontmatter 差异 | 保留 `mode: subagent` 与权限差异 | 保留 `.toml` 包装与 Codex subagent 合同 |
+
+补充规则：
+
+- adapter 层不应再手工改写主体职责，主体语义只能来自 canonical source
+- 若某平台确有不可消除的行为差异，只允许保留在 wrapper / adapter 层，并必须在该平台 README 中显式注明
+- Codex 的 `.toml` 包装不能因为迁移丢失：
+  - `sandbox_mode`
+  - `developer_instructions`
+  - implementation-stage `check-agent` 与正式 `/trellis:check` 的边界表述
+
+### 启用迁移时的原子更新集合
+
+一旦启用 workflow 内部 shared source 收敛，下列文件必须作为一个原子集合一起更新：
+
+- `commands/install-workflow.py`
+- `commands/upgrade-compat.py`
+- `commands/uninstall-workflow.py`
+- `commands/workflow_assets.py`
+- `commands/test_workflow_installers.py`
+- `commands/claude/README.md`
+- `commands/opencode/README.md`
+- `commands/codex/README.md`
+- 本文档 `CLI原生适配边界矩阵.md`
+- `目标项目兼容升级方案指导.md`
+- `结构性迁移设计.md`
+
+在这个集合未同时切换完成前：
+
+- 不要先把目标项目迁移到新 source contract
+- 不要把 `commands/{claude,opencode,codex}/agents/` 误删成“历史遗留层”
+
+### `/tmp` 验证基线
+
+基于 `/tmp` 临时项目的实际安装验证，当前 workflow 的正确检验口径应是：
+
+1. 先在 `/tmp` 创建纯净 Trellis 目标项目
+2. 满足安装前置条件：
+   - Git 仓库
+   - 新建仓库为 `main`
+   - `origin` 至少 2 个 push URL
+   - 已执行 `trellis init`
+3. 用 `install-workflow.py` 生成真实 target layout
+4. 比较的是：
+   - workflow adapter 层
+   - 与目标项目安装结果
+
+而不是把“workflow 内部共享 source 的定义”和“目标项目安装结果验证”混成一层，否则会导致新的分析漂移。
+
 ## 分类定义
 
 | 分类 | 含义 | 谁负责 |
@@ -26,7 +132,7 @@
 | 共享运行时基线 | `.claude/settings.json` | 手动维护 | hooks 接线、默认 deny |
 | 本机权限扩展 | `.claude/settings.local.json` | 手动维护 | MCP allowlist、本地调试 |
 | 会话与子代理 hooks | `.claude/hooks/*.py` | 手动维护 | session-start / inject-subagent-context |
-| 子代理定义 | `.claude/agents/*.md` | 部分安装器管理 | `research` / `implement` / `check` 由 workflow 部署；`debug` 仍手动维护 |
+| 子代理定义 | `.claude/agents/*.md` | 部分安装器管理 | `research` / `implement` / `check` 由 workflow source-of-truth `commands/claude/agents/` 部署；`debug` 仍手动维护 |
 | 项目 Git 前置条件 | `origin ≥ 2 push URL` | 运行前置/仅校验 | 安装器校验，不负责配置 |
 | Trellis init 产物 | `.trellis/.version` | 运行前置/仅校验 | 安装器校验，由 `trellis init` 负责 |
 
@@ -41,7 +147,7 @@
 | 通用辅助脚本 | `.trellis/scripts/workflow/` | 安装器管理 | 与 Claude 共用，不重复部署 |
 | Trellis 基线 workflow 指南补丁 | `.trellis/workflow.md` | 安装器管理 | 与 Claude / Codex 共用同一份目标项目 workflow 指南，保持 close-out 与 child-task 规则一致 |
 | 阶段 skills（跨 CLI 共享） | `.agents/skills/*/SKILL.md` | 安装器管理（与 Codex 共享单份落盘） | OpenCode 官方 skills 扫描链路会命中 `.agents/skills/`，因此同一份 skills 同时影响 OpenCode 与 Codex；升级/核对时必须把该路径算在 OpenCode 影响面内 |
-| 子代理定义 | `.opencode/agents/*.md` | 部分安装器管理 | `research` / `implement` / `check` 由 workflow 部署；`debug` 仍手动维护 |
+| 子代理定义 | `.opencode/agents/*.md` | 部分安装器管理 | `research` / `implement` / `check` 由 workflow source-of-truth `commands/opencode/agents/` 部署；`debug` 仍手动维护 |
 | 项目长期规则 | `AGENTS.md` | 半托管（手动维护为主） | 与 Claude/Codex 共用同一文件；`TRELLIS` managed block 与 `workflow-nl-routing` 区段由 `trellis init` / `install-workflow.py` 分别托管 |
 | workflow 文档注入 | `opencode.json.instructions` | 手动维护 | 只挂主入口与必要补充 |
 | 项目 Git 前置条件 | `origin ≥ 2 push URL` | 运行前置/仅校验 | 安装器校验 |
@@ -68,7 +174,7 @@
 | 项目长期规则 | `AGENTS.md` | 半托管（手动维护为主） | 与 Claude/OpenCode 共用；`TRELLIS` managed block 与 `workflow-nl-routing` 区段由 `trellis init` / `install-workflow.py` 分别托管 |
 | Codex 项目配置 | `.codex/config.toml` | 手动维护 | `AGENTS.md` fallback 等项目配置 |
 | 会话启动注入 | `.codex/hooks.json` + `.codex/hooks/*.py` | 手动维护 | SessionStart hook 注入 Trellis 上下文 |
-| 子代理定义 | `.codex/agents/*.toml` | 部分安装器管理 | `research` / `implement` / `check` 由 workflow 部署并纳入升级分析；其他 agent 仍手动维护 |
+| 子代理定义 | `.codex/agents/*.toml` | 部分安装器管理 | `research` / `implement` / `check` 由 workflow source-of-truth `commands/codex/agents/` 部署并纳入升级分析；其他 agent 仍手动维护 |
 | 项目 Git 前置条件 | `origin ≥ 2 push URL` | 运行前置/仅校验 | 安装器校验 |
 | Trellis init 产物 | `.trellis/.version` | 运行前置/仅校验 | 安装器校验 |
 
@@ -117,6 +223,8 @@ ls .codex/skills/parallel/SKILL.md 2>/dev/null
 | 平台配置 | `.claude/settings*.json` ❌ 手动 | `opencode.json` ❌ 手动 | `.codex/config.toml` ❌ 手动 |
 | Hooks | `.claude/hooks/*.py` ❌ 手动 | `.opencode/plugins/*.js` ❌ 手动（trellis init 分发） | `.codex/hooks.json` + `.codex/hooks/*.py` ❌ 手动 |
 | 子代理 | `research / implement / check` ✅ 部分安装器（由 workflow 部署）；其他手动 | `research / implement / check` ✅ 部分安装器（由 workflow 部署）；其他手动 | `research / implement / check` ✅ 部分安装器（由 workflow 部署）；其他手动 |
+
+> 注意：上表描述的是**当前 workflow-managed subset**；`iFlow` 当前不在本 workflow 的 installer / upgrade / uninstall 合同内。
 
 ---
 

@@ -20,6 +20,7 @@ from workflow_assets import (
     MANAGED_IMPLEMENTATION_AGENTS,
     OPTIONAL_DISABLED_BASELINE_COMMANDS,
     OVERLAY_BASELINE_COMMANDS,
+    workflow_managed_agent_target_path,
 )
 
 
@@ -128,7 +129,7 @@ def uninstall_managed_agents(root: Path, cli_type: str, cli_label: str) -> None:
     restored = 0
     for agent_name in MANAGED_IMPLEMENTATION_AGENTS:
         backup_agent = backup_dir / f"{agent_name}{suffix}"
-        target_agent = target_dir / f"{agent_name}{suffix}"
+        target_agent = workflow_managed_agent_target_path(root, cli_type, agent_name)
         if backup_agent.exists():
             shutil.copy2(backup_agent, target_agent)
             ok(f"[{cli_label}] 恢复 agent: {agent_name}")

@@ -1,0 +1,11 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/agents/index.md", "reason": "Target agent source architecture and field mapping"}
+{"file": ".trellis/spec/docs/index.md", "reason": "Documentation boundary rules for workflow and asset docs"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Cross-layer source-of-truth and deployment drift checklist"}
+{"file": "docs/workflows/新项目开发工作流/commands/workflow_assets.py", "reason": "Current workflow-managed implementation agent registry and deployment surface"}
+{"file": "docs/workflows/新项目开发工作流/commands/claude/agents/", "type": "directory", "reason": "Claude workflow-managed implementation agents"}
+{"file": "docs/workflows/新项目开发工作流/commands/opencode/agents/", "type": "directory", "reason": "OpenCode workflow-managed implementation agents"}
+{"file": "docs/workflows/新项目开发工作流/commands/codex/agents/", "type": "directory", "reason": "Codex workflow-managed implementation agents and toml contract"}
+{"file": "docs/workflows/新项目开发工作流/commands/upgrade-compat.py", "reason": "Upgrade compatibility logic that must be realigned once source-of-truth moves"}
+{"file": "docs/workflows/新项目开发工作流/commands/analyze-upgrade.py", "reason": "Analysis script that compares managed workflow assets and will reflect source-of-truth changes"}
+{"file": "docs/workflows/新项目开发工作流/commands/install-workflow.py", "reason": "Installer behavior that deploys workflow-managed agents into target projects"}

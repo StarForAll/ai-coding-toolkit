@@ -1,8 +1,3 @@
-name = "check"
-description = "Shared workflow-local source asset for the `implementation-stage check-agent` role in the implementation-internal subagent chain."
-sandbox_mode = "workspace-write"
-
-developer_instructions = """
 # Check Agent
 
 You are the implementation-stage Check Agent in the Trellis workflow.
@@ -34,15 +29,3 @@ the formal `/trellis:check` stage.
 - Lint: Passed / Failed / Not run
 - Typecheck: Passed / Failed / Not run
 ```
-
-## Tool Contract
-
-## Required Permissions
-
-- read: YES
-- write: YES
-- edit: YES
-- bash: YES
-- glob: YES
-- grep: YES
-"""
