@@ -19,9 +19,10 @@ CLI_ALT_DIRS = {
 }
 ALL_CLI_TYPES = ["claude", "opencode", "codex"]
 WORKFLOW_VERSION = "0.1.24"
-WORKFLOW_SCHEMA_VERSION = "1"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增
+WORKFLOW_SCHEMA_VERSION = "2"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增
 
 PATCH_BASELINE_COMMANDS = ["start", "finish-work", "record-session"]
+CODEX_PATCH_BASELINE_SKILLS = ["start", "finish-work"]
 PATCH_BASELINE_SHARED_DOCS = ["workflow.md"]
 OVERLAY_BASELINE_COMMANDS = ["brainstorm", "check"]
 OPTIONAL_DISABLED_BASELINE_COMMANDS = ["parallel"]
@@ -49,6 +50,21 @@ HELPER_SCRIPTS = [
     "record-session-helper.py",
 ]
 LATEST_TRELLIS_VERSION_ENV = "TRELLIS_LATEST_VERSION"
+
+
+def prepare_command_content(source_path: Path) -> str:
+    """Return target-project-facing command content after deployment rewrites."""
+    content = source_path.read_text(encoding="utf-8")
+    content = content.replace("<WORKFLOW_DIR>/commands/shell/", ".trellis/scripts/workflow/")
+    content = content.replace("docs/workflows/新项目开发工作流/commands/shell/", ".trellis/scripts/workflow/")
+    content = content.replace("见 `opencode/README.md`", "OpenCode 入口见目标项目 AGENTS.md 路由表")
+    content = content.replace("见 `codex/README.md`", "Codex 入口见目标项目 AGENTS.md 路由表")
+    content = content.replace("[阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md)", "阶段状态机与强门禁协议")
+    content = content.replace("[需求变更管理执行卡](../需求变更管理执行卡.md)", "需求变更管理执行卡")
+    content = content.replace("[需求变更管理执行卡](../../需求变更管理执行卡.md)", "需求变更管理执行卡")
+    content = content.replace("[源码水印与归属证据链执行卡](../源码水印与归属证据链执行卡.md)", "源码水印与归属证据链执行卡")
+    content = content.replace("[源码水印与归属证据链执行卡](../../源码水印与归属证据链执行卡.md)", "源码水印与归属证据链执行卡")
+    return content
 
 
 @dataclass(frozen=True)
@@ -149,6 +165,16 @@ def build_managed_asset_specs(cli_types: list[str]) -> list[ManagedAssetSpec]:
                     )
                 )
         elif cli_type == "codex":
+            for name in CODEX_PATCH_BASELINE_SKILLS:
+                specs.append(
+                    ManagedAssetSpec(
+                        asset_id=f"codex:{name}",
+                        category="patch-baseline",
+                        cli_type="codex",
+                        kind="skill",
+                        name=name,
+                    )
+                )
             for name in DISTRIBUTED_COMMANDS:
                 category = "overlay-baseline" if name in OVERLAY_BASELINE_COMMANDS else "added-command"
                 specs.append(
@@ -160,15 +186,6 @@ def build_managed_asset_specs(cli_types: list[str]) -> list[ManagedAssetSpec]:
                         name=name,
                     )
                 )
-            specs.append(
-                ManagedAssetSpec(
-                    asset_id="codex:finish-work",
-                    category="patch-baseline",
-                    cli_type="codex",
-                    kind="skill",
-                    name="finish-work",
-                )
-            )
             for name in OPTIONAL_DISABLED_BASELINE_COMMANDS:
                 specs.append(
                     ManagedAssetSpec(

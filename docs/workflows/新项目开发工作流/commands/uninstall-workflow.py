@@ -11,6 +11,7 @@ from pathlib import Path
 
 from workflow_assets import (
     ALL_CLI_TYPES,
+    CODEX_PATCH_BASELINE_SKILLS,
     CLI_ALT_DIRS,
     CLI_DIRS,
     detect_cli_types as detect_cli_types_shared,
@@ -243,7 +244,12 @@ def uninstall_opencode(root: Path, added_commands: list[str], overlay_commands: 
             ok(f"[OpenCode] 升级备份已删除: {directory.name}")
 
 
-def uninstall_codex(root: Path, added_commands: list[str], overlay_commands: list[str]) -> None:
+def uninstall_codex(
+    root: Path,
+    added_commands: list[str],
+    overlay_commands: list[str],
+    patched_codex_skills: list[str],
+) -> None:
     """卸载 Codex CLI 部署的工作流 skills。"""
     # 优先检查 .agents/skills/，其次 .codex/skills/
     skills_dirs = [root / ".agents" / "skills", root / ".codex" / "skills"]
@@ -284,14 +290,15 @@ def uninstall_codex(root: Path, added_commands: list[str], overlay_commands: lis
                 shutil.copy2(backup_skill, target_skill)
                 ok(f"[Codex] 恢复 {command} skill")
 
-        backup_finish_work = skills_dir / ".backup-original" / "finish-work" / "SKILL.md"
-        if backup_finish_work.exists():
-            finish_work_skill = skills_dir / "finish-work" / "SKILL.md"
-            finish_work_skill.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(backup_finish_work, finish_work_skill)
-            ok(f"[Codex] 恢复 finish-work skill")
-        else:
-            warn(f"[Codex] {skills_dir} 无 finish-work skill 备份，未恢复")
+        for baseline_skill in patched_codex_skills:
+            backup_skill = skills_dir / ".backup-original" / baseline_skill / "SKILL.md"
+            if backup_skill.exists():
+                target_skill = skills_dir / baseline_skill / "SKILL.md"
+                target_skill.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(backup_skill, target_skill)
+                ok(f"[Codex] 恢复 {baseline_skill} skill")
+            else:
+                warn(f"[Codex] {skills_dir} 无 {baseline_skill} skill 备份，未恢复")
 
         backup_dir = skills_dir / ".backup-original"
         if backup_dir.exists():
@@ -415,7 +422,8 @@ def main() -> int:
         elif cli_type == "opencode":
             uninstall_opencode(root, added_commands, overlay_commands)
         elif cli_type == "codex":
-            uninstall_codex(root, added_commands, overlay_commands)
+            patched_codex_skills = record.get("patched_codex_skills") or CODEX_PATCH_BASELINE_SKILLS
+            uninstall_codex(root, added_commands, overlay_commands, patched_codex_skills)
         print()
 
     # 删除辅助脚本

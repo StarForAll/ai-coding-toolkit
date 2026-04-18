@@ -78,6 +78,15 @@ class PlanValidateScriptTests(unittest.TestCase):
             check=False,
         )
 
+    def run_help(self) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [PYTHON, str(SCRIPT), "--help"],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
     def create_task_fixture(self, root: Path) -> Path:
         task_root = root / ".trellis" / "tasks"
         task_root.mkdir(parents=True, exist_ok=True)
@@ -101,6 +110,13 @@ class PlanValidateScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("Trellis Task 清单列名正确", result.stdout)
         self.assertIn("task_plan.md 结构验证通过", result.stdout)
+
+    def test_help_exits_without_requiring_task_plan(self) -> None:
+        result = self.run_help()
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("用法: python3 plan-validate.py [task_dir]", result.stdout)
+        self.assertNotIn("task_plan.md 不存在", result.stdout)
 
     def test_legacy_execution_markers_fail(self) -> None:
         with tempfile.TemporaryDirectory() as temp_root:

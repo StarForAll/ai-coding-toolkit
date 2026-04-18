@@ -27,6 +27,7 @@ from pathlib import Path
 from workflow_assets import (
     ADDED_COMMANDS,
     ALL_CLI_TYPES,
+    CODEX_PATCH_BASELINE_SKILLS,
     CLI_ALT_DIRS,
     CLI_DIRS,
     DISTRIBUTED_COMMANDS,
@@ -40,6 +41,7 @@ from workflow_assets import (
     WORKFLOW_SCHEMA_VERSION,
     WORKFLOW_VERSION,
     check_latest_trellis_prerequisite,
+    prepare_command_content,
     read_project_trellis_version,
     resolve_codex_skills_dir,
 )
@@ -68,6 +70,7 @@ def info(message: str) -> None:
 _PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 _INJECTION_MARKER = "## Operation Types"
 _FINISH_WORK_MARKER = "<!-- finish-work-projectization-patch -->"
+_CODEX_START_SKILL_MARKER = "## Workflow Phase Router Patch `[AI]`"
 _FINISH_WORK_START_HEADING = "### 1. Code Quality"
 _FINISH_WORK_END_HEADING = "### 1.5. Test Coverage"
 _RECORD_SESSION_MARKER = "## Record-Session Metadata Closure `[AI]`"
@@ -98,6 +101,7 @@ _REQUIRED_INSTALL_RECORD_KEYS = {
 _LEGACY_OPTIONAL_VERSION_KEYS = {
     "workflow_version",
     "workflow_schema_version",
+    "patched_codex_skills",
 }
 
 
@@ -140,6 +144,12 @@ def has_finish_work_patch(finish_work_path: Path) -> bool:
     if not finish_work_path.exists():
         return False
     return _FINISH_WORK_MARKER in finish_work_path.read_text(encoding="utf-8")
+
+
+def has_codex_start_skill_patch(start_skill_path: Path) -> bool:
+    if not start_skill_path.exists():
+        return False
+    return _CODEX_START_SKILL_MARKER in start_skill_path.read_text(encoding="utf-8")
 
 
 def has_workflow_patch(workflow_md: Path) -> bool:
@@ -459,6 +469,18 @@ def detect_conflicts_codex(src: Path, root: Path) -> int:
     if finish_work_conflicts:
         conflicts += finish_work_conflicts
 
+    start_skill_conflicts = 0
+    for skills_dir in skills_dirs:
+        start_skill = skills_dir / "start" / "SKILL.md"
+        if start_skill.exists():
+            if has_codex_start_skill_patch(start_skill):
+                ok(f"[Codex] start skill ({skills_dir.relative_to(root)}): Phase Router 补丁正常")
+            else:
+                err(f"[Codex] start skill ({skills_dir.relative_to(root)}): Phase Router 补丁缺失")
+                start_skill_conflicts += 1
+    if start_skill_conflicts:
+        conflicts += start_skill_conflicts
+
     # hooks 是全局的，只检查一次
     hooks_json = root / ".codex" / "hooks.json"
     if hooks_json.exists():
@@ -552,12 +574,6 @@ def backup_shared_workflow_state(root: Path) -> None:
 
 
 # ── 命令部署 ──
-def prepare_command_content(source_path: Path) -> str:
-    content = source_path.read_text(encoding="utf-8")
-    content = content.replace("<WORKFLOW_DIR>/commands/shell/", ".trellis/scripts/workflow/")
-    return content
-
-
 def deploy_commands(src: Path, dst_cmds: Path) -> None:
     for name in DISTRIBUTED_COMMANDS:
         source_path = src / f"{name}.md"
@@ -666,6 +682,18 @@ def restore_codex_finish_work(skills_dir: Path) -> bool:
     return True
 
 
+def restore_codex_start_skill(skills_dir: Path) -> bool:
+    backup_path = skills_dir / ".backup-original" / "start" / "SKILL.md"
+    target_path = skills_dir / "start" / "SKILL.md"
+    if not backup_path.exists():
+        err("缺少 .backup-original/start/SKILL.md，无法执行强制恢复")
+        return False
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(backup_path, target_path)
+    ok("[Codex] start skill 已从 .backup-original 恢复")
+    return True
+
+
 def restore_optional_codex_skill(skills_dir: Path, skill_name: str) -> bool:
     backup_path = skills_dir / ".backup-original" / skill_name / "SKILL.md"
     target_path = skills_dir / skill_name / "SKILL.md"
@@ -692,8 +720,36 @@ def inject_phase_router(src: Path, start: Path) -> bool:
         return False
 
     before, after = content.split(_INJECTION_MARKER, 1)
-    start.write_text(before + patch.read_text(encoding="utf-8") + "\n" + _INJECTION_MARKER + after, encoding="utf-8")
+    start.write_text(before + prepare_command_content(patch) + "\n" + _INJECTION_MARKER + after, encoding="utf-8")
     ok("Phase Router 已注入")
+    return True
+
+
+def build_codex_start_skill_content(content: str, patch_text: str) -> str:
+    if _CODEX_START_SKILL_MARKER in content:
+        return content
+    return content.rstrip() + "\n\n---\n\n" + patch_text.rstrip() + "\n"
+
+
+def inject_codex_start_skill_patch(src: Path, start_skill_path: Path, target_label: str) -> bool:
+    patch = src / "start-skill-patch-phase-router.md"
+    if not patch.exists():
+        err("start-skill-patch-phase-router.md 缺失，无法恢复 Codex start Phase Router 补丁")
+        return False
+    if not start_skill_path.exists():
+        err(f"{target_label} 不存在，无法恢复 Phase Router 补丁")
+        return False
+
+    content = start_skill_path.read_text(encoding="utf-8")
+    if _CODEX_START_SKILL_MARKER in content:
+        ok(f"{target_label} Phase Router 补丁已存在")
+        return True
+
+    start_skill_path.write_text(
+        build_codex_start_skill_content(content, prepare_command_content(patch)),
+        encoding="utf-8",
+    )
+    ok(f"{target_label} Phase Router 补丁已注入")
     return True
 
 
@@ -807,6 +863,7 @@ def write_install_record(
                 "added_commands": ADDED_COMMANDS,
                 "disabled_commands": OPTIONAL_DISABLED_BASELINE_COMMANDS,
                 "patched_baseline_commands": PATCH_BASELINE_COMMANDS,
+                "patched_codex_skills": CODEX_PATCH_BASELINE_SKILLS,
                 "patched_shared_docs": PATCH_BASELINE_SHARED_DOCS,
                 "scripts": HELPER_SCRIPTS,
                 "workflow_version": WORKFLOW_VERSION,
@@ -1007,12 +1064,24 @@ def main() -> int:
                 continue
             expected_parallel = expected_parallel_disabled_content(src)
             for skills_dir in skills_dirs:
+                start_skill = skills_dir / "start" / "SKILL.md"
                 finish_work_skill = skills_dir / "finish-work" / "SKILL.md"
                 if args.mode == "force":
+                    if start_skill.exists():
+                        if not restore_codex_start_skill(skills_dir):
+                            return 1
                     if finish_work_skill.exists():
                         if not restore_codex_finish_work(skills_dir):
                             return 1
                     restore_optional_codex_skill(skills_dir, "parallel")
+                if start_skill.exists() and not has_codex_start_skill_patch(start_skill):
+                    if not inject_codex_start_skill_patch(
+                        src,
+                        start_skill,
+                        f"start skill ({skills_dir.relative_to(root)})",
+                    ):
+                        err("[Codex] start Phase Router 补丁恢复失败")
+                        return 1
                 if finish_work_skill.exists() and not has_finish_work_patch(finish_work_skill):
                     if not inject_finish_work_patch(
                         src,

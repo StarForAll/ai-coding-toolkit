@@ -101,6 +101,13 @@ def resolve_task_path(repo_root: Path, task_path: str) -> Path:
 
 
 def main() -> int:
+    if any(arg in {"-h", "--help"} for arg in sys.argv[1:]):
+        print("用法: python3 plan-validate.py [task_dir]")
+        print()
+        print("校验 task_dir/task_plan.md 是否符合摘要型任务拆解契约。")
+        print("未传 task_dir 时默认使用当前目录。")
+        return 0
+
     task_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(".")
     plan_file = task_dir / "task_plan.md"
 

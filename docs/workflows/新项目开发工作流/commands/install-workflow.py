@@ -32,6 +32,7 @@ from pathlib import Path
 from workflow_assets import (
     ADDED_COMMANDS,
     ALL_CLI_TYPES,
+    CODEX_PATCH_BASELINE_SKILLS,
     CLI_ALT_DIRS,
     CLI_DIRS,
     DISTRIBUTED_COMMANDS,
@@ -44,6 +45,7 @@ from workflow_assets import (
     PATCH_BASELINE_SHARED_DOCS,
     WORKFLOW_SCHEMA_VERSION,
     WORKFLOW_VERSION,
+    prepare_command_content,
     resolve_codex_skills_dir,
 )
 
@@ -70,6 +72,7 @@ _FINISH_WORK_START_HEADING = "### 1. Code Quality"
 _FINISH_WORK_END_HEADING = "### 1.5. Test Coverage"
 _RECORD_SESSION_MARKER = "## Record-Session Metadata Closure `[AI]`"
 _RECORD_SESSION_INJECTION_MARKER = "### Step 2: One-Click Add Session"
+_CODEX_START_SKILL_MARKER = "## Workflow Phase Router Patch `[AI]`"
 _WORKFLOW_PATCH_MARKER = "<!-- workflow-projectization-patch -->"
 _WORKFLOW_START_HEADING = "## Development Process"
 _WORKFLOW_END_HEADING = "## File Descriptions"
@@ -349,13 +352,6 @@ def ensure_project_prereqs(root: Path) -> None:
 
 
 # ── 命令文件预处理 ──
-def prepare_command_content(src: Path) -> str:
-    """读取命令文件并替换路径引用。"""
-    c = src.read_text(encoding="utf-8")
-    c = c.replace("<WORKFLOW_DIR>/commands/shell/", ".trellis/scripts/workflow/")
-    return c
-
-
 def prepare_parallel_disabled_content(src: Path) -> str | None:
     """读取禁用 parallel 的覆盖内容。"""
     source_path = src / "parallel-disabled.md"
@@ -432,6 +428,45 @@ def build_finish_work_content(content: str, patch_text: str) -> str | None:
     prefix = content[:start_idx]
     suffix = content[end_idx:].lstrip("\n")
     return prefix + patch_text.rstrip() + "\n\n" + suffix
+
+
+def build_codex_start_skill_content(content: str, patch_text: str) -> str:
+    """Append workflow Phase Router guidance to the baseline Codex start skill."""
+    if _CODEX_START_SKILL_MARKER in content:
+        return content
+    return content.rstrip() + "\n\n---\n\n" + patch_text.rstrip() + "\n"
+
+
+def inject_codex_start_skill_patch(
+    src: Path,
+    target_path: Path,
+    *,
+    dry_run: bool,
+    cli_label: str,
+) -> bool:
+    """为 Codex start skill 注入 workflow Phase Router 补丁。"""
+    if not target_path.exists():
+        warn(f"[{cli_label}] start skill 不存在，跳过 Phase Router 补丁注入")
+        return False
+
+    content = target_path.read_text(encoding="utf-8")
+    if _CODEX_START_SKILL_MARKER in content:
+        ok(f"[{cli_label}] start skill Phase Router 补丁已存在")
+        return False
+
+    patch = src / "start-skill-patch-phase-router.md"
+    if not patch.exists():
+        warn(f"[{cli_label}] start-skill-patch-phase-router.md 不存在")
+        return False
+
+    new_content = build_codex_start_skill_content(content, prepare_command_content(patch))
+    if not dry_run:
+        target_path.write_text(new_content, encoding="utf-8")
+    if dry_run:
+        info(f"[{cli_label}] 将注入 start skill Phase Router 补丁")
+    else:
+        ok(f"[{cli_label}] start skill Phase Router 补丁已注入")
+    return True
 
 
 def build_workflow_content(content: str, patch_text: str) -> str | None:
@@ -597,7 +632,7 @@ def deploy_claude(src: Path, root: Path, dry_run: bool) -> dict:
                     before, after = content.split(marker, 1)
                     if not dry_run:
                         start.write_text(
-                            before + patch.read_text(encoding="utf-8") + "\n" + marker + after,
+                            before + prepare_command_content(patch) + "\n" + marker + after,
                             encoding="utf-8",
                         )
                     if dry_run:
@@ -720,7 +755,7 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool) -> dict:
                     before, after = content.split(marker, 1)
                     if not dry_run:
                         start.write_text(
-                            before + patch.read_text(encoding="utf-8") + "\n" + marker + after,
+                            before + prepare_command_content(patch) + "\n" + marker + after,
                             encoding="utf-8",
                         )
                     if dry_run:
@@ -791,7 +826,7 @@ def deploy_codex(src: Path, root: Path, dry_run: bool) -> dict:
     # 备份（对所有存在的 skills 目录执行）
     if not dry_run:
         for skills_dir in skills_dirs:
-            for name in [*OVERLAY_BASELINE_COMMANDS, *OPTIONAL_DISABLED_BASELINE_COMMANDS, "finish-work"]:
+            for name in [*OVERLAY_BASELINE_COMMANDS, *OPTIONAL_DISABLED_BASELINE_COMMANDS, *CODEX_PATCH_BASELINE_SKILLS]:
                 skill_path = skills_dir / name / "SKILL.md"
                 backup_path = skills_dir / ".backup-original" / name / "SKILL.md"
                 if skill_path.exists() and not backup_path.exists():
@@ -842,6 +877,32 @@ def deploy_codex(src: Path, root: Path, dry_run: bool) -> dict:
     if not any_finish_work_exists:
         result["errors"].append(
             "所有 skills 目录均缺少 finish-work 基线，无法注入 workflow 项目化补丁"
+        )
+
+    start_patched = False
+    any_start_exists = False
+    for skills_dir in skills_dirs:
+        start_skill = skills_dir / "start" / "SKILL.md"
+        if not start_skill.exists():
+            info(
+                f"[Codex] {skills_dir.relative_to(root)} 缺少 start 基线，"
+                "跳过该 Phase Router 补丁"
+            )
+            continue
+        any_start_exists = True
+        if inject_codex_start_skill_patch(
+            src,
+            start_skill,
+            dry_run=dry_run,
+            cli_label="Codex",
+        ):
+            if not start_patched:
+                result["patches"] += 1
+                start_patched = True
+
+    if not any_start_exists:
+        result["errors"].append(
+            "所有 skills 目录均缺少 start 基线，无法注入 workflow Phase Router 补丁"
         )
 
     # Codex 通过 session-start.py hook 注入上下文，不需要注入 start.md
@@ -948,6 +1009,7 @@ def write_install_record(
             "added_commands": ADDED_COMMANDS,
             "disabled_commands": OPTIONAL_DISABLED_BASELINE_COMMANDS,
             "patched_baseline_commands": PATCH_BASELINE_COMMANDS,
+            "patched_codex_skills": CODEX_PATCH_BASELINE_SKILLS,
             "patched_shared_docs": PATCH_BASELINE_SHARED_DOCS,
             "scripts": HELPER_SCRIPTS,
             "workflow_version": WORKFLOW_VERSION,
@@ -1154,11 +1216,11 @@ def main() -> int:
         else:
             print(f"    1. 安装器已自动导入 {_REQUIREMENTS_FOUNDATION_PACK}；{_BOOTSTRAP_TASK_NAME} 清理状态: {bootstrap_cleanup}")
         print("       请先确认 .trellis/library-lock.yaml 已包含需求发现基础资产")
-        print("    2. 技术架构确认后，再使用 trellis-library/cli.py assemble 为当前项目补充真实 spec 集合")
-        print("    2.1 若目标项目不是当前最新 Trellis 基线，先升级 Trellis；当前 workflow 的 archive 收尾仍直接复用基线 task.py 行为")
-        print("    3. 在目标项目根 README.md 中说明 todo.txt 的存在与用途")
-        print("    4. 若项目启用了源码水印与归属证明门禁，交付前使用 .trellis/scripts/workflow/ownership-proof-validate.py 做阶段校验")
-        print("    5. 同一目标项目中各 CLI 的入口协议不同，请分别按各自原生入口使用")
+        print("    2. 若目标项目不是当前最新 Trellis 基线，先升级 Trellis；当前 workflow 的 archive 收尾仍直接复用基线 task.py 行为")
+        print("    3. 技术架构确认后，再使用 trellis-library/cli.py assemble 为当前项目补充真实 spec 集合")
+        print("    4. 在目标项目根 README.md 中说明 todo.txt 的存在与用途")
+        print("    5. 若项目启用了源码水印与归属证明门禁，交付前使用 .trellis/scripts/workflow/ownership-proof-validate.py 做阶段校验")
+        print("    6. 同一目标项目中各 CLI 的入口协议不同，请分别按各自原生入口使用")
         for cli_type in cli_types:
             if cli_type == "claude":
                 print("       - Claude Code → /trellis:start")

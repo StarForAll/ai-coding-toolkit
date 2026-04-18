@@ -68,6 +68,14 @@ BASELINE_PARALLEL_CONTENT = (
     "# /trellis:parallel\n\n"
     "Run a worktree-based parallel pipeline and finish with a PR.\n"
 )
+BASELINE_START_SKILL_CONTENT = (
+    "---\n"
+    "name: start\n"
+    "description: Baseline start skill\n"
+    "---\n\n"
+    "# Start Session\n\n"
+    "Original baseline Codex start skill.\n"
+)
 BASELINE_FINISH_WORK_CONTENT = (
     "# Finish Work - Pre-Commit Checklist\n\n"
     "Before submitting or committing, use this checklist to ensure work completeness.\n\n"
@@ -252,6 +260,11 @@ class WorkflowInstallerTests(unittest.TestCase):
             )
         if include_codex:
             (root / ".agents" / "skills").mkdir(parents=True)
+            (root / ".agents" / "skills" / "start").mkdir(parents=True)
+            (root / ".agents" / "skills" / "start" / "SKILL.md").write_text(
+                BASELINE_START_SKILL_CONTENT,
+                encoding="utf-8",
+            )
             (root / ".agents" / "skills" / "finish-work").mkdir(parents=True)
             (root / ".agents" / "skills" / "finish-work" / "SKILL.md").write_text(
                 BASELINE_FINISH_WORK_CONTENT,
@@ -314,6 +327,9 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("child task", workflow_doc_text)
         self.assertIn("parent coordinator records", workflow_doc_text)
         self.assertIn("does not automatically authorize", workflow_doc_text)
+        start_text = (fixture / ".claude" / "commands" / "trellis" / "start.md").read_text(encoding="utf-8")
+        self.assertIn(".trellis/scripts/workflow/workflow-state.py validate <task-dir>", start_text)
+        self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", start_text)
         finish_work = fixture / ".claude" / "commands" / "trellis" / "finish-work.md"
         finish_work_text = finish_work.read_text(encoding="utf-8")
         self.assertIn(FINISH_WORK_MARKER, finish_work_text)
@@ -345,16 +361,27 @@ class WorkflowInstallerTests(unittest.TestCase):
             record_data["patched_baseline_commands"],
             ["start", "finish-work", "record-session"],
         )
+        self.assertEqual(record_data["patched_codex_skills"], ["start", "finish-work"])
         self.assertEqual(record_data["patched_shared_docs"], ["workflow.md"])
         self.assertEqual(record_data["scripts"], HELPER_SCRIPTS)
         for helper_name in HELPER_SCRIPTS:
             helper_path = fixture / ".trellis" / "scripts" / "workflow" / helper_name
             self.assertTrue(helper_path.exists(), f"{helper_name} should be deployed")
         self.assertEqual(record_data["workflow_version"], "0.1.24")
-        self.assertEqual(record_data["workflow_schema_version"], "1")
+        self.assertEqual(record_data["workflow_schema_version"], "2")
         self.assertEqual(record_data["initial_pack"], "pack.requirements-discovery-foundation")
         parallel = fixture / ".claude" / "commands" / "trellis" / "parallel.md"
         self.assertIn(PARALLEL_DISABLED_MARKER, parallel.read_text(encoding="utf-8"))
+        deployed_feasibility = (fixture / ".claude" / "commands" / "trellis" / "feasibility.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(".trellis/scripts/workflow/feasibility-check.py", deployed_feasibility)
+        self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", deployed_feasibility)
+        self.assertIn("OpenCode 入口见目标项目 AGENTS.md 路由表", deployed_feasibility)
+        self.assertIn("Codex 入口见目标项目 AGENTS.md 路由表", deployed_feasibility)
+        self.assertNotIn("[阶段状态机与强门禁协议](", deployed_feasibility)
+        self.assertNotIn("[需求变更管理执行卡](", deployed_feasibility)
+        self.assertNotIn("[源码水印与归属证据链执行卡](", deployed_feasibility)
 
     def test_install_patches_finish_work_for_opencode_and_codex(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
@@ -378,6 +405,26 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("质量平台门禁", codex_text)
         self.assertIn(PARALLEL_DISABLED_MARKER, opencode_parallel.read_text(encoding="utf-8"))
         self.assertIn(PARALLEL_DISABLED_MARKER, codex_parallel.read_text(encoding="utf-8"))
+
+    def test_install_patches_codex_start_skill_phase_router(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        start_skill = fixture / ".agents" / "skills" / "start" / "SKILL.md"
+        start_text = start_skill.read_text(encoding="utf-8")
+        self.assertIn("## Workflow Phase Router Patch `[AI]`", start_text)
+        self.assertIn("Use the `feasibility` skill", start_text)
+        self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", start_text)
+        self.assertNotIn("<WORKFLOW_DIR>/commands/shell", start_text)
+        self.assertEqual(
+            (fixture / ".agents" / "skills" / ".backup-original" / "start" / "SKILL.md").read_text(
+                encoding="utf-8"
+            ),
+            BASELINE_START_SKILL_CONTENT,
+        )
 
     def test_install_patches_finish_work_when_test_coverage_heading_is_missing(self) -> None:
         fixture = self.create_fixture()
@@ -718,6 +765,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         record_data.pop("patched_baseline_commands", None)
         record_data.pop("initial_pack", None)
         record_data.pop("bootstrap_task_removed", None)
+        record_data.pop("patched_codex_skills", None)
         record_path.write_text(json.dumps(record_data, ensure_ascii=False, indent=2), encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
@@ -734,6 +782,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("patched_baseline_commands", result.stdout)
         self.assertIn("initial_pack", result.stdout)
         self.assertIn("bootstrap_task_removed", result.stdout)
+        self.assertNotIn("patched_codex_skills", result.stdout)
 
     def test_upgrade_check_allows_legacy_missing_version_keys(self) -> None:
         fixture = self.create_fixture()
@@ -746,6 +795,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         record_data = json.loads(record_path.read_text(encoding="utf-8"))
         record_data.pop("workflow_version", None)
         record_data.pop("workflow_schema_version", None)
+        record_data.pop("patched_codex_skills", None)
         record_path.write_text(json.dumps(record_data, ensure_ascii=False, indent=2), encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
@@ -760,6 +810,53 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertNotIn("workflow-installed.json 缺少字段", result.stdout)
         self.assertIn("legacy/unknown", result.stdout)
+
+    def test_upgrade_force_backfills_legacy_missing_codex_patch_record(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        record_path = fixture / ".trellis" / "workflow-installed.json"
+        record_data = json.loads(record_path.read_text(encoding="utf-8"))
+        record_data.pop("patched_codex_skills", None)
+        record_path.write_text(json.dumps(record_data, ensure_ascii=False, indent=2), encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--force",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        updated_record = json.loads(record_path.read_text(encoding="utf-8"))
+        self.assertEqual(updated_record["patched_codex_skills"], ["start", "finish-work"])
+
+    def test_upgrade_check_detects_codex_start_skill_patch_drift(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        start_skill = fixture / ".agents" / "skills" / "start" / "SKILL.md"
+        start_skill.write_text(BASELINE_START_SKILL_CONTENT, encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("start skill (.agents/skills): Phase Router 补丁缺失", result.stdout)
 
     def test_upgrade_check_detects_codex_secondary_skills_dir_parallel_drift(self) -> None:
         fixture = self.create_fixture(include_codex=True)
@@ -1078,6 +1175,30 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(FINISH_WORK_MARKER, restored_text)
         self.assertNotIn("pnpm lint", restored_text)
 
+    def test_force_restores_codex_start_skill_from_backup_and_reapplies_patch(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        start_skill = fixture / ".agents" / "skills" / "start" / "SKILL.md"
+        start_skill.write_text("# broken start skill\n", encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--force",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        restored_text = start_skill.read_text(encoding="utf-8")
+        self.assertIn("Original baseline Codex start skill", restored_text)
+        self.assertIn("Workflow Phase Router Patch", restored_text)
+
     def test_uninstall_tolerates_corrupted_install_record(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
@@ -1103,21 +1224,48 @@ class WorkflowInstallerTests(unittest.TestCase):
             (fixture / ".claude" / "commands" / "trellis" / "record-session.md").read_text(encoding="utf-8"),
         )
 
-    def test_uninstall_restores_codex_finish_work_skill(self) -> None:
+    def test_uninstall_restores_codex_start_and_finish_work_skills(self) -> None:
         fixture = self.create_fixture(include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
 
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        start_skill = fixture / ".agents" / "skills" / "start" / "SKILL.md"
+        self.assertIn("Workflow Phase Router Patch", start_skill.read_text(encoding="utf-8"))
         patched_skill = fixture / ".agents" / "skills" / "finish-work" / "SKILL.md"
         self.assertIn(FINISH_WORK_MARKER, patched_skill.read_text(encoding="utf-8"))
 
         result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        start_text = start_skill.read_text(encoding="utf-8")
+        self.assertNotIn("Workflow Phase Router Patch", start_text)
+        self.assertIn("Original baseline Codex start skill", start_text)
         restored_text = patched_skill.read_text(encoding="utf-8")
         self.assertNotIn(FINISH_WORK_MARKER, restored_text)
         self.assertIn("pnpm lint", restored_text)
+
+    def test_uninstall_restores_codex_skills_when_record_lacks_patched_codex_skills(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        record_path = fixture / ".trellis" / "workflow-installed.json"
+        record_data = json.loads(record_path.read_text(encoding="utf-8"))
+        record_data.pop("patched_codex_skills", None)
+        record_path.write_text(json.dumps(record_data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        start_skill = fixture / ".agents" / "skills" / "start" / "SKILL.md"
+        patched_skill = fixture / ".agents" / "skills" / "finish-work" / "SKILL.md"
+        self.assertIn("Workflow Phase Router Patch", start_skill.read_text(encoding="utf-8"))
+        self.assertIn(FINISH_WORK_MARKER, patched_skill.read_text(encoding="utf-8"))
+
+        result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertNotIn("Workflow Phase Router Patch", start_skill.read_text(encoding="utf-8"))
+        self.assertNotIn(FINISH_WORK_MARKER, patched_skill.read_text(encoding="utf-8"))
 
     def test_uninstall_restores_overlapped_baseline_check_command(self) -> None:
         fixture = self.create_fixture()
