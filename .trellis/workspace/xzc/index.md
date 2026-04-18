@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 117
+- **Total Sessions**: 118
 - **Last Active**: 2026-04-18
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~1350 | Active |
+| `journal-3.md` | ~1428 | Active |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 118 | 2026-04-18 | workflow agents 子代理链收敛为工作流内单一 source-of-truth | `ab94c65` | `main` |
 | 117 | 2026-04-18 | 工作流补充 trellis 原生 subagent 能力 | `aaa20b4` | `main` |
 | 116 | 2026-04-18 | 工作流与 Trellis 0.4.0 兼容升级 | `19b16ec` | `main` |
 | 115 | 2026-04-18 | 当前项目 Trellis 版本升级 | `73397c4` | `main` |

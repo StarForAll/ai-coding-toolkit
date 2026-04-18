@@ -1348,3 +1348,81 @@ Strengthened workflow source contracts, added shared .trellis/workflow.md patchi
 ### Next Steps
 
 - None - task complete
+
+
+## Session 118: workflow agents 子代理链收敛为工作流内单一 source-of-truth
+
+**Date**: 2026-04-18
+**Task**: workflow agents 子代理链收敛为工作流内单一 source-of-truth
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Scope boundary | 收口任务边界为 `docs/workflows/新项目开发工作流/**` 与当前任务元数据，回滚越界的仓库根改动 |
+| Workflow source | 将 `research / implement / check` 收敛为 `commands/shared-agents/{research,implement,check}/` 共享 source |
+| Adapter pipeline | 让 Claude / OpenCode / Codex 三端 adapter 从 shared-agents 渲染生成，并统一 install / upgrade / uninstall 路径合同 |
+| Verification | 通过 `test_workflow_installers.py` 全量 62 测试，并多次 fresh `/tmp` 目标项目 `trellis init + install-workflow` 实装验证 |
+| Review closure | 处理 round-1 / round-2 / round-3 multi-cli-review 报告，修复 description/render 一致性与测试缺口，确认任务范围内已无阻塞问题 |
+
+**Updated Files**:
+- `docs/workflows/新项目开发工作流/commands/shared-agents/research/README.md`
+- `docs/workflows/新项目开发工作流/commands/shared-agents/research/SYSTEM.md`
+- `docs/workflows/新项目开发工作流/commands/shared-agents/research/TOOLS.md`
+- `docs/workflows/新项目开发工作流/commands/shared-agents/implement/README.md`
+- `docs/workflows/新项目开发工作流/commands/shared-agents/implement/SYSTEM.md`
+- `docs/workflows/新项目开发工作流/commands/shared-agents/implement/TOOLS.md`
+- `docs/workflows/新项目开发工作流/commands/shared-agents/check/README.md`
+- `docs/workflows/新项目开发工作流/commands/shared-agents/check/SYSTEM.md`
+- `docs/workflows/新项目开发工作流/commands/shared-agents/check/TOOLS.md`
+- `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
+- `docs/workflows/新项目开发工作流/commands/install-workflow.py`
+- `docs/workflows/新项目开发工作流/commands/upgrade-compat.py`
+- `docs/workflows/新项目开发工作流/commands/uninstall-workflow.py`
+- `docs/workflows/新项目开发工作流/commands/test_workflow_installers.py`
+- `docs/workflows/新项目开发工作流/commands/claude/agents/research.md`
+- `docs/workflows/新项目开发工作流/commands/claude/agents/implement.md`
+- `docs/workflows/新项目开发工作流/commands/claude/agents/check.md`
+- `docs/workflows/新项目开发工作流/commands/opencode/agents/research.md`
+- `docs/workflows/新项目开发工作流/commands/opencode/agents/implement.md`
+- `docs/workflows/新项目开发工作流/commands/opencode/agents/check.md`
+- `docs/workflows/新项目开发工作流/commands/codex/agents/research.toml`
+- `docs/workflows/新项目开发工作流/commands/codex/agents/implement.toml`
+- `docs/workflows/新项目开发工作流/commands/codex/agents/check.toml`
+- `docs/workflows/新项目开发工作流/CLI原生适配边界矩阵.md`
+- `docs/workflows/新项目开发工作流/结构性迁移设计.md`
+- `docs/workflows/新项目开发工作流/目标项目兼容升级方案指导.md`
+- `.trellis/tasks/04-18-agents-source-workflow-convergence/prd.md`
+- `.trellis/tasks/04-18-agents-source-workflow-convergence/task.json`
+
+**Verification**:
+- `git diff --check` -> pass
+- `/ops/softwares/python/bin/python3 test_workflow_installers.py` -> pass (62 tests)
+- `./scripts/validate-skills.sh` -> pass
+- `/ops/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings` -> pass with 2 informational stale-related-asset notices only
+- `/ops/softwares/python/bin/python3 -m unittest trellis-library/tests/test_cli.py` -> pass (35 tests)
+- fresh `/tmp` target project: `trellis init --claude --opencode --codex -y -u xzc` + `install-workflow.py` -> pass
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ab94c65` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
