@@ -90,6 +90,7 @@ Current installer-written keys:
 - `added_commands`
 - `disabled_commands`
 - `patched_baseline_commands`
+- `patched_shared_docs`
 - `initial_pack`
 - `bootstrap_task_removed`
 - `scripts`
@@ -141,6 +142,7 @@ Target-project deployed copies are derived state:
 - OpenCode: `.opencode/commands/trellis/*.md`
 - Codex: `.agents/skills/*/SKILL.md` or `.codex/skills/*/SKILL.md`
 - shared helper scripts: `.trellis/scripts/workflow/*.py`
+- shared project workflow guide patch: `.trellis/workflow.md`
 
 `workflow_assets.py` must remain the single shared definition of:
 
@@ -204,6 +206,16 @@ Workflow embed / analysis / repair scripts must distinguish three asset classes:
      - install record `scripts` must include it
      - installer regression tests must assert both deployment presence and install-record inclusion
      - if a helper becomes a required phase gate, the relevant walkthrough / mapping docs must mention the validation command
+
+6. **Patch-based shared workflow document**
+   - current known set:
+     - `.trellis/workflow.md`
+   - Contract:
+     - keep the Trellis baseline workflow guide, then inject workflow projectization content into the documented section boundaries
+     - installer must back up the original baseline copy before first patching
+     - uninstall / force-restore paths must restore the original baseline copy when a backup exists
+     - drift detection must at minimum verify the workflow patch marker is still present
+     - if the source patch changes, the workflow author must propagate the resulting rule changes to walkthrough / mapping docs that summarize the same behavior
 
 #### 3.2.1 Initial Branch Gate
 
@@ -409,6 +421,7 @@ When modifying these contracts, update or add tests that prove:
    - `delete`
 6. `--check` fails when:
    - patch markers drift
+   - `.trellis/workflow.md` patch content drifts while the marker still exists
    - overlay command content drifts
    - added command content drifts
    - helper script content drifts

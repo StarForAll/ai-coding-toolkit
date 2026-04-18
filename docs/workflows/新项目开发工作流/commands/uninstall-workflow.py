@@ -342,6 +342,30 @@ def remove_project_todo(root: Path) -> None:
         warn("todo.txt 已被修改，保留现有内容")
 
 
+def restore_shared_workflow_doc(root: Path) -> None:
+    """恢复 .trellis/workflow.md 基线，并清理其备份目录。"""
+    trellis_dir = root / ".trellis"
+    workflow_md = trellis_dir / "workflow.md"
+    backup_dir = trellis_dir / ".backup-original"
+    backup_workflow = backup_dir / "workflow.md"
+
+    if backup_workflow.exists():
+        shutil.copy2(backup_workflow, workflow_md)
+        ok("workflow.md 已恢复")
+    else:
+        warn("无 workflow.md 备份，未恢复")
+
+    if backup_dir.exists():
+        shutil.rmtree(backup_dir)
+        ok(".trellis/.backup-original 已删除")
+
+    if trellis_dir.is_dir():
+        for directory in trellis_dir.iterdir():
+            if directory.is_dir() and directory.name.startswith(".backup-upgrade-"):
+                shutil.rmtree(directory)
+                ok(f".trellis 升级备份已删除: {directory.name}")
+
+
 def main() -> int:
     import argparse
 
@@ -410,6 +434,9 @@ def main() -> int:
 
     # 删除安装器默认创建的 todo.txt
     remove_project_todo(root)
+
+    # 恢复 .trellis/workflow.md 基线
+    restore_shared_workflow_doc(root)
 
     print()
     print("✅ 卸载完成 — Trellis 已恢复原始状态")

@@ -41,6 +41,7 @@ from workflow_assets import (
     OPTIONAL_DISABLED_BASELINE_COMMANDS,
     OVERLAY_BASELINE_COMMANDS,
     PATCH_BASELINE_COMMANDS,
+    PATCH_BASELINE_SHARED_DOCS,
     WORKFLOW_SCHEMA_VERSION,
     WORKFLOW_VERSION,
     resolve_codex_skills_dir,
@@ -69,6 +70,9 @@ _FINISH_WORK_START_HEADING = "### 1. Code Quality"
 _FINISH_WORK_END_HEADING = "### 1.5. Test Coverage"
 _RECORD_SESSION_MARKER = "## Record-Session Metadata Closure `[AI]`"
 _RECORD_SESSION_INJECTION_MARKER = "### Step 2: One-Click Add Session"
+_WORKFLOW_PATCH_MARKER = "<!-- workflow-projectization-patch -->"
+_WORKFLOW_START_HEADING = "## Development Process"
+_WORKFLOW_END_HEADING = "## File Descriptions"
 _TODO_FILE_NAME = "todo.txt"
 _TODO_DEFAULT_LINE = "文档内容需要和实际当前的代码同步\n"
 _REQUIREMENTS_FOUNDATION_PACK = "pack.requirements-discovery-foundation"
@@ -430,6 +434,21 @@ def build_finish_work_content(content: str, patch_text: str) -> str | None:
     return prefix + patch_text.rstrip() + "\n\n" + suffix
 
 
+def build_workflow_content(content: str, patch_text: str) -> str | None:
+    """用项目化补丁替换 workflow.md 中的 Development Process / Session End 区块。"""
+    if _WORKFLOW_PATCH_MARKER in content:
+        return content
+
+    start_idx = content.find(_WORKFLOW_START_HEADING)
+    end_idx = content.find(_WORKFLOW_END_HEADING)
+    if start_idx == -1 or end_idx == -1 or end_idx <= start_idx:
+        return None
+
+    prefix = content[:start_idx]
+    suffix = content[end_idx:].lstrip("\n")
+    return prefix + patch_text.rstrip() + "\n\n" + suffix
+
+
 def inject_finish_work_patch(
     src: Path,
     target_path: Path,
@@ -464,6 +483,53 @@ def inject_finish_work_patch(
         info(f"[{cli_label}] 将注入 {target_label} 项目化补丁")
     else:
         ok(f"[{cli_label}] {target_label} 项目化补丁已注入")
+    return True
+
+
+def inject_workflow_patch(src: Path, root: Path, *, dry_run: bool) -> bool:
+    """为目标项目的 .trellis/workflow.md 注入项目化补丁。"""
+    target_path = root / ".trellis" / "workflow.md"
+    if not target_path.exists():
+        warn("[Shared] .trellis/workflow.md 不存在，跳过项目化补丁注入")
+        return False
+
+    patch = src / "workflow-patch-projectization.md"
+    if not patch.exists():
+        warn("[Shared] workflow-patch-projectization.md 不存在")
+        return False
+
+    patch_text = patch.read_text(encoding="utf-8")
+    content = target_path.read_text(encoding="utf-8")
+    if _WORKFLOW_PATCH_MARKER in content and patch_text in content:
+        ok("[Shared] workflow.md 项目化补丁已存在")
+        return False
+
+    baseline_content = content
+    if _WORKFLOW_PATCH_MARKER in content and patch_text not in content:
+        backup_path = root / ".trellis" / ".backup-original" / "workflow.md"
+        if backup_path.exists():
+            baseline_content = backup_path.read_text(encoding="utf-8")
+        else:
+            warn("[Shared] workflow.md 已存在旧补丁，但缺少 .backup-original/workflow.md，无法自动刷新")
+            return False
+
+    new_content = build_workflow_content(baseline_content, patch_text)
+    if new_content is None:
+        warn("[Shared] workflow.md 中未找到可替换的 Development Process / Session End 区块")
+        return False
+
+    if not dry_run:
+        backup_dir = root / ".trellis" / ".backup-original"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        backup_path = backup_dir / "workflow.md"
+        if not backup_path.exists():
+            shutil.copy2(target_path, backup_path)
+            ok("[Shared] workflow.md → 备份")
+        target_path.write_text(new_content, encoding="utf-8")
+    if dry_run:
+        info("[Shared] 将注入 workflow.md 项目化补丁")
+    else:
+        ok("[Shared] workflow.md 项目化补丁已注入")
     return True
 
 
@@ -882,6 +948,7 @@ def write_install_record(
             "added_commands": ADDED_COMMANDS,
             "disabled_commands": OPTIONAL_DISABLED_BASELINE_COMMANDS,
             "patched_baseline_commands": PATCH_BASELINE_COMMANDS,
+            "patched_shared_docs": PATCH_BASELINE_SHARED_DOCS,
             "scripts": HELPER_SCRIPTS,
             "workflow_version": WORKFLOW_VERSION,
             "workflow_schema_version": WORKFLOW_SCHEMA_VERSION,
@@ -1029,6 +1096,7 @@ def main() -> int:
     if not any(t and t["errors"] for t in total.values()):
         script_count = deploy_helper_scripts(src, root, args.dry_run)
         info(f"辅助脚本: {script_count}/{len(HELPER_SCRIPTS)} 个")
+        inject_workflow_patch(src, root, dry_run=args.dry_run)
     print()
 
     if not any(t and t["errors"] for t in total.values()):

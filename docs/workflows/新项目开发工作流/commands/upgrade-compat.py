@@ -36,6 +36,7 @@ from workflow_assets import (
     OPTIONAL_DISABLED_BASELINE_COMMANDS,
     OVERLAY_BASELINE_COMMANDS,
     PATCH_BASELINE_COMMANDS,
+    PATCH_BASELINE_SHARED_DOCS,
     WORKFLOW_SCHEMA_VERSION,
     WORKFLOW_VERSION,
     check_latest_trellis_prerequisite,
@@ -72,6 +73,9 @@ _FINISH_WORK_END_HEADING = "### 1.5. Test Coverage"
 _RECORD_SESSION_MARKER = "## Record-Session Metadata Closure `[AI]`"
 _RECORD_SESSION_INJECTION_MARKER = "### Step 2: One-Click Add Session"
 _PARALLEL_DISABLED_MARKER = "<!-- workflow-parallel-disabled -->"
+_WORKFLOW_PATCH_MARKER = "<!-- workflow-projectization-patch -->"
+_WORKFLOW_START_HEADING = "## Development Process"
+_WORKFLOW_END_HEADING = "## File Descriptions"
 # 当前 workflow 分发的阶段命令。
 # `brainstorm` / `check` 与 Trellis 基线同名，但当前 workflow 采用合并后的阶段语义；
 # `start` / `finish-work` / `record-session` 仍来自 Trellis 基线，并由当前 workflow 注入补丁。
@@ -86,6 +90,7 @@ _REQUIRED_INSTALL_RECORD_KEYS = {
     "added_commands",
     "disabled_commands",
     "patched_baseline_commands",
+    "patched_shared_docs",
     "scripts",
     "initial_pack",
     "bootstrap_task_removed",
@@ -137,6 +142,22 @@ def has_finish_work_patch(finish_work_path: Path) -> bool:
     return _FINISH_WORK_MARKER in finish_work_path.read_text(encoding="utf-8")
 
 
+def has_workflow_patch(workflow_md: Path) -> bool:
+    if not workflow_md.exists():
+        return False
+    return _WORKFLOW_PATCH_MARKER in workflow_md.read_text(encoding="utf-8")
+
+
+def workflow_patch_matches_source(src: Path, workflow_md: Path) -> bool:
+    if not workflow_md.exists():
+        return False
+    patch = src / "workflow-patch-projectization.md"
+    if not patch.exists():
+        return False
+    content = workflow_md.read_text(encoding="utf-8")
+    return _WORKFLOW_PATCH_MARKER in content and patch.read_text(encoding="utf-8") in content
+
+
 def build_finish_work_content(content: str, patch_text: str) -> str | None:
     if _FINISH_WORK_MARKER in content:
         return content
@@ -150,6 +171,20 @@ def build_finish_work_content(content: str, patch_text: str) -> str | None:
         if next_heading_idx == -1:
             return None
         end_idx = next_heading_idx + 1
+
+    prefix = content[:start_idx]
+    suffix = content[end_idx:].lstrip("\n")
+    return prefix + patch_text.rstrip() + "\n\n" + suffix
+
+
+def build_workflow_content(content: str, patch_text: str) -> str | None:
+    if _WORKFLOW_PATCH_MARKER in content:
+        return content
+
+    start_idx = content.find(_WORKFLOW_START_HEADING)
+    end_idx = content.find(_WORKFLOW_END_HEADING)
+    if start_idx == -1 or end_idx == -1 or end_idx <= start_idx:
+        return None
 
     prefix = content[:start_idx]
     suffix = content[end_idx:].lstrip("\n")
@@ -363,6 +398,21 @@ def detect_conflicts_opencode(src: Path, dst_cmds: Path) -> int:
     return conflicts
 
 
+def detect_conflicts_workflow_doc(src: Path, root: Path) -> int:
+    workflow_md = root / ".trellis" / "workflow.md"
+    if not workflow_md.exists():
+        err("[Shared] .trellis/workflow.md: 文件缺失")
+        return 1
+    if not has_workflow_patch(workflow_md):
+        err("[Shared] .trellis/workflow.md: 项目化补丁缺失")
+        return 1
+    if not workflow_patch_matches_source(src, workflow_md):
+        err("[Shared] .trellis/workflow.md: 项目化补丁内容漂移")
+        return 1
+    ok("[Shared] .trellis/workflow.md: 项目化补丁正常")
+    return 0
+
+
 # ── Codex 冲突检测 ──
 def detect_conflicts_codex(src: Path, root: Path) -> int:
     conflicts = 0
@@ -489,6 +539,18 @@ def backup_deployed_state(dst_cmds: Path) -> None:
     ok(f"备份 → {backup_dir.name}")
 
 
+def backup_shared_workflow_state(root: Path) -> None:
+    workflow_md = root / ".trellis" / "workflow.md"
+    if not workflow_md.exists():
+        return
+    trellis_dir = root / ".trellis"
+    ts = datetime.now().strftime("%Y%m%d%H%M%S")
+    backup_dir = trellis_dir / f".backup-upgrade-{ts}"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(workflow_md, backup_dir / "workflow.md")
+    ok(f".trellis/workflow.md 备份 → {backup_dir.name}")
+
+
 # ── 命令部署 ──
 def prepare_command_content(source_path: Path) -> str:
     content = source_path.read_text(encoding="utf-8")
@@ -578,6 +640,17 @@ def restore_start_from_original_backup(dst_cmds: Path, start: Path) -> bool:
         return False
     shutil.copy2(backup_start, start)
     ok("start.md 已从 .backup-original 恢复")
+    return True
+
+
+def restore_workflow_from_original_backup(root: Path) -> bool:
+    backup_path = root / ".trellis" / ".backup-original" / "workflow.md"
+    target_path = root / ".trellis" / "workflow.md"
+    if not backup_path.exists():
+        err("缺少 .trellis/.backup-original/workflow.md，无法执行强制恢复")
+        return False
+    shutil.copy2(backup_path, target_path)
+    ok(".trellis/workflow.md 已从 .backup-original 恢复")
     return True
 
 
@@ -674,6 +747,41 @@ def inject_record_session_patch(src: Path, record_session_md: Path) -> bool:
     return True
 
 
+def inject_workflow_patch(src: Path, root: Path) -> bool:
+    patch = src / "workflow-patch-projectization.md"
+    workflow_md = root / ".trellis" / "workflow.md"
+    if not patch.exists():
+        err("workflow-patch-projectization.md 缺失，无法恢复 .trellis/workflow.md 项目化补丁")
+        return False
+    if not workflow_md.exists():
+        err(".trellis/workflow.md 不存在，无法恢复项目化补丁")
+        return False
+
+    patch_text = patch.read_text(encoding="utf-8")
+    content = workflow_md.read_text(encoding="utf-8")
+    if _WORKFLOW_PATCH_MARKER in content and patch_text in content:
+        ok("workflow.md 项目化补丁已存在")
+        return True
+
+    baseline_content = content
+    if _WORKFLOW_PATCH_MARKER in content and patch_text not in content:
+        backup_path = root / ".trellis" / ".backup-original" / "workflow.md"
+        if backup_path.exists():
+            baseline_content = backup_path.read_text(encoding="utf-8")
+        else:
+            warn("workflow.md 已存在旧补丁，但缺少 .backup-original/workflow.md，无法自动刷新")
+            return False
+
+    new_content = build_workflow_content(baseline_content, patch_text)
+    if new_content is None:
+        warn("workflow.md 中未找到 Development Process / File Descriptions 注入边界，无法自动恢复项目化补丁")
+        return False
+
+    workflow_md.write_text(new_content, encoding="utf-8")
+    ok("workflow.md 项目化补丁已注入")
+    return True
+
+
 def write_install_record(
     rec_file: Path,
     current_version: str,
@@ -699,6 +807,7 @@ def write_install_record(
                 "added_commands": ADDED_COMMANDS,
                 "disabled_commands": OPTIONAL_DISABLED_BASELINE_COMMANDS,
                 "patched_baseline_commands": PATCH_BASELINE_COMMANDS,
+                "patched_shared_docs": PATCH_BASELINE_SHARED_DOCS,
                 "scripts": HELPER_SCRIPTS,
                 "workflow_version": WORKFLOW_VERSION,
                 "workflow_schema_version": WORKFLOW_SCHEMA_VERSION,
@@ -723,6 +832,20 @@ def cleanup_old_backups(dst_cmds: Path) -> None:
         for directory in old_backups[:-2]:
             shutil.rmtree(directory)
             warn(f"清理旧备份: {directory.name}")
+
+
+def cleanup_old_workflow_backups(root: Path) -> None:
+    trellis_dir = root / ".trellis"
+    if not trellis_dir.is_dir():
+        return
+    old_backups = sorted(
+        [d for d in trellis_dir.iterdir() if d.is_dir() and d.name.startswith(".backup-upgrade-")],
+        key=lambda d: d.name,
+    )
+    if len(old_backups) > 2:
+        for directory in old_backups[:-2]:
+            shutil.rmtree(directory)
+            warn(f"清理旧 .trellis 备份: {directory.name}")
 
 
 def main() -> int:
@@ -791,6 +914,7 @@ def main() -> int:
         elif cli_type == "codex":
             total_conflicts += detect_conflicts_codex(src, root)
     total_conflicts += detect_shared_script_conflicts(src, dst_scripts)
+    total_conflicts += detect_conflicts_workflow_doc(src, root)
     print(f"   总冲突: {total_conflicts}")
     print()
 
@@ -807,6 +931,14 @@ def main() -> int:
     if not version_changed and total_conflicts == 0:
         ok("版本一致且部署完整，无需重新部署")
         return 0
+
+    backup_shared_workflow_state(root)
+    if args.mode == "force":
+        if not restore_workflow_from_original_backup(root):
+            return 1
+    if not has_workflow_patch(root / ".trellis" / "workflow.md") and not inject_workflow_patch(src, root):
+        err("[Shared] workflow.md 项目化补丁恢复失败")
+        return 1
 
     # 合并/修复
     for cli_type in cli_types:
@@ -896,6 +1028,8 @@ def main() -> int:
                         return 1
                     parallel_skill.write_text(expected_parallel, encoding="utf-8")
                     ok(f"[Codex] parallel skill 已更新为禁用版本 → {parallel_skill.relative_to(root)}")
+
+    cleanup_old_workflow_backups(root)
 
     # 辅助脚本
     deploy_scripts(src, dst_scripts)

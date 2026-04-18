@@ -13,13 +13,15 @@
 - [ ] 默认包管理器占位命令已经删除，不再继续沿用通用模板
 - [ ] 如果技术架构尚未确定，先回到 `design` 完成矩阵定义，而不是伪造校验命令
 - [ ] 所有“必须通过”的命令都已实际执行，并只记录真实结果：通过 / 失败 / 未运行
+- [ ] 当前 task 已形成或更新 `finish-work-checklist.md`，至少记录：
+  - 冻结验证矩阵的 `Check / Command or Method / Result`
+  - 人工验证的真实状态与证据缺口
+  - 若为 child task，parent 记录同步状态
+  - 若为 Trellis / workflow 相关修改，隐藏目录联动同步状态
+- [ ] 若当前轮次不落盘 `finish-work-checklist.md`，则命令输出中必须逐项覆盖以上信息，并明确为什么没有形成 task-local checklist
 
 ```bash
-sonar-scanner \
-  -Dsonar.projectKey=<target-project-key> \
-  -Dsonar.token=$SONAR_TOKEN \
-  -Dsonar.host.url=https://sonarqube.xzc.com:13785 \
-  -Dsonar.sources=.
+<your-quality-platform-gate-command-here>
 ```
 
 ```text

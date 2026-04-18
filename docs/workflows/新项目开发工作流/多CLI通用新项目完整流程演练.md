@@ -234,7 +234,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 目标
 
-先按 task-first 建立或更新 `prd.md` 工作底稿，自动读取上下文并在必要时 research-first；然后确认需求描述是否准确，统一做 `L0/L1/L2` 分类；离开 brainstorm 前必须先补齐不可跳过的项目级粗估：`task_dir/prd.md` 中的 `## 项目级粗估` 与 `customer-facing-prd.md` 中的 `## 项目级粗估摘要`；进入 design 前至少需补齐 `customer-facing-prd.md`，`developer-facing-prd.md` 等到 design 阶段技术架构确认后再正式生成；`L0` 单任务闭环可只保留 `prd.md` 轻量基线，但仍不能跳过粗估。
+先按 task-first 建立或更新 `prd.md` 工作底稿，自动读取上下文并在必要时 research-first；然后确认需求描述是否准确，统一做 `L0/L1/L2` 分类；离开 brainstorm 前必须先补齐不可跳过的项目级粗估：`task_dir/prd.md` 中的 `## 项目级粗估` 与 `customer-facing-prd.md` 中的 `## 项目级粗估摘要`；进入 design 前至少需补齐 `customer-facing-prd.md`，`developer-facing-prd.md` 等到 design 阶段技术架构确认后再正式生成；`L0` 单任务闭环可只保留 `prd.md` 轻量基线，但仍不能跳过粗估。若 research-first 之后只剩一个可信方向，必须明确写“当前无可比方案”与原因，不要为了凑流程伪造方案对比。
 
 ### CLI 入口差异
 
@@ -343,6 +343,10 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
   - `docs/requirements/customer-facing-prd.md`（承担 BRD 主文档职责）
 - 技术架构确认后才正式生成：
   - `docs/requirements/developer-facing-prd.md`（需求实现说明、模块拆解与任务边界、场景/规则/验收映射；接口/数据库正文以跳转链接承接）
+  - `docs/requirements/developer-facing-prd.md` 最低还应能定位到：
+    - `依赖与约束`
+    - `接口与集成`
+    - `错误处理与边界情况`
 - 设计阶段硬必选：
   - `design/TAD.md`
   - `design/ODD-dev.md`
@@ -386,6 +390,8 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 - `/trellis:finish-work` 的首次项目化适配
 - `/trellis:record-session` 的基线适配
+- `finish-work-checklist.md` 的最小证据口径
+- design 权威文档中的系统边界 / 外部依赖 / ownership 边界
 - 若 `ownership_proof_required = yes`，同步冻结：
   - `WMID`
   - 零宽字符水印边界（只允许注释 / 文档字符串 / Markdown）
@@ -600,6 +606,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 - 真实执行了本项目要求的检查
 - 结果按 `pass / fail / not run` 记录
+- 当前 task 已有 `finish-work-checklist.md`，至少记录冻结验证矩阵、人工验证状态、spec/docs 同步结论
 - 可以进入 `delivery`
 
 ---
@@ -638,7 +645,9 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 ### 退出门禁
 
 - 验收结果清晰
-- 交付物已整理
+- `delivery/acceptance.md` 与 `delivery/deliverables.md` 已整理
+- `delivery/acceptance.md` 至少写清验收标准状态、阻塞项、Acceptance Gate
+- `delivery/deliverables.md` 至少写清 Closeout Assets、Verification Evidence、Current Status、Residual Risks
 - 若为外部项目，当前交付事件类型与允许移交范围已写清
 - 若 `ownership_proof_required = yes`，已通过：
 

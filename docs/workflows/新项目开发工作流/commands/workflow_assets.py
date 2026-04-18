@@ -22,6 +22,7 @@ WORKFLOW_VERSION = "0.1.24"
 WORKFLOW_SCHEMA_VERSION = "1"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增
 
 PATCH_BASELINE_COMMANDS = ["start", "finish-work", "record-session"]
+PATCH_BASELINE_SHARED_DOCS = ["workflow.md"]
 OVERLAY_BASELINE_COMMANDS = ["brainstorm", "check"]
 OPTIONAL_DISABLED_BASELINE_COMMANDS = ["parallel"]
 ADDED_COMMANDS = ["feasibility", "design", "plan", "test-first", "project-audit", "review-gate", "delivery"]
@@ -68,6 +69,8 @@ class ManagedAssetSpec:
         """
         if self.kind == "script":
             return root / ".trellis" / "scripts" / "workflow" / self.name
+        if self.kind == "doc":
+            return root / ".trellis" / self.name
         if self.kind == "command":
             return root / CLI_DIRS[self.cli_type] / "commands" / "trellis" / f"{self.name}.md"
         if self.kind == "skill":
@@ -178,6 +181,16 @@ def build_managed_asset_specs(cli_types: list[str]) -> list[ManagedAssetSpec]:
                 )
 
     if cli_types:
+        for name in PATCH_BASELINE_SHARED_DOCS:
+            specs.append(
+                ManagedAssetSpec(
+                    asset_id=f"shared:{name}",
+                    category="patch-baseline",
+                    cli_type="shared",
+                    kind="doc",
+                    name=name,
+                )
+            )
         for name in HELPER_SCRIPTS:
             specs.append(
                 ManagedAssetSpec(

@@ -8,6 +8,8 @@ import unittest
 from pathlib import Path
 import json
 
+from workflow_assets import HELPER_SCRIPTS
+
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 PYTHON = (
@@ -23,6 +25,7 @@ PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 FINISH_WORK_MARKER = "<!-- finish-work-projectization-patch -->"
 RECORD_SESSION_MARKER = "## Record-Session Metadata Closure `[AI]`"
 PARALLEL_DISABLED_MARKER = "<!-- workflow-parallel-disabled -->"
+WORKFLOW_PATCH_MARKER = "<!-- workflow-projectization-patch -->"
 DEFAULT_PROJECT_TODO = "文档内容需要和实际当前的代码同步\n"
 BASELINE_START_CONTENT = (
     "# /trellis:start\n\n"
@@ -103,6 +106,24 @@ BASELINE_FINISH_WORK_WITHOUT_TEST_COVERAGE_CONTENT = (
     "### 2. Code-Spec Sync\n\n"
     "Check code-spec updates.\n"
 )
+BASELINE_WORKFLOW_CONTENT = (
+    "## Development Process\n\n"
+    "### Task Development Flow\n\n"
+    "```\n"
+    "1. Create or select task\n"
+    "2. Start task\n"
+    "3. Write code\n"
+    "4. Self-test\n"
+    "5. Commit code\n"
+    "6. Record session\n"
+    "7. Finish task\n"
+    "```\n\n"
+    "## Session End\n\n"
+    "### One-Click Session Recording\n\n"
+    "Use add_session.py directly.\n\n"
+    "## File Descriptions\n\n"
+    "### 1. workspace/ - Developer Workspaces\n"
+)
 
 
 class WorkflowInstallerTests(unittest.TestCase):
@@ -167,6 +188,10 @@ class WorkflowInstallerTests(unittest.TestCase):
         (root / ".claude" / "commands" / "trellis").mkdir(parents=True)
         if include_trellis:
             (root / ".trellis").mkdir(parents=True)
+            (root / ".trellis" / "workflow.md").write_text(
+                BASELINE_WORKFLOW_CONTENT,
+                encoding="utf-8",
+            )
             if include_bootstrap_task:
                 (root / ".trellis" / "tasks" / "00-bootstrap-guidelines").mkdir(parents=True)
                 (root / ".trellis" / "tasks" / "00-bootstrap-guidelines" / "task.json").write_text(
@@ -280,6 +305,15 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertTrue(workflow_state_helper.exists(), "workflow-state.py should be deployed")
         ownership_helper = fixture / ".trellis" / "scripts" / "workflow" / "ownership-proof-validate.py"
         self.assertTrue(ownership_helper.exists(), "ownership-proof-validate.py should be deployed")
+        workflow_doc = fixture / ".trellis" / "workflow.md"
+        workflow_doc_text = workflow_doc.read_text(encoding="utf-8")
+        self.assertIn(WORKFLOW_PATCH_MARKER, workflow_doc_text)
+        self.assertIn("task.py start <name>", workflow_doc_text)
+        self.assertIn("record-session-helper.py", workflow_doc_text)
+        self.assertIn("finish-work-checklist.md", workflow_doc_text)
+        self.assertIn("child task", workflow_doc_text)
+        self.assertIn("parent coordinator records", workflow_doc_text)
+        self.assertIn("does not automatically authorize", workflow_doc_text)
         finish_work = fixture / ".claude" / "commands" / "trellis" / "finish-work.md"
         finish_work_text = finish_work.read_text(encoding="utf-8")
         self.assertIn(FINISH_WORK_MARKER, finish_work_text)
@@ -311,10 +345,11 @@ class WorkflowInstallerTests(unittest.TestCase):
             record_data["patched_baseline_commands"],
             ["start", "finish-work", "record-session"],
         )
-        self.assertIn("metadata-autocommit-guard.py", record_data["scripts"])
-        self.assertIn("ownership-proof-validate.py", record_data["scripts"])
-        self.assertIn("record-session-helper.py", record_data["scripts"])
-        self.assertIn("workflow-state.py", record_data["scripts"])
+        self.assertEqual(record_data["patched_shared_docs"], ["workflow.md"])
+        self.assertEqual(record_data["scripts"], HELPER_SCRIPTS)
+        for helper_name in HELPER_SCRIPTS:
+            helper_path = fixture / ".trellis" / "scripts" / "workflow" / helper_name
+            self.assertTrue(helper_path.exists(), f"{helper_name} should be deployed")
         self.assertEqual(record_data["workflow_version"], "0.1.24")
         self.assertEqual(record_data["workflow_schema_version"], "1")
         self.assertEqual(record_data["initial_pack"], "pack.requirements-discovery-foundation")
@@ -373,6 +408,74 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertFalse((fixture / ".trellis" / "tasks" / "00-bootstrap-guidelines").exists())
         self.assertIn("初始 spec 基线已导入", install.stdout)
         self.assertIn("Trellis bootstrap 任务已删除", install.stdout)
+
+    def test_uninstall_restores_workflow_doc(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        workflow_doc = fixture / ".trellis" / "workflow.md"
+        self.assertIn(WORKFLOW_PATCH_MARKER, workflow_doc.read_text(encoding="utf-8"))
+
+        result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertEqual(workflow_doc.read_text(encoding="utf-8"), BASELINE_WORKFLOW_CONTENT)
+
+    def test_upgrade_check_detects_workflow_doc_patch_drift(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        workflow_doc = fixture / ".trellis" / "workflow.md"
+        workflow_doc.write_text(
+            workflow_doc.read_text(encoding="utf-8").replace(WORKFLOW_PATCH_MARKER, "<!-- missing -->"),
+            encoding="utf-8",
+        )
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("workflow.md", result.stdout + result.stderr)
+
+    def test_upgrade_check_detects_workflow_doc_content_drift_while_marker_intact(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        workflow_doc = fixture / ".trellis" / "workflow.md"
+        workflow_doc.write_text(
+            workflow_doc.read_text(encoding="utf-8").replace(
+                "record-session runs first, then archive",
+                "record-session runs after archive",
+            ),
+            encoding="utf-8",
+        )
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("workflow.md", result.stdout + result.stderr)
+        self.assertIn("内容漂移", result.stdout + result.stderr)
 
     def test_install_initializes_project_todo_file(self) -> None:
         fixture = self.create_fixture()

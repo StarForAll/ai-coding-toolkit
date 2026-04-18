@@ -199,6 +199,12 @@ python3 .trellis/scripts/workflow/workflow-state.py init "$TASK_DIR" --stage bra
 
 - 当需要从零生成或大幅重写 PRD 时调用
 - 降级：手动按目标 / 范围 / 验收标准 / 技术约束 / 边界条件结构生成
+- 若 research-first 之后确认不存在两个以上可信替代方案，必须在工作底稿中显式写明：
+  - `当前无可比方案` 或 `当前无可信替代方案`
+  - 为什么这不是遗漏了方案比较
+  - 当前唯一可信方向受哪些约束决定
+  - 当前方向的主要 downside / 风险
+  - 不得为了凑流程而伪造 A/B/C 对比
 
 ### Step 4: 需求描述准确性校验
 

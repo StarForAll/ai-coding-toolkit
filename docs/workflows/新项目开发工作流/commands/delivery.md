@@ -125,8 +125,33 @@ python3 <WORKFLOW_DIR>/commands/shell/ownership-proof-validate.py --all --task-d
 
 **调用 Skill**：`doc-coauthoring` — 协同撰写交付文档。降级：手动按“客户交付物 / 开发交付物 / 验收证据”三段结构整理。
 
+进入本步前，当前 task 至少应已有：
+
+- `finish-work-checklist.md`
+
+若该文件缺失，说明提交前检查证据还未真正收口；先回 `/trellis:finish-work`，不要直接跳过。
+
 客户交付物：代码 + PRD + 用户手册 + 运维文档
 开发交付物：代码 + 技术文档 + 评估集
+
+最小交付文档契约：
+
+- `delivery/acceptance.md`
+  - 验收标准逐条状态
+  - Blocking Findings
+  - Acceptance Gate
+  - 当前离 `record-session` 还差什么
+- `delivery/deliverables.md`
+  - Closeout Assets
+  - Verification Evidence
+  - Current Status
+  - Residual Risks
+- `delivery/transfer-checklist.md`
+  - 当前事件允许移交什么
+  - 当前事件禁止标记为已移交什么
+  - 触发条件 / 付款 / 权限 / 证明材料是否齐备
+- `delivery/retrospective.md`
+  - 本轮验收、返工、摩擦点、可回流 learn 的结论
 
 ### Step 6: 交付事件 checklist（如适用）
 
@@ -264,15 +289,39 @@ git status --short .trellis/tasks .trellis/.current-task
 ## 输出
 
 ```
-$TASK_DIR/delivery/
-├── test-report.md
-├── acceptance.md
-├── deliverables.md
-├── transfer-checklist.md
-├── ownership-proof.md
-├── source-watermark-verification.md
-└── retrospective.md
+$TASK_DIR/
+├── finish-work-checklist.md
+└── delivery/
+    ├── test-report.md
+    ├── acceptance.md
+    ├── deliverables.md
+    ├── transfer-checklist.md
+    ├── ownership-proof.md
+    ├── source-watermark-verification.md
+    └── retrospective.md
 ```
+
+最小内容要求：
+
+- `finish-work-checklist.md`
+  - 冻结验证矩阵
+  - 人工验证状态
+  - spec / 文档同步结论
+  - child-task parent record sync（如适用）
+- `delivery/acceptance.md`
+  - `Acceptance Criteria`
+  - `Blocking Findings`
+  - `Acceptance Gate`
+  - `Closeout Note`
+- `delivery/deliverables.md`
+  - `Closeout Assets`
+  - `Verification Evidence`
+  - `Current Status`
+  - `Residual Risks`
+- `delivery/transfer-checklist.md`
+  - 对外项目：必填
+  - 内部项目：若无真实移交事件，可标注 `not applicable`
+- 这些文件都必须如实记录实际状态；没有证据时写 `not run` / `not applicable`，不要伪造通过
 
 ## 下一步推荐
 

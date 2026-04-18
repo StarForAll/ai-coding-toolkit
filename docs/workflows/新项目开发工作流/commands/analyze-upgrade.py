@@ -121,6 +121,7 @@ def build_legacy_asset_specs(
     commands = install_record.get("commands")
     overlay_commands = install_record.get("overlay_commands")
     scripts = install_record.get("scripts")
+    patched_shared_docs = install_record.get("patched_shared_docs")
 
     if not isinstance(commands, list):
         commands = []
@@ -128,10 +129,13 @@ def build_legacy_asset_specs(
         overlay_commands = []
     if not isinstance(scripts, list):
         scripts = []
+    if not isinstance(patched_shared_docs, list):
+        patched_shared_docs = []
 
     overlay_set = {name for name in overlay_commands if isinstance(name, str)}
     command_names = [name for name in commands if isinstance(name, str)]
     script_names = [name for name in scripts if isinstance(name, str)]
+    shared_doc_names = [name for name in patched_shared_docs if isinstance(name, str)]
 
     specs: list[ManagedAssetSpec] = []
     for cli_type in cli_types:
@@ -176,6 +180,20 @@ def build_legacy_asset_specs(
                 category="shared-script",
                 cli_type="shared",
                 kind="script",
+                name=name,
+            )
+        )
+
+    for name in shared_doc_names:
+        asset_id = f"shared:{name}"
+        if asset_id in current_asset_ids:
+            continue
+        specs.append(
+            ManagedAssetSpec(
+                asset_id=asset_id,
+                category="patch-baseline",
+                cli_type="shared",
+                kind="doc",
                 name=name,
             )
         )
