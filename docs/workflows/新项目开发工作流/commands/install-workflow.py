@@ -920,23 +920,37 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool) -> dict:
 
 # ── Codex CLI 部署 ──
 def deploy_codex(src: Path, root: Path, dry_run: bool) -> dict:
-    """部署到所有 skills 目录（Codex 无项目自定义命令目录，workflow 入口采用 skills 模型）。"""
+    """部署到 Codex skills 目录。
+
+    分发型 workflow skills 会同步写入所有存在的 skills 目录；
+    baseline patch 型 skills（start / finish-work）只增强活动目录。
+    """
     skills_dirs = list_all_codex_skills_dirs(root)
     if not skills_dirs:
         return {"commands": 0, "scripts": 0, "patches": 0, "agents": 0, "errors": ["未找到 .agents/skills/ 或 .codex/skills/ 目录"]}
+    primary_skills_dir = resolve_codex_skills_dir(root)
+    if primary_skills_dir is None:
+        return {"commands": 0, "scripts": 0, "patches": 0, "agents": 0, "errors": ["未找到 Codex 活动 skills 目录"]}
 
     result = {"commands": 0, "scripts": 0, "patches": 0, "agents": 0, "errors": []}
 
-    # 备份（对所有存在的 skills 目录执行）
+    # 备份分发型 / 禁用型 skills（对所有存在的 skills 目录执行）
     if not dry_run:
         for skills_dir in skills_dirs:
-            for name in [*OVERLAY_BASELINE_COMMANDS, *OPTIONAL_DISABLED_BASELINE_COMMANDS, *CODEX_PATCH_BASELINE_SKILLS]:
+            for name in [*OVERLAY_BASELINE_COMMANDS, *OPTIONAL_DISABLED_BASELINE_COMMANDS]:
                 skill_path = skills_dir / name / "SKILL.md"
                 backup_path = skills_dir / ".backup-original" / name / "SKILL.md"
                 if skill_path.exists() and not backup_path.exists():
                     backup_path.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(skill_path, backup_path)
                     ok(f"[Codex] {name} skill → {skills_dir.relative_to(root)}/.backup-original")
+        for name in CODEX_PATCH_BASELINE_SKILLS:
+            skill_path = primary_skills_dir / name / "SKILL.md"
+            backup_path = primary_skills_dir / ".backup-original" / name / "SKILL.md"
+            if skill_path.exists() and not backup_path.exists():
+                backup_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(skill_path, backup_path)
+                ok(f"[Codex] {name} skill → {primary_skills_dir.relative_to(root)}/.backup-original")
 
     # 部署 skills（从命令文件转换为 skills 格式，对所有目录同步写入）
     for cmd in DISTRIBUTED_COMMANDS:
@@ -955,59 +969,35 @@ def deploy_codex(src: Path, root: Path, dry_run: bool) -> dict:
         else:
             warn(f"[Codex] 源文件缺失: {cmd}.md")
 
-    # 注入 finish-work 补丁（对所有目录，但 patches 只计一次）
-    finish_work_patched = False
-    any_finish_work_exists = False
-    for skills_dir in skills_dirs:
-        finish_work_skill = skills_dir / "finish-work" / "SKILL.md"
-        if not finish_work_skill.exists():
-            info(
-                f"[Codex] {skills_dir.relative_to(root)} 缺少 finish-work 基线，"
-                "跳过该项目化补丁"
-            )
-            continue
-        any_finish_work_exists = True
-        if inject_finish_work_patch(
-            src,
-            finish_work_skill,
-            dry_run=dry_run,
-            cli_label="Codex",
-            target_label="finish-work skill",
-        ):
-            if not finish_work_patched:
-                result["patches"] += 1
-                finish_work_patched = True
-
-    if not any_finish_work_exists:
+    # 注入 finish-work 补丁（只增强活动 skills 目录）
+    finish_work_skill = primary_skills_dir / "finish-work" / "SKILL.md"
+    if not finish_work_skill.exists():
         result["errors"].append(
-            "所有 skills 目录均缺少 finish-work 基线，无法注入 workflow 项目化补丁"
+            f"活动 skills 目录缺少 finish-work 基线，无法注入 workflow 项目化补丁：{primary_skills_dir.relative_to(root)}"
         )
+    elif inject_finish_work_patch(
+        src,
+        finish_work_skill,
+        dry_run=dry_run,
+        cli_label="Codex",
+        target_label="finish-work skill",
+    ):
+        result["patches"] += 1
 
-    start_patched = False
-    any_start_exists = False
-    for skills_dir in skills_dirs:
-        start_skill = skills_dir / "start" / "SKILL.md"
-        if not start_skill.exists():
-            info(
-                f"[Codex] {skills_dir.relative_to(root)} 缺少 start 基线，"
-                "跳过该 Phase Router 补丁"
-            )
-            continue
-        any_start_exists = True
+    # 注入 start Phase Router 补丁（只增强活动 skills 目录）
+    start_skill = primary_skills_dir / "start" / "SKILL.md"
+    if not start_skill.exists():
+        result["errors"].append(
+            f"活动 skills 目录缺少 start 基线，无法注入 workflow Phase Router 补丁：{primary_skills_dir.relative_to(root)}"
+        )
+    else:
         if inject_codex_start_skill_patch(
             src,
             start_skill,
             dry_run=dry_run,
             cli_label="Codex",
         ):
-            if not start_patched:
-                result["patches"] += 1
-                start_patched = True
-
-    if not any_start_exists:
-        result["errors"].append(
-            "所有 skills 目录均缺少 start 基线，无法注入 workflow Phase Router 补丁"
-        )
+            result["patches"] += 1
 
     # Codex 通过 session-start.py hook 注入上下文，不需要注入 start.md
     # 验证 hook 是否已就绪（全局只检查一次）

@@ -468,6 +468,10 @@ def detect_conflicts_codex(src: Path, root: Path) -> int:
     if not skills_dirs:
         warn("[Codex] 未找到 skills 目录")
         return 0
+    primary_skills_dir = resolve_codex_skills_dir(root)
+    if primary_skills_dir is None:
+        warn("[Codex] 未找到活动 skills 目录")
+        return 0
 
     # 对每个 skills 目录分别检查分发 skills
     total_skill_conflicts = 0
@@ -494,30 +498,26 @@ def detect_conflicts_codex(src: Path, root: Path) -> int:
     if total_skill_conflicts:
         conflicts += total_skill_conflicts
 
-    # 对每个 skills 目录分别检查 finish-work 补丁
-    finish_work_conflicts = 0
-    for skills_dir in skills_dirs:
-        finish_work_skill = skills_dir / "finish-work" / "SKILL.md"
-        if finish_work_skill.exists():
-            if has_finish_work_patch(finish_work_skill):
-                ok(f"[Codex] finish-work skill ({skills_dir.relative_to(root)}): 项目化补丁正常")
-            else:
-                err(f"[Codex] finish-work skill ({skills_dir.relative_to(root)}): 项目化补丁缺失")
-                finish_work_conflicts += 1
-    if finish_work_conflicts:
-        conflicts += finish_work_conflicts
+    # baseline patch 型 skills 只检查活动 skills 目录
+    finish_work_skill = primary_skills_dir / "finish-work" / "SKILL.md"
+    if not finish_work_skill.exists():
+        err(f"[Codex] finish-work skill ({primary_skills_dir.relative_to(root)}): 基线缺失")
+        conflicts += 1
+    elif has_finish_work_patch(finish_work_skill):
+        ok(f"[Codex] finish-work skill ({primary_skills_dir.relative_to(root)}): 项目化补丁正常")
+    else:
+        err(f"[Codex] finish-work skill ({primary_skills_dir.relative_to(root)}): 项目化补丁缺失")
+        conflicts += 1
 
-    start_skill_conflicts = 0
-    for skills_dir in skills_dirs:
-        start_skill = skills_dir / "start" / "SKILL.md"
-        if start_skill.exists():
-            if has_codex_start_skill_patch(start_skill):
-                ok(f"[Codex] start skill ({skills_dir.relative_to(root)}): Phase Router 补丁正常")
-            else:
-                err(f"[Codex] start skill ({skills_dir.relative_to(root)}): Phase Router 补丁缺失")
-                start_skill_conflicts += 1
-    if start_skill_conflicts:
-        conflicts += start_skill_conflicts
+    start_skill = primary_skills_dir / "start" / "SKILL.md"
+    if not start_skill.exists():
+        err(f"[Codex] start skill ({primary_skills_dir.relative_to(root)}): 基线缺失")
+        conflicts += 1
+    elif has_codex_start_skill_patch(start_skill):
+        ok(f"[Codex] start skill ({primary_skills_dir.relative_to(root)}): Phase Router 补丁正常")
+    else:
+        err(f"[Codex] start skill ({primary_skills_dir.relative_to(root)}): Phase Router 补丁缺失")
+        conflicts += 1
 
     # hooks 是全局的，只检查一次
     hooks_json = root / ".codex" / "hooks.json"
@@ -1122,34 +1122,23 @@ def main() -> int:
             skills_dirs = list_all_codex_skills_dirs(root)
             if not skills_dirs:
                 continue
+            primary_skills_dir = resolve_codex_skills_dir(root)
+            if primary_skills_dir is None:
+                err("[Codex] 未找到活动 skills 目录")
+                return 1
             expected_parallel = expected_parallel_disabled_content(src)
+            start_skill = primary_skills_dir / "start" / "SKILL.md"
+            finish_work_skill = primary_skills_dir / "finish-work" / "SKILL.md"
+            if args.mode == "force":
+                start_backup = primary_skills_dir / ".backup-original" / "start" / "SKILL.md"
+                finish_work_backup = primary_skills_dir / ".backup-original" / "finish-work" / "SKILL.md"
+                if start_backup.exists() and not restore_codex_start_skill(primary_skills_dir):
+                    return 1
+                if finish_work_backup.exists() and not restore_codex_finish_work(primary_skills_dir):
+                    return 1
             for skills_dir in skills_dirs:
-                start_skill = skills_dir / "start" / "SKILL.md"
-                finish_work_skill = skills_dir / "finish-work" / "SKILL.md"
                 if args.mode == "force":
-                    if start_skill.exists():
-                        if not restore_codex_start_skill(skills_dir):
-                            return 1
-                    if finish_work_skill.exists():
-                        if not restore_codex_finish_work(skills_dir):
-                            return 1
                     restore_optional_codex_skill(skills_dir, "parallel")
-                if start_skill.exists() and not has_codex_start_skill_patch(start_skill):
-                    if not inject_codex_start_skill_patch(
-                        src,
-                        start_skill,
-                        f"start skill ({skills_dir.relative_to(root)})",
-                    ):
-                        err("[Codex] start Phase Router 补丁恢复失败")
-                        return 1
-                if finish_work_skill.exists() and not has_finish_work_patch(finish_work_skill):
-                    if not inject_finish_work_patch(
-                        src,
-                        finish_work_skill,
-                        f"finish-work skill ({skills_dir.relative_to(root)})",
-                    ):
-                        err("[Codex] finish-work 项目化补丁恢复失败")
-                        return 1
                 parallel_skill = skills_dir / "parallel" / "SKILL.md"
                 if parallel_skill.exists() and not is_parallel_disabled(parallel_skill):
                     if expected_parallel is None:
@@ -1157,6 +1146,28 @@ def main() -> int:
                         return 1
                     parallel_skill.write_text(expected_parallel, encoding="utf-8")
                     ok(f"[Codex] parallel skill 已更新为禁用版本 → {parallel_skill.relative_to(root)}")
+            if not start_skill.exists():
+                err(f"[Codex] 活动 skills 目录缺少 start 基线：{primary_skills_dir.relative_to(root)}")
+                return 1
+            if not finish_work_skill.exists():
+                err(f"[Codex] 活动 skills 目录缺少 finish-work 基线：{primary_skills_dir.relative_to(root)}")
+                return 1
+            if not has_codex_start_skill_patch(start_skill):
+                if not inject_codex_start_skill_patch(
+                    src,
+                    start_skill,
+                    f"start skill ({primary_skills_dir.relative_to(root)})",
+                ):
+                    err("[Codex] start Phase Router 补丁恢复失败")
+                    return 1
+            if not has_finish_work_patch(finish_work_skill):
+                if not inject_finish_work_patch(
+                    src,
+                    finish_work_skill,
+                    f"finish-work skill ({primary_skills_dir.relative_to(root)})",
+                ):
+                    err("[Codex] finish-work 项目化补丁恢复失败")
+                    return 1
             deploy_managed_agents(src, root, "codex", "Codex")
 
     cleanup_old_workflow_backups(root)

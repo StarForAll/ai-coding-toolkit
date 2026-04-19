@@ -197,6 +197,23 @@ Workflow embed / analysis / repair scripts must distinguish three asset classes:
      - uninstall / force-restore paths must restore the original baseline copy when a backup exists
      - drift detection must compare the deployed disabled copy against the workflow source of truth
 
+4.1 **Codex multi-directory skills boundary**
+   - Codex may expose more than one project-local skills directory:
+     - shared / generic layer: `.agents/skills/`
+     - Codex-local layer: `.codex/skills/`
+   - Contract:
+     - workflow distributed skills (`feasibility`, `brainstorm`, `design`, `plan`, `test-first`, `project-audit`, `check`, `review-gate`, `delivery`) must be deployed to **every existing Codex skills directory**
+     - patch-based baseline skills for Codex (`start`, `finish-work`) must be enhanced **only in the active skills directory** resolved by `resolve_codex_skills_dir`
+     - installer backup scope must match write scope:
+       - distributed skills / optional disabled skills: per existing skills directory
+       - patched baseline skills: active skills directory only
+     - uninstall / `--force` restore scope must match the same boundary and must not restore untouched baseline skills in non-active directories
+     - `upgrade-compat.py --check` must:
+       - verify distributed skills in every existing Codex skills directory
+       - verify optional disabled skills such as `parallel` in every directory where they exist
+       - verify `start` / `finish-work` patch health only in the active skills directory
+     - docs must state that non-active directory copies of `start` / `finish-work` are outside the workflow-managed patch drift surface unless a future installer explicitly starts writing there
+
 5. **Phase-gate helper scripts**
    - helper scripts referenced as mandatory validation gates inside workflow source commands
    - current examples may include:
@@ -466,6 +483,10 @@ When modifying these contracts, update or add tests that prove:
 7. `--merge` restores drifted command and helper-script content for low-risk cases
 8. `--force` can restore baseline-backed patch commands and reapply patches inside the same structural model
 9. newly added required helper scripts are reflected in user-visible install guidance when the workflow gate is exposed to target-project users
+10. Codex multi-directory behavior is covered by regression tests:
+   - distributed skills sync to every existing skills directory
+   - `start` / `finish-work` patch only the active skills directory
+   - uninstall / `--force` restore follow the same active-directory boundary
 
 Current regression anchors:
 

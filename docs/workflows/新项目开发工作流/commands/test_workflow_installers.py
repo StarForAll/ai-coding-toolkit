@@ -751,11 +751,11 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertNotEqual(install.returncode, 0)
         self.assertIn(
-            "所有 skills 目录均缺少 finish-work 基线", install.stdout + install.stderr
+            "活动 skills 目录缺少 finish-work 基线", install.stdout + install.stderr
         )
         self.assertFalse((fixture / ".trellis" / "workflow-installed.json").exists())
 
-    def test_install_codex_syncs_all_skills_dirs_without_requiring_finish_work_everywhere(self) -> None:
+    def test_install_codex_syncs_all_skills_dirs_but_patches_baseline_skills_only_in_active_dir(self) -> None:
         fixture = self.create_fixture(include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
         codex_parallel = fixture / ".codex" / "skills" / "parallel" / "SKILL.md"
@@ -765,10 +765,12 @@ class WorkflowInstallerTests(unittest.TestCase):
         install = self.install_workflow(fixture)
 
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
-        self.assertIn(".codex/skills 缺少 finish-work 基线，跳过该项目化补丁", install.stdout)
+        self.assertNotIn(".codex/skills 缺少 finish-work 基线", install.stdout)
+        self.assertNotIn(".codex/skills 缺少 start 基线", install.stdout)
         self.assertTrue((fixture / ".agents" / "skills" / "delivery" / "SKILL.md").exists())
         self.assertTrue((fixture / ".codex" / "skills" / "delivery" / "SKILL.md").exists())
         self.assertFalse((fixture / ".codex" / "skills" / "finish-work" / "SKILL.md").exists())
+        self.assertFalse((fixture / ".codex" / "skills" / "start" / "SKILL.md").exists())
         self.assertIn(
             PARALLEL_DISABLED_MARKER,
             (fixture / ".codex" / "skills" / "parallel" / "SKILL.md").read_text(encoding="utf-8"),

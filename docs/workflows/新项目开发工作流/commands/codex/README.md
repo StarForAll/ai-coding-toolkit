@@ -71,14 +71,15 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 - 通过 `list_all_codex_skills_dirs` 获取**所有存在的 skills 目录**（`.agents/skills/` + `.codex/skills/`）
 - 阶段 skills：向**所有目录同步写入**，确保两边内容一致
-- `finish-work` 补丁：**只在存在 finish-work 基线的目录**注入；若某目录没有该基线，则跳过（不报错）
+- `start` / `finish-work` 这类 baseline patch：**只增强活动 skills 目录**，即 `resolve_codex_skills_dir(root)` 解析出的主目录；当前 `trellis init` 下通常是 `.agents/skills/`
 - `parallel` 禁用覆盖：**只在存在 parallel 的目录**执行禁用；若不存在则跳过
-- `upgrade-compat.py --check`：对**所有 skills 目录**分别检查内容、补丁、禁用覆盖
+- `upgrade-compat.py --check`：对**所有 skills 目录**检查分发型 skills 与 `parallel` 禁用覆盖，但只在活动 skills 目录检查 `start` / `finish-work` baseline patch
 
-这意味着不再有"活动目录"与"影子目录"之分；安装器对两边一视同仁。但有一个重要边界：
+这意味着 Codex 的技能目录要分两类理解：
 
-- `trellis init` 未必在每个 skills 目录都写入相同的基线集合（例如 `.codex/skills/` 可能没有 `finish-work`）
-- 因此安装器不会强制要求"所有目录都必须有 finish-work"，而是按"有就打补丁，没有就跳过"处理
+- `.agents/skills/`：共享 / 通用 workflow skills 的主承载面
+- `.codex/skills/`：Codex 特有或本地侧技能的承载面；当前最典型的是 `parallel`
+- `trellis init` 未必在每个 skills 目录都写入相同的基线集合，因此不能把 `.codex/skills/` 直接等同于 `.agents/skills/`
 
 装后/升后核对仍建议显式检查两条路径，确认两边内容一致：
 
@@ -100,6 +101,7 @@ ls .codex/skills/parallel/SKILL.md 2>/dev/null
 - `feasibility`、`brainstorm`、`design`、`plan`、`test-first`、`check`、`review-gate`、`delivery` 这类阶段技能，通常来自当前 workflow 的嵌入资产
 - `start`、`finish-work`、`record-session` 这类技能/入口，默认应先理解为 **Trellis 基线能力**；其中当前 workflow 会在目标项目已有 `finish-work` skill 时注入项目化补丁，其余入口继续按基线能力与 workflow 文档约束承载
 - `start` 在当前 workflow 里的增强包括：自动选择具体 task、自动执行 before-dev 步骤、自动生成或刷新当前 task 的 `before-dev.md`
+- 卸载时也保持同一边界：`start` / `finish-work` 这类 baseline patch 只在**活动 skills 目录**恢复备份；非活动目录中的同名文件保持不动，因为安装器从未向该目录写入这些补丁
 
 如果忽略“先有 Trellis，再嵌入 workflow”这层关系，就会误把继承资产看成 workflow 漏装或少定义。
 

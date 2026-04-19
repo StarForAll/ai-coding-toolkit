@@ -20,6 +20,7 @@ from workflow_assets import (
     MANAGED_IMPLEMENTATION_AGENTS,
     OPTIONAL_DISABLED_BASELINE_COMMANDS,
     OVERLAY_BASELINE_COMMANDS,
+    resolve_codex_skills_dir,
     workflow_managed_agent_target_path,
 )
 
@@ -290,6 +291,7 @@ def uninstall_codex(
     """卸载 Codex CLI 部署的工作流 skills。"""
     # 优先检查 .agents/skills/，其次 .codex/skills/
     skills_dirs = [root / ".agents" / "skills", root / ".codex" / "skills"]
+    primary_skills_dir = resolve_codex_skills_dir(root)
     found_any = False
 
     for skills_dir in skills_dirs:
@@ -327,15 +329,14 @@ def uninstall_codex(
                 shutil.copy2(backup_skill, target_skill)
                 ok(f"[Codex] 恢复 {command} skill")
 
-        for baseline_skill in patched_codex_skills:
-            backup_skill = skills_dir / ".backup-original" / baseline_skill / "SKILL.md"
-            if backup_skill.exists():
-                target_skill = skills_dir / baseline_skill / "SKILL.md"
-                target_skill.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(backup_skill, target_skill)
-                ok(f"[Codex] 恢复 {baseline_skill} skill")
-            else:
-                warn(f"[Codex] {skills_dir} 无 {baseline_skill} skill 备份，未恢复")
+        if primary_skills_dir is not None and skills_dir == primary_skills_dir:
+            for baseline_skill in patched_codex_skills:
+                backup_skill = skills_dir / ".backup-original" / baseline_skill / "SKILL.md"
+                if backup_skill.exists():
+                    target_skill = skills_dir / baseline_skill / "SKILL.md"
+                    target_skill.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(backup_skill, target_skill)
+                    ok(f"[Codex] 恢复 {baseline_skill} skill")
 
         backup_dir = skills_dir / ".backup-original"
         if backup_dir.exists():
