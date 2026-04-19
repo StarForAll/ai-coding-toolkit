@@ -1426,3 +1426,52 @@ Strengthened workflow source contracts, added shared .trellis/workflow.md patchi
 ### Next Steps
 
 - None - task complete
+
+
+## Session 119: Exa 工具名标准化与工作流复核
+
+**Date**: 2026-04-19
+**Task**: Exa 工具名标准化与工作流复核
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Workflow docs | 将 `docs/workflows/新项目开发工作流/` 中关于 Exa 的旧名称 `exa_search` / `exa_create_research` 统一替换为 `exa_web_search_exa` / `exa_web_search_advanced_exa(type=deep-reasoning)`。 |
+| Review flow | 生成并处理 `tmp/multi-cli-review/04-19-exa-tool-name-normalization/` 的 reviewer 报告，聚合结果为 0 个当前成立问题，并提前关闭本轮审查。 |
+| Verification | 执行 `$check` 与 `$finish-work` 所需验证：工作流目录旧名称复扫为 0 命中，`./scripts/validate-skills.sh` 通过，`trellis-library/cli.py validate --strict-warnings` 通过，`python3 -m unittest trellis-library/tests/test_cli.py` 35 项全部通过。 |
+
+**Updated Files**:
+- `docs/workflows/新项目开发工作流/工作流总纲.md`
+- `docs/workflows/新项目开发工作流/多CLI通用新项目完整流程演练.md`
+- `docs/workflows/新项目开发工作流/commands/design.md`
+- `docs/workflows/新项目开发工作流/commands/feasibility.md`
+- `docs/workflows/新项目开发工作流/commands/review-gate.md`
+- `docs/workflows/新项目开发工作流/commands/delivery.md`
+- `tmp/multi-cli-review/04-19-exa-tool-name-normalization/summary-round-1.md`
+- `tmp/multi-cli-review/04-19-exa-tool-name-normalization/action.md`
+- `tmp/multi-cli-review/04-19-exa-tool-name-normalization/.processed.json`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e06a3e4` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
