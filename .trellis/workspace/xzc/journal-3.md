@@ -1528,3 +1528,36 @@ Strengthened workflow source contracts, added shared .trellis/workflow.md patchi
 ### Next Steps
 
 - None - task complete
+
+
+## Session 121: Codex workflow skills active-directory boundary fix
+
+**Date**: 2026-04-19
+**Task**: Codex workflow skills active-directory boundary fix
+**Branch**: `main`
+
+### Summary
+
+Fixed the Codex workflow skills boundary so distributed skills still sync to all existing skills directories while start and finish-work baseline patches only apply to the active skills directory. Updated installer, upgrade, uninstall, tests, workflow docs, and workflow installer contracts; validated with full test_workflow_installers coverage and diff checks.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8accbda` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
