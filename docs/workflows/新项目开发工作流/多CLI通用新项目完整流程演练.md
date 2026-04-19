@@ -194,7 +194,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 ### 推荐 MCP / Skills
 
 - `demand-risk-assessment`
-- `exa_create_research`
+- `exa_web_search_advanced_exa(type=deep-reasoning)`
 - `deepwiki`
 - `sequential-thinking`
 
