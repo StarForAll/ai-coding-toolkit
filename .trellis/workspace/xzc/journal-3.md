@@ -1475,3 +1475,56 @@ Strengthened workflow source contracts, added shared .trellis/workflow.md patchi
 ### Next Steps
 
 - None - task complete
+
+
+## Session 120: 新项目开发工作流修复完善
+
+**Date**: 2026-04-19
+**Task**: 新项目开发工作流修复完善
+**Branch**: `main`
+
+### Summary
+
+修复新项目开发工作流的 bootstrap current-task 清理、双 push URL 提示、research agent 搜索路由与多 CLI 审查闭环，并补齐文档、spec 与测试验证。
+
+### Main Changes
+
+| 模块 | 结果 |
+|------|------|
+| Workflow installer | 修复 `00-bootstrap-guidelines` 删除后 `.current-task` 悬空指针，补充 dry-run 预览与特殊值保护 |
+| Research agent | 将搜索策略对齐为 `ace.search_context` / `Context7` / `grok-search` / `deepwiki` / Exa 分层，并补 Claude `mcp__exa__web_fetch_exa` |
+| Workflow docs | 同步 `工作流总纲.md`、`命令映射.md`、`多CLI通用新项目完整流程演练.md`、CLI README 等文档口径 |
+| Tests | `test_workflow_installers.py` 扩展到 66 个用例，覆盖安装、升级、dry-run、adapter 对齐与 round-2 修复点 |
+| Multi-CLI review | 完成 round-1 / round-2 报告聚合，生成 `summary-round-1.md`、`summary-round-2.md`、`action.md`、`.processed.json` |
+
+**验证**:
+- `/ops/softwares/python/bin/python3 -m unittest test_workflow_installers.py` 通过（66 tests）
+- `/ops/softwares/python/bin/python3 -m py_compile install-workflow.py workflow_assets.py test_workflow_installers.py` 通过
+- `/ops/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings` 通过（仅 INFO 提示）
+- `/ops/softwares/python/bin/python3 -m unittest trellis-library/tests/test_cli.py` 通过（35 tests）
+
+**关联文件**:
+- `docs/workflows/新项目开发工作流/commands/install-workflow.py`
+- `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
+- `docs/workflows/新项目开发工作流/commands/test_workflow_installers.py`
+- `docs/workflows/新项目开发工作流/commands/shared-agents/research/SYSTEM.md`
+- `.trellis/spec/scripts/workflow-installer-upgrade-contracts.md`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5aabbaedf88529bd8cf3b7cbb5501f989fa88797` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
