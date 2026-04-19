@@ -199,6 +199,8 @@ python3 .trellis/scripts/workflow/workflow-state.py validate <task-dir>
 
 | 场景 | 调用能力 | 触发条件 | 说明 |
 |------|---------|---------|------|
+| 项目内现有实现 / 代码上下文定位 | `ace.search_context` | 当需要定位项目内相似实现、受影响文件或既有约束时 | 默认优先；回退：`Read + Glob/Grep` |
+| 最新版本 / 发布动态 / 今日事实 | `grok-search` | 当设计判断依赖最新版本、发布日期、官方动态时 | 默认优先；回退：`exa`，仍不足时标记 `[Evidence Gap]` |
 | 参考 GitHub 开源架构 | `deepwiki` | 当需要参考外部开源项目时 | 回退：`exa_web_search_exa` |
 | 技术选型深度研究 | `exa_web_search_advanced_exa(type=deep-reasoning)` | 当需要进行技术方案深度调研时 | 回退：`grok-search`。没有官方文档证据时，不下 API/框架细节结论，只保留待验证设计假设 |
 | 复杂架构推理 | `sequential-thinking` | 当涉及 ≥3 个技术方案对比或推理步骤 >3 步时 | 复杂决策场景 |

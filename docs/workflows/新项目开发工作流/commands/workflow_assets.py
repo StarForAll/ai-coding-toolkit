@@ -101,7 +101,7 @@ def render_workflow_managed_agent(commands_root: Path, cli_type: str, agent_name
 
     if cli_type == "claude":
         tools_line = {
-            "research": "Read, Glob, Grep, mcp__exa__web_search_exa, mcp__exa__get_code_context_exa, mcp__Context7__*, Skill, mcp__chrome-devtools__*",
+            "research": "Read, Glob, Grep, mcp__ace__*, mcp__grok_search__*, mcp__deepwiki__*, mcp__exa__web_search_exa, mcp__exa__web_search_advanced_exa, mcp__exa__web_fetch_exa, mcp__exa__get_code_context_exa, mcp__Context7__*, Skill, mcp__chrome-devtools__*",
             "implement": "Read, Write, Edit, Bash, Glob, Grep, mcp__exa__web_search_exa, mcp__exa__get_code_context_exa",
             "check": "Read, Write, Edit, Bash, Glob, Grep, mcp__exa__web_search_exa, mcp__exa__get_code_context_exa",
         }[agent_name]
@@ -125,6 +125,9 @@ def render_workflow_managed_agent(commands_root: Path, cli_type: str, agent_name
                 "  bash: deny",
                 "  glob: allow",
                 "  grep: allow",
+                "  mcp__ace__*: allow",
+                "  mcp__grok_search__*: allow",
+                "  mcp__deepwiki__*: allow",
                 "  mcp__exa__*: allow",
                 "  mcp__Context7__*: allow",
                 "  mcp__chrome-devtools__*: allow",

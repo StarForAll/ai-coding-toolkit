@@ -247,8 +247,11 @@ Workflow embed / analysis / repair scripts must distinguish three asset classes:
      - uninstall must delete an install-created managed agent when no baseline backup exists
      - the formal workflow stage `/trellis:check` is distinct from the internal `check-agent` role and docs must keep that boundary explicit
      - research-agent source contracts must keep:
-       - Exa-first external search
+       - `ace.search_context`-first project-internal code localization
        - Context7-first library/framework/SDK documentation lookup
+       - `grok-search`-first live/latest fact lookup
+       - `deepwiki`-first GitHub repository understanding
+       - Exa for deep research, external code context, and fallback web evidence
        - explicit `[Evidence Gap]` fallback wording when Context7 is unavailable
 
 #### 3.2.1 Initial Branch Gate

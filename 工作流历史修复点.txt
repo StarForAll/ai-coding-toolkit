@@ -38,3 +38,7 @@ git remote set-url --add --push origin git@gitee.com:xxx/yyy.git
 18. 外包项目全款收取的保险措施
 
 19. 工作流补充 research -> implement -> check 子代理链 调用能力
+
+20. 初始化项目之后嵌入该工作流 .current-task 应该为空 且在 git 没有两个远程仓库时提示对应的远程仓库创建命令
+
+21. research agent 搜索策略完善:exa+grok-search+deepwiki,根据具体的场景使用对应的工具

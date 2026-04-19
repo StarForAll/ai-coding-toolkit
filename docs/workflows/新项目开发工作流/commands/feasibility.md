@@ -109,6 +109,7 @@ echo "需求文本" | python3 <WORKFLOW_DIR>/commands/shell/feasibility-check.py
 
 | 场景 | 调用能力 | 触发条件 | 说明 |
 |------|---------|---------|------|
+| 最新行业信息 / 最新版本 / 今日事实 | `grok-search` | 当评估结论依赖最新消息、近期版本、政策或市场动态时 | 默认优先；回退：`exa`，仍不足时标记 `[Evidence Gap]` |
 | 竞品分析、技术方案深度调研 | `exa_web_search_advanced_exa(type=deep-reasoning)` | 当需要进行竞品分析或技术调研时 | 回退：`grok-search`。无法联网时不输出行业最新情况结论，改为本地已知风险清单，标记 `[Evidence Gap]` |
 | 风险评估复杂推理 | `sequential-thinking` | 当风险评估涉及 ≥3 个决策分支或推理步骤 >3 步时 | 复杂风险场景 |
 | 参考 GitHub 开源项目 | `deepwiki` | 当需要参考外部开源项目时 | 回退：`exa_web_search_exa` |

@@ -11,7 +11,7 @@
 - `feasibility` 到 `delivery`（含 `project-audit`）这类阶段资产由当前 workflow 分发
 - `start` / `finish-work` / `record-session` 默认来自 Trellis 基线，允许由当前 workflow 追加补丁增强
 - close-out 中的 `archive` 仍直接复用目标项目 Trellis 基线 `task.py`；若目标项目不是当前最新 Trellis 基线，可能不包含 archive auto-commit pathspec 修复
-- 安装器会自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines` 则清理，不存在则跳过
+- 安装器会自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines` 则清理，不存在则跳过；若 `.current-task` 仍指向该 bootstrap task，则同步清理悬空引用
 
 前提:
 - 目标项目是 Git 仓库，`origin` 至少有两个 push URL，已执行 trellis init，且存在对应 CLI 目录
@@ -332,6 +332,54 @@ def count_origin_push_urls(root: Path) -> int:
     return count
 
 
+def normalize_task_ref(task_ref: str, root: Path) -> str:
+    """规范化 `.current-task` 中的 task 引用，便于与 bootstrap task 比较。"""
+    normalized = task_ref.strip()
+    if not normalized:
+        return ""
+
+    path_obj = Path(normalized)
+    if path_obj.is_absolute():
+        try:
+            normalized = path_obj.relative_to(root).as_posix()
+        except ValueError:
+            return normalized
+
+    if normalized.startswith("./"):
+        normalized = normalized[2:]
+    if normalized.startswith("tasks/"):
+        normalized = f".trellis/{normalized}"
+    elif (
+        "/" not in normalized
+        and normalized
+        and normalized not in {".", ".."}
+        and not normalized.startswith(".trellis/")
+    ):
+        normalized = f".trellis/tasks/{normalized}"
+
+    return normalized
+
+
+def clear_bootstrap_current_task_if_needed(root: Path, dry_run: bool) -> bool:
+    """若 `.current-task` 仍指向 bootstrap task，则同步清理该悬空引用。"""
+    current_task_file = root / ".trellis" / ".current-task"
+    if not current_task_file.is_file():
+        return False
+
+    current_task = normalize_task_ref(current_task_file.read_text(encoding="utf-8"), root)
+    bootstrap_ref = f".trellis/tasks/{_BOOTSTRAP_TASK_NAME}"
+    if current_task != bootstrap_ref:
+        return False
+
+    if dry_run:
+        info(f"将清理 bootstrap current-task 引用 → {bootstrap_ref}")
+        return True
+
+    current_task_file.write_text("", encoding="utf-8")
+    ok(f"已清理 bootstrap current-task 引用 → {bootstrap_ref}")
+    return True
+
+
 def ensure_project_prereqs(root: Path) -> None:
     """校验目标项目满足 workflow 嵌入前提。"""
     git_marker = root / ".git"
@@ -348,9 +396,10 @@ def ensure_project_prereqs(root: Path) -> None:
     if push_url_count < _MIN_ORIGIN_PUSH_URLS:
         sys.exit(
             f"{R}目标项目未满足 workflow 前置校验：`{_ORIGIN_REMOTE_NAME}` 至少需要 {_MIN_ORIGIN_PUSH_URLS} 个 push URL。\n"
-            "请先为同一个 origin 配置多个 push 远端，例如：\n"
-            "git remote set-url --add --push origin git@github.com:xxx/yyy.git\n"
-            f"git remote set-url --add --push origin git@gitee.com:xxx/yyy.git{N}"
+            "请先为同一个 origin 配置多个 push 远端；若还没有 origin，先执行第一条：\n"
+            "git remote add origin <你的第一个远程仓库URL>\n"
+            "git remote set-url --add --push origin <第一个仓库URL>\n"
+            f"git remote set-url --add --push origin <第二个仓库URL>{N}"
         )
     enforce_initial_main_branch_policy(root)
 
@@ -1107,13 +1156,17 @@ def remove_bootstrap_task(root: Path, dry_run: bool) -> str:
         info(f"{_BOOTSTRAP_TASK_NAME} 不存在，跳过清理")
         return "absent"
     if dry_run:
+        clear_bootstrap_current_task_if_needed(root, dry_run=True)
         info(f"将删除 Trellis bootstrap 任务 → .trellis/tasks/{_BOOTSTRAP_TASK_NAME}")
         return "dry-run-removed"
+    current_task_cleared = clear_bootstrap_current_task_if_needed(root, dry_run)
     if task_dir.is_dir():
         shutil.rmtree(task_dir)
     else:
         task_dir.unlink()
     ok(f"Trellis bootstrap 任务已删除 → {_BOOTSTRAP_TASK_NAME}")
+    if not current_task_cleared:
+        info("bootstrap current-task 引用无需清理")
     return "removed"
 
 
@@ -1269,7 +1322,10 @@ def main() -> int:
     if not args.dry_run:
         print("  下一步（推荐）:")
         if bootstrap_cleanup == "removed":
-            print(f"    1. 安装器已自动导入 {_REQUIREMENTS_FOUNDATION_PACK}，并清理 {_BOOTSTRAP_TASK_NAME}")
+            print(
+                f"    1. 安装器已自动导入 {_REQUIREMENTS_FOUNDATION_PACK}，并清理 {_BOOTSTRAP_TASK_NAME}"
+                "；若 `.current-task` 曾指向该 bootstrap task，也已同步清理"
+            )
         elif bootstrap_cleanup == "absent":
             print(f"    1. 安装器已自动导入 {_REQUIREMENTS_FOUNDATION_PACK}；目标项目未创建 {_BOOTSTRAP_TASK_NAME}，清理已跳过")
         else:

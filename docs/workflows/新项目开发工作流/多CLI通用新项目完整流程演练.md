@@ -67,9 +67,12 @@
 参考配置命令：
 
 ```bash
-git remote set-url --add --push origin git@github.com:xxx/yyy.git
-git remote set-url --add --push origin git@gitee.com:xxx/yyy.git
+git remote add origin <你的第一个远程仓库URL>
+git remote set-url --add --push origin <第一个仓库URL>
+git remote set-url --add --push origin <第二个仓库URL>
 ```
+
+若 `origin` 已存在，跳过第一条。
 
 如果少了其中任意一个前提，就不应把当前 workflow 视为“已经可以直接嵌入使用”。
 
@@ -100,7 +103,7 @@ git remote set-url --add --push origin git@gitee.com:xxx/yyy.git
 1. 先在目标项目执行 `trellis init`
 2. 再运行当前 workflow 目录里的 `commands/install-workflow.py`
 3. 安装脚本把这套 workflow 嵌入到目标项目，并按各 CLI 官方原生格式完成内容适配
-4. 安装脚本自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines`，则一并清理，否则跳过
+4. 安装脚本自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines`，则一并清理；若 `.current-task` 仍指向该 bootstrap task，也同步清理悬空引用；否则跳过
 5. 最后在目标项目里按原生入口直接使用
 
 标准安装命令：
@@ -194,6 +197,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 ### 推荐 MCP / Skills
 
 - `demand-risk-assessment`
+- `grok-search`
 - `exa_web_search_advanced_exa(type=deep-reasoning)`
 - `deepwiki`
 - `sequential-thinking`
@@ -327,6 +331,8 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 - `ace.search_context`
 - `Context7`
+- `grok-search`
+- `deepwiki`
 - `doc-coauthoring`
 - `architecture-patterns`
 - `backend-patterns`
@@ -436,6 +442,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 - 没有结构化拆解能力时，至少按“范围 / 风险 / 验收 / 依赖 / 回归”五列拆任务
 - 对不确定项单独列成待补信息，不要混入已承诺任务
+- 若拆任务依赖第三方官方文档或最新版本判断，仍按全局路由：`Context7` / `grok-search` / `exa_web_search_advanced_exa(type=deep-reasoning)`
 
 ### 外部交付项目分支
 

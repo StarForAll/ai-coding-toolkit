@@ -27,7 +27,7 @@ OpenCode 已具备承载这套 workflow 的原生命令、rules、agents、skill
 
 这里要求同一个 `origin` 至少配置两个 push URL，是因为当前 workflow 默认服务于“同仓双推镜像”交付模型，常见配置就是 GitHub / Gitee 双推；如果你的项目没有这类远端同步要求，就不要把当前约束误解成通用 Git 最低要求。
 
-在此前提下，正确顺序是：先完成 `trellis init`，再执行当前 workflow 自带的安装脚本；原生命令与 agents 由安装脚本按平台方式落到目标项目，并自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines`，安装脚本会一并清理，否则跳过。
+在此前提下，正确顺序是：先完成 `trellis init`，再执行当前 workflow 自带的安装脚本；原生命令与 agents 由安装脚本按平台方式落到目标项目，并自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines`，安装脚本会一并清理；若 `.current-task` 仍指向该 bootstrap task，也会同步清理悬空引用，否则跳过。
 
 ## 安装时序
 
@@ -219,8 +219,11 @@ source-of-truth 边界需要单独说清：
 
 其中 `research` 角色还需要遵守统一证据门禁：
 
-- 外部技术搜索优先 `exa`
+- 项目内部代码定位优先 `ace.search_context`
 - 第三方库 / 框架 / SDK 官方文档必须先 `Context7`
+- 最新信息、版本、今日事实优先 `grok-search`
+- 深度技术调研 / 竞品分析优先 `exa_web_search_advanced_exa(type=deep-reasoning)`
+- GitHub 仓库理解优先 `deepwiki`
 - 未经过 `Context7`，不得输出 API / 配置 / 版本结论；若能力不可用，必须标记 `[Evidence Gap]`
 
 ### 4. Skills：保留技能层，而不是把所有逻辑硬塞进命令

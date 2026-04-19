@@ -120,6 +120,13 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
 
 **调用 Skill**：`project-planner` + `writing-plans`
 
+外部证据路由补充：
+
+- 若拆任务时需要确认第三方框架 / SDK 官方文档，优先 `Context7`
+- 若依赖最新版本、近期发布或今日事实，优先 `grok-search`
+- 只有在需要深度技术调研或多方案对比时，才进入 `exa_web_search_advanced_exa(type=deep-reasoning)`
+- 项目内既有实现、影响面和相似任务边界，优先 `ace.search_context`
+
 ```bash
 cat "$TASK_DIR/prd.md"
 cat "$TASK_DIR/design/index.md" 2>/dev/null

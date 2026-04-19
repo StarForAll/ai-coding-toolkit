@@ -9,5 +9,8 @@
 
 ## Required External Capabilities
 
+- ACE
+- Grok Search
+- DeepWiki
 - Exa
 - Context7

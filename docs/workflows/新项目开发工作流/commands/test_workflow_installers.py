@@ -200,6 +200,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         include_trellis: bool = True,
         include_trellis_version: bool = True,
         include_bootstrap_task: bool = True,
+        bootstrap_as_current_task: bool = False,
         current_branch: str = "main",
         has_local_history: bool = False,
     ) -> Path:
@@ -242,6 +243,11 @@ class WorkflowInstallerTests(unittest.TestCase):
                     '{"id":"00-bootstrap-guidelines"}\n',
                     encoding="utf-8",
                 )
+                if bootstrap_as_current_task:
+                    (root / ".trellis" / ".current-task").write_text(
+                        ".trellis/tasks/00-bootstrap-guidelines\n",
+                        encoding="utf-8",
+                    )
         (root / ".claude" / "commands" / "trellis" / "start.md").write_text(
             BASELINE_START_CONTENT,
             encoding="utf-8",
@@ -486,11 +492,24 @@ class WorkflowInstallerTests(unittest.TestCase):
         codex_research = (fixture / ".codex" / "agents" / "research.toml").read_text(encoding="utf-8")
         codex_implement = (fixture / ".codex" / "agents" / "implement.toml").read_text(encoding="utf-8")
         codex_check = (fixture / ".codex" / "agents" / "check.toml").read_text(encoding="utf-8")
+        self.assertIn("mcp__ace__*", claude_research)
+        self.assertIn("mcp__grok_search__*", claude_research)
+        self.assertIn("mcp__deepwiki__*", claude_research)
+        self.assertIn("mcp__exa__web_fetch_exa", claude_research)
         self.assertIn("Context7", claude_research)
+        self.assertIn("ace.search_context", claude_research)
+        self.assertIn("grok-search", claude_research)
+        self.assertIn("deepwiki", claude_research)
+        self.assertIn("mcp__ace__*: allow", opencode_research)
+        self.assertIn("mcp__grok_search__*: allow", opencode_research)
+        self.assertIn("mcp__deepwiki__*: allow", opencode_research)
         self.assertIn("Context7", opencode_research)
         self.assertIn('sandbox_mode = "read-only"', codex_research)
         self.assertIn("Context7", codex_research)
-        self.assertIn("Exa", codex_research)
+        self.assertIn("ace.search_context", codex_research)
+        self.assertIn("grok-search", codex_research)
+        self.assertIn("deepwiki", codex_research)
+        self.assertNotIn("Use Exa-first", codex_research)
         self.assertIn("[Evidence Gap]", codex_research)
         self.assertIn('sandbox_mode = "workspace-write"', codex_implement)
         self.assertIn('sandbox_mode = "workspace-write"', codex_check)
@@ -540,6 +559,56 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertFalse((fixture / ".trellis" / "tasks" / "00-bootstrap-guidelines").exists())
         self.assertIn("初始 spec 基线已导入", install.stdout)
         self.assertIn("Trellis bootstrap 任务已删除", install.stdout)
+
+    def test_install_clears_stale_current_task_when_bootstrap_task_is_removed(self) -> None:
+        fixture = self.create_fixture(bootstrap_as_current_task=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        current_task_file = fixture / ".trellis" / ".current-task"
+        if current_task_file.exists():
+            self.assertEqual(current_task_file.read_text(encoding="utf-8").strip(), "")
+        self.assertFalse((fixture / ".trellis" / "tasks" / "00-bootstrap-guidelines").exists())
+        self.assertIn("已清理 bootstrap current-task 引用", install.stdout)
+
+    def test_install_clears_bootstrap_current_task_when_reference_uses_short_name(self) -> None:
+        fixture = self.create_fixture(bootstrap_as_current_task=True)
+        self.addCleanup(shutil.rmtree, fixture)
+        (fixture / ".trellis" / ".current-task").write_text("00-bootstrap-guidelines\n", encoding="utf-8")
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        current_task_file = fixture / ".trellis" / ".current-task"
+        if current_task_file.exists():
+            self.assertEqual(current_task_file.read_text(encoding="utf-8").strip(), "")
+        self.assertIn("已清理 bootstrap current-task 引用", install.stdout)
+
+    def test_install_dry_run_previews_bootstrap_current_task_cleanup(self) -> None:
+        fixture = self.create_fixture(bootstrap_as_current_task=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        result = self.run_script(INSTALL_SCRIPT, "--project-root", str(fixture), "--dry-run")
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("将清理 bootstrap current-task 引用", result.stdout)
+        self.assertEqual(
+            (fixture / ".trellis" / ".current-task").read_text(encoding="utf-8").strip(),
+            ".trellis/tasks/00-bootstrap-guidelines",
+        )
+
+    def test_install_does_not_clear_special_current_task_values(self) -> None:
+        fixture = self.create_fixture(bootstrap_as_current_task=True)
+        self.addCleanup(shutil.rmtree, fixture)
+        (fixture / ".trellis" / ".current-task").write_text(".\n", encoding="utf-8")
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.assertEqual((fixture / ".trellis" / ".current-task").read_text(encoding="utf-8").strip(), ".")
+        self.assertNotIn("已清理 bootstrap current-task 引用", install.stdout)
 
     def test_uninstall_restores_workflow_doc(self) -> None:
         fixture = self.create_fixture()
@@ -650,6 +719,9 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertNotEqual(install.returncode, 0)
         self.assertIn("origin", install.stderr)
         self.assertIn("至少需要 2 个 push URL", install.stderr)
+        self.assertIn("git remote add origin <你的第一个远程仓库URL>", install.stderr)
+        self.assertIn("git remote set-url --add --push origin <第一个仓库URL>", install.stderr)
+        self.assertIn("git remote set-url --add --push origin <第二个仓库URL>", install.stderr)
 
     def test_install_requires_main_branch_for_new_project(self) -> None:
         fixture = self.create_fixture(current_branch="master", has_local_history=False)
@@ -1080,7 +1152,12 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         updated = claude_research.read_text(encoding="utf-8")
         self.assertIn("Context7", updated)
-        self.assertIn("Use Exa-first", updated)
+        self.assertIn("ace.search_context", updated)
+        self.assertIn("exa_web_search_advanced_exa", updated)
+        self.assertIn("mcp__exa__web_fetch_exa", updated)
+        self.assertIn("grok-search", updated)
+        self.assertIn("deepwiki", updated)
+        self.assertNotIn("Use Exa-first", updated)
 
     def test_upgrade_merge_restores_opencode_managed_agent(self) -> None:
         fixture = self.create_fixture(include_opencode=True)
