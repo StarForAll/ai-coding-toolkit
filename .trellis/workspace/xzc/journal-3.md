@@ -1606,3 +1606,36 @@ Fixed the Codex workflow skills boundary so distributed skills still sync to all
 ### Next Steps
 
 - None - task complete
+
+
+## Session 123: 新项目工作流装后核对闭环收敛
+
+**Date**: 2026-04-20
+**Task**: 新项目工作流装后核对闭环收敛
+**Branch**: `main`
+
+### Summary
+
+收敛 docs/workflows/新项目开发工作流 的装后核对闭环，补 install/upgrade 检测与测试，完成两轮 multi-cli-review 汇总修复。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c3cd8df` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
