@@ -1561,3 +1561,48 @@ Fixed the Codex workflow skills boundary so distributed skills still sync to all
 ### Next Steps
 
 - None - task complete
+
+
+## Session 122: workflow: plan stage readiness gate hardening
+
+**Date**: 2026-04-20
+**Task**: workflow: plan stage readiness gate hardening
+**Branch**: `main`
+
+### Summary
+
+强化新项目工作流 plan 阶段的 readiness gate、leaf-task 最小 prd 门禁与校验脚本，并完成多轮 multi-cli review 收口。
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Plan Stage | 在 `commands/plan.md` 中引入 readiness gate，明确仅吸收 Trellis plan-agent 的 task-ready 优点，不恢复 `plan -> dispatch` 自动链。 |
+| Validation | 强化 `commands/shell/plan-validate.py` 的 leaf-task 最小 `prd.md` 校验、双语标题匹配、路径规范化与占位符边界判断。 |
+| Test Coverage | 扩展 `commands/shell/test_plan_validate.py`，最终回归测试达到 16 个用例并全部通过。 |
+| Propagation | 同步更新总纲、命令映射、通俗版、walkthrough、阶段状态机、三端 README 与思维导图，消除规则漂移。 |
+| Review Closure | 完成 round-1 ~ round-4 的 multi-cli review/action 记录，最终在 round-4 提前关闭额外复核。 |
+
+**Validation**:
+- `/ops/softwares/python/bin/python3 docs/workflows/新项目开发工作流/commands/shell/test_plan_validate.py`
+- `/ops/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings`
+- `/ops/softwares/python/bin/python3 -m unittest trellis-library/tests/test_cli.py`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ef683aa` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
