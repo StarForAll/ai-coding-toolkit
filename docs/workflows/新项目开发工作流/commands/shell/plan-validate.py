@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import sys
+import unicodedata
 from pathlib import Path
 
 
@@ -34,8 +35,15 @@ LEGACY_MARKERS = [
     "并行属性",
     "冲突说明",
 ]
-PLACEHOLDER_MARKERS = ("待补充", "TBD", "...")
+PLACEHOLDER_MARKERS = ("待补充", "待定", "暂空", "后续补充", "TBD", "TODO", "FIXME", "...")
 TASK_CARD_MARKERS = ("任务路径", "任务标题", "本轮目标", "本轮不做", "前置依赖", "验收锚点", "风险提醒", "推荐主执行 CLI")
+LEAF_PRD_REQUIRED_SECTIONS = (
+    ("Goal", "目标"),
+    ("In Scope", "范围"),
+    ("Out of Scope", "不做"),
+    ("Acceptance Anchors", "验收锚点"),
+    ("Preferred CLI", "推荐主执行 CLI"),
+)
 
 
 def print_result(ok: bool, success: str, failure: str) -> int:
@@ -90,14 +98,85 @@ def has_meaningful_text(text: str) -> bool:
     stripped = text.strip()
     if not stripped:
         return False
-    return not any(marker in stripped for marker in PLACEHOLDER_MARKERS)
+    return not is_placeholder_like(stripped)
 
 
 def resolve_task_path(repo_root: Path, task_path: str) -> Path:
     normalized = task_path.strip().replace("\\", "/")
-    if normalized.startswith(".trellis/"):
-        return repo_root / normalized
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    if normalized.startswith("tasks/"):
+        normalized = f".trellis/{normalized}"
     return repo_root / normalized
+
+
+def extract_task_card_value(section_lines: list[str], label: str) -> str:
+    prefix = f"- {label}："
+    for line in section_lines:
+        stripped = line.strip()
+        if stripped.startswith(prefix):
+            return stripped[len(prefix):].strip()
+    return ""
+
+
+def find_matching_sections(lines: list[str], candidates: tuple[str, ...]) -> list[list[str]]:
+    matches: list[list[str]] = []
+    for title in candidates:
+        section_lines = find_section_lines(lines, title)
+        if section_lines:
+            matches.append(section_lines)
+    return matches
+
+
+def is_placeholder_like(text: str) -> bool:
+    normalized = text.strip().lstrip("-").strip().strip("`*_ \t\r\n")
+    if not normalized:
+        return True
+    lowered = normalized.lower()
+    for marker in PLACEHOLDER_MARKERS:
+        lowered_marker = marker.lower()
+        if not lowered.startswith(lowered_marker):
+            continue
+        if len(lowered) == len(lowered_marker):
+            return True
+        next_char = normalized[len(marker)]
+        if next_char.isspace():
+            return True
+        if unicodedata.category(next_char).startswith("P"):
+            return True
+    return False
+
+
+def has_meaningful_section_content(section_lines: list[str]) -> bool:
+    meaningful_lines = [line.strip().lstrip("-").strip() for line in section_lines if line.strip()]
+    if not meaningful_lines:
+        return False
+    return any(line and not is_placeholder_like(line) for line in meaningful_lines)
+
+
+def validate_leaf_prd(prd_path: Path) -> tuple[bool, str]:
+    if not prd_path.is_file():
+        return False, "当前推荐执行任务对应 leaf task 缺少最小 prd.md"
+
+    content = prd_path.read_text(encoding="utf-8")
+    lines = content.splitlines()
+
+    missing_sections: list[str] = []
+    empty_sections: list[str] = []
+    for candidates in LEAF_PRD_REQUIRED_SECTIONS:
+        label = " / ".join(candidates)
+        section_groups = find_matching_sections(lines, candidates)
+        if not section_groups:
+            missing_sections.append(label)
+            continue
+        if not any(has_meaningful_section_content(section_lines) for section_lines in section_groups):
+            empty_sections.append(label)
+
+    if missing_sections:
+        return False, f"当前推荐执行任务对应 leaf task 的 prd.md 缺少章节: {', '.join(missing_sections)}"
+    if empty_sections:
+        return False, f"当前推荐执行任务对应 leaf task 的 prd.md 章节仍是空值或占位内容: {', '.join(empty_sections)}"
+    return True, "当前推荐执行任务对应 leaf task 已补齐最小 prd.md"
 
 
 def main() -> int:
@@ -168,12 +247,27 @@ def main() -> int:
     )
 
     task_card_section = "\n".join(find_section_lines(lines, "当前推荐执行任务（待确认）"))
+    task_card_lines = find_section_lines(lines, "当前推荐执行任务（待确认）")
     has_task_card = has_meaningful_text(task_card_section) and all(marker in task_card_section for marker in TASK_CARD_MARKERS)
     checks += 1
     passed += print_result(
         has_task_card,
         "当前推荐执行任务说明卡已完整填写",
         "当前推荐执行任务（待确认）缺少任务说明卡字段（任务路径/任务标题/本轮目标/本轮不做/前置依赖/验收锚点/风险提醒/推荐主执行 CLI）",
+    )
+
+    recommended_task_path = extract_task_card_value(task_card_lines, "任务路径")
+    recommended_task_prd_ok = False
+    recommended_task_prd_message = "当前推荐执行任务对应 leaf task 缺少最小 prd.md"
+    if recommended_task_path:
+        recommended_task_dir = resolve_task_path(repo_root, recommended_task_path)
+        recommended_task_prd_ok, recommended_task_prd_message = validate_leaf_prd(recommended_task_dir / "prd.md")
+
+    checks += 1
+    passed += print_result(
+        recommended_task_prd_ok,
+        "当前推荐执行任务对应 leaf task 已补齐最小 prd.md",
+        recommended_task_prd_message,
     )
 
     task_section = find_section_lines(lines, "Trellis Task 清单")

@@ -96,6 +96,17 @@ class PlanValidateScriptTests(unittest.TestCase):
             (task_root / name).mkdir(parents=True, exist_ok=True)
         return current_task
 
+    def write_leaf_prd(self, root: Path, task_name: str) -> None:
+        task_dir = root / ".trellis" / "tasks" / task_name
+        (task_dir / "prd.md").write_text(
+            "# Leaf Task\n\n## Goal\n\n验证 leaf task ready 产物。\n\n## In Scope\n\n- 校验最小 task-ready 产物。\n\n## Out of Scope\n\n- 不进入实现。\n\n## Acceptance Anchors\n\n- 校验脚本通过。\n\n## Preferred CLI\n\n- Codex\n",
+            encoding="utf-8",
+        )
+
+    def write_leaf_prd_with_content(self, root: Path, task_name: str, content: str) -> None:
+        task_dir = root / ".trellis" / "tasks" / task_name
+        (task_dir / "prd.md").write_text(content, encoding="utf-8")
+
     def write_plan(self, directory: Path, content: str) -> None:
         (directory / "task_plan.md").write_text(content, encoding="utf-8")
 
@@ -103,6 +114,7 @@ class PlanValidateScriptTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_root:
             root = Path(temp_root)
             task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
             self.write_plan(task_dir, VALID_PLAN)
 
             result = self.run_script(task_dir)
@@ -122,6 +134,7 @@ class PlanValidateScriptTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_root:
             root = Path(temp_root)
             task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
             self.write_plan(task_dir, LEGACY_PLAN)
 
             result = self.run_script(task_dir)
@@ -133,6 +146,7 @@ class PlanValidateScriptTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_root:
             root = Path(temp_root)
             task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
             self.write_plan(task_dir, VALID_PLAN.replace("\n## 门禁摘要\n", "\n"))
 
             result = self.run_script(task_dir)
@@ -144,6 +158,7 @@ class PlanValidateScriptTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_root:
             root = Path(temp_root)
             task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
             shutil.rmtree(root / ".trellis" / "tasks" / "04-14-task-b")
             self.write_plan(task_dir, VALID_PLAN)
 
@@ -156,6 +171,7 @@ class PlanValidateScriptTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_root:
             root = Path(temp_root)
             task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
             broken = VALID_PLAN.replace("before-dev.md", "task-gate.md")
             self.write_plan(task_dir, broken)
 
@@ -168,6 +184,7 @@ class PlanValidateScriptTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_root:
             root = Path(temp_root)
             task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
             broken = VALID_PLAN.replace("域内串行，不自动续跑", "域内串行，自动续跑")
             self.write_plan(task_dir, broken)
 
@@ -175,6 +192,158 @@ class PlanValidateScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
         self.assertIn("项目域执行策略未写清“域内串行、不自动续跑”", result.stdout)
+
+    def test_missing_recommended_leaf_prd_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_plan(task_dir, VALID_PLAN)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("当前推荐执行任务对应 leaf task 缺少最小 prd.md", result.stdout)
+
+    def test_recommended_leaf_prd_placeholder_content_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd_with_content(
+                root,
+                "04-14-task-a",
+                "# Leaf Task\n\n## Goal\n\nTBD\n\n## In Scope\n\n- 待补充\n\n## Out of Scope\n\n- ...\n\n## Acceptance Anchors\n\n- TBD\n\n## Preferred CLI\n\n- 待补充\n",
+            )
+            self.write_plan(task_dir, VALID_PLAN)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("章节仍是空值或占位内容", result.stdout)
+
+    def test_recommended_leaf_prd_missing_required_sections_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd_with_content(
+                root,
+                "04-14-task-a",
+                "# Leaf Task\n\n## Goal\n\n验证 leaf task ready 产物。\n",
+            )
+            self.write_plan(task_dir, VALID_PLAN)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("prd.md 缺少章节", result.stdout)
+
+    def test_tasks_prefix_path_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
+            plan_with_tasks_prefix = VALID_PLAN.replace(
+                ".trellis/tasks/04-14-task-a",
+                "tasks/04-14-task-a",
+            ).replace(
+                ".trellis/tasks/04-14-task-b",
+                "tasks/04-14-task-b",
+            ).replace(
+                ".trellis/tasks/04-14-project-audit",
+                "tasks/04-14-project-audit",
+            )
+            self.write_plan(task_dir, plan_with_tasks_prefix)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("task_plan.md 结构验证通过", result.stdout)
+
+    def test_dot_slash_tasks_prefix_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
+            plan_with_dot_slash_tasks_prefix = VALID_PLAN.replace(
+                ".trellis/tasks/04-14-task-a",
+                "./tasks/04-14-task-a",
+            ).replace(
+                ".trellis/tasks/04-14-task-b",
+                "./tasks/04-14-task-b",
+            ).replace(
+                ".trellis/tasks/04-14-project-audit",
+                "./tasks/04-14-project-audit",
+            )
+            self.write_plan(task_dir, plan_with_dot_slash_tasks_prefix)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("task_plan.md 结构验证通过", result.stdout)
+
+    def test_bilingual_section_falls_back_to_non_empty_variant(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd_with_content(
+                root,
+                "04-14-task-a",
+                "# Leaf Task\n\n## Goal\n\nTBD\n\n## 目标\n\n验证 leaf task ready 产物。\n\n## In Scope\n\nTBD\n\n## 范围\n\n- 校验最小 task-ready 产物。\n\n## Out of Scope\n\nTBD\n\n## 不做\n\n- 不进入实现。\n\n## Acceptance Anchors\n\nTBD\n\n## 验收锚点\n\n- 校验脚本通过。\n\n## Preferred CLI\n\nTBD\n\n## 推荐主执行 CLI\n\n- Codex\n",
+            )
+            self.write_plan(task_dir, VALID_PLAN)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("当前推荐执行任务对应 leaf task 已补齐最小 prd.md", result.stdout)
+
+    def test_placeholder_variants_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd_with_content(
+                root,
+                "04-14-task-a",
+                "# Leaf Task\n\n## Goal\n\n待补充。\n\n## In Scope\n\n- TODO later\n\n## Out of Scope\n\n- 后续补充\n\n## Acceptance Anchors\n\n- FIXME\n\n## Preferred CLI\n\n- TBD soon\n",
+            )
+            self.write_plan(task_dir, VALID_PLAN)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("章节仍是空值或占位内容", result.stdout)
+
+    def test_placeholder_prefix_collision_does_not_fail_valid_leaf_prd(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd_with_content(
+                root,
+                "04-14-task-a",
+                "# Leaf Task\n\n## Goal\n\nTODOist integration\n\n## In Scope\n\n- 处理 FIXME-1234 缺陷同步。\n\n## Out of Scope\n\n- 不进入实现。\n\n## Acceptance Anchors\n\n- 校验脚本通过。\n\n## Preferred CLI\n\n- Codex\n",
+            )
+            self.write_plan(task_dir, VALID_PLAN)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("当前推荐执行任务对应 leaf task 已补齐最小 prd.md", result.stdout)
+
+    def test_task_table_description_with_todoist_is_not_placeholder(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
+            plan_with_valid_todoist_description = VALID_PLAN.replace(
+                "完成基础能力",
+                "实现 TODOist 集成模块",
+                1,
+            )
+            self.write_plan(task_dir, plan_with_valid_todoist_description)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("Trellis Task 清单填写完整", result.stdout)
 
 
 if __name__ == "__main__":

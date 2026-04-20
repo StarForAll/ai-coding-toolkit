@@ -123,6 +123,7 @@ Claude Code 的用户入口仍是项目命令：
 - 阶段性操作规则
 - 对应 shell/helper 脚本的调用关系
 - 承载 Brainstorm 完成前的项目级正式需求文档门禁：进入 design 前至少已同步 `docs/requirements/customer-facing-prd.md`，并补齐 `task_dir/prd.md` 中的 `## 项目级粗估` 与 `customer-facing-prd.md` 中的 `## 项目级粗估摘要`；`docs/requirements/developer-facing-prd.md` 等到技术架构确认后再正式生成
+- 承载 Plan 阶段的 task-ready 门禁：真正拆 task 前先做 readiness gate；当前推荐 leaf task 至少已补齐最小 `prd.md`；这不等于启用 Trellis 原生 `plan -> dispatch` 自动链
 
 对前端视觉落地链路，还要额外记一条：
 

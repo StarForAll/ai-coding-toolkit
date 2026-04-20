@@ -465,6 +465,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 真实 Trellis task / child task 已拆出
 - 每个 task 的全局门禁来源已明确
 - 已生成当前推荐执行任务说明卡，先向用户说明该 task 的目标、边界、依赖、验收与风险
+- 当前推荐 leaf task 至少已补齐最小 `prd.md`，不再是 Trellis 基线里的 `NOT READY` 任务
 - 已决定进入 `start` 主链（需要显式先测时才额外进入 `test-first`），但尚未开工
 - 已明确当前要执行的叶子 task，并把状态停在“等待用户确认是否进入 implementation/test-first”
 - 进入 `implementation` / `test-first` 前，必须通过 `workflow-state` 显式设置 `checkpoints.execution_authorized = true`，并记录 `last_confirmed_transition`

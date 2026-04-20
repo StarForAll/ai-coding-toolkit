@@ -148,7 +148,39 @@ cat "$TASK_DIR/design/index.md" 2>/dev/null
 
 若属于后者，先划清项目域边界，再在每个项目域内部做串行 task 链。
 
-### Step 2: 创建或补齐真实 Trellis task
+在真正拆 task 之前，先做一次**拆分就绪检查**。
+这里吸收的是 Trellis 原生 `plan agent` 的“先判断是否可规划、再补 task-ready 产物”的优点，
+但**不**引入其 `plan -> dispatch` 自动执行链。
+
+至少检查：
+
+- 目标、范围、验收锚点是否已经清晰
+- 关键依赖、约束、外部系统是否已经识别
+- 当前事项是否过大，是否应该继续拆小
+- 是否仍存在需要回退到 `brainstorm` / `design` 才能解决的阻断项
+
+若未通过拆分就绪检查：
+
+- 本轮 `plan` 停在“列出阻断项与建议回退阶段”
+- 不继续生成新的实施 leaf task
+- 不把未准备好的 leaf task 写成可直接进入 implementation 的候选
+
+推荐输出格式：
+
+```markdown
+## 拆分就绪检查
+
+- 已满足：
+  - ...
+- 未满足：
+  - ...
+- 当前阻断项：
+  - ...
+- 建议回退阶段：
+  - brainstorm / design / plan 内补信息
+```
+
+### Step 2: 创建或补齐真实 Trellis task 与最小就绪产物
 
 真实执行单元必须优先落成 Trellis task，而不是只写在 `task_plan.md` 里。
 
@@ -158,6 +190,35 @@ cat "$TASK_DIR/design/index.md" 2>/dev/null
 python3 ./.trellis/scripts/task.py create "<title>" --slug <name>
 python3 ./.trellis/scripts/task.py create "<child-title>" --slug <child-name> --parent "$TASK_DIR"
 python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
+```
+
+至少要保证：**当前推荐执行任务（待确认）对应的 leaf task 目录已经具备最小 `prd.md`**，
+避免该 task 在 Trellis 基线里被判定为 `NOT READY`。
+
+推荐最小模板：
+
+```markdown
+# <Leaf Task Title>
+
+## Goal
+
+<一句话目标>
+
+## In Scope
+
+- <本轮要做什么>
+
+## Out of Scope
+
+- <本轮明确不做什么>
+
+## Acceptance Anchors
+
+- <如何证明该 leaf task 完成>
+
+## Preferred CLI
+
+- Claude Code / OpenCode / Codex
 ```
 
 拆分规则：
@@ -198,7 +259,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 说明：
 
 - `Trellis Task 清单`：列出现实存在的 task / child task / project-audit task
-- `当前推荐执行任务（待确认）`：输出当前准备进入 implementation / test-first 的叶子 task 说明卡，至少写清任务路径、任务标题、本轮目标、本轮不做、前置依赖、验收锚点、风险提醒、推荐主执行 CLI
+- `当前推荐执行任务（待确认）`：输出当前准备进入 implementation / test-first 的叶子 task 说明卡，至少写清任务路径、任务标题、本轮目标、本轮不做、前置依赖、验收锚点、风险提醒、推荐主执行 CLI；且该 leaf task 目录至少已补齐最小 `prd.md`
 - `依赖关系`：只描述依赖和顺序，不写实时状态
 - `门禁摘要`：只写项目级全局门禁；task 级具体门禁在执行前写入 `$TASK_DIR/before-dev.md`
 - `任务图摘要`：用于人类快速理解 lane、主链、project-audit 触发条件
@@ -313,6 +374,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 
 - `task_plan.md` 结构是否完整
 - `task_plan.md` 中列出的关键 task 是否已真实存在
+- `当前推荐执行任务（待确认）`对应 leaf task 的最小 `prd.md` 是否存在
 - 是否写清项目域执行策略、依赖关系、门禁摘要、任务图摘要
 - 是否仍残留旧版执行矩阵字段
 - `plan` 阶段是否仍保持 `execution_authorized = false`
@@ -330,7 +392,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 ```text
 $TASK_DIR/
 ├── task_plan.md     ← 摘要型计划，不是执行真源
-└── ...              ← 对应的真实 Trellis tasks / child tasks / project-audit task
+└── ...              ← 对应的真实 Trellis tasks / child tasks / project-audit task（当前推荐 leaf task 至少已有最小 prd.md）
 ```
 
 补充状态约束：
@@ -341,7 +403,7 @@ $TASK_DIR/
 
 ## 下一步推荐
 
-**当前状态**: 真实 Trellis task 已拆出，`task_plan.md` 已包含当前推荐执行任务说明卡、任务图与门禁摘要；在用户明确确认前，仍停留在 plan 阶段。
+**当前状态**: 真实 Trellis task 已拆出，`task_plan.md` 已包含当前推荐执行任务说明卡、任务图与门禁摘要；当前推荐 leaf task 已补齐最小 `prd.md`；在用户明确确认前，仍停留在 plan 阶段。
 
 > 本节定义的是阶段完成后的推荐输出口径，用于帮助当前 CLI 或协作者说明下一步；它不是框架层自动跳转保证。
 
