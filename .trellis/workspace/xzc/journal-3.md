@@ -1639,3 +1639,36 @@ Fixed the Codex workflow skills boundary so distributed skills still sync to all
 ### Next Steps
 
 - None - task complete
+
+
+## Session 124: 修复工作流嵌入协议与初始态门禁
+
+**Date**: 2026-04-20
+**Task**: 修复工作流嵌入协议与初始态门禁
+**Branch**: `main`
+
+### Summary
+
+为新项目开发工作流补齐嵌入执行规范、detect-embed-state 检测脚本、workflow-embed-attempt 记录与初始态强门禁，并同步更新 spec、测试与多轮审查产物。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `031a2ca` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

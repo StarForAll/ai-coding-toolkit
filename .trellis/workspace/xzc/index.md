@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 123
+- **Total Sessions**: 124
 - **Last Active**: 2026-04-20
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~1641 | Active |
+| `journal-3.md` | ~1674 | Active |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 124 | 2026-04-20 | 修复工作流嵌入协议与初始态门禁 | `031a2ca` | `main` |
 | 123 | 2026-04-20 | 新项目工作流装后核对闭环收敛 | `c3cd8df` | `main` |
 | 122 | 2026-04-20 | workflow: plan stage readiness gate hardening | `ef683aa` | `main` |
 | 121 | 2026-04-19 | Codex workflow skills active-directory boundary fix | `8accbda` | `main` |
