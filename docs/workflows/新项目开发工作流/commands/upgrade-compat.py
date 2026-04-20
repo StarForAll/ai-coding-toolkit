@@ -20,6 +20,7 @@
 import argparse
 import importlib.util
 import json
+import os
 import shutil
 import sys
 from datetime import datetime, timezone
@@ -66,6 +67,7 @@ _INSTALL_WORKFLOW = _load_install_workflow_module()
 _AGENTS_NL_ROUTING_END = _INSTALL_WORKFLOW._AGENTS_NL_ROUTING_END
 _AGENTS_NL_ROUTING_MARKER = _INSTALL_WORKFLOW._AGENTS_NL_ROUTING_MARKER
 _NL_ROUTING_SECTION = _INSTALL_WORKFLOW._NL_ROUTING_SECTION
+_EMBED_ATTEMPT_FILE_NAME = _INSTALL_WORKFLOW._EMBED_ATTEMPT_FILE_NAME
 deploy_agents_md_routing = _INSTALL_WORKFLOW.deploy_agents_md_routing
 
 
@@ -101,6 +103,7 @@ _PARALLEL_DISABLED_MARKER = "<!-- workflow-parallel-disabled -->"
 _WORKFLOW_PATCH_MARKER = "<!-- workflow-projectization-patch -->"
 _WORKFLOW_START_HEADING = "## Development Process"
 _WORKFLOW_END_HEADING = "## File Descriptions"
+_IGNORE_EMBED_ATTEMPT_ENV = "WORKFLOW_IGNORE_EMBED_ATTEMPT"
 # 当前 workflow 分发的阶段命令。
 # `brainstorm` / `check` 与 Trellis 基线同名，但当前 workflow 采用合并后的阶段语义；
 # `start` / `finish-work` / `record-session` 仍来自 Trellis 基线，并由当前 workflow 注入补丁。
@@ -294,6 +297,30 @@ def detect_install_record_state_warnings(record: dict, root: Path) -> int:
         warn("workflow-installed.json: bootstrap_cleanup_status=absent，但 00-bootstrap-guidelines 仍存在；需人工核对")
 
     return 0
+
+
+def detect_embed_attempt_conflict(root: Path) -> int:
+    if os.environ.get(_IGNORE_EMBED_ATTEMPT_ENV) == "1":
+        return 0
+    attempt_path = root / ".trellis" / _EMBED_ATTEMPT_FILE_NAME
+    if not attempt_path.exists():
+        return 0
+    details = {}
+    try:
+        details = json.loads(attempt_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        details = {"status": "unknown", "error": "attempt record unreadable"}
+    err(
+        f"检测到残留的 {_EMBED_ATTEMPT_FILE_NAME}；目标项目存在未完成或失败的历史嵌入尝试，"
+        "当前状态不能视为完整有效嵌入。"
+    )
+    if details.get("status"):
+        warn(f"{_EMBED_ATTEMPT_FILE_NAME}: status={details['status']}")
+    if details.get("last_step"):
+        warn(f"{_EMBED_ATTEMPT_FILE_NAME}: last_step={details['last_step']}")
+    if details.get("error"):
+        warn(f"{_EMBED_ATTEMPT_FILE_NAME}: error={details['error']}")
+    return 1
 
 
 def read_text(path: Path) -> str | None:
@@ -1087,6 +1114,7 @@ def main() -> int:
 
     # 冲突检测
     total_conflicts = 0
+    total_conflicts += detect_embed_attempt_conflict(root)
     total_conflicts += detect_install_record_schema_conflicts(record)
     detect_install_record_state_warnings(record, root)
     for cli_type in cli_types:

@@ -32,7 +32,7 @@ python3 ./.trellis/scripts/get_context.py
 Use the `feasibility` skill.
 ```
 
-3. If `.trellis/workflow-installed.json` exists but `.trellis/library-lock.yaml` is missing or does not contain `pack.requirements-discovery-foundation`, stop and repair the installation baseline before routing further.
+3. If `.trellis/workflow-installed.json` exists but `.trellis/library-lock.yaml` is missing or does not contain `pack.requirements-discovery-foundation`, stop immediately. Report that the target project is not in a valid embedded state and require manual handling before any further routing.
 
 ### Existing Task Routing
 

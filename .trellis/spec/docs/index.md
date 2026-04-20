@@ -192,6 +192,7 @@ After changing a workflow rule in any command file:
 2. Check these categories of referencing documents:
    - Other command files (`commands/*.md`)
    - `工作流总纲.md` (the authority layer)
+   - `工作流嵌入执行规范.md` (the embed-contract layer, when the workflow defines one)
    - `命令映射.md` (the routing layer)
    - `多CLI通用新项目完整流程演练.md` and `完整流程演练.md` (the walkthrough layer)
    - `工作流全局流转说明（通俗版）.md` (the overview layer)
@@ -214,6 +215,7 @@ These rules have historically required cross-document propagation:
 - **project-audit conditional generation**: "不是所有项目都强制" — appears in brainstorm, plan, project-audit, plan-validate.py
 - **ownership-proof workflow gate**: "`ownership_proof_required` 启用后，`source_watermark_channels` 决定实际验证范围，且 `visible` 是最低必选通道" — appears in feasibility, design, plan, delivery, 总纲, 命令映射, walkthrough, 通俗版, platform README, validator tests
 - **multi-cli reviewer command pairing**: "需要调用 `multi-cli-review` 时，由当前 CLI 生成至少两条只在 `--reviewer-id` 上不同的 reviewer 命令，并同时生成匹配的 `multi-cli-review-action` 聚合命令" — appears in review-gate, project-audit, 总纲, walkthrough, platform instructions, and any reviewer command pack templates
+- **workflow embed execution contract**: "只有纯净初始态目标项目才允许执行首次嵌入；只要嵌入前置条件、初始态判定、非初始态阻断、完整/有效嵌入判定、托管资产范围、`install-workflow.py` / `upgrade-compat.py --check` 行为、`workflow-embed-attempt.json` / `workflow-installed.json` 语义、或 CLI 原生入口承载方式发生变化，就必须同步评估 `工作流嵌入执行规范.md` 是否需要更新" — appears in 嵌入执行规范, 总纲, 命令映射, walkthrough, CLI 边界矩阵, 装后核对清单, platform README, installer / checker scripts, and installer regression tests
 
 ---
 

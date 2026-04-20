@@ -42,3 +42,5 @@ git remote set-url --add --push origin git@gitee.com:xxx/yyy.git
 20. 初始化项目之后嵌入该工作流 .current-task 应该为空 且在 git 没有两个远程仓库时提示对应的远程仓库创建命令
 
 21. research agent 搜索策略完善:exa+grok-search+deepwiki,根据具体的场景使用对应的工具
+
+22. 补充 AI CLI 所需要使用的工作流嵌入规范指导文档

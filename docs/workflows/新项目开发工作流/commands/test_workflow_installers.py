@@ -19,8 +19,10 @@ PYTHON = (
 )
 COMMANDS_DIR = REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "commands"
 INSTALL_SCRIPT = COMMANDS_DIR / "install-workflow.py"
+DETECT_EMBED_STATE_SCRIPT = COMMANDS_DIR / "detect-embed-state.py"
 UPGRADE_SCRIPT = COMMANDS_DIR / "upgrade-compat.py"
 UNINSTALL_SCRIPT = COMMANDS_DIR / "uninstall-workflow.py"
+ATTEMPT_RECORD_NAME = "workflow-embed-attempt.json"
 PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 FINISH_WORK_MARKER = "<!-- finish-work-projectization-patch -->"
 RECORD_SESSION_MARKER = "## Record-Session Metadata Closure `[AI]`"
@@ -348,6 +350,9 @@ class WorkflowInstallerTests(unittest.TestCase):
 
     def install_workflow(self, fixture_root: Path) -> subprocess.CompletedProcess[str]:
         return self.run_script(INSTALL_SCRIPT, "--project-root", str(fixture_root))
+
+    def detect_embed_state(self, fixture_root: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+        return self.run_script(DETECT_EMBED_STATE_SCRIPT, "--project-root", str(fixture_root), *args, env=env)
 
     def latest_env_for(self, fixture_root: Path) -> dict[str, str]:
         version_path = fixture_root / ".trellis" / ".version"
@@ -678,6 +683,54 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("workflow.md", result.stdout + result.stderr)
         self.assertIn("内容漂移", result.stdout + result.stderr)
 
+    def test_upgrade_check_detects_embed_attempt_record_conflict(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        (fixture / ".trellis" / ATTEMPT_RECORD_NAME).write_text(
+            json.dumps({"status": "failed"}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(ATTEMPT_RECORD_NAME, result.stdout + result.stderr)
+        self.assertIn("status=failed", result.stdout + result.stderr)
+
+    def test_upgrade_check_allows_attempt_record_during_installer_self_check_env(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        (fixture / ".trellis" / ATTEMPT_RECORD_NAME).write_text(
+            json.dumps({"status": "failed", "last_step": "post-install-check"}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        env = self.latest_env_for(fixture)
+        env["WORKFLOW_IGNORE_EMBED_ATTEMPT"] = "1"
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=env,
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
     def test_upgrade_check_detects_agents_md_routing_drift(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
         self.addCleanup(shutil.rmtree, fixture)
@@ -725,6 +778,97 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         self.assertEqual(todo_path.read_text(encoding="utf-8"), "已有内容\n")
         self.assertIn("todo.txt 已存在", install.stdout)
+
+    def test_install_creates_and_clears_attempt_record_on_success(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.assertFalse((fixture / ".trellis" / ATTEMPT_RECORD_NAME).exists())
+        self.assertIn("装后自检通过", install.stdout)
+
+    def test_install_leaves_failed_attempt_record_when_cli_deployment_fails(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+        (fixture / ".agents" / "skills" / "finish-work" / "SKILL.md").unlink()
+
+        install = self.install_workflow(fixture)
+
+        self.assertNotEqual(install.returncode, 0)
+        attempt_record = fixture / ".trellis" / ATTEMPT_RECORD_NAME
+        self.assertTrue(attempt_record.exists(), "workflow-embed-attempt.json should remain after failed install")
+        attempt_data = json.loads(attempt_record.read_text(encoding="utf-8"))
+        self.assertEqual(attempt_data["status"], "failed")
+        self.assertEqual(attempt_data["last_step"], "deploy-cli-assets")
+        self.assertFalse((fixture / ".trellis" / "workflow-installed.json").exists())
+
+    def test_install_blocks_when_target_is_not_initial_baseline(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        first_install = self.install_workflow(fixture)
+        self.assertEqual(first_install.returncode, 0, msg=first_install.stdout + first_install.stderr)
+
+        second_install = self.install_workflow(fixture)
+
+        self.assertNotEqual(second_install.returncode, 0)
+        self.assertIn("不是可执行首次嵌入的初始态", second_install.stderr)
+        self.assertIn("workflow-installed.json", second_install.stderr)
+
+    def test_detect_embed_state_reports_initial_baseline_ready(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        result = self.detect_embed_state(fixture, "--json")
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["status"], "INITIAL_BASELINE_READY")
+        self.assertEqual(payload["traces"], [])
+
+    def test_detect_embed_state_reports_already_valid_embedded(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        result = self.detect_embed_state(fixture, "--json", env=self.latest_env_for(fixture))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["status"], "ALREADY_VALID_EMBEDDED")
+        self.assertTrue(payload["upgrade_check_passed"])
+
+    def test_detect_embed_state_blocks_failed_attempt_record(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
+        self.addCleanup(shutil.rmtree, fixture)
+        attempt_record = fixture / ".trellis" / ATTEMPT_RECORD_NAME
+        attempt_record.write_text(
+            json.dumps(
+                {
+                    "status": "failed",
+                    "workflow_version": "0.1.24",
+                    "workflow_root": "/tmp/workflow",
+                    "workflow_spec_path": "/tmp/workflow/工作流嵌入执行规范.md",
+                    "target_project_root": str(fixture),
+                    "last_step": "deploy-cli-assets",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = self.detect_embed_state(fixture, "--json", env=self.latest_env_for(fixture))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["status"], "BLOCKED_NON_INITIAL_STATE")
+        self.assertIn("embed-attempt-record", "\n".join(payload["traces"]))
+        self.assertEqual(payload["attempt_details"]["status"], "failed")
+        self.assertEqual(payload["attempt_details"]["last_step"], "deploy-cli-assets")
 
     def test_install_requires_git_repository(self) -> None:
         fixture = self.create_fixture(include_git=False)
@@ -842,9 +986,11 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("将写入安装记录", result.stdout)
         self.assertIn("将注入 AGENTS.md NL 路由表", result.stdout)
+        self.assertIn("将执行装后自检", result.stdout)
         self.assertNotIn("✅ 安装记录 → workflow-installed.json", result.stdout)
         self.assertNotIn("✅ AGENTS.md NL 路由表已注入", result.stdout)
         self.assertFalse((fixture / ".trellis" / "workflow-installed.json").exists())
+        self.assertFalse((fixture / ".trellis" / ATTEMPT_RECORD_NAME).exists())
         self.assertFalse((fixture / ".agents" / "skills" / "review-gate").exists())
         self.assertNotIn("workflow-nl-routing-start", (fixture / "AGENTS.md").read_text(encoding="utf-8"))
 

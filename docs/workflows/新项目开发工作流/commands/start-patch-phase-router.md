@@ -44,14 +44,7 @@ python3 docs/workflows/新项目开发工作流/commands/shell/workflow-state.py
 - PRD 文档规范
 - 配套模板与 checklist
 
-若命中安装不完整门禁，优先由维护者重新执行 workflow 安装脚本；若只需修复需求发现基线，也可直接执行：
-
-```bash
-python3 trellis-library/cli.py assemble \
-  --target <project-root> \
-  --pack pack.requirements-discovery-foundation \
-  --auto
-```
+若命中安装不完整门禁，必须立即停止，并明确告知用户：当前项目不是允许继续使用该 workflow 的有效嵌入状态，需要先手动处理，再从初始态重新执行完整嵌入。
 
 ### 路由决策树（强门禁版）
 
@@ -62,7 +55,7 @@ get_context.py + .current-task + workflow-state.json
     │   └── 无论是否外包项目，先路由 → /trellis:feasibility
     │
     ├── `.trellis/workflow-installed.json` 存在 + `.trellis/library-lock.yaml` 缺失或缺少最低资产集
-    │   └── 先补齐安装基线；补齐后重新执行本决策树
+    │   └── 立即停止；报告嵌入状态无效，要求用户手动处理后再重新完整嵌入
     │
     ├── 无 `.current-task` + 已存在有效 `assessment.md` + 用户意图是继续同一轮需求推进
     │   └── 允许复用既有 assessment；优先路由 → /trellis:brainstorm

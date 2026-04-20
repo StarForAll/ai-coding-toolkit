@@ -103,11 +103,12 @@ git remote set-url --add --push origin <第二个仓库URL>
 这套 workflow 的嵌入方式不是“给 AI CLI 一份目录就算装好了”，而是严格按下面时序执行：
 
 1. 先在目标项目执行 `trellis init`
-2. 再运行当前 workflow 目录里的 `commands/install-workflow.py`
-3. 安装脚本把这套 workflow 嵌入到目标项目，并按各 CLI 官方原生格式完成内容适配
-4. 安装脚本自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines`，则一并清理；若 `.current-task` 仍指向该 bootstrap task，也同步清理悬空引用；否则跳过
-5. 安装完成后，先按《[装后隐藏目录与托管边界核对清单](./装后隐藏目录与托管边界核对清单.md)》完成装后核对
-6. 核对通过后，最后再在目标项目里按原生入口直接使用
+2. 再按《[工作流嵌入执行规范](./工作流嵌入执行规范.md)》先运行 `detect-embed-state.py`，确认状态为 `INITIAL_BASELINE_READY`
+3. 再运行当前 workflow 目录里的 `commands/install-workflow.py`
+4. 安装脚本把这套 workflow 嵌入到目标项目，并按各 CLI 官方原生格式完成内容适配
+5. 安装脚本自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines`，则一并清理；若 `.current-task` 仍指向该 bootstrap task，也同步清理悬空引用；否则跳过
+6. 安装完成后，先按《[装后隐藏目录与托管边界核对清单](./装后隐藏目录与托管边界核对清单.md)》完成装后核对
+7. 核对通过后，最后再在目标项目里按原生入口直接使用
 
 标准安装命令：
 
@@ -124,7 +125,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 这里不要少掉一步：
 
-- 至少确认 `.trellis/workflow-installed.json`、`.trellis/workflow.md`、`.trellis/library-lock.yaml`、`AGENTS.md` 托管区段、`.agents/skills/`、`.codex/skills/` 的实际状态
+- 至少确认 `.trellis/workflow-installed.json`、`.trellis/workflow-embed-attempt.json`、`.trellis/workflow.md`、`.trellis/library-lock.yaml`、`AGENTS.md` 托管区段、`.agents/skills/`、`.codex/skills/` 的实际状态
 - Codex 的 `.agents/skills/` 是共享 workflow skills 主承载面；`.codex/skills/` 则是 `trellis init` 后可能出现的额外影响面，存在时也必须纳入核对
 - `.codex/hooks.json`、`.codex/hooks/session-start.py`、`.claude/settings*.json`、`opencode.json.instructions` 仍属于人工维护或 Trellis baseline 资产，不应误以为安装器会替你补齐
 

@@ -7,11 +7,13 @@
 重要边界：
 - 目标项目必须是 Git 仓库，`origin` 至少有两个 push URL，且已经执行过 `trellis init`
 - 若是新建目标项目，本地主分支和初始分支必须为 `main`；已有本地提交历史的存量项目不强制切换
+- 只有“纯净初始态”目标项目才允许执行首次嵌入；若检测到任何当前 workflow 的历史嵌入痕迹，必须阻止继续安装
 - 当前 workflow 是“嵌入 + 增强”模型，不会重建 Trellis 原生命令全集
 - `feasibility` 到 `delivery`（含 `project-audit`）这类阶段资产由当前 workflow 分发
 - `start` / `finish-work` / `record-session` 默认来自 Trellis 基线，允许由当前 workflow 追加补丁增强
 - close-out 中的 `archive` 仍直接复用目标项目 Trellis 基线 `task.py`；若目标项目不是当前最新 Trellis 基线，可能不包含 archive auto-commit pathspec 修复
 - 安装器会自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines` 则清理，不存在则跳过；若 `.current-task` 仍指向该 bootstrap task，则同步清理悬空引用
+- 一旦开始正式安装，安装器会先写入 `.trellis/workflow-embed-attempt.json`；若安装失败，该失败标记会保留，后续嵌入必须先由用户手动处理
 
 前提:
 - 目标项目是 Git 仓库，`origin` 至少有两个 push URL，已执行 trellis init，且存在对应 CLI 目录
@@ -23,6 +25,7 @@
 """
 import argparse
 import json
+import os
 import subprocess
 import shutil
 import sys
@@ -48,6 +51,7 @@ from workflow_assets import (
     WORKFLOW_SCHEMA_VERSION,
     WORKFLOW_VERSION,
     prepare_command_content,
+    read_project_trellis_version,
     render_workflow_managed_agent,
     resolve_codex_skills_dir,
     workflow_managed_agent_target_path,
@@ -82,6 +86,12 @@ _WORKFLOW_START_HEADING = "## Development Process"
 _WORKFLOW_END_HEADING = "## File Descriptions"
 _TODO_FILE_NAME = "todo.txt"
 _TODO_DEFAULT_LINE = "文档内容需要和实际当前的代码同步\n"
+_EMBED_ATTEMPT_FILE_NAME = "workflow-embed-attempt.json"
+_EMBED_ATTEMPT_STATUS_IN_PROGRESS = "in_progress"
+_EMBED_ATTEMPT_STATUS_FAILED = "failed"
+_EMBED_STATE_INITIAL = "INITIAL_BASELINE_READY"
+_EMBED_STATE_VALID = "ALREADY_VALID_EMBEDDED"
+_EMBED_STATE_BLOCKED = "BLOCKED_NON_INITIAL_STATE"
 _REQUIREMENTS_FOUNDATION_PACK = "pack.requirements-discovery-foundation"
 _BOOTSTRAP_TASK_NAME = "00-bootstrap-guidelines"
 _ORIGIN_REMOTE_NAME = "origin"
@@ -174,6 +184,220 @@ def detect_cli_types(root: Path, requested: list[str] | None = None) -> list[str
         dirs_str = "、".join(f"{d}/" for d in _CLI_DIRS.values())
         sys.exit(f"{R}未找到任何 CLI 目录（{dirs_str}），请先初始化目标 CLI{N}")
     return found
+
+
+def _read_text(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return None
+
+
+def _matches_expected_content(path: Path, expected: str) -> bool:
+    actual = _read_text(path)
+    if actual is None:
+        return False
+    return actual == expected
+
+
+def _trace_display(path: Path, root: Path) -> str:
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _append_trace(traces: list[str], label: str, path: Path, root: Path) -> None:
+    traces.append(f"{label}: {_trace_display(path, root)}")
+
+
+def collect_workflow_embed_traces(src: Path, root: Path, cli_types: list[str]) -> list[str]:
+    """Collect workflow-managed traces that prove the target project is not a clean initial baseline."""
+    traces: list[str] = []
+
+    attempt_record = root / ".trellis" / _EMBED_ATTEMPT_FILE_NAME
+    if attempt_record.exists():
+        _append_trace(traces, "embed-attempt-record", attempt_record, root)
+
+    install_record = root / ".trellis" / "workflow-installed.json"
+    if install_record.exists():
+        _append_trace(traces, "install-record", install_record, root)
+
+    workflow_md = root / ".trellis" / "workflow.md"
+    workflow_text = _read_text(workflow_md)
+    if workflow_text and _WORKFLOW_PATCH_MARKER in workflow_text:
+        _append_trace(traces, "workflow-doc-patch", workflow_md, root)
+
+    agents_md = root / "AGENTS.md"
+    agents_text = _read_text(agents_md)
+    if agents_text and _AGENTS_NL_ROUTING_MARKER in agents_text and _AGENTS_NL_ROUTING_END in agents_text:
+        _append_trace(traces, "agents-routing-block", agents_md, root)
+
+    helper_dir = root / ".trellis" / "scripts" / "workflow"
+    for helper_name in HELPER_SCRIPTS:
+        helper_path = helper_dir / helper_name
+        if helper_path.exists():
+            _append_trace(traces, "helper-script", helper_path, root)
+
+    expected_overlay_content = {
+        name: prepare_command_content(src / f"{name}.md")
+        for name in OVERLAY_BASELINE_COMMANDS
+        if (src / f"{name}.md").exists()
+    }
+
+    for cli_type in cli_types:
+        if cli_type in ("claude", "opencode"):
+            commands_dir = root / CLI_DIRS[cli_type] / "commands" / "trellis"
+            if not commands_dir.is_dir():
+                continue
+            backup_dir = commands_dir / ".backup-original"
+            if backup_dir.is_dir():
+                _append_trace(traces, f"{cli_type}-backup-dir", backup_dir, root)
+
+            for name in ADDED_COMMANDS:
+                path = commands_dir / f"{name}.md"
+                if path.exists():
+                    _append_trace(traces, f"{cli_type}-added-command", path, root)
+
+            for name, expected in expected_overlay_content.items():
+                path = commands_dir / f"{name}.md"
+                if _matches_expected_content(path, expected):
+                    _append_trace(traces, f"{cli_type}-overlay-command", path, root)
+
+            marker_checks = [
+                ("start-patch", commands_dir / "start.md", _PHASE_ROUTER_MARKER),
+                ("finish-work-patch", commands_dir / "finish-work.md", _FINISH_WORK_MARKER),
+                ("record-session-patch", commands_dir / "record-session.md", _RECORD_SESSION_MARKER),
+                ("parallel-disabled", commands_dir / "parallel.md", _PARALLEL_DISABLED_MARKER),
+            ]
+            for label, path, marker in marker_checks:
+                text = _read_text(path)
+                if text and marker in text:
+                    _append_trace(traces, f"{cli_type}-{label}", path, root)
+
+            agents_dir = root / CLI_DIRS[cli_type] / "agents"
+            if agents_dir.is_dir():
+                backup_dir = agents_dir / ".backup-original"
+                if backup_dir.is_dir():
+                    _append_trace(traces, f"{cli_type}-agent-backup-dir", backup_dir, root)
+                for agent_name in MANAGED_IMPLEMENTATION_AGENTS:
+                    path = workflow_managed_agent_target_path(root, cli_type, agent_name)
+                    expected = render_workflow_managed_agent(src, cli_type, agent_name)
+                    if _matches_expected_content(path, expected):
+                        _append_trace(traces, f"{cli_type}-managed-agent", path, root)
+
+        elif cli_type == "codex":
+            skills_dirs = list_all_codex_skills_dirs(root)
+            if not skills_dirs:
+                continue
+            expected_overlay_skills = expected_overlay_content
+            for skills_dir in skills_dirs:
+                backup_dir = skills_dir / ".backup-original"
+                if backup_dir.is_dir():
+                    _append_trace(traces, "codex-skill-backup-dir", backup_dir, root)
+
+                for name in ADDED_COMMANDS:
+                    path = skills_dir / name / "SKILL.md"
+                    if path.exists():
+                        _append_trace(traces, "codex-added-skill", path, root)
+
+                for name, expected in expected_overlay_skills.items():
+                    path = skills_dir / name / "SKILL.md"
+                    if _matches_expected_content(path, expected):
+                        _append_trace(traces, "codex-overlay-skill", path, root)
+
+                parallel_skill = skills_dir / "parallel" / "SKILL.md"
+                parallel_text = _read_text(parallel_skill)
+                if parallel_text and _PARALLEL_DISABLED_MARKER in parallel_text:
+                    _append_trace(traces, "codex-parallel-disabled", parallel_skill, root)
+
+            primary_skills_dir = resolve_codex_skills_dir(root)
+            if primary_skills_dir is not None:
+                start_skill = primary_skills_dir / "start" / "SKILL.md"
+                start_text = _read_text(start_skill)
+                if start_text and _CODEX_START_SKILL_MARKER in start_text:
+                    _append_trace(traces, "codex-start-patch", start_skill, root)
+
+                finish_work_skill = primary_skills_dir / "finish-work" / "SKILL.md"
+                finish_text = _read_text(finish_work_skill)
+                if finish_text and _FINISH_WORK_MARKER in finish_text:
+                    _append_trace(traces, "codex-finish-work-patch", finish_work_skill, root)
+
+            agents_dir = root / ".codex" / "agents"
+            if agents_dir.is_dir():
+                backup_dir = agents_dir / ".backup-original"
+                if backup_dir.is_dir():
+                    _append_trace(traces, "codex-agent-backup-dir", backup_dir, root)
+                for agent_name in MANAGED_IMPLEMENTATION_AGENTS:
+                    path = workflow_managed_agent_target_path(root, cli_type, agent_name)
+                    expected = render_workflow_managed_agent(src, cli_type, agent_name)
+                    if _matches_expected_content(path, expected):
+                        _append_trace(traces, "codex-managed-agent", path, root)
+
+    return traces
+
+
+def detect_embed_state(src: Path, root: Path, cli_types: list[str]) -> tuple[str, list[str]]:
+    traces = collect_workflow_embed_traces(src, root, cli_types)
+    if traces:
+        return _EMBED_STATE_BLOCKED, traces
+    return _EMBED_STATE_INITIAL, []
+
+
+def embed_attempt_record_path(root: Path) -> Path:
+    return root / ".trellis" / _EMBED_ATTEMPT_FILE_NAME
+
+
+def write_embed_attempt_record(src: Path, root: Path, cli_types: list[str]) -> Path:
+    now = datetime.now(timezone.utc).isoformat()
+    workflow_root = src.parent
+    workflow_spec = workflow_root / "工作流嵌入执行规范.md"
+    attempt_path = embed_attempt_record_path(root)
+    payload = {
+        "status": _EMBED_ATTEMPT_STATUS_IN_PROGRESS,
+        "workflow_version": WORKFLOW_VERSION,
+        "workflow_schema_version": WORKFLOW_SCHEMA_VERSION,
+        "workflow_spec_path": str(workflow_spec),
+        "workflow_root": str(workflow_root),
+        "target_project_root": str(root),
+        "started_at": now,
+        "updated_at": now,
+        "cli_types": cli_types,
+        "last_step": "preflight-passed",
+    }
+    attempt_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return attempt_path
+
+
+def update_embed_attempt_record(root: Path, **fields: object) -> None:
+    attempt_path = embed_attempt_record_path(root)
+    if not attempt_path.exists():
+        return
+    try:
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        payload = {}
+    payload.update(fields)
+    payload["updated_at"] = datetime.now(timezone.utc).isoformat()
+    attempt_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def fail_embed_attempt(root: Path, *, last_step: str, error: str) -> None:
+    update_embed_attempt_record(
+        root,
+        status=_EMBED_ATTEMPT_STATUS_FAILED,
+        last_step=last_step,
+        error=error,
+        failed_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+def clear_embed_attempt_record(root: Path) -> None:
+    attempt_path = embed_attempt_record_path(root)
+    if attempt_path.exists():
+        attempt_path.unlink()
 
 
 def resolve_git_dir(root: Path) -> Path | None:
@@ -1084,6 +1308,39 @@ def import_requirements_foundation(root: Path, dry_run: bool) -> bool:
     return True
 
 
+def run_post_install_check(src: Path, root: Path, cli_types: list[str], dry_run: bool) -> bool:
+    """Run a final read-only self-check before declaring embed success."""
+    if dry_run:
+        info("将执行装后自检 → upgrade-compat.py --check")
+        return True
+
+    command = [sys.executable, str(src / "upgrade-compat.py"), "--check", "--project-root", str(root)]
+    if cli_types:
+        command.extend(["--cli", ",".join(cli_types)])
+    current_version = read_project_trellis_version(root)
+    env = dict(os.environ)
+    if current_version:
+        env["TRELLIS_LATEST_VERSION"] = current_version
+    env["WORKFLOW_IGNORE_EMBED_ATTEMPT"] = "1"
+    result = subprocess.run(
+        command,
+        cwd=root,
+        text=True,
+        capture_output=True,
+        check=False,
+        env=env,
+    )
+    if result.stdout:
+        print(result.stdout.rstrip())
+    if result.stderr:
+        print(result.stderr.rstrip(), file=sys.stderr)
+    if result.returncode != 0:
+        err("装后自检失败，当前项目已被标记为非初始态；请由用户手动处理后重新完整嵌入")
+        return False
+    ok("装后自检通过")
+    return True
+
+
 # ── 安装记录 ──
 def write_install_record(
     root: Path,
@@ -1216,6 +1473,16 @@ def main() -> int:
             if r not in _ALL_CLI_TYPES:
                 sys.exit(f"{R}未知 CLI 类型: {r}（支持: {', '.join(_ALL_CLI_TYPES)}）{N}")
     cli_types = detect_cli_types(root, requested)
+    state, traces = detect_embed_state(src, root, cli_types)
+    if state != _EMBED_STATE_INITIAL:
+        trace_lines = "\n".join(f"- {trace}" for trace in traces)
+        sys.exit(
+            f"{R}目标项目不是可执行首次嵌入的初始态，已阻止继续安装。\n"
+            "当前协议只允许在纯净 Trellis 初始基线上执行首次嵌入；"
+            "一旦出现当前 workflow 的历史嵌入痕迹（无论成功、失败、残缺或状态不明），"
+            "都必须由用户手动处理后，再从初始态重新执行完整嵌入。\n"
+            f"检测到的 workflow 痕迹:\n{trace_lines}{N}"
+        )
 
     print()
     print("╔══════════════════════════════════════════╗")
@@ -1229,64 +1496,110 @@ def main() -> int:
         warn("DRY RUN 模式 — 不实际写入文件")
     print()
 
+    attempt_record_created = False
+    if not args.dry_run:
+        write_embed_attempt_record(src, root, cli_types)
+        attempt_record_created = True
+
     # 汇总结果
     total = {"claude": None, "opencode": None, "codex": None}
 
-    # 部署到每个 CLI
-    for cli_type in cli_types:
-        if cli_type == "claude":
-            total["claude"] = deploy_claude(src, root, args.dry_run)
-        elif cli_type == "opencode":
-            total["opencode"] = deploy_opencode(src, root, args.dry_run)
-        elif cli_type == "codex":
-            total["codex"] = deploy_codex(src, root, args.dry_run)
-        print()
+    try:
+        # 部署到每个 CLI
+        for cli_type in cli_types:
+            update_embed_attempt_record(root, last_step=f"deploy-{cli_type}")
+            if cli_type == "claude":
+                total["claude"] = deploy_claude(src, root, args.dry_run)
+            elif cli_type == "opencode":
+                total["opencode"] = deploy_opencode(src, root, args.dry_run)
+            elif cli_type == "codex":
+                total["codex"] = deploy_codex(src, root, args.dry_run)
+            print()
 
-    if any(result and result["errors"] for result in total.values()):
-        print("╔══════════════════════════════════════════╗")
-        print("║   ❌ 安装失败                           ║")
-        print("╚══════════════════════════════════════════╝")
-        print()
-        for cli_type, result in total.items():
-            if result is None:
-                continue
-            if result["errors"]:
-                for e in result["errors"]:
-                    err(f"[{cli_type}] {e}")
-        print()
-        return 1
-
-    # 辅助脚本（共享）
-    if not any(t and t["errors"] for t in total.values()):
-        script_count = deploy_helper_scripts(src, root, args.dry_run)
-        info(f"辅助脚本: {script_count}/{len(HELPER_SCRIPTS)} 个")
-        inject_workflow_patch(src, root, dry_run=args.dry_run)
-    print()
-
-    if not any(t and t["errors"] for t in total.values()):
-        print("📚 初始 spec 基线...")
-        if not import_requirements_foundation(root, args.dry_run):
+        if any(result and result["errors"] for result in total.values()):
+            if attempt_record_created:
+                fail_embed_attempt(
+                    root,
+                    last_step="deploy-cli-assets",
+                    error="one or more CLI deployments reported errors",
+                )
+            print("╔══════════════════════════════════════════╗")
+            print("║   ❌ 安装失败                           ║")
+            print("╚══════════════════════════════════════════╝")
+            print()
+            for cli_type, result in total.items():
+                if result is None:
+                    continue
+                if result["errors"]:
+                    for e in result["errors"]:
+                        err(f"[{cli_type}] {e}")
+            print()
             return 1
-        print()
-        print("🧹 Trellis bootstrap 清理...")
-        bootstrap_cleanup = remove_bootstrap_task(root, args.dry_run)
-    else:
-        bootstrap_cleanup = "skipped"
+
+        # 辅助脚本（共享）
+        if not any(t and t["errors"] for t in total.values()):
+            update_embed_attempt_record(root, last_step="deploy-helper-scripts")
+            script_count = deploy_helper_scripts(src, root, args.dry_run)
+            info(f"辅助脚本: {script_count}/{len(HELPER_SCRIPTS)} 个")
+            update_embed_attempt_record(root, last_step="patch-workflow-doc")
+            inject_workflow_patch(src, root, dry_run=args.dry_run)
         print()
 
-    # 安装记录
-    write_install_record(root, cli_types, args.dry_run, bootstrap_cleanup=bootstrap_cleanup)
+        if not any(t and t["errors"] for t in total.values()):
+            print("📚 初始 spec 基线...")
+            update_embed_attempt_record(root, last_step="import-initial-pack")
+            if not import_requirements_foundation(root, args.dry_run):
+                if attempt_record_created:
+                    fail_embed_attempt(
+                        root,
+                        last_step="import-initial-pack",
+                        error=f"failed to import {_REQUIREMENTS_FOUNDATION_PACK}",
+                    )
+                return 1
+            print()
+            print("🧹 Trellis bootstrap 清理...")
+            update_embed_attempt_record(root, last_step="remove-bootstrap-task")
+            bootstrap_cleanup = remove_bootstrap_task(root, args.dry_run)
+        else:
+            bootstrap_cleanup = "skipped"
+            print()
 
-    # NL 路由表注入 AGENTS.md（为无 hooks 的 CLI 提供路由支持）
-    print()
-    print("📋 NL 路由表...")
-    deploy_agents_md_routing(root, args.dry_run)
+        # 安装记录
+        update_embed_attempt_record(root, last_step="write-install-record")
+        write_install_record(root, cli_types, args.dry_run, bootstrap_cleanup=bootstrap_cleanup)
 
-    # todo.txt
-    if not args.dry_run:
+        # NL 路由表注入 AGENTS.md（为无 hooks 的 CLI 提供路由支持）
         print()
-        print("📝 项目级协作提醒...")
-        ensure_project_todo(root)
+        print("📋 NL 路由表...")
+        update_embed_attempt_record(root, last_step="inject-agents-routing")
+        deploy_agents_md_routing(root, args.dry_run)
+
+        # todo.txt
+        if not args.dry_run:
+            print()
+            print("📝 项目级协作提醒...")
+            update_embed_attempt_record(root, last_step="ensure-todo")
+            ensure_project_todo(root)
+
+        print()
+        print("🧪 装后自检...")
+        update_embed_attempt_record(root, last_step="post-install-check")
+        if not run_post_install_check(src, root, cli_types, args.dry_run):
+            if attempt_record_created:
+                fail_embed_attempt(
+                    root,
+                    last_step="post-install-check",
+                    error="upgrade-compat.py --check did not pass after installation",
+                )
+            return 1
+
+        if not args.dry_run:
+            clear_embed_attempt_record(root)
+            attempt_record_created = False
+    except Exception as exc:
+        if attempt_record_created:
+            fail_embed_attempt(root, last_step="unexpected-exception", error=str(exc))
+        raise
 
     # 汇总
     print()

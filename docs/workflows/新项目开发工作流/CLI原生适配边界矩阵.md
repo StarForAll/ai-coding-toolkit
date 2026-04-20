@@ -1,6 +1,7 @@
 # CLI 原生适配边界矩阵
 
 > 本文档聚焦"安装器管理什么 / 项目自己维护什么 / 运行前需满足什么"的边界说明。
+> 目标项目若要判断“是否允许执行首次嵌入”或“当前是否已完整有效嵌入”，先看《[工作流嵌入执行规范](./工作流嵌入执行规范.md)》。
 > 装后必检项统一见《[装后隐藏目录与托管边界核对清单](./装后隐藏目录与托管边界核对清单.md)》；各平台 README、命令映射.md、多CLI通用新项目完整流程演练.md 应引用本文档或该清单，不再各自扩写。
 
 ## 当前真实边界
@@ -227,6 +228,7 @@ ls .codex/skills/parallel/SKILL.md 2>/dev/null
 | 基线补丁 | start / finish-work / record-session ✅ | start / finish-work / record-session ✅ | start / finish-work ✅（仅活动 skills 目录） |
 | 收尾入口 | `record-session.md` + `.trellis/scripts/workflow/record-session-helper.py` | `record-session.md` + `.trellis/scripts/workflow/record-session-helper.py` | Trellis baseline `record-session` skill + `.trellis/scripts/workflow/record-session-helper.py` |
 | 辅助脚本 | `.trellis/scripts/workflow/` ✅ | 共用 ✅ | 共用 ✅ |
+| 嵌入尝试记录 | `.trellis/workflow-embed-attempt.json` ✅ 安装器（开始写入，成功后清理） | 共用 ✅ | 共用 ✅ |
 | 项目规则 | `AGENTS.md` ⚠️ 半托管 | `AGENTS.md` ⚠️ 半托管 | `AGENTS.md` ⚠️ 半托管 |
 | 平台配置 | `.claude/settings*.json` ❌ 手动 | `opencode.json` ❌ 手动 | `.codex/config.toml` ❌ 手动 |
 | Hooks | `.claude/hooks/*.py` ❌ 手动 | `.opencode/plugins/*.js` ❌ 手动（trellis init 分发） | `.codex/hooks.json` + `.codex/hooks/*.py` ❌ 手动 |

@@ -13,9 +13,11 @@
 - Trigger: modifying `docs/workflows/**/commands/analyze-upgrade.py`
 - Trigger: modifying `docs/workflows/**/commands/upgrade-compat.py`
 - Trigger: modifying `docs/workflows/**/commands/workflow_assets.py`
+- Trigger: modifying `docs/workflows/**/commands/detect-embed-state.py`
 - Trigger: changing the distributed workflow command set, helper script set, install record schema, or target deployment layout
 - Trigger: changing how workflow source assets are compared with deployed target-project copies
 - Trigger: changing the target-project upgrade flow from analysis-first to another sequence
+- Trigger: changing the embed-state model, initial-state gate, or failed-attempt recording contract
 
 This concern is required when the change crosses these layers:
 
@@ -81,6 +83,30 @@ Target-project install record:
 .trellis/workflow-installed.json
 ```
 
+Target-project embed-attempt record:
+
+```text
+.trellis/workflow-embed-attempt.json
+```
+
+Current embed-attempt lifecycle keys:
+
+- `status`
+- `workflow_version`
+- `workflow_schema_version`
+- `workflow_spec_path`
+- `workflow_root`
+- `target_project_root`
+- `started_at`
+- `updated_at`
+- `cli_types`
+- `last_step`
+
+Failure-state keys that may appear when install does not complete:
+
+- `error`
+- `failed_at`
+
 Current installer-written keys:
 
 - `trellis_version`
@@ -123,6 +149,20 @@ Install-record write boundary:
 - `workflow-installed.json` may be written only after all requested CLI deployments complete without deployment errors
 - if any CLI deployment reports an error, the installer must exit non-zero before writing `workflow-installed.json`
 - failed installs must not leave a misleading success-like install record behind
+- installer must create `workflow-embed-attempt.json` before the first target-project write in a formal install
+- installer must keep `workflow-embed-attempt.json` when install fails or when the final post-install validation does not pass
+- installer may remove `workflow-embed-attempt.json` only after the post-install self-check confirms a full valid embed
+
+Embed-attempt record contract:
+
+- `status` must be one of:
+  - `in_progress`
+  - `failed`
+- read-only diagnostics may synthesize `unknown` only when the attempt record is unreadable or not valid JSON; this is a diagnostic output state, not an installer-written lifecycle state
+- `last_step` must identify the last completed or attempted installer phase
+- `error` is optional and should be written only when the installer reaches a failed state
+- read-only detection and diagnostics may surface `status`, `last_step`, and `error` to help users distinguish an interrupted install from a failed install
+- absence of optional failure-state keys must not be treated as proof of a successful install
 
 ---
 
@@ -290,6 +330,30 @@ This branch gate is a workflow-entry contract, not a generic Git rule:
 - target-project docs may describe the gate at the workflow-entry layer
 - installer enforcement must still follow the same underlying rule when install is attempted
 
+#### 3.2.2 Initial Embed State Gate
+
+This workflow variant allows embed only from a clean initial baseline.
+
+Required behavior:
+
+- installer must detect whether the target project is still in the initial baseline state before any workflow-managed write
+- if any workflow-managed trace already exists, installer must fail fast instead of trying to continue or overlay the previous state
+- workflow-managed traces include at minimum:
+  - `workflow-installed.json`
+  - `workflow-embed-attempt.json`
+  - installer-managed `AGENTS.md` routing block
+  - installer-managed `.trellis/workflow.md` patch
+  - distributed added commands / skills
+  - workflow patch markers in baseline commands / skills
+  - workflow-managed helper scripts
+  - workflow-managed implementation agents
+- read-only detection may classify:
+  - `INITIAL_BASELINE_READY`
+  - `ALREADY_VALID_EMBEDDED`
+  - `BLOCKED_NON_INITIAL_STATE`
+- formal install path may proceed only from `INITIAL_BASELINE_READY`
+- if install fails at any later step, target project becomes `BLOCKED_NON_INITIAL_STATE` until a human manually resets it
+
 #### 3.3 Analysis-First Upgrade Contract
 
 Target-project workflow upgrade must use an analysis-first sequence:
@@ -372,10 +436,12 @@ Do not treat phase-gate helpers as "nice to have" copied scripts once their comm
 
 Installer success-only side effects must be gated behind a clean deployment result:
 
+- write `workflow-embed-attempt.json` before the first target-project write in a formal install
 - deploy per-CLI assets first and collect deployment errors
 - if any CLI deployment fails:
   - return a non-zero exit code
   - keep the failure visible in stdout/stderr
+  - keep `workflow-embed-attempt.json`
   - do not write `workflow-installed.json`
   - do not continue into other success-only side effects such as post-install guidance that assumes successful embed
 - only when all requested CLI deployments succeed may the installer continue to:
@@ -384,6 +450,19 @@ Installer success-only side effects must be gated behind a clean deployment resu
   - remove the bootstrap task if it exists, otherwise skip cleanup
   - write `workflow-installed.json`
   - apply post-install routing / reminders
+  - run a final read-only post-install validation
+  - clear `workflow-embed-attempt.json` only after that validation passes
+
+#### 3.4.1.1 Post-Install Self-Check Environment Gate
+
+The installer may need to suppress attempt-record conflict detection only for its own in-flight post-install self-check.
+
+Contract:
+
+- `WORKFLOW_IGNORE_EMBED_ATTEMPT=1` is an internal environment contract between `install-workflow.py` and `upgrade-compat.py --check`
+- it must be used only by the installer's immediate post-install self-check while `workflow-embed-attempt.json` is still expected to exist
+- normal user-invoked `upgrade-compat.py --check` and `detect-embed-state.py` must not set this flag implicitly
+- the flag must not weaken any other drift checks beyond suppressing the attempt-record conflict during the installer's own success-path validation
 
 #### 3.5 Source-Maintenance vs Target-Project Boundary
 
@@ -473,26 +552,34 @@ When modifying these contracts, update or add tests that prove:
 1. install writes `overlay_commands` and `added_commands` into `workflow-installed.json`
 2. installer enforces `main` branch for new repositories but allows existing-history repositories to keep a non-`main` branch
 3. installer does not write `workflow-installed.json` when any CLI deployment fails
-4. uninstall restores overlay baseline commands from backup
-5. `analyze-upgrade.py` classifies at least:
+4. installer writes `workflow-embed-attempt.json` before formal install writes and clears it only after post-install validation passes
+5. a failed install leaves `workflow-embed-attempt.json` behind with a failed lifecycle state
+6. initial-state detection distinguishes:
+   - `INITIAL_BASELINE_READY`
+   - `ALREADY_VALID_EMBEDDED`
+   - `BLOCKED_NON_INITIAL_STATE`
+7. reinstall is blocked when the target project is no longer in the initial baseline state
+8. uninstall restores overlay baseline commands from backup
+9. `analyze-upgrade.py` classifies at least:
    - `keep`
    - `add`
    - `replace`
    - `merge`
    - `delete`
-6. `--check` fails when:
+10. `--check` fails when:
    - patch markers drift
    - `.trellis/workflow.md` patch content drifts while the marker still exists
    - installer-managed `AGENTS.md` routing block is missing or drifts when `AGENTS.md` exists
+   - `workflow-embed-attempt.json` exists
    - overlay command content drifts
    - added command content drifts
    - helper script content drifts
    - a required phase-gate helper is missing from deployed target scripts or missing from install-record `scripts`
-7. `--check` emits a warning when install-record lifecycle state (`bootstrap_task_removed` / `bootstrap_cleanup_status`) conflicts with the actual presence of `.trellis/tasks/00-bootstrap-guidelines`
-8. `--merge` restores drifted command and helper-script content for low-risk cases
-9. `--force` can restore baseline-backed patch commands and reapply patches inside the same structural model
-10. newly added required helper scripts are reflected in user-visible install guidance when the workflow gate is exposed to target-project users
-11. Codex multi-directory behavior is covered by regression tests:
+11. `--check` emits a warning when install-record lifecycle state (`bootstrap_task_removed` / `bootstrap_cleanup_status`) conflicts with the actual presence of `.trellis/tasks/00-bootstrap-guidelines`
+12. `--merge` restores drifted command and helper-script content for low-risk cases
+13. `--force` can restore baseline-backed patch commands and reapply patches inside the same structural model
+14. newly added required helper scripts are reflected in user-visible install guidance when the workflow gate is exposed to target-project users
+15. Codex multi-directory behavior is covered by regression tests:
    - distributed skills sync to every existing skills directory
    - `start` / `finish-work` patch only the active skills directory
    - uninstall / `--force` restore follow the same active-directory boundary
