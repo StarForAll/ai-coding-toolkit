@@ -1,7 +1,7 @@
 # CLI 原生适配边界矩阵
 
-> 本文档是"安装器管理什么 / 项目自己维护什么 / 运行前需满足什么"的**单一事实源**。
-> 各平台 README、命令映射.md、多CLI通用新项目完整流程演练.md 应引用本文档，不再各自扩写。
+> 本文档聚焦"安装器管理什么 / 项目自己维护什么 / 运行前需满足什么"的边界说明。
+> 装后必检项统一见《[装后隐藏目录与托管边界核对清单](./装后隐藏目录与托管边界核对清单.md)》；各平台 README、命令映射.md、多CLI通用新项目完整流程演练.md 应引用本文档或该清单，不再各自扩写。
 
 ## 当前真实边界
 
@@ -168,6 +168,7 @@ docs/workflows/新项目开发工作流/commands/<shared-agent-source>/
 |------|---------|------|------|
 | workflow 阶段 skills（feasibility / brainstorm / design / plan / test-first / project-audit / check / review-gate / delivery） | `.agents/skills/<phase>/SKILL.md` + `.codex/skills/<phase>/SKILL.md` | 安装器管理（同步写入所有存在的目录） | 同源 Markdown 转换为 skill 格式；安装器通过 `list_all_codex_skills_dirs` 获取全部目录，向每个目录同步写入阶段 skills |
 | Trellis 基线 skill 补丁（start / finish-work） | 活动 skills 目录下的 `start/SKILL.md`、`finish-work/SKILL.md` | 安装器管理（活动目录增强） | **只在 `resolve_codex_skills_dir(root)` 解析出的活动 skills 目录**追加 workflow patch；当前 `trellis init` 下通常是 `.agents/skills/` |
+| Trellis 基线 `record-session` skill | 活动 skills 目录下的 `record-session/SKILL.md` | 运行前置/仅校验 | 由 `trellis init` 提供；当前 workflow 不对其追加 Codex 专属 patch，但最终收尾仍依赖它与共享 helper 正常协同 |
 | parallel skill 禁用覆盖 | 各 skills 目录下的 `parallel/SKILL.md` | 安装器管理（条件覆盖） | **只在存在 parallel 的目录**执行禁用覆盖；若不存在则跳过 |
 | 通用辅助脚本 | `.trellis/scripts/workflow/` | 安装器管理 | 与 Claude/OpenCode 共用 |
 | Trellis 基线 workflow 指南补丁 | `.trellis/workflow.md` | 安装器管理 | 与 Claude/OpenCode 共用；Codex hooks 注入的 `.trellis/workflow.md` 应与安装器增强后的文档保持一致 |
@@ -222,8 +223,9 @@ ls .codex/skills/parallel/SKILL.md 2>/dev/null
 
 | 资产类型 | Claude | OpenCode | Codex |
 |---------|--------|----------|-------|
-| 阶段命令入口 | `.claude/commands/trellis/*.md` ✅ 安装器 | `.opencode/commands/trellis/*.md` ✅ 安装器 | `.agents/skills/*/SKILL.md` ✅ 安装器（同一份也被 OpenCode 原生 skills 扫描命中） |
-| 基线补丁 | start / finish-work / record-session ✅ | start / finish-work / record-session ✅ | finish-work ✅ |
+| 阶段命令入口 | `.claude/commands/trellis/*.md` ✅ 安装器 | `.opencode/commands/trellis/*.md` ✅ 安装器 | `.agents/skills/*/SKILL.md` + `.codex/skills/*/SKILL.md` ✅ 安装器（对所有存在目录同步写入；`.agents/skills` 也会被 OpenCode 原生 skills 扫描命中） |
+| 基线补丁 | start / finish-work / record-session ✅ | start / finish-work / record-session ✅ | start / finish-work ✅（仅活动 skills 目录） |
+| 收尾入口 | `record-session.md` + `.trellis/scripts/workflow/record-session-helper.py` | `record-session.md` + `.trellis/scripts/workflow/record-session-helper.py` | Trellis baseline `record-session` skill + `.trellis/scripts/workflow/record-session-helper.py` |
 | 辅助脚本 | `.trellis/scripts/workflow/` ✅ | 共用 ✅ | 共用 ✅ |
 | 项目规则 | `AGENTS.md` ⚠️ 半托管 | `AGENTS.md` ⚠️ 半托管 | `AGENTS.md` ⚠️ 半托管 |
 | 平台配置 | `.claude/settings*.json` ❌ 手动 | `opencode.json` ❌ 手动 | `.codex/config.toml` ❌ 手动 |
@@ -231,6 +233,8 @@ ls .codex/skills/parallel/SKILL.md 2>/dev/null
 | 子代理 | `research / implement / check` ✅ 部分安装器（由 workflow 部署）；其他手动 | `research / implement / check` ✅ 部分安装器（由 workflow 部署）；其他手动 | `research / implement / check` ✅ 部分安装器（由 workflow 部署）；其他手动 |
 
 > 注意：上表描述的是**当前 workflow-managed subset**；`iFlow` 当前不在本 workflow 的 installer / upgrade / uninstall 合同内。
+>
+> 对 Codex 还要额外记住一条：`.codex/skills/` 是 `trellis init` 之后可能出现的额外影响面，而不是本文档要宣称的 Codex 官方唯一主目录；本文只是把它纳入当前 workflow 的实际核对边界。
 
 ---
 
@@ -337,6 +341,7 @@ test -f .codex/hooks/session-start.py
 
 | 文档 | 说明 |
 |------|------|
+| `装后隐藏目录与托管边界核对清单.md` | 安装后 / 升级后的隐藏目录与托管边界必检项 |
 | `commands/claude/README.md` | Claude Code 原生适配详情 |
 | `commands/opencode/README.md` | OpenCode 原生适配详情 |
 | `commands/codex/README.md` | Codex 原生适配详情 |

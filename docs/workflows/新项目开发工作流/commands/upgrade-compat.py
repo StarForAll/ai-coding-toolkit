@@ -18,6 +18,7 @@
 """
 
 import argparse
+import importlib.util
 import json
 import shutil
 import sys
@@ -49,6 +50,23 @@ from workflow_assets import (
     resolve_codex_skills_dir,
     workflow_managed_agent_target_path,
 )
+
+
+def _load_install_workflow_module():
+    module_path = Path(__file__).resolve().with_name("install-workflow.py")
+    spec = importlib.util.spec_from_file_location("workflow_install_workflow", module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"无法加载 install-workflow.py: {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_INSTALL_WORKFLOW = _load_install_workflow_module()
+_AGENTS_NL_ROUTING_END = _INSTALL_WORKFLOW._AGENTS_NL_ROUTING_END
+_AGENTS_NL_ROUTING_MARKER = _INSTALL_WORKFLOW._AGENTS_NL_ROUTING_MARKER
+_NL_ROUTING_SECTION = _INSTALL_WORKFLOW._NL_ROUTING_SECTION
+deploy_agents_md_routing = _INSTALL_WORKFLOW.deploy_agents_md_routing
 
 
 G, Y, R, C, N = "\033[0;32m", "\033[1;33m", "\033[0;31m", "\033[0;36m", "\033[0m"
@@ -106,6 +124,7 @@ _LEGACY_OPTIONAL_VERSION_KEYS = {
     "workflow_version",
     "workflow_schema_version",
     "patched_codex_skills",
+    "bootstrap_cleanup_status",
 }
 
 
@@ -160,6 +179,26 @@ def has_workflow_patch(workflow_md: Path) -> bool:
     if not workflow_md.exists():
         return False
     return _WORKFLOW_PATCH_MARKER in workflow_md.read_text(encoding="utf-8")
+
+
+def has_agents_md_routing(agents_md: Path) -> bool:
+    if not agents_md.exists():
+        return False
+    content = agents_md.read_text(encoding="utf-8")
+    return _AGENTS_NL_ROUTING_MARKER in content and _AGENTS_NL_ROUTING_END in content
+
+
+def agents_md_routing_matches_source(agents_md: Path) -> bool:
+    if not agents_md.exists():
+        return False
+    content = agents_md.read_text(encoding="utf-8")
+    if _AGENTS_NL_ROUTING_MARKER not in content or _AGENTS_NL_ROUTING_END not in content:
+        return False
+    start_idx = content.index(_AGENTS_NL_ROUTING_MARKER)
+    end_idx = content.index(_AGENTS_NL_ROUTING_END) + len(_AGENTS_NL_ROUTING_END)
+    actual_section = content[start_idx:end_idx].strip()
+    expected_section = _NL_ROUTING_SECTION.rstrip().strip()
+    return actual_section == expected_section
 
 
 def workflow_patch_matches_source(src: Path, workflow_md: Path) -> bool:
@@ -236,6 +275,24 @@ def detect_install_record_schema_conflicts(record: dict) -> int:
         return 0
 
     ok("workflow-installed.json schema 完整")
+    return 0
+
+
+def detect_install_record_state_warnings(record: dict, root: Path) -> int:
+    if not record:
+        return 0
+
+    bootstrap_task_dir = root / ".trellis" / "tasks" / "00-bootstrap-guidelines"
+    bootstrap_removed = bool(record.get("bootstrap_task_removed"))
+    bootstrap_status = record.get("bootstrap_cleanup_status")
+
+    if bootstrap_removed and bootstrap_task_dir.exists():
+        warn("workflow-installed.json: bootstrap_task_removed=true，但 00-bootstrap-guidelines 仍存在；需人工核对")
+    if bootstrap_status == "removed" and bootstrap_task_dir.exists():
+        warn("workflow-installed.json: bootstrap_cleanup_status=removed，但 00-bootstrap-guidelines 仍存在；需人工核对")
+    if bootstrap_status == "absent" and bootstrap_task_dir.exists():
+        warn("workflow-installed.json: bootstrap_cleanup_status=absent，但 00-bootstrap-guidelines 仍存在；需人工核对")
+
     return 0
 
 
@@ -432,6 +489,21 @@ def detect_conflicts_workflow_doc(src: Path, root: Path) -> int:
         err("[Shared] .trellis/workflow.md: 项目化补丁内容漂移")
         return 1
     ok("[Shared] .trellis/workflow.md: 项目化补丁正常")
+    return 0
+
+
+def detect_conflicts_agents_md(root: Path) -> int:
+    agents_md = root / "AGENTS.md"
+    if not agents_md.exists():
+        warn("[Shared] AGENTS.md: 文件缺失，跳过 NL 路由表检查")
+        return 0
+    if not has_agents_md_routing(agents_md):
+        err("[Shared] AGENTS.md: NL 路由表缺失")
+        return 1
+    if not agents_md_routing_matches_source(agents_md):
+        err("[Shared] AGENTS.md: NL 路由表内容漂移")
+        return 1
+    ok("[Shared] AGENTS.md: NL 路由表正常")
     return 0
 
 
@@ -1016,6 +1088,7 @@ def main() -> int:
     # 冲突检测
     total_conflicts = 0
     total_conflicts += detect_install_record_schema_conflicts(record)
+    detect_install_record_state_warnings(record, root)
     for cli_type in cli_types:
         if cli_type == "claude":
             dst_cmds = root / ".claude" / "commands" / "trellis"
@@ -1030,6 +1103,7 @@ def main() -> int:
             total_conflicts += detect_conflicts_managed_agents(src, root, "codex", "Codex")
     total_conflicts += detect_shared_script_conflicts(src, dst_scripts)
     total_conflicts += detect_conflicts_workflow_doc(src, root)
+    total_conflicts += detect_conflicts_agents_md(root)
     print(f"   总冲突: {total_conflicts}")
     print()
 
@@ -1054,6 +1128,13 @@ def main() -> int:
     if not has_workflow_patch(root / ".trellis" / "workflow.md") and not inject_workflow_patch(src, root):
         err("[Shared] workflow.md 项目化补丁恢复失败")
         return 1
+    agents_md = root / "AGENTS.md"
+    if agents_md.exists() and (
+        not has_agents_md_routing(agents_md) or not agents_md_routing_matches_source(agents_md)
+    ):
+        if not deploy_agents_md_routing(root, False):
+            err("[Shared] AGENTS.md NL 路由表恢复失败")
+            return 1
 
     # 合并/修复
     for cli_type in cli_types:

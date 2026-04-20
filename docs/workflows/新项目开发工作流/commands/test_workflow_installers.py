@@ -678,6 +678,31 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("workflow.md", result.stdout + result.stderr)
         self.assertIn("内容漂移", result.stdout + result.stderr)
 
+    def test_upgrade_check_detects_agents_md_routing_drift(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        agents_md = fixture / "AGENTS.md"
+        content = agents_md.read_text(encoding="utf-8")
+        start_idx = content.index("<!-- workflow-nl-routing-start -->")
+        end_idx = content.index("<!-- workflow-nl-routing-end -->") + len("<!-- workflow-nl-routing-end -->")
+        agents_md.write_text(content[:start_idx] + content[end_idx:], encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("AGENTS.md: NL 路由表缺失", result.stdout + result.stderr)
+
     def test_install_initializes_project_todo_file(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
@@ -955,6 +980,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         record_data.pop("workflow_version", None)
         record_data.pop("workflow_schema_version", None)
         record_data.pop("patched_codex_skills", None)
+        record_data.pop("bootstrap_cleanup_status", None)
         record_path.write_text(json.dumps(record_data, ensure_ascii=False, indent=2), encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
@@ -969,6 +995,29 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertNotIn("workflow-installed.json 缺少字段", result.stdout)
         self.assertIn("legacy/unknown", result.stdout)
+
+    def test_upgrade_check_warns_when_bootstrap_cleanup_record_conflicts_with_filesystem(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        bootstrap_dir = fixture / ".trellis" / "tasks" / "00-bootstrap-guidelines"
+        bootstrap_dir.mkdir(parents=True, exist_ok=True)
+        (bootstrap_dir / "task.json").write_text('{"id":"00-bootstrap-guidelines"}\n', encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("bootstrap_cleanup_status=removed", result.stdout + result.stderr)
 
     def test_upgrade_force_backfills_legacy_missing_codex_patch_record(self) -> None:
         fixture = self.create_fixture(include_codex=True)
@@ -1420,6 +1469,42 @@ class WorkflowInstallerTests(unittest.TestCase):
         record_data = json.loads((fixture / ".trellis" / "workflow-installed.json").read_text(encoding="utf-8"))
         self.assertEqual(record_data["workflow_version"], "0.1.24")
         self.assertEqual(record_data["previous_version"], "2.0.0")
+
+        followup_check = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+        self.assertEqual(followup_check.returncode, 0, msg=followup_check.stdout + followup_check.stderr)
+
+    def test_upgrade_merge_restores_agents_md_routing(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        agents_md = fixture / "AGENTS.md"
+        content = agents_md.read_text(encoding="utf-8")
+        start_idx = content.index("<!-- workflow-nl-routing-start -->")
+        end_idx = content.index("<!-- workflow-nl-routing-end -->") + len("<!-- workflow-nl-routing-end -->")
+        agents_md.write_text(content[:start_idx] + content[end_idx:], encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        merge = self.run_script(
+            UPGRADE_SCRIPT,
+            "--merge",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertEqual(merge.returncode, 0, msg=merge.stdout + merge.stderr)
+        updated_agents = agents_md.read_text(encoding="utf-8")
+        self.assertIn("workflow-nl-routing-start", updated_agents)
+        self.assertIn("自然语言命令路由", updated_agents)
 
         followup_check = self.run_script(
             UPGRADE_SCRIPT,

@@ -20,6 +20,7 @@
 
 - [工作流总纲](./工作流总纲.md)
 - [命令映射](./命令映射.md)
+- [装后隐藏目录与托管边界核对清单](./装后隐藏目录与托管边界核对清单.md)
 - [双轨交付控制完整流程演练](./完整流程演练.md)
 - [Claude Code 适配](./commands/claude/README.md)
 - [OpenCode 适配](./commands/opencode/README.md)
@@ -46,6 +47,7 @@
 | `多CLI通用新项目完整流程演练.md` | 第一入口，讲通用主链 |
 | `工作流总纲.md` | 权威规则层，讲原则、门禁、边界 |
 | `命令映射.md` | 路由层，讲阶段到命令 / skills / CLI 的映射 |
+| `装后隐藏目录与托管边界核对清单.md` | 安装后 / 升级后的隐藏目录与托管边界核对入口 |
 | `完整流程演练.md` | 专项案例层，讲外部项目双轨交付控制 |
 | `commands/*/README.md` | 平台展开层，讲各 CLI 的原生承载方式 |
 
@@ -104,7 +106,8 @@ git remote set-url --add --push origin <第二个仓库URL>
 2. 再运行当前 workflow 目录里的 `commands/install-workflow.py`
 3. 安装脚本把这套 workflow 嵌入到目标项目，并按各 CLI 官方原生格式完成内容适配
 4. 安装脚本自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines`，则一并清理；若 `.current-task` 仍指向该 bootstrap task，也同步清理悬空引用；否则跳过
-5. 最后在目标项目里按原生入口直接使用
+5. 安装完成后，先按《[装后隐藏目录与托管边界核对清单](./装后隐藏目录与托管边界核对清单.md)》完成装后核对
+6. 核对通过后，最后再在目标项目里按原生入口直接使用
 
 标准安装命令：
 
@@ -118,6 +121,12 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 所以这里说的“嵌入”，默认指的是**`trellis init` 之后再执行安装脚本，把 workflow 直接装进目标项目**。
 安装后的初始需求发现基础资产由脚本导入，不再通过手工复制或自然语言提示“补装”。
+
+这里不要少掉一步：
+
+- 至少确认 `.trellis/workflow-installed.json`、`.trellis/workflow.md`、`.trellis/library-lock.yaml`、`AGENTS.md` 托管区段、`.agents/skills/`、`.codex/skills/` 的实际状态
+- Codex 的 `.agents/skills/` 是共享 workflow skills 主承载面；`.codex/skills/` 则是 `trellis init` 后可能出现的额外影响面，存在时也必须纳入核对
+- `.codex/hooks.json`、`.codex/hooks/session-start.py`、`.claude/settings*.json`、`opencode.json.instructions` 仍属于人工维护或 Trellis baseline 资产，不应误以为安装器会替你补齐
 
 安装完成后，这套 workflow 的实际使用仍然可以是**渐进性披露**的：
 

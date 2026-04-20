@@ -141,6 +141,7 @@ Target-project deployed copies are derived state:
 - Claude: `.claude/commands/trellis/*.md`
 - OpenCode: `.opencode/commands/trellis/*.md`
 - Codex: `.agents/skills/*/SKILL.md` or `.codex/skills/*/SKILL.md`
+- installer-managed routing block: `AGENTS.md` inside `<!-- workflow-nl-routing-start ... workflow-nl-routing-end -->`
 - managed implementation agents:
   - Claude: `.claude/agents/{research,implement,check}.md`
   - OpenCode: `.opencode/agents/{research,implement,check}.md`
@@ -329,6 +330,12 @@ Required behavior:
   - verify deployed content matches current workflow source content after preprocessing
 - shared helper scripts:
   - verify deployed content matches current workflow source content
+- installer-managed `AGENTS.md` routing block:
+  - verify the routing block markers still exist when `AGENTS.md` exists
+  - verify the routing block content still matches the installer source of truth
+- install-record state warnings:
+  - do not fail only because lifecycle state and filesystem state disagree
+  - but emit a human-readable warning when `bootstrap_task_removed` / `bootstrap_cleanup_status` disagree with the actual presence of `.trellis/tasks/00-bootstrap-guidelines`
 
 For current workflow scripts, “after preprocessing” means at least applying the same path rewrite logic as deployment, such as:
 
@@ -476,14 +483,16 @@ When modifying these contracts, update or add tests that prove:
 6. `--check` fails when:
    - patch markers drift
    - `.trellis/workflow.md` patch content drifts while the marker still exists
+   - installer-managed `AGENTS.md` routing block is missing or drifts when `AGENTS.md` exists
    - overlay command content drifts
    - added command content drifts
    - helper script content drifts
    - a required phase-gate helper is missing from deployed target scripts or missing from install-record `scripts`
-7. `--merge` restores drifted command and helper-script content for low-risk cases
-8. `--force` can restore baseline-backed patch commands and reapply patches inside the same structural model
-9. newly added required helper scripts are reflected in user-visible install guidance when the workflow gate is exposed to target-project users
-10. Codex multi-directory behavior is covered by regression tests:
+7. `--check` emits a warning when install-record lifecycle state (`bootstrap_task_removed` / `bootstrap_cleanup_status`) conflicts with the actual presence of `.trellis/tasks/00-bootstrap-guidelines`
+8. `--merge` restores drifted command and helper-script content for low-risk cases
+9. `--force` can restore baseline-backed patch commands and reapply patches inside the same structural model
+10. newly added required helper scripts are reflected in user-visible install guidance when the workflow gate is exposed to target-project users
+11. Codex multi-directory behavior is covered by regression tests:
    - distributed skills sync to every existing skills directory
    - `start` / `finish-work` patch only the active skills directory
    - uninstall / `--force` restore follow the same active-directory boundary

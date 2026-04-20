@@ -1320,7 +1320,7 @@ def main() -> int:
             print(f"    1. 安装器已自动导入 {_REQUIREMENTS_FOUNDATION_PACK}；目标项目未创建 {_BOOTSTRAP_TASK_NAME}，清理已跳过")
         else:
             print(f"    1. 安装器已自动导入 {_REQUIREMENTS_FOUNDATION_PACK}；{_BOOTSTRAP_TASK_NAME} 清理状态: {bootstrap_cleanup}")
-        print("       请先确认 .trellis/library-lock.yaml 已包含需求发现基础资产")
+        print("       请先确认 trellis-library assemble 的导入结果已记录到 .trellis/library-lock.yaml")
         print("    2. 若目标项目不是当前最新 Trellis 基线，先升级 Trellis；当前 workflow 的 archive 收尾仍直接复用基线 task.py 行为")
         print("    3. 技术架构确认后，再使用 trellis-library/cli.py assemble 为当前项目补充真实 spec 集合")
         print("    4. 在目标项目根 README.md 中说明 todo.txt 的存在与用途")
