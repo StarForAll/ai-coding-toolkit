@@ -147,7 +147,7 @@ docs/workflows/新项目开发工作流/commands/<shared-agent-source>/
 | Trellis 基线命令补丁（start / finish-work / record-session） | `.opencode/commands/trellis/start.md` 等 | 安装器管理 | 保留基线 → 注入补丁 |
 | 通用辅助脚本 | `.trellis/scripts/workflow/` | 安装器管理 | 与 Claude 共用，不重复部署 |
 | Trellis 基线 workflow 指南补丁 | `.trellis/workflow.md` | 安装器管理 | 与 Claude / Codex 共用同一份目标项目 workflow 指南，保持 close-out 与 child-task 规则一致 |
-| 阶段 skills（跨 CLI 共享） | `.agents/skills/*/SKILL.md` | 安装器管理（与 Codex 共享单份落盘） | OpenCode 官方 skills 扫描链路会命中 `.agents/skills/`，因此同一份 skills 同时影响 OpenCode 与 Codex；升级/核对时必须把该路径算在 OpenCode 影响面内 |
+| 阶段 skills（跨 CLI 可发现） | `.agents/skills/*/SKILL.md` | 安装器管理（与 Codex 共用单份落盘） | OpenCode 官方 skills 扫描链路会命中 `.agents/skills/`，因此同一份 skills 会被 OpenCode 与 Codex 同时发现；但当前 workflow 对 OpenCode 的**正式主入口**仍是 `.opencode/commands/trellis/`，不是 `.agents/skills/` |
 | 子代理定义 | `.opencode/agents/*.md` | 部分安装器管理 | `research` / `implement` / `check` 由 workflow source-of-truth `commands/opencode/agents/` 部署；`debug` 仍手动维护 |
 | 项目长期规则 | `AGENTS.md` | 半托管（手动维护为主） | 与 Claude/Codex 共用同一文件；`TRELLIS` managed block 与 `workflow-nl-routing` 区段由 `trellis init` / `install-workflow.py` 分别托管 |
 | workflow 文档注入 | `opencode.json.instructions` | 手动维护 | 只挂主入口与必要补充 |
@@ -167,10 +167,10 @@ docs/workflows/新项目开发工作流/commands/<shared-agent-source>/
 
 | 资产 | 目标位置 | 分类 | 说明 |
 |------|---------|------|------|
-| workflow 阶段 skills（feasibility / brainstorm / design / plan / test-first / project-audit / check / review-gate / delivery） | `.agents/skills/<phase>/SKILL.md` + `.codex/skills/<phase>/SKILL.md` | 安装器管理（同步写入所有存在的目录） | 同源 Markdown 转换为 skill 格式；安装器通过 `list_all_codex_skills_dirs` 获取全部目录，向每个目录同步写入阶段 skills |
+| workflow 阶段 skills（feasibility / brainstorm / design / plan / test-first / project-audit / check / review-gate / delivery） | `.agents/skills/<phase>/SKILL.md` | 安装器管理（共享 skills 单点落盘） | 共享 skills 只落在 `.agents/skills/`；Codex 会直接读取这一路径；OpenCode 官方也会发现这一路径，但对当前 workflow 来说它不是 OpenCode 的正式主入口 |
 | Trellis 基线 skill 补丁（start / finish-work） | 活动 skills 目录下的 `start/SKILL.md`、`finish-work/SKILL.md` | 安装器管理（活动目录增强） | **只在 `resolve_codex_skills_dir(root)` 解析出的活动 skills 目录**追加 workflow patch；当前 `trellis init` 下通常是 `.agents/skills/` |
 | Trellis 基线 `record-session` skill | 活动 skills 目录下的 `record-session/SKILL.md` | 运行前置/仅校验 | 由 `trellis init` 提供；当前 workflow 不对其追加 Codex 专属 patch，但最终收尾仍依赖它与共享 helper 正常协同 |
-| parallel skill 禁用覆盖 | 各 skills 目录下的 `parallel/SKILL.md` | 安装器管理（条件覆盖） | **只在存在 parallel 的目录**执行禁用覆盖；若不存在则跳过 |
+| parallel skill 入口移除 | 各 skills 目录下的 `parallel/SKILL.md` | 安装器管理（条件移除） | **只在存在 parallel 的目录**执行：先备份，再把 `parallel` 从嵌入面移除；若不存在则跳过 |
 | 通用辅助脚本 | `.trellis/scripts/workflow/` | 安装器管理 | 与 Claude/OpenCode 共用 |
 | Trellis 基线 workflow 指南补丁 | `.trellis/workflow.md` | 安装器管理 | 与 Claude/OpenCode 共用；Codex hooks 注入的 `.trellis/workflow.md` 应与安装器增强后的文档保持一致 |
 | 项目长期规则 | `AGENTS.md` | 半托管（手动维护为主） | 与 Claude/OpenCode 共用；`TRELLIS` managed block 与 `workflow-nl-routing` 区段由 `trellis init` / `install-workflow.py` 分别托管 |
@@ -191,10 +191,10 @@ docs/workflows/新项目开发工作流/commands/<shared-agent-source>/
 
 `trellis init` 可能同时落盘 `.agents/skills/` 与 `.codex/skills/` 两个目录（例如本仓库实际观察到：主体 skills 落在 `.agents/skills/`，`parallel` 落在 `.codex/skills/`）。当前安装器对这两类目录采用分层策略：
 
-- `install-workflow.py` 向**所有 skills 目录**同步写入阶段 skills
+- `install-workflow.py` 只向 `.agents/skills/` 写入共享阶段 skills
 - `start` / `finish-work` baseline patch 只增强**活动 skills 目录**
-- `parallel` 禁用覆盖按"存在才覆盖，不存在就跳过"处理
-- `upgrade-compat.py --check` 对**所有 skills 目录**检查分发 skills 与 `parallel`，但只对活动目录检查 `start` / `finish-work`
+- `parallel` 入口按"存在才移除，不存在就跳过"处理
+- `upgrade-compat.py --check` 只在 `.agents/skills/` 检查共享分发 skills；若 `.codex/skills/` 中出现重复 shared skills，则视为重复副本
 
 补充说明：
 
@@ -206,6 +206,7 @@ docs/workflows/新项目开发工作流/commands/<shared-agent-source>/
 - `.agents/skills/` 承载共享 / 通用 workflow skills
 - `.codex/skills/` 承载 Codex 特有或本地侧 skills
 - 因此 `.codex/skills/` 不应被默认视为 `start` / `finish-work` 这类共享 baseline skill 的补丁目标
+- Claude Code 官方技能目录仍是 `.claude/skills/`；当前没有官方证据表明 Claude Code 会读取 `.agents/skills/`
 
 装后/升级后核对仍建议显式检查两条路径，确认两边已同步为一致状态：
 
@@ -213,9 +214,11 @@ docs/workflows/新项目开发工作流/commands/<shared-agent-source>/
 # 所有 skills 目录
 ls -d .agents/skills/ .codex/skills/ 2>/dev/null
 
-# 核对 parallel 是否已在所有目录被禁用
+# 核对 parallel 是否已从嵌入面移除，但备份仍在
 ls .agents/skills/parallel/SKILL.md 2>/dev/null
 ls .codex/skills/parallel/SKILL.md 2>/dev/null
+ls .agents/skills/.backup-original/parallel/SKILL.md 2>/dev/null
+ls .codex/skills/.backup-original/parallel/SKILL.md 2>/dev/null
 ```
 
 ---
@@ -224,7 +227,7 @@ ls .codex/skills/parallel/SKILL.md 2>/dev/null
 
 | 资产类型 | Claude | OpenCode | Codex |
 |---------|--------|----------|-------|
-| 阶段命令入口 | `.claude/commands/trellis/*.md` ✅ 安装器 | `.opencode/commands/trellis/*.md` ✅ 安装器 | `.agents/skills/*/SKILL.md` + `.codex/skills/*/SKILL.md` ✅ 安装器（对所有存在目录同步写入；`.agents/skills` 也会被 OpenCode 原生 skills 扫描命中） |
+| 阶段命令入口 | `.claude/commands/trellis/*.md` ✅ 安装器 | `.opencode/commands/trellis/*.md` ✅ 安装器 | `.agents/skills/*/SKILL.md` ✅ 安装器（`.codex/skills/*` 仅保留 Codex 独有或项目自定义 skills） |
 | 基线补丁 | start / finish-work / record-session ✅ | start / finish-work / record-session ✅ | start / finish-work ✅（仅活动 skills 目录） |
 | 收尾入口 | `record-session.md` + `.trellis/scripts/workflow/record-session-helper.py` | `record-session.md` + `.trellis/scripts/workflow/record-session-helper.py` | Trellis baseline `record-session` skill + `.trellis/scripts/workflow/record-session-helper.py` |
 | 辅助脚本 | `.trellis/scripts/workflow/` ✅ | 共用 ✅ | 共用 ✅ |
@@ -310,8 +313,8 @@ test -f .opencode/commands/trellis/check.md
 test -f .opencode/commands/trellis/delivery.md
 
 # Codex
-test -f .agents/skills/brainstorm/SKILL.md 2>/dev/null || test -f .codex/skills/brainstorm/SKILL.md
-test -f .agents/skills/check/SKILL.md 2>/dev/null || test -f .codex/skills/check/SKILL.md
+test -f .agents/skills/brainstorm/SKILL.md
+test -f .agents/skills/check/SKILL.md
 ```
 
 ### 平台前置资产验证

@@ -14,6 +14,7 @@
 - close-out 中的 `archive` 仍直接复用目标项目 Trellis 基线 `task.py`；若目标项目不是当前最新 Trellis 基线，可能不包含 archive auto-commit pathspec 修复
 - 安装器会自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines` 则清理，不存在则跳过；若 `.current-task` 仍指向该 bootstrap task，则同步清理悬空引用
 - 一旦开始正式安装，安装器会先写入 `.trellis/workflow-embed-attempt.json`；若安装失败，该失败标记会保留，后续嵌入必须先由用户手动处理
+- 首次嵌入执行应由可稳定执行项目安装脚本的入口（如 shell、Claude Code、OpenCode）完成；Codex 适合作为安装完成后的使用入口，不建议主导执行嵌入步骤
 
 前提:
 - 目标项目是 Git 仓库，`origin` 至少有两个 push URL，已执行 trellis init，且存在对应 CLI 目录
@@ -37,8 +38,11 @@ from workflow_assets import (
     ALL_CLI_TYPES,
     AGENT_SUFFIXES,
     CODEX_PATCH_BASELINE_SKILLS,
+    CODEX_SHARED_SKILL_NAMES,
     CLI_ALT_DIRS,
     CLI_DIRS,
+    codex_secondary_skills_dir,
+    codex_shared_skills_dir,
     DISTRIBUTED_COMMANDS,
     detect_cli_types as detect_cli_types_shared,
     HELPER_SCRIPTS,
@@ -70,7 +74,6 @@ def info(m): print(f"{C}ℹ️  {m}{N}")
 _CLI_DIRS = CLI_DIRS
 _CLI_ALT_DIRS = CLI_ALT_DIRS
 _ALL_CLI_TYPES = ALL_CLI_TYPES
-
 # 对 Trellis 原生命令做增强时使用的补丁标记。
 # 当前 workflow 会增强 `start.md`、`finish-work.md` 与 `record-session.md`，
 # 而不是重写它们的全部基线内容。
@@ -101,6 +104,7 @@ _HEAD_FILE_NAME = "HEAD"
 _REFS_HEADS_PREFIX = "refs/heads/"
 _PACKED_REFS_FILE = "packed-refs"
 _PARALLEL_DISABLED_MARKER = "<!-- workflow-parallel-disabled -->"
+_EMBED_EXECUTOR_CONFIRM_ENV = "WORKFLOW_EMBED_EXECUTOR_CONFIRMED"
 
 # AGENTS.md NL 路由表标记
 _AGENTS_NL_ROUTING_MARKER = "<!-- workflow-nl-routing-start -->"
@@ -628,6 +632,23 @@ def ensure_project_prereqs(root: Path) -> None:
     enforce_initial_main_branch_policy(root)
 
 
+def ensure_embed_executor_confirmed(dry_run: bool) -> None:
+    """Block until caller confirms this embed is not being executed from Codex.
+
+    The workflow still supports Codex after install. This guard only protects the
+    initial embed execution step.
+    """
+    if os.environ.get(_EMBED_EXECUTOR_CONFIRM_ENV) == "1":
+        return
+    if dry_run:
+        return
+    message = (
+        "当前工作流嵌入步骤无法在 Codex 中嵌入成功，只能在 Claude Code / OpenCode（或直接 shell）中执行嵌入操作。\n"
+        f"请确认当前执行这一步的不是 Codex；若确认无误，请重新执行并设置环境变量 {_EMBED_EXECUTOR_CONFIRM_ENV}=1。"
+    )
+    sys.exit(f"{R}{message}{N}")
+
+
 # ── 命令文件预处理 ──
 def prepare_parallel_disabled_content(src: Path) -> str | None:
     """读取禁用 parallel 的覆盖内容。"""
@@ -638,52 +659,41 @@ def prepare_parallel_disabled_content(src: Path) -> str | None:
 
 
 def disable_parallel_command(src: Path, target_path: Path, *, dry_run: bool, cli_label: str) -> bool:
-    """如目标项目存在 baseline parallel 命令，则覆盖为禁用说明。"""
+    """If a baseline parallel command exists, remove it from the embedded workflow surface.
+
+    The workflow explicitly disables parallel/worktree execution, so we keep the
+    backup but remove the command entry instead of leaving a disabled placeholder.
+    """
     if not target_path.exists():
         return False
 
-    content = target_path.read_text(encoding="utf-8")
-    if _PARALLEL_DISABLED_MARKER in content:
-        ok(f"[{cli_label}] parallel 命令已禁用")
-        return False
-
-    disabled_content = prepare_parallel_disabled_content(src)
-    if disabled_content is None:
-        warn(f"[{cli_label}] parallel-disabled.md 不存在，无法禁用 parallel")
-        return False
-
-    if not dry_run:
-        target_path.write_text(disabled_content, encoding="utf-8")
     if dry_run:
-        info(f"[{cli_label}] 将禁用 parallel 命令")
+        info(f"[{cli_label}] 将移除 parallel 命令（已禁用，不嵌入到目标项目）")
     else:
-        ok(f"[{cli_label}] parallel 命令已禁用")
+        target_path.unlink()
+        ok(f"[{cli_label}] parallel 命令已移除")
     return True
 
 
 def disable_parallel_skill(src: Path, skills_dir: Path, *, dry_run: bool, cli_label: str) -> bool:
-    """如目标项目存在 baseline parallel skill，则覆盖为禁用说明。"""
+    """If a baseline Codex parallel skill exists, remove it from the embedded workflow surface.
+
+    The workflow explicitly disables parallel/worktree execution. For Codex we should
+    not leave an invalid placeholder SKILL.md behind because Codex expects valid YAML
+    frontmatter. Instead, back up the baseline file and remove the skill from the
+    project-local skills surface.
+    """
     target_path = skills_dir / "parallel" / "SKILL.md"
     if not target_path.exists():
         return False
 
-    content = target_path.read_text(encoding="utf-8")
-    if _PARALLEL_DISABLED_MARKER in content:
-        ok(f"[{cli_label}] parallel skill 已禁用")
-        return False
-
-    disabled_content = prepare_parallel_disabled_content(src)
-    if disabled_content is None:
-        warn(f"[{cli_label}] parallel-disabled.md 不存在，无法禁用 parallel skill")
-        return False
-
-    if not dry_run:
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        target_path.write_text(disabled_content, encoding="utf-8")
     if dry_run:
-        info(f"[{cli_label}] 将禁用 parallel skill")
-    else:
-        ok(f"[{cli_label}] parallel skill 已禁用")
+        info(f"[{cli_label}] 将移除 parallel skill（已禁用，不嵌入到目标项目）")
+        return True
+
+    skill_dir = target_path.parent
+    shutil.rmtree(skill_dir)
+    ok(f"[{cli_label}] parallel skill 已移除")
     return True
 
 
@@ -849,6 +859,17 @@ def target_agent_dir(root: Path, cli_type: str) -> Path:
     return root / CLI_DIRS[cli_type] / "agents"
 
 
+def managed_agent_backup_dir(root: Path, cli_type: str) -> Path:
+    """Return backup location for managed agents.
+
+    Codex agent backups must stay outside `.codex/agents/` because Codex scans that
+    directory for role definitions and may treat backup files as duplicate roles.
+    """
+    if cli_type == "codex":
+        return root / ".trellis" / ".backup-original" / "codex-agents"
+    return target_agent_dir(root, cli_type) / ".backup-original"
+
+
 def deploy_managed_agents(
     src: Path,
     root: Path,
@@ -858,7 +879,7 @@ def deploy_managed_agents(
     dry_run: bool,
 ) -> dict:
     dst_agents = target_agent_dir(root, cli_type)
-    backup_dir = dst_agents / ".backup-original"
+    backup_dir = managed_agent_backup_dir(root, cli_type)
     result = {"agents": 0, "errors": []}
 
     if not dst_agents.is_dir():
@@ -1146,7 +1167,8 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool) -> dict:
 def deploy_codex(src: Path, root: Path, dry_run: bool) -> dict:
     """部署到 Codex skills 目录。
 
-    分发型 workflow skills 会同步写入所有存在的 skills 目录；
+    共享 workflow skills 只写入 `.agents/skills/`。
+    `.codex/skills/` 只保留 Codex 独有 skills；若存在重复 shared skills，应清理。
     baseline patch 型 skills（start / finish-work）只增强活动目录。
     """
     skills_dirs = list_all_codex_skills_dirs(root)
@@ -1157,11 +1179,20 @@ def deploy_codex(src: Path, root: Path, dry_run: bool) -> dict:
         return {"commands": 0, "scripts": 0, "patches": 0, "agents": 0, "errors": ["未找到 Codex 活动 skills 目录"]}
 
     result = {"commands": 0, "scripts": 0, "patches": 0, "agents": 0, "errors": []}
+    shared_skills_dir = codex_shared_skills_dir(root)
+    secondary_skills_dir = codex_secondary_skills_dir(root)
 
-    # 备份分发型 / 禁用型 skills（对所有存在的 skills 目录执行）
+    # 备份共享分发型 / 禁用型 skills（只对共享目录执行）
     if not dry_run:
+        for name in OVERLAY_BASELINE_COMMANDS:
+            skill_path = shared_skills_dir / name / "SKILL.md"
+            backup_path = shared_skills_dir / ".backup-original" / name / "SKILL.md"
+            if skill_path.exists() and not backup_path.exists():
+                backup_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(skill_path, backup_path)
+                ok(f"[Codex] {name} skill → {shared_skills_dir.relative_to(root)}/.backup-original")
         for skills_dir in skills_dirs:
-            for name in [*OVERLAY_BASELINE_COMMANDS, *OPTIONAL_DISABLED_BASELINE_COMMANDS]:
+            for name in OPTIONAL_DISABLED_BASELINE_COMMANDS:
                 skill_path = skills_dir / name / "SKILL.md"
                 backup_path = skills_dir / ".backup-original" / name / "SKILL.md"
                 if skill_path.exists() and not backup_path.exists():
@@ -1175,23 +1206,42 @@ def deploy_codex(src: Path, root: Path, dry_run: bool) -> dict:
                 backup_path.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(skill_path, backup_path)
                 ok(f"[Codex] {name} skill → {primary_skills_dir.relative_to(root)}/.backup-original")
+        if secondary_skills_dir.is_dir():
+            for name in CODEX_SHARED_SKILL_NAMES:
+                duplicate_path = secondary_skills_dir / name / "SKILL.md"
+                backup_path = secondary_skills_dir / ".backup-original" / name / "SKILL.md"
+                if duplicate_path.exists() and not backup_path.exists():
+                    backup_path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(duplicate_path, backup_path)
+                    ok(f"[Codex] duplicate {name} skill → {secondary_skills_dir.relative_to(root)}/.backup-original")
 
-    # 部署 skills（从命令文件转换为 skills 格式，对所有目录同步写入）
+    # 部署共享 skills（只写入 .agents/skills）
     for cmd in DISTRIBUTED_COMMANDS:
         s = src / f"{cmd}.md"
         if s.exists():
-            for skills_dir in skills_dirs:
-                d = skills_dir / cmd / "SKILL.md"
-                if dry_run:
-                    info(f"[Codex] 将部署 skill: {cmd} → {skills_dir.relative_to(root)}")
-                else:
-                    c = prepare_command_content(s)
-                    d.parent.mkdir(parents=True, exist_ok=True)
-                    d.write_text(c, encoding="utf-8")
-                    ok(f"[Codex] skill: {cmd} → {d.relative_to(root)}")
+            d = shared_skills_dir / cmd / "SKILL.md"
+            if dry_run:
+                info(f"[Codex] 将部署 shared skill: {cmd} → {shared_skills_dir.relative_to(root)}")
+            else:
+                c = prepare_command_content(s)
+                d.parent.mkdir(parents=True, exist_ok=True)
+                d.write_text(c, encoding="utf-8")
+                ok(f"[Codex] shared skill: {cmd} → {d.relative_to(root)}")
             result["commands"] += 1
         else:
             warn(f"[Codex] 源文件缺失: {cmd}.md")
+
+    # 清理 .codex/skills/ 中重复的 shared skills
+    if secondary_skills_dir.is_dir():
+        for name in CODEX_SHARED_SKILL_NAMES:
+            duplicate_dir = secondary_skills_dir / name
+            if not duplicate_dir.exists():
+                continue
+            if dry_run:
+                info(f"[Codex] 将移除 duplicate shared skill: {name} → {secondary_skills_dir.relative_to(root)}")
+            else:
+                shutil.rmtree(duplicate_dir)
+                ok(f"[Codex] duplicate shared skill 已移除: {duplicate_dir.relative_to(root)}")
 
     # 注入 finish-work 补丁（只增强活动 skills 目录）
     finish_work_skill = primary_skills_dir / "finish-work" / "SKILL.md"
@@ -1465,6 +1515,7 @@ def main() -> int:
     src = Path(__file__).resolve().parent
     root = args.project_root or find_root(Path(__file__))
     ensure_project_prereqs(root)
+    ensure_embed_executor_confirmed(args.dry_run)
 
     # 检测 CLI 类型
     requested = [x.strip() for x in args.cli.split(",")] if args.cli else None

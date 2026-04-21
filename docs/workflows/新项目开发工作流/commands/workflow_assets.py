@@ -51,6 +51,7 @@ HELPER_SCRIPTS = [
 ]
 MANAGED_IMPLEMENTATION_AGENTS = ["research", "implement", "check"]
 LATEST_TRELLIS_VERSION_ENV = "TRELLIS_LATEST_VERSION"
+CODEX_SHARED_SKILL_NAMES = [*DISTRIBUTED_COMMANDS, *CODEX_PATCH_BASELINE_SKILLS, "record-session"]
 AGENT_SUFFIXES = {
     "claude": ".md",
     "opencode": ".md",
@@ -220,20 +221,27 @@ class ManagedAssetSpec:
         if self.kind == "command":
             return root / CLI_DIRS[self.cli_type] / "commands" / "trellis" / f"{self.name}.md"
         if self.kind == "skill":
-            skills_dir = resolve_codex_skills_dir(root)
-            if skills_dir is None:
-                return None
-            return skills_dir / self.name / "SKILL.md"
+            return codex_shared_skills_dir(root) / self.name / "SKILL.md"
         if self.kind == "agent":
             return workflow_managed_agent_target_path(root, self.cli_type, self.name)
         raise ValueError(f"Unsupported asset kind: {self.kind}")
 
 
+def codex_shared_skills_dir(root: Path) -> Path:
+    """Canonical shared skills directory for Codex/OpenCode shared skills."""
+    return root / ".agents" / "skills"
+
+
+def codex_secondary_skills_dir(root: Path) -> Path:
+    """Codex-local skills directory reserved for Codex-only skills."""
+    return root / ".codex" / "skills"
+
+
 def resolve_codex_skills_dir(root: Path) -> Path | None:
-    skills_dir = root / ".agents" / "skills"
+    skills_dir = codex_shared_skills_dir(root)
     if skills_dir.is_dir():
         return skills_dir
-    skills_dir = root / ".codex" / "skills"
+    skills_dir = codex_secondary_skills_dir(root)
     if skills_dir.is_dir():
         return skills_dir
     return None
@@ -247,7 +255,7 @@ def list_all_codex_skills_dirs(root: Path) -> list[Path]:
     需要用本函数避免影子目录残留。
     """
     dirs: list[Path] = []
-    for p in [root / ".agents" / "skills", root / ".codex" / "skills"]:
+    for p in [codex_shared_skills_dir(root), codex_secondary_skills_dir(root)]:
         if p.is_dir():
             dirs.append(p)
     return dirs

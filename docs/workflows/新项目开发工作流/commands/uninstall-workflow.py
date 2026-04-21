@@ -53,6 +53,12 @@ def info(message: str) -> None:
     print(f"{C}ℹ️  {message}{N}")
 
 
+def managed_agent_backup_dir(root: Path, cli_type: str) -> Path:
+    if cli_type == "codex":
+        return root / ".trellis" / ".backup-original" / "codex-agents"
+    return root / CLI_DIRS[cli_type] / "agents" / ".backup-original"
+
+
 def find_root(start: Path) -> Path:
     """向上查找包含任一 CLI 目录的项目根目录。"""
     all_dirs = list(_CLI_DIRS.values()) + list(_CLI_ALT_DIRS.values())
@@ -120,7 +126,7 @@ def restore_optional_disabled_command(backup: Path, target_dir: Path, command: s
 
 def uninstall_managed_agents(root: Path, cli_type: str, cli_label: str) -> None:
     target_dir = root / CLI_DIRS[cli_type] / "agents"
-    backup_dir = target_dir / ".backup-original"
+    backup_dir = managed_agent_backup_dir(root, cli_type)
     suffix = AGENT_SUFFIXES[cli_type]
 
     if not target_dir.is_dir():

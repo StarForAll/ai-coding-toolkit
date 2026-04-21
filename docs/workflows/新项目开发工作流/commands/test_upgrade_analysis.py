@@ -187,8 +187,7 @@ class UpgradeAnalysisTests(unittest.TestCase):
         self.write_file(baseline, ".codex/skills/parallel/SKILL.md", "baseline parallel\n")
 
         self.write_file(expected, ".agents/skills/delivery/SKILL.md", "workflow delivery\n")
-        self.write_file(expected, ".codex/skills/delivery/SKILL.md", "workflow delivery\n")
-        self.write_file(expected, ".codex/skills/parallel/SKILL.md", "disabled parallel\n")
+        self.write_file(expected, ".codex/skills/.backup-original/parallel/SKILL.md", "baseline parallel\n")
 
         self.write_file(target, ".agents/skills/delivery/SKILL.md", "workflow delivery\n")
         self.write_file(target, ".codex/skills/delivery/SKILL.md", "drifted delivery\n")
@@ -211,8 +210,8 @@ class UpgradeAnalysisTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         payload = json.loads(result.stdout)
         actions = {item["asset_id"]: item["action"] for item in payload["findings"]}
-        self.assertEqual(actions["codex[.codex/skills]:delivery"], "merge")
-        self.assertEqual(actions["codex[.codex/skills]:parallel"], "merge")
+        self.assertEqual(actions["codex[.codex/skills]:delivery"], "delete")
+        self.assertEqual(actions["codex[.codex/skills]:parallel"], "delete")
 
     def test_analyze_upgrade_classifies_delete_from_target_install_record(self) -> None:
         baseline = self.make_root("upgrade-baseline-delete-")

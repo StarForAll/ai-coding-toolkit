@@ -22,6 +22,7 @@ INSTALL_SCRIPT = COMMANDS_DIR / "install-workflow.py"
 DETECT_EMBED_STATE_SCRIPT = COMMANDS_DIR / "detect-embed-state.py"
 UPGRADE_SCRIPT = COMMANDS_DIR / "upgrade-compat.py"
 UNINSTALL_SCRIPT = COMMANDS_DIR / "uninstall-workflow.py"
+EMBED_CONFIRM_ENV = "WORKFLOW_EMBED_EXECUTOR_CONFIRMED"
 ATTEMPT_RECORD_NAME = "workflow-embed-attempt.json"
 PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 FINISH_WORK_MARKER = "<!-- finish-work-projectization-patch -->"
@@ -349,7 +350,12 @@ class WorkflowInstallerTests(unittest.TestCase):
         return root
 
     def install_workflow(self, fixture_root: Path) -> subprocess.CompletedProcess[str]:
-        return self.run_script(INSTALL_SCRIPT, "--project-root", str(fixture_root))
+        return self.run_script(
+            INSTALL_SCRIPT,
+            "--project-root",
+            str(fixture_root),
+            env={EMBED_CONFIRM_ENV: "1"},
+        )
 
     def detect_embed_state(self, fixture_root: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
         return self.run_script(DETECT_EMBED_STATE_SCRIPT, "--project-root", str(fixture_root), *args, env=env)
@@ -357,6 +363,57 @@ class WorkflowInstallerTests(unittest.TestCase):
     def latest_env_for(self, fixture_root: Path) -> dict[str, str]:
         version_path = fixture_root / ".trellis" / ".version"
         return {"TRELLIS_LATEST_VERSION": version_path.read_text(encoding="utf-8").strip()}
+
+    def mark_legacy_codex_installed(self, fixture_root: Path) -> None:
+        record_path = fixture_root / ".trellis" / "workflow-installed.json"
+        record_data = json.loads(record_path.read_text(encoding="utf-8"))
+        cli_types = list(record_data.get("cli_types", []))
+        if "codex" not in cli_types:
+            cli_types.append("codex")
+        record_data["cli_types"] = cli_types
+        record_data["patched_codex_skills"] = ["start", "finish-work"]
+        record_path.write_text(json.dumps(record_data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def apply_legacy_codex_workflow_state(self, fixture_root: Path) -> None:
+        self.mark_legacy_codex_installed(fixture_root)
+        commands_root = COMMANDS_DIR
+        start_skill = fixture_root / ".agents" / "skills" / "start" / "SKILL.md"
+        finish_work_skill = fixture_root / ".agents" / "skills" / "finish-work" / "SKILL.md"
+        start_backup = fixture_root / ".agents" / "skills" / ".backup-original" / "start" / "SKILL.md"
+        finish_backup = fixture_root / ".agents" / "skills" / ".backup-original" / "finish-work" / "SKILL.md"
+        start_backup.parent.mkdir(parents=True, exist_ok=True)
+        finish_backup.parent.mkdir(parents=True, exist_ok=True)
+        start_backup.write_text(BASELINE_START_SKILL_CONTENT, encoding="utf-8")
+        finish_backup.write_text(BASELINE_FINISH_WORK_CONTENT, encoding="utf-8")
+
+        install_module = self.run_script  # suppress linter-like unused concerns by local aliasing? no
+        _ = install_module
+        import importlib.util
+        module_path = COMMANDS_DIR / "install-workflow.py"
+        spec = importlib.util.spec_from_file_location("workflow_install_workflow_test", module_path)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        patched_start = module.build_codex_start_skill_content(
+            BASELINE_START_SKILL_CONTENT,
+            module.prepare_command_content(commands_root / "start-skill-patch-phase-router.md"),
+        )
+        assert patched_start is not None
+        start_skill.write_text(patched_start, encoding="utf-8")
+
+        patched_finish = module.build_finish_work_content(
+            BASELINE_FINISH_WORK_CONTENT,
+            module.prepare_command_content(commands_root / "finish-work-patch-projectization.md"),
+        )
+        assert patched_finish is not None
+        finish_work_skill.write_text(patched_finish, encoding="utf-8")
+
+        agents_backup_dir = fixture_root / ".trellis" / ".backup-original" / "codex-agents"
+        agents_backup_dir.mkdir(parents=True, exist_ok=True)
+        (agents_backup_dir / "research.toml").write_text(BASELINE_CODEX_RESEARCH_TOML, encoding="utf-8")
+        (agents_backup_dir / "implement.toml").write_text(BASELINE_CODEX_IMPLEMENT_TOML, encoding="utf-8")
+        (agents_backup_dir / "check.toml").write_text(BASELINE_CODEX_CHECK_TOML, encoding="utf-8")
 
     def test_install_deploys_record_session_closure_helper_and_patch(self) -> None:
         fixture = self.create_fixture()
@@ -420,7 +477,6 @@ class WorkflowInstallerTests(unittest.TestCase):
             record_data["patched_baseline_commands"],
             ["start", "finish-work", "record-session"],
         )
-        self.assertEqual(record_data["patched_codex_skills"], ["start", "finish-work"])
         self.assertEqual(record_data["patched_shared_docs"], ["workflow.md"])
         self.assertEqual(record_data["scripts"], HELPER_SCRIPTS)
         for helper_name in HELPER_SCRIPTS:
@@ -430,14 +486,14 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(record_data["workflow_schema_version"], "2")
         self.assertEqual(record_data["initial_pack"], "pack.requirements-discovery-foundation")
         parallel = fixture / ".claude" / "commands" / "trellis" / "parallel.md"
-        self.assertIn(PARALLEL_DISABLED_MARKER, parallel.read_text(encoding="utf-8"))
+        self.assertFalse(parallel.exists())
+        self.assertTrue((fixture / ".claude" / "commands" / "trellis" / ".backup-original" / "parallel.md").exists())
         deployed_feasibility = (fixture / ".claude" / "commands" / "trellis" / "feasibility.md").read_text(
             encoding="utf-8"
         )
         self.assertIn(".trellis/scripts/workflow/feasibility-check.py", deployed_feasibility)
         self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", deployed_feasibility)
         self.assertIn("OpenCode 入口见目标项目 AGENTS.md 路由表", deployed_feasibility)
-        self.assertIn("Codex 入口见目标项目 AGENTS.md 路由表", deployed_feasibility)
         self.assertNotIn("[阶段状态机与强门禁协议](", deployed_feasibility)
         self.assertNotIn("[需求变更管理执行卡](", deployed_feasibility)
         self.assertNotIn("[源码水印与归属证据链执行卡](", deployed_feasibility)
@@ -462,8 +518,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         # 补丁已条件化：验证质量平台门禁口径，不再硬断言特定 sonar 内容
         self.assertIn("质量平台门禁", opencode_text)
         self.assertIn("质量平台门禁", codex_text)
-        self.assertIn(PARALLEL_DISABLED_MARKER, opencode_parallel.read_text(encoding="utf-8"))
-        self.assertIn(PARALLEL_DISABLED_MARKER, codex_parallel.read_text(encoding="utf-8"))
+        self.assertFalse(opencode_parallel.exists())
+        self.assertFalse(codex_parallel.exists())
 
     def test_install_patches_codex_start_skill_phase_router(self) -> None:
         fixture = self.create_fixture(include_codex=True)
@@ -520,7 +576,17 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn('sandbox_mode = "workspace-write"', codex_check)
         self.assertIn("implementation-stage check-agent", codex_check)
         self.assertTrue((fixture / ".claude" / "agents" / ".backup-original" / "check.md").exists())
-        self.assertTrue((fixture / ".codex" / "agents" / ".backup-original" / "check.toml").exists())
+        self.assertTrue((fixture / ".trellis" / ".backup-original" / "codex-agents" / "check.toml").exists())
+
+    def test_install_keeps_codex_agent_backups_outside_codex_agents_scan_dir(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.assertTrue((fixture / ".trellis" / ".backup-original" / "codex-agents" / "research.toml").exists())
+        self.assertFalse((fixture / ".codex" / "agents" / ".backup-original").exists())
 
     def test_checked_in_agent_adapters_match_rendered_shared_source(self) -> None:
         for cli_type, suffix in [("claude", ".md"), ("opencode", ".md"), ("codex", ".toml")]:
@@ -924,7 +990,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         )
         self.assertFalse((fixture / ".trellis" / "workflow-installed.json").exists())
 
-    def test_install_codex_syncs_all_skills_dirs_but_patches_baseline_skills_only_in_active_dir(self) -> None:
+    def test_install_codex_uses_agents_skills_for_shared_assets_only(self) -> None:
         fixture = self.create_fixture(include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
         codex_parallel = fixture / ".codex" / "skills" / "parallel" / "SKILL.md"
@@ -934,16 +1000,12 @@ class WorkflowInstallerTests(unittest.TestCase):
         install = self.install_workflow(fixture)
 
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
-        self.assertNotIn(".codex/skills 缺少 finish-work 基线", install.stdout)
-        self.assertNotIn(".codex/skills 缺少 start 基线", install.stdout)
         self.assertTrue((fixture / ".agents" / "skills" / "delivery" / "SKILL.md").exists())
-        self.assertTrue((fixture / ".codex" / "skills" / "delivery" / "SKILL.md").exists())
+        self.assertFalse((fixture / ".codex" / "skills" / "delivery" / "SKILL.md").exists())
         self.assertFalse((fixture / ".codex" / "skills" / "finish-work" / "SKILL.md").exists())
         self.assertFalse((fixture / ".codex" / "skills" / "start" / "SKILL.md").exists())
-        self.assertIn(
-            PARALLEL_DISABLED_MARKER,
-            (fixture / ".codex" / "skills" / "parallel" / "SKILL.md").read_text(encoding="utf-8"),
-        )
+        self.assertFalse((fixture / ".codex" / "skills" / "parallel" / "SKILL.md").exists())
+        self.assertTrue((fixture / ".codex" / "skills" / ".backup-original" / "parallel" / "SKILL.md").exists())
 
     def test_install_requires_trellis_init(self) -> None:
         fixture = self.create_fixture(include_trellis=False)
@@ -993,6 +1055,40 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertFalse((fixture / ".trellis" / ATTEMPT_RECORD_NAME).exists())
         self.assertFalse((fixture / ".agents" / "skills" / "review-gate").exists())
         self.assertNotIn("workflow-nl-routing-start", (fixture / "AGENTS.md").read_text(encoding="utf-8"))
+
+    def test_install_requires_embed_executor_confirmation(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        result = self.run_script(INSTALL_SCRIPT, "--project-root", str(fixture))
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("无法在 Codex 中嵌入成功", result.stderr)
+        self.assertIn(EMBED_CONFIRM_ENV, result.stderr)
+
+    def test_install_proceeds_after_embed_executor_confirmation(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        result = self.run_script(
+            INSTALL_SCRIPT,
+            "--project-root",
+            str(fixture),
+            env={EMBED_CONFIRM_ENV: "1"},
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+    def test_install_filters_supported_clis_when_codex_is_requested_with_others(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        result = self.run_script(INSTALL_SCRIPT, "--project-root", str(fixture), "--cli", "claude,opencode")
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        record_data = json.loads((fixture / ".trellis" / "workflow-installed.json").read_text(encoding="utf-8"))
+        self.assertEqual(record_data["cli_types"], ["claude", "opencode"])
+        self.assertIn("patched_codex_skills", record_data)
 
     def test_upgrade_check_detects_phase_router_drift_even_when_versions_match(self) -> None:
         fixture = self.create_fixture()
@@ -1172,6 +1268,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
 
+        self.apply_legacy_codex_workflow_state(fixture)
         record_path = fixture / ".trellis" / "workflow-installed.json"
         record_data = json.loads(record_path.read_text(encoding="utf-8"))
         record_data.pop("patched_codex_skills", None)
@@ -1196,6 +1293,7 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.apply_legacy_codex_workflow_state(fixture)
 
         start_skill = fixture / ".agents" / "skills" / "start" / "SKILL.md"
         start_skill.write_text(BASELINE_START_SKILL_CONTENT, encoding="utf-8")
@@ -1221,7 +1319,9 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.apply_legacy_codex_workflow_state(fixture)
 
+        codex_parallel.parent.mkdir(parents=True, exist_ok=True)
         codex_parallel.write_text("# drifted parallel\n", encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
@@ -1235,7 +1335,7 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn(".codex/skills", result.stdout)
-        self.assertIn("parallel skill (.codex/skills): 禁用覆盖漂移", result.stdout)
+        self.assertIn("parallel skill (.codex/skills): 应已从嵌入面移除", result.stdout)
 
     def test_upgrade_check_detects_codex_managed_agent_drift(self) -> None:
         fixture = self.create_fixture(include_codex=True)
@@ -1243,6 +1343,7 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.mark_legacy_codex_installed(fixture)
 
         codex_check = fixture / ".codex" / "agents" / "check.toml"
         codex_check.write_text('name = "check"\nsandbox_mode = "read-only"\n', encoding="utf-8")
@@ -1309,6 +1410,7 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.mark_legacy_codex_installed(fixture)
 
         codex_check = fixture / ".codex" / "agents" / "check.toml"
         codex_check.write_text('name = "check"\nsandbox_mode = "read-only"\n', encoding="utf-8")
@@ -1385,6 +1487,16 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.mark_legacy_codex_installed(fixture)
+
+        merge = self.run_script(
+            UPGRADE_SCRIPT,
+            "--merge",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+        self.assertEqual(merge.returncode, 0, msg=merge.stdout + merge.stderr)
 
         codex_check = fixture / ".codex" / "agents" / "check.toml"
         self.assertIn('sandbox_mode = "workspace-write"', codex_check.read_text(encoding="utf-8"))
@@ -1392,9 +1504,11 @@ class WorkflowInstallerTests(unittest.TestCase):
         result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        restored = codex_check.read_text(encoding="utf-8")
-        self.assertIn('sandbox_mode = "read-only"', restored)
-        self.assertFalse((fixture / ".codex" / "agents" / ".backup-original").exists())
+        self.assertIn("[Codex]", result.stdout)
+        if codex_check.exists():
+            restored = codex_check.read_text(encoding="utf-8")
+            self.assertIn('sandbox_mode = "read-only"', restored)
+        self.assertFalse((fixture / ".trellis" / ".backup-original" / "codex-agents").exists())
 
     def test_uninstall_restores_claude_managed_agents(self) -> None:
         fixture = self.create_fixture()
@@ -1440,7 +1554,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         self.assertTrue(created_by_install.exists())
-        self.assertFalse((fixture / ".codex" / "agents" / ".backup-original" / "research.toml").exists())
+        self.assertFalse((fixture / ".trellis" / ".backup-original" / "codex-agents" / "research.toml").exists())
 
         result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
 
@@ -1661,7 +1775,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         )
         self.assertEqual(followup_check.returncode, 0, msg=followup_check.stdout + followup_check.stderr)
 
-    def test_upgrade_merge_updates_codex_secondary_skills_dir(self) -> None:
+    def test_upgrade_merge_removes_codex_secondary_duplicate_shared_skills(self) -> None:
         fixture = self.create_fixture(include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
         codex_parallel = fixture / ".codex" / "skills" / "parallel" / "SKILL.md"
@@ -1670,9 +1784,12 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.apply_legacy_codex_workflow_state(fixture)
 
         codex_delivery = fixture / ".codex" / "skills" / "delivery" / "SKILL.md"
+        codex_delivery.parent.mkdir(parents=True, exist_ok=True)
         codex_delivery.write_text("# drifted delivery\n", encoding="utf-8")
+        codex_parallel.parent.mkdir(parents=True, exist_ok=True)
         codex_parallel.write_text("# drifted parallel\n", encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
@@ -1685,14 +1802,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         )
 
         self.assertEqual(merge.returncode, 0, msg=merge.stdout + merge.stderr)
-        self.assertIn(
-            "# /trellis:delivery",
-            codex_delivery.read_text(encoding="utf-8"),
-        )
-        self.assertIn(
-            PARALLEL_DISABLED_MARKER,
-            codex_parallel.read_text(encoding="utf-8"),
-        )
+        self.assertFalse(codex_delivery.exists())
+        self.assertFalse(codex_parallel.exists())
 
     def test_upgrade_merge_preserves_bootstrap_cleanup_status(self) -> None:
         fixture = self.create_fixture()
@@ -1727,9 +1838,13 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.apply_legacy_codex_workflow_state(fixture)
 
         backup_parallel = fixture / ".codex" / "skills" / ".backup-original" / "parallel" / "SKILL.md"
+        backup_parallel.parent.mkdir(parents=True, exist_ok=True)
+        backup_parallel.write_text(BASELINE_PARALLEL_CONTENT, encoding="utf-8")
         self.assertTrue(backup_parallel.exists())
+        codex_parallel.parent.mkdir(parents=True, exist_ok=True)
         codex_parallel.write_text("# drifted parallel\n", encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
@@ -1742,14 +1857,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         )
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        self.assertIn(
-            "[Codex] parallel skill 已从 .backup-original 恢复",
-            result.stdout,
-        )
-        self.assertIn(
-            PARALLEL_DISABLED_MARKER,
-            codex_parallel.read_text(encoding="utf-8"),
-        )
+        self.assertFalse(codex_parallel.exists())
 
     def test_force_restores_finish_work_from_backup_and_reapplies_patch(self) -> None:
         fixture = self.create_fixture()
@@ -1781,6 +1889,7 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.apply_legacy_codex_workflow_state(fixture)
 
         start_skill = fixture / ".agents" / "skills" / "start" / "SKILL.md"
         start_skill.write_text("# broken start skill\n", encoding="utf-8")
@@ -1830,6 +1939,7 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.apply_legacy_codex_workflow_state(fixture)
         start_skill = fixture / ".agents" / "skills" / "start" / "SKILL.md"
         self.assertIn("Workflow Phase Router Patch", start_skill.read_text(encoding="utf-8"))
         patched_skill = fixture / ".agents" / "skills" / "finish-work" / "SKILL.md"
@@ -1851,6 +1961,7 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.apply_legacy_codex_workflow_state(fixture)
         record_path = fixture / ".trellis" / "workflow-installed.json"
         record_data = json.loads(record_path.read_text(encoding="utf-8"))
         record_data.pop("patched_codex_skills", None)
@@ -1912,7 +2023,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         patched_parallel = fixture / ".claude" / "commands" / "trellis" / "parallel.md"
-        self.assertIn(PARALLEL_DISABLED_MARKER, patched_parallel.read_text(encoding="utf-8"))
+        self.assertFalse(patched_parallel.exists())
         self.assertEqual(
             (fixture / ".claude" / "commands" / "trellis" / ".backup-original" / "parallel.md").read_text(encoding="utf-8"),
             BASELINE_PARALLEL_CONTENT,

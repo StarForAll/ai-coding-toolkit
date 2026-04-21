@@ -31,8 +31,11 @@ from workflow_assets import (
     AGENT_SUFFIXES,
     ALL_CLI_TYPES,
     CODEX_PATCH_BASELINE_SKILLS,
+    CODEX_SHARED_SKILL_NAMES,
     CLI_ALT_DIRS,
     CLI_DIRS,
+    codex_secondary_skills_dir,
+    codex_shared_skills_dir,
     DISTRIBUTED_COMMANDS,
     detect_cli_types as detect_cli_types_shared,
     HELPER_SCRIPTS,
@@ -424,16 +427,12 @@ def detect_conflicts_claude(src: Path, dst_cmds: Path) -> int:
     else:
         ok("[Claude] record-session.md: 元数据闭环说明正常")
 
+    parallel_backup = dst_cmds / ".backup-original" / "parallel.md"
     if parallel.exists():
-        expected_parallel = expected_parallel_disabled_content(src)
-        actual_parallel = read_text(parallel)
-        if expected_parallel is None or actual_parallel is None:
-            conflicts += 1
-        elif actual_parallel != expected_parallel:
-            err("[Claude] parallel.md: 禁用覆盖漂移")
-            conflicts += 1
-        else:
-            ok("[Claude] parallel.md: 禁用覆盖正常")
+        err("[Claude] parallel.md: 应已从嵌入面移除")
+        conflicts += 1
+    elif parallel_backup.exists():
+        ok("[Claude] parallel.md: 已移除且备份正常")
 
     return conflicts
 
@@ -490,16 +489,12 @@ def detect_conflicts_opencode(src: Path, dst_cmds: Path) -> int:
     else:
         ok("[OpenCode] record-session.md: 元数据闭环说明正常")
 
+    parallel_backup = dst_cmds / ".backup-original" / "parallel.md"
     if parallel.exists():
-        expected_parallel = expected_parallel_disabled_content(src)
-        actual_parallel = read_text(parallel)
-        if expected_parallel is None or actual_parallel is None:
-            conflicts += 1
-        elif actual_parallel != expected_parallel:
-            err("[OpenCode] parallel.md: 禁用覆盖漂移")
-            conflicts += 1
-        else:
-            ok("[OpenCode] parallel.md: 禁用覆盖正常")
+        err("[OpenCode] parallel.md: 应已从嵌入面移除")
+        conflicts += 1
+    elif parallel_backup.exists():
+        ok("[OpenCode] parallel.md: 已移除且备份正常")
 
     return conflicts
 
@@ -567,35 +562,43 @@ def detect_conflicts_codex(src: Path, root: Path) -> int:
     if not skills_dirs:
         warn("[Codex] 未找到 skills 目录")
         return 0
+    shared_skills_dir = codex_shared_skills_dir(root)
+    secondary_skills_dir = codex_secondary_skills_dir(root)
     primary_skills_dir = resolve_codex_skills_dir(root)
     if primary_skills_dir is None:
         warn("[Codex] 未找到活动 skills 目录")
         return 0
 
-    # 对每个 skills 目录分别检查分发 skills
-    total_skill_conflicts = 0
-    for skills_dir in skills_dirs:
-        skill_conflicts = 0
-        for name in DISTRIBUTED_COMMANDS:
-            target_path = skills_dir / name / "SKILL.md"
-            if not target_path.exists():
-                warn(f"[Codex] skill 缺失: {name} ({skills_dir.relative_to(root)})")
-                skill_conflicts += 1
-                continue
-            expected = expected_command_content(src, name)
-            actual = read_text(target_path)
-            if expected is None or actual is None:
-                skill_conflicts += 1
-                continue
-            if actual != expected:
-                err(f"[Codex] skill 内容漂移: {name} ({skills_dir.relative_to(root)})")
-                skill_conflicts += 1
-        if skill_conflicts:
-            total_skill_conflicts += skill_conflicts
-        else:
-            ok(f"[Codex] {skills_dir.relative_to(root)} 分发 skills 内容一致")
-    if total_skill_conflicts:
-        conflicts += total_skill_conflicts
+    # shared skills 只允许存在于 .agents/skills
+    skill_conflicts = 0
+    for name in DISTRIBUTED_COMMANDS:
+        target_path = shared_skills_dir / name / "SKILL.md"
+        if not target_path.exists():
+            warn(f"[Codex] shared skill 缺失: {name} ({shared_skills_dir.relative_to(root)})")
+            skill_conflicts += 1
+            continue
+        expected = expected_command_content(src, name)
+        actual = read_text(target_path)
+        if expected is None or actual is None:
+            skill_conflicts += 1
+            continue
+        if actual != expected:
+            err(f"[Codex] shared skill 内容漂移: {name} ({shared_skills_dir.relative_to(root)})")
+            skill_conflicts += 1
+    if skill_conflicts:
+        conflicts += skill_conflicts
+    else:
+        ok(f"[Codex] {shared_skills_dir.relative_to(root)} 分发 skills 内容一致")
+
+    if secondary_skills_dir.is_dir():
+        duplicate_conflicts = 0
+        for name in CODEX_SHARED_SKILL_NAMES:
+            duplicate_path = secondary_skills_dir / name / "SKILL.md"
+            if duplicate_path.exists():
+                err(f"[Codex] duplicate shared skill 应已移除: {duplicate_path.relative_to(root)}")
+                duplicate_conflicts += 1
+        if duplicate_conflicts:
+            conflicts += duplicate_conflicts
 
     # baseline patch 型 skills 只检查活动 skills 目录
     finish_work_skill = primary_skills_dir / "finish-work" / "SKILL.md"
@@ -633,20 +636,16 @@ def detect_conflicts_codex(src: Path, root: Path) -> int:
         warn("[Codex] session-start.py 缺失")
         conflicts += 1
 
-    # 对每个 skills 目录分别检查 parallel 禁用
+    # 对每个 skills 目录分别检查 parallel：当前 Codex 合同是“移除嵌入面，但保留备份”
     parallel_conflicts = 0
     for skills_dir in skills_dirs:
         parallel_skill = skills_dir / "parallel" / "SKILL.md"
+        parallel_backup = skills_dir / ".backup-original" / "parallel" / "SKILL.md"
         if parallel_skill.exists():
-            expected_parallel = expected_parallel_disabled_content(src)
-            actual_parallel = read_text(parallel_skill)
-            if expected_parallel is None or actual_parallel is None:
-                parallel_conflicts += 1
-            elif actual_parallel != expected_parallel:
-                err(f"[Codex] parallel skill ({skills_dir.relative_to(root)}): 禁用覆盖漂移")
-                parallel_conflicts += 1
-            else:
-                ok(f"[Codex] parallel skill ({skills_dir.relative_to(root)}): 禁用覆盖正常")
+            err(f"[Codex] parallel skill ({skills_dir.relative_to(root)}): 应已从嵌入面移除")
+            parallel_conflicts += 1
+        elif parallel_backup.exists():
+            ok(f"[Codex] parallel skill ({skills_dir.relative_to(root)}): 已移除且备份正常")
     if parallel_conflicts:
         conflicts += parallel_conflicts
 
@@ -762,23 +761,29 @@ def deploy_codex_skills(src: Path, root: Path) -> None:
     if not skills_dirs:
         warn("[Codex] 未找到 skills 目录，跳过")
         return
+    shared_skills_dir = codex_shared_skills_dir(root)
+    secondary_skills_dir = codex_secondary_skills_dir(root)
 
     for name in DISTRIBUTED_COMMANDS:
         source_path = src / f"{name}.md"
         if source_path.exists():
             content = prepare_command_content(source_path)
-            for skills_dir in skills_dirs:
-                target_path = skills_dir / name / "SKILL.md"
-                target_path.parent.mkdir(parents=True, exist_ok=True)
-                target_path.write_text(content, encoding="utf-8")
-                ok(f"[Codex] skill: {name} → {target_path.relative_to(root)}")
+            target_path = shared_skills_dir / name / "SKILL.md"
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            target_path.write_text(content, encoding="utf-8")
+            ok(f"[Codex] shared skill: {name} → {target_path.relative_to(root)}")
 
-    expected_parallel = expected_parallel_disabled_content(src)
     for skills_dir in skills_dirs:
         parallel_skill = skills_dir / "parallel" / "SKILL.md"
-        if parallel_skill.exists() and expected_parallel is not None:
-            parallel_skill.write_text(expected_parallel, encoding="utf-8")
-            ok(f"[Codex] parallel skill 已更新为禁用版本 → {parallel_skill.relative_to(root)}")
+        if parallel_skill.exists():
+            shutil.rmtree(parallel_skill.parent)
+            ok(f"[Codex] parallel skill 已从嵌入面移除 → {parallel_skill.relative_to(root)}")
+    if secondary_skills_dir.is_dir():
+        for name in CODEX_SHARED_SKILL_NAMES:
+            duplicate_dir = secondary_skills_dir / name
+            if duplicate_dir.exists():
+                shutil.rmtree(duplicate_dir)
+                ok(f"[Codex] duplicate shared skill 已移除 → {duplicate_dir.relative_to(root)}")
 
 
 # ── 恢复 ──
@@ -1191,10 +1196,9 @@ def main() -> int:
             if not has_record_session_patch(record_session) and not inject_record_session_patch(src, record_session):
                 err("[Claude] record-session 元数据闭环恢复失败")
                 return 1
-            if parallel.exists() and not is_parallel_disabled(parallel):
-                if not deploy_parallel_disabled(src, parallel, "parallel.md"):
-                    err("[Claude] parallel 禁用覆盖恢复失败")
-                    return 1
+            if parallel.exists():
+                parallel.unlink()
+                ok("[Claude] parallel.md 已从嵌入面移除")
             deploy_managed_agents(src, root, "claude", "Claude")
         elif cli_type == "opencode":
             dst_cmds = root / ".opencode" / "commands" / "trellis"
@@ -1221,10 +1225,9 @@ def main() -> int:
             if not has_record_session_patch(record_session) and not inject_record_session_patch(src, record_session):
                 err("[OpenCode] record-session 元数据闭环恢复失败")
                 return 1
-            if parallel.exists() and not is_parallel_disabled(parallel):
-                if not deploy_parallel_disabled(src, parallel, "parallel.md"):
-                    err("[OpenCode] parallel 禁用覆盖恢复失败")
-                    return 1
+            if parallel.exists():
+                parallel.unlink()
+                ok("[OpenCode] parallel.md 已从嵌入面移除")
             deploy_managed_agents(src, root, "opencode", "OpenCode")
         elif cli_type == "codex":
             deploy_codex_skills(src, root)
@@ -1249,12 +1252,9 @@ def main() -> int:
                 if args.mode == "force":
                     restore_optional_codex_skill(skills_dir, "parallel")
                 parallel_skill = skills_dir / "parallel" / "SKILL.md"
-                if parallel_skill.exists() and not is_parallel_disabled(parallel_skill):
-                    if expected_parallel is None:
-                        err("[Codex] parallel 禁用覆盖恢复失败")
-                        return 1
-                    parallel_skill.write_text(expected_parallel, encoding="utf-8")
-                    ok(f"[Codex] parallel skill 已更新为禁用版本 → {parallel_skill.relative_to(root)}")
+                if parallel_skill.exists():
+                    shutil.rmtree(parallel_skill.parent)
+                    ok(f"[Codex] parallel skill 已从嵌入面移除 → {parallel_skill.relative_to(root)}")
             if not start_skill.exists():
                 err(f"[Codex] 活动 skills 目录缺少 start 基线：{primary_skills_dir.relative_to(root)}")
                 return 1

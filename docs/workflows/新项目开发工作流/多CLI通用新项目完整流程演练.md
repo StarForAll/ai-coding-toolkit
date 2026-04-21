@@ -126,7 +126,11 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 这里不要少掉一步：
 
 - 至少确认 `.trellis/workflow-installed.json`、`.trellis/workflow-embed-attempt.json`、`.trellis/workflow.md`、`.trellis/library-lock.yaml`、`AGENTS.md` 托管区段、`.agents/skills/`、`.codex/skills/` 的实际状态
-- Codex 的 `.agents/skills/` 是共享 workflow skills 主承载面；`.codex/skills/` 则是 `trellis init` 后可能出现的额外影响面，存在时也必须纳入核对
+- `.agents/skills/` 不是“所有 CLI 的共享技能目录”：
+  - 对 Codex：它是当前 workflow 共享 skills 的主承载面
+  - 对 OpenCode：官方会发现它，但当前 workflow 的正式主入口仍是 `.opencode/commands/trellis/`
+  - 对 Claude Code：当前没有官方证据表明会读取 `.agents/skills/`
+- `.codex/skills/` 只应保留 Codex 独有或项目自定义的额外 skills，若出现重复 shared skills 应视为漂移并清理
 - `.codex/hooks.json`、`.codex/hooks/session-start.py`、`.claude/settings*.json`、`opencode.json.instructions` 仍属于人工维护或 Trellis baseline 资产，不应误以为安装器会替你补齐
 
 安装完成后，这套 workflow 的实际使用仍然可以是**渐进性披露**的：
