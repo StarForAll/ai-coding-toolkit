@@ -1672,3 +1672,51 @@ Fixed the Codex workflow skills boundary so distributed skills still sync to all
 ### Next Steps
 
 - None - task complete
+
+
+## Session 125: 工作流嵌入边界与 skills 目录修复
+
+**Date**: 2026-04-21
+**Task**: 工作流嵌入边界与 skills 目录修复
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 项目 | 内容 |
+|------|------|
+| 嵌入边界 | 明确首次嵌入步骤不能由 Codex 主导执行，安装完成后仍允许 Codex 使用该 workflow |
+| parallel 处理 | 统一将 Claude/OpenCode/Codex 的 parallel 入口从嵌入面移除，并保留 backup |
+| skills 目录规则 | 共享 skills 只写入 `.agents/skills/`，`.codex/skills/` 仅保留 Codex 独有或项目自定义 skills |
+| 文档澄清 | 补充 `.agents/skills/` 对 OpenCode 与 Codex 的影响范围，明确 Claude Code 无官方证据读取该目录 |
+
+**Updated Scope**:
+- `docs/workflows/新项目开发工作流/commands/*.py`
+- `docs/workflows/新项目开发工作流/commands/*/README.md`
+- `docs/workflows/新项目开发工作流/*.md`
+
+**Verification**:
+- 代表性 unittest 子集通过
+- `/tmp` 目标项目串行安装验证通过
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `afd24f0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
