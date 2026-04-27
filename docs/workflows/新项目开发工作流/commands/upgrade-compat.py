@@ -34,17 +34,23 @@ from workflow_assets import (
     CODEX_SHARED_SKILL_NAMES,
     CLI_ALT_DIRS,
     CLI_DIRS,
+    CORE_HELPER_SCRIPTS,
+    DEFAULT_PROFILE,
     codex_secondary_skills_dir,
     codex_shared_skills_dir,
     DISTRIBUTED_COMMANDS,
     detect_cli_types as detect_cli_types_shared,
+    EXECUTION_CARDS,
     HELPER_SCRIPTS,
     list_all_codex_skills_dirs,
     MANAGED_IMPLEMENTATION_AGENTS,
     OPTIONAL_DISABLED_BASELINE_COMMANDS,
+    OUTSOURCING_EXECUTION_CARDS,
+    OUTSOURCING_ONLY_SCRIPTS,
     OVERLAY_BASELINE_COMMANDS,
     PATCH_BASELINE_COMMANDS,
     PATCH_BASELINE_SHARED_DOCS,
+    WORKFLOW_DOCS_DIR,
     WORKFLOW_SCHEMA_VERSION,
     WORKFLOW_VERSION,
     check_latest_trellis_prerequisite,
@@ -207,14 +213,14 @@ def agents_md_routing_matches_source(agents_md: Path) -> bool:
     return actual_section == expected_section
 
 
-def workflow_patch_matches_source(src: Path, workflow_md: Path) -> bool:
+def workflow_patch_matches_source(src: Path, workflow_md: Path, *, profile: str = DEFAULT_PROFILE) -> bool:
     if not workflow_md.exists():
         return False
     patch = src / "workflow-patch-projectization.md"
     if not patch.exists():
         return False
     content = workflow_md.read_text(encoding="utf-8")
-    return _WORKFLOW_PATCH_MARKER in content and patch.read_text(encoding="utf-8") in content
+    return _WORKFLOW_PATCH_MARKER in content and prepare_command_content(patch, profile=profile) in content
 
 
 def build_finish_work_content(content: str, patch_text: str) -> str | None:
@@ -336,12 +342,12 @@ def read_text(path: Path) -> str | None:
         return None
 
 
-def expected_command_content(src: Path, name: str) -> str | None:
+def expected_command_content(src: Path, name: str, *, profile: str = DEFAULT_PROFILE) -> str | None:
     source_path = src / f"{name}.md"
     if not source_path.exists():
         err(f"源命令缺失，无法校验: {source_path.name}")
         return None
-    return prepare_command_content(source_path)
+    return prepare_command_content(source_path, profile=profile)
 
 
 def expected_helper_script_content(src: Path, name: str) -> str | None:
@@ -376,7 +382,7 @@ def is_parallel_disabled(path: Path) -> bool:
 
 
 # ── Claude Code 冲突检测 ──
-def detect_conflicts_claude(src: Path, dst_cmds: Path) -> int:
+def detect_conflicts_claude(src: Path, dst_cmds: Path, *, profile: str = DEFAULT_PROFILE) -> int:
     conflicts = 0
     start = dst_cmds / "start.md"
     finish_work = dst_cmds / "finish-work.md"
@@ -396,7 +402,7 @@ def detect_conflicts_claude(src: Path, dst_cmds: Path) -> int:
             warn(f"[Claude] 命令缺失: /trellis:{name}")
             command_conflicts += 1
             continue
-        expected = expected_command_content(src, name)
+        expected = expected_command_content(src, name, profile=profile)
         actual = read_text(target_path)
         if expected is None or actual is None:
             command_conflicts += 1
@@ -438,7 +444,7 @@ def detect_conflicts_claude(src: Path, dst_cmds: Path) -> int:
 
 
 # ── OpenCode 冲突检测 ──
-def detect_conflicts_opencode(src: Path, dst_cmds: Path) -> int:
+def detect_conflicts_opencode(src: Path, dst_cmds: Path, *, profile: str = DEFAULT_PROFILE) -> int:
     conflicts = 0
     start = dst_cmds / "start.md"
     finish_work = dst_cmds / "finish-work.md"
@@ -458,7 +464,7 @@ def detect_conflicts_opencode(src: Path, dst_cmds: Path) -> int:
             warn(f"[OpenCode] 命令缺失: {name}")
             command_conflicts += 1
             continue
-        expected = expected_command_content(src, name)
+        expected = expected_command_content(src, name, profile=profile)
         actual = read_text(target_path)
         if expected is None or actual is None:
             command_conflicts += 1
@@ -499,7 +505,7 @@ def detect_conflicts_opencode(src: Path, dst_cmds: Path) -> int:
     return conflicts
 
 
-def detect_conflicts_workflow_doc(src: Path, root: Path) -> int:
+def detect_conflicts_workflow_doc(src: Path, root: Path, *, profile: str = DEFAULT_PROFILE) -> int:
     workflow_md = root / ".trellis" / "workflow.md"
     if not workflow_md.exists():
         err("[Shared] .trellis/workflow.md: 文件缺失")
@@ -507,7 +513,7 @@ def detect_conflicts_workflow_doc(src: Path, root: Path) -> int:
     if not has_workflow_patch(workflow_md):
         err("[Shared] .trellis/workflow.md: 项目化补丁缺失")
         return 1
-    if not workflow_patch_matches_source(src, workflow_md):
+    if not workflow_patch_matches_source(src, workflow_md, profile=profile):
         err("[Shared] .trellis/workflow.md: 项目化补丁内容漂移")
         return 1
     ok("[Shared] .trellis/workflow.md: 项目化补丁正常")
@@ -556,7 +562,7 @@ def detect_conflicts_managed_agents(src: Path, root: Path, cli_type: str, cli_la
 
 
 # ── Codex 冲突检测 ──
-def detect_conflicts_codex(src: Path, root: Path) -> int:
+def detect_conflicts_codex(src: Path, root: Path, *, profile: str = DEFAULT_PROFILE) -> int:
     conflicts = 0
     skills_dirs = list_all_codex_skills_dirs(root)
     if not skills_dirs:
@@ -577,7 +583,7 @@ def detect_conflicts_codex(src: Path, root: Path) -> int:
             warn(f"[Codex] shared skill 缺失: {name} ({shared_skills_dir.relative_to(root)})")
             skill_conflicts += 1
             continue
-        expected = expected_command_content(src, name)
+        expected = expected_command_content(src, name, profile=profile)
         actual = read_text(target_path)
         if expected is None or actual is None:
             skill_conflicts += 1
@@ -652,9 +658,10 @@ def detect_conflicts_codex(src: Path, root: Path) -> int:
     return conflicts
 
 
-def detect_shared_script_conflicts(src: Path, dst_scripts: Path) -> int:
+def detect_shared_script_conflicts(src: Path, dst_scripts: Path, *, profile: str = DEFAULT_PROFILE) -> int:
     conflicts = 0
-    for name in HELPER_SCRIPTS:
+    scripts = HELPER_SCRIPTS if profile == "outsourcing" else CORE_HELPER_SCRIPTS
+    for name in scripts:
         target_path = dst_scripts / name
         if not target_path.exists():
             warn(f"[Shared] 辅助脚本缺失: {name}")
@@ -670,6 +677,31 @@ def detect_shared_script_conflicts(src: Path, dst_scripts: Path) -> int:
             conflicts += 1
     if conflicts == 0:
         ok("[Shared] 所有辅助脚本内容一致")
+    return conflicts
+
+
+def detect_execution_card_conflicts(src: Path, root: Path, *, profile: str = DEFAULT_PROFILE) -> int:
+    conflicts = 0
+    workflow_root = src.parent
+    dst = root / WORKFLOW_DOCS_DIR
+    cards = list(EXECUTION_CARDS)
+    if profile == "outsourcing":
+        cards.extend(OUTSOURCING_EXECUTION_CARDS)
+    for card_name in cards:
+        card_dst = dst / card_name
+        card_src = workflow_root / card_name
+        if not card_dst.exists():
+            warn(f"[Shared] 执行卡缺失: {WORKFLOW_DOCS_DIR}/{card_name}")
+            conflicts += 1
+            continue
+        if card_src.exists():
+            expected = card_src.read_text(encoding="utf-8")
+            actual = read_text(card_dst)
+            if actual != expected:
+                err(f"[Shared] 执行卡内容漂移: {WORKFLOW_DOCS_DIR}/{card_name}")
+                conflicts += 1
+    if conflicts == 0:
+        ok("[Shared] 所有执行卡内容一致")
     return conflicts
 
 
@@ -710,12 +742,12 @@ def backup_shared_workflow_state(root: Path) -> None:
 
 
 # ── 命令部署 ──
-def deploy_commands(src: Path, dst_cmds: Path) -> None:
+def deploy_commands(src: Path, dst_cmds: Path, *, profile: str = DEFAULT_PROFILE) -> None:
     for name in DISTRIBUTED_COMMANDS:
         source_path = src / f"{name}.md"
         target_path = dst_cmds / f"{name}.md"
         if source_path.exists():
-            content = prepare_command_content(source_path)
+            content = prepare_command_content(source_path, profile=profile)
             target_path.write_text(content, encoding="utf-8")
             ok(f"/trellis:{name}")
 
@@ -756,7 +788,7 @@ def deploy_managed_agents(src: Path, root: Path, cli_type: str, cli_label: str) 
         ok(f"[{cli_label}] agent 已重部署: {agent_name}")
 
 
-def deploy_codex_skills(src: Path, root: Path) -> None:
+def deploy_codex_skills(src: Path, root: Path, *, profile: str = DEFAULT_PROFILE) -> None:
     skills_dirs = list_all_codex_skills_dirs(root)
     if not skills_dirs:
         warn("[Codex] 未找到 skills 目录，跳过")
@@ -767,7 +799,7 @@ def deploy_codex_skills(src: Path, root: Path) -> None:
     for name in DISTRIBUTED_COMMANDS:
         source_path = src / f"{name}.md"
         if source_path.exists():
-            content = prepare_command_content(source_path)
+            content = prepare_command_content(source_path, profile=profile)
             target_path = shared_skills_dir / name / "SKILL.md"
             target_path.parent.mkdir(parents=True, exist_ok=True)
             target_path.write_text(content, encoding="utf-8")
@@ -936,7 +968,7 @@ def inject_finish_work_patch(src: Path, finish_work_path: Path, target_label: st
     return True
 
 
-def inject_record_session_patch(src: Path, record_session_md: Path) -> bool:
+def inject_record_session_patch(src: Path, record_session_md: Path, *, profile: str = DEFAULT_PROFILE) -> bool:
     patch = src / "record-session-patch-metadata-closure.md"
     if not patch.exists():
         err("record-session-patch-metadata-closure.md 缺失，无法恢复 record-session 注入")
@@ -955,14 +987,14 @@ def inject_record_session_patch(src: Path, record_session_md: Path) -> bool:
 
     before, after = content.split(_RECORD_SESSION_INJECTION_MARKER, 1)
     record_session_md.write_text(
-        before + patch.read_text(encoding="utf-8") + "\n" + _RECORD_SESSION_INJECTION_MARKER + after,
+        before + prepare_command_content(patch, profile=profile) + "\n" + _RECORD_SESSION_INJECTION_MARKER + after,
         encoding="utf-8",
     )
     ok("record-session 元数据闭环说明已注入")
     return True
 
 
-def inject_workflow_patch(src: Path, root: Path) -> bool:
+def inject_workflow_patch(src: Path, root: Path, *, profile: str = DEFAULT_PROFILE) -> bool:
     patch = src / "workflow-patch-projectization.md"
     workflow_md = root / ".trellis" / "workflow.md"
     if not patch.exists():
@@ -972,7 +1004,7 @@ def inject_workflow_patch(src: Path, root: Path) -> bool:
         err(".trellis/workflow.md 不存在，无法恢复项目化补丁")
         return False
 
-    patch_text = patch.read_text(encoding="utf-8")
+    patch_text = prepare_command_content(patch, profile=profile)
     content = workflow_md.read_text(encoding="utf-8")
     if _WORKFLOW_PATCH_MARKER in content and patch_text in content:
         ok("workflow.md 项目化补丁已存在")
@@ -1099,6 +1131,7 @@ def main() -> int:
     current_version = read_project_trellis_version(root) or "unknown"
     record = load_install_record(rec_file)
     installed_version = record.get("trellis_version", "unknown")
+    profile = record.get("profile", DEFAULT_PROFILE)
     version_changed = current_version != installed_version
 
     print()
@@ -1125,17 +1158,18 @@ def main() -> int:
     for cli_type in cli_types:
         if cli_type == "claude":
             dst_cmds = root / ".claude" / "commands" / "trellis"
-            total_conflicts += detect_conflicts_claude(src, dst_cmds)
+            total_conflicts += detect_conflicts_claude(src, dst_cmds, profile=profile)
             total_conflicts += detect_conflicts_managed_agents(src, root, "claude", "Claude")
         elif cli_type == "opencode":
             dst_cmds = root / ".opencode" / "commands" / "trellis"
-            total_conflicts += detect_conflicts_opencode(src, dst_cmds)
+            total_conflicts += detect_conflicts_opencode(src, dst_cmds, profile=profile)
             total_conflicts += detect_conflicts_managed_agents(src, root, "opencode", "OpenCode")
         elif cli_type == "codex":
-            total_conflicts += detect_conflicts_codex(src, root)
+            total_conflicts += detect_conflicts_codex(src, root, profile=profile)
             total_conflicts += detect_conflicts_managed_agents(src, root, "codex", "Codex")
-    total_conflicts += detect_shared_script_conflicts(src, dst_scripts)
-    total_conflicts += detect_conflicts_workflow_doc(src, root)
+    total_conflicts += detect_shared_script_conflicts(src, dst_scripts, profile=profile)
+    total_conflicts += detect_execution_card_conflicts(src, root, profile=profile)
+    total_conflicts += detect_conflicts_workflow_doc(src, root, profile=profile)
     total_conflicts += detect_conflicts_agents_md(root)
     print(f"   总冲突: {total_conflicts}")
     print()
@@ -1158,7 +1192,7 @@ def main() -> int:
     if args.mode == "force":
         if not restore_workflow_from_original_backup(root):
             return 1
-    if not has_workflow_patch(root / ".trellis" / "workflow.md") and not inject_workflow_patch(src, root):
+    if not has_workflow_patch(root / ".trellis" / "workflow.md") and not inject_workflow_patch(src, root, profile=profile):
         err("[Shared] workflow.md 项目化补丁恢复失败")
         return 1
     agents_md = root / "AGENTS.md"
@@ -1178,7 +1212,7 @@ def main() -> int:
             record_session = dst_cmds / "record-session.md"
             parallel = dst_cmds / "parallel.md"
             backup_deployed_state(dst_cmds)
-            deploy_commands(src, dst_cmds)
+            deploy_commands(src, dst_cmds, profile=profile)
             if args.mode == "force":
                 if not restore_start_from_original_backup(dst_cmds, start):
                     return 1
@@ -1193,7 +1227,7 @@ def main() -> int:
             if not has_finish_work_patch(finish_work) and not inject_finish_work_patch(src, finish_work, "finish-work.md"):
                 err("[Claude] finish-work 项目化补丁恢复失败")
                 return 1
-            if not has_record_session_patch(record_session) and not inject_record_session_patch(src, record_session):
+            if not has_record_session_patch(record_session) and not inject_record_session_patch(src, record_session, profile=profile):
                 err("[Claude] record-session 元数据闭环恢复失败")
                 return 1
             if parallel.exists():
@@ -1207,7 +1241,7 @@ def main() -> int:
             record_session = dst_cmds / "record-session.md"
             parallel = dst_cmds / "parallel.md"
             backup_deployed_state(dst_cmds)
-            deploy_commands(src, dst_cmds)
+            deploy_commands(src, dst_cmds, profile=profile)
             if args.mode == "force":
                 if not restore_start_from_original_backup(dst_cmds, start):
                     return 1
@@ -1222,7 +1256,7 @@ def main() -> int:
             if not has_finish_work_patch(finish_work) and not inject_finish_work_patch(src, finish_work, "finish-work.md"):
                 err("[OpenCode] finish-work 项目化补丁恢复失败")
                 return 1
-            if not has_record_session_patch(record_session) and not inject_record_session_patch(src, record_session):
+            if not has_record_session_patch(record_session) and not inject_record_session_patch(src, record_session, profile=profile):
                 err("[OpenCode] record-session 元数据闭环恢复失败")
                 return 1
             if parallel.exists():
@@ -1230,7 +1264,7 @@ def main() -> int:
                 ok("[OpenCode] parallel.md 已从嵌入面移除")
             deploy_managed_agents(src, root, "opencode", "OpenCode")
         elif cli_type == "codex":
-            deploy_codex_skills(src, root)
+            deploy_codex_skills(src, root, profile=profile)
             skills_dirs = list_all_codex_skills_dirs(root)
             if not skills_dirs:
                 continue

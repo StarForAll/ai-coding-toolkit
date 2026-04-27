@@ -349,11 +349,12 @@ class WorkflowInstallerTests(unittest.TestCase):
             (root / "AGENTS.md").write_text("# Project Rules\n", encoding="utf-8")
         return root
 
-    def install_workflow(self, fixture_root: Path) -> subprocess.CompletedProcess[str]:
+    def install_workflow(self, fixture_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
         return self.run_script(
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture_root),
+            *args,
             env={EMBED_CONFIRM_ENV: "1"},
         )
 
@@ -439,12 +440,17 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(WORKFLOW_PATCH_MARKER, workflow_doc_text)
         self.assertIn("task.py start <name>", workflow_doc_text)
         self.assertIn("record-session-helper.py", workflow_doc_text)
+        self.assertIn(".trellis/scripts/workflow/record-session-helper.py", workflow_doc_text)
+        self.assertNotIn("<WORKFLOW_DIR>/commands/shell/record-session-helper.py", workflow_doc_text)
         self.assertIn("finish-work-checklist.md", workflow_doc_text)
         self.assertIn("child task", workflow_doc_text)
         self.assertIn("parent coordinator records", workflow_doc_text)
         self.assertIn("does not automatically authorize", workflow_doc_text)
         start_text = (fixture / ".claude" / "commands" / "trellis" / "start.md").read_text(encoding="utf-8")
-        self.assertIn(".trellis/scripts/workflow/workflow-state.py validate <task-dir>", start_text)
+        self.assertIn(
+            ".trellis/scripts/workflow/workflow-state.py route <task-dir> --project-root <project-root>",
+            start_text,
+        )
         self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", start_text)
         finish_work = fixture / ".claude" / "commands" / "trellis" / "finish-work.md"
         finish_work_text = finish_work.read_text(encoding="utf-8")
@@ -455,6 +461,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         record_session = fixture / ".claude" / "commands" / "trellis" / "record-session.md"
         rs_text = record_session.read_text(encoding="utf-8")
         self.assertIn(RECORD_SESSION_MARKER, rs_text)
+        self.assertIn(".trellis/scripts/workflow/record-session-helper.py", rs_text)
+        self.assertNotIn("<WORKFLOW_DIR>/commands/shell/record-session-helper.py", rs_text)
         # Verify close-out order: record-session-helper must appear before archive
         helper_pos = rs_text.find("record-session-helper.py")
         archive_pos = rs_text.find("task.py archive")
@@ -478,10 +486,23 @@ class WorkflowInstallerTests(unittest.TestCase):
             ["start", "finish-work", "record-session"],
         )
         self.assertEqual(record_data["patched_shared_docs"], ["workflow.md"])
+        self.assertEqual(record_data["profile"], "outsourcing")
         self.assertEqual(record_data["scripts"], HELPER_SCRIPTS)
+        self.assertEqual(
+            record_data["execution_cards"],
+            ["需求变更管理执行卡.md", "源码水印与归属证据链执行卡.md"],
+        )
         for helper_name in HELPER_SCRIPTS:
             helper_path = fixture / ".trellis" / "scripts" / "workflow" / helper_name
             self.assertTrue(helper_path.exists(), f"{helper_name} should be deployed")
+        change_card = fixture / ".trellis" / "workflow-docs" / "需求变更管理执行卡.md"
+        ownership_card = fixture / ".trellis" / "workflow-docs" / "源码水印与归属证据链执行卡.md"
+        self.assertTrue(change_card.exists(), "需求变更管理执行卡.md should be deployed")
+        self.assertTrue(ownership_card.exists(), "源码水印与归属证据链执行卡.md should be deployed")
+        ownership_card_text = ownership_card.read_text(encoding="utf-8")
+        self.assertIn(".trellis/scripts/workflow/ownership-proof-validate.py", ownership_card_text)
+        self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", ownership_card_text)
+        self.assertNotIn("<WORKFLOW_DIR>/commands/shell", ownership_card_text)
         self.assertEqual(record_data["workflow_version"], "0.1.24")
         self.assertEqual(record_data["workflow_schema_version"], "2")
         self.assertEqual(record_data["initial_pack"], "pack.requirements-discovery-foundation")
@@ -495,8 +516,63 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", deployed_feasibility)
         self.assertIn("OpenCode 入口见目标项目 AGENTS.md 路由表", deployed_feasibility)
         self.assertNotIn("[阶段状态机与强门禁协议](", deployed_feasibility)
-        self.assertNotIn("[需求变更管理执行卡](", deployed_feasibility)
-        self.assertNotIn("[源码水印与归属证据链执行卡](", deployed_feasibility)
+        self.assertNotIn("../源码水印与归属证据链执行卡.md", deployed_feasibility)
+        self.assertIn(
+            "[源码水印与归属证据链执行卡](.trellis/workflow-docs/源码水印与归属证据链执行卡.md)",
+            deployed_feasibility,
+        )
+
+    def test_install_personal_profile_excludes_outsourcing_cards_and_helpers(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture, "--profile", "personal")
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        record_data = json.loads((fixture / ".trellis" / "workflow-installed.json").read_text(encoding="utf-8"))
+        self.assertEqual(record_data["profile"], "personal")
+        self.assertEqual(
+            record_data["scripts"],
+            [name for name in HELPER_SCRIPTS if name not in {"delivery-control-validate.py", "ownership-proof-validate.py"}],
+        )
+        self.assertEqual(record_data["execution_cards"], ["需求变更管理执行卡.md"])
+
+        workflow_scripts = fixture / ".trellis" / "scripts" / "workflow"
+        self.assertTrue((workflow_scripts / "workflow-state.py").exists())
+        self.assertFalse((workflow_scripts / "delivery-control-validate.py").exists())
+        self.assertFalse((workflow_scripts / "ownership-proof-validate.py").exists())
+
+        workflow_docs = fixture / ".trellis" / "workflow-docs"
+        self.assertTrue((workflow_docs / "需求变更管理执行卡.md").exists())
+        self.assertFalse((workflow_docs / "源码水印与归属证据链执行卡.md").exists())
+
+        deployed_delivery = (fixture / ".claude" / "commands" / "trellis" / "delivery.md").read_text(encoding="utf-8")
+        self.assertNotIn("源码水印与归属证据链执行卡", deployed_delivery)
+        self.assertNotIn("ownership-proof-validate.py", deployed_delivery)
+
+    def test_upgrade_merge_respects_personal_profile_for_commands_and_codex_skills(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture, "--profile", "personal")
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        merge = self.run_script(
+            UPGRADE_SCRIPT,
+            "--merge",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertEqual(merge.returncode, 0, msg=merge.stdout + merge.stderr)
+        delivery_cmd = (fixture / ".claude" / "commands" / "trellis" / "delivery.md").read_text(encoding="utf-8")
+        delivery_skill = (fixture / ".agents" / "skills" / "delivery" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertNotIn("源码水印与归属证据链执行卡", delivery_cmd)
+        self.assertNotIn("ownership-proof-validate.py", delivery_cmd)
+        self.assertNotIn("源码水印与归属证据链执行卡", delivery_skill)
+        self.assertNotIn("ownership-proof-validate.py", delivery_skill)
 
     def test_install_patches_finish_work_for_opencode_and_codex(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
@@ -1083,7 +1159,14 @@ class WorkflowInstallerTests(unittest.TestCase):
         fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
         self.addCleanup(shutil.rmtree, fixture)
 
-        result = self.run_script(INSTALL_SCRIPT, "--project-root", str(fixture), "--cli", "claude,opencode")
+        result = self.run_script(
+            INSTALL_SCRIPT,
+            "--project-root",
+            str(fixture),
+            "--cli",
+            "claude,opencode",
+            env={EMBED_CONFIRM_ENV: "1"},
+        )
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         record_data = json.loads((fixture / ".trellis" / "workflow-installed.json").read_text(encoding="utf-8"))

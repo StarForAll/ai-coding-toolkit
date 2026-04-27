@@ -16,59 +16,49 @@ When this `start` skill is used in a target project that has installed `docs/wor
 
 If any part is missing or stale, stop in the recovery branch. Do not infer the active stage from the presence of `prd.md`, `task_plan.md`, `design/`, `check.md`, or chat history alone.
 
-### First Entry Routing
+### Routing
 
-For a newly embedded target project:
-
-1. Run:
+1. Run context gathering:
 
 ```bash
 python3 ./.trellis/scripts/get_context.py
 ```
 
-2. If this is a new project, new client, first project intake, feasibility/risk/pricing question, or there is no current task yet, route to the feasibility workflow:
-
-```text
-Use the `feasibility` skill.
-```
-
-3. If `.trellis/workflow-installed.json` exists but `.trellis/library-lock.yaml` is missing or does not contain `pack.requirements-discovery-foundation`, stop immediately. Report that the target project is not in a valid embedded state and require manual handling before any further routing.
-
-### Existing Task Routing
-
-When there is a current task, validate its state before resuming:
+2. Compute the routing target:
 
 ```bash
-python3 .trellis/scripts/workflow/workflow-state.py validate <task-dir>
+python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route <task-dir> --project-root <project-root>
 ```
 
-Then route only to the currently confirmed stage:
+If no `.current-task` exists (first entry or recovery), omit `<task-dir>`:
 
-| `workflow-state.stage` | Allowed re-entry |
-|------------------------|------------------|
-| `feasibility` | Use the `feasibility` skill |
-| `brainstorm` | Use the `brainstorm` skill |
-| `design` | Use the `design` skill |
-| `plan` | Use the `plan` skill; do not implement |
-| `test-first` | Use the `test-first` skill only when `execution_authorized = true` |
-| `implementation` | Implement only when `execution_authorized = true`; run before-dev first |
-| `project-audit` | Use the `project-audit` skill |
-| `check` | Use the `check` skill |
-| `review-gate` | Use the `review-gate` skill |
-| `finish-work` | Use the `finish-work` skill |
-| `delivery` | Use the `delivery` skill |
-| `record-session` | Use the `record-session` skill |
+```bash
+python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route --project-root <project-root>
+```
 
-If `stage_status = awaiting_user_confirmation`, report completed / missing / candidate next stage and wait for explicit user confirmation. Do not switch stages yourself.
+3. Act on the JSON output's `action` field:
+
+| action | Meaning | Action |
+|--------|---------|--------|
+| `first_entry` | New project, no assessment | Use the `feasibility` skill |
+| `resume_with_assessment` | Valid assessment exists | Use the `brainstorm` skill |
+| `reenter` | Re-enter current stage | Use the skill matching the `target` field |
+| `awaiting_confirmation` | Stage done, waiting for user | Report completed/missing items; wait for confirmation |
+| `blocked` | Execution blocked | Show `blockers` list; do not proceed |
+| `recovery_needed` | Cannot determine current task | Ask user to clarify the current task |
+| `repair_needed` | State file missing or corrupt | Run `workflow-state.py repair`; show inference and ask for confirmation |
+| `embed_invalid` | Installation incomplete | Stop; tell user to check installation integrity |
+
+4. If the output contains `blockers`, display each one and do not proceed.
 
 ### Implementation Entry
 
 Before writing implementation code:
 
 1. Confirm the current task is a leaf task.
-2. Confirm `workflow-state.py validate <task-dir>` passes.
-3. Run before-dev and write or refresh `$TASK_DIR/before-dev.md`.
-4. Keep work scoped to the selected leaf task only.
+2. Run before-dev and write or refresh `$TASK_DIR/before-dev.md`.
+3. Keep work scoped to the selected leaf task only.
+4. Do not auto-continue to the next task after completion — require a new `/trellis:start`.
 
 Within `implementation`, use this internal role chain:
 
@@ -78,9 +68,8 @@ research -> implement -> check-agent
 
 Rules:
 
-- treat the chain above as implementation-internal execution, not as a stage transition
-- the internal `check-agent` is not the same as the formal `check` stage
-- after the implementation-internal chain completes, only recommend the `check` skill as the candidate next stage and wait for explicit user confirmation
-- if the formal `check` stage fails, return to `implementation`, then run the internal chain again
-
-For external outsourcing projects, do not enter implementation or test-first until `assessment.md` records `kickoff_payment_received = yes`.
+- The internal `check-agent` is not the same as the formal `check` stage.
+- After the chain completes, only recommend the `check` skill as a candidate next stage and wait for user confirmation.
+- If the formal `check` stage fails, return to `implementation` and re-run the internal chain.
+- For `UI -> 首版代码界面` tasks: Codex cannot be the main executor; completion must produce `design/frontend-ui-spec.md`.
+- For external outsourcing projects, do not enter implementation or test-first until `assessment.md` records `kickoff_payment_received = yes`.

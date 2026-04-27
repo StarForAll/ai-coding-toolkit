@@ -7,7 +7,7 @@ Use `/trellis:record-session` here only for the **final close-out of the current
 ### Step 1: Record the session
 
 ```bash
-python3 ./.trellis/scripts/workflow/record-session-helper.py \
+python3 <WORKFLOW_DIR>/commands/shell/record-session-helper.py \
   --title "Session Title" \
   --commit "hash1,hash2" \
   --summary "Brief summary of what was done"

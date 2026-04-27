@@ -52,6 +52,20 @@ HELPER_SCRIPTS = [
 MANAGED_IMPLEMENTATION_AGENTS = ["research", "implement", "check"]
 LATEST_TRELLIS_VERSION_ENV = "TRELLIS_LATEST_VERSION"
 CODEX_SHARED_SKILL_NAMES = [*DISTRIBUTED_COMMANDS, *CODEX_PATCH_BASELINE_SKILLS, "record-session"]
+
+# ── Profile support ──
+VALID_PROFILES = ("personal", "outsourcing")
+DEFAULT_PROFILE = "outsourcing"
+OUTSOURCING_ONLY_SCRIPTS = [
+    "delivery-control-validate.py",
+    "ownership-proof-validate.py",
+]
+CORE_HELPER_SCRIPTS = [s for s in HELPER_SCRIPTS if s not in OUTSOURCING_ONLY_SCRIPTS]
+
+# ── Execution cards ──
+EXECUTION_CARDS = ["需求变更管理执行卡.md"]
+OUTSOURCING_EXECUTION_CARDS = ["源码水印与归属证据链执行卡.md"]
+WORKFLOW_DOCS_DIR = ".trellis/workflow-docs"
 AGENT_SUFFIXES = {
     "claude": ".md",
     "opencode": ".md",
@@ -183,7 +197,27 @@ def render_workflow_managed_agent(commands_root: Path, cli_type: str, agent_name
     raise ValueError(f"Unsupported cli_type for managed agent render: {cli_type}")
 
 
-def prepare_command_content(source_path: Path) -> str:
+def _strip_conditional_blocks(content: str, tag: str) -> str:
+    """Remove <!-- if:TAG --> ... <!-- endif:TAG --> blocks including markers."""
+    import re
+    pattern = re.compile(
+        rf"^\s*<!--\s*if:{re.escape(tag)}\s*-->\s*\n"
+        rf"(.*?)"
+        rf"^\s*<!--\s*endif:{re.escape(tag)}\s*-->\s*\n?",
+        re.MULTILINE | re.DOTALL,
+    )
+    return pattern.sub("", content)
+
+
+def _clean_conditional_markers(content: str, tag: str) -> str:
+    """Remove marker lines but keep the wrapped content."""
+    import re
+    content = re.sub(rf"^\s*<!--\s*if:{re.escape(tag)}\s*-->\s*\n", "", content, flags=re.MULTILINE)
+    content = re.sub(rf"^\s*<!--\s*endif:{re.escape(tag)}\s*-->\s*\n?", "", content, flags=re.MULTILINE)
+    return content
+
+
+def prepare_command_content(source_path: Path, *, profile: str = DEFAULT_PROFILE) -> str:
     """Return target-project-facing command content after deployment rewrites."""
     content = source_path.read_text(encoding="utf-8")
     content = content.replace("<WORKFLOW_DIR>/commands/shell/", ".trellis/scripts/workflow/")
@@ -191,10 +225,27 @@ def prepare_command_content(source_path: Path) -> str:
     content = content.replace("见 `opencode/README.md`", "OpenCode 入口见目标项目 AGENTS.md 路由表")
     content = content.replace("见 `codex/README.md`", "Codex 入口见目标项目 AGENTS.md 路由表")
     content = content.replace("[阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md)", "阶段状态机与强门禁协议")
-    content = content.replace("[需求变更管理执行卡](../需求变更管理执行卡.md)", "需求变更管理执行卡")
-    content = content.replace("[需求变更管理执行卡](../../需求变更管理执行卡.md)", "需求变更管理执行卡")
-    content = content.replace("[源码水印与归属证据链执行卡](../源码水印与归属证据链执行卡.md)", "源码水印与归属证据链执行卡")
-    content = content.replace("[源码水印与归属证据链执行卡](../../源码水印与归属证据链执行卡.md)", "源码水印与归属证据链执行卡")
+    _docs_dir = WORKFLOW_DOCS_DIR
+    content = content.replace(
+        "[需求变更管理执行卡](../需求变更管理执行卡.md)",
+        f"[需求变更管理执行卡]({_docs_dir}/需求变更管理执行卡.md)",
+    )
+    content = content.replace(
+        "[需求变更管理执行卡](../../需求变更管理执行卡.md)",
+        f"[需求变更管理执行卡]({_docs_dir}/需求变更管理执行卡.md)",
+    )
+    content = content.replace(
+        "[源码水印与归属证据链执行卡](../源码水印与归属证据链执行卡.md)",
+        f"[源码水印与归属证据链执行卡]({_docs_dir}/源码水印与归属证据链执行卡.md)",
+    )
+    content = content.replace(
+        "[源码水印与归属证据链执行卡](../../源码水印与归属证据链执行卡.md)",
+        f"[源码水印与归属证据链执行卡]({_docs_dir}/源码水印与归属证据链执行卡.md)",
+    )
+    if profile == "personal":
+        content = _strip_conditional_blocks(content, "outsourcing")
+    else:
+        content = _clean_conditional_markers(content, "outsourcing")
     return content
 
 

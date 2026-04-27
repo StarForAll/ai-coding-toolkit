@@ -41,17 +41,24 @@ from workflow_assets import (
     CODEX_SHARED_SKILL_NAMES,
     CLI_ALT_DIRS,
     CLI_DIRS,
+    CORE_HELPER_SCRIPTS,
+    DEFAULT_PROFILE,
     codex_secondary_skills_dir,
     codex_shared_skills_dir,
     DISTRIBUTED_COMMANDS,
     detect_cli_types as detect_cli_types_shared,
+    EXECUTION_CARDS,
     HELPER_SCRIPTS,
     list_all_codex_skills_dirs,
     MANAGED_IMPLEMENTATION_AGENTS,
     OPTIONAL_DISABLED_BASELINE_COMMANDS,
+    OUTSOURCING_EXECUTION_CARDS,
+    OUTSOURCING_ONLY_SCRIPTS,
     OVERLAY_BASELINE_COMMANDS,
     PATCH_BASELINE_COMMANDS,
     PATCH_BASELINE_SHARED_DOCS,
+    VALID_PROFILES,
+    WORKFLOW_DOCS_DIR,
     WORKFLOW_SCHEMA_VERSION,
     WORKFLOW_VERSION,
     prepare_command_content,
@@ -808,7 +815,7 @@ def inject_finish_work_patch(
     return True
 
 
-def inject_workflow_patch(src: Path, root: Path, *, dry_run: bool) -> bool:
+def inject_workflow_patch(src: Path, root: Path, *, dry_run: bool, profile: str = DEFAULT_PROFILE) -> bool:
     """为目标项目的 .trellis/workflow.md 注入项目化补丁。"""
     target_path = root / ".trellis" / "workflow.md"
     if not target_path.exists():
@@ -820,7 +827,7 @@ def inject_workflow_patch(src: Path, root: Path, *, dry_run: bool) -> bool:
         warn("[Shared] workflow-patch-projectization.md 不存在")
         return False
 
-    patch_text = patch.read_text(encoding="utf-8")
+    patch_text = prepare_command_content(patch, profile=profile)
     content = target_path.read_text(encoding="utf-8")
     if _WORKFLOW_PATCH_MARKER in content and patch_text in content:
         ok("[Shared] workflow.md 项目化补丁已存在")
@@ -910,7 +917,7 @@ def deploy_managed_agents(
 
 
 # ── Claude Code 部署 ──
-def deploy_claude(src: Path, root: Path, dry_run: bool) -> dict:
+def deploy_claude(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAULT_PROFILE) -> dict:
     """部署到 .claude/commands/trellis/"""
     dst_cmds = root / ".claude" / "commands" / "trellis"
     backup = dst_cmds / ".backup-original"
@@ -954,7 +961,7 @@ def deploy_claude(src: Path, root: Path, dry_run: bool) -> dict:
             if dry_run:
                 info(f"[Claude] 将部署 /trellis:{cmd}")
             else:
-                c = prepare_command_content(s)
+                c = prepare_command_content(s, profile=profile)
                 d.write_text(c, encoding="utf-8")
                 ok(f"[Claude] /trellis:{cmd}")
             result["commands"] += 1
@@ -1008,7 +1015,7 @@ def deploy_claude(src: Path, root: Path, dry_run: bool) -> dict:
                 if not dry_run:
                     before, after = content.split(_RECORD_SESSION_INJECTION_MARKER, 1)
                     record_session.write_text(
-                        before + patch.read_text(encoding="utf-8") + "\n" + _RECORD_SESSION_INJECTION_MARKER + after,
+                        before + prepare_command_content(patch, profile=profile) + "\n" + _RECORD_SESSION_INJECTION_MARKER + after,
                         encoding="utf-8",
                     )
                 if dry_run:
@@ -1036,7 +1043,7 @@ def deploy_claude(src: Path, root: Path, dry_run: bool) -> dict:
 
 
 # ── OpenCode 部署 ──
-def deploy_opencode(src: Path, root: Path, dry_run: bool) -> dict:
+def deploy_opencode(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAULT_PROFILE) -> dict:
     """部署到 .opencode/commands/trellis/（命令文件格式与 Claude Code 完全兼容）"""
     dst_cmds = root / ".opencode" / "commands" / "trellis"
     dst_scripts = root / ".trellis" / "scripts" / "workflow"
@@ -1081,7 +1088,7 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool) -> dict:
             if dry_run:
                 info(f"[OpenCode] 将部署 {cmd}（TUI: /trellis:{cmd} / CLI: trellis/{cmd}）")
             else:
-                c = prepare_command_content(s)
+                c = prepare_command_content(s, profile=profile)
                 d.write_text(c, encoding="utf-8")
                 ok(f"[OpenCode] {cmd}（TUI: /trellis:{cmd} / CLI: trellis/{cmd}）")
             result["commands"] += 1
@@ -1135,7 +1142,7 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool) -> dict:
                 if not dry_run:
                     before, after = content.split(_RECORD_SESSION_INJECTION_MARKER, 1)
                     record_session.write_text(
-                        before + patch.read_text(encoding="utf-8") + "\n" + _RECORD_SESSION_INJECTION_MARKER + after,
+                        before + prepare_command_content(patch, profile=profile) + "\n" + _RECORD_SESSION_INJECTION_MARKER + after,
                         encoding="utf-8",
                     )
                 if dry_run:
@@ -1164,7 +1171,7 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool) -> dict:
 
 
 # ── Codex CLI 部署 ──
-def deploy_codex(src: Path, root: Path, dry_run: bool) -> dict:
+def deploy_codex(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAULT_PROFILE) -> dict:
     """部署到 Codex skills 目录。
 
     共享 workflow skills 只写入 `.agents/skills/`。
@@ -1223,7 +1230,7 @@ def deploy_codex(src: Path, root: Path, dry_run: bool) -> dict:
             if dry_run:
                 info(f"[Codex] 将部署 shared skill: {cmd} → {shared_skills_dir.relative_to(root)}")
             else:
-                c = prepare_command_content(s)
+                c = prepare_command_content(s, profile=profile)
                 d.parent.mkdir(parents=True, exist_ok=True)
                 d.write_text(c, encoding="utf-8")
                 ok(f"[Codex] shared skill: {cmd} → {d.relative_to(root)}")
@@ -1305,12 +1312,13 @@ def deploy_codex(src: Path, root: Path, dry_run: bool) -> dict:
 
 
 # ── 辅助脚本部署（共享） ──
-def deploy_helper_scripts(src: Path, root: Path, dry_run: bool) -> int:
+def deploy_helper_scripts(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAULT_PROFILE) -> int:
     """部署平台无关的辅助脚本到 .trellis/scripts/workflow/"""
     dst_scripts = root / ".trellis" / "scripts" / "workflow"
     count = 0
     dst_scripts.mkdir(parents=True, exist_ok=True)
-    for f in HELPER_SCRIPTS:
+    scripts = HELPER_SCRIPTS if profile == "outsourcing" else CORE_HELPER_SCRIPTS
+    for f in scripts:
         s = src / "shell" / f
         d = dst_scripts / f
         if s.exists():
@@ -1318,6 +1326,31 @@ def deploy_helper_scripts(src: Path, root: Path, dry_run: bool) -> int:
                 shutil.copy2(s, d)
                 d.chmod(0o755)
             count += 1
+    return count, len(scripts)
+
+
+def deploy_execution_cards(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAULT_PROFILE) -> int:
+    """分发执行卡文档到 .trellis/workflow-docs/"""
+    workflow_root = src.parent  # commands/ 的上一级即 workflow 根目录
+    dst = root / WORKFLOW_DOCS_DIR
+    cards = list(EXECUTION_CARDS)
+    if profile == "outsourcing":
+        cards.extend(OUTSOURCING_EXECUTION_CARDS)
+    count = 0
+    if not dry_run:
+        dst.mkdir(parents=True, exist_ok=True)
+    for card_name in cards:
+        card_src = workflow_root / card_name
+        card_dst = dst / card_name
+        if card_src.exists():
+            if dry_run:
+                info(f"将分发执行卡 → {WORKFLOW_DOCS_DIR}/{card_name}")
+            else:
+                shutil.copy2(card_src, card_dst)
+                ok(f"执行卡 → {WORKFLOW_DOCS_DIR}/{card_name}")
+            count += 1
+        else:
+            warn(f"执行卡源文件不存在: {card_src}")
     return count
 
 
@@ -1397,6 +1430,7 @@ def write_install_record(
     cli_types: list[str],
     dry_run: bool,
     *,
+    profile: str = DEFAULT_PROFILE,
     bootstrap_cleanup: str = "unknown",
 ) -> None:
     now = datetime.now(timezone.utc).isoformat()
@@ -1404,11 +1438,16 @@ def write_install_record(
         if (root / ".trellis" / ".version").exists() else "unknown"
     rec = root / ".trellis" / "workflow-installed.json"
     bootstrap_task_removed = bootstrap_cleanup in {"removed", "dry-run-removed"}
+    scripts = HELPER_SCRIPTS if profile == "outsourcing" else CORE_HELPER_SCRIPTS
+    cards = list(EXECUTION_CARDS)
+    if profile == "outsourcing":
+        cards.extend(OUTSOURCING_EXECUTION_CARDS)
     if not dry_run:
         rec.write_text(json.dumps({
             "trellis_version": ver,
             "installed": now,
             "cli_types": cli_types,
+            "profile": profile,
             "commands": DISTRIBUTED_COMMANDS,
             "overlay_commands": OVERLAY_BASELINE_COMMANDS,
             "added_commands": ADDED_COMMANDS,
@@ -1416,7 +1455,8 @@ def write_install_record(
             "patched_baseline_commands": PATCH_BASELINE_COMMANDS,
             "patched_codex_skills": CODEX_PATCH_BASELINE_SKILLS,
             "patched_shared_docs": PATCH_BASELINE_SHARED_DOCS,
-            "scripts": HELPER_SCRIPTS,
+            "scripts": list(scripts),
+            "execution_cards": cards,
             "workflow_version": WORKFLOW_VERSION,
             "workflow_schema_version": WORKFLOW_SCHEMA_VERSION,
             "initial_pack": _REQUIREMENTS_FOUNDATION_PACK,
@@ -1509,6 +1549,8 @@ def main() -> int:
     p.add_argument("--project-root", type=Path, default=None, help="项目根目录（默认自动检测）")
     p.add_argument("--cli", type=str, default=None,
                    help="指定 CLI 类型，逗号分隔: claude,opencode,codex（默认安装全部检测到的 CLI；此参数仅用于过滤）")
+    p.add_argument("--profile", choices=VALID_PROFILES, default=DEFAULT_PROFILE,
+                   help=f"安装配置: personal（排除外包内容）/ outsourcing（完整内容，默认: {DEFAULT_PROFILE}）")
     p.add_argument("--dry-run", action="store_true", help="预览安装结果，不实际写入")
     args = p.parse_args()
 
@@ -1543,10 +1585,12 @@ def main() -> int:
     info(f"检测到 CLI: {', '.join(cli_types)}")
     if not args.cli:
         info("默认策略: 在同一目标项目中同时部署全部检测到的 CLI 适配层；如需过滤请使用 --cli")
+    info(f"Profile: {args.profile}")
     if args.dry_run:
         warn("DRY RUN 模式 — 不实际写入文件")
     print()
 
+    profile = args.profile
     attempt_record_created = False
     if not args.dry_run:
         write_embed_attempt_record(src, root, cli_types)
@@ -1560,11 +1604,11 @@ def main() -> int:
         for cli_type in cli_types:
             update_embed_attempt_record(root, last_step=f"deploy-{cli_type}")
             if cli_type == "claude":
-                total["claude"] = deploy_claude(src, root, args.dry_run)
+                total["claude"] = deploy_claude(src, root, args.dry_run, profile=profile)
             elif cli_type == "opencode":
-                total["opencode"] = deploy_opencode(src, root, args.dry_run)
+                total["opencode"] = deploy_opencode(src, root, args.dry_run, profile=profile)
             elif cli_type == "codex":
-                total["codex"] = deploy_codex(src, root, args.dry_run)
+                total["codex"] = deploy_codex(src, root, args.dry_run, profile=profile)
             print()
 
         if any(result and result["errors"] for result in total.values()):
@@ -1590,10 +1634,18 @@ def main() -> int:
         # 辅助脚本（共享）
         if not any(t and t["errors"] for t in total.values()):
             update_embed_attempt_record(root, last_step="deploy-helper-scripts")
-            script_count = deploy_helper_scripts(src, root, args.dry_run)
-            info(f"辅助脚本: {script_count}/{len(HELPER_SCRIPTS)} 个")
+            script_count, script_total = deploy_helper_scripts(src, root, args.dry_run, profile=profile)
+            info(f"辅助脚本: {script_count}/{script_total} 个")
+
+            # 执行卡文档
+            update_embed_attempt_record(root, last_step="deploy-execution-cards")
+            print()
+            print("📄 执行卡文档...")
+            card_count = deploy_execution_cards(src, root, args.dry_run, profile=profile)
+            info(f"执行卡: {card_count} 个")
+
             update_embed_attempt_record(root, last_step="patch-workflow-doc")
-            inject_workflow_patch(src, root, dry_run=args.dry_run)
+            inject_workflow_patch(src, root, dry_run=args.dry_run, profile=profile)
         print()
 
         if not any(t and t["errors"] for t in total.values()):
@@ -1617,7 +1669,7 @@ def main() -> int:
 
         # 安装记录
         update_embed_attempt_record(root, last_step="write-install-record")
-        write_install_record(root, cli_types, args.dry_run, bootstrap_cleanup=bootstrap_cleanup)
+        write_install_record(root, cli_types, args.dry_run, profile=profile, bootstrap_cleanup=bootstrap_cleanup)
 
         # NL 路由表注入 AGENTS.md（为无 hooks 的 CLI 提供路由支持）
         print()

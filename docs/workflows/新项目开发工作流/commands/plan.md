@@ -37,10 +37,7 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
   - `DDD.md` / `IDD.md` / `AID.md` / `STITCH-PROMPT.md` 是否需要创建
   - 后续需要单独拆出 `UI -> 首版代码界面` 的前端基线 task
 - 若属于外包、定制开发或新客户项目（外部项目），已在 `assessment.md` 中明确 `delivery_control_track`（默认 `hosted_deployment`，必要时使用 `trial_authorization`），**并且已按轨道导入交付控制相关 spec**
-- 若属于外部项目，已在 `assessment.md` 中明确：
-  - `project_engagement_type = external_outsourcing`
-  - `kickoff_payment_ratio` 不低于 `30%`
-  - `kickoff_payment_received` 当前状态已冻结
+- 外包项目控制字段由 `workflow-state.py validate` 强制校验。
 - 若 `assessment.md` 中 `ownership_proof_required = yes`，已在 design 阶段冻结 `$TASK_DIR/design/source-watermark-plan.md`
 - 当前 task 的 `workflow-state.json` 已明确切换到 `stage = plan`
 - 当前阶段切换已经过用户明确确认，而不是由 `/trellis:start` 或“下一步推荐”自动推进
@@ -51,8 +48,7 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
 - `/trellis:plan` 只允许重入当前已确认的 plan 阶段，不允许顺手自动进入实现
 - `plan` 完成后，必须先输出已完成/未完成/缺失项，再等待用户确认
 - 只有用户确认后，才允许把执行态切到具体叶子 task 的 implementation / test-first 分支
-- `plan` 阶段内必须保持 `checkpoints.execution_authorized = false`
-- `execution_authorized` 的状态门禁由 `workflow-state.py validate` 强制校验；未满足条件的执行态切换必须拒绝
+- `plan` 阶段 `execution_authorized` 必须为 `false`，由 validate 强制。
 
 `/trellis:plan` 的职责是：
 
@@ -137,9 +133,11 @@ cat "$TASK_DIR/design/index.md" 2>/dev/null
 - 已确认的需求与设计文档
 - 当前项目 `.trellis/spec/` 中已经落地的项目约束
 - 当前项目的自动化检查矩阵
+<!-- if:outsourcing -->
 - 若为外部项目，`assessment.md` 中约定的交付控制轨道、源码移交时点、权限移交时点
 - 若为外部项目，`assessment.md` 中约定的项目类别、启动款比例、开工状态、最终移交触发条件
 - 若启用了作者归属保护，`assessment.md` 中约定的 `source_watermark_*` 字段与 `$TASK_DIR/design/source-watermark-plan.md`
+<!-- endif:outsourcing -->
 
 先判断任务是否属于：
 
@@ -232,12 +230,14 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
   - 该 task **禁止**使用 Codex 作为主执行器，必须改用 Claude Code / OpenCode
   - 该 task 的完成定义必须包含 `design/frontend-ui-spec.md`
   - 后续所有前端视觉相关 task 默认依赖这份 `frontend-ui-spec.md`
+<!-- if:outsourcing -->
 - 若 `ownership_proof_required = yes`，至少还必须拆出以下 task：
   - `可见源码水印任务`（必选；只要启用了归属证明门禁，默认必须存在）
   - `零宽字符水印任务`（当 `zero_width_watermark_enabled = yes`）
   - `隐蔽代码标识任务`（当 `subtle_code_marker_enabled = yes`）
   - `水印验证任务`
   - `归属证明包任务`
+<!-- endif:outsourcing -->
 
 ### Step 3: 生成摘要型 `task_plan.md`
 
@@ -318,6 +318,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 - 主链：TASK-A → TASK-B → TASK-C
 - 全局终局任务：PROJECT-AUDIT（条件触发）
 
+<!-- if:outsourcing -->
 ## 外部项目交付控制（如适用）
 
 - <试运行版交付任务 / 托管部署任务 / 永久授权切换任务 / 源码移交任务 / 控制权移交任务>
@@ -326,6 +327,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 
 - `source-watermark-plan.md`：已冻结 / 待补齐
 - <可见源码水印任务 / 零宽字符水印任务 / 隐蔽代码标识任务 / 水印验证任务 / 归属证明包任务>
+<!-- endif:outsourcing -->
 ```
 
 ### Step 4: 项目级终局任务与外部交付任务
@@ -337,7 +339,8 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 - 高 blast radius
 - 外包 / 新客户项目
 
-外部项目若采用“托管部署 / 试运行授权”的双轨交付控制，仍需在 `task_plan.md` 摘要中显式列出：
+<!-- if:outsourcing -->
+外部项目若采用”托管部署 / 试运行授权”的双轨交付控制，仍需在 `task_plan.md` 摘要中显式列出：
 
 - `开工授权确认任务`
 - `试运行版交付任务`
@@ -350,7 +353,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 
 其中：
 
-- `开工授权确认任务` 负责把“启动款比例是否达标、启动款是否已到账、是否允许进入 implementation / test-first”单独落盘
+- `开工授权确认任务` 负责把”启动款比例是否达标、启动款是否已到账、是否允许进入 implementation / test-first”单独落盘
 - 若 `kickoff_payment_received != yes`，该任务只能停在等待确认或阻断状态，不得把执行态推进到 implementation / test-first
 
 若 `ownership_proof_required = yes`，`task_plan.md` 摘要中还需显式列出：
@@ -360,6 +363,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 - `隐蔽代码标识任务`（若启用）
 - `水印验证任务`
 - `归属证明包任务`
+<!-- endif:outsourcing -->
 
 这些任务同样应优先落成真实 Trellis task，而不是只留在摘要里。
 
@@ -376,8 +380,6 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 - `task_plan.md` 中列出的关键 task 是否已真实存在
 - `当前推荐执行任务（待确认）`对应 leaf task 的最小 `prd.md` 是否存在
 - 是否写清项目域执行策略、依赖关系、门禁摘要、任务图摘要
-- 是否仍残留旧版执行矩阵字段
-- `plan` 阶段是否仍保持 `execution_authorized = false`
 
 不负责判断：
 

@@ -161,6 +161,11 @@ def bool_arg(raw: str) -> bool:
 
 
 def validate_state_shape(state: dict[str, Any], errors: list[str]) -> None:
+    # Tolerant: if version is missing, default to SUPPORTED_STATE_VERSION
+    if "version" not in state:
+        state["version"] = SUPPORTED_STATE_VERSION
+    # Tolerant: ignore unknown keys (only validate required keys)
+
     required_keys = {
         "version",
         "stage",
@@ -614,6 +619,324 @@ def cmd_validate(args: argparse.Namespace) -> int:
     return 0
 
 
+# ---------------------------------------------------------------------------
+# route / repair subcommands
+# ---------------------------------------------------------------------------
+
+INSTALL_RECORD = ".trellis/workflow-installed.json"
+LIBRARY_LOCK = ".trellis/library-lock.yaml"
+REQUIREMENTS_FOUNDATION_PACK = "pack.requirements-discovery-foundation"
+
+
+def detect_embed_invalid(repo_root: Path) -> str | None:
+    install_record = repo_root / INSTALL_RECORD
+    if not install_record.is_file():
+        return None
+
+    library_lock = repo_root / LIBRARY_LOCK
+    if not library_lock.is_file():
+        return f"检测到 {INSTALL_RECORD}，但缺少 {LIBRARY_LOCK}"
+
+    try:
+        lock_text = library_lock.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return f"{LIBRARY_LOCK} 不可读，无法确认最低资产集"
+
+    if REQUIREMENTS_FOUNDATION_PACK not in lock_text:
+        return f"{LIBRARY_LOCK} 缺少最低资产集 {REQUIREMENTS_FOUNDATION_PACK}"
+
+    return None
+
+
+def _route_result(
+    target: str | None,
+    action: str,
+    reason: str,
+    *,
+    stage: str | None = None,
+    stage_status: str | None = None,
+    blockers: list[str] | None = None,
+) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "target": target,
+        "action": action,
+    }
+    if stage is not None:
+        result["stage"] = stage
+    if stage_status is not None:
+        result["stage_status"] = stage_status
+    result["reason"] = reason
+    result["blockers"] = blockers or []
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return result
+
+
+def cmd_route(args: argparse.Namespace) -> int:
+    # Step 1: resolve repo_root
+    if args.project_root:
+        repo_root = Path(args.project_root).resolve()
+    elif args.task_dir:
+        repo_root = find_repo_root(Path(args.task_dir).resolve())
+    else:
+        repo_root = find_repo_root(Path.cwd())
+
+    if repo_root is None:
+        print(json.dumps({"error": "无法定位 repo root"}, ensure_ascii=False, indent=2), file=sys.stderr)
+        return 1
+
+    embed_invalid_reason = detect_embed_invalid(repo_root)
+    if embed_invalid_reason is not None:
+        _route_result(None, "embed_invalid", embed_invalid_reason)
+        return 0
+
+    # Step 2: determine current-task pointer
+    current_task_file = (
+        Path(args.current_task_file).resolve()
+        if args.current_task_file
+        else repo_root / CURRENT_TASK_FILE
+    )
+
+    pointer: str | None = None
+    if current_task_file.is_file():
+        pointer = current_task_file.read_text(encoding="utf-8").strip() or None
+
+    if not pointer:
+        # No .current-task — scan .trellis/tasks/ for assessment.md
+        tasks_root = repo_root / ".trellis" / "tasks"
+        assessment_found: Path | None = None
+        if tasks_root.is_dir():
+            for candidate in tasks_root.rglob(ASSESSMENT_FILE.name):
+                if candidate.is_file():
+                    assessment_found = candidate
+                    break
+
+        if assessment_found is None:
+            _route_result("feasibility", "first_entry", "无 assessment.md，首次进入 feasibility")
+            return 0
+
+        # Assessment exists — check if it permits brainstorm
+        content = assessment_found.read_text(encoding="utf-8")
+        # Look for "是否允许进入 brainstorm" field with a value containing "是"
+        allow_brainstorm = False
+        for line in content.splitlines():
+            if "是否允许进入 brainstorm" in line and "是" in line:
+                allow_brainstorm = True
+                break
+
+        if allow_brainstorm:
+            _route_result(
+                "brainstorm",
+                "resume_with_assessment",
+                f"assessment.md 存在于 {assessment_found.relative_to(repo_root).as_posix()}，允许进入 brainstorm",
+            )
+            return 0
+
+        _route_result(
+            None,
+            "recovery_needed",
+            "无 .current-task 且无法自动确定下一步",
+        )
+        return 0
+
+    # Step 3: .current-task exists — validate it
+    normalized = normalize_task_pointer(pointer, repo_root)
+    task_dir = (repo_root / normalized).resolve()
+
+    if not task_dir.is_dir():
+        _route_result(None, "repair_needed", ".current-task 指向不存在的任务")
+        return 0
+
+    # Check leaf task (no children)
+    task_data = read_json(task_dir / TASK_FILE_NAME)
+    if task_data:
+        children = task_data.get("children", [])
+        if isinstance(children, list) and children:
+            _route_result(None, "repair_needed", "当前 task 已有 children")
+            return 0
+
+    state_path, state = load_state(task_dir)
+    if state is None:
+        _route_result(None, "repair_needed", "缺少 workflow-state.json")
+        return 0
+
+    # Step 4: route by stage
+    stage = state.get("stage", "")
+    stage_status = state.get("stage_status", "")
+    checkpoints = state.get("checkpoints", {})
+
+    if stage_status == "awaiting_user_confirmation":
+        _route_result(
+            stage,
+            "awaiting_confirmation",
+            f"当前 stage={stage}, status=awaiting_user_confirmation",
+            stage=stage,
+            stage_status=stage_status,
+        )
+        return 0
+
+    if stage in EXECUTION_STAGES:
+        blockers: list[str] = []
+
+        # Check execution_authorized
+        execution_authorized = checkpoints.get("execution_authorized", False)
+        if execution_authorized is not True:
+            blockers.append("checkpoints.execution_authorized 未授权")
+
+        # Check outsourcing kickoff gate
+        assessment_file = find_assessment_file(task_dir, repo_root)
+        if assessment_file is not None:
+            a_content = assessment_file.read_text(encoding="utf-8")
+            engagement_type = extract_backticked_field(a_content, "project_engagement_type")
+            if engagement_type == "external_outsourcing":
+                kickoff_received = extract_backticked_field(a_content, "kickoff_payment_received")
+                if kickoff_received != "yes":
+                    blockers.append("外包项目启动款未确认到账")
+
+        if blockers:
+            _route_result(
+                stage,
+                "blocked",
+                f"当前 stage={stage} 存在阻塞条件",
+                stage=stage,
+                stage_status=stage_status,
+                blockers=blockers,
+            )
+            return 0
+
+        _route_result(
+            stage,
+            "reenter",
+            f"当前 stage={stage}, status={stage_status}",
+            stage=stage,
+            stage_status=stage_status,
+        )
+        return 0
+
+    # Non-execution stage — simple reenter
+    _route_result(
+        stage,
+        "reenter",
+        f"当前 stage={stage}, status={stage_status}",
+        stage=stage,
+        stage_status=stage_status,
+    )
+    return 0
+
+
+def cmd_repair(args: argparse.Namespace) -> int:
+    # Step 1: resolve repo_root
+    task_dir_path = Path(args.task_dir).expanduser().resolve()
+    if args.project_root:
+        repo_root = Path(args.project_root).resolve()
+    else:
+        repo_root = find_repo_root(task_dir_path)
+
+    if repo_root is None:
+        print(json.dumps({"error": "无法定位 repo root"}, ensure_ascii=False, indent=2), file=sys.stderr)
+        return 1
+
+    # Step 2: check if workflow-state.json already exists and is valid
+    state_path, state = load_state(task_dir_path)
+    if state is not None:
+        check_errors: list[str] = []
+        validate_state_shape(state, check_errors)
+        if not check_errors:
+            result = {
+                "status": "ok",
+                "message": "workflow-state.json 已存在且合法",
+            }
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+
+    # Step 3: infer stage from artifacts
+    evidence: list[str] = []
+
+    # Check assessment.md in task lineage
+    has_assessment = False
+    if task_dir_path.is_dir() and (task_dir_path / TASK_FILE_NAME).is_file():
+        assessment_file = find_assessment_file(task_dir_path, repo_root)
+        if assessment_file is not None:
+            has_assessment = True
+            evidence.append("assessment.md 存在")
+    else:
+        # task_dir might not be a proper task dir — scan broadly
+        tasks_root = repo_root / ".trellis" / "tasks"
+        if tasks_root.is_dir():
+            for candidate in tasks_root.rglob(ASSESSMENT_FILE.name):
+                if candidate.is_file():
+                    has_assessment = True
+                    evidence.append("assessment.md 存在")
+                    break
+
+    if not has_assessment:
+        inferred_stage = "feasibility"
+        result = {
+            "status": "repair_needed",
+            "inferred_stage": inferred_stage,
+            "confidence": "high",
+            "evidence": ["assessment.md 不存在"],
+            "message": f"推断当前阶段为 {inferred_stage}，请确认后使用 --apply 写入",
+        }
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        if args.apply:
+            data = build_default_state(inferred_stage)
+            write_json(state_path, data)
+            print(json.dumps({"status": "applied", "stage": inferred_stage, "path": str(state_path)}, ensure_ascii=False, indent=2))
+        return 0
+
+    # Check customer-facing-prd.md
+    customer_prd = repo_root / CUSTOMER_PRD
+    has_customer_prd = customer_prd.is_file()
+    if not has_customer_prd:
+        inferred_stage = "brainstorm"
+        result = {
+            "status": "repair_needed",
+            "inferred_stage": inferred_stage,
+            "confidence": "high",
+            "evidence": evidence + [f"{CUSTOMER_PRD.as_posix()} 不存在"],
+            "message": f"推断当前阶段为 {inferred_stage}，请确认后使用 --apply 写入",
+        }
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        if args.apply:
+            data = build_default_state(inferred_stage)
+            write_json(state_path, data)
+            print(json.dumps({"status": "applied", "stage": inferred_stage, "path": str(state_path)}, ensure_ascii=False, indent=2))
+        return 0
+
+    evidence.append(f"{CUSTOMER_PRD.as_posix()} 存在")
+
+    # Check design/ dir in task_dir
+    design_dir = task_dir_path / "design"
+    if design_dir.is_dir():
+        evidence.append("design/ 存在")
+        task_plan = task_dir_path / "design" / "task_plan.md"
+        if task_plan.is_file():
+            evidence.append("design/task_plan.md 存在")
+            inferred_stage = "plan"
+        else:
+            inferred_stage = "design"
+    else:
+        inferred_stage = "brainstorm"
+
+    confidence = "high" if len(evidence) >= 2 else "medium"
+
+    result = {
+        "status": "repair_needed",
+        "inferred_stage": inferred_stage,
+        "confidence": confidence,
+        "evidence": evidence,
+        "message": f"推断当前阶段为 {inferred_stage}，请确认后使用 --apply 写入",
+    }
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+    if args.apply:
+        data = build_default_state(inferred_stage)
+        write_json(state_path, data)
+        print(json.dumps({"status": "applied", "stage": inferred_stage, "path": str(state_path)}, ensure_ascii=False, indent=2))
+
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="workflow strong-gate state helper")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -650,6 +973,18 @@ def build_parser() -> argparse.ArgumentParser:
     validate_parser.add_argument("--skip-current-task-check", action="store_true")
     validate_parser.add_argument("--current-task-file")
     validate_parser.set_defaults(func=cmd_validate)
+
+    route_parser = subparsers.add_parser("route", help="compute routing target for /trellis:start")
+    route_parser.add_argument("task_dir", nargs="?", default=None)
+    route_parser.add_argument("--project-root")
+    route_parser.add_argument("--current-task-file")
+    route_parser.set_defaults(func=cmd_route)
+
+    repair_parser = subparsers.add_parser("repair", help="infer and fix missing workflow-state.json")
+    repair_parser.add_argument("task_dir")
+    repair_parser.add_argument("--project-root")
+    repair_parser.add_argument("--apply", action="store_true")
+    repair_parser.set_defaults(func=cmd_repair)
 
     return parser
 

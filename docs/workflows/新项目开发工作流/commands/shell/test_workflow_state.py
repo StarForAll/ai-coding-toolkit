@@ -587,5 +587,220 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertIn("项目级粗估", validate.stdout)
 
 
+    # ------------------------------------------------------------------
+    # route subcommand tests
+    # ------------------------------------------------------------------
+
+    def test_cmd_route_first_entry(self) -> None:
+        """No .current-task, no assessment.md anywhere -> first_entry."""
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        # No .current-task, no assessment.md
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        import json as _json
+        data = _json.loads(result.stdout)
+        self.assertEqual(data["target"], "feasibility")
+        self.assertEqual(data["action"], "first_entry")
+
+    def test_cmd_route_resume_assessment(self) -> None:
+        """No .current-task, but assessment.md exists with brainstorm allowed -> resume_with_assessment."""
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        task_dir = root / ".trellis" / "tasks" / "04-15-sample-task"
+        task_dir.mkdir(parents=True, exist_ok=True)
+        (task_dir / "task.json").write_text('{"status":"planning","children":[]}\n', encoding="utf-8")
+        # Write assessment.md with brainstorm permission
+        (task_dir / "assessment.md").write_text(self.VALID_INTERNAL_ASSESSMENT, encoding="utf-8")
+        # No .current-task file
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        import json as _json
+        data = _json.loads(result.stdout)
+        self.assertEqual(data["target"], "brainstorm")
+        self.assertEqual(data["action"], "resume_with_assessment")
+
+    def test_cmd_route_normal_reenter(self) -> None:
+        """.current-task points to valid leaf task with stage=design, status=in_progress -> reenter."""
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.run_script("init", str(task_dir), "--stage", "design")
+
+        result = self.run_script("route", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        import json as _json
+        data = _json.loads(result.stdout)
+        self.assertEqual(data["target"], "design")
+        self.assertEqual(data["action"], "reenter")
+        self.assertEqual(data["stage"], "design")
+        self.assertEqual(data["stage_status"], "in_progress")
+
+    def test_cmd_route_awaiting_confirmation(self) -> None:
+        """workflow-state has stage_status=awaiting_user_confirmation -> awaiting_confirmation."""
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.run_script("init", str(task_dir), "--stage", "design")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status",
+            "awaiting_user_confirmation",
+            "--awaiting-user-confirmation",
+            "true",
+        )
+
+        result = self.run_script("route", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        import json as _json
+        data = _json.loads(result.stdout)
+        self.assertEqual(data["target"], "design")
+        self.assertEqual(data["action"], "awaiting_confirmation")
+        self.assertEqual(data["stage"], "design")
+        self.assertEqual(data["stage_status"], "awaiting_user_confirmation")
+
+    def test_cmd_route_no_current_task_recovery(self) -> None:
+        """No .current-task, assessment exists but lacks brainstorm permission field -> recovery_needed."""
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        task_dir = root / ".trellis" / "tasks" / "04-15-sample-task"
+        task_dir.mkdir(parents=True, exist_ok=True)
+        (task_dir / "task.json").write_text('{"status":"planning","children":[]}\n', encoding="utf-8")
+        # assessment.md exists but has NO "是否允许进入 brainstorm" line at all
+        (task_dir / "assessment.md").write_text(
+            "# assessment\n- `project_engagement_type`: `non_outsourcing`\n- 法律/合规风险结论：通过\n",
+            encoding="utf-8",
+        )
+        # No .current-task file
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        import json as _json
+        data = _json.loads(result.stdout)
+        self.assertEqual(data["action"], "recovery_needed")
+
+    def test_cmd_route_repair_needed(self) -> None:
+        """.current-task points to task dir without workflow-state.json -> repair_needed."""
+        root, task_dir = self.make_fixture()
+        # Do NOT run init — no workflow-state.json
+
+        result = self.run_script("route", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        import json as _json
+        data = _json.loads(result.stdout)
+        self.assertEqual(data["action"], "repair_needed")
+
+    def test_cmd_route_embed_invalid_when_install_record_exists_without_library_lock(self) -> None:
+        """workflow-installed.json exists but library-lock.yaml is missing -> embed_invalid."""
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text('{"installed":"now"}\n', encoding="utf-8")
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        import json as _json
+        data = _json.loads(result.stdout)
+        self.assertEqual(data["action"], "embed_invalid")
+        self.assertIn(".trellis/library-lock.yaml", data["reason"])
+
+    # ------------------------------------------------------------------
+    # repair subcommand tests
+    # ------------------------------------------------------------------
+
+    def test_cmd_repair_infer_feasibility(self) -> None:
+        """Task dir with no assessment.md -> infer feasibility."""
+        root, task_dir = self.make_fixture()
+        # No assessment.md, no workflow-state.json
+
+        result = self.run_script("repair", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        import json as _json
+        # May output multiple JSON objects; take the first one
+        data = _json.loads(result.stdout.strip().split("\n}")[0] + "\n}")
+        self.assertEqual(data["inferred_stage"], "feasibility")
+
+    def test_cmd_repair_infer_design(self) -> None:
+        """Task dir with assessment.md, customer-facing-prd.md, and design/ dir -> infer design."""
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        # Create design/ dir (without task_plan.md -> should infer design, not plan)
+        (task_dir / "design").mkdir(parents=True, exist_ok=True)
+
+        result = self.run_script("repair", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        import json as _json
+        data = _json.loads(result.stdout.strip().split("\n}")[0] + "\n}")
+        self.assertEqual(data["inferred_stage"], "design")
+
+    def test_cmd_repair_apply(self) -> None:
+        """With --apply flag, should create workflow-state.json."""
+        root, task_dir = self.make_fixture()
+        # No assessment.md -> infer feasibility
+        state_path = task_dir / "workflow-state.json"
+        self.assertFalse(state_path.exists())
+
+        result = self.run_script("repair", str(task_dir), "--project-root", str(root), "--apply")
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertTrue(state_path.exists(), "workflow-state.json should be created after --apply")
+        import json as _json
+        state = _json.loads(state_path.read_text(encoding="utf-8"))
+        self.assertEqual(state["stage"], "feasibility")
+        self.assertEqual(state["version"], 1)
+
+    # ------------------------------------------------------------------
+    # tolerant version handling test
+    # ------------------------------------------------------------------
+
+    def test_tolerant_missing_version(self) -> None:
+        """workflow-state.json without 'version' field -> validate should not fail on version check."""
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        # Init normally, then strip the version field
+        self.run_script("init", str(task_dir), "--stage", "design")
+        state_path = task_dir / "workflow-state.json"
+        import json as _json
+        state = _json.loads(state_path.read_text(encoding="utf-8"))
+        del state["version"]
+        state_path.write_text(_json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
+        self.assertIn("workflow-state 校验通过", validate.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

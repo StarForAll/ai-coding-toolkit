@@ -26,7 +26,7 @@
        Format: feat/fix/docs/refactor/test/chore
 
 6. Final close-out
-   --> python3 ./.trellis/scripts/workflow/record-session-helper.py --title "Title" --commit "hash"
+   --> python3 <WORKFLOW_DIR>/commands/shell/record-session-helper.py --title "Title" --commit "hash"
    --> python3 ./.trellis/scripts/task.py archive <task-name>
    --> record-session runs first, then archive
 ```
@@ -73,7 +73,7 @@ For workflows that split work into a parent coordination task plus child executi
 After the human has tested and committed the code, run the workflow helper first and archive the current task second:
 
 ```bash
-python3 ./.trellis/scripts/workflow/record-session-helper.py \
+python3 <WORKFLOW_DIR>/commands/shell/record-session-helper.py \
   --title "Session Title" \
   --commit "abc1234" \
   --summary "Brief summary"
