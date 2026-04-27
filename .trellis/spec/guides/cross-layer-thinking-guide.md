@@ -58,6 +58,10 @@ trellis-library authoring pattern -> .trellis/spec/library-assets guidance -> co
 source asset -> tool deployment copy -> README / skill instructions -> verification checklist
 ```
 
+```text
+skills/multi-cli-review/SKILL.md -> reviewer report contract -> skills/multi-cli-review-action/SKILL.md -> aggregation / fix flow
+```
+
 For each arrow, ask:
 - What path or identifier is being relied on?
 - What file records the state of this handoff?
@@ -128,6 +132,16 @@ text still describe the old workflow
 
 **Good**: Treat docs and instructions as part of the change surface
 
+### Mistake 3.5: Paired Skill Drift
+
+**Bad**: Updating `skills/multi-cli-review/SKILL.md` or
+`skills/multi-cli-review-action/SKILL.md` alone when the shared multi-reviewer
+protocol changed
+
+**Good**: Treat the reviewer skill and action skill as one contract; if either
+side changes path layout, metadata, protocol naming, or role boundaries, review
+and update the paired skill in the same change
+
 ### Mistake 4: Existence-Only Drift Checks
 
 **Bad**: Treating deployed workflow commands or helper scripts as healthy just
@@ -151,6 +165,7 @@ After implementation:
 - [ ] Verified copied/deployed paths match the intended layout
 - [ ] Verified config/metadata reflects the actual state on disk
 - [ ] Verified related docs/instructions were updated if behavior changed
+- [ ] If `multi-cli-review` or `multi-cli-review-action` changed, verified the paired skill was reviewed and updated when needed
 - [ ] Verified ambiguous paths are labeled as source repo, task runtime, or target project
 - [ ] Verified the relevant command/test path still passes end to end
 - [ ] Verified source-to-target drift detection checks content when the deployment contract depends on exact command/helper text, not just file presence

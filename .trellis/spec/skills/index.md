@@ -24,6 +24,51 @@ skills/
 
 ---
 
+## Coupled Skill Contracts (CRITICAL)
+
+Some skills in this repository form a **single protocol surface** even though
+they live in separate directories.
+
+Current mandatory coupled pair:
+
+- `skills/multi-cli-review/SKILL.md`
+- `skills/multi-cli-review-action/SKILL.md`
+
+These two files must be treated as **one shared contract**:
+
+- reviewer-side report emission contract
+- aggregator-side report intake contract
+- shared path layout under `tmp/multi-cli-review/`
+- shared metadata fields such as `task-id`, `round`, `reviewer-id`, and `protocol`
+- shared role boundaries between reviewer and fixer
+- shared legacy compatibility expectations
+
+### Required Rule
+
+If a change modifies **either** of these files in a way that can affect the
+shared protocol or role boundary, the other file must be reviewed and updated
+in the **same change**.
+
+Do not treat them as independently maintainable when changing:
+
+- path shapes or filenames
+- frontmatter / metadata fields
+- protocol names or protocol selection rules
+- reviewer-id or round handling
+- role boundaries such as "reviewer only" vs "current CLI only"
+- legacy compatibility parameters
+- output artifacts consumed by the paired skill
+
+### Minimum Verification For This Pair
+
+After editing either file:
+
+- confirm whether the paired skill also needs a matching change
+- read both diffs together before finishing
+- verify there is no protocol drift between reviewer output and action-side intake
+
+---
+
 ## Naming Conventions
 
 - **Skill IDs**: Use kebab-case: `demand-risk-assessment`, `code-review-helper`
@@ -221,6 +266,7 @@ npx skills add https://github.com/<owner>/<repo>
 - Forgetting to update version when making changes
 - Not specifying input format → users don't know what to provide
 - Making it tool-specific when it could be generic
+- Updating `multi-cli-review` or `multi-cli-review-action` alone when the shared protocol changed
 
 ---
 

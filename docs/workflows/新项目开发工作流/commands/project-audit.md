@@ -146,12 +146,19 @@ $TASK_DIR/project-audit/reviewer-commands-round-<N>.md
 - 建议优先在 3 轮内收敛；若超过建议轮次，需用户明确要求继续
 - 若当前轮使用双 reviewer，默认生成两条**审查描述相同、`review-focus` 相同、仅 `reviewer-id` 不同**的命令
 - 只有在当前 CLI 明确认定需要角色分工时，才允许为不同 reviewer 编写不同的审查描述或不同的审查重点
+- task-level 标准命令必须显式包含 `--task-dir`、`--reviewer-id`、`--round`
 
 标准命令示例：
 
 ```text
 /multi-cli-review "<project-audit 审查描述>" docs/workflows/新项目开发工作流 --task-dir tmp/multi-cli-review/<task-id>-project-audit --reviewer-id <reviewer-id> --round <N> --review-focus "<审查重点>"
 ```
+
+补充约束：
+
+- reviewer 只允许写入 `tmp/multi-cli-review/<task-id>-project-audit/review-round-<N>/<reviewer-id>.md`
+- reviewer 不得追加 `--output`、`--md-a`、`--md-b` 等参数绕开标准报告路径
+- reviewer 不得写入 `summary-round-<N>.md`、`action.md`、`.processed.json`
 
 然后输出：
 
@@ -199,7 +206,7 @@ $TASK_DIR/project-audit/reviewer-commands-round-<N>.md
 执行阶段可按需要使用：
 
 - `multi-cli-review`：补充执行中的新疑点、边界条件或争议点
-- `multi-cli-review-action`：在用户已确认方案后聚合 reviewer 结论、统一执行修复动作
+- `multi-cli-review-action`：在用户已确认方案后聚合 reviewer 证据、先输出汇总决策，再只对 `adopted` 项执行修复动作
 
 若执行阶段调用了 reviewer / action 能力，过程记录写入：
 
@@ -228,7 +235,10 @@ $TASK_DIR/project-audit/
 └── action-round-<N>.md
 
 tmp/multi-cli-review/<task-id>-project-audit/
-└── review-round-<N>/<reviewer-id>.md
+├── review-round-<N>/<reviewer-id>.md
+├── summary-round-<N>.md   # 如调用 multi-cli-review-action，则由当前 CLI 输出
+├── action.md              # 如调用 multi-cli-review-action，则由当前 CLI 输出
+└── .processed.json        # 如调用 multi-cli-review-action，则由当前 CLI 维护
 ```
 
 清理约定：

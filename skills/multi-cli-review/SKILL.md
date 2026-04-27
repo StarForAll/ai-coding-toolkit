@@ -1,489 +1,388 @@
 ---
 name: multi-cli-review
-description: Use when analyzing a skill, command, workflow, document, or code artifact for problems and outputting a structured defect report, either standalone (legacy protocol) or as part of a multi-reviewer task workflow (new protocol).
+description: Use when a reviewer CLI must analyze a skill, command, workflow, document, config, or code artifact and produce a structured defect report for the current CLI to consume, especially after requests like "分析这个 skill 的问题", "输出结构化问题报告", or "做多 CLI 审查".
 ---
 
 # Multi-CLI Review
 
-## Overview
+## Version History
 
-Multi-CLI Review 是一个多 CLI 协作的问题分析流程，支持两种协议：
+- **v2.1**: Aligned reviewer-side report emission with `multi-cli-review-action`, tightened task-level path rules, and clarified reviewer-only boundaries
 
-1. **旧协议（Legacy）**：单 run-id、单报告，适合单 reviewer 场景
-2. **新协议（Task-Level Multi-Reviewer）**：任务级多 reviewer，适合并行独立审查
+## Purpose
 
-**角色分工**：
-- 其他 CLI：reviewer，只审查不修改代码
-- 当前 CLI：统一修复者，负责汇总建议、执行修复
+`multi-cli-review` is the **reviewer-side** skill paired with `multi-cli-review-action`.
+
+It does one thing:
+
+1. inspect the assigned target conservatively
+2. write one structured reviewer report
+3. hand that report back to the current CLI for aggregation and decisioning
+
+It does **not** edit code, aggregate reports, decide final fixes, or advance workflow state on its own.
 
 ## When to Use
 
-- 需要分析 skill、command、workflow、文档、配置或代码中的问题
-- 需要输出结构化的问题报告（供当前 CLI 后续处理）
-- 需要在多 reviewer 场景下输出独立的审查报告
-- 需要在优化操作后重新分析问题
+Use this skill when any of the following is true:
+
+- another CLI has asked this CLI to review a target and write a report
+- the user asks to "分析这个 skill 的问题"
+- the user asks to "输出结构化问题报告"
+- the user asks to "做多 CLI 审查"
+- a standardized reviewer command package points to `multi-cli-review`
 
 ## When Not to Use
 
-- 只需要澄清需求，不需要结构化问题报告 → 使用 `brainstorm`
-- 只需要对当前 git diff 做代码审查 → 使用 `code-review-router` 或 `requesting-code-review`
-- 只需要直接修改文件，不需要 CLI 分工 → 直接执行实现流程
-
-## Protocol Selection
-
-### 协议优先级
-
-| 优先级 | 条件 | 使用的协议 |
-|--------|------|-----------|
-| 1 | 显式传入 `--task-dir` | **新协议（Task-Level Multi-Reviewer）** |
-| 2 | 显式传入 `--output` 或 `--md-a` | 兼容旧协议（显式路径优先） |
-| 3 | 无显式参数 | **旧协议兜底**（仅适合单 reviewer 场景） |
-
-> ⚠️ **重要**：
-> - 多 reviewer 场景下，**必须显式传入 `--task-dir`**，禁止依赖自动推断或自动生成 task-id。
-> - 新协议的所有报告必须由**当前 CLI（协调者）在启动多 reviewer 任务时统一生成目录结构**，各 reviewer 只负责写入各自报告，不负责创建目录。
-
-### 新协议（Task-Level Multi-Reviewer）
-
-```
-tmp/multi-cli-review/<task-id>/
-  review-round-1/
-    reviewer-a.md    # Reviewer A 的报告
-    reviewer-b.md    # Reviewer B 的报告
-  review-round-2/
-    reviewer-a.md
-    reviewer-c.md
-```
-
-**特点**：
-- 以任务（task-id）为维度组织目录
-- 每个 reviewer 输出独立的 `<reviewer-id>.md`
-- 支持多轮审查（review-round-N）
-- 当前 CLI 负责汇总和修复
-
-### 旧协议（Legacy Single-Reviewer）
-
-```
-tmp/multi-cli-review/<run-id>/
-  cur_defect.md      # 问题分析报告
-  optimize.md        # 优化方案（由 multi-cli-review-action 生成）
-```
-
-**特点**：
-- 以 run-id 为维度组织目录
-- 输出固定文件名 `cur_defect.md`
-- 仅适合单 reviewer 场景
-- **仅作兼容，新场景优先使用新协议**
-
-## Trigger Conditions
-
-以下任一情况都应触发本 skill：
-
-- 显式单独调用：`/multi-cli-review <问题描述> [目标路径] [参数...]`
-- 多 reviewer 模式：`/multi-cli-review <问题描述> [目标路径] --task-dir <任务目录> [--reviewer-id <ID>] [--round <N>]`
-- 组合调用：`$start /multi-cli-review ...`、`/trellis:brainstorm /multi-cli-review ...`
-- 自然语言请求：
-  - "分析这个 skill 在实际使用场景里的问题"
-  - "输出一个结构化问题报告"
-  - "用多 CLI 审查模式分析这个文档"
-
-## Input Parameters
-
-### 通用参数
-
-| 参数 | 必需 | 说明 |
-|------|------|------|
-| `<问题描述>` | 是（首次分析） | 用户提出的问题，贯穿始终 |
-| `[目标路径]` | 否 | 需要分析的目标文件或目录 |
+- you need to aggregate reports or apply fixes: use `multi-cli-review-action`
+- you are doing a normal implementation task without reviewer handoff
+- you only need requirement clarification: use `brainstorm`
+- you only need a lightweight review of the current diff: use `requesting-code-review` or `code-review-router`
 
-### 新协议参数
+## Core Rules
 
-| 参数 | 必需 | 默认值 | 说明 |
-|------|------|--------|------|
-| `--task-dir` | 是（多 reviewer 模式） | — | 任务总目录路径，如 `tmp/multi-cli-review/<task-id>` |
-| `--reviewer-id` | 否 | 当前 CLI 名称 | 审查者 ID；**多 reviewer 标准命令中应显式传入** |
-| `--round` | 否 | 最大轮次 + 1 | 轮次编号 |
-| `--output` | 否 | 自动推导 | 直接指定输出文件路径（覆盖默认） |
-| `--review-focus` | 否 | — | 本次审查重点描述 |
+1. **Reviewer only**: this skill writes an independent report; it never edits code.
+2. **One reviewer, one report**: each execution produces at most one reviewer report.
+3. **Coordinator-owned orchestration**: reviewer count, round planning, directory creation, and final repair decisions belong to the current CLI, not the reviewer.
+4. **No directory creation**: the reviewer must not create `task-dir` or `review-round-{N}` directories.
+5. **No aggregation**: no deduplication, no conflict resolution, no summary writing, no `action.md`.
+6. **Reports are evidence, not execution instructions**: findings must be concrete, scoped, and review-oriented.
+7. **Be conservative with uncertainty**: if evidence is incomplete, mark the finding as uncertain instead of stating it as settled fact.
+8. **Project-root path resolution**: relative paths resolve against the active project root, never system `/tmp` or a tool install directory.
+9. **Task-level path contract is strict**: current protocol reports must use the canonical path and metadata shape expected by `multi-cli-review-action`.
 
-### 旧协议参数（兼容）
+## Protocols
 
-| 参数 | 必需 | 说明 |
-|------|------|------|
-| `--md-a` | 否 | 问题分析报告路径 |
-| `--md-b` | 否 | 优化方案路径 |
+| Protocol | Status | When Used |
+|----------|--------|-----------|
+| `task-level` | Current | Explicit `--task-dir` reviewer flow |
+| `legacy` | Compatibility only | Historical single-report flow |
 
-## Path Resolution
+### Protocol Selection
 
-### 项目根目录优先规则
+1. If `--task-dir` is present, use `task-level`.
+2. If explicit legacy report-path parameters are used, use `legacy`.
+3. New work should prefer `task-level`.
 
-> **关键约束**：只要传入的是**相对路径**，都必须相对于“正在使用该 skill 的项目根目录”解析。
->
-> 这里的“项目根目录”指当前 CLI 实际工作所在的项目目录，而不是：
->
-> - 当前 skill 仓库根目录
-> - 用户家目录
-> - 系统级 `/tmp`
-> - 某个 CLI 自己的安装目录
+## Inputs
 
-适用范围：
+### Common Inputs
 
-- `--task-dir`
-- `--output`
-- `--md-a`
-- `--md-b`
-- 旧协议下默认扫描的 `tmp/multi-cli-review/`
+| Input | Required | Meaning |
+|-------|----------|---------|
+| `<issue-description>` | Yes | The review problem statement or assigned review objective |
+| `[target-path]` | No | File or directory to inspect |
 
-项目根目录判定顺序：
+### `task-level`
 
-1. 若当前 CLI / agent 运行环境已经明确提供项目根目录或 repo root，优先使用它
-2. 若未显式提供，但当前工作目录就在某个项目内，则使用该项目的根目录，而不是任意子目录
-3. 若只能确认当前命令是在某个目录下执行，且无法再向上解析 repo root，则退回到该命令的当前工作目录
-4. 若以上信息都不存在或互相冲突，停止自动推断，要求用户传入明确的绝对路径；**不得**猜成系统 `/tmp` 或用户家目录
+| Parameter | Required | Meaning |
+|-----------|----------|---------|
+| `--task-dir` | Yes | Task directory, for example `tmp/multi-cli-review/<task-id>` |
+| `--reviewer-id` | Should be explicit | Reviewer identity used for filename and metadata |
+| `--round` | Should be explicit | Review round identifier |
+| `--review-focus` | No | Focus area for this reviewer |
 
-示例：
+Rules:
 
-- 若在项目 `my-app/` 中执行 `--task-dir tmp/multi-cli-review/task-a`
-  - 实际目录应理解为 `my-app/tmp/multi-cli-review/task-a`
-  - **不是** `/tmp/multi-cli-review/task-a`
-  - **不是** `<当前 skill 所在仓库>/tmp/multi-cli-review/task-a`
+- In a standardized multi-reviewer command package, `--reviewer-id` and `--round` should be explicit.
+- Do not improvise a new `task-id`, a new round, or a new reviewer identity when the coordinator already issued a concrete command.
+- `--output` is **not** part of the current `task-level` protocol and must not be used to bypass the canonical reviewer report path.
 
-### 新协议路径解析
+### `legacy` Compatibility
 
-> **前提**：新协议必须由当前 CLI（协调者）在启动多 reviewer 任务时通过 `--task-dir` 明确指定目录。
-> Reviewer 端**不负责**创建目录，只负责写入报告文件。
+| Parameter | Required | Meaning |
+|-----------|----------|---------|
+| `--md-a` | No | Explicit legacy report path |
+| `--md-b` | No | Historical paired artifact path from older flows |
+| `--output` | No | Explicit compatibility output path for legacy single-report usage only |
 
-1. **显式 `--task-dir` + `--reviewer-id`**：
-   - 若 `--task-dir` 是相对路径：先按“调用该 skill 的项目根目录”解析
-   - 输出路径：`{task-dir}/review-round-{N}/{reviewer-id}.md`
-   - 轮次 N：若未指定，默认取最大轮次 + 1
-   - 若 `{task-dir}/review-round-{N}/` 目录不存在 → **报错**，要求协调者重新传入正确的 `--task-dir`
+Compatibility rules:
 
-2. **显式 `--output`**：
-   - 若 `--output` 是绝对路径：直接使用
-   - 若 `--output` 是相对路径：按“调用该 skill 的项目根目录”解析
-   - 不允许把相对 `--output` 默认为用户目录或系统 `/tmp`
+- Legacy parameters are retained only for older single-report flows.
+- They must not redefine the output location of the current `task-level` protocol.
 
-### 旧协议路径解析（兼容）
+## Path Rules
 
-1. 显式 `--md-a`：
-   - 绝对路径：直接使用
-   - 相对路径：按“调用该 skill 的项目根目录”解析
-2. 只传 `--md-b`：
-   - 先按相同规则解析 `--md-b`
-   - 再根据其同级目录推导 `cur_defect.md`
-3. 两者都未传：
-   - 扫描 `<project-root>/tmp/multi-cli-review/` 下已有数字目录
-   - 取最大 + 1，输出 `<project-root>/tmp/multi-cli-review/<run-id>/cur_defect.md`
+Relative paths must resolve against the active project root.
 
-> ⚠️ **无显式参数兜底规则**：不传入任何定位参数时，仅走旧协议并输出 `cur_defect.md`。
-> **严禁**在无显式 `--task-dir` 时自动生成 `task-{时间戳}` 目录并使用新协议格式。
-> **严禁**把旧协议兜底目录解释成系统 `/tmp/multi-cli-review/`。
+Do not reinterpret relative paths as:
 
-## Reviewer ID Rules
+- the skill repository root
+- the user home directory
+- system `/tmp`
+- a CLI installation directory
 
-> 本章节集中定义 reviewer-id 的所有规则。
+If project root detection is ambiguous, stop and ask for an absolute path instead of guessing.
 
-### 显式优先
+## Coordinator-Owned Parameters
 
-- 显式传入 `--reviewer-id` 时，具有最高优先级，不可被覆盖
-- **多 reviewer 标准命令中，`--reviewer-id` 应显式传入**，以确保各 reviewer 使用一致的 ID
+The reviewer must treat the following as coordinator-owned:
 
-### 默认值回退规则
+- creation of `tmp/multi-cli-review/<task-id>/`
+- creation of `review-round-{N}/`
+- default reviewer count
+- standard reviewer command generation
+- final aggregation, confirmation, repair, and verification
 
-- 若未显式传入 `--reviewer-id`，回退到**当前 CLI 名称**
-- 默认回退仅适合单 reviewer 或 ad-hoc 场景；多 reviewer 协作中应显式指定
+This skill only fulfills the assigned review role inside that envelope.
 
-### 文件命名
+## Task-Level Report Emission Contract
 
-- 输出文件名固定为 `{reviewer-id}.md`
-- 不得使用其他文件名（如 `cur_defect.md`）
+For `task-level`, the reviewer report must satisfy **all** of the following:
 
-### 轮次一致性
-
-- 同一 reviewer 在多轮审查中应使用**相同的 reviewer-id**
-- 不允许同一 reviewer 使用不同 ID（如第一轮用 `codex`，第二轮用 `claude`）
-
-### 冲突处理
-
-- 若输出文件 `{reviewer-id}.md` 已存在，**必须报错**，要求确认：
-  ```
-  ❌ 文件已存在：{path}
-
-  请选择：
-  1. 使用 --overwrite 覆盖
-  2. 使用不同的 --reviewer-id
-  ```
-- 禁止静默覆盖已有报告
-
-### 来源标识
-
-- 报告元数据中的 `reviewer-id` 必须与文件名一致
-- 用于后续 `multi-cli-review-action` 按 reviewer-id 识别来源
-
-## Output Files
-
-### 新协议输出格式
-
-**文件名**：`{reviewer-id}.md`
-
-```markdown
----
-task-id: <任务标识>
-round: <轮次>
-reviewer-id: <审查者 ID>
-source-cli: <CLI 名称>
-review-time: <ISO 8601 时间>
-review-focus: <本次审查重点>
-protocol: task-level
----
-
-# 缺陷分析报告
-
-## 审查概要
-
-- **审查者**：[reviewer-id]
-- **审查时间**：[review-time]
-- **审查重点**：[review-focus]
-- **目标**：[目标路径]
-
-## 分析结果
-
-### 问题 1：[问题标题]
-
-- **位置**：文件路径 + 行号范围
-- **问题描述**：具体是什么问题
-- **严重程度**：🔴 高 / 🟡 中 / 🟢 低
-- **影响范围**：[具体影响什么]
-- **必须解决原因**：说明为什么必须解决
-- **建议修复方向**：具体的修复建议
-
-### 问题 2：...
-
-## 审查状态
-
-- **审查者**：[reviewer-id]
-- **审查时间**：[review-time]
-- **协议版本**：task-level-v1
-```
-
-### 旧协议输出格式（兼容）
-
-```markdown
-# 问题分析报告
-
-## 问题描述
-<用户输入的问题描述，贯穿始终>
-
-## 分析结果
-### 问题 1：[问题标题]
-- **位置**：文件路径 + 行号范围
-- **问题描述**：具体是什么问题
-- **严重程度**：高/中/低
-- **影响范围**：[具体影响什么]
-- **必须解决原因**：（仅对未解决的问题）说明为什么 CLI 2 必须解决
-
-## 迭代状态
-- 当前迭代次数：1
-- 上次分析时间：2026-03-20
-- 当前运行目录：<project-root>/tmp/multi-cli-review/<run-id>/
-- 协议版本：legacy
-```
+1. The output file path is exactly `{task-dir}/review-round-{N}/{reviewer-id}.md`
+2. The basename is exactly `<reviewer-id>.md`
+3. The reviewer does not redirect the report elsewhere with `--output`
+4. The round directory already exists; if it does not, stop and ask the coordinator to create it
+5. The frontmatter includes:
+   - `task-id`
+   - `round`
+   - `reviewer-id`
+   - `source-cli`
+   - `review-time`
+   - `review-focus`
+   - `protocol: task-level`
+6. Frontmatter values match the directory and filename
+7. If the target file already exists, stop and ask whether the coordinator intends an overwrite or a different reviewer id
+
+## Report Content Contract
+
+Each task-level finding should contain:
+
+- location
+- problem description
+- severity
+- impact
+- why it matters
+- suggested fix direction
+
+Optional but recommended when evidence is incomplete:
+
+- evidence note
+- uncertainty note
+
+Safety rules:
+
+- keep observations separate from proposed fix directions
+- do not pretend the fix is already approved
+- do not turn uncertainty into a high-severity claim without evidence
+- do not expand beyond the assigned review focus just because adjacent issues look interesting
 
 ## Workflow
 
-### 新协议：任务级多 Reviewer 模式
+### Step 1: Resolve Mode and Inputs
 
-**推荐触发方式**：`/multi-cli-review <问题描述> --task-dir tmp/multi-cli-review/{task-id} --reviewer-id {reviewer-id} [--round <N>]`
+1. Determine whether this run is `task-level` or `legacy`.
+2. Resolve relative paths against the active project root.
+3. Identify the assigned review target and review focus.
 
-**执行流程**：
+### Step 2: Validate Reviewer Context
 
-1. **解析参数**：
-   - 确认 `--task-dir` 和 `--reviewer-id`
-   - 确定轮次（显式优先，自动递增兜底）
+For `task-level`:
 
-2. **检查目录存在性**：
-   - 确认 `{task-dir}/review-round-{N}/` 目录是否存在
-   - **不存在则报错**，提示协调者应先创建任务目录；reviewer 不负责创建目录
+1. confirm `--task-dir`
+2. confirm `--reviewer-id`
+3. confirm `--round`
+4. confirm `{task-dir}/review-round-{N}/` already exists
+5. confirm the target output file does not already contain another reviewer report unless overwrite was explicitly requested
 
-3. **分析问题**：
-   - 分析目标文件或目标目录
-   - 识别问题，按格式输出
+Stop if:
 
-4. **写入报告**：
-   - 写入 `{task-dir}/review-round-{N}/{reviewer-id}.md`
-   - 包含完整的元数据
+- `task-dir` is missing
+- the round directory does not exist
+- the report path would be ambiguous
+- the command tries to use `--output` to write outside the canonical path
 
-5. **回显执行结果**：
-   ```
-   ✅ 多 CLI 审查报告已生成
+### Step 3: Review Conservatively
 
-   📁 task-dir: <project-root>/tmp/multi-cli-review/{task-id}
-   🔄 round: {N}
-   👤 reviewer-id: {reviewer-id}
-   📄 输出文件: <project-root>/tmp/multi-cli-review/{task-id}/review-round-{N}/{reviewer-id}.md
-   ```
+1. Inspect only the assigned target and its direct evidence.
+2. Follow `review-focus` when provided.
+3. Keep findings concrete and bounded.
+4. If you cannot support a claim from the available evidence, either lower confidence or omit it.
 
-### 旧协议：单 Reviewer 模式（兼容）
+### Step 4: Write Exactly One Reviewer Report
 
-**推荐触发方式**：`/multi-cli-review <问题描述> [目标路径] [--md-a <路径>]`
+For `task-level`:
 
-**执行流程**：
+1. write the report to `{task-dir}/review-round-{N}/{reviewer-id}.md`
+2. include the full frontmatter contract
+3. include structured findings
+4. do not write `summary-round-{N}.md`
+5. do not write `action.md`
+6. do not update `.processed.json`
 
-1. **确定输出路径**
-2. **分析问题**
-3. **输出问题报告**
-4. **回显实际路径**
+For `legacy`:
+
+1. write only the legacy single-report artifact
+2. do not silently upgrade the flow into `task-level`
+
+### Step 5: Echo the Actual Output
+
+At the end of execution, echo:
+
+- task-dir or legacy run directory
+- round
+- reviewer-id
+- actual output path
+
+### Step 6: Stop
+
+After writing the report and echoing the path, stop.
+
+Do not:
+
+- propose that the workflow has already advanced
+- mark fixes as executed
+- claim verification has already happened
+
+## Output Files
+
+### `task-level` Reviewer Report
+
+Canonical filename: `{reviewer-id}.md`
+
+Minimum structure:
+
+```markdown
+---
+task-id: <task-id>
+round: <round>
+reviewer-id: <reviewer-id>
+source-cli: <cli-name>
+review-time: <ISO 8601 time>
+review-focus: <focus text>
+protocol: task-level
+---
+
+# Defect Report
+
+## Review Summary
+
+- Reviewer: <reviewer-id>
+- Review Time: <review-time>
+- Review Focus: <review-focus>
+- Target: <target-path>
+
+## Findings
+
+### Finding 1: <title>
+
+- Location: <path and lines>
+- Problem: <concrete issue>
+- Severity: high | medium | low
+- Impact: <why this matters>
+- Why It Should Be Addressed: <reason>
+- Suggested Fix Direction: <proposal, not an approved action>
+- Evidence: <optional>
+- Uncertainty: <optional>
+```
+
+### `legacy` Compatibility Report
+
+Canonical filename: `cur_defect.md`
+
+Legacy mode may still emit a single compatibility report, but it should not be treated as the preferred path for new multi-reviewer work.
 
 ## Echo Requirements
 
-**每次执行结束时，必须回显以下信息**：
+At minimum, echo:
 
-| 字段 | 说明 |
-|------|------|
-| `task-dir` | 任务总目录路径（新协议）或 run 目录（旧协议） |
-| `round` | 当前轮次编号 |
-| `reviewer-id` | 实际使用的审查者 ID |
-| `output-path` | 实际输出文件路径 |
+| Field | Meaning |
+|-------|---------|
+| `task-dir` | task root or legacy run root |
+| `round` | current round |
+| `reviewer-id` | actual reviewer identity used |
+| `output-path` | actual emitted report path |
 
-**格式示例**：
-```
-✅ 审查报告已生成
+Example:
+
+```text
+✅ Review report generated
 
 📁 task-dir: <project-root>/tmp/multi-cli-review/my-task
-🔄 round: 2
-👤 reviewer-id: claude-code
-📄 输出文件: <project-root>/tmp/multi-cli-review/my-task/review-round-2/claude-code.md
+🔄 round: 1
+👤 reviewer-id: codex
+📄 output-path: <project-root>/tmp/multi-cli-review/my-task/review-round-1/codex.md
 ```
 
-## Iteration Rules
+## Required Stop Conditions
 
-### 新协议多轮审查
+Stop and ask for clarification when any of the following is true:
 
-- **最大轮次**：3 轮
-- **轮次自动递增**：未指定 `--round` 时，默认取最大轮次 + 1
-- **提前关闭**：当前轮所有 reviewer 均未产出新的可执行修复建议时，可提前结束
-
-### 旧协议迭代
-
-- **最大迭代次数**：5 次
-- **状态标记**：
-  - `pending`：等待用户确认
-  - `completed`：已完成本轮操作
-  - `blocked`：被阻塞
-  - `abandoned`：用户选择终止
+- the task directory is missing
+- the round directory is missing
+- the command does not specify enough information to derive one canonical report path
+- the canonical report file already exists
+- the coordinator appears to expect this reviewer to create directories
+- the command expects the reviewer to edit code or aggregate reports
 
 ## Error Handling
 
-### 目录不存在
-
-- **报错并停止**
-- 明确提示：应由协调者先创建 `{task-dir}/review-round-{N}/`
-- reviewer **不得**擅自创建目录结构
-
-### 旧协议兜底警告
-
-- 旧协议仅作兼容，新场景应使用新协议
-- 显式提示建议迁移到新协议
+| Case | Required Behavior |
+|------|-------------------|
+| missing `task-dir` | stop and ask for the task-level directory |
+| missing round directory | stop and ask the coordinator to create it |
+| ambiguous project root | stop and ask for an absolute path |
+| existing report file | stop and ask whether to overwrite or change reviewer id |
+| attempted `--output` override in `task-level` mode | reject it and use or request the canonical path |
+| insufficient evidence for a strong claim | lower confidence, mark uncertainty, or omit the finding |
+| request to modify code | refuse; reviewer only writes the report |
 
 ## Common Mistakes
 
-### ❌ 省略元数据
-
-- 问题：输出报告缺少 `task-id`、`round`、`reviewer-id` 等字段
-- 后果：汇总阶段无法识别来源
-- 正确做法：新协议必须包含完整元数据
-
-### ❌ 不回显执行信息
-
-- 问题：生成文件后没有说明实际写入位置
-- 后果：当前 CLI 无法定位报告
-- 正确做法：每次执行末尾都回显 task-dir、round、reviewer-id、output-path
-
-### ❌ 承担聚合职责
-
-- 问题：在 review 阶段做去重、汇总
-- 后果：与 multi-cli-review-action 职责重叠
-- 正确做法：只负责产出当前 reviewer 的独立报告
-
-## Tips
-
-1. **新协议优先**：多 reviewer 场景默认使用 `--task-dir` 模式
-2. **回显解析后的真实路径**：让协调者能看到最终落盘位置，而不是只看到原始参数
-3. **review-focus 要明确**：帮助其他 reviewer 理解本次审查侧重点
-4. **保留"必须解决原因"**：这是后续聚合和决策的重要依据
-5. **保留"建议修复方向"**：包含具体的修复建议，不只是问题描述
+- **Editing code instead of reporting**: this skill is reviewer-only.
+- **Creating directories**: the coordinator owns directory creation.
+- **Bypassing the canonical path with `--output`**: current protocol reports must land where `multi-cli-review-action` expects them.
+- **Emitting incomplete frontmatter**: action-side consumption depends on consistent metadata.
+- **Overwriting an existing reviewer report silently**: stop and ask.
+- **Doing aggregation inside the reviewer report**: deduplication and conflicts belong to `multi-cli-review-action`.
+- **Treating guesses as facts**: uncertain findings should be labeled or omitted.
 
 ## Examples
 
-### 示例 1：新协议单 Reviewer
+### Example 1: Standard Reviewer Command
 
 ```text
-用户：/multi-cli-review 分析 skills/multi-cli-review 存在的问题 --task-dir tmp/multi-cli-review/skill-review --reviewer-id codex
+用户：/multi-cli-review "分析 skills/multi-cli-review 的问题" skills/multi-cli-review --task-dir tmp/multi-cli-review/skill-review --reviewer-id codex --round 1 --review-focus "边界条件与协议漂移"
 
 CLI Reviewer：
-1. 解析参数：task-dir=tmp/multi-cli-review/skill-review, reviewer-id=codex, round=1
-2. 先按当前项目根目录解析 `tmp/multi-cli-review/skill-review`
-3. 检查目录存在性：确认 `<project-root>/tmp/multi-cli-review/skill-review/review-round-1/` 存在（如不存在则报错）
-4. 分析问题
-5. 写入报告
-6. 回显执行结果
-
-✅ 审查报告已生成
-
-📁 task-dir: <project-root>/tmp/multi-cli-review/skill-review
-🔄 round: 1
-👤 reviewer-id: codex
-📄 输出文件: <project-root>/tmp/multi-cli-review/skill-review/review-round-1/codex.md
+1. 解析 task-dir、reviewer-id、round、review-focus
+2. 按项目根目录解析 task-dir
+3. 确认 <project-root>/tmp/multi-cli-review/skill-review/review-round-1/ 已存在
+4. 分析目标并写入报告
+5. 回显实际输出路径
 ```
 
-### 示例 2：新协议多 Reviewer
+### Example 2: Missing Round Directory
 
 ```text
-用户（CLI 1）：/multi-cli-review 分析 skills/multi-cli-review 存在的问题 --task-dir tmp/multi-cli-review/skill-review --reviewer-id gemini
+CLI Reviewer：
+❌ review-round-2 directory is missing:
+<project-root>/tmp/multi-cli-review/skill-review/review-round-2/
 
-CLI Reviewer（Gemini）：
-分析完成，写入 <project-root>/tmp/multi-cli-review/skill-review/review-round-1/gemini.md
-
-用户（CLI 1）：/multi-cli-review 分析 skills/multi-cli-review 存在的问题 --task-dir tmp/multi-cli-review/skill-review --reviewer-id claude
-
-CLI Reviewer（Claude）：
-分析完成，写入 <project-root>/tmp/multi-cli-review/skill-review/review-round-1/claude.md
-
-当前 CLI（CLI 1）使用 multi-cli-review-action 汇总两份报告，执行修复
+Reviewer must not create directories.
+Ask the coordinator to create the round directory and resend the command.
 ```
 
-### 示例 3：旧协议兼容
+### Example 3: Legacy Compatibility
 
 ```text
-用户：/multi-cli-review 分析 ./docs/api.md
+用户：/multi-cli-review "分析 ./docs/api.md 的问题" ./docs/api.md --md-a tmp/multi-cli-review/4/cur_defect.md
 
-CLI：
-1. 扫描 <project-root>/tmp/multi-cli-review/，发现已有 run-id=3
-2. 使用 run-id=4
-3. 输出到 <project-root>/tmp/multi-cli-review/4/cur_defect.md
-4. 回显路径
+CLI Reviewer：
+1. 进入 legacy compatibility mode
+2. 写入 cur_defect.md
+3. 回显实际路径
+4. 不自动升级为 task-level
 ```
 
 ## Related Skills
 
-- `multi-cli-review-action`：当前 CLI，负责汇总多个 reviewer 报告并执行修复
-- `brainstorm`：澄清问题边界
-- `requesting-code-review`：轻量级代码审查
+- `multi-cli-review-action`: current CLI aggregation and fix execution
+- `brainstorm`: requirement clarification before review
+- `requesting-code-review`: lightweight review path when multi-reviewer protocol is unnecessary
 
-## Protocol Migration Guide
+## Compatibility Notes
 
-### 从旧协议迁移到新协议
-
-| 旧协议 | 新协议 |
-|--------|--------|
-| `tmp/multi-cli-review/{run-id}/cur_defect.md` | `{task-dir}/review-round-{N}/{reviewer-id}.md` |
-| run-id 自动递增 | task-id + round 组合 |
-| 固定 `cur_defect.md` | `{reviewer-id}.md` |
-| CLI 2 生成 `optimize.md` | 当前 CLI 生成 `summary-round-{N}.md` + `action.md` |
-
-### 兼容性说明
-
-- 旧协议参数（`--md-a`、`--md-b`）仍然支持
-- 旧协议输出文件格式（无元数据）仍然支持
-- 新场景**强烈建议使用新协议**
+- New multi-reviewer work should always prefer `task-level` with explicit `--task-dir`, `--reviewer-id`, and `--round`.
+- Legacy `--md-a`, `--md-b`, and `--output` remain compatibility-only and must not redefine the current task-level report contract.
+- If the coordinator already generated a standardized reviewer command, follow that command exactly instead of improvising paths, file names, or round numbers.
