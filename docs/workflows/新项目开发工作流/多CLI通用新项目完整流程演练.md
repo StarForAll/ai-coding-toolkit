@@ -252,7 +252,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 目标
 
-先按 task-first 建立或更新 `prd.md` 工作底稿，自动读取上下文并在必要时 research-first；然后确认需求描述是否准确，统一做 `L0/L1/L2` 分类；离开 brainstorm 前必须先补齐不可跳过的项目级粗估：`task_dir/prd.md` 中的 `## 项目级粗估` 与 `customer-facing-prd.md` 中的 `## 项目级粗估摘要`；进入 design 前至少需补齐 `customer-facing-prd.md`，`developer-facing-prd.md` 等到 design 阶段技术架构确认后再正式生成；`L0` 单任务闭环可只保留 `prd.md` 轻量基线，但仍不能跳过粗估。若 research-first 之后只剩一个可信方向，必须明确写“当前无可比方案”与原因，不要为了凑流程伪造方案对比。
+先按 task-first 建立或更新 `prd.md` 工作底稿，自动读取上下文并在必要时 research-first；然后确认需求描述是否准确，统一做 `L0/L1/L2` 分类；离开 brainstorm 前必须先补齐不可跳过的项目级粗估：`task_dir/prd.md` 中的 `## 项目级粗估` 与 `customer-facing-prd.md` 中的 `## 项目级粗估摘要`；进入 design 前至少需补齐 `customer-facing-prd.md`，`developer-facing-prd.md` 等到 design 阶段技术架构确认后再正式生成；`L0` 单任务闭环可只保留 `prd.md` 轻量基线，但仍不能跳过粗估。若 research-first 之后只剩一个可信方向，必须明确写“当前无可比方案”与原因，不要为了凑流程伪造方案对比。离开本阶段前，`prd.md` 还应补齐 `## 阶段出口快照`，至少记录 UI lane 判定、跨平台范围、粗估刷新结果、kill criteria 与未解决项；这组字段当前主要用于文档与人工复核，不是 `workflow-state.py` 的逐字段脚本硬门禁。
 
 ### CLI 入口差异
 
@@ -303,6 +303,13 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 若走 `L1/L2 -> design` 路径，`customer-facing-prd.md` 已补齐 `## 项目级粗估摘要`
 - 若走 `L0 -> start` / `test-first` 路径，则 `customer-facing-prd.md` 不强制，但 `task_dir/prd.md` 中的项目级粗估仍不可跳过
 - `developer-facing-prd.md` 不在此时强制生成；它等到 design 阶段技术架构确认后再正式落盘
+- `task_dir/prd.md` 的 `## 阶段出口快照` 已明确：
+  - `complexity_decision`
+  - `ui_lane_decision`
+  - `cross_platform_scope`
+  - `estimate_refresh_result`
+  - `kill_criteria`
+  - `open_items`
 - 已决定走 `design`、`plan` 还是极小任务直进 `start`
 - 若下一步进入 `design`，已明确会在 `design -> 3.7` 把 `sonar-scanner` 纳入项目自动化检查矩阵
 - 已进入“等待用户确认是否切换阶段”的状态，而不是自动跳转
@@ -372,6 +379,11 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
   - `design/ODD-dev.md`
   - `design/ODD-user.md`
   - 项目根 `README.md`（最低可用版）
+- `design/TAD.md` 在退出前至少补齐：
+  - `## 架构冻结清单`
+  - `## 系统边界与外部依赖`
+  - `## 风险与回退`
+  - `## 阶段出口快照`
 - 设计阶段条件必选：
   - `design/DDD.md`
   - `design/IDD.md`
@@ -429,6 +441,8 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 已完成 `DDD.md` / `IDD.md` / `AID.md` / `STITCH-PROMPT.md` 的条件判定；凡判定涉及者，已在当前阶段直接细化
 - 自动化检查矩阵已明确，且已包含明确质量平台门禁（采用 Sonar 的项目必须写真实命令，未采用时必须写替代门禁和原因）
 - `finish-work` / `record-session` 的项目化基线已定
+- `design-export.py --validate` 已通过，且 `TAD.md` 不再只是空壳标题
+- `workflow-state.py validate` 已通过，并确认 `developer-facing-prd.md` 与项目根 `README.md` 已到位
 - 已完成 design 退出检查，且用户已明确确认允许进入 plan
 
 ---
@@ -473,6 +487,13 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 生产权限移交
 - 最终控制权移交
 
+此外，`task_plan.md` 不再只写主链和门禁摘要；离开 plan 前还要显式补齐：
+
+- `## 早期探针与骨架任务`
+- `## 自动化策略摘要`
+- `## 范围收敛与降级预案`
+- `## 阶段出口快照`
+
 ### 退出门禁
 
 - `task_plan.md` 摘要已形成
@@ -484,6 +505,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 已明确当前要执行的叶子 task，并把状态停在“等待用户确认是否进入 implementation/test-first”
 - 进入 `implementation` / `test-first` 前，必须通过 `workflow-state` 显式设置 `checkpoints.execution_authorized = true`，并记录 `last_confirmed_transition`
 - `plan` 阶段未生成基础代码、未编写实现代码、未直接执行任何具体 task
+- `plan-validate.py` 已通过，且 `task_plan.md` 中的 walking skeleton / packaging skeleton / performance probe / CI 边界 / P1 降级候选 已明确
 
 ---
 

@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 import unicodedata
 from pathlib import Path
@@ -22,8 +23,12 @@ REQUIRED_SECTIONS = [
     "Trellis Task 清单",
     "当前推荐执行任务（待确认）",
     "依赖关系",
+    "早期探针与骨架任务",
+    "自动化策略摘要",
+    "范围收敛与降级预案",
     "门禁摘要",
     "任务图摘要",
+    "阶段出口快照",
 ]
 OPTIONAL_SECTIONS = {"外部项目交付控制（如适用）"}
 REQUIRED_TASK_COLUMNS = ["任务路径", "类型", "项目域", "说明"]
@@ -44,6 +49,10 @@ LEAF_PRD_REQUIRED_SECTIONS = (
     ("Acceptance Anchors", "验收锚点"),
     ("Preferred CLI", "推荐主执行 CLI"),
 )
+EARLY_PROBE_FIELDS = ("`walking_skeleton_or_smoke`", "`packaging_skeleton`", "`performance_probe`")
+AUTOMATION_FIELDS = ("`ci_strategy`", "`local_vs_ci_boundary`")
+SCOPE_FIELDS = ("`kill_criteria`", "`p1_downgrade_candidates`")
+EXIT_SNAPSHOT_FIELDS = ("`frozen_lanes`", "`current_recommended_task`", "`open_blockers`", "`reopen_conditions`")
 
 
 def print_result(ok: bool, success: str, failure: str) -> int:
@@ -154,6 +163,27 @@ def has_meaningful_section_content(section_lines: list[str]) -> bool:
     return any(line and not is_placeholder_like(line) for line in meaningful_lines)
 
 
+def section_text(section_lines: list[str]) -> str:
+    return "\n".join(section_lines)
+
+
+def validate_structured_fields(section_lines: list[str], fields: tuple[str, ...], section_title: str) -> tuple[bool, str]:
+    text = section_text(section_lines)
+    missing_fields = [field for field in fields if field not in text]
+    if missing_fields:
+        return False, f"{section_title} 缺少结构化字段: {', '.join(missing_fields)}"
+
+    invalid_fields: list[str] = []
+    for field in fields:
+        pattern = rf"{re.escape(field)}\s*[：:]\s*(.+)"
+        match = re.search(pattern, text)
+        if not match or is_placeholder_like(match.group(1)):
+            invalid_fields.append(field)
+    if invalid_fields:
+        return False, f"{section_title} 存在空值或占位内容: {', '.join(invalid_fields)}"
+    return True, f"{section_title} 结构化字段完整"
+
+
 def validate_leaf_prd(prd_path: Path) -> tuple[bool, str]:
     if not prd_path.is_file():
         return False, "当前推荐执行任务对应 leaf task 缺少最小 prd.md"
@@ -254,6 +284,58 @@ def main() -> int:
         has_task_card,
         "当前推荐执行任务说明卡已完整填写",
         "当前推荐执行任务（待确认）缺少任务说明卡字段（任务路径/任务标题/本轮目标/本轮不做/前置依赖/验收锚点/风险提醒/推荐主执行 CLI）",
+    )
+
+    early_probe_section = find_section_lines(lines, "早期探针与骨架任务")
+    early_probe_ok, early_probe_message = validate_structured_fields(
+        early_probe_section,
+        EARLY_PROBE_FIELDS,
+        "早期探针与骨架任务",
+    )
+    checks += 1
+    passed += print_result(
+        early_probe_ok,
+        "早期探针与骨架任务已写清 smoke / 打包骨架 / 性能探针",
+        early_probe_message,
+    )
+
+    automation_section = find_section_lines(lines, "自动化策略摘要")
+    automation_ok, automation_message = validate_structured_fields(
+        automation_section,
+        AUTOMATION_FIELDS,
+        "自动化策略摘要",
+    )
+    checks += 1
+    passed += print_result(
+        automation_ok,
+        "自动化策略摘要已写清 CI 方案与本地/CI 边界",
+        automation_message,
+    )
+
+    scope_section = find_section_lines(lines, "范围收敛与降级预案")
+    scope_ok, scope_message = validate_structured_fields(
+        scope_section,
+        SCOPE_FIELDS,
+        "范围收敛与降级预案",
+    )
+    checks += 1
+    passed += print_result(
+        scope_ok,
+        "范围收敛与降级预案已写清 kill criteria 与 P1 降级候选",
+        scope_message,
+    )
+
+    exit_snapshot_section = find_section_lines(lines, "阶段出口快照")
+    exit_snapshot_ok, exit_snapshot_message = validate_structured_fields(
+        exit_snapshot_section,
+        EXIT_SNAPSHOT_FIELDS,
+        "阶段出口快照",
+    )
+    checks += 1
+    passed += print_result(
+        exit_snapshot_ok,
+        "阶段出口快照已写清冻结 lanes、阻断项与 reopen 条件",
+        exit_snapshot_message,
     )
 
     recommended_task_path = extract_task_card_value(task_card_lines, "任务路径")

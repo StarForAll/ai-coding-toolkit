@@ -1,0 +1,12 @@
+cd $ops/project/work
+mkcd 项目名称
+git init
+git remote add origin git@gitee.com:AllstarsBelongToMe/项目名称.git
+git remote set-url --add --push origin git@gitee.com:AllstarsBelongToMe/项目名称.git
+git remote set-url --add --push origin git@github.com:StarForAll/项目名称.git
+git remote -v
+trellis init --claude --opencode --codex -y -u xzc
+
+# 使用以下语句在cli中输入---嵌入工作流
+严格读取 /ops/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/工作流嵌入执行规范.md ，根据该文件中的状态判定和标准执行顺序，将 /ops/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流 对应的 workflow 嵌入当前项目。先执行 detect-embed-state.py；只有当状态为 INITIAL_BASELINE_READY 时才继续正式嵌入；若不是该状态，则停止并说明原因。
+

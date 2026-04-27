@@ -225,6 +225,10 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 - 若 task 超出单上下文预算，继续拆子 task
 - 若 task 的输出会改变下一个 task 的实现前提，必须串行，不要伪装并行
 - 若多个项目域彼此独立，可分别建立 lane，但 lane 内不自动续跑
+- 在真正进入模块 lane 前，优先前置这些横切 task 或等价探针：
+  - `walking skeleton / smoke`：尽早跑通一条最短主链，验证前后端/模块契约是否闭环
+  - `packaging skeleton`：凡是存在打包 / 分发 / 原生壳风险的项目，都应尽早产出最小骨架，而不是等所有模块完成后再第一次构建
+  - `performance probe`：凡是存在体积、启动时间、内存或关键性能指标的项目，都应尽早产出 baseline / canary 测量
 - 若项目包含前端视觉落地链路，必须额外拆出一个独立 task：`UI -> 首版代码界面`
   - 该 task 只负责把已确认 UI 原型落成第一版代码界面
   - 该 task **禁止**使用 Codex 作为主执行器，必须改用 Claude Code / OpenCode
@@ -251,8 +255,12 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 ## Trellis Task 清单
 ## 当前推荐执行任务（待确认）
 ## 依赖关系
+## 早期探针与骨架任务
+## 自动化策略摘要
+## 范围收敛与降级预案
 ## 门禁摘要
 ## 任务图摘要
+## 阶段出口快照
 ## 外部项目交付控制（如适用）
 ```
 
@@ -261,8 +269,12 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 - `Trellis Task 清单`：列出现实存在的 task / child task / project-audit task
 - `当前推荐执行任务（待确认）`：输出当前准备进入 implementation / test-first 的叶子 task 说明卡，至少写清任务路径、任务标题、本轮目标、本轮不做、前置依赖、验收锚点、风险提醒、推荐主执行 CLI；且该 leaf task 目录至少已补齐最小 `prd.md`
 - `依赖关系`：只描述依赖和顺序，不写实时状态
+- `早期探针与骨架任务`：明确 walking skeleton / smoke、packaging skeleton、performance probe 的前置安排；不适用时写 `not_applicable` + 原因
+- `自动化策略摘要`：明确 CI 方案与“本地跑什么 / CI 跑什么”的边界
+- `范围收敛与降级预案`：明确 kill criteria 与 `P1` 降级候选，不默认把全部范围都推进 implementation
 - `门禁摘要`：只写项目级全局门禁；task 级具体门禁在执行前写入 `$TASK_DIR/before-dev.md`
 - `任务图摘要`：用于人类快速理解 lane、主链、project-audit 触发条件
+- `阶段出口快照`：记录当前已冻结 lanes、推荐下一 leaf task、仍存阻断项，以及何时必须 reopen plan
 - 若存在前端视觉落地链路，必须在 `门禁摘要` 或 `任务图摘要` 中明确：
   - `UI -> 首版代码界面` task 的专属边界
   - `design/frontend-ui-spec.md` 是后续前端任务的统一约束来源
@@ -305,6 +317,22 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 - TASK-C 依赖 TASK-B
 - PROJECT-AUDIT 依赖全部代码相关 task 完成
 
+## 早期探针与骨架任务
+
+- `walking_skeleton_or_smoke`: <对应 task / not_applicable + 原因>
+- `packaging_skeleton`: <对应 task / not_applicable + 原因>
+- `performance_probe`: <对应 task / not_applicable + 原因>
+
+## 自动化策略摘要
+
+- `ci_strategy`: <CI 方案>
+- `local_vs_ci_boundary`: <本地与 CI 的职责边界>
+
+## 范围收敛与降级预案
+
+- `kill_criteria`: <何时必须停下并回退>
+- `p1_downgrade_candidates`: <可降级成 P1 的范围>
+
 ## 门禁摘要
 
 - 项目级全局门禁：
@@ -317,6 +345,13 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 
 - 主链：TASK-A → TASK-B → TASK-C
 - 全局终局任务：PROJECT-AUDIT（条件触发）
+
+## 阶段出口快照
+
+- `frozen_lanes`: <当前已冻结的 lane>
+- `current_recommended_task`: <当前推荐 leaf task>
+- `open_blockers`: <仍未解决的阻断项>
+- `reopen_conditions`: <何时必须回到 plan>
 
 <!-- if:outsourcing -->
 ## 外部项目交付控制（如适用）
@@ -379,7 +414,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 - `task_plan.md` 结构是否完整
 - `task_plan.md` 中列出的关键 task 是否已真实存在
 - `当前推荐执行任务（待确认）`对应 leaf task 的最小 `prd.md` 是否存在
-- 是否写清项目域执行策略、依赖关系、门禁摘要、任务图摘要
+- 是否写清项目域执行策略、依赖关系、早期探针、自动化策略、范围收敛预案、门禁摘要、任务图摘要、阶段出口快照
 
 不负责判断：
 

@@ -228,6 +228,13 @@ class DeliveryControlValidateTests(unittest.TestCase):
         result = self.run_script("--all", "--task-dir", str(d))
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
+    def test_all_phases_fail_for_internal_project_when_assessment_invalid(self) -> None:
+        d = self._make_task_dir()
+        (d / "assessment.md").write_text("# 评估\n", encoding="utf-8")
+        result = self.run_script("--all", "--task-dir", str(d))
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("project_engagement_type", result.stdout + result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

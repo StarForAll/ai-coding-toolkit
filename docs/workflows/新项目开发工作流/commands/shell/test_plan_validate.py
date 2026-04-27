@@ -47,6 +47,22 @@ VALID_PLAN = """# Task Plan: Sample
 - .trellis/tasks/04-14-task-b 依赖 .trellis/tasks/04-14-task-a
 - .trellis/tasks/04-14-project-audit 依赖全部代码相关 task 完成
 
+## 早期探针与骨架任务
+
+- `walking_skeleton_or_smoke`: ST0 先打通最短路径 smoke
+- `packaging_skeleton`: ST1 先产出最小打包骨架；纯后端项目可写 not_applicable + 原因
+- `performance_probe`: ST1B 输出首次性能基线
+
+## 自动化策略摘要
+
+- `ci_strategy`: GitHub Actions 负责 lint/typecheck/test/build
+- `local_vs_ci_boundary`: 本地只跑 typecheck + unit test，CI 跑完整矩阵
+
+## 范围收敛与降级预案
+
+- `kill_criteria`: 若跨平台基线在 ST1 仍未成立，则回退并缩减平台承诺
+- `p1_downgrade_candidates`: Linux 高级安装体验可降为 P1
+
 ## 门禁摘要
 
 - 项目级全局门禁：lint / typecheck / test / quality gate
@@ -56,6 +72,13 @@ VALID_PLAN = """# Task Plan: Sample
 
 - 主链：.trellis/tasks/04-14-task-a → .trellis/tasks/04-14-task-b
 - 全局终局任务：.trellis/tasks/04-14-project-audit
+
+## 阶段出口快照
+
+- `frozen_lanes`: backend, qa, packaging
+- `current_recommended_task`: .trellis/tasks/04-14-task-a
+- `open_blockers`: none
+- `reopen_conditions`: 若 smoke / packaging skeleton 失败则回到 plan
 """
 
 LEGACY_PLAN = VALID_PLAN + """
@@ -153,6 +176,35 @@ class PlanValidateScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
         self.assertIn("缺少章节: 门禁摘要", result.stdout)
+
+    def test_missing_early_probe_fields_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
+            broken = VALID_PLAN.replace("- `performance_probe`: ST1B 输出首次性能基线\n", "")
+            self.write_plan(task_dir, broken)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("早期探针与骨架任务 缺少结构化字段", result.stdout)
+
+    def test_placeholder_scope_downgrade_fields_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
+            broken = VALID_PLAN.replace(
+                "- `p1_downgrade_candidates`: Linux 高级安装体验可降为 P1\n",
+                "- `p1_downgrade_candidates`: TBD\n",
+            )
+            self.write_plan(task_dir, broken)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("范围收敛与降级预案 存在空值或占位内容", result.stdout)
 
     def test_missing_task_directory_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp_root:

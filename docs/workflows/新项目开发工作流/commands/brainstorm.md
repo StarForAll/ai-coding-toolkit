@@ -135,6 +135,14 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py init "$TASK_DIR" --stage
 
 ## Technical Notes
 
+## 阶段出口快照
+- `complexity_decision`:
+- `ui_lane_decision`:
+- `cross_platform_scope`:
+- `estimate_refresh_result`:
+- `kill_criteria`:
+- `open_items`:
+
 ## Workflow Decisions
 - Accuracy Status:
 - Complexity:
@@ -267,6 +275,14 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py init "$TASK_DIR" --stage
 - `L1`：按需做轻量发散
 - `L2`：必须先发散补充，再做任务拆解
 
+无论 `L1` 还是 `L2`，在离开本阶段前至少再做一次固定横切检查：
+
+- 是否存在需要单独成 lane 的前端 / UI 基线工作
+- 是否存在跨平台 / 分发 / 打包边界，需要提前承诺或降级
+- 是否存在必须提前建立的非功能探针（体积、启动时间、内存、性能等）
+- 当前项目级粗估相对 feasibility 是否已经刷新；若没有变化，也必须写清“为什么不变”
+- 是否已经形成 kill criteria / `P1` 降级候选，避免把全部范围默认带进 `plan`
+
 ### Step 7: 判断是否拆 `sub task`
 
 在进入具体任务生成前，必须明确：
@@ -301,6 +317,14 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py init "$TASK_DIR" --stage
 - 由 `workflow-state.py validate` 强制检查项目级粗估门禁。
 - 若下一步准备进入 `design`，则必须先明确：`design -> 3.7 技术架构确认后的项目 Spec 对齐` 阶段会纳入项目自动化检查矩阵；采用 Sonar 的项目必须写真实命令，未采用时必须写替代门禁和原因
 - 后续若命中 [需求变更管理执行卡](../需求变更管理执行卡.md) 且变更获批，必须同步更新受影响的项目级正式文档
+- `prd.md` 在离开本阶段前应补一段 `## 阶段出口快照`，至少写清：
+  - `complexity_decision`
+  - `ui_lane_decision`
+  - `cross_platform_scope`
+  - `estimate_refresh_result`
+  - `kill_criteria`
+  - `open_items`
+- 这组字段当前用于文档与人工复核，不由 `workflow-state.py` 单独逐字段强校验；不要把它误解成与项目级粗估同等级的脚本硬门禁
 
 ### 轻量化分层指引
 
@@ -404,6 +428,7 @@ docs/requirements/
 - 是否需要拆 `sub task`
 - `customer-facing-prd.md` 是否已生成并完成同步
 - 项目级粗估是否已在 `prd.md` 与 `customer-facing-prd.md` 中落盘
+- `prd.md` 的 `## 阶段出口快照` 是否已明确 UI lane / 粗估刷新 / kill criteria / 未解决项
 - 当前是否已进入 `awaiting_user_confirmation`
 - 推荐下一步命令
 

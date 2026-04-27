@@ -45,6 +45,8 @@ class FeasibilityCheckTests(unittest.TestCase):
             self.assertIn("项目可行性评估", text)
             self.assertIn("project_engagement_type", text)
             self.assertIn("delivery_control_track", text)
+            self.assertIn("source_watermark_level", text)
+            self.assertIn("阶段出口快照", text)
 
     def test_estimate_prints_existing_assessment(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -119,6 +121,71 @@ class FeasibilityCheckTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
             self.assertIn("内部项目", result.stdout)
 
+    def test_validate_passes_for_internal_project_without_ownership_fields(self) -> None:
+        content = (
+            "# 评估\n"
+            "- 总体决策：接\n"
+            "- 法律/合规风险结论：通过\n"
+            "- 是否允许进入 brainstorm：是\n"
+            "- `project_engagement_type`: `non_outsourcing`\n"
+            "\n"
+            "## 红线检查\n"
+            "✅ 通过\n"
+        )
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
+            result = self.run_script("--step", "validate", "--task-dir", td)
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+    def test_validate_fails_when_external_project_missing_ownership_fields(self) -> None:
+        content = (
+            "# 评估\n"
+            "- 总体决策：接\n"
+            "- 法律/合规风险结论：通过\n"
+            "- 是否允许进入 brainstorm：是\n"
+            "- `project_engagement_type`: `external_outsourcing`\n"
+            "- `kickoff_payment_ratio`: `30%`\n"
+            "- `kickoff_payment_received`: `yes`\n"
+            "\n"
+            "## 红线检查\n"
+            "✅ 通过\n"
+            "- `delivery_control_track`: `hosted_deployment`\n"
+            "- `delivery_control_handover_trigger`: `final_payment_received`\n"
+            "- `delivery_control_retained_scope`: source code and keys\n"
+        )
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
+            result = self.run_script("--step", "validate", "--task-dir", td)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("source_watermark_level", result.stdout + result.stderr)
+
+    def test_validate_fails_when_channels_is_placeholder(self) -> None:
+        content = (
+            "# 评估\n"
+            "- 总体决策：接\n"
+            "- 法律/合规风险结论：通过\n"
+            "- 是否允许进入 brainstorm：是\n"
+            "- `project_engagement_type`: `external_outsourcing`\n"
+            "- `kickoff_payment_ratio`: `30%`\n"
+            "- `kickoff_payment_received`: `yes`\n"
+            "\n"
+            "## 红线检查\n"
+            "✅ 通过\n"
+            "- `delivery_control_track`: `hosted_deployment`\n"
+            "- `delivery_control_handover_trigger`: `final_payment_received`\n"
+            "- `delivery_control_retained_scope`: source code and keys\n"
+            "- `source_watermark_level`: `basic`\n"
+            "- `source_watermark_channels`: `...`\n"
+            "- `zero_width_watermark_enabled`: `no`\n"
+            "- `subtle_code_marker_enabled`: `no`\n"
+            "- `ownership_proof_required`: `yes`\n"
+        )
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
+            result = self.run_script("--step", "validate", "--task-dir", td)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("source_watermark_channels", result.stdout + result.stderr)
+
     def test_validate_passes_for_complete_hosted_deployment(self) -> None:
         content = (
             "# 评估\n"
@@ -134,6 +201,11 @@ class FeasibilityCheckTests(unittest.TestCase):
             "- `delivery_control_track`: `hosted_deployment`\n"
             "- `delivery_control_handover_trigger`: `final_payment_received`\n"
             "- `delivery_control_retained_scope`: source code and keys\n"
+            "- `source_watermark_level`: `none`\n"
+            "- `source_watermark_channels`: `none`\n"
+            "- `zero_width_watermark_enabled`: `no`\n"
+            "- `subtle_code_marker_enabled`: `no`\n"
+            "- `ownership_proof_required`: `no`\n"
         )
         with tempfile.TemporaryDirectory() as td:
             (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
@@ -156,6 +228,11 @@ class FeasibilityCheckTests(unittest.TestCase):
             "- `delivery_control_track`: `invalid_value`\n"
             "- `delivery_control_handover_trigger`: `final_payment_received`\n"
             "- `delivery_control_retained_scope`: none\n"
+            "- `source_watermark_level`: `none`\n"
+            "- `source_watermark_channels`: `none`\n"
+            "- `zero_width_watermark_enabled`: `no`\n"
+            "- `subtle_code_marker_enabled`: `no`\n"
+            "- `ownership_proof_required`: `no`\n"
         )
         with tempfile.TemporaryDirectory() as td:
             (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
@@ -177,6 +254,11 @@ class FeasibilityCheckTests(unittest.TestCase):
             "- `delivery_control_track`: `trial_authorization`\n"
             "- `delivery_control_handover_trigger`: `final_payment_received`\n"
             "- `delivery_control_retained_scope`: source code\n"
+            "- `source_watermark_level`: `none`\n"
+            "- `source_watermark_channels`: `none`\n"
+            "- `zero_width_watermark_enabled`: `no`\n"
+            "- `subtle_code_marker_enabled`: `no`\n"
+            "- `ownership_proof_required`: `no`\n"
         )
         with tempfile.TemporaryDirectory() as td:
             (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
@@ -215,12 +297,44 @@ class FeasibilityCheckTests(unittest.TestCase):
             "- `delivery_control_track`: `hosted_deployment`\n"
             "- `delivery_control_handover_trigger`: `final_payment_received`\n"
             "- `delivery_control_retained_scope`: source code and keys\n"
+            "- `source_watermark_level`: `none`\n"
+            "- `source_watermark_channels`: `none`\n"
+            "- `zero_width_watermark_enabled`: `no`\n"
+            "- `subtle_code_marker_enabled`: `no`\n"
+            "- `ownership_proof_required`: `no`\n"
         )
         with tempfile.TemporaryDirectory() as td:
             (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
             result = self.run_script("--step", "validate", "--task-dir", td)
             self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
             self.assertIn("启动款到账", result.stdout + result.stderr)
+
+    def test_validate_fails_when_ownership_required_has_invalid_level(self) -> None:
+        content = (
+            "# 评估\n"
+            "- 总体决策：接\n"
+            "- 法律/合规风险结论：通过\n"
+            "- 是否允许进入 brainstorm：是\n"
+            "- `project_engagement_type`: `external_outsourcing`\n"
+            "- `kickoff_payment_ratio`: `30%`\n"
+            "- `kickoff_payment_received`: `yes`\n"
+            "\n"
+            "## 红线检查\n"
+            "✅ 通过\n"
+            "- `delivery_control_track`: `hosted_deployment`\n"
+            "- `delivery_control_handover_trigger`: `final_payment_received`\n"
+            "- `delivery_control_retained_scope`: source code and keys\n"
+            "- `source_watermark_level`: `none`\n"
+            "- `source_watermark_channels`: `visible`\n"
+            "- `zero_width_watermark_enabled`: `no`\n"
+            "- `subtle_code_marker_enabled`: `no`\n"
+            "- `ownership_proof_required`: `yes`\n"
+        )
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
+            result = self.run_script("--step", "validate", "--task-dir", td)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("source_watermark_level", result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

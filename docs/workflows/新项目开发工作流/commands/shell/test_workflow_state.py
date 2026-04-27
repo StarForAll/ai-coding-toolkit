@@ -44,6 +44,11 @@ class WorkflowStateScriptTests(unittest.TestCase):
 - `delivery_control_track`: `hosted_deployment`
 - `delivery_control_handover_trigger`: `final_payment_received`
 - `delivery_control_retained_scope`: source code and production keys
+- `source_watermark_level`: `none`
+- `source_watermark_channels`: `none`
+- `zero_width_watermark_enabled`: `no`
+- `subtle_code_marker_enabled`: `no`
+- `ownership_proof_required`: `no`
 - 法律/合规风险结论：通过
 - 是否允许进入 brainstorm：是
 """
@@ -60,6 +65,11 @@ class WorkflowStateScriptTests(unittest.TestCase):
 - `trial_authorization_terms.expiration_behavior`: 只读模式
 - `trial_authorization_terms.renewal_policy`: 续费延长
 - `trial_authorization_terms.permanent_authorization_trigger`: 尾款到账
+- `source_watermark_level`: `none`
+- `source_watermark_channels`: `none`
+- `zero_width_watermark_enabled`: `no`
+- `subtle_code_marker_enabled`: `no`
+- `ownership_proof_required`: `no`
 - 法律/合规风险结论：通过
 - 是否允许进入 brainstorm：是
 """
@@ -97,6 +107,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
     ) -> None:
         requirements_dir = root / "docs" / "requirements"
         requirements_dir.mkdir(parents=True, exist_ok=True)
+        (root / "README.md").write_text("# project\n", encoding="utf-8")
         (task_dir / "prd.md").write_text(
             "# sample task\n\n"
             f"{task_prd_suffix}",
@@ -239,6 +250,92 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
 
+    def test_validate_fails_when_design_exit_missing_developer_prd(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+
+        self.run_script("init", str(task_dir), "--stage", "design")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--architecture-confirmed",
+            "true",
+            "--completed-blocks",
+            "block-a,block-b,block-c,block-d",
+            "--stage-status",
+            "awaiting_user_confirmation",
+            "--awaiting-user-confirmation",
+            "true",
+        )
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("developer-facing-prd.md", validate.stdout)
+
+    def test_validate_allows_design_mid_block_confirmation_without_readme(self) -> None:
+        root, task_dir = self.make_fixture()
+        requirements_dir = root / "docs" / "requirements"
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (requirements_dir / "developer-facing-prd.md").write_text("# developer\n- body\n", encoding="utf-8")
+        (root / "README.md").unlink()
+
+        self.run_script("init", str(task_dir), "--stage", "design")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--architecture-confirmed",
+            "true",
+            "--completed-blocks",
+            "block-a",
+            "--stage-status",
+            "awaiting_user_confirmation",
+            "--awaiting-user-confirmation",
+            "true",
+        )
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
+
+    def test_validate_fails_when_design_exit_missing_readme(self) -> None:
+        root, task_dir = self.make_fixture()
+        requirements_dir = root / "docs" / "requirements"
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (requirements_dir / "developer-facing-prd.md").write_text("# developer\n- body\n", encoding="utf-8")
+        (root / "README.md").unlink()
+
+        self.run_script("init", str(task_dir), "--stage", "design")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--architecture-confirmed",
+            "true",
+            "--completed-blocks",
+            "block-a,block-b,block-c,block-d",
+            "--stage-status",
+            "awaiting_user_confirmation",
+            "--awaiting-user-confirmation",
+            "true",
+        )
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("README.md", validate.stdout)
+
     def test_set_rejects_plan_stage_execution_authorized_true(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
@@ -375,6 +472,29 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
         self.assertIn("delivery_control_handover_trigger", validate.stdout)
+
+    def test_validate_blocks_external_stage_when_ownership_policy_missing(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+            assessment_content=self.VALID_EXTERNAL_ASSESSMENT.replace(
+                "- `source_watermark_level`: `none`\n"
+                "- `source_watermark_channels`: `none`\n"
+                "- `zero_width_watermark_enabled`: `no`\n"
+                "- `subtle_code_marker_enabled`: `no`\n"
+                "- `ownership_proof_required`: `no`\n",
+                "",
+            ),
+        )
+
+        self.run_script("init", str(task_dir), "--stage", "design")
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("source_watermark_level", validate.stdout)
 
     def test_validate_blocks_external_stage_when_retained_scope_missing(self) -> None:
         root, task_dir = self.make_fixture()

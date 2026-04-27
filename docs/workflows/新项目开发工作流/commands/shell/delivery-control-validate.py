@@ -359,7 +359,7 @@ def validate_all_phases(task_dir: Path) -> int:
     
     if load_engagement_type(assessment_file) != "external_outsourcing":
         print("\n⚠️  未检测到外部项目特征，跳过后续验证")
-        return 0
+        return 0 if total_passed == total_checks else 1
     
     # Plan 阶段
     plan_file = task_dir / "task_plan.md"

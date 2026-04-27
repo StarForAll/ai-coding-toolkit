@@ -4,11 +4,36 @@
 from __future__ import annotations
 
 import argparse
+import unicodedata
 from pathlib import Path
 
 
 REQUIRED_FILES = ["index.md", "TAD.md", "ODD-dev.md", "ODD-user.md"]
 CONDITIONAL_FILES = ["DDD.md", "IDD.md", "AID.md", "STITCH-PROMPT.md"]
+PLACEHOLDER_MARKERS = ("待补充", "待定", "暂空", "后续补充", "TBD", "TODO", "FIXME", "...")
+TAD_REQUIRED_SECTIONS = [
+    "## 架构冻结清单",
+    "## 系统边界与外部依赖",
+    "## 风险与回退",
+    "## 阶段出口快照",
+]
+TAD_REQUIRED_FIELDS = [
+    "`runtime_host`",
+    "`application_stack`",
+    "`persistence_strategy`",
+    "`primary_processing_stack`",
+    "`distribution_strategy`",
+    "`remaining_unfrozen_items`",
+    "`reopen_conditions`",
+    "`system_boundary`",
+    "`external_dependencies`",
+    "`boundary_crossings`",
+    "`ownership_boundaries`",
+    "`fallback_assumptions`",
+    "`completed_blocks`",
+    "`current_status`",
+    "`open_risks`",
+]
 STITCH_PROMPT_BASELINE_TERMS = [
     "不要通用 SaaS 模板感",
     "不要廉价渐变和无意义炫光装饰",
@@ -27,6 +52,72 @@ SCAFFOLD_FILES = [
     "AID.md",
     "STITCH-PROMPT.md",
 ]
+SCAFFOLD_CONTENT = {
+    "index.md": "# index\n\n- 记录 design 目录索引、文档关系与当前确认状态。\n",
+    "TAD.md": """# TAD
+
+## 架构冻结清单
+- `runtime_host`: TBD
+- `application_stack`: TBD
+- `persistence_strategy`: TBD
+- `primary_processing_stack`: TBD
+- `distribution_strategy`: TBD
+- `remaining_unfrozen_items`: TBD
+- `reopen_conditions`: TBD
+
+## 系统边界与外部依赖
+- `system_boundary`: TBD
+- `external_dependencies`: TBD
+- `boundary_crossings`: TBD
+- `ownership_boundaries`: TBD
+- `fallback_assumptions`: TBD
+
+## 风险与回退
+- 主要风险：TBD
+- 回退策略：TBD
+
+## 阶段出口快照
+- `completed_blocks`: TBD
+- `current_status`: TBD
+- `open_risks`: TBD
+""",
+    "ODD-dev.md": "# ODD-dev\n\n## 开发侧操作流\n- TBD\n",
+    "ODD-user.md": "# ODD-user\n\n## 用户侧操作流\n- TBD\n",
+    "DDD.md": "# DDD\n",
+    "IDD.md": "# IDD\n",
+    "AID.md": "# AID\n",
+    "STITCH-PROMPT.md": "# STITCH-PROMPT\n",
+}
+
+
+def is_placeholder_like(text: str) -> bool:
+    normalized = text.strip().lstrip("-").strip().strip("`*_ \t\r\n")
+    if not normalized:
+        return True
+    lowered = normalized.lower()
+    for marker in PLACEHOLDER_MARKERS:
+        lowered_marker = marker.lower()
+        if not lowered.startswith(lowered_marker):
+            continue
+        if len(lowered) == len(lowered_marker):
+            return True
+        next_char = normalized[len(marker)]
+        if next_char.isspace():
+            return True
+        if unicodedata.category(next_char).startswith("P"):
+            return True
+    return False
+
+
+def has_meaningful_body(path: Path) -> bool:
+    content = path.read_text(encoding="utf-8")
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if not is_placeholder_like(stripped):
+            return True
+    return False
 
 
 def validate(design_dir: Path) -> int:
@@ -40,9 +131,29 @@ def validate(design_dir: Path) -> int:
     for filename in REQUIRED_FILES:
         path = design_dir / filename
         if path.exists():
-            print(f"✅ {filename}")
+            if has_meaningful_body(path):
+                print(f"✅ {filename}")
+            else:
+                print(f"❌ {filename} (只有标题或占位内容，未形成可审阅正文)")
+                missing += 1
         else:
             print(f"❌ {filename} (缺失)")
+            missing += 1
+
+    tad_path = design_dir / "TAD.md"
+    if tad_path.exists():
+        tad_text = tad_path.read_text(encoding="utf-8")
+        missing_sections = [section for section in TAD_REQUIRED_SECTIONS if section not in tad_text]
+        if missing_sections:
+            print("❌ TAD.md 缺少架构冻结/出口快照章节：")
+            for section in missing_sections:
+                print(f"   - {section}")
+            missing += 1
+        missing_fields = [field for field in TAD_REQUIRED_FIELDS if field not in tad_text]
+        if missing_fields:
+            print("❌ TAD.md 缺少结构化冻结字段：")
+            for field in missing_fields:
+                print(f"   - {field}")
             missing += 1
 
     for filename in CONDITIONAL_FILES:
@@ -82,6 +193,10 @@ def validate(design_dir: Path) -> int:
         "ℹ️  本脚本只检查 design/ 目录内资产；README.md、正式 PRD、workflow-state.json 与用户确认点"
         " 需在项目主链中单独检查"
     )
+    print(
+        "ℹ️  design 正式退出仍需额外通过 workflow-state.py validate；"
+        "该检查会覆盖 completed_blocks、developer-facing-prd.md、README.md 等退出门禁"
+    )
     print()
 
     if missing:
@@ -101,8 +216,7 @@ def scaffold(design_dir: Path) -> int:
     for filename in SCAFFOLD_FILES:
         path = design_dir / filename
         if not path.exists():
-            title = path.stem
-            path.write_text(f"# {title}\n", encoding="utf-8")
+            path.write_text(SCAFFOLD_CONTENT[filename], encoding="utf-8")
             print(f"已创建 {path}")
 
     print("✅ 骨架创建完成")

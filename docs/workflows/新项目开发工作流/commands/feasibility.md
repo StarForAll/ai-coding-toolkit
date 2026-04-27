@@ -130,6 +130,11 @@ python3 <WORKFLOW_DIR>/commands/shell/feasibility-check.py --step estimate
 - `assessment.md` 必须明确写出项目类别判断：`project_engagement_type = external_outsourcing` / `non_outsourcing`。
 - 本阶段允许输出**商务预判**、预算区间策略和是否值得继续推进，但**不承担需求澄清后的正式项目级工期承诺**。
 - 需求与客户讨论清楚后的正式项目级粗估，必须在 `brainstorm` 收口前写入 `task_dir/prd.md` 与 `docs/requirements/customer-facing-prd.md`，不能在这里跳过后移。
+- 若当前项目需要作者归属保护或存在源码移交风险，`source_watermark_*` 与 `ownership_proof_required` 必须在本阶段显式冻结，不能等到 `design` / `plan` 再回填。
+- `assessment.md` 除了记录结论，还必须形成一份“阶段出口快照”，明确：
+  - 哪些决策已经冻结
+  - 哪些事项必须在 `brainstorm` 收口前重算或复核
+  - 若哪些前提变化，必须回到 `/trellis:feasibility`
 - 若判定为外包、定制开发或新客户项目（`project_engagement_type = external_outsourcing`），必须同步执行以下控制判断：
 <!-- if:outsourcing -->
   - 启动款门禁：首款比例至少为 `30%`，默认建议 `30%` 或 `40%`
@@ -137,6 +142,13 @@ python3 <WORKFLOW_DIR>/commands/shell/feasibility-check.py --step estimate
   - 交付控制轨道必须明确，不允许停留在”未确定”
   - **首选轨：托管部署**，尾款前只提供开发者控制的试运行环境
   - **备选轨：试运行授权**，仅在双方明确接受授权方案时使用
+  - 若涉及源码水印 / 归属证明，离开 feasibility 前至少执行一次：
+
+    ```bash
+    python3 <WORKFLOW_DIR>/commands/shell/ownership-proof-validate.py --phase feasibility --task-dir <task-dir>
+    ```
+
+    这一步用于提前暴露 `source_watermark_*` / `ownership_proof_required` 的缺失或自相矛盾，避免到 design / plan 再回填
 <!-- endif:outsourcing -->
 - 若判定为非外包项目（`project_engagement_type = non_outsourcing`），继续走通用主链，但不启用首/尾款与外部交付控制手段。
 - 不允许把“隐藏后门”“未披露的失效逻辑”“不可恢复的锁定机制”当作风险控制手段写入方案。
@@ -230,6 +242,13 @@ $TASK_DIR/
 | 关键依赖 | ... | ... | ... |
 | 数据合规要点 | ... | ... | ... |
 | 决策/验收负责人 | ... | ... | ... |
+
+## 阶段出口快照
+- `need_return_to_feasibility`: `yes` / `no`
+- `frozen_decisions`: `project_engagement_type,delivery_control_track,source_watermark_level,...`
+- `estimate_refresh_owner`: `brainstorm`
+- `open_items`: ...
+- `reopen_triggers`: ...
 
 <!-- if:outsourcing -->
 ## Trial Authorization Terms（仅当 `delivery_control_track = trial_authorization`）

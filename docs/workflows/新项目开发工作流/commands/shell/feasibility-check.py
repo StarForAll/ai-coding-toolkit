@@ -20,6 +20,8 @@ VALID_ENGAGEMENT_TYPES = {"external_outsourcing", "non_outsourcing"}
 VALID_EXTERNAL_TRACKS = {"hosted_deployment", "trial_authorization"}
 VALID_BOOLEAN_VALUES = {"yes", "no"}
 MIN_KICKOFF_PAYMENT_RATIO = 30.0
+VALID_SOURCE_WATERMARK_LEVELS = {"none", "basic", "hybrid", "forensic"}
+PLACEHOLDER_MARKERS = ("待补充", "待定", "暂空", "后续补充", "TBD", "TODO", "FIXME", "...")
 
 
 def extract_backticked_field(content: str, field_name: str) -> str | None:
@@ -37,6 +39,56 @@ def parse_kickoff_payment_ratio(raw_value: str) -> tuple[bool, str]:
     if min(percentages) < MIN_KICKOFF_PAYMENT_RATIO:
         return False, f"启动款比例至少应为 {int(MIN_KICKOFF_PAYMENT_RATIO)}%"
     return True, ", ".join(f"{value:g}%" for value in percentages)
+
+
+def normalize_boolean_field(value: str | None) -> bool | None:
+    if value is None:
+        return None
+    lowered = value.strip().strip("`").lower()
+    if lowered == "yes":
+        return True
+    if lowered == "no":
+        return False
+    return None
+
+
+def parse_channels(raw: str | None) -> set[str]:
+    if not raw:
+        return set()
+    parts = re.split(r"[,\uFF0C/\s]+", raw.lower())
+    channels = {part for part in parts if part}
+    normalized = set()
+    for channel in channels:
+        if channel in {"visible", "可见", "可见水印"}:
+            normalized.add("visible")
+        elif channel in {"zero-width", "zero", "zw", "零宽", "zero_width"}:
+            normalized.add("zero-width")
+        elif channel in {"subtle", "subtle-marker", "subtle-markers", "marker", "markers", "隐蔽", "不起眼"}:
+            normalized.add("subtle-markers")
+        elif channel in {"zero-watermark", "zero-watermarks", "fingerprint", "fingerprints", "零水印", "指纹"}:
+            normalized.add("zero-watermark")
+        else:
+            normalized.add(channel)
+    return normalized
+
+
+def is_placeholder_like(text: str | None) -> bool:
+    if text is None:
+        return True
+    normalized = text.strip().lstrip("-").strip().strip("`*_ \t\r\n")
+    if not normalized:
+        return True
+    lowered = normalized.lower()
+    for marker in PLACEHOLDER_MARKERS:
+        lowered_marker = marker.lower()
+        if not lowered.startswith(lowered_marker):
+            continue
+        if len(lowered) == len(lowered_marker):
+            return True
+        next_char = normalized[len(marker)]
+        if next_char.isspace():
+            return True
+    return normalized in {"...", ".", "例如"}
 
 
 def step_compliance() -> None:
@@ -65,6 +117,11 @@ ASSESSMENT_TEMPLATE = """# 项目可行性评估
 - `delivery_control_track`: `hosted_deployment` / `trial_authorization`（仅当 `project_engagement_type = external_outsourcing`）
 - `delivery_control_handover_trigger`: 例如 `final_payment_received`（仅当 `project_engagement_type = external_outsourcing`）
 - `delivery_control_retained_scope`: 尾款前仍由开发者保留的环境、账号、密钥、部署控制范围；若无则写 `none`（仅当 `project_engagement_type = external_outsourcing`）
+- `source_watermark_level`: `none` / `basic` / `hybrid` / `forensic`
+- `source_watermark_channels`: 例如 `visible,zero-width,subtle-markers,zero-watermark`
+- `zero_width_watermark_enabled`: `yes` / `no`
+- `subtle_code_marker_enabled`: `yes` / `no`
+- `ownership_proof_required`: `yes` / `no`
 - 项目类别判定：外包项目 / 非外包项目
 - 交付控制轨道：托管部署 / 试运行授权 / 未确定
 - 当前结论的前提：
@@ -72,6 +129,13 @@ ASSESSMENT_TEMPLATE = """# 项目可行性评估
 - 总体置信度：高/中/低
 - 信息充分性：X/8
 - 承诺门：G0/G1/G2/G3
+
+## 阶段出口快照
+- `need_return_to_feasibility`: `yes` / `no`
+- `frozen_decisions`: `project_engagement_type,delivery_control_track,source_watermark_level,...`
+- `estimate_refresh_owner`: `brainstorm`
+- `open_items`: ...
+- `reopen_triggers`: ...
 
 ## 关键字段快照
 | 关键字段 | 状态(明确/暗示/缺失/冲突) | 证据锚点 | 关键假设/缺口备注 |
@@ -315,6 +379,79 @@ def step_validate(task_dir: Path) -> int:
                     errors.append(f"`{term}` 未填写具体值")
                 else:
                     print(f"✅ `{term}`: {term_value}")
+
+    ownership_fields_present = any(
+        extract_backticked_field(content, field_name) is not None
+        for field_name in (
+            "source_watermark_level",
+            "source_watermark_channels",
+            "zero_width_watermark_enabled",
+            "subtle_code_marker_enabled",
+            "ownership_proof_required",
+        )
+    )
+    if is_external_project or ownership_fields_present:
+        level = extract_backticked_field(content, "source_watermark_level")
+        if level is None:
+            errors.append("缺少 `source_watermark_level` 字段")
+            level_normalized = None
+        else:
+            level_normalized = level.lower()
+            if level_normalized not in VALID_SOURCE_WATERMARK_LEVELS:
+                errors.append("`source_watermark_level` 取值无效")
+            else:
+                print(f"✅ `source_watermark_level`: {level}")
+
+        channels_raw = extract_backticked_field(content, "source_watermark_channels")
+        if channels_raw is None:
+            errors.append("缺少 `source_watermark_channels` 字段")
+            channels = set()
+        elif is_placeholder_like(channels_raw):
+            errors.append("`source_watermark_channels` 未填写具体值")
+            channels = set()
+        else:
+            channels = parse_channels(channels_raw)
+            if not channels:
+                errors.append("`source_watermark_channels` 不能为空")
+            else:
+                print(f"✅ `source_watermark_channels`: {', '.join(sorted(channels))}")
+
+        zero_width_raw = extract_backticked_field(content, "zero_width_watermark_enabled")
+        zero_width_enabled = normalize_boolean_field(zero_width_raw)
+        if zero_width_raw is None:
+            errors.append("缺少 `zero_width_watermark_enabled` 字段")
+        elif zero_width_enabled is None:
+            errors.append("`zero_width_watermark_enabled` 只能填写 `yes` / `no`")
+        else:
+            print(f"✅ `zero_width_watermark_enabled`: {zero_width_raw}")
+
+        subtle_raw = extract_backticked_field(content, "subtle_code_marker_enabled")
+        subtle_enabled = normalize_boolean_field(subtle_raw)
+        if subtle_raw is None:
+            errors.append("缺少 `subtle_code_marker_enabled` 字段")
+        elif subtle_enabled is None:
+            errors.append("`subtle_code_marker_enabled` 只能填写 `yes` / `no`")
+        else:
+            print(f"✅ `subtle_code_marker_enabled`: {subtle_raw}")
+
+        ownership_raw = extract_backticked_field(content, "ownership_proof_required")
+        ownership_required = normalize_boolean_field(ownership_raw)
+        if ownership_raw is None:
+            errors.append("缺少 `ownership_proof_required` 字段")
+        elif ownership_required is None:
+            errors.append("`ownership_proof_required` 只能填写 `yes` / `no`")
+        else:
+            print(f"✅ `ownership_proof_required`: {ownership_raw}")
+
+        if zero_width_enabled is True and "zero-width" not in channels:
+            errors.append("已启用 `zero_width_watermark_enabled`，但 `source_watermark_channels` 未包含 `zero-width`")
+        if subtle_enabled is True and "subtle-markers" not in channels:
+            errors.append("已启用 `subtle_code_marker_enabled`，但 `source_watermark_channels` 未包含 `subtle-markers`")
+        if ownership_required is True:
+            if level_normalized == "none":
+                errors.append("`ownership_proof_required = yes` 时，`source_watermark_level` 不能为 `none`")
+            if "visible" not in channels:
+                errors.append("`ownership_proof_required = yes` 时，`source_watermark_channels` 必须包含 `visible`")
 
     print("\n" + "=" * 40)
     if warnings:

@@ -11,6 +11,7 @@ import argparse
 import json
 import re
 import sys
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,16 @@ TASK_PRD = Path("prd.md")
 ASSESSMENT_FILE = Path("assessment.md")
 VALID_ENGAGEMENT_TYPES = {"external_outsourcing", "non_outsourcing"}
 MIN_KICKOFF_PAYMENT_RATIO = 30.0
+VALID_SOURCE_WATERMARK_LEVELS = {"none", "basic", "hybrid", "forensic"}
+EXIT_READY_STATUSES = {"awaiting_user_confirmation", "completed"}
+OWNERSHIP_POLICY_FIELDS = (
+    "source_watermark_level",
+    "source_watermark_channels",
+    "zero_width_watermark_enabled",
+    "subtle_code_marker_enabled",
+    "ownership_proof_required",
+)
+DESIGN_EXIT_REQUIRED_BLOCKS = {"A", "B", "C", "D"}
 
 STAGES = {
     "feasibility",
@@ -70,6 +81,7 @@ CUSTOMER_ESTIMATE_MARKERS = (
     "预计完工窗口",
     "估算说明",
 )
+PLACEHOLDER_MARKERS = ("待补充", "待定", "暂空", "后续补充", "TBD", "TODO", "FIXME", "...")
 
 
 def now_iso() -> str:
@@ -350,6 +362,104 @@ def extract_backticked_field(content: str, field_name: str) -> str | None:
     return value or None
 
 
+def normalize_yes_no_field(value: str | None) -> bool | None:
+    if value is None:
+        return None
+    lowered = value.strip().strip("`").lower()
+    if lowered in {"yes", "true", "on", "1", "是"}:
+        return True
+    if lowered in {"no", "false", "off", "0", "否"}:
+        return False
+    return None
+
+
+def parse_channels(raw: str | None) -> set[str]:
+    if not raw:
+        return set()
+    parts = re.split(r"[,\uFF0C/\s]+", raw.lower())
+    channels = {part for part in parts if part}
+    normalized = set()
+    for channel in channels:
+        if channel in {"visible", "可见", "可见水印", "comment", "comments"}:
+            normalized.add("visible")
+        elif channel in {"zero-width", "zero", "zw", "零宽", "zero_width"}:
+            normalized.add("zero-width")
+        elif channel in {"subtle", "subtle-marker", "subtle-markers", "marker", "markers", "隐蔽", "不起眼"}:
+            normalized.add("subtle-markers")
+        elif channel in {"zero-watermark", "zero-watermarks", "fingerprint", "fingerprints", "零水印", "指纹"}:
+            normalized.add("zero-watermark")
+        else:
+            normalized.add(channel)
+    return normalized
+
+
+def is_placeholder_like(text: str | None) -> bool:
+    if text is None:
+        return True
+    normalized = text.strip().lstrip("-").strip().strip("`*_ \t\r\n")
+    if not normalized:
+        return True
+    lowered = normalized.lower()
+    for marker in PLACEHOLDER_MARKERS:
+        lowered_marker = marker.lower()
+        if not lowered.startswith(lowered_marker):
+            continue
+        if len(lowered) == len(lowered_marker):
+            return True
+        next_char = normalized[len(marker)]
+        if next_char.isspace():
+            return True
+        if unicodedata.category(next_char).startswith("P"):
+            return True
+    return False
+
+
+def normalize_design_block_name(raw: str) -> str | None:
+    normalized = raw.strip().lower().replace("_", "-")
+    mapping = {
+        "a": "A",
+        "block-a": "A",
+        "块a": "A",
+        "块 a": "A",
+        "developer-facing-prd": "A",
+        "developer-facing-prd.md": "A",
+        "b": "B",
+        "block-b": "B",
+        "块b": "B",
+        "块 b": "B",
+        "design-docs": "B",
+        "c": "C",
+        "block-c": "C",
+        "块c": "C",
+        "块 c": "C",
+        "project-docs": "C",
+        "readme": "C",
+        "d": "D",
+        "block-d": "D",
+        "块d": "D",
+        "块 d": "D",
+        "engineering-alignment": "D",
+        "spec-alignment": "D",
+    }
+    return mapping.get(normalized)
+
+
+def design_exit_ready(state: dict[str, Any]) -> bool:
+    if state.get("stage") != "design":
+        return False
+    completed_blocks = state.get("completed_blocks")
+    if not isinstance(completed_blocks, list):
+        return False
+    normalized_blocks = {
+        normalized
+        for item in completed_blocks
+        if isinstance(item, str)
+        for normalized in [normalize_design_block_name(item)]
+        if normalized is not None
+    }
+    return DESIGN_EXIT_REQUIRED_BLOCKS.issubset(normalized_blocks)
+
+
 def validate_external_project_controls(
     task_dir: Path,
     repo_root: Path,
@@ -446,6 +556,90 @@ def validate_external_project_controls(
                     f"{assessment_file.relative_to(repo_root).as_posix()} 的 `{term}` 未填写具体值"
                 )
 
+
+def validate_ownership_policy_controls(
+    task_dir: Path,
+    repo_root: Path,
+    state: dict[str, Any],
+    errors: list[str],
+) -> None:
+    stage = state.get("stage")
+    if stage == "feasibility":
+        return
+
+    assessment_file = find_assessment_file(task_dir, repo_root)
+    if assessment_file is None:
+        return
+
+    content = assessment_file.read_text(encoding="utf-8")
+    engagement_type = extract_backticked_field(content, "project_engagement_type")
+    has_any_ownership_policy = any(
+        extract_backticked_field(content, field_name) is not None
+        for field_name in OWNERSHIP_POLICY_FIELDS
+    )
+    if engagement_type != "external_outsourcing" and not has_any_ownership_policy:
+        return
+
+    rel_path = assessment_file.relative_to(repo_root).as_posix()
+
+    level = extract_backticked_field(content, "source_watermark_level")
+    if level is None:
+        errors.append(f"{rel_path} 缺少 `source_watermark_level` 字段")
+        level_normalized = None
+    else:
+        level_normalized = level.lower()
+        if level_normalized not in VALID_SOURCE_WATERMARK_LEVELS:
+            errors.append(f"{rel_path} 的 `source_watermark_level` 取值无效: {level}")
+
+    channels_raw = extract_backticked_field(content, "source_watermark_channels")
+    if channels_raw is None:
+        errors.append(f"{rel_path} 缺少 `source_watermark_channels` 字段")
+        channels = set()
+    elif is_placeholder_like(channels_raw):
+        errors.append(f"{rel_path} 的 `source_watermark_channels` 未填写具体值")
+        channels = set()
+    else:
+        channels = parse_channels(channels_raw)
+        if not channels:
+            errors.append(f"{rel_path} 的 `source_watermark_channels` 不能为空")
+
+    zero_width_raw = extract_backticked_field(content, "zero_width_watermark_enabled")
+    zero_width_enabled = normalize_yes_no_field(zero_width_raw)
+    if zero_width_raw is None:
+        errors.append(f"{rel_path} 缺少 `zero_width_watermark_enabled` 字段")
+    elif zero_width_enabled is None:
+        errors.append(f"{rel_path} 的 `zero_width_watermark_enabled` 只能填写 `yes` / `no`")
+
+    subtle_raw = extract_backticked_field(content, "subtle_code_marker_enabled")
+    subtle_enabled = normalize_yes_no_field(subtle_raw)
+    if subtle_raw is None:
+        errors.append(f"{rel_path} 缺少 `subtle_code_marker_enabled` 字段")
+    elif subtle_enabled is None:
+        errors.append(f"{rel_path} 的 `subtle_code_marker_enabled` 只能填写 `yes` / `no`")
+
+    ownership_raw = extract_backticked_field(content, "ownership_proof_required")
+    ownership_required = normalize_yes_no_field(ownership_raw)
+    if ownership_raw is None:
+        errors.append(f"{rel_path} 缺少 `ownership_proof_required` 字段")
+    elif ownership_required is None:
+        errors.append(f"{rel_path} 的 `ownership_proof_required` 只能填写 `yes` / `no`")
+
+    if zero_width_enabled is True and "zero-width" not in channels:
+        errors.append(
+            f"{rel_path} 已启用 `zero_width_watermark_enabled`，但 `source_watermark_channels` 未包含 `zero-width`"
+        )
+    if subtle_enabled is True and "subtle-markers" not in channels:
+        errors.append(
+            f"{rel_path} 已启用 `subtle_code_marker_enabled`，但 `source_watermark_channels` 未包含 `subtle-markers`"
+        )
+    if ownership_required is True:
+        if level_normalized == "none":
+            errors.append(f"{rel_path} 的 `ownership_proof_required = yes` 时，`source_watermark_level` 不能为 `none`")
+        if "visible" not in channels:
+            errors.append(
+                f"{rel_path} 的 `ownership_proof_required = yes` 时，`source_watermark_channels` 必须包含 `visible`"
+            )
+
 def find_missing_markers(path: Path, markers: tuple[str, ...]) -> list[str]:
     try:
         content = path.read_text(encoding="utf-8")
@@ -463,6 +657,7 @@ def validate_project_doc_boundary(
     stage = state.get("stage")
     checkpoints = state.get("checkpoints", {})
     architecture_confirmed = checkpoints.get("architecture_confirmed", False)
+    final_design_exit = design_exit_ready(state) and state.get("stage_status") in EXIT_READY_STATUSES
 
     customer_prd = project_root / CUSTOMER_PRD
     developer_prd = project_root / DEVELOPER_PRD
@@ -493,6 +688,15 @@ def validate_project_doc_boundary(
             "技术架构尚未确认，但目标项目已存在 docs/requirements/developer-facing-prd.md；"
             "这违反“确认前严格草稿隔离”规则"
         )
+
+    if final_design_exit and architecture_confirmed is not True:
+        errors.append("design 退出前必须先完成技术架构确认，不能在 architecture_confirmed=false 时等待用户确认")
+
+    if final_design_exit and architecture_confirmed is True and not developer_prd.is_file():
+        errors.append("design 退出前缺少 docs/requirements/developer-facing-prd.md；块 A 尚未真正完成")
+
+    if final_design_exit and not (project_root / "README.md").is_file():
+        errors.append("design 退出前缺少项目根 README.md；块 C 尚未真正完成")
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -604,6 +808,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
             validate_current_task_pointer(task_dir, repo_root, current_task_file, errors)
             validate_leaf_task(task_dir, errors)
             validate_external_project_controls(task_dir, repo_root, state, errors)
+            validate_ownership_policy_controls(task_dir, repo_root, state, errors)
 
     if args.project_root:
         validate_project_doc_boundary(state, Path(args.project_root).resolve(), task_dir, errors)
