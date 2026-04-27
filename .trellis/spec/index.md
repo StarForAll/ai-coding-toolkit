@@ -122,6 +122,7 @@ live workflow-authoring inputs.
 | Update `manifest.yaml` | `library-assets/manifest-maintenance.md` |
 | Write/modify Python scripts | `scripts/python-conventions.md` |
 | Modify workflow installer / upgrade scripts in `docs/workflows/**/commands/` | `scripts/index.md` + `scripts/workflow-installer-upgrade-contracts.md` |
+| Write/modify workflow command `.md` files in `docs/workflows/**/commands/` | `scripts/workflow-command-doc-contracts.md` |
 | Write/modify Shell scripts | `scripts/shell-conventions.md` |
 | Define an agent (source + deploy) | `agents/index.md` |
 | Define a command (source + deploy) | `commands/index.md` |

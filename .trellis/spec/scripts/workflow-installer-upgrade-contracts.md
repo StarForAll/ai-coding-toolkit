@@ -36,6 +36,7 @@ workflow source assets -> expected deployed copies -> target-project live copies
 python3 docs/workflows/<name>/commands/install-workflow.py \
   [--project-root /path/to/project] \
   [--cli claude,opencode,codex] \
+  [--profile personal|outsourcing] \
   [--dry-run]
 ```
 
@@ -111,6 +112,7 @@ Current installer-written keys:
 
 - `trellis_version`
 - `cli_types`
+- `profile`
 - `commands`
 - `overlay_commands`
 - `added_commands`
@@ -120,6 +122,7 @@ Current installer-written keys:
 - `initial_pack`
 - `bootstrap_task_removed`
 - `scripts`
+- `execution_cards`
 - `workflow_version`
 - `workflow_schema_version`
 
@@ -623,6 +626,303 @@ Recommended assertion points:
 
 ---
 
+## Scenario: Profile-Based Conditional Content
+
+### 1. Scope / Trigger
+
+- Trigger: modifying `prepare_command_content()` in `workflow_assets.py`
+- Trigger: adding/removing `<!-- if:outsourcing -->` markers in command source docs
+- Trigger: changing which scripts or execution cards are included per profile
+- Trigger: install-record `profile` field semantics change
+
+### 2. Signatures
+
+```python
+def prepare_command_content(source_path: Path, *, profile: str = DEFAULT_PROFILE) -> str
+```
+
+Profile values: `"personal"` | `"outsourcing"` (default: `"outsourcing"`)
+
+### 3. Contracts
+
+#### 3.1 Conditional Marker Format
+
+Source command files use HTML comments as conditional markers:
+
+```markdown
+<!-- if:outsourcing -->
+(outsourcing-specific content)
+<!-- endif:outsourcing -->
+```
+
+- Markers must be on their own line with no other content
+- Markers must always appear in matched pairs
+- Nesting is not supported
+
+#### 3.2 Stripping Behavior
+
+| Profile | Marker behavior |
+|---------|----------------|
+| `personal` | Remove markers AND wrapped content |
+| `outsourcing` | Remove markers only, keep wrapped content |
+
+#### 3.3 Script Filtering
+
+| Constant | Contents |
+|----------|---------|
+| `HELPER_SCRIPTS` | All 9 helper scripts (full set) |
+| `CORE_HELPER_SCRIPTS` | 7 scripts excluding outsourcing-only |
+| `OUTSOURCING_ONLY_SCRIPTS` | `delivery-control-validate.py`, `ownership-proof-validate.py` |
+
+Install deploys `HELPER_SCRIPTS` for outsourcing, `CORE_HELPER_SCRIPTS` for personal.
+
+#### 3.4 Profile in Install Record
+
+`workflow-installed.json` must include `"profile"` field. Missing profile defaults to `"outsourcing"` for backward compatibility.
+
+### 4. Validation & Error Matrix
+
+| Condition | Error |
+|-----------|-------|
+| Unmatched `<!-- if:outsourcing -->` without `<!-- endif:outsourcing -->` | Regex silently skips (no error); content leaks into personal build |
+| Profile not in `VALID_PROFILES` | argparse rejects at CLI level |
+| Missing `profile` in install record during `--check` | Default to `"outsourcing"` |
+
+### 5. Good / Base / Bad Cases
+
+- **Good**: personal profile trims outsourcing sections; `--check` uses same profile to verify
+- **Base**: outsourcing profile keeps all content, markers stripped
+- **Bad**: install with personal, check with outsourcing default → false drift on every outsourcing-marked command
+
+### 6. Tests Required
+
+- Profile stripping produces different output for marked files
+- `--check` reads profile from install record and matches deployed content
+- personal profile excludes `OUTSOURCING_ONLY_SCRIPTS`
+- install record contains `profile` field
+
+### 7. Wrong vs Correct
+
+#### Wrong
+- Check deployed content with default profile when install used `personal`
+- Add outsourcing markers with content on the same line as the marker
+
+#### Correct
+- Always read `profile` from install record before content comparison
+- Markers on their own lines, content between them on separate lines
+
+---
+
+## Scenario: Execution Card Distribution
+
+### 1. Scope / Trigger
+
+- Trigger: adding/removing execution cards
+- Trigger: changing execution card link rewrite rules in `prepare_command_content`
+- Trigger: changing `.trellis/workflow-docs/` deployment target
+
+### 2. Signatures
+
+```python
+EXECUTION_CARDS = ["需求变更管理执行卡.md"]
+OUTSOURCING_EXECUTION_CARDS = ["源码水印与归属证据链执行卡.md"]
+WORKFLOW_DOCS_DIR = ".trellis/workflow-docs"
+```
+
+```python
+def deploy_execution_cards(src: Path, root: Path, dry_run: bool, *, profile: str) -> int
+```
+
+### 3. Contracts
+
+#### 3.1 Source Location
+
+Execution cards live at the workflow root directory (parent of `commands/`):
+```text
+docs/workflows/<name>/需求变更管理执行卡.md
+docs/workflows/<name>/源码水印与归属证据链执行卡.md
+```
+
+#### 3.2 Target Location
+
+```text
+.trellis/workflow-docs/需求变更管理执行卡.md
+.trellis/workflow-docs/源码水印与归属证据链执行卡.md  (outsourcing only)
+```
+
+#### 3.3 Link Rewrite Contract
+
+`prepare_command_content` rewrites execution card links to point to the target-project path:
+
+| Source form | Deployed form |
+|-------------|--------------|
+| `[需求变更管理执行卡](../需求变更管理执行卡.md)` | `[需求变更管理执行卡](.trellis/workflow-docs/需求变更管理执行卡.md)` |
+| `[需求变更管理执行卡](../../需求变更管理执行卡.md)` | Same as above |
+
+Previous behavior stripped these to plain text. New behavior keeps them as working links.
+
+#### 3.4 Drift Detection
+
+`upgrade-compat.py --check` must verify:
+- Execution card files exist in `.trellis/workflow-docs/`
+- Content matches workflow source
+- Profile determines which cards are expected
+
+### 4. Validation & Error Matrix
+
+| Condition | Error |
+|-----------|-------|
+| Source card missing | `warn` during install, card not deployed |
+| Deployed card content differs from source | `err` during `--check` |
+| Card missing in target when expected by profile | `warn` during `--check` |
+
+---
+
+## Scenario: workflow-state.py route Subcommand
+
+### 1. Scope / Trigger
+
+- Trigger: modifying `cmd_route` in `workflow-state.py`
+- Trigger: changing Phase Router decision tree in `start-patch-phase-router.md`
+- Trigger: changing stage routing logic
+
+### 2. Signatures
+
+```bash
+python3 .trellis/scripts/workflow/workflow-state.py route [task-dir] \
+  [--project-root /path] [--current-task-file /path]
+```
+
+`task-dir` is optional. When absent, route infers from `.current-task` or project-level artifacts.
+
+### 3. Contracts
+
+#### Output Format (JSON to stdout)
+
+```json
+{
+  "target": "design" | null,
+  "action": "reenter" | "first_entry" | "resume_with_assessment" | "awaiting_confirmation" | "blocked" | "recovery_needed" | "repair_needed" | "embed_invalid",
+  "stage": "design",
+  "stage_status": "in_progress",
+  "reason": "...",
+  "blockers": []
+}
+```
+
+#### Action Semantics
+
+| Action | Meaning | Phase Router behavior |
+|--------|---------|----------------------|
+| `first_entry` | No assessment found | Route to `/trellis:feasibility` |
+| `resume_with_assessment` | Valid assessment allows brainstorm | Route to `/trellis:brainstorm` |
+| `reenter` | Normal re-entry to current stage | Route to `/trellis:<target>` |
+| `awaiting_confirmation` | Stage done, pending user confirm | Show status, wait for user |
+| `blocked` | Execution gate not met | Show blockers, do not proceed |
+| `recovery_needed` | Cannot determine current task | Ask user to clarify |
+| `repair_needed` | State file missing/broken | Run `repair` subcommand |
+| `embed_invalid` | Workflow install incomplete | Stop, report install issue |
+
+#### Exit Codes
+
+- `0`: Routing computed successfully (even when target is null)
+- `1`: Cannot compute route (path resolution error, etc.)
+
+### 4. Validation & Error Matrix
+
+| Condition | Output |
+|-----------|--------|
+| No `.current-task`, no assessment | `first_entry` → feasibility |
+| No `.current-task`, valid assessment with brainstorm permission | `resume_with_assessment` → brainstorm |
+| `.current-task` → non-leaf task | `repair_needed` |
+| `.current-task` → missing workflow-state.json | `repair_needed` |
+| Execution stage without `execution_authorized` | `blocked` |
+| External outsourcing without `kickoff_payment_received=yes` | `blocked` |
+
+---
+
+## Scenario: workflow-state.py repair Subcommand
+
+### 1. Scope / Trigger
+
+- Trigger: modifying `cmd_repair` in `workflow-state.py`
+- Trigger: changing state recovery logic in Phase Router
+
+### 2. Signatures
+
+```bash
+python3 .trellis/scripts/workflow/workflow-state.py repair <task-dir> \
+  [--project-root /path] [--apply]
+```
+
+### 3. Contracts
+
+#### Inference Rules
+
+| Artifact present | Inferred stage |
+|-----------------|----------------|
+| No assessment.md in task lineage | `feasibility` |
+| assessment.md exists, no customer-facing-prd.md | `brainstorm` |
+| customer-facing-prd.md exists, no design/ dir | `design` |
+| design/ exists, no task_plan.md | `design` |
+| task_plan.md exists | `plan` |
+
+#### Output Format
+
+```json
+{
+  "status": "ok" | "repair_needed",
+  "inferred_stage": "design",
+  "confidence": "high" | "medium" | "low",
+  "evidence": ["..."],
+  "message": "..."
+}
+```
+
+#### Write Gate
+
+- Without `--apply`: read-only, outputs inference
+- With `--apply`: creates `workflow-state.json` using `build_default_state(inferred_stage)`
+
+### 4. Wrong vs Correct
+
+#### Wrong
+- Auto-apply without user confirmation in AI layer
+- Infer execution stages (implementation, test-first) — these require explicit user confirmation
+
+#### Correct
+- Output inference, let Phase Router prompt user to confirm
+- Only infer pre-execution stages (feasibility through plan)
+
+---
+
+## Scenario: Tolerant Version Handling in validate_state_shape
+
+### 1. Scope / Trigger
+
+- Trigger: modifying version validation in `workflow-state.py`
+
+### 3. Contracts
+
+When `workflow-state.json` lacks the `"version"` field:
+- Default to `SUPPORTED_STATE_VERSION` (currently `1`)
+- Mutate the in-memory state dict to include the default
+- Continue validation normally
+
+Unknown fields in `workflow-state.json` are silently ignored; only required keys are validated.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+- Reject workflow-state.json outright when version is missing
+- Error on unknown fields added by future versions
+
+#### Correct
+- Tolerate missing version, default to current supported version
+- Validate only the required key set; ignore unknown keys
+
+---
+
 ## Related Files
 
 - `docs/workflows/新项目开发工作流/commands/install-workflow.py`
@@ -630,8 +930,14 @@ Recommended assertion points:
 - `docs/workflows/新项目开发工作流/commands/analyze-upgrade.py`
 - `docs/workflows/新项目开发工作流/commands/upgrade-compat.py`
 - `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
+- `docs/workflows/新项目开发工作流/commands/shell/workflow-state.py`
+- `docs/workflows/新项目开发工作流/commands/shell/test_workflow_state.py`
+- `docs/workflows/新项目开发工作流/commands/start-patch-phase-router.md`
+- `docs/workflows/新项目开发工作流/commands/start-skill-patch-phase-router.md`
 - `docs/workflows/新项目开发工作流/commands/test_workflow_installers.py`
 - `docs/workflows/新项目开发工作流/commands/test_upgrade_analysis.py`
+- `docs/workflows/新项目开发工作流/需求变更管理执行卡.md`
+- `docs/workflows/新项目开发工作流/源码水印与归属证据链执行卡.md`
 - `docs/workflows/新项目开发工作流/目标项目兼容升级方案指导.md`
 - `docs/workflows/新项目开发工作流/结构性迁移设计.md`
 - `docs/workflows/新项目开发工作流/命令映射.md`

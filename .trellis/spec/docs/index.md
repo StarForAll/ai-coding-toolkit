@@ -16,7 +16,25 @@ Use this document for:
 
 ---
 
-## Documentation Types
+## Project Identity
+
+This project is a **workflow authoring toolkit** — it creates, maintains, and distributes AI-assisted development workflows. It is not a target project that uses those workflows.
+
+Key distinction:
+
+| | This project (ai-coding-toolkit) | Target projects (other repos) |
+|--|----------------------------------|-------------------------------|
+| Role | **Author and distribute** workflow assets | **Install and use** workflow assets |
+| `docs/workflows/*/` | Product source assets to maintain | Does not exist (installed as tool commands) |
+| `docs/workflows/**/commands/*.md` | Source files to edit with authoring specs | Deployed copies managed by installer |
+| `docs/workflows/**/commands/*.py` | Installer/upgrade scripts to develop | Scripts run once during embed |
+| Workflow at runtime | Trellis native workflow (no Phase Router, no `workflow-installed.json`) | Workflow-enhanced Trellis (Phase Router, strong gates, `workflow-state.json`) |
+| Dev process | `/trellis:start` → Trellis native brainstorm/check/finish-work | `/trellis:start` → Phase Router → feasibility/brainstorm/design/plan/... |
+
+**Critical rule**: When modifying files under `docs/workflows/`, you are editing **product assets** — the stage gates, Phase Router, `workflow-state.json` state machine, outsourcing controls, and delivery protocols defined in those files are features of the product, not rules for how to develop in this project. The specs that govern your editing behavior are in `.trellis/spec/scripts/` (installer/upgrade contracts, command-doc authoring contracts), not in the workflow's own `阶段状态机与强门禁协议.md` or `工作流总纲.md`.
+
+---
+
 
 | Type | Location | Purpose |
 |------|----------|---------|
@@ -34,6 +52,9 @@ Use this document for:
 Do not add generic application README templates, frontend/backend doc advice, or
 API-reference scaffolds here. This repository is an asset library and workflow
 tooling repo, not a runnable app.
+
+Do not treat `docs/workflows/*/` content as development rules for this project.
+Those are product assets — see [Project Identity](#project-identity) above.
 
 This directory should stay focused on repository-specific documentation
 conventions and examples.
@@ -196,6 +217,7 @@ After changing a workflow rule in any command file:
    - `命令映射.md` (the routing layer)
    - `多CLI通用新项目完整流程演练.md` and `完整流程演练.md` (the walkthrough layer)
    - `工作流全局流转说明（通俗版）.md` (the overview layer)
+   - Maintainer-facing boundary docs such as `装后隐藏目录与托管边界核对清单.md`, `CLI原生适配边界矩阵.md`, and `目标项目兼容升级方案指导.md`
    - Platform README files (`commands/opencode/README.md`, `commands/codex/README.md`)
    - Command-derived skill entrypoints (`.agents/skills/*/SKILL.md`, `.qoder/skills/*/SKILL.md`) when the workflow is consumed through skills
    - `learn/README.md` (examples and gotchas)
@@ -216,6 +238,7 @@ These rules have historically required cross-document propagation:
 - **ownership-proof workflow gate**: "`ownership_proof_required` 启用后，`source_watermark_channels` 决定实际验证范围，且 `visible` 是最低必选通道" — appears in feasibility, design, plan, delivery, 总纲, 命令映射, walkthrough, 通俗版, platform README, validator tests
 - **multi-cli reviewer command pairing**: "需要调用 `multi-cli-review` 时，由当前 CLI 生成至少两条只在 `--reviewer-id` 上不同的 reviewer 命令，并同时生成匹配的 `multi-cli-review-action` 聚合命令" — appears in review-gate, project-audit, 总纲, walkthrough, platform instructions, and any reviewer command pack templates
 - **workflow embed execution contract**: "只有纯净初始态目标项目才允许执行首次嵌入；只要嵌入前置条件、初始态判定、非初始态阻断、完整/有效嵌入判定、托管资产范围、`install-workflow.py` / `upgrade-compat.py --check` 行为、`workflow-embed-attempt.json` / `workflow-installed.json` 语义、或 CLI 原生入口承载方式发生变化，就必须同步评估 `工作流嵌入执行规范.md` 是否需要更新" — appears in 嵌入执行规范, 总纲, 命令映射, walkthrough, CLI 边界矩阵, 装后核对清单, platform README, installer / checker scripts, and installer regression tests
+- **command-source vs maintainer-doc boundary**: "阶段命令源文档只保留产品/runtime 语义；维护者专用说明不得混入 `commands/*.md`，而应同步落到 `装后隐藏目录与托管边界核对清单.md`、`CLI原生适配边界矩阵.md`、`目标项目兼容升级方案指导.md` 与必要的平台 README" — appears in command-doc authoring spec, maintenance docs, platform README, and any tests/assertions that verify deployed command content
 
 ---
 

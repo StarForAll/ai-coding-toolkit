@@ -13,6 +13,7 @@ This project uses three script surfaces:
 | **Python** | `trellis-library/scripts/`, `.trellis/scripts/` | CLI tools, validation, assembly, sync |
 | **Shell** | `scripts/`, `trellis-library/scripts/` | Lightweight validation, CI helpers |
 | **Workflow Python** | `docs/workflows/**/commands/*.py`, `docs/workflows/**/commands/shell/*.py` | Workflow installer, upgrade, uninstall, and helper contracts for target-project embedding |
+| **Workflow Command Docs** | `docs/workflows/**/commands/*.md` | Command source documents deployed to target projects (product assets, not this project's dev rules) |
 
 ---
 
@@ -23,6 +24,7 @@ This project uses three script surfaces:
 | [python-conventions.md](./python-conventions.md) | Writing or modifying Python scripts |
 | [shell-conventions.md](./shell-conventions.md) | Writing or modifying Shell scripts |
 | [workflow-installer-upgrade-contracts.md](./workflow-installer-upgrade-contracts.md) | Modifying workflow installer / upgrade scripts under `docs/workflows/**/commands/` |
+| [workflow-command-doc-contracts.md](./workflow-command-doc-contracts.md) | Writing or modifying workflow command `.md` files under `docs/workflows/**/commands/` |
 
 ---
 

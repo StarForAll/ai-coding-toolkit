@@ -674,7 +674,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 若 `ownership_proof_required = yes`，已通过：
 
 ```bash
-python3 <WORKFLOW_DIR>/commands/shell/ownership-proof-validate.py --phase delivery --task-dir <task-dir>
+python3 .trellis/scripts/workflow/ownership-proof-validate.py --phase delivery --task-dir <task-dir>
 ```
 
 ---

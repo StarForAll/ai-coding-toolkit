@@ -73,6 +73,7 @@ For each arrow, ask:
 | command/script ↔ docs/skills | behavior changes but instructions stay outdated |
 | config ↔ agent/command behavior | allowed paths, flags, or conventions drift |
 | spec ↔ validation flow | rules say one thing, tooling enforces another |
+| workflow install params ↔ upgrade-compat check | install uses profile/conditional content, but check compares with different profile → false drift |
 
 ### Step 3: Define the Contract
 
