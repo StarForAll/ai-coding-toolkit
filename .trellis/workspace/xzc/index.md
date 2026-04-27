@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 125
-- **Last Active**: 2026-04-21
+- **Total Sessions**: 126
+- **Last Active**: 2026-04-27
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~1722 | Active |
+| `journal-3.md` | ~1757 | Active |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 126 | 2026-04-27 | workflow: align deploy paths, profile merge behavior, and maintainer boundaries | `2247287`, `03ee8ac`, `e215c8c` | `main` |
 | 125 | 2026-04-21 | 工作流嵌入边界与 skills 目录修复 | `afd24f0` | `main` |
 | 124 | 2026-04-20 | 修复工作流嵌入协议与初始态门禁 | `031a2ca` | `main` |
 | 123 | 2026-04-20 | 新项目工作流装后核对闭环收敛 | `c3cd8df` | `main` |

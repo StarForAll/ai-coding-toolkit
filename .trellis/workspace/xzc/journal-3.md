@@ -1720,3 +1720,38 @@ Fixed the Codex workflow skills boundary so distributed skills still sync to all
 ### Next Steps
 
 - None - task complete
+
+
+## Session 126: workflow: align deploy paths, profile merge behavior, and maintainer boundaries
+
+**Date**: 2026-04-27
+**Task**: workflow: align deploy paths, profile merge behavior, and maintainer boundaries
+**Branch**: `main`
+
+### Summary
+
+Fixed workflow deploy-path/profile/route issues, synced source-vs-target doc boundaries, and validated installer/state/upgrade regressions.
+
+### Main Changes
+
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2247287` | (see git log) |
+| `03ee8ac` | (see git log) |
+| `e215c8c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
