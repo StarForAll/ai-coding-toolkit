@@ -1802,3 +1802,36 @@ Fixed workflow deploy-path/profile/route issues, synced source-vs-target doc bou
 ### Next Steps
 
 - None - task complete
+
+
+## Session 128: 收敛 multi-cli-review 配套 skill 与 workflow 契约
+
+**Date**: 2026-04-27
+**Task**: 收敛 multi-cli-review 配套 skill 与 workflow 契约
+**Branch**: `main`
+
+### Summary
+
+规范化 multi-cli-review 与 multi-cli-review-action 两个配套 skill；补充 .trellis/spec 中的联动维护规则；同步 docs/workflows/新项目开发工作流 中 review-gate、project-audit、总纲、演练与通俗版的多 CLI 审查契约口径。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `27be975` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-3.md`
-- **Total Sessions**: 127
+- **Total Sessions**: 128
 - **Last Active**: 2026-04-27
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-3.md` | ~1804 | Active |
+| `journal-3.md` | ~1837 | Active |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
 <!-- @@@/auto:active-documents -->
@@ -31,6 +31,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 128 | 2026-04-27 | 收敛 multi-cli-review 配套 skill 与 workflow 契约 | `27be975` | `main` |
 | 127 | 2026-04-27 | workflow: tighten stage gates for new-project flow | `73cafc6` | `main` |
 | 126 | 2026-04-27 | workflow: align deploy paths, profile merge behavior, and maintainer boundaries | `2247287`, `03ee8ac`, `e215c8c` | `main` |
 | 125 | 2026-04-21 | 工作流嵌入边界与 skills 目录修复 | `afd24f0` | `main` |
