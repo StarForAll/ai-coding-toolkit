@@ -139,7 +139,8 @@
       "Bash(agent-browser wait:*)",
       "Bash(agent-browser snapshot:*)",
       "Bash(agent-browser get:*)",
-      "WebFetch(domain:skills.sh)"
+      "WebFetch(domain:skills.sh)",
+      "Bash(/ops/softwares/python/bin/python3 *)"
     ]
   }
 }
