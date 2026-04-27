@@ -1755,3 +1755,50 @@ Fixed workflow deploy-path/profile/route issues, synced source-vs-target doc bou
 ### Next Steps
 
 - None - task complete
+
+
+## Session 127: workflow: tighten stage gates for new-project flow
+
+**Date**: 2026-04-27
+**Task**: workflow: tighten stage gates for new-project flow
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Workflow Gates | Tightened ownership/source-watermark freezing, design final-exit gating, and plan structured probe/CI/scope guardrails for `docs/workflows/新项目开发工作流`. |
+| Validation | Added and updated validator tests for `workflow-state.py`, `feasibility-check.py`, `design-export.py`, `plan-validate.py`, and `delivery-control-validate.py`; reran installer regression and `trellis-library validate --strict-warnings`. |
+| Review Closure | Ran and processed two rounds of `multi-cli-review` reports, accepted the real gate/validation defects, and recorded round summaries plus action logs under `tmp/multi-cli-review/04-27-workflow-audit-gate-drift/`. |
+
+**Updated Files**:
+- `docs/workflows/新项目开发工作流/commands/*.md`
+- `docs/workflows/新项目开发工作流/commands/shell/*.py`
+- `docs/workflows/新项目开发工作流/commands/shell/test_*.py`
+- `docs/workflows/新项目开发工作流/工作流总纲.md`
+- `docs/workflows/新项目开发工作流/命令映射.md`
+- `docs/workflows/新项目开发工作流/多CLI通用新项目完整流程演练.md`
+- `docs/workflows/新项目开发工作流/工作流全局流转说明（通俗版）.md`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `73cafc6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
