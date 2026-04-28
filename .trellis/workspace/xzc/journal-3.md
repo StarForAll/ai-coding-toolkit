@@ -1835,3 +1835,36 @@ Fixed workflow deploy-path/profile/route issues, synced source-vs-target doc bou
 ### Next Steps
 
 - None - task complete
+
+
+## Session 129: workflow repair closeout
+
+**Date**: 2026-04-28
+**Task**: workflow repair closeout
+**Branch**: `main`
+
+### Summary
+
+workflow design chain, ownership defaults, multi-cli review closeout
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `177748d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
