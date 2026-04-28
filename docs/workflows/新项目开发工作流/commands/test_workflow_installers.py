@@ -503,7 +503,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(".trellis/scripts/workflow/ownership-proof-validate.py", ownership_card_text)
         self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", ownership_card_text)
         self.assertNotIn("<WORKFLOW_DIR>/commands/shell", ownership_card_text)
-        self.assertEqual(record_data["workflow_version"], "0.1.24")
+        self.assertEqual(record_data["workflow_version"], "0.1.25")
         self.assertEqual(record_data["workflow_schema_version"], "2")
         self.assertEqual(record_data["initial_pack"], "pack.requirements-discovery-foundation")
         parallel = fixture / ".claude" / "commands" / "trellis" / "parallel.md"
@@ -522,7 +522,7 @@ class WorkflowInstallerTests(unittest.TestCase):
             deployed_feasibility,
         )
 
-    def test_install_personal_profile_excludes_outsourcing_cards_and_helpers(self) -> None:
+    def test_install_personal_profile_keeps_ownership_cards_and_helpers(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
 
@@ -533,22 +533,25 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(record_data["profile"], "personal")
         self.assertEqual(
             record_data["scripts"],
-            [name for name in HELPER_SCRIPTS if name not in {"delivery-control-validate.py", "ownership-proof-validate.py"}],
+            [name for name in HELPER_SCRIPTS if name not in {"delivery-control-validate.py"}],
         )
-        self.assertEqual(record_data["execution_cards"], ["需求变更管理执行卡.md"])
+        self.assertEqual(
+            record_data["execution_cards"],
+            ["需求变更管理执行卡.md", "源码水印与归属证据链执行卡.md"],
+        )
 
         workflow_scripts = fixture / ".trellis" / "scripts" / "workflow"
         self.assertTrue((workflow_scripts / "workflow-state.py").exists())
         self.assertFalse((workflow_scripts / "delivery-control-validate.py").exists())
-        self.assertFalse((workflow_scripts / "ownership-proof-validate.py").exists())
+        self.assertTrue((workflow_scripts / "ownership-proof-validate.py").exists())
 
         workflow_docs = fixture / ".trellis" / "workflow-docs"
         self.assertTrue((workflow_docs / "需求变更管理执行卡.md").exists())
-        self.assertFalse((workflow_docs / "源码水印与归属证据链执行卡.md").exists())
+        self.assertTrue((workflow_docs / "源码水印与归属证据链执行卡.md").exists())
 
         deployed_delivery = (fixture / ".claude" / "commands" / "trellis" / "delivery.md").read_text(encoding="utf-8")
-        self.assertNotIn("源码水印与归属证据链执行卡", deployed_delivery)
-        self.assertNotIn("ownership-proof-validate.py", deployed_delivery)
+        self.assertIn("源码水印与归属证据链执行卡", deployed_delivery)
+        self.assertIn("ownership-proof-validate.py", deployed_delivery)
 
     def test_upgrade_merge_respects_personal_profile_for_commands_and_codex_skills(self) -> None:
         fixture = self.create_fixture(include_codex=True)
@@ -569,10 +572,10 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(merge.returncode, 0, msg=merge.stdout + merge.stderr)
         delivery_cmd = (fixture / ".claude" / "commands" / "trellis" / "delivery.md").read_text(encoding="utf-8")
         delivery_skill = (fixture / ".agents" / "skills" / "delivery" / "SKILL.md").read_text(encoding="utf-8")
-        self.assertNotIn("源码水印与归属证据链执行卡", delivery_cmd)
-        self.assertNotIn("ownership-proof-validate.py", delivery_cmd)
-        self.assertNotIn("源码水印与归属证据链执行卡", delivery_skill)
-        self.assertNotIn("ownership-proof-validate.py", delivery_skill)
+        self.assertIn("源码水印与归属证据链执行卡", delivery_cmd)
+        self.assertIn("ownership-proof-validate.py", delivery_cmd)
+        self.assertIn("源码水印与归属证据链执行卡", delivery_skill)
+        self.assertIn("ownership-proof-validate.py", delivery_skill)
 
     def test_install_patches_finish_work_for_opencode_and_codex(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
@@ -992,7 +995,7 @@ class WorkflowInstallerTests(unittest.TestCase):
             json.dumps(
                 {
                     "status": "failed",
-                    "workflow_version": "0.1.24",
+                    "workflow_version": "0.1.25",
                     "workflow_root": "/tmp/workflow",
                     "workflow_spec_path": "/tmp/workflow/工作流嵌入执行规范.md",
                     "target_project_root": str(fixture),
@@ -1810,7 +1813,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(FINISH_WORK_MARKER, finish_work.read_text(encoding="utf-8"))
         self.assertIn(RECORD_SESSION_MARKER, record_session.read_text(encoding="utf-8"))
         record_data = json.loads((fixture / ".trellis" / "workflow-installed.json").read_text(encoding="utf-8"))
-        self.assertEqual(record_data["workflow_version"], "0.1.24")
+        self.assertEqual(record_data["workflow_version"], "0.1.25")
         self.assertEqual(record_data["previous_version"], "2.0.0")
 
         followup_check = self.run_script(

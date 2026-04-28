@@ -265,7 +265,7 @@ ls .codex/skills/.backup-original/parallel/SKILL.md 2>/dev/null
 
 | 子阶段 | Claude | OpenCode | Codex |
 |--------|--------|----------|-------|
-| UI 原型生成（`uiprompt.site -> Stitch`） | ✅ 允许作为主执行器 | ✅ 允许作为主执行器 | ❌ 禁止作为主执行器 |
+| UI 原型生成（`uiprompt.site -> Stitch -> Figma`） | ✅ 允许作为主执行器 | ✅ 允许作为主执行器 | ❌ 禁止作为主执行器 |
 | UI -> 首版代码界面 | ✅ 允许作为主执行器 | ✅ 允许作为主执行器 | ❌ 禁止作为主执行器 |
 | 后续前端视觉微调 / 样式修复 | ✅ | ✅ | ✅（但需遵循 `design/frontend-ui-spec.md`） |
 
@@ -273,6 +273,8 @@ ls .codex/skills/.backup-original/parallel/SKILL.md 2>/dev/null
 
 - 若项目存在前端视觉落地链路，`UI -> 首版代码界面` 任务完成时必须产出 `design/frontend-ui-spec.md`
 - 后续任意 CLI 再改前端时，默认都要以 `design/frontend-ui-spec.md` 作为统一约束来源
+- `design/STITCH-PROMPT.md` 同时承担 Stitch `DESIGN.md` 的设计系统语义；UI 界面默认中文，给 Stitch 的执行 prompt 默认英文
+- Figma 只承担整体视觉风格参考与校正职责，不作为具体内容布局照抄依据
 - UI 原型文件、原型导出代码、临时网页源码都只属于参考资产，不能直接作为正式实现输入
 
 ## plan 阶段执行边界

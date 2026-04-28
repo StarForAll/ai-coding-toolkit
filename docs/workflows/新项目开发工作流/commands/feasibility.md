@@ -130,7 +130,7 @@ python3 <WORKFLOW_DIR>/commands/shell/feasibility-check.py --step estimate
 - `assessment.md` 必须明确写出项目类别判断：`project_engagement_type = external_outsourcing` / `non_outsourcing`。
 - 本阶段允许输出**商务预判**、预算区间策略和是否值得继续推进，但**不承担需求澄清后的正式项目级工期承诺**。
 - 需求与客户讨论清楚后的正式项目级粗估，必须在 `brainstorm` 收口前写入 `task_dir/prd.md` 与 `docs/requirements/customer-facing-prd.md`，不能在这里跳过后移。
-- 若当前项目需要作者归属保护或存在源码移交风险，`source_watermark_*` 与 `ownership_proof_required` 必须在本阶段显式冻结，不能等到 `design` / `plan` 再回填。
+- 当前 workflow 默认启用作者归属保护；除非项目明确写 `ownership_proof_required = no`，否则 `source_watermark_*` 与 `ownership_proof_required` 都必须在本阶段显式冻结，不能等到 `design` / `plan` 再回填。
 - `assessment.md` 除了记录结论，还必须形成一份“阶段出口快照”，明确：
   - 哪些决策已经冻结
   - 哪些事项必须在 `brainstorm` 收口前重算或复核
@@ -142,15 +142,15 @@ python3 <WORKFLOW_DIR>/commands/shell/feasibility-check.py --step estimate
   - 交付控制轨道必须明确，不允许停留在”未确定”
   - **首选轨：托管部署**，尾款前只提供开发者控制的试运行环境
   - **备选轨：试运行授权**，仅在双方明确接受授权方案时使用
-  - 若涉及源码水印 / 归属证明，离开 feasibility 前至少执行一次：
-
-    ```bash
-    python3 <WORKFLOW_DIR>/commands/shell/ownership-proof-validate.py --phase feasibility --task-dir <task-dir>
-    ```
-
-    这一步用于提前暴露 `source_watermark_*` / `ownership_proof_required` 的缺失或自相矛盾，避免到 design / plan 再回填
 <!-- endif:outsourcing -->
 - 若判定为非外包项目（`project_engagement_type = non_outsourcing`），继续走通用主链，但不启用首/尾款与外部交付控制手段。
+- 离开 feasibility 前，至少执行一次源码水印 / 归属证明字段自检：
+
+  ```bash
+  python3 <WORKFLOW_DIR>/commands/shell/ownership-proof-validate.py --phase feasibility --task-dir <task-dir>
+  ```
+
+  这一步用于提前暴露 `source_watermark_*` / `ownership_proof_required` 的缺失或自相矛盾，避免到 design / plan 再回填。
 - 不允许把“隐藏后门”“未披露的失效逻辑”“不可恢复的锁定机制”当作风险控制手段写入方案。
 
 > **📋 双轨交付控制基线输出**
@@ -213,11 +213,12 @@ $TASK_DIR/
 - `delivery_control_handover_trigger`: 例如 `final_payment_received`（仅当 `project_engagement_type = external_outsourcing`）
 - `delivery_control_retained_scope`: 尾款前仍由开发者保留的环境、账号、密钥、部署控制范围；若无则写 `none`（仅当 `project_engagement_type = external_outsourcing`）
 <!-- endif:outsourcing -->
-- `source_watermark_level`: `none` / `basic` / `hybrid` / `forensic`
-- `source_watermark_channels`: 例如 `visible,zero-width,subtle-markers,zero-watermark`
-- `zero_width_watermark_enabled`: `yes` / `no`
-- `subtle_code_marker_enabled`: `yes` / `no`
-- `ownership_proof_required`: `yes` / `no`
+<!-- 所有项目通用：ownership / source watermark 默认字段 -->
+- `source_watermark_level`: `basic`
+- `source_watermark_channels`: `visible`
+- `zero_width_watermark_enabled`: `no`
+- `subtle_code_marker_enabled`: `no`
+- `ownership_proof_required`: `yes`
 - 交付控制轨道：托管部署 / 试运行授权 / 未确定
 - 当前结论的前提：
 - 场景标签：
@@ -305,15 +306,15 @@ $TASK_DIR/
 - [ ] 源码仓库、源码包、管理员账号、密钥、生产权限的移交时点
 - [ ] 若采用试运行授权：有效期、续期方式、到期行为、永久授权交付条件
 - [ ] 若采用托管部署：演示/试运行环境的访问范围、SLO、数据责任边界
+<!-- endif:outsourcing -->
 
-若项目需要作者归属保护或希望降低被冒名顶替风险，上述条件还应至少覆盖：
+当前 workflow 默认启用作者归属保护（`ownership_proof_required` 常规默认值为 `yes`）；除非项目明确写 `no`，否则上述条件在常规情况下默认应继续覆盖：
 
 - [ ] 是否要求源码水印与归属证明门禁（`ownership_proof_required`）
 - [ ] 源码水印档位（`source_watermark_level`）
 - [ ] 是否启用零宽字符水印（仅允许注释 / 文档字符串 / Markdown）
 - [ ] 是否启用不起眼代码标识
 - [ ] 是否要求交付时提供 `ownership-proof.md` 与 `source-watermark-verification.md`
-<!-- endif:outsourcing -->
 
 ## 最小补充信息集
 1. ...（关联维度/为什么会改结论）
@@ -323,9 +324,9 @@ $TASK_DIR/
 - 若不允许：补信息 / 谈判 / 终止
 ```
 
-<!-- if:outsourcing -->
 ### 项目类别与控制字段映射表
 
+<!-- if:outsourcing -->
 | 字段 | 填写位置 | 作用 | 下游消费点 |
 |---|---|---|---|
 | `project_engagement_type` | `## 概览` | 判断是否启用外包项目控制分支 | 所有后续阶段先判定项目类别；非外包项目不启用首/尾款控制 |
@@ -337,6 +338,12 @@ $TASK_DIR/
 | `trial_authorization_terms.*` | `## Trial Authorization Terms` | 冻结试运行授权条款 | `/trellis:design` 导入 `authorization-management`；`/trellis:delivery` 校验到期行为与永久授权触发条件 |
 | 源码/密钥/管理员权限移交时点 | `## 关键字段快照` | 补足正式移交边界 | `/trellis:design` 判断是否导入 `secrets-and-config`；`/trellis:plan` 拆移交任务 |
 | 尾款比例、付款结构、逾期处理 | `## 关键字段快照` + `## 必须谈判条件` | 冻结付款与移交关系 | `/trellis:plan` 标记触发依赖；`/trellis:delivery` 作为最终移交门禁依据 |
+<!-- endif:outsourcing -->
+
+### 源码水印与归属证明字段映射表
+
+| 字段 | 填写位置 | 作用 | 下游消费点 |
+|---|---|---|---|
 | `source_watermark_level` | `## 概览` | 冻结源码水印档位 | `/trellis:design` 生成 `source-watermark-plan.md`；`/trellis:plan` 拆水印任务 |
 | `source_watermark_channels` | `## 概览` | 冻结采用的源码水印通道 | `/trellis:design` 约束零宽字符与隐蔽标识边界；`/trellis:delivery` 校验交付证明 |
 | `zero_width_watermark_enabled` / `subtle_code_marker_enabled` | `## 概览` | 明确是否启用零宽字符水印与不起眼代码标识 | `/trellis:plan` 拆对应 task；`ownership-proof-validate.py` 校验一致性 |
@@ -356,7 +363,6 @@ $TASK_DIR/
 - 是否真正启用后续 design / plan / delivery 的归属证明门禁，仍以 `ownership_proof_required` 为准
 - 只要启用了归属证明门禁，当前 workflow 默认要求保留 `visible` 通道
 - `basic` / `hybrid` / `forensic` 主要表达策略强度与默认期望；真正决定后续实际校验范围的，仍是 `source_watermark_channels`
-<!-- endif:outsourcing -->
 
 约束：
 
@@ -370,9 +376,10 @@ $TASK_DIR/
 - 外包项目至少填完 `delivery_control_*` 字段，不能只写中文描述不写机器字段
 - 外包项目在 `kickoff_payment_received != yes` 时，不得进入 implementation / test-first
 - 若 `delivery_control_track = trial_authorization`，`trial_authorization_terms.*` 不得留空
-- 需要作者归属保护的项目，不得只写”会做水印”这种自然语言描述；必须显式填写 `source_watermark_*` 与 `ownership_proof_required`
-- 若启用零宽字符水印，后续 design 阶段必须遵守 [源码水印与归属证据链执行卡](../源码水印与归属证据链执行卡.md) 中的”只允许注释 / 文档字符串 / Markdown”边界
 <!-- endif:outsourcing -->
+- 所有项目都不得只写”会做水印”这种自然语言描述；必须显式填写 `source_watermark_*` 与 `ownership_proof_required`
+- `ownership_proof_required` 继续保留显式字段，当前 workflow 的常规默认值是 `yes`
+- 若启用零宽字符水印，后续 design 阶段必须遵守 [源码水印与归属证据链执行卡](../源码水印与归属证据链执行卡.md) 中的”只允许注释 / 文档字符串 / Markdown”边界
 - 若当前只能做假设，必须在”关键字段快照”或”最小补充信息集”里写明证据缺口
 - 以上外包项目字段由 `workflow-state.py validate` 在后续阶段强制校验。
 

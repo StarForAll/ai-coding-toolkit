@@ -87,6 +87,7 @@ python3 <WORKFLOW_DIR>/commands/shell/delivery-control-validate.py --phase deliv
 
 此验证覆盖 `assessment.md` 双轨字段完整性、`task_plan.md` 中的交付控制 task 图摘要结构、以及 `delivery/` 交付事件文档。若验证失败，不得进入正式交付。
 此处的 `task_plan.md` 仅作为交付控制 task 图摘要；真实执行完成情况仍以对应 Trellis task 为准。
+<!-- endif:outsourcing -->
 
 ### Step 4.5: 源码水印与归属证明门禁（如适用）
 
@@ -116,8 +117,9 @@ python3 <WORKFLOW_DIR>/commands/shell/ownership-proof-validate.py --phase delive
 python3 <WORKFLOW_DIR>/commands/shell/ownership-proof-validate.py --all --task-dir <task-dir>
 ```
 
+设计边界、术语与证据链口径以 [源码水印与归属证据链执行卡](../源码水印与归属证据链执行卡.md) 为准。
+
 失败时不允许进入正式交付，也不应把”已交付源码 / 已完成归属证明”写入交付清单。
-<!-- endif:outsourcing -->
 
 ### Step 5: 交付物生成
 

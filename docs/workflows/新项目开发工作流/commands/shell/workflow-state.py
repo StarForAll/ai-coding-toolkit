@@ -572,14 +572,6 @@ def validate_ownership_policy_controls(
         return
 
     content = assessment_file.read_text(encoding="utf-8")
-    engagement_type = extract_backticked_field(content, "project_engagement_type")
-    has_any_ownership_policy = any(
-        extract_backticked_field(content, field_name) is not None
-        for field_name in OWNERSHIP_POLICY_FIELDS
-    )
-    if engagement_type != "external_outsourcing" and not has_any_ownership_policy:
-        return
-
     rel_path = assessment_file.relative_to(repo_root).as_posix()
 
     level = extract_backticked_field(content, "source_watermark_level")

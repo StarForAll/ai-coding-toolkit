@@ -46,6 +46,7 @@ class FeasibilityCheckTests(unittest.TestCase):
             self.assertIn("project_engagement_type", text)
             self.assertIn("delivery_control_track", text)
             self.assertIn("source_watermark_level", text)
+            self.assertIn("`ownership_proof_required`: `yes`", text)
             self.assertIn("阶段出口快照", text)
 
     def test_estimate_prints_existing_assessment(self) -> None:
@@ -111,6 +112,11 @@ class FeasibilityCheckTests(unittest.TestCase):
             "- 法律/合规风险结论：通过\n"
             "- 是否允许进入 brainstorm：是\n"
             "- `project_engagement_type`: `non_outsourcing`\n"
+            "- `source_watermark_level`: `basic`\n"
+            "- `source_watermark_channels`: `visible`\n"
+            "- `zero_width_watermark_enabled`: `no`\n"
+            "- `subtle_code_marker_enabled`: `no`\n"
+            "- `ownership_proof_required`: `yes`\n"
             "\n"
             "## 红线检查\n"
             "✅ 通过\n"
@@ -121,7 +127,7 @@ class FeasibilityCheckTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
             self.assertIn("内部项目", result.stdout)
 
-    def test_validate_passes_for_internal_project_without_ownership_fields(self) -> None:
+    def test_validate_fails_for_internal_project_without_ownership_fields(self) -> None:
         content = (
             "# 评估\n"
             "- 总体决策：接\n"
@@ -135,7 +141,8 @@ class FeasibilityCheckTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
             result = self.run_script("--step", "validate", "--task-dir", td)
-            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+            self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+            self.assertIn("ownership_proof_required", result.stdout + result.stderr)
 
     def test_validate_fails_when_external_project_missing_ownership_fields(self) -> None:
         content = (

@@ -161,7 +161,7 @@ Claude Code 的用户入口仍是项目命令：
   - 放 repo 共享的 hooks 接线、默认 deny 或共享运行时基线
 - `.claude/settings.local.json`
   - 放本机 / 本环境相关的 allowlist、MCP 可用性与调试权限扩展
-- 若项目启用源码水印与归属证明门禁：
+- 源码水印与归属证明在当前 workflow 中默认启用（`ownership_proof_required` 常规默认值为 `yes`）；若项目明确设置为 `no`，才可跳过以下内容：
   - 长期策略（是否启用、边界、默认验证要求）放 `AGENTS.md`
   - 具体设计与交付产物放 `$TASK_DIR/design/source-watermark-plan.md`、`$TASK_DIR/delivery/ownership-proof.md`、`$TASK_DIR/delivery/source-watermark-verification.md`
   - 阶段校验使用 `.trellis/scripts/workflow/ownership-proof-validate.py`

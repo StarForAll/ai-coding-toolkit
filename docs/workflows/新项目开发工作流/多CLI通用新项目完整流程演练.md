@@ -90,7 +90,7 @@ git remote set-url --add --push origin <第二个仓库URL>
 - `finish-work` 是 **Trellis 原生命令/技能基线 + workflow 项目化补丁**，不是当前 workflow 新增分发的独立源文件
 - `record-session` 是 **Trellis 原生命令/技能基线 + workflow 元数据闭环补丁**
 - `archive` 仍直接复用目标项目 Trellis 基线里的 `python3 ./.trellis/scripts/task.py archive`，不是当前 workflow 额外分发的一份 helper
-- 若项目启用作者归属保护，源码水印与归属证明也应视为 workflow 的正式产物层，而不是交付前临时想起的补丁动作
+- 当前 workflow 默认启用作者归属保护（`ownership_proof_required` 常规默认值为 `yes`）；除非项目明确写 `no`，否则源码水印与归属证明都应视为 workflow 的正式产物层，而不是交付前临时想起的补丁动作
 
 如果忽略这层嵌入关系，就容易把“继承基线”误判成“workflow 漏了命令”。
 
@@ -282,7 +282,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 尾款前不交什么
 - 变更如何计入下一轮
 
-若项目启用了作者归属保护，还要在 feasibility 一并定准：
+当前 workflow 默认启用作者归属保护；除非项目明确写 `ownership_proof_required = no`，否则还要在 feasibility 一并定准：
 
 | 档位 | 含义 | 最低要求 |
 |---|---|---|
@@ -405,8 +405,11 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 ### Stitch Prompt 口径
 
 - 先去 `uiprompt.site` 选择风格词
-- 再由当前 CLI 生成固定骨架的 `design/STITCH-PROMPT.md`
-- 最后按**单页面 / 单流程**给 Stitch 执行，不采用整站一次性大 Prompt
+- 再由当前 CLI 生成固定骨架的 `design/STITCH-PROMPT.md`；该文件同时承担 Stitch `DESIGN.md` 的设计系统语义
+- `design/STITCH-PROMPT.md` 中的 UI 界面文案默认中文，给 Stitch 的执行 prompt 默认英文
+- 再按**单页面 / 单流程**给 Stitch 执行，不采用整站一次性大 Prompt
+- Stitch 首版完成后，再进入 Figma 做现代视觉风格参考与校正
+- Figma 只作为整体视觉风格参考，不作为具体内容布局照抄依据
 - 默认一个 `STITCH-PROMPT.md` 即可；页面复杂时再补页面级 Prompt 文件
 - 必须包含“去 AI 味”全局禁止项；项目只能增补，不能删减基线项。默认基线以 [工作流总纲 §3.1.2](./工作流总纲.md) 为准
 

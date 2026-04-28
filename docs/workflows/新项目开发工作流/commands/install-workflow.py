@@ -1740,7 +1740,7 @@ def main() -> int:
         print("    2. 若目标项目不是当前最新 Trellis 基线，先升级 Trellis；当前 workflow 的 archive 收尾仍直接复用基线 task.py 行为")
         print("    3. 技术架构确认后，再使用 trellis-library/cli.py assemble 为当前项目补充真实 spec 集合")
         print("    4. 在目标项目根 README.md 中说明 todo.txt 的存在与用途")
-        print("    5. 若项目启用了源码水印与归属证明门禁，交付前使用 .trellis/scripts/workflow/ownership-proof-validate.py 做阶段校验")
+        print("    5. 当前 workflow 默认启用源码水印与归属证明门禁（`ownership_proof_required` 常规默认值为 `yes`）；交付前使用 .trellis/scripts/workflow/ownership-proof-validate.py 做阶段校验")
         print("    6. 同一目标项目中各 CLI 的入口协议不同，请分别按各自原生入口使用")
         for cli_type in cli_types:
             if cli_type == "claude":

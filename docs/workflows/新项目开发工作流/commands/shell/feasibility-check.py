@@ -117,11 +117,11 @@ ASSESSMENT_TEMPLATE = """# 项目可行性评估
 - `delivery_control_track`: `hosted_deployment` / `trial_authorization`（仅当 `project_engagement_type = external_outsourcing`）
 - `delivery_control_handover_trigger`: 例如 `final_payment_received`（仅当 `project_engagement_type = external_outsourcing`）
 - `delivery_control_retained_scope`: 尾款前仍由开发者保留的环境、账号、密钥、部署控制范围；若无则写 `none`（仅当 `project_engagement_type = external_outsourcing`）
-- `source_watermark_level`: `none` / `basic` / `hybrid` / `forensic`
-- `source_watermark_channels`: 例如 `visible,zero-width,subtle-markers,zero-watermark`
-- `zero_width_watermark_enabled`: `yes` / `no`
-- `subtle_code_marker_enabled`: `yes` / `no`
-- `ownership_proof_required`: `yes` / `no`
+- `source_watermark_level`: `basic`
+- `source_watermark_channels`: `visible`
+- `zero_width_watermark_enabled`: `no`
+- `subtle_code_marker_enabled`: `no`
+- `ownership_proof_required`: `yes`
 - 项目类别判定：外包项目 / 非外包项目
 - 交付控制轨道：托管部署 / 试运行授权 / 未确定
 - 当前结论的前提：
@@ -380,78 +380,67 @@ def step_validate(task_dir: Path) -> int:
                 else:
                     print(f"✅ `{term}`: {term_value}")
 
-    ownership_fields_present = any(
-        extract_backticked_field(content, field_name) is not None
-        for field_name in (
-            "source_watermark_level",
-            "source_watermark_channels",
-            "zero_width_watermark_enabled",
-            "subtle_code_marker_enabled",
-            "ownership_proof_required",
-        )
-    )
-    if is_external_project or ownership_fields_present:
-        level = extract_backticked_field(content, "source_watermark_level")
-        if level is None:
-            errors.append("缺少 `source_watermark_level` 字段")
-            level_normalized = None
+    level = extract_backticked_field(content, "source_watermark_level")
+    if level is None:
+        errors.append("缺少 `source_watermark_level` 字段")
+        level_normalized = None
+    else:
+        level_normalized = level.lower()
+        if level_normalized not in VALID_SOURCE_WATERMARK_LEVELS:
+            errors.append("`source_watermark_level` 取值无效")
         else:
-            level_normalized = level.lower()
-            if level_normalized not in VALID_SOURCE_WATERMARK_LEVELS:
-                errors.append("`source_watermark_level` 取值无效")
-            else:
-                print(f"✅ `source_watermark_level`: {level}")
+            print(f"✅ `source_watermark_level`: {level}")
 
-        channels_raw = extract_backticked_field(content, "source_watermark_channels")
-        if channels_raw is None:
-            errors.append("缺少 `source_watermark_channels` 字段")
-            channels = set()
-        elif is_placeholder_like(channels_raw):
-            errors.append("`source_watermark_channels` 未填写具体值")
-            channels = set()
+    channels_raw = extract_backticked_field(content, "source_watermark_channels")
+    if channels_raw is None:
+        errors.append("缺少 `source_watermark_channels` 字段")
+        channels = set()
+    elif is_placeholder_like(channels_raw):
+        errors.append("`source_watermark_channels` 未填写具体值")
+        channels = set()
+    else:
+        channels = parse_channels(channels_raw)
+        if not channels:
+            errors.append("`source_watermark_channels` 不能为空")
         else:
-            channels = parse_channels(channels_raw)
-            if not channels:
-                errors.append("`source_watermark_channels` 不能为空")
-            else:
-                print(f"✅ `source_watermark_channels`: {', '.join(sorted(channels))}")
+            print(f"✅ `source_watermark_channels`: {', '.join(sorted(channels))}")
 
-        zero_width_raw = extract_backticked_field(content, "zero_width_watermark_enabled")
-        zero_width_enabled = normalize_boolean_field(zero_width_raw)
-        if zero_width_raw is None:
-            errors.append("缺少 `zero_width_watermark_enabled` 字段")
-        elif zero_width_enabled is None:
-            errors.append("`zero_width_watermark_enabled` 只能填写 `yes` / `no`")
-        else:
-            print(f"✅ `zero_width_watermark_enabled`: {zero_width_raw}")
+    zero_width_raw = extract_backticked_field(content, "zero_width_watermark_enabled")
+    zero_width_enabled = normalize_boolean_field(zero_width_raw)
+    if zero_width_raw is None:
+        errors.append("缺少 `zero_width_watermark_enabled` 字段")
+    elif zero_width_enabled is None:
+        errors.append("`zero_width_watermark_enabled` 只能填写 `yes` / `no`")
+    else:
+        print(f"✅ `zero_width_watermark_enabled`: {zero_width_raw}")
 
-        subtle_raw = extract_backticked_field(content, "subtle_code_marker_enabled")
-        subtle_enabled = normalize_boolean_field(subtle_raw)
-        if subtle_raw is None:
-            errors.append("缺少 `subtle_code_marker_enabled` 字段")
-        elif subtle_enabled is None:
-            errors.append("`subtle_code_marker_enabled` 只能填写 `yes` / `no`")
-        else:
-            print(f"✅ `subtle_code_marker_enabled`: {subtle_raw}")
+    subtle_raw = extract_backticked_field(content, "subtle_code_marker_enabled")
+    subtle_enabled = normalize_boolean_field(subtle_raw)
+    if subtle_raw is None:
+        errors.append("缺少 `subtle_code_marker_enabled` 字段")
+    elif subtle_enabled is None:
+        errors.append("`subtle_code_marker_enabled` 只能填写 `yes` / `no`")
+    else:
+        print(f"✅ `subtle_code_marker_enabled`: {subtle_raw}")
 
-        ownership_raw = extract_backticked_field(content, "ownership_proof_required")
-        ownership_required = normalize_boolean_field(ownership_raw)
-        if ownership_raw is None:
-            errors.append("缺少 `ownership_proof_required` 字段")
-        elif ownership_required is None:
-            errors.append("`ownership_proof_required` 只能填写 `yes` / `no`")
-        else:
-            print(f"✅ `ownership_proof_required`: {ownership_raw}")
+    ownership_raw = extract_backticked_field(content, "ownership_proof_required")
+    ownership_required = normalize_boolean_field(ownership_raw)
+    if ownership_raw is None:
+        errors.append("缺少 `ownership_proof_required` 字段")
+    elif ownership_required is None:
+        errors.append("`ownership_proof_required` 只能填写 `yes` / `no`")
+    else:
+        print(f"✅ `ownership_proof_required`: {ownership_raw}")
 
-        if zero_width_enabled is True and "zero-width" not in channels:
-            errors.append("已启用 `zero_width_watermark_enabled`，但 `source_watermark_channels` 未包含 `zero-width`")
-        if subtle_enabled is True and "subtle-markers" not in channels:
-            errors.append("已启用 `subtle_code_marker_enabled`，但 `source_watermark_channels` 未包含 `subtle-markers`")
-        if ownership_required is True:
-            if level_normalized == "none":
-                errors.append("`ownership_proof_required = yes` 时，`source_watermark_level` 不能为 `none`")
-            if "visible" not in channels:
-                errors.append("`ownership_proof_required = yes` 时，`source_watermark_channels` 必须包含 `visible`")
+    if zero_width_enabled is True and "zero-width" not in channels:
+        errors.append("已启用 `zero_width_watermark_enabled`，但 `source_watermark_channels` 未包含 `zero-width`")
+    if subtle_enabled is True and "subtle-markers" not in channels:
+        errors.append("已启用 `subtle_code_marker_enabled`，但 `source_watermark_channels` 未包含 `subtle-markers`")
+    if ownership_required is True:
+        if level_normalized == "none":
+            errors.append("`ownership_proof_required = yes` 时，`source_watermark_level` 不能为 `none`")
+        if "visible" not in channels:
+            errors.append("`ownership_proof_required = yes` 时，`source_watermark_channels` 必须包含 `visible`")
 
     print("\n" + "=" * 40)
     if warnings:

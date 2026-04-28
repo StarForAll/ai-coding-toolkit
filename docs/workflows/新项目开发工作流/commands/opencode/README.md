@@ -163,7 +163,7 @@ OpenCode 的规则层不要只靠单一入口。
 - `AGENTS.md`：放项目级长期稳定规则，例如执行原则、验证门禁、语言策略、风险边界
 - `opencode.json.instructions`：挂载主入口文档与必要补充，不默认全量挂载所有阶段文档
 - 平台原生 MCP / provider 配置：负责把 workflow 需要的能力真正启用
-- 若项目启用源码水印与归属证明门禁：
+- 源码水印与归属证明在当前 workflow 中默认启用（`ownership_proof_required` 常规默认值为 `yes`）；若项目明确设置为 `no`，才可跳过以下内容：
   - 长期策略（是否启用、零宽字符边界、不起眼代码标识禁区）放 `AGENTS.md`
   - 阶段产物放 `$TASK_DIR/design/source-watermark-plan.md`、`$TASK_DIR/delivery/ownership-proof.md`、`$TASK_DIR/delivery/source-watermark-verification.md`
   - 静态校验使用 `.trellis/scripts/workflow/ownership-proof-validate.py`

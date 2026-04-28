@@ -136,8 +136,8 @@ cat "$TASK_DIR/design/index.md" 2>/dev/null
 <!-- if:outsourcing -->
 - 若为外部项目，`assessment.md` 中约定的交付控制轨道、源码移交时点、权限移交时点
 - 若为外部项目，`assessment.md` 中约定的项目类别、启动款比例、开工状态、最终移交触发条件
-- 若启用了作者归属保护，`assessment.md` 中约定的 `source_watermark_*` 字段与 `$TASK_DIR/design/source-watermark-plan.md`
 <!-- endif:outsourcing -->
+- 若启用了作者归属保护，`assessment.md` 中约定的 `source_watermark_*` 字段与 `$TASK_DIR/design/source-watermark-plan.md`
 
 先判断任务是否属于：
 
@@ -234,14 +234,12 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
   - 该 task **禁止**使用 Codex 作为主执行器，必须改用 Claude Code / OpenCode
   - 该 task 的完成定义必须包含 `design/frontend-ui-spec.md`
   - 后续所有前端视觉相关 task 默认依赖这份 `frontend-ui-spec.md`
-<!-- if:outsourcing -->
 - 若 `ownership_proof_required = yes`，至少还必须拆出以下 task：
   - `可见源码水印任务`（必选；只要启用了归属证明门禁，默认必须存在）
   - `零宽字符水印任务`（当 `zero_width_watermark_enabled = yes`）
   - `隐蔽代码标识任务`（当 `subtle_code_marker_enabled = yes`）
   - `水印验证任务`
   - `归属证明包任务`
-<!-- endif:outsourcing -->
 
 ### Step 3: 生成摘要型 `task_plan.md`
 
@@ -357,12 +355,12 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 ## 外部项目交付控制（如适用）
 
 - <试运行版交付任务 / 托管部署任务 / 永久授权切换任务 / 源码移交任务 / 控制权移交任务>
+<!-- endif:outsourcing -->
 
 ## 源码水印与归属证明（如适用）
 
 - `source-watermark-plan.md`：已冻结 / 待补齐
 - <可见源码水印任务 / 零宽字符水印任务 / 隐蔽代码标识任务 / 水印验证任务 / 归属证明包任务>
-<!-- endif:outsourcing -->
 ```
 
 ### Step 4: 项目级终局任务与外部交付任务
@@ -390,6 +388,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 
 - `开工授权确认任务` 负责把”启动款比例是否达标、启动款是否已到账、是否允许进入 implementation / test-first”单独落盘
 - 若 `kickoff_payment_received != yes`，该任务只能停在等待确认或阻断状态，不得把执行态推进到 implementation / test-first
+<!-- endif:outsourcing -->
 
 若 `ownership_proof_required = yes`，`task_plan.md` 摘要中还需显式列出：
 
@@ -398,7 +397,6 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 - `隐蔽代码标识任务`（若启用）
 - `水印验证任务`
 - `归属证明包任务`
-<!-- endif:outsourcing -->
 
 这些任务同样应优先落成真实 Trellis task，而不是只留在摘要里。
 

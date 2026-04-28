@@ -35,6 +35,11 @@ TAD_REQUIRED_FIELDS = [
     "`open_risks`",
 ]
 STITCH_PROMPT_BASELINE_TERMS = [
+    "该文件同时承担 Stitch DESIGN.md 的设计系统语义",
+    "UI 界面文案默认使用中文",
+    "给 Stitch 的执行 prompt 默认使用英文",
+    "先在 Stitch 生成首版原型，再进入 Figma 做现代视觉风格参考",
+    "Figma 只作为整体视觉风格参考，不作为具体内容布局照抄依据",
     "不要通用 SaaS 模板感",
     "不要廉价渐变和无意义炫光装饰",
     "不要过度圆角、过度玻璃拟态、过度悬浮阴影",
@@ -86,7 +91,29 @@ SCAFFOLD_CONTENT = {
     "DDD.md": "# DDD\n",
     "IDD.md": "# IDD\n",
     "AID.md": "# AID\n",
-    "STITCH-PROMPT.md": "# STITCH-PROMPT\n",
+    "STITCH-PROMPT.md": """# STITCH-PROMPT
+
+## Role
+- 该文件同时承担 Stitch DESIGN.md 的设计系统语义
+- UI 界面文案默认使用中文
+- 给 Stitch 的执行 prompt 默认使用英文
+- 先在 Stitch 生成首版原型，再进入 Figma 做现代视觉风格参考
+- Figma 只作为整体视觉风格参考，不作为具体内容布局照抄依据
+
+## Global Anti-AI Rules
+- 不要通用 SaaS 模板感
+- 不要廉价渐变和无意义炫光装饰
+- 不要过度圆角、过度玻璃拟态、过度悬浮阴影
+- 不要无信息密度的卡片堆砌
+- 不要与业务无关的装饰性图形或占位文案
+- 不要“英雄区 + 三栏卖点 + 泛化插画”的通用 AI 生成组合
+
+## Project-Level Context Prompt
+- TBD
+
+## Page / Flow Prompts
+- TBD
+""",
 }
 
 
@@ -168,12 +195,12 @@ def validate(design_dir: Path) -> int:
         stitch_text = stitch_prompt_path.read_text(encoding="utf-8")
         missing_terms = [term for term in STITCH_PROMPT_BASELINE_TERMS if term not in stitch_text]
         if missing_terms:
-            print("❌ STITCH-PROMPT.md 缺少去 AI 味基线项：")
+            print("❌ STITCH-PROMPT.md 缺少 Stitch DESIGN.md / 去 AI 味基线项：")
             for term in missing_terms:
                 print(f"   - {term}")
             missing += 1
         else:
-            print("✅ STITCH-PROMPT.md 去 AI 味基线项完整")
+            print("✅ STITCH-PROMPT.md 的 Stitch DESIGN.md / 去 AI 味基线项完整")
 
     specs_dir = design_dir / "specs"
     if specs_dir.is_dir():

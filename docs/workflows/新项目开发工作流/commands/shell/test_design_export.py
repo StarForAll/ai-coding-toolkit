@@ -128,7 +128,7 @@ class DesignExportTests(unittest.TestCase):
         (d / "STITCH-PROMPT.md").write_text("# STITCH-PROMPT\n", encoding="utf-8")
         result = self.run_script("--validate", str(d))
         self.assertEqual(result.returncode, 1)
-        self.assertIn("缺少去 AI 味基线项", result.stdout)
+        self.assertIn("缺少 Stitch DESIGN.md / 去 AI 味基线项", result.stdout)
 
     def test_validate_passes_with_full_stitch_prompt_baseline_terms(self) -> None:
         d = self._make_design_dir()
@@ -137,6 +137,11 @@ class DesignExportTests(unittest.TestCase):
             "\n".join(
                 [
                     "# STITCH-PROMPT",
+                    "该文件同时承担 Stitch DESIGN.md 的设计系统语义",
+                    "UI 界面文案默认使用中文",
+                    "给 Stitch 的执行 prompt 默认使用英文",
+                    "先在 Stitch 生成首版原型，再进入 Figma 做现代视觉风格参考",
+                    "Figma 只作为整体视觉风格参考，不作为具体内容布局照抄依据",
                     "不要通用 SaaS 模板感",
                     "不要廉价渐变和无意义炫光装饰",
                     "不要过度圆角、过度玻璃拟态、过度悬浮阴影",

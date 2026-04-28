@@ -33,6 +33,11 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
     VALID_INTERNAL_ASSESSMENT = """# assessment
 - `project_engagement_type`: `non_outsourcing`
+- `source_watermark_level`: `basic`
+- `source_watermark_channels`: `visible`
+- `zero_width_watermark_enabled`: `no`
+- `subtle_code_marker_enabled`: `no`
+- `ownership_proof_required`: `yes`
 - 法律/合规风险结论：通过
 - 是否允许进入 brainstorm：是
 """
@@ -495,6 +500,29 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
         self.assertIn("source_watermark_level", validate.stdout)
+
+    def test_validate_blocks_internal_stage_when_ownership_policy_missing(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+            assessment_content=self.VALID_INTERNAL_ASSESSMENT.replace(
+                "- `source_watermark_level`: `basic`\n"
+                "- `source_watermark_channels`: `visible`\n"
+                "- `zero_width_watermark_enabled`: `no`\n"
+                "- `subtle_code_marker_enabled`: `no`\n"
+                "- `ownership_proof_required`: `yes`\n",
+                "",
+            ),
+        )
+
+        self.run_script("init", str(task_dir), "--stage", "design")
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("ownership_proof_required", validate.stdout)
 
     def test_validate_blocks_external_stage_when_retained_scope_missing(self) -> None:
         root, task_dir = self.make_fixture()

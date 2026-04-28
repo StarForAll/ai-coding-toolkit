@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI 辅助开发实战工作流 V0.1.24 - 思维导图</title>
+  <title>AI 辅助开发实战工作流 V0.1.25 - 思维导图</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#0d1117;color:#c9d1d9;overflow:auto}
@@ -43,7 +43,7 @@ const svgNS = 'http://www.w3.org/2000/svg';
 
 const tree = [
   {
-    html: 'AI 辅助开发实战工作流<br>V0.1.24',
+    html: 'AI 辅助开发实战工作流<br>V0.1.25',
     level: 0, id: 'root',
     children: [
       { html:'§1 可行性评估', cls:'L1 c1', id:'p1', sub:'<span class="cmd">/trellis:feasibility</span>', children:[
@@ -68,7 +68,7 @@ const tree = [
         { html:'prd', cls:'SK', id:'p2_s', su:'§2 PRD 编写 skill' },
       ]},
       { html:'§3 设计阶段', cls:'L1 c3', id:'p3', sub:'<span class="cmd">/trellis:design</span>', children:[
-        { html:'3.1 UI/UX 设计',           cls:'L2', det:'uiprompt.site → STITCH-PROMPT → Stitch<br>Codex 禁止承担前两步主执行<br>原型只作参考，不直接带入正式实现', id:'p3_1' },
+        { html:'3.1 UI/UX 设计',           cls:'L2', det:'uiprompt.site → STITCH-PROMPT（Stitch DESIGN 语义）→ Stitch → Figma<br>UI 中文 / Stitch prompt 英文<br>Codex 禁止承担前两步主执行<br>原型只作参考，不直接带入正式实现', id:'p3_1' },
         { html:'3.2 功能规格说明',         cls:'L2', det:'模块/业务规则<br>输入输出/异常处理/接口', id:'p3_2' },
         { html:'3.3 当前边界',             cls:'L2', det:'架构确认前只同步 customer-facing-prd.md<br>其余技术结论留在 task 工作底稿', id:'p3_3' },
         { html:'3.4 页面与交互说明',       cls:'L2', det:'页面清单/定位/结构<br>状态变化/交互说明', id:'p3_4' },

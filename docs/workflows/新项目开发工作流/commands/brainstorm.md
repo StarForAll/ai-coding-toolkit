@@ -92,6 +92,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 <!-- if:outsourcing -->
 - 若 `project_engagement_type = external_outsourcing`，则外包项目控制字段已冻结，且后续不得绕过开工款与最终移交门禁
 <!-- endif:outsourcing -->
+- 若 `assessment.md` 中 `ownership_proof_required = yes`，则后续需求路由与复杂度判断必须默认感知源码水印与归属证明链路；本阶段不展开设计细节，但不得在进入 `design` 前丢失这组前置约束
 
 - 当前客户主体、需求范围、法律/合规前提未发生足以推翻评估结论的变化
 
