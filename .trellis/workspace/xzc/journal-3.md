@@ -1868,3 +1868,68 @@ workflow design chain, ownership defaults, multi-cli review closeout
 ### Next Steps
 
 - None - task complete
+
+
+## Session 130: 新项目开发工作流修复与多轮复核收口
+
+**Date**: 2026-04-29
+**Task**: 新项目开发工作流修复与多轮复核收口
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Result |
+|------|--------|
+| Workflow rules | 为 `docs/workflows/新项目开发工作流` 落实了三条主规则：design 阶段双语 README 门禁、plan 阶段 `task_creation_checklist.md` 先确认后建真实 task、主干后固定 `性能回归与优化任务` |
+| Validators | `workflow-state.py` 增加 `README.en.md` 设计退出门禁；`plan-validate.py` 增加 checklist 校验、性能任务存在性/时序校验，以及对 `PROJECT-AUDIT` 与性能任务顺序的补强 |
+| Tests | 补齐并通过 `test_plan_validate.py`、`test_workflow_state.py`、`test_workflow_installers.py` 的相关回归测试；最终 `test_plan_validate + test_workflow_state` 66 项通过，安装器回归 83 项通过 |
+| Docs propagation | 同步了 `工作流总纲.md`、`命令映射.md`、`多CLI通用新项目完整流程演练.md`、`工作流全局流转说明（通俗版）.md`、`commands/codex/README.md`、`目标项目兼容升级方案指导.md`、思维导图与版本号 `0.1.26` |
+| Multi-review | 完成 round-1 ~ round-4 的 `multi-cli-review` / `multi-cli-review-action` 收敛；round-2、round-3 各执行一轮最小面修复，round-4 确认无新的高价值问题并关闭审查链 |
+
+**Updated Files**:
+- `docs/workflows/新项目开发工作流/commands/design.md`
+- `docs/workflows/新项目开发工作流/commands/plan.md`
+- `docs/workflows/新项目开发工作流/commands/shell/plan-validate.py`
+- `docs/workflows/新项目开发工作流/commands/shell/workflow-state.py`
+- `docs/workflows/新项目开发工作流/commands/shell/test_plan_validate.py`
+- `docs/workflows/新项目开发工作流/commands/shell/test_workflow_state.py`
+- `docs/workflows/新项目开发工作流/commands/test_workflow_installers.py`
+- `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
+- `docs/workflows/新项目开发工作流/commands/codex/README.md`
+- `docs/workflows/新项目开发工作流/工作流总纲.md`
+- `docs/workflows/新项目开发工作流/命令映射.md`
+- `docs/workflows/新项目开发工作流/多CLI通用新项目完整流程演练.md`
+- `docs/workflows/新项目开发工作流/工作流全局流转说明（通俗版）.md`
+- `docs/workflows/新项目开发工作流/工作流思维导图.html`
+- `docs/workflows/新项目开发工作流/目标项目兼容升级方案指导.md`
+
+**Verification**:
+- `/ops/softwares/python/bin/python3 -m py_compile docs/workflows/新项目开发工作流/commands/shell/plan-validate.py docs/workflows/新项目开发工作流/commands/shell/workflow-state.py docs/workflows/新项目开发工作流/commands/shell/test_plan_validate.py docs/workflows/新项目开发工作流/commands/shell/test_workflow_state.py docs/workflows/新项目开发工作流/commands/test_workflow_installers.py docs/workflows/新项目开发工作流/commands/workflow_assets.py` → pass
+- `/ops/softwares/python/bin/python3 -m unittest docs.workflows.新项目开发工作流.commands.shell.test_plan_validate docs.workflows.新项目开发工作流.commands.shell.test_workflow_state` → pass (66 tests)
+- `/ops/softwares/python/bin/python3 docs/workflows/新项目开发工作流/commands/test_workflow_installers.py` → pass (83 tests)
+- `git diff --check` → pass
+- `/ops/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings` → pass (info only)
+- `/ops/softwares/python/bin/python3 -m unittest trellis-library/tests/test_cli.py` → pass (35 tests)
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d9dadc7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
