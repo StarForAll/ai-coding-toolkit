@@ -332,7 +332,8 @@ design 后半段不得一次性跑完，而要按多个子块分段执行。每�
 
 在当前子块中正式生成或更新：
 
-- 项目根 `README.md`（最低可用版）
+- 项目根 `README.md`（默认中文版，最低可用版）
+- 项目根 `README.en.md`（与 `README.md` 对齐的英文补充版）
 - 目标项目 `docs/` 下与已确认技术架构对应的正式说明文档
 
 #### 块 D：工程化联动
@@ -398,7 +399,7 @@ sonar-scanner \
 - 块 C 与块 D 允许按项目情况调序
 - 但两者都必须留在 design 阶段内完成
 - 每完成一个子块，都必须停下来给用户确认，不能一次性连续执行到底
-- 若块 C 先于块 D 执行，README 或项目 `docs/` 中引用的检查矩阵、spec 结论或收尾门禁应明确标注为“待 design 阶段块 D 最终确认”，避免被误认为已经定稿
+- 若块 C 先于块 D 执行，`README.md` / `README.en.md` 或项目 `docs/` 中引用的检查矩阵、spec 结论或收尾门禁应明确标注为“待 design 阶段块 D 最终确认”，避免被误认为已经定稿
 - `awaiting_user_confirmation` 在 design 阶段内部可能出现多次；只有 `completed_blocks` 已覆盖块 A/B/C/D 时，才表示“准备离开 design 的最终确认点”
 
 ### Step 8: design 退出检查
@@ -435,7 +436,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 - `design-export.py --validate` 通过
 - `workflow-state.py validate` 通过
 - `docs/requirements/developer-facing-prd.md` 已生成
-- 项目根 `README.md` 已生成或确认可复用
+- 项目根 `README.md` 与 `README.en.md` 已生成或确认可复用
 
 完成退出清单后：
 
@@ -475,6 +476,7 @@ $TASK_DIR/design/
 └── pages/<page>.md
 
 README.md
+README.en.md
 .trellis/spec/
 ```
 

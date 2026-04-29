@@ -18,7 +18,7 @@ CLI_ALT_DIRS = {
     "codex": ".agents",
 }
 ALL_CLI_TYPES = ["claude", "opencode", "codex"]
-WORKFLOW_VERSION = "0.1.25"
+WORKFLOW_VERSION = "0.1.26"
 WORKFLOW_SCHEMA_VERSION = "2"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增
 
 PATCH_BASELINE_COMMANDS = ["start", "finish-work", "record-session"]

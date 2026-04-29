@@ -24,6 +24,8 @@ REQUIREMENTS_DIR = Path("docs/requirements")
 CUSTOMER_PRD = REQUIREMENTS_DIR / "customer-facing-prd.md"
 DEVELOPER_PRD = REQUIREMENTS_DIR / "developer-facing-prd.md"
 TASK_PRD = Path("prd.md")
+ROOT_README = Path("README.md")
+ROOT_README_EN = Path("README.en.md")
 ASSESSMENT_FILE = Path("assessment.md")
 VALID_ENGAGEMENT_TYPES = {"external_outsourcing", "non_outsourcing"}
 MIN_KICKOFF_PAYMENT_RATIO = 30.0
@@ -687,8 +689,11 @@ def validate_project_doc_boundary(
     if final_design_exit and architecture_confirmed is True and not developer_prd.is_file():
         errors.append("design 退出前缺少 docs/requirements/developer-facing-prd.md；块 A 尚未真正完成")
 
-    if final_design_exit and not (project_root / "README.md").is_file():
+    if final_design_exit and not (project_root / ROOT_README).is_file():
         errors.append("design 退出前缺少项目根 README.md；块 C 尚未真正完成")
+
+    if final_design_exit and not (project_root / ROOT_README_EN).is_file():
+        errors.append("design 退出前缺少项目根 README.en.md；块 C 的英文补充版尚未真正完成")
 
 
 def cmd_init(args: argparse.Namespace) -> int:

@@ -129,7 +129,7 @@ Codex 下的 MCP / skills 配置也不应全部堆进 `AGENTS.md` 或启动注�
 - 源码水印与归属证明在当前 workflow 中默认启用（`ownership_proof_required` 常规默认值为 `yes`）；若项目明确设置为 `no`，才可跳过以下内容：
   - 长期策略（是否启用、零宽字符边界、不起眼代码标识禁区）放 `AGENTS.md`
   - 设计 / 交付产物继续放 `$TASK_DIR/design/source-watermark-plan.md`、`$TASK_DIR/delivery/ownership-proof.md`、`$TASK_DIR/delivery/source-watermark-verification.md`
-  - `plan` 阶段继续按 workflow 规则拆出：可见源码水印、零宽字符水印（若启用）、隐蔽代码标识（若启用）、水印验证、归属证明包任务
+  - `plan` 阶段继续按 workflow 规则拆出：可见源码水印、零宽字符水印（若启用）、隐蔽代码标识（若启用）、水印验证、归属证明包任务；并且无论是否启用源码水印，都必须在主干任务后追加 `性能回归与优化任务`
   - 静态校验通过 `.trellis/scripts/workflow/ownership-proof-validate.py` 执行
 
 ## 推荐承载方式

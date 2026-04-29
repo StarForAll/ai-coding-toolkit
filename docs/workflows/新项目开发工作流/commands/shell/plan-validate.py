@@ -32,6 +32,15 @@ REQUIRED_SECTIONS = [
 ]
 OPTIONAL_SECTIONS = {"外部项目交付控制（如适用）"}
 REQUIRED_TASK_COLUMNS = ["任务路径", "类型", "项目域", "说明"]
+TASK_CREATION_CHECKLIST_FILE = "task_creation_checklist.md"
+CHECKLIST_REQUIRED_SECTIONS = [
+    "概述",
+    "拟创建的 Trellis Task",
+    "依赖与项目域草案",
+    "人工确认清单",
+    "人工确认结果",
+]
+CHECKLIST_RESULT_FIELDS = ("`task_creation_confirmed`", "`confirmed_scope`", "`post_mainline_performance_task`")
 LEGACY_MARKERS = [
     "任务执行矩阵",
     "当前可开始任务",
@@ -52,7 +61,10 @@ LEAF_PRD_REQUIRED_SECTIONS = (
 EARLY_PROBE_FIELDS = ("`walking_skeleton_or_smoke`", "`packaging_skeleton`", "`performance_probe`")
 AUTOMATION_FIELDS = ("`ci_strategy`", "`local_vs_ci_boundary`")
 SCOPE_FIELDS = ("`kill_criteria`", "`p1_downgrade_candidates`")
-EXIT_SNAPSHOT_FIELDS = ("`frozen_lanes`", "`current_recommended_task`", "`open_blockers`", "`reopen_conditions`")
+EXIT_SNAPSHOT_FIELDS = ("`frozen_lanes`", "`current_recommended_task`", "`open_blockers`", "`task_creation_confirmed`", "`reopen_conditions`")
+PERFORMANCE_TASK_LABEL = "性能回归与优化任务"
+PROJECT_AUDIT_MARKERS = ("PROJECT-AUDIT", "project-audit")
+PROJECT_AUDIT_ORDER_MARKERS = ("不得早于", "不早于")
 
 
 def print_result(ok: bool, success: str, failure: str) -> int:
@@ -209,6 +221,67 @@ def validate_leaf_prd(prd_path: Path) -> tuple[bool, str]:
     return True, "当前推荐执行任务对应 leaf task 已补齐最小 prd.md"
 
 
+def field_has_expected_value(section_lines: list[str], field: str, expected: str) -> bool:
+    pattern = rf"{re.escape(field)}\s*[：:]\s*`?([^`\n]+?)`?(?:\s|$)"
+    match = re.search(pattern, section_text(section_lines))
+    if not match:
+        return False
+    return match.group(1).strip().lower() == expected.lower()
+
+
+def validate_task_creation_checklist(checklist_path: Path) -> tuple[bool, str]:
+    if not checklist_path.is_file():
+        return False, "缺少 task_creation_checklist.md；真实创建 Trellis task 前的人工确认依据不存在"
+
+    content = checklist_path.read_text(encoding="utf-8")
+    lines = content.splitlines()
+
+    missing_sections = [title for title in CHECKLIST_REQUIRED_SECTIONS if not find_section_lines(lines, title)]
+    if missing_sections:
+        return False, f"task_creation_checklist.md 缺少章节: {', '.join(missing_sections)}"
+
+    result_section = find_section_lines(lines, "人工确认结果")
+    result_ok, result_message = validate_structured_fields(
+        result_section,
+        CHECKLIST_RESULT_FIELDS,
+        "task_creation_checklist.md / 人工确认结果",
+    )
+    if not result_ok:
+        return False, result_message
+
+    if not field_has_expected_value(result_section, "`task_creation_confirmed`", "yes"):
+        return False, "task_creation_checklist.md 未明确记录 `task_creation_confirmed: yes`，不得进入真实 task 创建后的验证"
+
+    if not field_has_expected_value(result_section, "`post_mainline_performance_task`", "yes"):
+        return False, "task_creation_checklist.md 未明确确认主干后固定保留 `性能回归与优化任务`"
+
+    if PERFORMANCE_TASK_LABEL not in content:
+        return False, "task_creation_checklist.md 未列出必选的 `性能回归与优化任务`"
+
+    return True, "task_creation_checklist.md 已存在且人工确认结果完整"
+
+
+def validate_project_audit_dependency(section_lines: list[str]) -> tuple[bool, str]:
+    normalized_lines = [line.strip().replace("`", "") for line in section_lines if line.strip()]
+    if not normalized_lines:
+        return False, "依赖关系章节为空，无法确认 PROJECT-AUDIT 的时序约束"
+
+    for index, line in enumerate(normalized_lines):
+        if not any(marker in line for marker in PROJECT_AUDIT_MARKERS):
+            continue
+        window_start = max(0, index - 1)
+        window_end = min(len(normalized_lines), index + 2)
+        window_text = "\n".join(normalized_lines[window_start:window_end])
+        has_order_constraint = any(marker in window_text for marker in PROJECT_AUDIT_ORDER_MARKERS) or (
+            re.search(r"(?<!不)晚于", window_text) is not None
+        )
+        mentions_performance_task = PERFORMANCE_TASK_LABEL in window_text
+        if has_order_constraint and mentions_performance_task:
+            return True, "依赖关系已写明 PROJECT-AUDIT 不得早于 `性能回归与优化任务`"
+
+    return False, "依赖关系未写明 PROJECT-AUDIT 不得早于 `性能回归与优化任务` 的约束"
+
+
 def main() -> int:
     if any(arg in {"-h", "--help"} for arg in sys.argv[1:]):
         print("用法: python3 plan-validate.py [task_dir]")
@@ -219,8 +292,17 @@ def main() -> int:
 
     task_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(".")
     plan_file = task_dir / "task_plan.md"
+    checklist_file = task_dir / TASK_CREATION_CHECKLIST_FILE
 
     print("=== 任务拆解摘要结构验证 ===")
+
+    checklist_ok, checklist_message = validate_task_creation_checklist(checklist_file)
+    checks = 1
+    passed = print_result(
+        checklist_ok,
+        "task_creation_checklist.md 已存在且已完成真实 task 创建前人工确认",
+        checklist_message,
+    )
 
     if not plan_file.exists():
         print("❌ task_plan.md 不存在")
@@ -230,8 +312,6 @@ def main() -> int:
     repo_root = find_repo_root(task_dir)
     content = plan_file.read_text(encoding="utf-8")
     lines = content.splitlines()
-    checks = 0
-    passed = 0
 
     missing_sections = [title for title in REQUIRED_SECTIONS if not find_section_lines(lines, title)]
     checks += 1
@@ -373,6 +453,7 @@ def main() -> int:
     task_paths_ok = True
     meaningful_rows_ok = True
     project_audit_count = 0
+    performance_task_count = 0
     if has_task_table and header_ok:
         for row in rows:
             if len(row) != len(header):
@@ -388,6 +469,9 @@ def main() -> int:
                 task_paths_ok = False
             if data["类型"] == "project-audit":
                 project_audit_count += 1
+            row_text = " | ".join(row)
+            if PERFORMANCE_TASK_LABEL in row_text:
+                performance_task_count += 1
 
     checks += 1
     passed += print_result(
@@ -417,6 +501,54 @@ def main() -> int:
         dependency_ok,
         "依赖关系章节已填写",
         "依赖关系章节为空或仍是占位内容",
+    )
+
+    checks += 1
+    passed += print_result(
+        performance_task_count == 1,
+        "Trellis Task 清单已包含唯一的后置 `性能回归与优化任务`",
+        "Trellis Task 清单中缺少或重复定义 `性能回归与优化任务`",
+    )
+
+    performance_dependency_ok = PERFORMANCE_TASK_LABEL in dependency_section
+    checks += 1
+    passed += print_result(
+        performance_dependency_ok,
+        "依赖关系已写明 `性能回归与优化任务` 的主干后置位置",
+        "依赖关系未写明 `性能回归与优化任务` 的依赖位置",
+    )
+
+    project_audit_dependency_ok = True
+    project_audit_dependency_message = "当前任务图未声明 project-audit，可跳过 PROJECT-AUDIT 时序约束检查"
+    if project_audit_count == 1:
+        project_audit_dependency_ok, project_audit_dependency_message = validate_project_audit_dependency(
+            find_section_lines(lines, "依赖关系")
+        )
+    checks += 1
+    passed += print_result(
+        project_audit_dependency_ok,
+        "依赖关系已写明 PROJECT-AUDIT 的性能任务后置约束",
+        project_audit_dependency_message,
+    )
+
+    performance_graph_ok = PERFORMANCE_TASK_LABEL in graph_section
+    checks += 1
+    passed += print_result(
+        performance_graph_ok,
+        "任务图摘要已包含 `性能回归与优化任务`",
+        "任务图摘要未包含 `性能回归与优化任务`",
+    )
+
+    performance_before_audit_ok = True
+    if performance_graph_ok and "PROJECT-AUDIT" in graph_section:
+        performance_index = graph_section.find(PERFORMANCE_TASK_LABEL)
+        project_audit_index = graph_section.find("PROJECT-AUDIT")
+        performance_before_audit_ok = performance_index <= project_audit_index
+    checks += 1
+    passed += print_result(
+        performance_before_audit_ok,
+        "任务图摘要已保证 `性能回归与优化任务` 不晚于 PROJECT-AUDIT",
+        "任务图摘要中 `PROJECT-AUDIT` 早于 `性能回归与优化任务`，不符合主干后置优化要求",
     )
 
     print()

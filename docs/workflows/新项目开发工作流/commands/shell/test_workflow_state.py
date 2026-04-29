@@ -113,6 +113,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         requirements_dir = root / "docs" / "requirements"
         requirements_dir.mkdir(parents=True, exist_ok=True)
         (root / "README.md").write_text("# project\n", encoding="utf-8")
+        (root / "README.en.md").write_text("# project\n", encoding="utf-8")
         (task_dir / "prd.md").write_text(
             "# sample task\n\n"
             f"{task_prd_suffix}",
@@ -340,6 +341,36 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
         self.assertIn("README.md", validate.stdout)
+
+    def test_validate_fails_when_design_exit_missing_english_readme(self) -> None:
+        root, task_dir = self.make_fixture()
+        requirements_dir = root / "docs" / "requirements"
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (requirements_dir / "developer-facing-prd.md").write_text("# developer\n- body\n", encoding="utf-8")
+        (root / "README.en.md").unlink()
+
+        self.run_script("init", str(task_dir), "--stage", "design")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--architecture-confirmed",
+            "true",
+            "--completed-blocks",
+            "block-a,block-b,block-c,block-d",
+            "--stage-status",
+            "awaiting_user_confirmation",
+            "--awaiting-user-confirmation",
+            "true",
+        )
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("README.en.md", validate.stdout)
 
     def test_set_rejects_plan_stage_execution_authorized_true(self) -> None:
         root, task_dir = self.make_fixture()

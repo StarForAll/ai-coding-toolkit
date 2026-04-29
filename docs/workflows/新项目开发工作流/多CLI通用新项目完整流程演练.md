@@ -378,7 +378,8 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
   - `design/TAD.md`
   - `design/ODD-dev.md`
   - `design/ODD-user.md`
-  - 项目根 `README.md`（最低可用版）
+  - 项目根 `README.md`（默认中文，最低可用版）
+  - 项目根 `README.en.md`（与 `README.md` 对齐的英文补充版）
 - `design/TAD.md` 在退出前至少补齐：
   - `## 架构冻结清单`
   - `## 系统边界与外部依赖`
@@ -445,7 +446,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 自动化检查矩阵已明确，且已包含明确质量平台门禁（采用 Sonar 的项目必须写真实命令，未采用时必须写替代门禁和原因）
 - `finish-work` / `record-session` 的项目化基线已定
 - `design-export.py --validate` 已通过，且 `TAD.md` 不再只是空壳标题
-- `workflow-state.py validate` 已通过，并确认 `developer-facing-prd.md` 与项目根 `README.md` 已到位
+- `workflow-state.py validate` 已通过，并确认 `developer-facing-prd.md`、项目根 `README.md` 与 `README.en.md` 已到位
 - 已完成 design 退出检查，且用户已明确确认允许进入 plan
 
 ---
@@ -454,7 +455,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 目标
 
-把冻结后的需求与设计拆成真实 Trellis task，并生成只保留摘要的 `task_plan.md`。
+把冻结后的需求与设计先收敛成 `task_creation_checklist.md`，经人工确认后再拆成真实 Trellis task，并生成只保留摘要的 `task_plan.md`。
 
 ### CLI 入口差异
 
@@ -497,8 +498,15 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - `## 范围收敛与降级预案`
 - `## 阶段出口快照`
 
+并且无论项目是否启用源码水印，都必须把 `性能回归与优化任务` 拆成真实 Trellis task：
+
+- 它固定位于目标主干任务链之后
+- 它负责主干完成后的性能回归对比与优化闭环
+- 若存在 `PROJECT-AUDIT`，则 `PROJECT-AUDIT` 不得早于它
+
 ### 退出门禁
 
+- `task_creation_checklist.md` 已存在，且已明确记录人工确认结果
 - `task_plan.md` 摘要已形成
 - 真实 Trellis task / child task 已拆出
 - 每个 task 的全局门禁来源已明确
@@ -508,7 +516,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 已明确当前要执行的叶子 task，并把状态停在“等待用户确认是否进入 implementation/test-first”
 - 进入 `implementation` / `test-first` 前，必须通过 `workflow-state` 显式设置 `checkpoints.execution_authorized = true`，并记录 `last_confirmed_transition`
 - `plan` 阶段未生成基础代码、未编写实现代码、未直接执行任何具体 task
-- `plan-validate.py` 已通过，且 `task_plan.md` 中的 walking skeleton / packaging skeleton / performance probe / CI 边界 / P1 降级候选 已明确
+- `plan-validate.py` 已通过，且 `task_plan.md` 中的 walking skeleton / packaging skeleton / performance probe / 后置性能回归与优化任务 / CI 边界 / P1 降级候选 已明确
 
 ---
 

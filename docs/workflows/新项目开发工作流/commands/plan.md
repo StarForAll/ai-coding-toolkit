@@ -178,9 +178,91 @@ cat "$TASK_DIR/design/index.md" 2>/dev/null
   - brainstorm / design / plan 内补信息
 ```
 
-### Step 2: 创建或补齐真实 Trellis task 与最小就绪产物
+### Step 2: 生成人工确认清单（先确认，再创建真实 task）
 
-真实执行单元必须优先落成 Trellis task，而不是只写在 `task_plan.md` 里。
+在真正执行任何 `task.py create` 之前，必须先生成一个 **人工确认清单**：
+
+```text
+$TASK_DIR/task_creation_checklist.md
+```
+
+这个清单的目的不是替代 `task_plan.md`，而是把“拟创建哪些 Trellis task、它们如何依赖、哪些是强制后置任务”先交给用户确认。
+
+**硬规则**：
+
+- 在 `task_creation_checklist.md` 获得人工明确确认前，不得真实创建 leaf task / child task / project-audit task
+- 不得先创建 task 再补清单
+- 不得把“先建一个占位 task”“先补个最小 task 目录”当成例外
+
+建议结构：
+
+```markdown
+## 概述
+## 拟创建的 Trellis Task
+## 依赖与项目域草案
+## 人工确认清单
+## 人工确认结果
+```
+
+其中 `人工确认结果` 至少记录：
+
+```markdown
+- `task_creation_confirmed`: `yes`
+- `confirmed_scope`: <当前已确认的任务范围>
+- `post_mainline_performance_task`: `yes`
+```
+
+确认前可以先写成 `no` / `pending`，但只有在用户明确确认后，才允许改为 `yes` 并继续下一步。
+
+推荐最小模板：
+
+```markdown
+## 概述
+
+- 来源：<prd / design / requirements>
+- 当前阶段目标：先冻结待创建任务，再进入真实 task 创建
+
+## 拟创建的 Trellis Task
+
+- TASK-A：<主干任务 1>
+- TASK-B：<主干任务 2>
+- `性能回归与优化任务`：主干任务完成后的固定后置任务（必选）
+- PROJECT-AUDIT：<如适用>
+
+## 依赖与项目域草案
+
+- 项目域 A：TASK-A → TASK-B → 性能回归与优化任务
+- PROJECT-AUDIT（如适用）依赖全部代码相关 task 完成，且不得早于 `性能回归与优化任务`
+
+## 人工确认清单
+
+- [ ] 已确认拟创建的 Trellis task 列表
+- [ ] 已确认主干任务链与项目域 lane
+- [ ] 已确认 `性能回归与优化任务` 为主干后的固定必选任务
+- [ ] 已确认当前推荐执行任务的边界与验收锚点
+
+## 人工确认结果
+
+- `task_creation_confirmed`: `yes`
+- `confirmed_scope`: <当前已冻结的任务范围>
+- `post_mainline_performance_task`: `yes`
+```
+
+若用户尚未确认：
+
+- 本轮 `plan` 停在清单阶段
+- 允许继续补清单、补依赖草案、补风险说明
+- 不允许进入真实 task 创建
+
+### Step 3: 创建或补齐真实 Trellis task 与最小就绪产物
+
+只有当 `task_creation_checklist.md` 已明确记录：
+
+```markdown
+- `task_creation_confirmed`: `yes`
+```
+
+才允许执行真实 task 创建。
 
 最少动作：
 
@@ -229,6 +311,11 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
   - `walking skeleton / smoke`：尽早跑通一条最短主链，验证前后端/模块契约是否闭环
   - `packaging skeleton`：凡是存在打包 / 分发 / 原生壳风险的项目，都应尽早产出最小骨架，而不是等所有模块完成后再第一次构建
   - `performance probe`：凡是存在体积、启动时间、内存或关键性能指标的项目，都应尽早产出 baseline / canary 测量
+- 无论项目是否启用源码水印，都**必须**额外拆出一个独立的后置 task：`性能回归与优化任务`
+  - 该 task 只能在目标主干任务链完成后开始
+  - 该 task 负责对主干完成后的关键性能指标做回归对比，并在必要时完成优化闭环
+  - 指标至少覆盖与项目相关的体积 / 启动时间 / 内存 / 响应速度中的适用项
+  - 若存在 `PROJECT-AUDIT`，则 `PROJECT-AUDIT` 不得早于该 task
 - 若项目包含前端视觉落地链路，必须额外拆出一个独立 task：`UI -> 首版代码界面`
   - 该 task 只负责把已确认 UI 原型落成第一版代码界面
   - 该 task **禁止**使用 Codex 作为主执行器，必须改用 Claude Code / OpenCode
@@ -241,7 +328,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
   - `水印验证任务`
   - `归属证明包任务`
 
-### Step 3: 生成摘要型 `task_plan.md`
+### Step 4: 生成摘要型 `task_plan.md`
 
 `task_plan.md` 只保留摘要，不再承载实时执行矩阵。
 
@@ -264,15 +351,15 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 
 说明：
 
-- `Trellis Task 清单`：列出现实存在的 task / child task / project-audit task
+- `Trellis Task 清单`：列出现实存在的 task / child task / 性能回归与优化任务 / project-audit task
 - `当前推荐执行任务（待确认）`：输出当前准备进入 implementation / test-first 的叶子 task 说明卡，至少写清任务路径、任务标题、本轮目标、本轮不做、前置依赖、验收锚点、风险提醒、推荐主执行 CLI；且该 leaf task 目录至少已补齐最小 `prd.md`
 - `依赖关系`：只描述依赖和顺序，不写实时状态
 - `早期探针与骨架任务`：明确 walking skeleton / smoke、packaging skeleton、performance probe 的前置安排；不适用时写 `not_applicable` + 原因
 - `自动化策略摘要`：明确 CI 方案与“本地跑什么 / CI 跑什么”的边界
 - `范围收敛与降级预案`：明确 kill criteria 与 `P1` 降级候选，不默认把全部范围都推进 implementation
-- `门禁摘要`：只写项目级全局门禁；task 级具体门禁在执行前写入 `$TASK_DIR/before-dev.md`
-- `任务图摘要`：用于人类快速理解 lane、主链、project-audit 触发条件
-- `阶段出口快照`：记录当前已冻结 lanes、推荐下一 leaf task、仍存阻断项，以及何时必须 reopen plan
+- `门禁摘要`：只写项目级全局门禁；task 级具体门禁在执行前写入 `$TASK_DIR/before-dev.md`，并说明真实 task 创建前已通过 `task_creation_checklist.md` 的人工确认
+- `任务图摘要`：用于人类快速理解 lane、主链、后置性能任务和 project-audit 触发条件
+- `阶段出口快照`：记录当前已冻结 lanes、推荐下一 leaf task、仍存阻断项、`task_creation_confirmed`，以及何时必须 reopen plan
 - 若存在前端视觉落地链路，必须在 `门禁摘要` 或 `任务图摘要` 中明确：
   - `UI -> 首版代码界面` task 的专属边界
   - `design/frontend-ui-spec.md` 是后续前端任务的统一约束来源
@@ -296,6 +383,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 |---------|------|--------|------|
 | .trellis/tasks/04-14-task-a | implementation | 项目域 A | ... |
 | .trellis/tasks/04-14-task-b | implementation | 项目域 A | ... |
+| .trellis/tasks/04-14-performance-opt | implementation | 全局 | 主干完成后的性能回归与优化任务 |
 | .trellis/tasks/04-14-project-audit | project-audit | 全局 | 全部代码相关 task 完成后才允许开始 |
 
 ## 当前推荐执行任务（待确认）
@@ -313,7 +401,8 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 
 - TASK-B 依赖 TASK-A
 - TASK-C 依赖 TASK-B
-- PROJECT-AUDIT 依赖全部代码相关 task 完成
+- 性能回归与优化任务依赖全部主干任务完成
+- PROJECT-AUDIT 依赖全部代码相关 task 完成，且不得早于性能回归与优化任务
 
 ## 早期探针与骨架任务
 
@@ -335,20 +424,23 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 
 - 项目级全局门禁：
   - <lint / typecheck / test / build / quality gate / delivery gate>
+- 创建门禁：
+  - 真实 Trellis task 创建前，必须先完成 `task_creation_checklist.md` 并获得人工确认
 - task 级门禁：
   - 不在本阶段预造；进入某个 task 实现前，由 `/trellis:start` 自动执行 `before-dev`
   - 自动生成或刷新 `$TASK_DIR/before-dev.md`，补该 task 的当前测试门禁与实现前约束
 
 ## 任务图摘要
 
-- 主链：TASK-A → TASK-B → TASK-C
-- 全局终局任务：PROJECT-AUDIT（条件触发）
+- 主链：TASK-A → TASK-B → TASK-C → 性能回归与优化任务
+- 全局终局任务：PROJECT-AUDIT（条件触发；不得早于性能回归与优化任务）
 
 ## 阶段出口快照
 
 - `frozen_lanes`: <当前已冻结的 lane>
 - `current_recommended_task`: <当前推荐 leaf task>
 - `open_blockers`: <仍未解决的阻断项>
+- `task_creation_confirmed`: `yes`
 - `reopen_conditions`: <何时必须回到 plan>
 
 <!-- if:outsourcing -->
@@ -363,7 +455,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 - <可见源码水印任务 / 零宽字符水印任务 / 隐蔽代码标识任务 / 水印验证任务 / 归属证明包任务>
 ```
 
-### Step 4: 项目级终局任务与外部交付任务
+### Step 5: 项目级终局任务与外部交付任务
 
 满足以下任一条件时，生成 `PROJECT-AUDIT`：
 
@@ -400,7 +492,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 
 这些任务同样应优先落成真实 Trellis task，而不是只留在摘要里。
 
-### Step 5: 验证拆分结果
+### Step 6: 验证拆分结果
 
 ```bash
 python3 <WORKFLOW_DIR>/commands/shell/plan-validate.py <task-dir>
@@ -409,8 +501,10 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 
 校验重点：
 
+- `task_creation_checklist.md` 是否存在且已明确记录人工确认结果
 - `task_plan.md` 结构是否完整
 - `task_plan.md` 中列出的关键 task 是否已真实存在
+- `性能回归与优化任务` 是否已作为真实 Trellis task 出现，并位于主干之后
 - `当前推荐执行任务（待确认）`对应 leaf task 的最小 `prd.md` 是否存在
 - 是否写清项目域执行策略、依赖关系、早期探针、自动化策略、范围收敛预案、门禁摘要、任务图摘要、阶段出口快照
 
@@ -426,8 +520,9 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 
 ```text
 $TASK_DIR/
+├── task_creation_checklist.md  ← 真实 task 创建前的人类确认依据
 ├── task_plan.md     ← 摘要型计划，不是执行真源
-└── ...              ← 对应的真实 Trellis tasks / child tasks / project-audit task（当前推荐 leaf task 至少已有最小 prd.md）
+└── ...              ← 对应的真实 Trellis tasks / child tasks / 性能回归与优化任务 / project-audit task（当前推荐 leaf task 至少已有最小 prd.md）
 ```
 
 补充状态约束：
@@ -438,7 +533,7 @@ $TASK_DIR/
 
 ## 下一步推荐
 
-**当前状态**: 真实 Trellis task 已拆出，`task_plan.md` 已包含当前推荐执行任务说明卡、任务图与门禁摘要；当前推荐 leaf task 已补齐最小 `prd.md`；在用户明确确认前，仍停留在 plan 阶段。
+**当前状态**: `task_creation_checklist.md` 已完成并获得人工确认；真实 Trellis task 已拆出，`task_plan.md` 已包含当前推荐执行任务说明卡、后置性能任务与任务图门禁摘要；当前推荐 leaf task 已补齐最小 `prd.md`；在用户明确确认前，仍停留在 plan 阶段。
 
 > 本节定义的是阶段完成后的推荐输出口径，用于帮助当前 CLI 或协作者说明下一步；它不是框架层自动跳转保证。
 

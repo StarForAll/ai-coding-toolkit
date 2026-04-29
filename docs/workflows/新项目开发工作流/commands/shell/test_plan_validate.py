@@ -14,6 +14,33 @@ PYTHON = (
     else shutil.which("python3") or shutil.which("python")
 )
 SCRIPT = REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "commands" / "shell" / "plan-validate.py"
+VALID_CHECKLIST = """# Task Creation Checklist
+
+## 概述
+- 来源：示例
+- 当前阶段目标：先冻结待创建任务，再进入真实 task 创建
+
+## 拟创建的 Trellis Task
+- TASK-A：主干任务 1
+- TASK-B：主干任务 2
+- `性能回归与优化任务`：主干任务完成后的固定后置任务（必选）
+- PROJECT-AUDIT：项目级终局任务
+
+## 依赖与项目域草案
+- 后端域：TASK-A → TASK-B → 性能回归与优化任务
+- PROJECT-AUDIT 依赖全部代码相关 task 完成，且不得早于 `性能回归与优化任务`
+
+## 人工确认清单
+- [x] 已确认拟创建的 Trellis task 列表
+- [x] 已确认主干任务链与项目域 lane
+- [x] 已确认 `性能回归与优化任务` 为主干后的固定必选任务
+- [x] 已确认当前推荐执行任务的边界与验收锚点
+
+## 人工确认结果
+- `task_creation_confirmed`: `yes`
+- `confirmed_scope`: 当前主干任务链 + 后置性能回归与优化任务 + 项目级审查
+- `post_mainline_performance_task`: `yes`
+"""
 
 VALID_PLAN = """# Task Plan: Sample
 
@@ -30,6 +57,7 @@ VALID_PLAN = """# Task Plan: Sample
 |---------|------|--------|------|
 | .trellis/tasks/04-14-task-a | implementation | 后端域 | 完成基础能力 |
 | .trellis/tasks/04-14-task-b | implementation | 后端域 | 依赖 task-a |
+| .trellis/tasks/04-14-performance-opt | implementation | 全局 | 主干完成后的性能回归与优化任务 |
 | .trellis/tasks/04-14-project-audit | project-audit | 全局 | 全部代码相关 task 完成后才允许开始 |
 
 ## 当前推荐执行任务（待确认）
@@ -45,7 +73,8 @@ VALID_PLAN = """# Task Plan: Sample
 ## 依赖关系
 
 - .trellis/tasks/04-14-task-b 依赖 .trellis/tasks/04-14-task-a
-- .trellis/tasks/04-14-project-audit 依赖全部代码相关 task 完成
+- 性能回归与优化任务依赖全部主干任务完成
+- .trellis/tasks/04-14-project-audit 依赖全部代码相关 task 完成，且不得早于性能回归与优化任务
 
 ## 早期探针与骨架任务
 
@@ -66,18 +95,20 @@ VALID_PLAN = """# Task Plan: Sample
 ## 门禁摘要
 
 - 项目级全局门禁：lint / typecheck / test / quality gate
+- 创建门禁：真实 Trellis task 创建前，必须先完成 task_creation_checklist.md 并获得人工确认
 - task 级门禁：进入某个 task 实现前，由 /trellis:start 自动执行 before-dev，并把当前有效门禁落到 $TASK_DIR/before-dev.md
 
 ## 任务图摘要
 
-- 主链：.trellis/tasks/04-14-task-a → .trellis/tasks/04-14-task-b
-- 全局终局任务：.trellis/tasks/04-14-project-audit
+- 主链：.trellis/tasks/04-14-task-a → .trellis/tasks/04-14-task-b → 性能回归与优化任务
+- 全局终局任务：PROJECT-AUDIT（条件触发；不得早于性能回归与优化任务）
 
 ## 阶段出口快照
 
 - `frozen_lanes`: backend, qa, packaging
 - `current_recommended_task`: .trellis/tasks/04-14-task-a
 - `open_blockers`: none
+- `task_creation_confirmed`: yes
 - `reopen_conditions`: 若 smoke / packaging skeleton 失败则回到 plan
 """
 
@@ -115,8 +146,9 @@ class PlanValidateScriptTests(unittest.TestCase):
         task_root.mkdir(parents=True, exist_ok=True)
         current_task = task_root / "04-14-plan-root"
         current_task.mkdir(parents=True, exist_ok=True)
-        for name in ("04-14-task-a", "04-14-task-b", "04-14-project-audit"):
+        for name in ("04-14-task-a", "04-14-task-b", "04-14-performance-opt", "04-14-project-audit"):
             (task_root / name).mkdir(parents=True, exist_ok=True)
+        (current_task / "task_creation_checklist.md").write_text(VALID_CHECKLIST, encoding="utf-8")
         return current_task
 
     def write_leaf_prd(self, root: Path, task_name: str) -> None:
@@ -152,6 +184,33 @@ class PlanValidateScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("用法: python3 plan-validate.py [task_dir]", result.stdout)
         self.assertNotIn("task_plan.md 不存在", result.stdout)
+
+    def test_missing_task_creation_checklist_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
+            (task_dir / "task_creation_checklist.md").unlink()
+            self.write_plan(task_dir, VALID_PLAN)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("task_creation_checklist.md", result.stdout)
+
+    def test_unconfirmed_task_creation_checklist_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
+            pending = VALID_CHECKLIST.replace("`task_creation_confirmed`: `yes`", "`task_creation_confirmed`: `pending`")
+            (task_dir / "task_creation_checklist.md").write_text(pending, encoding="utf-8")
+            self.write_plan(task_dir, VALID_PLAN)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("task_creation_confirmed", result.stdout)
 
     def test_legacy_execution_markers_fail(self) -> None:
         with tempfile.TemporaryDirectory() as temp_root:
@@ -218,6 +277,79 @@ class PlanValidateScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
         self.assertIn("存在不存在的任务路径", result.stdout)
+
+    def test_missing_performance_task_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
+            broken = VALID_PLAN.replace(
+                "| .trellis/tasks/04-14-performance-opt | implementation | 全局 | 主干完成后的性能回归与优化任务 |\n",
+                "",
+            ).replace(
+                "- 性能回归与优化任务依赖全部主干任务完成\n",
+                "",
+            ).replace(
+                " → 性能回归与优化任务",
+                "",
+            )
+            self.write_plan(task_dir, broken)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("性能回归与优化任务", result.stdout)
+
+    def test_missing_project_audit_performance_constraint_in_dependencies_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
+            broken = VALID_PLAN.replace(
+                "- .trellis/tasks/04-14-project-audit 依赖全部代码相关 task 完成，且不得早于性能回归与优化任务\n",
+                "- .trellis/tasks/04-14-project-audit 依赖全部代码相关 task 完成\n",
+            )
+            self.write_plan(task_dir, broken)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("PROJECT-AUDIT", result.stdout)
+        self.assertIn("性能回归与优化任务", result.stdout)
+
+    def test_project_audit_before_performance_in_graph_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
+            broken = VALID_PLAN.replace(
+                "## 任务图摘要\n\n- 主链：.trellis/tasks/04-14-task-a → .trellis/tasks/04-14-task-b → 性能回归与优化任务\n- 全局终局任务：PROJECT-AUDIT（条件触发；不得早于性能回归与优化任务）\n",
+                "## 任务图摘要\n\n- 全局终局任务：PROJECT-AUDIT（条件触发；不得早于该任务）\n- 主链：.trellis/tasks/04-14-task-a → .trellis/tasks/04-14-task-b → 性能回归与优化任务\n",
+            )
+            self.write_plan(task_dir, broken)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("PROJECT-AUDIT", result.stdout)
+        self.assertIn("早于", result.stdout)
+
+    def test_project_audit_not_later_than_wording_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
+            broken = VALID_PLAN.replace(
+                "- .trellis/tasks/04-14-project-audit 依赖全部代码相关 task 完成，且不得早于性能回归与优化任务\n",
+                "- .trellis/tasks/04-14-project-audit 依赖全部代码相关 task 完成，且不晚于性能回归与优化任务\n",
+            )
+            self.write_plan(task_dir, broken)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("PROJECT-AUDIT", result.stdout)
+        self.assertIn("性能回归与优化任务", result.stdout)
 
     def test_missing_before_dev_marker_in_gate_summary_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp_root:
@@ -300,6 +432,9 @@ class PlanValidateScriptTests(unittest.TestCase):
                 ".trellis/tasks/04-14-task-b",
                 "tasks/04-14-task-b",
             ).replace(
+                ".trellis/tasks/04-14-performance-opt",
+                "tasks/04-14-performance-opt",
+            ).replace(
                 ".trellis/tasks/04-14-project-audit",
                 "tasks/04-14-project-audit",
             )
@@ -321,6 +456,9 @@ class PlanValidateScriptTests(unittest.TestCase):
             ).replace(
                 ".trellis/tasks/04-14-task-b",
                 "./tasks/04-14-task-b",
+            ).replace(
+                ".trellis/tasks/04-14-performance-opt",
+                "./tasks/04-14-performance-opt",
             ).replace(
                 ".trellis/tasks/04-14-project-audit",
                 "./tasks/04-14-project-audit",
