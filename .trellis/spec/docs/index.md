@@ -38,7 +38,7 @@ Key distinction:
 
 | Type | Location | Purpose |
 |------|----------|---------|
-| Repository README | `README.md` | Explain what this repo contains and how the asset layers relate |
+| Repository README | `README.md`, `README.en.md` | Explain what this repo contains and how the asset layers relate; maintain the Chinese default plus aligned English companion |
 | Asset README | `agents/README.md`, `commands/*/README.md`, `docs/README.md` | Clarify scope and structure of one asset area |
 | Workflow docs | `docs/workflows/**` | Human-facing workflow notes and command references |
 | Workflow authoring spec | `docs/workflows/自定义工作流制作规范.md` | Cross-workflow authoring rules, including Trellis upgrade-compat baseline requirements |
@@ -100,6 +100,11 @@ Must include:
 - **Source-of-truth explanation**: Which directories are source assets versus derived tool deployments
 - **Validation commands**: How to run repo checks that matter
 - **Links**: To workflow docs, `trellis-library`, and relevant spec indexes
+
+Additional contract for this repository:
+- The project root README is a **paired bilingual asset**: `README.md` is the default Simplified Chinese entry, and `README.en.md` is the aligned English companion
+- **Any modification** to the project root README content, structure, commands, paths, links, or status descriptions must update **both** `README.md` and `README.en.md` in the same change
+- The two files must keep visible cross-links near the top so readers can switch languages directly
 
 ### Directory README
 
@@ -193,6 +198,7 @@ What belongs here and what does not.
 - **Broken links**: Internal links that don't work
 - **App-centric boilerplate**: Installation or runtime sections for software this repo does not ship
 - **Inconsistent formatting**: Mixed styles in same doc
+- **Split bilingual README maintenance**: Updating `README.md` or `README.en.md` alone when the root README contract requires both files to stay aligned
 - **Target-project ambiguity**: Referencing paths like `docs/...` without saying whether they live in this repo, a task directory, or the installed target project
 - **Artifact conflation**: Treating task-local files such as `$TASK_DIR/prd.md` as equivalent to long-lived project requirement documents
 - **Version drift across workflow source files**: Updating `WORKFLOW_VERSION` or a workflow title without synchronizing the other active references, installer assertions, or generated companion docs

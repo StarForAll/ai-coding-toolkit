@@ -1,5 +1,7 @@
 # AI 编程工具箱（ai-coding-toolkit）
 
+> 默认版本：简体中文 | [English](./README.en.md)
+
 沉淀我在 AI 辅助编程过程中的可复用资产：规范、模板、agent、命令、skills、多工具配置、以及工作流。
 
 ## 目录结构

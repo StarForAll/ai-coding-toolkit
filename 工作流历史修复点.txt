@@ -44,3 +44,7 @@ git remote set-url --add --push origin git@gitee.com:xxx/yyy.git
 21. research agent 搜索策略完善:exa+grok-search+deepwiki,根据具体的场景使用对应的工具
 
 22. 补充 AI CLI 所需要使用的工作流嵌入规范指导文档
+
+23. 双语言版本README
+
+24. 目标项目必须包含性能优化子任务
