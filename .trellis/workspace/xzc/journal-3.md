@@ -1933,3 +1933,52 @@ workflow design chain, ownership defaults, multi-cli review closeout
 ### Next Steps
 
 - None - task complete
+
+
+## Session 131: workflow-audit skill implementation and validation
+
+**Date**: 2026-05-01
+**Task**: workflow-audit skill implementation and validation
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| New skill | Added `workflow-audit` as a maintainer-side workflow auditing skill under `.agents/skills/workflow-audit/` |
+| Claude entry | Added `.claude/skills/workflow-audit/` as a Claude-specific skill surface synchronized to the same behavior contract |
+| Source-of-truth spec | Added `.trellis/spec/skills/workflow-audit.md` and updated `.trellis/spec/skills/index.md` to register the supplement |
+| Templates | Added input, audit-report, lightweight-output, and Codex-handoff templates under both skill surfaces |
+| Validation scenarios | Added three first-version Markdown test scenarios covering lightweight static audit, nontrivial full audit, and Codex handoff |
+| Real validation | Performed `/tmp` temporary-project validation, including `trellis init`, `detect-embed-state.py`, and post-install `upgrade-compat.py --check` evidence review |
+| Review loop | Generated and consumed third-party `multi-cli-review` reports, then tightened workflow-audit boundaries, Codex handoff rules, and report contracts |
+
+**Key outcomes**:
+- `workflow-audit` now audits workflows only, not ordinary business code.
+- Non-trivial audits explicitly enter the `brainstorm` mainline; `grill-me` remains an internal conditional clarification submode.
+- Codex must stop at the formal embed step and hand off using the `Claude Code -> OpenCode` order.
+- Spec is the behavioral source of truth; `.agents/skills/` and `.claude/skills/` must stay synchronized with it in the same change when behavior changes.
+- The installed temporary target project at `/tmp/workflow-audit-dry-run` was verified as `ALREADY_VALID_EMBEDDED`.
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4ecf0fc` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
