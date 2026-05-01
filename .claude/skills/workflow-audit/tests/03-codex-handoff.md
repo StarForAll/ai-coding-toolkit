@@ -12,11 +12,13 @@ User input:
 
 ## Expected Mode
 
-Non-trivial audit mode, with Codex handoff triggered before the formal embed execution.
+Task-based runtime mode, with Codex handoff triggered before the formal embed execution.
 
 ## Expected Key Behaviors
 
-- recognize that the current CLI is Codex (either explicitly supplied or safely inferred from runtime)
+- execute evidence mainline steps A, B, and C first (under Codex)
+- based on findings, determine step D is required
+- before reaching formal embed in step D, recognize the Codex boundary
 - stop before continuing the formal temporary-project embed execution
 - emit the `Codex Handoff` template block
 - use default takeover order `Claude Code -> OpenCode`
@@ -26,6 +28,7 @@ Non-trivial audit mode, with Codex handoff triggered before the formal embed exe
 
 ## Must Not
 
+- must not pre-decide mode before step A/B/C
 - must not allow Codex to continue leading the first formal embed execution
 - must not output only “switch to another CLI” without concrete handoff commands
 - must not treat handoff as if validation were already completed

@@ -28,12 +28,12 @@ current_cli: <optional; infer from runtime when omitted>
   - default: `auto`
   - meanings:
     - `auto`: start with static evidence and escalate only when runtime validation is actually required
-    - `yes`: go directly down the runtime-validation path
-    - `no`: stay on static/document-only audit unless the skill later proves that runtime validation is necessary; in that case it must explain the escalation and switch
+    - `yes`: after completing A/B/C, the audit MUST enter task-based runtime mode and proceed to Step D, executing within CLI-allowed boundaries (Codex must stop and hand off before formal embed)
+    - `no`: stay on static/document-only audit unless the skill later proves that runtime validation is necessary; in that case it must output a Needs Confirmation block and wait for the user to decide whether to proceed
 
 - `force_full_brainstorm`
   - default: `no`
-  - `yes`: bypass lightweight shortcuts and enter the full `brainstorm` mainline
+  - `yes`: enter task-based mode (task + `brainstorm` mainline); does NOT by itself force runtime validation (Step D), which is judged separately based on Step 2 findings
 
 - `current_cli`
   - optional

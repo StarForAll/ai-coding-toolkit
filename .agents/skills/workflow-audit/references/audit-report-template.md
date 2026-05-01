@@ -1,6 +1,6 @@
 # audit-report.md Template
 
-Non-trivial, task-based `workflow-audit` runs must maintain `audit-report.md` inside the task directory.  
+Task-based `workflow-audit` runs must maintain `audit-report.md` inside the task directory.
 The file may be updated incrementally during the active audit and becomes the current finalized report at the stop-and-confirm boundary.
 
 ```markdown
@@ -8,19 +8,21 @@ The file may be updated incrementally during the active audit and becomes the cu
 
 ## Audit Target and Boundary
 - Workflow Root: `<workflow_path>`
-- Audit Scope: <static-only | full>
+- Audit Scope: <task-based static | task-based runtime>
 - Current CLI: <inferred or explicit>
 - Candidate Issues: <none / list>
 
 ## Evidence-Gathering Actions Executed in This Round
-- [Static] <repo/docs/spec inspection actions>
-- [Runtime] <if any: list /tmp, trellis init, detect-embed-state, install-workflow --dry-run, formal install-workflow, upgrade-compat --check, and post-install verification actions>
+- <evidence action> — Layer: <source repo>
+- <evidence action> — Layer: <generated target project>
+- <evidence action> — Layer: <runtime command output>
 
 ## Confirmed Issues
 
 ### [P0|P1|P2] <issue title>
 - Conclusion: <one-sentence issue conclusion>
 - Evidence Source:
+  - Layer: <source repo | generated target project | runtime command output>
   - <file path + relevant lines>
   - <command + key result>
 - Validation Action:
