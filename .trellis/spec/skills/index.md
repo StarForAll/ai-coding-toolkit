@@ -10,6 +10,22 @@ Skills are self-contained AI capabilities that can be discovered and installed v
 
 ---
 
+## Repo-local Maintainer Skill Supplements
+
+Most rules in this document describe installable skills under `skills/`.
+
+When this repository defines a stable repo-local maintainer skill surface under
+`.agents/skills/`, `.claude/skills/`, or another repo-local CLI entrypoint, and
+that skill needs repo-specific behavioral rules beyond the generic guidance
+here, add a dedicated supplement document in this directory rather than
+bloating `index.md`.
+
+Current supplement:
+
+- [workflow-audit](./workflow-audit.md) - behavioral spec for the repo-local maintainer skill surfaces `.agents/skills/workflow-audit/` and `.claude/skills/workflow-audit/`
+
+---
+
 ## Directory Structure
 
 ```

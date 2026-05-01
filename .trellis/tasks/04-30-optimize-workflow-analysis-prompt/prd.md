@@ -1,0 +1,338 @@
+# brainstorm: optimize workflow analysis prompt
+
+## Goal
+
+Design a repo-local maintainer skill, `.agents/skills/workflow-audit/`, for auditing workflows under `docs/workflows/*` in an evidence-first way. The skill should use real `/tmp` Trellis baseline plus embed validation when needed, only output confirmed issues with concrete fix options before any source edits, and keep `docs/workflows/新项目开发工作流/` as the default example and default path.
+
+## What I Already Know
+
+- The content inside double quotes in the original input is a format template, not the final formal question.
+- The optimization target is the prompt/instruction structure used to ask for workflow analysis and repair planning.
+- The workflow under analysis is `docs/workflows/新项目开发工作流/`.
+- The analysis phase should require a real temporary project under `/tmp`, run `trellis init`, and validate actual embed behavior instead of relying only on static reading.
+- During analysis, the assistant should only output issue findings, evidence, and fix proposals; it should not modify source files until the user confirms.
+- Current workflow docs require pure Trellis baseline comparison from a temporary `/tmp` project rather than treating this repo's own `.trellis/` and CLI directories as the baseline.
+- Current workflow docs explicitly state that Codex should not be the main CLI driving the first formal embed step.
+- The user prefers to make the deliverable a repo-local maintainer skill first.
+- The user selected the `workflow-audit` positioning for the repo-local maintainer skill.
+- The user wants `workflow-audit` to have a proactive trigger description rather than requiring explicit invocation only.
+- The user wants the first version of `workflow-audit` to work across `docs/workflows/*`, with `docs/workflows/新项目开发工作流/` as the default example and default path.
+- `brainstorm` must remain the mandatory mainline inside `workflow-audit`.
+- `grill-me` is accepted as an optional deep-clarification submode, but any genuinely unresolved critical ambiguity must be clarified explicitly rather than guessed.
+- `workflow-audit` should explicitly declare `brainstorm` as its mainline dependency and `grill-me` as a conditional deep-clarification submode, rather than only reusing their methodology implicitly.
+- The user does not accept designing the new skill so that it mechanically launches multiple independent `workflow-audit` runs inside the same task by default.
+- However, if the user asks to revisit the current conclusions, or new evidence materially changes the judgment while the audit task is still active, the same audit task may continue and revise its conclusions instead of forcing a new task immediately.
+- The user wants the minimal validation set to exist as actual files inside the `workflow-audit` skill directory.
+- Current `.agents/skills/` directories do not appear to have an established `references/`, `tests/`, or `evals/` subdirectory pattern, while some root-level reusable `skills/` do already use `references/`.
+- The user prefers the first version's persisted minimal validation set to live under `tests/`.
+- The user wants the Codex handoff template to include a preferred non-Codex CLI takeover order rather than treating all non-Codex CLIs as equal.
+- The default preferred non-Codex CLI takeover order should be `Claude Code` first and `OpenCode` second.
+- A single `workflow-audit` run should review only one workflow root.
+- The audited workflow itself is an untrusted target and may be modified; its own internal routing semantics must not be treated as a trusted control plane for `workflow-audit`.
+- Post-audit remediation recommendations do not have to be limited to this project's local skills; they may also recommend appropriate global skills when relevant.
+- In post-audit routing guidance, project-local maintainer skills should be preferred first when they clearly match; global skills should be recommended only as fallback or supplement.
+- If neither a suitable project-local skill nor a clearly appropriate global skill exists, `workflow-audit` should provide a plain-language next action instead of forcing a weak skill recommendation.
+- Post-audit routing recommendations should include a brief reason for why the suggested next action/skill was chosen over the alternatives.
+- The trusted post-audit routing whitelist should be limited to current-project maintainer-side skills/actions only, not global skills.
+- `grill-me` should not be part of the first-version post-audit trusted whitelist; it remains only an internal conditional deep-clarification submode within `workflow-audit`.
+- The first-version trusted post-audit whitelist should be `brainstorm`, `start`, `check`, and `update-spec`.
+- When `workflow-audit` recommends one of the trusted whitelist skills, it should also state the trigger condition for choosing that skill.
+- If lightweight direct-report mode discovers that runtime validation is actually required, `workflow-audit` should first explain the escalation reason and then switch into the non-trivial audit path.
+- In the recommended input contract, `need_runtime_validation` should default to `auto`.
+- In the recommended input contract, `force_full_brainstorm` should default to `no`.
+- In the recommended input contract, `workflow_path` should default to `docs/workflows/新项目开发工作流/` when the user does not explicitly specify another single target.
+- The first-version recommended input contract should not add a dedicated `preferred_handoff_cli` field.
+- Default handoff order stays `Claude Code -> OpenCode`, and only explicit user-stated natural-language constraints should override it.
+- The primary spec landing area for `workflow-audit` should be `.trellis/spec/skills/`, with only minimal supplemental updates to `.trellis/spec/docs/` or `.trellis/spec/guides/` when genuinely required.
+- Within `.trellis/spec/skills/`, `workflow-audit` should have its own dedicated detailed spec document rather than being documented only in `index.md`.
+- The dedicated detailed spec document under `.trellis/spec/skills/` should be named `workflow-audit.md`.
+- `.trellis/spec/skills/workflow-audit.md` should use a fixed section template that mirrors the skill's main control surfaces, including purpose, triggers, input contract, execution modes, task model, report contracts, CLI/handoff rules, post-audit routing, and validation.
+- `.trellis/spec/skills/workflow-audit.md` should be treated as the behavioral source of truth, while `.agents/skills/workflow-audit/SKILL.md` should act as the executable trigger/entry artifact and stay synchronized to the spec.
+- Any behavior-affecting change should update `.trellis/spec/skills/workflow-audit.md` and `.agents/skills/workflow-audit/SKILL.md` in the same change.
+- If a behavior-affecting change also impacts `references/` templates or `tests/` scenarios, those companion files should be updated in the same change as well.
+- The first-version `references/` layout under `.agents/skills/workflow-audit/` should be fixed to:
+  - `references/input-template.md`
+  - `references/audit-report-template.md`
+  - `references/lightweight-output-template.md`
+  - `references/codex-handoff-template.md`
+- The first-version `tests/` layout under `.agents/skills/workflow-audit/` should be fixed to:
+  - `tests/01-lightweight-static.md`
+  - `tests/02-nontrivial-full-audit.md`
+  - `tests/03-codex-handoff.md`
+- The first version of `.agents/skills/workflow-audit/` should not add a local `README.md`; the information surface should stay limited to `SKILL.md`, `references/`, and `.trellis/spec/skills/workflow-audit.md`.
+- In `.trellis/spec/skills/index.md`, `workflow-audit` should be represented by a brief index entry plus a link to `.trellis/spec/skills/workflow-audit.md`, rather than repeating its detailed control surfaces inline.
+- In `.agents/skills/workflow-audit/SKILL.md`, the first-version trigger description should explicitly cover both workflow-source maintenance audits and workflow install/embed/post-install validation audits.
+- In `.agents/skills/workflow-audit/SKILL.md`, the first-version trigger description should also explicitly exclude ordinary application/business code auditing; the skill targets workflows only.
+- The first-version persisted validation scenarios under `.agents/skills/workflow-audit/tests/` should be fixed to:
+  - `tests/01-lightweight-static.md`
+  - `tests/02-nontrivial-full-audit.md`
+  - `tests/03-codex-handoff.md`
+- Each first-version Markdown scenario file under `tests/` should use a fixed internal section template:
+  - `Purpose`
+  - `Input`
+  - `Expected Mode`
+  - `Expected Key Behaviors`
+  - `Must Not`
+- If the user supplies multiple workflow targets in one request, `workflow-audit` should stop and require the user to choose one explicit target rather than auto-selecting.
+- If the recommended input contract omits `current_cli`, `workflow-audit` should infer it from the runtime environment when possible, and only ask the user if a CLI-sensitive path is reached and the CLI still cannot be determined safely.
+- When `workflow-audit` creates a task, the default task naming convention should be `workflow-audit: <workflow-name>`.
+- The first-version persisted validation scenarios under `tests/` should use Markdown case files by default.
+- When a dedicated child audit task is created under an existing parent task, execution should switch into the child audit task; after that child task completes, execution should return to the parent task.
+- Returning from a child audit task to its parent should not happen immediately after the audit conclusion is produced.
+- The child audit task should remain the active context through audit, user confirmation of the conclusion, and the follow-up remediation work driven by that conclusion.
+- Only after the remediation work is completed and the human explicitly confirms the child audit task is complete should execution return to the parent task.
+- When there is no active task and the audit is non-trivial, `workflow-audit` should create a new top-level audit task rather than trying to attach to a non-existent parent.
+
+## Assumptions (Temporary)
+
+- The request started from optimizing a reusable prompt template, but has now converged to a skill-first deliverable where any prompt/template structure is embedded into the skill contract, input format, and examples.
+- This turn is still requirements/design only for the skill contract; no implementation of workflow-source changes is requested in this turn.
+
+## Open Questions
+
+- None at the moment. Current state is ready for a consolidated design summary / final confirmation.
+
+## Requirements (Evolving)
+
+The bullets below originated from prompt-template exploration and now apply to the `workflow-audit` skill body, its input contract, and its output rules.
+
+- The optimized prompt must clearly distinguish template scaffolding from the actual issue content to be supplied later.
+- The optimized prompt must force evidence-first analysis against the real workflow source directory.
+- The optimized prompt must require `/tmp` temporary-project validation with `trellis init`.
+- The optimized prompt must require analysis-only output before any implementation.
+- The optimized prompt should be reusable as a template, while defaulting to the current workflow path and current repo constraints.
+- The optimized prompt should require a fixed analysis-stage report structure.
+- The optimized prompt should include explicit hard prohibitions covering common workflow-analysis failure modes.
+- The optimized prompt should require every confirmed issue to use a fixed evidence schema.
+- The optimized prompt should prescribe explicit execution order and concrete command skeletons for the analysis phase.
+- The optimized prompt should require the analysis to stop with an explicit `Evidence Gap` whenever real `/tmp` validation or embed verification cannot actually be executed.
+- The optimized prompt should require every confirmed issue and key validation step to cite concrete file paths or line references plus key command results.
+- The optimized prompt should force explicit separation between source-workflow maintenance context and `/tmp` target-project validation context.
+- The optimized prompt should require user-provided candidate issue lists to be handled as hypotheses pending validation rather than as confirmed defects.
+- The final deliverable should include a copy-ready main prompt template plus a very short usage note explaining which slots are editable and which hard rules should remain untouched.
+- The main prompt body should remain tool-agnostic, while any `$brainstorm`-style trigger should live only in the short usage note as an optional entry method.
+- The optimized prompt should require CLI-native adaptation analysis to be reported separately for `Claude Code`, `OpenCode`, and `Codex`, rather than as one combined statement.
+- The optimized prompt should explicitly allow the final conclusion to be “no confirmed issues / no source changes recommended for now” when the evidence does not support any defect.
+- The optimized prompt should require confirmed issues to be prioritized by severity or impact rather than treated as a flat list.
+- The final deliverable should use Chinese as the primary language.
+- Editable placeholders in the final Chinese template should use explicit marker styles so users do not confuse them with formal problem statements.
+- The optimized prompt should explicitly distinguish between `Codex may participate in source reading, evidence gathering, analysis, and reporting` versus `Codex must not be the main executor of the first formal embed step into the temporary target project`.
+- When the analysis reaches the temporary-project formal embed step, if the current main executor is Codex, the prompt should require stopping there and handing off the embed action to another suitable CLI.
+- When Codex stops at the formal embed step, the prompt should require an explicit handoff block describing why execution must stop, which CLI should take over, what commands should be run next, and what evidence should be brought back.
+- The Codex handoff block should include command-level instructions for the next CLI rather than only a narrative handoff.
+- The optimized prompt should still require proactive issue discovery even when the user provides no candidate issue list.
+- After another CLI completes the temporary-project embed handoff, the current analysis session should resume, integrate the returned evidence, and produce the unified final analysis report.
+- Any non-Codex CLI taking over the temporary-project embed step should be constrained to runtime validation only and forbidden from modifying workflow source files during the analysis stage.
+- Each proposed fix direction should include propagation scope and the likely files or document layers that would need synchronized updates.
+- It may be more appropriate for the final deliverable to be skill-first, with the prompt template embedded as the skill's input/output contract and example, rather than shipping only a standalone prompt.
+- For this phase, the deliverable should be a repo-local maintainer skill first rather than a workflow-distributed skill shipped with target projects.
+- The repo-local maintainer skill should be positioned as `workflow-audit` rather than `workflow-analysis` or `workflow-optimize`.
+- The first implementation of `workflow-audit` should live only in `.agents/skills/workflow-audit/` rather than being mirrored to `.qoder/skills/` immediately.
+- In the first version, the skill itself should be the primary and sufficient deliverable, rather than maintaining a separate standalone prompt template as a parallel source of truth.
+- `workflow-audit` should have a proactive trigger description broad enough to catch common workflow-maintenance and workflow-audit requests.
+- The first version of `workflow-audit` should support arbitrary workflow directories under `docs/workflows/*`, while using `docs/workflows/新项目开发工作流/` as the default example and default path.
+- A likely design option is for `workflow-audit` to reuse `brainstorm` for task-first / PRD persistence and optionally invoke a `grill-me`-style one-question-at-a-time clarification loop when design or policy branches remain ambiguous.
+- `workflow-audit` should keep `brainstorm` as the mandatory mainline for task-first capture and PRD persistence.
+- `workflow-audit` may invoke `grill-me` as an optional deep-clarification submode when key decision branches remain ambiguous after evidence gathering.
+- If a critical ambiguity still cannot be derived from repo/docs/runtime evidence, `workflow-audit` must explicitly ask and resolve it rather than guessing.
+- When some critical branches remain unresolved, `workflow-audit` may emit partial confirmed conclusions, but all blocked decisions must be explicitly labeled as `Blocked`, `Evidence Gap`, or `Needs Clarification` rather than being guessed.
+- `workflow-audit` should persist its final audit output into a dedicated report file inside the task directory in addition to the chat response.
+- `workflow-audit` should create and maintain a task directory plus `prd.md` for non-trivial audits, while lightweight simple checks may use a direct-report mode.
+- `workflow-audit` must follow `brainstorm` as a methodology mainline, but only non-trivial audits are required to fully instantiate `brainstorm`'s `task-first` persistence path.
+- Lightweight direct-report mode may reuse `brainstorm`'s evidence-first / action-before-asking / one-question-at-a-time discipline without forcing `task + prd.md`.
+- If the user explicitly requires the full `brainstorm` mainline, `workflow-audit` should bypass the trivial-vs-non-trivial shortcut and directly treat the audit as non-trivial, creating `task + prd.md`.
+- Lightweight direct-report mode should be limited to static/document-only checks.
+- Any need for runtime validation, `/tmp` temporary projects, `trellis init`, embed-state detection, installer execution, post-install verification, or CLI handoff must automatically escalate the audit into the non-trivial `task + prd.md` path.
+- `workflow-audit` should explicitly invoke `brainstorm` as the named mainline dependency when the non-trivial audit path is entered or when the user explicitly requires the full `brainstorm` mainline.
+- `workflow-audit` should explicitly invoke `grill-me` as a named conditional submode only when key branches remain ambiguous after evidence gathering and cannot be safely derived.
+- After `workflow-audit` completes the audit, confirms issues, and proposes fix directions, it must stop and wait for explicit user confirmation before any follow-up design or implementation phase.
+- The dedicated persisted audit report should use the fixed filename `audit-report.md` inside the task directory.
+- `workflow-audit` should not be designed to mechanically perform multiple independent audit runs inside the same task as a normal workflow pattern.
+- If the current audit task is still active and the user requests re-analysis, or new evidence materially changes the conclusions, the same task may continue and revise `audit-report.md`.
+- A new linked follow-up task should be created only when the previous audit has effectively concluded/frozen and a later round of audit work must be treated as a separate audit episode.
+- A new linked follow-up task should be forced only after the previous audit has formally concluded and delivered its conclusions, and a later request represents a new independent audit episode rather than continuation of the current active audit.
+- `audit-report.md` should be updated incrementally during an active audit and naturally become the current finalized report when the audit reaches its stop-and-wait-for-confirmation point.
+- `audit-report.md` should use a fixed mandatory section template so every `workflow-audit` output stays structurally consistent.
+- `audit-report.md` should be required only for non-trivial, task-based audits.
+- Lightweight direct-report mode should not create a task-local `audit-report.md`; it should return its conclusion in chat only.
+- Lightweight direct-report mode should still use a fixed simplified chat structure rather than free-form prose.
+- `workflow-audit` should define a fixed recommended input contract while still allowing natural-language invocation.
+- The short copyable recommended input template should live directly in `SKILL.md`.
+- Detailed field explanations and a fuller example should live in a companion file under `references/`.
+- The first version of `workflow-audit` should remain a process/instruction skill that orchestrates existing repo scripts and documents rather than introducing new dedicated helper scripts.
+- `SKILL.md` should keep only the minimal executable rules and short input template.
+- Full report templates, lightweight-output templates, and Codex handoff templates should be split into `references/` files rather than kept inline in `SKILL.md`.
+- If `workflow-audit` is invoked while another non-audit task is already active, non-trivial audit work should create a dedicated child audit task rather than reusing the parent task directly.
+- When a dedicated child audit task is created, the active execution context should switch into that child task immediately.
+- After the child audit task eventually completes, execution should return to the parent task rather than continuing to spawn more audit runs in place.
+- Child-audit-task completion should not mean merely “audit report finished”; it should mean the audit conclusion has been confirmed, the remediation work driven by that conclusion has been completed, and the human has confirmed the child task is done.
+- If no active task exists, the non-trivial audit path should create a new top-level audit task.
+- In that top-level audit-task scenario, ordinary remediation should not be forced to split further by default; only clearly complex repair scopes should trigger implementation subtasks.
+- When no active task exists, a non-trivial `workflow-audit` should create a top-level audit task, and ordinary remediation inside that task should stay unsplit by default unless the repair scope is clearly complex.
+- `workflow-audit` should stop at the audit conclusion/confirmation boundary and should not itself own remediation execution.
+- After the user confirms the audit conclusion, remediation may continue in the same audit task, but it should be handled by later normal phases/skills rather than by `workflow-audit` itself.
+- At the stop-and-confirm boundary, `workflow-audit` should recommend a specific next phase/skill based on the audit outcome, but it must not auto-execute that next phase.
+- The first version of `workflow-audit` should include a minimal eval/test set covering lightweight static audit, non-trivial full audit, and the Codex-handoff path.
+- The minimal validation set for `workflow-audit` should be persisted as actual files in the skill directory rather than existing only in design prose.
+- The first version's persisted minimal validation artifacts should live under `tests/`.
+- The Codex handoff template should recommend a preferred non-Codex CLI takeover order by default.
+- The default preferred non-Codex CLI takeover order should be `Claude Code -> OpenCode`.
+- A single `workflow-audit` run should be limited to one workflow root; multiple workflow roots must not be batched into the same audit run.
+- If the user supplies multiple workflow targets in one request, `workflow-audit` must stop and ask for a single explicit target before continuing.
+- If the recommended input contract omits `current_cli`, `workflow-audit` should infer it from the runtime environment when possible and only ask the user when a CLI-sensitive path is reached and the CLI still cannot be determined safely.
+- When `workflow-audit` creates a new top-level audit task or child audit task, the default task title should use the naming convention `workflow-audit: <workflow-name>`.
+- The first-version persisted validation scenarios under `tests/` should use simple Markdown case files by default.
+- Post-audit routing guidance must not trust the audited workflow's own `design` / `plan` / `start` semantics as authoritative, because the workflow content itself is the object under audit and may be wrong or modified.
+- Post-audit routing guidance should be limited to a trusted whitelist of current-project maintainer-side skills/actions rather than recommending global skills.
+- If no suitable whitelisted current-project skill/action exists, `workflow-audit` must recommend a plain-language next action rather than forcing a weak skill recommendation.
+- When `workflow-audit` recommends a next skill or plain-language next action, it should include a brief justification for why that path was chosen and why stronger alternatives were not selected.
+- Post-audit routing recommendations should come from a trusted whitelist rather than from arbitrary “looks relevant” skills.
+- `grill-me` must not be included in the first-version post-audit trusted whitelist; it stays only as an internal conditional submode during the audit itself.
+- The first-version trusted post-audit whitelist should be `brainstorm`, `start`, `check`, and `update-spec`.
+- When `workflow-audit` recommends one of the trusted whitelist skills, it should also state the trigger condition for why that skill is appropriate now.
+- If lightweight direct-report mode discovers that runtime validation is actually required, `workflow-audit` must first explain why lightweight mode no longer applies and then switch into the non-trivial audit path.
+- In the recommended input contract, `need_runtime_validation` should default to `auto`.
+- In the recommended input contract, `force_full_brainstorm` should default to `no`.
+- In the recommended input contract, `workflow_path` should default to `docs/workflows/新项目开发工作流/` when the user does not explicitly specify another single target.
+- The first-version recommended input contract should not include a dedicated `preferred_handoff_cli` field.
+- Default handoff order should remain `Claude Code -> OpenCode`, and explicit user-stated natural-language constraints may override it.
+- The primary spec landing area for `workflow-audit` should be `.trellis/spec/skills/`, with only minimal supplemental updates to `.trellis/spec/docs/` or `.trellis/spec/guides/` when genuinely required.
+- The dedicated detailed spec document for this skill should be `.trellis/spec/skills/workflow-audit.md`.
+- `.trellis/spec/skills/workflow-audit.md` should follow a fixed section template covering the main control surfaces of the skill.
+- `.trellis/spec/skills/workflow-audit.md` should be the behavioral source of truth; `.agents/skills/workflow-audit/SKILL.md` should remain the synchronized executable entry.
+- Behavior-affecting changes should update both the source-of-truth spec and the executable `SKILL.md` in the same change.
+- If a behavior-affecting change also impacts `references/` templates or `tests/` scenarios, those companion files must be updated in the same change as well.
+- The first-version `references/` layout under `.agents/skills/workflow-audit/` should be fixed to:
+  - `references/input-template.md`
+  - `references/audit-report-template.md`
+  - `references/lightweight-output-template.md`
+  - `references/codex-handoff-template.md`
+
+## Acceptance Criteria (Evolving)
+
+The checklist below should now be read as acceptance criteria for the `workflow-audit` skill contract and behavior, not for a standalone long prompt artifact.
+
+- [ ] The optimized prompt does not treat placeholder sections as actual issues.
+- [ ] The optimized prompt requires real baseline and embed validation steps.
+- [ ] The optimized prompt makes analysis-only scope explicit.
+- [ ] The optimized prompt reflects current workflow constraints, including the Codex/non-Codex embed boundary.
+- [ ] The optimized prompt requires a fixed report structure separating confirmed issues, unconfirmed items, proposals, and user decisions.
+- [ ] The optimized prompt explicitly forbids common false-analysis behaviors, including treating placeholders as defects, skipping `/tmp` validation, using repo-local hidden dirs as Trellis baseline, editing source files during analysis, and ignoring the non-Codex first-embed boundary.
+- [ ] The optimized prompt requires each confirmed issue to include a standardized evidence block covering conclusion, evidence source, validation action, impact scope, and fix direction.
+- [ ] The optimized prompt prescribes analysis execution order and includes concrete command skeletons instead of abstract validation language.
+- [ ] The optimized prompt requires an explicit `Evidence Gap` stop condition when required runtime validation cannot be executed.
+- [ ] The optimized prompt requires concrete file/line citations and key command-result citations for both confirmed issues and validation steps.
+- [ ] The optimized prompt requires explicit separation between source-workflow maintenance findings and `/tmp` target-project validation findings.
+- [ ] The optimized prompt requires user-provided candidate issue lists to be labeled and resolved as pending hypotheses, confirmed issues, unconfirmed items, or false alarms.
+- [ ] The final deliverable includes a copy-ready prompt template and a short usage note that distinguishes editable placeholders from non-editable hard rules.
+- [ ] The prompt body is tool-agnostic, and any `$brainstorm` trigger appears only as an optional usage-note entry rather than as a hardwired part of the template body.
+- [ ] The optimized prompt requires separate native-adaptation findings for `Claude Code`, `OpenCode`, and `Codex`, including each platform's intended native carrier model and any mismatch against the current implementation.
+- [ ] The optimized prompt explicitly permits a zero-defect / no-change conclusion when runtime validation and document evidence do not confirm any issue.
+- [ ] The optimized prompt requires confirmed issues to be classified by priority so later fix planning can distinguish blocking defects from lower-risk optimizations.
+- [ ] The final deliverable is a Chinese-first template suitable for the user's current workflow-maintenance context.
+- [ ] The final Chinese template uses explicit editable-placeholder markers so fixed rules and fill-in sections are not confused.
+- [ ] The optimized prompt clearly allows Codex for analysis/reporting while forbidding Codex as the main executor of the first formal embed step.
+- [ ] The optimized prompt requires a stop-and-handoff behavior when the temporary-project formal embed step is reached under Codex.
+- [ ] The optimized prompt requires a concrete handoff block whenever Codex reaches the first formal embed step.
+- [ ] The Codex handoff block includes command-level instructions for the next CLI and specifies what evidence must be returned after execution.
+- [ ] The optimized prompt still drives proactive issue discovery when no candidate issue list is supplied, while still allowing a zero-defect conclusion if no real issue is confirmed.
+- [ ] The template makes the current analysis session responsible for synthesizing the final report after another CLI returns temporary-project embed evidence.
+- [ ] The template constrains any handoff CLI to runtime validation only and forbids workflow-source modifications during analysis.
+- [ ] Each proposed fix direction includes propagation scope, likely affected file/document layers, and synchronization risk notes.
+- [ ] The final form of the deliverable clearly decides whether this capability is shipped as a standalone prompt, a skill-first artifact, or both, with rationale aligned to existing workflow/skill boundaries.
+- [ ] The final form of the deliverable is clearly scoped as a repo-local maintainer skill first, not a workflow-distributed target-project skill.
+- [ ] The repo-local maintainer skill has a stable name and positioning aligned with its analysis-only, evidence-first behavior.
+- [ ] The first implementation scope is limited to `.agents/skills/workflow-audit/`, avoiding unnecessary multi-surface sync in the initial version.
+- [ ] The deliverable shape avoids dual maintenance between `SKILL.md` and a separate standalone long prompt as competing sources of truth.
+- [ ] The skill description is broad enough to trigger on common workflow-maintenance and workflow-audit requests, not only on explicit `$workflow-audit` invocation.
+- [ ] The skill is generic across `docs/workflows/*` while still providing a concrete default example and default path based on `docs/workflows/新项目开发工作流/`.
+- [ ] The final `workflow-audit` design makes an explicit decision about whether and how it composes `brainstorm` and `grill-me`.
+- [ ] The final `workflow-audit` design keeps `brainstorm` as the mandatory mainline and uses `grill-me` only as an optional deep-clarification submode.
+- [ ] The final `workflow-audit` design forbids blind guessing when critical ambiguities remain unresolved after evidence gathering.
+- [ ] The final `workflow-audit` design allows partial confirmed conclusions only when blocked branches are explicitly labeled and kept out of the final asserted conclusions.
+- [ ] The final `workflow-audit` design persists the final audit output into a dedicated report file inside the task directory in addition to the chat response.
+- [ ] The final `workflow-audit` design distinguishes between non-trivial audits that require `task + prd.md` and lightweight direct-report checks.
+- [ ] The final `workflow-audit` design requires `audit-report.md` only for non-trivial, task-based audits and keeps lightweight mode chat-only.
+- [ ] The final `workflow-audit` design uses a fixed simplified chat structure for lightweight direct-report mode.
+- [ ] The final `workflow-audit` design supports natural-language invocation but still defines a clear recommended input contract with explicit fields and defaults.
+- [ ] The final `workflow-audit` design keeps the minimal executable input template in `SKILL.md` while placing longer field explanations/examples in `references/`.
+- [ ] The first version of `workflow-audit` stays process/instruction-first and does not add new dedicated helper scripts.
+- [ ] The final `workflow-audit` design keeps `SKILL.md` lean by moving long report/handoff templates into `references/`.
+- [ ] The final `workflow-audit` design creates dedicated child audit tasks for non-trivial audits invoked under an existing non-audit parent task.
+- [ ] The final `workflow-audit` design switches execution into the child audit task when it is created and returns to the parent task only after the child audit task is complete.
+- [ ] The final `workflow-audit` design defines child-audit-task completion as post-remediation, human-confirmed completion rather than mere audit-report delivery.
+- [ ] The final `workflow-audit` design creates a new top-level audit task when no active task exists and the audit is non-trivial.
+- [ ] The final `workflow-audit` design does not force ordinary remediation inside a top-level audit task to split into subtasks unless the repair scope is genuinely complex.
+- [ ] The final `workflow-audit` design creates a top-level audit task for non-trivial audits when no active task exists and keeps ordinary remediation in that task by default unless complexity forces further splitting.
+- [ ] The final `workflow-audit` design stops at the audit-conclusion boundary and leaves remediation execution to later normal phases/skills within the same audit task.
+- [ ] The final `workflow-audit` design recommends a specific next phase/skill at the stop point without auto-executing it.
+- [ ] The final `workflow-audit` design includes a minimal test/eval set covering the three critical behavior paths.
+- [ ] The final `workflow-audit` design persists its minimal validation set as actual files within the skill directory.
+- [ ] The final `workflow-audit` design stores its first-version minimal validation artifacts under `tests/`.
+- [ ] The final `workflow-audit` design defines a default preferred takeover order in the Codex handoff template.
+- [ ] The final `workflow-audit` design fixes the default Codex handoff order as `Claude Code -> OpenCode`.
+- [ ] The final `workflow-audit` design limits each audit run to exactly one workflow root.
+- [ ] The final `workflow-audit` design refuses multi-target input until the user clarifies one explicit workflow target.
+- [ ] The final `workflow-audit` design infers `current_cli` from runtime context by default and asks the user only when a CLI-sensitive path remains ambiguous.
+- [ ] The final `workflow-audit` design uses the default task naming convention `workflow-audit: <workflow-name>` for created audit tasks.
+- [ ] The final `workflow-audit` design stores first-version validation scenarios under `tests/` as Markdown case files.
+- [ ] The final `workflow-audit` design does not use the audited workflow's own internal phase/routing semantics as a trusted control plane for post-audit routing guidance.
+- [ ] The final `workflow-audit` design restricts post-audit routing to a current-project trusted whitelist of maintainer-side skills/actions.
+- [ ] The final `workflow-audit` design falls back to a plain-language next action when no suitable whitelisted current-project skill/action exists.
+- [ ] The final `workflow-audit` design includes a brief rationale for each post-audit routing recommendation.
+- [ ] The final `workflow-audit` design restricts post-audit routing to a trusted whitelist with an explicitly defined scope.
+- [ ] The final `workflow-audit` design excludes `grill-me` from the first-version post-audit trusted whitelist and keeps it only as an internal conditional clarification submode.
+- [ ] The final `workflow-audit` design fixes the first-version trusted post-audit whitelist as `brainstorm`, `start`, `check`, and `update-spec`.
+- [ ] The final `workflow-audit` design states the trigger condition for each recommended trusted-whitelist skill.
+- [ ] The final `workflow-audit` design explains the escalation reason before switching from lightweight mode to the non-trivial audit path.
+- [ ] The final `workflow-audit` design defaults `need_runtime_validation` to `auto` in the recommended input contract.
+- [ ] The final `workflow-audit` design defaults `force_full_brainstorm` to `no` in the recommended input contract.
+- [ ] The final `workflow-audit` design defaults `workflow_path` to `docs/workflows/新项目开发工作流/` when no explicit single target is supplied.
+- [ ] The final `workflow-audit` design omits a dedicated `preferred_handoff_cli` field and uses natural-language constraints to override the default handoff order when needed.
+- [ ] The final `workflow-audit` design lands its primary spec in `.trellis/spec/skills/`, with only minimal supplemental `.trellis/spec/docs/` or `.trellis/spec/guides/` updates when genuinely required.
+- [ ] The final `workflow-audit` design includes a dedicated detailed spec document under `.trellis/spec/skills/` in addition to the `index.md` update.
+- [ ] The final `workflow-audit` design uses `.trellis/spec/skills/workflow-audit.md` as the dedicated detailed spec document path.
+- [ ] The final `workflow-audit` design uses a fixed section template for `.trellis/spec/skills/workflow-audit.md`.
+- [ ] The final `workflow-audit` design treats `.trellis/spec/skills/workflow-audit.md` as the behavioral source of truth and keeps `.agents/skills/workflow-audit/SKILL.md` synchronized as the executable entry artifact.
+- [ ] The final `workflow-audit` design requires same-change synchronization between `.trellis/spec/skills/workflow-audit.md` and `.agents/skills/workflow-audit/SKILL.md` for behavior-affecting changes.
+- [ ] The final `workflow-audit` design requires same-change synchronization for affected `references/` and `tests/` companion files when behavior-affecting changes touch them.
+- [ ] The final `workflow-audit` design fixes the first-version `references/` layout to the four core template files.
+- [ ] The final `workflow-audit` design fixes the first-version `tests/` layout to the three core Markdown scenario files.
+- [ ] The final `workflow-audit` design uses a fixed internal template for first-version `tests/*.md` scenario files.
+- [ ] The final `workflow-audit` design keeps the first-version information surface to `SKILL.md`, `references/`, and `.trellis/spec/skills/workflow-audit.md`, without an extra local `README.md`.
+- [ ] The final `workflow-audit` design keeps `.trellis/spec/skills/index.md` concise by using only a brief `workflow-audit` entry plus a link to the dedicated detailed spec.
+- [ ] The final `workflow-audit` design makes the `SKILL.md` trigger description explicitly cover both workflow-source maintenance audits and workflow install/embed/post-install validation audits.
+- [ ] The final `workflow-audit` design explicitly excludes ordinary application/business code auditing in the `SKILL.md` trigger description.
+- [ ] The final `workflow-audit` design lands its primary spec in `.trellis/spec/skills/`, with supplemental `.trellis/spec/docs/` or `.trellis/spec/guides/` updates only when genuinely required.
+- [ ] The final `workflow-audit` design reconciles `brainstorm` methodology with lightweight mode by requiring full `task + prd.md` persistence only for non-trivial audits or when the user explicitly demands the full `brainstorm` mainline.
+- [ ] The final `workflow-audit` design limits lightweight mode to static/document-only checks and automatically escalates any runtime validation need into the non-trivial path.
+- [ ] The final `workflow-audit` design explicitly declares `brainstorm` as the mainline dependency and `grill-me` as a conditional deep-clarification submode.
+- [ ] The final `workflow-audit` design always stops after the audit report and waits for explicit user confirmation before any follow-up phase.
+- [ ] The final `workflow-audit` design persists its dedicated report to a fixed task-local filename, `audit-report.md`.
+- [ ] The final `workflow-audit` design forbids default mechanical multi-run behavior inside the same task while still allowing same-task re-analysis when the active audit's conclusions legitimately need revision.
+- [ ] The final `workflow-audit` design creates new linked follow-up tasks only for later, separate audit episodes after the original audit has effectively concluded.
+- [ ] The final `workflow-audit` design clearly distinguishes active-task conclusion revision from later independent audit episodes that require a new follow-up task.
+- [ ] The final `workflow-audit` design updates `audit-report.md` incrementally during an active audit and treats the same file as the current finalized report at the stop-and-confirm boundary.
+- [ ] The final `workflow-audit` design uses a fixed mandatory section template for `audit-report.md`.
+
+## Out of Scope
+
+- Editing workflow source files in `docs/workflows/新项目开发工作流/` in this turn
+- Designing concrete fixes for specific workflow defects before those defects are evidenced
+
+## Technical Notes
+
+- Evidence read from `docs/workflows/新项目开发工作流/工作流嵌入执行规范.md`
+- Evidence read from `docs/workflows/新项目开发工作流/命令映射.md`
+- Evidence read from `docs/workflows/新项目开发工作流/多CLI通用新项目完整流程演练.md`
+- Evidence read from `docs/workflows/新项目开发工作流/commands/brainstorm.md`
+- Evidence read from `docs/workflows/新项目开发工作流/commands/codex/README.md`
+- Evidence read from `docs/workflows/自定义工作流制作规范.md`
+
+## Workflow Decisions
+
+- Accuracy Status: In progress
+- Complexity: Moderate
+- Need More Divergence: Yes
+- Need Sub Tasks: No
+- Next Step: Consolidate the agreed `workflow-audit` design into a final requirements summary for confirmation
