@@ -65,3 +65,76 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 133: workflow-capability-audit skill implementation
+
+**Date**: 2026-05-02
+**Task**: workflow-capability-audit skill implementation
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Summary |
+|------|---------|
+| Repo-local skill | Added `workflow-capability-audit` spec and dual skill surfaces under `.trellis/spec`, `.agents/skills`, and `.claude/skills` |
+| References/tests | Added execution templates, capability-report template, structural-break stop template, version-gate stop template, and persisted scenario tests |
+| Execution engine | Added `docs/workflows/新项目开发工作流/commands/workflow-capability-audit.py` as the canonical execution engine |
+| Version handling | Added `COMPATIBLE_TRELLIS_VERSION = 0.4.0` to `workflow_assets.py` and implemented semantic version comparison with `beta < rc < stable` |
+| Verification | Added and passed unit tests for version gate, upgrade-path bootstrap, supplemental capability updates, and fix lifecycle updates |
+
+**Updated Files**:
+- `.trellis/spec/skills/index.md`
+- `.trellis/spec/skills/workflow-capability-audit.md`
+- `.agents/skills/workflow-capability-audit/SKILL.md`
+- `.agents/skills/workflow-capability-audit/references/input-template.md`
+- `.agents/skills/workflow-capability-audit/references/version-gate-stop-template.md`
+- `.agents/skills/workflow-capability-audit/references/structural-break-possible-template.md`
+- `.agents/skills/workflow-capability-audit/references/capability-report-template.md`
+- `.agents/skills/workflow-capability-audit/references/execution-runbook.md`
+- `.agents/skills/workflow-capability-audit/tests/01-version-equal-stop.md`
+- `.agents/skills/workflow-capability-audit/tests/02-missing-compatible-anchor.md`
+- `.agents/skills/workflow-capability-audit/tests/03-full-audit-upgrade-path.md`
+- `.agents/skills/workflow-capability-audit/tests/04-structural-break-possible-stop.md`
+- `.agents/skills/workflow-capability-audit/tests/05-post-analysis-supplemental-capability.md`
+- `.agents/skills/workflow-capability-audit/tests/06-child-audit-task-and-fixture-lifecycle.md`
+- `.claude/skills/workflow-capability-audit/SKILL.md`
+- `.claude/skills/workflow-capability-audit/references/input-template.md`
+- `.claude/skills/workflow-capability-audit/references/version-gate-stop-template.md`
+- `.claude/skills/workflow-capability-audit/references/structural-break-possible-template.md`
+- `.claude/skills/workflow-capability-audit/references/capability-report-template.md`
+- `.claude/skills/workflow-capability-audit/references/execution-runbook.md`
+- `.claude/skills/workflow-capability-audit/tests/01-version-equal-stop.md`
+- `.claude/skills/workflow-capability-audit/tests/02-missing-compatible-anchor.md`
+- `.claude/skills/workflow-capability-audit/tests/03-full-audit-upgrade-path.md`
+- `.claude/skills/workflow-capability-audit/tests/04-structural-break-possible-stop.md`
+- `.claude/skills/workflow-capability-audit/tests/05-post-analysis-supplemental-capability.md`
+- `.claude/skills/workflow-capability-audit/tests/06-child-audit-task-and-fixture-lifecycle.md`
+- `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
+- `docs/workflows/新项目开发工作流/commands/workflow-capability-audit.py`
+- `docs/workflows/新项目开发工作流/commands/test_workflow_capability_audit.py`
+- `docs/workflows/自定义工作流制作规范.md`
+- `.trellis/tasks/05-02-workflow-capability-audit/prd.md`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d4624a7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
