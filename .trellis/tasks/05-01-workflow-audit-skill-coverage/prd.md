@@ -98,12 +98,12 @@ Assess whether the existing `workflow-audit` skill can cover a maintainer-side a
 * Final `COMPATIBLE_TRELLIS_VERSION` promotion after a confirmed compatibility conclusion should not be auto-written by the audit skill itself; it belongs to the subsequent confirmed implementation/update step.
 * Keep recommendations scoped to repo-local workflow assets under `docs/workflows/新项目开发工作流/` and related skill/spec/test files.
 
-## Acceptance Criteria (evolving)
+## Acceptance Criteria
 
-* [ ] Evidence-backed summary states what `workflow-audit` already covers.
-* [ ] Evidence-backed summary states what the requested scenario adds beyond current coverage.
-* [ ] A concrete decision fork is presented: extend existing skill vs create sibling skill.
-* [ ] At least one high-value unresolved design question is asked one-at-a-time with a recommended answer.
+* [x] Evidence-backed summary states what `workflow-audit` already covers. → "What I already know" § (lines 7-20) + Technical Notes (lines 119-131)
+* [x] Evidence-backed summary states what the requested scenario adds beyond current coverage. → Requirements §: capability-diff analysis, A/B comparison, compatibility matrix, version gating, structural-break judgment — none of which exist in current `workflow-audit`
+* [x] A concrete decision fork is presented: extend existing skill vs create sibling skill. → DECIDED: create new sibling skill `workflow-capability-audit`
+* [x] All design questions resolved through extensive user-decision capture (47+ user decisions recorded in Requirements §); no unresolved questions remain
 
 ## Definition of Done
 

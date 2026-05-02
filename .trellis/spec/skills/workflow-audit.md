@@ -21,6 +21,37 @@ It does not cover:
 - product feature auditing
 - generic implementation quality review outside workflow definitions
 
+## Audit Coverage Requirements
+
+This skill **must** fully validate the following aspects for any workflow under audit:
+
+1. **Script-behavior consistency** - For every script referenced in workflow documentation (e.g., `detect-embed-state.py`, `install-workflow.py`, `upgrade-compat.py`), the audit must verify:
+   - The script exists at the documented path
+   - The script's actual behavior (via static analysis or runtime) matches documented claims
+   - Exit codes and output format are machine-parseable if the workflow depends on them
+
+2. **CLI adaptation completeness** - For each supported CLI (Claude Code, OpenCode, Codex), the audit must confirm:
+   - All workflow commands/skills/agents are correctly mapped to the CLI's native location
+   - No CLI-specific behavior drifts exist for the same semantic action
+   - Missing or incomplete adaptations are flagged as `present-but-incompatible` or `missing-but-valuable`
+
+3. **Post-install artifact verification** - The audit must compare documented installation artifacts against actual files created in the target project, including:
+   - Hidden directories (`.trellis/`, `.claude/`, `.opencode/`, `.agents/`, `.codex/`)
+   - Command scripts, skill definitions, agent configurations
+   - The audit must report discrepancies as confirmed issues with source-layer tags
+
+4. **Codex handoff boundary** - When Codex is the primary executor and the audit reaches the formal embed step, the skill must:
+   - Stop and emit a handoff block using the dedicated template
+   - Require handoff to Claude Code or OpenCode for the embed execution
+   - Merge back evidence from the handoff into the audit report
+
+5. **Runtime validation triggers** - The audit must automatically escalate to runtime validation (task-based runtime mode) when:
+   - Any of the above checks cannot be conclusively resolved via static analysis
+   - The workflow documentation or scripts contain conditional logic based on the environment
+   - The user explicitly requests `/tmp` validation or Codex handoff testing
+
+Each confirmed issue in the audit report must include, in addition to the schema defined in "Confirmed-Issue Schema", a validation action that describes how the issue was detected (e.g., "Compared script signature against documentation; exit code 0 but missing required JSON output").
+
 ---
 
 ## Trigger Conditions
