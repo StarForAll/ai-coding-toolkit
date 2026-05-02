@@ -4,7 +4,7 @@ Natural-language invocation is supported. In first version, the effective workfl
 
 ```yaml
 workflow_path: docs/workflows/新项目开发工作流/
-current_cli: <optional; infer from runtime when omitted>
+current_cli: <always pass; infer from current runtime (claude|opencode|codex); the script does not auto-detect>
 ```
 
 ## Notes

@@ -48,7 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--current-cli",
         default="",
-        help="Optional current CLI label for the report.",
+        help="Current CLI label for the report. Always pass this value (claude|opencode|codex). The script does not auto-detect the CLI.",
     )
     parser.add_argument(
         "--compatible-trellis-version",
@@ -92,6 +92,17 @@ def print_stop(result: str, current_version: str | None, compatible_anchor: str 
     return payload
 
 
+def _next_action_for_gate(result: str) -> str:
+    actions = {
+        "equal-version-stop": "Update COMPATIBLE_TRELLIS_VERSION to a newer version before re-running the audit.",
+        "older-version-block": "Upgrade Trellis to at least the compatible anchor version before re-running the audit.",
+        "missing-compatible-anchor": "Supply a compatible Trellis version via --compatible-trellis-version and re-run.",
+        "environment-error": "Verify Trellis CLI installation and ensure trellis -v returns a valid version.",
+        "version-parse-error": "Check that both the current version and compatible anchor are valid semver strings.",
+    }
+    return actions.get(result, "Resolve the version gate condition and re-run the audit.")
+
+
 def print_stop_human(payload: dict[str, object]) -> None:
     result = str(payload["gate_result"])
     current_version = payload["current_trellis_version"]
@@ -110,6 +121,9 @@ def print_stop_human(payload: dict[str, object]) -> None:
     print("### Task Creation")
     print("- Skipped: Yes")
     print("- Reason: version gate happens before task creation and audit artifact creation")
+    print()
+    print("### Next Action")
+    print(f"- {_next_action_for_gate(result)}")
 
 
 def print_structural_possible_human(signals: list[str]) -> None:
@@ -154,10 +168,13 @@ def update_compatible_anchor(new_value: str) -> None:
         content = content[:start] + new_value + content[end:]
     else:
         insertion = f'COMPATIBLE_TRELLIS_VERSION = "{new_value}"\n'
-        anchor = 'WORKFLOW_SCHEMA_VERSION = "2"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增\n'
-        if anchor not in content:
+        prefix = 'WORKFLOW_SCHEMA_VERSION = "'
+        if prefix not in content:
             raise RuntimeError("Could not locate workflow version anchor insertion point.")
-        content = content.replace(anchor, anchor + insertion, 1)
+        start = content.index(prefix)
+        end = content.index("\n", start)
+        anchor_line = content[start:end + 1]
+        content = content.replace(anchor_line, anchor_line + insertion, 1)
     target.write_text(content, encoding="utf-8")
 
 
@@ -205,7 +222,7 @@ def _evidence_and_classification(
     if baseline_hits and not expected_hits:
         return evidence, "missing-but-valuable", True
     if not baseline_hits and expected_hits:
-        return evidence, "unclear", False
+        return evidence, "unclear", True
     return evidence, "not-applicable", False
 
 
@@ -373,12 +390,15 @@ def update_fix_lifecycle(
     report_path = task_dir / "capability-report.md"
     report_text = report_path.read_text(encoding="utf-8")
     updated = report_text
-    updated = append_bullets_to_section(updated, "## Confirmed Fix Scope", confirmed_fix_scope, "- <confirmed follow-up scope after user confirmation>")
-    updated = append_bullets_to_section(updated, "## Applied Corrections", applied_corrections, "- <only when the lifecycle advances beyond audit conclusion>")
-    updated = append_bullets_to_section(updated, "## Post-Fix Revalidation", post_fix_revalidation, "- <only when corrections have been applied>")
+    updated = append_bullets_to_section(updated, "## Confirmed Fix Scope", confirmed_fix_scope, "- none yet")
+    updated = append_bullets_to_section(updated, "## Applied Corrections", applied_corrections, "- none yet")
+    updated = append_bullets_to_section(updated, "## Post-Fix Revalidation", post_fix_revalidation, "- none yet")
     if finalize_fixture_destruction:
         updated = replace_single_line_value(updated, "Destroyed", "yes")
         updated = replace_single_line_value(updated, "Final destruction confirmed by user", "yes")
+        a_root, b_root = parse_fixture_roots_from_report(report_path)
+        shutil.rmtree(a_root, ignore_errors=True)
+        shutil.rmtree(b_root, ignore_errors=True)
     report_path.write_text(updated, encoding="utf-8")
     return {
         "mode": "fix-lifecycle-updated",
@@ -450,10 +470,8 @@ def refresh_structural_break_section(report_text: str) -> str:
         f"- Result: {result}",
         "- Signals:",
         *signal_lines,
-        "- Why:",
-        f"- {why}",
-        "- Required next action:",
-        "- Stop and wait for explicit user confirmation before any normal adaptation path proceeds." if result == "possible" else "- Continue with the current confirmation boundary.",
+        f"- Why: {why}",
+        f"- Required next action: {'Stop and wait for explicit user confirmation before any normal adaptation path proceeds.' if result == 'possible' else 'Continue with the current confirmation boundary.'}",
     ]
     return replace_section(report_text, "## Structural-Break Judgment", replacement_lines)
 
@@ -882,11 +900,13 @@ def initialize_capability_report(
     dependent_rows: list[dict[str, Any]],
 ) -> None:
     report_path = task_dir / "capability-report.md"
+    structural_result, structural_signals, structural_why = derive_structural_break(managed_rows, dependent_rows)
+    signal_lines = [f"- {signal}" for signal in structural_signals] or ["- none detected from initial A/B pass"]
     content = f"""# workflow-capability-audit: 新项目开发工作流
 
 ## Audit Target and Boundary
 - Workflow Root: `docs/workflows/新项目开发工作流/`
-- Current CLI: {current_cli or '<inferred or explicit>'}
+- Current CLI: {current_cli or 'not specified (pass --current-cli)'}
 - Current Trellis Version: {current_version}
 - Compatible Anchor: {compatible_anchor}
 - Audit Scope: task-based version-upgrade compatibility audit
@@ -915,14 +935,14 @@ def initialize_capability_report(
 - none yet
 
 ## Structural-Break Judgment
-- Result: {derive_structural_break(managed_rows, dependent_rows)[0]}
+- Result: {structural_result}
 - Signals:
-{chr(10).join(f"- {signal}" for signal in derive_structural_break(managed_rows, dependent_rows)[1]) or "- none detected from initial A/B pass"}
-- Why:
-- Required next action:
+{chr(10).join(signal_lines)}
+- Why: {structural_why}
+- Required next action: {"Stop and wait for explicit user confirmation before any normal adaptation path proceeds." if structural_result == "possible" else "Continue with the current confirmation boundary."}
 
 ## Confirmed Fix Scope
-- pending user confirmation
+- none yet
 
 ## Applied Corrections
 - none yet
@@ -1015,7 +1035,7 @@ def main() -> int:
             "environment-error",
             None,
             compatible_anchor,
-            "trellis --version failed or returned empty output.",
+            "trellis -v failed or returned empty output.",
         )
         if args.json:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -1060,6 +1080,10 @@ def main() -> int:
         else:
             print_stop_human(payload)
         return 0
+
+    if not args.current_cli:
+        print("--current-cli is required for the full upgrade audit. Pass claude, opencode, or codex.", file=sys.stderr)
+        return 1
 
     current_ref = current_task_ref()
     current_task_json = resolve_task_json(current_ref)

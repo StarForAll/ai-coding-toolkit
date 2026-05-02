@@ -7,14 +7,14 @@ Task-based `workflow-capability-audit` runs must maintain `capability-report.md`
 
 ## Audit Target and Boundary
 - Workflow Root: `docs/workflows/新项目开发工作流/`
-- Current CLI: <inferred or explicit>
+- Current CLI: <claude | opencode | codex>
 - Current Trellis Version: <value>
 - Compatible Anchor: <value>
 - Audit Scope: task-based version-upgrade compatibility audit
 
 ## Version Gate Outcome
 - Result: <passed>
-- Reason:
+- Reason: <current Trellis version is newer than the compatible anchor>
 
 ## Evidence-Gathering Actions Executed In This Round
 - <action> — Layer: <source repo | generated target project | runtime command output>
@@ -41,19 +41,20 @@ Task-based `workflow-capability-audit` runs must maintain `capability-report.md`
   - Reason:
 
 ## Structural-Break Judgment
-- Result: <no | possible | yes>
+- Result: <no | possible>
 - Signals:
-- Why:
-- Required next action:
+- <signal items or "none detected from current report state">
+- Why: <summary of why the judgment was reached>
+- Required next action: <"Stop and wait for explicit user confirmation..." | "Continue with the current confirmation boundary.">
 
 ## Confirmed Fix Scope
-- <confirmed follow-up scope after user confirmation>
+- none yet
 
 ## Applied Corrections
-- <only when the lifecycle advances beyond audit conclusion>
+- none yet
 
 ## Post-Fix Revalidation
-- <only when corrections have been applied>
+- none yet
 
 ## A/B Fixture Status
 - A Root:

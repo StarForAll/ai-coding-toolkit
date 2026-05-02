@@ -98,12 +98,12 @@ This is the **sole allowed pre-audit source edit exception**.
 
 For first-version design, treat:
 
-- `trellis --version`
+- `trellis -v`
 - fresh `trellis init` output `.trellis/.version`
 
 as the same source lineage from the current Trellis version.
 
-Version gating uses `trellis --version` as the operational check.
+Version gating uses `trellis -v` as the operational check.
 
 ### Comparison Direction Rules
 
@@ -133,7 +133,7 @@ Allowed outcomes:
 
 ### Environment Failure Rule
 
-If `trellis --version` fails or returns empty output:
+If `trellis -v` fails or returns empty output:
 
 - terminate immediately
 - classify as `Blocked / Environment Error`
@@ -164,8 +164,11 @@ Natural language is allowed, but the recommended contract is:
 - `workflow_path`
   - default and only supported value in first version: `docs/workflows/新项目开发工作流/`
 - `current_cli`
-  - optional
-  - infer from runtime when possible
+  - **always pass this value** inferred from the current runtime:
+    - in Claude Code: `claude`
+    - in OpenCode: `opencode`
+    - in Codex CLI: `codex`
+  - the script does not auto-detect the CLI; the caller is responsible for inference
 
 No initial `user_supplemented_capabilities` field exists in first version.
 
@@ -234,22 +237,29 @@ Lifecycle:
 
 ## Evidence Mainline
 
-After version gating passes, the skill follows this fixed audit framework:
+The audit follows a **script-driven + AI-review** hybrid model. The canonical execution engine generates the baseline matrix; the AI then reviews completeness, handles supplemental capabilities, and manages the fix lifecycle.
 
-### A. Discover Current Trellis Baseline Capabilities
+### A. Run the Canonical Execution Engine
 
-Using fresh `A`, determine what the current Trellis version actually provides and how it works.
+The canonical execution engine (`docs/workflows/新项目开发工作流/commands/workflow-capability-audit.py`) must:
 
-This capability inventory is **dynamic** per Trellis version and must not be hardcoded as a fixed canonical capability list.
+- pass the version gate
+- create the audit task
+- create fresh A/B fixtures
+- generate initial `prd.md`
+- generate `capability-report.md` with the baseline capability matrix
 
-### B. Build Expected Workflow-Embedded State
+The script discovers managed-surface rows from `workflow_assets.py` specs and dependent-surface rows from known Trellis-native carrier definitions.
 
-Using fresh `B`, determine what the workflow actually:
+### B. AI Reviews the Generated Report
 
-- manages directly
-- patches
-- disables intentionally
-- depends on without installer ownership
+After the script completes, review `capability-report.md` for:
+
+- **completeness** — are there capabilities visible in the A/B fixtures that the script missed?
+- **classification accuracy** — do the per-CLI classifications match the actual file evidence?
+- **structural signals** — does the auto-generated structural-break judgment need refinement based on closer inspection?
+
+This step is where human/AI domain knowledge supplements the script's automated discovery. The capability inventory is validated against current-version evidence rather than assumed from a fixed canonical list.
 
 ### C. Capability / Compatibility Matrix
 
@@ -259,7 +269,6 @@ Each row must include at least:
 
 - `Capability ID`
 - `Capability`
-- `Surface`
 - `Latest Trellis Mechanism / Benefit`
 - `Discovery Source`
 - `Claude Evidence`
@@ -272,6 +281,8 @@ Each row must include at least:
 - `Structural Signal`
 - `Adaptation Decision`
 
+Surface is conveyed by the matrix section heading (`Workflow-Managed Surface Matrix` vs `Workflow-Dependent Trellis-Native Surface Matrix`) rather than a dedicated column.
+
 ### D. Structural-Break Judgment
 
 `capability-report.md` must include an explicit `Structural-Break Judgment` section.
@@ -280,7 +291,6 @@ Allowed results:
 
 - `no`
 - `possible`
-- `yes`
 
 Rules:
 
@@ -395,6 +405,10 @@ If not confirmed:
 - record it in `Rejected / Unconfirmed Supplemental Points`
 
 `capability-report.md` must include a dedicated `Rejected / Unconfirmed Supplemental Points` section.
+
+### Known Limitation: Coarser Classification for Workflow-Managed Surfaces
+
+The supplemental validation path classifies capabilities by file existence alone (`adopted-compatible` / `missing-but-valuable` / `not-applicable` / `unclear`). It cannot derive `patched-compatible` or `intentionally-disabled` because it lacks the `spec.category` metadata from `workflow_assets.py` that the main audit path uses. For supplemental workflow-managed capabilities, `adopted-compatible` is the default classification; finer categorization belongs to the AI post-review phase.
 
 ---
 

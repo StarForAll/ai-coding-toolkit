@@ -41,10 +41,12 @@ creates fresh `A/B`, installs the workflow into `B`, and initializes:
 - `prd.md`
 - `capability-report.md`
 
+Always pass `--current-cli` inferred from the current runtime (the script does not auto-detect the CLI):
+
 ```bash
 /ops/softwares/python/bin/python3 \
 docs/workflows/新项目开发工作流/commands/workflow-capability-audit.py \
---current-cli codex \
+--current-cli claude \
 --json
 ```
 
