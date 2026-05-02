@@ -23,6 +23,7 @@ bloating `index.md`.
 Current supplement:
 
 - [workflow-audit](./workflow-audit.md) - behavioral spec for the repo-local maintainer skill surfaces `.agents/skills/workflow-audit/` and `.claude/skills/workflow-audit/`
+- [workflow-capability-audit](./workflow-capability-audit.md) - behavioral spec for the repo-local maintainer skill surfaces `.agents/skills/workflow-capability-audit/` and `.claude/skills/workflow-capability-audit/`
 
 ---
 

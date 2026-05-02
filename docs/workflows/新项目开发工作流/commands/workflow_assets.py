@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +21,7 @@ CLI_ALT_DIRS = {
 ALL_CLI_TYPES = ["claude", "opencode", "codex"]
 WORKFLOW_VERSION = "0.1.26"
 WORKFLOW_SCHEMA_VERSION = "2"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增
+COMPATIBLE_TRELLIS_VERSION = "0.4.0"
 
 PATCH_BASELINE_COMMANDS = ["start", "finish-work", "record-session"]
 CODEX_PATCH_BASELINE_SKILLS = ["start", "finish-work"]
@@ -51,7 +53,36 @@ HELPER_SCRIPTS = [
 ]
 MANAGED_IMPLEMENTATION_AGENTS = ["research", "implement", "check"]
 LATEST_TRELLIS_VERSION_ENV = "TRELLIS_LATEST_VERSION"
+CURRENT_TRELLIS_VERSION_ENV = "TRELLIS_CURRENT_VERSION"
 CODEX_SHARED_SKILL_NAMES = [*DISTRIBUTED_COMMANDS, *CODEX_PATCH_BASELINE_SKILLS, "record-session"]
+
+_TRELLIS_VERSION_RE = re.compile(
+    r"(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)"
+    r"(?:-(?P<label>beta|rc)(?:\.(?P<prenum>\d+))?)?"
+)
+
+
+@dataclass(frozen=True)
+class TrellisVersion:
+    major: int
+    minor: int
+    patch: int
+    prerelease_label: str | None
+    prerelease_number: int
+
+    def sort_key(self) -> tuple[int, int, int, int, int]:
+        prerelease_rank = {
+            "beta": 0,
+            "rc": 1,
+            None: 2,
+        }[self.prerelease_label]
+        return (
+            self.major,
+            self.minor,
+            self.patch,
+            prerelease_rank,
+            self.prerelease_number,
+        )
 
 # ── Profile support ──
 VALID_PROFILES = ("personal", "outsourcing")
@@ -441,6 +472,42 @@ def read_project_trellis_version(root: Path) -> str | None:
     except UnicodeDecodeError:
         return None
     return content or None
+
+
+def parse_trellis_version(value: str | None) -> TrellisVersion | None:
+    if not value:
+        return None
+    match = _TRELLIS_VERSION_RE.fullmatch(value.strip())
+    if not match:
+        return None
+    label = match.group("label")
+    prerelease_number = int(match.group("prenum") or 0)
+    return TrellisVersion(
+        major=int(match.group("major")),
+        minor=int(match.group("minor")),
+        patch=int(match.group("patch")),
+        prerelease_label=label,
+        prerelease_number=prerelease_number,
+    )
+
+
+def compare_trellis_versions(left: str, right: str) -> int | None:
+    left_version = parse_trellis_version(left)
+    right_version = parse_trellis_version(right)
+    if left_version is None or right_version is None:
+        return None
+    if left_version.sort_key() < right_version.sort_key():
+        return -1
+    if left_version.sort_key() > right_version.sort_key():
+        return 1
+    return 0
+
+
+def resolve_current_trellis_version() -> tuple[str | None, str]:
+    overridden = os.environ.get(CURRENT_TRELLIS_VERSION_ENV, "").strip()
+    if overridden:
+        return overridden, CURRENT_TRELLIS_VERSION_ENV
+    return resolve_latest_trellis_version()
 
 
 def resolve_latest_trellis_version() -> tuple[str | None, str]:
