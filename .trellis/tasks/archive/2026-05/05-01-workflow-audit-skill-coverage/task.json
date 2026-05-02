@@ -1,0 +1,53 @@
+{
+  "assignee": "xzc",
+  "base_branch": "main",
+  "branch": null,
+  "children": [],
+  "commit": null,
+  "completedAt": "2026-05-02",
+  "createdAt": "2026-05-01",
+  "creator": "xzc",
+  "current_phase": 6,
+  "description": "",
+  "dev_type": null,
+  "id": "workflow-audit-skill-coverage",
+  "meta": {},
+  "name": "workflow-audit-skill-coverage",
+  "next_action": [
+    {
+      "action": "brainstorm",
+      "phase": 1
+    },
+    {
+      "action": "research",
+      "phase": 2
+    },
+    {
+      "action": "implement",
+      "phase": 3
+    },
+    {
+      "action": "check",
+      "phase": 4
+    },
+    {
+      "action": "update-spec",
+      "phase": 5
+    },
+    {
+      "action": "record-session",
+      "phase": 6
+    }
+  ],
+  "notes": "All 6 phases complete. Brainstorm: PRD finalized with 47+ user decisions. Research: verified skill files exist on both surfaces. Implement: verified completeness. Check: 6 tests + 5 refs identical across .agents/ and .claude/. Update-spec: spec verified at 479 lines. Record-session: journaled. Task complete.",
+  "package": null,
+  "parent": null,
+  "pr_url": null,
+  "priority": "P2",
+  "relatedFiles": [],
+  "scope": null,
+  "status": "completed",
+  "subtasks": [],
+  "title": "brainstorm: audit workflow-audit skill coverage",
+  "worktree_path": null
+}
