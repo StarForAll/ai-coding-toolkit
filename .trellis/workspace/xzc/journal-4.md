@@ -207,3 +207,54 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 135: workflow-capability-audit skill 修复与完善
+
+**Date**: 2026-05-02
+**Task**: workflow-capability-audit skill 修复与完善
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| 修复项 | 描述 |
+|--------|------|
+| Structural-Break 格式一致性 | `refresh_structural_break_section()` 和 `initialize_capability_report()` 统一为单行 Why/Required next action 格式 |
+| lifecycle 占位符 | 初始报告的 Confirmed Fix Scope / Applied Corrections / Post-Fix Revalidation 从 `<>` 占位符改为 `- none yet` |
+| print_stop_human Next Action | 新增 `_next_action_for_gate()` 和 `### Next Action` section |
+| fixture 真正删除 | `--finalize-fixture-destruction` 现在真正 `shutil.rmtree` A/B fixture 目录 |
+| supplemental unclear 分类 | not-in-A-but-in-B 的 workflow-dependent-native 现在正确标记为 confirmed（unclear 级别） |
+| 测试隔离 | setUp/tearDown 清理 .trellis/tasks、.current-task、/tmp fixture |
+| spec 同步 | 移除 Surface 列、移除 `yes` structural-break 结果 |
+| 模板同步 | SKILL.md、capability-report-template.md、execution-runbook、input-template 四份副本统一 |
+
+**测试覆盖**: 14 个测试全部通过，含 6 个新增回归测试
+**关键文件**:
+- `docs/workflows/新项目开发工作流/commands/workflow-capability-audit.py`
+- `docs/workflows/新项目开发工作流/commands/test_workflow_capability_audit.py`
+- `.trellis/spec/skills/workflow-capability-audit.md`
+- `.agents/skills/workflow-capability-audit/` (SKILL.md + 3 references)
+- `.claude/skills/workflow-capability-audit/` (SKILL.md + 3 references)
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `974dc92` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
