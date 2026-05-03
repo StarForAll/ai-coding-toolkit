@@ -45,12 +45,14 @@ If there is no active task and the user did not confirm any cleanup archives, sk
 ## Step 4: Record session journal
 
 ```bash
-python3 ./.trellis/scripts/add_session.py \
+python3 ./.trellis/scripts/workflow/record-session-helper.py \
   --title "Session Title" \
   --commit "hash1,hash2" \
   --summary "Brief summary"
 ```
 
-Use the work-commit hashes produced in Phase 3.4 (visible in Step 1's `Recent commits` list, or via `git log --oneline`) for `--commit`. Do not include the archive commit hashes from Step 3. This produces a `chore: record journal` commit.
+Use the work-commit hashes produced in Phase 3.4 (visible in Step 1's `Recent commits` list, or via `git log --oneline`) for `--commit`. Do not include the archive commit hashes from Step 3.
+
+If `record-session-helper.py` reports a metadata auto-commit failure in a read-only/restricted environment and prints `TRELLIS_AUTO_ESCALATE_COMMAND=...`, immediately rerun the printed command with elevated permissions if the current CLI supports privileged retry. Do not fall back to manual commit unless privileged retry is unavailable.
 
 Final git log order: `<work commits from 3.4>` → `chore(task): archive ...` (one or more) → `chore: record journal`.

@@ -15,6 +15,7 @@ Usage:
     python3 task.py set-base-branch <dir> <branch>  # Set PR target branch
     python3 task.py set-scope <dir> <scope>     # Set scope for PR title
     python3 task.py archive <task-dir>          # Archive completed task
+    python3 task.py archive-commit-only <task>  # Retry archive metadata commit only
     python3 task.py list                        # List active tasks
     python3 task.py list-archive [month]        # List archived tasks
     python3 task.py add-subtask <parent-dir> <child-dir>     # Link child to parent
@@ -51,6 +52,7 @@ from common.task_context import (
 from common.task_store import (
     cmd_add_subtask,
     cmd_archive,
+    cmd_archive_commit_only,
     cmd_create,
     cmd_remove_subtask,
     cmd_set_base_branch,
@@ -283,6 +285,7 @@ Usage:
   python3 task.py set-base-branch <dir> <base>       Set PR target branch
   python3 task.py set-scope <dir> <scope>            Set scope for PR title
   python3 task.py archive <task-dir>                 Archive completed task
+  python3 task.py archive-commit-only <task>         Retry archive metadata commit only
   python3 task.py add-subtask <parent> <child>       Link child task to parent
   python3 task.py remove-subtask <parent> <child>    Unlink child from parent
   python3 task.py list [--mine] [--status <status>]  List tasks
@@ -305,6 +308,7 @@ Examples:
   python3 task.py current --source
   python3 task.py finish
   python3 task.py archive add-login
+  python3 task.py archive-commit-only add-login
   python3 task.py add-subtask parent-task child-task
   python3 task.py remove-subtask parent-task child-task
   python3 task.py list
@@ -397,6 +401,11 @@ def main() -> int:
     p_archive.add_argument("name", help="Task directory or name")
     p_archive.add_argument("--no-commit", action="store_true", help="Skip auto git commit after archive")
 
+    p_archive_commit = subparsers.add_parser(
+        "archive-commit-only", help="Retry archive metadata commit only"
+    )
+    p_archive_commit.add_argument("name", help="Task directory or name")
+
     p_list = subparsers.add_parser("list", help="List tasks")
     p_list.add_argument("--mine", "-m", action="store_true", help="My tasks only")
     p_list.add_argument("--status", "-s", help="Filter by status")
@@ -430,6 +439,7 @@ def main() -> int:
         "set-base-branch": cmd_set_base_branch,
         "set-scope": cmd_set_scope,
         "archive": cmd_archive,
+        "archive-commit-only": cmd_archive_commit_only,
         "add-subtask": cmd_add_subtask,
         "remove-subtask": cmd_remove_subtask,
         "list": cmd_list,

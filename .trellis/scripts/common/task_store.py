@@ -49,6 +49,17 @@ from .task_utils import (
 )
 
 
+READONLY_HINTS = (
+    "Read-only file system",
+    "只读文件系统",
+    "Permission denied",
+    "Operation not permitted",
+    ".git/index.lock",
+    "cannot create",
+    "不能创建",
+)
+
+
 # =============================================================================
 # Helper Functions
 # =============================================================================
@@ -75,6 +86,19 @@ def ensure_tasks_dir(repo_root: Path) -> Path:
         archive_dir.mkdir(parents=True)
 
     return tasks_dir
+
+
+def _is_readonly_git_failure(text: str) -> bool:
+    return any(hint in text for hint in READONLY_HINTS)
+
+
+def _print_archive_commit_resume_guidance(task_name: str) -> None:
+    command = f"python3 ./.trellis/scripts/task.py archive-commit-only {task_name}"
+    print("", file=sys.stderr)
+    print("⚠️  archive 元数据自动提交失败，检测到可能的只读/受限写入环境。", file=sys.stderr)
+    print("如果当前 CLI 支持提权重试，请立即用提权方式执行：", file=sys.stderr)
+    print(command, file=sys.stderr)
+    print(f"TRELLIS_AUTO_ESCALATE_COMMAND={command}", file=sys.stderr)
 
 
 # =============================================================================
@@ -340,8 +364,9 @@ def cmd_archive(args: argparse.Namespace) -> int:
         print(colored(f"Archived: {dir_name} -> archive/{year_month}/", Colors.GREEN), file=sys.stderr)
 
         # Auto-commit unless --no-commit
+        commit_ok = True
         if not getattr(args, "no_commit", False):
-            _auto_commit_archive(dir_name, repo_root)
+            commit_ok = _auto_commit_archive(dir_name, repo_root)
 
         # Return the archive path
         print(f"{DIR_WORKFLOW}/{DIR_TASKS}/{DIR_ARCHIVE}/{year_month}/{dir_name}")
@@ -349,28 +374,48 @@ def cmd_archive(args: argparse.Namespace) -> int:
         # Run hooks with the archived path
         archived_json = archive_dest / FILE_TASK_JSON
         run_task_hooks("after_archive", archived_json, repo_root)
-        return 0
+        return 0 if commit_ok else 2
 
     return 1
 
 
-def _auto_commit_archive(task_name: str, repo_root: Path) -> None:
+def _auto_commit_archive(task_name: str, repo_root: Path) -> bool:
     """Stage .trellis/tasks/ changes and commit after archive."""
     tasks_rel = f"{DIR_WORKFLOW}/{DIR_TASKS}"
-    run_git(["add", "-A", tasks_rel], cwd=repo_root)
+    rc, _, err = run_git(["add", "-A", tasks_rel], cwd=repo_root)
+    if rc != 0:
+        print(f"[WARN] git add failed: {err.strip()}", file=sys.stderr)
+        if _is_readonly_git_failure(err):
+            _print_archive_commit_resume_guidance(task_name)
+        return False
 
     rc, _, _ = run_git(["diff", "--cached", "--quiet", "--", tasks_rel], cwd=repo_root)
     if rc == 0:
         print("[OK] No task changes to commit.", file=sys.stderr)
-        return
+        return True
 
     commit_msg = f"chore(task): archive {task_name}"
     rc, _, err = run_git(["commit", "-m", commit_msg], cwd=repo_root)
     if rc == 0:
         print(f"[OK] Auto-committed: {commit_msg}", file=sys.stderr)
-        return
+        return True
 
     print(f"[WARN] Auto-commit failed: {err.strip()}", file=sys.stderr)
+    if _is_readonly_git_failure(err):
+        _print_archive_commit_resume_guidance(task_name)
+    return False
+
+
+def cmd_archive_commit_only(args: argparse.Namespace) -> int:
+    """Commit-only step for an already archived task's metadata."""
+    repo_root = get_repo_root()
+    task_name = args.name
+
+    if not task_name:
+        print(colored("Error: Task name is required", Colors.RED), file=sys.stderr)
+        return 1
+
+    return 0 if _auto_commit_archive(task_name, repo_root) else 2
 
 
 # =============================================================================

@@ -55,7 +55,7 @@ EOF
 - [OK] Updates index.md (Total Sessions +1, Last Active, line stats, history)
 - [OK] Runs metadata closure checks before and after session write
 - [OK] Auto-commits .trellis/workspace and .trellis/tasks changes in helper commit-only mode
-- [OK] If metadata commit fails in read-only/restricted env, prints a `--resume` command for retry in writable environment
+- [OK] If metadata commit fails in read-only/restricted env, prints `TRELLIS_AUTO_ESCALATE_COMMAND=...` plus a `--resume` command; if the current CLI supports privileged retry, rerun it with elevated permissions immediately
 
 ### Step 3: Archive Completed Task
 

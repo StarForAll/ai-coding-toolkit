@@ -126,13 +126,12 @@ def ensure_resume_artifacts(
 
 def print_resume_guidance(repo_root: Path, state_file: Path) -> None:
     rel = state_file.relative_to(repo_root).as_posix()
+    command = f"python3 ./.trellis/scripts/workflow/record-session-helper.py --resume {rel}"
     print("", file=sys.stderr)
     print("⚠️  record-session metadata auto-commit 失败，检测到可能的只读/受限写入环境。", file=sys.stderr)
-    print("请在可写环境中恢复执行 metadata commit-only 步骤：", file=sys.stderr)
-    print(
-        f"python3 ./.trellis/scripts/workflow/record-session-helper.py --resume {rel}",
-        file=sys.stderr,
-    )
+    print("如果当前 CLI 支持提权重试，请立即用提权方式执行：", file=sys.stderr)
+    print(command, file=sys.stderr)
+    print(f"TRELLIS_AUTO_ESCALATE_COMMAND={command}", file=sys.stderr)
 
 
 def get_workspace_commit_message(repo_root: Path) -> str:

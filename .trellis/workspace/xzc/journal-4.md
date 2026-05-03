@@ -258,3 +258,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 136: 本项目使用的trellis版本升级
+
+**Date**: 2026-05-03
+**Task**: 本项目使用的trellis版本升级
+**Branch**: `main`
+
+### Summary
+
+完成 ai-coding-toolkit 根目录 Trellis 0.5.0-rc.2 兼容升级收口：迁移 .trellis 核心 runtime、Claude/Codex/OpenCode 运行面、finish-work/record-session 语义、README 与 spec 入口文档，并清理 .iflow 残留与 .new 模板候选文件。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2670a00` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
