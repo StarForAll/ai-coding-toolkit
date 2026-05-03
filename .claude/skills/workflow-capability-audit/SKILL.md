@@ -89,6 +89,7 @@ Rules:
 
 - if no active task exists: create a top-level audit task
 - if a non-audit active task exists: create a dedicated child audit task and switch into it immediately
+- if a `workflow-capability-audit` task is already active: stop and ask the user to resume or complete the existing audit before starting a new full audit
 - maintain:
   - `prd.md`
   - `capability-report.md`
@@ -127,6 +128,11 @@ Run the script to:
 
 The script discovers managed-surface rows from `workflow_assets.py` specs and dependent-surface rows from known Trellis-native carrier definitions.
 
+First-version limitation:
+
+- dependent-surface discovery starts from a maintained known-carrier seed list in the execution engine
+- newly introduced Trellis-native carriers may still require the AI supplemental capability loop before they enter the formal matrix
+
 ### Step B: AI reviews the generated report
 
 After the script completes, review `capability-report.md` for:
@@ -161,6 +167,15 @@ After producing the audit conclusion:
 - do not auto-enter workflow source remediation
 
 ## Classification Rules
+
+`capability-report.md` rows must preserve the emitted first-version matrix column order:
+
+- `Claude Evidence`
+- `Claude Classification`
+- `OpenCode Evidence`
+- `OpenCode Classification`
+- `Codex Evidence`
+- `Codex Classification`
 
 Per-CLI classification supports:
 

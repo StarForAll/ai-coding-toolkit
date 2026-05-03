@@ -2,7 +2,7 @@
 
 ## Audit Target and Boundary
 - Workflow Root: `docs/workflows/新项目开发工作流/`
-- Current CLI: <inferred or explicit>
+- Current CLI: claude
 - Current Trellis Version: 9.9.9
 - Compatible Anchor: 0.4.0
 - Audit Scope: task-based version-upgrade compatibility audit
@@ -59,7 +59,6 @@
 
 | Capability ID | Capability | Latest Trellis Mechanism / Benefit | Discovery Source | Claude Evidence | Claude Classification | OpenCode Evidence | OpenCode Classification | Codex Evidence | Codex Classification | Overall Summary | Structural Signal | Adaptation Decision |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| TN-007 | custom-supplemental-capability | Supplemental capability confirmed from current A/B evidence. | supplemental-confirmed | A=AGENTS.md; B=AGENTS.md | adopted-compatible | not-applicable | not-applicable | not-applicable | not-applicable | adopted-compatible | none detected from supplemental validation | No action required unless later confirmed compatibility analysis changes this. |
 | TN-001 | project-rules-and-routing-carrier | Workflow depends on AGENTS-style project rules/routing as a shared long-lived carrier. | ai-discovered | A=AGENTS.md; B=AGENTS.md | adopted-compatible | A=AGENTS.md; B=AGENTS.md | adopted-compatible | A=AGENTS.md; B=AGENTS.md | adopted-compatible | adopted-compatible | none detected from A/B dependency surface shape | No action required in fresh B unless later compatibility analysis changes this. |
 | TN-002 | claude-hooks-and-settings-carrier | Workflow may rely on Claude runtime hooks/settings that are Trellis-native or manually maintained rather than installer-managed. | ai-discovered | A=.claude/settings.json,.claude/hooks; B=.claude/settings.json,.claude/hooks | adopted-compatible | not-applicable | not-applicable | not-applicable | not-applicable | adopted-compatible | none detected from A/B dependency surface shape | No action required in fresh B unless later compatibility analysis changes this. |
 | TN-003 | opencode-plugin-and-instructions-carrier | Workflow may rely on OpenCode plugin/instruction carrier surfaces outside installer-managed workflow commands. | ai-discovered | not-applicable | not-applicable | A=.opencode/plugins,.opencode/package.json; B=.opencode/plugins,.opencode/package.json | adopted-compatible | not-applicable | not-applicable | adopted-compatible | none detected from A/B dependency surface shape | No action required in fresh B unless later compatibility analysis changes this. |
@@ -67,19 +66,21 @@
 | TN-005 | implementation-agent-carrier | Workflow depends on per-CLI implementation agent carrier directories even beyond installer ownership boundaries. | ai-discovered | A=.claude/agents; B=.claude/agents | adopted-compatible | A=.opencode/agents; B=.opencode/agents | adopted-compatible | A=.codex/agents; B=.codex/agents | adopted-compatible | adopted-compatible | none detected from A/B dependency surface shape | No action required in fresh B unless later compatibility analysis changes this. |
 | TN-006 | trellis-runtime-workflow-guide | Workflow depends on Trellis runtime workflow guide and project runtime script surfaces. | ai-discovered | A=.trellis/workflow.md,.trellis/scripts/task.py; B=.trellis/workflow.md,.trellis/scripts/task.py | adopted-compatible | A=.trellis/workflow.md,.trellis/scripts/task.py; B=.trellis/workflow.md,.trellis/scripts/task.py | adopted-compatible | A=.trellis/workflow.md,.trellis/scripts/task.py; B=.trellis/workflow.md,.trellis/scripts/task.py | adopted-compatible | adopted-compatible | none detected from A/B dependency surface shape | No action required in fresh B unless later compatibility analysis changes this. |
 ## Rejected / Unconfirmed Supplemental Points
-- none yet
+- Point:
+  - Capability: no-evidence-capability
+  - Status: unconfirmed
+  - Evidence checked: not-applicable; not-applicable; not-applicable
+  - Reason: No baseline evidence confirmed the supplemental capability in the current A/B round.
 
 ## Structural-Break Judgment
 - Result: no
 - Signals:
 - none detected from current report state
-- Why:
-- Current report state does not show structural-break signals that require escalation.
-- Required next action:
-- Continue with the current confirmation boundary.
+- Why: Current report state does not show structural-break signals that require escalation.
+- Required next action: Continue with the current confirmation boundary.
 
 ## Confirmed Fix Scope
-- pending user confirmation
+- none yet
 
 ## Applied Corrections
 - none yet
@@ -88,8 +89,8 @@
 - none yet
 
 ## A/B Fixture Status
-- A Root: /tmp/workflow-capability-audit-a-e3wi9_lj
-- B Root: /tmp/workflow-capability-audit-b-pjl9qn2p
+- A Root: /tmp/workflow-capability-audit-a-zoz_ptd2
+- B Root: /tmp/workflow-capability-audit-b-93wjyq3v
 - Destroyed: no
 - Final destruction confirmed by user: no
 

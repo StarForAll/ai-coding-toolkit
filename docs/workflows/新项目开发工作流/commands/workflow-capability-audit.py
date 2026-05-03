@@ -149,11 +149,18 @@ def print_structural_possible_human(signals: list[str]) -> None:
     print("- Confirm whether to continue into deeper structural-break analysis before any normal adaptation recommendation proceeds.")
 
 
-def replace_section(text: str, heading: str, replacement_lines: list[str]) -> str:
-    start = text.index(heading)
+def _find_section_bounds(text: str, heading: str) -> tuple[int, int]:
+    start = text.find(heading)
+    if start == -1:
+        raise RuntimeError(f"Missing required section heading: {heading}")
     next_section = text.find("\n## ", start + len(heading))
     if next_section == -1:
         next_section = len(text)
+    return start, next_section
+
+
+def replace_section(text: str, heading: str, replacement_lines: list[str]) -> str:
+    start, next_section = _find_section_bounds(text, heading)
     section = heading + "\n" + "\n".join(replacement_lines).rstrip() + "\n"
     return text[:start] + section + text[next_section:]
 
@@ -178,6 +185,40 @@ def update_compatible_anchor(new_value: str) -> None:
     target.write_text(content, encoding="utf-8")
 
 
+def resolve_repo_developer_name() -> str:
+    developer_file = REPO_ROOT / ".trellis" / ".developer"
+    if developer_file.is_file():
+        content = developer_file.read_text(encoding="utf-8")
+        for line in content.splitlines():
+            if line.startswith("name="):
+                value = line.split("=", 1)[1].strip()
+                if value:
+                    return value
+    raise RuntimeError("Developer not initialized in .trellis/.developer; cannot create fresh audit fixtures.")
+
+
+def restore_current_task_ref(task_ref: str) -> None:
+    current_task_file = REPO_ROOT / ".trellis" / ".current-task"
+    if task_ref:
+        current_task_file.write_text(task_ref, encoding="utf-8")
+    elif current_task_file.exists():
+        current_task_file.unlink()
+
+
+def resolve_audit_task_dir(task_dir_arg: str) -> Path:
+    tasks_root = (REPO_ROOT / ".trellis" / "tasks").resolve()
+    task_dir = (REPO_ROOT / task_dir_arg).resolve()
+    try:
+        task_dir.relative_to(tasks_root)
+    except ValueError as exc:
+        raise RuntimeError(f"--task-dir must stay under .trellis/tasks: {task_dir_arg}") from exc
+
+    task_json = task_dir / "task.json"
+    if not is_audit_task(task_json):
+        raise RuntimeError(f"--task-dir must point to a workflow-capability-audit task: {task_dir_arg}")
+    return task_dir
+
+
 def parse_fixture_roots_from_report(report_path: Path) -> tuple[Path, Path]:
     text = report_path.read_text(encoding="utf-8")
     a_match = re.search(r"^- A Root: (.+)$", text, flags=re.MULTILINE)
@@ -185,6 +226,20 @@ def parse_fixture_roots_from_report(report_path: Path) -> tuple[Path, Path]:
     if not a_match or not b_match:
         raise RuntimeError("capability-report.md is missing A/B fixture paths.")
     return Path(a_match.group(1).strip()), Path(b_match.group(1).strip())
+
+
+def validate_fixture_root(path: Path, prefix: str, label: str) -> Path:
+    resolved = path.resolve()
+    tmp_root = Path(tempfile.gettempdir()).resolve()
+    try:
+        resolved.relative_to(tmp_root)
+    except ValueError as exc:
+        raise RuntimeError(f"{label} root must stay under the system temp directory: {resolved}") from exc
+    if not resolved.name.startswith(prefix):
+        raise RuntimeError(f"{label} root does not match the expected audit fixture prefix: {resolved}")
+    if not resolved.is_dir():
+        raise RuntimeError(f"{label} root is missing or is not a directory: {resolved}")
+    return resolved
 
 
 def next_capability_id(report_text: str, prefix: str) -> str:
@@ -240,12 +295,17 @@ def _parse_row_capability(row_line: str) -> str:
 
 
 def insert_matrix_row(text: str, section_heading: str, row_line: str, capability_name: str) -> str:
-    start = text.index(section_heading)
-    header_start = text.index("| Capability ID |", start)
-    data_start = text.index("\n", text.index("|---|", header_start)) + 1
-    next_section = text.find("\n## ", data_start)
-    if next_section == -1:
-        next_section = len(text)
+    start, next_section = _find_section_bounds(text, section_heading)
+    header_start = text.find("| Capability ID |", start, next_section)
+    if header_start == -1:
+        raise RuntimeError(f"Missing required matrix header row in section: {section_heading}")
+    separator_start = text.find("|---|", header_start, next_section)
+    if separator_start == -1:
+        raise RuntimeError(f"Missing required matrix separator row in section: {section_heading}")
+    data_start = text.find("\n", separator_start)
+    if data_start == -1:
+        raise RuntimeError(f"Malformed matrix separator row in section: {section_heading}")
+    data_start += 1
     section_body = text[data_start:next_section]
     lines = [line for line in section_body.splitlines() if line.strip()]
     insert_index = len(lines)
@@ -262,10 +322,7 @@ def insert_matrix_row(text: str, section_heading: str, row_line: str, capability
 
 def append_rejected_supplemental_point(text: str, capability: str, reason: str, evidence: str) -> str:
     heading = "## Rejected / Unconfirmed Supplemental Points"
-    start = text.index(heading)
-    next_section = text.find("\n## ", start + len(heading))
-    if next_section == -1:
-        next_section = len(text)
+    start, next_section = _find_section_bounds(text, heading)
     entry = (
         f"- Point:\n"
         f"  - Capability: {capability}\n"
@@ -292,10 +349,7 @@ def replace_single_line_value(text: str, label: str, value: str) -> str:
 def append_bullets_to_section(text: str, heading: str, bullets: list[str], placeholder: str) -> str:
     if not bullets:
         return text
-    start = text.index(heading)
-    next_section = text.find("\n## ", start + len(heading))
-    if next_section == -1:
-        next_section = len(text)
+    start, next_section = _find_section_bounds(text, heading)
     section = text[start:next_section]
     bullet_lines = "\n".join(f"- {item}" for item in bullets)
     if placeholder in section:
@@ -394,9 +448,17 @@ def update_fix_lifecycle(
     updated = append_bullets_to_section(updated, "## Applied Corrections", applied_corrections, "- none yet")
     updated = append_bullets_to_section(updated, "## Post-Fix Revalidation", post_fix_revalidation, "- none yet")
     if finalize_fixture_destruction:
+        applied_section = _read_section(updated, "## Applied Corrections")
+        revalidation_section = _read_section(updated, "## Post-Fix Revalidation")
+        if "- none yet" in applied_section or "- none yet" in revalidation_section:
+            raise RuntimeError(
+                "Cannot finalize fixture destruction before applied corrections and post-fix revalidation are recorded."
+            )
+        a_root, b_root = parse_fixture_roots_from_report(report_path)
+        a_root = validate_fixture_root(a_root, "workflow-capability-audit-a-", "A")
+        b_root = validate_fixture_root(b_root, "workflow-capability-audit-b-", "B")
         updated = replace_single_line_value(updated, "Destroyed", "yes")
         updated = replace_single_line_value(updated, "Final destruction confirmed by user", "yes")
-        a_root, b_root = parse_fixture_roots_from_report(report_path)
         shutil.rmtree(a_root, ignore_errors=True)
         shutil.rmtree(b_root, ignore_errors=True)
     report_path.write_text(updated, encoding="utf-8")
@@ -454,10 +516,7 @@ def parse_matrix_rows(section_text: str) -> list[dict[str, str]]:
 
 
 def _read_section(text: str, heading: str) -> str:
-    start = text.index(heading)
-    next_section = text.find("\n## ", start + len(heading))
-    if next_section == -1:
-        next_section = len(text)
+    start, next_section = _find_section_bounds(text, heading)
     return text[start:next_section]
 
 
@@ -506,7 +565,7 @@ def is_audit_task(task_json: Path | None) -> bool:
     except json.JSONDecodeError:
         return False
     title = str(data.get("title", ""))
-    return title.startswith("workflow-capability-audit:") or title.startswith("workflow-audit:")
+    return title.startswith("workflow-capability-audit:")
 
 
 def run_task_create(title: str, parent: str | None) -> str:
@@ -541,14 +600,24 @@ def run_task_start(task_dir: str) -> None:
         raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "task start failed")
 
 
-def create_fixture_root(prefix: str) -> Path:
+def create_fixture_root(prefix: str, developer_name: str) -> Path:
     root = Path(tempfile.mkdtemp(prefix=prefix))
-    subprocess.run(["git", "init", "-b", "main"], cwd=root, text=True, capture_output=True, check=True)
-    subprocess.run(["git", "remote", "add", "origin", "git@example.com:first/repo.git"], cwd=root, text=True, capture_output=True, check=True)
-    subprocess.run(["git", "remote", "set-url", "--add", "--push", "origin", "git@example.com:first/repo.git"], cwd=root, text=True, capture_output=True, check=True)
-    subprocess.run(["git", "remote", "set-url", "--add", "--push", "origin", "git@example.com:second/repo.git"], cwd=root, text=True, capture_output=True, check=True)
-    subprocess.run(["trellis", "init", "--claude", "--opencode", "--codex", "-u", "xzc", "-y"], cwd=root, text=True, capture_output=True, check=True)
-    return root
+    try:
+        subprocess.run(["git", "init", "-b", "main"], cwd=root, text=True, capture_output=True, check=True)
+        subprocess.run(["git", "remote", "add", "origin", "git@example.com:first/repo.git"], cwd=root, text=True, capture_output=True, check=True)
+        subprocess.run(["git", "remote", "set-url", "--add", "--push", "origin", "git@example.com:first/repo.git"], cwd=root, text=True, capture_output=True, check=True)
+        subprocess.run(["git", "remote", "set-url", "--add", "--push", "origin", "git@example.com:second/repo.git"], cwd=root, text=True, capture_output=True, check=True)
+        subprocess.run(
+            ["trellis", "init", "--claude", "--opencode", "--codex", "-u", developer_name, "-y"],
+            cwd=root,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        return root
+    except Exception:
+        shutil.rmtree(root, ignore_errors=True)
+        raise
 
 
 def install_workflow_into(root: Path) -> None:
@@ -973,16 +1042,20 @@ def main() -> int:
         if not args.task_dir:
             print("--task-dir is required for supplemental capability validation.", file=sys.stderr)
             return 1
-        task_dir = REPO_ROOT / args.task_dir
-        payload = validate_supplemental_capability(
-            task_dir=task_dir,
-            capability=args.supplemental_capability,
-            surface=args.surface,
-            mechanism=args.mechanism,
-            claude_paths=args.claude_path,
-            opencode_paths=args.opencode_path,
-            codex_paths=args.codex_path,
-        )
+        try:
+            task_dir = resolve_audit_task_dir(args.task_dir)
+            payload = validate_supplemental_capability(
+                task_dir=task_dir,
+                capability=args.supplemental_capability,
+                surface=args.surface,
+                mechanism=args.mechanism,
+                claude_paths=args.claude_path,
+                opencode_paths=args.opencode_path,
+                codex_paths=args.codex_path,
+            )
+        except RuntimeError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
         if args.json:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
@@ -993,14 +1066,18 @@ def main() -> int:
         if not args.task_dir:
             print("--task-dir is required for fix lifecycle updates.", file=sys.stderr)
             return 1
-        task_dir = REPO_ROOT / args.task_dir
-        payload = update_fix_lifecycle(
-            task_dir=task_dir,
-            confirmed_fix_scope=args.confirm_fix_scope,
-            applied_corrections=args.record_correction,
-            post_fix_revalidation=args.record_revalidation,
-            finalize_fixture_destruction=args.finalize_fixture_destruction,
-        )
+        try:
+            task_dir = resolve_audit_task_dir(args.task_dir)
+            payload = update_fix_lifecycle(
+                task_dir=task_dir,
+                confirmed_fix_scope=args.confirm_fix_scope,
+                applied_corrections=args.record_correction,
+                post_fix_revalidation=args.record_revalidation,
+                finalize_fixture_destruction=args.finalize_fixture_destruction,
+            )
+        except RuntimeError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
         if args.json:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
@@ -1025,7 +1102,20 @@ def main() -> int:
             else:
                 print_stop_human(payload)
             return 0
-        update_compatible_anchor(args.compatible_trellis_version)
+        supplied_version = args.compatible_trellis_version.strip()
+        if assets.parse_trellis_version(supplied_version) is None:
+            payload = print_stop(
+                "version-parse-error",
+                None,
+                supplied_version,
+                "Supplied compatible Trellis version could not be parsed using semantic-version comparison.",
+            )
+            if args.json:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                print_stop_human(payload)
+            return 0
+        update_compatible_anchor(supplied_version)
         assets = _load_module("workflow_capability_assets_reloaded", "workflow_assets.py")
         compatible_anchor = getattr(assets, "COMPATIBLE_TRELLIS_VERSION", None)
 
@@ -1087,29 +1177,62 @@ def main() -> int:
 
     current_ref = current_task_ref()
     current_task_json = resolve_task_json(current_ref)
+    if current_ref and is_audit_task(current_task_json):
+        print(
+            f"An existing workflow-capability-audit task is already active: {current_ref}. "
+            "Resume or complete the existing audit before starting a new full audit.",
+            file=sys.stderr,
+        )
+        return 1
     parent = current_ref if current_ref and not is_audit_task(current_task_json) else None
-    task_dir_ref = run_task_create(args.task_title, parent)
-    run_task_start(task_dir_ref)
-    task_dir = REPO_ROOT / task_dir_ref
+    task_dir_ref = ""
+    a_root: Path | None = None
+    b_root: Path | None = None
+    try:
+        task_dir_ref = run_task_create(args.task_title, parent)
+        run_task_start(task_dir_ref)
+        task_dir = REPO_ROOT / task_dir_ref
+        developer_name = resolve_repo_developer_name()
 
-    a_root = create_fixture_root("workflow-capability-audit-a-")
-    b_root = create_fixture_root("workflow-capability-audit-b-")
-    install_workflow_into(b_root)
-    cli_types = detect_cli_types_from_roots(a_root, b_root)
-    managed_rows = build_workflow_managed_rows(a_root, b_root, cli_types)
-    dependent_rows = build_workflow_dependent_rows(a_root, b_root)
-    initialize_prd(task_dir, current_version, compatible_anchor)
-    initialize_capability_report(
-        task_dir,
-        args.current_cli,
-        current_version,
-        compatible_anchor,
-        a_root,
-        b_root,
-        managed_rows,
-        dependent_rows,
-    )
-    structural_result, structural_signals, _structural_why = derive_structural_break(managed_rows, dependent_rows)
+        a_root = create_fixture_root("workflow-capability-audit-a-", developer_name)
+        b_root = create_fixture_root("workflow-capability-audit-b-", developer_name)
+        install_workflow_into(b_root)
+        cli_types = detect_cli_types_from_roots(a_root, b_root)
+        managed_rows = build_workflow_managed_rows(a_root, b_root, cli_types)
+        dependent_rows = build_workflow_dependent_rows(a_root, b_root)
+        initialize_prd(task_dir, current_version, compatible_anchor)
+        initialize_capability_report(
+            task_dir,
+            args.current_cli,
+            current_version,
+            compatible_anchor,
+            a_root,
+            b_root,
+            managed_rows,
+            dependent_rows,
+        )
+        structural_result, structural_signals, _structural_why = derive_structural_break(managed_rows, dependent_rows)
+    except RuntimeError as exc:
+        if a_root is not None:
+            shutil.rmtree(a_root, ignore_errors=True)
+        if b_root is not None:
+            shutil.rmtree(b_root, ignore_errors=True)
+        if task_dir_ref:
+            shutil.rmtree(REPO_ROOT / task_dir_ref, ignore_errors=True)
+        restore_current_task_ref(current_ref)
+        print(str(exc), file=sys.stderr)
+        return 1
+    except subprocess.CalledProcessError as exc:
+        if a_root is not None:
+            shutil.rmtree(a_root, ignore_errors=True)
+        if b_root is not None:
+            shutil.rmtree(b_root, ignore_errors=True)
+        if task_dir_ref:
+            shutil.rmtree(REPO_ROOT / task_dir_ref, ignore_errors=True)
+        restore_current_task_ref(current_ref)
+        detail = exc.stderr or exc.stdout or str(exc)
+        print(detail.strip(), file=sys.stderr)
+        return 1
 
     payload = {
         "gate_result": "newer-version-continue",

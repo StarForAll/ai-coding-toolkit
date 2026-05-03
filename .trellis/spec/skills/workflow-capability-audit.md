@@ -188,6 +188,7 @@ This skill is **task-based only** after the version gate passes.
 - if no active task exists: create a top-level audit task
 - if a non-audit active task exists: create a dedicated child audit task
 - after child task creation, switch execution into it immediately
+- if a `workflow-capability-audit` task is already active: stop and ask the user to resume or complete the existing audit before starting a new full audit
 
 ### Task Title
 
@@ -251,6 +252,11 @@ The canonical execution engine (`docs/workflows/新项目开发工作流/command
 
 The script discovers managed-surface rows from `workflow_assets.py` specs and dependent-surface rows from known Trellis-native carrier definitions.
 
+First-version limitation:
+
+- dependent-surface discovery starts from a maintained known-carrier seed list in the execution engine
+- newly introduced Trellis-native carriers may still require the AI supplemental capability loop before they enter the formal matrix
+
 ### B. AI Reviews the Generated Report
 
 After the script completes, review `capability-report.md` for:
@@ -265,17 +271,17 @@ This step is where human/AI domain knowledge supplements the script's automated 
 
 The report must use one unified capability matrix organized by capability rows.
 
-Each row must include at least:
+Each row must include at least, in the emitted first-version column order:
 
 - `Capability ID`
 - `Capability`
 - `Latest Trellis Mechanism / Benefit`
 - `Discovery Source`
 - `Claude Evidence`
-- `OpenCode Evidence`
-- `Codex Evidence`
 - `Claude Classification`
+- `OpenCode Evidence`
 - `OpenCode Classification`
+- `Codex Evidence`
 - `Codex Classification`
 - `Overall Summary`
 - `Structural Signal`
@@ -469,7 +475,12 @@ Executable entry artifacts:
 - `.agents/skills/workflow-capability-audit/SKILL.md`
 - `.claude/skills/workflow-capability-audit/SKILL.md`
 
-Behavior-affecting changes must update these in the same change.
+Canonical runtime artifacts:
+
+- `docs/workflows/新项目开发工作流/commands/workflow-capability-audit.py`
+- `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
+
+Behavior-affecting changes must update the spec, entry artifacts, and any affected runtime artifacts in the same change.
 
 If behavior changes also affect references/tests, the same change must update:
 

@@ -41,6 +41,8 @@ creates fresh `A/B`, installs the workflow into `B`, and initializes:
 - `prd.md`
 - `capability-report.md`
 
+If a `workflow-capability-audit` task is already active, stop instead of creating another full-audit task. Ask the user to resume or complete the existing audit first.
+
 Always pass `--current-cli` inferred from the current runtime (the script does not auto-detect the CLI):
 
 ```bash
@@ -116,6 +118,7 @@ docs/workflows/新项目开发工作流/commands/workflow-capability-audit.py \
 
 - version gate happens before task creation or audit artifact creation
 - full audit is allowed only when `current > compatible`
+- full audit must not create a second active `workflow-capability-audit` task when one is already active
 - equal version stops
 - older version blocks
 - supplemental validation reuses the same A/B and the same `capability-report.md`

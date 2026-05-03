@@ -2,6 +2,8 @@
 
 Task-based `workflow-capability-audit` runs must maintain `capability-report.md` inside the task directory.
 
+The matrix headers below define the emitted first-version column order and should be preserved as-is when a human or AI updates the report.
+
 ```markdown
 # workflow-capability-audit: 新项目开发工作流
 
