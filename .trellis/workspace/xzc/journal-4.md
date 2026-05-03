@@ -291,3 +291,37 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 137: finish-work自动提交-只读问题修复与文档沉淀
+
+**Date**: 2026-05-03
+**Task**: finish-work自动提交-只读问题修复与文档沉淀
+**Branch**: `main`
+
+### Summary
+
+修复 Trellis finish-work/record-session 自动提交在只读环境下失败时的恢复链路：为 archive 和 record-session 增加机器可读的提权恢复命令，统一 finish-work 默认走 record-session-helper，并补充一份可复用到其他项目的独立修复指南。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7b81618` | (see git log) |
+| `3ddf628` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

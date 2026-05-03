@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 136
+- **Total Sessions**: 137
 - **Last Active**: 2026-05-03
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~293 | Active |
+| `journal-4.md` | ~327 | Active |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 137 | 2026-05-03 | finish-work自动提交-只读问题修复与文档沉淀 | `7b81618`, `3ddf628` | `main` |
 | 136 | 2026-05-03 | 本项目使用的trellis版本升级 | `2670a00` | `main` |
 | 135 | 2026-05-02 | workflow-capability-audit skill 修复与完善 | `974dc92` | `main` |
 | 134 | 2026-05-02 | workflow-audit skill coverage 任务推进 | `0f406c2` | `main` |
