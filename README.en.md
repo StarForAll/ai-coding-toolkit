@@ -29,12 +29,11 @@ Reusable assets accumulated from AI-assisted programming work: specs, templates,
 
 | Directory | Description |
 |------|------|
-| `.claude/` | Claude Code config: agents (6), commands (13), hooks (3), settings |
-| `.opencode/` | OpenCode config: agents (6), commands (15), plugin (2), lib, settings |
-| `.iflow/` | iFlow config: agents (6), commands (13), hooks (3), settings |
-| `.codex/` | Codex CLI config: agents (3, TOML format), hooks (1) |
-| `.agents/` | Tool-side skills deployment (13 trellis workflow skills) |
-| `.kiro/` | Tool-side skills deployment (12 trellis workflow skills) |
+| `.claude/` | Claude Code config: agents, commands, hooks, settings |
+| `.opencode/` | OpenCode config: agents, commands, plugins, lib, settings |
+| `.codex/` | Codex CLI config: agents (TOML format), hooks, config |
+| `.agents/` | Tool-side skills deployment (shared trellis workflow skills) |
+| `.kiro/` | Tool-side skills deployment (Kiro skills surface) |
 
 ### Other Directories
 
@@ -55,13 +54,13 @@ Source asset layer (source of truth)   Tool deployment layer (derived instances)
 ────────────────────────────────────   ─────────────────────────────────────────
 agents/<id>/SYSTEM.md            ──→   .claude/agents/<role>.md
                                 ──→   .opencode/agents/<role>.md
-                                ──→   .iflow/agents/<role>.md
+                                ──→   .codex/agents/<role>.toml
 
 commands/<tool>/                 ──→   .<tool>/commands/<ns>/<name>.md
 ```
 
 > **Current status**: the `agents/` and `commands/` source layers have not been built yet and currently contain README skeletons only.
-> Agent and command assets are still maintained directly in tool deployment directories (`.claude/`, `.opencode/`, `.iflow/`, while `commands/` is waiting to be populated).
+> Agent and command assets are still maintained directly in tool deployment directories (`.claude/`, `.opencode/`, `.codex/`, while `commands/` is waiting to be populated).
 > See `.trellis/spec/agents/index.md` and `.trellis/spec/commands/index.md` for details.
 
 ### Notes on Automated Workflows
@@ -150,6 +149,13 @@ python3 trellis-library/cli.py validate --strict-warnings
 ### Documentation
 
 See `trellis-library/README.md`, `trellis-library/taxonomy.md`, and `.trellis/spec/library-assets/`.
+
+## Claude Code Configuration Notes
+
+This project dynamically injects context (project state, spec indexes, task info, sub-agent context) via Trellis session-start and PreToolUse hooks, which already covers the core functions of CLAUDE.md and Teammates mode:
+
+- **No need to enable Teammates mode**: Trellis already implements a more mature multi-agent orchestration (dispatch agent + worktree isolation + hook context injection + Ralph Loop quality gate). Enabling Teammates would introduce dual orchestration and hook conflicts.
+- **No need to initialize CLAUDE.md**: The dynamic injection from session-start hook (git status, active tasks, spec indexes, workflow guidance) is more accurate and auto-updating than a static CLAUDE.md. Adding both would cause information redundancy.
 
 ## Development Specs
 

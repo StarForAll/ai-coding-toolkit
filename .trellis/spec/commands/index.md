@@ -1,7 +1,7 @@
 # Command Asset Specification
 
 > **⚠️ IMPORTANT**: This spec describes the TARGET architecture, not current practice.
-> Current workflow: Edit directly in `.claude/commands/`、`.opencode/commands/`、`.iflow/commands/`
+> Current workflow: Edit directly in `.claude/commands/`、`.opencode/commands/`
 > To implement this architecture: populate `commands/<tool>/<id>/` source layer, then enable sync to tool directories
 
 > How to author command source assets for multiple AI CLI tools.
@@ -12,7 +12,7 @@
 
 **Source asset directories** (`commands/claude/<id>/`、`commands/codex/<id>/`、`commands/shell/<id>/`) are empty — only top-level README files exist, no actual scripts.
 
-**Tool command directories** (`.claude/commands/`、`.opencode/commands/`、`.iflow/commands/`) contain live commands,
+**Tool command directories** (`.claude/commands/`、`.opencode/commands/`) contain live commands,
 but are **not synchronized** from `commands/<tool>/` source.
 Current practice is **direct editing** in tool directories.
 
@@ -25,7 +25,7 @@ Current practice is **direct editing** in tool directories.
 This spec covers the **source asset layer**: `commands/claude/`, `commands/codex/`, `commands/shell/`.
 
 **Out of scope:**
-- `.claude/commands/`, `.opencode/commands/`, `.iflow/commands/` — these are each tool's internal command discovery directories, managed independently by each tool
+- `.claude/commands/`, `.opencode/commands/` — these are each tool's internal command discovery directories, managed independently by each tool
 - Trellis workflow commands (start, brainstorm, finish-work, etc.) — these live directly in tool deployment directories and are not part of this spec
 
 ---

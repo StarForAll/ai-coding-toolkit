@@ -154,7 +154,9 @@
       "Bash(bash scripts/validate-skills.sh)",
       "Bash(bash *)",
       "Bash(dash *)",
-      "Bash(sh *)"
+      "Bash(sh *)",
+      "Bash([ -f \".claude/skills/trellis-$skill/SKILL.md\" ])",
+      "Bash([ -f \".agents/skills/trellis-$skill/SKILL.md\" ])"
     ]
   }
 }

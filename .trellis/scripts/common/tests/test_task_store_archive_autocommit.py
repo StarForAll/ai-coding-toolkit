@@ -24,7 +24,7 @@ class TaskStoreArchiveAutocommitTests(unittest.TestCase):
             check=False,
         )
 
-    def create_repo(self, include_current_task: bool = True) -> tuple[Path, Path, Path]:
+    def create_repo(self) -> tuple[Path, Path]:
         repo_root = Path(tempfile.mkdtemp(prefix="task-store-archive-"))
         self.addCleanup(shutil.rmtree, repo_root)
 
@@ -36,53 +36,37 @@ class TaskStoreArchiveAutocommitTests(unittest.TestCase):
         task_dir.mkdir(parents=True, exist_ok=True)
         (task_dir / "task.json").write_text('{"status": "planning"}\n', encoding="utf-8")
 
-        current_task = repo_root / ".trellis" / ".current-task"
-        current_task.parent.mkdir(parents=True, exist_ok=True)
-        if include_current_task:
-            current_task.write_text('.trellis/tasks/04-16-sample-task\n', encoding="utf-8")
-
         self.git(repo_root, "add", ".")
         self.git(repo_root, "commit", "-m", "init")
-        return repo_root, task_dir, current_task
+        return repo_root, task_dir
 
-    def test_auto_commit_archive_includes_current_task_cleanup(self) -> None:
-        repo_root, task_dir, current_task = self.create_repo()
-
-        archive_dir = repo_root / ".trellis" / "tasks" / "archive" / "2026-04"
-        archive_dir.mkdir(parents=True, exist_ok=True)
-        archived_task = archive_dir / task_dir.name
-        shutil.move(str(task_dir), str(archived_task))
-        current_task.unlink()
-
-        ok = _auto_commit_archive(task_dir.name, repo_root)
-
-        self.assertTrue(ok)
-        status = self.git(repo_root, "status", "--short", "--", ".trellis/tasks", ".trellis/.current-task")
-        self.assertEqual(status.stdout.strip(), "", msg=status.stdout + status.stderr)
-
-        show = self.git(repo_root, "show", "--name-only", "--format=", "HEAD")
-        self.assertIn('.trellis/.current-task', show.stdout)
-        self.assertIn(f'.trellis/tasks/archive/2026-04/{task_dir.name}/task.json', show.stdout)
-
-
-    def test_auto_commit_archive_ignores_missing_untracked_current_task(self) -> None:
-        repo_root, task_dir, current_task = self.create_repo(include_current_task=False)
+    def test_auto_commit_archive_commits_archived_task_metadata(self) -> None:
+        repo_root, task_dir = self.create_repo()
 
         archive_dir = repo_root / ".trellis" / "tasks" / "archive" / "2026-04"
         archive_dir.mkdir(parents=True, exist_ok=True)
         archived_task = archive_dir / task_dir.name
         shutil.move(str(task_dir), str(archived_task))
-        self.assertFalse(current_task.exists())
 
-        ok = _auto_commit_archive(task_dir.name, repo_root)
+        _auto_commit_archive(task_dir.name, repo_root)
 
-        self.assertTrue(ok)
-        status = self.git(repo_root, "status", "--short", "--", ".trellis/tasks", ".trellis/.current-task")
+        status = self.git(repo_root, "status", "--short", "--", ".trellis/tasks")
         self.assertEqual(status.stdout.strip(), "", msg=status.stdout + status.stderr)
 
         show = self.git(repo_root, "show", "--name-only", "--format=", "HEAD")
-        self.assertNotIn('.trellis/.current-task', show.stdout)
         self.assertIn(f'.trellis/tasks/archive/2026-04/{task_dir.name}/task.json', show.stdout)
+
+
+    def test_auto_commit_archive_skips_when_no_task_changes_are_staged(self) -> None:
+        repo_root, task_dir = self.create_repo()
+
+        _auto_commit_archive(task_dir.name, repo_root)
+
+        log = self.git(repo_root, "log", "--oneline", "-1")
+        self.assertIn("init", log.stdout)
+
+        status = self.git(repo_root, "status", "--short", "--", ".trellis/tasks")
+        self.assertEqual(status.stdout.strip(), "", msg=status.stdout + status.stderr)
 
 
 if __name__ == "__main__":

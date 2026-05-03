@@ -13,7 +13,7 @@ This is a **meta-project** — an AI coding toolkit that maintains both reusable
 - **Python** automation scripts (`cli.py`, validation, assembly, sync)
 - **Shell** validation scripts
 - **SKILL.md** skill definitions (YAML frontmatter + markdown)
-- **Agent** source assets (`agents/<id>/`) deployed to `.claude/agents/`, `.opencode/agents/`, `.iflow/agents/`
+- **Agent** source assets (`agents/<id>/`) deployed to `.claude/agents/`, `.opencode/agents/`, `.codex/agents/`
 - **Command** source assets (`commands/<tool>/`) deployed to tool-specific command directories
 - **Workflow assets** under `docs/workflows/**`, including command source files, installers, and workflow conventions
 

@@ -29,12 +29,11 @@
 
 | 目录 | 说明 |
 |------|------|
-| `.claude/` | Claude Code 配置：agents（6）、commands（13）、hooks（3）、settings |
-| `.opencode/` | OpenCode 配置：agents（6）、commands（15）、plugin（2）、lib、settings |
-| `.iflow/` | iFlow 配置：agents（6）、commands（13）、hooks（3）、settings |
-| `.codex/` | Codex CLI 配置：agents（3，TOML 格式）、hooks（1） |
-| `.agents/` | 工具侧 skills 部署（13 个 trellis workflow skill） |
-| `.kiro/` | 工具侧 skills 部署（12 个 trellis workflow skill） |
+| `.claude/` | Claude Code 配置：agents、commands、hooks、settings |
+| `.opencode/` | OpenCode 配置：agents、commands、plugins、lib、settings |
+| `.codex/` | Codex CLI 配置：agents（TOML 格式）、hooks、config |
+| `.agents/` | 工具侧 skills 部署（共享 trellis workflow skills） |
+| `.kiro/` | 工具侧 skills 部署（Kiro skills 部署面） |
 
 ### 其他
 
@@ -55,13 +54,13 @@
 ────────────────────────           ──────────────────────────
 agents/<id>/SYSTEM.md       ──→    .claude/agents/<role>.md
                              ──→    .opencode/agents/<role>.md
-                             ──→    .iflow/agents/<role>.md
+                             ──→    .codex/agents/<role>.toml
 
 commands/<tool>/            ──→    .<tool>/commands/<ns>/<name>.md
 ```
 
 > **当前状态**：`agents/` 与 `commands/` 源资产层尚未建立（仅含 README 骨架），
-> agent 与 command 资产暂直接维护于各工具部署目录（`.claude/`、`.opencode/`、`.iflow/`、`commands/` 待填充）。
+> agent 与 command 资产暂直接维护于各工具部署目录（`.claude/`、`.opencode/`、`.codex/`、`commands/` 待填充）。
 > 详见 `.trellis/spec/agents/index.md` 和 `.trellis/spec/commands/index.md`。
 
 ### 关于自动化工作流的说明
@@ -150,6 +149,13 @@ python3 trellis-library/cli.py validate --strict-warnings
 ### 文档
 
 详见 `trellis-library/README.md`、`trellis-library/taxonomy.md` 和 `.trellis/spec/library-assets/`。
+
+## Claude Code 配置说明
+
+本项目通过 Trellis 的 session-start hook 和 PreToolUse hook 动态注入上下文（项目状态、规范索引、任务信息、子 agent 上下文），已覆盖 CLAUDE.md 和 Teammates 模式的核心功能：
+
+- **不需要开启 Teammates 模式**：Trellis 已实现更成熟的多 agent 编排（dispatch agent + worktree 隔离 + hook 上下文注入 + Ralph Loop 质量门禁），开启 Teammates 会引入双重编排和 hook 冲突。
+- **不需要初始化 CLAUDE.md**：session-start hook 动态注入的内容（git 状态、活跃任务、spec 索引、workflow 指引）比静态 CLAUDE.md 更准确且自动更新，同时添加会导致信息冗余。
 
 ## 开发规范
 

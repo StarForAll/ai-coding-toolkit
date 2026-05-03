@@ -23,7 +23,7 @@ The focus here is repo maintenance:
 where this repository has unusual handoffs:
 
 - Didn't think about source-to-deployment sync → tool instances behave differently
-- Didn't think about cross-tool consistency → agents or commands diverge across `.claude/`, `.opencode/`, `.iflow/`
+- Didn't think about cross-tool consistency → agents or commands diverge across `.claude/`, `.opencode/`, `.codex/`
 - Didn't think about manifest-asset alignment → validation fails or sync drifts
 - Didn't think about future maintainers → docs and instructions stop matching the repo
 
@@ -66,8 +66,8 @@ Keep guides here only when they are:
 - `.trellis/spec/library-assets/` authoring guidance for those assets
 - `manifest.yaml` registry
 - `.trellis/spec/` project-local maintenance specs
-- `agents/` source → `.claude/agents/` → `.opencode/agents/` → `.iflow/agents/`
-- `commands/` source → `.claude/commands/` → `.opencode/commands/` → `.iflow/commands/`
+- `agents/` source → `.claude/agents/` → `.opencode/agents/` → `.codex/agents/`
+- `commands/` source → `.claude/commands/` → `.opencode/commands/`
 - `scripts/` validation and sync tooling
 
 → Read [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md)
@@ -75,7 +75,7 @@ Keep guides here only when they are:
 ### When to Think About Code Reuse
 
 - [ ] You're writing similar logic to something that exists in another tool's deployment
-- [ ] You see the same pattern repeated across `.claude/`, `.opencode/`, `.iflow/`
+- [ ] You see the same pattern repeated across `.claude/`, `.opencode/`, `.codex/`
 - [ ] You're adding a new field to `manifest.yaml` entries
 - [ ] **You're modifying any constant, path, or config that appears in multiple layers**
 - [ ] **You're creating a new validation or sync script** ← Search existing scripts first!

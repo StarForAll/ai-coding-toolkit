@@ -1,3 +1,6 @@
+[!] **Legacy/manual fallback**: prefer `/trellis:finish-work` for the normal `0.5` close-out flow.
+Use this command only when you explicitly need `record-session-helper.py` or are resuming an interrupted metadata closure.
+
 [!] **Prerequisite**: This command should only be used AFTER the human has tested and committed the code.
 
 **Do NOT run `git commit` directly** — the scripts below handle their own commits for `.trellis/` metadata. You only need to read git history (`git log`, `git status`, `git diff`) and run the Python scripts.
@@ -20,6 +23,8 @@ python3 ./.trellis/scripts/get_context.py --mode record
 ```bash
 python3 ./.trellis/scripts/task.py archive <task-name>
 ```
+
+The archive step clears the session-scoped active task pointer for the current session.
 
 ### Step 2: One-Click Add Session
 

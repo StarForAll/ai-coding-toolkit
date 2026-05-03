@@ -1,3 +1,6 @@
+[!] **Legacy/manual fallback**: prefer `/trellis:finish-work` for the normal `0.5` close-out flow.
+Use this command only when you explicitly need `record-session-helper.py` or are resuming an interrupted metadata closure.
+
 [!] **Prerequisite**: This command should only be used AFTER the human has tested and committed the code.
 
 **Do NOT run `git commit` directly** — the scripts below handle their own commits for `.trellis/` metadata. You only need to read git history (`git log`, `git status`, `git diff`) and run the Python scripts.
@@ -5,7 +8,7 @@
 **Close-out order is mandatory**: `record-session` first, then `archive`.
 
 - `record-session` needs the current task context
-- `archive` moves task metadata and clears `.current-task`
+- `archive` moves task metadata and clears the session-scoped active task pointer
 - If you archive first, `record-session-helper.py` may be blocked by metadata closure pre-checks because `.trellis/tasks` is no longer clean
 
 ---
@@ -65,10 +68,10 @@ python3 ./.trellis/scripts/task.py archive <task-name>
 Recommended post-check:
 
 ```bash
-git status --short .trellis/tasks .trellis/.current-task
+python3 ./.trellis/scripts/task.py current --source
 ```
 
-Expected output: empty. If it is still dirty, the close-out is not complete yet.
+Expected output: no active task for the current session. If the archived task still appears, the close-out is not complete yet.
 
 ---
 

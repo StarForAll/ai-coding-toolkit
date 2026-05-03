@@ -1,16 +1,23 @@
 ---
 name: record-session
-description: "Records completed work progress to .trellis/workspace/ journal files after human testing and commit. Captures session summaries, commit hashes, and updates developer index files for future session context. Use when a coding session is complete, after the human has committed code, or to persist session knowledge for future AI sessions."
+description: "Legacy/manual fallback for recording completed work progress to .trellis/workspace/ journal files after human testing and commit. Prefer `trellis-finish-work` for the normal close-out path; use this only when you specifically need the helper flow or resume a previously interrupted metadata closure."
 ---
+
+[!] **Legacy/manual fallback**: the normal `0.5` close-out path is `trellis-finish-work`.
+Use this skill only when:
+
+- you explicitly need `record-session-helper.py`
+- you are resuming a previously interrupted metadata closure
+- the user specifically asks to run `record-session` manually
 
 [!] **Prerequisite**: This skill should only be used AFTER the human has tested and committed the code.
 
 **Do NOT run `git commit` directly** — the scripts below handle their own commits for `.trellis/` metadata. You only need to read git history (`git log`, `git status`, `git diff`) and run the Python scripts.
 
-**Close-out order is mandatory**: `record-session` first, then `archive`.
+**Manual fallback order**: `record-session` first, then `archive`.
 
 - `record-session` needs the current task context
-- `archive` moves task metadata and clears `.current-task`
+- `archive` moves task metadata and clears the session-scoped active task pointer
 - If you archive first, `record-session-helper.py` may be blocked by metadata closure pre-checks because `.trellis/tasks` is no longer clean
 
 ---
@@ -70,10 +77,10 @@ python3 ./.trellis/scripts/task.py archive <task-name>
 Recommended post-check:
 
 ```bash
-git status --short .trellis/tasks .trellis/.current-task
+python3 ./.trellis/scripts/task.py current --source
 ```
 
-Expected output: empty. If it is still dirty, the close-out is not complete yet.
+Expected output: no active task for the current session. If the archived task still appears, the close-out is not complete yet.
 
 ---
 

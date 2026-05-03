@@ -73,7 +73,7 @@ For each arrow, ask:
 |----------|----------------------------|
 | `trellis-library` ↔ `manifest.yaml` | source asset added or moved but registry not updated |
 | `trellis-library` ↔ `.trellis/spec/library-assets/` | source library structure or authoring rules change but local guidance still teaches the old workflow |
-| source asset ↔ tool deployment copy | content diverges across `.claude/`, `.opencode/`, `.iflow/` |
+| source asset ↔ tool deployment copy | content diverges across `.claude/`, `.opencode/`, `.codex/` |
 | command/script ↔ docs/skills | behavior changes but instructions stay outdated |
 | config ↔ agent/command behavior | allowed paths, flags, or conventions drift |
 | spec ↔ validation flow | rules say one thing, tooling enforces another |

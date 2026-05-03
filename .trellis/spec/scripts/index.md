@@ -65,11 +65,7 @@ trellis-library/
 ├── add_session.py                  # Session recording
 ├── init_developer.py               # Developer identity
 ├── get_developer.py                # Developer lookup
-└── multi_agent/                    # Multi-agent pipeline
-    ├── start.py
-    ├── status.py
-    ├── create_pr.py
-    └── cleanup.py
+└── common/                         # Shared runtime helpers (active_task, workflow_phase, etc.)
 
 scripts/
 └── validate-skills.sh              # Skill structure validation

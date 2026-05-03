@@ -1,7 +1,7 @@
 # Agent Asset Specification
 
 > **⚠️ IMPORTANT**: This spec describes the TARGET architecture, not current practice.
-> Current workflow: Edit directly in `.claude/agents/`、`.opencode/agents/`、`.iflow/agents/`
+> Current workflow: Edit directly in `.claude/agents/`、`.opencode/agents/`、`.codex/agents/`
 > To implement this architecture: populate `agents/<id>/` source layer, then enable sync to tool directories
 
 > How to author agent source assets and deploy them across multiple AI CLI tools.
@@ -12,7 +12,7 @@
 
 **Source asset layer** (`agents/<agent-id>/`) is empty — no `SYSTEM.md`, `TOOLS.md`, or `EXAMPLES/` exist.
 
-**Tool deployment directories** (`.claude/agents/`、`.opencode/agents/`、`.iflow/agents/`) exist
+**Tool deployment directories** (`.claude/agents/`、`.opencode/agents/`、`.codex/agents/`) exist
 and contain live agent definitions, but are **not synchronized** from `agents/<id>/` source.
 Current practice is **direct editing** in tool directories.
 
@@ -33,12 +33,12 @@ agents/                                 .claude/agents/
     SYSTEM.md   ← 系统提示词（核心）      .opencode/agents/
     TOOLS.md    ← 权限边界（可选）          <role>.md  (description, mode, permission)
     EXAMPLES/   ← 示例（可选）
-                                        .iflow/agents/
-                                          <role>.md  (name, description, tools, color)
+                                        .codex/agents/
+                                          <role>.toml  (name, description, sandbox)
 ```
 
 **Source of truth**: `agents/<agent-id>/` directory.
-**Tool deployments**: `.claude/agents/`, `.opencode/agents/`, `.iflow/agents/` are derived instances.
+**Tool deployments**: `.claude/agents/`, `.opencode/agents/`, `.codex/agents/` are derived instances.
 
 ---
 
@@ -114,16 +114,16 @@ Each tool requires a single `.md` file in its agents directory, wrapping the sou
 
 ### Field Mapping
 
-| Source Field | Claude Code | OpenCode | iFlow |
+| Source Field | Claude Code | OpenCode | Codex |
 |-------------|-------------|----------|-------|
-| **Directory** | `.claude/agents/` | `.opencode/agents/` | `.iflow/agents/` |
-| **Filename** | `<role>.md` | `<role>.md` | `<role>.md` |
-| **Agent name** | `name:` in frontmatter | Inferred from filename | `name:` in frontmatter |
-| **Description** | `description:` | `description:` (use `\|` block) | `description:` |
-| **Permissions** | `tools:` list (e.g. `Read, Write, Bash`) | `permission:` block (`read: allow`) | `tools:` list + `color:` |
+| **Directory** | `.claude/agents/` | `.opencode/agents/` | `.codex/agents/` |
+| **Filename** | `<role>.md` | `<role>.md` | `<role>.toml` |
+| **Agent name** | `name:` in frontmatter | Inferred from filename | `name =` |
+| **Description** | `description:` | `description:` (use `\|` block) | `description =` |
+| **Permissions** | `tools:` list (e.g. `Read, Write, Bash`) | `permission:` block (`read: allow`) | `sandbox_mode =` + developer instructions |
 | **Model** | `model:` (optional) | Not supported | Not supported |
-| **Mode** | Implicit (subagent) | `mode: subagent` (required) | Implicit (subagent) |
-| **Body** | SYSTEM.md content | SYSTEM.md content | SYSTEM.md content |
+| **Mode** | Implicit (subagent) | `mode: subagent` (required) | Implicit |
+| **Body** | SYSTEM.md content | SYSTEM.md content | `developer_instructions` string |
 
 ### Example: Deploying `research` Agent
 
@@ -155,16 +155,15 @@ permission:
 <SYSTEM.md content>
 ```
 
-**iFlow** (`.iflow/agents/research.md`):
-```markdown
----
-name: research
-description: |
-  Code and tech search expert. Pure research, no code modifications.
-tools: [Read, Grep, Glob]
-color: blue
----
+**Codex** (`.codex/agents/research.toml`):
+```toml
+name = "research"
+description = "Code and tech search expert. Pure research, no code modifications."
+sandbox_mode = "read-only"
+
+developer_instructions = """
 <SYSTEM.md content>
+"""
 ```
 
 ---
@@ -186,7 +185,7 @@ color: blue
 # After modifying agents/<id>/SYSTEM.md:
 # 1. Update .claude/agents/<role>.md (keep frontmatter, replace body)
 # 2. Update .opencode/agents/<role>.md (keep frontmatter, replace body)
-# 3. Update .iflow/agents/<role>.md (keep frontmatter, replace body)
+# 3. Update .codex/agents/<role>.toml (keep metadata, replace instructions)
 ```
 
 ---
@@ -206,7 +205,7 @@ Before finalizing a new agent:
 - [ ] SYSTEM.md has: responsibilities, boundaries, workflow, report format
 - [ ] Deployed to `.claude/agents/` with correct frontmatter
 - [ ] Deployed to `.opencode/agents/` with correct frontmatter
-- [ ] Deployed to `.iflow/agents/` with correct frontmatter
+- [ ] Deployed to `.codex/agents/` with correct metadata
 - [ ] Permissions are minimal for each tool
 
 ---
