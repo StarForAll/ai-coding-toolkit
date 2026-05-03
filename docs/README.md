@@ -14,3 +14,7 @@
 - `docs/workflows/<工作流名>/命令映射.md`：阶段和命令关系
 - `docs/workflows/<工作流名>/完整流程演练.md`：官方 walkthrough / 实例演练
 - `docs/workflows/完整流程演练模板.md`：为其他工作流复制 walkthrough 的骨架模板
+
+## 其他可复用运行时修复指南
+
+- `docs/Trellis自动提交失败恢复与提权修复指南.md`：当 Trellis 的 archive / record-session 自动提交因只读环境失败时，如何修改脚本链路与命令入口，让项目支持恢复命令与提权重试
