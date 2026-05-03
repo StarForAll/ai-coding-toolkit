@@ -29,6 +29,7 @@ This skill **must** fully validate the following aspects for any workflow under 
    - The script exists at the documented path
    - The script's actual behavior (via static analysis or runtime) matches documented claims
    - Exit codes and output format are machine-parseable if the workflow depends on them
+   - Required environment-variable contracts are still honored. In particular, `install-workflow.py` must continue to refuse formal install unless `WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1` is set, because the Codex handoff boundary depends on it
 
 2. **CLI adaptation completeness** - For each supported CLI (Claude Code, OpenCode, Codex), the audit must confirm:
    - All workflow commands/skills/agents are correctly mapped to the CLI's native location
@@ -98,6 +99,12 @@ Natural-language user constraints may override this order.
 
 If multiple workflow targets are supplied in one request, the skill must stop and require one explicit target before continuing.
 
+If the resolved `workflow_path` does not exist on disk:
+
+- stop immediately
+- classify the stop as `Blocked / Invalid Input`
+- require the user to supply one valid workflow root before continuing
+
 ---
 
 ## Evidence Mainline
@@ -124,6 +131,11 @@ Every piece of evidence collected throughout the mainline must be tagged with it
 - `runtime command output` — stdout/stderr/exit code from executed commands
 
 This labeling is mandatory because the core audit operation (gap analysis) compares what the source repo declares against what the target project actually contains. Without source-layer tags, the two are easily conflated.
+
+Per-CLI adaptation conclusions follow this scope rule:
+
+- the section is in scope when the audit examines CLI-specific carrier mapping, adaptation drift, CLI-specific installed artifacts, or the Codex handoff boundary
+- lightweight output should still keep the section even when CLI adaptation is not in scope; in that case, mark each CLI entry as `not-applicable` with a brief reason instead of omitting the section
 
 ### A. Understand Target System Mechanics
 
@@ -235,6 +247,12 @@ When the skill determines both task context and runtime validation are required:
 - output step E via `audit-report.md`
 - stop with a controlled next-step recommendation
 
+If `/tmp` project creation, `trellis init`, or any required runtime-validation command fails before step D completes:
+
+- stop immediately
+- classify the stop as `Blocked / Runtime Execution Failure`
+- record the failing command, exit status, key stdout/stderr evidence, and what remains unverified
+
 ### Mode transition boundary
 
 When transitioning from step C to a task-based mode:
@@ -246,6 +264,13 @@ When transitioning from step C to a task-based mode:
 5. seed `audit-report.md` with already-collected evidence from steps A/B/C
 
 Never switch modes silently. Never discard A/B/C findings when entering a task-based mode.
+
+If task-based mode is chosen but the required `brainstorm` entrypoint for the current CLI is unavailable:
+
+- stop immediately
+- classify the stop as `Blocked / Dependency Unavailable`
+- preserve the already-collected A/B/C evidence
+- do not silently fall back to lightweight mode
 
 ### User-set `need_runtime_validation: no` conflict
 
@@ -327,6 +352,26 @@ Every confirmed issue must include:
 - impact scope
 - fix direction
 
+#### Priority Rubric
+
+Use the following rubric to assign `P0` / `P1` / `P2` consistently. When in doubt between two levels, pick the more severe one and explain the borderline case in the issue conclusion.
+
+- `P0` — blocks workflow execution, install, or audit itself
+  - the workflow cannot finish a documented step under any supported CLI
+  - install / embed / upgrade scripts crash, exit with an undocumented non-zero status, or silently corrupt state
+  - a security or boundary contract is broken (e.g., `install-workflow.py` no longer enforces `WORKFLOW_EMBED_EXECUTOR_CONFIRMED`, allowing Codex to lead formal embed)
+  - documented post-install artifact is entirely missing
+- `P1` — drift with real behavioral impact, but a workaround or partial path exists
+  - documented behavior diverges from actual script behavior in a way an auditor or operator would notice (exit code shape, output schema, side-effect ordering)
+  - one CLI's adaptation is materially incomplete or behaviorally inconsistent with the other CLIs for the same semantic action
+  - cross-document references point at moved/renamed files but a manual workaround still works
+- `P2` — surface-level inconsistency, no behavioral impact
+  - wording, naming, or label drift between docs that does not change runtime behavior
+  - non-breaking documentation gaps that do not mislead an auditor about behavior
+  - cosmetic or formatting issues in templates that still render and parse correctly
+
+A finding that requires runtime validation to confirm severity must stay in the Blocked / Evidence Gap section until D is run, rather than be guessed into a P-level.
+
 ### Blocked-State Rules
 
 If some critical branches remain unresolved, partial confirmed conclusions are allowed only when blocked branches are explicitly labeled as:
@@ -336,6 +381,15 @@ If some critical branches remain unresolved, partial confirmed conclusions are a
 - `Needs Clarification`
 
 Blind guessing is forbidden.
+
+This partial-findings blocked-item set is distinct from hard-stop exit classifications such as:
+
+- `Blocked / Invalid Input`
+- `Blocked / Dependency Unavailable`
+- `Blocked / Runtime Execution Failure`
+- `Blocked / No Handoff Target`
+
+Use `Blocked / <subtype>` when the audit itself cannot continue reliably and must stop. Do not treat those hard-stop classifications as ordinary partial blocked-item labels inside an otherwise continuing audit report.
 
 ---
 
@@ -373,12 +427,20 @@ When the audit reaches the formal temporary-project embed step under Codex:
 - require the handoff sequence to cover:
   - state detection
   - install dry-run
-  - formal install with explicit non-Codex executor confirmation
+  - formal install with explicit non-Codex executor confirmation, performed with `WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1` set in the environment of the takeover CLI's invocation
   - post-install `upgrade-compat.py --check`
+
+The `WORKFLOW_EMBED_EXECUTOR_CONFIRMED` environment variable is part of the boundary contract: `install-workflow.py` uses it to refuse formal install when the operator has not explicitly acknowledged the takeover, so the audit must not treat the formal install step as covered by handoff evidence unless the env var was actually set in the returned command transcript.
 
 Any handoff CLI remains limited to runtime validation only during the audit stage and must not modify workflow source files.
 
 Returned evidence from the handoff path must be merged back into the current audit report.
+
+If the user constraints or runtime reality rule out all usable non-Codex executors for the formal embed step:
+
+- stop immediately
+- classify the stop as `Blocked / No Handoff Target`
+- explain that the formal embed step remains unverified because no allowed takeover CLI is available
 
 ---
 
@@ -410,13 +472,28 @@ The skill must stop after presenting the report and routing guidance. It must no
 
 ## Validation
 
-The first version must ship with these persisted scenario files:
+Required persisted scenario files:
 
 - `tests/01-lightweight-static.md`
 - `tests/02-nontrivial-full-audit.md`
 - `tests/03-codex-handoff.md`
 - `tests/04-task-based-static.md`
 - `tests/05-need-runtime-validation-no-escalation.md`
+- `tests/06-multi-target-input-stop.md`
+- `tests/07-child-audit-task.md`
+- `tests/08-post-audit-routing.md`
+- `tests/09-grill-me-gap-clarification.md`
+- `tests/10-opencode-priority-handoff.md`
+- `tests/11-invalid-workflow-path.md`
+- `tests/12-brainstorm-dependency-unavailable.md`
+- `tests/13-runtime-execution-failure.md`
+- `tests/14-no-handoff-target.md`
+- `tests/15-source-layer-tag-compliance.md`
+- `tests/16-candidate-issues-supplemental-focus.md`
+- `tests/17-per-cli-not-applicable-section.md`
+- `tests/18-confirmed-issue-minimum-schema.md`
+- `tests/19-current-cli-inference-failure.md`
+- `tests/20-script-behavior-mismatch.md`
 
 Each test file must use the same internal structure:
 
@@ -474,6 +551,21 @@ When a behavior change could affect the task-based audit path's dependence on `b
 - `.agents/skills/workflow-audit/tests/03-codex-handoff.md`
 - `.agents/skills/workflow-audit/tests/04-task-based-static.md`
 - `.agents/skills/workflow-audit/tests/05-need-runtime-validation-no-escalation.md`
+- `.agents/skills/workflow-audit/tests/06-multi-target-input-stop.md`
+- `.agents/skills/workflow-audit/tests/07-child-audit-task.md`
+- `.agents/skills/workflow-audit/tests/08-post-audit-routing.md`
+- `.agents/skills/workflow-audit/tests/09-grill-me-gap-clarification.md`
+- `.agents/skills/workflow-audit/tests/10-opencode-priority-handoff.md`
+- `.agents/skills/workflow-audit/tests/11-invalid-workflow-path.md`
+- `.agents/skills/workflow-audit/tests/12-brainstorm-dependency-unavailable.md`
+- `.agents/skills/workflow-audit/tests/13-runtime-execution-failure.md`
+- `.agents/skills/workflow-audit/tests/14-no-handoff-target.md`
+- `.agents/skills/workflow-audit/tests/15-source-layer-tag-compliance.md`
+- `.agents/skills/workflow-audit/tests/16-candidate-issues-supplemental-focus.md`
+- `.agents/skills/workflow-audit/tests/17-per-cli-not-applicable-section.md`
+- `.agents/skills/workflow-audit/tests/18-confirmed-issue-minimum-schema.md`
+- `.agents/skills/workflow-audit/tests/19-current-cli-inference-failure.md`
+- `.agents/skills/workflow-audit/tests/20-script-behavior-mismatch.md`
 - `.claude/skills/workflow-audit/references/input-template.md`
 - `.claude/skills/workflow-audit/references/audit-report-template.md`
 - `.claude/skills/workflow-audit/references/lightweight-output-template.md`
@@ -484,5 +576,20 @@ When a behavior change could affect the task-based audit path's dependence on `b
 - `.claude/skills/workflow-audit/tests/03-codex-handoff.md`
 - `.claude/skills/workflow-audit/tests/04-task-based-static.md`
 - `.claude/skills/workflow-audit/tests/05-need-runtime-validation-no-escalation.md`
+- `.claude/skills/workflow-audit/tests/06-multi-target-input-stop.md`
+- `.claude/skills/workflow-audit/tests/07-child-audit-task.md`
+- `.claude/skills/workflow-audit/tests/08-post-audit-routing.md`
+- `.claude/skills/workflow-audit/tests/09-grill-me-gap-clarification.md`
+- `.claude/skills/workflow-audit/tests/10-opencode-priority-handoff.md`
+- `.claude/skills/workflow-audit/tests/11-invalid-workflow-path.md`
+- `.claude/skills/workflow-audit/tests/12-brainstorm-dependency-unavailable.md`
+- `.claude/skills/workflow-audit/tests/13-runtime-execution-failure.md`
+- `.claude/skills/workflow-audit/tests/14-no-handoff-target.md`
+- `.claude/skills/workflow-audit/tests/15-source-layer-tag-compliance.md`
+- `.claude/skills/workflow-audit/tests/16-candidate-issues-supplemental-focus.md`
+- `.claude/skills/workflow-audit/tests/17-per-cli-not-applicable-section.md`
+- `.claude/skills/workflow-audit/tests/18-confirmed-issue-minimum-schema.md`
+- `.claude/skills/workflow-audit/tests/19-current-cli-inference-failure.md`
+- `.claude/skills/workflow-audit/tests/20-script-behavior-mismatch.md`
 - `.agents/skills/brainstorm/SKILL.md`
 - `.claude/commands/trellis/brainstorm.md`

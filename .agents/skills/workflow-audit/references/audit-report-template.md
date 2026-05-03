@@ -2,6 +2,7 @@
 
 Task-based `workflow-audit` runs must maintain `audit-report.md` inside the task directory.
 The file may be updated incrementally during the active audit and becomes the current finalized report at the stop-and-confirm boundary.
+Every evidence item and confirmed-issue entry must keep explicit source-layer tags.
 
 ```markdown
 # workflow-audit: <workflow-name>
@@ -27,6 +28,7 @@ The file may be updated incrementally during the active audit and becomes the cu
   - <command + key result>
 - Validation Action:
   - <what was done to confirm it>
+  - <example: Compared script signature against documentation; exit code 0 but missing required JSON output>
 - Impact Scope:
   - <which directories / platforms / steps are affected>
 - Suggested Fix Direction:
@@ -36,6 +38,7 @@ The file may be updated incrementally during the active audit and becomes the cu
 - <candidate issue> -> <unconfirmed / false alarm / invalid premise>
 
 ## Blocked Items (Blocked / Evidence Gap / Needs Clarification)
+This section is for unresolved branches inside a continuing audit result. Hard-stop `Blocked / <subtype>` exits stop the audit instead of being listed here.
 - <blocked item title>
   - Type: <Blocked | Evidence Gap | Needs Clarification>
   - Cause:
@@ -43,6 +46,8 @@ The file may be updated incrementally during the active audit and becomes the cu
   - What is needed to continue:
 
 ## Per-CLI Adaptation Conclusions
+
+Use `not-applicable` with a brief reason when CLI adaptation was not examined for a given CLI in this audit.
 
 ### Claude Code
 - Expected carrier model:
@@ -71,6 +76,7 @@ The file may be updated incrementally during the active audit and becomes the cu
 - Recommended action: <brainstorm | start | check | update-spec | plain-language action>
 - Trigger condition: <why this is the right next step now>
 - Recommendation reason: <why this path was chosen over alternatives>
+- Stronger alternatives not selected: <why stronger options were rejected now>
 
 ## Stop Point and Pending Confirmations
 - Auto-continue allowed: No

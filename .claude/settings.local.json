@@ -140,7 +140,21 @@
       "Bash(agent-browser snapshot:*)",
       "Bash(agent-browser get:*)",
       "WebFetch(domain:skills.sh)",
-      "Bash(/ops/softwares/python/bin/python3 *)"
+      "Bash(/ops/softwares/python/bin/python3 *)",
+      "Bash(trellis -v)",
+      "Bash(npx trellis *)",
+      "Bash(pip show *)",
+      "Bash(pip list *)",
+      "Bash(trellis --help)",
+      "Bash(cp -r /ops/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/commands/ /tmp/workflow-audit-test/docs/workflows/新项目开发工作流/commands/)",
+      "Bash(cp -r '/ops/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/*.md' /tmp/workflow-audit-test/docs/workflows/新项目开发工作流/)",
+      "Bash(awk *)",
+      "Bash(sh -x scripts/validate-skills.sh)",
+      "Bash(bash -x scripts/validate-skills.sh)",
+      "Bash(bash scripts/validate-skills.sh)",
+      "Bash(bash *)",
+      "Bash(dash *)",
+      "Bash(sh *)"
     ]
   }
 }

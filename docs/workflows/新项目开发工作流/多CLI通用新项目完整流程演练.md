@@ -113,7 +113,7 @@ git remote set-url --add --push origin <第二个仓库URL>
 标准安装命令：
 
 ```bash
-/ops/softwares/python/bin/python3 \
+WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1 /ops/softwares/python/bin/python3 \
 docs/workflows/新项目开发工作流/commands/install-workflow.py \
 --project-root <target-project>
 ```

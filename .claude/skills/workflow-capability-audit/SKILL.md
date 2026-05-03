@@ -71,7 +71,7 @@ Rules:
 - if `current == compatible`:
   - stop
 - if `current < compatible`:
-  - stop as unsupported older-version direction
+  - stop as `Blocked / Unsupported Direction`
 - only if `current > compatible`:
   - continue into full audit
 
@@ -105,6 +105,7 @@ Create fresh temporary projects only after the version gate passes:
 Rules:
 
 - do not reuse user-supplied A/B roots
+- do not recycle earlier unrelated fixtures
 - preserve A/B through the whole compatibility-fix lifecycle
 - destroy A/B only after correction is complete and the user gives explicit final confirmation
 
@@ -221,6 +222,12 @@ If not confirmed:
 
 - do not add it to the matrix
 - record it under `Rejected / Unconfirmed Supplemental Points`
+
+## Compatibility-Version Anchor Update Rules
+
+- the initialization exception above is the sole allowed pre-audit source edit
+- after a confirmed successful audit, do not auto-write the final compatibility-version promotion into `workflow_assets.py`
+- this remains true even if the workflow is already compatible as-is or no workflow source edits were needed beyond the initialization exception
 
 ### Known limitation: coarser classification for workflow-managed surfaces
 

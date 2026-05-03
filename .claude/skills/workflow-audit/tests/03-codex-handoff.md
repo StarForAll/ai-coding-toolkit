@@ -25,6 +25,7 @@ Task-based runtime mode, with Codex handoff triggered before the formal embed ex
 - provide command-level handoff instructions
 - include `detect-embed-state.py`, `install-workflow.py --dry-run`, formal install with `WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1`, and post-install `upgrade-compat.py --check`
 - explicitly require the return of state-detection output, installer output, post-install verification, and anomalies
+- require returned handoff evidence to be merged back into `audit-report.md` before any final audit conclusion
 
 ## Must Not
 

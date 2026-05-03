@@ -28,6 +28,7 @@ The skill should NOT silently enter lightweight static mode. It must output a Ne
 
 - execute evidence mainline steps A (understand mechanics), B (static evidence), and C (gap analysis)
 - during Step C: identify issues that conclusively require runtime validation to confirm or refute
+- treat unresolved script behavior, non-parseable output contracts, or environment-conditional workflow behavior as legitimate triggers for Step D
 - recognize the conflict: user set `need_runtime_validation: no` but D trigger conditions are met
 - do NOT silently skip D and enter lightweight static mode
 - do NOT unilaterally proceed to D without user consent

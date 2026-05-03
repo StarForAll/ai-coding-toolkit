@@ -1,6 +1,6 @@
 # Needs Confirmation Template
 
-When the escalation rule triggers — `need_runtime_validation: no` but A/B/C findings conclusively demonstrate that runtime validation is required — output this block and stop. Do NOT proceed to Step D or Step E until the user responds.
+When the escalation rule triggers — `need_runtime_validation: no` but A/B/C findings conclusively demonstrate that runtime validation is required — output this block and stop. Do NOT proceed to the normal Step D path or finalize the normal Step E report until the user responds.
 
 ```markdown
 ## Needs Confirmation — Runtime Validation Required

@@ -18,11 +18,13 @@ current_cli: <optional; infer from runtime when omitted>
   - must be a single target
   - defaults to `docs/workflows/新项目开发工作流/` when omitted
   - if multiple targets are supplied, `workflow-audit` must stop and require one explicit target
+  - if the resolved path does not exist on disk, `workflow-audit` must stop as `Blocked / Invalid Input`
 
 - `candidate_issues`
   - optional
   - every item is treated as a hypothesis pending validation
   - nothing here is automatically treated as a confirmed defect
+  - they do not switch execution paths; they only act as supplementary focus points within the normal evidence mainline
 
 - `need_runtime_validation`
   - default: `auto`
@@ -42,7 +44,7 @@ current_cli: <optional; infer from runtime when omitted>
 
 ## Notes
 
-- First version: no dedicated `preferred_handoff_cli` field
+- No dedicated `preferred_handoff_cli` field
 - Default handoff order is always `Claude Code -> OpenCode`
 - A user may override the order only by stating the real environment constraint explicitly in natural language
 

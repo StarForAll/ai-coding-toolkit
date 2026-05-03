@@ -54,7 +54,7 @@ Claude Code 是当前 workflow 维护的三种原生适配之一，并保留项�
 2. 运行：
 
 ```bash
-/ops/softwares/python/bin/python3 \
+WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1 /ops/softwares/python/bin/python3 \
 docs/workflows/新项目开发工作流/commands/install-workflow.py \
 --project-root <target-project> \
 --cli claude

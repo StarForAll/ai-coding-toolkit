@@ -26,7 +26,9 @@ Task-based static mode (task + brainstorm + `prd.md` + `audit-report.md`, withou
 
 - execute evidence mainline steps A (understand mechanics), B (static evidence), and C (gap analysis)
 - after Step C: recognize `force_full_brainstorm: yes` triggers task-based path
+- before creating task context, explain why task-based static mode was chosen
 - judge that Step D is NOT needed (none of the D trigger conditions are met from A/B/C findings)
+- explain why task context is warranted and why Step D is not needed
 - enter task-based static mode (NOT lightweight, NOT task-based runtime)
 - create audit task with default title `workflow-audit: 新项目开发工作流`
 - enter the `brainstorm` mainline as the control container
@@ -41,6 +43,7 @@ Task-based static mode (task + brainstorm + `prd.md` + `audit-report.md`, withou
 
 - must not pre-decide mode before Step A/B/C
 - must not enter lightweight static mode (task context is explicitly requested)
+- must not switch into task-based static mode silently
 - must not execute runtime validation (Step D) when findings do not justify it
 - must not create `/tmp` project
 - must not run `trellis init`

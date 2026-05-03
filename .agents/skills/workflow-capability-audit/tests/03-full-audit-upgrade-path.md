@@ -29,5 +29,6 @@ Task-based full compatibility audit.
 ## Must Not
 
 - must not reuse existing A/B roots
+- must not recycle earlier unrelated fixtures
 - must not enter the audit path when versions are equal
 - must not auto-execute workflow source remediation
