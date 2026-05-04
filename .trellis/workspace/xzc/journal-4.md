@@ -490,3 +490,36 @@ Applied the approved rc3 merge decisions across workflow assets, fixed real skil
 ### Next Steps
 
 - None - task complete
+
+
+## Session 143: workflow-audit version drift gate
+
+**Date**: 2026-05-04
+**Task**: workflow-audit version drift gate
+**Branch**: `main`
+
+### Summary
+
+Added workflow-audit version-drift hard gate, limited supported CLI scope to Claude/OpenCode/Codex, synced spec/skill/templates/tests, and closed the task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `db7c8f1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
