@@ -358,3 +358,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 139: drift-convergence: library sync fix, command retirement, drift annotation
+
+**Date**: 2026-05-04
+**Task**: drift-convergence: library sync fix, command retirement, drift annotation
+**Branch**: `main`
+
+### Summary
+
+Fix _internal import error in 7 library sync scripts; retire record-session and create-command commands; add Platform Drift Status sections to spec/agents and spec/commands; update command-level record-session references across docs; correct finish-work order annotation in spec/docs; fix installer contracts contradiction; clean patch artifact from 自提交指南
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `55f9add` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 138
+- **Total Sessions**: 139
 - **Last Active**: 2026-05-04
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~360 | Active |
+| `journal-4.md` | ~393 | Active |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 139 | 2026-05-04 | drift-convergence: library sync fix, command retirement, drift annotation | `55f9add` | `main` |
 | 138 | 2026-05-04 | 修订 AGENTS.md 对齐当前 Trellis 实现 | `b9fb63d` | `main` |
 | 137 | 2026-05-03 | finish-work自动提交-只读问题修复与文档沉淀 | `7b81618`, `3ddf628` | `main` |
 | 136 | 2026-05-03 | 本项目使用的trellis版本升级 | `2670a00` | `main` |
