@@ -17,12 +17,12 @@ from typing import Any
 import yaml
 
 LIBRARY_ROOT = Path(__file__).resolve().parents[2]
+if not (LIBRARY_ROOT / "_internal").is_dir():
+    _tl = LIBRARY_ROOT / "trellis-library"
+    if (_tl / "_internal").is_dir():
+        LIBRARY_ROOT = _tl
 if str(LIBRARY_ROOT) not in sys.path:
     sys.path.insert(0, str(LIBRARY_ROOT))
-
-_TRELLIS_LIBRARY = LIBRARY_ROOT / 'trellis-library'
-if str(_TRELLIS_LIBRARY) not in sys.path:
-    sys.path.insert(0, str(_TRELLIS_LIBRARY))
 
 from _internal.asset_state import assess_local_state as _assess_local_state  # noqa: E402
 from _internal.asset_state import determine_local_state as _determine_local_state  # noqa: E402
@@ -205,7 +205,7 @@ def _run_contribute(
 
     result = subprocess.run(cmd, check=False)
     if result.returncode != 0:
-        print(f"  贡献验证返回码: {result.returncode}")
+        print(f"  Contribution verification exit code: {result.returncode}")
 
 
 def _print_contribution_candidates(planned_actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -214,7 +214,7 @@ def _print_contribution_candidates(planned_actions: list[dict[str, Any]]) -> lis
         if action.get("drift_type") in {"local-changed", "upstream-and-local-changed"}
     ]
     if candidates:
-        print(f"\n  检测到 {len(candidates)} 个资产存在可贡献的本地漂移:")
+        print(f"\n  Detected local drift in {len(candidates)} asset(s) that could be proposed upstream:")
         for action in candidates:
             print(f"    📝 [{action['asset_id']}] {action['drift_type']}")
     return candidates
@@ -225,7 +225,7 @@ def _emit_other_drift_items(other_drift_items: list[dict[str, str]], json_mode: 
         return
     lines = [
         "",
-        f"  检测到 {len(other_drift_items)} 个已导入但本次未操作的资产存在漂移:",
+        f"  Detected drift in {len(other_drift_items)} imported asset(s) not touched in this run:",
     ]
     for item in other_drift_items:
         lines.append(f"    [{item['asset_id']}] {item['drift_type']} - {item['message']}")
@@ -412,27 +412,27 @@ def main() -> int:
         )
 
     if actions_to_confirm:
-        print("=== Sync 计划 ===\n")
+        print("=== Sync Plan ===\n")
         for a in actions_to_confirm:
             version_info = ""
             if a.get("asset"):
                 version_info = f" ({a['asset'].get('version', '')})"
             action_label = {
-                "updated": "覆盖目标 (源已更新)",
-                "restored-missing": "恢复目标 (目标缺失)",
+                "updated": "overwrite target (source changed)",
+                "restored-missing": "restore target (target missing)",
             }.get(a["decision"], a["decision"])
             print(f"  [{a['asset_id']}]{version_info} → {action_label}")
 
         # Show non-actionable items for awareness
         non_actionable = [a for a in planned_actions if not a["needs_confirm"] and a["decision"] not in ("unchanged", "skipped-local-only", "skipped-pinned")]
         if non_actionable:
-            print(f"\n  其他状态 ({len(non_actionable)} 项):")
+            print(f"\n  Other statuses ({len(non_actionable)} item(s)):")
             for a in non_actionable:
                 print(f"    [{a['asset_id']}] {a['decision']}")
 
         # Ask for confirmation
         if args.dry_run:
-            print(f"\nDRY RUN: 以上 {len(actions_to_confirm)} 项操作不会执行")
+            print(f"\nDRY RUN: the {len(actions_to_confirm)} planned action(s) above will not be executed")
             # Still generate results for output
             results = _build_results(planned_actions)
             if args.json:
@@ -445,20 +445,20 @@ def main() -> int:
             return 0
 
         if not args.force:
-            print(f"\n  共 {len(actions_to_confirm)} 项操作将修改目标文件。")
+            print(f"\n  {len(actions_to_confirm)} action(s) will modify target files.")
             try:
-                choice = input("  确认执行? [y]es / [n]o / [a]ll: ").strip().lower()
+                choice = input("  Proceed? [y]es / [n]o / [a]ll: ").strip().lower()
             except (EOFError, KeyboardInterrupt):
-                print("\n  已取消")
+                print("\n  Cancelled")
                 return 0
 
             if choice == "n":
-                print("  已取消 sync。")
+                print("  Sync cancelled.")
                 return 0
             elif choice in ("y", "a"):
                 pass  # proceed
             else:
-                print("  无效选择，已取消。")
+                print("  Invalid choice. Sync cancelled.")
                 return 0
         print()
 
@@ -477,6 +477,7 @@ def main() -> int:
                 import_item["source_version"] = action["asset"].get("version", import_item.get("source_version", ""))
                 import_item["source_checksum"] = action["source_checksum"]
                 import_item["last_local_checksum"] = sha256_for_path(action["target_abs"])
+                import_item["last_observed_checksum"] = import_item["last_local_checksum"]
                 import_item["local_state"] = "clean"
         elif decision == "unchanged":
             message = "No source change detected"
@@ -571,7 +572,7 @@ def main() -> int:
     if contribution_candidates:
         if not args.dry_run and not args.force:
             try:
-                choice = input("\n  [c] 贡献验证 / [i] 忽略: ").strip().lower()
+                choice = input("\n  [c] contribution verification / [i] ignore: ").strip().lower()
             except (EOFError, KeyboardInterrupt):
                 choice = "i"
 

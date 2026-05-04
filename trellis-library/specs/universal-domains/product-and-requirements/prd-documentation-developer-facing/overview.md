@@ -7,4 +7,3 @@ Define reusable rules for writing developer-facing product requirement documents
 ## Applicability
 
 Use this concern when creating or reviewing technical PRDs, engineering requirement docs, or implementation-oriented specifications used by developers, architects, and QA.
-

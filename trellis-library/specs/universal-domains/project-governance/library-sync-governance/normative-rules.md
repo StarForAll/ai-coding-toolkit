@@ -12,3 +12,9 @@
 * `apply-library-sync` must only apply approved proposals or patches; it must not decide what should be contributed upstream.
 * `apply-library-sync` must only write to whitelisted paths inside `trellis-library`.
 * After any source-library change produced by sync tooling, `validate-library-sync` must run and pass before the change is considered valid.
+
+### Drift Analysis and Operational Hygiene
+
+* Cross-platform differences in Skills and Agents deployments (`.claude/`, `.opencode/`, `.codex/`, `.kiro/`, `.qoder/`, `.agents/`) are design-expected due to different formats and conventions per platform; they must not be flagged as drift.
+* Only the latest `.trellis/.backup-*` directory must be retained; older backups must be cleaned up.
+* `.trellis/.template-hashes.json` is a drift detector that records hashes of managed deployment files; it must not be manually edited. Hash mismatches it reports are the detector working correctly, not the hash file itself being drifted.

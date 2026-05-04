@@ -4,7 +4,7 @@ library:
   source: local
   source_path: /ops/projects/personal/ai-coding-toolkit/trellis-library
   manifest_version: 1
-  manifest_checksum: c58e93a12e102bd34c78af3dc87fe6b4311131475cdb29307bf9c6fda2ca3ddf
+  manifest_checksum: e3bfe0668d1729196563ab674528e2491fdd7c46967b5046582fec9acda38df1
   imported_at: '2026-03-18T22:22:05+08:00'
 project:
   target_root: /ops/projects/personal/ai-coding-toolkit
@@ -45,7 +45,7 @@ imports:
   imported_at: '2026-03-29T18:07:05+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:10:57+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: 83a7c9464f5e16b17b1c207982216b1f482a5788d76ea93c8d7e0e5d0d832733
   contribution:
     eligible: false
@@ -69,7 +69,7 @@ imports:
   imported_at: '2026-03-29T18:07:05+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:10:57+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: 6f26166a8460aa0a594a6772f34f213e2e53b03b5ea0cdd621ce8cff6c32d1e0
   contribution:
     eligible: false
@@ -92,7 +92,7 @@ imports:
   imported_at: '2026-03-29T18:07:05+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:10:57+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: 29b391bc3e554acb711a982a95999117e266c827ada1e78419b40edcf4f909bc
   contribution:
     eligible: false
@@ -115,7 +115,7 @@ imports:
   imported_at: '2026-03-29T18:07:05+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:10:57+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: 2e0c44a88434671818831c6a68ad6e5d87c9a1c03d606b8affbde6b312212062
   contribution:
     eligible: false
@@ -139,7 +139,7 @@ imports:
   imported_at: '2026-03-29T18:07:05+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:10:57+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: ee0e80aafb0b37b7b4c63f70f4a379da087f0bb9c0ee62d7d3b78166f72f38ca
   contribution:
     eligible: false
@@ -162,7 +162,7 @@ imports:
   imported_at: '2026-03-29T18:10:52+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:10:57+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: a4499e39b6d5b5622acb141f941575688204fbc0ac806144aa3df27b511dc3c6
   contribution:
     eligible: false
@@ -174,7 +174,7 @@ imports:
     depends_on: []
     sync_targets: []
   notes: 'Batch 1 sync: spec.universal-domains.ai-execution.prompt-boundaries'
-  last_observed_checksum: ''
+  last_observed_checksum: a4499e39b6d5b5622acb141f941575688204fbc0ac806144aa3df27b511dc3c6
 - asset_id: spec.universal-domains.ai-execution.tool-call-policy
   type: spec
   source_path: specs/universal-domains/ai-execution/tool-call-policy
@@ -185,7 +185,7 @@ imports:
   imported_at: '2026-03-29T18:10:52+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:10:57+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: 8bbffe9447a1cba0ed13d531170103872d52df77eb2d54cd110cdcbf55ae4d70
   contribution:
     eligible: false
@@ -197,7 +197,7 @@ imports:
     depends_on: []
     sync_targets: []
   notes: 'Batch 1 sync: spec.universal-domains.ai-execution.tool-call-policy'
-  last_observed_checksum: ''
+  last_observed_checksum: 8bbffe9447a1cba0ed13d531170103872d52df77eb2d54cd110cdcbf55ae4d70
 - asset_id: spec.universal-domains.ai-execution.structured-output-policy
   type: spec
   source_path: specs/universal-domains/ai-execution/structured-output-policy
@@ -208,7 +208,7 @@ imports:
   imported_at: '2026-03-29T18:10:52+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:10:57+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: 00dd586f66592d1cf507ca146c44d6f9a68d775ca927997ee7a65827f0ff7265
   contribution:
     eligible: false
@@ -220,7 +220,7 @@ imports:
     depends_on: []
     sync_targets: []
   notes: 'Batch 1 sync: spec.universal-domains.ai-execution.structured-output-policy'
-  last_observed_checksum: ''
+  last_observed_checksum: 00dd586f66592d1cf507ca146c44d6f9a68d775ca927997ee7a65827f0ff7265
 - asset_id: spec.universal-domains.ai-execution.model-selection-and-fallback
   type: spec
   source_path: specs/universal-domains/ai-execution/model-selection-and-fallback
@@ -231,7 +231,7 @@ imports:
   imported_at: '2026-03-29T18:10:52+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:10:57+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: 7f8e48cd6d06937dbb8e7bf1e7817e2a1ae37b9ed28f3c4feb19c594605af4d9
   contribution:
     eligible: false
@@ -243,7 +243,7 @@ imports:
     depends_on: []
     sync_targets: []
   notes: 'Batch 1 sync: spec.universal-domains.ai-execution.model-selection-and-fallback'
-  last_observed_checksum: ''
+  last_observed_checksum: 7f8e48cd6d06937dbb8e7bf1e7817e2a1ae37b9ed28f3c4feb19c594605af4d9
 - asset_id: spec.universal-domains.context-engineering.context-budgeting
   type: spec
   source_path: specs/universal-domains/context-engineering/context-budgeting
@@ -254,7 +254,7 @@ imports:
   imported_at: '2026-03-29T18:10:52+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:10:57+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: 718ba32bf2376429260c26b6902aa6589c79f89215f012757fd428da36793aaf
   contribution:
     eligible: false
@@ -266,7 +266,7 @@ imports:
     depends_on: []
     sync_targets: []
   notes: 'Batch 1 sync: spec.universal-domains.context-engineering.context-budgeting'
-  last_observed_checksum: ''
+  last_observed_checksum: 718ba32bf2376429260c26b6902aa6589c79f89215f012757fd428da36793aaf
 - asset_id: spec.universal-domains.context-engineering.context-contamination
   type: spec
   source_path: specs/universal-domains/context-engineering/context-contamination
@@ -277,7 +277,7 @@ imports:
   imported_at: '2026-03-29T18:10:52+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:10:57+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: 8152fbb54e0e2b402d818d1da75029672a16f740789b1b5df87fe3026ca507a6
   contribution:
     eligible: false
@@ -291,7 +291,7 @@ imports:
     - spec.universal-domains.context-engineering.context-budgeting
     sync_targets: []
   notes: 'Batch 1 sync: spec.universal-domains.context-engineering.context-contamination'
-  last_observed_checksum: ''
+  last_observed_checksum: 8152fbb54e0e2b402d818d1da75029672a16f740789b1b5df87fe3026ca507a6
 - asset_id: spec.universal-domains.context-engineering.decision-summary-injection
   type: spec
   source_path: specs/universal-domains/context-engineering/decision-summary-injection
@@ -302,7 +302,7 @@ imports:
   imported_at: '2026-03-29T18:10:52+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:10:57+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: 8132dbc2aa3545382c8e00a5a3ed9048541f8cf0b5c5005feaab07e0b1d10d51
   contribution:
     eligible: false
@@ -315,7 +315,7 @@ imports:
     - spec.universal-domains.context-engineering.context-layering
     sync_targets: []
   notes: 'Batch 1 sync: spec.universal-domains.context-engineering.decision-summary-injection'
-  last_observed_checksum: ''
+  last_observed_checksum: 8132dbc2aa3545382c8e00a5a3ed9048541f8cf0b5c5005feaab07e0b1d10d51
 - asset_id: checklist.universal-domains.context-engineering.context-health-checklist
   type: checklist
   source_path: checklists/universal-domains/context-engineering/context-health-checklist.md
@@ -326,7 +326,7 @@ imports:
   imported_at: '2026-03-29T18:10:52+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:10:57+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: e3df2ce4b068dd4e9c4ea50885d5a416c4ae9d837c158a82479d16b45a0c8bf5
   contribution:
     eligible: false
@@ -341,7 +341,7 @@ imports:
     - spec.universal-domains.context-engineering.context-contamination
     sync_targets: []
   notes: 'Batch 1 sync: checklist.universal-domains.context-engineering.context-health-checklist'
-  last_observed_checksum: ''
+  last_observed_checksum: e3df2ce4b068dd4e9c4ea50885d5a416c4ae9d837c158a82479d16b45a0c8bf5
 - asset_id: spec.universal-domains.agent-collaboration.agent-role-boundaries
   type: spec
   source_path: specs/universal-domains/agent-collaboration/agent-role-boundaries
@@ -352,7 +352,7 @@ imports:
   imported_at: '2026-03-29T18:10:52+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:10:57+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: f5642de7010cd1281cbf959a4af6daae5d218858ec003e7600720f73491285c7
   contribution:
     eligible: false
@@ -364,7 +364,7 @@ imports:
     depends_on: []
     sync_targets: []
   notes: 'Batch 1 sync: spec.universal-domains.agent-collaboration.agent-role-boundaries'
-  last_observed_checksum: ''
+  last_observed_checksum: f5642de7010cd1281cbf959a4af6daae5d218858ec003e7600720f73491285c7
 - asset_id: spec.universal-domains.agent-collaboration.delegation-policy
   type: spec
   source_path: specs/universal-domains/agent-collaboration/delegation-policy
@@ -375,7 +375,7 @@ imports:
   imported_at: '2026-03-29T18:10:52+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:10:57+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: 0c389d8bdd2982d23d241cff8e66a56b496f28f0ddeeef3de573991bf851f7af
   contribution:
     eligible: false
@@ -389,7 +389,7 @@ imports:
     - spec.universal-domains.context-engineering.context-layering
     sync_targets: []
   notes: 'Batch 1 sync: spec.universal-domains.agent-collaboration.delegation-policy'
-  last_observed_checksum: ''
+  last_observed_checksum: 0c389d8bdd2982d23d241cff8e66a56b496f28f0ddeeef3de573991bf851f7af
 - asset_id: spec.universal-domains.agent-collaboration.handoff-contracts
   type: spec
   source_path: specs/universal-domains/agent-collaboration/handoff-contracts
@@ -400,7 +400,7 @@ imports:
   imported_at: '2026-03-29T18:10:52+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:10:57+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: ad41e11c0143fa75ff65d77bf65858a9eaf34be8796f2af5e7179c8a8af94474
   contribution:
     eligible: false
@@ -414,7 +414,7 @@ imports:
     - spec.universal-domains.verification.evidence-requirements
     sync_targets: []
   notes: 'Batch 1 sync: spec.universal-domains.agent-collaboration.handoff-contracts'
-  last_observed_checksum: ''
+  last_observed_checksum: ad41e11c0143fa75ff65d77bf65858a9eaf34be8796f2af5e7179c8a8af94474
 - asset_id: checklist.universal-domains.agent-collaboration.delegation-readiness-checklist
   type: checklist
   source_path: checklists/universal-domains/agent-collaboration/delegation-readiness-checklist.md
@@ -425,7 +425,7 @@ imports:
   imported_at: '2026-03-29T18:10:52+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:10:57+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: d7f54cac51afd675f860a59b75c9d2c04972b26994ea722bf074c4dd6e16dac7
   contribution:
     eligible: false
@@ -439,7 +439,7 @@ imports:
     - spec.universal-domains.agent-collaboration.agent-role-boundaries
     sync_targets: []
   notes: 'Batch 1 sync: checklist.universal-domains.agent-collaboration.delegation-readiness-checklist'
-  last_observed_checksum: ''
+  last_observed_checksum: d7f54cac51afd675f860a59b75c9d2c04972b26994ea722bf074c4dd6e16dac7
 - asset_id: checklist.universal-domains.agent-collaboration.handoff-readiness-checklist
   type: checklist
   source_path: checklists/universal-domains/agent-collaboration/handoff-readiness-checklist.md
@@ -450,7 +450,7 @@ imports:
   imported_at: '2026-03-29T18:10:52+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:10:57+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: d5d640624343d29b839488f69a75460ff07dcfee9fdb3428b1ea81ce0952ffcd
   contribution:
     eligible: false
@@ -464,7 +464,7 @@ imports:
     - spec.scenarios.collaboration-and-handoff.handoff-readiness
     sync_targets: []
   notes: 'Batch 1 sync: checklist.universal-domains.agent-collaboration.handoff-readiness-checklist'
-  last_observed_checksum: ''
+  last_observed_checksum: d5d640624343d29b839488f69a75460ff07dcfee9fdb3428b1ea81ce0952ffcd
 - asset_id: template.universal-domains.agent-collaboration.agent-handoff-template
   type: template
   source_path: templates/universal-domains/agent-collaboration/agent-handoff-template.md
@@ -475,7 +475,7 @@ imports:
   imported_at: '2026-03-29T18:10:52+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:10:57+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: 1598c40edeb775a5521d8e20a8e5662f87d63c9127028af91f9b012b402beb6e
   contribution:
     eligible: false
@@ -488,19 +488,19 @@ imports:
     - spec.universal-domains.agent-collaboration.handoff-contracts
     sync_targets: []
   notes: 'Batch 1 sync: template.universal-domains.agent-collaboration.agent-handoff-template'
-  last_observed_checksum: ''
+  last_observed_checksum: 1598c40edeb775a5521d8e20a8e5662f87d63c9127028af91f9b012b402beb6e
 - asset_id: script.validation.validate-library-sync
   type: script
   source_path: scripts/validation/validate-library-sync.py
   target_path: .trellis/scripts/validation/validate-library-sync.py
   import_mode: file
   source_version: 1.0.0
-  source_checksum: fcf51fa6c206c3d610263b609fcee9274860ac84700881f7c7cbdbc668a92ffd
+  source_checksum: 60bf4e97e8d88ebb6b5db80bd23e7df83d492a7d55f1fbdc27e3512b93507de7
   imported_at: '2026-03-29T18:10:52+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:10:57+08:00'
-  last_local_checksum: fcf51fa6c206c3d610263b609fcee9274860ac84700881f7c7cbdbc668a92ffd
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: 60bf4e97e8d88ebb6b5db80bd23e7df83d492a7d55f1fbdc27e3512b93507de7
   contribution:
     eligible: false
     mode: none
@@ -511,7 +511,7 @@ imports:
     depends_on: []
     sync_targets: []
   notes: 'Batch 1 sync: script.validation.validate-library-sync'
-  last_observed_checksum: ''
+  last_observed_checksum: 60bf4e97e8d88ebb6b5db80bd23e7df83d492a7d55f1fbdc27e3512b93507de7
 - asset_id: script.validation.validate-links
   type: script
   source_path: scripts/validation/validate-links.py
@@ -522,7 +522,7 @@ imports:
   imported_at: '2026-03-29T18:10:52+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:10:57+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: f243d8deab865553783daeb0928411da14f83b375934cd29451b98ca99e2363c
   contribution:
     eligible: false
@@ -534,7 +534,7 @@ imports:
     depends_on: []
     sync_targets: []
   notes: 'Batch 1 sync: script.validation.validate-links'
-  last_observed_checksum: ''
+  last_observed_checksum: f243d8deab865553783daeb0928411da14f83b375934cd29451b98ca99e2363c
 - asset_id: script.validation.validate-overview-links
   type: script
   source_path: scripts/validation/validate-overview-links.py
@@ -545,7 +545,7 @@ imports:
   imported_at: '2026-03-29T18:10:52+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:10:57+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: d424016596e238fa290ffd83a4b5c7201eeaffce42124f625014f7c6ff703ef6
   contribution:
     eligible: false
@@ -557,19 +557,19 @@ imports:
     depends_on: []
     sync_targets: []
   notes: 'Batch 1 sync: script.validation.validate-overview-links'
-  last_observed_checksum: ''
+  last_observed_checksum: d424016596e238fa290ffd83a4b5c7201eeaffce42124f625014f7c6ff703ef6
 - asset_id: spec.universal-domains.project-governance.library-sync-governance
   type: spec
   source_path: specs/universal-domains/project-governance/library-sync-governance
   target_path: .trellis/spec/universal-domains/project-governance/library-sync-governance
   import_mode: directory
   source_version: 1.0.0
-  source_checksum: 4f30980fed5fbf911bafda1e5e16d9941e3b1d29517749a7bac02cddeaed451b
+  source_checksum: 051e1b4d69773aae2fea29eec789b5c97c047de662374c2a421020e098e7bb2d
   imported_at: '2026-03-29T18:14:28.380641+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:14:28.380641+08:00'
-  last_local_checksum: 4f30980fed5fbf911bafda1e5e16d9941e3b1d29517749a7bac02cddeaed451b
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: 051e1b4d69773aae2fea29eec789b5c97c047de662374c2a421020e098e7bb2d
   contribution:
     eligible: false
     mode: none
@@ -583,19 +583,19 @@ imports:
     - script.validation.validate-overview-links
     sync_targets: []
   notes: Batch 2 bootstrap import for spec.universal-domains.project-governance.library-sync-governance
-  last_observed_checksum: 4f30980fed5fbf911bafda1e5e16d9941e3b1d29517749a7bac02cddeaed451b
+  last_observed_checksum: 051e1b4d69773aae2fea29eec789b5c97c047de662374c2a421020e098e7bb2d
 - asset_id: spec.universal-domains.verification.definition-of-done
   type: spec
   source_path: specs/universal-domains/verification/definition-of-done
   target_path: .trellis/spec/universal-domains/verification/definition-of-done
   import_mode: directory
   source_version: 1.0.0
-  source_checksum: cd5b0010d1b126f85d1ee94375f635d5cab297d562d415dda71cf567c8b6e60a
+  source_checksum: 130fee2d40c8dc304e40f3ae1dbdabb535e020f02a0f0bd67028786141e2a216
   imported_at: '2026-03-29T18:14:28.380641+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:14:28.380641+08:00'
-  last_local_checksum: cd5b0010d1b126f85d1ee94375f635d5cab297d562d415dda71cf567c8b6e60a
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: 130fee2d40c8dc304e40f3ae1dbdabb535e020f02a0f0bd67028786141e2a216
   contribution:
     eligible: false
     mode: none
@@ -606,19 +606,19 @@ imports:
     depends_on: []
     sync_targets: []
   notes: Batch 2 bootstrap import for spec.universal-domains.verification.definition-of-done
-  last_observed_checksum: cd5b0010d1b126f85d1ee94375f635d5cab297d562d415dda71cf567c8b6e60a
+  last_observed_checksum: 130fee2d40c8dc304e40f3ae1dbdabb535e020f02a0f0bd67028786141e2a216
 - asset_id: spec.platforms.cli-command-interface
   type: spec
   source_path: specs/platforms/cli/command-interface
   target_path: .trellis/spec/platforms/cli/command-interface
   import_mode: directory
   source_version: 1.0.0
-  source_checksum: 48827df0e074c090af349da5fb5a89b09d5b24087c24192d3564c0679d1f2930
+  source_checksum: 0aea10331fce34c6639133c8b7f8dfe5443b0afb2b9d25046ac5842399101cde
   imported_at: '2026-03-29T18:14:28.380641+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:14:28.380641+08:00'
-  last_local_checksum: 48827df0e074c090af349da5fb5a89b09d5b24087c24192d3564c0679d1f2930
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: 0aea10331fce34c6639133c8b7f8dfe5443b0afb2b9d25046ac5842399101cde
   contribution:
     eligible: false
     mode: none
@@ -630,19 +630,19 @@ imports:
     - spec.universal-domains.verification.verification-gates
     sync_targets: []
   notes: Batch 2 bootstrap import for spec.platforms.cli-command-interface
-  last_observed_checksum: 48827df0e074c090af349da5fb5a89b09d5b24087c24192d3564c0679d1f2930
+  last_observed_checksum: 0aea10331fce34c6639133c8b7f8dfe5443b0afb2b9d25046ac5842399101cde
 - asset_id: script.assembly.write-library-lock
   type: script
   source_path: scripts/assembly/write-library-lock.py
   target_path: .trellis/scripts/write-library-lock.py
   import_mode: file
   source_version: 1.0.0
-  source_checksum: 91d1248caaf8ea50e8d0cfebe3935768853fb22ca298de27f78360cecf422168
+  source_checksum: 2ec7103ea03fa71902d28e0c3c3d93a23599a12045ce5ecdffb671a0339bd9f0
   imported_at: '2026-03-29T18:14:28.380641+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:14:28.380641+08:00'
-  last_local_checksum: 91d1248caaf8ea50e8d0cfebe3935768853fb22ca298de27f78360cecf422168
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: 2ec7103ea03fa71902d28e0c3c3d93a23599a12045ce5ecdffb671a0339bd9f0
   contribution:
     eligible: false
     mode: none
@@ -653,19 +653,19 @@ imports:
     depends_on: []
     sync_targets: []
   notes: Batch 2 bootstrap import for script.assembly.write-library-lock
-  last_observed_checksum: 91d1248caaf8ea50e8d0cfebe3935768853fb22ca298de27f78360cecf422168
+  last_observed_checksum: 2ec7103ea03fa71902d28e0c3c3d93a23599a12045ce5ecdffb671a0339bd9f0
 - asset_id: script.assembly.analyze-library-pull
   type: script
   source_path: scripts/assembly/analyze-library-pull.py
   target_path: .trellis/scripts/analyze-library-pull.py
   import_mode: file
   source_version: 1.0.0
-  source_checksum: a659123cb4d7e06af5e58a1376df1ad0072ba2a70006d025c47fcca3d75ff665
+  source_checksum: 9af38e98882d4185735fcf3d7f50794e56f4df5163db316851f5624672904f4a
   imported_at: '2026-03-29T18:14:28.380641+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:14:28.380641+08:00'
-  last_local_checksum: a659123cb4d7e06af5e58a1376df1ad0072ba2a70006d025c47fcca3d75ff665
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: 9af38e98882d4185735fcf3d7f50794e56f4df5163db316851f5624672904f4a
   contribution:
     eligible: false
     mode: none
@@ -676,19 +676,19 @@ imports:
     depends_on: []
     sync_targets: []
   notes: Batch 2 bootstrap import for script.assembly.analyze-library-pull
-  last_observed_checksum: a659123cb4d7e06af5e58a1376df1ad0072ba2a70006d025c47fcca3d75ff665
+  last_observed_checksum: 9af38e98882d4185735fcf3d7f50794e56f4df5163db316851f5624672904f4a
 - asset_id: script.assembly.assemble-init-set
   type: script
   source_path: scripts/assembly/assemble-init-set.py
   target_path: .trellis/scripts/assemble-init-set.py
   import_mode: file
   source_version: 1.0.0
-  source_checksum: deb10938f1557ab3ec6079622b4ff3f5b69df681611f57ed722365b206d08fd6
+  source_checksum: 09604a9d6a2f8f7384769dabed0811680d88e74d5cb75a694edd4e461892538c
   imported_at: '2026-03-29T18:14:28.380641+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:14:28.380641+08:00'
-  last_local_checksum: deb10938f1557ab3ec6079622b4ff3f5b69df681611f57ed722365b206d08fd6
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: 09604a9d6a2f8f7384769dabed0811680d88e74d5cb75a694edd4e461892538c
   contribution:
     eligible: false
     mode: none
@@ -701,19 +701,19 @@ imports:
     - script.assembly.analyze-library-pull
     sync_targets: []
   notes: Batch 2 bootstrap import for script.assembly.assemble-init-set
-  last_observed_checksum: deb10938f1557ab3ec6079622b4ff3f5b69df681611f57ed722365b206d08fd6
+  last_observed_checksum: 09604a9d6a2f8f7384769dabed0811680d88e74d5cb75a694edd4e461892538c
 - asset_id: script.sync.diff-library-assets
   type: script
   source_path: scripts/sync/diff-library-assets.py
   target_path: .trellis/scripts/diff-library-assets.py
   import_mode: file
   source_version: 1.0.0
-  source_checksum: 501a166da3191dad4f1c3e06c997d055a23f07bdcf3aee28b1b0750df02d0c97
+  source_checksum: 9512ee6dce4c8f941a9974d7f28035576b99c7c2f3bf2b047544e04f761fec44
   imported_at: '2026-03-29T18:14:28.380641+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:14:28.380641+08:00'
-  last_local_checksum: 501a166da3191dad4f1c3e06c997d055a23f07bdcf3aee28b1b0750df02d0c97
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: 9512ee6dce4c8f941a9974d7f28035576b99c7c2f3bf2b047544e04f761fec44
   contribution:
     eligible: false
     mode: none
@@ -725,19 +725,19 @@ imports:
     - script.assembly.write-library-lock
     sync_targets: []
   notes: Batch 2 bootstrap import for script.sync.diff-library-assets
-  last_observed_checksum: 501a166da3191dad4f1c3e06c997d055a23f07bdcf3aee28b1b0750df02d0c97
+  last_observed_checksum: 9512ee6dce4c8f941a9974d7f28035576b99c7c2f3bf2b047544e04f761fec44
 - asset_id: script.sync.propose-library-sync
   type: script
   source_path: scripts/sync/propose-library-sync.py
   target_path: .trellis/scripts/propose-library-sync.py
   import_mode: file
   source_version: 1.0.0
-  source_checksum: 04364f92314c8b860fece442a4d0731470cba75ea93b88e858881cbe9bcde8e1
+  source_checksum: 44589dd864dc5988eeee508f733fb5acb542f62c880453eaff8631e13308770b
   imported_at: '2026-03-29T18:14:28.380641+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:14:28.380641+08:00'
-  last_local_checksum: 04364f92314c8b860fece442a4d0731470cba75ea93b88e858881cbe9bcde8e1
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: 44589dd864dc5988eeee508f733fb5acb542f62c880453eaff8631e13308770b
   contribution:
     eligible: false
     mode: none
@@ -749,19 +749,19 @@ imports:
     - script.sync.diff-library-assets
     sync_targets: []
   notes: Batch 2 bootstrap import for script.sync.propose-library-sync
-  last_observed_checksum: 04364f92314c8b860fece442a4d0731470cba75ea93b88e858881cbe9bcde8e1
+  last_observed_checksum: 44589dd864dc5988eeee508f733fb5acb542f62c880453eaff8631e13308770b
 - asset_id: script.sync.sync-library-assets
   type: script
   source_path: scripts/sync/sync-library-assets.py
   target_path: .trellis/scripts/sync-library-assets.py
   import_mode: file
   source_version: 1.0.0
-  source_checksum: eb9252d36d3548534ac0d5f90dd3e5ec9197287fca7fa7086989a2ccbe196740
+  source_checksum: e4ff198968e0b05897f14b3045b637741f35880cf69abb256096fa87a77ae3db
   imported_at: '2026-03-29T18:14:28.380641+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:14:28.380641+08:00'
-  last_local_checksum: eb9252d36d3548534ac0d5f90dd3e5ec9197287fca7fa7086989a2ccbe196740
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: e4ff198968e0b05897f14b3045b637741f35880cf69abb256096fa87a77ae3db
   contribution:
     eligible: false
     mode: none
@@ -773,19 +773,19 @@ imports:
     - script.assembly.write-library-lock
     sync_targets: []
   notes: Batch 2 bootstrap import for script.sync.sync-library-assets
-  last_observed_checksum: eb9252d36d3548534ac0d5f90dd3e5ec9197287fca7fa7086989a2ccbe196740
+  last_observed_checksum: e4ff198968e0b05897f14b3045b637741f35880cf69abb256096fa87a77ae3db
 - asset_id: script.sync.apply-library-sync
   type: script
   source_path: scripts/sync/apply-library-sync.py
   target_path: .trellis/scripts/apply-library-sync.py
   import_mode: file
   source_version: 1.0.0
-  source_checksum: 482b5af7d322a01db41e31643b4f299b151d3135b14e50ff61dc7c1f62c7fd9f
+  source_checksum: 3fa0079d2e2dc18779578180a778138e61337f71f498f1f29caf92a00bbbb384
   imported_at: '2026-03-29T18:14:28.380641+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:14:28.380641+08:00'
-  last_local_checksum: 482b5af7d322a01db41e31643b4f299b151d3135b14e50ff61dc7c1f62c7fd9f
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: 3fa0079d2e2dc18779578180a778138e61337f71f498f1f29caf92a00bbbb384
   contribution:
     eligible: false
     mode: none
@@ -798,19 +798,19 @@ imports:
     - script.validation.validate-library-sync
     sync_targets: []
   notes: Batch 2 bootstrap import for script.sync.apply-library-sync
-  last_observed_checksum: 482b5af7d322a01db41e31643b4f299b151d3135b14e50ff61dc7c1f62c7fd9f
+  last_observed_checksum: 3fa0079d2e2dc18779578180a778138e61337f71f498f1f29caf92a00bbbb384
 - asset_id: script.contribution.verify-upstream-contribution
   type: script
   source_path: scripts/contribution/verify-upstream-contribution.py
   target_path: .trellis/scripts/verify-upstream-contribution.py
   import_mode: file
   source_version: 1.0.0
-  source_checksum: 5f55c4e9495b27d5f44555aca4faea554446ea944bbaa12a92ad00bbd680b994
+  source_checksum: 1df63393a323d004cd9216a477ef4c250d9fa630061e2251584ea2843f20af5c
   imported_at: '2026-03-29T18:14:28.380641+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:14:28.380641+08:00'
-  last_local_checksum: 5f55c4e9495b27d5f44555aca4faea554446ea944bbaa12a92ad00bbd680b994
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: 1df63393a323d004cd9216a477ef4c250d9fa630061e2251584ea2843f20af5c
   contribution:
     eligible: false
     mode: none
@@ -823,7 +823,7 @@ imports:
     - script.sync.apply-library-sync
     sync_targets: []
   notes: Batch 2 bootstrap import for script.contribution.verify-upstream-contribution
-  last_observed_checksum: 5f55c4e9495b27d5f44555aca4faea554446ea944bbaa12a92ad00bbd680b994
+  last_observed_checksum: 1df63393a323d004cd9216a477ef4c250d9fa630061e2251584ea2843f20af5c
 - asset_id: checklist.platforms.cli.command-interface-readiness-checklist
   type: checklist
   source_path: checklists/platforms/cli/command-interface-readiness-checklist.md
@@ -834,7 +834,7 @@ imports:
   imported_at: '2026-03-29T18:14:28.380641+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:14:28.380641+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: 21fc47bae9486745cdf2cd6e66ae37f7ea84051d14361ee8f675b8ca58cbf74b
   contribution:
     eligible: false
@@ -858,7 +858,7 @@ imports:
   imported_at: '2026-03-29T18:14:28.380641+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:14:28.380641+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: 0d127cdaa336b3c98e7249a4f97abafae830f495434bc0533db73b903642577f
   contribution:
     eligible: false
@@ -883,7 +883,7 @@ imports:
   imported_at: '2026-03-29T18:14:28.380641+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:14:28.380641+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: 18e52ae45eaabd4f3cf7d69cf69d0746b55121f161db3ddc23a77adbe063937a
   contribution:
     eligible: false
@@ -903,12 +903,12 @@ imports:
   target_path: .trellis/spec/universal-domains/product-and-requirements/acceptance-criteria
   import_mode: directory
   source_version: 1.0.0
-  source_checksum: 6965b6e29753bc56163d6e1db0ee4e87fd88055daca2ee06eb29adf455040411
+  source_checksum: 93c08a98f518269faee6f4cdc5776e79b4e0fd30c257f2aecc6de81c5e12ed77
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:17:18.982083+08:00'
-  last_local_checksum: 6965b6e29753bc56163d6e1db0ee4e87fd88055daca2ee06eb29adf455040411
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: 93c08a98f518269faee6f4cdc5776e79b4e0fd30c257f2aecc6de81c5e12ed77
   contribution:
     eligible: false
     mode: none
@@ -921,19 +921,19 @@ imports:
     - spec.universal-domains.verification.evidence-requirements
     sync_targets: []
   notes: Batch 3 bootstrap import for spec.universal-domains.product-and-requirements.acceptance-criteria
-  last_observed_checksum: 6965b6e29753bc56163d6e1db0ee4e87fd88055daca2ee06eb29adf455040411
+  last_observed_checksum: 93c08a98f518269faee6f4cdc5776e79b4e0fd30c257f2aecc6de81c5e12ed77
 - asset_id: spec.universal-domains.product-and-requirements.prd-documentation-customer-facing
   type: spec
   source_path: specs/universal-domains/product-and-requirements/prd-documentation-customer-facing
   target_path: .trellis/spec/universal-domains/product-and-requirements/prd-documentation-customer-facing
   import_mode: directory
   source_version: 1.1.0
-  source_checksum: 4d641dd442792a000d92654f53b3fdb5a83504a6547fba9ee0acd4e909b7c89e
+  source_checksum: 8073225a13581254228e60455fea0dc700ca46f3bf472274864d4ef8e6a6d9a9
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:17:18.982083+08:00'
-  last_local_checksum: 4d641dd442792a000d92654f53b3fdb5a83504a6547fba9ee0acd4e909b7c89e
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: 8073225a13581254228e60455fea0dc700ca46f3bf472274864d4ef8e6a6d9a9
   contribution:
     eligible: false
     mode: none
@@ -947,19 +947,19 @@ imports:
     - spec.universal-domains.product-and-requirements.scope-boundary
     sync_targets: []
   notes: Batch 3 bootstrap import for spec.universal-domains.product-and-requirements.prd-documentation-customer-facing
-  last_observed_checksum: 4d641dd442792a000d92654f53b3fdb5a83504a6547fba9ee0acd4e909b7c89e
+  last_observed_checksum: 8073225a13581254228e60455fea0dc700ca46f3bf472274864d4ef8e6a6d9a9
 - asset_id: spec.universal-domains.product-and-requirements.prd-documentation-developer-facing
   type: spec
   source_path: specs/universal-domains/product-and-requirements/prd-documentation-developer-facing
   target_path: .trellis/spec/universal-domains/product-and-requirements/prd-documentation-developer-facing
   import_mode: directory
   source_version: 1.1.0
-  source_checksum: 61c35cbc6d823f4b76671077331725be88813f7f4a2f402f97ecb6473d760723
+  source_checksum: 4dfabac92b4fa0a6d0f6ee6bfe4608d3d73765243d284398bdb4503b5a157c9e
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:17:18.982083+08:00'
-  last_local_checksum: 61c35cbc6d823f4b76671077331725be88813f7f4a2f402f97ecb6473d760723
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: 4dfabac92b4fa0a6d0f6ee6bfe4608d3d73765243d284398bdb4503b5a157c9e
   contribution:
     eligible: false
     mode: none
@@ -973,19 +973,19 @@ imports:
     - spec.universal-domains.product-and-requirements.acceptance-criteria
     sync_targets: []
   notes: Batch 3 bootstrap import for spec.universal-domains.product-and-requirements.prd-documentation-developer-facing
-  last_observed_checksum: 61c35cbc6d823f4b76671077331725be88813f7f4a2f402f97ecb6473d760723
+  last_observed_checksum: 4dfabac92b4fa0a6d0f6ee6bfe4608d3d73765243d284398bdb4503b5a157c9e
 - asset_id: spec.universal-domains.product-and-requirements.problem-definition
   type: spec
   source_path: specs/universal-domains/product-and-requirements/problem-definition
   target_path: .trellis/spec/universal-domains/product-and-requirements/problem-definition
   import_mode: directory
   source_version: 1.0.0
-  source_checksum: 8fa5a3e379a4bac7ac718c57802de18dfc5b00ee527412c305237d57932cca41
+  source_checksum: cea2d22befec45440f39c7e7cc5de6cc5446f694f813076ff72e51b7bcbb75f9
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:17:18.982083+08:00'
-  last_local_checksum: 8fa5a3e379a4bac7ac718c57802de18dfc5b00ee527412c305237d57932cca41
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: cea2d22befec45440f39c7e7cc5de6cc5446f694f813076ff72e51b7bcbb75f9
   contribution:
     eligible: false
     mode: none
@@ -996,19 +996,19 @@ imports:
     depends_on: []
     sync_targets: []
   notes: Batch 3 bootstrap import for spec.universal-domains.product-and-requirements.problem-definition
-  last_observed_checksum: 8fa5a3e379a4bac7ac718c57802de18dfc5b00ee527412c305237d57932cca41
+  last_observed_checksum: cea2d22befec45440f39c7e7cc5de6cc5446f694f813076ff72e51b7bcbb75f9
 - asset_id: spec.universal-domains.product-and-requirements.requirement-clarification
   type: spec
   source_path: specs/universal-domains/product-and-requirements/requirement-clarification
   target_path: .trellis/spec/universal-domains/product-and-requirements/requirement-clarification
   import_mode: directory
   source_version: 1.0.0
-  source_checksum: d11e813a8e6c0263e2a6f764cc882bd19a3f63a3370f62ddc42f97816ebd443d
+  source_checksum: 04ef1c4ef61912d1e4a0cd4566882fedac2e32dbe729e21d83993c0e979a6489
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:17:18.982083+08:00'
-  last_local_checksum: d11e813a8e6c0263e2a6f764cc882bd19a3f63a3370f62ddc42f97816ebd443d
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: 04ef1c4ef61912d1e4a0cd4566882fedac2e32dbe729e21d83993c0e979a6489
   contribution:
     eligible: false
     mode: none
@@ -1020,19 +1020,19 @@ imports:
     - spec.universal-domains.product-and-requirements.problem-definition
     sync_targets: []
   notes: Batch 3 bootstrap import for spec.universal-domains.product-and-requirements.requirement-clarification
-  last_observed_checksum: d11e813a8e6c0263e2a6f764cc882bd19a3f63a3370f62ddc42f97816ebd443d
+  last_observed_checksum: 04ef1c4ef61912d1e4a0cd4566882fedac2e32dbe729e21d83993c0e979a6489
 - asset_id: checklist.universal-domains.product-and-requirements.acceptance-quality-checklist
   type: checklist
   source_path: checklists/universal-domains/product-and-requirements/acceptance-quality-checklist.md
   target_path: .trellis/spec/checklists/universal-domains/product-and-requirements/acceptance-quality-checklist.md
   import_mode: file
   source_version: 1.0.0
-  source_checksum: 5d2bcdf6213a9df5d8f53d633b403c71ca32d6f440cc982d7aa525e00118eb63
+  source_checksum: 40d2d2d4253513faa0a78cdb49035141b08cc7b56fcb5e7b60f0239b9ede75d0
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:17:18.982083+08:00'
-  last_local_checksum: 5d2bcdf6213a9df5d8f53d633b403c71ca32d6f440cc982d7aa525e00118eb63
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: 40d2d2d4253513faa0a78cdb49035141b08cc7b56fcb5e7b60f0239b9ede75d0
   contribution:
     eligible: false
     mode: none
@@ -1044,19 +1044,19 @@ imports:
     - spec.universal-domains.product-and-requirements.acceptance-criteria
     sync_targets: []
   notes: Batch 3 bootstrap import for checklist.universal-domains.product-and-requirements.acceptance-quality-checklist
-  last_observed_checksum: 5d2bcdf6213a9df5d8f53d633b403c71ca32d6f440cc982d7aa525e00118eb63
+  last_observed_checksum: 40d2d2d4253513faa0a78cdb49035141b08cc7b56fcb5e7b60f0239b9ede75d0
 - asset_id: checklist.universal-domains.product-and-requirements.customer-facing-prd-checklist
   type: checklist
   source_path: checklists/universal-domains/product-and-requirements/customer-facing-prd-checklist.md
   target_path: .trellis/spec/checklists/universal-domains/product-and-requirements/customer-facing-prd-checklist.md
   import_mode: file
   source_version: 1.0.0
-  source_checksum: c9d8a658a9c08abc76843735b4407066c21aaefb527c2d813b9346cf197e6879
+  source_checksum: 1b4d31e8d63f1a8f04b7063749454b63b1696b967bc7f3df4ede18653ab0f73d
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:17:18.982083+08:00'
-  last_local_checksum: c9d8a658a9c08abc76843735b4407066c21aaefb527c2d813b9346cf197e6879
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: 1b4d31e8d63f1a8f04b7063749454b63b1696b967bc7f3df4ede18653ab0f73d
   contribution:
     eligible: false
     mode: none
@@ -1069,19 +1069,19 @@ imports:
     - spec.universal-domains.product-and-requirements.acceptance-criteria
     sync_targets: []
   notes: Batch 3 bootstrap import for checklist.universal-domains.product-and-requirements.customer-facing-prd-checklist
-  last_observed_checksum: c9d8a658a9c08abc76843735b4407066c21aaefb527c2d813b9346cf197e6879
+  last_observed_checksum: 1b4d31e8d63f1a8f04b7063749454b63b1696b967bc7f3df4ede18653ab0f73d
 - asset_id: checklist.universal-domains.product-and-requirements.developer-facing-prd-checklist
   type: checklist
   source_path: checklists/universal-domains/product-and-requirements/developer-facing-prd-checklist.md
   target_path: .trellis/spec/checklists/universal-domains/product-and-requirements/developer-facing-prd-checklist.md
   import_mode: file
   source_version: 1.0.0
-  source_checksum: c73d40213f0baf7b680c1cf682e653dd321e9402cbc02d9da6e0f96b3de1a448
+  source_checksum: a41e2cedf06110b4488ed891da53a2b9a11be2d818b44dd9d12527d2b50d7591
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:17:18.982083+08:00'
-  last_local_checksum: c73d40213f0baf7b680c1cf682e653dd321e9402cbc02d9da6e0f96b3de1a448
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: a41e2cedf06110b4488ed891da53a2b9a11be2d818b44dd9d12527d2b50d7591
   contribution:
     eligible: false
     mode: none
@@ -1094,7 +1094,7 @@ imports:
     - spec.universal-domains.product-and-requirements.acceptance-criteria
     sync_targets: []
   notes: Batch 3 bootstrap import for checklist.universal-domains.product-and-requirements.developer-facing-prd-checklist
-  last_observed_checksum: c73d40213f0baf7b680c1cf682e653dd321e9402cbc02d9da6e0f96b3de1a448
+  last_observed_checksum: a41e2cedf06110b4488ed891da53a2b9a11be2d818b44dd9d12527d2b50d7591
 - asset_id: template.universal-domains.product-and-requirements.acceptance-criteria-template
   type: template
   source_path: templates/universal-domains/product-and-requirements/acceptance-criteria-template.md
@@ -1105,7 +1105,7 @@ imports:
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:17:18.982083+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: 2589bc288573961089c917635dd87ecebdf0a725c1cad97e73051f005ceb4ddb
   contribution:
     eligible: false
@@ -1125,12 +1125,12 @@ imports:
   target_path: .trellis/spec/templates/universal-domains/product-and-requirements/customer-facing-prd-template.md
   import_mode: file
   source_version: 1.0.0
-  source_checksum: 358bae06439ff02c69981bf92d7dcab37ce0524ad921577cc01e7d0abdf8885b
+  source_checksum: 3cec476e15a18f7d50be072c47da13e85d8648bfde8f74a50193f4a20bd231b2
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:17:18.982083+08:00'
-  last_local_checksum: 358bae06439ff02c69981bf92d7dcab37ce0524ad921577cc01e7d0abdf8885b
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: 3cec476e15a18f7d50be072c47da13e85d8648bfde8f74a50193f4a20bd231b2
   contribution:
     eligible: false
     mode: none
@@ -1143,19 +1143,19 @@ imports:
     - spec.universal-domains.product-and-requirements.acceptance-criteria
     sync_targets: []
   notes: Batch 3 bootstrap import for template.universal-domains.product-and-requirements.customer-facing-prd-template
-  last_observed_checksum: 358bae06439ff02c69981bf92d7dcab37ce0524ad921577cc01e7d0abdf8885b
+  last_observed_checksum: 3cec476e15a18f7d50be072c47da13e85d8648bfde8f74a50193f4a20bd231b2
 - asset_id: template.universal-domains.product-and-requirements.developer-facing-prd-template
   type: template
   source_path: templates/universal-domains/product-and-requirements/developer-facing-prd-template.md
   target_path: .trellis/spec/templates/universal-domains/product-and-requirements/developer-facing-prd-template.md
   import_mode: file
   source_version: 1.0.0
-  source_checksum: b556cc25ac8dcf27a3f99ac8ea27dcfae7a094b9ae45ccf1376d29404b71ca47
+  source_checksum: 32428e6020a34f25c8cf4913bb9dc23aea609a4b19fc4d31aa17dac2b77a8b59
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:17:18.982083+08:00'
-  last_local_checksum: b556cc25ac8dcf27a3f99ac8ea27dcfae7a094b9ae45ccf1376d29404b71ca47
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: 32428e6020a34f25c8cf4913bb9dc23aea609a4b19fc4d31aa17dac2b77a8b59
   contribution:
     eligible: false
     mode: none
@@ -1168,7 +1168,7 @@ imports:
     - spec.universal-domains.product-and-requirements.acceptance-criteria
     sync_targets: []
   notes: Batch 3 bootstrap import for template.universal-domains.product-and-requirements.developer-facing-prd-template
-  last_observed_checksum: b556cc25ac8dcf27a3f99ac8ea27dcfae7a094b9ae45ccf1376d29404b71ca47
+  last_observed_checksum: 32428e6020a34f25c8cf4913bb9dc23aea609a4b19fc4d31aa17dac2b77a8b59
 - asset_id: template.universal-domains.verification.definition-of-done-template
   type: template
   source_path: templates/universal-domains/verification/definition-of-done-template.md
@@ -1179,7 +1179,7 @@ imports:
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:17:18.982083+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: 8553a26d028a9d679792d35ff4c2ce5fab33bb701090fe83d397ae62e62d2b4d
   contribution:
     eligible: false
@@ -1203,7 +1203,7 @@ imports:
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:17:18.982083+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: be08c2eeef214c91f92a194a145661f1b1458378306bfed70a15d9f78c81352c
   contribution:
     eligible: false
@@ -1229,7 +1229,7 @@ imports:
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:17:18.982083+08:00'
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
   last_local_checksum: 0823123ef431f5ee727c56ead5b80cf3442097680d68e59b06f4cd94c01b3ea9
   contribution:
     eligible: false
@@ -1251,12 +1251,12 @@ imports:
   target_path: .trellis/spec/examples/universal-domains/product-and-requirements
   import_mode: directory
   source_version: 1.0.0
-  source_checksum: e6674a7c22a2ea58c5c749457566b17bd1f3254f054097db760f13f3beb8cc72
+  source_checksum: 55892eff8897cd07a74798c45d7af28e9e0528a7abd29b1c753bd7b5144d3d95
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-03-29T18:17:18.982083+08:00'
-  last_local_checksum: e6674a7c22a2ea58c5c749457566b17bd1f3254f054097db760f13f3beb8cc72
+  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_checksum: 55892eff8897cd07a74798c45d7af28e9e0528a7abd29b1c753bd7b5144d3d95
   contribution:
     eligible: false
     mode: none
@@ -1273,16 +1273,16 @@ imports:
     - checklist.universal-domains.product-and-requirements.developer-facing-prd-checklist
     sync_targets: []
   notes: Batch 3 bootstrap import for example.universal-domains.product-and-requirements.product-and-requirements-examples
-  last_observed_checksum: e6674a7c22a2ea58c5c749457566b17bd1f3254f054097db760f13f3beb8cc72
+  last_observed_checksum: 55892eff8897cd07a74798c45d7af28e9e0528a7abd29b1c753bd7b5144d3d95
 compiled:
   enabled: false
   last_built_at: null
   outputs: []
 sync:
-  last_sync_at: '2026-03-29T18:10:57+08:00'
-  last_sync_status: pass
-  last_diff_at: '2026-03-29T18:10:52+08:00'
-  last_diff_status: warn
+  last_sync_at: '2026-05-04T15:03:15+08:00'
+  last_sync_status: warn
+  last_diff_at: '2026-05-04T15:03:36+08:00'
+  last_diff_status: pass
   local_overrides: []
 history:
 - at: '2026-03-29T18:07:05+08:00'
@@ -1445,3 +1445,513 @@ history:
   asset_id: script.validation.validate-overview-links
   status: restored-missing
   notes: Source asset copied to target
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.project-governance.change-management
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.verification.verification-gates
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.verification.evidence-requirements
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.product-and-requirements.scope-boundary
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.context-engineering.context-layering
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.ai-execution.prompt-boundaries
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.ai-execution.tool-call-policy
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.ai-execution.structured-output-policy
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.ai-execution.model-selection-and-fallback
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.context-engineering.context-budgeting
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.context-engineering.context-contamination
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.context-engineering.decision-summary-injection
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: checklist.universal-domains.context-engineering.context-health-checklist
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.agent-collaboration.agent-role-boundaries
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.agent-collaboration.delegation-policy
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.agent-collaboration.handoff-contracts
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: checklist.universal-domains.agent-collaboration.delegation-readiness-checklist
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: checklist.universal-domains.agent-collaboration.handoff-readiness-checklist
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: template.universal-domains.agent-collaboration.agent-handoff-template
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: script.validation.validate-library-sync
+  status: updated
+  notes: Source asset copied to target
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: script.validation.validate-links
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: script.validation.validate-overview-links
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.project-governance.library-sync-governance
+  status: updated
+  notes: Source asset copied to target
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.verification.definition-of-done
+  status: updated
+  notes: Source asset copied to target
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.platforms.cli-command-interface
+  status: updated
+  notes: Source asset copied to target
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: script.assembly.write-library-lock
+  status: blocked-modified
+  notes: Local content modifications detected; manual review required
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: script.assembly.analyze-library-pull
+  status: updated
+  notes: Source asset copied to target
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: script.assembly.assemble-init-set
+  status: updated
+  notes: Source asset copied to target
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: script.sync.diff-library-assets
+  status: blocked-modified
+  notes: Local content modifications detected; manual review required
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: script.sync.propose-library-sync
+  status: blocked-modified
+  notes: Local content modifications detected; manual review required
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: script.sync.sync-library-assets
+  status: updated
+  notes: Source asset copied to target
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: script.sync.apply-library-sync
+  status: blocked-modified
+  notes: Local content modifications detected; manual review required
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: script.contribution.verify-upstream-contribution
+  status: updated
+  notes: Source asset copied to target
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: checklist.platforms.cli.command-interface-readiness-checklist
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: checklist.universal-domains.verification.definition-of-done-checklist
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: template.platforms.cli.command-contract-template
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.product-and-requirements.acceptance-criteria
+  status: updated
+  notes: Source asset copied to target
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.product-and-requirements.prd-documentation-customer-facing
+  status: updated
+  notes: Source asset copied to target
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.product-and-requirements.prd-documentation-developer-facing
+  status: updated
+  notes: Source asset copied to target
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.product-and-requirements.problem-definition
+  status: updated
+  notes: Source asset copied to target
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.product-and-requirements.requirement-clarification
+  status: updated
+  notes: Source asset copied to target
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: checklist.universal-domains.product-and-requirements.acceptance-quality-checklist
+  status: updated
+  notes: Source asset copied to target
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: checklist.universal-domains.product-and-requirements.customer-facing-prd-checklist
+  status: updated
+  notes: Source asset copied to target
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: checklist.universal-domains.product-and-requirements.developer-facing-prd-checklist
+  status: updated
+  notes: Source asset copied to target
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: template.universal-domains.product-and-requirements.acceptance-criteria-template
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: template.universal-domains.product-and-requirements.customer-facing-prd-template
+  status: updated
+  notes: Source asset copied to target
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: template.universal-domains.product-and-requirements.developer-facing-prd-template
+  status: updated
+  notes: Source asset copied to target
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: template.universal-domains.verification.definition-of-done-template
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: example.universal-domains.product-and-requirements.customer-facing-prd-example
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: example.universal-domains.product-and-requirements.developer-facing-prd-example
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:02:41+08:00'
+  action: sync-down
+  asset_id: example.universal-domains.product-and-requirements.product-and-requirements-examples
+  status: updated
+  notes: Source asset copied to target
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.project-governance.change-management
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.verification.verification-gates
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.verification.evidence-requirements
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.product-and-requirements.scope-boundary
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.context-engineering.context-layering
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.ai-execution.prompt-boundaries
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.ai-execution.tool-call-policy
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.ai-execution.structured-output-policy
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.ai-execution.model-selection-and-fallback
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.context-engineering.context-budgeting
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.context-engineering.context-contamination
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.context-engineering.decision-summary-injection
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: checklist.universal-domains.context-engineering.context-health-checklist
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.agent-collaboration.agent-role-boundaries
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.agent-collaboration.delegation-policy
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.agent-collaboration.handoff-contracts
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: checklist.universal-domains.agent-collaboration.delegation-readiness-checklist
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: checklist.universal-domains.agent-collaboration.handoff-readiness-checklist
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: template.universal-domains.agent-collaboration.agent-handoff-template
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: script.validation.validate-library-sync
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: script.validation.validate-links
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: script.validation.validate-overview-links
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.project-governance.library-sync-governance
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.verification.definition-of-done
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.platforms.cli-command-interface
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: script.assembly.write-library-lock
+  status: blocked-modified
+  notes: Local content modifications detected; manual review required
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: script.assembly.analyze-library-pull
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: script.assembly.assemble-init-set
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: script.sync.diff-library-assets
+  status: blocked-modified
+  notes: Local content modifications detected; manual review required
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: script.sync.propose-library-sync
+  status: blocked-modified
+  notes: Local content modifications detected; manual review required
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: script.sync.sync-library-assets
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: script.sync.apply-library-sync
+  status: blocked-modified
+  notes: Local content modifications detected; manual review required
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: script.contribution.verify-upstream-contribution
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: checklist.platforms.cli.command-interface-readiness-checklist
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: checklist.universal-domains.verification.definition-of-done-checklist
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: template.platforms.cli.command-contract-template
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.product-and-requirements.acceptance-criteria
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.product-and-requirements.prd-documentation-customer-facing
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.product-and-requirements.prd-documentation-developer-facing
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.product-and-requirements.problem-definition
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: spec.universal-domains.product-and-requirements.requirement-clarification
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: checklist.universal-domains.product-and-requirements.acceptance-quality-checklist
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: checklist.universal-domains.product-and-requirements.customer-facing-prd-checklist
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: checklist.universal-domains.product-and-requirements.developer-facing-prd-checklist
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: template.universal-domains.product-and-requirements.acceptance-criteria-template
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: template.universal-domains.product-and-requirements.customer-facing-prd-template
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: template.universal-domains.product-and-requirements.developer-facing-prd-template
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: template.universal-domains.verification.definition-of-done-template
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: example.universal-domains.product-and-requirements.customer-facing-prd-example
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: example.universal-domains.product-and-requirements.developer-facing-prd-example
+  status: unchanged
+  notes: No source change detected
+- at: '2026-05-04T15:03:15+08:00'
+  action: sync-down
+  asset_id: example.universal-domains.product-and-requirements.product-and-requirements-examples
+  status: unchanged
+  notes: No source change detected

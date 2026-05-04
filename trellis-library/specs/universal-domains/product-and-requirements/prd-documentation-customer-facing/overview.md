@@ -7,4 +7,3 @@ Define reusable rules for writing customer-facing product requirement documents 
 ## Applicability
 
 Use this concern when creating or reviewing PRDs, proposals, or requirement summaries that will be shared directly with customers, business stakeholders, or other audiences who need clarity without implementation detail.
-

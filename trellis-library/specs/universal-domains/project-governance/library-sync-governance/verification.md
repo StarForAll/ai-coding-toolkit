@@ -8,6 +8,9 @@ Check the following:
 * proposal generation outputs a reviewable report before patch application
 * apply operations are restricted to approved proposals and whitelisted target paths
 * source-library validation passes after applying any accepted upstream contribution
+* cross-platform Skills/Agents differences are not reported as drift
+* `.trellis/.template-hashes.json` has not been manually modified
+* at most one `.trellis/.backup-*` directory is retained
 
 Failure indicators:
 
@@ -15,3 +18,6 @@ Failure indicators:
 * target-project assets are overwritten despite `modified`, `diverged`, `pinned`, or `local-only` state
 * upstream proposal patches include project-private or structure-changing edits without escalation
 * apply tooling modifies paths outside the approved asset scope
+* drift analysis incorrectly flags cross-platform Skills/Agents format differences as anomalies
+* `.trellis/.template-hashes.json` has been manually edited
+* more than one `.trellis/.backup-*` directory exists at the same time

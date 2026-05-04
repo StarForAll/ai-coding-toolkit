@@ -17,6 +17,10 @@ from typing import Any
 import yaml
 
 LIBRARY_ROOT = Path(__file__).resolve().parents[2]
+if not (LIBRARY_ROOT / "_internal").is_dir():
+    _tl = LIBRARY_ROOT / "trellis-library"
+    if (_tl / "_internal").is_dir():
+        LIBRARY_ROOT = _tl
 if str(LIBRARY_ROOT) not in sys.path:
     sys.path.insert(0, str(LIBRARY_ROOT))
 
@@ -473,6 +477,7 @@ def main() -> int:
                 import_item["source_version"] = action["asset"].get("version", import_item.get("source_version", ""))
                 import_item["source_checksum"] = action["source_checksum"]
                 import_item["last_local_checksum"] = sha256_for_path(action["target_abs"])
+                import_item["last_observed_checksum"] = import_item["last_local_checksum"]
                 import_item["local_state"] = "clean"
         elif decision == "unchanged":
             message = "No source change detected"

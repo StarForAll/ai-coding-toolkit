@@ -15,12 +15,12 @@ from typing import Any
 import yaml
 
 LIBRARY_ROOT = Path(__file__).resolve().parents[2]
+if not (LIBRARY_ROOT / "_internal").is_dir():
+    _tl = LIBRARY_ROOT / "trellis-library"
+    if (_tl / "_internal").is_dir():
+        LIBRARY_ROOT = _tl
 if str(LIBRARY_ROOT) not in sys.path:
     sys.path.insert(0, str(LIBRARY_ROOT))
-
-_TRELLIS_LIBRARY = LIBRARY_ROOT / 'trellis-library'
-if str(_TRELLIS_LIBRARY) not in sys.path:
-    sys.path.insert(0, str(_TRELLIS_LIBRARY))
 
 from _internal.asset_state import sha256_for_path  # noqa: E402
 
