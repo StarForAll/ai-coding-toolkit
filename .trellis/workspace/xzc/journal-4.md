@@ -391,3 +391,36 @@ Fix _internal import error in 7 library sync scripts; retire record-session and 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 140: Fix workflow.md errors/omissions, renumber phases, sync platforms
+
+**Date**: 2026-05-04
+**Task**: Fix workflow.md errors/omissions, renumber phases, sync platforms
+**Branch**: `main`
+
+### Summary
+
+Fixed workflow.md: Phase numbering gaps (1.1→1.2→1.3, 3.1→3.2), 'AI should not commit' contradiction, missing spec/ tree entries, stale Development Process, Session Start cross-reference. Synced 50 files across 6 platforms. Renamed Phase 3.1 'Commit Gate' → 'Commit & Verify'. Fixed brainstorm Phase labels, change-workflow routing table, task.py help text.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1ed51cb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
