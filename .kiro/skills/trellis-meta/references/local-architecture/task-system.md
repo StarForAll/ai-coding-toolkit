@@ -95,7 +95,7 @@ When modifying the task system, the AI should prefer script commands to maintain
 | Change the default task template | `.trellis/scripts/common/task_store.py` and task creation instructions. |
 | Change status semantics | `.trellis/workflow.md`, workflow-state hook logic, and task usage conventions. |
 | Add task lifecycle actions | `hooks.after_*` in `.trellis/config.yaml`. |
-| Change context rules | Phase 1.3 in `.trellis/workflow.md` and related platform agent/hook instructions. |
+| Change context rules | Phase 1.2 in `.trellis/workflow.md` and related platform agent/hook instructions. |
 | Change archive policy | `.trellis/scripts/common/task_store.py` / `task_utils.py`. |
 
 These are local files in the user project. Do not default to editing Trellis CLI source code unless the user wants to contribute upstream.

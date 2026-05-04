@@ -336,12 +336,12 @@ def main() -> int:
             file=sys.stderr,
         )
         print(
-            "sub-agent-capable platforms and curated by the AI during Phase 1.3.",
+            "sub-agent-capable platforms and curated by the AI during Phase 1.2.",
             file=sys.stderr,
         )
-        print("See .trellis/workflow.md Phase 1.3 or run:", file=sys.stderr)
+        print("See .trellis/workflow.md Phase 1.2 or run:", file=sys.stderr)
         print(
-            "  python3 ./.trellis/scripts/get_context.py --mode phase --step 1.3",
+            "  python3 ./.trellis/scripts/get_context.py --mode phase --step 1.2",
             file=sys.stderr,
         )
         print(

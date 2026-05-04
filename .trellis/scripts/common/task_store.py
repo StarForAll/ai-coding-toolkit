@@ -283,7 +283,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     if seeded_jsonl:
         print(
             "  2. Curate implement.jsonl / check.jsonl (spec + research files only — "
-            "see .trellis/workflow.md Phase 1.3)",
+            "see .trellis/workflow.md Phase 1.2)",
             file=sys.stderr,
         )
         print("  3. Run: python3 task.py start <dir>", file=sys.stderr)

@@ -13,6 +13,7 @@
 5. [Session End](#session-end)
 6. [File Descriptions](#file-descriptions)
 7. [Best Practices](#best-practices)
+8. [Phase Index](#phase-index)
 
 ---
 
@@ -103,6 +104,7 @@ cat .trellis/spec/scripts/python-conventions.md
 ```
 .trellis/
 |-- .developer           # Developer identity (gitignored)
+|-- config.yaml          # Project-level configuration
 |-- .runtime/            # Session-scoped active task runtime state
 |-- scripts/
 |   |-- __init__.py          # Python package init
@@ -138,7 +140,7 @@ cat .trellis/spec/scripts/python-conventions.md
 |   |   |-- index.md
 |   |   |-- python-conventions.md
 |   |   +-- shell-conventions.md
-|   |-- agents/                       # Agent definitions
+|   |-- agents/                       # Agent source asset definitions (multi-tool deployment)
 |   |   +-- index.md
 |   |-- commands/                     # Command workflows
 |   |   +-- index.md
@@ -150,12 +152,20 @@ cat .trellis/spec/scripts/python-conventions.md
 |   |   |-- index.md
 |   |   |-- cross-layer-thinking-guide.md
 |   |   +-- *.md
+|   |-- universal-domains/            # Cross-cutting workflow domain specs
+|   |   +-- (ai-execution, context-engineering, agent-collaboration, ...)
+|   |-- checklists/                   # Workflow gate checklists
+|   |-- templates/                    # PRD, handoff, readiness templates
+|   |-- examples/                     # Example artifacts
+|   +-- platforms/                    # Platform-specific specs (e.g., cli/)
 +-- workflow.md             # This document
 ```
 
 ---
 
 ## Session Start Process
+
+> Steps 1–3 mirror the Quick Start above. This section adds session-specific details.
 
 ### Step 1: Get Session Context
 
@@ -207,28 +217,15 @@ python3 ./.trellis/scripts/task.py create "<title>" --slug <task-name>
 
 ### Task Development Flow
 
+Follow the **Phase Index** below for the canonical workflow. This section provides a quick summary only.
+
 ```
-1. Create or select task
-   --> python3 ./.trellis/scripts/task.py create "<title>" --slug <name> or list
-
-2. Write code according to guidelines
-   --> Read .trellis/spec/ docs relevant to your task
-   --> For cross-layer: read .trellis/spec/guides/
-
-3. Self-test
-   --> Run project's lint/test commands (see spec docs)
-   --> Manual feature testing
-
-4. Commit code
-   --> git add <files>
-   --> git commit -m "type(scope): description"
-       Format: feat/fix/docs/refactor/test/chore
-
-5. Final close-out
-   --> python3 ./.trellis/scripts/workflow/record-session-helper.py --title "Title" --commit "hash"
-   --> python3 ./.trellis/scripts/task.py archive <task-name>
-   --> python3 ./.trellis/scripts/task.py current --source
+Plan (Phase 1)     → Brainstorm, produce PRD, curate context, activate task
+Execute (Phase 2)  → Dispatch sub-agents to implement, check, update spec
+Finish (Phase 3)   → Commit code, then archive + record session via /finish-work
 ```
+
+See the [Phase Index](#phase-index) for step-by-step instructions and routing rules.
 
 ### Code Quality Checklist
 
@@ -319,7 +316,7 @@ spec/
 |   |-- index.md
 |   |-- python-conventions.md
 |   +-- shell-conventions.md
-|-- agents/                   # OpenCode agent definitions
+|-- agents/                   # Agent source asset definitions (multi-tool deployment)
 |   +-- index.md
 |-- commands/                 # Trellis command workflows
 |   +-- index.md
@@ -330,6 +327,11 @@ spec/
 |-- guides/                   # Thinking guides
 |   |-- index.md
 |   +-- *.md
+|-- universal-domains/        # Cross-cutting workflow domain specs
+|-- checklists/               # Workflow gate checklists
+|-- templates/                # PRD, handoff, readiness templates
+|-- examples/                 # Example artifacts
++-- platforms/                # Platform-specific specs (e.g., cli/)
 ```
 
 **When to update**:
@@ -378,7 +380,7 @@ python3 ./.trellis/scripts/task.py list-archive    # List archived tasks
 3. **After development complete**:
    - Use `/trellis:finish-work` for completion checklist
    - After fix bug, use `/trellis:break-loop` for deep analysis
-   - Human commits after testing passes
+   - Main session proposes the commit plan after testing passes (Phase 3.1); user confirms before execution
    - Use `/trellis:finish-work` for archive + journal close-out
 
 ### [X] DON'T - Should Not Do
@@ -388,7 +390,7 @@ python3 ./.trellis/scripts/task.py list-archive    # List archived tasks
 3. **Don't** develop multiple unrelated tasks simultaneously
 4. **Don't** commit code with lint/test errors
 5. **Don't** forget to update spec docs after learning something
-6. [!] **Don't** execute `git commit` - AI should not commit code
+6. **Don't** commit code with `sub-agent` sessions — only the main session may propose commits, and only after explicit user confirmation (per Phase 3.1)
 
 ---
 
@@ -422,7 +424,7 @@ git commit -m "type(scope): description"
 ```bash
 # Session management
 python3 ./.trellis/scripts/get_context.py    # Get full context
-python3 ./.trellis/scripts/get_context.py --mode phase --step 1.3 --platform codex
+python3 ./.trellis/scripts/get_context.py --mode phase --step 1.2 --platform codex
 
 # Task management
 python3 ./.trellis/scripts/task.py list      # List tasks
@@ -458,14 +460,14 @@ Following this workflow ensures:
 - Use `trellis-brainstorm` to clarify requirements with the user.
 - Produce or refine `prd.md`.
 
-#### 1.3 Curate JSONL Context
+#### 1.2 Curate JSONL Context
 
 - Curate `implement.jsonl` and `check.jsonl`.
 - Include only spec and research files.
 - Do not include code paths.
 - Research-heavy work should persist findings into `research/*.md` first.
 
-#### 1.4 Enter Execute Phase
+#### 1.3 Enter Execute Phase
 
 - Run `python3 ./.trellis/scripts/task.py start <task-dir>`.
 - This activates session-scoped task state and moves the task into `in_progress`.
@@ -489,12 +491,15 @@ Following this workflow ensures:
 
 ### Finish
 
-#### 3.1 Commit Gate
+#### 3.1 Commit & Verify
 
-- Before `finish-work`, code changes must already be committed in the main session.
-- `finish-work` is not the place to make the code commit.
+1. After implementation is verifiably complete, the main session **proposes the commit plan** — state which files will be committed, the commit message, and the rationale.
+2. Wait for **explicit user confirmation**.
+3. Execute `git add` + `git commit` only after confirmation.
+4. Verify the working tree is clean (paths outside `.trellis/workspace/` and `.trellis/tasks/` must have no uncommitted changes).
+5. `finish-work` is not the place to make the code commit — it only archives and journals.
 
-#### 3.4 Close-Out
+#### 3.2 Close-Out
 
 - Run `/trellis:finish-work` after code commits are done.
 - Archive completed task(s).
@@ -508,20 +513,20 @@ No active task. **A Direct answer** — pure Q&A / explanation / lookup / chat; 
 
 [workflow-state:planning]
 Load the `trellis-brainstorm` skill and iterate on prd.md with the user.
-Phase 1.3 (required, once): before `task.py start`, you MUST curate `implement.jsonl` and `check.jsonl` — list the spec / research files sub-agents need so they get the right context injected. You may skip only if the jsonl already has agent-curated entries (the seed `_example` row alone doesn't count).
+Phase 1.2 (required, once): before `task.py start`, you MUST curate `implement.jsonl` and `check.jsonl` — list the spec / research files sub-agents need so they get the right context injected. You may skip only if the jsonl already has agent-curated entries (the seed `_example` row alone doesn't count).
 Then run `task.py start <task-dir>` to flip status to in_progress.
 Research output **must** land in `{task_dir}/research/*.md`, written by `trellis-research` sub-agents. The main agent should not inline WebFetch / WebSearch — the PRD only links to research files.
 [/workflow-state:planning]
 
 [workflow-state:in_progress]
-**Flow**: trellis-implement → trellis-check → trellis-update-spec → commit (Phase 3.4) → `/trellis:finish-work`.
-**Default (no override)**: dispatch the `trellis-implement` / `trellis-check` sub-agents — the main agent does NOT edit code by default. Phase 3.4 commit (required, once): after trellis-update-spec, or whenever implementation is verifiably complete, the main agent **drives the commit** — state the commit plan in user-facing text, then run `git commit` — BEFORE suggesting `/trellis:finish-work`. `/finish-work` refuses to run on a dirty working tree (paths outside `.trellis/workspace/` and `.trellis/tasks/`).
+**Flow**: trellis-implement → trellis-check → trellis-update-spec → commit (Phase 3.1) → `/trellis:finish-work`.
+**Default (no override)**: dispatch the `trellis-implement` / `trellis-check` sub-agents — the main agent does NOT edit code by default. Phase 3.1 commit (required, once): after trellis-update-spec, or whenever implementation is verifiably complete, the main agent **proposes the commit plan** — state the commit plan in user-facing text, then run `git commit` after user confirmation — BEFORE suggesting `/trellis:finish-work`. `/finish-work` refuses to run on a dirty working tree (paths outside `.trellis/workspace/` and `.trellis/tasks/`).
 **Inline override** (per-turn only, escape hatch for sub-agent dispatch): the user's CURRENT message MUST explicitly contain one of: "do it inline" / "no sub-agent" / "你直接改" / "别派 sub-agent" / "main session 写就行" / "不用 sub-agent". **Without seeing one of these phrases you must NOT inline on your own**; do not invent an override the user never said.
 [/workflow-state:in_progress]
 
 [workflow-state:completed]
-Code committed via Phase 3.4; run `/trellis:finish-work` to wrap up (archive the task + record session).
-If you reach this state with uncommitted code, return to Phase 3.4 first — `/finish-work` refuses to run on a dirty working tree.
+Code committed via Phase 3.1; run `/trellis:finish-work` to wrap up (archive the task + record session).
+If you reach this state with uncommitted code, return to Phase 3.1 first — propose the commit plan and get user confirmation before `/finish-work`. `/finish-work` refuses to run on a dirty working tree.
 `task.py archive` deletes any runtime session files that still point at the archived task.
 [/workflow-state:completed]
 

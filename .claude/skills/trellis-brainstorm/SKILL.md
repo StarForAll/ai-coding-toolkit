@@ -515,14 +515,11 @@ Brainstorm
   Step 1–7: Discover requirements, research, converge
   Step 8: Final confirmation → user approves
   ↓
-Task Workflow Phase 2 (Prepare for Implementation)
-  Code-Spec Depth Check (if applicable)
-  → Research codebase (based on confirmed PRD)
-  → Configure code-spec context (jsonl files)
-  → Activate task
+Task Workflow Phase 2 (Execute)
+  Implement → Check → Update Spec → Commit (3.1)
   ↓
-Task Workflow Phase 3 (Execute)
-  Implement → Check → Complete
+Task Workflow Phase 3 (Finish)
+  Close-Out (3.2): archive + record journal
 ```
 
 The task directory and PRD already exist from brainstorm, so Phase 1 of the Task Workflow is skipped entirely.

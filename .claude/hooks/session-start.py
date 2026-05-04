@@ -267,14 +267,14 @@ def _get_task_status(trellis_dir: Path, input_data: dict) -> str:
     implement_jsonl = task_dir / "implement.jsonl"
     if implement_jsonl.is_file() and not _has_curated_jsonl_entry(implement_jsonl):
         return (
-            f"Status: PLANNING (Phase 1.3)\nTask: {task_title}\n"
+            f"Status: PLANNING (Phase 1.2)\nTask: {task_title}\n"
             f"Source: {active.source}\n"
             "Next-Action: Curate `implement.jsonl` and `check.jsonl` with the spec + research files "
             "the Phase 2 sub-agents will need. Only spec paths (`.trellis/spec/**/*.md`) and research "
             "files (`{TASK_DIR}/research/*.md`) — no code paths. Run "
             "`python3 ./.trellis/scripts/get_context.py --mode packages` to list available specs, "
             "then edit the jsonl files or use `python3 ./.trellis/scripts/task.py add-context`. "
-            "See `.trellis/workflow.md` Phase 1.3 for details."
+            "See `.trellis/workflow.md` Phase 1.2 for details."
         )
 
     return (

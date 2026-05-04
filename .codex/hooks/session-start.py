@@ -175,10 +175,10 @@ def _get_task_status(trellis_dir: Path, hook_input: dict) -> str:
     has_prd = (task_dir / "prd.md").is_file()
 
     if not has_prd:
-        return f"Status: NOT READY\nTask: {task_title}\nSource: {active.source}\nMissing: prd.md not created\nNext: Write PRD (see workflow.md Phase 1.1) then curate implement.jsonl per Phase 1.3"
+        return f"Status: NOT READY\nTask: {task_title}\nSource: {active.source}\nMissing: prd.md not created\nNext: Write PRD (see workflow.md Phase 1.1) then curate implement.jsonl per Phase 1.2"
 
     if not has_context:
-        return f"Status: NOT READY\nTask: {task_title}\nSource: {active.source}\nMissing: implement.jsonl / check.jsonl missing or empty\nNext: Curate entries per workflow.md Phase 1.3 (spec + research files only), then `task.py start`"
+        return f"Status: NOT READY\nTask: {task_title}\nSource: {active.source}\nMissing: implement.jsonl / check.jsonl missing or empty\nNext: Curate entries per workflow.md Phase 1.2 (spec + research files only), then `task.py start`"
 
     return (
         f"Status: READY\nTask: {task_title}\n"
