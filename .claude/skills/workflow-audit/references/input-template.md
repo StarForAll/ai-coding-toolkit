@@ -41,9 +41,13 @@ current_cli: <optional; infer from runtime when omitted>
   - optional
   - infer from runtime when possible
   - ask the user only when a CLI-sensitive path is reached and the CLI still cannot be determined safely
+  - if provided, use only `claude`, `opencode`, or `codex`
 
 ## Notes
 
+- Supported per-CLI audit scope is fixed to `Claude Code`, `OpenCode`, and `Codex`
+- Version preflight always runs first: compare `trellis -v` with `COMPATIBLE_TRELLIS_VERSION` in `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
+- Any mismatch must stop the audit as `Blocked / Version Drift` and route the user to `workflow-capability-audit`
 - No dedicated `preferred_handoff_cli` field
 - Default handoff order is always `Claude Code -> OpenCode`
 - A user may override the order only by stating the real environment constraint explicitly in natural language

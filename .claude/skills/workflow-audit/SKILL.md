@@ -1,6 +1,6 @@
 ---
 name: workflow-audit
-description: Audit workflow definitions under `docs/workflows/*`, including workflow source assets, embed/install flows, CLI-native adaptation, and post-install verification boundaries. Use this whenever the user wants to inspect, validate, or challenge a workflow itself before editing source files, especially when `/tmp + trellis init` validation, Codex handoff boundaries, or Claude Code / OpenCode / Codex adaptation checks are involved. Do not use this for ordinary business code, application features, or generic implementation review.
+description: Audit workflow definitions under `docs/workflows/*`, including workflow source assets, embed/install flows, CLI-native adaptation, and post-install verification boundaries. Use this for same-version workflow maintenance only when current Trellis matches the workflow's compatible version; route version drift to `workflow-capability-audit`. Do not use this for ordinary business code, application features, or generic implementation review.
 ---
 
 # workflow-audit
@@ -24,6 +24,32 @@ Do not use this skill to:
 - review application feature implementation quality
 - review product requirements or PRD content
 - perform generic code review unrelated to workflows
+- analyze Trellis version compatibility or upgrade drift; route that to `workflow-capability-audit`
+
+## Version Gate and Supported Surface
+
+`workflow-audit` is a same-version maintenance audit only.
+
+Before any audit step, it must:
+
+1. Read `COMPATIBLE_TRELLIS_VERSION` from `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
+2. Run `trellis -v`
+3. Compare the two versions for exact equality
+
+If the versions differ:
+
+- stop immediately as `Blocked / Version Drift`
+- report both the compatible version and the actual version
+- tell the user to use `workflow-capability-audit`
+- do not continue into target resolution, evidence gathering, task creation, `/tmp` project creation, or runtime validation
+
+Supported audit surface is limited to:
+
+- `Claude Code`
+- `OpenCode`
+- `Codex`
+
+Other repo-local platform directories are out of scope unless the workflow's own managed-surface contract later adds them.
 
 ## Audit Coverage Requirements
 
@@ -70,6 +96,8 @@ This skill should trigger proactively when the user intends to:
 - "verify whether these workflow optimization points are real issues"
 - "create a temporary project under `/tmp` to validate a workflow"
 
+Do not use this skill when the real problem is whether the workflow remains compatible after Trellis changed versions.
+
 ## Input
 
 Natural-language input is allowed, but prefer the recommended field contract. A short copyable template lives in `references/input-template.md`.
@@ -90,6 +118,7 @@ Key fields:
 - `current_cli`
   - default: infer from the runtime environment first
   - ask the user only if a CLI-sensitive path is reached and the CLI still cannot be determined safely
+  - if provided explicitly, it must be one of `claude`, `opencode`, `codex`
 
 Constraints:
 
@@ -129,7 +158,7 @@ Per-CLI adaptation conclusions follow this scope rule:
 Use blocked states in two distinct contexts:
 
 - partial unresolved branches inside an otherwise continuing audit report: `Blocked`, `Evidence Gap`, `Needs Clarification`
-- hard-stop exit classifications that terminate the audit: `Blocked / Invalid Input`, `Blocked / Dependency Unavailable`, `Blocked / Runtime Execution Failure`, `Blocked / No Handoff Target`
+- hard-stop exit classifications that terminate the audit: `Blocked / Version Drift`, `Blocked / Invalid Input`, `Blocked / Dependency Unavailable`, `Blocked / Runtime Execution Failure`, `Blocked / No Handoff Target`
 
 Do not mix these two contexts.
 
@@ -163,6 +192,21 @@ A finding that needs runtime validation to determine severity must stay in Block
 
 ## Workflow
 
+### Step 0: Version preflight
+
+Before target resolution or evidence gathering:
+
+- read `COMPATIBLE_TRELLIS_VERSION` from `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
+- run `trellis -v`
+- compare for exact equality
+
+If the versions differ:
+
+- stop as `Blocked / Version Drift`
+- report both values explicitly
+- recommend `workflow-capability-audit`
+- do not proceed to Step 1 or any later step
+
 ### Step 1: Resolve target and parse input
 
 1. Resolve exactly one `workflow_path`.
@@ -179,10 +223,14 @@ The following three sub-steps always execute. If `candidate_issues` were supplie
 
 Before auditing the workflow, understand the system it operates within:
 
+- current workflow authority for managed surfaces: `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
+- current CLI boundary contract: `docs/workflows/新项目开发工作流/CLI原生适配边界矩阵.md`
+- current hidden-directory / managed-boundary contract: `docs/workflows/新项目开发工作流/装后隐藏目录与托管边界核对清单.md`
 - trellis `init` 产物模型: `.trellis/`, `.claude/`, `.opencode/`, `.agents/skills/`, `.codex/`
 - 各 CLI 原生承载方式（commands / skills / agents / hooks 的目录约定）
 - workflow 自身 install / upgrade / uninstall 脚本的实际行为
 - 工作流嵌入执行规范中的状态机与前置条件
+- generated target-project evidence is about the temporary target project created for the audit, not this source repository's own hidden directories
 
 #### 2b. Static evidence gathering
 
@@ -204,6 +252,7 @@ Compare document claims against actual definition completeness:
 - 各 CLI 适配层之间是否存在行为漂移（同一语义在不同 CLI 下实现不一致）
 - CLI 适配缺口必须归类为 `present-but-incompatible` 或 `missing-but-valuable`
 - 隐藏目录托管边界：安装后产物是否与 trellis 基线 + workflow 声明的托管范围一致
+- 不得把 repo-local 的其他平台隐藏目录直接当作当前 workflow 缺失适配的证据；除非 `workflow_assets.py` 明确把它们纳入 managed surface
 
 ### Step 3: Judge execution mode
 
@@ -269,6 +318,7 @@ After task context is built, judge whether Step D (runtime validation) is needed
 
 Only in task-based runtime mode. Execute the validation:
 
+- confirm the temporary target project's `.trellis/.version` matches the Step 0 actual `trellis -v` result; otherwise stop as `Blocked / Version Drift`
 - 在 `/tmp` 创建纯净 Git 项目，满足安装前置条件后执行 `trellis init`
 - 执行标准嵌入链: `detect-embed-state.py` → `install-workflow.py --dry-run` → `install-workflow.py` → `upgrade-compat.py --check`
 - 检查安装后隐藏目录（`.trellis/`, `.claude/`, `.opencode/`, `.agents/`, `.codex/`）与 trellis 基线 + workflow 托管声明是否一致
@@ -367,6 +417,7 @@ Required persisted scenario files:
 - `tests/18-confirmed-issue-minimum-schema.md`
 - `tests/19-current-cli-inference-failure.md`
 - `tests/20-script-behavior-mismatch.md`
+- `tests/21-version-drift-stop.md`
 
 Every test file must use the same structure:
 
@@ -393,3 +444,11 @@ Audit the embed flow of `docs/workflows/新项目开发工作流/`. Create a tem
 
 Output:
 Enter the task-based runtime path, create an audit task, enter the `trellis:brainstorm` mainline as the control container, emit a Codex handoff block when required, and maintain `audit-report.md` inside the task.
+
+### Example 3: Version drift stop
+
+Input:
+Audit `docs/workflows/新项目开发工作流/`, but the current local `trellis -v` no longer matches the workflow's declared compatible version.
+
+Output:
+Stop immediately as `Blocked / Version Drift`, report both version values, and tell the user to use `workflow-capability-audit`. Do not create a task or continue the audit.

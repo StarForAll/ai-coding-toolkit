@@ -20,6 +20,39 @@ It does not cover:
 - ordinary business code review
 - product feature auditing
 - generic implementation quality review outside workflow definitions
+- Trellis version-drift or compatibility-upgrade analysis across versions; use `workflow-capability-audit` for that path
+
+## Version Gate and Supported Surface
+
+`workflow-audit` is a same-version workflow-maintenance audit only.
+
+Before any audit step, it must:
+
+1. Read `COMPATIBLE_TRELLIS_VERSION` from `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
+2. Run `trellis -v`
+3. Compare the two versions for exact equality
+
+If the versions differ in any way:
+
+- stop immediately
+- classify the stop as `Blocked / Version Drift`
+- report both the compatible version and the actual version
+- direct the user to `workflow-capability-audit`
+- do **not** continue into target resolution, A/B/C evidence gathering, task creation, `/tmp` project creation, `trellis init`, or embed/post-install validation
+
+Supported workflow audit surface is limited to:
+
+- `Claude Code`
+- `OpenCode`
+- `Codex`
+
+That support limit applies to:
+
+- per-CLI adaptation conclusions
+- temporary target-project artifact checks
+- hidden-directory scope during install/post-install verification
+
+Repo-local directories for other CLIs or carriers are out of scope for `workflow-audit` unless the workflow's own managed-surface contract explicitly adds them in the future.
 
 ## Audit Coverage Requirements
 
@@ -65,6 +98,7 @@ Use `workflow-audit` when the user wants to:
 - verify CLI adaptation or Codex handoff boundaries
 
 Do not use it for normal code review or ordinary product implementation tasks.
+Do not use it to determine whether a newer or older Trellis version is compatible with the workflow; that is `workflow-capability-audit`.
 
 ---
 
@@ -87,6 +121,7 @@ Natural language is allowed, but the recommended contract is:
 - `current_cli`
   - infer from runtime when possible
   - ask the user only if a CLI-sensitive path is reached and ambiguity remains
+  - if provided explicitly, it must be one of: `claude`, `opencode`, `codex`
 
 The contract intentionally omits `preferred_handoff_cli`.
 
@@ -137,14 +172,33 @@ Per-CLI adaptation conclusions follow this scope rule:
 - the section is in scope when the audit examines CLI-specific carrier mapping, adaptation drift, CLI-specific installed artifacts, or the Codex handoff boundary
 - lightweight output should still keep the section even when CLI adaptation is not in scope; in that case, mark each CLI entry as `not-applicable` with a brief reason instead of omitting the section
 
+### Step 0: Version preflight
+
+Before target resolution or evidence gathering:
+
+- read `COMPATIBLE_TRELLIS_VERSION` from `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
+- run `trellis -v`
+- compare for exact equality
+
+If the versions differ:
+
+- stop as `Blocked / Version Drift`
+- report both values explicitly
+- recommend `workflow-capability-audit`
+- do not proceed to Step 1 or any later step
+
 ### A. Understand Target System Mechanics
 
 Before auditing the workflow, understand the system it operates within:
 
+- current workflow authority for managed surfaces: `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
+- current CLI boundary contract: `docs/workflows/新项目开发工作流/CLI原生适配边界矩阵.md`
+- current hidden-directory / managed-boundary contract: `docs/workflows/新项目开发工作流/装后隐藏目录与托管边界核对清单.md`
 - trellis `init` 产物模型: `.trellis/`, `.claude/`, `.opencode/`, `.agents/skills/`, `.codex/`
 - 各 CLI 的原生承载方式（commands / skills / agents / hooks 的目录约定）
 - workflow 自身的 install / upgrade / uninstall 脚本实际行为
 - 工作流嵌入执行规范中的状态机与前置条件
+- generated target-project evidence is about the temporary target project created for the audit, not this source repository's own hidden directories
 
 ### B. Static Evidence Gathering
 
@@ -164,11 +218,13 @@ Compare document claims against actual definition completeness:
 - 跨文档引用的一致性：是否引用了不存在的文件、旧路径、或已过时的路径名
 - 各 CLI 适配层之间是否存在行为漂移（同一语义在不同 CLI 下实现不一致）
 - 隐藏目录托管边界：安装后产物是否与 trellis 基线 + workflow 声明的托管范围一致
+- 不得把 repo-local 的其他平台隐藏目录直接当作当前 workflow 缺失适配的证据；除非 `workflow_assets.py` 明确把它们纳入 managed surface
 
 ### D. Runtime Validation
 
 Required when embed / install / post-install behavior must be verified:
 
+- confirm the temporary target project's `.trellis/.version` matches the Step 0 actual `trellis -v` result; otherwise stop as `Blocked / Version Drift`
 - 在 `/tmp` 创建纯净 Git 项目，满足安装前置条件后执行 `trellis init`
 - 执行标准嵌入链: `detect-embed-state.py` → `install-workflow.py --dry-run` → `install-workflow.py` → `upgrade-compat.py --check`
 - 检查安装后隐藏目录（`.trellis/`, `.claude/`, `.opencode/`, `.agents/`, `.codex/`）与 trellis 基线 + workflow 托管声明是否一致
@@ -384,6 +440,7 @@ Blind guessing is forbidden.
 
 This partial-findings blocked-item set is distinct from hard-stop exit classifications such as:
 
+- `Blocked / Version Drift`
 - `Blocked / Invalid Input`
 - `Blocked / Dependency Unavailable`
 - `Blocked / Runtime Execution Failure`
@@ -494,6 +551,7 @@ Required persisted scenario files:
 - `tests/18-confirmed-issue-minimum-schema.md`
 - `tests/19-current-cli-inference-failure.md`
 - `tests/20-script-behavior-mismatch.md`
+- `tests/21-version-drift-stop.md`
 
 Each test file must use the same internal structure:
 
@@ -566,6 +624,7 @@ When a behavior change could affect the task-based audit path's dependence on `b
 - `.agents/skills/workflow-audit/tests/18-confirmed-issue-minimum-schema.md`
 - `.agents/skills/workflow-audit/tests/19-current-cli-inference-failure.md`
 - `.agents/skills/workflow-audit/tests/20-script-behavior-mismatch.md`
+- `.agents/skills/workflow-audit/tests/21-version-drift-stop.md`
 - `.claude/skills/workflow-audit/references/input-template.md`
 - `.claude/skills/workflow-audit/references/audit-report-template.md`
 - `.claude/skills/workflow-audit/references/lightweight-output-template.md`
@@ -591,5 +650,9 @@ When a behavior change could affect the task-based audit path's dependence on `b
 - `.claude/skills/workflow-audit/tests/18-confirmed-issue-minimum-schema.md`
 - `.claude/skills/workflow-audit/tests/19-current-cli-inference-failure.md`
 - `.claude/skills/workflow-audit/tests/20-script-behavior-mismatch.md`
+- `.claude/skills/workflow-audit/tests/21-version-drift-stop.md`
+- `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
+- `.agents/skills/workflow-capability-audit/SKILL.md`
+- `.claude/skills/workflow-capability-audit/SKILL.md`
 - `.agents/skills/brainstorm/SKILL.md`
 - `.claude/commands/trellis/brainstorm.md`

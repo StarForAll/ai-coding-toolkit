@@ -16,10 +16,11 @@ Task-based runtime mode.
 
 ## Expected Key Behaviors
 
+- run the version preflight first (`workflow_assets.py` compatible version vs `trellis -v`) and proceed only when they match
 - execute evidence mainline steps A (understand mechanics), B (static evidence), and C (gap analysis) first
 - based on A/B/C findings, determine step D is required
 - before creating task context, explain why task-based runtime mode was chosen
-- create an audit task and enter the `brainstorm` mainline
+- create an audit task and enter the `brainstorm` mainline as the control container
 - maintain `prd.md` in the task through the `brainstorm` path
 - maintain `audit-report.md`, seeded with step A/B/C evidence tagged with source layers
 - verify referenced script paths and check whether documented exit-code/output contracts remain machine-parseable when later workflow steps depend on them
@@ -34,6 +35,7 @@ Task-based runtime mode.
 
 - must not remain in lightweight mode
 - must not pre-decide mode before step A/B/C
+- must not skip the version preflight
 - must not switch into task-based runtime mode without explaining why runtime validation is necessary
 - must not skip gap analysis before runtime validation
 - must not skip `/tmp` temporary-project validation
