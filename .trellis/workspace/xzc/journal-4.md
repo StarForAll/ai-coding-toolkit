@@ -424,3 +424,36 @@ Fixed workflow.md: Phase numbering gaps (1.1→1.2→1.3, 3.1→3.2), 'AI should
 ### Next Steps
 
 - None - task complete
+
+
+## Session 141: Drift convergence: fix _internal fallback, refresh lock, codify rules
+
+**Date**: 2026-05-04
+**Task**: Drift convergence: fix _internal fallback, refresh lock, codify rules
+**Branch**: `main`
+
+### Summary
+
+修复 trellis-library 脚本 _internal 导入路径回退(7源+7部署)、sync-library-assets last_observed_checksum 回写缺陷、library-lock.yaml 7脚本checksum刷新及stale blocked字段清理、settings.local.json冲突权限移除、library-sync-governance规范新增3条漂移分析规则、2个PRD overview.md EOF修复
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e69af3a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
