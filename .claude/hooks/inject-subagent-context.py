@@ -4,9 +4,24 @@
 Multi-Platform Sub-Agent Context Injection Hook
 
 Injects task-specific context when sub-agents (implement, check, research) are spawned.
+
+Core Design Philosophy:
+- Hook is responsible for injecting all context, subagent works autonomously with complete info
+- Each agent has a dedicated jsonl file defining its context
+- No resume needed, no segmentation, behavior controlled by code not prompt
+
+Trigger: PreToolUse (before Task tool call)
+
+Context Source: Trellis active task resolver points to task directory
+- implement.jsonl - Implement agent dedicated context
+- check.jsonl     - Check agent dedicated context
+- prd.md          - Requirements document
+- info.md         - Technical design
+- codex-review-output.txt - Code Review results
 """
 from __future__ import annotations
 
+# IMPORTANT: Suppress all warnings FIRST
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -39,7 +54,12 @@ AGENTS_ALL = (AGENT_IMPLEMENT, AGENT_CHECK, AGENT_RESEARCH)
 
 
 def find_repo_root(start_path: str) -> str | None:
-    """Find git repo root from start_path upwards."""
+    """
+    Find git repo root from start_path upwards
+
+    Returns:
+        Repo root path, or None if not found
+    """
     current = Path(start_path).resolve()
     while current != current.parent:
         if (current / ".git").exists():
@@ -101,7 +121,7 @@ def get_current_task(repo_root: str, input_data: dict) -> str | None:
 
 
 def read_file_content(base_path: str, file_path: str) -> str | None:
-    """Read file content, return None if file doesn't exist."""
+    """Read file content, return None if file doesn't exist"""
     full_path = os.path.join(base_path, file_path)
     if os.path.exists(full_path) and os.path.isfile(full_path):
         try:
@@ -115,18 +135,29 @@ def read_file_content(base_path: str, file_path: str) -> str | None:
 def read_directory_contents(
     base_path: str, dir_path: str, max_files: int = 20
 ) -> list[tuple[str, str]]:
-    """Read all `.md` files in a directory."""
+    """
+    Read all .md files in a directory
+
+    Args:
+        base_path: Base path (usually repo_root)
+        dir_path: Directory relative path
+        max_files: Max files to read (prevent huge directories)
+
+    Returns:
+        [(file_path, content), ...]
+    """
     full_path = os.path.join(base_path, dir_path)
     if not os.path.exists(full_path) or not os.path.isdir(full_path):
         return []
 
     results = []
     try:
+        # Only read .md files, sorted by filename
         md_files = sorted(
             [
-                filename
-                for filename in os.listdir(full_path)
-                if filename.endswith(".md") and os.path.isfile(os.path.join(full_path, filename))
+                f
+                for f in os.listdir(full_path)
+                if f.endswith(".md") and os.path.isfile(os.path.join(full_path, f))
             ]
         )
 
@@ -134,8 +165,9 @@ def read_directory_contents(
             file_full_path = os.path.join(full_path, filename)
             relative_path = os.path.join(dir_path, filename)
             try:
-                with open(file_full_path, "r", encoding="utf-8") as handle:
-                    results.append((relative_path, handle.read()))
+                with open(file_full_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    results.append((relative_path, content))
             except Exception:
                 continue
     except Exception:
@@ -145,7 +177,22 @@ def read_directory_contents(
 
 
 def read_jsonl_entries(base_path: str, jsonl_path: str) -> list[tuple[str, str]]:
-    """Read all file/directory contents referenced in a JSONL file."""
+    """
+    Read all file/directory contents referenced in jsonl file
+
+    Schema:
+        {"file": "path/to/file.md", "reason": "..."}
+        {"file": "path/to/dir/", "type": "directory", "reason": "..."}
+        {"_example": "..."}          # seed row — skipped (no `file` field)
+
+    Rows without a ``file`` field (e.g. the self-describing seed line written
+    by ``task.py create`` before the agent has curated entries) are skipped
+    silently. If the resulting entry list is empty, a stderr warning is
+    emitted so the operator can debug missing context.
+
+    Returns:
+        [(path, content), ...]
+    """
     full_path = os.path.join(base_path, jsonl_path)
     if not os.path.exists(full_path):
         print(
@@ -158,8 +205,8 @@ def read_jsonl_entries(base_path: str, jsonl_path: str) -> list[tuple[str, str]]
     results = []
     saw_real_entry = False
     try:
-        with open(full_path, "r", encoding="utf-8") as handle:
-            for line in handle:
+        with open(full_path, "r", encoding="utf-8") as f:
+            for line in f:
                 line = line.strip()
                 if not line:
                     continue
@@ -169,12 +216,16 @@ def read_jsonl_entries(base_path: str, jsonl_path: str) -> list[tuple[str, str]]
                     entry_type = item.get("type", "file")
 
                     if not file_path:
+                        # Seed / comment row — skip silently
                         continue
 
                     saw_real_entry = True
                     if entry_type == "directory":
-                        results.extend(read_directory_contents(base_path, file_path))
+                        # Read all .md files in directory
+                        dir_contents = read_directory_contents(base_path, file_path)
+                        results.extend(dir_contents)
                     else:
+                        # Read single file
                         content = read_file_content(base_path, file_path)
                         if content:
                             results.append((file_path, content))
@@ -195,7 +246,10 @@ def read_jsonl_entries(base_path: str, jsonl_path: str) -> list[tuple[str, str]]
 
 
 def get_agent_context(repo_root: str, task_dir: str, agent_type: str) -> str:
-    """Get context from `{agent_type}.jsonl` for the specified agent."""
+    """
+    Get context from {agent_type}.jsonl for the specified agent.
+    Only reads implement.jsonl or check.jsonl (the two JSONL files the task system creates).
+    """
     context_parts = []
     agent_jsonl = f"{task_dir}/{agent_type}.jsonl"
     for file_path, content in read_jsonl_entries(repo_root, agent_jsonl):

@@ -246,15 +246,14 @@ See the [Phase Index](#phase-index) for step-by-step instructions and routing ru
 
 ### One-Click Session Recording
 
-After the human has tested and committed the code, record the session first and archive second:
+After the human has tested and committed the code, use `/trellis:finish-work` to archive first and then record the session journal:
 
 ```bash
+python3 ./.trellis/scripts/task.py archive <task-name>
 python3 ./.trellis/scripts/workflow/record-session-helper.py \
   --title "Session Title" \
   --commit "abc1234" \
   --summary "Brief summary"
-
-python3 ./.trellis/scripts/task.py archive <task-name>
 python3 ./.trellis/scripts/task.py current --source
 ```
 
@@ -270,9 +269,9 @@ This automatically:
 
 Use `/trellis:finish-work` command to run through:
 1. [OK] All code committed, commit message follows convention
-2. [OK] Session recorded via `record-session-helper.py`
+2. [OK] Session recorded via `record-session-helper.py` after archive
 3. [OK] No lint/test errors
-4. [OK] `record-session-helper.py` completed before `task.py archive`
+4. [OK] `task.py archive` completed before `record-session-helper.py`
 5. [OK] `.trellis/tasks` clean and active task pointer cleared after archive
 6. [OK] Spec docs updated if needed
 

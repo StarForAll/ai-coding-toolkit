@@ -5,6 +5,7 @@ Session Start Hook - Inject structured context
 """
 from __future__ import annotations
 
+# IMPORTANT: Suppress all warnings FIRST
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -24,6 +25,8 @@ Trellis SessionStart 已注入：workflow、当前任务状态、开发者身份
 Then continue directly with the user's request. This notice is one-shot: do not repeat it after the first assistant reply in the same session.
 </first-reply-notice>"""
 
+# IMPORTANT: Force stdout to use UTF-8 on Windows
+# This fixes UnicodeEncodeError when outputting non-ASCII characters
 if sys.platform.startswith("win"):
     import io as _io
 
@@ -34,7 +37,13 @@ if sys.platform.startswith("win"):
 
 
 def _has_curated_jsonl_entry(jsonl_path: Path) -> bool:
-    """Return True iff jsonl has at least one row with a ``file`` field."""
+    """Return True iff jsonl has at least one row with a ``file`` field.
+
+    A freshly seeded jsonl only contains a ``{"_example": ...}`` row (no
+    ``file`` key) — that is NOT "ready". Readiness requires at least one
+    curated entry. Matches the contract used by hook-inject and pull-based
+    sub-agent context loaders.
+    """
     try:
         for line in jsonl_path.read_text(encoding="utf-8").splitlines():
             line = line.strip()
@@ -119,7 +128,13 @@ def _resolve_context_key(trellis_dir: Path, input_data: dict) -> str | None:
 
 
 def _persist_context_key_for_bash(context_key: str | None) -> None:
-    """Expose Trellis session identity to later Claude Code Bash commands."""
+    """Expose Trellis session identity to later Claude Code Bash commands.
+
+    Claude Code SessionStart hooks can append exports to CLAUDE_ENV_FILE; those
+    variables are then available to Bash tools in the same conversation. Without
+    this bridge, `task.py start` has hook stdin during SessionStart but no
+    session identity when the AI later runs it as a normal shell command.
+    """
     if not context_key:
         return
     env_file = os.environ.get("CLAUDE_ENV_FILE")
@@ -148,6 +163,7 @@ def _resolve_active_task(trellis_dir: Path, input_data: dict):
 def run_script(script_path: Path, context_key: str | None = None) -> str:
     try:
         if script_path.suffix == ".py":
+            # Add PYTHONIOENCODING to force UTF-8 in subprocess
             env = os.environ.copy()
             env["PYTHONIOENCODING"] = "utf-8"
             if context_key:
@@ -204,9 +220,16 @@ def _resolve_task_dir(trellis_dir: Path, task_ref: str) -> Path:
 
 
 def _get_task_status(trellis_dir: Path, input_data: dict) -> str:
-    """Check current task status and return structured status string."""
+    """Check current task status and return structured status string with explicit next action.
+
+    Returns a block with three fields:
+    - Status: current state
+    - Task: task identifier (when applicable)
+    - Next-Action: explicit skill/command/tool call the AI should invoke
+    """
     active = _resolve_active_task(trellis_dir, input_data)
 
+    # Case 1: No active task — waiting for user to describe intent
     if not active.task_path:
         return (
             "Status: NO ACTIVE TASK\n"
@@ -223,6 +246,7 @@ def _get_task_status(trellis_dir: Path, input_data: dict) -> str:
             "acknowledge briefly and proceed without creating a task. Per-turn only."
         )
 
+    # Case 2: Stale pointer — task dir was deleted
     task_ref = active.task_path
     task_dir = _resolve_task_dir(trellis_dir, task_ref)
     if active.stale or not task_dir.is_dir():
@@ -233,6 +257,7 @@ def _get_task_status(trellis_dir: Path, input_data: dict) -> str:
             "then ask the user what to work on next."
         )
 
+    # Read task.json
     task_json_path = task_dir / "task.json"
     task_data = {}
     if task_json_path.is_file():
@@ -244,6 +269,7 @@ def _get_task_status(trellis_dir: Path, input_data: dict) -> str:
     task_title = task_data.get("title", task_ref)
     task_status = task_data.get("status", "unknown")
 
+    # Case 3: Task completed — time to archive
     if task_status == "completed":
         return (
             f"Status: COMPLETED\nTask: {task_title}\n"
@@ -253,6 +279,7 @@ def _get_task_status(trellis_dir: Path, input_data: dict) -> str:
         )
 
     has_prd = (task_dir / "prd.md").is_file()
+    # Case 4: No PRD — still in Plan phase
     if not has_prd:
         return (
             f"Status: PLANNING\nTask: {task_title}\n"
@@ -264,6 +291,7 @@ def _get_task_status(trellis_dir: Path, input_data: dict) -> str:
             "inline in the main session. Findings go to `{task_dir}/research/*.md`; PRD only links to them."
         )
 
+    # Case 4b: PRD exists but implement.jsonl has only seed (no curated entries)
     implement_jsonl = task_dir / "implement.jsonl"
     if implement_jsonl.is_file() and not _has_curated_jsonl_entry(implement_jsonl):
         return (
@@ -277,6 +305,7 @@ def _get_task_status(trellis_dir: Path, input_data: dict) -> str:
             "See `.trellis/workflow.md` Phase 1.2 for details."
         )
 
+    # Case 5: PRD + curated jsonl (or agent-less platform with no jsonl) — enter Execute phase
     return (
         f"Status: READY\nTask: {task_title}\n"
         f"Source: {active.source}\n"
@@ -294,7 +323,11 @@ def _get_task_status(trellis_dir: Path, input_data: dict) -> str:
 
 
 def _load_trellis_config(trellis_dir: Path, input_data: dict) -> tuple:
-    """Load Trellis config for session-start decisions."""
+    """Load Trellis config for session-start decisions.
+
+    Returns:
+        (is_mono, packages_dict, spec_scope, task_pkg, default_pkg)
+    """
     scripts_dir = trellis_dir / "scripts"
     if str(scripts_dir) not in sys.path:
         sys.path.insert(0, str(scripts_dir))
@@ -308,6 +341,7 @@ def _load_trellis_config(trellis_dir: Path, input_data: dict) -> tuple:
         packages = get_packages(repo_root) or {}
         scope = get_spec_scope(repo_root)
 
+        # Get active task's package
         task_pkg = None
         current = get_current_task(
             repo_root,
@@ -333,7 +367,10 @@ def _load_trellis_config(trellis_dir: Path, input_data: dict) -> tuple:
 
 
 def _check_legacy_spec(trellis_dir: Path, is_mono: bool, packages: dict) -> str | None:
-    """Check for legacy spec directory structure in monorepo."""
+    """Check for legacy spec directory structure in monorepo.
+
+    Returns warning message if legacy structure detected, None otherwise.
+    """
     if not is_mono or not packages:
         return None
 
@@ -341,6 +378,7 @@ def _check_legacy_spec(trellis_dir: Path, is_mono: bool, packages: dict) -> str 
     if not spec_dir.is_dir():
         return None
 
+    # Check for legacy flat spec dirs (spec/backend/, spec/frontend/ with index.md)
     has_legacy = False
     for legacy_name in ("backend", "frontend"):
         legacy_dir = spec_dir / legacy_name
@@ -351,11 +389,12 @@ def _check_legacy_spec(trellis_dir: Path, is_mono: bool, packages: dict) -> str 
     if not has_legacy:
         return None
 
+    # Check which packages are missing spec/<pkg>/ directory
     missing = [
         name for name in sorted(packages.keys()) if not (spec_dir / name).is_dir()
     ]
     if not missing:
-        return None
+        return None  # All packages have spec dirs
 
     if len(missing) == len(packages):
         return (

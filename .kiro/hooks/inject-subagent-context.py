@@ -23,6 +23,7 @@ from __future__ import annotations
 
 # IMPORTANT: Suppress all warnings FIRST
 import warnings
+
 warnings.filterwarnings("ignore")
 
 import json
@@ -31,35 +32,24 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# IMPORTANT: Force stdout to use UTF-8 on Windows
-# This fixes UnicodeEncodeError when outputting non-ASCII characters
 if sys.platform.startswith("win"):
     import io as _io
+
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
     elif hasattr(sys.stdout, "detach"):
         sys.stdout = _io.TextIOWrapper(sys.stdout.detach(), encoding="utf-8", errors="replace")  # type: ignore[union-attr]
 
 
-# =============================================================================
-# Path Constants (change here to rename directories)
-# =============================================================================
-
 DIR_WORKFLOW = ".trellis"
 DIR_SPEC = "spec"
 FILE_TASK_JSON = "task.json"
-
-# =============================================================================
-# Subagent Constants (change here to rename subagent types)
-# =============================================================================
 
 AGENT_IMPLEMENT = "trellis-implement"
 AGENT_CHECK = "trellis-check"
 AGENT_RESEARCH = "trellis-research"
 
-# Agents that require a task directory
 AGENTS_REQUIRE_TASK = (AGENT_IMPLEMENT, AGENT_CHECK)
-# All supported agents
 AGENTS_ALL = (AGENT_IMPLEMENT, AGENT_CHECK, AGENT_RESEARCH)
 
 
@@ -135,8 +125,8 @@ def read_file_content(base_path: str, file_path: str) -> str | None:
     full_path = os.path.join(base_path, file_path)
     if os.path.exists(full_path) and os.path.isfile(full_path):
         try:
-            with open(full_path, "r", encoding="utf-8") as f:
-                return f.read()
+            with open(full_path, "r", encoding="utf-8") as handle:
+                return handle.read()
         except Exception:
             return None
     return None
@@ -255,44 +245,30 @@ def read_jsonl_entries(base_path: str, jsonl_path: str) -> list[tuple[str, str]]
     return results
 
 
-
-
 def get_agent_context(repo_root: str, task_dir: str, agent_type: str) -> str:
     """
     Get context from {agent_type}.jsonl for the specified agent.
     Only reads implement.jsonl or check.jsonl (the two JSONL files the task system creates).
     """
     context_parts = []
-
     agent_jsonl = f"{task_dir}/{agent_type}.jsonl"
     for file_path, content in read_jsonl_entries(repo_root, agent_jsonl):
         context_parts.append(f"=== {file_path} ===\n{content}")
-
     return "\n\n".join(context_parts)
 
 
 def get_implement_context(repo_root: str, task_dir: str) -> str:
-    """
-    Complete context for Implement Agent
-
-    Read order:
-    1. All files in implement.jsonl (dev specs)
-    2. prd.md (requirements)
-    3. info.md (technical design)
-    """
+    """Complete context for Implement Agent."""
     context_parts = []
 
-    # 1. Read implement.jsonl
     base_context = get_agent_context(repo_root, task_dir, "implement")
     if base_context:
         context_parts.append(base_context)
 
-    # 2. Requirements document
     prd_content = read_file_content(repo_root, f"{task_dir}/prd.md")
     if prd_content:
         context_parts.append(f"=== {task_dir}/prd.md (Requirements) ===\n{prd_content}")
 
-    # 3. Technical design
     info_content = read_file_content(repo_root, f"{task_dir}/info.md")
     if info_content:
         context_parts.append(
@@ -303,9 +279,7 @@ def get_implement_context(repo_root: str, task_dir: str) -> str:
 
 
 def get_check_context(repo_root: str, task_dir: str) -> str:
-    """
-    Context for Check Agent: check.jsonl + prd.md
-    """
+    """Context for Check Agent: check.jsonl + prd.md."""
     context_parts = []
 
     for file_path, content in read_jsonl_entries(repo_root, f"{task_dir}/check.jsonl"):
@@ -319,16 +293,12 @@ def get_check_context(repo_root: str, task_dir: str) -> str:
 
 
 def get_finish_context(repo_root: str, task_dir: str) -> str:
-    """
-    Context for Finish phase: reuses check.jsonl + prd.md
-    (Finish is a final check, same context source.)
-    """
+    """Context for Finish phase: reuses check context."""
     return get_check_context(repo_root, task_dir)
 
 
-
 def build_implement_prompt(original_prompt: str, context: str) -> str:
-    """Build complete prompt for Implement"""
+    """Build complete prompt for Implement."""
     return f"""# Implement Agent Task
 
 You are the Implement Agent in the Multi-Agent Pipeline.
@@ -362,7 +332,7 @@ All the information you need has been prepared for you:
 
 
 def build_check_prompt(original_prompt: str, context: str) -> str:
-    """Build complete prompt for Check"""
+    """Build complete prompt for Check."""
     return f"""# Check Agent Task
 
 You are the Check Agent in the Multi-Agent Pipeline (code and cross-layer checker).
@@ -396,7 +366,7 @@ All check specs and dev specs you need:
 
 
 def build_finish_prompt(original_prompt: str, context: str) -> str:
-    """Build complete prompt for Finish (final check before PR)"""
+    """Build complete prompt for Finish."""
     return f"""# Finish Agent Task
 
 You are performing the final check before creating a PR.
@@ -435,34 +405,24 @@ Finish checklist and requirements:
 - Verify all acceptance criteria in prd.md are met"""
 
 
-
 def get_research_context(repo_root: str, task_dir: str | None) -> str:
-    """
-    Context for Research Agent — project structure overview for spec directories.
-
-    `task_dir` kept for signature parity with get_implement_context / get_check_context
-    so the dispatcher can call them uniformly.
-    """
+    """Context for Research Agent — project structure overview for spec directories."""
     _ = task_dir
     context_parts = []
 
-    # 1. Project structure overview (dynamically discover spec directories)
     spec_path = f"{DIR_WORKFLOW}/{DIR_SPEC}"
     spec_root = Path(repo_root) / DIR_WORKFLOW / DIR_SPEC
-
-    # Build spec tree dynamically
     tree_lines = [f"{spec_path}/"]
     if spec_root.is_dir():
-        pkg_dirs = sorted(d for d in spec_root.iterdir() if d.is_dir())
-        for i, pkg_dir in enumerate(pkg_dirs):
-            is_last = i == len(pkg_dirs) - 1
+        pkg_dirs = sorted(directory for directory in spec_root.iterdir() if directory.is_dir())
+        for index, pkg_dir in enumerate(pkg_dirs):
+            is_last = index == len(pkg_dirs) - 1
             prefix = "└── " if is_last else "├── "
-            layers = sorted(d.name for d in pkg_dir.iterdir() if d.is_dir())
+            layers = sorted(directory.name for directory in pkg_dir.iterdir() if directory.is_dir())
             layer_info = f" ({', '.join(layers)})" if layers else ""
             tree_lines.append(f"{prefix}{pkg_dir.name}/{layer_info}")
 
     spec_tree = "\n".join(tree_lines)
-
     project_structure = f"""## Project Spec Directory Structure
 
 ```
@@ -478,12 +438,11 @@ To get structured package info, run: `python3 ./{DIR_WORKFLOW}/scripts/get_conte
 - Tech solutions: Use mcp__exa__web_search_exa or mcp__exa__get_code_context_exa"""
 
     context_parts.append(project_structure)
-
     return "\n\n".join(context_parts)
 
 
 def build_research_prompt(original_prompt: str, context: str) -> str:
-    """Build complete prompt for Research"""
+    """Build complete prompt for Research."""
     return f"""# Research Agent Task
 
 You are the Research Agent in the Multi-Agent Pipeline (search researcher).
@@ -544,18 +503,12 @@ Provide structured search results including:
 
 def _string_value(value: Any) -> str:
     if isinstance(value, str):
-        stripped = value.strip()
-        return stripped
+        return value.strip()
     return ""
 
 
 def _extract_subagent_name(value: Any) -> str:
-    """Extract a sub-agent name from common platform encodings.
-
-    Cursor's native Task args encode custom sub-agents as a protobuf oneof,
-    which can appear in hook JSON as either ``{"custom": {"name": "..."}}``
-    or ``{"type": {"case": "custom", "value": {"name": "..."}}}``.
-    """
+    """Extract a sub-agent name from common platform encodings."""
     direct = _string_value(value)
     if direct:
         return direct
@@ -620,19 +573,9 @@ def _extract_subagent_type(tool_input: dict) -> str:
 
 
 def _parse_hook_input(input_data: dict) -> tuple[str, str, dict]:
-    """Parse hook input across different platform formats.
-
-    Returns (subagent_type, original_prompt, tool_input).
-    Handles:
-    - Claude Code / Qoder / CodeBuddy / Droid: tool_name=Task|Agent, tool_input.subagent_type
-    - Cursor: tool_name=Task|Subagent, tool_input.subagent_type
-    - Copilot CLI: toolName=task (camelCase key, lowercase value)
-    - Gemini CLI: tool_name IS the agent name (BeforeTool matcher already filtered)
-    - Kiro: agentSpawn hook, agent_name field at top level
-    """
+    """Parse hook input across different platform formats."""
     tool_input = input_data.get("tool_input", {})
 
-    # Standard format: Task/Agent tool with subagent_type
     tool_name = input_data.get("tool_name", "") or input_data.get("toolName", "")
     if tool_name.lower() in ("task", "agent", "subagent"):
         return (
@@ -641,17 +584,13 @@ def _parse_hook_input(input_data: dict) -> tuple[str, str, dict]:
             tool_input,
         )
 
-    # Kiro: agentSpawn hook passes agent_name at top level
     agent_name = input_data.get("agent_name", "")
     if agent_name:
         return agent_name, tool_input.get("prompt", input_data.get("prompt", "")), tool_input
 
-    # Gemini CLI: BeforeTool where tool_name IS the agent name
-    # (matcher already ensured it's one of our agents)
     if tool_name in AGENTS_ALL:
         return tool_name, tool_input.get("prompt", ""), tool_input
 
-    # Copilot CLI: toolName field (camelCase), value might be the agent name
     tool_name_camel = input_data.get("toolName", "")
     if tool_name_camel in AGENTS_ALL:
         return tool_name_camel, input_data.get("toolArgs", ""), tool_input
@@ -659,7 +598,7 @@ def _parse_hook_input(input_data: dict) -> tuple[str, str, dict]:
     return "", "", tool_input
 
 
-def main():
+def main() -> None:
     try:
         input_data = json.load(sys.stdin)
     except json.JSONDecodeError:
@@ -668,47 +607,37 @@ def main():
     subagent_type, original_prompt, tool_input = _parse_hook_input(input_data)
     cwd = input_data.get("cwd", os.getcwd())
 
-    # Only handle subagent types we care about
     if subagent_type not in AGENTS_ALL:
         sys.exit(0)
 
-    # Find repo root
     repo_root = find_repo_root(cwd)
     if not repo_root:
         sys.exit(0)
 
-    # Get current task directory (research doesn't require it)
     task_dir = get_current_task(repo_root, input_data)
 
-    # implement/check need task directory
     if subagent_type in AGENTS_REQUIRE_TASK:
         if not task_dir:
             sys.exit(0)
-        # Check if task directory exists
         task_dir_full = os.path.join(repo_root, task_dir)
         if not os.path.exists(task_dir_full):
             sys.exit(0)
 
-    # Check for [finish] marker in prompt (check agent with finish context)
     is_finish_phase = "[finish]" in original_prompt.lower()
 
-    # Get context and build prompt based on subagent type
     if subagent_type == AGENT_IMPLEMENT:
-        assert task_dir is not None  # validated above
+        assert task_dir is not None
         context = get_implement_context(repo_root, task_dir)
         new_prompt = build_implement_prompt(original_prompt, context)
     elif subagent_type == AGENT_CHECK:
-        assert task_dir is not None  # validated above
+        assert task_dir is not None
         if is_finish_phase:
-            # Finish phase: use finish context (lighter, focused on final verification)
             context = get_finish_context(repo_root, task_dir)
             new_prompt = build_finish_prompt(original_prompt, context)
         else:
-            # Regular check phase: use check context (full specs for self-fix loop)
             context = get_check_context(repo_root, task_dir)
             new_prompt = build_check_prompt(original_prompt, context)
     elif subagent_type == AGENT_RESEARCH:
-        # Research can work without task directory
         context = get_research_context(repo_root, task_dir)
         new_prompt = build_research_prompt(original_prompt, context)
     else:
@@ -717,21 +646,15 @@ def main():
     if not context:
         sys.exit(0)
 
-    # Return updated input — use a multi-format output that covers all platforms.
-    # Most platforms ignore unrecognized fields, so we include multiple formats.
-    # The platform picks whichever fields it understands.
     updated = {**tool_input, "prompt": new_prompt}
     output = {
-        # Claude Code / Qoder / CodeBuddy / Droid format
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "allow",
             "updatedInput": updated,
         },
-        # Cursor format
         "permission": "allow",
         "updated_input": updated,
-        # Gemini format
         "updatedInput": updated,
     }
 

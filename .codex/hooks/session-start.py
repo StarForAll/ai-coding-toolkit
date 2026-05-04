@@ -46,7 +46,12 @@ def configure_project_encoding(project_dir: Path) -> None:
 
 
 def _has_curated_jsonl_entry(jsonl_path: Path) -> bool:
-    """Return True iff jsonl has at least one row with a ``file`` field."""
+    """Return True iff jsonl has at least one row with a ``file`` field.
+
+    A freshly seeded jsonl only contains a ``{"_example": ...}`` row (no
+    ``file`` key) — that is NOT "ready". Readiness requires at least one
+    curated entry. Matches the contract used by ``inject-subagent-context.py``.
+    """
     try:
         for line in jsonl_path.read_text(encoding="utf-8").splitlines():
             line = line.strip()
@@ -224,7 +229,13 @@ def _strip_breadcrumb_tag_blocks(content: str) -> str:
 
 
 def _build_workflow_toc(workflow_path: Path) -> str:
-    """Inject workflow guide: TOC + Phase Index + Phase 1/2/3 step details."""
+    """Inject workflow guide: TOC + Phase Index + Phase 1/2/3 step details.
+
+    Since v0.5.0-rc.0 the [workflow-state:STATUS] breadcrumb tag blocks
+    live inside ## Phase Index. They're consumed by inject-workflow-state.py
+    on each UserPromptSubmit, so strip them from the session-start payload
+    to avoid duplicating context.
+    """
     content = read_file(workflow_path)
     if not content:
         return "No workflow.md found"
@@ -251,6 +262,7 @@ def main() -> None:
     if should_skip_injection():
         sys.exit(0)
 
+    # Read hook input from stdin
     try:
         hook_input = json.loads(sys.stdin.read())
         if not isinstance(hook_input, dict):
@@ -266,6 +278,7 @@ def main() -> None:
     context_key = _resolve_context_key(project_dir, hook_input)
 
     output = StringIO()
+
     output.write("""<session-context>
 You are starting a new session in a Trellis-managed project.
 Read and follow all instructions below carefully.
@@ -299,12 +312,14 @@ Read and follow all instructions below carefully.
         "explicitly opts out (see <task-status> below for override phrases).\n\n"
     )
 
+    # guides/ inlined (cross-package thinking, broadly useful)
     guides_index = trellis_dir / "spec" / "guides" / "index.md"
     if guides_index.is_file():
         output.write("## guides (inlined — cross-package thinking guides)\n")
         output.write(read_file(guides_index))
         output.write("\n\n")
 
+    # Other indexes — paths only
     paths: list[str] = []
     spec_dir = trellis_dir / "spec"
     if spec_dir.is_dir():
@@ -326,8 +341,8 @@ Read and follow all instructions below carefully.
 
     if paths:
         output.write("## Available spec indexes (read on demand)\n")
-        for path in paths:
-            output.write(f"- {path}\n")
+        for p in paths:
+            output.write(f"- {p}\n")
         output.write("\n")
 
     output.write(
