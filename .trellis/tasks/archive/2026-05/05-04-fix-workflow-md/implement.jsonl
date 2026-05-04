@@ -1,0 +1,4 @@
+{"file": ".trellis/workflow.md", "reason": "Primary target file — all 8 fixes applied here"}
+{"file": ".trellis/spec/index.md", "reason": "Reference for spec/ directory structure — verify the 12 subdirectories and their descriptions"}
+{"file": ".trellis/spec/agents/index.md", "reason": "Verify agents/ is multi-tool spec, not OpenCode-only"}
+{"file": ".trellis/spec/guides/index.md", "reason": "Reference for cross-layer thinking guide — may need update if Phase numbers change"}

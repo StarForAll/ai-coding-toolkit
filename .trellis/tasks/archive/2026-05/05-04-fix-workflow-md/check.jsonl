@@ -1,0 +1,2 @@
+{"file": ".trellis/workflow.md", "reason": "Verify all 8 fixes applied, no contradictions introduced, Phase Index parseable by workflow_phase.py"}
+{"file": ".trellis/spec/index.md", "reason": "Cross-check spec/ tree in workflow.md matches actual structure"}
