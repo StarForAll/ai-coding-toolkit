@@ -1,0 +1,5 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/docs/index.md", "reason": "Repo documentation boundary and workflow rule propagation requirements"}
+{"file": ".trellis/spec/scripts/index.md", "reason": "Script and workflow-runtime modification conventions"}
+{"file": ".trellis/spec/skills/index.md", "reason": "Repo-local skill structure and coupling rules"}
+{"file": ".trellis/spec/guides/index.md", "reason": "Cross-layer and code-reuse checklist"}

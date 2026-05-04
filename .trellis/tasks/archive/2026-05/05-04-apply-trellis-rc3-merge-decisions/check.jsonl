@@ -1,0 +1,5 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/docs/index.md", "reason": "Verify workflow documentation stays aligned with actual behavior"}
+{"file": ".trellis/spec/scripts/index.md", "reason": "Verify runtime script and hook changes remain contract-preserving"}
+{"file": ".trellis/spec/skills/index.md", "reason": "Verify skill wording and structure remain consistent"}
+{"file": ".trellis/spec/guides/index.md", "reason": "Cross-layer drift and missed-instance check"}
