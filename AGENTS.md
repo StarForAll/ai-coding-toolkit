@@ -1,126 +1,76 @@
 # AGENTS.md
 
-This file provides guidance to Qoder (qoder.com) when working with code in this repository.
+This file provides project-level instructions for AI assistants working in this repository.
 
-## Project Overview
+## Repository Scope
 
-This is a **meta-project** — an AI coding toolkit that maintains reusable assets for AI-assisted programming workflows. It is NOT a runnable application but rather a collection of:
+This repository is a **meta-project** for authoring, validating, and distributing AI-assisted development workflow assets. It is not a runnable application.
 
-- **Markdown** specs, templates, checklists, examples
-- **YAML** configuration (`manifest.yaml`, schemas)
-- **Python** automation scripts (`cli.py`, validation, assembly, sync)
-- **Shell** validation scripts
-- **SKILL.md** skill definitions (YAML frontmatter + markdown)
-- **Agent/Command** assets deployed to multiple AI tool configurations (Claude Code, OpenCode, Codex CLI, Qoder)
+Primary asset types:
 
-## Architecture
+- **Markdown** specs, templates, checklists, examples, and workflow docs
+- **YAML/TOML** configuration and metadata
+- **Python** and **Shell** automation
+- **Skill**, **agent**, and **command** assets for multiple AI tools
 
-### Source Assets → Tool Deployments
+## Current Repository Shape
 
-```
-Source Assets (source of truth)          Tool Deployments (derived)
-─────────────────────────────────        ───────────────────────────
-trellis-library/specs/            ──→    .trellis/spec/ (project-local)
-agents/<id>/SYSTEM.md             ──→    .claude/agents/<role>.md
-                                  ──→    .opencode/agents/<role>.md
-                                  ──→    .codex/agents/<role>.toml
-commands/<tool>/                  ──→    .<tool>/commands/<ns>/<name>.md
-skills/<id>/SKILL.md              ──→    .qoder/skills/, .agents/skills/
-```
-
-### Key Directories
-
-| Directory | Purpose |
-|-----------|---------|
-| `trellis-library/` | **Core asset library**: specs, templates, checklists managed via `manifest.yaml` |
-| `.trellis/spec/` | **Project live specs**: 11 spec layers defining how to author/maintain assets |
-| `.trellis/scripts/` | Workflow automation: task management, session recording, context gathering |
-| `skills/` | Skills CLI-compatible skill definitions |
-| `.claude/`, `.opencode/`, `.codex/`, `.qoder/` | Tool-specific deployments |
+- `trellis-library/`: reusable source library plus validation, assembly, and sync tooling
+- `.trellis/`: project-local Trellis workflow runtime and maintenance layer: `workflow.md`, `spec/`, `tasks/`, `workspace/`, `scripts/`, runtime state, library sync metadata, and managed-file hash tracking
+- `skills/`: skill source assets maintained in this repo
+- `.agents/`: shared deployment layer scanned by compatible skill loaders; in this repository it is currently populated by shared Trellis skills under `.agents/skills/`
+- `.claude/`, `.opencode/`, `.codex/`, `.kiro/`, `.qoder/`: current platform integration and deployment layer
+- `agents/`: currently a placeholder scaffold with README-only guidance; it is not yet the live source of truth for the managed Trellis agent trio
+- `commands/`: repo-root scaffold docs; do not confuse this directory with the workflow-local agent source
+- workflow-local shared-agents source: lives under `docs/workflows/新项目开发工作流/commands/` for the current workflow product
+- `.trellis/.template-hashes.json`: drift-tracking record for Trellis-managed deployment files across platform directories
 
 ## Common Commands
 
-### Validation
-
 ```bash
-# Validate trellis-library manifest and asset sync (REQUIRED before committing changes)
+# Validate trellis-library manifest and asset sync
 python3 trellis-library/cli.py validate --strict-warnings
 
-# Validate skills structure (YAML frontmatter check)
+# Validate skills structure
 ./scripts/validate-skills.sh
 
 # Run CLI unit tests
 python3 -m unittest trellis-library/tests/test_cli.py
-```
 
-### Workflow Scripts
-
-```bash
-# Get full session context (run at start of session)
+# Get session context and active task inventory
 python3 ./.trellis/scripts/get_context.py
-
-# Task management
 python3 ./.trellis/scripts/task.py list
-python3 ./.trellis/scripts/task.py create "<title>" --slug <name>
-
-# Record session after completing work
-python3 ./.trellis/scripts/add_session.py --title "Title" --commit "hash"
 ```
 
-### Trellis Library CLI
+## Working Rules
 
-```bash
-# Validate library
-python3 trellis-library/cli.py validate --strict-warnings
-
-# Assemble pack to target project (dry-run)
-python3 trellis-library/cli.py assemble --target /tmp/test --pack <pack-id> --dry-run
-
-# Sync workflows
-python3 trellis-library/cli.py sync --mode downstream --target /tmp/test --dry-run
-python3 trellis-library/cli.py sync --mode diff --target /tmp/test
-```
-
-## Pre-Development Requirements
-
-**MUST read before writing ANY code:**
-
-1. `cat .trellis/spec/index.md` — Master spec index
-2. Task-specific specs from the index's "Quick Start by Task Type" table
-3. `cat .trellis/spec/guides/index.md` — Always read shared guides
-
-**Key spec layers:**
-- `library-assets/` — Authoring specs, templates, checklists for `trellis-library`
-- `scripts/` — Python and Shell script conventions
-- `agents/`, `commands/`, `skills/` — Asset definition patterns
-
-## Commit Convention
-
-```bash
-git commit -m "type(scope): description"
-```
-
-**Types**: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
+- Read the relevant `.trellis/spec/` guidance before editing. For documentation and instruction changes, start with `.trellis/spec/docs/index.md` and `.trellis/spec/guides/index.md`.
+- Treat this repository as the workflow authoring source project, not a target project that consumes installed workflow assets.
+- Distinguish source assets, deployed tool copies, task-local runtime artifacts, and target-project outputs. Do not describe one layer as another.
+- `AGENTS.md` carries long-lived project rules. Session/task context comes from `.trellis/` plus platform hooks/plugins, not from this file alone.
+- For sub-agents, context may be pushed by platform-specific `inject-subagent-context` hooks/plugins or pulled by the agent definition itself, depending on the platform.
+- This repository authors workflow assets; consuming target projects receive extra install-time surfaces. One example is the installer-managed `workflow-nl-routing` AGENTS block, which belongs to installed target projects rather than this source authoring repository unless the authoring contract changes.
+- If you edit the project root README, update `README.md` and `README.en.md` together.
+- Do not execute `git commit`.
+- Keep `.trellis/workspace/` journal files under 2000 lines.
+- Run the relevant validation commands before claiming completion.
 
 ## Language Policy
 
 - `trellis-library/` assets: **English** (enforced by manifest `default_language`)
 - Project documentation: Chinese or English per context
 
-## Critical Constraints
+## Platform Notes
 
-1. **Do not execute `git commit`** — AI should not commit code
-2. **Max 2000 lines per journal document** in `.trellis/workspace/`
-3. **Run validation before any commit**: `python3 trellis-library/cli.py validate --strict-warnings`
-4. **No `frontend/` or `backend/` directories** — This is not a traditional application
-
-## Slash Commands
-
-When available, use these commands:
-- `/trellis:start` — Initialize developer identity, understand context
-- `/trellis:finish-work` — Post-commit close-out
-- `/trellis:break-loop` — Post-debug analysis
-- `/trellis:check` — Cross-layer and quality verification
+- In this repository, project-local Trellis skills, agents, and command-like entrypoints are typically referenced with the `trellis-...` form, for example `trellis-check`, `trellis-before-dev`, and `trellis-continue`.
+- Some workflow product docs may describe target-project CLI entrypoints such as `/trellis:...` or `trellis/...`; treat those as installed target-project surfaces, not the default invocation form for this repository.
+- Workflow-managed Trellis agents currently flow through `docs/workflows/新项目开发工作流/commands/shared-agents/` → `render_workflow_managed_agent(...)` → per-platform agent files under `.claude/agents/`, `.opencode/agents/`, `.codex/agents/`, `.kiro/agents/`, and `.qoder/agents/`.
+- Platform agent formats differ: Claude/OpenCode/Qoder use Markdown wrappers, Codex uses TOML, and Kiro uses JSON plus hook declarations.
+- For workflow maintenance, compare rendered agent copies against the shared source plus renderer contract, not only by cross-platform string equality; small platform-localized wording or path examples may differ.
+- Claude, OpenCode, and Kiro can push sub-agent context via `inject-subagent-context` hooks/plugins. Codex self-loads task context in agent files. In the current Qoder deployment, `trellis-implement` and `trellis-check` self-load `prd.md`, `info.md`, and JSONL context, while `trellis-research` resolves the active task/output path itself and there is no dedicated Qoder subagent-context hook in `.qoder/settings.json`.
+- Codex relies on `AGENTS.md`, `.codex/config.toml`, `.codex/hooks.json`, `.agents/skills/`, and `.codex/agents/`; do not assume a project-level `/trellis:...` command directory exists there.
+- Kiro uses `.kiro/` hooks, agents, and skills to connect into the same `.trellis` state.
+- Qoder uses `.qoder/` hooks, skills, and agents to connect into the same `.trellis` state.
 
 <!-- TRELLIS:START -->
 # Trellis Instructions
@@ -134,14 +84,19 @@ This project is managed by Trellis. The working knowledge you need lives under `
 - `.trellis/workspace/` — per-developer journals and session traces
 - `.trellis/tasks/` — active and archived tasks (PRDs, research, jsonl context)
 
-If a Trellis command is available on your platform (e.g. `/trellis:finish-work`, `/trellis:continue`), prefer it over manual steps. Not every platform exposes every command.
+If a Trellis command, skill, or agent entrypoint is available on your platform (for example `trellis-finish-work`, `trellis-continue`, `trellis-check` in this repository), prefer it over manual steps. Not every platform exposes the same surface, and some target-project docs may use `/trellis:...` for other CLIs.
 
-If you're using Codex or another agent-capable tool, additional project-scoped helpers may live in:
-- `.agents/skills/` — reusable Trellis skills
-- `.codex/agents/` — optional custom subagents
+If you're using an agent-capable tool, additional project-scoped helpers may live in:
+- `.agents/skills/` — reusable shared Trellis skills
+- `.claude/agents/`, `.opencode/agents/`, `.codex/agents/`, `.kiro/agents/`, `.qoder/agents/` — the workflow-managed Trellis agent trio, rendered per platform
 
 ## Subagents
 
+- This repository's standard Trellis subagents are `trellis-research`, `trellis-implement`, and `trellis-check`.
+- `trellis-research` finds and persists research into the current task's `research/` directory.
+- `trellis-implement` implements against task requirements, design notes, and curated spec context.
+- `trellis-check` reviews changes, fixes discovered issues, and runs required checks.
+- Subagent context delivery is platform-specific and described in the Platform Notes above.
 - ALWAYS wait for all subagents to complete before yielding.
 - Spawn subagents automatically when:
   - Parallelizable work (e.g., install + verify, npm test + typecheck, multiple tasks from plan)

@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/docs/index.md", "reason": "Project-local documentation rules for repository identity, README boundaries, and source-vs-target-project wording."}
+{"file": ".trellis/spec/guides/index.md", "reason": "Shared repo-maintenance thinking guide index required before edits."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "This AGENTS change crosses repo docs, hidden deployment dirs, and Trellis runtime boundaries."}
