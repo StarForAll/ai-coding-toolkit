@@ -1,0 +1,4 @@
+{"file":".trellis/spec/skills/index.md","reason":"Verify repo-local skill sync expectations remain satisfied."}
+{"file":".trellis/spec/skills/workflow-audit.md","reason":"Check behavior surface stays aligned with source-of-truth spec."}
+{"file":".trellis/spec/docs/index.md","reason":"Check workflow-doc propagation and target/source boundary wording."}
+{"file":".trellis/spec/guides/index.md","reason":"Check cross-layer consistency after touching spec/skills/tests."}

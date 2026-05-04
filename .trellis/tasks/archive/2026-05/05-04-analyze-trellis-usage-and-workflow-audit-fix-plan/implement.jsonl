@@ -1,0 +1,4 @@
+{"file":".trellis/spec/skills/index.md","reason":"Repo-local skill maintenance rules and workflow-audit supplement entrypoint."}
+{"file":".trellis/spec/skills/workflow-audit.md","reason":"Behavioral source of truth to update."}
+{"file":".trellis/spec/docs/index.md","reason":"Workflow-doc boundary and propagation rules for docs/workflows assets."}
+{"file":".trellis/spec/guides/index.md","reason":"Cross-layer sync reminders before changing spec/skill/tests together."}
