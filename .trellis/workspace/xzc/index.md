@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 141
+- **Total Sessions**: 142
 - **Last Active**: 2026-05-04
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~459 | Active |
+| `journal-4.md` | ~492 | Active |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 142 | 2026-05-04 | sync trellis rc3 merge decisions | `781a95c` | `main` |
 | 141 | 2026-05-04 | Drift convergence: fix _internal fallback, refresh lock, codify rules | `e69af3a` | `main` |
 | 140 | 2026-05-04 | Fix workflow.md errors/omissions, renumber phases, sync platforms | `1ed51cb` | `main` |
 | 139 | 2026-05-04 | drift-convergence: library sync fix, command retirement, drift annotation | `55f9add` | `main` |

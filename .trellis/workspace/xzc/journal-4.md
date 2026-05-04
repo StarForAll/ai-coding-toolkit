@@ -457,3 +457,36 @@ Fixed workflow.md: Phase numbering gaps (1.1→1.2→1.3, 3.1→3.2), 'AI should
 ### Next Steps
 
 - None - task complete
+
+
+## Session 142: sync trellis rc3 merge decisions
+
+**Date**: 2026-05-04
+**Task**: sync trellis rc3 merge decisions
+**Branch**: `main`
+
+### Summary
+
+Applied the approved rc3 merge decisions across workflow assets, fixed real skill/hash/hook issues, cleaned reviewed .new candidates, and aligned template hashes with current managed files.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `781a95c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
