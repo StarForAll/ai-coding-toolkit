@@ -325,3 +325,36 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 138: 修订 AGENTS.md 对齐当前 Trellis 实现
+
+**Date**: 2026-05-04
+**Task**: 修订 AGENTS.md 对齐当前 Trellis 实现
+**Branch**: `main`
+
+### Summary
+
+修订根 AGENTS.md，澄清源仓库与目标项目边界、平台 agent 差异、上下文注入方式，并补 docs 规范边界。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b9fb63d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
