@@ -210,8 +210,9 @@ Workflow embed / analysis / repair scripts must distinguish three asset classes:
 1. **Patch-based baseline commands**
    - `start`
    - `finish-work`
-   - `record-session`
    - Contract: keep Trellis baseline content, then inject workflow patch content
+
+   ~~`record-session`~~ — 已从 patch-based baseline 命令列表移除。该命令已退役，功能合并到 `finish-work`（session 记录通过 `record-session-helper.py` 内部完成）。已安装的目标项目如有残留 patch marker，应由 `upgrade-compat` 清理。
 
 2. **Overlay baseline commands**
    - same-name commands whose deployed file is fully distributed by the workflow while semantically replacing the live baseline copy
@@ -431,7 +432,7 @@ When a workflow introduces or changes a helper script that is invoked as a manda
 Examples of user-visible gate contracts:
 
 - a delivery-phase command that blocks formal delivery until a helper returns success
-- a record-session close-out flow that must run helper pre/post checks before archive
+- a record-session close-out flow that must run helper pre/post checks before archive（`record-session` 命令已退役，此 close-out flow 现由 `finish-work` 内部通过 `record-session-helper.py` 完成）
 
 Do not treat phase-gate helpers as "nice to have" copied scripts once their command docs make them required.
 
@@ -509,7 +510,7 @@ That branch becomes structural migration and must not be collapsed into `upgrade
 | asset exists only in `B` | classify `add` | return non-zero if missing in `C` | deploy asset | deploy asset |
 | `C != A` and `C != B` | classify `merge` and keep it visible | may return non-zero if drift is detected | do not claim semantic merge; only safe redeploy when drift is low-risk | not a structural-migration substitute |
 | asset removed from latest workflow but still exists in `C` | classify `delete` | may stay non-zero or advisory depending on script scope | optional manual cleanup only | optional manual cleanup only |
-| patch marker missing in `start` / `finish-work` / `record-session` | may present as `replace` or `merge` depending on `A/B/C` | return non-zero | redeploy and reinject patch when injection model still holds | restore baseline backup, then reinject patch when backup is valid |
+| patch marker missing in `start` / `finish-work`（`record-session` 已退役，patch marker 检查不再覆盖此项） | may present as `replace` or `merge` depending on `A/B/C` | return non-zero | redeploy and reinject patch when injection model still holds | restore baseline backup, then reinject patch when backup is valid |
 | helper script missing or drifted | classify `add` / `replace` / `merge` based on `A/B/C` | return non-zero | recopy helper script | recopy helper script |
 | missing `workflow_version` / `workflow_schema_version` while target project is already on latest Trellis | annotate as `legacy/unknown` context only | do not fail on absence alone | do not synthesize historical version | do not synthesize historical version |
 | missing baseline backup during force path | analysis may still proceed | n/a | n/a | fail clearly and keep error visible |

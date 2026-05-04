@@ -1,6 +1,6 @@
 # Trellis 自动提交失败恢复与提权修复指南
 
-> 适用场景：某个项目已经在使用 Trellis，本地 `finish-work` / `record-session` / `task.py archive` 会在最后一步尝试自动提交 `.trellis/` 元数据，但因为只读文件系统、沙箱、权限限制、`.git/index.lock` 无法创建等原因失败。
+> 适用场景：某个项目已经在使用 Trellis，本地 `finish-work` / `task.py archive` 会在最后一步尝试自动提交 `.trellis/` 元数据，但因为只读文件系统、沙箱、权限限制、`.git/index.lock` 无法创建等原因失败。
 
 这份文档不是当前仓库专用 spec，而是一份**可迁移到其他 Trellis 项目的独立修复指南**。  
 如果其他项目出现同样问题，可以直接按本文对应步骤修改它自己的 `.trellis/` 运行时脚本和命令入口。
@@ -13,7 +13,7 @@
 
 - `python3 ./.trellis/scripts/task.py archive <task>` 已执行归档，但自动提交失败
 - `python3 ./.trellis/scripts/add_session.py ...` 已写 journal / index，但自动提交失败
-- `record-session-helper.py` 或 `finish-work` 在最后一步停住
+- `record-session-helper.py` 或 `finish-work` 在最后一步停住（record-session 已退役，session 记录现由 finish-work 内部通过 record-session-helper.py 完成）
 - stderr 中出现类似：
   - `Read-only file system`
   - `Permission denied`
@@ -69,8 +69,8 @@
 
 - `.agents/skills/trellis-finish-work/SKILL.md`
 - `.{platform}/commands/trellis/finish-work.md`
-- `.agents/skills/record-session/SKILL.md`
-- `.{platform}/commands/trellis/record-session.md`
+
+（`record-session` 命令已退役，其功能已合并到 `finish-work` 内部。下方仅保留脚本级引用，不再跟踪已删除的命令入口。）
 
 这里的 `.{platform}` 至少覆盖你项目实际使用的平台，例如：
 
@@ -108,8 +108,8 @@ TRELLIS_AUTO_ESCALATE_COMMAND=<command>
    - `task.py archive`
    - 自动提交 `.trellis/tasks`
 
-2. **record-session 链**
-   - `record-session-helper.py`
+2. **record-session 链**（`record-session` 命令已退役，此链现由 `finish-work` 内部调用）
+   - `record-session-helper.py`（由 `finish-work` 内部调用）
    - `add_session.py`
    - 自动提交 `.trellis/workspace` + `.trellis/tasks`
 
@@ -264,13 +264,9 @@ python3 ./.trellis/scripts/workflow/record-session-helper.py \
 
 不要把“手工提交 `.trellis`”写成默认建议。
 
-## 6.2 `record-session` fallback
+## 6.2 `record-session` fallback（已退役）
 
-如果你的项目还保留独立 `record-session` 入口：
-
-- 把它标成 **legacy/manual fallback**
-- 说明正常收尾路径优先走 `finish-work`
-- 同样补上 `TRELLIS_AUTO_ESCALATE_COMMAND=...` 的解释
+`record-session` 命令已退役，其功能已合并到 `finish-work` 内部（通过 `record-session-helper.py`）。如果项目仍保留独立 `record-session` 入口文件，应删除并引导用户使用 `finish-work`。
 
 ---
 
@@ -286,7 +282,8 @@ python3 ./.trellis/scripts/workflow/record-session-helper.py \
 6. 你正在使用的平台命令入口：
    - `.claude/commands/trellis/finish-work.md`
    - `.opencode/commands/trellis/finish-work.md`
-   - 以及对应的 `record-session` fallback 文档
+
+（`record-session` 命令入口已退役删除，不再列出。）
 
 如果项目没有：
 
@@ -319,7 +316,7 @@ python3 -m py_compile \
   - `archive-commit-only`
   - `TRELLIS_AUTO_ESCALATE_COMMAND=...`
 
-### 8.3 record-session helper 恢复链
+### 8.3 record-session helper 恢复链（由 finish-work 内部调用）
 
 人工演练至少验证：
 
@@ -347,7 +344,7 @@ rg -n "Please commit \\.trellis|手工提交|record-session-helper.py --resume|T
 - 自动提交成功时静默闭环
 - 自动提交失败时打印机器可读恢复命令
 - `finish-work` 默认走 helper
-- archive 与 record-session 两条链都有恢复路径
+- archive 与 record-session 两条链都有恢复路径（record-session 链现由 finish-work 内部调用）
 
 ### Base
 
@@ -360,7 +357,7 @@ rg -n "Please commit \\.trellis|手工提交|record-session-helper.py --resume|T
 
 - 只打印 warning，不给恢复命令
 - `finish-work` 仍直接调用 `add_session.py`
-- 只有 record-session 有恢复路径，archive 没有
+- 只有 record-session（现由 finish-work 内部调用）有恢复路径，archive 没有
 - 强制要求用户手工 `git add .trellis && git commit`
 
 ---
@@ -408,11 +405,8 @@ TRELLIS_AUTO_ESCALATE_COMMAND=python3 ./.trellis/scripts/workflow/record-session
 正确修法是同时覆盖：
 
 - `archive` 自动提交链
-- `record-session` 自动提交链
+- `record-session` 自动提交链（现由 `finish-work` 内部调用）
 - helper 恢复链
 - `finish-work` 默认入口文案
 
-只有把这 4 层一起改完，才算真正解决问题。*** Update File: /ops/projects/personal/ai-coding-toolkit/docs/README.md
-## 新增可复用指南
-
-- `docs/Trellis自动提交失败恢复与提权修复指南.md`：当 Trellis 的 archive / record-session 自动提交因只读环境失败时，如何修改脚本链路与命令入口，给其他项目直接复用
+只有把这 4 层一起改完，才算真正解决问题。

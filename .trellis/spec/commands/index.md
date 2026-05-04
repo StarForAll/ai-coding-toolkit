@@ -137,6 +137,50 @@ Before finalizing a new command source asset:
 - **Unpaired reviewer handoff**: Commands that ask other CLIs to run reviewer work but fail to emit the matching `multi-cli-review-action` command for the current CLI
 - **Divergent reviewer prompts**: Default reviewer command pairs that differ in review description or `--review-focus` when the only intended difference is `--reviewer-id`
 
+## Platform Drift Status (as of 2026-05-04)
+
+Source layer `commands/` is empty (only README.md files). Tool command directories contain live content. Drift inventory below classifies differences for the source-layer convergence task (`03-19-implement-commands-source`).
+
+### Drift Classification
+
+| Type | Meaning | Action |
+|------|---------|--------|
+| **none** | Content is identical across platforms | No action needed |
+| **platform-param** | Only differs in platform-specific runtime parameter (e.g. `--platform claude` vs `--platform opencode`) | Reasonable; no action |
+| **content-drift** | Instructional content differs (one platform has more/different guidance) | Source layer must converge to canonical version |
+| **platform-only** | Command exists on one platform only, and is inherently platform-specific | Evaluate: keep as platform-only or generalize |
+| **residual** | Empty or obsolete file left over from a previous change | Clean up |
+
+### Commands
+
+| Command | Claude | OpenCode | Drift Type | Details |
+|---------|--------|----------|------------|---------|
+| finish-work | ✓ | ✓ | none | Identical content |
+| continue | ✓ | ✓ | platform-param | `--platform claude` vs `--platform opencode` |
+| record-session | ✓ | ✓ | **retired** | Replaced by `finish-work` (which includes session recording via `record-session-helper.py`). Deployed files have been removed. |
+| create-command | — | ✓ | **retired** | Low-usage, unshipped. Deployed file removed. |
+| migrate-specs | — | ✓ | **residual** | 0-byte empty file. Should be deleted. |
+
+### Skills (deployment asymmetry)
+
+| Skill | Claude | OpenCode | Drift Type | Details |
+|-------|--------|----------|------------|---------|
+| trellis-check | ✓ | ✓ | none | Identical |
+| trellis-before-dev | ✓ | ✓ | none | Identical |
+| trellis-brainstorm | ✓ | ✓ | none | Identical |
+| trellis-update-spec | ✓ | ✓ | none | Identical |
+| trellis-break-loop | ✓ | ✓ | none | Identical |
+| trellis-meta | ✓ | ✓ | none | Identical |
+| workflow-audit | ✓ | — | **platform-only** | Claude-only. Has test fixtures. Evaluate cross-platform deployment. |
+| workflow-capability-audit | ✓ | — | **platform-only** | Claude-only. Has test fixtures. Evaluate cross-platform deployment. |
+
+### Notes for Source Layer Task
+
+When `03-19-implement-commands-source` populates the source layer:
+- `record-session` has been retired — its functionality is absorbed by `finish-work` (which calls `record-session-helper.py` internally). Deployed command files removed.
+- `create-command` has been retired — low-usage, unshipped. Deployed file removed.
+- `workflow-audit` and `workflow-capability-audit` should be evaluated for OpenCode/Codex deployment
+
 ---
 
 **Language**: English

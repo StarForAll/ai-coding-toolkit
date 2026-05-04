@@ -20,6 +20,10 @@ LIBRARY_ROOT = Path(__file__).resolve().parents[2]
 if str(LIBRARY_ROOT) not in sys.path:
     sys.path.insert(0, str(LIBRARY_ROOT))
 
+_TRELLIS_LIBRARY = LIBRARY_ROOT / 'trellis-library'
+if str(_TRELLIS_LIBRARY) not in sys.path:
+    sys.path.insert(0, str(_TRELLIS_LIBRARY))
+
 from _internal.asset_state import assess_local_state as _assess_local_state  # noqa: E402
 from _internal.asset_state import determine_local_state as _determine_local_state  # noqa: E402
 from _internal.asset_state import (  # noqa: E402

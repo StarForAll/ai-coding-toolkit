@@ -241,7 +241,7 @@ These rules have historically required cross-document propagation:
 - **sonar-scanner conditionalization**: "必须有明确质量平台门禁；采用 Sonar 的项目写真实命令，未采用时写替代门禁和原因" — appears in 总纲, design, plan, finish-work, brainstorm, 命令映射, walkthrough, test
 - **L0/Lite dual-PRD relaxation**: "L0 不强制双 PRD" — appears in brainstorm, 命令映射, walkthrough
 - **review-gate conditional trigger**: "check 默认进 finish-work，条件触发 review-gate" — appears in check, review-gate, start phase router, 总纲, walkthrough, 通俗版
-- **record-session → archive order**: "先 record-session 再 archive" — appears in 总纲, 命令映射, walkthrough, 通俗版, learn, helper patch, and any command-derived `record-session` skill entrypoints
+- **record-session → archive order** (retired command): `finish-work` now handles session recording via `record-session-helper.py` internally. Inside `finish-work` the actual order is **先 archive 再 record-session**（参见 SKILL.md Step 3/Step 4），与 `record-session` 独立存在时的"先记录再归档"不同。Historical references in 总纲, 命令映射, walkthrough, 通俗版, learn, helper patch may still describe the old order and should be evaluated for alignment with the current finish-work flow.
 - **project-audit conditional generation**: "不是所有项目都强制" — appears in brainstorm, plan, project-audit, plan-validate.py
 - **ownership-proof workflow gate**: "`ownership_proof_required` 启用后，`source_watermark_channels` 决定实际验证范围，且 `visible` 是最低必选通道" — appears in feasibility, design, plan, delivery, 总纲, 命令映射, walkthrough, 通俗版, platform README, validator tests
 - **multi-cli reviewer command pairing**: "需要调用 `multi-cli-review` 时，由当前 CLI 生成至少两条只在 `--reviewer-id` 上不同的 reviewer 命令，并同时生成匹配的 `multi-cli-review-action` 聚合命令" — appears in review-gate, project-audit, 总纲, walkthrough, platform instructions, and any reviewer command pack templates

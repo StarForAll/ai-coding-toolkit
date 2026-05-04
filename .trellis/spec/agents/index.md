@@ -218,6 +218,37 @@ Before finalizing a new agent:
 - **Overly generic prompts**: "You are a helpful assistant"
 - **Missing boundaries**: No constraints on dangerous operations
 
+## Platform Drift Status (as of 2026-05-04)
+
+Source layer `agents/` is empty. All three tool deployments are independently maintained. Drift inventory below classifies differences for the source-layer convergence task (`03-19-implement-agents-source`).
+
+### Drift Classification
+
+| Type | Meaning | Action |
+|------|---------|--------|
+| **format-only** | Different frontmatter / context-loading mechanism; core instructions identical or equivalent | Source layer will unify core body; platform adapters keep format |
+| **content-drift** | Core instruction body differs across platforms (responsibilities, boundaries, workflow steps) | Source layer must converge to single canonical version |
+| **platform-only** | Feature exists on one platform only and is inherently platform-specific | No cross-platform action needed |
+
+### Agents
+
+| Agent | Claude | OpenCode | Codex | Drift Type | Details |
+|-------|--------|----------|-------|------------|---------|
+| trellis-implement | ✓ | ✓ | ✓ | format-only | Claude: YAML frontmatter + hook-injected context. OpenCode: self-loading context section. Codex: TOML + `developer_instructions`. Core instructions equivalent. |
+| trellis-check | ✓ | ✓ | ✓ | format-only | Same pattern as trellis-implement. |
+| trellis-research | ✓ | ✓ | ✓ | format-only | OpenCode version lists `.opencode/` in platform config paths; Claude lists `.claude/`. Core instructions equivalent. |
+
+### Not Required (no drift)
+
+No content-drift detected across deployed agents. All three agents have platform-appropriate context-loading mechanisms which are **reasonable adaptations**, not drift.
+
+### Notes for Source Layer Task
+
+When `03-19-implement-agents-source` populates `agents/<id>/SYSTEM.md`:
+- The SYSTEM.md body should capture the **shared core** (responsibilities, boundaries, workflow, report format)
+- Platform-specific context-loading instructions should go in each platform's deployment adapter, not in SYSTEM.md
+- The self-loading context section (currently in OpenCode agents) should be extracted to a platform adapter pattern
+
 ---
 
 **Language**: English
