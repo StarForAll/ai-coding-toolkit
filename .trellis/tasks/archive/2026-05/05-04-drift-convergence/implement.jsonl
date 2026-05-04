@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Cross-layer drift identification methodology and boundary checklist"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Pattern identification for consistent fix approach"}
+{"file": ".trellis/spec/agents/index.md", "reason": "Agent source-layer spec and deployment mapping — target for drift annotation"}
+{"file": ".trellis/spec/commands/index.md", "reason": "Command source-layer spec and deployment mapping — target for drift annotation"}
+{"file": ".trellis/spec/scripts/python-conventions.md", "reason": "Python conventions for fixing diff-library-assets.py import"}
+{"file": ".trellis/spec/library-assets/manifest-maintenance.md", "reason": "Library sync and manifest conventions for understanding library-lock.yaml"}
+{"file": ".trellis/spec/scripts/index.md", "reason": "Script conventions index for the library sync script fix"}

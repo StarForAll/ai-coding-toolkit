@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Verify drift annotations follow cross-layer boundary conventions"}
+{"file": ".trellis/spec/agents/index.md", "reason": "Verify drift status section is correctly added and consistent with spec structure"}
+{"file": ".trellis/spec/commands/index.md", "reason": "Verify drift status section is correctly added and consistent with spec structure"}
+{"file": ".trellis/spec/library-assets/manifest-maintenance.md", "reason": "Verify library-lock.yaml update follows manifest conventions"}
