@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 145
+- **Total Sessions**: 146
 - **Last Active**: 2026-05-05
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~587 | Active |
+| `journal-4.md` | ~620 | Active |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 146 | 2026-05-05 | Trellis residual surface audit and cleanup | `7fbfa30` | `main` |
 | 145 | 2026-05-05 | workflow-capability-audit deep analysis and fix | - | `main` |
 | 144 | 2026-05-05 | fix shared-skills-deployment-carrier | - | `main` |
 | 143 | 2026-05-04 | workflow-audit version drift gate | `db7c8f1` | `main` |

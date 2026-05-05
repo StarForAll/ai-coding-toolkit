@@ -585,3 +585,36 @@ Added workflow-audit version-drift hard gate, limited supported CLI scope to Cla
 ### Next Steps
 
 - None - task complete
+
+
+## Session 146: Trellis residual surface audit and cleanup
+
+**Date**: 2026-05-05
+**Task**: Trellis residual surface audit and cleanup
+**Branch**: `main`
+
+### Summary
+
+深度审计当前仓库的 Trellis 运行与接入面，识别并收敛非 workflow 目录下的 Trellis 关联残留。修正规范中对 agent/command 平台差异的误分类，清理 live .new、live *.backup 和空 .iflow 残留，仅保留最新 .trellis/.backup-* 快照。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7fbfa30` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
