@@ -684,3 +684,83 @@ Aligned current-vs-legacy workflow carriers for install/upgrade/uninstall/analyz
 ### Next Steps
 
 - None - task complete
+
+---
+
+## Session 149: workflow agent 层迁移至 Trellis 0.5 原生
+
+**Date**: 2026-05-05
+**Task**: workflow-agents-to-trellis-native
+**Branch**: `main`
+
+### Summary
+
+将 workflow 自定义 agent 层（shared-agents/ + claude/agents/ + opencode/agents/ + codex/agents/）删除，改依赖 Trellis 0.5 原生 `trellis-research` / `trellis-implement` / `trellis-check` agents。经确认原生 agents 的职责、上下文加载、报告格式足够覆盖 workflow 需求后，执行完整迁移。
+
+### Main Changes
+
+- 删除 `commands/shared-agents/`（9 文件）、`commands/claude/agents/`（3 文件）、`commands/opencode/agents/`（3 文件）、`commands/codex/agents/`（3 文件）
+- `workflow_assets.py`：移除 MANAGED_IMPLEMENTATION_AGENTS、AGENT_SUFFIXES、SHARED_AGENTS_DIR、render_workflow_managed_agent()、所有 agent 路径函数、kind="agent"；新增 `LEGACY_AGENT_NAMES`、`legacy_agent_target_path()`；COMPATIBLE_TRELLIS_VERSION 从 "0.4.0" 升至 "0.5.0"
+- `install-workflow.py`：移除 agent overlay 函数，新增 `_migrate_legacy_agents()` 处理 bare-name → trellis-* 重命名，支持 dry-run
+- `uninstall-workflow.py`：重写 `uninstall_managed_agents()` 确保 trellis-* 原生文件不会被误删，仅清理 legacy 残留或从备份恢复
+- `upgrade-compat.py`：新增 legacy + trellis 重复检测（`detect_conflicts_managed_agents`）
+- `analyze-upgrade.py`、`workflow-capability-audit.py`：移除 kind=="agent" 分支
+- 3 个平台 README：agent 章节从"workflow source-of-truth 部署"改为"Trellis 原生管理"
+- `CLI原生适配边界矩阵.md`：2 层模型替代旧 3 层，agent 行标记为"Trellis 原生管理"
+- `结构性迁移设计.md`、`目标项目兼容升级方案指导.md`：同步更新 agent 迁移判据描述
+- `test_workflow_installers.py`：新增 3 个 uninstall agent 测试 + 1 个 dry-run 测试
+- `test_upgrade_analysis.py`：新增 legacy+trellis 重复检测测试
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `25478e5` | refactor(workflow): switch from custom agent overlay to Trellis 0.5 native agents |
+
+### Testing
+
+- [OK] 93 tests pass (test_workflow_installers + test_upgrade_analysis)
+- [OK] E2E 验证：/tmp 纯净项目 trellis init → install-workflow.py → upgrade-compat.py --check 全链路通过
+- [OK] 原生 agent 模板与安装产物 diff 为 0（确认无 overlay）
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 149: fix workflow-capability-audit version alignment and anchor write-back timing
+
+**Date**: 2026-05-06
+**Task**: fix workflow-capability-audit version alignment and anchor write-back timing
+**Branch**: `main`
+
+### Summary
+
+将 COMPATIBLE_TRELLIS_VERSION 对齐到实际 trellis -v 值(0.5.0-rc.3)；把锚点写回时机从 initial full audit 移到 --confirm-fix-scope 触发点；同步更新 spec/SKILL.md/runbook 三层和测试文件。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `36db9ca` | (see git log) |
+| `e44b181` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
