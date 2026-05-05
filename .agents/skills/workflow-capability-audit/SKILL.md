@@ -126,7 +126,7 @@ Run the script to:
 - generate initial `prd.md`
 - generate `capability-report.md` with the baseline capability matrix
 
-The script discovers managed-surface rows from `workflow_assets.py` specs and dependent-surface rows from known Trellis-native carrier definitions.
+The script discovers managed-surface rows from `workflow_assets.py` specs and dependent-surface rows from known Trellis-native carrier definitions (project-rules, claude-hooks, opencode-plugin, codex-hooks, implementation-agent, runtime-workflow-guide, shared-skills-deployment-carrier).
 
 First-version limitation:
 

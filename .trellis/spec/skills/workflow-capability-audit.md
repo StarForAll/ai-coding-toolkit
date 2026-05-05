@@ -324,6 +324,16 @@ Assets directly managed by the workflow install/upgrade contract.
 
 Trellis-native capabilities that the workflow depends on, inherits, disables, or partially absorbs even when they are not installer-managed.
 
+First-version dependent-surface coverage includes these known Trellis-native carriers:
+
+- project-rules-and-routing-carrier (AGENTS.md)
+- claude-hooks-and-settings-carrier (.claude/settings.json, .claude/hooks)
+- opencode-plugin-and-instructions-carrier (.opencode/plugins, .opencode/package.json)
+- codex-hooks-and-config-carrier (.codex/hooks.json, .codex/config.toml)
+- implementation-agent-carrier (per-CLI agent directories)
+- trellis-runtime-workflow-guide (.trellis/workflow.md, .trellis/scripts/task.py)
+- shared-skills-deployment-carrier (.agents/skills/ — shared deployment layer for OpenCode and Codex skills)
+
 These two surfaces must appear as distinct sections in `capability-report.md`.
 
 ---

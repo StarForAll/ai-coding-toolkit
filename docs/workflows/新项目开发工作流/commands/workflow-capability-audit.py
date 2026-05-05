@@ -864,6 +864,13 @@ def build_workflow_dependent_rows(a_root: Path, b_root: Path) -> list[dict[str, 
             "opencode": [".trellis/workflow.md", ".trellis/scripts/task.py"],
             "codex": [".trellis/workflow.md", ".trellis/scripts/task.py"],
         },
+        {
+            "capability": "shared-skills-deployment-carrier",
+            "mechanism": "Workflow depends on .agents/skills/ as a shared deployment layer for OpenCode and Codex skills.",
+            "claude": [],
+            "opencode": [".agents/skills"],
+            "codex": [".agents/skills"],
+        },
     ]
 
     rows: list[dict[str, Any]] = []

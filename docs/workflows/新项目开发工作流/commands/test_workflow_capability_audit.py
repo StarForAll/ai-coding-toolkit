@@ -596,6 +596,47 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             self.assertIn("- none yet", section, f"{section_heading} must contain '- none yet'")
             self.assertNotRegex(section, r"<.+>", f"{section_heading} must not contain angle-bracket placeholders")
 
+    def test_shared_skills_deployment_carrier_appears_in_dependent_surface(self) -> None:
+        """shared-skills-deployment-carrier (TN-007) must appear in the dependent surface matrix."""
+        assets = load_assets_module()
+        env = {
+            assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
+        }
+        result = self.run_script("--current-cli", "claude", "--json", env=env)
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self._track_fixtures_from_payload(payload)
+
+        # Assert dependent_rows >= 7 (was 6 before the shared-skills carrier was added)
+        self.assertGreaterEqual(payload["dependent_rows"], 7)
+
+        # Read the generated capability-report.md
+        report_path = REPO_ROOT / payload["capability_report"]
+        report_text = report_path.read_text(encoding="utf-8")
+
+        # Assert shared-skills-deployment-carrier appears in the report
+        self.assertIn("shared-skills-deployment-carrier", report_text)
+
+        # Extract the dependent surface matrix section
+        dependent_section = _extract_section(report_text, "## Workflow-Dependent Trellis-Native Surface Matrix")
+        self.assertIn("shared-skills-deployment-carrier", dependent_section)
+
+        # Parse matrix rows to inspect classifications
+        module = load_script_module()
+        rows = module.parse_matrix_rows(dependent_section)
+        shared_row = None
+        for row in rows:
+            if row["capability"] == "shared-skills-deployment-carrier":
+                shared_row = row
+                break
+        self.assertIsNotNone(shared_row, "shared-skills-deployment-carrier row must exist in dependent surface matrix")
+
+        # Claude has no paths, so classification must be not-applicable
+        self.assertEqual(shared_row["claude_classification"], "not-applicable")
+        # OpenCode and Codex both use .agents/skills/ as shared deployment carrier (created by trellis init with --opencode and/or --codex)
+        self.assertEqual(shared_row["opencode_classification"], "adopted-compatible")
+        self.assertEqual(shared_row["codex_classification"], "adopted-compatible")
+
     def test_print_stop_human_includes_next_action_section(self) -> None:
         """Human-readable version-gate stop output must include the ### Next Action section."""
         assets = load_assets_module()
