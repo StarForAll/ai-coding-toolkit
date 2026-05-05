@@ -1,0 +1,4 @@
+{"file":".trellis/spec/scripts/workflow-installer-upgrade-contracts.md","reason":"Defines source-of-truth, Codex carrier classes, install/upgrade boundaries, and expected managed surfaces for workflow embed scripts."}
+{"file":".trellis/spec/scripts/python-conventions.md","reason":"Governs Python script edits for workflow installer, upgrade, and audit scripts."}
+{"file":".trellis/spec/skills/workflow-capability-audit.md","reason":"Behavioral source of truth for version gate, A/B lifecycle, and capability matrix expectations."}
+{"file":".trellis/tasks/05-05-workflow-capability-audit-agents-trellis-0-5/research/baseline-findings.md","reason":"Contains the concrete Trellis 0.5 baseline evidence and the current Codex compatibility failure chain."}

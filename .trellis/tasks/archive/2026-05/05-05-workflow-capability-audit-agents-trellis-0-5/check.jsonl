@@ -1,0 +1,4 @@
+{"file":".trellis/spec/scripts/workflow-installer-upgrade-contracts.md","reason":"Verification must preserve workflow install/upgrade carrier contracts and Codex surface semantics."}
+{"file":".trellis/spec/scripts/python-conventions.md","reason":"Check pass should enforce Python script structure and maintainability conventions."}
+{"file":".trellis/spec/skills/workflow-capability-audit.md","reason":"Check the final audit behavior against the skill contract and capability-report expectations."}
+{"file":".trellis/tasks/05-05-workflow-capability-audit-agents-trellis-0-5/research/baseline-findings.md","reason":"Revalidation should match the real Trellis 0.5 baseline and not regress to stale Codex assumptions."}
