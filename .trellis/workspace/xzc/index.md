@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 143
-- **Last Active**: 2026-05-04
+- **Total Sessions**: 144
+- **Last Active**: 2026-05-05
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~525 | Active |
+| `journal-4.md` | ~556 | Active |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 144 | 2026-05-05 | fix shared-skills-deployment-carrier | - | `main` |
 | 143 | 2026-05-04 | workflow-audit version drift gate | `db7c8f1` | `main` |
 | 142 | 2026-05-04 | sync trellis rc3 merge decisions | `781a95c` | `main` |
 | 141 | 2026-05-04 | Drift convergence: fix _internal fallback, refresh lock, codify rules | `e69af3a` | `main` |

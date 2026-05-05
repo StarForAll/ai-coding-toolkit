@@ -523,3 +523,34 @@ Added workflow-audit version-drift hard gate, limited supported CLI scope to Cla
 ### Next Steps
 
 - None - task complete
+
+
+## Session 144: fix shared-skills-deployment-carrier
+
+**Date**: 2026-05-05
+**Task**: fix shared-skills-deployment-carrier
+**Branch**: `main`
+
+### Summary
+
+为 workflow-capability-audit 的 dependent-rows 新增 shared-skills-deployment-carrier (TN-007)，追踪 .agents/skills/ 作为 OpenCode/Codex 共享部署层的依赖面。同步更新 spec/SKILL.md/测试/测试场景。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
