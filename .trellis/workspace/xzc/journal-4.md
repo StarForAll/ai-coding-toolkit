@@ -651,3 +651,36 @@ Repositioned multi-cli-review and multi-cli-review-action as a workflow-agnostic
 ### Next Steps
 
 - None - task complete
+
+
+## Session 148: Audit Trellis 0.5 workflow carriers
+
+**Date**: 2026-05-05
+**Task**: Audit Trellis 0.5 workflow carriers
+**Branch**: `main`
+
+### Summary
+
+Aligned current-vs-legacy workflow carriers for install/upgrade/uninstall/analyze paths, validated with full workflow installer, upgrade analysis, and capability audit test suites.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b853be7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
