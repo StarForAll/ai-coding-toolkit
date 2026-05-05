@@ -23,8 +23,10 @@ WORKFLOW_VERSION = "0.1.26"
 WORKFLOW_SCHEMA_VERSION = "2"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增
 COMPATIBLE_TRELLIS_VERSION = "0.4.0"
 
-PATCH_BASELINE_COMMANDS = ["start", "finish-work", "record-session"]
-CODEX_PATCH_BASELINE_SKILLS = ["start", "finish-work"]
+PATCH_BASELINE_COMMANDS = ["continue", "finish-work"]
+LEGACY_PATCH_BASELINE_COMMANDS = ["start", "finish-work", "record-session"]
+CODEX_PATCH_BASELINE_SKILLS = ["trellis-continue", "trellis-finish-work"]
+LEGACY_CODEX_PATCH_BASELINE_SKILLS = ["start", "finish-work"]
 PATCH_BASELINE_SHARED_DOCS = ["workflow.md"]
 OVERLAY_BASELINE_COMMANDS = ["brainstorm", "check"]
 OPTIONAL_DISABLED_BASELINE_COMMANDS = ["parallel"]
@@ -54,7 +56,13 @@ HELPER_SCRIPTS = [
 MANAGED_IMPLEMENTATION_AGENTS = ["research", "implement", "check"]
 LATEST_TRELLIS_VERSION_ENV = "TRELLIS_LATEST_VERSION"
 CURRENT_TRELLIS_VERSION_ENV = "TRELLIS_CURRENT_VERSION"
-CODEX_SHARED_SKILL_NAMES = [*DISTRIBUTED_COMMANDS, *CODEX_PATCH_BASELINE_SKILLS, "record-session"]
+CODEX_SHARED_SKILL_NAMES = [*DISTRIBUTED_COMMANDS, *CODEX_PATCH_BASELINE_SKILLS]
+CODEX_SHARED_SKILL_CLEANUP_NAMES = [
+    *DISTRIBUTED_COMMANDS,
+    *CODEX_PATCH_BASELINE_SKILLS,
+    *LEGACY_CODEX_PATCH_BASELINE_SKILLS,
+    "record-session",
+]
 
 _TRELLIS_VERSION_RE = re.compile(
     r"(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)"
@@ -104,6 +112,46 @@ AGENT_SUFFIXES = {
 SHARED_AGENTS_DIR = "shared-agents"
 
 
+def workflow_managed_agent_target_name(agent_name: str) -> str:
+    """Return the deployed Trellis-managed agent name for a role."""
+    return f"trellis-{agent_name}"
+
+
+def workflow_legacy_managed_agent_target_name(agent_name: str) -> str:
+    """Return the pre-Trellis-0.5 managed agent name for migration handling."""
+    return agent_name
+
+
+def codex_phase_router_skill_candidates() -> list[str]:
+    """Prefer the new Trellis 0.5 carrier, but keep legacy fallback names."""
+    return [CODEX_PATCH_BASELINE_SKILLS[0], LEGACY_CODEX_PATCH_BASELINE_SKILLS[0]]
+
+
+def codex_finish_work_skill_candidates() -> list[str]:
+    """Prefer the new Trellis 0.5 carrier, but keep legacy fallback names."""
+    return [CODEX_PATCH_BASELINE_SKILLS[1], LEGACY_CODEX_PATCH_BASELINE_SKILLS[1]]
+
+
+def codex_patch_baseline_skill_candidates() -> list[str]:
+    """Return all known Codex baseline patch skill names in preference order."""
+    return [*codex_phase_router_skill_candidates(), *codex_finish_work_skill_candidates()]
+
+
+def command_phase_router_candidates() -> list[str]:
+    """Prefer the current Trellis command carrier, but keep legacy fallback names."""
+    return [PATCH_BASELINE_COMMANDS[0], LEGACY_PATCH_BASELINE_COMMANDS[0]]
+
+
+def command_finish_work_candidates() -> list[str]:
+    """Prefer the current Trellis command carrier, but keep legacy fallback names."""
+    return [PATCH_BASELINE_COMMANDS[1], LEGACY_PATCH_BASELINE_COMMANDS[1]]
+
+
+def command_record_session_candidates() -> list[str]:
+    """Record-session is legacy-only for current Trellis 0.5+ baselines."""
+    return [LEGACY_PATCH_BASELINE_COMMANDS[2]]
+
+
 def workflow_managed_agent_source_path(commands_root: Path, cli_type: str, agent_name: str) -> Path:
     """Return the workflow-local shared source path for an implementation agent."""
     return commands_root / SHARED_AGENTS_DIR / agent_name
@@ -118,7 +166,13 @@ def workflow_managed_agent_adapter_path(commands_root: Path, cli_type: str, agen
 def workflow_managed_agent_target_path(root: Path, cli_type: str, agent_name: str) -> Path:
     """Return the target-project path for a managed implementation agent."""
     suffix = AGENT_SUFFIXES[cli_type]
-    return root / CLI_DIRS[cli_type] / "agents" / f"{agent_name}{suffix}"
+    return root / CLI_DIRS[cli_type] / "agents" / f"{workflow_managed_agent_target_name(agent_name)}{suffix}"
+
+
+def workflow_legacy_managed_agent_target_path(root: Path, cli_type: str, agent_name: str) -> Path:
+    """Return the legacy target-project path for a managed implementation agent."""
+    suffix = AGENT_SUFFIXES[cli_type]
+    return root / CLI_DIRS[cli_type] / "agents" / f"{workflow_legacy_managed_agent_target_name(agent_name)}{suffix}"
 
 
 def _read_shared_agent_text(agent_dir: Path, name: str) -> str:
@@ -134,6 +188,7 @@ def render_workflow_managed_agent(commands_root: Path, cli_type: str, agent_name
     readme = _read_shared_agent_text(agent_dir, "README.md")
     system = _read_shared_agent_text(agent_dir, "SYSTEM.md")
     tools = _read_shared_agent_text(agent_dir, "TOOLS.md")
+    target_name = workflow_managed_agent_target_name(agent_name)
 
     description = ""
     for line in readme.splitlines():
@@ -152,7 +207,7 @@ def render_workflow_managed_agent(commands_root: Path, cli_type: str, agent_name
         }[agent_name]
         return (
             "---\n"
-            f"name: {agent_name}\n"
+            f"name: {target_name}\n"
             "description: |\n"
             f"  {description}\n"
             f"tools: {tools_line}\n"
@@ -214,7 +269,7 @@ def render_workflow_managed_agent(commands_root: Path, cli_type: str, agent_name
             "check": "workspace-write",
         }[agent_name]
         return (
-            f'name = "{agent_name}"\n'
+            f'name = "{target_name}"\n'
             f'description = "{description}"\n'
             f'sandbox_mode = "{sandbox_mode}"\n\n'
             'developer_instructions = """\n'
@@ -342,6 +397,23 @@ def list_all_codex_skills_dirs(root: Path) -> list[Path]:
     return dirs
 
 
+def find_first_existing_codex_skill_path(
+    root: Path,
+    skill_names: list[str],
+    *,
+    skills_dir: Path | None = None,
+) -> Path | None:
+    """Return the first existing Codex skill path for the given candidate names."""
+    resolved_dir = skills_dir or resolve_codex_skills_dir(root)
+    if resolved_dir is None:
+        return None
+    for skill_name in skill_names:
+        path = resolved_dir / skill_name / "SKILL.md"
+        if path.exists():
+            return path
+    return None
+
+
 def detect_cli_types(*roots: Path) -> list[str]:
     found: list[str] = []
     for cli_type in ALL_CLI_TYPES:
@@ -365,6 +437,16 @@ def build_managed_asset_specs(cli_types: list[str]) -> list[ManagedAssetSpec]:
     for cli_type in cli_types:
         if cli_type in ("claude", "opencode"):
             for name in PATCH_BASELINE_COMMANDS:
+                specs.append(
+                    ManagedAssetSpec(
+                        asset_id=f"{cli_type}:{name}",
+                        category="patch-baseline",
+                        cli_type=cli_type,
+                        kind="command",
+                        name=name,
+                    )
+                )
+            for name in command_record_session_candidates():
                 specs.append(
                     ManagedAssetSpec(
                         asset_id=f"{cli_type}:{name}",
@@ -407,11 +489,10 @@ def build_managed_asset_specs(cli_types: list[str]) -> list[ManagedAssetSpec]:
                     )
                 )
             for name in DISTRIBUTED_COMMANDS:
-                category = "overlay-baseline" if name in OVERLAY_BASELINE_COMMANDS else "added-command"
                 specs.append(
                     ManagedAssetSpec(
                         asset_id=f"codex:{name}",
-                        category=category,
+                        category="added-command",
                         cli_type="codex",
                         kind="skill",
                         name=name,

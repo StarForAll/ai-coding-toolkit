@@ -1,6 +1,6 @@
 ## Workflow Phase Router Patch `[AI]`
 
-When this `start` skill is used in a target project that has installed `docs/workflows/新项目开发工作流`, treat it as the workflow Phase Router, not as the original generic Trellis task workflow.
+When this Codex entry skill is used in a target project that has installed `docs/workflows/新项目开发工作流`, treat it as the workflow Phase Router, not as the original generic Trellis task workflow.
 
 ### Hard Boundary
 
@@ -58,7 +58,7 @@ Before writing implementation code:
 1. Confirm the current task is a leaf task.
 2. Run before-dev and write or refresh `$TASK_DIR/before-dev.md`.
 3. Keep work scoped to the selected leaf task only.
-4. Do not auto-continue to the next task after completion — require a new `/trellis:start`.
+4. Do not auto-continue to the next task after completion — require a new explicit re-entry through the current entry skill.
 
 Within `implementation`, use this internal role chain:
 

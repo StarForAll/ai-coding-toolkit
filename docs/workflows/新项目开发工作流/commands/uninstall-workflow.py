@@ -13,14 +13,18 @@ from workflow_assets import (
     AGENT_SUFFIXES,
     ALL_CLI_TYPES,
     CODEX_PATCH_BASELINE_SKILLS,
+    LEGACY_CODEX_PATCH_BASELINE_SKILLS,
     CLI_ALT_DIRS,
     CLI_DIRS,
+    command_phase_router_candidates,
+    command_record_session_candidates,
     detect_cli_types as detect_cli_types_shared,
     DISTRIBUTED_COMMANDS,
     MANAGED_IMPLEMENTATION_AGENTS,
     OPTIONAL_DISABLED_BASELINE_COMMANDS,
     OVERLAY_BASELINE_COMMANDS,
     resolve_codex_skills_dir,
+    workflow_legacy_managed_agent_target_path,
     workflow_managed_agent_target_path,
 )
 
@@ -35,6 +39,21 @@ _AGENTS_NL_ROUTING_MARKER = "<!-- workflow-nl-routing-start -->"
 _AGENTS_NL_ROUTING_END = "<!-- workflow-nl-routing-end -->"
 _TODO_FILE_NAME = "todo.txt"
 _TODO_DEFAULT_LINE = "文档内容需要和实际当前的代码同步\n"
+
+
+def _restore_first_available_command_backup(
+    backup_dir: Path,
+    target_dir: Path,
+    candidate_names: list[str],
+    cli_label: str,
+) -> bool:
+    for command_name in candidate_names:
+        backup_path = backup_dir / f"{command_name}.md"
+        if backup_path.exists():
+            shutil.copy2(backup_path, target_dir / f"{command_name}.md")
+            ok(f"[{cli_label}] {command_name}.md 已恢复")
+            return True
+    return False
 
 
 def ok(message: str) -> None:
@@ -135,15 +154,28 @@ def uninstall_managed_agents(root: Path, cli_type: str, cli_label: str) -> None:
 
     restored = 0
     for agent_name in MANAGED_IMPLEMENTATION_AGENTS:
-        backup_agent = backup_dir / f"{agent_name}{suffix}"
         target_agent = workflow_managed_agent_target_path(root, cli_type, agent_name)
+        legacy_target_agent = workflow_legacy_managed_agent_target_path(root, cli_type, agent_name)
+        backup_agent = backup_dir / target_agent.name
+        legacy_backup_agent = backup_dir / legacy_target_agent.name
         if backup_agent.exists():
             shutil.copy2(backup_agent, target_agent)
+            if legacy_target_agent != target_agent and legacy_target_agent.exists():
+                legacy_target_agent.unlink()
             ok(f"[{cli_label}] 恢复 agent: {agent_name}")
+            restored += 1
+        elif legacy_backup_agent.exists():
+            shutil.copy2(legacy_backup_agent, legacy_target_agent)
+            if target_agent != legacy_target_agent and target_agent.exists():
+                target_agent.unlink()
+            ok(f"[{cli_label}] 恢复 legacy agent: {agent_name}")
             restored += 1
         elif target_agent.exists():
             target_agent.unlink()
             ok(f"[{cli_label}] 删除 install 新建的 agent: {agent_name}")
+        elif legacy_target_agent.exists():
+            legacy_target_agent.unlink()
+            ok(f"[{cli_label}] 删除 legacy install agent: {agent_name}")
         else:
             warn(f"[{cli_label}] 无 {agent_name}{suffix} 备份，保留当前文件")
 
@@ -183,13 +215,11 @@ def uninstall_claude(root: Path, added_commands: list[str], overlay_commands: li
     for command in OPTIONAL_DISABLED_BASELINE_COMMANDS:
         restore_optional_disabled_command(backup, dst_cmds, command, "Claude")
 
-    # 恢复 start.md
-    backup_start = backup / "start.md"
-    if backup_start.exists():
-        shutil.copy2(backup_start, dst_cmds / "start.md")
-        ok("[Claude] start.md 已恢复")
+    # 恢复 continue.md / start.md
+    if _restore_first_available_command_backup(backup, dst_cmds, command_phase_router_candidates(), "Claude"):
+        pass
     else:
-        warn("[Claude] 无 start.md 备份，未恢复")
+        warn("[Claude] 无 continue.md/start.md 备份，未恢复")
 
     # 恢复 finish-work.md
     backup_finish_work = backup / "finish-work.md"
@@ -199,12 +229,8 @@ def uninstall_claude(root: Path, added_commands: list[str], overlay_commands: li
     else:
         warn("[Claude] 无 finish-work.md 备份，未恢复")
 
-    # 恢复 record-session.md
-    backup_record_session = backup / "record-session.md"
-    if backup_record_session.exists():
-        shutil.copy2(backup_record_session, dst_cmds / "record-session.md")
-        ok("[Claude] record-session.md 已恢复")
-    else:
+    # 恢复 legacy record-session.md（若存在）
+    if not _restore_first_available_command_backup(backup, dst_cmds, command_record_session_candidates(), "Claude"):
         warn("[Claude] 无 record-session.md 备份，未恢复")
 
     # 清理备份目录
@@ -250,13 +276,11 @@ def uninstall_opencode(root: Path, added_commands: list[str], overlay_commands: 
     for command in OPTIONAL_DISABLED_BASELINE_COMMANDS:
         restore_optional_disabled_command(backup, dst_cmds, command, "OpenCode")
 
-    # 恢复 start.md
-    backup_start = backup / "start.md"
-    if backup_start.exists():
-        shutil.copy2(backup_start, dst_cmds / "start.md")
-        ok("[OpenCode] start.md 已恢复")
+    # 恢复 continue.md / start.md
+    if _restore_first_available_command_backup(backup, dst_cmds, command_phase_router_candidates(), "OpenCode"):
+        pass
     else:
-        warn("[OpenCode] 无 start.md 备份，未恢复")
+        warn("[OpenCode] 无 continue.md/start.md 备份，未恢复")
 
     # 恢复 finish-work.md
     backup_finish_work = backup / "finish-work.md"
@@ -266,12 +290,7 @@ def uninstall_opencode(root: Path, added_commands: list[str], overlay_commands: 
     else:
         warn("[OpenCode] 无 finish-work.md 备份，未恢复")
 
-    # 恢复 record-session.md
-    backup_record_session = backup / "record-session.md"
-    if backup_record_session.exists():
-        shutil.copy2(backup_record_session, dst_cmds / "record-session.md")
-        ok("[OpenCode] record-session.md 已恢复")
-    else:
+    if not _restore_first_available_command_backup(backup, dst_cmds, command_record_session_candidates(), "OpenCode"):
         warn("[OpenCode] 无 record-session.md 备份，未恢复")
 
     # 清理备份目录
@@ -322,8 +341,11 @@ def uninstall_codex(
                 shutil.copy2(backup_skill, target_skill)
                 ok(f"[Codex] 恢复 {command} skill")
                 restored += 1
+            elif target_skill.exists():
+                shutil.rmtree(target_skill.parent)
+                ok(f"[Codex] 删除无基线备份的 workflow skill: {command}")
             else:
-                warn(f"[Codex] {skills_dir} 无 {command} skill 备份，保留当前文件")
+                warn(f"[Codex] {skills_dir} 无 {command} skill 备份")
         if overlay_commands:
             info(f"[Codex] 已恢复 {restored}/{len(overlay_commands)} 个同名基线 skills")
 
@@ -468,7 +490,10 @@ def main() -> int:
         elif cli_type == "opencode":
             uninstall_opencode(root, added_commands, overlay_commands)
         elif cli_type == "codex":
-            patched_codex_skills = record.get("patched_codex_skills") or CODEX_PATCH_BASELINE_SKILLS
+            patched_codex_skills = record.get("patched_codex_skills") or [
+                *CODEX_PATCH_BASELINE_SKILLS,
+                *LEGACY_CODEX_PATCH_BASELINE_SKILLS,
+            ]
             uninstall_codex(root, added_commands, overlay_commands, patched_codex_skills)
         print()
 

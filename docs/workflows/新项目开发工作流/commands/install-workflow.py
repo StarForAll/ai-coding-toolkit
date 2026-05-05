@@ -10,7 +10,7 @@
 - 只有“纯净初始态”目标项目才允许执行首次嵌入；若检测到任何当前 workflow 的历史嵌入痕迹，必须阻止继续安装
 - 当前 workflow 是“嵌入 + 增强”模型，不会重建 Trellis 原生命令全集
 - `feasibility` 到 `delivery`（含 `project-audit`）这类阶段资产由当前 workflow 分发
-- `start` / `finish-work` / `record-session` 默认来自 Trellis 基线，允许由当前 workflow 追加补丁增强
+- `continue` / `finish-work` 默认来自当前 Trellis 基线，`record-session` 仅作为 legacy baseline 命令兼容；当前 workflow 会在这些基线上追加补丁增强
 - close-out 中的 `archive` 仍直接复用目标项目 Trellis 基线 `task.py`；若目标项目不是当前最新 Trellis 基线，可能不包含 archive auto-commit pathspec 修复
 - 安装器会自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines` 则清理，不存在则跳过；若 `.current-task` 仍指向该 bootstrap task，则同步清理悬空引用
 - 一旦开始正式安装，安装器会先写入 `.trellis/workflow-embed-attempt.json`；若安装失败，该失败标记会保留，后续嵌入必须先由用户手动处理
@@ -38,16 +38,22 @@ from workflow_assets import (
     ALL_CLI_TYPES,
     AGENT_SUFFIXES,
     CODEX_PATCH_BASELINE_SKILLS,
-    CODEX_SHARED_SKILL_NAMES,
+    CODEX_SHARED_SKILL_CLEANUP_NAMES,
     CLI_ALT_DIRS,
     CLI_DIRS,
     CORE_HELPER_SCRIPTS,
     DEFAULT_PROFILE,
+    command_finish_work_candidates,
+    command_phase_router_candidates,
+    command_record_session_candidates,
+    codex_finish_work_skill_candidates,
+    codex_phase_router_skill_candidates,
     codex_secondary_skills_dir,
     codex_shared_skills_dir,
     DISTRIBUTED_COMMANDS,
     detect_cli_types as detect_cli_types_shared,
     EXECUTION_CARDS,
+    find_first_existing_codex_skill_path,
     HELPER_SCRIPTS,
     list_all_codex_skills_dirs,
     MANAGED_IMPLEMENTATION_AGENTS,
@@ -65,6 +71,7 @@ from workflow_assets import (
     read_project_trellis_version,
     render_workflow_managed_agent,
     resolve_codex_skills_dir,
+    workflow_legacy_managed_agent_target_path,
     workflow_managed_agent_target_path,
 )
 
@@ -82,7 +89,7 @@ _CLI_DIRS = CLI_DIRS
 _CLI_ALT_DIRS = CLI_ALT_DIRS
 _ALL_CLI_TYPES = ALL_CLI_TYPES
 # 对 Trellis 原生命令做增强时使用的补丁标记。
-# 当前 workflow 会增强 `start.md`、`finish-work.md` 与 `record-session.md`，
+# 当前 workflow 会增强 `continue.md` / legacy `start.md`、`finish-work.md` 与 legacy `record-session.md`，
 # 而不是重写它们的全部基线内容。
 _PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 _FINISH_WORK_MARKER = "<!-- finish-work-projectization-patch -->"
@@ -112,6 +119,7 @@ _REFS_HEADS_PREFIX = "refs/heads/"
 _PACKED_REFS_FILE = "packed-refs"
 _PARALLEL_DISABLED_MARKER = "<!-- workflow-parallel-disabled -->"
 _EMBED_EXECUTOR_CONFIRM_ENV = "WORKFLOW_EMBED_EXECUTOR_CONFIRMED"
+_ENTRY_COMMAND_CANDIDATES = ("continue", "start")
 
 # AGENTS.md NL 路由表标记
 _AGENTS_NL_ROUTING_MARKER = "<!-- workflow-nl-routing-start -->"
@@ -142,20 +150,20 @@ _NL_ROUTING_SECTION = """\
 | 项目全局审查、全局代码审查、代码查缺补漏、项目审计、project-audit | `/trellis:project-audit` | 描述项目级审查意图，或显式触发 `project-audit` skill | §5.1 项目全局审查 |
 | 检查一下、质量检查、对照 spec、对照规范、自检、有没有偏差 | `/trellis:check` | 描述质量检查意图，或显式触发 `check` skill | §5.1.x 质量检查 |
 | 补充审查、多 CLI 审查、多人审查、让其他 CLI 看一下、review-gate、审查门禁 | `/trellis:review-gate` | 描述补充审查意图，或显式触发 `review-gate` skill | §5.1.y 补充审查 |
-| 提交前检查、准备提交、完成检查、commit 前、收尾 | `/trellis:finish-work` | 描述提交前检查意图，或显式触发 `finish-work` skill | §6 提交检查 |
+| 提交前检查、准备提交、完成检查、commit 前、收尾 | `/trellis:finish-work` | 描述提交前检查意图，或显式触发 `trellis-finish-work` skill | §6 提交检查 |
 | 交付、部署、上线、发布、测试通过、准备交付、跑验收、整理交付物、项目收尾 | `/trellis:delivery` | 描述交付收尾意图，或显式触发 `delivery` skill | §6+§7 测试交付 |
-| 记录、保存进度、收工、结束工作 | `/trellis:record-session` | 描述会话收尾意图，或显式触发 `record-session` skill | §7 会话记录 |
+| 记录、保存进度、收工、结束工作 | `/trellis:record-session` | 描述会话收尾意图，或显式触发 `trellis-finish-work` skill | §7 会话记录 |
 
 ### 框架通用命令
 
 | 触发关键词 | Claude / OpenCode 入口 | Codex 入口 | 说明 |
 |-----------|------------------------|------------|------|
-| 开始、新会话、继续、下一步 | `/trellis:start` | 描述当前意图，或显式触发 `start` skill | Phase Router 自动检测 |
-| 卡住了、反复出错、死循环、调不通 | `/trellis:break-loop` | 描述排障意图，或显式触发 `break-loop` skill | 深度 bug 分析 |
-| 更新规范、新发现、沉淀经验 | `/trellis:update-spec` | 描述规范更新意图，或显式触发 `update-spec` skill | 规范更新 |
+| 开始、新会话、继续、下一步 | `/trellis:start` | 描述当前意图，或显式触发 `trellis-continue` skill | Phase Router 自动检测 |
+| 卡住了、反复出错、死循环、调不通 | `/trellis:break-loop` | 描述排障意图，或显式触发 `trellis-break-loop` skill | 深度 bug 分析 |
+| 更新规范、新发现、沉淀经验 | `/trellis:update-spec` | 描述规范更新意图，或显式触发 `trellis-update-spec` skill | 规范更新 |
 | 跨层检查、跨模块、影响面 | `/trellis:check-cross-layer` | 描述跨层检查意图，或显式触发 `check-cross-layer` skill | 跨层检查 |
 | 集成 skill、添加 skill | `/trellis:integrate-skill` | 描述 skill 集成意图，或显式触发 `integrate-skill` skill | Skill 集成 |
-| 读规范、开发前准备、看看有什么规范 | `/trellis:before-dev` | 描述开发前准备意图，或显式触发 `before-dev` skill | 开发前读规范；默认主链里也会由 start 自动执行 |
+| 读规范、开发前准备、看看有什么规范 | `/trellis:before-dev` | 描述开发前准备意图，或显式触发 `trellis-before-dev` skill | 开发前读规范；默认主链里也会由 start 自动执行 |
 | 新人入门、项目介绍、怎么用 trellis | `/trellis:onboard` | 描述 onboarding 意图，或显式触发 `onboard` skill | 项目 onboarding |
 | 创建命令、新命令、加个命令 | `/trellis:create-command` | 描述创建命令意图，或显式触发 `create-command` skill | 创建新命令 |
 
@@ -197,13 +205,23 @@ def detect_cli_types(root: Path, requested: list[str] | None = None) -> list[str
     return found
 
 
-def _read_text(path: Path) -> str | None:
+def _read_text(path: Path | None) -> str | None:
+    if path is None:
+        return None
     if not path.exists():
         return None
     try:
         return path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
         return None
+
+
+def _find_first_existing_command(dst_cmds: Path, candidates: tuple[str, ...]) -> Path | None:
+    for name in candidates:
+        path = dst_cmds / f"{name}.md"
+        if path.exists():
+            return path
+    return None
 
 
 def _matches_expected_content(path: Path, expected: str) -> bool:
@@ -326,12 +344,20 @@ def collect_workflow_embed_traces(src: Path, root: Path, cli_types: list[str]) -
 
             primary_skills_dir = resolve_codex_skills_dir(root)
             if primary_skills_dir is not None:
-                start_skill = primary_skills_dir / "start" / "SKILL.md"
-                start_text = _read_text(start_skill)
-                if start_text and _CODEX_START_SKILL_MARKER in start_text:
-                    _append_trace(traces, "codex-start-patch", start_skill, root)
+                router_skill = find_first_existing_codex_skill_path(
+                    root,
+                    codex_phase_router_skill_candidates(),
+                    skills_dir=primary_skills_dir,
+                )
+                router_text = _read_text(router_skill)
+                if router_text and _CODEX_START_SKILL_MARKER in router_text:
+                    _append_trace(traces, "codex-start-patch", router_skill, root)
 
-                finish_work_skill = primary_skills_dir / "finish-work" / "SKILL.md"
+                finish_work_skill = find_first_existing_codex_skill_path(
+                    root,
+                    codex_finish_work_skill_candidates(),
+                    skills_dir=primary_skills_dir,
+                )
                 finish_text = _read_text(finish_work_skill)
                 if finish_text and _FINISH_WORK_MARKER in finish_text:
                     _append_trace(traces, "codex-finish-work-patch", finish_work_skill, root)
@@ -712,11 +738,11 @@ def build_finish_work_content(content: str, patch_text: str) -> str | None:
     start_idx = content.find(_FINISH_WORK_START_HEADING)
     end_idx = content.find(_FINISH_WORK_END_HEADING)
     if start_idx == -1:
-        return None
+        return content.rstrip() + "\n\n---\n\n" + patch_text.rstrip() + "\n"
     if end_idx == -1 or end_idx <= start_idx:
         next_heading_idx = content.find("\n### ", start_idx + len(_FINISH_WORK_START_HEADING))
         if next_heading_idx == -1:
-            return None
+            return content.rstrip() + "\n\n---\n\n" + patch_text.rstrip() + "\n"
         end_idx = next_heading_idx + 1
 
     prefix = content[:start_idx]
@@ -724,11 +750,49 @@ def build_finish_work_content(content: str, patch_text: str) -> str | None:
     return prefix + patch_text.rstrip() + "\n\n" + suffix
 
 
-def build_codex_start_skill_content(content: str, patch_text: str) -> str:
-    """Append workflow Phase Router guidance to the baseline Codex start skill."""
+def build_codex_phase_router_skill_content(content: str, patch_text: str) -> str:
+    """Append workflow Phase Router guidance to the active Codex entry skill."""
     if _CODEX_START_SKILL_MARKER in content:
         return content
     return content.rstrip() + "\n\n---\n\n" + patch_text.rstrip() + "\n"
+
+
+def inject_codex_phase_router_skill_patch(
+    src: Path,
+    target_path: Path,
+    *,
+    dry_run: bool,
+    cli_label: str,
+    target_label: str,
+) -> bool:
+    """为 Codex 当前入口 skill 注入 workflow Phase Router 补丁。"""
+    if not target_path.exists():
+        warn(f"[{cli_label}] {target_label} 不存在，跳过 Phase Router 补丁注入")
+        return False
+
+    content = target_path.read_text(encoding="utf-8")
+    if _CODEX_START_SKILL_MARKER in content:
+        ok(f"[{cli_label}] {target_label} Phase Router 补丁已存在")
+        return False
+
+    patch = src / "start-skill-patch-phase-router.md"
+    if not patch.exists():
+        warn(f"[{cli_label}] start-skill-patch-phase-router.md 不存在")
+        return False
+
+    new_content = build_codex_phase_router_skill_content(content, prepare_command_content(patch))
+    if not dry_run:
+        target_path.write_text(new_content, encoding="utf-8")
+    if dry_run:
+        info(f"[{cli_label}] 将注入 {target_label} Phase Router 补丁")
+    else:
+        ok(f"[{cli_label}] {target_label} Phase Router 补丁已注入")
+    return True
+
+
+def build_codex_start_skill_content(content: str, patch_text: str) -> str:
+    """Legacy wrapper preserved for tests and old helper call sites."""
+    return build_codex_phase_router_skill_content(content, patch_text)
 
 
 def inject_codex_start_skill_patch(
@@ -738,29 +802,14 @@ def inject_codex_start_skill_patch(
     dry_run: bool,
     cli_label: str,
 ) -> bool:
-    """为 Codex start skill 注入 workflow Phase Router 补丁。"""
-    if not target_path.exists():
-        warn(f"[{cli_label}] start skill 不存在，跳过 Phase Router 补丁注入")
-        return False
-
-    content = target_path.read_text(encoding="utf-8")
-    if _CODEX_START_SKILL_MARKER in content:
-        ok(f"[{cli_label}] start skill Phase Router 补丁已存在")
-        return False
-
-    patch = src / "start-skill-patch-phase-router.md"
-    if not patch.exists():
-        warn(f"[{cli_label}] start-skill-patch-phase-router.md 不存在")
-        return False
-
-    new_content = build_codex_start_skill_content(content, prepare_command_content(patch))
-    if not dry_run:
-        target_path.write_text(new_content, encoding="utf-8")
-    if dry_run:
-        info(f"[{cli_label}] 将注入 start skill Phase Router 补丁")
-    else:
-        ok(f"[{cli_label}] start skill Phase Router 补丁已注入")
-    return True
+    """Legacy wrapper preserved for tests and old helper call sites."""
+    return inject_codex_phase_router_skill_patch(
+        src,
+        target_path,
+        dry_run=dry_run,
+        cli_label=cli_label,
+        target_label="start skill",
+    )
 
 
 def build_workflow_content(content: str, patch_text: str) -> str | None:
@@ -771,7 +820,7 @@ def build_workflow_content(content: str, patch_text: str) -> str | None:
     start_idx = content.find(_WORKFLOW_START_HEADING)
     end_idx = content.find(_WORKFLOW_END_HEADING)
     if start_idx == -1 or end_idx == -1 or end_idx <= start_idx:
-        return None
+        return content.rstrip() + "\n\n" + patch_text.rstrip() + "\n"
 
     prefix = content[:start_idx]
     suffix = content[end_idx:].lstrip("\n")
@@ -898,18 +947,22 @@ def deploy_managed_agents(
 
     for agent_name in MANAGED_IMPLEMENTATION_AGENTS:
         target_path = workflow_managed_agent_target_path(root, cli_type, agent_name)
+        legacy_target_path = workflow_legacy_managed_agent_target_path(root, cli_type, agent_name)
         try:
             rendered = render_workflow_managed_agent(src, cli_type, agent_name)
         except FileNotFoundError as exc:
             result["errors"].append(f"源 agent 缺失: {exc.filename}")
             continue
-        if not dry_run and target_path.exists() and not (backup_dir / target_path.name).exists():
-            shutil.copy2(target_path, backup_dir / target_path.name)
-            ok(f"[{cli_label}] {target_path.name} → 备份")
+        current_path = target_path if target_path.exists() else legacy_target_path
+        if not dry_run and current_path.exists() and not (backup_dir / current_path.name).exists():
+            shutil.copy2(current_path, backup_dir / current_path.name)
+            ok(f"[{cli_label}] {current_path.name} → 备份")
         if dry_run:
             info(f"[{cli_label}] 将部署 agent: {agent_name}")
         else:
             target_path.write_text(rendered, encoding="utf-8")
+            if legacy_target_path != target_path and legacy_target_path.exists():
+                legacy_target_path.unlink()
             ok(f"[{cli_label}] agent: {agent_name}")
         result["agents"] += 1
 
@@ -930,14 +983,14 @@ def deploy_claude(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAUL
     # 备份
     if not dry_run:
         backup.mkdir(parents=True, exist_ok=True)
-        start = dst_cmds / "start.md"
+        entry_command = _find_first_existing_command(dst_cmds, _ENTRY_COMMAND_CANDIDATES)
         finish_work = dst_cmds / "finish-work.md"
         record_session = dst_cmds / "record-session.md"
         parallel = dst_cmds / "parallel.md"
         baseline_overlaps = [dst_cmds / f"{name}.md" for name in OVERLAY_BASELINE_COMMANDS]
-        if start.exists() and not (backup / "start.md").exists():
-            shutil.copy2(start, backup / "start.md")
-            ok(f"[Claude] start.md → 备份")
+        if entry_command is not None and not (backup / entry_command.name).exists():
+            shutil.copy2(entry_command, backup / entry_command.name)
+            ok(f"[Claude] {entry_command.name} → 备份")
         if finish_work.exists() and not (backup / "finish-work.md").exists():
             shutil.copy2(finish_work, backup / "finish-work.md")
             ok(f"[Claude] finish-work.md → 备份")
@@ -969,31 +1022,32 @@ def deploy_claude(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAUL
             warn(f"[Claude] 源文件缺失: {cmd}.md")
 
     # 注入 Phase Router
-    start = dst_cmds / "start.md"
-    if start.exists():
-        content = start.read_text(encoding="utf-8")
+    entry_command = _find_first_existing_command(dst_cmds, _ENTRY_COMMAND_CANDIDATES)
+    if entry_command is not None:
+        content = entry_command.read_text(encoding="utf-8")
         if _PHASE_ROUTER_MARKER not in content:
             patch = src / "start-patch-phase-router.md"
             if patch.exists():
+                patch_text = prepare_command_content(patch)
                 marker = "## Operation Types"
                 if marker in content:
                     before, after = content.split(marker, 1)
-                    if not dry_run:
-                        start.write_text(
-                            before + prepare_command_content(patch) + "\n" + marker + after,
-                            encoding="utf-8",
-                        )
-                    if dry_run:
-                        info("[Claude] 将注入 Phase Router 到 start.md")
-                    else:
-                        ok("[Claude] Phase Router 已注入 start.md")
-                    result["patches"] += 1
+                    new_content = before + patch_text + "\n" + marker + after
                 else:
-                    warn("[Claude] start.md 中未找到注入点 '## Operation Types'")
+                    new_content = content.rstrip() + "\n\n---\n\n" + patch_text.rstrip() + "\n"
+                if not dry_run:
+                    entry_command.write_text(new_content, encoding="utf-8")
+                if dry_run:
+                    info(f"[Claude] 将注入 Phase Router 到 {entry_command.name}")
+                else:
+                    ok(f"[Claude] Phase Router 已注入 {entry_command.name}")
+                result["patches"] += 1
             else:
                 warn("[Claude] start-patch-phase-router.md 不存在")
         else:
-            ok("[Claude] Phase Router 已存在")
+            ok(f"[Claude] Phase Router 已存在 → {entry_command.name}")
+    else:
+        warn("[Claude] continue.md / start.md 不存在，跳过 Phase Router 注入")
 
     finish_work = dst_cmds / "finish-work.md"
     if inject_finish_work_patch(
@@ -1057,14 +1111,14 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool, *, profile: str = DEFA
     # 备份
     if not dry_run:
         backup.mkdir(parents=True, exist_ok=True)
-        start = dst_cmds / "start.md"
+        entry_command = _find_first_existing_command(dst_cmds, _ENTRY_COMMAND_CANDIDATES)
         finish_work = dst_cmds / "finish-work.md"
         record_session = dst_cmds / "record-session.md"
         parallel = dst_cmds / "parallel.md"
         baseline_overlaps = [dst_cmds / f"{name}.md" for name in OVERLAY_BASELINE_COMMANDS]
-        if start.exists() and not (backup / "start.md").exists():
-            shutil.copy2(start, backup / "start.md")
-            ok(f"[OpenCode] start.md → 备份")
+        if entry_command is not None and not (backup / entry_command.name).exists():
+            shutil.copy2(entry_command, backup / entry_command.name)
+            ok(f"[OpenCode] {entry_command.name} → 备份")
         if finish_work.exists() and not (backup / "finish-work.md").exists():
             shutil.copy2(finish_work, backup / "finish-work.md")
             ok(f"[OpenCode] finish-work.md → 备份")
@@ -1096,31 +1150,32 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool, *, profile: str = DEFA
             warn(f"[OpenCode] 源文件缺失: {cmd}.md")
 
     # 注入 Phase Router
-    start = dst_cmds / "start.md"
-    if start.exists():
-        content = start.read_text(encoding="utf-8")
+    entry_command = _find_first_existing_command(dst_cmds, _ENTRY_COMMAND_CANDIDATES)
+    if entry_command is not None:
+        content = entry_command.read_text(encoding="utf-8")
         if _PHASE_ROUTER_MARKER not in content:
             patch = src / "start-patch-phase-router.md"
             if patch.exists():
+                patch_text = prepare_command_content(patch)
                 marker = "## Operation Types"
                 if marker in content:
                     before, after = content.split(marker, 1)
-                    if not dry_run:
-                        start.write_text(
-                            before + prepare_command_content(patch) + "\n" + marker + after,
-                            encoding="utf-8",
-                        )
-                    if dry_run:
-                        info("[OpenCode] 将注入 Phase Router 到 start.md")
-                    else:
-                        ok("[OpenCode] Phase Router 已注入 start.md")
-                    result["patches"] += 1
+                    new_content = before + patch_text + "\n" + marker + after
                 else:
-                    warn("[OpenCode] start.md 中未找到注入点 '## Operation Types'")
+                    new_content = content.rstrip() + "\n\n---\n\n" + patch_text.rstrip() + "\n"
+                if not dry_run:
+                    entry_command.write_text(new_content, encoding="utf-8")
+                if dry_run:
+                    info(f"[OpenCode] 将注入 Phase Router 到 {entry_command.name}")
+                else:
+                    ok(f"[OpenCode] Phase Router 已注入 {entry_command.name}")
+                result["patches"] += 1
             else:
                 warn("[OpenCode] start-patch-phase-router.md 不存在")
         else:
-            ok("[OpenCode] Phase Router 已存在")
+            ok(f"[OpenCode] Phase Router 已存在 → {entry_command.name}")
+    else:
+        warn("[OpenCode] continue.md / start.md 不存在，跳过 Phase Router 注入")
 
     finish_work = dst_cmds / "finish-work.md"
     if inject_finish_work_patch(
@@ -1189,15 +1244,8 @@ def deploy_codex(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAULT
     shared_skills_dir = codex_shared_skills_dir(root)
     secondary_skills_dir = codex_secondary_skills_dir(root)
 
-    # 备份共享分发型 / 禁用型 skills（只对共享目录执行）
+    # 备份禁用型 / baseline patch 型 skills
     if not dry_run:
-        for name in OVERLAY_BASELINE_COMMANDS:
-            skill_path = shared_skills_dir / name / "SKILL.md"
-            backup_path = shared_skills_dir / ".backup-original" / name / "SKILL.md"
-            if skill_path.exists() and not backup_path.exists():
-                backup_path.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(skill_path, backup_path)
-                ok(f"[Codex] {name} skill → {shared_skills_dir.relative_to(root)}/.backup-original")
         for skills_dir in skills_dirs:
             for name in OPTIONAL_DISABLED_BASELINE_COMMANDS:
                 skill_path = skills_dir / name / "SKILL.md"
@@ -1214,7 +1262,7 @@ def deploy_codex(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAULT
                 shutil.copy2(skill_path, backup_path)
                 ok(f"[Codex] {name} skill → {primary_skills_dir.relative_to(root)}/.backup-original")
         if secondary_skills_dir.is_dir():
-            for name in CODEX_SHARED_SKILL_NAMES:
+            for name in CODEX_SHARED_SKILL_CLEANUP_NAMES:
                 duplicate_path = secondary_skills_dir / name / "SKILL.md"
                 backup_path = secondary_skills_dir / ".backup-original" / name / "SKILL.md"
                 if duplicate_path.exists() and not backup_path.exists():
@@ -1240,7 +1288,7 @@ def deploy_codex(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAULT
 
     # 清理 .codex/skills/ 中重复的 shared skills
     if secondary_skills_dir.is_dir():
-        for name in CODEX_SHARED_SKILL_NAMES:
+        for name in CODEX_SHARED_SKILL_CLEANUP_NAMES:
             duplicate_dir = secondary_skills_dir / name
             if not duplicate_dir.exists():
                 continue
@@ -1251,32 +1299,41 @@ def deploy_codex(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAULT
                 ok(f"[Codex] duplicate shared skill 已移除: {duplicate_dir.relative_to(root)}")
 
     # 注入 finish-work 补丁（只增强活动 skills 目录）
-    finish_work_skill = primary_skills_dir / "finish-work" / "SKILL.md"
-    if not finish_work_skill.exists():
+    finish_work_skill = find_first_existing_codex_skill_path(
+        root,
+        codex_finish_work_skill_candidates(),
+        skills_dir=primary_skills_dir,
+    )
+    if finish_work_skill is None:
         result["errors"].append(
-            f"活动 skills 目录缺少 finish-work 基线，无法注入 workflow 项目化补丁：{primary_skills_dir.relative_to(root)}"
+            f"活动 skills 目录缺少 {CODEX_PATCH_BASELINE_SKILLS[1]} 基线，无法注入 workflow 项目化补丁：{primary_skills_dir.relative_to(root)}"
         )
     elif inject_finish_work_patch(
         src,
         finish_work_skill,
         dry_run=dry_run,
         cli_label="Codex",
-        target_label="finish-work skill",
+        target_label=f"{finish_work_skill.parent.name} skill",
     ):
         result["patches"] += 1
 
-    # 注入 start Phase Router 补丁（只增强活动 skills 目录）
-    start_skill = primary_skills_dir / "start" / "SKILL.md"
-    if not start_skill.exists():
+    # 注入入口 skill Phase Router 补丁（优先 trellis-continue，兼容旧 start）
+    router_skill = find_first_existing_codex_skill_path(
+        root,
+        codex_phase_router_skill_candidates(),
+        skills_dir=primary_skills_dir,
+    )
+    if router_skill is None:
         result["errors"].append(
-            f"活动 skills 目录缺少 start 基线，无法注入 workflow Phase Router 补丁：{primary_skills_dir.relative_to(root)}"
+            f"活动 skills 目录缺少 {CODEX_PATCH_BASELINE_SKILLS[0]} 基线，无法注入 workflow Phase Router 补丁：{primary_skills_dir.relative_to(root)}"
         )
     else:
-        if inject_codex_start_skill_patch(
+        if inject_codex_phase_router_skill_patch(
             src,
-            start_skill,
+            router_skill,
             dry_run=dry_run,
             cli_label="Codex",
+            target_label=f"{router_skill.parent.name} skill",
         ):
             result["patches"] += 1
 
@@ -1452,7 +1509,11 @@ def write_install_record(
             "overlay_commands": OVERLAY_BASELINE_COMMANDS,
             "added_commands": ADDED_COMMANDS,
             "disabled_commands": OPTIONAL_DISABLED_BASELINE_COMMANDS,
-            "patched_baseline_commands": PATCH_BASELINE_COMMANDS,
+            "patched_baseline_commands": [
+                command_phase_router_candidates()[0],
+                command_finish_work_candidates()[0],
+                *command_record_session_candidates(),
+            ],
             "patched_codex_skills": CODEX_PATCH_BASELINE_SKILLS,
             "patched_shared_docs": PATCH_BASELINE_SHARED_DOCS,
             "scripts": list(scripts),

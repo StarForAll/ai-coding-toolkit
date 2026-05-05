@@ -1,5 +1,5 @@
 ---
-name: research
+name: trellis-research
 description: |
   Shared workflow-local source asset for the `research` role in the implementation-internal subagent chain:
 tools: Read, Glob, Grep, mcp__ace__*, mcp__grok_search__*, mcp__deepwiki__*, mcp__exa__web_search_exa, mcp__exa__web_search_advanced_exa, mcp__exa__web_fetch_exa, mcp__exa__get_code_context_exa, mcp__Context7__*, Skill, mcp__chrome-devtools__*

@@ -238,6 +238,29 @@ Workflow embed / analysis / repair scripts must distinguish three asset classes:
      - `parallel`
    - Contract:
      - installer must back up the original baseline copy if present
+
+#### Trellis 0.5+ carrier rename note
+
+When adapting this workflow against a newer Trellis baseline, do not assume the
+old Codex / command carrier names remain stable.
+
+Current confirmed baseline drift (observed from fresh `trellis init` output):
+
+- Claude / OpenCode command carrier:
+  - `continue.md` replaces the old `start.md` baseline entrypoint
+  - `record-session.md` may be absent because close-out is folded into `finish-work.md`
+- Codex shared skill carrier:
+  - baseline patch targets are `trellis-continue` and `trellis-finish-work`
+  - legacy `start` / `finish-work` skill names should be treated only as migration inputs, not as fresh-baseline assumptions
+- Managed implementation agents:
+  - deployed target filenames and in-file agent names follow `trellis-{research,implement,check}`
+  - unprefixed `research` / `implement` / `check` names are legacy compatibility inputs only
+
+Compatibility code should therefore:
+
+- prefer current baseline names first
+- fall back to legacy names only when upgrading an older installed target
+- avoid treating missing legacy carriers as fresh-baseline incompatibility on current Trellis
      - installer may overwrite the target copy with a workflow-managed disabled notice
      - uninstall / force-restore paths must restore the original baseline copy when a backup exists
      - drift detection must compare the deployed disabled copy against the workflow source of truth
@@ -288,17 +311,18 @@ Workflow embed / analysis / repair scripts must distinguish three asset classes:
    - workflow-managed implementation-internal role assets
    - current known set:
      - Claude:
-       - `.claude/agents/research.md`
-       - `.claude/agents/implement.md`
-       - `.claude/agents/check.md`
+       - current: `.claude/agents/trellis-research.md`
+       - current: `.claude/agents/trellis-implement.md`
+       - current: `.claude/agents/trellis-check.md`
      - OpenCode:
-       - `.opencode/agents/research.md`
-       - `.opencode/agents/implement.md`
-       - `.opencode/agents/check.md`
+       - current: `.opencode/agents/trellis-research.md`
+       - current: `.opencode/agents/trellis-implement.md`
+       - current: `.opencode/agents/trellis-check.md`
      - Codex:
-       - `.codex/agents/research.toml`
-       - `.codex/agents/implement.toml`
-       - `.codex/agents/check.toml`
+       - current: `.codex/agents/trellis-research.toml`
+       - current: `.codex/agents/trellis-implement.toml`
+       - current: `.codex/agents/trellis-check.toml`
+    - legacy compatibility inputs may still appear as unprefixed `research / implement / check` files on older installed target projects and must be handled during upgrade / uninstall flows
    - Contract:
      - these assets are part of the workflow-managed implementation-stage internal chain
      - installer must back up any pre-existing target copy before first overwrite

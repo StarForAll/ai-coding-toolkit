@@ -1,4 +1,4 @@
-name = "research"
+name = "trellis-research"
 description = "Shared workflow-local source asset for the `research` role in the implementation-internal subagent chain:"
 sandbox_mode = "read-only"
 

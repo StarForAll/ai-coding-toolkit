@@ -1,4 +1,4 @@
-name = "implement"
+name = "trellis-implement"
 description = "Shared workflow-local source asset for the `implement` role in the implementation-internal subagent chain."
 sandbox_mode = "workspace-write"
 

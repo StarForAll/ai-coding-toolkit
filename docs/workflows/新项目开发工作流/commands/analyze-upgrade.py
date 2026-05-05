@@ -15,11 +15,18 @@ from pathlib import Path
 
 from workflow_assets import (
     ALL_CLI_TYPES,
+    command_phase_router_candidates,
+    command_record_session_candidates,
+    codex_finish_work_skill_candidates,
+    codex_phase_router_skill_candidates,
+    find_first_existing_codex_skill_path,
     ManagedAssetSpec,
     build_managed_asset_specs,
     check_latest_trellis_prerequisite,
     detect_cli_types,
     list_all_codex_skills_dirs,
+    workflow_legacy_managed_agent_target_path,
+    workflow_managed_agent_target_path,
 )
 
 
@@ -71,6 +78,19 @@ def collect_codex_skill_dir_labels(*roots: Path) -> list[str]:
     return labels
 
 
+def _read_first_existing_command(
+    root: Path,
+    cli_type: str,
+    candidates: list[str],
+) -> str | None:
+    commands_dir = root / f".{cli_type}" / "commands" / "trellis"
+    for name in candidates:
+        content = read_text(commands_dir / f"{name}.md")
+        if content is not None:
+            return content
+    return None
+
+
 def iter_asset_states(
     spec: ManagedAssetSpec,
     baseline_root: Path,
@@ -85,12 +105,46 @@ def iter_asset_states(
         asset_prefix, _, asset_name = spec.asset_id.partition(":")
         variants: list[tuple[str, str | None, str | None, str | None]] = []
         for label in dir_labels:
-            baseline = read_text(baseline_root / label / spec.name / "SKILL.md")
-            expected = read_text(expected_root / label / spec.name / "SKILL.md")
-            target = read_text(target_root / label / spec.name / "SKILL.md")
+            if spec.category == "patch-baseline":
+                skill_candidates = (
+                    codex_phase_router_skill_candidates()
+                    if spec.name == codex_phase_router_skill_candidates()[0]
+                    else codex_finish_work_skill_candidates()
+                )
+                baseline = read_text(find_first_existing_codex_skill_path(baseline_root, skill_candidates, skills_dir=baseline_root / label))
+                expected = read_text(find_first_existing_codex_skill_path(expected_root, skill_candidates, skills_dir=expected_root / label))
+                target = read_text(find_first_existing_codex_skill_path(target_root, skill_candidates, skills_dir=target_root / label))
+            else:
+                baseline = read_text(baseline_root / label / spec.name / "SKILL.md")
+                expected = read_text(expected_root / label / spec.name / "SKILL.md")
+                target = read_text(target_root / label / spec.name / "SKILL.md")
             asset_id = spec.asset_id if len(dir_labels) == 1 else f"{asset_prefix}[{label}]:{asset_name}"
             variants.append((asset_id, baseline, expected, target))
         return variants
+
+    if spec.kind == "agent":
+        baseline = read_text(workflow_managed_agent_target_path(baseline_root, spec.cli_type, spec.name))
+        if baseline is None:
+            baseline = read_text(workflow_legacy_managed_agent_target_path(baseline_root, spec.cli_type, spec.name))
+        expected = read_text(workflow_managed_agent_target_path(expected_root, spec.cli_type, spec.name))
+        if expected is None:
+            expected = read_text(workflow_legacy_managed_agent_target_path(expected_root, spec.cli_type, spec.name))
+        target = read_text(workflow_managed_agent_target_path(target_root, spec.cli_type, spec.name))
+        if target is None:
+            target = read_text(workflow_legacy_managed_agent_target_path(target_root, spec.cli_type, spec.name))
+        return [(spec.asset_id, baseline, expected, target)]
+
+    if spec.kind == "command" and spec.category == "patch-baseline":
+        if spec.name == command_phase_router_candidates()[0]:
+            candidates = command_phase_router_candidates()
+        elif spec.name in command_record_session_candidates():
+            candidates = command_record_session_candidates()
+        else:
+            candidates = [spec.name]
+        baseline = _read_first_existing_command(baseline_root, spec.cli_type, candidates)
+        expected = _read_first_existing_command(expected_root, spec.cli_type, candidates)
+        target = _read_first_existing_command(target_root, spec.cli_type, candidates)
+        return [(spec.asset_id, baseline, expected, target)]
 
     baseline = read_text(spec.locate(baseline_root))
     expected = read_text(spec.locate(expected_root))

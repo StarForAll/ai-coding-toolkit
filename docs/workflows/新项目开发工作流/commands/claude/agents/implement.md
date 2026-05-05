@@ -1,5 +1,5 @@
 ---
-name: implement
+name: trellis-implement
 description: |
   Shared workflow-local source asset for the `implement` role in the implementation-internal subagent chain.
 tools: Read, Write, Edit, Bash, Glob, Grep, mcp__exa__web_search_exa, mcp__exa__get_code_context_exa

@@ -51,15 +51,15 @@ class UpgradeAnalysisTests(unittest.TestCase):
         expected = self.make_root("upgrade-expected-")
         target = self.make_root("upgrade-target-")
 
-        self.write_file(baseline, ".claude/commands/trellis/start.md", "baseline start\n")
+        self.write_file(baseline, ".claude/commands/trellis/continue.md", "baseline continue\n")
         self.write_file(baseline, ".claude/commands/trellis/brainstorm.md", "baseline brainstorm\n")
 
-        self.write_file(expected, ".claude/commands/trellis/start.md", "workflow patched start\n")
+        self.write_file(expected, ".claude/commands/trellis/continue.md", "workflow patched continue\n")
         self.write_file(expected, ".claude/commands/trellis/brainstorm.md", "workflow brainstorm\n")
         self.write_file(expected, ".claude/commands/trellis/design.md", "workflow design\n")
         self.write_file(expected, ".trellis/scripts/workflow/check-quality.py", "# helper\n")
 
-        self.write_file(target, ".claude/commands/trellis/start.md", "baseline start\n")
+        self.write_file(target, ".claude/commands/trellis/continue.md", "baseline continue\n")
         self.write_file(target, ".claude/commands/trellis/brainstorm.md", "target custom brainstorm\n")
         self.write_file(target, ".trellis/scripts/workflow/check-quality.py", "# helper\n")
         self.write_file(target, ".trellis/.version", "2.1.0\n")
@@ -80,7 +80,7 @@ class UpgradeAnalysisTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         payload = json.loads(result.stdout)
         actions = {item["asset_id"]: item["action"] for item in payload["findings"]}
-        self.assertEqual(actions["claude:start"], "replace")
+        self.assertEqual(actions["claude:continue"], "replace")
         self.assertEqual(actions["claude:brainstorm"], "merge")
         self.assertEqual(actions["claude:design"], "add")
         self.assertEqual(actions["shared:check-quality.py"], "keep")
@@ -90,17 +90,15 @@ class UpgradeAnalysisTests(unittest.TestCase):
         expected = self.make_root("upgrade-expected-codex-")
         target = self.make_root("upgrade-target-codex-")
 
-        self.write_file(baseline, ".agents/skills/brainstorm/SKILL.md", "baseline brainstorm\n")
-        self.write_file(baseline, ".agents/skills/finish-work/SKILL.md", "baseline finish-work\n")
-        self.write_file(baseline, ".codex/agents/check.toml", 'name = "check"\nsandbox_mode = "read-only"\n')
+        self.write_file(baseline, ".agents/skills/trellis-finish-work/SKILL.md", "baseline finish-work\n")
+        self.write_file(baseline, ".codex/agents/trellis-check.toml", 'name = "trellis-check"\nsandbox_mode = "read-only"\n')
 
         self.write_file(expected, ".agents/skills/brainstorm/SKILL.md", "workflow brainstorm\n")
-        self.write_file(expected, ".agents/skills/finish-work/SKILL.md", "workflow finish-work\n")
-        self.write_file(expected, ".codex/agents/check.toml", 'name = "check"\nsandbox_mode = "workspace-write"\n')
+        self.write_file(expected, ".agents/skills/trellis-finish-work/SKILL.md", "workflow finish-work\n")
+        self.write_file(expected, ".codex/agents/trellis-check.toml", 'name = "trellis-check"\nsandbox_mode = "workspace-write"\n')
 
-        self.write_file(target, ".agents/skills/brainstorm/SKILL.md", "baseline brainstorm\n")
-        self.write_file(target, ".agents/skills/finish-work/SKILL.md", "baseline finish-work\n")
-        self.write_file(target, ".codex/agents/check.toml", 'name = "check"\nsandbox_mode = "read-only"\n')
+        self.write_file(target, ".agents/skills/trellis-finish-work/SKILL.md", "baseline finish-work\n")
+        self.write_file(target, ".codex/agents/trellis-check.toml", 'name = "trellis-check"\nsandbox_mode = "read-only"\n')
         self.write_file(target, ".trellis/.version", "2.1.0\n")
 
         result = self.run_script(
@@ -119,8 +117,8 @@ class UpgradeAnalysisTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         payload = json.loads(result.stdout)
         actions = {item["asset_id"]: item["action"] for item in payload["findings"]}
-        self.assertEqual(actions["codex:brainstorm"], "replace")
-        self.assertEqual(actions["codex:finish-work"], "replace")
+        self.assertEqual(actions["codex:brainstorm"], "add")
+        self.assertEqual(actions["codex:trellis-finish-work"], "replace")
         self.assertEqual(actions["codex:agent:check"], "replace")
 
     def test_analyze_upgrade_supports_claude_agents(self) -> None:
@@ -128,9 +126,9 @@ class UpgradeAnalysisTests(unittest.TestCase):
         expected = self.make_root("upgrade-expected-claude-agent-")
         target = self.make_root("upgrade-target-claude-agent-")
 
-        self.write_file(baseline, ".claude/agents/research.md", "baseline research\n")
-        self.write_file(expected, ".claude/agents/research.md", "workflow research\n")
-        self.write_file(target, ".claude/agents/research.md", "baseline research\n")
+        self.write_file(baseline, ".claude/agents/trellis-research.md", "baseline research\n")
+        self.write_file(expected, ".claude/agents/trellis-research.md", "workflow research\n")
+        self.write_file(target, ".claude/agents/trellis-research.md", "baseline research\n")
         self.write_file(target, ".trellis/.version", "2.1.0\n")
 
         result = self.run_script(
@@ -156,9 +154,9 @@ class UpgradeAnalysisTests(unittest.TestCase):
         expected = self.make_root("upgrade-expected-opencode-agent-")
         target = self.make_root("upgrade-target-opencode-agent-")
 
-        self.write_file(baseline, ".opencode/agents/check.md", "baseline check\n")
-        self.write_file(expected, ".opencode/agents/check.md", "workflow check\n")
-        self.write_file(target, ".opencode/agents/check.md", "baseline check\n")
+        self.write_file(baseline, ".opencode/agents/trellis-check.md", "baseline check\n")
+        self.write_file(expected, ".opencode/agents/trellis-check.md", "workflow check\n")
+        self.write_file(target, ".opencode/agents/trellis-check.md", "baseline check\n")
         self.write_file(target, ".trellis/.version", "2.1.0\n")
 
         result = self.run_script(

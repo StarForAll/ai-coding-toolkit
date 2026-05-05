@@ -39,6 +39,10 @@ BASELINE_START_CONTENT = (
     "| `[AI]` | tool calls |\n"
     "| `[USER]` | user actions |\n"
 )
+BASELINE_CONTINUE_CONTENT = (
+    "# Continue Current Task\n\n"
+    "Original baseline continue command for fixture testing.\n"
+)
 BASELINE_RECORD_SESSION_CONTENT = (
     "# /trellis:record-session\n\n"
     "## Record Work Progress\n\n"
@@ -135,39 +139,68 @@ BASELINE_WORKFLOW_CONTENT = (
     "## File Descriptions\n\n"
     "### 1. workspace/ - Developer Workspaces\n"
 )
+BASELINE_TRELLIS_CONTINUE_SKILL_CONTENT = (
+    "---\n"
+    "name: trellis-continue\n"
+    "description: Baseline continue skill\n"
+    "---\n\n"
+    "# Continue Current Task\n\n"
+    "Original baseline Codex continue skill.\n"
+)
+BASELINE_TRELLIS_FINISH_WORK_SKILL_CONTENT = (
+    "---\n"
+    "name: trellis-finish-work\n"
+    "description: Baseline finish-work skill\n"
+    "---\n\n"
+    + BASELINE_FINISH_WORK_CONTENT
+)
+BASELINE_TRELLIS_BRAINSTORM_SKILL_CONTENT = (
+    "---\n"
+    "name: trellis-brainstorm\n"
+    "description: Baseline brainstorm skill\n"
+    "---\n\n"
+    + BASELINE_BRAINSTORM_CONTENT
+)
+BASELINE_TRELLIS_CHECK_SKILL_CONTENT = (
+    "---\n"
+    "name: trellis-check\n"
+    "description: Baseline check skill\n"
+    "---\n\n"
+    + BASELINE_CHECK_CONTENT
+)
 BASELINE_AGENT_RESEARCH_MD = (
     "---\n"
-    "name: research\n"
+    "name: trellis-research\n"
     "description: baseline research\n"
     "---\n\n"
     "# Research Agent\n"
 )
 BASELINE_AGENT_IMPLEMENT_MD = (
     "---\n"
-    "name: implement\n"
+    "name: trellis-implement\n"
     "description: baseline implement\n"
     "---\n\n"
     "# Implement Agent\n"
 )
 BASELINE_AGENT_CHECK_MD = (
     "---\n"
-    "name: check\n"
+    "name: trellis-check\n"
     "description: baseline check\n"
     "---\n\n"
     "# Check Agent\n"
 )
 BASELINE_CODEX_RESEARCH_TOML = (
-    'name = "research"\n'
+    'name = "trellis-research"\n'
     'description = "baseline research"\n'
     'sandbox_mode = "read-only"\n'
 )
 BASELINE_CODEX_IMPLEMENT_TOML = (
-    'name = "implement"\n'
+    'name = "trellis-implement"\n'
     'description = "baseline implement"\n'
     'sandbox_mode = "workspace-write"\n'
 )
 BASELINE_CODEX_CHECK_TOML = (
-    'name = "check"\n'
+    'name = "trellis-check"\n'
     'description = "baseline check"\n'
     'sandbox_mode = "read-only"\n'
 )
@@ -206,6 +239,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         bootstrap_as_current_task: bool = False,
         current_branch: str = "main",
         has_local_history: bool = False,
+        use_latest_trellis_baseline: bool = True,
     ) -> Path:
         root = Path(tempfile.mkdtemp(prefix="workflow-installers-"))
         if include_git:
@@ -251,8 +285,10 @@ class WorkflowInstallerTests(unittest.TestCase):
                         ".trellis/tasks/00-bootstrap-guidelines\n",
                         encoding="utf-8",
                     )
-        (root / ".claude" / "commands" / "trellis" / "start.md").write_text(
-            BASELINE_START_CONTENT,
+        claude_entry_name = "continue.md" if use_latest_trellis_baseline else "start.md"
+        claude_entry_content = BASELINE_CONTINUE_CONTENT if use_latest_trellis_baseline else BASELINE_START_CONTENT
+        (root / ".claude" / "commands" / "trellis" / claude_entry_name).write_text(
+            claude_entry_content,
             encoding="utf-8",
         )
         (root / ".claude" / "commands" / "trellis" / "brainstorm.md").write_text(
@@ -276,15 +312,23 @@ class WorkflowInstallerTests(unittest.TestCase):
             encoding="utf-8",
         )
         (root / ".claude" / "agents").mkdir(parents=True, exist_ok=True)
-        (root / ".claude" / "agents" / "research.md").write_text(BASELINE_AGENT_RESEARCH_MD, encoding="utf-8")
-        (root / ".claude" / "agents" / "implement.md").write_text(BASELINE_AGENT_IMPLEMENT_MD, encoding="utf-8")
-        (root / ".claude" / "agents" / "check.md").write_text(BASELINE_AGENT_CHECK_MD, encoding="utf-8")
+        claude_agent_prefix = "trellis-" if use_latest_trellis_baseline else ""
+        (root / ".claude" / "agents" / f"{claude_agent_prefix}research.md").write_text(BASELINE_AGENT_RESEARCH_MD, encoding="utf-8")
+        (root / ".claude" / "agents" / f"{claude_agent_prefix}implement.md").write_text(BASELINE_AGENT_IMPLEMENT_MD, encoding="utf-8")
+        (root / ".claude" / "agents" / f"{claude_agent_prefix}check.md").write_text(BASELINE_AGENT_CHECK_MD, encoding="utf-8")
         if include_trellis and include_trellis_version:
-            (root / ".trellis" / ".version").write_text("2.0.0\n", encoding="utf-8")
+            version = "0.5.0-rc.3" if use_latest_trellis_baseline else "2.0.0"
+            (root / ".trellis" / ".version").write_text(f"{version}\n", encoding="utf-8")
         if include_opencode:
             (root / ".opencode" / "commands" / "trellis").mkdir(parents=True)
-            (root / ".opencode" / "commands" / "trellis" / "start.md").write_text(
-                BASELINE_START_CONTENT.replace("Original baseline", "Original OpenCode baseline"),
+            opencode_entry_name = "continue.md" if use_latest_trellis_baseline else "start.md"
+            opencode_entry_content = (
+                BASELINE_CONTINUE_CONTENT.replace("Original baseline", "Original OpenCode baseline")
+                if use_latest_trellis_baseline
+                else BASELINE_START_CONTENT.replace("Original baseline", "Original OpenCode baseline")
+            )
+            (root / ".opencode" / "commands" / "trellis" / opencode_entry_name).write_text(
+                opencode_entry_content,
                 encoding="utf-8",
             )
             (root / ".opencode" / "commands" / "trellis" / "brainstorm.md").write_text(
@@ -308,29 +352,30 @@ class WorkflowInstallerTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".opencode" / "agents").mkdir(parents=True)
-            (root / ".opencode" / "agents" / "research.md").write_text(BASELINE_AGENT_RESEARCH_MD, encoding="utf-8")
-            (root / ".opencode" / "agents" / "implement.md").write_text(BASELINE_AGENT_IMPLEMENT_MD, encoding="utf-8")
-            (root / ".opencode" / "agents" / "check.md").write_text(BASELINE_AGENT_CHECK_MD, encoding="utf-8")
+            opencode_agent_prefix = "trellis-" if use_latest_trellis_baseline else ""
+            (root / ".opencode" / "agents" / f"{opencode_agent_prefix}research.md").write_text(BASELINE_AGENT_RESEARCH_MD, encoding="utf-8")
+            (root / ".opencode" / "agents" / f"{opencode_agent_prefix}implement.md").write_text(BASELINE_AGENT_IMPLEMENT_MD, encoding="utf-8")
+            (root / ".opencode" / "agents" / f"{opencode_agent_prefix}check.md").write_text(BASELINE_AGENT_CHECK_MD, encoding="utf-8")
         if include_codex:
             (root / ".agents" / "skills").mkdir(parents=True)
-            (root / ".agents" / "skills" / "start").mkdir(parents=True)
-            (root / ".agents" / "skills" / "start" / "SKILL.md").write_text(
-                BASELINE_START_SKILL_CONTENT,
+            (root / ".agents" / "skills" / "trellis-continue").mkdir(parents=True)
+            (root / ".agents" / "skills" / "trellis-continue" / "SKILL.md").write_text(
+                BASELINE_TRELLIS_CONTINUE_SKILL_CONTENT,
                 encoding="utf-8",
             )
-            (root / ".agents" / "skills" / "finish-work").mkdir(parents=True)
-            (root / ".agents" / "skills" / "finish-work" / "SKILL.md").write_text(
-                BASELINE_FINISH_WORK_CONTENT,
+            (root / ".agents" / "skills" / "trellis-finish-work").mkdir(parents=True)
+            (root / ".agents" / "skills" / "trellis-finish-work" / "SKILL.md").write_text(
+                BASELINE_TRELLIS_FINISH_WORK_SKILL_CONTENT,
                 encoding="utf-8",
             )
-            (root / ".agents" / "skills" / "brainstorm").mkdir(parents=True)
-            (root / ".agents" / "skills" / "brainstorm" / "SKILL.md").write_text(
-                BASELINE_BRAINSTORM_CONTENT,
+            (root / ".agents" / "skills" / "trellis-brainstorm").mkdir(parents=True)
+            (root / ".agents" / "skills" / "trellis-brainstorm" / "SKILL.md").write_text(
+                BASELINE_TRELLIS_BRAINSTORM_SKILL_CONTENT,
                 encoding="utf-8",
             )
-            (root / ".agents" / "skills" / "check").mkdir(parents=True)
-            (root / ".agents" / "skills" / "check" / "SKILL.md").write_text(
-                BASELINE_CHECK_CONTENT,
+            (root / ".agents" / "skills" / "trellis-check").mkdir(parents=True)
+            (root / ".agents" / "skills" / "trellis-check" / "SKILL.md").write_text(
+                BASELINE_TRELLIS_CHECK_SKILL_CONTENT,
                 encoding="utf-8",
             )
             (root / ".agents" / "skills" / "parallel").mkdir(parents=True)
@@ -342,9 +387,10 @@ class WorkflowInstallerTests(unittest.TestCase):
             (root / ".codex" / "agents").mkdir(parents=True)
             (root / ".codex" / "hooks.json").write_text("{}", encoding="utf-8")
             (root / ".codex" / "hooks" / "session-start.py").write_text("# hook\n", encoding="utf-8")
-            (root / ".codex" / "agents" / "research.toml").write_text(BASELINE_CODEX_RESEARCH_TOML, encoding="utf-8")
-            (root / ".codex" / "agents" / "implement.toml").write_text(BASELINE_CODEX_IMPLEMENT_TOML, encoding="utf-8")
-            (root / ".codex" / "agents" / "check.toml").write_text(BASELINE_CODEX_CHECK_TOML, encoding="utf-8")
+            codex_agent_prefix = "trellis-" if use_latest_trellis_baseline else ""
+            (root / ".codex" / "agents" / f"{codex_agent_prefix}research.toml").write_text(BASELINE_CODEX_RESEARCH_TOML, encoding="utf-8")
+            (root / ".codex" / "agents" / f"{codex_agent_prefix}implement.toml").write_text(BASELINE_CODEX_IMPLEMENT_TOML, encoding="utf-8")
+            (root / ".codex" / "agents" / f"{codex_agent_prefix}check.toml").write_text(BASELINE_CODEX_CHECK_TOML, encoding="utf-8")
         if include_agents_md:
             (root / "AGENTS.md").write_text("# Project Rules\n", encoding="utf-8")
         return root
@@ -401,6 +447,7 @@ class WorkflowInstallerTests(unittest.TestCase):
             module.prepare_command_content(commands_root / "start-skill-patch-phase-router.md"),
         )
         assert patched_start is not None
+        start_skill.parent.mkdir(parents=True, exist_ok=True)
         start_skill.write_text(patched_start, encoding="utf-8")
 
         patched_finish = module.build_finish_work_content(
@@ -408,13 +455,14 @@ class WorkflowInstallerTests(unittest.TestCase):
             module.prepare_command_content(commands_root / "finish-work-patch-projectization.md"),
         )
         assert patched_finish is not None
+        finish_work_skill.parent.mkdir(parents=True, exist_ok=True)
         finish_work_skill.write_text(patched_finish, encoding="utf-8")
 
         agents_backup_dir = fixture_root / ".trellis" / ".backup-original" / "codex-agents"
         agents_backup_dir.mkdir(parents=True, exist_ok=True)
-        (agents_backup_dir / "research.toml").write_text(BASELINE_CODEX_RESEARCH_TOML, encoding="utf-8")
-        (agents_backup_dir / "implement.toml").write_text(BASELINE_CODEX_IMPLEMENT_TOML, encoding="utf-8")
-        (agents_backup_dir / "check.toml").write_text(BASELINE_CODEX_CHECK_TOML, encoding="utf-8")
+        (agents_backup_dir / "trellis-research.toml").write_text(BASELINE_CODEX_RESEARCH_TOML, encoding="utf-8")
+        (agents_backup_dir / "trellis-implement.toml").write_text(BASELINE_CODEX_IMPLEMENT_TOML, encoding="utf-8")
+        (agents_backup_dir / "trellis-check.toml").write_text(BASELINE_CODEX_CHECK_TOML, encoding="utf-8")
 
     def test_install_deploys_record_session_closure_helper_and_patch(self) -> None:
         fixture = self.create_fixture()
@@ -446,7 +494,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("child task", workflow_doc_text)
         self.assertIn("parent coordinator records", workflow_doc_text)
         self.assertIn("does not automatically authorize", workflow_doc_text)
-        start_text = (fixture / ".claude" / "commands" / "trellis" / "start.md").read_text(encoding="utf-8")
+        start_text = (fixture / ".claude" / "commands" / "trellis" / "continue.md").read_text(encoding="utf-8")
         self.assertIn(
             ".trellis/scripts/workflow/workflow-state.py route <task-dir> --project-root <project-root>",
             start_text,
@@ -483,7 +531,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(record_data["disabled_commands"], ["parallel"])
         self.assertEqual(
             record_data["patched_baseline_commands"],
-            ["start", "finish-work", "record-session"],
+            ["continue", "finish-work", "record-session"],
         )
         self.assertEqual(record_data["patched_shared_docs"], ["workflow.md"])
         self.assertEqual(record_data["profile"], "outsourcing")
@@ -585,7 +633,7 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         opencode_finish_work = fixture / ".opencode" / "commands" / "trellis" / "finish-work.md"
-        codex_finish_work = fixture / ".agents" / "skills" / "finish-work" / "SKILL.md"
+        codex_finish_work = fixture / ".agents" / "skills" / "trellis-finish-work" / "SKILL.md"
         opencode_parallel = fixture / ".opencode" / "commands" / "trellis" / "parallel.md"
         codex_parallel = fixture / ".agents" / "skills" / "parallel" / "SKILL.md"
         opencode_text = opencode_finish_work.read_text(encoding="utf-8")
@@ -600,24 +648,24 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertFalse(opencode_parallel.exists())
         self.assertFalse(codex_parallel.exists())
 
-    def test_install_patches_codex_start_skill_phase_router(self) -> None:
+    def test_install_patches_codex_continue_skill_phase_router(self) -> None:
         fixture = self.create_fixture(include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
 
         install = self.install_workflow(fixture)
 
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
-        start_skill = fixture / ".agents" / "skills" / "start" / "SKILL.md"
+        start_skill = fixture / ".agents" / "skills" / "trellis-continue" / "SKILL.md"
         start_text = start_skill.read_text(encoding="utf-8")
         self.assertIn("## Workflow Phase Router Patch `[AI]`", start_text)
         self.assertIn("Use the `feasibility` skill", start_text)
         self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", start_text)
         self.assertNotIn("<WORKFLOW_DIR>/commands/shell", start_text)
         self.assertEqual(
-            (fixture / ".agents" / "skills" / ".backup-original" / "start" / "SKILL.md").read_text(
+            (fixture / ".agents" / "skills" / ".backup-original" / "trellis-continue" / "SKILL.md").read_text(
                 encoding="utf-8"
             ),
-            BASELINE_START_SKILL_CONTENT,
+            BASELINE_TRELLIS_CONTINUE_SKILL_CONTENT,
         )
 
     def test_install_deploys_managed_agents_and_aligns_codex_check_agent(self) -> None:
@@ -627,11 +675,11 @@ class WorkflowInstallerTests(unittest.TestCase):
         install = self.install_workflow(fixture)
 
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
-        claude_research = (fixture / ".claude" / "agents" / "research.md").read_text(encoding="utf-8")
-        opencode_research = (fixture / ".opencode" / "agents" / "research.md").read_text(encoding="utf-8")
-        codex_research = (fixture / ".codex" / "agents" / "research.toml").read_text(encoding="utf-8")
-        codex_implement = (fixture / ".codex" / "agents" / "implement.toml").read_text(encoding="utf-8")
-        codex_check = (fixture / ".codex" / "agents" / "check.toml").read_text(encoding="utf-8")
+        claude_research = (fixture / ".claude" / "agents" / "trellis-research.md").read_text(encoding="utf-8")
+        opencode_research = (fixture / ".opencode" / "agents" / "trellis-research.md").read_text(encoding="utf-8")
+        codex_research = (fixture / ".codex" / "agents" / "trellis-research.toml").read_text(encoding="utf-8")
+        codex_implement = (fixture / ".codex" / "agents" / "trellis-implement.toml").read_text(encoding="utf-8")
+        codex_check = (fixture / ".codex" / "agents" / "trellis-check.toml").read_text(encoding="utf-8")
         self.assertIn("mcp__ace__*", claude_research)
         self.assertIn("mcp__grok_search__*", claude_research)
         self.assertIn("mcp__deepwiki__*", claude_research)
@@ -654,8 +702,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn('sandbox_mode = "workspace-write"', codex_implement)
         self.assertIn('sandbox_mode = "workspace-write"', codex_check)
         self.assertIn("implementation-stage check-agent", codex_check)
-        self.assertTrue((fixture / ".claude" / "agents" / ".backup-original" / "check.md").exists())
-        self.assertTrue((fixture / ".trellis" / ".backup-original" / "codex-agents" / "check.toml").exists())
+        self.assertTrue((fixture / ".claude" / "agents" / ".backup-original" / "trellis-check.md").exists())
+        self.assertTrue((fixture / ".trellis" / ".backup-original" / "codex-agents" / "trellis-check.toml").exists())
 
     def test_install_keeps_codex_agent_backups_outside_codex_agents_scan_dir(self) -> None:
         fixture = self.create_fixture(include_codex=True)
@@ -664,7 +712,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         install = self.install_workflow(fixture)
 
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
-        self.assertTrue((fixture / ".trellis" / ".backup-original" / "codex-agents" / "research.toml").exists())
+        self.assertTrue((fixture / ".trellis" / ".backup-original" / "codex-agents" / "trellis-research.toml").exists())
         self.assertFalse((fixture / ".codex" / "agents" / ".backup-original").exists())
 
     def test_checked_in_agent_adapters_match_rendered_shared_source(self) -> None:
@@ -937,7 +985,7 @@ class WorkflowInstallerTests(unittest.TestCase):
     def test_install_leaves_failed_attempt_record_when_cli_deployment_fails(self) -> None:
         fixture = self.create_fixture(include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
-        (fixture / ".agents" / "skills" / "finish-work" / "SKILL.md").unlink()
+        (fixture / ".agents" / "skills" / "trellis-finish-work" / "SKILL.md").unlink()
 
         install = self.install_workflow(fixture)
 
@@ -1059,13 +1107,13 @@ class WorkflowInstallerTests(unittest.TestCase):
     def test_install_requires_codex_baseline_finish_work_skill(self) -> None:
         fixture = self.create_fixture(include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
-        (fixture / ".agents" / "skills" / "finish-work" / "SKILL.md").unlink()
+        (fixture / ".agents" / "skills" / "trellis-finish-work" / "SKILL.md").unlink()
 
         install = self.install_workflow(fixture)
 
         self.assertNotEqual(install.returncode, 0)
         self.assertIn(
-            "活动 skills 目录缺少 finish-work 基线", install.stdout + install.stderr
+            "活动 skills 目录缺少 trellis-finish-work 基线", install.stdout + install.stderr
         )
         self.assertFalse((fixture / ".trellis" / "workflow-installed.json").exists())
 
@@ -1081,8 +1129,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         self.assertTrue((fixture / ".agents" / "skills" / "delivery" / "SKILL.md").exists())
         self.assertFalse((fixture / ".codex" / "skills" / "delivery" / "SKILL.md").exists())
-        self.assertFalse((fixture / ".codex" / "skills" / "finish-work" / "SKILL.md").exists())
-        self.assertFalse((fixture / ".codex" / "skills" / "start" / "SKILL.md").exists())
+        self.assertFalse((fixture / ".codex" / "skills" / "trellis-finish-work" / "SKILL.md").exists())
+        self.assertFalse((fixture / ".codex" / "skills" / "trellis-continue" / "SKILL.md").exists())
         self.assertFalse((fixture / ".codex" / "skills" / "parallel" / "SKILL.md").exists())
         self.assertTrue((fixture / ".codex" / "skills" / ".backup-original" / "parallel" / "SKILL.md").exists())
 
@@ -1183,8 +1231,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
 
-        backup_start = fixture / ".claude" / "commands" / "trellis" / ".backup-original" / "start.md"
-        target_start = fixture / ".claude" / "commands" / "trellis" / "start.md"
+        backup_start = fixture / ".claude" / "commands" / "trellis" / ".backup-original" / "continue.md"
+        target_start = fixture / ".claude" / "commands" / "trellis" / "continue.md"
         shutil.copy2(backup_start, target_start)
 
         result = self.run_script(
@@ -1371,7 +1419,7 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         updated_record = json.loads(record_path.read_text(encoding="utf-8"))
-        self.assertEqual(updated_record["patched_codex_skills"], ["start", "finish-work"])
+        self.assertEqual(updated_record["patched_codex_skills"], ["trellis-continue", "trellis-finish-work"])
 
     def test_upgrade_check_detects_codex_start_skill_patch_drift(self) -> None:
         fixture = self.create_fixture(include_codex=True)
@@ -1431,8 +1479,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         self.mark_legacy_codex_installed(fixture)
 
-        codex_check = fixture / ".codex" / "agents" / "check.toml"
-        codex_check.write_text('name = "check"\nsandbox_mode = "read-only"\n', encoding="utf-8")
+        codex_check = fixture / ".codex" / "agents" / "trellis-check.toml"
+        codex_check.write_text('name = "trellis-check"\nsandbox_mode = "read-only"\n', encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
         result = self.run_script(
@@ -1453,7 +1501,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
 
-        claude_research = fixture / ".claude" / "agents" / "research.md"
+        claude_research = fixture / ".claude" / "agents" / "trellis-research.md"
         claude_research.write_text("# drifted research\n", encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
@@ -1475,7 +1523,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
 
-        opencode_check = fixture / ".opencode" / "agents" / "check.md"
+        opencode_check = fixture / ".opencode" / "agents" / "trellis-check.md"
         opencode_check.write_text("# drifted check\n", encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
@@ -1498,8 +1546,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         self.mark_legacy_codex_installed(fixture)
 
-        codex_check = fixture / ".codex" / "agents" / "check.toml"
-        codex_check.write_text('name = "check"\nsandbox_mode = "read-only"\n', encoding="utf-8")
+        codex_check = fixture / ".codex" / "agents" / "trellis-check.toml"
+        codex_check.write_text('name = "trellis-check"\nsandbox_mode = "read-only"\n', encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
         result = self.run_script(
@@ -1522,7 +1570,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
 
-        claude_research = fixture / ".claude" / "agents" / "research.md"
+        claude_research = fixture / ".claude" / "agents" / "trellis-research.md"
         claude_research.write_text("# drifted research\n", encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
@@ -1551,7 +1599,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
 
-        opencode_check = fixture / ".opencode" / "agents" / "check.md"
+        opencode_check = fixture / ".opencode" / "agents" / "trellis-check.md"
         opencode_check.write_text("# drifted check\n", encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
@@ -1584,7 +1632,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         )
         self.assertEqual(merge.returncode, 0, msg=merge.stdout + merge.stderr)
 
-        codex_check = fixture / ".codex" / "agents" / "check.toml"
+        codex_check = fixture / ".codex" / "agents" / "trellis-check.toml"
         self.assertIn('sandbox_mode = "workspace-write"', codex_check.read_text(encoding="utf-8"))
 
         result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
@@ -1603,7 +1651,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
 
-        claude_research = fixture / ".claude" / "agents" / "research.md"
+        claude_research = fixture / ".claude" / "agents" / "trellis-research.md"
         self.assertIn("Context7", claude_research.read_text(encoding="utf-8"))
 
         result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
@@ -1620,7 +1668,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
 
-        opencode_check = fixture / ".opencode" / "agents" / "check.md"
+        opencode_check = fixture / ".opencode" / "agents" / "trellis-check.md"
         self.assertIn("implementation-stage Check Agent", opencode_check.read_text(encoding="utf-8"))
 
         result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
@@ -1634,13 +1682,13 @@ class WorkflowInstallerTests(unittest.TestCase):
         fixture = self.create_fixture(include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
 
-        created_by_install = fixture / ".codex" / "agents" / "research.toml"
+        created_by_install = fixture / ".codex" / "agents" / "trellis-research.toml"
         created_by_install.unlink()
 
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         self.assertTrue(created_by_install.exists())
-        self.assertFalse((fixture / ".trellis" / ".backup-original" / "codex-agents" / "research.toml").exists())
+        self.assertFalse((fixture / ".trellis" / ".backup-original" / "codex-agents" / "trellis-research.toml").exists())
 
         result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
 
@@ -1744,7 +1792,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
 
-        broken_start = fixture / ".claude" / "commands" / "trellis" / "start.md"
+        broken_start = fixture / ".claude" / "commands" / "trellis" / "continue.md"
         broken_start.write_text(
             "# broken start\n\n"
             "This file intentionally lacks the expected injection marker.\n",
@@ -1792,10 +1840,10 @@ class WorkflowInstallerTests(unittest.TestCase):
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
 
-        start = fixture / ".claude" / "commands" / "trellis" / "start.md"
+        start = fixture / ".claude" / "commands" / "trellis" / "continue.md"
         finish_work = fixture / ".claude" / "commands" / "trellis" / "finish-work.md"
         record_session = fixture / ".claude" / "commands" / "trellis" / "record-session.md"
-        start.write_text(BASELINE_START_CONTENT, encoding="utf-8")
+        start.write_text(BASELINE_CONTINUE_CONTENT, encoding="utf-8")
         finish_work.write_text(BASELINE_FINISH_WORK_CONTENT, encoding="utf-8")
         record_session.write_text(BASELINE_RECORD_SESSION_CONTENT, encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
@@ -1814,7 +1862,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(RECORD_SESSION_MARKER, record_session.read_text(encoding="utf-8"))
         record_data = json.loads((fixture / ".trellis" / "workflow-installed.json").read_text(encoding="utf-8"))
         self.assertEqual(record_data["workflow_version"], "0.1.26")
-        self.assertEqual(record_data["previous_version"], "2.0.0")
+        self.assertEqual(record_data["previous_version"], "0.5.0-rc.3")
 
         followup_check = self.run_script(
             UPGRADE_SCRIPT,
@@ -1824,6 +1872,35 @@ class WorkflowInstallerTests(unittest.TestCase):
             env=self.latest_env_for(fixture),
         )
         self.assertEqual(followup_check.returncode, 0, msg=followup_check.stdout + followup_check.stderr)
+
+    def test_upgrade_merge_preserves_legacy_entry_command_while_migrating_agent_names(self) -> None:
+        fixture = self.create_fixture(include_codex=True, use_latest_trellis_baseline=False)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        legacy_start = fixture / ".claude" / "commands" / "trellis" / "start.md"
+        self.assertTrue(legacy_start.exists())
+
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        merge = self.run_script(
+            UPGRADE_SCRIPT,
+            "--merge",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertEqual(merge.returncode, 0, msg=merge.stdout + merge.stderr)
+        self.assertIn(
+            PHASE_ROUTER_MARKER,
+            (fixture / ".claude" / "commands" / "trellis" / "start.md").read_text(encoding="utf-8"),
+        )
+        self.assertTrue((fixture / ".claude" / "commands" / "trellis" / "start.md").exists())
+        self.assertTrue((fixture / ".claude" / "agents" / "trellis-research.md").exists())
+        self.assertFalse((fixture / ".claude" / "agents" / "research.md").exists())
 
     def test_upgrade_merge_restores_agents_md_routing(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
@@ -2010,7 +2087,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("workflow-installed.json", result.stdout)
         self.assertFalse(record.exists())
         self.assertFalse((fixture / ".trellis" / "scripts" / "workflow").exists())
-        self.assertTrue((fixture / ".claude" / "commands" / "trellis" / "start.md").exists())
+        self.assertTrue((fixture / ".claude" / "commands" / "trellis" / "continue.md").exists())
         finish_work = (fixture / ".claude" / "commands" / "trellis" / "finish-work.md").read_text(encoding="utf-8")
         self.assertNotIn(FINISH_WORK_MARKER, finish_work)
         self.assertIn("pnpm lint", finish_work)

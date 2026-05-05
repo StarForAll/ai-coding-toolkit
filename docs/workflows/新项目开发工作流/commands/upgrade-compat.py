@@ -31,16 +31,22 @@ from workflow_assets import (
     AGENT_SUFFIXES,
     ALL_CLI_TYPES,
     CODEX_PATCH_BASELINE_SKILLS,
-    CODEX_SHARED_SKILL_NAMES,
+    CODEX_SHARED_SKILL_CLEANUP_NAMES,
     CLI_ALT_DIRS,
     CLI_DIRS,
     CORE_HELPER_SCRIPTS,
     DEFAULT_PROFILE,
+    command_finish_work_candidates,
+    command_phase_router_candidates,
+    command_record_session_candidates,
+    codex_finish_work_skill_candidates,
+    codex_phase_router_skill_candidates,
     codex_secondary_skills_dir,
     codex_shared_skills_dir,
     DISTRIBUTED_COMMANDS,
     detect_cli_types as detect_cli_types_shared,
     EXECUTION_CARDS,
+    find_first_existing_codex_skill_path,
     HELPER_SCRIPTS,
     list_all_codex_skills_dirs,
     MANAGED_IMPLEMENTATION_AGENTS,
@@ -58,6 +64,7 @@ from workflow_assets import (
     render_workflow_managed_agent,
     read_project_trellis_version,
     resolve_codex_skills_dir,
+    workflow_legacy_managed_agent_target_path,
     workflow_managed_agent_target_path,
 )
 
@@ -112,6 +119,7 @@ _PARALLEL_DISABLED_MARKER = "<!-- workflow-parallel-disabled -->"
 _WORKFLOW_PATCH_MARKER = "<!-- workflow-projectization-patch -->"
 _WORKFLOW_START_HEADING = "## Development Process"
 _WORKFLOW_END_HEADING = "## File Descriptions"
+_ENTRY_COMMAND_CANDIDATES = ("continue.md", "start.md")
 _IGNORE_EMBED_ATTEMPT_ENV = "WORKFLOW_IGNORE_EMBED_ATTEMPT"
 # 当前 workflow 分发的阶段命令。
 # `brainstorm` / `check` 与 Trellis 基线同名，但当前 workflow 采用合并后的阶段语义；
@@ -230,11 +238,11 @@ def build_finish_work_content(content: str, patch_text: str) -> str | None:
     start_idx = content.find(_FINISH_WORK_START_HEADING)
     end_idx = content.find(_FINISH_WORK_END_HEADING)
     if start_idx == -1:
-        return None
+        return content.rstrip() + "\n\n---\n\n" + patch_text.rstrip() + "\n"
     if end_idx == -1 or end_idx <= start_idx:
         next_heading_idx = content.find("\n### ", start_idx + len(_FINISH_WORK_START_HEADING))
         if next_heading_idx == -1:
-            return None
+            return content.rstrip() + "\n\n---\n\n" + patch_text.rstrip() + "\n"
         end_idx = next_heading_idx + 1
 
     prefix = content[:start_idx]
@@ -249,7 +257,7 @@ def build_workflow_content(content: str, patch_text: str) -> str | None:
     start_idx = content.find(_WORKFLOW_START_HEADING)
     end_idx = content.find(_WORKFLOW_END_HEADING)
     if start_idx == -1 or end_idx == -1 or end_idx <= start_idx:
-        return None
+        return content.rstrip() + "\n\n" + patch_text.rstrip() + "\n"
 
     prefix = content[:start_idx]
     suffix = content[end_idx:].lstrip("\n")
@@ -332,7 +340,9 @@ def detect_embed_attempt_conflict(root: Path) -> int:
     return 1
 
 
-def read_text(path: Path) -> str | None:
+def read_text(path: Path | None) -> str | None:
+    if path is None:
+        return None
     if not path.exists():
         return None
     try:
@@ -381,19 +391,50 @@ def is_parallel_disabled(path: Path) -> bool:
     return _PARALLEL_DISABLED_MARKER in text
 
 
+def _find_first_existing_command(dst_cmds: Path, candidates: tuple[str, ...]) -> Path | None:
+    for name in candidates:
+        path = dst_cmds / f"{name}.md"
+        if path.exists():
+            return path
+    return None
+
+
+def _ordered_command_candidates(
+    configured_names: list[str] | None,
+    canonical_names: list[str],
+) -> list[str]:
+    ordered: list[str] = []
+    for name in (configured_names or []) + canonical_names:
+        if name and name not in ordered:
+            ordered.append(name)
+    return ordered
+
+
+def _matching_configured_command_names(
+    configured_names: list[str] | None,
+    allowed_names: list[str],
+) -> list[str]:
+    allowed = set(allowed_names)
+    return [name for name in configured_names or [] if name in allowed]
+
+
 # ── Claude Code 冲突检测 ──
 def detect_conflicts_claude(src: Path, dst_cmds: Path, *, profile: str = DEFAULT_PROFILE) -> int:
     conflicts = 0
-    start = dst_cmds / "start.md"
+    entry_command = _find_first_existing_command(dst_cmds, tuple(command_phase_router_candidates()))
     finish_work = dst_cmds / "finish-work.md"
     record_session = dst_cmds / "record-session.md"
+    record_session_backup = dst_cmds / ".backup-original" / "record-session.md"
     parallel = dst_cmds / "parallel.md"
 
-    if not has_phase_router(start):
-        err("[Claude] start.md: Phase Router 丢失")
+    if entry_command is None:
+        err("[Claude] continue.md/start.md: 文件缺失")
+        conflicts += 1
+    elif not has_phase_router(entry_command):
+        err(f"[Claude] {entry_command.name}: Phase Router 丢失")
         conflicts += 1
     else:
-        ok("[Claude] start.md: Phase Router 正常")
+        ok(f"[Claude] {entry_command.name}: Phase Router 正常")
 
     command_conflicts = 0
     for name in DISTRIBUTED_COMMANDS:
@@ -425,8 +466,9 @@ def detect_conflicts_claude(src: Path, dst_cmds: Path, *, profile: str = DEFAULT
         ok("[Claude] finish-work.md: 项目化补丁正常")
 
     if not record_session.exists():
-        err("[Claude] record-session.md: 文件缺失")
-        conflicts += 1
+        if record_session_backup.exists():
+            err("[Claude] record-session.md: 文件缺失")
+            conflicts += 1
     elif not has_record_session_patch(record_session):
         err("[Claude] record-session.md: 元数据闭环说明缺失")
         conflicts += 1
@@ -446,16 +488,20 @@ def detect_conflicts_claude(src: Path, dst_cmds: Path, *, profile: str = DEFAULT
 # ── OpenCode 冲突检测 ──
 def detect_conflicts_opencode(src: Path, dst_cmds: Path, *, profile: str = DEFAULT_PROFILE) -> int:
     conflicts = 0
-    start = dst_cmds / "start.md"
+    entry_command = _find_first_existing_command(dst_cmds, tuple(command_phase_router_candidates()))
     finish_work = dst_cmds / "finish-work.md"
     record_session = dst_cmds / "record-session.md"
+    record_session_backup = dst_cmds / ".backup-original" / "record-session.md"
     parallel = dst_cmds / "parallel.md"
 
-    if not has_phase_router(start):
-        err("[OpenCode] start.md: Phase Router 丢失")
+    if entry_command is None:
+        err("[OpenCode] continue.md/start.md: 文件缺失")
+        conflicts += 1
+    elif not has_phase_router(entry_command):
+        err(f"[OpenCode] {entry_command.name}: Phase Router 丢失")
         conflicts += 1
     else:
-        ok("[OpenCode] start.md: Phase Router 正常")
+        ok(f"[OpenCode] {entry_command.name}: Phase Router 正常")
 
     command_conflicts = 0
     for name in DISTRIBUTED_COMMANDS:
@@ -487,8 +533,9 @@ def detect_conflicts_opencode(src: Path, dst_cmds: Path, *, profile: str = DEFAU
         ok("[OpenCode] finish-work.md: 项目化补丁正常")
 
     if not record_session.exists():
-        err("[OpenCode] record-session.md: 文件缺失")
-        conflicts += 1
+        if record_session_backup.exists():
+            err("[OpenCode] record-session.md: 文件缺失")
+            conflicts += 1
     elif not has_record_session_patch(record_session):
         err("[OpenCode] record-session.md: 元数据闭环说明缺失")
         conflicts += 1
@@ -544,12 +591,14 @@ def detect_conflicts_managed_agents(src: Path, root: Path, cli_type: str, cli_la
     conflicts = 0
     for agent_name in MANAGED_IMPLEMENTATION_AGENTS:
         target_path = workflow_managed_agent_target_path(root, cli_type, agent_name)
-        if not target_path.exists():
+        legacy_target_path = workflow_legacy_managed_agent_target_path(root, cli_type, agent_name)
+        actual_path = target_path if target_path.exists() else legacy_target_path
+        if not actual_path.exists():
             err(f"[{cli_label}] agent 缺失: {target_path.relative_to(root)}")
             conflicts += 1
             continue
         expected = expected_agent_content(src, cli_type, agent_name)
-        actual = read_text(target_path)
+        actual = read_text(actual_path)
         if expected is None or actual is None:
             conflicts += 1
             continue
@@ -562,7 +611,32 @@ def detect_conflicts_managed_agents(src: Path, root: Path, cli_type: str, cli_la
 
 
 # ── Codex 冲突检测 ──
-def detect_conflicts_codex(src: Path, root: Path, *, profile: str = DEFAULT_PROFILE) -> int:
+def _ordered_codex_skill_candidates(
+    configured_names: list[str] | None,
+    canonical_names: list[str],
+) -> list[str]:
+    ordered: list[str] = []
+    for name in (configured_names or []) + canonical_names:
+        if name and name not in ordered:
+            ordered.append(name)
+    return ordered
+
+
+def _matching_configured_codex_skills(
+    configured_names: list[str] | None,
+    allowed_names: list[str],
+) -> list[str]:
+    allowed = set(allowed_names)
+    return [name for name in configured_names or [] if name in allowed]
+
+
+def detect_conflicts_codex(
+    src: Path,
+    root: Path,
+    *,
+    profile: str = DEFAULT_PROFILE,
+    patched_codex_skills: list[str] | None = None,
+) -> int:
     conflicts = 0
     skills_dirs = list_all_codex_skills_dirs(root)
     if not skills_dirs:
@@ -598,7 +672,7 @@ def detect_conflicts_codex(src: Path, root: Path, *, profile: str = DEFAULT_PROF
 
     if secondary_skills_dir.is_dir():
         duplicate_conflicts = 0
-        for name in CODEX_SHARED_SKILL_NAMES:
+        for name in CODEX_SHARED_SKILL_CLEANUP_NAMES:
             duplicate_path = secondary_skills_dir / name / "SKILL.md"
             if duplicate_path.exists():
                 err(f"[Codex] duplicate shared skill 应已移除: {duplicate_path.relative_to(root)}")
@@ -606,25 +680,41 @@ def detect_conflicts_codex(src: Path, root: Path, *, profile: str = DEFAULT_PROF
         if duplicate_conflicts:
             conflicts += duplicate_conflicts
 
+    configured_skills = [name for name in patched_codex_skills or [] if isinstance(name, str)]
+    router_skill = find_first_existing_codex_skill_path(
+        root,
+        _ordered_codex_skill_candidates(
+            _matching_configured_codex_skills(configured_skills, codex_phase_router_skill_candidates()),
+            codex_phase_router_skill_candidates(),
+        ),
+        skills_dir=primary_skills_dir,
+    )
+    finish_work_skill = find_first_existing_codex_skill_path(
+        root,
+        _ordered_codex_skill_candidates(
+            _matching_configured_codex_skills(configured_skills, codex_finish_work_skill_candidates()),
+            codex_finish_work_skill_candidates(),
+        ),
+        skills_dir=primary_skills_dir,
+    )
+
     # baseline patch 型 skills 只检查活动 skills 目录
-    finish_work_skill = primary_skills_dir / "finish-work" / "SKILL.md"
-    if not finish_work_skill.exists():
-        err(f"[Codex] finish-work skill ({primary_skills_dir.relative_to(root)}): 基线缺失")
+    if finish_work_skill is None:
+        err(f"[Codex] {CODEX_PATCH_BASELINE_SKILLS[1]} skill ({primary_skills_dir.relative_to(root)}): 基线缺失")
         conflicts += 1
     elif has_finish_work_patch(finish_work_skill):
-        ok(f"[Codex] finish-work skill ({primary_skills_dir.relative_to(root)}): 项目化补丁正常")
+        ok(f"[Codex] {finish_work_skill.parent.name} skill ({primary_skills_dir.relative_to(root)}): 项目化补丁正常")
     else:
-        err(f"[Codex] finish-work skill ({primary_skills_dir.relative_to(root)}): 项目化补丁缺失")
+        err(f"[Codex] {finish_work_skill.parent.name} skill ({primary_skills_dir.relative_to(root)}): 项目化补丁缺失")
         conflicts += 1
 
-    start_skill = primary_skills_dir / "start" / "SKILL.md"
-    if not start_skill.exists():
-        err(f"[Codex] start skill ({primary_skills_dir.relative_to(root)}): 基线缺失")
+    if router_skill is None:
+        err(f"[Codex] {CODEX_PATCH_BASELINE_SKILLS[0]} skill ({primary_skills_dir.relative_to(root)}): 基线缺失")
         conflicts += 1
-    elif has_codex_start_skill_patch(start_skill):
-        ok(f"[Codex] start skill ({primary_skills_dir.relative_to(root)}): Phase Router 补丁正常")
+    elif has_codex_start_skill_patch(router_skill):
+        ok(f"[Codex] {router_skill.parent.name} skill ({primary_skills_dir.relative_to(root)}): Phase Router 补丁正常")
     else:
-        err(f"[Codex] start skill ({primary_skills_dir.relative_to(root)}): Phase Router 补丁缺失")
+        err(f"[Codex] {router_skill.parent.name} skill ({primary_skills_dir.relative_to(root)}): Phase Router 补丁缺失")
         conflicts += 1
 
     # hooks 是全局的，只检查一次
@@ -710,9 +800,9 @@ def backup_deployed_state(dst_cmds: Path) -> None:
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
     backup_dir = dst_cmds / f".backup-upgrade-{ts}"
     backup_dir.mkdir(parents=True, exist_ok=True)
-    start = dst_cmds / "start.md"
-    if start.exists():
-        shutil.copy2(start, backup_dir / "start.md")
+    entry_command = _find_first_existing_command(dst_cmds, tuple(command_phase_router_candidates()))
+    if entry_command is not None:
+        shutil.copy2(entry_command, backup_dir / entry_command.name)
     finish_work = dst_cmds / "finish-work.md"
     if finish_work.exists():
         shutil.copy2(finish_work, backup_dir / "finish-work.md")
@@ -779,12 +869,15 @@ def deploy_managed_agents(src: Path, root: Path, cli_type: str, cli_label: str) 
 
     for agent_name in MANAGED_IMPLEMENTATION_AGENTS:
         target_path = workflow_managed_agent_target_path(root, cli_type, agent_name)
+        legacy_target_path = workflow_legacy_managed_agent_target_path(root, cli_type, agent_name)
         try:
             rendered = render_workflow_managed_agent(src, cli_type, agent_name)
         except FileNotFoundError as exc:
             err(f"[{cli_label}] 源 agent 缺失，无法重部署: {exc.filename}")
             continue
         target_path.write_text(rendered, encoding="utf-8")
+        if legacy_target_path != target_path and legacy_target_path.exists():
+            legacy_target_path.unlink()
         ok(f"[{cli_label}] agent 已重部署: {agent_name}")
 
 
@@ -811,7 +904,7 @@ def deploy_codex_skills(src: Path, root: Path, *, profile: str = DEFAULT_PROFILE
             shutil.rmtree(parallel_skill.parent)
             ok(f"[Codex] parallel skill 已从嵌入面移除 → {parallel_skill.relative_to(root)}")
     if secondary_skills_dir.is_dir():
-        for name in CODEX_SHARED_SKILL_NAMES:
+        for name in CODEX_SHARED_SKILL_CLEANUP_NAMES:
             duplicate_dir = secondary_skills_dir / name
             if duplicate_dir.exists():
                 shutil.rmtree(duplicate_dir)
@@ -840,14 +933,21 @@ def restore_optional_command_from_original_backup(dst_cmds: Path, command_name: 
     return True
 
 
-def restore_start_from_original_backup(dst_cmds: Path, start: Path) -> bool:
-    backup_start = dst_cmds / ".backup-original" / "start.md"
-    if not backup_start.exists():
-        err("缺少 .backup-original/start.md，无法执行强制恢复")
-        return False
-    shutil.copy2(backup_start, start)
-    ok("start.md 已从 .backup-original 恢复")
-    return True
+def restore_start_from_original_backup(
+    dst_cmds: Path,
+    start: Path,
+    candidate_names: list[str] | None = None,
+) -> bool:
+    candidates = candidate_names or command_phase_router_candidates()
+    for command_name in candidates:
+        backup_start = dst_cmds / ".backup-original" / f"{command_name}.md"
+        if not backup_start.exists():
+            continue
+        shutil.copy2(backup_start, start)
+        ok(f"{command_name}.md 已从 .backup-original 恢复")
+        return True
+    err("缺少 .backup-original/continue.md 或 start.md，无法执行强制恢复")
+    return False
 
 
 def restore_workflow_from_original_backup(root: Path) -> bool:
@@ -861,28 +961,31 @@ def restore_workflow_from_original_backup(root: Path) -> bool:
     return True
 
 
-def restore_codex_finish_work(skills_dir: Path) -> bool:
-    backup_path = skills_dir / ".backup-original" / "finish-work" / "SKILL.md"
-    target_path = skills_dir / "finish-work" / "SKILL.md"
+def restore_codex_skill_from_backup(skills_dir: Path, skill_name: str) -> bool:
+    backup_path = skills_dir / ".backup-original" / skill_name / "SKILL.md"
+    target_path = skills_dir / skill_name / "SKILL.md"
     if not backup_path.exists():
-        err("缺少 .backup-original/finish-work/SKILL.md，无法执行强制恢复")
         return False
     target_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(backup_path, target_path)
-    ok("[Codex] finish-work skill 已从 .backup-original 恢复")
+    ok(f"[Codex] {skill_name} skill 已从 .backup-original 恢复")
     return True
 
 
-def restore_codex_start_skill(skills_dir: Path) -> bool:
-    backup_path = skills_dir / ".backup-original" / "start" / "SKILL.md"
-    target_path = skills_dir / "start" / "SKILL.md"
-    if not backup_path.exists():
-        err("缺少 .backup-original/start/SKILL.md，无法执行强制恢复")
-        return False
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(backup_path, target_path)
-    ok("[Codex] start skill 已从 .backup-original 恢复")
-    return True
+def restore_codex_finish_work(skills_dir: Path, candidate_names: list[str] | None = None) -> bool:
+    for skill_name in candidate_names or codex_finish_work_skill_candidates():
+        if restore_codex_skill_from_backup(skills_dir, skill_name):
+            return True
+    err("缺少 .backup-original/trellis-finish-work 或 finish-work，无法执行强制恢复")
+    return False
+
+
+def restore_codex_start_skill(skills_dir: Path, candidate_names: list[str] | None = None) -> bool:
+    for skill_name in candidate_names or codex_phase_router_skill_candidates():
+        if restore_codex_skill_from_backup(skills_dir, skill_name):
+            return True
+    err("缺少 .backup-original/trellis-continue 或 start，无法执行强制恢复")
+    return False
 
 
 def restore_optional_codex_skill(skills_dir: Path, skill_name: str) -> bool:
@@ -907,8 +1010,12 @@ def inject_phase_router(src: Path, start: Path) -> bool:
 
     content = start.read_text(encoding="utf-8")
     if _INJECTION_MARKER not in content:
-        warn("start.md 中未找到 '## Operation Types'，无法自动注入 Phase Router")
-        return False
+        start.write_text(
+            content.rstrip() + "\n\n---\n\n" + prepare_command_content(patch).rstrip() + "\n",
+            encoding="utf-8",
+        )
+        ok("Phase Router 已注入")
+        return True
 
     before, after = content.split(_INJECTION_MARKER, 1)
     start.write_text(before + prepare_command_content(patch) + "\n" + _INJECTION_MARKER + after, encoding="utf-8")
@@ -916,13 +1023,13 @@ def inject_phase_router(src: Path, start: Path) -> bool:
     return True
 
 
-def build_codex_start_skill_content(content: str, patch_text: str) -> str:
+def build_codex_phase_router_skill_content(content: str, patch_text: str) -> str:
     if _CODEX_START_SKILL_MARKER in content:
         return content
     return content.rstrip() + "\n\n---\n\n" + patch_text.rstrip() + "\n"
 
 
-def inject_codex_start_skill_patch(src: Path, start_skill_path: Path, target_label: str) -> bool:
+def inject_codex_phase_router_skill_patch(src: Path, start_skill_path: Path, target_label: str) -> bool:
     patch = src / "start-skill-patch-phase-router.md"
     if not patch.exists():
         err("start-skill-patch-phase-router.md 缺失，无法恢复 Codex start Phase Router 补丁")
@@ -937,11 +1044,21 @@ def inject_codex_start_skill_patch(src: Path, start_skill_path: Path, target_lab
         return True
 
     start_skill_path.write_text(
-        build_codex_start_skill_content(content, prepare_command_content(patch)),
+        build_codex_phase_router_skill_content(content, prepare_command_content(patch)),
         encoding="utf-8",
     )
     ok(f"{target_label} Phase Router 补丁已注入")
     return True
+
+
+def build_codex_start_skill_content(content: str, patch_text: str) -> str:
+    """Legacy wrapper preserved for older helper call sites."""
+    return build_codex_phase_router_skill_content(content, patch_text)
+
+
+def inject_codex_start_skill_patch(src: Path, start_skill_path: Path, target_label: str) -> bool:
+    """Legacy wrapper preserved for older helper call sites."""
+    return inject_codex_phase_router_skill_patch(src, start_skill_path, target_label)
 
 
 def inject_finish_work_patch(src: Path, finish_work_path: Path, target_label: str) -> bool:
@@ -1165,7 +1282,12 @@ def main() -> int:
             total_conflicts += detect_conflicts_opencode(src, dst_cmds, profile=profile)
             total_conflicts += detect_conflicts_managed_agents(src, root, "opencode", "OpenCode")
         elif cli_type == "codex":
-            total_conflicts += detect_conflicts_codex(src, root, profile=profile)
+            total_conflicts += detect_conflicts_codex(
+                src,
+                root,
+                profile=profile,
+                patched_codex_skills=record.get("patched_codex_skills"),
+            )
             total_conflicts += detect_conflicts_managed_agents(src, root, "codex", "Codex")
     total_conflicts += detect_shared_script_conflicts(src, dst_scripts, profile=profile)
     total_conflicts += detect_execution_card_conflicts(src, root, profile=profile)
@@ -1207,18 +1329,31 @@ def main() -> int:
     for cli_type in cli_types:
         if cli_type == "claude":
             dst_cmds = root / ".claude" / "commands" / "trellis"
-            start = dst_cmds / "start.md"
+            patched_baseline_commands = [
+                name for name in record.get("patched_baseline_commands", []) if isinstance(name, str)
+            ]
+            detected_entry = _find_first_existing_command(dst_cmds, tuple(command_phase_router_candidates()))
+            current_entry_name = detected_entry.name[:-3] if detected_entry is not None else command_phase_router_candidates()[0]
+            entry_command_candidates = _ordered_command_candidates(
+                [current_entry_name, *_matching_configured_command_names(patched_baseline_commands, command_phase_router_candidates())],
+                command_phase_router_candidates(),
+            )
+            record_session_candidates = _ordered_command_candidates(
+                _matching_configured_command_names(patched_baseline_commands, command_record_session_candidates()),
+                command_record_session_candidates(),
+            )
+            start = _find_first_existing_command(dst_cmds, tuple(entry_command_candidates)) or dst_cmds / entry_command_candidates[0]
             finish_work = dst_cmds / "finish-work.md"
-            record_session = dst_cmds / "record-session.md"
+            record_session = _find_first_existing_command(dst_cmds, tuple(record_session_candidates)) if record_session_candidates else None
             parallel = dst_cmds / "parallel.md"
             backup_deployed_state(dst_cmds)
             deploy_commands(src, dst_cmds, profile=profile)
             if args.mode == "force":
-                if not restore_start_from_original_backup(dst_cmds, start):
+                if not restore_start_from_original_backup(dst_cmds, start, entry_command_candidates):
                     return 1
                 if not restore_command_from_original_backup(dst_cmds, "finish-work"):
                     return 1
-                if not restore_command_from_original_backup(dst_cmds, "record-session"):
+                if record_session is not None and not restore_command_from_original_backup(dst_cmds, record_session.name[:-3]):
                     return 1
                 restore_optional_command_from_original_backup(dst_cmds, "parallel")
             if not has_phase_router(start) and not inject_phase_router(src, start):
@@ -1227,7 +1362,7 @@ def main() -> int:
             if not has_finish_work_patch(finish_work) and not inject_finish_work_patch(src, finish_work, "finish-work.md"):
                 err("[Claude] finish-work 项目化补丁恢复失败")
                 return 1
-            if not has_record_session_patch(record_session) and not inject_record_session_patch(src, record_session, profile=profile):
+            if record_session is not None and not has_record_session_patch(record_session) and not inject_record_session_patch(src, record_session, profile=profile):
                 err("[Claude] record-session 元数据闭环恢复失败")
                 return 1
             if parallel.exists():
@@ -1236,18 +1371,31 @@ def main() -> int:
             deploy_managed_agents(src, root, "claude", "Claude")
         elif cli_type == "opencode":
             dst_cmds = root / ".opencode" / "commands" / "trellis"
-            start = dst_cmds / "start.md"
+            patched_baseline_commands = [
+                name for name in record.get("patched_baseline_commands", []) if isinstance(name, str)
+            ]
+            detected_entry = _find_first_existing_command(dst_cmds, tuple(command_phase_router_candidates()))
+            current_entry_name = detected_entry.name[:-3] if detected_entry is not None else command_phase_router_candidates()[0]
+            entry_command_candidates = _ordered_command_candidates(
+                [current_entry_name, *_matching_configured_command_names(patched_baseline_commands, command_phase_router_candidates())],
+                command_phase_router_candidates(),
+            )
+            record_session_candidates = _ordered_command_candidates(
+                _matching_configured_command_names(patched_baseline_commands, command_record_session_candidates()),
+                command_record_session_candidates(),
+            )
+            start = _find_first_existing_command(dst_cmds, tuple(entry_command_candidates)) or dst_cmds / entry_command_candidates[0]
             finish_work = dst_cmds / "finish-work.md"
-            record_session = dst_cmds / "record-session.md"
+            record_session = _find_first_existing_command(dst_cmds, tuple(record_session_candidates)) if record_session_candidates else None
             parallel = dst_cmds / "parallel.md"
             backup_deployed_state(dst_cmds)
             deploy_commands(src, dst_cmds, profile=profile)
             if args.mode == "force":
-                if not restore_start_from_original_backup(dst_cmds, start):
+                if not restore_start_from_original_backup(dst_cmds, start, entry_command_candidates):
                     return 1
                 if not restore_command_from_original_backup(dst_cmds, "finish-work"):
                     return 1
-                if not restore_command_from_original_backup(dst_cmds, "record-session"):
+                if record_session is not None and not restore_command_from_original_backup(dst_cmds, record_session.name[:-3]):
                     return 1
                 restore_optional_command_from_original_backup(dst_cmds, "parallel")
             if not has_phase_router(start) and not inject_phase_router(src, start):
@@ -1256,7 +1404,7 @@ def main() -> int:
             if not has_finish_work_patch(finish_work) and not inject_finish_work_patch(src, finish_work, "finish-work.md"):
                 err("[OpenCode] finish-work 项目化补丁恢复失败")
                 return 1
-            if not has_record_session_patch(record_session) and not inject_record_session_patch(src, record_session, profile=profile):
+            if record_session is not None and not has_record_session_patch(record_session) and not inject_record_session_patch(src, record_session, profile=profile):
                 err("[OpenCode] record-session 元数据闭环恢复失败")
                 return 1
             if parallel.exists():
@@ -1272,15 +1420,27 @@ def main() -> int:
             if primary_skills_dir is None:
                 err("[Codex] 未找到活动 skills 目录")
                 return 1
-            expected_parallel = expected_parallel_disabled_content(src)
-            start_skill = primary_skills_dir / "start" / "SKILL.md"
-            finish_work_skill = primary_skills_dir / "finish-work" / "SKILL.md"
+            patched_codex_skills = [
+                name for name in record.get("patched_codex_skills", []) if isinstance(name, str)
+            ]
+            configured_router_candidates = _ordered_codex_skill_candidates(
+                _matching_configured_codex_skills(patched_codex_skills, codex_phase_router_skill_candidates()),
+                codex_phase_router_skill_candidates(),
+            )
+            configured_finish_candidates = _ordered_codex_skill_candidates(
+                _matching_configured_codex_skills(patched_codex_skills, codex_finish_work_skill_candidates()),
+                codex_finish_work_skill_candidates(),
+            )
             if args.mode == "force":
-                start_backup = primary_skills_dir / ".backup-original" / "start" / "SKILL.md"
-                finish_work_backup = primary_skills_dir / ".backup-original" / "finish-work" / "SKILL.md"
-                if start_backup.exists() and not restore_codex_start_skill(primary_skills_dir):
+                if any(
+                    (primary_skills_dir / ".backup-original" / skill_name / "SKILL.md").exists()
+                    for skill_name in configured_router_candidates
+                ) and not restore_codex_start_skill(primary_skills_dir, configured_router_candidates):
                     return 1
-                if finish_work_backup.exists() and not restore_codex_finish_work(primary_skills_dir):
+                if any(
+                    (primary_skills_dir / ".backup-original" / skill_name / "SKILL.md").exists()
+                    for skill_name in configured_finish_candidates
+                ) and not restore_codex_finish_work(primary_skills_dir, configured_finish_candidates):
                     return 1
             for skills_dir in skills_dirs:
                 if args.mode == "force":
@@ -1289,25 +1449,35 @@ def main() -> int:
                 if parallel_skill.exists():
                     shutil.rmtree(parallel_skill.parent)
                     ok(f"[Codex] parallel skill 已从嵌入面移除 → {parallel_skill.relative_to(root)}")
-            if not start_skill.exists():
-                err(f"[Codex] 活动 skills 目录缺少 start 基线：{primary_skills_dir.relative_to(root)}")
+            start_skill = find_first_existing_codex_skill_path(
+                root,
+                configured_router_candidates,
+                skills_dir=primary_skills_dir,
+            )
+            finish_work_skill = find_first_existing_codex_skill_path(
+                root,
+                configured_finish_candidates,
+                skills_dir=primary_skills_dir,
+            )
+            if start_skill is None:
+                err(f"[Codex] 活动 skills 目录缺少 {CODEX_PATCH_BASELINE_SKILLS[0]} 基线：{primary_skills_dir.relative_to(root)}")
                 return 1
-            if not finish_work_skill.exists():
-                err(f"[Codex] 活动 skills 目录缺少 finish-work 基线：{primary_skills_dir.relative_to(root)}")
+            if finish_work_skill is None:
+                err(f"[Codex] 活动 skills 目录缺少 {CODEX_PATCH_BASELINE_SKILLS[1]} 基线：{primary_skills_dir.relative_to(root)}")
                 return 1
             if not has_codex_start_skill_patch(start_skill):
-                if not inject_codex_start_skill_patch(
+                if not inject_codex_phase_router_skill_patch(
                     src,
                     start_skill,
-                    f"start skill ({primary_skills_dir.relative_to(root)})",
+                    f"{start_skill.parent.name} skill ({primary_skills_dir.relative_to(root)})",
                 ):
-                    err("[Codex] start Phase Router 补丁恢复失败")
+                    err("[Codex] Codex 入口 skill Phase Router 补丁恢复失败")
                     return 1
             if not has_finish_work_patch(finish_work_skill):
                 if not inject_finish_work_patch(
                     src,
                     finish_work_skill,
-                    f"finish-work skill ({primary_skills_dir.relative_to(root)})",
+                    f"{finish_work_skill.parent.name} skill ({primary_skills_dir.relative_to(root)})",
                 ):
                     err("[Codex] finish-work 项目化补丁恢复失败")
                     return 1
