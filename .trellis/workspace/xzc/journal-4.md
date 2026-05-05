@@ -618,3 +618,36 @@ Added workflow-audit version-drift hard gate, limited supported CLI scope to Cla
 ### Next Steps
 
 - None - task complete
+
+
+## Session 147: Decouple multi-cli review pair from workflow defaults
+
+**Date**: 2026-05-05
+**Task**: Decouple multi-cli review pair from workflow defaults
+**Branch**: `main`
+
+### Summary
+
+Repositioned multi-cli-review and multi-cli-review-action as a workflow-agnostic paired protocol, tightened no-regression adoption rules, aligned workflow docs, and added a paired-skill spec rule.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `82decc6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
