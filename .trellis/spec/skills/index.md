@@ -60,6 +60,10 @@ These two files must be treated as **one shared contract**:
 - shared role boundaries between reviewer and fixer
 - shared legacy compatibility expectations
 
+Keep this paired core contract workflow-agnostic. Coordinator-specific defaults
+such as reviewer-count defaults, round strategy, or command packaging belong in
+upstream workflow or command docs, not in the paired skills' core contract.
+
 ### Required Rule
 
 If a change modifies **either** of these files in a way that can affect the

@@ -1,0 +1,4 @@
+{"file": ".trellis/workflow.md", "reason": "Task lifecycle rules for planning, context curation, and verification before completion"}
+{"file": ".trellis/spec/skills/index.md", "reason": "Skill authoring rules plus the coupled contract for multi-cli-review and multi-cli-review-action"}
+{"file": ".trellis/spec/docs/index.md", "reason": "Workflow documentation propagation and boundary rules for any related command-doc updates"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Cross-layer checklist for paired skill and workflow-doc consistency"}

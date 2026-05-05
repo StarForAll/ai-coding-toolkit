@@ -206,7 +206,7 @@ $TASK_DIR/project-audit/reviewer-commands-round-<N>.md
 执行阶段可按需要使用：
 
 - `multi-cli-review`：补充执行中的新疑点、边界条件或争议点
-- `multi-cli-review-action`：在用户已确认方案后聚合 reviewer 证据、先输出汇总决策，再只对 `adopted` 项执行修复动作
+- `multi-cli-review-action`：在用户已确认方案后聚合 reviewer 证据、先输出汇总决策，再只对 `adopted` 且低回归风险的项执行修复动作
 
 若执行阶段调用了 reviewer / action 能力，过程记录写入：
 

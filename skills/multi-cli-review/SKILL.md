@@ -7,11 +7,14 @@ description: Use when a reviewer CLI must analyze a skill, command, workflow, do
 
 ## Version History
 
+- **v2.2**: Clarified generic coordinator ownership so the paired contract is not tied to a specific workflow surface
 - **v2.1**: Aligned reviewer-side report emission with `multi-cli-review-action`, tightened task-level path rules, and clarified reviewer-only boundaries
 
 ## Purpose
 
 `multi-cli-review` is the **reviewer-side** skill paired with `multi-cli-review-action`.
+
+It is the reviewer half of a generic paired protocol, not a workflow-specific review format.
 
 It does one thing:
 
@@ -42,7 +45,7 @@ Use this skill when any of the following is true:
 
 1. **Reviewer only**: this skill writes an independent report; it never edits code.
 2. **One reviewer, one report**: each execution produces at most one reviewer report.
-3. **Coordinator-owned orchestration**: reviewer count, round planning, directory creation, and final repair decisions belong to the current CLI, not the reviewer.
+3. **Coordinator-owned orchestration**: reviewer-count policy, round planning, directory creation, and final repair decisions belong to the current CLI or other upstream coordinator, not the reviewer.
 4. **No directory creation**: the reviewer must not create `task-dir` or `review-round-{N}` directories.
 5. **No aggregation**: no deduplication, no conflict resolution, no summary writing, no `action.md`.
 6. **Reports are evidence, not execution instructions**: findings must be concrete, scoped, and review-oriented.
@@ -115,7 +118,7 @@ If project root detection is ambiguous, stop and ask for an absolute path instea
 
 ## Coordinator-Owned Parameters
 
-The reviewer must treat the following as coordinator-owned:
+The reviewer must treat the following as coordinator-owned, regardless of whether the coordinator is a workflow, command pack, or a manual current-CLI process:
 
 - creation of `tmp/multi-cli-review/<task-id>/`
 - creation of `review-round-{N}/`
