@@ -194,32 +194,26 @@ OpenCode 的规则层不要只靠单一入口。
 - `命令映射.md` 作为必要补充，帮助做阶段路由
 - 当前只额外挂载 `brainstorm` 阶段，不默认把其他阶段一起塞进会话
 
-### 3. Agents：用 `.opencode/agents/` 承载子代理
+### 3. Agents：由 Trellis 0.5+ 原生提供，workflow 不再 overlay
 
-如果目标项目需要像 Trellis 这样做多阶段工作流，推荐单独部署 workflow agents，例如：
+Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check` agents（`trellis init` 产物），覆盖 9 个平台。workflow 不再维护自定义 agent 源资产或 overlay 这些定义。
 
 ```text
 .opencode/agents/
-├── research.md
-├── implement.md
-├── check.md
+├── trellis-research.md
+├── trellis-implement.md
+├── trellis-check.md
 └── debug.md
 ```
 
-这层负责 planner / research / implement / check 一类子代理职责，不应混在命令文案里。
+这层负责 planner / trellis-research / trellis-implement / trellis-check 一类子代理职责，不应混在命令文案里。
 
-当前 workflow 对 OpenCode agents 的托管边界已收紧为：
+当前 workflow 对 OpenCode agents 的托管边界已调整为：
 
-- `research` / `implement` / `check`：由 workflow 源资产统一治理并部署
+- `trellis-research` / `trellis-implement` / `trellis-check`：由 Trellis 原生提供（`trellis init`），workflow 不再 overlay；安装器仅做 legacy bare-name → trellis-* 迁移
 - `debug`：仍保留为 Trellis / 项目侧手动维护能力，不纳入当前 workflow 托管集合
 
-source-of-truth 边界需要单独说清：
-
-- 当前 workflow 安装器实际读取的是 `docs/workflows/新项目开发工作流/commands/opencode/agents/`
-- 目标项目 `.opencode/agents/` 是安装结果，不是当前 workflow 的唯一源层
-- 若后续要继续收敛，也应优先在 workflow 命令目录内完成，而不是上收到仓库根目录
-
-其中 `research` 角色还需要遵守统一证据门禁：
+其中 `trellis-research` 角色还需要遵守统一证据门禁：
 
 - 项目内部代码定位优先 `ace.search_context`
 - 第三方库 / 框架 / SDK 官方文档必须先 `Context7`
@@ -265,7 +259,7 @@ OpenCode 不应被写成“和 Claude 完全等价”，因为它在 hook / suba
 |-----------|------------------|------|-----------|
 | 阶段命令 | `.opencode/commands/trellis/*.md` | 用户显式触发的 workflow 命令 | ✅ `install-workflow.py` |
 | Trellis 原生命令基线 | `.opencode/commands/trellis/start.md` `finish-work.md` `record-session.md` | 由 `trellis init` 提供；当前 workflow 会对 `start` / `finish-work` / `record-session` 注入补丁，但不重新分发完整基线 | ✅ 补丁由安装器注入 |
-| 子代理定义 | `.opencode/agents/*.md` | `research` / `implement` / `check` 由 workflow source-of-truth `commands/opencode/agents/` 部署；`debug` 仍手动维护 | ✅ 部分由 `install-workflow.py` 管理 |
+| 子代理定义 | `.opencode/agents/*.md` | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 不再 overlay，仅做 legacy bare-name → trellis-* 迁移 | ✅ legacy 迁移由 `install-workflow.py` |
 | 项目长期规则 | `AGENTS.md` | 稳定执行规则、风险边界、语言策略 | ❌ 手动维护 |
 | workflow 文档注入 | `opencode.json.instructions` | 只挂主入口与必要补充，不默认全量挂载所有阶段文档 | ❌ 手动维护 |
 | 通用脚本 | `.trellis/scripts/workflow/` | 被命令或人工直接调用 | ✅ `install-workflow.py` |
@@ -273,7 +267,7 @@ OpenCode 不应被写成“和 Claude 完全等价”，因为它在 hook / suba
 
 **安装器不负责的 OpenCode 原生资产**（需手动维护）：
 
-- `.opencode/agents/debug.md` 或其他非 `research / implement / check` 子代理
+- `.opencode/agents/debug.md` 或其他非 `trellis-research / trellis-implement / trellis-check` 子代理
 - `opencode.json` — instructions / provider / MCP 配置
 - `AGENTS.md` — 项目级长期规则
 
@@ -322,9 +316,9 @@ test -f .opencode/commands/trellis/review-gate.md
 test -f .opencode/commands/trellis/brainstorm.md
 test -f .opencode/commands/trellis/check.md
 test -f .opencode/commands/trellis/delivery.md
-test -f .opencode/agents/research.md
-test -f .opencode/agents/implement.md
-test -f .opencode/agents/check.md
+test -f .opencode/agents/trellis-research.md
+test -f .opencode/agents/trellis-implement.md
+test -f .opencode/agents/trellis-check.md
 ```
 
 ### 平台前置资产验证

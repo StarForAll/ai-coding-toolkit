@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 import json
 
-from workflow_assets import HELPER_SCRIPTS, render_workflow_managed_agent
+from workflow_assets import HELPER_SCRIPTS
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -668,65 +668,39 @@ class WorkflowInstallerTests(unittest.TestCase):
             BASELINE_TRELLIS_CONTINUE_SKILL_CONTENT,
         )
 
-    def test_install_deploys_managed_agents_and_aligns_codex_check_agent(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True)
+    def test_install_migrates_legacy_agents_to_trellis_naming(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True, use_latest_trellis_baseline=False)
         self.addCleanup(shutil.rmtree, fixture)
 
         install = self.install_workflow(fixture)
 
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
-        claude_research = (fixture / ".claude" / "agents" / "trellis-research.md").read_text(encoding="utf-8")
-        opencode_research = (fixture / ".opencode" / "agents" / "trellis-research.md").read_text(encoding="utf-8")
-        codex_research = (fixture / ".codex" / "agents" / "trellis-research.toml").read_text(encoding="utf-8")
-        codex_implement = (fixture / ".codex" / "agents" / "trellis-implement.toml").read_text(encoding="utf-8")
-        codex_check = (fixture / ".codex" / "agents" / "trellis-check.toml").read_text(encoding="utf-8")
-        self.assertIn("mcp__ace__*", claude_research)
-        self.assertIn("mcp__grok_search__*", claude_research)
-        self.assertIn("mcp__deepwiki__*", claude_research)
-        self.assertIn("mcp__exa__web_fetch_exa", claude_research)
-        self.assertIn("Context7", claude_research)
-        self.assertIn("ace.search_context", claude_research)
-        self.assertIn("grok-search", claude_research)
-        self.assertIn("deepwiki", claude_research)
-        self.assertIn("mcp__ace__*: allow", opencode_research)
-        self.assertIn("mcp__grok_search__*: allow", opencode_research)
-        self.assertIn("mcp__deepwiki__*: allow", opencode_research)
-        self.assertIn("Context7", opencode_research)
-        self.assertIn('sandbox_mode = "read-only"', codex_research)
-        self.assertIn("Context7", codex_research)
-        self.assertIn("ace.search_context", codex_research)
-        self.assertIn("grok-search", codex_research)
-        self.assertIn("deepwiki", codex_research)
-        self.assertNotIn("Use Exa-first", codex_research)
-        self.assertIn("[Evidence Gap]", codex_research)
-        self.assertIn('sandbox_mode = "workspace-write"', codex_implement)
-        self.assertIn('sandbox_mode = "workspace-write"', codex_check)
-        self.assertIn("implementation-stage check-agent", codex_check)
-        self.assertTrue((fixture / ".claude" / "agents" / ".backup-original" / "trellis-check.md").exists())
-        self.assertTrue((fixture / ".trellis" / ".backup-original" / "codex-agents" / "trellis-check.toml").exists())
+        self.assertTrue((fixture / ".claude" / "agents" / "trellis-research.md").exists())
+        self.assertFalse((fixture / ".claude" / "agents" / "research.md").exists())
+        self.assertTrue((fixture / ".opencode" / "agents" / "trellis-research.md").exists())
+        self.assertFalse((fixture / ".opencode" / "agents" / "research.md").exists())
+        self.assertTrue((fixture / ".codex" / "agents" / "trellis-research.toml").exists())
+        self.assertFalse((fixture / ".codex" / "agents" / "research.toml").exists())
 
-    def test_install_keeps_codex_agent_backups_outside_codex_agents_scan_dir(self) -> None:
+    def test_install_no_longer_deploys_or_backs_up_codex_agents(self) -> None:
         fixture = self.create_fixture(include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
 
         install = self.install_workflow(fixture)
 
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
-        self.assertTrue((fixture / ".trellis" / ".backup-original" / "codex-agents" / "trellis-research.toml").exists())
-        self.assertFalse((fixture / ".codex" / "agents" / ".backup-original").exists())
-
-    def test_checked_in_agent_adapters_match_rendered_shared_source(self) -> None:
-        for cli_type, suffix in [("claude", ".md"), ("opencode", ".md"), ("codex", ".toml")]:
-            for agent_name in ("research", "implement", "check"):
-                checked_in = (COMMANDS_DIR / cli_type / "agents" / f"{agent_name}{suffix}").read_text(
-                    encoding="utf-8"
-                )
-                rendered = render_workflow_managed_agent(COMMANDS_DIR, cli_type, agent_name)
+        codex_trellis_agents = fixture / ".codex" / "agents"
+        for name in ("trellis-research.toml", "trellis-implement.toml", "trellis-check.toml"):
+            if (codex_trellis_agents / name).exists():
                 self.assertEqual(
-                    checked_in,
-                    rendered,
-                    f"{cli_type}/{agent_name} adapter should match rendered shared source",
+                    (codex_trellis_agents / name).read_text(encoding="utf-8"),
+                    {
+                        "trellis-research.toml": BASELINE_CODEX_RESEARCH_TOML,
+                        "trellis-implement.toml": BASELINE_CODEX_IMPLEMENT_TOML,
+                        "trellis-check.toml": BASELINE_CODEX_CHECK_TOML,
+                    }[name],
                 )
+        self.assertFalse((fixture / ".trellis" / ".backup-original" / "codex-agents").exists())
 
     def test_install_patches_finish_work_when_test_coverage_heading_is_missing(self) -> None:
         fixture = self.create_fixture()
@@ -1183,6 +1157,29 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertFalse((fixture / ".agents" / "skills" / "review-gate").exists())
         self.assertNotIn("workflow-nl-routing-start", (fixture / "AGENTS.md").read_text(encoding="utf-8"))
 
+    def test_install_dry_run_does_not_migrate_legacy_agents(self) -> None:
+        """--dry-run must NOT perform actual file renames on disk."""
+        fixture = self.create_fixture(use_latest_trellis_baseline=False)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        legacy_research = fixture / ".claude" / "agents" / "research.md"
+        trellis_research = fixture / ".claude" / "agents" / "trellis-research.md"
+        self.assertTrue(legacy_research.exists())
+        self.assertFalse(trellis_research.exists())
+
+        result = self.run_script(
+            INSTALL_SCRIPT,
+            "--project-root", str(fixture),
+            "--dry-run",
+            env={EMBED_CONFIRM_ENV: "1"},
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        # Legacy file must still exist (no actual rename)
+        self.assertTrue(legacy_research.exists(), "dry-run must not rename legacy agents on disk")
+        # trellis-* must NOT exist (no actual creation)
+        self.assertFalse(trellis_research.exists(), "dry-run must not create trellis-* agents on disk")
+
     def test_install_requires_embed_executor_confirmation(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
@@ -1471,7 +1468,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(".codex/skills", result.stdout)
         self.assertIn("parallel skill (.codex/skills): 应已从嵌入面移除", result.stdout)
 
-    def test_upgrade_check_detects_codex_managed_agent_drift(self) -> None:
+    def test_upgrade_check_no_longer_checks_agent_drift(self) -> None:
         fixture = self.create_fixture(include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
 
@@ -1491,10 +1488,9 @@ class WorkflowInstallerTests(unittest.TestCase):
             env=self.latest_env_for(fixture),
         )
 
-        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        self.assertIn("agent 内容漂移: check", result.stdout)
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
-    def test_upgrade_check_detects_claude_managed_agent_drift(self) -> None:
+    def test_upgrade_check_no_longer_checks_claude_agent_drift(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
 
@@ -1513,10 +1509,9 @@ class WorkflowInstallerTests(unittest.TestCase):
             env=self.latest_env_for(fixture),
         )
 
-        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        self.assertIn("agent 内容漂移: research", result.stdout)
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
-    def test_upgrade_check_detects_opencode_managed_agent_drift(self) -> None:
+    def test_upgrade_check_no_longer_checks_opencode_agent_drift(self) -> None:
         fixture = self.create_fixture(include_opencode=True)
         self.addCleanup(shutil.rmtree, fixture)
 
@@ -1535,10 +1530,9 @@ class WorkflowInstallerTests(unittest.TestCase):
             env=self.latest_env_for(fixture),
         )
 
-        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        self.assertIn("agent 内容漂移: check", result.stdout)
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
-    def test_upgrade_merge_restores_codex_managed_check_agent(self) -> None:
+    def test_upgrade_merge_no_longer_restores_codex_managed_agent(self) -> None:
         fixture = self.create_fixture(include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
 
@@ -1560,10 +1554,9 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         updated = codex_check.read_text(encoding="utf-8")
-        self.assertIn('sandbox_mode = "workspace-write"', updated)
-        self.assertIn("implementation-stage check-agent", updated)
+        self.assertIn('sandbox_mode = "read-only"', updated)
 
-    def test_upgrade_merge_restores_claude_managed_agent(self) -> None:
+    def test_upgrade_merge_no_longer_restores_claude_managed_agent(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
 
@@ -1584,15 +1577,9 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         updated = claude_research.read_text(encoding="utf-8")
-        self.assertIn("Context7", updated)
-        self.assertIn("ace.search_context", updated)
-        self.assertIn("exa_web_search_advanced_exa", updated)
-        self.assertIn("mcp__exa__web_fetch_exa", updated)
-        self.assertIn("grok-search", updated)
-        self.assertIn("deepwiki", updated)
-        self.assertNotIn("Use Exa-first", updated)
+        self.assertEqual(updated, "# drifted research\n")
 
-    def test_upgrade_merge_restores_opencode_managed_agent(self) -> None:
+    def test_upgrade_merge_no_longer_restores_opencode_managed_agent(self) -> None:
         fixture = self.create_fixture(include_opencode=True)
         self.addCleanup(shutil.rmtree, fixture)
 
@@ -1613,9 +1600,9 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         updated = opencode_check.read_text(encoding="utf-8")
-        self.assertIn("implementation-stage Check Agent", updated)
+        self.assertEqual(updated, "# drifted check\n")
 
-    def test_uninstall_restores_codex_managed_agents(self) -> None:
+    def test_uninstall_migrates_legacy_agents_and_restores_backups(self) -> None:
         fixture = self.create_fixture(include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
 
@@ -1633,7 +1620,6 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(merge.returncode, 0, msg=merge.stdout + merge.stderr)
 
         codex_check = fixture / ".codex" / "agents" / "trellis-check.toml"
-        self.assertIn('sandbox_mode = "workspace-write"', codex_check.read_text(encoding="utf-8"))
 
         result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
 
@@ -1642,9 +1628,10 @@ class WorkflowInstallerTests(unittest.TestCase):
         if codex_check.exists():
             restored = codex_check.read_text(encoding="utf-8")
             self.assertIn('sandbox_mode = "read-only"', restored)
-        self.assertFalse((fixture / ".trellis" / ".backup-original" / "codex-agents").exists())
 
-    def test_uninstall_restores_claude_managed_agents(self) -> None:
+    def test_uninstall_preserves_native_trellis_agents_no_backup(self) -> None:
+        """Post-0.5: workflow no longer overlays agents; uninstall must NOT
+        delete Trellis-native trellis-*.md files when no backup exists."""
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
 
@@ -1652,48 +1639,67 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
 
         claude_research = fixture / ".claude" / "agents" / "trellis-research.md"
-        self.assertIn("Context7", claude_research.read_text(encoding="utf-8"))
+        self.assertTrue(claude_research.exists(), "trellis-research.md should exist before uninstall")
 
         result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        restored = claude_research.read_text(encoding="utf-8")
-        self.assertEqual(restored, BASELINE_AGENT_RESEARCH_MD)
-        self.assertFalse((fixture / ".claude" / "agents" / ".backup-original").exists())
+        # Native agents must survive uninstall
+        self.assertTrue(claude_research.exists(), "native trellis-research.md must NOT be deleted by uninstall")
 
-    def test_uninstall_restores_opencode_managed_agents(self) -> None:
+    def test_uninstall_removes_legacy_bare_name_agents(self) -> None:
+        """Legacy bare-name agent files (research.md) are leftovers from
+        pre-0.5 installs and should be cleaned up by uninstall."""
+        fixture = self.create_fixture(use_latest_trellis_baseline=False)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        # After install, legacy bare-name should be migrated to trellis-*
+        legacy_research = fixture / ".claude" / "agents" / "research.md"
+        trellis_research = fixture / ".claude" / "agents" / "trellis-research.md"
+        self.assertFalse(legacy_research.exists(), "legacy research.md should be migrated by install")
+        self.assertTrue(trellis_research.exists(), "trellis-research.md should exist after migration")
+
+        result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+        # trellis-* is native, must survive uninstall even without backup
+        self.assertTrue(trellis_research.exists(), "native trellis-research.md must survive uninstall")
+
+    def test_uninstall_restores_agents_from_backup(self) -> None:
+        """When a workflow backup exists, uninstall restores the backup
+        content for both Claude and OpenCode agents."""
         fixture = self.create_fixture(include_opencode=True)
         self.addCleanup(shutil.rmtree, fixture)
 
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
 
+        claude_research = fixture / ".claude" / "agents" / "trellis-research.md"
         opencode_check = fixture / ".opencode" / "agents" / "trellis-check.md"
-        self.assertIn("implementation-stage Check Agent", opencode_check.read_text(encoding="utf-8"))
 
         result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        restored = opencode_check.read_text(encoding="utf-8")
-        self.assertEqual(restored, BASELINE_AGENT_CHECK_MD)
-        self.assertFalse((fixture / ".opencode" / "agents" / ".backup-original").exists())
+        if claude_research.exists():
+            restored = claude_research.read_text(encoding="utf-8")
+            self.assertEqual(restored, BASELINE_AGENT_RESEARCH_MD)
+        if opencode_check.exists():
+            restored = opencode_check.read_text(encoding="utf-8")
+            self.assertEqual(restored, BASELINE_AGENT_CHECK_MD)
 
-    def test_uninstall_removes_managed_agent_created_without_backup(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
+    def test_uninstall_removes_agents_created_by_legacy_migration(self) -> None:
+        fixture = self.create_fixture(include_codex=True, use_latest_trellis_baseline=False)
         self.addCleanup(shutil.rmtree, fixture)
-
-        created_by_install = fixture / ".codex" / "agents" / "trellis-research.toml"
-        created_by_install.unlink()
 
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
-        self.assertTrue(created_by_install.exists())
-        self.assertFalse((fixture / ".trellis" / ".backup-original" / "codex-agents" / "trellis-research.toml").exists())
 
         result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        self.assertFalse(created_by_install.exists())
 
     def test_upgrade_check_detects_record_session_patch_drift(self) -> None:
         fixture = self.create_fixture()

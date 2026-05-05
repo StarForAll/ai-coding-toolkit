@@ -6,92 +6,59 @@
 
 ## 当前真实边界
 
-在当前 `docs/workflows/新项目开发工作流` 版本里，需要先区分三层概念：
+在当前 `docs/workflows/新项目开发工作流` 版本里，需要先区分两层概念：
 
-1. **workflow source-of-truth（当前真实）**
-   - `docs/workflows/新项目开发工作流/commands/{claude,opencode,codex}/agents/`
-   - 安装器 / 升级分析 / 卸载脚本当前都直接读取这一层作为 managed agents 的源文件
+1. **Trellis 原生管理（当前真实）**
+   - Trellis 0.5+ 通过 `trellis init` 原生提供 `trellis-research` / `trellis-implement` / `trellis-check` agents，覆盖 9 个平台
+   - workflow 不再 overlay 这些 agent 定义，也不再维护 `commands/{claude,opencode,codex}/agents/` 源资产
+   - 安装器仅做 legacy bare-name → trellis-* 迁移（rename），不写入 agent 内容
 2. **workflow-managed subset（当前真实）**
-   - Claude / OpenCode / Codex 的 `research / implement / check`
+   - Claude / OpenCode / Codex 的阶段命令（feasibility / brainstorm / design / plan / test-first / project-audit / check / review-gate / delivery）
+   - Trellis 基线命令补丁（continue / finish-work / record-session）
    - 这是当前 workflow 安装器、升级分析、卸载、回归测试共同覆盖的子集
-3. **workflow-local integrated architecture（后续可选，不是现状）**
-   - 仍然留在 `docs/workflows/新项目开发工作流/commands/` 内收敛共享 agent source
-   - 不把 source 上收到仓库根目录
 
 补充说明：
 
 - `.iflow/agents/` 当前属于仓库级 live deployment 范围，但**不在**本 workflow 安装器的 managed subset 内
-- 因此，若当前问题与 `research / implement / check` 的安装、升级、卸载、漂移检测有关，修复应优先限制在 `docs/workflows/新项目开发工作流/**`
+- 因此，若当前问题与 `trellis-research / trellis-implement / trellis-check` 的部署有关，应通过 Trellis 上游解决，而非在 workflow 安装器内 overlay
 
-## 未来 workflow 内部 source 收敛合同（未启用）
+## 已完成的 agent 托管策略变更
 
-本节描述：如果未来要把 managed implementation agents 从当前 `commands/{claude,opencode,codex}/agents/`
-收敛到 workflow 命令目录内的共享 source，workflow 内部必须如何保持不漂移。
+Trellis 0.5 已原生提供 `trellis-research` / `trellis-implement` / `trellis-check` agents，覆盖 9 个平台（Claude / OpenCode / Codex / Cursor / Gemini / Kiro / Qoder / CodeBuddy / Pi）。workflow 已从"自维护 agent overlay"切换为"依赖 Trellis 原生 agents"。
 
-它是**迁移设计合同**，不是当前现状说明。
-
-### 迁移后的目标链路
-
-若未来启用内部共享 source，建议 workflow 内部收敛为：
+### 变更后的实际链路
 
 ```text
-workflow-local shared source
-  -> workflow adapter layer
-  -> target project managed agents
+Trellis 0.5 原生模板（trellis init 产物）
+  -> target project .claude/.opencode/.codex trellis-* agents
 ```
 
-对应到当前仓库，预期是：
-
-```text
-docs/workflows/新项目开发工作流/commands/<shared-agent-source>/
-  -> docs/workflows/新项目开发工作流/commands/{claude,opencode,codex}/agents/*
-  -> target project .claude/.opencode/.codex managed agents
-```
+workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也不再 overlay 这些文件。安装器仅做 legacy bare-name → trellis-* 迁移（rename）。
 
 关键约束：
 
-- workflow 命令目录内的共享 agent source 负责主体语义
-- `commands/{claude,opencode,codex}/agents/` 负责 per-CLI adapter 包装
-- `install-workflow.py`、`upgrade-compat.py`、`uninstall-workflow.py` 面向的仍然是 workflow adapter 层，而不是直接面向工作流外的仓库根目录
+- `trellis-research` / `trellis-implement` / `trellis-check` 的主体语义由 Trellis 上游维护，workflow 不修改
+- 若某平台确有行为差距（如 Codex class-2 缺 context self-loading），应通过 Trellis 上游机制或项目级配置解决，不在 workflow 源中补丁
+- 安装器 / 升级分析 / 卸载脚本不再读写 agent 内容，仅检测和迁移 legacy bare-name 文件
 
-### Adapter 生成最小规则
+### 已完成的原子更新集合
 
-| Canonical source field | Claude adapter | OpenCode adapter | Codex adapter |
-|------------------------|----------------|------------------|---------------|
-| `README.md` 中的用途 / 触发条件摘要 | frontmatter `description` | frontmatter `description` | `description =` |
-| `SYSTEM.md` 主体职责与边界 | Markdown 正文 | Markdown 正文 | `developer_instructions` 字符串正文 |
-| `TOOLS.md` 的抽象权限需求 | `tools:` 列表 | `permission:` block | `sandbox_mode =` + 必要的说明性约束 |
-| workflow 特有差异 | 保留最小 frontmatter 差异 | 保留 `mode: subagent` 与权限差异 | 保留 `.toml` 包装与 Codex subagent 合同 |
+切换到 Trellis 原生 agent 时，以下文件已作为原子集合一起更新：
 
-补充规则：
-
-- adapter 层不应再手工改写主体职责，主体语义只能来自 canonical source
-- 若某平台确有不可消除的行为差异，只允许保留在 wrapper / adapter 层，并必须在该平台 README 中显式注明
-- Codex 的 `.toml` 包装不能因为迁移丢失：
-  - `sandbox_mode`
-  - `developer_instructions`
-  - implementation-stage `check-agent` 与正式 `/trellis:check` 的边界表述
-
-### 启用迁移时的原子更新集合
-
-一旦启用 workflow 内部 shared source 收敛，下列文件必须作为一个原子集合一起更新：
-
-- `commands/install-workflow.py`
-- `commands/upgrade-compat.py`
-- `commands/uninstall-workflow.py`
-- `commands/workflow_assets.py`
-- `commands/test_workflow_installers.py`
-- `commands/claude/README.md`
-- `commands/opencode/README.md`
-- `commands/codex/README.md`
+- `commands/install-workflow.py` — 移除 agent overlay，仅保留 legacy 迁移
+- `commands/upgrade-compat.py` — 移除 agent overlay，仅保留 legacy 迁移
+- `commands/uninstall-workflow.py` — 不再删除原生 trellis-* agents
+- `commands/workflow_assets.py` — 移除 agent 相关定义，新增 `LEGACY_AGENT_NAMES`
+- `commands/test_workflow_installers.py` — 更新为验证”不再管理 agents”
+- `commands/claude/README.md` — 更新 agent 章节为”Trellis 原生管理”
+- `commands/opencode/README.md` — 同上
+- `commands/codex/README.md` — 同上
 - 本文档 `CLI原生适配边界矩阵.md`
 - `目标项目兼容升级方案指导.md`
-- `结构性迁移设计.md`
-
-在这个集合未同时切换完成前：
-
-- 不要先把目标项目迁移到新 source contract
-- 不要把 `commands/{claude,opencode,codex}/agents/` 误删成“历史遗留层”
+- `commands/shared-agents/` — 已删除
+- `commands/claude/agents/` — 已删除
+- `commands/opencode/agents/` — 已删除
+- `commands/codex/agents/` — 已删除
 
 ### `/tmp` 验证基线
 
@@ -133,7 +100,7 @@ docs/workflows/新项目开发工作流/commands/<shared-agent-source>/
 | 共享运行时基线 | `.claude/settings.json` | 手动维护 | hooks 接线、默认 deny |
 | 本机权限扩展 | `.claude/settings.local.json` | 手动维护 | MCP allowlist、本地调试 |
 | 会话与子代理 hooks | `.claude/hooks/*.py` | 手动维护 | session-start / inject-subagent-context |
-| 子代理定义 | `.claude/agents/*.md` | 部分安装器管理 | `research` / `implement` / `check` 由 workflow source-of-truth `commands/claude/agents/` 部署；`debug` 仍手动维护 |
+| 子代理定义 | `.claude/agents/*.md` | Trellis 原生管理 | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 不再 overlay，仅做 legacy bare-name → trellis-* 迁移 |
 | 项目 Git 前置条件 | `origin ≥ 2 push URL` | 运行前置/仅校验 | 安装器校验，不负责配置 |
 | Trellis init 产物 | `.trellis/.version` | 运行前置/仅校验 | 安装器校验，由 `trellis init` 负责 |
 
@@ -148,7 +115,7 @@ docs/workflows/新项目开发工作流/commands/<shared-agent-source>/
 | 通用辅助脚本 | `.trellis/scripts/workflow/` | 安装器管理 | 与 Claude 共用，不重复部署 |
 | Trellis 基线 workflow 指南补丁 | `.trellis/workflow.md` | 安装器管理 | 与 Claude / Codex 共用同一份目标项目 workflow 指南，保持 close-out 与 child-task 规则一致 |
 | 阶段 skills（跨 CLI 可发现） | `.agents/skills/*/SKILL.md` | 安装器管理（与 Codex 共用单份落盘） | OpenCode 官方 skills 扫描链路会命中 `.agents/skills/`，因此同一份 skills 会被 OpenCode 与 Codex 同时发现；但当前 workflow 对 OpenCode 的**正式主入口**仍是 `.opencode/commands/trellis/`，不是 `.agents/skills/` |
-| 子代理定义 | `.opencode/agents/*.md` | 部分安装器管理 | `research` / `implement` / `check` 由 workflow source-of-truth `commands/opencode/agents/` 部署；`debug` 仍手动维护 |
+| 子代理定义 | `.opencode/agents/*.md` | Trellis 原生管理 | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 不再 overlay，仅做 legacy bare-name → trellis-* 迁移 |
 | 项目长期规则 | `AGENTS.md` | 半托管（手动维护为主） | 与 Claude/Codex 共用同一文件；`TRELLIS` managed block 与 `workflow-nl-routing` 区段由 `trellis init` / `install-workflow.py` 分别托管 |
 | workflow 文档注入 | `opencode.json.instructions` | 手动维护 | 只挂主入口与必要补充 |
 | 项目 Git 前置条件 | `origin ≥ 2 push URL` | 运行前置/仅校验 | 安装器校验 |
@@ -156,7 +123,7 @@ docs/workflows/新项目开发工作流/commands/<shared-agent-source>/
 
 **安装器不负责的 OpenCode 原生资产**（需手动维护）：
 
-- `.opencode/agents/debug.md` 或其他非 `research / implement / check` 子代理
+- `.opencode/agents/debug.md` 或其他非 `trellis-research / trellis-implement / trellis-check` 子代理
 - `opencode.json` — instructions / provider / MCP 配置
 - `AGENTS.md` 的手动段（workflow 不托管的章节）
 - `.opencode/plugins/*.js` + `.opencode/package.json` — plugin 层（`trellis init` 产物，workflow 不重复分发）
@@ -176,7 +143,7 @@ docs/workflows/新项目开发工作流/commands/<shared-agent-source>/
 | 项目长期规则 | `AGENTS.md` | 半托管（手动维护为主） | 与 Claude/OpenCode 共用；`TRELLIS` managed block 与 `workflow-nl-routing` 区段由 `trellis init` / `install-workflow.py` 分别托管 |
 | Codex 项目配置 | `.codex/config.toml` | 手动维护 | `AGENTS.md` fallback 等项目配置 |
 | 会话启动注入 | `.codex/hooks.json` + `.codex/hooks/*.py` | 手动维护 | SessionStart hook 注入 Trellis 上下文 |
-| 子代理定义 | `.codex/agents/*.toml` | 部分安装器管理 | `research` / `implement` / `check` 由 workflow source-of-truth `commands/codex/agents/` 部署并纳入升级分析；其他 agent 仍手动维护 |
+| 子代理定义 | `.codex/agents/*.toml` | Trellis 原生管理 | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 不再 overlay，仅做 legacy bare-name → trellis-* 迁移 |
 | 项目 Git 前置条件 | `origin ≥ 2 push URL` | 运行前置/仅校验 | 安装器校验 |
 | Trellis init 产物 | `.trellis/.version` | 运行前置/仅校验 | 安装器校验 |
 

@@ -21,7 +21,7 @@ CLI_ALT_DIRS = {
 ALL_CLI_TYPES = ["claude", "opencode", "codex"]
 WORKFLOW_VERSION = "0.1.26"
 WORKFLOW_SCHEMA_VERSION = "2"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增
-COMPATIBLE_TRELLIS_VERSION = "0.4.0"
+COMPATIBLE_TRELLIS_VERSION = "0.5.0"
 
 PATCH_BASELINE_COMMANDS = ["continue", "finish-work"]
 LEGACY_PATCH_BASELINE_COMMANDS = ["start", "finish-work", "record-session"]
@@ -53,7 +53,6 @@ HELPER_SCRIPTS = [
     "metadata-autocommit-guard.py",
     "record-session-helper.py",
 ]
-MANAGED_IMPLEMENTATION_AGENTS = ["research", "implement", "check"]
 LATEST_TRELLIS_VERSION_ENV = "TRELLIS_LATEST_VERSION"
 CURRENT_TRELLIS_VERSION_ENV = "TRELLIS_CURRENT_VERSION"
 CODEX_SHARED_SKILL_NAMES = [*DISTRIBUTED_COMMANDS, *CODEX_PATCH_BASELINE_SKILLS]
@@ -104,22 +103,19 @@ CORE_HELPER_SCRIPTS = [s for s in HELPER_SCRIPTS if s not in OUTSOURCING_ONLY_SC
 EXECUTION_CARDS = ["需求变更管理执行卡.md", "源码水印与归属证据链执行卡.md"]
 OUTSOURCING_EXECUTION_CARDS: list[str] = []
 WORKFLOW_DOCS_DIR = ".trellis/workflow-docs"
-AGENT_SUFFIXES = {
-    "claude": ".md",
-    "opencode": ".md",
-    "codex": ".toml",
-}
-SHARED_AGENTS_DIR = "shared-agents"
+LEGACY_AGENT_NAMES = ["research", "implement", "check"]
 
 
-def workflow_managed_agent_target_name(agent_name: str) -> str:
-    """Return the deployed Trellis-managed agent name for a role."""
-    return f"trellis-{agent_name}"
+def legacy_agent_target_path(root: Path, cli_type: str, agent_name: str) -> Path:
+    """Return legacy target-project path for upgrade migration only.
 
-
-def workflow_legacy_managed_agent_target_name(agent_name: str) -> str:
-    """Return the pre-Trellis-0.5 managed agent name for migration handling."""
-    return agent_name
+    Trellis 0.5+ provides trellis-{research,implement,check} natively.
+    This function only resolves legacy paths so upgrade-compat can migrate
+    old bare-name agent files (research.md → trellis-research.md etc.).
+    """
+    if cli_type == "codex":
+        return root / CLI_DIRS[cli_type] / "agents" / f"{agent_name}.toml"
+    return root / CLI_DIRS[cli_type] / "agents" / f"{agent_name}.md"
 
 
 def codex_phase_router_skill_candidates() -> list[str]:
@@ -150,136 +146,6 @@ def command_finish_work_candidates() -> list[str]:
 def command_record_session_candidates() -> list[str]:
     """Record-session is legacy-only for current Trellis 0.5+ baselines."""
     return [LEGACY_PATCH_BASELINE_COMMANDS[2]]
-
-
-def workflow_managed_agent_source_path(commands_root: Path, cli_type: str, agent_name: str) -> Path:
-    """Return the workflow-local shared source path for an implementation agent."""
-    return commands_root / SHARED_AGENTS_DIR / agent_name
-
-
-def workflow_managed_agent_adapter_path(commands_root: Path, cli_type: str, agent_name: str) -> Path:
-    """Return the per-CLI workflow adapter path for an implementation agent."""
-    suffix = AGENT_SUFFIXES[cli_type]
-    return commands_root / cli_type / "agents" / f"{agent_name}{suffix}"
-
-
-def workflow_managed_agent_target_path(root: Path, cli_type: str, agent_name: str) -> Path:
-    """Return the target-project path for a managed implementation agent."""
-    suffix = AGENT_SUFFIXES[cli_type]
-    return root / CLI_DIRS[cli_type] / "agents" / f"{workflow_managed_agent_target_name(agent_name)}{suffix}"
-
-
-def workflow_legacy_managed_agent_target_path(root: Path, cli_type: str, agent_name: str) -> Path:
-    """Return the legacy target-project path for a managed implementation agent."""
-    suffix = AGENT_SUFFIXES[cli_type]
-    return root / CLI_DIRS[cli_type] / "agents" / f"{workflow_legacy_managed_agent_target_name(agent_name)}{suffix}"
-
-
-def _read_shared_agent_text(agent_dir: Path, name: str) -> str:
-    path = agent_dir / name
-    if not path.exists():
-        raise FileNotFoundError(path)
-    return path.read_text(encoding="utf-8").strip()
-
-
-def render_workflow_managed_agent(commands_root: Path, cli_type: str, agent_name: str) -> str:
-    """Render a per-CLI workflow-managed agent from the shared workflow-local source."""
-    agent_dir = workflow_managed_agent_source_path(commands_root, cli_type, agent_name)
-    readme = _read_shared_agent_text(agent_dir, "README.md")
-    system = _read_shared_agent_text(agent_dir, "SYSTEM.md")
-    tools = _read_shared_agent_text(agent_dir, "TOOLS.md")
-    target_name = workflow_managed_agent_target_name(agent_name)
-
-    description = ""
-    for line in readme.splitlines():
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#"):
-            description = stripped
-            break
-    if not description:
-        description = f"{agent_name} agent"
-
-    if cli_type == "claude":
-        tools_line = {
-            "research": "Read, Glob, Grep, mcp__ace__*, mcp__grok_search__*, mcp__deepwiki__*, mcp__exa__web_search_exa, mcp__exa__web_search_advanced_exa, mcp__exa__web_fetch_exa, mcp__exa__get_code_context_exa, mcp__Context7__*, Skill, mcp__chrome-devtools__*",
-            "implement": "Read, Write, Edit, Bash, Glob, Grep, mcp__exa__web_search_exa, mcp__exa__get_code_context_exa",
-            "check": "Read, Write, Edit, Bash, Glob, Grep, mcp__exa__web_search_exa, mcp__exa__get_code_context_exa",
-        }[agent_name]
-        return (
-            "---\n"
-            f"name: {target_name}\n"
-            "description: |\n"
-            f"  {description}\n"
-            f"tools: {tools_line}\n"
-            "model: opus\n"
-            "---\n"
-            f"{system}\n"
-        )
-
-    if cli_type == "opencode":
-        permission_block = {
-            "research": [
-                "  read: allow",
-                "  write: deny",
-                "  edit: deny",
-                "  bash: deny",
-                "  glob: allow",
-                "  grep: allow",
-                "  mcp__ace__*: allow",
-                "  mcp__grok_search__*: allow",
-                "  mcp__deepwiki__*: allow",
-                "  mcp__exa__*: allow",
-                "  mcp__Context7__*: allow",
-                "  mcp__chrome-devtools__*: allow",
-            ],
-            "implement": [
-                "  read: allow",
-                "  write: allow",
-                "  edit: allow",
-                "  bash: allow",
-                "  glob: allow",
-                "  grep: allow",
-                "  mcp__exa__*: allow",
-            ],
-            "check": [
-                "  read: allow",
-                "  write: allow",
-                "  edit: allow",
-                "  bash: allow",
-                "  glob: allow",
-                "  grep: allow",
-                "  mcp__exa__*: allow",
-            ],
-        }[agent_name]
-        return (
-            "---\n"
-            "description: |\n"
-            f"  {description}\n"
-            "mode: subagent\n"
-            "permission:\n"
-            + "\n".join(permission_block)
-            + "\n---\n"
-            f"{system}\n"
-        )
-
-    if cli_type == "codex":
-        sandbox_mode = {
-            "research": "read-only",
-            "implement": "workspace-write",
-            "check": "workspace-write",
-        }[agent_name]
-        return (
-            f'name = "{target_name}"\n'
-            f'description = "{description}"\n'
-            f'sandbox_mode = "{sandbox_mode}"\n\n'
-            'developer_instructions = """\n'
-            f"{system}\n\n"
-            "## Tool Contract\n\n"
-            f"{tools}\n"
-            '"""\n'
-        )
-
-    raise ValueError(f"Unsupported cli_type for managed agent render: {cli_type}")
 
 
 def _strip_conditional_blocks(content: str, tag: str) -> str:
@@ -358,8 +224,6 @@ class ManagedAssetSpec:
             return root / CLI_DIRS[self.cli_type] / "commands" / "trellis" / f"{self.name}.md"
         if self.kind == "skill":
             return codex_shared_skills_dir(root) / self.name / "SKILL.md"
-        if self.kind == "agent":
-            return workflow_managed_agent_target_path(root, self.cli_type, self.name)
         raise ValueError(f"Unsupported asset kind: {self.kind}")
 
 
@@ -467,16 +331,6 @@ def build_managed_asset_specs(cli_types: list[str]) -> list[ManagedAssetSpec]:
                         name=name,
                     )
                 )
-            for name in MANAGED_IMPLEMENTATION_AGENTS:
-                specs.append(
-                    ManagedAssetSpec(
-                        asset_id=f"{cli_type}:agent:{name}",
-                        category="implementation-agent",
-                        cli_type=cli_type,
-                        kind="agent",
-                        name=name,
-                    )
-                )
         elif cli_type == "codex":
             for name in CODEX_PATCH_BASELINE_SKILLS:
                 specs.append(
@@ -505,16 +359,6 @@ def build_managed_asset_specs(cli_types: list[str]) -> list[ManagedAssetSpec]:
                         category="disabled-baseline",
                         cli_type="codex",
                         kind="skill",
-                        name=name,
-                    )
-                )
-            for name in MANAGED_IMPLEMENTATION_AGENTS:
-                specs.append(
-                    ManagedAssetSpec(
-                        asset_id=f"codex:agent:{name}",
-                        category="implementation-agent",
-                        cli_type="codex",
-                        kind="agent",
                         name=name,
                     )
                 )

@@ -7,7 +7,7 @@ Codex 对这套 workflow 的正确承载模型不是 `.claude/commands/` 式自�
 - `.codex/hooks.json` + `.codex/hooks/*.py`：会话启动时注入 Trellis 上下文
 - `.agents/skills/*/SKILL.md`：共享 workflow 入口与阶段技能
 - `.codex/skills/*/SKILL.md`：仅 Codex 独有或项目自定义的额外技能
-- `.codex/agents/*.toml`：research / implement / check 一类子代理
+- `.codex/agents/*.toml`：trellis-research / trellis-implement / trellis-check 一类子代理（Trellis 0.5+ 原生提供）
 
 Codex 官方确实有 built-in slash commands，但那是 Codex 自身的交互控制能力，不等于“项目自定义 workflow 命令分发目录”。
 适配时应遵循 Codex 官方原生格式要求，但前置条件、阶段语义和初始化动作必须与 Claude Code / OpenCode 保持一致。
@@ -245,22 +245,16 @@ Codex 官方支持 subagents。对 Trellis workflow，推荐用它承载：
 
 ```text
 .codex/agents/
-├── research.toml
-├── implement.toml
-└── check.toml
+├── trellis-research.toml
+├── trellis-implement.toml
+└── trellis-check.toml
 ```
 
-这层负责“阶段内角色分工”，不负责对用户暴露 workflow 命令入口。
+这层负责”阶段内角色分工”，不负责对用户暴露 workflow 命令入口。
 
-当前 workflow 已将 `.codex/agents/*.toml` 中的 `research` / `implement` / `check` 纳入兼容治理，并与 Claude / OpenCode 的 implementation 内部角色链对齐。
+Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check` agents（`trellis init` 产物），覆盖 9 个平台。workflow 不再维护自定义 Codex agent 源资产或 overlay 这些定义；安装器仅做 legacy bare-name → trellis-* 迁移。
 
-source-of-truth 边界同样要明确：
-
-- 当前 workflow 安装链实际读取的是 `docs/workflows/新项目开发工作流/commands/codex/agents/*.toml`
-- 目标项目 `.codex/agents/*.toml` 是安装结果，不是当前 workflow 的唯一源层
-- 若后续要继续收敛，也应优先在 workflow 命令目录内完成，而不是上收到仓库根目录
-
-这里的对齐规则不是“复制 Claude 的 hook 机制”，而是：
+这里的对齐规则不是”复制 Claude 的 hook 机制”，而是：
 
 - 对齐 agent 角色语义
 - 对齐安装 / 升级 / 漂移检测
@@ -268,7 +262,7 @@ source-of-truth 边界同样要明确：
 
 其中：
 
-- `research.toml`：保持只读，但必须遵守统一证据门禁
+- `trellis-research.toml`：保持只读，但必须遵守统一证据门禁
   - 项目内部代码定位优先 `ace.search_context`
   - 第三方库 / 框架 / SDK 官方文档必须先 `Context7`
   - 最新信息、版本、今日事实优先 `grok-search`
@@ -325,7 +319,7 @@ Codex 官方内建 slash commands 是平台级控制能力，例如：
 | Codex 项目配置 | `.codex/config.toml` | 指定 `AGENTS.md` fallback 等项目级配置 | ❌ 手动维护 |
 | 会话启动注入 | `.codex/hooks.json` + `.codex/hooks/*.py` | 自动注入 Trellis workflow 上下文 | ❌ 手动维护 |
 | workflow 技能 | `.agents/skills/*/SKILL.md`（共享） / `.codex/skills/*/SKILL.md`（仅 Codex 独有或项目自定义） | `start`、`brainstorm`、`finish-work` 等阶段入口；若已有基线 `finish-work` skill，则由安装器追加项目化补丁 | ✅ `install-workflow.py` |
-| 子代理 | `.codex/agents/*.toml` | `research` / `implement` / `check` 由 workflow source-of-truth `commands/codex/agents/` 部署 | ✅ 部分由 `install-workflow.py` 管理 |
+| 子代理 | `.codex/agents/*.toml` | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 不再 overlay，仅做 legacy bare-name → trellis-* 迁移 | ✅ legacy 迁移由 `install-workflow.py` |
 | 辅助脚本 | `.trellis/scripts/workflow/` | 校验、导出、静态验证脚本 | ✅ `install-workflow.py` |
 | 源码水印与归属证明产物 | `$TASK_DIR/design/`、`$TASK_DIR/delivery/` | 设计计划、提取验证、交付证明 | ❌ 人工维护 / workflow 阶段产出 |
 
@@ -333,7 +327,7 @@ Codex 官方内建 slash commands 是平台级控制能力，例如：
 
 - `.codex/config.toml` — Codex 项目级配置
 - `.codex/hooks.json` + `.codex/hooks/*.py` — 会话启动 hooks
-- 其他非 `research / implement / check` 的 `.codex/agents/*.toml`
+- 其他非 `trellis-research / trellis-implement / trellis-check` 的 `.codex/agents/*.toml`
 - `AGENTS.md` — 项目级长期规则
 
 这些文件缺失不表示安装失败，但会导致 Codex 无法完整运行 workflow。

@@ -28,7 +28,6 @@ from pathlib import Path
 
 from workflow_assets import (
     ADDED_COMMANDS,
-    AGENT_SUFFIXES,
     ALL_CLI_TYPES,
     CODEX_PATCH_BASELINE_SKILLS,
     CODEX_SHARED_SKILL_CLEANUP_NAMES,
@@ -48,8 +47,9 @@ from workflow_assets import (
     EXECUTION_CARDS,
     find_first_existing_codex_skill_path,
     HELPER_SCRIPTS,
+    legacy_agent_target_path,
+    LEGACY_AGENT_NAMES,
     list_all_codex_skills_dirs,
-    MANAGED_IMPLEMENTATION_AGENTS,
     OPTIONAL_DISABLED_BASELINE_COMMANDS,
     OUTSOURCING_EXECUTION_CARDS,
     OUTSOURCING_ONLY_SCRIPTS,
@@ -61,11 +61,8 @@ from workflow_assets import (
     WORKFLOW_VERSION,
     check_latest_trellis_prerequisite,
     prepare_command_content,
-    render_workflow_managed_agent,
     read_project_trellis_version,
     resolve_codex_skills_dir,
-    workflow_legacy_managed_agent_target_path,
-    workflow_managed_agent_target_path,
 )
 
 
@@ -369,11 +366,7 @@ def expected_helper_script_content(src: Path, name: str) -> str | None:
 
 
 def expected_agent_content(src: Path, cli_type: str, name: str) -> str | None:
-    try:
-        return render_workflow_managed_agent(src, cli_type, name)
-    except FileNotFoundError as exc:
-        err(f"源 agent 缺失，无法校验: {exc.filename}")
-        return None
+    return None
 
 
 def expected_parallel_disabled_content(src: Path) -> str | None:
@@ -585,28 +578,22 @@ def detect_conflicts_agents_md(root: Path) -> int:
 def detect_conflicts_managed_agents(src: Path, root: Path, cli_type: str, cli_label: str) -> int:
     target_dir = root / CLI_DIRS[cli_type] / "agents"
     if not target_dir.is_dir():
-        warn(f"[{cli_label}] {target_dir.relative_to(root)}/ 不存在，跳过 managed agents 检查")
         return 0
 
     conflicts = 0
-    for agent_name in MANAGED_IMPLEMENTATION_AGENTS:
-        target_path = workflow_managed_agent_target_path(root, cli_type, agent_name)
-        legacy_target_path = workflow_legacy_managed_agent_target_path(root, cli_type, agent_name)
-        actual_path = target_path if target_path.exists() else legacy_target_path
-        if not actual_path.exists():
-            err(f"[{cli_label}] agent 缺失: {target_path.relative_to(root)}")
-            conflicts += 1
-            continue
-        expected = expected_agent_content(src, cli_type, agent_name)
-        actual = read_text(actual_path)
-        if expected is None or actual is None:
-            conflicts += 1
-            continue
-        if actual != expected:
-            err(f"[{cli_label}] agent 内容漂移: {agent_name}")
-            conflicts += 1
+    for agent_name in LEGACY_AGENT_NAMES:
+        if cli_type == "codex":
+            trellis_path = root / CLI_DIRS[cli_type] / "agents" / f"trellis-{agent_name}.toml"
         else:
-            ok(f"[{cli_label}] agent 正常: {agent_name}")
+            trellis_path = root / CLI_DIRS[cli_type] / "agents" / f"trellis-{agent_name}.md"
+        legacy_path = legacy_agent_target_path(root, cli_type, agent_name)
+
+        if legacy_path.exists() and not trellis_path.exists():
+            err(f"[{cli_label}] legacy agent 未迁移: {legacy_path.name} → trellis-{agent_name}")
+            conflicts += 1
+        elif legacy_path.exists() and trellis_path.exists():
+            err(f"[{cli_label}] legacy 与 trellis agent 重复定义: {legacy_path.name} + {trellis_path.name}")
+            conflicts += 1
     return conflicts
 
 
@@ -861,24 +848,27 @@ def deploy_scripts(src: Path, dst_scripts: Path) -> None:
     ok("辅助脚本已更新")
 
 
-def deploy_managed_agents(src: Path, root: Path, cli_type: str, cli_label: str) -> None:
-    target_dir = root / CLI_DIRS[cli_type] / "agents"
-    if not target_dir.is_dir():
-        warn(f"[{cli_label}] {target_dir.relative_to(root)}/ 不存在，跳过 managed agents 重部署")
+def _migrate_legacy_agents_upgrade(src: Path, root: Path, cli_type: str, cli_label: str) -> None:
+    """Migrate legacy bare-name agent files to Trellis 0.5 naming convention."""
+    agents_dir = root / CLI_DIRS[cli_type] / "agents"
+    if not agents_dir.is_dir():
+        warn(f"[{cli_label}] {agents_dir.relative_to(root)}/ 不存在，跳过 legacy agent 迁移")
         return
 
-    for agent_name in MANAGED_IMPLEMENTATION_AGENTS:
-        target_path = workflow_managed_agent_target_path(root, cli_type, agent_name)
-        legacy_target_path = workflow_legacy_managed_agent_target_path(root, cli_type, agent_name)
-        try:
-            rendered = render_workflow_managed_agent(src, cli_type, agent_name)
-        except FileNotFoundError as exc:
-            err(f"[{cli_label}] 源 agent 缺失，无法重部署: {exc.filename}")
-            continue
-        target_path.write_text(rendered, encoding="utf-8")
-        if legacy_target_path != target_path and legacy_target_path.exists():
-            legacy_target_path.unlink()
-        ok(f"[{cli_label}] agent 已重部署: {agent_name}")
+    for agent_name in LEGACY_AGENT_NAMES:
+        legacy_path = legacy_agent_target_path(root, cli_type, agent_name)
+        if cli_type == "codex":
+            trellis_path = root / CLI_DIRS[cli_type] / "agents" / f"trellis-{agent_name}.toml"
+        else:
+            trellis_path = root / CLI_DIRS[cli_type] / "agents" / f"trellis-{agent_name}.md"
+
+        if legacy_path.exists() and not trellis_path.exists():
+            shutil.copy2(legacy_path, trellis_path)
+            legacy_path.unlink()
+            ok(f"[{cli_label}] agent migrated: {legacy_path.name} → {trellis_path.name}")
+        elif legacy_path.exists() and trellis_path.exists():
+            legacy_path.unlink()
+            ok(f"[{cli_label}] legacy agent removed (trellis version exists): {legacy_path.name}")
 
 
 def deploy_codex_skills(src: Path, root: Path, *, profile: str = DEFAULT_PROFILE) -> None:
@@ -1368,7 +1358,7 @@ def main() -> int:
             if parallel.exists():
                 parallel.unlink()
                 ok("[Claude] parallel.md 已从嵌入面移除")
-            deploy_managed_agents(src, root, "claude", "Claude")
+            _migrate_legacy_agents_upgrade(src, root, "claude", "Claude")
         elif cli_type == "opencode":
             dst_cmds = root / ".opencode" / "commands" / "trellis"
             patched_baseline_commands = [
@@ -1410,7 +1400,7 @@ def main() -> int:
             if parallel.exists():
                 parallel.unlink()
                 ok("[OpenCode] parallel.md 已从嵌入面移除")
-            deploy_managed_agents(src, root, "opencode", "OpenCode")
+            _migrate_legacy_agents_upgrade(src, root, "opencode", "OpenCode")
         elif cli_type == "codex":
             deploy_codex_skills(src, root, profile=profile)
             skills_dirs = list_all_codex_skills_dirs(root)
@@ -1481,7 +1471,7 @@ def main() -> int:
                 ):
                     err("[Codex] finish-work 项目化补丁恢复失败")
                     return 1
-            deploy_managed_agents(src, root, "codex", "Codex")
+            _migrate_legacy_agents_upgrade(src, root, "codex", "Codex")
 
     cleanup_old_workflow_backups(root)
 

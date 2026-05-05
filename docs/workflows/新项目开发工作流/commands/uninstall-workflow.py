@@ -10,7 +10,6 @@ import sys
 from pathlib import Path
 
 from workflow_assets import (
-    AGENT_SUFFIXES,
     ALL_CLI_TYPES,
     CODEX_PATCH_BASELINE_SKILLS,
     LEGACY_CODEX_PATCH_BASELINE_SKILLS,
@@ -20,12 +19,11 @@ from workflow_assets import (
     command_record_session_candidates,
     detect_cli_types as detect_cli_types_shared,
     DISTRIBUTED_COMMANDS,
-    MANAGED_IMPLEMENTATION_AGENTS,
+    legacy_agent_target_path,
+    LEGACY_AGENT_NAMES,
     OPTIONAL_DISABLED_BASELINE_COMMANDS,
     OVERLAY_BASELINE_COMMANDS,
     resolve_codex_skills_dir,
-    workflow_legacy_managed_agent_target_path,
-    workflow_managed_agent_target_path,
 )
 
 
@@ -72,7 +70,7 @@ def info(message: str) -> None:
     print(f"{C}ℹ️  {message}{N}")
 
 
-def managed_agent_backup_dir(root: Path, cli_type: str) -> Path:
+def _managed_agent_backup_dir(root: Path, cli_type: str) -> Path:
     if cli_type == "codex":
         return root / ".trellis" / ".backup-original" / "codex-agents"
     return root / CLI_DIRS[cli_type] / "agents" / ".backup-original"
@@ -144,46 +142,59 @@ def restore_optional_disabled_command(backup: Path, target_dir: Path, command: s
 
 
 def uninstall_managed_agents(root: Path, cli_type: str, cli_label: str) -> None:
+    """Clean up agent files that workflow may have created or renamed.
+
+    Post-0.5 contract: workflow no longer overlays agents.  Trellis-native
+    trellis-{name}.md/.toml files must NEVER be deleted unless a workflow
+    backup exists to restore in their place.
+    """
     target_dir = root / CLI_DIRS[cli_type] / "agents"
-    backup_dir = managed_agent_backup_dir(root, cli_type)
-    suffix = AGENT_SUFFIXES[cli_type]
+    backup_dir = _managed_agent_backup_dir(root, cli_type)
 
     if not target_dir.is_dir():
         warn(f"[{cli_label}] {target_dir.relative_to(root)}/ 不存在，跳过 managed agents 卸载")
         return
 
     restored = 0
-    for agent_name in MANAGED_IMPLEMENTATION_AGENTS:
-        target_agent = workflow_managed_agent_target_path(root, cli_type, agent_name)
-        legacy_target_agent = workflow_legacy_managed_agent_target_path(root, cli_type, agent_name)
-        backup_agent = backup_dir / target_agent.name
-        legacy_backup_agent = backup_dir / legacy_target_agent.name
+    for agent_name in LEGACY_AGENT_NAMES:
+        if cli_type == "codex":
+            trellis_path = root / CLI_DIRS[cli_type] / "agents" / f"trellis-{agent_name}.toml"
+        else:
+            trellis_path = root / CLI_DIRS[cli_type] / "agents" / f"trellis-{agent_name}.md"
+        legacy_path = legacy_agent_target_path(root, cli_type, agent_name)
+        backup_agent = backup_dir / trellis_path.name
+        legacy_backup_agent = backup_dir / legacy_path.name
+
         if backup_agent.exists():
-            shutil.copy2(backup_agent, target_agent)
-            if legacy_target_agent != target_agent and legacy_target_agent.exists():
-                legacy_target_agent.unlink()
+            # Workflow had previously backed up a native trellis-* agent
+            # → restore backup, remove any legacy bare-name file
+            shutil.copy2(backup_agent, trellis_path)
+            if legacy_path.exists():
+                legacy_path.unlink()
             ok(f"[{cli_label}] 恢复 agent: {agent_name}")
             restored += 1
         elif legacy_backup_agent.exists():
-            shutil.copy2(legacy_backup_agent, legacy_target_agent)
-            if target_agent != legacy_target_agent and target_agent.exists():
-                target_agent.unlink()
+            # Workflow had backed up a legacy bare-name agent
+            # → restore legacy backup, remove trellis-* overlay
+            shutil.copy2(legacy_backup_agent, legacy_path)
+            if trellis_path.exists():
+                trellis_path.unlink()
             ok(f"[{cli_label}] 恢复 legacy agent: {agent_name}")
             restored += 1
-        elif target_agent.exists():
-            target_agent.unlink()
-            ok(f"[{cli_label}] 删除 install 新建的 agent: {agent_name}")
-        elif legacy_target_agent.exists():
-            legacy_target_agent.unlink()
-            ok(f"[{cli_label}] 删除 legacy install agent: {agent_name}")
-        else:
-            warn(f"[{cli_label}] 无 {agent_name}{suffix} 备份，保留当前文件")
+        elif legacy_path.exists():
+            # Legacy bare-name file with no backup — this is a leftover
+            # from a pre-0.5 install that install-workflow migrated to
+            # trellis-*.  The trellis-* version is provided by Trellis
+            # native, so just remove the stale legacy file.
+            legacy_path.unlink()
+            ok(f"[{cli_label}] 删除 legacy 残留: {legacy_path.name}")
+        # else: no backup and no legacy file — trellis-* is native, do NOT delete
 
     if backup_dir.exists():
         shutil.rmtree(backup_dir)
         ok(f"[{cli_label}] agent 备份目录已删除")
 
-    info(f"[{cli_label}] 已恢复 {restored}/{len(MANAGED_IMPLEMENTATION_AGENTS)} 个 managed agents")
+    info(f"[{cli_label}] 已恢复 {restored}/{len(LEGACY_AGENT_NAMES)} 个 managed agents")
 
 
 def uninstall_claude(root: Path, added_commands: list[str], overlay_commands: list[str]) -> None:

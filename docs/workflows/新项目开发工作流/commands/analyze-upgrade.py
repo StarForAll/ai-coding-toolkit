@@ -25,8 +25,6 @@ from workflow_assets import (
     check_latest_trellis_prerequisite,
     detect_cli_types,
     list_all_codex_skills_dirs,
-    workflow_legacy_managed_agent_target_path,
-    workflow_managed_agent_target_path,
 )
 
 
@@ -121,18 +119,6 @@ def iter_asset_states(
             asset_id = spec.asset_id if len(dir_labels) == 1 else f"{asset_prefix}[{label}]:{asset_name}"
             variants.append((asset_id, baseline, expected, target))
         return variants
-
-    if spec.kind == "agent":
-        baseline = read_text(workflow_managed_agent_target_path(baseline_root, spec.cli_type, spec.name))
-        if baseline is None:
-            baseline = read_text(workflow_legacy_managed_agent_target_path(baseline_root, spec.cli_type, spec.name))
-        expected = read_text(workflow_managed_agent_target_path(expected_root, spec.cli_type, spec.name))
-        if expected is None:
-            expected = read_text(workflow_legacy_managed_agent_target_path(expected_root, spec.cli_type, spec.name))
-        target = read_text(workflow_managed_agent_target_path(target_root, spec.cli_type, spec.name))
-        if target is None:
-            target = read_text(workflow_legacy_managed_agent_target_path(target_root, spec.cli_type, spec.name))
-        return [(spec.asset_id, baseline, expected, target)]
 
     if spec.kind == "command" and spec.category == "patch-baseline":
         if spec.name == command_phase_router_candidates()[0]:

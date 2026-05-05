@@ -36,11 +36,10 @@ from pathlib import Path
 from workflow_assets import (
     ADDED_COMMANDS,
     ALL_CLI_TYPES,
-    AGENT_SUFFIXES,
-    CODEX_PATCH_BASELINE_SKILLS,
-    CODEX_SHARED_SKILL_CLEANUP_NAMES,
     CLI_ALT_DIRS,
     CLI_DIRS,
+    CODEX_PATCH_BASELINE_SKILLS,
+    CODEX_SHARED_SKILL_CLEANUP_NAMES,
     CORE_HELPER_SCRIPTS,
     DEFAULT_PROFILE,
     command_finish_work_candidates,
@@ -55,8 +54,9 @@ from workflow_assets import (
     EXECUTION_CARDS,
     find_first_existing_codex_skill_path,
     HELPER_SCRIPTS,
+    legacy_agent_target_path,
+    LEGACY_AGENT_NAMES,
     list_all_codex_skills_dirs,
-    MANAGED_IMPLEMENTATION_AGENTS,
     OPTIONAL_DISABLED_BASELINE_COMMANDS,
     OUTSOURCING_EXECUTION_CARDS,
     OUTSOURCING_ONLY_SCRIPTS,
@@ -69,10 +69,7 @@ from workflow_assets import (
     WORKFLOW_VERSION,
     prepare_command_content,
     read_project_trellis_version,
-    render_workflow_managed_agent,
     resolve_codex_skills_dir,
-    workflow_legacy_managed_agent_target_path,
-    workflow_managed_agent_target_path,
 )
 
 
@@ -311,11 +308,6 @@ def collect_workflow_embed_traces(src: Path, root: Path, cli_types: list[str]) -
                 backup_dir = agents_dir / ".backup-original"
                 if backup_dir.is_dir():
                     _append_trace(traces, f"{cli_type}-agent-backup-dir", backup_dir, root)
-                for agent_name in MANAGED_IMPLEMENTATION_AGENTS:
-                    path = workflow_managed_agent_target_path(root, cli_type, agent_name)
-                    expected = render_workflow_managed_agent(src, cli_type, agent_name)
-                    if _matches_expected_content(path, expected):
-                        _append_trace(traces, f"{cli_type}-managed-agent", path, root)
 
         elif cli_type == "codex":
             skills_dirs = list_all_codex_skills_dirs(root)
@@ -367,11 +359,6 @@ def collect_workflow_embed_traces(src: Path, root: Path, cli_types: list[str]) -
                 backup_dir = agents_dir / ".backup-original"
                 if backup_dir.is_dir():
                     _append_trace(traces, "codex-agent-backup-dir", backup_dir, root)
-                for agent_name in MANAGED_IMPLEMENTATION_AGENTS:
-                    path = workflow_managed_agent_target_path(root, cli_type, agent_name)
-                    expected = render_workflow_managed_agent(src, cli_type, agent_name)
-                    if _matches_expected_content(path, expected):
-                        _append_trace(traces, "codex-managed-agent", path, root)
 
     return traces
 
@@ -911,60 +898,42 @@ def inject_workflow_patch(src: Path, root: Path, *, dry_run: bool, profile: str 
     return True
 
 
-def target_agent_dir(root: Path, cli_type: str) -> Path:
-    return root / CLI_DIRS[cli_type] / "agents"
+def _migrate_legacy_agents(root: Path, cli_type: str, cli_label: str, *, dry_run: bool = False) -> dict:
+    """Migrate legacy bare-name agent files to Trellis 0.5 naming convention.
 
-
-def managed_agent_backup_dir(root: Path, cli_type: str) -> Path:
-    """Return backup location for managed agents.
-
-    Codex agent backups must stay outside `.codex/agents/` because Codex scans that
-    directory for role definitions and may treat backup files as duplicate roles.
+    Before Trellis 0.5, agents were deployed as bare names (research.md).
+    Trellis 0.5+ provides trellis-{name}.md / trellis-{name}.toml natively.
+    This function renames any remaining legacy bare-name files.
     """
-    if cli_type == "codex":
-        return root / ".trellis" / ".backup-original" / "codex-agents"
-    return target_agent_dir(root, cli_type) / ".backup-original"
-
-
-def deploy_managed_agents(
-    src: Path,
-    root: Path,
-    *,
-    cli_type: str,
-    cli_label: str,
-    dry_run: bool,
-) -> dict:
-    dst_agents = target_agent_dir(root, cli_type)
-    backup_dir = managed_agent_backup_dir(root, cli_type)
     result = {"agents": 0, "errors": []}
+    agents_dir = root / CLI_DIRS[cli_type] / "agents"
 
-    if not dst_agents.is_dir():
-        result["errors"].append(f"{dst_agents.relative_to(root)}/ 不存在，请先运行 trellis init")
+    if not agents_dir.is_dir():
         return result
 
-    if not dry_run:
-        backup_dir.mkdir(parents=True, exist_ok=True)
-
-    for agent_name in MANAGED_IMPLEMENTATION_AGENTS:
-        target_path = workflow_managed_agent_target_path(root, cli_type, agent_name)
-        legacy_target_path = workflow_legacy_managed_agent_target_path(root, cli_type, agent_name)
-        try:
-            rendered = render_workflow_managed_agent(src, cli_type, agent_name)
-        except FileNotFoundError as exc:
-            result["errors"].append(f"源 agent 缺失: {exc.filename}")
-            continue
-        current_path = target_path if target_path.exists() else legacy_target_path
-        if not dry_run and current_path.exists() and not (backup_dir / current_path.name).exists():
-            shutil.copy2(current_path, backup_dir / current_path.name)
-            ok(f"[{cli_label}] {current_path.name} → 备份")
-        if dry_run:
-            info(f"[{cli_label}] 将部署 agent: {agent_name}")
+    for agent_name in LEGACY_AGENT_NAMES:
+        legacy_path = legacy_agent_target_path(root, cli_type, agent_name)
+        if cli_type == "codex":
+            new_path = root / CLI_DIRS[cli_type] / "agents" / f"trellis-{agent_name}.toml"
         else:
-            target_path.write_text(rendered, encoding="utf-8")
-            if legacy_target_path != target_path and legacy_target_path.exists():
-                legacy_target_path.unlink()
-            ok(f"[{cli_label}] agent: {agent_name}")
-        result["agents"] += 1
+            new_path = root / CLI_DIRS[cli_type] / "agents" / f"trellis-{agent_name}.md"
+
+        if legacy_path.exists() and not new_path.exists():
+            if dry_run:
+                ok(f"[{cli_label}] agent 将重命名: {legacy_path.name} → {new_path.name}")
+            else:
+                import shutil
+                shutil.copy2(legacy_path, new_path)
+                legacy_path.unlink()
+                ok(f"[{cli_label}] agent renamed: {legacy_path.name} → {new_path.name}")
+            result["agents"] += 1
+        elif legacy_path.exists() and new_path.exists():
+            if dry_run:
+                ok(f"[{cli_label}] 将删除 legacy 残留: {legacy_path.name}（trellis 版本已存在）")
+            else:
+                legacy_path.unlink()
+                ok(f"[{cli_label}] legacy 残留已删除: {legacy_path.name}（trellis 版本已存在）")
+            result["agents"] += 1
 
     return result
 
@@ -1089,10 +1058,6 @@ def deploy_claude(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAUL
     if disable_parallel_command(src, dst_cmds / "parallel.md", dry_run=dry_run, cli_label="Claude"):
         result["patches"] += 1
 
-    agent_result = deploy_managed_agents(src, root, cli_type="claude", cli_label="Claude", dry_run=dry_run)
-    result["agents"] = agent_result["agents"]
-    result["errors"].extend(agent_result["errors"])
-
     return result
 
 
@@ -1216,10 +1181,6 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool, *, profile: str = DEFA
 
     if disable_parallel_command(src, dst_cmds / "parallel.md", dry_run=dry_run, cli_label="OpenCode"):
         result["patches"] += 1
-
-    agent_result = deploy_managed_agents(src, root, cli_type="opencode", cli_label="OpenCode", dry_run=dry_run)
-    result["agents"] = agent_result["agents"]
-    result["errors"].extend(agent_result["errors"])
 
     # 辅助脚本已在 Claude Code 部署时处理，此处不重复计数
     return result
@@ -1359,10 +1320,6 @@ def deploy_codex(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAULT
             if not parallel_patched:
                 result["patches"] += 1
                 parallel_patched = True
-
-    agent_result = deploy_managed_agents(src, root, cli_type="codex", cli_label="Codex", dry_run=dry_run)
-    result["agents"] = agent_result["agents"]
-    result["errors"].extend(agent_result["errors"])
 
     # 辅助脚本已在 Claude Code 部署时处理
     return result
@@ -1666,10 +1623,13 @@ def main() -> int:
             update_embed_attempt_record(root, last_step=f"deploy-{cli_type}")
             if cli_type == "claude":
                 total["claude"] = deploy_claude(src, root, args.dry_run, profile=profile)
+                _migrate_legacy_agents(root, "claude", "Claude", dry_run=args.dry_run)
             elif cli_type == "opencode":
                 total["opencode"] = deploy_opencode(src, root, args.dry_run, profile=profile)
+                _migrate_legacy_agents(root, "opencode", "OpenCode", dry_run=args.dry_run)
             elif cli_type == "codex":
                 total["codex"] = deploy_codex(src, root, args.dry_run, profile=profile)
+                _migrate_legacy_agents(root, "codex", "Codex", dry_run=args.dry_run)
             print()
 
         if any(result and result["errors"] for result in total.values()):

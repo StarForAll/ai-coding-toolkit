@@ -9,14 +9,13 @@ Claude Code 是当前 workflow 维护的三种原生适配之一，并保留项�
 - `AGENTS.md`：项目级长期稳定规则
 - `.claude/settings.json` / `.claude/settings.local.json`：hooks、权限、工具可用性等运行时配置
 - `.claude/hooks/*.py`：会话启动与子代理上下文注入
-- `.claude/agents/*.md`：research / implement / check / debug 一类子代理
+- `.claude/agents/*.md`：trellis-research / trellis-implement / trellis-check / debug 一类子代理
 - skills / 通用脚本：复用能力资产，不应全部硬塞进命令正文
 
 就当前 workflow 实现而言，还要明确一条 source-of-truth 边界：
 
-- `research` / `implement` / `check` 当前真正的 workflow 源文件位于 `docs/workflows/新项目开发工作流/commands/claude/agents/`
-- 安装器只是把这层内容部署到目标项目 `.claude/agents/`
-- 若后续要继续收敛，也应优先在 workflow 命令目录内完成，而不是上收到仓库根目录
+- `trellis-research` / `trellis-implement` / `trellis-check` 由 Trellis 0.5+ 原生提供（`trellis init` 产物），workflow 不再 overlay 这些 agent 定义；安装器仅做 legacy bare-name → trellis-* 迁移
+- 若后续要继续收敛，也应优先在 Trellis 上游完成，而不是在 workflow 命令目录内重新维护
 
 前置条件也要单独说清：
 
@@ -185,36 +184,28 @@ Claude Code 的 hooks 是这套 workflow 的关键承载层之一。当前仓库
 - `inject-subagent-context.py`：对子代理注入 implement / check / debug 上下文
 - `ralph-loop.py`：在特定审查收口点执行自动循环或门禁逻辑
 
-### 4. Agents：用 `.claude/agents/*.md` 承载角色，而不是把所有能力塞进命令正文
+### 4. Agents：由 Trellis 0.5+ 原生提供，workflow 不再 overlay
 
-如果某能力是“阶段内角色分工”，更适合放在 agents：
+Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check` agents（`trellis init` 产物），覆盖 9 个平台。workflow 不再维护自定义 agent 源资产或 overlay 这些定义。
 
 ```text
 .claude/agents/
-├── research.md
-├── implement.md
-├── check.md
+├── trellis-research.md
+├── trellis-implement.md
+├── trellis-check.md
 └── debug.md
 ```
 
 这层适合放：
 
-- research / implement / check / debug 的职责拆分
+- trellis-research / trellis-implement / trellis-check / debug 的职责拆分
 - 角色级工具暴露
 - 子代理工作边界
 
-当前 workflow 对 agent 的托管边界已收紧为：
+当前 workflow 对 agent 的托管边界已调整为：
 
-- `research` / `implement` / `check`：由 workflow 源资产统一治理并部署
+- `trellis-research` / `trellis-implement` / `trellis-check`：由 Trellis 原生提供（`trellis init`），workflow 不再 overlay；安装器仅做 legacy bare-name → trellis-* 迁移
 - `debug`：仍保留为 Trellis / 项目侧手动维护能力，不纳入当前 workflow 托管集合
-
-更具体地说，当前 workflow 安装链读取的是：
-
-- `docs/workflows/新项目开发工作流/commands/claude/agents/research.md`
-- `docs/workflows/新项目开发工作流/commands/claude/agents/implement.md`
-- `docs/workflows/新项目开发工作流/commands/claude/agents/check.md`
-
-不要把目标项目里的 `.claude/agents/*.md` 误判成当前 workflow 的唯一源文件。
 
 其中 `research` 角色还需要遵守统一证据门禁：
 
@@ -277,9 +268,9 @@ test -f .claude/settings.json
 test -f .claude/hooks/session-start.py
 test -f .claude/hooks/inject-subagent-context.py
 test -f .claude/commands/trellis/start.md
-test -f .claude/agents/research.md
-test -f .claude/agents/implement.md
-test -f .claude/agents/check.md
+test -f .claude/agents/trellis-research.md
+test -f .claude/agents/trellis-implement.md
+test -f .claude/agents/trellis-check.md
 ```
 
 ### 配置层验证

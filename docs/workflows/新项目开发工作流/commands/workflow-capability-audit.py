@@ -699,8 +699,6 @@ def _normalize_overall(summary_values: list[str]) -> str:
 
 
 def _managed_row_key(spec: Any) -> str:
-    if spec.kind == "agent":
-        return f"agent:{spec.name}"
     if spec.kind == "script":
         return f"script:{spec.name}"
     if spec.kind == "doc":
@@ -709,8 +707,6 @@ def _managed_row_key(spec: Any) -> str:
 
 
 def _managed_row_label(spec: Any) -> str:
-    if spec.kind == "agent":
-        return f"implementation-agent:{spec.name}"
     if spec.kind == "script":
         return f"helper-script:{spec.name}"
     if spec.kind == "doc":
@@ -727,8 +723,6 @@ def _managed_mechanism(spec: Any) -> str:
         return "Workflow adds a workflow-only capability beyond the Trellis baseline."
     if spec.category == "disabled-baseline":
         return "Workflow intentionally disables a baseline capability on the embedded surface."
-    if spec.category == "implementation-agent":
-        return "Workflow deploys a managed implementation-stage internal role asset."
     if spec.category == "shared-script":
         return "Workflow deploys a shared helper script used across CLI carriers."
     return "Workflow-managed compatibility surface."
