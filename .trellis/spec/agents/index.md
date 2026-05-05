@@ -1,7 +1,7 @@
 # Agent Asset Specification
 
 > **⚠️ IMPORTANT**: This spec describes the TARGET architecture, not current practice.
-> Current workflow: Edit directly in `.claude/agents/`、`.opencode/agents/`、`.codex/agents/`
+> Current workflow: Edit directly in live deployment directories such as `.claude/agents/`、`.opencode/agents/`、`.codex/agents/`，and currently also `.kiro/agents/` / `.qoder/agents/`
 > To implement this architecture: populate `agents/<id>/` source layer, then enable sync to tool directories
 
 > How to author agent source assets and deploy them across multiple AI CLI tools.
@@ -15,6 +15,11 @@
 **Tool deployment directories** (`.claude/agents/`、`.opencode/agents/`、`.codex/agents/`) exist
 and contain live agent definitions, but are **not synchronized** from `agents/<id>/` source.
 Current practice is **direct editing** in tool directories.
+
+Additional live deployment surfaces also exist in this repository today, notably
+`.kiro/agents/` and `.qoder/agents/`. They are part of the current maintenance
+surface even though the initial source-layer design in this spec still centers
+on Claude / OpenCode / Codex.
 
 **To close the gap:** populate `agents/<id>/` with real source assets, then apply the Sync Strategy.
 
@@ -72,12 +77,12 @@ The core content, must be **tool-agnostic**. Contains:
 - Strict boundaries (what NOT to do)
 - Workflow steps (numbered)
 - Report format (markdown template)
-- Context self-loading instructions
 
 **Rules:**
 - Do NOT embed tool-specific syntax (no `Task(subagent_type:...)`, no frontmatter)
 - Do NOT reference specific tool paths (use generic paths like `.trellis/`)
-- Keep it self-contained — a tool adapter should only need to wrap it in frontmatter
+- Keep it self-contained for shared role semantics; deployment adapters may still
+  add platform-specific metadata or context-loading glue
 
 ### TOOLS.md (Optional)
 
@@ -110,7 +115,13 @@ Describe abstract permission needs:
 
 ## Multi-Tool Deployment Mapping
 
-Each tool requires a single `.md` file in its agents directory, wrapping the source content in tool-specific frontmatter.
+Each deployment target requires one tool-specific agent file that wraps the
+shared source content in that platform's metadata format.
+
+The mapping table below focuses on the current primary convergence targets
+Claude / OpenCode / Codex. This repository also carries live Kiro / Qoder agent
+deployments, but they remain outside the not-yet-implemented `agents/<id>/`
+source sync path.
 
 ### Field Mapping
 
@@ -192,7 +203,11 @@ developer_instructions = """
 
 ## Root `agents/` Directory
 
-The `agents/` directory at the project root IS the source asset layer. It is NOT a scaffold or documentation-only directory. All agent definitions should be authored here first, then deployed to tool-specific directories.
+The `agents/` directory at the project root is the **intended** source asset
+layer for this target architecture. In the current repo state it is still a
+scaffold / documentation-only directory containing only `agents/README.md`;
+live agent definitions remain under tool-specific deployment directories until
+`03-19-implement-agents-source` is completed.
 
 ---
 
@@ -226,7 +241,8 @@ Source layer `agents/` is empty. All three tool deployments are independently ma
 
 | Type | Meaning | Action |
 |------|---------|--------|
-| **format-only** | Different frontmatter / context-loading mechanism; core instructions identical or equivalent | Source layer will unify core body; platform adapters keep format |
+| **format-only** | Different serialization wrapper / frontmatter; core instructions identical or equivalent | Source layer will unify core body; platform adapters keep format |
+| **context-adapter** | Same core role, but one platform needs hook-push context while another must self-load task / JSONL context | Keep shared role semantics; isolate loading instructions in deployment adapters |
 | **content-drift** | Core instruction body differs across platforms (responsibilities, boundaries, workflow steps) | Source layer must converge to single canonical version |
 | **platform-only** | Feature exists on one platform only and is inherently platform-specific | No cross-platform action needed |
 
@@ -234,20 +250,46 @@ Source layer `agents/` is empty. All three tool deployments are independently ma
 
 | Agent | Claude | OpenCode | Codex | Drift Type | Details |
 |-------|--------|----------|-------|------------|---------|
-| trellis-implement | ✓ | ✓ | ✓ | format-only | Claude: YAML frontmatter + hook-injected context. OpenCode: self-loading context section. Codex: TOML + `developer_instructions`. Core instructions equivalent. |
-| trellis-check | ✓ | ✓ | ✓ | format-only | Same pattern as trellis-implement. |
-| trellis-research | ✓ | ✓ | ✓ | format-only | OpenCode version lists `.opencode/` in platform config paths; Claude lists `.claude/`. Core instructions equivalent. |
+| trellis-implement | ✓ | ✓ | ✓ | context-adapter | Claude relies on hook-injected context. OpenCode and Codex include self-loading context instructions because their current integration model is not identical to Claude's hook push. |
+| trellis-check | ✓ | ✓ | ✓ | context-adapter | Same pattern as trellis-implement. Hook model differs, but the review role itself is aligned. |
+| trellis-research | ✓ | ✓ | ✓ | format-only | Main difference is wrapper/permission syntax plus small platform path examples; no evidence of a different research role. |
 
-### Not Required (no drift)
+### Additional Live Platforms
 
-No content-drift detected across deployed agents. All three agents have platform-appropriate context-loading mechanisms which are **reasonable adaptations**, not drift.
+The current repository also carries live `trellis-*` agents in:
+
+- `.kiro/agents/`
+- `.qoder/agents/`
+
+These follow the same broad split:
+
+- hook-push / spawn-hook capable platforms can keep thinner agent bodies
+- platforms without equivalent sub-agent injection must self-load task context
+
+Treat those surfaces as part of the same convergence problem even though the
+current source-layer mapping table above still focuses on Claude / OpenCode /
+Codex.
+
+### Current Assessment
+
+No **critical role-drift** is currently confirmed across deployed agents.
+However, the live differences are not purely frontmatter-only:
+
+- some are **context-adapter** differences caused by platform hook capability
+- direct per-platform maintenance still creates a **future content-drift risk**
+
+So the right conclusion is:
+
+- current differences are mostly reasonable platform adaptations
+- current spec should not overstate them as pure `format-only`
+- source-layer convergence is still needed to prevent future drift
 
 ### Notes for Source Layer Task
 
 When `03-19-implement-agents-source` populates `agents/<id>/SYSTEM.md`:
 - The SYSTEM.md body should capture the **shared core** (responsibilities, boundaries, workflow, report format)
 - Platform-specific context-loading instructions should go in each platform's deployment adapter, not in SYSTEM.md
-- The self-loading context section (currently in OpenCode agents) should be extracted to a platform adapter pattern
+- The self-loading context section (currently seen in OpenCode / Codex / Qoder-style deployments) should be extracted to a platform adapter pattern where possible
 
 ---
 

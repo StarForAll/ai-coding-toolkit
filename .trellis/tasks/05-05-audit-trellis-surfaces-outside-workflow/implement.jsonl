@@ -1,0 +1,8 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/docs/index.md", "reason": "Documentation-layer rules for repo-local audit findings and maintenance notes."}
+{"file": ".trellis/spec/guides/index.md", "reason": "Cross-layer and drift-thinking guide for repo maintenance work."}
+{"file": ".trellis/spec/agents/index.md", "reason": "Current agent source/deploy contract and platform drift classification baseline."}
+{"file": ".trellis/spec/commands/index.md", "reason": "Current command source/deploy contract and platform drift classification baseline."}
+{"file": ".trellis/spec/scripts/index.md", "reason": "Rules for evaluating `.trellis/scripts/` runtime surfaces and script maintenance."}
+{"file": ".trellis/tasks/05-05-audit-trellis-surfaces-outside-workflow/research/trellis-residual-surfaces.md", "reason": "Residual Trellis surfaces audit conclusions for `.new`, backup, runtime state, and cleanup policy."}
+{"file": ".trellis/tasks/05-05-audit-trellis-surfaces-outside-workflow/research/platform-agent-drift-classification.md", "reason": "Cross-platform agent difference classification: capability-driven vs maintenance drift."}

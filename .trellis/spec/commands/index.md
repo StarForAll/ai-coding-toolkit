@@ -25,7 +25,9 @@ Current practice is **direct editing** in tool directories.
 This spec covers the **source asset layer**: `commands/claude/`, `commands/codex/`, `commands/shell/`.
 
 **Out of scope:**
-- `.claude/commands/`, `.opencode/commands/` — these are each tool's internal command discovery directories, managed independently by each tool
+- `.claude/commands/`, `.opencode/commands/` — these are live tool discovery /
+  deployment directories in this repo, not the source asset layer governed by
+  this spec
 - Trellis workflow commands (start, brainstorm, finish-work, etc.) — these live directly in tool deployment directories and are not part of this spec
 
 ---
@@ -149,7 +151,10 @@ Source layer `commands/` is empty (only README.md files). Tool command directori
 | **platform-param** | Only differs in platform-specific runtime parameter (e.g. `--platform claude` vs `--platform opencode`) | Reasonable; no action |
 | **content-drift** | Instructional content differs (one platform has more/different guidance) | Source layer must converge to canonical version |
 | **platform-only** | Command exists on one platform only, and is inherently platform-specific | Evaluate: keep as platform-only or generalize |
+| **retired** | Surface used to exist in live deployments but has been intentionally removed | Keep only as migration/history note |
+| **retired-cleaned** | Previously audited residual has already been deleted from live deployments | No further cleanup needed; keep only as audit note |
 | **residual** | Empty or obsolete file left over from a previous change | Clean up |
+| **shared-skill-surface** | Capability is carried by shared / skill deployment surfaces rather than command discovery files | Do not model it as a normal command-source convergence target |
 
 ### Commands
 
@@ -159,7 +164,7 @@ Source layer `commands/` is empty (only README.md files). Tool command directori
 | continue | ✓ | ✓ | platform-param | `--platform claude` vs `--platform opencode` |
 | record-session | ✓ | ✓ | **retired** | Replaced by `finish-work` (which includes session recording via `record-session-helper.py`). Deployed files have been removed. |
 | create-command | — | ✓ | **retired** | Low-usage, unshipped. Deployed file removed. |
-| migrate-specs | — | ✓ | **residual** | 0-byte empty file. Should be deleted. |
+| migrate-specs | — | — | **retired-cleaned** | Previously audited as an OpenCode residual; no live deployed file remains in the current repo state. |
 
 ### Skills (deployment asymmetry)
 
@@ -171,15 +176,15 @@ Source layer `commands/` is empty (only README.md files). Tool command directori
 | trellis-update-spec | ✓ | ✓ | none | Identical |
 | trellis-break-loop | ✓ | ✓ | none | Identical |
 | trellis-meta | ✓ | ✓ | none | Identical |
-| workflow-audit | ✓ | — | **platform-only** | Claude-only. Has test fixtures. Evaluate cross-platform deployment. |
-| workflow-capability-audit | ✓ | — | **platform-only** | Claude-only. Has test fixtures. Evaluate cross-platform deployment. |
+| workflow-audit | ✓ | — | **shared-skill-surface** | Not an OpenCode command, but the repo carries shared maintainer skill surfaces under `.agents/skills/workflow-audit/` plus Claude-local deployment under `.claude/skills/workflow-audit/`. |
+| workflow-capability-audit | ✓ | — | **shared-skill-surface** | Same carrier pattern as `workflow-audit`: shared `.agents/skills/` surface plus Claude-local deployment. |
 
 ### Notes for Source Layer Task
 
 When `03-19-implement-commands-source` populates the source layer:
 - `record-session` has been retired — its functionality is absorbed by `finish-work` (which calls `record-session-helper.py` internally). Deployed command files removed.
 - `create-command` has been retired — low-usage, unshipped. Deployed file removed.
-- `workflow-audit` and `workflow-capability-audit` should be evaluated for OpenCode/Codex deployment
+- `workflow-audit` and `workflow-capability-audit` are not ordinary command assets here; treat them as repo-local maintainer skill surfaces carried by `.agents/skills/` and `.claude/skills/`
 
 ---
 
