@@ -764,3 +764,37 @@ Aligned current-vs-legacy workflow carriers for install/upgrade/uninstall/analyz
 ### Next Steps
 
 - None - task complete
+
+
+## Session 150: workflow-capability-audit Codex runtime-boundary and test strategy follow-up
+
+**Date**: 2026-05-06
+**Task**: workflow-capability-audit Codex runtime-boundary and test strategy follow-up
+**Branch**: `main`
+
+### Summary
+
+Recorded the workflow-capability-audit follow-up: added Codex runtime-boundary guidance, aligned runtime messaging, and stabilized the audit test suite by replacing real trellis init success-path dependencies with controlled fake full-audit fixtures while keeping explicit failure-branch coverage.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e44b181` | (see git log) |
+| `36db9ca` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

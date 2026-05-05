@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 149
+- **Total Sessions**: 150
 - **Last Active**: 2026-05-06
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~766 | Active |
+| `journal-4.md` | ~800 | Active |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 150 | 2026-05-06 | workflow-capability-audit Codex runtime-boundary and test strategy follow-up | `e44b181`, `36db9ca` | `main` |
 | 149 | 2026-05-06 | fix workflow-capability-audit version alignment and anchor write-back timing | `36db9ca`, `e44b181` | `main` |
 | 148 | 2026-05-05 | Audit Trellis 0.5 workflow carriers | `b853be7` | `main` |
 | 147 | 2026-05-05 | Decouple multi-cli review pair from workflow defaults | `82decc6` | `main` |
