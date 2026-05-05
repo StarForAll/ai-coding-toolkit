@@ -620,6 +620,27 @@ def create_fixture_root(prefix: str, developer_name: str) -> Path:
         raise
 
 
+def _is_likely_codex_python_probe_false_negative(detail: str, current_cli: str) -> bool:
+    if current_cli != "codex":
+        return False
+    lowered = detail.lower()
+    return (
+        'python command "python3" not found' in lowered
+        and "trellis init requires python" in lowered
+    )
+
+
+def _codex_runtime_boundary_message(detail: str) -> str:
+    return (
+        "Codex runtime boundary: fresh `trellis init` failed inside the current Codex runtime, "
+        "so this result is not yet sufficient proof that the user's actual machine environment is broken.\n"
+        "Recheck the same `trellis init --claude --opencode --codex -u <name> -y` step in a real shell, "
+        "Claude Code, or OpenCode on the same machine before concluding `Blocked / Environment Error`.\n"
+        "If the non-Codex recheck succeeds, treat that result as the environment truth source.\n"
+        f"Original Codex-local failure:\n{detail}"
+    )
+
+
 def install_workflow_into(root: Path) -> None:
     command = [
         PYTHON,
@@ -1067,6 +1088,10 @@ def main() -> int:
         if not args.task_dir:
             print("--task-dir is required for fix lifecycle updates.", file=sys.stderr)
             return 1
+        if args.confirm_fix_scope:
+            current_version, _source = assets.resolve_current_trellis_version()
+            if current_version:
+                update_compatible_anchor(current_version)
         try:
             task_dir = resolve_audit_task_dir(args.task_dir)
             payload = update_fix_lifecycle(
@@ -1232,6 +1257,9 @@ def main() -> int:
             shutil.rmtree(REPO_ROOT / task_dir_ref, ignore_errors=True)
         restore_current_task_ref(current_ref)
         detail = exc.stderr or exc.stdout or str(exc)
+        if _is_likely_codex_python_probe_false_negative(detail.strip(), args.current_cli):
+            print(_codex_runtime_boundary_message(detail.strip()), file=sys.stderr)
+            return 1
         print(detail.strip(), file=sys.stderr)
         return 1
 

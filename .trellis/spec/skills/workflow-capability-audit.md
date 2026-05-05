@@ -138,6 +138,27 @@ If `trellis -v` fails or returns empty output:
 - terminate immediately
 - classify as `Blocked / Environment Error`
 
+### Codex Runtime Boundary
+
+When the current executor is Codex and the audit reaches a runtime step that
+depends on fresh `trellis init` execution for A/B baseline creation:
+
+- do not treat a Codex-local `trellis init` failure as sufficient proof that the
+  user's actual machine environment is broken
+- distinguish `runtime command output under Codex` from `real shell or non-Codex
+  executor behavior on the same machine`
+- if the failure is observed only under Codex, classify it as a Codex runtime
+  boundary / evidence-gap condition until the same step is rechecked outside Codex
+- do not convert this condition directly into `Blocked / Environment Error` for
+  the user's machine without a non-Codex recheck
+
+Minimum recheck rule:
+
+- if shell, Claude Code, or OpenCode can run the same `trellis init` step on the
+  same machine, that result is the environment truth source
+- if no non-Codex executor is available for recheck, stop with an evidence-gap
+  explanation instead of asserting that the machine environment is broken
+
 ### Version-Gate Output Contract
 
 Version-gate termination states must use a dedicated fixed template/reference.
@@ -441,10 +462,12 @@ If `COMPATIBLE_TRELLIS_VERSION` is missing and the user provides the value:
 
 After a confirmed successful audit:
 
-- do **not** let the audit skill auto-write the final compatibility-version promotion
-- the formal update belongs to the subsequent confirmed implementation/update step
+- `COMPATIBLE_TRELLIS_VERSION` **must** be set to the exact `trellis -v` output value in `workflow_assets.py`
+- this is a mandatory post-audit step, not optional
+- the version value written must be the literal string from `trellis -v`, including any prerelease suffix (e.g., `-rc.3`, `-beta.1`)
+- do **not** round up to a stable version (e.g., writing `"0.5.0"` when `trellis -v` returns `"0.5.0-rc.3"`) — this breaks downstream version gates in `workflow-audit` and causes false re-triggers in subsequent `workflow-capability-audit` runs
 
-This remains true even if the final conclusion is:
+This rule applies even if the final conclusion is:
 
 - the workflow is already compatible as-is
 - no workflow source edits were needed beyond the initialization exception

@@ -3,15 +3,19 @@
 
 from __future__ import annotations
 
+import io
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -90,6 +94,16 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         for d in self._temp_dirs:
             shutil.rmtree(d, ignore_errors=True)
 
+    def _clear_active_test_audit_task(self) -> None:
+        if not CURRENT_TASK_FILE.is_file():
+            return
+        current = CURRENT_TASK_FILE.read_text(encoding="utf-8").strip()
+        if "05-06-workflow-capability-audit-" in current:
+            CURRENT_TASK_FILE.unlink()
+
+    def _release_fake_audit_task_for_followup(self) -> None:
+        self._clear_active_test_audit_task()
+
     def _track_fixtures_from_payload(self, payload: dict) -> None:
         for key in ("a_root", "b_root"):
             path = Path(payload[key])
@@ -102,7 +116,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
     def _remove_compatible_anchor(self) -> None:
         content = WORKFLOW_ASSETS.read_text(encoding="utf-8")
         self.assertIn('COMPATIBLE_TRELLIS_VERSION = "', content)
-        content = content.replace('COMPATIBLE_TRELLIS_VERSION = "0.4.0"\n', "", 1)
+        content = re.sub(r'^COMPATIBLE_TRELLIS_VERSION = ".*"\n', "", content, count=1, flags=re.MULTILINE)
         WORKFLOW_ASSETS.write_text(content, encoding="utf-8")
 
     def _make_fake_trellis_bin(self, version: str = "9.9.9", init_exit: int = 42) -> Path:
@@ -149,6 +163,239 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             capture_output=True,
             check=False,
             env=merged_env,
+        )
+
+    def _write_fake_audit_root(self, root: Path, developer_name: str, *, include_delivery: bool) -> None:
+        (root / ".trellis" / "scripts").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / ".developer").write_text(f"name={developer_name}\n", encoding="utf-8")
+        (root / ".trellis" / ".version").write_text("9.9.9\n", encoding="utf-8")
+        (root / ".trellis" / "workflow.md").write_text("# fake workflow\n", encoding="utf-8")
+        (root / ".trellis" / "scripts" / "task.py").write_text("# fake task helper\n", encoding="utf-8")
+        (root / "AGENTS.md").write_text("# fake AGENTS\n", encoding="utf-8")
+
+        (root / ".claude" / "commands" / "trellis").mkdir(parents=True, exist_ok=True)
+        if include_delivery:
+            (root / ".claude" / "commands" / "trellis" / "delivery.md").write_text(
+                "# delivery\n",
+                encoding="utf-8",
+            )
+        (root / ".claude" / "agents").mkdir(parents=True, exist_ok=True)
+        (root / ".claude" / "settings.json").write_text("{}", encoding="utf-8")
+        (root / ".claude" / "hooks").mkdir(parents=True, exist_ok=True)
+
+        (root / ".opencode" / "agents").mkdir(parents=True, exist_ok=True)
+        (root / ".opencode" / "plugins").mkdir(parents=True, exist_ok=True)
+        (root / ".opencode" / "package.json").write_text("{}", encoding="utf-8")
+
+        (root / ".codex" / "agents").mkdir(parents=True, exist_ok=True)
+        (root / ".codex" / "hooks.json").write_text("{}", encoding="utf-8")
+        (root / ".codex" / "config.toml").write_text("", encoding="utf-8")
+
+        (root / ".agents" / "skills").mkdir(parents=True, exist_ok=True)
+
+    def _make_fake_full_audit_roots(self, developer_name: str) -> tuple[Path, Path]:
+        a_root = Path(tempfile.mkdtemp(prefix="workflow-capability-audit-a-"))
+        b_root = Path(tempfile.mkdtemp(prefix="workflow-capability-audit-b-"))
+        self._temp_dirs.extend([a_root, b_root])
+        self._write_fake_audit_root(a_root, developer_name, include_delivery=False)
+        self._write_fake_audit_root(b_root, developer_name, include_delivery=True)
+        return a_root, b_root
+
+    def _create_fake_audit_task_dir(self, title: str, parent: str | None) -> str:
+        existing = {
+            d.name for d in TRELLIS_TASKS_DIR.iterdir() if d.is_dir()
+        } if TRELLIS_TASKS_DIR.is_dir() else set()
+        index = 1
+        while True:
+            dir_name = f"05-06-workflow-capability-audit-{index:02d}"
+            if dir_name not in existing:
+                break
+            index += 1
+        task_dir = TRELLIS_TASKS_DIR / dir_name
+        task_dir.mkdir(parents=True, exist_ok=False)
+        payload = {
+            "title": title,
+            "parent": Path(parent).name if parent else None,
+            "children": [],
+        }
+        (task_dir / "task.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        return f".trellis/tasks/{dir_name}"
+
+    def _fake_managed_rows(self) -> list[dict[str, str]]:
+        return [
+            {
+                "capability_id": "WM-001",
+                "capability": "helper-script:record-session-helper.py",
+                "mechanism": "Workflow deploys a shared helper script used across CLI carriers.",
+                "discovery_source": "ai-discovered",
+                "claude_evidence": "B=.trellis/scripts/workflow/record-session-helper.py",
+                "claude_classification": "adopted-compatible",
+                "opencode_evidence": "B=.trellis/scripts/workflow/record-session-helper.py",
+                "opencode_classification": "adopted-compatible",
+                "codex_evidence": "B=.trellis/scripts/workflow/record-session-helper.py",
+                "codex_classification": "adopted-compatible",
+                "overall_summary": "adopted-compatible",
+                "structural_signal": "none detected from A/B surface shape",
+                "adaptation_decision": "No action required in fresh B unless later compatibility analysis changes this.",
+            }
+        ]
+
+    def _fake_dependent_rows(self) -> list[dict[str, str]]:
+        return [
+            {
+                "capability_id": "TN-001",
+                "capability": "project-rules-and-routing-carrier",
+                "mechanism": "Workflow depends on AGENTS-style project rules/routing as a shared long-lived carrier.",
+                "discovery_source": "ai-discovered",
+                "claude_evidence": "A=AGENTS.md; B=AGENTS.md",
+                "claude_classification": "adopted-compatible",
+                "opencode_evidence": "A=AGENTS.md; B=AGENTS.md",
+                "opencode_classification": "adopted-compatible",
+                "codex_evidence": "A=AGENTS.md; B=AGENTS.md",
+                "codex_classification": "adopted-compatible",
+                "overall_summary": "adopted-compatible",
+                "structural_signal": "none detected from A/B dependency surface shape",
+                "adaptation_decision": "No action required in fresh B unless later compatibility analysis changes this.",
+            },
+            {
+                "capability_id": "TN-002",
+                "capability": "claude-hooks-and-settings-carrier",
+                "mechanism": "Workflow may rely on Claude runtime hooks/settings that are Trellis-native or manually maintained rather than installer-managed.",
+                "discovery_source": "ai-discovered",
+                "claude_evidence": "A=.claude/settings.json,.claude/hooks; B=.claude/settings.json,.claude/hooks",
+                "claude_classification": "adopted-compatible",
+                "opencode_evidence": "not-applicable",
+                "opencode_classification": "not-applicable",
+                "codex_evidence": "not-applicable",
+                "codex_classification": "not-applicable",
+                "overall_summary": "adopted-compatible",
+                "structural_signal": "none detected from A/B dependency surface shape",
+                "adaptation_decision": "No action required in fresh B unless later compatibility analysis changes this.",
+            },
+            {
+                "capability_id": "TN-003",
+                "capability": "opencode-plugin-and-instructions-carrier",
+                "mechanism": "Workflow may rely on OpenCode plugin/instruction carrier surfaces outside installer-managed workflow commands.",
+                "discovery_source": "ai-discovered",
+                "claude_evidence": "not-applicable",
+                "claude_classification": "not-applicable",
+                "opencode_evidence": "A=.opencode/plugins,.opencode/package.json; B=.opencode/plugins,.opencode/package.json",
+                "opencode_classification": "adopted-compatible",
+                "codex_evidence": "not-applicable",
+                "codex_classification": "not-applicable",
+                "overall_summary": "adopted-compatible",
+                "structural_signal": "none detected from A/B dependency surface shape",
+                "adaptation_decision": "No action required in fresh B unless later compatibility analysis changes this.",
+            },
+            {
+                "capability_id": "TN-004",
+                "capability": "codex-hooks-and-config-carrier",
+                "mechanism": "Workflow may rely on Codex hook/config surfaces outside installer-managed shared skills.",
+                "discovery_source": "ai-discovered",
+                "claude_evidence": "not-applicable",
+                "claude_classification": "not-applicable",
+                "opencode_evidence": "not-applicable",
+                "opencode_classification": "not-applicable",
+                "codex_evidence": "A=.codex/hooks.json,.codex/config.toml; B=.codex/hooks.json,.codex/config.toml",
+                "codex_classification": "adopted-compatible",
+                "overall_summary": "adopted-compatible",
+                "structural_signal": "none detected from A/B dependency surface shape",
+                "adaptation_decision": "No action required in fresh B unless later compatibility analysis changes this.",
+            },
+            {
+                "capability_id": "TN-005",
+                "capability": "implementation-agent-carrier",
+                "mechanism": "Workflow depends on per-CLI implementation agent carrier directories even beyond installer ownership boundaries.",
+                "discovery_source": "ai-discovered",
+                "claude_evidence": "A=.claude/agents; B=.claude/agents",
+                "claude_classification": "adopted-compatible",
+                "opencode_evidence": "A=.opencode/agents; B=.opencode/agents",
+                "opencode_classification": "adopted-compatible",
+                "codex_evidence": "A=.codex/agents; B=.codex/agents",
+                "codex_classification": "adopted-compatible",
+                "overall_summary": "adopted-compatible",
+                "structural_signal": "none detected from A/B dependency surface shape",
+                "adaptation_decision": "No action required in fresh B unless later compatibility analysis changes this.",
+            },
+            {
+                "capability_id": "TN-006",
+                "capability": "trellis-runtime-workflow-guide",
+                "mechanism": "Workflow depends on Trellis runtime workflow guide and project runtime script surfaces.",
+                "discovery_source": "ai-discovered",
+                "claude_evidence": "A=.trellis/workflow.md,.trellis/scripts/task.py; B=.trellis/workflow.md,.trellis/scripts/task.py",
+                "claude_classification": "adopted-compatible",
+                "opencode_evidence": "A=.trellis/workflow.md,.trellis/scripts/task.py; B=.trellis/workflow.md,.trellis/scripts/task.py",
+                "opencode_classification": "adopted-compatible",
+                "codex_evidence": "A=.trellis/workflow.md,.trellis/scripts/task.py; B=.trellis/workflow.md,.trellis/scripts/task.py",
+                "codex_classification": "adopted-compatible",
+                "overall_summary": "adopted-compatible",
+                "structural_signal": "none detected from A/B dependency surface shape",
+                "adaptation_decision": "No action required in fresh B unless later compatibility analysis changes this.",
+            },
+            {
+                "capability_id": "TN-007",
+                "capability": "shared-skills-deployment-carrier",
+                "mechanism": "Workflow depends on .agents/skills/ as a shared deployment layer for OpenCode and Codex skills.",
+                "discovery_source": "ai-discovered",
+                "claude_evidence": "not-applicable",
+                "claude_classification": "not-applicable",
+                "opencode_evidence": "A=.agents/skills; B=.agents/skills",
+                "opencode_classification": "adopted-compatible",
+                "codex_evidence": "A=.agents/skills; B=.agents/skills",
+                "codex_classification": "adopted-compatible",
+                "overall_summary": "adopted-compatible",
+                "structural_signal": "none detected from A/B dependency surface shape",
+                "adaptation_decision": "No action required in fresh B unless later compatibility analysis changes this.",
+            },
+        ]
+
+    def run_script_with_fake_full_audit(
+        self,
+        *args: str,
+        env: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        module = load_script_module()
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        merged_env = os.environ.copy()
+        if env:
+            merged_env.update(env)
+        created_roots: list[Path] = []
+
+        def fake_create_fixture_root(prefix: str, developer_name: str) -> Path:
+            if not created_roots:
+                created_roots.extend(self._make_fake_full_audit_roots(developer_name))
+            if prefix.startswith("workflow-capability-audit-a-"):
+                return created_roots[0]
+            if prefix.startswith("workflow-capability-audit-b-"):
+                return created_roots[1]
+            raise AssertionError(f"Unexpected fixture prefix: {prefix}")
+
+        def fake_run_task_create(title: str, parent: str | None) -> str:
+            return self._create_fake_audit_task_dir(title, parent)
+
+        def fake_run_task_start(task_dir: str) -> None:
+            CURRENT_TASK_FILE.write_text(task_dir, encoding="utf-8")
+
+        with (
+            patch.dict(os.environ, merged_env, clear=False),
+            patch.object(sys, "argv", [str(SCRIPT), *args]),
+            patch.object(module, "run_task_create", side_effect=fake_run_task_create),
+            patch.object(module, "run_task_start", side_effect=fake_run_task_start),
+            patch.object(module, "create_fixture_root", side_effect=fake_create_fixture_root),
+            patch.object(module, "install_workflow_into", return_value=None),
+            patch.object(module, "detect_cli_types_from_roots", return_value=["claude", "opencode", "codex"]),
+            patch.object(module, "build_workflow_managed_rows", return_value=self._fake_managed_rows()),
+            patch.object(module, "build_workflow_dependent_rows", return_value=self._fake_dependent_rows()),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            code = module.main()
+        return subprocess.CompletedProcess(
+            args=[PYTHON, str(SCRIPT), *args],
+            returncode=code,
+            stdout=stdout.getvalue(),
+            stderr=stderr.getvalue(),
         )
 
     def test_compare_trellis_versions_orders_prerelease_before_stable(self) -> None:
@@ -206,10 +453,12 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
 
     def test_update_compatible_anchor_replaces_existing_value(self) -> None:
         module = load_script_module()
+        assets = load_assets_module()
+        old_anchor = assets.COMPATIBLE_TRELLIS_VERSION
         module.update_compatible_anchor("0.5.0")
         current_text = WORKFLOW_ASSETS.read_text(encoding="utf-8")
         self.assertIn('COMPATIBLE_TRELLIS_VERSION = "0.5.0"', current_text)
-        self.assertNotIn('COMPATIBLE_TRELLIS_VERSION = "0.4.0"', current_text)
+        self.assertNotIn(f'COMPATIBLE_TRELLIS_VERSION = "{old_anchor}"', current_text)
 
     def test_update_compatible_anchor_inserts_after_schema_line_when_missing(self) -> None:
         module = load_script_module()
@@ -224,7 +473,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         env = {
             assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
         }
-        result = self.run_script("--current-cli", "claude", "--json", env=env)
+        result = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env)
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         payload = json.loads(result.stdout)
         self.assertEqual(payload["gate_result"], "newer-version-continue")
@@ -241,7 +490,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         env = {
             assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
         }
-        result = self.run_script("--current-cli", "claude", "--json", env=env)
+        result = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env)
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         payload = json.loads(result.stdout)
         self._track_fixtures_from_payload(payload)
@@ -265,6 +514,51 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self.assertEqual(current_task_dirs, self._pre_task_dirs)
         self.assertEqual(list(controlled_tmp.iterdir()), [])
 
+    def test_codex_full_audit_python_probe_failure_reports_runtime_boundary_recheck(self) -> None:
+        assets = load_assets_module()
+        env = {
+            assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
+        }
+        module = load_script_module()
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        merged_env = os.environ.copy()
+        merged_env.update(env)
+
+        task_dir_ref = self._create_fake_audit_task_dir(
+            "workflow-capability-audit: 新项目开发工作流",
+            None,
+        )
+        self._clear_active_test_audit_task()
+
+        def fake_run_task_create(title: str, parent: str | None) -> str:
+            return task_dir_ref
+
+        def fake_run_task_start(task_dir: str) -> None:
+            CURRENT_TASK_FILE.write_text(task_dir, encoding="utf-8")
+
+        failure = subprocess.CalledProcessError(
+            returncode=1,
+            cmd=["trellis", "init", "--claude", "--opencode", "--codex", "-u", "audit-dev", "-y"],
+            stderr='Error: Python command "python3" not found. Trellis init requires Python ≥ 3.9.',
+        )
+
+        with (
+            patch.dict(os.environ, merged_env, clear=False),
+            patch.object(sys, "argv", [str(SCRIPT), "--current-cli", "codex", "--json"]),
+            patch.object(module, "run_task_create", side_effect=fake_run_task_create),
+            patch.object(module, "run_task_start", side_effect=fake_run_task_start),
+            patch.object(module, "create_fixture_root", side_effect=failure),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            code = module.main()
+
+        self.assertNotEqual(code, 0, msg=stdout.getvalue() + stderr.getvalue())
+        self.assertIn("Codex runtime boundary", stderr.getvalue())
+        self.assertIn("real shell, Claude Code, or OpenCode", stderr.getvalue())
+        self.assertIn('Python command "python3" not found', stderr.getvalue())
+
     def test_full_audit_creates_child_task_when_current_task_is_workflow_audit(self) -> None:
         assets = load_assets_module()
         current_task_dir = self._create_task_dir(
@@ -275,7 +569,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         env = {
             assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
         }
-        result = self.run_script("--current-cli", "claude", "--json", env=env)
+        result = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env)
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         payload = json.loads(result.stdout)
         self._track_fixtures_from_payload(payload)
@@ -314,10 +608,11 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         env = {
             assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
         }
-        first = self.run_script("--current-cli", "claude", "--json", env=env)
+        first = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env)
         self.assertEqual(first.returncode, 0, msg=first.stdout + first.stderr)
         payload = json.loads(first.stdout)
         self._track_fixtures_from_payload(payload)
+        self._release_fake_audit_task_for_followup()
 
         second = self.run_script(
             "--json",
@@ -345,10 +640,11 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         """After supplemental-confirmed, Structural-Break Judgment must stay single-line Why/Required next action."""
         assets = load_assets_module()
         env = {assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9"}
-        first = self.run_script("--current-cli", "claude", "--json", env=env)
+        first = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env)
         self.assertEqual(first.returncode, 0, msg=first.stdout + first.stderr)
         payload = json.loads(first.stdout)
         self._track_fixtures_from_payload(payload)
+        self._release_fake_audit_task_for_followup()
 
         second = self.run_script(
             "--json",
@@ -382,10 +678,11 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         """After supplemental-unconfirmed, Structural-Break Judgment must stay single-line Why/Required next action."""
         assets = load_assets_module()
         env = {assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9"}
-        first = self.run_script("--current-cli", "claude", "--json", env=env)
+        first = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env)
         self.assertEqual(first.returncode, 0, msg=first.stdout + first.stderr)
         payload = json.loads(first.stdout)
         self._track_fixtures_from_payload(payload)
+        self._release_fake_audit_task_for_followup()
 
         second = self.run_script(
             "--json",
@@ -420,10 +717,11 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         env = {
             assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
         }
-        first = self.run_script("--current-cli", "claude", "--json", env=env)
+        first = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env)
         self.assertEqual(first.returncode, 0, msg=first.stdout + first.stderr)
         payload = json.loads(first.stdout)
         self._track_fixtures_from_payload(payload)
+        self._release_fake_audit_task_for_followup()
 
         second = self.run_script(
             "--json",
@@ -458,10 +756,11 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         env = {
             assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
         }
-        first = self.run_script("--current-cli", "claude", "--json", env=env)
+        first = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env)
         self.assertEqual(first.returncode, 0, msg=first.stdout + first.stderr)
         payload = json.loads(first.stdout)
         self._track_fixtures_from_payload(payload)
+        self._release_fake_audit_task_for_followup()
 
         second = self.run_script(
             "--json",
@@ -531,10 +830,11 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         env = {
             assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
         }
-        first = self.run_script("--current-cli", "claude", "--json", env=env)
+        first = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env)
         self.assertEqual(first.returncode, 0, msg=first.stdout + first.stderr)
         payload = json.loads(first.stdout)
         self._track_fixtures_from_payload(payload)
+        self._release_fake_audit_task_for_followup()
 
         second = self.run_script(
             "--json",
@@ -555,10 +855,11 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         env = {
             assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
         }
-        first = self.run_script("--current-cli", "claude", "--json", env=env)
+        first = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env)
         self.assertEqual(first.returncode, 0, msg=first.stdout + first.stderr)
         payload = json.loads(first.stdout)
         self._track_fixtures_from_payload(payload)
+        self._release_fake_audit_task_for_followup()
         report_path = REPO_ROOT / payload["capability_report"]
         report_text = report_path.read_text(encoding="utf-8").replace("## Structural-Break Judgment", "## Removed Structural Break")
         report_path.write_text(report_text, encoding="utf-8")
@@ -584,7 +885,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         """Initial report must use 'none yet', not angle-bracket placeholders, for lifecycle sections."""
         assets = load_assets_module()
         env = {assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9"}
-        result = self.run_script("--current-cli", "claude", "--json", env=env)
+        result = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env)
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         payload = json.loads(result.stdout)
         self._track_fixtures_from_payload(payload)
@@ -602,7 +903,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         env = {
             assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
         }
-        result = self.run_script("--current-cli", "claude", "--json", env=env)
+        result = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env)
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         payload = json.loads(result.stdout)
         self._track_fixtures_from_payload(payload)

@@ -66,6 +66,14 @@ Rules:
   - rerun the gate
 - if `trellis -v` fails or returns empty output:
   - stop as `Blocked / Environment Error`
+- when running under Codex, do not treat a Codex-local `trellis init` runtime
+  failure during A/B fixture creation as sufficient proof that the user's actual
+  machine environment is broken
+  - distinguish Codex runtime evidence from real shell / non-Codex executor behavior
+  - require one non-Codex recheck before concluding that the machine environment
+    itself is broken
+  - if no non-Codex recheck is available, stop as evidence gap rather than
+    asserting a confirmed machine-environment defect
 - if version parsing fails:
   - stop as `Blocked / Version Parse Error`
 - if `current == compatible`:
@@ -241,8 +249,10 @@ If not confirmed:
 ## Compatibility-Version Anchor Update Rules
 
 - the initialization exception above is the sole allowed pre-audit source edit
-- after a confirmed successful audit, do not auto-write the final compatibility-version promotion into `workflow_assets.py`
-- this remains true even if the workflow is already compatible as-is or no workflow source edits were needed beyond the initialization exception
+- after a confirmed successful audit, `COMPATIBLE_TRELLIS_VERSION` **must** be set to the exact `trellis -v` output value in `workflow_assets.py`; this is a mandatory post-audit step, not optional
+- the version value written must be the literal string from `trellis -v`, including any prerelease suffix (e.g., `-rc.3`, `-beta.1`)
+- do not round up to a stable version (e.g., writing `"0.5.0"` when `trellis -v` returns `"0.5.0-rc.3"`) — this breaks downstream version gates in `workflow-audit` and causes false re-triggers in subsequent `workflow-capability-audit` runs
+- this rule applies even if the workflow was already compatible as-is or no workflow source edits were needed beyond the initialization exception
 
 ### Known limitation: coarser classification for workflow-managed surfaces
 

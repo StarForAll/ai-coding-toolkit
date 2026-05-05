@@ -59,6 +59,16 @@ Returned JSON includes at least:
 - `b_root`
 - `capability_report`
 
+Codex boundary:
+
+- if fresh A/B baseline creation fails only under Codex because `trellis init`
+  cannot be trusted inside the current Codex runtime/sandbox, do not conclude
+  that the user's actual machine environment is broken yet
+- rerun the same `trellis init` check in a real shell or another non-Codex executor
+  on the same machine before classifying the machine as environment-broken
+- if no such recheck is available, report the result as Codex runtime evidence gap
+  rather than a confirmed machine-environment defect
+
 ## 4. Supplemental Capability Validation
 
 Use this only after one audit round already exists.
@@ -114,7 +124,24 @@ docs/workflows/新项目开发工作流/commands/workflow-capability-audit.py \
 --json
 ```
 
-## 6. Boundaries
+## 6. Post-Audit Anchor Write-Back
+
+After the user confirms the audit by running `--confirm-fix-scope`, the script
+automatically writes the current `trellis -v` value back into
+`COMPATIBLE_TRELLIS_VERSION` in `workflow_assets.py`. The write-back does NOT
+happen during the initial full audit — it happens only when the user explicitly
+confirms the audit by entering the fix lifecycle.
+
+The write-back:
+
+- uses the exact literal string from `trellis -v`, preserving any prerelease suffix
+- does NOT round up to a stable version
+- applies even when the workflow was already compatible as-is
+
+No separate flag is required; the anchor promotion is a side effect of the first
+`--confirm-fix-scope` invocation after a successful full audit.
+
+## 7. Boundaries
 
 - version gate happens before task creation or audit artifact creation
 - full audit is allowed only when `current > compatible`
@@ -122,4 +149,6 @@ docs/workflows/新项目开发工作流/commands/workflow-capability-audit.py \
 - equal version stops
 - older version blocks
 - supplemental validation reuses the same A/B and the same `capability-report.md`
-- final compatibility-anchor promotion is **not** auto-written by this audit script
+- `COMPATIBLE_TRELLIS_VERSION` is promoted to the exact `trellis -v` value when the user confirms the audit via `--confirm-fix-scope`
+- Codex-local `trellis init` failures must be rechecked outside Codex before they
+  are treated as confirmed machine-environment failures
