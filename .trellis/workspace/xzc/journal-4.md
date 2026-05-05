@@ -554,3 +554,34 @@ Added workflow-audit version-drift hard gate, limited supported CLI scope to Cla
 ### Next Steps
 
 - None - task complete
+
+
+## Session 145: workflow-capability-audit deep analysis and fix
+
+**Date**: 2026-05-05
+**Task**: workflow-capability-audit deep analysis and fix
+**Branch**: `main`
+
+### Summary
+
+深度分析 .trellis 目录和 workflow-capability-audit skill 机制，识别出 .agents/skills/ 未被 dependent-rows 追踪的问题。新增 shared-skills-deployment-carrier (TN-007)，同步更新 spec/SKILL.md/单元测试/测试场景，修复注释过窄归因问题。归档任务并记录 journal。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
