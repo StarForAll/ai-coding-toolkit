@@ -45,6 +45,9 @@ If a `workflow-capability-audit` task is already active, stop instead of creatin
 
 Always pass `--current-cli` inferred from the current runtime (the script does not auto-detect the CLI):
 
+- accepted values are exactly `claude`, `opencode`, or `codex`
+- reject any other value before task creation or fixture setup
+
 ```bash
 /ops/softwares/python/bin/python3 \
 docs/workflows/新项目开发工作流/commands/workflow-capability-audit.py \
@@ -132,6 +135,10 @@ automatically writes the current `trellis -v` value back into
 happen during the initial full audit — it happens only when the user explicitly
 confirms the audit by entering the fix lifecycle.
 
+Before that write-back, `--task-dir` must first validate as a real
+`workflow-capability-audit` task. Failed or mistyped fix-lifecycle requests
+must not mutate `workflow_assets.py`.
+
 The write-back:
 
 - uses the exact literal string from `trellis -v`, preserving any prerelease suffix
@@ -146,6 +153,7 @@ No separate flag is required; the anchor promotion is a side effect of the first
 - version gate happens before task creation or audit artifact creation
 - full audit is allowed only when `current > compatible`
 - full audit must not create a second active `workflow-capability-audit` task when one is already active
+- if a child audit task is created under a parent task and setup later fails, rollback must also remove the stale parent `children` link
 - equal version stops
 - older version blocks
 - supplemental validation reuses the same A/B and the same `capability-report.md`

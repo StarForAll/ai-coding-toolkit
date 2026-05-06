@@ -34,6 +34,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 WORKFLOW_ROOT = SCRIPT_DIR.parent
 REPO_ROOT = SCRIPT_DIR.parents[3]
 PYTHON = sys.executable
+ALLOWED_CURRENT_CLIS = {"claude", "opencode", "codex"}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -195,6 +196,22 @@ def resolve_repo_developer_name() -> str:
                 if value:
                     return value
     raise RuntimeError("Developer not initialized in .trellis/.developer; cannot create fresh audit fixtures.")
+
+
+def remove_child_link(parent_ref: str, child_ref: str) -> None:
+    parent_task_json = resolve_task_json(parent_ref)
+    if parent_task_json is None:
+        return
+    try:
+        parent_data = json.loads(parent_task_json.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return
+    child_name = Path(child_ref).name
+    parent_children = parent_data.get("children", [])
+    if child_name not in parent_children:
+        return
+    parent_data["children"] = [item for item in parent_children if item != child_name]
+    parent_task_json.write_text(json.dumps(parent_data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def restore_current_task_ref(task_ref: str) -> None:
@@ -533,6 +550,15 @@ def refresh_structural_break_section(report_text: str) -> str:
         f"- Required next action: {'Stop and wait for explicit user confirmation before any normal adaptation path proceeds.' if result == 'possible' else 'Continue with the current confirmation boundary.'}",
     ]
     return replace_section(report_text, "## Structural-Break Judgment", replacement_lines)
+
+
+def validate_current_cli(current_cli: str) -> str | None:
+    normalized = current_cli.strip()
+    if not normalized:
+        return "--current-cli is required for the full upgrade audit. Pass claude, opencode, or codex."
+    if normalized not in ALLOWED_CURRENT_CLIS:
+        return "--current-cli must be one of: claude, opencode, codex."
+    return None
 
 
 def current_task_ref() -> str:
@@ -1088,12 +1114,12 @@ def main() -> int:
         if not args.task_dir:
             print("--task-dir is required for fix lifecycle updates.", file=sys.stderr)
             return 1
-        if args.confirm_fix_scope:
-            current_version, _source = assets.resolve_current_trellis_version()
-            if current_version:
-                update_compatible_anchor(current_version)
         try:
             task_dir = resolve_audit_task_dir(args.task_dir)
+            if args.confirm_fix_scope:
+                current_version, _source = assets.resolve_current_trellis_version()
+                if current_version:
+                    update_compatible_anchor(current_version)
             payload = update_fix_lifecycle(
                 task_dir=task_dir,
                 confirmed_fix_scope=args.confirm_fix_scope,
@@ -1197,8 +1223,9 @@ def main() -> int:
             print_stop_human(payload)
         return 0
 
-    if not args.current_cli:
-        print("--current-cli is required for the full upgrade audit. Pass claude, opencode, or codex.", file=sys.stderr)
+    current_cli_error = validate_current_cli(args.current_cli)
+    if current_cli_error:
+        print(current_cli_error, file=sys.stderr)
         return 1
 
     current_ref = current_task_ref()
@@ -1243,6 +1270,8 @@ def main() -> int:
             shutil.rmtree(a_root, ignore_errors=True)
         if b_root is not None:
             shutil.rmtree(b_root, ignore_errors=True)
+        if parent and task_dir_ref:
+            remove_child_link(parent, task_dir_ref)
         if task_dir_ref:
             shutil.rmtree(REPO_ROOT / task_dir_ref, ignore_errors=True)
         restore_current_task_ref(current_ref)
@@ -1253,6 +1282,8 @@ def main() -> int:
             shutil.rmtree(a_root, ignore_errors=True)
         if b_root is not None:
             shutil.rmtree(b_root, ignore_errors=True)
+        if parent and task_dir_ref:
+            remove_child_link(parent, task_dir_ref)
         if task_dir_ref:
             shutil.rmtree(REPO_ROOT / task_dir_ref, ignore_errors=True)
         restore_current_task_ref(current_ref)

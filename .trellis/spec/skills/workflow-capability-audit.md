@@ -190,6 +190,7 @@ Natural language is allowed, but the recommended contract is:
     - in OpenCode: `opencode`
     - in Codex CLI: `codex`
   - the script does not auto-detect the CLI; the caller is responsible for inference
+  - values outside `claude|opencode|codex` must be rejected before any full-audit task or fixture setup begins
 
 No initial `user_supplemented_capabilities` field exists in first version.
 
@@ -210,6 +211,7 @@ This skill is **task-based only** after the version gate passes.
 - if a non-audit active task exists: create a dedicated child audit task
 - after child task creation, switch execution into it immediately
 - if a `workflow-capability-audit` task is already active: stop and ask the user to resume or complete the existing audit before starting a new full audit
+- if child-audit setup fails after task creation, rollback must remove the created task directory, restore the prior active-task pointer, and remove any stale parent `children` link
 
 ### Task Title
 
@@ -464,6 +466,7 @@ After a confirmed successful audit:
 
 - `COMPATIBLE_TRELLIS_VERSION` **must** be set to the exact `trellis -v` output value in `workflow_assets.py`
 - this is a mandatory post-audit step, not optional
+- anchor write-back must occur only after `--task-dir` is validated as a real `workflow-capability-audit` task for the confirmed fix-lifecycle update
 - the version value written must be the literal string from `trellis -v`, including any prerelease suffix (e.g., `-rc.3`, `-beta.1`)
 - do **not** round up to a stable version (e.g., writing `"0.5.0"` when `trellis -v` returns `"0.5.0-rc.3"`) — this breaks downstream version gates in `workflow-audit` and causes false re-triggers in subsequent `workflow-capability-audit` runs
 

@@ -603,6 +603,16 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("--current-cli is required", result.stderr)
 
+    def test_full_audit_fails_when_current_cli_is_invalid(self) -> None:
+        """Invalid --current-cli must fail before creating fixtures or a task."""
+        assets = load_assets_module()
+        env = {
+            assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
+        }
+        result = self.run_script("--current-cli", "invalid-cli", "--json", env=env)
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("--current-cli must be one of", result.stderr)
+
     def test_supplemental_capability_updates_same_report(self) -> None:
         assets = load_assets_module()
         env = {
@@ -824,6 +834,8 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         )
         self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("workflow-capability-audit task", result.stderr)
+        current_text = WORKFLOW_ASSETS.read_text(encoding="utf-8")
+        self.assertEqual(current_text, self._pre_workflow_assets)
 
     def test_fix_lifecycle_requires_completed_fix_evidence_before_fixture_destruction(self) -> None:
         assets = load_assets_module()
@@ -949,6 +961,66 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self.assertIn("Update COMPATIBLE_TRELLIS_VERSION", output)
         for section in ["## Version Gate Stop", "### Why Execution Stops Here", "### Task Creation", "### Next Action"]:
             self.assertIn(section, output)
+
+    def test_structural_break_human_output_matches_reference_template_headings(self) -> None:
+        """Human-readable structural-break output must stay aligned with the maintained template headings."""
+        template_path = REPO_ROOT / ".claude" / "skills" / "workflow-capability-audit" / "references" / "structural-break-possible-template.md"
+        template_text = template_path.read_text(encoding="utf-8")
+        expected_headings = [
+            "## Structural-Break Judgment — Possible",
+            "### Why Judgment Is Not Yet Definitive",
+            "### Structural-Break Signals Observed",
+            "### Why Normal Adaptation Cannot Be Safely Recommended Yet",
+            "### What Additional Confirmation Or Analysis Is Needed",
+            "### Decision Required",
+        ]
+        module = load_script_module()
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            module.print_structural_possible_human(["signal-1"])
+        output = stdout.getvalue()
+        for heading in expected_headings:
+            self.assertIn(heading, template_text)
+            self.assertIn(heading, output)
+
+    def test_full_audit_failure_removes_child_link_from_parent_task(self) -> None:
+        """If child audit setup fails after task creation, parent.children must not keep a stale child reference."""
+        assets = load_assets_module()
+        parent_task_dir = self._create_task_dir(
+            "05-03-existing-workflow-audit",
+            "workflow-audit: 新项目开发工作流",
+        )
+        CURRENT_TASK_FILE.write_text(f".trellis/tasks/{parent_task_dir.name}", encoding="utf-8")
+
+        created_child_ref = self._create_fake_audit_task_dir(
+            "workflow-capability-audit: 新项目开发工作流",
+            f".trellis/tasks/{parent_task_dir.name}",
+        )
+        child_name = Path(created_child_ref).name
+        parent_json_path = parent_task_dir / "task.json"
+        parent_data = json.loads(parent_json_path.read_text(encoding="utf-8"))
+        parent_data["children"] = [child_name]
+        parent_json_path.write_text(json.dumps(parent_data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        module = load_script_module()
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        env = os.environ.copy()
+        env[assets.CURRENT_TRELLIS_VERSION_ENV] = "9.9.9"
+
+        with (
+            patch.dict(os.environ, env, clear=False),
+            patch.object(sys, "argv", [str(SCRIPT), "--current-cli", "claude", "--json"]),
+            patch.object(module, "run_task_create", return_value=created_child_ref),
+            patch.object(module, "run_task_start", side_effect=RuntimeError("simulated setup failure")),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            code = module.main()
+
+        self.assertNotEqual(code, 0, msg=stdout.getvalue() + stderr.getvalue())
+        updated_parent = json.loads(parent_json_path.read_text(encoding="utf-8"))
+        self.assertNotIn(child_name, updated_parent.get("children", []))
 
 
 if __name__ == "__main__":

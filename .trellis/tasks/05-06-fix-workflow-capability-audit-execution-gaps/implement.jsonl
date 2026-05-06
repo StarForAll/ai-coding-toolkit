@@ -1,0 +1,5 @@
+{"path":".trellis/spec/skills/workflow-capability-audit.md","reason":"Behavioral source of truth for the maintainer skill surface and runtime contract."}
+{"path":".trellis/spec/scripts/python-conventions.md","reason":"Python script modification conventions for workflow command implementation."}
+{"path":".trellis/spec/scripts/workflow-installer-upgrade-contracts.md","reason":"Workflow command boundary contracts and source-of-truth rules for docs/workflows commands."}
+{"path":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Avoid duplicated behavior definitions and drift across maintained surfaces."}
+{"path":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"This fix crosses runtime script, tests, and skill/spec documentation layers."}

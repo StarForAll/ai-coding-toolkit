@@ -1,0 +1,4 @@
+{"path":".trellis/spec/skills/workflow-capability-audit.md","reason":"Check repaired behavior against the maintainer skill contract."}
+{"path":".trellis/spec/scripts/python-conventions.md","reason":"Check that script changes remain consistent with project Python conventions."}
+{"path":".trellis/spec/scripts/workflow-installer-upgrade-contracts.md","reason":"Check workflow command behavior remains aligned with source/deployment contracts."}
+{"path":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check cross-layer updates stay synchronized across runtime, tests, and skill/spec surfaces."}

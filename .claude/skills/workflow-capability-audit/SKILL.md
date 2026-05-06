@@ -47,6 +47,7 @@ If another workflow root is requested, stop and report that first-version suppor
   - in OpenCode: `opencode`
   - in Codex CLI: `codex`
   - the script does not auto-detect the CLI; the caller is responsible for inference
+  - values outside `claude|opencode|codex` must be rejected before any full-audit task or fixture setup begins
 - `workflow_path` — default and only supported value in first version: `docs/workflows/新项目开发工作流/`
 
 ## Version Gate First
@@ -98,6 +99,7 @@ Rules:
 - if no active task exists: create a top-level audit task
 - if a non-audit active task exists: create a dedicated child audit task and switch into it immediately
 - if a `workflow-capability-audit` task is already active: stop and ask the user to resume or complete the existing audit before starting a new full audit
+- if child-audit setup fails after task creation, rollback must remove the created task directory, restore the prior active-task pointer, and remove any stale parent `children` link
 - maintain:
   - `prd.md`
   - `capability-report.md`
@@ -250,6 +252,7 @@ If not confirmed:
 
 - the initialization exception above is the sole allowed pre-audit source edit
 - after a confirmed successful audit, `COMPATIBLE_TRELLIS_VERSION` **must** be set to the exact `trellis -v` output value in `workflow_assets.py`; this is a mandatory post-audit step, not optional
+- anchor write-back must occur only after `--task-dir` is validated as a real `workflow-capability-audit` task for the confirmed fix-lifecycle update
 - the version value written must be the literal string from `trellis -v`, including any prerelease suffix (e.g., `-rc.3`, `-beta.1`)
 - do not round up to a stable version (e.g., writing `"0.5.0"` when `trellis -v` returns `"0.5.0-rc.3"`) — this breaks downstream version gates in `workflow-audit` and causes false re-triggers in subsequent `workflow-capability-audit` runs
 - this rule applies even if the workflow was already compatible as-is or no workflow source edits were needed beyond the initialization exception
