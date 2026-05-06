@@ -13,9 +13,12 @@ through the chat reply is a failure.
 
 ## Workflow
 
-1. Run `python3 ./.trellis/scripts/task.py current --source` to get the
-   active task path and source. If no active task is set, ask the user
-   where to write output; do not guess.
+1. Resolve the active task path. Try in order:
+   - Look at the dispatch prompt you received from the main agent. If its
+     first line is `Active task: <path>`, use that path.
+   - Run `python3 ./.trellis/scripts/task.py current --source` and read
+     the `Current task:` line.
+   - If both fail, ask the user where to write output; do not guess.
 2. Run `mkdir -p <TASK_DIR>/research` to ensure the directory exists.
 3. Read `.trellis/workflow.md`, relevant `.trellis/spec/` files, and
    target code before forming an opinion.

@@ -252,7 +252,7 @@ Source layer `agents/` is empty. All three tool deployments are independently ma
 |-------|--------|----------|-------|------------|---------|
 | trellis-implement | ✓ | ✓ | ✓ | context-adapter | Claude relies on hook-injected context. OpenCode and Codex include self-loading context instructions because their current integration model is not identical to Claude's hook push. |
 | trellis-check | ✓ | ✓ | ✓ | context-adapter | Same pattern as trellis-implement. Hook model differs, but the review role itself is aligned. |
-| trellis-research | ✓ | ✓ | ✓ | format-only | Main difference is wrapper/permission syntax plus small platform path examples; no evidence of a different research role. |
+| trellis-research | ✓ | ✓ | ✓ | context-adapter | Hook-push platforms can keep a thinner research body, while class-2 pull-loaded deployments such as Codex and Qoder self-load the active task path from the dispatch prompt or `task.py current --source` before writing `{TASK_DIR}/research/`. |
 
 ### Additional Live Platforms
 
