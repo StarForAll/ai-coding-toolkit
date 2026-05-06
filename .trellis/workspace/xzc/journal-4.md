@@ -930,3 +930,38 @@ Completed workflow-capability-audit for 新项目开发工作流, hardened manag
 ### Next Steps
 
 - None - task complete
+
+
+## Session 155: Expand WCA carrier coverage and fix anchor promotion
+
+**Date**: 2026-05-06
+**Task**: Expand WCA carrier coverage and fix anchor promotion
+**Branch**: `main`
+
+### Summary
+
+Add 5 dependent-surface carriers (claude-native-skills, opencode-native-skills, opencode-lib, trellis-hooks, codex-secondary-skills) with boundary declaration. Fix anchor write-back to require finalize + revalidation (two-layer gate). Update execution-runbook to match implementation. Add scenario test 14 and missing-but-valuable test. Fix test method merge regression and rename misleading test.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ee7cd21` | (see git log) |
+| `21d2d4e` | (see git log) |
+| `ef3569f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 154
+- **Total Sessions**: 155
 - **Last Active**: 2026-05-06
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~932 | Active |
+| `journal-4.md` | ~967 | Active |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 155 | 2026-05-06 | Expand WCA carrier coverage and fix anchor promotion | `ee7cd21`, `21d2d4e`, `ef3569f` | `main` |
 | 154 | 2026-05-06 | workflow capability audit | `d469d45` | `main` |
 | 153 | 2026-05-06 | Trellis upgrade reconciliation: fix phase drift, script contract, and description conflicts | `af217bb` | `main` |
 | 152 | 2026-05-06 | 收敛 Trellis 升级 git diff 并保留原编号 | `7a9b6ce` | `main` |
