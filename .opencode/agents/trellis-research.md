@@ -9,7 +9,11 @@ permission:
   bash: allow
   glob: allow
   grep: allow
+  mcp__ace__search_context: allow
   mcp__exa__*: allow
+  mcp__Context7__*: allow
+  mcp__deepwiki__*: allow
+  mcp__grok-search__*: allow
   mcp__chrome-devtools__*: allow
 ---
 # Research Agent
@@ -26,8 +30,8 @@ Conversations get compacted; files don't. Every research output MUST end up as a
 
 ## Core Responsibilities
 
-1. **Internal Search** — locate files/components, understand code logic, discover patterns (Glob, Grep, Read)
-2. **External Search** — library docs, API references, best practices (web search)
+1. **Internal Search** — locate files/components, understand code logic, discover patterns (ace.search_context → Glob/Grep/Read)
+2. **External Search** — library docs (Context7), GitHub repos (deepwiki), web search (exa/grok), full-page reading (web_fetch)
 3. **Persist** — write each research topic to `{TASK_DIR}/research/<topic>.md`
 4. **Report** — return file paths + one-line summaries to the main agent (not full content)
 
@@ -51,7 +55,18 @@ Classify: internal / external / mixed. Determine scope (global / specific direct
 
 ### Step 3: Execute Search
 
-Run independent searches in parallel (Glob + Grep + web) for efficiency.
+Choose tools by search type:
+
+| Search Type | Primary | Fallback |
+|-------------|---------|----------|
+| Internal code | ace.search_context | Glob + Grep + Read |
+| Library docs | Context7 (resolve → query) | exa.code_context → exa.web_search |
+| GitHub repos | deepwiki (structure → contents / ask) | exa.web_search |
+| Real-time / latest info | grok.web_search → grok.web_fetch | exa.web_search → exa.web_fetch |
+| General web (non-time-sensitive) | exa.web_search → exa.web_fetch | grok.web_search → grok.web_fetch |
+| Advanced / deep research | exa.web_search_advanced | grok.web_search |
+
+Run independent searches in parallel where tools don't share state.
 
 ### Step 4: Persist Each Topic
 

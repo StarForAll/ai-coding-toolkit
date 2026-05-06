@@ -244,6 +244,7 @@ Source layer `agents/` is empty. All three tool deployments are independently ma
 | **format-only** | Different serialization wrapper / frontmatter; core instructions identical or equivalent | Source layer will unify core body; platform adapters keep format |
 | **context-adapter** | Same core role, but one platform needs hook-push context while another must self-load task / JSONL context | Keep shared role semantics; isolate loading instructions in deployment adapters |
 | **content-drift** | Core instruction body differs across platforms (responsibilities, boundaries, workflow steps) | Source layer must converge to single canonical version |
+| **capability-enhancement** | Tool set expanded on some platforms (new MCP tools added) without changing core role/boundaries/workflow | Document in Tool Capability Matrix; platforms without MCP support keep existing tool set |
 | **platform-only** | Feature exists on one platform only and is inherently platform-specific | No cross-platform action needed |
 
 ### Agents
@@ -252,7 +253,7 @@ Source layer `agents/` is empty. All three tool deployments are independently ma
 |-------|--------|----------|-------|------------|---------|
 | trellis-implement | ✓ | ✓ | ✓ | context-adapter | Claude relies on hook-injected context. OpenCode and Codex include self-loading context instructions because their current integration model is not identical to Claude's hook push. |
 | trellis-check | ✓ | ✓ | ✓ | context-adapter | Same pattern as trellis-implement. Hook model differs, but the review role itself is aligned. |
-| trellis-research | ✓ | ✓ | ✓ | context-adapter | Hook-push platforms can keep a thinner research body, while class-2 pull-loaded deployments such as Codex and Qoder self-load the active task path from the dispatch prompt or `task.py current --source` before writing `{TASK_DIR}/research/`. |
+| trellis-research | ✓ | ✓ | ✓ | context-adapter + capability-enhancement | Hook-push platforms can keep a thinner research body, while class-2 pull-loaded deployments such as Codex and Qoder self-load the active task path from the dispatch prompt or `task.py current --source` before writing `{TASK_DIR}/research/`. **Tool capability enhanced 2026-05-06**: Claude/Qoder/OpenCode gained ace.search_context, exa.web_fetch, Context7, deepwiki, grok-search, exa.web_search_advanced; Codex/Kiro unchanged (platform model不支持 named MCP tool declarations). |
 
 ### Additional Live Platforms
 
@@ -284,12 +285,102 @@ So the right conclusion is:
 - current spec should not overstate them as pure `format-only`
 - source-layer convergence is still needed to prevent future drift
 
+### Context-Adapter Audit (2026-05-06)
+
+Verified by comparing deployed agents against Trellis 0.5.0-rc.5 native templates
+(`@mindfoldhq/trellis/dist/templates/{platform}/agents/`). Supporting evidence:
+- CLI boundary matrix: `docs/workflows/新项目开发工作流/CLI原生适配边界矩阵.md` §"当前真实边界"
+- Capability audit: `.trellis/tasks/archive/2026-05/05-06-workflow-capability-audit/capability-report.md`
+- Per-file diff results available on request via `diff` against the template paths above
+
+| Platform | Match Native? | Context-Loading Mechanism |
+|----------|--------------|--------------------------|
+| Claude Code (`.claude/agents/`) | **Identical** | PreToolUse hook (`inject-subagent-context.py`) auto-injects full task context before spawn for implement/check; research agent still self-loads task path (`task.py current --source`) because its scope (pure search + persist) does not need the full JSONL/spec injection the hook provides |
+| OpenCode (`.opencode/agents/`) | **Identical** | Trellis native template already includes Context Self-Loading section (OpenCode has no PreToolUse hook) |
+| Codex (`.codex/agents/`) | **Differs** | Repo agents have extra context self-loading instructions not present in native template; Codex only has SessionStart + UserPromptSubmit hooks, no PreToolUse — self-loading is the primary mechanism for sub-agents to receive reliable task context |
+
+**Conclusion**: All three platforms are using native Trellis agents or equivalent
+functionality. The Codex context self-loading additions are valid and necessary
+(`context-adapter` drift type), not overlay residuals.
+
+**Removing** the self-loading from Codex agents would lose the reliable
+context-loading path (JSONL/spec resolution, `implement.jsonl`/`check.jsonl`
+iteration). Codex agents can still discover the task path from the dispatch
+prompt or `task.py current --source`, but without self-loading they would miss
+the structured spec context that the hook provides on Claude and the
+self-loading section provides on Codex/OpenCode today.
+
+**Convergence path**: When Trellis upstream adds context self-loading to the
+Codex native templates (aligning with the OpenCode template pattern), re-run
+`trellis init --claude --codex --opencode` or manually sync `.codex/agents/`
+to the updated native templates. Until then, the current Codex agent files
+should be preserved as-is and not overwritten by the simpler native templates.
+
+### Tool Capability Enhancement (2026-05-06)
+
+trellis-research originally deployed with basic internal search (Glob/Grep/Read) + 2 exa tools.
+Enhanced on 2026-05-06 to cover the project MCP routing matrix's primary search scenarios.
+
+**Enhancement type**: `capability-enhancement` — extends available search channels
+without changing the core role, boundaries, or workflow structure.
+
+#### Enhanced Tool Matrix
+
+| Priority | Tool | Purpose | Claude | Qoder | OpenCode | Codex | Kiro |
+|----------|------|---------|--------|-------|----------|-------|------|
+| P0 | mcp__ace__search_context | Internal semantic search | ✓ | ✓ | ✓ | ✗ | ✗ |
+| P0 | mcp__exa__web_fetch_exa | Full-page read after search | ✓ | ✓ | ✓ | ✗ | ✗¹ |
+| P1 | mcp__Context7__resolve-library-id | Library docs (resolve) | ✓ | ✓ | ✓ | ✗ | ✗ |
+| P1 | mcp__Context7__query-docs | Library docs (query) | ✓ | ✓ | ✓ | ✗ | ✗ |
+| P2 | mcp__deepwiki__* (3 tools) | GitHub repo research | ✓ | ✓ | ✓ | ✗ | ✗ |
+| P3 | mcp__exa__web_search_advanced_exa | Advanced search | ✓ | ✓ | ✓ | ✗ | ✗ |
+| P3 | mcp__grok-search__web_search | Real-time / latest info (primary); general web (fallback) | ✓ | ✓ | ✓ | ✗ | ✗ |
+| P3 | mcp__grok-search__web_fetch | Real-time / latest info (primary); general web (fallback) | ✓ | ✓ | ✓ | ✗ | ✗ |
+
+¹ Kiro uses generic `web_fetch` which is functionally equivalent to `mcp__exa__web_fetch_exa`
+but is not an MCP-specific tool declaration.
+
+**Cross-platform notes:**
+- Claude / Qoder / OpenCode: full enhancement with all MCP tools
+- Codex: sandbox model doesn't support named MCP tool declarations; main agent coordinates external searches
+- Kiro: generic tool names (`web_search`/`web_fetch`) cover basic web capability; no MCP-specific tools
+
+**Search routing rule (agent body ↔ project MCP routing matrix alignment):**
+
+The agent's Step 3 routing table must follow the same priority order as the project's
+global MCP routing matrix (`rules/03-mcp-routing-matrix.md`):
+
+| Search Type | Primary | Fallback | Rationale |
+|-------------|---------|----------|-----------|
+| Internal code | ace.search_context | Glob + Grep + Read | Semantic > keyword for code intent |
+| Library docs | Context7 | exa | First-party docs > general web |
+| GitHub repos | deepwiki | exa | Structured repo knowledge > raw search |
+| **Real-time / latest info** | **grok-search** | **exa** | **grok-search has lower latency for current events, version updates, and time-sensitive facts** |
+| General web (non-time-sensitive) | exa | grok-search | exa has better content quality for static/evergreen topics |
+| Advanced / deep research | exa.web_search_advanced | grok-search | exa supports date/domain/text filters and deep-reasoning mode |
+
+Key alignment rule: **Real-time / latest info queries MUST use grok-search as primary,
+not exa.** This mirrors the project routing matrix's "Real-time information retrieval:
+grok-search → exa" rule and prevents the sub-agent from defaulting to exa for
+time-sensitive queries where grok-search is the designated first choice.
+
+**Body changes on enhanced platforms:**
+- Core Responsibilities lines 1-2 updated to reference new primary tools with fallback chains
+- Workflow Step 3 expanded from single-line to a tool routing table with 6 search types:
+  - Internal code: ace.search_context → Glob/Grep/Read
+  - Library docs: Context7 → exa fallback
+  - GitHub repos: deepwiki → exa fallback
+  - **Real-time / latest info: grok-search → exa fallback** (aligns with project MCP routing matrix rule that latest-information queries prefer grok-search)
+  - General web (non-time-sensitive): exa → grok-search fallback
+  - Advanced / deep research: exa.web_search_advanced → grok-search fallback
+
 ### Notes for Source Layer Task
 
 When `03-19-implement-agents-source` populates `agents/<id>/SYSTEM.md`:
 - The SYSTEM.md body should capture the **shared core** (responsibilities, boundaries, workflow, report format)
 - Platform-specific context-loading instructions should go in each platform's deployment adapter, not in SYSTEM.md
 - The self-loading context section (currently seen in OpenCode / Codex / Qoder-style deployments) should be extracted to a platform adapter pattern where possible
+- For Codex specifically: the deployment adapter MUST include context self-loading unless Trellis upstream adds it to native templates first
 
 ---
 
