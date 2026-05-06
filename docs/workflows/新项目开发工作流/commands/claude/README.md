@@ -244,7 +244,7 @@ Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-ch
 | 共享运行时基线 | `.claude/settings.json` | hooks 接线、默认 deny / shared baseline | ❌ 手动维护 |
 | 本机权限扩展 | `.claude/settings.local.json` | MCP allowlist、本地调试权限 | ❌ 手动维护 |
 | 会话与子代理 hooks | `.claude/hooks/*.py` | 会话启动、上下文注入、收口逻辑 | ❌ 手动维护 |
-| 子代理定义 | `.claude/agents/*.md` | `research` / `implement` / `check` 由 workflow 安装器管理；`debug` 仍手动维护 | ✅ 部分由 `install-workflow.py` 管理 |
+| 子代理定义 | `.claude/agents/*.md` | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 不再 overlay，仅做 legacy bare-name → trellis-* 迁移 | ✅ legacy 迁移由 `install-workflow.py` |
 | 通用辅助脚本 | `.trellis/scripts/workflow/` | 校验、导出、静态验证脚本 | ✅ `install-workflow.py` |
 | 源码水印与归属证明产物 | `$TASK_DIR/design/`、`$TASK_DIR/delivery/` | 设计计划、提取验证、交付证明 | ❌ 人工维护 / workflow 阶段产出 |
 
