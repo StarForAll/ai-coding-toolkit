@@ -1031,3 +1031,36 @@ Analyzed workflow-audit skill usability, found P1 brainstorm reference name mism
 ### Next Steps
 
 - None - task complete
+
+
+## Session 158: 同步自动提交失败恢复与提权修复指南
+
+**Date**: 2026-05-06
+**Task**: 同步自动提交失败恢复与提权修复指南
+**Branch**: `main`
+
+### Summary
+
+更新 Trellis 自动提交失败恢复与提权修复指南，修正文档对 Qoder 漂移入口和遗留 record-session 入口的归类，并同步任务 PRD 与研究摘要。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7d4886f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
