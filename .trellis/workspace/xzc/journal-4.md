@@ -965,3 +965,36 @@ Add 5 dependent-surface carriers (claude-native-skills, opencode-native-skills, 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 156: Fix workflow-audit skill references and scope clarity
+
+**Date**: 2026-05-06
+**Task**: Fix workflow-audit skill references and scope clarity
+**Branch**: `main`
+
+### Summary
+
+Analyzed workflow-audit skill usability, found P1 brainstorm reference name mismatch and P2 three-platform scope gap. Fixed: (1) replaced all stale brainstorm/trellis:brainstorm refs with trellis-brainstorm across spec, .agents/, .claude/ (SKILL.md, templates, tests); (2) unified post-audit whitelist to bare names (start/check/update-spec) across all three surfaces; (3) added explicit .kiro/.qoder exclusion and .opencode/.codex explanation to spec and both SKILL.md files; (4) corrected spec Related Files paths to actual file locations.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c73dbab` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
