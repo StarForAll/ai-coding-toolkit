@@ -798,3 +798,36 @@ Recorded the workflow-capability-audit follow-up: added Codex runtime-boundary g
 ### Next Steps
 
 - None - task complete
+
+
+## Session 151: Fix workflow-capability-audit execution gaps
+
+**Date**: 2026-05-06
+**Task**: Fix workflow-capability-audit execution gaps
+**Branch**: `main`
+
+### Summary
+
+Hardened workflow-capability-audit CLI validation and rollback behavior, aligned maintainer skill/spec/runbook contracts, and added regression coverage for fix-lifecycle anchor write ordering and child-task cleanup.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c82818a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
