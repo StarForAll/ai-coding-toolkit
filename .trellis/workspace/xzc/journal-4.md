@@ -831,3 +831,36 @@ Hardened workflow-capability-audit CLI validation and rollback behavior, aligned
 ### Next Steps
 
 - None - task complete
+
+
+## Session 152: 收敛 Trellis 升级 git diff 并保留原编号
+
+**Date**: 2026-05-06
+**Task**: 收敛 Trellis 升级 git diff 并保留原编号
+**Branch**: `main`
+
+### Summary
+
+保留有效升级改动，回退阶段编号漂移，逐个裁决并清理 .new 候选，补齐 class-2 子代理任务定位与 hook disable guard，一并通过验证与测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7a9b6ce` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
