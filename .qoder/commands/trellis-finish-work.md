@@ -1,6 +1,6 @@
 ---
 name: trellis-finish-work
-description: Wrap up the current session: quality gate, archive, journal. Code commits happen before this command (Phase 3.1).
+description: Wrap up the current session: verify quality gate passed, archive completed tasks, and record session progress to the developer journal. Code commits happen before this command (Phase 3.1). Use when code is committed and ready to end the session.
 ---
 
 # Finish Work
@@ -29,13 +29,13 @@ Run:
 git status --porcelain
 ```
 
-Filter out paths under `.trellis/workspace/` and `.trellis/tasks/` — those are managed by `add_session.py` and `task.py archive` auto-commits and will appear dirty as part of this skill's own work.
+Filter out paths under `.trellis/workspace/` and `.trellis/tasks/` — those are managed by `record-session-helper.py` and `task.py archive` auto-commits and will appear dirty as part of this skill's own work.
 
 If anything else is dirty (any path outside those two prefixes), **stop and bail out** with:
 
 > "Working tree has uncommitted code changes. Return to workflow Phase 3.1 to commit them before running `$finish-work`."
 
-Do NOT run `git commit` here. Code commits happen in Phase 3.1 (the main session proposes a commit plan and gets user confirmation before executing). If the working tree is dirty with code changes, direct the user back to Phase 3.1.
+Do NOT run `git commit` here. Do NOT prompt the user to commit. The user goes back to Phase 3.1 and the AI drives the batched commit there.
 
 ## Step 3: Archive task(s)
 
@@ -50,12 +50,14 @@ If there is no active task and the user did not confirm any cleanup archives, sk
 ## Step 4: Record session journal
 
 ```bash
-python3 ./.trellis/scripts/add_session.py \
+python3 ./.trellis/scripts/workflow/record-session-helper.py \
   --title "Session Title" \
   --commit "hash1,hash2" \
   --summary "Brief summary"
 ```
 
-Use the work-commit hashes produced in Phase 3.1 (visible in Step 1's `Recent commits` list, or via `git log --oneline`) for `--commit`. Do not include the archive commit hashes from Step 3. This produces a `chore: record journal` commit.
+Use the work-commit hashes produced in Phase 3.1 (visible in Step 1's `Recent commits` list, or via `git log --oneline`) for `--commit`. Do not include the archive commit hashes from Step 3. `record-session-helper.py` runs metadata closure pre-checks, calls `add_session.py` internally, then auto-commits `.trellis/workspace` and `.trellis/tasks` metadata changes.
+
+If `record-session-helper.py` reports a metadata auto-commit failure in a read-only/restricted environment and prints `TRELLIS_AUTO_ESCALATE_COMMAND=...`, immediately rerun the printed command with elevated permissions if the current CLI supports privileged retry. Do not fall back to "commit manually" unless the current runtime truly has no privilege-escalation path.
 
 Final git log order: `<work commits from 3.1>` → `chore(task): archive ...` (one or more) → `chore: record journal`.

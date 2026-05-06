@@ -13,13 +13,14 @@ import { createHash } from "crypto"
 import process from "process"
 
 const PYTHON_CMD = platform() === "win32" ? "python" : "python3"
+// Debug logging
 const DEBUG_LOG = "/tmp/trellis-plugin-debug.log"
 
 function debugLog(prefix, ...args) {
   const timestamp = new Date().toISOString()
-  const message = `[${timestamp}] [${prefix}] ${args.map(arg => typeof arg === "object" ? JSON.stringify(arg) : arg).join(" ")}\n`
+  const msg = `[${timestamp}] [${prefix}] ${args.map(a => typeof a === "object" ? JSON.stringify(a) : a).join(" ")}\n`
   try {
-    appendFileSync(DEBUG_LOG, message)
+    appendFileSync(DEBUG_LOG, msg)
   } catch {
     // ignore
   }
@@ -62,11 +63,18 @@ function buildContextKey(platformName, kind, value) {
   return safeValue ? `${platformName}_${safeValue}` : `${platformName}_${hashValue(value)}`
 }
 
+/**
+ * Trellis Context Manager
+ */
 export class TrellisContext {
   constructor(directory) {
     this.directory = directory
     debugLog("context", "TrellisContext initialized", { directory })
   }
+
+  // ============================================================
+  // Trellis Project Detection
+  // ============================================================
 
   isTrellisProject() {
     return existsSync(join(this.directory, ".trellis"))
@@ -106,6 +114,9 @@ export class TrellisContext {
     }
   }
 
+  /**
+   * Get active task from session runtime context.
+   */
   getActiveTask(platformInput = null) {
     const contextKey = this.getContextKey(platformInput)
     if (!contextKey) {
@@ -168,6 +179,10 @@ export class TrellisContext {
     return join(this.directory, ".trellis", "tasks", normalized)
   }
 
+  // ============================================================
+  // File Reading Utilities
+  // ============================================================
+
   readFile(filePath) {
     try {
       if (existsSync(filePath)) {
@@ -201,6 +216,10 @@ export class TrellisContext {
     }
   }
 
+  // ============================================================
+  // JSONL Reading
+  // ============================================================
+
   readDirectoryMdFiles(dirPath, maxFiles = 20) {
     const results = []
     const fullPath = join(this.directory, dirPath)
@@ -211,7 +230,7 @@ export class TrellisContext {
 
     try {
       const files = readdirSync(fullPath)
-        .filter(file => file.endsWith(".md"))
+        .filter(f => f.endsWith(".md"))
         .sort()
         .slice(0, maxFiles)
 
@@ -229,6 +248,12 @@ export class TrellisContext {
     return results
   }
 
+  /**
+   * Read a JSONL file and load referenced files/directories
+   * Supports:
+   *   {"file": "path/to/file.md", "reason": "..."}
+   *   {"file": "path/to/dir/", "type": "directory", "reason": "..."}
+   */
   readJsonlWithFiles(jsonlPath) {
     const results = []
     const content = this.readFile(jsonlPath)
@@ -261,9 +286,13 @@ export class TrellisContext {
   }
 
   buildContextFromEntries(entries) {
-    return entries.map(entry => `=== ${entry.path} ===\n${entry.content}`).join("\n\n")
+    return entries.map(e => `=== ${e.path} ===\n${e.content}`).join("\n\n")
   }
 }
+
+// ============================================================
+// Context Collector (for session deduplication)
+// ============================================================
 
 class ContextCollector {
   constructor() {
@@ -283,5 +312,8 @@ class ContextCollector {
   }
 }
 
+// Singleton instance
 export const contextCollector = new ContextCollector()
+
+// Export debug log for plugins
 export { debugLog }

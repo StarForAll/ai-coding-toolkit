@@ -205,17 +205,17 @@ def _get_task_status(trellis_dir: Path, hook_input: dict) -> str:
 def _extract_range(content: str, start_header: str, end_header: str) -> str:
     """Extract lines starting at `## start_header` up to (but excluding) `## end_header`."""
     lines = content.splitlines()
-    start: int | None = None
+    start: "int | None" = None
     end: int = len(lines)
     start_match = f"## {start_header}"
     end_match = f"## {end_header}"
-    for index, line in enumerate(lines):
+    for i, line in enumerate(lines):
         stripped = line.strip()
         if start is None and stripped == start_match:
-            start = index
+            start = i
             continue
         if start is not None and stripped == end_match:
-            end = index
+            end = i
             break
     if start is None:
         return ""
@@ -341,7 +341,9 @@ Read and follow all instructions below carefully.
                         continue
                     nested_index = nested / "index.md"
                     if nested_index.is_file():
-                        paths.append(f".trellis/spec/{sub.name}/{nested.name}/index.md")
+                        paths.append(
+                            f".trellis/spec/{sub.name}/{nested.name}/index.md"
+                        )
 
     if paths:
         output.write("## Available spec indexes (read on demand)\n")
