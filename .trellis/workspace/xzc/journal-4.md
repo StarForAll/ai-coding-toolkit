@@ -897,3 +897,36 @@ Fixed phase numbering drift (1.3/1.4→1.2/1.3, 3.4→3.1), restored brainstorm 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 154: workflow capability audit
+
+**Date**: 2026-05-06
+**Task**: workflow capability audit
+**Branch**: `main`
+
+### Summary
+
+Completed workflow-capability-audit for 新项目开发工作流, hardened managed-surface discovery and fix-lifecycle safety, archived the finished audit task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d469d45` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
