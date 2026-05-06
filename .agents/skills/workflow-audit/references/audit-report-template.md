@@ -73,7 +73,7 @@ Use `not-applicable` with a brief reason when CLI adaptation was not examined fo
 - <propagation risk notes>
 
 ## Recommended Next Step
-- Recommended action: <brainstorm | start | check | update-spec | plain-language action>
+- Recommended action: <trellis-brainstorm | start | check | update-spec | plain-language action>
 - Trigger condition: <why this is the right next step now>
 - Recommendation reason: <why this path was chosen over alternatives>
 - Stronger alternatives not selected: <why stronger options were rejected now>

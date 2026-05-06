@@ -54,6 +54,15 @@ That support limit applies to:
 
 Repo-local directories for other CLIs or carriers are out of scope for `workflow-audit` unless the workflow's own managed-surface contract explicitly adds them in the future.
 
+Currently excluded repo-local CLI directories and the reason:
+
+- `.kiro/` — not part of the workflow's managed surface; skill deployment there is handled independently by Trellis, not by the workflow-audit contract
+- `.qoder/` — same as above
+
+These exclusions are a design decision, not a coverage gap. Extending the supported surface to include additional platforms requires an explicit update to `workflow_assets.py`'s managed-surface contract first; `workflow-audit` will then incorporate the new platform in the same change.
+
+Note on `.opencode/` and `.codex/`: although these directories exist as repo-local CLI carriers, they belong to the three-platform managed surface (OpenCode via `.opencode/`, Codex via `.codex/` and `.agents/`). Their skill directories do not carry `workflow-audit` or `workflow-capability-audit` skill copies because those platforms consume the skill through Trellis-managed deployment, not through per-CLI skill directory duplication. The absence of skill files under `.opencode/skills/workflow-audit/` or `.codex/skills/workflow-audit/` is therefore expected and not a defect.
+
 ## Audit Coverage Requirements
 
 This skill **must** fully validate the following aspects for any workflow under audit:
@@ -151,7 +160,7 @@ E (Output Findings) always executes as the final report step.
 
 Three execution modes determine which evidence steps run and how findings are delivered:
 
-| Mode | Steps | Task | brainstorm | prd.md | audit-report.md |
+| Mode | Steps | Task | trellis-brainstorm | prd.md | audit-report.md |
 |------|-------|------|------------|--------|-----------------|
 | Lightweight static | A, B, C, E | N | N | N | N |
 | Task-based static | A, B, C, E (D skipped) | Y | Y | Y | Y |
@@ -249,7 +258,7 @@ Mode is not a pre-decision made at input time. It is the outcome of evidence mai
 
 After step C, two independent judgments determine the execution mode:
 
-**Judgment 1 — Taskify?** Should the audit create a task, enter brainstorm, and maintain `prd.md` + `audit-report.md`?
+**Judgment 1 — Taskify?** Should the audit create a task, enter trellis-brainstorm, and maintain `prd.md` + `audit-report.md`?
 
 - `force_full_brainstorm: yes` → yes: enter task-based path
 - `need_runtime_validation: yes` → yes: enter task-based path (D needed, which always requires task context)
@@ -269,8 +278,8 @@ Step D is required when any of these are true:
 `force_full_brainstorm: yes` does NOT by itself force Step D. D must be justified by one of the conditions above.
 
 When neither Judgment 1's conditions nor D-trigger conditions are met: lightweight static mode.
-When Judgment 1 is "yes" but D is not needed: task-based static mode (create task, enter brainstorm, maintain `prd.md` and `audit-report.md`, then skip D and go to E).
-When both judgments are "yes": task-based runtime mode (create task, enter brainstorm, maintain `prd.md` and `audit-report.md`, execute D, then output E).
+When Judgment 1 is "yes" but D is not needed: task-based static mode (create task, enter trellis-brainstorm, maintain `prd.md` and `audit-report.md`, then skip D and go to E).
+When both judgments are "yes": task-based runtime mode (create task, enter trellis-brainstorm, maintain `prd.md` and `audit-report.md`, execute D, then output E).
 
 ### Lightweight static mode
 
@@ -284,8 +293,8 @@ When both judgments are "yes": task-based runtime mode (create task, enter brain
 When the skill determines task context is warranted but runtime validation is not required:
 
 - create audit task context (child task if another non-audit task is active, otherwise top-level)
-- enter the `brainstorm` mainline explicitly as the control container
-- create and maintain `prd.md` through the `brainstorm` path
+- enter the `trellis-brainstorm` mainline explicitly as the control container
+- create and maintain `prd.md` through the `trellis-brainstorm` path
 - maintain `audit-report.md` using `references/audit-report-template.md`
 - seed `audit-report.md` with findings from steps A/B/C already collected
 - skip step D → proceed to step E (report via `audit-report.md`)
@@ -316,12 +325,12 @@ When transitioning from step C to a task-based mode:
 1. explain the rationale for the chosen mode
 2. if entering task-based static: explain why task context is warranted and why D is not needed
 3. if entering task-based runtime: explain why runtime validation is necessary
-4. proceed to create task context and enter brainstorm
+4. proceed to create task context and enter trellis-brainstorm
 5. seed `audit-report.md` with already-collected evidence from steps A/B/C
 
 Never switch modes silently. Never discard A/B/C findings when entering a task-based mode.
 
-If task-based mode is chosen but the required `brainstorm` entrypoint for the current CLI is unavailable:
+If task-based mode is chosen but the required `trellis-brainstorm` entrypoint for the current CLI is unavailable:
 
 - stop immediately
 - classify the stop as `Blocked / Dependency Unavailable`
@@ -507,7 +516,7 @@ The audited workflow's own internal `design` / `plan` / `start` semantics are no
 
 Post-audit routing must come only from the current-project trusted whitelist:
 
-- `brainstorm`
+- `trellis-brainstorm`
 - `start`
 - `check`
 - `update-spec`
@@ -580,7 +589,7 @@ Hard requirement:
 
 - when a behavior change is made to any of the three surfaces (spec / `.agents/` / `.claude/`), you must evaluate whether the other surfaces also need updating in the same change
 - behavior semantics (trigger conditions, execution modes, evidence requirements, report contracts, handoff rules) must remain consistent across all three surfaces
-- expression form may differ by CLI: for example, `.agents/skills/` may reference `brainstorm` directly as a sibling skill, while `.claude/skills/` must reference `trellis:brainstorm` as a trellis command
+- expression form may differ by CLI: for example, `.agents/skills/` may reference `trellis-brainstorm` directly as a sibling skill, while `.claude/skills/` may also reference `trellis-brainstorm` as a skill via the Skill tool
 - do not treat one skill surface as independently maintainable from the others for behavioral semantics
 - do not land behavior, trigger, or contract changes in only one skill surface without evaluating the others
 
@@ -591,7 +600,7 @@ If the same behavior change also touches companion templates/tests, the same cha
 - affected files under `.claude/skills/workflow-audit/references/`
 - affected files under `.claude/skills/workflow-audit/tests/`
 
-When a behavior change could affect the task-based audit path's dependence on `brainstorm`, review that dependency explicitly rather than assuming the coupling still holds.
+When a behavior change could affect the task-based audit path's dependence on `trellis-brainstorm`, review that dependency explicitly rather than assuming the coupling still holds.
 
 ---
 
@@ -654,5 +663,5 @@ When a behavior change could affect the task-based audit path's dependence on `b
 - `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
 - `.agents/skills/workflow-capability-audit/SKILL.md`
 - `.claude/skills/workflow-capability-audit/SKILL.md`
-- `.agents/skills/brainstorm/SKILL.md`
-- `.claude/commands/trellis/brainstorm.md`
+- `.agents/skills/trellis-brainstorm/SKILL.md`
+- `.claude/skills/trellis-brainstorm/SKILL.md`

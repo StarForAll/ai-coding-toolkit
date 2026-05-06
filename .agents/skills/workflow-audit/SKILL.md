@@ -51,6 +51,15 @@ Supported audit surface is limited to:
 
 Other repo-local platform directories are out of scope unless the workflow's own managed-surface contract later adds them.
 
+Currently excluded repo-local CLI directories and the reason:
+
+- `.kiro/` — not part of the workflow's managed surface; skill deployment there is handled independently by Trellis, not by the workflow-audit contract
+- `.qoder/` — same as above
+
+These exclusions are a design decision, not a coverage gap. Extending the supported surface to include additional platforms requires an explicit update to `workflow_assets.py`'s managed-surface contract first; `workflow-audit` will then incorporate the new platform in the same change.
+
+Note on `.opencode/` and `.codex/`: although these directories exist as repo-local CLI carriers, they belong to the three-platform managed surface (OpenCode via `.opencode/`, Codex via `.codex/` and `.agents/`). Their skill directories do not carry `workflow-audit` or `workflow-capability-audit` skill copies because those platforms consume the skill through Trellis-managed deployment, not through per-CLI skill directory duplication. The absence of skill files under `.opencode/skills/workflow-audit/` or `.codex/skills/workflow-audit/` is therefore expected and not a defect.
+
 ## Audit Coverage Requirements
 
 This skill must fully validate the following aspects for any workflow under audit:
@@ -266,7 +275,7 @@ Based on input parameters and Step 2 findings, determine whether the audit runs 
   - `/tmp` temporary-project validation is needed
   - embed / install / post-install behavior must be verified
   - Codex handoff may be triggered
-- `force_full_brainstorm: yes` (enters task + brainstorm mainline; Step D is still judged separately in Step 4)
+- `force_full_brainstorm: yes` (enters task + trellis-brainstorm mainline; Step D is still judged separately in Step 4)
 
 **Lightweight mode** (skip to Step 6) when:
 - `need_runtime_validation: no`, UNLESS Step 2 findings conclusively prove runtime validation is necessary (see escalation rule below)
@@ -276,7 +285,7 @@ Based on input parameters and Step 2 findings, determine whether the audit runs 
 **Escalation rule for `need_runtime_validation: no`**: If the user explicitly set `no` but Step 2 findings conclusively demonstrate that runtime validation is necessary, do NOT silently skip D. Instead, output a Needs Confirmation block using `references/needs-confirmation-template.md`, then let the user decide whether to proceed.
 
 Lightweight mode: no task, no `prd.md`, no `audit-report.md`. Output using simplified template.
-Task-based mode: proceed to Step 4 (task + brainstorm). Whether Step D executes is judged separately after task context is built.
+Task-based mode: proceed to Step 4 (task + trellis-brainstorm). Whether Step D executes is judged separately after task context is built.
 
 ### Mode transition boundary
 
@@ -289,22 +298,22 @@ When transitioning from Step 3 into any task-based mode:
 - never switch modes silently
 - never discard A/B/C findings during the transition
 
-If task-based mode is chosen but the required `brainstorm` entrypoint is unavailable:
+If task-based mode is chosen but the required `trellis-brainstorm` entrypoint is unavailable:
 
 - stop immediately
 - classify the stop as `Blocked / Dependency Unavailable`
 - preserve the already-collected A/B/C evidence
 - do not silently fall back to lightweight mode
 
-### Step 4: Build task context and enter brainstorm
+### Step 4: Build task context and enter trellis-brainstorm
 
 Only in task-based mode (when proceeding beyond Step 3):
 
 - If a non-audit active task exists: create child audit task and switch into it immediately
 - If no active task exists: create top-level audit task
 - Default title: `workflow-audit: <workflow-name>`
-- Enter the `brainstorm` mainline as the control container
-- Maintain `prd.md` through the `brainstorm` path
+- Enter the `trellis-brainstorm` mainline as the control container
+- Maintain `prd.md` through the `trellis-brainstorm` path
 - Initialize `audit-report.md`, seeding it with evidence already collected in Step 2
 
 After task context is built, judge whether Step D (runtime validation) is needed:
@@ -355,7 +364,7 @@ Constraints:
 
 After presenting the report, recommend the next step but do not execute it. Allowed recommendation targets:
 
-- `brainstorm`
+- `trellis-brainstorm`
 - `start`
 - `check`
 - `update-spec`
@@ -443,7 +452,7 @@ Input:
 Audit the embed flow of `docs/workflows/新项目开发工作流/`. Create a temporary project under `/tmp`, run `trellis init`, and verify the stop-and-handoff behavior when Codex reaches the formal embed step.
 
 Output:
-Enter the task-based runtime path, create an audit task, enter the `brainstorm` mainline as the control container, emit a Codex handoff block when required, and maintain `audit-report.md` inside the task.
+Enter the task-based runtime path, create an audit task, enter the `trellis-brainstorm` mainline as the control container, emit a Codex handoff block when required, and maintain `audit-report.md` inside the task.
 
 ### Example 3: Version drift stop
 

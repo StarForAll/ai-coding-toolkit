@@ -35,7 +35,7 @@ current_cli: <optional; infer from runtime when omitted>
 
 - `force_full_brainstorm`
   - default: `no`
-  - `yes`: enter task-based mode (task + `trellis:brainstorm` mainline); does NOT by itself force runtime validation (Step D), which is judged separately based on Step 2 findings
+  - `yes`: enter task-based mode (task + `trellis-brainstorm` mainline); does NOT by itself force runtime validation (Step D), which is judged separately based on Step 2 findings
 
 - `current_cli`
   - optional

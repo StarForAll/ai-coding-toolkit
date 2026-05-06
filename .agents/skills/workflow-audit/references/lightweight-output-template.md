@@ -44,7 +44,7 @@ This section is for unresolved branches inside a continuing audit result. Hard-s
 - <direction only, no execution>
 
 ## Recommended Next Step
-- Recommended action: <brainstorm | start | check | update-spec | plain-language action>
+- Recommended action: <trellis-brainstorm | start | check | update-spec | plain-language action>
 - Trigger condition: <why this is the right next step now>
 - Recommendation reason: <why this path over stronger alternatives>
 - Stronger alternatives not selected: <why other stronger options were rejected now>

@@ -20,8 +20,8 @@ Task-based runtime mode.
 - execute evidence mainline steps A (understand mechanics), B (static evidence), and C (gap analysis) first
 - based on A/B/C findings, determine step D is required
 - before creating task context, explain why task-based runtime mode was chosen
-- create an audit task and enter the `brainstorm` mainline as the control container
-- maintain `prd.md` in the task through the `brainstorm` path
+- create an audit task and enter the `trellis-brainstorm` mainline as the control container
+- maintain `prd.md` in the task through the `trellis-brainstorm` path
 - maintain `audit-report.md`, seeded with step A/B/C evidence tagged with source layers
 - verify referenced script paths and check whether documented exit-code/output contracts remain machine-parseable when later workflow steps depend on them
 - execute step D: `/tmp` project creation, `trellis init`, embed chain, post-install verification

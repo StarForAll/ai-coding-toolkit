@@ -1,0 +1,1 @@
+{"phases":[{"phase":"check","steps":[{"action":"grep","desc":"grep 三份文件确认新增排除说明存在且一致"},{"action":"read","desc":"读取三份文件对应章节确认措辞准确无歧义"}]}]}

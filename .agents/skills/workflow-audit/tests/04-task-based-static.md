@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Verify that `workflow-audit` enters task-based static mode when `force_full_brainstorm: yes` but A/B/C findings do not indicate runtime validation is needed. The audit should create a task, enter brainstorm, maintain `prd.md` and `audit-report.md`, skip Step D, and output via `audit-report.md`.
+Verify that `workflow-audit` enters task-based static mode when `force_full_brainstorm: yes` but A/B/C findings do not indicate runtime validation is needed. The audit should create a task, enter trellis-brainstorm, maintain `prd.md` and `audit-report.md`, skip Step D, and output via `audit-report.md`.
 
 ## Input
 
 User input:
 
-> I want a full structured audit of `docs/workflows/新项目开发工作流/` with task tracking and audit report — use the brainstorm mainline. But I know the embed/install flow is fine, so no `/tmp` or `trellis init` needed. Static-only analysis is enough.
+> I want a full structured audit of `docs/workflows/新项目开发工作流/` with task tracking and audit report — use the trellis-brainstorm mainline. But I know the embed/install flow is fine, so no `/tmp` or `trellis init` needed. Static-only analysis is enough.
 
 Interpreted as:
 ```yaml
@@ -20,7 +20,7 @@ force_full_brainstorm: yes
 
 ## Expected Mode
 
-Task-based static mode (task + brainstorm + `prd.md` + `audit-report.md`, without Step D).
+Task-based static mode (task + trellis-brainstorm + `prd.md` + `audit-report.md`, without Step D).
 
 ## Expected Key Behaviors
 
@@ -31,8 +31,8 @@ Task-based static mode (task + brainstorm + `prd.md` + `audit-report.md`, withou
 - explain why task context is warranted and why Step D is not needed
 - enter task-based static mode (NOT lightweight, NOT task-based runtime)
 - create audit task with default title `workflow-audit: 新项目开发工作流`
-- enter the `brainstorm` mainline as the control container
-- maintain `prd.md` through the `brainstorm` path
+- enter the `trellis-brainstorm` mainline as the control container
+- maintain `prd.md` through the `trellis-brainstorm` path
 - initialize `audit-report.md`, seeding it with Step A/B/C evidence tagged with source layers
 - skip Step D entirely — do NOT create `/tmp` project, do NOT run `trellis init`, do NOT execute embed chain
 - if A/B/C findings were to indicate Step D is necessary, follow the escalation rule: output Needs Confirmation block and wait for user, do NOT auto-execute D
@@ -48,6 +48,6 @@ Task-based static mode (task + brainstorm + `prd.md` + `audit-report.md`, withou
 - must not create `/tmp` project
 - must not run `trellis init`
 - must not emit Codex handoff block (D not reached)
-- must not silently drop the task or brainstorm context
+- must not silently drop the task or trellis-brainstorm context
 - must not output using the lightweight template
 - must not auto-execute Step D even if A/B/C findings indicate it is needed

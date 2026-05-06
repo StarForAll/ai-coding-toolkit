@@ -19,7 +19,7 @@ Task-based audit with child audit task creation.
 - execute A/B/C first, then decide the audit is task-based
 - create a dedicated child audit task instead of mixing the audit into the parent task
 - switch execution into the child audit task immediately
-- enter the `brainstorm` mainline as the control container inside the child audit task
+- enter the `trellis-brainstorm` mainline as the control container inside the child audit task
 - initialize `prd.md` and `audit-report.md` inside the child task
 - keep the audit conclusion and subsequent remediation inside the same child audit task until completion
 

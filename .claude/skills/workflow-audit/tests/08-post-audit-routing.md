@@ -17,7 +17,7 @@ Any completed audit mode, followed by controlled post-audit routing.
 ## Expected Key Behaviors
 
 - stop after presenting findings instead of auto-executing the next phase
-- recommend only from the trusted whitelist: `trellis:brainstorm`, `trellis:start`, `trellis:check`, `trellis:update-spec`, or a plain-language action if none fit
+- recommend only from the trusted whitelist: `trellis-brainstorm`, `start`, `check`, `update-spec`, or a plain-language action if none fit
 - exclude `grill-me` from post-audit recommendation targets
 - include all four recommendation elements:
   - chosen next action
