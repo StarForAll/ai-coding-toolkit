@@ -5,6 +5,15 @@
 这份文档不是当前仓库专用 spec，而是一份**可迁移到其他 Trellis 项目的独立修复指南**。  
 如果其他项目出现同样问题，可以直接按本文对应步骤修改它自己的 `.trellis/` 运行时脚本和命令入口。
 
+下文里凡是提到“当前仓库实际使用情况”，均以本仓库 **2026-05-06** 时的入口面为准：
+
+- 主入口链：`.agents/skills/trellis-finish-work/SKILL.md`
+- Claude / OpenCode 命令入口：`.claude/commands/trellis/finish-work.md`、`.opencode/commands/trellis/finish-work.md`
+- Qoder 当前命令入口：`.qoder/commands/trellis-finish-work.md`
+- Qoder 漂移副本：`.qoder/skills/trellis-finish-work/SKILL.md` 仍存在，但 frontmatter 是 `name: finish-work`，正文仍是旧的 pre-commit checklist，不能当作当前推荐收尾入口
+- 遗留 / fallback 入口：`.agents/skills/record-session/SKILL.md` 仍然存在，但已经明确标成 legacy/manual fallback
+- 平台遗留入口：`.qoder/skills/record-session/SKILL.md` 仍然存在，但它不是当前推荐主路径，且文案仍带有旧顺序语义
+
 ---
 
 ## 1. 问题定义
@@ -13,7 +22,7 @@
 
 - `python3 ./.trellis/scripts/task.py archive <task>` 已执行归档，但自动提交失败
 - `python3 ./.trellis/scripts/add_session.py ...` 已写 journal / index，但自动提交失败
-- `record-session-helper.py` 或 `finish-work` 在最后一步停住（record-session 已退役，session 记录现由 finish-work 内部通过 record-session-helper.py 完成）
+- `record-session-helper.py` 或 `finish-work` 在最后一步停住（当前推荐主路径已切到 `finish-work`，session 记录现由其内部通过 `record-session-helper.py` 完成；个别平台仍可能保留遗留 `record-session` 入口）
 - stderr 中出现类似：
   - `Read-only file system`
   - `Permission denied`
@@ -67,15 +76,24 @@
 
 ### 3.3 用户入口文档 / 技能入口
 
+当前仓库实际维护的主入口面是：
+
 - `.agents/skills/trellis-finish-work/SKILL.md`
-- `.{platform}/commands/trellis/finish-work.md`
+- `.claude/commands/trellis/finish-work.md`
+- `.opencode/commands/trellis/finish-work.md`
+- `.qoder/commands/trellis-finish-work.md`
 
-（`record-session` 命令已退役，其功能已合并到 `finish-work` 内部。下方仅保留脚本级引用，不再跟踪已删除的命令入口。）
+另外，当前仓库还存在一个需要单独审计的 Qoder 同名旧副本：
 
-这里的 `.{platform}` 至少覆盖你项目实际使用的平台，例如：
+- `.qoder/skills/trellis-finish-work/SKILL.md`（内容已漂移成旧 pre-commit checklist，不是当前 `finish-work` 主链入口）
 
-- `.claude/commands/trellis/...`
-- `.opencode/commands/trellis/...`
+如果项目里还保留遗留 `record-session` 入口，也要一起评估；当前仓库的例子是：
+
+- `.agents/skills/record-session/SKILL.md`（已明确标成 legacy/manual fallback，文案已切到 helper / resume / `TRELLIS_AUTO_ESCALATE_COMMAND` 语义）
+- `.qoder/skills/record-session/SKILL.md`（平台遗留兼容入口，不是当前主路径，仍保留旧的 `record-session` → `archive` 顺序）
+
+不要把平台路径写死成单一模式。
+例如 Claude / OpenCode 当前是 `commands/trellis/finish-work.md`，但 Qoder 当前实际是 `commands/trellis-finish-work.md`。
 
 ---
 
@@ -108,10 +126,15 @@ TRELLIS_AUTO_ESCALATE_COMMAND=<command>
    - `task.py archive`
    - 自动提交 `.trellis/tasks`
 
-2. **record-session 链**（`record-session` 命令已退役，此链现由 `finish-work` 内部调用）
+2. **record-session 链**（主路径已收敛到 `finish-work`，但某些平台可能仍保留遗留入口）
    - `record-session-helper.py`（由 `finish-work` 内部调用）
    - `add_session.py`
    - 自动提交 `.trellis/workspace` + `.trellis/tasks`
+
+当前仓库的实际例子是：`record-session` 已不再是主入口，但仍保留了两类残留面：
+
+- `.agents/skills/record-session/SKILL.md`：已明确标成 legacy/manual fallback
+- `.qoder/skills/record-session/SKILL.md`：仍保留旧的 close-out 顺序语义
 
 这两条链都要有恢复方案，不能只修一边。
 
@@ -239,6 +262,9 @@ TRELLIS_AUTO_ESCALATE_COMMAND=python3 ./.trellis/scripts/workflow/record-session
 
 这一步非常关键，因为真正的收尾默认应该经过 helper。
 
+补充一点：`metadata-autocommit-guard.py` 当前只服务于 `record-session-helper.py` 这条链，用来做 pre-check / commit-only / post-check。
+archive 链当前并不经过这个 guard，而是由 `.trellis/scripts/common/task_store.py` 自己完成 `git add` / `git commit` 和 `archive-commit-only` 恢复提示。
+
 ---
 
 ## 6. 命令/技能入口层如何改
@@ -264,9 +290,35 @@ python3 ./.trellis/scripts/workflow/record-session-helper.py \
 
 不要把“手工提交 `.trellis`”写成默认建议。
 
-## 6.2 `record-session` fallback（已退役）
+如果你维护的是当前仓库这一套入口面，至少要同时同步当前主入口：
 
-`record-session` 命令已退役，其功能已合并到 `finish-work` 内部（通过 `record-session-helper.py`）。如果项目仍保留独立 `record-session` 入口文件，应删除并引导用户使用 `finish-work`。
+- `.agents/skills/trellis-finish-work/SKILL.md`
+- `.claude/commands/trellis/finish-work.md`
+- `.opencode/commands/trellis/finish-work.md`
+- `.qoder/commands/trellis-finish-work.md`
+
+如果平台目录里还残留同名 skill 镜像或旧副本，也要一起审计或删除。当前仓库的例子是：
+
+- `.qoder/skills/trellis-finish-work/SKILL.md`：frontmatter 为 `name: finish-work`，正文却还是旧 pre-commit checklist，不能继续当作当前 `finish-work` 收尾入口的证据
+
+## 6.2 `record-session` fallback（遗留入口，不是主路径）
+
+`record-session` 已不再是当前推荐主入口，其功能主链已经合并到 `finish-work` 内部（通过 `record-session-helper.py`）。
+
+但“已退役”不等于“仓库里一定已经没有残留入口”。当前仓库就还保留着：
+
+- `.agents/skills/record-session/SKILL.md`
+- `.qoder/skills/record-session/SKILL.md`
+
+其中：
+
+- `.agents/skills/record-session/SKILL.md` 已经明确标成 legacy/manual fallback
+- `.qoder/skills/record-session/SKILL.md` 仍然描述旧的 close-out 顺序：`record-session` 先于 `archive`
+
+因此，如果你的项目仍保留独立 `record-session` 入口，至少要二选一：
+
+1. 删除它，并统一引导到 `finish-work`
+2. 保留它，但明确标成 legacy / fallback，并把文案同步成当前真实语义
 
 ---
 
@@ -278,12 +330,21 @@ python3 ./.trellis/scripts/workflow/record-session-helper.py \
 2. `.trellis/scripts/task.py`
 3. `.trellis/scripts/add_session.py`
 4. `.trellis/scripts/workflow/record-session-helper.py`
-5. `.agents/skills/trellis-finish-work/SKILL.md`
-6. 你正在使用的平台命令入口：
+5. `.trellis/scripts/workflow/metadata-autocommit-guard.py`（如果你采用 helper 的 pre/post check + commit-only 链）
+6. 一份收尾入口的源文案，例如 `.agents/skills/trellis-finish-work/SKILL.md`
+7. 你正在使用的平台命令 / 技能入口：
    - `.claude/commands/trellis/finish-work.md`
    - `.opencode/commands/trellis/finish-work.md`
+   - `.qoder/commands/trellis-finish-work.md`
 
-（`record-session` 命令入口已退役删除，不再列出。）
+如果项目里还存在平台私有 skill 镜像或历史副本，也把它们列入这次迁移范围并逐个核实是否漂移：
+
+- 例如 `.qoder/skills/trellis-finish-work/SKILL.md`
+
+如果项目里还残留独立 `record-session` 入口，也把它列入这次迁移范围：
+
+- 例如 `.agents/skills/record-session/SKILL.md`
+- 例如 `.qoder/skills/record-session/SKILL.md`
 
 如果项目没有：
 
@@ -302,6 +363,7 @@ python3 ./.trellis/scripts/workflow/record-session-helper.py \
 python3 -m py_compile \
   .trellis/scripts/add_session.py \
   .trellis/scripts/workflow/record-session-helper.py \
+  .trellis/scripts/workflow/metadata-autocommit-guard.py \
   .trellis/scripts/common/task_store.py \
   .trellis/scripts/task.py
 ```
@@ -331,9 +393,17 @@ python3 -m py_compile \
 检查下面这些入口不再直接鼓励手工 commit：
 
 ```bash
-rg -n "Please commit \\.trellis|手工提交|record-session-helper.py --resume|TRELLIS_AUTO_ESCALATE_COMMAND" \
-  .agents/skills .claude/commands .opencode/commands .trellis/scripts
+rg -n "Please commit \\.trellis|手工提交|record-session-helper.py --resume|archive-commit-only|TRELLIS_AUTO_ESCALATE_COMMAND" \
+  .agents/skills .claude/commands .opencode/commands .qoder/commands .qoder/skills .trellis/scripts
 ```
+
+### 8.5 遗留入口审计
+
+如果项目里还保留独立 `record-session` 入口，至少确认以下两件事：
+
+1. 它是否被明确标成 legacy / fallback，而不是继续伪装成主路径
+2. 它描述的 close-out 顺序是否仍然与当前主流程冲突
+3. 是否还存在同名 `finish-work` skill 副本，但内容早已漂移成别的语义
 
 ---
 
@@ -345,6 +415,7 @@ rg -n "Please commit \\.trellis|手工提交|record-session-helper.py --resume|T
 - 自动提交失败时打印机器可读恢复命令
 - `finish-work` 默认走 helper
 - archive 与 record-session 两条链都有恢复路径（record-session 链现由 finish-work 内部调用）
+- 如果保留遗留 `record-session` 入口，会明确标记为 legacy / fallback
 
 ### Base
 
@@ -359,6 +430,7 @@ rg -n "Please commit \\.trellis|手工提交|record-session-helper.py --resume|T
 - `finish-work` 仍直接调用 `add_session.py`
 - 只有 record-session（现由 finish-work 内部调用）有恢复路径，archive 没有
 - 强制要求用户手工 `git add .trellis && git commit`
+- 口头上说 `record-session` 已退役，但仓库里仍保留未标注的旧入口
 
 ---
 
@@ -408,5 +480,6 @@ TRELLIS_AUTO_ESCALATE_COMMAND=python3 ./.trellis/scripts/workflow/record-session
 - `record-session` 自动提交链（现由 `finish-work` 内部调用）
 - helper 恢复链
 - `finish-work` 默认入口文案
+- 仍然留在仓库里的遗留 `record-session` 入口
 
-只有把这 4 层一起改完，才算真正解决问题。
+只有把这些层一起改完，才算真正解决问题。
