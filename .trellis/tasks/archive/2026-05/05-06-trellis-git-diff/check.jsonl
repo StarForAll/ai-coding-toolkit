@@ -1,0 +1,8 @@
+{"file":".trellis/spec/docs/index.md","reason":"复核最终文案时确认 repo-local 文档边界、source/deploy 区分和路径口径仍正确。"}
+{"file":".trellis/spec/skills/index.md","reason":"检查 skill 副本与 repo-local maintainer skill 说明是否保持一致。"}
+{"file":".trellis/spec/commands/index.md","reason":"检查 live command 目录改动是否符合当前实践，而未误按空 source layer 合同处理。"}
+{"file":".trellis/spec/scripts/index.md","reason":"检查脚本和 hook 变更是否符合脚本层 spec。"}
+{"file":".trellis/spec/scripts/python-conventions.md","reason":"复核 Python 脚本变更的结构和退出行为是否仍符合约定。"}
+{"file":".trellis/spec/scripts/workflow-command-doc-contracts.md","reason":"复核工作流 command 文档章节和表述边界。"}
+{"file":".trellis/spec/guides/index.md","reason":"最终检查 cross-layer 漂移是否被正确收敛。"}
+{"file":".trellis/tasks/05-06-trellis-git-diff/research/upgrade-diff-classification.md","reason":"对照既定 diff 分类，核对最终保留/回退/`.new` 处置结果是否一致。"}

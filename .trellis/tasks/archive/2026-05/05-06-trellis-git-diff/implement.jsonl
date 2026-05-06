@@ -1,0 +1,8 @@
+{"file":".trellis/spec/docs/index.md","reason":"文档层边界：本次会修改 repo-local 技能/命令文案与说明，需要保持 source/deploy/target 语义清晰。"}
+{"file":".trellis/spec/skills/index.md","reason":"repo-local maintainer skill 说明变更需要遵守技能 frontmatter、耦合与 repo-local supplement 边界。"}
+{"file":".trellis/spec/commands/index.md","reason":"当前 live command 位于部署目录而非 source layer，需按当前仓库实践修改 `.claude/commands` / `.opencode/commands`。"}
+{"file":".trellis/spec/scripts/index.md","reason":"本任务涉及 `.trellis/scripts/common/active_task.py` 与平台 hook/脚本，需遵守脚本层规则。"}
+{"file":".trellis/spec/scripts/python-conventions.md","reason":"确保 Python runtime / hook 修改保持现有 CLI 脚本约定。"}
+{"file":".trellis/spec/scripts/workflow-command-doc-contracts.md","reason":"command 文档改动要满足工作流命令文档结构与边界合同。"}
+{"file":".trellis/spec/guides/index.md","reason":"本任务跨越 `.trellis`、`.agents`、多平台部署副本与 `.new` 候选，需要应用 cross-layer 思维。"}
+{"file":".trellis/tasks/05-06-trellis-git-diff/research/upgrade-diff-classification.md","reason":"执行阶段基于已整理的 diff 分类结论，按保留/回退/逐个判断 `.new` 的规则落地。"}
