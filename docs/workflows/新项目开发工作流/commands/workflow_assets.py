@@ -21,7 +21,7 @@ CLI_ALT_DIRS = {
 ALL_CLI_TYPES = ["claude", "opencode", "codex"]
 WORKFLOW_VERSION = "0.1.26"
 WORKFLOW_SCHEMA_VERSION = "2"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增
-COMPATIBLE_TRELLIS_VERSION = "0.5.0-rc.3"
+COMPATIBLE_TRELLIS_VERSION = "0.5.0-rc.5"
 
 PATCH_BASELINE_COMMANDS = ["continue", "finish-work"]
 LEGACY_PATCH_BASELINE_COMMANDS = ["start", "finish-work", "record-session"]
@@ -104,6 +104,10 @@ EXECUTION_CARDS = ["需求变更管理执行卡.md", "源码水印与归属证�
 OUTSOURCING_EXECUTION_CARDS: list[str] = []
 WORKFLOW_DOCS_DIR = ".trellis/workflow-docs"
 LEGACY_AGENT_NAMES = ["research", "implement", "check"]
+AGENTS_NL_ROUTING_MARKERS = (
+    "<!-- workflow-nl-routing-start -->",
+    "<!-- workflow-nl-routing-end -->",
+)
 
 
 def legacy_agent_target_path(root: Path, cli_type: str, agent_name: str) -> Path:
@@ -225,6 +229,16 @@ class ManagedAssetSpec:
         if self.kind == "skill":
             return codex_shared_skills_dir(root) / self.name / "SKILL.md"
         raise ValueError(f"Unsupported asset kind: {self.kind}")
+
+
+@dataclass(frozen=True)
+class ManagedAuditExtraSpec:
+    capability: str
+    mechanism: str
+    claude_paths: tuple[str, ...] = ()
+    opencode_paths: tuple[str, ...] = ()
+    codex_paths: tuple[str, ...] = ()
+    required_substrings: tuple[str, ...] = ()
 
 
 def codex_shared_skills_dir(root: Path) -> Path:
@@ -386,6 +400,76 @@ def build_managed_asset_specs(cli_types: list[str]) -> list[ManagedAssetSpec]:
             )
 
     return specs
+
+
+def build_managed_audit_extra_specs(cli_types: list[str]) -> list[ManagedAuditExtraSpec]:
+    if not cli_types:
+        return []
+
+    execution_card_paths = tuple(
+        f"{WORKFLOW_DOCS_DIR}/{name}" for name in [*EXECUTION_CARDS, *OUTSOURCING_EXECUTION_CARDS]
+    )
+    requirements_foundation_paths = (
+        ".trellis/library-lock.yaml",
+        ".trellis/spec/universal-domains/verification/evidence-requirements/overview.md",
+        ".trellis/checklists/universal-domains/product-and-requirements/developer-facing-prd-checklist.md",
+    )
+
+    return [
+        ManagedAuditExtraSpec(
+            capability="shared-artifact:workflow-installed-record",
+            mechanism="Workflow writes .trellis/workflow-installed.json as the install/upgrade/uninstall contract record.",
+            claude_paths=(".trellis/workflow-installed.json",),
+            opencode_paths=(".trellis/workflow-installed.json",),
+            codex_paths=(".trellis/workflow-installed.json",),
+        ),
+        ManagedAuditExtraSpec(
+            capability="shared-doc:execution-cards",
+            mechanism="Workflow deploys execution cards under .trellis/workflow-docs/ and references them from distributed commands/skills.",
+            claude_paths=execution_card_paths,
+            opencode_paths=execution_card_paths,
+            codex_paths=execution_card_paths,
+        ),
+        ManagedAuditExtraSpec(
+            capability="shared-pack:requirements-discovery-foundation-import",
+            mechanism="Workflow auto-imports pack.requirements-discovery-foundation, producing .trellis/library-lock.yaml and foundational spec/checklist assets.",
+            claude_paths=requirements_foundation_paths,
+            opencode_paths=requirements_foundation_paths,
+            codex_paths=requirements_foundation_paths,
+        ),
+        ManagedAuditExtraSpec(
+            capability="shared-doc:agents-nl-routing-block",
+            mechanism="Workflow injects an AGENTS.md natural-language routing block for non-hook command discovery.",
+            claude_paths=("AGENTS.md",),
+            opencode_paths=("AGENTS.md",),
+            codex_paths=("AGENTS.md",),
+            required_substrings=AGENTS_NL_ROUTING_MARKERS,
+        ),
+        ManagedAuditExtraSpec(
+            capability="shared-artifact:todo-reminder-file",
+            mechanism="Workflow creates a root-level todo.txt reminder file and preserves/deletes it through install and uninstall rules.",
+            claude_paths=("todo.txt",),
+            opencode_paths=("todo.txt",),
+            codex_paths=("todo.txt",),
+        ),
+        ManagedAuditExtraSpec(
+            capability="shared-state:backup-original-preservation",
+            mechanism="Workflow preserves replaced baseline assets in .backup-original directories to support uninstall and upgrade-compat restoration.",
+            claude_paths=(
+                ".trellis/.backup-original",
+                ".claude/commands/trellis/.backup-original",
+            ),
+            opencode_paths=(
+                ".trellis/.backup-original",
+                ".opencode/commands/trellis/.backup-original",
+            ),
+            codex_paths=(
+                ".trellis/.backup-original",
+                ".agents/skills/.backup-original",
+                ".codex/skills/.backup-original",
+            ),
+        ),
+    ]
 
 
 def read_project_trellis_version(root: Path) -> str | None:

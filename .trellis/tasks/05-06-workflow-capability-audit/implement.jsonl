@@ -1,0 +1,4 @@
+{"file":".trellis/spec/skills/workflow-capability-audit.md","reason":"Canonical skill contract for version gating, managed/dependent matrix rules, supplemental loop, and fix-lifecycle behavior."}
+{"file":".trellis/spec/scripts/index.md","reason":"Pre-development index for workflow command Python changes and required script conventions."}
+{"file":".trellis/spec/scripts/workflow-installer-upgrade-contracts.md","reason":"Executable contracts for workflow installer/upgrade assets, install record semantics, AGENTS routing, and managed asset boundaries used by audit discovery."}
+{"file":".trellis/spec/docs/index.md","reason":"Documentation-layer rules relevant to workflow product assets and source-vs-target-project boundary wording."}

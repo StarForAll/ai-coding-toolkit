@@ -311,6 +311,25 @@ def _parse_row_capability(row_line: str) -> str:
     return cells[1].lower() if len(cells) > 1 else ""
 
 
+def _parse_matrix_row_line(row_line: str) -> dict[str, str]:
+    cells = [cell.strip() for cell in row_line.strip().strip("|").split("|")]
+    return {
+        "capability_id": cells[0] if len(cells) > 0 else "",
+        "capability": cells[1] if len(cells) > 1 else "",
+        "discovery_source": cells[3] if len(cells) > 3 else "",
+    }
+
+
+def _matrix_insert_sort_key(section_heading: str, row_line: str) -> tuple[int, str, str]:
+    parsed = _parse_matrix_row_line(row_line)
+    discovery_rank = 1 if parsed["discovery_source"] == "supplemental-confirmed" else 0
+    capability = parsed["capability"]
+    if section_heading == "## Workflow-Managed Surface Matrix":
+        capability_family, _, capability_name = capability.partition(":")
+        return (discovery_rank, capability_family.lower(), (capability_name or capability).lower())
+    return (discovery_rank, capability.lower(), parsed["capability_id"].lower())
+
+
 def insert_matrix_row(text: str, section_heading: str, row_line: str, capability_name: str) -> str:
     start, next_section = _find_section_bounds(text, section_heading)
     header_start = text.find("| Capability ID |", start, next_section)
@@ -325,14 +344,8 @@ def insert_matrix_row(text: str, section_heading: str, row_line: str, capability
     data_start += 1
     section_body = text[data_start:next_section]
     lines = [line for line in section_body.splitlines() if line.strip()]
-    insert_index = len(lines)
-    target_name = capability_name.lower()
-    for idx, line in enumerate(lines):
-        existing_name = _parse_row_capability(line)
-        if existing_name and target_name < existing_name:
-            insert_index = idx
-            break
-    lines.insert(insert_index, row_line)
+    lines.append(row_line)
+    lines.sort(key=lambda line: _matrix_insert_sort_key(section_heading, line))
     new_body = "\n".join(lines)
     return text[:data_start] + new_body + text[next_section:]
 
@@ -374,6 +387,36 @@ def append_bullets_to_section(text: str, heading: str, bullets: list[str], place
     else:
         section = section.rstrip() + "\n" + bullet_lines + "\n"
     return text[:start] + section + text[next_section:]
+
+
+def _section_has_recorded_items(text: str, heading: str) -> bool:
+    return "- none yet" not in _read_section(text, heading)
+
+
+def refresh_stop_point_section(report_text: str) -> str:
+    destroyed = re.search(r"^- Destroyed: yes$", report_text, flags=re.MULTILINE) is not None
+    final_confirmed = re.search(r"^- Final destruction confirmed by user: yes$", report_text, flags=re.MULTILINE) is not None
+    confirmed_fix_scope_recorded = _section_has_recorded_items(report_text, "## Confirmed Fix Scope")
+
+    if destroyed and final_confirmed:
+        replacement_lines = [
+            "- Auto-continue allowed: No",
+            "- User confirmation required for:",
+            "  - none pending; A/B fixture destruction already finalized for this audit round.",
+        ]
+    elif confirmed_fix_scope_recorded:
+        replacement_lines = [
+            "- Auto-continue allowed: No",
+            "- User confirmation required for:",
+            "  - whether to finalize A/B fixture destruction after post-fix revalidation is complete",
+        ]
+    else:
+        replacement_lines = [
+            "- Auto-continue allowed: No",
+            "- User confirmation required for:",
+            "  - whether to proceed from audit into confirmed compatibility-fix work",
+        ]
+    return replace_section(report_text, "## Stop Point and Pending Confirmations", replacement_lines)
 
 
 def validate_supplemental_capability(
@@ -457,6 +500,7 @@ def update_fix_lifecycle(
     applied_corrections: list[str],
     post_fix_revalidation: list[str],
     finalize_fixture_destruction: bool,
+    compatible_anchor_value: str | None = None,
 ) -> dict[str, object]:
     report_path = task_dir / "capability-report.md"
     report_text = report_path.read_text(encoding="utf-8")
@@ -478,7 +522,10 @@ def update_fix_lifecycle(
         updated = replace_single_line_value(updated, "Final destruction confirmed by user", "yes")
         shutil.rmtree(a_root, ignore_errors=True)
         shutil.rmtree(b_root, ignore_errors=True)
+    updated = refresh_stop_point_section(updated)
     report_path.write_text(updated, encoding="utf-8")
+    if confirmed_fix_scope and compatible_anchor_value:
+        update_compatible_anchor(compatible_anchor_value)
     return {
         "mode": "fix-lifecycle-updated",
         "report_path": str(report_path),
@@ -789,6 +836,36 @@ def _locate_spec_presence(spec: Any, root: Path) -> list[str]:
     return [path.relative_to(root).as_posix()]
 
 
+def _locate_extra_presence(root: Path, rel_paths: tuple[str, ...]) -> list[str]:
+    return [path for path in rel_paths if _exists(root / path)]
+
+
+def _locate_extra_confirmed_presence(
+    root: Path,
+    rel_paths: tuple[str, ...],
+    required_substrings: tuple[str, ...],
+) -> list[str]:
+    locations = _locate_extra_presence(root, rel_paths)
+    if not required_substrings:
+        return locations
+    confirmed: list[str] = []
+    for rel_path in locations:
+        try:
+            content = (root / rel_path).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if all(marker in content for marker in required_substrings):
+            confirmed.append(rel_path)
+    return confirmed
+
+
+def _managed_sort_key(row: dict[str, Any]) -> tuple[int, str, str]:
+    discovery_rank = 1 if row.get("discovery_source") == "supplemental-confirmed" else 0
+    capability = str(row.get("capability", ""))
+    capability_family, _, capability_name = capability.partition(":")
+    return (discovery_rank, capability_family, capability_name or capability)
+
+
 def build_workflow_managed_rows(a_root: Path, b_root: Path, cli_types: list[str]) -> list[dict[str, Any]]:
     rows: dict[str, dict[str, Any]] = {}
     specs = ASSETS.build_managed_asset_specs(cli_types)
@@ -847,8 +924,49 @@ def build_workflow_managed_rows(a_root: Path, b_root: Path, cli_types: list[str]
                 if row[f"{prefix}_classification"] == "not-applicable":
                     row[f"{prefix}_classification"] = classification
 
+    for extra in ASSETS.build_managed_audit_extra_specs(cli_types):
+        row = {
+            "capability": extra.capability,
+            "mechanism": extra.mechanism,
+            "discovery_source": "ai-discovered",
+            "claude_evidence": "not-applicable",
+            "claude_classification": "not-applicable",
+            "opencode_evidence": "not-applicable",
+            "opencode_classification": "not-applicable",
+            "codex_evidence": "not-applicable",
+            "codex_classification": "not-applicable",
+            "structural_signal": "none detected from A/B surface shape",
+            "adaptation_decision": "No action required in fresh B unless later compatibility analysis changes this.",
+        }
+        per_cli_values = {
+            "claude": extra.claude_paths,
+            "opencode": extra.opencode_paths,
+            "codex": extra.codex_paths,
+        }
+        for prefix, rel_paths in per_cli_values.items():
+            baseline_locations = _locate_extra_confirmed_presence(a_root, rel_paths, extra.required_substrings)
+            expected_locations = _locate_extra_confirmed_presence(b_root, rel_paths, extra.required_substrings)
+            evidence_bits = []
+            if baseline_locations:
+                evidence_bits.append(f"A={','.join(baseline_locations)}")
+            if expected_locations:
+                evidence_bits.append(f"B={','.join(expected_locations)}")
+            if not baseline_locations and not expected_locations:
+                evidence_bits.append("absent in A/B")
+            row[f"{prefix}_evidence"] = _format_evidence(evidence_bits)
+            if expected_locations:
+                classification = "adopted-compatible"
+            elif baseline_locations:
+                classification = "missing-but-valuable"
+                row["structural_signal"] = "managed surface missing from fresh embedded B"
+                row["adaptation_decision"] = "Investigate why the expected workflow-managed asset is absent from fresh B."
+            else:
+                classification = "not-applicable"
+            row[f"{prefix}_classification"] = classification
+        rows[extra.capability] = row
+
     sorted_rows: list[dict[str, Any]] = []
-    for index, (_key, row) in enumerate(sorted(rows.items()), start=1):
+    for index, row in enumerate(sorted(rows.values(), key=_managed_sort_key), start=1):
         row["capability_id"] = f"WM-{index:03d}"
         row["overall_summary"] = _normalize_overall(
             [
@@ -1116,16 +1234,25 @@ def main() -> int:
             return 1
         try:
             task_dir = resolve_audit_task_dir(args.task_dir)
+            compatible_anchor_value: str | None = None
             if args.confirm_fix_scope:
                 current_version, _source = assets.resolve_current_trellis_version()
-                if current_version:
-                    update_compatible_anchor(current_version)
+                if current_version is None:
+                    raise RuntimeError(
+                        "Cannot promote COMPATIBLE_TRELLIS_VERSION during fix lifecycle because trellis -v failed or returned empty output."
+                    )
+                if assets.parse_trellis_version(current_version) is None:
+                    raise RuntimeError(
+                        "Cannot promote COMPATIBLE_TRELLIS_VERSION during fix lifecycle because the current Trellis version is not parseable semver."
+                    )
+                compatible_anchor_value = current_version
             payload = update_fix_lifecycle(
                 task_dir=task_dir,
                 confirmed_fix_scope=args.confirm_fix_scope,
                 applied_corrections=args.record_correction,
                 post_fix_revalidation=args.record_revalidation,
                 finalize_fixture_destruction=args.finalize_fixture_destruction,
+                compatible_anchor_value=compatible_anchor_value,
             )
         except RuntimeError as exc:
             print(str(exc), file=sys.stderr)
@@ -1239,10 +1366,22 @@ def main() -> int:
         return 1
     parent = current_ref if current_ref and not is_audit_task(current_task_json) else None
     task_dir_ref = ""
+    task_dir_preexisted = False
+    existing_task_dir_names = {
+        entry.name
+        for entry in (REPO_ROOT / ".trellis" / "tasks").iterdir()
+        if entry.is_dir() and entry.name != "archive"
+    }
     a_root: Path | None = None
     b_root: Path | None = None
     try:
         task_dir_ref = run_task_create(args.task_title, parent)
+        task_dir_preexisted = Path(task_dir_ref).name in existing_task_dir_names
+        if task_dir_preexisted:
+            raise RuntimeError(
+                f"workflow-capability-audit task directory already exists: {task_dir_ref}. "
+                "Resume or complete the existing audit instead of creating a fresh full audit in the same directory."
+            )
         run_task_start(task_dir_ref)
         task_dir = REPO_ROOT / task_dir_ref
         developer_name = resolve_repo_developer_name()
@@ -1272,7 +1411,7 @@ def main() -> int:
             shutil.rmtree(b_root, ignore_errors=True)
         if parent and task_dir_ref:
             remove_child_link(parent, task_dir_ref)
-        if task_dir_ref:
+        if task_dir_ref and not task_dir_preexisted:
             shutil.rmtree(REPO_ROOT / task_dir_ref, ignore_errors=True)
         restore_current_task_ref(current_ref)
         print(str(exc), file=sys.stderr)
@@ -1284,7 +1423,7 @@ def main() -> int:
             shutil.rmtree(b_root, ignore_errors=True)
         if parent and task_dir_ref:
             remove_child_link(parent, task_dir_ref)
-        if task_dir_ref:
+        if task_dir_ref and not task_dir_preexisted:
             shutil.rmtree(REPO_ROOT / task_dir_ref, ignore_errors=True)
         restore_current_task_ref(current_ref)
         detail = exc.stderr or exc.stdout or str(exc)

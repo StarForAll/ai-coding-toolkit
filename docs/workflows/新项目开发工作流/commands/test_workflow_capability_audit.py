@@ -201,6 +201,37 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self._write_fake_audit_root(b_root, developer_name, include_delivery=True)
         return a_root, b_root
 
+    def _write_initial_managed_matrix_extras(self, root: Path) -> None:
+        (root / ".trellis" / "workflow-installed.json").write_text("{}", encoding="utf-8")
+        (root / ".trellis" / "library-lock.yaml").write_text(
+            "packs:\n  - pack.requirements-discovery-foundation\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "spec" / "universal-domains" / "verification" / "evidence-requirements").mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        (root / ".trellis" / "spec" / "universal-domains" / "verification" / "evidence-requirements" / "overview.md").write_text(
+            "# evidence requirements\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "checklists" / "universal-domains" / "product-and-requirements").mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        (root / ".trellis" / "checklists" / "universal-domains" / "product-and-requirements" / "developer-facing-prd-checklist.md").write_text(
+            "# prd checklist\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "workflow-docs").mkdir(parents=True, exist_ok=True)
+        for card_name in ("需求变更管理执行卡.md", "源码水印与归属证据链执行卡.md"):
+            (root / ".trellis" / "workflow-docs" / card_name).write_text(f"# {card_name}\n", encoding="utf-8")
+        (root / "todo.txt").write_text("workflow todo\n", encoding="utf-8")
+        (root / ".trellis" / ".backup-original").mkdir(parents=True, exist_ok=True)
+        (root / ".claude" / "commands" / "trellis" / ".backup-original").mkdir(parents=True, exist_ok=True)
+        (root / ".opencode" / "commands" / "trellis" / ".backup-original").mkdir(parents=True, exist_ok=True)
+        (root / ".agents" / "skills" / ".backup-original").mkdir(parents=True, exist_ok=True)
+
     def _create_fake_audit_task_dir(self, title: str, parent: str | None) -> str:
         existing = {
             d.name for d in TRELLIS_TASKS_DIR.iterdir() if d.is_dir()
@@ -484,6 +515,70 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self.assertIn(payload["structural_break_judgment"], {"no", "possible"})
         self._track_fixtures_from_payload(payload)
 
+    def test_build_workflow_managed_rows_includes_confirmed_extra_managed_surfaces_in_initial_pass(self) -> None:
+        assets = load_assets_module()
+        module = load_script_module()
+        a_root, b_root = self._make_fake_full_audit_roots("audit-dev")
+        self._write_initial_managed_matrix_extras(b_root)
+        agents_with_routing = "\n".join(
+            [
+                "# fake AGENTS",
+                "<!-- workflow-nl-routing-start -->",
+                "routing",
+                "<!-- workflow-nl-routing-end -->",
+            ]
+        )
+        (b_root / "AGENTS.md").write_text(agents_with_routing, encoding="utf-8")
+
+        rows = module.build_workflow_managed_rows(a_root, b_root, ["claude", "opencode", "codex"])
+        by_capability = {row["capability"]: row for row in rows}
+
+        expected_capabilities = {
+            "shared-doc:execution-cards",
+            "shared-artifact:workflow-installed-record",
+            "shared-pack:requirements-discovery-foundation-import",
+            "shared-doc:agents-nl-routing-block",
+            "shared-artifact:todo-reminder-file",
+            "shared-state:backup-original-preservation",
+        }
+        self.assertTrue(expected_capabilities.issubset(by_capability))
+        for capability in expected_capabilities:
+            self.assertEqual(by_capability[capability]["discovery_source"], "ai-discovered")
+            self.assertEqual(by_capability[capability]["overall_summary"], "adopted-compatible")
+
+    def test_build_workflow_managed_rows_requires_agents_routing_markers_for_routing_capability(self) -> None:
+        module = load_script_module()
+        a_root, b_root = self._make_fake_full_audit_roots("audit-dev")
+        rows = module.build_workflow_managed_rows(a_root, b_root, ["claude", "opencode", "codex"])
+        by_capability = {row["capability"]: row for row in rows}
+        routing_row = by_capability["shared-doc:agents-nl-routing-block"]
+        self.assertEqual(routing_row["overall_summary"], "not-applicable")
+
+    def test_insert_matrix_row_keeps_supplemental_managed_rows_after_initial_ai_discovered_rows(self) -> None:
+        module = load_script_module()
+        report_text = "\n".join(
+            [
+                "## Workflow-Managed Surface Matrix",
+                "",
+                "| Capability ID | Capability | Latest Trellis Mechanism / Benefit | Discovery Source | Claude Evidence | Claude Classification | OpenCode Evidence | OpenCode Classification | Codex Evidence | Codex Classification | Overall Summary | Structural Signal | Adaptation Decision |",
+                "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+                "| WM-001 | alpha | alpha mech | ai-discovered | B=alpha | adopted-compatible | B=alpha | adopted-compatible | B=alpha | adopted-compatible | adopted-compatible | none detected from A/B surface shape | No action required in fresh B unless later compatibility analysis changes this. |",
+                "| WM-002 | shared-doc:workflow.md | workflow mech | ai-discovered | B=.trellis/workflow.md | patched-compatible | B=.trellis/workflow.md | patched-compatible | B=.trellis/workflow.md | patched-compatible | patched-compatible | none detected from A/B surface shape | No action required in fresh B unless later compatibility analysis changes this. |",
+                "",
+                "## Workflow-Dependent Trellis-Native Surface Matrix",
+                "",
+            ]
+        )
+        inserted = module.insert_matrix_row(
+            report_text,
+            "## Workflow-Managed Surface Matrix",
+            "| WM-099 | aaa-supplemental | supplemental mech | supplemental-confirmed | B=aaa | adopted-compatible | B=aaa | adopted-compatible | B=aaa | adopted-compatible | adopted-compatible | none detected from supplemental validation | No action required unless later confirmed compatibility analysis changes this. |",
+            "aaa-supplemental",
+        )
+        managed_section = _extract_section(inserted, "## Workflow-Managed Surface Matrix")
+        matrix_lines = [line for line in managed_section.splitlines() if line.startswith("| WM-")]
+        self.assertEqual([line.split("|")[2].strip() for line in matrix_lines], ["alpha", "shared-doc:workflow.md", "aaa-supplemental"])
+
     def test_full_audit_uses_repo_developer_identity_for_fresh_fixtures(self) -> None:
         assets = load_assets_module()
         self._set_repo_developer("audit-dev")
@@ -514,6 +609,20 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self.assertEqual(current_task_dirs, self._pre_task_dirs)
         self.assertEqual(list(controlled_tmp.iterdir()), [])
 
+    def test_full_audit_rejects_preexisting_top_level_audit_directory_without_deleting_it(self) -> None:
+        assets = load_assets_module()
+        existing_task_dir = self._create_task_dir(
+            "05-06-workflow-capability-audit",
+            "workflow-capability-audit: 新项目开发工作流",
+        )
+        env = {
+            assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
+        }
+        result = self.run_script("--current-cli", "claude", "--json", env=env)
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("task directory already exists", result.stderr)
+        self.assertTrue(existing_task_dir.is_dir())
+
     def test_codex_full_audit_python_probe_failure_reports_runtime_boundary_recheck(self) -> None:
         assets = load_assets_module()
         env = {
@@ -530,9 +639,21 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             None,
         )
         self._clear_active_test_audit_task()
+        existing_names = {
+            d.name for d in TRELLIS_TASKS_DIR.iterdir() if d.is_dir()
+        }
+        collision_name = Path(task_dir_ref).name
+        self.assertIn(collision_name, existing_names)
+        next_index = 1
+        while True:
+            candidate = f"05-06-workflow-capability-audit-{next_index:02d}"
+            if candidate not in existing_names:
+                break
+            next_index += 1
+        self.assertNotEqual(candidate, collision_name)
 
         def fake_run_task_create(title: str, parent: str | None) -> str:
-            return task_dir_ref
+            return f".trellis/tasks/{candidate}"
 
         def fake_run_task_start(task_dir: str) -> None:
             CURRENT_TASK_FILE.write_text(task_dir, encoding="utf-8")
@@ -795,6 +916,33 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self.assertIn("Revalidated capability report after confirmed correction.", report_text)
         self.assertIn("- Destroyed: yes", report_text)
         self.assertIn("- Final destruction confirmed by user: yes", report_text)
+        self.assertIn("none pending; A/B fixture destruction already finalized for this audit round.", report_text)
+        self.assertNotIn("whether to proceed from audit into confirmed compatibility-fix work", report_text)
+
+    def test_fix_lifecycle_confirmed_scope_switches_stop_point_to_fixture_destruction_confirmation(self) -> None:
+        assets = load_assets_module()
+        env = {
+            assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
+        }
+        first = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env)
+        self.assertEqual(first.returncode, 0, msg=first.stdout + first.stderr)
+        payload = json.loads(first.stdout)
+        self._track_fixtures_from_payload(payload)
+        self._release_fake_audit_task_for_followup()
+
+        second = self.run_script(
+            "--json",
+            "--task-dir",
+            payload["task_dir"],
+            "--confirm-fix-scope",
+            "Confirm patch markers and capability matrix updates.",
+            env=env,
+        )
+        self.assertEqual(second.returncode, 0, msg=second.stdout + second.stderr)
+        report_path = REPO_ROOT / json.loads(second.stdout)["report_path"]
+        report_text = report_path.read_text(encoding="utf-8")
+        self.assertIn("whether to finalize A/B fixture destruction after post-fix revalidation is complete", report_text)
+        self.assertNotIn("whether to proceed from audit into confirmed compatibility-fix work", report_text)
 
     def test_fix_lifecycle_rejects_task_dir_outside_audit_tasks(self) -> None:
         outside_dir = Path(tempfile.mkdtemp(prefix="workflow-capability-audit-outside-"))
@@ -861,6 +1009,61 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         report_text = (REPO_ROOT / payload["capability_report"]).read_text(encoding="utf-8")
         self.assertIn("- Destroyed: no", report_text)
         self.assertIn("- Final destruction confirmed by user: no", report_text)
+
+    def test_fix_lifecycle_does_not_promote_anchor_before_validation_succeeds(self) -> None:
+        assets = load_assets_module()
+        env = {
+            assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
+        }
+        first = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env)
+        self.assertEqual(first.returncode, 0, msg=first.stdout + first.stderr)
+        payload = json.loads(first.stdout)
+        self._track_fixtures_from_payload(payload)
+        self._release_fake_audit_task_for_followup()
+
+        before_text = WORKFLOW_ASSETS.read_text(encoding="utf-8")
+        self.assertNotIn('COMPATIBLE_TRELLIS_VERSION = "9.9.9"', before_text)
+
+        second = self.run_script(
+            "--json",
+            "--task-dir",
+            payload["task_dir"],
+            "--confirm-fix-scope",
+            "Confirm patch markers and capability matrix updates.",
+            "--finalize-fixture-destruction",
+            env=env,
+        )
+        self.assertNotEqual(second.returncode, 0, msg=second.stdout + second.stderr)
+        after_text = WORKFLOW_ASSETS.read_text(encoding="utf-8")
+        self.assertEqual(after_text, before_text)
+
+    def test_fix_lifecycle_confirm_fix_scope_requires_parseable_current_version_for_anchor_promotion(self) -> None:
+        assets = load_assets_module()
+        env = {
+            assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
+        }
+        first = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env)
+        self.assertEqual(first.returncode, 0, msg=first.stdout + first.stderr)
+        payload = json.loads(first.stdout)
+        self._track_fixtures_from_payload(payload)
+        self._release_fake_audit_task_for_followup()
+
+        before_text = WORKFLOW_ASSETS.read_text(encoding="utf-8")
+        bad_env = {
+            assets.CURRENT_TRELLIS_VERSION_ENV: "not-a-version",
+        }
+        second = self.run_script(
+            "--json",
+            "--task-dir",
+            payload["task_dir"],
+            "--confirm-fix-scope",
+            "Confirm patch markers and capability matrix updates.",
+            env=bad_env,
+        )
+        self.assertNotEqual(second.returncode, 0, msg=second.stdout + second.stderr)
+        self.assertIn("not parseable semver", second.stderr)
+        after_text = WORKFLOW_ASSETS.read_text(encoding="utf-8")
+        self.assertEqual(after_text, before_text)
 
     def test_supplemental_validation_reports_missing_section_heading_cleanly(self) -> None:
         assets = load_assets_module()
