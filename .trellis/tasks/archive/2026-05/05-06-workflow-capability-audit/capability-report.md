@@ -95,10 +95,10 @@
 ## A/B Fixture Status
 - A Root: /tmp/workflow-capability-audit-a-ti515l4j
 - B Root: /tmp/workflow-capability-audit-b-h_7790w3
-- Destroyed: no
-- Final destruction confirmed by user: no
+- Destroyed: yes
+- Final destruction confirmed by user: yes
 
 ## Stop Point and Pending Confirmations
 - Auto-continue allowed: No
 - User confirmation required for:
-  - whether to finalize A/B fixture destruction after post-fix revalidation is complete
+  - none pending; A/B fixture destruction already finalized for this audit round.
