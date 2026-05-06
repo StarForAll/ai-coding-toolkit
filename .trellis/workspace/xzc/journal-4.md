@@ -998,3 +998,36 @@ Analyzed workflow-audit skill usability, found P1 brainstorm reference name mism
 ### Next Steps
 
 - None - task complete
+
+
+## Session 157: Enhance trellis-research MCP search capability
+
+**Date**: 2026-05-06
+**Task**: Enhance trellis-research MCP search capability
+**Branch**: `main`
+
+### Summary
+
+为 trellis-research agent 增补 P0-P3 共 11 个 MCP 搜索工具（ace/Context7/deepwiki/grok-search/exa_fetch/exa_advanced），更新 Claude/Qoder/OpenCode 三平台部署文件及 spec/index.md 能力矩阵与路由规则，与项目 MCP 路由矩阵对齐（实时信息优先 grok-search）。Codex/Kiro 不变。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0c97453` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
