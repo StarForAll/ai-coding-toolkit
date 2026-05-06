@@ -864,3 +864,36 @@ Hardened workflow-capability-audit CLI validation and rollback behavior, aligned
 ### Next Steps
 
 - None - task complete
+
+
+## Session 153: Trellis upgrade reconciliation: fix phase drift, script contract, and description conflicts
+
+**Date**: 2026-05-06
+**Task**: Trellis upgrade reconciliation: fix phase drift, script contract, and description conflicts
+**Branch**: `main`
+
+### Summary
+
+Fixed phase numbering drift (1.3/1.4→1.2/1.3, 3.4→3.1), restored brainstorm flow (Phase 1.2/1.3 not skipped), fixed finish-work contract (record-session-helper.py not add_session.py, removed 'remind to commit' from description, restored TRELLIS_AUTO_ESCALATE_COMMAND guidance), adopted legitimate upgrades (hook disable guards, codex multi_agent_v2, dispatch prompt fallback), updated template-hashes.json baseline.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `af217bb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
