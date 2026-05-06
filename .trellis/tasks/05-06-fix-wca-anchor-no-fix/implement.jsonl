@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/skills/workflow-capability-audit.md", "reason": "Anchor write-back rules (Final Promotion Rule) define the expected behavior: anchor must update even when no fix-scope items exist"}
+{"file": ".claude/skills/workflow-capability-audit/SKILL.md", "reason": "Entry artifact references anchor update rules; must stay aligned after fix"}

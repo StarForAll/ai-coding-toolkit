@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/skills/workflow-capability-audit.md", "reason": "Behavioral source of truth: defines carrier list, anchor write-back rules, classification model, and sync rules"}
+{"file": ".claude/skills/workflow-capability-audit/SKILL.md", "reason": "Entry artifact: carrier names in step A description must match script seed list after update"}
