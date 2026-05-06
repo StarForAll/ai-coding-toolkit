@@ -350,12 +350,19 @@ Trellis-native capabilities that the workflow depends on, inherits, disables, or
 First-version dependent-surface coverage includes these known Trellis-native carriers:
 
 - project-rules-and-routing-carrier (AGENTS.md)
-- claude-hooks-and-settings-carrier (.claude/settings.json, .claude/hooks)
+- claude-hooks-and-settings-carrier (.claude/settings.json, .claude/hooks, .claude/hooks/inject-workflow-state.py, .claude/hooks/session-start.py, .claude/hooks/inject-subagent-context.py)
 - opencode-plugin-and-instructions-carrier (.opencode/plugins, .opencode/package.json)
-- codex-hooks-and-config-carrier (.codex/hooks.json, .codex/config.toml)
+- codex-hooks-and-config-carrier (.codex/hooks.json, .codex/config.toml, .codex/hooks/inject-workflow-state.py, .codex/hooks/session-start.py)
 - implementation-agent-carrier (per-CLI agent directories)
 - trellis-runtime-workflow-guide (.trellis/workflow.md, .trellis/scripts/task.py)
 - shared-skills-deployment-carrier (.agents/skills/ — shared deployment layer for OpenCode and Codex skills)
+- claude-native-skills-carrier (.claude/skills/ — Claude-native skills carrier)
+- opencode-native-skills-carrier (.opencode/skills/ — OpenCode-native skills carrier)
+- opencode-lib-carrier (.opencode/lib/ — OpenCode helper libraries)
+- trellis-hooks-carrier (.trellis/hooks/ — Trellis-side hooks directory)
+- codex-secondary-skills-carrier (.codex/skills/ — Codex-local/secondary skills carrier; not a replacement for shared-skills-deployment-carrier)
+
+shared-skills-deployment-carrier covers only the shared workflow skills primary carrier .agents/skills/; codex-secondary-skills-carrier covers the Codex-local/secondary skills surface .codex/skills/; the two must not replace or merge into one another.
 
 These two surfaces must appear as distinct sections in `capability-report.md`.
 

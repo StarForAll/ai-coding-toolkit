@@ -129,11 +129,23 @@ docs/workflows/新项目开发工作流/commands/workflow-capability-audit.py \
 
 ## 6. Post-Audit Anchor Write-Back
 
-After the user confirms the audit by running `--confirm-fix-scope`, the script
-automatically writes the current `trellis -v` value back into
-`COMPATIBLE_TRELLIS_VERSION` in `workflow_assets.py`. The write-back does NOT
-happen during the initial full audit — it happens only when the user explicitly
-confirms the audit by entering the fix lifecycle.
+After a confirmed successful audit, the script writes the current `trellis -v`
+value back into `COMPATIBLE_TRELLIS_VERSION` in `workflow_assets.py`. This
+write-back is a mandatory post-audit step, not optional.
+
+Anchor promotion is gated by two conditions that must both be satisfied:
+
+1. `--finalize-fixture-destruction` is passed (outer gate)
+2. `capability-report.md` has recorded items under `## Post-Fix Revalidation`
+   (inner gate — revalidation may have been recorded in a prior call)
+
+The write-back does NOT happen:
+
+- during the initial full audit
+- when only `--confirm-fix-scope` or `--record-correction` or
+  `--record-revalidation` is passed without `--finalize-fixture-destruction`
+- when `--finalize-fixture-destruction` is passed but the report has no
+  recorded post-fix revalidation items
 
 Before that write-back, `--task-dir` must first validate as a real
 `workflow-capability-audit` task. Failed or mistyped fix-lifecycle requests
@@ -143,10 +155,8 @@ The write-back:
 
 - uses the exact literal string from `trellis -v`, preserving any prerelease suffix
 - does NOT round up to a stable version
-- applies even when the workflow was already compatible as-is
-
-No separate flag is required; the anchor promotion is a side effect of the first
-`--confirm-fix-scope` invocation after a successful full audit.
+- applies even when the workflow was already compatible as-is or no workflow
+  source edits were needed beyond the initialization exception
 
 ## 7. Boundaries
 
@@ -157,6 +167,6 @@ No separate flag is required; the anchor promotion is a side effect of the first
 - equal version stops
 - older version blocks
 - supplemental validation reuses the same A/B and the same `capability-report.md`
-- `COMPATIBLE_TRELLIS_VERSION` is promoted to the exact `trellis -v` value when the user confirms the audit via `--confirm-fix-scope`
+- `COMPATIBLE_TRELLIS_VERSION` is promoted to the exact `trellis -v` value when `--finalize-fixture-destruction` is passed and the report has recorded post-fix revalidation items
 - Codex-local `trellis init` failures must be rechecked outside Codex before they
   are treated as confirmed machine-environment failures

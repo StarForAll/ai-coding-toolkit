@@ -171,6 +171,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         (root / ".trellis" / ".version").write_text("9.9.9\n", encoding="utf-8")
         (root / ".trellis" / "workflow.md").write_text("# fake workflow\n", encoding="utf-8")
         (root / ".trellis" / "scripts" / "task.py").write_text("# fake task helper\n", encoding="utf-8")
+        (root / ".trellis" / "hooks").mkdir(parents=True, exist_ok=True)
         (root / "AGENTS.md").write_text("# fake AGENTS\n", encoding="utf-8")
 
         (root / ".claude" / "commands" / "trellis").mkdir(parents=True, exist_ok=True)
@@ -182,14 +183,23 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         (root / ".claude" / "agents").mkdir(parents=True, exist_ok=True)
         (root / ".claude" / "settings.json").write_text("{}", encoding="utf-8")
         (root / ".claude" / "hooks").mkdir(parents=True, exist_ok=True)
+        (root / ".claude" / "hooks" / "inject-workflow-state.py").write_text("# hook\n", encoding="utf-8")
+        (root / ".claude" / "hooks" / "session-start.py").write_text("# hook\n", encoding="utf-8")
+        (root / ".claude" / "hooks" / "inject-subagent-context.py").write_text("# hook\n", encoding="utf-8")
+        (root / ".claude" / "skills").mkdir(parents=True, exist_ok=True)
 
         (root / ".opencode" / "agents").mkdir(parents=True, exist_ok=True)
         (root / ".opencode" / "plugins").mkdir(parents=True, exist_ok=True)
         (root / ".opencode" / "package.json").write_text("{}", encoding="utf-8")
+        (root / ".opencode" / "skills").mkdir(parents=True, exist_ok=True)
+        (root / ".opencode" / "lib").mkdir(parents=True, exist_ok=True)
 
         (root / ".codex" / "agents").mkdir(parents=True, exist_ok=True)
         (root / ".codex" / "hooks.json").write_text("{}", encoding="utf-8")
         (root / ".codex" / "config.toml").write_text("", encoding="utf-8")
+        (root / ".codex" / "hooks").mkdir(parents=True, exist_ok=True)
+        (root / ".codex" / "hooks" / "inject-workflow-state.py").write_text("# hook\n", encoding="utf-8")
+        (root / ".codex" / "hooks" / "session-start.py").write_text("# hook\n", encoding="utf-8")
 
         (root / ".agents" / "skills").mkdir(parents=True, exist_ok=True)
 
@@ -327,7 +337,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
                 "claude_classification": "not-applicable",
                 "opencode_evidence": "not-applicable",
                 "opencode_classification": "not-applicable",
-                "codex_evidence": "A=.codex/hooks.json,.codex/config.toml; B=.codex/hooks.json,.codex/config.toml",
+                "codex_evidence": "A=.codex/hooks.json,.codex/config.toml,.codex/hooks/inject-workflow-state.py,.codex/hooks/session-start.py; B=.codex/hooks.json,.codex/config.toml,.codex/hooks/inject-workflow-state.py,.codex/hooks/session-start.py",
                 "codex_classification": "adopted-compatible",
                 "overall_summary": "adopted-compatible",
                 "structural_signal": "none detected from A/B dependency surface shape",
@@ -375,6 +385,81 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
                 "codex_evidence": "A=.agents/skills; B=.agents/skills",
                 "codex_classification": "adopted-compatible",
                 "overall_summary": "adopted-compatible",
+                "structural_signal": "none detected from A/B dependency surface shape",
+                "adaptation_decision": "No action required in fresh B unless later compatibility analysis changes this.",
+            },
+            {
+                "capability_id": "TN-008",
+                "capability": "claude-native-skills-carrier",
+                "mechanism": "Workflow depends on .claude/skills/ as the Claude-native skills carrier for repo-local maintainer skills.",
+                "discovery_source": "ai-discovered",
+                "claude_evidence": "A=.claude/skills; B=.claude/skills",
+                "claude_classification": "adopted-compatible",
+                "opencode_evidence": "not-applicable",
+                "opencode_classification": "not-applicable",
+                "codex_evidence": "not-applicable",
+                "codex_classification": "not-applicable",
+                "overall_summary": "adopted-compatible",
+                "structural_signal": "none detected from A/B dependency surface shape",
+                "adaptation_decision": "No action required in fresh B unless later compatibility analysis changes this.",
+            },
+            {
+                "capability_id": "TN-009",
+                "capability": "opencode-native-skills-carrier",
+                "mechanism": "Workflow depends on .opencode/skills/ as the OpenCode-native skills carrier for repo-local skills.",
+                "discovery_source": "ai-discovered",
+                "claude_evidence": "not-applicable",
+                "claude_classification": "not-applicable",
+                "opencode_evidence": "A=.opencode/skills; B=.opencode/skills",
+                "opencode_classification": "adopted-compatible",
+                "codex_evidence": "not-applicable",
+                "codex_classification": "not-applicable",
+                "overall_summary": "adopted-compatible",
+                "structural_signal": "none detected from A/B dependency surface shape",
+                "adaptation_decision": "No action required in fresh B unless later compatibility analysis changes this.",
+            },
+            {
+                "capability_id": "TN-010",
+                "capability": "opencode-lib-carrier",
+                "mechanism": "Workflow depends on .opencode/lib/ as the OpenCode helper libraries carrier (e.g., trellis-context.js, session-utils.js).",
+                "discovery_source": "ai-discovered",
+                "claude_evidence": "not-applicable",
+                "claude_classification": "not-applicable",
+                "opencode_evidence": "A=.opencode/lib; B=.opencode/lib",
+                "opencode_classification": "adopted-compatible",
+                "codex_evidence": "not-applicable",
+                "codex_classification": "not-applicable",
+                "overall_summary": "adopted-compatible",
+                "structural_signal": "none detected from A/B dependency surface shape",
+                "adaptation_decision": "No action required in fresh B unless later compatibility analysis changes this.",
+            },
+            {
+                "capability_id": "TN-011",
+                "capability": "trellis-hooks-carrier",
+                "mechanism": "Workflow depends on .trellis/hooks/ as the Trellis-side hooks directory for workflow lifecycle hooks.",
+                "discovery_source": "ai-discovered",
+                "claude_evidence": "A=.trellis/hooks; B=.trellis/hooks",
+                "claude_classification": "adopted-compatible",
+                "opencode_evidence": "A=.trellis/hooks; B=.trellis/hooks",
+                "opencode_classification": "adopted-compatible",
+                "codex_evidence": "A=.trellis/hooks; B=.trellis/hooks",
+                "codex_classification": "adopted-compatible",
+                "overall_summary": "adopted-compatible",
+                "structural_signal": "none detected from A/B dependency surface shape",
+                "adaptation_decision": "No action required in fresh B unless later compatibility analysis changes this.",
+            },
+            {
+                "capability_id": "TN-012",
+                "capability": "codex-secondary-skills-carrier",
+                "mechanism": "Workflow must account for .codex/skills/ as a Codex-local/secondary skills carrier that may appear after trellis init, may hold Codex-only or project-local skills, and can affect duplicate shared-skill cleanup plus Codex-side runtime behavior.",
+                "discovery_source": "ai-discovered",
+                "claude_evidence": "not-applicable",
+                "claude_classification": "not-applicable",
+                "opencode_evidence": "not-applicable",
+                "opencode_classification": "not-applicable",
+                "codex_evidence": "not-applicable",
+                "codex_classification": "not-applicable",
+                "overall_summary": "not-applicable",
                 "structural_signal": "none detected from A/B dependency surface shape",
                 "adaptation_decision": "No action required in fresh B unless later compatibility analysis changes this.",
             },
@@ -920,6 +1005,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self.assertNotIn("whether to proceed from audit into confirmed compatibility-fix work", report_text)
 
     def test_fix_lifecycle_confirmed_scope_switches_stop_point_to_fixture_destruction_confirmation(self) -> None:
+        """Confirming fix scope alone must NOT promote the anchor — only post-fix revalidation or finalization allows that."""
         assets = load_assets_module()
         env = {
             assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
@@ -929,6 +1015,9 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         payload = json.loads(first.stdout)
         self._track_fixtures_from_payload(payload)
         self._release_fake_audit_task_for_followup()
+
+        before_text = WORKFLOW_ASSETS.read_text(encoding="utf-8")
+        self.assertNotIn('COMPATIBLE_TRELLIS_VERSION = "9.9.9"', before_text)
 
         second = self.run_script(
             "--json",
@@ -943,6 +1032,114 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         report_text = report_path.read_text(encoding="utf-8")
         self.assertIn("whether to finalize A/B fixture destruction after post-fix revalidation is complete", report_text)
         self.assertNotIn("whether to proceed from audit into confirmed compatibility-fix work", report_text)
+
+        after_text = WORKFLOW_ASSETS.read_text(encoding="utf-8")
+        self.assertEqual(after_text, before_text, "Anchor must NOT be promoted when only confirm-fix-scope is recorded")
+
+    def test_fix_lifecycle_promotes_anchor_when_no_fix_scope_but_lifecycle_entered(self) -> None:
+        """Anchor must promote when post-fix revalidation + finalize are both present, even without --confirm-fix-scope."""
+        assets = load_assets_module()
+        env = {
+            assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
+        }
+        first = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env)
+        self.assertEqual(first.returncode, 0, msg=first.stdout + first.stderr)
+        payload = json.loads(first.stdout)
+        self._track_fixtures_from_payload(payload)
+        self._release_fake_audit_task_for_followup()
+
+        before_text = WORKFLOW_ASSETS.read_text(encoding="utf-8")
+        self.assertNotIn('COMPATIBLE_TRELLIS_VERSION = "9.9.9"', before_text)
+
+        second = self.run_script(
+            "--json",
+            "--task-dir",
+            payload["task_dir"],
+            "--record-correction",
+            "No source edits needed; workflow already compatible as-is.",
+            "--record-revalidation",
+            "Revalidated: workflow remains fully compatible after upgrade.",
+            "--finalize-fixture-destruction",
+            env=env,
+        )
+        self.assertEqual(second.returncode, 0, msg=second.stdout + second.stderr)
+        after_text = WORKFLOW_ASSETS.read_text(encoding="utf-8")
+        self.assertIn('COMPATIBLE_TRELLIS_VERSION = "9.9.9"', after_text)
+
+    def test_fix_lifecycle_does_not_promote_anchor_on_revalidation_without_finalize(self) -> None:
+        """Post-fix revalidation alone must NOT promote anchor — finalization is also required."""
+        assets = load_assets_module()
+        env = {
+            assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
+        }
+        first = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env)
+        self.assertEqual(first.returncode, 0, msg=first.stdout + first.stderr)
+        payload = json.loads(first.stdout)
+        self._track_fixtures_from_payload(payload)
+        self._release_fake_audit_task_for_followup()
+
+        before_text = WORKFLOW_ASSETS.read_text(encoding="utf-8")
+        self.assertNotIn('COMPATIBLE_TRELLIS_VERSION = "9.9.9"', before_text)
+
+        second = self.run_script(
+            "--json",
+            "--task-dir",
+            payload["task_dir"],
+            "--confirm-fix-scope",
+            "Confirm patch markers and capability matrix updates.",
+            "--record-correction",
+            "Updated workflow source for Trellis version-upgrade compatibility.",
+            "--record-revalidation",
+            "Revalidated capability report after confirmed correction.",
+            env=env,
+        )
+        self.assertEqual(second.returncode, 0, msg=second.stdout + second.stderr)
+        after_text = WORKFLOW_ASSETS.read_text(encoding="utf-8")
+        self.assertEqual(after_text, before_text, "Anchor must NOT promote when revalidation is recorded but fixture destruction is not finalized")
+
+    def test_fix_lifecycle_promotes_anchor_when_finalize_and_revalidation_recorded(self) -> None:
+        """Anchor must promote when finalize is passed and revalidation was recorded in a prior call."""
+        assets = load_assets_module()
+        env = {
+            assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
+        }
+        first = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env)
+        self.assertEqual(first.returncode, 0, msg=first.stdout + first.stderr)
+        payload = json.loads(first.stdout)
+        self._track_fixtures_from_payload(payload)
+        self._release_fake_audit_task_for_followup()
+
+        before_text = WORKFLOW_ASSETS.read_text(encoding="utf-8")
+
+        # Record corrections + revalidation first
+        second = self.run_script(
+            "--json",
+            "--task-dir",
+            payload["task_dir"],
+            "--confirm-fix-scope",
+            "Confirm patch markers.",
+            "--record-correction",
+            "Updated workflow source.",
+            "--record-revalidation",
+            "Revalidated.",
+            env=env,
+        )
+        self.assertEqual(second.returncode, 0, msg=second.stdout + second.stderr)
+        self._release_fake_audit_task_for_followup()
+
+        # Finalize — revalidation was recorded in a prior call, so the report has revalidation items
+        # This MUST promote anchor because the report already has post-fix revalidation recorded
+        third = self.run_script(
+            "--json",
+            "--task-dir",
+            payload["task_dir"],
+            "--finalize-fixture-destruction",
+            env=env,
+        )
+        self.assertEqual(third.returncode, 0, msg=third.stdout + third.stderr)
+        after_text = WORKFLOW_ASSETS.read_text(encoding="utf-8")
+        self.assertIn('COMPATIBLE_TRELLIS_VERSION = "9.9.9"', after_text,
+                       "Anchor must promote when finalizing and report already has revalidation recorded")
 
     def test_fix_lifecycle_rejects_task_dir_outside_audit_tasks(self) -> None:
         outside_dir = Path(tempfile.mkdtemp(prefix="workflow-capability-audit-outside-"))
@@ -1011,6 +1208,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self.assertIn("- Final destruction confirmed by user: no", report_text)
 
     def test_fix_lifecycle_does_not_promote_anchor_before_validation_succeeds(self) -> None:
+        """confirm-fix-scope + finalize (without revalidation) must fail AND not promote anchor."""
         assets = load_assets_module()
         env = {
             assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
@@ -1123,8 +1321,8 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self._track_fixtures_from_payload(payload)
 
-        # Assert dependent_rows >= 7 (was 6 before the shared-skills carrier was added)
-        self.assertGreaterEqual(payload["dependent_rows"], 7)
+        # Assert dependent_rows >= 12 (7 original + 4 new carriers + codex-secondary-skills-carrier)
+        self.assertGreaterEqual(payload["dependent_rows"], 12)
 
         # Read the generated capability-report.md
         report_path = REPO_ROOT / payload["capability_report"]
@@ -1185,6 +1383,84 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         for heading in expected_headings:
             self.assertIn(heading, template_text)
             self.assertIn(heading, output)
+
+    def test_new_carriers_discovered_by_real_directory_scan(self) -> None:
+        """Integration test: TN-008~TN-011 carriers must appear when using real build_workflow_dependent_rows (not mocked)."""
+        module = load_script_module()
+        a_root, b_root = self._make_fake_full_audit_roots("carrier-dev")
+
+        rows = module.build_workflow_dependent_rows(a_root, b_root)
+        by_capability = {row["capability"]: row for row in rows}
+
+        new_carriers = [
+            ("claude-native-skills-carrier", "claude", "adopted-compatible"),
+            ("opencode-native-skills-carrier", "opencode", "adopted-compatible"),
+            ("opencode-lib-carrier", "opencode", "adopted-compatible"),
+            ("trellis-hooks-carrier", "claude", "adopted-compatible"),
+        ]
+        for carrier_name, primary_cli, expected_classification in new_carriers:
+            self.assertIn(carrier_name, by_capability, f"{carrier_name} must appear in dependent rows")
+            row = by_capability[carrier_name]
+            self.assertEqual(row[f"{primary_cli}_classification"], expected_classification,
+                             f"{carrier_name} {primary_cli} classification must be {expected_classification}")
+
+        # Verify codex-hooks-and-config-carrier now includes .codex/hooks/ scripts
+        codex_carrier = by_capability.get("codex-hooks-and-config-carrier")
+        self.assertIsNotNone(codex_carrier)
+        self.assertIn(".codex/hooks/inject-workflow-state.py", codex_carrier["codex_evidence"])
+
+        # Verify codex-secondary-skills-carrier: not-applicable when .codex/skills/ does not exist
+        codex_sec = by_capability.get("codex-secondary-skills-carrier")
+        self.assertIsNotNone(codex_sec, "codex-secondary-skills-carrier must appear in dependent rows")
+        self.assertEqual(codex_sec["codex_classification"], "not-applicable",
+                         "codex-secondary-skills-carrier must be not-applicable when .codex/skills/ does not exist in A/B")
+        self.assertEqual(codex_sec["claude_classification"], "not-applicable")
+        self.assertEqual(codex_sec["opencode_classification"], "not-applicable")
+
+        # Verify shared-skills-deployment-carrier still points to .agents/skills/ only
+        shared_row = by_capability.get("shared-skills-deployment-carrier")
+        self.assertIsNotNone(shared_row)
+        self.assertEqual(shared_row["codex_evidence"], "A=.agents/skills; B=.agents/skills")
+
+    def test_codex_secondary_skills_carrier_is_adopted_compatible_when_present(self) -> None:
+        """codex-secondary-skills-carrier must be adopted-compatible when .codex/skills/ exists in A/B."""
+        module = load_script_module()
+        a_root, b_root = self._make_fake_full_audit_roots("carrier-dev")
+
+        # Create .codex/skills/ in both A and B
+        (a_root / ".codex" / "skills").mkdir(parents=True, exist_ok=True)
+        (b_root / ".codex" / "skills").mkdir(parents=True, exist_ok=True)
+
+        rows = module.build_workflow_dependent_rows(a_root, b_root)
+        by_capability = {row["capability"]: row for row in rows}
+
+        codex_sec = by_capability.get("codex-secondary-skills-carrier")
+        self.assertIsNotNone(codex_sec)
+        self.assertEqual(codex_sec["codex_classification"], "adopted-compatible")
+        self.assertIn(".codex/skills", codex_sec["codex_evidence"])
+
+        # shared-skills-deployment-carrier must NOT include .codex/skills/
+        shared_row = by_capability.get("shared-skills-deployment-carrier")
+        self.assertIsNotNone(shared_row)
+        self.assertNotIn(".codex/skills", shared_row["codex_evidence"])
+        self.assertEqual(shared_row["codex_classification"], "adopted-compatible")
+
+    def test_codex_secondary_skills_carrier_is_missing_but_valuable_when_only_in_A(self) -> None:
+        """codex-secondary-skills-carrier must be missing-but-valuable for Codex when .codex/skills/ exists in A but not B."""
+        module = load_script_module()
+        a_root, b_root = self._make_fake_full_audit_roots("carrier-a-only")
+
+        # Create .codex/skills/ in A only
+        (a_root / ".codex" / "skills").mkdir(parents=True, exist_ok=True)
+
+        rows = module.build_workflow_dependent_rows(a_root, b_root)
+        by_capability = {row["capability"]: row for row in rows}
+
+        codex_sec = by_capability.get("codex-secondary-skills-carrier")
+        self.assertIsNotNone(codex_sec)
+        self.assertEqual(codex_sec["codex_classification"], "missing-but-valuable",
+                         "codex-secondary-skills-carrier must be missing-but-valuable when .codex/skills/ exists in A but not B")
+        self.assertEqual(codex_sec["overall_summary"], "missing-but-valuable")
 
     def test_full_audit_failure_removes_child_link_from_parent_task(self) -> None:
         """If child audit setup fails after task creation, parent.children must not keep a stale child reference."""

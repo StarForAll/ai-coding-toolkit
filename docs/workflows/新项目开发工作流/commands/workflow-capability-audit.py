@@ -501,6 +501,7 @@ def update_fix_lifecycle(
     post_fix_revalidation: list[str],
     finalize_fixture_destruction: bool,
     compatible_anchor_value: str | None = None,
+    allow_anchor_promotion: bool = False,
 ) -> dict[str, object]:
     report_path = task_dir / "capability-report.md"
     report_text = report_path.read_text(encoding="utf-8")
@@ -524,8 +525,10 @@ def update_fix_lifecycle(
         shutil.rmtree(b_root, ignore_errors=True)
     updated = refresh_stop_point_section(updated)
     report_path.write_text(updated, encoding="utf-8")
-    if confirmed_fix_scope and compatible_anchor_value:
-        update_compatible_anchor(compatible_anchor_value)
+    if compatible_anchor_value and allow_anchor_promotion:
+        report_after = report_path.read_text(encoding="utf-8")
+        if _section_has_recorded_items(report_after, "## Post-Fix Revalidation"):
+            update_compatible_anchor(compatible_anchor_value)
     return {
         "mode": "fix-lifecycle-updated",
         "report_path": str(report_path),
@@ -991,7 +994,7 @@ def build_workflow_dependent_rows(a_root: Path, b_root: Path) -> list[dict[str, 
         {
             "capability": "claude-hooks-and-settings-carrier",
             "mechanism": "Workflow may rely on Claude runtime hooks/settings that are Trellis-native or manually maintained rather than installer-managed.",
-            "claude": [".claude/settings.json", ".claude/hooks"],
+            "claude": [".claude/settings.json", ".claude/hooks", ".claude/hooks/inject-workflow-state.py", ".claude/hooks/session-start.py", ".claude/hooks/inject-subagent-context.py"],
             "opencode": [],
             "codex": [],
         },
@@ -1007,7 +1010,7 @@ def build_workflow_dependent_rows(a_root: Path, b_root: Path) -> list[dict[str, 
             "mechanism": "Workflow may rely on Codex hook/config surfaces outside installer-managed shared skills.",
             "claude": [],
             "opencode": [],
-            "codex": [".codex/hooks.json", ".codex/config.toml"],
+            "codex": [".codex/hooks.json", ".codex/config.toml", ".codex/hooks/inject-workflow-state.py", ".codex/hooks/session-start.py"],
         },
         {
             "capability": "implementation-agent-carrier",
@@ -1029,6 +1032,41 @@ def build_workflow_dependent_rows(a_root: Path, b_root: Path) -> list[dict[str, 
             "claude": [],
             "opencode": [".agents/skills"],
             "codex": [".agents/skills"],
+        },
+        {
+            "capability": "claude-native-skills-carrier",
+            "mechanism": "Workflow depends on .claude/skills/ as the Claude-native skills carrier for repo-local maintainer skills.",
+            "claude": [".claude/skills"],
+            "opencode": [],
+            "codex": [],
+        },
+        {
+            "capability": "opencode-native-skills-carrier",
+            "mechanism": "Workflow depends on .opencode/skills/ as the OpenCode-native skills carrier for repo-local skills.",
+            "claude": [],
+            "opencode": [".opencode/skills"],
+            "codex": [],
+        },
+        {
+            "capability": "opencode-lib-carrier",
+            "mechanism": "Workflow depends on .opencode/lib/ as the OpenCode helper libraries carrier (e.g., trellis-context.js, session-utils.js).",
+            "claude": [],
+            "opencode": [".opencode/lib"],
+            "codex": [],
+        },
+        {
+            "capability": "trellis-hooks-carrier",
+            "mechanism": "Workflow depends on .trellis/hooks/ as the Trellis-side hooks directory for workflow lifecycle hooks.",
+            "claude": [".trellis/hooks"],
+            "opencode": [".trellis/hooks"],
+            "codex": [".trellis/hooks"],
+        },
+        {
+            "capability": "codex-secondary-skills-carrier",
+            "mechanism": "Workflow must account for .codex/skills/ as a Codex-local/secondary skills carrier that may appear after trellis init, may hold Codex-only or project-local skills, and can affect duplicate shared-skill cleanup plus Codex-side runtime behavior.",
+            "claude": [],
+            "opencode": [],
+            "codex": [".codex/skills"],
         },
     ]
 
@@ -1235,17 +1273,17 @@ def main() -> int:
         try:
             task_dir = resolve_audit_task_dir(args.task_dir)
             compatible_anchor_value: str | None = None
-            if args.confirm_fix_scope:
-                current_version, _source = assets.resolve_current_trellis_version()
-                if current_version is None:
-                    raise RuntimeError(
-                        "Cannot promote COMPATIBLE_TRELLIS_VERSION during fix lifecycle because trellis -v failed or returned empty output."
-                    )
-                if assets.parse_trellis_version(current_version) is None:
-                    raise RuntimeError(
-                        "Cannot promote COMPATIBLE_TRELLIS_VERSION during fix lifecycle because the current Trellis version is not parseable semver."
-                    )
-                compatible_anchor_value = current_version
+            current_version, _source = assets.resolve_current_trellis_version()
+            if current_version is None:
+                raise RuntimeError(
+                    "Cannot promote COMPATIBLE_TRELLIS_VERSION during fix lifecycle because trellis -v failed or returned empty output."
+                )
+            if assets.parse_trellis_version(current_version) is None:
+                raise RuntimeError(
+                    "Cannot promote COMPATIBLE_TRELLIS_VERSION during fix lifecycle because the current Trellis version is not parseable semver."
+                )
+            compatible_anchor_value = current_version
+            allow_anchor_promotion = args.finalize_fixture_destruction
             payload = update_fix_lifecycle(
                 task_dir=task_dir,
                 confirmed_fix_scope=args.confirm_fix_scope,
@@ -1253,6 +1291,7 @@ def main() -> int:
                 post_fix_revalidation=args.record_revalidation,
                 finalize_fixture_destruction=args.finalize_fixture_destruction,
                 compatible_anchor_value=compatible_anchor_value,
+                allow_anchor_promotion=allow_anchor_promotion,
             )
         except RuntimeError as exc:
             print(str(exc), file=sys.stderr)
