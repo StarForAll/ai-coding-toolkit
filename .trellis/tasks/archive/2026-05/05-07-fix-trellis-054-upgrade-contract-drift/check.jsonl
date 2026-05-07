@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/guides/index.md", "reason": "检查跨层同步与部署副本一致性"}
+{"file": ".trellis/spec/scripts/index.md", "reason": "检查脚本 surface 约束"}
+{"file": ".trellis/spec/scripts/python-conventions.md", "reason": "检查 Python runtime 代码约束"}
+{"file": ".trellis/spec/skills/index.md", "reason": "检查 repo-local skill 说明一致性"}
+{"file": ".trellis/spec/docs/index.md", "reason": "检查文档边界与仓库行为描述一致性"}
+{"file": ".trellis/spec/agents/index.md", "reason": "检查 live agent 部署面一致性"}

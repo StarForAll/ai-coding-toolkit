@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/guides/index.md", "reason": "跨层同步、source-of-truth 与部署副本一致性"}
+{"file": ".trellis/spec/scripts/index.md", "reason": ".trellis/scripts 改动的整体脚本面规则"}
+{"file": ".trellis/spec/scripts/python-conventions.md", "reason": "Python 运行时脚本修改规范"}
+{"file": ".trellis/spec/skills/index.md", "reason": "repo-local skill 维护边界"}
+{"file": ".trellis/spec/docs/index.md", "reason": "文档和 repo 行为说明的边界要求"}
+{"file": ".trellis/spec/agents/index.md", "reason": "live agent 部署面修改边界"}
