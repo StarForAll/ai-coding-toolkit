@@ -86,6 +86,11 @@ This skill **must** fully validate the following aspects for any workflow under 
    - Command scripts, skill definitions, agent configurations
    - The audit must report discrepancies as confirmed issues with source-layer tags
 
+   Special interpretation rule:
+   - install-only low-stakes reminder artifacts such as the workflow-created root `todo.txt` are **not** defects by default
+   - if such an artifact is documented as “does not change stage gates / command routing / runtime closure,” the audit must not classify its existence alone as over-management, corruption, or drift without stronger contradictory evidence
+   - such artifacts may still be mentioned as contextual outputs, but they are not mandatory managed-surface failures in the same class as hidden-directory carriers, command copies, helper scripts, or routing blocks
+
 4. **Codex handoff boundary** - When Codex is the primary executor and the audit reaches the formal embed step, the skill must:
    - Stop and emit a handoff block using the dedicated template
    - Require handoff to Claude Code or OpenCode for the embed execution

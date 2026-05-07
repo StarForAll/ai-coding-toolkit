@@ -446,13 +446,6 @@ def build_managed_audit_extra_specs(cli_types: list[str]) -> list[ManagedAuditEx
             required_substrings=AGENTS_NL_ROUTING_MARKERS,
         ),
         ManagedAuditExtraSpec(
-            capability="shared-artifact:todo-reminder-file",
-            mechanism="Workflow creates a root-level todo.txt reminder file and preserves/deletes it through install and uninstall rules.",
-            claude_paths=("todo.txt",),
-            opencode_paths=("todo.txt",),
-            codex_paths=("todo.txt",),
-        ),
-        ManagedAuditExtraSpec(
             capability="shared-state:backup-original-preservation",
             mechanism="Workflow preserves replaced baseline assets in .backup-original directories to support uninstall and upgrade-compat restoration.",
             claude_paths=(

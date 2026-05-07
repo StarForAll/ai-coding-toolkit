@@ -83,7 +83,7 @@ OpenCode 下的 MCP / skills 配置不应全部堆进 `instructions`。
 > - `.claude/skills/*/SKILL.md`
 > - `.agents/skills/*/SKILL.md`
 >
-> 也就是说，`.agents/skills/` 既是 Codex / amp 等工具的通用 skills 位置，也是 OpenCode 的原生 skills 扫描路径之一。当前 workflow 把阶段 skills 部署到 `.agents/skills/` 时，同一份 skills 会同时影响 OpenCode 与 Codex。升级/装后核对 skills 漂移，必须把 OpenCode 也算在影响面内。
+> 也就是说，`.agents/skills/` 既是 Codex / amp 等工具的通用 skills 位置，也是 OpenCode 的原生 skills 扫描路径之一。当前 workflow 把阶段 skills 部署到 `.agents/skills/` 时，这些 skills 会进入 OpenCode 的可发现范围；但它们在 OpenCode 侧只应被当作共享承载面与漂移核对范围，不应被描述成与 `.opencode/commands/trellis/*` 等价的正式入口。
 
 ## 推荐承载方式
 

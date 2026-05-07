@@ -35,8 +35,6 @@ _CLI_ALT_DIRS = CLI_ALT_DIRS
 _ALL_CLI_TYPES = ALL_CLI_TYPES
 _AGENTS_NL_ROUTING_MARKER = "<!-- workflow-nl-routing-start -->"
 _AGENTS_NL_ROUTING_END = "<!-- workflow-nl-routing-end -->"
-_TODO_FILE_NAME = "todo.txt"
-_TODO_DEFAULT_LINE = "文档内容需要和实际当前的代码同步\n"
 
 
 def _restore_first_available_command_backup(
@@ -414,20 +412,6 @@ def remove_agents_md_routing(root: Path) -> None:
     ok("AGENTS.md NL 路由表已删除")
 
 
-def remove_project_todo(root: Path) -> None:
-    """删除安装器默认创建且未被修改的 todo.txt。"""
-    todo_path = root / _TODO_FILE_NAME
-    if not todo_path.exists():
-        return
-
-    content = todo_path.read_text(encoding="utf-8")
-    if content == _TODO_DEFAULT_LINE:
-        todo_path.unlink()
-        ok("todo.txt 已删除")
-    else:
-        warn("todo.txt 已被修改，保留现有内容")
-
-
 def restore_shared_workflow_doc(root: Path) -> None:
     """恢复 .trellis/workflow.md 基线，并清理其备份目录。"""
     trellis_dir = root / ".trellis"
@@ -521,9 +505,6 @@ def main() -> int:
 
     # 删除 AGENTS.md 路由表注入
     remove_agents_md_routing(root)
-
-    # 删除安装器默认创建的 todo.txt
-    remove_project_todo(root)
 
     # 恢复 .trellis/workflow.md 基线
     restore_shared_workflow_doc(root)

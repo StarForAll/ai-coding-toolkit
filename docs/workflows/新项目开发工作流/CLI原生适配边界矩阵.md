@@ -115,7 +115,7 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 | Trellis 基线命令补丁（continue / finish-work） | `.opencode/commands/trellis/continue.md`、`finish-work.md` | 安装器管理 | 当前 Trellis 0.5 fresh baseline 注入补丁；legacy `start` / `record-session` 仅用于旧目标项目迁移或兼容 |
 | 通用辅助脚本 | `.trellis/scripts/workflow/` | 安装器管理 | 与 Claude 共用，不重复部署 |
 | Trellis 基线 workflow 指南补丁 | `.trellis/workflow.md` | 安装器管理 | 与 Claude / Codex 共用同一份目标项目 workflow 指南，保持 close-out 与 child-task 规则一致 |
-| 阶段 skills（跨 CLI 可发现） | `.agents/skills/*/SKILL.md` | 安装器管理（与 Codex 共用单份落盘） | OpenCode 官方 skills 扫描链路会命中 `.agents/skills/`，因此同一份 skills 会被 OpenCode 与 Codex 同时发现；但当前 workflow 对 OpenCode 的**正式主入口**仍是 `.opencode/commands/trellis/`，不是 `.agents/skills/` |
+| 共享 skills 承载面（非 OpenCode 正式入口） | `.agents/skills/*/SKILL.md` | 安装器管理（与 Codex 共用单份落盘） | OpenCode 官方 skills 扫描链路会命中 `.agents/skills/`；当前 workflow 仅把这里视为共享分发与漂移核对范围，不把它当成 OpenCode 的推荐或正式触发入口 |
 | 子代理定义 | `.opencode/agents/*.md` | Trellis 原生管理 | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 不再 overlay，仅做 legacy bare-name → trellis-* 迁移 |
 | 项目长期规则 | `AGENTS.md` | 半托管（手动维护为主） | 与 Claude/Codex 共用同一文件；`TRELLIS` managed block 与 `workflow-nl-routing` 区段由 `trellis init` / `install-workflow.py` 分别托管 |
 | workflow 文档注入 | `opencode.json.instructions` | 手动维护 | 只挂主入口与必要补充 |
@@ -135,7 +135,7 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 
 | 资产 | 目标位置 | 分类 | 说明 |
 |------|---------|------|------|
-| workflow 阶段 skills（feasibility / brainstorm / design / plan / test-first / project-audit / check / review-gate / delivery） | `.agents/skills/<phase>/SKILL.md` | 安装器管理（共享 skills 单点落盘） | 共享 skills 只落在 `.agents/skills/`；Codex 会直接读取这一路径；OpenCode 官方也会发现这一路径，但对当前 workflow 来说它不是 OpenCode 的正式主入口 |
+| workflow 阶段 skills（feasibility / brainstorm / design / plan / test-first / project-audit / check / review-gate / delivery） | `.agents/skills/<phase>/SKILL.md` | 安装器管理（共享 skills 单点落盘） | 共享 skills 只落在 `.agents/skills/`；Codex 直接读取这一路径；OpenCode 即使会扫描到，也只作为共享承载面处理，不作为其正式入口 |
 | Trellis 基线 skill 补丁（trellis-continue / trellis-finish-work） | 活动 skills 目录下的 `trellis-continue/SKILL.md`、`trellis-finish-work/SKILL.md` | 安装器管理（活动目录增强） | **只在 `resolve_codex_skills_dir(root)` 解析出的活动 skills 目录**追加 workflow patch；当前 `trellis init` 下通常是 `.agents/skills/`；legacy `start` / `finish-work` 仅用于旧目标项目兼容 |
 | legacy `record-session` skill | 活动 skills 目录下可能存在的 `record-session/SKILL.md` | legacy 兼容/仅校验 | 当前 Trellis 0.5 fresh baseline 不要求该 skill；若旧目标项目仍存在，则只按 legacy close-out 兼容面检查 |
 | parallel skill 入口移除 | 各 skills 目录下的 `parallel/SKILL.md` | 安装器管理（条件移除） | **只在存在 parallel 的目录**执行：先备份，再把 `parallel` 从嵌入面移除；若不存在则跳过 |
@@ -157,7 +157,7 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 
 ### 多 skills 目录同步边界
 
-`trellis init` 可能同时落盘 `.agents/skills/` 与 `.codex/skills/` 两个目录（例如本仓库实际观察到：主体 skills 落在 `.agents/skills/`，`parallel` 落在 `.codex/skills/`）。当前安装器对这两类目录采用分层策略：
+`trellis init` 在部分样本里可能同时落盘 `.agents/skills/` 与 `.codex/skills/` 两个目录；但当前 fresh `0.5.4` 基线默认可稳定观察到的是 `.agents/skills/`，不应再把 `.codex/skills/parallel` 当作必然出现的默认现象。当前安装器对这两类目录采用分层策略：
 
 - `install-workflow.py` 只向 `.agents/skills/` 写入共享阶段 skills
 - `trellis-continue` / `trellis-finish-work` baseline patch 只增强**活动 skills 目录**；legacy `start` / `finish-work` 仅作为旧目标项目兼容输入
@@ -176,11 +176,14 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 - 因此 `.codex/skills/` 不应被默认视为 `trellis-continue` / `trellis-finish-work` 这类共享 baseline skill 的补丁目标
 - Claude Code 官方技能目录仍是 `.claude/skills/`；当前没有官方证据表明 Claude Code 会读取 `.agents/skills/`
 
-装后/升级后核对仍建议显式检查两条路径，确认两边已同步为一致状态：
+装后/升级后核对仍建议显式检查主目录，并只在次级目录实际存在时继续检查其条件性影响面：
 
 ```bash
-# 所有 skills 目录
-ls -d .agents/skills/ .codex/skills/ 2>/dev/null
+# 先确认共享主承载面存在
+test -d .agents/skills
+
+# .codex/skills/ 不是 fresh baseline 默认必然存在；存在时再继续检查
+test -d .codex/skills || true
 
 # 核对 parallel 是否已从嵌入面移除，但备份仍在
 ls .agents/skills/parallel/SKILL.md 2>/dev/null

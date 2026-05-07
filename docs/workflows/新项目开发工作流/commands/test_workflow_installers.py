@@ -946,6 +946,43 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(todo_path.read_text(encoding="utf-8"), "已有内容\n")
         self.assertIn("todo.txt 已存在", install.stdout)
 
+    def test_codex_secondary_skills_docs_do_not_claim_parallel_as_fresh_baseline_default(self) -> None:
+        cli_matrix = (REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "CLI原生适配边界矩阵.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("不应再把 `.codex/skills/parallel` 当作必然出现的默认现象", cli_matrix)
+        self.assertIn("test -d .agents/skills", cli_matrix)
+        self.assertIn("test -d .codex/skills || true", cli_matrix)
+        self.assertNotIn(
+            "本仓库实际观察到的例子是：主体 skills 落在 `.agents/skills/`，`parallel` 落在 `.codex/skills/`。",
+            cli_matrix,
+        )
+
+        codex_readme = (
+            REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "commands" / "codex" / "README.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("当前 fresh `0.5.4` 基线默认可稳定观察到的是 `.agents/skills/`", codex_readme)
+        self.assertNotIn(
+            "本仓库实际观察到的例子是：主体 skills 落在 `.agents/skills/`，而 `parallel` 落在 `.codex/skills/`。",
+            codex_readme,
+        )
+
+        hidden_boundary = (
+            REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "装后隐藏目录与托管边界核对清单.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("当前 fresh baseline 不应默认假定它存在", hidden_boundary)
+
+        command_map = (REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "命令映射.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("只应视为共享承载面与漂移核对范围", command_map)
+
+        workflow_overview = (REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "工作流总纲.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("install-only 的协作提醒产物", workflow_overview)
+        self.assertIn("不是卸载时必须恢复/清理的目标", workflow_overview)
+
     def test_install_creates_and_clears_attempt_record_on_success(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
         self.addCleanup(shutil.rmtree, fixture)
@@ -2218,7 +2255,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("AGENTS.md NL 路由表已删除", result.stdout)
         self.assertNotIn("workflow-nl-routing-start", (fixture / "AGENTS.md").read_text(encoding="utf-8"))
 
-    def test_uninstall_removes_default_todo_file(self) -> None:
+    def test_uninstall_leaves_default_todo_file_untouched(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
 
@@ -2229,10 +2266,10 @@ class WorkflowInstallerTests(unittest.TestCase):
         result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        self.assertIn("todo.txt 已删除", result.stdout)
-        self.assertFalse((fixture / "todo.txt").exists())
+        self.assertNotIn("todo.txt 已删除", result.stdout)
+        self.assertEqual((fixture / "todo.txt").read_text(encoding="utf-8"), DEFAULT_PROJECT_TODO)
 
-    def test_uninstall_preserves_modified_todo_file(self) -> None:
+    def test_uninstall_leaves_modified_todo_file_untouched(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
 
@@ -2244,7 +2281,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        self.assertIn("todo.txt 已被修改，保留现有内容", result.stdout)
+        self.assertNotIn("todo.txt 已被修改，保留现有内容", result.stdout)
         self.assertEqual(todo_path.read_text(encoding="utf-8"), "自定义提醒\n")
 
 

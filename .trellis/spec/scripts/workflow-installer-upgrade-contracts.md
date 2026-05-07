@@ -193,6 +193,16 @@ Target-project deployed copies are derived state:
   - workflow scripts may migrate legacy bare-name files to the Trellis-native names, but must not overlay native agent content
 - shared helper scripts: `.trellis/scripts/workflow/*.py`
 - shared project workflow guide patch: `.trellis/workflow.md`
+- install-only collaboration reminder: root-level `todo.txt`
+
+Special rule for `todo.txt`:
+
+- `install-workflow.py` intentionally keeps `ensure_project_todo()` and may create a root-level `todo.txt`
+- this file is an **install-only collaboration reminder**, not a stage gate, drift-repair surface, or uninstall restoration target
+- its existence must not be treated as proof of workflow corruption, duplicate embed, or upgrade drift
+- uninstall / upgrade / audit flows may mention it as contextual output, but should not classify it as a required managed capability whose absence or retention is a defect by itself
+- if a future audit or compatibility analysis discusses `todo.txt`, the default interpretation must be “intentional low-stakes reminder artifact” unless another spec explicitly promotes it to a stronger contract
+- `workflow-embed-attempt.json` may still record a chronological installer `last_step` related to this reminder creation (for example `ensure-todo`); this trace value is observational only and must not be interpreted as promoting `todo.txt` into a gate, required managed capability, or failure-critical contract
 
 `workflow_assets.py` must remain the single shared definition of:
 
@@ -294,6 +304,7 @@ Compatibility code should therefore:
        - verify optional disabled skills such as `parallel` in every directory where they exist
        - verify `trellis-continue` / `trellis-finish-work` patch health only in the active skills directory
      - docs must state that `.codex/skills/` is Codex-local / project-custom plus duplicate shared-skill drift cleanup scope, and that non-active directory copies of `trellis-continue` / `trellis-finish-work` are outside the workflow-managed patch drift surface unless a future installer explicitly starts writing there
+     - docs must not describe `.codex/skills/parallel` as the current fresh-baseline default outcome of `trellis init`; if mentioned, it must be framed as a conditional / historical / sample-only secondary-carrier case rather than a required or expected default
 
 5. **Phase-gate helper scripts**
    - helper scripts referenced as mandatory validation gates inside workflow source commands

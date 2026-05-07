@@ -623,7 +623,6 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             "shared-artifact:workflow-installed-record",
             "shared-pack:requirements-discovery-foundation-import",
             "shared-doc:agents-nl-routing-block",
-            "shared-artifact:todo-reminder-file",
             "shared-state:backup-original-preservation",
         }
         self.assertTrue(expected_capabilities.issubset(by_capability))

@@ -61,13 +61,14 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 > 关于 `.agents/skills/` 的真实归属：
 >
 > - `.agents/skills/` 并不是 Codex 专属路径，它是“跨 CLI skills”的通用位置。OpenCode 官方 skills 文档（<https://opencode.ai/docs/skills/>）明确说明，OpenCode 会沿项目向上扫描并加载 `.agents/skills/*/SKILL.md`
-> - 因此当前 workflow 部署到 `.agents/skills/` 下的阶段 skills，会同时出现在 OpenCode 与 Codex 的可发现范围内
+> - 因此当前 workflow 部署到 `.agents/skills/` 下的阶段 skills，会进入 OpenCode 与 Codex 的可发现范围
 > - 升级/核对 skills 漂移时，必须把 OpenCode 也算在影响面内，而不是仅把 `.agents/skills/` 当作 Codex 的内部实现细节
 > - Claude Code 官方技能目录仍是 `.claude/skills/*/SKILL.md`；当前没有官方证据表明 Claude Code 会读取 `.agents/skills/`
+> - 但对当前 workflow 而言，OpenCode 的正式/推荐入口仍是 `.opencode/commands/trellis/*`；`.agents/skills/` 在 OpenCode 侧只视为共享承载面，不视为等价入口
 
 ### 多 skills 目录同步（安装器行为）
 
-`trellis init` 可能同时创建 `.agents/skills/` 与 `.codex/skills/`。本仓库实际观察到的例子是：主体 skills 落在 `.agents/skills/`，而 `parallel` 落在 `.codex/skills/`。
+`trellis init` 在部分样本里可能同时创建 `.agents/skills/` 与 `.codex/skills/`。当前 fresh `0.5.4` 基线默认可稳定观察到的是 `.agents/skills/`；`.codex/skills/` 应视为条件出现的次级影响面，而不是默认必然存在。
 
 当前安装器（`install-workflow.py`）对 Codex 的处理策略：
 
@@ -83,13 +84,14 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - `.codex/skills/`：Codex 特有或本地侧技能的承载面
 - 因此 `.codex/skills/` 不应再出现 `feasibility` 到 `delivery` 这类共享阶段 skills 的重复副本
 
-装后/升后核对仍建议显式检查两条路径，确认两边内容一致：
+装后/升后核对仍建议先检查两条路径是否都存在；只有次级目录实际存在时，才继续核对其内容：
 
 ```bash
-test -d .agents/skills || test -d .codex/skills
+test -d .agents/skills
+test -d .codex/skills || true
 ls .agents/skills/parallel/SKILL.md 2>/dev/null
 ls .codex/skills/parallel/SKILL.md 2>/dev/null
-# 两者同时存在时，应确认内容已由安装器同步为一致状态
+# 只有 .codex/skills/ 实际存在时，才继续检查其条件性影响面
 ```
 
 在 Codex 中，推荐使用方式应是：

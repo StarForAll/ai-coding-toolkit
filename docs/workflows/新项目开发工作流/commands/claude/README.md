@@ -43,7 +43,7 @@ Claude Code 是当前 workflow 维护的三种原生适配之一，并保留项�
 - Claude 的 hooks / settings / agents 是原生承载层
 - 不应因为项目里同时安装了 Codex skills，就把 Claude Code 写成“只靠自然语言触发”
 
-> 注意：`.agents/skills/*/SKILL.md` 不是仅服务于 Codex 的路径。按 OpenCode 官方 skills 文档（<https://opencode.ai/docs/skills/>），OpenCode 同样会扫描 `.agents/skills/`；Claude Code 则通过自己的 `.claude/skills/*/SKILL.md` 独立工作。换言之，`.agents/skills/` 下的阶段 skills 会同时被 OpenCode 与 Codex 消费，升级核对时需要一起纳入影响面判断。
+> 注意：`.agents/skills/*/SKILL.md` 不是仅服务于 Codex 的路径。按 OpenCode 官方 skills 文档（<https://opencode.ai/docs/skills/>），OpenCode 同样会扫描 `.agents/skills/`；Claude Code 则通过自己的 `.claude/skills/*/SKILL.md` 独立工作。换言之，`.agents/skills/` 下的阶段 skills 会进入 OpenCode 与 Codex 的可发现范围；对 OpenCode 来说，这里只应视为共享承载面与漂移核对范围，而不是它的正式入口。
 
 ## 安装时序
 
