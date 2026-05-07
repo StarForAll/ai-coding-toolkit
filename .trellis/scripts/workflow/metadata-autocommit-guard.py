@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import subprocess
 import sys
 from pathlib import Path
@@ -13,7 +12,6 @@ from pathlib import Path
 ALLOWED_PREFIXES = {
     "record-session": [".trellis/workspace", ".trellis/tasks"],
 }
-COMMIT_TARGETS = [".trellis/workspace", ".trellis/tasks"]
 
 
 def run_git(repo_root: Path, *args: str) -> tuple[int, str, str]:
@@ -126,8 +124,9 @@ def validate_post_check(repo_root: Path, mode: str) -> int:
 
 
 def commit_metadata(repo_root: Path, commit_message: str) -> int:
+    targets = ALLOWED_PREFIXES["record-session"]
     add_result = subprocess.run(
-        ["git", "add", "-A", *COMMIT_TARGETS],
+        ["git", "add", "-A", *targets],
         cwd=repo_root,
         capture_output=True,
         text=True,
@@ -143,7 +142,7 @@ def commit_metadata(repo_root: Path, commit_message: str) -> int:
         return add_result.returncode or 1
 
     diff_result = subprocess.run(
-        ["git", "diff", "--cached", "--quiet", "--", *COMMIT_TARGETS],
+        ["git", "diff", "--cached", "--quiet", "--", *targets],
         cwd=repo_root,
         check=False,
     )

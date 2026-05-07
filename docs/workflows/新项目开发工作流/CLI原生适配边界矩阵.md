@@ -215,6 +215,7 @@ ls .codex/skills/.backup-original/parallel/SKILL.md 2>/dev/null
 | 资产/行为 | 实际位置 | 分类 | 说明 |
 |-----------|----------|------|------|
 | `record-session` 元数据闭环增强 | `record-session` 基线入口 + workflow patch | 安装器管理 | 当前 workflow 会对 Trellis 基线 `record-session` 注入补丁增强 |
+| `record-session` 自动提交失败恢复 | `.trellis/scripts/workflow/record-session-helper.py` + `metadata-autocommit-guard.py` | 安装器管理 | 三个平台共用同一套 `record-session-helper.py`，内置只读失败检测、pending 状态管理和 `--resume` 恢复；失败时输出 `TRELLIS_AUTO_ESCALATE_COMMAND=...`，支持提权重试。该增强对所有平台生效，但 Codex（沙箱环境）最容易触发 |
 | `archive` 任务归档行为 | `.trellis/scripts/task.py` / `.trellis/scripts/common/task_store.py` | 运行前置/仅校验 | 仍由目标项目 Trellis 基线提供，当前 workflow **不分发** 这段基线代码 |
 | archive metadata auto-commit pathspec 修复 | Trellis 基线 close-out 实现 | 运行前置/仅校验 | 若目标项目不是当前最新 Trellis 基线，收尾链路仍可能继承旧基线中的 archive bug；建议先升级 Trellis，再使用当前 workflow 的 `record-session -> archive` 收尾链路 |
 | 源码水印与归属证明校验脚本 | `.trellis/scripts/workflow/ownership-proof-validate.py` | 安装器管理 | 校验 assessment / design / plan / delivery 各阶段的源码水印与归属证明产物 |

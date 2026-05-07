@@ -5,22 +5,20 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
 
 
-READONLY_HINTS = [
+READONLY_HINTS = (
     "Read-only file system",
-    "只读文件系统",
     "只读文件系统",
     "Permission denied",
     "Operation not permitted",
     ".git/index.lock",
     "cannot create",
     "不能创建",
-]
+)
 
 
 def find_project_root(start: Path) -> Path:
@@ -102,22 +100,23 @@ def ensure_resume_artifacts(
     package: str | None,
     branch: str | None,
     input_text: str | None,
+    content_path: Path | None,
 ) -> Path:
     pending_dir = repo_root / ".trellis" / ".pending-record-session"
     pending_dir.mkdir(parents=True, exist_ok=True)
     slug = sanitize_title(title)
-    content_path: str | None = None
-    if input_text is not None:
+    sidecar_ref: str | None = None
+    if input_text is not None and content_path is None:
         body_file = pending_dir / f"{slug}.body.md"
         body_file.write_text(input_text, encoding="utf-8")
-        content_path = str(body_file.relative_to(repo_root))
+        sidecar_ref = str(body_file.relative_to(repo_root))
     state = {
         "title": title,
         "commit": commit,
         "summary": summary,
         "package": package,
         "branch": branch,
-        "content_file": content_path,
+        "sidecar": sidecar_ref,
     }
     state_file = pending_dir / f"{slug}.pending.json"
     state_file.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -193,6 +192,9 @@ def resume_from_state(state_file: Path, repo_root: Path) -> int:
         step_name="metadata commit-only",
     )
     if commit_result.returncode != 0:
+        combined = (commit_result.stdout or "") + "\n" + (commit_result.stderr or "")
+        if detect_readonly_failure(combined):
+            print_resume_guidance(repo_root, state_file)
         print("record-session incomplete", file=sys.stderr)
         return 1
 
@@ -211,13 +213,16 @@ def resume_from_state(state_file: Path, repo_root: Path) -> int:
         step_name="record-session post-check",
     )
     if post_result.returncode != 0:
+        combined = (post_result.stdout or "") + "\n" + (post_result.stderr or "")
+        if detect_readonly_failure(combined):
+            print_resume_guidance(repo_root, state_file)
         print("record-session incomplete", file=sys.stderr)
         return 1
 
     state_file.unlink(missing_ok=True)
-    content_file = state.get("content_file")
-    if content_file:
-        (repo_root / content_file).unlink(missing_ok=True)
+    sidecar = state.get("sidecar")
+    if sidecar:
+        (repo_root / sidecar).unlink(missing_ok=True)
     print("✅ record-session resumed and completed")
     return 0
 
@@ -296,6 +301,7 @@ def main() -> int:
                 package=args.package,
                 branch=args.branch,
                 input_text=input_text if content_path is None else None,
+                content_path=content_path,
             )
             print_resume_guidance(repo_root, state_file)
         print("record-session incomplete", file=sys.stderr)

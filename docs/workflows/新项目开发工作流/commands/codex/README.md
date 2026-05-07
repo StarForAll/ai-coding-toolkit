@@ -109,6 +109,19 @@ ls .codex/skills/parallel/SKILL.md 2>/dev/null
 
 还要补一条 close-out 边界：`record-session` 仍按 Trellis 基线能力与 workflow 文档约束承载，而最终的 `archive` 继续直接调用目标项目 Trellis 基线里的 `python3 ./.trellis/scripts/task.py archive`。因此，目标项目最好先升级到当前最新 Trellis；否则即使 workflow 已安装成功，收尾链路仍可能继承旧基线中的 archive metadata auto-commit 问题。
 
+### close-out 自动提交失败恢复
+
+`record-session-helper.py` 已内置只读失败检测与恢复机制，对所有平台生效。Codex 因运行在沙箱环境中最容易触发：
+
+1. `add_session.py` 以 `--no-commit` 模式调用，只写 journal/index 不触发 git commit
+2. 元数据提交由 `metadata-autocommit-guard.py --commit-message` 单独执行（commit-only）
+3. 若 commit-only 因只读失败（如 `Read-only file system`、`Permission denied`、`.git/index.lock`），在 `.trellis/.pending-record-session/` 下生成 pending 文件
+4. 输出 `TRELLIS_AUTO_ESCALATE_COMMAND=python3 ./.trellis/scripts/workflow/record-session-helper.py --resume <pending-file>`
+5. `--resume` 为 commit-only 恢复：仅重试提交磁盘上已写入的元数据，不重跑 `add_session.py`，避免 session 重复记录
+6. 恢复成功后自动清理 pending 文件及 body 旁路文件
+
+`archive` 链的自动提交仍由 Trellis 基线负责（`task.py` / `task_store.py` 属于基线，workflow 不分发），若 archive 提交失败建议升级 Trellis 基线。
+
 ## 渐进性披露（安装后的使用层）
 
 Codex 下的 MCP / skills 配置也不应全部堆进 `AGENTS.md` 或启动注入内容。
