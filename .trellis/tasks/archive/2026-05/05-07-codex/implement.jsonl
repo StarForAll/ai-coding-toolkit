@@ -1,0 +1,8 @@
+{"file": "docs/Trellis自动提交失败恢复与提权修复指南.md", "reason": "核心需求来源：定义了自动提交失败恢复的完整机制，包括 READONLY_HINTS、pending 文件、TRELLIS_AUTO_ESCALATE_COMMAND、--resume 支持"}
+{"file": "docs/workflows/新项目开发工作流/CLI原生适配边界矩阵.md", "reason": "托管边界定义：明确哪些脚本由 workflow 分发，哪些属于 Trellis 基线；明确三个平台的差异"}
+{"file": "docs/workflows/新项目开发工作流/commands/codex/README.md", "reason": "Codex 平台特点：理解 Codex 的入口承载方式、finish-work patch 机制、archive 基线依赖"}
+{"file": "docs/workflows/新项目开发工作流/commands/workflow_assets.py", "reason": "托管资产定义：HELPER_SCRIPTS 定义了 record-session-helper.py 和 metadata-autocommit-guard.py 的分发关系"}
+{"file": "docs/workflows/新项目开发工作流/commands/shell/record-session-helper.py", "reason": "待增强的基础脚本：需要添加 --resume、pending 文件管理、恢复命令输出"}
+{"file": "docs/workflows/新项目开发工作流/commands/shell/metadata-autocommit-guard.py", "reason": "待增强的基础脚本：需要添加 READONLY_HINTS 定义和只读失败检测函数"}
+{"file": "docs/workflows/新项目开发工作流/commands/finish-work-patch-projectization.md", "reason": "待更新的 patch 文档：需要添加 Codex 平台的恢复流程说明和 archive 基线依赖说明"}
+{"file": "docs/workflows/新项目开发工作流/工作流总纲.md", "reason": "待更新的总纲文档：第 3028 行的自动提交失败指导需要改为平台特定说明"}

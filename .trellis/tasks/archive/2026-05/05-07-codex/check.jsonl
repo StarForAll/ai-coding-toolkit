@@ -1,0 +1,5 @@
+{"file": "docs/Trellis自动提交失败恢复与提权修复指南.md", "reason": "验证标准：检查实现是否符合恢复指南的核心要求（仅 record-session 链部分）"}
+{"file": "docs/workflows/新项目开发工作流/CLI原生适配边界矩阵.md", "reason": "边界验证：确保修改后的脚本和文档符合托管边界，未误改 Claude Code / OpenCode 的行为"}
+{"file": "docs/workflows/新项目开发工作流/工作流总纲.md", "reason": "文档一致性验证：确保自动提交失败指导已改为平台特定说明，不包含通用的增强承诺"}
+{"file": "docs/workflows/新项目开发工作流/commands/codex/README.md", "reason": "平台一致性验证：确保 Codex README 中的收尾链路说明与新增的恢复机制一致"}
+{"file": "docs/workflows/新项目开发工作流/commands/shell/test_metadata_autocommit_guard.py", "reason": "测试基础：现有的 metadata-autocommit-guard 测试用例，需要扩展只读失败检测测试"}
