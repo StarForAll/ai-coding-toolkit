@@ -1163,3 +1163,36 @@ Aligned workflow documentation, installer guidance, and audit records with Trell
 ### Next Steps
 
 - None - task complete
+
+
+## Session 162: Trellis live 运行面漂移收敛与 template hash 恢复
+
+**Date**: 2026-05-07
+**Task**: Trellis live 运行面漂移收敛与 template hash 恢复
+**Branch**: `main`
+
+### Summary
+
+收敛当前项目 live Trellis 运行面漂移，保留 recursion guard、hook marker、Windows 路径归一化，恢复缺失的 template hash 跟踪，并补充缺键回填必须使用 fresh baseline hash 的治理规则。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c514780` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
