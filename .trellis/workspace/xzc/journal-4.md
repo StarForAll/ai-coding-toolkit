@@ -1130,3 +1130,36 @@ Analyzed workflow-audit skill usability, found P1 brainstorm reference name mism
 ### Next Steps
 
 - None - task complete
+
+
+## Session 161: Workflow audit native Trellis boundary
+
+**Date**: 2026-05-07
+**Task**: Workflow audit native Trellis boundary
+**Branch**: `main`
+
+### Summary
+
+Aligned workflow documentation, installer guidance, and audit records with Trellis 0.5 native agent and command boundaries.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3dd34ef` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

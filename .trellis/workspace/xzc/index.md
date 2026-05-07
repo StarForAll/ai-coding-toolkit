@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 160
+- **Total Sessions**: 161
 - **Last Active**: 2026-05-07
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~1132 | Active |
+| `journal-4.md` | ~1165 | Active |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 161 | 2026-05-07 | Workflow audit native Trellis boundary | `3dd34ef` | `main` |
 | 160 | 2026-05-07 | workflow-audit target scoping repair | `09a5ccd` | `main` |
 | 159 | 2026-05-07 | record-session auto-commit failure recovery | `5a8e828` | `main` |
 | 158 | 2026-05-06 | 同步自动提交失败恢复与提权修复指南 | `7d4886f` | `main` |
