@@ -1097,3 +1097,36 @@ Analyzed workflow-audit skill usability, found P1 brainstorm reference name mism
 ### Next Steps
 
 - None - task complete
+
+
+## Session 160: workflow-audit target scoping repair
+
+**Date**: 2026-05-07
+**Task**: workflow-audit target scoping repair
+**Branch**: `main`
+
+### Summary
+
+收紧 workflow-audit 为单一支持目标，补齐目标解析边界与回归测试，消除 repo root、active task、/tmp target project 的误指向风险。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `09a5ccd` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
