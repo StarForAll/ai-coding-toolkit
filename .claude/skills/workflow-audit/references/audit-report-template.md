@@ -9,6 +9,7 @@ Every evidence item and confirmed-issue entry must keep explicit source-layer ta
 
 ## Audit Target and Boundary
 - Workflow Root: `<workflow_path>`
+- Resolved Workflow Root Rule: always `docs/workflows/新项目开发工作流/`
 - Audit Scope: <task-based static | task-based runtime>
 - Current CLI: <inferred or explicit>
 - Candidate Issues: <none / list>

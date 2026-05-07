@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Verify that `workflow-audit` stops immediately when the resolved `workflow_path` does not exist on disk.
+Verify that `workflow-audit` stops immediately when its single supported workflow root is missing from the repository checkout.
 
 ## Input
 
 User input:
 
-> Audit `docs/workflows/does-not-exist/` and confirm whether its workflow adaptation rules are correct.
+> Audit this workflow, but assume the repository checkout no longer contains `docs/workflows/新项目开发工作流/`.
 
 ## Expected Mode
 
@@ -16,10 +16,10 @@ Input-validation stop with invalid-path blocking.
 
 ## Expected Key Behaviors
 
-- resolve the requested workflow path before entering the evidence mainline
-- detect that the path does not exist on disk
+- bind the target to `docs/workflows/新项目开发工作流/`
+- detect that the supported root is missing on disk
 - stop as `Blocked / Invalid Input`
-- require the user to provide one valid workflow root before continuing
+- explain that the repository checkout is missing the supported workflow root and must be repaired before the audit can continue
 
 ## Must Not
 

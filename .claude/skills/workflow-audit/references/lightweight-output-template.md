@@ -9,6 +9,7 @@ Always keep the `Per-CLI Adaptation Conclusions` section. If CLI adaptation was 
 ```markdown
 ## Audit Target and Boundary
 - Workflow Root: `<workflow_path>`
+- Resolved Workflow Root Rule: always `docs/workflows/新项目开发工作流/`
 - Scope: static/document-only (lightweight: evidence mainline A, B, C; output step E)
 
 ## System Mechanics Understood (step A)

@@ -15,10 +15,13 @@ current_cli: <optional; infer from runtime when omitted>
 ## Field Rules
 
 - `workflow_path`
-  - must be a single target
+  - only supported value: `docs/workflows/新项目开发工作流/`
   - defaults to `docs/workflows/新项目开发工作流/` when omitted
-  - if multiple targets are supplied, `workflow-audit` must stop and require one explicit target
-  - if the resolved path does not exist on disk, `workflow-audit` must stop as `Blocked / Invalid Input`
+  - natural-language requests such as "audit this workflow" must resolve to the same fixed workflow root
+  - never infer the target from repo root, current working directory, active task, or sibling workflow directories
+  - if multiple targets are supplied, `workflow-audit` must stop, explain that it supports only `docs/workflows/新项目开发工作流/`, and require the user to continue with that single supported root only
+  - if the resolved path is not `docs/workflows/新项目开发工作流/`, `workflow-audit` must stop as `Blocked / Invalid Input`
+  - if the supported root does not exist on disk, `workflow-audit` must stop as `Blocked / Invalid Input` and report that the repository checkout is missing the supported workflow root
 
 - `candidate_issues`
   - optional
@@ -46,6 +49,7 @@ current_cli: <optional; infer from runtime when omitted>
 ## Notes
 
 - Supported per-CLI audit scope is fixed to `Claude Code`, `OpenCode`, and `Codex`
+- Supported workflow target scope is fixed to `docs/workflows/新项目开发工作流/`
 - Version preflight always runs first: compare `trellis -v` with `COMPATIBLE_TRELLIS_VERSION` in `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
 - Any mismatch must stop the audit as `Blocked / Version Drift` and route the user to `workflow-capability-audit`
 - No dedicated `preferred_handoff_cli` field

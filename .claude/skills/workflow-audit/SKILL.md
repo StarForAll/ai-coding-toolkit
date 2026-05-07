@@ -1,6 +1,6 @@
 ---
 name: workflow-audit
-description: Audit workflow definitions under `docs/workflows/*`, including workflow source assets, embed/install flows, CLI-native adaptation, and post-install verification boundaries. Use this for same-version workflow maintenance only when current Trellis matches the workflow's compatible version; route version drift to `workflow-capability-audit`. Do not use this for ordinary business code, application features, or generic implementation review.
+description: Audit the repo-local workflow rooted at `docs/workflows/新项目开发工作流/`, including workflow source assets, embed/install flows, CLI-native adaptation, and post-install verification boundaries. Use this for same-version workflow maintenance only when current Trellis matches the workflow's compatible version; route version drift to `workflow-capability-audit`. Do not use this for ordinary business code, application features, or generic implementation review.
 ---
 
 # workflow-audit
@@ -13,10 +13,13 @@ If this file conflicts with `.trellis/spec/skills/workflow-audit.md`, treat the 
 
 Use this skill to:
 
-- audit workflow source assets under `docs/workflows/*`
+- audit workflow source assets under `docs/workflows/新项目开发工作流/`
 - audit workflow install / embed / post-install verification flows
 - audit Claude Code / OpenCode / Codex carrier and adaptation boundaries
 - verify whether candidate workflow issues are real rather than assuming they already are
+
+`workflow-audit` is not a generic selector for arbitrary entries under `docs/workflows/`.
+Its only supported workflow target is `docs/workflows/新项目开发工作流/`.
 
 Do not use this skill to:
 
@@ -97,13 +100,13 @@ Each confirmed issue must include a `validation action` describing exactly how t
 This skill should trigger proactively when the user intends to:
 
 - "audit this workflow"
-- "confirm whether this workflow really has a problem before changing it"
-- "check whether `docs/workflows/*` has defects"
-- "validate this workflow's embed / install / post-install behavior"
+- "confirm whether `docs/workflows/新项目开发工作流/` really has a problem before changing it"
+- "check whether `docs/workflows/新项目开发工作流/` has defects"
+- "validate the embed / install / post-install behavior of `docs/workflows/新项目开发工作流/`"
 - "check whether Codex / Claude Code / OpenCode adaptation is correct"
 - "validate the Codex handoff boundary and stop condition"
 - "verify whether these workflow optimization points are real issues"
-- "create a temporary project under `/tmp` to validate a workflow"
+- "create a temporary project under `/tmp` to validate `docs/workflows/新项目开发工作流/`"
 
 Do not use this skill when the real problem is whether the workflow remains compatible after Trellis changed versions.
 
@@ -114,7 +117,10 @@ Natural-language input is allowed, but prefer the recommended field contract. A 
 Key fields:
 
 - `workflow_path`
-  - default: `docs/workflows/新项目开发工作流/`
+  - only supported value: `docs/workflows/新项目开发工作流/`
+  - when omitted, resolve it to `docs/workflows/新项目开发工作流/`
+  - natural-language requests such as "audit this workflow" or "check the workflow" must bind to the same fixed workflow root
+  - do not infer the target from repo root, current working directory, active task, or sibling workflow directories
 - `candidate_issues`
   - default: empty, meaning the skill discovers issues proactively through the full evidence mainline
   - when supplied: supplementary focus points injected into each evidence step; the mainline still executes in full
@@ -132,9 +138,10 @@ Key fields:
 Constraints:
 
 - exactly one `workflow_path` per run
-- if multiple workflow targets appear in the input, stop and require the user to choose one explicit target
 - do not expose a dedicated `preferred_handoff_cli` field; default handoff order is `Claude Code -> OpenCode`
-- if the resolved `workflow_path` does not exist on disk, stop as `Blocked / Invalid Input` and require one valid workflow root before continuing
+- if the resolved `workflow_path` is anything other than `docs/workflows/新项目开发工作流/`, stop as `Blocked / Invalid Input`, explain that this skill audits only that root, and do not silently replace the requested target
+- if multiple workflow targets appear in the input, explain that this skill supports only `docs/workflows/新项目开发工作流/` and require the user to continue with that single supported root only
+- if the supported `docs/workflows/新项目开发工作流/` root does not exist on disk, stop as `Blocked / Invalid Input`, explain that the supported workflow root is missing from the repository checkout, and do not continue until the repository state is repaired
 
 ## Output
 
@@ -201,6 +208,24 @@ A finding that needs runtime validation to determine severity must stay in Block
 
 ## Workflow
 
+### Step naming map
+
+The workflow may refer to the same control flow with either evidence-step labels or numbered step labels. Treat the following names as equivalent:
+
+- `Target Resolution and Binding` = `Step 1`
+- `A. Understand Target System Mechanics` = `Step 2a`
+- `B. Static Evidence Gathering` = `Step 2b`
+- `C. Structured Gap Analysis` = `Step 2c`
+- `D. Runtime Validation` = `Step 5`
+- `E. Output Findings` = `Step 6`
+
+`Step 3` and `Step 4` are orchestration stages between `C` and `D`/`E`:
+
+- `Step 3` decides lightweight vs task-based execution mode
+- `Step 4` creates task context and enters `trellis-brainstorm` when the task-based path is chosen
+
+They do not replace or rename the evidence-mainline labels above.
+
 ### Step 0: Version preflight
 
 Before target resolution or evidence gathering:
@@ -218,9 +243,13 @@ If the versions differ:
 
 ### Step 1: Resolve target and parse input
 
-1. Resolve exactly one `workflow_path`.
-2. Parse input parameters: `candidate_issues`, `need_runtime_validation`, `force_full_brainstorm`, `current_cli`.
-3. Mode is NOT decided here — proceed to Step 2 regardless.
+1. Resolve exactly one workflow target.
+2. If `workflow_path` is omitted, or the user says "this workflow" / "the workflow" without naming another path, bind the target to `docs/workflows/新项目开发工作流/`.
+3. If the resolved target is anything other than `docs/workflows/新项目开发工作流/`, stop as `Blocked / Invalid Input`.
+4. Do not treat the current repo root, active task directory, or temporary target-project root as the workflow target.
+5. Parse input parameters: `candidate_issues`, `need_runtime_validation`, `force_full_brainstorm`, `current_cli`.
+6. Record the resolved workflow root explicitly in the output/report target section.
+7. Mode is NOT decided here — proceed to Step 2 regardless.
 
 ### Step 2: Execute evidence mainline A → B → C
 
@@ -232,6 +261,7 @@ The following three sub-steps always execute. If `candidate_issues` were supplie
 
 Before auditing the workflow, understand the system it operates within:
 
+- fixed audit target root: `docs/workflows/新项目开发工作流/`
 - current workflow authority for managed surfaces: `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
 - current CLI boundary contract: `docs/workflows/新项目开发工作流/CLI原生适配边界矩阵.md`
 - current hidden-directory / managed-boundary contract: `docs/workflows/新项目开发工作流/装后隐藏目录与托管边界核对清单.md`
@@ -239,12 +269,14 @@ Before auditing the workflow, understand the system it operates within:
 - 各 CLI 原生承载方式（commands / skills / agents / hooks 的目录约定）
 - workflow 自身 install / upgrade / uninstall 脚本的实际行为
 - 工作流嵌入执行规范中的状态机与前置条件
+- current repo root, active task directory, and temporary target-project root are context inputs, not substitute audit targets
 - generated target-project evidence is about the temporary target project created for the audit, not this source repository's own hidden directories
 
 #### 2b. Static evidence gathering
 
 Read authoritative entry documents and indexes first, then trace references outward:
 
+- bind default static reading scope to `docs/workflows/新项目开发工作流/` and files it references; do not treat the repo root as the primary audit target
 - catalog every claim the workflow makes: steps, artifacts, boundaries, contracts
 - note every referenced file path, script, template
 - identify every cross-reference dependency
@@ -427,6 +459,11 @@ Required persisted scenario files:
 - `tests/19-current-cli-inference-failure.md`
 - `tests/20-script-behavior-mismatch.md`
 - `tests/21-version-drift-stop.md`
+- `tests/22-implicit-default-workflow-root.md`
+- `tests/23-unsupported-explicit-workflow-root.md`
+- `tests/24-active-task-not-audit-target.md`
+- `tests/25-temp-project-not-workflow-source.md`
+- `tests/26-ambiguous-natural-language-target.md`
 
 Every test file must use the same structure:
 

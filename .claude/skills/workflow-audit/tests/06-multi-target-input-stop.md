@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Verify that `workflow-audit` refuses to proceed when the input mentions multiple workflow targets and requires the user to choose one explicit `workflow_path`.
+Verify that `workflow-audit` refuses to proceed when the input mentions multiple workflow targets, because this skill supports only `docs/workflows/新项目开发工作流/`.
 
 ## Input
 
@@ -18,11 +18,12 @@ Input-contract stop before evidence mainline execution.
 
 - detect that more than one workflow target was supplied
 - stop before starting the evidence mainline
-- require the user to choose exactly one explicit workflow target
+- explain that the skill supports only `docs/workflows/新项目开发工作流/`
 - do not infer priority order or choose one target on the user's behalf
 
 ## Must Not
 
 - must not start A/B/C evidence gathering for multiple targets
 - must not silently pick one workflow root
+- must not silently rewrite the request to the supported root
 - must not produce mixed findings across two workflow roots

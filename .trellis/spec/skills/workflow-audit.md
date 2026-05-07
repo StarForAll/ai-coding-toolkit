@@ -10,10 +10,13 @@
 
 This skill covers:
 
-- workflow source-asset maintenance under `docs/workflows/*`
+- workflow source-asset maintenance for the workflow rooted at `docs/workflows/新项目开发工作流/`
 - workflow install / embed / post-install validation
 - CLI-native adaptation checks for Claude Code / OpenCode / Codex
 - evidence-first validation of candidate workflow issues before any source edits
+
+`workflow-audit` is not a generic selector for arbitrary entries under `docs/workflows/`.
+Its only supported workflow target is `docs/workflows/新项目开发工作流/`.
 
 It does not cover:
 
@@ -101,7 +104,7 @@ Each confirmed issue in the audit report must include, in addition to the schema
 
 Use `workflow-audit` when the user wants to:
 
-- audit or verify a workflow definition under `docs/workflows/*`
+- audit or verify the maintained workflow rooted at `docs/workflows/新项目开发工作流/`
 - confirm whether workflow issues are real before changing source files
 - validate workflow embed/install behavior against a `/tmp + trellis init` baseline
 - verify CLI adaptation or Codex handoff boundaries
@@ -116,8 +119,10 @@ Do not use it to determine whether a newer or older Trellis version is compatibl
 Natural language is allowed, but the recommended contract is:
 
 - `workflow_path`
-  - default: `docs/workflows/新项目开发工作流/`
-  - must resolve to exactly one workflow root
+  - only supported value: `docs/workflows/新项目开发工作流/`
+  - when omitted, resolve it to `docs/workflows/新项目开发工作流/`
+  - natural-language requests such as "audit this workflow" or "check the workflow" must bind to the same fixed workflow root
+  - must resolve to exactly one workflow root, and that root must be `docs/workflows/新项目开发工作流/`
 - `candidate_issues`
   - default: empty, meaning the skill discovers issues proactively through the full evidence mainline
   - when supplied: supplementary focus points injected into each evidence step; the evidence mainline still executes in full regardless
@@ -141,13 +146,21 @@ Default handoff order remains:
 
 Natural-language user constraints may override this order.
 
-If multiple workflow targets are supplied in one request, the skill must stop and require one explicit target before continuing.
+If multiple workflow targets are supplied in one request, the skill must stop, explain that it supports only `docs/workflows/新项目开发工作流/`, and require the user to continue with that single supported root only.
 
-If the resolved `workflow_path` does not exist on disk:
+If the resolved `workflow_path` is anything other than `docs/workflows/新项目开发工作流/`:
 
 - stop immediately
 - classify the stop as `Blocked / Invalid Input`
-- require the user to supply one valid workflow root before continuing
+- explain that this skill audits only `docs/workflows/新项目开发工作流/`
+- do not silently replace the requested target with the supported root
+
+If the supported `docs/workflows/新项目开发工作流/` root does not exist on disk:
+
+- stop immediately
+- classify the stop as `Blocked / Invalid Input`
+- explain that the supported workflow root is missing from the repository checkout
+- do not continue until the repository state is repaired
 
 ---
 
@@ -157,6 +170,24 @@ A, B, C always execute in order, regardless of whether `candidate_issues` are su
 
 D (Runtime Validation) is conditional, determined by findings from A/B/C and input parameters.
 E (Output Findings) always executes as the final report step.
+
+### Step Naming Map
+
+The workflow may refer to the same control flow with either evidence-step labels or numbered step labels. Treat the following names as equivalent:
+
+- `Target Resolution and Binding` = `Step 1`
+- `A. Understand Target System Mechanics` = `Step 2a`
+- `B. Static Evidence Gathering` = `Step 2b`
+- `C. Structured Gap Analysis` = `Step 2c`
+- `D. Runtime Validation` = `Step 5`
+- `E. Output Findings` = `Step 6`
+
+`Step 3` and `Step 4` are orchestration stages between `C` and `D`/`E`:
+
+- `Step 3` decides lightweight vs task-based execution mode
+- `Step 4` creates task context and enters `trellis-brainstorm` when the task-based path is chosen
+
+They do not replace or rename the evidence-mainline labels above.
 
 Three execution modes determine which evidence steps run and how findings are delivered:
 
@@ -196,10 +227,21 @@ If the versions differ:
 - recommend `workflow-capability-audit`
 - do not proceed to Step 1 or any later step
 
+### Target Resolution and Binding
+
+Before step A begins:
+
+- resolve exactly one workflow target
+- if `workflow_path` is omitted, or the user says "this workflow" / "the workflow" without naming another path, bind the target to `docs/workflows/新项目开发工作流/`
+- if the resolved target is anything other than `docs/workflows/新项目开发工作流/`, stop as `Blocked / Invalid Input`
+- do not treat the current repo root, active task directory, or temporary target-project root as the workflow target
+- record the resolved workflow root explicitly in the output/report target section
+
 ### A. Understand Target System Mechanics
 
 Before auditing the workflow, understand the system it operates within:
 
+- fixed audit target root: `docs/workflows/新项目开发工作流/`
 - current workflow authority for managed surfaces: `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
 - current CLI boundary contract: `docs/workflows/新项目开发工作流/CLI原生适配边界矩阵.md`
 - current hidden-directory / managed-boundary contract: `docs/workflows/新项目开发工作流/装后隐藏目录与托管边界核对清单.md`
@@ -207,12 +249,14 @@ Before auditing the workflow, understand the system it operates within:
 - 各 CLI 的原生承载方式（commands / skills / agents / hooks 的目录约定）
 - workflow 自身的 install / upgrade / uninstall 脚本实际行为
 - 工作流嵌入执行规范中的状态机与前置条件
+- current repo root, active task directory, and temporary target-project root are context inputs, not substitute audit targets
 - generated target-project evidence is about the temporary target project created for the audit, not this source repository's own hidden directories
 
 ### B. Static Evidence Gathering
 
 Read authoritative entry documents and indexes first, then trace references outward:
 
+- bind default static reading scope to `docs/workflows/新项目开发工作流/` and files it references; do not treat the repo root as the primary audit target
 - catalog every claim the workflow makes: steps, artifacts, boundaries, contracts
 - note every referenced file path, script, template
 - identify every cross-reference dependency
@@ -561,6 +605,11 @@ Required persisted scenario files:
 - `tests/19-current-cli-inference-failure.md`
 - `tests/20-script-behavior-mismatch.md`
 - `tests/21-version-drift-stop.md`
+- `tests/22-implicit-default-workflow-root.md`
+- `tests/23-unsupported-explicit-workflow-root.md`
+- `tests/24-active-task-not-audit-target.md`
+- `tests/25-temp-project-not-workflow-source.md`
+- `tests/26-ambiguous-natural-language-target.md`
 
 Each test file must use the same internal structure:
 
@@ -634,6 +683,11 @@ When a behavior change could affect the task-based audit path's dependence on `t
 - `.agents/skills/workflow-audit/tests/19-current-cli-inference-failure.md`
 - `.agents/skills/workflow-audit/tests/20-script-behavior-mismatch.md`
 - `.agents/skills/workflow-audit/tests/21-version-drift-stop.md`
+- `.agents/skills/workflow-audit/tests/22-implicit-default-workflow-root.md`
+- `.agents/skills/workflow-audit/tests/23-unsupported-explicit-workflow-root.md`
+- `.agents/skills/workflow-audit/tests/24-active-task-not-audit-target.md`
+- `.agents/skills/workflow-audit/tests/25-temp-project-not-workflow-source.md`
+- `.agents/skills/workflow-audit/tests/26-ambiguous-natural-language-target.md`
 - `.claude/skills/workflow-audit/references/input-template.md`
 - `.claude/skills/workflow-audit/references/audit-report-template.md`
 - `.claude/skills/workflow-audit/references/lightweight-output-template.md`
@@ -660,6 +714,11 @@ When a behavior change could affect the task-based audit path's dependence on `t
 - `.claude/skills/workflow-audit/tests/19-current-cli-inference-failure.md`
 - `.claude/skills/workflow-audit/tests/20-script-behavior-mismatch.md`
 - `.claude/skills/workflow-audit/tests/21-version-drift-stop.md`
+- `.claude/skills/workflow-audit/tests/22-implicit-default-workflow-root.md`
+- `.claude/skills/workflow-audit/tests/23-unsupported-explicit-workflow-root.md`
+- `.claude/skills/workflow-audit/tests/24-active-task-not-audit-target.md`
+- `.claude/skills/workflow-audit/tests/25-temp-project-not-workflow-source.md`
+- `.claude/skills/workflow-audit/tests/26-ambiguous-natural-language-target.md`
 - `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
 - `.agents/skills/workflow-capability-audit/SKILL.md`
 - `.claude/skills/workflow-capability-audit/SKILL.md`
