@@ -1196,3 +1196,36 @@ Aligned workflow documentation, installer guidance, and audit records with Trell
 ### Next Steps
 
 - None - task complete
+
+
+## Session 163: 修正 Trellis 0.5.4 升级契约漂移与模板状态
+
+**Date**: 2026-05-07
+**Task**: 修正 Trellis 0.5.4 升级契约漂移与模板状态
+**Branch**: `main`
+
+### Summary
+
+回退错误升级契约，删除拒收的 .new 候选，并补充共享技能层与 JSONL seed 的安全注释。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a9e2983` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
