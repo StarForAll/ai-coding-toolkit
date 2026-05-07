@@ -1,0 +1,7 @@
+{"file":".trellis/spec/skills/workflow-audit.md","reason":"Repo-local behavioral source of truth for workflow-audit across .agents/skills and .claude/skills."}
+{"file":".trellis/spec/skills/index.md","reason":"Skill-layer authoring and coupled-surface rules for repo-local maintainer skills."}
+{"file":".trellis/spec/docs/index.md","reason":"Boundary rules for source repo vs target project vs task runtime, which are central to this audit-scope fix."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Avoid drift between duplicated skill surfaces and references/tests when updating repeated wording."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Review cross-layer source-of-truth and deployment-copy boundaries before changing repo-local skill surfaces."}
+{"file":".trellis/tasks/05-07-fix-workflow-audit-target-scoping-and-review/prd.md","reason":"Task requirements, accepted scope, and acceptance criteria for this repair."}
+{"file":".trellis/tasks/05-07-fix-workflow-audit-target-scoping-and-review/research/deep-review-findings.md","reason":"Persisted static audit findings to carry into implementation and follow-up review."}
