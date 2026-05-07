@@ -1,0 +1,7 @@
+{"_example":"Add spec or research files only. Example: {\"file\": \".trellis/spec/scripts/python-conventions.md\", \"reason\": \"Python script editing conventions\"}"}
+{"file":".trellis/spec/guides/index.md","reason":"Cross-layer and code-reuse thinking guide entrypoint for repo maintenance changes touching multiple live deployment surfaces."}
+{"file":".trellis/spec/agents/index.md","reason":"Current live practice for editing agent deployment files directly in platform directories."}
+{"file":".trellis/spec/skills/index.md","reason":"Rules for repo-local maintainer skills and shared skill contracts."}
+{"file":".trellis/spec/docs/index.md","reason":"Repo-local documentation boundary; confirms docs/workflows product assets are not the current live runtime truth for this task."}
+{"file":".trellis/spec/scripts/index.md","reason":"Conventions for modifying runtime scripts and helper files under .trellis/scripts."}
+{"file":".trellis/tasks/05-07-trellis-live/prd.md","reason":"Task requirements and explicit live-Trellis-only scope for this fix."}

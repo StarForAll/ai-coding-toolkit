@@ -1,0 +1,7 @@
+{"_example":"Add spec or research files only. Example: {\"file\": \".trellis/spec/scripts/python-conventions.md\", \"reason\": \"Python script editing conventions\"}"}
+{"file":".trellis/spec/guides/index.md","reason":"Cross-layer consistency check across platform live deployment surfaces."}
+{"file":".trellis/spec/agents/index.md","reason":"Check current live agent deployment expectations after edits."}
+{"file":".trellis/spec/skills/index.md","reason":"Check repo-local maintainer skill consistency after edits."}
+{"file":".trellis/spec/docs/index.md","reason":"Check docs/live-runtime boundary remains consistent in edited references."}
+{"file":".trellis/spec/scripts/index.md","reason":"Check runtime script edits and helper contracts remain aligned."}
+{"file":".trellis/tasks/05-07-trellis-live/prd.md","reason":"Review scope and acceptance criteria against the delivered changes."}
