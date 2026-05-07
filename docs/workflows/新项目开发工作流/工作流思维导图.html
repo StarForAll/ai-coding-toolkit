@@ -86,7 +86,7 @@ const tree = [
         { html:'/trellis:test-first',cls:'L3', id:'p4_c2', cp:'.claude/commands/trellis/test-first.md', cd:'手动测试驱动入口' },
         { html:'project-planner / writing-plans', cls:'SK', id:'p4_s', su:'§4 计划 skills' },
       ]},
-      { html:'§5 开发实施循环', cls:'L1 c5', id:'p5', sub:'<span class="cmd">/trellis:start</span>', children:[
+      { html:'§5 开发实施循环', cls:'L1 c5', id:'p5', sub:'<span class="cmd">/trellis:continue</span>', children:[
         { html:'5.1 单需求开发主链', cls:'L2', det:'①重入当前已确认阶段/叶子task<br>②自动 before-dev→③生成 before-dev.md<br>④DoR→⑤AI实现→⑥本地门禁→⑦收口', id:'p5_1' },
         { html:'5.1 项目级审查',   cls:'L2', det:'全部代码任务完成后<br>project-audit 三步闭环<br>分析→方案→修改', id:'p5_2' },
         { html:'5.1.x 反思/批判',   cls:'L2', det:'实现后质量检查<br>多CLI审查门禁 review-gate<br>双模态执行 · 上下文污染检测', id:'p5_2x' },
@@ -108,12 +108,12 @@ const tree = [
         { html:'/trellis:delivery',    cls:'L3', id:'p6_c2', cp:'.claude/commands/trellis/delivery.md', cd:'测试交付 · 验收清单' },
         { html:'/trellis:break-loop',  cls:'L3', id:'p6_c3', cp:'.claude/commands/trellis/break-loop.md', cd:'缺陷反复 · 深根因分析' },
       ]},
-      { html:'§7 交付与沉淀', cls:'L1 c7', id:'p7', sub:'<span class="cmd">/trellis:record-session</span>', children:[
+      { html:'§7 交付与沉淀', cls:'L1 c7', id:'p7', sub:'<span class="cmd">/trellis:finish-work</span>', children:[
         { html:'7.1 文档更新',   cls:'L2', det:'客户版: 不含AI<br>开发版: 含AI', id:'p7_1' },
         { html:'7.2 项目交付',   cls:'L2', det:'客户/开发交付物<br>acceptance/deliverables/transfer-checklist<br>双轨交付门禁<br>尾款后最终移交', id:'p7_2' },
         { html:'7.3 经验沉淀',   cls:'L2', det:'AI经验沉淀<br>learn/ 目录<br>AI起草→人工确认→回流', id:'p7_3' },
         { html:'7.4 会话记录',   cls:'L2', det:'record-session<br>先记录再archive<br>元数据闭环校验', id:'p7_4' },
-        { html:'/trellis:record-session', cls:'L3', id:'p7_c', cp:'commands/shell/record-session-helper.py', cd:'会话记录 · 最终结尾入口' },
+        { html:'/trellis:finish-work', cls:'L3', id:'p7_c', cp:'.claude/commands/trellis/finish-work.md', cd:'会话记录 · 最终结尾入口' },
         { html:'learn/',          cls:'L3', id:'p7_d', cp:'docs/workflows/.../learn/', cd:'经验反馈沉淀目录' },
       ]},
       // ── Left-side branch flows (expand leftward) ──

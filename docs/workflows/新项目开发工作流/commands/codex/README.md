@@ -73,7 +73,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 - 共享 workflow skills 只写入 `.agents/skills/`
 - `.codex/skills/` 只保留 Codex 独有或项目自定义的 skills；不再承载重复 shared skills
-- `start` / `finish-work` 这类 baseline patch：**只增强活动 skills 目录**，即 `resolve_codex_skills_dir(root)` 解析出的主目录；当前 `trellis init` 下通常是 `.agents/skills/`
+- `trellis-continue` / `trellis-finish-work` 这类 baseline patch：**只增强活动 skills 目录**，即 `resolve_codex_skills_dir(root)` 解析出的主目录；当前 `trellis init` 下通常是 `.agents/skills/`；legacy `start` / `finish-work` 仅作为旧目标项目兼容输入
 - `parallel` 入口移除：只要某个 skills 目录里存在 `parallel`，就先备份，再从嵌入面移除
 - `upgrade-compat.py --check`：共享 skills 只检查 `.agents/skills/`；若 `.codex/skills/` 中出现重复 shared skills，视为应清理的重复副本
 
@@ -101,13 +101,13 @@ ls .codex/skills/parallel/SKILL.md 2>/dev/null
 还要补一层边界：
 
 - `feasibility`、`brainstorm`、`design`、`plan`、`test-first`、`check`、`review-gate`、`delivery` 这类阶段技能，通常来自当前 workflow 的嵌入资产
-- `start`、`finish-work`、`record-session` 这类技能/入口，默认应先理解为 **Trellis 基线能力**；其中当前 workflow 会在目标项目已有 `finish-work` skill 时注入项目化补丁，其余入口继续按基线能力与 workflow 文档约束承载
-- `start` 在当前 workflow 里的增强包括：自动选择具体 task、自动执行 before-dev 步骤、自动生成或刷新当前 task 的 `before-dev.md`
-- 卸载时也保持同一边界：`start` / `finish-work` 这类 baseline patch 只在**活动 skills 目录**恢复备份；非活动目录中的同名文件保持不动，因为安装器从未向该目录写入这些补丁
+- `trellis-continue`、`trellis-finish-work` 这类技能/入口，默认应先理解为 **Trellis 基线能力**；当前 workflow 会在目标项目已有 `trellis-continue` / `trellis-finish-work` skill 时注入项目化补丁；legacy `start` / `finish-work` / `record-session` 仅作为旧目标项目兼容输入
+- `trellis-continue` 在当前 workflow 里的增强包括：自动选择具体 task、自动执行 before-dev 步骤、自动生成或刷新当前 task 的 `before-dev.md`
+- 卸载时也保持同一边界：`trellis-continue` / `trellis-finish-work` 这类 baseline patch 只在**活动 skills 目录**恢复备份；legacy 同名文件仅在旧目标项目兼容路径中处理
 
 如果忽略“先有 Trellis，再嵌入 workflow”这层关系，就会误把继承资产看成 workflow 漏装或少定义。
 
-还要补一条 close-out 边界：`record-session` 仍按 Trellis 基线能力与 workflow 文档约束承载，而最终的 `archive` 继续直接调用目标项目 Trellis 基线里的 `python3 ./.trellis/scripts/task.py archive`。因此，目标项目最好先升级到当前最新 Trellis；否则即使 workflow 已安装成功，收尾链路仍可能继承旧基线中的 archive metadata auto-commit 问题。
+还要补一条 close-out 边界：当前 fresh baseline 的会话记录由 `trellis-finish-work` 链路承载；legacy `record-session` 若存在才进入兼容补丁 / 清理检查。最终的 `archive` 继续直接调用目标项目 Trellis 基线里的 `python3 ./.trellis/scripts/task.py archive`。因此，目标项目最好先升级到当前最新 Trellis；否则即使 workflow 已安装成功，收尾链路仍可能继承旧基线中的 archive metadata auto-commit 问题。
 
 ### close-out 自动提交失败恢复
 
@@ -172,7 +172,7 @@ Codex 支持 hooks。对这套 workflow，推荐在 `SessionStart` 阶段注入�
 - `.trellis/workflow.md`
 - `.trellis/spec/` 索引
 - 当前任务状态
-- `start` skill 指令
+- `trellis-continue` skill 指令
 
 当前仓库已有对应实现：
 
@@ -185,9 +185,9 @@ Codex 支持 hooks。对这套 workflow，推荐在 `SessionStart` 阶段注入�
 
 对 Codex，这套 workflow 的推荐入口不是项目自定义 slash commands，而是 skills：
 
-- `.agents/skills/start/SKILL.md`
+- `.agents/skills/trellis-continue/SKILL.md`
 - `.agents/skills/brainstorm/SKILL.md`
-- `.agents/skills/finish-work/SKILL.md`
+- `.agents/skills/trellis-finish-work/SKILL.md`
 - `.agents/skills/project-audit/SKILL.md`
 - `.agents/skills/check/SKILL.md`
 - `.agents/skills/review-gate/SKILL.md`
@@ -282,12 +282,12 @@ Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-ch
   - 深度技术调研 / 竞品分析优先 `exa_web_search_advanced_exa(type=deep-reasoning)`
   - GitHub 仓库理解优先 `deepwiki`
   - 未经过 `Context7`，不得输出 API / 配置 / 版本结论；若能力不可用，必须标记 `[Evidence Gap]`
-- `implement.toml`：保持 `workspace-write`
-- `check.toml`：改为 `workspace-write` 的可修复 implementation-stage check-agent
+- `trellis-implement.toml`：保持 `workspace-write`
+- `trellis-check.toml`：保持 `workspace-write` 的可修复 implementation-stage check agent
 
 需要特别区分：
 
-- `check.toml`：implementation 内部链的自修复检查角色
+- `trellis-check.toml`：implementation 内部链的自修复检查 agent
 - `/trellis:check`：implementation 之后的正式质量门禁阶段
 
 二者不是同一层能力。
@@ -320,7 +320,7 @@ Codex 官方内建 slash commands 是平台级控制能力，例如：
 
 - Trellis 原生 `plan agent` / `dispatch agent` 不属于当前 workflow 主链；当前 workflow 只吸收 `plan agent` 的 readiness gate 与最小 task-ready 产物意识
 - 当前 workflow 不采用 `parallel/worktree` 驱动的 `plan -> dispatch -> create-pr` 流水线
-- implementation 阶段只保留 `research -> implement -> check-agent` 这一组内部角色链
+- implementation 阶段只保留 Trellis 原生 `trellis-research -> trellis-implement -> trellis-check` 这一组内部角色链
 
 ## 推荐部署映射
 
@@ -331,7 +331,7 @@ Codex 官方内建 slash commands 是平台级控制能力，例如：
 | 项目长期规则 | `AGENTS.md` | 长期稳定的项目规则和执行原则 | ❌ 手动维护 |
 | Codex 项目配置 | `.codex/config.toml` | 指定 `AGENTS.md` fallback 等项目级配置 | ❌ 手动维护 |
 | 会话启动注入 | `.codex/hooks.json` + `.codex/hooks/*.py` | 自动注入 Trellis workflow 上下文 | ❌ 手动维护 |
-| workflow 技能 | `.agents/skills/*/SKILL.md`（共享） / `.codex/skills/*/SKILL.md`（仅 Codex 独有或项目自定义） | `start`、`brainstorm`、`finish-work` 等阶段入口；若已有基线 `finish-work` skill，则由安装器追加项目化补丁 | ✅ `install-workflow.py` |
+| workflow 技能 | `.agents/skills/*/SKILL.md`（共享） / `.codex/skills/*/SKILL.md`（仅 Codex 独有或项目自定义） | `.agents/skills/` 承载共享阶段 skills；`trellis-continue` / `trellis-finish-work` 属于活动 skills 目录中的 Trellis 基线入口并由安装器追加项目化补丁；`.codex/skills/` 不承载重复 shared skills | ✅ `install-workflow.py` |
 | 子代理 | `.codex/agents/*.toml` | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 不再 overlay，仅做 legacy bare-name → trellis-* 迁移 | ✅ legacy 迁移由 `install-workflow.py` |
 | 辅助脚本 | `.trellis/scripts/workflow/` | 校验、导出、静态验证脚本 | ✅ `install-workflow.py` |
 | 源码水印与归属证明产物 | `$TASK_DIR/design/`、`$TASK_DIR/delivery/` | 设计计划、提取验证、交付证明 | ❌ 人工维护 / workflow 阶段产出 |
@@ -392,12 +392,13 @@ Codex 有 slash commands，但当前 workflow 入口更适合建成 skills。
 以下文件由 `install-workflow.py` 负责部署，缺失表示安装未完成：
 
 ```bash
-test -f .agents/skills/start/SKILL.md
+test -f .agents/skills/trellis-continue/SKILL.md
+test -f .agents/skills/trellis-finish-work/SKILL.md
 test -f .agents/skills/brainstorm/SKILL.md
 test -f .agents/skills/check/SKILL.md
-test -f .codex/agents/research.toml
-test -f .codex/agents/implement.toml
-test -f .codex/agents/check.toml
+test -f .codex/agents/trellis-research.toml
+test -f .codex/agents/trellis-implement.toml
+test -f .codex/agents/trellis-check.toml
 ```
 
 ### 平台前置资产验证

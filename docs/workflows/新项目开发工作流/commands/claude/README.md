@@ -100,21 +100,20 @@ Claude Code 的用户入口仍是项目命令：
 
 上面这棵树表示的是**当前 workflow 分发的阶段命令资产**，其中既包含纯新增命令，也包含与 Trellis 基线同名、但由当前 workflow 提供合并语义的 `brainstorm` / `check`；它不是目标项目里的完整 Trellis 命令全集。
 
-因为这套 workflow 是在 `trellis init` 之后嵌入的，目标项目里还会保留 Trellis 原生命令，例如：
+因为这套 workflow 是在 `trellis init` 之后嵌入的，目标项目里还会保留 Trellis 原生命令。当前 Trellis 0.5 fresh baseline 的补丁目标是：
 
-- `start.md`：保留基线命令，再由 workflow 注入 Phase Router
+- `continue.md`：保留基线命令，再由 workflow 注入 Phase Router
 - `finish-work.md`：保留基线命令，再由 workflow 注入项目化补丁
-- `record-session.md`：保留基线命令，再由 workflow 注入元数据闭环补丁
 
-其中 `start.md` 的增强还包括：
+旧目标项目若仍存在 `start.md` / `record-session.md`，安装器只按 legacy compatibility 处理，不把它们作为 fresh baseline 要求。其中 `continue.md` 的增强还包括：
 
 - 自动选择当前要执行的具体 task
 - 自动执行 before-dev 步骤
 - 自动生成或刷新当前 task 的 `before-dev.md`
 
-因此，不要把“当前 workflow 命令树只列到 `delivery`”理解成“目标项目没有 `finish-work` / `record-session`”。
+因此，不要把“当前 workflow 命令树只列到 `delivery`”理解成“目标项目没有 `continue` / `finish-work`”。
 
-还要补一条 close-out 边界：`record-session` 虽然会被当前 workflow 注入元数据闭环补丁，但 `archive` 仍直接调用目标项目 Trellis 基线里的 `python3 ./.trellis/scripts/task.py archive`。因此，目标项目最好先升级到当前最新 Trellis；否则即使 workflow 已安装成功，收尾链路仍可能继承旧基线中的 archive metadata auto-commit 问题。
+还要补一条 close-out 边界：当前 fresh baseline 的会话记录由 `finish-work` 链路承载；legacy `record-session` 若存在才进入兼容补丁 / 清理检查。`archive` 仍直接调用目标项目 Trellis 基线里的 `python3 ./.trellis/scripts/task.py archive`。因此，目标项目最好先升级到当前最新 Trellis；否则即使 workflow 已安装成功，收尾链路仍可能继承旧基线中的 archive metadata auto-commit 问题。
 
 这层负责：
 
@@ -239,7 +238,7 @@ Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-ch
 | 工作流资产 | Claude Code 目标位置 | 说明 | 安装器管理 |
 |-----------|----------------------|------|-----------|
 | 阶段命令 | `.claude/commands/trellis/*.md` | 用户显式触发的 workflow 命令 | ✅ `install-workflow.py` |
-| Trellis 原生命令基线 | `.claude/commands/trellis/start.md` `finish-work.md` `record-session.md` | 由 `trellis init` 提供；当前 workflow 会对 `start` / `finish-work` / `record-session` 注入补丁，但不重新定义完整基线 | ✅ 补丁由安装器注入 |
+| Trellis 原生命令基线 | `.claude/commands/trellis/continue.md` `finish-work.md` | 由 `trellis init` 提供；当前 workflow 会对 `continue` / `finish-work` 注入补丁，但不重新定义完整基线；legacy `start` / `record-session` 仅用于旧目标项目兼容 | ✅ 补丁由安装器注入 |
 | 项目长期规则 | `AGENTS.md` | 稳定执行规则、证据门禁、能力优先级 | ❌ 手动维护 |
 | 共享运行时基线 | `.claude/settings.json` | hooks 接线、默认 deny / shared baseline | ❌ 手动维护 |
 | 本机权限扩展 | `.claude/settings.local.json` | MCP allowlist、本地调试权限 | ❌ 手动维护 |
@@ -267,7 +266,7 @@ test -f AGENTS.md
 test -f .claude/settings.json
 test -f .claude/hooks/session-start.py
 test -f .claude/hooks/inject-subagent-context.py
-test -f .claude/commands/trellis/start.md
+test -f .claude/commands/trellis/continue.md
 test -f .claude/agents/trellis-research.md
 test -f .claude/agents/trellis-implement.md
 test -f .claude/agents/trellis-check.md

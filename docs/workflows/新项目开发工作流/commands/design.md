@@ -344,7 +344,7 @@ design 后半段不得一次性跑完，而要按多个子块分段执行。每�
 2. 基于当前项目作用/背景/技术架构，对当前项目 `.trellis/spec/` 做分析完善
 3. 明确项目自动化检查矩阵
 4. 同步适配当前项目的 `/trellis:finish-work`
-5. 同步适配当前项目的 `/trellis:record-session`
+5. 同步适配当前项目的 close-out 基线（当前 fresh baseline 为 `/trellis:finish-work` / `trellis-finish-work`，legacy `/trellis:record-session` 仅旧目标项目兼容）
 6. 若 `ownership_proof_required = yes`，同步建立源码水印与归属证明基线
 
 源码水印与归属证明基线要求：
@@ -494,4 +494,4 @@ README.en.md
 | 设计不完善，回退补讨论/补文档 | `/trellis:design` | 继续 design 阶段，或显式触发 `design` skill | 先做 gap review，不直接整批重生成内容 |
 | 冻结后出现新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 不直接在当前阶段吸收 |
 | 检查跨层一致性 | `/trellis:check-cross-layer` | 检查跨层影响，或显式触发 `check-cross-layer` skill | 设计涉及多层时建议执行 |
-| 不确定当前任务/状态 | `/trellis:start` | 描述当前状态恢复意图，或显式触发 `start` skill | 回到当前已确认阶段的状态恢复分支 |
+| 不确定当前任务/状态 | `/trellis:continue` | 描述当前状态恢复意图，或显式触发 `trellis-continue` skill | 回到当前已确认阶段的状态恢复分支 |

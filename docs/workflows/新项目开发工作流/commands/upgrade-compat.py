@@ -13,7 +13,7 @@
 - 目标项目必须已完成当前最新 Trellis 官方升级；否则连只读分析和本脚本都不允许执行
 - 建议先完成三态分析（A 纯净基线 / B 最新 workflow 期望状态 / C 目标项目真实状态）
 - 当前 workflow 会重新部署合并型 + 纯新增型阶段命令资产
-- `start.md` / `finish-work.md` / `record-session.md` 属于 Trellis 基线命令，升级脚本负责恢复并重新注入 workflow 补丁
+- 当前 fresh baseline 的 `continue.md` / `finish-work.md` 属于 Trellis 基线命令，升级脚本负责恢复并重新注入 workflow 补丁；legacy `start.md` / `record-session.md` 仅按旧目标项目兼容路径处理
 - 若 Trellis 或 workflow 自身发生结构性 breaking change，本脚本不替代人工迁移判断
 """
 
@@ -120,7 +120,8 @@ _ENTRY_COMMAND_CANDIDATES = ("continue.md", "start.md")
 _IGNORE_EMBED_ATTEMPT_ENV = "WORKFLOW_IGNORE_EMBED_ATTEMPT"
 # 当前 workflow 分发的阶段命令。
 # `brainstorm` / `check` 与 Trellis 基线同名，但当前 workflow 采用合并后的阶段语义；
-# `start` / `finish-work` / `record-session` 仍来自 Trellis 基线，并由当前 workflow 注入补丁。
+# fresh baseline `continue` / `finish-work` 仍来自 Trellis 基线，并由当前 workflow 注入补丁；
+# legacy `start` / `record-session` 仅按旧目标项目兼容路径处理。
 _CLI_DIRS = CLI_DIRS
 _CLI_ALT_DIRS = CLI_ALT_DIRS
 _ALL_CLI_TYPES = ALL_CLI_TYPES

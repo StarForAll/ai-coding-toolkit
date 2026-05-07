@@ -330,8 +330,8 @@ $TASK_DIR/
 | 字段 | 填写位置 | 作用 | 下游消费点 |
 |---|---|---|---|
 | `project_engagement_type` | `## 概览` | 判断是否启用外包项目控制分支 | 所有后续阶段先判定项目类别；非外包项目不启用首/尾款控制 |
-| `kickoff_payment_ratio` | `## 概览` | 冻结外包项目的最低启动款比例 | `/trellis:start` / `workflow-state.py` 判断 implementation / test-first 是否允许开启 |
-| `kickoff_payment_received` | `## 概览` | 冻结外包项目是否已满足开工门禁 | `/trellis:start` / `workflow-state.py` 阻止在首款未到账时开工 |
+| `kickoff_payment_ratio` | `## 概览` | 冻结外包项目的最低启动款比例 | `/trellis:continue` / `workflow-state.py` 判断 implementation / test-first 是否允许开启 |
+| `kickoff_payment_received` | `## 概览` | 冻结外包项目是否已满足开工门禁 | `/trellis:continue` / `workflow-state.py` 阻止在首款未到账时开工 |
 | `delivery_control_track` | `## 概览` | 决定交付轨道 | `/trellis:design` 选择必选 spec；`/trellis:plan` 决定是否拆试运行授权任务 |
 | `delivery_control_handover_trigger` | `## 概览` | 定义最终控制权移交触发条件 | `/trellis:plan` 设置前置依赖；`/trellis:delivery` 判断是否允许最终移交 |
 | `delivery_control_retained_scope` | `## 概览` | 明确尾款前仍由开发者保留的控制范围 | `/trellis:plan` 拆 retained-control 任务；`/trellis:delivery` 校验未提前移交 |
@@ -396,4 +396,4 @@ $TASK_DIR/
 | 继续推进项目 | `/trellis:brainstorm` | 继续需求发现，或显式触发 `brainstorm` skill | **默认推荐**。仅在用户明确确认，且当前 `assessment.md` 仍有效时才允许切换；后续会话也可直接复用这份评估结果 |
 | 信息不足，先补充再评估 | `/trellis:feasibility` | 补信息后重跑评估，或显式触发 `feasibility` skill | 默认用于 `暂停` 结论；补齐缺口、谈判后重跑 |
 | 评估不通过，终止 | — | — | 记录原因，保留 `assessment.md` 作为拒绝依据 |
-| 不确定下一步 | `/trellis:start` | 描述当前意图，或显式触发 `start` skill | 用 Phase Router / skill 路由做阶段检测 |
+| 不确定下一步 | `/trellis:continue` | 描述当前意图，或显式触发 `trellis-continue` skill | 用 Phase Router / skill 路由做阶段检测 |

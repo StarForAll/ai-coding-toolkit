@@ -5,7 +5,7 @@ description: 需要显式先测或补验证证据？进入手动测试驱动模�
 
 # /trellis:test-first — 手动测试驱动入口
 
-> **Workflow Position**: §4.3 → 默认前: `/trellis:start` 前的显式手动入口 → 后: `/trellis:start`
+> **Workflow Position**: §4.3 → 默认前: `/trellis:continue` 前的显式手动入口 → 后: `/trellis:continue`
 > **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:test-first`） · ✅ OpenCode（TUI: `/trellis:test-first`；CLI: `trellis/test-first`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:test-first` 命令；见 `codex/README.md`）
 
 > **Strong Gate**: 本阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束。测试先行完成后，必须等待用户确认，不能自动推进到实现或 check。
@@ -18,7 +18,7 @@ description: 需要显式先测或补验证证据？进入手动测试驱动模�
 
 默认主链中：
 
-- 进入某个具体 task 实现前，由 `/trellis:start` 自动执行 `before-dev`
+- 进入某个具体 task 实现前，由 `/trellis:continue` 自动执行 `before-dev`
 - task 级测试门禁自动补到：
 
 ```text
@@ -64,18 +64,18 @@ $TASK_DIR/before-dev.md
 
 若以上内容仍未明确，先回到：
 
-- `/trellis:start`：自动执行 before-dev 并补齐 task 级门禁
+- `/trellis:continue`：自动执行 before-dev 并补齐 task 级门禁
 - 或 `/trellis:design`：补齐项目级全局测试基线
 
 推荐进入顺序：
 
-1. 先通过 `/trellis:start` 进入一次主链，让当前 task 自动生成 `before-dev.md`
+1. 先通过 `/trellis:continue` 进入一次主链，让当前 task 自动生成 `before-dev.md`
 2. 如果仍需显式先测，再进入 `/trellis:test-first` 补测试或补验证证据
-3. 若是 `L0` 从 `brainstorm` 直接进入 `test-first` / `start` 的轻量路径，也不能跳过项目级粗估；至少要先在 `task_dir/prd.md` 完成粗估落盘
+3. 若是 `L0` 从 `brainstorm` 直接进入 `test-first` / `continue` 的轻量路径，也不能跳过项目级粗估；至少要先在 `task_dir/prd.md` 完成粗估落盘
 
 边界说明：
 
-- 当前 workflow 里，`before-dev.md` 由 `/trellis:start` 在进入 implementation / test-first 前自动执行 before-dev 步骤时生成或刷新
+- 当前 workflow 里，`before-dev.md` 由 `/trellis:continue` 在进入 implementation / test-first 前自动执行 before-dev 步骤时生成或刷新
 - 手动单独调用 `/trellis:before-dev` 仍按 Trellis 基线语义理解为“读规范 / 注入项目知识”，不默认承诺一定会单独生成 `before-dev.md`
 
 ## 流程
@@ -110,7 +110,7 @@ $TASK_DIR/before-dev.md
 
 ### Step 4: 回到实现主链
 
-测试就绪后，回到 `/trellis:start` 进入实现。
+测试就绪后，回到 `/trellis:continue` 进入实现。
 
 ---
 
@@ -130,8 +130,8 @@ $TASK_DIR/
 
 | 你的意图 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
-| 开始实现代码 | `/trellis:start` | 直接进入实施，或显式触发 `start` skill | **默认推荐**。仅在用户明确确认后才允许回到主链进入实现 |
+| 开始实现代码 | `/trellis:continue` | 直接进入实施，或显式触发 `trellis-continue` skill | **默认推荐**。仅在用户明确确认后才允许回到主链进入实现 |
 | 继续补测试 | `/trellis:test-first` | 继续补测试，或显式触发 `test-first` skill | 测试证据仍不足 |
 | 发现任务边界不对，需要重拆 | `/trellis:plan` | 回退任务拆解，或显式触发 `plan` skill | 重新调整 task 图与门禁摘要 |
 | 冻结后出现新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先完成评估与基线更新，再回到受影响的最早阶段 |
-| 不确定下一步 | `/trellis:start` | 描述当前意图，或显式触发 `start` skill | 用 Phase Router / skill 路由做阶段检测 |
+| 不确定下一步 | `/trellis:continue` | 描述当前意图，或显式触发 `trellis-continue` skill | 用 Phase Router / skill 路由做阶段检测 |

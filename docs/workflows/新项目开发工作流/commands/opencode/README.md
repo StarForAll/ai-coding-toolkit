@@ -73,8 +73,8 @@ OpenCode 下的 MCP / skills 配置不应全部堆进 `instructions`。
 
 对 OpenCode 来说，这不改变它的原生入口判断：
 
-- TUI 中仍按 `/trellis:start`
-- CLI 中仍按 `trellis/start`
+- TUI 中按 `/trellis:continue`
+- CLI 中按 `trellis/continue`
 - 不应因为同项目里还安装了 Codex skills，就把 OpenCode 写成“只靠自然语言触发”
 
 > 注意：`.agents/skills/*/SKILL.md` 并不是“只与 Codex 相关”。按 OpenCode 官方 skills 文档（<https://opencode.ai/docs/skills/>），OpenCode 从当前工作目录向上回溯到 git worktree 时，会同时扫描：
@@ -106,21 +106,20 @@ OpenCode 原生支持项目级命令目录。对这套 workflow，推荐把命�
 
 上面这棵树表示的是**当前 workflow 分发的阶段命令资产**，其中既包含纯新增命令，也包含与 Trellis 基线同名、但由当前 workflow 提供合并语义的 `brainstorm` / `check`；它不是目标项目里的完整 Trellis 命令全集。
 
-因为这套 workflow 是在 `trellis init` 之后嵌入的，目标项目原本还会有 Trellis 基线命令，例如：
+因为这套 workflow 是在 `trellis init` 之后嵌入的，目标项目原本还会有 Trellis 基线命令。当前 Trellis 0.5 fresh baseline 的补丁目标是：
 
-- `start.md`：保留基线命令，再由 workflow 注入 Phase Router
+- `continue.md`：保留基线命令，再由 workflow 注入 Phase Router
 - `finish-work.md`：保留基线命令，再由 workflow 注入项目化补丁
-- `record-session.md`：保留基线命令，再由 workflow 注入元数据闭环补丁
 
-其中 `start.md` 的增强还包括：
+旧目标项目若仍存在 `start.md` / `record-session.md`，安装器只按 legacy compatibility 处理，不把它们作为 fresh baseline 要求。其中 `continue.md` 的增强还包括：
 
 - 自动选择当前要执行的具体 task
 - 自动执行 before-dev 步骤
 - 自动生成或刷新当前 task 的 `before-dev.md`
 
-所以看到自定义命令树只列到 `delivery`，不能推导出“这个项目没有 `finish-work` / `record-session`”。
+所以看到自定义命令树只列到 `delivery`，不能推导出“这个项目没有 `continue` / `finish-work`”。
 
-还要补一条 close-out 边界：`record-session` 虽然会被当前 workflow 注入元数据闭环补丁，但 `archive` 仍直接调用目标项目 Trellis 基线里的 `python3 ./.trellis/scripts/task.py archive`。因此，目标项目最好先升级到当前最新 Trellis；否则即使 workflow 已安装成功，收尾链路仍可能继承旧基线中的 archive metadata auto-commit 问题。
+还要补一条 close-out 边界：当前 fresh baseline 的会话记录由 `finish-work` 链路承载；legacy `record-session` 若存在才进入兼容补丁 / 清理检查。`archive` 仍直接调用目标项目 Trellis 基线里的 `python3 ./.trellis/scripts/task.py archive`。因此，目标项目最好先升级到当前最新 Trellis；否则即使 workflow 已安装成功，收尾链路仍可能继承旧基线中的 archive metadata auto-commit 问题。
 
 在 Trellis 约定中，这一层负责承载“用户显式调用的阶段命令”。
 
@@ -149,10 +148,10 @@ OpenCode 原生支持项目级命令目录。对这套 workflow，推荐把命�
 
 命令路径语法也要与 Claude / Codex 风格区分开：
 
-- Claude Code 文档通常写成 `/trellis:start`
-- OpenCode CLI 的 `run --command` 入口实际使用 `trellis/start`
+- Claude Code 文档通常写成 `/trellis:continue`
+- OpenCode CLI 的 `run --command` 入口实际使用 `trellis/continue`
 
-也就是说，目录命名空间 `trellis/start.md` 在 OpenCode CLI 中对应的命令标识应按 `trellis/start` 理解，而不是直接照搬冒号语法；同项目里即使同时存在 Codex 的 `start` skill，也不影响 OpenCode 继续使用命令入口。
+也就是说，目录命名空间 `trellis/continue.md` 在 OpenCode CLI 中对应的命令标识应按 `trellis/continue` 理解，而不是直接照搬冒号语法；legacy `trellis/start` 仅用于旧目标项目兼容；同项目里即使同时存在 Codex 的 legacy `start` skill，也不影响 OpenCode 继续使用命令入口。
 
 ### 2. Rules：`AGENTS.md` + `opencode.json.instructions`
 
@@ -258,7 +257,7 @@ OpenCode 不应被写成“和 Claude 完全等价”，因为它在 hook / suba
 | 工作流资产 | OpenCode 目标位置 | 说明 | 安装器管理 |
 |-----------|------------------|------|-----------|
 | 阶段命令 | `.opencode/commands/trellis/*.md` | 用户显式触发的 workflow 命令 | ✅ `install-workflow.py` |
-| Trellis 原生命令基线 | `.opencode/commands/trellis/start.md` `finish-work.md` `record-session.md` | 由 `trellis init` 提供；当前 workflow 会对 `start` / `finish-work` / `record-session` 注入补丁，但不重新分发完整基线 | ✅ 补丁由安装器注入 |
+| Trellis 原生命令基线 | `.opencode/commands/trellis/continue.md` `finish-work.md` | 由 `trellis init` 提供；当前 workflow 会对 `continue` / `finish-work` 注入补丁，但不重新分发完整基线；legacy `start` / `record-session` 仅用于旧目标项目兼容 | ✅ 补丁由安装器注入 |
 | 子代理定义 | `.opencode/agents/*.md` | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 不再 overlay，仅做 legacy bare-name → trellis-* 迁移 | ✅ legacy 迁移由 `install-workflow.py` |
 | 项目长期规则 | `AGENTS.md` | 稳定执行规则、风险边界、语言策略 | ❌ 手动维护 |
 | workflow 文档注入 | `opencode.json.instructions` | 只挂主入口与必要补充，不默认全量挂载所有阶段文档 | ❌ 手动维护 |
@@ -311,7 +310,7 @@ OpenCode 不应被写成“和 Claude 完全等价”，因为它在 hook / suba
 以下文件由 `install-workflow.py` 负责部署，缺失表示安装未完成：
 
 ```bash
-test -f .opencode/commands/trellis/start.md
+test -f .opencode/commands/trellis/continue.md
 test -f .opencode/commands/trellis/review-gate.md
 test -f .opencode/commands/trellis/brainstorm.md
 test -f .opencode/commands/trellis/check.md
@@ -358,7 +357,7 @@ HOME="$TMP_ROOT/home" opencode agent list
 ```bash
 HOME="$TMP_ROOT/home" opencode run \
   --dir "$TMP_ROOT/project" \
-  --command trellis/start \
+  --command trellis/continue \
   "请按当前项目 workflow 开始会话并说明下一步"
 ```
 

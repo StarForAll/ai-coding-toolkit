@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/docs/index.md", "reason": "Documentation boundary rules for distinguishing source-repo workflow assets, task-local audit artifacts, and generated target-project outputs."}
+{"file": ".trellis/spec/scripts/workflow-installer-upgrade-contracts.md", "reason": "Installer and upgrade contracts relevant to Trellis 0.5 carrier names, Codex skills directory boundaries, and legacy migration behavior."}
+{"file": ".trellis/spec/guides/index.md", "reason": "Cross-layer and code-reuse thinking triggers for workflow source, docs, scripts, specs, and deployment-boundary drift."}
+{"file": ".trellis/tasks/05-07-workflow-audit-native-overlap-redundancy/research/deep-analysis.md", "reason": "Task-local refined audit evidence and corrected interpretation for native Trellis overlap and redundancy."}

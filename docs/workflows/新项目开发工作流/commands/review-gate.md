@@ -236,6 +236,6 @@ tmp/multi-cli-review/<task-id>/
 | `skip`，可直接提交前检查 | `/trellis:finish-work` | 进入提交前检查，或显式触发 `finish-work` skill | **默认推荐**。仅在用户明确确认后才允许进入提交前检查 |
 | `required` 或接受 `recommended` | 在已具备 `multi-cli-review` 能力的其他 CLI 中运行 `multi-cli-review` | 在目标 CLI 中发起多 CLI 审查，或显式触发 `multi-cli-review` skill | 默认 reviewer 数为 2；若目标 CLI 尚未具备该 skill，先补齐能力再执行 |
 | 报告已就绪，准备汇总修复 | `multi-cli-review-action` 能力 | `multi-cli-review-action` skill | 当前 CLI 先汇总报告、输出 `summary`、等待用户确认后仅执行低回归的 `adopted` 修复，再重新验证 |
-| 审查发现需回到实现阶段 | `/trellis:start` | 回到实施阶段，或显式触发 `start` skill | 回到当前任务修复问题 |
+| 审查发现需回到实现阶段 | `/trellis:continue` | 回到实施阶段，或显式触发 `trellis-continue` skill | 回到当前任务修复问题 |
 | 审查发现冻结后新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先处理评估与基线更新，再回到受影响的最早阶段 |
 | 出现冲突或超过建议轮次仍未收敛 | 用户人工决策 | 用户人工决策 | 若用户未明确要求继续下一轮，先做人工裁决 |

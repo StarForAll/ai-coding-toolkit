@@ -89,7 +89,7 @@ Notes:
 - `record-session` is the real close-out entry. It needs the current task context before archive clears `.trellis/.current-task`.
 - If `record-session-helper.py` fails, do not archive yet.
 - `archive` 预期会清除 `.trellis/.current-task`；真正需要关注的阻塞条件是 `.trellis/tasks` 元数据仍然 dirty。
-- Detailed close-out gates still belong to the installed `/trellis:finish-work`, `/trellis:delivery`, and `/trellis:record-session` entries; this workflow guide only summarizes the default path.
+- Detailed close-out gates still belong to the installed `/trellis:finish-work` / `trellis-finish-work` and `/trellis:delivery` entries; legacy `/trellis:record-session` is old-target compatibility only. This workflow guide only summarizes the default path.
 
 ### Pre-end Checklist
 

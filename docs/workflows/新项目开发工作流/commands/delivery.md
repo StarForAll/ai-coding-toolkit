@@ -5,10 +5,10 @@ description: 开发完成？准备交付 — 验收测试、交付物生成、�
 
 # /trellis:delivery — 项目测试、交付与沉淀
 
-> **Workflow Position**: §6+§7 → 前: `/trellis:finish-work` → 后: `/trellis:record-session`
+> **Workflow Position**: §6+§7 → 前: `/trellis:finish-work` → 后: `/trellis:finish-work`（最终 close-out；legacy `/trellis:record-session` 仅旧目标项目兼容）
 > **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:delivery`） · ✅ OpenCode（TUI: `/trellis:delivery`；CLI: `trellis/delivery`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:delivery` 命令；见 `codex/README.md`）
 
-> **Strong Gate**: 本阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束。delivery 完成后，必须等待用户明确确认，不能自动进入 `record-session`。
+> **Strong Gate**: 本阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束。delivery 完成后，必须等待用户明确确认，不能自动进入 close-out。
 
 ---
 
@@ -255,16 +255,16 @@ docs/workflows/新项目开发工作流/learn/
 
 ### Step 10: 收尾记录校验
 
-进入 `/trellis:record-session` 前，先确认：
+进入最终 close-out 前，先确认：
 
 - 已完成内容已由人工测试并提交
-- `/trellis:record-session` 在此只用于**当前任务完成后的最终收尾记录**
+- 当前 fresh baseline 使用 `/trellis:finish-work` / `trellis-finish-work` 承载最终收尾记录；legacy `/trellis:record-session` 仅用于旧目标项目兼容
 - 当前执行任务已完成，且本轮收尾只围绕**当前任务**
 - 未完成任务不要误归档；非当前任务不要借本轮收尾顺手自动提交
 - 不为了补齐新规则或整理台账而批量回写旧任务、旧会话记录或已归档目录
 - staged 区不得混入非目标变更；若存在 staged 污染，必须先中断处理
 
-收尾顺序：**先 record-session，再 archive**。record-session 需要当前任务上下文来生成会话记录；archive 会清除 `.current-task`，所以必须在 record-session 完成后再执行。
+收尾顺序：**先通过 close-out helper 记录 session，再 archive**。session 记录需要当前任务上下文；archive 会清除 `.current-task`，所以必须在记录完成后再执行。
 
 ```bash
 python3 <WORKFLOW_DIR>/commands/shell/record-session-helper.py \
@@ -283,7 +283,7 @@ git status --short .trellis/tasks .trellis/.current-task
 判定规则：
 
 - helper 返回 0：会话记录与元数据闭环完成，可以继续 archive
-- helper 返回非 0：`/trellis:record-session` 不算完成，先处理 metadata closure 失败原因，不要 archive
+- helper 返回非 0：close-out 不算完成，先处理 metadata closure 失败原因，不要 archive
 - archive 后 `git status --short .trellis/tasks .trellis/.current-task` 输出应为空
 
 ---
@@ -335,9 +335,9 @@ $TASK_DIR/
 
 | 验收结果 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
-| 全部通过，准备收尾 | `/trellis:record-session` | 进入会话收尾，或显式触发 `record-session` skill | **默认推荐**。仅在用户明确确认后才允许进入会话收尾；先通过 helper 完成记录与元数据闭环，再 archive |
+| 全部通过，准备收尾 | `/trellis:finish-work` | 进入会话收尾，或显式触发 `trellis-finish-work` skill | **默认推荐**。仅在用户明确确认后才允许进入会话收尾；先通过 helper 完成记录与元数据闭环，再 archive |
 | 有 P0/P1 缺陷 | `/trellis:break-loop` | 进入深度排障，或显式触发 `break-loop` skill | 深度分析 Bug 根因 |
-| 有 P2/P3 缺陷 | `/trellis:start` | 回到实施阶段，或显式触发 `start` skill | 回到实施阶段修复 |
+| 有 P2/P3 缺陷 | `/trellis:continue` | 回到实施阶段，或显式触发 `trellis-continue` skill | 回到实施阶段修复 |
 | 验收中出现冻结后新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先完成变更评估与确认；不要直接混入当前交付 |
 | 需要更新规范文档 | `/trellis:update-spec` | 记录并更新规范，或显式触发 `update-spec` skill | 沉淀新发现的模式到 spec |
 | 需要请求代码审查 | `requesting-code-review` 能力 | `requesting-code-review` skill | 提交前外部审查 |

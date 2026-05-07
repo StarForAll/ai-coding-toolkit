@@ -86,8 +86,8 @@ _CLI_DIRS = CLI_DIRS
 _CLI_ALT_DIRS = CLI_ALT_DIRS
 _ALL_CLI_TYPES = ALL_CLI_TYPES
 # 对 Trellis 原生命令做增强时使用的补丁标记。
-# 当前 workflow 会增强 `continue.md` / legacy `start.md`、`finish-work.md` 与 legacy `record-session.md`，
-# 而不是重写它们的全部基线内容。
+# 当前 workflow 会增强 fresh baseline `continue.md` / `finish-work.md`；
+# legacy `start.md` / `record-session.md` 仅在旧目标项目兼容路径中处理。
 _PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 _FINISH_WORK_MARKER = "<!-- finish-work-projectization-patch -->"
 _FINISH_WORK_START_HEADING = "### 1. Code Quality"
@@ -133,7 +133,7 @@ _NL_ROUTING_SECTION = """\
 > - Claude Code / OpenCode：优先使用项目级 `/trellis:xxx` 命令；OpenCode CLI 可使用 `trellis/xxx`
 > - Codex：通过 `AGENTS.md` 自然语言路由或显式触发对应 skill；不要期待项目级 `/trellis:xxx` 命令目录
 > - 本表用于缩小候选范围，不表示所有 CLI 都存在确定性的自动命令路由；若命中歧义、缺少前置条件或上下文不足，仍应先确认再进入对应阶段
-> - 当前 workflow 采用强门禁阶段状态机：阶段切换必须由用户明确确认；`/trellis:start` 只重入当前已确认阶段，不自动跨阶段推进
+> - 当前 workflow 采用强门禁阶段状态机：阶段切换必须由用户明确确认；`/trellis:continue` 只重入当前已确认阶段，不自动跨阶段推进；legacy `/trellis:start` 仅用于旧目标项目兼容
 
 ### 工作流阶段命令
 
@@ -149,25 +149,25 @@ _NL_ROUTING_SECTION = """\
 | 补充审查、多 CLI 审查、多人审查、让其他 CLI 看一下、review-gate、审查门禁 | `/trellis:review-gate` | 描述补充审查意图，或显式触发 `review-gate` skill | §5.1.y 补充审查 |
 | 提交前检查、准备提交、完成检查、commit 前、收尾 | `/trellis:finish-work` | 描述提交前检查意图，或显式触发 `trellis-finish-work` skill | §6 提交检查 |
 | 交付、部署、上线、发布、测试通过、准备交付、跑验收、整理交付物、项目收尾 | `/trellis:delivery` | 描述交付收尾意图，或显式触发 `delivery` skill | §6+§7 测试交付 |
-| 记录、保存进度、收工、结束工作 | `/trellis:record-session` | 描述会话收尾意图，或显式触发 `trellis-finish-work` skill | §7 会话记录 |
+| 记录、保存进度、收工、结束工作 | `/trellis:finish-work` | 描述会话收尾意图，或显式触发 `trellis-finish-work` skill | §7 会话记录；legacy `/trellis:record-session` 仅兼容旧目标项目 |
 
 ### 框架通用命令
 
 | 触发关键词 | Claude / OpenCode 入口 | Codex 入口 | 说明 |
 |-----------|------------------------|------------|------|
-| 开始、新会话、继续、下一步 | `/trellis:start` | 描述当前意图，或显式触发 `trellis-continue` skill | Phase Router 自动检测 |
+| 开始、新会话、继续、下一步 | `/trellis:continue` | 描述当前意图，或显式触发 `trellis-continue` skill | Phase Router 自动检测；legacy `/trellis:start` 仅兼容旧目标项目 |
 | 卡住了、反复出错、死循环、调不通 | `/trellis:break-loop` | 描述排障意图，或显式触发 `trellis-break-loop` skill | 深度 bug 分析 |
 | 更新规范、新发现、沉淀经验 | `/trellis:update-spec` | 描述规范更新意图，或显式触发 `trellis-update-spec` skill | 规范更新 |
 | 跨层检查、跨模块、影响面 | `/trellis:check-cross-layer` | 描述跨层检查意图，或显式触发 `check-cross-layer` skill | 跨层检查 |
 | 集成 skill、添加 skill | `/trellis:integrate-skill` | 描述 skill 集成意图，或显式触发 `integrate-skill` skill | Skill 集成 |
-| 读规范、开发前准备、看看有什么规范 | `/trellis:before-dev` | 描述开发前准备意图，或显式触发 `trellis-before-dev` skill | 开发前读规范；默认主链里也会由 start 自动执行 |
+| 读规范、开发前准备、看看有什么规范 | `/trellis:before-dev` | 描述开发前准备意图，或显式触发 `trellis-before-dev` skill | 开发前读规范；默认主链里也会由 continue 自动执行 |
 | 新人入门、项目介绍、怎么用 trellis | `/trellis:onboard` | 描述 onboarding 意图，或显式触发 `onboard` skill | 项目 onboarding |
 | 创建命令、新命令、加个命令 | `/trellis:create-command` | 描述创建命令意图，或显式触发 `create-command` skill | 创建新命令 |
 
 ### 歧义消解
 
 - 多个命令匹配时：当前阶段上下文 > 精确关键词 > 当前已确认阶段优先 > 模糊语义
-- 无法确定时：路由到 `/trellis:start`（Phase Router 自动检测）
+- 无法确定时：路由到 `/trellis:continue`（Phase Router 自动检测）；legacy `/trellis:start` 仅用于旧目标项目兼容
 - 当前 workflow 明确禁用基于 `parallel/worktree` 的后台 dispatch + PR 完成路径；如用户提到并行开发，应先回到 `/trellis:plan` 重新安排任务依赖，不再默认路由到 `parallel`
 - top-2 优先级接近时：向用户确认意图，而不是假定已经完成自动精确路由
 
@@ -795,7 +795,7 @@ def inject_codex_start_skill_patch(
         target_path,
         dry_run=dry_run,
         cli_label=cli_label,
-        target_label="start skill",
+        target_label="entry skill",
     )
 
 
@@ -1192,7 +1192,8 @@ def deploy_codex(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAULT
 
     共享 workflow skills 只写入 `.agents/skills/`。
     `.codex/skills/` 只保留 Codex 独有 skills；若存在重复 shared skills，应清理。
-    baseline patch 型 skills（start / finish-work）只增强活动目录。
+    baseline patch 型 skills（trellis-continue / trellis-finish-work）只增强活动目录；
+    legacy start / finish-work 仅作为旧目标项目兼容输入。
     """
     skills_dirs = list_all_codex_skills_dirs(root)
     if not skills_dirs:
@@ -1765,11 +1766,11 @@ def main() -> int:
         print("    6. 同一目标项目中各 CLI 的入口协议不同，请分别按各自原生入口使用")
         for cli_type in cli_types:
             if cli_type == "claude":
-                print("       - Claude Code → /trellis:start")
+                print("       - Claude Code → /trellis:continue（legacy /trellis:start 仅兼容旧目标项目）")
             elif cli_type == "opencode":
-                print("       - OpenCode → /trellis:start（TUI）或 trellis/start（CLI）")
+                print("       - OpenCode → /trellis:continue（TUI）或 trellis/continue（CLI）；legacy start 仅兼容旧目标项目")
             elif cli_type == "codex":
-                print("       - Codex → 描述需求或显式触发对应 skill；不要期待项目级 /trellis:start")
+                print("       - Codex → 描述需求或显式触发对应 skill；不要期待项目级 /trellis:continue")
         print(f"  卸载: python3 {src}/uninstall-workflow.py")
     print()
     return 0

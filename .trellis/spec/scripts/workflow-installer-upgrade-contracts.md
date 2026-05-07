@@ -183,12 +183,14 @@ Target-project deployed copies are derived state:
 
 - Claude: `.claude/commands/trellis/*.md`
 - OpenCode: `.opencode/commands/trellis/*.md`
-- Codex: `.agents/skills/*/SKILL.md` or `.codex/skills/*/SKILL.md`
+- Codex shared workflow skills: `.agents/skills/*/SKILL.md`
+- Codex local / cleanup scope: `.codex/skills/*/SKILL.md` only for Codex-local project skills, optional disabled entries such as `parallel`, and duplicate shared-skill drift cleanup
 - installer-managed routing block: `AGENTS.md` inside `<!-- workflow-nl-routing-start ... workflow-nl-routing-end -->`
-- managed implementation agents:
-  - Claude: `.claude/agents/{research,implement,check}.md`
-  - OpenCode: `.opencode/agents/{research,implement,check}.md`
-  - Codex: `.codex/agents/{research,implement,check}.toml`
+- Trellis-native implementation agents:
+  - Claude: `.claude/agents/trellis-{research,implement,check}.md`
+  - OpenCode: `.opencode/agents/trellis-{research,implement,check}.md`
+  - Codex: `.codex/agents/trellis-{research,implement,check}.toml`
+  - workflow scripts may migrate legacy bare-name files to the Trellis-native names, but must not overlay native agent content
 - shared helper scripts: `.trellis/scripts/workflow/*.py`
 - shared project workflow guide patch: `.trellis/workflow.md`
 
@@ -199,7 +201,7 @@ Target-project deployed copies are derived state:
 - overlay baseline commands
 - added commands
 - optional disabled baseline commands
-- managed implementation agents
+- Trellis-native implementation agents and legacy bare-name migration inputs
 - helper scripts
 - managed asset enumeration / detection helpers
 
@@ -208,11 +210,13 @@ Target-project deployed copies are derived state:
 Workflow embed / analysis / repair scripts must distinguish three asset classes:
 
 1. **Patch-based baseline commands**
-   - `start`
+   - Claude / OpenCode: `continue`
    - `finish-work`
+   - Codex shared skill carrier: `trellis-continue`
+   - `trellis-finish-work`
    - Contract: keep Trellis baseline content, then inject workflow patch content
 
-   ~~`record-session`~~ — 已从 patch-based baseline 命令列表移除。该命令已退役，功能合并到 `finish-work`（session 记录通过 `record-session-helper.py` 内部完成）。已安装的目标项目如有残留 patch marker，应由 `upgrade-compat` 清理。
+   Legacy `start` / `record-session` are old-target compatibility inputs only. `record-session` has retired from the current fresh-baseline patch list and close-out is folded into `finish-work` via `record-session-helper.py`. Installed target projects with residual legacy patch markers should be handled by `upgrade-compat`.
 
 2. **Overlay baseline commands**
    - same-name commands whose deployed file is fully distributed by the workflow while semantically replacing the live baseline copy
@@ -267,20 +271,29 @@ Compatibility code should therefore:
 
 4.1 **Codex multi-directory skills boundary**
    - Codex may expose more than one project-local skills directory:
-     - shared / generic layer: `.agents/skills/`
-     - Codex-local layer: `.codex/skills/`
+     - shared / generic layer and workflow distributed-skill target: `.agents/skills/`
+     - Codex-local / project-custom layer and duplicate shared-skill drift cleanup surface: `.codex/skills/`
    - Contract:
-     - workflow distributed skills (`feasibility`, `brainstorm`, `design`, `plan`, `test-first`, `project-audit`, `check`, `review-gate`, `delivery`) must be deployed to **every existing Codex skills directory**
-     - patch-based baseline skills for Codex (`start`, `finish-work`) must be enhanced **only in the active skills directory** resolved by `resolve_codex_skills_dir`
+     - workflow distributed skills (`feasibility`, `brainstorm`, `design`, `plan`, `test-first`, `project-audit`, `check`, `review-gate`, `delivery`) must be deployed to `.agents/skills/` only
+     - `.codex/skills/` must not be treated as a required shared workflow skill deployment target; duplicate shared workflow skills found there are drift and should be detected / cleaned up
+     - patch-based baseline skills for Codex (`trellis-continue`, `trellis-finish-work`) must be enhanced **only in the active skills directory** resolved by `resolve_codex_skills_dir`
+     - legacy `start` / `finish-work` skill names are old-target compatibility inputs only, not current fresh-baseline patch targets
      - installer backup scope must match write scope:
-       - distributed skills / optional disabled skills: per existing skills directory
+       - distributed skills: `.agents/skills/` only
+       - optional disabled skills such as `parallel`: each skills directory where the disabled entry exists
        - patched baseline skills: active skills directory only
-     - uninstall / `--force` restore scope must match the same boundary and must not restore untouched baseline skills in non-active directories
+       - duplicate shared workflow skill cleanup: `.codex/skills/` only when duplicate shared-skill files exist there
+     - uninstall / `--force` restore scope must match the same boundary:
+       - shared workflow distributed skills are restored / removed only in `.agents/skills/`
+       - optional disabled entries are restored only in directories where they were backed up
+       - active baseline patches are restored / reapplied only in the active skills directory
+       - duplicate shared workflow skill copies in `.codex/skills/` are cleanup targets, not required restore targets
      - `upgrade-compat.py --check` must:
-       - verify distributed skills in every existing Codex skills directory
+       - verify distributed skills in `.agents/skills/`
+       - detect duplicate shared workflow skills under `.codex/skills/` as drift
        - verify optional disabled skills such as `parallel` in every directory where they exist
-       - verify `start` / `finish-work` patch health only in the active skills directory
-     - docs must state that non-active directory copies of `start` / `finish-work` are outside the workflow-managed patch drift surface unless a future installer explicitly starts writing there
+       - verify `trellis-continue` / `trellis-finish-work` patch health only in the active skills directory
+     - docs must state that `.codex/skills/` is Codex-local / project-custom plus duplicate shared-skill drift cleanup scope, and that non-active directory copies of `trellis-continue` / `trellis-finish-work` are outside the workflow-managed patch drift surface unless a future installer explicitly starts writing there
 
 5. **Phase-gate helper scripts**
    - helper scripts referenced as mandatory validation gates inside workflow source commands
@@ -307,9 +320,9 @@ Compatibility code should therefore:
      - drift detection must at minimum verify the workflow patch marker is still present
      - if the source patch changes, the workflow author must propagate the resulting rule changes to walkthrough / mapping docs that summarize the same behavior
 
-7. **Managed implementation agents**
-   - workflow-managed implementation-internal role assets
-   - current known set:
+7. **Trellis-native implementation agents**
+   - Trellis 0.5+ native implementation-internal role assets
+   - current Trellis-native target filenames:
      - Claude:
        - current: `.claude/agents/trellis-research.md`
        - current: `.claude/agents/trellis-implement.md`
@@ -324,21 +337,12 @@ Compatibility code should therefore:
        - current: `.codex/agents/trellis-check.toml`
     - legacy compatibility inputs may still appear as unprefixed `research / implement / check` files on older installed target projects and must be handled during upgrade / uninstall flows
    - Contract:
-     - these assets are part of the workflow-managed implementation-stage internal chain
-     - installer must back up any pre-existing target copy before first overwrite
-     - if a target copy does not exist at install time, installer may create it from the workflow source of truth
-     - `upgrade-compat.py --check` must detect drift against the workflow source of truth
-     - `--merge` may redeploy the workflow-managed agent content
-     - uninstall must restore the backed-up target copy when a backup exists
-     - uninstall must delete an install-created managed agent when no baseline backup exists
-     - the formal workflow stage `/trellis:check` is distinct from the internal `check-agent` role and docs must keep that boundary explicit
-     - research-agent source contracts must keep:
-       - `ace.search_context`-first project-internal code localization
-       - Context7-first library/framework/SDK documentation lookup
-       - `grok-search`-first live/latest fact lookup
-       - `deepwiki`-first GitHub repository understanding
-       - Exa for deep research, external code context, and fallback web evidence
-       - explicit `[Evidence Gap]` fallback wording when Context7 is unavailable
+     - workflow install / upgrade / uninstall scripts must not write, patch, or delete the Trellis-native `trellis-research` / `trellis-implement` / `trellis-check` content
+     - installer dry-runs should report `Agents: 0` for the workflow-managed write set when only Trellis-native implementation agents are present
+     - upgrade / uninstall paths may rename legacy bare-name files (`research`, `implement`, `check`) to the Trellis-native `trellis-*` naming convention when an older target project still has those files
+     - `upgrade-compat.py --check` must not report native `trellis-*` agent content drift as workflow-managed drift
+     - uninstall must not delete Trellis-native `trellis-*` agents created by `trellis init`
+     - the formal workflow stage `/trellis:check` is distinct from the Trellis-native `trellis-check` agent role and docs must keep that boundary explicit
 
 #### 3.2.1 Initial Branch Gate
 
@@ -374,7 +378,7 @@ Required behavior:
   - distributed added commands / skills
   - workflow patch markers in baseline commands / skills
   - workflow-managed helper scripts
-  - workflow-managed implementation agents
+  - legacy bare-name implementation agents that require migration
 - read-only detection may classify:
   - `INITIAL_BASELINE_READY`
   - `ALREADY_VALID_EMBEDDED`
@@ -534,7 +538,7 @@ That branch becomes structural migration and must not be collapsed into `upgrade
 | asset exists only in `B` | classify `add` | return non-zero if missing in `C` | deploy asset | deploy asset |
 | `C != A` and `C != B` | classify `merge` and keep it visible | may return non-zero if drift is detected | do not claim semantic merge; only safe redeploy when drift is low-risk | not a structural-migration substitute |
 | asset removed from latest workflow but still exists in `C` | classify `delete` | may stay non-zero or advisory depending on script scope | optional manual cleanup only | optional manual cleanup only |
-| patch marker missing in `start` / `finish-work`（`record-session` 已退役，patch marker 检查不再覆盖此项） | may present as `replace` or `merge` depending on `A/B/C` | return non-zero | redeploy and reinject patch when injection model still holds | restore baseline backup, then reinject patch when backup is valid |
+| patch marker missing in Claude / OpenCode `continue` / `finish-work` or Codex active-skill `trellis-continue` / `trellis-finish-work`（legacy `start` / `record-session` 仅作为旧目标项目兼容残留处理） | may present as `replace` or `merge` depending on `A/B/C` | return non-zero | redeploy and reinject patch when injection model still holds | restore baseline backup, then reinject patch when backup is valid |
 | helper script missing or drifted | classify `add` / `replace` / `merge` based on `A/B/C` | return non-zero | recopy helper script | recopy helper script |
 | missing `workflow_version` / `workflow_schema_version` while target project is already on latest Trellis | annotate as `legacy/unknown` context only | do not fail on absence alone | do not synthesize historical version | do not synthesize historical version |
 | missing baseline backup during force path | analysis may still proceed | n/a | n/a | fail clearly and keep error visible |
@@ -608,9 +612,11 @@ When modifying these contracts, update or add tests that prove:
 13. `--force` can restore baseline-backed patch commands and reapply patches inside the same structural model
 14. newly added required helper scripts are reflected in user-visible install guidance when the workflow gate is exposed to target-project users
 15. Codex multi-directory behavior is covered by regression tests:
-   - distributed skills sync to every existing skills directory
-   - `start` / `finish-work` patch only the active skills directory
-   - uninstall / `--force` restore follow the same active-directory boundary
+   - distributed shared workflow skills sync to `.agents/skills/` only
+   - duplicate shared workflow skills under `.codex/skills/` are detected / cleaned as drift instead of required
+   - `trellis-continue` / `trellis-finish-work` patch health is checked and repaired only in the active skills directory
+   - legacy `start` / `finish-work` names are covered only as old-target compatibility inputs
+   - uninstall / `--force` restore follow the same write-scope boundary for `.agents/skills/`, optional disabled entries, active baseline patches, and `.codex/skills/` duplicate cleanup
 
 Current regression anchors:
 

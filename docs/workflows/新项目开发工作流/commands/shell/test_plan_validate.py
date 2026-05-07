@@ -96,7 +96,7 @@ VALID_PLAN = """# Task Plan: Sample
 
 - 项目级全局门禁：lint / typecheck / test / quality gate
 - 创建门禁：真实 Trellis task 创建前，必须先完成 task_creation_checklist.md 并获得人工确认
-- task 级门禁：进入某个 task 实现前，由 /trellis:start 自动执行 before-dev，并把当前有效门禁落到 $TASK_DIR/before-dev.md
+- task 级门禁：进入某个 task 实现前，由 /trellis:continue 自动执行 before-dev，并把当前有效门禁落到 $TASK_DIR/before-dev.md
 
 ## 任务图摘要
 

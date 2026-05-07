@@ -2,7 +2,7 @@
 
 ### 核心定位
 
-收到 `/trellis:start` 后，**只做当前已确认阶段的识别与重入**，不做跨阶段自动推进。
+收到 `/trellis:continue` 后，**只做当前已确认阶段的识别与重入**，不做跨阶段自动推进。legacy `/trellis:start` 仅用于旧目标项目兼容。
 采用强门禁模型：每个阶段完成后必须先进入 `awaiting_user_confirmation`，用户确认后才能切到下一阶段。
 
 ### 执行步骤
@@ -44,7 +44,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route --project-root <pr
 
 1. **一次只推进一个具体叶子 task** — 不能把多个 task 混在同一上下文里一起做
 2. **每次进入实现前自动执行 before-dev** — 不要求用户显式输入 `/trellis:before-dev`；产出落到 `$TASK_DIR/before-dev.md`
-3. **串行不等于自动续跑** — 前一 task 完成后仍需再次进入 `/trellis:start`，不能自动开始下一个
+3. **串行不等于自动续跑** — 前一 task 完成后仍需再次进入 `/trellis:continue`，不能自动开始下一个
 4. **前端视觉首版 task** — `UI -> 首版代码界面` 不能使用 Codex 作为主执行器；完成时必须沉淀 `design/frontend-ui-spec.md`
 
 ### 下一步推荐输出格式
@@ -67,5 +67,5 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route --project-root <pr
 | 继续当前阶段当前子块 | `/trellis:xxx` | 自然语言继续当前阶段，或显式触发 `xxx` skill | **默认推荐**。不跨阶段，只重入当前已确认阶段 |
 | 在当前阶段切到另一个已允许子块 | `/trellis:xxx` | 自然语言继续当前阶段，或显式触发 `xxx` skill | 仍留在当前 stage，不得跨阶段 |
 | 准备切到下一阶段 | `/trellis:xxx` | 自然语言说明要切到下一阶段，或显式触发 `xxx` skill | 仅在退出清单已完成且用户明确确认后才允许 |
-| 不确定当前任务/状态 | `/trellis:start` | 描述当前状态恢复意图，或显式触发 `start` skill | 进入任务选择 / 状态恢复分支 |
+| 不确定当前任务/状态 | `/trellis:continue` | 描述当前状态恢复意图，或显式触发 `trellis-continue` skill | 进入任务选择 / 状态恢复分支 |
 ```

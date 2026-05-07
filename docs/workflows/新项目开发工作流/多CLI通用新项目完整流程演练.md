@@ -86,15 +86,15 @@ git remote set-url --add --push origin <第二个仓库URL>
 
 在当前这套新项目 workflow 里，至少要记住：
 
-- `start` 是 **Trellis 原生命令 + workflow Phase Router 增强**
-- `finish-work` 是 **Trellis 原生命令/技能基线 + workflow 项目化补丁**，不是当前 workflow 新增分发的独立源文件
-- `record-session` 是 **Trellis 原生命令/技能基线 + workflow 元数据闭环补丁**
+- `continue` / `trellis-continue` 是 **Trellis 原生命令/技能基线 + workflow Phase Router 增强**
+- `finish-work` / `trellis-finish-work` 是 **Trellis 原生命令/技能基线 + workflow 项目化补丁**，不是当前 workflow 新增分发的独立源文件
+- legacy `start` / `record-session` 仅作为旧目标项目兼容输入
 - `archive` 仍直接复用目标项目 Trellis 基线里的 `python3 ./.trellis/scripts/task.py archive`，不是当前 workflow 额外分发的一份 helper
 - 当前 workflow 默认启用作者归属保护（`ownership_proof_required` 常规默认值为 `yes`）；除非项目明确写 `no`，否则源码水印与归属证明都应视为 workflow 的正式产物层，而不是交付前临时想起的补丁动作
 
 如果忽略这层嵌入关系，就容易把“继承基线”误判成“workflow 漏了命令”。
 
-对应到本次 close-out 行为，还要再加一条：若目标项目不是通过当前最新 Trellis 初始化/升级得到的，那么即使 workflow 本身已经安装成功，`record-session -> archive` 这条链路也可能仍然继承旧基线中的 archive bug。
+对应到本次 close-out 行为，还要再加一条：若目标项目不是通过当前最新 Trellis 初始化/升级得到的，那么即使 workflow 本身已经安装成功，`finish-work -> archive` 这条链路也可能仍然继承旧基线中的 archive bug；legacy 目标项目才检查 `record-session -> archive`。
 
 还要额外记住一条：`finish-work` 的项目化补丁虽然会按 Claude Code / OpenCode / Codex 各自原生格式落地，但它承载的**项目检查矩阵含义必须一致**，因为这部分由项目技术架构决定，不由 CLI 类型决定。
 
@@ -173,8 +173,8 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - Codex：优先推荐“自然语言意图 + 对应 skill 名”，如“继续需求澄清，或显式触发 `brainstorm` skill”
 - 不要把 `/trellis:xxx` 当作 Codex 的唯一入口协议
 - 用户不确定下一步时：
-  - Claude / OpenCode：推荐 `/trellis:start`
-  - Codex：推荐描述当前意图，或显式触发 `start` skill
+  - Claude / OpenCode：推荐 `/trellis:continue`
+  - Codex：推荐描述当前意图，或显式触发 `trellis-continue` skill
 
 ### 统一阶段模板
 
@@ -192,7 +192,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 当前 workflow 采用 [阶段状态机与强门禁协议](./阶段状态机与强门禁协议.md)
 - 当前阶段只允许按 `.current-task -> 当前叶子任务 -> workflow-state.json` 判定
 - 每个阶段完成后都必须停在 `awaiting_user_confirmation`，用户确认后才允许切到下一阶段
-- `/trellis:start` 只重入当前已确认阶段，不自动跨阶段推进
+- `/trellis:continue` 只重入当前已确认阶段，不自动跨阶段推进
 
 ---
 
@@ -425,7 +425,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 同时在这里完成：
 
 - `/trellis:finish-work` 的首次项目化适配
-- `/trellis:record-session` 的基线适配
+- close-out 基线适配（当前 fresh baseline 为 `/trellis:finish-work` / `trellis-finish-work`，legacy `/trellis:record-session` 仅旧目标项目兼容）
 - `finish-work-checklist.md` 的最小证据口径
 - design 权威文档中的系统边界 / 外部依赖 / ownership 边界
 - 若 `ownership_proof_required = yes`，同步冻结：
@@ -528,9 +528,9 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### CLI 入口差异
 
-- Claude Code：默认 `/trellis:start`；只有显式先测时才 `/trellis:test-first`
-- OpenCode：默认 TUI 用 `/trellis:start`、CLI 用 `trellis/start`；只有显式先测时才进入 `test-first`
-- Codex：默认描述当前实现意图或显式触发 `start` skill；只有显式先测时才进入 `test-first`
+- Claude Code：默认 `/trellis:continue`；只有显式先测时才 `/trellis:test-first`
+- OpenCode：默认 TUI 用 `/trellis:continue`、CLI 用 `trellis/continue`；只有显式先测时才进入 `test-first`
+- Codex：默认描述当前实现意图或显式触发 `trellis-continue` skill；只有显式先测时才进入 `test-first`
 
 ### 推荐 MCP / Skills
 
@@ -545,7 +545,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 - 无法先写自动化测试时，至少在 `before-dev.md` 中写清手工验证步骤与证据口径
 - 无 `Context7` 时，只引用项目内既有模式或已确认官方文档
-- 若不确定当前该进哪个阶段，用 `start` 作为 Phase Router 兜底
+- 若不确定当前该进哪个阶段，用 `continue` / `trellis-continue` 作为 Phase Router 兜底
 
 ### 外部交付项目分支
 
@@ -600,7 +600,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 先做本 CLI 的质量检查，再判断是否需要进入多 CLI 补充审查门禁。
 
 这里的 `review-gate` 仅适用于任务闭环，不属于 `project-audit` 之后的默认项目级收尾阶段。
-这里展示的是项目收尾链路中的正式 `check`；在单任务开发循环内，`start` 所重入的 implementation 阶段内部先执行 `research -> implement -> check-agent`，然后在用户确认后再进入正式 `check`。
+这里展示的是项目收尾链路中的正式 `check`；在单任务开发循环内，`continue` 所重入的 implementation 阶段内部先执行 Trellis 原生 `trellis-research -> trellis-implement -> trellis-check` agent 链，然后在用户确认后再进入正式 `check`。
 
 ### CLI 入口差异
 
@@ -722,9 +722,9 @@ python3 .trellis/scripts/workflow/ownership-proof-validate.py --phase delivery -
 
 ### CLI 入口差异
 
-- Claude Code：`/trellis:record-session`
-- OpenCode：TUI 用 `/trellis:record-session`，CLI 用 `trellis/record-session`
-- Codex：自然语言描述或显式触发 `record-session` skill
+- Claude Code：`/trellis:finish-work`
+- OpenCode：TUI 用 `/trellis:finish-work`，CLI 用 `trellis/finish-work`
+- Codex：自然语言描述或显式触发 `trellis-finish-work` skill
 
 ### 推荐 MCP / Skills
 

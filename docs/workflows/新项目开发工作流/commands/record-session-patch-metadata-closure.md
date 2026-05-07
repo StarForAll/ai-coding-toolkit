@@ -1,6 +1,6 @@
 ## Record-Session Metadata Closure `[AI]`
 
-Use `/trellis:record-session` here only for the **final close-out of the current completed task**.
+Legacy compatibility only: use `/trellis:record-session` here only when an older installed target project still has the retired entrypoint. Current Trellis 0.5 fresh baseline folds close-out into `/trellis:finish-work` / `trellis-finish-work`.
 
 **Close-out order: record-session first, then archive.** The session record needs the current task context; archive clears `.current-task`, so it must come after.
 

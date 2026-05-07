@@ -5,7 +5,7 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
 
 # /trellis:plan — 基于 Trellis task 的任务拆解
 
-> **Workflow Position**: §4 → 前: `/trellis:design` → 后: `/trellis:start`
+> **Workflow Position**: §4 → 前: `/trellis:design` → 后: `/trellis:continue`
 > **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:plan`） · ✅ OpenCode（TUI: `/trellis:plan`；CLI: `trellis/plan`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:plan` 命令；见 `codex/README.md`）
 
 ---
@@ -18,7 +18,7 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
 - "怎么排期"
 - "需要制定实现步骤"
 
-> 简单任务（`L0`、单上下文可闭环）？跳过，直接 `/trellis:start`。
+> 简单任务（`L0`、单上下文可闭环）？跳过，直接 `/trellis:continue`。
 
 > 若 `PRD` 已冻结后命中需求讨论，按 [需求变更管理执行卡](../需求变更管理执行卡.md) 分流：纯澄清留在当前阶段；新增 / 修改 / 删除进入变更管理，不直接顺手改当前 `task_plan.md` 或 task 图。
 
@@ -31,7 +31,7 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
 - 已结合当前项目作用、背景、技术架构，对当前项目 `.trellis/spec/` 完成分析完善（任务 2，仅在任务 1 完成后执行）
 - 已基于当前项目实际技术栈，明确自动化检查矩阵（任务 3，仅在任务 1、任务 2 完成后执行；不得只写默认 `Lint`，必须有明确质量平台门禁；采用 Sonar 的项目必须写真实命令，未采用时必须写替代门禁和原因）
 - 已基于任务 3 中写清的自动化检查矩阵，完成当前项目 `/trellis:finish-work` 的首次项目化适配（任务 4）
-- 已完成当前项目 `/trellis:record-session` 的基线适配，至少明确记录入口、archive 前置条件、元数据边界与阻断条件（任务 5）
+- 已完成当前项目 close-out 基线适配，至少明确记录入口（当前 fresh baseline 为 `/trellis:finish-work` / `trellis-finish-work`，legacy `/trellis:record-session` 仅旧目标项目兼容）、archive 前置条件、元数据边界与阻断条件（任务 5）
 - 若项目包含前端视觉落地链路，已在 `design` 阶段明确：
   - `customer-facing-prd.md` 承担 BRD 主文档职责
   - `DDD.md` / `IDD.md` / `AID.md` / `STITCH-PROMPT.md` 是否需要创建
@@ -40,7 +40,7 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
 - 外包项目控制字段由 `workflow-state.py validate` 强制校验。
 - 若 `assessment.md` 中 `ownership_proof_required = yes`，已在 design 阶段冻结 `$TASK_DIR/design/source-watermark-plan.md`
 - 当前 task 的 `workflow-state.json` 已明确切换到 `stage = plan`
-- 当前阶段切换已经过用户明确确认，而不是由 `/trellis:start` 或“下一步推荐”自动推进
+- 当前阶段切换已经过用户明确确认，而不是由 `/trellis:continue` 或“下一步推荐”自动推进
 
 ## 强门禁规则
 
@@ -100,10 +100,10 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
    若目标项目包含多个相对独立的项目域 / 端（如前台、后台、管理端），允许按项目域分 lane；但每个 lane 内仍默认串行。
 
 4. **串行不等于自动续跑**
-   即使前一个 task 已收口，也不会被解释成“默认自动开始下一个”。下一 task 仍需显式进入 `/trellis:start` 并重新选定实施对象。
+   即使前一个 task 已收口，也不会被解释成“默认自动开始下一个”。下一 task 仍需显式进入 `/trellis:continue` 并重新选定实施对象。
 
 5. **task 级门禁不在 plan 阶段虚构**
-   `plan` 只记录全局门禁摘要。每个 task 的具体测试门禁，在进入该 task 实现前由 `/trellis:start` 自动触发 `before-dev` 后生成或刷新 `$TASK_DIR/before-dev.md`。
+   `plan` 只记录全局门禁摘要。每个 task 的具体测试门禁，在进入该 task 实现前由 `/trellis:continue` 自动触发 `before-dev` 后生成或刷新 `$TASK_DIR/before-dev.md`。
 
 6. **plan 不是执行阶段**
    `plan` 里只能定义“接下来做什么”，不能开始“已经在做什么”。
@@ -427,7 +427,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 - 创建门禁：
   - 真实 Trellis task 创建前，必须先完成 `task_creation_checklist.md` 并获得人工确认
 - task 级门禁：
-  - 不在本阶段预造；进入某个 task 实现前，由 `/trellis:start` 自动执行 `before-dev`
+  - 不在本阶段预造；进入某个 task 实现前，由 `/trellis:continue` 自动执行 `before-dev`
   - 自动生成或刷新 `$TASK_DIR/before-dev.md`，补该 task 的当前测试门禁与实现前约束
 
 ## 任务图摘要
@@ -541,10 +541,10 @@ $TASK_DIR/
 
 | 你的意图 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
-| 确认进入某个具体 task 的 implementation | `/trellis:start` | 直接进入实施，或显式触发 `start` skill | **默认推荐**。仅在用户明确确认 plan 已完成后才允许；先切换到目标叶子 task，再由 start 自动执行 before-dev 并补 task 门禁 |
+| 确认进入某个具体 task 的 implementation | `/trellis:continue` | 直接进入实施，或显式触发 `trellis-continue` skill | **默认推荐**。仅在用户明确确认 plan 已完成后才允许；先切换到目标叶子 task，再由 continue 自动执行 before-dev 并补 task 门禁 |
 | 显式先测某个 task | `/trellis:test-first` | 进入测试驱动，或显式触发 `test-first` skill | 非默认主链；仅在明确要 TDD / 补验证证据时使用 |
 | 拆解不合理，重新拆 | `/trellis:plan` | 继续任务拆解，或显式触发 `plan` skill | 重新执行拆解流程 |
 | 设计有问题 | `/trellis:design` | 回退设计阶段，或显式触发 `design` skill | 回退到设计阶段 |
 | 冻结后出现新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先冻结当前计划；获批后再回到受影响的最早阶段更新计划 |
 | 需要项目级全局代码审查 | `/trellis:project-audit` | 进入项目级审查，或显式触发 `project-audit` skill | 仅在全部代码相关 task 完成且用户明确确认后进入；中途也可手动预审 |
-| 不确定下一步 | `/trellis:start` | 描述当前意图，或显式触发 `start` skill | 用 Phase Router / skill 路由做阶段检测 |
+| 不确定下一步 | `/trellis:continue` | 描述当前意图，或显式触发 `trellis-continue` skill | 用 Phase Router / skill 路由做阶段检测 |

@@ -1176,7 +1176,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate_parser.add_argument("--current-task-file")
     validate_parser.set_defaults(func=cmd_validate)
 
-    route_parser = subparsers.add_parser("route", help="compute routing target for /trellis:start")
+    route_parser = subparsers.add_parser("route", help="compute routing target for /trellis:continue")
     route_parser.add_argument("task_dir", nargs="?", default=None)
     route_parser.add_argument("--project-root")
     route_parser.add_argument("--current-task-file")

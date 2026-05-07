@@ -5,7 +5,7 @@ description: 需求还不够稳？先按 Trellis 原生需求发现主链收集�
 
 # /trellis:brainstorm — 需求发现与任务生成前置路由
 
-> **Workflow Position**: §2 → 前: `/trellis:feasibility` → 后: `/trellis:design` / `/trellis:plan` / `/trellis:start`
+> **Workflow Position**: §2 → 前: `/trellis:feasibility` → 后: `/trellis:design` / `/trellis:plan` / `/trellis:continue`
 > **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:brainstorm`） · ✅ OpenCode（TUI: `/trellis:brainstorm`；CLI: `trellis/brainstorm`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:brainstorm` 命令；见 `codex/README.md`）
 >
 > **Merge Rule**: 本命令保留 Trellis 原生 `brainstorm` 的需求发现主链（Task-first / Action-before-asking / Research-first / Diverge → Converge），并叠加当前 workflow 的 `assessment.md` 前置、需求准确性校验、`L0/L1/L2` 分类、`sub task` 拆分，以及强门禁阶段状态约束。
@@ -37,7 +37,7 @@ description: 需求还不够稳？先按 Trellis 原生需求发现主链收集�
 - `task_dir/prd.md` 仅是当前任务的工作底稿，不等同于目标项目里的正式需求文档；项目级正式需求文档统一落在目标项目的 `docs/requirements/`。
 - 当前阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束：
   - 当前阶段只允许重入 brainstorm
-  - 完成本阶段后必须等待用户确认，不能自动切到 `design` / `plan` / `start`
+  - 完成本阶段后必须等待用户确认，不能自动切到 `design` / `plan` / `continue`
 - 在进入 design 之前，目标项目正式文档只强制要求 `customer-facing-prd.md`；`developer-facing-prd.md` 等到技术架构确认后再正式生成
 - 需求已准确并准备离开 `brainstorm` 时，必须先产出项目级粗估；该粗估不能跳过，也不能只停留在口头描述里
 - 本命令新增的规则默认只约束**后续新生成或重新确认的任务**，不追溯重写历史 `prd.md`、历史 `task_plan.md`、历史 task 状态或既有审查记录。
@@ -307,12 +307,12 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py init "$TASK_DIR" --stage
 - 在进入 `design`、`plan` 或任何执行阶段前，必须先产出**不可跳过的项目级粗估**
 - `docs/requirements/developer-facing-prd.md` 不在此时强制生成；它等到 design 阶段技术架构确认后再正式落盘
 
-**L0 降级**：L0 单任务闭环可不强制生成项目级正式 PRD，但 `prd.md` 工作底稿仍需覆盖目标、范围、验收、边界四项。进入 `start` 前至少确认需求基线已就绪。
+**L0 降级**：L0 单任务闭环可不强制生成项目级正式 PRD，但 `prd.md` 工作底稿仍需覆盖目标、范围、验收、边界四项。进入 `continue` 前至少确认需求基线已就绪。
 
 要求：
 
 - `customer-facing-prd.md` 负责客户可读的产品信息、功能需求、范围与验收口径
-- `L0` 若直接进入 `start` / `implementation`，可继续不强制生成 `customer-facing-prd.md`，但**仍必须**先在 `task_dir/prd.md` 中补齐项目级粗估
+- `L0` 若直接进入 `continue` / `implementation`，可继续不强制生成 `customer-facing-prd.md`，但**仍必须**先在 `task_dir/prd.md` 中补齐项目级粗估
 - `task_dir/prd.md` 继续保留为阶段内工作底稿，但不能替代项目级正式需求文档
 - 若暂时无法给出单点值，也必须给出**区间估算**与适用前提；”后面再说””先不估”都不算通过
 - 由 `workflow-state.py validate` 强制检查项目级粗估门禁。
@@ -333,10 +333,10 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py init "$TASK_DIR" --stage
 
 | 层级 | 适用场景 | brainstorm 产出要求 | 后续默认链路 |
 |------|---------|-------------------|------------|
-| **Lite** | L0 / 内部小任务 | 单份轻量需求基线即可（`prd.md`），但仍必须补齐 `## 项目级粗估` | brainstorm → start → check → finish-work → delivery → record-session |
-| **Standard** | L1 / 多文件任务 | `customer-facing-prd.md` + task 工作底稿；两者都必须补齐项目级粗估；`developer-facing-prd.md` 在设计确认后生成 | brainstorm → design → plan → start（自动 before-dev）→ check → finish-work → delivery → record-session |
+| **Lite** | L0 / 内部小任务 | 单份轻量需求基线即可（`prd.md`），但仍必须补齐 `## 项目级粗估` | brainstorm → continue（自动 before-dev）→ check → finish-work → delivery |
+| **Standard** | L1 / 多文件任务 | `customer-facing-prd.md` + task 工作底稿；两者都必须补齐项目级粗估；`developer-facing-prd.md` 在设计确认后生成 | brainstorm → design → plan → continue（自动 before-dev）→ check → finish-work → delivery |
 <!-- if:outsourcing -->
-| **Strict** | L2 / 外包 / 新客户 / 高风险 / 跨层 | `customer-facing-prd.md` + feasibility + 项目级粗估 + design 3.7 + 交付控制 + project-audit（项目级） + review-gate（任务级条件触发）；`developer-facing-prd.md` 在设计确认后生成 | 保留当前严格全链路；实施前仍由 start 自动触发 before-dev |
+| **Strict** | L2 / 外包 / 新客户 / 高风险 / 跨层 | `customer-facing-prd.md` + feasibility + 项目级粗估 + design 3.7 + 交付控制 + project-audit（项目级） + review-gate（任务级条件触发）；`developer-facing-prd.md` 在设计确认后生成 | 保留当前严格全链路；实施前仍由 continue 自动触发 before-dev |
 <!-- endif:outsourcing -->
 
 **L0 降级规则**：L0 任务可不强制生成项目级正式 PRD，但 `prd.md` 工作底稿仍需覆盖目标、范围、验收、边界四项。若后续发现任务复杂度超出预期，应在进入 design 前补齐 `customer-facing-prd.md`。
@@ -385,7 +385,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py init "$TASK_DIR" --stage
 | 需求已准确，但 `customer-facing-prd.md` 未生成或未同步 | 留在 `/trellis:brainstorm` | 先补齐 `docs/requirements/customer-facing-prd.md` |
 | 需求已准确，但项目级粗估未生成或未同步 | 留在 `/trellis:brainstorm` | 先补齐 `task_dir/prd.md` 的 `## 项目级粗估` 与 `customer-facing-prd.md` 的 `## 项目级粗估摘要` |
 | 需求已准确，且准备先冻结设计 | `/trellis:design` | 前提：`customer-facing-prd.md` 已生成并同步，且项目级粗估已落盘；若当前阶段是首次入口则已完成 `main` 分支门禁；进入 `design` 时需明确项目自动化检查矩阵（采用 Sonar 的项目必须写真实命令，未采用时必须写替代门禁和原因） |
-| `L0` | `/trellis:start` | 仅限单任务闭环成立；L0 可只保留 `prd.md` 轻量需求基线，但仍必须先补齐 `## 项目级粗估` |
+| `L0` | `/trellis:continue` | 仅限单任务闭环成立；L0 可只保留 `prd.md` 轻量需求基线，但仍必须先补齐 `## 项目级粗估` |
 | `L1` | `/trellis:plan` | 仅限经过 design 阶段正式确认后，进入显式任务拆解与执行安排 |
 | `L2` | 继续 `/trellis:brainstorm` 发散补充，然后 `/trellis:plan` | 先补信息，再拆成多个子任务 |
 
@@ -399,7 +399,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py init "$TASK_DIR" --stage
 
 ## 单任务上下文闭环要求
 
-无论是 `L0` 直接进入 `/trellis:start`，还是 `L1/L2` 经过 `/trellis:plan` 后再执行，单个任务上下文都必须覆盖完整闭环：
+无论是 `L0` 直接进入 `/trellis:continue`，还是 `L1/L2` 经过 `/trellis:plan` 后再执行，单个任务上下文都必须覆盖完整闭环：
 
 - 代码实现
 - 代码检测
@@ -448,5 +448,5 @@ docs/requirements/
 | 继续澄清需求 | `/trellis:brainstorm` | 继续需求澄清，或显式触发 `brainstorm` skill | 信息不足或需求仍有歧义 |
 | 做设计 | `/trellis:design` | 进入设计阶段，或显式触发 `design` skill | 仅在用户明确确认后才允许切换；前提：`customer-facing-prd.md` 已生成并同步，且项目级粗估已完成落盘 |
 | 拆任务 | `/trellis:plan` | 进入任务拆解，或显式触发 `plan` skill | `L1/L2` 默认走这里；plan 会优先拆成真实 Trellis tasks，并只输出摘要型 `task_plan.md` |
-| 直接做单任务 | `/trellis:start` | 直接进入实施，或显式触发 `start` skill | 仅限 `L0`、单上下文可闭环，且仅在用户明确确认后才允许切换；进入实现前 start 会自动执行 before-dev 并补 task 门禁 |
+| 直接做单任务 | `/trellis:continue` | 直接进入实施，或显式触发 `trellis-continue` skill | 仅限 `L0`、单上下文可闭环，且仅在用户明确确认后才允许切换；进入实现前 continue 会自动执行 before-dev 并补 task 门禁 |
 | 冻结后出现正式变更 | [需求变更管理执行卡](../需求变更管理执行卡.md) | 同上 | 不直接改现有任务基线 |

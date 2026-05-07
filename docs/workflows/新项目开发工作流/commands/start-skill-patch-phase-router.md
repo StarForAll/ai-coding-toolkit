@@ -63,12 +63,12 @@ Before writing implementation code:
 Within `implementation`, use this internal role chain:
 
 ```text
-research -> implement -> check-agent
+trellis-research -> trellis-implement -> trellis-check
 ```
 
 Rules:
 
-- The internal `check-agent` is not the same as the formal `check` stage.
+- The internal `trellis-check` agent is not the same as the formal `check` stage.
 - After the chain completes, only recommend the `check` skill as a candidate next stage and wait for user confirmation.
 - If the formal `check` stage fails, return to `implementation` and re-run the internal chain.
 - For `UI -> 首版代码界面` tasks: Codex cannot be the main executor; completion must produce `design/frontend-ui-spec.md`.

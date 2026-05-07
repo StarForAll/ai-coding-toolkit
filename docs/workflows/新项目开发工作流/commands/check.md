@@ -5,7 +5,7 @@ description: 代码写完了？检查一下 — 基于真实改动范围和项�
 
 # /trellis:check — 实现后质量检查
 
-> **Workflow Position**: §5.1.x → 前: `/trellis:start` 实施完成 → 后: `/trellis:finish-work`（默认）/ `/trellis:review-gate`（条件触发）
+> **Workflow Position**: §5.1.x → 前: `/trellis:continue` 实施完成 → 后: `/trellis:finish-work`（默认）/ `/trellis:review-gate`（条件触发）
 > **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:check`） · ✅ OpenCode（TUI: `/trellis:check`；CLI: `trellis/check`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:check` 命令；见 `codex/README.md`）
 
 > **Strong Gate**: 本阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束。`check` 完成后不能自动进入 `review-gate` 或 `finish-work`，必须先等待用户确认。
@@ -39,8 +39,8 @@ description: 代码写完了？检查一下 — 基于真实改动范围和项�
 
 补充边界：
 
-- implementation 阶段内部允许存在 `research -> implement -> check-agent` 这条角色链
-- 这里的 `check-agent` 属于 implementation 内部自检，不是正式 `/trellis:check` 阶段
+- implementation 阶段内部允许存在 Trellis 原生 `trellis-research -> trellis-implement -> trellis-check` 这条 agent 链
+- 这里的 `trellis-check` 属于 implementation 内部自检 agent，不是正式 `/trellis:check` 阶段
 - `/trellis:check` 只在 implementation 内部链完成并经用户确认后进入
 
 ---
@@ -179,9 +179,9 @@ $TASK_DIR/check.md
 |---------|---------------------------|----------------|------|
 | 基本合规，可直接进入收尾 | `/trellis:finish-work` | 进入提交前检查，或显式触发 `finish-work` skill | **默认推荐**（Lite / Standard）。仅在用户明确确认后才允许进入收尾 |
 | 涉及安全 / 跨层 / 高 blast radius / 多 CLI 任务 | `/trellis:review-gate` | 进入补充审查判断，或显式触发 `review-gate` skill | **条件触发**。仅在用户明确确认后才允许切换到 review-gate |
-| 存在实现偏差，需先修复 | `/trellis:start` | 回到实施阶段，或显式触发 `start` skill | 回到 implementation 内部链修复偏差项，再重新执行正式 `check` |
+| 存在实现偏差，需先修复 | `/trellis:continue` | 回到实施阶段，或显式触发 `trellis-continue` skill | 回到 implementation 内部链修复偏差项，再重新执行正式 `check` |
 | 测试或验证证据不足 | `/trellis:test-first` | 回到测试驱动，或显式触发 `test-first` skill | 先补验证证据，再重新执行 `check` |
-| 发现上下文污染 | `/trellis:start` | 开新会话并重新描述当前意图，或显式触发 `start` skill | 停止当前会话，开新会话并注入决策摘要 |
+| 发现上下文污染 | `/trellis:continue` | 开新会话并重新描述当前意图，或显式触发 `trellis-continue` skill | 停止当前会话，开新会话并注入决策摘要 |
 | 偏差来自冻结后新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先完成评估与确认；获批后再回到受影响的最早阶段 |
 | 偏差仅是纯澄清 | 留在当前阶段 | 留在当前阶段 | 仅限不改变范围、接口契约、验收标准、成本、工期 |
 | 不确定下一步 | `/trellis:finish-work` | 描述当前检查结果，或显式触发 `finish-work` skill | 优先进入提交前检查 |
