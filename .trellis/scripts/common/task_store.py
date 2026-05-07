@@ -105,6 +105,9 @@ def _print_archive_commit_resume_guidance(task_name: str) -> None:
 # Sub-agent platform detection + JSONL seeding
 # =============================================================================
 
+# Only platforms that actually consume ``implement.jsonl`` / ``check.jsonl``
+# belong here. Shared skill layers are not a signal for seeding task-local
+# agent context manifests.
 _SUBAGENT_CONFIG_DIRS: tuple[str, ...] = (
     ".claude",
     ".cursor",
@@ -133,7 +136,11 @@ def _has_subagent_platform(repo_root: Path) -> bool:
 
 
 def _write_seed_jsonl(path: Path) -> None:
-    """Write a one-line seed JSONL file with a self-describing ``_example``."""
+    """Write a one-line seed JSONL file with a self-describing ``_example``.
+
+    The seed row intentionally omits a ``file`` field so downstream readers can
+    skip it naturally and only treat curated rows as real context entries.
+    """
     seed = {"_example": _SEED_EXAMPLE}
     path.write_text(json.dumps(seed, ensure_ascii=False) + "\n", encoding="utf-8")
 

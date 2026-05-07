@@ -590,7 +590,11 @@ _ALL_PLATFORM_CONFIG_DIRS = (
     ".github/copilot",
     ".factory",
 )
-"""All platform config directory names (used by detect_platform exclusion checks)."""
+"""Platform-specific config dirs used by ``detect_platform`` exclusion checks.
+
+``.agents/skills/`` is intentionally excluded because it is a shared skill
+distribution layer, not a single-platform ownership signal.
+"""
 
 
 def _has_other_platform_dir(project_root: Path, exclude: set[str]) -> bool:
@@ -659,8 +663,9 @@ def detect_platform(project_root: Path) -> Platform:
     if (project_root / ".gemini").is_dir():
         return "gemini"
 
-    # Check for .codex directory (Codex-specific)
-    # .agents/skills/ alone does NOT trigger codex detection (it's a shared standard)
+    # Check for .codex directory (Codex-specific).
+    # Shared ``.agents/skills/`` may coexist with many platforms, so it is not
+    # enough by itself to identify the current platform as Codex.
     if (project_root / ".codex").is_dir() and not _has_other_platform_dir(
         project_root, {".codex", ".agents"}
     ):
