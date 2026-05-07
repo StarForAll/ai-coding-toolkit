@@ -1064,3 +1064,36 @@ Analyzed workflow-audit skill usability, found P1 brainstorm reference name mism
 ### Next Steps
 
 - None - task complete
+
+
+## Session 159: record-session auto-commit failure recovery
+
+**Date**: 2026-05-07
+**Task**: record-session auto-commit failure recovery
+**Branch**: `main`
+
+### Summary
+
+为 record-session-helper.py 实现只读失败检测、pending 状态文件、TRELLIS_AUTO_ESCALATE_COMMAND 提权重试、--resume commit-only 恢复；分离 sidecar 避免删除用户 content_file；同步源与部署副本；重写测试套件 28 项全通过；更新文档
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5a8e828` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
