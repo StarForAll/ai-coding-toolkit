@@ -1262,3 +1262,36 @@ Completed the Trellis 0.5.4 workflow capability audit, promoted COMPATIBLE_TRELL
 ### Next Steps
 
 - None - task complete
+
+
+## Session 165: Audit workflow docs and contracts alignment
+
+**Date**: 2026-05-07
+**Task**: Audit workflow docs and contracts alignment
+**Branch**: `main`
+
+### Summary
+
+Aligned workflow docs, specs, and tests around todo reminder semantics and Codex/OpenCode carrier boundaries.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2f648e6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
