@@ -1295,3 +1295,45 @@ Aligned workflow docs, specs, and tests around todo reminder semantics and Codex
 ### Next Steps
 
 - None - task complete
+
+
+## Session 166: Trellis 0.5.6 upgrade drift reconciliation
+
+**Date**: 2026-05-08
+**Task**: Trellis 0.5.6 upgrade drift reconciliation
+**Branch**: `main`
+
+### Summary
+
+Reconciled Trellis 0.5.6 upgrade drift by keeping valid bootstrap/hook changes, preserving the repo's canonical phase contract, and adding managed trellis-start tracking.
+
+### Main Changes
+
+Kept the valid 0.5.6 Codex/Qoder/Claude workflow-state bootstrap changes, restored the current repository's canonical Phase 1.2/1.3/3.1/3.2 contract where later template drift conflicted with local policy, and added the managed Codex-only trellis-start skill plus its template-hash key.
+
+Verified that the reported follow-up issues around codex session-start, qoder/claude phase references, research-agent fallback handling, and broad template-hash mismatch were mostly false positives for this repository: some files are not live, some are already stronger than upstream, and broad hash rewrites would violate the repo's own narrow backfill rule.
+
+Validation run in this session:
+- ./scripts/validate-skills.sh
+- python -m py_compile for the retained hook Python files (with PYTHONPYCACHEPREFIX in /tmp)
+- git diff --check on the retained change set
+- targeted baseline comparisons against the installed Trellis 0.5.6 templates
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0d4750d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

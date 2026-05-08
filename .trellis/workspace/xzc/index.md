@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 165
-- **Last Active**: 2026-05-07
+- **Total Sessions**: 166
+- **Last Active**: 2026-05-08
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~1297 | Active |
+| `journal-4.md` | ~1339 | Active |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 166 | 2026-05-08 | Trellis 0.5.6 upgrade drift reconciliation | `0d4750d` | `main` |
 | 165 | 2026-05-07 | Audit workflow docs and contracts alignment | `2f648e6` | `main` |
 | 164 | 2026-05-07 | Finalize 0.5.4 workflow capability audit | `22786e2` | `main` |
 | 163 | 2026-05-07 | 修正 Trellis 0.5.4 升级契约漂移与模板状态 | `a9e2983` | `main` |
