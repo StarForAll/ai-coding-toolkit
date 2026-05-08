@@ -48,3 +48,6 @@ git remote set-url --add --push origin git@gitee.com:xxx/yyy.git
 23. 双语言版本README
 
 24. 目标项目必须包含性能优化子任务
+
+25. 使用原生 trellis agents
+

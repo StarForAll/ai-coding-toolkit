@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/guides/index.md", "reason": "检查时确认共享思维规则与跨层维护要求仍满足。"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "检查所有 source-of-truth、部署副本和 metadata 是否保持一致。"}
+{"file": ".trellis/spec/scripts/index.md", "reason": "检查涉及脚本/命令/资产的变更面是否仍符合项目脚本层规范。"}
+{"file": ".trellis/spec/scripts/python-conventions.md", "reason": "验证 Python 脚本改动没有破坏既有脚本约定。"}
+{"file": ".trellis/spec/scripts/workflow-installer-upgrade-contracts.md", "reason": "核对升级边界、.new 处置和基线/hash 合同是否被正确执行。"}
