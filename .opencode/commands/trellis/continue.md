@@ -25,8 +25,8 @@ Shows the Phase Index (Plan / Execute / Finish) with routing + skill mapping.
 `get_context.py` shows the active task's `status` field. Route by `status` + artifact presence:
 
 - `status=planning` + no `prd.md` → **1.1** (load `trellis-brainstorm`)
-- `status=planning` + `prd.md` exists + `implement.jsonl` not curated (only the seed `_example` row) → **1.2**
-- `status=planning` + `prd.md` + curated `implement.jsonl` → **1.3** (run `task.py start` to enter Phase 2)
+- `status=planning` + `prd.md` exists + `implement.jsonl` not curated (only the seed `_example` row) → **1.3**
+- `status=planning` + `prd.md` + curated `implement.jsonl` → **1.4** (run `task.py start` to enter Phase 2)
 - `status=in_progress` + implementation not started → **2.1**
 - `status=in_progress` + implementation done, not yet checked → **2.2**
 - `status=in_progress` + check passed → **3.1**
@@ -35,7 +35,7 @@ Shows the Phase Index (Plan / Execute / Finish) with routing + skill mapping.
 Phase rules (full detail in `.trellis/workflow.md`):
 
 1. Run steps **in order** within a phase — `[required]` steps must not be skipped
-2. `[once]` steps are already done if the output exists (e.g., `prd.md` for 1.1; `implement.jsonl` with curated entries for 1.2) — skip them
+2. `[once]` steps are already done if the output exists (e.g., `prd.md` for 1.1; `implement.jsonl` with curated entries for 1.3) — skip them
 3. You may go back to an earlier phase if discoveries require it
 
 ## Step 4: Load the Specific Step

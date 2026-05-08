@@ -68,7 +68,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 多 skills 目录同步（安装器行为）
 
-`trellis init` 在部分样本里可能同时创建 `.agents/skills/` 与 `.codex/skills/`。当前 fresh `0.5.4` 基线默认可稳定观察到的是 `.agents/skills/`；`.codex/skills/` 应视为条件出现的次级影响面，而不是默认必然存在。
+`trellis init` 在部分样本里可能同时创建 `.agents/skills/` 与 `.codex/skills/`。当前 fresh `0.5.9` 基线默认可稳定观察到的是 `.agents/skills/`；`.codex/skills/` 应视为条件出现的次级影响面，而不是默认必然存在。
 
 当前安装器（`install-workflow.py`）对 Codex 的处理策略：
 
@@ -267,7 +267,7 @@ Codex 官方支持 subagents。对 Trellis workflow，推荐用它承载：
 
 这层负责”阶段内角色分工”，不负责对用户暴露 workflow 命令入口。
 
-Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check` agents（`trellis init` 产物），覆盖 9 个平台。workflow 不再维护自定义 Codex agent 源资产或 overlay 这些定义；安装器仅做 legacy bare-name → trellis-* 迁移。
+Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check` agents（`trellis init` 产物），覆盖 9 个平台。workflow 安装器不再维护自定义 Codex agent 源资产或 overlay 这些定义到目标项目；安装器仅做 legacy bare-name → trellis-* 迁移。本源仓库的 carrier agent 文件可能含有项目级 capability-enhancement，详见 `.trellis/spec/agents/index.md`。
 
 这里的对齐规则不是”复制 Claude 的 hook 机制”，而是：
 
@@ -334,7 +334,7 @@ Codex 官方内建 slash commands 是平台级控制能力，例如：
 | Codex 项目配置 | `.codex/config.toml` | 指定 `AGENTS.md` fallback 等项目级配置 | ❌ 手动维护 |
 | 会话启动注入 | `.codex/hooks.json` + `.codex/hooks/*.py` | 自动注入 Trellis workflow 上下文 | ❌ 手动维护 |
 | workflow 技能 | `.agents/skills/*/SKILL.md`（共享） / `.codex/skills/*/SKILL.md`（仅 Codex 独有或项目自定义） | `.agents/skills/` 承载共享阶段 skills；`trellis-continue` / `trellis-finish-work` 属于活动 skills 目录中的 Trellis 基线入口并由安装器追加项目化补丁；`.codex/skills/` 不承载重复 shared skills | ✅ `install-workflow.py` |
-| 子代理 | `.codex/agents/*.toml` | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 不再 overlay，仅做 legacy bare-name → trellis-* 迁移 | ✅ legacy 迁移由 `install-workflow.py` |
+| 子代理 | `.codex/agents/*.toml` | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 安装器不再 overlay 到目标项目，仅做 legacy bare-name → trellis-* 迁移；源仓库 carrier 可有项目级增强 | ✅ legacy 迁移由 `install-workflow.py` |
 | 辅助脚本 | `.trellis/scripts/workflow/` | 校验、导出、静态验证脚本 | ✅ `install-workflow.py` |
 | 源码水印与归属证明产物 | `$TASK_DIR/design/`、`$TASK_DIR/delivery/` | 设计计划、提取验证、交付证明 | ❌ 人工维护 / workflow 阶段产出 |
 

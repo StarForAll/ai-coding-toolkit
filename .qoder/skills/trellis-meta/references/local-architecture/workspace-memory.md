@@ -34,20 +34,16 @@ This creates `.trellis/.developer` and the corresponding workspace directory. Th
 
 `journal-N.md` records completed or partially completed work from each session. By default, each journal holds about 2000 lines; after that it rotates to the next file.
 
-Common workflow for recording a session:
+Common command for recording a session:
 
 ```bash
-# Step 1: Archive the completed task
-python3 ./.trellis/scripts/task.py archive <task-name>
-
-# Step 2: Record the session journal
-python3 ./.trellis/scripts/workflow/record-session-helper.py \
+python3 ./.trellis/scripts/add_session.py \
   --title "Session title" \
   --summary "What changed" \
   --commit "abc1234"
 ```
 
-`record-session-helper.py` performs metadata closure pre-checks, calls `add_session.py` internally, and auto-commits `.trellis/workspace` and `.trellis/tasks` metadata changes. If it reports a failure in a read-only environment, follow the `TRELLIS_AUTO_ESCALATE_COMMAND` guidance it prints.
+Planning or review work without a commit can also be recorded by using `--no-commit` or an empty commit value.
 
 ## Relationship Between Workspace Memory And Tasks
 

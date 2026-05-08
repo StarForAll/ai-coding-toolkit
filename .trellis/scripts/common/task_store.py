@@ -228,7 +228,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     write_json(task_json_path, task_data)
 
     # Seed implement.jsonl / check.jsonl for sub-agent-capable platforms.
-    # Agent curates real entries in Phase 1.2 (see .trellis/workflow.md).
+    # Agent curates real entries in Phase 1.3 (see .trellis/workflow.md).
     # Agent-less platforms (Kilo / Antigravity / Windsurf) skip this — they
     # load specs via the trellis-before-dev skill instead of JSONL.
     seeded_jsonl = False
@@ -284,7 +284,7 @@ def cmd_create(args: argparse.Namespace) -> int:
     if seeded_jsonl:
         print(
             "  2. Curate implement.jsonl / check.jsonl (spec + research files only — "
-            "see .trellis/workflow.md Phase 1.2)",
+            "see .trellis/workflow.md Phase 1.3)",
             file=sys.stderr,
         )
         print("  3. Run: python3 task.py start <dir>", file=sys.stderr)

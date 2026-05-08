@@ -248,7 +248,7 @@ def read_jsonl_entries(base_path: str, jsonl_path: str) -> list[tuple[str, str]]
         print(
             f"[inject-subagent-context] WARN: {jsonl_path} has no curated "
             f"entries (only seed / empty) — sub-agent will receive only "
-            f"prd.md. See workflow.md Phase 1.2 for curation guidance.",
+            f"prd.md. See workflow.md Phase 1.3 for curation guidance.",
             file=sys.stderr,
         )
 
@@ -478,7 +478,7 @@ To get structured package info, run: `python3 ./{DIR_WORKFLOW}/scripts/get_conte
 
 - Spec files: `{spec_path}/**/*.md`
 - Code search: Use Glob and Grep tools
-- Tech solutions: Use web_search and web_fetch tools"""
+- Tech solutions: Use mcp__exa__web_search_exa or mcp__exa__get_code_context_exa"""
 
     context_parts.append(project_structure)
 
@@ -523,8 +523,8 @@ You are a documenter, not a reviewer.
 | Glob | Search by filename pattern |
 | Grep | Search by content |
 | Read | Read file content |
-| web_search | External web search |
-| web_fetch | External page fetch |
+| mcp__exa__web_search_exa | External web search |
+| mcp__exa__get_code_context_exa | External code/doc search |
 
 ## Strict Boundaries
 

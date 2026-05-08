@@ -193,9 +193,9 @@ OpenCode 的规则层不要只靠单一入口。
 - `命令映射.md` 作为必要补充，帮助做阶段路由
 - 当前只额外挂载 `brainstorm` 阶段，不默认把其他阶段一起塞进会话
 
-### 3. Agents：由 Trellis 0.5+ 原生提供，workflow 不再 overlay
+### 3. Agents：由 Trellis 0.5+ 原生提供，workflow 安装器不再 overlay
 
-Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check` agents（`trellis init` 产物），覆盖 9 个平台。workflow 不再维护自定义 agent 源资产或 overlay 这些定义。
+Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check` agents（`trellis init` 产物），覆盖 9 个平台。workflow 安装器不再维护自定义 agent 源资产或 overlay 这些定义到目标项目；本源仓库的 carrier agent 可含项目级 capability-enhancement。
 
 ```text
 .opencode/agents/
@@ -209,7 +209,7 @@ Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-ch
 
 当前 workflow 对 OpenCode agents 的托管边界已调整为：
 
-- `trellis-research` / `trellis-implement` / `trellis-check`：由 Trellis 原生提供（`trellis init`），workflow 不再 overlay；安装器仅做 legacy bare-name → trellis-* 迁移
+- `trellis-research` / `trellis-implement` / `trellis-check`：由 Trellis 原生提供（`trellis init`），workflow 安装器不再 overlay 这些定义到此 README 描述的目标项目；安装器仅做 legacy bare-name → trellis-* 迁移。本源仓库的 carrier agent 文件含有项目级 capability-enhancement，详见 `.trellis/spec/agents/index.md`
 - `debug`：仍保留为 Trellis / 项目侧手动维护能力，不纳入当前 workflow 托管集合
 
 其中 `trellis-research` 角色还需要遵守统一证据门禁：
@@ -258,7 +258,7 @@ OpenCode 不应被写成“和 Claude 完全等价”，因为它在 hook / suba
 |-----------|------------------|------|-----------|
 | 阶段命令 | `.opencode/commands/trellis/*.md` | 用户显式触发的 workflow 命令 | ✅ `install-workflow.py` |
 | Trellis 原生命令基线 | `.opencode/commands/trellis/continue.md` `finish-work.md` | 由 `trellis init` 提供；当前 workflow 会对 `continue` / `finish-work` 注入补丁，但不重新分发完整基线；legacy `start` / `record-session` 仅用于旧目标项目兼容 | ✅ 补丁由安装器注入 |
-| 子代理定义 | `.opencode/agents/*.md` | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 不再 overlay，仅做 legacy bare-name → trellis-* 迁移 | ✅ legacy 迁移由 `install-workflow.py` |
+| 子代理定义 | `.opencode/agents/*.md` | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 安装器不再 overlay 到目标项目，仅做 legacy 迁移；源仓库 carrier 可含项目级增强 | ✅ legacy 迁移由 `install-workflow.py` |
 | 项目长期规则 | `AGENTS.md` | 稳定执行规则、风险边界、语言策略 | ❌ 手动维护 |
 | workflow 文档注入 | `opencode.json.instructions` | 只挂主入口与必要补充，不默认全量挂载所有阶段文档 | ❌ 手动维护 |
 | 通用脚本 | `.trellis/scripts/workflow/` | 被命令或人工直接调用 | ✅ `install-workflow.py` |

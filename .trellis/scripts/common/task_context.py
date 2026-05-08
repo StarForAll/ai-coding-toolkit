@@ -10,8 +10,8 @@ Provides:
 Note:
     ``cmd_init_context`` was removed in v0.5.0-beta.12. JSONL context files
     are now seeded at ``task.py create`` time with a self-describing
-    ``_example`` line; the AI agent curates real entries during Phase 1.2 of
-    the workflow. See ``.trellis/workflow.md`` Phase 1.2 for the current
+    ``_example`` line; the AI agent curates real entries during Phase 1.3 of
+    the workflow. See ``.trellis/workflow.md`` Phase 1.3 for the current
     instructions.
 """
 

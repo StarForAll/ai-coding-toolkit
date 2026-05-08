@@ -14,7 +14,7 @@ Claude Code 是当前 workflow 维护的三种原生适配之一，并保留项�
 
 就当前 workflow 实现而言，还要明确一条 source-of-truth 边界：
 
-- `trellis-research` / `trellis-implement` / `trellis-check` 由 Trellis 0.5+ 原生提供（`trellis init` 产物），workflow 不再 overlay 这些 agent 定义；安装器仅做 legacy bare-name → trellis-* 迁移
+- `trellis-research` / `trellis-implement` / `trellis-check` 由 Trellis 0.5+ 原生提供（`trellis init` 产物），workflow 安装器不再 overlay 这些 agent 定义到目标项目；安装器仅做 legacy bare-name → trellis-* 迁移。本源仓库的 carrier 可含项目级增强，见 `.trellis/spec/agents/index.md`
 - 若后续要继续收敛，也应优先在 Trellis 上游完成，而不是在 workflow 命令目录内重新维护
 
 前置条件也要单独说清：
@@ -183,9 +183,9 @@ Claude Code 的 hooks 是这套 workflow 的关键承载层之一。当前仓库
 - `inject-subagent-context.py`：对子代理注入 implement / check / debug 上下文
 - `ralph-loop.py`：在特定审查收口点执行自动循环或门禁逻辑
 
-### 4. Agents：由 Trellis 0.5+ 原生提供，workflow 不再 overlay
+### 4. Agents：由 Trellis 0.5+ 原生提供，workflow 安装器不再 overlay
 
-Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check` agents（`trellis init` 产物），覆盖 9 个平台。workflow 不再维护自定义 agent 源资产或 overlay 这些定义。
+Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check` agents（`trellis init` 产物），覆盖 9 个平台。workflow 安装器不再维护自定义 agent 源资产或 overlay 这些定义到目标项目；本源仓库的 carrier agent 可含项目级 capability-enhancement。
 
 ```text
 .claude/agents/
@@ -203,7 +203,7 @@ Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-ch
 
 当前 workflow 对 agent 的托管边界已调整为：
 
-- `trellis-research` / `trellis-implement` / `trellis-check`：由 Trellis 原生提供（`trellis init`），workflow 不再 overlay；安装器仅做 legacy bare-name → trellis-* 迁移
+- `trellis-research` / `trellis-implement` / `trellis-check`：由 Trellis 原生提供（`trellis init`），workflow 安装器不再 overlay 这些定义到此 README 描述的目标项目；安装器仅做 legacy bare-name → trellis-* 迁移。本源仓库的 carrier agent 文件（`.claude/agents/trellis-research.md` 等）含有项目级 capability-enhancement，详见 `.trellis/spec/agents/index.md`
 - `debug`：仍保留为 Trellis / 项目侧手动维护能力，不纳入当前 workflow 托管集合
 
 其中 `research` 角色还需要遵守统一证据门禁：
@@ -243,7 +243,7 @@ Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-ch
 | 共享运行时基线 | `.claude/settings.json` | hooks 接线、默认 deny / shared baseline | ❌ 手动维护 |
 | 本机权限扩展 | `.claude/settings.local.json` | MCP allowlist、本地调试权限 | ❌ 手动维护 |
 | 会话与子代理 hooks | `.claude/hooks/*.py` | 会话启动、上下文注入、收口逻辑 | ❌ 手动维护 |
-| 子代理定义 | `.claude/agents/*.md` | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 不再 overlay，仅做 legacy bare-name → trellis-* 迁移 | ✅ legacy 迁移由 `install-workflow.py` |
+| 子代理定义 | `.claude/agents/*.md` | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 安装器不再 overlay 到目标项目，仅做 legacy 迁移；源仓库 carrier 可含项目级增强 | ✅ legacy 迁移由 `install-workflow.py` |
 | 通用辅助脚本 | `.trellis/scripts/workflow/` | 校验、导出、静态验证脚本 | ✅ `install-workflow.py` |
 | 源码水印与归属证明产物 | `$TASK_DIR/design/`、`$TASK_DIR/delivery/` | 设计计划、提取验证、交付证明 | ❌ 人工维护 / workflow 阶段产出 |
 

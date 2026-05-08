@@ -961,7 +961,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         codex_readme = (
             REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "commands" / "codex" / "README.md"
         ).read_text(encoding="utf-8")
-        self.assertIn("当前 fresh `0.5.4` 基线默认可稳定观察到的是 `.agents/skills/`", codex_readme)
+        self.assertIn("当前 fresh `0.5.9` 基线默认可稳定观察到的是 `.agents/skills/`", codex_readme)
         self.assertNotIn(
             "本仓库实际观察到的例子是：主体 skills 落在 `.agents/skills/`，而 `parallel` 落在 `.codex/skills/`。",
             codex_readme,

@@ -26,7 +26,7 @@ This page only describes files that are visible and editable inside the user pro
 | `.trellis/config.yaml` | Yes | Project configuration, hooks, packages, journal line limits, and related settings. |
 | `.trellis/spec/` | Yes | Project specs, intended to be updated regularly by users and AI. |
 | `.trellis/tasks/` | Yes | Task material and research artifacts, maintained by the task workflow. |
-| `.trellis/workspace/` | Yes | Session records, written via `record-session-helper.py` (which internally calls `add_session.py`). |
+| `.trellis/workspace/` | Yes | Session records, usually written by `add_session.py`. |
 | `.trellis/scripts/` | Carefully | Local runtime. It can be customized, but only after understanding the call chain. |
 | `.trellis/.runtime/` | No | Runtime state, usually written automatically by hooks/scripts. |
 | `.trellis/.developer` | Carefully | Current developer identity. |

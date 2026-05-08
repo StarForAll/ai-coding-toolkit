@@ -5,6 +5,14 @@ description: "Guides collaborative requirements discovery before implementation.
 
 # Brainstorm - Requirements Discovery (AI Coding Enhanced)
 
+**CoreRule**: Interview me relentlessly about every aspect of this plan until we reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one. For each question, provide your recommended answer.
+
+Ask the questions one at a time.
+
+If a question can be answered by exploring the codebase, explore the codebase instead.
+
+---
+
 Guide AI through collaborative requirements discovery **before implementation**, optimized for AI coding workflows:
 
 * **Task-first** (capture ideas immediately)
@@ -198,9 +206,11 @@ For each research topic, **spawn a `trellis-research` sub-agent via the Task too
 
 Why:
 - The sub-agent has its own context window → doesn't pollute brainstorm context with raw tool output
-- It persists findings to `{TASK_DIR}/research/<topic>.md` (the contract — see `workflow.md` Phase 1.2)
+- It persists findings to `{TASK_DIR}/research/<topic>.md` (the contract — see `workflow.md` Phase 1.3)
 - It returns only `{file path, one-line summary}` to the main agent
 - Independent topics can be **parallelized** — spawn multiple sub-agents in one tool call
+
+> **Codex inline-mode exception**: on Codex CLI with `dispatch_mode: inline` (the default), the main agent does research inline — dispatching `trellis-research` is unnecessary because the main session already has full task context. With `dispatch_mode: sub-agent`, `trellis-research` can be dispatched normally: the dispatch prompt's `Active task: <path>` first line tells the sub-agent which `{task_dir}/research/` to write into (see `.trellis/workflow.md` sub-agent dispatch protocol).
 
 Agent type: `trellis-research`
 Task description template: "Research <specific question>; persist findings to `{TASK_DIR}/research/<topic-slug>.md`."

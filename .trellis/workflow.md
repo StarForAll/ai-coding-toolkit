@@ -379,7 +379,7 @@ python3 ./.trellis/scripts/task.py list-archive    # List archived tasks
 3. **After development complete**:
    - Use `/trellis:finish-work` for completion checklist
    - After fix bug, use `/trellis:break-loop` for deep analysis
-   - Main session proposes the commit plan after testing passes (Phase 3.1); user confirms before execution
+   - Main session proposes the commit plan after testing passes (Phase 3.4); user confirms before execution
    - Use `/trellis:finish-work` for archive + journal close-out
 
 ### [X] DON'T - Should Not Do
@@ -389,7 +389,7 @@ python3 ./.trellis/scripts/task.py list-archive    # List archived tasks
 3. **Don't** develop multiple unrelated tasks simultaneously
 4. **Don't** commit code with lint/test errors
 5. **Don't** forget to update spec docs after learning something
-6. **Don't** commit code with `sub-agent` sessions — only the main session may propose commits, and only after explicit user confirmation (per Phase 3.1)
+6. **Don't** commit code with `sub-agent` sessions — only the main session may propose commits, and only after explicit user confirmation (per Phase 3.4)
 
 ---
 
@@ -423,7 +423,7 @@ git commit -m "type(scope): description"
 ```bash
 # Session management
 python3 ./.trellis/scripts/get_context.py    # Get full context
-python3 ./.trellis/scripts/get_context.py --mode phase --step 1.2 --platform codex
+python3 ./.trellis/scripts/get_context.py --mode phase --step 1.3 --platform codex
 
 # Task management
 python3 ./.trellis/scripts/task.py list      # List tasks
@@ -459,20 +459,20 @@ Following this workflow ensures:
 - Use `trellis-brainstorm` to clarify requirements with the user.
 - Produce or refine `prd.md`.
 
-#### 1.2 Curate JSONL Context
+#### 1.3 Curate JSONL Context
 
-[Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini]
+[Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini, codex-sub-agent]
 - Curate `implement.jsonl` and `check.jsonl`.
 - Include only spec and research files.
 - Do not include code paths.
 - Research-heavy work should persist findings into `research/*.md` first.
-[/Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini]
+[/Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini, codex-sub-agent]
 
-[Kilo, Antigravity, Windsurf]
+[codex-inline, Kilo, Antigravity, Windsurf]
 - Skipped in inline dispatch mode. The main session loads `trellis-before-dev` directly and reads spec context itself — no sub-agent to inject jsonl into.
-[/Kilo, Antigravity, Windsurf]
+[/codex-inline, Kilo, Antigravity, Windsurf]
 
-#### 1.3 Enter Execute Phase
+#### 1.4 Enter Execute Phase
 
 - Run `python3 ./.trellis/scripts/task.py start <task-dir>`.
 - This activates session-scoped task state and moves the task into `in_progress`.
@@ -481,27 +481,27 @@ Following this workflow ensures:
 
 #### 2.1 Implement
 
-[Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini]
+[Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini, codex-sub-agent]
 - Default path: dispatch `trellis-implement`.
 - Main session edits code only when the user's current message explicitly opts out of sub-agents.
-[/Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini]
+[/Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini, codex-sub-agent]
 
-[Kilo, Antigravity, Windsurf]
+[codex-inline, Kilo, Antigravity, Windsurf]
 - Inline dispatch: load `trellis-before-dev` skill first, then edit code directly.
 - Do NOT dispatch `trellis-implement` / `trellis-check` sub-agents.
-[/Kilo, Antigravity, Windsurf]
+[/codex-inline, Kilo, Antigravity, Windsurf]
 
 #### 2.2 Check
 
-[Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini]
+[Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini, codex-sub-agent]
 - Dispatch `trellis-check`.
 - Fix issues directly, re-run checks, and ensure spec sync is considered.
-[/Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini]
+[/Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini, codex-sub-agent]
 
-[Kilo, Antigravity, Windsurf]
+[codex-inline, Kilo, Antigravity, Windsurf]
 - Inline dispatch: load `trellis-check` skill, run lint / type-check / tests yourself.
 - Fix issues directly. Do NOT dispatch `trellis-check` sub-agent.
-[/Kilo, Antigravity, Windsurf]
+[/codex-inline, Kilo, Antigravity, Windsurf]
 
 #### 2.3 Update Spec
 
@@ -510,22 +510,24 @@ Following this workflow ensures:
 
 ### Finish
 
-#### 3.1 Commit & Verify
+#### 3.4 Commit & Verify
 
-[Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini]
+[Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini, codex-sub-agent]
 1. After implementation is verifiably complete, the main session **proposes the commit plan** — state which files will be committed, the commit message, and the rationale.
 2. Wait for **explicit user confirmation**.
 3. Execute `git add` + `git commit` only after confirmation.
 4. Verify the working tree is clean (paths outside `.trellis/workspace/` and `.trellis/tasks/` must have no uncommitted changes).
 5. `finish-work` is not the place to make the code commit — it only archives and journals.
-[/Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini]
+[/Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini, codex-sub-agent]
 
-[Kilo, Antigravity, Windsurf]
-1. After implementation is verifiably complete, the main session **drives the commit** — state the commit plan in user-facing text, then run `git commit`.
-2. No sub-agent dispatch needed; the main session handles everything directly.
-[/Kilo, Antigravity, Windsurf]
+[codex-inline, Kilo, Antigravity, Windsurf]
+1. After implementation is verifiably complete, the main session **proposes the commit plan** — state which files will be committed, the commit message, and the rationale.
+2. Wait for **explicit user confirmation**.
+3. Execute `git add` + `git commit` only after confirmation.
+4. No sub-agent dispatch needed; the main session handles everything directly.
+[/codex-inline, Kilo, Antigravity, Windsurf]
 
-#### 3.2 Close-Out
+#### 3.5 Close-Out
 
 - Run `/trellis:finish-work` after code commits are done.
 - Archive completed task(s).
@@ -533,28 +535,27 @@ Following this workflow ensures:
 
 [workflow-state:no_task]
 No active task. **A Direct answer** — pure Q&A / explanation / lookup / chat; no file writes + one-line answer + repo reads ≤ 2 files → AI judges, no override needed.
-**B Create a task** — any implementation / code change / build / refactor work. Entry sequence: (1) `python3 ./.trellis/scripts/task.py create "<title>"` to create the task (status=planning, breadcrumb switches to [workflow-state:planning] for brainstorm + jsonl phase guidance) → (2) load `trellis-brainstorm` skill to discuss requirements with the user and iterate on prd.md → (3) once prd is done and jsonl is curated, run `task.py start <task-dir>` to enter [workflow-state:in_progress] for the implementation skeleton. For research-heavy work, dispatch `trellis-research` sub-agents — main agent must NOT do 3+ inline WebFetch / WebSearch / `gh api` calls. **"It looks small" is NOT grounds for downgrading B to A or C**.
+**B Create a task** — any implementation / code change / build / refactor work. Entry sequence: (1) `python3 ./.trellis/scripts/task.py create "<title>"` to create the task (status=planning, breadcrumb switches to [workflow-state:planning] for brainstorm + jsonl phase guidance) → (2) load `trellis-brainstorm` skill to discuss requirements with the user and iterate on prd.md → (3) once prd is done and jsonl is curated, run `task.py start <task-dir>` to enter [workflow-state:in_progress] for the implementation skeleton. **"It looks small" is NOT grounds for downgrading B to A or C**.
 **C Inline change** (per-turn only, escape hatch for B) — the user's CURRENT message MUST contain one of: "skip trellis" / "no task" / "just do it" / "don't create a task" / "跳过 trellis" / "别走流程" / "小修一下" / "直接改" / "先别建任务" → briefly acknowledge ("ok, skipping trellis flow this turn"), then inline. **Without seeing one of these phrases you must NOT inline on your own**; do not invent an override the user never said.
 [/workflow-state:no_task]
 
 [workflow-state:planning]
 Load the `trellis-brainstorm` skill and iterate on prd.md with the user.
-Phase 1.2 (required, once): before `task.py start`, you MUST curate `implement.jsonl` and `check.jsonl` — list the spec / research files sub-agents need so they get the right context injected. You may skip only if the jsonl already has agent-curated entries (the seed `_example` row alone doesn't count).
+Phase 1.3 (required, once): before `task.py start`, you MUST curate `implement.jsonl` and `check.jsonl` — list the spec / research files sub-agents need so they get the right context injected. You may skip only if the jsonl already has agent-curated entries (the seed `_example` row alone doesn't count).
 Then run `task.py start <task-dir>` to flip status to in_progress.
-Research output **must** land in `{task_dir}/research/*.md`, written by `trellis-research` sub-agents. The main agent should not inline WebFetch / WebSearch — the PRD only links to research files.
 [/workflow-state:planning]
 
 [workflow-state:in_progress]
-**Flow**: trellis-implement → trellis-check → trellis-update-spec → commit (Phase 3.1) → `/trellis:finish-work`.
-**Main-session default (no override)**: dispatch the `trellis-implement` / `trellis-check` sub-agents — the main agent does NOT edit code by default. Phase 3.1 commit (required, once): after trellis-update-spec, or whenever implementation is verifiably complete, the main agent **proposes the commit plan** — state the commit plan in user-facing text, wait for **explicit user confirmation**, then run `git commit` — BEFORE suggesting `/trellis:finish-work`. `/finish-work` refuses to run on a dirty working tree (paths outside `.trellis/workspace/` and `.trellis/tasks/`).
+**Flow**: trellis-implement → trellis-check → trellis-update-spec → commit (Phase 3.4) → `/trellis:finish-work`.
+**Main-session default (no override)**: dispatch the `trellis-implement` / `trellis-check` sub-agents — the main agent does NOT edit code by default. Phase 3.4 commit (required, once): after trellis-update-spec, or whenever implementation is verifiably complete, the main agent **proposes the commit plan** — state which files will be committed, the commit message, and the rationale — then wait for **explicit user confirmation** before running `git commit`. `/finish-work` refuses to run on a dirty working tree (paths outside `.trellis/workspace/` and `.trellis/tasks/`).
 **Sub-agent self-exemption**: if you are already running as `trellis-implement`, implement directly from the loaded task context and do NOT spawn another `trellis-implement`; if you are already running as `trellis-check`, review/fix directly and do NOT spawn another `trellis-check`. The default dispatch rule applies to the main session only.
-**Sub-agent dispatch protocol (all platforms, all sub-agents EXCEPT trellis-research)**: When you spawn `trellis-implement` / `trellis-check`, your dispatch prompt **MUST** start with one line: `Active task: <task path from \`task.py current\`>`. No exceptions. On class-2 platforms (codex / copilot / gemini / qoder) the sub-agent depends on this line because there is no hook to inject task context. On class-1 platforms (claude / cursor / opencode / kiro / codebuddy / droid) the line is normally redundant — the hook injects context directly — but it serves as a critical fallback when the hook fails (Windows + Claude Code PreToolUse silent skip, `--continue` resume, fork distribution, hooks disabled, etc.). `trellis-research` does not need this line because it operates without a task binding.
+**Sub-agent dispatch protocol (all platforms, all sub-agents)**: When you spawn `trellis-implement` / `trellis-check` / `trellis-research`, your dispatch prompt **MUST** start with one line: `Active task: <task path from \`task.py current\`>`. No exceptions. On class-2 platforms (codex / copilot / gemini / qoder) the sub-agent depends on this line because there is no hook to inject task context. On class-1 platforms (claude / cursor / opencode / kiro / codebuddy / droid) the line is normally redundant — the hook injects context directly — but it serves as a critical fallback when the hook fails (Windows + Claude Code PreToolUse silent skip, `--continue` resume, fork distribution, hooks disabled, etc.). For `trellis-research`, the line tells the sub-agent which `{task_dir}/research/` to write into.
 **Inline override** (per-turn only, escape hatch for sub-agent dispatch): the user's CURRENT message MUST explicitly contain one of: "do it inline" / "no sub-agent" / "你直接改" / "别派 sub-agent" / "main session 写就行" / "不用 sub-agent". **Without seeing one of these phrases you must NOT inline on your own**; do not invent an override the user never said.
 [/workflow-state:in_progress]
 
 [workflow-state:completed]
-Code committed via Phase 3.1; run `/trellis:finish-work` to wrap up (archive the task + record session).
-If you reach this state with uncommitted code, return to Phase 3.1 first — `/finish-work` refuses to run on a dirty working tree.
+Code committed via Phase 3.4; run `/trellis:finish-work` to wrap up (archive the task + record session).
+If you reach this state with uncommitted code, return to Phase 3.4 first — `/finish-work` refuses to run on a dirty working tree.
 `task.py archive` deletes any runtime session files that still point at the archived task.
 [/workflow-state:completed]
 
@@ -564,13 +565,12 @@ your per-turn prompt text
 
 [workflow-state:planning-inline]
 Load the `trellis-brainstorm` skill and iterate on prd.md with the user.
-Phase 1.2 jsonl curation is **skipped** in inline dispatch mode — the main session loads `trellis-before-dev` directly in Phase 2 and reads spec context itself, so there is no sub-agent to inject jsonl into.
+Phase 1.3 jsonl curation is **skipped** in inline dispatch mode — the main session loads `trellis-before-dev` directly in Phase 2 and reads spec context itself, so there is no sub-agent to inject jsonl into.
 Then run `task.py start <task-dir>` to flip status to in_progress.
-Research output **must** land in `{task_dir}/research/*.md`. In inline mode the main session may do research itself or dispatch `trellis-research` sub-agents.
 [/workflow-state:planning-inline]
 
 [workflow-state:in_progress-inline]
-**Flow** (inline mode): main session loads `trellis-before-dev` → main session edits code → main session loads `trellis-check` → run lint / type-check / tests → fix → `trellis-update-spec` → commit (Phase 3.1) → `/trellis:finish-work`.
+**Flow** (inline mode): main session loads `trellis-before-dev` → main session edits code → main session loads `trellis-check` → run lint / type-check / tests → fix → `trellis-update-spec` → commit (Phase 3.4) → `/trellis:finish-work`.
 **Main-session default (inline dispatch_mode)**: the main agent edits code directly. Do NOT dispatch `trellis-implement` / `trellis-check` sub-agents. Load the `trellis-before-dev` skill before writing code; load the `trellis-check` skill before reporting completion.
-Phase 3.1 commit (required, once): after `trellis-update-spec`, or whenever implementation is verifiably complete, the main agent **drives the commit** — state the commit plan in user-facing text, then run `git commit` — BEFORE suggesting `/trellis:finish-work`. `/finish-work` refuses to run on a dirty working tree (paths outside `.trellis/workspace/` and `.trellis/tasks/`).
+Phase 3.4 commit (required, once): after `trellis-update-spec`, or whenever implementation is verifiably complete, the main agent **proposes the commit plan** — state which files will be committed, the commit message, and the rationale — then wait for **explicit user confirmation** before running `git commit`. Do NOT suggest `/trellis:finish-work` until the commit is done. `/finish-work` refuses to run on a dirty working tree (paths outside `.trellis/workspace/` and `.trellis/tasks/`).
 [/workflow-state:in_progress-inline]

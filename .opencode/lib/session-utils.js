@@ -77,11 +77,11 @@ function getTaskStatus(ctx, platformInput = null) {
   const hasPrd = existsSync(join(taskDir, "prd.md"))
 
   if (!hasPrd) {
-    return `Status: NOT READY\nTask: ${taskTitle}\nSource: ${active.source}\nMissing: prd.md not created\nNext: Write PRD (see workflow.md Phase 1.1) then curate implement.jsonl per Phase 1.2`
+    return `Status: NOT READY\nTask: ${taskTitle}\nSource: ${active.source}\nMissing: prd.md not created\nNext: Write PRD (see workflow.md Phase 1.1) then curate implement.jsonl per Phase 1.3`
   }
 
   if (!hasContext) {
-    return `Status: NOT READY\nTask: ${taskTitle}\nSource: ${active.source}\nMissing: implement.jsonl / check.jsonl missing or empty\nNext: Curate entries per workflow.md Phase 1.2 (spec + research files only), then \`task.py start\``
+    return `Status: NOT READY\nTask: ${taskTitle}\nSource: ${active.source}\nMissing: implement.jsonl / check.jsonl missing or empty\nNext: Curate entries per workflow.md Phase 1.3 (spec + research files only), then \`task.py start\``
   }
 
   return (

@@ -65,7 +65,7 @@ This command lists packages and spec layers for the current project. Use this ou
 
 ## How Specs Enter Tasks
 
-Before a task enters implementation, Phase 1.2 should write relevant specs into `implement.jsonl` / `check.jsonl`:
+Before a task enters implementation, Phase 1.3 should write relevant specs into `implement.jsonl` / `check.jsonl`:
 
 ```jsonl
 {"file": ".trellis/spec/cli/backend/index.md", "reason": "CLI backend conventions"}

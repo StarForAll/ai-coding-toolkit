@@ -10,7 +10,7 @@
 
 1. **Trellis 原生管理（当前真实）**
    - Trellis 0.5+ 通过 `trellis init` 原生提供 `trellis-research` / `trellis-implement` / `trellis-check` agents，覆盖 9 个平台
-   - workflow 不再 overlay 这些 agent 定义，也不再维护 `commands/{claude,opencode,codex}/agents/` 源资产
+   - workflow 安装器不再 overlay 这些 agent 定义到目标项目，也不再维护 `commands/{claude,opencode,codex}/agents/` 源资产
    - 安装器仅做 legacy bare-name → trellis-* 迁移（rename），不写入 agent 内容
 2. **workflow-managed subset（当前真实）**
    - Claude / OpenCode / Codex 的阶段命令（feasibility / brainstorm / design / plan / test-first / project-audit / check / review-gate / delivery）
@@ -41,6 +41,8 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 - `trellis-research` / `trellis-implement` / `trellis-check` 的主体语义由 Trellis 上游维护，workflow 不修改
 - 若某平台确有行为差距（如 Codex class-2 缺 context self-loading），应通过 Trellis 上游机制或项目级配置解决，不在 workflow 源中补丁
 - 安装器 / 升级分析 / 卸载脚本不再读写 agent 内容，仅检测和迁移 legacy bare-name 文件
+
+**源仓库 carrier 增强 vs. 安装器 overlay（两层边界区分）**：上述约束针对的是 *workflow 安装器对目标项目* 的行为。本源仓库（authoring repo）自身可以且已经对 carrier agent 做了项目级能力增强（capability-enhancement），例如 Claude/Qoder/OpenCode 的 `trellis-research` 扩展了 MCP 工具路由（ace、Context7、deepwiki、grok-search、exa_advanced），详见 `.trellis/spec/agents/index.md` Tool Capability Enhancement 段。这类增强只落盘在本仓库的 carrier 文件中，不经过 workflow 安装器分发到目标项目——目标项目的 agent 仍由 `trellis init` 原生模板提供。换言之："安装器不 overlay"≠"源仓库不能增强 carrier"。
 
 ### 已完成的原子更新集合
 
@@ -101,7 +103,7 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 | 共享运行时基线 | `.claude/settings.json` | 手动维护 | hooks 接线、默认 deny |
 | 本机权限扩展 | `.claude/settings.local.json` | 手动维护 | MCP allowlist、本地调试 |
 | 会话与子代理 hooks | `.claude/hooks/*.py` | 手动维护 | session-start / inject-subagent-context |
-| 子代理定义 | `.claude/agents/*.md` | Trellis 原生管理 | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 不再 overlay，仅做 legacy bare-name → trellis-* 迁移 |
+| 子代理定义 | `.claude/agents/*.md` | Trellis 原生管理 | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 安装器不再 overlay 到目标项目，仅做 legacy 迁移；源仓库 carrier 可含项目级增强 |
 | 项目 Git 前置条件 | `origin ≥ 2 push URL` | 运行前置/仅校验 | 安装器校验，不负责配置 |
 | Trellis init 产物 | `.trellis/.version` | 运行前置/仅校验 | 安装器校验，由 `trellis init` 负责 |
 
@@ -116,7 +118,7 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 | 通用辅助脚本 | `.trellis/scripts/workflow/` | 安装器管理 | 与 Claude 共用，不重复部署 |
 | Trellis 基线 workflow 指南补丁 | `.trellis/workflow.md` | 安装器管理 | 与 Claude / Codex 共用同一份目标项目 workflow 指南，保持 close-out 与 child-task 规则一致 |
 | 共享 skills 承载面（非 OpenCode 正式入口） | `.agents/skills/*/SKILL.md` | 安装器管理（与 Codex 共用单份落盘） | OpenCode 官方 skills 扫描链路会命中 `.agents/skills/`；当前 workflow 仅把这里视为共享分发与漂移核对范围，不把它当成 OpenCode 的推荐或正式触发入口 |
-| 子代理定义 | `.opencode/agents/*.md` | Trellis 原生管理 | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 不再 overlay，仅做 legacy bare-name → trellis-* 迁移 |
+| 子代理定义 | `.opencode/agents/*.md` | Trellis 原生管理 | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 安装器不再 overlay 到目标项目，仅做 legacy 迁移；源仓库 carrier 可含项目级增强 |
 | 项目长期规则 | `AGENTS.md` | 半托管（手动维护为主） | 与 Claude/Codex 共用同一文件；`TRELLIS` managed block 与 `workflow-nl-routing` 区段由 `trellis init` / `install-workflow.py` 分别托管 |
 | workflow 文档注入 | `opencode.json.instructions` | 手动维护 | 只挂主入口与必要补充 |
 | 项目 Git 前置条件 | `origin ≥ 2 push URL` | 运行前置/仅校验 | 安装器校验 |
@@ -144,7 +146,7 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 | 项目长期规则 | `AGENTS.md` | 半托管（手动维护为主） | 与 Claude/OpenCode 共用；`TRELLIS` managed block 与 `workflow-nl-routing` 区段由 `trellis init` / `install-workflow.py` 分别托管 |
 | Codex 项目配置 | `.codex/config.toml` | 手动维护 | `AGENTS.md` fallback 等项目配置 |
 | 会话启动注入 | `.codex/hooks.json` + `.codex/hooks/*.py` | 手动维护 | SessionStart hook 注入 Trellis 上下文 |
-| 子代理定义 | `.codex/agents/*.toml` | Trellis 原生管理 | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 不再 overlay，仅做 legacy bare-name → trellis-* 迁移 |
+| 子代理定义 | `.codex/agents/*.toml` | Trellis 原生管理 | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 安装器不再 overlay 到目标项目，仅做 legacy 迁移；源仓库 carrier 可含项目级增强 |
 | 项目 Git 前置条件 | `origin ≥ 2 push URL` | 运行前置/仅校验 | 安装器校验 |
 | Trellis init 产物 | `.trellis/.version` | 运行前置/仅校验 | 安装器校验 |
 
@@ -157,7 +159,7 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 
 ### 多 skills 目录同步边界
 
-`trellis init` 在部分样本里可能同时落盘 `.agents/skills/` 与 `.codex/skills/` 两个目录；但当前 fresh `0.5.4` 基线默认可稳定观察到的是 `.agents/skills/`，不应再把 `.codex/skills/parallel` 当作必然出现的默认现象。当前安装器对这两类目录采用分层策略：
+`trellis init` 在部分样本里可能同时落盘 `.agents/skills/` 与 `.codex/skills/` 两个目录；但当前 fresh `0.5.9` 基线默认可稳定观察到的是 `.agents/skills/`，不应再把 `.codex/skills/parallel` 当作必然出现的默认现象。当前安装器对这两类目录采用分层策略：
 
 - `install-workflow.py` 只向 `.agents/skills/` 写入共享阶段 skills
 - `trellis-continue` / `trellis-finish-work` baseline patch 只增强**活动 skills 目录**；legacy `start` / `finish-work` 仅作为旧目标项目兼容输入

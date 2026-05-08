@@ -171,36 +171,6 @@ def get_active_task(root: Path, input_data: dict) -> Optional[tuple[str, str, st
     return task_id, status, active.source
 
 
-def _read_trellis_config(root: Path) -> dict:
-    """Read .trellis/config.yaml if it exists; return empty dict on error."""
-    # Use repo-local config parser instead of inline PyYAML
-    scripts_dir = root / ".trellis" / "scripts"
-    if str(scripts_dir) not in sys.path:
-        sys.path.insert(0, str(scripts_dir))
-
-    try:
-        from common.trellis_config import read_trellis_config  # type: ignore[import-not-found]
-        return read_trellis_config(root)
-    except Exception:
-        return {}
-
-
-def resolve_breadcrumb_key(status: str, platform: str | None, root: Path) -> str:
-    """Resolve the effective breadcrumb key for the given status and platform.
-
-    For codex platform with dispatch_mode=inline in config, append '-inline'
-    to the breadcrumb key. This routes to the inline-mode breadcrumb variants.
-    """
-    if platform != "codex" or status == "no_task":
-        return status
-
-    config = _read_trellis_config(root)
-    codex_cfg = config.get("codex") if isinstance(config, dict) else None
-    if isinstance(codex_cfg, dict) and codex_cfg.get("dispatch_mode") == "inline":
-        return f"{status}-inline"
-    return status
-
-
 # ---------------------------------------------------------------------------
 # Breadcrumb loading: parse workflow.md, fall back to hardcoded defaults
 # ---------------------------------------------------------------------------
@@ -238,6 +208,71 @@ def load_breadcrumbs(root: Path) -> dict[str, str]:
     return result
 
 
+def _read_trellis_config(root: Path) -> dict:
+    """Load .trellis/config.yaml via the bundled trellis_config helper.
+
+    The helper lives in .trellis/scripts/common; the hook lives outside the
+    scripts tree, so we extend sys.path before importing.
+    """
+    scripts_dir = root / ".trellis" / "scripts"
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    try:
+        from common.trellis_config import read_trellis_config  # type: ignore[import-not-found]
+    except Exception:
+        return {}
+    try:
+        return read_trellis_config(root)
+    except Exception:
+        return {}
+
+
+def _codex_mode_banner(config: dict) -> str:
+    """Emit a `<codex-mode>` banner for the additionalContext payload.
+
+    Reads `codex.dispatch_mode` from .trellis/config.yaml; defaults to
+    `inline` when missing or invalid because Codex sub-agents run with
+    `fork_turns="none"` isolation and can't inherit the parent session's
+    task context. The banner makes the active mode explicit to Codex AI
+    per turn, complementing the workflow-state body which is per-status.
+    Mode tells AI which dispatch protocol to follow; workflow-state tells
+    AI what step it's at.
+    """
+    mode = "inline"
+    if isinstance(config, dict):
+        codex_cfg = config.get("codex")
+        if isinstance(codex_cfg, dict):
+            cfg_mode = codex_cfg.get("dispatch_mode")
+            if cfg_mode in ("inline", "sub-agent"):
+                mode = cfg_mode
+    return f"<codex-mode>{mode}</codex-mode>"
+
+
+def resolve_breadcrumb_key(
+    status: str, platform: str | None, config: dict
+) -> str:
+    """Pick the breadcrumb tag key based on Codex dispatch_mode.
+
+    Codex defaults to ``inline`` because sub-agents run with ``fork_turns="none"``
+    isolation and can't inherit the parent session's task context. Users can
+    opt into ``codex.dispatch_mode: sub-agent`` in ``.trellis/config.yaml``
+    to use the parallel ``<status>-inline`` tag → ``<status>`` flip. Invalid
+    or missing values fall back to inline.
+
+    Non-codex platforms return the plain status unchanged.
+    """
+    if platform == "codex":
+        mode = "inline"
+        if isinstance(config, dict):
+            codex_cfg = config.get("codex")
+            if isinstance(codex_cfg, dict):
+                cfg_mode = codex_cfg.get("dispatch_mode")
+                if cfg_mode in ("inline", "sub-agent"):
+                    mode = cfg_mode
+        return f"{status}-inline" if mode == "inline" else status
+    return status
+
+
 def build_breadcrumb(
     task_id: Optional[str],
     status: str,
@@ -251,15 +286,10 @@ def build_breadcrumb(
     - Unknown status (no tag, or workflow.md missing) → generic
       "Refer to workflow.md for current step." line
     - `no_task` pseudo-status (task_id is None) → header omits task info
-    - breadcrumb_key: optional override for template lookup (e.g., "planning-inline"
-      for status "planning" with dispatch_mode=inline). If provided, use this key
-      to fetch the body, but keep the real status in the header.
     """
-    lookup_key = breadcrumb_key if breadcrumb_key is not None else status
+    lookup_key = breadcrumb_key or status
     body = templates.get(lookup_key)
-    # Fallback: if the inline variant tag doesn't exist (e.g., 'completed-inline'
-    # not in workflow.md), fall back to the base status tag (e.g., 'completed').
-    if body is None and breadcrumb_key is not None and breadcrumb_key != status:
+    if body is None and lookup_key != status:
         body = templates.get(status)
     if body is None:
         body = "Refer to workflow.md for current step."
@@ -290,21 +320,27 @@ def main() -> int:
         return 0  # not a Trellis project
 
     templates = load_breadcrumbs(root)
-    task = get_active_task(root, data)
     platform = _detect_platform(data)
+    config = _read_trellis_config(root)
+    task = get_active_task(root, data)
     if task is None:
         # No active task — still emit a breadcrumb nudging AI toward
         # trellis-brainstorm + task.py create when user describes real work.
-        breadcrumb = build_breadcrumb(None, "no_task", templates)
+        no_task_key = resolve_breadcrumb_key("no_task", platform, config)
+        breadcrumb = build_breadcrumb(
+            None, "no_task", templates, breadcrumb_key=no_task_key
+        )
     else:
         task_id, status, source = task
-        breadcrumb_key = resolve_breadcrumb_key(status, platform, root)
-        breadcrumb = build_breadcrumb(task_id, status, templates, source, breadcrumb_key)
-
+        status_key = resolve_breadcrumb_key(status, platform, config)
+        breadcrumb = build_breadcrumb(
+            task_id, status, templates, source, breadcrumb_key=status_key
+        )
     if platform == "codex":
         parts: list[str] = [CODEX_SUB_AGENT_NOTICE]
         if task is None:
             parts.append(CODEX_NO_TASK_BOOTSTRAP_NOTICE)
+        parts.append(_codex_mode_banner(config))
         parts.append(breadcrumb)
         breadcrumb = "\n\n".join(parts)
 

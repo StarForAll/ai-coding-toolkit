@@ -18,8 +18,6 @@ import warnings
 from io import StringIO
 from pathlib import Path
 
-warnings.filterwarnings("ignore")
-
 
 def _normalize_windows_shell_path(path_str: str) -> str:
     """Normalize Unix-style shell paths to real Windows paths.
@@ -69,14 +67,15 @@ def _normalize_windows_shell_path(path_str: str) -> str:
     return path_str
 
 
+warnings.filterwarnings("ignore")
+
 FIRST_REPLY_NOTICE = """<first-reply-notice>
 On the first visible assistant reply in this session, begin with exactly one short Chinese sentence:
 Trellis SessionStart 已注入：workflow、当前任务状态、开发者身份、git 状态、active tasks、spec 索引已加载。
 Then continue directly with the user's request. This notice is one-shot: do not repeat it after the first assistant reply in the same session.
 </first-reply-notice>"""
 
-
-CODEX_SUB_AGENT_NOTICE = """<sub-agent-notice>
+SUB_AGENT_NOTICE = """<sub-agent-notice>
 SUB-AGENT NOTICE - READ FIRST IF SPAWNED VIA spawn_agent
 
 If your parent session spawned you via spawn_agent with an explicit task
@@ -250,10 +249,10 @@ def _get_task_status(trellis_dir: Path, hook_input: dict) -> str:
     has_prd = (task_dir / "prd.md").is_file()
 
     if not has_prd:
-        return f"Status: NOT READY\nTask: {task_title}\nSource: {active.source}\nMissing: prd.md not created\nNext: Write PRD (see workflow.md Phase 1.1) then curate implement.jsonl per Phase 1.2"
+        return f"Status: NOT READY\nTask: {task_title}\nSource: {active.source}\nMissing: prd.md not created\nNext: Write PRD (see workflow.md Phase 1.1) then curate implement.jsonl per Phase 1.3"
 
     if not has_context:
-        return f"Status: NOT READY\nTask: {task_title}\nSource: {active.source}\nMissing: implement.jsonl / check.jsonl missing or empty\nNext: Curate entries per workflow.md Phase 1.2 (spec + research files only), then `task.py start`"
+        return f"Status: NOT READY\nTask: {task_title}\nSource: {active.source}\nMissing: implement.jsonl / check.jsonl missing or empty\nNext: Curate entries per workflow.md Phase 1.3 (spec + research files only), then `task.py start`"
 
     return (
         f"Status: READY\nTask: {task_title}\n"
@@ -353,9 +352,8 @@ def main() -> None:
 
     output = StringIO()
 
-    # Check if this is a sub-agent session (spawned via spawn_agent)
-    # Sub-agents should NOT load full Trellis context
-    is_subagent = os.environ.get("CODEX_SUB_AGENT") == "1" or hook_input.get("is_subagent")
+    output.write(SUB_AGENT_NOTICE)
+    output.write("\n\n")
 
     output.write("""<session-context>
 You are starting a new session in a Trellis-managed project.
@@ -363,13 +361,8 @@ Read and follow all instructions below carefully.
 </session-context>
 
 """)
-
-    if is_subagent:
-        output.write(CODEX_SUB_AGENT_NOTICE)
-        output.write("\n\n")
-    else:
-        output.write(FIRST_REPLY_NOTICE)
-        output.write("\n\n")
+    output.write(FIRST_REPLY_NOTICE)
+    output.write("\n\n")
 
     output.write("<current-state>\n")
     context_script = trellis_dir / "scripts" / "get_context.py"
