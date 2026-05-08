@@ -1469,3 +1469,36 @@ Fix 0.5.7→0.5.9 upgrade residue: adopt .new files, add codex-inline/codex-sub-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 171: 修正 workflow-capability-audit 与 trellis 会话模型对齐
+
+**Date**: 2026-05-08
+**Task**: 修正 workflow-capability-audit 与 trellis 会话模型对齐
+**Branch**: `main`
+
+### Summary
+
+修复 workflow-capability-audit 对会话级 active task、carrier 分类与锚点提升路径的兼容问题，并同步测试、spec 与 skill 副本。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c7d2f37` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
