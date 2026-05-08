@@ -1370,3 +1370,36 @@ Validation run in this session:
 ### Next Steps
 
 - None - task complete
+
+
+## Session 168: Trellis 0.5.6→0.5.7 upgrade: dispatch_mode inline, Kiro contract, template-hashes backfill
+
+**Date**: 2026-05-08
+**Task**: Trellis 0.5.6→0.5.7 upgrade: dispatch_mode inline, Kiro contract, template-hashes backfill
+**Branch**: `main`
+
+### Summary
+
+完成 trellis 0.5.6→0.5.7 升级：添加 codex dispatch_mode=inline 支持及 breadcrumb key 路由；对齐 Kiro 平台文件合约（prompt 字段名、{{PYTHON_CMD}}、generic tools）；添加 Codex sub-agent 防死锁 features 块和 SUB_AGENT_NOTICE；在 workflow.md 添加 Kilo/Antigravity/Windsurf 平台块和 inline breadcrumb tags；从 0.5.7 baseline 回填 .template-hashes.json 19 个条目
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a171f11` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
