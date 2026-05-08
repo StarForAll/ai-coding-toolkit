@@ -1403,3 +1403,36 @@ Validation run in this session:
 ### Next Steps
 
 - None - task complete
+
+
+## Session 169: 收敛 trellis 升级残留并清理 new 候选
+
+**Date**: 2026-05-08
+**Task**: 收敛 trellis 升级残留并清理 new 候选
+**Branch**: `main`
+
+### Summary
+
+收敛当前仓库 Trellis 小版本升级残留：清理全部 .new 候选，保留 Kiro agent hook 命令落盘修正，补齐 shared/Kiro/Qoder 的 trellis-finish-work 文案与 Final git log order，并同步本轮确认项的 template hash。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1d706b6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
