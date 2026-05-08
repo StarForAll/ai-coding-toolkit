@@ -1436,3 +1436,36 @@ Validation run in this session:
 ### Next Steps
 
 - None - task complete
+
+
+## Session 170: Settle Trellis 0.5.9 upgrade consistency
+
+**Date**: 2026-05-08
+**Task**: Settle Trellis 0.5.9 upgrade consistency
+**Branch**: `main`
+
+### Summary
+
+Fix 0.5.7→0.5.9 upgrade residue: adopt .new files, add codex-inline/codex-sub-agent platform markers, update Phase numbering (1.2→1.3, 1.3→1.4, 3.1→3.4, 3.2→3.5), sync version refs 0.5.4→0.5.9, rewrite brainstorm Codex exception, qualify carrier enhancement vs installer overlay, fix Phase 3.4 commit semantics (all modes now require explicit user confirmation), fix trellis-meta Phase 3.3→2.3 residuals and change-workflow spec update Phase mapping
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `819f04a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
