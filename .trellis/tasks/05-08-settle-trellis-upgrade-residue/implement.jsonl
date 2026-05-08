@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/index.md", "reason": "project spec overview for repo-maintenance boundaries"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "cross-layer drift checks across agents commands skills docs and metadata"}
+{"file": ".trellis/spec/scripts/index.md", "reason": "script-layer conventions for hook/runtime python files"}
+{"file": ".trellis/spec/scripts/python-conventions.md", "reason": "python editing standards for hook/runtime scripts"}
+{"file": ".trellis/spec/skills/index.md", "reason": "repo-local skill surface editing rules"}
+{"file": ".trellis/spec/docs/index.md", "reason": "documentation and repo-boundary wording rules for live command and reference docs"}

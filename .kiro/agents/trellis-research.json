@@ -23,7 +23,7 @@
   "hooks": {
     "agentSpawn": [
       {
-        "command": "{{PYTHON_CMD}} .kiro/hooks/inject-subagent-context.py"
+        "command": "python3 .kiro/hooks/inject-subagent-context.py"
       }
     ]
   }

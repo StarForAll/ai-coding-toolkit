@@ -40,7 +40,7 @@ For each remaining dirty path, decide whether it belongs to **the current task**
 Then route:
 
 - **Any remaining path looks like current-task work** — bail out with:
-  > "Working tree has uncommitted code changes from this task: `<list>`. Return to workflow Phase 3.1 to commit them before running `$finish-work`."
+  > "Working tree has uncommitted code changes from this task: `<list>`. Return to workflow Phase 3.1 to commit them before running `trellis-finish-work`."
 
   Do NOT run `git commit` here. Do NOT prompt the user to commit. The user goes back to Phase 3.1 and the AI drives the batched commit there.
 - **All remaining paths look unrelated** (other parallel-window work) — report them once and continue to Step 3:
@@ -69,3 +69,5 @@ python3 ./.trellis/scripts/workflow/record-session-helper.py \
 Use the work-commit hashes produced in Phase 3.1 (visible in Step 1's `Recent commits` list, or via `git log --oneline`) for `--commit`. Do not include the archive commit hashes from Step 3. `record-session-helper.py` runs metadata closure pre-checks, calls `add_session.py` internally, then auto-commits `.trellis/workspace` and `.trellis/tasks` metadata changes.
 
 If `record-session-helper.py` reports a metadata auto-commit failure in a read-only/restricted environment and prints `TRELLIS_AUTO_ESCALATE_COMMAND=...`, immediately rerun the printed command with elevated permissions if the current CLI supports privileged retry. Do not fall back to "commit manually" unless the current runtime truly has no privilege-escalation path.
+
+Final git log order: `<work commits from 3.1>` → `chore(task): archive ...` (one or more) → `chore: record journal`.
