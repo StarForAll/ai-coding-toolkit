@@ -461,10 +461,16 @@ Following this workflow ensures:
 
 #### 1.2 Curate JSONL Context
 
+[Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini]
 - Curate `implement.jsonl` and `check.jsonl`.
 - Include only spec and research files.
 - Do not include code paths.
 - Research-heavy work should persist findings into `research/*.md` first.
+[/Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini]
+
+[Kilo, Antigravity, Windsurf]
+- Skipped in inline dispatch mode. The main session loads `trellis-before-dev` directly and reads spec context itself — no sub-agent to inject jsonl into.
+[/Kilo, Antigravity, Windsurf]
 
 #### 1.3 Enter Execute Phase
 
@@ -475,13 +481,27 @@ Following this workflow ensures:
 
 #### 2.1 Implement
 
+[Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini]
 - Default path: dispatch `trellis-implement`.
 - Main session edits code only when the user's current message explicitly opts out of sub-agents.
+[/Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini]
+
+[Kilo, Antigravity, Windsurf]
+- Inline dispatch: load `trellis-before-dev` skill first, then edit code directly.
+- Do NOT dispatch `trellis-implement` / `trellis-check` sub-agents.
+[/Kilo, Antigravity, Windsurf]
 
 #### 2.2 Check
 
+[Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini]
 - Dispatch `trellis-check`.
 - Fix issues directly, re-run checks, and ensure spec sync is considered.
+[/Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini]
+
+[Kilo, Antigravity, Windsurf]
+- Inline dispatch: load `trellis-check` skill, run lint / type-check / tests yourself.
+- Fix issues directly. Do NOT dispatch `trellis-check` sub-agent.
+[/Kilo, Antigravity, Windsurf]
 
 #### 2.3 Update Spec
 
@@ -492,11 +512,18 @@ Following this workflow ensures:
 
 #### 3.1 Commit & Verify
 
+[Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini]
 1. After implementation is verifiably complete, the main session **proposes the commit plan** — state which files will be committed, the commit message, and the rationale.
 2. Wait for **explicit user confirmation**.
 3. Execute `git add` + `git commit` only after confirmation.
 4. Verify the working tree is clean (paths outside `.trellis/workspace/` and `.trellis/tasks/` must have no uncommitted changes).
 5. `finish-work` is not the place to make the code commit — it only archives and journals.
+[/Claude Code, Cursor, Codex, Qoder, OpenCode, CodeBuddy, Droid, Copilot, Gemini]
+
+[Kilo, Antigravity, Windsurf]
+1. After implementation is verifiably complete, the main session **drives the commit** — state the commit plan in user-facing text, then run `git commit`.
+2. No sub-agent dispatch needed; the main session handles everything directly.
+[/Kilo, Antigravity, Windsurf]
 
 #### 3.2 Close-Out
 
@@ -534,3 +561,16 @@ If you reach this state with uncommitted code, return to Phase 3.1 first — `/f
 [workflow-state:my-status]
 your per-turn prompt text
 [/workflow-state:my-status]
+
+[workflow-state:planning-inline]
+Load the `trellis-brainstorm` skill and iterate on prd.md with the user.
+Phase 1.2 jsonl curation is **skipped** in inline dispatch mode — the main session loads `trellis-before-dev` directly in Phase 2 and reads spec context itself, so there is no sub-agent to inject jsonl into.
+Then run `task.py start <task-dir>` to flip status to in_progress.
+Research output **must** land in `{task_dir}/research/*.md`. In inline mode the main session may do research itself or dispatch `trellis-research` sub-agents.
+[/workflow-state:planning-inline]
+
+[workflow-state:in_progress-inline]
+**Flow** (inline mode): main session loads `trellis-before-dev` → main session edits code → main session loads `trellis-check` → run lint / type-check / tests → fix → `trellis-update-spec` → commit (Phase 3.1) → `/trellis:finish-work`.
+**Main-session default (inline dispatch_mode)**: the main agent edits code directly. Do NOT dispatch `trellis-implement` / `trellis-check` sub-agents. Load the `trellis-before-dev` skill before writing code; load the `trellis-check` skill before reporting completion.
+Phase 3.1 commit (required, once): after `trellis-update-spec`, or whenever implementation is verifiably complete, the main agent **drives the commit** — state the commit plan in user-facing text, then run `git commit` — BEFORE suggesting `/trellis:finish-work`. `/finish-work` refuses to run on a dirty working tree (paths outside `.trellis/workspace/` and `.trellis/tasks/`).
+[/workflow-state:in_progress-inline]

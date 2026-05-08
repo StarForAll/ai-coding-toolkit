@@ -171,6 +171,36 @@ def get_active_task(root: Path, input_data: dict) -> Optional[tuple[str, str, st
     return task_id, status, active.source
 
 
+def _read_trellis_config(root: Path) -> dict:
+    """Read .trellis/config.yaml if it exists; return empty dict on error."""
+    # Use repo-local config parser instead of inline PyYAML
+    scripts_dir = root / ".trellis" / "scripts"
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+
+    try:
+        from common.trellis_config import read_trellis_config  # type: ignore[import-not-found]
+        return read_trellis_config(root)
+    except Exception:
+        return {}
+
+
+def resolve_breadcrumb_key(status: str, platform: str | None, root: Path) -> str:
+    """Resolve the effective breadcrumb key for the given status and platform.
+
+    For codex platform with dispatch_mode=inline in config, append '-inline'
+    to the breadcrumb key. This routes to the inline-mode breadcrumb variants.
+    """
+    if platform != "codex" or status == "no_task":
+        return status
+
+    config = _read_trellis_config(root)
+    codex_cfg = config.get("codex") if isinstance(config, dict) else None
+    if isinstance(codex_cfg, dict) and codex_cfg.get("dispatch_mode") == "inline":
+        return f"{status}-inline"
+    return status
+
+
 # ---------------------------------------------------------------------------
 # Breadcrumb loading: parse workflow.md, fall back to hardcoded defaults
 # ---------------------------------------------------------------------------
@@ -213,6 +243,7 @@ def build_breadcrumb(
     status: str,
     templates: dict[str, str],
     source: str | None = None,
+    breadcrumb_key: str | None = None,
 ) -> str:
     """Build the <workflow-state>...</workflow-state> block.
 
@@ -220,8 +251,16 @@ def build_breadcrumb(
     - Unknown status (no tag, or workflow.md missing) → generic
       "Refer to workflow.md for current step." line
     - `no_task` pseudo-status (task_id is None) → header omits task info
+    - breadcrumb_key: optional override for template lookup (e.g., "planning-inline"
+      for status "planning" with dispatch_mode=inline). If provided, use this key
+      to fetch the body, but keep the real status in the header.
     """
-    body = templates.get(status)
+    lookup_key = breadcrumb_key if breadcrumb_key is not None else status
+    body = templates.get(lookup_key)
+    # Fallback: if the inline variant tag doesn't exist (e.g., 'completed-inline'
+    # not in workflow.md), fall back to the base status tag (e.g., 'completed').
+    if body is None and breadcrumb_key is not None and breadcrumb_key != status:
+        body = templates.get(status)
     if body is None:
         body = "Refer to workflow.md for current step."
     header = f"Status: {status}" if task_id is None else f"Task: {task_id} ({status})"
@@ -252,15 +291,16 @@ def main() -> int:
 
     templates = load_breadcrumbs(root)
     task = get_active_task(root, data)
+    platform = _detect_platform(data)
     if task is None:
         # No active task — still emit a breadcrumb nudging AI toward
         # trellis-brainstorm + task.py create when user describes real work.
         breadcrumb = build_breadcrumb(None, "no_task", templates)
     else:
         task_id, status, source = task
-        breadcrumb = build_breadcrumb(task_id, status, templates, source)
+        breadcrumb_key = resolve_breadcrumb_key(status, platform, root)
+        breadcrumb = build_breadcrumb(task_id, status, templates, source, breadcrumb_key)
 
-    platform = _detect_platform(data)
     if platform == "codex":
         parts: list[str] = [CODEX_SUB_AGENT_NOTICE]
         if task is None:

@@ -76,6 +76,23 @@ Then continue directly with the user's request. This notice is one-shot: do not 
 </first-reply-notice>"""
 
 
+CODEX_SUB_AGENT_NOTICE = """<sub-agent-notice>
+SUB-AGENT NOTICE - READ FIRST IF SPAWNED VIA spawn_agent
+
+If your parent session spawned you via spawn_agent with an explicit task
+message above this hook output, that message is your only job.
+- Execute the parent message exactly as written, then return.
+- Ignore all Trellis workflow guidance below this notice.
+- Do NOT call task.py start, task.py add-context, or task.py archive.
+- Do NOT call wait_agent or spawn_agent.
+- Do NOT modify .trellis/tasks/* or any other file unless the parent message
+  explicitly asks for that.
+
+If you are the main interactive Codex session and the user is typing at the
+terminal with no parent agent, use the workflow guidance below normally.
+</sub-agent-notice>"""
+
+
 def should_skip_injection() -> bool:
     if os.environ.get("TRELLIS_HOOKS") == "0":
         return True
@@ -336,14 +353,23 @@ def main() -> None:
 
     output = StringIO()
 
+    # Check if this is a sub-agent session (spawned via spawn_agent)
+    # Sub-agents should NOT load full Trellis context
+    is_subagent = os.environ.get("CODEX_SUB_AGENT") == "1" or hook_input.get("is_subagent")
+
     output.write("""<session-context>
 You are starting a new session in a Trellis-managed project.
 Read and follow all instructions below carefully.
 </session-context>
 
 """)
-    output.write(FIRST_REPLY_NOTICE)
-    output.write("\n\n")
+
+    if is_subagent:
+        output.write(CODEX_SUB_AGENT_NOTICE)
+        output.write("\n\n")
+    else:
+        output.write(FIRST_REPLY_NOTICE)
+        output.write("\n\n")
 
     output.write("<current-state>\n")
     context_script = trellis_dir / "scripts" / "get_context.py"
