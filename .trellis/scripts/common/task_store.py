@@ -49,17 +49,6 @@ from .task_utils import (
 )
 
 
-READONLY_HINTS = (
-    "Read-only file system",
-    "只读文件系统",
-    "Permission denied",
-    "Operation not permitted",
-    ".git/index.lock",
-    "cannot create",
-    "不能创建",
-)
-
-
 # =============================================================================
 # Helper Functions
 # =============================================================================
@@ -88,26 +77,15 @@ def ensure_tasks_dir(repo_root: Path) -> Path:
     return tasks_dir
 
 
-def _is_readonly_git_failure(text: str) -> bool:
-    return any(hint in text for hint in READONLY_HINTS)
-
-
-def _print_archive_commit_resume_guidance(task_name: str) -> None:
-    command = f"python3 ./.trellis/scripts/task.py archive-commit-only {task_name}"
-    print("", file=sys.stderr)
-    print("⚠️  archive 元数据自动提交失败，检测到可能的只读/受限写入环境。", file=sys.stderr)
-    print("如果当前 CLI 支持提权重试，请立即用提权方式执行：", file=sys.stderr)
-    print(command, file=sys.stderr)
-    print(f"TRELLIS_AUTO_ESCALATE_COMMAND={command}", file=sys.stderr)
-
-
 # =============================================================================
 # Sub-agent platform detection + JSONL seeding
 # =============================================================================
 
-# Only platforms that actually consume ``implement.jsonl`` / ``check.jsonl``
-# belong here. Shared skill layers are not a signal for seeding task-local
-# agent context manifests.
+# Config directories of platforms that consume implement.jsonl / check.jsonl.
+# Keep in sync with src/types/ai-tools.ts AI_TOOLS entries — these are the
+# platforms listed in workflow.md's "agent-capable" Skill Routing block
+# (Class-1 hook-inject + Class-2 pull-based preludes). Kilo / Antigravity /
+# Windsurf are NOT in this list: they do not consume JSONL.
 _SUBAGENT_CONFIG_DIRS: tuple[str, ...] = (
     ".claude",
     ".cursor",
@@ -117,9 +95,9 @@ _SUBAGENT_CONFIG_DIRS: tuple[str, ...] = (
     ".opencode",
     ".qoder",
     ".codebuddy",
-    ".factory",
+    ".factory",   # Factory Droid
     ".github/copilot",
-    ".pi",
+    ".pi",        # Pi Agent
 )
 
 _SEED_EXAMPLE = (
@@ -131,15 +109,24 @@ _SEED_EXAMPLE = (
 
 
 def _has_subagent_platform(repo_root: Path) -> bool:
-    """Return True if any sub-agent-capable platform is configured."""
-    return any((repo_root / config_dir).is_dir() for config_dir in _SUBAGENT_CONFIG_DIRS)
+    """Return True if any sub-agent-capable platform is configured.
+
+    Detected by probing well-known config directories at the repo root. Used
+    only to decide whether ``task.py create`` should seed empty
+    ``implement.jsonl`` / ``check.jsonl`` files.
+    """
+    for config_dir in _SUBAGENT_CONFIG_DIRS:
+        if (repo_root / config_dir).is_dir():
+            return True
+    return False
 
 
 def _write_seed_jsonl(path: Path) -> None:
     """Write a one-line seed JSONL file with a self-describing ``_example``.
 
-    The seed row intentionally omits a ``file`` field so downstream readers can
-    skip it naturally and only treat curated rows as real context entries.
+    The seed row has no ``file`` field, so downstream consumers (hooks +
+    preludes) that iterate entries via ``item.get("file")`` naturally skip
+    it. The row exists purely as an in-file prompt for the AI curator.
     """
     seed = {"_example": _SEED_EXAMPLE}
     path.write_text(json.dumps(seed, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -240,6 +227,10 @@ def cmd_create(args: argparse.Namespace) -> int:
 
     write_json(task_json_path, task_data)
 
+    # Seed implement.jsonl / check.jsonl for sub-agent-capable platforms.
+    # Agent curates real entries in Phase 1.2 (see .trellis/workflow.md).
+    # Agent-less platforms (Kilo / Antigravity / Windsurf) skip this — they
+    # load specs via the trellis-before-dev skill instead of JSONL.
     seeded_jsonl = False
     if _has_subagent_platform(repo_root):
         for jsonl_name in ("implement.jsonl", "check.jsonl"):
@@ -270,10 +261,13 @@ def cmd_create(args: argparse.Namespace) -> int:
 
                 print(colored(f"Linked as child of: {parent_dir.name}", Colors.GREEN), file=sys.stderr)
 
-    # Auto-activate new task when a session identity exists.
+    # Auto-activate the new task so the per-turn breadcrumb fires planning
+    # state. Best-effort: gracefully degrade if no session identity (CLI run
+    # outside an AI session) — the task is still created, the user can run
+    # task.py start later. Pointer is session-scoped so this never affects
+    # other AI sessions.
     try:
         from .active_task import resolve_context_key, set_active_task
-
         if resolve_context_key():
             try:
                 rel_dir = task_dir.relative_to(repo_root).as_posix()
@@ -344,7 +338,10 @@ def cmd_archive(args: argparse.Namespace) -> int:
             data["completedAt"] = today
             write_json(task_json_path, data)
 
-            # Keep this task in its parent's children list so progress stays stable.
+            # Handle subtask relationships on archive.
+            # Keep this task in its parent's children list so progress
+            # counters (children_progress) stay consistent — children
+            # missing from the active set are treated as completed.
             task_children = data.get("children", [])
 
             # If this is a parent, clear parent field in all children
@@ -359,8 +356,8 @@ def cmd_archive(args: argparse.Namespace) -> int:
                                 child_data["parent"] = None
                                 write_json(child_json, child_data)
 
+    # Clear any session that still points at this task before the path moves.
     from .active_task import clear_task_from_sessions
-
     clear_task_from_sessions(str(task_dir), repo_root)
 
     # Archive
@@ -371,9 +368,8 @@ def cmd_archive(args: argparse.Namespace) -> int:
         print(colored(f"Archived: {dir_name} -> archive/{year_month}/", Colors.GREEN), file=sys.stderr)
 
         # Auto-commit unless --no-commit
-        commit_ok = True
         if not getattr(args, "no_commit", False):
-            commit_ok = _auto_commit_archive(dir_name, repo_root)
+            _auto_commit_archive(dir_name, repo_root)
 
         # Return the archive path
         print(f"{DIR_WORKFLOW}/{DIR_TASKS}/{DIR_ARCHIVE}/{year_month}/{dir_name}")
@@ -381,48 +377,30 @@ def cmd_archive(args: argparse.Namespace) -> int:
         # Run hooks with the archived path
         archived_json = archive_dest / FILE_TASK_JSON
         run_task_hooks("after_archive", archived_json, repo_root)
-        return 0 if commit_ok else 2
+        return 0
 
     return 1
 
 
-def _auto_commit_archive(task_name: str, repo_root: Path) -> bool:
+def _auto_commit_archive(task_name: str, repo_root: Path) -> None:
     """Stage .trellis/tasks/ changes and commit after archive."""
     tasks_rel = f"{DIR_WORKFLOW}/{DIR_TASKS}"
-    rc, _, err = run_git(["add", "-A", tasks_rel], cwd=repo_root)
-    if rc != 0:
-        print(f"[WARN] git add failed: {err.strip()}", file=sys.stderr)
-        if _is_readonly_git_failure(err):
-            _print_archive_commit_resume_guidance(task_name)
-        return False
+    run_git(["add", "-A", tasks_rel], cwd=repo_root)
 
-    rc, _, _ = run_git(["diff", "--cached", "--quiet", "--", tasks_rel], cwd=repo_root)
+    # Check if there are staged changes
+    rc, _, _ = run_git(
+        ["diff", "--cached", "--quiet", "--", tasks_rel], cwd=repo_root
+    )
     if rc == 0:
         print("[OK] No task changes to commit.", file=sys.stderr)
-        return True
+        return
 
     commit_msg = f"chore(task): archive {task_name}"
     rc, _, err = run_git(["commit", "-m", commit_msg], cwd=repo_root)
     if rc == 0:
         print(f"[OK] Auto-committed: {commit_msg}", file=sys.stderr)
-        return True
-
-    print(f"[WARN] Auto-commit failed: {err.strip()}", file=sys.stderr)
-    if _is_readonly_git_failure(err):
-        _print_archive_commit_resume_guidance(task_name)
-    return False
-
-
-def cmd_archive_commit_only(args: argparse.Namespace) -> int:
-    """Commit-only step for an already archived task's metadata."""
-    repo_root = get_repo_root()
-    task_name = args.name
-
-    if not task_name:
-        print(colored("Error: Task name is required", Colors.RED), file=sys.stderr)
-        return 1
-
-    return 0 if _auto_commit_archive(task_name, repo_root) else 2
+    else:
+        print(f"[WARN] Auto-commit failed: {err.strip()}", file=sys.stderr)
 
 
 # =============================================================================

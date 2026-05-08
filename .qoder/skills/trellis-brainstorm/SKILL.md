@@ -507,31 +507,25 @@ Context / Decision / Consequences
 
 ## Integration with Start Workflow
 
-After brainstorm completes (Step 8 confirmation approved), the flow continues through the remaining Phase 1 steps before reaching Phase 2:
+After brainstorm completes (Step 8 confirmation approved), the flow continues to the Task Workflow's **Phase 2: Prepare for Implementation**:
 
 ```text
-Brainstorm (Phase 1.1)
+Brainstorm
   Step 0: Create task directory + seed PRD
   Step 1–7: Discover requirements, research, converge
   Step 8: Final confirmation → user approves
   ↓
-Phase 1.2 (Curate JSONL Context)
-  Curate implement.jsonl and check.jsonl
+Task Workflow Phase 2 (Prepare for Implementation)
+  Code-Spec Depth Check (if applicable)
+  → Research codebase (based on confirmed PRD)
+  → Configure code-spec context (jsonl files)
+  → Activate task
   ↓
-Phase 1.3 (Enter Execute Phase)
-  Run task.py start → task enters in_progress
-  ↓
-Phase 2 (Execute)
-  Implement → Check → Update Spec
-  ↓
-Phase 3.1 (Commit & Verify)
-  Propose commit plan, user confirms, execute
-  ↓
-Phase 3.2 (Close-Out)
-  Archive + record journal
+Task Workflow Phase 3 (Execute)
+  Implement → Check → Complete
 ```
 
-The task directory and PRD already exist from brainstorm, so Phase 1.1 is complete. Phases 1.2 and 1.3 still need to run before entering Phase 2.
+The task directory and PRD already exist from brainstorm, so Phase 1 of the Task Workflow is skipped entirely.
 
 ---
 

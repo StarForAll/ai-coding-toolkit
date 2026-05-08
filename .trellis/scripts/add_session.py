@@ -22,7 +22,6 @@ Branch resolution order:
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import subprocess
 import sys
@@ -52,16 +51,6 @@ from common.config import (
 # =============================================================================
 # Helper Functions
 # =============================================================================
-
-READONLY_HINTS = (
-    "Read-only file system",
-    "只读文件系统",
-    "Permission denied",
-    "Operation not permitted",
-    ".git/index.lock",
-    "cannot create",
-    "不能创建",
-)
 
 def get_latest_journal_info(dev_dir: Path) -> tuple[Path | None, int, int]:
     """Get latest journal file info.
@@ -102,50 +91,6 @@ def get_current_session(index_file: Path) -> int:
             if match:
                 return int(match.group(1))
     return 0
-
-
-def _detect_readonly_git_failure(text: str) -> bool:
-    return any(hint in text for hint in READONLY_HINTS)
-
-
-def _sanitize_resume_title(value: str) -> str:
-    cleaned = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in value.strip())
-    cleaned = "-".join(part for part in cleaned.split("-") if part)
-    return cleaned or "record-session"
-
-
-def _ensure_record_session_resume_state(
-    repo_root: Path,
-    *,
-    title: str,
-    commit: str,
-    summary: str,
-    package: str | None,
-    branch: str | None,
-) -> Path:
-    pending_dir = repo_root / ".trellis" / ".pending-record-session"
-    pending_dir.mkdir(parents=True, exist_ok=True)
-    slug = _sanitize_resume_title(title)
-    state = {
-        "title": title,
-        "commit": commit,
-        "summary": summary,
-        "package": package,
-        "branch": branch,
-        "content_file": None,
-    }
-    state_file = pending_dir / f"{slug}.pending.json"
-    state_file.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
-    return state_file
-
-
-def _print_record_session_resume_guidance(repo_root: Path, state_file: Path) -> None:
-    rel = state_file.relative_to(repo_root).as_posix()
-    command = f"python3 ./.trellis/scripts/workflow/record-session-helper.py --resume {rel}"
-    print("⚠️  record-session metadata auto-commit 失败，检测到可能的只读/受限写入环境。", file=sys.stderr)
-    print("如果当前 CLI 支持提权重试，请立即用提权方式执行：", file=sys.stderr)
-    print(command, file=sys.stderr)
-    print(f"TRELLIS_AUTO_ESCALATE_COMMAND={command}", file=sys.stderr)
 
 
 def _extract_journal_num(filename: str) -> int:
@@ -368,15 +313,7 @@ def update_index(
 # Main Function
 # =============================================================================
 
-def _auto_commit_workspace(
-    repo_root: Path,
-    *,
-    title: str,
-    commit: str,
-    summary: str,
-    package: str | None,
-    branch: str | None,
-) -> bool:
+def _auto_commit_workspace(repo_root: Path) -> None:
     """Stage .trellis/workspace and .trellis/tasks, then commit with a configured message."""
     commit_msg = get_session_commit_message(repo_root)
     add_result = subprocess.run(
@@ -387,18 +324,8 @@ def _auto_commit_workspace(
     )
     if add_result.returncode != 0:
         print(f"[WARN] git add failed (exit {add_result.returncode}): {add_result.stderr.strip()}", file=sys.stderr)
-        combined = (add_result.stdout or "") + "\n" + (add_result.stderr or "")
-        if _detect_readonly_git_failure(combined):
-            state_file = _ensure_record_session_resume_state(
-                repo_root,
-                title=title,
-                commit=commit,
-                summary=summary,
-                package=package,
-                branch=branch,
-            )
-            _print_record_session_resume_guidance(repo_root, state_file)
-        return False
+        print("[WARN] Please commit .trellis/ changes manually: git add .trellis && git commit", file=sys.stderr)
+        return
     # Check if there are staged changes
     result = subprocess.run(
         ["git", "diff", "--cached", "--quiet", "--", ".trellis/workspace", ".trellis/tasks"],
@@ -406,7 +333,7 @@ def _auto_commit_workspace(
     )
     if result.returncode == 0:
         print("[OK] No workspace changes to commit.", file=sys.stderr)
-        return True
+        return
     commit_result = subprocess.run(
         ["git", "commit", "-m", commit_msg],
         cwd=repo_root,
@@ -415,21 +342,8 @@ def _auto_commit_workspace(
     )
     if commit_result.returncode == 0:
         print(f"[OK] Auto-committed: {commit_msg}", file=sys.stderr)
-        return True
-
-    print(f"[WARN] Auto-commit failed: {commit_result.stderr.strip()}", file=sys.stderr)
-    combined = (commit_result.stdout or "") + "\n" + (commit_result.stderr or "")
-    if _detect_readonly_git_failure(combined):
-        state_file = _ensure_record_session_resume_state(
-            repo_root,
-            title=title,
-            commit=commit,
-            summary=summary,
-            package=package,
-            branch=branch,
-        )
-        _print_record_session_resume_guidance(repo_root, state_file)
-    return False
+    else:
+        print(f"[WARN] Auto-commit failed: {commit_result.stderr.strip()}", file=sys.stderr)
 
 
 def add_session(
@@ -527,15 +441,7 @@ def add_session(
     # Auto-commit workspace changes
     if auto_commit:
         print("", file=sys.stderr)
-        if not _auto_commit_workspace(
-            repo_root,
-            title=title,
-            commit=commit,
-            summary=summary,
-            package=package,
-            branch=branch,
-        ):
-            return 1
+        _auto_commit_workspace(repo_root)
 
     return 0
 

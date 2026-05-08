@@ -519,7 +519,7 @@ Research output **must** land in `{task_dir}/research/*.md`, written by `trellis
 
 [workflow-state:in_progress]
 **Flow**: trellis-implement → trellis-check → trellis-update-spec → commit (Phase 3.1) → `/trellis:finish-work`.
-**Default (no override)**: dispatch the `trellis-implement` / `trellis-check` sub-agents — the main agent does NOT edit code by default. Phase 3.1 commit (required, once): after trellis-update-spec, or whenever implementation is verifiably complete, the main agent **proposes the commit plan** — state the commit plan in user-facing text, then run `git commit` after user confirmation — BEFORE suggesting `/trellis:finish-work`. `/finish-work` refuses to run on a dirty working tree (paths outside `.trellis/workspace/` and `.trellis/tasks/`).
+**Main-session default (no override)**: dispatch the `trellis-implement` / `trellis-check` sub-agents — the main agent does NOT edit code by default. Phase 3.1 commit (required, once): after trellis-update-spec, or whenever implementation is verifiably complete, the main agent **proposes the commit plan** — state the commit plan in user-facing text, wait for **explicit user confirmation**, then run `git commit` — BEFORE suggesting `/trellis:finish-work`. `/finish-work` refuses to run on a dirty working tree (paths outside `.trellis/workspace/` and `.trellis/tasks/`).
 **Sub-agent self-exemption**: if you are already running as `trellis-implement`, implement directly from the loaded task context and do NOT spawn another `trellis-implement`; if you are already running as `trellis-check`, review/fix directly and do NOT spawn another `trellis-check`. The default dispatch rule applies to the main session only.
 **Sub-agent dispatch protocol (all platforms, all sub-agents EXCEPT trellis-research)**: When you spawn `trellis-implement` / `trellis-check`, your dispatch prompt **MUST** start with one line: `Active task: <task path from \`task.py current\`>`. No exceptions. On class-2 platforms (codex / copilot / gemini / qoder) the sub-agent depends on this line because there is no hook to inject task context. On class-1 platforms (claude / cursor / opencode / kiro / codebuddy / droid) the line is normally redundant — the hook injects context directly — but it serves as a critical fallback when the hook fails (Windows + Claude Code PreToolUse silent skip, `--continue` resume, fork distribution, hooks disabled, etc.). `trellis-research` does not need this line because it operates without a task binding.
 **Inline override** (per-turn only, escape hatch for sub-agent dispatch): the user's CURRENT message MUST explicitly contain one of: "do it inline" / "no sub-agent" / "你直接改" / "别派 sub-agent" / "main session 写就行" / "不用 sub-agent". **Without seeing one of these phrases you must NOT inline on your own**; do not invent an override the user never said.
@@ -527,7 +527,7 @@ Research output **must** land in `{task_dir}/research/*.md`, written by `trellis
 
 [workflow-state:completed]
 Code committed via Phase 3.1; run `/trellis:finish-work` to wrap up (archive the task + record session).
-If you reach this state with uncommitted code, return to Phase 3.1 first — propose the commit plan and get user confirmation before `/finish-work`. `/finish-work` refuses to run on a dirty working tree.
+If you reach this state with uncommitted code, return to Phase 3.1 first — `/finish-work` refuses to run on a dirty working tree.
 `task.py archive` deletes any runtime session files that still point at the archived task.
 [/workflow-state:completed]
 

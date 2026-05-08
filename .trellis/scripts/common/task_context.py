@@ -43,6 +43,7 @@ def cmd_add_context(args: argparse.Namespace) -> int:
         print(colored(f"Error: Directory not found: {target_dir}", Colors.RED))
         return 1
 
+    # Support shorthand
     if not jsonl_name.endswith(".jsonl"):
         jsonl_name = f"{jsonl_name}.jsonl"
 
@@ -58,19 +59,22 @@ def cmd_add_context(args: argparse.Namespace) -> int:
         print(colored(f"Error: Path not found: {path}", Colors.RED))
         return 1
 
+    # Check if already exists
     if jsonl_file.is_file():
         content = jsonl_file.read_text(encoding="utf-8")
         if f'"{path}"' in content:
             print(colored(f"Warning: Entry already exists for {path}", Colors.YELLOW))
             return 0
 
+    # Add entry
+    entry: dict
     if entry_type == "directory":
         entry = {"file": path, "type": "directory", "reason": reason}
     else:
         entry = {"file": path, "reason": reason}
 
-    with jsonl_file.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    with jsonl_file.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
     print(colored(f"Added {entry_type}: {path}", Colors.GREEN))
     return 0
@@ -96,15 +100,16 @@ def cmd_validate(args: argparse.Namespace) -> int:
     total_errors = 0
     for jsonl_name in ["implement.jsonl", "check.jsonl"]:
         jsonl_file = target_dir / jsonl_name
-        total_errors += _validate_jsonl(jsonl_file, repo_root)
+        errors = _validate_jsonl(jsonl_file, repo_root)
+        total_errors += errors
 
     print()
     if total_errors == 0:
         print(colored("✓ All validations passed", Colors.GREEN))
         return 0
-
-    print(colored(f"✗ Validation failed ({total_errors} errors)", Colors.RED))
-    return 1
+    else:
+        print(colored(f"✗ Validation failed ({total_errors} errors)", Colors.RED))
+        return 1
 
 
 def _validate_jsonl(jsonl_file: Path, repo_root: Path) -> int:
@@ -138,6 +143,7 @@ def _validate_jsonl(jsonl_file: Path, repo_root: Path) -> int:
         entry_type = data.get("type", "file")
 
         if not file_path:
+            # Seed / comment row — skip silently
             continue
 
         real_entries += 1
@@ -195,6 +201,7 @@ def cmd_list_context(args: argparse.Namespace) -> int:
 
             file_path = data.get("file")
             if not file_path:
+                # Seed / comment row — don't count as a real entry
                 continue
             seed_only = False
 

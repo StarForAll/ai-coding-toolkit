@@ -26,12 +26,12 @@ This page only describes files that are visible and editable inside the user pro
 | `.trellis/config.yaml` | Yes | Project configuration, hooks, packages, journal line limits, and related settings. |
 | `.trellis/spec/` | Yes | Project specs, intended to be updated regularly by users and AI. |
 | `.trellis/tasks/` | Yes | Task material and research artifacts, maintained by the task workflow. |
-| `.trellis/workspace/` | Yes | Session records, usually written by `add_session.py`. |
+| `.trellis/workspace/` | Yes | Session records, written via `record-session-helper.py` (which internally calls `add_session.py`). |
 | `.trellis/scripts/` | Carefully | Local runtime. It can be customized, but only after understanding the call chain. |
 | `.trellis/.runtime/` | No | Runtime state, usually written automatically by hooks/scripts. |
 | `.trellis/.developer` | Carefully | Current developer identity. |
 | `.trellis/.version` | No | Trellis version record used by update/migration logic. |
-| `.trellis/.template-hashes.json` | No | Template hash record. Do not hand-write business rules here, and do not replace hashes with values computed from current local customized files. |
+| `.trellis/.template-hashes.json` | No | Template hash record. Do not hand-write business rules here. |
 
 ## Platform Directories
 
@@ -59,12 +59,6 @@ When modifying a platform directory, also confirm whether `.trellis/workflow.md`
 
 When an AI customizes local Trellis files, it does not need to maintain hashes manually. It is normal for Trellis update to recognize the result as "modified by the user."
 
-Narrow recovery exception:
-
-- If historical drift left out managed keys from `.trellis/.template-hashes.json`, recovery may backfill only those missing keys.
-- The replacement values must come from a matching fresh Trellis baseline for the same version and platform set.
-- Never hash the current local customized file contents into `.trellis/.template-hashes.json` during that recovery; that would hide user modifications from future `trellis update`.
-
 ## Local Customization Boundaries
 
 Editable by default:
@@ -81,6 +75,6 @@ Do not edit by default:
 - `node_modules/@mindfoldhq/trellis`
 - Trellis GitHub repository source code
 - Concrete state files under `.trellis/.runtime/**`
-- Hash contents inside `.trellis/.template-hashes.json`, except the narrow missing-key baseline-backfill recovery above
+- Hash contents inside `.trellis/.template-hashes.json`
 
 Switch to the Trellis CLI source-code perspective only when the user explicitly wants to contribute upstream.

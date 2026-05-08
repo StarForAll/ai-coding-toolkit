@@ -6,7 +6,7 @@ When the user wants to change the engineering conventions AI follows, add new sp
 
 1. `.trellis/config.yaml`
 2. `.trellis/spec/`
-3. `.trellis/workflow.md` Phase 1.2 and Phase 2.3
+3. `.trellis/workflow.md` Phase 1.2 and Phase 3.1
 4. Current task `implement.jsonl` / `check.jsonl`
 
 ## Common Needs
