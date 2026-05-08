@@ -352,14 +352,14 @@ First-version dependent-surface coverage includes these known Trellis-native car
 - project-rules-and-routing-carrier (AGENTS.md)
 - claude-hooks-and-settings-carrier (.claude/settings.json, .claude/hooks, .claude/hooks/inject-workflow-state.py, .claude/hooks/session-start.py, .claude/hooks/inject-subagent-context.py)
 - opencode-plugin-and-instructions-carrier (.opencode/plugins, .opencode/package.json)
-- codex-hooks-and-config-carrier (.codex/hooks.json, .codex/config.toml, .codex/hooks/inject-workflow-state.py, .codex/hooks/session-start.py)
+- codex-hooks-and-config-carrier (.codex/hooks.json, .codex/config.toml, .codex/hooks/inject-workflow-state.py; file presence and runtime activation are separate because Codex hooks remain user-gated)
 - implementation-agent-carrier (per-CLI agent directories)
 - trellis-runtime-workflow-guide (.trellis/workflow.md, .trellis/scripts/task.py)
-- shared-skills-deployment-carrier (.agents/skills/ — shared deployment layer for OpenCode and Codex skills)
+- shared-skills-deployment-carrier (.agents/skills/ — shared deployment layer and repo-local maintainer carrier for shared skills consumed by OpenCode and Codex)
 - claude-native-skills-carrier (.claude/skills/ — Claude-native skills carrier)
 - opencode-native-skills-carrier (.opencode/skills/ — OpenCode-native skills carrier)
 - opencode-lib-carrier (.opencode/lib/ — OpenCode helper libraries)
-- trellis-hooks-carrier (.trellis/hooks/ — Trellis-side hooks directory)
+- trellis-hooks-script-carrier (.trellis/scripts/hooks/ — Trellis-side lifecycle hook script carrier)
 - codex-secondary-skills-carrier (.codex/skills/ — Codex-local/secondary skills carrier; not a replacement for shared-skills-deployment-carrier)
 
 shared-skills-deployment-carrier covers only the shared workflow skills primary carrier .agents/skills/; codex-secondary-skills-carrier covers the Codex-local/secondary skills surface .codex/skills/; the two must not replace or merge into one another.
@@ -378,6 +378,7 @@ Per-CLI classification must support:
 - `present-but-incompatible`
 - `missing-but-valuable`
 - `unclear`
+- `present-but-gated`
 - `not-applicable`
 
 ### Overall Summary Derivation
@@ -389,10 +390,11 @@ Severity / action priority:
 1. `present-but-incompatible`
 2. `missing-but-valuable`
 3. `unclear`
-4. `intentionally-disabled`
-5. `patched-compatible`
-6. `adopted-compatible`
-7. `not-applicable`
+4. `present-but-gated`
+5. `intentionally-disabled`
+6. `patched-compatible`
+7. `adopted-compatible`
+8. `not-applicable`
 
 `not-applicable` is the lowest-interference state and must not override any more action-demanding state.
 
@@ -481,6 +483,12 @@ This rule applies even if the final conclusion is:
 
 - the workflow is already compatible as-is
 - no workflow source edits were needed beyond the initialization exception
+
+No-fix-compatible path:
+
+- `workflow-capability-audit` may still record the confirmed no-fix conclusion under `## Confirmed Fix Scope`
+- in that path, `## Applied Corrections` may remain `- none yet`
+- anchor promotion still requires recorded `## Post-Fix Revalidation` evidence plus explicit fixture-destruction finalization
 
 ---
 

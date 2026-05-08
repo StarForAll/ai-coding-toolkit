@@ -23,6 +23,7 @@ Task-based full compatibility audit.
 - if `.codex/skills/` exists in A but not in B, Codex must classify as `missing-but-valuable`
 - the row must NOT overlap with or replace the `shared-skills-deployment-carrier` row (which covers `.agents/skills/`)
 - both carriers must appear as separate rows in the dependent surface matrix
+- `codex-hooks-and-config-carrier` may independently use `present-but-gated` for Codex and must not collapse that state into the secondary-skills carrier row
 
 ## Must Not
 

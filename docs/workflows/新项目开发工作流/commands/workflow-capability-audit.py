@@ -36,6 +36,16 @@ REPO_ROOT = SCRIPT_DIR.parents[3]
 PYTHON = sys.executable
 ALLOWED_CURRENT_CLIS = {"claude", "opencode", "codex"}
 
+TRELLIS_SCRIPTS_DIR = REPO_ROOT / ".trellis" / "scripts"
+if str(TRELLIS_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(TRELLIS_SCRIPTS_DIR))
+
+from common.active_task import (  # type: ignore[import-not-found]
+    ActiveTask,
+    resolve_active_task,
+    set_active_task,
+)
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -214,12 +224,16 @@ def remove_child_link(parent_ref: str, child_ref: str) -> None:
     parent_task_json.write_text(json.dumps(parent_data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def restore_current_task_ref(task_ref: str) -> None:
-    current_task_file = REPO_ROOT / ".trellis" / ".current-task"
-    if task_ref:
-        current_task_file.write_text(task_ref, encoding="utf-8")
-    elif current_task_file.exists():
-        current_task_file.unlink()
+def restore_active_task(previous: ActiveTask) -> str | None:
+    if not previous.task_path:
+        return None
+    restored = set_active_task(previous.task_path, REPO_ROOT)
+    if restored is None:
+        return (
+            "Could not restore the previous session-scoped active task after audit rollback "
+            "because no session identity was available in the current executor context."
+        )
+    return None
 
 
 def resolve_audit_task_dir(task_dir_arg: str) -> Path:
@@ -459,7 +473,7 @@ def validate_supplemental_capability(
     )
     structural_signal = "none detected from supplemental validation"
     adaptation_decision = "No action required unless later confirmed compatibility analysis changes this."
-    if overall in {"present-but-incompatible", "missing-but-valuable", "unclear"}:
+    if overall in {"present-but-incompatible", "missing-but-valuable", "unclear", "present-but-gated"}:
         structural_signal = "supplemental capability indicates additional compatibility attention may be required"
         adaptation_decision = "Review the supplemental capability in the next confirmed compatibility decision."
     row_line = (
@@ -512,7 +526,12 @@ def update_fix_lifecycle(
     if finalize_fixture_destruction:
         applied_section = _read_section(updated, "## Applied Corrections")
         revalidation_section = _read_section(updated, "## Post-Fix Revalidation")
-        if "- none yet" in applied_section or "- none yet" in revalidation_section:
+        no_fix_path = (
+            "- none yet" in applied_section
+            and _section_has_recorded_items(updated, "## Confirmed Fix Scope")
+            and _section_has_recorded_items(updated, "## Post-Fix Revalidation")
+        )
+        if not no_fix_path and ("- none yet" in applied_section or "- none yet" in revalidation_section):
             raise RuntimeError(
                 "Cannot finalize fixture destruction before applied corrections and post-fix revalidation are recorded."
             )
@@ -543,7 +562,7 @@ def derive_structural_break(managed_rows: list[dict[str, Any]], dependent_rows: 
     rows = [*managed_rows, *dependent_rows]
     blocking = []
     for row in rows:
-        if row["overall_summary"] in {"present-but-incompatible", "missing-but-valuable", "unclear"}:
+        if row["overall_summary"] in {"present-but-incompatible", "missing-but-valuable", "unclear", "present-but-gated"}:
             blocking.append(f"{row['capability_id']}: {row['structural_signal']} ({row['overall_summary']})")
     if blocking:
         return (
@@ -611,13 +630,6 @@ def validate_current_cli(current_cli: str) -> str | None:
     return None
 
 
-def current_task_ref() -> str:
-    current_task_file = REPO_ROOT / ".trellis" / ".current-task"
-    if not current_task_file.is_file():
-        return ""
-    return current_task_file.read_text(encoding="utf-8").strip()
-
-
 def resolve_task_json(task_ref: str) -> Path | None:
     if not task_ref:
         return None
@@ -631,6 +643,20 @@ def resolve_task_json(task_ref: str) -> Path | None:
     if task_json.is_file():
         return task_json
     return None
+
+
+def task_parent_ref(task_ref: str) -> str | None:
+    task_json = resolve_task_json(task_ref)
+    if task_json is None:
+        return None
+    try:
+        data = json.loads(task_json.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    parent = data.get("parent")
+    if not isinstance(parent, str) or not parent.strip():
+        return None
+    return f".trellis/tasks/{parent.strip()}"
 
 
 def is_audit_task(task_json: Path | None) -> bool:
@@ -781,6 +807,7 @@ def _normalize_overall(summary_values: list[str]) -> str:
         "present-but-incompatible",
         "missing-but-valuable",
         "unclear",
+        "present-but-gated",
         "intentionally-disabled",
         "patched-compatible",
         "adopted-compatible",
@@ -1007,10 +1034,13 @@ def build_workflow_dependent_rows(a_root: Path, b_root: Path) -> list[dict[str, 
         },
         {
             "capability": "codex-hooks-and-config-carrier",
-            "mechanism": "Workflow may rely on Codex hook/config surfaces outside installer-managed shared skills.",
+            "mechanism": "Workflow may rely on Codex hook/config surfaces outside installer-managed shared skills, and these surfaces can remain file-present while runtime activation is still gated by user-level feature flags or hook approval.",
             "claude": [],
             "opencode": [],
-            "codex": [".codex/hooks.json", ".codex/config.toml", ".codex/hooks/inject-workflow-state.py", ".codex/hooks/session-start.py"],
+            "codex": [".codex/hooks.json", ".codex/config.toml", ".codex/hooks/inject-workflow-state.py"],
+            "gated_cli": "codex",
+            "gated_reason": "carrier exists in A/B, but Codex runtime activation still depends on feature gates or user approval outside the embedded workflow files",
+            "gated_decision": "Treat file presence and runtime activation as separate checks when judging Codex compatibility.",
         },
         {
             "capability": "implementation-agent-carrier",
@@ -1028,7 +1058,7 @@ def build_workflow_dependent_rows(a_root: Path, b_root: Path) -> list[dict[str, 
         },
         {
             "capability": "shared-skills-deployment-carrier",
-            "mechanism": "Workflow depends on .agents/skills/ as a shared deployment layer for OpenCode and Codex skills.",
+            "mechanism": "Workflow depends on .agents/skills/ as a shared deployment layer and repo-local maintainer carrier for shared skills consumed by OpenCode and Codex.",
             "claude": [],
             "opencode": [".agents/skills"],
             "codex": [".agents/skills"],
@@ -1055,11 +1085,11 @@ def build_workflow_dependent_rows(a_root: Path, b_root: Path) -> list[dict[str, 
             "codex": [],
         },
         {
-            "capability": "trellis-hooks-carrier",
-            "mechanism": "Workflow depends on .trellis/hooks/ as the Trellis-side hooks directory for workflow lifecycle hooks.",
-            "claude": [".trellis/hooks"],
-            "opencode": [".trellis/hooks"],
-            "codex": [".trellis/hooks"],
+            "capability": "trellis-hooks-script-carrier",
+            "mechanism": "Workflow depends on Trellis-side lifecycle hook scripts under .trellis/scripts/hooks/ rather than an older .trellis/hooks directory model.",
+            "claude": [".trellis/scripts/hooks", ".trellis/scripts/hooks/linear_sync.py"],
+            "opencode": [".trellis/scripts/hooks", ".trellis/scripts/hooks/linear_sync.py"],
+            "codex": [".trellis/scripts/hooks", ".trellis/scripts/hooks/linear_sync.py"],
         },
         {
             "capability": "codex-secondary-skills-carrier",
@@ -1097,7 +1127,12 @@ def build_workflow_dependent_rows(a_root: Path, b_root: Path) -> list[dict[str, 
                 evidence_bits.append(f"B={','.join(expected_hits)}")
             row[f"{prefix}_evidence"] = _format_evidence(evidence_bits)
             if baseline_hits and expected_hits:
-                classification = "adopted-compatible"
+                if definition.get("gated_cli") == prefix:
+                    classification = "present-but-gated"
+                    row["structural_signal"] = str(definition.get("gated_reason", "carrier presence is conditional at runtime"))
+                    row["adaptation_decision"] = str(definition.get("gated_decision", "Review runtime gating before concluding compatibility."))
+                else:
+                    classification = "adopted-compatible"
             elif baseline_hits and not expected_hits:
                 classification = "missing-but-valuable"
                 row["structural_signal"] = "workflow depends on Trellis-native surface not preserved in fresh B"
@@ -1394,7 +1429,8 @@ def main() -> int:
         print(current_cli_error, file=sys.stderr)
         return 1
 
-    current_ref = current_task_ref()
+    current_active = resolve_active_task(REPO_ROOT)
+    current_ref = current_active.task_path or ""
     current_task_json = resolve_task_json(current_ref)
     if current_ref and is_audit_task(current_task_json):
         print(
@@ -1448,11 +1484,14 @@ def main() -> int:
             shutil.rmtree(a_root, ignore_errors=True)
         if b_root is not None:
             shutil.rmtree(b_root, ignore_errors=True)
-        if parent and task_dir_ref:
-            remove_child_link(parent, task_dir_ref)
+        rollback_parent = (task_parent_ref(task_dir_ref) if task_dir_ref else None) or parent
+        if rollback_parent and task_dir_ref:
+            remove_child_link(rollback_parent, task_dir_ref)
         if task_dir_ref and not task_dir_preexisted:
             shutil.rmtree(REPO_ROOT / task_dir_ref, ignore_errors=True)
-        restore_current_task_ref(current_ref)
+        restore_warning = restore_active_task(current_active)
+        if restore_warning:
+            print(f"WARN: {restore_warning}", file=sys.stderr)
         print(str(exc), file=sys.stderr)
         return 1
     except subprocess.CalledProcessError as exc:
@@ -1460,11 +1499,14 @@ def main() -> int:
             shutil.rmtree(a_root, ignore_errors=True)
         if b_root is not None:
             shutil.rmtree(b_root, ignore_errors=True)
-        if parent and task_dir_ref:
-            remove_child_link(parent, task_dir_ref)
+        rollback_parent = (task_parent_ref(task_dir_ref) if task_dir_ref else None) or parent
+        if rollback_parent and task_dir_ref:
+            remove_child_link(rollback_parent, task_dir_ref)
         if task_dir_ref and not task_dir_preexisted:
             shutil.rmtree(REPO_ROOT / task_dir_ref, ignore_errors=True)
-        restore_current_task_ref(current_ref)
+        restore_warning = restore_active_task(current_active)
+        if restore_warning:
+            print(f"WARN: {restore_warning}", file=sys.stderr)
         detail = exc.stderr or exc.stdout or str(exc)
         if _is_likely_codex_python_probe_false_negative(detail.strip(), args.current_cli):
             print(_codex_runtime_boundary_message(detail.strip()), file=sys.stderr)

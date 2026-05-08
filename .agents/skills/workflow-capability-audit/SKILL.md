@@ -136,7 +136,7 @@ Run the script to:
 - generate initial `prd.md`
 - generate `capability-report.md` with the baseline capability matrix
 
-The script discovers managed-surface rows from `workflow_assets.py` specs and dependent-surface rows from known Trellis-native carrier definitions (project-rules, claude-hooks, opencode-plugin, codex-hooks, implementation-agent, runtime-workflow-guide, shared-skills-deployment-carrier, claude-native-skills-carrier, opencode-native-skills-carrier, opencode-lib-carrier, trellis-hooks-carrier, codex-secondary-skills-carrier).
+The script discovers managed-surface rows from `workflow_assets.py` specs and dependent-surface rows from known Trellis-native carrier definitions (project-rules, claude-hooks, opencode-plugin, codex-hooks, implementation-agent, runtime-workflow-guide, shared-skills-deployment-carrier, claude-native-skills-carrier, opencode-native-skills-carrier, opencode-lib-carrier, trellis-hooks-script-carrier, codex-secondary-skills-carrier).
 
 First-version limitation:
 
@@ -195,6 +195,7 @@ Per-CLI classification supports:
 - `present-but-incompatible`
 - `missing-but-valuable`
 - `unclear`
+- `present-but-gated`
 - `not-applicable`
 
 `Overall Summary` uses the most severe / most action-demanding state.
@@ -204,10 +205,11 @@ Severity order:
 1. `present-but-incompatible`
 2. `missing-but-valuable`
 3. `unclear`
-4. `intentionally-disabled`
-5. `patched-compatible`
-6. `adopted-compatible`
-7. `not-applicable`
+4. `present-but-gated`
+5. `intentionally-disabled`
+6. `patched-compatible`
+7. `adopted-compatible`
+8. `not-applicable`
 
 ## Identity Rules
 
@@ -260,6 +262,13 @@ If not confirmed:
 ### Known limitation: coarser classification for workflow-managed surfaces
 
 The supplemental path classifies capabilities by file existence alone (adopted-compatible / missing-but-valuable / not-applicable / unclear). It cannot derive patched-compatible or intentionally-disabled because it lacks the `spec.category` metadata from `workflow_assets.py` that the main audit path uses. For supplemental workflow-managed capabilities, adopted-compatible is the default classification; finer categorization belongs to the AI post-review phase.
+
+### Known limitation: Codex hook carrier scans file presence, not runtime activation truth
+
+- `codex-hooks-and-config-carrier` intentionally checks file/config carrier presence such as `.codex/hooks.json`, `.codex/config.toml`, and `.codex/hooks/inject-workflow-state.py`
+- it does **not** treat `.codex/hooks/session-start.py` as a required compatibility path in the current model
+- the emitted `present-but-gated` classification means the carrier exists on disk but real activation can still depend on user-level feature flags and hook approval outside workflow-managed files
+- capability audit therefore does not prove Codex runtime activation end to end by file presence alone
 
 ## References
 

@@ -19,7 +19,7 @@ Confirmed-audit completion with mandatory `COMPATIBLE_TRELLIS_VERSION` write-bac
 - finish the audit conclusion normally
 - write the exact `trellis -v` output value into `COMPATIBLE_TRELLIS_VERSION` in `workflow_assets.py` as a mandatory post-audit step
 - preserve the literal version string from `trellis -v`, including any prerelease suffix (e.g., `-rc.3`, `-beta.1`)
-- apply this rule even when the workflow was already compatible as-is or no additional source edits are needed
+- apply this rule even when the workflow was already compatible as-is or no additional source edits are needed, provided the audit round still records explicit revalidation and final fixture-destruction confirmation
 
 ## Must Not
 

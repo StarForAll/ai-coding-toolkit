@@ -62,6 +62,12 @@ Returned JSON includes at least:
 - `b_root`
 - `capability_report`
 
+Task-state boundary:
+
+- the script now reads and restores the active task through Trellis' session-scoped runtime state (`.trellis/.runtime/sessions/`) rather than a legacy global `.trellis/.current-task` file
+- rollback after task creation must restore the previous session-scoped active task when one existed in the current executor context
+- if no session identity is available during rollback, task restoration degrades to a warning rather than failing the cleanup path itself
+
 Codex boundary:
 
 - if fresh A/B baseline creation fails only under Codex because `trellis init`
@@ -146,6 +152,12 @@ The write-back does NOT happen:
   `--record-revalidation` is passed without `--finalize-fixture-destruction`
 - when `--finalize-fixture-destruction` is passed but the report has no
   recorded post-fix revalidation items
+
+No-fix-compatible path:
+
+- if the audit concludes the workflow is already compatible as-is, `--confirm-fix-scope` may still record that conclusion
+- in that path, `## Applied Corrections` may remain `- none yet`
+- anchor promotion is still allowed once post-fix / post-audit revalidation is recorded and fixture destruction is explicitly finalized
 
 Before that write-back, `--task-dir` must first validate as a real
 `workflow-capability-audit` task. Failed or mistyped fix-lifecycle requests

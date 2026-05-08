@@ -14,6 +14,7 @@ import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
+from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
@@ -29,6 +30,7 @@ SCRIPT = COMMANDS_DIR / "workflow-capability-audit.py"
 WORKFLOW_ASSETS = COMMANDS_DIR / "workflow_assets.py"
 TRELLIS_TASKS_DIR = REPO_ROOT / ".trellis" / "tasks"
 CURRENT_TASK_FILE = REPO_ROOT / ".trellis" / ".current-task"
+RUNTIME_SESSIONS_DIR = REPO_ROOT / ".trellis" / ".runtime" / "sessions"
 DEVELOPER_FILE = REPO_ROOT / ".trellis" / ".developer"
 
 
@@ -72,6 +74,10 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self._pre_current_task = CURRENT_TASK_FILE.read_text(encoding="utf-8") if CURRENT_TASK_FILE.is_file() else None
         self._pre_workflow_assets = WORKFLOW_ASSETS.read_text(encoding="utf-8")
         self._pre_developer = DEVELOPER_FILE.read_text(encoding="utf-8") if DEVELOPER_FILE.is_file() else None
+        self._pre_runtime_sessions = {
+            path.name: path.read_text(encoding="utf-8")
+            for path in RUNTIME_SESSIONS_DIR.glob("*.json")
+        } if RUNTIME_SESSIONS_DIR.is_dir() else {}
         self._fixture_dirs: list[Path] = []
         self._temp_dirs: list[Path] = []
 
@@ -89,17 +95,28 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             DEVELOPER_FILE.write_text(self._pre_developer, encoding="utf-8")
         elif DEVELOPER_FILE.is_file():
             DEVELOPER_FILE.unlink()
+        if RUNTIME_SESSIONS_DIR.is_dir():
+            for path in RUNTIME_SESSIONS_DIR.glob("*.json"):
+                if path.name not in self._pre_runtime_sessions:
+                    path.unlink()
+        else:
+            RUNTIME_SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+        for name, content in self._pre_runtime_sessions.items():
+            (RUNTIME_SESSIONS_DIR / name).write_text(content, encoding="utf-8")
         for d in self._fixture_dirs:
             shutil.rmtree(d, ignore_errors=True)
         for d in self._temp_dirs:
             shutil.rmtree(d, ignore_errors=True)
 
     def _clear_active_test_audit_task(self) -> None:
-        if not CURRENT_TASK_FILE.is_file():
-            return
-        current = CURRENT_TASK_FILE.read_text(encoding="utf-8").strip()
-        if "05-06-workflow-capability-audit-" in current:
-            CURRENT_TASK_FILE.unlink()
+        for session_path in RUNTIME_SESSIONS_DIR.glob("*.json"):
+            try:
+                payload = json.loads(session_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            current = payload.get("current_task")
+            if isinstance(current, str) and "workflow-capability-audit" in current:
+                session_path.unlink()
 
     def _release_fake_audit_task_for_followup(self) -> None:
         self._clear_active_test_audit_task()
@@ -112,6 +129,24 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
 
     def _set_repo_developer(self, name: str) -> None:
         DEVELOPER_FILE.write_text(f"name={name}\n", encoding="utf-8")
+
+    def _session_file_for(self, context_id: str) -> Path:
+        RUNTIME_SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+        return RUNTIME_SESSIONS_DIR / f"{context_id}.json"
+
+    def _write_session_current_task(self, context_id: str, task_ref: str) -> None:
+        self._session_file_for(context_id).write_text(
+            json.dumps({"current_task": task_ref}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    def _read_session_current_task(self, context_id: str) -> str | None:
+        path = self._session_file_for(context_id)
+        if not path.is_file():
+            return None
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        value = payload.get("current_task")
+        return value if isinstance(value, str) else None
 
     def _remove_compatible_anchor(self) -> None:
         content = WORKFLOW_ASSETS.read_text(encoding="utf-8")
@@ -171,7 +206,8 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         (root / ".trellis" / ".version").write_text("9.9.9\n", encoding="utf-8")
         (root / ".trellis" / "workflow.md").write_text("# fake workflow\n", encoding="utf-8")
         (root / ".trellis" / "scripts" / "task.py").write_text("# fake task helper\n", encoding="utf-8")
-        (root / ".trellis" / "hooks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "scripts" / "hooks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "scripts" / "hooks" / "linear_sync.py").write_text("# hook script\n", encoding="utf-8")
         (root / "AGENTS.md").write_text("# fake AGENTS\n", encoding="utf-8")
 
         (root / ".claude" / "commands" / "trellis").mkdir(parents=True, exist_ok=True)
@@ -196,10 +232,9 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
 
         (root / ".codex" / "agents").mkdir(parents=True, exist_ok=True)
         (root / ".codex" / "hooks.json").write_text("{}", encoding="utf-8")
-        (root / ".codex" / "config.toml").write_text("", encoding="utf-8")
+        (root / ".codex" / "config.toml").write_text("[features.multi_agent_v2]\nenabled = true\n", encoding="utf-8")
         (root / ".codex" / "hooks").mkdir(parents=True, exist_ok=True)
         (root / ".codex" / "hooks" / "inject-workflow-state.py").write_text("# hook\n", encoding="utf-8")
-        (root / ".codex" / "hooks" / "session-start.py").write_text("# hook\n", encoding="utf-8")
 
         (root / ".agents" / "skills").mkdir(parents=True, exist_ok=True)
 
@@ -241,6 +276,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         (root / ".claude" / "commands" / "trellis" / ".backup-original").mkdir(parents=True, exist_ok=True)
         (root / ".opencode" / "commands" / "trellis" / ".backup-original").mkdir(parents=True, exist_ok=True)
         (root / ".agents" / "skills" / ".backup-original").mkdir(parents=True, exist_ok=True)
+        (root / ".codex" / "skills" / ".backup-original").mkdir(parents=True, exist_ok=True)
 
     def _create_fake_audit_task_dir(self, title: str, parent: str | None) -> str:
         existing = {
@@ -331,17 +367,17 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             {
                 "capability_id": "TN-004",
                 "capability": "codex-hooks-and-config-carrier",
-                "mechanism": "Workflow may rely on Codex hook/config surfaces outside installer-managed shared skills.",
+                "mechanism": "Workflow may rely on Codex hook/config surfaces outside installer-managed shared skills, and these surfaces can remain file-present while runtime activation is still gated by user-level feature flags or hook approval.",
                 "discovery_source": "ai-discovered",
                 "claude_evidence": "not-applicable",
                 "claude_classification": "not-applicable",
                 "opencode_evidence": "not-applicable",
                 "opencode_classification": "not-applicable",
-                "codex_evidence": "A=.codex/hooks.json,.codex/config.toml,.codex/hooks/inject-workflow-state.py,.codex/hooks/session-start.py; B=.codex/hooks.json,.codex/config.toml,.codex/hooks/inject-workflow-state.py,.codex/hooks/session-start.py",
-                "codex_classification": "adopted-compatible",
-                "overall_summary": "adopted-compatible",
-                "structural_signal": "none detected from A/B dependency surface shape",
-                "adaptation_decision": "No action required in fresh B unless later compatibility analysis changes this.",
+                "codex_evidence": "A=.codex/hooks.json,.codex/config.toml,.codex/hooks/inject-workflow-state.py; B=.codex/hooks.json,.codex/config.toml,.codex/hooks/inject-workflow-state.py",
+                "codex_classification": "present-but-gated",
+                "overall_summary": "present-but-gated",
+                "structural_signal": "carrier exists in A/B, but Codex runtime activation still depends on feature gates or user approval outside the embedded workflow files",
+                "adaptation_decision": "Treat file presence and runtime activation as separate checks when judging Codex compatibility.",
             },
             {
                 "capability_id": "TN-005",
@@ -435,14 +471,14 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             },
             {
                 "capability_id": "TN-011",
-                "capability": "trellis-hooks-carrier",
-                "mechanism": "Workflow depends on .trellis/hooks/ as the Trellis-side hooks directory for workflow lifecycle hooks.",
+                "capability": "trellis-hooks-script-carrier",
+                "mechanism": "Workflow depends on Trellis-side lifecycle hook scripts under .trellis/scripts/hooks/ rather than an older .trellis/hooks directory model.",
                 "discovery_source": "ai-discovered",
-                "claude_evidence": "A=.trellis/hooks; B=.trellis/hooks",
+                "claude_evidence": "A=.trellis/scripts/hooks,.trellis/scripts/hooks/linear_sync.py; B=.trellis/scripts/hooks,.trellis/scripts/hooks/linear_sync.py",
                 "claude_classification": "adopted-compatible",
-                "opencode_evidence": "A=.trellis/hooks; B=.trellis/hooks",
+                "opencode_evidence": "A=.trellis/scripts/hooks,.trellis/scripts/hooks/linear_sync.py; B=.trellis/scripts/hooks,.trellis/scripts/hooks/linear_sync.py",
                 "opencode_classification": "adopted-compatible",
-                "codex_evidence": "A=.trellis/hooks; B=.trellis/hooks",
+                "codex_evidence": "A=.trellis/scripts/hooks,.trellis/scripts/hooks/linear_sync.py; B=.trellis/scripts/hooks,.trellis/scripts/hooks/linear_sync.py",
                 "codex_classification": "adopted-compatible",
                 "overall_summary": "adopted-compatible",
                 "structural_signal": "none detected from A/B dependency surface shape",
@@ -491,7 +527,8 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             return self._create_fake_audit_task_dir(title, parent)
 
         def fake_run_task_start(task_dir: str) -> None:
-            CURRENT_TASK_FILE.write_text(task_dir, encoding="utf-8")
+            context_id = merged_env.get("TRELLIS_CONTEXT_ID", "test-context")
+            self._write_session_current_task(context_id, task_dir)
 
         with (
             patch.dict(os.environ, merged_env, clear=False),
@@ -681,22 +718,27 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         fake_bin = self._make_fake_trellis_bin()
         controlled_tmp = Path(tempfile.mkdtemp(prefix="workflow-capability-audit-tmp-"))
         self._temp_dirs.append(controlled_tmp)
+        context_id = "test-failure-cleanup"
+        original_task = ".trellis/tasks/03-19-implement-agents-source"
+        self._write_session_current_task(context_id, original_task)
         env = {
             "PATH": f"{fake_bin}:{os.environ['PATH']}",
             "TMPDIR": str(controlled_tmp),
+            "TRELLIS_CONTEXT_ID": context_id,
         }
         result = self.run_script("--current-cli", "claude", "--json", env=env)
         self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        current_task = CURRENT_TASK_FILE.read_text(encoding="utf-8") if CURRENT_TASK_FILE.is_file() else None
-        self.assertEqual(current_task, self._pre_current_task)
+        current_task = self._read_session_current_task(context_id)
+        self.assertEqual(current_task, original_task)
         current_task_dirs = set(d.name for d in TRELLIS_TASKS_DIR.iterdir()) if TRELLIS_TASKS_DIR.is_dir() else set()
         self.assertEqual(current_task_dirs, self._pre_task_dirs)
         self.assertEqual(list(controlled_tmp.iterdir()), [])
 
     def test_full_audit_rejects_preexisting_top_level_audit_directory_without_deleting_it(self) -> None:
         assets = load_assets_module()
+        today_prefix = date.today().strftime("%m-%d")
         existing_task_dir = self._create_task_dir(
-            "05-06-workflow-capability-audit",
+            f"{today_prefix}-workflow-capability-audit",
             "workflow-capability-audit: 新项目开发工作流",
         )
         env = {
@@ -709,8 +751,10 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
 
     def test_codex_full_audit_python_probe_failure_reports_runtime_boundary_recheck(self) -> None:
         assets = load_assets_module()
+        context_id = "test-codex-runtime-boundary"
         env = {
             assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
+            "TRELLIS_CONTEXT_ID": context_id,
         }
         module = load_script_module()
         stdout = io.StringIO()
@@ -740,7 +784,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             return f".trellis/tasks/{candidate}"
 
         def fake_run_task_start(task_dir: str) -> None:
-            CURRENT_TASK_FILE.write_text(task_dir, encoding="utf-8")
+            self._write_session_current_task(context_id, task_dir)
 
         failure = subprocess.CalledProcessError(
             returncode=1,
@@ -766,13 +810,15 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
 
     def test_full_audit_creates_child_task_when_current_task_is_workflow_audit(self) -> None:
         assets = load_assets_module()
+        context_id = "test-child-audit-task"
         current_task_dir = self._create_task_dir(
             "05-03-existing-workflow-audit",
             "workflow-audit: 新项目开发工作流",
         )
-        CURRENT_TASK_FILE.write_text(f".trellis/tasks/{current_task_dir.name}", encoding="utf-8")
+        self._write_session_current_task(context_id, f".trellis/tasks/{current_task_dir.name}")
         env = {
             assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
+            "TRELLIS_CONTEXT_ID": context_id,
         }
         result = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env)
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
@@ -784,13 +830,15 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
 
     def test_full_audit_stops_when_current_task_is_workflow_capability_audit(self) -> None:
         assets = load_assets_module()
+        context_id = "test-existing-capability-audit"
         current_task_dir = self._create_task_dir(
             "05-03-existing-workflow-capability-audit",
             "workflow-capability-audit: 新项目开发工作流",
         )
-        CURRENT_TASK_FILE.write_text(f".trellis/tasks/{current_task_dir.name}", encoding="utf-8")
+        self._write_session_current_task(context_id, f".trellis/tasks/{current_task_dir.name}")
         env = {
             assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
+            "TRELLIS_CONTEXT_ID": context_id,
         }
         result = self.run_script("--current-cli", "claude", "--json", env=env)
         self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
@@ -1062,6 +1110,45 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             env=env,
         )
         self.assertEqual(second.returncode, 0, msg=second.stdout + second.stderr)
+        after_text = WORKFLOW_ASSETS.read_text(encoding="utf-8")
+        self.assertIn('COMPATIBLE_TRELLIS_VERSION = "9.9.9"', after_text)
+
+    def test_fix_lifecycle_promotes_anchor_when_compatible_as_is_with_revalidation_and_finalize(self) -> None:
+        """No-fix compatible audits must still be able to promote the anchor after explicit revalidation + finalize."""
+        assets = load_assets_module()
+        env = {
+            assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
+        }
+        first = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env)
+        self.assertEqual(first.returncode, 0, msg=first.stdout + first.stderr)
+        payload = json.loads(first.stdout)
+        self._track_fixtures_from_payload(payload)
+        self._release_fake_audit_task_for_followup()
+
+        before_text = WORKFLOW_ASSETS.read_text(encoding="utf-8")
+        self.assertNotIn('COMPATIBLE_TRELLIS_VERSION = "9.9.9"', before_text)
+
+        second = self.run_script(
+            "--json",
+            "--task-dir",
+            payload["task_dir"],
+            "--confirm-fix-scope",
+            "Confirmed compatible as-is; no workflow source corrections required.",
+            "--record-revalidation",
+            "Revalidated compatible-as-is conclusion against final A/B evidence before fixture destruction.",
+            env=env,
+        )
+        self.assertEqual(second.returncode, 0, msg=second.stdout + second.stderr)
+        self._release_fake_audit_task_for_followup()
+
+        third = self.run_script(
+            "--json",
+            "--task-dir",
+            payload["task_dir"],
+            "--finalize-fixture-destruction",
+            env=env,
+        )
+        self.assertEqual(third.returncode, 0, msg=third.stdout + third.stderr)
         after_text = WORKFLOW_ASSETS.read_text(encoding="utf-8")
         self.assertIn('COMPATIBLE_TRELLIS_VERSION = "9.9.9"', after_text)
 
@@ -1350,6 +1437,26 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self.assertEqual(shared_row["opencode_classification"], "adopted-compatible")
         self.assertEqual(shared_row["codex_classification"], "adopted-compatible")
 
+    def test_build_workflow_dependent_rows_marks_codex_hook_carrier_as_present_but_gated(self) -> None:
+        module = load_script_module()
+        a_root, b_root = self._make_fake_full_audit_roots("audit-dev")
+        rows = module.build_workflow_dependent_rows(a_root, b_root)
+        by_capability = {row["capability"]: row for row in rows}
+        codex_row = by_capability["codex-hooks-and-config-carrier"]
+        self.assertEqual(codex_row["codex_classification"], "present-but-gated")
+        self.assertEqual(codex_row["overall_summary"], "present-but-gated")
+        self.assertNotIn("session-start.py", codex_row["codex_evidence"])
+
+    def test_build_workflow_dependent_rows_uses_trellis_hooks_script_carrier(self) -> None:
+        module = load_script_module()
+        a_root, b_root = self._make_fake_full_audit_roots("audit-dev")
+        rows = module.build_workflow_dependent_rows(a_root, b_root)
+        by_capability = {row["capability"]: row for row in rows}
+        hooks_row = by_capability["trellis-hooks-script-carrier"]
+        self.assertEqual(hooks_row["overall_summary"], "adopted-compatible")
+        self.assertIn(".trellis/scripts/hooks", hooks_row["claude_evidence"])
+        self.assertNotIn(".trellis/hooks", hooks_row["claude_evidence"])
+
     def test_print_stop_human_includes_next_action_section(self) -> None:
         """Human-readable version-gate stop output must include the ### Next Action section."""
         assets = load_assets_module()
@@ -1395,7 +1502,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             ("claude-native-skills-carrier", "claude", "adopted-compatible"),
             ("opencode-native-skills-carrier", "opencode", "adopted-compatible"),
             ("opencode-lib-carrier", "opencode", "adopted-compatible"),
-            ("trellis-hooks-carrier", "claude", "adopted-compatible"),
+            ("trellis-hooks-script-carrier", "claude", "adopted-compatible"),
         ]
         for carrier_name, primary_cli, expected_classification in new_carriers:
             self.assertIn(carrier_name, by_capability, f"{carrier_name} must appear in dependent rows")
@@ -1403,10 +1510,12 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             self.assertEqual(row[f"{primary_cli}_classification"], expected_classification,
                              f"{carrier_name} {primary_cli} classification must be {expected_classification}")
 
-        # Verify codex-hooks-and-config-carrier now includes .codex/hooks/ scripts
+        # Verify codex-hooks-and-config-carrier now includes .codex/hooks/ scripts but no session-start requirement
         codex_carrier = by_capability.get("codex-hooks-and-config-carrier")
         self.assertIsNotNone(codex_carrier)
         self.assertIn(".codex/hooks/inject-workflow-state.py", codex_carrier["codex_evidence"])
+        self.assertNotIn("session-start.py", codex_carrier["codex_evidence"])
+        self.assertEqual(codex_carrier["codex_classification"], "present-but-gated")
 
         # Verify codex-secondary-skills-carrier: not-applicable when .codex/skills/ does not exist
         codex_sec = by_capability.get("codex-secondary-skills-carrier")
@@ -1468,7 +1577,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             "05-03-existing-workflow-audit",
             "workflow-audit: 新项目开发工作流",
         )
-        CURRENT_TASK_FILE.write_text(f".trellis/tasks/{parent_task_dir.name}", encoding="utf-8")
+        self._write_session_current_task("test-parent-child-link", f".trellis/tasks/{parent_task_dir.name}")
 
         created_child_ref = self._create_fake_audit_task_dir(
             "workflow-capability-audit: 新项目开发工作流",
@@ -1499,6 +1608,30 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self.assertNotEqual(code, 0, msg=stdout.getvalue() + stderr.getvalue())
         updated_parent = json.loads(parent_json_path.read_text(encoding="utf-8"))
         self.assertNotIn(child_name, updated_parent.get("children", []))
+
+    def test_full_audit_failure_warns_when_active_task_cannot_be_restored_without_context(self) -> None:
+        """Rollback cleanup must not fail just because the previous session-scoped task cannot be restored."""
+        module = load_script_module()
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        original_active = module.ActiveTask(
+            ".trellis/tasks/03-19-implement-commands-source",
+            "session",
+            "missing-context",
+        )
+        with (
+            patch.dict(os.environ, {"TRELLIS_CURRENT_VERSION": "9.9.9"}, clear=False),
+            patch.object(sys, "argv", [str(SCRIPT), "--current-cli", "claude", "--json"]),
+            patch.object(module, "resolve_active_task", return_value=original_active),
+            patch.object(module, "set_active_task", return_value=None),
+            patch.object(module, "run_task_create", return_value=".trellis/tasks/05-08-workflow-capability-audit"),
+            patch.object(module, "run_task_start", side_effect=RuntimeError("simulated start failure")),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            code = module.main()
+        self.assertNotEqual(code, 0, msg=stdout.getvalue() + stderr.getvalue())
+        self.assertIn("WARN: Could not restore the previous session-scoped active task", stderr.getvalue())
 
 
 if __name__ == "__main__":
