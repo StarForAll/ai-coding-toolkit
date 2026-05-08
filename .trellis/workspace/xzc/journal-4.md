@@ -1337,3 +1337,36 @@ Validation run in this session:
 ### Next Steps
 
 - None - task complete
+
+
+## Session 167: 修复 Trellis 0.5.6 升级缺陷：回退 trellis-research 工具简化并修正 Phase 编号
+
+**Date**: 2026-05-08
+**Task**: 修复 Trellis 0.5.6 升级缺陷：回退 trellis-research 工具简化并修正 Phase 编号
+**Branch**: `main`
+
+### Summary
+
+回退 trellis-research 工具简化（恢复 ace/Context7/deepwiki/grok-search），修正所有 Phase 编号引用（1.2/1.3/2.3/3.1/3.2），修复 workflow.md 内部矛盾，统一 finish-work 机制，修正文档一致性（finish-work description、change-workflow 表格、generated-files.md、workspace-memory.md）
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `36a27cc` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
