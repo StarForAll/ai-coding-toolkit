@@ -1,0 +1,4 @@
+{"file":".trellis/spec/skills/workflow-capability-audit.md","reason":"定义 repo-local maintainer skill 的行为契约，需要与脚本和 skill 同步。"}
+{"file":".trellis/spec/scripts/python-conventions.md","reason":"修改 workflow Python 脚本时遵循本项目 Python CLI 约定。"}
+{"file":".trellis/spec/scripts/workflow-installer-upgrade-contracts.md","reason":"workflow 资产与 carrier 语义属于 installer/upgrade 合约的一部分。"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"这次修改跨脚本、测试、skill、spec、reference 多层，需要防止协议漂移。"}
