@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 176
+- **Total Sessions**: 177
 - **Last Active**: 2026-05-09
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~1669 | Active |
+| `journal-4.md` | ~1703 | Active |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 177 | 2026-05-09 | workflow-audit: align readme governance and close-out terminology | `71feed4`, `dce304c` | `main` |
 | 176 | 2026-05-09 | Refine gated carrier structural-break logic | `2a54fbf` | `main` |
 | 175 | 2026-05-09 | 补充 codex git 提权 spec | `70e1d39` | `main` |
 | 174 | 2026-05-09 | 收口 qoder trellis 收尾兼容副本 | `6e854ec` | `main` |

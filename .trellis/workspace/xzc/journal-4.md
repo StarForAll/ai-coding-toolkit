@@ -1667,3 +1667,37 @@ Distinguished expected versus unexpected gated carriers in workflow-capability-a
 ### Next Steps
 
 - None - task complete
+
+
+## Session 177: workflow-audit: align readme governance and close-out terminology
+
+**Date**: 2026-05-09
+**Task**: workflow-audit: align readme governance and close-out terminology
+**Branch**: `main`
+
+### Summary
+
+Verified Trellis-native-agent boundary, added default README bilingual governance import, propagated walkthrough docs, and closed workflow-audit task state gaps.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `71feed4` | (see git log) |
+| `dce304c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
