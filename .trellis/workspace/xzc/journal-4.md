@@ -1601,3 +1601,36 @@ Aligned workflow-audit same-version contract, templates, and scenario coverage a
 ### Next Steps
 
 - None - task complete
+
+
+## Session 175: 补充 codex git 提权 spec
+
+**Date**: 2026-05-09
+**Task**: 补充 codex git 提权 spec
+**Branch**: `main`
+
+### Summary
+
+为当前仓库补充 Codex 平台专属规则：在已获批准的 git add/git commit 步骤中，直接用提权方式执行，避免先在受限写入环境里失败再重试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `70e1d39` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
