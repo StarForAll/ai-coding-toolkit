@@ -1801,3 +1801,36 @@ Audited historical workflow fixpoints, deployed enhanced trellis-research to tar
 ### Next Steps
 
 - None - task complete
+
+
+## Session 181: workflow audit remediation and close-out
+
+**Date**: 2026-05-10
+**Task**: workflow audit remediation and close-out
+**Branch**: `main`
+
+### Summary
+
+Verified the workflow audit findings, fixed target-project trellis-research parity, enforced continue-route readiness gates, added feasibility-stage assessment hard checks, standardized total_effort_hours, expanded external delivery-control fields, and synchronized the related docs and tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a08fc4c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
