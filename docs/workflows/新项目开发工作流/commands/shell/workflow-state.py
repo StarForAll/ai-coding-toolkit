@@ -71,6 +71,7 @@ PROJECT_ESTIMATE_REQUIRED_STAGES = STAGES - {"feasibility", "brainstorm"}
 PROJECT_ESTIMATE_DOC_STAGES = {"design", "plan"}
 TASK_ESTIMATE_MARKERS = (
     "## 项目级粗估",
+    "total_effort_hours",
     "预计总工时",
     "预计总工期",
     "预计完工窗口",
@@ -317,6 +318,77 @@ def validate_leaf_task(task_dir: Path, errors: list[str]) -> None:
         errors.append("当前 task 已有 children，不应继续作为执行态叶子任务持有 workflow-state")
 
 
+def collect_dependency_blockers(task_dir: Path, repo_root: Path) -> list[str]:
+    task_data = load_task_json(task_dir)
+    if not task_data:
+        return []
+    meta = task_data.get("meta")
+    if not isinstance(meta, dict):
+        return []
+    depends_on = meta.get("depends_on")
+    if not isinstance(depends_on, list):
+        return []
+
+    blockers: list[str] = []
+    tasks_root = repo_root / ".trellis" / "tasks"
+    for item in depends_on:
+        if not isinstance(item, str) or not item.strip():
+            continue
+        dep_dir = tasks_root / item.strip()
+        dep_task = load_task_json(dep_dir)
+        if dep_task is None:
+            blockers.append(f"前置依赖任务不存在或不可读: {item}")
+            continue
+        dep_status = dep_task.get("status")
+        if dep_status != "completed":
+            blockers.append(f"前置依赖任务未完成: {item} (status={dep_status})")
+    return blockers
+
+
+def collect_route_readiness_blockers(
+    task_dir: Path,
+    repo_root: Path,
+    state: dict[str, Any],
+) -> list[str]:
+    stage = state.get("stage")
+    blockers: list[str] = []
+
+    if stage == "brainstorm":
+        assessment_file = find_assessment_file(task_dir, repo_root)
+        if assessment_file is None:
+            blockers.append("缺少 assessment.md；必须先完成 feasibility 才允许继续 brainstorm")
+        else:
+            content = assessment_file.read_text(encoding="utf-8")
+            allow_line_present = False
+            allow_brainstorm = False
+            for line in content.splitlines():
+                if "是否允许进入 brainstorm" in line:
+                    allow_line_present = True
+                    if "是" in line or "`yes`" in line or ": yes" in line.lower():
+                        allow_brainstorm = True
+                    break
+            if not allow_line_present:
+                blockers.append("assessment.md 缺少“是否允许进入 brainstorm”字段")
+            elif not allow_brainstorm:
+                blockers.append("assessment.md 未明确允许进入 brainstorm")
+
+    if stage == "plan":
+        task_prd = task_dir / TASK_PRD
+        if not task_prd.is_file():
+            blockers.append("当前推荐执行任务说明卡缺少最小 prd.md，不能继续进入后续路由")
+        design_dir = task_dir / "design"
+        if design_dir.is_dir() and not (repo_root / ROOT_README_EN).is_file():
+            blockers.append("design 已落盘但项目根 README.en.md 缺失；需先补齐 design 阶段块 C 英文文档")
+
+    if stage in EXECUTION_STAGES:
+        task_prd = task_dir / TASK_PRD
+        if not task_prd.is_file():
+            blockers.append("当前推荐执行任务说明卡缺少最小 prd.md，不能进入执行态")
+        blockers.extend(collect_dependency_blockers(task_dir, repo_root))
+
+    return blockers
+
+
 def load_task_json(path: Path) -> dict[str, Any] | None:
     data = read_json(path / TASK_FILE_NAME)
     if isinstance(data, dict):
@@ -469,15 +541,22 @@ def validate_external_project_controls(
     errors: list[str],
 ) -> None:
     stage = state.get("stage")
-    if stage == "feasibility":
-        return
-
     assessment_file = find_assessment_file(task_dir, repo_root)
     if assessment_file is None:
         errors.append("缺少 assessment.md；任何项目都必须先经过 feasibility 并完成项目类别判断")
         return
 
     content = assessment_file.read_text(encoding="utf-8")
+    legal_match = re.search(r'法律(?:/|与)?合规风险结论[：:]\s*(\S+)', content)
+    if not legal_match:
+        errors.append(f"{assessment_file.relative_to(repo_root).as_posix()} 缺少 `法律/合规风险结论` 字段")
+    else:
+        legal_value = legal_match.group(1)
+        if legal_value not in {"通过", "不通过", "待补充"}:
+            errors.append(
+                f"{assessment_file.relative_to(repo_root).as_posix()} 的 `法律/合规风险结论` 值异常: {legal_value}"
+            )
+
     engagement_type = extract_backticked_field(content, "project_engagement_type")
     if engagement_type is None:
         errors.append(f"{assessment_file.relative_to(repo_root).as_posix()} 缺少 `project_engagement_type` 字段")
@@ -565,10 +644,6 @@ def validate_ownership_policy_controls(
     state: dict[str, Any],
     errors: list[str],
 ) -> None:
-    stage = state.get("stage")
-    if stage == "feasibility":
-        return
-
     assessment_file = find_assessment_file(task_dir, repo_root)
     if assessment_file is None:
         return
@@ -973,6 +1048,19 @@ def cmd_route(args: argparse.Namespace) -> int:
             f"当前 stage={stage}, status=awaiting_user_confirmation",
             stage=stage,
             stage_status=stage_status,
+        )
+        return 0
+
+    readiness_blockers = collect_route_readiness_blockers(task_dir, repo_root, state)
+    if readiness_blockers:
+        primary_reason = readiness_blockers[0]
+        _route_result(
+            stage or None,
+            "blocked" if stage in EXECUTION_STAGES or stage == "plan" else "repair_needed",
+            primary_reason,
+            stage=stage or None,
+            stage_status=stage_status or None,
+            blockers=readiness_blockers,
         )
         return 0
 

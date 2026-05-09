@@ -25,6 +25,9 @@ COMPLETE_HOSTED_ASSESSMENT = """\
 - `delivery_control_track`: `hosted_deployment`
 - `delivery_control_handover_trigger`: `final_payment_received`
 - `delivery_control_retained_scope`: source code and keys
+- `milestone_payment_schedule`: `M1:40%,M2:30%,Final:30%`
+- `non_payment_remedy_path`: `written_notice -> retained_control_delivery_only -> suspend_final_handover`
+- `dispute_escalation_path`: `technical_review -> project_negotiation -> third_party_arbitration`
 """
 
 COMPLETE_TRIAL_ASSESSMENT = """\
@@ -37,6 +40,9 @@ COMPLETE_TRIAL_ASSESSMENT = """\
 - `delivery_control_track`: `trial_authorization`
 - `delivery_control_handover_trigger`: `final_payment_received`
 - `delivery_control_retained_scope`: source code
+- `milestone_payment_schedule`: `M1:40%,M2:30%,Final:30%`
+- `non_payment_remedy_path`: `written_notice -> trial_expiration_read_only -> suspend_permanent_authorization`
+- `dispute_escalation_path`: `technical_review -> project_negotiation -> third_party_arbitration`
 - `trial_authorization_terms.validity`: 90天
 - `trial_authorization_terms.clock_source_or_usage_basis`: 首次部署日
 - `trial_authorization_terms.expiration_behavior`: 只读模式
@@ -57,9 +63,12 @@ PLAN_WITH_DELIVERY = """\
 
 ### 开工触发条件
 - 首款到账后才允许 implementation（kickoff_payment_received: yes）
+- 里程碑付款按 `milestone_payment_schedule` 执行
 
 ### 交付触发条件
 - 尾款到账后触发控制权移交（handover_trigger: final_payment_received）
+- 若客户拒付，按 `non_payment_remedy_path` 执行
+- 若出现验收争议，按 `dispute_escalation_path` 升级
 
 ## Trellis Task 清单
 
@@ -71,7 +80,7 @@ PLAN_WITH_DELIVERY = """\
 """
 
 DELIVERY_DIR_CONTENT = {
-    "transfer-checklist.md": "# Transfer Checklist\n\nretained-control delivery\n",
+    "transfer-checklist.md": "# Transfer Checklist\n\nretained-control delivery\n\n- milestone_payment_schedule\n- non_payment_remedy_path\n- dispute_escalation_path\n",
     "deliverables.md": "# Deliverables\n\n交付物清单\n",
     "acceptance.md": "# Acceptance\n",
 }
@@ -113,6 +122,32 @@ class DeliveryControlValidateTests(unittest.TestCase):
         (d / "assessment.md").write_text(COMPLETE_HOSTED_ASSESSMENT, encoding="utf-8")
         result = self.run_script("--phase", "feasibility", "--task-dir", str(d))
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+    def test_feasibility_fails_when_milestone_payment_schedule_missing(self) -> None:
+        d = self._make_task_dir()
+        content = COMPLETE_HOSTED_ASSESSMENT.replace(
+            "- `milestone_payment_schedule`: `M1:40%,M2:30%,Final:30%`\n",
+            "",
+        )
+        (d / "assessment.md").write_text(content, encoding="utf-8")
+        result = self.run_script("--phase", "feasibility", "--task-dir", str(d))
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("milestone_payment_schedule", result.stdout + result.stderr)
+
+    def test_feasibility_fails_when_non_payment_or_dispute_path_missing(self) -> None:
+        d = self._make_task_dir()
+        content = COMPLETE_HOSTED_ASSESSMENT.replace(
+            "- `non_payment_remedy_path`: `written_notice -> retained_control_delivery_only -> suspend_final_handover`\n",
+            "",
+        ).replace(
+            "- `dispute_escalation_path`: `technical_review -> project_negotiation -> third_party_arbitration`\n",
+            "",
+        )
+        (d / "assessment.md").write_text(content, encoding="utf-8")
+        result = self.run_script("--phase", "feasibility", "--task-dir", str(d))
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("non_payment_remedy_path", result.stdout + result.stderr)
+        self.assertIn("dispute_escalation_path", result.stdout + result.stderr)
 
     def test_feasibility_checks_trial_terms(self) -> None:
         d = self._make_task_dir()
@@ -158,6 +193,26 @@ class DeliveryControlValidateTests(unittest.TestCase):
         result = self.run_script("--phase", "plan", "--task-dir", str(d))
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
+    def test_plan_fails_when_remedy_or_dispute_flow_missing(self) -> None:
+        d = self._make_task_dir()
+        (d / "assessment.md").write_text(COMPLETE_HOSTED_ASSESSMENT, encoding="utf-8")
+        task_root = d / ".trellis" / "tasks"
+        task_root.mkdir(parents=True)
+        for name in ("04-14-hosted-deploy", "04-14-source-handover", "04-14-control-handover"):
+            (task_root / name).mkdir(parents=True)
+        content = PLAN_WITH_DELIVERY.replace(
+            "- 若客户拒付，按 `non_payment_remedy_path` 执行\n",
+            "",
+        ).replace(
+            "- 若出现验收争议，按 `dispute_escalation_path` 升级\n",
+            "",
+        )
+        (d / "task_plan.md").write_text(content, encoding="utf-8")
+        result = self.run_script("--phase", "plan", "--task-dir", str(d))
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("non_payment_remedy_path", result.stdout + result.stderr)
+        self.assertIn("dispute_escalation_path", result.stdout + result.stderr)
+
     def test_plan_passes_for_internal_project(self) -> None:
         d = self._make_task_dir()
         (d / "assessment.md").write_text(
@@ -191,6 +246,19 @@ class DeliveryControlValidateTests(unittest.TestCase):
             (delivery / name).write_text(content, encoding="utf-8")
         result = self.run_script("--phase", "delivery", "--task-dir", str(d))
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+    def test_delivery_fails_when_transfer_checklist_missing_new_remedy_fields(self) -> None:
+        d = self._make_task_dir()
+        (d / "assessment.md").write_text(COMPLETE_HOSTED_ASSESSMENT, encoding="utf-8")
+        delivery = d / "delivery"
+        delivery.mkdir()
+        incomplete = dict(DELIVERY_DIR_CONTENT)
+        incomplete["transfer-checklist.md"] = "# Transfer Checklist\n\nretained-control delivery\n"
+        for name, content in incomplete.items():
+            (delivery / name).write_text(content, encoding="utf-8")
+        result = self.run_script("--phase", "delivery", "--task-dir", str(d))
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("milestone_payment_schedule", result.stdout + result.stderr)
 
     def test_delivery_passes_for_internal_project(self) -> None:
         d = self._make_task_dir()

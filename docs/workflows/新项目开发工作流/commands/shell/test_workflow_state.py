@@ -18,6 +18,7 @@ SCRIPT = REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "comman
 
 class WorkflowStateScriptTests(unittest.TestCase):
     VALID_BRAINSTORM_ESTIMATE = """## 项目级粗估
+- `total_effort_hours`: `16`
 - 预计总工时：12-16 人时
 - 预计总工期：3-4 个工作日
 - 预计完工窗口：2026-04-20 ~ 2026-04-23
@@ -509,6 +510,20 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
         self.assertIn("delivery_control_handover_trigger", validate.stdout)
 
+    def test_validate_feasibility_stage_checks_assessment_field_completeness(self) -> None:
+        root, task_dir = self.make_fixture()
+        (task_dir / "assessment.md").write_text(
+            "# assessment\n- `project_engagement_type`: `non_outsourcing`\n",
+            encoding="utf-8",
+        )
+
+        self.run_script("init", str(task_dir), "--stage", "feasibility")
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("法律/合规风险结论", validate.stdout)
+        self.assertIn("source_watermark_level", validate.stdout)
+
     def test_validate_blocks_external_stage_when_ownership_policy_missing(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
@@ -765,6 +780,28 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
         self.assertIn("项目级粗估", validate.stdout)
 
+    def test_validate_fails_when_project_estimate_missing_total_effort_hours(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=(
+                "## 项目级粗估\n"
+                "- 预计总工时：12-16 人时\n"
+                "- 预计总工期：3-4 个工作日\n"
+                "- 预计完工窗口：2026-04-20 ~ 2026-04-23\n"
+                "- 估算置信度：中\n"
+                "- 估算前提：需求范围维持当前冻结版本\n"
+            ),
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+
+        self.run_script("init", str(task_dir), "--stage", "design")
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("total_effort_hours", validate.stdout)
+
 
     # ------------------------------------------------------------------
     # route subcommand tests
@@ -886,6 +923,92 @@ class WorkflowStateScriptTests(unittest.TestCase):
         import json as _json
         data = _json.loads(result.stdout)
         self.assertEqual(data["action"], "repair_needed")
+
+    def test_cmd_route_blocks_brainstorm_without_assessment_even_when_customer_prd_missing(self) -> None:
+        root, task_dir = self.make_fixture()
+        (task_dir / "task.json").write_text('{"status":"planning","children":[]}\n', encoding="utf-8")
+        (task_dir / "prd.md").write_text("# sample\n", encoding="utf-8")
+        self.run_script("init", str(task_dir), "--stage", "brainstorm")
+
+        result = self.run_script("route", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        import json as _json
+        data = _json.loads(result.stdout)
+        self.assertEqual(data["action"], "repair_needed")
+        self.assertIn("assessment", data["reason"])
+
+    def test_cmd_route_blocks_plan_when_recommended_task_prd_missing(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (task_dir / "prd.md").unlink()
+        self.run_script("init", str(task_dir), "--stage", "plan")
+
+        result = self.run_script("route", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        import json as _json
+        data = _json.loads(result.stdout)
+        self.assertEqual(data["action"], "blocked")
+        self.assertIn("任务说明", "".join(data.get("blockers", [])))
+
+    def test_cmd_route_blocks_execution_when_task_json_declares_unfinished_dependencies(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        dependency_dir = root / ".trellis" / "tasks" / "04-15-dependency"
+        dependency_dir.mkdir(parents=True, exist_ok=True)
+        (dependency_dir / "task.json").write_text('{"status":"in_progress","children":[]}\n', encoding="utf-8")
+        (task_dir / "task.json").write_text(
+            '{"status":"in_progress","children":[],"meta":{"depends_on":["04-15-dependency"]}}\n',
+            encoding="utf-8",
+        )
+        self.run_script("init", str(task_dir), "--stage", "implementation")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--execution-authorized",
+            "true",
+            "--transition-from",
+            "plan",
+        )
+
+        result = self.run_script("route", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        import json as _json
+        data = _json.loads(result.stdout)
+        self.assertEqual(data["action"], "blocked")
+        self.assertIn("前置", "".join(data.get("blockers", [])))
+
+    def test_cmd_route_plan_prompts_english_readme_requirement_when_design_docs_missing(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (task_dir / "design").mkdir(parents=True, exist_ok=True)
+        (root / "README.en.md").unlink()
+        self.run_script("init", str(task_dir), "--stage", "plan")
+
+        result = self.run_script("route", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        import json as _json
+        data = _json.loads(result.stdout)
+        self.assertEqual(data["action"], "blocked")
+        self.assertIn("README.en.md", "".join(data.get("blockers", [])))
 
     def test_cmd_route_embed_invalid_when_install_record_exists_without_library_lock(self) -> None:
         """workflow-installed.json exists but library-lock.yaml is missing -> embed_invalid."""

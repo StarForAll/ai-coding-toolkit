@@ -48,6 +48,7 @@ class FeasibilityCheckTests(unittest.TestCase):
             self.assertIn("source_watermark_level", text)
             self.assertIn("`ownership_proof_required`: `yes`", text)
             self.assertIn("阶段出口快照", text)
+            self.assertIn("`total_effort_hours`", text)
 
     def test_estimate_prints_existing_assessment(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -112,6 +113,7 @@ class FeasibilityCheckTests(unittest.TestCase):
             "- 法律/合规风险结论：通过\n"
             "- 是否允许进入 brainstorm：是\n"
             "- `project_engagement_type`: `non_outsourcing`\n"
+            "- `total_effort_hours`: `16`\n"
             "- `source_watermark_level`: `basic`\n"
             "- `source_watermark_channels`: `visible`\n"
             "- `zero_width_watermark_enabled`: `no`\n"
@@ -126,6 +128,28 @@ class FeasibilityCheckTests(unittest.TestCase):
             result = self.run_script("--step", "validate", "--task-dir", td)
             self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
             self.assertIn("内部项目", result.stdout)
+
+    def test_validate_fails_when_total_effort_hours_missing(self) -> None:
+        content = (
+            "# 评估\n"
+            "- 总体决策：接\n"
+            "- 法律/合规风险结论：通过\n"
+            "- 是否允许进入 brainstorm：是\n"
+            "- `project_engagement_type`: `non_outsourcing`\n"
+            "- `source_watermark_level`: `basic`\n"
+            "- `source_watermark_channels`: `visible`\n"
+            "- `zero_width_watermark_enabled`: `no`\n"
+            "- `subtle_code_marker_enabled`: `no`\n"
+            "- `ownership_proof_required`: `yes`\n"
+            "\n"
+            "## 红线检查\n"
+            "✅ 通过\n"
+        )
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
+            result = self.run_script("--step", "validate", "--task-dir", td)
+            self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+            self.assertIn("total_effort_hours", result.stdout + result.stderr)
 
     def test_validate_fails_for_internal_project_without_ownership_fields(self) -> None:
         content = (
@@ -200,6 +224,7 @@ class FeasibilityCheckTests(unittest.TestCase):
             "- 法律/合规风险结论：通过\n"
             "- 是否允许进入 brainstorm：是\n"
             "- `project_engagement_type`: `external_outsourcing`\n"
+            "- `total_effort_hours`: `24`\n"
             "- `kickoff_payment_ratio`: `30%`\n"
             "- `kickoff_payment_received`: `yes`\n"
             "\n"
@@ -208,6 +233,9 @@ class FeasibilityCheckTests(unittest.TestCase):
             "- `delivery_control_track`: `hosted_deployment`\n"
             "- `delivery_control_handover_trigger`: `final_payment_received`\n"
             "- `delivery_control_retained_scope`: source code and keys\n"
+            "- `milestone_payment_schedule`: `M1:40%,M2:30%,Final:30%`\n"
+            "- `non_payment_remedy_path`: `written_notice -> retained_control_delivery_only -> suspend_final_handover`\n"
+            "- `dispute_escalation_path`: `technical_review -> project_negotiation -> third_party_arbitration`\n"
             "- `source_watermark_level`: `none`\n"
             "- `source_watermark_channels`: `none`\n"
             "- `zero_width_watermark_enabled`: `no`\n"
@@ -296,6 +324,7 @@ class FeasibilityCheckTests(unittest.TestCase):
             "- 法律/合规风险结论：通过\n"
             "- 是否允许进入 brainstorm：是\n"
             "- `project_engagement_type`: `external_outsourcing`\n"
+            "- `total_effort_hours`: `24`\n"
             "- `kickoff_payment_ratio`: `30%`\n"
             "- `kickoff_payment_received`: `no`\n"
             "\n"
@@ -304,6 +333,9 @@ class FeasibilityCheckTests(unittest.TestCase):
             "- `delivery_control_track`: `hosted_deployment`\n"
             "- `delivery_control_handover_trigger`: `final_payment_received`\n"
             "- `delivery_control_retained_scope`: source code and keys\n"
+            "- `milestone_payment_schedule`: `M1:40%,M2:30%,Final:30%`\n"
+            "- `non_payment_remedy_path`: `written_notice -> retained_control_delivery_only -> suspend_final_handover`\n"
+            "- `dispute_escalation_path`: `technical_review -> project_negotiation -> third_party_arbitration`\n"
             "- `source_watermark_level`: `none`\n"
             "- `source_watermark_channels`: `none`\n"
             "- `zero_width_watermark_enabled`: `no`\n"

@@ -190,7 +190,9 @@ Target-project deployed copies are derived state:
   - Claude: `.claude/agents/trellis-{research,implement,check}.md`
   - OpenCode: `.opencode/agents/trellis-{research,implement,check}.md`
   - Codex: `.codex/agents/trellis-{research,implement,check}.toml`
-  - workflow scripts may migrate legacy bare-name files to the Trellis-native names, but must not overlay native agent content
+  - workflow scripts may migrate legacy bare-name files to the Trellis-native names
+  - current exception: `trellis-research` is a workflow-managed enhanced agent and may be synchronized from the authoring repo live deployment into target projects
+  - `trellis-implement` / `trellis-check` remain Trellis-native and must not be overlaid
 - shared helper scripts: `.trellis/scripts/workflow/*.py`
 - shared project workflow guide patch: `.trellis/workflow.md`
 - install-only collaboration reminder: root-level `todo.txt`
@@ -252,6 +254,17 @@ Workflow embed / analysis / repair scripts must distinguish three asset classes:
      - `parallel`
    - Contract:
      - installer must back up the original baseline copy if present
+
+5. **Managed enhanced agent**
+   - current known set:
+     - `trellis-research`
+   - Contract:
+     - installer must back up the target project's baseline `trellis-research` once before replacing it
+     - installer must deploy the authoring-repo enhanced `trellis-research` content into the target project
+     - `upgrade-compat.py --check` must detect drift in the managed enhanced research agent
+     - `upgrade-compat.py --merge` / `--force` must restore the managed enhanced research agent from source
+     - `uninstall-workflow.py` must restore the backed-up baseline `trellis-research`
+     - this exception does not promote `trellis-implement` / `trellis-check` into workflow-managed overlays
 
 #### Trellis 0.5+ carrier rename note
 

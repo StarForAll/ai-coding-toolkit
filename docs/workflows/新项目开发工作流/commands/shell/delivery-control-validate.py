@@ -138,6 +138,27 @@ def validate_assessment(assessment_file: Path) -> tuple[int, int, bool]:
     else:
         passed += print_result(False, "", "缺少 `delivery_control_retained_scope` 字段")
 
+    checks += 1
+    milestone_schedule = extract_backticked_field(content, "milestone_payment_schedule")
+    if milestone_schedule and milestone_schedule not in {"...", "例如"}:
+        passed += print_result(True, f"`milestone_payment_schedule`: {milestone_schedule}", "")
+    else:
+        passed += print_result(False, "", "缺少 `milestone_payment_schedule` 字段")
+
+    checks += 1
+    remedy_path = extract_backticked_field(content, "non_payment_remedy_path")
+    if remedy_path and remedy_path not in {"...", "例如"}:
+        passed += print_result(True, f"`non_payment_remedy_path`: {remedy_path}", "")
+    else:
+        passed += print_result(False, "", "缺少 `non_payment_remedy_path` 字段")
+
+    checks += 1
+    dispute_path = extract_backticked_field(content, "dispute_escalation_path")
+    if dispute_path and dispute_path not in {"...", "例如"}:
+        passed += print_result(True, f"`dispute_escalation_path`: {dispute_path}", "")
+    else:
+        passed += print_result(False, "", "缺少 `dispute_escalation_path` 字段")
+
     # 7. 如果是 trial_authorization，检查 trial_authorization_terms
     if is_trial:
         print("\n检测到试运行授权轨道，检查授权条款...")
@@ -255,6 +276,24 @@ def validate_task_plan(plan_file: Path, is_trial: bool) -> tuple[int, int]:
         passed += print_result(True, "任务计划包含最终移交触发条件依赖", "")
     else:
         passed += print_result(False, "", "任务计划未明确最终移交触发条件（如尾款到账）")
+
+    checks += 1
+    if "milestone_payment_schedule" in content:
+        passed += print_result(True, "任务计划包含里程碑付款安排", "")
+    else:
+        passed += print_result(False, "", "任务计划未明确 `milestone_payment_schedule`")
+
+    checks += 1
+    if "non_payment_remedy_path" in content:
+        passed += print_result(True, "任务计划包含拒付救济路径", "")
+    else:
+        passed += print_result(False, "", "任务计划未明确 `non_payment_remedy_path`")
+
+    checks += 1
+    if "dispute_escalation_path" in content:
+        passed += print_result(True, "任务计划包含争议升级路径", "")
+    else:
+        passed += print_result(False, "", "任务计划未明确 `dispute_escalation_path`")
     
     print(f"\n计划阶段验证: {passed}/{checks} 通过")
     return passed, checks
@@ -307,6 +346,24 @@ def validate_delivery(delivery_dir: Path, is_trial: bool) -> tuple[int, int]:
             passed += print_result(True, "移交清单标注了交付事件类型", "")
         else:
             passed += print_result(False, "", "移交清单未明确交付事件类型")
+
+        checks += 1
+        if "milestone_payment_schedule" in content:
+            passed += print_result(True, "移交清单包含里程碑付款核对项", "")
+        else:
+            passed += print_result(False, "", "移交清单缺少 `milestone_payment_schedule` 核对项")
+
+        checks += 1
+        if "non_payment_remedy_path" in content:
+            passed += print_result(True, "移交清单包含拒付救济核对项", "")
+        else:
+            passed += print_result(False, "", "移交清单缺少 `non_payment_remedy_path` 核对项")
+
+        checks += 1
+        if "dispute_escalation_path" in content:
+            passed += print_result(True, "移交清单包含争议升级核对项", "")
+        else:
+            passed += print_result(False, "", "移交清单缺少 `dispute_escalation_path` 核对项")
         
         # 如果是试运行授权，检查是否有到期行为验证
         if is_trial:

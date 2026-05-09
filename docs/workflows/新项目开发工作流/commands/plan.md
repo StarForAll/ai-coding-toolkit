@@ -136,6 +136,7 @@ cat "$TASK_DIR/design/index.md" 2>/dev/null
 <!-- if:outsourcing -->
 - 若为外部项目，`assessment.md` 中约定的交付控制轨道、源码移交时点、权限移交时点
 - 若为外部项目，`assessment.md` 中约定的项目类别、启动款比例、开工状态、最终移交触发条件
+- 若为外部项目，`assessment.md` 中约定的 `milestone_payment_schedule`、`non_payment_remedy_path`、`dispute_escalation_path`
 <!-- endif:outsourcing -->
 - 若启用了作者归属保护，`assessment.md` 中约定的 `source_watermark_*` 字段与 `$TASK_DIR/design/source-watermark-plan.md`
 
@@ -347,6 +348,10 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 ## 任务图摘要
 ## 阶段出口快照
 ## 外部项目交付控制（如适用）
+
+- `milestone_payment_schedule`: <assessment.md 中已冻结的里程碑付款结构>
+- `non_payment_remedy_path`: <客户拒付尾款后的救济路径>
+- `dispute_escalation_path`: <验收/付款争议升级路径>
 ```
 
 说明：

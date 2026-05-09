@@ -7,11 +7,11 @@ git remote set-url --add --push origin git@gitee.com:xxx/yyy.git
 
 3. trellis init创建的任务00-bootstrap-guidelines在安装这个工作流之后需要删除，finish-work中的 pnpm校验删除，后续技术架构确定之后补充明确的内容
 
-4. 在Brainstorm阶段确认完成之后需要在当前项目下的docs目录中生成完全可用的两份项目级需求文档文档；一份面向客户，一份面向开发人员
+4. 在 Brainstorm 阶段确认完成并准备进入 design 前，需要在目标项目 `docs/requirements/` 下补齐项目级需求文档结构；其中 `customer-facing-prd.md` 必须先可用并补齐 `## 项目级粗估摘要`，`developer-facing-prd.md` 改为在 design 阶段技术架构确认后再正式生成
 
 5. 开启新的任务时需要判断对应的任务是否要求前一个任务必须完成，如果是则需要先进行校验，如果前一个任务完成了才真正开始当前任务
 
-6. 初始阶段校验当前分支是main分支且在Brainstorm阶段结束之后添加的门禁中补充使用 sonar-scanner 
+6. 初始阶段校验当前分支是 main（仅对无本地提交历史的新建项目强制）；技术架构确认后需要在项目自动化检查矩阵中明确真实质量门禁，采用 Sonar / SonarQube 的项目必须写真实命令，未采用时必须写替代门禁和原因
 
 7. 任务信息分配给具体的任务不能挤压到 task_plan.md 文件中而是使用trellis的任务机制且每一个具体的任务需要在执行前补充其任务相关的测试门禁
 
@@ -42,7 +42,7 @@ git remote set-url --add --push origin git@gitee.com:xxx/yyy.git
 20. 初始化项目之后嵌入该工作流 .current-task 应该为空 且在 git 没有两个远程仓库时提示对应的远程仓库创建命令
 注: 这里只是在记录旧 workflow/目标项目嵌入问题的历史修复点，不代表当前本仓库 `.trellis` 运行时仍以 `.current-task` 作为 active task 真源；当前主机制以 session-scoped runtime 为准。
 
-21. research agent 搜索策略完善:exa+grok-search+deepwiki,根据具体的场景使用对应的工具
+21. 目标项目中安装后的 `trellis-research` agent 需要与当前项目正在使用的加强版 `trellis-research` 保持同等级能力：内部代码优先 `ace.search_context`，外部搜索按场景使用 `exa` / `grok-search` / `deepwiki` / `Context7`；其中实时/最新信息优先 `grok-search`，通用与深度检索优先 `exa`，GitHub 仓库理解优先 `deepwiki`，库文档优先 `Context7`
 
 22. 补充 AI CLI 所需要使用的工作流嵌入规范指导文档
 

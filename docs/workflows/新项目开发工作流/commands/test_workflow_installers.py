@@ -679,6 +679,78 @@ class WorkflowInstallerTests(unittest.TestCase):
                 )
         self.assertFalse((fixture / ".trellis" / ".backup-original" / "codex-agents").exists())
 
+    def test_install_deploys_enhanced_research_agents_to_target_project(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        claude_research = (fixture / ".claude" / "agents" / "trellis-research.md").read_text(encoding="utf-8")
+        opencode_research = (fixture / ".opencode" / "agents" / "trellis-research.md").read_text(encoding="utf-8")
+        codex_research = (fixture / ".codex" / "agents" / "trellis-research.toml").read_text(encoding="utf-8")
+
+        self.assertIn("mcp__ace__search_context", claude_research)
+        self.assertIn("mcp__grok-search__web_search", claude_research)
+        self.assertIn("mcp__deepwiki__read_wiki_structure", claude_research)
+        self.assertIn("mcp__Context7__resolve-library-id", claude_research)
+
+        self.assertIn("mcp__ace__search_context: allow", opencode_research)
+        self.assertIn("mcp__grok-search__*: allow", opencode_research)
+        self.assertIn("mcp__deepwiki__*: allow", opencode_research)
+        self.assertIn("mcp__Context7__*: allow", opencode_research)
+
+        self.assertIn("Resolve the active task path. Try in order:", codex_research)
+        self.assertIn("Choose tools by search type:", codex_research)
+        self.assertIn("ace.search_context", codex_research)
+        self.assertIn("grok-search", codex_research)
+
+    def test_upgrade_check_detects_managed_research_agent_drift(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        claude_research = fixture / ".claude" / "agents" / "trellis-research.md"
+        claude_research.write_text("# drifted research\n", encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("agent 内容漂移", result.stdout)
+
+    def test_upgrade_merge_restores_managed_research_agent(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        claude_research = fixture / ".claude" / "agents" / "trellis-research.md"
+        claude_research.write_text("# drifted research\n", encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--merge",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        updated = claude_research.read_text(encoding="utf-8")
+        self.assertIn("mcp__ace__search_context", updated)
+        self.assertIn("mcp__grok-search__web_search", updated)
+
     def test_install_patches_finish_work_when_test_coverage_heading_is_missing(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
@@ -723,6 +795,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertFalse((fixture / ".trellis" / "tasks" / "00-bootstrap-guidelines").exists())
         self.assertIn("初始 spec 基线已导入", install.stdout)
         self.assertIn("Trellis bootstrap 任务已删除", install.stdout)
+        self.assertIn("README.en.md", install.stdout)
 
     def test_install_clears_stale_current_task_when_bootstrap_task_is_removed(self) -> None:
         fixture = self.create_fixture(bootstrap_as_current_task=True)
@@ -1564,15 +1637,15 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
-    def test_upgrade_check_no_longer_checks_claude_agent_drift(self) -> None:
+    def test_upgrade_check_still_ignores_non_research_claude_agent_drift(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
 
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
 
-        claude_research = fixture / ".claude" / "agents" / "trellis-research.md"
-        claude_research.write_text("# drifted research\n", encoding="utf-8")
+        claude_check = fixture / ".claude" / "agents" / "trellis-check.md"
+        claude_check.write_text("# drifted check\n", encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
         result = self.run_script(
@@ -1585,7 +1658,7 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
-    def test_upgrade_check_no_longer_checks_opencode_agent_drift(self) -> None:
+    def test_upgrade_check_still_ignores_non_research_opencode_agent_drift(self) -> None:
         fixture = self.create_fixture(include_opencode=True)
         self.addCleanup(shutil.rmtree, fixture)
 
@@ -1630,15 +1703,15 @@ class WorkflowInstallerTests(unittest.TestCase):
         updated = codex_check.read_text(encoding="utf-8")
         self.assertIn('sandbox_mode = "read-only"', updated)
 
-    def test_upgrade_merge_no_longer_restores_claude_managed_agent(self) -> None:
+    def test_upgrade_merge_still_ignores_non_research_claude_agent_drift(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
 
         install = self.install_workflow(fixture)
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
 
-        claude_research = fixture / ".claude" / "agents" / "trellis-research.md"
-        claude_research.write_text("# drifted research\n", encoding="utf-8")
+        claude_check = fixture / ".claude" / "agents" / "trellis-check.md"
+        claude_check.write_text("# drifted check\n", encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
         result = self.run_script(
@@ -1650,10 +1723,10 @@ class WorkflowInstallerTests(unittest.TestCase):
         )
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        updated = claude_research.read_text(encoding="utf-8")
-        self.assertEqual(updated, "# drifted research\n")
+        updated = claude_check.read_text(encoding="utf-8")
+        self.assertEqual(updated, "# drifted check\n")
 
-    def test_upgrade_merge_no_longer_restores_opencode_managed_agent(self) -> None:
+    def test_upgrade_merge_still_ignores_non_research_opencode_agent_drift(self) -> None:
         fixture = self.create_fixture(include_opencode=True)
         self.addCleanup(shutil.rmtree, fixture)
 

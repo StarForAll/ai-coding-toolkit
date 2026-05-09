@@ -56,6 +56,8 @@ from workflow_assets import (
     HELPER_SCRIPTS,
     legacy_agent_target_path,
     LEGACY_AGENT_NAMES,
+    managed_agent_target_path,
+    MANAGED_ENHANCED_AGENT_NAMES,
     list_all_codex_skills_dirs,
     OPTIONAL_DISABLED_BASELINE_COMMANDS,
     OUTSOURCING_EXECUTION_CARDS,
@@ -70,6 +72,7 @@ from workflow_assets import (
     prepare_command_content,
     read_project_trellis_version,
     resolve_codex_skills_dir,
+    source_agent_path,
 )
 
 
@@ -935,6 +938,34 @@ def _migrate_legacy_agents(root: Path, cli_type: str, cli_label: str, *, dry_run
     return result
 
 
+def _deploy_enhanced_research_agent(root: Path, cli_type: str, cli_label: str, *, dry_run: bool = False) -> int:
+    """Deploy the enhanced trellis-research agent from the authoring repo into target projects."""
+    if "research" not in MANAGED_ENHANCED_AGENT_NAMES:
+        return 0
+
+    source_path = source_agent_path(cli_type, "research")
+    target_path = managed_agent_target_path(root, cli_type, "research")
+    if not source_path.exists():
+        warn(f"[{cli_label}] 增强版 trellis-research 源文件缺失: {source_path}")
+        return 0
+
+    if dry_run:
+        info(f"[{cli_label}] 将部署增强版 trellis-research agent")
+        return 1
+
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    backup_dir = target_path.parent / ".backup-original"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_path = backup_dir / target_path.name
+    if target_path.exists() and not backup_path.exists():
+        shutil.copy2(target_path, backup_path)
+        ok(f"[{cli_label}] trellis-research agent → 备份")
+
+    shutil.copy2(source_path, target_path)
+    ok(f"[{cli_label}] 增强版 trellis-research agent 已部署")
+    return 1
+
+
 # ── Claude Code 部署 ──
 def deploy_claude(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAULT_PROFILE) -> dict:
     """部署到 .claude/commands/trellis/"""
@@ -1023,6 +1054,8 @@ def deploy_claude(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAUL
 
     if disable_parallel_command(src, dst_cmds / "parallel.md", dry_run=dry_run, cli_label="Claude"):
         result["patches"] += 1
+
+    result["agents"] += _deploy_enhanced_research_agent(root, "claude", "Claude", dry_run=dry_run)
 
     return result
 
@@ -1116,6 +1149,8 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool, *, profile: str = DEFA
 
     if disable_parallel_command(src, dst_cmds / "parallel.md", dry_run=dry_run, cli_label="OpenCode"):
         result["patches"] += 1
+
+    result["agents"] += _deploy_enhanced_research_agent(root, "opencode", "OpenCode", dry_run=dry_run)
 
     # 辅助脚本已在 Claude Code 部署时处理，此处不重复计数
     return result
@@ -1256,6 +1291,8 @@ def deploy_codex(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAULT
             if not parallel_patched:
                 result["patches"] += 1
                 parallel_patched = True
+
+    result["agents"] += _deploy_enhanced_research_agent(root, "codex", "Codex", dry_run=dry_run)
 
     # 辅助脚本已在 Claude Code 部署时处理
     return result
@@ -1408,6 +1445,7 @@ def write_install_record(
             ],
             "patched_codex_skills": CODEX_PATCH_BASELINE_SKILLS,
             "patched_shared_docs": PATCH_BASELINE_SHARED_DOCS,
+            "managed_enhanced_agents": MANAGED_ENHANCED_AGENT_NAMES,
             "scripts": list(scripts),
             "execution_cards": cards,
             "workflow_version": WORKFLOW_VERSION,
@@ -1669,6 +1707,9 @@ def main() -> int:
         print("║   ✅ 安装完成                           ║")
     print("╚══════════════════════════════════════════╝")
     print()
+
+    if not args.dry_run:
+        info("后续 design 阶段请记得补齐项目根 README.md 与 README.en.md（块 C 英文补充版属于正式产物）")
 
     for cli_type, result in total.items():
         if result is None:

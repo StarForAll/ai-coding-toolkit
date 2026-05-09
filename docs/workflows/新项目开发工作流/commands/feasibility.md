@@ -206,12 +206,16 @@ $TASK_DIR/
 - 法律/合规风险结论：通过 / 不通过 / 待补充
 - 是否允许进入 brainstorm：是 / 否
 - `project_engagement_type`: `external_outsourcing` / `non_outsourcing`
+- `total_effort_hours`: `16`（项目级正式粗估总工时；若当前只能给区间，写中位值并在“当前结论的前提”说明上下界）
 <!-- if:outsourcing -->
 - `kickoff_payment_ratio`: 例如 `30%` / `40%`（仅当 `project_engagement_type = external_outsourcing`）
 - `kickoff_payment_received`: `yes` / `no`（仅当 `project_engagement_type = external_outsourcing`）
 - `delivery_control_track`: `hosted_deployment` / `trial_authorization`（仅当 `project_engagement_type = external_outsourcing`）
 - `delivery_control_handover_trigger`: 例如 `final_payment_received`（仅当 `project_engagement_type = external_outsourcing`）
 - `delivery_control_retained_scope`: 尾款前仍由开发者保留的环境、账号、密钥、部署控制范围；若无则写 `none`（仅当 `project_engagement_type = external_outsourcing`）
+- `milestone_payment_schedule`: 例如 `M1:40%,M2:30%,Final:30%`（仅当 `project_engagement_type = external_outsourcing`）
+- `non_payment_remedy_path`: 例如 `written_notice -> retained_control_delivery_only -> suspend_final_handover`（仅当 `project_engagement_type = external_outsourcing`）
+- `dispute_escalation_path`: 例如 `technical_review -> project_negotiation -> third_party_arbitration`（仅当 `project_engagement_type = external_outsourcing`）
 <!-- endif:outsourcing -->
 <!-- 所有项目通用：ownership / source watermark 默认字段 -->
 - `source_watermark_level`: `basic`
@@ -231,6 +235,7 @@ $TASK_DIR/
 |----------|---------------------------|----------|------------------|
 | 范围边界 | ... | ... | ... |
 | 项目类别判定 | ... | ... | ... |
+| 项目总工时 | ... | ... | ... |
 | 交付物清单 | ... | ... | ... |
 | 验收口径 | ... | ... | ... |
 | 付款结构 | ... | ... | ... |

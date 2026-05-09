@@ -112,11 +112,15 @@ ASSESSMENT_TEMPLATE = """# 项目可行性评估
 - 法律/合规风险结论：通过 / 不通过 / 待补充
 - 是否允许进入 brainstorm：是 / 否
 - `project_engagement_type`: `external_outsourcing` / `non_outsourcing`
+- `total_effort_hours`: `16`（项目级正式粗估总工时；若只能区间估算，写中位值并在“当前结论的前提”说明上下界）
 - `kickoff_payment_ratio`: 例如 `30%` / `40%`（仅当 `project_engagement_type = external_outsourcing`）
 - `kickoff_payment_received`: `yes` / `no`（仅当 `project_engagement_type = external_outsourcing`）
 - `delivery_control_track`: `hosted_deployment` / `trial_authorization`（仅当 `project_engagement_type = external_outsourcing`）
 - `delivery_control_handover_trigger`: 例如 `final_payment_received`（仅当 `project_engagement_type = external_outsourcing`）
 - `delivery_control_retained_scope`: 尾款前仍由开发者保留的环境、账号、密钥、部署控制范围；若无则写 `none`（仅当 `project_engagement_type = external_outsourcing`）
+- `milestone_payment_schedule`: 例如 `M1:40%,M2:30%,Final:30%`（仅当 `project_engagement_type = external_outsourcing`）
+- `non_payment_remedy_path`: 例如 `written_notice -> retained_control_delivery_only -> suspend_final_handover`（仅当 `project_engagement_type = external_outsourcing`）
+- `dispute_escalation_path`: 例如 `technical_review -> project_negotiation -> third_party_arbitration`（仅当 `project_engagement_type = external_outsourcing`）
 - `source_watermark_level`: `basic`
 - `source_watermark_channels`: `visible`
 - `zero_width_watermark_enabled`: `no`
@@ -309,6 +313,14 @@ def step_validate(task_dir: Path) -> int:
         is_external_project = engagement_type == "external_outsourcing"
         print(f"✅ `project_engagement_type`: {engagement_type}")
 
+    total_effort_hours = extract_backticked_field(content, "total_effort_hours")
+    if total_effort_hours is None:
+        errors.append("缺少 `total_effort_hours` 字段")
+    elif not re.fullmatch(r"\d+(?:\.\d+)?", total_effort_hours.strip()):
+        errors.append("`total_effort_hours` 只能填写数字小时值（如 `16` / `24.5`）")
+    else:
+        print(f"✅ `total_effort_hours`: {total_effort_hours}")
+
     if not is_external_project:
         print("ℹ️ 项目类别判定为非外包项目（内部项目/自有项目）；继续使用通用 workflow 主链，不启用首/尾款控制门禁")
     else:
@@ -360,6 +372,30 @@ def step_validate(task_dir: Path) -> int:
             errors.append("`delivery_control_retained_scope` 未填写具体值（若无保留范围，应写 `none`）")
         else:
             print(f"✅ `delivery_control_retained_scope`: {scope_value}")
+
+        milestone_schedule = extract_backticked_field(content, "milestone_payment_schedule")
+        if milestone_schedule is None:
+            errors.append("缺少 `milestone_payment_schedule` 字段")
+        elif milestone_schedule in {"...", "", "例如"}:
+            errors.append("`milestone_payment_schedule` 未填写具体值")
+        else:
+            print(f"✅ `milestone_payment_schedule`: {milestone_schedule}")
+
+        remedy_path = extract_backticked_field(content, "non_payment_remedy_path")
+        if remedy_path is None:
+            errors.append("缺少 `non_payment_remedy_path` 字段")
+        elif remedy_path in {"...", "", "例如"}:
+            errors.append("`non_payment_remedy_path` 未填写具体值")
+        else:
+            print(f"✅ `non_payment_remedy_path`: {remedy_path}")
+
+        dispute_path = extract_backticked_field(content, "dispute_escalation_path")
+        if dispute_path is None:
+            errors.append("缺少 `dispute_escalation_path` 字段")
+        elif dispute_path in {"...", "", "例如"}:
+            errors.append("`dispute_escalation_path` 未填写具体值")
+        else:
+            print(f"✅ `dispute_escalation_path`: {dispute_path}")
 
         if track_value == "trial_authorization":
             print("\n检测到试运行授权轨道，检查授权条款...")

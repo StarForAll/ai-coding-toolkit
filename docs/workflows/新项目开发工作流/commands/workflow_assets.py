@@ -106,6 +106,7 @@ EXECUTION_CARDS = ["需求变更管理执行卡.md", "源码水印与归属证�
 OUTSOURCING_EXECUTION_CARDS: list[str] = []
 WORKFLOW_DOCS_DIR = ".trellis/workflow-docs"
 LEGACY_AGENT_NAMES = ["research", "implement", "check"]
+MANAGED_ENHANCED_AGENT_NAMES = ["research"]
 AGENTS_NL_ROUTING_MARKERS = (
     "<!-- workflow-nl-routing-start -->",
     "<!-- workflow-nl-routing-end -->",
@@ -122,6 +123,26 @@ def legacy_agent_target_path(root: Path, cli_type: str, agent_name: str) -> Path
     if cli_type == "codex":
         return root / CLI_DIRS[cli_type] / "agents" / f"{agent_name}.toml"
     return root / CLI_DIRS[cli_type] / "agents" / f"{agent_name}.md"
+
+
+def managed_agent_target_path(root: Path, cli_type: str, agent_name: str) -> Path:
+    """Return target-project path for workflow-managed enhanced agents."""
+    if cli_type == "codex":
+        return root / CLI_DIRS[cli_type] / "agents" / f"trellis-{agent_name}.toml"
+    return root / CLI_DIRS[cli_type] / "agents" / f"trellis-{agent_name}.md"
+
+
+def authoring_repo_root() -> Path:
+    """Return the authoring repository root from this workflow commands module."""
+    return Path(__file__).resolve().parents[4]
+
+
+def source_agent_path(cli_type: str, agent_name: str) -> Path:
+    """Return the live authoring-repo source path for a managed enhanced agent."""
+    repo_root = authoring_repo_root()
+    if cli_type == "codex":
+        return repo_root / ".codex" / "agents" / f"trellis-{agent_name}.toml"
+    return repo_root / CLI_DIRS[cli_type] / "agents" / f"trellis-{agent_name}.md"
 
 
 def codex_phase_router_skill_candidates() -> list[str]:

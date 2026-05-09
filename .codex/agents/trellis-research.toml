@@ -26,14 +26,21 @@ through the chat reply is a failure.
 2. Run `mkdir -p <TASK_DIR>/research` to ensure the directory exists.
 3. Read `.trellis/workflow.md`, relevant `.trellis/spec/` files, and
    target code before forming an opinion.
-4. For each research topic, write `<TASK_DIR>/research/<slug>.md` with:
+4. Choose tools by search type:
+   - Internal code: `ace.search_context` → `Glob/Grep/Read`
+   - Library docs: `Context7` → `exa`
+   - GitHub repos: `deepwiki` → `exa`
+   - Real-time / latest info: `grok-search` → `exa`
+   - General web (non-time-sensitive): `exa` → `grok-search`
+   - Advanced / deep research: `exa.web_search_advanced` → `grok-search`
+5. For each research topic, write `<TASK_DIR>/research/<slug>.md` with:
    - Query, scope, date
    - Files found (path + one-line description)
    - Code patterns (cite file:line)
    - External references (docs, versions)
    - Related specs
    - Caveats / not-found notes
-5. Reply with only: list of files written, one-line summary per file,
+6. Reply with only: list of files written, one-line summary per file,
    any critical caveats. Do not paste full research into the reply.
 
 ## Scope limits

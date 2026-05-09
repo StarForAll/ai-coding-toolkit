@@ -150,6 +150,7 @@ python3 <WORKFLOW_DIR>/commands/shell/ownership-proof-validate.py --all --task-d
   - 当前事件允许移交什么
   - 当前事件禁止标记为已移交什么
   - 触发条件 / 付款 / 权限 / 证明材料是否齐备
+  - `milestone_payment_schedule` / `non_payment_remedy_path` / `dispute_escalation_path` 是否与 `assessment.md`、`task_plan.md` 对齐
 - `delivery/retrospective.md`
   - 本轮验收、返工、摩擦点、可回流 learn 的结论
 
@@ -165,13 +166,19 @@ python3 <WORKFLOW_DIR>/commands/shell/ownership-proof-validate.py --all --task-d
 | retained-control delivery | 否 | 交付材料中必须写清哪些控制权仍由开发者保留 |
 | final control transfer | 是 | `delivery_control_handover_trigger` 已满足，通常为 `final_payment_received` |
 
+每次交付事件都应额外核对：
+
+- `milestone_payment_schedule` 是否已达到当前事件允许的付款里程碑
+- `non_payment_remedy_path` 是否已在交付材料中明确
+- `dispute_escalation_path` 是否已在验收/付款争议场景中明确
+
 ### 交付事件执行门禁表
 
 | 交付事件 | 允许交付的内容 | 不得标记为已完成的内容 | 必须附带的证据/说明 |
 |---|---|---|---|
-| retained-control delivery | 演示地址、试运行环境访问、验收材料、用户手册、运维说明 | 源码仓库权限、永久授权、生产密钥、管理员账号、最终部署权限 | 当前保留控制范围、当前事件类型、后续最终移交触发条件 |
-| trial delivery under authorization | 试运行包、授权文件、限制说明、到期行为说明、验收材料 | 永久授权、完整源码、最终控制权 | `trial_authorization_terms.*`、到期行为验证、永久授权触发条件 |
-| final control transfer | 源码、永久授权、构建/部署材料、密钥/配置、平台管理员权限、最终交接记录 | 无，但必须与 `transfer-checklist` 一致 | 尾款到账或其他触发条件证据、完整交接记录、回滚说明 |
+| retained-control delivery | 演示地址、试运行环境访问、验收材料、用户手册、运维说明 | 源码仓库权限、永久授权、生产密钥、管理员账号、最终部署权限 | 当前保留控制范围、当前事件类型、后续最终移交触发条件、`milestone_payment_schedule`、`non_payment_remedy_path`、`dispute_escalation_path` |
+| trial delivery under authorization | 试运行包、授权文件、限制说明、到期行为说明、验收材料 | 永久授权、完整源码、最终控制权 | `trial_authorization_terms.*`、到期行为验证、永久授权触发条件、`milestone_payment_schedule`、`non_payment_remedy_path`、`dispute_escalation_path` |
+| final control transfer | 源码、永久授权、构建/部署材料、密钥/配置、平台管理员权限、最终交接记录 | 无，但必须与 `transfer-checklist` 一致 | 尾款到账或其他触发条件证据、完整交接记录、回滚说明、`milestone_payment_schedule`、`non_payment_remedy_path`、`dispute_escalation_path` |
 
 - [ ] 源码仓库权限或源码包
 - [ ] 永久授权文件，或移除试运行限制的正式版本
