@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/skills/workflow-audit.md", "reason": "Verification baseline for truthful blocked-state and handoff reporting."}
+{"file": "docs/workflows/新项目开发工作流/工作流嵌入执行规范.md", "reason": "Re-check install command chain and formal-install stop boundary against actual runtime evidence."}
+{"file": "docs/workflows/新项目开发工作流/CLI原生适配边界矩阵.md", "reason": "Verify per-CLI conclusions remain consistent with the managed-surface contract."}
+{"file": "docs/workflows/新项目开发工作流/装后隐藏目录与托管边界核对清单.md", "reason": "Verify baseline-vs-installed attribution and hidden-directory checks stay accurate."}
+{"file": "docs/workflows/新项目开发工作流/工作流总纲.md", "reason": "Re-check stage-governance conclusions against authoritative workflow semantics."}
+{"file": "docs/workflows/新项目开发工作流/阶段状态机与强门禁协议.md", "reason": "Verify stage confirmation and transition conclusions after runtime evidence is added."}
