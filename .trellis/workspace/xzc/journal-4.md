@@ -1634,3 +1634,36 @@ Aligned workflow-audit same-version contract, templates, and scenario coverage a
 ### Next Steps
 
 - None - task complete
+
+
+## Session 176: Refine gated carrier structural-break logic
+
+**Date**: 2026-05-09
+**Task**: Refine gated carrier structural-break logic
+**Branch**: `main`
+
+### Summary
+
+Distinguished expected versus unexpected gated carriers in workflow-capability-audit, updated tests and mirrored skill/spec docs, and verified the real A/B audit no longer flags the Codex hook carrier as a structural break.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2a54fbf` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

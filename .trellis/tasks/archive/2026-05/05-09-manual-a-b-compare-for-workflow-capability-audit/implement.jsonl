@@ -1,0 +1,3 @@
+{"file":".trellis/spec/docs/index.md","reason":"Repository documentation boundary rules matter because this task reasons about workflow source assets versus target-project outputs."}
+{"file":".trellis/spec/guides/index.md","reason":"Project thinking guides index for cross-layer maintenance context during workflow compatibility analysis."}
+{"file":".trellis/spec/skills/workflow-capability-audit.md","reason":"Behavioral source of truth for compatibility audit semantics, classifications, and structural-break judgment."}
