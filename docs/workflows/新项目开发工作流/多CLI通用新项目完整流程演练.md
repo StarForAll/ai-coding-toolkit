@@ -12,7 +12,7 @@
 
 它只做三件事：
 
-- 说明新项目主链从 `feasibility` 到 `record-session` 应该怎么走
+- 说明新项目主链从 `feasibility` 到 `finish-work`（含 session record）应该怎么走
 - 明确 Claude Code、OpenCode、Codex 的入口差异
 - 给出每个阶段推荐调用的 MCP / skills、典型降级方式和退出门禁
 
@@ -106,7 +106,7 @@ git remote set-url --add --push origin <第二个仓库URL>
 2. 再按《[工作流嵌入执行规范](./工作流嵌入执行规范.md)》先运行 `detect-embed-state.py`，确认状态为 `INITIAL_BASELINE_READY`
 3. 再运行当前 workflow 目录里的 `commands/install-workflow.py`
 4. 安装脚本把这套 workflow 嵌入到目标项目，并按各 CLI 官方原生格式完成内容适配
-5. 安装脚本自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines`，则一并清理；若 `.current-task` 仍指向该 bootstrap task，也同步清理悬空引用；否则跳过
+5. 安装脚本自动导入 `pack.requirements-discovery-foundation`；其中默认包含需求发现规范与项目级 `README` 双语治理规则；若目标项目存在 `00-bootstrap-guidelines`，则一并清理；若 `.current-task` 仍指向该 bootstrap task，也同步清理悬空引用；否则跳过
 6. 安装完成后，先按《[装后隐藏目录与托管边界核对清单](./装后隐藏目录与托管边界核对清单.md)》完成装后核对
 7. 核对通过后，最后再在目标项目里按原生入口直接使用
 
@@ -326,7 +326,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 目标
 
-冻结关键设计决策，补齐项目 spec 基线，并同步适配后续 `finish-work` / `record-session` 的项目化门禁。
+冻结关键设计决策，补齐项目 spec 基线，并同步适配后续 `finish-work`（含 session record）的项目化门禁。
 
 当前阶段拆成两段：
 
@@ -444,7 +444,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 关键设计文档与项目 spec 已对齐
 - 已完成 `DDD.md` / `IDD.md` / `AID.md` / `STITCH-PROMPT.md` 的条件判定；凡判定涉及者，已在当前阶段直接细化
 - 自动化检查矩阵已明确，且已包含明确质量平台门禁（采用 Sonar 的项目必须写真实命令，未采用时必须写替代门禁和原因）
-- `finish-work` / `record-session` 的项目化基线已定
+- `finish-work`（含 session record）的项目化基线已定
 - `design-export.py --validate` 已通过，且 `TAD.md` 不再只是空壳标题
 - `workflow-state.py validate` 已通过，并确认 `developer-facing-prd.md`、项目根 `README.md` 与 `README.en.md` 已到位
 - 已完成 design 退出检查，且用户已明确确认允许进入 plan
@@ -712,7 +712,7 @@ python3 .trellis/scripts/workflow/ownership-proof-validate.py --phase delivery -
 
 ---
 
-## 阶段 10：Record-Session
+## 阶段 10：Finish-Work（Session Record）
 
 ### 目标
 
@@ -728,7 +728,7 @@ python3 .trellis/scripts/workflow/ownership-proof-validate.py --phase delivery -
 
 ### 推荐 MCP / Skills
 
-- `record-session`
+- `trellis-finish-work`
 
 ### 典型降级方式
 
@@ -744,7 +744,7 @@ python3 .trellis/scripts/workflow/ownership-proof-validate.py --phase delivery -
 - 通过 `record-session-helper.py` 完成收尾记录（最终收尾入口，不要直接调用 `add_session.py`）
 - session 已记录成功
 - 元数据闭环完成
-- 然后再执行 archive（顺序永远是 record-session → archive）
+- 然后再执行 archive（顺序永远是 finish-work 内 session record → archive）
 
 ---
 

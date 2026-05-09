@@ -5,6 +5,7 @@ Selected assets:
 * `spec.universal-domains.product-and-requirements.problem-definition`
 * `spec.universal-domains.product-and-requirements.scope-boundary`
 * `spec.universal-domains.product-and-requirements.requirement-clarification`
+* `spec.universal-domains.project-governance.readme-governance`
 * `spec.universal-domains.product-and-requirements.acceptance-criteria`
 
 ## PRD Documentation Specifications

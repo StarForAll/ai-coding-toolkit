@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/skills/workflow-audit.md", "reason": "Verify final audit conclusions and blocked-state wording remain truthful after remediation."}
+{"file": ".trellis/spec/scripts/workflow-installer-upgrade-contracts.md", "reason": "Check that the README governance import and native-agent contract still match the installer/upgrade spec."}
+{"file": ".trellis/spec/scripts/workflow-command-doc-contracts.md", "reason": "Check synchronized wording across workflow docs that describe install and close-out behavior."}
+{"file": ".trellis/spec/docs/index.md", "reason": "Re-check README bilingual governance wording against the new imported spec and propagated workflow docs."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Final cross-layer verification for asset, manifest, workflow doc, and audit-surface synchronization."}

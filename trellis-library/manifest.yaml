@@ -149,6 +149,46 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+- id: spec.universal-domains.project-governance.readme-governance
+  type: spec
+  format: directory
+  path: specs/universal-domains/project-governance/readme-governance
+  title: README Governance
+  summary: Reusable project-level rules for default README language policy and synchronized updates across paired README variants
+  status: active
+  version: 1.0.0
+  domain_axis: universal-domains
+  domain: project-governance
+  concern: readme-governance
+  atomicity: complex
+  tags:
+  - governance
+  - docs
+  - readme
+  - localization
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - initialization
+    - planning
+    - implementation
+    - verification
+    platforms: []
+    technologies: []
+  owners:
+  - core-library
+  dependencies: []
+  optional_dependencies: []
+  provides:
+  - readme-governance
+  change_impact:
+    level: medium
+    review_required: true
+    sync_targets: []
+  metadata:
+    source_of_truth: true
+    generated: false
+    notes: ''
 - id: spec.universal-domains.project-governance.risk-tiering
   type: spec
   format: directory
@@ -13220,6 +13260,7 @@ packs:
     - spec.universal-domains.product-and-requirements.problem-definition
     - spec.universal-domains.product-and-requirements.scope-boundary
     - spec.universal-domains.product-and-requirements.requirement-clarification
+    - spec.universal-domains.project-governance.readme-governance
     - spec.universal-domains.product-and-requirements.acceptance-criteria
     - spec.universal-domains.product-and-requirements.prd-documentation-customer-facing
     - spec.universal-domains.product-and-requirements.prd-documentation-developer-facing

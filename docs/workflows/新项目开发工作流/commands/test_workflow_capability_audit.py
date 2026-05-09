@@ -260,6 +260,14 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             "# evidence requirements\n",
             encoding="utf-8",
         )
+        (root / ".trellis" / "spec" / "universal-domains" / "project-governance" / "readme-governance").mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        (root / ".trellis" / "spec" / "universal-domains" / "project-governance" / "readme-governance" / "overview.md").write_text(
+            "# readme governance\n",
+            encoding="utf-8",
+        )
         (root / ".trellis" / "checklists" / "universal-domains" / "product-and-requirements").mkdir(
             parents=True,
             exist_ok=True,

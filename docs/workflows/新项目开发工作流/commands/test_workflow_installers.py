@@ -728,6 +728,21 @@ class WorkflowInstallerTests(unittest.TestCase):
         lock_text = lock_path.read_text(encoding="utf-8")
         self.assertIn("pack.requirements-discovery-foundation", lock_text)
         self.assertIn("spec.universal-domains.product-and-requirements.problem-definition", lock_text)
+        self.assertIn("spec.universal-domains.project-governance.readme-governance", lock_text)
+        readme_governance = (
+            fixture
+            / ".trellis"
+            / "spec"
+            / "universal-domains"
+            / "project-governance"
+            / "readme-governance"
+            / "normative-rules.md"
+        )
+        self.assertTrue(readme_governance.exists(), "README governance spec should be imported during installation")
+        readme_governance_text = readme_governance.read_text(encoding="utf-8")
+        self.assertIn("README.md", readme_governance_text)
+        self.assertIn("README.en.md", readme_governance_text)
+        self.assertIn("default Simplified Chinese entry", readme_governance_text)
         self.assertFalse((fixture / ".trellis" / "tasks" / "00-bootstrap-guidelines").exists())
         self.assertIn("初始 spec 基线已导入", install.stdout)
         self.assertIn("Trellis bootstrap 任务已删除", install.stdout)

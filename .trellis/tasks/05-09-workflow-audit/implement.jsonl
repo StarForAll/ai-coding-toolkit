@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/skills/workflow-audit.md", "reason": "Audit contract for evidence flow, blocked states, and Codex handoff boundaries."}
+{"file": ".trellis/spec/scripts/workflow-installer-upgrade-contracts.md", "reason": "Installer contract for native-agent non-overlay behavior and initial pack import semantics."}
+{"file": ".trellis/spec/scripts/workflow-command-doc-contracts.md", "reason": "Workflow doc propagation contract for keeping install and close-out wording aligned across docs."}
+{"file": ".trellis/spec/docs/index.md", "reason": "Source repository README bilingual rule used as the model for the imported target-project README governance spec."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Cross-layer checklist for synchronized updates across library assets, manifest, workflow docs, and verification surfaces."}
