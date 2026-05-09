@@ -1701,3 +1701,37 @@ Verified Trellis-native-agent boundary, added default README bilingual governanc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 178: 恢复 Trellis 原生 finish-work close-out
+
+**Date**: 2026-05-09
+**Task**: 恢复 Trellis 原生 finish-work close-out
+**Branch**: `main`
+
+### Summary
+
+移除 record-session-helper 与 metadata-autocommit-guard，恢复 workflow/source/spec/tests 到 Trellis 原生 archive + add_session.py 收尾链路，并完成 /tmp 目标项目嵌入验证。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5cbc917` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
