@@ -1,0 +1,3 @@
+{"file":".trellis/spec/index.md","reason":"Top-level project spec index that must expose the platforms layer and point future sessions to the new rule."}
+{"file":".trellis/spec/platforms/index.md","reason":"Platform-layer entry point for repo-local platform behavior rules."}
+{"file":".trellis/spec/platforms/codex-workflow-behavior.md","reason":"New Codex-specific project rule document defining inline-mode no-manual-subagent behavior."}

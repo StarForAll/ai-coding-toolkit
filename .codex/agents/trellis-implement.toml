@@ -1,3 +1,7 @@
+# This agent definition is a carrier for explicit delegated/non-inline Codex
+# paths. When `.trellis/config.yaml` keeps `codex.dispatch_mode = "inline"`,
+# the main Codex session must not manually spawn this agent ad hoc.
+
 name = "trellis-implement"
 description = "Workspace-write Trellis implementer that follows specs and keeps generated templates in sync."
 sandbox_mode = "workspace-write"

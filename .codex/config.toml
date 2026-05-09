@@ -11,6 +11,12 @@
 # Keep AGENTS.md as the primary project instruction file.
 project_doc_fallback_filenames = ["AGENTS.md"]
 
+# Project rule: when `.trellis/config.yaml` keeps `codex.dispatch_mode =
+# "inline"` (the default in this repo), the main Codex session must remain
+# inline and must NOT manually spawn subagents. The agent definitions under
+# `.codex/agents/` exist for explicit delegated/non-inline paths only; they are
+# not an ad hoc escape hatch for inline sessions.
+
 # Codex hooks (`hooks.json` in this directory) only fire when the user
 # has enabled them in their USER-level config: `[features].hooks = true`
 # in ~/.codex/config.toml (Codex 0.129+; legacy name: `codex_hooks = true`,
@@ -23,6 +29,9 @@ project_doc_fallback_filenames = ["AGENTS.md"]
 # `wait` tool — parent must block on terminal status before acting,
 # instead of cancelling / re-spawning. Incompatible with
 # [agents].max_threads (codex will reject the combination).
+# In this repository, that capability does NOT override the inline-mode rule
+# above. Treat it as infrastructure for explicit non-inline/subagent flows, not
+# as permission for manual subagent spawning from an inline main session.
 # `enabled = true` is required inside the table — the table form does
 # NOT auto-enable the feature without it.
 # - max_concurrent_threads_per_session: bumps default 4 → 6.

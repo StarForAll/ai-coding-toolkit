@@ -1,3 +1,7 @@
+# This agent definition is a carrier for explicit delegated/non-inline Codex
+# paths. When `.trellis/config.yaml` keeps `codex.dispatch_mode = "inline"`,
+# the main Codex session must not manually spawn this agent ad hoc.
+
 name = "trellis-research"
 description = "Trellis researcher for specs, code patterns, and affected files. Writes findings into {TASK_DIR}/research/ — read-only elsewhere."
 sandbox_mode = "workspace-write"

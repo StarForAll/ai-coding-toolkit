@@ -39,6 +39,7 @@ than `trellis-library/` as a source library, but wider than a pure
 | [commands](./commands/index.md) | `.trellis/spec/commands/` | ⚠️ Design | Command source-layer guidance while live edits still happen in tool directories |
 | [skills](./skills/index.md) | `.trellis/spec/skills/` | ✅ Implemented | How to define installable skills in `skills/` |
 | [docs](./docs/index.md) | `.trellis/spec/docs/` | ✅ Implemented | Repository documentation conventions |
+| [platforms](./platforms/index.md) | `.trellis/spec/platforms/` | ✅ Implemented | Platform-specific project behavior and CLI-oriented concerns |
 
 > **Status Legend**:
 > - ✅ **Implemented**: source asset layer is populated, spec reflects live practice
@@ -58,6 +59,7 @@ AI workflow assets under `docs/workflows/**`.
 | Project governance | `.trellis/spec/universal-domains/project-governance/` | Governs change records, risk handling, and library sync rules used by this repo |
 | Product and requirements | `.trellis/spec/universal-domains/product-and-requirements/` | Governs requirement discovery and PRD shaping used by workflow assets in `docs/workflows/**` |
 | CLI command interface | `.trellis/spec/platforms/cli/command-interface/` | Governs CLI-oriented command contracts used by workflow command assets |
+| Platform-specific project behavior | `.trellis/spec/platforms/` | Governs repo-local rules tied to one platform runtime such as Codex execution constraints |
 
 Current fit review:
 
@@ -127,6 +129,7 @@ live workflow-authoring inputs.
 | Define an agent (source + deploy) | `agents/index.md` |
 | Define a command (source + deploy) | `commands/index.md` |
 | Define a skill | `skills/index.md` |
+| Change platform-specific runtime behavior | `platforms/index.md` |
 | Design or update workflow docs in `docs/workflows/**` | `docs/index.md` + relevant `universal-domains/**` concerns |
 | Any repo-maintenance task | `guides/index.md` |
 
