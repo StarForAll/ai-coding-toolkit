@@ -1,0 +1,3 @@
+{"file":".trellis/spec/skills/workflow-audit.md","reason":"Verify preserved follow-up directions still point to the correct workflow-audit behavioral source of truth."}
+{"file":".trellis/spec/skills/workflow-capability-audit.md","reason":"Verify preserved follow-up directions still point to the correct capability-audit behavioral source of truth."}
+{"file":".trellis/spec/docs/index.md","reason":"Verify future doc-propagation work remains anchored to the correct maintainer-doc boundary rules."}

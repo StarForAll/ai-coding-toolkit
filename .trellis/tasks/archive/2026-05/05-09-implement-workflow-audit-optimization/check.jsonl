@@ -1,0 +1,4 @@
+{"file":".trellis/spec/skills/workflow-audit.md","reason":"Verify the final contract still matches the updated skill surfaces and scenario expectations."}
+{"file":".trellis/spec/skills/index.md","reason":"Ensure repo-local skill guidance remains satisfied after the change."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Check that .agents/.claude copies and repeated wording stay synchronized."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check boundary correctness across spec, skill copies, references, and tests."}

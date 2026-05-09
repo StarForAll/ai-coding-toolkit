@@ -1535,3 +1535,36 @@ Added a project-level platforms spec and repo-local Codex guidance requiring inl
 ### Next Steps
 
 - None - task complete
+
+
+## Session 173: Align workflow-audit baseline contract
+
+**Date**: 2026-05-09
+**Task**: Align workflow-audit baseline contract
+**Branch**: `main`
+
+### Summary
+
+Aligned workflow-audit same-version contract, templates, and scenario coverage around baseline-vs-installed evidence modeling and archived the related tasks.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4e3d0ec` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
