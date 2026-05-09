@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 173
+- **Total Sessions**: 174
 - **Last Active**: 2026-05-09
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~1570 | Active |
+| `journal-4.md` | ~1603 | Active |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 174 | 2026-05-09 | 收口 qoder trellis 收尾兼容副本 | `6e854ec` | `main` |
 | 173 | 2026-05-09 | Align workflow-audit baseline contract | `4e3d0ec` | `main` |
 | 172 | 2026-05-09 | Add Codex inline no-subagent project rule | `b04854b` | `main` |
 | 171 | 2026-05-08 | 修正 workflow-capability-audit 与 trellis 会话模型对齐 | `c7d2f37` | `main` |

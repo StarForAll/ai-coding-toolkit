@@ -1568,3 +1568,36 @@ Aligned workflow-audit same-version contract, templates, and scenario coverage a
 ### Next Steps
 
 - None - task complete
+
+
+## Session 174: 收口 qoder trellis 收尾兼容副本
+
+**Date**: 2026-05-09
+**Task**: 收口 qoder trellis 收尾兼容副本
+**Branch**: `main`
+
+### Summary
+
+修复 Qoder 收尾兼容副本漂移，恢复共享 workflow 的跨平台 add_session.py 基线，并把 record-session-helper.py 明确收窄为 Codex 特化 close-out helper。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6e854ec` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
