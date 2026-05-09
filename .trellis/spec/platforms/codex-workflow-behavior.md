@@ -60,29 +60,19 @@ Because of that:
 - doing multi-step analysis in the main Codex session
 - using normal non-agent tools in the current session
 
-### Codex-Specific Close-Out Helper
+### Close-Out Path
 
-In this repository, `record-session-helper.py` is a Codex-specific close-out
-helper, not a cross-platform default.
+In this repository, Codex should follow the same Trellis-native close-out path
+as the other active platforms.
 
 Normative meaning:
 
-- Codex-focused fallback / recovery guidance may reference
-  `.trellis/scripts/workflow/record-session-helper.py`
-- shared non-Codex `finish-work` entrypoints should continue to describe the
-  default `add_session.py` path unless their own platform contract explicitly
-  adopts the helper
-- do not rewrite Claude / OpenCode / Qoder / Kiro `finish-work` entrypoints to
-  use the Codex-specific helper merely for cross-platform wording symmetry
-
-Why this matters:
-
-- `record-session-helper.py` was added here to support Codex-specific recovery
-  and operator ergonomics
-- other platform surfaces in this repository are not required to treat that
-  helper as their default session-recording path
-- cross-platform wording should reflect actual platform ownership rather than
-  collapsing everything into the Codex path
+- `trellis-finish-work` should describe the default `task.py archive` +
+  `add_session.py` behavior
+- do not add a Codex-only helper-based close-out path unless the project
+  explicitly changes the platform contract
+- shared `finish-work` wording should stay aligned with the Trellis-native
+  behavior that exists in the active baseline
 
 ### Codex Git Write Escalation
 

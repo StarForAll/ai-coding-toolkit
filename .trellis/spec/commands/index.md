@@ -162,7 +162,7 @@ Source layer `commands/` is empty (only README.md files). Tool command directori
 |---------|--------|----------|------------|---------|
 | finish-work | ✓ | ✓ | none | Identical content |
 | continue | ✓ | ✓ | platform-param | `--platform claude` vs `--platform opencode` |
-| record-session | ✓ | ✓ | **retired** | Replaced by `finish-work` (which includes session recording via `record-session-helper.py`). Deployed files have been removed. |
+| record-session | ✓ | ✓ | **retired** | Replaced by Trellis native `finish-work` / `add_session.py`. Deployed files have been removed. |
 | create-command | — | ✓ | **retired** | Low-usage, unshipped. Deployed file removed. |
 | migrate-specs | — | — | **retired-cleaned** | Previously audited as an OpenCode residual; no live deployed file remains in the current repo state. |
 
@@ -182,7 +182,7 @@ Source layer `commands/` is empty (only README.md files). Tool command directori
 ### Notes for Source Layer Task
 
 When `03-19-implement-commands-source` populates the source layer:
-- `record-session` has been retired — its functionality is absorbed by `finish-work` (which calls `record-session-helper.py` internally). Deployed command files removed.
+- `record-session` has been retired — its functionality is absorbed by Trellis native `finish-work` / `add_session.py`. Deployed command files removed.
 - `create-command` has been retired — low-usage, unshipped. Deployed file removed.
 - `workflow-audit` and `workflow-capability-audit` are not ordinary command assets here; treat them as repo-local maintainer skill surfaces carried by `.agents/skills/` and `.claude/skills/`
 

@@ -264,27 +264,27 @@ docs/workflows/新项目开发工作流/learn/
 - 不为了补齐新规则或整理台账而批量回写旧任务、旧会话记录或已归档目录
 - staged 区不得混入非目标变更；若存在 staged 污染，必须先中断处理
 
-收尾顺序：**先通过 close-out helper 记录 session，再 archive**。session 记录需要当前任务上下文；archive 会清除 `.current-task`，所以必须在记录完成后再执行。
+收尾顺序：**先 archive，再通过 `add_session.py` 记录 session**。这与 Trellis 原生 `finish-work` 一致。
 
 ```bash
-python3 <WORKFLOW_DIR>/commands/shell/record-session-helper.py \
+python3 ./.trellis/scripts/task.py archive <current-task>
+
+python3 ./.trellis/scripts/add_session.py \
   --title "Session Title" \
   --commit "hash1,hash2" \
   --summary "Brief summary of what was done"
 
-python3 ./.trellis/scripts/task.py archive <current-task>
-
 # 注意：archive 仍直接复用目标项目 Trellis 基线里的 task.py；若目标项目不是当前最新 Trellis 基线，
 # 可能仍缺少 archive metadata auto-commit 的 pathspec 修复，需先升级 Trellis 再继续收尾。
 
-git status --short .trellis/tasks .trellis/.current-task
+git status --short .trellis/workspace .trellis/tasks
 ```
 
 判定规则：
 
-- helper 返回 0：会话记录与元数据闭环完成，可以继续 archive
-- helper 返回非 0：close-out 不算完成，先处理 metadata closure 失败原因，不要 archive
-- archive 后 `git status --short .trellis/tasks .trellis/.current-task` 输出应为空
+- `archive` 与 `add_session.py` 都返回 0：会话记录与元数据闭环完成
+- 任一步返回非 0：close-out 不算完成，先处理 Trellis 基线写入失败原因
+- `git status --short .trellis/workspace .trellis/tasks` 输出应为空
 
 ---
 
@@ -335,11 +335,11 @@ $TASK_DIR/
 
 | 验收结果 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
-| 全部通过，准备收尾 | `/trellis:finish-work` | 进入会话收尾，或显式触发 `trellis-finish-work` skill | **默认推荐**。仅在用户明确确认后才允许进入会话收尾；先通过 helper 完成记录与元数据闭环，再 archive |
+| 全部通过，准备收尾 | `/trellis:finish-work` | 进入会话收尾，或显式触发 `trellis-finish-work` skill | **默认推荐**。仅在用户明确确认后才允许进入会话收尾；按 Trellis 原生顺序先 archive，再通过 `add_session.py` 完成记录与元数据闭环 |
 | 有 P0/P1 缺陷 | `/trellis:break-loop` | 进入深度排障，或显式触发 `break-loop` skill | 深度分析 Bug 根因 |
 | 有 P2/P3 缺陷 | `/trellis:continue` | 回到实施阶段，或显式触发 `trellis-continue` skill | 回到实施阶段修复 |
 | 验收中出现冻结后新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先完成变更评估与确认；不要直接混入当前交付 |
 | 需要更新规范文档 | `/trellis:update-spec` | 记录并更新规范，或显式触发 `update-spec` skill | 沉淀新发现的模式到 spec |
 | 需要请求代码审查 | `requesting-code-review` 能力 | `requesting-code-review` skill | 提交前外部审查 |
-| 需要归档任务 | `python3 ./.trellis/scripts/task.py archive <name>` | 同左 | 仅在 record-session 完成后使用；archive 会清除 `.current-task` |
+| 需要归档任务 | `python3 ./.trellis/scripts/task.py archive <name>` | 同左 | 这是 Trellis 原生 close-out 的第一步；archive 会清除 `.current-task` |
 | 不确定下一步 | `/trellis:delivery` | 描述当前收尾意图，或显式触发 `delivery` skill | 先停留在 delivery 阶段澄清，而不是自动进入会话收尾 |

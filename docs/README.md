@@ -17,4 +17,4 @@
 
 ## 其他可复用运行时修复指南
 
-- `docs/Trellis自动提交失败恢复与提权修复指南.md`：当 Trellis 的 archive / finish-work 自动提交因只读环境失败时，如何修改脚本链路与命令入口，让项目支持恢复命令与提权重试
+- `docs/Trellis元数据自动提交失败恢复指南.md`：当 Trellis 的 archive / finish-work 自动提交因只读环境失败时，如何修改脚本链路与命令入口，让项目支持恢复命令与提权重试

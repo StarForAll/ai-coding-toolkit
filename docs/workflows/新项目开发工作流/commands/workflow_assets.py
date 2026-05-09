@@ -50,8 +50,6 @@ HELPER_SCRIPTS = [
     "check-quality.py",
     "delivery-control-validate.py",
     "ownership-proof-validate.py",
-    "metadata-autocommit-guard.py",
-    "record-session-helper.py",
 ]
 LATEST_TRELLIS_VERSION_ENV = "TRELLIS_LATEST_VERSION"
 CURRENT_TRELLIS_VERSION_ENV = "TRELLIS_CURRENT_VERSION"

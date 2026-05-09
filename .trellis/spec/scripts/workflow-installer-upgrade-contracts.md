@@ -226,7 +226,7 @@ Workflow embed / analysis / repair scripts must distinguish three asset classes:
    - `trellis-finish-work`
    - Contract: keep Trellis baseline content, then inject workflow patch content
 
-   Legacy `start` / `record-session` are old-target compatibility inputs only. `record-session` has retired from the current fresh-baseline patch list and close-out is folded into `finish-work` via `record-session-helper.py`. Installed target projects with residual legacy patch markers should be handled by `upgrade-compat`.
+   Legacy `start` / `record-session` are old-target compatibility inputs only. `record-session` has retired from the current fresh-baseline patch list; close-out should follow Trellis native `finish-work` / `add_session.py`. Installed target projects with residual legacy patch markers should be handled by `upgrade-compat`.
 
 2. **Overlay baseline commands**
    - same-name commands whose deployed file is fully distributed by the workflow while semantically replacing the live baseline copy
@@ -311,7 +311,7 @@ Compatibility code should therefore:
    - current examples may include:
      - `delivery-control-validate.py`
      - `ownership-proof-validate.py`
-     - `record-session-helper.py`
+     - `workflow-state.py`
    - Contract:
      - source command docs may reference `<WORKFLOW_DIR>/commands/shell/...` in source form
      - deployment must rewrite those references to `.trellis/scripts/workflow/...`
@@ -471,7 +471,7 @@ When a workflow introduces or changes a helper script that is invoked as a manda
 Examples of user-visible gate contracts:
 
 - a delivery-phase command that blocks formal delivery until a helper returns success
-- a record-session close-out flow that must run helper pre/post checks before archive（`record-session` 命令已退役，此 close-out flow 现由 `finish-work` 内部通过 `record-session-helper.py` 完成）
+- a close-out flow whose final session record behavior must stay aligned with Trellis native `finish-work` / `add_session.py`（`record-session` 命令已退役）
 
 Do not treat phase-gate helpers as "nice to have" copied scripts once their command docs make them required.
 

@@ -227,20 +227,20 @@ class TrellisLibraryCliTests(unittest.TestCase):
         self.assertIn("invalid-checklist-structure", result.stdout)
         self.assertIn("release-readiness-checklist.md", result.stdout)
 
-    def test_repo_local_codex_finish_work_skill_uses_record_session_helper_before_archive(self) -> None:
+    def test_repo_local_finish_work_skill_uses_add_session_after_archive(self) -> None:
         skill_path = REPO_ROOT / ".agents" / "skills" / "trellis-finish-work" / "SKILL.md"
         skill_text = skill_path.read_text(encoding="utf-8")
 
-        helper_pos = skill_text.find("record-session-helper.py")
         archive_pos = skill_text.find("task.py archive")
-        self.assertGreaterEqual(helper_pos, 0, "trellis-finish-work should reference record-session-helper.py")
+        add_session_pos = skill_text.find("python3 ./.trellis/scripts/add_session.py")
         self.assertGreaterEqual(archive_pos, 0, "trellis-finish-work should still archive tasks")
+        self.assertGreaterEqual(add_session_pos, 0, "trellis-finish-work should reference add_session.py")
         self.assertLess(
-            helper_pos,
             archive_pos,
-            "Codex repo-local finish-work must run record-session-helper.py before archive",
+            add_session_pos,
+            "repo-local finish-work must archive before add_session",
         )
-        self.assertNotIn("python3 ./.trellis/scripts/add_session.py", skill_text)
+        self.assertNotIn("record-session-helper.py", skill_text)
 
     def test_assemble_command_runs_dry_run(self) -> None:
         with tempfile.TemporaryDirectory() as target_dir:

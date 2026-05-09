@@ -119,7 +119,7 @@ OpenCode 原生支持项目级命令目录。对这套 workflow，推荐把命�
 
 所以看到自定义命令树只列到 `delivery`，不能推导出“这个项目没有 `continue` / `finish-work`”。
 
-还要补一条 close-out 边界：当前 fresh baseline 的会话记录由 `finish-work` 链路承载；legacy `record-session` 若存在才进入兼容补丁 / 清理检查。`archive` 仍直接调用目标项目 Trellis 基线里的 `python3 ./.trellis/scripts/task.py archive`。因此，目标项目最好先升级到当前最新 Trellis；否则即使 workflow 已安装成功，收尾链路仍可能继承旧基线中的 archive metadata auto-commit 问题。
+还要补一条 close-out 边界：当前 fresh baseline 的会话记录由 Trellis 原生 `finish-work` 链路承载，执行顺序是 `archive` 后再 `add_session.py`；legacy `record-session` 若存在才进入兼容补丁 / 清理检查。因此，目标项目最好先升级到当前最新 Trellis；否则即使 workflow 已安装成功，收尾链路仍可能继承旧基线中的 archive metadata auto-commit 问题。
 
 在 Trellis 约定中，这一层负责承载“用户显式调用的阶段命令”。
 

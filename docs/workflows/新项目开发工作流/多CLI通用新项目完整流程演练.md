@@ -741,10 +741,10 @@ python3 .trellis/scripts/workflow/ownership-proof-validate.py --phase delivery -
 
 ### 退出门禁
 
-- 通过 `record-session-helper.py` 完成收尾记录（最终收尾入口，不要直接调用 `add_session.py`）
+- 通过 Trellis 原生 `add_session.py` 完成收尾记录
 - session 已记录成功
 - 元数据闭环完成
-- 然后再执行 archive（顺序永远是 finish-work 内 session record → archive）
+- `archive` 先执行，然后补 session record
 
 ---
 

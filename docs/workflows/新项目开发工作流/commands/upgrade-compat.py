@@ -110,8 +110,6 @@ _FINISH_WORK_MARKER = "<!-- finish-work-projectization-patch -->"
 _CODEX_START_SKILL_MARKER = "## Workflow Phase Router Patch `[AI]`"
 _FINISH_WORK_START_HEADING = "### 1. Code Quality"
 _FINISH_WORK_END_HEADING = "### 1.5. Test Coverage"
-_RECORD_SESSION_MARKER = "## Record-Session Metadata Closure `[AI]`"
-_RECORD_SESSION_INJECTION_MARKER = "### Step 2: One-Click Add Session"
 _PARALLEL_DISABLED_MARKER = "<!-- workflow-parallel-disabled -->"
 _WORKFLOW_PATCH_MARKER = "<!-- workflow-projectization-patch -->"
 _WORKFLOW_START_HEADING = "## Development Process"
@@ -173,12 +171,6 @@ def has_phase_router(start_md: Path) -> bool:
     if not start_md.exists():
         return False
     return _PHASE_ROUTER_MARKER in start_md.read_text(encoding="utf-8")
-
-
-def has_record_session_patch(record_session_md: Path) -> bool:
-    if not record_session_md.exists():
-        return False
-    return _RECORD_SESSION_MARKER in record_session_md.read_text(encoding="utf-8")
 
 
 def has_finish_work_patch(finish_work_path: Path) -> bool:
@@ -417,8 +409,6 @@ def detect_conflicts_claude(src: Path, dst_cmds: Path, *, profile: str = DEFAULT
     conflicts = 0
     entry_command = _find_first_existing_command(dst_cmds, tuple(command_phase_router_candidates()))
     finish_work = dst_cmds / "finish-work.md"
-    record_session = dst_cmds / "record-session.md"
-    record_session_backup = dst_cmds / ".backup-original" / "record-session.md"
     parallel = dst_cmds / "parallel.md"
 
     if entry_command is None:
@@ -459,16 +449,6 @@ def detect_conflicts_claude(src: Path, dst_cmds: Path, *, profile: str = DEFAULT
     else:
         ok("[Claude] finish-work.md: 项目化补丁正常")
 
-    if not record_session.exists():
-        if record_session_backup.exists():
-            err("[Claude] record-session.md: 文件缺失")
-            conflicts += 1
-    elif not has_record_session_patch(record_session):
-        err("[Claude] record-session.md: 元数据闭环说明缺失")
-        conflicts += 1
-    else:
-        ok("[Claude] record-session.md: 元数据闭环说明正常")
-
     parallel_backup = dst_cmds / ".backup-original" / "parallel.md"
     if parallel.exists():
         err("[Claude] parallel.md: 应已从嵌入面移除")
@@ -484,8 +464,6 @@ def detect_conflicts_opencode(src: Path, dst_cmds: Path, *, profile: str = DEFAU
     conflicts = 0
     entry_command = _find_first_existing_command(dst_cmds, tuple(command_phase_router_candidates()))
     finish_work = dst_cmds / "finish-work.md"
-    record_session = dst_cmds / "record-session.md"
-    record_session_backup = dst_cmds / ".backup-original" / "record-session.md"
     parallel = dst_cmds / "parallel.md"
 
     if entry_command is None:
@@ -525,16 +503,6 @@ def detect_conflicts_opencode(src: Path, dst_cmds: Path, *, profile: str = DEFAU
         conflicts += 1
     else:
         ok("[OpenCode] finish-work.md: 项目化补丁正常")
-
-    if not record_session.exists():
-        if record_session_backup.exists():
-            err("[OpenCode] record-session.md: 文件缺失")
-            conflicts += 1
-    elif not has_record_session_patch(record_session):
-        err("[OpenCode] record-session.md: 元数据闭环说明缺失")
-        conflicts += 1
-    else:
-        ok("[OpenCode] record-session.md: 元数据闭环说明正常")
 
     parallel_backup = dst_cmds / ".backup-original" / "parallel.md"
     if parallel.exists():
@@ -1076,32 +1044,6 @@ def inject_finish_work_patch(src: Path, finish_work_path: Path, target_label: st
     return True
 
 
-def inject_record_session_patch(src: Path, record_session_md: Path, *, profile: str = DEFAULT_PROFILE) -> bool:
-    patch = src / "record-session-patch-metadata-closure.md"
-    if not patch.exists():
-        err("record-session-patch-metadata-closure.md 缺失，无法恢复 record-session 注入")
-        return False
-    if not record_session_md.exists():
-        err("record-session.md 不存在，无法恢复元数据闭环说明")
-        return False
-
-    content = record_session_md.read_text(encoding="utf-8")
-    if _RECORD_SESSION_MARKER in content:
-        ok("record-session 元数据闭环说明已存在")
-        return True
-    if _RECORD_SESSION_INJECTION_MARKER not in content:
-        warn("record-session.md 中未找到 Step 2 注入点，无法自动注入元数据闭环说明")
-        return False
-
-    before, after = content.split(_RECORD_SESSION_INJECTION_MARKER, 1)
-    record_session_md.write_text(
-        before + prepare_command_content(patch, profile=profile) + "\n" + _RECORD_SESSION_INJECTION_MARKER + after,
-        encoding="utf-8",
-    )
-    ok("record-session 元数据闭环说明已注入")
-    return True
-
-
 def inject_workflow_patch(src: Path, root: Path, *, profile: str = DEFAULT_PROFILE) -> bool:
     patch = src / "workflow-patch-projectization.md"
     workflow_md = root / ".trellis" / "workflow.md"
@@ -1329,13 +1271,8 @@ def main() -> int:
                 [current_entry_name, *_matching_configured_command_names(patched_baseline_commands, command_phase_router_candidates())],
                 command_phase_router_candidates(),
             )
-            record_session_candidates = _ordered_command_candidates(
-                _matching_configured_command_names(patched_baseline_commands, command_record_session_candidates()),
-                command_record_session_candidates(),
-            )
             start = _find_first_existing_command(dst_cmds, tuple(entry_command_candidates)) or dst_cmds / entry_command_candidates[0]
             finish_work = dst_cmds / "finish-work.md"
-            record_session = _find_first_existing_command(dst_cmds, tuple(record_session_candidates)) if record_session_candidates else None
             parallel = dst_cmds / "parallel.md"
             backup_deployed_state(dst_cmds)
             deploy_commands(src, dst_cmds, profile=profile)
@@ -1344,17 +1281,12 @@ def main() -> int:
                     return 1
                 if not restore_command_from_original_backup(dst_cmds, "finish-work"):
                     return 1
-                if record_session is not None and not restore_command_from_original_backup(dst_cmds, record_session.name[:-3]):
-                    return 1
                 restore_optional_command_from_original_backup(dst_cmds, "parallel")
             if not has_phase_router(start) and not inject_phase_router(src, start):
                 err("[Claude] Phase Router 恢复失败")
                 return 1
             if not has_finish_work_patch(finish_work) and not inject_finish_work_patch(src, finish_work, "finish-work.md"):
                 err("[Claude] finish-work 项目化补丁恢复失败")
-                return 1
-            if record_session is not None and not has_record_session_patch(record_session) and not inject_record_session_patch(src, record_session, profile=profile):
-                err("[Claude] record-session 元数据闭环恢复失败")
                 return 1
             if parallel.exists():
                 parallel.unlink()
@@ -1371,13 +1303,8 @@ def main() -> int:
                 [current_entry_name, *_matching_configured_command_names(patched_baseline_commands, command_phase_router_candidates())],
                 command_phase_router_candidates(),
             )
-            record_session_candidates = _ordered_command_candidates(
-                _matching_configured_command_names(patched_baseline_commands, command_record_session_candidates()),
-                command_record_session_candidates(),
-            )
             start = _find_first_existing_command(dst_cmds, tuple(entry_command_candidates)) or dst_cmds / entry_command_candidates[0]
             finish_work = dst_cmds / "finish-work.md"
-            record_session = _find_first_existing_command(dst_cmds, tuple(record_session_candidates)) if record_session_candidates else None
             parallel = dst_cmds / "parallel.md"
             backup_deployed_state(dst_cmds)
             deploy_commands(src, dst_cmds, profile=profile)
@@ -1386,17 +1313,12 @@ def main() -> int:
                     return 1
                 if not restore_command_from_original_backup(dst_cmds, "finish-work"):
                     return 1
-                if record_session is not None and not restore_command_from_original_backup(dst_cmds, record_session.name[:-3]):
-                    return 1
                 restore_optional_command_from_original_backup(dst_cmds, "parallel")
             if not has_phase_router(start) and not inject_phase_router(src, start):
                 err("[OpenCode] Phase Router 恢复失败")
                 return 1
             if not has_finish_work_patch(finish_work) and not inject_finish_work_patch(src, finish_work, "finish-work.md"):
                 err("[OpenCode] finish-work 项目化补丁恢复失败")
-                return 1
-            if record_session is not None and not has_record_session_patch(record_session) and not inject_record_session_patch(src, record_session, profile=profile):
-                err("[OpenCode] record-session 元数据闭环恢复失败")
                 return 1
             if parallel.exists():
                 parallel.unlink()

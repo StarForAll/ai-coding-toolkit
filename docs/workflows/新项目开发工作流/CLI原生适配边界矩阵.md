@@ -221,7 +221,7 @@ ls .codex/skills/.backup-original/parallel/SKILL.md 2>/dev/null
 | 资产/行为 | 实际位置 | 分类 | 说明 |
 |-----------|----------|------|------|
 | legacy `record-session` 元数据闭环增强 | legacy `record-session` 基线入口 + workflow patch | legacy 兼容/条件增强 | 当前 Trellis 0.5 fresh baseline 不要求 `record-session`；若旧目标项目仍有该入口，workflow 可注入兼容补丁 |
-| `finish-work` / legacy `record-session` 自动提交失败恢复 | `.trellis/scripts/workflow/record-session-helper.py` + `metadata-autocommit-guard.py` | 安装器管理 | helper 由安装器分发，供当前 close-out patch 或 legacy `record-session` 兼容链路调用；内置只读失败检测、pending 状态管理和 `--resume` 恢复；失败时输出 `TRELLIS_AUTO_ESCALATE_COMMAND=...`，支持提权重试 |
+| `finish-work` / legacy `record-session` 收尾行为 | Trellis 原生 `task.py archive` + `add_session.py` | Trellis 基线管理 | workflow 不再分发 helper；close-out 直接复用 Trellis 原生行为，legacy `record-session` 仅兼容旧目标项目输入 |
 | `archive` 任务归档行为 | `.trellis/scripts/task.py` / `.trellis/scripts/common/task_store.py` | 运行前置/仅校验 | 仍由目标项目 Trellis 基线提供，当前 workflow **不分发** 这段基线代码 |
 | archive metadata auto-commit pathspec 修复 | Trellis 基线 close-out 实现 | 运行前置/仅校验 | 若目标项目不是当前最新 Trellis 基线，收尾链路仍可能继承旧基线中的 archive bug；建议先升级 Trellis，再使用当前 workflow 的 `finish-work` close-out 链路；legacy 目标项目才检查 `record-session -> archive` |
 | 源码水印与归属证明校验脚本 | `.trellis/scripts/workflow/ownership-proof-validate.py` | 安装器管理 | 校验 assessment / design / plan / delivery 各阶段的源码水印与归属证明产物 |
@@ -229,7 +229,7 @@ ls .codex/skills/.backup-original/parallel/SKILL.md 2>/dev/null
 
 补充约束：
 
-- legacy `record-session` 若存在并被当前 workflow 注入元数据闭环补丁，最终的 `archive` 仍直接调用目标项目 Trellis 基线里的 `python3 ./.trellis/scripts/task.py archive`
+- legacy `record-session` 若存在并被当前 workflow 注入兼容补丁，最终仍应回到目标项目 Trellis 基线的 `archive` / `add_session.py` 行为
 - 因此，这类 close-out 行为是否稳定，取决于目标项目当前 Trellis 基线是否已包含相应修复，而不是取决于 workflow 是否额外分发了 helper
 - 若要验证该前提，优先检查目标项目 `.trellis/.version` 是否已升级到当前最新 Trellis 版本
 

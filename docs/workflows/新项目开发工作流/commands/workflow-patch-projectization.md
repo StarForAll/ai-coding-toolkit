@@ -26,9 +26,9 @@
        Format: feat/fix/docs/refactor/test/chore
 
 6. Final close-out
-   --> python3 <WORKFLOW_DIR>/commands/shell/record-session-helper.py --title "Title" --commit "hash"
    --> python3 ./.trellis/scripts/task.py archive <task-name>
-   --> record-session runs first, then archive
+   --> python3 ./.trellis/scripts/add_session.py --title "Title" --commit "hash"
+   --> archive runs first, then add_session
 ```
 
 `python3 ./.trellis/scripts/task.py finish` remains available when you intentionally need to clear `.trellis/.current-task` without archiving a completed task. Do not use it as a substitute for final close-out.
@@ -70,25 +70,25 @@ For workflows that split work into a parent coordination task plus child executi
 
 ### One-Click Session Recording
 
-After the human has tested and committed the code, run the workflow helper first and archive the current task second:
+After the human has tested and committed the code, archive the current task first and record the session second:
 
 ```bash
-python3 <WORKFLOW_DIR>/commands/shell/record-session-helper.py \
+python3 ./.trellis/scripts/task.py archive <task-name>
+
+python3 ./.trellis/scripts/add_session.py \
   --title "Session Title" \
   --commit "abc1234" \
   --summary "Brief summary"
 
-python3 ./.trellis/scripts/task.py archive <task-name>
-git status --short .trellis/tasks .trellis/.current-task
+git status --short .trellis/workspace .trellis/tasks
 ```
 
 Expected metadata status output: empty.
 
 Notes:
 
-- `record-session` is the real close-out entry. It needs the current task context before archive clears `.trellis/.current-task`.
-- If `record-session-helper.py` fails, do not archive yet.
-- `archive` 预期会清除 `.trellis/.current-task`；真正需要关注的阻塞条件是 `.trellis/tasks` 元数据仍然 dirty。
+- Close-out follows Trellis native `finish-work` behavior: archive first, then `add_session.py`.
+- `archive` 预期会清除 `.trellis/.current-task`；真正需要关注的阻塞条件是 `.trellis/workspace` / `.trellis/tasks` 元数据仍然 dirty。
 - Detailed close-out gates still belong to the installed `/trellis:finish-work` / `trellis-finish-work` and `/trellis:delivery` entries; legacy `/trellis:record-session` is old-target compatibility only. This workflow guide only summarizes the default path.
 
 ### Pre-end Checklist
@@ -105,6 +105,6 @@ Close-out runs in two phases:
 **Phase B — post-commit**
 
 1. Human commit already exists
-2. `record-session-helper.py` completed successfully for the current task
-3. Current completed task archived; if it is a child task, the parent coordinator records are also synchronized to the new completed frontier
-4. `.trellis/tasks` metadata clean
+2. Current completed task archived; if it is a child task, the parent coordinator records are also synchronized to the new completed frontier
+3. `add_session.py` completed successfully for the current session record
+4. `.trellis/workspace` and `.trellis/tasks` metadata clean

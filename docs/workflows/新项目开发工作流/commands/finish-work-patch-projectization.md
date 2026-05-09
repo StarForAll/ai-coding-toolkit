@@ -30,44 +30,17 @@
 必须有明确质量平台门禁；采用 Sonar 的项目必须写真实命令，未采用时必须写替代门禁和原因。
 ```
 
-### 2. record-session 自动提交失败恢复
+### 2. close-out 基线路径
 
-`record-session-helper.py` 已内置只读失败检测与恢复机制。该增强对所有平台生效（三个平台共用同一套 `record-session-helper.py`），但 Codex（沙箱环境）最容易触发。
+当前 workflow 的 close-out 应直接复用 Trellis 原生 `finish-work` 行为，不再引入 helper-based session-record 流程。
 
-**架构：`--no-commit` + commit-only 分离**
+进入 `/trellis:finish-work` 前，至少确认：
 
-`record-session-helper.py` 调用 `add_session.py` 时传递 `--no-commit`，阻止其自动提交和生成 pending。元数据提交由 `metadata-autocommit-guard.py --commit-message` 单独执行（commit-only 模式）。这保证了只读失败时只产生一份 pending 和一条恢复命令。
-
-**恢复流程**：
-
-1. `add_session.py --no-commit` 写入 journal/index（不触发 git commit）
-2. `metadata-autocommit-guard.py --commit-message` 执行 commit-only
-3. 若 commit-only 因只读/权限失败，在 `.trellis/.pending-record-session/` 下生成 pending 文件
-4. 失败时输出 `TRELLIS_AUTO_ESCALATE_COMMAND=...`，支持提权重试
-5. `--resume` 为 commit-only 恢复：仅重试提交磁盘上已写入的元数据，不重跑 `add_session.py`
-6. 恢复成功后自动清理 pending 文件及 body 旁路文件
-
-**使用 `--resume`**：
-
-```bash
-python3 ./.trellis/scripts/workflow/record-session-helper.py --resume .trellis/.pending-record-session/<pending-file>
-```
-
-**限制**：
-- `--resume` 为 commit-only，不会重新写入 journal / index.md（因为 `add_session.py --no-commit` 在首次尝试时已写入磁盘数据）
-- 若首次尝试中 `add_session.py` 尚未写入任何数据（如 pre-check 阶段就失败了），恢复后 journal 中不会出现该 session 记录
-- stdin 内容会保存在 pending 目录的 `.body.md` 旁路文件中，但 commit-only 恢复不会重新传递给 `add_session.py`
-- 只有 commit-only 步骤失败才会生成 pending；pre-check 或 add_session 失败不生成（前者是前置条件不满足，后者是数据写入失败，两者都不适合通过提权重试恢复）
-- post-check 失败也不生成 pending：commit 成功后 post-check 失败说明有其他未预期的脏变更，不是只读环境问题
-
-**`add_session.py` 边界说明**：
-
-- `add_session.py` 自身也包含 readonly 检测和 pending 生成逻辑（`_ensure_record_session_resume_state` 等），但通过 `--no-commit` 调用时这些路径不会触发
-- 如果不通过 helper 直接调用 `add_session.py`（不带 `--no-commit`），会走其自带的自动提交和恢复路径，产生独立的 pending 文件（不含 stdin body sidecar）
-- 推荐始终通过 `record-session-helper.py` 调用，避免两套恢复路径并存
+- [ ] 目标项目的 close-out 路径仍是 Trellis 原生 `task.py archive` + `add_session.py`
+- [ ] 不再要求 `record-session-helper.py`、`metadata-autocommit-guard.py` 或额外恢复命令
+- [ ] 若目标项目的 `.trellis/` 元数据自动提交失败，按目标项目当前 Trellis 基线能力处理，不在 workflow 层额外发明 helper 分支
 
 **archive 链基线依赖说明**：
 
-- `task.py archive` 的自动提交仍由 Trellis 基线负责，workflow 不分发 `task.py` / `task_store.py`
-- 若 archive 自动提交失败，建议升级目标项目的 Trellis 基线版本
-- `record-session` 链的恢复机制仅覆盖 `record-session-helper.py` 管理的 `.trellis/workspace` + `.trellis/tasks` 提交
+- `task.py archive` 与 `add_session.py` 的自动提交均由 Trellis 基线负责，workflow 不分发 `task.py` / `task_store.py`
+- 若 archive 或 `add_session.py` 的自动提交失败，建议先升级目标项目的 Trellis 基线版本

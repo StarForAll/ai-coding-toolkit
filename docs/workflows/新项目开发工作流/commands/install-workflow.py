@@ -92,8 +92,6 @@ _PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 _FINISH_WORK_MARKER = "<!-- finish-work-projectization-patch -->"
 _FINISH_WORK_START_HEADING = "### 1. Code Quality"
 _FINISH_WORK_END_HEADING = "### 1.5. Test Coverage"
-_RECORD_SESSION_MARKER = "## Record-Session Metadata Closure `[AI]`"
-_RECORD_SESSION_INJECTION_MARKER = "### Step 2: One-Click Add Session"
 _CODEX_START_SKILL_MARKER = "## Workflow Phase Router Patch `[AI]`"
 _WORKFLOW_PATCH_MARKER = "<!-- workflow-projectization-patch -->"
 _WORKFLOW_START_HEADING = "## Development Process"
@@ -295,7 +293,6 @@ def collect_workflow_embed_traces(src: Path, root: Path, cli_types: list[str]) -
             marker_checks = [
                 ("start-patch", commands_dir / "start.md", _PHASE_ROUTER_MARKER),
                 ("finish-work-patch", commands_dir / "finish-work.md", _FINISH_WORK_MARKER),
-                ("record-session-patch", commands_dir / "record-session.md", _RECORD_SESSION_MARKER),
                 ("parallel-disabled", commands_dir / "parallel.md", _PARALLEL_DISABLED_MARKER),
             ]
             for label, path, marker in marker_checks:
@@ -954,7 +951,6 @@ def deploy_claude(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAUL
         backup.mkdir(parents=True, exist_ok=True)
         entry_command = _find_first_existing_command(dst_cmds, _ENTRY_COMMAND_CANDIDATES)
         finish_work = dst_cmds / "finish-work.md"
-        record_session = dst_cmds / "record-session.md"
         parallel = dst_cmds / "parallel.md"
         baseline_overlaps = [dst_cmds / f"{name}.md" for name in OVERLAY_BASELINE_COMMANDS]
         if entry_command is not None and not (backup / entry_command.name).exists():
@@ -963,9 +959,6 @@ def deploy_claude(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAUL
         if finish_work.exists() and not (backup / "finish-work.md").exists():
             shutil.copy2(finish_work, backup / "finish-work.md")
             ok(f"[Claude] finish-work.md → 备份")
-        if record_session.exists() and not (backup / "record-session.md").exists():
-            shutil.copy2(record_session, backup / "record-session.md")
-            ok(f"[Claude] record-session.md → 备份")
         if parallel.exists() and not (backup / "parallel.md").exists():
             shutil.copy2(parallel, backup / "parallel.md")
             ok("[Claude] parallel.md → 备份")
@@ -1028,33 +1021,6 @@ def deploy_claude(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAUL
     ):
         result["patches"] += 1
 
-    # 注入元数据闭环
-    record_session = dst_cmds / "record-session.md"
-    if record_session.exists():
-        content = record_session.read_text(encoding="utf-8")
-        if _RECORD_SESSION_MARKER not in content:
-            patch = src / "record-session-patch-metadata-closure.md"
-            if patch.exists() and _RECORD_SESSION_INJECTION_MARKER in content:
-                if not dry_run:
-                    before, after = content.split(_RECORD_SESSION_INJECTION_MARKER, 1)
-                    record_session.write_text(
-                        before + prepare_command_content(patch, profile=profile) + "\n" + _RECORD_SESSION_INJECTION_MARKER + after,
-                        encoding="utf-8",
-                    )
-                if dry_run:
-                    info("[Claude] 将注入 record-session 元数据闭环")
-                else:
-                    ok("[Claude] record-session 元数据闭环已注入")
-                result["patches"] += 1
-            elif not patch.exists():
-                warn("[Claude] record-session-patch-metadata-closure.md 不存在")
-            else:
-                warn("[Claude] record-session.md 中未找到注入点")
-        else:
-            ok("[Claude] record-session 元数据闭环已存在")
-    else:
-        warn("[Claude] record-session.md 不存在，跳过元数据闭环注入")
-
     if disable_parallel_command(src, dst_cmds / "parallel.md", dry_run=dry_run, cli_label="Claude"):
         result["patches"] += 1
 
@@ -1078,7 +1044,6 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool, *, profile: str = DEFA
         backup.mkdir(parents=True, exist_ok=True)
         entry_command = _find_first_existing_command(dst_cmds, _ENTRY_COMMAND_CANDIDATES)
         finish_work = dst_cmds / "finish-work.md"
-        record_session = dst_cmds / "record-session.md"
         parallel = dst_cmds / "parallel.md"
         baseline_overlaps = [dst_cmds / f"{name}.md" for name in OVERLAY_BASELINE_COMMANDS]
         if entry_command is not None and not (backup / entry_command.name).exists():
@@ -1087,9 +1052,6 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool, *, profile: str = DEFA
         if finish_work.exists() and not (backup / "finish-work.md").exists():
             shutil.copy2(finish_work, backup / "finish-work.md")
             ok(f"[OpenCode] finish-work.md → 备份")
-        if record_session.exists() and not (backup / "record-session.md").exists():
-            shutil.copy2(record_session, backup / "record-session.md")
-            ok(f"[OpenCode] record-session.md → 备份")
         if parallel.exists() and not (backup / "parallel.md").exists():
             shutil.copy2(parallel, backup / "parallel.md")
             ok("[OpenCode] parallel.md → 备份")
@@ -1151,33 +1113,6 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool, *, profile: str = DEFA
         target_label="finish-work.md",
     ):
         result["patches"] += 1
-
-    # 注入元数据闭环
-    record_session = dst_cmds / "record-session.md"
-    if record_session.exists():
-        content = record_session.read_text(encoding="utf-8")
-        if _RECORD_SESSION_MARKER not in content:
-            patch = src / "record-session-patch-metadata-closure.md"
-            if patch.exists() and _RECORD_SESSION_INJECTION_MARKER in content:
-                if not dry_run:
-                    before, after = content.split(_RECORD_SESSION_INJECTION_MARKER, 1)
-                    record_session.write_text(
-                        before + prepare_command_content(patch, profile=profile) + "\n" + _RECORD_SESSION_INJECTION_MARKER + after,
-                        encoding="utf-8",
-                    )
-                if dry_run:
-                    info("[OpenCode] 将注入 record-session 元数据闭环")
-                else:
-                    ok("[OpenCode] record-session 元数据闭环已注入")
-                result["patches"] += 1
-            elif not patch.exists():
-                warn("[OpenCode] record-session-patch-metadata-closure.md 不存在")
-            else:
-                warn("[OpenCode] record-session.md 中未找到注入点")
-        else:
-            ok("[OpenCode] record-session 元数据闭环已存在")
-    else:
-        warn("[OpenCode] record-session.md 不存在，跳过元数据闭环注入")
 
     if disable_parallel_command(src, dst_cmds / "parallel.md", dry_run=dry_run, cli_label="OpenCode"):
         result["patches"] += 1
@@ -1470,7 +1405,6 @@ def write_install_record(
             "patched_baseline_commands": [
                 command_phase_router_candidates()[0],
                 command_finish_work_candidates()[0],
-                *command_record_session_candidates(),
             ],
             "patched_codex_skills": CODEX_PATCH_BASELINE_SKILLS,
             "patched_shared_docs": PATCH_BASELINE_SHARED_DOCS,
