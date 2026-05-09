@@ -1,0 +1,5 @@
+{"file":".trellis/spec/scripts/workflow-installer-upgrade-contracts.md","reason":"Defines installer/upgrade source-of-truth, target deployment boundaries, and verification expectations for shared helper scripts."}
+{"file":".trellis/spec/scripts/python-conventions.md","reason":"Covers Python script structure and exit-code expectations for modifying upgrade-compat.py tests/logic."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"The residue detection/cleanup should reuse shared workflow asset definitions instead of introducing duplicated stale-helper lists."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"This change crosses workflow source assets, upgrade tooling, target-project drift detection, and maintainer docs."}
+{"file":".trellis/tasks/05-09-remove-stale-workflow-helper-residue/research/current-state.md","reason":"Summarizes the static audit evidence that the current upgrade path misses obsolete helper residue."}

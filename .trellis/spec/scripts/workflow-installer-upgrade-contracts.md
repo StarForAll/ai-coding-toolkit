@@ -319,6 +319,7 @@ Compatibility code should therefore:
      - installer must copy it into the target project
      - install record `scripts` must include it
      - installer regression tests must assert both deployment presence and install-record inclusion
+     - retired helper names that are no longer workflow-managed must be tracked in shared asset definitions so `upgrade-compat.py --check` can flag stale deployed residue and `--merge` can remove it
      - if a helper becomes a required phase gate, the relevant walkthrough / mapping docs must mention the validation command
 
 6. **Patch-based shared workflow document**

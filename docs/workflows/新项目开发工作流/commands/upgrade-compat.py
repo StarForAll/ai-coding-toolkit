@@ -56,6 +56,7 @@ from workflow_assets import (
     OVERLAY_BASELINE_COMMANDS,
     PATCH_BASELINE_COMMANDS,
     PATCH_BASELINE_SHARED_DOCS,
+    RETIRED_HELPER_SCRIPTS,
     WORKFLOW_DOCS_DIR,
     WORKFLOW_SCHEMA_VERSION,
     WORKFLOW_VERSION,
@@ -356,6 +357,21 @@ def expected_helper_script_content(src: Path, name: str) -> str | None:
         err(f"源辅助脚本缺失，无法校验: {source_path.name}")
         return None
     return read_text(source_path)
+
+
+def _managed_helper_scripts_for_profile(profile: str) -> list[str]:
+    return HELPER_SCRIPTS if profile == DEFAULT_PROFILE else CORE_HELPER_SCRIPTS
+
+
+def _obsolete_helper_script_candidates(record: dict, *, profile: str) -> list[str]:
+    managed_scripts = set(_managed_helper_scripts_for_profile(profile))
+    record_scripts = {
+        name
+        for name in record.get("scripts", [])
+        if isinstance(name, str)
+    }
+    candidates = (record_scripts | set(RETIRED_HELPER_SCRIPTS)) - managed_scripts
+    return sorted(candidates)
 
 
 def expected_agent_content(src: Path, cli_type: str, name: str) -> str | None:
@@ -706,7 +722,7 @@ def detect_conflicts_codex(
 
 def detect_shared_script_conflicts(src: Path, dst_scripts: Path, *, profile: str = DEFAULT_PROFILE) -> int:
     conflicts = 0
-    scripts = HELPER_SCRIPTS if profile == "outsourcing" else CORE_HELPER_SCRIPTS
+    scripts = _managed_helper_scripts_for_profile(profile)
     for name in scripts:
         target_path = dst_scripts / name
         if not target_path.exists():
@@ -723,6 +739,23 @@ def detect_shared_script_conflicts(src: Path, dst_scripts: Path, *, profile: str
             conflicts += 1
     if conflicts == 0:
         ok("[Shared] 所有辅助脚本内容一致")
+    return conflicts
+
+
+def detect_obsolete_shared_script_conflicts(
+    dst_scripts: Path,
+    record: dict,
+    *,
+    profile: str = DEFAULT_PROFILE,
+) -> int:
+    conflicts = 0
+    for name in _obsolete_helper_script_candidates(record, profile=profile):
+        target_path = dst_scripts / name
+        if target_path.exists():
+            err(f"[Shared] 废弃辅助脚本残留: {name}")
+            conflicts += 1
+    if conflicts == 0:
+        ok("[Shared] 无废弃辅助脚本残留")
     return conflicts
 
 
@@ -807,14 +840,26 @@ def deploy_parallel_disabled(src: Path, target_path: Path, label: str) -> bool:
     return True
 
 
-def deploy_scripts(src: Path, dst_scripts: Path) -> None:
+def deploy_scripts(src: Path, dst_scripts: Path, *, profile: str = DEFAULT_PROFILE) -> None:
     dst_scripts.mkdir(parents=True, exist_ok=True)
-    for name in HELPER_SCRIPTS:
+    for name in _managed_helper_scripts_for_profile(profile):
         source_path = src / "shell" / name
         if source_path.exists():
             shutil.copy2(source_path, dst_scripts / name)
             (dst_scripts / name).chmod(0o755)
     ok("辅助脚本已更新")
+
+
+def remove_obsolete_deployed_scripts(dst_scripts: Path, record: dict, *, profile: str = DEFAULT_PROFILE) -> None:
+    removed = 0
+    for name in _obsolete_helper_script_candidates(record, profile=profile):
+        target_path = dst_scripts / name
+        if target_path.exists():
+            target_path.unlink()
+            ok(f"[Shared] 已删除废弃辅助脚本残留: {name}")
+            removed += 1
+    if removed == 0:
+        info("[Shared] 无需清理废弃辅助脚本残留")
 
 
 def _migrate_legacy_agents_upgrade(src: Path, root: Path, cli_type: str, cli_label: str) -> None:
@@ -1091,6 +1136,7 @@ def write_install_record(
     initial_pack = prior_record.get("initial_pack", "pack.requirements-discovery-foundation")
     bootstrap_task_removed = prior_record.get("bootstrap_task_removed", True)
     bootstrap_cleanup_status = prior_record.get("bootstrap_cleanup_status", "unknown")
+    profile = prior_record.get("profile", DEFAULT_PROFILE)
     rec_file.write_text(
         json.dumps(
             {
@@ -1099,6 +1145,7 @@ def write_install_record(
                 "previous_version": previous_version,
                 "cli_types": cli_types,
                 "updated": now,
+                "profile": profile,
                 "commands": DISTRIBUTED_COMMANDS,
                 "overlay_commands": OVERLAY_BASELINE_COMMANDS,
                 "added_commands": ADDED_COMMANDS,
@@ -1106,7 +1153,7 @@ def write_install_record(
                 "patched_baseline_commands": PATCH_BASELINE_COMMANDS,
                 "patched_codex_skills": CODEX_PATCH_BASELINE_SKILLS,
                 "patched_shared_docs": PATCH_BASELINE_SHARED_DOCS,
-                "scripts": HELPER_SCRIPTS,
+                "scripts": _managed_helper_scripts_for_profile(profile),
                 "workflow_version": WORKFLOW_VERSION,
                 "workflow_schema_version": WORKFLOW_SCHEMA_VERSION,
                 "initial_pack": initial_pack,
@@ -1223,6 +1270,7 @@ def main() -> int:
             )
             total_conflicts += detect_conflicts_managed_agents(src, root, "codex", "Codex")
     total_conflicts += detect_shared_script_conflicts(src, dst_scripts, profile=profile)
+    total_conflicts += detect_obsolete_shared_script_conflicts(dst_scripts, record, profile=profile)
     total_conflicts += detect_execution_card_conflicts(src, root, profile=profile)
     total_conflicts += detect_conflicts_workflow_doc(src, root, profile=profile)
     total_conflicts += detect_conflicts_agents_md(root)
@@ -1399,7 +1447,8 @@ def main() -> int:
     cleanup_old_workflow_backups(root)
 
     # 辅助脚本
-    deploy_scripts(src, dst_scripts)
+    remove_obsolete_deployed_scripts(dst_scripts, record, profile=profile)
+    deploy_scripts(src, dst_scripts, profile=profile)
 
     # 更新安装记录
     write_install_record(rec_file, current_version, installed_version, cli_types, record)

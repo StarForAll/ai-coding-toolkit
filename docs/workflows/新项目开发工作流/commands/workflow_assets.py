@@ -51,6 +51,10 @@ HELPER_SCRIPTS = [
     "delivery-control-validate.py",
     "ownership-proof-validate.py",
 ]
+RETIRED_HELPER_SCRIPTS = [
+    "record-session-helper.py",
+    "metadata-autocommit-guard.py",
+]
 LATEST_TRELLIS_VERSION_ENV = "TRELLIS_LATEST_VERSION"
 CURRENT_TRELLIS_VERSION_ENV = "TRELLIS_CURRENT_VERSION"
 CODEX_SHARED_SKILL_NAMES = [*DISTRIBUTED_COMMANDS, *CODEX_PATCH_BASELINE_SKILLS]

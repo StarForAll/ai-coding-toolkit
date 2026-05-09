@@ -1339,6 +1339,51 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("辅助脚本内容漂移", result.stdout)
         self.assertIn("check-quality.py", result.stdout)
 
+    def test_upgrade_check_detects_obsolete_helper_script_residue(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        stale_helper = fixture / ".trellis" / "scripts" / "workflow" / "record-session-helper.py"
+        stale_helper.write_text("# obsolete helper residue\n", encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("废弃辅助脚本残留", result.stdout)
+        self.assertIn("record-session-helper.py", result.stdout)
+
+    def test_upgrade_merge_removes_obsolete_helper_script_residue(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        stale_helper = fixture / ".trellis" / "scripts" / "workflow" / "record-session-helper.py"
+        stale_helper.write_text("# obsolete helper residue\n", encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--merge",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertFalse(stale_helper.exists())
+
     def test_upgrade_check_detects_install_record_schema_drift(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)

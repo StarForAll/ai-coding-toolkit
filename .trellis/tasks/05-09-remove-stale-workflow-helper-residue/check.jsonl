@@ -1,0 +1,4 @@
+{"file":".trellis/spec/scripts/workflow-installer-upgrade-contracts.md","reason":"Verification must preserve the workflow install/upgrade contract while adding obsolete-helper residue handling."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check phase must confirm source-to-target drift detection now covers extra stale helper files, not just existence/content of expected files."}
+{"file":"docs/workflows/新项目开发工作流/装后隐藏目录与托管边界核对清单.md","reason":"If behavior changes, maintainer-facing verification docs must stay aligned with what upgrade-compat.py actually checks."}
+{"file":".trellis/tasks/05-09-remove-stale-workflow-helper-residue/research/current-state.md","reason":"Provides the intended before/after behavior to validate against during check."}
