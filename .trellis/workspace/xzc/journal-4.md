@@ -1768,3 +1768,36 @@ Added obsolete-helper residue detection and cleanup to upgrade-compat, updated m
 ### Next Steps
 
 - None - task complete
+
+
+## Session 180: workflow audit follow-up and gate fixes
+
+**Date**: 2026-05-10
+**Task**: workflow audit follow-up and gate fixes
+**Branch**: `main`
+
+### Summary
+
+Audited historical workflow fixpoints, deployed enhanced trellis-research to target projects, and added readiness gates for feasibility, task dependencies, task explanation cards, README.en prompts, total effort hours, and delivery-control structured fields.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a08fc4c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
