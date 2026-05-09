@@ -1735,3 +1735,36 @@ Verified Trellis-native-agent boundary, added default README bilingual governanc
 
 - None - task complete
 
+
+
+## Session 179: Clean stale workflow helper residue during upgrade
+
+**Date**: 2026-05-09
+**Task**: Clean stale workflow helper residue during upgrade
+**Branch**: `main`
+
+### Summary
+
+Added obsolete-helper residue detection and cleanup to upgrade-compat, updated maintainer docs, verified with installer tests and a real /tmp upgrade rehearsal.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `43bdac3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 178
+- **Total Sessions**: 179
 - **Last Active**: 2026-05-09
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~1767 | Active |
+| `journal-4.md` | ~1770 | Active |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 179 | 2026-05-09 | Clean stale workflow helper residue during upgrade | `43bdac3` | `main` |
 | 178 | 2026-05-09 | 恢复 Trellis 原生 finish-work close-out | `5cbc917` | `main` |
 | 177 | 2026-05-09 | workflow-audit: align readme governance and close-out terminology | `71feed4`, `dce304c` | `main` |
 | 176 | 2026-05-09 | Refine gated carrier structural-break logic | `2a54fbf` | `main` |
