@@ -21,10 +21,12 @@ Task-based runtime audit with multi-layer evidence.
   - `source repo`
   - `generated target project`
   - `runtime command output`
+- when the tag is `generated target project`, further distinguish baseline-after-`trellis init` evidence from workflow-installed-state evidence without inventing a new layer tag
 - keep the same tags inside each confirmed issue's `evidence source` field
 
 ## Must Not
 
 - must not output untagged evidence lines
 - must not invent ad-hoc layer labels
+- must not split baseline and installed-state evidence into new top-level layer names
 - must not conflate source-repo evidence with generated target-project evidence

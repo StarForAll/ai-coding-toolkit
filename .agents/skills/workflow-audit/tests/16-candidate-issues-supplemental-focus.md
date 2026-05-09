@@ -28,6 +28,7 @@ Mode determined by the normal evidence mainline, not by `candidate_issues` alone
 
 - execute the same A/B/C mainline that would run without `candidate_issues`
 - reference the supplied `candidate_issues` as supplementary focus points within the evidence steps
+- if the focused evidence reaches generated target-project material, keep the baseline-vs-installed comparison model intact instead of collapsing them into one bucket
 - keep mode selection based on actual findings rather than the mere presence of `candidate_issues`
 
 ## Must Not

@@ -4,6 +4,7 @@ Lightweight mode does not create a task and does not persist `audit-report.md`.
 However, the chat response must still use a fixed simplified structure.
 
 Every evidence line must keep an explicit source-layer tag.
+If `generated target project` evidence appears, keep the same layer tag but explicitly note whether it came from the clean `trellis init` baseline or the workflow-installed state after `install-workflow.py`.
 Always keep the `Per-CLI Adaptation Conclusions` section. If CLI adaptation was not examined, mark each CLI as `not-applicable` and briefly say why.
 
 ```markdown
@@ -11,9 +12,10 @@ Always keep the `Per-CLI Adaptation Conclusions` section. If CLI adaptation was 
 - Workflow Root: `<workflow_path>`
 - Resolved Workflow Root Rule: always `docs/workflows/新项目开发工作流/`
 - Scope: static/document-only (lightweight: evidence mainline A, B, C; output step E)
+- Comparison Model: `source repo` vs `generated target project` baseline (`trellis init`) vs `generated target project` workflow-installed state (`install-workflow.py`) vs `runtime command output`
 
 ## System Mechanics Understood (step A)
-- <key findings: trellis init model, CLI adaptation contracts, embed state machine>
+- <key findings: `.trellis` runtime truth layer, session-scoped task model, `.agents/skills/` dual role, CLI adaptation contracts, embed state machine>
 
 ## Static Evidence Gathered (step B)
 - <evidence item> — Layer: <source repo>
@@ -21,7 +23,8 @@ Always keep the `Per-CLI Adaptation Conclusions` section. If CLI adaptation was 
 
 ## Gap Analysis (step C)
 - <gap finding> — Layer: <source repo | generated target project | runtime command output>
-- <cross-layer comparison: doc claims vs definition completeness>
+- Format rule: if Layer is `generated target project`, add `Stage: <baseline after trellis init | workflow-installed state after install-workflow.py>` on the next line instead of treating Stage as a separate evidence item
+- <cross-layer comparison: doc claims vs definition completeness vs clean baseline vs post-install state>
 
 ## Confirmed Issues
 - <or explicitly write "No change-worthy issue is currently confirmed">

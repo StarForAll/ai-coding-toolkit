@@ -3,6 +3,7 @@
 Task-based `workflow-audit` runs must maintain `audit-report.md` inside the task directory.
 The file may be updated incrementally during the active audit and becomes the current finalized report at the stop-and-confirm boundary.
 Every evidence item and confirmed-issue entry must keep explicit source-layer tags.
+When the layer is `generated target project`, also record whether the evidence came from the clean `trellis init` baseline or from the workflow-installed state after `install-workflow.py`.
 
 ```markdown
 # workflow-audit: <workflow-name>
@@ -13,10 +14,12 @@ Every evidence item and confirmed-issue entry must keep explicit source-layer ta
 - Audit Scope: <task-based static | task-based runtime>
 - Current CLI: <inferred or explicit>
 - Candidate Issues: <none / list>
+- Generated Target Project Root: <none in static mode | /tmp/...>
+- Comparison Model: `source repo` vs `generated target project` baseline (`trellis init`) vs `generated target project` workflow-installed state (`install-workflow.py`) vs `runtime command output`
 
 ## Evidence-Gathering Actions Executed in This Round
 - <evidence action> — Layer: <source repo>
-- <evidence action> — Layer: <generated target project>
+- <evidence action> — Layer: <generated target project> — Stage: <baseline after trellis init | workflow-installed state after install-workflow.py>
 - <evidence action> — Layer: <runtime command output>
 
 ## Confirmed Issues
@@ -25,6 +28,7 @@ Every evidence item and confirmed-issue entry must keep explicit source-layer ta
 - Conclusion: <one-sentence issue conclusion>
 - Evidence Source:
   - Layer: <source repo | generated target project | runtime command output>
+  - Stage: <n/a | baseline after trellis init | workflow-installed state after install-workflow.py>
   - <file path + relevant lines>
   - <command + key result>
 - Validation Action:

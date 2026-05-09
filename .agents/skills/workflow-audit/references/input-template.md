@@ -12,6 +12,13 @@ force_full_brainstorm: no
 current_cli: <optional; infer from runtime when omitted>
 ```
 
+Comparison model used by the audit:
+
+- `source repo`
+- clean `trellis init` baseline in the generated target project
+- workflow-installed state after `install-workflow.py`
+- `runtime command output`
+
 ## Field Rules
 
 - `workflow_path`
@@ -27,7 +34,7 @@ current_cli: <optional; infer from runtime when omitted>
   - optional
   - every item is treated as a hypothesis pending validation
   - nothing here is automatically treated as a confirmed defect
-  - they do not switch execution paths; they only act as supplementary focus points within the normal evidence mainline
+  - they do not switch execution paths; they only act as supplementary focus points within the normal evidence mainline and comparison model
 
 - `need_runtime_validation`
   - default: `auto`
@@ -50,6 +57,7 @@ current_cli: <optional; infer from runtime when omitted>
 
 - Supported per-CLI audit scope is fixed to `Claude Code`, `OpenCode`, and `Codex`
 - Supported workflow target scope is fixed to `docs/workflows/新项目开发工作流/`
+- Comparison model inside the audit is `source repo` vs clean `trellis init` baseline vs workflow-installed state after `install-workflow.py` vs `runtime command output`
 - Version preflight always runs first: compare `trellis -v` with `COMPATIBLE_TRELLIS_VERSION` in `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
 - Any mismatch must stop the audit as `Blocked / Version Drift` and route the user to `workflow-capability-audit`
 - No dedicated `preferred_handoff_cli` field

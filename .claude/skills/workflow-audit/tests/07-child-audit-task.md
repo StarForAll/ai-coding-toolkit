@@ -17,6 +17,7 @@ Task-based audit with child audit task creation.
 ## Expected Key Behaviors
 
 - execute A/B/C first, then decide the audit is task-based
+- resolve the existing active task from the current session-scoped Trellis runtime, not from a repo-global task marker
 - create a dedicated child audit task instead of mixing the audit into the parent task
 - switch execution into the child audit task immediately
 - enter the `trellis-brainstorm` mainline as the control container inside the child audit task
@@ -27,4 +28,5 @@ Task-based audit with child audit task creation.
 
 - must not write the audit body directly into the parent non-audit task
 - must not create a sibling free-floating note without switching task context
+- must not assume a repo-global `.current-task` style active-task file
 - must not return to the parent task merely because the first audit report exists

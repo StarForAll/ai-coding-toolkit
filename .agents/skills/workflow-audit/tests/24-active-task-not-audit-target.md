@@ -17,12 +17,13 @@ Lightweight mode.
 ## Expected Key Behaviors
 
 - resolve the omitted target to `docs/workflows/新项目开发工作流/`
-- keep any active task directory as runtime context only, not as the workflow root
+- keep any active task directory as session-scoped runtime context only, not as the workflow root
 - report `docs/workflows/新项目开发工作流/` as the audit target in the output
 - continue with the normal A/B/C static evidence mainline against the supported workflow root
 
 ## Must Not
 
 - must not reinterpret the active task directory as `workflow_path`
+- must not treat session runtime state as evidence that the workflow target changed
 - must not ask the user to choose between the active task and the supported workflow root
 - must not report the active task directory as the audited workflow root

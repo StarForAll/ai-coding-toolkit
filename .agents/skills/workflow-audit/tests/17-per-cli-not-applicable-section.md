@@ -18,6 +18,7 @@ Lightweight static mode.
 
 - output using the lightweight template
 - keep the `Per-CLI Adaptation Conclusions` section
+- keep the comparison-model instructions and Gap Analysis formatting readable even when per-CLI adaptation is out of scope
 - mark Claude Code, OpenCode, and Codex as `not-applicable` when CLI adaptation was not examined
 - include a brief reason for each `not-applicable` entry
 

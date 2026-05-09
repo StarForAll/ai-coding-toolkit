@@ -34,6 +34,7 @@ Task-based static mode (task + trellis-brainstorm + `prd.md` + `audit-report.md`
 - enter the `trellis-brainstorm` mainline as the control container
 - maintain `prd.md` through the `trellis-brainstorm` path
 - initialize `audit-report.md`, seeding it with Step A/B/C evidence tagged with source layers
+- if any `generated target project` evidence is already present in that seeded report, distinguish its `Stage` as clean baseline vs workflow-installed state
 - skip Step D entirely — do NOT create `/tmp` project, do NOT run `trellis init`, do NOT execute embed chain
 - if A/B/C findings were to indicate Step D is necessary, follow the escalation rule: output Needs Confirmation block and wait for user, do NOT auto-execute D
 - output findings in Step E via `audit-report.md`

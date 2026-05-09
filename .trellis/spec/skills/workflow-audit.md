@@ -64,7 +64,7 @@ Currently excluded repo-local CLI directories and the reason:
 
 These exclusions are a design decision, not a coverage gap. Extending the supported surface to include additional platforms requires an explicit update to `workflow_assets.py`'s managed-surface contract first; `workflow-audit` will then incorporate the new platform in the same change.
 
-Note on `.opencode/` and `.codex/`: although these directories exist as repo-local CLI carriers, they belong to the three-platform managed surface (OpenCode via `.opencode/`, Codex via `.codex/` and `.agents/`). Their skill directories do not carry `workflow-audit` or `workflow-capability-audit` skill copies because those platforms consume the skill through Trellis-managed deployment, not through per-CLI skill directory duplication. The absence of skill files under `.opencode/skills/workflow-audit/` or `.codex/skills/workflow-audit/` is therefore expected and not a defect.
+Note on `.opencode/`, `.codex/`, and `.agents/skills/`: these paths participate in the three-platform managed surface, but not all in the same way. `.agents/skills/` has a dual role: in this source repository it is the shared deployment layer for compatible skill loaders, while in workflow-installed target projects it is also the shared workflow skill carrier visible to Codex and potentially OpenCode. Its presence alone is therefore not a defect. For Codex, `.codex/config.toml` and `.codex/hooks.json` are primary carrier/config surfaces, while `.codex/skills/` remains a conditional secondary carrier rather than the default baseline artifact set. Codex hook activation is also runtime-gated by user-level enablement or approval, so installed carrier shape and live runtime activation must be audited separately. The absence of skill files under `.opencode/skills/workflow-audit/` or `.codex/skills/workflow-audit/` is therefore expected and not a defect.
 
 ## Audit Coverage Requirements
 
@@ -81,10 +81,12 @@ This skill **must** fully validate the following aspects for any workflow under 
    - No CLI-specific behavior drifts exist for the same semantic action
    - Missing or incomplete adaptations are flagged as `present-but-incompatible` or `missing-but-valuable`
 
-3. **Post-install artifact verification** - The audit must compare documented installation artifacts against actual files created in the target project, including:
+3. **Post-install artifact verification** - The audit must compare documented installation artifacts against actual files created in the target project, separating the clean `trellis init` baseline from the workflow-installed state after `install-workflow.py`, including:
    - Hidden directories (`.trellis/`, `.claude/`, `.opencode/`, `.agents/`, `.codex/`)
+   - `.agents/skills/` must be interpreted with its dual role in mind: repo-local shared deployment layer in this source repo, shared workflow skill carrier in target projects
    - Command scripts, skill definitions, agent configurations
    - The audit must report discrepancies as confirmed issues with source-layer tags
+   - Generated target-project files may only be attributed to the workflow after that baseline-vs-installed comparison
 
    Special interpretation rule:
    - install-only low-stakes reminder artifacts such as the workflow-created root `todo.txt` are **not** defects by default
@@ -207,10 +209,17 @@ Mode selection is described in the Execution Modes section below.
 Every piece of evidence collected throughout the mainline must be tagged with its source layer:
 
 - `source repo` — files, documents, scripts within the workflow directory under `docs/workflows/`
-- `generated target project` — files produced by `trellis init` or `install-workflow.py` in the `/tmp` target project
+- `generated target project` — files inside the `/tmp` target project, including the clean `trellis init` baseline and the workflow-installed state after `install-workflow.py`
 - `runtime command output` — stdout/stderr/exit code from executed commands
 
 This labeling is mandatory because the core audit operation (gap analysis) compares what the source repo declares against what the target project actually contains. Without source-layer tags, the two are easily conflated.
+
+Within the `generated target project` layer, the audit must explicitly distinguish whether evidence came from the clean `trellis init` baseline or from the post-install workflow state. The comparison model is:
+
+- `source repo`
+- `generated target project` baseline (`trellis init`)
+- `generated target project` workflow-installed state (`install-workflow.py`)
+- `runtime command output`
 
 Per-CLI adaptation conclusions follow this scope rule:
 
@@ -250,12 +259,20 @@ Before auditing the workflow, understand the system it operates within:
 - current workflow authority for managed surfaces: `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
 - current CLI boundary contract: `docs/workflows/新项目开发工作流/CLI原生适配边界矩阵.md`
 - current hidden-directory / managed-boundary contract: `docs/workflows/新项目开发工作流/装后隐藏目录与托管边界核对清单.md`
-- trellis `init` 产物模型: `.trellis/`, `.claude/`, `.opencode/`, `.agents/skills/`, `.codex/`
+- `.trellis/` is the runtime truth layer for workflow, task, and session state
+- active-task resolution is session-scoped under `.trellis/.runtime/sessions/`, not a repo-global `.trellis/.current-task`
+- hidden platform directories (`.claude/`, `.opencode/`, `.codex/`, `.agents/`) are carrier layers with platform-specific loading models, not equal authorities to `.trellis/`
+- trellis `init` baseline carrier set: `.trellis/`, `.claude/`, `.opencode/`, `.agents/skills/`, `.codex/`
+- `.agents/skills/` 双角色：在当前 source repo 中是 shared deployment layer，在 workflow-installed target project 中是 shared workflow skill carrier；presence alone is not a defect
+- OpenCode carrier model: plugin-driven context loading plus native command/agent carriers; adaptation checks must account for both halves
+- Codex carrier model: `.codex/config.toml` / `.codex/hooks.json` are primary carrier/config surfaces; `.codex/skills/` is a conditional secondary carrier, not a default baseline artifact
+- Codex hook execution is runtime-gated by local enablement or approval, so installed carrier shape and live activation are separate audit questions
 - 各 CLI 的原生承载方式（commands / skills / agents / hooks 的目录约定）
 - workflow 自身的 install / upgrade / uninstall 脚本实际行为
 - 工作流嵌入执行规范中的状态机与前置条件
 - current repo root, active task directory, and temporary target-project root are context inputs, not substitute audit targets
 - generated target-project evidence is about the temporary target project created for the audit, not this source repository's own hidden directories
+- generated target-project evidence must distinguish the clean `trellis init` baseline from the workflow-installed state after `install-workflow.py`
 
 ### B. Static Evidence Gathering
 
@@ -275,7 +292,10 @@ Compare document claims against actual definition completeness:
 - 流程层面"有"但执行闭环层面"没做完"的内容 → 记录为 incomplete closure
 - 跨文档引用的一致性：是否引用了不存在的文件、旧路径、或已过时的路径名
 - 各 CLI 适配层之间是否存在行为漂移（同一语义在不同 CLI 下实现不一致）
+- `.agents/skills/` presence alone is not a defect; only contradictory managed-surface behavior or misleading duplicate exposure counts as a workflow issue
+- `.codex/skills/` 缺失默认不算 defect，除非当前 managed-surface contract 明确要求这个 secondary carrier
 - 隐藏目录托管边界：安装后产物是否与 trellis 基线 + workflow 声明的托管范围一致
+- `generated target project` 证据必须区分 clean `trellis init` baseline 与 workflow-installed state；不得把 baseline 自带产物直接归因给 workflow
 - 不得把 repo-local 的其他平台隐藏目录直接当作当前 workflow 缺失适配的证据；除非 `workflow_assets.py` 明确把它们纳入 managed surface
 
 ### D. Runtime Validation
@@ -284,9 +304,11 @@ Required when embed / install / post-install behavior must be verified:
 
 - confirm the temporary target project's `.trellis/.version` matches the Step 0 actual `trellis -v` result; otherwise stop as `Blocked / Version Drift`
 - 在 `/tmp` 创建纯净 Git 项目，满足安装前置条件后执行 `trellis init`
+- 在 `trellis init` 完成后、执行 `install-workflow.py` 前，记录当前文件系统状态作为 clean baseline 快照；后续 post-install 比较与产物归因必须以该快照为基准
 - 执行标准嵌入链: `detect-embed-state.py` → `install-workflow.py --dry-run` → `install-workflow.py` → `upgrade-compat.py --check`
-- 检查安装后隐藏目录（`.trellis/`, `.claude/`, `.opencode/`, `.agents/`, `.codex/`）与 trellis 基线 + workflow 托管声明是否一致
+- 检查安装后隐藏目录（`.trellis/`, `.claude/`, `.opencode/`, `.agents/`, `.codex/`）与 baseline 快照 + workflow 托管声明是否一致
 - 比较文档声明的安装产物与实际落盘产物
+- 如果 Step D 在 baseline 快照已捕获后失败，保留该 baseline 证据，并将后续 installed state 标记为 incomplete / unverified，禁止把未完成安装状态当作完整 workflow-installed 结论
 - 当 Codex 为主执行器时，触发 Codex handoff（见 CLI and Handoff Rules）
 
 ### E. Output Findings
@@ -342,6 +364,7 @@ When both judgments are "yes": task-based runtime mode (create task, enter trell
 When the skill determines task context is warranted but runtime validation is not required:
 
 - create audit task context (child task if another non-audit task is active, otherwise top-level)
+- resolve active-task state from the current session-scoped Trellis runtime; do not assume a repo-global active-task marker
 - enter the `trellis-brainstorm` mainline explicitly as the control container
 - create and maintain `prd.md` through the `trellis-brainstorm` path
 - maintain `audit-report.md` using `references/audit-report-template.md`
@@ -399,6 +422,8 @@ When the user explicitly set `need_runtime_validation: no` but step C findings c
 
 ## Task Model
 
+All task references in this section are resolved from the current session-scoped Trellis runtime, not from a repo-global active-task file.
+
 ### Task-based Audit with Existing Active Non-audit Task
 
 - create a dedicated child audit task
@@ -454,6 +479,7 @@ Rules:
 - update incrementally during the active audit
 - treat the same file as the current finalized report at the stop-and-confirm boundary
 - require it only for task-based audits
+- when evidence is tagged as `generated target project`, record whether it came from the clean `trellis init` baseline or the workflow-installed state after `install-workflow.py`
 
 ### Confirmed-Issue Schema
 
@@ -462,6 +488,7 @@ Every confirmed issue must include:
 - priority (`P0` / `P1` / `P2`)
 - conclusion
 - evidence source (with source layer tag: `source repo` / `generated target project` / `runtime command output`)
+  - when the layer is `generated target project`, include `Stage` as `baseline after trellis init` or `workflow-installed state after install-workflow.py`
 - validation action
 - impact scope
 - fix direction
@@ -615,6 +642,8 @@ Required persisted scenario files:
 - `tests/24-active-task-not-audit-target.md`
 - `tests/25-temp-project-not-workflow-source.md`
 - `tests/26-ambiguous-natural-language-target.md`
+- `tests/27-baseline-installed-no-diff.md`
+- `tests/28-trellis-init-partial-baseline-failure.md`
 
 Each test file must use the same internal structure:
 
@@ -693,6 +722,8 @@ When a behavior change could affect the task-based audit path's dependence on `t
 - `.agents/skills/workflow-audit/tests/24-active-task-not-audit-target.md`
 - `.agents/skills/workflow-audit/tests/25-temp-project-not-workflow-source.md`
 - `.agents/skills/workflow-audit/tests/26-ambiguous-natural-language-target.md`
+- `.agents/skills/workflow-audit/tests/27-baseline-installed-no-diff.md`
+- `.agents/skills/workflow-audit/tests/28-trellis-init-partial-baseline-failure.md`
 - `.claude/skills/workflow-audit/references/input-template.md`
 - `.claude/skills/workflow-audit/references/audit-report-template.md`
 - `.claude/skills/workflow-audit/references/lightweight-output-template.md`
@@ -724,6 +755,8 @@ When a behavior change could affect the task-based audit path's dependence on `t
 - `.claude/skills/workflow-audit/tests/24-active-task-not-audit-target.md`
 - `.claude/skills/workflow-audit/tests/25-temp-project-not-workflow-source.md`
 - `.claude/skills/workflow-audit/tests/26-ambiguous-natural-language-target.md`
+- `.claude/skills/workflow-audit/tests/27-baseline-installed-no-diff.md`
+- `.claude/skills/workflow-audit/tests/28-trellis-init-partial-baseline-failure.md`
 - `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
 - `.agents/skills/workflow-capability-audit/SKILL.md`
 - `.claude/skills/workflow-capability-audit/SKILL.md`
