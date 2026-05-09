@@ -195,7 +195,8 @@ Per-CLI classification supports:
 - `present-but-incompatible`
 - `missing-but-valuable`
 - `unclear`
-- `present-but-gated`
+- `present-but-gated-unexpected`
+- `present-but-gated-expected`
 - `not-applicable`
 
 `Overall Summary` uses the most severe / most action-demanding state.
@@ -205,11 +206,12 @@ Severity order:
 1. `present-but-incompatible`
 2. `missing-but-valuable`
 3. `unclear`
-4. `present-but-gated`
-5. `intentionally-disabled`
-6. `patched-compatible`
-7. `adopted-compatible`
-8. `not-applicable`
+4. `present-but-gated-unexpected`
+5. `present-but-gated-expected`
+6. `intentionally-disabled`
+7. `patched-compatible`
+8. `adopted-compatible`
+9. `not-applicable`
 
 ## Identity Rules
 
@@ -267,7 +269,8 @@ The supplemental path classifies capabilities by file existence alone (adopted-c
 
 - `codex-hooks-and-config-carrier` intentionally checks file/config carrier presence such as `.codex/hooks.json`, `.codex/config.toml`, and `.codex/hooks/inject-workflow-state.py`
 - it does **not** treat `.codex/hooks/session-start.py` as a required compatibility path in the current model
-- the emitted `present-but-gated` classification means the carrier exists on disk but real activation can still depend on user-level feature flags and hook approval outside workflow-managed files
+- the emitted `present-but-gated-expected` classification means the carrier exists on disk and the remaining runtime gate is an explicitly modeled design expectation, so it should remain a follow-up signal rather than an automatic structural-break trigger
+- `present-but-gated-unexpected` is reserved for gated behavior that is not explicitly modeled as an expected design-time runtime gate, and it should continue to block normal adaptation recommendations
 - capability audit therefore does not prove Codex runtime activation end to end by file presence alone
 
 ## References

@@ -378,7 +378,8 @@ Per-CLI classification must support:
 - `present-but-incompatible`
 - `missing-but-valuable`
 - `unclear`
-- `present-but-gated`
+- `present-but-gated-unexpected`
+- `present-but-gated-expected`
 - `not-applicable`
 
 ### Overall Summary Derivation
@@ -390,11 +391,12 @@ Severity / action priority:
 1. `present-but-incompatible`
 2. `missing-but-valuable`
 3. `unclear`
-4. `present-but-gated`
-5. `intentionally-disabled`
-6. `patched-compatible`
-7. `adopted-compatible`
-8. `not-applicable`
+4. `present-but-gated-unexpected`
+5. `present-but-gated-expected`
+6. `intentionally-disabled`
+7. `patched-compatible`
+8. `adopted-compatible`
+9. `not-applicable`
 
 `not-applicable` is the lowest-interference state and must not override any more action-demanding state.
 

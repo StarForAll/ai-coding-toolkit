@@ -374,8 +374,8 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
                 "opencode_evidence": "not-applicable",
                 "opencode_classification": "not-applicable",
                 "codex_evidence": "A=.codex/hooks.json,.codex/config.toml,.codex/hooks/inject-workflow-state.py; B=.codex/hooks.json,.codex/config.toml,.codex/hooks/inject-workflow-state.py",
-                "codex_classification": "present-but-gated",
-                "overall_summary": "present-but-gated",
+                "codex_classification": "present-but-gated-expected",
+                "overall_summary": "present-but-gated-expected",
                 "structural_signal": "carrier exists in A/B, but Codex runtime activation still depends on feature gates or user approval outside the embedded workflow files",
                 "adaptation_decision": "Treat file presence and runtime activation as separate checks when judging Codex compatibility.",
             },
@@ -1443,8 +1443,8 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         rows = module.build_workflow_dependent_rows(a_root, b_root)
         by_capability = {row["capability"]: row for row in rows}
         codex_row = by_capability["codex-hooks-and-config-carrier"]
-        self.assertEqual(codex_row["codex_classification"], "present-but-gated")
-        self.assertEqual(codex_row["overall_summary"], "present-but-gated")
+        self.assertEqual(codex_row["codex_classification"], "present-but-gated-expected")
+        self.assertEqual(codex_row["overall_summary"], "present-but-gated-expected")
         self.assertNotIn("session-start.py", codex_row["codex_evidence"])
 
     def test_build_workflow_dependent_rows_uses_trellis_hooks_script_carrier(self) -> None:
@@ -1515,20 +1515,36 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self.assertIsNotNone(codex_carrier)
         self.assertIn(".codex/hooks/inject-workflow-state.py", codex_carrier["codex_evidence"])
         self.assertNotIn("session-start.py", codex_carrier["codex_evidence"])
-        self.assertEqual(codex_carrier["codex_classification"], "present-but-gated")
+        self.assertEqual(codex_carrier["codex_classification"], "present-but-gated-expected")
 
-        # Verify codex-secondary-skills-carrier: not-applicable when .codex/skills/ does not exist
-        codex_sec = by_capability.get("codex-secondary-skills-carrier")
-        self.assertIsNotNone(codex_sec, "codex-secondary-skills-carrier must appear in dependent rows")
-        self.assertEqual(codex_sec["codex_classification"], "not-applicable",
-                         "codex-secondary-skills-carrier must be not-applicable when .codex/skills/ does not exist in A/B")
-        self.assertEqual(codex_sec["claude_classification"], "not-applicable")
-        self.assertEqual(codex_sec["opencode_classification"], "not-applicable")
+    def test_expected_gated_rows_do_not_trigger_structural_break(self) -> None:
+        module = load_script_module()
+        managed_rows = self._fake_managed_rows()
+        dependent_rows = self._fake_dependent_rows()
 
-        # Verify shared-skills-deployment-carrier still points to .agents/skills/ only
-        shared_row = by_capability.get("shared-skills-deployment-carrier")
-        self.assertIsNotNone(shared_row)
-        self.assertEqual(shared_row["codex_evidence"], "A=.agents/skills; B=.agents/skills")
+        result, signals, why = module.derive_structural_break(managed_rows, dependent_rows)
+
+        self.assertEqual(result, "no")
+        self.assertEqual(signals, [])
+        self.assertIn("does not show structural-break signals", why)
+
+    def test_unexpected_gated_rows_still_trigger_structural_break(self) -> None:
+        module = load_script_module()
+        managed_rows = self._fake_managed_rows()
+        dependent_rows = self._fake_dependent_rows()
+        dependent_rows[3] = {
+            **dependent_rows[3],
+            "codex_classification": "present-but-gated-unexpected",
+            "overall_summary": "present-but-gated-unexpected",
+            "structural_signal": "runtime activation became gated unexpectedly in the current A/B audit",
+        }
+
+        result, signals, why = module.derive_structural_break(managed_rows, dependent_rows)
+
+        self.assertEqual(result, "possible")
+        self.assertEqual(len(signals), 1)
+        self.assertIn("present-but-gated-unexpected", signals[0])
+        self.assertIn("High-action compatibility findings", why)
 
     def test_codex_secondary_skills_carrier_is_adopted_compatible_when_present(self) -> None:
         """codex-secondary-skills-carrier must be adopted-compatible when .codex/skills/ exists in A/B."""

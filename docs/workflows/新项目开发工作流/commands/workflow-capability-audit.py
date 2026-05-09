@@ -562,7 +562,12 @@ def derive_structural_break(managed_rows: list[dict[str, Any]], dependent_rows: 
     rows = [*managed_rows, *dependent_rows]
     blocking = []
     for row in rows:
-        if row["overall_summary"] in {"present-but-incompatible", "missing-but-valuable", "unclear", "present-but-gated"}:
+        if row["overall_summary"] in {
+            "present-but-incompatible",
+            "missing-but-valuable",
+            "unclear",
+            "present-but-gated-unexpected",
+        }:
             blocking.append(f"{row['capability_id']}: {row['structural_signal']} ({row['overall_summary']})")
     if blocking:
         return (
@@ -807,7 +812,8 @@ def _normalize_overall(summary_values: list[str]) -> str:
         "present-but-incompatible",
         "missing-but-valuable",
         "unclear",
-        "present-but-gated",
+        "present-but-gated-unexpected",
+        "present-but-gated-expected",
         "intentionally-disabled",
         "patched-compatible",
         "adopted-compatible",
@@ -1039,6 +1045,7 @@ def build_workflow_dependent_rows(a_root: Path, b_root: Path) -> list[dict[str, 
             "opencode": [],
             "codex": [".codex/hooks.json", ".codex/config.toml", ".codex/hooks/inject-workflow-state.py"],
             "gated_cli": "codex",
+            "gated_expectation": "expected",
             "gated_reason": "carrier exists in A/B, but Codex runtime activation still depends on feature gates or user approval outside the embedded workflow files",
             "gated_decision": "Treat file presence and runtime activation as separate checks when judging Codex compatibility.",
         },
@@ -1128,7 +1135,12 @@ def build_workflow_dependent_rows(a_root: Path, b_root: Path) -> list[dict[str, 
             row[f"{prefix}_evidence"] = _format_evidence(evidence_bits)
             if baseline_hits and expected_hits:
                 if definition.get("gated_cli") == prefix:
-                    classification = "present-but-gated"
+                    gated_expectation = str(definition.get("gated_expectation", "unexpected"))
+                    classification = (
+                        "present-but-gated-expected"
+                        if gated_expectation == "expected"
+                        else "present-but-gated-unexpected"
+                    )
                     row["structural_signal"] = str(definition.get("gated_reason", "carrier presence is conditional at runtime"))
                     row["adaptation_decision"] = str(definition.get("gated_decision", "Review runtime gating before concluding compatibility."))
                 else:
