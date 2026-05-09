@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 171
-- **Last Active**: 2026-05-08
+- **Total Sessions**: 172
+- **Last Active**: 2026-05-09
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~1504 | Active |
+| `journal-4.md` | ~1537 | Active |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 172 | 2026-05-09 | Add Codex inline no-subagent project rule | `b04854b` | `main` |
 | 171 | 2026-05-08 | 修正 workflow-capability-audit 与 trellis 会话模型对齐 | `c7d2f37` | `main` |
 | 170 | 2026-05-08 | Settle Trellis 0.5.9 upgrade consistency | `819f04a` | `main` |
 | 169 | 2026-05-08 | 收敛 trellis 升级残留并清理 new 候选 | `1d706b6` | `main` |

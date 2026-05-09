@@ -1502,3 +1502,36 @@ Fix 0.5.7→0.5.9 upgrade residue: adopt .new files, add codex-inline/codex-sub-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 172: Add Codex inline no-subagent project rule
+
+**Date**: 2026-05-09
+**Task**: Add Codex inline no-subagent project rule
+**Branch**: `main`
+
+### Summary
+
+Added a project-level platforms spec and repo-local Codex guidance requiring inline sessions to avoid manual subagent spawning.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b04854b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
