@@ -84,6 +84,31 @@ Why this matters:
 - cross-platform wording should reflect actual platform ownership rather than
   collapsing everything into the Codex path
 
+### Codex Git Write Escalation
+
+In this repository, Codex should treat `git add` and `git commit` as
+write-sensitive operations that normally need elevated permissions.
+
+Normative meaning:
+
+- when the user has already approved a commit plan and Codex is about to run
+  `git add` or `git commit`, prefer running the command with elevated
+  permissions immediately instead of first attempting it in the restricted
+  sandbox and then retrying after an `index.lock` / read-only failure
+- this rule is about execution strategy in Codex, not about changing the
+  repository's commit policy or bypassing commit approval requirements
+- do not generalize this rule to Claude / OpenCode / Qoder / Kiro unless their
+  own platform contract is explicitly updated
+
+Why this matters:
+
+- this repository often runs Codex in an environment where `.git/index.lock`
+  creation fails under default sandbox permissions
+- direct elevated execution avoids noisy fail-then-retry loops for routine
+  approved metadata or code commits
+- keeping the rule Codex-specific prevents accidental cross-platform drift in
+  shared docs and command surfaces
+
 ### Not Allowed While Inline
 
 - manually calling platform-level agent spawning to parallelize analysis
@@ -115,6 +140,8 @@ When reviewing Codex behavior in this repository, verify:
 - no manual subagent spawning was used inside an inline Codex path
 - any deviation was made explicit as a rule/config change rather than an
   unrecorded exception
+- approved `git add` / `git commit` steps in Codex were executed with elevated
+  permissions directly rather than relying on a predictable first-failure retry
 
 ---
 
