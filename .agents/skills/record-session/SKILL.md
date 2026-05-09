@@ -10,6 +10,11 @@ Use this skill only when:
 - you are resuming a previously interrupted metadata closure
 - the user specifically asks to run `record-session` manually
 
+[!] **Platform boundary**: in this repository, `record-session-helper.py` is a
+Codex-specific helper / recovery path. Default non-Codex `finish-work`
+entrypoints continue to use `add_session.py`; use the helper examples below
+only when you explicitly need helper / resume semantics.
+
 [!] **Prerequisite**: This skill should only be used AFTER the human has tested and committed the code.
 
 **Do NOT run `git commit` directly** — the scripts below handle their own commits for `.trellis/` metadata. You only need to read git history (`git log`, `git status`, `git diff`) and run the Python scripts.
@@ -35,7 +40,7 @@ python3 ./.trellis/scripts/get_context.py --mode record
 - All acceptance criteria met? → Archive it
 - Don't skip archiving just because `status` still says `planning` or `in_progress`
 
-### Step 2: One-Click Add Session
+### Step 2: One-Click Add Session (helper / recovery path)
 
 ```bash
 # Method 1: Simple parameters
@@ -66,6 +71,16 @@ EOF
 - [OK] Auto-commits .trellis/workspace and .trellis/tasks changes in helper commit-only mode
 - [OK] If metadata commit fails in read-only/restricted env, prints `TRELLIS_AUTO_ESCALATE_COMMAND=...` plus a `--resume` command; if the current CLI supports privileged retry, rerun it with elevated permissions immediately
 
+If you only need the generic non-Codex manual record path and do not need the
+helper's recovery semantics, use:
+
+```bash
+python3 ./.trellis/scripts/add_session.py \
+  --title "Session Title" \
+  --commit "hash1,hash2" \
+  --summary "Brief summary of what was done"
+```
+
 ### Step 3: Archive Completed Task
 
 Only after `record-session-helper.py` succeeds:
@@ -90,5 +105,6 @@ Expected output: no active task for the current session. If the archived task st
 |---------|---------|
 | `python3 ./.trellis/scripts/get_context.py --mode record` | Get context for record-session |
 | `python3 ./.trellis/scripts/workflow/record-session-helper.py --title "..." --commit "..."` | **One-click add session (recommended, branch auto-complete, metadata closure aware)** |
+| `python3 ./.trellis/scripts/add_session.py --title "..." --commit "..."` | Generic non-Codex manual session record path |
 | `python3 ./.trellis/scripts/task.py archive <name>` | Archive completed task (**only after the helper succeeds**) |
 | `python3 ./.trellis/scripts/task.py list` | List active tasks |

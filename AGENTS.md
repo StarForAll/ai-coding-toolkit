@@ -69,6 +69,7 @@ python3 ./.trellis/scripts/task.py list
 - For workflow maintenance, compare rendered agent copies against the shared source plus renderer contract, not only by cross-platform string equality; small platform-localized wording or path examples may differ.
 - Claude, OpenCode, and Kiro can push sub-agent context via `inject-subagent-context` hooks/plugins. Codex self-loads task context in agent files. In the current Qoder deployment, `trellis-implement` and `trellis-check` self-load `prd.md`, `info.md`, and JSONL context, while `trellis-research` resolves the active task/output path itself and there is no dedicated Qoder subagent-context hook in `.qoder/settings.json`.
 - Codex relies on `AGENTS.md`, `.codex/config.toml`, `.codex/hooks.json`, `.agents/skills/`, and `.codex/agents/`; do not assume a project-level `/trellis:...` command directory exists there.
+- `record-session-helper.py` is a Codex-specific close-out helper in this repository. Do not automatically propagate that helper into Claude / OpenCode / Qoder / Kiro `finish-work` entrypoints unless the platform-specific contract is explicitly changed.
 - Kiro uses `.kiro/` hooks, agents, and skills to connect into the same `.trellis` state.
 - Qoder uses `.qoder/` hooks, skills, and agents to connect into the same `.trellis` state.
 

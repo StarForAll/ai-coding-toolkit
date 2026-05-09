@@ -250,12 +250,16 @@ After the human has tested and committed the code, use `/trellis:finish-work` to
 
 ```bash
 python3 ./.trellis/scripts/task.py archive <task-name>
-python3 ./.trellis/scripts/workflow/record-session-helper.py \
+python3 ./.trellis/scripts/add_session.py \
   --title "Session Title" \
   --commit "abc1234" \
   --summary "Brief summary"
 python3 ./.trellis/scripts/task.py current --source
 ```
+
+This shared workflow guide uses `add_session.py` as the generic cross-platform
+session-recording baseline. Codex-specific helper / recovery guidance belongs
+in the Codex platform rules or helper-specific fallback docs.
 
 This automatically:
 1. Detects current journal file
@@ -269,9 +273,9 @@ This automatically:
 
 Use `/trellis:finish-work` command to run through:
 1. [OK] All code committed, commit message follows convention
-2. [OK] Session recorded via `record-session-helper.py` after archive
+2. [OK] Session recorded via `add_session.py` after archive
 3. [OK] No lint/test errors
-4. [OK] `task.py archive` completed before `record-session-helper.py`
+4. [OK] `task.py archive` completed before `add_session.py`
 5. [OK] `.trellis/tasks` clean and active task pointer cleared after archive
 6. [OK] Spec docs updated if needed
 

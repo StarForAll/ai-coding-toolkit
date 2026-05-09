@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/skills/index.md", "reason": "Skill authoring and coupled update rules"}
+{"file": ".trellis/spec/scripts/index.md", "reason": "Repository script/documentation maintenance boundaries"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Cross-layer drift and source-of-truth thinking"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Keep Qoder copies aligned with shared source wording"}
