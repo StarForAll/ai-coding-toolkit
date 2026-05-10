@@ -34,7 +34,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 WORKFLOW_ROOT = SCRIPT_DIR.parent
 REPO_ROOT = SCRIPT_DIR.parents[3]
 PYTHON = sys.executable
-ALLOWED_CURRENT_CLIS = {"claude", "opencode", "codex"}
+ALLOWED_CURRENT_CLIS = set(ASSETS.ALL_CLI_TYPES)
 
 TRELLIS_SCRIPTS_DIR = REPO_ROOT / ".trellis" / "scripts"
 if str(TRELLIS_SCRIPTS_DIR) not in sys.path:
@@ -463,6 +463,7 @@ def validate_supplemental_capability(
         return {
             "mode": "supplemental-unconfirmed",
             "capability": capability,
+            "capability_report": str(report_path),
             "report_path": str(report_path),
         }
 
@@ -504,6 +505,7 @@ def validate_supplemental_capability(
         "mode": "supplemental-confirmed",
         "capability": capability,
         "capability_id": capability_id,
+        "capability_report": str(report_path),
         "report_path": str(report_path),
     }
 
@@ -550,6 +552,7 @@ def update_fix_lifecycle(
             update_compatible_anchor(compatible_anchor_value)
     return {
         "mode": "fix-lifecycle-updated",
+        "capability_report": str(report_path),
         "report_path": str(report_path),
         "confirmed_fix_scope_items": len(confirmed_fix_scope),
         "applied_corrections_items": len(applied_corrections),
@@ -833,6 +836,8 @@ def _managed_row_key(spec: Any) -> str:
         return f"script:{spec.name}"
     if spec.kind == "doc":
         return f"doc:{spec.name}"
+    if spec.kind == "agent":
+        return f"agent:{spec.name}"
     return spec.name
 
 
@@ -841,6 +846,8 @@ def _managed_row_label(spec: Any) -> str:
         return f"helper-script:{spec.name}"
     if spec.kind == "doc":
         return f"shared-doc:{spec.name}"
+    if spec.kind == "agent":
+        return f"managed-enhanced-agent:trellis-{spec.name}"
     return spec.name
 
 
@@ -855,6 +862,8 @@ def _managed_mechanism(spec: Any) -> str:
         return "Workflow intentionally disables a baseline capability on the embedded surface."
     if spec.category == "shared-script":
         return "Workflow deploys a shared helper script used across CLI carriers."
+    if spec.category == "managed-enhanced-agent":
+        return "Workflow deploys the authoring-repo enhanced trellis-research agent into target projects while trellis-implement and trellis-check remain Trellis-native."
     return "Workflow-managed compatibility surface."
 
 
@@ -1052,9 +1061,21 @@ def build_workflow_dependent_rows(a_root: Path, b_root: Path) -> list[dict[str, 
         {
             "capability": "implementation-agent-carrier",
             "mechanism": "Workflow depends on per-CLI implementation agent carrier directories even beyond installer ownership boundaries.",
-            "claude": [".claude/agents"],
-            "opencode": [".opencode/agents"],
-            "codex": [".codex/agents"],
+            "claude": [
+                ".claude/agents/trellis-research.md",
+                ".claude/agents/trellis-implement.md",
+                ".claude/agents/trellis-check.md",
+            ],
+            "opencode": [
+                ".opencode/agents/trellis-research.md",
+                ".opencode/agents/trellis-implement.md",
+                ".opencode/agents/trellis-check.md",
+            ],
+            "codex": [
+                ".codex/agents/trellis-research.toml",
+                ".codex/agents/trellis-implement.toml",
+                ".codex/agents/trellis-check.toml",
+            ],
         },
         {
             "capability": "trellis-runtime-workflow-guide",

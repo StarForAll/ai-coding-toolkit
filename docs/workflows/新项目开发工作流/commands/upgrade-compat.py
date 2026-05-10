@@ -67,6 +67,7 @@ from workflow_assets import (
     read_project_trellis_version,
     resolve_codex_skills_dir,
     source_agent_path,
+    AGENTS_NL_ROUTING_MARKERS,
 )
 
 
@@ -81,8 +82,7 @@ def _load_install_workflow_module():
 
 
 _INSTALL_WORKFLOW = _load_install_workflow_module()
-_AGENTS_NL_ROUTING_END = _INSTALL_WORKFLOW._AGENTS_NL_ROUTING_END
-_AGENTS_NL_ROUTING_MARKER = _INSTALL_WORKFLOW._AGENTS_NL_ROUTING_MARKER
+_AGENTS_NL_ROUTING_MARKER, _AGENTS_NL_ROUTING_END = AGENTS_NL_ROUTING_MARKERS
 _NL_ROUTING_SECTION = _INSTALL_WORKFLOW._NL_ROUTING_SECTION
 _EMBED_ATTEMPT_FILE_NAME = _INSTALL_WORKFLOW._EMBED_ATTEMPT_FILE_NAME
 deploy_agents_md_routing = _INSTALL_WORKFLOW.deploy_agents_md_routing
@@ -118,7 +118,6 @@ _PARALLEL_DISABLED_MARKER = "<!-- workflow-parallel-disabled -->"
 _WORKFLOW_PATCH_MARKER = "<!-- workflow-projectization-patch -->"
 _WORKFLOW_START_HEADING = "## Development Process"
 _WORKFLOW_END_HEADING = "## File Descriptions"
-_ENTRY_COMMAND_CANDIDATES = ("continue.md", "start.md")
 _IGNORE_EMBED_ATTEMPT_ENV = "WORKFLOW_IGNORE_EMBED_ATTEMPT"
 # 当前 workflow 分发的阶段命令。
 # `brainstorm` / `check` 与 Trellis 基线同名，但当前 workflow 采用合并后的阶段语义；
@@ -139,6 +138,7 @@ _REQUIRED_INSTALL_RECORD_KEYS = {
     "scripts",
     "initial_pack",
     "bootstrap_task_removed",
+    "execution_cards",
 }
 _LEGACY_OPTIONAL_VERSION_KEYS = {
     "workflow_version",
@@ -305,6 +305,8 @@ def detect_install_record_state_warnings(record: dict, root: Path) -> int:
         warn("workflow-installed.json: bootstrap_task_removed=true，但 00-bootstrap-guidelines 仍存在；需人工核对")
     if bootstrap_status == "removed" and bootstrap_task_dir.exists():
         warn("workflow-installed.json: bootstrap_cleanup_status=removed，但 00-bootstrap-guidelines 仍存在；需人工核对")
+    if bootstrap_status == "dry-run-removed" and bootstrap_task_dir.exists():
+        warn("workflow-installed.json: bootstrap_cleanup_status=dry-run-removed，但 00-bootstrap-guidelines 仍存在；需人工核对")
     if bootstrap_status == "absent" and bootstrap_task_dir.exists():
         warn("workflow-installed.json: bootstrap_cleanup_status=absent，但 00-bootstrap-guidelines 仍存在；需人工核对")
 
@@ -333,6 +335,19 @@ def detect_embed_attempt_conflict(root: Path) -> int:
     if details.get("error"):
         warn(f"{_EMBED_ATTEMPT_FILE_NAME}: error={details['error']}")
     return 1
+
+
+def cleanup_embed_attempt_record(root: Path) -> bool:
+    attempt_path = root / ".trellis" / _EMBED_ATTEMPT_FILE_NAME
+    if not attempt_path.exists():
+        return True
+    try:
+        attempt_path.unlink()
+    except OSError as exc:
+        err(f"无法清理 {_EMBED_ATTEMPT_FILE_NAME}: {exc}")
+        return False
+    ok(f"{_EMBED_ATTEMPT_FILE_NAME} 已清理")
+    return True
 
 
 def read_text(path: Path | None) -> str | None:
@@ -385,21 +400,6 @@ def expected_agent_content(src: Path, cli_type: str, name: str) -> str | None:
     if not source_path.exists():
         return None
     return source_path.read_text(encoding="utf-8")
-
-
-def expected_parallel_disabled_content(src: Path) -> str | None:
-    source_path = src / "parallel-disabled.md"
-    if not source_path.exists():
-        err("parallel-disabled.md 缺失，无法校验 parallel 禁用覆盖")
-        return None
-    return prepare_command_content(source_path)
-
-
-def is_parallel_disabled(path: Path) -> bool:
-    text = read_text(path)
-    if text is None:
-        return False
-    return _PARALLEL_DISABLED_MARKER in text
 
 
 def _find_first_existing_command(dst_cmds: Path, candidates: tuple[str, ...]) -> Path | None:
@@ -856,15 +856,6 @@ def deploy_commands(src: Path, dst_cmds: Path, *, profile: str = DEFAULT_PROFILE
             ok(f"/trellis:{name}")
 
 
-def deploy_parallel_disabled(src: Path, target_path: Path, label: str) -> bool:
-    expected = expected_parallel_disabled_content(src)
-    if expected is None or not target_path.exists():
-        return False
-    target_path.write_text(expected, encoding="utf-8")
-    ok(f"{label} 已更新为禁用版本")
-    return True
-
-
 def deploy_scripts(src: Path, dst_scripts: Path, *, profile: str = DEFAULT_PROFILE) -> None:
     dst_scripts.mkdir(parents=True, exist_ok=True)
     for name in _managed_helper_scripts_for_profile(profile):
@@ -1180,6 +1171,9 @@ def write_install_record(
     bootstrap_task_removed = prior_record.get("bootstrap_task_removed", True)
     bootstrap_cleanup_status = prior_record.get("bootstrap_cleanup_status", "unknown")
     profile = prior_record.get("profile", DEFAULT_PROFILE)
+    cards = list(EXECUTION_CARDS)
+    if profile == DEFAULT_PROFILE:
+        cards.extend(OUTSOURCING_EXECUTION_CARDS)
     rec_file.write_text(
         json.dumps(
             {
@@ -1198,6 +1192,7 @@ def write_install_record(
                 "patched_shared_docs": PATCH_BASELINE_SHARED_DOCS,
                 "managed_enhanced_agents": MANAGED_ENHANCED_AGENT_NAMES,
                 "scripts": _managed_helper_scripts_for_profile(profile),
+                "execution_cards": cards,
                 "workflow_version": WORKFLOW_VERSION,
                 "workflow_schema_version": WORKFLOW_SCHEMA_VERSION,
                 "initial_pack": initial_pack,
@@ -1332,7 +1327,10 @@ def main() -> int:
         return 0
 
     if not version_changed and total_conflicts == 0:
-        ok("版本一致且部署完整，无需重新部署")
+        write_install_record(rec_file, current_version, installed_version, cli_types, record)
+        if not cleanup_embed_attempt_record(root):
+            return 1
+        ok("版本一致且部署完整；安装记录已刷新")
         return 0
 
     backup_shared_workflow_state(root)
@@ -1439,15 +1437,21 @@ def main() -> int:
                 codex_finish_work_skill_candidates(),
             )
             if args.mode == "force":
-                if any(
+                if not any(
                     (primary_skills_dir / ".backup-original" / skill_name / "SKILL.md").exists()
                     for skill_name in configured_router_candidates
-                ) and not restore_codex_start_skill(primary_skills_dir, configured_router_candidates):
+                ):
+                    err("缺少 .backup-original/trellis-continue 或 start，无法执行强制恢复")
                     return 1
-                if any(
+                if not restore_codex_start_skill(primary_skills_dir, configured_router_candidates):
+                    return 1
+                if not any(
                     (primary_skills_dir / ".backup-original" / skill_name / "SKILL.md").exists()
                     for skill_name in configured_finish_candidates
-                ) and not restore_codex_finish_work(primary_skills_dir, configured_finish_candidates):
+                ):
+                    err("缺少 .backup-original/trellis-finish-work 或 finish-work，无法执行强制恢复")
+                    return 1
+                if not restore_codex_finish_work(primary_skills_dir, configured_finish_candidates):
                     return 1
             for skills_dir in skills_dirs:
                 if args.mode == "force":
@@ -1499,6 +1503,8 @@ def main() -> int:
 
     # 更新安装记录
     write_install_record(rec_file, current_version, installed_version, cli_types, record)
+    if not cleanup_embed_attempt_record(root):
+        return 1
 
     # 清理旧备份
     for cli_type in cli_types:

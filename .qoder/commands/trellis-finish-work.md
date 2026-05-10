@@ -1,6 +1,6 @@
 ---
 name: trellis-finish-work
-description: Wrap up the current session: quality gate, commit reminder, archive, journal.
+description: Wrap up the current session: verify quality gate passed, archive completed tasks, and record session progress to the developer journal via Trellis native finish-work behavior. Use when done coding and ready to end the session.
 ---
 
 # Finish Work
@@ -40,7 +40,7 @@ For each remaining dirty path, decide whether it belongs to **the current task**
 Then route:
 
 - **Any remaining path looks like current-task work** — bail out with:
-  > "Working tree has uncommitted code changes from this task: `<list>`. Return to workflow Phase 3.4 to commit them before running `$finish-work`."
+  > "Working tree has uncommitted code changes from this task: `<list>`. Return to workflow Phase 3.4 to commit them before running ``finish-work` (Trellis command)`."
 
   Do NOT run `git commit` here. Do NOT prompt the user to commit. The user goes back to Phase 3.4 and the AI drives the batched commit there.
 - **All remaining paths look unrelated** (other parallel-window work) — report them once and continue to Step 3:
@@ -61,9 +61,9 @@ If there is no active task and the user did not confirm any cleanup archives, sk
 
 ```bash
 python3 ./.trellis/scripts/add_session.py \
-  --title "Session Title" \
-  --commit "hash1,hash2" \
-  --summary "Brief summary"
+    --title "Session Title" \
+    --commit "hash1,hash2" \
+    --summary "Brief summary"
 ```
 
 Use the work-commit hashes produced in Phase 3.4 (visible in Step 1's `Recent commits` list, or via `git log --oneline`) for `--commit`. Do not include the archive commit hashes from Step 3. This produces a `chore: record journal` commit.

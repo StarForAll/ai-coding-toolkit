@@ -161,7 +161,7 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产；当
 
 ### 多 skills 目录同步边界
 
-`trellis init` 在部分样本里可能同时落盘 `.agents/skills/` 与 `.codex/skills/` 两个目录；但当前 fresh `0.5.9` 基线默认可稳定观察到的是 `.agents/skills/`，不应再把 `.codex/skills/parallel` 当作必然出现的默认现象。当前安装器对这两类目录采用分层策略：
+`trellis init` 在部分样本里可能同时落盘 `.agents/skills/` 与 `.codex/skills/` 两个目录；但当前 fresh `0.5.10` 基线默认可稳定观察到的是 `.agents/skills/`，不应再把 `.codex/skills/parallel` 当作必然出现的默认现象。当前安装器对这两类目录采用分层策略：
 
 - `install-workflow.py` 只向 `.agents/skills/` 写入共享阶段 skills
 - `trellis-continue` / `trellis-finish-work` baseline patch 只增强**活动 skills 目录**；legacy `start` / `finish-work` 仅作为旧目标项目兼容输入

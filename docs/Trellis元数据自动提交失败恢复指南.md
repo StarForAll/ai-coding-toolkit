@@ -294,7 +294,7 @@ python3 -m py_compile \
 检查下面这些入口不再鼓励手工 commit，也不再指向已删除 helper：
 
 ```bash
-rg -n "Please commit \\.trellis|手工提交|record-session-helper.py|metadata-autocommit-guard.py|TRELLIS_AUTO_ESCALATE_COMMAND" \
+rg -n "Please commit \\.trellis|手工提交|TRELLIS_AUTO_ESCALATE_COMMAND" \
   .agents/skills .claude/commands .opencode/commands .qoder/commands .qoder/skills .trellis/scripts
 ```
 

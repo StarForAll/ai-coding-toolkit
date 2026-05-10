@@ -68,7 +68,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 多 skills 目录同步（安装器行为）
 
-`trellis init` 在部分样本里可能同时创建 `.agents/skills/` 与 `.codex/skills/`。当前 fresh `0.5.9` 基线默认可稳定观察到的是 `.agents/skills/`；`.codex/skills/` 应视为条件出现的次级影响面，而不是默认必然存在。
+`trellis init` 在部分样本里可能同时创建 `.agents/skills/` 与 `.codex/skills/`。当前 fresh `0.5.10` 基线默认可稳定观察到的是 `.agents/skills/`；`.codex/skills/` 应视为条件出现的次级影响面，而不是默认必然存在。
 
 当前安装器（`install-workflow.py`）对 Codex 的处理策略：
 

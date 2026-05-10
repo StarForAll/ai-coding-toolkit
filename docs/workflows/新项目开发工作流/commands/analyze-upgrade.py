@@ -15,12 +15,14 @@ from pathlib import Path
 
 from workflow_assets import (
     ALL_CLI_TYPES,
+    AGENTS_NL_ROUTING_MARKERS,
     command_phase_router_candidates,
     command_record_session_candidates,
     codex_finish_work_skill_candidates,
     codex_phase_router_skill_candidates,
     find_first_existing_codex_skill_path,
     ManagedAssetSpec,
+    build_managed_audit_extra_specs,
     build_managed_asset_specs,
     check_latest_trellis_prerequisite,
     detect_cli_types,
@@ -60,7 +62,18 @@ def build_parser() -> argparse.ArgumentParser:
 def read_text(path: Path | None) -> str | None:
     if path is None or not path.exists():
         return None
+    if path.is_dir():
+        return f"<dir:{path.name}>"
     return path.read_text(encoding="utf-8")
+
+
+def read_if_marked(path: Path | None, required_substrings: tuple[str, ...]) -> str | None:
+    content = read_text(path)
+    if content is None:
+        return None
+    if required_substrings and not all(marker in content for marker in required_substrings):
+        return None
+    return content
 
 
 def collect_codex_skill_dir_labels(*roots: Path) -> list[str]:
@@ -138,6 +151,30 @@ def iter_asset_states(
     return [(spec.asset_id, baseline, expected, target)]
 
 
+def iter_extra_asset_state(
+    asset_id: str,
+    baseline_root: Path,
+    expected_root: Path,
+    target_root: Path,
+    rel_paths: tuple[str, ...],
+    *,
+    required_substrings: tuple[str, ...] = (),
+) -> tuple[str, str | None, str | None, str | None]:
+    def first_content(root: Path) -> str | None:
+        for rel_path in rel_paths:
+            content = read_if_marked(root / rel_path, required_substrings)
+            if content is not None:
+                return content
+        return None
+
+    return (
+        asset_id,
+        first_content(baseline_root),
+        first_content(expected_root),
+        first_content(target_root),
+    )
+
+
 def load_install_record(root: Path) -> dict[str, object]:
     record_path = root / ".trellis" / "workflow-installed.json"
     if not record_path.exists():
@@ -162,6 +199,7 @@ def build_legacy_asset_specs(
     overlay_commands = install_record.get("overlay_commands")
     scripts = install_record.get("scripts")
     patched_shared_docs = install_record.get("patched_shared_docs")
+    patched_codex_skills = install_record.get("patched_codex_skills")
 
     if not isinstance(commands, list):
         commands = []
@@ -171,11 +209,14 @@ def build_legacy_asset_specs(
         scripts = []
     if not isinstance(patched_shared_docs, list):
         patched_shared_docs = []
+    if not isinstance(patched_codex_skills, list):
+        patched_codex_skills = []
 
     overlay_set = {name for name in overlay_commands if isinstance(name, str)}
     command_names = [name for name in commands if isinstance(name, str)]
     script_names = [name for name in scripts if isinstance(name, str)]
     shared_doc_names = [name for name in patched_shared_docs if isinstance(name, str)]
+    legacy_patched_codex_names = [name for name in patched_codex_skills if isinstance(name, str)]
 
     specs: list[ManagedAssetSpec] = []
     for cli_type in cli_types:
@@ -204,6 +245,19 @@ def build_legacy_asset_specs(
                     ManagedAssetSpec(
                         asset_id=asset_id,
                         category=category,
+                        cli_type="codex",
+                        kind="skill",
+                        name=name,
+                    )
+                )
+            for name in legacy_patched_codex_names:
+                asset_id = f"codex:{name}"
+                if asset_id in current_asset_ids:
+                    continue
+                specs.append(
+                    ManagedAssetSpec(
+                        asset_id=asset_id,
+                        category="patch-baseline",
                         cli_type="codex",
                         kind="skill",
                         name=name,
@@ -280,6 +334,12 @@ def render_report(
     target_root: Path,
 ) -> str:
     counts = Counter(item.action for item in findings)
+    merge_count = counts.get("merge", 0)
+    structural_risk_signals: list[str] = []
+    if any(item.category == "patch-baseline" and item.action == "merge" for item in findings):
+        structural_risk_signals.append("核心补丁型基线命令出现 merge，旧补丁模型可能已不足以自动恢复。")
+    if findings and merge_count >= max(3, len(findings) // 2):
+        structural_risk_signals.append("merge 项占主导，目标项目可能存在大面积私有 workflow 改写。")
     lines = [
         "# 目标项目工作流兼容升级分析报告",
         "",
@@ -296,11 +356,19 @@ def render_report(
         f"- `merge`: {counts.get('merge', 0)}",
         f"- `delete`: {counts.get('delete', 0)}",
         "",
+        "## 结构性风险提示",
+    ]
+    if structural_risk_signals:
+        lines.extend(f"- {signal}" for signal in structural_risk_signals)
+    else:
+        lines.append("- 当前分析未命中明显的结构性 break 信号；仍需人工评估高风险 merge 项。")
+    lines.extend([
+        "",
         "## 明细",
         "",
         "| Asset | Category | Action | Note |",
         "|------|----------|--------|------|",
-    ]
+    ])
     for item in findings:
         lines.append(f"| `{item.asset_id}` | `{item.category}` | `{item.action}` | {item.rationale} |")
     lines.append("")
@@ -351,6 +419,31 @@ def main() -> int:
                 Finding(
                     asset_id=asset_id,
                     category=spec.category,
+                    action=action,
+                    rationale=rationale,
+                    baseline_exists=baseline is not None,
+                    expected_exists=expected is not None,
+                    target_exists=target is not None,
+                )
+            )
+
+    extra_specs = build_managed_audit_extra_specs(cli_types)
+    for extra in extra_specs:
+        rel_paths = tuple(dict.fromkeys([*extra.claude_paths, *extra.opencode_paths, *extra.codex_paths]))
+        asset_id, baseline, expected, target = iter_extra_asset_state(
+            extra.capability,
+            args.baseline_root,
+            args.expected_root,
+            args.target_root,
+            rel_paths,
+            required_substrings=extra.required_substrings,
+        )
+        action, rationale = classify_asset(baseline, expected, target)
+        if action != "ignore":
+            findings.append(
+                Finding(
+                    asset_id=asset_id,
+                    category="shared-extra",
                     action=action,
                     rationale=rationale,
                     baseline_exists=baseline is not None,

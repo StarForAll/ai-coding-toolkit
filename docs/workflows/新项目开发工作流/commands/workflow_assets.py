@@ -21,7 +21,7 @@ CLI_ALT_DIRS = {
 ALL_CLI_TYPES = ["claude", "opencode", "codex"]
 WORKFLOW_VERSION = "0.1.26"
 WORKFLOW_SCHEMA_VERSION = "2"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增
-COMPATIBLE_TRELLIS_VERSION = "0.5.9"
+COMPATIBLE_TRELLIS_VERSION = "0.5.10"
 
 PATCH_BASELINE_COMMANDS = ["continue", "finish-work"]
 LEGACY_PATCH_BASELINE_COMMANDS = ["start", "finish-work", "record-session"]
@@ -247,6 +247,8 @@ class ManagedAssetSpec:
             return root / ".trellis" / "scripts" / "workflow" / self.name
         if self.kind == "doc":
             return root / ".trellis" / self.name
+        if self.kind == "agent":
+            return managed_agent_target_path(root, self.cli_type, self.name)
         if self.kind == "command":
             return root / CLI_DIRS[self.cli_type] / "commands" / "trellis" / f"{self.name}.md"
         if self.kind == "skill":
@@ -399,6 +401,16 @@ def build_managed_asset_specs(cli_types: list[str]) -> list[ManagedAssetSpec]:
                         name=name,
                     )
                 )
+        for name in MANAGED_ENHANCED_AGENT_NAMES:
+            specs.append(
+                ManagedAssetSpec(
+                    asset_id=f"{cli_type}:agent:{name}",
+                    category="managed-enhanced-agent",
+                    cli_type=cli_type,
+                    kind="agent",
+                    name=name,
+                )
+            )
 
     if cli_types:
         for name in PATCH_BASELINE_SHARED_DOCS:
@@ -485,6 +497,13 @@ def build_managed_audit_extra_specs(cli_types: list[str]) -> list[ManagedAuditEx
                 ".agents/skills/.backup-original",
                 ".codex/skills/.backup-original",
             ),
+        ),
+        ManagedAuditExtraSpec(
+            capability="shared-artifact:todo-reminder-file",
+            mechanism="Workflow creates a root-level todo.txt reminder file as an intentional low-stakes collaboration artifact during installation.",
+            claude_paths=("todo.txt",),
+            opencode_paths=("todo.txt",),
+            codex_paths=("todo.txt",),
         ),
     ]
 

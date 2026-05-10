@@ -29,7 +29,6 @@ COMMANDS_DIR = REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "
 SCRIPT = COMMANDS_DIR / "workflow-capability-audit.py"
 WORKFLOW_ASSETS = COMMANDS_DIR / "workflow_assets.py"
 TRELLIS_TASKS_DIR = REPO_ROOT / ".trellis" / "tasks"
-CURRENT_TASK_FILE = REPO_ROOT / ".trellis" / ".current-task"
 RUNTIME_SESSIONS_DIR = REPO_ROOT / ".trellis" / ".runtime" / "sessions"
 DEVELOPER_FILE = REPO_ROOT / ".trellis" / ".developer"
 
@@ -71,7 +70,6 @@ def _extract_section(text: str, heading: str) -> str:
 class WorkflowCapabilityAuditTests(unittest.TestCase):
     def setUp(self) -> None:
         self._pre_task_dirs = set(d.name for d in TRELLIS_TASKS_DIR.iterdir()) if TRELLIS_TASKS_DIR.is_dir() else set()
-        self._pre_current_task = CURRENT_TASK_FILE.read_text(encoding="utf-8") if CURRENT_TASK_FILE.is_file() else None
         self._pre_workflow_assets = WORKFLOW_ASSETS.read_text(encoding="utf-8")
         self._pre_developer = DEVELOPER_FILE.read_text(encoding="utf-8") if DEVELOPER_FILE.is_file() else None
         self._pre_runtime_sessions = {
@@ -86,10 +84,6 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             for d in TRELLIS_TASKS_DIR.iterdir():
                 if d.name not in self._pre_task_dirs:
                     shutil.rmtree(d, ignore_errors=True)
-        if self._pre_current_task is not None:
-            CURRENT_TASK_FILE.write_text(self._pre_current_task, encoding="utf-8")
-        elif CURRENT_TASK_FILE.is_file():
-            CURRENT_TASK_FILE.unlink()
         WORKFLOW_ASSETS.write_text(self._pre_workflow_assets, encoding="utf-8")
         if self._pre_developer is not None:
             DEVELOPER_FILE.write_text(self._pre_developer, encoding="utf-8")
@@ -189,6 +183,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
 
     def run_script(self, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
         merged_env = os.environ.copy()
+        merged_env["TRELLIS_CONTEXT_ID"] = "test-context"
         if env:
             merged_env.update(env)
         return subprocess.run(
@@ -217,6 +212,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
                 encoding="utf-8",
             )
         (root / ".claude" / "agents").mkdir(parents=True, exist_ok=True)
+        (root / ".claude" / "agents" / "trellis-research.md").write_text("# research\n", encoding="utf-8")
         (root / ".claude" / "settings.json").write_text("{}", encoding="utf-8")
         (root / ".claude" / "hooks").mkdir(parents=True, exist_ok=True)
         (root / ".claude" / "hooks" / "inject-workflow-state.py").write_text("# hook\n", encoding="utf-8")
@@ -225,12 +221,14 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         (root / ".claude" / "skills").mkdir(parents=True, exist_ok=True)
 
         (root / ".opencode" / "agents").mkdir(parents=True, exist_ok=True)
+        (root / ".opencode" / "agents" / "trellis-research.md").write_text("# research\n", encoding="utf-8")
         (root / ".opencode" / "plugins").mkdir(parents=True, exist_ok=True)
         (root / ".opencode" / "package.json").write_text("{}", encoding="utf-8")
         (root / ".opencode" / "skills").mkdir(parents=True, exist_ok=True)
         (root / ".opencode" / "lib").mkdir(parents=True, exist_ok=True)
 
         (root / ".codex" / "agents").mkdir(parents=True, exist_ok=True)
+        (root / ".codex" / "agents" / "trellis-research.toml").write_text('name = "trellis-research"\n', encoding="utf-8")
         (root / ".codex" / "hooks.json").write_text("{}", encoding="utf-8")
         (root / ".codex" / "config.toml").write_text("[features.multi_agent_v2]\nenabled = true\n", encoding="utf-8")
         (root / ".codex" / "hooks").mkdir(parents=True, exist_ok=True)
@@ -392,11 +390,11 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
                 "capability": "implementation-agent-carrier",
                 "mechanism": "Workflow depends on per-CLI implementation agent carrier directories even beyond installer ownership boundaries.",
                 "discovery_source": "ai-discovered",
-                "claude_evidence": "A=.claude/agents; B=.claude/agents",
+                "claude_evidence": "A=.claude/agents/trellis-research.md,.claude/agents/trellis-implement.md,.claude/agents/trellis-check.md; B=.claude/agents/trellis-research.md,.claude/agents/trellis-implement.md,.claude/agents/trellis-check.md",
                 "claude_classification": "adopted-compatible",
-                "opencode_evidence": "A=.opencode/agents; B=.opencode/agents",
+                "opencode_evidence": "A=.opencode/agents/trellis-research.md,.opencode/agents/trellis-implement.md,.opencode/agents/trellis-check.md; B=.opencode/agents/trellis-research.md,.opencode/agents/trellis-implement.md,.opencode/agents/trellis-check.md",
                 "opencode_classification": "adopted-compatible",
-                "codex_evidence": "A=.codex/agents; B=.codex/agents",
+                "codex_evidence": "A=.codex/agents/trellis-research.toml,.codex/agents/trellis-implement.toml,.codex/agents/trellis-check.toml; B=.codex/agents/trellis-research.toml,.codex/agents/trellis-implement.toml,.codex/agents/trellis-check.toml",
                 "codex_classification": "adopted-compatible",
                 "overall_summary": "adopted-compatible",
                 "structural_signal": "none detected from A/B dependency surface shape",
@@ -518,6 +516,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         stdout = io.StringIO()
         stderr = io.StringIO()
         merged_env = os.environ.copy()
+        merged_env["TRELLIS_CONTEXT_ID"] = "test-context"
         if env:
             merged_env.update(env)
         created_roots: list[Path] = []
@@ -664,6 +663,8 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         by_capability = {row["capability"]: row for row in rows}
 
         expected_capabilities = {
+            "managed-enhanced-agent:trellis-research",
+            "shared-artifact:todo-reminder-file",
             "shared-doc:execution-cards",
             "shared-artifact:workflow-installed-record",
             "shared-pack:requirements-discovery-foundation-import",
@@ -674,6 +675,9 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         for capability in expected_capabilities:
             self.assertEqual(by_capability[capability]["discovery_source"], "ai-discovered")
             self.assertEqual(by_capability[capability]["overall_summary"], "adopted-compatible")
+        self.assertIn("A=.claude/agents/trellis-research.md", by_capability["managed-enhanced-agent:trellis-research"]["claude_evidence"])
+        self.assertIn("B=.codex/agents/trellis-research.toml", by_capability["managed-enhanced-agent:trellis-research"]["codex_evidence"])
+        self.assertEqual(by_capability["shared-artifact:todo-reminder-file"]["codex_evidence"], "B=todo.txt")
 
     def test_build_workflow_managed_rows_requires_agents_routing_markers_for_routing_capability(self) -> None:
         module = load_script_module()
@@ -902,6 +906,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self.assertEqual(second.returncode, 0, msg=second.stdout + second.stderr)
         second_payload = json.loads(second.stdout)
         self.assertEqual(second_payload["mode"], "supplemental-confirmed")
+        self.assertEqual(second_payload["capability_report"], second_payload["report_path"])
         report_path = REPO_ROOT / second_payload["report_path"]
         report_text = report_path.read_text(encoding="utf-8")
         self.assertIn("custom-supplemental-capability", report_text)
@@ -934,6 +939,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self.assertEqual(second.returncode, 0, msg=second.stdout + second.stderr)
         second_payload = json.loads(second.stdout)
         self.assertEqual(second_payload["mode"], "supplemental-confirmed")
+        self.assertEqual(second_payload["capability_report"], second_payload["report_path"])
 
         report_path = REPO_ROOT / second_payload["report_path"]
         report_text = report_path.read_text(encoding="utf-8")
@@ -972,6 +978,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self.assertEqual(second.returncode, 0, msg=second.stdout + second.stderr)
         second_payload = json.loads(second.stdout)
         self.assertEqual(second_payload["mode"], "supplemental-unconfirmed")
+        self.assertEqual(second_payload["capability_report"], second_payload["report_path"])
 
         report_path = REPO_ROOT / second_payload["report_path"]
         report_text = report_path.read_text(encoding="utf-8")
@@ -1012,6 +1019,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         second_payload = json.loads(second.stdout)
         self.assertEqual(second_payload["mode"], "supplemental-confirmed",
                          msg=f"Expected supplemental-confirmed, got {second_payload.get('mode')}")
+        self.assertEqual(second_payload["capability_report"], second_payload["report_path"])
         report_path = REPO_ROOT / second_payload["report_path"]
         report_text = report_path.read_text(encoding="utf-8")
         self.assertIn("workflow-added-command-carrier", report_text)
@@ -1049,6 +1057,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self.assertEqual(second.returncode, 0, msg=second.stdout + second.stderr)
         second_payload = json.loads(second.stdout)
         self.assertEqual(second_payload["mode"], "fix-lifecycle-updated")
+        self.assertEqual(second_payload["capability_report"], second_payload["report_path"])
         report_path = REPO_ROOT / second_payload["report_path"]
         report_text = report_path.read_text(encoding="utf-8")
         self.assertIn("Confirm patch markers and capability matrix updates.", report_text)
@@ -1618,6 +1627,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         stderr = io.StringIO()
         env = os.environ.copy()
         env[assets.CURRENT_TRELLIS_VERSION_ENV] = "9.9.9"
+        env["TRELLIS_CONTEXT_ID"] = "test-parent-child-link"
 
         with (
             patch.dict(os.environ, env, clear=False),
@@ -1644,7 +1654,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             "missing-context",
         )
         with (
-            patch.dict(os.environ, {"TRELLIS_CURRENT_VERSION": "9.9.9"}, clear=False),
+            patch.dict(os.environ, {"TRELLIS_CURRENT_VERSION": "9.9.9", "TRELLIS_CONTEXT_ID": "test-missing-context"}, clear=False),
             patch.object(sys, "argv", [str(SCRIPT), "--current-cli", "claude", "--json"]),
             patch.object(module, "resolve_active_task", return_value=original_active),
             patch.object(module, "set_active_task", return_value=None),

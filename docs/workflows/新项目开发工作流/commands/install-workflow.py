@@ -69,6 +69,7 @@ from workflow_assets import (
     WORKFLOW_DOCS_DIR,
     WORKFLOW_SCHEMA_VERSION,
     WORKFLOW_VERSION,
+    AGENTS_NL_ROUTING_MARKERS,
     prepare_command_content,
     read_project_trellis_version,
     resolve_codex_skills_dir,
@@ -120,8 +121,7 @@ _EMBED_EXECUTOR_CONFIRM_ENV = "WORKFLOW_EMBED_EXECUTOR_CONFIRMED"
 _ENTRY_COMMAND_CANDIDATES = ("continue", "start")
 
 # AGENTS.md NL 路由表标记
-_AGENTS_NL_ROUTING_MARKER = "<!-- workflow-nl-routing-start -->"
-_AGENTS_NL_ROUTING_END = "<!-- workflow-nl-routing-end -->"
+_AGENTS_NL_ROUTING_MARKER, _AGENTS_NL_ROUTING_END = AGENTS_NL_ROUTING_MARKERS
 
 _NL_ROUTING_SECTION = """\
 <!-- workflow-nl-routing-start -->
@@ -156,6 +156,7 @@ _NL_ROUTING_SECTION = """\
 
 | 触发关键词 | Claude / OpenCode 入口 | Codex 入口 | 说明 |
 |-----------|------------------------|------------|------|
+| 调研、研究、查资料、查文档、看源码、搜代码、搜资料、技术调研、仓库分析 | 调用当前 CLI 的 `trellis-research` 子代理能力（若平台支持） | 描述研究意图，或显式触发 `trellis-research` agent | implementation 内部 research 链入口；用于代码/文档/仓库检索，不等于正式阶段命令 |
 | 开始、新会话、继续、下一步 | `/trellis:continue` | 描述当前意图，或显式触发 `trellis-continue` skill | Phase Router 自动检测；legacy `/trellis:start` 仅兼容旧目标项目 |
 | 卡住了、反复出错、死循环、调不通 | `/trellis:break-loop` | 描述排障意图，或显式触发 `trellis-break-loop` skill | 深度 bug 分析 |
 | 更新规范、新发现、沉淀经验 | `/trellis:update-spec` | 描述规范更新意图，或显式触发 `trellis-update-spec` skill | 规范更新 |

@@ -659,7 +659,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertTrue((fixture / ".codex" / "agents" / "trellis-research.toml").exists())
         self.assertFalse((fixture / ".codex" / "agents" / "research.toml").exists())
 
-    def test_install_no_longer_deploys_or_backs_up_codex_agents(self) -> None:
+    def test_install_keeps_codex_native_implement_check_but_enhances_research(self) -> None:
         fixture = self.create_fixture(include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
 
@@ -667,16 +667,18 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         codex_trellis_agents = fixture / ".codex" / "agents"
-        for name in ("trellis-research.toml", "trellis-implement.toml", "trellis-check.toml"):
-            if (codex_trellis_agents / name).exists():
-                self.assertEqual(
-                    (codex_trellis_agents / name).read_text(encoding="utf-8"),
-                    {
-                        "trellis-research.toml": BASELINE_CODEX_RESEARCH_TOML,
-                        "trellis-implement.toml": BASELINE_CODEX_IMPLEMENT_TOML,
-                        "trellis-check.toml": BASELINE_CODEX_CHECK_TOML,
-                    }[name],
-                )
+        self.assertIn(
+            "Resolve the active task path. Try in order:",
+            (codex_trellis_agents / "trellis-research.toml").read_text(encoding="utf-8"),
+        )
+        self.assertEqual(
+            (codex_trellis_agents / "trellis-implement.toml").read_text(encoding="utf-8"),
+            BASELINE_CODEX_IMPLEMENT_TOML,
+        )
+        self.assertEqual(
+            (codex_trellis_agents / "trellis-check.toml").read_text(encoding="utf-8"),
+            BASELINE_CODEX_CHECK_TOML,
+        )
         self.assertFalse((fixture / ".trellis" / ".backup-original" / "codex-agents").exists())
 
     def test_install_deploys_enhanced_research_agents_to_target_project(self) -> None:
@@ -1026,7 +1028,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         codex_readme = (
             REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "commands" / "codex" / "README.md"
         ).read_text(encoding="utf-8")
-        self.assertIn("当前 fresh `0.5.9` 基线默认可稳定观察到的是 `.agents/skills/`", codex_readme)
+        self.assertIn("当前 fresh `0.5.10` 基线默认可稳定观察到的是 `.agents/skills/`", codex_readme)
         self.assertNotIn(
             "本仓库实际观察到的例子是：主体 skills 落在 `.agents/skills/`，而 `parallel` 落在 `.codex/skills/`。",
             codex_readme,
@@ -1241,6 +1243,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         agents_md = (fixture / "AGENTS.md").read_text(encoding="utf-8")
         self.assertIn("Claude / OpenCode 入口 | Codex 入口", agents_md)
         self.assertIn("Codex：通过 `AGENTS.md` 自然语言路由或显式触发对应 skill", agents_md)
+        self.assertIn("调研、研究、查资料", agents_md)
+        self.assertIn("trellis-research", agents_md)
 
     def test_install_dry_run_reports_preview_without_writing_files(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
@@ -1516,6 +1520,33 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertNotIn("workflow-installed.json 缺少字段", result.stdout)
         self.assertIn("legacy/unknown", result.stdout)
 
+    def test_upgrade_merge_backfills_legacy_missing_version_keys_even_without_conflicts(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        record_path = fixture / ".trellis" / "workflow-installed.json"
+        record_data = json.loads(record_path.read_text(encoding="utf-8"))
+        record_data.pop("workflow_version", None)
+        record_data.pop("workflow_schema_version", None)
+        record_path.write_text(json.dumps(record_data, ensure_ascii=False, indent=2), encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--merge",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        updated = json.loads(record_path.read_text(encoding="utf-8"))
+        self.assertEqual(updated["workflow_version"], "0.1.26")
+        self.assertEqual(updated["workflow_schema_version"], "2")
+
     def test_upgrade_check_warns_when_bootstrap_cleanup_record_conflicts_with_filesystem(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
@@ -1538,6 +1569,34 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("bootstrap_cleanup_status=removed", result.stdout + result.stderr)
+
+    def test_upgrade_check_warns_when_bootstrap_dry_run_removed_conflicts_with_filesystem(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        record_path = fixture / ".trellis" / "workflow-installed.json"
+        record_data = json.loads(record_path.read_text(encoding="utf-8"))
+        record_data["bootstrap_cleanup_status"] = "dry-run-removed"
+        record_path.write_text(json.dumps(record_data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        bootstrap_dir = fixture / ".trellis" / "tasks" / "00-bootstrap-guidelines"
+        bootstrap_dir.mkdir(parents=True, exist_ok=True)
+        (bootstrap_dir / "task.json").write_text('{"id":"00-bootstrap-guidelines"}\n', encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("bootstrap_cleanup_status=dry-run-removed", result.stdout + result.stderr)
 
     def test_upgrade_force_backfills_legacy_missing_codex_patch_record(self) -> None:
         fixture = self.create_fixture(include_codex=True)
@@ -1564,6 +1623,28 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         updated_record = json.loads(record_path.read_text(encoding="utf-8"))
         self.assertEqual(updated_record["patched_codex_skills"], ["trellis-continue", "trellis-finish-work"])
+
+    def test_upgrade_merge_clears_residual_attempt_record_after_success(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        attempt_record = fixture / ".trellis" / ATTEMPT_RECORD_NAME
+        attempt_record.write_text(json.dumps({"status": "failed"}, ensure_ascii=False), encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--merge",
+            "--project-root",
+            str(fixture),
+            env={**self.latest_env_for(fixture), "WORKFLOW_IGNORE_EMBED_ATTEMPT": "1"},
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertFalse(attempt_record.exists(), "successful merge should clear residual attempt record")
 
     def test_upgrade_check_detects_codex_start_skill_patch_drift(self) -> None:
         fixture = self.create_fixture(include_codex=True)
@@ -2198,6 +2279,33 @@ class WorkflowInstallerTests(unittest.TestCase):
         restored_text = start_skill.read_text(encoding="utf-8")
         self.assertIn("Original baseline Codex start skill", restored_text)
         self.assertIn("Workflow Phase Router Patch", restored_text)
+
+    def test_force_fails_when_codex_active_baseline_backup_is_missing(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.apply_legacy_codex_workflow_state(fixture)
+
+        start_backup = fixture / ".agents" / "skills" / ".backup-original" / "start" / "SKILL.md"
+        if start_backup.exists():
+            start_backup.unlink()
+        current_backup = fixture / ".agents" / "skills" / ".backup-original" / "trellis-continue" / "SKILL.md"
+        if current_backup.exists():
+            current_backup.unlink()
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--force",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("缺少 .backup-original/trellis-continue 或 start", result.stdout + result.stderr)
 
     def test_uninstall_tolerates_corrupted_install_record(self) -> None:
         fixture = self.create_fixture()
