@@ -15,12 +15,12 @@ Design
 ------
 - Scripts only stage SPECIFIC product paths (journal files, index.md, the
   current task dir, the archive dir). Never the whole `.trellis/` tree.
-- If plain `git add <specific>` fails with "ignored by", retry with
-  `git add -f <specific>` — forcing only the paths the script knows it owns.
-  This is safe because the paths are narrow; it is NOT equivalent to
-  `git add -f .trellis/` (which would fan out to backups/worktrees/runtime).
-- If the -f retry also fails, print an explicit warning that includes a
-  negative example: ``Do NOT use `git add -f .trellis/` ...``
+- If plain `git add <specific>` fails with "ignored by", DO NOT retry with
+  `-f`. The ignored state is treated as user intent to keep Trellis-owned
+  data local-only unless the project is reconfigured explicitly.
+- If `git add` fails, print an explicit warning that includes a negative
+  example: ``Do NOT use `git add -f .trellis/` ...`` and point at
+  `session_auto_commit: false` as the supported opt-out.
 
 The wider-grain forbidden command stays forbidden.
 """
@@ -159,7 +159,7 @@ def safe_git_add(
     repo_root: Path,
     include_removals: bool = False,
 ) -> tuple[bool, bool, str]:
-    """Run `git add` on specific paths, retrying with -f if .gitignore blocks.
+    """Run `git add` on specific paths without overriding user ignore rules.
 
     Returns (success, used_force, stderr). On success, callers should still
     `git diff --cached` to detect whether anything was actually staged.
@@ -167,12 +167,8 @@ def safe_git_add(
     Behavior:
       - No paths passed → success, no force, empty stderr.
       - Plain `git add <paths>` succeeds → return.
-      - Plain fails with "ignored by" → retry with `git add -f <paths>`.
-      - Retry succeeds → return success with used_force=True.
-      - Retry fails → return failure; caller should print the gitignore
-        warning (see :func:`print_gitignore_warning`).
-      - Plain fails with a non-ignored error → return failure; do NOT retry
-        with -f (we only force when ignore is the cause).
+      - Plain fails (ignored or other error) → return failure without retry.
+      - `used_force` is kept for caller compatibility and is always False.
     """
     if not paths:
         return True, False, ""
@@ -186,18 +182,7 @@ def safe_git_add(
     if rc == 0:
         return True, False, ""
 
-    if not _stderr_indicates_ignored(err):
-        return False, False, err
-
-    force_args = ["add"]
-    if include_removals:
-        force_args.append("-A")
-    force_args.extend(["-f", "--", *paths])
-
-    rc2, _, err2 = run_git(force_args, cwd=repo_root)
-    if rc2 == 0:
-        return True, True, err2 or err
-    return False, True, err2 or err
+    return False, False, err
 
 
 def print_gitignore_warning(paths: list[str]) -> None:
@@ -242,6 +227,15 @@ def print_gitignore_warning(paths: list[str]) -> None:
     )
     for sub in TRELLIS_IGNORED_SUBPATHS:
         print(f"[WARN]   {sub}", file=sys.stderr)
+    print("[WARN]", file=sys.stderr)
+    print(
+        "[WARN] If you intentionally keep Trellis state local-only, set",
+        file=sys.stderr,
+    )
+    print(
+        "[WARN] `session_auto_commit: false` in `.trellis/config.yaml`.",
+        file=sys.stderr,
+    )
     print("[WARN]", file=sys.stderr)
     print(
         "[WARN] Do NOT use `git add -f .trellis/` — it pulls in backups, worktrees,",

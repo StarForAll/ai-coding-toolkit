@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import os
+from contextlib import redirect_stderr
 import shutil
 import subprocess
 import tempfile
 import unittest
+from io import StringIO
 from pathlib import Path
 
 
@@ -137,6 +139,33 @@ class SafeCommitPathSelectionTests(unittest.TestCase):
         )
 
         self.assertIn(".trellis/tasks/05-10-current", paths)
+
+    def test_safe_git_add_does_not_force_when_gitignore_blocks_paths(self) -> None:
+        repo_root = self.create_repo()
+        self.git(repo_root, "init")
+        self.git(repo_root, "config", "user.email", "test@example.com")
+        self.git(repo_root, "config", "user.name", "Safe Commit Tester")
+        (repo_root / ".gitignore").write_text(".trellis/\n", encoding="utf-8")
+
+        success, used_force, err = safe_commit.safe_git_add(
+            [".trellis/workspace/tester/journal-1.md"],
+            repo_root,
+        )
+
+        self.assertFalse(success)
+        self.assertFalse(used_force)
+        self.assertTrue(err.strip())
+
+    def test_print_gitignore_warning_mentions_session_auto_commit_false(self) -> None:
+        stderr = StringIO()
+        with redirect_stderr(stderr):
+            safe_commit.print_gitignore_warning(
+                [".trellis/workspace/tester/journal-1.md"]
+            )
+
+        output = stderr.getvalue()
+        self.assertIn("session_auto_commit: false", output)
+        self.assertIn("Do NOT use `git add -f .trellis/`", output)
 
 
 if __name__ == "__main__":

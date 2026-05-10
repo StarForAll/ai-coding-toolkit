@@ -45,6 +45,7 @@ from common.tasks import load_task
 from common.config import (
     get_packages,
     get_session_commit_message,
+    get_session_auto_commit,
     get_max_journal_lines,
     is_monorepo,
     resolve_package,
@@ -322,9 +323,16 @@ def _auto_commit_workspace(repo_root: Path) -> None:
 
     Path scope is restricted to specific products (journal files, index.md,
     active task dirs, the archive subtree). We never `git add` the whole
-    `.trellis/` tree, and if `.gitignore` blocks the specific paths we retry
-    with `git add -f <those-specific-paths>` — never `-f .trellis/`.
+    `.trellis/` tree, and ignored-path failures are treated as user intent,
+    not a signal to auto-force.
     """
+    if not get_session_auto_commit(repo_root):
+        print(
+            "[OK] session_auto_commit: false — skipping git stage/commit.",
+            file=sys.stderr,
+        )
+        return
+
     commit_msg = get_session_commit_message(repo_root)
     paths = safe_trellis_paths_to_add(repo_root)
     if not paths:
@@ -341,12 +349,6 @@ def _auto_commit_workspace(repo_root: Path) -> None:
                 file=sys.stderr,
             )
         return
-
-    if used_force:
-        print(
-            "[OK] Staged Trellis-owned paths with -f (specific paths, not .trellis/).",
-            file=sys.stderr,
-        )
 
     # Check if there are staged changes for the paths we just staged.
     rc, _, _ = run_git(
@@ -529,9 +531,11 @@ def main() -> int:
             if detected:
                 branch = detected
 
+    auto_commit = get_session_auto_commit(repo_root) and not args.no_commit
+
     return add_session(
         args.title, args.commit, args.summary, extra_content,
-        auto_commit=not args.no_commit,
+        auto_commit=auto_commit,
         package=package,
         branch=branch,
     )

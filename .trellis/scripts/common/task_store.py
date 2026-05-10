@@ -24,6 +24,7 @@ from pathlib import Path
 
 from .config import (
     get_packages,
+    get_session_auto_commit,
     is_monorepo,
     resolve_package,
     validate_package,
@@ -375,7 +376,7 @@ def cmd_archive(args: argparse.Namespace) -> int:
         print(colored(f"Archived: {dir_name} -> archive/{year_month}/", Colors.GREEN), file=sys.stderr)
 
         # Auto-commit unless --no-commit
-        if not getattr(args, "no_commit", False):
+        if get_session_auto_commit(repo_root) and not getattr(args, "no_commit", False):
             _auto_commit_archive(dir_name, repo_root, sorted(touched_task_names))
 
         # Return the archive path
@@ -398,9 +399,16 @@ def _auto_commit_archive(
 
     Only stages specific subpaths (the archive subtree and active task dirs),
     never the whole `.trellis/` tree. If `.gitignore` excludes `.trellis/`,
-    falls back to `git add -f <specific>` and emits a warning that explicitly
-    forbids `git add -f .trellis/` (which would fan out to caches/backups).
+    the ignored state is treated as user intent; the function warns and
+    returns without touching git.
     """
+    if not get_session_auto_commit(repo_root):
+        print(
+            "[OK] session_auto_commit: false — skipping git stage/commit.",
+            file=sys.stderr,
+        )
+        return True
+
     paths = safe_archive_paths_to_add(repo_root, task_name, related_task_names)
     if not paths:
         print("[OK] No task changes to commit.", file=sys.stderr)
@@ -420,12 +428,6 @@ def _auto_commit_archive(
                 file=sys.stderr,
             )
         return False
-
-    if used_force:
-        print(
-            "[OK] Staged Trellis-owned paths with -f (specific paths, not .trellis/).",
-            file=sys.stderr,
-        )
 
     rc, _, _ = run_git(
         ["diff", "--cached", "--quiet", "--", *paths], cwd=repo_root
