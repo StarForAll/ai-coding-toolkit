@@ -1834,3 +1834,37 @@ Verified the workflow audit findings, fixed target-project trellis-research pari
 ### Next Steps
 
 - None - task complete
+
+
+## Session 182: Restore Trellis upgrade drift and fix archive auto-commit pathspec
+
+**Date**: 2026-05-10
+**Task**: Restore Trellis upgrade drift and fix archive auto-commit pathspec
+**Branch**: `main`
+
+### Summary
+
+Restored Trellis 0.5.10 live workflow/skill drift and fixed archive auto-commit path selection for tracked vs untracked source task paths.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `06b325e` | (see git log) |
+| `6232b5f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

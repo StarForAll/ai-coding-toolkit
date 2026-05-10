@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-4.md`
-- **Total Sessions**: 181
+- **Total Sessions**: 182
 - **Last Active**: 2026-05-10
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~1836 | Active |
+| `journal-4.md` | ~1870 | Active |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
@@ -32,6 +32,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 182 | 2026-05-10 | Restore Trellis upgrade drift and fix archive auto-commit pathspec | `06b325e`, `6232b5f` | `main` |
 | 181 | 2026-05-10 | workflow audit remediation and close-out | `a08fc4c` | `main` |
 | 180 | 2026-05-10 | workflow audit follow-up and gate fixes | `a08fc4c` | `main` |
 | 179 | 2026-05-09 | Clean stale workflow helper residue during upgrade | `43bdac3` | `main` |
