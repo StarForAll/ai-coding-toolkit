@@ -7,8 +7,8 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-4.md`
-- **Total Sessions**: 185
+- **Active File**: `journal-5.md`
+- **Total Sessions**: 186
 - **Last Active**: 2026-05-10
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-4.md` | ~1969 | Active |
+| `journal-5.md` | ~40 | Active |
+| `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
 | `journal-1.md` | ~1987 | Archived |
@@ -32,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 186 | 2026-05-10 | Refine review-gate trigger rules | `9f5dd55` | `main` |
 | 185 | 2026-05-10 | workflow reviewer-id and watermark guard contracts | `4d5ce71` | `main` |
 | 184 | 2026-05-10 | Refine workflow audit boundaries | `2b345cf` | `main` |
 | 183 | 2026-05-10 | workflow capability audit close-out | `7205841` | `main` |
