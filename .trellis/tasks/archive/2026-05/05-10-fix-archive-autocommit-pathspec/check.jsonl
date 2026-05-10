@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/scripts/python-conventions.md", "reason": "Check Python helper changes and regression tests against script conventions"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Check runtime and test updates stay consistent with close-out flow"}

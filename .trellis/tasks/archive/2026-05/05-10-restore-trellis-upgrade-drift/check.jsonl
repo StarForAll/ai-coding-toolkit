@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/scripts/python-conventions.md", "reason": "Check Python runtime helper changes and tests against script conventions"}
+{"file": ".trellis/spec/platforms/codex-workflow-behavior.md", "reason": "Check Codex inline/sub-agent contract consistency"}
+{"file": ".trellis/spec/universal-domains/agent-collaboration/agent-role-boundaries/normative-rules.md", "reason": "Check role/tool boundaries for research agent surfaces"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Check cross-platform deployment consistency after edits"}

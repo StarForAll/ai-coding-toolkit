@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/scripts/python-conventions.md", "reason": "Python runtime and test changes must follow repo script conventions"}
+{"file": ".trellis/spec/platforms/codex-workflow-behavior.md", "reason": "Codex inline behavior and close-out boundaries must remain consistent"}
+{"file": ".trellis/spec/agents/index.md", "reason": "Agent carrier files are live maintenance targets in this repo"}
+{"file": ".trellis/spec/skills/index.md", "reason": "Repo-local skill surfaces and coupling rules apply to skill edits"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "This task spans workflow, hooks, skills, agents, and runtime helpers"}
