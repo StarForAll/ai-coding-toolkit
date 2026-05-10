@@ -126,7 +126,11 @@ def safe_archive_paths_to_add(
         archive_dir = tasks_dir / DIR_ARCHIVE
         if archive_dir.is_dir():
             paths.append(f"{DIR_WORKFLOW}/{DIR_TASKS}/{DIR_ARCHIVE}")
-        paths.append(f"{DIR_WORKFLOW}/{DIR_TASKS}/{task_name}")
+        source_task_dir = tasks_dir / task_name
+        source_task_rel = f"{DIR_WORKFLOW}/{DIR_TASKS}/{task_name}"
+        source_task_probe = f"{source_task_rel}/task.json"
+        if source_task_dir.is_dir() or _path_is_tracked(source_task_probe, repo_root):
+            paths.append(source_task_rel)
         for related_name in related_task_names or []:
             if not related_name or related_name == task_name:
                 continue
@@ -134,6 +138,12 @@ def safe_archive_paths_to_add(
             if related_dir.is_dir():
                 paths.append(f"{DIR_WORKFLOW}/{DIR_TASKS}/{related_name}")
     return list(dict.fromkeys(paths))
+
+
+def _path_is_tracked(path: str, repo_root: Path) -> bool:
+    """Return True when git already tracks the given repo-relative path."""
+    rc, _, _ = run_git(["ls-files", "--error-unmatch", "--", path], cwd=repo_root)
+    return rc == 0
 
 
 def _stderr_indicates_ignored(stderr: str) -> bool:

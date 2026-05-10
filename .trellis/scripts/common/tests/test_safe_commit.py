@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,6 +17,15 @@ import common.safe_commit as safe_commit  # noqa: E402
 
 
 class SafeCommitPathSelectionTests(unittest.TestCase):
+    def git(self, repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", *args],
+            cwd=repo_root,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
     def create_repo(self) -> Path:
         repo_root = Path(tempfile.mkdtemp(prefix="safe-commit-"))
         self.addCleanup(shutil.rmtree, repo_root)
@@ -30,6 +40,14 @@ class SafeCommitPathSelectionTests(unittest.TestCase):
         (tasks_dir / "05-10-current").mkdir()
         (tasks_dir / "05-10-other").mkdir()
         (tasks_dir / "archive").mkdir()
+        (tasks_dir / "05-10-current" / "task.json").write_text(
+            '{"status": "planning"}\n',
+            encoding="utf-8",
+        )
+        (tasks_dir / "05-10-other" / "task.json").write_text(
+            '{"status": "planning"}\n',
+            encoding="utf-8",
+        )
 
         (repo_root / ".trellis" / ".developer").write_text(
             "name=tester\n",
@@ -81,6 +99,44 @@ class SafeCommitPathSelectionTests(unittest.TestCase):
         self.assertIn(".trellis/tasks/05-10-other", paths)
         self.assertIn(".trellis/tasks/archive", paths)
         self.assertNotIn(".trellis/tasks/05-10-related", paths)
+
+    def test_safe_archive_paths_skip_missing_untracked_source_task_after_move(self) -> None:
+        repo_root = self.create_repo()
+        tasks_dir = repo_root / ".trellis" / "tasks"
+        archived_dir = tasks_dir / "archive" / "2026-05" / "05-10-current"
+        archived_dir.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(tasks_dir / "05-10-current"), str(archived_dir))
+
+        paths = safe_commit.safe_archive_paths_to_add(
+            repo_root,
+            "05-10-current",
+            ["05-10-other"],
+        )
+
+        self.assertNotIn(".trellis/tasks/05-10-current", paths)
+        self.assertIn(".trellis/tasks/archive", paths)
+        self.assertIn(".trellis/tasks/05-10-other", paths)
+
+    def test_safe_archive_paths_keep_missing_tracked_source_task_after_move(self) -> None:
+        repo_root = self.create_repo()
+        self.git(repo_root, "init")
+        self.git(repo_root, "config", "user.email", "test@example.com")
+        self.git(repo_root, "config", "user.name", "Safe Commit Tester")
+        self.git(repo_root, "add", ".")
+        self.git(repo_root, "commit", "-m", "init")
+
+        tasks_dir = repo_root / ".trellis" / "tasks"
+        archived_dir = tasks_dir / "archive" / "2026-05" / "05-10-current"
+        archived_dir.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(tasks_dir / "05-10-current"), str(archived_dir))
+
+        paths = safe_commit.safe_archive_paths_to_add(
+            repo_root,
+            "05-10-current",
+            ["05-10-other"],
+        )
+
+        self.assertIn(".trellis/tasks/05-10-current", paths)
 
 
 if __name__ == "__main__":
