@@ -1901,3 +1901,36 @@ Restored Trellis 0.5.10 live workflow/skill drift and fixed archive auto-commit 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 184: Refine workflow audit boundaries
+
+**Date**: 2026-05-10
+**Task**: Refine workflow audit boundaries
+**Branch**: `main`
+
+### Summary
+
+Completed a runtime-backed workflow audit, fixed Codex patch accounting, and aligned conditional .codex/skills boundary docs and tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2b345cf` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
