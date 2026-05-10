@@ -1934,3 +1934,36 @@ Completed a runtime-backed workflow audit, fixed Codex patch accounting, and ali
 ### Next Steps
 
 - None - task complete
+
+
+## Session 185: workflow reviewer-id and watermark guard contracts
+
+**Date**: 2026-05-10
+**Task**: workflow reviewer-id and watermark guard contracts
+**Branch**: `main`
+
+### Summary
+
+Unified task-level reviewer-id slots to a/b/c/d with source-cli metadata, added source-watermark-guard.py, aligned watermark preservation/repair docs and specs, and fixed validator/spec drift without introducing new regressions.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4d5ce71` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
