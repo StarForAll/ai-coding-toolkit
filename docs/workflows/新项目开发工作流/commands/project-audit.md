@@ -144,6 +144,8 @@ $TASK_DIR/project-audit/reviewer-commands-round-<N>.md
 - 默认 reviewer 数：2（其他 CLI）
 - 最大 reviewer 数：4
 - 建议优先在 3 轮内收敛；若超过建议轮次，需用户明确要求继续
+- task-level reviewer-id 默认使用协调者分配的字母槽位：`a` / `b` / `c` / `d`
+- 实际执行审查的 CLI 身份由 reviewer 报告 metadata 中的 `source-cli` 记录，不写入 `reviewer-id`
 - 若当前轮使用双 reviewer，默认生成两条**审查描述相同、`review-focus` 相同、仅 `reviewer-id` 不同**的命令
 - 只有在当前 CLI 明确认定需要角色分工时，才允许为不同 reviewer 编写不同的审查描述或不同的审查重点
 - task-level 标准命令必须显式包含 `--task-dir`、`--reviewer-id`、`--round`

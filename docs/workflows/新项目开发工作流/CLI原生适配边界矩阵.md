@@ -226,7 +226,7 @@ ls .codex/skills/.backup-original/parallel/SKILL.md 2>/dev/null
 | `finish-work` / legacy `record-session` 收尾行为 | Trellis 原生 `task.py archive` + `add_session.py` | Trellis 基线管理 | workflow 不再分发 helper；close-out 直接复用 Trellis 原生行为，legacy `record-session` 仅兼容旧目标项目输入 |
 | `archive` 任务归档行为 | `.trellis/scripts/task.py` / `.trellis/scripts/common/task_store.py` | 运行前置/仅校验 | 仍由目标项目 Trellis 基线提供，当前 workflow **不分发** 这段基线代码 |
 | archive metadata auto-commit pathspec 修复 | Trellis 基线 close-out 实现 | 运行前置/仅校验 | 若目标项目不是当前最新 Trellis 基线，收尾链路仍可能继承旧基线中的 archive bug；建议先升级 Trellis，再使用当前 workflow 的 `finish-work` close-out 链路；legacy 目标项目才检查 `record-session -> archive` |
-| 源码水印与归属证明校验脚本 | `.trellis/scripts/workflow/ownership-proof-validate.py` | 安装器管理 | 校验 assessment / design / plan / delivery 各阶段的源码水印与归属证明产物 |
+| 源码水印与归属证明校验脚本 | `.trellis/scripts/workflow/ownership-proof-validate.py`、`.trellis/scripts/workflow/source-watermark-guard.py` | 安装器管理 | 前者校验 assessment / design / plan / delivery 各阶段的源码水印与归属证明产物；后者校验并在允许时修复受保护水印片段的保持状态 |
 | 源码水印设计与交付产物 | `$TASK_DIR/design/source-watermark-plan.md`、`$TASK_DIR/delivery/ownership-proof.md`、`$TASK_DIR/delivery/source-watermark-verification.md` | 运行前置/人工维护 | 属于目标项目或任务产物，不由安装器直接生成 |
 
 补充约束：

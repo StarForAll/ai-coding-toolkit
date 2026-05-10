@@ -163,6 +163,7 @@ Claude Code 的用户入口仍是项目命令：
   - 长期策略（是否启用、边界、默认验证要求）放 `AGENTS.md`
   - 具体设计与交付产物放 `$TASK_DIR/design/source-watermark-plan.md`、`$TASK_DIR/delivery/ownership-proof.md`、`$TASK_DIR/delivery/source-watermark-verification.md`
   - 阶段校验使用 `.trellis/scripts/workflow/ownership-proof-validate.py`
+  - 若设计里声明了 `Protected Watermark Snippets`，后续改动还要执行 `.trellis/scripts/workflow/source-watermark-guard.py --mode check`；只有显式声明可恢复的低风险片段才允许 `--mode repair`
 
 当前仓库里的典型结构就是：
 

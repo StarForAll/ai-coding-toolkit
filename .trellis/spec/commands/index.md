@@ -125,6 +125,7 @@ Before finalizing a new command source asset:
   - reviewer task-dir root
   - review round number
   - at least two reviewer commands whose review description and `--review-focus` stay identical while only `--reviewer-id` differs
+  - the current task-level reviewer-id slot convention (`a` / `b` / `c` / `d`) and the boundary that real CLI identity is recorded separately in `source-cli`
   - the matching aggregator command for the current CLI
   - the boundary that the coordinator creates the review directory and reviewers only write reports
 

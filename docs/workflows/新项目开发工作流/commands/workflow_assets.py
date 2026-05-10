@@ -19,7 +19,7 @@ CLI_ALT_DIRS = {
     "codex": ".agents",
 }
 ALL_CLI_TYPES = ["claude", "opencode", "codex"]
-WORKFLOW_VERSION = "0.1.26"
+WORKFLOW_VERSION = "0.1.27"
 WORKFLOW_SCHEMA_VERSION = "2"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增
 COMPATIBLE_TRELLIS_VERSION = "0.5.10"
 
@@ -50,6 +50,7 @@ HELPER_SCRIPTS = [
     "check-quality.py",
     "delivery-control-validate.py",
     "ownership-proof-validate.py",
+    "source-watermark-guard.py",
 ]
 RETIRED_HELPER_SCRIPTS = [
     "record-session-helper.py",

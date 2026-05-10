@@ -7,6 +7,7 @@ description: Use when the current CLI is the sole fixer for one or more `multi-c
 
 ## Version History
 
+- **v2.4**: Aligned paired intake wording with coordinator-assigned letter-based `reviewer-id` slots and CLI identity recorded separately in `source-cli`
 - **v2.3**: Repositioned the skill as a workflow-agnostic action-side pair contract and moved reviewer-count defaults out of the core contract
 - **v2.2**: Added an explicit no-new-problems adoption gate and aligned workflow wording around regression-safe fixes
 - **v2.1**: Tightened report intake rules, safety gates, and skill-spec alignment for the shared paired contract
@@ -108,6 +109,7 @@ For `action-v2`, only consume files that satisfy **all** of the following:
    - `task-id`
    - `round`
    - `reviewer-id`
+   - `source-cli`
    - `protocol: task-level`
 4. Frontmatter values match the directory and filename
 5. The file is not one of:
@@ -122,6 +124,7 @@ If a file is ambiguous, malformed, or inconsistent with the contract, stop and a
 - This skill consumes the valid `multi-cli-review` reports present for the chosen round; it does not define how many reviewers should be launched by default.
 - `0` valid reports is an error.
 - If a coordinator, workflow, or command pack defines reviewer-count defaults or caps, treat those as upstream policy rather than redefining them here.
+- In current task-level rounds, `reviewer-id` should be interpreted as the coordinator-assigned reviewer slot ID (`a` / `b` / `c` / `d`), while `source-cli` identifies the actual reviewer CLI.
 
 ## Decision States
 

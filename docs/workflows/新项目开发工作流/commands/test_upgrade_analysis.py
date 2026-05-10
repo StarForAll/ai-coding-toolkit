@@ -349,7 +349,7 @@ class UpgradeAnalysisTests(unittest.TestCase):
         self.write_file(target, ".claude/agents/research.md", "---\nname: research\n")
         self.write_file(target, ".trellis/.version", "0.5.0-rc.3\n")
         self.write_file(target, ".trellis/workflow-installed.json",
-                         '{"workflow_version":"0.1.26","cli_types":["claude"]}')
+                         '{"workflow_version":"0.1.27","cli_types":["claude"]}')
 
         upgrade_script = COMMANDS_DIR / "upgrade-compat.py"
         merged_env = os.environ.copy()

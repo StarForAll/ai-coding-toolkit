@@ -277,6 +277,12 @@ def validate_design(
         else:
             passed += print_result(False, "", "source-watermark-plan.md 缺少分片/冗余策略说明")
 
+    if "protected watermark snippets" in normalized or "受保护水印片段" in content:
+        checks += 1
+        passed += print_result(True, "source-watermark-plan.md 已声明受保护水印片段与保持/修复边界", "")
+    else:
+        print("ℹ️  source-watermark-plan.md 未声明受保护水印片段；后续 source-watermark-guard.py 将按可选路径跳过保持/修复检查")
+
     checks += 1
     if WMID_PATTERN.search(content):
         passed += print_result(True, "source-watermark-plan.md 记录了符合格式的 WMID", "")

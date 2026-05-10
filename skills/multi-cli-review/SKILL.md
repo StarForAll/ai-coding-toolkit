@@ -7,6 +7,7 @@ description: Use when a reviewer CLI must analyze a skill, command, workflow, do
 
 ## Version History
 
+- **v2.3**: Standardized task-level `reviewer-id` handling to coordinator-assigned letter IDs while keeping actual CLI identity in `source-cli`
 - **v2.2**: Clarified generic coordinator ownership so the paired contract is not tied to a specific workflow surface
 - **v2.1**: Aligned reviewer-side report emission with `multi-cli-review-action`, tightened task-level path rules, and clarified reviewer-only boundaries
 
@@ -80,13 +81,15 @@ Use this skill when any of the following is true:
 | Parameter | Required | Meaning |
 |-----------|----------|---------|
 | `--task-dir` | Yes | Task directory, for example `tmp/multi-cli-review/<task-id>` |
-| `--reviewer-id` | Should be explicit | Reviewer identity used for filename and metadata |
+| `--reviewer-id` | Should be explicit | Coordinator-assigned reviewer slot ID used for filename and metadata |
 | `--round` | Should be explicit | Review round identifier |
 | `--review-focus` | No | Focus area for this reviewer |
 
 Rules:
 
 - In a standardized multi-reviewer command package, `--reviewer-id` and `--round` should be explicit.
+- For new task-level multi-reviewer flows, `--reviewer-id` should use short slot letters such as `a`, `b`, `c`, `d` instead of CLI names.
+- The actual CLI identity belongs in report metadata field `source-cli`, not inside `reviewer-id`.
 - Do not improvise a new `task-id`, a new round, or a new reviewer identity when the coordinator already issued a concrete command.
 - `--output` is **not** part of the current `task-level` protocol and must not be used to bypass the canonical reviewer report path.
 
@@ -293,7 +296,7 @@ At minimum, echo:
 |-------|---------|
 | `task-dir` | task root or legacy run root |
 | `round` | current round |
-| `reviewer-id` | actual reviewer identity used |
+| `reviewer-id` | coordinator-assigned reviewer slot ID actually used |
 | `output-path` | actual emitted report path |
 
 Example:
@@ -303,8 +306,8 @@ Example:
 
 📁 task-dir: <project-root>/tmp/multi-cli-review/my-task
 🔄 round: 1
-👤 reviewer-id: codex
-📄 output-path: <project-root>/tmp/multi-cli-review/my-task/review-round-1/codex.md
+👤 reviewer-id: a
+📄 output-path: <project-root>/tmp/multi-cli-review/my-task/review-round-1/a.md
 ```
 
 ## Required Stop Conditions
@@ -345,7 +348,7 @@ Stop and ask for clarification when any of the following is true:
 ### Example 1: Standard Reviewer Command
 
 ```text
-用户：/multi-cli-review "分析 skills/multi-cli-review 的问题" skills/multi-cli-review --task-dir tmp/multi-cli-review/skill-review --reviewer-id codex --round 1 --review-focus "边界条件与协议漂移"
+用户：/multi-cli-review "分析 skills/multi-cli-review 的问题" skills/multi-cli-review --task-dir tmp/multi-cli-review/skill-review --reviewer-id a --round 1 --review-focus "边界条件与协议漂移"
 
 CLI Reviewer：
 1. 解析 task-dir、reviewer-id、round、review-focus
@@ -389,3 +392,4 @@ CLI Reviewer：
 - New multi-reviewer work should always prefer `task-level` with explicit `--task-dir`, `--reviewer-id`, and `--round`.
 - Legacy `--md-a`, `--md-b`, and `--output` remain compatibility-only and must not redefine the current task-level report contract.
 - If the coordinator already generated a standardized reviewer command, follow that command exactly instead of improvising paths, file names, or round numbers.
+- In coordinator-managed task-level review rounds, `reviewer-id` names the slot (`a` / `b` / `c` / `d`), while `source-cli` records which CLI actually produced that slot's report.

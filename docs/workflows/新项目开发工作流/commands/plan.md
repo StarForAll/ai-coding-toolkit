@@ -326,7 +326,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
   - `可见源码水印任务`（必选；只要启用了归属证明门禁，默认必须存在）
   - `零宽字符水印任务`（当 `zero_width_watermark_enabled = yes`）
   - `隐蔽代码标识任务`（当 `subtle_code_marker_enabled = yes`）
-  - `水印验证任务`
+  - `水印验证任务`（至少覆盖交付前验证，以及后续改动对受保护水印片段的保持/自动修复检查）
   - `归属证明包任务`
 
 ### Step 4: 生成摘要型 `task_plan.md`

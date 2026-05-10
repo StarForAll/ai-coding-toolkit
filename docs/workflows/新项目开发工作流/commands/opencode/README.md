@@ -166,6 +166,7 @@ OpenCode 的规则层不要只靠单一入口。
   - 长期策略（是否启用、零宽字符边界、不起眼代码标识禁区）放 `AGENTS.md`
   - 阶段产物放 `$TASK_DIR/design/source-watermark-plan.md`、`$TASK_DIR/delivery/ownership-proof.md`、`$TASK_DIR/delivery/source-watermark-verification.md`
   - 静态校验使用 `.trellis/scripts/workflow/ownership-proof-validate.py`
+  - 若设计里声明了 `Protected Watermark Snippets`，后续改动还要执行 `.trellis/scripts/workflow/source-watermark-guard.py --mode check`；只有显式声明可恢复的低风险片段才允许 `--mode repair`
 
 `instructions` 更适合加载“主入口 + 当前会话真正需要的补充”，而不是替代命令系统。
 

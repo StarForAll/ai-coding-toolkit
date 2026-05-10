@@ -344,6 +344,7 @@ Compatibility code should therefore:
    - current examples may include:
      - `delivery-control-validate.py`
      - `ownership-proof-validate.py`
+     - `source-watermark-guard.py`
      - `workflow-state.py`
    - Contract:
      - source command docs may reference `<WORKFLOW_DIR>/commands/shell/...` in source form
@@ -746,9 +747,9 @@ Source command files use HTML comments as conditional markers:
 
 | Constant | Contents |
 |----------|---------|
-| `HELPER_SCRIPTS` | All 9 helper scripts (full set) |
+| `HELPER_SCRIPTS` | All 8 helper scripts (full set) |
 | `CORE_HELPER_SCRIPTS` | 7 scripts excluding outsourcing-only |
-| `OUTSOURCING_ONLY_SCRIPTS` | `delivery-control-validate.py`, `ownership-proof-validate.py` |
+| `OUTSOURCING_ONLY_SCRIPTS` | `delivery-control-validate.py` |
 
 Install deploys `HELPER_SCRIPTS` for outsourcing, `CORE_HELPER_SCRIPTS` for personal.
 

@@ -113,6 +113,20 @@ python3 <WORKFLOW_DIR>/commands/shell/check-quality.py \
 - 性能影响：复杂度、资源占用、慢路径
 - 上下文健康：是否出现重复修错、方向漂移、明显遗漏
 
+若当前任务涉及 `ownership_proof_required = yes` 且改动命中了受保护水印文件，还必须追加：
+
+```bash
+python3 <WORKFLOW_DIR>/commands/shell/source-watermark-guard.py --task-dir <task-dir> --mode check
+```
+
+若只发现已在 `source-watermark-plan.md` 中声明为可自动恢复的低风险片段漂移，可先执行：
+
+```bash
+python3 <WORKFLOW_DIR>/commands/shell/source-watermark-guard.py --task-dir <task-dir> --mode repair
+```
+
+然后重新执行 `--mode check`，确认修复后的水印保持状态重新通过。未声明为可恢复的漂移不得自动修复，必须人工处理。
+
 **调用 Skill**：`sharp-edges` — 检查危险 API 和配置。降级：手动检查 fail-open 默认值、危险配置和易误用接口。
 
 ### Step 5: 生成检查结果

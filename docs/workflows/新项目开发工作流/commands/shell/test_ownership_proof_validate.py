@@ -76,6 +76,13 @@ SOURCE_WATERMARK_PLAN = """\
 
 ## Verification
 - 记录验证命令、校验 hash 和复核方式
+
+## Protected Watermark Snippets
+### `src/protected.py`
+- `id`: `visible-header`
+- `expected`: `# watermark: wm_demo_001`
+- `repair`: `replace-if-missing`
+- `insert-after`: `# module: protected`
 """
 
 VISIBLE_ONLY_WATERMARK_PLAN = """\
@@ -240,6 +247,17 @@ class OwnershipProofValidateTests(unittest.TestCase):
         result = self.run_script("--phase", "design", "--task-dir", str(task_dir))
         self.assertEqual(result.returncode, 1)
         self.assertIn("禁区位置", result.stdout + result.stderr)
+
+    def test_design_allows_missing_protected_watermark_snippets(self) -> None:
+        task_dir = self._make_task_dir()
+        (task_dir / "assessment.md").write_text(COMPLETE_ASSESSMENT, encoding="utf-8")
+        design_dir = task_dir / "design"
+        design_dir.mkdir()
+        content = SOURCE_WATERMARK_PLAN.replace("\n## Protected Watermark Snippets\n### `src/protected.py`\n- `id`: `visible-header`\n- `expected`: `# watermark: wm_demo_001`\n- `repair`: `replace-if-missing`\n- `insert-after`: `# module: protected`\n", "")
+        (design_dir / "source-watermark-plan.md").write_text(content, encoding="utf-8")
+        result = self.run_script("--phase", "design", "--task-dir", str(task_dir))
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("未声明受保护水印片段", result.stdout + result.stderr)
 
     def test_plan_fails_when_required_tasks_missing(self) -> None:
         task_dir = self._make_task_dir()

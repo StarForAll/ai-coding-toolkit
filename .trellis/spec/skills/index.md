@@ -87,6 +87,7 @@ After editing either file:
 - confirm whether the paired skill also needs a matching change
 - read both diffs together before finishing
 - verify there is no protocol drift between reviewer output and action-side intake
+- verify task-level reviewer-id semantics remain aligned: slot letters in `reviewer-id`, actual CLI identity in `source-cli`
 
 ---
 

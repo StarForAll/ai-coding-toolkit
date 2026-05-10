@@ -357,6 +357,9 @@ design 后半段不得一次性跑完，而要按多个子块分段执行。每�
   - `subtle-markers` 的嵌入位置与禁区
   - `excluded_paths`
   - `extraction` 与 `verification` 步骤
+- 若项目需要对后续多轮源码修改建立“不得破坏水印”的保护面，再补充 `Protected Watermark Snippets`
+  - 声明后续修改不得破坏的受保护水印片段
+  - 仅对可自动恢复片段给出 `repair` 策略与 `insert-after` 锚点
 - 零宽字符水印只能用于：
   - 注释
   - 文档字符串
@@ -374,6 +377,8 @@ design 后半段不得一次性跑完，而要按多个子块分段执行。每�
 - 交付阶段至少需要预留两份产物：
   - `$TASK_DIR/delivery/ownership-proof.md`
   - `$TASK_DIR/delivery/source-watermark-verification.md`
+- 后续实现 / 修复阶段如再次触碰受保护文件，必须先执行 `.trellis/scripts/workflow/source-watermark-guard.py --task-dir <task-dir> --mode check`
+- 若 guard 发现的是已声明为可恢复的低风险片段漂移，允许执行 `.trellis/scripts/workflow/source-watermark-guard.py --task-dir <task-dir> --mode repair` 自动回补；否则必须人工修复后再继续
 - 设计边界与术语以 [源码水印与归属证据链执行卡](../源码水印与归属证据链执行卡.md) 为准
 
 自动化检查矩阵要求：

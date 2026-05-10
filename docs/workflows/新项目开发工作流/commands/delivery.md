@@ -97,6 +97,7 @@ python3 <WORKFLOW_DIR>/commands/shell/delivery-control-validate.py --phase deliv
 - 可见源码水印已落地
 - 零宽字符水印（若启用）已按”仅注释 / 文档字符串 / Markdown”边界落地
 - 不起眼代码标识（若启用）已落地且未污染业务关键逻辑
+- 若设计中声明了 `Protected Watermark Snippets`，这些受保护片段在当前源码中仍然存在；若先前发生可恢复漂移，已通过自动修复或人工修复恢复
 - `ownership-proof.md` 与 `source-watermark-verification.md` 已生成
 
 按当前 workflow 口径：
@@ -109,12 +110,20 @@ python3 <WORKFLOW_DIR>/commands/shell/delivery-control-validate.py --phase deliv
 
 ```bash
 python3 <WORKFLOW_DIR>/commands/shell/ownership-proof-validate.py --phase delivery --task-dir <task-dir>
+python3 <WORKFLOW_DIR>/commands/shell/source-watermark-guard.py --task-dir <task-dir> --mode check
 ```
 
 若需要一次性检查冻结字段、设计计划、任务拆分和交付证明，可执行：
 
 ```bash
 python3 <WORKFLOW_DIR>/commands/shell/ownership-proof-validate.py --all --task-dir <task-dir>
+```
+
+若 guard 发现的是已声明为可自动恢复的低风险片段漂移，可先执行：
+
+```bash
+python3 <WORKFLOW_DIR>/commands/shell/source-watermark-guard.py --task-dir <task-dir> --mode repair
+python3 <WORKFLOW_DIR>/commands/shell/source-watermark-guard.py --task-dir <task-dir> --mode check
 ```
 
 设计边界、术语与证据链口径以 [源码水印与归属证据链执行卡](../源码水印与归属证据链执行卡.md) 为准。

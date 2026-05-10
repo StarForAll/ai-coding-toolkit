@@ -139,6 +139,7 @@ Codex 下的 MCP / skills 配置也不应全部堆进 `AGENTS.md` 或启动注�
   - 设计 / 交付产物继续放 `$TASK_DIR/design/source-watermark-plan.md`、`$TASK_DIR/delivery/ownership-proof.md`、`$TASK_DIR/delivery/source-watermark-verification.md`
   - `plan` 阶段继续按 workflow 规则拆出：可见源码水印、零宽字符水印（若启用）、隐蔽代码标识（若启用）、水印验证、归属证明包任务；并且无论是否启用源码水印，都必须在主干任务后追加 `性能回归与优化任务`
   - 静态校验通过 `.trellis/scripts/workflow/ownership-proof-validate.py` 执行
+  - 若设计里声明了 `Protected Watermark Snippets`，后续改动还要执行 `.trellis/scripts/workflow/source-watermark-guard.py --mode check`；只有显式声明可恢复的低风险片段才允许 `--mode repair`
 
 ## 推荐承载方式
 

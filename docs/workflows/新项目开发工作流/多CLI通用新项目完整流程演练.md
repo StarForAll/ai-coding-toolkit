@@ -91,6 +91,7 @@ git remote set-url --add --push origin <第二个仓库URL>
 - legacy `start` / `record-session` 仅作为旧目标项目兼容输入
 - `archive` 仍直接复用目标项目 Trellis 基线里的 `python3 ./.trellis/scripts/task.py archive`，不是当前 workflow 额外分发的一份 helper
 - 当前 workflow 默认启用作者归属保护（`ownership_proof_required` 常规默认值为 `yes`）；除非项目明确写 `no`，否则源码水印与归属证明都应视为 workflow 的正式产物层，而不是交付前临时想起的补丁动作
+- 若 design 中已经声明了 `Protected Watermark Snippets`，后续任何实现/修复任务都必须把这些片段当成“不能顺手改坏”的保留面；只有明确声明可自动恢复的低风险片段，才允许用 `source-watermark-guard.py --mode repair` 自动回补
 
 如果忽略这层嵌入关系，就容易把“继承基线”误判成“workflow 漏了命令”。
 
@@ -292,6 +293,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 | `forensic` | 取证强化档：尽量保留多层水印与证明 | `source_watermark_channels` 至少包含 `visible`，建议启用全部已确认通道 |
 
 这里的 level 主要表达策略强度；真正决定后续 design / plan / delivery 实际检查范围的，仍是 `source_watermark_channels`。
+若项目后续还会多轮修改源码，design 阶段还要把受保护水印片段与修复锚点写进 `source-watermark-plan.md`，供 `source-watermark-guard.py` 做保持/修复检查。
 
 ### 退出门禁
 
