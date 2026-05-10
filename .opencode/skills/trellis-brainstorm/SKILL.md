@@ -210,7 +210,7 @@ Why:
 - It returns only `{file path, one-line summary}` to the main agent
 - Independent topics can be **parallelized** — spawn multiple sub-agents in one tool call
 
-> **Codex inline-mode exception**: on Codex CLI with `dispatch_mode: inline` (the default), the main agent does research inline — dispatching `trellis-research` is unnecessary because the main session already has full task context. With `dispatch_mode: sub-agent`, `trellis-research` can be dispatched normally: the dispatch prompt's `Active task: <path>` first line tells the sub-agent which `{task_dir}/research/` to write into (see `.trellis/workflow.md` sub-agent dispatch protocol).
+> **Codex exception**: on Codex CLI with `dispatch_mode: inline` (the default), the main agent does research inline — dispatching `trellis-research` is unnecessary because the main session already has full task context. With `dispatch_mode: sub-agent`, `trellis-research` can be dispatched normally: the dispatch prompt's `Active task: <path>` first line tells the sub-agent which `{task_dir}/research/` to write into (see `.trellis/workflow.md` sub-agent dispatch protocol).
 
 Agent type: `trellis-research`
 Task description template: "Research <specific question>; persist findings to `{TASK_DIR}/research/<topic-slug>.md`."
