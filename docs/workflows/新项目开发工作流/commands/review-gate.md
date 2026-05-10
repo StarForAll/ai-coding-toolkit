@@ -7,7 +7,7 @@ description: 质量检查完成了？进入任务级补充审查门禁 — 判�
 
 > **Workflow Position**: §5.1.x → 前: `/trellis:check`（条件触发） → 后: `/trellis:finish-work`
 >
-> **触发条件**：review-gate 不是所有 check 的必经步骤。仅当 check 结果涉及安全 / 跨层 / 高 blast radius / 多 CLI 任务 / 外包交付关键路径 / L2 级任务时才触发。普通检查可直接从 check 进入 finish-work。
+> **触发条件**：review-gate 不是所有 check 的必经步骤。默认只在明确高风险条件或用户显式要求时触发；普通检查可直接从 check 进入 finish-work。
 > **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:review-gate`） · ✅ OpenCode（TUI: `/trellis:review-gate`；CLI: `trellis/review-gate`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:review-gate` 命令；见 `codex/README.md`）
 
 > **Strong Gate**: 本阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束。review-gate 完成后，必须等待用户明确确认，不能自动进入 `finish-work`。
@@ -63,19 +63,56 @@ description: 质量检查完成了？进入任务级补充审查门禁 — 判�
 - 认证、授权、权限边界、敏感信息处理
 - 数据迁移、schema 变更、删除与回填
 - 公共 API、跨层 contract、外部系统集成
-- 支付、队列、缓存一致性、并发状态
+- 支付、消息队列、缓存一致性、并发状态
 - 核心共享模块且 blast radius 明显
-- 用户显式要求执行任务级多 CLI 审查
+- 用户显式要求使用 `review-gate`
+
+`blast radius 明显` 只在至少满足以下任一条件时成立：
+
+- 改动落在多个 feature / module / package 共用的核心模块，且当前代码搜索已知下游消费者不少于 3 处
+- 改动改变多个层之间共享的数据 contract / serialization / validation 语义
+- 改动影响全局启动 / 构建 / runtime 初始化 / 全局状态一致性
+- 一旦出错，影响不是局部功能退化，而是跨功能、跨任务或跨模块系统性失效
+
+若以上证据无法从代码、配置、调用关系或任务上下文中成立，不得仅凭“感觉重要”命中该硬条件。
 
 **软条件门槛**
 - 复杂度层：改动文件数、改动行数、涉及模块/层数、异常路径数量
 - 影响面层：公共模块、跨层边界、外部集成、blast radius
-- 可信度层：测试覆盖不足、当前 CLI 不确定性高、AI 生成比例高、历史缺陷密度高
+- 可信度层：测试或验证证据明显不足、当前 CLI 不确定性高、AI 生成比例高、历史缺陷密度高
+
+“测试或验证证据明显不足” 只在至少满足以下任一条件时成立：
+
+- 改变了行为或修复了 bug，但没有对应自动化测试，也没有明确的手工验证记录
+- 改变了失败路径 / 异常分支 / 回退逻辑，但没有负向验证证据
+- 改变了跨层 contract / serialization / integration 行为，但没有对应集成或边界验证
+- 跳过了当前任务本应执行的关键验证命令，且没有等价替代证据
+
+以下情况默认不构成“测试或验证证据明显不足”：
+
+- 一般性的覆盖率不够理想，但当前改动路径已有合理自动化或手工验证
+- 纯文档改动
+- 纯重构且未改变性能特征、序列化格式、缓存策略或其他非功能性行为
+- 无行为变化改动
+- 仅因为“理论上还能补更多测试”
+
+以下 anti-pattern 单独出现时，不得作为进入 `review-gate` 的理由：
+
+- “看起来复杂”
+- “改动文件稍多”
+- “CLI 想更稳一点”
 
 **判定结果**
 - `required`：必须执行多 CLI 审查
 - `recommended`：建议执行；若现有验证已足够且用户接受风险，可跳过并写明原因
 - `skip`：无需执行，直接进入 `/trellis:finish-work`
+
+门槛判定：
+
+- 命中任一硬条件 → `required`
+- 未命中硬条件，但可信度层因“测试或验证证据明显不足”单独达到中门槛 → `recommended`
+- 未命中硬条件，但多个软条件叠加达到现有中门槛 → `recommended`
+- 否则 → `skip`
 
 将判定写入：
 
@@ -97,6 +134,12 @@ $TASK_DIR/review-gate/review-gate-round-<N>.md
 - 先提示用户在对应 CLI 中补齐对应 skill
 - **不要**降级为临时上下文注入或其他兼容协议继续该审查层
 - 若用户确认当前无法补齐 skill，记录"未执行原因 + 当前残余风险"后直接跳过 review-gate，进入下一步
+
+用户触发边界：
+
+- 若用户明确要求进入 `review-gate`，则必须进入本阶段；AI 不得以“当前风险不高”为由拒绝。
+- 但进入阶段后，当前轮判定结果仍可为 `skip` / `recommended` / `required`。
+- 若用户明确要求“多 CLI 审查 / 让其他 CLI 再看一轮 / multi-cli-review”，则外部 reviewer 执行视为必需动作；若能力不可用，必须显式阻塞并说明依赖缺失，不得静默降级。
 
 1. 当前 CLI 创建：
 

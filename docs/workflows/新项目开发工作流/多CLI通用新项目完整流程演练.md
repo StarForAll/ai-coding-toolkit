@@ -606,7 +606,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### CLI 入口差异
 
-- Claude Code：`/trellis:check` → （默认）`/trellis:finish-work`；高风险条件触发时 → `/trellis:review-gate`
+- Claude Code：`/trellis:check` → （默认）`/trellis:finish-work`；命中 `review-gate` 硬条件、或软条件判定达到 `recommended`、或用户显式要求时 → `/trellis:review-gate`
 - OpenCode：TUI 用 `/trellis:check`、`/trellis:finish-work`（或条件触发 `/trellis:review-gate`）；CLI 用 `trellis/check`、`trellis/finish-work`
 - Codex：自然语言描述或显式触发 `check`、`finish-work` skill；条件触发时再用 `review-gate` skill
 
@@ -620,7 +620,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 ### 典型降级方式
 
 - 没有 reviewer skill 时，不伪造多 CLI 审查，直接记录“未执行原因 + 当前残余风险”
-- 只要出现安全、跨层 contract、数据迁移、高 blast radius，就不要把 `review-gate` 当成可有可无
+- 只要命中 `review-gate` 的硬条件（如安全、跨层 contract、数据迁移、支付 / MQ / 缓存一致性 / 并发状态、共享核心模块且 blast radius 明显），或用户显式要求进入补充审查，就不要把 `review-gate` 当成可有可无
 
 ### 外部交付项目分支
 

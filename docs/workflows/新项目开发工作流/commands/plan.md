@@ -466,7 +466,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 
 - 多任务 / 跨模块项目
 - 发版前或交付前
-- 高 blast radius
+- 高 blast radius（仅当其满足项目级高影响面条件时）
 - 外包 / 新客户项目
 
 <!-- if:outsourcing -->

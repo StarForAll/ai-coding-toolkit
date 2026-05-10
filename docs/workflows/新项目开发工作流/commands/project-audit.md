@@ -47,7 +47,12 @@ description: 所有代码任务都完成了？进入项目级全局代码审查�
 满足以下**任一**条件时，优先进入本命令：
 
 - `task_plan.md` 存在，且其中定义的全部代码相关 Trellis task 均已完成，且 `PROJECT-AUDIT` 尚未完成
-- 多任务 / 跨模块 / 发版前 / 高 blast radius 场景
+- 多任务 / 跨模块 / 发版前场景
+- 或改动满足项目级高影响面条件，例如：
+  - 影响多个 feature / module / package 共用的核心模块，且已知下游消费者不少于 3 处
+  - 改变多个层之间共享的数据 contract / serialization / validation 语义
+  - 影响全局启动 / 构建 / runtime 初始化 / 全局状态一致性
+  - 一旦出错，会造成跨功能、跨任务或跨模块系统性失效
 - 外包 / 新客户项目在交付前
 
 **不强制触发的情况**（Lite 链路）：
@@ -118,7 +123,7 @@ description: 所有代码任务都完成了？进入项目级全局代码审查�
 - 当前问题涉及跨模块因果链，当前 CLI 难以单独判断
 - 用户显式要求使用 `multi-cli-review`
 
-注意：这些是 `project-audit` 内部引入 `multi-cli-review` 的条件，与 `check` 后触发 `review-gate` 的硬条件（安全 / 跨层 / 高 blast radius / 外包 / L2）不同。
+注意：这些是 `project-audit` 内部引入 `multi-cli-review` 的条件，与 `check` 后触发 `review-gate` 的硬条件不同；`review-gate` 的权威硬条件列表以 `commands/review-gate.md` 为准。
 
 即使命中以上条件，也必须先由当前 CLI 形成聚焦后的问题包，再交给 reviewer；不要把宽泛的“整个项目看一下”直接丢给其他 CLI。
 

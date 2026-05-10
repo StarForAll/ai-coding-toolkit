@@ -192,7 +192,7 @@ $TASK_DIR/check.md
 | 检查结果 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
 | 基本合规，可直接进入收尾 | `/trellis:finish-work` | 进入提交前检查，或显式触发 `finish-work` skill | **默认推荐**（Lite / Standard）。仅在用户明确确认后才允许进入收尾 |
-| 涉及安全 / 跨层 / 高 blast radius / 多 CLI 任务 | `/trellis:review-gate` | 进入补充审查判断，或显式触发 `review-gate` skill | **条件触发**。仅在用户明确确认后才允许切换到 review-gate |
+| 命中 review-gate 硬条件，或用户显式要求进入补充审查 | `/trellis:review-gate` | 进入补充审查判断，或显式触发 `review-gate` skill | **条件触发**。仅在用户明确确认后才允许切换到 review-gate |
 | 存在实现偏差，需先修复 | `/trellis:continue` | 回到实施阶段，或显式触发 `trellis-continue` skill | 回到 implementation 内部链修复偏差项，再重新执行正式 `check` |
 | 测试或验证证据不足 | `/trellis:test-first` | 回到测试驱动，或显式触发 `test-first` skill | 先补验证证据，再重新执行 `check` |
 | 发现上下文污染 | `/trellis:continue` | 开新会话并重新描述当前意图，或显式触发 `trellis-continue` skill | 停止当前会话，开新会话并注入决策摘要 |
@@ -202,11 +202,13 @@ $TASK_DIR/check.md
 
 **review-gate 触发条件**（不是所有 check 都必须走 review-gate）：
 
-- 涉及安全、权限、敏感数据处理
-- 跨模块 / 跨层 contract 变更
-- 数据库 schema 或数据迁移
-- 高 blast radius（影响多个已有功能）
-- 外包 / 新客户项目的关键交付路径
-- L2 级任务的最终 check
+- 命中以下任一硬条件：
+  - 认证 / 授权 / 权限边界 / 敏感信息处理
+  - 数据迁移 / schema 变化 / 删除 / 回填
+  - 公共 API / 跨层 contract / 外部系统集成
+  - 支付 / 消息队列 / 缓存一致性 / 并发状态
+  - 共享核心模块且 blast radius 明显
+  - 用户显式要求进入 `review-gate`
+- 或根据当前改动的软条件预判，进入 `review-gate` 后大概率会被判定为 `recommended`
 
 不满足以上条件时，check 可直接进入 finish-work，无需经过 review-gate。
