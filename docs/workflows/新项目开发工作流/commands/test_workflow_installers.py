@@ -1038,6 +1038,8 @@ class WorkflowInstallerTests(unittest.TestCase):
             REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "装后隐藏目录与托管边界核对清单.md"
         ).read_text(encoding="utf-8")
         self.assertIn("当前 fresh baseline 不应默认假定它存在", hidden_boundary)
+        self.assertIn("仅在 `.codex/skills/` 实际存在时才纳入核对", hidden_boundary)
+        self.assertIn("仅在该目录真实存在时才继续检查其条件性影响面", hidden_boundary)
 
         command_map = (REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "命令映射.md").read_text(
             encoding="utf-8"
@@ -1262,6 +1264,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertFalse((fixture / ".trellis" / ATTEMPT_RECORD_NAME).exists())
         self.assertFalse((fixture / ".agents" / "skills" / "review-gate").exists())
         self.assertNotIn("workflow-nl-routing-start", (fixture / "AGENTS.md").read_text(encoding="utf-8"))
+        self.assertIn("[codex] 命令: 9/9, 补丁: 3, agents: 1, 脚本: 0, 手动基线校验: 2".lower(), result.stdout.lower())
+        self.assertNotIn("[codex] 命令: 9/9, 补丁: 4".lower(), result.stdout.lower())
 
     def test_install_dry_run_does_not_migrate_legacy_agents(self) -> None:
         """--dry-run must NOT perform actual file renames on disk."""

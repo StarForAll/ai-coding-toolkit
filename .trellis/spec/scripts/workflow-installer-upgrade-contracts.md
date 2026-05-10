@@ -319,6 +319,26 @@ Compatibility code should therefore:
      - docs must state that `.codex/skills/` is Codex-local / project-custom plus duplicate shared-skill drift cleanup scope, and that non-active directory copies of `trellis-continue` / `trellis-finish-work` are outside the workflow-managed patch drift surface unless a future installer explicitly starts writing there
      - docs must not describe `.codex/skills/parallel` as the current fresh-baseline default outcome of `trellis init`; if mentioned, it must be framed as a conditional / historical / sample-only secondary-carrier case rather than a required or expected default
 
+4.2 **Codex install summary accounting**
+   - installer summary fields for Codex must distinguish:
+     - `patches`: workflow actually injected or removed assets within the workflow-managed write scope
+     - `manual_checks`: baseline/manual-maintained prerequisite surfaces that were only checked for presence or readiness
+   - Contract:
+     - `patches` may include:
+       - `trellis-continue` patch injection in the active skills directory
+       - `trellis-finish-work` patch injection in the active skills directory
+       - optional disabled entry removal such as `parallel`, but only when such an entry actually exists in one of the skills directories
+     - `patches` must not include:
+       - `.codex/hooks.json` presence checks
+       - `.codex/hooks/session-start.py` presence checks
+       - other Trellis-baseline or project-manual assets that the workflow does not write, patch, or remove
+     - presence checks for `.codex/hooks.json` / `.codex/hooks/session-start.py` must be reported separately as `manual_checks` or an equivalent non-patch summary dimension
+     - dry-run and formal-install summary output must not overstate workflow write scope by counting manual/baseline readiness checks as workflow patches
+   - Tests Required:
+     - Codex dry-run summary must show workflow patch count independently from manual baseline checks
+     - a fixture that contains `.agents/skills/parallel` must still increment `patches` for the `parallel` removal path
+     - the same fixture must not gain an extra patch count merely because `.codex/hooks.json` and `.codex/hooks/session-start.py` exist
+
 5. **Phase-gate helper scripts**
    - helper scripts referenced as mandatory validation gates inside workflow source commands
    - current examples may include:

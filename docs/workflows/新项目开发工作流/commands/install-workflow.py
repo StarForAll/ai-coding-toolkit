@@ -1168,12 +1168,26 @@ def deploy_codex(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAULT
     """
     skills_dirs = list_all_codex_skills_dirs(root)
     if not skills_dirs:
-        return {"commands": 0, "scripts": 0, "patches": 0, "agents": 0, "errors": ["未找到 .agents/skills/ 或 .codex/skills/ 目录"]}
+        return {
+            "commands": 0,
+            "scripts": 0,
+            "patches": 0,
+            "agents": 0,
+            "manual_checks": 0,
+            "errors": ["未找到 .agents/skills/ 或 .codex/skills/ 目录"],
+        }
     primary_skills_dir = resolve_codex_skills_dir(root)
     if primary_skills_dir is None:
-        return {"commands": 0, "scripts": 0, "patches": 0, "agents": 0, "errors": ["未找到 Codex 活动 skills 目录"]}
+        return {
+            "commands": 0,
+            "scripts": 0,
+            "patches": 0,
+            "agents": 0,
+            "manual_checks": 0,
+            "errors": ["未找到 Codex 活动 skills 目录"],
+        }
 
-    result = {"commands": 0, "scripts": 0, "patches": 0, "agents": 0, "errors": []}
+    result = {"commands": 0, "scripts": 0, "patches": 0, "agents": 0, "manual_checks": 0, "errors": []}
     shared_skills_dir = codex_shared_skills_dir(root)
     secondary_skills_dir = codex_secondary_skills_dir(root)
 
@@ -1271,17 +1285,19 @@ def deploy_codex(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAULT
             result["patches"] += 1
 
     # Codex 通过 session-start.py hook 注入上下文，不需要注入 start.md
-    # 验证 hook 是否已就绪（全局只检查一次）
+    # 验证 hook 是否已就绪（全局只检查一次）。
+    # 这些属于 Trellis baseline / 项目手动维护面，不计入 workflow patch 数。
     hooks_json = root / ".codex" / "hooks.json"
     if hooks_json.exists():
         ok("[Codex] hooks.json 已存在")
-        result["patches"] += 1
+        result["manual_checks"] += 1
     else:
         warn("[Codex] hooks.json 不存在，SessionStart hook 未配置")
 
     session_start = root / ".codex" / "hooks" / "session-start.py"
     if session_start.exists():
         ok("[Codex] session-start.py hook 已存在")
+        result["manual_checks"] += 1
     else:
         warn("[Codex] session-start.py 不存在，会话上下文注入不可用")
 
@@ -1719,8 +1735,13 @@ def main() -> int:
             for e in result["errors"]:
                 err(f"[{cli_type}] {e}")
         else:
-            ok(f"[{cli_type}] 命令: {result['commands']}/{len(DISTRIBUTED_COMMANDS)}, "
-               f"补丁: {result['patches']}, Agents: {result['agents']}, 脚本: {result['scripts']}")
+            summary = (
+                f"[{cli_type}] 命令: {result['commands']}/{len(DISTRIBUTED_COMMANDS)}, "
+                f"补丁: {result['patches']}, Agents: {result['agents']}, 脚本: {result['scripts']}"
+            )
+            if "manual_checks" in result:
+                summary += f", 手动基线校验: {result['manual_checks']}"
+            ok(summary)
 
     print()
     if not args.dry_run:
