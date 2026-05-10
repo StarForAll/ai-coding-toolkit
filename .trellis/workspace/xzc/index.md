@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 186
+- **Total Sessions**: 187
 - **Last Active**: 2026-05-10
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~40 | Active |
+| `journal-5.md` | ~73 | Active |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 187 | 2026-05-10 | workflow: align active-task runtime and bootstrap cleanup | `5d6f481` | `main` |
 | 186 | 2026-05-10 | Refine review-gate trigger rules | `9f5dd55` | `main` |
 | 185 | 2026-05-10 | workflow reviewer-id and watermark guard contracts | `4d5ce71` | `main` |
 | 184 | 2026-05-10 | Refine workflow audit boundaries | `2b345cf` | `main` |

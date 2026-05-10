@@ -38,3 +38,36 @@ Audited workflow friction, compared legacy file_flow against current workflow, t
 ### Next Steps
 
 - None - task complete
+
+
+## Session 187: workflow: align active-task runtime and bootstrap cleanup
+
+**Date**: 2026-05-10
+**Task**: workflow: align active-task runtime and bootstrap cleanup
+**Branch**: `main`
+
+### Summary
+
+Aligned workflow phase routing with Trellis session-scoped active task runtime, removed .current-task as the stage truth source, cleaned up bootstrap legacy/session task references, and synchronized specs, docs, and tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5d6f481` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
