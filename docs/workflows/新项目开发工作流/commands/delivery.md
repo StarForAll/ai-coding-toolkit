@@ -283,7 +283,7 @@ docs/workflows/新项目开发工作流/learn/
 收尾顺序：**先 archive，再通过 `add_session.py` 记录 session**。这与 Trellis 原生 `finish-work` 一致。
 
 ```bash
-python3 ./.trellis/scripts/task.py archive <current-task>
+python3 ./.trellis/scripts/task.py archive <task-name>
 
 python3 ./.trellis/scripts/add_session.py \
   --title "Session Title" \
@@ -357,5 +357,5 @@ $TASK_DIR/
 | 验收中出现冻结后新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先完成变更评估与确认；不要直接混入当前交付 |
 | 需要更新规范文档 | `/trellis:update-spec` | 记录并更新规范，或显式触发 `update-spec` skill | 沉淀新发现的模式到 spec |
 | 需要请求代码审查 | `requesting-code-review` 能力 | `requesting-code-review` skill | 提交前外部审查 |
-| 需要归档任务 | `python3 ./.trellis/scripts/task.py archive <name>` | 同左 | 这是 Trellis 原生 close-out 的第一步；archive 会清除 `.current-task` |
+| 需要归档任务 | `python3 ./.trellis/scripts/task.py archive <name>` | 同左 | 这是 Trellis 原生 close-out 的第一步；archive 会清除当前 session 的 active-task runtime |
 | 不确定下一步 | `/trellis:delivery` | 描述当前收尾意图，或显式触发 `delivery` skill | 先停留在 delivery 阶段澄清，而不是自动进入会话收尾 |

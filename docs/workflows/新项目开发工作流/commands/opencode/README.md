@@ -27,7 +27,7 @@ OpenCode 已具备承载这套 workflow 的原生命令、rules、agents、skill
 
 这里要求同一个 `origin` 至少配置两个 push URL，是因为当前 workflow 默认服务于“同仓双推镜像”交付模型，常见配置就是 GitHub / Gitee 双推；如果你的项目没有这类远端同步要求，就不要把当前约束误解成通用 Git 最低要求。
 
-在此前提下，正确顺序是：先完成 `trellis init`，再执行当前 workflow 自带的安装脚本；原生命令与 agents 由安装脚本按平台方式落到目标项目，并自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines`，安装脚本会一并清理；若 `.current-task` 仍指向该 bootstrap task，也会同步清理悬空引用，否则跳过。
+在此前提下，正确顺序是：先完成 `trellis init`，再执行当前 workflow 自带的安装脚本；原生命令与 agents 由安装脚本按平台方式落到目标项目，并自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines`，安装脚本会一并清理；若遗留的 repo-global `.current-task` 仍指向该 bootstrap task，也会作为兼容清理一并移除，否则跳过。
 
 ## 安装时序
 

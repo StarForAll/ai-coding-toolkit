@@ -19,7 +19,7 @@ python3 ./.trellis/scripts/get_context.py
 python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route <task-dir> --project-root <project-root>
 ```
 
-若当前无 `.current-task`（首次入口或恢复场景），可省略 `<task-dir>`：
+若当前 session 已解析出 active task，或当前处于首次入口 / 恢复场景，可省略 `<task-dir>`：
 
 ```bash
 python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route --project-root <project-root>
@@ -29,12 +29,11 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route --project-root <pr
 
 | action | 含义 | 执行动作 |
 |--------|------|---------|
-| `first_entry` | 首次进入新项目 | 路由到 `/trellis:feasibility` |
-| `resume_with_assessment` | 有效 assessment 存在 | 路由到 `/trellis:brainstorm` |
+| `first_entry` | 当前 session 尚无 active task，且项目中也没有可继续任务 | 路由到 `/trellis:feasibility` |
 | `reenter` | 重入当前阶段 | 路由到 `/trellis:<target>`（`target` 字段即目标阶段） |
 | `awaiting_confirmation` | 阶段完成等待确认 | 展示已完成/未完成/缺失项，等用户确认 |
 | `blocked` | 执行阶段存在阻塞条件 | 逐项展示 `blockers`，不继续推进 |
-| `recovery_needed` | 无法确定当前任务 | 要求用户明确当前任务 |
+| `recovery_needed` | 当前 session 无法确定 active task | 要求用户明确当前任务 |
 | `repair_needed` | 状态文件缺失或损坏 | 运行 `workflow-state.py repair`，展示推断结果请求确认 |
 | `embed_invalid` | 嵌入状态无效 | 停止；提示用户检查安装完整性 |
 

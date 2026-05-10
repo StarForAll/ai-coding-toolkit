@@ -107,7 +107,7 @@ git remote set-url --add --push origin <第二个仓库URL>
 2. 再按《[工作流嵌入执行规范](./工作流嵌入执行规范.md)》先运行 `detect-embed-state.py`，确认状态为 `INITIAL_BASELINE_READY`
 3. 再运行当前 workflow 目录里的 `commands/install-workflow.py`
 4. 安装脚本把这套 workflow 嵌入到目标项目，并按各 CLI 官方原生格式完成内容适配
-5. 安装脚本自动导入 `pack.requirements-discovery-foundation`；其中默认包含需求发现规范与项目级 `README` 双语治理规则；若目标项目存在 `00-bootstrap-guidelines`，则一并清理；若 `.current-task` 仍指向该 bootstrap task，也同步清理悬空引用；否则跳过
+5. 安装脚本自动导入 `pack.requirements-discovery-foundation`；其中默认包含需求发现规范与项目级 `README` 双语治理规则；若目标项目存在 `00-bootstrap-guidelines`，则一并清理；若遗留的 repo-global `.current-task` 仍指向该 bootstrap task，也同步做兼容清理；否则跳过
 6. 安装完成后，先按《[装后隐藏目录与托管边界核对清单](./装后隐藏目录与托管边界核对清单.md)》完成装后核对
 7. 核对通过后，最后再在目标项目里按原生入口直接使用
 
@@ -191,7 +191,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 补充总规则：
 
 - 当前 workflow 采用 [阶段状态机与强门禁协议](./阶段状态机与强门禁协议.md)
-- 当前阶段只允许按 `.current-task -> 当前叶子任务 -> workflow-state.json` 判定
+- 当前阶段只允许按 `session-scoped active task -> 当前叶子任务 -> workflow-state.json` 判定
 - 每个阶段完成后都必须停在 `awaiting_user_confirmation`，用户确认后才允许切到下一阶段
 - `/trellis:continue` 只重入当前已确认阶段，不自动跨阶段推进
 
@@ -735,7 +735,7 @@ python3 .trellis/scripts/workflow/ownership-proof-validate.py --phase delivery -
 ### 典型降级方式
 
 - helper 或自动提交失败时，不把 session 记为完成
-- 若 `.trellis/tasks`、`.trellis/.current-task`、staged 区仍脏，先处理元数据问题，不直接记录
+- 若 `.trellis/tasks`、当前 session 的 active-task runtime、staged 区仍脏，先处理元数据问题，不直接记录
 
 ### 外部交付项目分支
 

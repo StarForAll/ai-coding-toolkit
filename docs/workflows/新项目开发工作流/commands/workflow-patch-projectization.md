@@ -10,7 +10,7 @@
 
 2. Start task (mark as current)
    --> python3 ./.trellis/scripts/task.py start <name>
-   --> Writes .trellis/.current-task; future sessions and hooks can re-enter the current task
+   --> Writes session-scoped active task runtime state; future sessions and hooks can re-enter the current task
 
 3. Write code according to guidelines
    --> Read .trellis/spec/ docs relevant to your task
@@ -31,7 +31,7 @@
    --> archive runs first, then add_session
 ```
 
-`python3 ./.trellis/scripts/task.py finish` remains available when you intentionally need to clear `.trellis/.current-task` without archiving a completed task. Do not use it as a substitute for final close-out.
+`python3 ./.trellis/scripts/task.py finish` remains available when you intentionally need to clear the current session's active task without archiving a completed task. Do not use it as a substitute for final close-out.
 
 For workflows that split work into a parent coordination task plus child execution tasks:
 
@@ -88,7 +88,7 @@ Expected metadata status output: empty.
 Notes:
 
 - Close-out follows Trellis native `finish-work` behavior: archive first, then `add_session.py`.
-- `archive` 预期会清除 `.trellis/.current-task`；真正需要关注的阻塞条件是 `.trellis/workspace` / `.trellis/tasks` 元数据仍然 dirty。
+- `archive` 预期会清除当前 session 的 active-task runtime；真正需要关注的阻塞条件是 `.trellis/workspace` / `.trellis/tasks` 元数据仍然 dirty。
 - Detailed close-out gates still belong to the installed `/trellis:finish-work` / `trellis-finish-work` and `/trellis:delivery` entries; legacy `/trellis:record-session` is old-target compatibility only. This workflow guide only summarizes the default path.
 
 ### Pre-end Checklist

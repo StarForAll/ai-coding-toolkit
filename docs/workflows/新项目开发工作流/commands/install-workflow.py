@@ -12,7 +12,7 @@
 - `feasibility` 到 `delivery`（含 `project-audit`）这类阶段资产由当前 workflow 分发
 - `continue` / `finish-work` 默认来自当前 Trellis 基线，`record-session` 仅作为 legacy baseline 命令兼容；当前 workflow 会在这些基线上追加补丁增强
 - close-out 中的 `archive` 仍直接复用目标项目 Trellis 基线 `task.py`；若目标项目不是当前最新 Trellis 基线，可能不包含 archive auto-commit pathspec 修复
-- 安装器会自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines` 则清理，不存在则跳过；若 `.current-task` 仍指向该 bootstrap task，则同步清理悬空引用
+- 安装器会自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines` 则清理，不存在则跳过；若遗留的 repo-global `.current-task` 仍指向该 bootstrap task，则同步做兼容清理
 - 一旦开始正式安装，安装器会先写入 `.trellis/workflow-embed-attempt.json`；若安装失败，该失败标记会保留，后续嵌入必须先由用户手动处理
 - 首次嵌入执行应由可稳定执行项目安装脚本的入口（如 shell、Claude Code、OpenCode）完成；Codex 适合作为安装完成后的使用入口，不建议主导执行嵌入步骤
 
@@ -32,6 +32,12 @@ import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+TRELLIS_SCRIPTS_DIR = Path(__file__).resolve().parents[4] / ".trellis" / "scripts"
+if str(TRELLIS_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(TRELLIS_SCRIPTS_DIR))
+
+from common.active_task import clear_task_from_sessions  # type: ignore[import-not-found]
 
 from workflow_assets import (
     ADDED_COMMANDS,
@@ -624,9 +630,47 @@ def clear_bootstrap_current_task_if_needed(root: Path, dry_run: bool) -> bool:
         info(f"将清理 bootstrap current-task 引用 → {bootstrap_ref}")
         return True
 
-    current_task_file.write_text("", encoding="utf-8")
+    current_task_file.unlink()
     ok(f"已清理 bootstrap current-task 引用 → {bootstrap_ref}")
     return True
+
+
+def _count_bootstrap_session_refs(root: Path) -> int:
+    sessions_dir = root / ".trellis" / ".runtime" / "sessions"
+    if not sessions_dir.is_dir():
+        return 0
+
+    bootstrap_ref = f".trellis/tasks/{_BOOTSTRAP_TASK_NAME}"
+    count = 0
+    for session_path in sessions_dir.glob("*.json"):
+        try:
+            payload = json.loads(session_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        current_task = payload.get("current_task")
+        if not isinstance(current_task, str):
+            continue
+        if normalize_task_ref(current_task, root) == bootstrap_ref:
+            count += 1
+    return count
+
+
+def clear_bootstrap_session_runtime_if_needed(root: Path, dry_run: bool) -> int:
+    """清理仍指向 bootstrap task 的 session runtime 文件。"""
+    bootstrap_ref = f".trellis/tasks/{_BOOTSTRAP_TASK_NAME}"
+    count = _count_bootstrap_session_refs(root)
+    if count == 0:
+        return 0
+
+    if dry_run:
+        info(f"将清理 bootstrap session active-task 引用 → {bootstrap_ref} ({count} 个 session)")
+        return count
+
+    cleared = clear_task_from_sessions(bootstrap_ref, root)
+    ok(f"已清理 bootstrap session active-task 引用 → {bootstrap_ref} ({cleared} 个 session)")
+    return cleared
 
 
 def ensure_project_prereqs(root: Path) -> None:
@@ -1497,21 +1541,22 @@ def remove_bootstrap_task(root: Path, dry_run: bool) -> str:
     - ``"dry-run-removed"`` : dry-run 模式下识别到了存在的 bootstrap task
     """
     task_dir = root / ".trellis" / "tasks" / _BOOTSTRAP_TASK_NAME
+    current_task_cleared = clear_bootstrap_current_task_if_needed(root, dry_run)
+    session_refs_cleared = clear_bootstrap_session_runtime_if_needed(root, dry_run)
+
     if not task_dir.exists():
         info(f"{_BOOTSTRAP_TASK_NAME} 不存在，跳过清理")
         return "absent"
     if dry_run:
-        clear_bootstrap_current_task_if_needed(root, dry_run=True)
         info(f"将删除 Trellis bootstrap 任务 → .trellis/tasks/{_BOOTSTRAP_TASK_NAME}")
         return "dry-run-removed"
-    current_task_cleared = clear_bootstrap_current_task_if_needed(root, dry_run)
     if task_dir.is_dir():
         shutil.rmtree(task_dir)
     else:
         task_dir.unlink()
     ok(f"Trellis bootstrap 任务已删除 → {_BOOTSTRAP_TASK_NAME}")
-    if not current_task_cleared:
-        info("bootstrap current-task 引用无需清理")
+    if not current_task_cleared and session_refs_cleared == 0:
+        info("bootstrap task 引用无需清理")
     return "removed"
 
 

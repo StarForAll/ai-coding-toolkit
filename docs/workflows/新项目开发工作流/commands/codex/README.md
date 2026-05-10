@@ -30,7 +30,7 @@ Codex 官方确实有 built-in slash commands，但那是 Codex 自身的交互�
 
 这里要求同一个 `origin` 至少配置两个 push URL，是因为当前 workflow 默认面向“同仓双推镜像”的协作方式，常见就是 GitHub / Gitee 双推；若你的 Codex 目标项目只维护单一远端，这条约束并不是通用 Git 规则，而是当前 workflow 变体的安装前提。
 
-在此前提下，正确顺序是：先完成 `trellis init`，再执行当前 workflow 自带的安装脚本；真正的 skills、hooks、agents 由安装器和项目配置落到目标项目，并自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines`，安装脚本会一并清理；若 `.current-task` 仍指向该 bootstrap task，也会同步清理悬空引用，否则跳过。
+在此前提下，正确顺序是：先完成 `trellis init`，再执行当前 workflow 自带的安装脚本；真正的 skills、hooks、agents 由安装器和项目配置落到目标项目，并自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines`，安装脚本会一并清理；若遗留的 repo-global `.current-task` 仍指向该 bootstrap task，也会作为兼容清理一并移除，否则跳过。
 
 ## 安装时序
 

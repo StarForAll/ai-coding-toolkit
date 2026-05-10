@@ -76,7 +76,7 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
 - 编写或修改任何属于具体 task 执行范围的实现代码
 - 借“先补个基础文件”“先做一点”为名提前开工
 - 因重新进入 `/trellis:plan` 而自动恢复某个 task 的 implementation
-- 在未获用户明确确认前，把 `.current-task` 切到实施叶子 task
+- 在未获用户明确确认前，把当前 session 的 active task 切到实施叶子 task
 - 在未获用户明确确认前，把任何 `workflow-state.stage` 改成 `implementation` / `test-first`
 
 ## 历史数据防漂移要求
@@ -90,7 +90,7 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
 ## 核心原则
 
 1. **Trellis task 才是主执行单元**
-   `task_plan.md` 只保留摘要；真实执行状态依赖 `.trellis/tasks/<task>/task.json`、`.current-task`、`before-dev.md`、`check.md` 等任务产物。
+   `task_plan.md` 只保留摘要；真实执行状态依赖 `.trellis/tasks/<task>/task.json`、session-scoped active task runtime、`before-dev.md`、`check.md` 等任务产物。
 
 2. **复杂任务继续拆**
    若某个 task 过大、跨越太多上下文、无法单上下文闭环，就必须继续拆成多个串行 task，不允许长期把复杂子阶段堆在单个 `task_plan.md` 里。
@@ -532,7 +532,7 @@ $TASK_DIR/
 
 补充状态约束：
 
-- 如果当前 root task 在 plan 阶段拆出了 children，则继续实施前应把 `.current-task` 切到实际要执行的叶子任务
+- 如果当前 root task 在 plan 阶段拆出了 children，则继续实施前应把当前 session 的 active task 切到实际要执行的叶子任务
 - 在进入 implementation / test-first 前，必须先用“当前推荐执行任务（待确认）”说明卡向用户说明本轮要开的 task 信息，再等待用户确认
 - 父任务只保留汇总意义，不应继续作为执行态叶子任务持有 `workflow-state.json`
 

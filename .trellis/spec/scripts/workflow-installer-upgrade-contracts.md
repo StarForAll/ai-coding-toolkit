@@ -867,10 +867,10 @@ Previous behavior stripped these to plain text. New behavior keeps them as worki
 
 ```bash
 python3 .trellis/scripts/workflow/workflow-state.py route [task-dir] \
-  [--project-root /path] [--current-task-file /path]
+  [--project-root /path]
 ```
 
-`task-dir` is optional. When absent, route infers from `.current-task` or project-level artifacts.
+`task-dir` is optional. When absent, route resolves the active task from Trellis' session-scoped runtime and otherwise falls into `first_entry` / `recovery_needed`.
 
 ### 3. Contracts
 
@@ -879,7 +879,7 @@ python3 .trellis/scripts/workflow/workflow-state.py route [task-dir] \
 ```json
 {
   "target": "design" | null,
-  "action": "reenter" | "first_entry" | "resume_with_assessment" | "awaiting_confirmation" | "blocked" | "recovery_needed" | "repair_needed" | "embed_invalid",
+  "action": "reenter" | "first_entry" | "awaiting_confirmation" | "blocked" | "recovery_needed" | "repair_needed" | "embed_invalid",
   "stage": "design",
   "stage_status": "in_progress",
   "reason": "...",
@@ -891,12 +891,11 @@ python3 .trellis/scripts/workflow/workflow-state.py route [task-dir] \
 
 | Action | Meaning | Phase Router behavior |
 |--------|---------|----------------------|
-| `first_entry` | No assessment found | Route to `/trellis:feasibility` |
-| `resume_with_assessment` | Valid assessment allows brainstorm | Route to `/trellis:brainstorm` |
+| `first_entry` | No active task and no resumable task exists in the target project | Route to `/trellis:feasibility` |
 | `reenter` | Normal re-entry to current stage | Route to `/trellis:<target>` |
 | `awaiting_confirmation` | Stage done, pending user confirm | Show status, wait for user |
 | `blocked` | Execution gate not met | Show blockers, do not proceed |
-| `recovery_needed` | Cannot determine current task | Ask user to clarify |
+| `recovery_needed` | Cannot determine the current active task | Ask user to clarify |
 | `repair_needed` | State file missing/broken | Run `repair` subcommand |
 | `embed_invalid` | Workflow install incomplete | Stop, report install issue |
 
@@ -909,10 +908,10 @@ python3 .trellis/scripts/workflow/workflow-state.py route [task-dir] \
 
 | Condition | Output |
 |-----------|--------|
-| No `.current-task`, no assessment | `first_entry` → feasibility |
-| No `.current-task`, valid assessment with brainstorm permission | `resume_with_assessment` → brainstorm |
-| `.current-task` → non-leaf task | `repair_needed` |
-| `.current-task` → missing workflow-state.json | `repair_needed` |
+| No active task and no task directories | `first_entry` → feasibility |
+| No active task but task directories exist | `recovery_needed` |
+| Active task → non-leaf task | `repair_needed` |
+| Active task → missing workflow-state.json | `repair_needed` |
 | Execution stage without `execution_authorized` | `blocked` |
 | External outsourcing without `kickoff_payment_received=yes` | `blocked` |
 

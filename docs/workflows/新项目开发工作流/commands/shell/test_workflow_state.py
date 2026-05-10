@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import tempfile
 import unittest
+import json
 from pathlib import Path
 
 
@@ -81,23 +83,26 @@ class WorkflowStateScriptTests(unittest.TestCase):
 """
 
     def run_script(self, *args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+        env = {**os.environ, "TRELLIS_CONTEXT_ID": "test-context"}
         return subprocess.run(
             [PYTHON, str(SCRIPT), *args],
             cwd=cwd or REPO_ROOT,
             text=True,
             capture_output=True,
             check=False,
+            env=env,
         )
 
     def make_fixture(self) -> tuple[Path, Path]:
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
         self.addCleanup(shutil.rmtree, root)
         (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / ".runtime" / "sessions").mkdir(parents=True, exist_ok=True)
         task_dir = root / ".trellis" / "tasks" / "04-15-sample-task"
         task_dir.mkdir(parents=True, exist_ok=True)
         (task_dir / "task.json").write_text('{"status":"planning","children":[]}\n', encoding="utf-8")
-        (root / ".trellis" / ".current-task").write_text(
-            ".trellis/tasks/04-15-sample-task\n",
+        (root / ".trellis" / ".runtime" / "sessions" / "test-context.json").write_text(
+            json.dumps({"current_task": ".trellis/tasks/04-15-sample-task"}, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
         return root, task_dir
@@ -130,7 +135,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-    def test_init_and_validate_pass_with_current_task_pointer(self) -> None:
+    def test_init_and_validate_pass_with_active_task_runtime(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
             root,
@@ -165,7 +170,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
         self.assertIn("version 非法或暂不支持", validate.stdout)
 
-    def test_validate_fails_when_current_task_is_empty(self) -> None:
+    def test_validate_fails_when_active_task_is_missing(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
             root,
@@ -173,18 +178,21 @@ class WorkflowStateScriptTests(unittest.TestCase):
             task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
             customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
         )
-        (root / ".trellis" / ".current-task").write_text("", encoding="utf-8")
+        (root / ".trellis" / ".runtime" / "sessions" / "test-context.json").unlink()
 
         self.run_script("init", str(task_dir), "--stage", "design")
         validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
 
         self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
-        self.assertIn(".trellis/.current-task 不能为空", validate.stdout)
+        self.assertIn("无法从 Trellis session runtime 解析当前活动任务", validate.stdout)
 
-    def test_validate_fails_when_current_task_points_to_another_task(self) -> None:
+    def test_validate_fails_when_active_task_points_to_another_task(self) -> None:
         root, task_dir = self.make_fixture()
-        (root / ".trellis" / ".current-task").write_text(
-            ".trellis/tasks/04-15-other-task\n",
+        other_task_dir = root / ".trellis" / "tasks" / "04-15-other-task"
+        other_task_dir.mkdir(parents=True, exist_ok=True)
+        (other_task_dir / "task.json").write_text('{"status":"planning","children":[]}\n', encoding="utf-8")
+        (root / ".trellis" / ".runtime" / "sessions" / "test-context.json").write_text(
+            json.dumps({"current_task": ".trellis/tasks/04-15-other-task"}, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
         self.write_required_project_docs(
@@ -808,11 +816,11 @@ class WorkflowStateScriptTests(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_cmd_route_first_entry(self) -> None:
-        """No .current-task, no assessment.md anywhere -> first_entry."""
+        """No active task and no tasks anywhere -> first_entry."""
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
         self.addCleanup(shutil.rmtree, root)
         (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
-        # No .current-task, no assessment.md
+        (root / ".trellis" / ".runtime" / "sessions").mkdir(parents=True, exist_ok=True)
 
         result = self.run_script("route", "--project-root", str(root))
 
@@ -822,27 +830,26 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(data["target"], "feasibility")
         self.assertEqual(data["action"], "first_entry")
 
-    def test_cmd_route_resume_assessment(self) -> None:
-        """No .current-task, but assessment.md exists with brainstorm allowed -> resume_with_assessment."""
+    def test_cmd_route_without_active_task_enters_recovery(self) -> None:
+        """Existing tasks but no active task -> recovery_needed."""
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
         self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / ".runtime" / "sessions").mkdir(parents=True, exist_ok=True)
         task_dir = root / ".trellis" / "tasks" / "04-15-sample-task"
         task_dir.mkdir(parents=True, exist_ok=True)
         (task_dir / "task.json").write_text('{"status":"planning","children":[]}\n', encoding="utf-8")
-        # Write assessment.md with brainstorm permission
         (task_dir / "assessment.md").write_text(self.VALID_INTERNAL_ASSESSMENT, encoding="utf-8")
-        # No .current-task file
 
         result = self.run_script("route", "--project-root", str(root))
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         import json as _json
         data = _json.loads(result.stdout)
-        self.assertEqual(data["target"], "brainstorm")
-        self.assertEqual(data["action"], "resume_with_assessment")
+        self.assertEqual(data["target"], None)
+        self.assertEqual(data["action"], "recovery_needed")
 
     def test_cmd_route_normal_reenter(self) -> None:
-        """.current-task points to valid leaf task with stage=design, status=in_progress -> reenter."""
+        """Active task points to valid leaf task with stage=design, status=in_progress -> reenter."""
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
             root,
@@ -861,6 +868,25 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(data["action"], "reenter")
         self.assertEqual(data["stage"], "design")
         self.assertEqual(data["stage_status"], "in_progress")
+
+    def test_cmd_route_reenters_from_session_runtime_without_task_arg(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.run_script("init", str(task_dir), "--stage", "plan")
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        import json as _json
+        data = _json.loads(result.stdout)
+        self.assertEqual(data["target"], "plan")
+        self.assertEqual(data["action"], "reenter")
+        self.assertEqual(data["stage"], "plan")
 
     def test_cmd_route_awaiting_confirmation(self) -> None:
         """workflow-state has stage_status=awaiting_user_confirmation -> awaiting_confirmation."""
@@ -891,19 +917,18 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(data["stage"], "design")
         self.assertEqual(data["stage_status"], "awaiting_user_confirmation")
 
-    def test_cmd_route_no_current_task_recovery(self) -> None:
-        """No .current-task, assessment exists but lacks brainstorm permission field -> recovery_needed."""
+    def test_cmd_route_no_active_task_recovery(self) -> None:
+        """Existing tasks but no active task -> recovery_needed."""
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
         self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / ".runtime" / "sessions").mkdir(parents=True, exist_ok=True)
         task_dir = root / ".trellis" / "tasks" / "04-15-sample-task"
         task_dir.mkdir(parents=True, exist_ok=True)
         (task_dir / "task.json").write_text('{"status":"planning","children":[]}\n', encoding="utf-8")
-        # assessment.md exists but has NO "是否允许进入 brainstorm" line at all
         (task_dir / "assessment.md").write_text(
             "# assessment\n- `project_engagement_type`: `non_outsourcing`\n- 法律/合规风险结论：通过\n",
             encoding="utf-8",
         )
-        # No .current-task file
 
         result = self.run_script("route", "--project-root", str(root))
 
@@ -913,7 +938,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(data["action"], "recovery_needed")
 
     def test_cmd_route_repair_needed(self) -> None:
-        """.current-task points to task dir without workflow-state.json -> repair_needed."""
+        """Active task points to task dir without workflow-state.json -> repair_needed."""
         root, task_dir = self.make_fixture()
         # Do NOT run init — no workflow-state.json
 

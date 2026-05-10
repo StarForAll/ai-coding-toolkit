@@ -9,8 +9,8 @@ When this Codex entry skill is used in a target project that has installed `docs
 - Use this state chain as the only source of truth:
 
 ```text
-.trellis/.current-task
-  -> current leaf task
+.trellis/.runtime/sessions/<context>.json
+  -> current active leaf task
   -> $TASK_DIR/workflow-state.json
 ```
 
@@ -30,7 +30,7 @@ python3 ./.trellis/scripts/get_context.py
 python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route <task-dir> --project-root <project-root>
 ```
 
-If no `.current-task` exists (first entry or recovery), omit `<task-dir>`:
+If the current session runtime already points at the active task, or if you are entering first-entry / recovery mode, omit `<task-dir>`:
 
 ```bash
 python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route --project-root <project-root>
@@ -40,12 +40,11 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route --project-root <pr
 
 | action | Meaning | Action |
 |--------|---------|--------|
-| `first_entry` | New project, no assessment | Use the `feasibility` skill |
-| `resume_with_assessment` | Valid assessment exists | Use the `brainstorm` skill |
+| `first_entry` | New project and no resumable task exists | Use the `feasibility` skill |
 | `reenter` | Re-enter current stage | Use the skill matching the `target` field |
 | `awaiting_confirmation` | Stage done, waiting for user | Report completed/missing items; wait for confirmation |
 | `blocked` | Execution blocked | Show `blockers` list; do not proceed |
-| `recovery_needed` | Cannot determine current task | Ask user to clarify the current task |
+| `recovery_needed` | Cannot determine the current active task | Ask user to clarify the current task |
 | `repair_needed` | State file missing or corrupt | Run `workflow-state.py repair`; show inference and ask for confirmation |
 | `embed_invalid` | Installation incomplete | Stop; tell user to check installation integrity |
 

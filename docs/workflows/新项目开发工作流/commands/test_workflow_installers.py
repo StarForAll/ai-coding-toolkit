@@ -269,6 +269,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         (root / ".claude" / "commands" / "trellis").mkdir(parents=True)
         if include_trellis:
             (root / ".trellis").mkdir(parents=True)
+            (root / ".trellis" / ".runtime" / "sessions").mkdir(parents=True, exist_ok=True)
             (root / ".trellis" / "workflow.md").write_text(
                 BASELINE_WORKFLOW_CONTENT,
                 encoding="utf-8",
@@ -282,6 +283,10 @@ class WorkflowInstallerTests(unittest.TestCase):
                 if bootstrap_as_current_task:
                     (root / ".trellis" / ".current-task").write_text(
                         ".trellis/tasks/00-bootstrap-guidelines\n",
+                        encoding="utf-8",
+                    )
+                    (root / ".trellis" / ".runtime" / "sessions" / "test-context.json").write_text(
+                        json.dumps({"current_task": ".trellis/tasks/00-bootstrap-guidelines"}, ensure_ascii=False) + "\n",
                         encoding="utf-8",
                     )
         claude_entry_name = "continue.md" if use_latest_trellis_baseline else "start.md"
@@ -814,10 +819,11 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         current_task_file = fixture / ".trellis" / ".current-task"
-        if current_task_file.exists():
-            self.assertEqual(current_task_file.read_text(encoding="utf-8").strip(), "")
+        self.assertFalse(current_task_file.exists())
+        self.assertFalse((fixture / ".trellis" / ".runtime" / "sessions" / "test-context.json").exists())
         self.assertFalse((fixture / ".trellis" / "tasks" / "00-bootstrap-guidelines").exists())
         self.assertIn("已清理 bootstrap current-task 引用", install.stdout)
+        self.assertIn("已清理 bootstrap session active-task 引用", install.stdout)
 
     def test_install_clears_bootstrap_current_task_when_reference_uses_short_name(self) -> None:
         fixture = self.create_fixture(bootstrap_as_current_task=True)
@@ -828,9 +834,10 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         current_task_file = fixture / ".trellis" / ".current-task"
-        if current_task_file.exists():
-            self.assertEqual(current_task_file.read_text(encoding="utf-8").strip(), "")
+        self.assertFalse(current_task_file.exists())
+        self.assertFalse((fixture / ".trellis" / ".runtime" / "sessions" / "test-context.json").exists())
         self.assertIn("已清理 bootstrap current-task 引用", install.stdout)
+        self.assertIn("已清理 bootstrap session active-task 引用", install.stdout)
 
     def test_install_dry_run_previews_bootstrap_current_task_cleanup(self) -> None:
         fixture = self.create_fixture(bootstrap_as_current_task=True)
@@ -840,6 +847,7 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("将清理 bootstrap current-task 引用", result.stdout)
+        self.assertIn("将清理 bootstrap session active-task 引用", result.stdout)
         self.assertEqual(
             (fixture / ".trellis" / ".current-task").read_text(encoding="utf-8").strip(),
             ".trellis/tasks/00-bootstrap-guidelines",
@@ -855,6 +863,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         self.assertEqual((fixture / ".trellis" / ".current-task").read_text(encoding="utf-8").strip(), ".")
         self.assertNotIn("已清理 bootstrap current-task 引用", install.stdout)
+        self.assertFalse((fixture / ".trellis" / ".runtime" / "sessions" / "test-context.json").exists())
+        self.assertIn("已清理 bootstrap session active-task 引用", install.stdout)
 
     def test_uninstall_restores_workflow_doc(self) -> None:
         fixture = self.create_fixture()

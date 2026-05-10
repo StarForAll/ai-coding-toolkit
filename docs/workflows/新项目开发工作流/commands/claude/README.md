@@ -27,7 +27,7 @@ Claude Code 是当前 workflow 维护的三种原生适配之一，并保留项�
 
 这里要求同一个 `origin` 至少配置两个 push URL，是因为这套 workflow 默认按“同仓双推镜像”协作模型设计，常见场景是同时推送到 GitHub / Gitee；如果目标项目不采用这类双推同步策略，就不应直接套用当前变体。
 
-这几个前提成立后，正确顺序是：先完成 `trellis init`，再执行当前 workflow 自带的安装脚本，由安装脚本把 Claude 所需命令入口和补丁真正落到目标项目，并自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines`，安装脚本会一并清理；若 `.current-task` 仍指向该 bootstrap task，也会同步清理悬空引用，否则跳过。
+这几个前提成立后，正确顺序是：先完成 `trellis init`，再执行当前 workflow 自带的安装脚本，由安装脚本把 Claude 所需命令入口和补丁真正落到目标项目，并自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines`，安装脚本会一并清理；若遗留的 repo-global `.current-task` 仍指向该 bootstrap task，也会作为兼容清理一并移除，否则跳过。
 
 ## 在多 CLI 同装中的定位
 

@@ -16,10 +16,26 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+def _resolve_trellis_scripts_dir() -> Path:
+    for candidate_root in Path(__file__).resolve().parents:
+        scripts_dir = candidate_root / ".trellis" / "scripts"
+        if (scripts_dir / "common" / "__init__.py").is_file():
+            return scripts_dir
+    raise RuntimeError("无法定位 Trellis scripts 目录")
+
+
+TRELLIS_SCRIPTS_DIR = _resolve_trellis_scripts_dir()
+if str(TRELLIS_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(TRELLIS_SCRIPTS_DIR))
+
+from common.active_task import (  # type: ignore[import-not-found]
+    resolve_active_task,
+    resolve_task_ref,
+)
+
 
 STATE_FILE_NAME = "workflow-state.json"
 TASK_FILE_NAME = "task.json"
-CURRENT_TASK_FILE = ".trellis/.current-task"
 REQUIREMENTS_DIR = Path("docs/requirements")
 CUSTOMER_PRD = REQUIREMENTS_DIR / "customer-facing-prd.md"
 DEVELOPER_PRD = REQUIREMENTS_DIR / "developer-facing-prd.md"
@@ -116,21 +132,6 @@ def find_repo_root(start: Path) -> Path | None:
             return current
         current = current.parent
     return None
-
-
-def normalize_task_pointer(pointer: str, repo_root: Path) -> str:
-    normalized = pointer.strip().replace("\\", "/")
-    while normalized.startswith("./"):
-        normalized = normalized[2:]
-    if normalized.startswith("tasks/"):
-        normalized = f".trellis/{normalized}"
-    abs_candidate = Path(normalized)
-    if abs_candidate.is_absolute():
-        try:
-            return abs_candidate.resolve().relative_to(repo_root).as_posix()
-        except ValueError:
-            return abs_candidate.resolve().as_posix()
-    return normalized
 
 
 def build_default_state(stage: str) -> dict[str, Any]:
@@ -291,20 +292,25 @@ def validate_execution_boundary(state: dict[str, Any], errors: list[str]) -> Non
             )
 
 
-def validate_current_task_pointer(task_dir: Path, repo_root: Path, current_task_file: Path, errors: list[str]) -> None:
-    if not current_task_file.is_file():
-        errors.append(f"{CURRENT_TASK_FILE} 不存在")
+def validate_session_active_task(task_dir: Path, repo_root: Path, errors: list[str]) -> None:
+    active = resolve_active_task(repo_root)
+    if not active.task_path:
+        errors.append("无法从 Trellis session runtime 解析当前活动任务")
         return
-    pointer = current_task_file.read_text(encoding="utf-8").strip()
-    if not pointer:
-        errors.append(f"{CURRENT_TASK_FILE} 不能为空，必须明确当前执行任务")
+    if active.stale:
+        errors.append(f"Trellis session runtime 中的当前活动任务已失效: {active.task_path}")
         return
 
-    normalized_pointer = normalize_task_pointer(pointer, repo_root)
-    expected = task_dir.resolve().relative_to(repo_root).as_posix()
-    if normalized_pointer != expected:
+    resolved_active = resolve_task_ref(active.task_path, repo_root)
+    if resolved_active is None:
+        errors.append(f"无法解析当前活动任务路径: {active.task_path}")
+        return
+
+    if resolved_active.resolve() != task_dir.resolve():
+        expected = task_dir.resolve().relative_to(repo_root).as_posix()
+        actual = resolved_active.resolve().relative_to(repo_root).as_posix()
         errors.append(
-            f"{CURRENT_TASK_FILE} 指向 {normalized_pointer}，与当前 task {expected} 不一致"
+            f"Trellis session runtime 指向 {actual}，与当前 task {expected} 不一致"
         )
 
 
@@ -867,17 +873,12 @@ def cmd_validate(args: argparse.Namespace) -> int:
     validate_state_shape(state, errors)
     validate_execution_boundary(state, errors)
 
-    should_check_current_task = not args.skip_current_task_check
-    if should_check_current_task:
+    should_check_active_task = not args.skip_active_task_check
+    if should_check_active_task:
         if repo_root is None:
-            errors.append("无法定位 repo root，不能校验 .current-task")
+            errors.append("无法定位 repo root，不能校验当前活动任务")
         else:
-            current_task_file = (
-                Path(args.current_task_file).resolve()
-                if args.current_task_file
-                else repo_root / CURRENT_TASK_FILE
-            )
-            validate_current_task_pointer(task_dir, repo_root, current_task_file, errors)
+            validate_session_active_task(task_dir, repo_root, errors)
             validate_leaf_task(task_dir, errors)
             validate_external_project_controls(task_dir, repo_root, state, errors)
             validate_ownership_policy_controls(task_dir, repo_root, state, errors)
@@ -966,61 +967,45 @@ def cmd_route(args: argparse.Namespace) -> int:
         _route_result(None, "embed_invalid", embed_invalid_reason)
         return 0
 
-    # Step 2: determine current-task pointer
-    current_task_file = (
-        Path(args.current_task_file).resolve()
-        if args.current_task_file
-        else repo_root / CURRENT_TASK_FILE
-    )
-
-    pointer: str | None = None
-    if current_task_file.is_file():
-        pointer = current_task_file.read_text(encoding="utf-8").strip() or None
-
-    if not pointer:
-        # No .current-task — scan .trellis/tasks/ for assessment.md
-        tasks_root = repo_root / ".trellis" / "tasks"
-        assessment_found: Path | None = None
-        if tasks_root.is_dir():
-            for candidate in tasks_root.rglob(ASSESSMENT_FILE.name):
-                if candidate.is_file():
-                    assessment_found = candidate
-                    break
-
-        if assessment_found is None:
-            _route_result("feasibility", "first_entry", "无 assessment.md，首次进入 feasibility")
+    # Step 2: determine the active task from Trellis session runtime
+    if args.task_dir:
+        try:
+            task_dir = resolve_task_dir(args.task_dir)
+        except FileNotFoundError as exc:
+            print(json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2), file=sys.stderr)
+            return 1
+    else:
+        active = resolve_active_task(repo_root)
+        if active.task_path:
+            if active.stale:
+                _route_result(None, "repair_needed", f"Trellis 当前活动任务已失效: {active.task_path}")
+                return 0
+            resolved_active = resolve_task_ref(active.task_path, repo_root)
+            if resolved_active is None or not resolved_active.is_dir():
+                _route_result(None, "repair_needed", f"无法解析当前活动任务: {active.task_path}")
+                return 0
+            task_dir = resolved_active.resolve()
+        else:
+            tasks_root = repo_root / ".trellis" / "tasks"
+            has_any_task = False
+            if tasks_root.is_dir():
+                for candidate in tasks_root.iterdir():
+                    if candidate.is_dir() and (candidate / TASK_FILE_NAME).is_file():
+                        has_any_task = True
+                        break
+            if not has_any_task:
+                _route_result("feasibility", "first_entry", "当前 session 尚无 active task，首次进入 feasibility")
+            else:
+                _route_result(
+                    None,
+                    "recovery_needed",
+                    "当前 session 未解析到 active task；请先明确当前任务或重新进入目标阶段",
+                )
             return 0
 
-        # Assessment exists — check if it permits brainstorm
-        content = assessment_found.read_text(encoding="utf-8")
-        # Look for "是否允许进入 brainstorm" field with a value containing "是"
-        allow_brainstorm = False
-        for line in content.splitlines():
-            if "是否允许进入 brainstorm" in line and "是" in line:
-                allow_brainstorm = True
-                break
-
-        if allow_brainstorm:
-            _route_result(
-                "brainstorm",
-                "resume_with_assessment",
-                f"assessment.md 存在于 {assessment_found.relative_to(repo_root).as_posix()}，允许进入 brainstorm",
-            )
-            return 0
-
-        _route_result(
-            None,
-            "recovery_needed",
-            "无 .current-task 且无法自动确定下一步",
-        )
-        return 0
-
-    # Step 3: .current-task exists — validate it
-    normalized = normalize_task_pointer(pointer, repo_root)
-    task_dir = (repo_root / normalized).resolve()
-
+    # Step 3: validate the resolved task
     if not task_dir.is_dir():
-        _route_result(None, "repair_needed", ".current-task 指向不存在的任务")
+        _route_result(None, "repair_needed", "当前活动任务目录不存在")
         return 0
 
     # Check leaf task (no children)
@@ -1260,14 +1245,18 @@ def build_parser() -> argparse.ArgumentParser:
     validate_parser = subparsers.add_parser("validate", help="validate workflow-state.json and task boundaries")
     validate_parser.add_argument("task_dir")
     validate_parser.add_argument("--project-root")
-    validate_parser.add_argument("--skip-current-task-check", action="store_true")
-    validate_parser.add_argument("--current-task-file")
+    validate_parser.add_argument("--skip-active-task-check", action="store_true")
+    validate_parser.add_argument(
+        "--skip-current-task-check",
+        action="store_true",
+        dest="skip_active_task_check",
+        help=argparse.SUPPRESS,
+    )
     validate_parser.set_defaults(func=cmd_validate)
 
     route_parser = subparsers.add_parser("route", help="compute routing target for /trellis:continue")
     route_parser.add_argument("task_dir", nargs="?", default=None)
     route_parser.add_argument("--project-root")
-    route_parser.add_argument("--current-task-file")
     route_parser.set_defaults(func=cmd_route)
 
     repair_parser = subparsers.add_parser("repair", help="infer and fix missing workflow-state.json")
