@@ -104,3 +104,36 @@ Migrated the live Trellis workflow to the 0.5.12 phase model and hardened sessio
 ### Next Steps
 
 - None - task complete
+
+
+## Session 189: Fix trellis 0.5.12 upgrade drift
+
+**Date**: 2026-05-11
+**Task**: Fix trellis 0.5.12 upgrade drift
+**Branch**: `main`
+
+### Summary
+
+Restore research agent MCP tools + 3-step fallback, adopt 0.5.12 Phase corrections, selective-merge safe_commit/task_store/add_session (preserve include_removals + _path_is_tracked for archive deletion), fix change-workflow Phase descriptions, reconcile template-hashes (213 entries self-consistent), sync qoder finish-work skill, handle all .new files
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4f262ef` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

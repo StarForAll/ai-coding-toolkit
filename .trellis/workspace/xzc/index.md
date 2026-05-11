@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 188
-- **Last Active**: 2026-05-10
+- **Total Sessions**: 189
+- **Last Active**: 2026-05-11
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~106 | Active |
+| `journal-5.md` | ~139 | Active |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 189 | 2026-05-11 | Fix trellis 0.5.12 upgrade drift | `4f262ef` | `main` |
 | 188 | 2026-05-10 | Trellis 0.5.12 workflow phase migration and auto-commit hardening | `3ae6f69` | `main` |
 | 187 | 2026-05-10 | workflow: align active-task runtime and bootstrap cleanup | `5d6f481` | `main` |
 | 186 | 2026-05-10 | Refine review-gate trigger rules | `9f5dd55` | `main` |
