@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/universal-domains/project-governance/change-management/overview.md", "reason": "Change management governance — guides how trellis upgrades should be handled"}
+{"file": ".trellis/spec/universal-domains/verification/evidence-requirements/overview.md", "reason": "Evidence requirements — verification that changes are correct"}
+{"file": ".trellis/spec/universal-domains/agent-collaboration/agent-role-boundaries/overview.md", "reason": "Agent role boundaries — understanding research agent's tool scope and responsibilities"}
+{"file": ".trellis/spec/universal-domains/ai-execution/tool-call-policy/overview.md", "reason": "Tool call policy — MCP tool routing matrix governs research agent's tool selection"}
+{"file": ".trellis/spec/universal-domains/context-engineering/context-layering/overview.md", "reason": "Context layering — template-hashes and upgrade drift context injection"}

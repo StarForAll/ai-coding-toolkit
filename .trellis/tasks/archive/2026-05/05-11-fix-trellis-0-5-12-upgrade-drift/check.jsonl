@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/universal-domains/verification/verification-gates/overview.md", "reason": "Verification gates — checking all changes pass quality gates"}
+{"file": ".trellis/spec/universal-domains/verification/evidence-requirements/overview.md", "reason": "Evidence requirements — must verify each file operation with evidence"}
+{"file": ".trellis/spec/universal-domains/agent-collaboration/agent-role-boundaries/overview.md", "reason": "Agent role boundaries — verify research agent tool list is complete"}
