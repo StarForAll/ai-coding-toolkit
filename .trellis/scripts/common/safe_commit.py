@@ -16,13 +16,18 @@ Design
 - Scripts only stage SPECIFIC product paths (journal files, index.md, the
   current task dir, the archive dir). Never the whole `.trellis/` tree.
 - If plain `git add <specific>` fails with "ignored by", DO NOT retry with
-  `-f`. The ignored state is treated as user intent to keep Trellis-owned
-  data local-only unless the project is reconfigured explicitly.
-- If `git add` fails, print an explicit warning that includes a negative
-  example: ``Do NOT use `git add -f .trellis/` ...`` and point at
-  `session_auto_commit: false` as the supported opt-out.
+  ``-f``. The presence of `.trellis/` in `.gitignore` is treated as user
+  intent ("keep .trellis/ local-only"). The script warns and skips the
+  auto-commit; users who want auto-staging can either fix their `.gitignore`
+  or set ``session_auto_commit: false`` and manage git themselves.
+- The warning includes a negative example: ``Do NOT use `git add -f .trellis/` ...``
+  so any AI rereading the log doesn't reinvent the bug.
 
-The wider-grain forbidden command stays forbidden.
+History note: 0.5.10 introduced an automatic ``git add -f`` retry on the
+specific paths. That was reverted in 0.5.11 — auto-forcing into a tree the
+user had gitignored violates user intent even when the path list is narrow.
+The wider-grain forbidden command stays forbidden, and the narrow-grain auto
+``-f`` is gone too.
 """
 
 from __future__ import annotations
@@ -37,7 +42,6 @@ from .paths import (
     DIR_WORKFLOW,
     DIR_WORKSPACE,
     FILE_JOURNAL_PREFIX,
-    get_current_task,
     get_developer,
 )
 
@@ -64,7 +68,7 @@ def safe_trellis_paths_to_add(repo_root: Path) -> list[str]:
     Included:
       - .trellis/workspace/<developer>/journal-*.md
       - .trellis/workspace/<developer>/index.md
-      - .trellis/tasks/<current-task>/ if a current task exists
+      - .trellis/tasks/<task-dir>/   (every active task directory)
       - .trellis/tasks/archive/      (whole archive subtree, if present)
 
     Excluded (intentionally — these must not be staged):
@@ -89,35 +93,34 @@ def safe_trellis_paths_to_add(repo_root: Path) -> list[str]:
                     f"{DIR_WORKFLOW}/{DIR_WORKSPACE}/{developer}/index.md"
                 )
 
-    # Session recording may need the current task metadata when journaling
-    # against an active task, but must not sweep unrelated parallel tasks.
+    # Active tasks: each direct child of tasks/ that is a directory and not
+    # the archive root. The archive subtree is added as a single path below.
     tasks_dir = repo_root / DIR_WORKFLOW / DIR_TASKS
     if tasks_dir.is_dir():
-        current_task = get_current_task(repo_root)
-        if current_task:
-            current_task_path = repo_root / current_task
-            if current_task_path.is_dir():
-                paths.append(current_task)
+        for child in sorted(tasks_dir.iterdir()):
+            if not child.is_dir():
+                continue
+            if child.name == DIR_ARCHIVE:
+                continue
+            paths.append(f"{DIR_WORKFLOW}/{DIR_TASKS}/{child.name}")
 
         archive_dir = tasks_dir / DIR_ARCHIVE
         if archive_dir.is_dir():
             paths.append(f"{DIR_WORKFLOW}/{DIR_TASKS}/{DIR_ARCHIVE}")
 
-    return list(dict.fromkeys(paths))
+    return paths
 
 
 def safe_archive_paths_to_add(
     repo_root: Path,
     task_name: str,
-    related_task_names: list[str] | None = None,
 ) -> list[str]:
     """Return paths to stage after `task.py archive`.
 
     Limited to the archive subtree (where the freshly-moved task lives) plus
-    the specific active-task directories that may have been touched by archive
-    bookkeeping. This captures the source-path deletion for the archived task
-    and any explicitly-known related task metadata updates without sweeping
-    unrelated parallel task directories into the same commit.
+    active task directories that may have been touched by archive bookkeeping.
+    The archived task's source path is included explicitly (even though the
+    directory no longer exists on disk) so ``git add -A`` captures the deletion.
     """
     paths: list[str] = []
     tasks_dir = repo_root / DIR_WORKFLOW / DIR_TASKS
@@ -126,18 +129,21 @@ def safe_archive_paths_to_add(
         archive_dir = tasks_dir / DIR_ARCHIVE
         if archive_dir.is_dir():
             paths.append(f"{DIR_WORKFLOW}/{DIR_TASKS}/{DIR_ARCHIVE}")
-        source_task_dir = tasks_dir / task_name
+        # Source task path — the directory is gone but git still tracks
+        # the files that were there; include via _path_is_tracked probe
+        # so git add -A captures the deletion.
         source_task_rel = f"{DIR_WORKFLOW}/{DIR_TASKS}/{task_name}"
         source_task_probe = f"{source_task_rel}/task.json"
-        if source_task_dir.is_dir() or _path_is_tracked(source_task_probe, repo_root):
+        if _path_is_tracked(source_task_probe, repo_root):
             paths.append(source_task_rel)
-        for related_name in related_task_names or []:
-            if not related_name or related_name == task_name:
+        # Active tasks that may have been touched (e.g. parent children list).
+        for child in sorted(tasks_dir.iterdir()):
+            if not child.is_dir():
                 continue
-            related_dir = tasks_dir / related_name
-            if related_dir.is_dir():
-                paths.append(f"{DIR_WORKFLOW}/{DIR_TASKS}/{related_name}")
-    return list(dict.fromkeys(paths))
+            if child.name == DIR_ARCHIVE:
+                continue
+            paths.append(f"{DIR_WORKFLOW}/{DIR_TASKS}/{child.name}")
+    return paths
 
 
 def _path_is_tracked(path: str, repo_root: Path) -> bool:
@@ -197,6 +203,15 @@ def print_gitignore_warning(paths: list[str]) -> None:
         file=sys.stderr,
     )
     print(
+        "[WARN] Skipping auto-commit. The journal/task files were still written to disk;",
+        file=sys.stderr,
+    )
+    print(
+        "[WARN] git was not touched.",
+        file=sys.stderr,
+    )
+    print("[WARN]", file=sys.stderr)
+    print(
         "[WARN] Trellis manages these specific paths and they should be tracked:",
         file=sys.stderr,
     )
@@ -229,11 +244,23 @@ def print_gitignore_warning(paths: list[str]) -> None:
         print(f"[WARN]   {sub}", file=sys.stderr)
     print("[WARN]", file=sys.stderr)
     print(
-        "[WARN] If you intentionally keep Trellis state local-only, set",
+        "[WARN] Or, if you intentionally keep .trellis/ local-only, set in",
         file=sys.stderr,
     )
     print(
-        "[WARN] `session_auto_commit: false` in `.trellis/config.yaml`.",
+        "[WARN] .trellis/config.yaml:",
+        file=sys.stderr,
+    )
+    print(
+        "[WARN]   session_auto_commit: false",
+        file=sys.stderr,
+    )
+    print(
+        "[WARN] so the scripts skip git entirely and you can review / commit",
+        file=sys.stderr,
+    )
+    print(
+        "[WARN] manually with `git status` / `git add` / `git commit`.",
         file=sys.stderr,
     )
     print("[WARN]", file=sys.stderr)

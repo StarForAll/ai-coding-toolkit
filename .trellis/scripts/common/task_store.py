@@ -334,7 +334,6 @@ def cmd_archive(args: argparse.Namespace) -> int:
 
     dir_name = task_dir.name
     task_json_path = task_dir / FILE_TASK_JSON
-    touched_task_names: set[str] = {dir_name}
 
     # Update status before archiving
     today = datetime.now().strftime("%Y-%m-%d")
@@ -362,7 +361,6 @@ def cmd_archive(args: argparse.Namespace) -> int:
                             if child_data:
                                 child_data["parent"] = None
                                 write_json(child_json, child_data)
-                                touched_task_names.add(child_dir_path.name)
 
     # Clear any session that still points at this task before the path moves.
     from .active_task import clear_task_from_sessions
@@ -376,8 +374,8 @@ def cmd_archive(args: argparse.Namespace) -> int:
         print(colored(f"Archived: {dir_name} -> archive/{year_month}/", Colors.GREEN), file=sys.stderr)
 
         # Auto-commit unless --no-commit
-        if get_session_auto_commit(repo_root) and not getattr(args, "no_commit", False):
-            _auto_commit_archive(dir_name, repo_root, sorted(touched_task_names))
+        if not getattr(args, "no_commit", False):
+            _auto_commit_archive(dir_name, repo_root)
 
         # Return the archive path
         print(f"{DIR_WORKFLOW}/{DIR_TASKS}/{DIR_ARCHIVE}/{year_month}/{dir_name}")
@@ -390,35 +388,32 @@ def cmd_archive(args: argparse.Namespace) -> int:
     return 1
 
 
-def _auto_commit_archive(
-    task_name: str,
-    repo_root: Path,
-    related_task_names: list[str] | None = None,
-) -> bool:
+def _auto_commit_archive(task_name: str, repo_root: Path) -> None:
     """Stage Trellis-owned task paths and commit after archive.
 
     Only stages specific subpaths (the archive subtree and active task dirs),
-    never the whole `.trellis/` tree. If `.gitignore` excludes `.trellis/`,
-    the ignored state is treated as user intent; the function warns and
-    returns without touching git.
+    never the whole ``.trellis/`` tree. If ``.gitignore`` blocks the paths,
+    we warn + skip — we do NOT retry with ``git add -f``. The warning
+    explicitly forbids ``git add -f .trellis/`` (which would fan out to
+    caches/backups) and points users at ``session_auto_commit: false``.
+
+    Honors ``session_auto_commit`` in ``.trellis/config.yaml``: when set to
+    ``false``, this function returns immediately without touching git
+    (the archive directory move on disk is unaffected).
     """
     if not get_session_auto_commit(repo_root):
         print(
             "[OK] session_auto_commit: false — skipping git stage/commit.",
             file=sys.stderr,
         )
-        return True
+        return
 
-    paths = safe_archive_paths_to_add(repo_root, task_name, related_task_names)
+    paths = safe_archive_paths_to_add(repo_root, task_name)
     if not paths:
         print("[OK] No task changes to commit.", file=sys.stderr)
-        return True
+        return
 
-    success, used_force, err = safe_git_add(
-        paths,
-        repo_root,
-        include_removals=True,
-    )
+    success, _, err = safe_git_add(paths, repo_root, include_removals=True)
     if not success:
         if err and "ignored by" in err.lower():
             print_gitignore_warning(paths)
@@ -427,23 +422,21 @@ def _auto_commit_archive(
                 f"[WARN] git add failed: {err.strip() if err else 'unknown error'}",
                 file=sys.stderr,
             )
-        return False
+        return
 
     rc, _, _ = run_git(
         ["diff", "--cached", "--quiet", "--", *paths], cwd=repo_root
     )
     if rc == 0:
         print("[OK] No task changes to commit.", file=sys.stderr)
-        return True
+        return
 
     commit_msg = f"chore(task): archive {task_name}"
     rc, _, err = run_git(["commit", "-m", commit_msg], cwd=repo_root)
     if rc == 0:
         print(f"[OK] Auto-committed: {commit_msg}", file=sys.stderr)
-        return True
     else:
         print(f"[WARN] Auto-commit failed: {err.strip()}", file=sys.stderr)
-        return False
 
 
 # =============================================================================

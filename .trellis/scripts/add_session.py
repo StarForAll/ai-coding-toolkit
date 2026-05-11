@@ -323,8 +323,12 @@ def _auto_commit_workspace(repo_root: Path) -> None:
 
     Path scope is restricted to specific products (journal files, index.md,
     active task dirs, the archive subtree). We never `git add` the whole
-    `.trellis/` tree, and ignored-path failures are treated as user intent,
-    not a signal to auto-force.
+    `.trellis/` tree, and if `.gitignore` blocks the specific paths we
+    warn + skip — never retry with ``-f``.
+
+    Honors ``session_auto_commit`` in ``.trellis/config.yaml``: when set to
+    ``false``, this function returns immediately without touching git
+    (journal/index files are still written to disk by the caller).
     """
     if not get_session_auto_commit(repo_root):
         print(
@@ -339,7 +343,7 @@ def _auto_commit_workspace(repo_root: Path) -> None:
         print("[OK] No workspace changes to commit.", file=sys.stderr)
         return
 
-    success, used_force, err = safe_git_add(paths, repo_root)
+    success, _, err = safe_git_add(paths, repo_root)
     if not success:
         if err and "ignored by" in err.lower():
             print_gitignore_warning(paths)
@@ -531,11 +535,9 @@ def main() -> int:
             if detected:
                 branch = detected
 
-    auto_commit = get_session_auto_commit(repo_root) and not args.no_commit
-
     return add_session(
         args.title, args.commit, args.summary, extra_content,
-        auto_commit=auto_commit,
+        auto_commit=not args.no_commit,
         package=package,
         branch=branch,
     )

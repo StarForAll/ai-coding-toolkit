@@ -206,11 +206,11 @@ For each research topic, **spawn a `trellis-research` sub-agent via the Task too
 
 Why:
 - The sub-agent has its own context window → doesn't pollute brainstorm context with raw tool output
-- It persists findings to `{TASK_DIR}/research/<topic>.md` (the contract — see `workflow.md` Phase 1.3)
+- It persists findings to `{TASK_DIR}/research/<topic>.md` (the contract — see `workflow.md` Phase 1.2)
 - It returns only `{file path, one-line summary}` to the main agent
 - Independent topics can be **parallelized** — spawn multiple sub-agents in one tool call
 
-> **Codex exception**: on Codex CLI with `dispatch_mode: inline` (the default), the main agent does research inline — dispatching `trellis-research` is unnecessary because the main session already has full task context. With `dispatch_mode: sub-agent`, `trellis-research` can be dispatched normally: the dispatch prompt's `Active task: <path>` first line tells the sub-agent which `{task_dir}/research/` to write into (see `.trellis/workflow.md` sub-agent dispatch protocol).
+> **Codex exception**: on Codex CLI, do NOT dispatch `trellis-research` for research-first mode — do the research inline (WebFetch / WebSearch in the main session) and write findings to `{TASK_DIR}/research/<topic>.md` yourself. Reason: Codex `spawn_agent` runs sub-agents with `fork_turns="none"` (isolated context, no parent session inheritance), so the research sub-agent cannot resolve the active task path via `task.py current` and silently aborts without producing files. Inline research on Codex avoids this failure mode. The 3+ inline research calls limit (B rule in `workflow.md`) is relaxed for Codex specifically.
 
 Agent type: `trellis-research`
 Task description template: "Research <specific question>; persist findings to `{TASK_DIR}/research/<topic-slug>.md`."
