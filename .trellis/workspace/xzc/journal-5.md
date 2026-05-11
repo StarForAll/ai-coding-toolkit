@@ -137,3 +137,36 @@ Restore research agent MCP tools + 3-step fallback, adopt 0.5.12 Phase correctio
 ### Next Steps
 
 - None - task complete
+
+
+## Session 190: Finalize workflow capability audit for Trellis 0.5.12
+
+**Date**: 2026-05-11
+**Task**: Finalize workflow capability audit for Trellis 0.5.12
+**Branch**: `main`
+
+### Summary
+
+Completed the workflow-capability-audit lifecycle for 新项目开发工作流, confirmed no compatibility fix was required for Trellis 0.5.12, promoted COMPATIBLE_TRELLIS_VERSION to 0.5.12, archived the audit task, and recorded the audit evidence.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ff526eb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

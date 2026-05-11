@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 189
+- **Total Sessions**: 190
 - **Last Active**: 2026-05-11
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~139 | Active |
+| `journal-5.md` | ~172 | Active |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 190 | 2026-05-11 | Finalize workflow capability audit for Trellis 0.5.12 | `ff526eb` | `main` |
 | 189 | 2026-05-11 | Fix trellis 0.5.12 upgrade drift | `4f262ef` | `main` |
 | 188 | 2026-05-10 | Trellis 0.5.12 workflow phase migration and auto-commit hardening | `3ae6f69` | `main` |
 | 187 | 2026-05-10 | workflow: align active-task runtime and bootstrap cleanup | `5d6f481` | `main` |
