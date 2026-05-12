@@ -7,3 +7,4 @@ Check the following:
 * external dependencies are identified
 * assumptions about external control or reliability are not hidden
 * unresolved boundary ambiguity is not treated as settled design
+* interaction or state complexity is documented with structured artifacts once prose alone no longer keeps the boundary reviewable

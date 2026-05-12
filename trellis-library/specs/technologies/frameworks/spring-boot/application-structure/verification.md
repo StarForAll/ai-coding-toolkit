@@ -9,3 +9,5 @@ Check the following:
 * similar slices follow consistent structure
 * Spring-managed roles are named and placed consistently across modules
 * dependency injection style leaves required collaborators explicit and reviewable
+* intermediate coordination responsibilities are intentionally placed rather than collapsed into web or persistence layers
+* manager/application-service style layers exist only where they clarify shared coordination responsibilities

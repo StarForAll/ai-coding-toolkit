@@ -1001,7 +1001,7 @@ assets:
   title: Authentication And Authorization
   summary: Reusable rules for identity verification, access control, and privilege boundaries
   status: active
-  version: 1.0.0
+  version: 1.1.0
   domain_axis: universal-domains
   domain: security
   concern: authn-authz
@@ -1077,7 +1077,7 @@ assets:
   title: Input Validation
   summary: Reusable rules for validating external input at trust boundaries
   status: active
-  version: 1.1.0
+  version: 1.2.0
   domain_axis: universal-domains
   domain: security
   concern: input-validation
@@ -1681,7 +1681,7 @@ assets:
   title: Database Schema
   summary: Reusable data rules for naming, shaping, and structuring persistent storage schemas
   status: active
-  version: 1.1.0
+  version: 1.3.0
   domain_axis: universal-domains
   domain: data
   concern: database-schema
@@ -1806,7 +1806,7 @@ assets:
   title: Test Strategy
   summary: Reusable rules for selecting appropriate test layers and balancing confidence against execution cost
   status: active
-  version: 1.0.0
+  version: 1.2.0
   domain_axis: universal-domains
   domain: testing
   concern: test-strategy
@@ -2011,7 +2011,7 @@ assets:
   title: Observability
   summary: Reusable operational rules for making runtime behavior inspectable and diagnosable
   status: active
-  version: 1.1.0
+  version: 1.2.0
   domain_axis: universal-domains
   domain: delivery-and-operations
   concern: observability
@@ -3118,7 +3118,7 @@ assets:
   title: Java Project Structure
   summary: Reusable Java language-level rules for package layout, source boundaries, and structural discoverability
   status: active
-  version: 1.1.0
+  version: 1.2.0
   domain_axis: technologies
   domain: languages
   concern: java-project-structure
@@ -3160,7 +3160,7 @@ assets:
   title: Java Error Handling
   summary: Reusable Java language-level rules for exception modeling, propagation, and boundary translation
   status: active
-  version: 1.1.0
+  version: 1.2.0
   domain_axis: technologies
   domain: languages
   concern: java-error-handling
@@ -3186,6 +3186,256 @@ assets:
   optional_dependencies: []
   provides:
   - java-error-rules
+  change_impact:
+    level: medium
+    review_required: true
+    sync_targets: []
+  metadata:
+    source_of_truth: true
+    generated: false
+    notes: ''
+- id: spec.technologies.languages.java-type-and-object-modeling
+  type: spec
+  format: directory
+  path: specs/technologies/languages/java/type-and-object-modeling
+  title: Java Type And Object Modeling
+  summary: Reusable Java language-level rules for type choice, value semantics, object state, and POJO modeling boundaries
+  status: active
+  version: 1.1.0
+  domain_axis: technologies
+  domain: languages
+  concern: java-type-and-object-modeling
+  atomicity: complex
+  tags:
+  - technologies
+  - languages
+  - java
+  - types
+  - modeling
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - design
+    - implementation
+    - verification
+    platforms: []
+    technologies:
+    - java
+  owners:
+  - core-library
+  dependencies:
+  - spec.universal-domains.data.data-modeling
+  optional_dependencies: []
+  provides:
+  - java-type-modeling-rules
+  change_impact:
+    level: medium
+    review_required: true
+    sync_targets: []
+  metadata:
+    source_of_truth: true
+    generated: false
+    notes: ''
+- id: spec.technologies.languages.java-collections-and-generics
+  type: spec
+  format: directory
+  path: specs/technologies/languages/java/collections-and-generics
+  title: Java Collections And Generics
+  summary: Reusable Java language-level rules for collection semantics, iteration safety, and generic boundary clarity
+  status: active
+  version: 1.0.0
+  domain_axis: technologies
+  domain: languages
+  concern: java-collections-and-generics
+  atomicity: complex
+  tags:
+  - technologies
+  - languages
+  - java
+  - collections
+  - generics
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - implementation
+    - verification
+    - refactoring
+    platforms: []
+    technologies:
+    - java
+  owners:
+  - core-library
+  dependencies:
+  - spec.technologies.languages.java-type-and-object-modeling
+  optional_dependencies: []
+  provides:
+  - java-collection-rules
+  change_impact:
+    level: medium
+    review_required: true
+    sync_targets: []
+  metadata:
+    source_of_truth: true
+    generated: false
+    notes: ''
+- id: spec.technologies.languages.java-concurrency
+  type: spec
+  format: directory
+  path: specs/technologies/languages/java/concurrency
+  title: Java Concurrency
+  summary: Reusable Java language-level rules for executors, locks, thread-local state, and shared-memory coordination
+  status: active
+  version: 1.1.0
+  domain_axis: technologies
+  domain: languages
+  concern: java-concurrency
+  atomicity: complex
+  tags:
+  - technologies
+  - languages
+  - java
+  - concurrency
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - design
+    - implementation
+    - verification
+    platforms: []
+    technologies:
+    - java
+  owners:
+  - core-library
+  dependencies:
+  - spec.technologies.languages.java-type-and-object-modeling
+  - spec.universal-domains.data.data-integrity
+  optional_dependencies: []
+  provides:
+  - java-concurrency-rules
+  change_impact:
+    level: high
+    review_required: true
+    sync_targets: []
+  metadata:
+    source_of_truth: true
+    generated: false
+    notes: ''
+- id: spec.technologies.languages.java-control-flow
+  type: spec
+  format: directory
+  path: specs/technologies/languages/java/control-flow
+  title: Java Control Flow
+  summary: Reusable Java language-level rules for branching, switch behavior, loops, and guard-style flow clarity
+  status: active
+  version: 1.1.0
+  domain_axis: technologies
+  domain: languages
+  concern: java-control-flow
+  atomicity: complex
+  tags:
+  - technologies
+  - languages
+  - java
+  - control-flow
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - implementation
+    - review
+    - refactoring
+    platforms: []
+    technologies:
+    - java
+  owners:
+  - core-library
+  dependencies:
+  - spec.technologies.languages.java-project-structure
+  optional_dependencies: []
+  provides:
+  - java-control-flow-rules
+  change_impact:
+    level: medium
+    review_required: true
+    sync_targets: []
+  metadata:
+    source_of_truth: true
+    generated: false
+    notes: ''
+- id: spec.technologies.languages.java-build-and-dependencies
+  type: spec
+  format: directory
+  path: specs/technologies/languages/java/build-and-dependencies
+  title: Java Build and Dependencies
+  summary: Reusable Java ecosystem rules for dependency coordinates, version discipline, and build-facing dependency management
+  status: active
+  version: 1.0.0
+  domain_axis: technologies
+  domain: languages
+  concern: java-build-and-dependencies
+  atomicity: complex
+  tags:
+  - technologies
+  - languages
+  - java
+  - build
+  - dependencies
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - design
+    - implementation
+    - release
+    platforms: []
+    technologies:
+    - java
+  owners:
+  - core-library
+  dependencies:
+  - spec.universal-domains.architecture.dependency-direction
+  optional_dependencies: []
+  provides:
+  - java-build-dependency-rules
+  change_impact:
+    level: medium
+    review_required: true
+    sync_targets: []
+  metadata:
+    source_of_truth: true
+    generated: false
+    notes: ''
+- id: spec.technologies.languages.java-testing
+  type: spec
+  format: directory
+  path: specs/technologies/languages/java/testing
+  title: Java Testing
+  summary: Reusable Java language-level rules for test placement, assertion style, repeatability, and coverage expectations
+  status: active
+  version: 1.1.0
+  domain_axis: technologies
+  domain: languages
+  concern: java-testing
+  atomicity: complex
+  tags:
+  - technologies
+  - languages
+  - java
+  - testing
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - implementation
+    - verification
+    - review
+    platforms: []
+    technologies:
+    - java
+  owners:
+  - core-library
+  dependencies:
+  - spec.universal-domains.testing.test-strategy
+  optional_dependencies: []
+  provides:
+  - java-testing-rules
   change_impact:
     level: medium
     review_required: true
@@ -3701,7 +3951,7 @@ assets:
   title: Spring Boot Application Structure
   summary: Reusable Spring Boot framework-level rules for structuring application layers, modules, and framework entry points
   status: active
-  version: 1.1.0
+  version: 1.3.0
   domain_axis: technologies
   domain: frameworks
   concern: spring-boot-application-structure
@@ -3743,7 +3993,7 @@ assets:
   title: Spring Boot Web Layer
   summary: Reusable Spring Boot framework-level rules for controller boundaries and request handling flow
   status: active
-  version: 1.1.0
+  version: 1.2.0
   domain_axis: technologies
   domain: frameworks
   concern: spring-boot-web-layer
@@ -3829,7 +4079,7 @@ assets:
   title: Spring Boot Data Access
   summary: Reusable Spring Boot framework-level rules for persistence boundaries, repositories, and transactional clarity
   status: active
-  version: 1.1.0
+  version: 1.3.0
   domain_axis: technologies
   domain: frameworks
   concern: spring-boot-data-access
@@ -3872,7 +4122,7 @@ assets:
   title: Spring Boot Security
   summary: Reusable Spring Boot framework-level rules for authentication, authorization, and request protection structure
   status: active
-  version: 1.1.0
+  version: 1.2.0
   domain_axis: technologies
   domain: frameworks
   concern: spring-boot-security
@@ -3916,7 +4166,7 @@ assets:
   summary: Reusable Spring Boot framework-level rules for slice selection, wiring verification, and integration-test confidence
     boundaries
   status: active
-  version: 1.1.0
+  version: 1.2.0
   domain_axis: technologies
   domain: frameworks
   concern: spring-boot-testing
@@ -4713,7 +4963,7 @@ assets:
   title: Service Runtime
   summary: Reusable backend-service platform rules for lifecycle states, process behavior, and runtime dependency assumptions
   status: active
-  version: 1.0.0
+  version: 1.1.0
   domain_axis: platforms
   domain: backend-service
   concern: service-runtime
@@ -4755,7 +5005,7 @@ assets:
   title: API Serving
   summary: Reusable backend-service platform rules for realistic request-serving behavior and operational boundary handling
   status: active
-  version: 1.1.0
+  version: 1.2.0
   domain_axis: platforms
   domain: backend-service
   concern: api-serving
@@ -4797,7 +5047,7 @@ assets:
   title: Async Jobs And Schedulers
   summary: Reusable backend-service platform rules for background jobs, retries, and scheduled execution reliability
   status: active
-  version: 1.1.0
+  version: 1.2.0
   domain_axis: platforms
   domain: backend-service
   concern: async-jobs-and-schedulers
@@ -7898,7 +8148,7 @@ assets:
   title: Java Spring Service Foundation Example Pack
   summary: Example selection for Spring Boot backend services with explicit structure, data, security, and runtime rules
   status: active
-  version: 1.1.0
+  version: 1.3.0
   domain_axis: scenarios
   domain: assembled-packs
   concern: java-spring-service-foundation
@@ -7921,6 +8171,12 @@ assets:
   dependencies:
   - spec.technologies.languages.java-project-structure
   - spec.technologies.languages.java-error-handling
+  - spec.technologies.languages.java-type-and-object-modeling
+  - spec.technologies.languages.java-collections-and-generics
+  - spec.technologies.languages.java-concurrency
+  - spec.technologies.languages.java-control-flow
+  - spec.technologies.languages.java-build-and-dependencies
+  - spec.technologies.languages.java-testing
   - spec.technologies.frameworks.spring-boot-application-structure
   - spec.technologies.frameworks.spring-boot-web-layer
   - spec.technologies.frameworks.spring-boot-service-layer
@@ -13447,6 +13703,12 @@ packs:
     assets:
     - spec.technologies.languages.java-project-structure
     - spec.technologies.languages.java-error-handling
+    - spec.technologies.languages.java-type-and-object-modeling
+    - spec.technologies.languages.java-collections-and-generics
+    - spec.technologies.languages.java-concurrency
+    - spec.technologies.languages.java-control-flow
+    - spec.technologies.languages.java-build-and-dependencies
+    - spec.technologies.languages.java-testing
     - spec.technologies.frameworks.spring-boot-application-structure
     - spec.technologies.frameworks.spring-boot-web-layer
     - spec.technologies.frameworks.spring-boot-service-layer

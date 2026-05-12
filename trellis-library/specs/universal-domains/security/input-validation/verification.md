@@ -9,3 +9,4 @@ Check the following:
 * unvalidated input is not treated as trusted by default
 * nested structures and collections are validated rather than bypassed through shallow top-level checks
 * schema-level validation and business-context validation responsibilities are distinguishable
+* operational guardrails exist for inputs that can trigger abuse or resource exhaustion

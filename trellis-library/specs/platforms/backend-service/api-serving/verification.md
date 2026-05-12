@@ -9,3 +9,4 @@ Check the following:
 * client and operator expectations can be aligned from the serving behavior
 * retriable mutation endpoints have explicit idempotency or replay handling
 * large-read, export, or deep-pagination paths state their load and latency assumptions
+* redirect, sorting, filtering, and pagination inputs are constrained against unsafe or abusive usage

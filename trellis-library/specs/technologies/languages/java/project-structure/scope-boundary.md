@@ -1,5 +1,5 @@
 # Scope Boundary
 
-This concern covers Java package organization, source boundary clarity, and structural discoverability.
+This concern covers Java package organization, naming and documentation conventions, source boundary clarity, and structural discoverability.
 
-It does not replace framework-specific layering rules or build-tool configuration guidance.
+It does not replace framework-specific layering rules, control-flow shaping, or build/dependency-management guidance.

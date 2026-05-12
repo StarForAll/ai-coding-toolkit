@@ -5,3 +5,4 @@
 * Extension contracts must define what may vary and what must remain stable.
 * New extension points must not be introduced only to avoid making a concrete design decision.
 * Extension mechanisms should minimize blast radius when custom logic fails or is misused.
+* Core modules should remain open to bounded extension while resisting direct modification pressure for every new variation that can be isolated behind a stable contract.

@@ -7,3 +7,4 @@ Check the following:
 * escalated operations are auditable
 * fail-safe behavior exists for uncertain authorization state
 * hidden trust assumptions are not required for normal operation
+* resource-ownership checks prevent cross-user access through identifier or boundary bypass

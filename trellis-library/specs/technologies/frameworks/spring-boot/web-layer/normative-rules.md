@@ -10,3 +10,5 @@
 * Public request and response models must not expose persistence entities directly.
 * Mapping boundaries should remain explicit enough that storage-only fields or nested objects are not leaked by shallow-copy convenience.
 * Endpoint documentation or equivalent contract description should be maintained at the boundary where client-facing behavior is defined, rather than relying on unstated endpoint conventions.
+* Controller handlers should keep conditional branching and incidental business decisions shallow enough that orchestration remains reviewable, pushing deeper flow decisions into service-level collaborators.
+* Batch, pagination, export, or query-shaping request parameters must be validated against operational limits before they can amplify backend load.

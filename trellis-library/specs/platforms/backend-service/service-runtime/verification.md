@@ -7,3 +7,4 @@ Check the following:
 * degraded dependency behavior fails predictably
 * restart and shutdown conditions were considered for lifecycle-sensitive work
 * framework abstractions are not hiding service-runtime constraints
+* resource-exhaustion-sensitive runtime settings are explicit enough to review against expected load

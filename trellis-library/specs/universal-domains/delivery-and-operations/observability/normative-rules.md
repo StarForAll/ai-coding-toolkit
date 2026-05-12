@@ -10,3 +10,5 @@
 * Business-relevant execution logs should identify the operation consistently and cover ingress, dependency calls, state-changing writes, and failure exits where those checkpoints are required for diagnosis.
 * Sensitive values should be redacted, omitted, or transformed before they enter logs, traces, or metrics payloads.
 * Key execution checkpoints should be observable at the start, critical branch, failure, and completion boundaries when missing them would block diagnosis.
+* Failure logs should include both business-scene context and the underlying throwable or equivalent failure evidence when diagnosis depends on both.
+* Log retention and classification should reflect operational, security, and audit needs rather than treating all signals as equally disposable.

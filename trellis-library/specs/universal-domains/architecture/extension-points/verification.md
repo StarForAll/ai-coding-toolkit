@@ -7,3 +7,4 @@ Check the following:
 * ownership between core logic and extension logic is clear
 * extension points are not being used to dodge unresolved design choices
 * failures in extension behavior can be isolated and contained
+* bounded extension contracts are used instead of repeatedly editing core logic for every variation

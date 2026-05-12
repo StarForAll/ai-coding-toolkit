@@ -5,3 +5,4 @@
 * Service behavior should fail predictably when dependencies are unavailable rather than hanging in ambiguous half-ready states.
 * Lifecycle-sensitive work must account for restart, replay, and shutdown conditions rather than assuming uninterrupted execution.
 * Platform runtime constraints should remain visible even when hidden behind framework startup abstractions.
+* Runtime configuration for memory, descriptor usage, and similarly exhaustion-prone process resources should remain explicit enough to review against expected service concurrency and failure modes.

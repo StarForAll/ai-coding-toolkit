@@ -7,3 +7,6 @@
 * Testing conventions should remain consistent enough that confidence claims can be mapped to what was actually exercised.
 * Isolated tests should cover expected flow, boundary conditions, failure branches, and dependency error behavior for the unit under review.
 * Test naming should communicate the behavior and scenario under verification rather than forcing readers to infer intent from implementation details.
+* Automated tests must not rely on console output or manual inspection as the primary assertion mechanism.
+* Tests touching persistence should prepare their own data and cleanup strategy rather than assuming a pre-seeded database state.
+* Framework tests should preserve independence and repeatability by avoiding hidden execution-order coupling or unmanaged external-environment dependencies.

@@ -7,3 +7,4 @@
 * Operational serving behavior should remain understandable enough that client and operator expectations can be aligned.
 * Mutation endpoints that may be retried by clients, gateways, or operators should define idempotency or replay handling explicitly rather than assuming one-shot delivery.
 * Large result sets, exports, and deep pagination paths must expose their load and latency assumptions explicitly instead of pretending all reads are cheap and synchronous.
+* Request-serving flows that use redirects, sorting, filtering, or pagination parameters must constrain those inputs so callers cannot escalate cost or trigger unsafe navigation behavior through ordinary API surfaces.

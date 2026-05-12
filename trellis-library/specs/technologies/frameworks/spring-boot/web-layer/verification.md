@@ -12,3 +12,5 @@ Check the following:
 * request and response contracts do not expose persistence entities directly
 * mapping boundaries are explicit enough that shallow-copy helpers do not hide nested-field leakage
 * client-facing endpoint behavior is documented or otherwise reviewable at the boundary
+* controller branching remains shallow enough that orchestration is still reviewable
+* request parameters that can amplify load are validated against explicit operational limits

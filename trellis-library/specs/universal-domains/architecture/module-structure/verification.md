@@ -7,3 +7,4 @@ Check the following:
 * shared logic is not scattered without reason
 * decomposition follows ownership and behavior
 * fragmentation is not introduced without structural benefit
+* classes and modules do not routinely bundle multiple unrelated change reasons

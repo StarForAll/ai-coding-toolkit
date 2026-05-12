@@ -12,3 +12,5 @@ Check the following:
 * operation-level logging covers ingress, dependency calls, state-changing writes, and failure exits where diagnosis depends on them
 * sensitive values are redacted or excluded from diagnostic output
 * key execution checkpoints are observable where missing them would block diagnosis
+* failure logs preserve both business-scene context and underlying failure evidence where diagnosis needs both
+* retention and classification match the audit and operational value of the emitted signals
