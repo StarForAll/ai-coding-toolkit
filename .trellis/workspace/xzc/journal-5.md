@@ -236,3 +236,36 @@ Completed the workflow-capability-audit lifecycle for 新项目开发工作流, 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 193: Expand Java manual coverage in trellis-library
+
+**Date**: 2026-05-12
+**Task**: Expand Java manual coverage in trellis-library
+**Branch**: `main`
+
+### Summary
+
+Expanded trellis-library Java coverage with new language concerns, refined Spring/data/security/testing rules, and aligned manifest/example pack metadata.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4b7a17e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
