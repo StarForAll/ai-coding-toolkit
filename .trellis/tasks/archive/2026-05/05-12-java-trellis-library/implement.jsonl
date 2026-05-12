@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/library-assets/index.md", "reason": "Library asset authoring entry guidance and validation expectation"}
+{"file": ".trellis/spec/library-assets/spec-authoring.md", "reason": "Concern structure and writing rules for trellis-library specs"}
+{"file": ".trellis/spec/library-assets/manifest-maintenance.md", "reason": "Registration and cross-axis rules if new assets are needed"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Prefer extending existing library assets instead of duplicating rules"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Keep trellis-library assets, manifest, and examples aligned"}
