@@ -155,7 +155,8 @@
       "Bash(dash *)",
       "Bash(sh *)",
       "Bash([ -f \".claude/skills/trellis-$skill/SKILL.md\" ])",
-      "Bash([ -f \".agents/skills/trellis-$skill/SKILL.md\" ])"
+      "Bash([ -f \".agents/skills/trellis-$skill/SKILL.md\" ])",
+      "Bash(/ops/softwares/python/bin/pip install *)"
     ]
   }
 }
