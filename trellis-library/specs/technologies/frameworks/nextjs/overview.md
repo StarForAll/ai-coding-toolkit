@@ -2,13 +2,16 @@
 
 Development guidelines for production Next.js applications using the oRPC API layer and PostgreSQL with Drizzle ORM.
 
-> **Applicability**: These guidelines document a specific, proven stack (Next.js 15 + oRPC + Drizzle + PostgreSQL). They are not universal — they assume this exact stack. If your project uses a different API layer (tRPC, REST, GraphQL) or ORM (Prisma, TypeORM), adapt accordingly.
+> **Applicability**: These guidelines document a specific full-stack baseline built
+> around the stable Next.js App Router plus oRPC, Drizzle, and PostgreSQL. They
+> are not universal. If your project uses a different API layer (tRPC, REST,
+> GraphQL) or ORM (Prisma, TypeORM), adapt accordingly.
 
 ## Structure
 
 ### [Frontend](./frontend/)
 
-React 19 + Next.js 15 App Router frontend development patterns:
+App Router frontend development patterns:
 
 - [Directory Structure](./frontend/directory-structure.md)
 - [Components](./frontend/components.md)
@@ -62,7 +65,7 @@ Common issues and solutions (filed under `scenarios/`):
 
 ## Tech Stack
 
-- **Frontend**: Next.js 15, React 19, TailwindCSS 4, Radix UI, React Query
+- **Frontend**: Next.js App Router, React, Tailwind CSS, Radix UI, React Query
 - **Backend**: oRPC, Drizzle ORM, PostgreSQL, better-auth
 - **AI**: Vercel AI SDK (multi-provider)
 - **Real-time**: Ably / WebSocket / SSE

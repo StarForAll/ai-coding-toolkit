@@ -585,15 +585,15 @@ stateDiagram-v2
 ### Technical Dependencies
 | Dependency | Version | Purpose | Fallback Option |
 |------------|---------|---------|-----------------|
-| MySQL | 8.0+ | Primary database | PostgreSQL 13+ |
-| Redis | 6.0+ | Session and cart storage | In-memory cache with persistence |
-| RabbitMQ | 3.8+ | Message queue | Apache Kafka |
-| Alipay SDK | 3.0+ | Payment integration | Direct API calls |
-| WeChat Pay SDK | 3.0+ | Payment integration | Direct API calls |
+| MySQL | Current stable major | Primary database | PostgreSQL current stable major |
+| Redis | Current stable major | Session and cart storage | In-memory cache with persistence |
+| RabbitMQ | Current stable major | Message queue | Apache Kafka |
+| Alipay SDK | Current stable release line | Payment integration | Direct API calls |
+| WeChat Pay SDK | Current stable release line | Payment integration | Direct API calls |
 
 ### System Constraints
 - **Hardware**: Minimum 4 CPU cores, 8GB RAM per application instance
-- **Software**: Java 11+, Spring Boot 2.5+, PostgreSQL 13+ or MySQL 8.0+
+- **Software**: Java 17+, Spring Boot current stable release line, PostgreSQL or MySQL
 - **Network**: Low latency (< 50ms) between application and database
 - **Storage**: Minimum 100GB SSD for database, 500GB for file storage
 
@@ -652,7 +652,7 @@ stateDiagram-v2
 - **Cleanup**: Automatic cleanup after each test suite
 
 ### End-to-End Testing
-- **User Scenarios**: 
+- **User Scenarios**:
   1. Complete purchase flow from cart to course access
   2. Payment failure and retry flow
   3. Invoice generation and delivery flow
@@ -679,7 +679,7 @@ stateDiagram-v2
 
 ### Technical Decisions
 - [ ] **Decision 1**: Should we use synchronous or asynchronous payment processing?
-  - **Options**: 
+  - **Options**:
     - Option A: Synchronous (simpler, but blocks user)
     - Option B: Asynchronous (better UX, but more complex)
   - **Decision Maker**: Technical Lead Wang Wu

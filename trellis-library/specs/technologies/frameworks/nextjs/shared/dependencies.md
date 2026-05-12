@@ -1,176 +1,57 @@
-# Dependencies & Versions
+# Dependency Selection & Compatibility
 
-> Adjust versions to your project. These represent a known-working combination as of the time of writing. Pin or widen ranges to match your stability requirements.
-
----
-
-## Runtime Environment
-
-| Dependency | Version | Description |
-|------------|---------|-------------|
-| Node.js | >=20 | JavaScript runtime |
-| pnpm | ^10.x | Package manager |
+> Use this file to choose dependency families and compatibility checks. Pin
+> exact versions in the target project after checking the current stable
+> release notes for the stack you actually ship.
 
 ---
 
-## Core Framework
+## Core Dependency Families
 
-| Package | Version | Description |
-|---------|---------|-------------|
-| next | ^15.x | React framework for production |
-| react | ^19.x | UI library |
-| react-dom | ^19.x | React DOM renderer |
-| typescript | ^5.x | TypeScript language |
-
----
-
-## Backend
-
-### API Layer
-
-| Package | Version | Description |
-|---------|---------|-------------|
-| hono | ^4.x | Lightweight web framework |
-| @orpc/server | ^1.x | oRPC server implementation |
-| @orpc/client | ^1.x | oRPC client |
-| @orpc/zod | ^1.x | oRPC Zod integration |
-| @orpc/openapi | ^1.x | OpenAPI schema generation |
-| zod | ^4.x | Schema validation |
-
-### Database
-
-| Package | Version | Description |
-|---------|---------|-------------|
-| drizzle-orm | ^0.44.x | TypeScript ORM |
-| drizzle-kit | ^0.31.x | Drizzle CLI tools |
-| drizzle-zod | ^0.8.x | Drizzle + Zod integration |
-| pg | ^8.x | PostgreSQL client |
-
-### Authentication
-
-| Package | Version | Description |
-|---------|---------|-------------|
-| better-auth | ^1.x | Authentication library |
-
-### Caching & Queue
-
-| Package | Version | Description |
-|---------|---------|-------------|
-| @upstash/redis | ^1.x | Redis client (Upstash) |
-| @upstash/qstash | ^2.x | Message queue |
+| Area | Representative packages | Guidance |
+|------|--------------------------|----------|
+| Framework core | `next`, `react`, `react-dom`, `typescript` | Keep these on mutually supported stable majors and verify App Router compatibility before upgrades. |
+| API layer | `hono`, `@orpc/server`, `@orpc/client`, `@orpc/zod`, `@orpc/openapi`, `zod` | Upgrade server, client, adapters, and schema packages as a compatibility group. |
+| Database | `drizzle-orm`, `drizzle-kit`, `drizzle-zod`, `pg` | Pin ORM, CLI, and codegen helpers together; run migrations and type checks after every major change. |
+| Authentication | `better-auth` | Add only when the target project uses this auth model. |
+| Cache and queue | `@upstash/redis`, `@upstash/qstash` | Keep optional infrastructure packages out of minimal installs. |
+| AI integration | `ai`, `@ai-sdk/react`, provider packages | Select provider packages and model IDs from current stable vendor docs; avoid experimental SDK APIs in baseline guidance. |
+| UI primitives | `@radix-ui/*`, `lucide-react`, `cmdk`, `sonner` | Pin explicitly in the target project; never rely on `latest`. |
+| Styling | `tailwindcss`, `@tailwindcss/postcss`, `tailwind-merge`, `class-variance-authority`, `clsx` | Upgrade styling plugins with their parent framework/tooling compatibility in mind. |
+| State and forms | `@tanstack/react-query`, `@orpc/tanstack-query`, `nuqs`, `react-hook-form`, `@hookform/resolvers` | Treat bridge packages as version-coupled with the primary state library. |
+| Internationalization and utilities | `next-intl`, `date-fns`, `es-toolkit`, `nanoid`, `p-limit` | Keep only the packages the target project actually uses. |
+| Observability and QA | `@sentry/nextjs`, `@playwright/test`, `@biomejs/biome`, `husky`, `turbo`, `tsx` | Validate build, type-check, lint, and end-to-end flows after major upgrades. |
 
 ---
 
-## AI Integration
+## Selection Rules
 
-| Package | Version | Description |
-|---------|---------|-------------|
-| ai | ^5.x | Vercel AI SDK core |
-| @ai-sdk/react | ^2.x | AI SDK React hooks |
-| @ai-sdk/openai | ^2.x | OpenAI provider |
-| @ai-sdk/anthropic | ^2.x | Anthropic provider |
-
----
-
-## Frontend
-
-### UI Components
-
-| Package | Version | Description |
-|---------|---------|-------------|
-| @radix-ui/* | latest | Headless UI primitives |
-| lucide-react | ^0.x | Icon library |
-| cmdk | ^1.x | Command palette |
-| sonner | ^2.x | Toast notifications |
-
-### Styling
-
-| Package | Version | Description |
-|---------|---------|-------------|
-| tailwindcss | ^4.x | Utility-first CSS (v4 config format) |
-| @tailwindcss/postcss | ^4.x | PostCSS plugin |
-| tailwind-merge | ^3.x | Tailwind class merging |
-| class-variance-authority | ^0.7.x | Variant management |
-| clsx | ^2.x | Class name utility |
-
-### State Management
-
-| Package | Version | Description |
-|---------|---------|-------------|
-| @tanstack/react-query | ^5.x | Data fetching & caching |
-| @orpc/tanstack-query | ^1.x | oRPC + React Query bridge |
-| nuqs | ^2.x | URL state management |
-| react-hook-form | ^7.x | Form state management |
-| @hookform/resolvers | ^5.x | Form validation resolvers |
-
-### Internationalization
-
-| Package | Version | Description |
-|---------|---------|-------------|
-| next-intl | ^4.x | Next.js i18n |
-
-### Utilities
-
-| Package | Version | Description |
-|---------|---------|-------------|
-| date-fns | ^4.x | Date utilities |
-| es-toolkit | ^1.x | Utility functions |
-| nanoid | ^5.x | ID generation |
-| p-limit | ^7.x | Concurrency control |
+1. Prefer current stable releases over canary, beta, or experimental lines for shared project baselines.
+2. Never use `latest` in reusable documentation as a version recommendation.
+3. Pin exact versions in the target project's package manifest and lockfile, not in this library asset.
+4. Upgrade framework triplets together when they are closely coupled, especially `next` + `react` + `react-dom`.
+5. Keep generator and runtime packages aligned for families such as oRPC, Drizzle, and AI SDK providers.
+6. Remove packages that do not support an active feature in the target project.
 
 ---
 
-## Monitoring & Logging
-
-| Package | Version | Description |
-|---------|---------|-------------|
-| @sentry/nextjs | ^10.x | Error tracking |
-
----
-
-## Development Tools
-
-### Build & Bundling
-
-| Package | Version | Description |
-|---------|---------|-------------|
-| turbo | ^2.x | Monorepo build system |
-| tsx | ^4.x | TypeScript executor |
-
-### Code Quality
-
-| Package | Version | Description |
-|---------|---------|-------------|
-| @biomejs/biome | ^2.x | Linter & formatter |
-| husky | ^9.x | Git hooks |
-
-### Testing
-
-| Package | Version | Description |
-|---------|---------|-------------|
-| @playwright/test | ^1.x | E2E testing |
-
----
-
-## Important Notes
-
-1. **React 19**: Major version with breaking changes from React 18
-2. **Next.js 15**: App Router is the primary routing pattern
-3. **TailwindCSS 4**: Uses the new v4 configuration format (not `tailwind.config.js`)
-4. **Zod 4**: Latest version with improved TypeScript support
-5. **Monorepo**: Use `@your-app/*` for internal workspace package references
-
----
-
-## Updating Dependencies
+## Compatibility Checks
 
 When updating dependencies:
 
-1. Check compatibility with React 19 and Next.js 15
-2. Update pnpm overrides if changing React or Drizzle versions
-3. Run `pnpm install` from the root directory
-4. Run `pnpm type-check` to verify TypeScript compatibility
-5. Run `pnpm build` to ensure production build works
+1. Check the current stable Next.js release notes and React compatibility matrix.
+2. Verify App Router behavior, build output, and type-checks after framework upgrades.
+3. Re-run migrations and schema generation when changing Drizzle or database adapters.
+4. Re-test auth, caching, queue, and AI integrations when their bridge packages change.
+5. Run `pnpm install`, `pnpm type-check`, and `pnpm build` in the target project before shipping.
+
+---
+
+## Dependency Hygiene
+
+- Prefer the smallest install surface that supports the target project's active features.
+- Remove stale or partially adopted packages instead of carrying speculative dependencies.
+- Record exceptional compatibility constraints close to the target project's package manifest or architecture notes.
 
 ---
 

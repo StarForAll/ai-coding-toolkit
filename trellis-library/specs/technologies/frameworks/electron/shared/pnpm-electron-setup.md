@@ -114,15 +114,20 @@ my-electron-project/
     "postinstall": "electron-builder install-app-deps"
   },
   "devDependencies": {
-    "electron": "^28.0.0"
+    "electron": "^your-electron-major.0.0"
   },
   "engines": {
-    "node": ">=18.0.0",
-    "pnpm": ">=8.0.0"
+    "node": ">=your-node-lts-major.0.0",
+    "pnpm": ">=your-pnpm-major.0.0"
   },
-  "packageManager": "pnpm@8.15.0"
+  "packageManager": "pnpm@your-pnpm-version"
 }
 ```
+
+> Placeholder convention:
+> - `your-electron-major` = the stable Electron major selected by the target project
+> - `your-node-lts-major` = the supported Node.js LTS major selected by the target project
+> - `your-pnpm-major` / `your-pnpm-version` = the pnpm major or exact version selected by the workspace
 
 ---
 
@@ -411,7 +416,7 @@ npm install --global windows-build-tools
 // package.json
 {
   "devDependencies": {
-    "electron": "28.0.0" // Pin the exact version instead of using ^
+    "electron": "your-electron-version" // Pin the exact version instead of using ^
   }
 }
 ```
@@ -421,10 +426,10 @@ npm install --global windows-build-tools
 ```json
 // package.json
 {
-  "packageManager": "pnpm@8.15.0",
+  "packageManager": "pnpm@your-pnpm-version",
   "engines": {
-    "node": ">=18.0.0",
-    "pnpm": ">=8.0.0"
+    "node": ">=your-node-lts-major.0.0",
+    "pnpm": ">=your-pnpm-major.0.0"
   }
 }
 ```

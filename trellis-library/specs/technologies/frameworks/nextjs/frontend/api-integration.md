@@ -256,29 +256,40 @@ export function useAIChat() {
 ### Using Vercel AI SDK
 
 ```typescript
-import { useChat } from 'ai/react';
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
+import { useState, type FormEvent } from 'react';
 
 export function useAIChatWithSDK() {
+  const [input, setInput] = useState('');
   const {
     messages,
-    input,
-    handleInputChange,
-    handleSubmit,
-    isLoading,
+    sendMessage,
+    status,
     error,
   } = useChat({
-    api: '/api/ai/chat',
-    onFinish: (message) => {
+    transport: new DefaultChatTransport({
+      api: '/api/ai/chat',
+    }),
+    onFinish: ({ message, messages, isAbort }) => {
       // Handle completed message
     },
   });
 
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!input.trim()) return;
+
+    sendMessage({ text: input });
+    setInput('');
+  };
+
   return {
     messages,
     input,
-    handleInputChange,
+    setInput,
     handleSubmit,
-    isLoading,
+    isLoading: status === 'submitted' || status === 'streaming',
     error,
   };
 }
@@ -286,126 +297,98 @@ export function useAIChatWithSDK() {
 
 ## AI Tool Calls Handling
 
-AI responses may include tool calls (function calls). The format differs between real-time streaming and history restore.
+AI responses may include tool calls. In AI SDK 5, prefer rendering typed
+`message.parts` instead of normalizing transport-specific event payloads.
 
-### Real-time Streaming Format
-
-During streaming, tool calls arrive incrementally:
-
-```typescript
-interface StreamingToolCall {
-  type: 'tool-call';
-  toolCallId: string;
-  toolName: string;
-  args: Record<string, unknown>;
-}
-
-interface StreamingToolResult {
-  type: 'tool-result';
-  toolCallId: string;
-  result: unknown;
-}
-```
-
-### History Restore Format
-
-When loading chat history, tool calls are embedded in messages:
+### Typed UI Message Parts
 
 ```typescript
-interface HistoryMessage {
-  role: 'assistant';
-  content: string;
-  toolInvocations?: Array<{
-    toolCallId: string;
-    toolName: string;
-    args: Record<string, unknown>;
-    result?: unknown;
-    state: 'pending' | 'result' | 'error';
-  }>;
-}
-```
-
-### Unified Handler Pattern
-
-```typescript
-interface ToolCall {
-  id: string;
-  name: string;
-  args: Record<string, unknown>;
-  result?: unknown;
-  state: 'pending' | 'result' | 'error';
-}
-
-function normalizeToolCall(
-  data: StreamingToolCall | HistoryMessage['toolInvocations'][0]
-): ToolCall {
-  // Handle streaming format
-  if ('type' in data && data.type === 'tool-call') {
-    return {
-      id: data.toolCallId,
-      name: data.toolName,
-      args: data.args,
-      state: 'pending',
+type CreateOrderPart =
+  | {
+      type: 'tool-createOrder';
+      state: 'input-streaming' | 'input-available';
+      toolCallId: string;
+      input?: {
+        productId?: string;
+        quantity?: number;
+      };
+    }
+  | {
+      type: 'tool-createOrder';
+      state: 'output-available';
+      toolCallId: string;
+      input: {
+        productId: string;
+        quantity: number;
+      };
+      output: {
+        success: boolean;
+        orderId: string;
+      };
+    }
+  | {
+      type: 'tool-createOrder';
+      state: 'output-error';
+      toolCallId: string;
+      errorText?: string;
     };
-  }
 
-  // Handle history format
-  return {
-    id: data.toolCallId,
-    name: data.toolName,
-    args: data.args,
-    result: data.result,
-    state: data.state,
-  };
-}
+type ChatMessage = {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  parts: Array<{ type: 'text'; text: string } | CreateOrderPart>;
+};
+```
 
-// Usage in component
-function ToolCallDisplay({ toolCall }: { toolCall: ToolCall }) {
-  switch (toolCall.name) {
-    case 'searchProducts':
-      return <ProductSearchResult args={toolCall.args} result={toolCall.result} />;
-    case 'createOrder':
-      return <OrderCreationResult args={toolCall.args} result={toolCall.result} />;
-    default:
-      return <GenericToolResult toolCall={toolCall} />;
-  }
+### Render Pattern
+
+```typescript
+function ToolAwareMessages({ messages }: { messages: ChatMessage[] }) {
+  return (
+    <>
+      {messages.map((message) => (
+        <div key={message.id}>
+          {message.parts.map((part, index) => {
+            switch (part.type) {
+              case 'text':
+                return <div key={index}>{part.text}</div>;
+              case 'tool-createOrder':
+                if (part.state === 'output-available' && part.output.success) {
+                  return <OrderCreationResult key={part.toolCallId} orderId={part.output.orderId} />;
+                }
+                if (part.state === 'output-error') {
+                  return <ToolError key={part.toolCallId} message={part.errorText ?? 'Order creation failed'} />;
+                }
+                return <PendingToolCall key={part.toolCallId} />;
+              default:
+                return null;
+            }
+          })}
+        </div>
+      ))}
+    </>
+  );
 }
 ```
 
-### Handling Tool Call States
+### Persistence Guidance
+
+When restoring history:
+
+- Persist normalized UI messages or server-side tool results.
+- Keep durable domain records as the source of truth for completed tool effects.
+- Avoid rebuilding application state from ad hoc streaming event formats.
+
+### If Local Message Mutation Is Needed
+
+AI SDK 5 still exposes `setMessages`, but use it for deliberate local UI state
+updates rather than depending on mixed legacy payload shapes.
 
 ```typescript
-export function useToolCallHandler() {
-  const [pendingToolCalls, setPendingToolCalls] = useState<Map<string, ToolCall>>(
-    new Map()
-  );
+const { messages, setMessages } = useChat();
 
-  const handleStreamChunk = useCallback((chunk: unknown) => {
-    if (isToolCall(chunk)) {
-      setPendingToolCalls((prev) => {
-        const next = new Map(prev);
-        next.set(chunk.toolCallId, normalizeToolCall(chunk));
-        return next;
-      });
-    }
-
-    if (isToolResult(chunk)) {
-      setPendingToolCalls((prev) => {
-        const next = new Map(prev);
-        const existing = next.get(chunk.toolCallId);
-        if (existing) {
-          next.set(chunk.toolCallId, {
-            ...existing,
-            result: chunk.result,
-            state: 'result',
-          });
-        }
-        return next;
-      });
-    }
-  }, []);
-
-  return { pendingToolCalls, handleStreamChunk };
+function removeMessage(messageId: string) {
+  setMessages((current) => current.filter((message) => message.id !== messageId));
 }
 ```
 

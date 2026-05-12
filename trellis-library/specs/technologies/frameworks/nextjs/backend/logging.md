@@ -77,8 +77,6 @@ const cached = await span(
 Use standardized prefixes for consistent Sentry categorization:
 
 ```typescript
-import { SpanPrefix } from "../../../lib/tracer";
-
 const SpanPrefix = {
   /** Database operations - maps to Sentry op: db.query */
   DB: "DB.",
@@ -175,48 +173,58 @@ export async function processOrderBatch(orderIds: string[]) {
 }
 ```
 
-## AI SDK Telemetry
+## AI Request Observability
 
-When using the Vercel AI SDK, enable telemetry for token tracking:
+When using the Vercel AI SDK, trace AI work through your existing logger and
+tracing utilities instead of depending on SDK-specific experimental telemetry
+hooks in reusable baseline docs.
 
 ```typescript
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
+import { logger } from "@your-app/logs";
 
-const result = await generateText({
-  model: openai("gpt-4o"),
-  prompt: userPrompt,
-  experimental_telemetry: {
-    isEnabled: true,
-    functionId: "classify-content",
-    metadata: {
-      userId,
-      contentLength: content.length,
-    },
-  },
-});
+const startedAt = Date.now();
+
+try {
+  const result = await generateText({
+    model: openai("your-stable-model"),
+    prompt: userPrompt,
+  });
+
+  logger.info("AI request completed", {
+    operation: "classify-content",
+    userId,
+    contentLength: content.length,
+    durationMs: Date.now() - startedAt,
+  });
+
+  return result;
+} catch (error) {
+  logger.error("AI request failed", {
+    operation: "classify-content",
+    userId,
+    contentLength: content.length,
+    durationMs: Date.now() - startedAt,
+    error: error instanceof Error ? error.message : String(error),
+  });
+
+  throw error;
+}
 ```
 
-### Telemetry Metadata
+### AI Logging Context
 
-Include relevant context in telemetry:
+Include relevant context in your own logs and traces:
 
 ```typescript
-experimental_telemetry: {
-  isEnabled: true,
-  functionId: "generate-response",  // Unique identifier for this AI function
-  metadata: {
-    // User context
-    userId: context.user.id,
-
-    // Input metrics
-    promptTokens: estimatedTokens,
-
-    // Business context
-    feature: "auto-reply",
-    priority: "high",
-  },
-}
+logger.info("AI response generated", {
+  operation: "generate-response",
+  userId: context.user.id,
+  feature: "auto-reply",
+  priority: "high",
+  requestId,
+});
 ```
 
 ## Error Handling Patterns

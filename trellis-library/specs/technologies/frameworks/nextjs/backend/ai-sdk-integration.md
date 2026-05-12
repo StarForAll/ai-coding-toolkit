@@ -2,12 +2,20 @@
 
 ## 1. Overview
 
-This document covers backend integration patterns using the Vercel AI SDK (`ai` package) for AI-powered features.
+This document covers backend integration patterns using the stable Vercel AI SDK
+surface (`ai` plus provider packages) for AI-powered features.
 
-### Supported Providers
-- **OpenAI**: GPT-4o, GPT-4o-mini, GPT-4-turbo
-- **Google Gemini**: gemini-1.5-pro, gemini-1.5-flash
-- **Anthropic**: Claude 3.5 Sonnet, Claude 3 Opus
+### Provider Selection
+
+Use the provider packages your target project actually needs, for example:
+
+- `@ai-sdk/openai`
+- `@ai-sdk/google`
+- `@ai-sdk/anthropic`
+
+Choose model IDs from the provider's current stable documentation at the time
+you wire the target project. Do not freeze provider model IDs in reusable
+library assets unless the surrounding rule depends on a specific model family.
 
 ### Package Dependencies
 ```bash
@@ -25,7 +33,7 @@ import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 
 const { text } = await generateText({
-  model: openai("gpt-4o-mini"),
+  model: openai("your-stable-model"),
   prompt: "Summarize this document...",
 });
 ```
@@ -46,7 +54,7 @@ const classificationSchema = z.object({
 });
 
 const { object } = await generateObject({
-  model: openai("gpt-4o-mini"),
+  model: openai("your-stable-model"),
   schema: classificationSchema,
   prompt: "Classify the priority of this task...",
 });
@@ -62,7 +70,7 @@ import { streamText } from "ai";
 import { openai } from "@ai-sdk/openai";
 
 const result = streamText({
-  model: openai("gpt-4o"),
+  model: openai("your-stable-model"),
   messages: conversationHistory,
   system: "You are a helpful assistant.",
 });
@@ -71,52 +79,71 @@ const result = streamText({
 return result.toDataStreamResponse();
 ```
 
-## 3. Telemetry Configuration
+## 3. Observability and Tracing
 
-**IMPORTANT**: Always enable telemetry for token tracking and performance monitoring.
+Prefer application-level logging and tracing around AI calls instead of relying
+on SDK-specific experimental observability hooks.
 
 ```typescript
 import { generateObject } from "ai";
 import { openai } from "@ai-sdk/openai";
+import { logger } from "@your-app/logs";
 
-const { object } = await generateObject({
-  model: openai("gpt-4o-mini"),
-  schema: mySchema,
-  prompt,
-  experimental_telemetry: {
-    isEnabled: true,
-    functionId: "orders.classify",  // Module.function naming
-    metadata: {
-      orderId,
-      userId,
-    },
-  },
-});
+const startedAt = Date.now();
+
+try {
+  const { object } = await generateObject({
+    model: openai("your-stable-model"),
+    schema: mySchema,
+    prompt,
+  });
+
+  logger.info("AI classification completed", {
+    operation: "orders.classify",
+    orderId,
+    userId,
+    durationMs: Date.now() - startedAt,
+  });
+
+  return object;
+} catch (error) {
+  logger.error("AI classification failed", {
+    operation: "orders.classify",
+    orderId,
+    userId,
+    durationMs: Date.now() - startedAt,
+    error: error instanceof Error ? error.message : "Unknown error",
+  });
+
+  throw error;
+}
 ```
 
-### Telemetry Naming Convention
+### Naming Convention
 
-Use dot-separated format for `functionId`: `module.function`
+Use stable, searchable operation IDs in logs and traces, for example
+`module.function`.
 
-| Module | Example functionId |
+| Module | Example operation ID |
 |--------|-------------------|
 | Orders | `orders.classify`, `orders.summarize` |
 | Support | `support.generateReply`, `support.categorize` |
 | Content | `content.summarize`, `content.translate` |
 | Users | `users.analyzePreferences` |
 
-### Auto-recorded Metrics
+### What to Record
 
-When telemetry is enabled, these metrics are automatically tracked:
+Record only fields you can verify in the current stable SDK and provider
+versions used by the target project.
 
 | Metric | Description |
 |--------|-------------|
-| `ai.model.id` | Model identifier (e.g., gpt-4o-mini) |
-| `ai.model.provider` | Provider name (e.g., openai) |
-| `ai.usage.prompt_tokens` | Input tokens consumed |
-| `ai.usage.completion_tokens` | Output tokens generated |
-| `ai.usage.total_tokens` | Total tokens used |
-| `ai.response.finish_reason` | Completion reason (stop, length, etc.) |
+| `operation` | Stable business or workflow operation name |
+| `provider` | Model provider in use |
+| `model` | Selected model ID |
+| `durationMs` | End-to-end call duration |
+| `requestId` | Correlation ID when available |
+| `businessContext` | Non-sensitive IDs such as `orderId` or `userId` |
 
 ## 4. Tool Calling
 
@@ -128,7 +155,7 @@ import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 
 const result = await generateText({
-  model: openai("gpt-4o"),
+  model: openai("your-stable-model"),
   prompt: "Create a task for the user...",
   tools: {
     createTask: tool({
@@ -188,13 +215,9 @@ import { logger } from "@your-app/logs";
 async function classifyOrder(orderData: OrderData) {
   try {
     const { object } = await generateObject({
-      model: openai("gpt-4o-mini"),
+      model: openai("your-stable-model"),
       schema: classificationSchema,
       prompt: buildClassificationPrompt(orderData),
-      experimental_telemetry: {
-        isEnabled: true,
-        functionId: "orders.classify",
-      },
     });
     return { success: true, data: object };
   } catch (error) {
@@ -257,7 +280,7 @@ import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 
 const result = await generateText({
-  model: openai("gpt-4o"),
+  model: openai("your-stable-model"),
   system: `You are a professional assistant.
 Always respond in a structured format.
 Be concise and accurate.
@@ -273,14 +296,14 @@ For complex tasks, break down into multiple AI calls.
 ```typescript
 // Step 1: Extract entities
 const { object: entities } = await generateObject({
-  model: openai("gpt-4o-mini"),
+  model: openai("your-stable-model"),
   schema: entitiesSchema,
   prompt: `Extract entities from: ${document}`,
 });
 
 // Step 2: Classify based on entities
 const { object: classification } = await generateObject({
-  model: openai("gpt-4o-mini"),
+  model: openai("your-stable-model"),
   schema: classificationSchema,
   prompt: `
 <entities>
@@ -301,7 +324,7 @@ Based on these entities, classify the document category.
 ```typescript
 import { openai } from "@ai-sdk/openai";
 
-const model = openai("gpt-4o-mini", {
+const model = openai("your-stable-model", {
   // Optional: custom configuration
 });
 ```
@@ -311,7 +334,7 @@ const model = openai("gpt-4o-mini", {
 ```typescript
 import { google } from "@ai-sdk/google";
 
-const model = google("gemini-1.5-flash");
+const model = google("your-stable-model");
 ```
 
 ### Anthropic
@@ -319,18 +342,19 @@ const model = google("gemini-1.5-flash");
 ```typescript
 import { anthropic } from "@ai-sdk/anthropic";
 
-const model = anthropic("claude-3-5-sonnet-20241022");
+const model = anthropic("your-stable-model");
 ```
 
 ## 8. Best Practices Summary
 
 | Rule | Description |
 |------|-------------|
-| Always enable telemetry | Track token usage and performance for cost monitoring |
+| Select model IDs from current provider docs | Avoid freezing fast-moving provider choices in shared assets |
 | Use generateObject for structured output | Leverage Zod schemas for type safety and validation |
 | Use XML prompts for complex tasks | Better structure improves AI understanding |
 | Handle errors gracefully | Return fallback responses, never crash |
 | Log AI failures | Include context (truncated prompt, IDs) for debugging |
+| Prefer application-level observability | Keep tracing/logging stable across SDK revisions |
 | Use appropriate model sizes | Use mini models for simple tasks, larger for complex |
 | Implement rate limiting | Protect against API quota exhaustion |
 | Cache responses when appropriate | Reduce costs for repeated queries |

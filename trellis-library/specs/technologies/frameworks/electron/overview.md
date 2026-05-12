@@ -76,7 +76,7 @@ Common issues and solutions (filed under `scenarios/`):
 ## Tech Stack
 
 - **Package Manager**: pnpm (see [pnpm + Electron Setup](./shared/pnpm-electron-setup.md))
-- **Renderer**: React 18, TypeScript, TanStack Query, Tailwind CSS
+- **Renderer**: React, TypeScript, TanStack Query, Tailwind CSS
 - **Main Process**: Electron, better-sqlite3, TypeScript
 - **IPC**: Type-safe contextBridge pattern
 - **Build**: Vite, electron-builder

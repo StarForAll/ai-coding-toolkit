@@ -2,7 +2,8 @@ version: 1
 library:
   id: trellis-library
   title: Trellis Reusable Asset Library
-  description: Reusable specs, templates, checklists, examples, schemas, and scripts for Trellis-based project initialization
+  description: Reusable specs, templates, checklists, examples, schemas, and scripts
+    for Trellis-based project initialization
   status: active
   owners:
   - xzc
@@ -67,8 +68,8 @@ assets:
   format: directory
   path: specs/universal-domains/project-governance/library-sync-governance
   title: Library Sync Governance
-  summary: Governance rules for downstream sync, target-project lock state, upstream contribution proposals, and controlled
-    apply boundaries
+  summary: Governance rules for downstream sync, target-project lock state, upstream
+    contribution proposals, and controlled apply boundaries
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -113,7 +114,8 @@ assets:
   format: directory
   path: specs/universal-domains/project-governance/change-management
   title: Change Management
-  summary: Reusable governance rules for classifying, approving, and recording meaningful project changes
+  summary: Reusable governance rules for classifying, approving, and recording meaningful
+    project changes
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -154,7 +156,8 @@ assets:
   format: directory
   path: specs/universal-domains/project-governance/readme-governance
   title: README Governance
-  summary: Reusable project-level rules for default README language policy and synchronized updates across paired README variants
+  summary: Reusable project-level rules for default README language policy and synchronized
+    updates across paired README variants
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -194,7 +197,8 @@ assets:
   format: directory
   path: specs/universal-domains/project-governance/risk-tiering
   title: Risk Tiering
-  summary: Reusable governance rules for assigning risk tiers and scaling review and verification intensity
+  summary: Reusable governance rules for assigning risk tiers and scaling review and
+    verification intensity
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -235,7 +239,8 @@ assets:
   format: directory
   path: specs/universal-domains/project-governance/decision-record-policy
   title: Decision Record Policy
-  summary: Reusable governance rules for recording material decisions with enough context to survive handoff and future review
+  summary: Reusable governance rules for recording material decisions with enough
+    context to survive handoff and future review
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -277,7 +282,8 @@ assets:
   format: directory
   path: specs/universal-domains/project-governance/delivery-control
   title: Delivery Control
-  summary: Reusable rules for external-project delivery track selection, payment-gated handover, retained-control boundaries, and prohibited control mechanisms
+  summary: Reusable rules for external-project delivery track selection, payment-gated
+    handover, retained-control boundaries, and prohibited control mechanisms
   status: active
   version: 1.1.0
   domain_axis: universal-domains
@@ -322,7 +328,8 @@ assets:
   format: directory
   path: specs/universal-domains/project-governance/authorization-management
   title: Authorization Management
-  summary: Reusable rules for the trial-authorization track, covering terms, expiration behavior, visibility, and permanent-authorization transition
+  summary: Reusable rules for the trial-authorization track, covering terms, expiration
+    behavior, visibility, and permanent-authorization transition
   status: active
   version: 1.1.0
   domain_axis: universal-domains
@@ -407,7 +414,8 @@ assets:
   format: directory
   path: specs/universal-domains/contracts/error-contracts
   title: Error Contracts
-  summary: Reusable rules for stable, actionable, and consumer-facing error structures and semantics
+  summary: Reusable rules for stable, actionable, and consumer-facing error structures
+    and semantics
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -448,7 +456,8 @@ assets:
   format: directory
   path: specs/universal-domains/contracts/compatibility-policy
   title: Compatibility Policy
-  summary: Reusable rules for evolving contracts while making breaking change risk explicit and controllable
+  summary: Reusable rules for evolving contracts while making breaking change risk
+    explicit and controllable
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -491,7 +500,8 @@ assets:
   format: directory
   path: specs/universal-domains/contracts/event-contracts
   title: Event Contracts
-  summary: Reusable rules for asynchronous event and message payload meaning, evolution, and consumer stability
+  summary: Reusable rules for asynchronous event and message payload meaning, evolution,
+    and consumer stability
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -571,7 +581,8 @@ assets:
   format: directory
   path: specs/universal-domains/verification/verification-gates
   title: Verification Gates
-  summary: Reusable gate definitions for auditable validation before completion or release
+  summary: Reusable gate definitions for auditable validation before completion or
+    release
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -609,7 +620,8 @@ assets:
   format: directory
   path: specs/universal-domains/verification/evidence-requirements
   title: Evidence Requirements
-  summary: Reusable rules for what counts as acceptable evidence behind correctness and completion claims
+  summary: Reusable rules for what counts as acceptable evidence behind correctness
+    and completion claims
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -686,7 +698,8 @@ assets:
   format: directory
   path: specs/universal-domains/ai-execution/prompt-boundaries
   title: Prompt Boundaries
-  summary: Reusable boundaries for stable prompt context, dynamic task context, and prompt inclusion rules
+  summary: Reusable boundaries for stable prompt context, dynamic task context, and
+    prompt inclusion rules
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -842,7 +855,8 @@ assets:
   format: directory
   path: specs/universal-domains/context-engineering/context-layering
   title: Context Layering
-  summary: Reusable rules for separating stable, project, task, and temporary context layers
+  summary: Reusable rules for separating stable, project, task, and temporary context
+    layers
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -880,7 +894,8 @@ assets:
   format: directory
   path: specs/universal-domains/context-engineering/context-budgeting
   title: Context Budgeting
-  summary: Reusable rules for context-size prioritization, compression, and bounded prompt growth
+  summary: Reusable rules for context-size prioritization, compression, and bounded
+    prompt growth
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -918,7 +933,8 @@ assets:
   format: directory
   path: specs/universal-domains/context-engineering/context-contamination
   title: Context Contamination
-  summary: Reusable rules for detecting stale, contradictory, or misleading AI session context
+  summary: Reusable rules for detecting stale, contradictory, or misleading AI session
+    context
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -999,7 +1015,8 @@ assets:
   format: directory
   path: specs/universal-domains/security/authn-authz
   title: Authentication And Authorization
-  summary: Reusable rules for identity verification, access control, and privilege boundaries
+  summary: Reusable rules for identity verification, access control, and privilege
+    boundaries
   status: active
   version: 1.1.0
   domain_axis: universal-domains
@@ -1037,7 +1054,8 @@ assets:
   format: directory
   path: specs/universal-domains/security/secrets-and-config
   title: Secrets And Config
-  summary: Reusable rules for separating secrets from ordinary configuration and handling sensitive settings safely
+  summary: Reusable rules for separating secrets from ordinary configuration and handling
+    sensitive settings safely
   status: active
   version: 1.1.0
   domain_axis: universal-domains
@@ -1309,7 +1327,8 @@ assets:
   format: directory
   path: specs/universal-domains/product-and-requirements/prd-documentation
   title: PRD Documentation
-  summary: Shared rules for structuring PRD documentation and keeping customer-facing and developer-facing variants aligned
+  summary: Shared rules for structuring PRD documentation and keeping customer-facing
+    and developer-facing variants aligned
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -1352,8 +1371,8 @@ assets:
   format: directory
   path: specs/universal-domains/product-and-requirements/prd-documentation-customer-facing
   title: Customer-Facing PRD Documentation
-  summary: Reusable rules for writing PRDs that are clear, accessible, and understandable for customers and stakeholders without
-    technical backgrounds
+  summary: Reusable rules for writing PRDs that are clear, accessible, and understandable
+    for customers and stakeholders without technical backgrounds
   status: active
   version: 1.1.0
   domain_axis: universal-domains
@@ -1395,8 +1414,8 @@ assets:
   format: directory
   path: specs/universal-domains/product-and-requirements/prd-documentation-developer-facing
   title: Developer-Facing PRD Documentation
-  summary: Reusable rules for writing technical PRDs that provide detailed specifications, technical constraints, and implementation
-    guidance for development teams
+  summary: Reusable rules for writing technical PRDs that provide detailed specifications,
+    technical constraints, and implementation guidance for development teams
   status: active
   version: 1.1.0
   domain_axis: universal-domains
@@ -1439,7 +1458,8 @@ assets:
   format: directory
   path: specs/universal-domains/architecture/system-boundaries
   title: System Boundaries
-  summary: Reusable rules for describing what belongs inside a system and what remains external
+  summary: Reusable rules for describing what belongs inside a system and what remains
+    external
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -1517,7 +1537,8 @@ assets:
   format: directory
   path: specs/universal-domains/architecture/dependency-direction
   title: Dependency Direction
-  summary: Reusable architecture rules for controlling dependency flow and preventing unstable coupling
+  summary: Reusable architecture rules for controlling dependency flow and preventing
+    unstable coupling
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -1558,7 +1579,8 @@ assets:
   format: directory
   path: specs/universal-domains/architecture/extension-points
   title: Extension Points
-  summary: Reusable architecture rules for defining bounded customization and plugin surfaces
+  summary: Reusable architecture rules for defining bounded customization and plugin
+    surfaces
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -1599,7 +1621,8 @@ assets:
   format: directory
   path: specs/universal-domains/data/data-modeling
   title: Data Modeling
-  summary: Reusable rules for modeling entities, relationships, identity, and state evolution
+  summary: Reusable rules for modeling entities, relationships, identity, and state
+    evolution
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -1679,7 +1702,8 @@ assets:
   format: directory
   path: specs/universal-domains/data/database-schema
   title: Database Schema
-  summary: Reusable data rules for naming, shaping, and structuring persistent storage schemas
+  summary: Reusable data rules for naming, shaping, and structuring persistent storage
+    schemas
   status: active
   version: 1.3.0
   domain_axis: universal-domains
@@ -1719,7 +1743,8 @@ assets:
   format: directory
   path: specs/universal-domains/data/data-integrity
   title: Data Integrity
-  summary: Reusable data rules for preserving correctness, invariants, and consistency across change
+  summary: Reusable data rules for preserving correctness, invariants, and consistency
+    across change
   status: active
   version: 1.1.0
   domain_axis: universal-domains
@@ -1761,8 +1786,8 @@ assets:
   format: directory
   path: specs/universal-domains/data/caching-and-consistency
   title: Caching And Consistency
-  summary: Reusable data rules for freshness assumptions, invalidation discipline, and consistency tradeoffs around cached
-    or replicated data
+  summary: Reusable data rules for freshness assumptions, invalidation discipline,
+    and consistency tradeoffs around cached or replicated data
   status: active
   version: 1.1.0
   domain_axis: universal-domains
@@ -1804,7 +1829,8 @@ assets:
   format: directory
   path: specs/universal-domains/testing/test-strategy
   title: Test Strategy
-  summary: Reusable rules for selecting appropriate test layers and balancing confidence against execution cost
+  summary: Reusable rules for selecting appropriate test layers and balancing confidence
+    against execution cost
   status: active
   version: 1.2.0
   domain_axis: universal-domains
@@ -1845,7 +1871,8 @@ assets:
   format: directory
   path: specs/universal-domains/testing/regression-policy
   title: Regression Policy
-  summary: Reusable rules for preventing known failures and risky behaviors from reappearing after change
+  summary: Reusable rules for preventing known failures and risky behaviors from reappearing
+    after change
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -1886,7 +1913,8 @@ assets:
   format: directory
   path: specs/universal-domains/testing/mocking-policy
   title: Mocking Policy
-  summary: Reusable testing rules for using mocks, fakes, and stubs without disconnecting tests from real behavior risk
+  summary: Reusable testing rules for using mocks, fakes, and stubs without disconnecting
+    tests from real behavior risk
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -1926,7 +1954,8 @@ assets:
   format: directory
   path: specs/universal-domains/delivery-and-operations/environment-policy
   title: Environment Policy
-  summary: Reusable operational rules for separating environments and controlling promotion boundaries
+  summary: Reusable operational rules for separating environments and controlling
+    promotion boundaries
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -1967,7 +1996,8 @@ assets:
   format: directory
   path: specs/universal-domains/delivery-and-operations/release-policy
   title: Release Policy
-  summary: Reusable operational rules for deciding when and how changes are eligible to ship
+  summary: Reusable operational rules for deciding when and how changes are eligible
+    to ship
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -2009,7 +2039,8 @@ assets:
   format: directory
   path: specs/universal-domains/delivery-and-operations/observability
   title: Observability
-  summary: Reusable operational rules for making runtime behavior inspectable and diagnosable
+  summary: Reusable operational rules for making runtime behavior inspectable and
+    diagnosable
   status: active
   version: 1.2.0
   domain_axis: universal-domains
@@ -2050,7 +2081,8 @@ assets:
   format: directory
   path: specs/universal-domains/delivery-and-operations/incident-response
   title: Incident Response
-  summary: Reusable operational rules for containing incidents and restoring controlled service safely
+  summary: Reusable operational rules for containing incidents and restoring controlled
+    service safely
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -2091,7 +2123,8 @@ assets:
   format: directory
   path: specs/universal-domains/delivery-and-operations/rollback-policy
   title: Rollback Policy
-  summary: Reusable operational rules for rollback readiness, reversibility, and rollback decision boundaries
+  summary: Reusable operational rules for rollback readiness, reversibility, and rollback
+    decision boundaries
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -2132,7 +2165,8 @@ assets:
   format: directory
   path: specs/universal-domains/delivery-and-operations/postmortem-policy
   title: Postmortem Policy
-  summary: Reusable operational rules for learning from incidents and tracking corrective follow-through
+  summary: Reusable operational rules for learning from incidents and tracking corrective
+    follow-through
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -2173,7 +2207,8 @@ assets:
   format: directory
   path: specs/universal-domains/agent-collaboration/agent-role-boundaries
   title: Agent Role Boundaries
-  summary: Reusable collaboration rules for separating coordination, execution, review, and human decision ownership
+  summary: Reusable collaboration rules for separating coordination, execution, review,
+    and human decision ownership
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -2214,7 +2249,8 @@ assets:
   format: directory
   path: specs/universal-domains/agent-collaboration/delegation-policy
   title: Delegation Policy
-  summary: Reusable collaboration rules for deciding what work may be delegated and what evidence a delegate requires
+  summary: Reusable collaboration rules for deciding what work may be delegated and
+    what evidence a delegate requires
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -2255,7 +2291,8 @@ assets:
   format: directory
   path: specs/universal-domains/agent-collaboration/handoff-contracts
   title: Handoff Contracts
-  summary: Reusable collaboration rules for preserving continuity and truthful state across agent or human handoffs
+  summary: Reusable collaboration rules for preserving continuity and truthful state
+    across agent or human handoffs
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -2296,7 +2333,8 @@ assets:
   format: directory
   path: specs/universal-domains/agent-collaboration/parallel-work-rules
   title: Parallel Work Rules
-  summary: Reusable collaboration rules for splitting concurrent work safely and integrating without hidden conflicts
+  summary: Reusable collaboration rules for splitting concurrent work safely and integrating
+    without hidden conflicts
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -2337,7 +2375,8 @@ assets:
   format: directory
   path: specs/scenarios/defect-and-debugging/root-cause-analysis
   title: Root Cause Analysis
-  summary: Reusable debugging scenario for identifying the actual cause of a defect before implementing a fix
+  summary: Reusable debugging scenario for identifying the actual cause of a defect
+    before implementing a fix
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -2414,8 +2453,8 @@ assets:
   format: directory
   path: specs/scenarios/defect-and-debugging/production-issue-reproduction
   title: Production Issue Reproduction
-  summary: Reusable debugging scenario for reproducing production failures without inventing false certainty or increasing
-    live risk
+  summary: Reusable debugging scenario for reproducing production failures without
+    inventing false certainty or increasing live risk
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -2456,7 +2495,8 @@ assets:
   format: directory
   path: specs/scenarios/refactoring-and-evolution/refactoring-safety
   title: Refactoring Safety
-  summary: Reusable refactoring scenario for preserving behavior while controlling structural change risk
+  summary: Reusable refactoring scenario for preserving behavior while controlling
+    structural change risk
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -2495,7 +2535,8 @@ assets:
   format: directory
   path: specs/scenarios/refactoring-and-evolution/performance-tuning
   title: Performance Tuning
-  summary: Reusable optimization scenario for improving performance without hiding measurement gaps or destabilizing behavior
+  summary: Reusable optimization scenario for improving performance without hiding
+    measurement gaps or destabilizing behavior
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -2537,8 +2578,8 @@ assets:
   format: directory
   path: specs/scenarios/implementation-and-change/dependency-upgrade-safety
   title: Dependency Upgrade Safety
-  summary: Reusable implementation scenario for upgrading dependencies without normalizing unknown compatibility or behavior
-    risk
+  summary: Reusable implementation scenario for upgrading dependencies without normalizing
+    unknown compatibility or behavior risk
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -2581,7 +2622,8 @@ assets:
   format: directory
   path: specs/scenarios/implementation-and-change/config-change-safety
   title: Config Change Safety
-  summary: Reusable implementation scenario for changing runtime configuration without understating behavior and rollout risk
+  summary: Reusable implementation scenario for changing runtime configuration without
+    understating behavior and rollout risk
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -2624,7 +2666,8 @@ assets:
   format: directory
   path: specs/scenarios/quality-and-verification/release-verification
   title: Release Verification
-  summary: Reusable release scenario for assembling truthful evidence before increasing exposure
+  summary: Reusable release scenario for assembling truthful evidence before increasing
+    exposure
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -2666,7 +2709,8 @@ assets:
   format: directory
   path: specs/scenarios/quality-and-verification/manual-verification-readiness
   title: Manual Verification Readiness
-  summary: Reusable verification scenario for deciding whether manual checks are concrete enough to provide trustworthy evidence
+  summary: Reusable verification scenario for deciding whether manual checks are concrete
+    enough to provide trustworthy evidence
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -2707,7 +2751,8 @@ assets:
   format: directory
   path: specs/scenarios/quality-and-verification/cross-layer-change-review
   title: Cross-Layer Change Review
-  summary: Reusable review scenario for validating changes whose behavior spans multiple architectural layers
+  summary: Reusable review scenario for validating changes whose behavior spans multiple
+    architectural layers
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -2748,7 +2793,8 @@ assets:
   format: directory
   path: specs/scenarios/collaboration-and-handoff/code-review-fixes
   title: Code Review Fixes
-  summary: Reusable collaboration scenario for addressing code review feedback safely and coherently
+  summary: Reusable collaboration scenario for addressing code review feedback safely
+    and coherently
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -2789,7 +2835,8 @@ assets:
   format: directory
   path: specs/scenarios/collaboration-and-handoff/handoff-readiness
   title: Handoff Readiness
-  summary: Reusable collaboration scenario for deciding whether work can be transferred without forcing rediscovery
+  summary: Reusable collaboration scenario for deciding whether work can be transferred
+    without forcing rediscovery
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -2830,7 +2877,8 @@ assets:
   format: directory
   path: specs/scenarios/discovery-and-planning/solution-comparison
   title: Solution Comparison
-  summary: Reusable planning scenario for comparing multiple feasible approaches before implementation commitment
+  summary: Reusable planning scenario for comparing multiple feasible approaches before
+    implementation commitment
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -2870,7 +2918,8 @@ assets:
   format: directory
   path: specs/scenarios/contract-and-data-change/schema-migration-safety
   title: Schema Migration Safety
-  summary: Reusable scenario for managing schema changes without hiding compatibility, migration, or rollback risk
+  summary: Reusable scenario for managing schema changes without hiding compatibility,
+    migration, or rollback risk
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -2911,7 +2960,8 @@ assets:
   format: directory
   path: specs/scenarios/contract-and-data-change/integration-cutover
   title: Integration Cutover
-  summary: Reusable change scenario for switching integrations or consumers without hiding transition and compatibility risk
+  summary: Reusable change scenario for switching integrations or consumers without
+    hiding transition and compatibility risk
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -2952,7 +3002,8 @@ assets:
   format: directory
   path: specs/scenarios/release-and-operations/rollback-readiness
   title: Rollback Readiness
-  summary: Reusable release scenario for defining rollback expectations before risky changes are handed off or deployed
+  summary: Reusable release scenario for defining rollback expectations before risky
+    changes are handed off or deployed
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -2991,7 +3042,8 @@ assets:
   format: directory
   path: specs/scenarios/release-and-operations/hotfix-safety
   title: Hotfix Safety
-  summary: Reusable release scenario for shipping urgent fixes without discarding scope, verification, or rollback discipline
+  summary: Reusable release scenario for shipping urgent fixes without discarding
+    scope, verification, or rollback discipline
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -3033,7 +3085,8 @@ assets:
   format: directory
   path: specs/scenarios/release-and-operations/third-party-outage-containment
   title: Third-Party Outage Containment
-  summary: Reusable operations scenario for containing incidents caused or amplified by external providers
+  summary: Reusable operations scenario for containing incidents caused or amplified
+    by external providers
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -3074,7 +3127,8 @@ assets:
   format: directory
   path: specs/scenarios/release-and-operations/rollback-decisioning
   title: Rollback Decisioning
-  summary: Reusable release scenario for deciding whether to continue forward or roll back under live uncertainty
+  summary: Reusable release scenario for deciding whether to continue forward or roll
+    back under live uncertainty
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -3116,7 +3170,8 @@ assets:
   format: directory
   path: specs/technologies/languages/java/project-structure
   title: Java Project Structure
-  summary: Reusable Java language-level rules for package layout, source boundaries, and structural discoverability
+  summary: Reusable Java language-level rules for package layout, source boundaries,
+    and structural discoverability
   status: active
   version: 1.2.0
   domain_axis: technologies
@@ -3158,7 +3213,8 @@ assets:
   format: directory
   path: specs/technologies/languages/java/error-handling
   title: Java Error Handling
-  summary: Reusable Java language-level rules for exception modeling, propagation, and boundary translation
+  summary: Reusable Java language-level rules for exception modeling, propagation,
+    and boundary translation
   status: active
   version: 1.2.0
   domain_axis: technologies
@@ -3199,7 +3255,8 @@ assets:
   format: directory
   path: specs/technologies/languages/java/type-and-object-modeling
   title: Java Type And Object Modeling
-  summary: Reusable Java language-level rules for type choice, value semantics, object state, and POJO modeling boundaries
+  summary: Reusable Java language-level rules for type choice, value semantics, object
+    state, and POJO modeling boundaries
   status: active
   version: 1.1.0
   domain_axis: technologies
@@ -3241,7 +3298,8 @@ assets:
   format: directory
   path: specs/technologies/languages/java/collections-and-generics
   title: Java Collections And Generics
-  summary: Reusable Java language-level rules for collection semantics, iteration safety, and generic boundary clarity
+  summary: Reusable Java language-level rules for collection semantics, iteration
+    safety, and generic boundary clarity
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -3283,7 +3341,8 @@ assets:
   format: directory
   path: specs/technologies/languages/java/concurrency
   title: Java Concurrency
-  summary: Reusable Java language-level rules for executors, locks, thread-local state, and shared-memory coordination
+  summary: Reusable Java language-level rules for executors, locks, thread-local state,
+    and shared-memory coordination
   status: active
   version: 1.1.0
   domain_axis: technologies
@@ -3325,7 +3384,8 @@ assets:
   format: directory
   path: specs/technologies/languages/java/control-flow
   title: Java Control Flow
-  summary: Reusable Java language-level rules for branching, switch behavior, loops, and guard-style flow clarity
+  summary: Reusable Java language-level rules for branching, switch behavior, loops,
+    and guard-style flow clarity
   status: active
   version: 1.1.0
   domain_axis: technologies
@@ -3366,7 +3426,8 @@ assets:
   format: directory
   path: specs/technologies/languages/java/build-and-dependencies
   title: Java Build and Dependencies
-  summary: Reusable Java ecosystem rules for dependency coordinates, version discipline, and build-facing dependency management
+  summary: Reusable Java ecosystem rules for dependency coordinates, version discipline,
+    and build-facing dependency management
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -3408,7 +3469,8 @@ assets:
   format: directory
   path: specs/technologies/languages/java/testing
   title: Java Testing
-  summary: Reusable Java language-level rules for test placement, assertion style, repeatability, and coverage expectations
+  summary: Reusable Java language-level rules for test placement, assertion style,
+    repeatability, and coverage expectations
   status: active
   version: 1.1.0
   domain_axis: technologies
@@ -3449,7 +3511,8 @@ assets:
   format: directory
   path: specs/technologies/languages/python/typing
   title: Python Typing
-  summary: Reusable Python language-level rules for using type hints to improve interface clarity and change safety
+  summary: Reusable Python language-level rules for using type hints to improve interface
+    clarity and change safety
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -3490,7 +3553,8 @@ assets:
   format: directory
   path: specs/technologies/languages/python/packaging
   title: Python Packaging
-  summary: Reusable Python language-level rules for package layout, import boundaries, and distribution-facing structure
+  summary: Reusable Python language-level rules for package layout, import boundaries,
+    and distribution-facing structure
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -3531,7 +3595,8 @@ assets:
   format: directory
   path: specs/technologies/languages/typescript/type-modeling
   title: TypeScript Type Modeling
-  summary: Reusable TypeScript language-level rules for modeling data and interfaces with meaningful types
+  summary: Reusable TypeScript language-level rules for modeling data and interfaces
+    with meaningful types
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -3573,7 +3638,8 @@ assets:
   format: directory
   path: specs/technologies/languages/typescript/runtime-boundaries
   title: TypeScript Runtime Boundaries
-  summary: Reusable TypeScript language-level rules for separating static type confidence from runtime trust boundaries
+  summary: Reusable TypeScript language-level rules for separating static type confidence
+    from runtime trust boundaries
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -3615,7 +3681,8 @@ assets:
   format: directory
   path: specs/technologies/languages/go/package-structure
   title: Go Package Structure
-  summary: Reusable Go language-level rules for package layout, exported surface discipline, and structural simplicity
+  summary: Reusable Go language-level rules for package layout, exported surface discipline,
+    and structural simplicity
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -3656,7 +3723,8 @@ assets:
   format: directory
   path: specs/technologies/languages/go/error-handling
   title: Go Error Handling
-  summary: Reusable Go language-level rules for explicit error returns, wrapping, and boundary handling
+  summary: Reusable Go language-level rules for explicit error returns, wrapping,
+    and boundary handling
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -3697,7 +3765,8 @@ assets:
   format: directory
   path: specs/technologies/frameworks/vue/component-model
   title: Vue Component Model
-  summary: Reusable Vue framework-level rules for component boundaries, prop and emit contracts, and state ownership
+  summary: Reusable Vue framework-level rules for component boundaries, prop and emit
+    contracts, and state ownership
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -3739,7 +3808,8 @@ assets:
   format: directory
   path: specs/technologies/frameworks/vue/state-management
   title: Vue State Management
-  summary: Reusable Vue framework-level rules for state placement, shared-state ownership, and reactive data-flow clarity
+  summary: Reusable Vue framework-level rules for state placement, shared-state ownership,
+    and reactive data-flow clarity
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -3781,7 +3851,8 @@ assets:
   format: directory
   path: specs/technologies/frameworks/vue/routing
   title: Vue Routing
-  summary: Reusable Vue framework-level rules for route-driven composition, navigation behavior, and route-state boundaries
+  summary: Reusable Vue framework-level rules for route-driven composition, navigation
+    behavior, and route-state boundaries
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -3823,7 +3894,8 @@ assets:
   format: directory
   path: specs/technologies/frameworks/react/component-model
   title: React Component Model
-  summary: Reusable React framework-level rules for component boundaries, composition, and state ownership
+  summary: Reusable React framework-level rules for component boundaries, composition,
+    and state ownership
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -3865,7 +3937,8 @@ assets:
   format: directory
   path: specs/technologies/frameworks/react/state-and-dataflow
   title: React State And Dataflow
-  summary: Reusable React framework-level rules for state ownership, data propagation, and side-effect-aware data flow
+  summary: Reusable React framework-level rules for state ownership, data propagation,
+    and side-effect-aware data flow
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -3907,7 +3980,8 @@ assets:
   format: directory
   path: specs/technologies/frameworks/react/routing
   title: React Routing
-  summary: Reusable React framework-level rules for route-driven composition, navigation state, and screen ownership
+  summary: Reusable React framework-level rules for route-driven composition, navigation
+    state, and screen ownership
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -3949,7 +4023,8 @@ assets:
   format: directory
   path: specs/technologies/frameworks/spring-boot/application-structure
   title: Spring Boot Application Structure
-  summary: Reusable Spring Boot framework-level rules for structuring application layers, modules, and framework entry points
+  summary: Reusable Spring Boot framework-level rules for structuring application
+    layers, modules, and framework entry points
   status: active
   version: 1.3.0
   domain_axis: technologies
@@ -3991,7 +4066,8 @@ assets:
   format: directory
   path: specs/technologies/frameworks/spring-boot/web-layer
   title: Spring Boot Web Layer
-  summary: Reusable Spring Boot framework-level rules for controller boundaries and request handling flow
+  summary: Reusable Spring Boot framework-level rules for controller boundaries and
+    request handling flow
   status: active
   version: 1.2.0
   domain_axis: technologies
@@ -4034,7 +4110,8 @@ assets:
   format: directory
   path: specs/technologies/frameworks/spring-boot/service-layer
   title: Spring Boot Service Layer
-  summary: Reusable Spring Boot framework-level rules for service orchestration, transaction ownership, and proxy-mediated business coordination
+  summary: Reusable Spring Boot framework-level rules for service orchestration, transaction
+    ownership, and proxy-mediated business coordination
   status: active
   version: 1.1.0
   domain_axis: technologies
@@ -4077,7 +4154,8 @@ assets:
   format: directory
   path: specs/technologies/frameworks/spring-boot/data-access
   title: Spring Boot Data Access
-  summary: Reusable Spring Boot framework-level rules for persistence boundaries, repositories, and transactional clarity
+  summary: Reusable Spring Boot framework-level rules for persistence boundaries,
+    repositories, and transactional clarity
   status: active
   version: 1.3.0
   domain_axis: technologies
@@ -4120,7 +4198,8 @@ assets:
   format: directory
   path: specs/technologies/frameworks/spring-boot/security
   title: Spring Boot Security
-  summary: Reusable Spring Boot framework-level rules for authentication, authorization, and request protection structure
+  summary: Reusable Spring Boot framework-level rules for authentication, authorization,
+    and request protection structure
   status: active
   version: 1.2.0
   domain_axis: technologies
@@ -4163,8 +4242,8 @@ assets:
   format: directory
   path: specs/technologies/frameworks/spring-boot/testing
   title: Spring Boot Testing
-  summary: Reusable Spring Boot framework-level rules for slice selection, wiring verification, and integration-test confidence
-    boundaries
+  summary: Reusable Spring Boot framework-level rules for slice selection, wiring
+    verification, and integration-test confidence boundaries
   status: active
   version: 1.2.0
   domain_axis: technologies
@@ -4207,7 +4286,8 @@ assets:
   format: directory
   path: specs/platforms/web/browser-runtime
   title: Browser Runtime
-  summary: Reusable web-platform rules for client execution constraints and browser runtime assumptions
+  summary: Reusable web-platform rules for client execution constraints and browser
+    runtime assumptions
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -4248,7 +4328,8 @@ assets:
   format: directory
   path: specs/platforms/web/routing-and-url
   title: Web Routing And URL
-  summary: Reusable web-platform rules for browser-visible routing, URL meaning, and navigation behavior
+  summary: Reusable web-platform rules for browser-visible routing, URL meaning, and
+    navigation behavior
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -4290,7 +4371,8 @@ assets:
   format: directory
   path: specs/platforms/web/storage-and-cache
   title: Web Storage And Cache
-  summary: Reusable web-platform rules for browser storage, cache behavior, and client-side persistence boundaries
+  summary: Reusable web-platform rules for browser storage, cache behavior, and client-side
+    persistence boundaries
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -4332,7 +4414,8 @@ assets:
   format: directory
   path: specs/platforms/cli/command-interface
   title: Command Interface
-  summary: Reusable CLI-platform rules for invocation contracts, exit semantics, and user-visible command behavior
+  summary: Reusable CLI-platform rules for invocation contracts, exit semantics, and
+    user-visible command behavior
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -4373,8 +4456,8 @@ assets:
   format: directory
   path: specs/platforms/desktop/shared/application-runtime
   title: Desktop Application Runtime
-  summary: Reusable desktop-platform rules for lifecycle, local runtime assumptions, and desktop-visible degradation shared
-    across operating systems
+  summary: Reusable desktop-platform rules for lifecycle, local runtime assumptions,
+    and desktop-visible degradation shared across operating systems
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -4415,8 +4498,8 @@ assets:
   format: directory
   path: specs/platforms/desktop/shared/system-integration
   title: Desktop System Integration
-  summary: Reusable desktop-platform rules for local OS service boundaries, capability access, and user-visible system integration
-    behavior
+  summary: Reusable desktop-platform rules for local OS service boundaries, capability
+    access, and user-visible system integration behavior
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -4457,8 +4540,8 @@ assets:
   format: directory
   path: specs/platforms/desktop/macos/system-permissions
   title: macOS System Permissions
-  summary: Reusable macOS-specific rules for permission-gated desktop capabilities, consent flow behavior, and settings-based
-    recovery
+  summary: Reusable macOS-specific rules for permission-gated desktop capabilities,
+    consent flow behavior, and settings-based recovery
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -4501,7 +4584,8 @@ assets:
   format: directory
   path: specs/platforms/desktop/windows/filesystem-and-paths
   title: Windows Filesystem And Paths
-  summary: Reusable Windows-specific desktop rules for path handling, writable locations, and filesystem behavior differences
+  summary: Reusable Windows-specific desktop rules for path handling, writable locations,
+    and filesystem behavior differences
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -4544,7 +4628,8 @@ assets:
   format: directory
   path: specs/platforms/desktop/linux/runtime-environment
   title: Linux Runtime Environment
-  summary: Reusable Linux-specific desktop rules for environment-driven runtime behavior, XDG-style paths, and session assumptions
+  summary: Reusable Linux-specific desktop rules for environment-driven runtime behavior,
+    XDG-style paths, and session assumptions
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -4587,7 +4672,8 @@ assets:
   format: directory
   path: specs/platforms/android/app-lifecycle
   title: Android App Lifecycle
-  summary: Reusable Android-specific rules for lifecycle, recreation, backgrounding, and state restoration
+  summary: Reusable Android-specific rules for lifecycle, recreation, backgrounding,
+    and state restoration
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -4628,7 +4714,8 @@ assets:
   format: directory
   path: specs/platforms/ios/app-lifecycle
   title: iOS App Lifecycle
-  summary: Reusable iOS-specific rules for lifecycle, suspension, restoration, and scene-driven state transitions
+  summary: Reusable iOS-specific rules for lifecycle, suspension, restoration, and
+    scene-driven state transitions
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -4669,7 +4756,8 @@ assets:
   format: directory
   path: specs/platforms/harmonyos/application-runtime
   title: HarmonyOS Application Runtime
-  summary: Reusable HarmonyOS-specific rules for runtime behavior, lifecycle transitions, and state continuity
+  summary: Reusable HarmonyOS-specific rules for runtime behavior, lifecycle transitions,
+    and state continuity
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -4710,7 +4798,8 @@ assets:
   format: directory
   path: specs/platforms/miniapp/host-runtime
   title: Miniapp Host Runtime
-  summary: Reusable miniapp-platform rules for host-controlled lifecycle, capability limits, and container runtime assumptions
+  summary: Reusable miniapp-platform rules for host-controlled lifecycle, capability
+    limits, and container runtime assumptions
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -4751,7 +4840,8 @@ assets:
   format: directory
   path: specs/platforms/web/browser-security
   title: Browser Security
-  summary: Reusable web-platform rules for browser trust boundaries and client-exposed security surfaces
+  summary: Reusable web-platform rules for browser trust boundaries and client-exposed
+    security surfaces
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -4793,7 +4883,8 @@ assets:
   format: directory
   path: specs/platforms/web/page-lifecycle
   title: Web Page Lifecycle
-  summary: Reusable web-platform rules for browser page lifecycle transitions, state survival, and lifecycle-sensitive behavior
+  summary: Reusable web-platform rules for browser page lifecycle transitions, state
+    survival, and lifecycle-sensitive behavior
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -4835,7 +4926,8 @@ assets:
   format: directory
   path: specs/platforms/web/accessibility
   title: Web Accessibility
-  summary: Reusable web-platform rules for operable, perceivable, and assistive-technology-compatible browser interaction
+  summary: Reusable web-platform rules for operable, perceivable, and assistive-technology-compatible
+    browser interaction
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -4876,7 +4968,8 @@ assets:
   format: directory
   path: specs/platforms/web/networking
   title: Web Networking
-  summary: Reusable web-platform rules for browser-side network behavior, retries, and client-boundary request handling
+  summary: Reusable web-platform rules for browser-side network behavior, retries,
+    and client-boundary request handling
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -4918,7 +5011,8 @@ assets:
   format: directory
   path: specs/platforms/web/rendering-and-performance
   title: Web Rendering And Performance
-  summary: Reusable web-platform rules for rendering cost, responsiveness, and browser-visible performance behavior
+  summary: Reusable web-platform rules for rendering cost, responsiveness, and browser-visible
+    performance behavior
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -4961,7 +5055,8 @@ assets:
   format: directory
   path: specs/platforms/backend-service/service-runtime
   title: Service Runtime
-  summary: Reusable backend-service platform rules for lifecycle states, process behavior, and runtime dependency assumptions
+  summary: Reusable backend-service platform rules for lifecycle states, process behavior,
+    and runtime dependency assumptions
   status: active
   version: 1.1.0
   domain_axis: platforms
@@ -5003,7 +5098,8 @@ assets:
   format: directory
   path: specs/platforms/backend-service/api-serving
   title: API Serving
-  summary: Reusable backend-service platform rules for realistic request-serving behavior and operational boundary handling
+  summary: Reusable backend-service platform rules for realistic request-serving behavior
+    and operational boundary handling
   status: active
   version: 1.2.0
   domain_axis: platforms
@@ -5045,7 +5141,8 @@ assets:
   format: directory
   path: specs/platforms/backend-service/async-jobs-and-schedulers
   title: Async Jobs And Schedulers
-  summary: Reusable backend-service platform rules for background jobs, retries, and scheduled execution reliability
+  summary: Reusable backend-service platform rules for background jobs, retries, and
+    scheduled execution reliability
   status: active
   version: 1.2.0
   domain_axis: platforms
@@ -5087,7 +5184,8 @@ assets:
   format: directory
   path: specs/platforms/backend-service/observability-and-operations
   title: Observability And Operations
-  summary: Reusable backend-service platform rules for service-level health visibility and operational intervention assumptions
+  summary: Reusable backend-service platform rules for service-level health visibility
+    and operational intervention assumptions
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -5168,7 +5266,8 @@ assets:
   format: file
   path: templates/universal-domains/contracts/error-matrix-template.md
   title: Error Matrix Template
-  summary: Reusable template for documenting contract-level error behavior and recovery expectations
+  summary: Reusable template for documenting contract-level error behavior and recovery
+    expectations
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -5245,8 +5344,8 @@ assets:
   format: file
   path: templates/universal-domains/product-and-requirements/customer-facing-prd-template.md
   title: Customer-Facing PRD Template
-  summary: Reusable template for creating customer-facing Product Requirement Documents that are clear and accessible for
-    non-technical stakeholders
+  summary: Reusable template for creating customer-facing Product Requirement Documents
+    that are clear and accessible for non-technical stakeholders
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -5287,8 +5386,8 @@ assets:
   format: file
   path: templates/universal-domains/product-and-requirements/developer-facing-prd-template.md
   title: Developer-Facing PRD Template
-  summary: Reusable template for creating developer-facing Product Requirement Documents that provide detailed technical specifications
-    and implementation guidance
+  summary: Reusable template for creating developer-facing Product Requirement Documents
+    that provide detailed technical specifications and implementation guidance
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -5330,7 +5429,8 @@ assets:
   format: file
   path: templates/universal-domains/project-governance/external-project-delivery-tasks/trial-run-delivery.md
   title: Trial Run Delivery Task Template
-  summary: Task template for preparing and delivering trial version to client under trial authorization track
+  summary: Task template for preparing and delivering trial version to client under
+    trial authorization track
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -5371,7 +5471,8 @@ assets:
   format: file
   path: templates/universal-domains/project-governance/external-project-delivery-tasks/hosted-deployment-setup.md
   title: Hosted Deployment Setup Task Template
-  summary: Task template for setting up hosted trial environment for client verification under hosted deployment track
+  summary: Task template for setting up hosted trial environment for client verification
+    under hosted deployment track
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -5411,7 +5512,8 @@ assets:
   format: file
   path: templates/universal-domains/project-governance/external-project-delivery-tasks/permanent-authorization-delivery.md
   title: Permanent Authorization Delivery Task Template
-  summary: Task template for final handover after final payment, delivering permanent authorization and full control
+  summary: Task template for final handover after final payment, delivering permanent
+    authorization and full control
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -5452,7 +5554,8 @@ assets:
   format: file
   path: templates/universal-domains/project-governance/external-project-delivery-tasks/source-code-transfer.md
   title: Source Code Transfer Task Template
-  summary: Task template for transferring complete source code and build artifacts to client
+  summary: Task template for transferring complete source code and build artifacts
+    to client
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -5492,7 +5595,8 @@ assets:
   format: file
   path: templates/universal-domains/project-governance/external-project-delivery-tasks/control-handover.md
   title: Control Handover Task Template
-  summary: Task template for transferring administrative control of infrastructure and services to client
+  summary: Task template for transferring administrative control of infrastructure
+    and services to client
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -5532,7 +5636,8 @@ assets:
   format: file
   path: templates/universal-domains/project-governance/external-project-delivery-tasks/secrets-config-transfer.md
   title: Secrets and Configuration Transfer Task Template
-  summary: Task template for securely transferring all secrets, certificates, and environment configuration to client
+  summary: Task template for securely transferring all secrets, certificates, and
+    environment configuration to client
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -5573,7 +5678,8 @@ assets:
   format: file
   path: templates/universal-domains/project-governance/change-request-template.md
   title: Change Request Template
-  summary: Reusable template for describing, assessing, and deciding a meaningful project change
+  summary: Reusable template for describing, assessing, and deciding a meaningful
+    project change
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -5651,7 +5757,8 @@ assets:
   format: file
   path: templates/universal-domains/verification/release-readiness-template.md
   title: Release Readiness Template
-  summary: Reusable template for documenting release evidence, risk, and rollout decision status
+  summary: Reusable template for documenting release evidence, risk, and rollout decision
+    status
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -5727,7 +5834,8 @@ assets:
   format: file
   path: templates/universal-domains/delivery-and-operations/incident-report-template.md
   title: Incident Report Template
-  summary: Reusable template for documenting incidents, containment actions, and follow-up context
+  summary: Reusable template for documenting incidents, containment actions, and follow-up
+    context
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -5766,7 +5874,8 @@ assets:
   format: file
   path: templates/universal-domains/agent-collaboration/agent-handoff-template.md
   title: Agent Handoff Template
-  summary: Reusable template for transferring work between agents or between an agent and a human
+  summary: Reusable template for transferring work between agents or between an agent
+    and a human
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -5881,7 +5990,8 @@ assets:
   format: file
   path: templates/scenarios/release-and-operations/hotfix-decision-template.md
   title: Hotfix Decision Template
-  summary: Reusable template for justifying urgent hotfix decisions under operational pressure
+  summary: Reusable template for justifying urgent hotfix decisions under operational
+    pressure
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -5957,7 +6067,8 @@ assets:
   format: file
   path: templates/universal-domains/security/security-review-template.md
   title: Security Review Template
-  summary: Reusable template for recording security review scope, risk, controls, and outcome
+  summary: Reusable template for recording security review scope, risk, controls,
+    and outcome
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -5995,7 +6106,8 @@ assets:
   format: file
   path: templates/universal-domains/contracts/event-contract-template.md
   title: Event Contract Template
-  summary: Reusable template for defining event payload, producer, consumer, and compatibility expectations
+  summary: Reusable template for defining event payload, producer, consumer, and compatibility
+    expectations
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -6033,7 +6145,8 @@ assets:
   format: file
   path: templates/universal-domains/context-engineering/decision-log-template.md
   title: Decision Log Template
-  summary: Reusable template for recording decisions so they can be summarized, injected, and audited later
+  summary: Reusable template for recording decisions so they can be summarized, injected,
+    and audited later
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -6151,7 +6264,8 @@ assets:
   format: file
   path: templates/universal-domains/delivery-and-operations/release-plan-template.md
   title: Release Plan Template
-  summary: Reusable template for documenting release scope, evidence, rollout, and rollback conditions
+  summary: Reusable template for documenting release scope, evidence, rollout, and
+    rollback conditions
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -6190,7 +6304,8 @@ assets:
   format: file
   path: templates/universal-domains/delivery-and-operations/rollback-plan-template.md
   title: Rollback Plan Template
-  summary: Reusable template for defining rollback conditions, steps, and post-rollback verification
+  summary: Reusable template for defining rollback conditions, steps, and post-rollback
+    verification
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -6229,7 +6344,8 @@ assets:
   format: file
   path: templates/platforms/desktop/runtime-assumptions-template.md
   title: Desktop Runtime Assumptions Template
-  summary: Reusable template for documenting lifecycle, storage, and OS-integration assumptions in desktop applications
+  summary: Reusable template for documenting lifecycle, storage, and OS-integration
+    assumptions in desktop applications
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -6271,7 +6387,8 @@ assets:
   format: file
   path: templates/platforms/cli/command-contract-template.md
   title: CLI Command Contract Template
-  summary: Reusable template for documenting command invocation, output, and exit-code expectations for CLI workflows
+  summary: Reusable template for documenting command invocation, output, and exit-code
+    expectations for CLI workflows
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -6312,7 +6429,8 @@ assets:
   format: file
   path: templates/platforms/desktop/macos-permission-plan-template.md
   title: macOS Permission Plan Template
-  summary: Reusable template for documenting permission-gated features and recovery paths on macOS
+  summary: Reusable template for documenting permission-gated features and recovery
+    paths on macOS
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -6355,7 +6473,8 @@ assets:
   format: file
   path: templates/platforms/mobile/lifecycle-state-template.md
   title: Mobile Lifecycle State Template
-  summary: Reusable template for documenting lifecycle-sensitive state and restoration expectations on mobile platforms
+  summary: Reusable template for documenting lifecycle-sensitive state and restoration
+    expectations on mobile platforms
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -6400,7 +6519,8 @@ assets:
   format: file
   path: templates/platforms/miniapp/host-capability-matrix-template.md
   title: Miniapp Host Capability Matrix Template
-  summary: Reusable template for documenting host capabilities, restrictions, and fallback behavior in miniapp environments
+  summary: Reusable template for documenting host capabilities, restrictions, and
+    fallback behavior in miniapp environments
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -6482,7 +6602,8 @@ assets:
   format: file
   path: checklists/universal-domains/contracts/compatibility-review-checklist.md
   title: Compatibility Review Checklist
-  summary: Review checklist aligned with compatibility policy and contract change discipline
+  summary: Review checklist aligned with compatibility policy and contract change
+    discipline
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -6521,7 +6642,8 @@ assets:
   format: file
   path: checklists/universal-domains/product-and-requirements/acceptance-quality-checklist.md
   title: Acceptance Quality Checklist
-  summary: Review checklist aligned with acceptance-criteria quality and verifiability rules
+  summary: Review checklist aligned with acceptance-criteria quality and verifiability
+    rules
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -6560,8 +6682,8 @@ assets:
   format: file
   path: checklists/universal-domains/product-and-requirements/customer-facing-prd-checklist.md
   title: Customer-Facing PRD Checklist
-  summary: Review checklist for validating customer-facing Product Requirement Documents for clarity, completeness, and stakeholder
-    accessibility
+  summary: Review checklist for validating customer-facing Product Requirement Documents
+    for clarity, completeness, and stakeholder accessibility
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -6603,8 +6725,8 @@ assets:
   format: file
   path: checklists/universal-domains/product-and-requirements/developer-facing-prd-checklist.md
   title: Developer-Facing PRD Checklist
-  summary: Review checklist for validating developer-facing Product Requirement Documents for technical completeness, specificity,
-    and implementation readiness
+  summary: Review checklist for validating developer-facing Product Requirement Documents
+    for technical completeness, specificity, and implementation readiness
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -6685,7 +6807,8 @@ assets:
   format: file
   path: checklists/universal-domains/project-governance/risk-review-checklist.md
   title: Risk Review Checklist
-  summary: Review checklist aligned with risk-tier assignment and verification escalation rules
+  summary: Review checklist aligned with risk-tier assignment and verification escalation
+    rules
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -6725,7 +6848,8 @@ assets:
   format: file
   path: checklists/universal-domains/project-governance/transfer-checklist.md
   title: Transfer Checklist
-  summary: Practical checklist for external-project delivery events, covering retained-control boundaries, final transfer, and disclosed trial-authorization handover conditions
+  summary: Practical checklist for external-project delivery events, covering retained-control
+    boundaries, final transfer, and disclosed trial-authorization handover conditions
   status: active
   version: 1.1.0
   domain_axis: universal-domains
@@ -6766,7 +6890,8 @@ assets:
   format: file
   path: checklists/universal-domains/verification/release-readiness-checklist.md
   title: Release Readiness Checklist
-  summary: Review checklist aligned with release readiness and release verification rules
+  summary: Review checklist aligned with release readiness and release verification
+    rules
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -6806,7 +6931,8 @@ assets:
   format: file
   path: checklists/universal-domains/verification/definition-of-done-checklist.md
   title: Definition Of Done Checklist
-  summary: Review checklist aligned with completion claims, required evidence, and remaining gaps
+  summary: Review checklist aligned with completion claims, required evidence, and
+    remaining gaps
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -6845,7 +6971,8 @@ assets:
   format: file
   path: checklists/universal-domains/context-engineering/context-health-checklist.md
   title: Context Health Checklist
-  summary: Review checklist aligned with context layering, budgeting, and contamination rules
+  summary: Review checklist aligned with context layering, budgeting, and contamination
+    rules
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -7004,7 +7131,8 @@ assets:
   format: file
   path: checklists/universal-domains/delivery-and-operations/incident-response-checklist.md
   title: Incident Response Checklist
-  summary: Review checklist aligned with incident response and outage containment rules
+  summary: Review checklist aligned with incident response and outage containment
+    rules
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -7122,7 +7250,8 @@ assets:
   format: file
   path: checklists/universal-domains/testing/regression-readiness-checklist.md
   title: Regression Readiness Checklist
-  summary: Review checklist aligned with regression policy and release confidence rules
+  summary: Review checklist aligned with regression policy and release confidence
+    rules
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -7276,7 +7405,8 @@ assets:
   format: file
   path: checklists/scenarios/quality-and-verification/manual-verification-checklist.md
   title: Manual Verification Checklist
-  summary: Review checklist aligned with manual verification planning and evidence capture
+  summary: Review checklist aligned with manual verification planning and evidence
+    capture
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -7315,7 +7445,8 @@ assets:
   format: file
   path: checklists/platforms/desktop/runtime-readiness-checklist.md
   title: Desktop Runtime Readiness Checklist
-  summary: Review checklist aligned with shared desktop runtime and system-integration rules
+  summary: Review checklist aligned with shared desktop runtime and system-integration
+    rules
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -7356,7 +7487,8 @@ assets:
   format: file
   path: checklists/platforms/cli/command-interface-readiness-checklist.md
   title: CLI Command Interface Readiness Checklist
-  summary: Review checklist aligned with CLI invocation, help, and exit-code behavior rules
+  summary: Review checklist aligned with CLI invocation, help, and exit-code behavior
+    rules
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -7604,7 +7736,8 @@ assets:
   format: file
   path: checklists/platforms/miniapp-host-runtime-readiness-checklist.md
   title: Miniapp Host Runtime Readiness Checklist
-  summary: Review checklist aligned with miniapp host-runtime and capability-limit rules
+  summary: Review checklist aligned with miniapp host-runtime and capability-limit
+    rules
   status: active
   version: 1.0.0
   domain_axis: platforms
@@ -7682,7 +7815,8 @@ assets:
   format: file
   path: checklists/universal-domains/contracts/event-contract-review-checklist.md
   title: Event Contract Review Checklist
-  summary: Review checklist aligned with event contract clarity and compatibility expectations
+  summary: Review checklist aligned with event contract clarity and compatibility
+    expectations
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -7760,7 +7894,8 @@ assets:
   format: file
   path: examples/assembled-packs/ai-agent-project-foundation.md
   title: AI Agent Project Foundation Example Pack
-  summary: Example selection for projects where multi-agent execution, context control, and tool-calling discipline are central
+  summary: Example selection for projects where multi-agent execution, context control,
+    and tool-calling discipline are central
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -7811,7 +7946,8 @@ assets:
   format: file
   path: examples/assembled-packs/incident-ready-service.md
   title: Incident Ready Service Example Pack
-  summary: Example selection for services that need stronger incident readiness, observability, and rollback discipline
+  summary: Example selection for services that need stronger incident readiness, observability,
+    and rollback discipline
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -7860,8 +7996,8 @@ assets:
   format: file
   path: examples/assembled-packs/cross-layer-change-heavy-service.md
   title: Cross-Layer Change Heavy Service Example Pack
-  summary: Example selection for services with frequent cross-layer change, contract drift risk, and stronger release verification
-    needs
+  summary: Example selection for services with frequent cross-layer change, contract
+    drift risk, and stronger release verification needs
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -7913,7 +8049,8 @@ assets:
   format: file
   path: examples/assembled-packs/requirements-discovery-foundation.md
   title: Requirements Discovery Foundation Example Pack
-  summary: Example selection for projects that need stronger requirement discovery and solution-comparison discipline
+  summary: Example selection for projects that need stronger requirement discovery
+    and solution-comparison discipline
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -7958,7 +8095,8 @@ assets:
   format: file
   path: examples/assembled-packs/security-and-review-foundation.md
   title: Security And Review Foundation Example Pack
-  summary: Example selection for projects that need explicit security boundaries and stronger review discipline
+  summary: Example selection for projects that need explicit security boundaries and
+    stronger review discipline
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -8003,7 +8141,8 @@ assets:
   format: file
   path: examples/assembled-packs/architecture-and-data-foundation.md
   title: Architecture And Data Foundation Example Pack
-  summary: Example selection for projects that need explicit structural, schema, and data-integrity boundaries
+  summary: Example selection for projects that need explicit structural, schema, and
+    data-integrity boundaries
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -8053,7 +8192,8 @@ assets:
   format: file
   path: examples/assembled-packs/debugging-and-refactoring-workbench.md
   title: Debugging And Refactoring Workbench Example Pack
-  summary: Example selection for projects that frequently diagnose failures and perform bounded refactoring
+  summary: Example selection for projects that frequently diagnose failures and perform
+    bounded refactoring
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -8097,7 +8237,8 @@ assets:
   format: file
   path: examples/assembled-packs/typescript-web-platform-foundation.md
   title: TypeScript Web Platform Foundation Example Pack
-  summary: Example selection for TypeScript web applications with explicit browser-platform and runtime-boundary rules
+  summary: Example selection for TypeScript web applications with explicit browser-platform
+    and runtime-boundary rules
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -8146,7 +8287,8 @@ assets:
   format: file
   path: examples/assembled-packs/java-spring-service-foundation.md
   title: Java Spring Service Foundation Example Pack
-  summary: Example selection for Spring Boot backend services with explicit structure, data, security, and runtime rules
+  summary: Example selection for Spring Boot backend services with explicit structure,
+    data, security, and runtime rules
   status: active
   version: 1.3.0
   domain_axis: scenarios
@@ -8203,7 +8345,8 @@ assets:
   format: file
   path: examples/assembled-packs/python-backend-foundation.md
   title: Python Backend Foundation Example Pack
-  summary: Example selection for Python backend services with explicit typing, packaging, and runtime rules
+  summary: Example selection for Python backend services with explicit typing, packaging,
+    and runtime rules
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -8246,7 +8389,8 @@ assets:
   format: file
   path: examples/assembled-packs/go-service-foundation.md
   title: Go Service Foundation Example Pack
-  summary: Example selection for Go backend services with explicit package, error, and async-runtime rules
+  summary: Example selection for Go backend services with explicit package, error,
+    and async-runtime rules
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -8290,7 +8434,8 @@ assets:
   format: file
   path: examples/assembled-packs/vue-web-app-foundation.md
   title: Vue Web App Foundation Example Pack
-  summary: Example selection for Vue web applications with explicit component, routing, state, and browser-platform rules
+  summary: Example selection for Vue web applications with explicit component, routing,
+    state, and browser-platform rules
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -8342,7 +8487,8 @@ assets:
   format: file
   path: examples/assembled-packs/react-web-app-foundation.md
   title: React Web App Foundation Example Pack
-  summary: Example selection for React web applications with explicit component, routing, dataflow, and browser-platform rules
+  summary: Example selection for React web applications with explicit component, routing,
+    dataflow, and browser-platform rules
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -8394,7 +8540,8 @@ assets:
   format: file
   path: examples/assembled-packs/desktop-platform-foundation.md
   title: Desktop Platform Foundation Example Pack
-  summary: Example selection for cross-platform desktop applications with explicit runtime and system-integration boundaries
+  summary: Example selection for cross-platform desktop applications with explicit
+    runtime and system-integration boundaries
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -8435,7 +8582,8 @@ assets:
   format: file
   path: examples/assembled-packs/cli-command-foundation.md
   title: CLI Command Foundation Example Pack
-  summary: Example selection for projects that need explicit CLI invocation, help, and exit semantics
+  summary: Example selection for projects that need explicit CLI invocation, help,
+    and exit semantics
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -8474,7 +8622,8 @@ assets:
   format: file
   path: examples/assembled-packs/desktop-macos-foundation.md
   title: Desktop macOS Foundation Example Pack
-  summary: Example selection for macOS desktop applications with explicit runtime, system-integration, and permission rules
+  summary: Example selection for macOS desktop applications with explicit runtime,
+    system-integration, and permission rules
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -8517,7 +8666,8 @@ assets:
   format: file
   path: examples/assembled-packs/desktop-windows-foundation.md
   title: Desktop Windows Foundation Example Pack
-  summary: Example selection for Windows desktop applications with explicit runtime, integration, and filesystem/path rules
+  summary: Example selection for Windows desktop applications with explicit runtime,
+    integration, and filesystem/path rules
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -8560,7 +8710,8 @@ assets:
   format: file
   path: examples/assembled-packs/desktop-linux-foundation.md
   title: Desktop Linux Foundation Example Pack
-  summary: Example selection for Linux desktop applications with explicit runtime, integration, and environment rules
+  summary: Example selection for Linux desktop applications with explicit runtime,
+    integration, and environment rules
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -8603,7 +8754,8 @@ assets:
   format: file
   path: examples/assembled-packs/mobile-app-lifecycle-foundation.md
   title: Mobile App Lifecycle Foundation Example Pack
-  summary: Example selection for mobile applications that need explicit Android and iOS lifecycle rules
+  summary: Example selection for mobile applications that need explicit Android and
+    iOS lifecycle rules
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -8645,7 +8797,8 @@ assets:
   format: file
   path: examples/assembled-packs/harmonyos-app-foundation.md
   title: HarmonyOS App Foundation Example Pack
-  summary: Example selection for HarmonyOS applications with explicit runtime and lifecycle rules
+  summary: Example selection for HarmonyOS applications with explicit runtime and
+    lifecycle rules
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -8685,7 +8838,8 @@ assets:
   format: file
   path: examples/assembled-packs/electron-app-foundation.md
   title: Electron App Foundation Example Pack
-  summary: Example selection for Electron desktop applications with main-process, renderer, shared, and pitfalls specs
+  summary: Example selection for Electron desktop applications with main-process,
+    renderer, shared, and pitfalls specs
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -8769,7 +8923,8 @@ assets:
   format: file
   path: examples/assembled-packs/nextjs-fullstack-foundation.md
   title: Next.js Full-Stack Foundation Example Pack
-  summary: Example selection for Next.js full-stack applications with backend, frontend, shared, and pitfalls specs
+  summary: Example selection for Next.js full-stack applications with backend, frontend,
+    shared, and pitfalls specs
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -8839,7 +8994,8 @@ assets:
   format: file
   path: examples/assembled-packs/miniapp-runtime-foundation.md
   title: Miniapp Runtime Foundation Example Pack
-  summary: Example selection for miniapp projects with explicit host-runtime and capability-limit rules
+  summary: Example selection for miniapp projects with explicit host-runtime and capability-limit
+    rules
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -9024,7 +9180,8 @@ assets:
   format: file
   path: scripts/validation/validate-overview-links.py
   title: Validate Overview Links
-  summary: Scans framework overview.md files and their sub-files for broken relative links
+  summary: Scans framework overview.md files and their sub-files for broken relative
+    links
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -9060,7 +9217,8 @@ assets:
   format: file
   path: scripts/assembly/write-library-lock.py
   title: Write Library Lock
-  summary: Writes .trellis/library-lock.yaml for a target project based on selected assets
+  summary: Writes .trellis/library-lock.yaml for a target project based on selected
+    assets
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -9097,7 +9255,8 @@ assets:
   format: file
   path: scripts/assembly/assemble-init-set.py
   title: Assemble Init Set
-  summary: Copies selected assets into a target project's .trellis directory and writes library-lock.yaml
+  summary: Copies selected assets into a target project's .trellis directory and writes
+    library-lock.yaml
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -9135,7 +9294,8 @@ assets:
   format: file
   path: scripts/assembly/analyze-library-pull.py
   title: Analyze Library Pull
-  summary: '3-way comparison analysis for asset pull: classifies changes, detects local-only files, generates simulation reports'
+  summary: '3-way comparison analysis for asset pull: classifies changes, detects
+    local-only files, generates simulation reports'
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -9173,7 +9333,8 @@ assets:
   format: file
   path: scripts/sync/sync-library-assets.py
   title: Sync Library Assets
-  summary: Synchronizes source-library assets downstream into a target project's .trellis tree using library-lock state
+  summary: Synchronizes source-library assets downstream into a target project's .trellis
+    tree using library-lock state
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -9211,8 +9372,8 @@ assets:
   format: file
   path: scripts/sync/diff-library-assets.py
   title: Diff Library Assets
-  summary: Compares target-project assets against source-library assets and classifies local changes for downstream sync and
-    upstream proposal eligibility
+  summary: Compares target-project assets against source-library assets and classifies
+    local changes for downstream sync and upstream proposal eligibility
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -9252,7 +9413,8 @@ assets:
   format: file
   path: scripts/sync/propose-library-sync.py
   title: Propose Library Sync
-  summary: Generates reviewable upstream sync proposals and optional patch files from target-project spec improvements
+  summary: Generates reviewable upstream sync proposals and optional patch files from
+    target-project spec improvements
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -9291,7 +9453,8 @@ assets:
   format: file
   path: scripts/sync/apply-library-sync.py
   title: Apply Library Sync
-  summary: Applies an approved upstream proposal patch to trellis-library and validates the library afterward
+  summary: Applies an approved upstream proposal patch to trellis-library and validates
+    the library afterward
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -9330,8 +9493,8 @@ assets:
   format: file
   path: scripts/contribution/verify-upstream-contribution.py
   title: Verify Upstream Contribution
-  summary: 'Verify upstream contributions: check upstream status, validate format, summarize, interactive per-file approval,
-    generate proposals'
+  summary: 'Verify upstream contributions: check upstream status, validate format,
+    summarize, interactive per-file approval, generate proposals'
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -9372,7 +9535,8 @@ assets:
   format: file
   path: specs/technologies/frameworks/electron/main-process/api-module.md
   title: API Module Organization
-  summary: Domain-driven API module layout using TypeScript + Zod for strict type safety.
+  summary: Domain-driven API module layout using TypeScript + Zod for strict type
+    safety.
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -9390,6 +9554,20 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: &id001
+    - implementation
+    - review
+    - verification
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-main-process-api-module-rules
 - id: spec.technologies.frameworks.electron-main-process-api-patterns
   type: spec
   format: file
@@ -9413,6 +9591,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id001
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-main-process-api-patterns-rules
 - id: spec.technologies.frameworks.electron-main-process-database
   type: spec
   format: file
@@ -9436,6 +9625,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id001
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-main-process-database-rules
 - id: spec.technologies.frameworks.electron-main-process-directory-structure
   type: spec
   format: file
@@ -9459,6 +9659,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id001
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-main-process-directory-structure-rules
 - id: spec.technologies.frameworks.electron-main-process-environment
   type: spec
   format: file
@@ -9482,6 +9693,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id001
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-main-process-environment-rules
 - id: spec.technologies.frameworks.electron-main-process-error-handling
   type: spec
   format: file
@@ -9505,6 +9727,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id001
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-main-process-error-handling-rules
 - id: spec.technologies.frameworks.electron-main-process-logging
   type: spec
   format: file
@@ -9528,12 +9761,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id001
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-main-process-logging-rules
 - id: spec.technologies.frameworks.electron-main-process-macos-permissions
   type: spec
   format: file
   path: specs/technologies/frameworks/electron/main-process/macos-permissions.md
   title: macOS System Permissions
-  summary: Guide for handling system permissions (microphone, accessibility, etc.) in Electron apps.
+  summary: Guide for handling system permissions (microphone, accessibility, etc.)
+    in Electron apps.
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -9551,6 +9796,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id001
+    platforms:
+    - macos
+    technologies:
+    - electron
+  provides:
+  - electron-main-process-macos-permissions-rules
 - id: spec.technologies.frameworks.electron-main-process-pagination
   type: spec
   format: file
@@ -9574,6 +9830,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id001
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-main-process-pagination-rules
 - id: spec.technologies.frameworks.electron-main-process-quality
   type: spec
   format: file
@@ -9597,12 +9864,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id001
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-main-process-quality-rules
 - id: spec.technologies.frameworks.electron-main-process-text-input
   type: spec
   format: file
   path: specs/technologies/frameworks/electron/main-process/text-input.md
   title: Text Input Without Clipboard Pollution
-  summary: Best practices for inserting text into other applications without polluting the clipboard.
+  summary: Best practices for inserting text into other applications without polluting
+    the clipboard.
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -9620,6 +9899,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id001
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-main-process-text-input-rules
 - id: spec.technologies.frameworks.electron-main-process-type-safety
   type: spec
   format: file
@@ -9643,6 +9933,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id001
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-main-process-type-safety-rules
 - id: spec.technologies.frameworks.electron-renderer-components
   type: spec
   format: file
@@ -9666,6 +9967,20 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: &id002
+    - implementation
+    - review
+    - verification
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-renderer-components-rules
 - id: spec.technologies.frameworks.electron-renderer-css-design
   type: spec
   format: file
@@ -9689,6 +10004,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id002
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-renderer-css-design-rules
 - id: spec.technologies.frameworks.electron-renderer-directory-structure
   type: spec
   format: file
@@ -9712,6 +10038,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id002
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-renderer-directory-structure-rules
 - id: spec.technologies.frameworks.electron-renderer-electron-browser-api-restrictions
   type: spec
   format: file
@@ -9735,6 +10072,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id002
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-renderer-electron-browser-api-restrictions-rules
 - id: spec.technologies.frameworks.electron-renderer-hooks
   type: spec
   format: file
@@ -9758,6 +10106,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id002
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-renderer-hooks-rules
 - id: spec.technologies.frameworks.electron-renderer-ipc-electron
   type: spec
   format: file
@@ -9781,6 +10140,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id002
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-renderer-ipc-electron-rules
 - id: spec.technologies.frameworks.electron-renderer-quality
   type: spec
   format: file
@@ -9804,6 +10174,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id002
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-renderer-quality-rules
 - id: spec.technologies.frameworks.electron-renderer-react-pitfalls
   type: spec
   format: file
@@ -9827,6 +10208,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id002
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-renderer-react-pitfalls-rules
 - id: spec.technologies.frameworks.electron-renderer-state-management
   type: spec
   format: file
@@ -9850,6 +10242,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id002
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-renderer-state-management-rules
 - id: spec.technologies.frameworks.electron-renderer-type-safety
   type: spec
   format: file
@@ -9873,6 +10276,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id002
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-renderer-type-safety-rules
 - id: spec.technologies.frameworks.electron-shared-code-quality
   type: spec
   format: file
@@ -9896,6 +10310,20 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: &id003
+    - implementation
+    - review
+    - verification
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-shared-code-quality-rules
 - id: spec.technologies.frameworks.electron-shared-git-conventions
   type: spec
   format: file
@@ -9919,12 +10347,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id003
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-shared-git-conventions-rules
 - id: spec.technologies.frameworks.electron-shared-pnpm-electron-setup
   type: spec
   format: file
   path: specs/technologies/frameworks/electron/shared/pnpm-electron-setup.md
   title: pnpm + Electron Setup Guide
-  summary: Complete setup guide for managing Electron projects with pnpm including workspace configuration
+  summary: Complete setup guide for managing Electron projects with pnpm including
+    workspace configuration
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -9942,12 +10382,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id003
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-shared-pnpm-electron-setup-rules
 - id: spec.technologies.frameworks.electron-shared-timestamp
   type: spec
   format: file
   path: specs/technologies/frameworks/electron/shared/timestamp.md
   title: Timestamp Specification
-  summary: Rules for consistent timestamp handling using Unix milliseconds across the entire Electron stack
+  summary: Rules for consistent timestamp handling using Unix milliseconds across
+    the entire Electron stack
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -9965,6 +10417,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id003
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-shared-timestamp-rules
 - id: spec.technologies.frameworks.electron-shared-typescript
   type: spec
   format: file
@@ -9988,6 +10451,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id003
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-shared-typescript-rules
 - id: spec.technologies.frameworks.electron-guides-bug-root-cause-thinking
   type: spec
   format: file
@@ -10011,6 +10485,20 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: &id004
+    - design
+    - implementation
+    - review
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-guides-bug-root-cause-thinking-rules
 - id: spec.technologies.frameworks.electron-guides-code-reuse-thinking
   type: spec
   format: file
@@ -10034,6 +10522,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id004
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-guides-code-reuse-thinking-rules
 - id: spec.technologies.frameworks.electron-guides-cross-layer-thinking
   type: spec
   format: file
@@ -10057,6 +10556,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id004
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-guides-cross-layer-thinking-rules
 - id: spec.technologies.frameworks.electron-guides-db-schema-change
   type: spec
   format: file
@@ -10080,6 +10590,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id004
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-guides-db-schema-change-rules
 - id: spec.technologies.frameworks.electron-guides-pre-implementation-checklist
   type: spec
   format: file
@@ -10103,12 +10624,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id004
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-guides-pre-implementation-checklist-rules
 - id: spec.technologies.frameworks.electron-guides-semantic-change
   type: spec
   format: file
   path: specs/technologies/frameworks/electron/guides/semantic-change.md
   title: Semantic Change Checklist
-  summary: Guide for handling semantic changes and backward compatibility in Electron apps
+  summary: Guide for handling semantic changes and backward compatibility in Electron
+    apps
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -10126,6 +10659,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id004
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-guides-semantic-change-rules
 - id: spec.technologies.frameworks.electron-guides-transaction-consistency
   type: spec
   format: file
@@ -10149,6 +10693,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id004
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-guides-transaction-consistency-rules
 - id: spec.technologies.frameworks.electron-overview
   type: spec
   format: file
@@ -10172,6 +10727,19 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - implementation
+    - review
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-overview-rules
 - id: spec.scenarios.defect-and-debugging.electron-pitfalls-bluetooth-hid-device
   type: spec
   format: file
@@ -10195,6 +10763,20 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: &id005
+    - debugging
+    - implementation
+    - verification
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-pitfalls-bluetooth-hid-device-rules
 - id: spec.scenarios.defect-and-debugging.electron-pitfalls-css-flex-centering
   type: spec
   format: file
@@ -10218,6 +10800,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id005
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-pitfalls-css-flex-centering-rules
 - id: spec.scenarios.defect-and-debugging.electron-pitfalls-global-keyboard-hooks
   type: spec
   format: file
@@ -10241,6 +10834,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id005
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-pitfalls-global-keyboard-hooks-rules
 - id: spec.scenarios.defect-and-debugging.electron-pitfalls-ipc-handler-registration
   type: spec
   format: file
@@ -10264,6 +10868,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id005
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-pitfalls-ipc-handler-registration-rules
 - id: spec.scenarios.defect-and-debugging.electron-pitfalls-native-module-complex-deps
   type: spec
   format: file
@@ -10287,6 +10902,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id005
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-pitfalls-native-module-complex-deps-rules
 - id: spec.scenarios.defect-and-debugging.electron-pitfalls-native-module-packaging
   type: spec
   format: file
@@ -10310,6 +10936,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id005
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-pitfalls-native-module-packaging-rules
 - id: spec.scenarios.defect-and-debugging.electron-pitfalls-network-stack-differences
   type: spec
   format: file
@@ -10333,6 +10970,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id005
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-pitfalls-network-stack-differences-rules
 - id: spec.scenarios.defect-and-debugging.electron-pitfalls-react-usestate-function
   type: spec
   format: file
@@ -10356,6 +11004,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id005
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-pitfalls-react-usestate-function-rules
 - id: spec.scenarios.defect-and-debugging.electron-pitfalls-timestamp-precision
   type: spec
   format: file
@@ -10379,12 +11038,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id005
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-pitfalls-timestamp-precision-rules
 - id: spec.scenarios.defect-and-debugging.electron-pitfalls-transaction-silent-failure
   type: spec
   format: file
   path: specs/scenarios/defect-and-debugging/electron-pitfalls/transaction-silent-failure.md
   title: Transaction Helper Functions Silent Failure
-  summary: Pitfall guide for silent transaction failure patterns in Electron SQLite usage
+  summary: Pitfall guide for silent transaction failure patterns in Electron SQLite
+    usage
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -10402,12 +11073,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id005
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-pitfalls-transaction-silent-failure-rules
 - id: spec.technologies.frameworks.nextjs-backend-ai-sdk-integration
   type: spec
   format: file
   path: specs/technologies/frameworks/nextjs/backend/ai-sdk-integration.md
   title: AI SDK Backend Integration Guidelines
-  summary: Rules for integrating the AI SDK into Next.js backend routes and server actions
+  summary: Rules for integrating the AI SDK into Next.js backend routes and server
+    actions
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -10425,13 +11108,27 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: &id006
+    - implementation
+    - review
+    - verification
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-backend-ai-sdk-integration-rules
 - id: spec.technologies.frameworks.nextjs-backend-authentication
   type: spec
   format: file
   path: specs/technologies/frameworks/nextjs/backend/authentication.md
   title: Authentication Guidelines
-  summary: This document covers backend authentication integration using better-auth, including session management, protected
-    procedures, and OAuth configuration.
+  summary: This document covers backend authentication integration using better-auth,
+    including session management, protected procedures, and OAuth configuration.
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -10449,6 +11146,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id006
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-backend-authentication-rules
 - id: spec.technologies.frameworks.nextjs-backend-database
   type: spec
   format: file
@@ -10472,12 +11180,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id006
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-backend-database-rules
 - id: spec.technologies.frameworks.nextjs-backend-directory-structure
   type: spec
   format: file
   path: specs/technologies/frameworks/nextjs/backend/directory-structure.md
   title: Directory Structure
-  summary: This document describes the module organization pattern for backend API development.
+  summary: This document describes the module organization pattern for backend API
+    development.
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -10495,12 +11215,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id006
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-backend-directory-structure-rules
 - id: spec.technologies.frameworks.nextjs-backend-logging
   type: spec
   format: file
   path: specs/technologies/frameworks/nextjs/backend/logging.md
   title: Logging and Monitoring
-  summary: This document covers structured logging, error tracking with Sentry, and observability patterns.
+  summary: This document covers structured logging, error tracking with Sentry, and
+    observability patterns.
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -10518,6 +11250,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id006
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-backend-logging-rules
 - id: spec.technologies.frameworks.nextjs-backend-orpc-usage
   type: spec
   format: file
@@ -10541,6 +11284,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id006
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-backend-orpc-usage-rules
 - id: spec.technologies.frameworks.nextjs-backend-performance
   type: spec
   format: file
@@ -10564,6 +11318,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id006
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-backend-performance-rules
 - id: spec.technologies.frameworks.nextjs-backend-quality
   type: spec
   format: file
@@ -10587,12 +11352,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id006
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-backend-quality-rules
 - id: spec.technologies.frameworks.nextjs-backend-type-safety
   type: spec
   format: file
   path: specs/technologies/frameworks/nextjs/backend/type-safety.md
   title: Type Safety Guidelines
-  summary: This document covers TypeScript best practices and type safety patterns for backend development.
+  summary: This document covers TypeScript best practices and type safety patterns
+    for backend development.
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -10610,6 +11387,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id006
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-backend-type-safety-rules
 - id: spec.technologies.frameworks.nextjs-frontend-ai-sdk-integration
   type: spec
   format: file
@@ -10633,12 +11421,27 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: &id007
+    - implementation
+    - review
+    - verification
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-frontend-ai-sdk-integration-rules
 - id: spec.technologies.frameworks.nextjs-frontend-api-integration
   type: spec
   format: file
   path: specs/technologies/frameworks/nextjs/frontend/api-integration.md
   title: API Integration
-  summary: This document covers API integration patterns including oRPC client usage, real-time communication, and AI streaming.
+  summary: This document covers API integration patterns including oRPC client usage,
+    real-time communication, and AI streaming.
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -10656,13 +11459,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id007
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-frontend-api-integration-rules
 - id: spec.technologies.frameworks.nextjs-frontend-authentication
   type: spec
   format: file
   path: specs/technologies/frameworks/nextjs/frontend/authentication.md
   title: Frontend Authentication with better-auth
-  summary: This document provides guidelines for implementing client-side authentication using better-auth in a Next.js React
-    application.
+  summary: This document provides guidelines for implementing client-side authentication
+    using better-auth in a Next.js React application.
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -10680,13 +11494,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id007
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-frontend-authentication-rules
 - id: spec.technologies.frameworks.nextjs-frontend-components
   type: spec
   format: file
   path: specs/technologies/frameworks/nextjs/frontend/components.md
   title: Component Development Guidelines
-  summary: This document covers component development patterns including Server vs Client components, semantic HTML, and UI
-    best practices.
+  summary: This document covers component development patterns including Server vs
+    Client components, semantic HTML, and UI best practices.
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -10704,12 +11529,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id007
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-frontend-components-rules
 - id: spec.technologies.frameworks.nextjs-frontend-css-layout
   type: spec
   format: file
   path: specs/technologies/frameworks/nextjs/frontend/css-layout.md
   title: CSS & Layout Best Practices
-  summary: This document covers CSS patterns, layout strategies, and cross-environment compatibility considerations.
+  summary: This document covers CSS patterns, layout strategies, and cross-environment
+    compatibility considerations.
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -10727,12 +11564,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id007
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-frontend-css-layout-rules
 - id: spec.technologies.frameworks.nextjs-frontend-directory-structure
   type: spec
   format: file
   path: specs/technologies/frameworks/nextjs/frontend/directory-structure.md
   title: Directory Structure
-  summary: This document describes the module organization and folder conventions for the frontend application.
+  summary: This document describes the module organization and folder conventions
+    for the frontend application.
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -10750,13 +11599,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id007
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-frontend-directory-structure-rules
 - id: spec.technologies.frameworks.nextjs-frontend-hooks
   type: spec
   format: file
   path: specs/technologies/frameworks/nextjs/frontend/hooks.md
   title: Hook Development Patterns
-  summary: This document covers React hook patterns for data fetching, mutations, and state management using React Query with
-    oRPC.
+  summary: This document covers React hook patterns for data fetching, mutations,
+    and state management using React Query with oRPC.
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -10774,13 +11634,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id007
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-frontend-hooks-rules
 - id: spec.technologies.frameworks.nextjs-frontend-orpc-usage
   type: spec
   format: file
   path: specs/technologies/frameworks/nextjs/frontend/orpc-usage.md
   title: oRPC Frontend Usage Guidelines
-  summary: This document provides comprehensive guidelines for using oRPC in frontend applications, covering client setup,
-    React Query integration, and best practices.
+  summary: This document provides comprehensive guidelines for using oRPC in frontend
+    applications, covering client setup, React Query integration, and best practices.
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -10798,6 +11669,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id007
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-frontend-orpc-usage-rules
 - id: spec.technologies.frameworks.nextjs-frontend-quality
   type: spec
   format: file
@@ -10821,13 +11703,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id007
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-frontend-quality-rules
 - id: spec.technologies.frameworks.nextjs-frontend-state-management
   type: spec
   format: file
   path: specs/technologies/frameworks/nextjs/frontend/state-management.md
   title: State Management
-  summary: This document covers state management patterns including URL state with nuqs, React Context guidelines, and synchronization
-    strategies.
+  summary: This document covers state management patterns including URL state with
+    nuqs, React Context guidelines, and synchronization strategies.
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -10845,12 +11738,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id007
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-frontend-state-management-rules
 - id: spec.technologies.frameworks.nextjs-frontend-type-safety
   type: spec
   format: file
   path: specs/technologies/frameworks/nextjs/frontend/type-safety.md
   title: Type Safety Guidelines
-  summary: This document covers TypeScript best practices for maintaining type safety across the frontend application.
+  summary: This document covers TypeScript best practices for maintaining type safety
+    across the frontend application.
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -10868,6 +11773,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id007
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-frontend-type-safety-rules
 - id: spec.technologies.frameworks.nextjs-shared-code-quality
   type: spec
   format: file
@@ -10891,13 +11807,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id003
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-shared-code-quality-rules
 - id: spec.technologies.frameworks.nextjs-shared-dependencies
   type: spec
   format: file
   path: specs/technologies/frameworks/nextjs/shared/dependencies.md
-  title: Dependencies & Versions
-  summary: Adjust versions to your project. These represent a known-working combination as of the time of writing. Pin or
-    widen ranges to match your stability requirements.
+  title: Dependency Selection & Compatibility
+  summary: Dependency families and compatibility rules for Next.js full-stack applications
+    without freezing volatile exact version recommendations
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -10915,6 +11842,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id003
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-shared-dependencies-rules
 - id: spec.technologies.frameworks.nextjs-shared-typescript
   type: spec
   format: file
@@ -10938,6 +11876,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id003
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-shared-typescript-rules
 - id: spec.technologies.frameworks.nextjs-guides-cross-layer-thinking
   type: spec
   format: file
@@ -10961,6 +11910,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id004
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-guides-cross-layer-thinking-rules
 - id: spec.technologies.frameworks.nextjs-guides-pre-implementation-checklist
   type: spec
   format: file
@@ -10984,12 +11944,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id004
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-guides-pre-implementation-checklist-rules
 - id: spec.technologies.frameworks.nextjs-overview
   type: spec
   format: file
   path: specs/technologies/frameworks/nextjs/overview.md
   title: Next.js Full-Stack Development Guidelines
-  summary: Universal development guidelines for production Next.js applications with oRPC API layer and PostgreSQL.
+  summary: Universal development guidelines for production Next.js applications with
+    oRPC API layer and PostgreSQL.
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -11007,6 +11979,19 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - implementation
+    - review
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-overview-rules
 - id: spec.scenarios.defect-and-debugging.nextjs-pitfalls-postgres-json-jsonb
   type: spec
   format: file
@@ -11030,12 +12015,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id005
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-pitfalls-postgres-json-jsonb-rules
 - id: spec.scenarios.defect-and-debugging.nextjs-pitfalls-sentry-nextintl-conflict
   type: spec
   format: file
   path: specs/scenarios/defect-and-debugging/nextjs-pitfalls/sentry-nextintl-conflict.md
   title: Sentry and next-intl Build Configuration Conflict
-  summary: Pitfall guide for resolving Sentry and next-intl middleware conflicts in Next.js
+  summary: Pitfall guide for resolving Sentry and next-intl middleware conflicts in
+    Next.js
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -11053,12 +12050,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id005
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-pitfalls-sentry-nextintl-conflict-rules
 - id: spec.scenarios.defect-and-debugging.nextjs-pitfalls-turbopack-webpack-flexbox
   type: spec
   format: file
   path: specs/scenarios/defect-and-debugging/nextjs-pitfalls/turbopack-webpack-flexbox.md
   title: Turbopack vs Webpack Flexbox Layout Differences
-  summary: Pitfall guide for flexbox rendering differences between Turbopack and Webpack in Next.js
+  summary: Pitfall guide for flexbox rendering differences between Turbopack and Webpack
+    in Next.js
   status: active
   version: 1.0.0
   domain_axis: scenarios
@@ -11076,6 +12085,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id005
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-pitfalls-turbopack-webpack-flexbox-rules
 - id: spec.scenarios.defect-and-debugging.nextjs-pitfalls-webkit-tap-highlight
   type: spec
   format: file
@@ -11099,13 +12119,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id005
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-pitfalls-webkit-tap-highlight-rules
 - id: spec.technologies.frameworks.electron
   type: spec
   format: directory
   path: specs/technologies/frameworks/electron
   title: Electron Framework Specs
-  summary: Development guidelines for Electron desktop applications (main process, renderer, shared concerns, guides, and
-    known pitfalls).
+  summary: Development guidelines for Electron desktop applications (main process,
+    renderer, shared concerns, guides, and known pitfalls).
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -11123,6 +12154,19 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - implementation
+    - review
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-guidance
 - id: spec.technologies.frameworks.electron-main-process
   type: spec
   format: directory
@@ -11146,6 +12190,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id001
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-main-process-rules
 - id: spec.technologies.frameworks.electron-renderer
   type: spec
   format: directory
@@ -11169,6 +12224,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id002
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-renderer-rules
 - id: spec.technologies.frameworks.electron-shared
   type: spec
   format: directory
@@ -11192,6 +12258,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id003
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-shared-rules
 - id: spec.technologies.frameworks.electron-guides
   type: spec
   format: directory
@@ -11215,6 +12292,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id004
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-guides-rules
 - id: spec.scenarios.defect-and-debugging.electron-pitfalls
   type: spec
   format: directory
@@ -11238,13 +12326,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id005
+    platforms:
+    - desktop
+    technologies:
+    - electron
+  provides:
+  - electron-pitfalls-guidance
 - id: spec.technologies.frameworks.nextjs
   type: spec
   format: directory
   path: specs/technologies/frameworks/nextjs
   title: Next.js Framework Specs
-  summary: Development guidelines for Next.js full-stack applications (backend, frontend, shared concerns, guides, and known
-    pitfalls).
+  summary: Development guidelines for Next.js full-stack applications (backend, frontend,
+    shared concerns, guides, and known pitfalls).
   status: active
   version: 1.0.0
   domain_axis: technologies
@@ -11262,6 +12361,19 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - implementation
+    - review
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-guidance
 - id: spec.technologies.frameworks.nextjs-backend
   type: spec
   format: directory
@@ -11285,6 +12397,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id006
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-backend-rules
 - id: spec.technologies.frameworks.nextjs-frontend
   type: spec
   format: directory
@@ -11308,6 +12431,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id007
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-frontend-rules
 - id: spec.technologies.frameworks.nextjs-shared
   type: spec
   format: directory
@@ -11331,6 +12465,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id003
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-shared-rules
 - id: spec.technologies.frameworks.nextjs-guides
   type: spec
   format: directory
@@ -11354,6 +12499,17 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id004
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-guides-rules
 - id: spec.scenarios.defect-and-debugging.nextjs-pitfalls
   type: spec
   format: directory
@@ -11377,12 +12533,24 @@ assets:
     source_of_truth: true
     generated: false
     notes: Intended as a baseline pack for Next.js full-stack applications.
+  owners:
+  - core-library
+  applicability:
+    project_types: []
+    lifecycle_stages: *id005
+    platforms:
+    - web
+    technologies:
+    - nextjs
+  provides:
+  - nextjs-pitfalls-guidance
 - id: example.universal-domains.product-and-requirements.product-and-requirements-examples
   type: example
   format: directory
   path: examples/universal-domains/product-and-requirements
   title: Product and Requirements Examples
-  summary: Example documents for product requirements specifications including customer-facing and developer-facing PRD examples
+  summary: Example documents for product requirements specifications including customer-facing
+    and developer-facing PRD examples
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -11428,8 +12596,9 @@ assets:
   format: file
   path: examples/universal-domains/product-and-requirements/customer-facing-prd-example.md
   title: Customer-Facing PRD Example
-  summary: Example customer-facing Product Requirement Document demonstrating clear, accessible requirements for non-technical
-    stakeholders using an online education platform course purchase feature
+  summary: Example customer-facing Product Requirement Document demonstrating clear,
+    accessible requirements for non-technical stakeholders using an online education
+    platform course purchase feature
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -11471,8 +12640,9 @@ assets:
   format: file
   path: examples/universal-domains/product-and-requirements/developer-facing-prd-example.md
   title: Developer-Facing PRD Example
-  summary: Example developer-facing Product Requirement Document demonstrating detailed technical specifications and implementation
-    guidance using an online education platform course purchase feature
+  summary: Example developer-facing Product Requirement Document demonstrating detailed
+    technical specifications and implementation guidance using an online education
+    platform course purchase feature
   status: active
   version: 1.0.0
   domain_axis: universal-domains
@@ -13409,7 +14579,8 @@ packs:
   notes: Intended as a baseline pack for new API service projects.
 - id: pack.cli-command-foundation
   title: CLI Command Foundation Pack
-  summary: Reusable asset selection for projects that need explicit CLI invocation, help, and exit semantics
+  summary: Reusable asset selection for projects that need explicit CLI invocation,
+    help, and exit semantics
   status: active
   selection:
     assets:
@@ -13427,7 +14598,8 @@ packs:
   notes: Intended as a baseline pack for command-line tools and scriptable CLI workflows.
 - id: pack.ai-agent-project-foundation
   title: AI Agent Project Foundation Pack
-  summary: Baseline reusable asset selection for projects centered on multi-agent execution and context control
+  summary: Baseline reusable asset selection for projects centered on multi-agent
+    execution and context control
   status: active
   selection:
     assets:
@@ -13460,10 +14632,12 @@ packs:
     - design
   target_layout:
     profile: single-repo
-  notes: Intended as a baseline pack for projects where agent execution policy is a first-class design concern.
+  notes: Intended as a baseline pack for projects where agent execution policy is
+    a first-class design concern.
 - id: pack.incident-ready-service
   title: Incident Ready Service Pack
-  summary: Reusable asset selection for services with stronger incident readiness, observability, and rollback needs
+  summary: Reusable asset selection for services with stronger incident readiness,
+    observability, and rollback needs
   status: active
   selection:
     assets:
@@ -13497,10 +14671,12 @@ packs:
     - release
   target_layout:
     profile: single-repo
-  notes: Intended as a baseline pack for services that expect real operational load and incident handling.
+  notes: Intended as a baseline pack for services that expect real operational load
+    and incident handling.
 - id: pack.cross-layer-change-heavy-service
   title: Cross-Layer Change Heavy Service Pack
-  summary: Reusable asset selection for services with frequent contract drift and system-spanning change review needs
+  summary: Reusable asset selection for services with frequent contract drift and
+    system-spanning change review needs
   status: active
   selection:
     assets:
@@ -13549,11 +14725,12 @@ packs:
     - verification
   target_layout:
     profile: single-repo
-  notes: Intended as a baseline pack for projects where cross-layer consistency and release evidence are recurring risks.
+  notes: Intended as a baseline pack for projects where cross-layer consistency and
+    release evidence are recurring risks.
 - id: pack.requirements-discovery-foundation
   title: Requirements Discovery Foundation Pack
-  summary: Reusable asset selection for projects that need stronger requirement definition, scope clarity, and solution comparison
-    before implementation
+  summary: Reusable asset selection for projects that need stronger requirement definition,
+    scope clarity, and solution comparison before implementation
   status: active
   selection:
     assets:
@@ -13583,10 +14760,12 @@ packs:
     - planning
   target_layout:
     profile: single-repo
-  notes: Intended as a baseline pack for projects where requirement ambiguity is a primary delivery risk.
+  notes: Intended as a baseline pack for projects where requirement ambiguity is a
+    primary delivery risk.
 - id: pack.security-and-review-foundation
   title: Security And Review Foundation Pack
-  summary: Reusable asset selection for projects that need explicit security boundaries and stronger change-review discipline
+  summary: Reusable asset selection for projects that need explicit security boundaries
+    and stronger change-review discipline
   status: active
   selection:
     assets:
@@ -13610,10 +14789,12 @@ packs:
     - review
   target_layout:
     profile: single-repo
-  notes: Intended as a baseline pack for projects where security and review quality need to be explicit from the start.
+  notes: Intended as a baseline pack for projects where security and review quality
+    need to be explicit from the start.
 - id: pack.architecture-and-data-foundation
   title: Architecture And Data Foundation Pack
-  summary: Reusable asset selection for projects that need explicit structural boundaries, schema clarity, and migration discipline
+  summary: Reusable asset selection for projects that need explicit structural boundaries,
+    schema clarity, and migration discipline
   status: active
   selection:
     assets:
@@ -13639,11 +14820,12 @@ packs:
     - design
   target_layout:
     profile: single-repo
-  notes: Intended as a baseline pack for projects where architecture and persistent data shape are central design concerns.
+  notes: Intended as a baseline pack for projects where architecture and persistent
+    data shape are central design concerns.
 - id: pack.debugging-and-refactoring-workbench
   title: Debugging And Refactoring Workbench Pack
-  summary: Reusable asset selection for teams that frequently diagnose production issues, fix defects, and perform bounded
-    refactoring
+  summary: Reusable asset selection for teams that frequently diagnose production
+    issues, fix defects, and perform bounded refactoring
   status: active
   selection:
     assets:
@@ -13670,7 +14852,8 @@ packs:
   notes: Intended as a baseline pack for iterative diagnosis and safe corrective change.
 - id: pack.typescript-web-platform-foundation
   title: TypeScript Web Platform Foundation Pack
-  summary: Reusable asset selection for TypeScript web projects that need explicit browser-platform and runtime-boundary rules
+  summary: Reusable asset selection for TypeScript web projects that need explicit
+    browser-platform and runtime-boundary rules
   status: active
   selection:
     assets:
@@ -13697,7 +14880,8 @@ packs:
   notes: Intended as a baseline pack for browser-delivered TypeScript applications.
 - id: pack.java-spring-service-foundation
   title: Java Spring Service Foundation Pack
-  summary: Reusable asset selection for Spring Boot services with strong structural, data, and security needs
+  summary: Reusable asset selection for Spring Boot services with strong structural,
+    data, and security needs
   status: active
   selection:
     assets:
@@ -13732,8 +14916,8 @@ packs:
   notes: Intended as a baseline pack for Spring Boot backend services.
 - id: pack.python-backend-foundation
   title: Python Backend Foundation Pack
-  summary: Reusable asset selection for Python services that need explicit package structure, typing, and service-runtime
-    expectations
+  summary: Reusable asset selection for Python services that need explicit package
+    structure, typing, and service-runtime expectations
   status: active
   selection:
     assets:
@@ -13754,7 +14938,8 @@ packs:
   notes: Intended as a baseline pack for Python backend services.
 - id: pack.go-service-foundation
   title: Go Service Foundation Pack
-  summary: Reusable asset selection for Go services that need explicit package, error, and service-runtime rules
+  summary: Reusable asset selection for Go services that need explicit package, error,
+    and service-runtime rules
   status: active
   selection:
     assets:
@@ -13776,7 +14961,8 @@ packs:
   notes: Intended as a baseline pack for Go backend services.
 - id: pack.vue-web-app-foundation
   title: Vue Web App Foundation Pack
-  summary: Reusable asset selection for Vue web applications with clear component, routing, and state-management boundaries
+  summary: Reusable asset selection for Vue web applications with clear component,
+    routing, and state-management boundaries
   status: active
   selection:
     assets:
@@ -13806,7 +14992,8 @@ packs:
   notes: Intended as a baseline pack for Vue-based web applications.
 - id: pack.react-web-app-foundation
   title: React Web App Foundation Pack
-  summary: Reusable asset selection for React web applications with clear component, routing, and dataflow boundaries
+  summary: Reusable asset selection for React web applications with clear component,
+    routing, and dataflow boundaries
   status: active
   selection:
     assets:
@@ -13836,7 +15023,8 @@ packs:
   notes: Intended as a baseline pack for React-based web applications.
 - id: pack.desktop-platform-foundation
   title: Desktop Platform Foundation Pack
-  summary: Reusable asset selection for cross-platform desktop applications with explicit runtime and system-integration rules
+  summary: Reusable asset selection for cross-platform desktop applications with explicit
+    runtime and system-integration rules
   status: active
   selection:
     assets:
@@ -13853,10 +15041,12 @@ packs:
     - design
   target_layout:
     profile: single-repo
-  notes: Intended as a baseline pack for cross-platform desktop applications before adding OS-specific constraints.
+  notes: Intended as a baseline pack for cross-platform desktop applications before
+    adding OS-specific constraints.
 - id: pack.desktop-macos-foundation
   title: Desktop macOS Foundation Pack
-  summary: Reusable asset selection for macOS desktop applications with explicit runtime, integration, and permission rules
+  summary: Reusable asset selection for macOS desktop applications with explicit runtime,
+    integration, and permission rules
   status: active
   selection:
     assets:
@@ -13879,8 +15069,8 @@ packs:
   notes: Intended as a baseline pack for macOS desktop applications.
 - id: pack.desktop-windows-foundation
   title: Desktop Windows Foundation Pack
-  summary: Reusable asset selection for Windows desktop applications with explicit runtime, integration, and filesystem/path
-    rules
+  summary: Reusable asset selection for Windows desktop applications with explicit
+    runtime, integration, and filesystem/path rules
   status: active
   selection:
     assets:
@@ -13902,7 +15092,8 @@ packs:
   notes: Intended as a baseline pack for Windows desktop applications.
 - id: pack.desktop-linux-foundation
   title: Desktop Linux Foundation Pack
-  summary: Reusable asset selection for Linux desktop applications with explicit runtime, integration, and environment rules
+  summary: Reusable asset selection for Linux desktop applications with explicit runtime,
+    integration, and environment rules
   status: active
   selection:
     assets:
@@ -13924,7 +15115,8 @@ packs:
   notes: Intended as a baseline pack for Linux desktop applications.
 - id: pack.mobile-app-lifecycle-foundation
   title: Mobile App Lifecycle Foundation Pack
-  summary: Reusable asset selection for mobile applications that need explicit Android and iOS lifecycle rules
+  summary: Reusable asset selection for mobile applications that need explicit Android
+    and iOS lifecycle rules
   status: active
   selection:
     assets:
@@ -13941,10 +15133,12 @@ packs:
     - design
   target_layout:
     profile: single-repo
-  notes: Intended as a baseline pack for mobile applications that need lifecycle discipline across Android and iOS.
+  notes: Intended as a baseline pack for mobile applications that need lifecycle discipline
+    across Android and iOS.
 - id: pack.harmonyos-app-foundation
   title: HarmonyOS App Foundation Pack
-  summary: Reusable asset selection for HarmonyOS applications with explicit runtime and lifecycle rules
+  summary: Reusable asset selection for HarmonyOS applications with explicit runtime
+    and lifecycle rules
   status: active
   selection:
     assets:
@@ -13963,7 +15157,8 @@ packs:
   notes: Intended as a baseline pack for HarmonyOS applications.
 - id: pack.miniapp-runtime-foundation
   title: Miniapp Runtime Foundation Pack
-  summary: Reusable asset selection for miniapp projects with explicit host-runtime and capability-limit rules
+  summary: Reusable asset selection for miniapp projects with explicit host-runtime
+    and capability-limit rules
   status: active
   selection:
     assets:
@@ -13982,8 +15177,8 @@ packs:
   notes: Intended as a baseline pack for miniapp projects.
 - id: pack.electron-app-foundation
   title: Electron App Foundation Pack
-  summary: Reusable asset selection for Electron desktop applications with explicit main-process, renderer, shared, and pitfalls
-    specs
+  summary: Reusable asset selection for Electron desktop applications with explicit
+    main-process, renderer, shared, and pitfalls specs
   status: active
   selection:
     assets:
@@ -14044,8 +15239,8 @@ packs:
   notes: Intended as a baseline pack for Electron-based desktop applications.
 - id: pack.nextjs-fullstack-foundation
   title: Next.js Full-Stack Foundation Pack
-  summary: Reusable asset selection for Next.js full-stack applications with explicit backend, frontend, shared, and pitfalls
-    specs
+  summary: Reusable asset selection for Next.js full-stack applications with explicit
+    backend, frontend, shared, and pitfalls specs
   status: active
   selection:
     assets:

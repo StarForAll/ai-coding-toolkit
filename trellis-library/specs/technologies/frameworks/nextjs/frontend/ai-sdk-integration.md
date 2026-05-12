@@ -2,42 +2,64 @@
 
 ## 1. Overview
 
-This guide covers frontend integration with the Vercel AI SDK using `@ai-sdk/react`. Key topics include:
+This guide covers stable frontend integration with the Vercel AI SDK using
+`@ai-sdk/react`. Key topics include:
 
-- Using `@ai-sdk/react` for React integration
-- Streaming chat with the `useChat` hook
-- Tool call handling with proper format detection
+- Configuring `useChat` through a transport
+- Rendering structured `message.parts`
+- Handling tool output from UI messages instead of raw transport packets
 
 ## 2. Basic Chat with useChat
 
-The `useChat` hook provides a simple interface for chat functionality:
+In AI SDK 5, prefer transport-based configuration:
 
 ```typescript
 "use client";
 
 import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
+import { useState } from "react";
 
 export function ChatPanel() {
-  const { messages, input, handleInputChange, handleSubmit, status } = useChat({
-    api: "/api/chat",
+  const { messages, sendMessage, status } = useChat({
+    transport: new DefaultChatTransport({
+      api: "/api/chat",
+    }),
   });
+  const [input, setInput] = useState("");
 
   return (
     <div>
       {messages.map((message) => (
         <div key={message.id}>
-          <strong>{message.role}:</strong> {message.content}
+          <strong>{message.role}:</strong>
+          {message.parts?.map((part, index) => {
+            switch (part.type) {
+              case "text":
+                return <div key={index}>{part.text}</div>;
+              default:
+                return null;
+            }
+          })}
         </div>
       ))}
 
-      <form onSubmit={handleSubmit}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!input.trim()) return;
+
+          sendMessage({ text: input });
+          setInput("");
+        }}
+      >
         <input
           value={input}
-          onChange={handleInputChange}
+          onChange={(event) => setInput(event.target.value)}
           placeholder="Type a message..."
-          disabled={status === "streaming"}
+          disabled={status !== "ready"}
         />
-        <button type="submit" disabled={status === "streaming"}>
+        <button type="submit" disabled={status !== "ready"}>
           Send
         </button>
       </form>
@@ -56,7 +78,7 @@ import { eventIteratorToStream } from "@orpc/client";
 import { orpcClient } from "@/lib/orpc-client";
 
 export function ChatPanel({ sessionId }: { sessionId: string }) {
-  const { messages, sendMessage, status } = useChat({
+  const { messages, status } = useChat({
     id: sessionId,
     transport: {
       async sendMessages(options) {
@@ -80,179 +102,67 @@ export function ChatPanel({ sessionId }: { sessionId: string }) {
 }
 ```
 
-## 4. Tool Calls Handling
+## 4. Render Tool Output from UI Messages
 
-**CRITICAL**: Tool calls have TWO different formats that must both be handled:
-
-### Format 1: Real-time Streaming
-
-During streaming, tool results appear as:
-
-```typescript
-{
-  type: "tool-createTask",  // tool-{toolName}
-  toolCallId: "call_abc123",
-  state: "output-available",
-  input: { title: "...", priority: "high" },
-  output: { success: true, taskId: "task_xyz" }  // Direct object
-}
-```
-
-### Format 2: History Restore
-
-When loading from history/database:
-
-```typescript
-{
-  type: "tool-result",
-  toolName: "createTask",
-  toolCallId: "call_abc123",
-  output: {
-    type: "json",
-    value: { success: true, taskId: "task_xyz" }  // Nested in value
-  }
-}
-```
-
-### Unified Handling Pattern
+In AI SDK 5, tool output should be rendered from typed `message.parts`. Prefer
+that stable UI boundary over parsing internal event envelopes.
 
 ```typescript
 import { useChat } from "@ai-sdk/react";
-import { useEffect, useState, useRef } from "react";
 
 export function AssistantPanel({ sessionId }: { sessionId: string }) {
-  const [createdItems, setCreatedItems] = useState<Map<string, CreatedItem>>(new Map());
-  const toolCallsRef = useRef<Map<string, string>>(new Map());
-
-  const { messages, status } = useChat({
+  const { messages } = useChat({
     id: sessionId,
     transport: { /* ... */ },
-
-    // Handle real-time tool results
-    onData: (dataPart) => {
-      const payload = typeof dataPart === "object" && "json" in dataPart
-        ? (dataPart as { json: unknown }).json
-        : dataPart;
-
-      if (typeof payload === "object" && payload !== null && "type" in payload) {
-        const { type, data } = payload as { type: string; data: any };
-
-        if (type === "tool-output-available" || type === "tool-result") {
-          const { toolCallId, output } = data;
-          const toolName = toolCallsRef.current.get(toolCallId);
-
-          if (toolName === "createTask" && output?.success) {
-            setCreatedItems((prev) => {
-              if (prev.has(toolCallId)) return prev;
-              return new Map(prev).set(toolCallId, {
-                id: output.taskId,
-                title: output.title,
-              });
-            });
-          }
-        }
-      }
-    },
   });
-
-  // Handle history restore
-  useEffect(() => {
-    messages.forEach((message) => {
-      if (message.role !== "assistant") return;
-
-      const parts = (message as any).parts || [];
-      parts.forEach((part: any) => {
-        // Match both formats
-        const isRealTime = part.type === "tool-createTask" && part.state === "output-available";
-        const isRestored = part.type === "tool-result" && part.toolName === "createTask";
-
-        if ((isRealTime || isRestored) && part.output) {
-          const key = part.toolCallId || message.id;
-
-          // Extract output (handle nested structure)
-          const rawOutput = part.output;
-          const output = rawOutput?.type === "json" && rawOutput?.value
-            ? rawOutput.value
-            : rawOutput;
-
-          if (output?.success) {
-            setCreatedItems((prev) => {
-              if (prev.has(key)) return prev;
-              return new Map(prev).set(key, {
-                id: output.taskId,
-                title: output.title,
-              });
-            });
-          }
-        }
-      });
-    });
-  }, [messages, status]);
 
   return (
     <div>
       {messages.map((message) => (
-        <MessageBubble key={message.id} message={message} />
-      ))}
-
-      {/* Display created items */}
-      {Array.from(createdItems.values()).map((item) => (
-        <CreatedItemCard key={item.id} item={item} />
+        <div key={message.id}>
+          {message.parts?.map((part, index) => {
+            switch (part.type) {
+              case "text":
+                return <div key={index}>{part.text}</div>;
+              case "tool-createTask":
+                if (part.state === "output-available" && part.output?.success) {
+                  return (
+                    <CreatedItemCard
+                      key={part.toolCallId}
+                      item={{ id: part.output.taskId, title: part.output.title }}
+                    />
+                  );
+                }
+                return <PendingToolCall key={part.toolCallId} />;
+              default:
+                return null;
+            }
+          })}
+        </div>
       ))}
     </div>
   );
 }
 ```
 
-## 5. Tool Call State Lifecycle
+## 5. Persistence Boundary
 
-During streaming, tool parts go through these states:
+When restoring chat history:
 
-| State | Description |
-|-------|-------------|
-| `input-streaming` | Tool input is being generated |
-| `input-available` | Complete input ready |
-| `output-available` | Tool executed, result available |
-| `output-error` | Tool execution failed |
+- Persist normalized UI messages or server-side tool results.
+- Keep the server as the source of truth for completed tool effects.
+- Avoid rebuilding application state from raw stream packets when a persisted
+  domain record already exists.
 
-## 6. Displaying Thought Process
-
-Show users what the AI is "thinking":
-
-```typescript
-const [thoughtSteps, setThoughtSteps] = useState<ThoughtStep[]>([]);
-
-// In onData handler
-if (type === "tool-input-start" || type === "tool-call") {
-  const { toolCallId, toolName, input } = data;
-  toolCallsRef.current.set(toolCallId, toolName);
-
-  setThoughtSteps((prev) => [
-    ...prev,
-    { id: toolCallId, toolName, status: "pending", input },
-  ]);
-}
-
-if (type === "tool-output-available") {
-  setThoughtSteps((prev) =>
-    prev.map((step) =>
-      step.id === toolCallId
-        ? { ...step, status: "done", result: output }
-        : step
-    )
-  );
-}
-```
-
-## 7. Best Practices Summary
+## 6. Best Practices Summary
 
 | Rule | Description |
 |------|-------------|
-| Handle both tool formats | Real-time and history restore |
-| Use toolCallId as key | Correlate calls across formats |
-| Use useRef for toolName mapping | Avoid React state timing issues |
-| onData for real-time UI | useEffect for history restore |
-| Show thought process | Better UX for tool-heavy flows |
+| Use transport-based chat setup | Match the stable AI SDK 5 API shape |
+| Render `message.parts` | Keep UI logic aligned with structured chat messages |
+| Treat tool output as typed UI data | Avoid coupling to raw stream internals |
+| Persist normalized results | Make history restore deterministic |
+| Keep server-side side effects authoritative | UI should reflect, not invent, domain state |
 
 ---
 
