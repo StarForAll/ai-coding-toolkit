@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 193
-- **Last Active**: 2026-05-12
+- **Total Sessions**: 194
+- **Last Active**: 2026-05-13
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~271 | Active |
+| `journal-5.md` | ~304 | Active |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 194 | 2026-05-13 | Refresh trellis-library stable guidance | `fcea8ad` | `main` |
 | 193 | 2026-05-12 | Expand Java manual coverage in trellis-library | `4b7a17e` | `main` |
 | 192 | 2026-05-12 | 修正 Java 开发手册 MD 内容 | `96d071b` | `main` |
 | 191 | 2026-05-12 | 提炼 java-spring 文档到 trellis-library | `d2585ef` | `main` |

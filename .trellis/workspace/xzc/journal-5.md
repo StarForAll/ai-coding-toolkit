@@ -269,3 +269,36 @@ Expanded trellis-library Java coverage with new language concerns, refined Sprin
 ### Next Steps
 
 - None - task complete
+
+
+## Session 194: Refresh trellis-library stable guidance
+
+**Date**: 2026-05-13
+**Task**: Refresh trellis-library stable guidance
+**Branch**: `main`
+
+### Summary
+
+Audited trellis-library against stable framework docs, corrected volatile Next.js/Electron guidance, tightened manifest/schema metadata, and verified the library with strict validation plus CLI unit tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fcea8ad` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
