@@ -7,3 +7,4 @@ Check the following:
 * duplicate execution and restart behavior were considered
 * operational visibility can detect stuck or silently failing work
 * downstream correctness does not assume perfect single-run semantics
+* state-changing deferred handlers have explicit idempotency or compensation behavior

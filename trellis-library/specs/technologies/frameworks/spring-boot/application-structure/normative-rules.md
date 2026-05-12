@@ -5,3 +5,5 @@
 * Structural choices should preserve testability and module discoverability rather than optimizing only for framework convenience.
 * Cross-layer reach-through should not be normalized just because Spring injection makes access easy.
 * Similar application slices should follow consistent structural conventions.
+* Spring-managed roles such as controllers, services, repositories, and configuration classes should be named and placed consistently enough that ownership is obvious from the class boundary.
+* Dependency injection should prefer explicit constructor-based wiring or equivalently reviewable patterns over hidden field injection that obscures required collaborators.

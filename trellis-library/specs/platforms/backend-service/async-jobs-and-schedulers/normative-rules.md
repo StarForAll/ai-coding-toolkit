@@ -5,3 +5,4 @@
 * Jobs, retries, and schedulers must account for duplicate execution, partial failure, and restart behavior where relevant.
 * Operational visibility for asynchronous work must be strong enough to detect stuck, repeated, or silently failing execution.
 * When async execution semantics are uncertain, downstream correctness must not assume perfect single-run behavior.
+* Deferred handlers that coordinate durable state should preserve idempotency and compensating behavior explicitly enough to survive redelivery, callback checks, or delayed execution.

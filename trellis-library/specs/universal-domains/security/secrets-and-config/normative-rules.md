@@ -5,3 +5,4 @@
 * Missing required secrets must fail closed for protected operations.
 * Environment-specific overrides must be explicit and reviewable.
 * Debug or local convenience settings must not silently weaken production security expectations.
+* Operational logs, diagnostics, and error payloads must not expose secrets, credentials, signing material, or equivalent sensitive configuration values.

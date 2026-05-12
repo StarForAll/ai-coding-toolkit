@@ -6,6 +6,7 @@ Selected assets:
 * `spec.technologies.languages.java-error-handling`
 * `spec.technologies.frameworks.spring-boot-application-structure`
 * `spec.technologies.frameworks.spring-boot-web-layer`
+* `spec.technologies.frameworks.spring-boot-service-layer`
 * `spec.technologies.frameworks.spring-boot-data-access`
 * `spec.technologies.frameworks.spring-boot-security`
 * `spec.technologies.frameworks.spring-boot-testing`

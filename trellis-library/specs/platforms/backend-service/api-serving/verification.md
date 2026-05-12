@@ -7,3 +7,5 @@ Check the following:
 * ideal dependency assumptions are not hiding service-runtime risk
 * timeout, concurrency, and backpressure expectations are visible
 * client and operator expectations can be aligned from the serving behavior
+* retriable mutation endpoints have explicit idempotency or replay handling
+* large-read, export, or deep-pagination paths state their load and latency assumptions

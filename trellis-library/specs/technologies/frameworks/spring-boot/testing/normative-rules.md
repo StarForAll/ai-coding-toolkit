@@ -5,3 +5,5 @@
 * Integration-style tests should be used where configuration, web boundaries, security, or persistence wiring materially affect correctness.
 * Test structure must not blur the difference between business-logic verification and framework wiring verification.
 * Testing conventions should remain consistent enough that confidence claims can be mapped to what was actually exercised.
+* Isolated tests should cover expected flow, boundary conditions, failure branches, and dependency error behavior for the unit under review.
+* Test naming should communicate the behavior and scenario under verification rather than forcing readers to infer intent from implementation details.

@@ -7,3 +7,8 @@ Check the following:
 * failure translation and client-visible behavior are predictable
 * controllers are not absorbing domain logic
 * request-flow conventions are consistent across endpoints
+* HTTP method and route choices align with read versus mutation intent
+* malformed-input validation is enforced at the boundary while deeper business validation remains explicit
+* request and response contracts do not expose persistence entities directly
+* mapping boundaries are explicit enough that shallow-copy helpers do not hide nested-field leakage
+* client-facing endpoint behavior is documented or otherwise reviewable at the boundary

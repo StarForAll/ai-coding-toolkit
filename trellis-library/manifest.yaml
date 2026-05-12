@@ -1039,7 +1039,7 @@ assets:
   title: Secrets And Config
   summary: Reusable rules for separating secrets from ordinary configuration and handling sensitive settings safely
   status: active
-  version: 1.0.0
+  version: 1.1.0
   domain_axis: universal-domains
   domain: security
   concern: secrets-and-config
@@ -1077,7 +1077,7 @@ assets:
   title: Input Validation
   summary: Reusable rules for validating external input at trust boundaries
   status: active
-  version: 1.0.0
+  version: 1.1.0
   domain_axis: universal-domains
   domain: security
   concern: input-validation
@@ -1681,7 +1681,7 @@ assets:
   title: Database Schema
   summary: Reusable data rules for naming, shaping, and structuring persistent storage schemas
   status: active
-  version: 1.0.0
+  version: 1.1.0
   domain_axis: universal-domains
   domain: data
   concern: database-schema
@@ -1721,7 +1721,7 @@ assets:
   title: Data Integrity
   summary: Reusable data rules for preserving correctness, invariants, and consistency across change
   status: active
-  version: 1.0.0
+  version: 1.1.0
   domain_axis: universal-domains
   domain: data
   concern: data-integrity
@@ -1764,7 +1764,7 @@ assets:
   summary: Reusable data rules for freshness assumptions, invalidation discipline, and consistency tradeoffs around cached
     or replicated data
   status: active
-  version: 1.0.0
+  version: 1.1.0
   domain_axis: universal-domains
   domain: data
   concern: caching-and-consistency
@@ -2011,7 +2011,7 @@ assets:
   title: Observability
   summary: Reusable operational rules for making runtime behavior inspectable and diagnosable
   status: active
-  version: 1.0.0
+  version: 1.1.0
   domain_axis: universal-domains
   domain: delivery-and-operations
   concern: observability
@@ -3118,7 +3118,7 @@ assets:
   title: Java Project Structure
   summary: Reusable Java language-level rules for package layout, source boundaries, and structural discoverability
   status: active
-  version: 1.0.0
+  version: 1.1.0
   domain_axis: technologies
   domain: languages
   concern: java-project-structure
@@ -3160,7 +3160,7 @@ assets:
   title: Java Error Handling
   summary: Reusable Java language-level rules for exception modeling, propagation, and boundary translation
   status: active
-  version: 1.0.0
+  version: 1.1.0
   domain_axis: technologies
   domain: languages
   concern: java-error-handling
@@ -3701,7 +3701,7 @@ assets:
   title: Spring Boot Application Structure
   summary: Reusable Spring Boot framework-level rules for structuring application layers, modules, and framework entry points
   status: active
-  version: 1.0.0
+  version: 1.1.0
   domain_axis: technologies
   domain: frameworks
   concern: spring-boot-application-structure
@@ -3743,7 +3743,7 @@ assets:
   title: Spring Boot Web Layer
   summary: Reusable Spring Boot framework-level rules for controller boundaries and request handling flow
   status: active
-  version: 1.0.0
+  version: 1.1.0
   domain_axis: technologies
   domain: frameworks
   concern: spring-boot-web-layer
@@ -3779,6 +3779,49 @@ assets:
     source_of_truth: true
     generated: false
     notes: ''
+- id: spec.technologies.frameworks.spring-boot-service-layer
+  type: spec
+  format: directory
+  path: specs/technologies/frameworks/spring-boot/service-layer
+  title: Spring Boot Service Layer
+  summary: Reusable Spring Boot framework-level rules for service orchestration, transaction ownership, and proxy-mediated business coordination
+  status: active
+  version: 1.1.0
+  domain_axis: technologies
+  domain: frameworks
+  concern: spring-boot-service-layer
+  atomicity: complex
+  tags:
+  - technologies
+  - frameworks
+  - spring-boot
+  - service-layer
+  applicability:
+    project_types: []
+    lifecycle_stages:
+    - implementation
+    - review
+    - refactoring
+    platforms: []
+    technologies:
+    - spring-boot
+  owners:
+  - core-library
+  dependencies:
+  - spec.technologies.frameworks.spring-boot-application-structure
+  - spec.technologies.frameworks.spring-boot-data-access
+  - spec.universal-domains.data.data-integrity
+  optional_dependencies: []
+  provides:
+  - spring-boot-service-layer-rules
+  change_impact:
+    level: medium
+    review_required: true
+    sync_targets: []
+  metadata:
+    source_of_truth: true
+    generated: false
+    notes: ''
 - id: spec.technologies.frameworks.spring-boot-data-access
   type: spec
   format: directory
@@ -3786,7 +3829,7 @@ assets:
   title: Spring Boot Data Access
   summary: Reusable Spring Boot framework-level rules for persistence boundaries, repositories, and transactional clarity
   status: active
-  version: 1.0.0
+  version: 1.1.0
   domain_axis: technologies
   domain: frameworks
   concern: spring-boot-data-access
@@ -3829,7 +3872,7 @@ assets:
   title: Spring Boot Security
   summary: Reusable Spring Boot framework-level rules for authentication, authorization, and request protection structure
   status: active
-  version: 1.0.0
+  version: 1.1.0
   domain_axis: technologies
   domain: frameworks
   concern: spring-boot-security
@@ -3873,7 +3916,7 @@ assets:
   summary: Reusable Spring Boot framework-level rules for slice selection, wiring verification, and integration-test confidence
     boundaries
   status: active
-  version: 1.0.0
+  version: 1.1.0
   domain_axis: technologies
   domain: frameworks
   concern: spring-boot-testing
@@ -4712,7 +4755,7 @@ assets:
   title: API Serving
   summary: Reusable backend-service platform rules for realistic request-serving behavior and operational boundary handling
   status: active
-  version: 1.0.0
+  version: 1.1.0
   domain_axis: platforms
   domain: backend-service
   concern: api-serving
@@ -4754,7 +4797,7 @@ assets:
   title: Async Jobs And Schedulers
   summary: Reusable backend-service platform rules for background jobs, retries, and scheduled execution reliability
   status: active
-  version: 1.0.0
+  version: 1.1.0
   domain_axis: platforms
   domain: backend-service
   concern: async-jobs-and-schedulers
@@ -7855,7 +7898,7 @@ assets:
   title: Java Spring Service Foundation Example Pack
   summary: Example selection for Spring Boot backend services with explicit structure, data, security, and runtime rules
   status: active
-  version: 1.0.0
+  version: 1.1.0
   domain_axis: scenarios
   domain: assembled-packs
   concern: java-spring-service-foundation
@@ -7880,6 +7923,7 @@ assets:
   - spec.technologies.languages.java-error-handling
   - spec.technologies.frameworks.spring-boot-application-structure
   - spec.technologies.frameworks.spring-boot-web-layer
+  - spec.technologies.frameworks.spring-boot-service-layer
   - spec.technologies.frameworks.spring-boot-data-access
   - spec.technologies.frameworks.spring-boot-security
   - spec.technologies.frameworks.spring-boot-testing
@@ -13405,6 +13449,7 @@ packs:
     - spec.technologies.languages.java-error-handling
     - spec.technologies.frameworks.spring-boot-application-structure
     - spec.technologies.frameworks.spring-boot-web-layer
+    - spec.technologies.frameworks.spring-boot-service-layer
     - spec.technologies.frameworks.spring-boot-data-access
     - spec.technologies.frameworks.spring-boot-security
     - spec.technologies.frameworks.spring-boot-testing

@@ -7,3 +7,5 @@ Check the following:
 * structure preserves testability and discoverability
 * injection convenience is not hiding cross-layer reach-through
 * similar slices follow consistent structure
+* Spring-managed roles are named and placed consistently across modules
+* dependency injection style leaves required collaborators explicit and reviewable
