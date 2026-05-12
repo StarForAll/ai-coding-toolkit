@@ -170,3 +170,36 @@ Completed the workflow-capability-audit lifecycle for 新项目开发工作流, 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 191: 提炼 java-spring 文档到 trellis-library
+
+**Date**: 2026-05-12
+**Task**: 提炼 java-spring 文档到 trellis-library
+**Branch**: `main`
+
+### Summary
+
+将 java-spring.md 中可复用的 Java/Spring 规范拆分沉淀到 trellis-library，新增 spring-boot service-layer concern，并补齐边界、日志、Entity 暴露、@Async 等规则。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d2585ef` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
