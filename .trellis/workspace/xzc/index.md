@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 191
+- **Total Sessions**: 192
 - **Last Active**: 2026-05-12
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~205 | Active |
+| `journal-5.md` | ~238 | Active |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 192 | 2026-05-12 | 修正 Java 开发手册 MD 内容 | `96d071b` | `main` |
 | 191 | 2026-05-12 | 提炼 java-spring 文档到 trellis-library | `d2585ef` | `main` |
 | 190 | 2026-05-11 | Finalize workflow capability audit for Trellis 0.5.12 | `ff526eb` | `main` |
 | 189 | 2026-05-11 | Fix trellis 0.5.12 upgrade drift | `4f262ef` | `main` |

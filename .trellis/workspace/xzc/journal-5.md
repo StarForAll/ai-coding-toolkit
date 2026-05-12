@@ -203,3 +203,36 @@ Completed the workflow-capability-audit lifecycle for 新项目开发工作流, 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 192: 修正 Java 开发手册 MD 内容
+
+**Date**: 2026-05-12
+**Task**: 修正 Java 开发手册 MD 内容
+**Branch**: `main`
+
+### Summary
+
+对比 PDF 原文和 MD 文件，移除了重复的前言部分和版本表格，文件行数从 2237 行减少到 2220 行，保持了 markdown 格式
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `96d071b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
