@@ -65,6 +65,19 @@ description: |
 - `color`
 - `permissionMode`：仅在目标项目明确接受更自动化权限时再加
 
+除上面的常用推荐字段外，当前官方还支持更多可选字段，例如：
+
+- `disallowedTools`
+- `maxTurns`
+- `skills`
+- `mcpServers`
+- `hooks`
+- `memory`
+- `effort`
+- `background`
+- `isolation`
+- `initialPrompt`
+
 推荐 `tools` 基线：
 
 ```yaml
@@ -79,14 +92,8 @@ tools: Read, Write, Edit, Glob, Grep, Bash, WebSearch, WebFetch
 - `permissionMode` 不建议在通用模板里默认设成过宽权限，应由目标项目按风险
   偏好决定。
 
-更多可选字段：
-
-- `skills`
-- `mcpServers`
-- `hooks`
-
-这些字段更适合在目标项目已经有成熟的 docs/browser/search MCP 体系、或已经有
-稳定技能装配方案时再补，不建议默认塞进每个最小 wrapper。
+这些字段更适合在目标项目已经有成熟的 docs/browser/search MCP 体系、稳定技能装配方案、
+或明确的自动化隔离需求时再补，不建议默认塞进每个最小 wrapper。
 
 ### OpenCode
 
@@ -123,6 +130,20 @@ permission:
 - `color`
 - `hidden`：仅当该 agent 只希望被其他 agent 编排调用时使用
 
+OpenCode 当前还支持更多可选字段或权限增强位点，例如：
+
+- `disable`
+- `top_p`
+- `prompt`
+- JSON 形式的 `opencode.json` agent 配置
+- `permission.task`
+- `permission.external_directory`
+- `permission.todowrite`
+- `permission.lsp`
+- `permission.skill`
+- `permission.question`
+- `permission.doom_loop`
+
 注意：
 
 - `description` 是必填字段。
@@ -131,6 +152,8 @@ permission:
 - 文件写入/修改由 `permission.edit` 覆盖，不需要单独 `write` 键。
 - OpenCode 允许对 `bash` 等权限做更细粒度规则；如果目标项目风险较高，
   建议把 `bash` 从字符串权限升级为对象规则。
+- OpenCode 不只支持 Markdown agent 文件，也支持在 `opencode.json`
+  中声明 agent；本仓库这里优先记录 source agent 最接近的 Markdown 适配形态。
 - 如果目标项目高度信任该 agent，且它主要承担 Mode 3 的 build / test /
   delivery 工作，可把 `bash: ask` 调整为 `bash: allow` 以减少确认摩擦。
 
@@ -181,8 +204,8 @@ developer_instructions = """
 | `glob` | `Glob` | `permission.glob` | default tool availability |
 | `grep` | `Grep` | `permission.grep` | default tool availability |
 | `bash` | `Bash` | `permission.bash` | default tool availability |
-| `websearch` | `WebSearch` | `permission.websearch` | rely on session/tool support |
-| `webfetch` | `WebFetch` | `permission.webfetch` | rely on session/tool support |
+| `websearch` | `WebSearch` | `permission.websearch` | 依赖目标项目在当前 Codex 会话中启用的 Web/MCP 检索能力 |
+| `webfetch` | `WebFetch` | `permission.webfetch` | 依赖目标项目在当前 Codex 会话中启用的 Web/MCP 页面读取能力 |
 
 ## Search Tool Availability
 
@@ -210,6 +233,17 @@ developer_instructions = """
 
 如果这些能力都没有，就要预期该 agent 会频繁输出 `[Evidence Gap]`，此时应降低它
 在“最新版本 / 最新价格 / 最新政策 / 最新安全状态”类任务中的使用范围。
+
+## Platform Coverage Boundary
+
+本源资产的当前适配文档只覆盖 Claude Code、OpenCode、Codex 这 3 个目标平台，
+因为它们是本次 source-agent 设计的主目标。
+
+仓库里虽然也存在 `.kiro/agents/` 与 `.qoder/agents/` 这类 live deployment
+surface，但它们目前不在这个 source-agent 的 wrapper 说明范围内。
+
+如果后续要把这个 agent 扩展到 Kiro/Qoder，应新增对应平台的单独适配说明，并重新
+核验各自的上下文注入方式、字段面与工具能力。
 
 ## Real-Time Evidence Contract
 

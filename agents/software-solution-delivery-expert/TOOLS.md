@@ -37,7 +37,10 @@ When adapting this source asset:
 
 - Claude Code usually maps capability through `tools` and optional
   `permissionMode`
-- OpenCode should prefer `permission`, not legacy `tools`
-- Codex should express edit scope through `sandbox_mode`; extra doc/search
-  access should be added only through currently supported config keys such as
-  `mcp_servers` or `skills.config`
+- OpenCode should prefer `permission`, not legacy `tools`; note that
+  `permission.edit` covers write/edit/patch style file modification as one
+  merged capability
+- Codex should express edit scope through `sandbox_mode`; web search and fetch
+  are not declared through standalone agent keys, so live-web behavior depends
+  on the parent session or attached MCP/doc-search capabilities that the target
+  project actually enables

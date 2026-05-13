@@ -16,10 +16,14 @@
   - Allow web tools only if the environment actually provides them
 - OpenCode:
   - Prefer `permission` over deprecated `tools`
-  - Allow `read`, `write`, `edit`, `glob`, `grep`, `websearch`, `webfetch`
+  - Use `permission.edit` as the merged write/edit/patch capability instead of
+    trying to model a separate `write` key
+  - Allow `read`, `edit`, `glob`, `grep`, `websearch`, `webfetch`
 - Codex:
   - Prefer `sandbox_mode = "workspace-write"` when content files may be created
-  - Keep live web search enabled when the task is time-sensitive
+  - Keep live web search enabled when the task is time-sensitive, but note that
+    live web behavior depends on the current session or attached MCP/doc-search
+    capabilities rather than a standalone `websearch` agent field
 
 ## Forbidden Operations
 
