@@ -722,11 +722,11 @@ def detect_conflicts_codex(
         warn("[Codex] hooks.json 缺失")
         conflicts += 1
 
-    session_start = root / ".codex" / "hooks" / "session-start.py"
-    if session_start.exists():
-        ok("[Codex] session-start.py 存在")
+    inject_workflow_state = root / ".codex" / "hooks" / "inject-workflow-state.py"
+    if inject_workflow_state.exists():
+        ok("[Codex] inject-workflow-state.py 存在")
     else:
-        warn("[Codex] session-start.py 缺失")
+        warn("[Codex] inject-workflow-state.py 缺失")
         conflicts += 1
 
     # 对每个 skills 目录分别检查 parallel：当前 Codex 合同是“移除嵌入面，但保留备份”

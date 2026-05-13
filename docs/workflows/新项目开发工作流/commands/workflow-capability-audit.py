@@ -1049,7 +1049,7 @@ def build_workflow_dependent_rows(a_root: Path, b_root: Path) -> list[dict[str, 
         },
         {
             "capability": "codex-hooks-and-config-carrier",
-            "mechanism": "Workflow may rely on Codex hook/config surfaces outside installer-managed shared skills, and these surfaces can remain file-present while runtime activation is still gated by user-level feature flags or hook approval.",
+            "mechanism": "Workflow may rely on Codex hook/config surfaces outside installer-managed shared skills, and these surfaces can remain file-present while runtime activation is still gated by project trust plus higher-precedence hook/config decisions outside the embedded workflow files.",
             "claude": [],
             "opencode": [],
             "codex": [".codex/hooks.json", ".codex/config.toml", ".codex/hooks/inject-workflow-state.py"],

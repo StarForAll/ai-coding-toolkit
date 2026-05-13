@@ -1328,7 +1328,8 @@ def deploy_codex(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAULT
         ):
             result["patches"] += 1
 
-    # Codex 通过 session-start.py hook 注入上下文，不需要注入 start.md
+    # Codex 当前通过 hooks.json 引用的 inject-workflow-state.py hook 注入上下文，
+    # 不需要注入 start.md。
     # 验证 hook 是否已就绪（全局只检查一次）。
     # 这些属于 Trellis baseline / 项目手动维护面，不计入 workflow patch 数。
     hooks_json = root / ".codex" / "hooks.json"
@@ -1336,14 +1337,14 @@ def deploy_codex(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAULT
         ok("[Codex] hooks.json 已存在")
         result["manual_checks"] += 1
     else:
-        warn("[Codex] hooks.json 不存在，SessionStart hook 未配置")
+        warn("[Codex] hooks.json 不存在，Codex hook 注入未配置")
 
-    session_start = root / ".codex" / "hooks" / "session-start.py"
-    if session_start.exists():
-        ok("[Codex] session-start.py hook 已存在")
+    inject_workflow_state = root / ".codex" / "hooks" / "inject-workflow-state.py"
+    if inject_workflow_state.exists():
+        ok("[Codex] inject-workflow-state.py hook 已存在")
         result["manual_checks"] += 1
     else:
-        warn("[Codex] session-start.py 不存在，会话上下文注入不可用")
+        warn("[Codex] inject-workflow-state.py 不存在，Codex workflow 上下文注入不可用")
 
     # 禁用 parallel（对所有目录，但 patches 只计一次）
     parallel_patched = False

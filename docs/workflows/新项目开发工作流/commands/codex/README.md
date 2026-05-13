@@ -4,7 +4,7 @@ Codex 对这套 workflow 的正确承载模型不是 `.claude/commands/` 式自�
 
 - `AGENTS.md`：项目级长期稳定规则
 - `.codex/config.toml`：项目级 Codex 配置与 `AGENTS.md` fallback
-- `.codex/hooks.json` + `.codex/hooks/*.py`：会话启动时注入 Trellis 上下文
+- `.codex/hooks.json` + `.codex/hooks/*.py`：按当前 hook 配置在用户回合等事件注入 Trellis 上下文
 - `.agents/skills/*/SKILL.md`：共享 workflow 入口与阶段技能
 - `.codex/skills/*/SKILL.md`：仅 Codex 独有或项目自定义的额外技能
 - `.codex/agents/*.toml`：trellis-research / trellis-implement / trellis-check 一类子代理（Trellis 0.5+ 原生提供）
@@ -161,21 +161,27 @@ Codex 官方支持 `AGENTS.md` 指令链。对 Trellis workflow，推荐把长�
 project_doc_fallback_filenames = ["AGENTS.md"]
 ```
 
-### 2. Hooks：用 `.codex/hooks.json` 在会话启动时注入 Trellis 上下文
+### 2. Hooks：用 `.codex/hooks.json` 注入 Trellis 上下文
 
-Codex 支持 hooks。对这套 workflow，推荐在 `SessionStart` 阶段注入：
+Codex 支持 hooks。对这套 workflow，当前推荐通过项目 `.codex/hooks.json` 在 `UserPromptSubmit` 等 turn 级事件注入 Trellis 上下文；不要把当前产品合同写死成“必须依赖 `SessionStart`”。
 
 - `.trellis/workflow.md`
 - `.trellis/spec/` 索引
 - 当前任务状态
 - `trellis-continue` skill 指令
 
+激活边界要单独说明：
+
+- 项目级 `.codex/` 配置层只有在 target project 被标记为 trusted 时才会加载；未受信任时，本地 `.codex/config.toml`、`.codex/hooks.json`、`.codex/hooks/*.py` 都不会生效
+- 当前官方文档把 `codex_hooks` 视为 stable / 默认启用能力，但更高优先级的 user/system config 仍可能关闭 hooks 或覆盖 hook 来源
+- 因此，若 hooks 不生效，排查顺序应先看 trust 状态，再看 effective merged config 与实际 hook 源
+
 当前仓库已有对应实现：
 
 - `.codex/hooks.json`
-- `.codex/hooks/session-start.py`
+- `.codex/hooks/inject-workflow-state.py`
 
-这条链路的作用是：把 Trellis workflow 运行时所需的上下文自动装进 Codex 会话，而不是要求用户每次手动粘贴。
+这条链路的作用是：把 Trellis workflow 运行时所需的上下文自动装进 Codex 会话，而不是要求用户每次手动粘贴。若项目额外保留 `session-start.py`，应把它视为可选的 repo-local / Trellis-baseline 辅助面，而不是当前 workflow 合同里唯一必需的挂接点。
 
 ### 3. Skills：workflow 阶段入口由 skills 承载
 
@@ -189,11 +195,9 @@ Codex 支持 hooks。对这套 workflow，推荐在 `SessionStart` 阶段注入�
 - `.agents/skills/review-gate/SKILL.md`
 - `.agents/skills/update-spec/SKILL.md`
 
-在当前仓库里，`session-start.py` 还显式写了：
+这正是 Codex 与 Claude/OpenCode 的关键差异：
 
 - Codex uses skills, not slash commands
-
-这正是 Codex 与 Claude/OpenCode 的关键差异。
 
 在“多 CLI 同装”场景下，也应继续坚持这个差异：
 
@@ -399,13 +403,13 @@ test -f .codex/agents/trellis-check.toml
 
 ### 平台前置资产验证
 
-以下文件由项目开发者手动维护，缺失不表示安装失败，但会导致 Codex 无法正常运行：
+以下文件由项目开发者手动维护，缺失不表示安装失败，但会导致 Codex 无法完整运行 workflow。对 hooks 而言，`hooks.json` 与实际被引用的 hook 脚本比某个特定事件名的文件更重要：
 
 ```bash
 test -f AGENTS.md
 test -f .codex/config.toml
 test -f .codex/hooks.json
-test -f .codex/hooks/session-start.py
+test -f .codex/hooks/inject-workflow-state.py
 ```
 
 ### CLI 基础可执行验证
@@ -434,7 +438,7 @@ HOME="$TMP_ROOT/home" codex exec \
   --skip-git-repo-check \
   -C "$TMP_ROOT/project" \
   --json \
-  "If you received a <ready> block from session-start hook, reply READY_ONLY. Otherwise reply MISSING_ONLY."
+  "If you received a <ready> block from the Codex workflow-state hook, reply READY_ONLY. Otherwise reply MISSING_ONLY."
 ```
 
 若执行失败，应区分：
@@ -457,10 +461,10 @@ HOME="$TMP_ROOT/home" codex exec \
 
 这条命令可用于验证项目级 `AGENTS.md` 是否被加载。
 
-若要单独验证 hook 文件本身是否能生成 Trellis 注入上下文，可直接按 hook 协议执行：
+若要单独验证当前 workflow 使用的 hook 文件本身是否能生成 Trellis 注入上下文，可直接按 hook 协议执行：
 
 ```bash
-printf '{"cwd":"'"$TMP_ROOT"'/project"}' | python3 "$TMP_ROOT/project/.codex/hooks/session-start.py"
+printf '{"cwd":"'"$TMP_ROOT"'/project"}' | python3 "$TMP_ROOT/project/.codex/hooks/inject-workflow-state.py"
 ```
 
 ## 当前结论
@@ -474,5 +478,5 @@ Codex 对这套 workflow 的正确描述应该是：
 当前 `/tmp` smoke test 的额外发现：
 
 - `codex exec` 可完整运行并读取项目 `AGENTS.md`
-- `SessionStart` hook 文件本身可按协议生成 Trellis 上下文
+- 当前 workflow 使用的 `inject-workflow-state.py` hook 文件本身可按协议生成 Trellis 上下文
 - 但在非交互 `codex exec` 中，是否把 hook 注入后的 `<ready>` 块暴露给模型，需要单独验证，不能直接假定与交互式会话完全一致

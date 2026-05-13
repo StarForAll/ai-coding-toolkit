@@ -132,7 +132,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
   - 对 OpenCode：官方会发现它，但当前 workflow 的正式主入口仍是 `.opencode/commands/trellis/`
   - 对 Claude Code：当前没有官方证据表明会读取 `.agents/skills/`
 - `.codex/skills/` 只应保留 Codex 独有或项目自定义的额外 skills，若出现重复 shared skills 应视为漂移并清理
-- `.codex/hooks.json`、`.codex/hooks/session-start.py`、`.claude/settings*.json`、`opencode.json.instructions` 仍属于人工维护或 Trellis baseline 资产，不应误以为安装器会替你补齐
+- `.codex/hooks.json`、`.codex/hooks/inject-workflow-state.py`、`.claude/settings*.json`、`opencode.json.instructions` 仍属于人工维护或 Trellis baseline 资产，不应误以为安装器会替你补齐
 
 安装完成后，这套 workflow 的实际使用仍然可以是**渐进性披露**的：
 

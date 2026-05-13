@@ -390,7 +390,7 @@ class WorkflowInstallerTests(unittest.TestCase):
             (root / ".codex" / "hooks").mkdir(parents=True)
             (root / ".codex" / "agents").mkdir(parents=True)
             (root / ".codex" / "hooks.json").write_text("{}", encoding="utf-8")
-            (root / ".codex" / "hooks" / "session-start.py").write_text("# hook\n", encoding="utf-8")
+            (root / ".codex" / "hooks" / "inject-workflow-state.py").write_text("# hook\n", encoding="utf-8")
             codex_agent_prefix = "trellis-" if use_latest_trellis_baseline else ""
             (root / ".codex" / "agents" / f"{codex_agent_prefix}research.toml").write_text(BASELINE_CODEX_RESEARCH_TOML, encoding="utf-8")
             (root / ".codex" / "agents" / f"{codex_agent_prefix}implement.toml").write_text(BASELINE_CODEX_IMPLEMENT_TOML, encoding="utf-8")

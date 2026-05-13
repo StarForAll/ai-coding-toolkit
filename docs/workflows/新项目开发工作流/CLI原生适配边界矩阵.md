@@ -122,7 +122,7 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产；当
 | 共享 skills 承载面（非 OpenCode 正式入口） | `.agents/skills/*/SKILL.md` | 安装器管理（与 Codex 共用单份落盘） | OpenCode 官方 skills 扫描链路会命中 `.agents/skills/`；当前 workflow 仅把这里视为共享分发与漂移核对范围，不把它当成 OpenCode 的推荐或正式触发入口 |
 | 子代理定义 | `.opencode/agents/*.md` | Trellis 原生管理 | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 安装器不再 overlay 到目标项目，仅做 legacy 迁移；源仓库 carrier 可含项目级增强 |
 | 项目长期规则 | `AGENTS.md` | 半托管（手动维护为主） | 与 Claude/Codex 共用同一文件；`TRELLIS` managed block 与 `workflow-nl-routing` 区段由 `trellis init` / `install-workflow.py` 分别托管 |
-| workflow 文档注入 | `opencode.json.instructions` | 手动维护 | 只挂主入口与必要补充 |
+| workflow 文档注入 | `opencode.json.instructions` | 手动维护（可选） | 若启用，只挂主入口与必要补充 |
 | 项目 Git 前置条件 | `origin ≥ 2 push URL` | 运行前置/仅校验 | 安装器校验 |
 | Trellis init 产物 | `.trellis/.version` | 运行前置/仅校验 | 安装器校验 |
 
@@ -147,7 +147,7 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产；当
 | Trellis 基线 workflow 指南补丁 | `.trellis/workflow.md` | 安装器管理 | 与 Claude/OpenCode 共用；Codex hooks 注入的 `.trellis/workflow.md` 应与安装器增强后的文档保持一致 |
 | 项目长期规则 | `AGENTS.md` | 半托管（手动维护为主） | 与 Claude/OpenCode 共用；`TRELLIS` managed block 与 `workflow-nl-routing` 区段由 `trellis init` / `install-workflow.py` 分别托管 |
 | Codex 项目配置 | `.codex/config.toml` | 手动维护 | `AGENTS.md` fallback 等项目配置 |
-| 会话启动注入 | `.codex/hooks.json` + `.codex/hooks/*.py` | 手动维护 | SessionStart hook 注入 Trellis 上下文 |
+| 会话上下文注入 | `.codex/hooks.json` + `.codex/hooks/*.py` | 手动维护 | 当前 workflow 常见载体是 turn 级 hook（如 `UserPromptSubmit -> inject-workflow-state.py`）；不要把合同固定写死成 `SessionStart` |
 | 子代理定义 | `.codex/agents/*.toml` | Trellis 原生管理 | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 安装器不再 overlay 到目标项目，仅做 legacy 迁移；源仓库 carrier 可含项目级增强 |
 | 项目 Git 前置条件 | `origin ≥ 2 push URL` | 运行前置/仅校验 | 安装器校验 |
 | Trellis init 产物 | `.trellis/.version` | 运行前置/仅校验 | 安装器校验 |
@@ -208,7 +208,7 @@ ls .codex/skills/.backup-original/parallel/SKILL.md 2>/dev/null
 | 辅助脚本 | `.trellis/scripts/workflow/` ✅ | 共用 ✅ | 共用 ✅ |
 | 嵌入尝试记录 | `.trellis/workflow-embed-attempt.json` ✅ 安装器（开始写入，成功后清理） | 共用 ✅ | 共用 ✅ |
 | 项目规则 | `AGENTS.md` ⚠️ 半托管 | `AGENTS.md` ⚠️ 半托管 | `AGENTS.md` ⚠️ 半托管 |
-| 平台配置 | `.claude/settings*.json` ❌ 手动 | `opencode.json` ❌ 手动 | `.codex/config.toml` ❌ 手动 |
+| 平台配置 | `.claude/settings*.json` ❌ 手动 | `opencode.json` ❌ 手动（可选） | `.codex/config.toml` ❌ 手动 |
 | Hooks | `.claude/hooks/*.py` ❌ 手动 | `.opencode/plugins/*.js` ❌ 手动（trellis init 分发） | `.codex/hooks.json` + `.codex/hooks/*.py` ❌ 手动 |
 | 子代理 | `trellis-research` / `trellis-implement` / `trellis-check` ✅ Trellis 原生管理；workflow dry-run `Agents: 0`，仅迁移 legacy bare-name agents | `trellis-research` / `trellis-implement` / `trellis-check` ✅ Trellis 原生管理；workflow dry-run `Agents: 0`，仅迁移 legacy bare-name agents | `trellis-research` / `trellis-implement` / `trellis-check` ✅ Trellis 原生管理；workflow dry-run `Agents: 0`，仅迁移 legacy bare-name agents |
 
@@ -307,7 +307,7 @@ test -f .claude/hooks/session-start.py
 
 # OpenCode
 test -f AGENTS.md
-test -f opencode.json
+test -f opencode.json && echo "present" || echo "[optional] opencode.json absent"
 test -f .opencode/plugins/session-start.js
 test -f .opencode/plugins/inject-subagent-context.js
 
@@ -315,7 +315,7 @@ test -f .opencode/plugins/inject-subagent-context.js
 test -f AGENTS.md
 test -f .codex/config.toml
 test -f .codex/hooks.json
-test -f .codex/hooks/session-start.py
+test -f .codex/hooks/inject-workflow-state.py
 ```
 
 ---

@@ -395,7 +395,7 @@ First-version dependent-surface coverage includes these known Trellis-native car
 - project-rules-and-routing-carrier (AGENTS.md)
 - claude-hooks-and-settings-carrier (.claude/settings.json, .claude/hooks, .claude/hooks/inject-workflow-state.py, .claude/hooks/session-start.py, .claude/hooks/inject-subagent-context.py)
 - opencode-plugin-and-instructions-carrier (.opencode/plugins, .opencode/package.json)
-- codex-hooks-and-config-carrier (.codex/hooks.json, .codex/config.toml, .codex/hooks/inject-workflow-state.py; file presence and runtime activation are separate because Codex hooks remain user-gated)
+- codex-hooks-and-config-carrier (.codex/hooks.json, .codex/config.toml, .codex/hooks/inject-workflow-state.py; file presence and runtime activation are separate because Codex project hooks remain trust-gated and can still be altered by higher-precedence config)
 - implementation-agent-carrier (per-CLI agent directories)
 - trellis-runtime-workflow-guide (.trellis/workflow.md, .trellis/scripts/task.py)
 - shared-skills-deployment-carrier (.agents/skills/ — shared deployment layer and repo-local maintainer carrier for shared skills consumed by OpenCode and Codex)

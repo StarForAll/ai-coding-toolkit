@@ -330,14 +330,14 @@ Compatibility code should therefore:
        - optional disabled entry removal such as `parallel`, but only when such an entry actually exists in one of the skills directories
      - `patches` must not include:
        - `.codex/hooks.json` presence checks
-       - `.codex/hooks/session-start.py` presence checks
+       - `.codex/hooks/inject-workflow-state.py` presence checks
        - other Trellis-baseline or project-manual assets that the workflow does not write, patch, or remove
-     - presence checks for `.codex/hooks.json` / `.codex/hooks/session-start.py` must be reported separately as `manual_checks` or an equivalent non-patch summary dimension
+     - presence checks for `.codex/hooks.json` / `.codex/hooks/inject-workflow-state.py` must be reported separately as `manual_checks` or an equivalent non-patch summary dimension
      - dry-run and formal-install summary output must not overstate workflow write scope by counting manual/baseline readiness checks as workflow patches
    - Tests Required:
      - Codex dry-run summary must show workflow patch count independently from manual baseline checks
      - a fixture that contains `.agents/skills/parallel` must still increment `patches` for the `parallel` removal path
-     - the same fixture must not gain an extra patch count merely because `.codex/hooks.json` and `.codex/hooks/session-start.py` exist
+     - the same fixture must not gain an extra patch count merely because `.codex/hooks.json` and `.codex/hooks/inject-workflow-state.py` exist
 
 5. **Phase-gate helper scripts**
    - helper scripts referenced as mandatory validation gates inside workflow source commands

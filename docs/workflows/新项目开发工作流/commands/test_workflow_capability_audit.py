@@ -373,7 +373,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             {
                 "capability_id": "TN-004",
                 "capability": "codex-hooks-and-config-carrier",
-                "mechanism": "Workflow may rely on Codex hook/config surfaces outside installer-managed shared skills, and these surfaces can remain file-present while runtime activation is still gated by user-level feature flags or hook approval.",
+                "mechanism": "Workflow may rely on Codex hook/config surfaces outside installer-managed shared skills, and these surfaces can remain file-present while runtime activation is still gated by project trust plus higher-precedence hook/config decisions outside the embedded workflow files.",
                 "discovery_source": "ai-discovered",
                 "claude_evidence": "not-applicable",
                 "claude_classification": "not-applicable",

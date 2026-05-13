@@ -14,7 +14,7 @@ OpenCode 已具备承载这套 workflow 的原生命令、rules、agents、skill
 - workflow 命令：部署到 `.opencode/commands/trellis/`
 - workflow agents：部署到 `.opencode/agents/`
 - 项目级稳定规则：放在项目 `AGENTS.md`
-- workflow 文档与必要补充：通过 `opencode.json` 的 `instructions` 引入
+- workflow 文档与必要补充：可通过 `opencode.json` 的 `instructions` 引入；这是推荐的手动挂接面，不是 fresh baseline 安装成功的必备落盘文件
 - 通用辅助脚本：继续放在 `.trellis/scripts/workflow/` 或 `docs/workflows/.../commands/shell/`
 
 前置条件：
@@ -153,14 +153,14 @@ OpenCode 原生支持项目级命令目录。对这套 workflow，推荐把命�
 
 也就是说，目录命名空间 `trellis/continue.md` 在 OpenCode CLI 中对应的命令标识应按 `trellis/continue` 理解，而不是直接照搬冒号语法；legacy `trellis/start` 仅用于旧目标项目兼容；同项目里即使同时存在 Codex 的 legacy `start` skill，也不影响 OpenCode 继续使用命令入口。
 
-### 2. Rules：`AGENTS.md` + `opencode.json.instructions`
+### 2. Rules：`AGENTS.md` + 可选的 `opencode.json.instructions`
 
 OpenCode 的规则层不要只靠单一入口。
 
 推荐分工：
 
 - `AGENTS.md`：放项目级长期稳定规则，例如执行原则、验证门禁、语言策略、风险边界
-- `opencode.json.instructions`：挂载主入口文档与必要补充，不默认全量挂载所有阶段文档
+- `opencode.json.instructions`：可选地挂载主入口文档与必要补充，不默认全量挂载所有阶段文档
 - 平台原生 MCP / provider 配置：负责把 workflow 需要的能力真正启用
 - 源码水印与归属证明在当前 workflow 中默认启用（`ownership_proof_required` 常规默认值为 `yes`）；若项目明确设置为 `no`，才可跳过以下内容：
   - 长期策略（是否启用、零宽字符边界、不起眼代码标识禁区）放 `AGENTS.md`
@@ -261,7 +261,7 @@ OpenCode 不应被写成“和 Claude 完全等价”，因为它在 hook / suba
 | Trellis 原生命令基线 | `.opencode/commands/trellis/continue.md` `finish-work.md` | 由 `trellis init` 提供；当前 workflow 会对 `continue` / `finish-work` 注入补丁，但不重新分发完整基线；legacy `start` / `record-session` 仅用于旧目标项目兼容 | ✅ 补丁由安装器注入 |
 | 子代理定义 | `.opencode/agents/*.md` | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 安装器不再 overlay 到目标项目，仅做 legacy 迁移；源仓库 carrier 可含项目级增强 | ✅ legacy 迁移由 `install-workflow.py` |
 | 项目长期规则 | `AGENTS.md` | 稳定执行规则、风险边界、语言策略 | ❌ 手动维护 |
-| workflow 文档注入 | `opencode.json.instructions` | 只挂主入口与必要补充，不默认全量挂载所有阶段文档 | ❌ 手动维护 |
+| workflow 文档注入 | `opencode.json.instructions` | 可选的手动挂接面；若启用，只挂主入口与必要补充，不默认全量挂载所有阶段文档 | ❌ 手动维护 |
 | 通用脚本 | `.trellis/scripts/workflow/` | 被命令或人工直接调用 | ✅ `install-workflow.py` |
 | 源码水印与归属证明产物 | `$TASK_DIR/design/`、`$TASK_DIR/delivery/` | 设计计划、提取验证、交付证明 | ❌ 人工维护 / workflow 阶段产出 |
 
@@ -323,11 +323,11 @@ test -f .opencode/agents/trellis-check.md
 
 ### 平台前置资产验证
 
-以下文件由项目开发者手动维护，缺失不表示安装失败，但会导致 OpenCode 无法正常运行：
+以下文件由项目开发者手动维护；其中 `AGENTS.md` 与 plugin 载体更接近当前 workflow 的常见运行前提，`opencode.json` 则属于可选但推荐的项目配置面。它们缺失不表示安装失败，但会削弱或阻断 OpenCode 的完整运行体验：
 
 ```bash
 test -f AGENTS.md
-test -f opencode.json
+test -f opencode.json && echo "present" || echo "[optional] opencode.json absent"
 test -f .opencode/plugins/session-start.js
 test -f .opencode/plugins/inject-subagent-context.js
 ```
@@ -348,7 +348,7 @@ HOME="$TMP_ROOT/home" opencode agent list
 
 其中：
 
-- `opencode debug config` 用于确认 `opencode.json.instructions` 已被解析
+- 若目标项目选择使用 `opencode.json.instructions`，`opencode debug config` 可用于确认该配置已被解析
 - `opencode agent list` 用于确认 `.opencode/agents/` 已被识别
 
 ### Workflow 命令可用性验证
