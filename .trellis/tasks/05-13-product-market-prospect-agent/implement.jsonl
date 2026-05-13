@@ -1,0 +1,4 @@
+{"file":".trellis/spec/agents/index.md","reason":"Defines required source-asset structure, tool-agnostic SYSTEM.md rules, and deploy mapping for agents/."}
+{"file":"agents/NAMING-AND-VERSIONING.md","reason":"Provides naming, scope, and evolution guidance for new source agents."}
+{"file":".trellis/tasks/05-13-product-market-prospect-agent/research/platform-wrapper-baseline.md","reason":"Records the 2026-05-13 verified wrapper-field baseline for Claude Code, OpenCode, and Codex."}
+{"file":".trellis/tasks/05-13-product-market-prospect-agent/research/market-signal-framework.md","reason":"Defines the live-evidence market-signal buckets and evidence hierarchy for this agent."}

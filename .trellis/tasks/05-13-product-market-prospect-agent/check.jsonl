@@ -1,0 +1,4 @@
+{"file":".trellis/spec/agents/index.md","reason":"Primary quality checklist for agent source assets and deploy-boundary consistency."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Catch repeated wording drift across source agents and docs during review."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Covers source/deploy/documentation boundary checks for agent assets."}
+{"file":".trellis/tasks/05-13-product-market-prospect-agent/research/platform-wrapper-baseline.md","reason":"Check deploy docs against the verified wrapper baseline."}
