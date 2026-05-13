@@ -151,6 +151,32 @@ After the script completes, review `capability-report.md` for:
 - **classification accuracy** — do the per-CLI classifications match the actual file evidence?
 - **structural signals** — does the auto-generated structural-break judgment need refinement based on closer inspection?
 
+For Claude Code / OpenCode / Codex native-adaptation judgments, combine both:
+
+- the latest official CLI documentation available at audit time
+- repo-local validated evidence from the current workflow authoring repository
+  and, when available, the A/B fixtures or runtime observations
+
+Minimum repo-local evidence pack:
+
+- `docs/workflows/新项目开发工作流/CLI原生适配边界矩阵.md`
+- the relevant platform README under `docs/workflows/新项目开发工作流/commands/{claude,opencode,codex}/README.md`
+- the live carrier files behind the claim (`.claude/**`, `.opencode/**`, `.codex/**`, `.agents/skills/**`, `.trellis/workflow.md`, `.trellis/scripts/hooks/**`)
+
+When filling `## Native CLI Adaptation Evidence`, capture at least:
+
+- per-CLI official docs source checked
+- per-CLI repo-local evidence checked
+- per-CLI agreement / discrepancy status
+- discrepancy resolution and conservative-classification rationale when a disagreement exists
+
+If official docs and repo-local evidence disagree:
+
+- record the discrepancy explicitly in `capability-report.md`
+- explain whether it is an intentional local adaptation, stale repo guidance, or an unresolved evidence gap
+- prefer `unclear`, `present-but-gated-expected`, or another evidence-backed conservative value over unsupported assumptions
+- if the generated `capability-report.md` does not already contain the `## Native CLI Adaptation Evidence` section, add it during Step B before finalizing the audit conclusion
+
 ### Step C: Handle supplemental capabilities
 
 If the AI or user identifies an omitted capability after the initial discovery pass, use the supplemental capability loop (see [Supplemental Capability Loop](#supplemental-capability-loop)). Reuse the same A/B fixtures and the same `capability-report.md`.

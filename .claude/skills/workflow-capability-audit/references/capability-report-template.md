@@ -21,6 +21,22 @@ The matrix headers below define the emitted first-version column order and shoul
 ## Evidence-Gathering Actions Executed In This Round
 - <action> — Layer: <source repo | generated target project | runtime command output>
 
+## Native CLI Adaptation Evidence
+<!-- Fill this section during Step B AI review unless the execution engine already prefilled it. -->
+- Claude Code:
+  - Official docs source:
+  - Repo-local evidence:
+  - Agreement / discrepancy:
+- OpenCode:
+  - Official docs source:
+  - Repo-local evidence:
+  - Agreement / discrepancy:
+- Codex:
+  - Official docs source:
+  - Repo-local evidence:
+  - Agreement / discrepancy:
+- Discrepancy resolution:
+
 ## Discovered Baseline Capabilities
 - <capability cluster summary>
 

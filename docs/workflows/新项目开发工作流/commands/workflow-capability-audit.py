@@ -1261,6 +1261,22 @@ def initialize_capability_report(
 - Fresh A fixture created — Layer: generated target project
 - Fresh B fixture created — Layer: generated target project
 
+## Native CLI Adaptation Evidence
+<!-- Fill this section during Step B AI review unless the execution engine already prefilled it. -->
+- Claude Code:
+  - Official docs source:
+  - Repo-local evidence:
+  - Agreement / discrepancy:
+- OpenCode:
+  - Official docs source:
+  - Repo-local evidence:
+  - Agreement / discrepancy:
+- Codex:
+  - Official docs source:
+  - Repo-local evidence:
+  - Agreement / discrepancy:
+- Discrepancy resolution:
+
 ## Discovered Baseline Capabilities
 {chr(10).join(f"- {item}" for item in summarize_baseline_capabilities(a_root))}
 

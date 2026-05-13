@@ -290,6 +290,49 @@ After the script completes, review `capability-report.md` for:
 
 This step is where human/AI domain knowledge supplements the script's automated discovery. The capability inventory is validated against current-version evidence rather than assumed from a fixed canonical list.
 
+#### Native CLI Adaptation Evidence Contract
+
+When the audit judges native adaptation for Claude Code, OpenCode, or Codex,
+each CLI-specific conclusion must combine **both** evidence tracks:
+
+- the CLI vendor/project's latest official documentation available at audit time
+- repo-local empirical evidence from the current authoring repository and, when
+  available, the current A/B fixtures or validated runtime observations
+
+Do not rely on memory alone, and do not treat one evidence track as sufficient.
+
+Use official documentation to confirm platform-supported mechanisms such as
+configuration layers, hooks/plugins, rules/instructions loading, subagent/agent
+discovery, and similar carrier semantics. Use repo-local evidence to confirm
+how this workflow currently uses, constrains, or intentionally avoids those
+mechanisms in practice.
+
+Minimum repo-local evidence pack for native CLI adaptation analysis:
+
+- `docs/workflows/新项目开发工作流/CLI原生适配边界矩阵.md`
+- the relevant platform README under
+  `docs/workflows/新项目开发工作流/commands/{claude,opencode,codex}/README.md`
+- the live carrier files that back the claim, such as `.claude/**`,
+  `.opencode/**`, `.codex/**`, `.agents/skills/**`, `.trellis/workflow.md`, and
+  `.trellis/scripts/hooks/**`
+
+When recording `## Native CLI Adaptation Evidence` in `capability-report.md`,
+capture at least:
+
+- per-CLI official documentation source checked
+- per-CLI repo-local evidence checked
+- per-CLI agreement / discrepancy status
+- discrepancy resolution and conservative-classification rationale when a
+  disagreement exists
+
+If official documentation and repo-local evidence disagree:
+
+- record the discrepancy explicitly in `capability-report.md`
+- explain whether it is an intentional local adaptation, stale repo guidance, or
+  an unresolved evidence gap
+- prefer `unclear`, `present-but-gated-expected`, or another evidence-backed
+  conservative classification over unsupported assumptions
+
 ### C. Capability / Compatibility Matrix
 
 The report must use one unified capability matrix organized by capability rows.
@@ -541,6 +584,31 @@ If behavior changes also affect references/tests, the same change must update:
 - `.agents/skills/workflow-capability-audit/tests/*`
 - `.claude/skills/workflow-capability-audit/references/*`
 - `.claude/skills/workflow-capability-audit/tests/*`
+
+If native CLI adaptation evidence rules change, also review whether these
+repo-local maintainer docs need matching updates in the same change:
+
+- `docs/workflows/新项目开发工作流/CLI原生适配边界矩阵.md`
+- `docs/workflows/新项目开发工作流/commands/claude/README.md`
+- `docs/workflows/新项目开发工作流/commands/opencode/README.md`
+- `docs/workflows/新项目开发工作流/commands/codex/README.md`
+
+This rule currently has maintained counterparts in:
+
+- `.trellis/spec/skills/workflow-capability-audit.md`
+- `.agents/skills/workflow-capability-audit/SKILL.md`
+- `.claude/skills/workflow-capability-audit/SKILL.md`
+- `.agents/skills/workflow-capability-audit/references/execution-runbook.md`
+- `.claude/skills/workflow-capability-audit/references/execution-runbook.md`
+- `.agents/skills/workflow-capability-audit/references/capability-report-template.md`
+- `.claude/skills/workflow-capability-audit/references/capability-report-template.md`
+- `.agents/skills/workflow-capability-audit/tests/15-native-cli-adaptation-evidence-contract.md`
+- `.claude/skills/workflow-capability-audit/tests/15-native-cli-adaptation-evidence-contract.md`
+- `docs/workflows/新项目开发工作流/commands/workflow-capability-audit.py`
+- `docs/workflows/新项目开发工作流/commands/test_workflow_capability_audit.py`
+
+When its behavior changes, review and update those counterparts together rather
+than editing only one copy.
 
 ---
 

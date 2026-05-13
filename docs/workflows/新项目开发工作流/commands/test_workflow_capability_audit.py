@@ -1413,6 +1413,28 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             self.assertIn("- none yet", section, f"{section_heading} must contain '- none yet'")
             self.assertNotRegex(section, r"<.+>", f"{section_heading} must not contain angle-bracket placeholders")
 
+    def test_initial_report_contains_native_cli_adaptation_evidence_section(self) -> None:
+        """Initial report must include the Native CLI Adaptation Evidence section with Step B guidance."""
+        assets = load_assets_module()
+        env = {assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9"}
+        result = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env)
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self._track_fixtures_from_payload(payload)
+        report_path = REPO_ROOT / payload["capability_report"]
+        report_text = report_path.read_text(encoding="utf-8")
+
+        section = _extract_section(report_text, "## Native CLI Adaptation Evidence")
+        self.assertIn("## Native CLI Adaptation Evidence", section)
+        self.assertIn("<!-- Fill this section during Step B AI review unless the execution engine already prefilled it. -->", section)
+        self.assertIn("- Claude Code:", section)
+        self.assertIn("- OpenCode:", section)
+        self.assertIn("- Codex:", section)
+        self.assertIn("- Discrepancy resolution:", section)
+        self.assertIn("  - Official docs source:", section)
+        self.assertIn("  - Repo-local evidence:", section)
+        self.assertIn("  - Agreement / discrepancy:", section)
+
     def test_shared_skills_deployment_carrier_appears_in_dependent_surface(self) -> None:
         """shared-skills-deployment-carrier (TN-007) must appear in the dependent surface matrix."""
         assets = load_assets_module()

@@ -62,6 +62,27 @@ Returned JSON includes at least:
 - `b_root`
 - `capability_report`
 
+Native CLI adaptation evidence rule:
+
+- when the audit draws Claude Code / OpenCode / Codex compatibility conclusions,
+  verify them against both the latest official CLI documentation available at
+  execution time and repo-local evidence from the current workflow authoring
+  repository
+- the minimum repo-local pack is `CLI原生适配边界矩阵.md`, the matching
+  platform README, and the carrier files that implement the claim
+- if the generated `capability-report.md` does not already contain
+  `## Native CLI Adaptation Evidence`, fill that section during the AI review
+  step before finalizing the audit conclusion
+- record per CLI the official-doc source checked, the repo-local evidence
+  checked, the agreement/discrepancy status, and any conservative-classification
+  rationale used to resolve disagreements
+- if those evidence tracks disagree, keep the discrepancy visible in
+  `capability-report.md`, explain whether it is an intentional local
+  adaptation, stale repo guidance, or an unresolved evidence gap, and prefer
+  `unclear`, `present-but-gated-expected`, or another evidence-backed
+  conservative classification instead of flattening it into a memory-based
+  answer
+
 Task-state boundary:
 
 - the script now reads and restores the active task through Trellis' session-scoped runtime state (`.trellis/.runtime/sessions/`) rather than a legacy global `.trellis/.current-task` file
