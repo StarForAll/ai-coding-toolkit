@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/agents/index.md", "reason": "Source-agent structure, deployment-boundary, and quality checklist for agents/ assets"}
+{"file": ".trellis/spec/docs/index.md", "reason": "Repo documentation conventions for README/DEPLOYMENT authoring"}
+{"file": ".trellis/tasks/05-13-design-product-price-estimator-agent/research/platform-and-evidence-baseline.md", "reason": "Current official platform and live-evidence baseline for Claude Code, OpenCode, and Codex"}
