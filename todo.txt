@@ -6,16 +6,16 @@
 
 5. 每次trellis升级都需要对工作流中的升级适配机制修复完善
 小版本升级:[循环1次]
-A1:详细深度分析当前项目下trellis工作和使用机制,然后分析当前项目下trellis小版本升级内容[git status/diff],其中 .new文件的具体处理方案[丢弃,合并,覆盖...],其他修改操作是否正确,是否存在缺漏,修复操作是否修改出现了问题等等各个方面
-其中Phase 编号需要使用其原本的,
+A1:详细深度分析当前项目下trellis工作和使用机制,然后分析当前项目下trellis小版本升级内容[git status/diff],其中 .new文件的具体处理方案[丢弃,合并,覆盖...],其他修改操作是否正确,是否存在缺漏,修复操作是否修改出现了问题等等各个方面,/tmp/trellis-0.5.14 是当前trellis版本下初始化的临时项目
+其中Phase 编号需要使用其原本的
 是针对当前项目实际使用的trellis而非docs/workflows/新项目开发工作流;其中 trellis-research 需要使用ace等额外的工具
 在当前会话中不能使用subagents
 
 A2:使用另一个cli对当前修改进行分析[需要重复几次操作]
-mkcd /tmp/trellis-0.5.12
+mkcd /tmp/trellis-0.5.14
 trellis init --codex --claude --opencode --qoder -u xzc
 
-/tmp/trellis-0.5.12 是当前trellis版本下初始化的临时项目，使用该临时项目详细了解trellis机制之后和当前项目根目录下相对应的隐藏目录中的内容进行对比分析，判断当前修改[git status/diff]操作是否正确，是否存在错漏
+/tmp/trellis-0.5.14 是当前trellis版本下初始化的临时项目，使用该临时项目详细了解trellis机制之后和当前项目根目录下相对应的隐藏目录中的内容进行对比分析，判断当前修改[git status/diff]操作是否正确，是否存在错漏
 注意当前修改可能存在遗漏的情况，需要注意部分文件没有修改的情况
 Phase 编号使用现在的即可
 在当前会话中不能使用subagents

@@ -44,8 +44,8 @@ from common.safe_commit import (
 from common.tasks import load_task
 from common.config import (
     get_packages,
-    get_session_commit_message,
     get_session_auto_commit,
+    get_session_commit_message,
     get_max_journal_lines,
     is_monorepo,
     resolve_package,
@@ -535,9 +535,11 @@ def main() -> int:
             if detected:
                 branch = detected
 
+    auto_commit = (not args.no_commit) and get_session_auto_commit(repo_root)
+
     return add_session(
         args.title, args.commit, args.summary, extra_content,
-        auto_commit=not args.no_commit,
+        auto_commit=auto_commit,
         package=package,
         branch=branch,
     )
