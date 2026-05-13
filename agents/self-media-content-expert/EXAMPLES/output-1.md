@@ -1,5 +1,7 @@
 # Outcome
 
+说明：以下为**期望输出格式示例**，不是本仓库内一次真实 live verification 的运行记录。
+
 输出一份面向独立创作者和知识博主的小红书图文内容方案。
 
 ## Evidence Status

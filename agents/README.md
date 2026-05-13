@@ -29,6 +29,10 @@ agents/
   - 通用“软件产品价格估算大师”
   - 重点能力：报价区间设计、成本拆解、套餐定价、实时价格核验
   - 适配目标平台：Claude Code / OpenCode / Codex
+- `product-market-viability-expert/`
+  - 通用“产品市场前景判断专家”
+  - 重点能力：当前市场前景判断、需求信号核验、竞争与分发压力分析、go/no-go 输出
+  - 适配目标平台：Claude Code / OpenCode / Codex
 
 ## 作者辅助资产
 

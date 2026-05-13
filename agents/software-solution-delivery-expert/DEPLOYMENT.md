@@ -26,6 +26,16 @@ Claude Code、OpenCode、Codex。
 - OpenCode: `https://opencode.ai/docs/agents/`
 - OpenCode permissions: `https://opencode.ai/docs/permissions`
 
+## Refresh Policy
+
+以下任一情况出现时，应重新核验本文件中的平台字段面与 wrapper 建议：
+
+1. 距离上次核验超过 90 天
+2. 目标平台发布了 agents / subagents / permissions / custom agents 相关文档更新
+3. 部署时发现字段解析失败、权限字段失效、或推荐模板与 UI/CLI 行为不一致
+4. 目标项目准备启用新的增强字段，例如 `mcpServers`、`memory`、
+   `background`、`isolation`、`nickname_candidates`
+
 ## Source Files
 
 适配时以这些文件为源：
@@ -152,6 +162,16 @@ OpenCode 当前还支持更多可选字段或权限增强位点，例如：
 - 文件写入/修改由 `permission.edit` 覆盖，不需要单独 `write` 键。
 - OpenCode 允许对 `bash` 等权限做更细粒度规则；如果目标项目风险较高，
   建议把 `bash` 从字符串权限升级为对象规则。
+- 更细粒度的更安全写法例如：
+
+```yaml
+permission:
+  bash:
+    "*": ask
+    "git diff*": allow
+    "git log*": allow
+    "rg *": allow
+```
 - OpenCode 不只支持 Markdown agent 文件，也支持在 `opencode.json`
   中声明 agent；本仓库这里优先记录 source agent 最接近的 Markdown 适配形态。
 - 如果目标项目高度信任该 agent，且它主要承担 Mode 3 的 build / test /

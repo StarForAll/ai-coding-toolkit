@@ -69,86 +69,7 @@
 - OpenCode 部署目标：`.opencode/agents/self-media-content-expert.md`
 - Codex 部署目标：`.codex/agents/self-media-content-expert.toml`
 
-## Verified Platform Mapping
-
-以下映射基于 2026-05-13 的官方资料与当前仓库验证结果。
-
-### Claude Code
-
-- 项目级位置：`.claude/agents/`
-- 文件格式：Markdown + YAML frontmatter
-- 当前最小稳定字段：`name`、`description`
-- 常用可选字段：`tools`、`model`、`color`
-
-### OpenCode
-
-- 项目级位置：`.opencode/agents/`
-- 文件格式：Markdown + YAML frontmatter
-- agent 名来自文件名
-- 推荐字段：`description`、`mode`、`permission`
-- 文件修改能力通过 `permission.edit` 控制，不需要单独 `write` 键
-- 当前官方更推荐 `permission`，旧 `tools` 已废弃为兼容层
-
-### Codex
-
-- 项目级位置：`.codex/agents/`
-- 文件格式：TOML
-- 必填字段：`name`、`description`、`developer_instructions`
-- 常用可选字段：`model`、`model_reasoning_effort`、`sandbox_mode`
-
-## Suggested Deployment Wrappers
-
-以下内容是**适配模板**，用于将该源资产迁移到目标项目时生成对应平台文件；不是本仓库当前已经启用的运行副本。
-
-这里展示的是**最小兼容模板**，目的是先说明三端的基础包裹形态。
-像 `model`、`color`、`permissionMode`、`mcpServers` 等可选增强字段，
-请以 `DEPLOYMENT.md` 中的推荐字段与可选字段说明为准。
-
-### Claude Code
-
-```markdown
----
-name: self-media-content-expert
-description: |
-  Modern self-media content strategist and implementation specialist. Use for
-  topic discovery, audience-fit content design, multi-platform adaptation, and
-  evidence-backed real-time content work.
-tools: Read, Write, Edit, Glob, Grep, WebFetch, WebSearch
----
-<SYSTEM.md content>
-```
-
-### OpenCode
-
-```markdown
----
-description: |
-  Modern self-media content strategist and implementation specialist. Use for
-  topic discovery, audience-fit content design, multi-platform adaptation, and
-  evidence-backed real-time content work.
-mode: subagent
-permission:
-  read: allow
-  edit: allow
-  glob: allow
-  grep: allow
-  webfetch: allow
-  websearch: allow
----
-<SYSTEM.md content>
-```
-
-### Codex
-
-```toml
-name = "self-media-content-expert"
-description = "Modern self-media content strategist and implementation specialist for evidence-backed multi-platform content work."
-sandbox_mode = "workspace-write"
-
-developer_instructions = """
-<SYSTEM.md content>
-"""
-```
+部署细节、平台字段、wrapper 模板与刷新策略见 `DEPLOYMENT.md`。
 
 ## Files
 
@@ -164,6 +85,11 @@ developer_instructions = """
 - `EXAMPLES/input-1.md` / `output-1.md`：小红书图文方案
 - `EXAMPLES/input-2.md` / `output-2.md`：短视频口播与分镜脚本
 - `EXAMPLES/input-3.md` / `output-3.md`：多平台内容改写
+
+说明：
+
+- 当前 `EXAMPLES/output-*.md` 是**期望输出格式示例**，用于展示这个 agent 的
+  目标报告形态，不代表本仓库内已经真实执行过 live verification。
 
 ## Validation Notes
 

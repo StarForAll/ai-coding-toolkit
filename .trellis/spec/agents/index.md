@@ -71,6 +71,14 @@ Must include:
 - **Tool Compatibility**: Which tools this agent is deployed to
 - **Deployment Pointer**: If deployment guidance lives in `DEPLOYMENT.md`, README should point to it clearly
 
+Should avoid:
+- duplicating large platform-field tables already owned by `DEPLOYMENT.md`
+- duplicating wrapper templates already owned by `DEPLOYMENT.md`
+
+If README includes example outputs:
+- mark whether they are real verified run artifacts or illustrative expected-format examples
+- do not let a reader confuse template examples with actual live verification evidence
+
 ### SYSTEM.md (Required)
 
 The core content, must be **tool-agnostic**. Contains:
@@ -102,6 +110,14 @@ Describe abstract permission needs:
 - git commit, git push, git merge
 - rm -rf (bulk deletion)
 ```
+
+### DEPLOYMENT.md (Recommended)
+
+If present, it should own:
+- platform wrapper templates
+- platform-field baselines
+- permission mapping details
+- refresh / re-verification policy for time-sensitive platform docs
 
 ---
 
@@ -230,6 +246,9 @@ Before finalizing a new agent source asset:
 - [ ] If cross-platform deployment is part of the design, `DEPLOYMENT.md` exists or equivalent deployment guidance is clearly documented
 - [ ] Deployment wrappers are either created or explicitly documented as out of scope for this task
 - [ ] Permissions are minimal for each tool
+- [ ] README points to deployment guidance instead of duplicating large wrapper sections
+- [ ] Example outputs clearly state whether they are illustrative or actual run artifacts
+- [ ] DEPLOYMENT.md includes a refresh policy when it cites date-sensitive platform docs
 
 ---
 

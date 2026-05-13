@@ -78,94 +78,7 @@
 - OpenCode 部署目标：`.opencode/agents/software-pricing-estimation-expert.md`
 - Codex 部署目标：`.codex/agents/software-pricing-estimation-expert.toml`
 
-部署细节和字段建议见 `DEPLOYMENT.md`。
-
-## Verified Platform Mapping
-
-以下映射基于 2026-05-13 的官方资料与当前仓库验证结果。
-
-### Claude Code
-
-- 项目级位置：`.claude/agents/`
-- 文件格式：Markdown + YAML frontmatter
-- 当前必需字段：`name`、`description`
-- 常用可选字段：`tools`、`model`、`color`、`permissionMode`
-- 更多 wrapper 细节见 `DEPLOYMENT.md`
-
-### OpenCode
-
-- 项目级位置：`.opencode/agents/`
-- 文件格式：Markdown + frontmatter
-- agent 名来自文件名
-- `description` 必填
-- `mode` 默认为 `all`，适合作为子 agent 时建议显式写 `subagent`
-- 当前推荐权限模型：`permission`
-- 文件修改能力通过 `permission.edit` 控制，不需要单独 `write` 键
-- 旧 `tools` 配置在 `v1.1.1` 起已废弃为兼容层
-
-### Codex
-
-- 项目级位置：`.codex/agents/`
-- 文件格式：TOML
-- 必填字段：`name`、`description`、`developer_instructions`
-- 常用可选字段：`nickname_candidates`、`model`、
-  `model_reasoning_effort`、`sandbox_mode`
-- 进阶可选字段：`mcp_servers`、`skills.config`
-
-## Suggested Deployment Wrappers
-
-以下内容是**适配模板**，用于将该源资产迁移到目标项目时生成对应平台文件；
-不是本仓库当前已经启用的运行副本。
-
-这里展示的是**最小兼容模板**，目的是先说明三端的基础包裹形态。
-像 `model`、`color`、`permissionMode`、`mcpServers` 等可选增强字段，
-请以 `DEPLOYMENT.md` 中的推荐字段与可选字段说明为准。
-
-### Claude Code
-
-```markdown
----
-name: software-pricing-estimation-expert
-description: |
-  Software pricing and estimate specialist for cost modeling, quote framing,
-  pricing strategy, and evidence-backed real-time price verification.
-tools: Read, Write, Edit, Glob, Grep, Bash, WebSearch, WebFetch
----
-<SYSTEM.md content>
-```
-
-### OpenCode
-
-```markdown
----
-description: |
-  Software pricing and estimate specialist for cost modeling, quote framing,
-  pricing strategy, and evidence-backed real-time price verification.
-mode: subagent
-permission:
-  read: allow
-  edit: allow
-  glob: allow
-  grep: allow
-  bash: ask
-  websearch: allow
-  webfetch: allow
----
-<SYSTEM.md content>
-```
-
-### Codex
-
-```toml
-name = "software-pricing-estimation-expert"
-description = "Software pricing and estimate specialist for cost modeling, quote framing, pricing strategy, and evidence-backed real-time price verification."
-sandbox_mode = "workspace-write"
-model_reasoning_effort = "high"
-
-developer_instructions = """
-<SYSTEM.md content>
-"""
-```
+部署细节、平台字段、wrapper 模板与刷新策略见 `DEPLOYMENT.md`。
 
 ## Files
 
@@ -180,6 +93,11 @@ developer_instructions = """
 
 - `EXAMPLES/input-1.md` / `output-1.md`：定制软件项目报价区间与风险拆解
 - `EXAMPLES/input-2.md` / `output-2.md`：AI/SaaS 套餐定价与实时成本核验路径
+
+说明：
+
+- 当前 `EXAMPLES/output-*.md` 是**期望输出格式示例**，用于展示这个 agent 的
+  目标报告形态，不代表本仓库内已经真实执行过 live search。
 
 ## Validation Notes
 

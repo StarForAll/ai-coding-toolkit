@@ -1,5 +1,7 @@
 # Outcome
 
+说明：以下为**期望输出格式示例**，不是本仓库内一次真实 live verification 的运行记录。
+
 输出同一主题的三平台改写方案：小红书图文版、X 线程版、LinkedIn 版。
 
 ## Evidence Status

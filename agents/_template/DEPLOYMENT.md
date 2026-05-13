@@ -2,6 +2,16 @@
 
 Use this file as a checklist when adapting a source agent into platform-specific wrappers.
 
+## Refresh Policy
+
+Add a short section explaining when the platform docs must be re-verified.
+
+Recommended triggers:
+
+- more than 90 days since the last verification
+- the platform updates its agents / subagents / permissions docs
+- the wrapper fails to parse or behaves differently from the current docs
+
 ## Claude Code
 
 - Target path: `.claude/agents/<agent-id>.md`

@@ -1,5 +1,7 @@
 # Output 1
 
+说明：以下为**期望输出格式示例**，不是本仓库内一次真实 live verification 的运行记录。
+
 ## 1. Outcome
 
 给出一个“可先接但要带条件”的 intake 结论，并输出 MVP 范围、澄清问题、

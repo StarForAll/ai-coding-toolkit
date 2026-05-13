@@ -15,6 +15,16 @@
 - 只想阅读 agent 的角色定义
 - 只需要 `SYSTEM.md` 里的提示词主体
 
+## Refresh Policy
+
+以下任一情况出现时，应重新核验本文件中的平台字段面与 wrapper 建议：
+
+1. 距离上次核验超过 90 天
+2. 目标平台发布了 agents / subagents / permissions / custom agents 相关文档更新
+3. 部署时发现字段解析失败、权限字段失效、或推荐模板与 UI/CLI 行为不一致
+4. 目标项目准备启用新的增强字段，例如 `mcpServers`、`memory`、
+   `background`、`isolation`
+
 ## Source Files
 
 适配时以这些文件为源：

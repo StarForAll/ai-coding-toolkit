@@ -15,6 +15,7 @@
 3. 替换所有占位符
 4. 根据角色边界删掉不需要的段落
 5. 再补该 agent 的真实示例
+6. 如果示例不是实际运行产物，明确标注“期望输出格式示例”
 
 ## Not A Real Agent
 
@@ -29,3 +30,9 @@
 - `TOOLS.md`
 - `DEPLOYMENT.md`
 - `EXAMPLES/`
+
+## Authoring Reminder
+
+- `README.md` 只保留用途、输入输出、边界和对 `DEPLOYMENT.md` 的明确指针
+- 平台字段表与 wrapper 模板优先放在 `DEPLOYMENT.md`
+- 示例若不是实际运行结果，必须显式说明

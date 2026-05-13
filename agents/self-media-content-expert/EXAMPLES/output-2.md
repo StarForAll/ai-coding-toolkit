@@ -1,5 +1,7 @@
 # Outcome
 
+说明：以下为**期望输出格式示例**，不是本仓库内一次真实 live verification 的运行记录。
+
 输出一套 60 秒竖屏短视频脚本方案，包含钩子、口播、分镜和 CTA。
 
 ## Evidence Status
