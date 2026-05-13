@@ -302,3 +302,36 @@ Audited trellis-library against stable framework docs, corrected volatile Next.j
 ### Next Steps
 
 - None - task complete
+
+
+## Session 195: Align workflow-capability-audit native CLI evidence contract
+
+**Date**: 2026-05-13
+**Task**: Align workflow-capability-audit native CLI evidence contract
+**Branch**: `main`
+
+### Summary
+
+Aligned workflow-capability-audit native CLI evidence rules across spec, skill, references, runtime report generation, and regression tests; verified with unittest and validate-skills.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4bff10d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
