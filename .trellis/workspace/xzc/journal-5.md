@@ -506,3 +506,36 @@ Added a reusable software pricing estimation source agent under agents/, refined
 ### Next Steps
 
 - None - task complete
+
+
+## Session 201: Trellis 0.5.14 runtime upgrade residue analysis and repair
+
+**Date**: 2026-05-13
+**Task**: Trellis 0.5.14 runtime upgrade residue analysis and repair
+**Branch**: `main`
+
+### Summary
+
+Analyzed live Trellis runtime vs 0.5.14 baseline, restored repo-local Codex/research contracts, kept intended runtime upgrades, fixed finish-work/change-workflow wording drift, and reconciled archive/journal auto-commit behavior with regression coverage.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `28b65e5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
