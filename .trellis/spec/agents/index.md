@@ -141,8 +141,8 @@ source sync path.
 ### Official-doc drift notes (verified 2026-05-13)
 
 - **Claude Code**: project-scoped subagents still live under `.claude/agents/` as Markdown files, but the official docs now expose a broader frontmatter surface than this source-layer spec currently models, including optional fields such as `color`, `permissionMode`, `mcpServers`, `hooks`, `skills`, `memory`, `effort`, `background`, and `isolation`. For source-layer work in this repo, keep `SYSTEM.md` tool-agnostic and treat those as deployment-wrapper concerns unless a task explicitly needs them.
-- **OpenCode**: official docs now prefer the `permission` field over the legacy `tools` boolean/object config. When authoring or updating OpenCode deployment wrappers, use `permission` as the default unless maintaining backward compatibility with an older deployment.
-- **Codex**: official docs confirm the required custom-agent fields are `name`, `description`, and `developer_instructions`; `sandbox_mode`, `model`, `model_reasoning_effort`, `mcp_servers`, and `skills.config` remain optional wrapper-level additions.
+- **OpenCode**: official docs now prefer the `permission` field over the legacy `tools` boolean/object config. When authoring or updating OpenCode deployment wrappers, use `permission` as the default unless maintaining backward compatibility with an older deployment. File creation/modification should be modeled through `permission.edit`; do not teach a separate `permission.write` key as if it were part of the current official surface.
+- **Codex**: official docs confirm the required custom-agent fields are `name`, `description`, and `developer_instructions`; `sandbox_mode`, `model`, `model_reasoning_effort`, `mcp_servers`, and `skills.config` remain optional wrapper-level additions. Do not introduce custom-agent keys that the current official page does not confirm, such as a standalone `web_search = "live"` field.
 
 ### Example: Deploying `research` Agent
 

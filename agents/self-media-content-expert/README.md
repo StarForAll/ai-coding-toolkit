@@ -86,6 +86,7 @@
 - 文件格式：Markdown + YAML frontmatter
 - agent 名来自文件名
 - 推荐字段：`description`、`mode`、`permission`
+- 文件修改能力通过 `permission.edit` 控制，不需要单独 `write` 键
 - 当前官方更推荐 `permission`，旧 `tools` 已废弃为兼容层
 
 ### Codex
@@ -99,6 +100,10 @@
 
 以下内容是**适配模板**，用于将该源资产迁移到目标项目时生成对应平台文件；不是本仓库当前已经启用的运行副本。
 
+这里展示的是**最小兼容模板**，目的是先说明三端的基础包裹形态。
+像 `model`、`color`、`permissionMode`、`mcpServers` 等可选增强字段，
+请以 `DEPLOYMENT.md` 中的推荐字段与可选字段说明为准。
+
 ### Claude Code
 
 ```markdown
@@ -109,7 +114,6 @@ description: |
   topic discovery, audience-fit content design, multi-platform adaptation, and
   evidence-backed real-time content work.
 tools: Read, Write, Edit, Glob, Grep, WebFetch, WebSearch
-model: inherit
 ---
 <SYSTEM.md content>
 ```
@@ -125,7 +129,6 @@ description: |
 mode: subagent
 permission:
   read: allow
-  write: allow
   edit: allow
   glob: allow
   grep: allow

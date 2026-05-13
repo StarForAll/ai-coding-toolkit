@@ -94,7 +94,6 @@ description: |
 mode: subagent
 permission:
   read: allow
-  write: allow
   edit: allow
   glob: allow
   grep: allow
@@ -124,6 +123,7 @@ OpenCode 还支持更多可选字段，例如：
 注意：
 
 - 当前官方更推荐 `permission`，不要为新配置回退到旧 `tools`。
+- 文件写入/修改由 `permission.edit` 覆盖，不需要单独 `write` 键。
 - 如果目标环境依赖 MCP 搜索工具，可在目标项目中追加对应 permission。
 
 ### Codex
@@ -145,14 +145,15 @@ developer_instructions = """
 推荐补充：
 
 - `sandbox_mode = "workspace-write"`
-- `web_search = "live"`
 - `model`
 - `model_reasoning_effort`
 
 注意：
 
 - 如果任务只允许只读分析，可把 `sandbox_mode` 调成 `read-only`，但这会削弱“落文件交付”能力。
-- `web_search = "live"` 更适合这个 agent，因为它经常处理时效性内容。
+- 当前官方 custom-agent 页面没有单独确认 `web_search = "live"` 这类
+  agent 级字段；如果需要联网检索，优先依赖当前会话的 web/tool 能力，或通过
+  当前官方支持的 `mcp_servers` / `skills.config` 等方式补充能力。
 
 ## Permission Mapping
 
@@ -161,12 +162,31 @@ developer_instructions = """
 | Abstract Need | Claude Code | OpenCode | Codex |
 | --- | --- | --- | --- |
 | `read` | `Read` | `permission.read` | default + sandbox |
-| `write` | `Write` | `permission.write` 或 `permission.edit` 体系下放行写操作 | `workspace-write` |
+| `write` | `Write` | `permission.edit` | `workspace-write` |
 | `edit` | `Edit` | `permission.edit` | `workspace-write` |
 | `glob` | `Glob` | `permission.glob` | default tool availability |
 | `grep` | `Grep` | `permission.grep` | default tool availability |
-| `websearch` | `WebSearch` | `permission.websearch` | `web_search = "live"` |
+| `websearch` | `WebSearch` | `permission.websearch` | 依赖当前 Codex web/tool 能力 |
 | `webfetch` | `WebFetch` | `permission.webfetch` | 依赖当前 Codex web tool 能力 |
+
+## Search Tool Availability
+
+这个 agent 同样依赖实时资料核验，部署时要单独检查搜索通道是否真的可用。
+
+建议至少确认：
+
+1. 本地项目内容可被读取与搜索
+2. 平台规则、产品能力、新闻事件等外部资料可被 live search / fetch
+3. 如果目标项目依赖 MCP 搜索栈，Claude Code / Codex wrapper 是否已通过
+   `mcpServers` 或目标项目统一配置接入，OpenCode 是否已通过项目侧能力提供
+
+如果目标项目沿用本仓库的搜索路由习惯，可参考：
+
+- 项目内部搜索：`ace.search_context` 一类语义搜索
+- 文档与库行为：官方文档链路或 `Context7` 一类 docs MCP
+- 最新外部事实：`grok-search`、`exa` 或等价 live web 能力
+
+缺少这些通道时，应预期该 agent 会更多返回 `[Evidence Gap]`。
 
 ## Real-Time Evidence Contract
 
