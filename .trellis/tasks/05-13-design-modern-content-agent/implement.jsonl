@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/agents/index.md", "reason": "Source-layer agent authoring rules and deployment mapping."}
+{"file": ".trellis/spec/docs/index.md", "reason": "Documentation boundary and README writing rules for this repo."}
+{"file": ".trellis/spec/platforms/index.md", "reason": "Platform-specific behavior boundary for this repo."}
+{"file": ".trellis/spec/platforms/codex-workflow-behavior.md", "reason": "Codex inline-mode constraints that affected implementation decisions."}
+{"file": ".trellis/tasks/05-13-design-modern-content-agent/research/platform-agent-compatibility.md", "reason": "Live platform evidence for Claude Code, OpenCode, and Codex agent formats."}

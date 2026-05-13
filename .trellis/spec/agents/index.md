@@ -10,7 +10,7 @@
 
 ## Current State
 
-**Source asset layer** (`agents/<agent-id>/`) is empty — no `SYSTEM.md`, `TOOLS.md`, or `EXAMPLES/` exist.
+**Source asset layer** (`agents/<agent-id>/`) is now partially populated. The repository currently has at least one real source asset (`agents/self-media-content-expert/`), but the source layer is still incomplete and not yet the live synchronization source for all deployed agents.
 
 **Tool deployment directories** (`.claude/agents/`、`.opencode/agents/`、`.codex/agents/`) exist
 and contain live agent definitions, but are **not synchronized** from `agents/<id>/` source.
@@ -55,6 +55,7 @@ agents/
     README.md        # 用途、适用场景、调用方式、示例（必需）
     SYSTEM.md        # 系统提示词：角色、职责、边界、工作流、输出格式（必需）
     TOOLS.md         # 抽象权限需求：read/write/edit/bash/glob/grep（可选）
+    DEPLOYMENT.md    # 目标平台 wrapper 生成与验证说明（推荐）
     EXAMPLES/        # 输入输出示例（可选）
       input-1.md
       output-1.md
@@ -68,6 +69,7 @@ Must include:
 - **Input**: What the agent expects
 - **Output**: What the agent produces
 - **Tool Compatibility**: Which tools this agent is deployed to
+- **Deployment Pointer**: If deployment guidance lives in `DEPLOYMENT.md`, README should point to it clearly
 
 ### SYSTEM.md (Required)
 
@@ -131,10 +133,16 @@ source sync path.
 | **Filename** | `<role>.md` | `<role>.md` | `<role>.toml` |
 | **Agent name** | `name:` in frontmatter | Inferred from filename | `name =` |
 | **Description** | `description:` | `description:` (use `\|` block) | `description =` |
-| **Permissions** | `tools:` list (e.g. `Read, Write, Bash`) | `permission:` block (`read: allow`) | `sandbox_mode =` + developer instructions |
+| **Permissions** | `tools:` list or richer frontmatter capability controls | `permission:` block (`read: allow`) | `sandbox_mode =` + developer instructions |
 | **Model** | `model:` (optional) | Not supported | Not supported |
 | **Mode** | Implicit (subagent) | `mode: subagent` (required) | Implicit |
 | **Body** | SYSTEM.md content | SYSTEM.md content | `developer_instructions` string |
+
+### Official-doc drift notes (verified 2026-05-13)
+
+- **Claude Code**: project-scoped subagents still live under `.claude/agents/` as Markdown files, but the official docs now expose a broader frontmatter surface than this source-layer spec currently models, including optional fields such as `color`, `permissionMode`, `mcpServers`, `hooks`, `skills`, `memory`, `effort`, `background`, and `isolation`. For source-layer work in this repo, keep `SYSTEM.md` tool-agnostic and treat those as deployment-wrapper concerns unless a task explicitly needs them.
+- **OpenCode**: official docs now prefer the `permission` field over the legacy `tools` boolean/object config. When authoring or updating OpenCode deployment wrappers, use `permission` as the default unless maintaining backward compatibility with an older deployment.
+- **Codex**: official docs confirm the required custom-agent fields are `name`, `description`, and `developer_instructions`; `sandbox_mode`, `model`, `model_reasoning_effort`, `mcp_servers`, and `skills.config` remain optional wrapper-level additions.
 
 ### Example: Deploying `research` Agent
 
@@ -204,23 +212,23 @@ developer_instructions = """
 ## Root `agents/` Directory
 
 The `agents/` directory at the project root is the **intended** source asset
-layer for this target architecture. In the current repo state it is still a
-scaffold / documentation-only directory containing only `agents/README.md`;
-live agent definitions remain under tool-specific deployment directories until
+layer for this target architecture. In the current repo state it is no longer
+documentation-only: it now contains source assets such as
+`agents/self-media-content-expert/`. However, live agent definitions still
+primarily remain under tool-specific deployment directories until
 `03-19-implement-agents-source` is completed.
 
 ---
 
 ## Quality Checklist
 
-Before finalizing a new agent:
+Before finalizing a new agent source asset:
 
 - [ ] `agents/<agent-id>/README.md` exists with purpose, triggers, I/O
 - [ ] `agents/<agent-id>/SYSTEM.md` exists and is tool-agnostic
 - [ ] SYSTEM.md has: responsibilities, boundaries, workflow, report format
-- [ ] Deployed to `.claude/agents/` with correct frontmatter
-- [ ] Deployed to `.opencode/agents/` with correct frontmatter
-- [ ] Deployed to `.codex/agents/` with correct metadata
+- [ ] If cross-platform deployment is part of the design, `DEPLOYMENT.md` exists or equivalent deployment guidance is clearly documented
+- [ ] Deployment wrappers are either created or explicitly documented as out of scope for this task
 - [ ] Permissions are minimal for each tool
 
 ---
@@ -235,7 +243,7 @@ Before finalizing a new agent:
 
 ## Platform Drift Status (as of 2026-05-04)
 
-Source layer `agents/` is empty. All three tool deployments are independently maintained. Drift inventory below classifies differences for the source-layer convergence task (`03-19-implement-agents-source`).
+Source layer `agents/` is partially populated, but all three primary tool deployments are still independently maintained. Drift inventory below classifies differences for the source-layer convergence task (`03-19-implement-agents-source`).
 
 ### Drift Classification
 
