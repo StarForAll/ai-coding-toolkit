@@ -1,0 +1,4 @@
+{"file":".trellis/spec/agents/index.md","reason":"Repository-wide agent source asset contract, wrapper field mapping, and current official-doc drift notes for Claude Code / OpenCode / Codex."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"This task touches source assets, repo-level spec, task metadata, and cross-platform deployment guidance."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Need to keep wrapper wording and platform mapping aligned across multiple agent source assets."}
+{"file":".trellis/tasks/05-13-software-contracting-agent/research/platform-agent-compatibility.md","reason":"Latest official platform findings used to author accurate README and DEPLOYMENT guidance."}

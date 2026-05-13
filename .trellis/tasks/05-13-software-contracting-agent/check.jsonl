@@ -1,0 +1,4 @@
+{"file":".trellis/spec/agents/index.md","reason":"Quality check must confirm the new source asset and wrapper guidance stay within the repo's agent authoring contract."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Review needs to catch source/deploy boundary drift and task-metadata drift across repository layers."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Check repeated wrapper conventions and platform wording for avoidable divergence."}
+{"file":".trellis/tasks/05-13-software-contracting-agent/research/platform-agent-compatibility.md","reason":"Review should compare current docs wording against the latest platform compatibility research recorded for this task."}
