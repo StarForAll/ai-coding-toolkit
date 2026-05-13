@@ -21,6 +21,10 @@ agents/
   - 通用“现代自媒体内容设计实现专家”
   - 重点能力：实时趋势核验、内容结构设计、多平台内容改写、交付规范化
   - 适配目标平台：Claude Code / OpenCode / Codex
+- `software-solution-delivery-expert/`
+  - 通用“软件项目接单与交付专家”
+  - 重点能力：需求澄清、MVP 收敛、风险识别、实施与验收路径设计
+  - 适配目标平台：Claude Code / OpenCode / Codex
 
 ## 作者辅助资产
 
