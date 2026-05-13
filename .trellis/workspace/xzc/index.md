@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 195
+- **Total Sessions**: 196
 - **Last Active**: 2026-05-13
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~337 | Active |
+| `journal-5.md` | ~370 | Active |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 196 | 2026-05-13 | 修复 workflow-audit skill 证据合同与防误报规则 | `62786b2` | `main` |
 | 195 | 2026-05-13 | Align workflow-capability-audit native CLI evidence contract | `4bff10d` | `main` |
 | 194 | 2026-05-13 | Refresh trellis-library stable guidance | `fcea8ad` | `main` |
 | 193 | 2026-05-12 | Expand Java manual coverage in trellis-library | `4b7a17e` | `main` |

@@ -335,3 +335,36 @@ Aligned workflow-capability-audit native CLI evidence rules across spec, skill, 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 196: 修复 workflow-audit skill 证据合同与防误报规则
+
+**Date**: 2026-05-13
+**Task**: 修复 workflow-audit skill 证据合同与防误报规则
+**Branch**: `main`
+
+### Summary
+
+补齐 workflow-audit 的原生 CLI 证据三元组、冲突处理、negative-optimization guardrail，并同步 tests/templates/spec。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `62786b2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
