@@ -472,3 +472,37 @@ Added a reusable software pricing estimation source agent under agents/, refined
 ### Next Steps
 
 - None - task complete
+
+
+## Session 200: 新增个人产品市场前景调研 source agent
+
+**Date**: 2026-05-13
+**Task**: 新增个人产品市场前景调研 source agent
+**Branch**: `main`
+
+### Summary
+
+新增 product-market-viability-expert 源资产，补实时证据与部署刷新规则，并收敛 agents 层 README/DEPLOYMENT/示例约定。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8e61144` | (see git log) |
+| `60424f7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
