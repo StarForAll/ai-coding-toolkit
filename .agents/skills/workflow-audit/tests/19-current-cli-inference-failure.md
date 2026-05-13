@@ -19,6 +19,7 @@ CLI-sensitive clarification stop after the relevant audit branch is reached.
 - do not ask for `current_cli` at the initial input-parsing step if the audit can still proceed safely
 - once a CLI-sensitive branch is reached and the runtime still cannot be inferred safely, ask the user to clarify `current_cli`
 - stop and wait for that clarification before continuing the CLI-sensitive branch
+- until the executor identity is clarified, do not fabricate official-doc / repo-local / practical-use adaptation conclusions for a CLI-specific branch
 
 ## Must Not
 

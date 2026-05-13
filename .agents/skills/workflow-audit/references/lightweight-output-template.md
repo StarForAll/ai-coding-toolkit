@@ -44,8 +44,16 @@ This section is for unresolved branches inside a continuing audit result. Hard-s
 - OpenCode: <conclusion / not-applicable + reason>
 - Codex: <conclusion / not-applicable + reason>
 
+When CLI adaptation is examined, each CLI entry should also state:
+- official docs checked
+- repo-local evidence checked
+- practical development-use evidence checked
+- whether those sources agree or where they differ
+
 ## Suggested Fix Directions
 - <direction only, no execution>
+
+Do not propose “cleanup” or “optimization” directions for evidence-backed non-defects. If the strongest conclusion is that the current behavior is acceptable, state that directly.
 
 ## Recommended Next Step
 - Recommended action: <trellis-brainstorm | start | check | update-spec | plain-language action>

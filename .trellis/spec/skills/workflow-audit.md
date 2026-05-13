@@ -80,6 +80,11 @@ This skill **must** fully validate the following aspects for any workflow under 
    - All workflow commands/skills/agents are correctly mapped to the CLI's native location
    - No CLI-specific behavior drifts exist for the same semantic action
    - Missing or incomplete adaptations are flagged as `present-but-incompatible` or `missing-but-valuable`
+   - Native-adaptation conclusions must combine:
+     - the latest official CLI documentation available at audit time
+     - repo-local validated evidence from this workflow authoring repository
+     - actual development-use evidence: the real maintainer/operator path, runtime gating behavior, and which carriers are primary vs conditional in day-to-day use
+   - The audit must not judge native adaptation from memory alone, or from carrier-file presence/absence alone
 
 3. **Post-install artifact verification** - The audit must compare documented installation artifacts against actual files created in the target project, separating the clean `trellis init` baseline from the workflow-installed state after `install-workflow.py`, including:
    - Hidden directories (`.trellis/`, `.claude/`, `.opencode/`, `.agents/`, `.codex/`)
@@ -102,6 +107,12 @@ This skill **must** fully validate the following aspects for any workflow under 
    - Any of the above checks cannot be conclusively resolved via static analysis
    - The workflow documentation or scripts contain conditional logic based on the environment
    - The user explicitly requests `/tmp` validation or Codex handoff testing
+
+6. **Change-worthiness and negative-optimization guardrail** - The audit must separate real defects from non-defect differences:
+   - Do not classify a path as change-worthy merely because another arrangement seems cleaner or more uniform
+   - Do not recommend optimization when the current state is evidence-backed, intentionally scoped, and does not break behavior, closure, or maintainability
+   - If the latest official docs, repo-local evidence, and actual development-use evidence all support the current state, record the item as a false alarm / non-defect rather than manufacturing a fix
+   - When a candidate issue turns out to be non-defective, ignore it rather than turning it into a low-value optimization target
 
 Each confirmed issue in the audit report must include, in addition to the schema defined in "Confirmed-Issue Schema", a validation action that describes how the issue was detected (e.g., "Compared script signature against documentation; exit code 0 but missing required JSON output").
 
@@ -225,6 +236,8 @@ Per-CLI adaptation conclusions follow this scope rule:
 
 - the section is in scope when the audit examines CLI-specific carrier mapping, adaptation drift, CLI-specific installed artifacts, or the Codex handoff boundary
 - lightweight output should still keep the section even when CLI adaptation is not in scope; in that case, mark each CLI entry as `not-applicable` with a brief reason instead of omitting the section
+- if a CLI entry is `not-applicable`, a brief reason is sufficient; do not force the detailed evidence trio fields for that CLI
+- when official docs, repo-local evidence, and practical development-use evidence disagree, record the disagreement explicitly instead of silently choosing one source as the winner
 
 ### Step 0: Version preflight
 
@@ -262,12 +275,14 @@ Before auditing the workflow, understand the system it operates within:
 - `.trellis/` is the runtime truth layer for workflow, task, and session state
 - active-task resolution is session-scoped under `.trellis/.runtime/sessions/`, not a repo-global `.trellis/.current-task`
 - hidden platform directories (`.claude/`, `.opencode/`, `.codex/`, `.agents/`) are carrier layers with platform-specific loading models, not equal authorities to `.trellis/`
+- when CLI-native adaptation is in scope, the latest official docs for Claude Code / OpenCode / Codex are part of the authoritative mechanics set, not optional background reading
 - trellis `init` baseline carrier set: `.trellis/`, `.claude/`, `.opencode/`, `.agents/skills/`, `.codex/`
 - `.agents/skills/` 双角色：在当前 source repo 中是 shared deployment layer，在 workflow-installed target project 中是 shared workflow skill carrier；presence alone is not a defect
 - OpenCode carrier model: plugin-driven context loading plus native command/agent carriers; adaptation checks must account for both halves
 - Codex carrier model: `.codex/config.toml` / `.codex/hooks.json` are primary carrier/config surfaces; `.codex/skills/` is a conditional secondary carrier, not a default baseline artifact
 - Codex hook execution is runtime-gated by local enablement or approval, so installed carrier shape and live activation are separate audit questions
 - 各 CLI 的原生承载方式（commands / skills / agents / hooks 的目录约定）
+- 各 CLI 在实际开发使用中的主路径、条件路径、运行时 gating，以及“目录存在”与“真实可用”之间的区别
 - workflow 自身的 install / upgrade / uninstall 脚本实际行为
 - 工作流嵌入执行规范中的状态机与前置条件
 - current repo root, active task directory, and temporary target-project root are context inputs, not substitute audit targets
@@ -283,6 +298,10 @@ Read authoritative entry documents and indexes first, then trace references outw
 - note every referenced file path, script, template
 - identify every cross-reference dependency
 - cross-check referenced paths against actual filesystem
+- for scripts that gate later workflow behavior, verify the documented exit-code and output-shape contract from static evidence first
+- when per-CLI adaptation is being judged, fetch and compare the latest official docs for Claude Code / OpenCode / Codex against repo-local evidence before concluding compatibility
+- capture practical-use evidence for each CLI when needed: which path maintainers actually rely on, which carrier is primary, which carrier is conditional, and which runtime gate decides live behavior
+- practical development-use evidence should prefer inspectable artifacts when possible: the CLI boundary matrix, platform READMEs, live carrier/config files, runtime gate definitions, and if Step D runs, command transcripts or runtime observations
 
 ### C. Structured Gap Analysis
 
@@ -292,8 +311,14 @@ Compare document claims against actual definition completeness:
 - 流程层面"有"但执行闭环层面"没做完"的内容 → 记录为 incomplete closure
 - 跨文档引用的一致性：是否引用了不存在的文件、旧路径、或已过时的路径名
 - 各 CLI 适配层之间是否存在行为漂移（同一语义在不同 CLI 下实现不一致）
+- CLI 适配缺口必须归类为 `present-but-incompatible` 或 `missing-but-valuable`
 - `.agents/skills/` presence alone is not a defect; only contradictory managed-surface behavior or misleading duplicate exposure counts as a workflow issue
 - `.codex/skills/` 缺失默认不算 defect，除非当前 managed-surface contract 明确要求这个 secondary carrier
+- 结合“最新官方文档 + repo-local 证据 + 实际开发使用视角”判断每个 CLI 的原生适配结论；禁止只凭记忆或静态目录存在性下结论
+- 当三源证据冲突时：runtime observation 只决定“当前实际观察到的行为”；repo-local evidence 决定“当前 workflow 的声明/实现”；官方文档决定“当前上游文档契约”
+- 若三源冲突仍不能证明真实缺陷，则保守落到 `Evidence Gap` / `Needs Clarification`，而不是直接生成 confirmed issue；若冲突更像上游 CLI capability drift，则提示转到 `workflow-capability-audit`
+- 对“看起来可以更统一/更干净”的点，先判断是否真是缺陷；不是缺陷的就忽略，不得做负面优化
+- 明确的人类/维护者意图可以作为解释差异为何存在的上下文，但意图本身不会自动把 non-defect 变成 defect；除非用户明确要求设计变更，否则不要把这类差异升级成 confirmed issue 或默认修复方向
 - 隐藏目录托管边界：安装后产物是否与 trellis 基线 + workflow 声明的托管范围一致
 - `generated target project` 证据必须区分 clean `trellis init` baseline 与 workflow-installed state；不得把 baseline 自带产物直接归因给 workflow
 - 不得把 repo-local 的其他平台隐藏目录直接当作当前 workflow 缺失适配的证据；除非 `workflow_assets.py` 明确把它们纳入 managed surface
@@ -480,6 +505,11 @@ Rules:
 - treat the same file as the current finalized report at the stop-and-confirm boundary
 - require it only for task-based audits
 - when evidence is tagged as `generated target project`, record whether it came from the clean `trellis init` baseline or the workflow-installed state after `install-workflow.py`
+- when per-CLI adaptation is judged, record for each CLI:
+  - the official-doc source checked
+  - the repo-local evidence checked
+  - the practical development-use evidence checked
+  - whether these sources agree or where they differ
 
 ### Confirmed-Issue Schema
 
@@ -492,6 +522,8 @@ Every confirmed issue must include:
 - validation action
 - impact scope
 - fix direction
+
+The audit must not emit a confirmed issue or fix direction for a non-defect “optimization” idea unless evidence shows real behavioral, closure, or maintainability harm. Evidence-backed non-defects belong in `Unconfirmed Items / False Alarms`, not in `Confirmed Issues`.
 
 #### Priority Rubric
 
@@ -608,6 +640,12 @@ Every post-audit recommendation must include:
 - a brief reason
 - why stronger alternatives were not selected
 
+Suggested fix directions and post-audit recommendations must obey the change-worthiness guardrail:
+
+- do not propose “cleanup” or “optimization” work for evidence-backed non-defects
+- do not recommend changes that would remove a currently valid primary/conditional carrier split merely to force cosmetic cross-CLI symmetry
+- if the strongest evidence-backed conclusion is “current behavior is acceptable,” say so directly and stop
+
 The skill must stop after presenting the report and routing guidance. It must not auto-execute the next phase.
 
 ---
@@ -644,6 +682,9 @@ Required persisted scenario files:
 - `tests/26-ambiguous-natural-language-target.md`
 - `tests/27-baseline-installed-no-diff.md`
 - `tests/28-trellis-init-partial-baseline-failure.md`
+- `tests/29-native-cli-doc-and-practical-evidence.md`
+- `tests/30-non-defect-no-negative-optimization.md`
+- `tests/31-todo-reminder-non-defect.md`
 
 Each test file must use the same internal structure:
 
@@ -724,6 +765,9 @@ When a behavior change could affect the task-based audit path's dependence on `t
 - `.agents/skills/workflow-audit/tests/26-ambiguous-natural-language-target.md`
 - `.agents/skills/workflow-audit/tests/27-baseline-installed-no-diff.md`
 - `.agents/skills/workflow-audit/tests/28-trellis-init-partial-baseline-failure.md`
+- `.agents/skills/workflow-audit/tests/29-native-cli-doc-and-practical-evidence.md`
+- `.agents/skills/workflow-audit/tests/30-non-defect-no-negative-optimization.md`
+- `.agents/skills/workflow-audit/tests/31-todo-reminder-non-defect.md`
 - `.claude/skills/workflow-audit/references/input-template.md`
 - `.claude/skills/workflow-audit/references/audit-report-template.md`
 - `.claude/skills/workflow-audit/references/lightweight-output-template.md`
@@ -757,6 +801,9 @@ When a behavior change could affect the task-based audit path's dependence on `t
 - `.claude/skills/workflow-audit/tests/26-ambiguous-natural-language-target.md`
 - `.claude/skills/workflow-audit/tests/27-baseline-installed-no-diff.md`
 - `.claude/skills/workflow-audit/tests/28-trellis-init-partial-baseline-failure.md`
+- `.claude/skills/workflow-audit/tests/29-native-cli-doc-and-practical-evidence.md`
+- `.claude/skills/workflow-audit/tests/30-non-defect-no-negative-optimization.md`
+- `.claude/skills/workflow-audit/tests/31-todo-reminder-non-defect.md`
 - `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
 - `.agents/skills/workflow-capability-audit/SKILL.md`
 - `.claude/skills/workflow-capability-audit/SKILL.md`

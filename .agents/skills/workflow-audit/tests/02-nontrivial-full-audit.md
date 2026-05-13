@@ -28,10 +28,12 @@ Task-based runtime mode.
 - treat files immediately after `trellis init` as clean baseline evidence, then compare post-install state against that baseline before attributing artifacts to the workflow
 - compare documented install artifacts against actual files, including hidden directories under `.trellis/`, `.claude/`, `.opencode/`, `.agents/`, and `.codex/`
 - when evaluating shared carriers, treat `.agents/skills/` presence alone as non-defective and `.codex/skills/` as a conditional secondary carrier rather than a default required artifact
+- when judging Claude Code / OpenCode / Codex native adaptation, combine the latest official CLI docs, repo-local evidence, and practical development-use evidence rather than relying on memory or directory presence alone
 - when formal install is executed in a valid non-Codex path, require post-install `upgrade-compat.py --check`
 - classify CLI adaptation gaps in step E as `present-but-incompatible` or `missing-but-valuable` when applicable
 - stop with a controlled next-step recommendation instead of auto-executing follow-up work
 - candidate_issues, if supplied, are referenced within each step without changing the execution path
+- avoid manufacturing optimization work for evidence-backed non-defects
 
 ## Must Not
 
@@ -47,3 +49,4 @@ Task-based runtime mode.
 - must not use vague unlabeled CLI-gap wording when one of the required adaptation labels applies
 - must not treat candidate_issues as a path-switching condition
 - must not auto-advance into remediation after the audit stop point
+- must not convert a non-defective carrier difference into a cleanup recommendation just because it looks less uniform

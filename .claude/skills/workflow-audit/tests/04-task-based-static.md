@@ -34,11 +34,14 @@ Task-based static mode (task + trellis-brainstorm + `prd.md` + `audit-report.md`
 - enter the `trellis-brainstorm` mainline as the control container
 - maintain `prd.md` through the `trellis-brainstorm` path
 - initialize `audit-report.md`, seeding it with Step A/B/C evidence tagged with source layers
+- if task-based static mode still evaluates CLI adaptation, the resulting `audit-report.md` must record official-doc evidence, repo-local evidence, and practical development-use evidence for each in-scope CLI
+- if any CLI is out of scope in that report, `not-applicable` plus a brief reason is sufficient; the detailed evidence trio is not required for that CLI
 - if any `generated target project` evidence is already present in that seeded report, distinguish its `Stage` as clean baseline vs workflow-installed state
 - skip Step D entirely — do NOT create `/tmp` project, do NOT run `trellis init`, do NOT execute embed chain
 - if A/B/C findings were to indicate Step D is necessary, follow the escalation rule: output Needs Confirmation block and wait for user, do NOT auto-execute D
 - output findings in Step E via `audit-report.md`
 - stop with a controlled next-step recommendation
+- do not manufacture optimization work for evidence-backed non-defects in the static report
 
 ## Must Not
 
@@ -52,3 +55,4 @@ Task-based static mode (task + trellis-brainstorm + `prd.md` + `audit-report.md`
 - must not silently drop the task or trellis-brainstorm context
 - must not output using the lightweight template
 - must not auto-execute Step D even if A/B/C findings indicate it is needed
+- must not treat a non-defective carrier difference as a default cleanup target in task-based static mode

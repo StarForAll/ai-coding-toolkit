@@ -23,6 +23,7 @@ Any audit mode that reaches a confirmed issue.
   - `validation action`
   - `impact scope`
   - `fix direction`
+- when the reported item is supported by official docs, repo-local evidence, and practical development-use evidence, keep it out of `Confirmed Issues` and treat it as a non-defect / false alarm instead
 - the `evidence source` field keeps the required source-layer tagging
 - when the `evidence source` layer is `generated target project`, it also records `Stage` as baseline vs workflow-installed state
 
@@ -32,3 +33,4 @@ Any audit mode that reaches a confirmed issue.
 - must not omit `validation action` from a confirmed issue
 - must not omit source-layer tagging inside the `evidence source` field
 - must not omit `Stage` when using `generated target project` evidence
+- must not emit a confirmed issue just to justify a cosmetic or negative optimization

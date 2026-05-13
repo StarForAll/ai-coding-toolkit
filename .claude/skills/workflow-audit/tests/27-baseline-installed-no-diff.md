@@ -27,6 +27,9 @@ Task-based runtime mode.
 - if a reviewed path is materially unchanged between baseline and post-install
   state, classify it as baseline/non-workflow evidence rather than a confirmed
   issue or workflow-managed delta
+- if official docs, repo-local evidence, and practical development-use evidence
+  all support the current shape, keep the path as a non-defect rather than an
+  optimization target
 - preserve the distinction between baseline evidence, workflow-installed
   evidence, and runtime command output in the report
 
@@ -37,3 +40,5 @@ Task-based runtime mode.
 - must not escalate a no-diff path into a confirmed issue without contradictory
   evidence
 - must not collapse baseline and workflow-installed state into a single bucket
+- must not turn a no-diff baseline path into a cleanup recommendation just for
+  cross-CLI symmetry

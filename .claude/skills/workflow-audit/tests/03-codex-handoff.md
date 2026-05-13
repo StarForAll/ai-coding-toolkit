@@ -26,6 +26,7 @@ Task-based runtime mode, with Codex handoff triggered before the formal embed ex
 - include `detect-embed-state.py`, `install-workflow.py --dry-run`, formal install with `WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1`, and post-install `upgrade-compat.py --check`
 - explicitly require the return of state-detection output, installer output, post-install verification, and anomalies
 - require returned handoff evidence to be merged back into `audit-report.md` before any final audit conclusion
+- if CLI adaptation conclusions are already in scope before the handoff point, preserve the evidence-trio reporting requirement for in-scope CLIs and avoid manufacturing cleanup directions for evidence-backed non-defects
 
 ## Must Not
 
@@ -33,3 +34,4 @@ Task-based runtime mode, with Codex handoff triggered before the formal embed ex
 - must not allow Codex to continue leading the first formal embed execution
 - must not output only “switch to another CLI” without concrete handoff commands
 - must not treat handoff as if validation were already completed
+- must not treat the handoff boundary itself as proof of a CLI adaptation defect

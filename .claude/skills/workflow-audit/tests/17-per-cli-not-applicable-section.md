@@ -21,9 +21,11 @@ Lightweight static mode.
 - keep the comparison-model instructions and Gap Analysis formatting readable even when per-CLI adaptation is out of scope
 - mark Claude Code, OpenCode, and Codex as `not-applicable` when CLI adaptation was not examined
 - include a brief reason for each `not-applicable` entry
+- do not require the detailed official-doc / repo-local / practical-use evidence trio fields for a CLI that is explicitly `not-applicable`
 
 ## Must Not
 
 - must not omit the per-CLI section entirely
 - must not leave `not-applicable` entries unexplained
 - must not fabricate CLI-specific conclusions when CLI adaptation was out of scope
+- must not force empty evidence-trio placeholders into a `not-applicable` CLI entry

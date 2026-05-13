@@ -55,16 +55,28 @@ This section is for unresolved branches inside a continuing audit result. Hard-s
 Use `not-applicable` with a brief reason when CLI adaptation was not examined for a given CLI in this audit.
 
 ### Claude Code
+- Official docs checked:
+- Repo-local evidence checked:
+- Practical development-use evidence checked:
+- Agreement / discrepancy:
 - Expected carrier model:
 - Does the current implementation match:
 - If not, what is wrong:
 
 ### OpenCode
+- Official docs checked:
+- Repo-local evidence checked:
+- Practical development-use evidence checked:
+- Agreement / discrepancy:
 - Expected carrier model:
 - Does the current implementation match:
 - If not, what is wrong:
 
 ### Codex
+- Official docs checked:
+- Repo-local evidence checked:
+- Practical development-use evidence checked:
+- Agreement / discrepancy:
 - Expected carrier model:
 - Does the current implementation match:
 - If not, what is wrong:
@@ -72,6 +84,8 @@ Use `not-applicable` with a brief reason when CLI adaptation was not examined fo
 ## Suggested Fix Directions
 - <direction 1>
 - <direction 2>
+
+Do not add “cleanup” or “optimization” directions for evidence-backed non-defects. If the strongest conclusion is that the current behavior is acceptable, say so and stop.
 
 ## Propagation Scope and Synchronized Update Range
 - <affected file layers / doc layers / script layers / test layers>
