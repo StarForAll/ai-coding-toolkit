@@ -368,3 +368,37 @@ Aligned workflow-capability-audit native CLI evidence rules across spec, skill, 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 197: Design self-media content expert source agent
+
+**Date**: 2026-05-13
+**Task**: Design self-media content expert source agent
+**Branch**: `main`
+
+### Summary
+
+Designed a cross-platform self-media content expert source agent, added deployment guidance/templates, expanded examples, and aligned agent source-layer specs with current repo state.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `71fc648` | (see git log) |
+| `0016f42` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
