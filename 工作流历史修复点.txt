@@ -51,3 +51,10 @@ git remote set-url --add --push origin git@gitee.com:xxx/yyy.git
 24. 目标项目必须包含性能优化子任务
 
 25. 使用原生 trellis agents
+
+26. 工作流顺序执行[in-line],不使用 agents
+
+27. 非技术性面向人查看的文档需要使用 humanizer-zh skill 优化
+
+28. trellis 原生 continue 命令 和当前工作流嵌入之后使用不冲突,是兼容的
+目标项目嵌入工作流之后,对应的AGENTS.md和实际的工作流不冲突兼容的;
