@@ -671,3 +671,37 @@ Updated workflow-audit to support explicit patch-only stable mismatch bypasses, 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 206: workflow-audit main-session handoff boundary tightening
+
+**Date**: 2026-05-14
+**Task**: workflow-audit main-session handoff boundary tightening
+**Branch**: `main`
+
+### Summary
+
+Tightened workflow-audit so Codex handoff and maintainer execution stay on main interactive sessions, synchronized spec/skill surfaces and tests, and aligned workflow source docs.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d8bcd58` | (see git log) |
+| `27bc4b1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
