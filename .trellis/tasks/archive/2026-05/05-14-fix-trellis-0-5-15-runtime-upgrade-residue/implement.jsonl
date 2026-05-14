@@ -1,0 +1,6 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/platforms/index.md", "reason": "Platform integration boundary for runtime carrier changes"}
+{"file": ".trellis/spec/platforms/codex-workflow-behavior.md", "reason": "Codex inline contract must remain intact"}
+{"file": ".trellis/spec/scripts/index.md", "reason": "Runtime Python script change conventions"}
+{"file": ".trellis/spec/docs/index.md", "reason": "Docs boundary for repo-local maintenance docs"}
+{"file": ".trellis/tasks/05-14-fix-trellis-0-5-15-runtime-upgrade-residue/research/runtime-upgrade-decision.md", "reason": "Audit decision source for runtime upgrade residue handling"}
