@@ -806,3 +806,36 @@ Processed 15 .new files from trellis 0.5.15 upgrade: discarded 8 (local customiz
 ### Next Steps
 
 - None - task complete
+
+
+## Session 210: 修复 Trellis AGENTS 与 workflow 文档漂移
+
+**Date**: 2026-05-14
+**Task**: 修复 Trellis AGENTS 与 workflow 文档漂移
+**Branch**: `main`
+
+### Summary
+
+修复 AGENTS.md 与 .trellis/workflow.md 的文档漂移；补 stale breadcrumb 模板与跨平台 stale 映射；新增 workflow breadcrumb 合同回归测试并验证通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `db799c1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
