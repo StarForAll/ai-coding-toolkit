@@ -312,12 +312,15 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py init "$TASK_DIR" --stage
 要求：
 
 - `customer-facing-prd.md` 负责客户可读的产品信息、功能需求、范围与验收口径
+- `customer-facing-prd.md` 这类给用户看的非技术文档，初稿完成后默认执行一次 `humanizer-zh` 做文字优化
+- 若用户明确要求其他文件也做人性化处理，即使它不在默认范围内，也按同口径执行 `humanizer-zh`
+- `docs/requirements/developer-facing-prd.md` 不在本条默认范围内
 - `L0` 若直接进入 `continue` / `implementation`，可继续不强制生成 `customer-facing-prd.md`，但**仍必须**先在 `task_dir/prd.md` 中补齐项目级粗估
 - `task_dir/prd.md` 继续保留为阶段内工作底稿，但不能替代项目级正式需求文档
 - 若暂时无法给出单点值，也必须给出**区间估算**与适用前提；”后面再说””先不估”都不算通过
 - 由 `workflow-state.py validate` 强制检查项目级粗估门禁。
 - 若下一步准备进入 `design`，则必须先明确：`design -> 3.7 技术架构确认后的项目 Spec 对齐` 阶段会纳入项目自动化检查矩阵；采用 Sonar 的项目必须写真实命令，未采用时必须写替代门禁和原因
-- 后续若命中 [需求变更管理执行卡](../需求变更管理执行卡.md) 且变更获批，必须同步更新受影响的项目级正式文档
+- 后续若命中 [需求变更管理执行卡](../需求变更管理执行卡.md) 且用户接受并入当前轮次，必须同步更新受影响的项目级正式文档
 - `prd.md` 在离开本阶段前应补一段 `## 阶段出口快照`，至少写清：
   - `complexity_decision`
   - `ui_lane_decision`

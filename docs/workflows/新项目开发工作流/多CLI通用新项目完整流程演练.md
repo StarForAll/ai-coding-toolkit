@@ -578,7 +578,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - `project-audit` 新发现的高风险问题留在当前阶段内处理，不回挂具体任务
 - 默认先由当前 CLI 完成发现与方案讨论
 - 只有当问题本身高不确定、强争议、跨模块因果难判断，或用户显式要求时，才在分析/方案阶段提前引入 `multi-cli-review`
-- 若在 `project-audit` 内部使用多 CLI 审查，默认 2 个 reviewer，最多 4 个；建议优先在 3 轮内收敛，超过建议轮次需用户明确要求继续
+- 若在 `project-audit` 内部使用多 CLI 审查，固定按 full 口径处理：默认 2 个 reviewer，最多 4 个；建议优先在 3 轮内收敛，超过建议轮次需用户明确要求继续
 - 若进入补充审查：`multi-cli-review` 只负责 reviewer 证据报告；`multi-cli-review-action` 负责汇总、确认后只执行低回归修复，并重新验证
 - 这些多 CLI 能力属于 `project-audit` 内部手段，不等于进入任务级 `review-gate`
 

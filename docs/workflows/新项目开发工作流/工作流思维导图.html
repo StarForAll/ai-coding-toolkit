@@ -111,16 +111,16 @@ const tree = [
       { html:'§7 交付与沉淀', cls:'L1 c7', id:'p7', sub:'<span class="cmd">/trellis:finish-work</span>', children:[
         { html:'7.1 文档更新',   cls:'L2', det:'客户版: 不含AI<br>开发版: 含AI', id:'p7_1' },
         { html:'7.2 项目交付',   cls:'L2', det:'客户/开发交付物<br>acceptance/deliverables/transfer-checklist<br>双轨交付门禁<br>尾款后最终移交', id:'p7_2' },
-        { html:'7.3 经验沉淀',   cls:'L2', det:'AI经验沉淀<br>learn/ 目录<br>AI起草→人工确认→回流', id:'p7_3' },
+        { html:'7.3 项目复盘与流程问题说明',   cls:'L2', det:'项目复盘<br>手动说明缺陷与待优化点', id:'p7_3' },
         { html:'7.4 会话记录',   cls:'L2', det:'record-session<br>先记录再archive<br>元数据闭环校验', id:'p7_4' },
         { html:'/trellis:finish-work', cls:'L3', id:'p7_c', cp:'.claude/commands/trellis/finish-work.md', cd:'会话记录 · 最终结尾入口' },
-        { html:'learn/',          cls:'L3', id:'p7_d', cp:'docs/workflows/.../learn/', cd:'经验反馈沉淀目录' },
+        { html:'人工记录',        cls:'L3', id:'p7_d', cd:'非默认主链；按需手动说明 workflow 问题' },
       ]},
       // ── Left-side branch flows (expand leftward) ──
       { html:'冻结后需求变更', cls:'BR', id:'br_change', bdesc:'§3→§7 任一阶段出现<br>新增/修改/删除需求', btrig:'→ §2.5 需求变更管理<br>→ 回到受影响最早阶段', side:'left', children:[
         { html:'纯澄清', cls:'L2', det:'不改变范围/接口契约<br>验收标准/成本/工期<br>→ 留在当前阶段', id:'br_ch_1' },
-        { html:'新增/修改/删除', cls:'L2', det:'评估影响→确认<br>→ 回写双PRD<br>→ 回到最早受影响阶段', id:'br_ch_2' },
-        { html:'变更未获批', cls:'L2', det:'维持冻结基线<br>不混入当前交付', id:'br_ch_3' },
+        { html:'新增/修改/删除', cls:'L2', det:'评估影响/收费→确认<br>接受后并入当前轮次<br>→ 回写双PRD', id:'br_ch_2' },
+        { html:'用户不接受', cls:'L2', det:'维持冻结基线<br>不混入当前交付<br>按当前轮次忽略', id:'br_ch_3' },
       ]},
       { html:'回退修改流', cls:'BR', id:'br_fallback', bdesc:'质量检查/审查/交付<br>发现偏差', btrig:'check → start 修复<br>review-gate → start 修复<br>delivery → start 修复', side:'left', children:[
         { html:'check 有偏差', cls:'L2', det:'§5.1.x 质量检查未通过<br>→ 回到 start 修复', id:'br_fb_1' },

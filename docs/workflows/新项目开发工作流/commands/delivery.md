@@ -1,6 +1,6 @@
 ---
 name: delivery
-description: 开发完成？准备交付 — 验收测试、交付物生成、变更日志、经验沉淀。触发词：准备交付、跑验收、整理交付物、项目收尾、上线、发布、部署
+description: 开发完成？准备交付 — 验收测试、交付物生成、变更日志、项目复盘。触发词：准备交付、跑验收、整理交付物、项目收尾、上线、发布、部署
 ---
 
 # /trellis:delivery — 项目测试、交付与沉淀
@@ -143,6 +143,19 @@ python3 <WORKFLOW_DIR>/commands/shell/source-watermark-guard.py --task-dir <task
 客户交付物：代码 + PRD + 用户手册 + 运维文档
 开发交付物：代码 + 技术文档 + 评估集
 
+面向用户或非技术读者的文档，默认增加一条文字收口要求：
+
+- 对目标项目 `docs/` 目录下的**非技术性文档**，初稿完成后默认执行一次 `humanizer-zh`
+- 正式交付前，再执行一次 `humanizer-zh`
+- 项目整体完成后，对仍需交给人阅读的非技术性文档再复核一次
+- 若用户明确要求某个额外文件做人性化处理，即使它不在默认范围内，也应执行 `humanizer-zh`
+
+默认不强制纳入 `humanizer-zh` 的文件：
+
+- `docs/requirements/developer-facing-prd.md`
+- `delivery/transfer-checklist.md`
+- `delivery/retrospective.md`
+
 最小交付文档契约：
 
 - `delivery/acceptance.md`
@@ -161,7 +174,7 @@ python3 <WORKFLOW_DIR>/commands/shell/source-watermark-guard.py --task-dir <task
   - 触发条件 / 付款 / 权限 / 证明材料是否齐备
   - `milestone_payment_schedule` / `non_payment_remedy_path` / `dispute_escalation_path` 是否与 `assessment.md`、`task_plan.md` 对齐
 - `delivery/retrospective.md`
-  - 本轮验收、返工、摩擦点、可回流 learn 的结论
+  - 本轮验收、返工、摩擦点，以及需要人工说明的缺陷或待优化点
 
 <!-- if:outsourcing -->
 ### Step 6: 交付事件 checklist（如适用）
@@ -207,67 +220,26 @@ python3 <WORKFLOW_DIR>/commands/shell/source-watermark-guard.py --task-dir <task
 
 **调用 Skill**：`requesting-code-review` — 完成提交前审查清单。降级：手动列出审查范围、验证证据和剩余风险。
 
-### Step 9: 经验沉淀
+### Step 9: 项目复盘
 
-本步骤包含两件事，**先分清再动手**：
+本步骤只保留当前项目的复盘与人工说明，不再要求单独的 workflow 缺陷反馈机制闭环。
 
-| 产出物 | 面向 | 写什么 | 在哪 |
-|-------|------|--------|------|
-| `retrospective.md` | 当前项目 | 功能验收结果、Bug 清单、效率指标、改进建议 | `$TASK_DIR/delivery/retrospective.md` |
-| `learn/*.md` | 工作流本身 | 流程踩坑、命令歧义、阶段路由错误、可复用经验 | `docs/workflows/新项目开发工作流/learn/` |
+`retrospective.md` 重点记录：
 
-简单判断：如果问题是"这个功能没做好"，写 `retrospective.md`；如果问题是"这个流程/命令/文档本身有坑"，写 `learn/`。两者可以同时写，但不要混在一起。
+- 功能验收结果
+- 返工与摩擦点
+- 哪些地方仍需要人工补充说明
 
----
+若本次真实执行暴露出**workflow 本身**的缺陷或待优化点，人工手动说明即可；当前 workflow 不再要求：
 
-**项目复盘**（→ `retrospective.md`）：效率指标 + Bug 知识沉淀 + 改进项
+- AI 先在 `tmp/` 目录起草 `workflow-feedback-*.md`
+- 再移动到 `learn/`
+- 再按固定交接闭环回流
 
-不要写成周报或制度材料，按真实开发过程复盘就够。优先记这些实际会拖慢你的点：
+换句话说：
 
-- 哪一步让你来回切换上下文
-- 哪个命令说明看完还是容易误解
-- 哪个门禁缺了，导致你返工或漏检
-- 哪次人工介入其实暴露的是流程问题，不只是当前任务问题
-
-#### Step 9a: 检查 tmp/ 中的待处理反馈文件
-
-在正式复盘前，先检查 `tmp/` 目录下是否有 AI 起草但尚未处理的反馈文件：
-
-```bash
-ls tmp/workflow-feedback-*.md 2>/dev/null
-```
-
-如果存在未处理的反馈文件：
-
-1. 逐一展示给用户，确认是否保留
-2. 确认保留的，移动到 `docs/workflows/新项目开发工作流/learn/` 目录
-3. 确认不需要的，直接删除
-4. 移动完成后，删除 `tmp/` 中的原文件
-
-> 这一步确保开发过程中 AI 起草的流程反馈不会遗漏。
-
-#### Step 9b: 项目复盘
-
-若在本次真实执行中发现了**流程问题、命令歧义、阶段路由错误、记录闭环缺口、人工介入触发原因、可复用提示词模式或明显反模式**，不要只停留在 `retrospective.md`。
-
-请额外在以下目录沉淀一份经验反馈记录：
-
-```text
-docs/workflows/新项目开发工作流/learn/
-```
-
-记录方式：
-
-- 新建 `YYYY-MM-DD-主题短名.md`
-- 按 `learn/TEMPLATE.md` 填写（快速捕获或完整记录均可）
-- 明确标注"是否值得学习优化"
-- 若结论涉及修改工作流规则、命令门禁或阶段默认路径，必须等待人工确认后再回流修改
-
-建议写法：
-
-- 先写"哪里卡住了、你当时怎么判断错了、后来怎么发现的"
-- 再写"这个坑是一次性失误，还是工作流本身容易让人踩"
-- 最后再决定要不要升级成工作流优化候选
+- 项目问题，继续写在 `retrospective.md`
+- workflow 问题，人工手动说明缺陷和待优化点即可
 
 ### Step 10: 收尾记录校验
 

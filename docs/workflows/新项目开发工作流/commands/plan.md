@@ -550,6 +550,6 @@ $TASK_DIR/
 | 显式先测某个 task | `/trellis:test-first` | 进入测试驱动，或显式触发 `test-first` skill | 非默认主链；仅在明确要 TDD / 补验证证据时使用 |
 | 拆解不合理，重新拆 | `/trellis:plan` | 继续任务拆解，或显式触发 `plan` skill | 重新执行拆解流程 |
 | 设计有问题 | `/trellis:design` | 回退设计阶段，或显式触发 `design` skill | 回退到设计阶段 |
-| 冻结后出现新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先冻结当前计划；获批后再回到受影响的最早阶段更新计划 |
+| 冻结后出现新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先冻结当前计划；用户接受并入当前轮次后再回到受影响的最早阶段更新计划 |
 | 需要项目级全局代码审查 | `/trellis:project-audit` | 进入项目级审查，或显式触发 `project-audit` skill | 仅在全部代码相关 task 完成且用户明确确认后进入；中途也可手动预审 |
 | 不确定下一步 | `/trellis:continue` | 描述当前意图，或显式触发 `trellis-continue` skill | 用 Phase Router / skill 路由做阶段检测 |

@@ -37,6 +37,7 @@ description: 所有代码任务都完成了？进入项目级全局代码审查�
 
 - `project-audit` 新发现的问题留在当前阶段内处理，不回挂到具体任务
 - 若需要多 CLI 审查能力，它在本阶段内作为辅助分析或修复手段使用，不转入任务级 `review-gate`
+- 本阶段内部若使用 `multi-cli-review`，固定按 **full** 口径执行，不复用任务级 `review-gate` 的 `lite` 模式
 
 ---
 
@@ -146,7 +147,7 @@ tmp/multi-cli-review/<task-id>-project-audit/review-round-<N>/
 $TASK_DIR/project-audit/reviewer-commands-round-<N>.md
 ```
 
-- 默认 reviewer 数：2（其他 CLI）
+- 默认 reviewer 数：2（其他 CLI，full 口径）
 - 最大 reviewer 数：4
 - 建议优先在 3 轮内收敛；若超过建议轮次，需用户明确要求继续
 - task-level reviewer-id 默认使用协调者分配的字母槽位：`a` / `b` / `c` / `d`

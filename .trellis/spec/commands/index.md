@@ -124,9 +124,10 @@ Before finalizing a new command source asset:
 - [ ] If the command orchestrates external reviewer CLIs (for example `multi-cli-review` / `multi-cli-review-action`), the source docs explicitly include:
   - reviewer task-dir root
   - review round number
-  - at least two reviewer commands whose review description and `--review-focus` stay identical while only `--reviewer-id` differs
+  - how many reviewer commands the current mode emits by default (`lite` vs `full`)
+  - when multiple reviewer commands are emitted, their review description and `--review-focus` stay identical while only `--reviewer-id` differs
   - the current task-level reviewer-id slot convention (`a` / `b` / `c` / `d`) and the boundary that real CLI identity is recorded separately in `source-cli`
-  - the matching aggregator command for the current CLI
+  - when the current mode requires aggregation, the matching aggregator command for the current CLI
   - the boundary that the coordinator creates the review directory and reviewers only write reports
 
 ---

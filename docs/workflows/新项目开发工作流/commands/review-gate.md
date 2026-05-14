@@ -34,7 +34,7 @@ description: 质量检查完成了？进入任务级补充审查门禁 — 判�
 2. 若需要，生成给其他 CLI 直接执行的**标准化命令包**
 3. 在其他 CLI 返回报告后，由当前 CLI 统一汇总、修复、回归验证
 
-它的定位是：**高风险 / 高不确定任务的补充审查门禁**。普通任务多数应落在 `skip`，而不是默认进入多 CLI 审查。
+它的定位是：**高风险 / 高不确定任务的补充审查门禁**。普通任务多数应落在 `skip`，真正进入该层后也默认**轻量优先**，而不是一上来就走多 reviewer 重模式。
 
 ---
 
@@ -120,7 +120,21 @@ description: 质量检查完成了？进入任务级补充审查门禁 — 判�
 $TASK_DIR/review-gate/review-gate-round-<N>.md
 ```
 
-### Step 3: 确认能力前置并生成 reviewer 指令包
+### Step 3: 执行模式判定
+
+当本轮不为 `skip` 时，继续判定执行模式：
+
+- `lite`：默认模式。适用于 `recommended`，或用户只是希望先让其他 CLI 补一轮视角时。
+- `full`：重模式。默认用于 `required`，或用户明确要求按多 reviewer 审查处理时。
+
+约束：
+
+- `lite` 默认只使用 **1 个 reviewer**
+- `full` 默认使用 **2 个 reviewer**
+- `full` 最多允许扩展到 **4 个 reviewer**
+- `project-audit` 内部使用 `multi-cli-review` 时不复用这里的 `lite`，仍按其自身的 full 口径处理
+
+### Step 4: 确认能力前置并生成 reviewer 指令包
 
 若结果为 `required` 或用户接受 `recommended`：
 
@@ -165,12 +179,14 @@ $TASK_DIR/review-gate/reviewer-commands-round-<N>.md
 
 约束：
 
-- 默认 reviewer 数：2（其他 CLI）
-- 最大 reviewer 数：4
+- `lite` 默认 reviewer 数：1（其他 CLI）
+- `full` 默认 reviewer 数：2（其他 CLI）
+- `full` 最大 reviewer 数：4
 - 建议轮次：3；若超过建议轮次，需用户显式要求继续
 - task-level reviewer-id 默认使用协调者分配的字母槽位：`a` / `b` / `c` / `d`
 - 实际执行审查的 CLI 身份由 reviewer 报告 metadata 中的 `source-cli` 记录，不写入 `reviewer-id`
-- 若使用双 reviewer，默认生成两条**审查描述相同、`review-focus` 相同、仅 `reviewer-id` 不同**的命令
+- `lite` 默认只生成一条 reviewer 命令
+- `full` 默认生成两条**审查描述相同、`review-focus` 相同、仅 `reviewer-id` 不同**的命令
 - 只有在明确需要角色分工时，才允许为不同 reviewer 编写不同的审查描述或不同的审查重点
 - task-level 标准命令必须显式包含 `--task-dir`、`--reviewer-id`、`--round`
 - reviewer 只允许使用 `multi-cli-review`
@@ -179,7 +195,7 @@ $TASK_DIR/review-gate/reviewer-commands-round-<N>.md
 - reviewer 不得追加 `--output`、`--md-a`、`--md-b` 等参数绕开标准报告路径
 - 不转交当前完整对话上下文，只给标准化命令包
 
-### Step 4: 其他 CLI 执行独立审查
+### Step 5: 其他 CLI 执行独立审查
 
 用户在其他 CLI 中手动执行标准命令，例如：
 
@@ -199,9 +215,9 @@ tmp/multi-cli-review/<task-id>/review-round-<N>/<reviewer-id>.md
 - reviewer 报告必须使用标准 metadata，并与目录 / 文件名一致
 - reviewer 不得写入 `summary-round-<N>.md`、`action.md`、`.processed.json`
 
-### Step 5: 当前 CLI 汇总、确认并修复
+### Step 6: 当前 CLI 汇总、确认并修复
 
-其他 CLI 报告就绪后，当前 CLI 执行：
+若是 `full` 模式，或 `lite` 模式下 reviewer 提出了新的有效问题，当前 CLI 执行：
 
 ```text
 /multi-cli-review-action --task-dir tmp/multi-cli-review/<task-id> --round <N>
@@ -216,7 +232,9 @@ tmp/multi-cli-review/<task-id>/review-round-<N>/<reviewer-id>.md
 - 等待用户确认后，只对 `adopted` 且不会明显引入新问题/回归的项执行修复
 - 输出 `action.md` 与 `.processed.json`
 
-### Step 6: 重新验证与关闭
+若 `lite` 模式下 reviewer 没有提出新的有效问题，则可直接记录“无新增有效问题”，不必强制进入 `multi-cli-review-action`。
+
+### Step 7: 重新验证与关闭
 
 当前 CLI 根据修复结果重新跑该任务的质量检查 / 验证：
 
@@ -279,7 +297,8 @@ tmp/multi-cli-review/<task-id>/
 | 判定结果 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
 | `skip`，可直接提交前检查 | `/trellis:finish-work` | 进入提交前检查，或显式触发 `finish-work` skill | **默认推荐**。仅在用户明确确认后才允许进入提交前检查 |
-| `required` 或接受 `recommended` | 在已具备 `multi-cli-review` 能力的其他 CLI 中运行 `multi-cli-review` | 在目标 CLI 中发起多 CLI 审查，或显式触发 `multi-cli-review` skill | 默认 reviewer 数为 2；若目标 CLI 尚未具备该 skill，先补齐能力再执行 |
+| 接受 `recommended` | 在已具备 `multi-cli-review` 能力的其他 CLI 中运行 `multi-cli-review`（`lite`） | 在目标 CLI 中发起 lite 审查，或显式触发 `multi-cli-review` skill | **默认 1 个 reviewer**。若发现新问题，再进入 `multi-cli-review-action` |
+| `required` | 在已具备 `multi-cli-review` 能力的其他 CLI 中运行 `multi-cli-review`（`full`） | 在目标 CLI 中发起 full 审查，或显式触发 `multi-cli-review` skill | **默认 2 个 reviewer**；若目标 CLI 尚未具备该 skill，先补齐能力再执行 |
 | 报告已就绪，准备汇总修复 | `multi-cli-review-action` 能力 | `multi-cli-review-action` skill | 当前 CLI 先汇总报告、输出 `summary`、等待用户确认后仅执行低回归的 `adopted` 修复，再重新验证 |
 | 审查发现需回到实现阶段 | `/trellis:continue` | 回到实施阶段，或显式触发 `trellis-continue` skill | 回到当前任务修复问题 |
 | 审查发现冻结后新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先处理评估与基线更新，再回到受影响的最早阶段 |
