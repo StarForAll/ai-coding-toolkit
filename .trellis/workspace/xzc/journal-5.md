@@ -605,3 +605,36 @@ Updated workflow docs and repo-local specs to align freeze-change handling, revi
 ### Next Steps
 
 - None - task complete
+
+
+## Session 204: workflow-audit version gate bypass contract
+
+**Date**: 2026-05-14
+**Task**: workflow-audit version gate bypass contract
+**Branch**: `main`
+
+### Summary
+
+Updated workflow-audit to support explicit patch-only stable mismatch bypasses, tightened natural-language and runtime gate boundaries, added negative tests, and aligned skill/spec/templates.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `207c0e6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
