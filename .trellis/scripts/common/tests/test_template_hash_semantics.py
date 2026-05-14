@@ -45,7 +45,6 @@ class TemplateHashSemanticsTest(unittest.TestCase):
             ".codex/agents/trellis-research.toml",
             ".codex/config.toml",
             ".kiro/agents/trellis-research.json",
-            ".kiro/skills/trellis-meta/references/customize-local/change-workflow.md",
             ".opencode/agents/trellis-research.md",
             ".opencode/skills/trellis-meta/references/customize-local/change-workflow.md",
             ".qoder/agents/trellis-research.md",

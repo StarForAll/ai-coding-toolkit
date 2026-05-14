@@ -438,7 +438,23 @@ def _auto_commit_archive(
             )
         return False
 
+    # Belt-and-suspenders for the phantom-delete bug: `safe_git_add` uses
+    # `git add -A` via include_removals but that may miss files already moved
+    # away by `shutil.move`. An explicit `git rm --cached` stages the deletions
+    # in this same commit — otherwise they sit as uncommitted "phantom deletes"
+    # against HEAD until something later picks them up.
+    # `--ignore-unmatch` makes this a no-op when the task was never tracked.
+    # Guard: only run when the source directory no longer exists on disk (i.e.
+    # the archive `shutil.move` has already moved it away). Without this guard,
+    # `git rm --cached` would stage deletions for a source directory that is
+    # still present, creating a false diff that triggers an unwanted commit.
     source_rel = f"{DIR_WORKFLOW}/{DIR_TASKS}/{task_name}"
+    source_dir = get_tasks_dir(repo_root) / task_name
+    if not source_dir.is_dir():
+        run_git(
+            ["rm", "-r", "--cached", "--ignore-unmatch", "--", source_rel],
+            cwd=repo_root,
+        )
 
     rc, _, _ = run_git(
         ["diff", "--cached", "--quiet", "--", *paths, source_rel],
