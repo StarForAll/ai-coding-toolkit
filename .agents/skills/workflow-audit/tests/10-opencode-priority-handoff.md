@@ -20,6 +20,7 @@ Task-based runtime mode with Codex handoff override.
 - recognize that the user already ruled out Claude Code
 - override the default takeover order and prioritize OpenCode
 - explain why the default `Claude Code -> OpenCode` order was overridden
+- still require the takeover to happen in a main interactive OpenCode session rather than via an agent/sub-agent
 - still provide the full command-level handoff instructions and required return evidence
 - if CLI adaptation conclusions are already in scope, preserve the evidence-trio reporting rule for in-scope CLIs while treating the takeover-order override itself as an execution constraint rather than a defect
 
@@ -27,5 +28,6 @@ Task-based runtime mode with Codex handoff override.
 
 - must not present Claude Code as the default takeover CLI after the user ruled it out
 - must not drop the explanation for the override
+- must not suggest an OpenCode agent/sub-agent as the fallback takeover path
 - must not continue the formal embed step inside Codex
 - must not convert the override into a confirmed compatibility defect without evidence of real behavioral breakage

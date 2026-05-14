@@ -96,6 +96,13 @@ These exclusions are a design decision, not a coverage gap. Extending the suppor
 
 Note on `.opencode/`, `.codex/`, and `.agents/skills/`: these paths participate in the three-platform managed surface, but not all in the same way. `.agents/skills/` has a dual role: in this source repository it is the shared deployment layer for compatible skill loaders, while in workflow-installed target projects it is also the shared workflow skill carrier visible to Codex and potentially OpenCode. Its presence alone is therefore not a defect. For Codex, `.codex/config.toml` and `.codex/hooks.json` are primary carrier/config surfaces, while `.codex/skills/` remains a conditional secondary carrier rather than the default baseline artifact set. Codex hook activation is also runtime-gated by user-level enablement or approval, so installed carrier shape and live runtime activation must be audited separately. The absence of skill files under `.opencode/skills/workflow-audit/` or `.codex/skills/workflow-audit/` is therefore expected and not a defect.
 
+Current execution policy for this skill:
+
+- `workflow-audit` runs in the invoking CLI's main interactive session
+- do not dispatch Claude Code or OpenCode agents/sub-agents to execute audit steps for this skill
+- if Codex reaches the formal embed boundary, any allowed continuation must move to a main interactive Claude Code or OpenCode session rather than to an agent
+- this is a temporary execution-efficiency constraint for `workflow-audit`, not a change to the supported audit surface
+
 ## Audit Coverage Requirements
 
 This skill **must** fully validate the following aspects for any workflow under audit:
@@ -130,7 +137,7 @@ This skill **must** fully validate the following aspects for any workflow under 
 
 4. **Codex handoff boundary** - When Codex is the primary executor and the audit reaches the formal embed step, the skill must:
    - Stop and emit a handoff block using the dedicated template
-   - Require handoff to Claude Code or OpenCode for the embed execution
+   - Require handoff to a main interactive Claude Code or OpenCode session for the embed execution; agent/sub-agent takeover is not allowed for this skill at the current stage
    - Merge back evidence from the handoff into the audit report
 
 5. **Runtime validation triggers** - The audit must automatically escalate to runtime validation (task-based runtime mode) when:
@@ -445,6 +452,7 @@ When the skill determines both task context and runtime validation are required:
 
 - all task-based static mode behaviors above, plus:
 - execute step D within CLI-allowed boundaries: `/tmp` project, `trellis init`, embed chain, post-install verification (Codex must stop and hand off before formal embed)
+- if Codex hands off, the receiving executor must be a main interactive Claude Code or OpenCode session rather than an agent/sub-agent
 - merge runtime evidence into `audit-report.md`
 - when D reaches Codex boundary: emit handoff block (see CLI and Handoff Rules)
 - output step E via `audit-report.md`
@@ -622,6 +630,16 @@ The audit must separate conclusions for:
 
 Do not collapse them into one generic statement.
 
+### Main-session-only execution policy
+
+At the current stage, `workflow-audit` must execute in the current CLI's main
+interactive session. Claude Code or OpenCode agents/sub-agents are not allowed
+to execute audit steps for this skill.
+
+If runtime reality offers only agent-based Claude Code/OpenCode execution for a
+required Codex handoff, treat that the same as having no usable non-Codex
+handoff target for this run.
+
 ### Codex Boundary
 
 Codex may participate in:
@@ -641,6 +659,7 @@ When the audit reaches the formal temporary-project embed step under Codex:
 - emit a handoff block
 - use the template from `references/codex-handoff-template.md`
 - prefer `Claude Code -> OpenCode` unless explicit user constraints override it
+- require the takeover to happen in a main interactive Claude Code or OpenCode session, not through an agent/sub-agent
 - require the handoff sequence to cover:
   - state detection
   - install dry-run
@@ -657,7 +676,7 @@ If the user constraints or runtime reality rule out all usable non-Codex executo
 
 - stop immediately
 - classify the stop as `Blocked / No Handoff Target`
-- explain that the formal embed step remains unverified because no allowed takeover CLI is available
+- explain that the formal embed step remains unverified because no allowed main-session takeover CLI is available
 
 ---
 
@@ -731,6 +750,8 @@ Required persisted scenario files:
 - `tests/32-allowed-minor-version-mismatch.md`
 - `tests/33-prerelease-drift-ignores-bypass.md`
 - `tests/34-wider-drift-ignores-bypass.md`
+- `tests/35-main-session-only-execution.md`
+- `tests/36-agent-only-handoff-stop.md`
 
 Each test file must use the same internal structure:
 
@@ -817,6 +838,8 @@ When a behavior change could affect the task-based audit path's dependence on `t
 - `.agents/skills/workflow-audit/tests/32-allowed-minor-version-mismatch.md`
 - `.agents/skills/workflow-audit/tests/33-prerelease-drift-ignores-bypass.md`
 - `.agents/skills/workflow-audit/tests/34-wider-drift-ignores-bypass.md`
+- `.agents/skills/workflow-audit/tests/35-main-session-only-execution.md`
+- `.agents/skills/workflow-audit/tests/36-agent-only-handoff-stop.md`
 - `.claude/skills/workflow-audit/references/input-template.md`
 - `.claude/skills/workflow-audit/references/audit-report-template.md`
 - `.claude/skills/workflow-audit/references/lightweight-output-template.md`
@@ -856,6 +879,8 @@ When a behavior change could affect the task-based audit path's dependence on `t
 - `.claude/skills/workflow-audit/tests/32-allowed-minor-version-mismatch.md`
 - `.claude/skills/workflow-audit/tests/33-prerelease-drift-ignores-bypass.md`
 - `.claude/skills/workflow-audit/tests/34-wider-drift-ignores-bypass.md`
+- `.claude/skills/workflow-audit/tests/35-main-session-only-execution.md`
+- `.claude/skills/workflow-audit/tests/36-agent-only-handoff-stop.md`
 - `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
 - `.agents/skills/workflow-capability-audit/SKILL.md`
 - `.claude/skills/workflow-capability-audit/SKILL.md`

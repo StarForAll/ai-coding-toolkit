@@ -19,10 +19,11 @@ Task-based runtime mode blocked at the Codex handoff boundary.
 - reach the Codex handoff boundary through the normal A/B/C -> D path
 - recognize that no usable non-Codex executor is available
 - stop as `Blocked / No Handoff Target`
-- explain that the formal embed step remains unverified because no allowed takeover CLI exists
+- explain that the formal embed step remains unverified because no allowed main-session takeover CLI exists
 
 ## Must Not
 
 - must not continue the formal embed step inside Codex
 - must not invent a takeover CLI that the user ruled out
+- must not suggest an agent/sub-agent workaround once the main-session path is unavailable
 - must not claim that handoff validation already completed

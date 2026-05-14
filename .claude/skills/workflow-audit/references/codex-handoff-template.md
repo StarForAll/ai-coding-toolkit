@@ -15,6 +15,10 @@ The outer fence uses 4 backticks so the inner triple-backtick `bash` blocks rend
 1. Claude Code
 2. OpenCode
 
+### Takeover boundary
+- Continue this handoff in a main interactive Claude Code or OpenCode session
+- Do not run the continuation through an agent or sub-agent
+
 ### Execution context for the takeover CLI
 - Run all commands below from the workflow source repo's working directory (the repo that contains `<WORKFLOW_ROOT_DIR>`), NOT from inside `<TARGET_PROJECT_ROOT>`
 - `<WORKFLOW_ROOT_DIR>` points to the workflow source root (e.g. `docs/workflows/新项目开发工作流/`)
@@ -60,6 +64,7 @@ The `WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1` env var is mandatory: `install-workflo
 - any anomalies / failures encountered
 
 ### Takeover CLI behavior limits
+- main interactive CLI session only; do not use agents/sub-agents for this takeover
 - runtime validation only
 - no workflow source-file edits during the audit stage
 - returned evidence must be merged back into the current `audit-report.md`

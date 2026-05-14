@@ -22,6 +22,7 @@ Task-based runtime mode, with Codex handoff triggered before the formal embed ex
 - stop before continuing the formal temporary-project embed execution
 - emit the `Codex Handoff` template block
 - use default takeover order `Claude Code -> OpenCode`
+- require the takeover to happen in a main interactive Claude Code or OpenCode session rather than via an agent/sub-agent
 - provide command-level handoff instructions
 - include `detect-embed-state.py`, `install-workflow.py --dry-run`, formal install with `WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1`, and post-install `upgrade-compat.py --check`
 - explicitly require the return of state-detection output, installer output, post-install verification, and anomalies
@@ -33,5 +34,6 @@ Task-based runtime mode, with Codex handoff triggered before the formal embed ex
 - must not pre-decide mode before step A/B/C
 - must not allow Codex to continue leading the first formal embed execution
 - must not output only “switch to another CLI” without concrete handoff commands
+- must not suggest a Claude Code or OpenCode agent/sub-agent as the takeover executor
 - must not treat handoff as if validation were already completed
 - must not treat the handoff boundary itself as proof of a CLI adaptation defect

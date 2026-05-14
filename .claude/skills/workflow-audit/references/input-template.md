@@ -86,6 +86,7 @@ Do **not** accept as equivalent:
 - Only an explicit `allow_minor_version_mismatch: yes` can bypass a contract-defined patch-only stable mismatch; all prerelease-related or broader drift still stop as `Blocked / Version Drift`
 - No dedicated `preferred_handoff_cli` field
 - Default handoff order is always `Claude Code -> OpenCode`
+- Any Codex handoff must continue in a main interactive Claude Code or OpenCode session; agent/sub-agent takeover is intentionally out of scope for now
 - A user may override the order only by stating the real environment constraint explicitly in natural language
 
 ## Full Example

@@ -93,6 +93,13 @@ These exclusions are a design decision, not a coverage gap. Extending the suppor
 
 Note on `.opencode/`, `.codex/`, and `.agents/skills/`: these paths participate in the three-platform managed surface, but not all in the same way. `.agents/skills/` has a dual role: in this source repository it is the shared deployment layer for compatible skill loaders, while in workflow-installed target projects it is also the shared workflow skill carrier visible to Codex and potentially OpenCode. Its presence alone is therefore not a defect. For Codex, `.codex/config.toml` and `.codex/hooks.json` are primary carrier/config surfaces, while `.codex/skills/` remains a conditional secondary carrier rather than the default baseline artifact set. Codex hook activation is also runtime-gated by user-level enablement or approval, so installed carrier shape and live runtime activation must be audited separately. The absence of skill files under `.opencode/skills/workflow-audit/` or `.codex/skills/workflow-audit/` is therefore expected and not a defect.
 
+Current execution policy for this skill:
+
+- `workflow-audit` runs in the invoking CLI's main interactive session
+- do not dispatch Claude Code or OpenCode agents/sub-agents to execute audit steps for this skill
+- if Codex reaches the formal embed boundary, any allowed continuation must move to a main interactive Claude Code or OpenCode session rather than to an agent
+- this is a temporary execution-efficiency constraint for `workflow-audit`, not a change to the supported audit surface
+
 ## Audit Coverage Requirements
 
 This skill must fully validate the following aspects for any workflow under audit:
@@ -120,7 +127,7 @@ This skill must fully validate the following aspects for any workflow under audi
 
 4. **Codex handoff boundary**
    - stop and emit the dedicated handoff block when Codex reaches the formal embed step
-   - require handoff to Claude Code or OpenCode for the formal embed execution
+   - require handoff to a main interactive Claude Code or OpenCode session for the formal embed execution; agent/sub-agent takeover is not allowed for this skill at the current stage
    - require returned handoff evidence to be merged back into `audit-report.md`
 
 5. **Runtime validation triggers**
@@ -186,6 +193,7 @@ Constraints:
 
 - exactly one `workflow_path` per run
 - do not expose a dedicated `preferred_handoff_cli` field; default handoff order is `Claude Code -> OpenCode`
+- the handoff order applies only to allowed main interactive CLI sessions; it does not reopen the agent/sub-agent path
 - if the resolved `workflow_path` is anything other than `docs/workflows/新项目开发工作流/`, stop as `Blocked / Invalid Input`, explain that this skill audits only that root, and do not silently replace the requested target
 - if multiple workflow targets appear in the input, explain that this skill supports only `docs/workflows/新项目开发工作流/` and require the user to continue with that single supported root only
 - if the supported `docs/workflows/新项目开发工作流/` root does not exist on disk, stop as `Blocked / Invalid Input`, explain that the supported workflow root is missing from the repository checkout, and do not continue until the repository state is repaired
@@ -469,15 +477,16 @@ If this step reaches the formal temporary-project embed execution and the curren
 - emit a handoff block using `references/codex-handoff-template.md`
 - default handoff order: `Claude Code -> OpenCode`
 - if the user already established that Claude Code is unavailable or OpenCode is the only usable non-Codex CLI, override the default order and explain why
+- the handoff target must be a main interactive Claude Code or OpenCode session; do not continue this skill through an agent/sub-agent
 - require the handoff sequence to include: `detect-embed-state.py` → `install-workflow.py --dry-run` → formal install with non-Codex executor confirmation (`WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1` set in the takeover CLI's invocation environment) → `upgrade-compat.py --check`
 
 The `WORKFLOW_EMBED_EXECUTOR_CONFIRMED` env var is part of the boundary contract: `install-workflow.py` refuses formal install when it is unset. The audit must not treat the formal install step as covered by handoff evidence unless the env var was actually set in the returned command transcript.
 
 Constraints:
 
-- takeover CLI: runtime validation only, no workflow source edits
+- takeover CLI: main interactive Claude Code/OpenCode session only; runtime validation only, no workflow source edits
 - returned handoff evidence must be merged into `audit-report.md`
-- if no usable non-Codex executor is available for the formal embed step, stop as `Blocked / No Handoff Target` and explain that the formal embed remains unverified
+- if no usable non-Codex main-session executor is available for the formal embed step, stop as `Blocked / No Handoff Target` and explain that the formal embed remains unverified
 
 ### Step 6: Report and stop (evidence mainline step E)
 
@@ -568,6 +577,8 @@ Required persisted scenario files:
 - `tests/32-allowed-minor-version-mismatch.md`
 - `tests/33-prerelease-drift-ignores-bypass.md`
 - `tests/34-wider-drift-ignores-bypass.md`
+- `tests/35-main-session-only-execution.md`
+- `tests/36-agent-only-handoff-stop.md`
 
 Every test file must use the same structure:
 
