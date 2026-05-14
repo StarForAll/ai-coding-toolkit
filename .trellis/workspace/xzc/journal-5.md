@@ -773,3 +773,36 @@ Repaired Trellis 0.5.15 runtime upgrade residue, restored richer research carrie
 ### Next Steps
 
 - None - task complete
+
+
+## Session 209: Resolve trellis 0.5.15 upgrade .new files and fix template hash drift
+
+**Date**: 2026-05-14
+**Task**: Resolve trellis 0.5.15 upgrade .new files and fix template hash drift
+**Branch**: `main`
+
+### Summary
+
+Processed 15 .new files from trellis 0.5.15 upgrade: discarded 8 (local customizations preserved), overwrote 7 (upstream alignment + reverted broken Phase routing), merged 2 (codex config + phantom-delete fix). Fixed template hash semantics (overlay files record upstream hash), restored carrier comments on codex check/implement, added source-exists guard to git rm --cached, updated test overlay list. 19/19 tests pass.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f36b3e8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
