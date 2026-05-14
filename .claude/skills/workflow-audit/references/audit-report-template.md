@@ -11,6 +11,10 @@ When the layer is `generated target project`, also record whether the evidence c
 ## Audit Target and Boundary
 - Workflow Root: `<workflow_path>`
 - Resolved Workflow Root Rule: always `docs/workflows/新项目开发工作流/`
+- Compatible Anchor Version: `<COMPATIBLE_TRELLIS_VERSION or unavailable>`
+- Current Trellis Version: `<trellis -v output or unavailable>`
+- Version Gate: `<passed | bypassed>`
+- Bypass Detail: `<none | user-approved minor version mismatch; run-local only; not compatibility approval>`
 - Audit Scope: <task-based static | task-based runtime>
 - Current CLI: <inferred or explicit>
 - Candidate Issues: <none / list>

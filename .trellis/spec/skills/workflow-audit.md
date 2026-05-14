@@ -27,20 +27,50 @@ It does not cover:
 
 ## Version Gate and Supported Surface
 
-`workflow-audit` is a same-version workflow-maintenance audit only.
+`workflow-audit` is a same-version workflow-maintenance audit only, with one narrow user-approved exception for a patch-only stable mismatch.
 
 Before any audit step, it must:
 
 1. Read `COMPATIBLE_TRELLIS_VERSION` from `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
 2. Run `trellis -v`
-3. Compare the two versions for exact equality
+3. Classify the version relationship using the rules below
 
-If the versions differ in any way:
+For this contract, a `minor version mismatch` means all of the following:
+
+- same `major`
+- same `minor`
+- different `patch`
+- neither version carries a prerelease label such as `-rc` or `-beta`
+
+Examples:
+
+- `0.5.0` vs `0.5.5` = contract-defined `minor version mismatch`
+- `0.5.0-rc.1` vs `0.5.0` = not a `minor version mismatch`
+- `0.5.0-beta.1` vs `0.5.0` = not a `minor version mismatch`
+- `0.5.0-rc.1` vs `0.5.0-rc.3` = not a `minor version mismatch`
+
+Despite the field name, this contract term does **not** mean semver minor-number drift such as `0.5.x` vs `0.6.x`. It refers only to a same-`major.minor` stable `patch` difference.
+
+Equivalent natural-language instructions are allowed only when they unambiguously limit the bypass to that same-`major.minor` stable `patch` difference. If the wording is ambiguous, treat it as `allow_minor_version_mismatch: no`.
+
+If the versions match exactly:
+
+- continue normally
+
+If the versions are a `minor version mismatch` and the user explicitly set `allow_minor_version_mismatch: yes` or gave an equivalent natural-language instruction:
+
+- continue normally
+- report both versions and the user-approved gate bypass explicitly
+- treat the bypass as run-local only; do not reinterpret it as compatibility approval
+- do **not** continue by rewriting `COMPATIBLE_TRELLIS_VERSION`
+
+If the versions differ in any other way, or the `minor version mismatch` was not explicitly allowed:
 
 - stop immediately
 - classify the stop as `Blocked / Version Drift`
 - report both the compatible version and the actual version
-- direct the user to `workflow-capability-audit`
+- if the mismatch is the contract-defined `minor version mismatch`, also explain that the user may rerun with `allow_minor_version_mismatch: yes` for this audit run only
+- otherwise direct the user to `workflow-capability-audit`
 - do **not** continue into target resolution, A/B/C evidence gathering, task creation, `/tmp` project creation, `trellis init`, or embed/post-install validation
 
 Supported workflow audit surface is limited to:
@@ -150,6 +180,12 @@ Natural language is allowed, but the recommended contract is:
   - default: `auto`
 - `force_full_brainstorm`
   - default: `no`
+- `allow_minor_version_mismatch`
+  - default: `no`
+  - `yes` allows Step 0 to continue only for the contract-defined `minor version mismatch` above
+  - it never allows prerelease-related mismatches or broader version drift
+  - despite the name, it does **not** mean semver minor-number drift
+  - if the field form is not used and the wording is ambiguous about the patch-only stable scope, treat it as `no`
 - `current_cli`
   - infer from runtime when possible
   - ask the user only if a CLI-sensitive path is reached and ambiguity remains
@@ -245,13 +281,17 @@ Before target resolution or evidence gathering:
 
 - read `COMPATIBLE_TRELLIS_VERSION` from `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
 - run `trellis -v`
-- compare for exact equality
+- classify the version relationship:
+  - exact match -> continue
+  - contract-defined `minor version mismatch` + explicit `allow_minor_version_mismatch: yes` (or equivalent, unambiguous natural-language instruction) -> continue and record the bypass explicitly
+  - anything else -> stop as `Blocked / Version Drift`
+- if the field form is not used and the wording is ambiguous about the patch-only stable scope, treat it as `allow_minor_version_mismatch: no`
 
-If the versions differ:
+If the audit stops for version drift:
 
-- stop as `Blocked / Version Drift`
 - report both values explicitly
-- recommend `workflow-capability-audit`
+- if the mismatch is the contract-defined `minor version mismatch`, explain that the user may rerun with `allow_minor_version_mismatch: yes` for this run only
+- otherwise recommend `workflow-capability-audit`
 - do not proceed to Step 1 or any later step
 
 ### Target Resolution and Binding
@@ -328,6 +368,7 @@ Compare document claims against actual definition completeness:
 Required when embed / install / post-install behavior must be verified:
 
 - confirm the temporary target project's `.trellis/.version` matches the Step 0 actual `trellis -v` result; otherwise stop as `Blocked / Version Drift`
+- this runtime check is independent from the Step 0 `COMPATIBLE_TRELLIS_VERSION` gate; it verifies that the temporary baseline project was initialized by the same current runtime version, even if Step 0 used an allowed bypass
 - 在 `/tmp` 创建纯净 Git 项目，满足安装前置条件后执行 `trellis init`
 - 在 `trellis init` 完成后、执行 `install-workflow.py` 前，记录当前文件系统状态作为 clean baseline 快照；后续 post-install 比较与产物归因必须以该快照为基准
 - 执行标准嵌入链: `detect-embed-state.py` → `install-workflow.py --dry-run` → `install-workflow.py` → `upgrade-compat.py --check`
@@ -504,6 +545,8 @@ Rules:
 - update incrementally during the active audit
 - treat the same file as the current finalized report at the stop-and-confirm boundary
 - require it only for task-based audits
+- record `Compatible Anchor Version`, `Current Trellis Version`, and `Version Gate` (`passed` or `bypassed`) in the audit boundary section
+- when `Version Gate` is `bypassed`, also record `Bypass Detail` with the user-approved reason and the run-local-only disclaimer
 - when evidence is tagged as `generated target project`, record whether it came from the clean `trellis init` baseline or the workflow-installed state after `install-workflow.py`
 - when per-CLI adaptation is judged, record for each CLI:
   - the official-doc source checked
@@ -685,6 +728,9 @@ Required persisted scenario files:
 - `tests/29-native-cli-doc-and-practical-evidence.md`
 - `tests/30-non-defect-no-negative-optimization.md`
 - `tests/31-todo-reminder-non-defect.md`
+- `tests/32-allowed-minor-version-mismatch.md`
+- `tests/33-prerelease-drift-ignores-bypass.md`
+- `tests/34-wider-drift-ignores-bypass.md`
 
 Each test file must use the same internal structure:
 
@@ -768,6 +814,9 @@ When a behavior change could affect the task-based audit path's dependence on `t
 - `.agents/skills/workflow-audit/tests/29-native-cli-doc-and-practical-evidence.md`
 - `.agents/skills/workflow-audit/tests/30-non-defect-no-negative-optimization.md`
 - `.agents/skills/workflow-audit/tests/31-todo-reminder-non-defect.md`
+- `.agents/skills/workflow-audit/tests/32-allowed-minor-version-mismatch.md`
+- `.agents/skills/workflow-audit/tests/33-prerelease-drift-ignores-bypass.md`
+- `.agents/skills/workflow-audit/tests/34-wider-drift-ignores-bypass.md`
 - `.claude/skills/workflow-audit/references/input-template.md`
 - `.claude/skills/workflow-audit/references/audit-report-template.md`
 - `.claude/skills/workflow-audit/references/lightweight-output-template.md`
@@ -804,6 +853,9 @@ When a behavior change could affect the task-based audit path's dependence on `t
 - `.claude/skills/workflow-audit/tests/29-native-cli-doc-and-practical-evidence.md`
 - `.claude/skills/workflow-audit/tests/30-non-defect-no-negative-optimization.md`
 - `.claude/skills/workflow-audit/tests/31-todo-reminder-non-defect.md`
+- `.claude/skills/workflow-audit/tests/32-allowed-minor-version-mismatch.md`
+- `.claude/skills/workflow-audit/tests/33-prerelease-drift-ignores-bypass.md`
+- `.claude/skills/workflow-audit/tests/34-wider-drift-ignores-bypass.md`
 - `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
 - `.agents/skills/workflow-capability-audit/SKILL.md`
 - `.claude/skills/workflow-capability-audit/SKILL.md`

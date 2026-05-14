@@ -16,6 +16,7 @@ workflow_path: docs/workflows/新项目开发工作流/
 candidate_issues: []
 need_runtime_validation: no
 force_full_brainstorm: no
+allow_minor_version_mismatch: no
 ```
 
 However, during Step A/B/C, the skill discovers that the workflow's embed scripts reference non-existent paths and the install state machine has structural gaps that can only be confirmed by running `trellis init` + embed chain.

@@ -16,6 +16,7 @@ workflow_path: docs/workflows/新项目开发工作流/
 candidate_issues: []
 need_runtime_validation: no
 force_full_brainstorm: yes
+allow_minor_version_mismatch: no
 ```
 
 ## Expected Mode

@@ -9,6 +9,7 @@ candidate_issues:
   - <candidate issue 2, optional>
 need_runtime_validation: auto
 force_full_brainstorm: no
+allow_minor_version_mismatch: no
 current_cli: <optional; infer from runtime when omitted>
 ```
 
@@ -47,11 +48,34 @@ Comparison model used by the audit:
   - default: `no`
   - `yes`: enter task-based mode (task + `trellis-brainstorm` mainline); does NOT by itself force runtime validation (Step D), which is judged separately based on Step 2 findings
 
+- `allow_minor_version_mismatch`
+  - default: `no`
+  - `yes`: allow Step 0 to continue only when `COMPATIBLE_TRELLIS_VERSION` and `trellis -v` differ solely by `patch`, share the same `major.minor`, and neither side has a prerelease label
+  - does **not** allow `rc` / `beta` to stable, prerelease-to-prerelease, or wider version drift
+  - despite the name, this does **not** mean semver minor-number drift such as `0.5.x` vs `0.6.x`
+  - equivalent explicit natural-language instructions may be treated the same way only when they unambiguously limit the bypass to that patch-only stable scope
+  - if the field form is not used and the wording is ambiguous, treat it as `no`
+
 - `current_cli`
   - optional
   - infer from runtime when possible
   - ask the user only when a CLI-sensitive path is reached and the CLI still cannot be determined safely
   - if provided, use only `claude`, `opencode`, or `codex`
+
+### Natural-Language Equivalence Boundary
+
+Accept as equivalent to `allow_minor_version_mismatch: yes`:
+
+- "the versions only differ by patch; allow this audit run"
+- "it's just `0.5.0` vs `0.5.5`; continue this run only"
+- "skip this patch-only stable mismatch for this run"
+
+Do **not** accept as equivalent:
+
+- "skip the version check"
+- "ignore version drift"
+- "my minor version is different, allow it"
+- any wording that does not explicitly constrain the bypass to a same-`major.minor` stable `patch` difference
 
 ## Notes
 
@@ -59,7 +83,7 @@ Comparison model used by the audit:
 - Supported workflow target scope is fixed to `docs/workflows/新项目开发工作流/`
 - Comparison model inside the audit is `source repo` vs clean `trellis init` baseline vs workflow-installed state after `install-workflow.py` vs `runtime command output`
 - Version preflight always runs first: compare `trellis -v` with `COMPATIBLE_TRELLIS_VERSION` in `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
-- Any mismatch must stop the audit as `Blocked / Version Drift` and route the user to `workflow-capability-audit`
+- Only an explicit `allow_minor_version_mismatch: yes` can bypass a contract-defined patch-only stable mismatch; all prerelease-related or broader drift still stop as `Blocked / Version Drift`
 - No dedicated `preferred_handoff_cli` field
 - Default handoff order is always `Claude Code -> OpenCode`
 - A user may override the order only by stating the real environment constraint explicitly in natural language
@@ -73,5 +97,6 @@ candidate_issues:
   - Whether post-install verification guidance has drifted from the installer behavior
 need_runtime_validation: auto
 force_full_brainstorm: yes
+allow_minor_version_mismatch: no
 current_cli: codex
 ```

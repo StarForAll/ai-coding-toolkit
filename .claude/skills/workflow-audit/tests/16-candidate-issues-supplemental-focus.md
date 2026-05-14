@@ -18,6 +18,7 @@ candidate_issues:
   - Whether post-install verification guidance still matches installer behavior
 need_runtime_validation: auto
 force_full_brainstorm: no
+allow_minor_version_mismatch: no
 ```
 
 ## Expected Mode

@@ -11,6 +11,10 @@ Always keep the `Per-CLI Adaptation Conclusions` section. If CLI adaptation was 
 ## Audit Target and Boundary
 - Workflow Root: `<workflow_path>`
 - Resolved Workflow Root Rule: always `docs/workflows/新项目开发工作流/`
+- Compatible Anchor Version: `<COMPATIBLE_TRELLIS_VERSION or unavailable>`
+- Current Trellis Version: `<trellis -v output or unavailable>`
+- Version Gate: `<passed | bypassed>`
+- Bypass Detail: `<none | user-approved minor version mismatch; run-local only; not compatibility approval>`
 - Scope: static/document-only (lightweight: evidence mainline A, B, C; output step E)
 - Comparison Model: `source repo` vs `generated target project` baseline (`trellis init`) vs `generated target project` workflow-installed state (`install-workflow.py`) vs `runtime command output`
 

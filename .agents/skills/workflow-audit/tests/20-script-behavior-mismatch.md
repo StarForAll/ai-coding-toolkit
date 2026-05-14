@@ -18,6 +18,7 @@ candidate_issues:
   - Whether detect-embed-state.py output status values still match documented contract
 need_runtime_validation: auto
 force_full_brainstorm: no
+allow_minor_version_mismatch: no
 ```
 
 ## Expected Mode
