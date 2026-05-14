@@ -90,11 +90,26 @@ function getActiveTask(ctx, platformInput = null) {
  * - no_task pseudo-status (id === null) → header omits task info
  */
 function buildBreadcrumb(id, status, templates, source = null) {
-  let body = templates[status]
+  let lookupStatus = status
+  let displayStatus = status
+  if (
+    templates.stale !== undefined &&
+    (
+      status === "stale" ||
+      status.startsWith("stale_") ||
+      lookupStatus === "stale" ||
+      lookupStatus.startsWith("stale_") ||
+      lookupStatus.startsWith("stale-")
+    )
+  ) {
+    lookupStatus = "stale"
+    displayStatus = "stale"
+  }
+  let body = templates[lookupStatus]
   if (body === undefined) {
     body = "Refer to workflow.md for current step."
   }
-  let header = id === null ? `Status: ${status}` : `Task: ${id} (${status})`
+  let header = id === null ? `Status: ${displayStatus}` : `Task: ${id} (${displayStatus})`
   if (source) {
     header = `${header}\nSource: ${source}`
   }
