@@ -738,3 +738,38 @@ Audited the 新项目开发工作流 against the existing /tmp/trellis-0.5.14-1 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 208: Trellis 0.5.15 runtime upgrade residue repair
+
+**Date**: 2026-05-14
+**Task**: Trellis 0.5.15 runtime upgrade residue repair
+**Branch**: `main`
+
+### Summary
+
+Repaired Trellis 0.5.15 runtime upgrade residue, restored richer research carrier contracts, fixed template-hash semantics, resolved .new decisions, and captured regression coverage for runtime and hash semantics.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f00d53f` | (see git log) |
+| `12ba2af` | (see git log) |
+| `2ee4678` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

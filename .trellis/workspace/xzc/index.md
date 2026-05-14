@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 207
+- **Total Sessions**: 208
 - **Last Active**: 2026-05-14
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~740 | Active |
+| `journal-5.md` | ~775 | Active |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 208 | 2026-05-14 | Trellis 0.5.15 runtime upgrade residue repair | `f00d53f`, `12ba2af`, `2ee4678` | `main` |
 | 207 | 2026-05-14 | Audit workflow AGENTS behavior on 0.5.14 sample | `059cd60` | `main` |
 | 206 | 2026-05-14 | workflow-audit main-session handoff boundary tightening | `d8bcd58`, `27bc4b1` | `main` |
 | 205 | 2026-05-14 | 修正 AGENTS close-out 与 commit 规则 | `15e1b86` | `main` |
