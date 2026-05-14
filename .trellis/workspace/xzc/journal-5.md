@@ -572,3 +572,36 @@ Completed the Trellis 0.5.14 workflow capability audit, reconciled Codex hook ca
 ### Next Steps
 
 - None - task complete
+
+
+## Session 203: Align workflow audit follow-up wording
+
+**Date**: 2026-05-14
+**Task**: Align workflow audit follow-up wording
+**Branch**: `main`
+
+### Summary
+
+Updated workflow docs and repo-local specs to align freeze-change handling, review-gate lite/full behavior, delivery retrospective wording, humanizer-zh boundaries, and stage-gate terminology.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7bb3027` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
