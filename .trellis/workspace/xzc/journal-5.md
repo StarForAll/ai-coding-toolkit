@@ -839,3 +839,36 @@ Processed 15 .new files from trellis 0.5.15 upgrade: discarded 8 (local customiz
 ### Next Steps
 
 - None - task complete
+
+
+## Session 211: 收敛 Trellis 运行时降级契约
+
+**Date**: 2026-05-14
+**Task**: 收敛 Trellis 运行时降级契约
+**Branch**: `main`
+
+### Summary
+
+为 degraded fallback、OpenCode JS 解析、statusline 可见性和相关回归测试做收敛修复。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5581f5d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
