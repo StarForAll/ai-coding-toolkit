@@ -638,3 +638,36 @@ Updated workflow-audit to support explicit patch-only stable mismatch bypasses, 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 205: 修正 AGENTS close-out 与 commit 规则
+
+**Date**: 2026-05-14
+**Task**: 修正 AGENTS close-out 与 commit 规则
+**Branch**: `main`
+
+### Summary
+
+对齐 AGENTS 与当前 Trellis 工作流：删除冲突的 git commit 规则，补充 sub-agent 调度前导要求，澄清 close-out 与 record-session 文案层级。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `15e1b86` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

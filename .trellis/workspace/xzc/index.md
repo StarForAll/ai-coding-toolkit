@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 204
+- **Total Sessions**: 205
 - **Last Active**: 2026-05-14
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~640 | Active |
+| `journal-5.md` | ~673 | Active |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 205 | 2026-05-14 | 修正 AGENTS close-out 与 commit 规则 | `15e1b86` | `main` |
 | 204 | 2026-05-14 | workflow-audit version gate bypass contract | `207c0e6` | `main` |
 | 203 | 2026-05-14 | Align workflow audit follow-up wording | `7bb3027` | `main` |
 | 202 | 2026-05-13 | Finalize workflow capability audit for 新项目开发工作流 | `3d473c7` | `main` |
