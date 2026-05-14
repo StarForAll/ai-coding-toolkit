@@ -43,6 +43,7 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产；当
 - `trellis-research` 的增强版搜索能力由当前 workflow 额外同步，以对齐当前项目正在使用的 research routing 规则
 - 若某平台确有行为差距（如 Codex class-2 缺 context self-loading），应通过 Trellis 上游机制或项目级配置解决，不在 workflow 源中补丁
 - 安装器 / 升级分析 / 卸载脚本不再读写 agent 内容，仅检测和迁移 legacy bare-name 文件
+- 维护者侧例外：当前 repo-local `workflow-audit` 不得把 Claude Code / OpenCode agent 执行链作为正式口径；即便平台原生支持，当前合同仍要求主会话执行，只有后续明确调整合同后才可放开
 
 **源仓库 carrier 增强 vs. 安装器 overlay（两层边界区分）**：当前源仓库（authoring repo）自身对 `trellis-research` 做了项目级 capability-enhancement，例如 Claude/OpenCode 版本扩展了 ace、Context7、deepwiki、grok-search、exa_advanced 等工具路由，详见 `.trellis/spec/agents/index.md` Tool Capability Enhancement 段。当前 workflow 合同要求目标项目中的 `trellis-research` 与这套增强版保持同等级能力，因此安装器 / 升级器会同步该增强版 `trellis-research`；但 `trellis-implement` / `trellis-check` 仍保持 Trellis 原生基线，不做 overlay。
 

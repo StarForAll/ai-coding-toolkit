@@ -213,6 +213,12 @@ Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-ch
 - `trellis-research` / `trellis-implement` / `trellis-check`：由 Trellis 原生提供（`trellis init`），workflow 安装器不再 overlay 这些定义到此 README 描述的目标项目；安装器仅做 legacy bare-name → trellis-* 迁移。本源仓库的 carrier agent 文件含有项目级 capability-enhancement，详见 `.trellis/spec/agents/index.md`
 - `debug`：仍保留为 Trellis / 项目侧手动维护能力，不纳入当前 workflow 托管集合
 
+维护者侧例外：
+
+- repo-local `workflow-audit` 当前阶段不得在 OpenCode 中走 agent 执行链
+- 原因不是 OpenCode 原生能力缺失，而是这条审计链当前用 agent 的整体耗时/交互成本偏高
+- 因此当前口径是：若维护者要执行这条审计链，必须使用 OpenCode 主会话；只有后续明确调整合同后，才可单独放开 agent 路径
+
 其中 `trellis-research` 角色还需要遵守统一证据门禁：
 
 - 项目内部代码定位优先 `ace.search_context`
