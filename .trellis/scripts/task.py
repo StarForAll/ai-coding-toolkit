@@ -38,8 +38,10 @@ from common.paths import (
 )
 from common.active_task import (
     clear_active_task,
+    get_degraded_active_task,
     resolve_active_task,
     resolve_context_key,
+    set_degraded_active_task,
     set_active_task,
 )
 from common.io import read_json, write_json
@@ -96,7 +98,9 @@ def cmd_start(args: argparse.Namespace) -> int:
         # Degraded mode: no session identity available.
         # Hook didn't inject TRELLIS_CONTEXT_ID (common on Windows + Claude Code,
         # --continue resume path, fork distribution, hooks disabled, etc.). Skip
-        # per-session pointer write; AI continues based on conversation context.
+        # per-session pointer write; instead persist a best-effort degraded
+        # fallback so later `task.py current` / statusline calls still have a
+        # minimal active-task source to recover from.
         print(colored(
             "ℹ Session identity not available; active-task pointer not persisted "
             "this session (degraded mode). AI continues based on conversation context.",
@@ -107,6 +111,23 @@ def cmd_start(args: argparse.Namespace) -> int:
             "or set TRELLIS_CONTEXT_ID before running task.py start.",
             Colors.YELLOW,
         ))
+
+        previous_degraded = get_degraded_active_task(repo_root)
+        if previous_degraded and previous_degraded.task_path and previous_degraded.task_path != task_dir:
+            print(colored(
+                f"Warning: replacing degraded fallback task {previous_degraded.task_path} -> {task_dir}",
+                Colors.YELLOW,
+            ))
+
+        degraded = set_degraded_active_task(task_dir, repo_root)
+        if degraded:
+            print(colored(f"✓ Degraded fallback active task set to: {task_dir}", Colors.GREEN))
+            print(f"Source: {degraded.source}")
+        else:
+            print(colored(
+                "Warning: failed to persist degraded fallback active-task state.",
+                Colors.YELLOW,
+            ))
 
         # Still flip task.json status: planning → in_progress so downstream phases proceed.
         if task_json_path.is_file():

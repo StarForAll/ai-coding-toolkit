@@ -22,9 +22,7 @@ class TemplateHashSemanticsTest(unittest.TestCase):
     def test_clean_managed_files_do_not_keep_stale_hashes(self) -> None:
         clean_files = (
             ".agents/skills/trellis-finish-work/SKILL.md",
-            ".opencode/lib/trellis-context.js",
             ".opencode/plugins/inject-subagent-context.js",
-            ".opencode/plugins/inject-workflow-state.js",
             ".opencode/plugins/session-start.js",
             ".qoder/settings.json",
             ".trellis/scripts/common/session_context.py",
@@ -46,6 +44,8 @@ class TemplateHashSemanticsTest(unittest.TestCase):
             ".codex/config.toml",
             ".kiro/agents/trellis-research.json",
             ".opencode/agents/trellis-research.md",
+            ".opencode/lib/trellis-context.js",
+            ".opencode/plugins/inject-workflow-state.js",
             ".opencode/skills/trellis-meta/references/customize-local/change-workflow.md",
             ".qoder/agents/trellis-research.md",
             ".qoder/skills/trellis-meta/references/customize-local/change-workflow.md",

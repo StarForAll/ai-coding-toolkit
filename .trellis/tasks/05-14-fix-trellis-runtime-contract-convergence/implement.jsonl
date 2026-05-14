@@ -1,0 +1,4 @@
+{"file":".trellis/spec/scripts/python-conventions.md","reason":"Python runtime/helper changes must follow repo script conventions."}
+{"file":".trellis/spec/platforms/codex-workflow-behavior.md","reason":"Codex inline behavior remains a hard repository constraint and must not be bypassed by the degraded-path fix."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"This fix crosses runtime script, hook, and UI feedback layers; keep the boundary contract aligned."}
+

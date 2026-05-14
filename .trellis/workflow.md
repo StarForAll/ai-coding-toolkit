@@ -73,7 +73,7 @@ python3 ./.trellis/scripts/task.py create-pr [name] [--dry-run]
 
 > Run `python3 ./.trellis/scripts/task.py --help` to see the authoritative, up-to-date list.
 
-**Current-task mechanism**: `task.py create` creates the task directory and (when session identity is available) auto-sets the per-session active-task pointer so the planning breadcrumb fires immediately. `task.py start` writes the same pointer (idempotent if already set) and flips `task.json.status` from `planning` to `in_progress`. State is stored under `.trellis/.runtime/sessions/`. If no context key is available from hook input, `TRELLIS_CONTEXT_ID`, or a platform-native session environment variable, `task.py start` falls back to degraded mode: it does not persist a session-scoped active-task pointer, but it still flips `task.json.status` to `in_progress` and prints a session identity hint. `task.py finish` deletes the current session file (status unchanged). `task.py archive <task>` writes `status=completed`, moves the directory to `archive/`, and deletes any runtime session files that still point at the archived task.
+**Current-task mechanism**: `task.py create` creates the task directory and (when session identity is available) auto-sets the per-session active-task pointer so the planning breadcrumb fires immediately. `task.py start` writes the same pointer (idempotent if already set) and flips `task.json.status` from `planning` to `in_progress`. State is stored under `.trellis/.runtime/sessions/`. If no context key is available from hook input, `TRELLIS_CONTEXT_ID`, or a platform-native session environment variable, `task.py start` falls back to degraded mode: it does not persist a session-scoped active-task pointer, but it does write a best-effort degraded fallback under `.trellis/.runtime/` so later `task.py current` / statusline calls can still recover one explicit active task outside a fully identified AI session. `task.py finish` deletes the current session file (or the degraded fallback when no session identity is available). `task.py archive <task>` writes `status=completed`, moves the directory to `archive/`, and deletes any runtime session files that still point at the archived task.
 
 ### Workspace System
 
@@ -437,7 +437,7 @@ python3 ./.trellis/scripts/task.py start <task-dir>
 
 After this command succeeds, the breadcrumb auto-switches to `[workflow-state:in_progress]`, and the rest of Phase 2 / 3 follows.
 
-If `task.py start` cannot resolve session identity (no context key from hook input, `TRELLIS_CONTEXT_ID`, or platform-native session env), it falls back to degraded mode: status still flips to `in_progress`, but no session-scoped active-task pointer is persisted. Follow the printed hint if you need later `task.py current` / hook-based task resolution to work in the same session.
+If `task.py start` cannot resolve session identity (no context key from hook input, `TRELLIS_CONTEXT_ID`, or platform-native session env), it falls back to degraded mode: status still flips to `in_progress`, no session-scoped active-task pointer is persisted, and a best-effort degraded fallback file is written under `.trellis/.runtime/`. That fallback is lower priority than normal session resolution, but it preserves one explicit active task for later `task.py current` / statusline use outside a fully identified AI session.
 
 #### 1.5 Completion criteria
 

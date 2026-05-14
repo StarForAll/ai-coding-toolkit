@@ -320,6 +320,8 @@ def build_breadcrumb(
     ):
         lookup_key = "stale"
         display_status = "stale"
+    elif source == "degraded":
+        display_status = f"{display_status} · degraded"
     body = templates.get(lookup_key)
     if body is None and lookup_key != status:
         body = templates.get(status)

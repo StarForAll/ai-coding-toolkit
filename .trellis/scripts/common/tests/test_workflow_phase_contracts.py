@@ -99,6 +99,17 @@ class WorkflowPhaseContractsTest(unittest.TestCase):
         self.assertIn("Active task pointer is stale", breadcrumb)
         self.assertNotIn("Refer to workflow.md for current step.", breadcrumb)
 
+    def test_python_hook_surfaces_degraded_mode_in_header(self) -> None:
+        breadcrumb = self.hook_module.build_breadcrumb(
+            "sample-task",
+            "in_progress",
+            self.blocks,
+            source="degraded",
+            breadcrumb_key="in_progress-inline",
+        )
+        self.assertIn("Task: sample-task (in_progress · degraded)", breadcrumb)
+        self.assertIn("Source: degraded", breadcrumb)
+
 
 if __name__ == "__main__":
     unittest.main()

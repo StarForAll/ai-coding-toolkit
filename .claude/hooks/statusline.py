@@ -64,8 +64,16 @@ def _get_current_task(trellis_dir: Path, platform_input: dict) -> dict | None:
         return None
 
     active = resolve_active_task(trellis_dir.parent, platform_input, platform="claude")
-    if not active.task_path or active.stale:
+    if not active.task_path:
         return None
+
+    if active.stale:
+        return {
+            "title": Path(active.task_path).name,
+            "status": "stale",
+            "priority": "STALE",
+            "source": active.source_type,
+        }
 
     task_path = trellis_dir.parent / active.task_path
     task_data = _read_json(task_path / "task.json")
@@ -76,6 +84,7 @@ def _get_current_task(trellis_dir: Path, platform_input: dict) -> dict | None:
         "title": task_data.get("title") or task_data.get("name") or "unknown",
         "status": task_data.get("status", "unknown"),
         "priority": task_data.get("priority", "P2"),
+        "source": active.source_type,
     }
 
 
@@ -127,6 +136,22 @@ def _format_duration(ms: int) -> str:
     if hours > 0:
         return f"{hours}h{mins}m"
     return f"{mins}m"
+
+
+def _render_task_line(task: dict[str, str]) -> str:
+    title = task.get("title", "unknown")
+    status = task.get("status", "unknown")
+    source = task.get("source", "")
+
+    if status == "stale":
+        return f"\033[31m[STALE]\033[0m {title} \033[31m(stale)\033[0m"
+
+    status_label = status
+    if source == "degraded":
+        status_label = f"{status} · degraded"
+
+    priority = task.get("priority", "P2")
+    return f"\033[36m[{priority}]\033[0m {title} \033[33m({status_label})\033[0m"
 
 
 def main() -> None:
@@ -189,7 +214,7 @@ def main() -> None:
 
     # Output: task line (only if active) + info line
     if task:
-        print(f"\033[36m[{task['priority']}]\033[0m {task['title']} \033[33m({task['status']})\033[0m")
+        print(_render_task_line(task))
     print(info_line)
 
 

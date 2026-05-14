@@ -137,6 +137,7 @@ export class TrellisContext {
    *   2. If that misses and exactly one session runtime file exists locally,
    *      use it (`_resolveSingleSessionFallback`). Refuses to guess when 0 or
    *      ≥2 files exist so multi-window isolation holds.
+   *   3. If no context key exists at all, consult the degraded fallback file.
    */
   getActiveTask(platformInput = null) {
     const contextKey = this.getContextKey(platformInput)
@@ -156,6 +157,13 @@ export class TrellisContext {
     const fallback = this._resolveSingleSessionFallback()
     if (fallback) {
       return fallback
+    }
+
+    if (!contextKey) {
+      const degraded = this._resolveDegradedActiveTask()
+      if (degraded) {
+        return degraded
+      }
     }
 
     return { taskPath: null, source: "none", stale: false }
@@ -195,6 +203,27 @@ export class TrellisContext {
     return {
       taskPath: taskRef,
       source: `session-fallback:${fallbackKey}`,
+      stale: !taskDir || !existsSync(taskDir),
+    }
+  }
+
+  _resolveDegradedActiveTask() {
+    const degradedPath = join(this.directory, ".trellis", ".runtime", "degraded-active-task.json")
+    if (!existsSync(degradedPath)) return null
+
+    let context
+    try {
+      context = JSON.parse(readFileSync(degradedPath, "utf-8"))
+    } catch {
+      return null
+    }
+    const taskRef = this.normalizeTaskRef(context?.current_task || "")
+    if (!taskRef) return null
+
+    const taskDir = this.resolveTaskDir(taskRef)
+    return {
+      taskPath: taskRef,
+      source: "degraded",
       stale: !taskDir || !existsSync(taskDir),
     }
   }

@@ -2,8 +2,11 @@
 """Session-scoped active task resolution.
 
 The user-facing concept is a single "active task". Trellis stores that pointer
-per AI session/window under `.trellis/.runtime/sessions/`; without a stable
-session key there is no active task.
+per AI session/window under `.trellis/.runtime/sessions/`.
+
+When no stable session key is available, the runtime can optionally fall back
+to a single degraded active-task file. This preserves minimal continuity for
+shell/manual flows without weakening the normal session-scoped contract.
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ DIR_WORKFLOW = ".trellis"
 DIR_TASKS = "tasks"
 DIR_RUNTIME = ".runtime"
 DIR_SESSIONS = "sessions"
+FILE_DEGRADED_ACTIVE_TASK = "degraded-active-task.json"
 DIR_CURSOR_SHELL = "cursor-shell"
 CURSOR_SHELL_TICKET_TTL_SECONDS = 30
 TASK_SESSION_COMMANDS = {"start", "current", "finish"}
@@ -135,6 +139,10 @@ def resolve_task_ref(task_ref: str, repo_root: Path) -> Path | None:
 
 def _runtime_sessions_dir(repo_root: Path) -> Path:
     return repo_root / DIR_WORKFLOW / DIR_RUNTIME / DIR_SESSIONS
+
+
+def _degraded_active_task_path(repo_root: Path) -> Path:
+    return repo_root / DIR_WORKFLOW / DIR_RUNTIME / FILE_DEGRADED_ACTIVE_TASK
 
 
 def _sanitize_key(raw: str) -> str:
@@ -476,8 +484,11 @@ def resolve_active_task(
     missing/empty session context falls back to single-session inference: if
     exactly one session file exists in the runtime, return its task with
     source_type="session-fallback" — covers class-2 platform sub-agents (codex,
-    copilot, gemini, qoder) that don't inherit the parent's session id. ≥2
-    files or 0 files yield ActiveTask(None) — refuses to guess across windows.
+    copilot, gemini, qoder) that don't inherit the parent's session id.
+
+    If no context key is available at all, the resolver may finally consult the
+    degraded active-task file written by `task.py start` in degraded mode.
+    ≥2 session files or 0 files still refuse to guess across windows.
     """
     context_key = resolve_context_key(platform_input, platform)
     if context_key:
@@ -490,6 +501,11 @@ def resolve_active_task(
     fallback = _resolve_single_session_fallback(repo_root)
     if fallback is not None:
         return fallback
+
+    if not context_key:
+        degraded = _resolve_degraded_active_task(repo_root)
+        if degraded is not None:
+            return degraded
 
     return ActiveTask(None, "none", context_key)
 
@@ -517,6 +533,50 @@ def _resolve_single_session_fallback(repo_root: Path) -> ActiveTask | None:
 
     fallback_key = session_file.stem
     return _active_from_ref(task_ref, repo_root, "session-fallback", fallback_key)
+
+
+def _resolve_degraded_active_task(repo_root: Path) -> ActiveTask | None:
+    """Resolve the best-effort degraded active-task fallback.
+
+    This path exists only for flows where no session identity could be resolved
+    at `task.py start` time. It is intentionally lower priority than normal
+    session resolution and single-session fallback.
+    """
+    degraded = _read_json(_degraded_active_task_path(repo_root)) or {}
+    task_ref = _string_value(degraded.get("current_task"))
+    if not task_ref:
+        return None
+    return _active_from_ref(task_ref, repo_root, "degraded")
+
+
+def get_degraded_active_task(repo_root: Path) -> ActiveTask | None:
+    """Return the current degraded active-task fallback, if any."""
+    return _resolve_degraded_active_task(repo_root)
+
+
+def _same_task_reference(left: str | None, right: str | None, repo_root: Path) -> bool:
+    if left is None or right is None:
+        return False
+    left_ref = _canonical_task_ref(left, repo_root) if left else None
+    right_ref = _canonical_task_ref(right, repo_root) if right else None
+    if left_ref and right_ref:
+        return left_ref == right_ref
+    return normalize_task_ref(left) == normalize_task_ref(right)
+
+
+def clear_degraded_active_task(
+    repo_root: Path,
+    *,
+    keep_task_path: str | None = None,
+) -> bool:
+    """Delete the degraded fallback unless it should be preserved."""
+    degraded = _resolve_degraded_active_task(repo_root)
+    degraded_path = _degraded_active_task_path(repo_root)
+    if not degraded_path.is_file():
+        return False
+    if keep_task_path and degraded and _same_task_reference(degraded.task_path, keep_task_path, repo_root):
+        return False
+    return _remove_file(degraded_path)
 
 
 def _utc_now() -> str:
@@ -571,7 +631,35 @@ def set_active_task(
     context.setdefault("current_run", None)
     if not _write_json(context_path, context):
         return None
+
+    # A session-scoped pointer is now authoritative. If a degraded fallback
+    # still points at a DIFFERENT task, clear it so stale shell/no-context
+    # lookups do not resurrect old work.
+    clear_degraded_active_task(repo_root, keep_task_path=canonical)
     return ActiveTask(canonical, "session", context_key)
+
+
+def set_degraded_active_task(
+    task_path: str,
+    repo_root: Path,
+    platform_input: dict[str, Any] | None = None,
+    platform: str | None = None,
+) -> ActiveTask | None:
+    """Persist a best-effort degraded active-task fallback.
+
+    Used only when no session identity is available during `task.py start`.
+    """
+    canonical = _canonical_task_ref(task_path, repo_root)
+    if canonical is None:
+        return None
+
+    degraded = _read_json(_degraded_active_task_path(repo_root)) or {}
+    degraded.update(_context_metadata(platform_input, platform))
+    degraded["current_task"] = canonical
+    degraded["mode"] = "degraded"
+    if not _write_json(_degraded_active_task_path(repo_root), degraded):
+        return None
+    return ActiveTask(canonical, "degraded")
 
 
 def clear_active_task(
@@ -582,17 +670,25 @@ def clear_active_task(
     """Clear the active task by deleting the current session context file."""
     context_key = resolve_context_key(platform_input, platform)
     if not context_key:
-        return ActiveTask(None, "none")
+        previous = _resolve_degraded_active_task(repo_root) or ActiveTask(None, "none")
+        degraded_path = _degraded_active_task_path(repo_root)
+        if degraded_path.is_file():
+            _remove_file(degraded_path)
+        return previous
 
     previous = resolve_active_task(repo_root, platform_input, platform)
     context_path = _context_path(repo_root, context_key)
     if context_path.is_file():
         _remove_file(context_path)
+    if previous.task_path:
+        degraded = _resolve_degraded_active_task(repo_root)
+        if degraded and _same_task_reference(degraded.task_path, previous.task_path, repo_root):
+            clear_degraded_active_task(repo_root)
     return previous
 
 
 def clear_task_from_sessions(task_path: str, repo_root: Path) -> int:
-    """Delete all session runtime files that point at a task."""
+    """Delete runtime task pointers that point at a task."""
     target = _canonical_task_ref(task_path, repo_root) or normalize_task_ref(task_path)
     if not target:
         return 0
@@ -612,6 +708,13 @@ def clear_task_from_sessions(task_path: str, repo_root: Path) -> int:
             continue
         if session_path.is_file() and _remove_file(session_path):
             cleared += 1
+
+    degraded_path = _degraded_active_task_path(repo_root)
+    degraded = _read_json(degraded_path) or {}
+    degraded_task = _string_value(degraded.get("current_task"))
+    degraded_ref = _canonical_task_ref(degraded_task, repo_root) if degraded_task else None
+    if degraded_ref == target and degraded_path.is_file() and _remove_file(degraded_path):
+        cleared += 1
 
     return cleared
 
