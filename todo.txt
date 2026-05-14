@@ -6,9 +6,8 @@
 
 2.1 当前项目下 agents 目录内容定时执行更新，其需要符合最新有效的技术文档信息，避免当前agents过时
 
-
-2.
-3. 扫描项目所有内容同步更新README.md
+3.1 扫描项目所有内容同步更新README.md
+3.2 根据当前项目中docs/workflows/新项目开发工作流 目录所对应的工作流在实际嵌入目标项目中的实际效果更新 docs/workflows/新项目开发工作流/工作流思维导图.html
 4. 根据当前项目实际作用分析，将历史遗留漂移数据扫描查询出来给出合适的方案然后让用户确认具体要执行的修改方案
 
 5. 每次trellis升级都需要对工作流中的升级适配机制修复完善
@@ -19,12 +18,13 @@ A1:详细深度分析当前项目下trellis工作和使用机制,然后分析当
 在当前会话中不能使用subagents
 
 A2:使用另一个cli对当前修改进行分析[需要重复几次操作]
-mkcd /tmp/trellis-0.5.14
+mkcd /tmp/trellis-0.5.15
 trellis init --codex --claude --opencode --qoder -u xzc
 
-/tmp/trellis-0.5.14 是当前trellis版本下初始化的临时项目，使用该临时项目详细了解trellis机制之后和当前项目根目录下相对应的隐藏目录中的内容进行对比分析，判断当前修改[git status/diff]操作是否正确，是否存在错漏
+/tmp/trellis-0.5.15 是当前trellis版本下初始化的临时项目，使用该临时项目详细了解trellis机制之后和当前项目根目录下相对应的隐藏目录中的内容进行对比分析，判断当前修改[git status/diff]操作是否正确，是否存在错漏
 注意当前修改可能存在遗漏的情况，需要注意部分文件没有修改的情况
 Phase 编号使用现在的即可
+.trellis/.template-hashes.json 记录值 != 当前实际内容是正常的情况
 在当前会话中不能使用subagents
 
 
