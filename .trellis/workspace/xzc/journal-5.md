@@ -705,3 +705,36 @@ Tightened workflow-audit so Codex handoff and maintainer execution stay on main 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 207: Audit workflow AGENTS behavior on 0.5.14 sample
+
+**Date**: 2026-05-14
+**Task**: Audit workflow AGENTS behavior on 0.5.14 sample
+**Branch**: `main`
+
+### Summary
+
+Audited the 新项目开发工作流 against the existing /tmp/trellis-0.5.14-1 Trellis 0.5.14 sample, captured bounded runtime evidence for AGENTS.md behavior, archived the runtime audit task, and concluded no confirmed AGENTS conflict under the dry-run evidence path.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `059cd60` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
