@@ -48,12 +48,12 @@ python3 ./.trellis/scripts/task.py list
 - Treat this repository as the workflow authoring source project, not a target project that consumes installed workflow assets.
 - Distinguish source assets, deployed tool copies, task-local runtime artifacts, and target-project outputs. Do not describe one layer as another.
 - `AGENTS.md` carries long-lived project rules. Session/task context comes from `.trellis/` plus platform hooks/plugins, not from this file alone.
-- For sub-agents, context may be pushed by platform-specific `inject-subagent-context` hooks/plugins or pulled by the agent definition itself, depending on the platform.
+- For sub-agents, context may be pushed by platform-specific `inject-subagent-context` hooks/plugins or pulled by the agent definition itself, depending on the platform. When dispatching Trellis sub-agents from the main session, follow `.trellis/workflow.md`'s required `Active task: <task path>` prompt prelude so hookless or self-loading platforms resolve the correct task context.
 - This repository authors workflow assets; consuming target projects receive extra install-time surfaces. One example is the installer-managed `workflow-nl-routing` AGENTS block, which belongs to installed target projects rather than this source authoring repository unless the authoring contract changes.
 - If you edit the project root README, update `README.md` and `README.en.md` together.
-- Do not execute `git commit`.
 - Keep `.trellis/workspace/` journal files under 2000 lines.
 - Run the relevant validation commands before claiming completion.
+- When this repository's Trellis workflow or platform-integration behavior changes, use the same change/review to manually re-check the guidance outside this file's `TRELLIS:START` / `TRELLIS:END` block against `.trellis/workflow.md`, `.codex/config.toml`, and the relevant `trellis-*` skills so local summary text does not drift from the managed workflow.
 
 ## Language Policy
 
@@ -69,7 +69,7 @@ python3 ./.trellis/scripts/task.py list
 - For workflow maintenance, compare rendered agent copies against the shared source plus renderer contract, not only by cross-platform string equality; small platform-localized wording or path examples may differ.
 - Claude, OpenCode, and Kiro can push sub-agent context via `inject-subagent-context` hooks/plugins. Codex self-loads task context in agent files. In the current Qoder deployment, `trellis-implement` and `trellis-check` self-load `prd.md`, `info.md`, and JSONL context, while `trellis-research` resolves the active task/output path itself and there is no dedicated Qoder subagent-context hook in `.qoder/settings.json`.
 - Codex relies on `AGENTS.md`, `.codex/config.toml`, `.codex/hooks.json`, `.agents/skills/`, and `.codex/agents/`; do not assume a project-level `/trellis:...` command directory exists there.
-- Use Trellis native `finish-work` / `add_session.py` behavior for close-out in this repository; do not introduce repo-local helper-based close-out flows unless the platform contract is explicitly changed.
+- Use Trellis native `finish-work` as the normal close-out path in this repository after the workflow's required code-commit step. `add_session.py` is the underlying session-recording step used by that flow and a manual fallback when explicitly needed; do not introduce repo-local helper-based close-out flows unless the platform contract is explicitly changed.
 - Kiro uses `.kiro/` hooks, agents, and skills to connect into the same `.trellis` state.
 - Qoder uses `.qoder/` hooks, skills, and agents to connect into the same `.trellis` state.
 

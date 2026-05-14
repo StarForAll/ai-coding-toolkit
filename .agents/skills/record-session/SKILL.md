@@ -9,9 +9,10 @@ Use this skill only when:
 - the user specifically asks to run `record-session` manually
 - you intentionally want a manual `add_session.py` path outside the normal `finish-work`
 
-[!] **Platform boundary**: this repository now treats `finish-work` / `add_session.py`
-as the standard close-out path. Do not reintroduce helper-specific recovery
-semantics here.
+[!] **Platform boundary**: this repository now treats `finish-work` as the
+standard close-out path. Direct `add_session.py` use remains the underlying
+session-recording step in that flow and a manual fallback when explicitly
+needed. Do not reintroduce helper-specific recovery semantics here.
 
 [!] **Prerequisite**: This skill should only be used AFTER the human has tested and committed the code.
 
