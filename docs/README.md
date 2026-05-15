@@ -18,3 +18,4 @@
 ## 其他可复用运行时修复指南
 
 - `docs/Trellis元数据自动提交失败恢复指南.md`：当 Trellis 的 archive / finish-work 自动提交因只读环境失败时，如何修改脚本链路与命令入口，让项目支持恢复命令与提权重试
+- `docs/Trellis隐藏目录边界清单.md`：说明当前 source repo 自身的隐藏目录应如何区分 `managed`、`manual`、`ignored runtime residue`，避免把目标项目清单误用于本仓库
