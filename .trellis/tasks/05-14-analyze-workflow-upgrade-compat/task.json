@@ -3,7 +3,7 @@
   "name": "analyze-workflow-upgrade-compat",
   "title": "分析工作流升级兼容性修改的缺漏与残留问题",
   "description": "",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,
