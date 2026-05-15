@@ -1,0 +1,3 @@
+{"file":".trellis/spec/skills/workflow-capability-audit.md","reason":"Behavioral source of truth for version-gate and audit-flow contract changes."}
+{"file":".trellis/spec/docs/index.md","reason":"Documentation-layer boundary and update rules for workflow product docs and references."}
+{"file":".trellis/spec/platforms/codex-workflow-behavior.md","reason":"Keep Codex inline execution constraints aligned while changing audit behavior."}
