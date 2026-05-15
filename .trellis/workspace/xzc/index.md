@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 211
-- **Last Active**: 2026-05-14
+- **Total Sessions**: 212
+- **Last Active**: 2026-05-15
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~874 | Active |
+| `journal-5.md` | ~907 | Active |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 212 | 2026-05-15 | 分析工作流升级兼容性修改收尾 | `dced458` | `main` |
 | 211 | 2026-05-14 | 收敛 Trellis 运行时降级契约 | `5581f5d` | `main` |
 | 210 | 2026-05-14 | 修复 Trellis AGENTS 与 workflow 文档漂移 | `db799c1` | `main` |
 | 209 | 2026-05-14 | Resolve trellis 0.5.15 upgrade .new files and fix template hash drift | `f36b3e8` | `main` |
