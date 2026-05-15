@@ -78,6 +78,9 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         } if RUNTIME_SESSIONS_DIR.is_dir() else {}
         self._fixture_dirs: list[Path] = []
         self._temp_dirs: list[Path] = []
+        if RUNTIME_SESSIONS_DIR.is_dir():
+            for path in RUNTIME_SESSIONS_DIR.glob("*.json"):
+                path.unlink()
 
     def tearDown(self) -> None:
         if TRELLIS_TASKS_DIR.is_dir():
@@ -581,15 +584,35 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self.assertEqual(payload["gate_result"], "equal-version-stop")
         self.assertFalse(payload["task_created"])
 
-    def test_script_stops_on_older_version(self) -> None:
+    def test_script_enters_full_audit_on_equal_version_when_explicitly_allowed(self) -> None:
+        assets = load_assets_module()
+        env = {
+            assets.CURRENT_TRELLIS_VERSION_ENV: assets.COMPATIBLE_TRELLIS_VERSION,
+        }
+        result = self.run_script_with_fake_full_audit(
+            "--current-cli",
+            "claude",
+            "--allow-equal-version-continue",
+            "--json",
+            env=env,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["gate_result"], "equal-version-continue")
+        self.assertIn("reason", payload)
+        self.assertNotIn("gate_reason", payload)
+        self.assertIn("task_dir", payload)
+        self.assertIn("capability_report", payload)
+        self._track_fixtures_from_payload(payload)
+
+    def test_script_errors_on_older_version_contract_violation(self) -> None:
         assets = load_assets_module()
         env = {
             assets.CURRENT_TRELLIS_VERSION_ENV: "0.3.9",
         }
         result = self.run_script("--json", env=env)
-        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        payload = json.loads(result.stdout)
-        self.assertEqual(payload["gate_result"], "older-version-block")
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("COMPATIBLE_TRELLIS_VERSION must not exceed trellis -v", result.stderr)
 
     def test_script_stops_on_version_parse_error(self) -> None:
         assets = load_assets_module()
@@ -628,7 +651,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         schema_index = lines.index('WORKFLOW_SCHEMA_VERSION = "2"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增')
         self.assertEqual(lines[schema_index + 1], 'COMPATIBLE_TRELLIS_VERSION = "0.5.0"')
 
-    def test_script_enters_upgrade_path_when_current_version_is_newer(self) -> None:
+    def test_script_enters_full_audit_when_current_version_is_newer(self) -> None:
         assets = load_assets_module()
         env = {
             assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
@@ -637,6 +660,8 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         payload = json.loads(result.stdout)
         self.assertEqual(payload["gate_result"], "newer-version-continue")
+        self.assertIn("reason", payload)
+        self.assertNotIn("gate_reason", payload)
         self.assertIn("task_dir", payload)
         self.assertIn("capability_report", payload)
         self.assertGreaterEqual(payload["managed_rows"], 1)
@@ -1048,7 +1073,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             "--confirm-fix-scope",
             "Confirm patch markers and capability matrix updates.",
             "--record-correction",
-            "Updated workflow source for Trellis version-upgrade compatibility.",
+            "Updated workflow source for Trellis compatibility alignment.",
             "--record-revalidation",
             "Revalidated capability report after confirmed correction.",
             "--finalize-fixture-destruction",
@@ -1061,7 +1086,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         report_path = REPO_ROOT / second_payload["report_path"]
         report_text = report_path.read_text(encoding="utf-8")
         self.assertIn("Confirm patch markers and capability matrix updates.", report_text)
-        self.assertIn("Updated workflow source for Trellis version-upgrade compatibility.", report_text)
+        self.assertIn("Updated workflow source for Trellis compatibility alignment.", report_text)
         self.assertIn("Revalidated capability report after confirmed correction.", report_text)
         self.assertIn("- Destroyed: yes", report_text)
         self.assertIn("- Final destruction confirmed by user: yes", report_text)
@@ -1191,7 +1216,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             "--confirm-fix-scope",
             "Confirm patch markers and capability matrix updates.",
             "--record-correction",
-            "Updated workflow source for Trellis version-upgrade compatibility.",
+            "Updated workflow source for Trellis compatibility alignment.",
             "--record-revalidation",
             "Revalidated capability report after confirmed correction.",
             env=env,
@@ -1504,7 +1529,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         output = result.stdout
         self.assertIn("### Next Action", output)
-        self.assertIn("Update COMPATIBLE_TRELLIS_VERSION", output)
+        self.assertIn("--allow-equal-version-continue", output)
         for section in ["## Version Gate Stop", "### Why Execution Stops Here", "### Task Creation", "### Next Action"]:
             self.assertIn(section, output)
 

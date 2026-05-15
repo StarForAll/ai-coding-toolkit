@@ -1,14 +1,14 @@
-# 03 Full Audit Upgrade Path
+# 03 Full Audit Newer Path
 
 ## Purpose
 
-Verify that `workflow-capability-audit` enters the full task-based audit path only when the current Trellis version is newer than `COMPATIBLE_TRELLIS_VERSION`.
+Verify that `workflow-capability-audit` enters the full task-based audit path when the current Trellis version is newer than `COMPATIBLE_TRELLIS_VERSION`.
 
 ## Input
 
 User input:
 
-> Audit whether the new Trellis version changed capabilities or mechanics that require compatibility updates in `docs/workflows/新项目开发工作流/`.
+> Audit whether the newer Trellis version changed capabilities or mechanics that require compatibility updates in `docs/workflows/新项目开发工作流/`.
 
 ## Expected Mode
 
@@ -16,7 +16,7 @@ Task-based full compatibility audit.
 
 ## Expected Key Behaviors
 
-- pass version gating only when `current > compatible`
+- pass version gating whenever `current > compatible`
 - create a task after the gate passes
 - create fresh A/B fixtures
 - maintain `prd.md`
@@ -30,5 +30,6 @@ Task-based full compatibility audit.
 
 - must not reuse existing A/B roots
 - must not recycle earlier unrelated fixtures
-- must not enter the audit path when versions are equal
+- must not enter the audit path when versions are equal unless explicit continuation was requested
+- must not enter the audit path when `current < compatible`
 - must not auto-execute workflow source remediation

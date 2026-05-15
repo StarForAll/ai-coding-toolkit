@@ -12,11 +12,11 @@ The matrix headers below define the emitted first-version column order and shoul
 - Current CLI: <claude | opencode | codex>
 - Current Trellis Version: <value>
 - Compatible Anchor: <value>
-- Audit Scope: task-based version-upgrade compatibility audit
+- Audit Scope: task-based compatibility audit
 
 ## Version Gate Outcome
-- Result: <passed>
-- Reason: <current Trellis version is newer than the compatible anchor>
+- Result: <newer-version-continue | equal-version-continue>
+- Reason: <current Trellis version is newer than the compatible anchor | current Trellis version matches and explicit same-version continuation was requested>
 
 ## Evidence-Gathering Actions Executed In This Round
 - <action> — Layer: <source repo | generated target project | runtime command output>

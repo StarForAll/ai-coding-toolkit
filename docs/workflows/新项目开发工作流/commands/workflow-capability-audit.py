@@ -49,7 +49,7 @@ from common.active_task import (  # type: ignore[import-not-found]
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run a Trellis version-upgrade capability audit skeleton for 新项目开发工作流."
+        description="Run a Trellis compatibility audit skeleton for 新项目开发工作流."
     )
     parser.add_argument(
         "--workflow-path",
@@ -60,6 +60,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--current-cli",
         default="",
         help="Current CLI label for the report. Always pass this value (claude|opencode|codex). The script does not auto-detect the CLI.",
+    )
+    parser.add_argument(
+        "--allow-equal-version-continue",
+        action="store_true",
+        help="Allow the full audit path when the current Trellis version exactly matches the compatible anchor.",
     )
     parser.add_argument(
         "--compatible-trellis-version",
@@ -105,8 +110,7 @@ def print_stop(result: str, current_version: str | None, compatible_anchor: str 
 
 def _next_action_for_gate(result: str) -> str:
     actions = {
-        "equal-version-stop": "Update COMPATIBLE_TRELLIS_VERSION to a newer version before re-running the audit.",
-        "older-version-block": "Upgrade Trellis to at least the compatible anchor version before re-running the audit.",
+        "equal-version-stop": "Re-run with --allow-equal-version-continue when the user explicitly wants a same-version full audit.",
         "missing-compatible-anchor": "Supply a compatible Trellis version via --compatible-trellis-version and re-run.",
         "environment-error": "Verify Trellis CLI installation and ensure trellis -v returns a valid version.",
         "version-parse-error": "Check that both the current version and compatible anchor are valid semver strings.",
@@ -785,7 +789,7 @@ def initialize_prd(task_dir: Path, current_version: str, compatible_anchor: str)
 
 ## Goal
 
-Audit whether a newer Trellis version changed baseline capabilities or mechanics in ways that require compatibility adaptation for `docs/workflows/新项目开发工作流/`.
+Audit whether the current Trellis version relationship to the workflow compatibility anchor requires compatibility adaptation for `docs/workflows/新项目开发工作流/`.
 
 ## What I already know
 
@@ -795,7 +799,7 @@ Audit whether a newer Trellis version changed baseline capabilities or mechanics
 
 ## Requirements
 
-* Create fresh `A` and `B` fixtures after the version gate passes.
+* Create fresh `A` and `B` fixtures after the version gate allows continuation.
 * Discover current Trellis baseline capabilities dynamically.
 * Compare workflow-managed and workflow-dependent Trellis-native surfaces.
 * Produce `capability-report.md` and stop for user confirmation.
@@ -1241,6 +1245,8 @@ def initialize_capability_report(
     current_cli: str,
     current_version: str,
     compatible_anchor: str,
+    gate_result: str,
+    reason: str,
     a_root: Path,
     b_root: Path,
     managed_rows: list[dict[str, Any]],
@@ -1256,11 +1262,11 @@ def initialize_capability_report(
 - Current CLI: {current_cli or 'not specified (pass --current-cli)'}
 - Current Trellis Version: {current_version}
 - Compatible Anchor: {compatible_anchor}
-- Audit Scope: task-based version-upgrade compatibility audit
+- Audit Scope: task-based compatibility audit
 
 ## Version Gate Outcome
-- Result: passed
-- Reason: current Trellis version is newer than the compatible anchor
+- Result: {gate_result}
+- Reason: {reason}
 
 ## Evidence-Gathering Actions Executed In This Round
 - Step 0 version gate passed — Layer: runtime command output
@@ -1454,12 +1460,12 @@ def main() -> int:
         else:
             print_stop_human(payload)
         return 0
-    if comparison == 0:
+    if comparison == 0 and not args.allow_equal_version_continue:
         payload = print_stop(
             "equal-version-stop",
             current_version,
             compatible_anchor,
-            "Current Trellis version already matches the workflow compatibility anchor.",
+            "Current Trellis version already matches the workflow compatibility anchor, and no explicit same-version continuation was requested.",
         )
         if args.json:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -1467,17 +1473,16 @@ def main() -> int:
             print_stop_human(payload)
         return 0
     if comparison < 0:
-        payload = print_stop(
-            "older-version-block",
-            current_version,
-            compatible_anchor,
-            "Current Trellis version is older than the workflow compatibility anchor.",
+        raise RuntimeError(
+            "Workflow contract violation: COMPATIBLE_TRELLIS_VERSION must not exceed trellis -v."
         )
-        if args.json:
-            print(json.dumps(payload, ensure_ascii=False, indent=2))
-        else:
-            print_stop_human(payload)
-        return 0
+
+    gate_result = "equal-version-continue" if comparison == 0 else "newer-version-continue"
+    reason = (
+        "Current Trellis version matches the workflow compatibility anchor and explicit continuation was requested."
+        if comparison == 0
+        else "Current Trellis version is newer than the workflow compatibility anchor."
+    )
 
     current_cli_error = validate_current_cli(args.current_cli)
     if current_cli_error:
@@ -1528,6 +1533,8 @@ def main() -> int:
             args.current_cli,
             current_version,
             compatible_anchor,
+            gate_result,
+            reason,
             a_root,
             b_root,
             managed_rows,
@@ -1570,7 +1577,8 @@ def main() -> int:
         return 1
 
     payload = {
-        "gate_result": "newer-version-continue",
+        "gate_result": gate_result,
+        "reason": reason,
         "current_trellis_version": current_version,
         "compatible_anchor": compatible_anchor,
         "task_dir": task_dir_ref,

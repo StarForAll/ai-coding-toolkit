@@ -1,12 +1,12 @@
 # workflow-capability-audit Skill Specification
 
-> Repo-local maintainer skill contract for auditing whether `docs/workflows/新项目开发工作流/` remains compatible with a newer Trellis version.
+> Repo-local maintainer skill contract for auditing whether `docs/workflows/新项目开发工作流/` remains compatible under Trellis version drift or an explicitly requested same-version full audit.
 
 ---
 
 ## Purpose
 
-`workflow-capability-audit` exists to judge **Trellis version-upgrade compatibility** for the repo-local workflow source under `docs/workflows/新项目开发工作流/`.
+`workflow-capability-audit` exists to judge **Trellis compatibility** for the repo-local workflow source under `docs/workflows/新项目开发工作流/`.
 
 This skill covers:
 
@@ -19,11 +19,12 @@ This skill covers:
   - workflow-managed surfaces
   - Trellis-native capabilities that the workflow depends on even when they are not installer-managed
 - structural-break risk judgment before any workflow source adaptation work starts
+- explicit same-version full-audit continuation when the user requests deeper confirmation
 
 It does not cover:
 
 - ordinary business code review
-- routine workflow-source drift analysis when the Trellis version has not changed
+- routine workflow-source drift analysis when the Trellis version has not changed and no explicit same-version full audit was requested
 - automatic workflow source remediation before the user confirms the audit conclusion
 
 ---
@@ -32,14 +33,15 @@ It does not cover:
 
 Use `workflow-capability-audit` when the user wants to:
 
-- determine whether a newer Trellis version changed capabilities or mechanics that affect `docs/workflows/新项目开发工作流/`
+- determine whether the current Trellis version relationship to the compatibility anchor changed capabilities or mechanics that affect `docs/workflows/新项目开发工作流/`
+- continue into a same-version full audit when the user explicitly requests deeper confirmation
 - compare a fresh Trellis baseline against a workflow-embedded project to judge missing/disabled/incompatible capabilities
-- decide whether the workflow needs compatibility adaptation after Trellis version upgrade
+- decide whether the workflow needs compatibility adaptation after Trellis version change or drift
 - validate whether a suspected omitted Trellis capability should enter the compatibility matrix after the AI completes a discovery pass
 
 Do not use it for:
 
-- same-version workflow maintenance with no Trellis version change
+- same-version workflow maintenance with no Trellis version change and no explicit same-version full audit request
 - ordinary workflow embed/install correctness checks where capability compatibility is not the central question
 - generic code review or implementation quality analysis
 
@@ -135,15 +137,16 @@ If version parsing fails:
 Allowed outcomes:
 
 1. `current == COMPATIBLE_TRELLIS_VERSION`
-   - terminate execution
-   - explain that no Trellis version-upgrade compatibility audit is needed
+   - default: terminate execution
+   - explain that no full compatibility audit is needed unless the user explicitly requests a same-version full audit
+   - explicit override: allow the full audit path when the caller passes the dedicated continuation input
 
 2. `current > COMPATIBLE_TRELLIS_VERSION`
    - proceed to full audit
 
 3. `current < COMPATIBLE_TRELLIS_VERSION`
-   - terminate execution
-   - classify as `Blocked / Unsupported Direction`
+   - treat this as a workflow-contract violation
+   - abort with a non-zero error instead of entering the normal audit path
 
 ### Environment Failure Rule
 
@@ -185,7 +188,6 @@ First-version template strategy:
 Expected `Gate Result` values:
 
 - `equal-version-stop`
-- `older-version-block`
 - `missing-compatible-anchor`
 - `environment-error`
 - `version-parse-error`
@@ -205,6 +207,11 @@ Natural language is allowed, but the recommended contract is:
     - in Codex CLI: `codex`
   - the script does not auto-detect the CLI; the caller is responsible for inference
   - values outside `claude|opencode|codex` must be rejected before any full-audit task or fixture setup begins
+- `allow_equal_version_continue`
+  - optional boolean
+  - default: `false`
+  - required when the user explicitly wants a same-version full audit
+  - has effect only when `current == compatible`
 
 No initial `user_supplemented_capabilities` field exists in first version.
 
@@ -217,7 +224,7 @@ Reason:
 
 ## Task Model
 
-This skill is **task-based only** after the version gate passes.
+This skill is **task-based only** after `current > compatible` or an explicit same-version continuation is allowed.
 
 ### Task Creation Rules
 
@@ -265,7 +272,7 @@ Rules:
 
 Lifecycle:
 
-- create only after version gate passes
+- create only after `current > compatible` or explicit same-version continuation is allowed
 - preserve A/B through the whole audit/fix lifecycle
 - preserve them after audit conclusion while the user reviews or confirms the next step
 - preserve them through confirmed compatibility-fix and post-fix revalidation
@@ -583,8 +590,10 @@ Each test file must use:
 First-version scenario set should cover at least:
 
 - version equal stop
+- version equal explicit continue
 - missing compatibility anchor
-- full upgrade-path audit
+- full newer-path audit
+- older-version contract violation
 - structural-break possible stop
 - supplemental capability confirmation loop
 - child audit task + A/B fixture lifecycle

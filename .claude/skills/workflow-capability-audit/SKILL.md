@@ -1,16 +1,17 @@
 ---
 name: workflow-capability-audit
-description: Use when auditing whether `docs/workflows/新项目开发工作流/` remains compatible after a newer Trellis version changes baseline capabilities, carrier models, or upgrade-sensitive mechanics.
+description: Use when auditing whether `docs/workflows/新项目开发工作流/` remains compatible under newer-version drift or an explicitly requested same-version full audit.
 ---
 
 # workflow-capability-audit
 
-`workflow-capability-audit` is the repo-local maintainer entry point for **Trellis version-upgrade compatibility** of `docs/workflows/新项目开发工作流/`.
+`workflow-capability-audit` is the repo-local maintainer entry point for **Trellis compatibility audit** of `docs/workflows/新项目开发工作流/`.
 
 If this file conflicts with `.trellis/spec/skills/workflow-capability-audit.md`, treat the spec file as the behavioral source of truth.
 
 ## Version History
 
+- `v1.2`: allow full audit only on newer-version drift and add explicit same-version continuation override
 - `v1.1`: surfaced sync rules, error/edge handling, Codex inline execution constraints, and explicit scenario-test/reference contracts
 - `v1.0`: established the first-version capability-audit contract
 
@@ -18,7 +19,8 @@ If this file conflicts with `.trellis/spec/skills/workflow-capability-audit.md`,
 
 Use this skill to:
 
-- decide whether a newer Trellis version changed capabilities/mechanics that affect the workflow
+- decide whether the current Trellis version relationship to the compatibility anchor changed capabilities/mechanics that affect the workflow
+- allow explicit same-version full audit when the user wants deeper confirmation even without version drift
 - compare a fresh Trellis baseline (`A`) and a fresh workflow-embedded state (`B`)
 - build a capability/compatibility matrix across workflow-managed and workflow-dependent Trellis-native surfaces
 - decide whether the workflow needs normal compatibility adaptation or structural-break follow-up
@@ -26,15 +28,16 @@ Use this skill to:
 Do not use this skill to:
 
 - review ordinary business code
-- re-audit same-version workflow maintenance
+- re-audit same-version workflow maintenance unless the user explicitly requests a same-version full audit
 - auto-execute workflow source remediation before the user confirms the audit conclusion
 
 ## Trigger Conditions
 
 Trigger this skill when the user wants to:
 
-- check whether a newer Trellis version is still compatible with `docs/workflows/新项目开发工作流/`
-- audit missing / disabled / incompatible Trellis-native capabilities after version upgrade
+- check whether the current Trellis version relationship to the compatibility anchor is still compatible with `docs/workflows/新项目开发工作流/`
+- audit missing / disabled / incompatible Trellis-native capabilities after version change or drift
+- continue into a same-version full audit explicitly instead of stopping at the default equal-version gate
 - confirm whether the workflow now needs compatibility fixes or structural-break handling
 
 ## Scope
@@ -54,6 +57,10 @@ If another workflow root is requested, stop and report that first-version suppor
   - the script does not auto-detect the CLI; the caller is responsible for inference
   - values outside `claude|opencode|codex` must be rejected before any full-audit task or fixture setup begins
 - `workflow_path` — default and only supported value in first version: `docs/workflows/新项目开发工作流/`
+- `allow_equal_version_continue` — optional explicit override:
+  - default: `false`
+  - set to `true` only when the user explicitly wants a same-version full audit
+  - has effect only when `current == compatible`
 
 ## Supported Surface
 
@@ -107,11 +114,13 @@ Rules:
 - if version parsing fails:
   - stop as `Blocked / Version Parse Error`
 - if `current == compatible`:
-  - stop
-- if `current < compatible`:
-  - stop as `Blocked / Unsupported Direction`
-- only if `current > compatible`:
+  - default: stop
+  - continue only when the explicit same-version continuation input is provided
+- if `current > compatible`:
   - continue into full audit
+- if `current < compatible`:
+  - abort with a non-zero workflow-contract violation error
+  - do not treat this as a normal audit path
 
 For the same numeric base version:
 
@@ -121,7 +130,7 @@ Use the fixed version-gate stop template from `references/version-gate-stop-temp
 
 ## Task Model
 
-This skill is task-based only **after** the version gate passes.
+This skill is task-based only **after** `current > compatible` or explicit same-version continuation is allowed.
 
 Rules:
 
@@ -137,7 +146,7 @@ Rules:
 
 ## A/B Fixtures
 
-Create fresh temporary projects only after the version gate passes:
+Create fresh temporary projects only after `current > compatible` or explicit same-version continuation is allowed:
 
 - `A`: fresh Trellis baseline
 - `B`: fresh Trellis baseline + installed current workflow
@@ -159,7 +168,7 @@ For exact invocation forms, see `references/execution-runbook.md`.
 
 Run the script to:
 
-- pass the version gate
+- pass the version gate or explicit same-version continuation gate
 - create the audit task
 - create fresh A/B fixtures
 - generate initial `prd.md`
@@ -249,11 +258,8 @@ This skill has three output modes:
 ## Error Handling And Edge Cases
 
 - `equal-version-stop`:
-  - trigger: `trellis -v == COMPATIBLE_TRELLIS_VERSION`
+  - trigger: `trellis -v == COMPATIBLE_TRELLIS_VERSION` and no explicit same-version continuation input is provided
   - action: stop before task creation, `prd.md`, `capability-report.md`, or A/B fixtures
-- `older-version-block`:
-  - trigger: `current < compatible`
-  - action: stop as unsupported direction
 - `missing-compatible-anchor`:
   - trigger: `COMPATIBLE_TRELLIS_VERSION` missing
   - action: ask the user for the value; only the compatibility-anchor write is allowed before the audit
@@ -278,6 +284,13 @@ This skill has three output modes:
 - structural-break possible:
   - trigger: final structural judgment is `possible`
   - action: use the dedicated stop template and wait for explicit user confirmation
+
+### Contract-violation path
+
+- `older-version-contract-violation`:
+  - trigger: `current < compatible`
+  - action: abort with a non-zero error and treat it as a workflow-contract violation instead of a normal gate result
+  - note: this is **not** emitted as a `gate_result`; the script raises a `RuntimeError` instead
 
 ## Classification Rules
 
@@ -401,13 +414,13 @@ Required persisted scenario files:
 
 - `tests/01-version-equal-stop.md`
 - `tests/02-missing-compatible-anchor.md`
-- `tests/03-full-audit-upgrade-path.md`
+- `tests/03-full-audit-newer-path.md`
 - `tests/04-structural-break-possible-stop.md`
 - `tests/05-post-analysis-supplemental-capability.md`
 - `tests/06-child-audit-task-and-fixture-lifecycle.md`
 - `tests/07-version-parse-error.md`
 - `tests/08-environment-error.md`
-- `tests/09-older-version-block.md`
+- `tests/09-older-version-contract-violation.md`
 - `tests/10-final-compatibility-promotion-mandatory.md`
 - `tests/11-existing-active-capability-audit-stop.md`
 - `tests/12-shared-skills-deployment-carrier.md`
@@ -415,6 +428,7 @@ Required persisted scenario files:
 - `tests/14-codex-secondary-skills-carrier.md`
 - `tests/15-native-cli-adaptation-evidence-contract.md`
 - `tests/16-codex-inline-main-session-analysis.md`
+- `tests/17-equal-version-explicit-continue.md`
 
 Every test file must use the same structure:
 
@@ -441,9 +455,21 @@ Expected path:
 - if `trellis -v == COMPATIBLE_TRELLIS_VERSION`, stop with `Gate Result = equal-version-stop`
 - do not create a task or A/B fixtures
 
-### Example 2: Full upgrade-path audit
+### Example 2: Equal-version explicit continue
 
-User asks whether a newer Trellis version changed capabilities that affect
+User asks for the same compatibility audit and explicitly wants it to continue
+even though the versions match.
+
+Expected path:
+
+- run the version gate first
+- detect `trellis -v == COMPATIBLE_TRELLIS_VERSION`
+- continue only when the explicit same-version continuation input is passed
+- create the audit task, fresh A/B fixtures, and `capability-report.md`
+
+### Example 3: Full newer-path audit
+
+User asks whether the newer Trellis version changed capabilities that affect
 `docs/workflows/新项目开发工作流/`.
 
 Expected path:
@@ -453,7 +479,17 @@ Expected path:
 - review and update `capability-report.md`
 - stop for user confirmation before any workflow source remediation
 
-### Example 3: Codex inline audit analysis
+### Example 4: Unexpected older-version contract violation
+
+User runs the audit in an environment where `trellis -v` is older than the workflow compatibility anchor.
+
+Expected path:
+
+- detect `current < compatible`
+- abort with a non-zero error
+- treat the state as a workflow-contract violation rather than a normal audit path
+
+### Example 5: Codex inline audit analysis
 
 User asks for the same compatibility audit from a Codex session in this
 repository.
