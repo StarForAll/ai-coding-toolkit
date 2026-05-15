@@ -1,0 +1,3 @@
+{"file":".trellis/spec/docs/index.md","reason":"Re-check workflow rule propagation and documentation boundary during final verification."}
+{"file":".trellis/spec/scripts/workflow-command-doc-contracts.md","reason":"Verify the command-source doc change still follows workflow authoring contracts."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Re-check that all intended cross-layer sync targets were updated."}
