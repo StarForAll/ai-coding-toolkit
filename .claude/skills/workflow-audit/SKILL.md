@@ -1,6 +1,6 @@
 ---
 name: workflow-audit
-description: Audit the repo-local workflow rooted at `docs/workflows/新项目开发工作流/`, including workflow source assets, embed/install flows, CLI-native adaptation, and post-install verification boundaries. Use this for same-version workflow maintenance, or for a user-approved patch-only stable mismatch in the current run; route other version drift to `workflow-capability-audit`. Do not use this for ordinary business code, application features, or generic implementation review.
+description: Use when auditing whether the repo-local workflow rooted at `docs/workflows/新项目开发工作流/` has same-version maintenance issues in workflow assets, install/embed flows, CLI-native adaptation, or post-install verification boundaries, including a user-approved patch-only stable version mismatch in the current run; do not use for ordinary business code, application features, or generic implementation review, and use `workflow-capability-audit` instead for broader Trellis version-drift or upgrade-compatibility audits.
 ---
 
 # workflow-audit
@@ -8,6 +8,10 @@ description: Audit the repo-local workflow rooted at `docs/workflows/新项目�
 `workflow-audit` is the maintainer-side audit entry point for workflows in this repository. It verifies whether workflow problems are real before any source edits, then produces evidence-based conclusions, repair directions, and controlled next-step recommendations.
 
 If this file conflicts with `.trellis/spec/skills/workflow-audit.md`, treat the spec file as the behavioral source of truth.
+
+## Version Notes
+
+- `2026-05-15`: aligned the live skill frontmatter with the repo-local skill discovery contract, restored ordinary-review exclusion, and reinstated explicit cross-skill routing for version-drift compatibility audits; no audit-behavior change
 
 ## Purpose
 
