@@ -1237,3 +1237,36 @@ Synchronized UI skill routing rules across the workflow design command, authorit
 ### Next Steps
 
 - None - task complete
+
+
+## Session 223: Sync codex inline boundary docs
+
+**Date**: 2026-05-15
+**Task**: Sync codex inline boundary docs
+**Branch**: `main`
+
+### Summary
+
+Synced Codex inline dispatch boundary wording across workflow docs, verified targeted unit tests, and archived the task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6795f34` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
