@@ -1170,3 +1170,37 @@ Tightened workflow-audit skill discovery routing, restored ordinary-review exclu
 ### Next Steps
 
 - None - task complete
+
+
+## Session 221: 收尾 workflow-capability-audit 审计修复
+
+**Date**: 2026-05-15
+**Task**: 收尾 workflow-capability-audit 审计修复
+**Branch**: `main`
+
+### Summary
+
+完成新项目开发工作流 capability audit 的修复收口：统一 Codex/OpenCode/Claude 载体术语，补齐相关文档与安装器回归测试，完成 A/B fixture 清理并归档任务。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e533525` | (see git log) |
+| `f3f383d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
