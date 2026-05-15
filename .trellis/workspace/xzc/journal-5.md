@@ -938,3 +938,37 @@ Processed 15 .new files from trellis 0.5.15 upgrade: discarded 8 (local customiz
 ### Next Steps
 
 - None - task complete
+
+
+## Session 214: 修正 workflow-capability-audit skill 兼容契约与测试覆盖
+
+**Date**: 2026-05-15
+**Task**: 修正 workflow-capability-audit skill 兼容契约与测试覆盖
+**Branch**: `main`
+
+### Summary
+
+补齐 workflow-capability-audit 的同步契约、错误/边界处理、Codex inline 约束与测试格式说明，新增 Codex inline 场景测试，并修正 supplemental gated 分支与非 JSON full-audit 路径覆盖。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4142f56` | (see git log) |
+| `9b91418` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
