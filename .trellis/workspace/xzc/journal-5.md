@@ -972,3 +972,36 @@ Processed 15 .new files from trellis 0.5.15 upgrade: discarded 8 (local customiz
 ### Next Steps
 
 - None - task complete
+
+
+## Session 215: Fix workflow-audit skill contracts
+
+**Date**: 2026-05-15
+**Task**: Fix workflow-audit skill contracts
+**Branch**: `main`
+
+### Summary
+
+Aligned workflow-audit spec and skill surfaces with current Trellis mechanics, removed execution-surface redundancy, and verified skill structure/sync.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `68a6991` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
