@@ -54,6 +54,20 @@ First-version hard scope:
 
 If another workflow target is requested, stop and report that first-version support is limited to `docs/workflows/新项目开发工作流/`.
 
+### Supported CLI Surface
+
+Current first-version audit coverage is limited to the same three CLI surfaces
+implied by `current_cli`:
+
+- `Claude Code`
+- `OpenCode`
+- `Codex`
+
+Other repo-local hidden directories such as `.kiro/` and `.qoder/` may exist as
+Trellis carrier surfaces in this repository, but they are not part of this
+skill's first-version matrix unless the workflow-side managed-surface contract
+is explicitly expanded.
+
 ---
 
 ## Version Gate
@@ -333,6 +347,21 @@ If official documentation and repo-local evidence disagree:
 - prefer `unclear`, `present-but-gated-expected`, or another evidence-backed
   conservative classification over unsupported assumptions
 
+#### Codex Inline Execution Constraint
+
+When `current_cli = codex` in this repository and `.trellis/config.yaml` keeps
+`codex.dispatch_mode: inline`, Step B AI review must stay inline in the main
+Codex session.
+
+Rules:
+
+- do not manually spawn subagents for read-only audit analysis
+- do not bypass inline mode just because the audit is "only analysis"
+- treat this execution-model constraint as separate from the Codex runtime
+  boundary around fresh `trellis init` execution for A/B fixtures
+- if the repository later changes Codex away from the inline model, update this
+  skill contract together with `.trellis/spec/platforms/codex-workflow-behavior.md`
+
 ### C. Capability / Compatibility Matrix
 
 The report must use one unified capability matrix organized by capability rows.
@@ -557,6 +586,8 @@ First-version scenario set should cover at least:
 - structural-break possible stop
 - supplemental capability confirmation loop
 - child audit task + A/B fixture lifecycle
+- native CLI adaptation evidence contract
+- Codex inline main-session analysis boundary
 
 ---
 
@@ -604,6 +635,9 @@ This rule currently has maintained counterparts in:
 - `.claude/skills/workflow-capability-audit/references/capability-report-template.md`
 - `.agents/skills/workflow-capability-audit/tests/15-native-cli-adaptation-evidence-contract.md`
 - `.claude/skills/workflow-capability-audit/tests/15-native-cli-adaptation-evidence-contract.md`
+- `.agents/skills/workflow-capability-audit/tests/16-codex-inline-main-session-analysis.md`
+- `.claude/skills/workflow-capability-audit/tests/16-codex-inline-main-session-analysis.md`
+- `.trellis/spec/platforms/codex-workflow-behavior.md`
 - `docs/workflows/新项目开发工作流/commands/workflow-capability-audit.py`
 - `docs/workflows/新项目开发工作流/commands/test_workflow_capability_audit.py`
 

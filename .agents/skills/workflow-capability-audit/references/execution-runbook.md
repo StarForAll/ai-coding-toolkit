@@ -62,6 +62,14 @@ Returned JSON includes at least:
 - `b_root`
 - `capability_report`
 
+Codex execution note:
+
+- when this skill runs from Codex in this repository and `.trellis/config.yaml`
+  keeps `codex.dispatch_mode: inline`, keep the audit analysis in the main
+  Codex session
+- do not manually spawn subagents for Step B review or official-doc comparison
+- this execution-model rule is separate from the Codex runtime boundary below
+
 Native CLI adaptation evidence rule:
 
 - when the audit draws Claude Code / OpenCode / Codex compatibility conclusions,

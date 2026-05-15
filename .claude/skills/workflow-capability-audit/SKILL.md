@@ -9,6 +9,11 @@ description: Use when auditing whether `docs/workflows/新项目开发工作流/
 
 If this file conflicts with `.trellis/spec/skills/workflow-capability-audit.md`, treat the spec file as the behavioral source of truth.
 
+## Version History
+
+- `v1.1`: surfaced sync rules, error/edge handling, Codex inline execution constraints, and explicit scenario-test/reference contracts
+- `v1.0`: established the first-version capability-audit contract
+
 ## Purpose
 
 Use this skill to:
@@ -40,7 +45,7 @@ First-version support is limited to:
 
 If another workflow root is requested, stop and report that first-version support is limited to this workflow.
 
-## Input Contract
+## Input
 
 - `current_cli` — **always pass this value** inferred from the current runtime:
   - in Claude Code: `claude`
@@ -49,6 +54,30 @@ If another workflow root is requested, stop and report that first-version suppor
   - the script does not auto-detect the CLI; the caller is responsible for inference
   - values outside `claude|opencode|codex` must be rejected before any full-audit task or fixture setup begins
 - `workflow_path` — default and only supported value in first version: `docs/workflows/新项目开发工作流/`
+
+## Supported Surface
+
+Current first-version audit coverage is limited to the same three CLI surfaces
+implied by `current_cli`:
+
+- `Claude Code`
+- `OpenCode`
+- `Codex`
+
+Other repo-local hidden directories such as `.kiro/` and `.qoder/` may exist as
+Trellis carrier surfaces in this repository, but they are not part of this
+skill's first-version matrix unless the workflow-side managed-surface contract
+is explicitly expanded.
+
+## Execution Constraints
+
+- when `current_cli = codex` in this repository, keep the audit inline in the
+  main Codex session
+- follow `.trellis/spec/platforms/codex-workflow-behavior.md`
+- do not manually spawn subagents for Step B read-only analysis or official-doc
+  comparison work
+- treat the Codex execution-model rule as separate from the Codex runtime
+  boundary around fresh `trellis init` execution
 
 ## Version Gate First
 
@@ -202,6 +231,54 @@ After producing the audit conclusion:
 - wait for user confirmation
 - do not auto-enter workflow source remediation
 
+## Output
+
+This skill has three output modes:
+
+1. Version-gate stop:
+   - use `references/version-gate-stop-template.md`
+   - do not create a task, `prd.md`, `capability-report.md`, or A/B fixtures
+2. Full task-based audit:
+   - maintain task-scoped `capability-report.md`
+   - follow `references/capability-report-template.md`
+   - stop after the audit conclusion and wait for user confirmation
+3. Structural-break possible stop:
+   - use `references/structural-break-possible-template.md`
+   - require explicit user confirmation before any deeper analysis or normal adaptation recommendation continues
+
+## Error Handling And Edge Cases
+
+- `equal-version-stop`:
+  - trigger: `trellis -v == COMPATIBLE_TRELLIS_VERSION`
+  - action: stop before task creation, `prd.md`, `capability-report.md`, or A/B fixtures
+- `older-version-block`:
+  - trigger: `current < compatible`
+  - action: stop as unsupported direction
+- `missing-compatible-anchor`:
+  - trigger: `COMPATIBLE_TRELLIS_VERSION` missing
+  - action: ask the user for the value; only the compatibility-anchor write is allowed before the audit
+- `environment-error`:
+  - trigger: `trellis -v` fails or returns empty output
+  - action: stop before full audit setup
+- `version-parse-error`:
+  - trigger: semantic-version parsing fails
+  - action: stop immediately
+- invalid input:
+  - trigger: unsupported workflow root or invalid `current_cli`
+  - action: reject before task or fixture setup
+- duplicate active capability audit:
+  - trigger: a `workflow-capability-audit` task is already active
+  - action: stop and resume/complete the existing audit first
+- Codex runtime-only fixture failure:
+  - trigger: `trellis init` fails only under the current Codex runtime
+  - action: require non-Codex recheck or report an evidence gap rather than asserting a confirmed machine-environment defect
+- supplemental capability unconfirmed:
+  - trigger: the omitted point is not supported by the current A/B evidence
+  - action: record it under `Rejected / Unconfirmed Supplemental Points` and do not add a matrix row
+- structural-break possible:
+  - trigger: final structural judgment is `possible`
+  - action: use the dedicated stop template and wait for explicit user confirmation
+
 ## Classification Rules
 
 `capability-report.md` rows must preserve the emitted first-version matrix column order:
@@ -304,10 +381,15 @@ The supplemental path classifies capabilities by file existence alone (adopted-c
 Read these when needed:
 
 - `references/version-gate-stop-template.md`
+  - fixed output contract for version-gate termination states
 - `references/structural-break-possible-template.md`
+  - fixed stop-and-confirm template for `Structural-Break Judgment = possible`
 - `references/capability-report-template.md`
+  - task-based report contract, including `## Native CLI Adaptation Evidence`
 - `references/input-template.md`
+  - copyable invocation format for the first-version input contract
 - `references/execution-runbook.md`
+  - canonical script invocations, fix-lifecycle update flags, Codex execution note, and native-adaptation evidence follow-through
 
 The canonical execution engine is:
 
@@ -315,4 +397,111 @@ The canonical execution engine is:
 
 ## Tests
 
-Use persisted scenario files under `tests/` to validate first-version behavior boundaries.
+Required persisted scenario files:
+
+- `tests/01-version-equal-stop.md`
+- `tests/02-missing-compatible-anchor.md`
+- `tests/03-full-audit-upgrade-path.md`
+- `tests/04-structural-break-possible-stop.md`
+- `tests/05-post-analysis-supplemental-capability.md`
+- `tests/06-child-audit-task-and-fixture-lifecycle.md`
+- `tests/07-version-parse-error.md`
+- `tests/08-environment-error.md`
+- `tests/09-older-version-block.md`
+- `tests/10-final-compatibility-promotion-mandatory.md`
+- `tests/11-existing-active-capability-audit-stop.md`
+- `tests/12-shared-skills-deployment-carrier.md`
+- `tests/13-codex-runtime-boundary-recheck.md`
+- `tests/14-codex-secondary-skills-carrier.md`
+- `tests/15-native-cli-adaptation-evidence-contract.md`
+- `tests/16-codex-inline-main-session-analysis.md`
+
+Every test file must use the same structure:
+
+- `Purpose`
+- `Input`
+- `Expected Mode`
+- `Expected Key Behaviors`
+- `Must Not`
+
+Critical maintained behavior notes:
+
+- `tests/15-native-cli-adaptation-evidence-contract.md` is the persisted scenario for the Native CLI Adaptation Evidence contract that is also reflected in `references/execution-runbook.md` and `references/capability-report-template.md`
+- `tests/16-codex-inline-main-session-analysis.md` is the persisted scenario for the repo-local Codex inline analysis boundary
+
+## Examples
+
+### Example 1: Equal-version stop
+
+User asks whether the workflow needs a Trellis compatibility audit.
+
+Expected path:
+
+- run the version gate first
+- if `trellis -v == COMPATIBLE_TRELLIS_VERSION`, stop with `Gate Result = equal-version-stop`
+- do not create a task or A/B fixtures
+
+### Example 2: Full upgrade-path audit
+
+User asks whether a newer Trellis version changed capabilities that affect
+`docs/workflows/新项目开发工作流/`.
+
+Expected path:
+
+- pass `current_cli`
+- run the canonical execution engine
+- review and update `capability-report.md`
+- stop for user confirmation before any workflow source remediation
+
+### Example 3: Codex inline audit analysis
+
+User asks for the same compatibility audit from a Codex session in this
+repository.
+
+Expected path:
+
+- keep the audit in the main Codex session
+- do not manually spawn subagents for Step B analysis
+- still apply the separate Codex runtime boundary rule if fresh `trellis init`
+  fails only inside the current Codex runtime
+
+## Sync Rules
+
+Behavioral source of truth:
+
+- `.trellis/spec/skills/workflow-capability-audit.md`
+
+Executable entry artifacts:
+
+- `.agents/skills/workflow-capability-audit/SKILL.md`
+- `.claude/skills/workflow-capability-audit/SKILL.md`
+
+Canonical runtime artifacts:
+
+- `docs/workflows/新项目开发工作流/commands/workflow-capability-audit.py`
+- `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
+
+Behavior-affecting changes must update the spec, both entry artifacts, and any
+affected runtime artifacts in the same change.
+
+When behavior changes affect maintained references/tests, update the affected
+counterparts in the same change, including:
+
+- `.agents/skills/workflow-capability-audit/references/*`
+- `.claude/skills/workflow-capability-audit/references/*`
+- `.agents/skills/workflow-capability-audit/tests/*`
+- `.claude/skills/workflow-capability-audit/tests/*`
+
+When the Native CLI Adaptation Evidence contract changes, also review/update:
+
+- `references/execution-runbook.md`
+- `references/capability-report-template.md`
+- `tests/15-native-cli-adaptation-evidence-contract.md`
+- `docs/workflows/新项目开发工作流/CLI原生适配边界矩阵.md`
+- `docs/workflows/新项目开发工作流/commands/{claude,opencode,codex}/README.md`
+
+When the repo-local Codex execution model changes, also review/update:
+
+- `.trellis/spec/platforms/codex-workflow-behavior.md`
+- `references/execution-runbook.md`
+- `tests/16-codex-inline-main-session-analysis.md`
