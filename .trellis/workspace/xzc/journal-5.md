@@ -905,3 +905,36 @@ Processed 15 .new files from trellis 0.5.15 upgrade: discarded 8 (local customiz
 ### Next Steps
 
 - None - task complete
+
+
+## Session 213: Trellis 隐藏目录漂移分析与边界清理
+
+**Date**: 2026-05-15
+**Task**: Trellis 隐藏目录漂移分析与边界清理
+**Branch**: `main`
+
+### Summary
+
+分析当前仓库 Trellis 隐藏目录与 /tmp/trellis-0.5.15 基线差异，确认 repo-local overlay、manual hidden assets 与 ignored runtime residue 的边界；清理 .trellis/.runtime/sessions 中 11 个 stale session；新增 docs/Trellis隐藏目录边界清单.md 并更新 docs/README.md。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7efa038` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
