@@ -1037,15 +1037,30 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("不应再把 `.codex/skills/parallel` 当作必然出现的默认现象", cli_matrix)
         self.assertIn("test -d .agents/skills", cli_matrix)
         self.assertIn("test -d .codex/skills || true", cli_matrix)
+        self.assertIn("secondary carrier，不是 fresh baseline 默认必然存在", cli_matrix)
+        self.assertIn("唯一主承载面", cli_matrix)
+        self.assertIn("repo-scoped skills 主入口", cli_matrix)
         self.assertNotIn(
             "本仓库实际观察到的例子是：主体 skills 落在 `.agents/skills/`，`parallel` 落在 `.codex/skills/`。",
             cli_matrix,
         )
 
+        opencode_readme = (
+            REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "commands" / "opencode" / "README.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("共享承载面与漂移核对范围", opencode_readme)
+        self.assertIn("不应被描述成与 `.opencode/commands/trellis/*` 等价的正式入口", opencode_readme)
+        self.assertIn("这一定位与本轮官方文档核对和 A/B fixture 审计结论一致", opencode_readme)
+
         codex_readme = (
             REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "commands" / "codex" / "README.md"
         ).read_text(encoding="utf-8")
-        self.assertIn("当前 fresh `0.5.10` 基线默认可稳定观察到的是 `.agents/skills/`", codex_readme)
+        self.assertIn("当前 fresh `0.5.15` 基线默认可稳定观察到的是 `.agents/skills/`", codex_readme)
+        self.assertIn("唯一主承载面", codex_readme)
+        self.assertIn("repo-scoped skills 主入口", codex_readme)
+        self.assertIn("secondary carrier", codex_readme)
+        self.assertIn("不是共享 workflow 主入口", codex_readme)
+        self.assertIn(".codex/skills/ 是条件出现的 secondary carrier", codex_readme)
         self.assertNotIn(
             "本仓库实际观察到的例子是：主体 skills 落在 `.agents/skills/`，而 `parallel` 落在 `.codex/skills/`。",
             codex_readme,
@@ -1057,17 +1072,35 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("当前 fresh baseline 不应默认假定它存在", hidden_boundary)
         self.assertIn("仅在 `.codex/skills/` 实际存在时才纳入核对", hidden_boundary)
         self.assertIn("仅在该目录真实存在时才继续检查其条件性影响面", hidden_boundary)
+        self.assertIn("唯一主承载面", hidden_boundary)
+        self.assertIn("secondary carrier", hidden_boundary)
 
         command_map = (REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "命令映射.md").read_text(
             encoding="utf-8"
         )
         self.assertIn("只应视为共享承载面与漂移核对范围", command_map)
+        self.assertIn("repo-scoped skills 主入口", command_map)
+        self.assertIn("secondary carrier", command_map)
 
-        workflow_overview = (REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "工作流总纲.md").read_text(
-            encoding="utf-8"
-        )
+        plain_overview = (
+            REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "工作流全局流转说明（通俗版）.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("repo-scoped skills 主入口", plain_overview)
+        self.assertIn("secondary carrier", plain_overview)
+
+        workflow_overview = (
+            REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "工作流总纲.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("共享 skills 唯一主承载面", workflow_overview)
+        self.assertIn("secondary carrier", workflow_overview)
         self.assertIn("install-only 的协作提醒产物", workflow_overview)
         self.assertIn("不是卸载时必须恢复/清理的目标", workflow_overview)
+
+        walkthrough = (
+            REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "多CLI通用新项目完整流程演练.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("repo-scoped skills 主入口", walkthrough)
+        self.assertIn("secondary-carrier skills", walkthrough)
 
     def test_install_creates_and_clears_attempt_record_on_success(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)

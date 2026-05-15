@@ -17,6 +17,11 @@ OpenCode 已具备承载这套 workflow 的原生命令、rules、agents、skill
 - workflow 文档与必要补充：可通过 `opencode.json` 的 `instructions` 引入；这是推荐的手动挂接面，不是 fresh baseline 安装成功的必备落盘文件
 - 通用辅助脚本：继续放在 `.trellis/scripts/workflow/` 或 `docs/workflows/.../commands/shell/`
 
+补充边界：
+
+- 当前 workflow 继续把 `.opencode/commands/trellis/` 作为 OpenCode 的正式主入口
+- 这一定位与本轮官方文档核对和 A/B fixture 审计结论一致，不依赖 `.agents/skills/` 作为等价主入口
+
 前置条件：
 
 - 目标项目本身必须是 Git 项目
@@ -83,7 +88,7 @@ OpenCode 下的 MCP / skills 配置不应全部堆进 `instructions`。
 > - `.claude/skills/*/SKILL.md`
 > - `.agents/skills/*/SKILL.md`
 >
-> 也就是说，`.agents/skills/` 既是 Codex / amp 等工具的通用 skills 位置，也是 OpenCode 的原生 skills 扫描路径之一。当前 workflow 把阶段 skills 部署到 `.agents/skills/` 时，这些 skills 会进入 OpenCode 的可发现范围；但它们在 OpenCode 侧只应被当作共享承载面与漂移核对范围，不应被描述成与 `.opencode/commands/trellis/*` 等价的正式入口。
+> 也就是说，`.agents/skills/` 既是 Codex / amp 等工具的通用 skills 位置，也是 OpenCode 的原生 skills 扫描路径之一。当前 workflow 把阶段 skills 部署到 `.agents/skills/` 时，这些 skills 会进入 OpenCode 的可发现范围；但它们在 OpenCode 侧只应被当作共享承载面与漂移核对范围，不应被描述成与 `.opencode/commands/trellis/*` 等价的正式入口。这个边界已由本轮官方文档核对与 A/B 审计再次确认。
 
 ## 推荐承载方式
 

@@ -5,12 +5,17 @@ Claude Code 是当前 workflow 维护的三种原生适配之一，并保留项�
 
 在这套 workflow 里，Claude Code 的正确承载模型是：
 
-- `.claude/commands/trellis/`：workflow 阶段命令入口
+- `.claude/commands/trellis/`：当前 workflow 选择保留的阶段命令入口；按本轮官方文档核对，它仍是 supported 的项目命令承载面，但不是唯一推荐入口
 - `AGENTS.md`：项目级长期稳定规则
 - `.claude/settings.json` / `.claude/settings.local.json`：hooks、权限、工具可用性等运行时配置
 - `.claude/hooks/*.py`：会话启动与子代理上下文注入
 - `.claude/agents/*.md`：trellis-research / trellis-implement / trellis-check / debug 一类子代理
 - skills / 通用脚本：复用能力资产，不应全部硬塞进命令正文
+
+补充边界：
+
+- Claude 官方当前对 skills 的投入更积极，但官方文档并未否定 `.claude/commands/` 这类项目命令承载面
+- 因此，当前 workflow 继续使用 `.claude/commands/trellis/` 是**兼容且可运行**的产品选择，而不是对官方能力边界的误判
 
 就当前 workflow 实现而言，还要明确一条 source-of-truth 边界：
 

@@ -5,8 +5,8 @@ Codex 对这套 workflow 的正确承载模型不是 `.claude/commands/` 式自�
 - `AGENTS.md`：项目级长期稳定规则
 - `.codex/config.toml`：项目级 Codex 配置与 `AGENTS.md` fallback
 - `.codex/hooks.json` + `.codex/hooks/*.py`：按当前 hook 配置在用户回合等事件注入 Trellis 上下文
-- `.agents/skills/*/SKILL.md`：共享 workflow 入口与阶段技能
-- `.codex/skills/*/SKILL.md`：仅 Codex 独有或项目自定义的额外技能
+- `.agents/skills/*/SKILL.md`：共享 workflow 入口与阶段技能；按当前官方文档与 A/B 证据，这是 Codex 的 repo-scoped skills 唯一主承载面，也是其 repo-scoped skills 主入口
+- `.codex/skills/*/SKILL.md`：仅 Codex 独有或项目自定义的额外技能；属于条件出现的 secondary skills carrier，不是共享 workflow 主入口
 - `.codex/agents/*.toml`：trellis-research / trellis-implement / trellis-check 一类子代理（Trellis 0.5+ 原生提供）
 
 Codex 官方确实有 built-in slash commands，但那是 Codex 自身的交互控制能力，不等于“项目自定义 workflow 命令分发目录”。
@@ -68,7 +68,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 多 skills 目录同步（安装器行为）
 
-`trellis init` 在部分样本里可能同时创建 `.agents/skills/` 与 `.codex/skills/`。当前 fresh `0.5.10` 基线默认可稳定观察到的是 `.agents/skills/`；`.codex/skills/` 应视为条件出现的次级影响面，而不是默认必然存在。
+`trellis init` 在部分样本里可能同时创建 `.agents/skills/` 与 `.codex/skills/`。当前 fresh `0.5.15` 基线默认可稳定观察到的是 `.agents/skills/`；`.codex/skills/` 应视为条件出现的次级影响面，而不是默认必然存在。
 
 当前安装器（`install-workflow.py`）对 Codex 的处理策略：
 
@@ -80,18 +80,19 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 这意味着 Codex 的技能目录要分两类理解：
 
-- `.agents/skills/`：共享 / 通用 workflow skills 的唯一主承载面
-- `.codex/skills/`：Codex 特有或本地侧技能的承载面
+- `.agents/skills/`：共享 / 通用 workflow skills 的唯一主承载面，也是当前证据下 Codex 的 repo-scoped skills 主入口
+- `.codex/skills/`：Codex 特有或本地侧技能的 secondary 承载面
 - 因此 `.codex/skills/` 不应再出现 `feasibility` 到 `delivery` 这类共享阶段 skills 的重复副本
 
 装后/升后核对仍建议先检查两条路径是否都存在；只有次级目录实际存在时，才继续核对其内容：
 
 ```bash
 test -d .agents/skills
+# .codex/skills/ 是条件出现的 secondary carrier；只有实际存在时才继续检查
 test -d .codex/skills || true
 ls .agents/skills/parallel/SKILL.md 2>/dev/null
 ls .codex/skills/parallel/SKILL.md 2>/dev/null
-# 只有 .codex/skills/ 实际存在时，才继续检查其条件性影响面
+# 只有 .codex/skills/ 这个 secondary carrier 实际存在时，才继续检查其条件性影响面
 ```
 
 在 Codex 中，推荐使用方式应是：
@@ -331,7 +332,7 @@ Codex 官方内建 slash commands 是平台级控制能力，例如：
 | 项目长期规则 | `AGENTS.md` | 长期稳定的项目规则和执行原则 | ❌ 手动维护 |
 | Codex 项目配置 | `.codex/config.toml` | 指定 `AGENTS.md` fallback 等项目级配置 | ❌ 手动维护 |
 | 会话启动注入 | `.codex/hooks.json` + `.codex/hooks/*.py` | 自动注入 Trellis workflow 上下文 | ❌ 手动维护 |
-| workflow 技能 | `.agents/skills/*/SKILL.md`（共享） / `.codex/skills/*/SKILL.md`（仅 Codex 独有或项目自定义） | `.agents/skills/` 承载共享阶段 skills；`trellis-continue` / `trellis-finish-work` 属于活动 skills 目录中的 Trellis 基线入口并由安装器追加项目化补丁；`.codex/skills/` 不承载重复 shared skills | ✅ `install-workflow.py` |
+| workflow 技能 | `.agents/skills/*/SKILL.md`（共享唯一主承载面） / `.codex/skills/*/SKILL.md`（仅 Codex 独有或项目自定义的 secondary carrier） | `.agents/skills/` 承载共享阶段 skills；`trellis-continue` / `trellis-finish-work` 属于活动 skills 目录中的 Trellis 基线入口并由安装器追加项目化补丁；`.codex/skills/` 不承载重复 shared skills，也不应被描述成与 `.agents/skills/` 并列的共享 workflow 主入口 | ✅ `install-workflow.py` |
 | 子代理 | `.codex/agents/*.toml` | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 安装器不再 overlay 到目标项目，仅做 legacy bare-name → trellis-* 迁移；源仓库 carrier 可有项目级增强 | ✅ legacy 迁移由 `install-workflow.py` |
 | 辅助脚本 | `.trellis/scripts/workflow/` | 校验、导出、静态验证脚本 | ✅ `install-workflow.py` |
 | 源码水印与归属证明产物 | `$TASK_DIR/design/`、`$TASK_DIR/delivery/` | 设计计划、提取验证、交付证明 | ❌ 人工维护 / workflow 阶段产出 |
