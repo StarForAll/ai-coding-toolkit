@@ -19,6 +19,7 @@ Task-based full compatibility audit with explicit same-version continuation.
 - run version gating before task creation
 - detect that `current == compatible`
 - continue only because explicit same-version continuation was requested
+- require `current_cli` before task creation or fixture setup because this path still enters full audit after the equal-version gate override
 - create the audit task, fresh A/B fixtures, and `capability-report.md`
 
 ## Must Not

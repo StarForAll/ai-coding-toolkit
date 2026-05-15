@@ -17,6 +17,7 @@ Task-based full compatibility audit.
 ## Expected Key Behaviors
 
 - pass version gating whenever `current > compatible`
+- require `current_cli` before task creation or fixture setup because this path enters full audit
 - create a task after the gate passes
 - create fresh A/B fixtures
 - maintain `prd.md`

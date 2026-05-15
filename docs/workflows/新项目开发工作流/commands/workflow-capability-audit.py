@@ -59,7 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--current-cli",
         default="",
-        help="Current CLI label for the report. Always pass this value (claude|opencode|codex). The script does not auto-detect the CLI.",
+        help="Current CLI label for the report. Pass this value (claude|opencode|codex) whenever the run may continue past the version gate into the full audit path. The script does not auto-detect the CLI.",
     )
     parser.add_argument(
         "--allow-equal-version-continue",

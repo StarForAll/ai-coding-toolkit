@@ -50,12 +50,13 @@ If another workflow root is requested, stop and report that first-version suppor
 
 ## Input
 
-- `current_cli` — **always pass this value** inferred from the current runtime:
+- `current_cli` — pass this value inferred from the current runtime whenever the run may continue past the version gate:
   - in Claude Code: `claude`
   - in OpenCode: `opencode`
   - in Codex CLI: `codex`
   - the script does not auto-detect the CLI; the caller is responsible for inference
-  - values outside `claude|opencode|codex` must be rejected before any full-audit task or fixture setup begins
+  - version-gate-only calls may omit it because they stop before any CLI-specific full-audit setup begins
+  - once execution may continue past the version gate into full-audit setup, values outside `claude|opencode|codex` must be rejected before any task or fixture setup begins
 - `workflow_path` — default and only supported value in first version: `docs/workflows/新项目开发工作流/`
 - `allow_equal_version_continue` — optional explicit override:
   - default: `false`

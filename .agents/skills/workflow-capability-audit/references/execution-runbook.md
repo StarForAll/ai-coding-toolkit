@@ -17,6 +17,9 @@ docs/workflows/新项目开发工作流/commands/workflow-capability-audit.py \
 --json
 ```
 
+`--current-cli` is optional here because this path stops at the version gate and
+does not enter any CLI-specific full-audit setup.
+
 ## 2. Missing Compatible Anchor
 
 If `COMPATIBLE_TRELLIS_VERSION` is missing, rerun with the user-supplied value:
@@ -27,6 +30,9 @@ docs/workflows/新项目开发工作流/commands/workflow-capability-audit.py \
 --compatible-trellis-version 0.4.0 \
 --json
 ```
+
+`--current-cli` is optional here for the same reason: this path still stops at
+the version gate before any task or fixture setup begins.
 
 This is the sole allowed pre-audit source edit exception:
 

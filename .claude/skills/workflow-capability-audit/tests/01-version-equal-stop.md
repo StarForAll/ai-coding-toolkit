@@ -20,6 +20,7 @@ Version-gate termination. No task-based audit starts.
 - compare current Trellis version against `COMPATIBLE_TRELLIS_VERSION`
 - emit the version-gate stop template with `Gate Result = equal-version-stop`
 - explain that no same-version full audit will run unless explicit continuation is requested
+- allow this gate-only path to omit `current_cli` because no full-audit setup begins
 - do not create a task
 - do not create `prd.md`
 - do not create `capability-report.md`
