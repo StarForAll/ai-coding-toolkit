@@ -474,7 +474,13 @@ def validate_supplemental_capability(
     )
     structural_signal = "none detected from supplemental validation"
     adaptation_decision = "No action required unless later confirmed compatibility analysis changes this."
-    if overall in {"present-but-incompatible", "missing-but-valuable", "unclear", "present-but-gated"}:
+    if overall in {
+        "present-but-incompatible",
+        "missing-but-valuable",
+        "unclear",
+        "present-but-gated-unexpected",
+        "present-but-gated-expected",
+    }:
         structural_signal = "supplemental capability indicates additional compatibility attention may be required"
         adaptation_decision = "Review the supplemental capability in the next confirmed compatibility decision."
     row_line = (

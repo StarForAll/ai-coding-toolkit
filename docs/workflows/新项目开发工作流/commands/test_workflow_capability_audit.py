@@ -1529,6 +1529,101 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             self.assertIn(heading, template_text)
             self.assertIn(heading, output)
 
+    def test_full_audit_non_json_structural_break_path_emits_template_and_payload(self) -> None:
+        """Non-JSON full-audit output must emit the structural-break template before the payload JSON."""
+        module = load_script_module()
+        assets = load_assets_module()
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        merged_env = {
+            assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
+            "TRELLIS_CONTEXT_ID": "test-non-json-structural-break",
+        }
+        created_roots: list[Path] = []
+
+        def fake_create_fixture_root(prefix: str, developer_name: str) -> Path:
+            if not created_roots:
+                created_roots.extend(self._make_fake_full_audit_roots(developer_name))
+            if prefix.startswith("workflow-capability-audit-a-"):
+                return created_roots[0]
+            if prefix.startswith("workflow-capability-audit-b-"):
+                return created_roots[1]
+            raise AssertionError(f"Unexpected fixture prefix: {prefix}")
+
+        def fake_run_task_create(title: str, parent: str | None) -> str:
+            return self._create_fake_audit_task_dir(title, parent)
+
+        def fake_run_task_start(task_dir: str) -> None:
+            self._write_session_current_task(merged_env["TRELLIS_CONTEXT_ID"], task_dir)
+
+        with (
+            patch.dict(os.environ, merged_env, clear=False),
+            patch.object(sys, "argv", [str(SCRIPT), "--current-cli", "claude"]),
+            patch.object(module, "run_task_create", side_effect=fake_run_task_create),
+            patch.object(module, "run_task_start", side_effect=fake_run_task_start),
+            patch.object(module, "create_fixture_root", side_effect=fake_create_fixture_root),
+            patch.object(module, "install_workflow_into", return_value=None),
+            patch.object(module, "detect_cli_types_from_roots", return_value=["claude", "opencode", "codex"]),
+            patch.object(module, "build_workflow_managed_rows", return_value=self._fake_managed_rows()),
+            patch.object(module, "build_workflow_dependent_rows", return_value=self._fake_dependent_rows()),
+            patch.object(module, "derive_structural_break", return_value=("possible", ["signal-1"], "needs confirmation")),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            code = module.main()
+
+        self.assertEqual(code, 0, msg=stdout.getvalue() + stderr.getvalue())
+        output = stdout.getvalue()
+        self.assertIn("## Structural-Break Judgment — Possible", output)
+        self.assertIn("signal-1", output)
+        self.assertIn('"structural_break_judgment": "possible"', output)
+        self.assertEqual("", stderr.getvalue())
+
+    def test_supplemental_capability_with_specific_gated_value_requests_followup(self) -> None:
+        """Supplemental rows using present-but-gated-* values must still mark follow-up structural attention."""
+        assets = load_assets_module()
+        env = {
+            assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9",
+        }
+        first = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env)
+        self.assertEqual(first.returncode, 0, msg=first.stdout + first.stderr)
+        payload = json.loads(first.stdout)
+        self._track_fixtures_from_payload(payload)
+        self._release_fake_audit_task_for_followup()
+
+        module = load_script_module()
+        task_dir = REPO_ROOT / payload["task_dir"]
+        with patch.object(
+            module,
+            "_evidence_and_classification",
+            side_effect=[
+                ("not-applicable", "not-applicable", False),
+                ("not-applicable", "not-applicable", False),
+                ("A=.codex/hooks.json; B=.codex/hooks.json", "present-but-gated-expected", True),
+            ],
+        ):
+            result = module.validate_supplemental_capability(
+                task_dir,
+                "codex-gated-supplement",
+                "workflow-dependent-native",
+                "Supplemental Codex-gated capability.",
+                [],
+                [],
+                [".codex/hooks.json"],
+            )
+
+        self.assertEqual(result["mode"], "supplemental-confirmed")
+        report_text = (task_dir / "capability-report.md").read_text(encoding="utf-8")
+        gated_row = next(
+            line for line in report_text.splitlines()
+            if "| codex-gated-supplement |" in line
+        )
+        self.assertIn("present-but-gated-expected", gated_row)
+        self.assertIn(
+            "supplemental capability indicates additional compatibility attention may be required",
+            gated_row,
+        )
+
     def test_new_carriers_discovered_by_real_directory_scan(self) -> None:
         """Integration test: TN-008~TN-011 carriers must appear when using real build_workflow_dependent_rows (not mocked)."""
         module = load_script_module()
