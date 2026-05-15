@@ -1038,3 +1038,36 @@ Aligned workflow-audit spec and skill surfaces with current Trellis mechanics, r
 ### Next Steps
 
 - None - task complete
+
+
+## Session 217: workflow-capability-audit evidence boundary
+
+**Date**: 2026-05-15
+**Task**: workflow-capability-audit evidence boundary
+**Branch**: `main`
+
+### Summary
+
+Restricted workflow-capability-audit native-adaptation evidence to official docs, workflow source assets, and temporary A/B fixtures; finalized the audit report and promoted the compatible Trellis anchor to 0.5.15.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6dfae4a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
