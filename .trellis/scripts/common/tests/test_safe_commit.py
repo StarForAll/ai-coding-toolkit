@@ -55,10 +55,6 @@ class SafeCommitPathSelectionTests(unittest.TestCase):
             "name=tester\n",
             encoding="utf-8",
         )
-        (repo_root / ".trellis" / ".current-task").write_text(
-            ".trellis/tasks/05-10-current\n",
-            encoding="utf-8",
-        )
         runtime_dir = repo_root / ".trellis" / ".runtime" / "sessions"
         runtime_dir.mkdir(parents=True, exist_ok=True)
         session_key = "codex_test-session"
