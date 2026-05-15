@@ -113,7 +113,30 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 
 ### Step 2: UI/UX 设计（如有前端）
 
-**调用 Skill**：`ui-ux-pro-max` — 生成页面布局粗稿、组件建议和交互流程。降级：手动从 PRD 提取页面目标后进入外部工具设计。
+**调用 Skill**：`ui-ux-pro-max` 为 UI 原型还原 / 设计稿落地的基座能力，进入这类任务时**必调**；其他 UI 相关 skill 一律按“平台 + 框架 + 样式栈 + 当前阶段”命中条件优先调用。降级：手动从 PRD 提取页面目标后进入外部工具设计。
+
+**条件路由表**：
+
+| 命中条件 | 优先 Skill | 用途 |
+|------|-----------|------|
+| Web 项目采用 `shadcn/ui` 组件体系 | `shadcn-ui` | 组件发现、引入、定制与组合约束 |
+| Web 项目采用 Vue | `vue-best-practices` | Vue 组件拆分、Composition API、数据流与实现约束 |
+| Web 项目采用 UnoCSS | `unocss` | 原子样式、shortcut/theme 约束与写法边界 |
+| 需要浏览器 / 原型 / 页面交互验证，或需要操作 Stitch / Figma / 站点页面 | `agent-browser` | 浏览器交互、截图、探索、外部页面操作 |
+| 已经有本地前端实现，需要页面验收、回归或截图验证 | `webapp-testing` | 基于本地 WebApp 的自动化验证与回归 |
+| 需要补 Web 页面可访问性复核 | `accessibility-a11y` | Web 语义、键盘可达性、对比度与 WCAG 检查 |
+| iOS 原生视觉与交互设计 | `mobile-ios-design` | Apple HIG / SwiftUI 设计模式与原生体验约束 |
+| iOS 原生页面实现或评审 | `ios-application-dev` | UIKit / SwiftUI / 触控 / safe area / Dynamic Type 等实现约束 |
+| Android 原生视觉与交互设计 | `mobile-android-design` | Material Design 3 / Compose 设计模式与原生体验约束 |
+| Android 原生页面实现或评审 | `android-native-dev` | Kotlin / Compose / Material 3 / 可访问性与构建约束 |
+| Flutter 跨端界面实现 | `flutter-expert` | Flutter widget、状态管理、路由与跨端实现约束 |
+
+**补充规则**：
+
+- Web 路由是条件叠加，不把 `shadcn-ui`、`vue-best-practices`、`unocss`、`agent-browser`、`webapp-testing`、`accessibility-a11y` 写成一个固定 bundle。
+- `agent-browser` 与 `webapp-testing` 不是二选一：前者偏浏览器 / 原型 / 页面交互，后者偏本地实现后的验收 / 回归。
+- iOS / Android 原生端的可访问性默认由各自平台设计 / 开发 skill 覆盖，不额外挂通用 Web `accessibility-a11y`。
+- Flutter 默认先调用 `flutter-expert`；只有在需要明显对齐 iOS / Android 原生视觉规范时，才再叠加对应平台设计 skill。
 
 **强制提醒**：
 

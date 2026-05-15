@@ -68,7 +68,7 @@ const tree = [
         { html:'prd', cls:'SK', id:'p2_s', su:'§2 PRD 编写 skill' },
       ]},
       { html:'§3 设计阶段', cls:'L1 c3', id:'p3', sub:'<span class="cmd">/trellis:design</span>', children:[
-        { html:'3.1 UI/UX 设计',           cls:'L2', det:'uiprompt.site → STITCH-PROMPT（Stitch DESIGN 语义）→ Stitch → Figma<br>UI 中文 / Stitch prompt 英文<br>Codex 禁止承担前两步主执行<br>原型只作参考，不直接带入正式实现', id:'p3_1' },
+        { html:'3.1 UI/UX 设计',           cls:'L2', det:'ui-ux-pro-max 基座必调 + 条件 UI skill 路由<br>uiprompt.site → STITCH-PROMPT（Stitch DESIGN 语义）→ Stitch → Figma<br>UI 中文 / Stitch prompt 英文<br>Codex 禁止承担前两步主执行<br>原型只作参考，不直接带入正式实现', id:'p3_1' },
         { html:'3.2 功能规格说明',         cls:'L2', det:'模块/业务规则<br>输入输出/异常处理/接口', id:'p3_2' },
         { html:'3.3 当前边界',             cls:'L2', det:'架构确认前只同步 customer-facing-prd.md<br>其余技术结论留在 task 工作底稿', id:'p3_3' },
         { html:'3.4 页面与交互说明',       cls:'L2', det:'页面清单/定位/结构<br>状态变化/交互说明', id:'p3_4' },
@@ -76,7 +76,7 @@ const tree = [
         { html:'3.6 架构确认后分块落盘',   cls:'L2', det:'块A developer-facing-prd<br>含依赖/接口/错误边界<br>块B 设计文档<br>块C 项目文档<br>块D 工程化联动<br>每块完成后都需用户确认', id:'p3_6' },
         { html:'§3.7 Spec 对齐',           cls:'GT', id:'p3_g', det:'仅在架构确认后的 design 后半段执行<br>导入spec → 完善.trellis/spec<br>自动化检查矩阵 / finish-work（含 session record）', id:'p3_g' },
         { html:'/trellis:design',           cls:'L3', id:'p3_c', cp:'.claude/commands/trellis/design.md', cd:'设计阶段主命令' },
-        { html:'ui-ux-pro-max / architecture-patterns', cls:'SK', id:'p3_s', su:'§3 设计辅助 skills' },
+        { html:'ui-ux-pro-max / 条件 UI skill 路由 / architecture-patterns', cls:'SK', id:'p3_s', su:'§3 设计辅助 skills' },
       ]},
       { html:'§4 任务分解与准备', cls:'L1 c4', id:'p4', sub:'<span class="cmd">/trellis:plan</span>', children:[
         { html:'4.1 AI驱动任务拆解', cls:'L2', det:'先做 readiness gate<br>拆真实 Trellis task<br>当前推荐 leaf task 补最小 prd.md<br>task_plan.md 只保留摘要', id:'p4_1' },

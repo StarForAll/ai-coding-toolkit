@@ -400,6 +400,14 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 - `UI 原型生成`：Codex 不能作为主执行器，必须改用 Claude Code / OpenCode
 - `UI -> 首版代码界面`：Codex 也不能作为主执行器，必须改用 Claude Code / OpenCode
+- 只要进入 `UI 原型还原`、`设计稿落地`、`UI -> 首版代码界面` 这类任务，就把 `ui-ux-pro-max` 作为基座 skill 必调
+- 其他 UI skill 不组成固定 bundle，而是按“平台 + 框架 + 样式栈 + 当前阶段”命中条件优先调用
+- Web 侧当前已验证适配的条件 skill：`shadcn-ui`、`vue-best-practices`、`unocss`、`agent-browser`、`webapp-testing`、`accessibility-a11y`
+- iOS 侧：`mobile-ios-design` + `ios-application-dev`
+- Android 侧：`mobile-android-design` + `android-native-dev`
+- iOS / Android 原生端的可访问性默认由各自平台设计 / 开发 skill 覆盖，不额外挂通用 Web `accessibility-a11y`
+- Flutter 侧：`flutter-expert`；只有在需要明显对齐 iOS / Android 原生视觉规范时，才再叠加对应平台设计 skill
+- `agent-browser` 与 `webapp-testing` 不是二选一：前者用于浏览器 / 原型 / 页面交互，后者用于本地实现后的验收 / 回归
 - 该首版前端落地 task 完成时，必须产出 `design/frontend-ui-spec.md`
 - 后续任意 CLI 再改前端时，都默认以 `design/frontend-ui-spec.md` 为统一约束来源
 - UI 原型文件、原型导出代码、临时网页源码都只算参考资产，不能直接作为正式实现输入
