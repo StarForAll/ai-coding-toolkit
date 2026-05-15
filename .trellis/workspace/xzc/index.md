@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 221
+- **Total Sessions**: 222
 - **Last Active**: 2026-05-15
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~1206 | Active |
+| `journal-5.md` | ~1239 | Active |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 222 | 2026-05-15 | Sync workflow UI skill routing docs | `ff2224c` | `main` |
 | 221 | 2026-05-15 | 收尾 workflow-capability-audit 审计修复 | `e533525`, `f3f383d` | `main` |
 | 220 | 2026-05-15 | Fix workflow-audit skill compatibility | `95bdb10` | `main` |
 | 219 | 2026-05-15 | fix workflow-capability-audit skill | `ccefd28` | `main` |

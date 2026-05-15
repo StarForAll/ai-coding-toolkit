@@ -1204,3 +1204,36 @@ Tightened workflow-audit skill discovery routing, restored ordinary-review exclu
 ### Next Steps
 
 - None - task complete
+
+
+## Session 222: Sync workflow UI skill routing docs
+
+**Date**: 2026-05-15
+**Task**: Sync workflow UI skill routing docs
+**Branch**: `main`
+
+### Summary
+
+Synchronized UI skill routing rules across the workflow design command, authority/mapping/walkthrough docs, overview copy, and mindmap; clarified ui-ux-pro-max as mandatory base skill and conditional routing for related UI skills.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ff2224c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
