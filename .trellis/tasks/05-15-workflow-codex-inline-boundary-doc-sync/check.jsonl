@@ -1,0 +1,2 @@
+{"file":".trellis/spec/docs/index.md","reason":"Verify workflow doc edits preserve repo-local doc boundary and propagation requirements."}
+{"file":".trellis/spec/guides/index.md","reason":"Shared project maintenance checks before concluding doc sync is complete."}
