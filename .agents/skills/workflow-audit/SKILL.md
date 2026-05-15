@@ -238,46 +238,11 @@ Per-CLI adaptation conclusions follow this scope rule:
 - if a CLI entry is `not-applicable`, a brief reason is sufficient; do not force the detailed evidence trio fields for that CLI
 - when official docs, repo-local evidence, and practical development-use evidence disagree, record the disagreement explicitly instead of silently choosing one source as the winner
 
-Use blocked states in two distinct contexts:
-
-- partial unresolved branches inside an otherwise continuing audit report: `Blocked`, `Evidence Gap`, `Needs Clarification`
-- hard-stop exit classifications that terminate the audit: `Blocked / Version Drift`, `Blocked / Invalid Input`, `Blocked / Dependency Unavailable`, `Blocked / Runtime Execution Failure`, `Blocked / No Handoff Target`
-
-Do not mix these two contexts.
-
-Each confirmed issue must include at least:
-
-- `priority`
-- `conclusion`
-- `evidence source` (tagged with source layer: `source repo` / `generated target project` / `runtime command output`)
-- `validation action`
-  - example granularity: `Compared script signature against documentation; exit code 0 but missing required JSON output`
-- `impact scope`
-- `fix direction`
-
-The audit must not emit a confirmed issue or fix direction for a non-defect “optimization” idea unless evidence shows real behavioral, closure, or maintainability harm. Evidence-backed non-defects belong in `Unconfirmed Items / False Alarms`, not in `Confirmed Issues`.
-
-Priority rubric (apply consistently; pick the more severe level when borderline):
-
-- `P0` — blocks workflow execution, install, or audit itself
-  - workflow cannot finish a documented step under any supported CLI
-  - install / embed / upgrade scripts crash, exit with an undocumented non-zero status, or silently corrupt state
-  - a security or boundary contract is broken (e.g., `install-workflow.py` no longer enforces `WORKFLOW_EMBED_EXECUTOR_CONFIRMED`, allowing Codex to lead formal embed)
-  - documented post-install artifact is entirely missing
-- `P1` — drift with real behavioral impact, but a workaround or partial path exists
-  - documented behavior diverges from actual script behavior in a way an auditor or operator would notice (exit code shape, output schema, side-effect ordering)
-  - one CLI's adaptation is materially incomplete or behaviorally inconsistent with the other CLIs for the same semantic action
-  - cross-document references point at moved/renamed files but a manual workaround still works
-- `P2` — surface-level inconsistency, no behavioral impact
-  - wording, naming, or label drift that does not change runtime behavior
-  - non-breaking documentation gaps that do not mislead an auditor about behavior
-  - cosmetic or formatting issues in templates that still render and parse correctly
-
-A finding that needs runtime validation to determine severity must stay in Blocked / Evidence Gap until D is run, rather than be guessed into a P-level.
+Detailed blocked-state rules, confirmed-issue schema, priority rubric, and non-defect handling live in `## Report Contracts`. Until Step D runs, any finding whose severity still depends on runtime validation must remain `Blocked / Evidence Gap`.
 
 ## Workflow
 
-### Step naming map
+### Step Naming Map
 
 The workflow may refer to the same control flow with either evidence-step labels or numbered step labels. Treat the following names as equivalent:
 
@@ -507,15 +472,15 @@ Each recommendation must state:
 - what trigger condition makes it the right choice now
 - why stronger alternatives were not selected
 
-Suggested fix directions and post-audit recommendations must obey the change-worthiness guardrail:
-
-- do not propose “cleanup” or “optimization” work for evidence-backed non-defects
-- do not recommend changes that would remove a currently valid primary/conditional carrier split merely to force cosmetic cross-CLI symmetry
-- if the strongest evidence-backed conclusion is “current behavior is acceptable,” say so directly and stop
+Suggested fix directions and post-audit recommendations must obey the same change-worthiness guardrail already defined in `C. Structured Gap Analysis` and `Confirmed-Issue Schema`.
 
 Stop and wait for user confirmation.
 
-### Child Audit Task Completion (return-to-parent rules)
+## Task Model
+
+All task references in this section are resolved from the current session-scoped Trellis runtime, not from a repo-global active-task file.
+
+### Child Audit Task Completion
 
 These rules apply only after Step 6 has produced an audit conclusion inside a child audit task — they govern when the child task may close and execution may return to the parent task. They are not Step 4 task-creation rules.
 
@@ -523,6 +488,236 @@ These rules apply only after Step 6 has produced an audit conclusion inside a ch
 - workflow-audit only advances the task to "audit conclusion produced, waiting for confirmation"
 - once the user confirms the conclusion, remediation is handled by normal phases/skills inside the same child audit task
 - return to parent only after remediation is complete and the human confirms
+
+### Remediation Splitting
+
+Inside a top-level or child audit task:
+
+- ordinary remediation stays in the same audit task by default
+- create implementation subtasks only when the repair scope is genuinely complex
+
+`workflow-audit` itself does not own remediation execution. It stops at the audit-conclusion boundary; later normal phases/skills handle the repair work in the same audit task.
+
+## Report Contracts
+
+### Lightweight Static Output
+
+Use the simplified structure from `references/lightweight-output-template.md`.
+
+### Task-based Audit Report
+
+Maintain `audit-report.md` in the task directory. This applies to both task-based static and task-based runtime modes.
+
+Rules:
+
+- filename is fixed: `audit-report.md`
+- update incrementally during the active audit
+- treat the same file as the current finalized report at the stop-and-confirm boundary
+- require it only for task-based audits
+- record `Compatible Anchor Version`, `Current Trellis Version`, and `Version Gate` (`passed` or `bypassed`) in the audit boundary section
+- when `Version Gate` is `bypassed`, also record `Bypass Detail` with the user-approved reason and the run-local-only disclaimer
+- when evidence is tagged as `generated target project`, record whether it came from the clean `trellis init` baseline or the workflow-installed state after `install-workflow.py`
+- when per-CLI adaptation is judged, record for each CLI:
+  - the official-doc source checked
+  - the repo-local evidence checked
+  - the practical development-use evidence checked
+  - whether these sources agree or where they differ
+
+### Confirmed-Issue Schema
+
+Every confirmed issue must include:
+
+- priority (`P0` / `P1` / `P2`)
+- conclusion
+- evidence source (with source layer tag: `source repo` / `generated target project` / `runtime command output`)
+  - when the layer is `generated target project`, include `Stage` as `baseline after trellis init` or `workflow-installed state after install-workflow.py`
+- validation action
+- impact scope
+- fix direction
+
+The audit must not emit a confirmed issue or fix direction for a non-defect “optimization” idea unless evidence shows real behavioral, closure, or maintainability harm. Evidence-backed non-defects belong in `Unconfirmed Items / False Alarms`, not in `Confirmed Issues`.
+
+#### Priority Rubric
+
+Use the following rubric to assign `P0` / `P1` / `P2` consistently. When in doubt between two levels, pick the more severe one and explain the borderline case in the issue conclusion.
+
+- `P0` — blocks workflow execution, install, or audit itself
+  - the workflow cannot finish a documented step under any supported CLI
+  - install / embed / upgrade scripts crash, exit with an undocumented non-zero status, or silently corrupt state
+  - a security or boundary contract is broken (e.g., `install-workflow.py` no longer enforces `WORKFLOW_EMBED_EXECUTOR_CONFIRMED`, allowing Codex to lead formal embed)
+  - documented post-install artifact is entirely missing
+- `P1` — drift with real behavioral impact, but a workaround or partial path exists
+  - documented behavior diverges from actual script behavior in a way an auditor or operator would notice (exit code shape, output schema, side-effect ordering)
+  - one CLI's adaptation is materially incomplete or behaviorally inconsistent with the other CLIs for the same semantic action
+  - cross-document references point at moved/renamed files but a manual workaround still works
+- `P2` — surface-level inconsistency, no behavioral impact
+  - wording, naming, or label drift between docs that does not change runtime behavior
+  - non-breaking documentation gaps that do not mislead an auditor about behavior
+  - cosmetic or formatting issues in templates that still render and parse correctly
+
+A finding that requires runtime validation to confirm severity must stay in the Blocked / Evidence Gap section until D is run, rather than be guessed into a P-level.
+
+### Blocked-State Rules
+
+If some critical branches remain unresolved, partial confirmed conclusions are allowed only when blocked branches are explicitly labeled as:
+
+- `Blocked`
+- `Evidence Gap`
+- `Needs Clarification`
+
+Blind guessing is forbidden.
+
+This partial-findings blocked-item set is distinct from hard-stop exit classifications such as:
+
+- `Blocked / Version Drift`
+- `Blocked / Invalid Input`
+- `Blocked / Dependency Unavailable`
+- `Blocked / Runtime Execution Failure`
+- `Blocked / No Handoff Target`
+
+Use `Blocked / <subtype>` when the audit itself cannot continue reliably and must stop. Do not treat those hard-stop classifications as ordinary partial blocked-item labels inside an otherwise continuing audit report.
+
+## CLI and Handoff Rules
+
+### Multi-CLI Reporting
+
+The audit must separate conclusions for:
+
+- Claude Code
+- OpenCode
+- Codex
+
+Do not collapse them into one generic statement.
+
+### Main-session-only execution policy
+
+At the current stage, `workflow-audit` must execute in the current CLI's main interactive session. Claude Code or OpenCode agents/sub-agents are not allowed to execute audit steps for this skill.
+
+If runtime reality offers only agent-based Claude Code/OpenCode execution for a required Codex handoff, treat that the same as having no usable non-Codex handoff target for this run.
+
+### Codex Boundary
+
+Codex may participate in:
+
+- source reading
+- evidence gathering
+- analysis
+- reporting
+
+Codex must not be the main executor of the first formal embed step into the temporary target project.
+
+### Codex Handoff
+
+When the audit reaches the formal temporary-project embed step under Codex:
+
+- stop execution there
+- emit a handoff block
+- use the template from `references/codex-handoff-template.md`
+- prefer `Claude Code -> OpenCode` unless explicit user constraints override it
+- require the takeover to happen in a main interactive Claude Code or OpenCode session, not through an agent/sub-agent
+- require the handoff sequence to cover:
+  - state detection
+  - install dry-run
+  - formal install with explicit non-Codex executor confirmation, performed with `WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1` set in the environment of the takeover CLI's invocation
+  - post-install `upgrade-compat.py --check`
+
+The `WORKFLOW_EMBED_EXECUTOR_CONFIRMED` environment variable is part of the boundary contract: `install-workflow.py` uses it to refuse formal install when the operator has not explicitly acknowledged the takeover, so the audit must not treat the formal install step as covered by handoff evidence unless the env var was actually set in the returned command transcript.
+
+Any handoff CLI remains limited to runtime validation only during the audit stage and must not modify workflow source files.
+
+Returned evidence from the handoff path must be merged back into the current audit report.
+
+If the user constraints or runtime reality rule out all usable non-Codex executors for the formal embed step:
+
+- stop immediately
+- classify the stop as `Blocked / No Handoff Target`
+- explain that the formal embed step remains unverified because no allowed main-session takeover CLI is available
+
+## Post-audit Routing
+
+The audited workflow's own internal `design` / `plan` / `start` semantics are not a trusted control plane.
+
+Post-audit routing must come only from the current-project trusted whitelist:
+
+- `trellis-brainstorm`
+- `start`
+- `check`
+- `update-spec`
+
+`grill-me` is excluded from this whitelist and exists only as an internal clarification submode during the audit itself.
+
+If no whitelist item fits, recommend a plain-language next action instead of forcing a weak skill recommendation.
+
+Every post-audit recommendation must include:
+
+- the chosen next action/skill
+- its trigger condition
+- a brief reason
+- why stronger alternatives were not selected
+
+Suggested fix directions and post-audit recommendations must obey the same change-worthiness guardrail already defined in `C. Structured Gap Analysis` and `Confirmed-Issue Schema`:
+
+- do not propose “cleanup” or “optimization” work for evidence-backed non-defects
+- do not recommend changes that would remove a currently valid primary/conditional carrier split merely to force cosmetic cross-CLI symmetry
+- if the strongest evidence-backed conclusion is “current behavior is acceptable,” say so directly and stop
+
+The skill must stop after presenting the report and routing guidance. It must not auto-execute the next phase.
+
+## Sync Rules
+
+Behavioral source of truth:
+
+- `.trellis/spec/skills/workflow-audit.md`
+
+Executable entry artifacts:
+
+- `.agents/skills/workflow-audit/SKILL.md`
+- `.claude/skills/workflow-audit/SKILL.md`
+
+Behavior-affecting changes must update these in the same change.
+
+Hard requirement:
+
+- when a behavior change is made to any of the three surfaces (spec / `.agents/` / `.claude/`), you must evaluate whether the other surfaces also need updating in the same change
+- behavior semantics (trigger conditions, execution modes, evidence requirements, report contracts, handoff rules) must remain consistent across all three surfaces
+- expression form may differ by CLI: for example, `.agents/skills/` may reference `trellis-brainstorm` directly as a sibling skill, while `.claude/skills/` may also reference `trellis-brainstorm` as a skill via the Skill tool
+- do not treat one skill surface as independently maintainable from the others for behavioral semantics
+- do not land behavior, trigger, or contract changes in only one skill surface without evaluating the others
+
+If the same behavior change also touches companion templates/tests, the same change must also update:
+
+- affected files under `.agents/skills/workflow-audit/references/`
+- affected files under `.agents/skills/workflow-audit/tests/`
+- affected files under `.claude/skills/workflow-audit/references/`
+- affected files under `.claude/skills/workflow-audit/tests/`
+
+When a behavior change could affect the task-based audit path's dependence on `trellis-brainstorm`, review that dependency explicitly rather than assuming the coupling still holds.
+
+## Related Files
+
+Primary source-of-truth and executable surfaces:
+
+- `.trellis/spec/skills/workflow-audit.md`
+- `.agents/skills/workflow-audit/SKILL.md`
+- `.claude/skills/workflow-audit/SKILL.md`
+
+Companion references:
+
+- `.agents/skills/workflow-audit/references/*`
+- `.claude/skills/workflow-audit/references/*`
+
+Persisted scenario tests:
+
+- `.agents/skills/workflow-audit/tests/*`
+- `.claude/skills/workflow-audit/tests/*`
+
+Directly related contracts:
+
+- `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
+- `.agents/skills/workflow-capability-audit/SKILL.md`
+- `.claude/skills/workflow-capability-audit/SKILL.md`
+- `.agents/skills/trellis-brainstorm/SKILL.md`
+- `.claude/skills/trellis-brainstorm/SKILL.md`
 
 ## References
 

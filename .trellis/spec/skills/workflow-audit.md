@@ -151,7 +151,7 @@ This skill **must** fully validate the following aspects for any workflow under 
    - If the latest official docs, repo-local evidence, and actual development-use evidence all support the current state, record the item as a false alarm / non-defect rather than manufacturing a fix
    - When a candidate issue turns out to be non-defective, ignore it rather than turning it into a low-value optimization target
 
-Each confirmed issue in the audit report must include, in addition to the schema defined in "Confirmed-Issue Schema", a validation action that describes how the issue was detected (e.g., "Compared script signature against documentation; exit code 0 but missing required JSON output").
+Each confirmed issue in the audit report must include a validation action that describes how the issue was detected. The detailed schema lives in `## Report Contracts`.
 
 ---
 
@@ -702,64 +702,13 @@ Every post-audit recommendation must include:
 - a brief reason
 - why stronger alternatives were not selected
 
-Suggested fix directions and post-audit recommendations must obey the change-worthiness guardrail:
+Suggested fix directions and post-audit recommendations must obey the same change-worthiness guardrail already defined in `C. Structured Gap Analysis` and `Confirmed-Issue Schema`:
 
 - do not propose “cleanup” or “optimization” work for evidence-backed non-defects
 - do not recommend changes that would remove a currently valid primary/conditional carrier split merely to force cosmetic cross-CLI symmetry
 - if the strongest evidence-backed conclusion is “current behavior is acceptable,” say so directly and stop
 
 The skill must stop after presenting the report and routing guidance. It must not auto-execute the next phase.
-
----
-
-## Validation
-
-Required persisted scenario files:
-
-- `tests/01-lightweight-static.md`
-- `tests/02-nontrivial-full-audit.md`
-- `tests/03-codex-handoff.md`
-- `tests/04-task-based-static.md`
-- `tests/05-need-runtime-validation-no-escalation.md`
-- `tests/06-multi-target-input-stop.md`
-- `tests/07-child-audit-task.md`
-- `tests/08-post-audit-routing.md`
-- `tests/09-grill-me-gap-clarification.md`
-- `tests/10-opencode-priority-handoff.md`
-- `tests/11-invalid-workflow-path.md`
-- `tests/12-brainstorm-dependency-unavailable.md`
-- `tests/13-runtime-execution-failure.md`
-- `tests/14-no-handoff-target.md`
-- `tests/15-source-layer-tag-compliance.md`
-- `tests/16-candidate-issues-supplemental-focus.md`
-- `tests/17-per-cli-not-applicable-section.md`
-- `tests/18-confirmed-issue-minimum-schema.md`
-- `tests/19-current-cli-inference-failure.md`
-- `tests/20-script-behavior-mismatch.md`
-- `tests/21-version-drift-stop.md`
-- `tests/22-implicit-default-workflow-root.md`
-- `tests/23-unsupported-explicit-workflow-root.md`
-- `tests/24-active-task-not-audit-target.md`
-- `tests/25-temp-project-not-workflow-source.md`
-- `tests/26-ambiguous-natural-language-target.md`
-- `tests/27-baseline-installed-no-diff.md`
-- `tests/28-trellis-init-partial-baseline-failure.md`
-- `tests/29-native-cli-doc-and-practical-evidence.md`
-- `tests/30-non-defect-no-negative-optimization.md`
-- `tests/31-todo-reminder-non-defect.md`
-- `tests/32-allowed-minor-version-mismatch.md`
-- `tests/33-prerelease-drift-ignores-bypass.md`
-- `tests/34-wider-drift-ignores-bypass.md`
-- `tests/35-main-session-only-execution.md`
-- `tests/36-agent-only-handoff-stop.md`
-
-Each test file must use the same internal structure:
-
-1. `Purpose`
-2. `Input`
-3. `Expected Mode`
-4. `Expected Key Behaviors`
-5. `Must Not`
 
 ---
 
@@ -797,90 +746,24 @@ When a behavior change could affect the task-based audit path's dependence on `t
 
 ## Related Files
 
+Primary source-of-truth and executable surfaces:
+
+- `.trellis/spec/skills/workflow-audit.md`
 - `.agents/skills/workflow-audit/SKILL.md`
 - `.claude/skills/workflow-audit/SKILL.md`
-- `.agents/skills/workflow-audit/references/input-template.md`
-- `.agents/skills/workflow-audit/references/audit-report-template.md`
-- `.agents/skills/workflow-audit/references/lightweight-output-template.md`
-- `.agents/skills/workflow-audit/references/codex-handoff-template.md`
-- `.agents/skills/workflow-audit/references/needs-confirmation-template.md`
-- `.agents/skills/workflow-audit/tests/01-lightweight-static.md`
-- `.agents/skills/workflow-audit/tests/02-nontrivial-full-audit.md`
-- `.agents/skills/workflow-audit/tests/03-codex-handoff.md`
-- `.agents/skills/workflow-audit/tests/04-task-based-static.md`
-- `.agents/skills/workflow-audit/tests/05-need-runtime-validation-no-escalation.md`
-- `.agents/skills/workflow-audit/tests/06-multi-target-input-stop.md`
-- `.agents/skills/workflow-audit/tests/07-child-audit-task.md`
-- `.agents/skills/workflow-audit/tests/08-post-audit-routing.md`
-- `.agents/skills/workflow-audit/tests/09-grill-me-gap-clarification.md`
-- `.agents/skills/workflow-audit/tests/10-opencode-priority-handoff.md`
-- `.agents/skills/workflow-audit/tests/11-invalid-workflow-path.md`
-- `.agents/skills/workflow-audit/tests/12-brainstorm-dependency-unavailable.md`
-- `.agents/skills/workflow-audit/tests/13-runtime-execution-failure.md`
-- `.agents/skills/workflow-audit/tests/14-no-handoff-target.md`
-- `.agents/skills/workflow-audit/tests/15-source-layer-tag-compliance.md`
-- `.agents/skills/workflow-audit/tests/16-candidate-issues-supplemental-focus.md`
-- `.agents/skills/workflow-audit/tests/17-per-cli-not-applicable-section.md`
-- `.agents/skills/workflow-audit/tests/18-confirmed-issue-minimum-schema.md`
-- `.agents/skills/workflow-audit/tests/19-current-cli-inference-failure.md`
-- `.agents/skills/workflow-audit/tests/20-script-behavior-mismatch.md`
-- `.agents/skills/workflow-audit/tests/21-version-drift-stop.md`
-- `.agents/skills/workflow-audit/tests/22-implicit-default-workflow-root.md`
-- `.agents/skills/workflow-audit/tests/23-unsupported-explicit-workflow-root.md`
-- `.agents/skills/workflow-audit/tests/24-active-task-not-audit-target.md`
-- `.agents/skills/workflow-audit/tests/25-temp-project-not-workflow-source.md`
-- `.agents/skills/workflow-audit/tests/26-ambiguous-natural-language-target.md`
-- `.agents/skills/workflow-audit/tests/27-baseline-installed-no-diff.md`
-- `.agents/skills/workflow-audit/tests/28-trellis-init-partial-baseline-failure.md`
-- `.agents/skills/workflow-audit/tests/29-native-cli-doc-and-practical-evidence.md`
-- `.agents/skills/workflow-audit/tests/30-non-defect-no-negative-optimization.md`
-- `.agents/skills/workflow-audit/tests/31-todo-reminder-non-defect.md`
-- `.agents/skills/workflow-audit/tests/32-allowed-minor-version-mismatch.md`
-- `.agents/skills/workflow-audit/tests/33-prerelease-drift-ignores-bypass.md`
-- `.agents/skills/workflow-audit/tests/34-wider-drift-ignores-bypass.md`
-- `.agents/skills/workflow-audit/tests/35-main-session-only-execution.md`
-- `.agents/skills/workflow-audit/tests/36-agent-only-handoff-stop.md`
-- `.claude/skills/workflow-audit/references/input-template.md`
-- `.claude/skills/workflow-audit/references/audit-report-template.md`
-- `.claude/skills/workflow-audit/references/lightweight-output-template.md`
-- `.claude/skills/workflow-audit/references/codex-handoff-template.md`
-- `.claude/skills/workflow-audit/references/needs-confirmation-template.md`
-- `.claude/skills/workflow-audit/tests/01-lightweight-static.md`
-- `.claude/skills/workflow-audit/tests/02-nontrivial-full-audit.md`
-- `.claude/skills/workflow-audit/tests/03-codex-handoff.md`
-- `.claude/skills/workflow-audit/tests/04-task-based-static.md`
-- `.claude/skills/workflow-audit/tests/05-need-runtime-validation-no-escalation.md`
-- `.claude/skills/workflow-audit/tests/06-multi-target-input-stop.md`
-- `.claude/skills/workflow-audit/tests/07-child-audit-task.md`
-- `.claude/skills/workflow-audit/tests/08-post-audit-routing.md`
-- `.claude/skills/workflow-audit/tests/09-grill-me-gap-clarification.md`
-- `.claude/skills/workflow-audit/tests/10-opencode-priority-handoff.md`
-- `.claude/skills/workflow-audit/tests/11-invalid-workflow-path.md`
-- `.claude/skills/workflow-audit/tests/12-brainstorm-dependency-unavailable.md`
-- `.claude/skills/workflow-audit/tests/13-runtime-execution-failure.md`
-- `.claude/skills/workflow-audit/tests/14-no-handoff-target.md`
-- `.claude/skills/workflow-audit/tests/15-source-layer-tag-compliance.md`
-- `.claude/skills/workflow-audit/tests/16-candidate-issues-supplemental-focus.md`
-- `.claude/skills/workflow-audit/tests/17-per-cli-not-applicable-section.md`
-- `.claude/skills/workflow-audit/tests/18-confirmed-issue-minimum-schema.md`
-- `.claude/skills/workflow-audit/tests/19-current-cli-inference-failure.md`
-- `.claude/skills/workflow-audit/tests/20-script-behavior-mismatch.md`
-- `.claude/skills/workflow-audit/tests/21-version-drift-stop.md`
-- `.claude/skills/workflow-audit/tests/22-implicit-default-workflow-root.md`
-- `.claude/skills/workflow-audit/tests/23-unsupported-explicit-workflow-root.md`
-- `.claude/skills/workflow-audit/tests/24-active-task-not-audit-target.md`
-- `.claude/skills/workflow-audit/tests/25-temp-project-not-workflow-source.md`
-- `.claude/skills/workflow-audit/tests/26-ambiguous-natural-language-target.md`
-- `.claude/skills/workflow-audit/tests/27-baseline-installed-no-diff.md`
-- `.claude/skills/workflow-audit/tests/28-trellis-init-partial-baseline-failure.md`
-- `.claude/skills/workflow-audit/tests/29-native-cli-doc-and-practical-evidence.md`
-- `.claude/skills/workflow-audit/tests/30-non-defect-no-negative-optimization.md`
-- `.claude/skills/workflow-audit/tests/31-todo-reminder-non-defect.md`
-- `.claude/skills/workflow-audit/tests/32-allowed-minor-version-mismatch.md`
-- `.claude/skills/workflow-audit/tests/33-prerelease-drift-ignores-bypass.md`
-- `.claude/skills/workflow-audit/tests/34-wider-drift-ignores-bypass.md`
-- `.claude/skills/workflow-audit/tests/35-main-session-only-execution.md`
-- `.claude/skills/workflow-audit/tests/36-agent-only-handoff-stop.md`
+
+Companion references:
+
+- `.agents/skills/workflow-audit/references/*`
+- `.claude/skills/workflow-audit/references/*`
+
+Persisted scenario tests:
+
+- `.agents/skills/workflow-audit/tests/*`
+- `.claude/skills/workflow-audit/tests/*`
+
+Directly related contracts:
+
 - `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
 - `.agents/skills/workflow-capability-audit/SKILL.md`
 - `.claude/skills/workflow-capability-audit/SKILL.md`
