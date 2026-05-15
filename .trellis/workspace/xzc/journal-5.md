@@ -1071,3 +1071,36 @@ Restricted workflow-capability-audit native-adaptation evidence to official docs
 ### Next Steps
 
 - None - task complete
+
+
+## Session 218: workflow-capability-audit: equal-version user-override
+
+**Date**: 2026-05-15
+**Task**: workflow-capability-audit: equal-version user-override
+**Branch**: `main`
+
+### Summary
+
+Tightened workflow-capability-audit gate semantics: newer-version drift continues, same-version requires explicit override, older-version is treated as contract violation; synchronized spec, skill, references, and tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8645a4f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
