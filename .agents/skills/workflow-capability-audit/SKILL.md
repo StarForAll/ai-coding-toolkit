@@ -183,26 +183,26 @@ After the script completes, review `capability-report.md` for:
 For Claude Code / OpenCode / Codex native-adaptation judgments, combine both:
 
 - the latest official CLI documentation available at audit time
-- repo-local validated evidence from the current workflow authoring repository
-  and, when available, the A/B fixtures or runtime observations
+- workflow-source evidence plus, when available, the A/B fixtures or runtime observations
 
-Minimum repo-local evidence pack:
+Minimum workflow-source evidence pack:
 
 - `docs/workflows/新项目开发工作流/CLI原生适配边界矩阵.md`
 - the relevant platform README under `docs/workflows/新项目开发工作流/commands/{claude,opencode,codex}/README.md`
-- the live carrier files behind the claim (`.claude/**`, `.opencode/**`, `.codex/**`, `.agents/skills/**`, `.trellis/workflow.md`, `.trellis/scripts/hooks/**`)
+- the workflow source definitions behind the claim (`commands/workflow_assets.py`, `commands/install-workflow.py`, `commands/upgrade-compat.py`)
+- the temporary A/B fixture files that show the installed target-project result
 
 When filling `## Native CLI Adaptation Evidence`, capture at least:
 
 - per-CLI official docs source checked
-- per-CLI repo-local evidence checked
+- per-CLI workflow-source / A/B evidence checked
 - per-CLI agreement / discrepancy status
 - discrepancy resolution and conservative-classification rationale when a disagreement exists
 
-If official docs and repo-local evidence disagree:
+If official docs and workflow-source / A/B evidence disagree:
 
 - record the discrepancy explicitly in `capability-report.md`
-- explain whether it is an intentional local adaptation, stale repo guidance, or an unresolved evidence gap
+- explain whether it is a workflow-source contract issue, stale product documentation, or an unresolved evidence gap
 - prefer `unclear`, `present-but-gated-expected`, or another evidence-backed conservative value over unsupported assumptions
 - if the generated `capability-report.md` does not already contain the `## Native CLI Adaptation Evidence` section, add it during Step B before finalizing the audit conclusion
 

@@ -310,40 +310,42 @@ When the audit judges native adaptation for Claude Code, OpenCode, or Codex,
 each CLI-specific conclusion must combine **both** evidence tracks:
 
 - the CLI vendor/project's latest official documentation available at audit time
-- repo-local empirical evidence from the current authoring repository and, when
-  available, the current A/B fixtures or validated runtime observations
+- workflow-source evidence plus current A/B fixture evidence
 
 Do not rely on memory alone, and do not treat one evidence track as sufficient.
 
 Use official documentation to confirm platform-supported mechanisms such as
 configuration layers, hooks/plugins, rules/instructions loading, subagent/agent
-discovery, and similar carrier semantics. Use repo-local evidence to confirm
-how this workflow currently uses, constrains, or intentionally avoids those
-mechanisms in practice.
+discovery, and similar carrier semantics. Use workflow-source docs and A/B
+fixture evidence to confirm how the audited workflow currently uses,
+constrains, or intentionally avoids those mechanisms in installed target
+projects.
 
-Minimum repo-local evidence pack for native CLI adaptation analysis:
+Minimum workflow-source evidence pack for native CLI adaptation analysis:
 
 - `docs/workflows/新项目开发工作流/CLI原生适配边界矩阵.md`
 - the relevant platform README under
   `docs/workflows/新项目开发工作流/commands/{claude,opencode,codex}/README.md`
-- the live carrier files that back the claim, such as `.claude/**`,
-  `.opencode/**`, `.codex/**`, `.agents/skills/**`, `.trellis/workflow.md`, and
-  `.trellis/scripts/hooks/**`
+- the workflow source definitions that back the claim, such as
+  `docs/workflows/新项目开发工作流/commands/workflow_assets.py`,
+  `docs/workflows/新项目开发工作流/commands/install-workflow.py`, and
+  `docs/workflows/新项目开发工作流/commands/upgrade-compat.py`
+- the temporary A/B fixture files that show the installed target-project result
 
 When recording `## Native CLI Adaptation Evidence` in `capability-report.md`,
 capture at least:
 
 - per-CLI official documentation source checked
-- per-CLI repo-local evidence checked
+- per-CLI workflow-source / A/B evidence checked
 - per-CLI agreement / discrepancy status
 - discrepancy resolution and conservative-classification rationale when a
   disagreement exists
 
-If official documentation and repo-local evidence disagree:
+If official documentation and workflow-source / A/B evidence disagree:
 
 - record the discrepancy explicitly in `capability-report.md`
-- explain whether it is an intentional local adaptation, stale repo guidance, or
-  an unresolved evidence gap
+- explain whether it is a workflow-source contract issue, stale product
+  documentation, or an unresolved evidence gap
 - prefer `unclear`, `present-but-gated-expected`, or another evidence-backed
   conservative classification over unsupported assumptions
 
@@ -427,7 +429,7 @@ First-version dependent-surface coverage includes these known Trellis-native car
 - codex-hooks-and-config-carrier (.codex/hooks.json, .codex/config.toml, .codex/hooks/inject-workflow-state.py; file presence and runtime activation are separate because Codex project hooks remain trust-gated and can still be altered by higher-precedence config)
 - implementation-agent-carrier (per-CLI agent directories)
 - trellis-runtime-workflow-guide (.trellis/workflow.md, .trellis/scripts/task.py)
-- shared-skills-deployment-carrier (.agents/skills/ — shared deployment layer and repo-local maintainer carrier for shared skills consumed by OpenCode and Codex)
+- shared-skills-deployment-carrier (.agents/skills/ — shared deployment layer for shared skills consumed by OpenCode and Codex)
 - claude-native-skills-carrier (.claude/skills/ — Claude-native skills carrier)
 - opencode-native-skills-carrier (.opencode/skills/ — OpenCode-native skills carrier)
 - opencode-lib-carrier (.opencode/lib/ — OpenCode helper libraries)

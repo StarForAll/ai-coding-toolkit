@@ -433,7 +433,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             {
                 "capability_id": "TN-008",
                 "capability": "claude-native-skills-carrier",
-                "mechanism": "Workflow depends on .claude/skills/ as the Claude-native skills carrier for repo-local maintainer skills.",
+                "mechanism": "Workflow depends on .claude/skills/ as the Claude-native skills carrier for workflow-installed or workflow-maintained skills.",
                 "discovery_source": "ai-discovered",
                 "claude_evidence": "A=.claude/skills; B=.claude/skills",
                 "claude_classification": "adopted-compatible",
@@ -448,7 +448,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             {
                 "capability_id": "TN-009",
                 "capability": "opencode-native-skills-carrier",
-                "mechanism": "Workflow depends on .opencode/skills/ as the OpenCode-native skills carrier for repo-local skills.",
+                "mechanism": "Workflow depends on .opencode/skills/ as the OpenCode-native skills carrier for workflow-installed or workflow-maintained skills.",
                 "discovery_source": "ai-discovered",
                 "claude_evidence": "not-applicable",
                 "claude_classification": "not-applicable",
@@ -1432,7 +1432,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self.assertIn("- Codex:", section)
         self.assertIn("- Discrepancy resolution:", section)
         self.assertIn("  - Official docs source:", section)
-        self.assertIn("  - Repo-local evidence:", section)
+        self.assertIn("  - Workflow-source / A/B evidence:", section)
         self.assertIn("  - Agreement / discrepancy:", section)
 
     def test_shared_skills_deployment_carrier_appears_in_dependent_surface(self) -> None:

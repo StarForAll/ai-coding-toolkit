@@ -74,19 +74,19 @@ Native CLI adaptation evidence rule:
 
 - when the audit draws Claude Code / OpenCode / Codex compatibility conclusions,
   verify them against both the latest official CLI documentation available at
-  execution time and repo-local evidence from the current workflow authoring
-  repository
-- the minimum repo-local pack is `CLI原生适配边界矩阵.md`, the matching
-  platform README, and the carrier files that implement the claim
+  execution time and workflow-source / A/B evidence for the audited workflow
+- the minimum workflow-source pack is `CLI原生适配边界矩阵.md`, the matching
+  platform README, the workflow source definitions that implement the claim,
+  and the temporary A/B fixture files that show the installed target-project result
 - if the generated `capability-report.md` does not already contain
   `## Native CLI Adaptation Evidence`, fill that section during the AI review
   step before finalizing the audit conclusion
-- record per CLI the official-doc source checked, the repo-local evidence
+- record per CLI the official-doc source checked, the workflow-source / A/B evidence
   checked, the agreement/discrepancy status, and any conservative-classification
   rationale used to resolve disagreements
 - if those evidence tracks disagree, keep the discrepancy visible in
-  `capability-report.md`, explain whether it is an intentional local
-  adaptation, stale repo guidance, or an unresolved evidence gap, and prefer
+  `capability-report.md`, explain whether it is a workflow-source contract
+  issue, stale product documentation, or an unresolved evidence gap, and prefer
   `unclear`, `present-but-gated-expected`, or another evidence-backed
   conservative classification instead of flattening it into a memory-based
   answer

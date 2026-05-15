@@ -25,15 +25,15 @@ The matrix headers below define the emitted first-version column order and shoul
 <!-- Fill this section during Step B AI review unless the execution engine already prefilled it. -->
 - Claude Code:
   - Official docs source:
-  - Repo-local evidence:
+  - Workflow-source / A/B evidence:
   - Agreement / discrepancy:
 - OpenCode:
   - Official docs source:
-  - Repo-local evidence:
+  - Workflow-source / A/B evidence:
   - Agreement / discrepancy:
 - Codex:
   - Official docs source:
-  - Repo-local evidence:
+  - Workflow-source / A/B evidence:
   - Agreement / discrepancy:
 - Discrepancy resolution:
 

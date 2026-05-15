@@ -1092,21 +1092,21 @@ def build_workflow_dependent_rows(a_root: Path, b_root: Path) -> list[dict[str, 
         },
         {
             "capability": "shared-skills-deployment-carrier",
-            "mechanism": "Workflow depends on .agents/skills/ as a shared deployment layer and repo-local maintainer carrier for shared skills consumed by OpenCode and Codex.",
+            "mechanism": "Workflow depends on .agents/skills/ as a shared deployment layer for shared skills consumed by OpenCode and Codex.",
             "claude": [],
             "opencode": [".agents/skills"],
             "codex": [".agents/skills"],
         },
         {
             "capability": "claude-native-skills-carrier",
-            "mechanism": "Workflow depends on .claude/skills/ as the Claude-native skills carrier for repo-local maintainer skills.",
+            "mechanism": "Workflow depends on .claude/skills/ as the Claude-native skills carrier for workflow-installed or workflow-maintained skills.",
             "claude": [".claude/skills"],
             "opencode": [],
             "codex": [],
         },
         {
             "capability": "opencode-native-skills-carrier",
-            "mechanism": "Workflow depends on .opencode/skills/ as the OpenCode-native skills carrier for repo-local skills.",
+            "mechanism": "Workflow depends on .opencode/skills/ as the OpenCode-native skills carrier for workflow-installed or workflow-maintained skills.",
             "claude": [],
             "opencode": [".opencode/skills"],
             "codex": [],
@@ -1271,15 +1271,15 @@ def initialize_capability_report(
 <!-- Fill this section during Step B AI review unless the execution engine already prefilled it. -->
 - Claude Code:
   - Official docs source:
-  - Repo-local evidence:
+  - Workflow-source / A/B evidence:
   - Agreement / discrepancy:
 - OpenCode:
   - Official docs source:
-  - Repo-local evidence:
+  - Workflow-source / A/B evidence:
   - Agreement / discrepancy:
 - Codex:
   - Official docs source:
-  - Repo-local evidence:
+  - Workflow-source / A/B evidence:
   - Agreement / discrepancy:
 - Discrepancy resolution:
 
