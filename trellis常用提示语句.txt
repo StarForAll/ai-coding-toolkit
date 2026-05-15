@@ -1,7 +1,8 @@
 初始空项目执行命令
 -------------------------------------------
 cd $ops/project/work
-mkcd 项目名称git init
+mkcd 项目路径
+git init
 git remote add origin git@gitee.com:AllstarsBelongToMe/项目名称.git
 git remote set-url --add --push origin git@gitee.com:AllstarsBelongToMe/项目名称.git
 git remote set-url --add --push origin git@github.com:StarForAll/项目名称.git
@@ -19,14 +20,14 @@ sonar-scanner -Dsonar.projectKey=目标项目key -Dsonar.token=$SONAR_TOKEN -Dso
 
 # 方式2:shell 命令执行
 WORKFLOW_ROOT="/ops/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流"
-TARGET_PROJECT="/tmp/trellis-0.5.9-2"
+TARGET_PROJECT="项目路径"
 PYTHON_BIN="/ops/softwares/python/bin/python3"
 # 必须人工确认返回 INITIAL_BASELINE_READY，否则停止
 "$PYTHON_BIN" "$WORKFLOW_ROOT/commands/detect-embed-state.py" --project-root "$TARGET_PROJECT"
 
 # 默认是外部项目，如果加入 --profile personal 就是内部个人项目不会包含外包要求
 # 当 dry-run 通过之后执行真正的命令
-"$PYTHON_BIN" "$WORKFLOW_ROOT/commands/install-workflow.py" --project-root "$TARGET_PROJECT" --dry-run"
+"$PYTHON_BIN" "$WORKFLOW_ROOT/commands/install-workflow.py" --project-root "$TARGET_PROJECT" --dry-run
 WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1 "$PYTHON_BIN" "$WORKFLOW_ROOT/commands/install-workflow.py" --project-root "$TARGET_PROJECT"
 # 完整性校验
 "$PYTHON_BIN" "$WORKFLOW_ROOT/commands/upgrade-compat.py" --project-root "$TARGET_PROJECT" --check
