@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 215
+- **Total Sessions**: 216
 - **Last Active**: 2026-05-15
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~1007 | Active |
+| `journal-5.md` | ~1040 | Active |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 216 | 2026-05-15 | 清理 .current-task 旧机制残影 | `cf08f4c` | `main` |
 | 215 | 2026-05-15 | Fix workflow-audit skill contracts | `68a6991` | `main` |
 | 214 | 2026-05-15 | 修正 workflow-capability-audit skill 兼容契约与测试覆盖 | `4142f56`, `9b91418` | `main` |
 | 213 | 2026-05-15 | Trellis 隐藏目录漂移分析与边界清理 | `7efa038` | `main` |

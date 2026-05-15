@@ -1005,3 +1005,36 @@ Aligned workflow-audit spec and skill surfaces with current Trellis mechanics, r
 ### Next Steps
 
 - None - task complete
+
+
+## Session 216: 清理 .current-task 旧机制残影
+
+**Date**: 2026-05-15
+**Task**: 清理 .current-task 旧机制残影
+**Branch**: `main`
+
+### Summary
+
+移除现行 runtime/test 面中残留的 .current-task 旧机制：删除 FILE_CURRENT_TASK 常量与导出，safe_commit 测试 fixture 改为只依赖 session-scoped runtime。随后归档任务 remove-current-task-legacy。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cf08f4c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
