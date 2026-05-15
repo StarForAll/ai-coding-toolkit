@@ -610,7 +610,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 先做本 CLI 的质量检查，再判断是否需要进入多 CLI 补充审查门禁。
 
 这里的 `review-gate` 仅适用于任务闭环，不属于 `project-audit` 之后的默认项目级收尾阶段。
-这里展示的是项目收尾链路中的正式 `check`；在单任务开发循环内，`continue` 所重入的 implementation 阶段内部先执行 Trellis 原生 `trellis-research -> trellis-implement -> trellis-check` agent 链，然后在用户确认后再进入正式 `check`。其中 `trellis-research` 会按当前 workflow 合同同步增强版 research 能力，`trellis-implement` / `trellis-check` 仍保持 Trellis 原生基线。
+这里展示的是项目收尾链路中的正式 `check`；在单任务开发循环内，`continue` 所重入的 implementation 阶段内部默认先执行 Trellis 原生 `trellis-research -> trellis-implement -> trellis-check` agent 链，然后在用户确认后再进入正式 `check`。其中 `trellis-research` 会按当前 workflow 合同同步增强版 research 能力，`trellis-implement` / `trellis-check` 仍保持 Trellis 原生基线；但若目标项目保持 `codex.dispatch_mode = inline`，Codex 主会话不手工派发这条链，而改由主会话直接完成对应 research / implement / check。
 
 ### CLI 入口差异
 

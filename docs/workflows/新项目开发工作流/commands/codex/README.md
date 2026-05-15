@@ -184,6 +184,13 @@ Codex 支持 hooks。对这套 workflow，当前推荐通过项目 `.codex/hooks
 
 这条链路的作用是：把 Trellis workflow 运行时所需的上下文自动装进 Codex 会话，而不是要求用户每次手动粘贴。若项目额外保留 `session-start.py`，应把它视为可选的 repo-local / Trellis-baseline 辅助面，而不是当前 workflow 合同里唯一必需的挂接点。
 
+还要补一条 dispatch 边界，避免把 Codex 的平台能力误读成当前 workflow 的默认执行方式：
+
+- 当目标项目的 `.trellis/config.yaml` 仍保持 `codex.dispatch_mode = inline` 时，Codex 主会话必须保持 inline，不得手工派发 `trellis-implement` / `trellis-check` / `trellis-research` 一类 sub-agent，也不得改用 `spawn_agent`、`explorer`、`worker` 等通用平台 sub-agent / agent 能力绕过这条约束
+- 此时 `.codex/agents/*.toml` 只服务于显式 delegated / non-inline 路径；它们不是 inline 主会话下的临时逃生口
+- 即使目标项目同时启用了 Codex 的 multi-agent 相关平台能力，这些能力也只应被理解为非 inline 路径的基础设施，不覆盖上面这条 inline 约束
+- 因此，判断当前应否派发 sub-agent 时，优先看目标项目的 `codex.dispatch_mode` 与 workflow 当前阶段要求，不要只因为 `.codex/agents/` 存在或平台支持 multi-agent 就推断“现在可以派”
+
 ### 3. Skills：workflow 阶段入口由 skills 承载
 
 对 Codex，这套 workflow 的推荐入口不是项目自定义 slash commands，而是 skills：
@@ -314,14 +321,14 @@ Codex 官方内建 slash commands 是平台级控制能力，例如：
 对 Trellis 来说，正确做法是：
 
 - 用 Codex built-in slash commands 管理 Codex 本身
-- 用 `AGENTS.md + hooks + skills + subagents` 承载 Trellis workflow
+- 用 `AGENTS.md + hooks + skills + subagents` 承载 Trellis workflow；若目标项目保持 `codex.dispatch_mode = inline`，其中 subagents 只代表可用承载面，不代表 Codex 主会话可以手工派发
 - 不把其他 CLI 的 `/trellis:xxx` 文案误当成 Codex 的项目命令协议
 
 补充边界：
 
 - Trellis 原生 `plan agent` / `dispatch agent` 不属于当前 workflow 主链；当前 workflow 只吸收 `plan agent` 的 readiness gate 与最小 task-ready 产物意识
 - 当前 workflow 不采用 `parallel/worktree` 驱动的 `plan -> dispatch -> create-pr` 流水线
-- implementation 阶段只保留 Trellis 原生 `trellis-research -> trellis-implement -> trellis-check` 这一组内部角色链
+- implementation 阶段只保留 Trellis 原生 `trellis-research -> trellis-implement -> trellis-check` 这一组内部角色链；若目标项目保持 `codex.dispatch_mode = inline`，Codex 主会话不手工派发这条链，而改由主会话直接完成对应 research / implement / check
 
 ## 推荐部署映射
 

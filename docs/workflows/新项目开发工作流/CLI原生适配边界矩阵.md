@@ -149,7 +149,7 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产；当
 | 项目长期规则 | `AGENTS.md` | 半托管（手动维护为主） | 与 Claude/OpenCode 共用；`TRELLIS` managed block 与 `workflow-nl-routing` 区段由 `trellis init` / `install-workflow.py` 分别托管 |
 | Codex 项目配置 | `.codex/config.toml` | 手动维护 | `AGENTS.md` fallback 等项目配置 |
 | 会话上下文注入 | `.codex/hooks.json` + `.codex/hooks/*.py` | 手动维护 | 当前 workflow 常见载体是 turn 级 hook（如 `UserPromptSubmit -> inject-workflow-state.py`）；不要把合同固定写死成 `SessionStart` |
-| 子代理定义 | `.codex/agents/*.toml` | Trellis 原生管理 | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 安装器不再 overlay 到目标项目，仅做 legacy 迁移；源仓库 carrier 可含项目级增强 |
+| 子代理定义 | `.codex/agents/*.toml` | Trellis 原生管理 | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 安装器不再 overlay 到目标项目，仅做 legacy 迁移；源仓库 carrier 可含项目级增强。若目标项目保持 `codex.dispatch_mode = inline`，这些 agents 只服务显式 delegated / non-inline 路径，不构成 inline 主会话的临时逃生口 |
 | 项目 Git 前置条件 | `origin ≥ 2 push URL` | 运行前置/仅校验 | 安装器校验 |
 | Trellis init 产物 | `.trellis/.version` | 运行前置/仅校验 | 安装器校验 |
 

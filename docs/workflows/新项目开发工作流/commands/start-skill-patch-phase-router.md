@@ -68,6 +68,7 @@ trellis-research -> trellis-implement -> trellis-check
 Rules:
 
 - The internal `trellis-check` agent is not the same as the formal `check` stage.
+- If the target project keeps `codex.dispatch_mode = inline`, Codex main sessions do not manually dispatch this chain and instead perform the corresponding research / implement / check work inline.
 - After the chain completes, only recommend the `check` skill as a candidate next stage and wait for user confirmation.
 - If the formal `check` stage fails, return to `implementation` and re-run the internal chain.
 - For `UI -> 首版代码界面` tasks: Codex cannot be the main executor; completion must produce `design/frontend-ui-spec.md`.
