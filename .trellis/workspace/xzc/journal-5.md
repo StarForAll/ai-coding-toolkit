@@ -1104,3 +1104,36 @@ Tightened workflow-capability-audit gate semantics: newer-version drift continue
 ### Next Steps
 
 - None - task complete
+
+
+## Session 219: fix workflow-capability-audit skill
+
+**Date**: 2026-05-15
+**Task**: fix workflow-capability-audit skill
+**Branch**: `main`
+
+### Summary
+
+Aligned workflow-capability-audit current_cli contract wording across script help, spec, skill entry artifacts, references, and persisted scenario tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ccefd28` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

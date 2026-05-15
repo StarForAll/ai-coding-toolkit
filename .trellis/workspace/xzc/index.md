@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 218
+- **Total Sessions**: 219
 - **Last Active**: 2026-05-15
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~1106 | Active |
+| `journal-5.md` | ~1139 | Active |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 219 | 2026-05-15 | fix workflow-capability-audit skill | `ccefd28` | `main` |
 | 218 | 2026-05-15 | workflow-capability-audit: equal-version user-override | `8645a4f` | `main` |
 | 217 | 2026-05-15 | workflow-capability-audit evidence boundary | `6dfae4a` | `main` |
 | 216 | 2026-05-15 | 清理 .current-task 旧机制残影 | `cf08f4c` | `main` |
