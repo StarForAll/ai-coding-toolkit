@@ -1137,3 +1137,36 @@ Aligned workflow-capability-audit current_cli contract wording across script hel
 ### Next Steps
 
 - None - task complete
+
+
+## Session 220: Fix workflow-audit skill compatibility
+
+**Date**: 2026-05-15
+**Task**: Fix workflow-audit skill compatibility
+**Branch**: `main`
+
+### Summary
+
+Tightened workflow-audit skill discovery routing, restored ordinary-review exclusion and explicit workflow-capability-audit routing, and validated the live skill surfaces.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `95bdb10` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
