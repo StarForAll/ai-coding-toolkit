@@ -581,6 +581,11 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 再确认修正方案
 - 最后统一修改
 
+这里还要统一补齐两类**项目级总检**：
+
+- 项目级统一代码漏洞检测（发现问题后按正常 project-audit 流程确认并修复）
+- 代码质量检测（例如全量 lint / typecheck / build / test / quality gate）
+
 补充规则：
 
 - `project-audit` 新发现的高风险问题留在当前阶段内处理，不回挂具体任务

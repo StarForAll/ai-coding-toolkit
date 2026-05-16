@@ -479,6 +479,10 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertTrue(brainstorm.exists(), "brainstorm.md should be deployed")
         project_audit = fixture / ".claude" / "commands" / "trellis" / "project-audit.md"
         self.assertTrue(project_audit.exists(), "project-audit.md should be deployed")
+        project_audit_text = project_audit.read_text(encoding="utf-8")
+        self.assertIn("代码漏洞检测与代码质量总检", project_audit_text)
+        self.assertIn("项目级统一代码漏洞检测命令", project_audit_text)
+        self.assertIn("项目级统一代码质量总检命令", project_audit_text)
         workflow_state_helper = fixture / ".trellis" / "scripts" / "workflow" / "workflow-state.py"
         self.assertTrue(workflow_state_helper.exists(), "workflow-state.py should be deployed")
         ownership_helper = fixture / ".trellis" / "scripts" / "workflow" / "ownership-proof-validate.py"

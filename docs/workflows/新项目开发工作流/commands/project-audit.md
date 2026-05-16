@@ -30,8 +30,9 @@ description: 所有代码任务都完成了？进入项目级全局代码审查�
 
 1. 站在项目全局视角回看所有代码相关产物，而不是只盯着单个任务 diff
 2. 识别跨任务累积形成的缺口、遗漏、不一致与错误实现
-3. 先和用户讨论发现，再确认修正方案，最后统一修改
-4. 作为进入最终质量门禁前的项目级总复核
+3. 在全部代码相关任务完成后，补做项目级统一代码漏洞检测与代码质量总检
+4. 先和用户讨论发现，再确认修正方案，最后统一修改
+5. 作为进入最终质量门禁前的项目级总复核
 
 补充约束：
 
@@ -105,6 +106,13 @@ description: 所有代码任务都完成了？进入项目级全局代码审查�
 - 是否存在遗漏的更新点、漏改点、残留兼容分支
 - 是否存在重复实现、错误抽象、接口/字段不一致
 - 是否存在“单任务都看起来正确，但放到项目整体就有问题”的情况
+- 哪些验证只适合在项目级统一执行，而不应要求每个 task 的 `check` 重复执行
+
+在完成首轮分析后，还必须补充一份**项目级统一验证矩阵**，至少明确：
+
+- 项目级代码漏洞检测命令：如依赖漏洞扫描、质量平台安全规则、敏感信息/注入风险扫描
+- 项目级代码质量总检命令：如全量 lint / typecheck / build / test / quality gate
+- 对于未采用某一类工具的项目，需要记录等价替代门禁，或明确写 `not run + 原因`
 
 必要时优先使用：
 
@@ -187,6 +195,7 @@ $TASK_DIR/project-audit/reviewer-commands-round-<N>.md
 - 为什么这样改
 - 是否会影响既有任务边界或验收结果
 - 是否需要补测试、补文档、补规范
+- 项目级代码漏洞检测与代码质量总检的实际执行命令、预期结果、失败后的处理动作
 
 若存在多个可行方案，应给出 2-3 个具体选项和取舍，不要只抛问题给用户。
 
@@ -210,6 +219,7 @@ $TASK_DIR/project-audit/reviewer-commands-round-<N>.md
 - 修改必须只围绕 `project-audit` 已确认的全局缺口
 - 不借此扩大范围做新的需求扩张
 - 改完后不要直接进入交付；下一步必须回到 `/trellis:check`
+- 在本阶段完成前，必须执行已确认的项目级代码漏洞检测与代码质量总检，并把结论写入 `project-audit.md`
 
 执行阶段可按需要使用：
 
@@ -262,6 +272,11 @@ tmp/multi-cli-review/<task-id>-project-audit/
 ## Mode
 - formal / pre-audit
 
+## Project-Level Verification Matrix
+- 项目级统一代码漏洞检测命令：
+- 项目级统一代码质量总检命令：
+- `not run + 原因`（如适用）：
+
 ## Confirmed Findings
 
 ## Candidate Findings / Reviewer Evidence
@@ -270,6 +285,11 @@ tmp/multi-cli-review/<task-id>-project-audit/
 ## Confirmed Fix Plan
 
 ## Applied Changes
+
+## Project-Level Verification Results
+- 项目级统一代码漏洞检测：
+- 项目级统一代码质量总检：
+- 失败后的处理动作 / 剩余阻塞：
 
 ## Remaining Risks
 
