@@ -23,6 +23,7 @@ REQUIRED_SECTIONS = [
     "Trellis Task 清单",
     "当前推荐执行任务（待确认）",
     "依赖关系",
+    "任务粒度判断",
     "早期探针与骨架任务",
     "自动化策略摘要",
     "范围收敛与降级预案",
@@ -57,6 +58,13 @@ LEAF_PRD_REQUIRED_SECTIONS = (
     ("Out of Scope", "不做"),
     ("Acceptance Anchors", "验收锚点"),
     ("Preferred CLI", "推荐主执行 CLI"),
+)
+GRANULARITY_FIELDS = (
+    "`granularity_decision`",
+    "`decision_reason`",
+    "`closure_target`",
+    "`non_split_risk`",
+    "`human_judgement_notes`",
 )
 EARLY_PROBE_FIELDS = ("`walking_skeleton_or_smoke`", "`packaging_skeleton`", "`performance_probe`")
 AUTOMATION_FIELDS = ("`ci_strategy`", "`local_vs_ci_boundary`")
@@ -227,6 +235,14 @@ def field_has_expected_value(section_lines: list[str], field: str, expected: str
     if not match:
         return False
     return match.group(1).strip().lower() == expected.lower()
+
+
+def field_has_allowed_value(section_lines: list[str], field: str, allowed: tuple[str, ...]) -> bool:
+    pattern = rf"{re.escape(field)}\s*[：:]\s*`?([^`\n]+?)`?(?:\s|$)"
+    match = re.search(pattern, section_text(section_lines))
+    if not match:
+        return False
+    return match.group(1).strip().lower() in {value.lower() for value in allowed}
 
 
 def validate_task_creation_checklist(checklist_path: Path) -> tuple[bool, str]:
@@ -501,6 +517,31 @@ def main() -> int:
         dependency_ok,
         "依赖关系章节已填写",
         "依赖关系章节为空或仍是占位内容",
+    )
+
+    granularity_section = find_section_lines(lines, "任务粒度判断")
+    granularity_ok, granularity_message = validate_structured_fields(
+        granularity_section,
+        GRANULARITY_FIELDS,
+        "任务粒度判断",
+    )
+    checks += 1
+    passed += print_result(
+        granularity_ok,
+        "任务粒度判断已写明是否继续细分与人工判断说明",
+        granularity_message,
+    )
+
+    granularity_value_ok = field_has_allowed_value(
+        granularity_section,
+        "`granularity_decision`",
+        ("split_further", "keep_current_granularity"),
+    )
+    checks += 1
+    passed += print_result(
+        granularity_value_ok,
+        "`granularity_decision` 取值合法",
+        "`granularity_decision` 只能填写 `split_further` 或 `keep_current_granularity`",
     )
 
     checks += 1

@@ -76,6 +76,14 @@ VALID_PLAN = """# Task Plan: Sample
 - 性能回归与优化任务依赖全部主干任务完成
 - .trellis/tasks/04-14-project-audit 依赖全部代码相关 task 完成，且不得早于性能回归与优化任务
 
+## 任务粒度判断
+
+- `granularity_decision`: keep_current_granularity
+- `decision_reason`: 当前推荐 leaf task 已承载单一闭环目标，继续合并会放大边界与验收风险
+- `closure_target`: 完成基础能力并形成后续 task 可复用前提
+- `non_split_risk`: acceptable
+- `human_judgement_notes`: 文件数、改动量和上下文预算只作为辅助信号，本轮仍以人工判断确认当前粒度合适
+
 ## 早期探针与骨架任务
 
 - `walking_skeleton_or_smoke`: ST0 先打通最短路径 smoke
@@ -248,6 +256,54 @@ class PlanValidateScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
         self.assertIn("早期探针与骨架任务 缺少结构化字段", result.stdout)
+
+    def test_missing_granularity_fields_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
+            broken = VALID_PLAN.replace(
+                "- `human_judgement_notes`: 文件数、改动量和上下文预算只作为辅助信号，本轮仍以人工判断确认当前粒度合适\n",
+                "",
+            )
+            self.write_plan(task_dir, broken)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("任务粒度判断 缺少结构化字段", result.stdout)
+
+    def test_placeholder_granularity_fields_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
+            broken = VALID_PLAN.replace(
+                "- `human_judgement_notes`: 文件数、改动量和上下文预算只作为辅助信号，本轮仍以人工判断确认当前粒度合适\n",
+                "- `human_judgement_notes`: TBD\n",
+            )
+            self.write_plan(task_dir, broken)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("任务粒度判断 存在空值或占位内容", result.stdout)
+
+    def test_invalid_granularity_decision_value_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
+            broken = VALID_PLAN.replace(
+                "- `granularity_decision`: keep_current_granularity\n",
+                "- `granularity_decision`: maybe\n",
+            )
+            self.write_plan(task_dir, broken)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("granularity_decision", result.stdout)
 
     def test_placeholder_scope_downgrade_fields_fail(self) -> None:
         with tempfile.TemporaryDirectory() as temp_root:

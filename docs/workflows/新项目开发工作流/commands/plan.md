@@ -18,7 +18,7 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
 - "怎么排期"
 - "需要制定实现步骤"
 
-> 简单任务（`L0`、单上下文可闭环）？跳过，直接 `/trellis:continue`。
+> 简单任务（`L0`、当前事项无需继续细分即可达到合适任务粒度）？跳过，直接 `/trellis:continue`。
 
 > 若 `PRD` 已冻结后命中需求讨论，按 [需求变更管理执行卡](../需求变更管理执行卡.md) 分流：纯澄清留在当前阶段；新增 / 修改 / 删除进入变更管理，不直接顺手改当前 `task_plan.md` 或 task 图。
 
@@ -29,6 +29,7 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
 - 技术架构已经过用户明确确认
 - 已根据技术架构，从 `trellis-library` 选择并导入合适 spec 到当前项目 `.trellis/spec/`（任务 1，必须先于任务 2 完成）
 - 已结合当前项目作用、背景、技术架构，对当前项目 `.trellis/spec/` 完成分析完善（任务 2，仅在任务 1 完成后执行）
+- 已对目标项目中与已确认技术架构直接相关的全部 spec 完成一次 `Context7` 错漏复核；若直接相关的第三方 spec 因 `Context7` 不可用而留下 `[Evidence Gap]`，不得进入 `plan`
 - 已基于当前项目实际技术栈，明确自动化检查矩阵（任务 3，仅在任务 1、任务 2 完成后执行；不得只写默认 `Lint`，必须有明确质量平台门禁；采用 Sonar 的项目必须写真实命令，未采用时必须写替代门禁和原因）
 - 已基于任务 3 中写清的自动化检查矩阵，完成当前项目 `/trellis:finish-work` 的首次项目化适配（任务 4）
 - 已完成当前项目 close-out 基线适配，至少明确记录入口（当前 fresh baseline 为 `/trellis:finish-work` / `trellis-finish-work`，legacy `/trellis:record-session` 仅旧目标项目兼容）、archive 前置条件、元数据边界与阻断条件（任务 5）
@@ -92,8 +93,8 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
 1. **Trellis task 才是主执行单元**
    `task_plan.md` 只保留摘要；真实执行状态依赖 `.trellis/tasks/<task>/task.json`、session-scoped active task runtime、`before-dev.md`、`check.md` 等任务产物。
 
-2. **复杂任务继续拆**
-   若某个 task 过大、跨越太多上下文、无法单上下文闭环，就必须继续拆成多个串行 task，不允许长期把复杂子阶段堆在单个 `task_plan.md` 里。
+2. **任务粒度合适才停止继续细分**
+   若当前事项仍可继续合理细分，且继续细分能更清楚地隔离闭环目标、验收边界、依赖前提或验证方式，就应继续拆成多个串行 task，不允许长期把多个独立闭环目标堆在单个 `task_plan.md` 里。
 
 3. **同项目域内默认串行**
    单个项目域内，task 默认串行执行。
@@ -155,7 +156,7 @@ cat "$TASK_DIR/design/index.md" 2>/dev/null
 
 - 目标、范围、验收锚点是否已经清晰
 - 关键依赖、约束、外部系统是否已经识别
-- 当前事项是否过大，是否应该继续拆小
+- 当前事项是否仍应继续细分，才能达到合适的任务粒度
 - 是否仍存在需要回退到 `brainstorm` / `design` 才能解决的阻断项
 
 若未通过拆分就绪检查：
@@ -163,6 +164,7 @@ cat "$TASK_DIR/design/index.md" 2>/dev/null
 - 本轮 `plan` 停在“列出阻断项与建议回退阶段”
 - 不继续生成新的实施 leaf task
 - 不把未准备好的 leaf task 写成可直接进入 implementation 的候选
+- 这里的拆分就绪检查负责回答“当前是否已经适合进入任务拆解”；真正拆到什么程度，则在后续 `任务粒度判断` 中显式留痕，两者结论不得互相矛盾
 
 推荐输出格式：
 
@@ -305,7 +307,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 拆分规则：
 
 - 一个 task 只承载一个可闭环实现目标
-- 若 task 超出单上下文预算，继续拆子 task
+- 若当前事项仍可继续合理细分，且继续细分能更清楚地隔离闭环目标、依赖变化、验证方式或风险承担，继续拆子 task
 - 若 task 的输出会改变下一个 task 的实现前提，必须串行，不要伪装并行
 - 若多个项目域彼此独立，可分别建立 lane，但 lane 内不自动续跑
 - 在真正进入模块 lane 前，优先前置这些横切 task 或等价探针：
@@ -341,6 +343,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 ## Trellis Task 清单
 ## 当前推荐执行任务（待确认）
 ## 依赖关系
+## 任务粒度判断
 ## 早期探针与骨架任务
 ## 自动化策略摘要
 ## 范围收敛与降级预案
@@ -359,6 +362,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 - `Trellis Task 清单`：列出现实存在的 task / child task / 性能回归与优化任务 / project-audit task
 - `当前推荐执行任务（待确认）`：输出当前准备进入 implementation / test-first 的叶子 task 说明卡，至少写清任务路径、任务标题、本轮目标、本轮不做、前置依赖、验收锚点、风险提醒、推荐主执行 CLI；且该 leaf task 目录至少已补齐最小 `prd.md`
 - `依赖关系`：只描述依赖和顺序，不写实时状态
+- `任务粒度判断`：显式记录当前事项是否还应继续细分，以及当前推荐 task 为什么已经达到合适粒度；这里必须保留人工判断空间，不使用机械评分表
 - `早期探针与骨架任务`：明确 walking skeleton / smoke、packaging skeleton、performance probe 的前置安排；不适用时写 `not_applicable` + 原因
 - `自动化策略摘要`：明确 CI 方案与“本地跑什么 / CI 跑什么”的边界
 - `范围收敛与降级预案`：明确 kill criteria 与 `P1` 降级候选，不默认把全部范围都推进 implementation
@@ -408,6 +412,14 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 - TASK-C 依赖 TASK-B
 - 性能回归与优化任务依赖全部主干任务完成
 - PROJECT-AUDIT 依赖全部代码相关 task 完成，且不得早于性能回归与优化任务
+
+## 任务粒度判断
+
+- `granularity_decision`: `split_further` / `keep_current_granularity`
+- `decision_reason`: <为什么当前事项还应继续拆分，或为什么当前粒度已经合适>
+- `closure_target`: <当前推荐 task 的唯一闭环目标>
+- `non_split_risk`: <若不继续拆分的主要风险；若当前粒度可接受，写 `acceptable` + 原因>
+- `human_judgement_notes`: <需要保留人工判断的因素；例如文件数、改动量、跨层数、上下文预算都只作为辅助信号，不作为机械裁决规则>
 
 ## 早期探针与骨架任务
 

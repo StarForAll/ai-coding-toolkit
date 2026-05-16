@@ -247,7 +247,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py init "$TASK_DIR" --stage
 
 - `L0 简单任务`
   - 需求已准确
-  - 单个上下文可闭环
+  - 当前事项无需继续细分即可达到合适任务粒度
   - 通常只涉及 1-2 个文件或一个明确变更点
   - 不强制先生成 `task_plan.md`
 
@@ -288,15 +288,14 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py init "$TASK_DIR" --stage
 
 在进入具体任务生成前，必须明确：
 
-- 当前事项是否能在**单个上下文**中完整完成
+- 当前事项是否还应继续细分，才能达到**合适的任务粒度**
 - 是否可以形成**单任务闭环**
 - 若不能，应该拆成几个**可独立验证、可独立收尾**的子任务
 
 拆分原则：
 
-- 单个上下文只负责一个任务
 - 单个任务必须独立可测试、可验证、可修复
-- 若任务超出单上下文预算，不允许硬塞进一个上下文继续做
+- 若当前事项仍可继续合理细分，且继续细分能更清楚地隔离闭环目标、依赖变化、验证方式或风险承担，不允许硬塞成一个任务继续做
 
 ### Step 8: 项目级正式需求文档与项目级粗估门禁
 
@@ -451,5 +450,5 @@ docs/requirements/
 | 继续澄清需求 | `/trellis:brainstorm` | 继续需求澄清，或显式触发 `brainstorm` skill | 信息不足或需求仍有歧义 |
 | 做设计 | `/trellis:design` | 进入设计阶段，或显式触发 `design` skill | 仅在用户明确确认后才允许切换；前提：`customer-facing-prd.md` 已生成并同步，且项目级粗估已完成落盘 |
 | 拆任务 | `/trellis:plan` | 进入任务拆解，或显式触发 `plan` skill | `L1/L2` 默认走这里；plan 会优先拆成真实 Trellis tasks，并只输出摘要型 `task_plan.md` |
-| 直接做单任务 | `/trellis:continue` | 直接进入实施，或显式触发 `trellis-continue` skill | 仅限 `L0`、单上下文可闭环，且仅在用户明确确认后才允许切换；进入实现前 continue 会自动执行 before-dev 并补 task 门禁 |
+| 直接做单任务 | `/trellis:continue` | 直接进入实施，或显式触发 `trellis-continue` skill | 仅限 `L0`、当前事项无需继续细分即可达到合适任务粒度，且仅在用户明确确认后才允许切换；进入实现前 continue 会自动执行 before-dev 并补 task 门禁 |
 | 冻结后出现正式变更 | [需求变更管理执行卡](../需求变更管理执行卡.md) | 同上 | 不直接改现有任务基线 |

@@ -43,6 +43,7 @@ TASK_PRD = Path("prd.md")
 ROOT_README = Path("README.md")
 ROOT_README_EN = Path("README.en.md")
 ASSESSMENT_FILE = Path("assessment.md")
+CONTEXT7_REVIEW_FILE = Path("design/context7-review.md")
 VALID_ENGAGEMENT_TYPES = {"external_outsourcing", "non_outsourcing"}
 MIN_KICKOFF_PAYMENT_RATIO = 30.0
 VALID_SOURCE_WATERMARK_LEVELS = {"none", "basic", "hybrid", "forensic"}
@@ -147,6 +148,7 @@ def build_default_state(stage: str) -> dict[str, Any]:
         "notes": [],
         "checkpoints": {
             "architecture_confirmed": False,
+            "context7_review_completed": False,
             "execution_authorized": False,
         },
         "updated_at": now_iso(),
@@ -249,6 +251,9 @@ def validate_state_shape(state: dict[str, Any], errors: list[str]) -> None:
         architecture_confirmed = checkpoints.get("architecture_confirmed")
         if not isinstance(architecture_confirmed, bool):
             errors.append("checkpoints.architecture_confirmed 必须是布尔值")
+        context7_review_completed = checkpoints.get("context7_review_completed", False)
+        if not isinstance(context7_review_completed, bool):
+            errors.append("checkpoints.context7_review_completed 必须是布尔值")
         execution_authorized = checkpoints.get("execution_authorized")
         if not isinstance(execution_authorized, bool):
             errors.append("checkpoints.execution_authorized 必须是布尔值")
@@ -723,6 +728,62 @@ def find_missing_markers(path: Path, markers: tuple[str, ...]) -> list[str]:
     return [marker for marker in markers if marker not in content]
 
 
+def validate_context7_review_artifact(
+    task_dir: Path,
+    state: dict[str, Any],
+    errors: list[str],
+) -> None:
+    checkpoints = state.get("checkpoints", {})
+    architecture_confirmed = checkpoints.get("architecture_confirmed", False)
+    context7_review_completed = checkpoints.get("context7_review_completed", False)
+    stage = state.get("stage")
+    final_design_exit = design_exit_ready(state) and state.get("stage_status") in EXIT_READY_STATUSES
+
+    if stage == "plan":
+        should_enforce = True
+    else:
+        should_enforce = stage == "design" and final_design_exit and architecture_confirmed is True
+
+    if not should_enforce:
+        return
+
+    review_path = task_dir / CONTEXT7_REVIEW_FILE
+    if not review_path.is_file():
+        errors.append(f"缺少 {CONTEXT7_REVIEW_FILE.as_posix()}；未完成 Context7 spec 复核留痕")
+        return
+
+    if context7_review_completed is not True:
+        errors.append("进入 plan 或退出 design 前，checkpoints.context7_review_completed 必须为 true")
+
+    required_fields = (
+        "`context7_review_completed`",
+        "`review_scope`",
+        "`review_summary`",
+        "`blocking_findings`",
+        "`open_items`",
+    )
+    content = review_path.read_text(encoding="utf-8")
+    missing_fields = [field for field in required_fields if field not in content]
+    if missing_fields:
+        errors.append(
+            f"{CONTEXT7_REVIEW_FILE.as_posix()} 缺少结构化字段: {', '.join(missing_fields)}"
+        )
+        return
+
+    review_completed_value = normalize_yes_no_field(extract_backticked_field(content, "context7_review_completed"))
+    if review_completed_value is not True:
+        errors.append(
+            f"{CONTEXT7_REVIEW_FILE.as_posix()} 的 `context7_review_completed` 必须为 `yes`"
+        )
+
+    for field_name in ("review_scope", "review_summary", "blocking_findings", "open_items"):
+        field_value = extract_backticked_field(content, field_name)
+        if is_placeholder_like(field_value):
+            errors.append(
+                f"{CONTEXT7_REVIEW_FILE.as_posix()} 的 `{field_name}` 未填写具体结论"
+            )
+
+
 def validate_project_doc_boundary(
     state: dict[str, Any],
     project_root: Path,
@@ -776,6 +837,8 @@ def validate_project_doc_boundary(
     if final_design_exit and not (project_root / ROOT_README_EN).is_file():
         errors.append("design 退出前缺少项目根 README.en.md；块 C 的英文补充版尚未真正完成")
 
+    validate_context7_review_artifact(task_dir, state, errors)
+
 
 def cmd_init(args: argparse.Namespace) -> int:
     task_dir = resolve_task_dir(args.task_dir)
@@ -824,6 +887,9 @@ def cmd_set(args: argparse.Namespace) -> int:
     if args.architecture_confirmed is not None:
         checkpoints = state.setdefault("checkpoints", {})
         checkpoints["architecture_confirmed"] = args.architecture_confirmed
+    if args.context7_review_completed is not None:
+        checkpoints = state.setdefault("checkpoints", {})
+        checkpoints["context7_review_completed"] = args.context7_review_completed
     if args.execution_authorized is not None:
         checkpoints = state.setdefault("checkpoints", {})
         checkpoints["execution_authorized"] = args.execution_authorized
@@ -1236,6 +1302,7 @@ def build_parser() -> argparse.ArgumentParser:
     set_parser.add_argument("--allowed-next")
     set_parser.add_argument("--awaiting-user-confirmation", type=bool_arg)
     set_parser.add_argument("--architecture-confirmed", type=bool_arg)
+    set_parser.add_argument("--context7-review-completed", type=bool_arg)
     set_parser.add_argument("--execution-authorized", type=bool_arg)
     set_parser.add_argument("--transition-from", choices=sorted(STAGES))
     set_parser.add_argument("--clear-last-transition", action="store_true")

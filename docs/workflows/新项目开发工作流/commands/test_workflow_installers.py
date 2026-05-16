@@ -540,7 +540,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(".trellis/scripts/workflow/source-watermark-guard.py", ownership_card_text)
         self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", ownership_card_text)
         self.assertNotIn("<WORKFLOW_DIR>/commands/shell", ownership_card_text)
-        self.assertEqual(record_data["workflow_version"], "0.1.27")
+        self.assertEqual(record_data["workflow_version"], "0.1.28")
         self.assertEqual(record_data["workflow_schema_version"], "2")
         self.assertEqual(record_data["initial_pack"], "pack.requirements-discovery-foundation")
         parallel = fixture / ".claude" / "commands" / "trellis" / "parallel.md"
@@ -558,6 +558,13 @@ class WorkflowInstallerTests(unittest.TestCase):
             "[源码水印与归属证据链执行卡](.trellis/workflow-docs/源码水印与归属证据链执行卡.md)",
             deployed_feasibility,
         )
+        deployed_design = (fixture / ".claude" / "commands" / "trellis" / "design.md").read_text(encoding="utf-8")
+        self.assertIn("context7-review.md", deployed_design)
+        self.assertIn("Context7", deployed_design)
+        self.assertIn("context7_review_completed", deployed_design)
+        deployed_plan = (fixture / ".claude" / "commands" / "trellis" / "plan.md").read_text(encoding="utf-8")
+        self.assertIn("## 任务粒度判断", deployed_plan)
+        self.assertIn("granularity_decision", deployed_plan)
 
     def test_install_personal_profile_keeps_ownership_cards_and_helpers(self) -> None:
         fixture = self.create_fixture()
@@ -1177,7 +1184,7 @@ class WorkflowInstallerTests(unittest.TestCase):
             json.dumps(
                 {
                     "status": "failed",
-                    "workflow_version": "0.1.27",
+                    "workflow_version": "0.1.28",
                     "workflow_root": "/tmp/workflow",
                     "workflow_spec_path": "/tmp/workflow/工作流嵌入执行规范.md",
                     "target_project_root": str(fixture),
@@ -1602,7 +1609,7 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         updated = json.loads(record_path.read_text(encoding="utf-8"))
-        self.assertEqual(updated["workflow_version"], "0.1.27")
+        self.assertEqual(updated["workflow_version"], "0.1.28")
         self.assertEqual(updated["workflow_schema_version"], "2")
 
     def test_upgrade_check_warns_when_bootstrap_cleanup_record_conflicts_with_filesystem(self) -> None:
@@ -2128,7 +2135,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(PHASE_ROUTER_MARKER, start.read_text(encoding="utf-8"))
         self.assertIn(FINISH_WORK_MARKER, finish_work.read_text(encoding="utf-8"))
         record_data = json.loads((fixture / ".trellis" / "workflow-installed.json").read_text(encoding="utf-8"))
-        self.assertEqual(record_data["workflow_version"], "0.1.27")
+        self.assertEqual(record_data["workflow_version"], "0.1.28")
         self.assertEqual(record_data["previous_version"], "0.5.0-rc.3")
 
         followup_check = self.run_script(

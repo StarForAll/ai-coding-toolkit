@@ -365,10 +365,38 @@ design 后半段不得一次性跑完，而要按多个子块分段执行。每�
 
 1. 根据技术架构，使用 `trellis-library/cli.py assemble` 选择并导入合适 spec 到当前项目 `.trellis/spec/`
 2. 基于当前项目作用/背景/技术架构，对当前项目 `.trellis/spec/` 做分析完善
-3. 明确项目自动化检查矩阵
-4. 同步适配当前项目的 `/trellis:finish-work`
-5. 同步适配当前项目的 close-out 基线（当前 fresh baseline 为 `/trellis:finish-work` / `trellis-finish-work`，legacy `/trellis:record-session` 仅旧目标项目兼容）
-6. 若 `ownership_proof_required = yes`，同步建立源码水印与归属证明基线
+3. 对目标项目中所有与已确认技术架构直接相关的全部 spec 执行一次基于 `Context7` 的错漏复核
+4. 明确项目自动化检查矩阵
+5. 同步适配当前项目的 `/trellis:finish-work`
+6. 同步适配当前项目的 close-out 基线（当前 fresh baseline 为 `/trellis:finish-work` / `trellis-finish-work`，legacy `/trellis:record-session` 仅旧目标项目兼容）
+7. 若 `ownership_proof_required = yes`，同步建立源码水印与归属证明基线
+
+`Context7` spec 复核要求：
+
+- 复核对象是目标项目中与已确认技术架构直接相关的全部 spec
+- 能被第三方官方文档约束的 spec 内容，必须先经过 `Context7`
+- 纯内部流程规范、团队约定、项目私有约束不强制要求 `Context7`，但仍必须做本地静态分析并留下可复核结论
+- 错漏分析至少覆盖：
+  - API / 配置过时
+  - 能力假设错误
+  - 缺少必要约束
+  - 遗漏关键边界或失败路径
+  - 与官方文档冲突
+- 若直接相关的第三方 spec 因 `Context7` 不可用而无法完成复核，必须标记 `[Evidence Gap]`，并阻断进入 `/trellis:plan`
+- 若复核发现错误、遗漏或冲突，必须先修正相关 spec 或明确记录阻断项，不得带着未处理缺口直接进入 `/trellis:plan`
+- 复核结论默认沉淀到 `$TASK_DIR/design/context7-review.md`，并在完成后把 `workflow-state.json` 的 `checkpoints.context7_review_completed` 置为 `true`
+
+推荐最小模板：
+
+```markdown
+# Context7 Review
+
+- `context7_review_completed`: `yes`
+- `review_scope`: <本次复核覆盖的直接相关 spec 范围>
+- `review_summary`: <与官方文档核对后的结论摘要>
+- `blocking_findings`: <阻断进入 plan 的问题；若无则写 `none`>
+- `open_items`: <仍待后续跟踪的非阻断项；若无则写 `none`>
+```
 
 源码水印与归属证明基线要求：
 
@@ -498,6 +526,7 @@ $TASK_DIR/design/
 ├── index.md
 ├── TAD.md / ODD-dev.md / ODD-user.md
 ├── DDD.md / IDD.md / AID.md / STITCH-PROMPT.md          （该文件同时承担 Stitch `DESIGN.md` 的设计系统语义）
+├── context7-review.md                               （技术架构确认后、直接相关 spec 复核结论留痕；完成后需同步 `checkpoints.context7_review_completed = true`）
 ├── frontend-ui-spec.md                               （仅 UI -> 首版代码界面任务完成后必补）
 ├── source-watermark-plan.md                          （仅当 `ownership_proof_required = yes`）
 ├── specs/<module>.md

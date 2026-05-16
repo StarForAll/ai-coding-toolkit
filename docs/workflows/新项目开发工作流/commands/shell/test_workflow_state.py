@@ -82,6 +82,15 @@ class WorkflowStateScriptTests(unittest.TestCase):
 - 是否允许进入 brainstorm：是
 """
 
+    VALID_CONTEXT7_REVIEW = """# Context7 Review
+
+- `context7_review_completed`: `yes`
+- `review_scope`: backend + platform specs directly related to the confirmed architecture
+- `review_summary`: 已核对直接相关第三方 spec 与官方文档，未发现阻断性冲突
+- `blocking_findings`: none
+- `open_items`: none
+"""
+
     def run_script(self, *args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
         env = {**os.environ, "TRELLIS_CONTEXT_ID": "test-context"}
         return subprocess.run(
@@ -132,6 +141,14 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
         (task_dir / "assessment.md").write_text(
             assessment_content or self.VALID_INTERNAL_ASSESSMENT,
+            encoding="utf-8",
+        )
+
+    def write_context7_review(self, task_dir: Path, content: str | None = None) -> None:
+        design_dir = task_dir / "design"
+        design_dir.mkdir(parents=True, exist_ok=True)
+        (design_dir / "context7-review.md").write_text(
+            content or self.VALID_CONTEXT7_REVIEW,
             encoding="utf-8",
         )
 
@@ -389,14 +406,47 @@ class WorkflowStateScriptTests(unittest.TestCase):
             task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
             customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
         )
+        self.write_context7_review(task_dir)
 
         self.run_script("init", str(task_dir), "--stage", "plan")
+        self.run_script("set", str(task_dir), "--context7-review-completed", "true")
         illegal_set = self.run_script("set", str(task_dir), "--execution-authorized", "true")
         validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
 
         self.assertEqual(illegal_set.returncode, 1, msg=illegal_set.stdout + illegal_set.stderr)
         self.assertIn("拒绝写入非法 workflow-state", illegal_set.stdout)
         self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
+
+    def test_validate_fails_when_plan_missing_context7_review_artifact(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+
+        self.run_script("init", str(task_dir), "--stage", "plan")
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("context7-review.md", validate.stdout)
+
+    def test_validate_fails_when_plan_missing_context7_review_checkpoint(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_context7_review(task_dir)
+
+        self.run_script("init", str(task_dir), "--stage", "plan")
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("context7_review_completed", validate.stdout)
 
     def test_validate_fails_when_implementation_has_no_execution_authorization(self) -> None:
         root, task_dir = self.make_fixture()
@@ -624,8 +674,10 @@ class WorkflowStateScriptTests(unittest.TestCase):
             task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
             customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
         )
+        self.write_context7_review(task_dir)
 
         self.run_script("init", str(task_dir), "--stage", "plan")
+        self.run_script("set", str(task_dir), "--context7-review-completed", "true")
         illegal_set = self.run_script("set", str(task_dir), "--stage", "implementation")
         validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
 
