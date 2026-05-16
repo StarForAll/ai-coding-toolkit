@@ -34,21 +34,16 @@ class TemplateHashSemanticsTest(unittest.TestCase):
 
     def test_repo_local_overlays_remain_detectable_as_modified(self) -> None:
         overlays = (
-            ".agents/skills/trellis-meta/references/customize-local/change-workflow.md",
             ".claude/agents/trellis-research.md",
             ".claude/settings.json",
-            ".claude/skills/trellis-meta/references/customize-local/change-workflow.md",
             ".codex/agents/trellis-check.toml",
             ".codex/agents/trellis-implement.toml",
             ".codex/agents/trellis-research.toml",
             ".codex/config.toml",
-            ".kiro/agents/trellis-research.json",
             ".opencode/agents/trellis-research.md",
             ".opencode/lib/trellis-context.js",
             ".opencode/plugins/inject-workflow-state.js",
-            ".opencode/skills/trellis-meta/references/customize-local/change-workflow.md",
             ".qoder/agents/trellis-research.md",
-            ".qoder/skills/trellis-meta/references/customize-local/change-workflow.md",
             ".trellis/scripts/add_session.py",
             ".trellis/scripts/common/safe_commit.py",
             ".trellis/scripts/common/task_store.py",
@@ -59,6 +54,21 @@ class TemplateHashSemanticsTest(unittest.TestCase):
         for rel_path in overlays:
             with self.subTest(path=rel_path):
                 self.assertNotEqual(recorded[rel_path], _actual_hash(rel_path))
+
+    def test_removed_templates_are_no_longer_tracked(self) -> None:
+        recorded = _recorded_hashes()
+
+        for rel_path in (
+            ".qoder/skills/trellis-finish-work/SKILL.md",
+            ".trellis/scripts/common/registry.py",
+            ".trellis/scripts/common/worktree.py",
+        ):
+            with self.subTest(path=rel_path):
+                self.assertNotIn(rel_path, recorded)
+
+        for rel_path in recorded:
+            with self.subTest(path=rel_path):
+                self.assertFalse(rel_path.startswith(".kiro/"))
 
 
 if __name__ == "__main__":
