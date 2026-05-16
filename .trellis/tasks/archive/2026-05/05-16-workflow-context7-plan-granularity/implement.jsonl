@@ -1,0 +1,4 @@
+{"file":".trellis/spec/docs/index.md","reason":"Repo-local documentation rules for workflow docs under docs/workflows/**."}
+{"file":".trellis/spec/commands/index.md","reason":"Command asset maintenance context and current direct-edit boundary for workflow command docs."}
+{"file":".trellis/spec/scripts/index.md","reason":"Script authoring and validation context for workflow helper Python under commands/shell/."}
+{"file":".trellis/spec/guides/index.md","reason":"Shared repo thinking guides and cross-layer drift reminders for multi-surface edits."}

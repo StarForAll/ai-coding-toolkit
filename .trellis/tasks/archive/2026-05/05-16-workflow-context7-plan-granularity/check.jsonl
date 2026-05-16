@@ -1,0 +1,4 @@
+{"file":".trellis/spec/docs/index.md","reason":"Check doc updates under docs/workflows/** against repo-local documentation rules."}
+{"file":".trellis/spec/commands/index.md","reason":"Check workflow command doc edits against command maintenance boundaries."}
+{"file":".trellis/spec/scripts/index.md","reason":"Check plan-validate.py changes against script conventions."}
+{"file":".trellis/spec/guides/index.md","reason":"Cross-layer consistency check for docs/script/test propagation."}
