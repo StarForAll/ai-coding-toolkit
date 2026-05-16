@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/scripts/workflow-installer-upgrade-contracts.md", "reason": "验证 install-workflow.py 补丁注入符合 installer 合约（幂等、profile 路由、签名）"}
+{"file": ".trellis/spec/scripts/python-conventions.md", "reason": "验证 workflow-state.py 代码符合 Python 约定（argparse、退出码、错误输出）"}
+{"file": "docs/workflows/新项目开发工作流/阶段状态机与强门禁协议.md", "reason": "验证 STAGE_TRANSITIONS 常量和阶段切换门禁与权威状态机定义一致"}
+{"file": "docs/workflows/新项目开发工作流/CLI原生适配边界矩阵.md", "reason": "验证 hook 补丁不超出 CLI 原生适配边界"}

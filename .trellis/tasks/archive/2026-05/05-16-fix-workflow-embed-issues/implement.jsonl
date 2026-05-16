@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/scripts/workflow-installer-upgrade-contracts.md", "reason": "Issue #1 #2 #3 #7: install-workflow.py 补丁注入必须遵循 installer 签名、幂等性和 profile 路由合约"}
+{"file": ".trellis/spec/scripts/python-conventions.md", "reason": "Issue #4 #5 #6: workflow-state.py 代码修改需遵循 argparse、错误处理、退出码等 Python 约定"}
+{"file": ".trellis/spec/scripts/workflow-command-doc-contracts.md", "reason": "Issue #1 #2 #3: workflow-patch-projectization.md 模板必须符合命令文档的必选节和门禁校验块合约"}
+{"file": "docs/workflows/新项目开发工作流/阶段状态机与强门禁协议.md", "reason": "Issue #1 #2 #3 #5: 强门禁阶段链、STAGE_TRANSITIONS、breadcrumb 标签和阶段切换约束的权威定义"}
+{"file": "docs/workflows/新项目开发工作流/工作流嵌入执行规范.md", "reason": "Issue #7: 嵌入时文件分发和引用路径修正的规范依据"}
+{"file": "docs/workflows/新项目开发工作流/工作流全局流转说明（通俗版）.md", "reason": "Issue #1 #7: no_task 路由和全局流转逻辑的参考，用于修复 breadcrumb 和残留引用"}
