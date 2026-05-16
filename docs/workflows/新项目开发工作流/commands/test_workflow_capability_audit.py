@@ -688,7 +688,6 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         by_capability = {row["capability"]: row for row in rows}
 
         expected_capabilities = {
-            "managed-enhanced-agent:trellis-research",
             "shared-artifact:todo-reminder-file",
             "shared-doc:execution-cards",
             "shared-artifact:workflow-installed-record",
@@ -700,8 +699,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         for capability in expected_capabilities:
             self.assertEqual(by_capability[capability]["discovery_source"], "ai-discovered")
             self.assertEqual(by_capability[capability]["overall_summary"], "adopted-compatible")
-        self.assertIn("A=.claude/agents/trellis-research.md", by_capability["managed-enhanced-agent:trellis-research"]["claude_evidence"])
-        self.assertIn("B=.codex/agents/trellis-research.toml", by_capability["managed-enhanced-agent:trellis-research"]["codex_evidence"])
+        self.assertNotIn("managed-enhanced-agent:trellis-research", by_capability)
         self.assertEqual(by_capability["shared-artifact:todo-reminder-file"]["codex_evidence"], "B=todo.txt")
 
     def test_build_workflow_managed_rows_requires_agents_routing_markers_for_routing_capability(self) -> None:

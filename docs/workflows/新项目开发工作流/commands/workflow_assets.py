@@ -107,7 +107,10 @@ EXECUTION_CARDS = ["需求变更管理执行卡.md", "源码水印与归属证�
 OUTSOURCING_EXECUTION_CARDS: list[str] = []
 WORKFLOW_DOCS_DIR = ".trellis/workflow-docs"
 LEGACY_AGENT_NAMES = ["research", "implement", "check"]
-MANAGED_ENHANCED_AGENT_NAMES = ["research"]
+# Reserved for legacy install-record compatibility and historical capability
+# categories. Fresh installs keep this list empty and do not overlay native
+# trellis-* agents anymore.
+MANAGED_ENHANCED_AGENT_NAMES: list[str] = []
 AGENTS_NL_ROUTING_MARKERS = (
     "<!-- workflow-nl-routing-start -->",
     "<!-- workflow-nl-routing-end -->",
@@ -124,26 +127,6 @@ def legacy_agent_target_path(root: Path, cli_type: str, agent_name: str) -> Path
     if cli_type == "codex":
         return root / CLI_DIRS[cli_type] / "agents" / f"{agent_name}.toml"
     return root / CLI_DIRS[cli_type] / "agents" / f"{agent_name}.md"
-
-
-def managed_agent_target_path(root: Path, cli_type: str, agent_name: str) -> Path:
-    """Return target-project path for workflow-managed enhanced agents."""
-    if cli_type == "codex":
-        return root / CLI_DIRS[cli_type] / "agents" / f"trellis-{agent_name}.toml"
-    return root / CLI_DIRS[cli_type] / "agents" / f"trellis-{agent_name}.md"
-
-
-def authoring_repo_root() -> Path:
-    """Return the authoring repository root from this workflow commands module."""
-    return Path(__file__).resolve().parents[4]
-
-
-def source_agent_path(cli_type: str, agent_name: str) -> Path:
-    """Return the live authoring-repo source path for a managed enhanced agent."""
-    repo_root = authoring_repo_root()
-    if cli_type == "codex":
-        return repo_root / ".codex" / "agents" / f"trellis-{agent_name}.toml"
-    return repo_root / CLI_DIRS[cli_type] / "agents" / f"trellis-{agent_name}.md"
 
 
 def codex_phase_router_skill_candidates() -> list[str]:
@@ -248,8 +231,6 @@ class ManagedAssetSpec:
             return root / ".trellis" / "scripts" / "workflow" / self.name
         if self.kind == "doc":
             return root / ".trellis" / self.name
-        if self.kind == "agent":
-            return managed_agent_target_path(root, self.cli_type, self.name)
         if self.kind == "command":
             return root / CLI_DIRS[self.cli_type] / "commands" / "trellis" / f"{self.name}.md"
         if self.kind == "skill":
@@ -402,17 +383,6 @@ def build_managed_asset_specs(cli_types: list[str]) -> list[ManagedAssetSpec]:
                         name=name,
                     )
                 )
-        for name in MANAGED_ENHANCED_AGENT_NAMES:
-            specs.append(
-                ManagedAssetSpec(
-                    asset_id=f"{cli_type}:agent:{name}",
-                    category="managed-enhanced-agent",
-                    cli_type=cli_type,
-                    kind="agent",
-                    name=name,
-                )
-            )
-
     if cli_types:
         for name in PATCH_BASELINE_SHARED_DOCS:
             specs.append(

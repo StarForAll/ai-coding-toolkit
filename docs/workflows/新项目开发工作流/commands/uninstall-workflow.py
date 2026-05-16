@@ -21,8 +21,6 @@ from workflow_assets import (
     DISTRIBUTED_COMMANDS,
     legacy_agent_target_path,
     LEGACY_AGENT_NAMES,
-    managed_agent_target_path,
-    MANAGED_ENHANCED_AGENT_NAMES,
     OPTIONAL_DISABLED_BASELINE_COMMANDS,
     OVERLAY_BASELINE_COMMANDS,
     resolve_codex_skills_dir,
@@ -189,13 +187,6 @@ def uninstall_managed_agents(root: Path, cli_type: str, cli_label: str) -> None:
             legacy_path.unlink()
             ok(f"[{cli_label}] 删除 legacy 残留: {legacy_path.name}")
         # else: no backup and no legacy file — trellis-* is native, do NOT delete
-
-    for agent_name in MANAGED_ENHANCED_AGENT_NAMES:
-        target_path = managed_agent_target_path(root, cli_type, agent_name)
-        backup_agent = backup_dir / target_path.name
-        if backup_agent.exists():
-            shutil.copy2(backup_agent, target_path)
-            ok(f"[{cli_label}] 恢复增强版 agent 的 baseline: trellis-{agent_name}")
 
     if backup_dir.exists():
         shutil.rmtree(backup_dir)

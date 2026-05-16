@@ -91,8 +91,19 @@ class WorkflowStateScriptTests(unittest.TestCase):
 - `open_items`: none
 """
 
-    def run_script(self, *args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+    def run_script(
+        self,
+        *args: str,
+        cwd: Path | None = None,
+        env_overrides: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
         env = {**os.environ, "TRELLIS_CONTEXT_ID": "test-context"}
+        if env_overrides:
+            for key, value in env_overrides.items():
+                if value is None:
+                    env.pop(key, None)
+                else:
+                    env[key] = value
         return subprocess.run(
             [PYTHON, str(SCRIPT), *args],
             cwd=cwd or REPO_ROOT,
@@ -1001,6 +1012,160 @@ class WorkflowStateScriptTests(unittest.TestCase):
         data = _json.loads(result.stdout)
         self.assertEqual(data["action"], "repair_needed")
 
+    def test_cmd_route_repair_needed_when_state_shape_is_invalid(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.run_script("init", str(task_dir), "--stage", "design")
+        state_path = task_dir / "workflow-state.json"
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        state["allowed_next_stages"] = ["not-a-stage"]
+        state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+        result = self.run_script("route", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "repair_needed")
+        self.assertIn("allowed_next_stages", "".join(data.get("blockers", [])))
+
+    def test_cmd_route_uses_degraded_fallback_even_when_platform_context_key_exists(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        session_file = root / ".trellis" / ".runtime" / "sessions" / "test-context.json"
+        session_file.unlink()
+        (root / ".trellis" / ".runtime" / "degraded-active-task.json").write_text(
+            json.dumps({"current_task": ".trellis/tasks/04-15-sample-task"}, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        state = {
+            "version": 1,
+            "stage": "implementation",
+            "stage_status": "in_progress",
+            "current_block": None,
+            "completed_blocks": [],
+            "allowed_next_stages": [],
+            "awaiting_user_confirmation": False,
+            "last_confirmed_transition": {
+                "from": "plan",
+                "to": "implementation",
+                "confirmed_at": "2026-05-16T00:00:00+00:00",
+            },
+            "notes": [],
+            "checkpoints": {
+                "architecture_confirmed": True,
+                "context7_review_completed": True,
+                "execution_authorized": True,
+            },
+            "updated_at": "2026-05-16T00:00:00+00:00",
+        }
+        (task_dir / "workflow-state.json").write_text(
+            json.dumps(state, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        (root / "docs" / "requirements" / "developer-facing-prd.md").write_text("# developer\n", encoding="utf-8")
+        self.write_context7_review(task_dir)
+
+        result = self.run_script(
+            "route",
+            "--project-root",
+            str(root),
+            env_overrides={"TRELLIS_CONTEXT_ID": None, "CODEX_THREAD_ID": "codex-test-thread"},
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "reenter")
+        self.assertEqual(data["stage"], "implementation")
+
+    def test_cmd_route_uses_degraded_when_session_file_exists_without_current_task(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        session_file = root / ".trellis" / ".runtime" / "sessions" / "test-context.json"
+        session_file.write_text(json.dumps({}, ensure_ascii=False) + "\n", encoding="utf-8")
+        (root / ".trellis" / ".runtime" / "degraded-active-task.json").write_text(
+            json.dumps({"current_task": ".trellis/tasks/04-15-sample-task"}, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        state = {
+            "version": 1,
+            "stage": "implementation",
+            "stage_status": "in_progress",
+            "current_block": None,
+            "completed_blocks": [],
+            "allowed_next_stages": [],
+            "awaiting_user_confirmation": False,
+            "last_confirmed_transition": {
+                "from": "plan",
+                "to": "implementation",
+                "confirmed_at": "2026-05-16T00:00:00+00:00",
+            },
+            "notes": [],
+            "checkpoints": {
+                "architecture_confirmed": True,
+                "context7_review_completed": True,
+                "execution_authorized": True,
+            },
+            "updated_at": "2026-05-16T00:00:00+00:00",
+        }
+        (task_dir / "workflow-state.json").write_text(
+            json.dumps(state, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        (root / "docs" / "requirements" / "developer-facing-prd.md").write_text("# developer\n", encoding="utf-8")
+        self.write_context7_review(task_dir)
+
+        result = self.run_script(
+            "route",
+            "--project-root",
+            str(root),
+            env_overrides={"TRELLIS_CONTEXT_ID": None, "CODEX_THREAD_ID": "codex-test-thread"},
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "reenter")
+        self.assertEqual(data["stage"], "implementation")
+
+    def test_cmd_route_ignores_degraded_when_session_files_exist(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (root / ".trellis" / ".runtime" / "degraded-active-task.json").write_text(
+            json.dumps({"current_task": ".trellis/tasks/04-15-sample-task"}, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_script(
+            "route",
+            "--project-root",
+            str(root),
+            env_overrides={"TRELLIS_CONTEXT_ID": None, "CODEX_THREAD_ID": "codex-test-thread"},
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "repair_needed")
+        self.assertIn("workflow-state.json", data["reason"])
+
     def test_cmd_route_blocks_brainstorm_without_assessment_even_when_customer_prd_missing(self) -> None:
         root, task_dir = self.make_fixture()
         (task_dir / "task.json").write_text('{"status":"planning","children":[]}\n', encoding="utf-8")
@@ -1137,6 +1302,107 @@ class WorkflowStateScriptTests(unittest.TestCase):
         import json as _json
         data = _json.loads(result.stdout.strip().split("\n}")[0] + "\n}")
         self.assertEqual(data["inferred_stage"], "design")
+
+    def test_cmd_repair_infer_plan_from_root_task_plan(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (task_dir / "design").mkdir(parents=True, exist_ok=True)
+        (task_dir / "task_plan.md").write_text("# task plan\n", encoding="utf-8")
+
+        result = self.run_script("repair", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout.strip().split("\n}")[0] + "\n}")
+        self.assertEqual(data["inferred_stage"], "plan")
+
+    def test_cmd_repair_infer_implementation_from_before_dev(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (task_dir / "before-dev.md").write_text("# before dev\n", encoding="utf-8")
+
+        result = self.run_script("repair", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout.strip().split("\n}")[0] + "\n}")
+        self.assertEqual(data["inferred_stage"], "implementation")
+
+    def test_cmd_repair_infer_check_from_check_md(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (task_dir / "check.md").write_text("# check\n", encoding="utf-8")
+
+        result = self.run_script("repair", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout.strip().split("\n}")[0] + "\n}")
+        self.assertEqual(data["inferred_stage"], "check")
+
+    def test_cmd_repair_infer_project_audit_from_project_audit_md(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (task_dir / "project-audit.md").write_text("# project audit\n", encoding="utf-8")
+
+        result = self.run_script("repair", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout.strip().split("\n}")[0] + "\n}")
+        self.assertEqual(data["inferred_stage"], "project-audit")
+
+    def test_cmd_repair_infer_review_gate_from_task_dir_artifacts(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        review_gate_dir = task_dir / "review-gate"
+        review_gate_dir.mkdir(parents=True, exist_ok=True)
+        (review_gate_dir / "review-gate-round-1.md").write_text("# review gate\n", encoding="utf-8")
+
+        result = self.run_script("repair", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout.strip().split("\n}")[0] + "\n}")
+        self.assertEqual(data["inferred_stage"], "review-gate")
+
+    def test_cmd_repair_infer_delivery_from_delivery_artifacts(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        delivery_dir = task_dir / "delivery"
+        delivery_dir.mkdir(parents=True, exist_ok=True)
+        (delivery_dir / "acceptance.md").write_text("# acceptance\n", encoding="utf-8")
+
+        result = self.run_script("repair", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout.strip().split("\n}")[0] + "\n}")
+        self.assertEqual(data["inferred_stage"], "delivery")
 
     def test_cmd_repair_apply(self) -> None:
         """With --apply flag, should create workflow-state.json."""

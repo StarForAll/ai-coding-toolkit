@@ -682,7 +682,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertTrue((fixture / ".codex" / "agents" / "trellis-research.toml").exists())
         self.assertFalse((fixture / ".codex" / "agents" / "research.toml").exists())
 
-    def test_install_keeps_codex_native_implement_check_but_enhances_research(self) -> None:
+    def test_install_keeps_codex_native_agents_unchanged(self) -> None:
         fixture = self.create_fixture(include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
 
@@ -690,9 +690,9 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         codex_trellis_agents = fixture / ".codex" / "agents"
-        self.assertIn(
-            "Resolve the active task path. Try in order:",
+        self.assertEqual(
             (codex_trellis_agents / "trellis-research.toml").read_text(encoding="utf-8"),
+            BASELINE_CODEX_RESEARCH_TOML,
         )
         self.assertEqual(
             (codex_trellis_agents / "trellis-implement.toml").read_text(encoding="utf-8"),
@@ -702,9 +702,10 @@ class WorkflowInstallerTests(unittest.TestCase):
             (codex_trellis_agents / "trellis-check.toml").read_text(encoding="utf-8"),
             BASELINE_CODEX_CHECK_TOML,
         )
+        self.assertFalse((codex_trellis_agents / ".backup-original").exists())
         self.assertFalse((fixture / ".trellis" / ".backup-original" / "codex-agents").exists())
 
-    def test_install_deploys_enhanced_research_agents_to_target_project(self) -> None:
+    def test_install_keeps_native_research_agents_in_target_project(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
 
@@ -715,22 +716,11 @@ class WorkflowInstallerTests(unittest.TestCase):
         opencode_research = (fixture / ".opencode" / "agents" / "trellis-research.md").read_text(encoding="utf-8")
         codex_research = (fixture / ".codex" / "agents" / "trellis-research.toml").read_text(encoding="utf-8")
 
-        self.assertIn("mcp__ace__search_context", claude_research)
-        self.assertIn("mcp__grok-search__web_search", claude_research)
-        self.assertIn("mcp__deepwiki__read_wiki_structure", claude_research)
-        self.assertIn("mcp__Context7__resolve-library-id", claude_research)
+        self.assertEqual(claude_research, BASELINE_AGENT_RESEARCH_MD)
+        self.assertEqual(opencode_research, BASELINE_AGENT_RESEARCH_MD)
+        self.assertEqual(codex_research, BASELINE_CODEX_RESEARCH_TOML)
 
-        self.assertIn("mcp__ace__search_context: allow", opencode_research)
-        self.assertIn("mcp__grok-search__*: allow", opencode_research)
-        self.assertIn("mcp__deepwiki__*: allow", opencode_research)
-        self.assertIn("mcp__Context7__*: allow", opencode_research)
-
-        self.assertIn("Resolve the active task path. Try in order:", codex_research)
-        self.assertIn("Choose tools by search type:", codex_research)
-        self.assertIn("ace.search_context", codex_research)
-        self.assertIn("grok-search", codex_research)
-
-    def test_upgrade_check_detects_managed_research_agent_drift(self) -> None:
+    def test_upgrade_check_ignores_native_research_agent_content_drift(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
 
@@ -749,10 +739,10 @@ class WorkflowInstallerTests(unittest.TestCase):
             env=self.latest_env_for(fixture),
         )
 
-        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        self.assertIn("agent 内容漂移", result.stdout)
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertNotIn("agent 内容漂移", result.stdout)
 
-    def test_upgrade_merge_restores_managed_research_agent(self) -> None:
+    def test_upgrade_merge_does_not_rewrite_native_research_agent(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
 
@@ -773,8 +763,7 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         updated = claude_research.read_text(encoding="utf-8")
-        self.assertIn("mcp__ace__search_context", updated)
-        self.assertIn("mcp__grok-search__web_search", updated)
+        self.assertEqual(updated, "# drifted research\n")
 
     def test_install_patches_finish_work_when_test_coverage_heading_is_missing(self) -> None:
         fixture = self.create_fixture()
@@ -1325,7 +1314,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertFalse((fixture / ".trellis" / ATTEMPT_RECORD_NAME).exists())
         self.assertFalse((fixture / ".agents" / "skills" / "review-gate").exists())
         self.assertNotIn("workflow-nl-routing-start", (fixture / "AGENTS.md").read_text(encoding="utf-8"))
-        self.assertIn("[codex] 命令: 9/9, 补丁: 3, agents: 1, 脚本: 0, 手动基线校验: 2".lower(), result.stdout.lower())
+        self.assertIn("[codex] 命令: 9/9, 补丁: 3, agents: 0, 脚本: 0, 手动基线校验: 2".lower(), result.stdout.lower())
         self.assertNotIn("[codex] 命令: 9/9, 补丁: 4".lower(), result.stdout.lower())
 
     def test_install_dry_run_does_not_migrate_legacy_agents(self) -> None:

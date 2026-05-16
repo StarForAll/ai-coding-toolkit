@@ -169,6 +169,39 @@ def load_state(task_dir: Path) -> tuple[Path, dict[str, Any] | None]:
     return state_path, read_json(state_path)
 
 
+def session_runtime_has_any_current_task(repo_root: Path) -> bool:
+    sessions_dir = repo_root / ".trellis" / ".runtime" / "sessions"
+    if not sessions_dir.is_dir():
+        return False
+    for session_file in sessions_dir.glob("*.json"):
+        session_data = read_json(session_file)
+        if not session_data:
+            continue
+        current_task = session_data.get("current_task")
+        if isinstance(current_task, str) and current_task.strip():
+            return True
+    return False
+
+
+def resolve_degraded_task_dir(repo_root: Path) -> Path | None:
+    if session_runtime_has_any_current_task(repo_root):
+        # Degraded fallback is only a last resort when no live session state
+        # exists. If any session file already carries a current_task pointer,
+        # prefer explicit recovery instead of guessing from a degraded pointer.
+        return None
+    degraded_path = repo_root / ".trellis" / ".runtime" / "degraded-active-task.json"
+    degraded = read_json(degraded_path)
+    if not degraded:
+        return None
+    task_ref = degraded.get("current_task")
+    if not isinstance(task_ref, str) or not task_ref.strip():
+        return None
+    resolved = resolve_task_ref(task_ref, repo_root)
+    if resolved is None or not resolved.is_dir():
+        return None
+    return resolved.resolve()
+
+
 def bool_arg(raw: str) -> bool:
     lowered = raw.strip().lower()
     if lowered in {"1", "true", "yes", "y", "on"}:
@@ -1052,22 +1085,26 @@ def cmd_route(args: argparse.Namespace) -> int:
                 return 0
             task_dir = resolved_active.resolve()
         else:
-            tasks_root = repo_root / ".trellis" / "tasks"
-            has_any_task = False
-            if tasks_root.is_dir():
-                for candidate in tasks_root.iterdir():
-                    if candidate.is_dir() and (candidate / TASK_FILE_NAME).is_file():
-                        has_any_task = True
-                        break
-            if not has_any_task:
-                _route_result("feasibility", "first_entry", "当前 session 尚无 active task，首次进入 feasibility")
+            degraded_task_dir = resolve_degraded_task_dir(repo_root)
+            if degraded_task_dir is not None:
+                task_dir = degraded_task_dir
             else:
-                _route_result(
-                    None,
-                    "recovery_needed",
-                    "当前 session 未解析到 active task；请先明确当前任务或重新进入目标阶段",
-                )
-            return 0
+                tasks_root = repo_root / ".trellis" / "tasks"
+                has_any_task = False
+                if tasks_root.is_dir():
+                    for candidate in tasks_root.iterdir():
+                        if candidate.is_dir() and (candidate / TASK_FILE_NAME).is_file():
+                            has_any_task = True
+                            break
+                if not has_any_task:
+                    _route_result("feasibility", "first_entry", "当前 session 尚无 active task，首次进入 feasibility")
+                else:
+                    _route_result(
+                        None,
+                        "recovery_needed",
+                        "当前 session 未解析到 active task；请先明确当前任务或重新进入目标阶段",
+                    )
+                return 0
 
     # Step 3: validate the resolved task
     if not task_dir.is_dir():
@@ -1085,6 +1122,20 @@ def cmd_route(args: argparse.Namespace) -> int:
     state_path, state = load_state(task_dir)
     if state is None:
         _route_result(None, "repair_needed", "缺少 workflow-state.json")
+        return 0
+
+    state_errors: list[str] = []
+    validate_state_shape(state, state_errors)
+    validate_execution_boundary(state, state_errors)
+    if state_errors:
+        _route_result(
+            state.get("stage") if isinstance(state.get("stage"), str) else None,
+            "repair_needed",
+            state_errors[0],
+            stage=state.get("stage") if isinstance(state.get("stage"), str) else None,
+            stage_status=state.get("stage_status") if isinstance(state.get("stage_status"), str) else None,
+            blockers=state_errors,
+        )
         return 0
 
     # Step 4: route by stage
@@ -1246,20 +1297,71 @@ def cmd_repair(args: argparse.Namespace) -> int:
 
     evidence.append(f"{CUSTOMER_PRD.as_posix()} 存在")
 
-    # Check design/ dir in task_dir
-    design_dir = task_dir_path / "design"
-    if design_dir.is_dir():
-        evidence.append("design/ 存在")
-        task_plan = task_dir_path / "design" / "task_plan.md"
-        if task_plan.is_file():
-            evidence.append("design/task_plan.md 存在")
-            inferred_stage = "plan"
-        else:
-            inferred_stage = "design"
+    delivery_dir = task_dir_path / "delivery"
+    delivery_artifacts = (
+        delivery_dir / "acceptance.md",
+        delivery_dir / "deliverables.md",
+        delivery_dir / "transfer-checklist.md",
+        delivery_dir / "ownership-proof.md",
+        delivery_dir / "source-watermark-verification.md",
+    )
+    present_delivery_artifacts = [path for path in delivery_artifacts if path.is_file()]
+    if present_delivery_artifacts:
+        inferred_stage = "delivery"
+        evidence.extend(path.relative_to(task_dir_path).as_posix() + " 存在" for path in present_delivery_artifacts)
+        confidence = "high"
     else:
-        inferred_stage = "brainstorm"
+        review_gate_task_dir = task_dir_path / "review-gate"
+        if review_gate_task_dir.is_dir():
+            inferred_stage = "review-gate"
+            evidence.append("review-gate/ 存在")
+            confidence = "high"
+        else:
+            review_gate_dir = repo_root / "tmp" / "multi-cli-review" / task_dir_path.name
+            if review_gate_dir.is_dir():
+                inferred_stage = "review-gate"
+                evidence.append(f"tmp/multi-cli-review/{task_dir_path.name}/ 存在")
+                confidence = "low"
+            elif (task_dir_path / "project-audit.md").is_file() or (task_dir_path / "project-audit").is_dir():
+                inferred_stage = "project-audit"
+                if (task_dir_path / "project-audit.md").is_file():
+                    evidence.append("project-audit.md 存在")
+                if (task_dir_path / "project-audit").is_dir():
+                    evidence.append("project-audit/ 存在")
+                confidence = "high"
+            elif (task_dir_path / "check.md").is_file():
+                inferred_stage = "check"
+                evidence.append("check.md 存在")
+                confidence = "high"
+            elif (task_dir_path / "before-dev.md").is_file():
+                inferred_stage = "implementation"
+                evidence.append("before-dev.md 存在")
+                confidence = "medium"
+            else:
+                task_plan = task_dir_path / "task_plan.md"
+                legacy_task_plan = task_dir_path / "design" / "task_plan.md"
+                if task_plan.is_file():
+                    inferred_stage = "plan"
+                    evidence.append("task_plan.md 存在")
+                    confidence = "high"
+                elif legacy_task_plan.is_file():
+                    inferred_stage = "plan"
+                    evidence.append("design/task_plan.md 存在（legacy）")
+                    confidence = "medium"
+                else:
+                    inferred_stage = "brainstorm"
+                    confidence = "medium"
 
-    confidence = "high" if len(evidence) >= 2 else "medium"
+    if inferred_stage not in {"delivery", "review-gate", "project-audit", "check", "implementation", "plan"}:
+        # Check design/ dir in task_dir only when later-stage evidence is absent.
+        design_dir = task_dir_path / "design"
+        if design_dir.is_dir():
+            evidence.append("design/ 存在")
+            inferred_stage = "design"
+            confidence = "high"
+        else:
+            inferred_stage = "brainstorm"
+            confidence = "medium"
 
     result = {
         "status": "repair_needed",

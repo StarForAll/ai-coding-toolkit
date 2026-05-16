@@ -846,8 +846,6 @@ def _managed_row_key(spec: Any) -> str:
         return f"script:{spec.name}"
     if spec.kind == "doc":
         return f"doc:{spec.name}"
-    if spec.kind == "agent":
-        return f"agent:{spec.name}"
     return spec.name
 
 
@@ -856,8 +854,6 @@ def _managed_row_label(spec: Any) -> str:
         return f"helper-script:{spec.name}"
     if spec.kind == "doc":
         return f"shared-doc:{spec.name}"
-    if spec.kind == "agent":
-        return f"managed-enhanced-agent:trellis-{spec.name}"
     return spec.name
 
 
@@ -872,8 +868,6 @@ def _managed_mechanism(spec: Any) -> str:
         return "Workflow intentionally disables a baseline capability on the embedded surface."
     if spec.category == "shared-script":
         return "Workflow deploys a shared helper script used across CLI carriers."
-    if spec.category == "managed-enhanced-agent":
-        return "Workflow deploys the authoring-repo enhanced trellis-research agent into target projects while trellis-implement and trellis-check remain Trellis-native."
     return "Workflow-managed compatibility surface."
 
 
