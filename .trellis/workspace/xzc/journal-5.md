@@ -1409,3 +1409,38 @@ Completed the full workflow-capability-audit for docs/workflows/新项目开发�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 228: Audit workflow follow-up edge cases
+
+**Date**: 2026-05-16
+**Task**: Audit workflow follow-up edge cases
+**Branch**: `main`
+
+### Summary
+
+Audited and fixed remaining workflow edge cases in docs/workflows/新项目开发工作流, including degraded fallback routing, review-gate repair inference, and legacy compat residue cleanup.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2a0a8ad` | (see git log) |
+| `539c4f4` | (see git log) |
+| `df3f24a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
