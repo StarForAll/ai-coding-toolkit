@@ -74,8 +74,8 @@ class RuntimeUpgradeContractsTest(unittest.TestCase):
         self.assertIn("Active task: <path>", prompt)
         self.assertIn("semantic/context search", prompt)
 
-    def test_change_workflow_keeps_phase_3_4_visible(self) -> None:
-        expected = "Phase 3.1 → 3.3 → 3.4"
+    def test_change_workflow_keeps_current_finish_route_wording(self) -> None:
+        expected = "Phase 3.1 (verify quality + spec update)"
         for rel_path in (
             ".agents/skills/trellis-meta/references/customize-local/change-workflow.md",
             ".claude/skills/trellis-meta/references/customize-local/change-workflow.md",
