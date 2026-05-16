@@ -1376,3 +1376,36 @@ Completed the full workflow-capability-audit for docs/workflows/新项目开发�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 227: 收口 Context7 spec 复核与 plan 粒度判断合同
+
+**Date**: 2026-05-16
+**Task**: 收口 Context7 spec 复核与 plan 粒度判断合同
+**Branch**: `main`
+
+### Summary
+
+补齐 Context7 spec 复核门禁、任务粒度判断结构及相关校验与文档同步。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d136384` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
