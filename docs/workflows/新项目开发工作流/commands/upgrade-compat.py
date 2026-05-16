@@ -87,6 +87,11 @@ deploy_agents_md_routing = _INSTALL_WORKFLOW.deploy_agents_md_routing
 inject_workflow_phase_index_patch = _INSTALL_WORKFLOW.inject_workflow_phase_index_patch
 inject_workflow_no_task_patch = _INSTALL_WORKFLOW.inject_workflow_no_task_patch
 inject_workflow_breadcrumb_patch = _INSTALL_WORKFLOW.inject_workflow_breadcrumb_patch
+cleanup_legacy_breadcrumb_blocks = _INSTALL_WORKFLOW.cleanup_legacy_breadcrumb_blocks
+cleanup_stale_contract_references = _INSTALL_WORKFLOW.cleanup_stale_contract_references
+patch_inject_workflow_state_hook = _INSTALL_WORKFLOW.patch_inject_workflow_state_hook
+_HOOK_PATCH_MARKER = _INSTALL_WORKFLOW._HOOK_PATCH_MARKER
+_STALE_CONTRACT_PATTERN = _INSTALL_WORKFLOW._STALE_CONTRACT_PATTERN
 # Reuse install-workflow markers for idempotency checks
 _WORKFLOW_PHASE_INDEX_MARKER = _INSTALL_WORKFLOW._WORKFLOW_PHASE_INDEX_MARKER
 _WORKFLOW_BREADCRUMB_MARKER = _INSTALL_WORKFLOW._WORKFLOW_BREADCRUMB_MARKER
@@ -536,18 +541,50 @@ def detect_conflicts_opencode(src: Path, dst_cmds: Path, *, profile: str = DEFAU
 
 
 def detect_conflicts_workflow_doc(src: Path, root: Path, *, profile: str = DEFAULT_PROFILE) -> int:
+    conflicts = 0
     workflow_md = root / ".trellis" / "workflow.md"
     if not workflow_md.exists():
         err("[Shared] .trellis/workflow.md: 文件缺失")
         return 1
     if not has_workflow_patch(workflow_md):
         err("[Shared] .trellis/workflow.md: 项目化补丁缺失")
-        return 1
-    if not workflow_patch_matches_source(src, workflow_md, profile=profile):
+        conflicts += 1
+    elif not workflow_patch_matches_source(src, workflow_md, profile=profile):
         err("[Shared] .trellis/workflow.md: 项目化补丁内容漂移")
-        return 1
-    ok("[Shared] .trellis/workflow.md: 项目化补丁正常")
-    return 0
+        conflicts += 1
+    else:
+        ok("[Shared] .trellis/workflow.md: 项目化补丁正常")
+
+    # Issue 2: check for residual legacy three-phase breadcrumb blocks
+    # Must check for actual block definitions (opening + closing tag pair),
+    # not just string occurrences — the tag names also appear in documentation
+    # text and cross-references inside workflow.md.
+    content = workflow_md.read_text(encoding="utf-8")
+    if _WORKFLOW_BREADCRUMB_MARKER in content:
+        legacy_tags = ("stale", "planning", "planning-inline", "in_progress", "in_progress-inline", "completed")
+        found_residual = False
+        for tag in legacy_tags:
+            open_tag = f"[workflow-state:{tag}]"
+            close_tag = f"[/workflow-state:{tag}]"
+            if open_tag in content and close_tag in content:
+                # Verify the close tag comes after the open tag (it's a real block)
+                open_idx = content.find(open_tag)
+                close_idx = content.find(close_tag, open_idx + len(open_tag))
+                if close_idx != -1:
+                    err(f"[Shared] .trellis/workflow.md: 旧三阶段 breadcrumb 残留块 {open_tag}")
+                    conflicts += 1
+                    found_residual = True
+        if not found_residual:
+            ok("[Shared] .trellis/workflow.md: 无旧三阶段 breadcrumb 残留")
+
+    # Issue 6: check for stale workflow-state-contract.md references
+    if _STALE_CONTRACT_PATTERN in content:
+        err(f"[Shared] .trellis/workflow.md: 引用不存在的 {_STALE_CONTRACT_PATTERN}")
+        conflicts += 1
+
+    if conflicts == 0:
+        ok("[Shared] .trellis/workflow.md: 一致性检查通过")
+    return conflicts
 
 
 def detect_conflicts_agents_md(root: Path) -> int:
@@ -705,7 +742,16 @@ def detect_conflicts_codex(
 
     inject_workflow_state = root / ".codex" / "hooks" / "inject-workflow-state.py"
     if inject_workflow_state.exists():
-        ok("[Codex] inject-workflow-state.py 存在")
+        # Issue 1+7: check that the hook has been patched
+        # This is a best-effort enhancement — if the hook structure doesn't
+        # match expectations (e.g. different Trellis version), the workflow
+        # still functions without the patch, just without workflow-state.json
+        # stage priority. Report as warning, not hard conflict.
+        hook_content = inject_workflow_state.read_text(encoding="utf-8")
+        if _HOOK_PATCH_MARKER in hook_content:
+            ok("[Codex] inject-workflow-state.py: hook 补丁已应用")
+        else:
+            warn("[Codex] inject-workflow-state.py: hook 补丁未应用（workflow-state.json.stage 优先级 + 代码块过滤未启用）；若 hook 结构不匹配则需手动补丁")
     else:
         warn("[Codex] inject-workflow-state.py 缺失")
         conflicts += 1
@@ -1309,6 +1355,10 @@ def main() -> int:
     inject_workflow_phase_index_patch(src, root, dry_run=False, profile=profile)
     inject_workflow_no_task_patch(src, root, dry_run=False, profile=profile)
     inject_workflow_breadcrumb_patch(src, root, dry_run=False, profile=profile)
+    # Post-patch cleanup: remove legacy three-phase breadcrumbs, fix stale references, patch hook
+    cleanup_legacy_breadcrumb_blocks(root, dry_run=False)
+    cleanup_stale_contract_references(root, dry_run=False)
+    patch_inject_workflow_state_hook(root, dry_run=False)
     agents_md = root / "AGENTS.md"
     if agents_md.exists() and (
         not has_agents_md_routing(agents_md) or not agents_md_routing_matches_source(agents_md)

@@ -1,0 +1,9 @@
+{"file": ".trellis/spec/skills/workflow-audit.md", "reason": "Audit contract for verifying same-version consistency — acceptance criteria validation method"}
+{"file": ".trellis/spec/skills/workflow-capability-audit.md", "reason": "Baseline comparison method for post-embed verification — fresh trellis init + install vs expected state"}
+{"file": ".trellis/spec/platforms/codex-workflow-behavior.md", "reason": "Issue 8 verification — confirms dispatch_mode=inline behavior spec that breadcrumb must match"}
+{"file": ".trellis/spec/workflow-spec-fit-assessment.md", "reason": "Scope boundary — verifies all changes stay within docs/workflows/ and out-of-scope items are untouched"}
+{"file": "docs/workflows/新项目开发工作流/commands/workflow-patch-projectization.md", "reason": "Primary patch template — check all 5 patch sections (Phase Index, breadcrumb, no_task) for consistency after edits"}
+{"file": "docs/workflows/新项目开发工作流/commands/install-workflow.py", "reason": "Primary installer — check patch_inject_workflow_state_hook(), old breadcrumb cleanup, contract reference cleanup"}
+{"file": "docs/workflows/新项目开发工作流/commands/workflow_assets.py", "reason": "Shared constants — verify WORKFLOW_VERSION bump if needed and prepare_command_content behavior unchanged"}
+{"file": "docs/workflows/新项目开发工作流/阶段状态机与强门禁协议.md", "reason": "Stage machine spec — verify Issue 4 command reference matches STAGES and gate logic"}
+{"file": "docs/workflows/新项目开发工作流/commands/test_workflow_installers.py", "reason": "Existing test suite — verify patches pass existing embed tests without regressions"}

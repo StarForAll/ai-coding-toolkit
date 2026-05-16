@@ -1,0 +1,9 @@
+{"file": ".trellis/spec/skills/workflow-audit.md", "reason": "Issue verification methodology — same-version workflow audit contract, scope boundary, and evidence-first validation rules for all 9 issues"}
+{"file": ".trellis/spec/skills/workflow-capability-audit.md", "reason": "Trellis baseline comparison methodology — fresh baseline vs embedded state A/B comparison for acceptance testing"}
+{"file": ".trellis/spec/platforms/codex-workflow-behavior.md", "reason": "Issue 8 — codex dispatch_mode=inline vs sub-agent behavior spec that the implementation breadcrumb must align with"}
+{"file": ".trellis/spec/platforms/cli/command-interface/normative-rules.md", "reason": "Command interface norms — breadcrumb block format and lifecycle rules that patches must conform to"}
+{"file": ".trellis/spec/workflow-spec-fit-assessment.md", "reason": "Scope boundary — confirms workflow source assets under docs/workflows/ are in-scope and Trellis baseline scripts are out-of-scope"}
+{"file": "docs/workflows/新项目开发工作流/commands/workflow_assets.py", "reason": "Shared constants used by install-workflow.py — WORKFLOW_VERSION, prepare_command_content, profile handling"}
+{"file": "docs/workflows/新项目开发工作流/commands/workflow-patch-projectization.md", "reason": "Primary patch template — contains Phase Index, breadcrumb blocks, and no_task rules that Issues 3/4/5/8/9 modify"}
+{"file": "docs/workflows/新项目开发工作流/commands/install-workflow.py", "reason": "Primary installer — contains inject_workflow_phase_index_patch, inject_workflow_no_task_patch, inject_workflow_breadcrumb_patch, and main() flow that Issues 1/2/6/7 modify"}
+{"file": "docs/workflows/新项目开发工作流/阶段状态机与强门禁协议.md", "reason": "Stage machine protocol — STAGES definition, stage_status values, and gate enforcement rules that Issue 4 command reference must align with"}

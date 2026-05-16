@@ -1127,6 +1127,171 @@ def inject_workflow_breadcrumb_patch(src: Path, root: Path, *, dry_run: bool, pr
     return True
 
 
+# ── Issue 1+7: patch deployed inject-workflow-state.py hook ──
+_HOOK_PATCH_MARKER = "# [workflow-embed-patch:prefer-workflow-state-json]"
+
+
+def patch_inject_workflow_state_hook(root: Path, *, dry_run: bool) -> bool:
+    """Patch deployed inject-workflow-state.py to prefer workflow-state.json.stage (Issue 1)
+    and strip fenced code blocks before breadcrumb parsing (Issue 7).
+
+    The deployed hook is a Trellis baseline file not managed by this workflow.
+    We patch it via text insertion at well-known anchor points.
+    """
+    hook_path = root / ".codex" / "hooks" / "inject-workflow-state.py"
+    if not hook_path.exists():
+        info("[Shared] inject-workflow-state.py 不存在（非 Codex 项目），跳过 hook 补丁")
+        return False
+
+    content = hook_path.read_text(encoding="utf-8")
+    if _HOOK_PATCH_MARKER in content:
+        ok("[Shared] inject-workflow-state.py hook 补丁已存在")
+        return False
+
+    patched = content
+
+    # ── Issue 7: strip fenced code blocks before _TAG_RE.finditer() ──
+    # Insert a re.sub line after "content = workflow.read_text(encoding="utf-8")"
+    # inside load_breadcrumbs().
+    code_block_strip_line = '    content = re.sub(r"```.*?```", "", content, flags=re.DOTALL)\n'
+    read_text_anchor = '        content = workflow.read_text(encoding="utf-8")\n'
+    if read_text_anchor in patched and code_block_strip_line not in patched:
+        insert_pos = patched.find(read_text_anchor) + len(read_text_anchor)
+        patched = patched[:insert_pos] + code_block_strip_line + patched[insert_pos:]
+
+    # ── Issue 1: prefer workflow-state.json.stage over task.json.status ──
+    # In get_active_task(), the function computes task_dir (a Path) and returns
+    # (task_id, status, active.source).  We insert a block that reads
+    # task_dir/workflow-state.json and overrides status with its "stage" field.
+    #
+    # Anchor: the line "    return task_id, status, active.source" at the end
+    # of the happy path in get_active_task().
+    ws_override_block = """\
+    # [workflow-embed-patch:prefer-workflow-state-json]
+    # Prefer workflow-state.json.stage over task.json.status for strong-gate projects
+    _ws_source = None
+    _ws_path = task_dir / "workflow-state.json"
+    if _ws_path.is_file():
+        try:
+            _ws_data = json.loads(_ws_path.read_text(encoding="utf-8"))
+            _ws_stage = _ws_data.get("stage", "")
+            if isinstance(_ws_stage, str) and _ws_stage:
+                status = _ws_stage
+                _ws_source = "workflow-state.json"
+        except (json.JSONDecodeError, OSError):
+            pass
+"""
+    return_anchor = "    return task_id, status, active.source\n"
+    return_replacement = "    return task_id, status, _ws_source or active.source\n"
+    if return_anchor in patched and _HOOK_PATCH_MARKER not in patched:
+        # Insert before the return statement — but only the one inside
+        # get_active_task(), not any other function.
+        # Strategy: find the function definition, then find the return
+        # that belongs to it.
+        func_def = "def get_active_task("
+        func_start = patched.find(func_def)
+        if func_start != -1:
+            return_pos = patched.find(return_anchor, func_start)
+            # Make sure this return is in the same function (before next def)
+            next_def = patched.find("\ndef ", func_start + len(func_def))
+            if next_def == -1 or return_pos < next_def:
+                # Replace return line with version that uses _ws_source
+                patched = patched[:return_pos] + ws_override_block + return_replacement + patched[return_pos + len(return_anchor):]
+
+    if patched == content:
+        warn("[Shared] inject-workflow-state.py 补丁未命中目标代码，跳过")
+        return False
+
+    if not dry_run:
+        hook_path.write_text(patched, encoding="utf-8")
+    if dry_run:
+        info("[Shared] 将补丁 inject-workflow-state.py hook（优先 workflow-state.json.stage + 移除代码块示例）")
+    else:
+        ok("[Shared] inject-workflow-state.py hook 已补丁（优先 workflow-state.json.stage + 移除代码块示例）")
+    return True
+
+
+# ── Issue 2: cleanup legacy three-phase breadcrumb blocks ──
+_LEGACY_BREADCRUMB_TAGS = (
+    "stale",
+    "planning",
+    "planning-inline",
+    "in_progress",
+    "in_progress-inline",
+    "completed",
+)
+
+
+def cleanup_legacy_breadcrumb_blocks(root: Path, *, dry_run: bool) -> int:
+    """Remove legacy three-phase breadcrumb blocks from embedded workflow.md (Issue 2).
+
+    After strong-gate Phase Index + breadcrumb patches are applied, the old
+    three-phase breadcrumb blocks (stale, planning, planning-inline, in_progress,
+    in_progress-inline, completed) should be removed to avoid duplicate
+    [workflow-state:STATUS] blocks that confuse the hook parser.
+    """
+    target_path = root / ".trellis" / "workflow.md"
+    if not target_path.exists():
+        return 0
+
+    content = target_path.read_text(encoding="utf-8")
+    removed = 0
+
+    for tag in _LEGACY_BREADCRUMB_TAGS:
+        start_tag = f"[workflow-state:{tag}]"
+        end_tag = f"[/workflow-state:{tag}]"
+        block_info = _extract_breadcrumb_block(content, start_tag, end_tag)
+        if block_info is not None:
+            block_text, block_start, block_end = block_info
+            # Only remove legacy blocks when strong-gate breadcrumb patch
+            # has been applied — without the marker, the file still follows
+            # the baseline three-phase model and these blocks are valid.
+            sg_marker_idx = content.find(_WORKFLOW_BREADCRUMB_MARKER)
+            if sg_marker_idx == -1:
+                continue
+            # Legacy blocks are those that appear before the strong-gate marker
+            if block_start < sg_marker_idx:
+                # Remove the block and any surrounding blank lines
+                before = content[:block_start].rstrip("\n")
+                after = content[block_end:].lstrip("\n")
+                content = before + "\n\n" + after
+                removed += 1
+
+    if removed > 0:
+        if not dry_run:
+            target_path.write_text(content, encoding="utf-8")
+        if dry_run:
+            info(f"[Shared] 将移除 {removed} 个旧三阶段 breadcrumb 块")
+        else:
+            ok(f"[Shared] 已移除 {removed} 个旧三阶段 breadcrumb 块")
+    return removed
+
+
+# ── Issue 6: cleanup stale workflow-state-contract.md references ──
+_STALE_CONTRACT_PATTERN = ".trellis/spec/cli/backend/workflow-state-contract.md"
+_STALE_CONTRACT_REPLACEMENT = "workflow-state.py --help"
+
+
+def cleanup_stale_contract_references(root: Path, *, dry_run: bool) -> bool:
+    """Replace references to non-existent workflow-state-contract.md in embedded workflow.md (Issue 6)."""
+    target_path = root / ".trellis" / "workflow.md"
+    if not target_path.exists():
+        return False
+
+    content = target_path.read_text(encoding="utf-8")
+    if _STALE_CONTRACT_PATTERN not in content:
+        return False
+
+    new_content = content.replace(_STALE_CONTRACT_PATTERN, _STALE_CONTRACT_REPLACEMENT)
+    if not dry_run:
+        target_path.write_text(new_content, encoding="utf-8")
+    if dry_run:
+        info("[Shared] 将替换 workflow-state-contract.md 引用 → workflow-state.py --help")
+    else:
+        ok("[Shared] 已替换 workflow-state-contract.md 引用 → workflow-state.py --help")
+    return True
+
+
 def _migrate_legacy_agents(root: Path, cli_type: str, cli_label: str, *, dry_run: bool = False) -> dict:
     """Migrate legacy bare-name agent files to Trellis 0.5 naming convention.
 
@@ -1861,6 +2026,15 @@ def main() -> int:
             inject_workflow_phase_index_patch(src, root, dry_run=args.dry_run, profile=profile)
             inject_workflow_no_task_patch(src, root, dry_run=args.dry_run, profile=profile)
             inject_workflow_breadcrumb_patch(src, root, dry_run=args.dry_run, profile=profile)
+
+            # Issue 2: cleanup legacy three-phase breadcrumb blocks after strong-gate patches
+            cleanup_legacy_breadcrumb_blocks(root, dry_run=args.dry_run)
+
+            # Issue 6: cleanup stale workflow-state-contract.md references
+            cleanup_stale_contract_references(root, dry_run=args.dry_run)
+
+            # Issue 1+7: patch deployed inject-workflow-state.py hook
+            patch_inject_workflow_state_hook(root, dry_run=args.dry_run)
         print()
 
         if not any(t and t["errors"] for t in total.values()):
