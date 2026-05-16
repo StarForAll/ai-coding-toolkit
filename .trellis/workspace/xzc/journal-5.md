@@ -1270,3 +1270,36 @@ Synced Codex inline dispatch boundary wording across workflow docs, verified tar
 ### Next Steps
 
 - None - task complete
+
+
+## Session 224: Project-audit global checks
+
+**Date**: 2026-05-16
+**Task**: Project-audit global checks
+**Branch**: `main`
+
+### Summary
+
+Narrowed workflow changes to project-audit only, added project-level verification matrix/results sections, synchronized wording across core docs, and tightened installer assertions.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `438a417` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

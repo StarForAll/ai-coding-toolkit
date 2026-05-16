@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 223
-- **Last Active**: 2026-05-15
+- **Total Sessions**: 224
+- **Last Active**: 2026-05-16
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~1272 | Active |
+| `journal-5.md` | ~1305 | Active |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 224 | 2026-05-16 | Project-audit global checks | `438a417` | `main` |
 | 223 | 2026-05-15 | Sync codex inline boundary docs | `6795f34` | `main` |
 | 222 | 2026-05-15 | Sync workflow UI skill routing docs | `ff2224c` | `main` |
 | 221 | 2026-05-15 | 收尾 workflow-capability-audit 审计修复 | `e533525`, `f3f383d` | `main` |
