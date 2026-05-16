@@ -108,3 +108,102 @@ Close-out runs in two phases:
 2. Current completed task archived; if it is a child task, the parent coordinator records are also synchronized to the new completed frontier
 3. `add_session.py` completed successfully for the current session record
 4. `.trellis/workspace` and `.trellis/tasks` metadata clean
+
+---
+
+## Phase Index
+
+<!-- workflow-projectization-phase-index-patch -->
+
+```
+feasibility → brainstorm → design → plan → implementation → test-first → project-audit → check → review-gate → finish-work → delivery → record-session
+```
+
+Stage transition gates are enforced by `workflow-state.py set --stage <next>`; use `--force` to bypass for repair scenarios.
+
+---
+
+## Strong-Gate Breadcrumb Blocks
+
+<!-- workflow-projectization-breadcrumb-patch -->
+
+[workflow-state:feasibility]
+Current stage: **feasibility** — first project assessment gate.
+Load `/trellis:feasibility` to evaluate project viability, risk, and engagement type.
+All new projects must pass feasibility before entering brainstorm.
+Run `python3 ./.trellis/scripts/workflow/workflow-state.py route` to check routing.
+[/workflow-state:feasibility]
+
+[workflow-state:brainstorm]
+Current stage: **brainstorm** — requirement discovery and PRD iteration.
+Load `/trellis:brainstorm` skill to iterate on prd.md with the user.
+Prerequisite: valid assessment.md from feasibility.
+After prd.md and jsonl are curated, set `stage_status = awaiting_user_confirmation` for design/plan transition.
+[/workflow-state:brainstorm]
+
+[workflow-state:design]
+Current stage: **design** — architecture and design document creation.
+Load `/trellis:design` to produce developer-facing PRD (block A), design docs (block B), project docs (block C), and engineering alignment (block D).
+Blocks A and B require user confirmation before proceeding.
+Run `python3 ./.trellis/scripts/workflow/workflow-state.py validate <task-dir> --project-root <root>` to check exit readiness.
+[/workflow-state:design]
+
+[workflow-state:plan]
+Current stage: **plan** — task decomposition and scheduling.
+Load `/trellis:plan` to decompose work into child tasks with prd.md.
+**Hard prohibition**: no implementation code, no scaffolding, no migration scripts.
+Set `stage_status = awaiting_user_confirmation` when plan is ready for user approval.
+[/workflow-state:plan]
+
+[workflow-state:implementation]
+Current stage: **implementation** — code writing phase.
+`checkpoints.execution_authorized` must be `true` before entering.
+Dispatch `trellis-implement` sub-agent or implement inline (with explicit user override).
+After implementation, proceed to `check` or `test-first`.
+[/workflow-state:implementation]
+
+[workflow-state:test-first]
+Current stage: **test-first** — write tests before implementation code.
+Load `/trellis:test-first` skill for TDD-driven verification.
+`checkpoints.execution_authorized` must be `true`.
+[/workflow-state:test-first]
+
+[workflow-state:project-audit]
+Current stage: **project-audit** — full-project quality review.
+Load `/trellis:project-audit` for cross-cutting quality assessment.
+[/workflow-state:project-audit]
+
+[workflow-state:check]
+Current stage: **check** — quality check against spec and conventions.
+Load `/trellis:check` to validate implementation against specifications.
+After passing, proceed to `review-gate` or back to `implementation`.
+[/workflow-state:check]
+
+[workflow-state:review-gate]
+Current stage: **review-gate** — multi-CLI supplementary review.
+Load `/trellis:review-gate` for additional cross-platform quality assurance.
+After passing, proceed to `finish-work`.
+[/workflow-state:review-gate]
+
+[workflow-state:finish-work]
+Current stage: **finish-work** — commit preparation and session wrap-up.
+Load `/trellis:finish-work` for commit checklist and close-out.
+Run `python3 ./.trellis/scripts/task.py archive <task-name>` then `add_session.py` for final recording.
+[/workflow-state:finish-work]
+
+[workflow-state:delivery]
+Current stage: **delivery** — project handover and deployment.
+Load `/trellis:delivery` for acceptance, deliverables, and ownership proof.
+[/workflow-state:delivery]
+
+---
+
+## No-Task Entry Point (Strong-Gate)
+
+<!-- workflow-projectization-no-task-patch -->
+
+[workflow-state:no_task]
+No active task. **A Direct answer** — pure Q&A / explanation / lookup / chat; no file writes + one-line answer + repo reads ≤ 2 files → AI judges, no override needed.
+**B Create a task** — any implementation / code change / build / refactor work. For outsourcing profile: entry sequence starts with feasibility gate — (1) `python3 ./.trellis/scripts/workflow/workflow-state.py route` to detect first-entry → (2) if `action=first_entry`, load `/trellis:feasibility` first → (3) after feasibility passes, `task.py create "<title>"` → (4) `trellis-brainstorm` for prd iteration → (5) `task.py start <task-dir>`. For personal profile: (1) `task.py create "<title>"` → (2) `trellis-brainstorm` → (3) `task.py start <task-dir>`. **"It looks small" is NOT grounds for downgrading B to A or C**.
+**C Inline change** (per-turn only, escape hatch for B) — the user's CURRENT message MUST contain one of: "skip trellis" / "no task" / "just do it" / "don't create a task" / "跳过 trellis" / "别走流程" / "小修一下" / "直接改" / "先别建任务" → briefly acknowledge ("ok, skipping trellis flow this turn"), then inline. **Without seeing one of these phrases you must NOT inline on your own**; do not invent an override the user never said.
+[/workflow-state:no_task]

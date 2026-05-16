@@ -104,6 +104,13 @@ _CODEX_START_SKILL_MARKER = "## Workflow Phase Router Patch `[AI]`"
 _WORKFLOW_PATCH_MARKER = "<!-- workflow-projectization-patch -->"
 _WORKFLOW_START_HEADING = "## Development Process"
 _WORKFLOW_END_HEADING = "## File Descriptions"
+_WORKFLOW_PHASE_INDEX_MARKER = "<!-- workflow-projectization-phase-index-patch -->"
+_WORKFLOW_BREADCRUMB_MARKER = "<!-- workflow-projectization-breadcrumb-patch -->"
+_WORKFLOW_NO_TASK_MARKER = "<!-- workflow-projectization-no-task-patch -->"
+_BASELINE_NO_TASK_START = "[workflow-state:no_task]"
+_BASELINE_NO_TASK_END = "[/workflow-state:no_task]"
+_BASELINE_PHASE_INDEX_START = "## Phase Index"
+_BASELINE_PHASE_1_HEADING = "### Phase 1: Plan"
 _TODO_FILE_NAME = "todo.txt"
 _TODO_DEFAULT_LINE = "文档内容需要和实际当前的代码同步\n"
 _EMBED_ATTEMPT_FILE_NAME = "workflow-embed-attempt.json"
@@ -167,7 +174,7 @@ _NL_ROUTING_SECTION = """\
 | 跨层检查、跨模块、影响面 | `/trellis:check` + 手动指定跨层范围 | 描述跨层检查意图，或显式触发 `check` skill 并说明跨层范围 | 当前未提供专用 `check-cross-layer` skill；用 `/trellis:check` 替代 |
 | 集成 skill、添加 skill | 手动完成 skill 集成 | 手动完成 skill 集成 | 当前未提供专用 `integrate-skill` skill；按 skill 文档手动集成 |
 | 读规范、开发前准备、看看有什么规范 | `/trellis:before-dev` | 描述开发前准备意图，或显式触发 `trellis-before-dev` skill | 开发前读规范；默认主链里也会由 continue 自动执行 |
-| 新人入门、项目介绍、怎么用 trellis | 阅读 AGENTS.md + `工作流全局流转说明（通俗版）.md` | 阅读 AGENTS.md 路由表 | 当前未提供专用 `onboard` skill；按项目文档入门 |
+| 新人入门、项目介绍、怎么用 trellis | 阅读 AGENTS.md NL 路由表 | 阅读 AGENTS.md 路由表 | 当前未提供专用 `onboard` skill；按项目文档入门 |
 | 创建命令、新命令、加个命令 | 按平台格式手动创建 | 按平台格式手动创建 | 当前未提供专用 `create-command` skill；按对应 CLI 格式手动创建 |
 
 ### 歧义消解
@@ -941,6 +948,185 @@ def inject_workflow_patch(src: Path, root: Path, *, dry_run: bool, profile: str 
     return True
 
 
+def _extract_breadcrumb_block(content: str, start_tag: str, end_tag: str) -> tuple[str, int, int] | None:
+    """Extract a breadcrumb block delimited by start_tag and end_tag from content.
+
+    Returns (block_text, start_offset, end_offset) or None if not found.
+    """
+    start_idx = content.find(start_tag)
+    if start_idx == -1:
+        return None
+    end_idx = content.find(end_tag, start_idx + len(start_tag))
+    if end_idx == -1:
+        return None
+    end_idx += len(end_tag)
+    return content[start_idx:end_idx], start_idx, end_idx
+
+
+def inject_workflow_phase_index_patch(src: Path, root: Path, *, dry_run: bool, profile: str = DEFAULT_PROFILE) -> bool:
+    """Replace the baseline Phase Index section with strong-gate version in workflow.md."""
+    target_path = root / ".trellis" / "workflow.md"
+    if not target_path.exists():
+        warn("[Shared] workflow.md 不存在，跳过 Phase Index 补丁注入")
+        return False
+
+    patch = src / "workflow-patch-projectization.md"
+    if not patch.exists():
+        warn("[Shared] workflow-patch-projectization.md 不存在，跳过 Phase Index 补丁")
+        return False
+
+    patch_text = prepare_command_content(patch, profile=profile)
+
+    # Extract Phase Index replacement section from patch
+    phase_index_marker = _WORKFLOW_PHASE_INDEX_MARKER
+    if phase_index_marker not in patch_text:
+        warn("[Shared] workflow-patch-projectization.md 缺少 Phase Index 模板标记")
+        return False
+
+    phase_index_start = patch_text.find(phase_index_marker)
+    # Find next --- or end of file as boundary
+    next_section = patch_text.find("\n---\n", phase_index_start)
+    if next_section == -1:
+        phase_index_section = patch_text[phase_index_start:]
+    else:
+        phase_index_section = patch_text[phase_index_start:next_section]
+
+    content = target_path.read_text(encoding="utf-8")
+    if phase_index_marker in content:
+        ok("[Shared] workflow.md Phase Index 强门禁补丁已存在")
+        return False
+
+    # Find baseline Phase Index block: from "## Phase Index" to "### Phase 1: Plan"
+    phase_index_idx = content.find(_BASELINE_PHASE_INDEX_START)
+    if phase_index_idx == -1:
+        warn("[Shared] workflow.md 中未找到 ## Phase Index，跳过替换")
+        return False
+
+    phase1_idx = content.find(_BASELINE_PHASE_1_HEADING, phase_index_idx)
+    if phase1_idx == -1:
+        warn("[Shared] workflow.md 中未找到 ### Phase 1: Plan，跳过替换")
+        return False
+
+    prefix = content[:phase_index_idx]
+    suffix = content[phase1_idx:]
+    new_content = prefix + phase_index_section.rstrip() + "\n\n" + suffix
+
+    if not dry_run:
+        target_path.write_text(new_content, encoding="utf-8")
+    if dry_run:
+        info("[Shared] 将注入 workflow.md Phase Index 强门禁补丁")
+    else:
+        ok("[Shared] workflow.md Phase Index 强门禁补丁已注入")
+    return True
+
+
+def inject_workflow_no_task_patch(src: Path, root: Path, *, dry_run: bool, profile: str = DEFAULT_PROFILE) -> bool:
+    """Replace the baseline no_task breadcrumb block with strong-gate version in workflow.md."""
+    target_path = root / ".trellis" / "workflow.md"
+    if not target_path.exists():
+        warn("[Shared] workflow.md 不存在，跳过 no_task 补丁注入")
+        return False
+
+    patch = src / "workflow-patch-projectization.md"
+    if not patch.exists():
+        warn("[Shared] workflow-patch-projectization.md 不存在，跳过 no_task 补丁")
+        return False
+
+    patch_text = prepare_command_content(patch, profile=profile)
+
+    no_task_marker = _WORKFLOW_NO_TASK_MARKER
+    if no_task_marker not in patch_text:
+        warn("[Shared] workflow-patch-projectization.md 缺少 no_task 模板标记")
+        return False
+
+    no_task_start = patch_text.find(no_task_marker)
+    # Find next --- or end of file as boundary
+    next_section = patch_text.find("\n---\n", no_task_start)
+    if next_section == -1:
+        no_task_section = patch_text[no_task_start:]
+    else:
+        no_task_section = patch_text[no_task_start:next_section]
+
+    content = target_path.read_text(encoding="utf-8")
+    if no_task_marker in content:
+        ok("[Shared] workflow.md no_task 强门禁补丁已存在")
+        return False
+
+    # Find and replace baseline no_task block
+    block_info = _extract_breadcrumb_block(content, _BASELINE_NO_TASK_START, _BASELINE_NO_TASK_END)
+    if block_info is None:
+        warn("[Shared] workflow.md 中未找到 baseline [workflow-state:no_task] 块")
+        return False
+
+    _, block_start, block_end = block_info
+    prefix = content[:block_start]
+    suffix = content[block_end:]
+    new_content = prefix + no_task_section.rstrip() + "\n" + suffix
+
+    if not dry_run:
+        target_path.write_text(new_content, encoding="utf-8")
+    if dry_run:
+        info("[Shared] 将注入 workflow.md no_task 强门禁补丁")
+    else:
+        ok("[Shared] workflow.md no_task 强门禁补丁已注入")
+    return True
+
+
+def inject_workflow_breadcrumb_patch(src: Path, root: Path, *, dry_run: bool, profile: str = DEFAULT_PROFILE) -> bool:
+    """Inject strong-gate breadcrumb blocks for all stages into workflow.md."""
+    target_path = root / ".trellis" / "workflow.md"
+    if not target_path.exists():
+        warn("[Shared] workflow.md 不存在，跳过 breadcrumb 补丁注入")
+        return False
+
+    patch = src / "workflow-patch-projectization.md"
+    if not patch.exists():
+        warn("[Shared] workflow-patch-projectization.md 不存在，跳过 breadcrumb 补丁")
+        return False
+
+    patch_text = prepare_command_content(patch, profile=profile)
+
+    breadcrumb_marker = _WORKFLOW_BREADCRUMB_MARKER
+    if breadcrumb_marker not in patch_text:
+        warn("[Shared] workflow-patch-projectization.md 缺少 breadcrumb 模板标记")
+        return False
+
+    breadcrumb_start = patch_text.find(breadcrumb_marker)
+    # Find next --- or no_task section as boundary
+    no_task_marker_idx = patch_text.find(_WORKFLOW_NO_TASK_MARKER, breadcrumb_start)
+    if no_task_marker_idx != -1:
+        breadcrumb_section = patch_text[breadcrumb_start:no_task_marker_idx]
+    else:
+        next_section = patch_text.find("\n---\n", breadcrumb_start)
+        if next_section == -1:
+            breadcrumb_section = patch_text[breadcrumb_start:]
+        else:
+            breadcrumb_section = patch_text[breadcrumb_start:next_section]
+
+    content = target_path.read_text(encoding="utf-8")
+    if breadcrumb_marker in content:
+        ok("[Shared] workflow.md 强门禁 breadcrumb 补丁已存在")
+        return False
+
+    # Insert before the no_task block (or at end if no_task block not found)
+    block_info = _extract_breadcrumb_block(content, _BASELINE_NO_TASK_START, _BASELINE_NO_TASK_END)
+    if block_info is not None:
+        _, block_start, _ = block_info
+        prefix = content[:block_start]
+        suffix = content[block_start:]
+        new_content = prefix + breadcrumb_section.rstrip() + "\n\n" + suffix
+    else:
+        new_content = content.rstrip() + "\n\n" + breadcrumb_section.rstrip() + "\n"
+
+    if not dry_run:
+        target_path.write_text(new_content, encoding="utf-8")
+    if dry_run:
+        info("[Shared] 将注入 workflow.md 强门禁 breadcrumb 补丁")
+    else:
+        ok("[Shared] workflow.md 强门禁 breadcrumb 补丁已注入")
+    return True
+
+
 def _migrate_legacy_agents(root: Path, cli_type: str, cli_label: str, *, dry_run: bool = False) -> dict:
     """Migrate legacy bare-name agent files to Trellis 0.5 naming convention.
 
@@ -1669,6 +1855,12 @@ def main() -> int:
 
             update_embed_attempt_record(root, last_step="patch-workflow-doc")
             inject_workflow_patch(src, root, dry_run=args.dry_run, profile=profile)
+
+            # Strong-gate Phase Index, no_task breadcrumb, and stage breadcrumb patches
+            update_embed_attempt_record(root, last_step="patch-workflow-phase-index")
+            inject_workflow_phase_index_patch(src, root, dry_run=args.dry_run, profile=profile)
+            inject_workflow_no_task_patch(src, root, dry_run=args.dry_run, profile=profile)
+            inject_workflow_breadcrumb_patch(src, root, dry_run=args.dry_run, profile=profile)
         print()
 
         if not any(t and t["errors"] for t in total.values()):

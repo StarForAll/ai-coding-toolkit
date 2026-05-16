@@ -84,6 +84,13 @@ _AGENTS_NL_ROUTING_MARKER, _AGENTS_NL_ROUTING_END = AGENTS_NL_ROUTING_MARKERS
 _NL_ROUTING_SECTION = _INSTALL_WORKFLOW._NL_ROUTING_SECTION
 _EMBED_ATTEMPT_FILE_NAME = _INSTALL_WORKFLOW._EMBED_ATTEMPT_FILE_NAME
 deploy_agents_md_routing = _INSTALL_WORKFLOW.deploy_agents_md_routing
+inject_workflow_phase_index_patch = _INSTALL_WORKFLOW.inject_workflow_phase_index_patch
+inject_workflow_no_task_patch = _INSTALL_WORKFLOW.inject_workflow_no_task_patch
+inject_workflow_breadcrumb_patch = _INSTALL_WORKFLOW.inject_workflow_breadcrumb_patch
+# Reuse install-workflow markers for idempotency checks
+_WORKFLOW_PHASE_INDEX_MARKER = _INSTALL_WORKFLOW._WORKFLOW_PHASE_INDEX_MARKER
+_WORKFLOW_BREADCRUMB_MARKER = _INSTALL_WORKFLOW._WORKFLOW_BREADCRUMB_MARKER
+_WORKFLOW_NO_TASK_MARKER = _INSTALL_WORKFLOW._WORKFLOW_NO_TASK_MARKER
 
 
 G, Y, R, C, N = "\033[0;32m", "\033[1;33m", "\033[0;31m", "\033[0;36m", "\033[0m"
@@ -1298,6 +1305,10 @@ def main() -> int:
     if not has_workflow_patch(root / ".trellis" / "workflow.md") and not inject_workflow_patch(src, root, profile=profile):
         err("[Shared] workflow.md 项目化补丁恢复失败")
         return 1
+    # Inject strong-gate patches for existing projects that predate these markers
+    inject_workflow_phase_index_patch(src, root, dry_run=False, profile=profile)
+    inject_workflow_no_task_patch(src, root, dry_run=False, profile=profile)
+    inject_workflow_breadcrumb_patch(src, root, dry_run=False, profile=profile)
     agents_md = root / "AGENTS.md"
     if agents_md.exists() and (
         not has_agents_md_routing(agents_md) or not agents_md_routing_matches_source(agents_md)

@@ -71,6 +71,20 @@ STAGES = {
     "delivery",
     "record-session",
 }
+STAGE_TRANSITIONS: dict[str, list[str]] = {
+    "feasibility": ["brainstorm"],
+    "brainstorm": ["design", "plan"],
+    "design": ["plan"],
+    "plan": ["implementation", "test-first"],
+    "implementation": ["test-first", "check", "project-audit"],
+    "test-first": ["implementation", "check", "project-audit"],
+    "project-audit": ["check", "review-gate"],
+    "check": ["review-gate", "implementation"],
+    "review-gate": ["finish-work", "implementation"],
+    "finish-work": ["delivery", "record-session"],
+    "delivery": ["record-session"],
+    "record-session": [],
+}
 STAGE_STATUSES = {
     "in_progress",
     "blocked",
@@ -142,7 +156,7 @@ def build_default_state(stage: str) -> dict[str, Any]:
         "stage_status": "in_progress",
         "current_block": None,
         "completed_blocks": [],
-        "allowed_next_stages": [],
+        "allowed_next_stages": list(STAGE_TRANSITIONS.get(stage, [])),
         "awaiting_user_confirmation": False,
         "last_confirmed_transition": None,
         "notes": [],
@@ -904,6 +918,27 @@ def cmd_set(args: argparse.Namespace) -> int:
         return 1
 
     if args.stage:
+        current_stage = state.get("stage", "")
+        new_stage = args.stage
+        if new_stage != current_stage and not args.force:
+            # 1. allowed_next_stages gate
+            allowed = state.get("allowed_next_stages", [])
+            if isinstance(allowed, list) and allowed and new_stage not in allowed:
+                print(f"❌ 阶段切换被拒绝: {current_stage!r} → {new_stage!r} 不在 allowed_next_stages {allowed} 中；如需强制切换请使用 --force")
+                return 1
+            # 2. awaiting_user_confirmation + execution_authorized gate for execution stages
+            if new_stage in EXECUTION_STAGES:
+                current_status = state.get("stage_status", "")
+                if current_status != "awaiting_user_confirmation":
+                    print(f"❌ 阶段切换被拒绝: 进入 {new_stage!r} 前 stage_status 必须为 awaiting_user_confirmation；当前为 {current_status!r}。如需强制切换请使用 --force")
+                    return 1
+                # execution_authorized may be set in the same call; check current or pending value
+                checkpoints = state.get("checkpoints", {})
+                current_ea = checkpoints.get("execution_authorized", False)
+                pending_ea = args.execution_authorized if args.execution_authorized is not None else current_ea
+                if pending_ea is not True:
+                    print(f"❌ 阶段切换被拒绝: 进入 {new_stage!r} 前 checkpoints.execution_authorized 必须为 true（可在同一命令中通过 --execution-authorized true 设置）。如需强制切换请使用 --force")
+                    return 1
         state["stage"] = args.stage
     if args.stage_status:
         state["stage_status"] = args.stage_status
@@ -1397,6 +1432,7 @@ def build_parser() -> argparse.ArgumentParser:
     set_parser = subparsers.add_parser("set", help="update workflow-state.json fields")
     set_parser.add_argument("task_dir")
     set_parser.add_argument("--stage", choices=sorted(STAGES))
+    set_parser.add_argument("--force", action="store_true", help="skip stage transition gate validation")
     set_parser.add_argument("--stage-status", choices=sorted(STAGE_STATUSES))
     set_parser.add_argument("--current-block")
     set_parser.add_argument("--clear-current-block", action="store_true")

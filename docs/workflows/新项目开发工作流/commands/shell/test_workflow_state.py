@@ -689,11 +689,37 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.run_script("init", str(task_dir), "--stage", "plan")
         self.run_script("set", str(task_dir), "--context7-review-completed", "true")
-        illegal_set = self.run_script("set", str(task_dir), "--stage", "implementation")
-        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
 
+        # Attempt 1: without awaiting_user_confirmation -> rejected at transition gate
+        illegal_set = self.run_script("set", str(task_dir), "--stage", "implementation")
         self.assertEqual(illegal_set.returncode, 1, msg=illegal_set.stdout + illegal_set.stderr)
-        self.assertIn("拒绝写入非法 workflow-state", illegal_set.stdout)
+        self.assertIn("stage_status 必须为 awaiting_user_confirmation", illegal_set.stdout)
+
+        # Attempt 2: set awaiting_user_confirmation but still no execution_authorized -> rejected
+        self.run_script(
+            "set", str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+        )
+        illegal_set2 = self.run_script("set", str(task_dir), "--stage", "implementation")
+        self.assertEqual(illegal_set2.returncode, 1, msg=illegal_set2.stdout + illegal_set2.stderr)
+        self.assertIn("execution_authorized 必须为 true", illegal_set2.stdout)
+
+        # Attempt 3: --force bypasses transition gate but NOT execution_boundary
+        # (execution_boundary is a shape check, not a transition gate)
+        illegal_force = self.run_script("set", str(task_dir), "--stage", "implementation", "--force")
+        self.assertEqual(illegal_force.returncode, 1, msg=illegal_force.stdout + illegal_force.stderr)
+        self.assertIn("execution_authorized", illegal_force.stdout)
+
+        # Attempt 4: full legal transition with execution_authorized + transition record
+        legal_set = self.run_script(
+            "set", str(task_dir),
+            "--stage", "implementation",
+            "--execution-authorized", "true",
+            "--transition-from", "plan",
+        )
+        self.assertEqual(legal_set.returncode, 0, msg=legal_set.stdout + legal_set.stderr)
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
         self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
 
     def test_validate_fails_when_transition_record_targets_other_stage(self) -> None:
