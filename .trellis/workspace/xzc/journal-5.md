@@ -1444,3 +1444,36 @@ Audited and fixed remaining workflow edge cases in docs/workflows/新项目开�
 ### Next Steps
 
 - None - task complete
+
+
+## Session 229: Fix workflow source issues: false-green exit, stale skill refs, trellis-research contract
+
+**Date**: 2026-05-16
+**Task**: Fix workflow source issues: false-green exit, stale skill refs, trellis-research contract
+**Branch**: `main`
+
+### Summary
+
+Fix 3 rounds of workflow source issues: (1) check-quality.py false-green exit code bug + test coverage, (2) 7 files with stale non-existent skill command references (check-cross-layer, integrate-skill, onboard, create-command, project-planner, writing-plans) replaced with degradation messages, (3) trellis-research托管合同 in 4 docs aligned to 'Trellis原生基线' + test assertion fix. 11 files changed, all tests passing.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c350980` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
