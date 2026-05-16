@@ -1303,3 +1303,43 @@ Narrowed workflow changes to project-audit only, added project-level verificatio
 ### Next Steps
 
 - None - task complete
+
+
+## Session 225: Settle Trellis 0.5.16 upgrade residue
+
+**Date**: 2026-05-16
+**Task**: Settle Trellis 0.5.16 upgrade residue
+**Branch**: `main`
+
+### Summary
+
+Aligned finish-route wording across live carriers, codified stale template-hash recovery, reconciled the 0.5.16 template-hash baseline, updated regression tests, and cleared the upgrade residue.
+
+### Main Changes
+
+- Verified the reported 36 stale template-hash entries were real and removed them.
+- Removed the obsolete `.kiro/agents/trellis-research.json` overlay expectation from the template-hash regression test.
+- Updated runtime upgrade contract assertions to the current live `change-workflow.md` wording.
+- Preserved the repo's live stale/degraded active-task contract and richer research-agent tooling instead of adopting regressive `.new` baselines.
+- Cleared all residual `.new` files and verified focused Trellis runtime/hash/workflow regression suites passed.
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `015de3c` | (see git log) |
+| `0498c4e` | (see git log) |
+| `ae58670` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
