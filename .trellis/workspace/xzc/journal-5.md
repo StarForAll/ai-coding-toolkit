@@ -1477,3 +1477,36 @@ Fix 3 rounds of workflow source issues: (1) check-quality.py false-green exit co
 ### Next Steps
 
 - None - task complete
+
+
+## Session 230: 修复新项目开发工作流嵌入后7个一致性问题
+
+**Date**: 2026-05-16
+**Task**: 修复新项目开发工作流嵌入后7个一致性问题
+**Branch**: `main`
+
+### Summary
+
+添加 STAGE_TRANSITIONS、阶段切换门禁、install-workflow.py 三个强门禁补丁注入函数、upgrade-compat.py 升级修复路径调用、回退违反合同的自动推断逻辑、移除与托管边界冲突的 hook 补丁。208 测试通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b217f52` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

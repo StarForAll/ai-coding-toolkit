@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 229
+- **Total Sessions**: 230
 - **Last Active**: 2026-05-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~1479 | Active |
+| `journal-5.md` | ~1512 | Active |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 230 | 2026-05-16 | 修复新项目开发工作流嵌入后7个一致性问题 | `b217f52` | `main` |
 | 229 | 2026-05-16 | Fix workflow source issues: false-green exit, stale skill refs, trellis-research contract | `c350980` | `main` |
 | 228 | 2026-05-16 | Audit workflow follow-up edge cases | `2a0a8ad`, `539c4f4`, `df3f24a` | `main` |
 | 227 | 2026-05-16 | 收口 Context7 spec 复核与 plan 粒度判断合同 | `d136384` | `main` |
