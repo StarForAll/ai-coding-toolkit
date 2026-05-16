@@ -1343,3 +1343,36 @@ Aligned finish-route wording across live carriers, codified stale template-hash 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 226: Finalize workflow capability audit for Trellis 0.5.16
+
+**Date**: 2026-05-16
+**Task**: Finalize workflow capability audit for Trellis 0.5.16
+**Branch**: `main`
+
+### Summary
+
+Completed the full workflow-capability-audit for docs/workflows/新项目开发工作流, confirmed no-fix compatibility with Trellis 0.5.16, promoted the compatibility anchor to 0.5.16, and archived the audit task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dcac0ff` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
