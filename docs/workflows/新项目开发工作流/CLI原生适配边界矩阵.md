@@ -10,8 +10,7 @@
 
 1. **Trellis 原生管理（当前真实）**
    - Trellis 0.5+ 通过 `trellis init` 原生提供 `trellis-research` / `trellis-implement` / `trellis-check` agents，覆盖 9 个平台
-   - 当前 workflow 默认仍依赖 Trellis 原生 `trellis-implement` / `trellis-check`
-   - `trellis-research` 则额外作为 workflow-managed enhanced agent 同步到目标项目，以满足当前工作流对搜索能力路由的要求
+   - 当前 workflow 默认依赖这三份 Trellis 原生 agent
    - 安装器继续负责 legacy bare-name → trellis-* 迁移（rename）
 2. **workflow-managed subset（当前真实）**
    - Claude / OpenCode / Codex 的阶段命令（feasibility / brainstorm / design / plan / test-first / project-audit / check / review-gate / delivery）
@@ -22,7 +21,7 @@
 补充说明：
 
 - `.iflow/agents/` 当前属于仓库级 live deployment 范围，但**不在**本 workflow 安装器的 managed subset 内
-- 因此，若当前问题与 `trellis-implement` / `trellis-check` 的部署有关，应通过 Trellis 上游解决；`trellis-research` 的增强能力对齐则属于当前 workflow 安装器合同的一部分
+- 因此，若当前问题与 `trellis-research` / `trellis-implement` / `trellis-check` 的部署有关，应优先按 Trellis 原生 baseline 理解；workflow 安装器只负责 legacy 迁移，不负责 fresh install overlay
 
 ## 已完成的 agent 托管策略变更
 
@@ -35,27 +34,26 @@ Trellis 0.5 原生模板（trellis init 产物）
   -> target project .claude/.opencode/.codex trellis-* agents
 ```
 
-workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产；当前增强版 `trellis-research` 直接以本仓库 live deployment carrier 为来源同步到目标项目，`trellis-implement` / `trellis-check` 仍不 overlay。安装器继续处理 legacy bare-name → trellis-* 迁移（rename）。
+workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也不再把增强版 `trellis-research` 同步到 fresh target project。安装器继续处理 legacy bare-name → trellis-* 迁移（rename）。
 
 关键约束：
 
-- `trellis-implement` / `trellis-check` 的主体语义由 Trellis 上游维护，workflow 不修改
-- `trellis-research` 的增强版搜索能力由当前 workflow 额外同步，以对齐当前项目正在使用的 research routing 规则
+- `trellis-research` / `trellis-implement` / `trellis-check` 的主体语义都由 Trellis 上游维护，workflow 不修改 fresh install 的原生内容
 - 若某平台确有行为差距（如 Codex class-2 缺 context self-loading），应通过 Trellis 上游机制或项目级配置解决，不在 workflow 源中补丁
 - 安装器 / 升级分析 / 卸载脚本不再读写 agent 内容，仅检测和迁移 legacy bare-name 文件
 - 维护者侧例外：当前 repo-local `workflow-audit` 不得把 Claude Code / OpenCode agent 执行链作为正式口径；即便平台原生支持，当前合同仍要求主会话执行，只有后续明确调整合同后才可放开
 
-**源仓库 carrier 增强 vs. 安装器 overlay（两层边界区分）**：当前源仓库（authoring repo）自身对 `trellis-research` 做了项目级 capability-enhancement，例如 Claude/OpenCode 版本扩展了 ace、Context7、deepwiki、grok-search、exa_advanced 等工具路由，详见 `.trellis/spec/agents/index.md` Tool Capability Enhancement 段。当前 workflow 合同要求目标项目中的 `trellis-research` 与这套增强版保持同等级能力，因此安装器 / 升级器会同步该增强版 `trellis-research`；但 `trellis-implement` / `trellis-check` 仍保持 Trellis 原生基线，不做 overlay。
+**源仓库 carrier 增强 vs. 目标项目 baseline（两层边界区分）**：当前源仓库（authoring repo）自身对 `trellis-research` 做了项目级 capability-enhancement，例如 Claude/OpenCode 版本扩展了 ace、Context7、deepwiki、grok-search、exa_advanced 等工具路由，详见 `.trellis/spec/agents/index.md` Tool Capability Enhancement 段。这些增强属于 source repo 自身 carrier 能力，不再作为 fresh install overlay 同步到目标项目；目标项目默认回到 Trellis 原生 baseline。
 
 ### 已完成的原子更新集合
 
 切换到 Trellis 原生 agent 时，以下文件已作为原子集合一起更新：
 
-- `commands/install-workflow.py` — `trellis-research` 增强版同步 + legacy 迁移；不恢复 implement/check overlay
-- `commands/upgrade-compat.py` — 检查/恢复增强版 `trellis-research`，同时保留 legacy 迁移
-- `commands/uninstall-workflow.py` — 恢复 `trellis-research` baseline 备份；不删除原生 trellis-* agents
-- `commands/workflow_assets.py` — 维护 legacy 迁移与增强版 `trellis-research` 源路径定义
-- `commands/test_workflow_installers.py` — 验证增强版 `trellis-research` 的安装、校验、恢复链路
+- `commands/install-workflow.py` — 只做 legacy 迁移；不再同步增强版 `trellis-research`
+- `commands/upgrade-compat.py` — 不再把 native `trellis-research` 内容漂移当成 workflow-managed drift，同时保留 legacy 迁移
+- `commands/uninstall-workflow.py` — 不删除原生 trellis-* agents；如存在历史 overlay 备份，仅用于回到 baseline
+- `commands/workflow_assets.py` — 维护 legacy 迁移与当前 fresh install 托管边界定义
+- `commands/test_workflow_installers.py` — 验证 native agents 保持 baseline、legacy 迁移与 dry-run 汇总口径
 - `commands/claude/README.md` — 更新 agent 章节为”Trellis 原生管理”
 - `commands/opencode/README.md` — 同上
 - `commands/codex/README.md` — 同上
