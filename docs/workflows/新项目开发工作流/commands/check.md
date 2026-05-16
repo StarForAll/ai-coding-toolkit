@@ -22,7 +22,7 @@ description: 代码写完了？检查一下 — 基于真实改动范围和项�
 
 > 以下场景不要误路由到本命令：
 >
-> - 需要跨层影响排查 → `/trellis:check-cross-layer`
+> - 需要跨层影响排查 → `/trellis:check`（跨层范围手动指定）
 > - 需要多 CLI 补充审查门禁 → `/trellis:review-gate`
 > - 需要提交前完整收尾检查 → `/trellis:finish-work`
 

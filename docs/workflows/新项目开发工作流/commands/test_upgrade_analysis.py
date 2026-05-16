@@ -117,13 +117,17 @@ class UpgradeAnalysisTests(unittest.TestCase):
         self.assertEqual(actions["codex:brainstorm"], "add")
         self.assertEqual(actions["codex:trellis-finish-work"], "replace")
 
-    def test_analyze_upgrade_includes_managed_enhanced_claude_research_agent(self) -> None:
+    def test_analyze_upgrade_does_not_manage_trellis_research_agent(self) -> None:
+        # MANAGED_ENHANCED_AGENT_NAMES is empty — trellis-research is Trellis-native,
+        # not a workflow-managed asset. It must not appear in upgrade findings,
+        # even when baseline and expected differ (which would trigger a "replace"
+        # if it were managed).
         baseline = self.make_root("upgrade-baseline-claude-agent-")
         expected = self.make_root("upgrade-expected-claude-agent-")
         target = self.make_root("upgrade-target-claude-agent-")
 
         self.write_file(baseline, ".claude/agents/trellis-research.md", "baseline research\n")
-        self.write_file(expected, ".claude/agents/trellis-research.md", "workflow research\n")
+        self.write_file(expected, ".claude/agents/trellis-research.md", "expected research (different)\n")
         self.write_file(target, ".claude/agents/trellis-research.md", "baseline research\n")
         self.write_file(target, ".trellis/.version", "2.1.0\n")
 
@@ -143,7 +147,7 @@ class UpgradeAnalysisTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         payload = json.loads(result.stdout)
         actions = {item["asset_id"]: item["action"] for item in payload["findings"]}
-        self.assertEqual(actions["claude:agent:research"], "replace")
+        self.assertNotIn("claude:agent:research", actions)
 
     def test_analyze_upgrade_still_ignores_non_managed_opencode_check_agent(self) -> None:
         baseline = self.make_root("upgrade-baseline-opencode-agent-")

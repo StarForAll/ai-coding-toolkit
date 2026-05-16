@@ -164,11 +164,11 @@ _NL_ROUTING_SECTION = """\
 | 开始、新会话、继续、下一步 | `/trellis:continue` | 描述当前意图，或显式触发 `trellis-continue` skill | Phase Router 自动检测；legacy `/trellis:start` 仅兼容旧目标项目 |
 | 卡住了、反复出错、死循环、调不通 | `/trellis:break-loop` | 描述排障意图，或显式触发 `trellis-break-loop` skill | 深度 bug 分析 |
 | 更新规范、新发现、沉淀经验 | `/trellis:update-spec` | 描述规范更新意图，或显式触发 `trellis-update-spec` skill | 规范更新 |
-| 跨层检查、跨模块、影响面 | `/trellis:check-cross-layer` | 描述跨层检查意图，或显式触发 `check-cross-layer` skill | 跨层检查 |
-| 集成 skill、添加 skill | `/trellis:integrate-skill` | 描述 skill 集成意图，或显式触发 `integrate-skill` skill | Skill 集成 |
+| 跨层检查、跨模块、影响面 | `/trellis:check` + 手动指定跨层范围 | 描述跨层检查意图，或显式触发 `check` skill 并说明跨层范围 | 当前未提供专用 `check-cross-layer` skill；用 `/trellis:check` 替代 |
+| 集成 skill、添加 skill | 手动完成 skill 集成 | 手动完成 skill 集成 | 当前未提供专用 `integrate-skill` skill；按 skill 文档手动集成 |
 | 读规范、开发前准备、看看有什么规范 | `/trellis:before-dev` | 描述开发前准备意图，或显式触发 `trellis-before-dev` skill | 开发前读规范；默认主链里也会由 continue 自动执行 |
-| 新人入门、项目介绍、怎么用 trellis | `/trellis:onboard` | 描述 onboarding 意图，或显式触发 `onboard` skill | 项目 onboarding |
-| 创建命令、新命令、加个命令 | `/trellis:create-command` | 描述创建命令意图，或显式触发 `create-command` skill | 创建新命令 |
+| 新人入门、项目介绍、怎么用 trellis | 阅读 AGENTS.md + `工作流全局流转说明（通俗版）.md` | 阅读 AGENTS.md 路由表 | 当前未提供专用 `onboard` skill；按项目文档入门 |
+| 创建命令、新命令、加个命令 | 按平台格式手动创建 | 按平台格式手动创建 | 当前未提供专用 `create-command` skill；按对应 CLI 格式手动创建 |
 
 ### 歧义消解
 

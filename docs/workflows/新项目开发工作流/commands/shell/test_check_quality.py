@@ -81,6 +81,34 @@ class CheckQualityScriptTests(unittest.TestCase):
         self.assertIn("未提供已确认命令，跳过", result.stdout)
         self.assertFalse((project_dir / "commands.log").exists())
 
+    def test_returns_nonzero_when_check_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            project_dir = Path(temp_root)
+            result = self.run_script(project_dir, "--test-cmd", "false")
+
+        self.assertNotEqual(result.returncode, 0, "failing --test-cmd must produce non-zero exit code")
+        self.assertIn("未通过", result.stdout)
+
+    def test_returns_nonzero_when_lint_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            project_dir = Path(temp_root)
+            result = self.run_script(project_dir, "--lint-cmd", "false")
+
+        self.assertNotEqual(result.returncode, 0, "failing --lint-cmd must produce non-zero exit code")
+
+    def test_returns_zero_when_all_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            project_dir = Path(temp_root)
+            result = self.run_script(
+                project_dir,
+                "--test-cmd",
+                "true",
+                "--lint-cmd",
+                "true",
+            )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

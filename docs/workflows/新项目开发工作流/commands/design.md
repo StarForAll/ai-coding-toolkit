@@ -550,5 +550,5 @@ README.en.md
 | design 已完成，准备进入 plan | `/trellis:plan` | 进入任务拆解，或显式触发 `plan` skill | 仅在 design 退出清单完成且用户明确确认后才允许 |
 | 设计不完善，回退补讨论/补文档 | `/trellis:design` | 继续 design 阶段，或显式触发 `design` skill | 先做 gap review，不直接整批重生成内容 |
 | 冻结后出现新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 不直接在当前阶段吸收 |
-| 检查跨层一致性 | `/trellis:check-cross-layer` | 检查跨层影响，或显式触发 `check-cross-layer` skill | 设计涉及多层时建议执行 |
+| 检查跨层一致性 | `/trellis:check`（跨层范围手动指定） | 描述跨层检查意图，或显式触发 `check` skill 并说明跨层范围 | 设计涉及多层时建议执行 |
 | 不确定当前任务/状态 | `/trellis:continue` | 描述当前状态恢复意图，或显式触发 `trellis-continue` skill | 回到当前已确认阶段的状态恢复分支 |

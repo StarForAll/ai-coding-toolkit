@@ -115,7 +115,7 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
 
 ### Step 1: 读取输入并识别执行域
 
-**调用 Skill**：`project-planner` + `writing-plans`
+**调用 Skill**：按 Step 2 流程执行任务拆解，当前未提供专用 `project-planner` + `writing-plans` skill，直接使用以下步骤
 
 外部证据路由补充：
 

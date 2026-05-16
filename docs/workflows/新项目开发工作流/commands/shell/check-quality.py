@@ -61,14 +61,16 @@ def main() -> int:
 
     print("说明：测试 / lint / type-check 命令必须来自技术架构确认后由用户明确的项目化输入。")
 
+    results: list[bool | None] = []
+
     # 1. 测试
-    run_optional_check(args.test_cmd, "测试状态")
+    results.append(run_optional_check(args.test_cmd, "测试状态"))
 
     # 2. Lint
-    run_optional_check(args.lint_cmd, "Lint 状态")
+    results.append(run_optional_check(args.lint_cmd, "Lint 状态"))
 
     # 3. Type check
-    run_optional_check(args.typecheck_cmd, "Type Check 状态")
+    results.append(run_optional_check(args.typecheck_cmd, "Type Check 状态"))
 
     # 4. Git 状态
     print("\n--- Git 状态 ---")
@@ -93,6 +95,8 @@ def main() -> int:
     print()
     print("=== 质量检查完成 ===")
     print("下一步：根据以上结果生成 check.md 检查结果")
+    if any(r is False for r in results):
+        return 1
     return 0
 
 
