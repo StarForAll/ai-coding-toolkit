@@ -18,6 +18,9 @@
 * Cross-platform differences in Skills and Agents deployments (`.claude/`, `.opencode/`, `.codex/`, `.kiro/`, `.qoder/`, `.agents/`) are design-expected due to different formats and conventions per platform; they must not be flagged as drift.
 * Only the latest `.trellis/.backup-*` directory must be retained; older backups must be cleaned up.
 * `.trellis/.template-hashes.json` is a drift detector that records hashes of managed deployment files; it must not be manually edited in ordinary work.
-* The only allowed recovery is backfilling missing managed keys with hash values copied from a matching fresh Trellis baseline for the same version and platform set when historical drift omitted those keys.
-* Recovery backfill must never write hashes computed from the current local customized file contents into `.trellis/.template-hashes.json`; doing so would hide local modifications from future `trellis update`.
+* The only allowed recovery paths are:
+  - backfilling missing managed keys with hash values copied from a matching fresh Trellis baseline for the same version and platform set when historical drift omitted those keys
+  - deleting stale managed keys when the same matching fresh Trellis baseline no longer tracks those paths
+* Recovery must never write hashes computed from the current local customized file contents into `.trellis/.template-hashes.json`; doing so would hide local modifications from future `trellis update`.
+* When the managed template set changes, the repo-local regression tests that index recorded template hashes must be updated in the same change. In particular, `.trellis/scripts/common/tests/test_template_hash_semantics.py` must not keep removed paths in `overlays`, and any live wording assertions that were updated as part of the same template reconciliation must be kept aligned in the relevant contract tests.
 * Hash mismatches reported by `.trellis/.template-hashes.json` are the detector working correctly, not the hash file itself being drifted.
