@@ -1576,3 +1576,36 @@ Bug1: code_block_strip_line 缩进 4→8 空格修复 Codex hook SyntaxError; Bu
 ### Next Steps
 
 - None - task complete
+
+
+## Session 233: 修复工作流状态机8项问题与文档一致性
+
+**Date**: 2026-05-17
+**Task**: 修复工作流状态机8项问题与文档一致性
+**Branch**: `main`
+
+### Summary
+
+修复 workflow-state.py 状态机 Issue 3-7（awaiting 门禁扩展、route blockers、execution_authorized 自动重置、空 allowed_next 终态锁定、L0 brainstorm 路径）、install-workflow.py Issue 1-2（Claude/OpenCode hook 补丁）、finish-work→delivery→record-session 收尾链路统一、upgrade-compat 覆盖修复、--allowed-next 空值支持、5 项追加文档与测试修复（P0 安装产物冲突、文档旧模型、upgrade-compat 漏检、断言不严格）。68 测试全部通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bafcd8a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
