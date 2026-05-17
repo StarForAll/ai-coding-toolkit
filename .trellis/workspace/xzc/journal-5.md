@@ -1675,3 +1675,36 @@ P1-P6 + 额外修复：record-session 归类到 OVERLAY_BASELINE_COMMANDS/DISTRI
 ### Next Steps
 
 - None - task complete
+
+
+## Session 236: 审计并修复强门禁5项一致性问题
+
+**Date**: 2026-05-17
+**Task**: 审计并修复强门禁5项一致性问题
+**Branch**: `main`
+
+### Summary
+
+完成 05-17-workflow-gate-consistency-audit：审计7个候选问题（C1-C7），确认5个为真缺陷（C2/C3/C5/C6/C7），2个为误报（C1/C4）。修复：session-start no-task指导引用NL路由表、profile_hint读workflow-installed.json、finish-work补丁扩展到Step3/4、task.py start降级模式文档、嵌入执行规范要求index.md。测试68+11 passed，trellis-library validate通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d86bd00` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
