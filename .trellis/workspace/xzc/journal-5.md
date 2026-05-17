@@ -1741,3 +1741,36 @@ P1-P6 + 额外修复：record-session 归类到 OVERLAY_BASELINE_COMMANDS/DISTRI
 ### Next Steps
 
 - None - task complete
+
+
+## Session 238: 修复嵌入工作流7项一致性问题
+
+**Date**: 2026-05-17
+**Task**: 修复嵌入工作流7项一致性问题
+**Branch**: `main`
+
+### Summary
+
+修复阶段切换表、finish-work语义矛盾、状态机跳阶段路径、硬门禁校验缺失、Codex旧路由残留、旧三阶段引用、安装器补丁边界等7项问题
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8487195` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
