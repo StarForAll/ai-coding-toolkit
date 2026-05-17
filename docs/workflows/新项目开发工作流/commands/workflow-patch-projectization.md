@@ -141,8 +141,9 @@ All transitions follow a two-step protocol: **(A)** signal readiness by setting 
 | plan → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next test-first,check,project-audit --transition-from plan` |
 | plan → test-first | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage test-first --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next implementation,check,project-audit --transition-from plan` |
 | implementation → check | code complete | `workflow-state.py set <dir> --stage check --stage-status in_progress --allowed-next review-gate,implementation` |
-| implementation → test-first | code complete | `workflow-state.py set <dir> --stage test-first --stage-status in_progress --allowed-next implementation,check,project-audit` |
+| implementation → test-first | code complete | `workflow-state.py set <dir> --stage test-first --stage-status in_progress --allowed-next implementation,check,project-audit --transition-from implementation` |
 | check → review-gate | check passes | `workflow-state.py set <dir> --stage review-gate --stage-status in_progress --allowed-next finish-work,implementation` |
+| check → finish-work | check passes (no review-gate needed) | `workflow-state.py set <dir> --stage finish-work --stage-status in_progress --allowed-next delivery,record-session` |
 | review-gate → finish-work | review passes | `workflow-state.py set <dir> --stage finish-work --stage-status in_progress --allowed-next delivery,record-session` |
 | finish-work → delivery | close-out evidence complete | `workflow-state.py set <dir> --stage delivery --stage-status in_progress --allowed-next record-session` |
 | delivery → record-session | delivery accepted | `workflow-state.py set <dir> --stage record-session --stage-status in_progress --allowed-next` |
@@ -204,7 +205,7 @@ Load `/trellis:project-audit` for cross-cutting quality assessment.
 [workflow-state:check]
 Current stage: **check** — quality check against spec and conventions.
 Load `/trellis:check` to validate implementation against specifications.
-After passing, proceed to `review-gate` or back to `implementation`.
+After passing, proceed to `review-gate`, back to `implementation`, or directly to `finish-work` (when no review-gate is needed).
 [/workflow-state:check]
 
 [workflow-state:review-gate]
@@ -239,6 +240,6 @@ The legacy `/trellis:record-session` command remains available as a backwards-co
 [workflow-state:no_task]
 No active task. **A Direct answer** — pure Q&A / explanation / lookup / chat; no file writes + one-line answer + repo reads ≤ 2 files → AI judges, no override needed.
 **A+ Deep analysis** — multi-file read-only audit / architecture review / diagnostic report; file writes limited to analysis docs (research/, temp files); no source code / config / project file modification allowed. Creates a task only if the user explicitly asks to act on findings.
-**B Create a task** — any implementation / code change / build / refactor work. For outsourcing profile: entry sequence starts with feasibility gate — (1) `python3 ./.trellis/scripts/workflow/workflow-state.py route` to detect first-entry → (2) if `action=first_entry`, load `/trellis:feasibility` (the feasibility skill will automatically create the task directory and initialize workflow-state.json) → (3) after feasibility passes, `trellis-brainstorm` for prd iteration → (4) `task.py start <task-dir>`. For personal profile: (1) `task.py create "<title>"` → (2) `trellis-brainstorm` → (3) `task.py start <task-dir>`. **"It looks small" is NOT grounds for downgrading B to A+ or C**.
+**B Create a task** — any implementation / code change / build / refactor work. For outsourcing profile: entry sequence starts with feasibility gate — (1) `python3 ./.trellis/scripts/workflow/workflow-state.py route` to detect first-entry → (2) if `action=first_entry`, load `/trellis:feasibility` (the feasibility skill will automatically create the task directory and initialize workflow-state.json) → (3) after feasibility passes, `trellis-brainstorm` for prd iteration → (4) `task.py start <task-dir>`. For personal profile: (1) `task.py create "<title>"` → (2) `trellis-brainstorm` — personal profile can skip feasibility but **must** supplement core fields of `assessment.md` during brainstorm (`project_engagement_type=non_outsourcing` + `source_watermark_*` + `ownership_proof_required`), otherwise subsequent stage gate validation will block → (3) `task.py start <task-dir>`. **"It looks small" is NOT grounds for downgrading B to A+ or C**.
 **C Inline change** (per-turn only, escape hatch for B) — the user's CURRENT message MUST contain one of: "skip trellis" / "no task" / "just do it" / "don't create a task" / "跳过 trellis" / "别走流程" / "小修一下" / "直接改" / "先别建任务" → briefly acknowledge ("ok, skipping trellis flow this turn"), then inline. **Without seeing one of these phrases you must NOT inline on your own**; do not invent an override the user never said.
 [/workflow-state:no_task]

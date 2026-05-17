@@ -79,7 +79,7 @@ STAGE_TRANSITIONS: dict[str, list[str]] = {
     "implementation": ["test-first", "check", "project-audit"],
     "test-first": ["implementation", "check", "project-audit"],
     "project-audit": ["check", "review-gate"],
-    "check": ["review-gate", "implementation"],
+    "check": ["review-gate", "implementation", "finish-work"],
     "review-gate": ["finish-work", "implementation"],
     "finish-work": ["delivery", "record-session"],
     "delivery": ["record-session"],
@@ -316,6 +316,42 @@ def validate_state_shape(state: dict[str, Any], errors: list[str]) -> None:
                 errors.append("last_confirmed_transition.to 必须存在且为字符串")
             if not isinstance(transition.get("confirmed_at"), str):
                 errors.append("last_confirmed_transition.confirmed_at 必须存在且为字符串")
+
+
+def validate_stage_transition_gates(
+    task_dir: Path,
+    repo_root: Path,
+    state: dict[str, Any],
+    new_stage: str,
+    errors: list[str],
+) -> None:
+    """Validate gate requirements when transitioning to a new stage via set."""
+    current_stage = state.get("stage", "")
+
+    if new_stage in {"feasibility"}:
+        return
+
+    # Stages >= brainstorm require external project controls and ownership policy
+    if new_stage in STAGES - {"feasibility"}:
+        gate_errors: list[str] = []
+        validate_external_project_controls(task_dir, repo_root, state, gate_errors)
+        validate_ownership_policy_controls(task_dir, repo_root, state, gate_errors)
+
+        # For brainstorm stage, downgrade missing assessment errors to warnings
+        if new_stage == "brainstorm":
+            remaining: list[str] = []
+            for err in gate_errors:
+                if "缺少 assessment.md" in err:
+                    print(f"⚠️ {err}（brainstorm 阶段允许补齐）")
+                else:
+                    remaining.append(err)
+            gate_errors = remaining
+
+        errors.extend(gate_errors)
+
+    # Stages >= design additionally require project doc boundary
+    if new_stage in PROJECT_ESTIMATE_REQUIRED_STAGES:
+        validate_project_doc_boundary(state, repo_root, task_dir, errors)
 
 
 def validate_execution_boundary(state: dict[str, Any], errors: list[str]) -> None:
@@ -940,6 +976,16 @@ def cmd_set(args: argparse.Namespace) -> int:
                 if pending_ea is not True:
                     print(f"❌ 阶段切换被拒绝: 进入 {new_stage!r} 前 checkpoints.execution_authorized 必须为 true（可在同一命令中通过 --execution-authorized true 设置）。如需强制切换请使用 --force")
                     return 1
+            # 4. Stage transition gate validation (external project controls, ownership, doc boundary)
+            repo_root = find_repo_root(task_dir)
+            if repo_root is not None:
+                gate_errors: list[str] = []
+                validate_stage_transition_gates(task_dir, repo_root, state, new_stage, gate_errors)
+                if gate_errors:
+                    for message in gate_errors:
+                        print(f"❌ {message}")
+                    print("❌ 阶段切换被拒绝: 门禁产物未齐；如需强制切换请使用 --force")
+                    return 1
         state["stage"] = args.stage
         # Auto-reset execution_authorized when leaving execution stages
         if current_stage in EXECUTION_STAGES and new_stage not in EXECUTION_STAGES:
@@ -1073,6 +1119,8 @@ def _route_result(
     stage: str | None = None,
     stage_status: str | None = None,
     blockers: list[str] | None = None,
+    warnings: list[str] | None = None,
+    profile_hint: str | None = None,
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
         "target": target,
@@ -1084,6 +1132,10 @@ def _route_result(
         result["stage_status"] = stage_status
     result["reason"] = reason
     result["blockers"] = blockers or []
+    if warnings:
+        result["warnings"] = warnings
+    if profile_hint is not None:
+        result["profile_hint"] = profile_hint
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return result
 
@@ -1137,7 +1189,27 @@ def cmd_route(args: argparse.Namespace) -> int:
                             has_any_task = True
                             break
                 if not has_any_task:
-                    _route_result("feasibility", "first_entry", "当前 session 尚无 active task，首次进入 feasibility")
+                    # Detect project profile for first-entry routing
+                    profile_hint = None
+                    if not (repo_root / ASSESSMENT_FILE).is_file():
+                        # No assessment.md: likely personal project
+                        profile_hint = "personal"
+                    else:
+                        try:
+                            a_content = (repo_root / ASSESSMENT_FILE).read_text(encoding="utf-8")
+                            engagement_type = extract_backticked_field(a_content, "project_engagement_type")
+                            if engagement_type and engagement_type != "external_outsourcing":
+                                profile_hint = "personal"
+                            elif engagement_type == "external_outsourcing":
+                                profile_hint = "outsourcing"
+                        except (OSError, UnicodeDecodeError):
+                            pass
+                    _route_result(
+                        "feasibility",
+                        "first_entry",
+                        "当前 session 尚无 active task，首次进入 feasibility",
+                        profile_hint=profile_hint,
+                    )
                 else:
                     _route_result(
                         None,
@@ -1255,13 +1327,22 @@ def cmd_route(args: argparse.Namespace) -> int:
         )
         return 0
 
-    # Non-execution stage — simple reenter
+    # Non-execution stage — simple reenter with optional warnings
+    warnings: list[str] = []
+    if stage in STAGES - {"feasibility"}:
+        # Collect non-blocking gate warnings for reenter scenarios
+        warn_errors: list[str] = []
+        validate_external_project_controls(task_dir, repo_root, state, warn_errors)
+        validate_ownership_policy_controls(task_dir, repo_root, state, warn_errors)
+        warnings.extend(warn_errors)
+
     _route_result(
         stage,
         "reenter",
         f"当前 stage={stage}, status={stage_status}",
         stage=stage,
         stage_status=stage_status,
+        warnings=warnings if warnings else None,
     )
     return 0
 

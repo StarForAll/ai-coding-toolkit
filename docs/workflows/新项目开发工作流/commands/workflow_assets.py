@@ -30,7 +30,7 @@ LEGACY_CODEX_PATCH_BASELINE_SKILLS = ["start", "finish-work"]
 PATCH_BASELINE_SHARED_DOCS = ["workflow.md"]
 OVERLAY_BASELINE_COMMANDS = ["brainstorm", "check"]
 OPTIONAL_DISABLED_BASELINE_COMMANDS = ["parallel"]
-ADDED_COMMANDS = ["feasibility", "design", "plan", "test-first", "project-audit", "review-gate", "delivery"]
+ADDED_COMMANDS = ["feasibility", "design", "plan", "test-first", "project-audit", "review-gate", "delivery", "record-session"]
 DISTRIBUTED_COMMANDS = [
     "feasibility",
     "brainstorm",
@@ -51,6 +51,8 @@ HELPER_SCRIPTS = [
     "delivery-control-validate.py",
     "ownership-proof-validate.py",
     "source-watermark-guard.py",
+    "patch-workflow-phase.py",
+    "patch-inject-workflow-state.py",
 ]
 RETIRED_HELPER_SCRIPTS = [
     "record-session-helper.py",
