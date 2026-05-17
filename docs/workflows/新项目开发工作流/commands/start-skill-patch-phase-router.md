@@ -1,3 +1,11 @@
+<!-- start-skill-phase-router-step-replacement -->
+
+**⚠️ 强门禁模式下 Steps 1-4 替换说明**：本补丁内容替换 SKILL.md 正文中的旧 Step 1（Load Current Context）、Step 2（Load the Phase Index）、Step 3（Decide Where You Are）和 Step 4（Load the Specific Step）。在嵌入安装时，安装器必须将 SKILL.md 中从 "## Step 1: Load Current Context" 到 "## Step 4: Load the Specific Step" 结束的整个段落替换为下方 "### Routing" 和 "### Implementation Entry" 中的新路由逻辑。
+
+旧 Step 3 中按 `status=planning` / `status=in_progress` 路由的方式已废弃。在强门禁模型下，路由基于 `workflow-state.json` 的 `stage` 字段，由 `workflow-state.py route` 命令计算。
+
+---
+
 ## Workflow Phase Router Patch `[AI]`
 
 When this Codex entry skill is used in a target project that has installed `docs/workflows/新项目开发工作流`, treat it as the workflow Phase Router, not as the original generic Trellis task workflow.

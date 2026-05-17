@@ -1,3 +1,15 @@
+<!-- finish-work-strong-gate-step-replacement -->
+
+**⚠️ 强门禁模式下 Step 3/4 替换说明**：本补丁内容替换 SKILL.md 正文中的旧 Step 3（Archive task(s)）和 Step 4（Record session journal）。在嵌入安装时，安装器必须将 SKILL.md 中从 "## Step 3: Archive task(s)" 到 "## Step 4: Record session journal" 结束的整个段落替换为以下内容：
+
+> **Step 3**: 确认 `finish-work-checklist.md` 已落盘 → 进入 delivery 阶段
+>
+> archive 和 add_session 移至 `record-session` 阶段执行。finish-work 在强门禁模式下**不执行** `task.py archive` 或 `add_session.py`。
+
+收尾链路为：**finish-work → delivery → record-session**。`finish-work` 只负责提交检查清单与收尾证据；`delivery` 负责验收、交付物与所有权证明；`record-session` 才执行 `task.py archive` + `add_session.py`。
+
+---
+
 ### 1. Code Quality
 
 <!-- finish-work-projectization-patch -->

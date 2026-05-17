@@ -1035,27 +1035,42 @@ def inject_workflow_phase_index_patch(src: Path, root: Path, *, dry_run: bool, p
         return False
 
     phase_index_start = patch_text.find(phase_index_marker)
-    # Find next --- or end of file as boundary
-    next_section = patch_text.find("\n---\n", phase_index_start)
-    if next_section == -1:
+    # Find the second --- after the marker (first separates Phase Index from
+    # Customizing Trellis; second separates from Strong-Gate Breadcrumb Blocks).
+    # We need both sections to replace the old Phase Index + old Customizing Trellis.
+    first_sep = patch_text.find("\n---\n", phase_index_start)
+    if first_sep == -1:
         phase_index_section = patch_text[phase_index_start:]
     else:
-        phase_index_section = patch_text[phase_index_start:next_section]
+        second_sep = patch_text.find("\n---\n", first_sep + 1)
+        if second_sep == -1:
+            phase_index_section = patch_text[phase_index_start:]
+        else:
+            phase_index_section = patch_text[phase_index_start:second_sep]
 
     content = target_path.read_text(encoding="utf-8")
     if phase_index_marker in content:
         ok("[Shared] workflow.md Phase Index 强门禁补丁已存在")
         return False
 
-    # Find baseline Phase Index block: from "## Phase Index" to "## Customizing Trellis"
-    # (removes old Phase 1/2/3 content as well)
+    # Find baseline Phase Index block: from "## Phase Index" to "## Strong-Gate Breadcrumb Blocks"
+    # (removes old Phase 1/2/3 content and old Customizing Trellis section)
     phase_index_idx = content.find(_BASELINE_PHASE_INDEX_START)
     if phase_index_idx == -1:
         warn("[Shared] workflow.md 中未找到 ## Phase Index，跳过替换")
         return False
 
+    breadcrumb_heading = "## Strong-Gate Breadcrumb Blocks"
+    breadcrumb_idx = content.find(breadcrumb_heading, phase_index_idx)
     customizing_idx = content.find(_BASELINE_CUSTOMIZING_HEADING, phase_index_idx)
-    if customizing_idx != -1:
+
+    if breadcrumb_idx != -1:
+        # Replace from ## Phase Index to ## Strong-Gate Breadcrumb Blocks
+        # (includes replacing old Customizing Trellis section)
+        prefix = content[:phase_index_idx]
+        suffix = content[breadcrumb_idx:]
+        new_content = prefix + phase_index_section.rstrip() + "\n\n" + suffix
+    elif customizing_idx != -1:
         # Replace from ## Phase Index to ## Customizing Trellis
         prefix = content[:phase_index_idx]
         suffix = content[customizing_idx:]

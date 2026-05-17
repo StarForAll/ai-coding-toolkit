@@ -128,7 +128,7 @@ Close-out runs in three phases:
 feasibility → brainstorm → design → plan → implementation → test-first → project-audit → check → review-gate → finish-work → delivery → record-session
 ```
 
-Stage transition gates are enforced by `workflow-state.py set --stage <next>`; use `--force` to bypass for repair scenarios.
+Stage transition gates are enforced by `workflow-state.py set --stage <next>`; use `--force` to bypass for repair scenarios. `finish-work` may only transition to `delivery` — the shortcut `finish-work → record-session` is not allowed, as it would bypass the delivery gate.
 
 ### Stage Transition Quick Reference
 
@@ -142,15 +142,68 @@ All transitions follow a two-step protocol: **(A)** signal readiness by setting 
 | design → plan | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage plan --stage-status in_progress --awaiting-user-confirmation false --allowed-next implementation,test-first --transition-from design` |
 | plan → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next test-first,check,project-audit --transition-from plan` |
 | plan → test-first | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage test-first --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next implementation,check,project-audit --transition-from plan` |
-| implementation → check | code complete | `workflow-state.py set <dir> --stage check --stage-status in_progress --allowed-next review-gate,implementation` |
-| implementation → test-first | code complete | `workflow-state.py set <dir> --stage test-first --stage-status in_progress --allowed-next implementation,check,project-audit --transition-from implementation` |
-| check → review-gate | check passes | `workflow-state.py set <dir> --stage review-gate --stage-status in_progress --allowed-next finish-work,implementation` |
-| check → finish-work | check passes (no review-gate needed) | `workflow-state.py set <dir> --stage finish-work --stage-status in_progress --allowed-next delivery,record-session` |
-| review-gate → finish-work | review passes | `workflow-state.py set <dir> --stage finish-work --stage-status in_progress --allowed-next delivery,record-session` |
-| finish-work → delivery | close-out evidence complete | `workflow-state.py set <dir> --stage delivery --stage-status in_progress --allowed-next record-session` |
-| delivery → record-session | delivery accepted | `workflow-state.py set <dir> --stage record-session --stage-status in_progress --allowed-next` |
+| implementation → check | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage check --stage-status in_progress --awaiting-user-confirmation false --allowed-next review-gate,implementation` |
+| implementation → test-first | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage test-first --stage-status in_progress --awaiting-user-confirmation false --allowed-next implementation,check,project-audit --transition-from implementation` |
+| check → review-gate | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage review-gate --stage-status in_progress --awaiting-user-confirmation false --allowed-next finish-work,implementation` |
+| check → finish-work | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage finish-work --stage-status in_progress --awaiting-user-confirmation false --allowed-next delivery` |
+| review-gate → finish-work | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage finish-work --stage-status in_progress --awaiting-user-confirmation false --allowed-next delivery` |
+| finish-work → delivery | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage delivery --stage-status in_progress --awaiting-user-confirmation false --allowed-next record-session` |
+| delivery → record-session | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage record-session --stage-status in_progress --awaiting-user-confirmation false --allowed-next` |
 
 For repair scenarios, append `--force` to bypass validation gates.
+
+---
+
+## Customizing Trellis (for forks)
+
+This section is for developers who want to modify the Trellis workflow itself. All customization is done by editing this file; the scripts are parsers only.
+
+### Changing what a step means
+
+Edit the corresponding step's walkthrough body in the Phase sections above. **Critical constraint**: if you change a step's `[required · once]` marker or add a new `[required · once]` step, you MUST also add a matching enforcement line to that phase's `[workflow-state:STATUS]` tag block — otherwise the per-turn breadcrumb omits the reinforcement, and the AI silently skips the step.
+
+Under the strong-gate model, each stage has its own `[workflow-state:STATUS]` tag block. The full list of tag blocks lives in the `## Strong-Gate Breadcrumb Blocks` section below.
+
+### Changing the per-turn prompt text
+
+Directly edit the body of the corresponding `[workflow-state:STATUS]` block. After editing, restart your AI session — no script changes required.
+
+### Adding a custom status
+
+Add a new block:
+
+```
+[workflow-state:my-status]
+your per-turn prompt text
+[/workflow-state:my-status]
+```
+
+Constraints:
+- STATUS charset: `[A-Za-z0-9_-]+` (underscores and hyphens allowed, e.g. `in-review`, `blocked-by-team`)
+- A lifecycle hook must write `task.json.status` to your custom value, otherwise the tag is never read
+- Lifecycle hooks live in `task.json.hooks.after_*` and bind to one of `after_create / after_start / after_finish / after_archive`
+
+### Adding a lifecycle hook
+
+Add a `hooks` field to your `task.json`:
+
+```json
+{
+  "hooks": {
+    "after_finish": [
+      "your-script-or-command-here"
+    ]
+  }
+}
+```
+
+Supported events: `after_create / after_start / after_finish / after_archive`. Note that `after_finish` ≠ a status change (it only clears the active-task pointer); use `after_archive` for "task is done" notifications.
+
+### Full contract
+
+For the workflow state machine's runtime contract, the locations of all status writers, pseudo-statuses (`no_task` / `stale_<source_type>`), the hook reachability matrix, and other deep details, see:
+
+- `workflow-state.py --help` — runtime contract + writer table + test invariants
 
 ---
 

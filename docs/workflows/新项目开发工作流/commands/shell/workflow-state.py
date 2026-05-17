@@ -40,6 +40,14 @@ REQUIREMENTS_DIR = Path("docs/requirements")
 CUSTOMER_PRD = REQUIREMENTS_DIR / "customer-facing-prd.md"
 DEVELOPER_PRD = REQUIREMENTS_DIR / "developer-facing-prd.md"
 TASK_PRD = Path("prd.md")
+TASK_PLAN_FILE = Path("task_plan.md")
+CHECK_MD_FILE = Path("check.md")
+TASK_CREATION_CHECKLIST_FILE = Path("task_creation_checklist.md")
+DELIVERY_DIR = Path("delivery")
+DELIVERY_ARTIFACTS = (
+    DELIVERY_DIR / "acceptance.md",
+    DELIVERY_DIR / "deliverables.md",
+)
 ROOT_README = Path("README.md")
 ROOT_README_EN = Path("README.en.md")
 ASSESSMENT_FILE = Path("assessment.md")
@@ -81,7 +89,7 @@ STAGE_TRANSITIONS: dict[str, list[str]] = {
     "project-audit": ["check", "review-gate"],
     "check": ["review-gate", "implementation", "finish-work"],
     "review-gate": ["finish-work", "implementation"],
-    "finish-work": ["delivery", "record-session"],
+    "finish-work": ["delivery"],
     "delivery": ["record-session"],
     "record-session": [],
 }
@@ -318,6 +326,45 @@ def validate_state_shape(state: dict[str, Any], errors: list[str]) -> None:
                 errors.append("last_confirmed_transition.confirmed_at 必须存在且为字符串")
 
 
+def validate_plan_gate(task_dir: Path, errors: list[str]) -> None:
+    """Validate plan artifacts before entering implementation or test-first."""
+    checklist_path = task_dir / TASK_CREATION_CHECKLIST_FILE
+    if checklist_path.is_file():
+        content = checklist_path.read_text(encoding="utf-8")
+        if "`task_creation_confirmed`" in content:
+            if not re.search(r'`task_creation_confirmed`\s*[：:]\s*`?yes`?', content):
+                errors.append(
+                    "task_creation_checklist.md 存在但 task_creation_confirmed 未确认为 yes；"
+                    "不得进入执行阶段"
+                )
+        plan_path = task_dir / TASK_PLAN_FILE
+        if not plan_path.is_file():
+            errors.append(
+                "task_creation_checklist.md 存在但缺少 task_plan.md；"
+                "计划产物不完整，不得进入执行阶段"
+            )
+
+
+def validate_check_gate(task_dir: Path, errors: list[str]) -> None:
+    """Validate check.md exists before leaving check stage."""
+    check_path = task_dir / CHECK_MD_FILE
+    if not check_path.is_file():
+        errors.append("缺少 check.md；check 阶段产物未生成，不得进入 review-gate 或 finish-work")
+
+
+def validate_delivery_gate(task_dir: Path, errors: list[str]) -> None:
+    """Validate delivery artifacts before entering record-session."""
+    missing = [
+        artifact.relative_to(task_dir).as_posix()
+        for artifact in DELIVERY_ARTIFACTS
+        if not (task_dir / artifact).is_file()
+    ]
+    if missing:
+        errors.append(
+            f"缺少交付产物: {', '.join(missing)}；delivery 阶段未完成，不得进入 record-session"
+        )
+
+
 def validate_stage_transition_gates(
     task_dir: Path,
     repo_root: Path,
@@ -363,6 +410,18 @@ def validate_stage_transition_gates(
     # Stages >= design additionally require project doc boundary
     if new_stage in PROJECT_ESTIMATE_REQUIRED_STAGES:
         validate_project_doc_boundary(candidate_state, repo_root, task_dir, errors)
+
+    # Plan → implementation/test-first requires plan artifacts
+    if new_stage in EXECUTION_STAGES:
+        validate_plan_gate(task_dir, errors)
+
+    # Check → finish-work/review-gate requires check.md
+    if new_stage in {"finish-work", "review-gate"}:
+        validate_check_gate(task_dir, errors)
+
+    # Delivery → record-session requires delivery artifacts
+    if new_stage == "record-session":
+        validate_delivery_gate(task_dir, errors)
 
 
 def validate_execution_boundary(state: dict[str, Any], errors: list[str]) -> None:
