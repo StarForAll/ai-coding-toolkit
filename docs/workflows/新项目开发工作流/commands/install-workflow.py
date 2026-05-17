@@ -1135,38 +1135,40 @@ def patch_inject_workflow_state_hook(root: Path, *, dry_run: bool) -> bool:
     """Patch deployed inject-workflow-state.py to prefer workflow-state.json.stage (Issue 1)
     and strip fenced code blocks before breadcrumb parsing (Issue 7).
 
-    The deployed hook is a Trellis baseline file not managed by this workflow.
-    We patch it via text insertion at well-known anchor points.
+    Codex (.codex/) receives both Issue 1 and Issue 7 patches.
+    Claude (.claude/) receives Issue 7 patch only (Issue 1 does not apply there).
     """
-    hook_path = root / ".codex" / "hooks" / "inject-workflow-state.py"
-    if not hook_path.exists():
-        info("[Shared] inject-workflow-state.py 不存在（非 Codex 项目），跳过 hook 补丁")
-        return False
+    any_patched = False
 
-    content = hook_path.read_text(encoding="utf-8")
-    if _HOOK_PATCH_MARKER in content:
-        ok("[Shared] inject-workflow-state.py hook 补丁已存在")
-        return False
+    for hook_subpath, apply_issue1 in [
+        (".codex/hooks/inject-workflow-state.py", True),
+        (".claude/hooks/inject-workflow-state.py", False),
+    ]:
+        hook_path = root / hook_subpath
+        if not hook_path.exists():
+            continue
 
-    patched = content
+        content = hook_path.read_text(encoding="utf-8")
 
-    # ── Issue 7: strip fenced code blocks before _TAG_RE.finditer() ──
-    # Insert a re.sub line after "content = workflow.read_text(encoding="utf-8")"
-    # inside load_breadcrumbs().
-    code_block_strip_line = '    content = re.sub(r"```.*?```", "", content, flags=re.DOTALL)\n'
-    read_text_anchor = '        content = workflow.read_text(encoding="utf-8")\n'
-    if read_text_anchor in patched and code_block_strip_line not in patched:
-        insert_pos = patched.find(read_text_anchor) + len(read_text_anchor)
-        patched = patched[:insert_pos] + code_block_strip_line + patched[insert_pos:]
+        if apply_issue1 and _HOOK_PATCH_MARKER in content:
+            ok(f"[Shared] {hook_subpath} hook 补丁已存在")
+            continue
 
-    # ── Issue 1: prefer workflow-state.json.stage over task.json.status ──
-    # In get_active_task(), the function computes task_dir (a Path) and returns
-    # (task_id, status, active.source).  We insert a block that reads
-    # task_dir/workflow-state.json and overrides status with its "stage" field.
-    #
-    # Anchor: the line "    return task_id, status, active.source" at the end
-    # of the happy path in get_active_task().
-    ws_override_block = """\
+        patched = content
+
+        # ── Issue 7: strip fenced code blocks before _TAG_RE.finditer() ──
+        # Insert a re.sub line after "content = workflow.read_text(encoding="utf-8")"
+        # inside load_breadcrumbs().
+        code_block_strip_line = '        content = re.sub(r"```.*?```", "", content, flags=re.DOTALL)\n'
+        read_text_anchor = '        content = workflow.read_text(encoding="utf-8")\n'
+        if read_text_anchor in patched and code_block_strip_line not in patched:
+            insert_pos = patched.find(read_text_anchor) + len(read_text_anchor)
+            patched = patched[:insert_pos] + code_block_strip_line + patched[insert_pos:]
+
+        # ── Issue 1: prefer workflow-state.json.stage over task.json.status ──
+        # (Codex only — Claude's state resolution path does not go through this hook)
+        if apply_issue1:
+            ws_override_block = """\
     # [workflow-embed-patch:prefer-workflow-state-json]
     # Prefer workflow-state.json.stage over task.json.status for strong-gate projects
     _ws_source = None
@@ -1181,34 +1183,31 @@ def patch_inject_workflow_state_hook(root: Path, *, dry_run: bool) -> bool:
         except (json.JSONDecodeError, OSError):
             pass
 """
-    return_anchor = "    return task_id, status, active.source\n"
-    return_replacement = "    return task_id, status, _ws_source or active.source\n"
-    if return_anchor in patched and _HOOK_PATCH_MARKER not in patched:
-        # Insert before the return statement — but only the one inside
-        # get_active_task(), not any other function.
-        # Strategy: find the function definition, then find the return
-        # that belongs to it.
-        func_def = "def get_active_task("
-        func_start = patched.find(func_def)
-        if func_start != -1:
-            return_pos = patched.find(return_anchor, func_start)
-            # Make sure this return is in the same function (before next def)
-            next_def = patched.find("\ndef ", func_start + len(func_def))
-            if next_def == -1 or return_pos < next_def:
-                # Replace return line with version that uses _ws_source
-                patched = patched[:return_pos] + ws_override_block + return_replacement + patched[return_pos + len(return_anchor):]
+            return_anchor = "    return task_id, status, active.source\n"
+            return_replacement = "    return task_id, status, _ws_source or active.source\n"
+            if return_anchor in patched and _HOOK_PATCH_MARKER not in patched:
+                func_def = "def get_active_task("
+                func_start = patched.find(func_def)
+                if func_start != -1:
+                    return_pos = patched.find(return_anchor, func_start)
+                    next_def = patched.find("\ndef ", func_start + len(func_def))
+                    if next_def == -1 or return_pos < next_def:
+                        patched = patched[:return_pos] + ws_override_block + return_replacement + patched[return_pos + len(return_anchor):]
 
-    if patched == content:
-        warn("[Shared] inject-workflow-state.py 补丁未命中目标代码，跳过")
-        return False
+        if patched == content:
+            warn(f"[Shared] {hook_subpath} 补丁未命中目标代码，跳过")
+            continue
 
-    if not dry_run:
-        hook_path.write_text(patched, encoding="utf-8")
-    if dry_run:
-        info("[Shared] 将补丁 inject-workflow-state.py hook（优先 workflow-state.json.stage + 移除代码块示例）")
-    else:
-        ok("[Shared] inject-workflow-state.py hook 已补丁（优先 workflow-state.json.stage + 移除代码块示例）")
-    return True
+        if not dry_run:
+            hook_path.write_text(patched, encoding="utf-8")
+        label = "优先 workflow-state.json.stage + 移除代码块示例" if apply_issue1 else "移除代码块示例"
+        if dry_run:
+            info(f"[Shared] 将补丁 {hook_subpath} hook（{label}）")
+        else:
+            ok(f"[Shared] {hook_subpath} hook 已补丁（{label}）")
+        any_patched = True
+
+    return any_patched
 
 
 # ── Issue 2: cleanup legacy three-phase breadcrumb blocks ──
