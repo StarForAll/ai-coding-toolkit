@@ -1,0 +1,8 @@
+{"file": "docs/workflows/新项目开发工作流/commands/workflow-patch-projectization.md", "reason": "检查缺陷1 — 确认所有进入 execution stage 的转换行均有 --execution-authorized true"}
+{"file": "docs/workflows/新项目开发工作流/commands/install-workflow.py", "reason": "检查缺陷6 — 确认 NL 路由表拆分了记录/保存进度路由到 record-session"}
+{"file": "docs/workflows/新项目开发工作流/commands/shell/workflow-state.py", "reason": "检查缺陷3/4/5 — validate_plan_gate 调用 plan-validate.py; validate_check_gate 有内容校验; DELIVERY_ARTIFACTS 含 transfer-checklist; 外包 profile 有额外门禁"}
+{"file": "docs/workflows/新项目开发工作流/commands/shell/plan-validate.py", "reason": "检查缺陷3 — 确认 plan-validate.py 可被 subprocess 正确调用"}
+{"file": "docs/workflows/新项目开发工作流/commands/shell/patch-workflow-phase.py", "reason": "检查缺陷7 — 确认 get_step() 返回空字符串而非 None，stderr 有提示"}
+{"file": "docs/workflows/新项目开发工作流/commands/finish-work-patch-projectization.md", "reason": "检查缺陷5 — 确认 Step 2 误导语言修正指令存在"}
+{"file": "docs/workflows/新项目开发工作流/commands/shell/test_workflow_state.py", "reason": "运行 workflow-state.py 的现有测试 — 确认扩展门禁后不破坏已有测试"}
+{"file": "docs/workflows/新项目开发工作流/commands/test_workflow_installers.py", "reason": "运行安装器测试 — 确认 NL 路由修改和补丁脚本注册不破坏安装器测试"}

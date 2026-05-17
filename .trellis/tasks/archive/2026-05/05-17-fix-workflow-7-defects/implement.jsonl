@@ -1,0 +1,12 @@
+{"file": ".trellis/spec/templates/index.md", "reason": "实现模板规范 — 确认 jsonl 和 spec 文件格式约定"}
+{"file": "docs/workflows/新项目开发工作流/commands/workflow-patch-projectization.md", "reason": "缺陷1主文件 — Stage Transition Quick Reference 表需要加 --execution-authorized true"}
+{"file": "docs/workflows/新项目开发工作流/commands/install-workflow.py", "reason": "缺陷6主文件 — NL 路由表 _NL_ROUTING_SECTION 需要拆分 record-session 和 finish-work 的路由行"}
+{"file": "docs/workflows/新项目开发工作流/commands/shell/workflow-state.py", "reason": "缺陷3/4/5主文件 — validate_plan_gate/validate_check_gate/validate_delivery_gate/DELIVERY_ARTIFACTS 需要扩展"}
+{"file": "docs/workflows/新项目开发工作流/commands/shell/plan-validate.py", "reason": "缺陷3参考 — plan-validate.py 是 validate_plan_gate 需要委托调用的全面校验脚本"}
+{"file": "docs/workflows/新项目开发工作流/commands/shell/patch-workflow-phase.py", "reason": "缺陷7主文件 — get_step() 返回 None 需改为空字符串+stderr提示"}
+{"file": "docs/workflows/新项目开发工作流/commands/finish-work-patch-projectization.md", "reason": "缺陷5主文件 — 需要增加 Step 2 误导语言修正指令"}
+{"file": "docs/workflows/新项目开发工作流/commands/start-patch-phase-router.md", "reason": "缺陷2参考 — 现有的 start-skill 丁模式，作为新 session-start 补丁的设计参考"}
+{"file": "docs/workflows/新项目开发工作流/commands/start-skill-patch-phase-router.md", "reason": "缺陷2参考 — 现有的 start-skill 补丁模式，作为新 session-start 补丁的设计参考"}
+{"file": "docs/workflows/新项目开发工作流/commands/workflow_assets.py", "reason": "安装器资产定义 — 新补丁脚本需要注册到 HELPER_SCRIPTS 等资产列表中"}
+{"file": "docs/workflows/新项目开发工作流/阶段状态机与强门禁协议.md", "reason": "强门禁协议规范参考 — 确认门禁扩展的语义一致性"}
+{"file": "docs/workflows/新项目开发工作流/命令映射.md", "reason": "命令映射参考 — 确认路由修改与命令映射的语义一致性"}
