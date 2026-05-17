@@ -1708,3 +1708,36 @@ P1-P6 + 额外修复：record-session 归类到 OVERLAY_BASELINE_COMMANDS/DISTRI
 ### Next Steps
 
 - None - task complete
+
+
+## Session 237: 修复新项目开发工作流嵌入后状态机与平台残留问题
+
+**Date**: 2026-05-17
+**Task**: 修复新项目开发工作流嵌入后状态机与平台残留问题
+**Branch**: `main`
+
+### Summary
+
+修复 workflow-state 阶段切换门禁、清理嵌入后旧三阶段合同残留，并为 degraded fallback 与 OpenCode session-utils 补丁补齐安装器/升级器与回归测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b7ccf62` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

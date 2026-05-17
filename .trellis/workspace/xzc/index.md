@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 236
+- **Total Sessions**: 237
 - **Last Active**: 2026-05-17
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~1710 | Active |
+| `journal-5.md` | ~1743 | Active |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 237 | 2026-05-17 | 修复新项目开发工作流嵌入后状态机与平台残留问题 | `b7ccf62` | `main` |
 | 236 | 2026-05-17 | 审计并修复强门禁5项一致性问题 | `d86bd00` | `main` |
 | 235 | 2026-05-17 | 修复工作流嵌入6项一致性问题 | `0d28f04` | `main` |
 | 234 | 2026-05-17 | 修复工作流强门禁8项一致性问题 | HEAD | `main` |
