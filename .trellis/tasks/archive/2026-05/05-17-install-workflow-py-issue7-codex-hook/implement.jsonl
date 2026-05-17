@@ -1,0 +1,1 @@
+{"file": "docs/workflows/新项目开发工作流/commands/install-workflow.py", "reason": "唯一需修改的文件：Bug 1 修复第 1156 行缩进 4→8 空格，Bug 2 扩展 patch_inject_workflow_state_hook 对 .claude/ hook 也应用 Issue 7 补丁"}
