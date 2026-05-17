@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/scripts/python-conventions.md", "reason": "Python 编码规范，确保 workflow-state.py 和 install-workflow.py 修改符合项目风格"}
+{"file": ".trellis/spec/scripts/workflow-installer-upgrade-contracts.md", "reason": "install-workflow.py 和 workflow_assets.py 修改必须遵守的安装/升级合约"}
+{"file": ".trellis/spec/scripts/workflow-command-doc-contracts.md", "reason": "workflow.md 命令文档模板修改合约"}
+{"file": ".trellis/spec/skills/workflow-audit.md", "reason": "工作流审计 skill 规范，Issue 1/2/8 涉及的嵌入补丁逻辑需与此一致"}
