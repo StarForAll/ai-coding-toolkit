@@ -89,6 +89,19 @@ def err(m): print(f"{R}❌ {m}{N}")
 def info(m): print(f"{C}ℹ️  {m}{N}")
 
 
+def _remove_old_status_routing(content: str) -> str:
+    """Remove old Step 3 (status=planning/in_progress routing) from baseline continue.md."""
+    start_idx = content.find(_STATUS_ROUTING_MARKER)
+    if start_idx == -1:
+        return content
+    end_idx = content.find(_STATUS_ROUTING_END_MARKER)
+    if end_idx == -1 or end_idx <= start_idx:
+        return content
+    prefix = content[:start_idx]
+    suffix = content[end_idx:]
+    return prefix + suffix
+
+
 # ── 常量 ──
 _CLI_DIRS = CLI_DIRS
 _CLI_ALT_DIRS = CLI_ALT_DIRS
@@ -97,9 +110,15 @@ _ALL_CLI_TYPES = ALL_CLI_TYPES
 # 当前 workflow 会增强 fresh baseline `continue.md` / `finish-work.md` / `record-session.md`；
 # legacy `start.md` 仅在旧目标项目兼容路径中处理。
 _PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
+_STATUS_ROUTING_MARKER = "## Step 3: Decide Where You Are"
+_STATUS_ROUTING_END_MARKER = "## Step 4: Load the Specific Step"
 _FINISH_WORK_MARKER = "<!-- finish-work-projectization-patch -->"
 _FINISH_WORK_START_HEADING = "### 1. Code Quality"
-_FINISH_WORK_END_HEADING = "### 1.5. Test Coverage"
+_FINISH_WORK_END_HEADING = "### 2. close-out"
+# For baseline finish-work.md (Trellis 0.5.16), Step 3/4 headings that
+# the strong-gate patch must also replace.
+_FINISH_WORK_STEP3_HEADING = "## Step 3: Archive task(s)"
+_FINISH_WORK_STEP4_END_HEADING = "## Reference"
 _CODEX_START_SKILL_MARKER = "## Workflow Phase Router Patch `[AI]`"
 _WORKFLOW_PATCH_MARKER = "<!-- workflow-projectization-patch -->"
 _WORKFLOW_START_HEADING = "## Development Process"
@@ -111,6 +130,7 @@ _BASELINE_NO_TASK_START = "[workflow-state:no_task]"
 _BASELINE_NO_TASK_END = "[/workflow-state:no_task]"
 _BASELINE_PHASE_INDEX_START = "## Phase Index"
 _BASELINE_PHASE_1_HEADING = "### Phase 1: Plan"
+_BASELINE_CUSTOMIZING_HEADING = "## Customizing Trellis"
 _TODO_FILE_NAME = "todo.txt"
 _TODO_DEFAULT_LINE = "文档内容需要和实际当前的代码同步\n"
 _EMBED_ATTEMPT_FILE_NAME = "workflow-embed-attempt.json"
@@ -285,6 +305,11 @@ def collect_workflow_embed_traces(src: Path, root: Path, cli_types: list[str]) -
         for name in OVERLAY_BASELINE_COMMANDS
         if (src / f"{name}.md").exists()
     }
+    expected_added_content = {
+        name: prepare_command_content(src / f"{name}.md")
+        for name in ADDED_COMMANDS
+        if (src / f"{name}.md").exists()
+    }
 
     for cli_type in cli_types:
         if cli_type in ("claude", "opencode"):
@@ -295,9 +320,9 @@ def collect_workflow_embed_traces(src: Path, root: Path, cli_types: list[str]) -
             if backup_dir.is_dir():
                 _append_trace(traces, f"{cli_type}-backup-dir", backup_dir, root)
 
-            for name in ADDED_COMMANDS:
+            for name, expected in expected_added_content.items():
                 path = commands_dir / f"{name}.md"
-                if path.exists():
+                if _matches_expected_content(path, expected):
                     _append_trace(traces, f"{cli_type}-added-command", path, root)
 
             for name, expected in expected_overlay_content.items():
@@ -331,9 +356,9 @@ def collect_workflow_embed_traces(src: Path, root: Path, cli_types: list[str]) -
                 if backup_dir.is_dir():
                     _append_trace(traces, "codex-skill-backup-dir", backup_dir, root)
 
-                for name in ADDED_COMMANDS:
+                for name, expected in expected_added_content.items():
                     path = skills_dir / name / "SKILL.md"
-                    if path.exists():
+                    if _matches_expected_content(path, expected):
                         _append_trace(traces, "codex-added-skill", path, root)
 
                 for name, expected in expected_overlay_skills.items():
@@ -768,14 +793,23 @@ def disable_parallel_skill(src: Path, skills_dir: Path, *, dry_run: bool, cli_la
 
 
 def build_finish_work_content(content: str, patch_text: str) -> str | None:
-    """将 finish-work 的默认 Code Quality 区块替换为项目化补丁。"""
+    """将 finish-work 的默认 Code Quality 区块及 Step 3/4 替换为项目化补丁。"""
     if _FINISH_WORK_MARKER in content:
         return content
 
+    # Try extended replacement: from "### 1. Code Quality" through end of Step 4
     start_idx = content.find(_FINISH_WORK_START_HEADING)
-    end_idx = content.find(_FINISH_WORK_END_HEADING)
+    end_idx = content.find(_FINISH_WORK_STEP4_END_HEADING)
     if start_idx == -1:
         return content.rstrip() + "\n\n---\n\n" + patch_text.rstrip() + "\n"
+    if end_idx != -1 and end_idx > start_idx:
+        prefix = content[:start_idx]
+        suffix = content[end_idx:]
+        return prefix + patch_text.rstrip() + "\n\n" + suffix
+
+    # Fallback: old narrow replacement (### 1. Code Quality to ### 1.5. Test Coverage)
+    old_end_heading = "### 1.5. Test Coverage"
+    end_idx = content.find(old_end_heading)
     if end_idx == -1 or end_idx <= start_idx:
         next_heading_idx = content.find("\n### ", start_idx + len(_FINISH_WORK_START_HEADING))
         if next_heading_idx == -1:
@@ -996,20 +1030,28 @@ def inject_workflow_phase_index_patch(src: Path, root: Path, *, dry_run: bool, p
         ok("[Shared] workflow.md Phase Index 强门禁补丁已存在")
         return False
 
-    # Find baseline Phase Index block: from "## Phase Index" to "### Phase 1: Plan"
+    # Find baseline Phase Index block: from "## Phase Index" to "## Customizing Trellis"
+    # (removes old Phase 1/2/3 content as well)
     phase_index_idx = content.find(_BASELINE_PHASE_INDEX_START)
     if phase_index_idx == -1:
         warn("[Shared] workflow.md 中未找到 ## Phase Index，跳过替换")
         return False
 
-    phase1_idx = content.find(_BASELINE_PHASE_1_HEADING, phase_index_idx)
-    if phase1_idx == -1:
-        warn("[Shared] workflow.md 中未找到 ### Phase 1: Plan，跳过替换")
-        return False
-
-    prefix = content[:phase_index_idx]
-    suffix = content[phase1_idx:]
-    new_content = prefix + phase_index_section.rstrip() + "\n\n" + suffix
+    customizing_idx = content.find(_BASELINE_CUSTOMIZING_HEADING, phase_index_idx)
+    if customizing_idx != -1:
+        # Replace from ## Phase Index to ## Customizing Trellis
+        prefix = content[:phase_index_idx]
+        suffix = content[customizing_idx:]
+        new_content = prefix + phase_index_section.rstrip() + "\n\n" + suffix
+    else:
+        # Fallback: old behavior — only replace up to ### Phase 1: Plan
+        phase1_idx = content.find(_BASELINE_PHASE_1_HEADING, phase_index_idx)
+        if phase1_idx == -1:
+            warn("[Shared] workflow.md 中未找到 ### Phase 1: Plan 且无 ## Customizing Trellis，跳过替换")
+            return False
+        prefix = content[:phase_index_idx]
+        suffix = content[phase1_idx:]
+        new_content = prefix + phase_index_section.rstrip() + "\n\n" + suffix
 
     if not dry_run:
         target_path.write_text(new_content, encoding="utf-8")
@@ -1125,6 +1167,43 @@ def inject_workflow_breadcrumb_patch(src: Path, root: Path, *, dry_run: bool, pr
     else:
         ok("[Shared] workflow.md 强门禁 breadcrumb 补丁已注入")
     return True
+
+
+def _apply_patch_workflow_phase(src: Path, root: Path, *, dry_run: bool) -> bool:
+    """Apply patch-workflow-phase.py to the deployed workflow_phase.py helper."""
+    import importlib.util
+
+    dst_scripts = root / ".trellis" / "scripts" / "workflow"
+    target_wf_phase = dst_scripts / "workflow_phase.py"
+    patch_script = src / "shell" / "patch-workflow-phase.py"
+
+    if not target_wf_phase.exists():
+        info("[Shared] workflow_phase.py 不存在，跳过强门禁补丁")
+        return False
+
+    if not patch_script.exists():
+        warn("[Shared] patch-workflow-phase.py 不存在，跳过强门禁补丁")
+        return False
+
+    if dry_run:
+        info(f"[Shared] 将对 workflow_phase.py 应用强门禁补丁 → {target_wf_phase}")
+        return True
+
+    spec = importlib.util.spec_from_file_location("patch_workflow_phase", patch_script)
+    if spec is None or spec.loader is None:
+        warn("[Shared] patch-workflow-phase.py 加载失败")
+        return False
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    if hasattr(module, "patch_workflow_phase"):
+        result = module.patch_workflow_phase(target_wf_phase)
+        if result:
+            ok("[Shared] workflow_phase.py 强门禁补丁已应用")
+        return result
+
+    warn("[Shared] patch-workflow-phase.py 缺少 patch_workflow_phase 函数")
+    return False
 
 
 # ── Issue 1+7: patch deployed inject-workflow-state.py hook ──
@@ -1426,6 +1505,8 @@ def deploy_claude(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAUL
     if entry_command is not None:
         content = entry_command.read_text(encoding="utf-8")
         if _PHASE_ROUTER_MARKER not in content:
+            # Remove old Step 3 (status-based routing) before injecting Phase Router
+            content = _remove_old_status_routing(content)
             patch = src / "start-patch-phase-router.md"
             if patch.exists():
                 patch_text = prepare_command_content(patch)
@@ -1519,6 +1600,8 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool, *, profile: str = DEFA
     if entry_command is not None:
         content = entry_command.read_text(encoding="utf-8")
         if _PHASE_ROUTER_MARKER not in content:
+            # Remove old Step 3 (status-based routing) before injecting Phase Router
+            content = _remove_old_status_routing(content)
             patch = src / "start-patch-phase-router.md"
             if patch.exists():
                 patch_text = prepare_command_content(patch)
@@ -2076,6 +2159,9 @@ def main() -> int:
 
             # Issue 1+7: patch deployed inject-workflow-state.py hook
             patch_inject_workflow_state_hook(root, dry_run=args.dry_run)
+
+            # Patch workflow_phase.py with strong-gate rejection
+            _apply_patch_workflow_phase(src, root, dry_run=args.dry_run)
         print()
 
         if not any(t and t["errors"] for t in total.values()):

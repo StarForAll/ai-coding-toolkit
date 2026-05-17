@@ -5,6 +5,8 @@
 收到 `/trellis:continue` 后，**只做当前已确认阶段的识别与重入**，不做跨阶段自动推进。legacy `/trellis:start` 仅用于旧目标项目兼容。
 采用强门禁模型：每个阶段完成后必须先进入 `awaiting_user_confirmation`，用户确认后才能切到下一阶段。
 
+**⚠️ 旧 status 路由已废弃**：不再使用 `status=planning` / `status=in_progress` 做 Step 3 路由。强门禁模式下，路由依据 `workflow-state.json` 的 `stage` 字段，由 `workflow-state.py route` 命令计算。
+
 ### 执行步骤
 
 1. 获取上下文：

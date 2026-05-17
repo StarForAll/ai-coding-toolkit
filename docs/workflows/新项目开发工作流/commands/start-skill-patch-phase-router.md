@@ -2,6 +2,8 @@
 
 When this Codex entry skill is used in a target project that has installed `docs/workflows/新项目开发工作流`, treat it as the workflow Phase Router, not as the original generic Trellis task workflow.
 
+**⚠️ Old status routing is deprecated**: Do not use `status=planning` / `status=in_progress` for Step 3 routing. Under the strong-gate model, routing is based on the `stage` field from `workflow-state.json`, computed by the `workflow-state.py route` command.
+
 ### Hard Boundary
 
 - Do not auto-advance across workflow stages.

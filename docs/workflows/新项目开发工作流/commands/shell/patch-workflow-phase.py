@@ -19,16 +19,16 @@ PATCH_BLOCK = '''
     # refuse to return old #### X.Y step matches and direct to route instead.
     try:
         import json as _json
-        _ws_path = task_dir / "workflow-state.json" if 'task_dir' in dir() else None
-        if _ws_path is None:
-            for _p in Path(__file__).resolve().parents:
-                _cand = _p / ".trellis" / "tasks"
-                if _cand.is_dir():
-                    for _td in _cand.iterdir():
-                        if _td.is_dir() and (_td / "workflow-state.json").is_file():
-                            _ws_path = _td / "workflow-state.json"
-                            break
-                    break
+        _ws_path = None
+        # Walk up from this script to find a task dir containing workflow-state.json
+        for _p in Path(__file__).resolve().parents:
+            _cand = _p / ".trellis" / "tasks"
+            if _cand.is_dir():
+                for _td in _cand.iterdir():
+                    if _td.is_dir() and (_td / "workflow-state.json").is_file():
+                        _ws_path = _td / "workflow-state.json"
+                        break
+                break
         if _ws_path is not None and _ws_path.is_file():
             _ws_data = _json.loads(_ws_path.read_text(encoding="utf-8"))
             _stage = _ws_data.get("stage", "")

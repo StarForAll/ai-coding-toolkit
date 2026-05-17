@@ -28,9 +28,9 @@ LEGACY_PATCH_BASELINE_COMMANDS = ["start", "finish-work", "record-session"]
 CODEX_PATCH_BASELINE_SKILLS = ["trellis-continue", "trellis-finish-work"]
 LEGACY_CODEX_PATCH_BASELINE_SKILLS = ["start", "finish-work"]
 PATCH_BASELINE_SHARED_DOCS = ["workflow.md"]
-OVERLAY_BASELINE_COMMANDS = ["brainstorm", "check"]
+OVERLAY_BASELINE_COMMANDS = ["brainstorm", "check", "record-session"]
 OPTIONAL_DISABLED_BASELINE_COMMANDS = ["parallel"]
-ADDED_COMMANDS = ["feasibility", "design", "plan", "test-first", "project-audit", "review-gate", "delivery", "record-session"]
+ADDED_COMMANDS = ["feasibility", "design", "plan", "test-first", "project-audit", "review-gate", "delivery"]
 DISTRIBUTED_COMMANDS = [
     "feasibility",
     "brainstorm",
@@ -41,6 +41,7 @@ DISTRIBUTED_COMMANDS = [
     "check",
     "review-gate",
     "delivery",
+    "record-session",
 ]
 HELPER_SCRIPTS = [
     "feasibility-check.py",
@@ -65,7 +66,6 @@ CODEX_SHARED_SKILL_CLEANUP_NAMES = [
     *DISTRIBUTED_COMMANDS,
     *CODEX_PATCH_BASELINE_SKILLS,
     *LEGACY_CODEX_PATCH_BASELINE_SKILLS,
-    "record-session",
 ]
 
 _TRELLIS_VERSION_RE = re.compile(

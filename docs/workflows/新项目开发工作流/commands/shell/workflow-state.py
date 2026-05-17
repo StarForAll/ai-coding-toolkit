@@ -334,7 +334,7 @@ def validate_stage_transition_gates(
     # Stages >= brainstorm require external project controls and ownership policy
     if new_stage in STAGES - {"feasibility"}:
         gate_errors: list[str] = []
-        validate_external_project_controls(task_dir, repo_root, state, gate_errors)
+        validate_external_project_controls(task_dir, repo_root, state, gate_errors, target_stage=new_stage)
         validate_ownership_policy_controls(task_dir, repo_root, state, gate_errors)
 
         # For brainstorm stage, downgrade missing assessment errors to warnings
@@ -633,8 +633,10 @@ def validate_external_project_controls(
     repo_root: Path,
     state: dict[str, Any],
     errors: list[str],
+    *,
+    target_stage: str | None = None,
 ) -> None:
-    stage = state.get("stage")
+    stage = target_stage if target_stage is not None else state.get("stage")
     assessment_file = find_assessment_file(task_dir, repo_root)
     if assessment_file is None:
         errors.append("缺少 assessment.md；任何项目都必须先经过 feasibility 并完成项目类别判断")

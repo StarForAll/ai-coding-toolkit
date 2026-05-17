@@ -515,7 +515,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         record_data = json.loads(record.read_text(encoding="utf-8"))
         self.assertIn("brainstorm", record_data["commands"])
         self.assertIn("project-audit", record_data["commands"])
-        self.assertEqual(record_data["overlay_commands"], ["brainstorm", "check"])
+        self.assertEqual(record_data["overlay_commands"], ["brainstorm", "check", "record-session"])
         self.assertEqual(record_data["disabled_commands"], ["parallel"])
         self.assertEqual(
             record_data["patched_baseline_commands"],
@@ -1314,8 +1314,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertFalse((fixture / ".trellis" / ATTEMPT_RECORD_NAME).exists())
         self.assertFalse((fixture / ".agents" / "skills" / "review-gate").exists())
         self.assertNotIn("workflow-nl-routing-start", (fixture / "AGENTS.md").read_text(encoding="utf-8"))
-        self.assertIn("[codex] 命令: 9/9, 补丁: 3, agents: 0, 脚本: 0, 手动基线校验: 2".lower(), result.stdout.lower())
-        self.assertNotIn("[codex] 命令: 9/9, 补丁: 4".lower(), result.stdout.lower())
+        self.assertIn("[codex] 命令: 10/10, 补丁: 3, agents: 0, 脚本: 0, 手动基线校验: 2".lower(), result.stdout.lower())
+        self.assertNotIn("[codex] 命令: 10/10, 补丁: 4".lower(), result.stdout.lower())
 
     def test_install_dry_run_does_not_migrate_legacy_agents(self) -> None:
         """--dry-run must NOT perform actual file renames on disk."""
@@ -2095,7 +2095,9 @@ class WorkflowInstallerTests(unittest.TestCase):
             env=self.latest_env_for(fixture),
         )
 
-        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        # record-session is now a DISTRIBUTED_COMMAND; removing it is detected as drift
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("record-session", result.stdout + result.stderr)
 
     def test_upgrade_merge_restores_drift_and_followup_check_passes(self) -> None:
         fixture = self.create_fixture()

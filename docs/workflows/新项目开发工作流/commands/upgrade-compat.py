@@ -124,6 +124,8 @@ _FINISH_WORK_MARKER = "<!-- finish-work-projectization-patch -->"
 _CODEX_START_SKILL_MARKER = "## Workflow Phase Router Patch `[AI]`"
 _FINISH_WORK_START_HEADING = "### 1. Code Quality"
 _FINISH_WORK_END_HEADING = "### 1.5. Test Coverage"
+_FINISH_WORK_STEP3_HEADING = "## Step 3: Archive task(s)"
+_FINISH_WORK_STEP4_END_HEADING = "## Reference"
 _PARALLEL_DISABLED_MARKER = "<!-- workflow-parallel-disabled -->"
 _WORKFLOW_PATCH_MARKER = "<!-- workflow-projectization-patch -->"
 _WORKFLOW_START_HEADING = "## Development Process"
@@ -240,10 +242,18 @@ def build_finish_work_content(content: str, patch_text: str) -> str | None:
     if _FINISH_WORK_MARKER in content:
         return content
 
+    # Try extended replacement: from "### 1. Code Quality" through end of Step 4
     start_idx = content.find(_FINISH_WORK_START_HEADING)
-    end_idx = content.find(_FINISH_WORK_END_HEADING)
+    end_idx = content.find(_FINISH_WORK_STEP4_END_HEADING)
     if start_idx == -1:
         return content.rstrip() + "\n\n---\n\n" + patch_text.rstrip() + "\n"
+    if end_idx != -1 and end_idx > start_idx:
+        prefix = content[:start_idx]
+        suffix = content[end_idx:]
+        return prefix + patch_text.rstrip() + "\n\n" + suffix
+
+    # Fallback: old narrow replacement
+    end_idx = content.find(_FINISH_WORK_END_HEADING)
     if end_idx == -1 or end_idx <= start_idx:
         next_heading_idx = content.find("\n### ", start_idx + len(_FINISH_WORK_START_HEADING))
         if next_heading_idx == -1:
@@ -584,6 +594,75 @@ def detect_conflicts_workflow_doc(src: Path, root: Path, *, profile: str = DEFAU
 
     if conflicts == 0:
         ok("[Shared] .trellis/workflow.md: 一致性检查通过")
+    return conflicts
+
+
+def _apply_patch_workflow_phase_upgrade(src: Path, dst_scripts: Path) -> bool:
+    """Apply patch-workflow-phase.py to the deployed workflow_phase.py helper (upgrade mode)."""
+    import importlib.util
+
+    target_wf_phase = dst_scripts / "workflow_phase.py"
+    patch_script = src / "shell" / "patch-workflow-phase.py"
+
+    if not target_wf_phase.exists():
+        info("[Shared] workflow_phase.py 不存在，跳过强门禁补丁")
+        return False
+
+    if not patch_script.exists():
+        warn("[Shared] patch-workflow-phase.py 不存在，跳过强门禁补丁")
+        return False
+
+    spec = importlib.util.spec_from_file_location("patch_workflow_phase", patch_script)
+    if spec is None or spec.loader is None:
+        warn("[Shared] patch-workflow-phase.py 加载失败")
+        return False
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    if hasattr(module, "patch_workflow_phase"):
+        result = module.patch_workflow_phase(target_wf_phase)
+        if result:
+            ok("[Shared] workflow_phase.py 强门禁补丁已应用")
+        return result
+
+    warn("[Shared] patch-workflow-phase.py 缺少 patch_workflow_phase 函数")
+    return False
+
+
+def detect_conflicts_added_commands_missing(
+    record: dict,
+    root: Path,
+    cli_types: list[str],
+) -> int:
+    """Check that every command listed in added_commands actually exists on disk."""
+    conflicts = 0
+    added_commands = record.get("added_commands", [])
+    if not isinstance(added_commands, list):
+        return 0
+    for name in added_commands:
+        if not isinstance(name, str) or not name:
+            continue
+        for cli_type in cli_types:
+            if cli_type in ("claude", "opencode"):
+                target_path = root / CLI_DIRS[cli_type] / "commands" / "trellis" / f"{name}.md"
+                if not target_path.exists():
+                    err(f"[{cli_type.capitalize()}] added_commands 声明 {name}，但文件缺失: {target_path.relative_to(root)}")
+                    conflicts += 1
+            elif cli_type == "codex":
+                skills_dirs = list_all_codex_skills_dirs(root)
+                if skills_dirs:
+                    for name in added_commands:
+                        if not isinstance(name, str) or not name:
+                            continue
+                        exists_in_any = any(
+                            (skills_dir / name / "SKILL.md").exists()
+                            for skills_dir in skills_dirs
+                        )
+                        if not exists_in_any:
+                            err(f"[Codex] added_commands 声明 {name}，但 skill 在所有 skills 目录中均缺失")
+                            conflicts += 1
+    if conflicts == 0:
+        ok("added_commands 文件存在性检查通过")
     return conflicts
 
 
@@ -1345,6 +1424,7 @@ def main() -> int:
     total_conflicts += detect_execution_card_conflicts(src, root, profile=profile)
     total_conflicts += detect_conflicts_workflow_doc(src, root, profile=profile)
     total_conflicts += detect_conflicts_agents_md(root)
+    total_conflicts += detect_conflicts_added_commands_missing(record, root, cli_types)
     print(f"   总冲突: {total_conflicts}")
     print()
 
@@ -1537,6 +1617,9 @@ def main() -> int:
     # 辅助脚本
     remove_obsolete_deployed_scripts(dst_scripts, record, profile=profile)
     deploy_scripts(src, dst_scripts, profile=profile)
+
+    # Patch workflow_phase.py with strong-gate rejection
+    _apply_patch_workflow_phase_upgrade(src, dst_scripts)
 
     # 更新安装记录
     write_install_record(rec_file, current_version, installed_version, cli_types, record)
