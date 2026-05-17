@@ -1838,3 +1838,36 @@ P1-P6 + 额外修复：record-session 归类到 OVERLAY_BASELINE_COMMANDS/DISTRI
 ### Next Steps
 
 - None - task complete
+
+
+## Session 241: 修复新项目开发工作流 7 项结构性缺陷
+
+**Date**: 2026-05-18
+**Task**: 修复新项目开发工作流 7 项结构性缺陷
+**Branch**: `main`
+
+### Summary
+
+修复新项目开发工作流7项结构性缺陷：1)Stage Transition Quick Reference添加--execution-authorized true; 2)新增patch-session-start-strong-gate.py补丁脚本; 3)validate_plan_gate增加plan-validate.py调用; 4)validate_check_gate增加内容校验+DELIVERY_ARTIFACTS扩展transfer-checklist.md+外包profile门禁; 5)finish-work Step 2误导语言修正; 6)NL路由表拆分record-session/finish-work; 7)get_step()返回空字符串而非None
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `832de6e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
