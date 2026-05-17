@@ -25,7 +25,7 @@ COMPATIBLE_TRELLIS_VERSION = "0.5.16"
 
 PATCH_BASELINE_COMMANDS = ["continue", "finish-work", "record-session"]
 LEGACY_PATCH_BASELINE_COMMANDS = ["start", "finish-work", "record-session"]
-CODEX_PATCH_BASELINE_SKILLS = ["trellis-continue", "trellis-finish-work"]
+CODEX_PATCH_BASELINE_SKILLS = ["trellis-continue", "trellis-finish-work", "trellis-start"]
 LEGACY_CODEX_PATCH_BASELINE_SKILLS = ["start", "finish-work"]
 PATCH_BASELINE_SHARED_DOCS = ["workflow.md"]
 OVERLAY_BASELINE_COMMANDS = ["brainstorm", "check", "record-session"]

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -12,6 +13,59 @@ from pathlib import Path
 VALID_LEVELS = {"none", "basic", "hybrid", "forensic"}
 TRUE_VALUES = {"yes", "true", "on", "1", "是"}
 WMID_PATTERN = re.compile(r"\bwm_[A-Za-z0-9_-]{4,}\b")
+
+
+def _find_assessment_in_lineage(task_dir: Path) -> Path:
+    """Walk task lineage to find assessment.md; falls back to task_dir/assessment.md."""
+    current = task_dir.resolve()
+    visited: set[Path] = set()
+    while current not in visited and current.is_dir():
+        candidate = current / "assessment.md"
+        if candidate.is_file():
+            return candidate
+        visited.add(current)
+        task_json = current / "task.json"
+        if not task_json.is_file():
+            break
+        try:
+            data = json.loads(task_json.read_text(encoding="utf-8"))
+            parent_name = data.get("parent")
+            if not isinstance(parent_name, str) or not parent_name:
+                break
+            parent_dir = current.parent / parent_name
+            if not parent_dir.is_dir():
+                break
+            current = parent_dir.resolve()
+        except Exception:
+            break
+    return task_dir / "assessment.md"
+
+
+def _find_design_file_in_lineage(task_dir: Path, *rel_paths: str) -> Path | None:
+    """Walk task lineage to find a design file matching any of the given relative paths."""
+    current = task_dir.resolve()
+    visited: set[Path] = set()
+    while current not in visited and current.is_dir():
+        for rel in rel_paths:
+            candidate = current / rel
+            if candidate.is_file():
+                return candidate
+        visited.add(current)
+        task_json = current / "task.json"
+        if not task_json.is_file():
+            break
+        try:
+            data = json.loads(task_json.read_text(encoding="utf-8"))
+            parent_name = data.get("parent")
+            if not isinstance(parent_name, str) or not parent_name:
+                break
+            parent_dir = current.parent / parent_name
+            if not parent_dir.is_dir():
+                break
+            current = parent_dir.resolve()
+        except Exception:
+            break
+    return None
 
 
 def print_result(ok: bool, success: str, failure: str) -> bool:
@@ -66,8 +120,8 @@ def parse_channels(raw: str | None) -> set[str]:
 
 
 def load_assessment(task_dir: Path) -> tuple[str | None, set[str], bool, bool, bool]:
-    """Load watermark settings from assessment.md."""
-    assessment_file = task_dir / "assessment.md"
+    """Load watermark settings from assessment.md, walking lineage if needed."""
+    assessment_file = _find_assessment_in_lineage(task_dir)
     if not assessment_file.exists():
         raise FileNotFoundError(f"{assessment_file} 不存在")
 
@@ -113,7 +167,7 @@ def validate_feasibility(task_dir: Path) -> tuple[int, int, bool, set[str], bool
     """Validate assessment watermark policy fields."""
     print("\n=== 验证 assessment.md (Ownership / Feasibility) ===")
 
-    assessment_file = task_dir / "assessment.md"
+    assessment_file = _find_assessment_in_lineage(task_dir)
     if not assessment_file.exists():
         print(f"❌ {assessment_file} 不存在")
         return 0, 1, False, set(), False, False
@@ -189,15 +243,12 @@ def validate_feasibility(task_dir: Path) -> tuple[int, int, bool, set[str], bool
 
 
 def find_watermark_plan(task_dir: Path) -> Path | None:
-    """Locate the source watermark plan file."""
-    candidates = [
-        task_dir / "design" / "source-watermark-plan.md",
-        task_dir / "source-watermark-plan.md",
-    ]
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    return None
+    """Locate the source watermark plan file, walking parent lineage if needed."""
+    return _find_design_file_in_lineage(
+        task_dir,
+        "design/source-watermark-plan.md",
+        "source-watermark-plan.md",
+    )
 
 
 def validate_design(

@@ -103,6 +103,45 @@ def _remove_old_status_routing(content: str) -> str:
     return prefix + suffix
 
 
+def _cleanup_continue_orphan_steps(content: str) -> str:
+    """Retroactively clean up orphan Steps 2/4 in already-patched continue.md.
+
+    Old patching only removed Step 3 and kept Steps 2/4 which contain:
+    - Step 2: old "Plan / Execute / Finish" phase index language
+    - Step 4: broken --step <X.X> reference that no longer works
+
+    This is safe to apply even when the Phase Router is already present.
+    """
+    if _CONTINUE_STEPS_CLEANUP_MARKER in content:
+        return content
+
+    changed = False
+
+    # Fix Step 2's misleading "Plan / Execute / Finish" language
+    if _CONTINUE_STEP2_OLD_TEXT in content:
+        content = content.replace(_CONTINUE_STEP2_OLD_TEXT, _CONTINUE_STEP2_NEW_TEXT)
+        changed = True
+
+    # Remove orphan Step 4 (broken --step <X.X> reference)
+    step4_idx = content.find(_CONTINUE_STEP4_HEADING)
+    if step4_idx != -1:
+        # Find where Step 4 section ends: next "## " heading or "---" separator
+        after_step4 = content[step4_idx + len(_CONTINUE_STEP4_HEADING):]
+        end_match = re.search(r"\n(## |---)", after_step4)
+        if end_match:
+            end_pos = step4_idx + len(_CONTINUE_STEP4_HEADING) + end_match.start()
+        else:
+            end_pos = len(content)
+        content = content[:step4_idx].rstrip("\n") + "\n" + content[end_pos:].lstrip("\n")
+        changed = True
+
+    if changed:
+        # Prepend cleanup marker as an HTML comment so it's invisible in rendered output
+        content = _CONTINUE_STEPS_CLEANUP_MARKER + "\n" + content
+
+    return content
+
+
 # ── 常量 ──
 _CLI_DIRS = CLI_DIRS
 _CLI_ALT_DIRS = CLI_ALT_DIRS
@@ -113,6 +152,13 @@ _ALL_CLI_TYPES = ALL_CLI_TYPES
 _PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 _STATUS_ROUTING_MARKER = "## Step 3: Decide Where You Are"
 _STATUS_ROUTING_END_MARKER = "## Step 4: Load the Specific Step"
+# Marker for tracking retroactive cleanup of orphan Steps 2/4 in already-patched continue.md.
+_CONTINUE_STEPS_CLEANUP_MARKER = "<!-- continue-old-steps-cleaned -->"
+# Text in Step 2 that references the old Phase Index language.
+_CONTINUE_STEP2_OLD_TEXT = "Shows the Phase Index (Plan / Execute / Finish) with routing + skill mapping."
+_CONTINUE_STEP2_NEW_TEXT = "Shows the workflow phase overview and current routing state."
+# Heading used to remove orphan Step 4 in already-patched continue.md.
+_CONTINUE_STEP4_HEADING = "## Step 4: Load the Specific Step"
 _FINISH_WORK_MARKER = "<!-- finish-work-projectization-patch -->"
 _FINISH_WORK_START_HEADING = "### 1. Code Quality"
 _FINISH_WORK_END_HEADING = "### 2. close-out"
@@ -818,6 +864,13 @@ def build_finish_work_content(content: str, patch_text: str) -> str | None:
         # Final fallback: try from "### 1. Code Quality" if no step headings exist.
         start_idx = content.find(_FINISH_WORK_START_HEADING)
 
+    # When Step 1 was found but Step 3 also exists, prefer Step 3 as the actual
+    # replacement start so that the useful Steps 1/2 survey/sanity content is preserved.
+    if start_idx != -1:
+        step3_idx = content.find(_FINISH_WORK_STEP3_HEADING)
+        if step3_idx != -1 and step3_idx > start_idx:
+            start_idx = step3_idx
+
     # Determine the end boundary for replacement
     end_idx = content.find(_FINISH_WORK_STEP4_END_HEADING)  # "## Reference"
 
@@ -830,17 +883,8 @@ def build_finish_work_content(content: str, patch_text: str) -> str | None:
         suffix = content[end_idx:]
         return prefix + patch_text.rstrip() + "\n\n" + suffix
 
-    # No "## Reference" found — the baseline SKILL.md may end after Step 4.
-    # Try to find the next "## " heading after start_idx, or extend to end of file.
-    search_from = start_idx + 1
-    next_heading = re.search(r"\n## ", content[search_from:])
-    if next_heading:
-        end_idx = search_from + next_heading.start()
-        prefix = content[:start_idx]
-        suffix = content[end_idx:]
-        return prefix + patch_text.rstrip() + "\n\n" + suffix
-
-    # No next heading found — replace from start_idx to end of file
+    # No "## Reference" found — replace from start_idx to end of file.
+    # (The trellis baseline finish-work.md has no ## Reference section; Steps 3/4 run to EOF.)
     prefix = content[:start_idx]
     return prefix + patch_text.rstrip() + "\n"
 
@@ -966,6 +1010,17 @@ def inject_finish_work_patch(
 
     content = target_path.read_text(encoding="utf-8")
     if _FINISH_WORK_MARKER in content:
+        # Already patched. Retroactively clean up orphan Step 3/4 left by the old buggy patching.
+        step3_pos = content.find(_FINISH_WORK_STEP3_HEADING)
+        if step3_pos != -1:
+            cleaned = content[:step3_pos].rstrip() + "\n"
+            if not dry_run:
+                target_path.write_text(cleaned, encoding="utf-8")
+            if dry_run:
+                info(f"[{cli_label}] 将清除 {target_label} 中孤立的 Step 3/4 存档指引")
+            else:
+                ok(f"[{cli_label}] {target_label} 已清除孤立的 Step 3/4 存档指引")
+            return True
         ok(f"[{cli_label}] {target_label} 项目化补丁已存在")
         return False
 
@@ -1917,6 +1972,17 @@ def deploy_claude(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAUL
                 warn("[Claude] start-patch-phase-router.md 不存在")
         else:
             ok(f"[Claude] Phase Router 已存在 → {entry_command.name}")
+        # Retroactively clean up orphan Steps 2/4 in already-patched continue.md
+        content = entry_command.read_text(encoding="utf-8")
+        cleaned = _cleanup_continue_orphan_steps(content)
+        if cleaned != content:
+            if not dry_run:
+                entry_command.write_text(cleaned, encoding="utf-8")
+            if dry_run:
+                info(f"[Claude] 将清除 {entry_command.name} 中孤立的旧 Step 2/4")
+            else:
+                ok(f"[Claude] {entry_command.name} 孤立旧 Step 2/4 已清除")
+            result["patches"] += 1
     else:
         warn("[Claude] continue.md / start.md 不存在，跳过 Phase Router 注入")
 
@@ -2012,6 +2078,17 @@ def deploy_opencode(src: Path, root: Path, dry_run: bool, *, profile: str = DEFA
                 warn("[OpenCode] start-patch-phase-router.md 不存在")
         else:
             ok(f"[OpenCode] Phase Router 已存在 → {entry_command.name}")
+        # Retroactively clean up orphan Steps 2/4 in already-patched continue.md
+        content = entry_command.read_text(encoding="utf-8")
+        cleaned = _cleanup_continue_orphan_steps(content)
+        if cleaned != content:
+            if not dry_run:
+                entry_command.write_text(cleaned, encoding="utf-8")
+            if dry_run:
+                info(f"[OpenCode] 将清除 {entry_command.name} 中孤立的旧 Step 2/4")
+            else:
+                ok(f"[OpenCode] {entry_command.name} 孤立旧 Step 2/4 已清除")
+            result["patches"] += 1
     else:
         warn("[OpenCode] continue.md / start.md 不存在，跳过 Phase Router 注入")
 
@@ -2158,6 +2235,23 @@ def deploy_codex(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAULT
             target_label=f"{router_skill.parent.name} skill",
         ):
             result["patches"] += 1
+
+    # 注入 trellis-start skill Phase Router 补丁（no-task bootstrap 入口）
+    start_skill = find_first_existing_codex_skill_path(
+        root,
+        ["trellis-start"],
+        skills_dir=primary_skills_dir,
+    )
+    if start_skill is not None:
+        if inject_codex_phase_router_skill_patch(
+            src,
+            start_skill,
+            dry_run=dry_run,
+            cli_label="Codex",
+            target_label=f"{start_skill.parent.name} skill",
+        ):
+            result["patches"] += 1
+    # trellis-start 不存在时不报错，因为它是可选的 no-task 入口
 
     # Codex 当前通过 hooks.json 引用的 inject-workflow-state.py hook 注入上下文，
     # 不需要注入 start.md。

@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -22,6 +23,32 @@ VALID_ENGAGEMENT_TYPES = {"external_outsourcing", "non_outsourcing"}
 VALID_EXTERNAL_TRACKS = {"hosted_deployment", "trial_authorization"}
 VALID_BOOLEAN_VALUES = {"yes", "no"}
 MIN_KICKOFF_PAYMENT_RATIO = 30.0
+
+
+def _find_assessment_in_lineage(task_dir: Path) -> Path:
+    """Walk task lineage to find assessment.md; falls back to task_dir/assessment.md."""
+    current = task_dir.resolve()
+    visited: set[Path] = set()
+    while current not in visited and current.is_dir():
+        candidate = current / "assessment.md"
+        if candidate.is_file():
+            return candidate
+        visited.add(current)
+        task_json = current / "task.json"
+        if not task_json.is_file():
+            break
+        try:
+            data = json.loads(task_json.read_text(encoding="utf-8"))
+            parent_name = data.get("parent")
+            if not isinstance(parent_name, str) or not parent_name:
+                break
+            parent_dir = current.parent / parent_name
+            if not parent_dir.is_dir():
+                break
+            current = parent_dir.resolve()
+        except Exception:
+            break
+    return task_dir / "assessment.md"
 
 
 def print_result(ok: bool, success: str, failure: str) -> int:
@@ -409,7 +436,7 @@ def validate_all_phases(task_dir: Path) -> int:
     total_checks = 0
     
     # Feasibility 阶段
-    assessment_file = task_dir / "assessment.md"
+    assessment_file = _find_assessment_in_lineage(task_dir)
     passed, checks, is_trial = validate_assessment(assessment_file)
     total_passed += passed
     total_checks += checks
@@ -488,11 +515,11 @@ def main() -> int:
         return validate_all_phases(args.task_dir)
     
     if args.phase == "feasibility":
-        passed, checks, _ = validate_assessment(args.task_dir / "assessment.md")
+        passed, checks, _ = validate_assessment(_find_assessment_in_lineage(args.task_dir))
         return 0 if passed == checks else 1
-    
+
     if args.phase == "plan":
-        assessment_file = args.task_dir / "assessment.md"
+        assessment_file = _find_assessment_in_lineage(args.task_dir)
         engagement_type = load_engagement_type(assessment_file)
         if engagement_type == "non_outsourcing":
             print("ℹ️  非外包项目无需执行外包项目交付控制 plan 校验")
@@ -506,7 +533,7 @@ def main() -> int:
         return 0 if passed == checks else 1
     
     if args.phase == "delivery":
-        assessment_file = args.task_dir / "assessment.md"
+        assessment_file = _find_assessment_in_lineage(args.task_dir)
         engagement_type = load_engagement_type(assessment_file)
         if engagement_type == "non_outsourcing":
             print("ℹ️  非外包项目无需执行外包项目交付控制 delivery 校验")

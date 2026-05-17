@@ -543,6 +543,34 @@ def collect_route_readiness_blockers(
     return blockers
 
 
+def collect_exit_gate_blockers(
+    task_dir: Path,
+    repo_root: Path,
+    state: dict[str, Any],
+) -> list[str]:
+    """Check exit-gate completeness when a stage is awaiting_user_confirmation.
+
+    These blockers indicate the stage's exit requirements are not yet met, even
+    though the stage_status has been set to awaiting_user_confirmation. They are
+    only evaluated when the route is deciding whether to report 'awaiting_confirmation'
+    so that the AI/user receives accurate readiness signals rather than a false OK.
+    """
+    stage = state.get("stage")
+    blockers: list[str] = []
+
+    if stage == "check":
+        validate_check_gate(task_dir, blockers)
+
+    elif stage == "delivery":
+        validate_delivery_gate(task_dir, blockers)
+
+    elif stage == "design":
+        validate_project_doc_boundary(state, repo_root, task_dir, blockers)
+        validate_context7_review_artifact(task_dir, state, blockers)
+
+    return blockers
+
+
 def load_task_json(path: Path) -> dict[str, Any] | None:
     data = read_json(path / TASK_FILE_NAME)
     if isinstance(data, dict):
@@ -1345,14 +1373,16 @@ def cmd_route(args: argparse.Namespace) -> int:
     readiness_blockers = collect_route_readiness_blockers(task_dir, repo_root, state)
 
     if stage_status == "awaiting_user_confirmation":
-        if readiness_blockers:
+        exit_blockers = collect_exit_gate_blockers(task_dir, repo_root, state)
+        all_blockers = readiness_blockers + exit_blockers
+        if all_blockers:
             _route_result(
                 stage,
                 "awaiting_confirmation_with_blockers",
                 f"当前 stage={stage}, status=awaiting_user_confirmation 但仍存在 readiness blockers",
                 stage=stage,
                 stage_status=stage_status,
-                blockers=readiness_blockers,
+                blockers=all_blockers,
             )
         else:
             _route_result(

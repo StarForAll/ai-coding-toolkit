@@ -77,10 +77,29 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def load_plan(task_dir: Path) -> tuple[Path, str]:
-    for rel_path in PROTECTED_SOURCES:
-        candidate = task_dir / rel_path
-        if candidate.exists():
-            return candidate, candidate.read_text(encoding="utf-8")
+    """Find the source watermark plan, walking up the task lineage if needed."""
+    current = task_dir.resolve()
+    visited: set[Path] = set()
+    while current not in visited and current.is_dir():
+        for rel_path in PROTECTED_SOURCES:
+            candidate = current / rel_path
+            if candidate.exists():
+                return candidate, candidate.read_text(encoding="utf-8")
+        visited.add(current)
+        task_json_path = current / "task.json"
+        if not task_json_path.is_file():
+            break
+        try:
+            data = json.loads(task_json_path.read_text(encoding="utf-8"))
+            parent_name = data.get("parent")
+            if not isinstance(parent_name, str) or not parent_name:
+                break
+            parent_dir = current.parent / parent_name
+            if not parent_dir.is_dir():
+                break
+            current = parent_dir.resolve()
+        except Exception:
+            break
     raise FileNotFoundError("未找到 `design/source-watermark-plan.md` 或 `source-watermark-plan.md`")
 
 
