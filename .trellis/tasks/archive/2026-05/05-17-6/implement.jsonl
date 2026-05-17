@@ -1,0 +1,7 @@
+{"file": "spec/commands/workflow_assets.md", "reason": "P1: record-session 需加入 DISTRIBUTED_COMMANDS，理解命令分类常量的语义"}
+{"file": "spec/commands/install-workflow.md", "reason": "P3b/P4a/P5/extra1: 安装器多处注入逻辑需修改，理解现有注入机制和替换范围"}
+{"file": "spec/commands/upgrade-compat.md", "reason": "P2/P3c: upgrade-compat 检测和修复逻辑需增强，理解现有冲突检测机制"}
+{"file": "spec/commands/patch-workflow-phase.md", "reason": "P3a: 补丁脚本变量引用 bug 需修复，理解补丁注入点和目标函数签名"}
+{"file": "spec/commands/workflow-state.md", "reason": "P6: 门禁校验需传 new_stage 参数，理解 validate 函数链的调用关系"}
+{"file": "spec/commands/start-patch-phase-router.md", "reason": "P4b: Phase Router 补丁需更新，理解当前补丁内容和旧路由结构"}
+
