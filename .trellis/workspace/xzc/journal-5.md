@@ -1543,3 +1543,36 @@ Fix 3 rounds of workflow source issues: (1) check-quality.py false-green exit co
 ### Next Steps
 
 - None - task complete
+
+
+## Session 232: 修复 install-workflow.py Issue7 补丁缩进错误并扩展至 .claude/ hook
+
+**Date**: 2026-05-17
+**Task**: 修复 install-workflow.py Issue7 补丁缩进错误并扩展至 .claude/ hook
+**Branch**: `main`
+
+### Summary
+
+Bug1: code_block_strip_line 缩进 4→8 空格修复 Codex hook SyntaxError; Bug2: patch_inject_workflow_state_hook 重构遍历 .codex/ 和 .claude/ 两个 hook 路径，对 .claude/ 也应用 Issue7 代码块剥离补丁
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `73fa021` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

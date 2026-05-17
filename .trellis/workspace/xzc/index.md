@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-5.md`
-- **Total Sessions**: 231
+- **Total Sessions**: 232
 - **Last Active**: 2026-05-17
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~1545 | Active |
+| `journal-5.md` | ~1578 | Active |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
@@ -33,6 +33,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 232 | 2026-05-17 | 修复 install-workflow.py Issue7 补丁缩进错误并扩展至 .claude/ hook | `73fa021` | `main` |
 | 231 | 2026-05-17 | 修复工作流嵌入后9个一致性问题 | `b9347a7` | `main` |
 | 230 | 2026-05-16 | 修复新项目开发工作流嵌入后7个一致性问题 | `b217f52` | `main` |
 | 229 | 2026-05-16 | Fix workflow source issues: false-green exit, stale skill refs, trellis-research contract | `c350980` | `main` |
