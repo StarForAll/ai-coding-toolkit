@@ -1807,3 +1807,34 @@ P1-P6 + 额外修复：record-session 归类到 OVERLAY_BASELINE_COMMANDS/DISTRI
 ### Next Steps
 
 - None - task complete
+
+
+## Session 240: 修复工作流7项一致性问题
+
+**Date**: 2026-05-17
+**Task**: 修复工作流7项一致性问题
+**Branch**: `main`
+
+### Summary
+
+修复子任务链割裂、route误判、文档自相矛盾等问题：(1)添加父链遍历到3个验证脚本 (2)添加design/check/delivery退出门控 (3)添加trellis-start补丁支持 (4)修复finish-work边界检测 (5)清理continue.md孤立步骤
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
