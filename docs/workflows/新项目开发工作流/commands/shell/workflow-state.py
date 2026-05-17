@@ -395,16 +395,6 @@ def validate_stage_transition_gates(
         )
         validate_ownership_policy_controls(task_dir, repo_root, state, gate_errors)
 
-        # For brainstorm stage, downgrade missing assessment errors to warnings
-        if new_stage == "brainstorm":
-            remaining: list[str] = []
-            for err in gate_errors:
-                if "缺少 assessment.md" in err:
-                    print(f"⚠️ {err}（brainstorm 阶段允许补齐）")
-                else:
-                    remaining.append(err)
-            gate_errors = remaining
-
         errors.extend(gate_errors)
 
     # Stages >= design additionally require project doc boundary

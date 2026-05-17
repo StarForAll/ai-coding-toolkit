@@ -27,6 +27,7 @@
 import argparse
 import json
 import os
+import re
 import subprocess
 import shutil
 import sys
@@ -816,32 +817,67 @@ def build_finish_work_content(content: str, patch_text: str) -> str | None:
     if start_idx == -1:
         # Final fallback: try from "### 1. Code Quality" if no step headings exist.
         start_idx = content.find(_FINISH_WORK_START_HEADING)
-    end_idx = content.find(_FINISH_WORK_STEP4_END_HEADING)
+
+    # Determine the end boundary for replacement
+    end_idx = content.find(_FINISH_WORK_STEP4_END_HEADING)  # "## Reference"
+
     if start_idx == -1:
         return content.rstrip() + "\n\n---\n\n" + patch_text.rstrip() + "\n"
+
     if end_idx != -1 and end_idx > start_idx:
+        # Found "## Reference" after the step headings — replace up to it, keep Reference
         prefix = content[:start_idx]
         suffix = content[end_idx:]
         return prefix + patch_text.rstrip() + "\n\n" + suffix
 
-    # Fallback: old narrow replacement (### 1. Code Quality to ### 1.5. Test Coverage)
-    old_end_heading = "### 1.5. Test Coverage"
-    end_idx = content.find(old_end_heading)
-    if end_idx == -1 or end_idx <= start_idx:
-        next_heading_idx = content.find("\n### ", start_idx + len(_FINISH_WORK_START_HEADING))
-        if next_heading_idx == -1:
-            return content.rstrip() + "\n\n---\n\n" + patch_text.rstrip() + "\n"
-        end_idx = next_heading_idx + 1
+    # No "## Reference" found — the baseline SKILL.md may end after Step 4.
+    # Try to find the next "## " heading after start_idx, or extend to end of file.
+    search_from = start_idx + 1
+    next_heading = re.search(r"\n## ", content[search_from:])
+    if next_heading:
+        end_idx = search_from + next_heading.start()
+        prefix = content[:start_idx]
+        suffix = content[end_idx:]
+        return prefix + patch_text.rstrip() + "\n\n" + suffix
 
+    # No next heading found — replace from start_idx to end of file
     prefix = content[:start_idx]
-    suffix = content[end_idx:].lstrip("\n")
-    return prefix + patch_text.rstrip() + "\n\n" + suffix
+    return prefix + patch_text.rstrip() + "\n"
 
 
 def build_codex_phase_router_skill_content(content: str, patch_text: str) -> str:
-    """Append workflow Phase Router guidance to the active Codex entry skill."""
+    """Replace old Steps 1-4 in the Codex entry skill with workflow Phase Router guidance.
+
+    The baseline trellis-continue SKILL.md has Steps 1-4 that use old
+    status=planning/in_progress routing. Under the strong-gate model,
+    these must be replaced with the new routing logic from the patch.
+    Previously this function just appended the patch, leaving the old
+    steps in place — which confused AI agents who read top-to-bottom.
+    """
     if _CODEX_START_SKILL_MARKER in content:
         return content
+
+    # Try to replace the old Steps 1-4 with the new patch content
+    step1_heading = "## Step 1: Load Current Context"
+    step4_heading = "## Step 4: Load the Specific Step"
+
+    step1_idx = content.find(step1_heading)
+    if step1_idx != -1:
+        step4_idx = content.find(step4_heading, step1_idx)
+        if step4_idx != -1:
+            # Find the end of Step 4 section (next "## " heading or "## Reference" or end of file)
+            after_step4 = content[step4_idx + len(step4_heading):]
+            next_section = re.search(r"\n## ", after_step4)
+            if next_section:
+                replace_end = step4_idx + len(step4_heading) + next_section.start()
+            else:
+                replace_end = len(content)
+
+            before = content[:step1_idx].rstrip("\n")
+            after = content[replace_end:].lstrip("\n")
+            return before + "\n\n" + patch_text.rstrip() + "\n\n" + after
+
+    # Fallback: if Steps 1-4 not found, append the patch
     return content.rstrip() + "\n\n---\n\n" + patch_text.rstrip() + "\n"
 
 
@@ -1365,10 +1401,8 @@ def patch_inject_workflow_state_hook(root: Path, *, dry_run: bool) -> bool:
 
 # ── C2: patch session-start no-task guidance to reference NL routing table ──
 _SESSION_START_NO_TASK_MARKER = "# [workflow-embed-patch:session-start-nl-routing]"
-_SESSION_START_NO_TASK_OLD = (
-    '"Next-Action: After the user describes their intent, load skill `trellis-brainstorm` '
-    'to clarify requirements and create a task via `python3 ./.trellis/scripts/task.py create`.\\n"'
-)
+_SESSION_START_NO_TASK_LINE1 = '"Next-Action: After the user describes their intent, load skill `trellis-brainstorm` "'
+_SESSION_START_NO_TASK_LINE2 = '"to clarify requirements and create a task via `python3 ./.trellis/scripts/task.py create`.\\n"'
 _SESSION_START_NO_TASK_NEW = (
     '"Next-Action: Consult the AGENTS.md NL routing table for profile-specific entry routing. '
     'For outsourcing profile: run `python3 ./.trellis/scripts/workflow/workflow-state.py route` '
@@ -1376,6 +1410,37 @@ _SESSION_START_NO_TASK_NEW = (
     'For personal profile: load skill `trellis-brainstorm` to clarify requirements '
     'and create a task via `python3 ./.trellis/scripts/task.py create`.\\n"'
 )
+
+
+def _match_session_start_no_task_old(content: str) -> tuple[str, int, int] | None:
+    """Match the old no-task guidance in session-start.py, handling both
+    single-line and multi-line string literal formats.
+
+    The baseline session-start.py may have the old text as:
+      - Two consecutive string literals on the same line
+      - Two string literals split across lines with whitespace between them
+    """
+    # Try exact match first (for single-line format)
+    old_single = _SESSION_START_NO_TASK_LINE1 + " " + _SESSION_START_NO_TASK_LINE2
+    idx = content.find(old_single)
+    if idx != -1:
+        return old_single, idx, idx + len(old_single)
+
+    # Try multi-line format: the two string literals may be on separate lines
+    idx1 = content.find(_SESSION_START_NO_TASK_LINE1)
+    if idx1 == -1:
+        return None
+    # Find the second line after the first, allowing whitespace/newlines between
+    after_line1 = content[idx1 + len(_SESSION_START_NO_TASK_LINE1):]
+    idx2_relative = after_line1.find(_SESSION_START_NO_TASK_LINE2)
+    if idx2_relative == -1:
+        return None
+    # Check that only whitespace separates the two lines
+    gap = after_line1[:idx2_relative]
+    if gap.strip():
+        return None
+    match_end = idx1 + len(_SESSION_START_NO_TASK_LINE1) + idx2_relative + len(_SESSION_START_NO_TASK_LINE2)
+    return content[idx1:match_end], idx1, match_end
 
 
 def patch_session_start_no_task_guidance(root: Path, *, dry_run: bool) -> bool:
@@ -1394,12 +1459,14 @@ def patch_session_start_no_task_guidance(root: Path, *, dry_run: bool) -> bool:
         ok("[Shared] session-start.py no-task guidance 补丁已存在")
         return False
 
-    if _SESSION_START_NO_TASK_OLD not in content:
+    match = _match_session_start_no_task_old(content)
+    if match is None:
         warn("[Shared] session-start.py no-task 指导未命中目标代码，跳过")
         return False
 
+    old_text, _, _ = match
     patched = content.replace(
-        _SESSION_START_NO_TASK_OLD,
+        old_text,
         _SESSION_START_NO_TASK_MARKER + "\n            " + _SESSION_START_NO_TASK_NEW,
     )
 
@@ -1513,6 +1580,69 @@ def cleanup_legacy_phase_router_sections(root: Path, *, dry_run: bool) -> bool:
         info("[Shared] 将移除 workflow.md 中旧三阶段 Phase Index / Plan-Execute-Finish 合同")
     else:
         ok("[Shared] 已移除 workflow.md 中旧三阶段 Phase Index / Plan-Execute-Finish 合同")
+    return True
+
+
+def cleanup_legacy_customizing_section(root: Path, *, dry_run: bool) -> bool:
+    """Remove the old '## Customizing Trellis (for forks)' section that appears
+    before '## Development Process' in the baseline workflow.md.
+
+    The Trellis baseline workflow.md has a '## Customizing Trellis (for forks)'
+    section that describes the old planning/in_progress/completed tag block system.
+    When the strong-gate projectization patch is applied, a NEW '## Customizing
+    Trellis (for forks)' section with the correct strong-gate content is inserted
+    as part of the phase-index patch. This function removes the OLD one that still
+    sits before '## Development Process', which would otherwise confuse AI agents
+    who read the document top-to-bottom and absorb outdated rules first.
+    """
+    target_path = root / ".trellis" / "workflow.md"
+    if not target_path.exists():
+        return False
+
+    content = target_path.read_text(encoding="utf-8")
+
+    # Only act after the projectization patch has been applied
+    if _WORKFLOW_PATCH_MARKER not in content:
+        return False
+
+    # Find the old section: it starts with "## Customizing Trellis (for forks)"
+    # and ends just before "## Development Process"
+    customizing_heading = "## Customizing Trellis (for forks)"
+    dev_process_heading = "## Development Process"
+
+    old_idx = content.find(customizing_heading)
+    if old_idx == -1:
+        return False
+
+    dev_idx = content.find(dev_process_heading)
+    if dev_idx == -1:
+        return False
+
+    # Only remove if the customizing section appears BEFORE Development Process
+    if old_idx >= dev_idx:
+        return False
+
+    # Also skip if this is the new section from the projectization patch
+    # (the new section appears AFTER the patch marker)
+    patch_marker_idx = content.find(_WORKFLOW_PATCH_MARKER)
+    if patch_marker_idx != -1 and old_idx > patch_marker_idx:
+        return False
+
+    # Find the section boundary: from the heading line start to just before
+    # the next "## " heading (which should be "## Development Process")
+    before = content[:old_idx].rstrip("\n")
+    after = content[dev_idx:]
+    new_content = before + "\n\n" + after
+
+    if new_content == content:
+        return False
+
+    if not dry_run:
+        target_path.write_text(new_content, encoding="utf-8")
+    if dry_run:
+        info("[Shared] 将移除 workflow.md 中旧 Customizing Trellis 段（Development Process 之前）")
+    else:
+        ok("[Shared] 已移除 workflow.md 中旧 Customizing Trellis 段（Development Process 之前）")
     return True
 
 
@@ -1644,9 +1774,11 @@ function getTaskStatus(ctx, platformInput = null) {
     const data = JSON.parse(output)
     const stage = typeof data.stage === "string" && data.stage ? data.stage : "(unknown)"
     const action = typeof data.action === "string" ? data.action : "unknown"
+    const target = typeof data.target === "string" && data.target ? data.target : ""
     const blockers = Array.isArray(data.blockers) ? data.blockers : []
     const blockerText = blockers.length > 0 ? `\\nBlockers: ${blockers.join(" | ")}` : ""
-    return `Stage: ${stage}\\nAction: ${action}\\nReason: ${data.reason || ""}${blockerText}`
+    const targetText = target ? `\\nTarget: ${target}` : ""
+    return `Stage: ${stage}\\nAction: ${action}${targetText}\\nReason: ${data.reason || ""}${blockerText}`
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     return `Status: ROUTER FAILED\\nSource: ${active.source}\\nNext: workflow-state.py route failed\\nError: ${message}`
@@ -2137,6 +2269,80 @@ def import_requirements_foundation(root: Path, dry_run: bool) -> bool:
     return True
 
 
+def patch_spec_quality_guidelines(root: Path, *, dry_run: bool) -> int:
+    """Replace placeholder 'To be filled' quality-guidelines.md with workflow-aware content.
+
+    The Trellis baseline creates quality-guidelines.md files with "To be filled" placeholders.
+    The strong-gate workflow references these files for quality baselines at check/finish-work
+    stages, but the placeholders provide no executable content. This function replaces them
+    with content that references the design 3.7 stage's automation check matrix.
+    """
+    spec_dir = root / ".trellis" / "spec"
+    if not spec_dir.exists():
+        return 0
+
+    count = 0
+    for qg_path in spec_dir.rglob("quality-guidelines.md"):
+        content = qg_path.read_text(encoding="utf-8")
+        if "(To be filled by the team)" not in content:
+            continue
+
+        # Determine the layer from the path (e.g., backend, frontend)
+        parts = qg_path.relative_to(spec_dir).parts
+        layer = parts[0] if parts else "unknown"
+
+        new_content = f"""\
+# Quality Guidelines
+
+> Code quality standards for {layer} development.
+
+---
+
+## Verification Matrix
+
+This project's quality verification matrix is defined during the **design stage (§3.7 技术架构确认后的项目 Spec 对齐)** and frozen in `finish-work-checklist.md` at the finish-work stage.
+
+Until the design stage completes the matrix definition:
+
+- Do NOT fabricate or assume verification commands
+- Do NOT use generic package-manager placeholder commands
+- Reference the design stage output for the actual automation check matrix
+
+---
+
+## Forbidden Patterns
+
+Defined during design stage §3.7; not pre-populated.
+
+---
+
+## Required Patterns
+
+Defined during design stage §3.7; not pre-populated.
+
+---
+
+## Testing Requirements
+
+Defined during design stage §3.7; not pre-populated.
+
+---
+
+## Code Review Checklist
+
+Defined during design stage §3.7; not pre-populated.
+"""
+        if not dry_run:
+            qg_path.write_text(new_content, encoding="utf-8")
+        if dry_run:
+            info(f"[Shared] 将替换 {qg_path.relative_to(root)} 占位 → 引用 design 阶段")
+        else:
+            ok(f"[Shared] 已替换 {qg_path.relative_to(root)} 占位 → 引用 design 阶段")
+        count += 1
+
+    return count
+
+
 def run_post_install_check(src: Path, root: Path, cli_types: list[str], dry_run: bool) -> bool:
     """Run a final read-only self-check before declaring embed success."""
     if dry_run:
@@ -2413,6 +2619,9 @@ def main() -> int:
             cleanup_legacy_phase_router_sections(root, dry_run=args.dry_run)
             cleanup_legacy_breadcrumb_blocks(root, dry_run=args.dry_run)
 
+            # Remove old "## Customizing Trellis (for forks)" section before Development Process
+            cleanup_legacy_customizing_section(root, dry_run=args.dry_run)
+
             # Issue 6: cleanup stale workflow-state-contract.md references
             cleanup_stale_contract_references(root, dry_run=args.dry_run)
 
@@ -2439,6 +2648,12 @@ def main() -> int:
                         error=f"failed to import {_REQUIREMENTS_FOUNDATION_PACK}",
                     )
                 return 1
+
+            # Replace placeholder quality-guidelines.md with workflow-aware content
+            qg_count = patch_spec_quality_guidelines(root, dry_run=args.dry_run)
+            if qg_count > 0:
+                info(f"spec 质量规范占位替换: {qg_count} 个")
+
             print()
             print("🧹 Trellis bootstrap 清理...")
             update_embed_attempt_record(root, last_step="remove-bootstrap-task")
