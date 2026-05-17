@@ -1642,3 +1642,36 @@ Bug1: code_block_strip_line 缩进 4→8 空格修复 Codex hook SyntaxError; Bu
 ### Next Steps
 
 - None - task complete
+
+
+## Session 235: 修复工作流嵌入6项一致性问题
+
+**Date**: 2026-05-17
+**Task**: 修复工作流嵌入6项一致性问题
+**Branch**: `main`
+
+### Summary
+
+P1-P6 + 额外修复：record-session 归类到 OVERLAY_BASELINE_COMMANDS/DISTRIBUTED_COMMANDS；ADDED_COMMANDS 痕迹检测改用内容匹配；upgrade-compat 新增 added_commands 缺失检测与 Codex 跨目录聚合检查；patch-workflow-phase 移除 task_dir 引用；install-workflow 和 upgrade-compat 集成 workflow_phase 补丁；注入 Phase Router 前移除旧 Step3 status 路由；build_finish_work_content 扩展替换；inject_workflow_phase_index_patch 替换到 ##Customizing Trellis；validate_external_project_controls 接受 target_stage 参数；测试全部通过 (94+10)
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0d28f04` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
