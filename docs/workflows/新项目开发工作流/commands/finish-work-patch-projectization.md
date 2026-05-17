@@ -1,5 +1,18 @@
 <!-- finish-work-strong-gate-step-replacement -->
 
+**⚠️ 强门禁模式下 Step 2 误导语言修正说明**：SKILL.md 正文 Step 2 中包含与强门禁模型矛盾的 archive 语义措辞。在嵌入安装时，安装器必须对 Step 2 中的以下语句进行替换：
+
+| 原文（误导措辞） | 替换为（强门禁对齐措辞） |
+|---|---|
+| `current active task is always archived in Step 3 regardless` | `current active task is NOT archived in finish-work; archiving is deferred to the record-session stage` |
+| `archive them too in this round` | `note them for archiving in the record-session stage` |
+
+修正理由：强门禁模式下 close-out 链路为 **finish-work → delivery → record-session**。`finish-work` 不执行任何 archive 操作；archive 仅在 `record-session` 阶段执行。Step 2 中任何暗示"在本轮/archive"的措辞必须替换为"延期至 record-session"的对齐表述。
+
+安装器实现提示：在处理 Step 2 正文时，按上述映射表对两处短语执行文本替换即可，无需替换整个 Step 2 段落。
+
+---
+
 **⚠️ 强门禁模式下 Step 3/4 替换说明**：本补丁内容替换 SKILL.md 正文中的旧 Step 3（Archive task(s)）和 Step 4（Record session journal）。在嵌入安装时，安装器必须将 SKILL.md 中从 "## Step 3: Archive task(s)" 到 "## Step 4: Record session journal" 结束的整个段落替换为以下内容：
 
 > **Step 3**: 确认 `finish-work-checklist.md` 已落盘 → 进入 delivery 阶段

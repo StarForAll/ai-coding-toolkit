@@ -38,7 +38,9 @@ PATCH_BLOCK = '''
                 "check", "review-gate", "finish-work", "delivery", "record-session",
             }
             if _stage in _STRONG_GATE_STAGES:
-                return None  # Reject old step; caller should use workflow-state.py route
+                import sys as _sys
+                print("⚠️ 强门禁模式下旧 step 查询已禁用，请使用 workflow-state.py route", file=_sys.stderr)
+                return ""
     except Exception:
         pass
     # --- end strong-gate phase patch ---

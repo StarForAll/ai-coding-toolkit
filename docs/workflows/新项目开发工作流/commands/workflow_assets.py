@@ -54,6 +54,7 @@ HELPER_SCRIPTS = [
     "source-watermark-guard.py",
     "patch-workflow-phase.py",
     "patch-inject-workflow-state.py",
+    "patch-session-start-strong-gate.py",
 ]
 RETIRED_HELPER_SCRIPTS = [
     "record-session-helper.py",

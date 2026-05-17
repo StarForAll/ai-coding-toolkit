@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 import unicodedata
 from datetime import datetime, timezone
@@ -47,6 +48,7 @@ DELIVERY_DIR = Path("delivery")
 DELIVERY_ARTIFACTS = (
     DELIVERY_DIR / "acceptance.md",
     DELIVERY_DIR / "deliverables.md",
+    DELIVERY_DIR / "transfer-checklist.md",
 )
 ROOT_README = Path("README.md")
 ROOT_README_EN = Path("README.en.md")
@@ -343,16 +345,56 @@ def validate_plan_gate(task_dir: Path, errors: list[str]) -> None:
                 "task_creation_checklist.md 存在但缺少 task_plan.md；"
                 "计划产物不完整，不得进入执行阶段"
             )
+    # Comprehensive structural validation via plan-validate.py
+    plan_validate_script = Path(__file__).resolve().parent / "plan-validate.py"
+    if plan_validate_script.is_file():
+        try:
+            result = subprocess.run(
+                [sys.executable, str(plan_validate_script), str(task_dir)],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode != 0:
+                # Extract error summary from stdout (plan-validate prints details there)
+                output = result.stdout.strip()
+                if output:
+                    # Take the last meaningful line as the summary
+                    lines = [ln for ln in output.splitlines() if ln.strip()]
+                    summary = lines[-1] if lines else output
+                    errors.append(
+                        f"plan-validate.py 结构验证未通过: {summary}；不得进入执行阶段"
+                    )
+                else:
+                    errors.append(
+                        "plan-validate.py 结构验证未通过（无详细输出）；不得进入执行阶段"
+                    )
+        except subprocess.TimeoutExpired:
+            errors.append("plan-validate.py 执行超时；不得进入执行阶段")
+        except OSError as exc:
+            errors.append(f"plan-validate.py 执行失败: {exc}；不得进入执行阶段")
 
 
 def validate_check_gate(task_dir: Path, errors: list[str]) -> None:
-    """Validate check.md exists before leaving check stage."""
+    """Validate check.md exists and has minimum content structure before leaving check stage."""
     check_path = task_dir / CHECK_MD_FILE
     if not check_path.is_file():
         errors.append("缺少 check.md；check 阶段产物未生成，不得进入 review-gate 或 finish-work")
+        return
+    content = check_path.read_text(encoding="utf-8")
+    missing_sections: list[str] = []
+    if not re.search(r"(?:Changed Scope|变更范围)", content):
+        missing_sections.append("Changed Scope / 变更范围")
+    if not re.search(r"(?:Verification Results|验证结果)", content):
+        missing_sections.append("Verification Results / 验证结果")
+    if missing_sections:
+        errors.append(
+            f"check.md 缺少必要章节: {', '.join(missing_sections)}；"
+            "check 阶段产物不完整，不得进入 review-gate 或 finish-work"
+        )
 
 
-def validate_delivery_gate(task_dir: Path, errors: list[str]) -> None:
+def validate_delivery_gate(task_dir: Path, errors: list[str], repo_root: Path | None = None) -> None:
     """Validate delivery artifacts before entering record-session."""
     missing = [
         artifact.relative_to(task_dir).as_posix()
@@ -363,6 +405,26 @@ def validate_delivery_gate(task_dir: Path, errors: list[str]) -> None:
         errors.append(
             f"缺少交付产物: {', '.join(missing)}；delivery 阶段未完成，不得进入 record-session"
         )
+    # Outsourcing-specific delivery artifact checks
+    if repo_root is not None:
+        assessment_path = find_assessment_file(task_dir, repo_root)
+        if assessment_path is not None:
+            assessment_content = assessment_path.read_text(encoding="utf-8")
+            engagement = extract_backticked_field(assessment_content, "project_engagement_type")
+            if engagement == "external_outsourcing":
+                outsourcing_artifacts = [
+                    (Path("delivery") / "ownership-proof.md", "ownership-proof.md"),
+                    (Path("delivery") / "source-watermark-verification.md", "source-watermark-verification.md"),
+                ]
+                missing_outsourcing = [
+                    label for artifact_path, label in outsourcing_artifacts
+                    if not (task_dir / artifact_path).is_file()
+                ]
+                if missing_outsourcing:
+                    errors.append(
+                        f"外包项目缺少交付产物: {', '.join(missing_outsourcing)}；"
+                        "delivery 阶段未完成，不得进入 record-session"
+                    )
 
 
 def validate_stage_transition_gates(
@@ -411,7 +473,7 @@ def validate_stage_transition_gates(
 
     # Delivery → record-session requires delivery artifacts
     if new_stage == "record-session":
-        validate_delivery_gate(task_dir, errors)
+        validate_delivery_gate(task_dir, errors, repo_root)
 
 
 def validate_execution_boundary(state: dict[str, Any], errors: list[str]) -> None:
@@ -562,7 +624,7 @@ def collect_exit_gate_blockers(
         validate_check_gate(task_dir, blockers)
 
     elif stage == "delivery":
-        validate_delivery_gate(task_dir, blockers)
+        validate_delivery_gate(task_dir, blockers, repo_root)
 
     elif stage == "design":
         validate_project_doc_boundary(state, repo_root, task_dir, blockers)

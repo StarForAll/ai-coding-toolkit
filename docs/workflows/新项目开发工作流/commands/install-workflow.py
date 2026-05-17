@@ -229,7 +229,8 @@ _NL_ROUTING_SECTION = """\
 | 补充审查、多 CLI 审查、多人审查、让其他 CLI 看一下、review-gate、审查门禁 | `/trellis:review-gate` | 描述补充审查意图，或显式触发 `review-gate` skill | §5.1.y 补充审查 |
 | 提交前检查、准备提交、完成检查、commit 前、收尾 | `/trellis:finish-work` | 描述提交前检查意图，或显式触发 `trellis-finish-work` skill | §6 提交检查 |
 | 交付、部署、上线、发布、测试通过、准备交付、跑验收、整理交付物、项目收尾 | `/trellis:delivery` | 描述交付收尾意图，或显式触发 `delivery` skill | §6+§7 测试交付 |
-| 记录、保存进度、收工、结束工作 | `/trellis:finish-work` | 描述会话收尾意图，或显式触发 `trellis-finish-work` skill | §7 会话记录 → delivery → record-session |
+| 记录、保存进度 | `/trellis:record-session` | 描述会话记录意图，或显式触发 `record-session` skill | §7 record-session: 归档 + add_session |
+| 收工、结束工作 | `/trellis:finish-work` | 描述会话收尾意图，或显式触发 `trellis-finish-work` skill | §6 finish-work → delivery → record-session |
 
 ### 框架通用命令
 
@@ -852,6 +853,17 @@ def build_finish_work_content(content: str, patch_text: str) -> str | None:
     content = content.replace(
         "Wrap up the current session: archive the active task (and any other completed-but-unarchived tasks the user wants to clean up) and record the session journal. Code commits are NOT done here — those happen in workflow Phase 3.4 before you invoke this command.",
         "Wrap up the current session: verify close-out evidence, confirm the frozen quality matrix, and hand off to `delivery` / `record-session`. Code commits are NOT done here — those happen in workflow Phase 3.4 before you invoke this command.",
+    )
+
+    # Step 2 misleading archive language correction (strong-gate model):
+    # archiving only happens in record-session, not in finish-work.
+    content = content.replace(
+        "current active task is always archived in Step 3 regardless",
+        "current active task is NOT archived in finish-work; archiving is deferred to the record-session stage",
+    )
+    content = content.replace(
+        "archive them too in this round",
+        "note them for archiving in the record-session stage",
     )
 
     # Prefer replacing the full old Step 1-4 body when present so the
