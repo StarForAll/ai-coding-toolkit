@@ -115,6 +115,7 @@ _STATUS_ROUTING_END_MARKER = "## Step 4: Load the Specific Step"
 _FINISH_WORK_MARKER = "<!-- finish-work-projectization-patch -->"
 _FINISH_WORK_START_HEADING = "### 1. Code Quality"
 _FINISH_WORK_END_HEADING = "### 2. close-out"
+_FINISH_WORK_STEP1_HEADING = "## Step 1: Survey current state"
 # For baseline finish-work.md (Trellis 0.5.16), Step 3/4 headings that
 # the strong-gate patch must also replace.
 _FINISH_WORK_STEP3_HEADING = "## Step 3: Archive task(s)"
@@ -797,12 +798,23 @@ def build_finish_work_content(content: str, patch_text: str) -> str | None:
     if _FINISH_WORK_MARKER in content:
         return content
 
-    # Try extended replacement: from "## Step 3: Archive task(s)" through end of Step 4
-    # This ensures the original Steps 3-4 (archive + record-session) are removed,
-    # not just the Code Quality section that follows them.
-    start_idx = content.find(_FINISH_WORK_STEP3_HEADING)
+    content = content.replace(
+        'description: "Wrap up the current session: verify quality gate passed, remind user to commit, archive completed tasks, and record session progress to the developer journal. Use when done coding and ready to end the session."',
+        'description: "Wrap up the current session: verify quality gate passed, collect close-out evidence, and hand off to delivery / record-session. Use when implementation is complete and ready for close-out."',
+    )
+    content = content.replace(
+        "Wrap up the current session: archive the active task (and any other completed-but-unarchived tasks the user wants to clean up) and record the session journal. Code commits are NOT done here — those happen in workflow Phase 3.4 before you invoke this command.",
+        "Wrap up the current session: verify close-out evidence, confirm the frozen quality matrix, and hand off to `delivery` / `record-session`. Code commits are NOT done here — those happen in workflow Phase 3.4 before you invoke this command.",
+    )
+
+    # Prefer replacing the full old Step 1-4 body when present so the
+    # misleading archive/add_session guidance disappears from the top half too.
+    start_idx = content.find(_FINISH_WORK_STEP1_HEADING)
     if start_idx == -1:
-        # Fallback: try from "### 1. Code Quality" if Step 3 heading not found
+        # Fallback: from old archive/session steps through the end of Step 4.
+        start_idx = content.find(_FINISH_WORK_STEP3_HEADING)
+    if start_idx == -1:
+        # Final fallback: try from "### 1. Code Quality" if no step headings exist.
         start_idx = content.find(_FINISH_WORK_START_HEADING)
     end_idx = content.find(_FINISH_WORK_STEP4_END_HEADING)
     if start_idx == -1:
@@ -1397,6 +1409,8 @@ _LEGACY_BREADCRUMB_TAGS = (
     "in_progress-inline",
     "completed",
 )
+_LEGACY_WORKFLOW_SECTION_START = "## Phase Index"
+_LEGACY_WORKFLOW_SECTION_END = "## Customizing Trellis (for forks)"
 
 
 def cleanup_legacy_breadcrumb_blocks(root: Path, *, dry_run: bool) -> int:
@@ -1444,9 +1458,54 @@ def cleanup_legacy_breadcrumb_blocks(root: Path, *, dry_run: bool) -> int:
     return removed
 
 
+def cleanup_legacy_phase_router_sections(root: Path, *, dry_run: bool) -> bool:
+    """Remove the legacy three-phase workflow contract from embedded workflow.md.
+
+    The strong-gate workflow patch appends a new stage-machine contract after the
+    baseline three-phase Phase Index section. Leaving the old section in place
+    causes hooks and session-start carriers to read conflicting instructions.
+    """
+    target_path = root / ".trellis" / "workflow.md"
+    if not target_path.exists():
+        return False
+
+    content = target_path.read_text(encoding="utf-8")
+    marker_idx = content.find(_WORKFLOW_PHASE_INDEX_MARKER)
+    if marker_idx == -1:
+        return False
+
+    start_idx = content.find(_LEGACY_WORKFLOW_SECTION_START)
+    contract_idx = content.find("WORKFLOW-STATE BREADCRUMB CONTRACT")
+    if contract_idx != -1:
+        comment_start = content.rfind("<!--", 0, contract_idx)
+        if comment_start != -1 and (start_idx == -1 or comment_start < start_idx):
+            start_idx = comment_start
+    end_idx = content.find(_LEGACY_WORKFLOW_SECTION_END)
+    if start_idx == -1 or end_idx == -1 or end_idx <= start_idx:
+        return False
+    if start_idx >= marker_idx:
+        return False
+
+    before = content[:start_idx].rstrip("\n")
+    after = content[end_idx:].lstrip("\n")
+    new_content = before + "\n\n" + after
+    if new_content == content:
+        return False
+
+    if not dry_run:
+        target_path.write_text(new_content, encoding="utf-8")
+    if dry_run:
+        info("[Shared] 将移除 workflow.md 中旧三阶段 Phase Index / Plan-Execute-Finish 合同")
+    else:
+        ok("[Shared] 已移除 workflow.md 中旧三阶段 Phase Index / Plan-Execute-Finish 合同")
+    return True
+
+
 # ── Issue 6: cleanup stale workflow-state-contract.md references ──
 _STALE_CONTRACT_PATTERN = ".trellis/spec/cli/backend/workflow-state-contract.md"
 _STALE_CONTRACT_REPLACEMENT = "workflow-state.py --help"
+_TASK_DEGRADED_PATCH_MARKER = "# [workflow-embed-patch:degraded-active-task]"
+_OPENCODE_SESSION_UTILS_PATCH_MARKER = "// [workflow-embed-patch:strong-gate-session-utils]"
 
 
 def cleanup_stale_contract_references(root: Path, *, dry_run: bool) -> bool:
@@ -1466,6 +1525,133 @@ def cleanup_stale_contract_references(root: Path, *, dry_run: bool) -> bool:
         info("[Shared] 将替换 workflow-state-contract.md 引用 → workflow-state.py --help")
     else:
         ok("[Shared] 已替换 workflow-state-contract.md 引用 → workflow-state.py --help")
+    return True
+
+
+def patch_task_start_degraded_fallback(root: Path, *, dry_run: bool) -> bool:
+    """Patch task.py so degraded start writes a fallback active-task file.
+
+    The strong-gate router already knows how to recover from
+    `.trellis/.runtime/degraded-active-task.json`, but the Trellis baseline
+    `task.py start` degraded branch never writes it.
+    """
+    task_path = root / ".trellis" / "scripts" / "task.py"
+    if not task_path.exists():
+        return False
+
+    content = task_path.read_text(encoding="utf-8")
+    if _TASK_DEGRADED_PATCH_MARKER in content:
+        ok("[Shared] task.py degraded fallback 补丁已存在")
+        return False
+
+    anchor = '        # Still flip task.json status: planning → in_progress so downstream phases proceed.\n'
+    if anchor not in content:
+        warn("[Shared] task.py degraded fallback 补丁未命中目标代码，跳过")
+        return False
+
+    patch_block = """\
+        # [workflow-embed-patch:degraded-active-task]
+        degraded_runtime = repo_root / ".trellis" / ".runtime"
+        degraded_runtime.mkdir(parents=True, exist_ok=True)
+        degraded_path = degraded_runtime / "degraded-active-task.json"
+        degraded_payload = {
+            "current_task": task_dir,
+            "updated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+            "source": "task.py start (degraded)",
+        }
+        if write_json(degraded_path, degraded_payload):
+            print(colored("✓ Wrote degraded active-task fallback", Colors.GREEN))
+
+"""
+    patched = content.replace(anchor, patch_block + anchor, 1)
+
+    finish_anchor = '    if task_json_path.is_file():\n        run_task_hooks("after_finish", task_json_path, repo_root)\n    return 0\n'
+    finish_patch = """\
+    degraded_path = repo_root / ".trellis" / ".runtime" / "degraded-active-task.json"
+    if degraded_path.exists():
+        payload = read_json(degraded_path)
+        if isinstance(payload, dict) and payload.get("current_task") == current:
+            degraded_path.unlink()
+
+"""
+    if finish_anchor in patched:
+        patched = patched.replace(finish_anchor, finish_patch + finish_anchor, 1)
+
+    if not dry_run:
+        task_path.write_text(patched, encoding="utf-8")
+    if dry_run:
+        info("[Shared] 将补丁 task.py degraded start fallback → .trellis/.runtime/degraded-active-task.json")
+    else:
+        ok("[Shared] task.py degraded start fallback 已补丁")
+    return True
+
+
+def patch_opencode_session_utils(root: Path, *, dry_run: bool) -> bool:
+    """Patch OpenCode session-utils.js to route from workflow-state instead of READY semantics."""
+    session_utils = root / ".opencode" / "lib" / "session-utils.js"
+    if not session_utils.exists():
+        return False
+
+    content = session_utils.read_text(encoding="utf-8")
+    if _OPENCODE_SESSION_UTILS_PATCH_MARKER in content:
+        ok("[Shared] .opencode/lib/session-utils.js 强门禁补丁已存在")
+        return False
+
+    new_block = """\
+// [workflow-embed-patch:strong-gate-session-utils]
+function getTaskStatus(ctx, platformInput = null) {
+  const active = ctx.getActiveTask(platformInput)
+  const taskRef = active.taskPath
+  const routeScript = join(ctx.directory, ".trellis", "scripts", "workflow", "workflow-state.py")
+
+  if (!existsSync(routeScript)) {
+    return `Status: ROUTER UNAVAILABLE\\nSource: ${active.source}\\nNext: Missing .trellis/scripts/workflow/workflow-state.py`
+  }
+
+  const args = [routeScript, "route", "--project-root", ctx.directory]
+  if (taskRef) {
+    args.splice(2, 0, taskRef)
+  }
+
+  try {
+    const output = execFileSync(PYTHON_CMD, args, {
+      cwd: ctx.directory,
+      timeout: 5000,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        ...(platformInput && typeof ctx.getContextKey === "function" && ctx.getContextKey(platformInput)
+          ? { TRELLIS_CONTEXT_ID: ctx.getContextKey(platformInput) }
+          : {}),
+      },
+    })
+    const data = JSON.parse(output)
+    const stage = typeof data.stage === "string" && data.stage ? data.stage : "(unknown)"
+    const action = typeof data.action === "string" ? data.action : "unknown"
+    const blockers = Array.isArray(data.blockers) ? data.blockers : []
+    const blockerText = blockers.length > 0 ? `\\nBlockers: ${blockers.join(" | ")}` : ""
+    return `Stage: ${stage}\\nAction: ${action}\\nReason: ${data.reason || ""}${blockerText}`
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return `Status: ROUTER FAILED\\nSource: ${active.source}\\nNext: workflow-state.py route failed\\nError: ${message}`
+  }
+}
+"""
+    func_start = content.find("function getTaskStatus(ctx, platformInput = null) {")
+    if func_start == -1:
+        warn("[Shared] .opencode/lib/session-utils.js 强门禁补丁未命中目标代码，跳过")
+        return False
+    next_func = content.find("\nfunction loadTrellisConfig(", func_start)
+    if next_func == -1:
+        next_func = len(content)
+    patched = content[:func_start] + new_block.rstrip() + "\n\n" + content[next_func:].lstrip("\n")
+    if not dry_run:
+        session_utils.write_text(patched, encoding="utf-8")
+    if dry_run:
+        info("[Shared] 将补丁 .opencode/lib/session-utils.js → 改用 workflow-state.py route")
+    else:
+        ok("[Shared] .opencode/lib/session-utils.js 已补丁 → 改用 workflow-state.py route")
     return True
 
 
@@ -2209,6 +2395,7 @@ def main() -> int:
             inject_workflow_breadcrumb_patch(src, root, dry_run=args.dry_run, profile=profile)
 
             # Issue 2: cleanup legacy three-phase breadcrumb blocks after strong-gate patches
+            cleanup_legacy_phase_router_sections(root, dry_run=args.dry_run)
             cleanup_legacy_breadcrumb_blocks(root, dry_run=args.dry_run)
 
             # Issue 6: cleanup stale workflow-state-contract.md references
@@ -2216,6 +2403,8 @@ def main() -> int:
 
             # Issue 1+7: patch deployed inject-workflow-state.py hook
             patch_inject_workflow_state_hook(root, dry_run=args.dry_run)
+            patch_task_start_degraded_fallback(root, dry_run=args.dry_run)
+            patch_opencode_session_utils(root, dry_run=args.dry_run)
 
             # C2: patch session-start no-task guidance to reference NL routing table
             patch_session_start_no_task_guidance(root, dry_run=args.dry_run)

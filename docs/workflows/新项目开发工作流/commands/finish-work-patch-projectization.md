@@ -38,7 +38,7 @@
 - `delivery` 负责验收、交付物确认与所有权证明（外包 profile）
 - `record-session` 才执行 `task.py archive` + `add_session.py`，完成最终归档
 
-**⚠️ 本补丁覆盖 SKILL.md 正文中的 Step 3 (Archive task(s)) 和 Step 4 (Record session journal)**：finish-work 在强门禁模式下不执行 archive / add_session。替换为：
+**⚠️ 本补丁覆盖 SKILL.md 正文中的旧 Step 3/4 语义**：finish-work 在强门禁模式下不执行 archive / add_session。替换为：
 
 > **Step 3**: 确认 `finish-work-checklist.md` 已落盘 → 进入 delivery 阶段
 

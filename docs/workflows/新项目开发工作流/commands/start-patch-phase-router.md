@@ -34,6 +34,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route --project-root <pr
 | `first_entry` | 当前 session 尚无 active task，且项目中也没有可继续任务 | 路由到 `/trellis:feasibility` |
 | `reenter` | 重入当前阶段 | 路由到 `/trellis:<target>`（`target` 字段即目标阶段） |
 | `awaiting_confirmation` | 阶段完成等待确认 | 展示已完成/未完成/缺失项，等用户确认 |
+| `awaiting_confirmation_with_blockers` | 阶段已到确认点，但仍有阻塞项 | 展示 `blockers`，要求先补齐阻塞项，不能直接确认推进 |
 | `blocked` | 执行阶段存在阻塞条件 | 逐项展示 `blockers`，不继续推进 |
 | `recovery_needed` | 当前 session 无法确定 active task | 要求用户明确当前任务 |
 | `repair_needed` | 状态文件缺失或损坏 | 运行 `workflow-state.py repair`，展示推断结果请求确认 |

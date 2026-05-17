@@ -326,15 +326,26 @@ def validate_stage_transition_gates(
     errors: list[str],
 ) -> None:
     """Validate gate requirements when transitioning to a new stage via set."""
-    current_stage = state.get("stage", "")
-
     if new_stage in {"feasibility"}:
         return
+
+    candidate_state = json.loads(json.dumps(state, ensure_ascii=False))
+    candidate_state["stage"] = new_stage
+    if "allowed_next_stages" not in candidate_state or not isinstance(
+        candidate_state.get("allowed_next_stages"), list
+    ):
+        candidate_state["allowed_next_stages"] = list(STAGE_TRANSITIONS.get(new_stage, []))
 
     # Stages >= brainstorm require external project controls and ownership policy
     if new_stage in STAGES - {"feasibility"}:
         gate_errors: list[str] = []
-        validate_external_project_controls(task_dir, repo_root, state, gate_errors, target_stage=new_stage)
+        validate_external_project_controls(
+            task_dir,
+            repo_root,
+            candidate_state,
+            gate_errors,
+            target_stage=new_stage,
+        )
         validate_ownership_policy_controls(task_dir, repo_root, state, gate_errors)
 
         # For brainstorm stage, downgrade missing assessment errors to warnings
@@ -351,7 +362,7 @@ def validate_stage_transition_gates(
 
     # Stages >= design additionally require project doc boundary
     if new_stage in PROJECT_ESTIMATE_REQUIRED_STAGES:
-        validate_project_doc_boundary(state, repo_root, task_dir, errors)
+        validate_project_doc_boundary(candidate_state, repo_root, task_dir, errors)
 
 
 def validate_execution_boundary(state: dict[str, Any], errors: list[str]) -> None:
@@ -925,6 +936,57 @@ def validate_project_doc_boundary(
     validate_context7_review_artifact(task_dir, state, errors)
 
 
+def build_pending_state_for_set(
+    state: dict[str, Any],
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    pending = json.loads(json.dumps(state, ensure_ascii=False))
+    current_stage = pending.get("stage", "")
+    pending_stage = args.stage if args.stage else current_stage
+
+    pending["stage"] = pending_stage
+    if current_stage in EXECUTION_STAGES and pending_stage not in EXECUTION_STAGES:
+        checkpoints = pending.setdefault("checkpoints", {})
+        checkpoints["execution_authorized"] = False
+    if args.stage_status:
+        pending["stage_status"] = args.stage_status
+    if args.clear_current_block:
+        pending["current_block"] = None
+    elif args.current_block is not None:
+        pending["current_block"] = args.current_block
+    if args.completed_blocks is not None:
+        pending["completed_blocks"] = [item for item in args.completed_blocks.split(",") if item]
+    if args.allowed_next is not None:
+        pending["allowed_next_stages"] = [item for item in args.allowed_next.split(",") if item]
+    if args.awaiting_user_confirmation is not None:
+        pending["awaiting_user_confirmation"] = args.awaiting_user_confirmation
+    if args.architecture_confirmed is not None:
+        checkpoints = pending.setdefault("checkpoints", {})
+        checkpoints["architecture_confirmed"] = args.architecture_confirmed
+    if args.context7_review_completed is not None:
+        checkpoints = pending.setdefault("checkpoints", {})
+        checkpoints["context7_review_completed"] = args.context7_review_completed
+    if args.execution_authorized is not None:
+        checkpoints = pending.setdefault("checkpoints", {})
+        checkpoints["execution_authorized"] = args.execution_authorized
+    if args.clear_last_transition:
+        pending["last_confirmed_transition"] = None
+    elif args.transition_from is not None:
+        pending["last_confirmed_transition"] = {
+            "from": args.transition_from,
+            "to": pending_stage,
+            "confirmed_at": now_iso(),
+        }
+    if args.note:
+        notes = pending.setdefault("notes", [])
+        if not isinstance(notes, list):
+            notes = []
+            pending["notes"] = notes
+        notes.append(args.note)
+
+    return pending
+
+
 def cmd_init(args: argparse.Namespace) -> int:
     task_dir = resolve_task_dir(args.task_dir)
     state_path, state = load_state(task_dir)
@@ -955,91 +1017,52 @@ def cmd_set(args: argparse.Namespace) -> int:
         print(f"❌ {state_path} 不存在或无法读取；请先运行 init")
         return 1
 
+    current_stage = state.get("stage", "")
+    pending_state = build_pending_state_for_set(state, args)
+    pending_stage = pending_state.get("stage", current_stage)
+
     if args.stage:
-        current_stage = state.get("stage", "")
-        new_stage = args.stage
-        if new_stage != current_stage and not args.force:
+        if pending_stage != current_stage and not args.force:
             # 1. allowed_next_stages gate
             allowed = state.get("allowed_next_stages", [])
-            if isinstance(allowed, list) and new_stage not in allowed:
-                print(f"❌ 阶段切换被拒绝: {current_stage!r} → {new_stage!r} 不在 allowed_next_stages {allowed} 中；如需强制切换请使用 --force")
+            if isinstance(allowed, list) and pending_stage not in allowed:
+                print(f"❌ 阶段切换被拒绝: {current_stage!r} → {pending_stage!r} 不在 allowed_next_stages {allowed} 中；如需强制切换请使用 --force")
                 return 1
             # 2. awaiting_user_confirmation gate for all non-trivial stage transitions
-            if new_stage not in {"feasibility"}:
+            if pending_stage not in {"feasibility"}:
                 current_status = state.get("stage_status", "")
                 if current_status != "awaiting_user_confirmation":
-                    print(f"❌ 阶段切换被拒绝: 进入 {new_stage!r} 前 stage_status 必须为 awaiting_user_confirmation；当前为 {current_status!r}。如需强制切换请使用 --force")
+                    print(f"❌ 阶段切换被拒绝: 进入 {pending_stage!r} 前 stage_status 必须为 awaiting_user_confirmation；当前为 {current_status!r}。如需强制切换请使用 --force")
                     return 1
             # 3. execution_authorized gate for execution stages
-            if new_stage in EXECUTION_STAGES:
-                checkpoints = state.get("checkpoints", {})
-                current_ea = checkpoints.get("execution_authorized", False)
-                pending_ea = args.execution_authorized if args.execution_authorized is not None else current_ea
+            if pending_stage in EXECUTION_STAGES:
+                checkpoints = pending_state.get("checkpoints", {})
+                pending_ea = checkpoints.get("execution_authorized", False)
                 if pending_ea is not True:
-                    print(f"❌ 阶段切换被拒绝: 进入 {new_stage!r} 前 checkpoints.execution_authorized 必须为 true（可在同一命令中通过 --execution-authorized true 设置）。如需强制切换请使用 --force")
+                    print(f"❌ 阶段切换被拒绝: 进入 {pending_stage!r} 前 checkpoints.execution_authorized 必须为 true（可在同一命令中通过 --execution-authorized true 设置）。如需强制切换请使用 --force")
                     return 1
             # 4. Stage transition gate validation (external project controls, ownership, doc boundary)
             repo_root = find_repo_root(task_dir)
             if repo_root is not None:
                 gate_errors: list[str] = []
-                validate_stage_transition_gates(task_dir, repo_root, state, new_stage, gate_errors)
+                validate_stage_transition_gates(task_dir, repo_root, pending_state, pending_stage, gate_errors)
                 if gate_errors:
                     for message in gate_errors:
                         print(f"❌ {message}")
                     print("❌ 阶段切换被拒绝: 门禁产物未齐；如需强制切换请使用 --force")
                     return 1
-        state["stage"] = args.stage
-        # Auto-reset execution_authorized when leaving execution stages
-        if current_stage in EXECUTION_STAGES and new_stage not in EXECUTION_STAGES:
-            checkpoints = state.setdefault("checkpoints", {})
-            checkpoints["execution_authorized"] = False
-    if args.stage_status:
-        state["stage_status"] = args.stage_status
-    if args.clear_current_block:
-        state["current_block"] = None
-    elif args.current_block is not None:
-        state["current_block"] = args.current_block
-    if args.completed_blocks is not None:
-        state["completed_blocks"] = [item for item in args.completed_blocks.split(",") if item]
-    if args.allowed_next is not None:
-        state["allowed_next_stages"] = [item for item in args.allowed_next.split(",") if item]
-    if args.awaiting_user_confirmation is not None:
-        state["awaiting_user_confirmation"] = args.awaiting_user_confirmation
-    if args.architecture_confirmed is not None:
-        checkpoints = state.setdefault("checkpoints", {})
-        checkpoints["architecture_confirmed"] = args.architecture_confirmed
-    if args.context7_review_completed is not None:
-        checkpoints = state.setdefault("checkpoints", {})
-        checkpoints["context7_review_completed"] = args.context7_review_completed
-    if args.execution_authorized is not None:
-        checkpoints = state.setdefault("checkpoints", {})
-        checkpoints["execution_authorized"] = args.execution_authorized
-    if args.clear_last_transition:
-        state["last_confirmed_transition"] = None
-    elif args.transition_from is not None:
-        state["last_confirmed_transition"] = {
-            "from": args.transition_from,
-            "to": state.get("stage"),
-            "confirmed_at": now_iso(),
-        }
-    if args.note:
-        notes = state.setdefault("notes", [])
-        if not isinstance(notes, list):
-            notes = []
-            state["notes"] = notes
-        notes.append(args.note)
 
     set_errors: list[str] = []
-    validate_state_shape(state, set_errors)
-    validate_execution_boundary(state, set_errors)
+    validate_state_shape(pending_state, set_errors)
+    validate_execution_boundary(pending_state, set_errors)
     if set_errors:
         for message in set_errors:
             print(f"❌ {message}")
         print("❌ 拒绝写入非法 workflow-state；请一次性完成合法的阶段切换参数")
         return 1
 
-    state["updated_at"] = now_iso()
-    write_json(state_path, state)
+    pending_state["updated_at"] = now_iso()
+    write_json(state_path, pending_state)
     print(f"✅ 已更新 {state_path}")
     return 0
 

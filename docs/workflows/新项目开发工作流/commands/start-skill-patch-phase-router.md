@@ -45,6 +45,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route --project-root <pr
 | `first_entry` | New project and no resumable task exists | Use the `feasibility` skill |
 | `reenter` | Re-enter current stage | Use the skill matching the `target` field |
 | `awaiting_confirmation` | Stage done, waiting for user | Report completed/missing items; wait for confirmation |
+| `awaiting_confirmation_with_blockers` | Stage reached confirmation point but blockers remain | Show `blockers`; do not ask for confirmation until they are fixed |
 | `blocked` | Execution blocked | Show `blockers` list; do not proceed |
 | `recovery_needed` | Cannot determine the current active task | Ask user to clarify the current task |
 | `repair_needed` | State file missing or corrupt | Run `workflow-state.py repair`; show inference and ask for confirmation |

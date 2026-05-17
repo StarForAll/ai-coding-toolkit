@@ -88,10 +88,15 @@ inject_workflow_phase_index_patch = _INSTALL_WORKFLOW.inject_workflow_phase_inde
 inject_workflow_no_task_patch = _INSTALL_WORKFLOW.inject_workflow_no_task_patch
 inject_workflow_breadcrumb_patch = _INSTALL_WORKFLOW.inject_workflow_breadcrumb_patch
 cleanup_legacy_breadcrumb_blocks = _INSTALL_WORKFLOW.cleanup_legacy_breadcrumb_blocks
+cleanup_legacy_phase_router_sections = _INSTALL_WORKFLOW.cleanup_legacy_phase_router_sections
 cleanup_stale_contract_references = _INSTALL_WORKFLOW.cleanup_stale_contract_references
 patch_inject_workflow_state_hook = _INSTALL_WORKFLOW.patch_inject_workflow_state_hook
+patch_task_start_degraded_fallback = _INSTALL_WORKFLOW.patch_task_start_degraded_fallback
+patch_opencode_session_utils = _INSTALL_WORKFLOW.patch_opencode_session_utils
 _HOOK_PATCH_MARKER = _INSTALL_WORKFLOW._HOOK_PATCH_MARKER
 _STALE_CONTRACT_PATTERN = _INSTALL_WORKFLOW._STALE_CONTRACT_PATTERN
+_TASK_DEGRADED_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_DEGRADED_PATCH_MARKER
+_OPENCODE_SESSION_UTILS_PATCH_MARKER = _INSTALL_WORKFLOW._OPENCODE_SESSION_UTILS_PATCH_MARKER
 # Reuse install-workflow markers for idempotency checks
 _WORKFLOW_PHASE_INDEX_MARKER = _INSTALL_WORKFLOW._WORKFLOW_PHASE_INDEX_MARKER
 _WORKFLOW_BREADCRUMB_MARKER = _INSTALL_WORKFLOW._WORKFLOW_BREADCRUMB_MARKER
@@ -587,6 +592,10 @@ def detect_conflicts_workflow_doc(src: Path, root: Path, *, profile: str = DEFAU
         if not found_residual:
             ok("[Shared] .trellis/workflow.md: 无旧三阶段 breadcrumb 残留")
 
+    if "Phase 1: Plan    → figure out what to do" in content:
+        err("[Shared] .trellis/workflow.md: 旧三阶段 Phase Index / Plan-Execute-Finish 合同残留")
+        conflicts += 1
+
     # Issue 6: check for stale workflow-state-contract.md references
     if _STALE_CONTRACT_PATTERN in content:
         err(f"[Shared] .trellis/workflow.md: 引用不存在的 {_STALE_CONTRACT_PATTERN}")
@@ -855,6 +864,23 @@ def detect_conflicts_codex(
         else:
             warn("[OpenCode] inject-workflow-state.js: plugin 补丁未应用（workflow-state.json.stage 优先级未启用）")
     # OpenCode plugin absence is not a conflict — OpenCode may not be installed
+
+    task_py = root / ".trellis" / "scripts" / "task.py"
+    if task_py.exists():
+        task_content = task_py.read_text(encoding="utf-8")
+        if _TASK_DEGRADED_PATCH_MARKER in task_content:
+            ok("[Shared] task.py: degraded-active-task fallback 补丁已应用")
+        else:
+            err("[Shared] task.py: degraded-active-task fallback 补丁缺失")
+            conflicts += 1
+
+    opencode_session_utils = root / ".opencode" / "lib" / "session-utils.js"
+    if opencode_session_utils.exists():
+        session_utils_content = opencode_session_utils.read_text(encoding="utf-8")
+        if _OPENCODE_SESSION_UTILS_PATCH_MARKER in session_utils_content:
+            ok("[OpenCode] session-utils.js: 强门禁 session context 补丁已应用")
+        else:
+            warn("[OpenCode] session-utils.js: 仍在使用 READY/NOT READY 旧语义；如当前项目启用 session-start plugin 应补丁")
 
     # 对每个 skills 目录分别检查 parallel：当前 Codex 合同是“移除嵌入面，但保留备份”
     parallel_conflicts = 0
@@ -1458,8 +1484,11 @@ def main() -> int:
     inject_workflow_breadcrumb_patch(src, root, dry_run=False, profile=profile)
     # Post-patch cleanup: remove legacy three-phase breadcrumbs, fix stale references, patch hook
     cleanup_legacy_breadcrumb_blocks(root, dry_run=False)
+    cleanup_legacy_phase_router_sections(root, dry_run=False)
     cleanup_stale_contract_references(root, dry_run=False)
     patch_inject_workflow_state_hook(root, dry_run=False)
+    patch_task_start_degraded_fallback(root, dry_run=False)
+    patch_opencode_session_utils(root, dry_run=False)
     agents_md = root / "AGENTS.md"
     if agents_md.exists() and (
         not has_agents_md_routing(agents_md) or not agents_md_routing_matches_source(agents_md)

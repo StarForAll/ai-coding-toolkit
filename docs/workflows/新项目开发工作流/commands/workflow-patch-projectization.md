@@ -5,34 +5,35 @@
 ### Task Development Flow
 
 ```text
-1. Create or select task
-   --> python3 ./.trellis/scripts/task.py create "<title>" --slug <name> or list
+1. First entry / route current task
+   --> python3 ./.trellis/scripts/workflow/workflow-state.py route --project-root <project-root>
+   --> For new outsourcing projects: route to feasibility first
+   --> For resumable tasks: re-enter the currently confirmed stage only
 
-2. Start task (mark as current)
-   --> python3 ./.trellis/scripts/task.py start <name>
-   --> Writes session-scoped active task runtime state; future sessions and hooks can re-enter the current task
-   --> If no session identity is available, enters degraded mode: status flips to in_progress, writes fallback file under .trellis/.runtime/, returns exit 0
+2. Create or reuse the task directory for the current stage
+   --> feasibility / brainstorm may create the task
+   --> workflow-state.json is the single source of truth for stage routing
 
-3. Write code according to guidelines
-   --> Read .trellis/spec/ docs relevant to your task
-   --> For cross-layer: read .trellis/spec/guides/
+3. Confirm stage gates before leaving the current stage
+   --> Signal readiness with stage_status=awaiting_user_confirmation
+   --> After explicit user confirmation, switch stage via workflow-state.py set
 
-4. Self-test
+4. Implement only after execution authorization
+   --> plan -> implementation / test-first requires checkpoints.execution_authorized=true
+   --> If task.py start runs without session identity, it must also write .trellis/.runtime/degraded-active-task.json for later recovery
+
+5. Verify and commit
    --> Run the project's frozen verification commands when scaffold exists (see spec docs)
    --> Manual feature testing
-
-5. Commit code
    --> git add <files>
    --> git commit -m "type(scope): description"
-       Format: feat/fix/docs/refactor/test/chore
 
 6. Final close-out
-   --> python3 ./.trellis/scripts/task.py archive <task-name>
-   --> python3 ./.trellis/scripts/add_session.py --title "Title" --commit "hash"
-   --> archive runs first, then add_session
+   --> finish-work -> delivery -> record-session
+   --> archive and add_session happen only at record-session
 ```
 
-`python3 ./.trellis/scripts/task.py finish` remains available when you intentionally need to clear the current session's active task without archiving a completed task. Do not use it as a substitute for final close-out.
+`python3 ./.trellis/scripts/task.py finish` remains available when you intentionally need to clear the current session's active task without archiving a completed task. Do not use it as a substitute for final close-out. In degraded mode, `task.py start` must leave a recoverable fallback file under `.trellis/.runtime/degraded-active-task.json`.
 
 For workflows that split work into a parent coordination task plus child execution tasks:
 
@@ -71,7 +72,7 @@ For workflows that split work into a parent coordination task plus child executi
 
 ### One-Click Session Recording
 
-After the human has tested and committed the code, archive the current task first and record the session second:
+The strong-gate workflow no longer archives at `finish-work`. Session recording belongs to the terminal `record-session` stage only:
 
 ```bash
 python3 ./.trellis/scripts/task.py archive <task-name>
@@ -84,7 +85,7 @@ python3 ./.trellis/scripts/add_session.py \
 git status --short .trellis/workspace .trellis/tasks
 ```
 
-Expected metadata status output: empty.
+Expected metadata status output: empty. This command pair is a `record-session` stage action, not a generic finish-work shortcut.
 
 Notes:
 
@@ -92,7 +93,7 @@ Notes:
 - `finish-work` only handles commit checklist and close-out evidence; it does NOT archive the task.
 - `delivery` handles acceptance, deliverables, and ownership proof.
 - `record-session` performs the final `task.py archive` + `add_session.py` to complete the workflow cycle.
-- Detailed close-out gates still belong to the installed `/trellis:finish-work` / `trellis-finish-work` and `/trellis:delivery` entries; legacy `/trellis:record-session` is old-target compatibility only. This workflow guide only summarizes the default path.
+- Detailed close-out gates still belong to the installed `/trellis:finish-work` / `trellis-finish-work` and `/trellis:delivery` entries. Directly invoking `/trellis:record-session` remains an old-target compatibility entry; in the strong-gate flow the `record-session` stage is reached only after `delivery`.
 
 ### Pre-end Checklist
 
@@ -131,11 +132,11 @@ Stage transition gates are enforced by `workflow-state.py set --stage <next>`; u
 
 ### Stage Transition Quick Reference
 
-All transitions follow a two-step protocol: **(A)** signal readiness by setting `stage_status=awaiting_user_confirmation`, then **(B)** after user confirms, switch to the next stage. `workflow-state.py set` applies all flags in one call and validates the final state.
+All transitions follow a two-step protocol: **(A)** signal readiness by setting `stage_status=awaiting_user_confirmation`, then **(B)** after user confirms, switch to the next stage. `workflow-state.py set` must evaluate the fully merged target state in one call, including any checkpoint flags passed on the same command.
 
 | From → To | Step A: Signal readiness | Step B: After user confirms |
 |---|---|---|
-| no_task → feasibility | N/A (outsourcing first entry) | `workflow-state.py route` → load `/trellis:feasibility` (skill auto-creates task + init) |
+| no_task → feasibility | N/A (outsourcing first entry) | `workflow-state.py route` → load `/trellis:feasibility` (skill auto-creates task + init feasibility state) |
 | feasibility → brainstorm | assessment.md approved | `workflow-state.py set <dir> --stage brainstorm --stage-status in_progress --allowed-next design,plan` |
 | brainstorm → design | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage design --stage-status in_progress --awaiting-user-confirmation false --allowed-next plan --transition-from brainstorm` |
 | design → plan | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage plan --stage-status in_progress --awaiting-user-confirmation false --allowed-next implementation,test-first --transition-from design` |
@@ -242,5 +243,6 @@ The legacy `/trellis:record-session` command remains available as a backwards-co
 No active task. **A Direct answer** — pure Q&A / explanation / lookup / chat; no file writes + one-line answer + repo reads ≤ 2 files → AI judges, no override needed.
 **A+ Deep analysis** — multi-file read-only audit / architecture review / diagnostic report; file writes limited to analysis docs (research/, temp files); no source code / config / project file modification allowed. Creates a task only if the user explicitly asks to act on findings.
 **B Create a task** — any implementation / code change / build / refactor work. For outsourcing profile: entry sequence starts with feasibility gate — (1) `python3 ./.trellis/scripts/workflow/workflow-state.py route` to detect first-entry → (2) if `action=first_entry`, load `/trellis:feasibility` (the feasibility skill will automatically create the task directory and initialize workflow-state.json) → (3) after feasibility passes, `trellis-brainstorm` for prd iteration → (4) `task.py start <task-dir>`. For personal profile: (1) `task.py create "<title>"` → (2) `trellis-brainstorm` — personal profile can skip feasibility but **must** supplement core fields of `assessment.md` during brainstorm (`project_engagement_type=non_outsourcing` + `source_watermark_*` + `ownership_proof_required`), otherwise subsequent stage gate validation will block → (3) `task.py start <task-dir>`. **"It looks small" is NOT grounds for downgrading B to A+ or C**.
+`task.py start` in this branch only persists or repairs the active-task pointer for the current session. It does **not** advance `workflow-state.json.stage`; stage changes must still be performed via `workflow-state.py set` after the current stage reaches `awaiting_user_confirmation`.
 **C Inline change** (per-turn only, escape hatch for B) — the user's CURRENT message MUST contain one of: "skip trellis" / "no task" / "just do it" / "don't create a task" / "跳过 trellis" / "别走流程" / "小修一下" / "直接改" / "先别建任务" → briefly acknowledge ("ok, skipping trellis flow this turn"), then inline. **Without seeing one of these phrases you must NOT inline on your own**; do not invent an override the user never said.
 [/workflow-state:no_task]

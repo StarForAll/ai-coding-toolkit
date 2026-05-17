@@ -1527,6 +1527,71 @@ class WorkflowStateScriptTests(unittest.TestCase):
         forced = self.run_script("set", str(task_dir), "--stage", "design", "--force")
         self.assertEqual(forced.returncode, 0, msg=forced.stdout + forced.stderr)
 
+    def test_transition_to_design_uses_target_stage_doc_gate(self) -> None:
+        """Entering design must validate design-stage project docs, not the old stage."""
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (root / "docs" / "requirements" / "customer-facing-prd.md").unlink()
+
+        self.run_script("init", str(task_dir), "--stage", "brainstorm")
+        self.run_script(
+            "set", str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+        )
+
+        blocked = self.run_script(
+            "set", str(task_dir),
+            "--stage", "design",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "brainstorm",
+            "--allowed-next", "plan",
+        )
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("customer-facing-prd.md", blocked.stdout)
+
+    def test_transition_to_plan_accepts_checkpoint_flags_from_same_command(self) -> None:
+        """Design->plan should validate the fully merged target state from one set call."""
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        requirements_dir = root / "docs" / "requirements"
+        (requirements_dir / "developer-facing-prd.md").write_text("# dev prd\n", encoding="utf-8")
+        self.write_context7_review(task_dir)
+
+        self.run_script("init", str(task_dir), "--stage", "design")
+        self.run_script(
+            "set", str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--completed-blocks", "A,B,C,D",
+        )
+
+        transitioned = self.run_script(
+            "set", str(task_dir),
+            "--stage", "plan",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "design",
+            "--allowed-next", "implementation,test-first",
+            "--architecture-confirmed", "true",
+            "--context7-review-completed", "true",
+        )
+        self.assertEqual(transitioned.returncode, 0, msg=transitioned.stdout + transitioned.stderr)
+        state = json.loads((task_dir / "workflow-state.json").read_text(encoding="utf-8"))
+        self.assertEqual(state["stage"], "plan")
+        self.assertTrue(state["checkpoints"]["context7_review_completed"])
+
     def test_issue4_route_awaiting_with_blockers(self) -> None:
         """Issue 4: route returns awaiting_confirmation_with_blockers when awaiting but blockers exist."""
         root, task_dir = self.make_fixture()
