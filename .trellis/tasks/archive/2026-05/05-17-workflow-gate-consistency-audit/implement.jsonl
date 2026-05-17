@@ -1,0 +1,12 @@
+{"file": ".trellis/spec/docs/index.md", "reason": "Documentation boundary rules for workflow product assets and target-project/source-repo separation."}
+{"file": ".trellis/spec/scripts/index.md", "reason": "Entry point for workflow Python scripts and command-doc authoring contracts."}
+{"file": ".trellis/spec/scripts/python-conventions.md", "reason": "Required if installer/helper Python patches are needed."}
+{"file": ".trellis/spec/scripts/workflow-installer-upgrade-contracts.md", "reason": "Installer and upgrade behavior contracts for target-project embedding fixes."}
+{"file": ".trellis/spec/scripts/workflow-command-doc-contracts.md", "reason": "Command source documents under docs/workflows/**/commands must preserve runtime semantics."}
+{"file": ".trellis/spec/platforms/index.md", "reason": "Platform-specific boundaries for CLI behavior changes."}
+{"file": ".trellis/spec/platforms/codex-workflow-behavior.md", "reason": "Codex inline/no-agent and workflow behavior constraints are central to this task."}
+{"file": ".trellis/spec/skills/workflow-audit.md", "reason": "Source-of-truth behavior for workflow-audit task-based runtime audits."}
+{"file": ".trellis/spec/guides/index.md", "reason": "Cross-layer and code-reuse thinking prompts for workflow asset maintenance."}
+{"file": ".trellis/spec/universal-domains/product-and-requirements/acceptance-criteria/normative-rules.md", "reason": "Imported requirements/acceptance rules are part of the spec-discovery issue under validation."}
+{"file": ".trellis/spec/universal-domains/verification/evidence-requirements/normative-rules.md", "reason": "Evidence-first validation requirements for confirmed issue reporting."}
+{"file": ".trellis/tasks/05-17-workflow-gate-consistency-audit/research/preflight-and-boundary.md", "reason": "Preflight version gate and target-project boundary facts collected before formal execution."}

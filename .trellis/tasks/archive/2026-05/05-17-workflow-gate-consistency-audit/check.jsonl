@@ -1,0 +1,10 @@
+{"file": ".trellis/spec/docs/index.md", "reason": "Verify workflow documentation remains accurate and source/target boundaries are not conflated."}
+{"file": ".trellis/spec/scripts/index.md", "reason": "Verify script and command-doc changes follow repo-local workflow authoring rules."}
+{"file": ".trellis/spec/scripts/workflow-installer-upgrade-contracts.md", "reason": "Check installer/upgrade patch behavior remains safe for target-project embedding."}
+{"file": ".trellis/spec/scripts/workflow-command-doc-contracts.md", "reason": "Check command source documents do not mix maintainer-only and runtime semantics."}
+{"file": ".trellis/spec/platforms/codex-workflow-behavior.md", "reason": "Verify Codex-specific no-agent and inline execution constraints remain honored."}
+{"file": ".trellis/spec/skills/workflow-audit.md", "reason": "Check audit report, evidence tags, runtime validation, and Codex handoff boundaries against the source-of-truth skill spec."}
+{"file": ".trellis/spec/universal-domains/verification/evidence-requirements/normative-rules.md", "reason": "Verify final conclusions are evidence-backed and do not overclaim."}
+{"file": ".trellis/spec/universal-domains/verification/verification-gates/normative-rules.md", "reason": "Verify completion claims are tied to actual tests or documented non-runs."}
+{"file": ".trellis/spec/checklists/universal-domains/verification/definition-of-done-checklist.md", "reason": "Quality gate checklist for final verification after repair."}
+{"file": ".trellis/tasks/05-17-workflow-gate-consistency-audit/research/preflight-and-boundary.md", "reason": "Check preflight evidence remains reflected accurately in task conclusions."}
