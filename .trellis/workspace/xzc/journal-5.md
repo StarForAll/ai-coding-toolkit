@@ -1510,3 +1510,36 @@ Fix 3 rounds of workflow source issues: (1) check-quality.py false-green exit co
 ### Next Steps
 
 - None - task complete
+
+
+## Session 231: 修复工作流嵌入后9个一致性问题
+
+**Date**: 2026-05-17
+**Task**: 修复工作流嵌入后9个一致性问题
+**Branch**: `main`
+
+### Summary
+
+修复 install-workflow.py (patch_inject_workflow_state_hook, cleanup_legacy_breadcrumb_blocks, cleanup_stale_contract_references)、upgrade-compat.py (累积冲突检测、残留块检测、hook patch warn)、workflow-patch-projectization.md (两步过渡协议、record-session 面包屑、A+ 深度分析、inline variants) 共9个一致性问题，经3轮实施和用户纠正后全部通过测试
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b9347a7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
