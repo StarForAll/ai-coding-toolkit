@@ -1609,3 +1609,36 @@ Bug1: code_block_strip_line 缩进 4→8 空格修复 Codex hook SyntaxError; Bu
 ### Next Steps
 
 - None - task complete
+
+
+## Session 234: 修复工作流强门禁8项一致性问题
+
+**Date**: 2026-05-17
+**Task**: 修复工作流强门禁8项一致性问题
+**Branch**: `main`
+
+### Summary
+
+修复workflow-state.py的8项一致性问题：set缺门禁(新增validate_stage_transition_gates)、check→finish-work转移、personal profile路径、route warnings、面包屑优先读stage、收尾链路冲突、record-session命令、patch补丁脚本。68测试全部通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `HEAD` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
