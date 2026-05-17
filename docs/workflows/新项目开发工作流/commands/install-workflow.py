@@ -793,12 +793,17 @@ def disable_parallel_skill(src: Path, skills_dir: Path, *, dry_run: bool, cli_la
 
 
 def build_finish_work_content(content: str, patch_text: str) -> str | None:
-    """将 finish-work 的默认 Code Quality 区块及 Step 3/4 替换为项目化补丁。"""
+    """将 finish-work 的 Step 3/4 及 Code Quality 区块替换为项目化补丁。"""
     if _FINISH_WORK_MARKER in content:
         return content
 
-    # Try extended replacement: from "### 1. Code Quality" through end of Step 4
-    start_idx = content.find(_FINISH_WORK_START_HEADING)
+    # Try extended replacement: from "## Step 3: Archive task(s)" through end of Step 4
+    # This ensures the original Steps 3-4 (archive + record-session) are removed,
+    # not just the Code Quality section that follows them.
+    start_idx = content.find(_FINISH_WORK_STEP3_HEADING)
+    if start_idx == -1:
+        # Fallback: try from "### 1. Code Quality" if Step 3 heading not found
+        start_idx = content.find(_FINISH_WORK_START_HEADING)
     end_idx = content.find(_FINISH_WORK_STEP4_END_HEADING)
     if start_idx == -1:
         return content.rstrip() + "\n\n---\n\n" + patch_text.rstrip() + "\n"
@@ -1329,6 +1334,58 @@ def patch_inject_workflow_state_hook(root: Path, *, dry_run: bool) -> bool:
                 warn(f"[Shared] {opencode_js_subpath} 补丁未命中目标代码，跳过")
 
     return any_patched
+
+
+# ── C2: patch session-start no-task guidance to reference NL routing table ──
+_SESSION_START_NO_TASK_MARKER = "# [workflow-embed-patch:session-start-nl-routing]"
+_SESSION_START_NO_TASK_OLD = (
+    '"Next-Action: After the user describes their intent, load skill `trellis-brainstorm` '
+    'to clarify requirements and create a task via `python3 ./.trellis/scripts/task.py create`.\\n"'
+)
+_SESSION_START_NO_TASK_NEW = (
+    '"Next-Action: Consult the AGENTS.md NL routing table for profile-specific entry routing. '
+    'For outsourcing profile: run `python3 ./.trellis/scripts/workflow/workflow-state.py route` '
+    'to detect first-entry and load `/trellis:feasibility`. '
+    'For personal profile: load skill `trellis-brainstorm` to clarify requirements '
+    'and create a task via `python3 ./.trellis/scripts/task.py create`.\\n"'
+)
+
+
+def patch_session_start_no_task_guidance(root: Path, *, dry_run: bool) -> bool:
+    """Patch session-start hook no-task guidance to reference AGENTS.md NL routing table.
+
+    The baseline session-start hook unconditionally directs to trellis-brainstorm +
+    task.py create, which bypasses the feasibility gate for outsourcing profile.
+    This patch updates the guidance to check the profile and route accordingly.
+    """
+    hook_path = root / ".claude" / "hooks" / "session-start.py"
+    if not hook_path.exists():
+        return False
+
+    content = hook_path.read_text(encoding="utf-8")
+    if _SESSION_START_NO_TASK_MARKER in content:
+        ok("[Shared] session-start.py no-task guidance 补丁已存在")
+        return False
+
+    if _SESSION_START_NO_TASK_OLD not in content:
+        warn("[Shared] session-start.py no-task 指导未命中目标代码，跳过")
+        return False
+
+    patched = content.replace(
+        _SESSION_START_NO_TASK_OLD,
+        _SESSION_START_NO_TASK_MARKER + "\n            " + _SESSION_START_NO_TASK_NEW,
+    )
+
+    if patched == content:
+        warn("[Shared] session-start.py 补丁未生效，跳过")
+        return False
+
+    if not dry_run:
+        hook_path.write_text(patched, encoding="utf-8")
+        ok("[Shared] session-start.py no-task guidance 已补丁（引用 NL 路由表）")
+    else:
+        info("[Shared] 将补丁 session-start.py no-task guidance（引用 NL 路由表）")
+    return True
 
 
 # ── Issue 2: cleanup legacy three-phase breadcrumb blocks ──
@@ -2159,6 +2216,9 @@ def main() -> int:
 
             # Issue 1+7: patch deployed inject-workflow-state.py hook
             patch_inject_workflow_state_hook(root, dry_run=args.dry_run)
+
+            # C2: patch session-start no-task guidance to reference NL routing table
+            patch_session_start_no_task_guidance(root, dry_run=args.dry_run)
 
             # Patch workflow_phase.py with strong-gate rejection
             _apply_patch_workflow_phase(src, root, dry_run=args.dry_run)

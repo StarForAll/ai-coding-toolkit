@@ -11,6 +11,7 @@
 2. Start task (mark as current)
    --> python3 ./.trellis/scripts/task.py start <name>
    --> Writes session-scoped active task runtime state; future sessions and hooks can re-enter the current task
+   --> If no session identity is available, enters degraded mode: status flips to in_progress, writes fallback file under .trellis/.runtime/, returns exit 0
 
 3. Write code according to guidelines
    --> Read .trellis/spec/ docs relevant to your task

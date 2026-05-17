@@ -1194,8 +1194,21 @@ def cmd_route(args: argparse.Namespace) -> int:
                     # Detect project profile for first-entry routing
                     profile_hint = None
                     if not (repo_root / ASSESSMENT_FILE).is_file():
-                        # No assessment.md: likely personal project
-                        profile_hint = "personal"
+                        # No assessment.md: check workflow-installed.json for actual profile
+                        install_record_path = repo_root / INSTALL_RECORD
+                        if install_record_path.is_file():
+                            try:
+                                import json as _json
+                                installed_data = _json.loads(install_record_path.read_text(encoding="utf-8"))
+                                installed_profile = installed_data.get("profile")
+                                if installed_profile == "outsourcing":
+                                    profile_hint = "outsourcing"
+                                else:
+                                    profile_hint = "personal"
+                            except (OSError, UnicodeDecodeError, ValueError):
+                                profile_hint = "personal"
+                        else:
+                            profile_hint = "personal"
                     else:
                         try:
                             a_content = (repo_root / ASSESSMENT_FILE).read_text(encoding="utf-8")
