@@ -1774,3 +1774,36 @@ P1-P6 + 额外修复：record-session 归类到 OVERLAY_BASELINE_COMMANDS/DISTRI
 ### Next Steps
 
 - None - task complete
+
+
+## Session 239: 修复新项目开发工作流9项一致性问题
+
+**Date**: 2026-05-17
+**Task**: 修复新项目开发工作流9项一致性问题
+**Branch**: `main`
+
+### Summary
+
+修复嵌入工作流9项一致性问题：1) install-workflow增加cleanup_legacy_customizing_section清理旧Customizing段落; 2) patch-projectization扩展Stage Transition Quick Reference表至24行覆盖全部STAGE_TRANSITIONS; 3) workflow-state.py移除brainstorm阶段缺少assessment.md的降级逻辑; 4) 修正feasibility→brainstorm的Step B命令参数; 5) install-workflow用多行匹配函数替换单行匹配修复session-start替换失败; 6) build_codex_phase_router_skill_content改为替换而非追加旧Steps 1-4; 7) build_finish_work_content改进end-boundary检测; 8) OpenCode session-utils.js补充data.target解析; 9) 新增patch_spec_quality_guidelines替换占位符quality-guidelines.md
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9595891` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
