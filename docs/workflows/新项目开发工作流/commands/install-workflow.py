@@ -10,7 +10,7 @@
 - 只有“纯净初始态”目标项目才允许执行首次嵌入；若检测到任何当前 workflow 的历史嵌入痕迹，必须阻止继续安装
 - 当前 workflow 是“嵌入 + 增强”模型，不会重建 Trellis 原生命令全集
 - `feasibility` 到 `delivery`（含 `project-audit`）这类阶段资产由当前 workflow 分发
-- `continue` / `finish-work` 默认来自当前 Trellis 基线，`record-session` 仅作为 legacy baseline 命令兼容；当前 workflow 会在这些基线上追加补丁增强
+- `continue` / `finish-work` / `record-session` 默认来自当前 Trellis 基线；当前 workflow 会在这些基线上追加补丁增强
 - close-out 中的 `archive` 仍直接复用目标项目 Trellis 基线 `task.py`；若目标项目不是当前最新 Trellis 基线，可能不包含 archive auto-commit pathspec 修复
 - 安装器会自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines` 则清理，不存在则跳过；若遗留的 repo-global `.current-task` 仍指向该 bootstrap task，则同步做兼容清理
 - 一旦开始正式安装，安装器会先写入 `.trellis/workflow-embed-attempt.json`；若安装失败，该失败标记会保留，后续嵌入必须先由用户手动处理
@@ -94,8 +94,8 @@ _CLI_DIRS = CLI_DIRS
 _CLI_ALT_DIRS = CLI_ALT_DIRS
 _ALL_CLI_TYPES = ALL_CLI_TYPES
 # 对 Trellis 原生命令做增强时使用的补丁标记。
-# 当前 workflow 会增强 fresh baseline `continue.md` / `finish-work.md`；
-# legacy `start.md` / `record-session.md` 仅在旧目标项目兼容路径中处理。
+# 当前 workflow 会增强 fresh baseline `continue.md` / `finish-work.md` / `record-session.md`；
+# legacy `start.md` 仅在旧目标项目兼容路径中处理。
 _PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 _FINISH_WORK_MARKER = "<!-- finish-work-projectization-patch -->"
 _FINISH_WORK_START_HEADING = "### 1. Code Quality"
@@ -161,7 +161,7 @@ _NL_ROUTING_SECTION = """\
 | 补充审查、多 CLI 审查、多人审查、让其他 CLI 看一下、review-gate、审查门禁 | `/trellis:review-gate` | 描述补充审查意图，或显式触发 `review-gate` skill | §5.1.y 补充审查 |
 | 提交前检查、准备提交、完成检查、commit 前、收尾 | `/trellis:finish-work` | 描述提交前检查意图，或显式触发 `trellis-finish-work` skill | §6 提交检查 |
 | 交付、部署、上线、发布、测试通过、准备交付、跑验收、整理交付物、项目收尾 | `/trellis:delivery` | 描述交付收尾意图，或显式触发 `delivery` skill | §6+§7 测试交付 |
-| 记录、保存进度、收工、结束工作 | `/trellis:finish-work` | 描述会话收尾意图，或显式触发 `trellis-finish-work` skill | §7 会话记录；legacy `/trellis:record-session` 仅兼容旧目标项目 |
+| 记录、保存进度、收工、结束工作 | `/trellis:finish-work` | 描述会话收尾意图，或显式触发 `trellis-finish-work` skill | §7 会话记录 → delivery → record-session |
 
 ### 框架通用命令
 
@@ -1135,14 +1135,13 @@ def patch_inject_workflow_state_hook(root: Path, *, dry_run: bool) -> bool:
     """Patch deployed inject-workflow-state.py to prefer workflow-state.json.stage (Issue 1)
     and strip fenced code blocks before breadcrumb parsing (Issue 7).
 
-    Codex (.codex/) receives both Issue 1 and Issue 7 patches.
-    Claude (.claude/) receives Issue 7 patch only (Issue 1 does not apply there).
+    Codex (.codex/) and Claude (.claude/) both receive Issue 1 and Issue 7 patches.
     """
     any_patched = False
 
     for hook_subpath, apply_issue1 in [
         (".codex/hooks/inject-workflow-state.py", True),
-        (".claude/hooks/inject-workflow-state.py", False),
+        (".claude/hooks/inject-workflow-state.py", True),
     ]:
         hook_path = root / hook_subpath
         if not hook_path.exists():
@@ -1150,7 +1149,8 @@ def patch_inject_workflow_state_hook(root: Path, *, dry_run: bool) -> bool:
 
         content = hook_path.read_text(encoding="utf-8")
 
-        if apply_issue1 and _HOOK_PATCH_MARKER in content:
+        issue1_already_applied = apply_issue1 and _HOOK_PATCH_MARKER in content
+        if issue1_already_applied and "re.sub(r" in content:
             ok(f"[Shared] {hook_subpath} hook 补丁已存在")
             continue
 
@@ -1166,8 +1166,8 @@ def patch_inject_workflow_state_hook(root: Path, *, dry_run: bool) -> bool:
             patched = patched[:insert_pos] + code_block_strip_line + patched[insert_pos:]
 
         # ── Issue 1: prefer workflow-state.json.stage over task.json.status ──
-        # (Codex only — Claude's state resolution path does not go through this hook)
-        if apply_issue1:
+        # (Applied to Codex and Claude hooks)
+        if apply_issue1 and not issue1_already_applied:
             ws_override_block = """\
     # [workflow-embed-patch:prefer-workflow-state-json]
     # Prefer workflow-state.json.stage over task.json.status for strong-gate projects
@@ -1206,6 +1206,48 @@ def patch_inject_workflow_state_hook(root: Path, *, dry_run: bool) -> bool:
         else:
             ok(f"[Shared] {hook_subpath} hook 已补丁（{label}）")
         any_patched = True
+
+    # ── Issue 2: patch OpenCode inject-workflow-state.js ──
+    # Prefer workflow-state.json.stage over task.json.status for strong-gate projects
+    opencode_js_subpath = ".opencode/plugins/inject-workflow-state.js"
+    opencode_js_path = root / opencode_js_subpath
+    if opencode_js_path.exists():
+        js_content = opencode_js_path.read_text(encoding="utf-8")
+        js_patch_marker = "// [workflow-embed-patch:prefer-workflow-state-json]"
+        if js_patch_marker in js_content:
+            ok(f"[Shared] {opencode_js_subpath} 补丁已存在")
+        else:
+            # Find the anchor: line right after "taskDir" stale check and before task.json read
+            js_anchor = '  const taskJsonPath = join(taskDir, "task.json")\n'
+            if js_anchor in js_content:
+                js_override_block = """\
+  // [workflow-embed-patch:prefer-workflow-state-json]
+  // Prefer workflow-state.json.stage over task.json.status for strong-gate projects
+  const wsPath = join(taskDir, "workflow-state.json")
+  if (existsSync(wsPath)) {
+    try {
+      const wsData = JSON.parse(readFileSync(wsPath, "utf-8"))
+      const wsStage = typeof wsData.stage === "string" && wsData.stage ? wsData.stage : ""
+      if (wsStage) {
+        const id = wsData.id || taskRef.split("/").pop()
+        return { id, status: wsStage, source: "workflow-state.json" }
+      }
+    } catch {
+      // fall through to task.json
+    }
+  }
+"""
+                insert_pos = js_content.find(js_anchor)
+                patched_js = js_content[:insert_pos] + js_override_block + js_content[insert_pos:]
+                if not dry_run:
+                    opencode_js_path.write_text(patched_js, encoding="utf-8")
+                if dry_run:
+                    info(f"[Shared] 将补丁 {opencode_js_subpath}（优先 workflow-state.json.stage）")
+                else:
+                    ok(f"[Shared] {opencode_js_subpath} 已补丁（优先 workflow-state.json.stage）")
+                any_patched = True
+            else:
+                warn(f"[Shared] {opencode_js_subpath} 补丁未命中目标代码，跳过")
 
     return any_patched
 

@@ -73,7 +73,7 @@ STAGES = {
 }
 STAGE_TRANSITIONS: dict[str, list[str]] = {
     "feasibility": ["brainstorm"],
-    "brainstorm": ["design", "plan"],
+    "brainstorm": ["design", "plan", "implementation", "test-first"],
     "design": ["plan"],
     "plan": ["implementation", "test-first"],
     "implementation": ["test-first", "check", "project-audit"],
@@ -923,16 +923,17 @@ def cmd_set(args: argparse.Namespace) -> int:
         if new_stage != current_stage and not args.force:
             # 1. allowed_next_stages gate
             allowed = state.get("allowed_next_stages", [])
-            if isinstance(allowed, list) and allowed and new_stage not in allowed:
+            if isinstance(allowed, list) and new_stage not in allowed:
                 print(f"❌ 阶段切换被拒绝: {current_stage!r} → {new_stage!r} 不在 allowed_next_stages {allowed} 中；如需强制切换请使用 --force")
                 return 1
-            # 2. awaiting_user_confirmation + execution_authorized gate for execution stages
-            if new_stage in EXECUTION_STAGES:
+            # 2. awaiting_user_confirmation gate for all non-trivial stage transitions
+            if new_stage not in {"feasibility"}:
                 current_status = state.get("stage_status", "")
                 if current_status != "awaiting_user_confirmation":
                     print(f"❌ 阶段切换被拒绝: 进入 {new_stage!r} 前 stage_status 必须为 awaiting_user_confirmation；当前为 {current_status!r}。如需强制切换请使用 --force")
                     return 1
-                # execution_authorized may be set in the same call; check current or pending value
+            # 3. execution_authorized gate for execution stages
+            if new_stage in EXECUTION_STAGES:
                 checkpoints = state.get("checkpoints", {})
                 current_ea = checkpoints.get("execution_authorized", False)
                 pending_ea = args.execution_authorized if args.execution_authorized is not None else current_ea
@@ -940,6 +941,10 @@ def cmd_set(args: argparse.Namespace) -> int:
                     print(f"❌ 阶段切换被拒绝: 进入 {new_stage!r} 前 checkpoints.execution_authorized 必须为 true（可在同一命令中通过 --execution-authorized true 设置）。如需强制切换请使用 --force")
                     return 1
         state["stage"] = args.stage
+        # Auto-reset execution_authorized when leaving execution stages
+        if current_stage in EXECUTION_STAGES and new_stage not in EXECUTION_STAGES:
+            checkpoints = state.setdefault("checkpoints", {})
+            checkpoints["execution_authorized"] = False
     if args.stage_status:
         state["stage_status"] = args.stage_status
     if args.clear_current_block:
@@ -1178,17 +1183,28 @@ def cmd_route(args: argparse.Namespace) -> int:
     stage_status = state.get("stage_status", "")
     checkpoints = state.get("checkpoints", {})
 
+    readiness_blockers = collect_route_readiness_blockers(task_dir, repo_root, state)
+
     if stage_status == "awaiting_user_confirmation":
-        _route_result(
-            stage,
-            "awaiting_confirmation",
-            f"当前 stage={stage}, status=awaiting_user_confirmation",
-            stage=stage,
-            stage_status=stage_status,
-        )
+        if readiness_blockers:
+            _route_result(
+                stage,
+                "awaiting_confirmation_with_blockers",
+                f"当前 stage={stage}, status=awaiting_user_confirmation 但仍存在 readiness blockers",
+                stage=stage,
+                stage_status=stage_status,
+                blockers=readiness_blockers,
+            )
+        else:
+            _route_result(
+                stage,
+                "awaiting_confirmation",
+                f"当前 stage={stage}, status=awaiting_user_confirmation",
+                stage=stage,
+                stage_status=stage_status,
+            )
         return 0
 
-    readiness_blockers = collect_route_readiness_blockers(task_dir, repo_root, state)
     if readiness_blockers:
         primary_reason = readiness_blockers[0]
         _route_result(
@@ -1437,7 +1453,7 @@ def build_parser() -> argparse.ArgumentParser:
     set_parser.add_argument("--current-block")
     set_parser.add_argument("--clear-current-block", action="store_true")
     set_parser.add_argument("--completed-blocks")
-    set_parser.add_argument("--allowed-next")
+    set_parser.add_argument("--allowed-next", nargs="?", const="", default=None)
     set_parser.add_argument("--awaiting-user-confirmation", type=bool_arg)
     set_parser.add_argument("--architecture-confirmed", type=bool_arg)
     set_parser.add_argument("--context7-review-completed", type=bool_arg)

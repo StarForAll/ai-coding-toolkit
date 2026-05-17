@@ -1472,6 +1472,196 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
         self.assertIn("workflow-state 校验通过", validate.stdout)
 
+    # ------------------------------------------------------------------
+    # Regression tests for state machine fixes (Issue 3-7)
+    # ------------------------------------------------------------------
+
+    def test_issue3_non_execution_stage_transition_requires_awaiting(self) -> None:
+        """Issue 3: Non-execution stage transitions also require awaiting_user_confirmation."""
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.run_script("init", str(task_dir), "--stage", "brainstorm")
+        # Attempt to switch brainstorm→design without awaiting_user_confirmation
+        illegal_set = self.run_script("set", str(task_dir), "--stage", "design")
+        self.assertEqual(illegal_set.returncode, 1, msg=illegal_set.stdout + illegal_set.stderr)
+        self.assertIn("stage_status 必须为 awaiting_user_confirmation", illegal_set.stdout)
+
+        # With awaiting_user_confirmation it should succeed
+        self.run_script(
+            "set", str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+        )
+        ok_set = self.run_script(
+            "set", str(task_dir),
+            "--stage", "design",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "brainstorm",
+            "--allowed-next", "plan",
+        )
+        self.assertEqual(ok_set.returncode, 0, msg=ok_set.stdout + ok_set.stderr)
+
+        # feasibility entry should NOT require awaiting (special case)
+        self.run_script("init", str(task_dir), "--stage", "feasibility", "--force")
+        feas_set = self.run_script("set", str(task_dir), "--stage", "brainstorm", "--force")
+        # feasibility is exempt from the awaiting gate, but we use --force here
+        # to bypass allowed_next_stages too
+        self.assertEqual(feas_set.returncode, 0, msg=feas_set.stdout + feas_set.stderr)
+
+    def test_issue3_force_bypasses_awaiting_gate(self) -> None:
+        """Issue 3: --force still bypasses the awaiting_user_confirmation gate."""
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.run_script("init", str(task_dir), "--stage", "brainstorm")
+        forced = self.run_script("set", str(task_dir), "--stage", "design", "--force")
+        self.assertEqual(forced.returncode, 0, msg=forced.stdout + forced.stderr)
+
+    def test_issue4_route_awaiting_with_blockers(self) -> None:
+        """Issue 4: route returns awaiting_confirmation_with_blockers when awaiting but blockers exist."""
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        # Use brainstorm stage without assessment.md to guarantee a readiness blocker
+        (task_dir / "assessment.md").unlink()
+        self.run_script("init", str(task_dir), "--stage", "brainstorm")
+        self.run_script(
+            "set", str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+        )
+
+        result = self.run_script("route", str(task_dir), "--project-root", str(root))
+        import json as _json
+        data = _json.loads(result.stdout)
+        self.assertEqual(data["action"], "awaiting_confirmation_with_blockers")
+        self.assertIn("blockers", data)
+        self.assertTrue(len(data["blockers"]) > 0, "expected at least one blocker")
+
+    def test_issue5_auto_reset_execution_authorized_on_stage_exit(self) -> None:
+        """Issue 5: execution_authorized auto-resets when leaving execution stage."""
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.run_script("init", str(task_dir), "--stage", "implementation")
+        self.run_script(
+            "set", str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--execution-authorized", "true",
+            "--allowed-next", "check",
+        )
+        # Switch to check (non-execution stage)
+        self.run_script(
+            "set", str(task_dir),
+            "--stage", "check",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "implementation",
+            "--allowed-next", "review-gate,implementation",
+        )
+        import json as _json
+        state = _json.loads((task_dir / "workflow-state.json").read_text(encoding="utf-8"))
+        self.assertFalse(state["checkpoints"]["execution_authorized"],
+                        "execution_authorized should auto-reset to false when leaving execution stage")
+
+    def test_issue6_empty_allowed_next_stages_blocks_transition(self) -> None:
+        """Issue 6: Empty allowed_next_stages list blocks any stage transition."""
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.run_script("init", str(task_dir), "--stage", "record-session")
+        # Set allowed_next_stages to empty list (terminal state)
+        state_path = task_dir / "workflow-state.json"
+        import json as _json
+        state = _json.loads(state_path.read_text(encoding="utf-8"))
+        state["allowed_next_stages"] = []
+        state["stage_status"] = "awaiting_user_confirmation"
+        state["awaiting_user_confirmation"] = True
+        state_path.write_text(_json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+        # Attempt to switch to any stage should be blocked
+        blocked = self.run_script("set", str(task_dir), "--stage", "delivery")
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("不在 allowed_next_stages", blocked.stdout)
+
+    def test_issue7_brainstorm_allows_implementation_transition(self) -> None:
+        """Issue 7: brainstorm can transition directly to implementation (L0 path)."""
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.run_script("init", str(task_dir), "--stage", "brainstorm")
+        self.run_script(
+            "set", str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "design,plan,implementation,test-first",
+        )
+        # L0 path: brainstorm → implementation
+        ok_set = self.run_script(
+            "set", str(task_dir),
+            "--stage", "implementation",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--execution-authorized", "true",
+            "--transition-from", "brainstorm",
+            "--allowed-next", "test-first,check,project-audit",
+        )
+        self.assertEqual(ok_set.returncode, 0, msg=ok_set.stdout + ok_set.stderr)
+
+    def test_issue7_brainstorm_allows_test_first_transition(self) -> None:
+        """Issue 7: brainstorm can transition directly to test-first (L0 path)."""
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.run_script("init", str(task_dir), "--stage", "brainstorm")
+        self.run_script(
+            "set", str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "design,plan,implementation,test-first",
+        )
+        ok_set = self.run_script(
+            "set", str(task_dir),
+            "--stage", "test-first",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--execution-authorized", "true",
+            "--transition-from", "brainstorm",
+            "--allowed-next", "implementation,check,project-audit",
+        )
+        self.assertEqual(ok_set.returncode, 0, msg=ok_set.stdout + ok_set.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

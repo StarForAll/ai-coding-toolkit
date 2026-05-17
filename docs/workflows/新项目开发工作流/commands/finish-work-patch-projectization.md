@@ -32,12 +32,16 @@
 
 ### 2. close-out 基线路径
 
-当前 workflow 的 close-out 应直接复用 Trellis 原生 `finish-work` 行为，不再引入 helper-based session-record 流程。
+当前 workflow 的 close-out 遵循三阶段顺序：**finish-work → delivery → record-session**。
+
+- `finish-work` **只负责**提交检查清单与收尾证据，**不执行** `task.py archive` 或 `add_session.py`
+- `delivery` 负责验收、交付物确认与所有权证明（外包 profile）
+- `record-session` 才执行 `task.py archive` + `add_session.py`，完成最终归档
 
 进入 `/trellis:finish-work` 前，至少确认：
 
-- [ ] 目标项目的 close-out 路径仍是 Trellis 原生 `task.py archive` + `add_session.py`
-- [ ] 不再要求 `record-session-helper.py`、`metadata-autocommit-guard.py` 或额外恢复命令
+- [ ] 当前 task 已形成或更新 `finish-work-checklist.md`（见上方 §1）
+- [ ] 不在此阶段执行 `task.py archive` — archive 移至 `record-session` 阶段
 - [ ] 若目标项目的 `.trellis/` 元数据自动提交失败，按目标项目当前 Trellis 基线能力处理，不在 workflow 层额外发明 helper 分支
 
 **archive 链基线依赖说明**：

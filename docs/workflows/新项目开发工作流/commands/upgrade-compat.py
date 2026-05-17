@@ -756,6 +756,27 @@ def detect_conflicts_codex(
         warn("[Codex] inject-workflow-state.py 缺失")
         conflicts += 1
 
+    # Issue 2: check Claude hook patch
+    claude_hook = root / ".claude" / "hooks" / "inject-workflow-state.py"
+    if claude_hook.exists():
+        claude_content = claude_hook.read_text(encoding="utf-8")
+        if _HOOK_PATCH_MARKER in claude_content:
+            ok("[Claude] inject-workflow-state.py: hook 补丁已应用")
+        else:
+            warn("[Claude] inject-workflow-state.py: hook 补丁未应用（workflow-state.json.stage 优先级未启用）")
+    # Claude hook absence is not a conflict — Claude may not be installed
+
+    # Issue 2: check OpenCode plugin patch
+    opencode_js = root / ".opencode" / "plugins" / "inject-workflow-state.js"
+    if opencode_js.exists():
+        js_content = opencode_js.read_text(encoding="utf-8")
+        js_patch_marker = "// [workflow-embed-patch:prefer-workflow-state-json]"
+        if js_patch_marker in js_content:
+            ok("[OpenCode] inject-workflow-state.js: plugin 补丁已应用")
+        else:
+            warn("[OpenCode] inject-workflow-state.js: plugin 补丁未应用（workflow-state.json.stage 优先级未启用）")
+    # OpenCode plugin absence is not a conflict — OpenCode may not be installed
+
     # 对每个 skills 目录分别检查 parallel：当前 Codex 合同是“移除嵌入面，但保留备份”
     parallel_conflicts = 0
     for skills_dir in skills_dirs:

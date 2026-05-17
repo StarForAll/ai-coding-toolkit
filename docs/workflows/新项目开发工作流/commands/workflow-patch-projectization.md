@@ -87,13 +87,15 @@ Expected metadata status output: empty.
 
 Notes:
 
-- Close-out follows Trellis native `finish-work` behavior: archive first, then `add_session.py`.
-- `archive` 预期会清除当前 session 的 active-task runtime；真正需要关注的阻塞条件是 `.trellis/workspace` / `.trellis/tasks` 元数据仍然 dirty。
+- Close-out follows this order: **finish-work → delivery → record-session**. `archive` and `add_session` are performed at the `record-session` stage, not at `finish-work`.
+- `finish-work` only handles commit checklist and close-out evidence; it does NOT archive the task.
+- `delivery` handles acceptance, deliverables, and ownership proof.
+- `record-session` performs the final `task.py archive` + `add_session.py` to complete the workflow cycle.
 - Detailed close-out gates still belong to the installed `/trellis:finish-work` / `trellis-finish-work` and `/trellis:delivery` entries; legacy `/trellis:record-session` is old-target compatibility only. This workflow guide only summarizes the default path.
 
 ### Pre-end Checklist
 
-Close-out runs in two phases:
+Close-out runs in three phases:
 
 **Phase A — pre-commit (`/trellis:finish-work`)**
 
@@ -102,12 +104,17 @@ Close-out runs in two phases:
 3. `finish-work-checklist.md` records the current close-out evidence
 4. Spec docs updated if needed
 
-**Phase B — post-commit**
+**Phase B — delivery (`/trellis:delivery`)**
 
-1. Human commit already exists
-2. Current completed task archived; if it is a child task, the parent coordinator records are also synchronized to the new completed frontier
-3. `add_session.py` completed successfully for the current session record
-4. `.trellis/workspace` and `.trellis/tasks` metadata clean
+1. Deliverables assembled and verified
+2. Acceptance confirmed
+3. Ownership proof validated (outsourcing profile)
+
+**Phase C — post-delivery (`/trellis:record-session`)**
+
+1. Current completed task archived; if it is a child task, the parent coordinator records are also synchronized to the new completed frontier
+2. `add_session.py` completed successfully for the current session record
+3. `.trellis/workspace` and `.trellis/tasks` metadata clean
 
 ---
 
@@ -137,7 +144,7 @@ All transitions follow a two-step protocol: **(A)** signal readiness by setting 
 | implementation → test-first | code complete | `workflow-state.py set <dir> --stage test-first --stage-status in_progress --allowed-next implementation,check,project-audit` |
 | check → review-gate | check passes | `workflow-state.py set <dir> --stage review-gate --stage-status in_progress --allowed-next finish-work,implementation` |
 | review-gate → finish-work | review passes | `workflow-state.py set <dir> --stage finish-work --stage-status in_progress --allowed-next delivery,record-session` |
-| finish-work → delivery | archive + add_session done | `workflow-state.py set <dir> --stage delivery --stage-status in_progress --allowed-next record-session` |
+| finish-work → delivery | close-out evidence complete | `workflow-state.py set <dir> --stage delivery --stage-status in_progress --allowed-next record-session` |
 | delivery → record-session | delivery accepted | `workflow-state.py set <dir> --stage record-session --stage-status in_progress --allowed-next` |
 
 For repair scenarios, append `--force` to bypass validation gates.
@@ -207,9 +214,9 @@ After passing, proceed to `finish-work`.
 [/workflow-state:review-gate]
 
 [workflow-state:finish-work]
-Current stage: **finish-work** — commit preparation and session wrap-up.
-Load `/trellis:finish-work` for commit checklist and close-out.
-After this stage, run `task.py archive <task-name>` then `add_session.py` to complete close-out before proceeding to `delivery`.
+Current stage: **finish-work** — commit preparation and close-out evidence.
+Load `/trellis:finish-work` for commit checklist and close-out evidence collection.
+After this stage, proceed to `delivery`. Archive and add_session are performed at the `record-session` stage, NOT here.
 [/workflow-state:finish-work]
 
 [workflow-state:delivery]
@@ -219,7 +226,7 @@ Load `/trellis:delivery` for acceptance, deliverables, and ownership proof.
 
 [workflow-state:record-session]
 Current stage: **record-session** — workflow cycle complete.
-This is the strong-gate terminal stage confirming that all close-out steps (archive + add_session) have been recorded. The workflow cycle is now complete.
+This is the strong-gate terminal stage. Run `task.py archive <task-name>` then `add_session.py` to finalize close-out. The workflow cycle is now complete.
 The legacy `/trellis:record-session` command remains available as a backwards-compatible entry point for older projects that use the baseline three-phase model; in the strong-gate flow this stage is reached automatically after `delivery`.
 [/workflow-state:record-session]
 
