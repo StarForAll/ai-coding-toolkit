@@ -1,0 +1,10 @@
+{"file": ".trellis/spec/scripts/workflow-command-doc-contracts.md", "reason": "验证修改后的命令文档是否满足节结构、门禁校验块、下一步推荐表等合约"}
+{"file": ".trellis/spec/scripts/workflow-installer-upgrade-contracts.md", "reason": "验证新增补丁/命令是否符合资产分类、分发、安装记录合约"}
+{"file": "docs/workflows/新项目开发工作流/阶段状态机与强门禁协议.md", "reason": "验证STAGE_TRANSITIONS修改后是否与状态机单一事实源一致"}
+{"file": "docs/workflows/新项目开发工作流/commands/shell/workflow-state.py", "reason": "验证workflow-state.py的set/route/validate修改后逻辑正确且不破坏现有测试"}
+{"file": "docs/workflows/新项目开发工作流/commands/shell/test_workflow_state.py", "reason": "运行现有测试确认无回归"}
+{"file": "docs/workflows/新项目开发工作流/commands/workflow-patch-projectization.md", "reason": "验证面包屑块、阶段切换快查表、no_task入口修改后的一致性"}
+{"file": "docs/workflows/新项目开发工作流/commands/finish-work-patch-projectization.md", "reason": "验证finish-work补丁是否明确覆盖SKILL.md正文Step3-4"}
+{"file": "docs/workflows/新项目开发工作流/commands/start-patch-phase-router.md", "reason": "验证旧路由逻辑已删除，仅保留Phase Router"}
+{"file": "docs/workflows/新项目开发工作流/commands/start-skill-patch-phase-router.md", "reason": "验证Codex版补丁同样已删除旧路由逻辑"}
+{"file": "docs/workflows/新项目开发工作流/commands/workflow_assets.py", "reason": "验证新增命令/脚本已正确注册到资产表"}
