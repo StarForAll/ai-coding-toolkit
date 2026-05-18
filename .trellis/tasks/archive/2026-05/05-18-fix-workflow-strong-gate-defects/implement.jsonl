@@ -1,0 +1,9 @@
+{"file": "docs/workflows/新项目开发工作流/commands/shell/workflow-state.py", "reason": "P3: cmd_route first_entry 路由逻辑需改为 profile-aware"}
+{"file": "docs/workflows/新项目开发工作流/commands/shell/patch-session-start-strong-gate.py", "reason": "P1+P2: CLI 参数过时(--task-dir, advance --stage)，需匹配当前 workflow-state.py 接口；需完整替换 _get_task_status"}
+{"file": "docs/workflows/新项目开发工作流/commands/shell/patch-workflow-phase.py", "reason": "P2: 扫描全部 task 目录改为仅检查 active task"}
+{"file": "docs/workflows/新项目开发工作流/commands/delivery.md", "reason": "P2: Step 10 archive+add_session 步骤需移除，改为引用 record-session"}
+{"file": "docs/workflows/新项目开发工作流/commands/install-workflow.py", "reason": "P1+P2+P3: 安装器核心逻辑——需验证 OpenCode 面包屑标记替换、Codex SKILL.md 旧步骤替换是否完整、参考文档生成是否更新"}
+{"file": "docs/workflows/新项目开发工作流/commands/start-skill-patch-phase-router.md", "reason": "P1: Codex SKILL.md 替换内容——需验证替换范围是否覆盖旧 Step 4"}
+{"file": "docs/workflows/新项目开发工作流/commands/start-patch-phase-router.md", "reason": "P1: Claude/OpenCode continue 命令 patch——参考对照"}
+{"file": "docs/workflows/新项目开发工作流/commands/session-start-patch-strong-gate.md", "reason": "P2: 文档中 CLI 参数需同步更新"}
+{"file": "docs/workflows/新项目开发工作流/commands/record-session.md", "reason": "P2: 对照确认 archive+add_session 归属"}

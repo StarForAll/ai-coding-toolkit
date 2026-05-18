@@ -1,0 +1,5 @@
+{"file": "docs/workflows/新项目开发工作流/commands/install-workflow.py", "reason": "安装器是最终验证入口——确认所有 patch 正确应用、SKILL.md 旧步骤完整替换、OpenCode 面包屑标记替换、参考文档更新"}
+{"file": "docs/workflows/新项目开发工作流/commands/shell/workflow-state.py", "reason": "验证 profile-aware 路由实现正确性：personal profile first_entry 跳过 feasibility"}
+{"file": "docs/workflows/新项目开发工作流/commands/shell/patch-session-start-strong-gate.py", "reason": "验证 CLI 参数修复：位置参数替代 --task-dir，set --stage 替代 advance --stage"}
+{"file": "docs/workflows/新项目开发工作流/commands/delivery.md", "reason": "验证 archive+add_session 已移除，仅保留 record-session 引用"}
+{"file": "docs/workflows/新项目开发工作流/commands/shell/patch-workflow-phase.py", "reason": "验证仅检查 active task 而非扫描全部"}
