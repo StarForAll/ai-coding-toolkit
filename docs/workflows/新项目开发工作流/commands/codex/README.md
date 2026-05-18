@@ -338,7 +338,7 @@ Codex 官方内建 slash commands 是平台级控制能力，例如：
 |-----------|----------------|------|-----------|
 | 项目长期规则 | `AGENTS.md` | 长期稳定的项目规则和执行原则 | ❌ 手动维护 |
 | Codex 项目配置 | `.codex/config.toml` | 指定 `AGENTS.md` fallback 等项目级配置 | ❌ 手动维护 |
-| 会话启动注入 | `.codex/hooks.json` + `.codex/hooks/*.py` | 自动注入 Trellis workflow 上下文 | ❌ 手动维护 |
+| 会话上下文注入 | `.codex/hooks.json` + `.codex/hooks/*.py` | 自动注入 Trellis workflow 上下文；当前常见是 turn 级 hook，`SessionStart` 仅在目标项目显式接线时启用 | ❌ 手动维护 |
 | workflow 技能 | `.agents/skills/*/SKILL.md`（共享唯一主承载面） / `.codex/skills/*/SKILL.md`（仅 Codex 独有或项目自定义的 secondary carrier） | `.agents/skills/` 承载共享阶段 skills；`trellis-continue` / `trellis-finish-work` 属于活动 skills 目录中的 Trellis 基线入口并由安装器追加项目化补丁；`.codex/skills/` 不承载重复 shared skills，也不应被描述成与 `.agents/skills/` 并列的共享 workflow 主入口 | ✅ `install-workflow.py` |
 | 子代理 | `.codex/agents/*.toml` | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 安装器不再 overlay 到目标项目，仅做 legacy bare-name → trellis-* 迁移；源仓库 carrier 可有项目级增强 | ✅ legacy 迁移由 `install-workflow.py` |
 | 辅助脚本 | `.trellis/scripts/workflow/` | 校验、导出、静态验证脚本 | ✅ `install-workflow.py` |
@@ -347,7 +347,7 @@ Codex 官方内建 slash commands 是平台级控制能力，例如：
 **安装器不负责的 Codex 原生资产**（需手动维护）：
 
 - `.codex/config.toml` — Codex 项目级配置
-- `.codex/hooks.json` + `.codex/hooks/*.py` — 会话启动 hooks
+- `.codex/hooks.json` + `.codex/hooks/*.py` — Codex hook carrier（当前常见是 turn 级注入；`SessionStart` 仅在目标项目显式接线时启用）
 - 其他非 `trellis-research / trellis-implement / trellis-check` 的 `.codex/agents/*.toml`
 - `AGENTS.md` — 项目级长期规则
 

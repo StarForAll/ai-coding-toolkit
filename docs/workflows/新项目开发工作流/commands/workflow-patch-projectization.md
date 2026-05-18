@@ -191,7 +191,7 @@ your per-turn prompt text
 
 Constraints:
 - STATUS charset: `[A-Za-z0-9_-]+` (underscores and hyphens allowed, e.g. `in-review`, `blocked-by-team`)
-- A lifecycle hook must write `task.json.status` to your custom value, otherwise the tag is never read
+- Under the strong-gate model, do **not** treat `task.json.status` as the stage-routing source of truth. Custom breadcrumb tags must be backed by the actual routing layer that emits them (normally `workflow-state.py route` and the hook's breadcrumb-key mapping), otherwise the block is unreachable.
 - Lifecycle hooks live in `task.json.hooks.after_*` and bind to one of `after_create / after_start / after_finish / after_archive`
 
 ### Adding a lifecycle hook

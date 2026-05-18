@@ -50,7 +50,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route --project-root <pr
 
 | action | Meaning | Action |
 |--------|---------|--------|
-| `first_entry` | New project and no resumable task exists | Use the `feasibility` skill |
+| `first_entry` | New project and no resumable task exists | Use the skill matching the `target` field (`feasibility` for outsourcing first entry, `brainstorm` for personal first entry) |
 | `reenter` | Re-enter current stage | Use the skill matching the `target` field |
 | `awaiting_confirmation` | Stage done, waiting for user | Report completed/missing items; wait for confirmation |
 | `awaiting_confirmation_with_blockers` | Stage reached confirmation point but blockers remain | Show `blockers`; do not ask for confirmation until they are fixed |

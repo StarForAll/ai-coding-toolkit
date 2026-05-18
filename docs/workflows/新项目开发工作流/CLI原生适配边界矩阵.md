@@ -154,7 +154,7 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 **安装器不负责的 Codex 原生资产**（需手动维护）：
 
 - `.codex/config.toml` — Codex 项目级配置
-- `.codex/hooks.json` + `.codex/hooks/*.py` — 会话启动 hooks
+- `.codex/hooks.json` + `.codex/hooks/*.py` — Codex hook carrier（当前常见是 turn 级注入；`SessionStart` 仅在目标项目显式接线时才算启用）
 - 其他非 `trellis-research / trellis-implement / trellis-check` 的 `.codex/agents/*.toml`
 - `AGENTS.md` 的手动段（workflow 不托管的章节）
 

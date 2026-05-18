@@ -74,7 +74,7 @@ const tree = [
         { html:'3.4 页面与交互说明',       cls:'L2', det:'页面清单/定位/结构<br>状态变化/交互说明', id:'p3_4' },
         { html:'3.5 技术选型',             cls:'L2', det:'research-first 多候选<br>单一路径时显式写无可比方案<br>补齐系统边界/外部依赖/ownership', id:'p3_5' },
         { html:'3.6 架构确认后分块落盘',   cls:'L2', det:'块A developer-facing-prd<br>含依赖/接口/错误边界<br>块B 设计文档<br>块C 项目文档<br>块D 工程化联动<br>每块完成后都需用户确认', id:'p3_6' },
-        { html:'§3.7 Spec 对齐',           cls:'GT', id:'p3_g', det:'仅在架构确认后的 design 后半段执行<br>导入spec → 完善.trellis/spec<br>自动化检查矩阵 / finish-work（含 session record）', id:'p3_g' },
+        { html:'§3.7 Spec 对齐',           cls:'GT', id:'p3_g', det:'仅在架构确认后的 design 后半段执行<br>导入spec → 完善.trellis/spec<br>自动化检查矩阵 / finish-work close-out 基线', id:'p3_g' },
         { html:'/trellis:design',           cls:'L3', id:'p3_c', cp:'.claude/commands/trellis/design.md', cd:'设计阶段主命令' },
         { html:'ui-ux-pro-max / 条件 UI skill 路由 / architecture-patterns', cls:'SK', id:'p3_s', su:'§3 设计辅助 skills' },
       ]},
@@ -108,12 +108,12 @@ const tree = [
         { html:'/trellis:delivery',    cls:'L3', id:'p6_c2', cp:'.claude/commands/trellis/delivery.md', cd:'测试交付 · 验收清单' },
         { html:'/trellis:break-loop',  cls:'L3', id:'p6_c3', cp:'.claude/commands/trellis/break-loop.md', cd:'缺陷反复 · 深根因分析' },
       ]},
-      { html:'§7 交付与沉淀', cls:'L1 c7', id:'p7', sub:'<span class="cmd">/trellis:finish-work</span>', children:[
+      { html:'§7 交付与沉淀', cls:'L1 c7', id:'p7', sub:'<span class="cmd">/trellis:delivery → record-session</span>', children:[
         { html:'7.1 文档更新',   cls:'L2', det:'客户版: 不含AI<br>开发版: 含AI', id:'p7_1' },
         { html:'7.2 项目交付',   cls:'L2', det:'客户/开发交付物<br>acceptance/deliverables/transfer-checklist<br>双轨交付门禁<br>尾款后最终移交', id:'p7_2' },
         { html:'7.3 项目复盘与流程问题说明',   cls:'L2', det:'项目复盘<br>手动说明缺陷与待优化点', id:'p7_3' },
         { html:'7.4 会话记录',   cls:'L2', det:'record-session<br>先记录再archive<br>元数据闭环校验', id:'p7_4' },
-        { html:'/trellis:finish-work', cls:'L3', id:'p7_c', cp:'.claude/commands/trellis/finish-work.md', cd:'会话记录 · 最终结尾入口' },
+        { html:'/trellis:delivery', cls:'L3', id:'p7_c', cp:'.claude/commands/trellis/delivery.md', cd:'交付收口 · 进入 record-session 前入口' },
         { html:'人工记录',        cls:'L3', id:'p7_d', cd:'非默认主链；按需手动说明 workflow 问题' },
       ]},
       // ── Left-side branch flows (expand leftward) ──
