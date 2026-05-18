@@ -31,6 +31,7 @@ DIR_SCRIPTS = "scripts"
 
 # File names
 FILE_DEVELOPER = ".developer"
+FILE_CURRENT_TASK = ".current-task"
 FILE_TASK_JSON = "task.json"
 FILE_JOURNAL_PREFIX = "journal-"
 

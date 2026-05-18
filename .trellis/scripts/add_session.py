@@ -535,11 +535,9 @@ def main() -> int:
             if detected:
                 branch = detected
 
-    auto_commit = (not args.no_commit) and get_session_auto_commit(repo_root)
-
     return add_session(
         args.title, args.commit, args.summary, extra_content,
-        auto_commit=auto_commit,
+        auto_commit=not args.no_commit,
         package=package,
         branch=branch,
     )
