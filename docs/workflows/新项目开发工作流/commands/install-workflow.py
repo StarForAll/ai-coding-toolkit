@@ -48,6 +48,7 @@ from workflow_assets import (
     CODEX_PATCH_BASELINE_SKILLS,
     CODEX_SHARED_SKILL_CLEANUP_NAMES,
     CORE_HELPER_SCRIPTS,
+    CRITICAL_RUNTIME_PATCHES,
     DEFAULT_PROFILE,
     command_finish_work_candidates,
     command_phase_router_candidates,
@@ -61,6 +62,7 @@ from workflow_assets import (
     EXECUTION_CARDS,
     find_first_existing_codex_skill_path,
     HELPER_SCRIPTS,
+    INJECT_WORKFLOW_STATE_PATCH_MARKER,
     legacy_agent_target_path,
     LEGACY_AGENT_NAMES,
     MANAGED_ENHANCED_AGENT_NAMES,
@@ -71,10 +73,14 @@ from workflow_assets import (
     OVERLAY_BASELINE_COMMANDS,
     PATCH_BASELINE_COMMANDS,
     PATCH_BASELINE_SHARED_DOCS,
+    SESSION_START_STRONG_GATE_PATCH_MARKER,
+    TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER,
+    TASK_START_STRONG_GATE_PATCH_MARKER,
     VALID_PROFILES,
     WORKFLOW_DOCS_DIR,
     WORKFLOW_SCHEMA_VERSION,
     WORKFLOW_VERSION,
+    WORKFLOW_PHASE_STRONG_GATE_PATCH_MARKER,
     AGENTS_NL_ROUTING_MARKERS,
     prepare_command_content,
     read_project_trellis_version,
@@ -1308,8 +1314,7 @@ def _apply_patch_workflow_phase(src: Path, root: Path, *, dry_run: bool) -> bool
     """Apply patch-workflow-phase.py to the deployed workflow_phase.py helper."""
     import importlib.util
 
-    dst_scripts = root / ".trellis" / "scripts" / "workflow"
-    target_wf_phase = dst_scripts / "workflow_phase.py"
+    target_wf_phase = root / ".trellis" / "scripts" / "common" / "workflow_phase.py"
     patch_script = src / "shell" / "patch-workflow-phase.py"
 
     if not target_wf_phase.exists():
@@ -1377,8 +1382,89 @@ def _apply_patch_task_start(src: Path, root: Path, *, dry_run: bool) -> bool:
     return False
 
 
+def _apply_patch_session_start(src: Path, root: Path, *, dry_run: bool) -> bool:
+    """Apply patch-session-start-strong-gate.py to supported session-start hooks."""
+    import importlib.util
+
+    patch_script = src / "shell" / "patch-session-start-strong-gate.py"
+    if not patch_script.exists():
+        warn("[Shared] patch-session-start-strong-gate.py 不存在，跳过补丁")
+        return False
+
+    targets = [
+        ("Claude", root / ".claude" / "hooks" / "session-start.py"),
+        ("Codex", root / ".codex" / "hooks" / "session-start.py"),
+    ]
+    if dry_run:
+        planned = [label for label, target in targets if target.exists()]
+        for label in planned:
+            info(f"[{label}] 将应用 session-start 强门禁补丁")
+        return bool(planned)
+
+    spec = importlib.util.spec_from_file_location("patch_session_start_strong_gate", patch_script)
+    if spec is None or spec.loader is None:
+        warn("[Shared] patch-session-start-strong-gate.py 加载失败")
+        return False
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    if not hasattr(module, "patch_session_start"):
+        warn("[Shared] patch-session-start-strong-gate.py 缺少 patch_session_start 函数")
+        return False
+
+    any_patched = False
+    for label, target_path in targets:
+        if not target_path.exists():
+            info(f"[{label}] session-start.py 不存在，跳过强门禁补丁")
+            continue
+        result = module.patch_session_start(target_path)
+        if result:
+            ok(f"[{label}] session-start.py 强门禁补丁已应用")
+            any_patched = True
+    return any_patched
+
+
+def _apply_patch_task_create_preserve_active(src: Path, root: Path, *, dry_run: bool) -> bool:
+    """Patch common/task_store.py so child-task create can preserve the parent active task."""
+    import importlib.util
+
+    target_path = root / ".trellis" / "scripts" / "common" / "task_store.py"
+    patch_script = src / "shell" / "patch-task-create-preserve-active.py"
+
+    if not target_path.exists():
+        info("[Shared] common/task_store.py 不存在，跳过 preserve-active 补丁")
+        return False
+
+    if not patch_script.exists():
+        warn("[Shared] patch-task-create-preserve-active.py 不存在，跳过补丁")
+        return False
+
+    if dry_run:
+        info("[Shared] 将对 common/task_store.py 应用 preserve-active 补丁")
+        return True
+
+    spec = importlib.util.spec_from_file_location("patch_task_create_preserve_active", patch_script)
+    if spec is None or spec.loader is None:
+        warn("[Shared] patch-task-create-preserve-active.py 加载失败")
+        return False
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    if hasattr(module, "patch_task_store"):
+        result = module.patch_task_store(target_path)
+        if result:
+            ok("[Shared] common/task_store.py preserve-active 补丁已应用")
+        return result
+
+    warn("[Shared] patch-task-create-preserve-active.py 缺少 patch_task_store 函数")
+    return False
+
+
 # ── Issue 1+7: patch deployed inject-workflow-state.py hook ──
-_HOOK_PATCH_MARKER = "# [workflow-embed-patch:prefer-workflow-state-json]"
+_HOOK_PATCH_MARKER = INJECT_WORKFLOW_STATE_PATCH_MARKER
+_SESSION_START_STRONG_GATE_PATCH_MARKER = SESSION_START_STRONG_GATE_PATCH_MARKER
+_TASK_NO_STATUS_FLIP_PATCH_MARKER = TASK_START_STRONG_GATE_PATCH_MARKER
+_TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER = TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER
+_WORKFLOW_PHASE_PATCH_MARKER = WORKFLOW_PHASE_STRONG_GATE_PATCH_MARKER
 
 
 def patch_inject_workflow_state_hook(root: Path, *, dry_run: bool) -> bool:
@@ -1407,13 +1493,17 @@ def patch_inject_workflow_state_hook(root: Path, *, dry_run: bool) -> bool:
         patched = content
 
         # ── Issue 7: strip fenced code blocks before _TAG_RE.finditer() ──
-        # Insert a re.sub line after "content = workflow.read_text(encoding="utf-8")"
-        # inside load_breadcrumbs().
-        code_block_strip_line = '        content = re.sub(r"```.*?```", "", content, flags=re.DOTALL)\n'
-        read_text_anchor = '        content = workflow.read_text(encoding="utf-8")\n'
-        if read_text_anchor in patched and code_block_strip_line not in patched:
-            insert_pos = patched.find(read_text_anchor) + len(read_text_anchor)
-            patched = patched[:insert_pos] + code_block_strip_line + patched[insert_pos:]
+        code_block_pattern = re.compile(
+            r'^(?P<indent>\s*)content = workflow\.read_text\(encoding="utf-8"\)\n',
+            re.MULTILINE,
+        )
+        if 're.sub(r"```.*?```", "", content, flags=re.DOTALL)' not in patched:
+            match = code_block_pattern.search(patched)
+            if match:
+                indent = match.group("indent")
+                insert_pos = match.end()
+                code_block_strip_line = f'{indent}content = re.sub(r"```.*?```", "", content, flags=re.DOTALL)\n'
+                patched = patched[:insert_pos] + code_block_strip_line + patched[insert_pos:]
 
         # ── Issue 1: prefer workflow-state.json.stage over task.json.status ──
         # (Applied to Codex and Claude hooks)
@@ -1433,16 +1523,24 @@ def patch_inject_workflow_state_hook(root: Path, *, dry_run: bool) -> bool:
         except (json.JSONDecodeError, OSError):
             pass
 """
-            return_anchor = "    return task_id, status, active.source\n"
+            return_anchor = re.compile(
+                r'^(?P<indent>\s*)return task_id, status, active\.source\n',
+                re.MULTILINE,
+            )
             return_replacement = "    return task_id, status, _ws_source or active.source\n"
-            if return_anchor in patched and _HOOK_PATCH_MARKER not in patched:
+            if _HOOK_PATCH_MARKER not in patched:
                 func_def = "def get_active_task("
                 func_start = patched.find(func_def)
                 if func_start != -1:
-                    return_pos = patched.find(return_anchor, func_start)
+                    match = return_anchor.search(patched, pos=func_start)
                     next_def = patched.find("\ndef ", func_start + len(func_def))
-                    if next_def == -1 or return_pos < next_def:
-                        patched = patched[:return_pos] + ws_override_block + return_replacement + patched[return_pos + len(return_anchor):]
+                    if match is not None and (next_def == -1 or match.start() < next_def):
+                        patched = (
+                            patched[: match.start()]
+                            + ws_override_block
+                            + return_replacement
+                            + patched[match.end() :]
+                        )
 
         if patched == content:
             warn(f"[Shared] {hook_subpath} 补丁未命中目标代码，跳过")
@@ -2552,6 +2650,7 @@ def write_install_record(
             ],
             "patched_codex_skills": CODEX_PATCH_BASELINE_SKILLS,
             "patched_shared_docs": PATCH_BASELINE_SHARED_DOCS,
+            "critical_runtime_patches": CRITICAL_RUNTIME_PATCHES,
             # Legacy compatibility field: fresh installs no longer manage
             # enhanced agents, but older records/readers still understand it.
             "managed_enhanced_agents": MANAGED_ENHANCED_AGENT_NAMES,
@@ -2769,6 +2868,7 @@ def main() -> int:
 
             # Issue 1+7: patch deployed inject-workflow-state.py hook
             patch_inject_workflow_state_hook(root, dry_run=args.dry_run)
+            _apply_patch_session_start(src, root, dry_run=args.dry_run)
             patch_task_start_degraded_fallback(root, dry_run=args.dry_run)
             patch_opencode_session_utils(root, dry_run=args.dry_run)
 
@@ -2780,6 +2880,7 @@ def main() -> int:
 
             # Patch task.py cmd_start to skip status flip under strong-gate
             _apply_patch_task_start(src, root, dry_run=args.dry_run)
+            _apply_patch_task_create_preserve_active(src, root, dry_run=args.dry_run)
         print()
 
         if not any(t and t["errors"] for t in total.values()):

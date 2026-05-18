@@ -271,9 +271,15 @@ $TASK_DIR/task_creation_checklist.md
 
 ```bash
 python3 ./.trellis/scripts/task.py create "<title>" --slug <name>
-python3 ./.trellis/scripts/task.py create "<child-title>" --slug <child-name> --parent "$TASK_DIR"
+TRELLIS_PRESERVE_ACTIVE_TASK=1 python3 ./.trellis/scripts/task.py create "<child-title>" --slug <child-name> --parent "$TASK_DIR"
 python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 ```
+
+补充约束：
+
+- 在 `plan` 阶段从父任务拆出 child task 时，默认应保留当前 parent coordinator 作为 session active task；不要因为 `create --parent` 就偷偷切到新 child task
+- 只有在用户明确确认“当前推荐执行任务（待确认）”之后，才允许把 session active task 切到真正要进入 `implementation` / `test-first` 的叶子任务
+- `TRELLIS_PRESERVE_ACTIVE_TASK=1` 只用于“协调态拆任务但暂不切执行上下文”这一步；进入执行态前必须回到真实 leaf task
 
 至少要保证：**当前推荐执行任务（待确认）对应的 leaf task 目录已经具备最小 `prd.md`**，
 避免该 task 在 Trellis 基线里被判定为 `NOT READY`。

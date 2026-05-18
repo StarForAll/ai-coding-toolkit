@@ -236,7 +236,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
         self.assertIn("与当前 task", validate.stdout)
 
-    def test_validate_fails_when_task_has_children(self) -> None:
+    def test_validate_allows_parent_task_with_children_during_plan(self) -> None:
         root, task_dir = self.make_fixture()
         (task_dir / "task.json").write_text('{"status":"planning","children":["04-15-child-task"]}\n', encoding="utf-8")
         self.write_required_project_docs(
@@ -245,12 +245,43 @@ class WorkflowStateScriptTests(unittest.TestCase):
             task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
             customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
         )
+        self.write_context7_review(task_dir)
 
         self.run_script("init", str(task_dir), "--stage", "plan")
+        self.run_script("set", str(task_dir), "--context7-review-completed", "true")
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
+        self.assertIn("workflow-state 校验通过", validate.stdout)
+
+    def test_validate_still_rejects_execution_task_with_children(self) -> None:
+        root, task_dir = self.make_fixture()
+        (task_dir / "task.json").write_text('{"status":"planning","children":["04-15-child-task"]}\n', encoding="utf-8")
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (root / "docs" / "requirements" / "developer-facing-prd.md").write_text("# developer\n", encoding="utf-8")
+        self.write_context7_review(task_dir)
+
+        self.run_script("init", str(task_dir), "--stage", "plan")
+        self.run_script("set", str(task_dir), "--context7-review-completed", "true")
+        state_path = task_dir / "workflow-state.json"
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        state["stage"] = "implementation"
+        state["checkpoints"]["execution_authorized"] = True
+        state["last_confirmed_transition"] = {
+            "from": "plan",
+            "to": "implementation",
+            "confirmed_at": "2026-05-18T00:00:00+00:00",
+        }
+        state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
 
         self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
-        self.assertIn("不应继续作为执行态叶子任务", validate.stdout)
+        self.assertIn("执行态叶子任务", validate.stdout)
 
     def test_validate_fails_when_design_before_arch_confirm_has_developer_prd(self) -> None:
         root, task_dir = self.make_fixture()
@@ -919,6 +950,46 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(data["target"], "feasibility")
         self.assertEqual(data["action"], "first_entry")
 
+    def test_cmd_route_first_entry_personal_profile_targets_brainstorm(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "scripts" / "common").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / ".runtime" / "sessions").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            json.dumps({"profile": "personal"}, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "library-lock.yaml").write_text(
+            "packs:\n  - pack.requirements-discovery-foundation\n",
+            encoding="utf-8",
+        )
+        (root / ".claude" / "hooks").mkdir(parents=True, exist_ok=True)
+        (root / ".claude" / "hooks" / "session-start.py").write_text(
+            "# strong-gate-session-start-patch-applied\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "task.py").write_text(
+            "# [workflow-embed-patch:strong-gate-no-status-flip]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
+            "# [workflow-embed-patch:preserve-parent-active-task]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
+            "# strong-gate-phase-patch-applied\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["target"], "brainstorm")
+        self.assertEqual(data["action"], "first_entry")
+        self.assertEqual(data["profile_hint"], "personal")
+
     def test_cmd_route_without_active_task_enters_recovery(self) -> None:
         """Existing tasks but no active task -> recovery_needed."""
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
@@ -976,6 +1047,26 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(data["target"], "plan")
         self.assertEqual(data["action"], "reenter")
         self.assertEqual(data["stage"], "plan")
+
+    def test_cmd_route_reenters_parent_plan_task_with_children(self) -> None:
+        root, task_dir = self.make_fixture()
+        (task_dir / "task.json").write_text('{"status":"planning","children":["04-15-child-task"]}\n', encoding="utf-8")
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_context7_review(task_dir)
+        self.run_script("init", str(task_dir), "--stage", "plan")
+        self.run_script("set", str(task_dir), "--context7-review-completed", "true")
+
+        result = self.run_script("route", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertNotEqual(data["action"], "repair_needed")
+        self.assertNotIn("children", data["reason"])
 
     def test_cmd_route_awaiting_confirmation(self) -> None:
         """workflow-state has stage_status=awaiting_user_confirmation -> awaiting_confirmation."""
@@ -1292,6 +1383,56 @@ class WorkflowStateScriptTests(unittest.TestCase):
         data = _json.loads(result.stdout)
         self.assertEqual(data["action"], "embed_invalid")
         self.assertIn(".trellis/library-lock.yaml", data["reason"])
+
+    def test_cmd_route_embed_invalid_when_critical_runtime_patches_are_missing(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "scripts" / "common").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / ".runtime" / "sessions").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            json.dumps(
+                {
+                    "profile": "outsourcing",
+                    "cli_types": ["claude", "codex"],
+                    "critical_runtime_patches": [
+                        "inject-workflow-state",
+                        "session-start-strong-gate",
+                        "task-start-strong-gate",
+                        "task-create-preserve-active",
+                        "workflow-phase-strong-gate",
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "library-lock.yaml").write_text(
+            "packs:\n  - pack.requirements-discovery-foundation\n",
+            encoding="utf-8",
+        )
+        (root / ".claude" / "hooks").mkdir(parents=True, exist_ok=True)
+        (root / ".claude" / "hooks" / "session-start.py").write_text("# baseline hook\n", encoding="utf-8")
+        (root / ".codex" / "hooks").mkdir(parents=True, exist_ok=True)
+        (root / ".codex" / "hooks" / "inject-workflow-state.py").write_text(
+            "# [workflow-embed-patch:prefer-workflow-state-json]\n",
+            encoding="utf-8",
+        )
+        (root / ".codex" / "hooks" / "session-start.py").write_text("# baseline hook\n", encoding="utf-8")
+        (root / ".trellis" / "scripts" / "task.py").write_text("# baseline task helper\n", encoding="utf-8")
+        (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
+            "# baseline task store\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "embed_invalid")
+        self.assertIn("critical runtime patch", data["reason"])
 
     # ------------------------------------------------------------------
     # repair subcommand tests

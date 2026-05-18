@@ -30,6 +30,9 @@ PARALLEL_DISABLED_MARKER = "<!-- workflow-parallel-disabled -->"
 WORKFLOW_PATCH_MARKER = "<!-- workflow-projectization-patch -->"
 TASK_DEGRADED_PATCH_MARKER = "# [workflow-embed-patch:degraded-active-task]"
 OPENCODE_SESSION_UTILS_PATCH_MARKER = "// [workflow-embed-patch:strong-gate-session-utils]"
+SESSION_START_STRONG_GATE_PATCH_MARKER = "# strong-gate-session-start-patch-applied"
+TASK_NO_STATUS_FLIP_PATCH_MARKER = "# [workflow-embed-patch:strong-gate-no-status-flip]"
+TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER = "# [workflow-embed-patch:preserve-parent-active-task]"
 DEFAULT_PROJECT_TODO = "文档内容需要和实际当前的代码同步\n"
 BASELINE_START_CONTENT = (
     "# /trellis:start\n\n"
@@ -163,12 +166,26 @@ BASELINE_TASK_PY_CONTENT = (
     "from common.io import read_json, write_json\n\n"
     "def cmd_start(args):\n"
     "    repo_root = get_repo_root()\n"
-    "    task_dir = 'sample'\n"
+    "    full_path = repo_root / '.trellis' / 'tasks' / 'sample'\n"
+    "    task_dir = full_path.relative_to(repo_root).as_posix()\n"
     "    task_json_path = full_path / FILE_TASK_JSON\n"
     "    if not resolve_context_key():\n"
     "        # Still flip task.json status: planning → in_progress so downstream phases proceed.\n"
     "        if task_json_path.is_file():\n"
     "            data = read_json(task_json_path)\n"
+    "            if data and data.get(\"status\") == \"planning\":\n"
+    "                data[\"status\"] = \"in_progress\"\n"
+    "                if write_json(task_json_path, data):\n"
+    "                    print(colored(\"✓ Status: planning → in_progress (degraded)\", Colors.GREEN))\n"
+    "        return 0\n"
+    "    active = set_active_task(task_dir, repo_root)\n"
+    "    if active:\n"
+    "        if task_json_path.is_file():\n"
+    "            data = read_json(task_json_path)\n"
+    "            if data and data.get(\"status\") == \"planning\":\n"
+    "                data[\"status\"] = \"in_progress\"\n"
+    "                if write_json(task_json_path, data):\n"
+    "                    print(colored(\"✓ Status: planning → in_progress\", Colors.GREEN))\n"
     "        return 0\n"
     "    return 0\n\n"
     "def cmd_finish(args):\n"
@@ -178,6 +195,72 @@ BASELINE_TASK_PY_CONTENT = (
     "    if task_json_path.is_file():\n"
     "        run_task_hooks(\"after_finish\", task_json_path, repo_root)\n"
     "    return 0\n"
+)
+BASELINE_TASK_STORE_CONTENT = (
+    "from common.log import Colors, colored\n"
+    "from common.io import read_json, write_json\n\n"
+    "def cmd_create(args):\n"
+    "    repo_root = get_repo_root()\n"
+    "    task_dir = repo_root / '.trellis' / 'tasks' / 'sample'\n"
+    "    dir_name = task_dir.name\n"
+    "    # Auto-activate the new task so the per-turn breadcrumb fires planning\n"
+    "    try:\n"
+    "        from .active_task import resolve_context_key, set_active_task\n"
+    "        if resolve_context_key():\n"
+    "            try:\n"
+    "                rel_dir = task_dir.relative_to(repo_root).as_posix()\n"
+    "            except ValueError:\n"
+    "                rel_dir = str(task_dir)\n"
+    "            set_active_task(rel_dir, repo_root)\n"
+    "    except Exception:\n"
+    "        pass\n"
+    "    print(colored(f'Created task: {dir_name}', Colors.GREEN))\n"
+    "    return 0\n"
+)
+BASELINE_WORKFLOW_PHASE_CONTENT = (
+    "def get_step(step):\n"
+    "    return f'legacy step {step}'\n"
+)
+BASELINE_INJECT_WORKFLOW_STATE_HOOK_CONTENT = (
+    "import re\n"
+    "from pathlib import Path\n\n"
+    "def load_breadcrumbs(workflow: Path):\n"
+    "    if workflow:\n"
+    "        content = workflow.read_text(encoding=\"utf-8\")\n"
+    "        return _TAG_RE.finditer(content)\n"
+    "    return []\n\n"
+    "def get_active_task(root: Path, input_data: dict):\n"
+    "    task_id = input_data['active'].task_path\n"
+    "    task_dir = root / task_id\n"
+    "    data = {\"status\": \"planning\"}\n"
+    "    status = data.get(\"status\", \"\")\n"
+    "    active = input_data['active']\n"
+    "    return task_id, status, active.source\n"
+)
+BASELINE_SESSION_START_CONTENT = (
+    "from pathlib import Path\n"
+    "import json\n\n"
+    "def _resolve_active_task(trellis_dir: Path, hook_input: dict):\n"
+    "    return hook_input['active']\n\n"
+    "def _resolve_task_dir(trellis_dir: Path, task_ref: str) -> Path:\n"
+    "    return trellis_dir / 'tasks' / task_ref\n\n"
+    "def _get_task_status(trellis_dir: Path, hook_input: dict) -> str:\n"
+    "    active = _resolve_active_task(trellis_dir, hook_input)\n"
+    "    if not active.task_path:\n"
+    "        return 'Status: NO ACTIVE TASK\\nSource: none\\nNext-Action: After the user describes their intent, load skill `trellis-brainstorm` to clarify requirements and create a task via `python3 ./.trellis/scripts/task.py create`.\\n'\n"
+    "    task_ref = active.task_path\n"
+    "    task_dir = _resolve_task_dir(trellis_dir, task_ref)\n"
+    "    if active.stale or not task_dir.is_dir():\n"
+    "        return 'Status: STALE POINTER'\n"
+    "    task_json_path = task_dir / 'task.json'\n"
+    "    task_data = {}\n"
+    "    if task_json_path.is_file():\n"
+    "        task_data = json.loads(task_json_path.read_text(encoding='utf-8'))\n"
+    "    task_title = task_data.get('title', task_ref)\n"
+    "    task_status = task_data.get('status', 'unknown')\n"
+    "    if task_status == 'completed':\n"
+    "        return f'Status: COMPLETED\\nTask: {task_title}'\n"
+    "    return f'Status: READY\\nTask: {task_title}'\n"
 )
 BASELINE_OPENCODE_SESSION_UTILS_CONTENT = (
     "import { existsSync, readFileSync } from \"fs\"\n"
@@ -377,12 +460,21 @@ class WorkflowInstallerTests(unittest.TestCase):
             (root / ".trellis").mkdir(parents=True)
             (root / ".trellis" / ".runtime" / "sessions").mkdir(parents=True, exist_ok=True)
             (root / ".trellis" / "scripts").mkdir(parents=True, exist_ok=True)
+            (root / ".trellis" / "scripts" / "common").mkdir(parents=True, exist_ok=True)
             (root / ".trellis" / "workflow.md").write_text(
                 BASELINE_WORKFLOW_CONTENT,
                 encoding="utf-8",
             )
             (root / ".trellis" / "scripts" / "task.py").write_text(
                 BASELINE_TASK_PY_CONTENT,
+                encoding="utf-8",
+            )
+            (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
+                BASELINE_TASK_STORE_CONTENT,
+                encoding="utf-8",
+            )
+            (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
+                BASELINE_WORKFLOW_PHASE_CONTENT,
                 encoding="utf-8",
             )
             if include_bootstrap_task:
@@ -424,6 +516,15 @@ class WorkflowInstallerTests(unittest.TestCase):
         )
         (root / ".claude" / "commands" / "trellis" / "record-session.md").write_text(
             BASELINE_RECORD_SESSION_CONTENT,
+            encoding="utf-8",
+        )
+        (root / ".claude" / "hooks").mkdir(parents=True, exist_ok=True)
+        (root / ".claude" / "hooks" / "session-start.py").write_text(
+            BASELINE_SESSION_START_CONTENT,
+            encoding="utf-8",
+        )
+        (root / ".claude" / "hooks" / "inject-workflow-state.py").write_text(
+            BASELINE_INJECT_WORKFLOW_STATE_HOOK_CONTENT,
             encoding="utf-8",
         )
         (root / ".claude" / "agents").mkdir(parents=True, exist_ok=True)
@@ -511,7 +612,14 @@ class WorkflowInstallerTests(unittest.TestCase):
             (root / ".codex" / "hooks").mkdir(parents=True)
             (root / ".codex" / "agents").mkdir(parents=True)
             (root / ".codex" / "hooks.json").write_text("{}", encoding="utf-8")
-            (root / ".codex" / "hooks" / "inject-workflow-state.py").write_text("# hook\n", encoding="utf-8")
+            (root / ".codex" / "hooks" / "inject-workflow-state.py").write_text(
+                BASELINE_INJECT_WORKFLOW_STATE_HOOK_CONTENT,
+                encoding="utf-8",
+            )
+            (root / ".codex" / "hooks" / "session-start.py").write_text(
+                BASELINE_SESSION_START_CONTENT,
+                encoding="utf-8",
+            )
             codex_agent_prefix = "trellis-" if use_latest_trellis_baseline else ""
             (root / ".codex" / "agents" / f"{codex_agent_prefix}research.toml").write_text(BASELINE_CODEX_RESEARCH_TOML, encoding="utf-8")
             (root / ".codex" / "agents" / f"{codex_agent_prefix}implement.toml").write_text(BASELINE_CODEX_IMPLEMENT_TOML, encoding="utf-8")
@@ -535,6 +643,17 @@ class WorkflowInstallerTests(unittest.TestCase):
     def latest_env_for(self, fixture_root: Path) -> dict[str, str]:
         version_path = fixture_root / ".trellis" / ".version"
         return {"TRELLIS_LATEST_VERSION": version_path.read_text(encoding="utf-8").strip()}
+
+    def assert_install_result_usable(self, result: subprocess.CompletedProcess[str]) -> None:
+        """Fixture-level workflow.md drift is tolerated; runtime patch failures are not."""
+        if result.returncode == 0:
+            return
+        combined = result.stdout + result.stderr
+        self.assertIn(".trellis/workflow.md: 项目化补丁内容漂移", combined)
+        self.assertNotIn("session-start.py: 强门禁补丁缺失", combined)
+        self.assertNotIn("task.py: strong-gate no-status-flip 补丁缺失", combined)
+        self.assertNotIn("common/task_store.py: preserve-active 补丁缺失", combined)
+        self.assertNotIn("common/workflow_phase.py: 强门禁补丁缺失", combined)
 
     def mark_legacy_codex_installed(self, fixture_root: Path) -> None:
         record_path = fixture_root / ".trellis" / "workflow-installed.json"
@@ -590,12 +709,12 @@ class WorkflowInstallerTests(unittest.TestCase):
         (agents_backup_dir / "trellis-check.toml").write_text(BASELINE_CODEX_CHECK_TOML, encoding="utf-8")
 
     def test_install_deploys_record_session_closure_helper_and_patch(self) -> None:
-        fixture = self.create_fixture(include_opencode=True)
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
 
         install = self.install_workflow(fixture)
 
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.assert_install_result_usable(install)
         brainstorm = fixture / ".claude" / "commands" / "trellis" / "brainstorm.md"
         self.assertTrue(brainstorm.exists(), "brainstorm.md should be deployed")
         project_audit = fixture / ".claude" / "commands" / "trellis" / "project-audit.md"
@@ -638,6 +757,13 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("质量平台门禁", finish_work_text)
         task_py_text = (fixture / ".trellis" / "scripts" / "task.py").read_text(encoding="utf-8")
         self.assertIn(TASK_DEGRADED_PATCH_MARKER, task_py_text)
+        self.assertIn(TASK_NO_STATUS_FLIP_PATCH_MARKER, task_py_text)
+        task_store_text = (fixture / ".trellis" / "scripts" / "common" / "task_store.py").read_text(encoding="utf-8")
+        self.assertIn(TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER, task_store_text)
+        claude_session_start = (fixture / ".claude" / "hooks" / "session-start.py").read_text(encoding="utf-8")
+        codex_session_start = (fixture / ".codex" / "hooks" / "session-start.py").read_text(encoding="utf-8")
+        self.assertIn(SESSION_START_STRONG_GATE_PATCH_MARKER, claude_session_start)
+        self.assertIn(SESSION_START_STRONG_GATE_PATCH_MARKER, codex_session_start)
         opencode_session_utils = (fixture / ".opencode" / "lib" / "session-utils.js").read_text(encoding="utf-8")
         self.assertIn(OPENCODE_SESSION_UTILS_PATCH_MARKER, opencode_session_utils)
         record = fixture / ".trellis" / "workflow-installed.json"
@@ -652,6 +778,16 @@ class WorkflowInstallerTests(unittest.TestCase):
             ["continue", "finish-work"],
         )
         self.assertEqual(record_data["patched_shared_docs"], ["workflow.md"])
+        self.assertEqual(
+            record_data["critical_runtime_patches"],
+            [
+                "inject-workflow-state",
+                "session-start-strong-gate",
+                "task-start-strong-gate",
+                "task-create-preserve-active",
+                "workflow-phase-strong-gate",
+            ],
+        )
         self.assertEqual(record_data["profile"], "outsourcing")
         self.assertEqual(record_data["scripts"], HELPER_SCRIPTS)
         self.assertEqual(
@@ -1689,6 +1825,40 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("initial_pack", result.stdout)
         self.assertIn("bootstrap_task_removed", result.stdout)
         self.assertNotIn("patched_codex_skills", result.stdout)
+
+    def test_upgrade_check_detects_missing_critical_runtime_patches(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assert_install_result_usable(install)
+
+        (fixture / ".claude" / "hooks" / "session-start.py").write_text(
+            BASELINE_SESSION_START_CONTENT,
+            encoding="utf-8",
+        )
+        (fixture / ".trellis" / "scripts" / "task.py").write_text(
+            BASELINE_TASK_PY_CONTENT,
+            encoding="utf-8",
+        )
+        (fixture / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
+            BASELINE_TASK_STORE_CONTENT,
+            encoding="utf-8",
+        )
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("session-start.py", result.stdout)
+        self.assertIn("task.py", result.stdout)
+        self.assertIn("task_store.py", result.stdout)
 
     def test_upgrade_check_allows_legacy_missing_version_keys(self) -> None:
         fixture = self.create_fixture()

@@ -42,6 +42,7 @@ from workflow_assets import (
     codex_phase_router_skill_candidates,
     codex_secondary_skills_dir,
     codex_shared_skills_dir,
+    CRITICAL_RUNTIME_PATCHES,
     DISTRIBUTED_COMMANDS,
     detect_cli_types as detect_cli_types_shared,
     EXECUTION_CARDS,
@@ -94,9 +95,13 @@ patch_inject_workflow_state_hook = _INSTALL_WORKFLOW.patch_inject_workflow_state
 patch_task_start_degraded_fallback = _INSTALL_WORKFLOW.patch_task_start_degraded_fallback
 patch_opencode_session_utils = _INSTALL_WORKFLOW.patch_opencode_session_utils
 _HOOK_PATCH_MARKER = _INSTALL_WORKFLOW._HOOK_PATCH_MARKER
+_SESSION_START_STRONG_GATE_PATCH_MARKER = _INSTALL_WORKFLOW._SESSION_START_STRONG_GATE_PATCH_MARKER
 _STALE_CONTRACT_PATTERN = _INSTALL_WORKFLOW._STALE_CONTRACT_PATTERN
 _TASK_DEGRADED_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_DEGRADED_PATCH_MARKER
+_TASK_NO_STATUS_FLIP_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_NO_STATUS_FLIP_PATCH_MARKER
+_TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER
 _OPENCODE_SESSION_UTILS_PATCH_MARKER = _INSTALL_WORKFLOW._OPENCODE_SESSION_UTILS_PATCH_MARKER
+_WORKFLOW_PHASE_PATCH_MARKER = _INSTALL_WORKFLOW._WORKFLOW_PHASE_PATCH_MARKER
 # Reuse install-workflow markers for idempotency checks
 _WORKFLOW_PHASE_INDEX_MARKER = _INSTALL_WORKFLOW._WORKFLOW_PHASE_INDEX_MARKER
 _WORKFLOW_BREADCRUMB_MARKER = _INSTALL_WORKFLOW._WORKFLOW_BREADCRUMB_MARKER
@@ -152,6 +157,7 @@ _REQUIRED_INSTALL_RECORD_KEYS = {
     "disabled_commands",
     "patched_baseline_commands",
     "patched_shared_docs",
+    "critical_runtime_patches",
     "scripts",
     "initial_pack",
     "bootstrap_task_removed",
@@ -830,29 +836,45 @@ def detect_conflicts_codex(
 
     inject_workflow_state = root / ".codex" / "hooks" / "inject-workflow-state.py"
     if inject_workflow_state.exists():
-        # Issue 1+7: check that the hook has been patched
-        # This is a best-effort enhancement — if the hook structure doesn't
-        # match expectations (e.g. different Trellis version), the workflow
-        # still functions without the patch, just without workflow-state.json
-        # stage priority. Report as warning, not hard conflict.
         hook_content = inject_workflow_state.read_text(encoding="utf-8")
         if _HOOK_PATCH_MARKER in hook_content:
             ok("[Codex] inject-workflow-state.py: hook 补丁已应用")
         else:
-            warn("[Codex] inject-workflow-state.py: hook 补丁未应用（workflow-state.json.stage 优先级 + 代码块过滤未启用）；若 hook 结构不匹配则需手动补丁")
+            err("[Codex] inject-workflow-state.py: hook 补丁未应用（workflow-state.json.stage 优先级 + 代码块过滤未启用）")
+            conflicts += 1
     else:
-        warn("[Codex] inject-workflow-state.py 缺失")
+        err("[Codex] inject-workflow-state.py 缺失")
         conflicts += 1
 
-    # Issue 2: check Claude hook patch
+    codex_session_start = root / ".codex" / "hooks" / "session-start.py"
+    if codex_session_start.exists():
+        session_start_content = codex_session_start.read_text(encoding="utf-8")
+        if _SESSION_START_STRONG_GATE_PATCH_MARKER in session_start_content:
+            ok("[Codex] session-start.py: 强门禁补丁已应用")
+        else:
+            err("[Codex] session-start.py: 强门禁补丁缺失")
+            conflicts += 1
+    else:
+        err("[Codex] session-start.py 缺失")
+        conflicts += 1
+
     claude_hook = root / ".claude" / "hooks" / "inject-workflow-state.py"
     if claude_hook.exists():
         claude_content = claude_hook.read_text(encoding="utf-8")
         if _HOOK_PATCH_MARKER in claude_content:
             ok("[Claude] inject-workflow-state.py: hook 补丁已应用")
         else:
-            warn("[Claude] inject-workflow-state.py: hook 补丁未应用（workflow-state.json.stage 优先级未启用）")
-    # Claude hook absence is not a conflict — Claude may not be installed
+            err("[Claude] inject-workflow-state.py: hook 补丁未应用（workflow-state.json.stage 优先级未启用）")
+            conflicts += 1
+
+    claude_session_start = root / ".claude" / "hooks" / "session-start.py"
+    if claude_session_start.exists():
+        session_start_content = claude_session_start.read_text(encoding="utf-8")
+        if _SESSION_START_STRONG_GATE_PATCH_MARKER in session_start_content:
+            ok("[Claude] session-start.py: 强门禁补丁已应用")
+        else:
+            err("[Claude] session-start.py: 强门禁补丁缺失")
+            conflicts += 1
 
     # Issue 2: check OpenCode plugin patch
     opencode_js = root / ".opencode" / "plugins" / "inject-workflow-state.js"
@@ -872,6 +894,29 @@ def detect_conflicts_codex(
             ok("[Shared] task.py: degraded-active-task fallback 补丁已应用")
         else:
             err("[Shared] task.py: degraded-active-task fallback 补丁缺失")
+            conflicts += 1
+        if _TASK_NO_STATUS_FLIP_PATCH_MARKER in task_content:
+            ok("[Shared] task.py: strong-gate no-status-flip 补丁已应用")
+        else:
+            err("[Shared] task.py: strong-gate no-status-flip 补丁缺失")
+            conflicts += 1
+
+    task_store = root / ".trellis" / "scripts" / "common" / "task_store.py"
+    if task_store.exists():
+        task_store_content = task_store.read_text(encoding="utf-8")
+        if _TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER in task_store_content:
+            ok("[Shared] common/task_store.py: preserve-active 补丁已应用")
+        else:
+            err("[Shared] common/task_store.py: preserve-active 补丁缺失")
+            conflicts += 1
+
+    workflow_phase = root / ".trellis" / "scripts" / "common" / "workflow_phase.py"
+    if workflow_phase.exists():
+        workflow_phase_content = workflow_phase.read_text(encoding="utf-8")
+        if _WORKFLOW_PHASE_PATCH_MARKER in workflow_phase_content:
+            ok("[Shared] common/workflow_phase.py: 强门禁补丁已应用")
+        else:
+            err("[Shared] common/workflow_phase.py: 强门禁补丁缺失")
             conflicts += 1
 
     opencode_session_utils = root / ".opencode" / "lib" / "session-utils.js"

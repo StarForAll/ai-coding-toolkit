@@ -56,6 +56,7 @@ HELPER_SCRIPTS = [
     "patch-inject-workflow-state.py",
     "patch-session-start-strong-gate.py",
     "patch-task-start-strong-gate.py",
+    "patch-task-create-preserve-active.py",
 ]
 RETIRED_HELPER_SCRIPTS = [
     "record-session-helper.py",
@@ -119,6 +120,18 @@ AGENTS_NL_ROUTING_MARKERS = (
     "<!-- workflow-nl-routing-start -->",
     "<!-- workflow-nl-routing-end -->",
 )
+CRITICAL_RUNTIME_PATCHES = [
+    "inject-workflow-state",
+    "session-start-strong-gate",
+    "task-start-strong-gate",
+    "task-create-preserve-active",
+    "workflow-phase-strong-gate",
+]
+INJECT_WORKFLOW_STATE_PATCH_MARKER = "# [workflow-embed-patch:prefer-workflow-state-json]"
+SESSION_START_STRONG_GATE_PATCH_MARKER = "# strong-gate-session-start-patch-applied"
+TASK_START_STRONG_GATE_PATCH_MARKER = "# [workflow-embed-patch:strong-gate-no-status-flip]"
+TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER = "# [workflow-embed-patch:preserve-parent-active-task]"
+WORKFLOW_PHASE_STRONG_GATE_PATCH_MARKER = "# strong-gate-phase-patch-applied"
 
 
 def legacy_agent_target_path(root: Path, cli_type: str, agent_name: str) -> Path:

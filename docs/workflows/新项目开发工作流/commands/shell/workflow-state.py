@@ -102,6 +102,8 @@ STAGE_STATUSES = {
     "completed",
 }
 EXECUTION_STAGES = {"implementation", "test-first"}
+COORDINATION_STAGES = {"feasibility", "brainstorm", "design", "plan"}
+LEAF_REQUIRED_STAGES = STAGES - COORDINATION_STAGES
 SUPPORTED_STATE_VERSION = 1
 PROJECT_ESTIMATE_REQUIRED_STAGES = STAGES - {"feasibility", "brainstorm"}
 # 只在 design/plan 校验 customer-facing PRD 的粗估摘要。
@@ -524,7 +526,13 @@ def validate_session_active_task(task_dir: Path, repo_root: Path, errors: list[s
         )
 
 
-def validate_leaf_task(task_dir: Path, errors: list[str]) -> None:
+def stage_requires_leaf(stage: str | None) -> bool:
+    return isinstance(stage, str) and stage in LEAF_REQUIRED_STAGES
+
+
+def validate_leaf_task(task_dir: Path, stage: str | None, errors: list[str]) -> None:
+    if not stage_requires_leaf(stage):
+        return
     task_data = read_json(task_dir / TASK_FILE_NAME)
     if not task_data:
         errors.append("task.json 无法读取")
@@ -1228,7 +1236,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
             errors.append("无法定位 repo root，不能校验当前活动任务")
         else:
             validate_session_active_task(task_dir, repo_root, errors)
-            validate_leaf_task(task_dir, errors)
+            validate_leaf_task(task_dir, state.get("stage"), errors)
             validate_external_project_controls(task_dir, repo_root, state, errors)
             validate_ownership_policy_controls(task_dir, repo_root, state, errors)
 
@@ -1253,12 +1261,117 @@ def cmd_validate(args: argparse.Namespace) -> int:
 INSTALL_RECORD = ".trellis/workflow-installed.json"
 LIBRARY_LOCK = ".trellis/library-lock.yaml"
 REQUIREMENTS_FOUNDATION_PACK = "pack.requirements-discovery-foundation"
+CRITICAL_RUNTIME_PATCH_NAMES = (
+    "inject-workflow-state",
+    "session-start-strong-gate",
+    "task-start-strong-gate",
+    "task-create-preserve-active",
+    "workflow-phase-strong-gate",
+)
+INJECT_WORKFLOW_STATE_PATCH_MARKER = "# [workflow-embed-patch:prefer-workflow-state-json]"
+SESSION_START_STRONG_GATE_PATCH_MARKER = "# strong-gate-session-start-patch-applied"
+TASK_START_STRONG_GATE_PATCH_MARKER = "# [workflow-embed-patch:strong-gate-no-status-flip]"
+TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER = "# [workflow-embed-patch:preserve-parent-active-task]"
+WORKFLOW_PHASE_STRONG_GATE_PATCH_MARKER = "# strong-gate-phase-patch-applied"
+
+
+def _load_install_record_data(install_record: Path) -> dict[str, Any]:
+    data = read_json(install_record)
+    return data if isinstance(data, dict) else {}
+
+
+def _install_record_cli_types(record: dict[str, Any]) -> set[str]:
+    cli_types = record.get("cli_types")
+    if not isinstance(cli_types, list):
+        return set()
+    return {str(item) for item in cli_types if isinstance(item, str)}
+
+
+def _expected_critical_runtime_patches(record: dict[str, Any]) -> set[str]:
+    configured = record.get("critical_runtime_patches")
+    if isinstance(configured, list):
+        return {
+            str(item)
+            for item in configured
+            if isinstance(item, str) and item in CRITICAL_RUNTIME_PATCH_NAMES
+        }
+    return set(CRITICAL_RUNTIME_PATCH_NAMES)
+
+
+def _critical_patch_paths(repo_root: Path, cli_types: set[str]) -> list[tuple[str, Path, str]]:
+    checks = [
+        ("task-start-strong-gate", repo_root / ".trellis" / "scripts" / "task.py", TASK_START_STRONG_GATE_PATCH_MARKER),
+        (
+            "task-create-preserve-active",
+            repo_root / ".trellis" / "scripts" / "common" / "task_store.py",
+            TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER,
+        ),
+        (
+            "workflow-phase-strong-gate",
+            repo_root / ".trellis" / "scripts" / "common" / "workflow_phase.py",
+            WORKFLOW_PHASE_STRONG_GATE_PATCH_MARKER,
+        ),
+    ]
+    if "claude" in cli_types:
+        checks.extend(
+            [
+                (
+                    "inject-workflow-state",
+                    repo_root / ".claude" / "hooks" / "inject-workflow-state.py",
+                    INJECT_WORKFLOW_STATE_PATCH_MARKER,
+                ),
+                (
+                    "session-start-strong-gate",
+                    repo_root / ".claude" / "hooks" / "session-start.py",
+                    SESSION_START_STRONG_GATE_PATCH_MARKER,
+                ),
+            ]
+        )
+    if "codex" in cli_types:
+        checks.extend(
+            [
+                (
+                    "inject-workflow-state",
+                    repo_root / ".codex" / "hooks" / "inject-workflow-state.py",
+                    INJECT_WORKFLOW_STATE_PATCH_MARKER,
+                ),
+                (
+                    "session-start-strong-gate",
+                    repo_root / ".codex" / "hooks" / "session-start.py",
+                    SESSION_START_STRONG_GATE_PATCH_MARKER,
+                ),
+            ]
+        )
+    return checks
+
+
+def _detect_missing_critical_runtime_patches(repo_root: Path, record: dict[str, Any]) -> list[str]:
+    expected = _expected_critical_runtime_patches(record)
+    if not expected:
+        return []
+    cli_types = _install_record_cli_types(record)
+    missing: list[str] = []
+    for patch_name, path, marker in _critical_patch_paths(repo_root, cli_types):
+        if patch_name not in expected:
+            continue
+        if not path.is_file():
+            missing.append(f"{path.relative_to(repo_root)} 缺失（critical runtime patch: {patch_name}）")
+            continue
+        try:
+            content = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            missing.append(f"{path.relative_to(repo_root)} 不可读（critical runtime patch: {patch_name}）")
+            continue
+        if marker not in content:
+            missing.append(f"{path.relative_to(repo_root)} 缺少补丁标记（critical runtime patch: {patch_name}）")
+    return missing
 
 
 def detect_embed_invalid(repo_root: Path) -> str | None:
     install_record = repo_root / INSTALL_RECORD
     if not install_record.is_file():
         return None
+    record = _load_install_record_data(install_record)
 
     library_lock = repo_root / LIBRARY_LOCK
     if not library_lock.is_file():
@@ -1271,6 +1384,10 @@ def detect_embed_invalid(repo_root: Path) -> str | None:
 
     if REQUIREMENTS_FOUNDATION_PACK not in lock_text:
         return f"{LIBRARY_LOCK} 缺少最低资产集 {REQUIREMENTS_FOUNDATION_PACK}"
+
+    missing_patches = _detect_missing_critical_runtime_patches(repo_root, record)
+    if missing_patches:
+        return "critical runtime patch 未完整落地: " + "; ".join(missing_patches)
 
     return None
 
@@ -1384,10 +1501,10 @@ def cmd_route(args: argparse.Namespace) -> int:
                         except (OSError, UnicodeDecodeError):
                             pass
                     _route_result(
-                        "design" if profile_hint == "personal" else "feasibility",
+                        "brainstorm" if profile_hint == "personal" else "feasibility",
                         "first_entry",
                         "当前 session 尚无 active task，首次进入"
-                        + (" design/plan（personal profile 跳过 feasibility）" if profile_hint == "personal" else " feasibility"),
+                        + (" brainstorm（personal profile 跳过 feasibility）" if profile_hint == "personal" else " feasibility"),
                         profile_hint=profile_hint or "unknown",
                     )
                 else:
@@ -1403,13 +1520,7 @@ def cmd_route(args: argparse.Namespace) -> int:
         _route_result(None, "repair_needed", "当前活动任务目录不存在")
         return 0
 
-    # Check leaf task (no children)
     task_data = read_json(task_dir / TASK_FILE_NAME)
-    if task_data:
-        children = task_data.get("children", [])
-        if isinstance(children, list) and children:
-            _route_result(None, "repair_needed", "当前 task 已有 children")
-            return 0
 
     state_path, state = load_state(task_dir)
     if state is None:
@@ -1434,6 +1545,11 @@ def cmd_route(args: argparse.Namespace) -> int:
     stage = state.get("stage", "")
     stage_status = state.get("stage_status", "")
     checkpoints = state.get("checkpoints", {})
+    if task_data and stage_requires_leaf(stage):
+        children = task_data.get("children", [])
+        if isinstance(children, list) and children:
+            _route_result(None, "repair_needed", "当前 task 已有 children")
+            return 0
 
     readiness_blockers = collect_route_readiness_blockers(task_dir, repo_root, state)
 
