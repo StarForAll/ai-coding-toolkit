@@ -38,3 +38,36 @@ Removed 19 rejected 0.5.17 .new upgrade candidates, preserved live Trellis enhan
 ### Next Steps
 
 - None - task complete
+
+
+## Session 246: Finalize Trellis 0.5.17 capability audit
+
+**Date**: 2026-05-18
+**Task**: Finalize Trellis 0.5.17 capability audit
+**Branch**: `main`
+
+### Summary
+
+Completed the workflow capability audit for docs/workflows/新项目开发工作流/, confirmed compatibility with Trellis 0.5.17, promoted COMPATIBLE_TRELLIS_VERSION to 0.5.17, and finalized the audit evidence/report.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `73ab9f6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
