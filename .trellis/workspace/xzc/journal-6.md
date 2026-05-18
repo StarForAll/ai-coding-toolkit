@@ -137,3 +137,37 @@ Completed the workflow capability audit for docs/workflows/新项目开发工作
 ### Next Steps
 
 - None - task complete
+
+
+## Session 249: Audit embedded workflow gaps
+
+**Date**: 2026-05-18
+**Task**: Audit embedded workflow gaps
+**Branch**: `main`
+
+### Summary
+
+Audited the embedded 新项目开发工作流 against /tmp/trellis-0.5.17-2, fixed real strong-gate/runtime/install drift, aligned embedded guidance, and verified with workflow-state plus installer test suites.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b10aae9` | (see git log) |
+| `e9f6576` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
