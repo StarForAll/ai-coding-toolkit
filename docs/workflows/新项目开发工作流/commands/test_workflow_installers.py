@@ -160,6 +160,31 @@ BASELINE_WORKFLOW_CONTENT = (
     "## File Descriptions\n\n"
     "### 1. workspace/ - Developer Workspaces\n"
 )
+LATEST_BASELINE_WORKFLOW_CONTENT = (
+    "# Development Workflow\n\n"
+    "---\n\n"
+    "## Trellis System\n\n"
+    "### Task System\n\n"
+    "**Current-task mechanism**: `task.py create` creates the task directory and "
+    "(when session identity is available) auto-sets the per-session active-task "
+    "pointer so the planning breadcrumb fires immediately. `task.py start` writes "
+    "the same pointer (idempotent if already set) and flips `task.json.status` "
+    "from `planning` to `in_progress`. State is stored under "
+    "`.trellis/.runtime/sessions/`. If no context key is available from hook "
+    "input, `TRELLIS_CONTEXT_ID`, or a platform-native session environment "
+    "variable, there is no active task and `task.py start` fails with a session "
+    "identity hint. `task.py finish` deletes the current session file (status "
+    "unchanged). `task.py archive <task>` writes `status=completed`, moves the "
+    "directory to `archive/`, and deletes any runtime session files that still "
+    "point at the archived task.\n\n"
+    "### Workspace System\n\n"
+    "Records every AI session.\n\n"
+    "### Context Script\n\n"
+    "```bash\n"
+    "python3 ./.trellis/scripts/get_context.py --mode phase --step <X.Y>\n"
+    "```\n\n"
+    "---\n"
+)
 LEGACY_PHASE_WORKFLOW_CONTENT = (
     "## Context Script\n\n"
     "```bash\n"
@@ -716,6 +741,42 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertEqual(runtime_module.get_step("1.0"), "")
 
+    def test_build_workflow_content_replaces_task_mechanism_without_legacy_headings(self) -> None:
+        import importlib.util
+
+        module_path = COMMANDS_DIR / "install-workflow.py"
+        spec = importlib.util.spec_from_file_location("workflow_install_workflow_test", module_path)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        patch_text = module.prepare_command_content(COMMANDS_DIR / "workflow-patch-projectization.md")
+        patched = module.build_workflow_content(LATEST_BASELINE_WORKFLOW_CONTENT, patch_text)
+
+        self.assertIsNotNone(patched)
+        assert patched is not None
+        self.assertIn(WORKFLOW_PATCH_MARKER, patched)
+        self.assertIn(module._STRONG_GATE_WORKFLOW_TASK_MECHANISM, patched)
+        self.assertNotIn("flips `task.json.status` from `planning` to `in_progress`", patched)
+
+    def test_upgrade_build_workflow_content_replaces_task_mechanism_without_legacy_headings(self) -> None:
+        import importlib.util
+
+        module_path = COMMANDS_DIR / "upgrade-compat.py"
+        spec = importlib.util.spec_from_file_location("workflow_upgrade_compat_test", module_path)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        patch_text = module.prepare_command_content(COMMANDS_DIR / "workflow-patch-projectization.md")
+        patched = module.build_workflow_content(LATEST_BASELINE_WORKFLOW_CONTENT, patch_text)
+
+        self.assertIsNotNone(patched)
+        assert patched is not None
+        self.assertIn(WORKFLOW_PATCH_MARKER, patched)
+        self.assertIn(module._INSTALL_WORKFLOW._STRONG_GATE_WORKFLOW_TASK_MECHANISM, patched)
+        self.assertNotIn("flips `task.json.status` from `planning` to `in_progress`", patched)
+
     def detect_embed_state(self, fixture_root: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
         return self.run_script(DETECT_EMBED_STATE_SCRIPT, "--project-root", str(fixture_root), *args, env=env)
 
@@ -1072,6 +1133,15 @@ class WorkflowInstallerTests(unittest.TestCase):
         install = self.install_workflow(fixture, "--cli", "codex")
 
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        combined = install.stdout + install.stderr
+        self.assertNotIn(
+            "[Codex] session-start.py: 存在但未接 workflow 补丁（当前合同下视为可选辅助面）",
+            combined,
+        )
+        self.assertIn(
+            "[Codex] session-start.py: 存在但未接 workflow 补丁（可选辅助面，当前合同下不作为必需 carrier）",
+            combined,
+        )
         codex_session_start = (fixture / ".codex" / "hooks" / "session-start.py").read_text(encoding="utf-8")
         self.assertNotIn(SESSION_START_STRONG_GATE_PATCH_MARKER, codex_session_start)
         record = json.loads((fixture / ".trellis" / "workflow-installed.json").read_text(encoding="utf-8"))

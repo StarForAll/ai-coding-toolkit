@@ -94,6 +94,7 @@ cleanup_stale_contract_references = _INSTALL_WORKFLOW.cleanup_stale_contract_ref
 patch_inject_workflow_state_hook = _INSTALL_WORKFLOW.patch_inject_workflow_state_hook
 patch_task_start_degraded_fallback = _INSTALL_WORKFLOW.patch_task_start_degraded_fallback
 patch_opencode_session_utils = _INSTALL_WORKFLOW.patch_opencode_session_utils
+replace_workflow_task_mechanism = _INSTALL_WORKFLOW._replace_workflow_task_mechanism
 _HOOK_PATCH_MARKER = _INSTALL_WORKFLOW._HOOK_PATCH_MARKER
 _SESSION_START_STRONG_GATE_PATCH_MARKER = _INSTALL_WORKFLOW._SESSION_START_STRONG_GATE_PATCH_MARKER
 _STALE_CONTRACT_PATTERN = _INSTALL_WORKFLOW._STALE_CONTRACT_PATTERN
@@ -313,11 +314,13 @@ def build_workflow_content(content: str, patch_text: str) -> str | None:
     start_idx = content.find(_WORKFLOW_START_HEADING)
     end_idx = content.find(_WORKFLOW_END_HEADING)
     if start_idx == -1 or end_idx == -1 or end_idx <= start_idx:
-        return content.rstrip() + "\n\n" + patch_text.rstrip() + "\n"
+        new_content = content.rstrip() + "\n\n" + patch_text.rstrip() + "\n"
+        return replace_workflow_task_mechanism(new_content)
 
     prefix = content[:start_idx]
     suffix = content[end_idx:].lstrip("\n")
-    return prefix + patch_text.rstrip() + "\n\n" + suffix
+    new_content = prefix + patch_text.rstrip() + "\n\n" + suffix
+    return replace_workflow_task_mechanism(new_content)
 
 
 def load_install_record(rec_file: Path) -> dict:
@@ -882,7 +885,7 @@ def detect_conflicts_codex(
         if _SESSION_START_STRONG_GATE_PATCH_MARKER in session_start_content:
             ok("[Codex] session-start.py: 可选辅助面已接上强门禁补丁")
         else:
-            warn("[Codex] session-start.py: 存在但未接 workflow 补丁（当前合同下视为可选辅助面）")
+            info("[Codex] session-start.py: 存在但未接 workflow 补丁（可选辅助面，当前合同下不作为必需 carrier）")
     else:
         info("[Codex] session-start.py 缺失（当前合同下不作为必需 carrier）")
 

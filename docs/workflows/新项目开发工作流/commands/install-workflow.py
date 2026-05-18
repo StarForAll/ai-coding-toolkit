@@ -219,6 +219,10 @@ _STRONG_GATE_WORKFLOW_TASK_MECHANISM = (
     "the directory to `archive/`, and deletes any runtime session files that still "
     "point at the archived task."
 )
+_WORKFLOW_TASK_MECHANISM_BLOCK_RE = re.compile(
+    r"\*\*Current-task mechanism\*\*:.*?(?=\n\n(?:### |## |<!--)|\Z)",
+    re.S,
+)
 _TODO_FILE_NAME = "todo.txt"
 _TODO_DEFAULT_LINE = "文档内容需要和实际当前的代码同步\n"
 _EMBED_ATTEMPT_FILE_NAME = "workflow-embed-attempt.json"
@@ -1037,20 +1041,39 @@ def build_workflow_content(content: str, patch_text: str) -> str | None:
     if _WORKFLOW_PATCH_MARKER in content:
         return content
 
+    def replace_task_mechanism(block: str) -> str:
+        return _replace_workflow_task_mechanism(block)
+
     start_idx = content.find(_WORKFLOW_START_HEADING)
     end_idx = content.find(_WORKFLOW_END_HEADING)
     if start_idx == -1 or end_idx == -1 or end_idx <= start_idx:
-        return content.rstrip() + "\n\n" + patch_text.rstrip() + "\n"
+        new_content = content.rstrip() + "\n\n" + patch_text.rstrip() + "\n"
+        return replace_task_mechanism(new_content)
 
     prefix = content[:start_idx]
     suffix = content[end_idx:].lstrip("\n")
     new_content = prefix + patch_text.rstrip() + "\n\n" + suffix
-    if _BASELINE_WORKFLOW_TASK_MECHANISM in new_content:
-        new_content = new_content.replace(
+    return replace_task_mechanism(new_content)
+
+
+def _replace_workflow_task_mechanism(content: str) -> str:
+    """Refresh the baseline Current-task mechanism paragraph to the strong-gate contract."""
+    if _STRONG_GATE_WORKFLOW_TASK_MECHANISM in content:
+        return content
+    if _BASELINE_WORKFLOW_TASK_MECHANISM in content:
+        return content.replace(
             _BASELINE_WORKFLOW_TASK_MECHANISM,
             _STRONG_GATE_WORKFLOW_TASK_MECHANISM,
+            1,
         )
-    return new_content
+    match = _WORKFLOW_TASK_MECHANISM_BLOCK_RE.search(content)
+    if match is None:
+        return content
+    return (
+        content[:match.start()]
+        + _STRONG_GATE_WORKFLOW_TASK_MECHANISM
+        + content[match.end():]
+    )
 
 
 def inject_finish_work_patch(
