@@ -33,6 +33,7 @@ PARALLEL_DISABLED_MARKER = "<!-- workflow-parallel-disabled -->"
 WORKFLOW_PATCH_MARKER = "<!-- workflow-projectization-patch -->"
 TRELLIS_META_PATCH_MARKER = "<!-- workflow-embed-patch:trellis-meta-strong-gate -->"
 TASK_DEGRADED_PATCH_MARKER = "# [workflow-embed-patch:degraded-active-task]"
+TASK_CURRENT_DEGRADED_PATCH_MARKER = "# [workflow-embed-patch:degraded-current-read]"
 OPENCODE_SESSION_UTILS_PATCH_MARKER = "// [workflow-embed-patch:strong-gate-session-utils]"
 SESSION_START_STRONG_GATE_PATCH_MARKER = "# strong-gate-session-start-patch-applied"
 TASK_NO_STATUS_FLIP_PATCH_MARKER = "# [workflow-embed-patch:strong-gate-no-status-flip]"
@@ -236,7 +237,20 @@ BASELINE_TASK_PY_CONTENT = (
     "    task_json_path = repo_root / current / FILE_TASK_JSON\n"
     "    if task_json_path.is_file():\n"
     "        run_task_hooks(\"after_finish\", task_json_path, repo_root)\n"
-    "    return 0\n"
+    "    return 0\n\n"
+    "def cmd_current(args):\n"
+    "    repo_root = get_repo_root()\n"
+    "    active = resolve_active_task(repo_root)\n"
+    "    if args.source:\n"
+    "        print(f\"Current task: {active.task_path or '(none)'}\")\n"
+    "        print(f\"Source: {active.source}\")\n"
+    "        if active.stale:\n"
+    "            print(\"State: stale\")\n"
+    "        return 0 if active.task_path else 1\n\n"
+    "    if active.task_path:\n"
+    "        print(active.task_path)\n"
+    "        return 0\n\n"
+    "    return 1\n"
 )
 BASELINE_TASK_STORE_CONTENT = (
     "from common.log import Colors, colored\n"
@@ -888,17 +902,21 @@ class WorkflowInstallerTests(unittest.TestCase):
         )
         self.assertIn("target` 字段对应阶段", start_text)
         self.assertIn("awaiting_confirmation_with_blockers", start_text)
+        self.assertNotIn("Steps 1-4 替换说明", start_text)
+        self.assertNotIn("Load Current Context", start_text)
         self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", start_text)
         finish_work = fixture / ".claude" / "commands" / "trellis" / "finish-work.md"
         finish_work_text = finish_work.read_text(encoding="utf-8")
         self.assertIn(FINISH_WORK_MARKER, finish_work_text)
         self.assertNotIn("pnpm lint", finish_work_text)
         self.assertNotIn("archive the active task", finish_work_text)
+        self.assertNotIn("Step 3/4 替换说明", finish_work_text)
         self.assertIn("finish-work → delivery → record-session", finish_work_text)
         # 补丁已条件化：验证质量平台门禁口径，不再硬断言特定 sonar 内容
         self.assertIn("质量平台门禁", finish_work_text)
         task_py_text = (fixture / ".trellis" / "scripts" / "task.py").read_text(encoding="utf-8")
         self.assertIn(TASK_DEGRADED_PATCH_MARKER, task_py_text)
+        self.assertIn(TASK_CURRENT_DEGRADED_PATCH_MARKER, task_py_text)
         self.assertIn(TASK_NO_STATUS_FLIP_PATCH_MARKER, task_py_text)
         task_store_text = (fixture / ".trellis" / "scripts" / "common" / "task_store.py").read_text(encoding="utf-8")
         self.assertIn(TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER, task_store_text)
@@ -1117,6 +1135,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         start_text = start_skill.read_text(encoding="utf-8")
         self.assertIn("## Workflow Phase Router Patch `[AI]`", start_text)
         self.assertIn("Use the skill matching the `target` field", start_text)
+        self.assertNotIn("Steps 1-4 替换说明", start_text)
         self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", start_text)
         self.assertNotIn("<WORKFLOW_DIR>/commands/shell", start_text)
         self.assertEqual(

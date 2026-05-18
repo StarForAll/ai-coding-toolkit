@@ -238,6 +238,48 @@ def bool_arg(raw: str) -> bool:
     raise argparse.ArgumentTypeError(f"invalid bool value: {raw}")
 
 
+def summarize_validator_output(stdout: str, stderr: str) -> str:
+    combined = "\n".join(part for part in (stdout.strip(), stderr.strip()) if part)
+    if not combined:
+        return ""
+    lines = [line.strip() for line in combined.splitlines() if line.strip()]
+    return lines[-1] if lines else combined
+
+
+def run_gate_validator(
+    script_name: str,
+    validator_args: list[str],
+    errors: list[str],
+    *,
+    label: str,
+    timeout: int = 30,
+) -> None:
+    script_path = Path(__file__).resolve().parent / script_name
+    if not script_path.is_file():
+        errors.append(f"缺少 {script_name}；无法执行 {label}")
+        return
+    try:
+        result = subprocess.run(
+            [sys.executable, str(script_path), *validator_args],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        errors.append(f"{label} 执行超时")
+        return
+    except OSError as exc:
+        errors.append(f"{label} 执行失败: {exc}")
+        return
+    if result.returncode == 0:
+        return
+    summary = summarize_validator_output(result.stdout, result.stderr)
+    if summary:
+        errors.append(f"{label} 未通过: {summary}")
+    else:
+        errors.append(f"{label} 未通过")
+
+
 def validate_state_shape(state: dict[str, Any], errors: list[str]) -> None:
     # Tolerant: if version is missing, default to SUPPORTED_STATE_VERSION
     if "version" not in state:
@@ -348,34 +390,33 @@ def validate_plan_gate(task_dir: Path, errors: list[str]) -> None:
                 "task_creation_checklist.md 存在但缺少 task_plan.md；"
                 "计划产物不完整，不得进入执行阶段"
             )
-    # Comprehensive structural validation via plan-validate.py
-    plan_validate_script = Path(__file__).resolve().parent / "plan-validate.py"
-    if plan_validate_script.is_file():
-        try:
-            result = subprocess.run(
-                [sys.executable, str(plan_validate_script), str(task_dir)],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            if result.returncode != 0:
-                # Extract error summary from stdout (plan-validate prints details there)
-                output = result.stdout.strip()
-                if output:
-                    # Take the last meaningful line as the summary
-                    lines = [ln for ln in output.splitlines() if ln.strip()]
-                    summary = lines[-1] if lines else output
-                    errors.append(
-                        f"plan-validate.py 结构验证未通过: {summary}；不得进入执行阶段"
-                    )
-                else:
-                    errors.append(
-                        "plan-validate.py 结构验证未通过（无详细输出）；不得进入执行阶段"
-                    )
-        except subprocess.TimeoutExpired:
-            errors.append("plan-validate.py 执行超时；不得进入执行阶段")
-        except OSError as exc:
-            errors.append(f"plan-validate.py 执行失败: {exc}；不得进入执行阶段")
+    run_gate_validator(
+        "plan-validate.py",
+        [str(task_dir)],
+        errors,
+        label="plan-validate.py 结构验证",
+    )
+    run_gate_validator(
+        "delivery-control-validate.py",
+        ["--phase", "plan", "--task-dir", str(task_dir)],
+        errors,
+        label="delivery-control-validate.py plan 校验",
+    )
+    run_gate_validator(
+        "ownership-proof-validate.py",
+        ["--phase", "plan", "--task-dir", str(task_dir)],
+        errors,
+        label="ownership-proof-validate.py plan 校验",
+    )
+
+
+def validate_design_exit_gate(task_dir: Path, errors: list[str]) -> None:
+    run_gate_validator(
+        "ownership-proof-validate.py",
+        ["--phase", "design", "--task-dir", str(task_dir)],
+        errors,
+        label="ownership-proof-validate.py design 校验",
+    )
 
 
 def validate_check_gate(task_dir: Path, errors: list[str]) -> None:
@@ -454,6 +495,34 @@ def validate_delivery_gate(task_dir: Path, errors: list[str], repo_root: Path | 
                         f"外包项目缺少交付产物: {', '.join(missing_outsourcing)}；"
                         "delivery 阶段未完成，不得进入 record-session"
                     )
+    run_gate_validator(
+        "delivery-control-validate.py",
+        ["--phase", "delivery", "--task-dir", str(task_dir)],
+        errors,
+        label="delivery-control-validate.py delivery 校验",
+    )
+    run_gate_validator(
+        "ownership-proof-validate.py",
+        ["--phase", "delivery", "--task-dir", str(task_dir)],
+        errors,
+        label="ownership-proof-validate.py delivery 校验",
+    )
+    if repo_root is not None:
+        assessment_path = find_assessment_file(task_dir, repo_root)
+        if assessment_path is not None:
+            content = assessment_path.read_text(encoding="utf-8")
+            ownership_required = normalize_yes_no_field(
+                extract_backticked_field(content, "ownership_proof_required")
+            )
+            level = extract_backticked_field(content, "source_watermark_level")
+            level_normalized = level.lower() if isinstance(level, str) else None
+            if ownership_required is True and level_normalized not in {None, "none"}:
+                run_gate_validator(
+                    "source-watermark-guard.py",
+                    ["--task-dir", str(task_dir), "--mode", "check"],
+                    errors,
+                    label="source-watermark-guard.py 保持性校验",
+                )
 
 
 def validate_stage_transition_gates(
@@ -466,6 +535,7 @@ def validate_stage_transition_gates(
     """Validate gate requirements when transitioning to a new stage via set."""
     if new_stage in {"feasibility"}:
         return
+    validate_leaf_task(task_dir, new_stage, errors)
 
     candidate_state = json.loads(json.dumps(state, ensure_ascii=False))
     candidate_state["stage"] = new_stage
@@ -491,6 +561,9 @@ def validate_stage_transition_gates(
     # Stages >= design additionally require project doc boundary
     if new_stage in PROJECT_ESTIMATE_REQUIRED_STAGES:
         validate_project_doc_boundary(candidate_state, repo_root, task_dir, errors)
+
+    if state.get("stage") == "design" and new_stage == "plan":
+        validate_design_exit_gate(task_dir, errors)
 
     # Only the explicit plan → execution exit requires plan artifacts.
     if new_stage in EXECUTION_STAGES and state.get("stage") == "plan":
@@ -537,23 +610,27 @@ def validate_execution_boundary(state: dict[str, Any], errors: list[str]) -> Non
 
 def validate_session_active_task(task_dir: Path, repo_root: Path, errors: list[str]) -> None:
     active = resolve_active_task(repo_root)
+    source_label = "Trellis session runtime"
     if not active.task_path:
-        errors.append("无法从 Trellis session runtime 解析当前活动任务")
-        return
-    if active.stale:
-        errors.append(f"Trellis session runtime 中的当前活动任务已失效: {active.task_path}")
-        return
-
-    resolved_active = resolve_task_ref(active.task_path, repo_root)
-    if resolved_active is None:
-        errors.append(f"无法解析当前活动任务路径: {active.task_path}")
-        return
+        resolved_active = resolve_degraded_task_dir(repo_root)
+        source_label = "degraded active-task fallback"
+        if resolved_active is None:
+            errors.append("无法从 Trellis session runtime 或 degraded fallback 解析当前活动任务")
+            return
+    else:
+        if active.stale:
+            errors.append(f"Trellis session runtime 中的当前活动任务已失效: {active.task_path}")
+            return
+        resolved_active = resolve_task_ref(active.task_path, repo_root)
+        if resolved_active is None:
+            errors.append(f"无法解析当前活动任务路径: {active.task_path}")
+            return
 
     if resolved_active.resolve() != task_dir.resolve():
         expected = task_dir.resolve().relative_to(repo_root).as_posix()
         actual = resolved_active.resolve().relative_to(repo_root).as_posix()
         errors.append(
-            f"Trellis session runtime 指向 {actual}，与当前 task {expected} 不一致"
+            f"{source_label} 指向 {actual}，与当前 task {expected} 不一致"
         )
 
 
@@ -662,6 +739,9 @@ def collect_exit_gate_blockers(
     if stage == "check":
         validate_check_gate(task_dir, blockers)
 
+    elif stage == "plan":
+        validate_plan_gate(task_dir, blockers)
+
     elif stage == "finish-work":
         validate_finish_work_gate(task_dir, blockers)
 
@@ -671,6 +751,7 @@ def collect_exit_gate_blockers(
     elif stage == "design":
         validate_project_doc_boundary(state, repo_root, task_dir, blockers)
         validate_context7_review_artifact(task_dir, state, blockers)
+        validate_design_exit_gate(task_dir, blockers)
 
     return blockers
 
@@ -1236,6 +1317,7 @@ def cmd_set(args: argparse.Namespace) -> int:
     set_errors: list[str] = []
     validate_state_shape(pending_state, set_errors)
     validate_execution_boundary(pending_state, set_errors)
+    validate_leaf_task(task_dir, pending_state.get("stage"), set_errors)
     if set_errors:
         for message in set_errors:
             print(f"❌ {message}")
@@ -1545,10 +1627,33 @@ def cmd_route(args: argparse.Namespace) -> int:
                             has_any_task = True
                             break
                 if not has_any_task:
-                    # Detect project profile for first-entry routing
+                    # Detect project profile and whether an existing assessment
+                    # explicitly allows direct brainstorm re-entry.
                     profile_hint = None
-                    if not (repo_root / ASSESSMENT_FILE).is_file():
-                        # No assessment.md: check workflow-installed.json for actual profile
+                    target = "feasibility"
+                    reason = "当前 session 尚无 active task，首次进入 feasibility"
+                    assessment_path = repo_root / ASSESSMENT_FILE
+                    if assessment_path.is_file():
+                        try:
+                            a_content = assessment_path.read_text(encoding="utf-8")
+                            engagement_type = extract_backticked_field(a_content, "project_engagement_type")
+                            if engagement_type and engagement_type != "external_outsourcing":
+                                profile_hint = "personal"
+                            elif engagement_type == "external_outsourcing":
+                                profile_hint = "outsourcing"
+                            allow_brainstorm = False
+                            for line in a_content.splitlines():
+                                if "是否允许进入 brainstorm" not in line:
+                                    continue
+                                if "是" in line or "`yes`" in line or ": yes" in line.lower():
+                                    allow_brainstorm = True
+                                break
+                            if allow_brainstorm:
+                                target = "brainstorm"
+                                reason = "当前 session 尚无 active task，但已存在允许进入 brainstorm 的 assessment"
+                        except (OSError, UnicodeDecodeError):
+                            pass
+                    else:
                         install_record_path = repo_root / INSTALL_RECORD
                         if install_record_path.is_file():
                             try:
@@ -1561,25 +1666,10 @@ def cmd_route(args: argparse.Namespace) -> int:
                                     profile_hint = "personal"
                             except (OSError, UnicodeDecodeError, ValueError):
                                 profile_hint = "personal"
-                        else:
-                            # No install record either: cannot determine profile,
-                            # default to feasibility (safest first-entry target)
-                            profile_hint = None
-                    else:
-                        try:
-                            a_content = (repo_root / ASSESSMENT_FILE).read_text(encoding="utf-8")
-                            engagement_type = extract_backticked_field(a_content, "project_engagement_type")
-                            if engagement_type and engagement_type != "external_outsourcing":
-                                profile_hint = "personal"
-                            elif engagement_type == "external_outsourcing":
-                                profile_hint = "outsourcing"
-                        except (OSError, UnicodeDecodeError):
-                            pass
                     _route_result(
-                        "brainstorm" if profile_hint == "personal" else "feasibility",
+                        target,
                         "first_entry",
-                        "当前 session 尚无 active task，首次进入"
-                        + (" brainstorm（personal profile 跳过 feasibility）" if profile_hint == "personal" else " feasibility"),
+                        reason,
                         profile_hint=profile_hint or "unknown",
                     )
                 else:
@@ -1722,7 +1812,11 @@ def cmd_route(args: argparse.Namespace) -> int:
 
 def cmd_repair(args: argparse.Namespace) -> int:
     # Step 1: resolve repo_root
-    task_dir_path = Path(args.task_dir).expanduser().resolve()
+    try:
+        task_dir_path = resolve_task_dir(args.task_dir)
+    except FileNotFoundError as exc:
+        print(json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2), file=sys.stderr)
+        return 1
     if args.project_root:
         repo_root = Path(args.project_root).resolve()
     else:
@@ -1737,6 +1831,8 @@ def cmd_repair(args: argparse.Namespace) -> int:
     if state is not None:
         check_errors: list[str] = []
         validate_state_shape(state, check_errors)
+        validate_execution_boundary(state, check_errors)
+        validate_leaf_task(task_dir_path, state.get("stage"), check_errors)
         if not check_errors:
             result = {
                 "status": "ok",
@@ -1745,147 +1841,106 @@ def cmd_repair(args: argparse.Namespace) -> int:
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
 
-    # Step 3: infer stage from artifacts
     evidence: list[str] = []
-
-    # Check assessment.md in task lineage
-    has_assessment = False
-    if task_dir_path.is_dir() and (task_dir_path / TASK_FILE_NAME).is_file():
-        assessment_file = find_assessment_file(task_dir_path, repo_root)
-        if assessment_file is not None:
-            has_assessment = True
-            evidence.append("assessment.md 存在")
+    if state_path.exists() and state is None:
+        evidence.append("workflow-state.json 存在但无法读取或不是合法 JSON")
+    elif not state_path.exists():
+        evidence.append("workflow-state.json 缺失")
     else:
-        # task_dir might not be a proper task dir — scan broadly
-        tasks_root = repo_root / ".trellis" / "tasks"
-        if tasks_root.is_dir():
-            for candidate in tasks_root.rglob(ASSESSMENT_FILE.name):
-                if candidate.is_file():
-                    has_assessment = True
-                    evidence.append("assessment.md 存在")
-                    break
+        evidence.append("workflow-state.json 可读取，但当前状态不合法")
 
-    if not has_assessment:
-        inferred_stage = "feasibility"
+    candidate_stage = args.stage
+    recovered_from_state = False
+    if candidate_stage is None and isinstance(state, dict):
+        stage_value = state.get("stage")
+        if stage_value in STAGES:
+            candidate_stage = stage_value
+            recovered_from_state = True
+            evidence.append(f"保留了现有 state.stage={stage_value!r}")
+
+    if candidate_stage is None:
         result = {
-            "status": "repair_needed",
-            "inferred_stage": inferred_stage,
-            "confidence": "high",
-            "evidence": ["assessment.md 不存在"],
-            "message": f"推断当前阶段为 {inferred_stage}，请确认后使用 --apply 写入",
+            "status": "manual_confirmation_required",
+            "evidence": evidence,
+            "message": (
+                "无法从现有 workflow-state.json 自恢复当前阶段。"
+                "repair 不会根据 prd.md、task_plan.md、design/、check.md 等产物推断 stage。"
+                "请先由用户确认当前已确认阶段，再使用 `--stage <stage>`（必要时配合 `--apply`）重建状态。"
+            ),
         }
         print(json.dumps(result, ensure_ascii=False, indent=2))
-        if args.apply:
-            data = build_default_state(inferred_stage)
-            write_json(state_path, data)
-            print(json.dumps({"status": "applied", "stage": inferred_stage, "path": str(state_path)}, ensure_ascii=False, indent=2))
-        return 0
+        return 1 if args.apply else 0
 
-    # Check customer-facing-prd.md
-    customer_prd = repo_root / CUSTOMER_PRD
-    has_customer_prd = customer_prd.is_file()
-    if not has_customer_prd:
-        inferred_stage = "brainstorm"
-        result = {
-            "status": "repair_needed",
-            "inferred_stage": inferred_stage,
-            "confidence": "high",
-            "evidence": evidence + [f"{CUSTOMER_PRD.as_posix()} 不存在"],
-            "message": f"推断当前阶段为 {inferred_stage}，请确认后使用 --apply 写入",
-        }
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        if args.apply:
-            data = build_default_state(inferred_stage)
-            write_json(state_path, data)
-            print(json.dumps({"status": "applied", "stage": inferred_stage, "path": str(state_path)}, ensure_ascii=False, indent=2))
-        return 0
+    repaired = build_default_state(candidate_stage)
+    if recovered_from_state and isinstance(state, dict) and state.get("stage") == candidate_stage:
+        existing_status = state.get("stage_status")
+        if existing_status in STAGE_STATUSES:
+            repaired["stage_status"] = existing_status
+        existing_block = state.get("current_block")
+        if existing_block is None or isinstance(existing_block, str):
+            repaired["current_block"] = existing_block
+        existing_completed = state.get("completed_blocks")
+        if isinstance(existing_completed, list) and all(isinstance(item, str) for item in existing_completed):
+            repaired["completed_blocks"] = existing_completed
+        existing_allowed = state.get("allowed_next_stages")
+        if isinstance(existing_allowed, list) and all(isinstance(item, str) for item in existing_allowed):
+            repaired["allowed_next_stages"] = existing_allowed
+        existing_awaiting = state.get("awaiting_user_confirmation")
+        if isinstance(existing_awaiting, bool):
+            repaired["awaiting_user_confirmation"] = existing_awaiting
+        existing_transition = state.get("last_confirmed_transition")
+        if isinstance(existing_transition, dict):
+            repaired["last_confirmed_transition"] = existing_transition
+        existing_notes = state.get("notes")
+        if isinstance(existing_notes, list) and all(isinstance(item, str) for item in existing_notes):
+            repaired["notes"] = existing_notes
+        existing_checkpoints = state.get("checkpoints")
+        if isinstance(existing_checkpoints, dict):
+            repaired_checkpoints = repaired.setdefault("checkpoints", {})
+            for key in ("architecture_confirmed", "context7_review_completed", "execution_authorized"):
+                value = existing_checkpoints.get(key)
+                if isinstance(value, bool):
+                    repaired_checkpoints[key] = value
+        if repaired["stage_status"] == "awaiting_user_confirmation":
+            repaired["awaiting_user_confirmation"] = True
+        elif repaired["awaiting_user_confirmation"] is True:
+            repaired["stage_status"] = "awaiting_user_confirmation"
 
-    evidence.append(f"{CUSTOMER_PRD.as_posix()} 存在")
+    repair_errors: list[str] = []
+    validate_state_shape(repaired, repair_errors)
+    validate_execution_boundary(repaired, repair_errors)
+    validate_leaf_task(task_dir_path, candidate_stage, repair_errors)
 
-    finish_work_checklist = task_dir_path / FINISH_WORK_CHECKLIST_FILE
-    delivery_dir = task_dir_path / "delivery"
-    delivery_artifacts = (
-        delivery_dir / "acceptance.md",
-        delivery_dir / "deliverables.md",
-        delivery_dir / "transfer-checklist.md",
-        delivery_dir / "ownership-proof.md",
-        delivery_dir / "source-watermark-verification.md",
-    )
-    present_delivery_artifacts = [path for path in delivery_artifacts if path.is_file()]
-    if present_delivery_artifacts:
-        inferred_stage = "delivery"
-        evidence.extend(path.relative_to(task_dir_path).as_posix() + " 存在" for path in present_delivery_artifacts)
-        confidence = "high"
-    elif finish_work_checklist.is_file():
-        inferred_stage = "finish-work"
-        evidence.append(f"{FINISH_WORK_CHECKLIST_FILE.as_posix()} 存在")
-        confidence = "high"
-    else:
-        review_gate_task_dir = task_dir_path / "review-gate"
-        if review_gate_task_dir.is_dir():
-            inferred_stage = "review-gate"
-            evidence.append("review-gate/ 存在")
-            confidence = "high"
-        else:
-            review_gate_dir = repo_root / "tmp" / "multi-cli-review" / task_dir_path.name
-            if review_gate_dir.is_dir():
-                inferred_stage = "review-gate"
-                evidence.append(f"tmp/multi-cli-review/{task_dir_path.name}/ 存在")
-                confidence = "low"
-            elif (task_dir_path / "project-audit.md").is_file() or (task_dir_path / "project-audit").is_dir():
-                inferred_stage = "project-audit"
-                if (task_dir_path / "project-audit.md").is_file():
-                    evidence.append("project-audit.md 存在")
-                if (task_dir_path / "project-audit").is_dir():
-                    evidence.append("project-audit/ 存在")
-                confidence = "high"
-            elif (task_dir_path / "check.md").is_file():
-                inferred_stage = "check"
-                evidence.append("check.md 存在")
-                confidence = "high"
-            elif (task_dir_path / "before-dev.md").is_file():
-                inferred_stage = "implementation"
-                evidence.append("before-dev.md 存在")
-                confidence = "medium"
-            else:
-                task_plan = task_dir_path / "task_plan.md"
-                legacy_task_plan = task_dir_path / "design" / "task_plan.md"
-                if task_plan.is_file():
-                    inferred_stage = "plan"
-                    evidence.append("task_plan.md 存在")
-                    confidence = "high"
-                elif legacy_task_plan.is_file():
-                    inferred_stage = "plan"
-                    evidence.append("design/task_plan.md 存在（legacy）")
-                    confidence = "medium"
-                else:
-                    inferred_stage = "brainstorm"
-                    confidence = "medium"
-
-    if inferred_stage not in {"delivery", "finish-work", "review-gate", "project-audit", "check", "implementation", "plan"}:
-        # Check design/ dir in task_dir only when later-stage evidence is absent.
-        design_dir = task_dir_path / "design"
-        if design_dir.is_dir():
-            evidence.append("design/ 存在")
-            inferred_stage = "design"
-            confidence = "high"
-        else:
-            inferred_stage = "brainstorm"
-            confidence = "medium"
-
+    status = "repair_ready"
+    if repair_errors:
+        status = "repair_blocked"
     result = {
-        "status": "repair_needed",
-        "inferred_stage": inferred_stage,
-        "confidence": confidence,
+        "status": status,
+        "stage": candidate_stage,
         "evidence": evidence,
-        "message": f"推断当前阶段为 {inferred_stage}，请确认后使用 --apply 写入",
+        "blockers": repair_errors,
+        "message": (
+            f"已准备按 stage={candidate_stage} 重建 workflow-state.json"
+            if not repair_errors
+            else (
+                f"当前 stage={candidate_stage} 的状态仍缺少关键语义字段；"
+                "请先回到上游确认点或手动补齐确认信息后再重建。"
+            )
+        ),
     }
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
     if args.apply:
-        data = build_default_state(inferred_stage)
-        write_json(state_path, data)
-        print(json.dumps({"status": "applied", "stage": inferred_stage, "path": str(state_path)}, ensure_ascii=False, indent=2))
+        if repair_errors:
+            return 1
+        write_json(state_path, repaired)
+        print(
+            json.dumps(
+                {"status": "applied", "stage": candidate_stage, "path": str(state_path)},
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
 
     return 0
 
@@ -1939,9 +1994,10 @@ def build_parser() -> argparse.ArgumentParser:
     route_parser.add_argument("--project-root")
     route_parser.set_defaults(func=cmd_route)
 
-    repair_parser = subparsers.add_parser("repair", help="infer and fix missing workflow-state.json")
+    repair_parser = subparsers.add_parser("repair", help="safely rebuild missing or broken workflow-state.json")
     repair_parser.add_argument("task_dir")
     repair_parser.add_argument("--project-root")
+    repair_parser.add_argument("--stage", choices=sorted(STAGES))
     repair_parser.add_argument("--apply", action="store_true")
     repair_parser.set_defaults(func=cmd_repair)
 

@@ -174,6 +174,7 @@ _FINISH_WORK_STEP1_HEADING = "## Step 1: Survey current state"
 _FINISH_WORK_STEP3_HEADING = "## Step 3: Archive task(s)"
 _FINISH_WORK_STEP4_END_HEADING = "## Reference"
 _CODEX_START_SKILL_MARKER = "## Workflow Phase Router Patch `[AI]`"
+_TASK_CURRENT_DEGRADED_PATCH_MARKER = "# [workflow-embed-patch:degraded-current-read]"
 _WORKFLOW_PATCH_MARKER = "<!-- workflow-projectization-patch -->"
 _WORKFLOW_START_HEADING = "## Development Process"
 _WORKFLOW_END_HEADING = "## File Descriptions"
@@ -889,6 +890,9 @@ def build_finish_work_content(content: str, patch_text: str) -> str | None:
     """将 finish-work 的 Step 3/4 及 Code Quality 区块替换为项目化补丁。"""
     if _FINISH_WORK_MARKER in content:
         return content
+    runtime_idx = patch_text.find(_FINISH_WORK_START_HEADING)
+    if runtime_idx != -1:
+        patch_text = patch_text[runtime_idx:]
 
     content = content.replace(
         'description: "Wrap up the current session: verify quality gate passed, remind user to commit, archive completed tasks, and record session progress to the developer journal. Use when done coding and ready to end the session."',
@@ -954,6 +958,9 @@ def build_codex_phase_router_skill_content(content: str, patch_text: str) -> str
     Previously this function just appended the patch, leaving the old
     steps in place — which confused AI agents who read top-to-bottom.
     """
+    runtime_idx = patch_text.find(_CODEX_START_SKILL_MARKER)
+    if runtime_idx != -1:
+        patch_text = patch_text[runtime_idx:]
     if _CODEX_START_SKILL_MARKER in content:
         return content
 
@@ -1989,16 +1996,15 @@ def patch_task_start_degraded_fallback(root: Path, *, dry_run: bool) -> bool:
         return False
 
     content = task_path.read_text(encoding="utf-8")
-    if _TASK_DEGRADED_PATCH_MARKER in content:
-        ok("[Shared] task.py degraded fallback 补丁已存在")
-        return False
+    patched = content
+    applied = False
 
     anchor = '        # Still flip task.json status: planning → in_progress so downstream phases proceed.\n'
-    if anchor not in content:
-        warn("[Shared] task.py degraded fallback 补丁未命中目标代码，跳过")
-        return False
-
-    patch_block = """\
+    if _TASK_DEGRADED_PATCH_MARKER not in patched:
+        if anchor not in patched:
+            warn("[Shared] task.py degraded fallback 补丁未命中目标代码，跳过 start 分支写入补丁")
+        else:
+            patch_block = """\
         # [workflow-embed-patch:degraded-active-task]
         degraded_runtime = repo_root / ".trellis" / ".runtime"
         degraded_runtime.mkdir(parents=True, exist_ok=True)
@@ -2012,7 +2018,8 @@ def patch_task_start_degraded_fallback(root: Path, *, dry_run: bool) -> bool:
             print(colored("✓ Wrote degraded active-task fallback", Colors.GREEN))
 
 """
-    patched = content.replace(anchor, patch_block + anchor, 1)
+            patched = patched.replace(anchor, patch_block + anchor, 1)
+            applied = True
 
     finish_anchor = '    if task_json_path.is_file():\n        run_task_hooks("after_finish", task_json_path, repo_root)\n    return 0\n'
     finish_patch = """\
@@ -2024,14 +2031,44 @@ def patch_task_start_degraded_fallback(root: Path, *, dry_run: bool) -> bool:
 
 """
     if finish_anchor in patched:
-        patched = patched.replace(finish_anchor, finish_patch + finish_anchor, 1)
+        if finish_patch not in patched:
+            patched = patched.replace(finish_anchor, finish_patch + finish_anchor, 1)
+            applied = True
+
+    current_anchor = '    if active.task_path:\n        print(active.task_path)\n        return 0\n\n    return 1\n'
+    current_patch = """\
+    if active.task_path:
+        print(active.task_path)
+        return 0
+
+    # [workflow-embed-patch:degraded-current-read]
+    degraded_path = repo_root / ".trellis" / ".runtime" / "degraded-active-task.json"
+    payload = read_json(degraded_path)
+    current_task = payload.get("current_task") if isinstance(payload, dict) else None
+    if isinstance(current_task, str) and current_task.strip():
+        if args.source:
+            print(f"Current task: {current_task}")
+            print("Source: degraded-active-task")
+            return 0
+        print(current_task)
+        return 0
+
+    return 1
+"""
+    if _TASK_CURRENT_DEGRADED_PATCH_MARKER not in patched and current_anchor in patched:
+        patched = patched.replace(current_anchor, current_patch, 1)
+        applied = True
+
+    if not applied:
+        ok("[Shared] task.py degraded fallback / current-read 补丁已存在")
+        return False
 
     if not dry_run:
         task_path.write_text(patched, encoding="utf-8")
     if dry_run:
-        info("[Shared] 将补丁 task.py degraded start fallback → .trellis/.runtime/degraded-active-task.json")
+        info("[Shared] 将补丁 task.py degraded start fallback / current-read → .trellis/.runtime/degraded-active-task.json")
     else:
-        ok("[Shared] task.py degraded start fallback 已补丁")
+        ok("[Shared] task.py degraded start fallback / current-read 已补丁")
     return True
 
 

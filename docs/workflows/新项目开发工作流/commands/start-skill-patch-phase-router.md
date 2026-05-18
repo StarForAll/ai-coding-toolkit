@@ -25,6 +25,7 @@ When this Codex entry skill is used in a target project that has installed `docs
 ```
 
 If any part is missing or stale, stop in the recovery branch. Do not infer the active stage from the presence of `prd.md`, `task_plan.md`, `design/`, `check.md`, or chat history alone.
+`workflow-state.py repair` 只能基于现有 `workflow-state.json` 可恢复字段或用户显式给出的 `--stage` 重建状态；它不会根据这些任务产物反推阶段。
 
 ### Routing
 
@@ -50,13 +51,13 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route --project-root <pr
 
 | action | Meaning | Action |
 |--------|---------|--------|
-| `first_entry` | New project and no resumable task exists | Use the skill matching the `target` field (`feasibility` for outsourcing first entry, `brainstorm` for personal first entry) |
+| `first_entry` | New project and no resumable task exists | Use the skill matching the `target` field. Fresh projects without a reusable assessment should enter `feasibility`; `brainstorm` is only valid when route explicitly reuses an existing assessment that already allows it. |
 | `reenter` | Re-enter current stage | Use the skill matching the `target` field |
 | `awaiting_confirmation` | Stage done, waiting for user | Report completed/missing items; wait for confirmation |
 | `awaiting_confirmation_with_blockers` | Stage reached confirmation point but blockers remain | Show `blockers`; do not ask for confirmation until they are fixed |
 | `blocked` | Execution blocked | Show `blockers` list; do not proceed |
 | `recovery_needed` | Cannot determine the current active task | Ask user to clarify the current task |
-| `repair_needed` | State file missing or corrupt | Run `workflow-state.py repair`; show inference and ask for confirmation |
+| `repair_needed` | State file missing or corrupt | Run `workflow-state.py repair`. If it reports `repair_ready`, confirm and re-apply; if it reports `manual_confirmation_required`, ask the user to confirm the current stage and rerun with `--stage <stage>` instead of inferring from artifacts. |
 | `embed_invalid` | Installation incomplete | Stop; tell user to check installation integrity |
 
 4. If the output contains `blockers`, display each one and do not proceed.

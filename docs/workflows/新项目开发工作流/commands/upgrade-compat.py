@@ -99,6 +99,7 @@ _HOOK_PATCH_MARKER = _INSTALL_WORKFLOW._HOOK_PATCH_MARKER
 _SESSION_START_STRONG_GATE_PATCH_MARKER = _INSTALL_WORKFLOW._SESSION_START_STRONG_GATE_PATCH_MARKER
 _STALE_CONTRACT_PATTERN = _INSTALL_WORKFLOW._STALE_CONTRACT_PATTERN
 _TASK_DEGRADED_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_DEGRADED_PATCH_MARKER
+_TASK_CURRENT_DEGRADED_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_CURRENT_DEGRADED_PATCH_MARKER
 _TASK_NO_STATUS_FLIP_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_NO_STATUS_FLIP_PATCH_MARKER
 _TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER
 _OPENCODE_SESSION_UTILS_PATCH_MARKER = _INSTALL_WORKFLOW._OPENCODE_SESSION_UTILS_PATCH_MARKER
@@ -281,30 +282,7 @@ def workflow_patch_matches_source(src: Path, workflow_md: Path, *, profile: str 
 
 
 def build_finish_work_content(content: str, patch_text: str) -> str | None:
-    if _FINISH_WORK_MARKER in content:
-        return content
-
-    # Try extended replacement: from "### 1. Code Quality" through end of Step 4
-    start_idx = content.find(_FINISH_WORK_START_HEADING)
-    end_idx = content.find(_FINISH_WORK_STEP4_END_HEADING)
-    if start_idx == -1:
-        return content.rstrip() + "\n\n---\n\n" + patch_text.rstrip() + "\n"
-    if end_idx != -1 and end_idx > start_idx:
-        prefix = content[:start_idx]
-        suffix = content[end_idx:]
-        return prefix + patch_text.rstrip() + "\n\n" + suffix
-
-    # Fallback: old narrow replacement
-    end_idx = content.find(_FINISH_WORK_END_HEADING)
-    if end_idx == -1 or end_idx <= start_idx:
-        next_heading_idx = content.find("\n### ", start_idx + len(_FINISH_WORK_START_HEADING))
-        if next_heading_idx == -1:
-            return content.rstrip() + "\n\n---\n\n" + patch_text.rstrip() + "\n"
-        end_idx = next_heading_idx + 1
-
-    prefix = content[:start_idx]
-    suffix = content[end_idx:].lstrip("\n")
-    return prefix + patch_text.rstrip() + "\n\n" + suffix
+    return _INSTALL_WORKFLOW.build_finish_work_content(content, patch_text)
 
 
 def build_workflow_content(content: str, patch_text: str) -> str | None:
@@ -926,6 +904,11 @@ def detect_conflicts_codex(
         else:
             err("[Shared] task.py: degraded-active-task fallback 补丁缺失")
             conflicts += 1
+        if _TASK_CURRENT_DEGRADED_PATCH_MARKER in task_content:
+            ok("[Shared] task.py: degraded current-task fallback 补丁已应用")
+        else:
+            err("[Shared] task.py: degraded current-task fallback 补丁缺失")
+            conflicts += 1
         if _TASK_NO_STATUS_FLIP_PATCH_MARKER in task_content:
             ok("[Shared] task.py: strong-gate no-status-flip 补丁已应用")
         else:
@@ -1273,9 +1256,7 @@ def inject_phase_router(src: Path, start: Path) -> bool:
 
 
 def build_codex_phase_router_skill_content(content: str, patch_text: str) -> str:
-    if _CODEX_START_SKILL_MARKER in content:
-        return content
-    return content.rstrip() + "\n\n---\n\n" + patch_text.rstrip() + "\n"
+    return _INSTALL_WORKFLOW.build_codex_phase_router_skill_content(content, patch_text)
 
 
 def inject_codex_phase_router_skill_patch(src: Path, start_skill_path: Path, target_label: str) -> bool:
