@@ -696,9 +696,9 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 ### 推荐 MCP / Skills
 
 - `doc-coauthoring`
-- `changelog-generator`
 - `verification-before-completion`
-- `requesting-code-review`
+- `multi-cli-review`（如需额外 reviewer 审查）
+- `multi-cli-review-action`（有 reviewer 报告待汇总时）
 
 ### 典型降级方式
 

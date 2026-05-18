@@ -1215,7 +1215,11 @@ def cmd_set(args: argparse.Namespace) -> int:
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
-    task_dir = resolve_task_dir(args.task_dir)
+    try:
+        task_dir = resolve_task_dir(args.task_dir)
+    except FileNotFoundError as exc:
+        print(f"❌ {exc}")
+        return 1
     repo_root = find_repo_root(task_dir)
     state_path, state = load_state(task_dir)
 
@@ -1269,7 +1273,9 @@ CRITICAL_RUNTIME_PATCH_NAMES = (
     "workflow-phase-strong-gate",
 )
 INJECT_WORKFLOW_STATE_PATCH_MARKER = "# [workflow-embed-patch:prefer-workflow-state-json]"
+OPENCODE_INJECT_WORKFLOW_STATE_PATCH_MARKER = "// [workflow-embed-patch:prefer-workflow-state-json]"
 SESSION_START_STRONG_GATE_PATCH_MARKER = "# strong-gate-session-start-patch-applied"
+OPENCODE_SESSION_UTILS_PATCH_MARKER = "// [workflow-embed-patch:strong-gate-session-utils]"
 TASK_START_STRONG_GATE_PATCH_MARKER = "# [workflow-embed-patch:strong-gate-no-status-flip]"
 TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER = "# [workflow-embed-patch:preserve-parent-active-task]"
 WORKFLOW_PHASE_STRONG_GATE_PATCH_MARKER = "# strong-gate-phase-patch-applied"
@@ -1342,7 +1348,43 @@ def _critical_patch_paths(repo_root: Path, cli_types: set[str]) -> list[tuple[st
                 ),
             ]
         )
+    if "opencode" in cli_types:
+        checks.extend(
+            [
+                (
+                    "inject-workflow-state",
+                    repo_root / ".opencode" / "plugins" / "inject-workflow-state.js",
+                    OPENCODE_INJECT_WORKFLOW_STATE_PATCH_MARKER,
+                ),
+                (
+                    "session-start-strong-gate",
+                    repo_root / ".opencode" / "lib" / "session-utils.js",
+                    OPENCODE_SESSION_UTILS_PATCH_MARKER,
+                ),
+            ]
+        )
     return checks
+
+
+def _python_compile_error(
+    repo_root: Path,
+    path: Path,
+    patch_name: str,
+    content: str,
+) -> str | None:
+    if path.suffix != ".py":
+        return None
+    try:
+        compile(content, str(path), "exec")
+    except SyntaxError as exc:
+        detail = exc.msg
+        if exc.lineno is not None:
+            detail = f"{detail} @ line {exc.lineno}"
+        return (
+            f"{path.relative_to(repo_root)} 无法编译"
+            f"（critical runtime patch: {patch_name}; {exc.__class__.__name__}: {detail}）"
+        )
+    return None
 
 
 def _detect_missing_critical_runtime_patches(repo_root: Path, record: dict[str, Any]) -> list[str]:
@@ -1364,6 +1406,10 @@ def _detect_missing_critical_runtime_patches(repo_root: Path, record: dict[str, 
             continue
         if marker not in content:
             missing.append(f"{path.relative_to(repo_root)} 缺少补丁标记（critical runtime patch: {patch_name}）")
+            continue
+        compile_error = _python_compile_error(repo_root, path, patch_name, content)
+        if compile_error is not None:
+            missing.append(compile_error)
     return missing
 
 

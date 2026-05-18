@@ -19,19 +19,19 @@ from pathlib import Path
 PATCH_MARKER = "# [workflow-embed-patch:preserve-parent-active-task]"
 
 PATCH_BLOCK = """\
-        _preserve_active = bool(getattr(args, "parent", None)) and __import__("os").environ.get(
-            "TRELLIS_PRESERVE_ACTIVE_TASK"
-        ) == "1"
-        if _preserve_active:
-            print(
-                colored(
-                    "⏭ Preserving current active task while creating child task "
-                    "(TRELLIS_PRESERVE_ACTIVE_TASK=1)",
-                    Colors.YELLOW,
-                ),
-                file=sys.stderr,
-            )
-        elif resolve_context_key():
+_preserve_active = bool(getattr(args, "parent", None)) and __import__("os").environ.get(
+    "TRELLIS_PRESERVE_ACTIVE_TASK"
+) == "1"
+if _preserve_active:
+    print(
+        colored(
+            "⏭ Preserving current active task while creating child task "
+            "(TRELLIS_PRESERVE_ACTIVE_TASK=1)",
+            Colors.YELLOW,
+        ),
+        file=sys.stderr,
+    )
+elif resolve_context_key():
 """
 
 

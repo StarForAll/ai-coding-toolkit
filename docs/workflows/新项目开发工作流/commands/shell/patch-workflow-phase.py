@@ -20,20 +20,22 @@ PATCH_BLOCK = '''
     try:
         import json as _json
         import subprocess as _sp
+        from pathlib import Path as _Path
+        import sys as _sys
         _ws_path = None
         # Walk up to find trellis root
-        for _p in Path(__file__).resolve().parents:
+        for _p in _Path(__file__).resolve().parents:
             _trellis = _p / ".trellis"
             if _trellis.is_dir():
                 _task_script = _trellis / "scripts" / "task.py"
                 if _task_script.is_file():
                     _r = _sp.run(
-                        [sys.executable, str(_task_script), "current"],
+                        [_sys.executable, str(_task_script), "current"],
                         capture_output=True, text=True, encoding="utf-8", errors="replace",
                         timeout=10,
                     )
                     if _r.returncode == 0 and _r.stdout.strip():
-                        _active_task_dir = Path(_r.stdout.strip())
+                        _active_task_dir = _Path(_r.stdout.strip())
                         if _active_task_dir.is_dir() and (_active_task_dir / "workflow-state.json").is_file():
                             _ws_path = _active_task_dir / "workflow-state.json"
                 break
@@ -46,7 +48,6 @@ PATCH_BLOCK = '''
                 "check", "review-gate", "finish-work", "delivery", "record-session",
             }
             if _stage in _STRONG_GATE_STAGES:
-                import sys as _sys
                 print("⚠️ 强门禁模式下旧 step 查询已禁用，请使用 workflow-state.py route", file=_sys.stderr)
                 return ""
     except Exception:

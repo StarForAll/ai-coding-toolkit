@@ -214,11 +214,12 @@ python3 <WORKFLOW_DIR>/commands/shell/source-watermark-guard.py --task-dir <task
 
 ### Step 7: 变更日志
 
-**调用 Skill**：`changelog-generator` — 从 git commits 自动生成变更日志。降级：手动按功能、修复、风险、迁移说明四类整理。
+**可选 Skill**：`doc-coauthoring` — 协助把变更日志整理成对外可读版本。当前 workflow 不依赖专用 changelog skill；默认做法是基于实际提交记录，按功能、修复、风险、迁移说明四类手动整理。
 
 ### Step 8: 代码审查
 
-**调用 Skill**：`requesting-code-review` — 完成提交前审查清单。降级：手动列出审查范围、验证证据和剩余风险。
+**优先 Skill**：`verification-before-completion` — 先收口当前 CLI 的验证证据与剩余风险。  
+**如需额外外部审查**：使用 `multi-cli-review` 发起 reviewer 审查，并在报告返回后用 `multi-cli-review-action` 汇总、确认与执行低回归修复。降级：手动列出审查范围、验证证据和剩余风险。
 
 ### Step 9: 项目复盘
 
@@ -317,6 +318,6 @@ $TASK_DIR/
 | 有 P2/P3 缺陷 | `/trellis:continue` | 回到实施阶段，或显式触发 `trellis-continue` skill | 回到实施阶段修复 |
 | 验收中出现冻结后新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先完成变更评估与确认；不要直接混入当前交付 |
 | 需要更新规范文档 | `/trellis:update-spec` | 记录并更新规范，或显式触发 `update-spec` skill | 沉淀新发现的模式到 spec |
-| 需要请求代码审查 | `requesting-code-review` 能力 | `requesting-code-review` skill | 提交前外部审查 |
+| 需要请求代码审查 | `multi-cli-review` / `multi-cli-review-action` 能力 | `multi-cli-review` / `multi-cli-review-action` skill | 提交前外部审查与报告汇总 |
 | 需要归档任务 | `python3 ./.trellis/scripts/task.py archive <name>` | 同左 | 归档在 `/trellis:record-session` 阶段执行，不在 delivery 或 finish-work 阶段 |
 | 不确定下一步 | `/trellis:delivery` | 描述当前收尾意图，或显式触发 `delivery` skill | 先停留在 delivery 阶段澄清，而不是自动进入 record-session |

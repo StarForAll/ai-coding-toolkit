@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -22,6 +23,8 @@ INSTALL_SCRIPT = COMMANDS_DIR / "install-workflow.py"
 DETECT_EMBED_STATE_SCRIPT = COMMANDS_DIR / "detect-embed-state.py"
 UPGRADE_SCRIPT = COMMANDS_DIR / "upgrade-compat.py"
 UNINSTALL_SCRIPT = COMMANDS_DIR / "uninstall-workflow.py"
+PATCH_TASK_CREATE_SCRIPT = COMMANDS_DIR / "shell" / "patch-task-create-preserve-active.py"
+PATCH_WORKFLOW_PHASE_SCRIPT = COMMANDS_DIR / "shell" / "patch-workflow-phase.py"
 EMBED_CONFIRM_ENV = "WORKFLOW_EMBED_EXECUTOR_CONFIRMED"
 ATTEMPT_RECORD_NAME = "workflow-embed-attempt.json"
 PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
@@ -637,6 +640,68 @@ class WorkflowInstallerTests(unittest.TestCase):
             env={EMBED_CONFIRM_ENV: "1"},
         )
 
+    def test_patch_task_create_preserve_active_produces_compilable_python(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="workflow-task-store-patch-"))
+        self.addCleanup(shutil.rmtree, root)
+        target = root / "task_store.py"
+        target.write_text(BASELINE_TASK_STORE_CONTENT, encoding="utf-8")
+
+        spec = importlib.util.spec_from_file_location("patch_task_store", PATCH_TASK_CREATE_SCRIPT)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        applied = module.patch_task_store(target)
+        self.assertTrue(applied, "patch_task_store should patch the baseline fixture")
+
+        result = subprocess.run(
+            [PYTHON, "-m", "py_compile", str(target)],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+    def test_patch_workflow_phase_blocks_legacy_step_lookup_when_strong_gate_state_exists(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="workflow-phase-patch-"))
+        self.addCleanup(shutil.rmtree, root)
+        target = root / ".trellis" / "scripts" / "common" / "workflow_phase.py"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(BASELINE_WORKFLOW_PHASE_CONTENT, encoding="utf-8")
+
+        task_script = root / ".trellis" / "scripts" / "task.py"
+        task_script.write_text(
+            "from pathlib import Path\n"
+            "import sys\n\n"
+            "if len(sys.argv) >= 2 and sys.argv[1] == 'current':\n"
+            "    print(str(Path(__file__).resolve().parents[1] / 'tasks' / '04-15-sample-task'))\n"
+            "    raise SystemExit(0)\n"
+            "raise SystemExit(1)\n",
+            encoding="utf-8",
+        )
+
+        task_dir = root / ".trellis" / "tasks" / "04-15-sample-task"
+        task_dir.mkdir(parents=True, exist_ok=True)
+        (task_dir / "workflow-state.json").write_text('{"stage":"design"}\n', encoding="utf-8")
+
+        spec = importlib.util.spec_from_file_location("patch_workflow_phase", PATCH_WORKFLOW_PHASE_SCRIPT)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        patch_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(patch_module)
+
+        applied = patch_module.patch_workflow_phase(target)
+        self.assertTrue(applied, "patch_workflow_phase should patch the baseline fixture")
+
+        module_spec = importlib.util.spec_from_file_location("patched_workflow_phase", target)
+        self.assertIsNotNone(module_spec)
+        self.assertIsNotNone(module_spec.loader)
+        runtime_module = importlib.util.module_from_spec(module_spec)
+        module_spec.loader.exec_module(runtime_module)
+
+        self.assertEqual(runtime_module.get_step("1.0"), "")
+
     def detect_embed_state(self, fixture_root: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
         return self.run_script(DETECT_EMBED_STATE_SCRIPT, "--project-root", str(fixture_root), *args, env=env)
 
@@ -824,6 +889,44 @@ class WorkflowInstallerTests(unittest.TestCase):
             "[源码水印与归属证据链执行卡](.trellis/workflow-docs/源码水印与归属证据链执行卡.md)",
             deployed_feasibility,
         )
+
+    def test_install_deployed_runtime_helpers_compile(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assert_install_result_usable(install)
+
+        python_targets = [
+            fixture / ".trellis" / "scripts" / "task.py",
+            fixture / ".trellis" / "scripts" / "common" / "task_store.py",
+            fixture / ".trellis" / "scripts" / "common" / "workflow_phase.py",
+            fixture / ".claude" / "hooks" / "inject-workflow-state.py",
+            fixture / ".claude" / "hooks" / "session-start.py",
+            fixture / ".codex" / "hooks" / "inject-workflow-state.py",
+            fixture / ".codex" / "hooks" / "session-start.py",
+        ]
+        python_targets.extend(fixture / ".trellis" / "scripts" / "workflow" / name for name in HELPER_SCRIPTS)
+
+        result = subprocess.run(
+            [PYTHON, "-m", "py_compile", *(str(path) for path in python_targets)],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+    def test_delivery_docs_do_not_reference_missing_skills(self) -> None:
+        docs_to_check = [
+            COMMANDS_DIR / "delivery.md",
+            COMMANDS_DIR.parent / "命令映射.md",
+            COMMANDS_DIR.parent / "多CLI通用新项目完整流程演练.md",
+        ]
+        forbidden = ("requesting-code-review", "changelog-generator")
+        for path in docs_to_check:
+            content = path.read_text(encoding="utf-8")
+            for skill_name in forbidden:
+                self.assertNotIn(skill_name, content, msg=f"{path} still references missing skill {skill_name}")
 
     def test_install_removes_legacy_three_phase_workflow_contract(self) -> None:
         fixture = self.create_fixture()

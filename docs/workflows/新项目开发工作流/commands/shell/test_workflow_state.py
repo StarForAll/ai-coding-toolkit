@@ -474,6 +474,17 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
         self.assertIn("context7-review.md", validate.stdout)
 
+    def test_validate_returns_cli_error_for_missing_task_dir(self) -> None:
+        root, _task_dir = self.make_fixture()
+
+        missing = root / ".trellis" / "tasks" / "does-not-exist"
+        result = self.run_script("validate", str(missing), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 1)
+        combined = result.stdout + result.stderr
+        self.assertIn("task dir not found", combined)
+        self.assertNotIn("Traceback", combined)
+
     def test_validate_fails_when_plan_missing_context7_review_checkpoint(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
@@ -1433,6 +1444,114 @@ class WorkflowStateScriptTests(unittest.TestCase):
         data = json.loads(result.stdout)
         self.assertEqual(data["action"], "embed_invalid")
         self.assertIn("critical runtime patch", data["reason"])
+
+    def test_cmd_route_embed_invalid_when_runtime_python_patch_has_syntax_error(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "scripts" / "common").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            json.dumps(
+                {
+                    "profile": "outsourcing",
+                    "cli_types": ["claude"],
+                    "critical_runtime_patches": [
+                        "inject-workflow-state",
+                        "session-start-strong-gate",
+                        "task-start-strong-gate",
+                        "task-create-preserve-active",
+                        "workflow-phase-strong-gate",
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "library-lock.yaml").write_text(
+            "packs:\n  - pack.requirements-discovery-foundation\n",
+            encoding="utf-8",
+        )
+        (root / ".claude" / "hooks").mkdir(parents=True, exist_ok=True)
+        (root / ".claude" / "hooks" / "inject-workflow-state.py").write_text(
+            "# [workflow-embed-patch:prefer-workflow-state-json]\n",
+            encoding="utf-8",
+        )
+        (root / ".claude" / "hooks" / "session-start.py").write_text(
+            "# strong-gate-session-start-patch-applied\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "task.py").write_text(
+            "# [workflow-embed-patch:strong-gate-no-status-flip]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
+            "# strong-gate-phase-patch-applied\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
+            "# [workflow-embed-patch:preserve-parent-active-task]\n"
+            "def broken(:\n"
+            "    pass\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "embed_invalid")
+        self.assertIn("task_store.py", data["reason"])
+        self.assertIn("SyntaxError", data["reason"])
+
+    def test_cmd_route_embed_invalid_when_opencode_runtime_patch_is_missing(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "scripts" / "common").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            json.dumps(
+                {
+                    "profile": "outsourcing",
+                    "cli_types": ["opencode"],
+                    "critical_runtime_patches": [
+                        "inject-workflow-state",
+                        "session-start-strong-gate",
+                        "task-start-strong-gate",
+                        "task-create-preserve-active",
+                        "workflow-phase-strong-gate",
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "library-lock.yaml").write_text(
+            "packs:\n  - pack.requirements-discovery-foundation\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "task.py").write_text(
+            "# [workflow-embed-patch:strong-gate-no-status-flip]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
+            "# [workflow-embed-patch:preserve-parent-active-task]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
+            "# strong-gate-phase-patch-applied\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "embed_invalid")
+        self.assertIn(".opencode", data["reason"])
 
     # ------------------------------------------------------------------
     # repair subcommand tests
