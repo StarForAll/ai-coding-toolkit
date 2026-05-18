@@ -73,7 +73,7 @@ Active task is session-level state stored in `.trellis/.runtime/sessions/`. Do n
 
 This makes `[workflow-state:planning]` the live breadcrumb during the brainstorm and JSONL curation work that follows `task.py create`. The pre-R7 behavior left the breadcrumb stuck on `no_task` until `task.py start`, so the planning block was effectively dead text.
 
-If you fork `task.py` to add a new creation path (e.g. an external import that bypasses `cmd_create`), audit whether your path also calls `set_active_task`. Without that call, your created tasks will not surface as active. The full status writer table is in `.trellis/spec/cli/backend/workflow-state-contract.md`.
+If you fork `task.py` to add a new creation path (e.g. an external import that bypasses `cmd_create`), audit whether your path also calls `set_active_task`. Without that call, your created tasks will not surface as active. The live task-state contract is split across `.trellis/workflow.md`, `.trellis/scripts/common/tests/test_workflow_phase_contracts.py`, and the parsers under `.claude/hooks/inject-workflow-state.py`, `.codex/hooks/inject-workflow-state.py`, `.qoder/hooks/inject-workflow-state.py`, and `.opencode/plugins/inject-workflow-state.js`.
 
 ## Modification Steps
 

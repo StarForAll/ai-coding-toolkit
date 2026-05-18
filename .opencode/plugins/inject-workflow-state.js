@@ -104,8 +104,6 @@ function buildBreadcrumb(id, status, templates, source = null) {
   ) {
     lookupStatus = "stale"
     displayStatus = "stale"
-  } else if (source === "degraded") {
-    displayStatus = `${displayStatus} · degraded`
   }
   let body = templates[lookupStatus]
   if (body === undefined) {

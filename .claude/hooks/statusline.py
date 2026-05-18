@@ -141,17 +141,12 @@ def _format_duration(ms: int) -> str:
 def _render_task_line(task: dict[str, str]) -> str:
     title = task.get("title", "unknown")
     status = task.get("status", "unknown")
-    source = task.get("source", "")
 
     if status == "stale":
         return f"\033[31m[STALE]\033[0m {title} \033[31m(stale)\033[0m"
 
-    status_label = status
-    if source == "degraded":
-        status_label = f"{status} · degraded"
-
     priority = task.get("priority", "P2")
-    return f"\033[36m[{priority}]\033[0m {title} \033[33m({status_label})\033[0m"
+    return f"\033[36m[{priority}]\033[0m {title} \033[33m({status})\033[0m"
 
 
 def main() -> None:
