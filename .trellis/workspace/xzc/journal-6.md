@@ -171,3 +171,36 @@ Audited the embedded 新项目开发工作流 against /tmp/trellis-0.5.17-2, fix
 ### Next Steps
 
 - None - task complete
+
+
+## Session 250: Fix workflow embed post-check drift
+
+**Date**: 2026-05-18
+**Task**: Fix workflow embed post-check drift
+**Branch**: `main`
+
+### Summary
+
+Fixed embedded workflow.md task-mechanism patch fallback, aligned upgrade-compat behavior, and downgraded Codex optional session-start output from warning to info after fresh-embed validation.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `67d34ef` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
