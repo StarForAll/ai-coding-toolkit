@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/scripts/index.md", "reason": "修改 .trellis 脚本与 runtime 文件前先遵守 repo-local script 规范。"}
+{"file": ".trellis/spec/platforms/index.md", "reason": "涉及 Codex/Qoder/OpenCode/Kiro/Claude 平台运行面，需遵守平台约束。"}
+{"file": ".trellis/spec/skills/index.md", "reason": "涉及 .agents/.claude/.opencode/.qoder/.kiro 的 skill/agent 载体时保持 repo-local 规范。"}
+{"file": ".trellis/tasks/archive/2026-05/05-13-analyze-current-trellis-runtime-and-minor-upgrade-residue/research/runtime-upgrade-audit.md", "reason": "本轮增强保留/删除判断直接依赖该审计结论。"}

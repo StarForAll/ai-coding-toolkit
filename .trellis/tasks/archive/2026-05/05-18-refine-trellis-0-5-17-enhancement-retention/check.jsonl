@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/scripts/index.md", "reason": "检查 .trellis 脚本与 runtime 变更仍符合 repo-local script 规范。"}
+{"file": ".trellis/spec/platforms/index.md", "reason": "检查平台运行面变更未破坏 repo-local 平台约束。"}
+{"file": ".trellis/spec/skills/index.md", "reason": "检查 skill/agent 载体变更仍符合 repo-local 规范。"}
+{"file": ".trellis/tasks/archive/2026-05/05-13-analyze-current-trellis-runtime-and-minor-upgrade-residue/research/runtime-upgrade-audit.md", "reason": "复核 .new 清理与增强保留是否符合既有审计结论。"}
