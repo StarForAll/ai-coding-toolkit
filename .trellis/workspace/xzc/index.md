@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-6.md`
-- **Total Sessions**: 247
+- **Total Sessions**: 248
 - **Last Active**: 2026-05-18
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-6.md` | ~106 | Active |
+| `journal-6.md` | ~139 | Active |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
@@ -34,6 +34,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 248 | 2026-05-18 | 修复嵌入式新项目开发工作流缺陷 | `0ba7dc2` | `main` |
 | 247 | 2026-05-18 | 修复新项目工作流嵌入问题 | `2f3e39d0371a4a1d78de6a12065cc356feb6f04b` | `main` |
 | 246 | 2026-05-18 | Finalize Trellis 0.5.17 capability audit | `73ab9f6` | `main` |
 | 245 | 2026-05-18 | Refine trellis 0.5.17 enhancement retention | `0ae0a39` | `main` |

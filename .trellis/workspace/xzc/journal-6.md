@@ -104,3 +104,36 @@ Completed the workflow capability audit for docs/workflows/新项目开发工作
 ### Next Steps
 
 - None - task complete
+
+
+## Session 248: 修复嵌入式新项目开发工作流缺陷
+
+**Date**: 2026-05-18
+**Task**: 修复嵌入式新项目开发工作流缺陷
+**Branch**: `main`
+
+### Summary
+
+修复嵌入式工作流补丁缩进、强门禁 embed_invalid 校验与 delivery 文档缺失 skill 引用
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0ba7dc2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
