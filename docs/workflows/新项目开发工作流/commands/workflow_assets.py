@@ -21,7 +21,7 @@ CLI_ALT_DIRS = {
 ALL_CLI_TYPES = ["claude", "opencode", "codex"]
 WORKFLOW_VERSION = "0.1.28"
 WORKFLOW_SCHEMA_VERSION = "2"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增
-COMPATIBLE_TRELLIS_VERSION = "0.5.16"
+COMPATIBLE_TRELLIS_VERSION = "0.5.17"
 
 PATCH_BASELINE_COMMANDS = ["continue", "finish-work", "record-session"]
 LEGACY_PATCH_BASELINE_COMMANDS = ["start", "finish-work", "record-session"]
