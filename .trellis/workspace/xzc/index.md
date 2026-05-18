@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-6.md`
-- **Total Sessions**: 250
+- **Total Sessions**: 251
 - **Last Active**: 2026-05-18
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-6.md` | ~206 | Active |
+| `journal-6.md` | ~239 | Active |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
@@ -34,6 +34,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 251 | 2026-05-18 | Audit and patch embedded workflow state guards | `57e9aa1` | `main` |
 | 250 | 2026-05-18 | Fix workflow embed post-check drift | `67d34ef` | `main` |
 | 249 | 2026-05-18 | Audit embedded workflow gaps | `b10aae9`, `e9f6576` | `main` |
 | 248 | 2026-05-18 | 修复嵌入式新项目开发工作流缺陷 | `0ba7dc2` | `main` |

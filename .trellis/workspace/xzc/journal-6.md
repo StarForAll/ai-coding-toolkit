@@ -204,3 +204,36 @@ Fixed embedded workflow.md task-mechanism patch fallback, aligned upgrade-compat
 ### Next Steps
 
 - None - task complete
+
+
+## Session 251: Audit and patch embedded workflow state guards
+
+**Date**: 2026-05-18
+**Task**: Audit and patch embedded workflow state guards
+**Branch**: `main`
+
+### Summary
+
+审计并修复新项目开发工作流的强门禁状态机问题，补齐 leaf gate、repair 边界、degraded fallback、delivery/ownership validator 接线，以及 installer/upgrade 的 runtime patch 与回归测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `57e9aa1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
