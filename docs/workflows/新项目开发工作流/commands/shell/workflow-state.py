@@ -43,6 +43,7 @@ DEVELOPER_PRD = REQUIREMENTS_DIR / "developer-facing-prd.md"
 TASK_PRD = Path("prd.md")
 TASK_PLAN_FILE = Path("task_plan.md")
 CHECK_MD_FILE = Path("check.md")
+FINISH_WORK_CHECKLIST_FILE = Path("finish-work-checklist.md")
 TASK_CREATION_CHECKLIST_FILE = Path("task_creation_checklist.md")
 DELIVERY_DIR = Path("delivery")
 DELIVERY_ARTIFACTS = (
@@ -396,6 +397,32 @@ def validate_check_gate(task_dir: Path, errors: list[str]) -> None:
         )
 
 
+def validate_finish_work_gate(task_dir: Path, errors: list[str]) -> None:
+    """Validate frozen close-out evidence before leaving finish-work for delivery."""
+    checklist_path = task_dir / FINISH_WORK_CHECKLIST_FILE
+    if not checklist_path.is_file():
+        errors.append(
+            "缺少 finish-work-checklist.md；finish-work 阶段未冻结验证矩阵与收尾证据，不得进入 delivery"
+        )
+        return
+
+    content = checklist_path.read_text(encoding="utf-8")
+    missing_sections: list[str] = []
+    if not re.search(r"^\s*##+\s*(?:冻结验证矩阵|Verification Matrix)\s*$", content, re.MULTILINE):
+        missing_sections.append("冻结验证矩阵 / Verification Matrix")
+    if not re.search(r"Check\s*\|.*Command or Method.*\|.*Result", content, re.IGNORECASE):
+        missing_sections.append("Check | Command or Method | Result")
+    if not re.search(r"^\s*##+\s*(?:人工验证|Manual Verification)\s*$", content, re.MULTILINE):
+        missing_sections.append("人工验证 / Manual Verification")
+    if not re.search(r"^\s*##+\s*(?:同步结论|Sync Conclusion)\s*$", content, re.MULTILINE):
+        missing_sections.append("同步结论 / Sync Conclusion")
+    if missing_sections:
+        errors.append(
+            f"finish-work-checklist.md 缺少必要内容: {', '.join(missing_sections)}；"
+            "finish-work 阶段证据不完整，不得进入 delivery"
+        )
+
+
 def validate_delivery_gate(task_dir: Path, errors: list[str], repo_root: Path | None = None) -> None:
     """Validate delivery artifacts before entering record-session."""
     missing = [
@@ -465,13 +492,17 @@ def validate_stage_transition_gates(
     if new_stage in PROJECT_ESTIMATE_REQUIRED_STAGES:
         validate_project_doc_boundary(candidate_state, repo_root, task_dir, errors)
 
-    # Plan → implementation/test-first requires plan artifacts
-    if new_stage in EXECUTION_STAGES:
+    # Only the explicit plan → execution exit requires plan artifacts.
+    if new_stage in EXECUTION_STAGES and state.get("stage") == "plan":
         validate_plan_gate(task_dir, errors)
 
     # Check → finish-work/review-gate requires check.md
     if new_stage in {"finish-work", "review-gate"}:
         validate_check_gate(task_dir, errors)
+
+    # Finish-work → delivery requires the frozen close-out checklist
+    if new_stage == "delivery":
+        validate_finish_work_gate(task_dir, errors)
 
     # Delivery → record-session requires delivery artifacts
     if new_stage == "record-session":
@@ -630,6 +661,9 @@ def collect_exit_gate_blockers(
 
     if stage == "check":
         validate_check_gate(task_dir, blockers)
+
+    elif stage == "finish-work":
+        validate_finish_work_gate(task_dir, blockers)
 
     elif stage == "delivery":
         validate_delivery_gate(task_dir, blockers, repo_root)
@@ -1341,11 +1375,6 @@ def _critical_patch_paths(repo_root: Path, cli_types: set[str]) -> list[tuple[st
                     repo_root / ".codex" / "hooks" / "inject-workflow-state.py",
                     INJECT_WORKFLOW_STATE_PATCH_MARKER,
                 ),
-                (
-                    "session-start-strong-gate",
-                    repo_root / ".codex" / "hooks" / "session-start.py",
-                    SESSION_START_STRONG_GATE_PATCH_MARKER,
-                ),
             ]
         )
     if "opencode" in cli_types:
@@ -1773,6 +1802,7 @@ def cmd_repair(args: argparse.Namespace) -> int:
 
     evidence.append(f"{CUSTOMER_PRD.as_posix()} 存在")
 
+    finish_work_checklist = task_dir_path / FINISH_WORK_CHECKLIST_FILE
     delivery_dir = task_dir_path / "delivery"
     delivery_artifacts = (
         delivery_dir / "acceptance.md",
@@ -1785,6 +1815,10 @@ def cmd_repair(args: argparse.Namespace) -> int:
     if present_delivery_artifacts:
         inferred_stage = "delivery"
         evidence.extend(path.relative_to(task_dir_path).as_posix() + " 存在" for path in present_delivery_artifacts)
+        confidence = "high"
+    elif finish_work_checklist.is_file():
+        inferred_stage = "finish-work"
+        evidence.append(f"{FINISH_WORK_CHECKLIST_FILE.as_posix()} 存在")
         confidence = "high"
     else:
         review_gate_task_dir = task_dir_path / "review-gate"
@@ -1828,7 +1862,7 @@ def cmd_repair(args: argparse.Namespace) -> int:
                     inferred_stage = "brainstorm"
                     confidence = "medium"
 
-    if inferred_stage not in {"delivery", "review-gate", "project-audit", "check", "implementation", "plan"}:
+    if inferred_stage not in {"delivery", "finish-work", "review-gate", "project-audit", "check", "implementation", "plan"}:
         # Check design/ dir in task_dir only when later-stage evidence is absent.
         design_dir = task_dir_path / "design"
         if design_dir.is_dir():

@@ -31,6 +31,7 @@ PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 FINISH_WORK_MARKER = "<!-- finish-work-projectization-patch -->"
 PARALLEL_DISABLED_MARKER = "<!-- workflow-parallel-disabled -->"
 WORKFLOW_PATCH_MARKER = "<!-- workflow-projectization-patch -->"
+TRELLIS_META_PATCH_MARKER = "<!-- workflow-embed-patch:trellis-meta-strong-gate -->"
 TASK_DEGRADED_PATCH_MARKER = "# [workflow-embed-patch:degraded-active-task]"
 OPENCODE_SESSION_UTILS_PATCH_MARKER = "// [workflow-embed-patch:strong-gate-session-utils]"
 SESSION_START_STRONG_GATE_PATCH_MARKER = "# strong-gate-session-start-patch-applied"
@@ -129,6 +130,19 @@ BASELINE_FINISH_WORK_WITHOUT_TEST_COVERAGE_CONTENT = (
     "Check code-spec updates.\n"
 )
 BASELINE_WORKFLOW_CONTENT = (
+    "### Task System\n\n"
+    "**Current-task mechanism**: `task.py create` creates the task directory and "
+    "(when session identity is available) auto-sets the per-session active-task "
+    "pointer so the planning breadcrumb fires immediately. `task.py start` writes "
+    "the same pointer (idempotent if already set) and flips `task.json.status` "
+    "from `planning` to `in_progress`. State is stored under "
+    "`.trellis/.runtime/sessions/`. If no context key is available from hook "
+    "input, `TRELLIS_CONTEXT_ID`, or a platform-native session environment "
+    "variable, there is no active task and `task.py start` fails with a session "
+    "identity hint. `task.py finish` deletes the current session file (status "
+    "unchanged). `task.py archive <task>` writes `status=completed`, moves the "
+    "directory to `archive/`, and deletes any runtime session files that still "
+    "point at the archived task.\n\n"
     "## Development Process\n\n"
     "### Task Development Flow\n\n"
     "```\n"
@@ -799,6 +813,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(WORKFLOW_PATCH_MARKER, workflow_doc_text)
         self.assertIn("task.py start <task-dir>", workflow_doc_text)
         self.assertIn("does **not** advance `workflow-state.json.stage`", workflow_doc_text)
+        self.assertNotIn("flips `task.json.status` from `planning` to `in_progress`", workflow_doc_text)
         self.assertIn("python3 ./.trellis/scripts/add_session.py", workflow_doc_text)
         self.assertIn("finish-work-checklist.md", workflow_doc_text)
         self.assertIn("child task", workflow_doc_text)
@@ -810,6 +825,7 @@ class WorkflowInstallerTests(unittest.TestCase):
             ".trellis/scripts/workflow/workflow-state.py route <task-dir> --project-root <project-root>",
             start_text,
         )
+        self.assertIn("target` 字段对应阶段", start_text)
         self.assertIn("awaiting_confirmation_with_blockers", start_text)
         self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", start_text)
         finish_work = fixture / ".claude" / "commands" / "trellis" / "finish-work.md"
@@ -826,9 +842,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         task_store_text = (fixture / ".trellis" / "scripts" / "common" / "task_store.py").read_text(encoding="utf-8")
         self.assertIn(TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER, task_store_text)
         claude_session_start = (fixture / ".claude" / "hooks" / "session-start.py").read_text(encoding="utf-8")
-        codex_session_start = (fixture / ".codex" / "hooks" / "session-start.py").read_text(encoding="utf-8")
         self.assertIn(SESSION_START_STRONG_GATE_PATCH_MARKER, claude_session_start)
-        self.assertIn(SESSION_START_STRONG_GATE_PATCH_MARKER, codex_session_start)
         opencode_session_utils = (fixture / ".opencode" / "lib" / "session-utils.js").read_text(encoding="utf-8")
         self.assertIn(OPENCODE_SESSION_UTILS_PATCH_MARKER, opencode_session_utils)
         record = fixture / ".trellis" / "workflow-installed.json"
@@ -1041,7 +1055,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         start_skill = fixture / ".agents" / "skills" / "trellis-continue" / "SKILL.md"
         start_text = start_skill.read_text(encoding="utf-8")
         self.assertIn("## Workflow Phase Router Patch `[AI]`", start_text)
-        self.assertIn("Use the `feasibility` skill", start_text)
+        self.assertIn("Use the skill matching the `target` field", start_text)
         self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", start_text)
         self.assertNotIn("<WORKFLOW_DIR>/commands/shell", start_text)
         self.assertEqual(
@@ -1050,6 +1064,61 @@ class WorkflowInstallerTests(unittest.TestCase):
             ),
             BASELINE_TRELLIS_CONTINUE_SKILL_CONTENT,
         )
+
+    def test_install_does_not_patch_codex_session_start_when_only_turn_level_hook_is_managed(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture, "--cli", "codex")
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        codex_session_start = (fixture / ".codex" / "hooks" / "session-start.py").read_text(encoding="utf-8")
+        self.assertNotIn(SESSION_START_STRONG_GATE_PATCH_MARKER, codex_session_start)
+        record = json.loads((fixture / ".trellis" / "workflow-installed.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            record["critical_runtime_patches"],
+            [
+                "inject-workflow-state",
+                "task-start-strong-gate",
+                "task-create-preserve-active",
+                "workflow-phase-strong-gate",
+            ],
+        )
+
+    def test_install_patches_trellis_meta_references_with_strong_gate_guidance(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        stale_files = [
+            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "local-architecture" / "workflow.md",
+            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "local-architecture" / "context-injection.md",
+            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "platform-files" / "hooks-and-settings.md",
+            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-workflow.md",
+            fixture / ".claude" / "skills" / "trellis-meta" / "references" / "local-architecture" / "workflow.md",
+            fixture / ".claude" / "skills" / "trellis-meta" / "references" / "local-architecture" / "context-injection.md",
+            fixture / ".claude" / "skills" / "trellis-meta" / "references" / "platform-files" / "hooks-and-settings.md",
+            fixture / ".claude" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-workflow.md",
+            fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "local-architecture" / "workflow.md",
+            fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "local-architecture" / "context-injection.md",
+            fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "platform-files" / "hooks-and-settings.md",
+            fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-workflow.md",
+        ]
+        for path in stale_files:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("# stale\nlegacy status routing\n", encoding="utf-8")
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        for path in stale_files:
+            content = path.read_text(encoding="utf-8")
+            self.assertIn(TRELLIS_META_PATCH_MARKER, content, msg=str(path))
+            self.assertNotIn("legacy status routing", content, msg=str(path))
+        shared_workflow_ref = (
+            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "local-architecture" / "workflow.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("workflow-state.json.stage", shared_workflow_ref)
+        self.assertIn("finish-work -> delivery -> record-session", shared_workflow_ref)
 
     def test_install_migrates_legacy_agents_to_trellis_naming(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True, use_latest_trellis_baseline=False)
@@ -1159,7 +1228,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         patched_text = finish_work.read_text(encoding="utf-8")
         self.assertIn(FINISH_WORK_MARKER, patched_text)
-        self.assertIn("### 2. Code-Spec Sync", patched_text)
+        self.assertIn("### 2. close-out 基线路径", patched_text)
         self.assertNotIn("pnpm lint", patched_text)
 
     def test_install_imports_requirements_foundation_and_removes_bootstrap_task(self) -> None:
@@ -1298,8 +1367,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         workflow_doc = fixture / ".trellis" / "workflow.md"
         workflow_doc.write_text(
             workflow_doc.read_text(encoding="utf-8").replace(
-                "workflow-state.py set <dir> --stage brainstorm --stage-status in_progress --allowed-next design,plan",
-                "workflow-state.py set <dir> --stage brainstorm --stage-status blocked --allowed-next design,plan",
+                "workflow-state.py set <dir> --stage brainstorm --stage-status in_progress --awaiting-user-confirmation false --allowed-next design,plan,implementation,test-first",
+                "workflow-state.py set <dir> --stage brainstorm --stage-status blocked --awaiting-user-confirmation false --allowed-next design,plan,implementation,test-first",
             ),
             encoding="utf-8",
         )
@@ -2093,7 +2162,10 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         updated_record = json.loads(record_path.read_text(encoding="utf-8"))
-        self.assertEqual(updated_record["patched_codex_skills"], ["trellis-continue", "trellis-finish-work"])
+        self.assertEqual(
+            updated_record["patched_codex_skills"],
+            ["trellis-continue", "trellis-finish-work", "trellis-start"],
+        )
 
     def test_upgrade_merge_clears_residual_attempt_record_after_success(self) -> None:
         fixture = self.create_fixture()

@@ -134,6 +134,28 @@ TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER = "# [workflow-embed-patch:preserve-par
 WORKFLOW_PHASE_STRONG_GATE_PATCH_MARKER = "# strong-gate-phase-patch-applied"
 
 
+def critical_runtime_patches_for_cli_types(cli_types: list[str] | tuple[str, ...]) -> list[str]:
+    """Return the runtime patch contract actually required for the selected CLIs.
+
+    Codex currently relies on the turn-level hook carrier (`hooks.json` ->
+    `inject-workflow-state.py`) rather than a workflow-managed SessionStart
+    contract. Keep SessionStart as a required runtime patch only for the CLIs
+    where this workflow actively patches and depends on that surface.
+    """
+    selected = {str(item) for item in cli_types}
+    patches = ["inject-workflow-state"]
+    if selected & {"claude", "opencode"}:
+        patches.append("session-start-strong-gate")
+    patches.extend(
+        [
+            "task-start-strong-gate",
+            "task-create-preserve-active",
+            "workflow-phase-strong-gate",
+        ]
+    )
+    return patches
+
+
 def legacy_agent_target_path(root: Path, cli_type: str, agent_name: str) -> Path:
     """Return legacy target-project path for upgrade migration only.
 

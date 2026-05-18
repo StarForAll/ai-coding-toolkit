@@ -42,7 +42,7 @@ from workflow_assets import (
     codex_phase_router_skill_candidates,
     codex_secondary_skills_dir,
     codex_shared_skills_dir,
-    CRITICAL_RUNTIME_PATCHES,
+    critical_runtime_patches_for_cli_types,
     DISTRIBUTED_COMMANDS,
     detect_cli_types as detect_cli_types_shared,
     EXECUTION_CARDS,
@@ -246,7 +246,37 @@ def workflow_patch_matches_source(src: Path, workflow_md: Path, *, profile: str 
     if not patch.exists():
         return False
     content = workflow_md.read_text(encoding="utf-8")
-    return _WORKFLOW_PATCH_MARKER in content and prepare_command_content(patch, profile=profile) in content
+    if _WORKFLOW_PATCH_MARKER not in content:
+        return False
+
+    required_markers = (
+        _WORKFLOW_BREADCRUMB_MARKER,
+        _WORKFLOW_NO_TASK_MARKER,
+    )
+    if any(marker not in content for marker in required_markers):
+        return False
+
+    required_snippets = (
+        "finish-work -> delivery -> record-session",
+        "does **not** advance `workflow-state.json.stage`",
+        "Current stage: **finish-work**",
+        "Current stage: **record-session**",
+    )
+    if any(snippet not in content for snippet in required_snippets):
+        return False
+
+    if "flips `task.json.status` from `planning` to `in_progress`" in content:
+        return False
+
+    # Keep at least one direct tie to the prepared source patch so obvious source drift
+    # still fails, without requiring the whole patched section to remain verbatim.
+    patch_text = prepare_command_content(patch, profile=profile)
+    anchor_snippets = (
+        "Phase A — pre-commit (`/trellis:finish-work`)",
+        "Current stage: **implementation**",
+        "workflow-state.py set <dir> --stage brainstorm --stage-status in_progress --awaiting-user-confirmation false --allowed-next design,plan,implementation,test-first",
+    )
+    return all(snippet in patch_text and snippet in content for snippet in anchor_snippets)
 
 
 def build_finish_work_content(content: str, patch_text: str) -> str | None:
@@ -850,13 +880,11 @@ def detect_conflicts_codex(
     if codex_session_start.exists():
         session_start_content = codex_session_start.read_text(encoding="utf-8")
         if _SESSION_START_STRONG_GATE_PATCH_MARKER in session_start_content:
-            ok("[Codex] session-start.py: 强门禁补丁已应用")
+            ok("[Codex] session-start.py: 可选辅助面已接上强门禁补丁")
         else:
-            err("[Codex] session-start.py: 强门禁补丁缺失")
-            conflicts += 1
+            warn("[Codex] session-start.py: 存在但未接 workflow 补丁（当前合同下视为可选辅助面）")
     else:
-        err("[Codex] session-start.py 缺失")
-        conflicts += 1
+        info("[Codex] session-start.py 缺失（当前合同下不作为必需 carrier）")
 
     claude_hook = root / ".claude" / "hooks" / "inject-workflow-state.py"
     if claude_hook.exists():
@@ -1370,6 +1398,7 @@ def write_install_record(
                 "patched_baseline_commands": PATCH_BASELINE_COMMANDS,
                 "patched_codex_skills": CODEX_PATCH_BASELINE_SKILLS,
                 "patched_shared_docs": PATCH_BASELINE_SHARED_DOCS,
+                "critical_runtime_patches": critical_runtime_patches_for_cli_types(cli_types),
                 # Legacy compatibility field: keep writing [] until a future
                 # install-record schema bump removes it explicitly.
                 "managed_enhanced_agents": MANAGED_ENHANCED_AGENT_NAMES,

@@ -48,7 +48,6 @@ from workflow_assets import (
     CODEX_PATCH_BASELINE_SKILLS,
     CODEX_SHARED_SKILL_CLEANUP_NAMES,
     CORE_HELPER_SCRIPTS,
-    CRITICAL_RUNTIME_PATCHES,
     DEFAULT_PROFILE,
     command_finish_work_candidates,
     command_phase_router_candidates,
@@ -57,6 +56,7 @@ from workflow_assets import (
     codex_phase_router_skill_candidates,
     codex_secondary_skills_dir,
     codex_shared_skills_dir,
+    critical_runtime_patches_for_cli_types,
     DISTRIBUTED_COMMANDS,
     detect_cli_types as detect_cli_types_shared,
     EXECUTION_CARDS,
@@ -180,11 +180,45 @@ _WORKFLOW_END_HEADING = "## File Descriptions"
 _WORKFLOW_PHASE_INDEX_MARKER = "<!-- workflow-projectization-phase-index-patch -->"
 _WORKFLOW_BREADCRUMB_MARKER = "<!-- workflow-projectization-breadcrumb-patch -->"
 _WORKFLOW_NO_TASK_MARKER = "<!-- workflow-projectization-no-task-patch -->"
+TRELLIS_META_STRONG_GATE_PATCH_MARKER = "<!-- workflow-embed-patch:trellis-meta-strong-gate -->"
 _BASELINE_NO_TASK_START = "[workflow-state:no_task]"
 _BASELINE_NO_TASK_END = "[/workflow-state:no_task]"
 _BASELINE_PHASE_INDEX_START = "## Phase Index"
 _BASELINE_PHASE_1_HEADING = "### Phase 1: Plan"
 _BASELINE_CUSTOMIZING_HEADING = "## Customizing Trellis"
+_BASELINE_WORKFLOW_TASK_MECHANISM = (
+    "**Current-task mechanism**: `task.py create` creates the task directory and "
+    "(when session identity is available) auto-sets the per-session active-task "
+    "pointer so the planning breadcrumb fires immediately. `task.py start` writes "
+    "the same pointer (idempotent if already set) and flips `task.json.status` "
+    "from `planning` to `in_progress`. State is stored under "
+    "`.trellis/.runtime/sessions/`. If no context key is available from hook "
+    "input, `TRELLIS_CONTEXT_ID`, or a platform-native session environment "
+    "variable, there is no active task and `task.py start` fails with a session "
+    "identity hint. `task.py finish` deletes the current session file (status "
+    "unchanged). `task.py archive <task>` writes `status=completed`, moves the "
+    "directory to `archive/`, and deletes any runtime session files that still "
+    "point at the archived task."
+)
+_STRONG_GATE_WORKFLOW_TASK_MECHANISM = (
+    "**Current-task mechanism**: `task.py create` creates the task directory and "
+    "(when session identity is available) auto-sets the per-session active-task "
+    "pointer so the planning breadcrumb fires immediately. `task.py start` always "
+    "refreshes the active-task pointer for the current session; in strong-gate "
+    "installs, if the active task already has `workflow-state.json`, patched "
+    "`task.py start` does **not** treat `task.json.status` as the stage source of "
+    "truth and may skip the legacy `planning -> in_progress` flip. Runtime stage "
+    "routing is determined by `.trellis/.runtime/sessions/<context>.json -> "
+    "$TASK_DIR/workflow-state.json.stage`, while `task.json.status` remains a "
+    "legacy lifecycle field for task bookkeeping only. State is stored under "
+    "`.trellis/.runtime/sessions/`; if no context key is available from hook "
+    "input, `TRELLIS_CONTEXT_ID`, or a platform-native session environment "
+    "variable, `task.py start` falls back to degraded recovery behavior instead of "
+    "being the stage authority. `task.py finish` deletes the current session file "
+    "(status unchanged). `task.py archive <task>` writes `status=completed`, moves "
+    "the directory to `archive/`, and deletes any runtime session files that still "
+    "point at the archived task."
+)
 _TODO_FILE_NAME = "todo.txt"
 _TODO_DEFAULT_LINE = "文档内容需要和实际当前的代码同步\n"
 _EMBED_ATTEMPT_FILE_NAME = "workflow-embed-attempt.json"
@@ -1010,7 +1044,13 @@ def build_workflow_content(content: str, patch_text: str) -> str | None:
 
     prefix = content[:start_idx]
     suffix = content[end_idx:].lstrip("\n")
-    return prefix + patch_text.rstrip() + "\n\n" + suffix
+    new_content = prefix + patch_text.rstrip() + "\n\n" + suffix
+    if _BASELINE_WORKFLOW_TASK_MECHANISM in new_content:
+        new_content = new_content.replace(
+            _BASELINE_WORKFLOW_TASK_MECHANISM,
+            _STRONG_GATE_WORKFLOW_TASK_MECHANISM,
+        )
+    return new_content
 
 
 def inject_finish_work_patch(
@@ -1383,7 +1423,7 @@ def _apply_patch_task_start(src: Path, root: Path, *, dry_run: bool) -> bool:
 
 
 def _apply_patch_session_start(src: Path, root: Path, *, dry_run: bool) -> bool:
-    """Apply patch-session-start-strong-gate.py to supported session-start hooks."""
+    """Apply the SessionStart strong-gate patch only on managed carriers."""
     import importlib.util
 
     patch_script = src / "shell" / "patch-session-start-strong-gate.py"
@@ -1391,10 +1431,7 @@ def _apply_patch_session_start(src: Path, root: Path, *, dry_run: bool) -> bool:
         warn("[Shared] patch-session-start-strong-gate.py 不存在，跳过补丁")
         return False
 
-    targets = [
-        ("Claude", root / ".claude" / "hooks" / "session-start.py"),
-        ("Codex", root / ".codex" / "hooks" / "session-start.py"),
-    ]
+    targets = [("Claude", root / ".claude" / "hooks" / "session-start.py")]
     if dry_run:
         planned = [label for label, target in targets if target.exists()]
         for label in planned:
@@ -1419,6 +1456,40 @@ def _apply_patch_session_start(src: Path, root: Path, *, dry_run: bool) -> bool:
         result = module.patch_session_start(target_path)
         if result:
             ok(f"[{label}] session-start.py 强门禁补丁已应用")
+            any_patched = True
+    return any_patched
+
+
+def patch_trellis_meta_references(src: Path, root: Path, *, dry_run: bool) -> bool:
+    """Overwrite stale trellis-meta reference docs with strong-gate-aware copies."""
+    patch_root = src / "trellis-meta-strong-gate"
+    if not patch_root.is_dir():
+        warn("[Shared] trellis-meta-strong-gate/ 不存在，跳过 trellis-meta 参考文档补丁")
+        return False
+
+    targets = [
+        ("Shared", root / ".agents" / "skills" / "trellis-meta" / "references"),
+        ("Claude", root / ".claude" / "skills" / "trellis-meta" / "references"),
+        ("OpenCode", root / ".opencode" / "skills" / "trellis-meta" / "references"),
+    ]
+
+    any_patched = False
+    for label, target_root in targets:
+        if not target_root.exists():
+            continue
+        for source_file in sorted(patch_root.rglob("*.md")):
+            rel = source_file.relative_to(patch_root)
+            target_file = target_root / rel
+            desired = source_file.read_text(encoding="utf-8")
+            current = target_file.read_text(encoding="utf-8") if target_file.exists() else ""
+            if current == desired:
+                continue
+            if dry_run:
+                info(f"[{label}] 将更新 trellis-meta 参考文档 {rel.as_posix()}")
+            else:
+                target_file.parent.mkdir(parents=True, exist_ok=True)
+                target_file.write_text(desired, encoding="utf-8")
+                ok(f"[{label}] trellis-meta 参考文档已更新: {rel.as_posix()}")
             any_patched = True
     return any_patched
 
@@ -1767,6 +1838,15 @@ def cleanup_legacy_phase_router_sections(root: Path, *, dry_run: bool) -> bool:
     if start_idx == -1 or end_idx == -1 or end_idx <= start_idx:
         return False
     if start_idx >= marker_idx:
+        return False
+
+    candidate_section = content[start_idx:end_idx]
+    legacy_signals = (
+        "Phase 1: Plan    → figure out what to do",
+        "[workflow-state:planning]",
+        "WORKFLOW-STATE BREADCRUMB CONTRACT",
+    )
+    if not any(signal in candidate_section for signal in legacy_signals):
         return False
 
     before = content[:start_idx].rstrip("\n")
@@ -2650,7 +2730,7 @@ def write_install_record(
             ],
             "patched_codex_skills": CODEX_PATCH_BASELINE_SKILLS,
             "patched_shared_docs": PATCH_BASELINE_SHARED_DOCS,
-            "critical_runtime_patches": CRITICAL_RUNTIME_PATCHES,
+            "critical_runtime_patches": critical_runtime_patches_for_cli_types(cli_types),
             # Legacy compatibility field: fresh installs no longer manage
             # enhanced agents, but older records/readers still understand it.
             "managed_enhanced_agents": MANAGED_ENHANCED_AGENT_NAMES,
@@ -2855,6 +2935,7 @@ def main() -> int:
             inject_workflow_phase_index_patch(src, root, dry_run=args.dry_run, profile=profile)
             inject_workflow_no_task_patch(src, root, dry_run=args.dry_run, profile=profile)
             inject_workflow_breadcrumb_patch(src, root, dry_run=args.dry_run, profile=profile)
+            patch_trellis_meta_references(src, root, dry_run=args.dry_run)
 
             # Issue 2: cleanup legacy three-phase breadcrumb blocks after strong-gate patches
             cleanup_legacy_phase_router_sections(root, dry_run=args.dry_run)

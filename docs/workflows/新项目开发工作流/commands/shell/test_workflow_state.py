@@ -91,6 +91,23 @@ class WorkflowStateScriptTests(unittest.TestCase):
 - `open_items`: none
 """
 
+    VALID_FINISH_WORK_CHECKLIST = """## 冻结验证矩阵
+
+| Check | Command or Method | Result |
+| --- | --- | --- |
+| lint | npm run lint | pass |
+
+## 人工验证
+
+- 当前状态：已完成基础人工验证
+- 证据缺口：none
+
+## 同步结论
+
+- spec/docs 同步：done
+- hidden-dir sync：n/a
+"""
+
     def run_script(
         self,
         *args: str,
@@ -160,6 +177,12 @@ class WorkflowStateScriptTests(unittest.TestCase):
         design_dir.mkdir(parents=True, exist_ok=True)
         (design_dir / "context7-review.md").write_text(
             content or self.VALID_CONTEXT7_REVIEW,
+            encoding="utf-8",
+        )
+
+    def write_finish_work_checklist(self, task_dir: Path, content: str | None = None) -> None:
+        (task_dir / "finish-work-checklist.md").write_text(
+            content or self.VALID_FINISH_WORK_CHECKLIST,
             encoding="utf-8",
         )
 
@@ -1553,6 +1576,57 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(data["action"], "embed_invalid")
         self.assertIn(".opencode", data["reason"])
 
+    def test_cmd_route_codex_embed_does_not_require_session_start_patch(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "scripts" / "common").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            json.dumps(
+                {
+                    "profile": "outsourcing",
+                    "cli_types": ["codex"],
+                    "critical_runtime_patches": [
+                        "inject-workflow-state",
+                        "task-start-strong-gate",
+                        "task-create-preserve-active",
+                        "workflow-phase-strong-gate",
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "library-lock.yaml").write_text(
+            "packs:\n  - pack.requirements-discovery-foundation\n",
+            encoding="utf-8",
+        )
+        (root / ".codex" / "hooks").mkdir(parents=True, exist_ok=True)
+        (root / ".codex" / "hooks" / "inject-workflow-state.py").write_text(
+            "# [workflow-embed-patch:prefer-workflow-state-json]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "task.py").write_text(
+            "# [workflow-embed-patch:strong-gate-no-status-flip]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
+            "# [workflow-embed-patch:preserve-parent-active-task]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
+            "# strong-gate-phase-patch-applied\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertNotEqual(data["action"], "embed_invalid")
+
     # ------------------------------------------------------------------
     # repair subcommand tests
     # ------------------------------------------------------------------
@@ -1689,6 +1763,22 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         data = json.loads(result.stdout.strip().split("\n}")[0] + "\n}")
         self.assertEqual(data["inferred_stage"], "delivery")
+
+    def test_cmd_repair_infer_finish_work_from_finish_work_checklist(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_finish_work_checklist(task_dir)
+
+        result = self.run_script("repair", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout.strip().split("\n}")[0] + "\n}")
+        self.assertEqual(data["inferred_stage"], "finish-work")
 
     def test_cmd_repair_apply(self) -> None:
         """With --apply flag, should create workflow-state.json."""
@@ -1986,6 +2076,69 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "--allowed-next", "implementation,check,project-audit",
         )
         self.assertEqual(ok_set.returncode, 0, msg=ok_set.stdout + ok_set.stderr)
+
+    def test_finish_work_to_delivery_requires_finish_work_checklist(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.run_script("init", str(task_dir), "--stage", "finish-work")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "delivery",
+        )
+
+        blocked = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "delivery",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "finish-work",
+            "--allowed-next", "record-session",
+        )
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("finish-work-checklist.md", blocked.stdout)
+
+        self.write_finish_work_checklist(task_dir)
+        allowed = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "delivery",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "finish-work",
+            "--allowed-next", "record-session",
+        )
+        self.assertEqual(allowed.returncode, 0, msg=allowed.stdout + allowed.stderr)
+
+    def test_route_finish_work_awaiting_reports_blockers_when_checklist_missing(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.run_script("init", str(task_dir), "--stage", "finish-work")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "delivery",
+        )
+
+        result = self.run_script("route", str(task_dir), "--project-root", str(root))
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "awaiting_confirmation_with_blockers")
+        self.assertIn("finish-work-checklist.md", "".join(data.get("blockers", [])))
 
 
 if __name__ == "__main__":
