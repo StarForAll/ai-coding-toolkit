@@ -1,0 +1,6 @@
+{"file": ".trellis/tasks/05-18-trellis-0-5-17-new/prd.md", "reason": "主 PRD：7 步实施方案、22 个 .new 文件分类决策、风险矩阵"}
+{"file": ".trellis/tasks/_research/git-changes-analysis.md", "reason": "22 个 .new 文件逐项 diff 分析、OVERWRITE/MERGE/DISCARD 推荐、升级主题总结"}
+{"file": ".trellis/tasks/03-19-implement-agents-source/research/trellis-0.5.17-reference-vs-current.md", "reason": "参考项目 vs 当前项目完整对比，确认 .new 文件与参考项目一致性"}
+{"file": ".trellis/tasks/research/phase-workflow.md", "reason": "Phase 工作流机制分析，理解 degraded 移除对 Phase 流程的影响"}
+{"file": ".trellis/tasks/research/hook-system.md", "reason": "Hook 注入机制分析，理解 stale/degraded 显示逻辑移除的钩子层影响"}
+{"file": ".trellis/tasks/research/agent-dispatch.md", "reason": "Agent 分发机制，理解 research agent MCP 工具保留的架构背景"}

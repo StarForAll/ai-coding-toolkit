@@ -1,0 +1,3 @@
+{"file": ".trellis/tasks/05-18-trellis-0-5-17-new/prd.md", "reason": "PRD Step 7 验证清单：无残留 .new、task.py 功能、degraded 移除、MCP 保留、Codex 安全注释"}
+{"file": ".trellis/tasks/_research/git-changes-analysis.md", "reason": "22 个 .new 文件完整分类表，用于逐项确认处置结果"}
+{"file": ".trellis/spec/platforms/codex-workflow-behavior.md", "reason": "Codex 平台行为规范，验证 inline-mode 安全注释保留是否符合规范"}
