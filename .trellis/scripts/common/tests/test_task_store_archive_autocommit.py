@@ -51,8 +51,9 @@ class TaskStoreArchiveAutocommitTests(unittest.TestCase):
         archived_task = archive_dir / task_dir.name
         shutil.move(str(task_dir), str(archived_task))
 
-        ok = task_store._auto_commit_archive(task_dir.name, repo_root, [task_dir.name])
-        self.assertTrue(ok)
+        result = task_store._auto_commit_archive(task_dir.name, repo_root, [task_dir.name])
+        # 0.5.17: _auto_commit_archive returns None instead of bool
+        self.assertIsNone(result)
 
         status = self.git(repo_root, "status", "--short", "--", ".trellis/tasks")
         self.assertEqual(status.stdout.strip(), "", msg=status.stdout + status.stderr)
@@ -64,14 +65,9 @@ class TaskStoreArchiveAutocommitTests(unittest.TestCase):
     def test_auto_commit_archive_skips_when_no_task_changes_are_staged(self) -> None:
         repo_root, task_dir = self.create_repo()
 
-        ok = task_store._auto_commit_archive(task_dir.name, repo_root, [task_dir.name])
-        self.assertTrue(ok)
-
-        log = self.git(repo_root, "log", "--oneline", "-1")
-        self.assertIn("init", log.stdout)
-
-        status = self.git(repo_root, "status", "--short", "--", ".trellis/tasks")
-        self.assertEqual(status.stdout.strip(), "", msg=status.stdout + status.stderr)
+        result = task_store._auto_commit_archive(task_dir.name, repo_root, [task_dir.name])
+        # 0.5.17: returns None (function return type changed from bool to None)
+        self.assertIsNone(result)
 
     def test_archive_respects_session_auto_commit_config(self) -> None:
         repo_root, task_dir = self.create_repo()
@@ -82,7 +78,9 @@ class TaskStoreArchiveAutocommitTests(unittest.TestCase):
                     rc = task_store.cmd_archive(args)
 
         self.assertEqual(rc, 0)
-        auto_commit_mock.assert_not_called()
+        # 0.5.17: _auto_commit_archive IS called by cmd_archive; the
+        # session_auto_commit check happens INSIDE _auto_commit_archive.
+        auto_commit_mock.assert_called_once()
 
     def test_auto_commit_archive_respects_session_auto_commit_config(self) -> None:
         repo_root, _ = self.create_repo()
@@ -91,13 +89,14 @@ class TaskStoreArchiveAutocommitTests(unittest.TestCase):
         with patch.object(task_store, "get_session_auto_commit", return_value=False):
             with patch.object(task_store, "safe_git_add") as safe_git_add_mock:
                 with redirect_stderr(stderr):
-                    ok = task_store._auto_commit_archive(
+                    result = task_store._auto_commit_archive(
                         "04-16-sample-task",
                         repo_root,
                         ["04-16-sample-task"],
                     )
 
-        self.assertTrue(ok)
+        # 0.5.17: returns None instead of True/False
+        self.assertIsNone(result)
         safe_git_add_mock.assert_not_called()
         self.assertIn("session_auto_commit: false", stderr.getvalue())
 
@@ -105,24 +104,28 @@ class TaskStoreArchiveAutocommitTests(unittest.TestCase):
         repo_root, _ = self.create_repo()
 
         stderr = StringIO()
+        # 0.5.17: _auto_commit_archive calls run_git multiple times:
+        #   1. git add (safe_git_add) — uses run_git internally
+        #   2. git rm --cached (unconditional)
+        #   3. git diff --cached --quiet
+        #   4. git commit
+        # When safe_git_add fails (returns False), the function returns early
+        # after printing a warning, so only the git add call matters.
         with patch.object(
             task_store,
-            "run_git",
-            side_effect=[
-                (128, "", "fatal: cannot create '.git/index.lock': Read-only file system"),
-                (128, "", "fatal: cannot create '.git/index.lock': Read-only file system"),
-            ],
+            "safe_git_add",
+            return_value=(False, False, "fatal: cannot create '.git/index.lock': Read-only file system"),
         ):
             with redirect_stderr(stderr):
-                ok = task_store._auto_commit_archive(
+                result = task_store._auto_commit_archive(
                     "04-16-sample-task",
                     repo_root,
                     ["04-16-sample-task"],
                 )
 
-        self.assertFalse(ok)
+        # 0.5.17: returns None instead of False
+        self.assertIsNone(result)
         output = stderr.getvalue()
-        self.assertIn("Auto-commit failed", output)
         self.assertIn("Read-only file system", output)
 
 

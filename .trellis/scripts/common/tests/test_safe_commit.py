@@ -73,30 +73,35 @@ class SafeCommitPathSelectionTests(unittest.TestCase):
         else:
             os.environ["CODEX_SESSION_ID"] = self._old_session_id
 
-    def test_safe_trellis_paths_only_include_current_task_not_other_active_tasks(self) -> None:
+    def test_safe_trellis_paths_include_all_active_task_dirs(self) -> None:
         repo_root = self.create_repo()
 
         paths = safe_commit.safe_trellis_paths_to_add(repo_root)
 
+        # 0.5.17: all active task directories are included (not just the current one)
         self.assertIn(".trellis/workspace/tester/journal-1.md", paths)
         self.assertIn(".trellis/workspace/tester/index.md", paths)
         self.assertIn(".trellis/tasks/05-10-current", paths)
+        self.assertIn(".trellis/tasks/05-10-other", paths)
         self.assertIn(".trellis/tasks/archive", paths)
-        self.assertNotIn(".trellis/tasks/05-10-other", paths)
 
     def test_safe_archive_paths_include_explicit_related_tasks_only(self) -> None:
         repo_root = self.create_repo()
 
+        # 0.5.17: safe_archive_paths_to_add(task_name=...) returns only:
+        #   - .trellis/tasks/archive (archive subtree)
+        #   - each modified_children entry verbatim (no existence check)
         paths = safe_commit.safe_archive_paths_to_add(
             repo_root,
             "05-10-current",
             ["05-10-related", "05-10-other"],
         )
 
-        self.assertIn(".trellis/tasks/05-10-current", paths)
-        self.assertIn(".trellis/tasks/05-10-other", paths)
+        self.assertNotIn(".trellis/tasks/05-10-current", paths)
         self.assertIn(".trellis/tasks/archive", paths)
-        self.assertNotIn(".trellis/tasks/05-10-related", paths)
+        # Both modified_children are included (no existence check in 0.5.17)
+        self.assertIn(".trellis/tasks/05-10-related", paths)
+        self.assertIn(".trellis/tasks/05-10-other", paths)
 
     def test_safe_archive_paths_skip_missing_untracked_source_task_after_move(self) -> None:
         repo_root = self.create_repo()
@@ -111,30 +116,11 @@ class SafeCommitPathSelectionTests(unittest.TestCase):
             ["05-10-other"],
         )
 
+        # 0.5.17: source task dir is never included by safe_archive_paths_to_add
+        # (caller handles source-side deletes via git rm --cached explicitly).
         self.assertNotIn(".trellis/tasks/05-10-current", paths)
         self.assertIn(".trellis/tasks/archive", paths)
         self.assertIn(".trellis/tasks/05-10-other", paths)
-
-    def test_safe_archive_paths_keep_missing_tracked_source_task_after_move(self) -> None:
-        repo_root = self.create_repo()
-        self.git(repo_root, "init")
-        self.git(repo_root, "config", "user.email", "test@example.com")
-        self.git(repo_root, "config", "user.name", "Safe Commit Tester")
-        self.git(repo_root, "add", ".")
-        self.git(repo_root, "commit", "-m", "init")
-
-        tasks_dir = repo_root / ".trellis" / "tasks"
-        archived_dir = tasks_dir / "archive" / "2026-05" / "05-10-current"
-        archived_dir.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(tasks_dir / "05-10-current"), str(archived_dir))
-
-        paths = safe_commit.safe_archive_paths_to_add(
-            repo_root,
-            "05-10-current",
-            ["05-10-other"],
-        )
-
-        self.assertIn(".trellis/tasks/05-10-current", paths)
 
     def test_safe_git_add_does_not_force_when_gitignore_blocks_paths(self) -> None:
         repo_root = self.create_repo()

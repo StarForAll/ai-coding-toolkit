@@ -93,15 +93,16 @@ def safe_trellis_paths_to_add(repo_root: Path) -> list[str]:
                     f"{DIR_WORKFLOW}/{DIR_WORKSPACE}/{developer}/index.md"
                 )
 
-    # Current active task only. Do not sweep all active tasks into one
-    # workspace/journal commit.
+    # Active tasks: each direct child of tasks/ that is a directory and not
+    # the archive root. The archive subtree is added as a single path below.
     tasks_dir = repo_root / DIR_WORKFLOW / DIR_TASKS
     if tasks_dir.is_dir():
-        from .paths import get_current_task
-
-        current_task = get_current_task(repo_root)
-        if current_task:
-            paths.append(current_task)
+        for child in sorted(tasks_dir.iterdir()):
+            if not child.is_dir():
+                continue
+            if child.name == DIR_ARCHIVE:
+                continue
+            paths.append(f"{DIR_WORKFLOW}/{DIR_TASKS}/{child.name}")
 
         archive_dir = tasks_dir / DIR_ARCHIVE
         if archive_dir.is_dir():
@@ -143,19 +144,16 @@ def safe_archive_paths_to_add(
     archive_dir = tasks_dir / DIR_ARCHIVE
 
     if task_name is not None:
+        # Narrow scope — only paths that still exist on disk (so
+        # `git add` doesn't choke on the moved-away source). The caller
+        # handles the source-side deletes via `git rm --cached`
+        # explicitly.
         if archive_dir.is_dir():
             paths.append(
                 f"{DIR_WORKFLOW}/{DIR_TASKS}/{DIR_ARCHIVE}"
             )
-        source_task_rel = f"{DIR_WORKFLOW}/{DIR_TASKS}/{task_name}"
-        source_task_dir = tasks_dir / task_name
-        source_task_probe = f"{source_task_rel}/task.json"
-        if source_task_dir.is_dir() or _path_is_tracked(source_task_probe, repo_root):
-            paths.append(source_task_rel)
         for child_name in modified_children or []:
-            child_dir = tasks_dir / child_name
-            if child_dir.is_dir():
-                paths.append(f"{DIR_WORKFLOW}/{DIR_TASKS}/{child_name}")
+            paths.append(f"{DIR_WORKFLOW}/{DIR_TASKS}/{child_name}")
         return paths
 
     # Legacy wide scope (no task_name): preserve old behavior so callers
@@ -171,12 +169,6 @@ def safe_archive_paths_to_add(
     return paths
 
 
-def _path_is_tracked(path: str, repo_root: Path) -> bool:
-    """Return True when git already tracks the given repo-relative path."""
-    rc, _, _ = run_git(["ls-files", "--error-unmatch", "--", path], cwd=repo_root)
-    return rc == 0
-
-
 def _stderr_indicates_ignored(stderr: str) -> bool:
     """git add error indicates the path is excluded by .gitignore."""
     if not stderr:
@@ -186,9 +178,7 @@ def _stderr_indicates_ignored(stderr: str) -> bool:
 
 
 def safe_git_add(
-    paths: list[str],
-    repo_root: Path,
-    include_removals: bool = False,
+    paths: list[str], repo_root: Path
 ) -> tuple[bool, bool, str]:
     """Run `git add` on specific paths; never retry with -f.
 
@@ -206,12 +196,7 @@ def safe_git_add(
     if not paths:
         return True, False, ""
 
-    add_args = ["add"]
-    if include_removals:
-        add_args.append("-A")
-    add_args.extend(["--", *paths])
-
-    rc, _, err = run_git(add_args, cwd=repo_root)
+    rc, _, err = run_git(["add", "--", *paths], cwd=repo_root)
     if rc == 0:
         return True, False, ""
     return False, False, err

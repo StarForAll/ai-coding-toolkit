@@ -378,7 +378,7 @@ def cmd_archive(args: argparse.Namespace) -> int:
         print(colored(f"Archived: {dir_name} -> archive/{year_month}/", Colors.GREEN), file=sys.stderr)
 
         # Auto-commit unless --no-commit
-        if not getattr(args, "no_commit", False) and get_session_auto_commit(repo_root):
+        if not getattr(args, "no_commit", False):
             _auto_commit_archive(dir_name, repo_root, modified_children)
 
         # Return the archive path
@@ -418,7 +418,7 @@ def _auto_commit_archive(
             "[OK] session_auto_commit: false — skipping git stage/commit.",
             file=sys.stderr,
         )
-        return True
+        return
 
     paths = safe_archive_paths_to_add(
         repo_root, task_name=task_name, modified_children=modified_children
@@ -427,7 +427,7 @@ def _auto_commit_archive(
         print("[OK] No task changes to commit.", file=sys.stderr)
         return
 
-    success, _, err = safe_git_add(paths, repo_root, include_removals=True)
+    success, _, err = safe_git_add(paths, repo_root)
     if not success:
         if err and "ignored by" in err.lower():
             print_gitignore_warning(paths)
@@ -436,25 +436,22 @@ def _auto_commit_archive(
                 f"[WARN] git add failed: {err.strip() if err else 'unknown error'}",
                 file=sys.stderr,
             )
-        return False
+        return
 
     # Belt-and-suspenders for the phantom-delete bug: `safe_git_add` uses
-    # `git add -A` via include_removals but that may miss files already moved
-    # away by `shutil.move`. An explicit `git rm --cached` stages the deletions
-    # in this same commit — otherwise they sit as uncommitted "phantom deletes"
+    # `git add` (no -A) which only stages additions/modifications. The
+    # source task directory was moved away by `shutil.move`, so its files
+    # need an explicit `git rm --cached` to stage the deletions in this
+    # same commit — otherwise they sit as uncommitted "phantom deletes"
     # against HEAD until something later picks them up.
-    # `--ignore-unmatch` makes this a no-op when the task was never tracked.
-    # Guard: only run when the source directory no longer exists on disk (i.e.
-    # the archive `shutil.move` has already moved it away). Without this guard,
-    # `git rm --cached` would stage deletions for a source directory that is
-    # still present, creating a false diff that triggers an unwanted commit.
+    #
+    # `--ignore-unmatch` makes this a no-op when the task was never tracked
+    # (e.g. archiving a task that lived only in working tree).
     source_rel = f"{DIR_WORKFLOW}/{DIR_TASKS}/{task_name}"
-    source_dir = get_tasks_dir(repo_root) / task_name
-    if not source_dir.is_dir():
-        run_git(
-            ["rm", "-r", "--cached", "--ignore-unmatch", "--", source_rel],
-            cwd=repo_root,
-        )
+    run_git(
+        ["rm", "-r", "--cached", "--ignore-unmatch", "--", source_rel],
+        cwd=repo_root,
+    )
 
     rc, _, _ = run_git(
         ["diff", "--cached", "--quiet", "--", *paths, source_rel],
@@ -462,16 +459,14 @@ def _auto_commit_archive(
     )
     if rc == 0:
         print("[OK] No task changes to commit.", file=sys.stderr)
-        return True
+        return
 
     commit_msg = f"chore(task): archive {task_name}"
     rc, _, err = run_git(["commit", "-m", commit_msg], cwd=repo_root)
     if rc == 0:
         print(f"[OK] Auto-committed: {commit_msg}", file=sys.stderr)
-        return True
     else:
         print(f"[WARN] Auto-commit failed: {err.strip()}", file=sys.stderr)
-        return False
 
 
 # =============================================================================

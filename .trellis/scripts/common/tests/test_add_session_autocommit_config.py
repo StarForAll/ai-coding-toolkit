@@ -41,7 +41,7 @@ class AddSessionAutoCommitConfigTests(unittest.TestCase):
         )
         return repo_root
 
-    def test_main_respects_session_auto_commit_config(self) -> None:
+    def test_main_passes_auto_commit_flag_to_add_session(self) -> None:
         repo_root = self.create_repo()
 
         with patch.object(add_session, "get_repo_root", return_value=repo_root):
@@ -55,7 +55,10 @@ class AddSessionAutoCommitConfigTests(unittest.TestCase):
                         rc = add_session.main()
 
         self.assertEqual(rc, 0)
-        self.assertEqual(add_session_mock.call_args.kwargs["auto_commit"], False)
+        # 0.5.17: main() passes auto_commit=not args.no_commit directly;
+        # session_auto_commit is checked inside _auto_commit_workspace().
+        # With no --no-commit flag, auto_commit is True.
+        self.assertEqual(add_session_mock.call_args.kwargs["auto_commit"], True)
 
 
 if __name__ == "__main__":
