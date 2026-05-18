@@ -7,8 +7,8 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-5.md`
-- **Total Sessions**: 244
+- **Active File**: `journal-6.md`
+- **Total Sessions**: 245
 - **Last Active**: 2026-05-18
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-5.md` | ~1974 | Active |
+| `journal-6.md` | ~40 | Active |
+| `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
 | `journal-2.md` | ~2000 | Archived |
@@ -33,6 +34,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 245 | 2026-05-18 | Refine trellis 0.5.17 enhancement retention | `0ae0a39` | `main` |
 | 244 | 2026-05-18 | Trellis 0.5.17 runtime contract drift fix | `79a087d`, `b2afc3d`, `980d6c2`, `bb6d0d3`, `08c5540` | `main` |
 | 243 | 2026-05-18 | Trellis 0.5.17 upgrade: process .new files | - | `main` |
 | 242 | 2026-05-18 | 修复强门禁模型 9 项结构性缺陷 | `91e9d9e` | `main` |
