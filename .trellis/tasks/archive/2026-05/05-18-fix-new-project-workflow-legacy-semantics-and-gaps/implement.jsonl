@@ -1,0 +1,15 @@
+{"file": "docs/workflows/新项目开发工作流/commands/install-workflow.py", "reason": "理解 patch_trellis_meta_references 机制和 trellis-meta-strong-gate 目录结构"}
+{"file": "docs/workflows/新项目开发工作流/commands/trellis-meta-strong-gate/customize-local/change-workflow.md", "reason": "现有强门禁补丁文件范例，作为新补丁文件格式参考"}
+{"file": "docs/workflows/新项目开发工作流/commands/trellis-meta-strong-gate/local-architecture/context-injection.md", "reason": "现有强门禁补丁文件范例"}
+{"file": "docs/workflows/新项目开发工作流/commands/trellis-meta-strong-gate/local-architecture/workflow.md", "reason": "现有强门禁补丁文件范例"}
+{"file": "docs/workflows/新项目开发工作流/commands/trellis-meta-strong-gate/platform-files/hooks-and-settings.md", "reason": "现有强门禁补丁文件范例"}
+{"file": "docs/workflows/新项目开发工作流/commands/shell/workflow-state.py", "reason": "修复 route 函数恢复提示精度，新增 context_needed action"}
+{"file": "docs/workflows/新项目开发工作流/阶段状态机与强门禁协议.md", "reason": "更新协议文档区分 recovery/repair/context_needed"}
+{"file": "docs/workflows/新项目开发工作流/commands/workflow-patch-projectization.md", "reason": "修复 no_task 块中 start 条件性翻转说明"}
+{"file": ".agents/skills/trellis-meta/references/customize-local/change-task-lifecycle.md", "reason": "源基线文件，理解需替换的旧内容"}
+{"file": ".agents/skills/trellis-meta/references/local-architecture/task-system.md", "reason": "源基线文件，理解需替换的旧内容"}
+{"file": ".agents/skills/trellis-meta/references/local-architecture/spec-system.md", "reason": "源基线文件，理解需替换的旧内容"}
+{"file": ".trellis/tasks/05-18-fix-new-project-workflow-legacy-semantics-and-gaps/research/legacy-planning-semantics-conflict.md", "reason": "研究产出：旧语义残留的完整映射"}
+{"file": ".trellis/tasks/05-18-planning-legacy-semantics/research/missing-spec-references-embedded-workflow.md", "reason": "研究产出：缺失规范引用的完整映射"}
+{"file": ".trellis/tasks/05-18-planning-legacy-semantics/research/task-start-semantic-drift.md", "reason": "研究产出：create/start 语义漂移分析"}
+{"file": ".trellis/tasks/05-18-planning-legacy-semantics/research/recovery-path-error-message-precision.md", "reason": "研究产出：恢复提示精度不足的完整分析"}
