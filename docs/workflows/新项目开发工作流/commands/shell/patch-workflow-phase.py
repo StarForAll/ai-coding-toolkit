@@ -19,15 +19,23 @@ PATCH_BLOCK = '''
     # refuse to return old #### X.Y step matches and direct to route instead.
     try:
         import json as _json
+        import subprocess as _sp
         _ws_path = None
-        # Walk up from this script to find a task dir containing workflow-state.json
+        # Walk up to find trellis root
         for _p in Path(__file__).resolve().parents:
-            _cand = _p / ".trellis" / "tasks"
-            if _cand.is_dir():
-                for _td in _cand.iterdir():
-                    if _td.is_dir() and (_td / "workflow-state.json").is_file():
-                        _ws_path = _td / "workflow-state.json"
-                        break
+            _trellis = _p / ".trellis"
+            if _trellis.is_dir():
+                _task_script = _trellis / "scripts" / "task.py"
+                if _task_script.is_file():
+                    _r = _sp.run(
+                        [sys.executable, str(_task_script), "current"],
+                        capture_output=True, text=True, encoding="utf-8", errors="replace",
+                        timeout=10,
+                    )
+                    if _r.returncode == 0 and _r.stdout.strip():
+                        _active_task_dir = Path(_r.stdout.strip())
+                        if _active_task_dir.is_dir() and (_active_task_dir / "workflow-state.json").is_file():
+                            _ws_path = _active_task_dir / "workflow-state.json"
                 break
         if _ws_path is not None and _ws_path.is_file():
             _ws_data = _json.loads(_ws_path.read_text(encoding="utf-8"))

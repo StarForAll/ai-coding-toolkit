@@ -19,9 +19,9 @@
 
 1. 检查 `task_dir / "workflow-state.json"` 是否存在
 2. 若存在，读取 `stage` 字段，验证其属于合法强门禁阶段集合
-3. 若阶段有效，执行 `workflow-state.py route --task-dir <task_dir>` 获取路由 JSON
+3. 若阶段有效，执行 `workflow-state.py route <task_dir>` 获取路由 JSON
 4. 构建结构化状态字符串，包含 `Status`（强门禁阶段）、`Action`、`Blockers` 等，直接返回
-5. 若 `workflow-state.json` 不存在或补丁逻辑异常，静默 fallback 到旧逻辑
+5. 若 `workflow-state.json` 不存在或阶段无效，返回简单 `ACTIVE` 状态而非 fallback 到旧逻辑
 
 ### 合法强门禁阶段
 
@@ -61,10 +61,10 @@ Next-Action: Follow the action above...
 
 ### Fallback 行为
 
-以下情况补丁不生效，自动 fallback 到旧 PLANNING/READY 逻辑：
+以下情况补丁返回简单 `ACTIVE` 状态（不 fallback 到旧 PLANNING/READY 逻辑）：
 
 - `workflow-state.json` 不存在于 task 目录
 - `stage` 字段为空或不在合法阶段集合中
 - `workflow-state.py` 脚本未找到
 - `workflow-state.py route` 执行失败或输出非法 JSON
-- 补丁逻辑抛出任何异常（被 `except Exception` 静默捕获）
+- 补丁逻辑抛出任何异常（被 `except Exception` 捕获后返回 ACTIVE 状态）

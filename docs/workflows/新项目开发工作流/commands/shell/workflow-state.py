@@ -1370,7 +1370,9 @@ def cmd_route(args: argparse.Namespace) -> int:
                             except (OSError, UnicodeDecodeError, ValueError):
                                 profile_hint = "personal"
                         else:
-                            profile_hint = "personal"
+                            # No install record either: cannot determine profile,
+                            # default to feasibility (safest first-entry target)
+                            profile_hint = None
                     else:
                         try:
                             a_content = (repo_root / ASSESSMENT_FILE).read_text(encoding="utf-8")
@@ -1382,10 +1384,11 @@ def cmd_route(args: argparse.Namespace) -> int:
                         except (OSError, UnicodeDecodeError):
                             pass
                     _route_result(
-                        "feasibility",
+                        "design" if profile_hint == "personal" else "feasibility",
                         "first_entry",
-                        "当前 session 尚无 active task，首次进入 feasibility",
-                        profile_hint=profile_hint,
+                        "当前 session 尚无 active task，首次进入"
+                        + (" design/plan（personal profile 跳过 feasibility）" if profile_hint == "personal" else " feasibility"),
+                        profile_hint=profile_hint or "unknown",
                     )
                 else:
                     _route_result(

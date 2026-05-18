@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""Patch session-start.py _get_task_status() to prefer workflow-state.json.stage routing.
+"""Patch session-start.py _get_task_status() to use strong-gate workflow-state routing.
 
-When installed into a target project, this patch modifies session-start.py's
-_get_task_status() so that when an active task exists AND a workflow-state.json
-with a valid strong-gate stage is detected, the function delegates to
-`workflow-state.py route` output instead of using the old PLANNING/READY routing.
+When installed into a target project, this patch replaces session-start.py's
+_get_task_status() routing logic with strong-gate workflow-state.json routing.
+The injected block always returns, making the old PLANNING/READY case logic unreachable.
 
-If workflow-state.json is absent or has no valid stage, the old logic is preserved.
+When workflow-state.json with a valid stage exists, `workflow-state.py route <task_dir>`
+is called (positional task_dir argument) to determine routing.
+
+If workflow-state.json is absent or invalid, a simple ACTIVE status is returned
+instead of falling back to the old PLANNING/READY logic.
 """
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ PATCH_BLOCK = '''
     # --- strong-gate session-start patch ---
     # When a workflow-state.json with a valid strong-gate stage exists in the
     # active task directory, delegate routing to workflow-state.py route instead
-    # of using the old PLANNING/READY logic.
+    # of using the old PLANNING/READY logic. This block always returns.
     try:
         _STRONG_GATE_STAGES = {
             "feasibility", "brainstorm", "design", "plan",
@@ -41,7 +44,7 @@ PATCH_BLOCK = '''
                 if _ws_script.is_file():
                     import subprocess as _sp
                     _route_result = _sp.run(
-                        [sys.executable, str(_ws_script), "route", "--task-dir", str(task_dir)],
+                        [sys.executable, str(_ws_script), "route", str(task_dir)],
                         capture_output=True, text=True, encoding="utf-8", errors="replace",
                         timeout=10,
                     )
@@ -68,12 +71,15 @@ PATCH_BLOCK = '''
                             _lines.append(f"Blockers: {'; '.join(_r_blockers)}")
                         _lines.append(
                             "Next-Action: Follow the action above. Use `workflow-state.py route` "
-                            "to re-check routing at any time. Use `workflow-state.py advance --stage <stage>` "
+                            "to re-check routing at any time. Use `workflow-state.py set --stage <stage>` "
                             "to transition stages when gate conditions are met."
                         )
                         return "\\n".join(_lines)
+        # No workflow-state.json or invalid stage — return simple ACTIVE status
+        # instead of falling back to the old PLANNING/READY logic.
+        return f"Status: ACTIVE\\nTask: {task_title}\\nSource: {active.source}"
     except Exception:
-        pass
+        return f"Status: ACTIVE\\nTask: {task_title}\\nSource: {active.source}"
     # --- end strong-gate session-start patch ---
 '''
 

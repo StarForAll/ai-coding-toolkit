@@ -255,25 +255,11 @@ python3 <WORKFLOW_DIR>/commands/shell/source-watermark-guard.py --task-dir <task
 - 不为了补齐新规则或整理台账而批量回写旧任务、旧会话记录或已归档目录
 - staged 区不得混入非目标变更；若存在 staged 污染，必须先中断处理
 
-收尾顺序：在 `/trellis:record-session` 阶段，**先 archive，再通过 `add_session.py` 记录 session**。
-
-```bash
-python3 ./.trellis/scripts/task.py archive <task-name>
-
-python3 ./.trellis/scripts/add_session.py \
-  --title "Session Title" \
-  --commit "hash1,hash2" \
-  --summary "Brief summary of what was done"
-
-# 注意：archive 仍直接复用目标项目 Trellis 基线里的 task.py；若目标项目不是当前最新 Trellis 基线，
-# 可能仍缺少 archive metadata auto-commit 的 pathspec 修复，需先升级 Trellis 再继续收尾。
-
-git status --short .trellis/workspace .trellis/tasks
-```
+archive 与 session 记录的执行在 `record-session` 阶段完成，不在 delivery 阶段执行。具体操作步骤参见 `record-session.md`。
 
 判定规则：
 
-- `archive` 与 `add_session.py` 都返回 0：会话记录与元数据闭环完成
+- 在 `record-session` 阶段：`archive` 与 `add_session.py` 都返回 0 则会话记录与元数据闭环完成
 - 任一步返回非 0：close-out 不算完成，先处理 Trellis 基线写入失败原因
 - `git status --short .trellis/workspace .trellis/tasks` 输出应为空
 

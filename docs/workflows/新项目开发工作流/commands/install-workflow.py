@@ -1341,6 +1341,42 @@ def _apply_patch_workflow_phase(src: Path, root: Path, *, dry_run: bool) -> bool
     return False
 
 
+def _apply_patch_task_start(src: Path, root: Path, *, dry_run: bool) -> bool:
+    """Apply patch-task-start-strong-gate.py to the deployed task.py."""
+    import importlib.util
+
+    task_path = root / ".trellis" / "scripts" / "task.py"
+    patch_script = src / "shell" / "patch-task-start-strong-gate.py"
+
+    if not task_path.exists():
+        info("[Shared] task.py 不存在，跳过 strong-gate no-status-flip 补丁")
+        return False
+
+    if not patch_script.exists():
+        warn("[Shared] patch-task-start-strong-gate.py 不存在，跳过补丁")
+        return False
+
+    if dry_run:
+        info("[Shared] 将对 task.py 应用 strong-gate no-status-flip 补丁")
+        return True
+
+    spec = importlib.util.spec_from_file_location("patch_task_start_strong_gate", patch_script)
+    if spec is None or spec.loader is None:
+        warn("[Shared] patch-task-start-strong-gate.py 加载失败")
+        return False
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    if hasattr(module, "patch_task_start"):
+        result = module.patch_task_start(task_path)
+        if result:
+            ok("[Shared] task.py strong-gate no-status-flip 补丁已应用")
+        return result
+
+    warn("[Shared] patch-task-start-strong-gate.py 缺少 patch_task_start 函数")
+    return False
+
+
 # ── Issue 1+7: patch deployed inject-workflow-state.py hook ──
 _HOOK_PATCH_MARKER = "# [workflow-embed-patch:prefer-workflow-state-json]"
 
@@ -2741,6 +2777,9 @@ def main() -> int:
 
             # Patch workflow_phase.py with strong-gate rejection
             _apply_patch_workflow_phase(src, root, dry_run=args.dry_run)
+
+            # Patch task.py cmd_start to skip status flip under strong-gate
+            _apply_patch_task_start(src, root, dry_run=args.dry_run)
         print()
 
         if not any(t and t["errors"] for t in total.values()):
