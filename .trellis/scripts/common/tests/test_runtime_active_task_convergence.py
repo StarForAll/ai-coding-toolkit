@@ -80,7 +80,7 @@ class RuntimeActiveTaskConvergenceTest(unittest.TestCase):
             env=env,
         )
 
-    def test_cmd_start_without_session_identity_persists_degraded_fallback(self) -> None:
+    def test_cmd_start_without_session_identity_does_not_persist_pointer(self) -> None:
         repo_root = self.make_repo()
         self.addCleanup(shutil.rmtree, repo_root)
         task_dir = repo_root / ".trellis" / "tasks" / "05-14-sample-task"
@@ -97,31 +97,16 @@ class RuntimeActiveTaskConvergenceTest(unittest.TestCase):
         task_data = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
         self.assertEqual(task_data["status"], "in_progress")
 
+        # Degraded mode removed in 0.5.17: no fallback file is written.
         degraded_path = repo_root / ".trellis" / ".runtime" / "degraded-active-task.json"
-        self.assertTrue(
+        self.assertFalse(
             degraded_path.is_file(),
-            "degraded mode should persist a fallback active-task file",
-        )
-        degraded_data = json.loads(degraded_path.read_text(encoding="utf-8"))
-        self.assertEqual(
-            degraded_data.get("current_task"),
-            ".trellis/tasks/05-14-sample-task",
+            "degraded fallback file should NOT be written after degraded mode removal",
         )
 
-    def test_cmd_start_warns_when_replacing_different_degraded_task(self) -> None:
+    def test_cmd_start_without_session_identity_prints_degraded_hint(self) -> None:
         repo_root = self.make_repo()
         self.addCleanup(shutil.rmtree, repo_root)
-        old_task_dir = repo_root / ".trellis" / "tasks" / "05-14-old-task"
-        old_task_dir.mkdir(parents=True, exist_ok=True)
-        (old_task_dir / "task.json").write_text(
-            json.dumps({"id": "05-14-old-task", "title": "Old Task", "status": "in_progress"}) + "\n",
-            encoding="utf-8",
-        )
-        degraded_path = repo_root / ".trellis" / ".runtime" / "degraded-active-task.json"
-        degraded_path.write_text(
-            json.dumps({"current_task": ".trellis/tasks/05-14-old-task"}, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
         task_dir = repo_root / ".trellis" / "tasks" / "05-14-sample-task"
         args = argparse.Namespace(dir=str(task_dir))
         stdout = io.StringIO()
@@ -135,31 +120,19 @@ class RuntimeActiveTaskConvergenceTest(unittest.TestCase):
             exit_code = self.task_module.cmd_start(args)
 
         self.assertEqual(exit_code, 0)
-        self.assertIn("replacing degraded fallback task", stdout.getvalue())
+        self.assertIn("degraded mode", stdout.getvalue())
 
-    def test_resolve_active_task_uses_degraded_fallback_when_no_session_context(self) -> None:
+    def test_resolve_active_task_returns_none_when_no_session_context(self) -> None:
         repo_root = self.make_repo(status="in_progress")
         self.addCleanup(shutil.rmtree, repo_root)
-        degraded_path = repo_root / ".trellis" / ".runtime" / "degraded-active-task.json"
-        degraded_path.write_text(
-            json.dumps(
-                {
-                    "current_task": ".trellis/tasks/05-14-sample-task",
-                },
-                ensure_ascii=False,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
 
         with patch.object(self.active_task, "resolve_context_key", return_value=None):
             active = self.active_task.resolve_active_task(repo_root)
 
-        self.assertEqual(active.task_path, ".trellis/tasks/05-14-sample-task")
-        self.assertEqual(active.source, "degraded")
-        self.assertFalse(active.stale)
+        self.assertIsNone(active.task_path)
+        self.assertEqual(active.source, "none")
 
-    def test_resolve_active_task_prefers_session_fallback_over_degraded(self) -> None:
+    def test_resolve_active_task_prefers_session_fallback_over_none(self) -> None:
         repo_root = self.make_repo(status="in_progress")
         self.addCleanup(shutil.rmtree, repo_root)
         session_path = repo_root / ".trellis" / ".runtime" / "sessions" / "only-session.json"
@@ -167,12 +140,6 @@ class RuntimeActiveTaskConvergenceTest(unittest.TestCase):
             json.dumps({"current_task": ".trellis/tasks/05-14-sample-task"}, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
-        degraded_path = repo_root / ".trellis" / ".runtime" / "degraded-active-task.json"
-        degraded_path.write_text(
-            json.dumps({"current_task": ".trellis/tasks/05-14-other-task"}, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
-
         with patch.object(self.active_task, "resolve_context_key", return_value=None):
             active = self.active_task.resolve_active_task(repo_root)
 
@@ -182,11 +149,6 @@ class RuntimeActiveTaskConvergenceTest(unittest.TestCase):
     def test_resolve_active_task_skips_degraded_when_context_key_exists(self) -> None:
         repo_root = self.make_repo(status="in_progress")
         self.addCleanup(shutil.rmtree, repo_root)
-        degraded_path = repo_root / ".trellis" / ".runtime" / "degraded-active-task.json"
-        degraded_path.write_text(
-            json.dumps({"current_task": ".trellis/tasks/05-14-sample-task"}, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
 
         with patch.object(self.active_task, "resolve_context_key", return_value="codex_demo"):
             active = self.active_task.resolve_active_task(repo_root)
@@ -195,63 +157,27 @@ class RuntimeActiveTaskConvergenceTest(unittest.TestCase):
         self.assertEqual(active.source_type, "none")
         self.assertEqual(active.context_key, "codex_demo")
 
-    def test_clear_active_task_without_session_identity_clears_degraded_fallback(self) -> None:
+    def test_clear_active_task_without_session_identity_returns_none(self) -> None:
         repo_root = self.make_repo(status="in_progress")
         self.addCleanup(shutil.rmtree, repo_root)
-        degraded_path = repo_root / ".trellis" / ".runtime" / "degraded-active-task.json"
-        degraded_path.write_text(
-            json.dumps(
-                {
-                    "current_task": ".trellis/tasks/05-14-sample-task",
-                },
-                ensure_ascii=False,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
 
         with patch.object(self.active_task, "resolve_context_key", return_value=None):
             previous = self.active_task.clear_active_task(repo_root)
 
-        self.assertEqual(previous.task_path, ".trellis/tasks/05-14-sample-task")
-        self.assertEqual(previous.source, "degraded")
-        self.assertFalse(degraded_path.exists())
+        self.assertIsNone(previous.task_path)
+        self.assertEqual(previous.source, "none")
 
-    def test_clear_task_from_sessions_clears_matching_degraded_fallback(self) -> None:
+    def test_clear_task_from_sessions_only_clears_session_files(self) -> None:
         repo_root = self.make_repo(status="in_progress")
         self.addCleanup(shutil.rmtree, repo_root)
-        degraded_path = repo_root / ".trellis" / ".runtime" / "degraded-active-task.json"
-        degraded_path.write_text(
-            json.dumps({"current_task": ".trellis/tasks/05-14-sample-task"}, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
 
         cleared = self.active_task.clear_task_from_sessions(
             ".trellis/tasks/05-14-sample-task",
             repo_root,
         )
 
-        self.assertEqual(cleared, 1)
-        self.assertFalse(degraded_path.exists())
-
-    def test_set_degraded_active_task_rejects_missing_task(self) -> None:
-        repo_root = self.make_repo()
-        self.addCleanup(shutil.rmtree, repo_root)
-
-        active = self.active_task.set_degraded_active_task(
-            ".trellis/tasks/does-not-exist",
-            repo_root,
-        )
-
-        self.assertIsNone(active)
-
-    def test_same_task_reference_none_none_is_false(self) -> None:
-        repo_root = self.make_repo()
-        self.addCleanup(shutil.rmtree, repo_root)
-
-        same = self.active_task._same_task_reference(None, None, repo_root)
-
-        self.assertFalse(same)
+        # No session files exist for this task, so nothing is cleared.
+        self.assertEqual(cleared, 0)
 
     def test_statusline_keeps_stale_task_visible(self) -> None:
         repo_root = self.make_repo(status="in_progress")
@@ -281,66 +207,18 @@ class RuntimeActiveTaskConvergenceTest(unittest.TestCase):
         assert task is not None
         self.assertEqual(task["status"], "stale")
 
-    def test_statusline_marks_degraded_tasks_in_output(self) -> None:
-        payload = {
-            "model": {"display_name": "Claude"},
-            "context_window": {"used_percentage": 12, "context_window_size": 128000},
-            "cost": {"total_duration_ms": 120000},
-            "rate_limits": {},
-        }
-        stdout = io.StringIO()
-
-        with (
-            patch.object(
-                self.statusline,
-                "_get_current_task",
-                return_value={
-                    "title": "Sample Task",
-                    "status": "in_progress",
-                    "priority": "P2",
-                    "source": "degraded",
-                },
-            ),
-            patch.object(self.statusline, "_find_trellis_dir", return_value=REPO_ROOT / ".trellis"),
-            patch.object(self.statusline, "_get_developer", return_value="xzc"),
-            patch.object(self.statusline, "_count_active_tasks", return_value=1),
-            patch.object(self.statusline, "_get_git_branch", return_value="main"),
-            patch("sys.stdin", io.StringIO(json.dumps(payload))),
-            contextlib.redirect_stdout(stdout),
-        ):
-            self.statusline.main()
-
-        self.assertIn("degraded", stdout.getvalue())
-
-    def test_opencode_js_uses_degraded_fallback_when_no_session_context(self) -> None:
-        repo_root = self.make_repo(status="in_progress")
-        self.addCleanup(shutil.rmtree, repo_root)
-        degraded_path = repo_root / ".trellis" / ".runtime" / "degraded-active-task.json"
-        degraded_path.write_text(
-            json.dumps({"current_task": ".trellis/tasks/05-14-sample-task"}, ensure_ascii=False) + "\n",
-            encoding="utf-8",
+    def test_statusline_does_not_surface_degraded_suffix(self) -> None:
+        rendered = self.statusline._render_task_line(
+            {
+                "title": "Sample Task",
+                "status": "in_progress",
+                "priority": "P2",
+                "source": "degraded",
+            }
         )
 
-        script = f"""
-import {{ TrellisContext }} from './.opencode/lib/trellis-context.js'
-const ctx = new TrellisContext({json.dumps(str(repo_root))})
-console.log(JSON.stringify(ctx.getActiveTask(null)))
-"""
-        with patch.dict(
-            os.environ,
-            {
-                "TRELLIS_CONTEXT_ID": "leaked-session",
-                "OPENCODE_RUN_ID": "leaked-opencode-run",
-                "CLAUDE_SESSION_ID": "leaked-claude-session",
-            },
-            clear=False,
-        ):
-            result = self.run_node(script)
-        self.assertEqual(result.returncode, 0, msg=result.stderr)
-        active = json.loads(result.stdout.strip().splitlines()[-1])
-        self.assertEqual(active["taskPath"], ".trellis/tasks/05-14-sample-task")
-        self.assertEqual(active["source"], "degraded")
-
+        self.assertIn("(in_progress)", rendered)
+        self.assertNotIn("degraded", rendered)
 
 if __name__ == "__main__":
     unittest.main()

@@ -99,7 +99,7 @@ class WorkflowPhaseContractsTest(unittest.TestCase):
         self.assertIn("Active task pointer is stale", breadcrumb)
         self.assertNotIn("Refer to workflow.md for current step.", breadcrumb)
 
-    def test_python_hook_surfaces_degraded_mode_in_header(self) -> None:
+    def test_python_header_does_not_surface_degraded_source(self) -> None:
         breadcrumb = self.hook_module.build_breadcrumb(
             "sample-task",
             "in_progress",
@@ -107,8 +107,40 @@ class WorkflowPhaseContractsTest(unittest.TestCase):
             source="degraded",
             breadcrumb_key="in_progress-inline",
         )
-        self.assertIn("Task: sample-task (in_progress · degraded)", breadcrumb)
-        self.assertIn("Source: degraded", breadcrumb)
+        self.assertIn("sample-task", breadcrumb)
+        self.assertNotIn("(in_progress · degraded)", breadcrumb)
+
+    def test_workflow_documents_live_degraded_start_behavior(self) -> None:
+        self.assertIn("falls back to degraded mode", self.workflow_text)
+        self.assertIn("AI continues based on conversation context", self.workflow_text)
+        self.assertNotIn("fails with a session identity hint", self.workflow_text)
+
+    def test_workflow_does_not_reference_missing_contract_files(self) -> None:
+        self.assertNotIn(
+            ".trellis/spec/cli/backend/workflow-state-contract.md",
+            self.workflow_text,
+        )
+        self.assertNotIn(
+            ".trellis/scripts/inject-workflow-state.py",
+            self.workflow_text,
+        )
+
+    def test_trellis_meta_change_task_lifecycle_references_live_paths(self) -> None:
+        rel_paths = (
+            ".agents/skills/trellis-meta/references/customize-local/change-task-lifecycle.md",
+            ".claude/skills/trellis-meta/references/customize-local/change-task-lifecycle.md",
+            ".kiro/skills/trellis-meta/references/customize-local/change-task-lifecycle.md",
+            ".opencode/skills/trellis-meta/references/customize-local/change-task-lifecycle.md",
+            ".qoder/skills/trellis-meta/references/customize-local/change-task-lifecycle.md",
+        )
+        for rel_path in rel_paths:
+            content = (REPO_ROOT / rel_path).read_text(encoding="utf-8")
+            with self.subTest(path=rel_path):
+                self.assertNotIn(
+                    ".trellis/spec/cli/backend/workflow-state-contract.md",
+                    content,
+                )
+                self.assertIn(".trellis/workflow.md", content)
 
 
 if __name__ == "__main__":

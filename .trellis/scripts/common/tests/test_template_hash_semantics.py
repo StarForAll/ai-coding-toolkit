@@ -33,20 +33,26 @@ class TemplateHashSemanticsTest(unittest.TestCase):
                 self.assertEqual(recorded[rel_path], _actual_hash(rel_path))
 
     def test_repo_local_overlays_remain_detectable_as_modified(self) -> None:
+        # 0.5.17: several files were overwritten with .new template versions
+        # and now match their template hash. Only truly locally-customized
+        # files remain as overlays (recorded hash != actual hash).
         overlays = (
             ".claude/agents/trellis-research.md",
+            ".claude/hooks/inject-workflow-state.py",
             ".claude/settings.json",
             ".codex/agents/trellis-check.toml",
             ".codex/agents/trellis-implement.toml",
             ".codex/agents/trellis-research.toml",
+            ".codex/hooks/inject-workflow-state.py",
             ".codex/config.toml",
+            ".qoder/hooks/inject-workflow-state.py",
             ".opencode/agents/trellis-research.md",
-            ".opencode/lib/trellis-context.js",
             ".opencode/plugins/inject-workflow-state.js",
             ".qoder/agents/trellis-research.md",
-            ".trellis/scripts/add_session.py",
-            ".trellis/scripts/common/safe_commit.py",
-            ".trellis/scripts/common/task_store.py",
+            ".agents/skills/trellis-meta/references/customize-local/change-task-lifecycle.md",
+            ".claude/skills/trellis-meta/references/customize-local/change-task-lifecycle.md",
+            ".opencode/skills/trellis-meta/references/customize-local/change-task-lifecycle.md",
+            ".qoder/skills/trellis-meta/references/customize-local/change-task-lifecycle.md",
             ".trellis/workflow.md",
             "AGENTS.md",
         )
@@ -54,6 +60,19 @@ class TemplateHashSemanticsTest(unittest.TestCase):
         for rel_path in overlays:
             with self.subTest(path=rel_path):
                 self.assertNotEqual(recorded[rel_path], _actual_hash(rel_path))
+
+    def test_overwritten_files_now_match_template_hash(self) -> None:
+        # 0.5.17: these files were overwritten with .new template versions,
+        # so their actual hash now matches the recorded template hash.
+        overwritten = (
+            ".trellis/scripts/add_session.py",
+            ".trellis/scripts/common/safe_commit.py",
+            ".trellis/scripts/common/task_store.py",
+        )
+        recorded = _recorded_hashes()
+        for rel_path in overwritten:
+            with self.subTest(path=rel_path):
+                self.assertEqual(recorded[rel_path], _actual_hash(rel_path))
 
     def test_removed_templates_are_no_longer_tracked(self) -> None:
         recorded = _recorded_hashes()
@@ -66,9 +85,9 @@ class TemplateHashSemanticsTest(unittest.TestCase):
             with self.subTest(path=rel_path):
                 self.assertNotIn(rel_path, recorded)
 
-        for rel_path in recorded:
-            with self.subTest(path=rel_path):
-                self.assertFalse(rel_path.startswith(".kiro/"))
+        # 0.5.17: .kiro/ platform is now a supported platform with template
+        # files tracked in template-hashes.json. Remove the old assertion
+        # that disallowed any .kiro/ entries.
 
 
 if __name__ == "__main__":
