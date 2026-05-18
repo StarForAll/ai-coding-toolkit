@@ -1904,3 +1904,34 @@ P1-P6 + 额外修复：record-session 归类到 OVERLAY_BASELINE_COMMANDS/DISTRI
 ### Next Steps
 
 - None - task complete
+
+
+## Session 243: Trellis 0.5.17 upgrade: process .new files
+
+**Date**: 2026-05-18
+**Task**: Trellis 0.5.17 upgrade: process .new files
+**Branch**: `main`
+
+### Summary
+
+处理 0.5.17 升级 .new 文件：13 个 OVERWRITE（移除 degraded/stale 机制、简化 auto-commit、添加 .current-task），9 个 DISCARD/RETAIN（保留 Codex 安全注释、enriched research agent MCP 工具、Kiro 平台），修复 23 个因断言旧行为而失败的测试，33/33 测试通过
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
