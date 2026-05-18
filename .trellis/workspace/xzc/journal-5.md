@@ -1935,3 +1935,40 @@ P1-P6 + 额外修复：record-session 归类到 OVERLAY_BASELINE_COMMANDS/DISTRI
 ### Next Steps
 
 - None - task complete
+
+
+## Session 244: Trellis 0.5.17 runtime contract drift fix
+
+**Date**: 2026-05-18
+**Task**: Trellis 0.5.17 runtime contract drift fix
+**Branch**: `main`
+
+### Summary
+
+修复 Trellis 0.5.17 live runtime contract 漂移，补齐 stale 面包屑、失效引用、Kiro 漏改与回归覆盖，并完成剩余 0.5.17 基线对齐收尾
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `79a087d` | (see git log) |
+| `b2afc3d` | (see git log) |
+| `980d6c2` | (see git log) |
+| `bb6d0d3` | (see git log) |
+| `08c5540` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
