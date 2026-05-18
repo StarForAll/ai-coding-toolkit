@@ -1607,7 +1607,16 @@ def cmd_route(args: argparse.Namespace) -> int:
         active = resolve_active_task(repo_root)
         if active.task_path:
             if active.stale:
-                _route_result(None, "repair_needed", f"Trellis 当前活动任务已失效: {active.task_path}")
+                # Distinguish archived vs invalid stale path
+                stale_path = active.task_path
+                if isinstance(stale_path, (str, Path)):
+                    stale_str = str(stale_path)
+                    if "archive" in stale_str:
+                        _route_result(None, "repair_needed", f"活动任务已归档: {stale_path}。请 task.py start 切换到其他活跃任务")
+                    else:
+                        _route_result(None, "repair_needed", f"活动任务路径无效: {stale_path}。请 task.py start <task-dir> 重新指定")
+                else:
+                    _route_result(None, "repair_needed", f"活动任务路径无效: {stale_path}。请 task.py start <task-dir> 重新指定")
                 return 0
             resolved_active = resolve_task_ref(active.task_path, repo_root)
             if resolved_active is None or not resolved_active.is_dir():
@@ -1673,11 +1682,33 @@ def cmd_route(args: argparse.Namespace) -> int:
                         profile_hint=profile_hint or "unknown",
                     )
                 else:
-                    _route_result(
-                        None,
-                        "recovery_needed",
-                        "当前 session 未解析到 active task；请先明确当前任务或重新进入目标阶段",
-                    )
+                    # Enumerate existing tasks for actionable guidance
+                    existing_tasks = []
+                    try:
+                        for candidate in tasks_root.iterdir():
+                            if candidate.is_dir() and (candidate / TASK_FILE_NAME).is_file():
+                                t_data = read_json(candidate / TASK_FILE_NAME)
+                                t_stage = None
+                                t_state_path = candidate / "workflow-state.json"
+                                if t_state_path.is_file():
+                                    t_state = read_json(t_state_path)
+                                    if isinstance(t_state, dict):
+                                        t_stage = t_state.get("stage")
+                                task_label = candidate.name
+                                if t_stage:
+                                    task_label += f"({t_stage})"
+                                existing_tasks.append(task_label)
+                    except OSError:
+                        pass
+                    if existing_tasks:
+                        task_list_str = ", ".join(existing_tasks)
+                        reason = (
+                            f"当前 session 未解析到 active task。已有任务: {task_list_str}。"
+                            f"请执行 task.py start <task-dir> 切换到目标任务"
+                        )
+                    else:
+                        reason = "当前 session 未解析到 active task；请先明确当前任务或重新进入目标阶段"
+                    _route_result(None, "recovery_needed", reason)
                 return 0
 
     # Step 3: validate the resolved task
@@ -1689,7 +1720,11 @@ def cmd_route(args: argparse.Namespace) -> int:
 
     state_path, state = load_state(task_dir)
     if state is None:
-        _route_result(None, "repair_needed", "缺少 workflow-state.json")
+        _route_result(
+            None,
+            "repair_needed",
+            "缺少 workflow-state.json（可能因任务创建于工作流安装之前）。请执行 workflow-state.py init <task-dir> --stage feasibility 初始化",
+        )
         return 0
 
     state_errors: list[str] = []
@@ -1713,7 +1748,14 @@ def cmd_route(args: argparse.Namespace) -> int:
     if task_data and stage_requires_leaf(stage):
         children = task_data.get("children", [])
         if isinstance(children, list) and children:
-            _route_result(None, "repair_needed", "当前 task 已有 children")
+            children_list = ", ".join(str(c) for c in children)
+            _route_result(
+                None,
+                "context_needed",
+                f"当前 task 处于 leaf-required stage={stage} 但含有 children，需切换到子任务执行。子任务: {children_list}。请执行 task.py start <child-task-dir>",
+                stage=stage,
+                stage_status=stage_status or None,
+            )
             return 0
 
     readiness_blockers = collect_route_readiness_blockers(task_dir, repo_root, state)
@@ -1744,7 +1786,7 @@ def cmd_route(args: argparse.Namespace) -> int:
         primary_reason = readiness_blockers[0]
         _route_result(
             stage or None,
-            "blocked" if stage in EXECUTION_STAGES or stage == "plan" else "repair_needed",
+            "blocked",
             primary_reason,
             stage=stage or None,
             stage_status=stage_status or None,
