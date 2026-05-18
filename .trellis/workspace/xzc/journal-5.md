@@ -1871,3 +1871,36 @@ P1-P6 + 额外修复：record-session 归类到 OVERLAY_BASELINE_COMMANDS/DISTRI
 ### Next Steps
 
 - None - task complete
+
+
+## Session 242: 修复强门禁模型 9 项结构性缺陷
+
+**Date**: 2026-05-18
+**Task**: 修复强门禁模型 9 项结构性缺陷
+**Branch**: `main`
+
+### Summary
+
+修复新项目开发工作流中残留的旧三阶段模型引用：P1-2 新增 patch-task-start 跳过 status flip，P1-3 session-start patch 始终 return，P2-4 delivery 移除 archive 命令，P2-6 CLI 参数修正，P2-7 改用 task.py current，P3-8 profile-aware 首次 entry 路由。trellis-check 额外修复 install-workflow.py 函数嵌套 bug。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `91e9d9e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
