@@ -237,3 +237,36 @@ Fixed embedded workflow.md task-mechanism patch fallback, aligned upgrade-compat
 ### Next Steps
 
 - None - task complete
+
+
+## Session 252: 修复新项目开发工作流旧语义残留与恢复提示精度
+
+**Date**: 2026-05-18
+**Task**: 修复新项目开发工作流旧语义残留与恢复提示精度
+**Branch**: `main`
+
+### Summary
+
+R1-R6: 清除旧三态语义、修复 JSONL 路径、新增 context_needed action、改进 route 恢复提示精度、补充 start 条件翻转说明、更新协议文档
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5087633` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
