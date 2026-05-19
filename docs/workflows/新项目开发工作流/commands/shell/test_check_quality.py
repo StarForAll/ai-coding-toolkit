@@ -77,7 +77,7 @@ class CheckQualityScriptTests(unittest.TestCase):
             project_dir = Path(temp_root)
             result = self.run_script(project_dir)
 
-        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("未提供已确认命令，跳过", result.stdout)
         self.assertFalse((project_dir / "commands.log").exists())
 

@@ -130,6 +130,15 @@ CUSTOMER_ESTIMATE_MARKERS = (
 )
 PLACEHOLDER_MARKERS = ("待补充", "待定", "暂空", "后续补充", "TBD", "TODO", "FIXME", "...")
 
+BRAINSTORM_EXIT_SNAPSHOT_FIELDS = (
+    "complexity_decision",
+    "ui_lane_decision",
+    "cross_platform_scope",
+    "estimate_refresh_result",
+    "kill_criteria",
+    "open_items",
+)
+
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
@@ -427,13 +436,28 @@ def validate_check_gate(task_dir: Path, errors: list[str]) -> None:
         return
     content = check_path.read_text(encoding="utf-8")
     missing_sections: list[str] = []
-    if not re.search(r"(?:Changed Scope|变更范围)", content):
+    if not re.search(r"^\s*##+\s*(?:Changed Scope|变更范围)\s*$", content, re.MULTILINE):
         missing_sections.append("Changed Scope / 变更范围")
-    if not re.search(r"(?:Verification Results|验证结果)", content):
+    if not re.search(r"^\s*##+\s*(?:Applied Specs|适用规范)\s*$", content, re.MULTILINE):
+        missing_sections.append("Applied Specs / 适用规范")
+    if not re.search(r"^\s*##+\s*(?:Verification Results|验证结果)\s*$", content, re.MULTILINE):
         missing_sections.append("Verification Results / 验证结果")
+    if not re.search(r"^\s*##+\s*(?:Deviations|偏差清单)\s*$", content, re.MULTILINE):
+        missing_sections.append("Deviations / 偏差清单")
+    if not re.search(r"^\s*##+\s*(?:Uncovered Risks|未覆盖风险)\s*$", content, re.MULTILINE):
+        missing_sections.append("Uncovered Risks / 未覆盖风险")
+    if not re.search(r"^\s*##+\s*(?:Suggested Next Step|推荐下一步)\s*$", content, re.MULTILINE):
+        missing_sections.append("Suggested Next Step / 推荐下一步")
     if missing_sections:
         errors.append(
             f"check.md 缺少必要章节: {', '.join(missing_sections)}；"
+            "check 阶段产物不完整，不得进入 review-gate 或 finish-work"
+        )
+        return
+
+    if not re.search(r"\b(pass|fail|not run)\b|通过|失败|未运行", content, re.IGNORECASE):
+        errors.append(
+            "check.md 缺少真实验证结论（pass / fail / not run）；"
             "check 阶段产物不完整，不得进入 review-gate 或 finish-work"
         )
 
@@ -462,12 +486,86 @@ def validate_finish_work_gate(task_dir: Path, errors: list[str]) -> None:
             f"finish-work-checklist.md 缺少必要内容: {', '.join(missing_sections)}；"
             "finish-work 阶段证据不完整，不得进入 delivery"
         )
+        return
+
+    if not re.search(r"\b(pass|fail|not run)\b|通过|失败|未运行", content, re.IGNORECASE):
+        errors.append(
+            "finish-work-checklist.md 缺少真实验证结论（pass / fail / not run）；"
+            "finish-work 阶段证据不完整，不得进入 delivery"
+        )
+    if not re.search(r"当前状态|status|证据缺口|evidence gap", content, re.IGNORECASE):
+        errors.append(
+            "finish-work-checklist.md 缺少人工验证真实状态或证据缺口；"
+            "finish-work 阶段证据不完整，不得进入 delivery"
+        )
+
+
+def validate_project_audit_gate(task_dir: Path, errors: list[str]) -> None:
+    report_path = task_dir / "project-audit.md"
+    if not report_path.is_file():
+        errors.append("缺少 project-audit.md；project-audit 阶段未沉淀项目级审查结论，不得进入后续阶段")
+        return
+
+    content = report_path.read_text(encoding="utf-8")
+    missing_sections: list[str] = []
+    required_sections = (
+        "Mode",
+        "Project-Level Verification Matrix",
+        "Confirmed Findings",
+        "Candidate Findings / Reviewer Evidence",
+        "Confirmed Fix Plan",
+        "Applied Changes",
+        "Project-Level Verification Results",
+        "Remaining Risks",
+        "Suggested Next Step",
+    )
+    for section in required_sections:
+        if not re.search(rf"^\s*##+\s*{re.escape(section)}\s*$", content, re.MULTILINE):
+            missing_sections.append(section)
+
+    if missing_sections:
+        errors.append(
+            f"project-audit.md 缺少必要章节: {', '.join(missing_sections)}；"
+            "project-audit 阶段证据不完整，不得进入后续阶段"
+        )
+
+
+def validate_review_gate_gate(task_dir: Path, errors: list[str]) -> None:
+    review_gate_dir = task_dir / "review-gate"
+    if not review_gate_dir.is_dir():
+        errors.append(
+            "缺少 review-gate/ 目录；review-gate 阶段未沉淀本轮判定记录，不得进入后续阶段"
+        )
+        return
+
+    reports = sorted(review_gate_dir.glob("review-gate-round-*.md"))
+    if not reports:
+        errors.append(
+            "缺少 review-gate/review-gate-round-<N>.md；review-gate 阶段未记录判定结论，不得进入后续阶段"
+        )
+        return
+
+    content = reports[-1].read_text(encoding="utf-8")
+    missing_sections: list[str] = []
+    for section in ("Decision", "Trigger Evidence", "Mode", "Recommended Next Step"):
+        if not re.search(rf"^\s*##+\s*{re.escape(section)}\s*$", content, re.MULTILINE):
+            missing_sections.append(section)
+
+    if missing_sections:
+        errors.append(
+            f"{reports[-1].relative_to(task_dir).as_posix()} 缺少必要章节: {', '.join(missing_sections)}；"
+            "review-gate 阶段证据不完整，不得进入后续阶段"
+        )
+
+
+def validate_record_session_gate(task_dir: Path, errors: list[str]) -> None:
+    validate_delivery_gate(task_dir, errors)
 
 
 def validate_delivery_gate(task_dir: Path, errors: list[str], repo_root: Path | None = None) -> None:
     """Validate delivery artifacts before entering record-session."""
     missing = [
-        artifact.relative_to(task_dir).as_posix()
+        artifact.as_posix()
         for artifact in DELIVERY_ARTIFACTS
         if not (task_dir / artifact).is_file()
     ]
@@ -537,6 +635,14 @@ def validate_stage_transition_gates(
         return
     validate_leaf_task(task_dir, new_stage, errors)
 
+    current_stage = state.get("stage")
+    canonical_next = STAGE_TRANSITIONS.get(current_stage, [])
+    if current_stage is not None and new_stage != current_stage and new_stage not in canonical_next:
+        errors.append(
+            f"阶段切换被拒绝: {current_stage!r} → {new_stage!r} 不属于 canonical transition {canonical_next}"
+        )
+        return
+
     candidate_state = json.loads(json.dumps(state, ensure_ascii=False))
     candidate_state["stage"] = new_stage
     if "allowed_next_stages" not in candidate_state or not isinstance(
@@ -562,6 +668,9 @@ def validate_stage_transition_gates(
     if new_stage in PROJECT_ESTIMATE_REQUIRED_STAGES:
         validate_project_doc_boundary(candidate_state, repo_root, task_dir, errors)
 
+    if state.get("stage") == "brainstorm":
+        validate_brainstorm_exit_gate(state, repo_root, task_dir, errors)
+
     if state.get("stage") == "design" and new_stage == "plan":
         validate_design_exit_gate(task_dir, errors)
 
@@ -572,6 +681,12 @@ def validate_stage_transition_gates(
     # Check → finish-work/review-gate requires check.md
     if new_stage in {"finish-work", "review-gate"}:
         validate_check_gate(task_dir, errors)
+
+    if current_stage == "project-audit":
+        validate_project_audit_gate(task_dir, errors)
+
+    if current_stage == "review-gate":
+        validate_review_gate_gate(task_dir, errors)
 
     # Finish-work → delivery requires the frozen close-out checklist
     if new_stage == "delivery":
@@ -705,6 +820,10 @@ def collect_route_readiness_blockers(
             elif not allow_brainstorm:
                 blockers.append("assessment.md 未明确允许进入 brainstorm")
 
+        task_prd = task_dir / TASK_PRD
+        if not task_prd.is_file():
+            blockers.append("当前 brainstorm task 缺少 prd.md 工作底稿")
+
     if stage == "plan":
         task_prd = task_dir / TASK_PRD
         if not task_prd.is_file():
@@ -717,6 +836,8 @@ def collect_route_readiness_blockers(
         task_prd = task_dir / TASK_PRD
         if not task_prd.is_file():
             blockers.append("当前推荐执行任务说明卡缺少最小 prd.md，不能进入执行态")
+        elif find_missing_markers(task_prd, TASK_ESTIMATE_MARKERS):
+            blockers.append("当前推荐执行任务说明卡缺少项目级粗估字段，不能进入执行态")
         blockers.extend(collect_dependency_blockers(task_dir, repo_root))
 
     return blockers
@@ -749,16 +870,65 @@ def collect_exit_gate_blockers(
     elif stage == "delivery":
         validate_delivery_gate(task_dir, blockers, repo_root)
 
+    elif stage == "project-audit":
+        validate_project_audit_gate(task_dir, blockers)
+
+    elif stage == "review-gate":
+        validate_review_gate_gate(task_dir, blockers)
+
+    elif stage == "record-session":
+        validate_record_session_gate(task_dir, blockers)
+
     elif stage == "design":
         validate_project_doc_boundary(state, repo_root, task_dir, blockers)
         validate_context7_review_artifact(task_dir, state, blockers)
         validate_design_exit_gate(task_dir, blockers)
 
     elif stage == "brainstorm":
-        validate_external_project_controls(task_dir, repo_root, state, blockers)
-        validate_ownership_policy_controls(task_dir, repo_root, state, blockers)
+        allowed_targets = design_path_candidates_from_state(state)
+        validate_brainstorm_exit_gate(
+            state,
+            repo_root,
+            task_dir,
+            blockers,
+            require_exit_snapshot=True,
+            require_customer_prd=bool(allowed_targets & {"design", "plan"}),
+        )
 
     return blockers
+
+
+def validate_stage_exit_artifacts(
+    task_dir: Path,
+    repo_root: Path | None,
+    state: dict[str, Any],
+    errors: list[str],
+) -> None:
+    if repo_root is None:
+        return
+
+    stage = state.get("stage")
+    if stage == "brainstorm":
+        validate_brainstorm_exit_gate(
+            state,
+            repo_root,
+            task_dir,
+            errors,
+            require_exit_snapshot=state.get("stage_status") in EXIT_READY_STATUSES,
+            require_customer_prd=False,
+        )
+    elif stage == "plan":
+        validate_plan_gate(task_dir, errors)
+    elif stage == "check":
+        validate_check_gate(task_dir, errors)
+    elif stage == "finish-work":
+        validate_finish_work_gate(task_dir, errors)
+    elif stage == "project-audit":
+        validate_project_audit_gate(task_dir, errors)
+    elif stage == "review-gate":
+        validate_review_gate_gate(task_dir, errors)
+    elif stage == "delivery":
+        validate_delivery_gate(task_dir, errors, repo_root)
 
 
 def load_task_json(path: Path) -> dict[str, Any] | None:
@@ -1115,6 +1285,59 @@ def find_missing_markers(path: Path, markers: tuple[str, ...]) -> list[str]:
     return [marker for marker in markers if marker not in content]
 
 
+def design_path_candidates_from_state(state: dict[str, Any]) -> set[str]:
+    allowed_next = state.get("allowed_next_stages")
+    if not isinstance(allowed_next, list):
+        return set()
+    return {item for item in allowed_next if isinstance(item, str)}
+
+
+def validate_brainstorm_exit_gate(
+    state: dict[str, Any],
+    project_root: Path,
+    task_dir: Path,
+    errors: list[str],
+    *,
+    require_exit_snapshot: bool = True,
+    require_customer_prd: bool = True,
+) -> None:
+    validate_external_project_controls(task_dir, project_root, state, errors)
+    validate_ownership_policy_controls(task_dir, project_root, state, errors)
+
+    task_prd = task_dir / TASK_PRD
+    if not task_prd.is_file():
+        errors.append(f"缺少 {TASK_PRD.as_posix()}；brainstorm 退出前不满足工作底稿门禁")
+        return
+
+    missing_task_markers = find_missing_markers(task_prd, TASK_ESTIMATE_MARKERS)
+    if missing_task_markers:
+        errors.append(
+            f"{TASK_PRD.as_posix()} 缺少项目级粗估字段: {', '.join(missing_task_markers)}"
+        )
+
+    task_content = task_prd.read_text(encoding="utf-8")
+    if require_exit_snapshot:
+        missing_snapshot = [
+            field for field in BRAINSTORM_EXIT_SNAPSHOT_FIELDS if f"`{field}`" not in task_content
+        ]
+        if missing_snapshot:
+            errors.append(
+                f"{TASK_PRD.as_posix()} 缺少阶段出口快照字段: {', '.join(missing_snapshot)}"
+            )
+
+    allowed_targets = design_path_candidates_from_state(state)
+    if require_customer_prd and allowed_targets & {"design", "plan"}:
+        customer_prd = project_root / CUSTOMER_PRD
+        if not customer_prd.is_file():
+            errors.append(f"缺少 {CUSTOMER_PRD.as_posix()}，当前 brainstorm 退出不满足 design/plan 正式文档门禁")
+        else:
+            missing_customer_markers = find_missing_markers(customer_prd, CUSTOMER_ESTIMATE_MARKERS)
+            if missing_customer_markers:
+                errors.append(
+                    f"{CUSTOMER_PRD.as_posix()} 缺少项目级粗估摘要字段: {', '.join(missing_customer_markers)}"
+                )
+
+
 def validate_context7_review_artifact(
     task_dir: Path,
     state: dict[str, Any],
@@ -1319,6 +1542,12 @@ def cmd_set(args: argparse.Namespace) -> int:
             if isinstance(allowed, list) and pending_stage not in allowed:
                 print(f"❌ 阶段切换被拒绝: {current_stage!r} → {pending_stage!r} 不在 allowed_next_stages {allowed} 中；如需强制切换请使用 --force")
                 return 1
+            canonical_next = STAGE_TRANSITIONS.get(current_stage, [])
+            if pending_stage not in canonical_next:
+                print(
+                    f"❌ 阶段切换被拒绝: {current_stage!r} → {pending_stage!r} 不属于 canonical transition {canonical_next}；如需强制切换请使用 --force"
+                )
+                return 1
             # 2. awaiting_user_confirmation gate for all non-trivial stage transitions
             if pending_stage not in {"feasibility"}:
                 current_status = state.get("stage_status", "")
@@ -1379,15 +1608,17 @@ def cmd_validate(args: argparse.Namespace) -> int:
     validate_state_shape(state, errors)
     validate_execution_boundary(state, errors)
 
-    should_check_active_task = not args.skip_active_task_check
+    should_check_active_task = args.require_active_task_check
     if should_check_active_task:
         if repo_root is None:
             errors.append("无法定位 repo root，不能校验当前活动任务")
         else:
             validate_session_active_task(task_dir, repo_root, errors)
-            validate_leaf_task(task_dir, state.get("stage"), errors)
-            validate_external_project_controls(task_dir, repo_root, state, errors)
-            validate_ownership_policy_controls(task_dir, repo_root, state, errors)
+    if repo_root is not None:
+        validate_leaf_task(task_dir, state.get("stage"), errors)
+        validate_external_project_controls(task_dir, repo_root, state, errors)
+        validate_ownership_policy_controls(task_dir, repo_root, state, errors)
+        validate_stage_exit_artifacts(task_dir, repo_root, state, errors)
 
     if args.project_root:
         validate_project_doc_boundary(state, Path(args.project_root).resolve(), task_dir, errors)
@@ -1553,6 +1784,32 @@ def _detect_missing_critical_runtime_patches(repo_root: Path, record: dict[str, 
     return missing
 
 
+def _detect_missing_patched_codex_skills(repo_root: Path, record: dict[str, Any]) -> list[str]:
+    configured = record.get("patched_codex_skills")
+    if not isinstance(configured, list):
+        return []
+
+    problems: list[str] = []
+    shared_skills_dir = repo_root / ".agents" / "skills"
+    for skill_name in configured:
+        if not isinstance(skill_name, str):
+            continue
+        target = shared_skills_dir / skill_name / "SKILL.md"
+        if not target.is_file():
+            problems.append(f"{target.relative_to(repo_root)} 缺失（patched codex skill: {skill_name}）")
+            continue
+        try:
+            content = target.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            problems.append(f"{target.relative_to(repo_root)} 不可读（patched codex skill: {skill_name}）")
+            continue
+        if skill_name == "trellis-start" and "## Workflow Phase Router Patch `[AI]`" not in content:
+            problems.append(
+                f"{target.relative_to(repo_root)} 缺少强门禁 Phase Router 补丁（patched codex skill: trellis-start）"
+            )
+    return problems
+
+
 def detect_embed_invalid(repo_root: Path) -> str | None:
     install_record = repo_root / INSTALL_RECORD
     if not install_record.is_file():
@@ -1574,6 +1831,10 @@ def detect_embed_invalid(repo_root: Path) -> str | None:
     missing_patches = _detect_missing_critical_runtime_patches(repo_root, record)
     if missing_patches:
         return "critical runtime patch 未完整落地: " + "; ".join(missing_patches)
+
+    missing_codex_skills = _detect_missing_patched_codex_skills(repo_root, record)
+    if missing_codex_skills:
+        return "patched codex skill 未完整落地: " + "; ".join(missing_codex_skills)
 
     return None
 
@@ -1944,38 +2205,15 @@ def cmd_repair(args: argparse.Namespace) -> int:
 
     repaired = build_default_state(candidate_stage)
     if recovered_from_state and isinstance(state, dict) and state.get("stage") == candidate_stage:
-        existing_status = state.get("stage_status")
-        if existing_status in STAGE_STATUSES:
-            repaired["stage_status"] = existing_status
         existing_block = state.get("current_block")
         if existing_block is None or isinstance(existing_block, str):
             repaired["current_block"] = existing_block
         existing_completed = state.get("completed_blocks")
         if isinstance(existing_completed, list) and all(isinstance(item, str) for item in existing_completed):
             repaired["completed_blocks"] = existing_completed
-        existing_allowed = state.get("allowed_next_stages")
-        if isinstance(existing_allowed, list) and all(isinstance(item, str) for item in existing_allowed):
-            repaired["allowed_next_stages"] = existing_allowed
-        existing_awaiting = state.get("awaiting_user_confirmation")
-        if isinstance(existing_awaiting, bool):
-            repaired["awaiting_user_confirmation"] = existing_awaiting
-        existing_transition = state.get("last_confirmed_transition")
-        if isinstance(existing_transition, dict):
-            repaired["last_confirmed_transition"] = existing_transition
         existing_notes = state.get("notes")
         if isinstance(existing_notes, list) and all(isinstance(item, str) for item in existing_notes):
             repaired["notes"] = existing_notes
-        existing_checkpoints = state.get("checkpoints")
-        if isinstance(existing_checkpoints, dict):
-            repaired_checkpoints = repaired.setdefault("checkpoints", {})
-            for key in ("architecture_confirmed", "context7_review_completed", "execution_authorized"):
-                value = existing_checkpoints.get(key)
-                if isinstance(value, bool):
-                    repaired_checkpoints[key] = value
-        if repaired["stage_status"] == "awaiting_user_confirmation":
-            repaired["awaiting_user_confirmation"] = True
-        elif repaired["awaiting_user_confirmation"] is True:
-            repaired["stage_status"] = "awaiting_user_confirmation"
 
     repair_errors: list[str] = []
     validate_state_shape(repaired, repair_errors)
@@ -2051,11 +2289,18 @@ def build_parser() -> argparse.ArgumentParser:
     validate_parser = subparsers.add_parser("validate", help="validate workflow-state.json and task boundaries")
     validate_parser.add_argument("task_dir")
     validate_parser.add_argument("--project-root")
-    validate_parser.add_argument("--skip-active-task-check", action="store_true")
+    validate_parser.add_argument("--skip-active-task-check", action="store_true", help=argparse.SUPPRESS)
+    validate_parser.add_argument("--require-active-task-check", action="store_true")
     validate_parser.add_argument(
         "--skip-current-task-check",
         action="store_true",
         dest="skip_active_task_check",
+        help=argparse.SUPPRESS,
+    )
+    validate_parser.add_argument(
+        "--require-current-task-check",
+        action="store_true",
+        dest="require_active_task_check",
         help=argparse.SUPPRESS,
     )
     validate_parser.set_defaults(func=cmd_validate)

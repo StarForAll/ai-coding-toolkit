@@ -106,8 +106,15 @@ PY_GET_ACTIVE_TASK_BLOCK = """def get_active_task(root: Path, input_data: dict) 
                         \"Warnings: \" + \"; \".join(str(item) for item in route_warnings)
                     )
                 route_source = \"workflow-state.route\"
-        except Exception:
-            pass
+            elif route_result.returncode != 0:
+                status = \"workflow-state.route_failed\"
+                route_source = \"workflow-state.route_failed\"
+                stderr_summary = route_result.stderr.strip() or route_result.stdout.strip() or \"workflow-state.py route returned non-zero\"
+                extra_lines.append(f\"Reason: {stderr_summary.splitlines()[-1]}\")
+        except Exception as exc:
+            status = \"workflow-state.route_failed\"
+            route_source = \"workflow-state.route_failed\"
+            extra_lines.append(f\"Reason: {type(exc).__name__}: {exc}\")
     return task_id, status, route_source, extra_lines
 """
 
@@ -204,8 +211,10 @@ JS_GET_ACTIVE_TASK_BLOCK = """function getActiveTask(ctx, platformInput = null) 
       if (routeBlockers.length > 0) extraLines.push(`Blockers: ${routeBlockers.map(item => String(item)).join(\"; \")}`)
       if (routeWarnings.length > 0) extraLines.push(`Warnings: ${routeWarnings.map(item => String(item)).join(\"; \")}`)
       source = \"workflow-state.route\"
-    } catch {
-      // fall back to task.json status
+    } catch (error) {
+      status = "workflow-state.route_failed"
+      source = "workflow-state.route_failed"
+      extraLines.push(`Reason: ${String(error).split("\\n").pop()}`)
     }
   }
 
@@ -282,8 +291,15 @@ PY_BASELINE_ROUTE_SNIPPET = """# [workflow-embed-patch:prefer-workflow-state-jso
                 if isinstance(route_warnings, list) and route_warnings:
                     extra_lines.append("Warnings: " + "; ".join(str(item) for item in route_warnings))
                 route_source = "workflow-state.route"
-        except Exception:
-            pass
+            elif route_result.returncode != 0:
+                status = "workflow-state.route_failed"
+                route_source = "workflow-state.route_failed"
+                stderr_summary = route_result.stderr.strip() or route_result.stdout.strip() or "workflow-state.py route returned non-zero"
+                extra_lines.append(f"Reason: {stderr_summary.splitlines()[-1]}")
+        except Exception as exc:
+            status = "workflow-state.route_failed"
+            route_source = "workflow-state.route_failed"
+            extra_lines.append(f"Reason: {type(exc).__name__}: {exc}")
     return task_id, status, route_source, extra_lines
 """
 
@@ -328,8 +344,10 @@ JS_BASELINE_ROUTE_SNIPPET = """  // [workflow-embed-patch:prefer-workflow-state-
       if (routeBlockers.length > 0) extraLines.push(`Blockers: ${routeBlockers.map(item => String(item)).join("; ")}`)
       if (routeWarnings.length > 0) extraLines.push(`Warnings: ${routeWarnings.map(item => String(item)).join("; ")}`)
       source = "workflow-state.route"
-    } catch {
-      // fall through to task.json status
+    } catch (error) {
+      status = "workflow-state.route_failed"
+      source = "workflow-state.route_failed"
+      extraLines.push(`Reason: ${String(error).split("\\n").pop()}`)
     }
   }
 """

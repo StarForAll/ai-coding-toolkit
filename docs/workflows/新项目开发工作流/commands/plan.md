@@ -522,6 +522,8 @@ python3 <WORKFLOW_DIR>/commands/shell/plan-validate.py <task-dir>
 python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 ```
 
+这里的 `workflow-state.py validate <task-dir>` 默认只校该 task 的阶段 artifact / exit gate，不要求当前 session 已经把 active task 切到它；若需要额外验证当前 session 绑定，再显式追加 `--require-active-task-check`。
+
 校验重点：
 
 - `task_creation_checklist.md` 是否存在且已明确记录人工确认结果

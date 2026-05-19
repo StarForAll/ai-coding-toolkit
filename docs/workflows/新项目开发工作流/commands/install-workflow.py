@@ -176,6 +176,8 @@ _FINISH_WORK_STEP1_HEADING = "## Step 1: Survey current state"
 _FINISH_WORK_STEP3_HEADING = "## Step 3: Archive task(s)"
 _FINISH_WORK_STEP4_END_HEADING = "## Reference"
 _CODEX_START_SKILL_MARKER = "## Workflow Phase Router Patch `[AI]`"
+_CODEX_START_CURRENT_STEP1_HEADING = "## Step 1: Current state"
+_CODEX_START_CURRENT_STEP4_HEADING = "## Step 4: Decide next action"
 _TASK_CURRENT_DEGRADED_PATCH_MARKER = "# [workflow-embed-patch:degraded-current-read]"
 _WORKFLOW_PATCH_MARKER = "<!-- workflow-projectization-patch -->"
 _WORKFLOW_START_HEADING = "## Development Process"
@@ -966,25 +968,28 @@ def build_codex_phase_router_skill_content(content: str, patch_text: str) -> str
     if _CODEX_START_SKILL_MARKER in content:
         return content
 
-    # Try to replace the old Steps 1-4 with the new patch content
-    step1_heading = "## Step 1: Load Current Context"
-    step4_heading = "## Step 4: Load the Specific Step"
-
-    step1_idx = content.find(step1_heading)
-    if step1_idx != -1:
+    heading_pairs = [
+        ("## Step 1: Load Current Context", "## Step 4: Load the Specific Step"),
+        (_CODEX_START_CURRENT_STEP1_HEADING, _CODEX_START_CURRENT_STEP4_HEADING),
+    ]
+    for step1_heading, step4_heading in heading_pairs:
+        step1_idx = content.find(step1_heading)
+        if step1_idx == -1:
+            continue
         step4_idx = content.find(step4_heading, step1_idx)
-        if step4_idx != -1:
-            # Find the end of Step 4 section (next "## " heading or "## Reference" or end of file)
-            after_step4 = content[step4_idx + len(step4_heading):]
-            next_section = re.search(r"\n## ", after_step4)
-            if next_section:
-                replace_end = step4_idx + len(step4_heading) + next_section.start()
-            else:
-                replace_end = len(content)
+        if step4_idx == -1:
+            continue
 
-            before = content[:step1_idx].rstrip("\n")
-            after = content[replace_end:].lstrip("\n")
-            return before + "\n\n" + patch_text.rstrip() + "\n\n" + after
+        after_step4 = content[step4_idx + len(step4_heading):]
+        next_section = re.search(r"\n## ", after_step4)
+        if next_section:
+            replace_end = step4_idx + len(step4_heading) + next_section.start()
+        else:
+            replace_end = len(content)
+
+        before = content[:step1_idx].rstrip("\n")
+        after = content[replace_end:].lstrip("\n")
+        return before + "\n\n" + patch_text.rstrip() + "\n\n" + after
 
     # Fallback: if Steps 1-4 not found, append the patch
     return content.rstrip() + "\n\n---\n\n" + patch_text.rstrip() + "\n"

@@ -42,6 +42,7 @@ description: 需求冻结了？开始设计 — 先核对设计输入，再做�
 python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 ```
 
+默认按给定 `<task-dir>` 校验当前阶段 artifact / exit gate；若你还需要确认当前 session 的 active task 绑定到该任务，再显式追加 `--require-active-task-check`。
 校验通过后继续当前阶段；失败时按输出的错误项逐项修复后重试。
 
 进入 `/trellis:design` 前，需求已冻结，且已形成目标项目的：

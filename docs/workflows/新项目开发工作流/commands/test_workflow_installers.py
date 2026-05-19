@@ -86,11 +86,26 @@ BASELINE_PARALLEL_CONTENT = (
 )
 BASELINE_START_SKILL_CONTENT = (
     "---\n"
-    "name: start\n"
+    "name: trellis-start\n"
     "description: Baseline start skill\n"
     "---\n\n"
     "# Start Session\n\n"
-    "Original baseline Codex start skill.\n"
+    "## Step 1: Current state\n\n"
+    "```bash\n"
+    "python3 ./.trellis/scripts/get_context.py\n"
+    "```\n\n"
+    "## Step 2: Workflow overview\n\n"
+    "```bash\n"
+    "python3 ./.trellis/scripts/get_context.py --mode phase\n"
+    "```\n\n"
+    "## Step 3: Guideline indexes\n\n"
+    "```bash\n"
+    "python3 ./.trellis/scripts/get_context.py --mode packages\n"
+    "```\n\n"
+    "## Step 4: Decide next action\n\n"
+    "```bash\n"
+    "python3 ./.trellis/scripts/get_context.py --mode phase --step 2.1 --platform codex\n"
+    "```\n"
 )
 BASELINE_FINISH_WORK_CONTENT = (
     "# Finish Work - Pre-Commit Checklist\n\n"
@@ -640,6 +655,11 @@ class WorkflowInstallerTests(unittest.TestCase):
             (root / ".opencode" / "agents" / f"{opencode_agent_prefix}check.md").write_text(BASELINE_AGENT_CHECK_MD, encoding="utf-8")
         if include_codex:
             (root / ".agents" / "skills").mkdir(parents=True)
+            (root / ".agents" / "skills" / "trellis-start").mkdir(parents=True)
+            (root / ".agents" / "skills" / "trellis-start" / "SKILL.md").write_text(
+                BASELINE_START_SKILL_CONTENT,
+                encoding="utf-8",
+            )
             (root / ".agents" / "skills" / "trellis-continue").mkdir(parents=True)
             (root / ".agents" / "skills" / "trellis-continue" / "SKILL.md").write_text(
                 BASELINE_TRELLIS_CONTINUE_SKILL_CONTENT,
@@ -905,6 +925,10 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertNotIn("Steps 1-4 替换说明", start_text)
         self.assertNotIn("Load Current Context", start_text)
         self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", start_text)
+        trellis_start_text = (fixture / ".agents" / "skills" / "trellis-start" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("## Workflow Phase Router Patch `[AI]`", trellis_start_text)
+        self.assertNotIn("--step 2.1 --platform codex", trellis_start_text)
+        self.assertNotIn("## Step 4: Decide next action", trellis_start_text)
         finish_work = fixture / ".claude" / "commands" / "trellis" / "finish-work.md"
         finish_work_text = finish_work.read_text(encoding="utf-8")
         self.assertIn(FINISH_WORK_MARKER, finish_work_text)
@@ -922,8 +946,16 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER, task_store_text)
         claude_session_start = (fixture / ".claude" / "hooks" / "session-start.py").read_text(encoding="utf-8")
         self.assertIn(SESSION_START_STRONG_GATE_PATCH_MARKER, claude_session_start)
+        claude_inject = (fixture / ".claude" / "hooks" / "inject-workflow-state.py").read_text(encoding="utf-8")
+        self.assertIn("workflow-state.route_failed", claude_inject)
+        self.assertNotIn("fall back to task.json status", claude_inject)
         opencode_session_utils = (fixture / ".opencode" / "lib" / "session-utils.js").read_text(encoding="utf-8")
         self.assertIn(OPENCODE_SESSION_UTILS_PATCH_MARKER, opencode_session_utils)
+        opencode_inject_path = fixture / ".opencode" / "plugins" / "inject-workflow-state.js"
+        if opencode_inject_path.exists():
+            opencode_inject = opencode_inject_path.read_text(encoding="utf-8")
+            self.assertIn("workflow-state.route_failed", opencode_inject)
+            self.assertNotIn("fall back to task.json status", opencode_inject)
         record = fixture / ".trellis" / "workflow-installed.json"
         self.assertTrue(record.exists(), "workflow-installed.json should be created")
         record_data = json.loads(record.read_text(encoding="utf-8"))
@@ -1857,8 +1889,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertFalse((fixture / ".trellis" / ATTEMPT_RECORD_NAME).exists())
         self.assertFalse((fixture / ".agents" / "skills" / "review-gate").exists())
         self.assertNotIn("workflow-nl-routing-start", (fixture / "AGENTS.md").read_text(encoding="utf-8"))
-        self.assertIn("[codex] 命令: 10/10, 补丁: 3, agents: 0, 脚本: 0, 手动基线校验: 2".lower(), result.stdout.lower())
-        self.assertNotIn("[codex] 命令: 10/10, 补丁: 4".lower(), result.stdout.lower())
+        self.assertIn("[codex] 命令: 10/10, 补丁: 4, agents: 0, 脚本: 0, 手动基线校验: 2".lower(), result.stdout.lower())
 
     def test_install_dry_run_does_not_migrate_legacy_agents(self) -> None:
         """--dry-run must NOT perform actual file renames on disk."""
@@ -2938,7 +2969,7 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         restored_text = start_skill.read_text(encoding="utf-8")
-        self.assertIn("Original baseline Codex start skill", restored_text)
+        self.assertNotIn("## Step 4: Decide next action", restored_text)
         self.assertIn("Workflow Phase Router Patch", restored_text)
 
     def test_force_fails_when_codex_active_baseline_backup_is_missing(self) -> None:
@@ -3006,7 +3037,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         start_text = start_skill.read_text(encoding="utf-8")
         self.assertNotIn("Workflow Phase Router Patch", start_text)
-        self.assertIn("Original baseline Codex start skill", start_text)
+        self.assertIn("## Step 4: Decide next action", start_text)
         restored_text = patched_skill.read_text(encoding="utf-8")
         self.assertNotIn(FINISH_WORK_MARKER, restored_text)
         self.assertIn("pnpm lint", restored_text)

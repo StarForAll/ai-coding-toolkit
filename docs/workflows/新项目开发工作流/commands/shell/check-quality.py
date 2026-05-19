@@ -72,6 +72,11 @@ def main() -> int:
     # 3. Type check
     results.append(run_optional_check(args.typecheck_cmd, "Type Check 状态"))
 
+    provided_commands = [cmd for cmd in (args.test_cmd, args.lint_cmd, args.typecheck_cmd) if cmd]
+    if not provided_commands:
+        print()
+        print("❌ 未提供任何已确认的验证命令；质量检查不能在无证据输入下视为通过")
+
     # 4. Git 状态
     print("\n--- Git 状态 ---")
     try:
@@ -95,6 +100,8 @@ def main() -> int:
     print()
     print("=== 质量检查完成 ===")
     print("下一步：根据以上结果生成 check.md 检查结果")
+    if not provided_commands:
+        return 1
     if any(r is False for r in results):
         return 1
     return 0
