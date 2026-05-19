@@ -535,3 +535,34 @@ Audited the embedded workflow against a rebuilt tmp target, fixed brainstorm ent
 ### Next Steps
 
 - None - task complete
+
+
+## Session 261: 优化大众玩家游戏评论Agent提示词
+
+**Date**: 2026-05-19
+**Task**: 优化大众玩家游戏评论Agent提示词
+**Branch**: `main`
+
+### Summary
+
+基于设计文档将元层说明书转化为可运行的 System Prompt + 用户调用模板，含14个评估维度、付费模式专项、Shot Example 和多轮对话支持。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
