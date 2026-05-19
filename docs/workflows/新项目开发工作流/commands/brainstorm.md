@@ -8,7 +8,7 @@ description: 需求还不够稳？先按 Trellis 原生需求发现主链收集�
 > **Workflow Position**: §2 → 前: `/trellis:feasibility` → 后: `/trellis:design` / `/trellis:plan` / `/trellis:continue`
 > **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:brainstorm`） · ✅ OpenCode（TUI: `/trellis:brainstorm`；CLI: `trellis/brainstorm`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:brainstorm` 命令；见 `codex/README.md`）
 >
-> **Merge Rule**: 本命令保留 Trellis 原生 `brainstorm` 的需求发现主链（Task-first / Action-before-asking / Research-first / Diverge → Converge），并叠加当前 workflow 的 `assessment.md` 前置、需求准确性校验、`L0/L1/L2` 分类、`sub task` 拆分，以及强门禁阶段状态约束。
+> **Merge Rule**: 本命令保留 Trellis 原生 `brainstorm` 的需求发现主链（Task-first / Action-before-asking / Research-first / Diverge → Converge），并叠加当前 workflow 的 `assessment.md` 基线、需求准确性校验、`L0/L1/L2` 分类、`sub task` 拆分，以及强门禁阶段状态约束。
 
 ---
 
@@ -28,8 +28,9 @@ description: 需求还不够稳？先按 Trellis 原生需求发现主链收集�
 
 ## 前置条件与边界
 
-- 进入本命令前，新项目默认已完成 `assessment.md` 驱动的可行性评估，且明确允许进入需求发现。
-- 若当前项目尚未形成有效 `assessment.md`，或客户主体、需求范围、法律/合规前提发生足以推翻评估结论的变化，必须先回 `/trellis:feasibility`，不允许直接开始 `brainstorm`。
+- 外包/对外交付项目在进入本命令前，默认已完成 `assessment.md` 驱动的可行性评估，且明确允许进入需求发现。
+- 个人项目在 workflow 首次入口允许直接进入 `brainstorm` 创建任务与工作底稿，但必须在本阶段补齐 `assessment.md` 的核心字段基线；若直到准备离开 `brainstorm` 时仍未补齐，后续阶段门禁仍会阻断。
+- 若当前项目尚未形成有效 `assessment.md`，且不属于“个人项目首次进入 brainstorm 补 assessment 基线”的受控场景，或客户主体、需求范围、法律/合规前提发生足以推翻评估结论的变化，必须先回 `/trellis:feasibility`，不允许直接开始 `brainstorm`。
 - 若已存在有效 `assessment.md`，且当前只是继续同一轮需求推进，可直接复用该评估结果，不需要重复执行 `feasibility`。
 - 若目标项目属于新建仓库，则在首次进入 workflow 时仍应先通过与 `/trellis:feasibility` Step 0 同口径的 `main` 分支门禁；已有本地提交历史的项目仅记录现状，不强制改分支。
 - 本命令负责**需求发现 + 任务生成前置路由**，不直接替代后续设计、计划、实现和审查阶段。
@@ -77,9 +78,9 @@ description: 需求还不够稳？先按 Trellis 原生需求发现主链收集�
 
 ## 流程
 
-### Gate 0: Assessment Gate (ALWAYS)
+### Gate 0: Assessment Baseline Gate (ALWAYS)
 
-先确认 feasibility 已完成且 `assessment.md` 仍有效。
+先确认当前项目具备可继续需求发现的 assessment 基线。
 
 ### 门禁校验
 
@@ -89,6 +90,8 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 
 校验通过后继续当前阶段；失败时按输出的错误项逐项修复后重试。
 
+若当前还是首次入口、尚无 `$TASK_DIR`，先执行下方 Step 0 创建任务目录并初始化 `workflow-state.json`，再回到这里运行校验；不要在没有 task 的情况下空跑 `validate <task-dir>`。
+
 <!-- if:outsourcing -->
 - 若 `project_engagement_type = external_outsourcing`，则外包项目控制字段已冻结，且后续不得绕过开工款与最终移交门禁
 <!-- endif:outsourcing -->
@@ -96,7 +99,12 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 
 - 当前客户主体、需求范围、法律/合规前提未发生足以推翻评估结论的变化
 
-若不满足以上任一条件，停止当前 `brainstorm`，先回 `/trellis:feasibility` 重新评估；不要先创建 `brainstorm` task 再补评估。
+特殊说明：
+
+- 外包项目或已有历史 assessment 的项目：进入本阶段前就应满足上述条件。
+- 个人项目首次入口：允许先创建 `brainstorm` task，再在本阶段补齐 `assessment.md` 最低基线；但在准备离开 `brainstorm` 前，`workflow-state.py validate` / `route` 仍会要求这些字段完整满足。
+
+若不满足以上任一条件，且不属于上述受控的 personal bootstrap 场景，停止当前 `brainstorm`，先回 `/trellis:feasibility` 重新评估。
 
 ### Step 0: Ensure Task Exists (ALWAYS)
 
@@ -114,6 +122,19 @@ TASK_DIR=$(python3 ./.trellis/scripts/task.py create "brainstorm: <short goal>")
 ```bash
 python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py init "$TASK_DIR" --stage brainstorm
 ```
+
+若当前项目属于 personal profile 且还没有 `assessment.md`，在 `prd.md` 工作底稿建立后应尽快补一份最小 `assessment.md`，至少冻结：
+
+- `project_engagement_type = non_outsourcing`
+- `法律/合规风险结论`
+- `source_watermark_level`
+- `source_watermark_channels`
+- `zero_width_watermark_enabled`
+- `subtle_code_marker_enabled`
+- `ownership_proof_required`
+- `是否允许进入 brainstorm = 是`
+
+这组字段是“允许 personal 首次入口直接 brainstorm”的补偿性门禁，不可拖到 design / plan 再回填。
 
 `$TASK_DIR/prd.md` 至少保留这些区块：
 

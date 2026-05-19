@@ -688,7 +688,8 @@ def collect_route_readiness_blockers(
     if stage == "brainstorm":
         assessment_file = find_assessment_file(task_dir, repo_root)
         if assessment_file is None:
-            blockers.append("缺少 assessment.md；必须先完成 feasibility 才允许继续 brainstorm")
+            if not is_personal_brainstorm_bootstrap_allowed(task_dir, repo_root, state):
+                blockers.append("缺少 assessment.md；必须先完成 feasibility 才允许继续 brainstorm")
         else:
             content = assessment_file.read_text(encoding="utf-8")
             allow_line_present = False
@@ -753,6 +754,10 @@ def collect_exit_gate_blockers(
         validate_context7_review_artifact(task_dir, state, blockers)
         validate_design_exit_gate(task_dir, blockers)
 
+    elif stage == "brainstorm":
+        validate_external_project_controls(task_dir, repo_root, state, blockers)
+        validate_ownership_policy_controls(task_dir, repo_root, state, blockers)
+
     return blockers
 
 
@@ -792,6 +797,23 @@ def find_assessment_file(task_dir: Path, repo_root: Path) -> Path | None:
         if assessment.is_file():
             return assessment
     return None
+
+
+def is_personal_brainstorm_bootstrap_allowed(
+    task_dir: Path,
+    repo_root: Path,
+    state: dict[str, Any],
+) -> bool:
+    """Whether personal-profile brainstorm may bootstrap assessment in place."""
+    if state.get("stage") != "brainstorm":
+        return False
+    if state.get("stage_status") != "in_progress":
+        return False
+    if find_assessment_file(task_dir, repo_root) is not None:
+        return False
+
+    install_record = read_json(repo_root / INSTALL_RECORD)
+    return isinstance(install_record, dict) and install_record.get("profile") == "personal"
 
 
 def extract_backticked_field(content: str, field_name: str) -> str | None:
@@ -912,6 +934,11 @@ def validate_external_project_controls(
     stage = target_stage if target_stage is not None else state.get("stage")
     assessment_file = find_assessment_file(task_dir, repo_root)
     if assessment_file is None:
+        if (
+            target_stage is None
+            and is_personal_brainstorm_bootstrap_allowed(task_dir, repo_root, state)
+        ):
+            return
         errors.append("缺少 assessment.md；任何项目都必须先经过 feasibility 并完成项目类别判断")
         return
 
@@ -1015,6 +1042,8 @@ def validate_ownership_policy_controls(
 ) -> None:
     assessment_file = find_assessment_file(task_dir, repo_root)
     if assessment_file is None:
+        if is_personal_brainstorm_bootstrap_allowed(task_dir, repo_root, state):
+            return
         return
 
     content = assessment_file.read_text(encoding="utf-8")

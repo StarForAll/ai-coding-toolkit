@@ -137,7 +137,7 @@ All transitions follow a two-step protocol: **(A)** signal readiness by setting 
 | From → To | Step A: Signal readiness | Step B: After user confirms |
 |---|---|---|
 | no_task → feasibility | N/A (outsourcing first entry) | `workflow-state.py route` → load `/trellis:feasibility` (skill auto-creates task + init feasibility state) |
-| feasibility → brainstorm | assessment.md approved | `workflow-state.py set <dir> --stage brainstorm --stage-status in_progress --awaiting-user-confirmation false --allowed-next design,plan,implementation,test-first` |
+| feasibility → brainstorm | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage brainstorm --stage-status in_progress --awaiting-user-confirmation false --allowed-next design,plan,implementation,test-first --transition-from feasibility` |
 | brainstorm → design | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage design --stage-status in_progress --awaiting-user-confirmation false --allowed-next plan --transition-from brainstorm` |
 | brainstorm → plan | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage plan --stage-status in_progress --awaiting-user-confirmation false --allowed-next implementation,test-first --transition-from brainstorm` |
 | brainstorm → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next test-first,check,project-audit --transition-from brainstorm` |
@@ -232,7 +232,10 @@ Run `python3 ./.trellis/scripts/workflow/workflow-state.py route` to check routi
 [workflow-state:brainstorm]
 Current stage: **brainstorm** — requirement discovery and PRD iteration.
 Load `/trellis:brainstorm` skill to iterate on prd.md with the user.
-Prerequisite: valid assessment.md from feasibility.
+Prerequisite:
+
+- outsourcing / external-delivery projects: valid `assessment.md` from feasibility
+- personal profile first-entry: `brainstorm` may bootstrap the minimum `assessment.md` baseline in-place, but it must be complete before leaving `brainstorm`
 After prd.md and jsonl are curated, set `stage_status = awaiting_user_confirmation` for design/plan transition.
 [/workflow-state:brainstorm]
 
