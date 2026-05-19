@@ -566,3 +566,36 @@ Audited the embedded workflow against a rebuilt tmp target, fixed brainstorm ent
 ### Next Steps
 
 - None - task complete
+
+
+## Session 262: 修复工作流嵌入补丁与验活缺口
+
+**Date**: 2026-05-19
+**Task**: 修复工作流嵌入补丁与验活缺口
+**Branch**: `main`
+
+### Summary
+
+复现并修复新项目开发工作流的 task.py degraded fallback、OpenCode inject-workflow-state 半补丁态以及安装后健康检查盲区，补充对应回归测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `41e9d0c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
