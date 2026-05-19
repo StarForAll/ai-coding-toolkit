@@ -38,6 +38,8 @@ OPENCODE_SESSION_UTILS_PATCH_MARKER = "// [workflow-embed-patch:strong-gate-sess
 SESSION_START_STRONG_GATE_PATCH_MARKER = "# strong-gate-session-start-patch-applied"
 TASK_NO_STATUS_FLIP_PATCH_MARKER = "# [workflow-embed-patch:strong-gate-no-status-flip]"
 TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER = "# [workflow-embed-patch:preserve-parent-active-task]"
+LEGACY_READY_AUTOCONTINUE_LINE = "If a task is READY, execute its Next required action without asking whether to continue."
+STRONG_GATE_READY_GUIDANCE_LINE = "Treat `workflow-state.py route` / <task-status> as the only authority for the next action."
 DEFAULT_PROJECT_TODO = "文档内容需要和实际当前的代码同步\n"
 BASELINE_START_CONTENT = (
     "# /trellis:start\n\n"
@@ -1029,6 +1031,11 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("finish-work → delivery → record-session", finish_work_text)
         # 补丁已条件化：验证质量平台门禁口径，不再硬断言特定 sonar 内容
         self.assertIn("质量平台门禁", finish_work_text)
+        codex_finish_work_text = (
+            fixture / ".agents" / "skills" / "trellis-finish-work" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("hand off to `delivery` / `record-session`", codex_finish_work_text)
+        self.assertNotIn("hand off to delivery / record-session", codex_finish_work_text)
         record_session_text = (fixture / ".claude" / "commands" / "trellis" / "record-session.md").read_text(encoding="utf-8")
         self.assertIn("只负责确认：当前 task 已满足 **进入 `record-session` 之前** 的 `delivery` 完整性门禁", record_session_text)
         self.assertIn("不代表** `archive`、`add_session.py`", record_session_text)
@@ -1040,11 +1047,16 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER, task_store_text)
         claude_session_start = (fixture / ".claude" / "hooks" / "session-start.py").read_text(encoding="utf-8")
         self.assertIn(SESSION_START_STRONG_GATE_PATCH_MARKER, claude_session_start)
+        self.assertNotIn(LEGACY_READY_AUTOCONTINUE_LINE, claude_session_start)
+        codex_session_start = (fixture / ".codex" / "hooks" / "session-start.py").read_text(encoding="utf-8")
+        self.assertIn(SESSION_START_STRONG_GATE_PATCH_MARKER, codex_session_start)
+        self.assertNotIn(LEGACY_READY_AUTOCONTINUE_LINE, codex_session_start)
         claude_inject = (fixture / ".claude" / "hooks" / "inject-workflow-state.py").read_text(encoding="utf-8")
         self.assertIn("workflow-state.route_failed", claude_inject)
         self.assertNotIn("fall back to task.json status", claude_inject)
         opencode_session_utils = (fixture / ".opencode" / "lib" / "session-utils.js").read_text(encoding="utf-8")
         self.assertIn(OPENCODE_SESSION_UTILS_PATCH_MARKER, opencode_session_utils)
+        self.assertNotIn(LEGACY_READY_AUTOCONTINUE_LINE, opencode_session_utils)
         opencode_inject_path = fixture / ".opencode" / "plugins" / "inject-workflow-state.js"
         if opencode_inject_path.exists():
             opencode_inject = opencode_inject_path.read_text(encoding="utf-8")
@@ -1181,10 +1193,68 @@ class WorkflowInstallerTests(unittest.TestCase):
             self.assertNotIn("Status: READY", content)
             self.assertNotIn("Status: PLANNING", content)
 
-    def test_nl_routing_maps_record_progress_to_finish_work_not_record_session(self) -> None:
+    def test_nl_routing_maps_record_progress_to_record_session(self) -> None:
         content = (COMMANDS_DIR / "install-workflow.py").read_text(encoding="utf-8")
-        self.assertIn("| 记录、保存进度 | `/trellis:finish-work` |", content)
-        self.assertNotIn("| 记录、保存进度 | `/trellis:record-session` |", content)
+        self.assertIn("| 记录、保存进度 | `/trellis:record-session` |", content)
+        self.assertNotIn("| 记录、保存进度 | `/trellis:finish-work` |", content)
+
+    def test_upgrade_merge_removes_ready_autocontinue_prompt_residue(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        for target in (
+            fixture / ".claude" / "hooks" / "session-start.py",
+            fixture / ".codex" / "hooks" / "session-start.py",
+            fixture / ".opencode" / "lib" / "session-utils.js",
+        ):
+            content = target.read_text(encoding="utf-8")
+            target.write_text(content + "\n" + LEGACY_READY_AUTOCONTINUE_LINE + "\n", encoding="utf-8")
+
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        check = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+        self.assertNotEqual(check.returncode, 0)
+        self.assertIn("READY 自动续跑提示", check.stdout + check.stderr)
+
+        merge = self.run_script(
+            UPGRADE_SCRIPT,
+            "--merge",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+        self.assertEqual(merge.returncode, 0, msg=merge.stdout + merge.stderr)
+
+        for target in (
+            fixture / ".claude" / "hooks" / "session-start.py",
+            fixture / ".codex" / "hooks" / "session-start.py",
+            fixture / ".opencode" / "lib" / "session-utils.js",
+        ):
+            content = target.read_text(encoding="utf-8")
+            self.assertNotIn(LEGACY_READY_AUTOCONTINUE_LINE, content)
+            self.assertIn(STRONG_GATE_READY_GUIDANCE_LINE, content)
+
+    def test_cli_matrix_treats_record_session_as_distributed_not_baseline_patch(self) -> None:
+        matrix = (COMMANDS_DIR.parent / "CLI原生适配边界矩阵.md").read_text(encoding="utf-8")
+        self.assertNotIn("continue / finish-work / record-session ✅", matrix)
+        self.assertIn("workflow 分发的 `record-session` 终态命令/skill", matrix)
+        self.assertNotIn("`record-session` 基线入口 + workflow patch", matrix)
+
+    def test_full_walkthrough_closeout_example_keeps_delivery_before_record_session(self) -> None:
+        walkthrough = (COMMANDS_DIR.parent / "完整流程演练.md").read_text(encoding="utf-8")
+        self.assertIn("### 最小收尾样例：`finish-work` → `delivery` → `record-session`", walkthrough)
+        self.assertIn("再通过 `/trellis:delivery` 确认验收结论和交付物", walkthrough)
+        self.assertIn("最后进入 `/trellis:record-session` 执行终态归档与会话记录", walkthrough)
+        self.assertNotIn("### 最小收尾样例：`finish-work` → session record", walkthrough)
 
     def test_delivery_docs_do_not_reference_missing_skills(self) -> None:
         docs_to_check = [

@@ -1884,6 +1884,8 @@ class WorkflowStateScriptTests(unittest.TestCase):
         import json as _json
         data = _json.loads(result.stdout)
         self.assertEqual(data["action"], "repair_needed")
+        self.assertIn("workflow-state.py repair <task-dir>", data["reason"])
+        self.assertNotIn("init <task-dir> --stage feasibility", data["reason"])
 
     def test_cmd_route_repair_needed_when_state_shape_is_invalid(self) -> None:
         root, task_dir = self.make_fixture()

@@ -369,7 +369,7 @@ design 后半段不得一次性跑完，而要按多个子块分段执行。每�
 3. 对目标项目中所有与已确认技术架构直接相关的全部 spec 执行一次基于 `Context7` 的错漏复核
 4. 明确项目自动化检查矩阵
 5. 同步适配当前项目的 `/trellis:finish-work`
-6. 同步适配当前项目的 close-out 基线（当前 fresh baseline 为 `/trellis:finish-work` / `trellis-finish-work`，legacy `/trellis:record-session` 仅旧目标项目兼容）
+6. 同步适配当前项目的 close-out 基线（当前 fresh baseline 的 close-out 主入口为 `/trellis:finish-work` / `trellis-finish-work`，最终归档/会话记录入口为 `/trellis:record-session`；legacy 直达语义仅旧目标项目兼容）
 7. 若 `ownership_proof_required = yes`，同步建立源码水印与归属证明基线
 
 `Context7` spec 复核要求：

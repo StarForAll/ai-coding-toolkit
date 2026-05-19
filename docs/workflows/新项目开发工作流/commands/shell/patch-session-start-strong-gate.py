@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Patch session-start.py _get_task_status() to use strong-gate workflow-state routing.
+"""Patch session-start.py to use strong-gate workflow-state routing.
 
 When installed into a target project, this patch replaces the legacy
 task-status tail logic after `task_status = task_data.get(...)` with a
@@ -11,6 +11,10 @@ whenever the helper script exists, even if `workflow-state.json` is missing or
 invalid. That lets the authoritative router surface `repair_needed`,
 `context_needed`, `awaiting_confirmation_with_blockers`, or other formal strong-
 gate actions instead of collapsing them into a misleading `ACTIVE` fallback.
+
+It also removes the legacy startup instruction that told the AI to auto-continue
+whenever a task looked `READY`; under the strong-gate workflow, startup carriers
+must follow `workflow-state.py route` and stop at blockers or confirmation gates.
 """
 
 from __future__ import annotations
@@ -21,6 +25,11 @@ from pathlib import Path
 
 PATCH_MARKER = "# strong-gate-session-start-patch-applied"
 ROUTE_FIRST_MARKER = "# [workflow-embed-patch:session-start-route-first]"
+LEGACY_READY_AUTOCONTINUE_LINE = "If a task is READY, execute its Next required action without asking whether to continue."
+STRONG_GATE_READY_GUIDANCE_LINES = (
+    "Treat `workflow-state.py route` / <task-status> as the only authority for the next action.\n"
+    "Do NOT auto-continue across blockers or confirmation gates; when routing asks for confirmation, repair, or task selection, surface that requirement first."
+)
 TAIL_START_RE = re.compile(
     r'task_status\s*=\s*task_data\.get\(\s*["\']status["\']\s*,\s*["\']unknown["\']\s*\)\s*\n'
 )
@@ -121,6 +130,12 @@ def _replace_legacy_tail(content: str) -> str | None:
     return content[:match.start()] + replacement + content[tail_end.start():]
 
 
+def _replace_legacy_ready_autocontinue(content: str) -> tuple[str, bool]:
+    if LEGACY_READY_AUTOCONTINUE_LINE not in content:
+        return content, False
+    return content.replace(LEGACY_READY_AUTOCONTINUE_LINE, STRONG_GATE_READY_GUIDANCE_LINES), True
+
+
 def patch_session_start(target_path: Path) -> bool:
     """Apply the strong-gate patch to session-start.py's _get_task_status().
 
@@ -131,21 +146,31 @@ def patch_session_start(target_path: Path) -> bool:
         return False
 
     content = target_path.read_text(encoding="utf-8")
+    patched = content
+    route_patch_present = PATCH_MARKER in content and ROUTE_FIRST_MARKER in content
+    route_applied = False
+    ready_guidance_applied = False
 
-    if PATCH_MARKER in content and ROUTE_FIRST_MARKER in content:
-        print(f"OK: {target_path} already contains strong-gate patch, skipping")
+    if not route_patch_present:
+        replaced = _replace_legacy_tail(patched)
+        if replaced is None:
+            print(f"Warning: {target_path} does not contain expected _get_task_status structure, skipping patch")
+            return False
+        patched = replaced
+        route_applied = True
+
+    patched, ready_guidance_applied = _replace_legacy_ready_autocontinue(patched)
+    if not route_applied and not ready_guidance_applied:
+        print(f"OK: {target_path} already contains full strong-gate patch, skipping")
         return True
 
-    replaced = _replace_legacy_tail(content)
-    if replaced is None:
-        print(f"Warning: {target_path} does not contain expected _get_task_status structure, skipping patch")
-        return False
-
-    target_path.write_text(replaced, encoding="utf-8")
-    if PATCH_MARKER in content:
-        print(f"OK: Upgraded strong-gate session-start patch in {target_path}")
-    else:
+    target_path.write_text(patched, encoding="utf-8")
+    if route_applied and ready_guidance_applied:
+        print(f"OK: Upgraded strong-gate session-start patch in {target_path} (route + startup guidance)")
+    elif route_applied:
         print(f"OK: Applied strong-gate session-start patch to {target_path}")
+    else:
+        print(f"OK: Upgraded strong-gate startup guidance in {target_path}")
     return True
 
 

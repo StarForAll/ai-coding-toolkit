@@ -138,6 +138,13 @@ def _js_runtime_contract_issues(path: Path, content: str) -> list[str]:
     return issues
 
 
+def _legacy_ready_guidance_issues(path: Path, content: str) -> list[str]:
+    issues: list[str] = []
+    if _INSTALL_WORKFLOW._LEGACY_READY_AUTOCONTINUE_LINE in content:
+        issues.append(f"{path.name}: 仍保留 READY 自动续跑提示")
+    return issues
+
+
 def _task_runtime_import_issues(path: Path, content: str) -> list[str]:
     issues: list[str] = []
     if _TASK_DEGRADED_PATCH_MARKER in content or _TASK_CURRENT_DEGRADED_PATCH_MARKER in content:
@@ -920,7 +927,12 @@ def detect_conflicts_codex(
             _SESSION_START_STRONG_GATE_PATCH_MARKER in session_start_content
             and _SESSION_START_ROUTE_FIRST_MARKER in session_start_content
         ):
-            ok("[Codex] session-start.py: 强门禁补丁已应用")
+            ready_issues = _legacy_ready_guidance_issues(codex_session_start, session_start_content)
+            if ready_issues:
+                err("[Codex] session-start.py: " + "；".join(ready_issues))
+                conflicts += 1
+            else:
+                ok("[Codex] session-start.py: 强门禁补丁已应用")
         else:
             err("[Codex] session-start.py: 强门禁补丁缺失，仍保留 legacy READY/NOT READY 启动面")
             conflicts += 1
@@ -948,7 +960,12 @@ def detect_conflicts_codex(
             _SESSION_START_STRONG_GATE_PATCH_MARKER in session_start_content
             and _SESSION_START_ROUTE_FIRST_MARKER in session_start_content
         ):
-            ok("[Claude] session-start.py: 强门禁补丁已应用")
+            ready_issues = _legacy_ready_guidance_issues(claude_session_start, session_start_content)
+            if ready_issues:
+                err("[Claude] session-start.py: " + "；".join(ready_issues))
+                conflicts += 1
+            else:
+                ok("[Claude] session-start.py: 强门禁补丁已应用")
         else:
             err("[Claude] session-start.py: 强门禁补丁缺失或仍会隐藏 repair_needed")
             conflicts += 1
@@ -1038,7 +1055,12 @@ def detect_conflicts_codex(
     if opencode_session_utils.exists():
         session_utils_content = opencode_session_utils.read_text(encoding="utf-8")
         if _OPENCODE_SESSION_UTILS_PATCH_MARKER in session_utils_content:
-            ok("[OpenCode] session-utils.js: 强门禁 session context 补丁已应用")
+            ready_issues = _legacy_ready_guidance_issues(opencode_session_utils, session_utils_content)
+            if ready_issues:
+                err("[OpenCode] session-utils.js: " + "；".join(ready_issues))
+                conflicts += 1
+            else:
+                ok("[OpenCode] session-utils.js: 强门禁 session context 补丁已应用")
         else:
             warn("[OpenCode] session-utils.js: 仍在使用 READY/NOT READY 旧语义；如当前项目启用 session-start plugin 应补丁")
 

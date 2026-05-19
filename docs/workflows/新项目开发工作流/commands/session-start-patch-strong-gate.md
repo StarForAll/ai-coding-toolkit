@@ -2,7 +2,7 @@
 
 ### 概述
 
-安装器在嵌入目标项目时，将 `patch-session-start-strong-gate.py` 应用于 `.claude/hooks/session-start.py`，使其 `_get_task_status()` 函数在强门禁模式下统一委托 `workflow-state.py route`，而非旧的 PLANNING/READY 逻辑。
+安装器在嵌入目标项目时，将 `patch-session-start-strong-gate.py` 应用于 `.claude/hooks/session-start.py`，使其 `_get_task_status()` 函数在强门禁模式下统一委托 `workflow-state.py route`，而非旧的 PLANNING/READY 逻辑；同时移除 `<ready>` 提示块里“任务 READY 就直接继续执行下一步”的旧入口文案。
 
 ### 背景
 
@@ -55,7 +55,7 @@ Next-Action: Follow the action above...
 
 ### 冪等性
 
-补丁通过 `# strong-gate-session-start-patch-applied` 与 `# [workflow-embed-patch:session-start-route-first]` 标记检测是否已升级到 route-first 版本。重复调用不会重复注入。
+补丁通过 `# strong-gate-session-start-patch-applied` 与 `# [workflow-embed-patch:session-start-route-first]` 标记检测 route-first 版本，并额外检查 `<ready>` 提示块是否还残留 READY 自动续跑文案。重复调用不会重复注入，但会升级旧 patch 遗留的入口提示残渣。
 
 ### Fallback 行为
 

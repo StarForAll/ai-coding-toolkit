@@ -12,7 +12,7 @@
 
 它只做三件事：
 
-- 说明新项目主链从 `feasibility` 到 `finish-work`（含 session record）应该怎么走
+- 说明新项目主链从 `feasibility` 到 `finish-work → delivery → record-session` 应该怎么走
 - 明确 Claude Code、OpenCode、Codex 的入口差异
 - 给出每个阶段推荐调用的 MCP / skills、典型降级方式和退出门禁
 
@@ -95,7 +95,7 @@ git remote set-url --add --push origin <第二个仓库URL>
 
 如果忽略这层嵌入关系，就容易把“继承基线”误判成“workflow 漏了命令”。
 
-对应到本次 close-out 行为，还要再加一条：若目标项目不是通过当前最新 Trellis 初始化/升级得到的，那么即使 workflow 本身已经安装成功，`finish-work -> archive` 这条链路也可能仍然继承旧基线中的 archive bug；legacy 目标项目才检查 `record-session -> archive`。
+对应到本次 close-out 行为，还要再加一条：若目标项目不是通过当前最新 Trellis 初始化/升级得到的，那么即使 workflow 本身已经安装成功，`record-session -> archive` 这条终态链路也可能仍然继承旧基线中的 archive bug；不应再把 `finish-work` 描述成直接执行 archive 的阶段。
 
 还要额外记住一条：`finish-work` 的项目化补丁虽然会按 Claude Code / OpenCode / Codex 各自原生格式落地，但它承载的**项目检查矩阵含义必须一致**，因为这部分由项目技术架构决定，不由 CLI 类型决定。
 
@@ -328,7 +328,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 目标
 
-冻结关键设计决策，补齐项目 spec 基线，并同步适配后续 `finish-work`（含 session record）的项目化门禁。
+冻结关键设计决策，补齐项目 spec 基线，并同步适配后续 `finish-work → delivery → record-session` 的项目化门禁。
 
 当前阶段拆成两段：
 
@@ -435,7 +435,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 同时在这里完成：
 
 - `/trellis:finish-work` 的首次项目化适配
-- close-out 基线适配（当前 fresh baseline 为 `/trellis:finish-work` / `trellis-finish-work`，legacy `/trellis:record-session` 仅旧目标项目兼容）
+- close-out 基线适配（当前 fresh baseline 的 close-out 主入口为 `/trellis:finish-work` / `trellis-finish-work`，最终归档/会话记录入口为 `/trellis:record-session`；legacy 直达语义仅旧目标项目兼容）
 - `finish-work-checklist.md` 的最小证据口径
 - design 权威文档中的系统边界 / 外部依赖 / ownership 边界
 - 若 `ownership_proof_required = yes`，同步冻结：
@@ -454,7 +454,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 关键设计文档与项目 spec 已对齐
 - 已完成 `DDD.md` / `IDD.md` / `AID.md` / `STITCH-PROMPT.md` 的条件判定；凡判定涉及者，已在当前阶段直接细化
 - 自动化检查矩阵已明确，且已包含明确质量平台门禁（采用 Sonar 的项目必须写真实命令，未采用时必须写替代门禁和原因）
-- `finish-work`（含 session record）的项目化基线已定
+- `finish-work → delivery → record-session` 的项目化基线已定
 - `design-export.py --validate` 已通过，且 `TAD.md` 不再只是空壳标题
 - `workflow-state.py validate` 已通过，并确认 `developer-facing-prd.md`、项目根 `README.md` 与 `README.en.md` 已到位
 - 已完成 design 退出检查，且用户已明确确认允许进入 plan

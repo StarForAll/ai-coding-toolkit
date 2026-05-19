@@ -32,7 +32,7 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
 - 已对目标项目中与已确认技术架构直接相关的全部 spec 完成一次 `Context7` 错漏复核；若直接相关的第三方 spec 因 `Context7` 不可用而留下 `[Evidence Gap]`，不得进入 `plan`
 - 已基于当前项目实际技术栈，明确自动化检查矩阵（任务 3，仅在任务 1、任务 2 完成后执行；不得只写默认 `Lint`，必须有明确质量平台门禁；采用 Sonar 的项目必须写真实命令，未采用时必须写替代门禁和原因）
 - 已基于任务 3 中写清的自动化检查矩阵，完成当前项目 `/trellis:finish-work` 的首次项目化适配（任务 4）
-- 已完成当前项目 close-out 基线适配，至少明确记录入口（当前 fresh baseline 为 `/trellis:finish-work` / `trellis-finish-work`，legacy `/trellis:record-session` 仅旧目标项目兼容）、archive 前置条件、元数据边界与阻断条件（任务 5）
+- 已完成当前项目 close-out 基线适配，至少明确记录 close-out 主入口（当前 fresh baseline 为 `/trellis:finish-work` / `trellis-finish-work`）与最终归档/会话记录入口（`/trellis:record-session`；legacy 直达语义仅旧目标项目兼容）、archive 前置条件、元数据边界与阻断条件（任务 5）
 - 若项目包含前端视觉落地链路，已在 `design` 阶段明确：
   - `customer-facing-prd.md` 承担 BRD 主文档职责
   - `DDD.md` / `IDD.md` / `AID.md` / `STITCH-PROMPT.md` 是否需要创建

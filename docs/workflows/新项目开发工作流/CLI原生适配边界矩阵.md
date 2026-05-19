@@ -203,7 +203,7 @@ ls .codex/skills/.backup-original/parallel/SKILL.md 2>/dev/null
 | 资产类型 | Claude | OpenCode | Codex |
 |---------|--------|----------|-------|
 | 阶段命令入口 | `.claude/commands/trellis/*.md` ✅ 安装器 | `.opencode/commands/trellis/*.md` ✅ 安装器 | `.agents/skills/*/SKILL.md` ✅ 安装器（`.codex/skills/*` 仅保留 Codex 独有或项目自定义 skills） |
-| 基线补丁 | continue / finish-work / record-session ✅；legacy `start` 仅兼容 | continue / finish-work / record-session ✅；legacy `start` 仅兼容 | trellis-continue / trellis-finish-work ✅（仅活动 skills 目录）；legacy `start` / `finish-work` 仅兼容 |
+| 基线补丁 | continue / finish-work ✅；legacy `start` / baseline `record-session` 仅兼容 | continue / finish-work ✅；legacy `start` / baseline `record-session` 仅兼容 | trellis-continue / trellis-finish-work ✅（仅活动 skills 目录）；legacy `start` / `finish-work` 仅兼容 |
 | 收尾入口 | `finish-work.md` → `delivery` → `record-session.md` | `finish-work.md` → `delivery` → `record-session.md` | `trellis-finish-work` skill → `delivery` → `record-session` skill |
 | 辅助脚本 | `.trellis/scripts/workflow/` ✅ | 共用 ✅ | 共用 ✅ |
 | 嵌入尝试记录 | `.trellis/workflow-embed-attempt.json` ✅ 安装器（开始写入，成功后清理） | 共用 ✅ | 共用 ✅ |
@@ -222,7 +222,7 @@ ls .codex/skills/.backup-original/parallel/SKILL.md 2>/dev/null
 
 | 资产/行为 | 实际位置 | 分类 | 说明 |
 |-----------|----------|------|------|
-| `record-session` 元数据闭环 | `record-session` 基线入口 + workflow patch | fresh baseline patch | 当前 Trellis 0.5 fresh baseline 包含 `record-session`；`task.py archive` + `add_session.py` 在此阶段执行 |
+| `record-session` 元数据闭环 | workflow 分发的 `record-session` 终态命令/skill | overlay / distributed close-out stage | 当前 workflow 分发 `record-session` 终态阶段；该阶段执行 `task.py archive` + `add_session.py`。若目标项目仍残留 baseline `record-session`，只按旧目标项目兼容面检查 |
 | `finish-work` 收尾行为 | Trellis 原生 `finish-work` 基线 + workflow patch | Trellis 基线管理 | workflow 不再分发 helper；`finish-work` 只做提交检查清单与收尾证据，**不执行 archive** |
 | `archive` 任务归档行为 | `.trellis/scripts/task.py` / `.trellis/scripts/common/task_store.py` | 运行前置/仅校验 | 仍由目标项目 Trellis 基线提供，当前 workflow **不分发** 这段基线代码 |
 | archive metadata auto-commit pathspec 修复 | Trellis 基线 close-out 实现 | 运行前置/仅校验 | 若目标项目不是当前最新 Trellis 基线，收尾链路仍可能继承旧基线中的 archive bug；建议先升级 Trellis，再使用当前 workflow 的收尾链路 |

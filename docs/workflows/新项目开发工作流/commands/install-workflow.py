@@ -250,6 +250,11 @@ _PACKED_REFS_FILE = "packed-refs"
 _PARALLEL_DISABLED_MARKER = "<!-- workflow-parallel-disabled -->"
 _EMBED_EXECUTOR_CONFIRM_ENV = "WORKFLOW_EMBED_EXECUTOR_CONFIRMED"
 _ENTRY_COMMAND_CANDIDATES = ("continue", "start")
+_LEGACY_READY_AUTOCONTINUE_LINE = "If a task is READY, execute its Next required action without asking whether to continue."
+_STRONG_GATE_READY_GUIDANCE_LINES = (
+    "Treat `workflow-state.py route` / <task-status> as the only authority for the next action.\n"
+    "Do NOT auto-continue across blockers or confirmation gates; when routing asks for confirmation, repair, or task selection, surface that requirement first."
+)
 
 # AGENTS.md NL 路由表标记
 _AGENTS_NL_ROUTING_MARKER, _AGENTS_NL_ROUTING_END = AGENTS_NL_ROUTING_MARKERS
@@ -281,8 +286,8 @@ _NL_ROUTING_SECTION = """\
 | 补充审查、多 CLI 审查、多人审查、让其他 CLI 看一下、review-gate、审查门禁 | `/trellis:review-gate` | 描述补充审查意图，或显式触发 `review-gate` skill | §5.1.y 补充审查 |
 | 提交前检查、准备提交、完成检查、commit 前、收尾 | `/trellis:finish-work` | 描述提交前检查意图，或显式触发 `trellis-finish-work` skill | §6 提交检查 |
 | 交付、部署、上线、发布、测试通过、准备交付、跑验收、整理交付物、项目收尾 | `/trellis:delivery` | 描述交付收尾意图，或显式触发 `delivery` skill | §6+§7 测试交付 |
-| 记录、保存进度 | `/trellis:finish-work` | 描述会话收尾意图，或显式触发 `trellis-finish-work` skill | §6 finish-work → delivery → record-session |
-| 收工、结束工作 | `/trellis:finish-work` | 描述会话收尾意图，或显式触发 `trellis-finish-work` skill | §6 finish-work → delivery → record-session |
+| 记录、保存进度 | `/trellis:record-session` | 描述最终归档 / 会话记录意图，或显式触发 `record-session` skill | 终态收尾入口。若当前未到 `record-session`，会先被强门禁阻断并提示回到缺失阶段 |
+| 收工、结束工作 | `/trellis:record-session` | 描述最终归档 / 会话记录意图，或显式触发 `record-session` skill | 终态收尾入口。若当前未到 `record-session`，会先被强门禁阻断并提示回到缺失阶段 |
 
 ### 框架通用命令
 
@@ -307,6 +312,12 @@ _NL_ROUTING_SECTION = """\
 
 <!-- workflow-nl-routing-end -->
 """
+
+
+def _replace_legacy_ready_autocontinue(content: str) -> tuple[str, bool]:
+    if _LEGACY_READY_AUTOCONTINUE_LINE not in content:
+        return content, False
+    return content.replace(_LEGACY_READY_AUTOCONTINUE_LINE, _STRONG_GATE_READY_GUIDANCE_LINES), True
 
 
 # ── 项目根检测 ──
@@ -903,11 +914,11 @@ def build_finish_work_content(content: str, patch_text: str) -> str | None:
 
     content = content.replace(
         'description: "Wrap up the current session: verify quality gate passed, remind user to commit, archive completed tasks, and record session progress to the developer journal. Use when done coding and ready to end the session."',
-        'description: "Wrap up the current session: verify quality gate passed, collect close-out evidence, and hand off to delivery / record-session. Use when implementation is complete and ready for close-out."',
+        'description: "Wrap up the current session: verify quality gate passed, collect close-out evidence, and prepare the delivery hand-off. Use when implementation is complete and ready for pre-delivery close-out."',
     )
     content = content.replace(
         "Wrap up the current session: archive the active task (and any other completed-but-unarchived tasks the user wants to clean up) and record the session journal. Code commits are NOT done here — those happen in workflow Phase 3.4 before you invoke this command.",
-        "Wrap up the current session: verify close-out evidence, confirm the frozen quality matrix, and hand off to `delivery` / `record-session`. Code commits are NOT done here — those happen in workflow Phase 3.4 before you invoke this command.",
+        "Wrap up the current session: verify close-out evidence, confirm the frozen quality matrix, and prepare to enter `delivery`. Code commits are NOT done here — those happen in workflow Phase 3.4 before you invoke this command. Archive + add_session happen later at `record-session`.",
     )
 
     # Step 2 misleading archive language correction (strong-gate model):
@@ -2287,11 +2298,16 @@ def patch_opencode_session_utils(root: Path, *, dry_run: bool) -> bool:
         return False
 
     content = session_utils.read_text(encoding="utf-8")
-    if _OPENCODE_SESSION_UTILS_PATCH_MARKER in content:
-        ok("[Shared] .opencode/lib/session-utils.js 强门禁补丁已存在")
-        return False
+    patched = content
+    route_applied = False
+    ready_guidance_applied = False
 
-    new_block = """\
+    if _OPENCODE_SESSION_UTILS_PATCH_MARKER in patched:
+        ok("[Shared] .opencode/lib/session-utils.js 强门禁补丁已存在")
+    else:
+        route_applied = True
+
+        new_block = """\
 // [workflow-embed-patch:strong-gate-session-utils]
 function getTaskStatus(ctx, platformInput = null) {
   const active = ctx.getActiveTask(platformInput)
@@ -2334,20 +2350,35 @@ function getTaskStatus(ctx, platformInput = null) {
   }
 }
 """
-    func_start = content.find("function getTaskStatus(ctx, platformInput = null) {")
-    if func_start == -1:
-        warn("[Shared] .opencode/lib/session-utils.js 强门禁补丁未命中目标代码，跳过")
+        func_start = patched.find("function getTaskStatus(ctx, platformInput = null) {")
+        if func_start == -1:
+            warn("[Shared] .opencode/lib/session-utils.js 强门禁补丁未命中目标代码，跳过")
+            return False
+        next_func = patched.find("\nfunction loadTrellisConfig(", func_start)
+        if next_func == -1:
+            next_func = len(patched)
+        patched = patched[:func_start] + new_block.rstrip() + "\n\n" + patched[next_func:].lstrip("\n")
+
+    patched, ready_guidance_applied = _replace_legacy_ready_autocontinue(patched)
+    if not route_applied and not ready_guidance_applied:
         return False
-    next_func = content.find("\nfunction loadTrellisConfig(", func_start)
-    if next_func == -1:
-        next_func = len(content)
-    patched = content[:func_start] + new_block.rstrip() + "\n\n" + content[next_func:].lstrip("\n")
+
     if not dry_run:
         session_utils.write_text(patched, encoding="utf-8")
     if dry_run:
-        info("[Shared] 将补丁 .opencode/lib/session-utils.js → 改用 workflow-state.py route")
+        if route_applied and ready_guidance_applied:
+            info("[Shared] 将补丁 .opencode/lib/session-utils.js → 改用 workflow-state.py route，并移除 READY 自动续跑提示")
+        elif route_applied:
+            info("[Shared] 将补丁 .opencode/lib/session-utils.js → 改用 workflow-state.py route")
+        else:
+            info("[Shared] 将升级 .opencode/lib/session-utils.js → 移除 READY 自动续跑提示")
     else:
-        ok("[Shared] .opencode/lib/session-utils.js 已补丁 → 改用 workflow-state.py route")
+        if route_applied and ready_guidance_applied:
+            ok("[Shared] .opencode/lib/session-utils.js 已升级 → 改用 workflow-state.py route，并移除 READY 自动续跑提示")
+        elif route_applied:
+            ok("[Shared] .opencode/lib/session-utils.js 已补丁 → 改用 workflow-state.py route")
+        else:
+            ok("[Shared] .opencode/lib/session-utils.js 已升级 → 移除 READY 自动续跑提示")
     return True
 
 
