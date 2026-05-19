@@ -37,7 +37,7 @@ Key implications:
 
 - `task.json.status` is a legacy task-lifecycle field, not the stage-routing authority.
 - `task.py start` refreshes the active-task pointer, but stage changes must still go through `workflow-state.py set`.
-- `workflow-state.py route` is the authoritative router for `first_entry`, `reenter`, `blocked`, `context_needed`, `awaiting_confirmation`, `awaiting_confirmation_with_blockers`, `repair_needed`, and `embed_invalid`.
+- `workflow-state.py route` is the authoritative router for `entry_choice_required`, `reenter`, `blocked`, `context_needed`, `awaiting_confirmation`, `awaiting_confirmation_with_blockers`, `repair_needed`, and `embed_invalid`.
 
 ## Workflow-State Prompt Blocks
 

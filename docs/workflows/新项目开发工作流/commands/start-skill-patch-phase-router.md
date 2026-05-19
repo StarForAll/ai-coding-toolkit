@@ -51,7 +51,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route --project-root <pr
 
 | action | Meaning | Action |
 |--------|---------|--------|
-| `first_entry` | New project and no resumable task exists | Use the skill matching the `target` field. Fresh projects without a reusable assessment should enter `feasibility`; `brainstorm` is only valid when route explicitly reuses an existing assessment that already allows it. |
+| `entry_choice_required` | No active task exists and nothing is resumable | Choose by intent first. For read-only workflow/project analysis, meta-audit, or A/A+ analysis, stay in `no_task` and analyze inline without creating a task. For a new implementation task, use the skill matching the `target` field. Fresh projects without a reusable assessment should enter `feasibility`; `brainstorm` is only valid when route explicitly reuses an existing assessment that already allows it. |
 | `reenter` | Re-enter current stage | Use the skill matching the `target` field |
 | `awaiting_confirmation` | Stage done, waiting for user | Report completed/missing items; wait for confirmation |
 | `awaiting_confirmation_with_blockers` | Stage reached confirmation point but blockers remain | Show `blockers`; do not ask for confirmation until they are fixed |

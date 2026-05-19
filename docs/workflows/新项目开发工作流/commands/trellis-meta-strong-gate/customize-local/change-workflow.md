@@ -42,7 +42,7 @@ Examples:
 
 | action | Meaning | Resume behavior |
 | --- | --- | --- |
-| `first_entry` | No active task and no resumable task | Use the skill/command matching `target` (`feasibility` for outsourcing, `brainstorm` for personal) |
+| `entry_choice_required` | No active task and no resumable task | Decide by current intent first: stay `no_task` for read-only analysis / meta-audit, or use the skill/command matching `target` when starting a real task |
 | `reenter` | Re-enter the current confirmed stage | Use the carrier matching `target` |
 | `context_needed` | Parent task cannot continue directly | Switch to the required child task before proceeding |
 | `awaiting_confirmation_with_blockers` | Stage is at confirmation point but exit gate is incomplete | Fix blockers before asking for confirmation |

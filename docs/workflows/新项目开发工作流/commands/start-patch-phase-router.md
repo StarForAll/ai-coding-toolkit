@@ -31,7 +31,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route --project-root <pr
 
 | action | 含义 | 执行动作 |
 |--------|------|---------|
-| `first_entry` | 当前 session 尚无 active task，且项目中也没有可继续任务 | 路由到 `target` 字段对应阶段。若项目还没有可复用的有效 assessment，首次入口应先走 `/trellis:feasibility`；只有 route 明确复用了现有 assessment 并允许继续 brainstorm 时，才进入 `/trellis:brainstorm`。 |
+| `entry_choice_required` | 当前 session 尚无 active task，且项目中也没有可继续任务 | 先判断当前意图。如果是 workflow / 项目只读分析、元审计或 A/A+ 纯分析，则保持 `no_task` 直接分析，不创建任务；如果是开始新的实现任务，再进入 `target` 字段对应阶段。若项目还没有可复用的有效 assessment，默认入口应先走 `/trellis:feasibility`；只有 route 明确复用了现有 assessment 并允许继续 brainstorm 时，才进入 `/trellis:brainstorm`。 |
 | `reenter` | 重入当前阶段 | 路由到 `/trellis:<target>`（`target` 字段即目标阶段） |
 | `awaiting_confirmation` | 阶段完成等待确认 | 展示已完成/未完成/缺失项，等用户确认 |
 | `awaiting_confirmation_with_blockers` | 阶段已到确认点，但仍有阻塞项 | 展示 `blockers`，要求先补齐阻塞项，不能直接确认推进 |

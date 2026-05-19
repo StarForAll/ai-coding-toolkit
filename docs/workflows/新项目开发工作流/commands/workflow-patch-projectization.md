@@ -20,7 +20,7 @@
 
 4. Implement only after execution authorization
    --> plan -> implementation / test-first requires checkpoints.execution_authorized=true
-   --> If task.py start runs without session identity, it must also write .trellis/.runtime/degraded-active-task.json for later recovery
+   --> If task.py start runs without session identity, it must also write a runtime-keyed degraded fallback file under .trellis/.runtime/ (with degraded-active-task.json kept as compatibility fallback) for later recovery
 
 5. Verify and commit
    --> Run the project's frozen verification commands when scaffold exists (see spec docs)
@@ -33,7 +33,7 @@
    --> archive and add_session happen only at record-session
 ```
 
-`python3 ./.trellis/scripts/task.py finish` remains available when you intentionally need to clear the current session's active task without archiving a completed task. Do not use it as a substitute for final close-out. In degraded mode, `task.py start` must leave a recoverable fallback file under `.trellis/.runtime/degraded-active-task.json`.
+`python3 ./.trellis/scripts/task.py finish` remains available when you intentionally need to clear the current session's active task without archiving a completed task. Do not use it as a substitute for final close-out. In degraded mode, `task.py start` must leave a recoverable runtime-keyed fallback file under `.trellis/.runtime/`; the shared `degraded-active-task.json` remains only as a compatibility fallback.
 
 For workflows that split work into a parent coordination task plus child execution tasks:
 
@@ -136,7 +136,7 @@ All transitions follow a two-step protocol: **(A)** signal readiness by setting 
 
 | From → To | Step A: Signal readiness | Step B: After user confirms |
 |---|---|---|
-| no_task → feasibility | N/A (outsourcing first entry) | `workflow-state.py route` → load `/trellis:feasibility` (skill auto-creates task + init feasibility state) |
+| no_task → feasibility | N/A (outsourcing first entry) | `workflow-state.py route` → if `action=entry_choice_required` and当前意图是开始新任务，再进入 `/trellis:feasibility`；若只是只读分析 / 元审计，则保持 `no_task` 直接分析 |
 | feasibility → brainstorm | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage brainstorm --stage-status in_progress --awaiting-user-confirmation false --allowed-next design,plan,implementation,test-first --transition-from feasibility` |
 | brainstorm → design | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage design --stage-status in_progress --awaiting-user-confirmation false --allowed-next plan --transition-from brainstorm` |
 | brainstorm → plan | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage plan --stage-status in_progress --awaiting-user-confirmation false --allowed-next implementation,test-first --transition-from brainstorm` |
@@ -309,7 +309,7 @@ The legacy `/trellis:record-session` command remains available as a backwards-co
 [workflow-state:no_task]
 No active task. **A Direct answer** — pure Q&A / explanation / lookup / chat; no file writes + one-line answer + repo reads ≤ 2 files → AI judges, no override needed.
 **A+ Deep analysis** — multi-file read-only audit / architecture review / diagnostic report; file writes limited to analysis docs (research/, temp files); no source code / config / project file modification allowed. Creates a task only if the user explicitly asks to act on findings.
-**B Create a task** — any implementation / code change / build / refactor work. For outsourcing profile: entry sequence starts with feasibility gate — (1) `python3 ./.trellis/scripts/workflow/workflow-state.py route` to detect first-entry → (2) if `action=first_entry`, load `/trellis:feasibility` (the feasibility skill will automatically create the task directory and initialize workflow-state.json) → (3) after feasibility passes, `trellis-brainstorm` for prd iteration → (4) `task.py start <task-dir>`. For personal profile: (1) `task.py create "<title>"` → (2) `trellis-brainstorm` — personal profile can skip feasibility but **must** supplement core fields of `assessment.md` during brainstorm (`project_engagement_type=non_outsourcing` + `source_watermark_*` + `ownership_proof_required`), otherwise subsequent stage gate validation will block → (3) `task.py start <task-dir>`. **"It looks small" is NOT grounds for downgrading B to A+ or C**.
-`task.py start` in this branch only persists or repairs the active-task pointer for the current session. It does **not** advance `workflow-state.json.stage`; stage changes must still be performed via `workflow-state.py set` after the current stage reaches `awaiting_user_confirmation`. Note: when `workflow-state.json` does not yet exist (e.g. before feasibility), `task.py start` still performs the `planning → in_progress` flip in `task.json` as a fallback; once `workflow-state.json` exists, this flip is skipped and stage progression is fully controlled by `workflow-state.py set`.
+**B Create a task** — any implementation / code change / build / refactor work. For outsourcing profile: entry sequence starts with route intent choice — (1) `python3 ./.trellis/scripts/workflow/workflow-state.py route` → (2) if `action=entry_choice_required` and当前意图是开始新任务，load `/trellis:feasibility` (the feasibility skill will automatically create the task directory and initialize `workflow-state.json`)；若当前只是 workflow / 项目只读分析、元审计或 A/A+ 纯分析，则停留在 `no_task` 直接分析，不创建任务 → (3) after feasibility passes, `trellis-brainstorm` for prd iteration → (4) `task.py start <task-dir>`. For personal profile: (1) `task.py create "<title>"` → (2) `trellis-brainstorm` — personal profile can skip feasibility but **must** supplement core fields of `assessment.md` during brainstorm (`project_engagement_type=non_outsourcing` + `source_watermark_*` + `ownership_proof_required`), otherwise subsequent stage gate validation will block → (3) `task.py start <task-dir>`. **"It looks small" is NOT grounds for downgrading B to A+ or C**.
+`task.py start` in this branch only persists or repairs the active-task pointer for the current session. It does **not** advance `workflow-state.json.stage`, and in strong-gate installs it also does **not** keep producing the legacy `planning → in_progress` status flip; stage changes must still be performed via `workflow-state.py set` after the current stage reaches `awaiting_user_confirmation`.
 **C Inline change** (per-turn only, escape hatch for B) — the user's CURRENT message MUST contain one of: "skip trellis" / "no task" / "just do it" / "don't create a task" / "跳过 trellis" / "别走流程" / "小修一下" / "直接改" / "先别建任务" → briefly acknowledge ("ok, skipping trellis flow this turn"), then inline. **Without seeing one of these phrases you must NOT inline on your own**; do not invent an override the user never said.
 [/workflow-state:no_task]

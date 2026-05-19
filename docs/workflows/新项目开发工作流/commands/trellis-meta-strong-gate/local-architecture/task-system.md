@@ -35,7 +35,7 @@ The Trellis task system is stored entirely under `.trellis/tasks/` in the user p
 | Field | Meaning |
 | --- | --- |
 | `id` / `name` / `title` | Task identity and title. |
-| `status` | Bookkeeping field: `planning`, `in_progress`, `review`, or `completed`. Under the strong-gate model, `task.json.status` does **not** drive stage routing; the routing authority is `workflow-state.py route` over the task's `workflow-state.json`. |
+| `status` | Bookkeeping field only. Under the strong-gate model, `task.json.status` does **not** drive stage routing; task views and startup carriers should derive their live status from `workflow-state.py route` / `workflow-state.json`, while raw `task.json.status` stays limited to coarse lifecycle bookkeeping such as archived completion. |
 | `priority` | `P0`, `P1`, `P2`, `P3`. |
 | `creator` / `assignee` | Creator and assignee. |
 | `package` | Target package in a monorepo; may be empty. |
@@ -56,7 +56,7 @@ The user sees a "current task," but Trellis stores active task state per session
 
 `task.py start` writes the task path into the runtime session file for the current session. `task.py current --source` shows the current task and where it came from. Different AI windows can point to different tasks without overwriting each other.
 
-If the platform or shell environment has no stable session identity, `task.py start` may be unable to set the active task. The AI should read the error, inspect the platform hook/session environment, and not fall back to a shared global pointer.
+If the platform or shell environment has no stable session identity, `task.py start` may be unable to set the active task. Strong-gate installs use runtime-keyed degraded fallback files under `.trellis/.runtime/` as a last-resort recovery aid; the AI should still avoid guessing from an unrelated session pointer.
 
 ## JSONL Context
 

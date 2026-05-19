@@ -70,8 +70,8 @@ Active task is session-level state stored in `.trellis/.runtime/sessions/`. Do n
 
 `cmd_create` in `.trellis/scripts/common/task_store.py` calls `set_active_task` best-effort right after writing the new task directory. The behavior:
 
-- When the calling shell carries session identity, the per-session pointer at `.trellis/.runtime/sessions/<context_key>.json` is rewritten to point at the new task. `task.json` records `status=planning` as a bookkeeping field only; it does **not** drive stage routing. Under the strong-gate model, stage routing is determined by `workflow-state.py route` over the task's `workflow-state.json`.
-- When session identity is unavailable, the task directory is still created and `status=planning` is still written, but the active pointer is left untouched. The user can attach the task later with `task.py start <dir>` once they're back in an AI session.
+- When the calling shell carries session identity, the per-session pointer at `.trellis/.runtime/sessions/<context_key>.json` is rewritten to point at the new task. `task.json.status` remains bookkeeping only; it does **not** drive stage routing or task-list progress semantics. Under the strong-gate model, live task views should derive their status from `workflow-state.py route` / `workflow-state.json`.
+- When session identity is unavailable, the task directory is still created, but the active pointer is left untouched. The user can attach the task later with `task.py start <dir>` once they're back in an AI session; degraded recovery uses runtime-keyed fallback files under `.trellis/.runtime/` rather than reviving a shared global pointer.
 
 After `task.py create` sets the active pointer, the next `workflow-state.py route` call will detect the new task and route from the current `workflow-state.json` content. During brainstorm and JSONL curation, the active phase is still represented in `workflow-state.json`, but the authoritative action shown to carriers comes from `workflow-state.py route`, not from `task.json.status`.
 
