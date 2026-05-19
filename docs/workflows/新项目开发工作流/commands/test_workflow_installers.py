@@ -1042,6 +1042,26 @@ class WorkflowInstallerTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
+    def test_install_session_start_patch_removes_legacy_tail_logic(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assert_install_result_usable(install)
+
+        target = fixture / ".claude" / "hooks" / "session-start.py"
+        content = target.read_text(encoding="utf-8")
+        self.assertIn(SESSION_START_STRONG_GATE_PATCH_MARKER, content)
+        self.assertIn("workflow-state.route", content)
+        self.assertNotIn("Case 3: Task completed", content)
+        self.assertNotIn("Status: READY", content)
+        self.assertNotIn("Status: PLANNING", content)
+
+    def test_nl_routing_maps_record_progress_to_finish_work_not_record_session(self) -> None:
+        content = (COMMANDS_DIR / "install-workflow.py").read_text(encoding="utf-8")
+        self.assertIn("| 记录、保存进度 | `/trellis:finish-work` |", content)
+        self.assertNotIn("| 记录、保存进度 | `/trellis:record-session` |", content)
+
     def test_delivery_docs_do_not_reference_missing_skills(self) -> None:
         docs_to_check = [
             COMMANDS_DIR / "delivery.md",
@@ -1087,7 +1107,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn('print("Current task: (none)")', task_py)
         self.assertIn('if args.source:', task_py)
         self.assertIn('if active.task_path:', task_py)
-        self.assertIn('degraded_path = repo_root / ".trellis" / ".runtime" / "degraded-active-task.json"', task_py)
+        self.assertIn('degraded-active-task-{runtime_key}.json', task_py)
+        self.assertIn('degraded_runtime / "degraded-active-task.json"', task_py)
 
     def test_install_personal_profile_keeps_ownership_cards_and_helpers(self) -> None:
         fixture = self.create_fixture()

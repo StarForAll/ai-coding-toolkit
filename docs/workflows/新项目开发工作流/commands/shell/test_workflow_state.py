@@ -124,6 +124,28 @@ class WorkflowStateScriptTests(unittest.TestCase):
 - 先完成 `source-watermark-plan.md`
 """
 
+    VALID_TASK_CREATION_CHECKLIST = """# Task Creation Checklist
+
+## 概述
+- 已完成真实 task 创建前人工确认
+
+## 拟创建的 Trellis Task
+- .trellis/tasks/04-15-sample-task
+- 性能回归与优化任务
+
+## 依赖与项目域草案
+- 当前任务域内串行，不自动续跑
+
+## 人工确认清单
+- 已确认当前推荐执行任务
+
+## 人工确认结果
+- `task_creation_confirmed`: `yes`
+- `confirmed_scope`: `sample-task`
+- `post_mainline_performance_task`: `yes`
+- 性能回归与优化任务：保留
+"""
+
     VALID_FULL_TASK_PLAN = """# Task Plan: Sample
 
 ## 概述
@@ -1199,6 +1221,20 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.run_script("init", str(task_dir), "--stage", "plan")
         self.run_script("set", str(task_dir), "--context7-review-completed", "true")
+        performance_task_dir = root / ".trellis" / "tasks" / "04-15-performance-opt"
+        performance_task_dir.mkdir(parents=True, exist_ok=True)
+        (performance_task_dir / "task.json").write_text('{"status":"planning","children":[]}\n', encoding="utf-8")
+        (task_dir / "task_plan.md").write_text(self.VALID_OWNERSHIP_PLAN, encoding="utf-8")
+        (task_dir / "task_creation_checklist.md").write_text(self.VALID_TASK_CREATION_CHECKLIST, encoding="utf-8")
+        design_dir = task_dir / "design"
+        design_dir.mkdir(parents=True, exist_ok=True)
+        (design_dir / "source-watermark-plan.md").write_text(self.VALID_SOURCE_WATERMARK_PLAN, encoding="utf-8")
+        (task_dir / "prd.md").write_text(
+            "# Leaf Task\n\n"
+            f"{self.VALID_BRAINSTORM_ESTIMATE}\n"
+            "## Goal\n\n验证计划到执行阶段门禁。\n\n## In Scope\n\n- 校验合法转场。\n\n## Out of Scope\n\n- 不进入实际实现。\n\n## Acceptance Anchors\n\n- transition gate 通过。\n\n## Preferred CLI\n\n- Codex\n",
+            encoding="utf-8",
+        )
 
         # Attempt 1: without awaiting_user_confirmation -> rejected at transition gate
         illegal_set = self.run_script("set", str(task_dir), "--stage", "implementation")
@@ -1794,6 +1830,96 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(data["action"], "reenter")
         self.assertEqual(data["stage"], "implementation")
 
+    def test_cmd_route_prefers_keyed_degraded_fallback_over_shared_file(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (root / ".trellis" / ".runtime" / "sessions" / "test-context.json").unlink()
+        other_task = root / ".trellis" / "tasks" / "04-15-other-task"
+        other_task.mkdir(parents=True, exist_ok=True)
+        (other_task / "task.json").write_text('{"status":"planning","children":[]}\n', encoding="utf-8")
+        (other_task / "workflow-state.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "stage": "design",
+                    "stage_status": "in_progress",
+                    "current_block": None,
+                    "completed_blocks": [],
+                    "allowed_next_stages": ["plan"],
+                    "awaiting_user_confirmation": False,
+                    "last_confirmed_transition": None,
+                    "notes": [],
+                    "checkpoints": {
+                        "architecture_confirmed": False,
+                        "context7_review_completed": False,
+                        "execution_authorized": False,
+                    },
+                    "updated_at": "2026-05-19T00:00:00+00:00",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / ".runtime" / "degraded-active-task.json").write_text(
+            json.dumps({"current_task": ".trellis/tasks/04-15-other-task"}, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / ".runtime" / "degraded-active-task-term-demo.json").write_text(
+            json.dumps({"current_task": ".trellis/tasks/04-15-sample-task"}, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        state = {
+            "version": 1,
+            "stage": "implementation",
+            "stage_status": "in_progress",
+            "current_block": None,
+            "completed_blocks": [],
+            "allowed_next_stages": [],
+            "awaiting_user_confirmation": False,
+            "last_confirmed_transition": {
+                "from": "plan",
+                "to": "implementation",
+                "confirmed_at": "2026-05-19T00:00:00+00:00",
+            },
+            "notes": [],
+            "checkpoints": {
+                "architecture_confirmed": True,
+                "context7_review_completed": True,
+                "execution_authorized": True,
+            },
+            "updated_at": "2026-05-19T00:00:00+00:00",
+        }
+        (task_dir / "workflow-state.json").write_text(
+            json.dumps(state, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        (root / "docs" / "requirements" / "developer-facing-prd.md").write_text("# developer\n", encoding="utf-8")
+        self.write_context7_review(task_dir)
+
+        result = self.run_script(
+            "route",
+            "--project-root",
+            str(root),
+            env_overrides={
+                "TRELLIS_CONTEXT_ID": None,
+                "CODEX_THREAD_ID": None,
+                "TERM_SESSION_ID": "term-demo",
+            },
+            cwd=root,
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "reenter")
+        self.assertEqual(data["stage"], "implementation")
+
     def test_validate_uses_degraded_fallback_when_session_pointer_missing(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
@@ -1833,6 +1959,46 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("workflow-state 校验通过", result.stdout)
+
+    def test_validate_record_session_stage_requires_delivery_artifacts(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        state = {
+            "version": 1,
+            "stage": "record-session",
+            "stage_status": "in_progress",
+            "current_block": None,
+            "completed_blocks": [],
+            "allowed_next_stages": [],
+            "awaiting_user_confirmation": False,
+            "last_confirmed_transition": {
+                "from": "delivery",
+                "to": "record-session",
+                "confirmed_at": "2026-05-19T00:00:00+00:00",
+            },
+            "notes": [],
+            "checkpoints": {
+                "architecture_confirmed": True,
+                "context7_review_completed": True,
+                "execution_authorized": False,
+            },
+            "updated_at": "2026-05-19T00:00:00+00:00",
+        }
+        (task_dir / "workflow-state.json").write_text(
+            json.dumps(state, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("缺少交付产物", result.stdout)
+        self.assertIn("不得进入 record-session", result.stdout)
 
     def test_cmd_route_ignores_degraded_when_session_files_exist(self) -> None:
         root, task_dir = self.make_fixture()
@@ -2016,6 +2182,74 @@ class WorkflowStateScriptTests(unittest.TestCase):
         result = self.run_script("route", str(task_dir), "--project-root", str(root))
         data = json.loads(result.stdout)
         self.assertEqual(data["action"], "awaiting_confirmation")
+
+    def test_route_brainstorm_execution_path_blocks_when_complexity_is_not_l0(self) -> None:
+        root, task_dir = self.make_fixture()
+        (task_dir / "prd.md").write_text(
+            "# sample task\n\n"
+            f"{self.VALID_BRAINSTORM_ESTIMATE}\n"
+            "## 阶段出口快照\n"
+            "- `complexity_decision`: `L1`\n"
+            "- `ui_lane_decision`: `no-ui`\n"
+            "- `cross_platform_scope`: `codex-only`\n"
+            "- `estimate_refresh_result`: `initial`\n"
+            "- `kill_criteria`: `none`\n"
+            "- `open_items`: `none`\n",
+            encoding="utf-8",
+        )
+        (task_dir / "assessment.md").write_text(self.VALID_INTERNAL_ASSESSMENT, encoding="utf-8")
+        self.run_script("init", str(task_dir), "--stage", "brainstorm")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "implementation,test-first",
+        )
+
+        result = self.run_script("route", str(task_dir), "--project-root", str(root))
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "awaiting_confirmation_with_blockers")
+        self.assertIn("complexity_decision", "".join(data.get("blockers", [])))
+        self.assertIn("L0", "".join(data.get("blockers", [])))
+
+    def test_cmd_set_blocks_brainstorm_to_execution_when_complexity_is_not_l0(self) -> None:
+        root, task_dir = self.make_fixture()
+        (task_dir / "prd.md").write_text(
+            "# sample task\n\n"
+            f"{self.VALID_BRAINSTORM_ESTIMATE}\n"
+            "## 阶段出口快照\n"
+            "- `complexity_decision`: `L2`\n"
+            "- `ui_lane_decision`: `no-ui`\n"
+            "- `cross_platform_scope`: `codex-only`\n"
+            "- `estimate_refresh_result`: `initial`\n"
+            "- `kill_criteria`: `none`\n"
+            "- `open_items`: `none`\n",
+            encoding="utf-8",
+        )
+        (task_dir / "assessment.md").write_text(self.VALID_INTERNAL_ASSESSMENT, encoding="utf-8")
+        self.run_script("init", str(task_dir), "--stage", "brainstorm")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "implementation,test-first",
+        )
+
+        result = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "implementation",
+            "--execution-authorized", "true",
+            "--transition-from", "brainstorm",
+            cwd=root,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        combined = result.stdout + result.stderr
+        self.assertIn("complexity_decision", combined)
+        self.assertIn("L0", combined)
 
     def test_route_execution_stage_blocks_when_project_estimate_markers_missing(self) -> None:
         root, task_dir = self.make_fixture()
@@ -2577,6 +2811,18 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "--stage-status", "awaiting_user_confirmation",
             "--awaiting-user-confirmation", "true",
         )
+        (task_dir / "prd.md").write_text(
+            "# sample task\n\n"
+            f"{self.VALID_BRAINSTORM_ESTIMATE}\n"
+            "## 阶段出口快照\n"
+            "- `complexity_decision`: `L1`\n"
+            "- `ui_lane_decision`: `no-ui`\n"
+            "- `cross_platform_scope`: `claude+codex`\n"
+            "- `estimate_refresh_result`: `confirmed`\n"
+            "- `kill_criteria`: `none`\n"
+            "- `open_items`: `none`\n",
+            encoding="utf-8",
+        )
         ok_set = self.run_script(
             "set", str(task_dir),
             "--stage", "design",
@@ -2800,6 +3046,18 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "--awaiting-user-confirmation", "true",
             "--allowed-next", "design,plan,implementation,test-first",
         )
+        (task_dir / "prd.md").write_text(
+            "# sample task\n\n"
+            f"{self.VALID_BRAINSTORM_ESTIMATE}\n"
+            "## 阶段出口快照\n"
+            "- `complexity_decision`: `L0`\n"
+            "- `ui_lane_decision`: `no-ui`\n"
+            "- `cross_platform_scope`: `codex-only`\n"
+            "- `estimate_refresh_result`: `confirmed`\n"
+            "- `kill_criteria`: `none`\n"
+            "- `open_items`: `none`\n",
+            encoding="utf-8",
+        )
         # L0 path: brainstorm → implementation
         ok_set = self.run_script(
             "set", str(task_dir),
@@ -2827,6 +3085,18 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "--stage-status", "awaiting_user_confirmation",
             "--awaiting-user-confirmation", "true",
             "--allowed-next", "design,plan,implementation,test-first",
+        )
+        (task_dir / "prd.md").write_text(
+            "# sample task\n\n"
+            f"{self.VALID_BRAINSTORM_ESTIMATE}\n"
+            "## 阶段出口快照\n"
+            "- `complexity_decision`: `L0`\n"
+            "- `ui_lane_decision`: `no-ui`\n"
+            "- `cross_platform_scope`: `codex-only`\n"
+            "- `estimate_refresh_result`: `confirmed`\n"
+            "- `kill_criteria`: `none`\n"
+            "- `open_items`: `none`\n",
+            encoding="utf-8",
         )
         ok_set = self.run_script(
             "set", str(task_dir),
