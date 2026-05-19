@@ -270,3 +270,37 @@ R1-R6: 清除旧三态语义、修复 JSONL 路径、新增 context_needed actio
 ### Next Steps
 
 - None - task complete
+
+
+## Session 253: 修复嵌入工作流强门禁路由注入漂移
+
+**Date**: 2026-05-19
+**Task**: 修复嵌入工作流强门禁路由注入漂移
+**Branch**: `main`
+
+### Summary
+
+审计并修复新项目开发工作流的 route-centered 强门禁注入、Claude session-start repair 分支和 context_needed 入口消费漂移。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c3b3655` | (see git log) |
+| `9a0a422` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-6.md`
-- **Total Sessions**: 252
-- **Last Active**: 2026-05-18
+- **Total Sessions**: 253
+- **Last Active**: 2026-05-19
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-6.md` | ~272 | Active |
+| `journal-6.md` | ~306 | Active |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
@@ -34,6 +34,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 253 | 2026-05-19 | 修复嵌入工作流强门禁路由注入漂移 | `c3b3655`, `9a0a422` | `main` |
 | 252 | 2026-05-18 | 修复新项目开发工作流旧语义残留与恢复提示精度 | `5087633` | `main` |
 | 251 | 2026-05-18 | Audit and patch embedded workflow state guards | `57e9aa1` | `main` |
 | 250 | 2026-05-18 | Fix workflow embed post-check drift | `67d34ef` | `main` |
