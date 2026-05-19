@@ -278,7 +278,7 @@ _NL_ROUTING_SECTION = """\
 | 补充审查、多 CLI 审查、多人审查、让其他 CLI 看一下、review-gate、审查门禁 | `/trellis:review-gate` | 描述补充审查意图，或显式触发 `review-gate` skill | §5.1.y 补充审查 |
 | 提交前检查、准备提交、完成检查、commit 前、收尾 | `/trellis:finish-work` | 描述提交前检查意图，或显式触发 `trellis-finish-work` skill | §6 提交检查 |
 | 交付、部署、上线、发布、测试通过、准备交付、跑验收、整理交付物、项目收尾 | `/trellis:delivery` | 描述交付收尾意图，或显式触发 `delivery` skill | §6+§7 测试交付 |
-| 记录、保存进度 | `/trellis:record-session` | 描述会话记录意图，或显式触发 `record-session` skill | §7 record-session: 归档 + add_session |
+| 记录、保存进度 | `/trellis:finish-work` | 描述会话收尾意图，或显式触发 `trellis-finish-work` skill | §6 finish-work → delivery → record-session |
 | 收工、结束工作 | `/trellis:finish-work` | 描述会话收尾意图，或显式触发 `trellis-finish-work` skill | §6 finish-work → delivery → record-session |
 
 ### 框架通用命令
@@ -1938,7 +1938,13 @@ def patch_task_start_degraded_fallback(root: Path, *, dry_run: bool) -> bool:
         # [workflow-embed-patch:degraded-active-task]
         degraded_runtime = repo_root / ".trellis" / ".runtime"
         degraded_runtime.mkdir(parents=True, exist_ok=True)
-        degraded_path = degraded_runtime / "degraded-active-task.json"
+        runtime_key = os.environ.get("TRELLIS_CONTEXT_ID", "").strip() or os.environ.get("TERM_SESSION_ID", "").strip() or f"ppid-{os.getppid()}"
+        runtime_key = re.sub(r"[^A-Za-z0-9._-]+", "_", runtime_key).strip("._-")[:160]
+        degraded_path = (
+            degraded_runtime / f"degraded-active-task-{runtime_key}.json"
+            if runtime_key
+            else degraded_runtime / "degraded-active-task.json"
+        )
         degraded_payload = {
             "current_task": task_dir,
             "updated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
@@ -1953,8 +1959,9 @@ def patch_task_start_degraded_fallback(root: Path, *, dry_run: bool) -> bool:
 
     finish_anchor = '    if task_json_path.is_file():\n        run_task_hooks("after_finish", task_json_path, repo_root)\n    return 0\n'
     finish_patch = """\
-    degraded_path = repo_root / ".trellis" / ".runtime" / "degraded-active-task.json"
-    if degraded_path.exists():
+    degraded_runtime = repo_root / ".trellis" / ".runtime"
+    degraded_paths = list(degraded_runtime.glob("degraded-active-task*.json")) if degraded_runtime.is_dir() else []
+    for degraded_path in degraded_paths:
         payload = read_json(degraded_path)
         if isinstance(payload, dict) and payload.get("current_task") == current:
             degraded_path.unlink()
@@ -1975,13 +1982,20 @@ def patch_task_start_degraded_fallback(root: Path, *, dry_run: bool) -> bool:
                 print("State: stale")
             return 0
         # [workflow-embed-patch:degraded-current-read]
-        degraded_path = repo_root / ".trellis" / ".runtime" / "degraded-active-task.json"
-        payload = read_json(degraded_path)
-        current_task = payload.get("current_task") if isinstance(payload, dict) else None
-        if isinstance(current_task, str) and current_task.strip():
-            print(f"Current task: {current_task}")
-            print("Source: degraded-active-task")
-            return 0
+        degraded_runtime = repo_root / ".trellis" / ".runtime"
+        runtime_key = os.environ.get("TRELLIS_CONTEXT_ID", "").strip() or os.environ.get("TERM_SESSION_ID", "").strip() or f"ppid-{os.getppid()}"
+        runtime_key = re.sub(r"[^A-Za-z0-9._-]+", "_", runtime_key).strip("._-")[:160]
+        degraded_candidates = []
+        if runtime_key:
+            degraded_candidates.append(degraded_runtime / f"degraded-active-task-{runtime_key}.json")
+        degraded_candidates.append(degraded_runtime / "degraded-active-task.json")
+        for degraded_path in degraded_candidates:
+            payload = read_json(degraded_path)
+            current_task = payload.get("current_task") if isinstance(payload, dict) else None
+            if isinstance(current_task, str) and current_task.strip():
+                print(f"Current task: {current_task}")
+                print("Source: degraded-active-task")
+                return 0
         print("Current task: (none)")
         print("Source: none")
         if active.stale:
@@ -1992,12 +2006,19 @@ def patch_task_start_degraded_fallback(root: Path, *, dry_run: bool) -> bool:
         print(active.task_path)
         return 0
 
-    degraded_path = repo_root / ".trellis" / ".runtime" / "degraded-active-task.json"
-    payload = read_json(degraded_path)
-    current_task = payload.get("current_task") if isinstance(payload, dict) else None
-    if isinstance(current_task, str) and current_task.strip():
-        print(current_task)
-        return 0
+    degraded_runtime = repo_root / ".trellis" / ".runtime"
+    runtime_key = os.environ.get("TRELLIS_CONTEXT_ID", "").strip() or os.environ.get("TERM_SESSION_ID", "").strip() or f"ppid-{os.getppid()}"
+    runtime_key = re.sub(r"[^A-Za-z0-9._-]+", "_", runtime_key).strip("._-")[:160]
+    degraded_candidates = []
+    if runtime_key:
+        degraded_candidates.append(degraded_runtime / f"degraded-active-task-{runtime_key}.json")
+    degraded_candidates.append(degraded_runtime / "degraded-active-task.json")
+    for degraded_path in degraded_candidates:
+        payload = read_json(degraded_path)
+        current_task = payload.get("current_task") if isinstance(payload, dict) else None
+        if isinstance(current_task, str) and current_task.strip():
+            print(current_task)
+            return 0
 
     return 1
 """

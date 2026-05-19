@@ -15,7 +15,7 @@
 
 ### 补丁行为
 
-在 `_get_task_status()` 函数中，`task_title` 和 `task_status` 均已解析后、旧 Case 3（completed）判断之前，注入强门禁路由逻辑：
+在 `_get_task_status()` 函数中，`task_title` 和 `task_status` 均已解析后，直接以强门禁 route-first 逻辑**替换旧的 task-status 尾路由**（而不是前插一个总是 return 的补丁块）：
 
 1. 定位 `.trellis/scripts/workflow/workflow-state.py`
 2. 无论 `workflow-state.json` 是否存在，都执行 `workflow-state.py route <task_dir> --project-root <project-root>`
@@ -24,6 +24,11 @@
 5. 只有在 route helper 缺失、route 执行失败、或输出非法 JSON 时，才退回简单 `ACTIVE` 状态
 
 这样 `repair_needed`、`context_needed`、`awaiting_confirmation_with_blockers` 等正式路由结果不会被 SessionStart 隐藏。
+
+维护约束：
+
+- 不要保留旧的 `PLANNING` / `READY` / `COMPLETED` 尾逻辑作为不可达死代码
+- 补丁升级时应保证 `_get_task_status()` 中只保留一套 route-first 结果分支和必要 fallback，避免维护者误改死分支
 
 ### 补丁输出格式
 

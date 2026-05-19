@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -31,6 +32,7 @@ if str(TRELLIS_SCRIPTS_DIR) not in sys.path:
 
 from common.active_task import (  # type: ignore[import-not-found]
     resolve_active_task,
+    resolve_context_key,
     resolve_task_ref,
 )
 
@@ -219,23 +221,50 @@ def session_runtime_has_any_current_task(repo_root: Path) -> bool:
     return False
 
 
+def _degraded_runtime_key() -> str | None:
+    context_key = resolve_context_key()
+    if context_key:
+        safe_key = re.sub(r"[^A-Za-z0-9._-]+", "_", context_key).strip("._-")
+        return safe_key[:160] if safe_key else None
+
+    terminal_key = os.environ.get("TERM_SESSION_ID", "").strip()
+    if terminal_key:
+        safe_key = re.sub(r"[^A-Za-z0-9._-]+", "_", terminal_key).strip("._-")
+        return safe_key[:160] if safe_key else None
+
+    fallback = f"ppid-{os.getppid()}"
+    safe_key = re.sub(r"[^A-Za-z0-9._-]+", "_", fallback).strip("._-")
+    return safe_key[:160] if safe_key else None
+
+
+def degraded_active_task_paths(repo_root: Path) -> list[Path]:
+    runtime_dir = repo_root / ".trellis" / ".runtime"
+    paths: list[Path] = []
+    runtime_key = _degraded_runtime_key()
+    if runtime_key:
+        paths.append(runtime_dir / f"degraded-active-task-{runtime_key}.json")
+    paths.append(runtime_dir / "degraded-active-task.json")
+    return paths
+
+
 def resolve_degraded_task_dir(repo_root: Path) -> Path | None:
     if session_runtime_has_any_current_task(repo_root):
         # Degraded fallback is only a last resort when no live session state
         # exists. If any session file already carries a current_task pointer,
         # prefer explicit recovery instead of guessing from a degraded pointer.
         return None
-    degraded_path = repo_root / ".trellis" / ".runtime" / "degraded-active-task.json"
-    degraded = read_json(degraded_path)
-    if not degraded:
-        return None
-    task_ref = degraded.get("current_task")
-    if not isinstance(task_ref, str) or not task_ref.strip():
-        return None
-    resolved = resolve_task_ref(task_ref, repo_root)
-    if resolved is None or not resolved.is_dir():
-        return None
-    return resolved.resolve()
+    for degraded_path in degraded_active_task_paths(repo_root):
+        degraded = read_json(degraded_path)
+        if not degraded:
+            continue
+        task_ref = degraded.get("current_task")
+        if not isinstance(task_ref, str) or not task_ref.strip():
+            continue
+        resolved = resolve_task_ref(task_ref, repo_root)
+        if resolved is None or not resolved.is_dir():
+            continue
+        return resolved.resolve()
+    return None
 
 
 def bool_arg(raw: str) -> bool:
@@ -745,7 +774,8 @@ def validate_delivery_gate(task_dir: Path, errors: list[str], repo_root: Path | 
 def validate_stage_transition_gates(
     task_dir: Path,
     repo_root: Path,
-    state: dict[str, Any],
+    current_state: dict[str, Any],
+    candidate_state: dict[str, Any],
     new_stage: str,
     errors: list[str],
 ) -> None:
@@ -754,7 +784,7 @@ def validate_stage_transition_gates(
         return
     validate_leaf_task(task_dir, new_stage, errors)
 
-    current_stage = state.get("stage")
+    current_stage = current_state.get("stage")
     canonical_next = STAGE_TRANSITIONS.get(current_stage, [])
     if current_stage is not None and new_stage != current_stage and new_stage not in canonical_next:
         errors.append(
@@ -762,8 +792,6 @@ def validate_stage_transition_gates(
         )
         return
 
-    candidate_state = json.loads(json.dumps(state, ensure_ascii=False))
-    candidate_state["stage"] = new_stage
     if "allowed_next_stages" not in candidate_state or not isinstance(
         candidate_state.get("allowed_next_stages"), list
     ):
@@ -779,7 +807,7 @@ def validate_stage_transition_gates(
             gate_errors,
             target_stage=new_stage,
         )
-        validate_ownership_policy_controls(task_dir, repo_root, state, gate_errors)
+        validate_ownership_policy_controls(task_dir, repo_root, current_state, gate_errors)
 
         errors.extend(gate_errors)
 
@@ -787,14 +815,14 @@ def validate_stage_transition_gates(
     if new_stage in PROJECT_ESTIMATE_REQUIRED_STAGES:
         validate_project_doc_boundary(candidate_state, repo_root, task_dir, errors)
 
-    if state.get("stage") == "brainstorm":
-        validate_brainstorm_exit_gate(state, repo_root, task_dir, errors)
+    if current_state.get("stage") == "brainstorm":
+        validate_brainstorm_exit_gate(current_state, repo_root, task_dir, errors)
 
-    if state.get("stage") == "design" and new_stage == "plan":
+    if current_state.get("stage") == "design" and new_stage == "plan":
         validate_design_exit_gate(task_dir, errors)
 
     # Only the explicit plan → execution exit requires plan artifacts.
-    if new_stage in EXECUTION_STAGES and state.get("stage") == "plan":
+    if new_stage in EXECUTION_STAGES and current_state.get("stage") == "plan":
         validate_plan_gate(task_dir, errors)
 
     # Check → finish-work/review-gate requires check.md
@@ -1048,6 +1076,8 @@ def validate_stage_exit_artifacts(
         validate_review_gate_gate(task_dir, errors)
     elif stage == "delivery":
         validate_delivery_gate(task_dir, errors, repo_root)
+    elif stage == "record-session":
+        validate_record_session_gate(task_dir, errors)
 
 
 def load_task_json(path: Path) -> dict[str, Any] | None:
@@ -1435,6 +1465,7 @@ def validate_brainstorm_exit_gate(
         )
 
     task_content = task_prd.read_text(encoding="utf-8")
+    allowed_targets = design_path_candidates_from_state(state)
     if require_exit_snapshot:
         missing_snapshot = [
             field for field in BRAINSTORM_EXIT_SNAPSHOT_FIELDS if f"`{field}`" not in task_content
@@ -1443,8 +1474,15 @@ def validate_brainstorm_exit_gate(
             errors.append(
                 f"{TASK_PRD.as_posix()} 缺少阶段出口快照字段: {', '.join(missing_snapshot)}"
             )
+        elif allowed_targets and allowed_targets.issubset(EXECUTION_STAGES):
+            complexity_decision = extract_backticked_field(task_content, "complexity_decision")
+            if complexity_decision != "L0":
+                rendered_value = complexity_decision or "(missing)"
+                errors.append(
+                    f"{TASK_PRD.as_posix()} 的 `complexity_decision`={rendered_value!r}；"
+                    "brainstorm 仅允许 `L0` 直接进入 implementation/test-first，其他复杂度必须先进入 design/plan"
+                )
 
-    allowed_targets = design_path_candidates_from_state(state)
     if require_customer_prd and allowed_targets & {"design", "plan"}:
         customer_prd = project_root / CUSTOMER_PRD
         if not customer_prd.is_file():
@@ -1684,7 +1722,14 @@ def cmd_set(args: argparse.Namespace) -> int:
             repo_root = find_repo_root(task_dir)
             if repo_root is not None:
                 gate_errors: list[str] = []
-                validate_stage_transition_gates(task_dir, repo_root, pending_state, pending_stage, gate_errors)
+                validate_stage_transition_gates(
+                    task_dir,
+                    repo_root,
+                    state,
+                    pending_state,
+                    pending_stage,
+                    gate_errors,
+                )
                 if gate_errors:
                     for message in gate_errors:
                         print(f"❌ {message}")

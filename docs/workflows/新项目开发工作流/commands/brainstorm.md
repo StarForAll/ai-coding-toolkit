@@ -349,7 +349,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py init "$TASK_DIR" --stage
   - `estimate_refresh_result`
   - `kill_criteria`
   - `open_items`
-- 这组字段当前用于文档与人工复核，不由 `workflow-state.py` 单独逐字段强校验；不要把它误解成与项目级粗估同等级的脚本硬门禁
+- 这组字段不是“全部同等级硬门禁”：`workflow-state.py` 当前会强校验这些字段名是否存在；其中当 `brainstorm` 试图直接进入 `implementation` / `test-first` 时，`complexity_decision` 还会被额外当成脚本级硬门禁，只有 `L0` 才允许直达执行态；其余字段当前主要承担结构留痕与人工复核职责
 
 ### 轻量化分层指引
 

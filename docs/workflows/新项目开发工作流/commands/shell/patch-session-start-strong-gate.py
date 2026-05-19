@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Patch session-start.py _get_task_status() to use strong-gate workflow-state routing.
 
-When installed into a target project, this patch replaces session-start.py's
-_get_task_status() routing logic with strong-gate `workflow-state.py route`
-routing. The injected block always returns, making the old PLANNING/READY case
-logic unreachable.
+When installed into a target project, this patch replaces the legacy
+task-status tail logic after `task_status = task_data.get(...)` with a
+route-first strong-gate branch, so old PLANNING/READY/COMPLETED status routing
+does not remain as unreachable dead code.
 
 The patched session-start carrier delegates to `workflow-state.py route`
 whenever the helper script exists, even if `workflow-state.json` is missing or
@@ -21,6 +21,14 @@ from pathlib import Path
 
 PATCH_MARKER = "# strong-gate-session-start-patch-applied"
 ROUTE_FIRST_MARKER = "# [workflow-embed-patch:session-start-route-first]"
+TAIL_START_RE = re.compile(
+    r'task_status\s*=\s*task_data\.get\(\s*["\']status["\']\s*,\s*["\']unknown["\']\s*\)\s*\n'
+)
+LEGACY_TAIL_END_PATTERNS = (
+    re.compile(r"\n\s*def _extract_range\("),
+    re.compile(r"\n\s*def _load_trellis_config\("),
+    re.compile(r"\n\s*def main\("),
+)
 
 PATCH_BLOCK = '''
     # --- strong-gate session-start patch ---
@@ -88,6 +96,31 @@ PATCH_BLOCK = '''
 '''
 
 
+def _build_replacement(status_assignment_line: str) -> str:
+    return (
+        status_assignment_line
+        + f"    {PATCH_MARKER}\n"
+        + f"    {ROUTE_FIRST_MARKER}\n"
+        + PATCH_BLOCK
+        + "\n"
+    )
+
+
+def _replace_legacy_tail(content: str) -> str | None:
+    match = TAIL_START_RE.search(content)
+    if not match:
+        return None
+    tail_end = None
+    for pattern in LEGACY_TAIL_END_PATTERNS:
+        candidate = pattern.search(content, match.end())
+        if candidate and (tail_end is None or candidate.start() < tail_end.start()):
+            tail_end = candidate
+    replacement = _build_replacement(match.group(0))
+    if tail_end is None:
+        return content[:match.start()] + replacement
+    return content[:match.start()] + replacement + content[tail_end.start():]
+
+
 def patch_session_start(target_path: Path) -> bool:
     """Apply the strong-gate patch to session-start.py's _get_task_status().
 
@@ -103,63 +136,16 @@ def patch_session_start(target_path: Path) -> bool:
         print(f"OK: {target_path} already contains strong-gate patch, skipping")
         return True
 
-    if PATCH_MARKER in content and ROUTE_FIRST_MARKER not in content:
-        start_idx = content.find(f"    {PATCH_MARKER}")
-        block_start = content.find("    # --- strong-gate session-start patch ---", start_idx)
-        block_end = content.find("    # --- end strong-gate session-start patch ---", block_start)
-        if start_idx != -1 and block_start != -1 and block_end != -1:
-            block_end = content.find("\n", block_end)
-            if block_end == -1:
-                block_end = len(content)
-            replacement = f"    {PATCH_MARKER}\n    {ROUTE_FIRST_MARKER}\n{PATCH_BLOCK}\n"
-            new_content = content[:start_idx] + replacement + content[block_end:]
-            target_path.write_text(new_content, encoding="utf-8")
-            print(f"OK: Upgraded strong-gate session-start patch in {target_path}")
-            return True
+    replaced = _replace_legacy_tail(content)
+    if replaced is None:
+        print(f"Warning: {target_path} does not contain expected _get_task_status structure, skipping patch")
+        return False
 
-    # Find the _get_task_status function and the point where task_dir and
-    # task_title are both resolved. We need to inject AFTER the task_title
-    # is known (because the patch references task_title) but BEFORE the
-    # old PLANNING/READY routing cases.
-    #
-    # Strategy: find the line "task_title = task_data.get("task_title" ..."
-    # and inject after the next blank line, or find the stale-pointer return
-    # block and inject after it (before the old case logic starts).
-    #
-    # Most reliable: insert right after the task_title assignment and the
-    # task_status assignment, which are both available before Case 3.
-
-    # Look for the task_status assignment line that precedes the case logic
-    # Pattern: task_status = task_data.get("status", "unknown")
-    pattern = re.compile(
-        r'(task_status\s*=\s*task_data\.get\(\s*["\']status["\']\s*,\s*["\']unknown["\']\s*\)\s*\n)'
-    )
-
-    match = pattern.search(content)
-    if not match:
-        # Fallback: try to find the completed-task check and insert before it
-        # This means we need to be after task_title is available
-        pattern2 = re.compile(r'(\s+# Case 3: Task completed)')
-        match2 = pattern2.search(content)
-        if not match2:
-            print(f"Warning: {target_path} does not contain expected _get_task_status structure, skipping patch")
-            return False
-        # Insert before "# Case 3:" but we need task_title to be available
-        # Check if task_title is defined above this point
-        task_title_check = re.compile(r'task_title\s*=')
-        pre_content = content[:match2.start()]
-        if not task_title_check.search(pre_content):
-            print(f"Warning: {target_path} task_title not resolved before insertion point, skipping patch")
-            return False
-        insert_pos = match2.start()
+    target_path.write_text(replaced, encoding="utf-8")
+    if PATCH_MARKER in content:
+        print(f"OK: Upgraded strong-gate session-start patch in {target_path}")
     else:
-        insert_pos = match.end()
-
-    patch_with_marker = f"    {PATCH_MARKER}\n    {ROUTE_FIRST_MARKER}\n{PATCH_BLOCK}\n"
-
-    new_content = content[:insert_pos] + patch_with_marker + content[insert_pos:]
-    target_path.write_text(new_content, encoding="utf-8")
-    print(f"OK: Applied strong-gate session-start patch to {target_path}")
+        print(f"OK: Applied strong-gate session-start patch to {target_path}")
     return True
 
 

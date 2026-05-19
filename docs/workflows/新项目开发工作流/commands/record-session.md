@@ -14,6 +14,7 @@ description: 工作流最终收尾 — 归档任务并记录会话。触发词�
 
 ## When to Use (自然触发)
 
+- 仅当当前路由已在 `delivery` 之后，且准备执行最终归档与会话记录时使用
 - "归档这个任务"
 - "记录一下这次会话"
 - "收尾完成了"
@@ -29,6 +30,22 @@ description: 工作流最终收尾 — 归档任务并记录会话。触发词�
 - [ ] `delivery/acceptance.md` 已记录验收结论
 - [ ] 当前 workflow 收尾链路已按 **finish-work → delivery → record-session** 顺序执行
 - [ ] 当前 task 是本次要归档的目标，不混入其他任务
+
+### 门禁校验
+
+先检查当前路由是否已经进入 `record-session`：
+
+```bash
+python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route <task-dir> --project-root <project-root>
+```
+
+再校验当前阶段产物是否满足终态收尾门禁：
+
+```bash
+python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
+```
+
+若 `route` 仍显示当前阶段是 `delivery` / `finish-work` / 其他阶段，或 `validate` 报告缺少交付产物，则不得直接执行本命令中的 archive / add_session 步骤。先回到缺失阶段补齐门禁。
 
 ---
 
@@ -73,6 +90,7 @@ git status --short .trellis/workspace .trellis/tasks
 
 ## 约束
 
+- **终态入口，不是快捷跳转**：在强门禁流里，`record-session` 只应作为 `delivery` 之后的终态执行卡使用；不要把它当成跳过 `delivery` 的会话记录快捷入口
 - **归档顺序**：先 `task.py archive`，再 `add_session.py`
 - **范围锁定**：只归档当前任务，不批量处理其他任务
 - **禁止回写**：不为补齐规则或整理台账而回写旧任务、旧会话记录或已归档目录
