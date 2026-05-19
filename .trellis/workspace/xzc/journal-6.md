@@ -338,3 +338,38 @@ Audited the embedded workflow source against a tmp Trellis baseline sample, conf
 ### Next Steps
 
 - None - task complete
+
+
+## Session 255: Audit and fix embedded workflow entry gates
+
+**Date**: 2026-05-19
+**Task**: Audit and fix embedded workflow entry gates
+**Branch**: `main`
+
+### Summary
+
+Audited the embedded workflow against a rebuilt tmp target, fixed brainstorm entry and feasibility-to-brainstorm transition inconsistencies, and verified outsourcing and personal-profile regression paths.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `586d110` | (see git log) |
+| `bc5f146` | (see git log) |
+| `b3087c7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
