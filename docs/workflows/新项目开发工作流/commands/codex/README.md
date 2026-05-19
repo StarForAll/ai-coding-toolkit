@@ -486,5 +486,5 @@ Codex 对这套 workflow 的正确描述应该是：
 当前 `/tmp` smoke test 的额外发现：
 
 - `codex exec` 可完整运行并读取项目 `AGENTS.md`
-- 当前 workflow 使用的 `inject-workflow-state.py` hook 文件本身可按协议生成 Trellis 上下文
+- 当前 workflow 使用的 `inject-workflow-state.py` hook 文件本身可按协议生成 Trellis 上下文；修复后其 header 应显式携带 `workflow-state.py route` 的 `action / stage_status / blockers / target / reason` 等元数据，而不是只暴露阶段名
 - 但在非交互 `codex exec` 中，是否把 hook 注入后的 `<ready>` 块暴露给模型，需要单独验证，不能直接假定与交互式会话完全一致

@@ -30,7 +30,7 @@ Whether these files exist depends on which `trellis init --<platform>` surfaces 
 | Script | Purpose |
 | --- | --- |
 | `session-start.py` | Optional session-start overview when that platform wires the event. |
-| `inject-workflow-state.py` | Emits the block matching the current strong-gate stage. |
+| `inject-workflow-state.py` | Emits the current stage template plus route metadata such as `action`, `stage_status`, and `blockers`. |
 | `inject-subagent-context.py` | Injects PRD, JSONL context, and related spec/research. |
 | `inject-shell-session-context.py` | Lets shell commands inherit Trellis session identity. |
 
@@ -38,7 +38,7 @@ Whether these files exist depends on which `trellis init --<platform>` surfaces 
 
 1. **Settings wire things up; hooks define behavior.** If only the hook changes, the platform may never call it.
 2. **Confirm the live carrier first.** Some projects use SessionStart, some use turn-level hooks, and some use both.
-3. **Strong-gate routing must be stage-based.** The workflow-state carrier should prefer `workflow-state.json.stage` / `workflow-state.py route`, not `task.json.status`.
+3. **Strong-gate routing must be route-based.** The workflow-state carrier may still choose a stage template, but its source of truth must be `workflow-state.py route`, not `task.json.status`, and it must not hide blocker/repair actions.
 4. **Errors must be visible.** If a carrier is missing or inactive, surface which context was not injected.
 
 ## Troubleshooting Path

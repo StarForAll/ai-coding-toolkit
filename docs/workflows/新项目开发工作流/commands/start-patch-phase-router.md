@@ -36,6 +36,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route --project-root <pr
 | `awaiting_confirmation` | 阶段完成等待确认 | 展示已完成/未完成/缺失项，等用户确认 |
 | `awaiting_confirmation_with_blockers` | 阶段已到确认点，但仍有阻塞项 | 展示 `blockers`，要求先补齐阻塞项，不能直接确认推进 |
 | `blocked` | 执行阶段存在阻塞条件 | 逐项展示 `blockers`，不继续推进 |
+| `context_needed` | 当前 task 不能继续直接执行 | 当前阶段要求 leaf task，但当前 task 含有 children；要求切到子任务，不能继续在 parent task 上推进 |
 | `recovery_needed` | 当前 session 无法确定 active task | 要求用户明确当前任务 |
 | `repair_needed` | 状态文件缺失或损坏 | 运行 `workflow-state.py repair`。若输出 `repair_ready`，在用户确认后再重写；若输出 `manual_confirmation_required`，必须先让用户明确当前已确认阶段，再用 `--stage <stage>` 重建，不能靠任务产物反推。 |
 | `embed_invalid` | 嵌入状态无效 | 停止；提示用户检查安装完整性 |

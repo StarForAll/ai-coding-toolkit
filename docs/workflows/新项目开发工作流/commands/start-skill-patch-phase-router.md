@@ -56,6 +56,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route --project-root <pr
 | `awaiting_confirmation` | Stage done, waiting for user | Report completed/missing items; wait for confirmation |
 | `awaiting_confirmation_with_blockers` | Stage reached confirmation point but blockers remain | Show `blockers`; do not ask for confirmation until they are fixed |
 | `blocked` | Execution blocked | Show `blockers` list; do not proceed |
+| `context_needed` | Current task cannot continue directly | The current stage requires a leaf task but the task has children; switch to a child task instead of proceeding on the parent task. |
 | `recovery_needed` | Cannot determine the current active task | Ask user to clarify the current task |
 | `repair_needed` | State file missing or corrupt | Run `workflow-state.py repair`. If it reports `repair_ready`, confirm and re-apply; if it reports `manual_confirmation_required`, ask the user to confirm the current stage and rerun with `--stage <stage>` instead of inferring from artifacts. |
 | `embed_invalid` | Installation incomplete | Stop; tell user to check installation integrity |

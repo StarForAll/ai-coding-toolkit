@@ -35,7 +35,7 @@ The Trellis task system is stored entirely under `.trellis/tasks/` in the user p
 | Field | Meaning |
 | --- | --- |
 | `id` / `name` / `title` | Task identity and title. |
-| `status` | Bookkeeping field: `planning`, `in_progress`, `review`, or `completed`. Under the strong-gate model, `task.json.status` does **not** drive stage routing; the stage authority is `workflow-state.json.stage`. |
+| `status` | Bookkeeping field: `planning`, `in_progress`, `review`, or `completed`. Under the strong-gate model, `task.json.status` does **not** drive stage routing; the routing authority is `workflow-state.py route` over the task's `workflow-state.json`. |
 | `priority` | `P0`, `P1`, `P2`, `P3`. |
 | `creator` / `assignee` | Creator and assignee. |
 | `package` | Target package in a monorepo; may be empty. |
@@ -44,7 +44,7 @@ The Trellis task system is stored entirely under `.trellis/tasks/` in the user p
 | `commit` / `pr_url` | Commit and PR information after completion. |
 | `meta` | Extension fields. |
 
-The AI should not treat phase numbers as task status. Task progress is determined by `workflow-state.json.stage`, `prd.md`, whether JSONL context is configured, and the stage descriptions in `.trellis/workflow.md`.
+The AI should not treat phase numbers as task status. Task progress is determined by `workflow-state.py route`, the task's `workflow-state.json`, `prd.md`, whether JSONL context is configured, and the stage descriptions in `.trellis/workflow.md`.
 
 ## Active Task
 

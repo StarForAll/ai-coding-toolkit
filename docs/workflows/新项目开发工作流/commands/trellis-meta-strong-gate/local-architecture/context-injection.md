@@ -29,10 +29,16 @@ If the user says "the AI forgot the current stage," first check the carrier the 
 workflow-state is the lightweight hint injected around each user turn. In strong-gate projects it should be derived from:
 
 ```text
-active task -> workflow-state.json.stage -> matching [workflow-state:STAGE] block
+active task -> workflow-state.py route -> stage template + route metadata header
 ```
 
 Do not describe this as "matching the current task status" unless you are explicitly talking about a legacy non-strong-gate project.
+
+Practical meaning:
+
+- the breadcrumb body may still come from the current stage's `[workflow-state:STAGE]` block
+- but the injected header should surface route-only fields such as `action`, `stage_status`, `blockers`, `target`, and `reason`
+- therefore `blocked`, `context_needed`, or `repair_needed` must not look identical to an ordinary `design` / `plan` / `implementation` re-entry
 
 ## sub-agent context
 
@@ -48,7 +54,7 @@ In both modes, JSONL files remain the key interface, but stage routing still com
 | Need | Edit location |
 | --- | --- |
 | Change session-start injected content | The platform's session-start carrier, if that project actually wires one. |
-| Change per-turn workflow-state rules | `[workflow-state:STAGE]` blocks in `.trellis/workflow.md`, plus hook mapping if the emitted key changes. |
+| Change per-turn workflow-state rules | `[workflow-state:STAGE]` blocks in `.trellis/workflow.md`, plus the carrier logic that decides which route metadata is surfaced in the injected header. |
 | Change how sub-agents read context | Platform agent definitions, `inject-subagent-context`, or agent preludes. |
 | Change active task resolution | `.trellis/scripts/common/active_task.py`. |
 

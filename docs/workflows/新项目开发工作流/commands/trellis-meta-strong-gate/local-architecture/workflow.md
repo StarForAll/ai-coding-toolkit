@@ -29,18 +29,19 @@ Use this chain to determine the current stage:
 ```text
 .trellis/.runtime/sessions/<context>.json
   -> current active task
-  -> $TASK_DIR/workflow-state.json.stage
+  -> $TASK_DIR/workflow-state.json
+  -> workflow-state.py route
 ```
 
 Key implications:
 
 - `task.json.status` is a legacy task-lifecycle field, not the stage-routing authority.
 - `task.py start` refreshes the active-task pointer, but stage changes must still go through `workflow-state.py set`.
-- `workflow-state.py route` is the authoritative router for `first_entry`, `reenter`, `blocked`, `awaiting_confirmation`, and `repair_needed`.
+- `workflow-state.py route` is the authoritative router for `first_entry`, `reenter`, `blocked`, `context_needed`, `awaiting_confirmation`, `awaiting_confirmation_with_blockers`, `repair_needed`, and `embed_invalid`.
 
 ## Workflow-State Prompt Blocks
 
-The injected block should match the current strong-gate stage, for example:
+The injected block may still use the current strong-gate stage template, for example:
 
 ```text
 [workflow-state:design]
@@ -48,7 +49,7 @@ The injected block should match the current strong-gate stage, for example:
 [/workflow-state:design]
 ```
 
-Typical live blocks are stage-based (`design`, `plan`, `finish-work`, `delivery`) plus `no_task`. Do not assume `planning` / `in_progress` / `completed` blocks remain meaningful after this workflow is installed.
+Typical live blocks are stage-based (`design`, `plan`, `finish-work`, `delivery`) plus `no_task`. However the injected header must also carry the authoritative route metadata (`action`, `stage_status`, `blockers`, `target`, `reason`) so blocked or repair-needed states are not downgraded into a plain stage breadcrumb. Do not assume `planning` / `in_progress` / `completed` blocks remain meaningful after this workflow is installed.
 
 ## Local Modification Patterns
 

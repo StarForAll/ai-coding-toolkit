@@ -97,6 +97,9 @@ patch_opencode_session_utils = _INSTALL_WORKFLOW.patch_opencode_session_utils
 replace_workflow_task_mechanism = _INSTALL_WORKFLOW._replace_workflow_task_mechanism
 _HOOK_PATCH_MARKER = _INSTALL_WORKFLOW._HOOK_PATCH_MARKER
 _SESSION_START_STRONG_GATE_PATCH_MARKER = _INSTALL_WORKFLOW._SESSION_START_STRONG_GATE_PATCH_MARKER
+_ROUTE_HOOK_PATCH_MARKER = "# [workflow-embed-patch:prefer-workflow-route]"
+_OPENCODE_ROUTE_HOOK_PATCH_MARKER = "// [workflow-embed-patch:prefer-workflow-route]"
+_SESSION_START_ROUTE_FIRST_MARKER = "# [workflow-embed-patch:session-start-route-first]"
 _STALE_CONTRACT_PATTERN = _INSTALL_WORKFLOW._STALE_CONTRACT_PATTERN
 _TASK_DEGRADED_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_DEGRADED_PATCH_MARKER
 _TASK_CURRENT_DEGRADED_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_CURRENT_DEGRADED_PATCH_MARKER
@@ -848,10 +851,14 @@ def detect_conflicts_codex(
     inject_workflow_state = root / ".codex" / "hooks" / "inject-workflow-state.py"
     if inject_workflow_state.exists():
         hook_content = inject_workflow_state.read_text(encoding="utf-8")
-        if _HOOK_PATCH_MARKER in hook_content:
+        if (
+            _HOOK_PATCH_MARKER in hook_content
+            and _ROUTE_HOOK_PATCH_MARKER in hook_content
+            and "workflow-state.route" in hook_content
+        ):
             ok("[Codex] inject-workflow-state.py: hook 补丁已应用")
         else:
-            err("[Codex] inject-workflow-state.py: hook 补丁未应用（workflow-state.json.stage 优先级 + 代码块过滤未启用）")
+            err("[Codex] inject-workflow-state.py: hook 补丁未应用（route-centered breadcrumb 未启用）")
             conflicts += 1
     else:
         err("[Codex] inject-workflow-state.py 缺失")
@@ -860,7 +867,10 @@ def detect_conflicts_codex(
     codex_session_start = root / ".codex" / "hooks" / "session-start.py"
     if codex_session_start.exists():
         session_start_content = codex_session_start.read_text(encoding="utf-8")
-        if _SESSION_START_STRONG_GATE_PATCH_MARKER in session_start_content:
+        if (
+            _SESSION_START_STRONG_GATE_PATCH_MARKER in session_start_content
+            and _SESSION_START_ROUTE_FIRST_MARKER in session_start_content
+        ):
             ok("[Codex] session-start.py: 可选辅助面已接上强门禁补丁")
         else:
             info("[Codex] session-start.py: 存在但未接 workflow 补丁（可选辅助面，当前合同下不作为必需 carrier）")
@@ -870,30 +880,43 @@ def detect_conflicts_codex(
     claude_hook = root / ".claude" / "hooks" / "inject-workflow-state.py"
     if claude_hook.exists():
         claude_content = claude_hook.read_text(encoding="utf-8")
-        if _HOOK_PATCH_MARKER in claude_content:
+        if (
+            _HOOK_PATCH_MARKER in claude_content
+            and _ROUTE_HOOK_PATCH_MARKER in claude_content
+            and "workflow-state.route" in claude_content
+        ):
             ok("[Claude] inject-workflow-state.py: hook 补丁已应用")
         else:
-            err("[Claude] inject-workflow-state.py: hook 补丁未应用（workflow-state.json.stage 优先级未启用）")
+            err("[Claude] inject-workflow-state.py: hook 补丁未应用（route-centered breadcrumb 未启用）")
             conflicts += 1
 
     claude_session_start = root / ".claude" / "hooks" / "session-start.py"
     if claude_session_start.exists():
         session_start_content = claude_session_start.read_text(encoding="utf-8")
-        if _SESSION_START_STRONG_GATE_PATCH_MARKER in session_start_content:
+        if (
+            _SESSION_START_STRONG_GATE_PATCH_MARKER in session_start_content
+            and _SESSION_START_ROUTE_FIRST_MARKER in session_start_content
+        ):
             ok("[Claude] session-start.py: 强门禁补丁已应用")
         else:
-            err("[Claude] session-start.py: 强门禁补丁缺失")
+            err("[Claude] session-start.py: 强门禁补丁缺失或仍会隐藏 repair_needed")
             conflicts += 1
 
     # Issue 2: check OpenCode plugin patch
     opencode_js = root / ".opencode" / "plugins" / "inject-workflow-state.js"
     if opencode_js.exists():
         js_content = opencode_js.read_text(encoding="utf-8")
-        js_patch_marker = "// [workflow-embed-patch:prefer-workflow-state-json]"
-        if js_patch_marker in js_content:
+        if (
+            _HOOK_PATCH_MARKER not in js_content
+            and _OPENCODE_ROUTE_HOOK_PATCH_MARKER in js_content
+            and "workflow-state.route" in js_content
+        ) or (
+            _OPENCODE_ROUTE_HOOK_PATCH_MARKER in js_content
+            and "workflow-state.route" in js_content
+        ):
             ok("[OpenCode] inject-workflow-state.js: plugin 补丁已应用")
         else:
-            warn("[OpenCode] inject-workflow-state.js: plugin 补丁未应用（workflow-state.json.stage 优先级未启用）")
+            warn("[OpenCode] inject-workflow-state.js: plugin 补丁未应用（route-centered breadcrumb 未启用）")
     # OpenCode plugin absence is not a conflict — OpenCode may not be installed
 
     task_py = root / ".trellis" / "scripts" / "task.py"

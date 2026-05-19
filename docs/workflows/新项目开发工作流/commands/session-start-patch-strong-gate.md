@@ -2,7 +2,7 @@
 
 ### 概述
 
-安装器在嵌入目标项目时，将 `patch-session-start-strong-gate.py` 应用于 `.claude/hooks/session-start.py`，使其 `_get_task_status()` 函数在强门禁模式下优先使用 `workflow-state.py route` 的路由结果，而非旧的 PLANNING/READY 逻辑。
+安装器在嵌入目标项目时，将 `patch-session-start-strong-gate.py` 应用于 `.claude/hooks/session-start.py`，使其 `_get_task_status()` 函数在强门禁模式下统一委托 `workflow-state.py route`，而非旧的 PLANNING/READY 逻辑。
 
 ### 背景
 
@@ -17,35 +17,28 @@
 
 在 `_get_task_status()` 函数中，`task_title` 和 `task_status` 均已解析后、旧 Case 3（completed）判断之前，注入强门禁路由逻辑：
 
-1. 检查 `task_dir / "workflow-state.json"` 是否存在
-2. 若存在，读取 `stage` 字段，验证其属于合法强门禁阶段集合
-3. 若阶段有效，执行 `workflow-state.py route <task_dir>` 获取路由 JSON
-4. 构建结构化状态字符串，包含 `Status`（强门禁阶段）、`Action`、`Blockers` 等，直接返回
-5. 若 `workflow-state.json` 不存在或阶段无效，返回简单 `ACTIVE` 状态而非 fallback 到旧逻辑
+1. 定位 `.trellis/scripts/workflow/workflow-state.py`
+2. 无论 `workflow-state.json` 是否存在，都执行 `workflow-state.py route <task_dir> --project-root <project-root>`
+3. 读取路由 JSON 中的 `action`、`stage`、`stage_status`、`blockers`、`target`、`reason`
+4. 构建结构化状态字符串并直接返回
+5. 只有在 route helper 缺失、route 执行失败、或输出非法 JSON 时，才退回简单 `ACTIVE` 状态
 
-### 合法强门禁阶段
-
-```python
-{
-    "feasibility", "brainstorm", "design", "plan",
-    "implementation", "test-first", "project-audit",
-    "check", "review-gate", "finish-work", "delivery", "record-session",
-}
-```
+这样 `repair_needed`、`context_needed`、`awaiting_confirmation_with_blockers` 等正式路由结果不会被 SessionStart 隐藏。
 
 ### 补丁输出格式
 
 当强门禁路由生效时，`<task-status>` 块的格式变为：
 
 ```
-Status: STRONG-GATE (<stage>)
+Status: STRONG-GATE (<stage-or-action>)
 Task: <task_title>
-Source: <active.source>
+Source: workflow-state.route
 Stage-Status: <stage_status>
 Action: <action>
 Target-Stage: <target>        (仅当 target 非空)
 Reason: <reason>              (仅当 reason 非空)
 Blockers: <blocker1>; <blocker2>  (仅当有 blockers)
+Warnings: <warning1>; <warning2>  (仅当有 warnings)
 Next-Action: Follow the action above...
 ```
 
@@ -57,14 +50,14 @@ Next-Action: Follow the action above...
 
 ### 冪等性
 
-补丁通过 `# strong-gate-session-start-patch-applied` 标记检测是否已应用。重复调用不会重复注入。
+补丁通过 `# strong-gate-session-start-patch-applied` 与 `# [workflow-embed-patch:session-start-route-first]` 标记检测是否已升级到 route-first 版本。重复调用不会重复注入。
 
 ### Fallback 行为
 
 以下情况补丁返回简单 `ACTIVE` 状态（不 fallback 到旧 PLANNING/READY 逻辑）：
 
-- `workflow-state.json` 不存在于 task 目录
-- `stage` 字段为空或不在合法阶段集合中
 - `workflow-state.py` 脚本未找到
 - `workflow-state.py route` 执行失败或输出非法 JSON
 - 补丁逻辑抛出任何异常（被 `except Exception` 捕获后返回 ACTIVE 状态）
+
+注意：`workflow-state.json` 缺失或损坏时，不应再回退为 `ACTIVE`；应由 `workflow-state.py route` 返回 `repair_needed`。

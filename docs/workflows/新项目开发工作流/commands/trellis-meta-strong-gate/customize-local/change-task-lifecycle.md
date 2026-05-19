@@ -70,10 +70,10 @@ Active task is session-level state stored in `.trellis/.runtime/sessions/`. Do n
 
 `cmd_create` in `.trellis/scripts/common/task_store.py` calls `set_active_task` best-effort right after writing the new task directory. The behavior:
 
-- When the calling shell carries session identity, the per-session pointer at `.trellis/.runtime/sessions/<context_key>.json` is rewritten to point at the new task. `task.json` records `status=planning` as a bookkeeping field only; it does **not** drive stage routing. Under the strong-gate model, stage routing is determined by `workflow-state.json.stage`.
+- When the calling shell carries session identity, the per-session pointer at `.trellis/.runtime/sessions/<context_key>.json` is rewritten to point at the new task. `task.json` records `status=planning` as a bookkeeping field only; it does **not** drive stage routing. Under the strong-gate model, stage routing is determined by `workflow-state.py route` over the task's `workflow-state.json`.
 - When session identity is unavailable, the task directory is still created and `status=planning` is still written, but the active pointer is left untouched. The user can attach the task later with `task.py start <dir>` once they're back in an AI session.
 
-After `task.py create` sets the active pointer, the next `workflow-state.py route` call will detect the new task and route based on `workflow-state.json.stage`. During brainstorm and JSONL curation, the stage is driven by `workflow-state.json.stage=brainstorm`, not by `task.json.status`.
+After `task.py create` sets the active pointer, the next `workflow-state.py route` call will detect the new task and route from the current `workflow-state.json` content. During brainstorm and JSONL curation, the active phase is still represented in `workflow-state.json`, but the authoritative action shown to carriers comes from `workflow-state.py route`, not from `task.json.status`.
 
 If you fork `task.py` to add a new creation path (e.g. an external import that bypasses `cmd_create`), audit whether your path also calls `set_active_task`. Without that call, your created tasks will not surface as active. The stage-routing contract is maintained by `workflow-state.py` (`cmd_set` / `cmd_route` functions) and the stage transition protocol in `.trellis/workflow.md`.
 
