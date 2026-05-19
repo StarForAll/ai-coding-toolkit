@@ -470,3 +470,37 @@ Audited the embedded workflow against a rebuilt tmp target, fixed brainstorm ent
 ### Next Steps
 
 - None - task complete
+
+
+## Session 259: workflow audit fix strong-gate closure
+
+**Date**: 2026-05-19
+**Task**: workflow audit fix strong-gate closure
+**Branch**: `main`
+
+### Summary
+
+修复新项目开发工作流的强门禁、record-session 路由、degraded fallback 与 session-start 补丁问题，并补齐回归测试与审计记录。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `71a797b` | (see git log) |
+| `7f8cab2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
