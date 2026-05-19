@@ -733,3 +733,36 @@ Audited the embedded workflow against a rebuilt tmp target, fixed brainstorm ent
 ### Next Steps
 
 - None - task complete
+
+
+## Session 267: 审计并修复嵌入工作流强门禁路由残留
+
+**Date**: 2026-05-19
+**Task**: 审计并修复嵌入工作流强门禁路由残留
+**Branch**: `main`
+
+### Summary
+
+审计 docs/workflows/新项目开发工作流 的强门禁残留，修复 implementation/finish-work 路由契约、动作态 breadcrumb 与 hook 状态依赖，并补安装器回归测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `995308b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
