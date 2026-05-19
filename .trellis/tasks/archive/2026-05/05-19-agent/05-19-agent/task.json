@@ -1,7 +1,7 @@
 {
   "id": "agent",
-  "name": "agent",
-  "title": "生成游戏策略大师Agent系统提示词",
+  "name": "agent-review-prompt",
+  "title": "优化大众玩家游戏评论Agent提示词",
   "description": "",
   "status": "completed",
   "dev_type": null,
