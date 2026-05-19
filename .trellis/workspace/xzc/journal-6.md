@@ -766,3 +766,36 @@ Audited the embedded workflow against a rebuilt tmp target, fixed brainstorm ent
 ### Next Steps
 
 - None - task complete
+
+
+## Session 268: 修复嵌入工作流运行时门禁与恢复逻辑
+
+**Date**: 2026-05-20
+**Task**: 修复嵌入工作流运行时门禁与恢复逻辑
+**Branch**: `main`
+
+### Summary
+
+修复源工作流的非执行阶段硬门禁、Codex patched skill 漏检、degraded 恢复误选，以及任务视图对 route 的动态依赖，并补齐回归测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `df978a7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
