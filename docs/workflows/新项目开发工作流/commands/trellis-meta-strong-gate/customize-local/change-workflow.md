@@ -46,7 +46,7 @@ Examples:
 | `reenter` | Re-enter the current confirmed stage | Use the carrier matching `target` |
 | `context_needed` | Parent task cannot continue directly | Switch to the required child task before proceeding |
 | `awaiting_confirmation_with_blockers` | Stage is at confirmation point but exit gate is incomplete | Fix blockers before asking for confirmation |
-| `repair_needed` | State file missing or stale | Run `workflow-state.py repair` and confirm the inference |
+| `repair_needed` | State file missing or stale | Run `workflow-state.py repair` and confirm the inference; execution stages also need explicit confirmation fields such as `--execution-authorized true` and `--transition-from <previous-stage>` |
 
 ## Notes
 

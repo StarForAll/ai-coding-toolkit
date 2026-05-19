@@ -58,7 +58,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route --project-root <pr
 | `blocked` | Execution blocked | Show `blockers` list; do not proceed |
 | `context_needed` | Current task cannot continue directly | The current stage requires a leaf task but the task has children; switch to a child task instead of proceeding on the parent task. |
 | `recovery_needed` | Cannot determine the current active task | Ask user to clarify the current task |
-| `repair_needed` | State file missing or corrupt | Run `workflow-state.py repair`. If it reports `repair_ready`, confirm and re-apply; if it reports `manual_confirmation_required`, ask the user to confirm the current stage and rerun with `--stage <stage>` instead of inferring from artifacts. |
+| `repair_needed` | State file missing or corrupt | Run `workflow-state.py repair`. If it reports `repair_ready`, confirm and re-apply; if it reports `manual_confirmation_required`, ask the user to confirm the current stage and rerun with explicit confirmation flags instead of inferring from artifacts. Non-execution stages usually only need `--stage <stage>`; `implementation` / `test-first` also require `--execution-authorized true` and `--transition-from <previous-stage>`. |
 | `embed_invalid` | Installation incomplete | Stop; tell user to check installation integrity |
 
 4. If the output contains `blockers`, display each one and do not proceed.

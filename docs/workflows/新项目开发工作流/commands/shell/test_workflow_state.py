@@ -2371,6 +2371,48 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(state["stage"], "feasibility")
         self.assertEqual(state["version"], 1)
 
+    def test_cmd_repair_execution_stage_requires_explicit_confirmation_fields(self) -> None:
+        root, task_dir = self.make_fixture()
+
+        result = self.run_script(
+            "repair",
+            str(task_dir),
+            "--project-root",
+            str(root),
+            "--stage",
+            "implementation",
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["status"], "manual_confirmation_required")
+        self.assertIn("--execution-authorized true", data["message"])
+        self.assertIn("--transition-from <上一阶段>", data["message"])
+
+    def test_cmd_repair_execution_stage_apply_succeeds_with_confirmation_fields(self) -> None:
+        root, task_dir = self.make_fixture()
+
+        result = self.run_script(
+            "repair",
+            str(task_dir),
+            "--project-root",
+            str(root),
+            "--stage",
+            "implementation",
+            "--execution-authorized",
+            "true",
+            "--transition-from",
+            "plan",
+            "--apply",
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        repaired = json.loads((task_dir / "workflow-state.json").read_text(encoding="utf-8"))
+        self.assertEqual(repaired["stage"], "implementation")
+        self.assertTrue(repaired["checkpoints"]["execution_authorized"])
+        self.assertEqual(repaired["last_confirmed_transition"]["from"], "plan")
+        self.assertEqual(repaired["last_confirmed_transition"]["to"], "implementation")
+
     def test_cmd_repair_resets_suspicious_semantic_fields_for_same_stage(self) -> None:
         root, task_dir = self.make_fixture()
         broken_state = {
@@ -2442,6 +2484,47 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         repaired = json.loads((task_dir / "workflow-state.json").read_text(encoding="utf-8"))
         self.assertEqual(repaired["allowed_next_stages"], ["implementation", "test-first"])
+
+    def test_cmd_repair_preserves_valid_execution_confirmation_for_same_stage(self) -> None:
+        root, task_dir = self.make_fixture()
+        broken_state = {
+            "version": 1,
+            "stage": "implementation",
+            "stage_status": "awaiting_user_confirmation",
+            "current_block": None,
+            "completed_blocks": ["task-created"],
+            "allowed_next_stages": ["invalid-next"],
+            "awaiting_user_confirmation": True,
+            "last_confirmed_transition": {
+                "from": "plan",
+                "to": "implementation",
+                "confirmed_at": "2026-05-18T00:00:00+00:00",
+            },
+            "notes": ["keep me"],
+            "checkpoints": {
+                "architecture_confirmed": True,
+                "context7_review_completed": True,
+                "execution_authorized": True,
+            },
+            "updated_at": "2026-05-18T00:00:00+00:00",
+        }
+        (task_dir / "workflow-state.json").write_text(
+            json.dumps(broken_state, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_script("repair", str(task_dir), "--project-root", str(root), "--apply")
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        repaired = json.loads((task_dir / "workflow-state.json").read_text(encoding="utf-8"))
+        self.assertEqual(repaired["stage"], "implementation")
+        self.assertEqual(repaired["stage_status"], "awaiting_user_confirmation")
+        self.assertTrue(repaired["awaiting_user_confirmation"])
+        self.assertTrue(repaired["checkpoints"]["execution_authorized"])
+        self.assertEqual(repaired["last_confirmed_transition"]["from"], "plan")
+        self.assertEqual(repaired["last_confirmed_transition"]["to"], "implementation")
+        self.assertEqual(repaired["completed_blocks"], ["task-created"])
+        self.assertEqual(repaired["allowed_next_stages"], ["test-first", "check", "project-audit"])
 
     # ------------------------------------------------------------------
     # tolerant version handling test

@@ -1965,21 +1965,37 @@ def patch_task_start_degraded_fallback(root: Path, *, dry_run: bool) -> bool:
             patched = patched.replace(finish_anchor, finish_patch + finish_anchor, 1)
             applied = True
 
-    current_anchor = '    if active.task_path:\n        print(active.task_path)\n        return 0\n\n    return 1\n'
+    current_anchor = '    if args.source:\n        print(f"Current task: {active.task_path or \'(none)\'}")\n        print(f"Source: {active.source}")\n        if active.stale:\n            print("State: stale")\n        return 0 if active.task_path else 1\n\n    if active.task_path:\n        print(active.task_path)\n        return 0\n\n    return 1\n'
     current_patch = """\
+    if args.source:
+        if active.task_path:
+            print(f"Current task: {active.task_path}")
+            print(f"Source: {active.source}")
+            if active.stale:
+                print("State: stale")
+            return 0
+        # [workflow-embed-patch:degraded-current-read]
+        degraded_path = repo_root / ".trellis" / ".runtime" / "degraded-active-task.json"
+        payload = read_json(degraded_path)
+        current_task = payload.get("current_task") if isinstance(payload, dict) else None
+        if isinstance(current_task, str) and current_task.strip():
+            print(f"Current task: {current_task}")
+            print("Source: degraded-active-task")
+            return 0
+        print("Current task: (none)")
+        print("Source: none")
+        if active.stale:
+            print("State: stale")
+        return 1
+
     if active.task_path:
         print(active.task_path)
         return 0
 
-    # [workflow-embed-patch:degraded-current-read]
     degraded_path = repo_root / ".trellis" / ".runtime" / "degraded-active-task.json"
     payload = read_json(degraded_path)
     current_task = payload.get("current_task") if isinstance(payload, dict) else None
     if isinstance(current_task, str) and current_task.strip():
-        if args.source:
-            print(f"Current task: {current_task}")
-            print("Source: degraded-active-task")
-            return 0
         print(current_task)
         return 0
 

@@ -382,6 +382,125 @@ def validate_state_shape(state: dict[str, Any], errors: list[str]) -> None:
                 errors.append("last_confirmed_transition.confirmed_at 必须存在且为字符串")
 
 
+def transition_payload_is_valid(
+    transition: Any,
+    *,
+    target_stage: str | None = None,
+) -> bool:
+    if not isinstance(transition, dict):
+        return False
+    if not isinstance(transition.get("from"), str):
+        return False
+    if not isinstance(transition.get("to"), str):
+        return False
+    if not isinstance(transition.get("confirmed_at"), str):
+        return False
+    if target_stage is not None and transition.get("to") != target_stage:
+        return False
+    return True
+
+
+def recover_repair_state(
+    candidate_stage: str,
+    state: dict[str, Any] | None,
+) -> dict[str, Any]:
+    repaired = build_default_state(candidate_stage)
+    if not isinstance(state, dict) or state.get("stage") != candidate_stage:
+        return repaired
+
+    existing_block = state.get("current_block")
+    if existing_block is None or isinstance(existing_block, str):
+        repaired["current_block"] = existing_block
+
+    existing_completed = state.get("completed_blocks")
+    if isinstance(existing_completed, list) and all(isinstance(item, str) for item in existing_completed):
+        repaired["completed_blocks"] = existing_completed
+
+    existing_allowed_next = state.get("allowed_next_stages")
+    canonical_allowed_next = set(STAGE_TRANSITIONS.get(candidate_stage, []))
+    if (
+        isinstance(existing_allowed_next, list)
+        and all(isinstance(item, str) for item in existing_allowed_next)
+        and set(existing_allowed_next).issubset(canonical_allowed_next)
+    ):
+        repaired["allowed_next_stages"] = existing_allowed_next
+
+    existing_notes = state.get("notes")
+    if isinstance(existing_notes, list) and all(isinstance(item, str) for item in existing_notes):
+        repaired["notes"] = existing_notes
+
+    if candidate_stage in EXECUTION_STAGES:
+        existing_stage_status = state.get("stage_status")
+        existing_awaiting = state.get("awaiting_user_confirmation")
+        if (
+            existing_stage_status in STAGE_STATUSES
+            and isinstance(existing_awaiting, bool)
+            and (
+                (existing_awaiting is True and existing_stage_status == "awaiting_user_confirmation")
+                or (existing_awaiting is False and existing_stage_status != "awaiting_user_confirmation")
+            )
+        ):
+            repaired["stage_status"] = existing_stage_status
+            repaired["awaiting_user_confirmation"] = existing_awaiting
+
+        existing_checkpoints = state.get("checkpoints")
+        if isinstance(existing_checkpoints, dict):
+            repaired_checkpoints = repaired.setdefault("checkpoints", {})
+            for field_name in (
+                "architecture_confirmed",
+                "context7_review_completed",
+                "execution_authorized",
+            ):
+                field_value = existing_checkpoints.get(field_name)
+                if isinstance(field_value, bool):
+                    repaired_checkpoints[field_name] = field_value
+
+        existing_transition = state.get("last_confirmed_transition")
+        if transition_payload_is_valid(existing_transition, target_stage=candidate_stage):
+            repaired["last_confirmed_transition"] = existing_transition
+
+    return repaired
+
+
+def apply_repair_overrides(repaired: dict[str, Any], args: argparse.Namespace) -> None:
+    if getattr(args, "stage_status", None):
+        repaired["stage_status"] = args.stage_status
+    if getattr(args, "clear_current_block", False):
+        repaired["current_block"] = None
+    elif getattr(args, "current_block", None) is not None:
+        repaired["current_block"] = args.current_block
+    if getattr(args, "completed_blocks", None) is not None:
+        repaired["completed_blocks"] = [item for item in args.completed_blocks.split(",") if item]
+    if getattr(args, "allowed_next", None) is not None:
+        repaired["allowed_next_stages"] = [item for item in args.allowed_next.split(",") if item]
+    if getattr(args, "awaiting_user_confirmation", None) is not None:
+        repaired["awaiting_user_confirmation"] = args.awaiting_user_confirmation
+
+    checkpoints = repaired.setdefault("checkpoints", {})
+    if getattr(args, "architecture_confirmed", None) is not None:
+        checkpoints["architecture_confirmed"] = args.architecture_confirmed
+    if getattr(args, "context7_review_completed", None) is not None:
+        checkpoints["context7_review_completed"] = args.context7_review_completed
+    if getattr(args, "execution_authorized", None) is not None:
+        checkpoints["execution_authorized"] = args.execution_authorized
+
+    if getattr(args, "clear_last_transition", False):
+        repaired["last_confirmed_transition"] = None
+    elif getattr(args, "transition_from", None) is not None:
+        repaired["last_confirmed_transition"] = {
+            "from": args.transition_from,
+            "to": repaired.get("stage"),
+            "confirmed_at": now_iso(),
+        }
+
+    if getattr(args, "note", None):
+        notes = repaired.setdefault("notes", [])
+        if not isinstance(notes, list):
+            notes = []
+            repaired["notes"] = notes
+        notes.append(args.note)
+
+
 def validate_plan_gate(task_dir: Path, errors: list[str]) -> None:
     """Validate plan artifacts before entering implementation or test-first."""
     checklist_path = task_dir / TASK_CREATION_CHECKLIST_FILE
@@ -2203,28 +2322,37 @@ def cmd_repair(args: argparse.Namespace) -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 1 if args.apply else 0
 
-    repaired = build_default_state(candidate_stage)
-    if recovered_from_state and isinstance(state, dict) and state.get("stage") == candidate_stage:
-        existing_block = state.get("current_block")
-        if existing_block is None or isinstance(existing_block, str):
-            repaired["current_block"] = existing_block
-        existing_completed = state.get("completed_blocks")
-        if isinstance(existing_completed, list) and all(isinstance(item, str) for item in existing_completed):
-            repaired["completed_blocks"] = existing_completed
-        existing_notes = state.get("notes")
-        if isinstance(existing_notes, list) and all(isinstance(item, str) for item in existing_notes):
-            repaired["notes"] = existing_notes
+    repaired = recover_repair_state(candidate_stage, state)
+    apply_repair_overrides(repaired, args)
 
     repair_errors: list[str] = []
     validate_state_shape(repaired, repair_errors)
     validate_execution_boundary(repaired, repair_errors)
     validate_leaf_task(task_dir_path, candidate_stage, repair_errors)
 
-    status = "repair_ready"
+    missing_confirmation_args: list[str] = []
+    if candidate_stage in EXECUTION_STAGES:
+        checkpoints = repaired.get("checkpoints", {})
+        if checkpoints.get("execution_authorized") is not True:
+            missing_confirmation_args.append("--execution-authorized true")
+        if not transition_payload_is_valid(repaired.get("last_confirmed_transition"), target_stage=candidate_stage):
+            missing_confirmation_args.append("--transition-from <上一阶段>")
+
+    repair_status = "repair_ready"
     if repair_errors:
-        status = "repair_blocked"
+        if candidate_stage in EXECUTION_STAGES and missing_confirmation_args and all(
+            (
+                "checkpoints.execution_authorized" in error
+                or "last_confirmed_transition" in error
+            )
+            for error in repair_errors
+        ):
+            repair_status = "manual_confirmation_required"
+        else:
+            repair_status = "repair_blocked"
+
     result = {
-        "status": status,
+        "status": repair_status,
         "stage": candidate_stage,
         "evidence": evidence,
         "blockers": repair_errors,
@@ -2232,8 +2360,15 @@ def cmd_repair(args: argparse.Namespace) -> int:
             f"已准备按 stage={candidate_stage} 重建 workflow-state.json"
             if not repair_errors
             else (
-                f"当前 stage={candidate_stage} 的状态仍缺少关键语义字段；"
-                "请先回到上游确认点或手动补齐确认信息后再重建。"
+                (
+                    f"当前 stage={candidate_stage} 属于执行阶段；还需要用户显式确认执行授权信息后才能重建。"
+                    f" 请补充 {' '.join(missing_confirmation_args)}，必要时再配合 --apply。"
+                )
+                if repair_status == "manual_confirmation_required"
+                else (
+                    f"当前 stage={candidate_stage} 的状态仍缺少关键语义字段；"
+                    "请先回到上游确认点或手动补齐确认信息后再重建。"
+                )
             )
         ),
     }
@@ -2314,6 +2449,18 @@ def build_parser() -> argparse.ArgumentParser:
     repair_parser.add_argument("task_dir")
     repair_parser.add_argument("--project-root")
     repair_parser.add_argument("--stage", choices=sorted(STAGES))
+    repair_parser.add_argument("--stage-status", choices=sorted(STAGE_STATUSES))
+    repair_parser.add_argument("--current-block")
+    repair_parser.add_argument("--clear-current-block", action="store_true")
+    repair_parser.add_argument("--completed-blocks")
+    repair_parser.add_argument("--allowed-next", nargs="?", const="", default=None)
+    repair_parser.add_argument("--awaiting-user-confirmation", type=bool_arg)
+    repair_parser.add_argument("--architecture-confirmed", type=bool_arg)
+    repair_parser.add_argument("--context7-review-completed", type=bool_arg)
+    repair_parser.add_argument("--execution-authorized", type=bool_arg)
+    repair_parser.add_argument("--transition-from", choices=sorted(STAGES))
+    repair_parser.add_argument("--clear-last-transition", action="store_true")
+    repair_parser.add_argument("--note")
     repair_parser.add_argument("--apply", action="store_true")
     repair_parser.set_defaults(func=cmd_repair)
 

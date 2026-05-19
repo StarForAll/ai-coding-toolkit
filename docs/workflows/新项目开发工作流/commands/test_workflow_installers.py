@@ -1075,6 +1075,20 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("## 任务粒度判断", deployed_plan)
         self.assertIn("granularity_decision", deployed_plan)
 
+    def test_install_patches_task_current_source_to_read_degraded_fallback(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        task_py = (fixture / ".trellis" / "scripts" / "task.py").read_text(encoding="utf-8")
+        self.assertIn('print("Source: degraded-active-task")', task_py)
+        self.assertIn('print("Current task: (none)")', task_py)
+        self.assertIn('if args.source:', task_py)
+        self.assertIn('if active.task_path:', task_py)
+        self.assertIn('degraded_path = repo_root / ".trellis" / ".runtime" / "degraded-active-task.json"', task_py)
+
     def test_install_personal_profile_keeps_ownership_cards_and_helpers(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
