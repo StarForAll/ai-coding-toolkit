@@ -406,3 +406,36 @@ Audited the embedded workflow against a rebuilt tmp target, fixed brainstorm ent
 ### Next Steps
 
 - None - task complete
+
+
+## Session 257: 修复工作流恢复闭环
+
+**Date**: 2026-05-19
+**Task**: 修复工作流恢复闭环
+**Branch**: `main`
+
+### Summary
+
+修复新项目开发工作流的 execution-stage repair 断链与 degraded current-read 分叉问题，补充回归测试并同步相关路由文档。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `494dce6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
