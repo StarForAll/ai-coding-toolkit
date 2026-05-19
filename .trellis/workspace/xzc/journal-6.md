@@ -632,3 +632,37 @@ Audited the embedded workflow against a rebuilt tmp target, fixed brainstorm ent
 ### Next Steps
 
 - None - task complete
+
+
+## Session 264: 修复工作流强门禁运行合同
+
+**Date**: 2026-05-19
+**Task**: 修复工作流强门禁运行合同
+**Branch**: `main`
+
+### Summary
+
+修复新项目开发工作流在目标项目中的强门禁运行合同缺口，收口 Codex session-start、stage/status 双真相、no-task 误路由与 degraded 恢复，并同步安装器、升级器、测试和工作流文档。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6c30a17` | (see git log) |
+| `5303e95` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
