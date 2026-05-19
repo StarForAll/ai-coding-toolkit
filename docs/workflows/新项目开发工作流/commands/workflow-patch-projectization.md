@@ -175,7 +175,7 @@ This section is for developers who want to modify the Trellis workflow itself. A
 
 Edit the corresponding step's walkthrough body in the Phase sections above. **Critical constraint**: if you change a step's `[required · once]` marker or add a new `[required · once]` step, you MUST also add a matching enforcement line to that phase's `[workflow-state:STATUS]` tag block — otherwise the per-turn breadcrumb omits the reinforcement, and the AI silently skips the step.
 
-Under the strong-gate model, each stage has its own `[workflow-state:STATUS]` tag block. The full list of tag blocks lives in the `## Strong-Gate Breadcrumb Blocks` section below.
+Under the strong-gate model, each stage has its own `[workflow-state:STATUS]` tag block, and route-only action states such as `blocked` / `repair_needed` / `awaiting_confirmation_with_blockers` may also own dedicated blocks. The full list of tag blocks lives in the `## Strong-Gate Breadcrumb Blocks` section below.
 
 ### Changing the per-turn prompt text
 
@@ -258,6 +258,7 @@ Set `stage_status = awaiting_user_confirmation` when plan is ready for user appr
 [workflow-state:implementation]
 Current stage: **implementation** — code writing phase.
 `checkpoints.execution_authorized` must be `true` before entering.
+Re-enter this stage through `/trellis:continue`; do **not** expect a public `/trellis:implementation` command or same-named shared skill.
 For sub-agent dispatch mode: dispatch `trellis-implement` sub-agent. For inline dispatch mode (`codex.dispatch_mode=inline`): implement directly (load `trellis-before-dev` first).
 After implementation, proceed to `check` or `test-first`.
 [/workflow-state:implementation]
@@ -303,6 +304,50 @@ Current stage: **record-session** — workflow cycle complete.
 This is the strong-gate terminal stage. Run `task.py archive <task-name>` then `add_session.py` to finalize close-out. The workflow cycle is now complete.
 The legacy `/trellis:record-session` command remains available as a backwards-compatible entry point for older projects that use the baseline three-phase model; in the strong-gate flow this stage is reached automatically after `delivery`.
 [/workflow-state:record-session]
+
+[workflow-state:awaiting_confirmation]
+Route action: **awaiting_confirmation** — stop at the confirmation boundary.
+Do not continue executing the current stage body until the user explicitly confirms the transition.
+If the header contains `Stage: ...`, treat it as context only; the required action now is to summarize readiness and wait.
+[/workflow-state:awaiting_confirmation]
+
+[workflow-state:awaiting_confirmation_with_blockers]
+Route action: **awaiting_confirmation_with_blockers** — the stage reached its confirmation point, but exit blockers still exist.
+Fix every header `Blockers:` item first. Do **not** ask for stage transition confirmation until the blockers are cleared and `workflow-state.py route` no longer returns this action.
+[/workflow-state:awaiting_confirmation_with_blockers]
+
+[workflow-state:blocked]
+Route action: **blocked** — do not keep executing the current stage as if it were normal re-entry.
+Read the header `Reason:` / `Blockers:` lines, repair those conditions, then rerun `workflow-state.py route`.
+If the header contains `Stage: ...`, that stage name is diagnostic context, not permission to proceed.
+[/workflow-state:blocked]
+
+[workflow-state:context_needed]
+Route action: **context_needed** — the current task cannot continue directly.
+Most commonly this means the current stage requires a leaf task but the active task still has `children`.
+Switch to the correct child task with `task.py start <child-task-dir>` before continuing.
+[/workflow-state:context_needed]
+
+[workflow-state:recovery_needed]
+Route action: **recovery_needed** — the workflow cannot determine the active task safely.
+Do not guess from filenames or chat history. Ask the user to clarify the current task, or explicitly reselect it with `task.py start <task-dir>`.
+[/workflow-state:recovery_needed]
+
+[workflow-state:repair_needed]
+Route action: **repair_needed** — workflow state is missing, stale, or structurally invalid.
+Run `workflow-state.py repair <task-dir>` first. If it reports `repair_ready`, confirm before applying; if it reports `manual_confirmation_required`, ask the user to confirm the currently approved stage instead of inferring it from artifacts.
+Execution stages such as `implementation` / `test-first` also require explicit `--execution-authorized true` and `--transition-from <previous-stage>`.
+[/workflow-state:repair_needed]
+
+[workflow-state:embed_invalid]
+Route action: **embed_invalid** — the installed workflow surface is incomplete or drifted.
+Stop normal task execution and repair the workflow installation first. Check `.trellis/workflow-installed.json`, `.trellis/library-lock.yaml`, helper scripts, and critical runtime patches before continuing.
+[/workflow-state:embed_invalid]
+
+[workflow-state:workflow-state.route_failed]
+Route action: **workflow-state.route_failed** — the route helper itself failed.
+Do not treat the current stage as trustworthy. Inspect the header `Reason:` line, fix the route helper or its runtime dependency, then retry.
+[/workflow-state:workflow-state.route_failed]
 
 ---
 

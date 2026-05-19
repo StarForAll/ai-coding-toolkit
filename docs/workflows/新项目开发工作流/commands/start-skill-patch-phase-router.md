@@ -51,8 +51,8 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route --project-root <pr
 
 | action | Meaning | Action |
 |--------|---------|--------|
-| `entry_choice_required` | No active task exists and nothing is resumable | Choose by intent first. For read-only workflow/project analysis, meta-audit, or A/A+ analysis, stay in `no_task` and analyze inline without creating a task. For a new implementation task, use the skill matching the `target` field. Fresh projects without a reusable assessment should enter `feasibility`; `brainstorm` is only valid when route explicitly reuses an existing assessment that already allows it. |
-| `reenter` | Re-enter current stage | Use the skill matching the `target` field |
+| `entry_choice_required` | No active task exists and nothing is resumable | Choose by intent first. For read-only workflow/project analysis, meta-audit, or A/A+ analysis, stay in `no_task` and analyze inline without creating a task. For a new implementation task, enter the formal route target first. Fresh projects without a reusable assessment should enter `feasibility`; `brainstorm` is only valid when route explicitly reuses an existing assessment that already allows it. Do not assume a public `implementation` skill exists. |
+| `reenter` | Re-enter current stage | If `target=implementation`, stay in the current phase-router entry and follow the `Implementation Entry` section below. If `target=finish-work`, use `trellis-finish-work`. For other targets, use the skill matching the `target` field. |
 | `awaiting_confirmation` | Stage done, waiting for user | Report completed/missing items; wait for confirmation |
 | `awaiting_confirmation_with_blockers` | Stage reached confirmation point but blockers remain | Show `blockers`; do not ask for confirmation until they are fixed |
 | `blocked` | Execution blocked | Show `blockers` list; do not proceed |
@@ -67,10 +67,11 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route --project-root <pr
 
 Before writing implementation code:
 
-1. Confirm the current task is a leaf task.
-2. Run before-dev and write or refresh `$TASK_DIR/before-dev.md`.
-3. Keep work scoped to the selected leaf task only.
-4. Do not auto-continue to the next task after completion — require a new explicit re-entry through the current entry skill.
+1. Treat this phase-router entry itself as the public re-entry point for `implementation`; there is no symmetric public `implementation` skill.
+2. Confirm the current task is a leaf task.
+3. Run before-dev and write or refresh `$TASK_DIR/before-dev.md`.
+4. Keep work scoped to the selected leaf task only.
+5. Do not auto-continue to the next task after completion — require a new explicit re-entry through the current entry skill.
 
 Within `implementation`, use this internal role chain:
 

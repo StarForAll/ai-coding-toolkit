@@ -6,11 +6,11 @@ inject-workflow-state carriers so their breadcrumb headers are derived from the
 authoritative `workflow-state.py route` result instead of collapsing everything
 to `workflow-state.json.stage` or `task.json.status`.
 
-The patched carriers still use stage templates from `.trellis/workflow.md`, but
-they now surface route-only metadata such as `action`, `stage_status`,
-`blockers`, `target`, and `reason` directly in the injected header so blocked
-or repair-required states cannot be silently downgraded into a normal stage
-breadcrumb.
+The patched carriers still use `.trellis/workflow.md` breadcrumb templates, but
+they now treat blocking / repair / confirmation actions as first-class template
+keys instead of silently reusing the current stage body. Python carriers also
+load the route helper in-process when possible so the hot path does not need a
+fresh subprocess on every turn.
 """
 
 from __future__ import annotations
@@ -24,7 +24,61 @@ PY_ROUTE_PATCH_MARKER = "# [workflow-embed-patch:prefer-workflow-route]"
 JS_PATCH_MARKER = "// [workflow-embed-patch:prefer-workflow-state-json]"
 JS_ROUTE_PATCH_MARKER = "// [workflow-embed-patch:prefer-workflow-route]"
 
-PY_GET_ACTIVE_TASK_BLOCK = """def get_active_task(root: Path, input_data: dict) -> Optional[tuple[str, str, str, list[str]]]:
+PY_GET_ACTIVE_TASK_BLOCK = """_ACTION_BREADCRUMB_KEYS = {
+    "awaiting_confirmation",
+    "awaiting_confirmation_with_blockers",
+    "blocked",
+    "context_needed",
+    "repair_needed",
+    "recovery_needed",
+    "embed_invalid",
+    "workflow-state.route_failed",
+}
+
+
+def _load_route_data(root: Path, task_dir: Path) -> tuple[dict | None, str | None]:
+    route_script = root / ".trellis" / "scripts" / "workflow" / "workflow-state.py"
+    if not route_script.is_file():
+        route_script = root / ".trellis" / "scripts" / "workflow-state.py"
+    if not route_script.is_file():
+        return None, None
+
+    try:
+        import argparse as _argparse
+        import contextlib as _contextlib
+        import importlib.util as _importlib_util
+        import io as _io
+
+        cache = getattr(_load_route_data, "_module_cache", {})
+        cache_key = str(route_script)
+        module = cache.get(cache_key)
+        if module is None:
+            spec = _importlib_util.spec_from_file_location("_trellis_workflow_state_hook", str(route_script))
+            if spec is None or spec.loader is None:
+                return None, "workflow-state.py route helper unavailable"
+            module = _importlib_util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            cache[cache_key] = module
+            _load_route_data._module_cache = cache
+        if not hasattr(module, "cmd_route"):
+            return None, "workflow-state.py route helper unavailable"
+
+        buffer = _io.StringIO()
+        with _contextlib.redirect_stdout(buffer):
+            exit_code = module.cmd_route(
+                _argparse.Namespace(project_root=str(root), task_dir=str(task_dir))
+            )
+        output = buffer.getvalue().strip()
+        if exit_code != 0:
+            return None, output.splitlines()[-1] if output else "workflow-state.py route returned non-zero"
+        if not output:
+            return None, "workflow-state.py route returned empty output"
+        return json.loads(output), None
+    except Exception as exc:
+        return None, f"{type(exc).__name__}: {exc}"
+
+
+def get_active_task(root: Path, input_data: dict) -> Optional[tuple[str, str, str, list[str]]]:
     \"\"\"Return (task_id, status, source, extra_lines) from the current active task.\"\"\"
     active = _resolve_active_task(root, input_data)
     if not active.task_path:
@@ -36,85 +90,64 @@ PY_GET_ACTIVE_TASK_BLOCK = """def get_active_task(root: Path, input_data: dict) 
     if active.stale:
         return task_dir.name, f\"stale_{active.source_type}\", active.source, []
 
+    data: dict = {}
     task_json = task_dir / \"task.json\"
-    if not task_json.is_file():
-        return None
-    try:
-        data = json.loads(task_json.read_text(encoding=\"utf-8\"))
-    except (json.JSONDecodeError, OSError):
-        return None
+    if task_json.is_file():
+        try:
+            loaded = json.loads(task_json.read_text(encoding=\"utf-8\"))
+            if isinstance(loaded, dict):
+                data = loaded
+        except (json.JSONDecodeError, OSError):
+            data = {}
 
     task_id = data.get(\"id\") or task_dir.name
-    status = data.get(\"status\", \"\")
-    if not isinstance(status, str) or not status:
-        return None
+    raw_status = data.get(\"status\", \"\")
+    status = raw_status if isinstance(raw_status, str) else \"\"
 
     # [workflow-embed-patch:prefer-workflow-state-json]
     # [workflow-embed-patch:prefer-workflow-route]
     # Prefer workflow-state.py route over task.json.status for strong-gate projects.
     route_source = active.source
     extra_lines: list[str] = []
-    route_script = root / \".trellis\" / \"scripts\" / \"workflow\" / \"workflow-state.py\"
-    if not route_script.is_file():
-        route_script = root / \".trellis\" / \"scripts\" / \"workflow-state.py\"
-    if route_script.is_file():
-        try:
-            import subprocess as _sp
-
-            route_result = _sp.run(
-                [
-                    sys.executable,
-                    str(route_script),
-                    \"route\",
-                    str(task_dir),
-                    \"--project-root\",
-                    str(root),
-                ],
-                capture_output=True,
-                text=True,
-                encoding=\"utf-8\",
-                errors=\"replace\",
-                timeout=10,
+    route_data, route_error = _load_route_data(root, task_dir)
+    if route_data is not None:
+        route_stage = route_data.get(\"stage\", \"\")
+        route_action = route_data.get(\"action\", \"\")
+        route_stage_status = route_data.get(\"stage_status\", \"\")
+        route_target = route_data.get(\"target\", \"\")
+        route_reason = route_data.get(\"reason\", \"\")
+        route_blockers = route_data.get(\"blockers\", [])
+        route_warnings = route_data.get(\"warnings\", [])
+        uses_action_breadcrumb = isinstance(route_action, str) and route_action in _ACTION_BREADCRUMB_KEYS
+        if uses_action_breadcrumb:
+            status = route_action
+            if isinstance(route_stage, str) and route_stage:
+                extra_lines.append(f\"Stage: {route_stage}\")
+        elif isinstance(route_stage, str) and route_stage:
+            status = route_stage
+        elif isinstance(route_action, str) and route_action:
+            status = route_action
+        if isinstance(route_stage_status, str) and route_stage_status:
+            extra_lines.append(f\"Stage-Status: {route_stage_status}\")
+        if isinstance(route_target, str) and route_target:
+            extra_lines.append(f\"Target-Stage: {route_target}\")
+        if isinstance(route_reason, str) and route_reason:
+            extra_lines.append(f\"Reason: {route_reason}\")
+        if isinstance(route_blockers, list) and route_blockers:
+            extra_lines.append(
+                \"Blockers: \" + \"; \".join(str(item) for item in route_blockers)
             )
-            if route_result.returncode == 0 and route_result.stdout.strip():
-                route_data = json.loads(route_result.stdout.strip())
-                route_stage = route_data.get(\"stage\", \"\")
-                route_action = route_data.get(\"action\", \"\")
-                route_stage_status = route_data.get(\"stage_status\", \"\")
-                route_target = route_data.get(\"target\", \"\")
-                route_reason = route_data.get(\"reason\", \"\")
-                route_blockers = route_data.get(\"blockers\", [])
-                route_warnings = route_data.get(\"warnings\", [])
-                if isinstance(route_stage, str) and route_stage:
-                    status = route_stage
-                elif isinstance(route_action, str) and route_action:
-                    status = route_action
-                if isinstance(route_action, str) and route_action:
-                    extra_lines.append(f\"Action: {route_action}\")
-                if isinstance(route_stage_status, str) and route_stage_status:
-                    extra_lines.append(f\"Stage-Status: {route_stage_status}\")
-                if isinstance(route_target, str) and route_target:
-                    extra_lines.append(f\"Target-Stage: {route_target}\")
-                if isinstance(route_reason, str) and route_reason:
-                    extra_lines.append(f\"Reason: {route_reason}\")
-                if isinstance(route_blockers, list) and route_blockers:
-                    extra_lines.append(
-                        \"Blockers: \" + \"; \".join(str(item) for item in route_blockers)
-                    )
-                if isinstance(route_warnings, list) and route_warnings:
-                    extra_lines.append(
-                        \"Warnings: \" + \"; \".join(str(item) for item in route_warnings)
-                    )
-                route_source = \"workflow-state.route\"
-            elif route_result.returncode != 0:
-                status = \"workflow-state.route_failed\"
-                route_source = \"workflow-state.route_failed\"
-                stderr_summary = route_result.stderr.strip() or route_result.stdout.strip() or \"workflow-state.py route returned non-zero\"
-                extra_lines.append(f\"Reason: {stderr_summary.splitlines()[-1]}\")
-        except Exception as exc:
-            status = \"workflow-state.route_failed\"
-            route_source = \"workflow-state.route_failed\"
-            extra_lines.append(f\"Reason: {type(exc).__name__}: {exc}\")
+        if isinstance(route_warnings, list) and route_warnings:
+            extra_lines.append(
+                \"Warnings: \" + \"; \".join(str(item) for item in route_warnings)
+            )
+        route_source = \"workflow-state.route\"
+    elif route_error:
+        status = \"workflow-state.route_failed\"
+        route_source = \"workflow-state.route_failed\"
+        extra_lines.append(f\"Reason: {route_error}\")
+    if not status:
+        return None
     return task_id, status, route_source, extra_lines
 """
 
@@ -149,7 +182,18 @@ PY_BUILD_BREADCRUMB_BLOCK = """def build_breadcrumb(
     return f\"<workflow-state>\\n{header}\\n{body}\\n</workflow-state>\"
 """
 
-JS_GET_ACTIVE_TASK_BLOCK = """function getActiveTask(ctx, platformInput = null) {
+JS_GET_ACTIVE_TASK_BLOCK = """const ACTION_BREADCRUMB_KEYS = new Set([
+  "awaiting_confirmation",
+  "awaiting_confirmation_with_blockers",
+  "blocked",
+  "context_needed",
+  "repair_needed",
+  "recovery_needed",
+  "embed_invalid",
+  "workflow-state.route_failed",
+])
+
+function getActiveTask(ctx, platformInput = null) {
   const active = ctx.getActiveTask(platformInput)
   const taskRef = active.taskPath
   if (!taskRef) return null
@@ -158,17 +202,19 @@ JS_GET_ACTIVE_TASK_BLOCK = """function getActiveTask(ctx, platformInput = null) 
     return { id: taskRef.split(\"/\").pop(), status: \"stale\", source: active.source, extraLines: [] }
   }
   const taskJsonPath = join(taskDir, \"task.json\")
-  if (!existsSync(taskJsonPath)) return null
-  let data
-  try {
-    data = JSON.parse(readFileSync(taskJsonPath, \"utf-8\"))
-  } catch {
-    return null
+  let data = {}
+  if (existsSync(taskJsonPath)) {
+    try {
+      const parsed = JSON.parse(readFileSync(taskJsonPath, \"utf-8\"))
+      if (parsed && typeof parsed === \"object\" && !Array.isArray(parsed)) {
+        data = parsed
+      }
+    } catch {
+      data = {}
+    }
   }
-
   const rawStatus = typeof data.status === \"string\" ? data.status : \"\"
-  if (!rawStatus) return null
-  const id = data.id || taskRef.split(\"/\").pop()
+  const id = typeof data.id === \"string\" && data.id ? data.id : taskRef.split(\"/\").pop()
 
   // [workflow-embed-patch:prefer-workflow-state-json]
   // [workflow-embed-patch:prefer-workflow-route]
@@ -199,12 +245,15 @@ JS_GET_ACTIVE_TASK_BLOCK = """function getActiveTask(ctx, platformInput = null) 
       const routeReason = typeof routeData.reason === \"string\" ? routeData.reason : \"\"
       const routeBlockers = Array.isArray(routeData.blockers) ? routeData.blockers : []
       const routeWarnings = Array.isArray(routeData.warnings) ? routeData.warnings : []
-      if (routeStage) {
+      const usesActionBreadcrumb = ACTION_BREADCRUMB_KEYS.has(routeAction)
+      if (usesActionBreadcrumb) {
+        status = routeAction
+        if (routeStage) extraLines.push(`Stage: ${routeStage}`)
+      } else if (routeStage) {
         status = routeStage
       } else if (routeAction) {
         status = routeAction
       }
-      if (routeAction) extraLines.push(`Action: ${routeAction}`)
       if (routeStageStatus) extraLines.push(`Stage-Status: ${routeStageStatus}`)
       if (routeTarget) extraLines.push(`Target-Stage: ${routeTarget}`)
       if (routeReason) extraLines.push(`Reason: ${routeReason}`)
@@ -217,7 +266,7 @@ JS_GET_ACTIVE_TASK_BLOCK = """function getActiveTask(ctx, platformInput = null) 
       extraLines.push(`Reason: ${String(error).split("\\n").pop()}`)
     }
   }
-
+  if (!status) return null
   return { id, status, source, extraLines }
 }
 """
@@ -274,12 +323,24 @@ PY_BASELINE_ROUTE_SNIPPET = """# [workflow-embed-patch:prefer-workflow-state-jso
                 route_reason = route_data.get("reason", "")
                 route_blockers = route_data.get("blockers", [])
                 route_warnings = route_data.get("warnings", [])
-                if isinstance(route_stage, str) and route_stage:
+                use_action_status = isinstance(route_action, str) and route_action in {
+                    "awaiting_confirmation",
+                    "awaiting_confirmation_with_blockers",
+                    "blocked",
+                    "context_needed",
+                    "repair_needed",
+                    "recovery_needed",
+                    "embed_invalid",
+                    "workflow-state.route_failed",
+                }
+                if use_action_status:
+                    status = route_action
+                    if isinstance(route_stage, str) and route_stage:
+                        extra_lines.append(f"Stage: {route_stage}")
+                elif isinstance(route_stage, str) and route_stage:
                     status = route_stage
                 elif isinstance(route_action, str) and route_action:
                     status = route_action
-                if isinstance(route_action, str) and route_action:
-                    extra_lines.append(f"Action: {route_action}")
                 if isinstance(route_stage_status, str) and route_stage_status:
                     extra_lines.append(f"Stage-Status: {route_stage_status}")
                 if isinstance(route_target, str) and route_target:
@@ -332,12 +393,24 @@ JS_BASELINE_ROUTE_SNIPPET = """  // [workflow-embed-patch:prefer-workflow-state-
       const routeReason = typeof routeData.reason === "string" ? routeData.reason : ""
       const routeBlockers = Array.isArray(routeData.blockers) ? routeData.blockers : []
       const routeWarnings = Array.isArray(routeData.warnings) ? routeData.warnings : []
-      if (routeStage) {
+      const useActionStatus = new Set([
+        "awaiting_confirmation",
+        "awaiting_confirmation_with_blockers",
+        "blocked",
+        "context_needed",
+        "repair_needed",
+        "recovery_needed",
+        "embed_invalid",
+        "workflow-state.route_failed",
+      ]).has(routeAction)
+      if (useActionStatus) {
+        status = routeAction
+        if (routeStage) extraLines.push(`Stage: ${routeStage}`)
+      } else if (routeStage) {
         status = routeStage
       } else if (routeAction) {
         status = routeAction
       }
-      if (routeAction) extraLines.push(`Action: ${routeAction}`)
       if (routeStageStatus) extraLines.push(`Stage-Status: ${routeStageStatus}`)
       if (routeTarget) extraLines.push(`Target-Stage: ${routeTarget}`)
       if (routeReason) extraLines.push(`Reason: ${routeReason}`)
@@ -350,6 +423,7 @@ JS_BASELINE_ROUTE_SNIPPET = """  // [workflow-embed-patch:prefer-workflow-state-
       extraLines.push(`Reason: ${String(error).split("\\n").pop()}`)
     }
   }
+  if (!status) return null
 """
 
 
@@ -549,11 +623,6 @@ def _patch_js_baseline_fixture(content: str) -> str:
             task_status_anchor + "  const rawStatus = typeof taskData.status === \"string\" ? taskData.status : \"\"\n\n",
             1,
         )
-    if "  if (!rawStatus) return null\n" not in patched:
-        raw_status_line = "  const rawStatus = typeof taskData.status === \"string\" ? taskData.status : \"\"\n"
-        if raw_status_line not in patched:
-            raise ValueError("js baseline fixture missing rawStatus line")
-        patched = patched.replace(raw_status_line, raw_status_line + "  if (!rawStatus) return null\n", 1)
     return patched
 
 
@@ -568,6 +637,7 @@ def patch_python_hook(target_path: Path) -> bool:
         PY_ROUTE_PATCH_MARKER in content
         and "workflow-state.route" in content
         and "extra_lines=extra_lines" in content
+        and "_ACTION_BREADCRUMB_KEYS" in content
     ):
         print(f"✅ {target_path} 已包含 route-centered workflow-state 补丁，跳过")
         return True
@@ -639,6 +709,7 @@ def patch_js_hook(target_path: Path) -> bool:
         and "task.extraLines" in content
         and 'import { execFileSync } from "child_process"' in content
         and 'const PYTHON_CMD = "python3"' in content
+        and "ACTION_BREADCRUMB_KEYS" in content
     ):
         print(f"✅ {target_path} 已包含 route-centered workflow-state 补丁，跳过")
         return True

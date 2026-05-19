@@ -1007,13 +1007,17 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("child task", workflow_doc_text)
         self.assertIn("parent coordinator records", workflow_doc_text)
         self.assertIn("does not automatically authorize", workflow_doc_text)
+        self.assertIn("[workflow-state:blocked]", workflow_doc_text)
+        self.assertIn("[workflow-state:repair_needed]", workflow_doc_text)
+        self.assertIn("[workflow-state:awaiting_confirmation_with_blockers]", workflow_doc_text)
+        self.assertIn("do **not** expect a public `/trellis:implementation` command", workflow_doc_text)
         self.assertNotIn("Phase 1: Plan    → figure out what to do", workflow_doc_text)
         start_text = (fixture / ".claude" / "commands" / "trellis" / "continue.md").read_text(encoding="utf-8")
         self.assertIn(
             ".trellis/scripts/workflow/workflow-state.py route <task-dir> --project-root <project-root>",
             start_text,
         )
-        self.assertIn("target` 字段对应阶段", start_text)
+        self.assertIn("不要期待存在公开的 `/trellis:implementation` 入口", start_text)
         self.assertIn("awaiting_confirmation_with_blockers", start_text)
         self.assertNotIn("Steps 1-4 替换说明", start_text)
         self.assertNotIn("Load Current Context", start_text)
@@ -1052,6 +1056,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(SESSION_START_STRONG_GATE_PATCH_MARKER, codex_session_start)
         self.assertNotIn(LEGACY_READY_AUTOCONTINUE_LINE, codex_session_start)
         claude_inject = (fixture / ".claude" / "hooks" / "inject-workflow-state.py").read_text(encoding="utf-8")
+        self.assertIn("use_action_status =", claude_inject)
+        self.assertIn('extra_lines.append(f"Stage: {route_stage}")', claude_inject)
         self.assertIn("workflow-state.route_failed", claude_inject)
         self.assertNotIn("fall back to task.json status", claude_inject)
         opencode_session_utils = (fixture / ".opencode" / "lib" / "session-utils.js").read_text(encoding="utf-8")
@@ -1060,6 +1066,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         opencode_inject_path = fixture / ".opencode" / "plugins" / "inject-workflow-state.js"
         if opencode_inject_path.exists():
             opencode_inject = opencode_inject_path.read_text(encoding="utf-8")
+            self.assertIn("ACTION_BREADCRUMB_KEYS", opencode_inject)
+            self.assertNotIn("if (!rawStatus) return null", opencode_inject)
             self.assertIn("workflow-state.route_failed", opencode_inject)
             self.assertNotIn("fall back to task.json status", opencode_inject)
         record = fixture / ".trellis" / "workflow-installed.json"
@@ -1173,6 +1181,9 @@ class WorkflowInstallerTests(unittest.TestCase):
         opencode_inject = (fixture / ".opencode" / "plugins" / "inject-workflow-state.js").read_text(encoding="utf-8")
         self.assertIn('import { execFileSync } from "child_process"', opencode_inject)
         self.assertIn('const PYTHON_CMD = "python3"', opencode_inject)
+        self.assertIn("ACTION_BREADCRUMB_KEYS", opencode_inject)
+        self.assertIn("Stage: ${routeStage}", opencode_inject)
+        self.assertNotIn("if (!rawStatus) return null", opencode_inject)
         self.assertIn("task.extraLines", opencode_inject)
 
     def test_install_session_start_patch_removes_legacy_tail_logic(self) -> None:
@@ -1197,6 +1208,11 @@ class WorkflowInstallerTests(unittest.TestCase):
         content = (COMMANDS_DIR / "install-workflow.py").read_text(encoding="utf-8")
         self.assertIn("| 记录、保存进度 | `/trellis:record-session` |", content)
         self.assertNotIn("| 记录、保存进度 | `/trellis:finish-work` |", content)
+
+    def test_nl_routing_maps_implementation_entry_to_continue(self) -> None:
+        content = (COMMANDS_DIR / "install-workflow.py").read_text(encoding="utf-8")
+        self.assertIn("| 开始写代码、实现、开发、编码、动手、修这个功能、开始改代码 | `/trellis:continue` |", content)
+        self.assertIn("没有对称的 `/trellis:implementation` 命令", content)
 
     def test_upgrade_merge_removes_ready_autocontinue_prompt_residue(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
@@ -1317,6 +1333,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("# [workflow-embed-patch:strong-gate-task-status-view]", tasks_py)
         self.assertIn('display_status, display_extra = _display_status(task_dir, data)', tasks_py)
         self.assertIn("_route_status_summary(task_dir)", tasks_py)
+        self.assertIn("_module_cache", tasks_py)
+        self.assertNotIn("subprocess.run(", tasks_py)
         self.assertIn('data["_workflow_display_extra"] = display_extra', tasks_py)
         self.assertIn("# [workflow-embed-patch:strong-gate-task-status-view]", task_queue_py)
         self.assertIn('return list_tasks_by_status(None, repo_root)', task_queue_py)
@@ -1415,7 +1433,9 @@ class WorkflowInstallerTests(unittest.TestCase):
         start_skill = fixture / ".agents" / "skills" / "trellis-continue" / "SKILL.md"
         start_text = start_skill.read_text(encoding="utf-8")
         self.assertIn("## Workflow Phase Router Patch `[AI]`", start_text)
-        self.assertIn("Use the skill matching the `target` field", start_text)
+        self.assertIn("stay in the current phase-router entry", start_text)
+        self.assertIn("Do not assume a public `implementation` skill exists.", start_text)
+        self.assertIn("If `target=finish-work`, use `trellis-finish-work`.", start_text)
         self.assertNotIn("Steps 1-4 替换说明", start_text)
         self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", start_text)
         self.assertNotIn("<WORKFLOW_DIR>/commands/shell", start_text)

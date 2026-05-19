@@ -294,6 +294,7 @@ _NL_ROUTING_SECTION = """\
 | 触发关键词 | Claude / OpenCode 入口 | Codex 入口 | 说明 |
 |-----------|------------------------|------------|------|
 | 调研、研究、查资料、查文档、看源码、搜代码、搜资料、技术调研、仓库分析 | 调用当前 CLI 的 `trellis-research` 子代理能力（若平台支持） | 描述研究意图，或显式触发 `trellis-research` agent | implementation 内部 research 链入口；用于代码/文档/仓库检索，不等于正式阶段命令 |
+| 开始写代码、实现、开发、编码、动手、修这个功能、开始改代码 | `/trellis:continue` | 描述当前实现意图，或显式触发 `trellis-continue` skill | implementation 的公开重入入口。没有对称的 `/trellis:implementation` 命令；continue 会先做 Phase Router 判断，再在当前 task 上执行 implementation 内部链 |
 | 开始、新会话、继续、下一步 | `/trellis:continue` | 描述当前意图，或显式触发 `trellis-continue` skill | Phase Router 自动检测；legacy `/trellis:start` 仅兼容旧目标项目 |
 | 卡住了、反复出错、死循环、调不通 | `/trellis:break-loop` | 描述排障意图，或显式触发 `trellis-break-loop` skill | 深度 bug 分析 |
 | 更新规范、新发现、沉淀经验 | `/trellis:update-spec` | 描述规范更新意图，或显式触发 `trellis-update-spec` skill | 规范更新 |
@@ -1619,22 +1620,40 @@ def _route_status_summary(task_dir: Path) -> tuple[str | None, str | None]:
         return None, None
 
     try:
-        result = subprocess.run(
-            [sys.executable, str(script_path), "route", str(task_dir), "--project-root", str(repo_root)],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
+        import argparse as _argparse
+        import contextlib as _contextlib
+        import importlib.util as _importlib_util
+        import io as _io
+        import json as _json
+
+        cache = getattr(_route_status_summary, "_module_cache", {})
+        cache_key = str(script_path)
+        module = cache.get(cache_key)
+        if module is None:
+            spec = _importlib_util.spec_from_file_location("_trellis_workflow_state_tasks", str(script_path))
+            if spec is None or spec.loader is None:
+                return None, None
+            module = _importlib_util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            cache[cache_key] = module
+            _route_status_summary._module_cache = cache
+        if not hasattr(module, "cmd_route"):
+            return None, None
+
+        buffer = _io.StringIO()
+        with _contextlib.redirect_stdout(buffer):
+            exit_code = module.cmd_route(
+                _argparse.Namespace(project_root=str(repo_root), task_dir=str(task_dir))
+            )
     except Exception:
         return None, None
 
-    if result.returncode != 0:
+    if exit_code != 0:
         return None, None
 
     try:
-        payload = json.loads(result.stdout)
-    except json.JSONDecodeError:
+        payload = _json.loads(buffer.getvalue())
+    except Exception:
         return None, None
 
     stage = payload.get("stage")
@@ -1695,13 +1714,11 @@ def _display_status(task_dir: Path, data: dict) -> str:
         return "needs-init"
     return "unknown"
 """
-        if _TASK_STATUS_VIEW_PATCH_MARKER not in patched or "_route_status_summary(task_dir)" not in patched:
-            if "import json\n" not in patched and "from __future__ import annotations\n" in patched:
-                patched = patched.replace(
-                    "from __future__ import annotations\n\n",
-                    "from __future__ import annotations\n\nimport json\nimport subprocess\nimport sys\n\n",
-                    1,
-                )
+        if (
+            _TASK_STATUS_VIEW_PATCH_MARKER not in patched
+            or "_route_status_summary(task_dir)" not in patched
+            or "_module_cache" not in patched
+        ):
             anchor = "\n\ndef load_task(task_dir: Path) -> TaskInfo | None:\n"
             if legacy_helper.strip() in patched:
                 patched = patched.replace(legacy_helper.strip(), helper.strip(), 1)

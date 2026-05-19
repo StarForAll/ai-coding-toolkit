@@ -31,8 +31,8 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route --project-root <pr
 
 | action | 含义 | 执行动作 |
 |--------|------|---------|
-| `entry_choice_required` | 当前 session 尚无 active task，且项目中也没有可继续任务 | 先判断当前意图。如果是 workflow / 项目只读分析、元审计或 A/A+ 纯分析，则保持 `no_task` 直接分析，不创建任务；如果是开始新的实现任务，再进入 `target` 字段对应阶段。若项目还没有可复用的有效 assessment，默认入口应先走 `/trellis:feasibility`；只有 route 明确复用了现有 assessment 并允许继续 brainstorm 时，才进入 `/trellis:brainstorm`。 |
-| `reenter` | 重入当前阶段 | 路由到 `/trellis:<target>`（`target` 字段即目标阶段） |
+| `entry_choice_required` | 当前 session 尚无 active task，且项目中也没有可继续任务 | 先判断当前意图。如果是 workflow / 项目只读分析、元审计或 A/A+ 纯分析，则保持 `no_task` 直接分析，不创建任务；如果是开始新的实现任务，再进入 `target` 对应的正式入口。若项目还没有可复用的有效 assessment，默认入口应先走 `/trellis:feasibility`；只有 route 明确复用了现有 assessment 并允许继续 brainstorm 时，才进入 `/trellis:brainstorm`。不要期待存在公开的 `/trellis:implementation` 入口。 |
+| `reenter` | 重入当前阶段 | 若 `target=implementation`，继续留在当前 `/trellis:continue` 入口并按下方“实施阶段额外约束”执行；其他阶段再路由到 `/trellis:<target>`（`target` 字段即目标阶段）。 |
 | `awaiting_confirmation` | 阶段完成等待确认 | 展示已完成/未完成/缺失项，等用户确认 |
 | `awaiting_confirmation_with_blockers` | 阶段已到确认点，但仍有阻塞项 | 展示 `blockers`，要求先补齐阻塞项，不能直接确认推进 |
 | `blocked` | 执行阶段存在阻塞条件 | 逐项展示 `blockers`，不继续推进 |
@@ -46,6 +46,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route --project-root <pr
 ### 实施阶段额外约束
 
 1. **一次只推进一个具体叶子 task** — 不能把多个 task 混在同一上下文里一起做
+1.1. **implementation 的公开重入入口就是 `/trellis:continue`** — 它没有对称的 `/trellis:implementation` 命令；真正写代码时由 continue 在当前 task 上执行 implementation 内部链
 2. **每次进入实现前自动执行 before-dev** — 不要求用户显式输入 `/trellis:before-dev`；产出落到 `$TASK_DIR/before-dev.md`
 3. **串行不等于自动续跑** — 前一 task 完成后仍需再次进入 `/trellis:continue`，不能自动开始下一个
 4. **前端视觉首版 task** — `UI -> 首版代码界面` 不能使用 Codex 作为主执行器；完成时必须沉淀 `design/frontend-ui-spec.md`
