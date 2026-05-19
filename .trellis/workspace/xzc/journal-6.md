@@ -304,3 +304,37 @@ R1-R6: 清除旧三态语义、修复 JSONL 路径、新增 context_needed actio
 ### Next Steps
 
 - None - task complete
+
+
+## Session 254: workflow audit: align record-session asset contracts
+
+**Date**: 2026-05-19
+**Task**: workflow audit: align record-session asset contracts
+**Branch**: `main`
+
+### Summary
+
+Audited the embedded workflow source against a tmp Trellis baseline sample, confirmed the real remaining defect was record-session asset contract drift, aligned workflow asset classification across installer/upgrade/docs/tests, and validated the regression tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fbfa098` | (see git log) |
+| `0ccad43` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
