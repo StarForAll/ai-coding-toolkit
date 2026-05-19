@@ -1584,9 +1584,86 @@ def patch_task_status_views(root: Path, *, dry_run: bool) -> bool:
     if tasks_path.exists():
         content = tasks_path.read_text(encoding="utf-8")
         patched = content
-        if _TASK_STATUS_VIEW_PATCH_MARKER not in patched:
-            anchor = "\n\ndef load_task(task_dir: Path) -> TaskInfo | None:\n"
-            helper = """
+        helper = """
+WORKFLOW_STATE_FILE_NAME = "workflow-state.json"
+TERMINAL_TASK_STATUSES = {"completed", "done", "archived"}
+
+
+# [workflow-embed-patch:strong-gate-task-status-view]
+def _shorten_status_detail(value: str, limit: int = 72) -> str:
+    collapsed = " ".join(value.split())
+    if len(collapsed) <= limit:
+        return collapsed
+    return collapsed[: limit - 1] + "…"
+
+
+def _route_status_summary(task_dir: Path) -> tuple[str | None, str | None]:
+    script_path = task_dir.parents[1] / "scripts" / "workflow" / "workflow-state.py"
+    repo_root = task_dir
+    while repo_root != repo_root.parent and not (repo_root / ".trellis").is_dir():
+        repo_root = repo_root.parent
+    if not (repo_root / ".trellis").is_dir():
+        return None, None
+    if not script_path.is_file():
+        return None, None
+
+    try:
+        result = subprocess.run(
+            [sys.executable, str(script_path), "route", str(task_dir), "--project-root", str(repo_root)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except Exception:
+        return None, None
+
+    if result.returncode != 0:
+        return None, None
+
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None, None
+
+    stage = payload.get("stage")
+    action = payload.get("action")
+    target = payload.get("target")
+    blockers = payload.get("blockers")
+    reason = payload.get("reason")
+
+    status = stage if isinstance(stage, str) and stage else None
+    summary_parts: list[str] = []
+    if isinstance(action, str) and action not in {"", "reenter"}:
+        summary_parts.append(action)
+    if isinstance(target, str) and target and target != stage:
+        summary_parts.append(f"target={target}")
+    if isinstance(blockers, list) and blockers:
+        summary_parts.append(_shorten_status_detail(str(blockers[0])))
+    elif isinstance(reason, str) and reason and action not in {"", "reenter"}:
+        summary_parts.append(_shorten_status_detail(reason))
+
+    summary = " | ".join(summary_parts) if summary_parts else None
+    return status, summary
+
+
+def _display_status(task_dir: Path, data: dict) -> tuple[str, str | None]:
+    state = read_json(task_dir / WORKFLOW_STATE_FILE_NAME)
+    if isinstance(state, dict):
+        stage = state.get("stage")
+        if isinstance(stage, str) and stage:
+            route_status, route_summary = _route_status_summary(task_dir)
+            return route_status or stage, route_summary
+        return "repair_needed", "repair_needed"
+
+    raw_status = data.get("status", "unknown")
+    if raw_status in TERMINAL_TASK_STATUSES:
+        return "completed", None
+    if isinstance(raw_status, str) and raw_status:
+        return "needs-init", None
+    return "unknown", None
+"""
+        legacy_helper = """
 WORKFLOW_STATE_FILE_NAME = "workflow-state.json"
 TERMINAL_TASK_STATUSES = {"completed", "done", "archived"}
 
@@ -1607,19 +1684,51 @@ def _display_status(task_dir: Path, data: dict) -> str:
         return "needs-init"
     return "unknown"
 """
-            if anchor in patched:
+        if _TASK_STATUS_VIEW_PATCH_MARKER not in patched or "_route_status_summary(task_dir)" not in patched:
+            if "import json\n" not in patched and "from __future__ import annotations\n" in patched:
+                patched = patched.replace(
+                    "from __future__ import annotations\n\n",
+                    "from __future__ import annotations\n\nimport json\nimport subprocess\nimport sys\n\n",
+                    1,
+                )
+            anchor = "\n\ndef load_task(task_dir: Path) -> TaskInfo | None:\n"
+            if legacy_helper.strip() in patched:
+                patched = patched.replace(legacy_helper.strip(), helper.strip(), 1)
+            elif anchor in patched:
                 patched = patched.replace(anchor, "\n\n" + helper.rstrip() + anchor, 1)
+        if 'data["_workflow_display_extra"] = display_extra' not in patched:
             patched = patched.replace(
-                '        status=data.get("status", "unknown"),\n',
-                '        status=_display_status(task_dir, data),\n',
+                '    if not data:\n        return None\n\n    return TaskInfo(\n',
+                '    if not data:\n        return None\n\n'
+                '    display_status, display_extra = _display_status(task_dir, data)\n'
+                '    data["_workflow_display_extra"] = display_extra\n\n'
+                '    return TaskInfo(\n',
                 1,
             )
+            patched = patched.replace(
+                '    if not data:\n        return None\n    return TaskInfo(\n',
+                '    if not data:\n        return None\n'
+                '    display_status, display_extra = _display_status(task_dir, data)\n'
+                '    data["_workflow_display_extra"] = display_extra\n'
+                '    return TaskInfo(\n',
+                1,
+            )
+        patched = patched.replace(
+            '        status=data.get("status", "unknown"),\n',
+            '        status=display_status,\n',
+            1,
+        )
+        patched = patched.replace(
+            '        status=_display_status(task_dir, data),\n',
+            '        status=display_status,\n',
+            1,
+        )
         if patched != content:
             if dry_run:
-                info("[Shared] 将补丁 common/tasks.py → 任务视图改为 stage / needs-init")
+                info("[Shared] 将补丁 common/tasks.py → 任务视图改为 route-aware stage + strong-gate 摘要")
             else:
                 tasks_path.write_text(patched, encoding="utf-8")
-                ok("[Shared] common/tasks.py 已补丁 → 任务视图改为 stage / needs-init")
+                ok("[Shared] common/tasks.py 已补丁 → 任务视图改为 route-aware stage + strong-gate 摘要")
             any_patched = True
 
     if task_queue_path.exists():
@@ -1649,12 +1758,30 @@ def _display_status(task_dir: Path, data: dict) -> str:
             "  --status, -s <s>     Filter by status (planning, in_progress, review, completed)\n",
             "  --status, -s <s>     Filter by workflow display status / stage (e.g. needs-init, feasibility, design, completed)\n",
         )
+        patched = patched.replace(
+            '            print(f"{prefix}{dir_name}/ ({t.status}){pkg_tag}{progress}{marker}")\n',
+            '            extra = t.raw.get("_workflow_display_extra")\n'
+            '            extra_tag = f" {{{extra}}}" if extra else ""\n'
+            '            print(f"{prefix}{dir_name}/ ({t.status}){pkg_tag}{progress}{extra_tag}{marker}")\n',
+            1,
+        )
+        patched = patched.replace(
+            '            print(f"{prefix}{dir_name}/ ({t.status}){pkg_tag}{progress} [{colored(t.assignee or \'-\', Colors.CYAN)}]{marker}")\n',
+            '            extra = t.raw.get("_workflow_display_extra")\n'
+            '            extra_tag = f" {{{extra}}}" if extra else ""\n'
+            '            print(f"{prefix}{dir_name}/ ({t.status}){pkg_tag}{progress}{extra_tag} [{colored(t.assignee or \'-\', Colors.CYAN)}]{marker}")\n',
+            1,
+        )
+        patched = patched.replace(
+            "  python3 task.py list --mine --status in_progress   # List my in-progress tasks\n",
+            "  python3 task.py list --mine --status check         # List my tasks currently in check stage\n",
+        )
         if patched != content:
             if dry_run:
-                info("[Shared] 将更新 task.py --status 帮助文本 → 使用 workflow display status / stage")
+                info("[Shared] 将更新 task.py 任务列表展示与 --status 帮助文本 → 使用 workflow display status / stage")
             else:
                 task_cli_path.write_text(patched, encoding="utf-8")
-                ok("[Shared] task.py --status 帮助文本已更新 → 使用 workflow display status / stage")
+                ok("[Shared] task.py 任务列表展示与 --status 帮助文本已更新 → 使用 workflow display status / stage")
             any_patched = True
 
     return any_patched

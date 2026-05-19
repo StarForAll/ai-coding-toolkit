@@ -145,17 +145,19 @@ All transitions follow a two-step protocol: **(A)** signal readiness by setting 
 | design → plan | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage plan --stage-status in_progress --awaiting-user-confirmation false --allowed-next implementation,test-first --transition-from design` |
 | plan → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next test-first,check,project-audit --transition-from plan` |
 | plan → test-first | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage test-first --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next implementation,check,project-audit --transition-from plan` |
-| implementation → check | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage check --stage-status in_progress --awaiting-user-confirmation false --allowed-next review-gate,implementation,finish-work` |
+| implementation → check | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage check --stage-status in_progress --awaiting-user-confirmation false --allowed-next project-audit,review-gate,implementation,finish-work` |
 | implementation → test-first | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage test-first --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next implementation,check,project-audit --transition-from implementation` |
 | implementation → project-audit | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage project-audit --stage-status in_progress --awaiting-user-confirmation false --allowed-next check,review-gate --transition-from implementation` |
 | test-first → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next test-first,check,project-audit --transition-from test-first` |
-| test-first → check | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage check --stage-status in_progress --awaiting-user-confirmation false --allowed-next review-gate,implementation,finish-work --transition-from test-first` |
+| test-first → check | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage check --stage-status in_progress --awaiting-user-confirmation false --allowed-next project-audit,review-gate,implementation,finish-work --transition-from test-first` |
 | test-first → project-audit | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage project-audit --stage-status in_progress --awaiting-user-confirmation false --allowed-next check,review-gate --transition-from test-first` |
-| project-audit → check | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage check --stage-status in_progress --awaiting-user-confirmation false --allowed-next review-gate,implementation,finish-work --transition-from project-audit` |
-| project-audit → review-gate | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage review-gate --stage-status in_progress --awaiting-user-confirmation false --allowed-next finish-work,implementation --transition-from project-audit` |
+| project-audit → check | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage check --stage-status in_progress --awaiting-user-confirmation false --allowed-next project-audit,review-gate,implementation,finish-work --transition-from project-audit` |
+| project-audit → review-gate | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage review-gate --stage-status in_progress --awaiting-user-confirmation false --allowed-next project-audit,finish-work,implementation --transition-from project-audit` |
+| check → project-audit | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage project-audit --stage-status in_progress --awaiting-user-confirmation false --allowed-next check,review-gate --transition-from check` |
 | check → review-gate | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage review-gate --stage-status in_progress --awaiting-user-confirmation false --allowed-next finish-work,implementation` |
 | check → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next test-first,check,project-audit --transition-from check` |
 | check → finish-work | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage finish-work --stage-status in_progress --awaiting-user-confirmation false --allowed-next delivery` |
+| review-gate → project-audit | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage project-audit --stage-status in_progress --awaiting-user-confirmation false --allowed-next check,review-gate --transition-from review-gate` |
 | review-gate → finish-work | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage finish-work --stage-status in_progress --awaiting-user-confirmation false --allowed-next delivery` |
 | review-gate → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next test-first,check,project-audit --transition-from review-gate` |
 | finish-work → delivery | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage delivery --stage-status in_progress --awaiting-user-confirmation false --allowed-next record-session` |
@@ -268,18 +270,20 @@ Load `/trellis:test-first` skill for TDD-driven verification.
 
 [workflow-state:project-audit]
 Current stage: **project-audit** — full-project quality review.
+Formal mode typically re-enters here from `check` / `review-gate`; pre-audit may enter early from `implementation` / `test-first`.
 Load `/trellis:project-audit` for cross-cutting quality assessment.
 [/workflow-state:project-audit]
 
 [workflow-state:check]
 Current stage: **check** — quality check against spec and conventions.
 Load `/trellis:check` to validate implementation against specifications.
-After passing, proceed to `review-gate`, back to `implementation`, or directly to `finish-work` (when no review-gate is needed).
+After passing, proceed to `project-audit`, `review-gate`, back to `implementation`, or directly to `finish-work` (when no project-audit / review-gate is needed).
 [/workflow-state:check]
 
 [workflow-state:review-gate]
 Current stage: **review-gate** — multi-CLI supplementary review.
 Load `/trellis:review-gate` for additional cross-platform quality assurance.
+If the task still needs a formal project-level sweep, it may re-enter `project-audit` from here before `finish-work`.
 After passing, proceed to `finish-work`.
 [/workflow-state:review-gate]
 

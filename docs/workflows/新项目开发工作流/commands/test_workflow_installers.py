@@ -1243,10 +1243,15 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         tasks_py = (fixture / ".trellis" / "scripts" / "common" / "tasks.py").read_text(encoding="utf-8")
         task_queue_py = (fixture / ".trellis" / "scripts" / "common" / "task_queue.py").read_text(encoding="utf-8")
+        task_py = (fixture / ".trellis" / "scripts" / "task.py").read_text(encoding="utf-8")
         self.assertIn("# [workflow-embed-patch:strong-gate-task-status-view]", tasks_py)
-        self.assertIn('_display_status(task_dir, data)', tasks_py)
+        self.assertIn('display_status, display_extra = _display_status(task_dir, data)', tasks_py)
+        self.assertIn("_route_status_summary(task_dir)", tasks_py)
+        self.assertIn('data["_workflow_display_extra"] = display_extra', tasks_py)
         self.assertIn("# [workflow-embed-patch:strong-gate-task-status-view]", task_queue_py)
         self.assertIn('return list_tasks_by_status(None, repo_root)', task_queue_py)
+        self.assertNotIn("Still flip task.json status: planning → in_progress", task_py)
+        self.assertIn("Strong-gate mode keeps workflow-state.py route as the only stage authority.", task_py)
 
     def test_install_personal_profile_keeps_ownership_cards_and_helpers(self) -> None:
         fixture = self.create_fixture()

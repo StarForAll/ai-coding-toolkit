@@ -1,113 +1,75 @@
+#!/usr/bin/env python3
+"""Tests for check-quality.py."""
+
 from __future__ import annotations
 
-import os
+import shlex
 import shutil
 import subprocess
+import sys
 import tempfile
-import textwrap
 import unittest
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[5]
-PYTHON = (
-    "/ops/softwares/python/bin/python3"
-    if Path("/ops/softwares/python/bin/python3").exists()
-    else shutil.which("python3") or shutil.which("python")
-)
-SCRIPT = REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "commands" / "shell" / "check-quality.py"
+SCRIPT = Path(__file__).resolve().parent / "check-quality.py"
+PYTHON = sys.executable
 
 
 class CheckQualityScriptTests(unittest.TestCase):
-    def run_script(self, project_dir: Path, *extra_args: str) -> subprocess.CompletedProcess[str]:
-        fake_bin = project_dir / "fake-bin"
-        env = os.environ.copy()
-        env["PATH"] = f"{fake_bin}{os.pathsep}{env.get('PATH', '')}"
+    def make_task_dir(self) -> Path:
+        task_dir = Path(tempfile.mkdtemp(prefix="check-quality-test-"))
+        self.addCleanup(shutil.rmtree, task_dir, True)
+        return task_dir
+
+    def run_script(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [PYTHON, str(SCRIPT), str(project_dir), *extra_args],
-            cwd=project_dir,
-            text=True,
+            [PYTHON, str(SCRIPT), *args],
             capture_output=True,
+            text=True,
             check=False,
-            env=env,
         )
 
-    def write_package_manager_stub(self, project_dir: Path, name: str) -> None:
-        fake_bin = project_dir / "fake-bin"
-        fake_bin.mkdir(exist_ok=True)
-        log_file = project_dir / "commands.log"
-        script = fake_bin / name
-        script.write_text(
-            textwrap.dedent(
-                f"""\
-                #!/bin/sh
-                echo "{name} $@" >> "{log_file}"
-                exit 0
-                """
-            ),
-            encoding="utf-8",
+    def python_cmd(self, code: str) -> str:
+        return f"{shlex.quote(PYTHON)} -c {shlex.quote(code)}"
+
+    def test_reports_not_run_and_fails_when_no_commands_are_provided(self) -> None:
+        task_dir = self.make_task_dir()
+
+        result = self.run_script(str(task_dir))
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertGreaterEqual(result.stdout.count("Result: not run"), 3)
+        self.assertIn("未提供任何已确认的验证命令", result.stdout)
+
+    def test_omitted_checks_are_not_run_but_do_not_fail_when_other_checks_pass(self) -> None:
+        task_dir = self.make_task_dir()
+        test_cmd = self.python_cmd("print('ok')")
+
+        result = self.run_script(str(task_dir), "--test-cmd", test_cmd)
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("- 测试状态: pass", result.stdout)
+        self.assertIn("- Lint 状态: not run", result.stdout)
+        self.assertIn("- Type Check 状态: not run", result.stdout)
+
+    def test_extra_checks_capture_stderr_and_fail_summary(self) -> None:
+        task_dir = self.make_task_dir()
+        test_cmd = self.python_cmd("print('ok')")
+        failing_cmd = self.python_cmd("import sys; print('out'); print('err', file=sys.stderr); sys.exit(3)")
+
+        result = self.run_script(
+            str(task_dir),
+            "--test-cmd", test_cmd,
+            "--extra-check", f"Build={failing_cmd}",
         )
-        script.chmod(0o755)
 
-    def test_runs_explicit_commands_from_arguments(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_root:
-            project_dir = Path(temp_root)
-            self.write_package_manager_stub(project_dir, "npm")
-            self.write_package_manager_stub(project_dir, "pytest")
-
-            result = self.run_script(
-                project_dir,
-                "--test-cmd",
-                "pytest -q",
-                "--lint-cmd",
-                "npm run lint",
-                "--typecheck-cmd",
-                "npm run type-check",
-            )
-
-            log_text = (project_dir / "commands.log").read_text(encoding="utf-8")
-
-        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        self.assertIn("pytest -q", log_text)
-        self.assertIn("npm run lint", log_text)
-        self.assertIn("npm run type-check", log_text)
-
-    def test_skips_checks_when_commands_are_not_provided(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_root:
-            project_dir = Path(temp_root)
-            result = self.run_script(project_dir)
-
-        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        self.assertIn("未提供已确认命令，跳过", result.stdout)
-        self.assertFalse((project_dir / "commands.log").exists())
-
-    def test_returns_nonzero_when_check_fails(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_root:
-            project_dir = Path(temp_root)
-            result = self.run_script(project_dir, "--test-cmd", "false")
-
-        self.assertNotEqual(result.returncode, 0, "failing --test-cmd must produce non-zero exit code")
-        self.assertIn("未通过", result.stdout)
-
-    def test_returns_nonzero_when_lint_fails(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_root:
-            project_dir = Path(temp_root)
-            result = self.run_script(project_dir, "--lint-cmd", "false")
-
-        self.assertNotEqual(result.returncode, 0, "failing --lint-cmd must produce non-zero exit code")
-
-    def test_returns_zero_when_all_pass(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_root:
-            project_dir = Path(temp_root)
-            result = self.run_script(
-                project_dir,
-                "--test-cmd",
-                "true",
-                "--lint-cmd",
-                "true",
-            )
-
-        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("Result: pass", result.stdout)
+        self.assertIn("--- Build ---", result.stdout)
+        self.assertIn("Result: fail", result.stdout)
+        self.assertIn("stdout:\nout", result.stdout)
+        self.assertIn("stderr:\nerr", result.stdout)
 
 
 if __name__ == "__main__":

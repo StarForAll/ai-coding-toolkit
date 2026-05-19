@@ -93,14 +93,19 @@ python3 <WORKFLOW_DIR>/commands/shell/check-quality.py \
   <task_dir> \
   --test-cmd "<user-confirmed test command>" \
   --lint-cmd "<user-confirmed lint command>" \
-  --typecheck-cmd "<user-confirmed type-check command>"
+  --typecheck-cmd "<user-confirmed type-check command>" \
+  --extra-check "Build=<user-confirmed build command>" \
+  --extra-check "E2E=<user-confirmed e2e command>" \
+  --extra-check "Migration=<user-confirmed migration validation command>"
 ```
 
 约束：
 
 - test / lint / typecheck 命令必须来自技术架构确认后的项目化输入
+- 若当前项目还需要 build / e2e / migration / 平台质量门禁，使用 `--extra-check "标签=命令"` 追加，不要把它们口头带过
 - 若当前项目没有某一项检查，则省略对应参数，并在结果中标记 `not run`
 - 不猜默认命令，不把其他项目习惯硬套到当前项目
+- 失败输出必须保留关键 stdout / stderr 证据，不能只给一句“没过”
 
 ### Step 4: 扩展质量检查清单
 

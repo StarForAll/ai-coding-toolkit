@@ -16,6 +16,8 @@ import sys
 from pathlib import Path
 
 PATCH_MARKER = "# [workflow-embed-patch:strong-gate-no-status-flip]"
+LEGACY_STATUS_COMMENT = "# Still flip task.json status: planning → in_progress so downstream phases proceed.\n"
+UPDATED_STATUS_COMMENT = "# Strong-gate mode keeps workflow-state.py route as the only stage authority.\n"
 
 
 def patch_task_start(target_path: Path) -> bool:
@@ -28,6 +30,7 @@ def patch_task_start(target_path: Path) -> bool:
         return False
 
     content = target_path.read_text(encoding="utf-8")
+    content = content.replace(LEGACY_STATUS_COMMENT, UPDATED_STATUS_COMMENT)
 
     if PATCH_MARKER in content:
         print(f"OK: {target_path} already contains strong-gate no-status-flip patch, skipping")
@@ -43,7 +46,6 @@ def patch_task_start(target_path: Path) -> bool:
     def _replace(match: re.Match[str]) -> str:
         indent = match.group("indent")
         var_name = match.group("var")
-        message = match.group("msg")
         return (
             f"{indent}{PATCH_MARKER}\n"
             f"{indent}if {var_name} and {var_name}.get(\"status\") == \"planning\":\n"

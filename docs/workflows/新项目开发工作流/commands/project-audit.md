@@ -5,7 +5,7 @@ description: 所有代码任务都完成了？进入项目级全局代码审查�
 
 # /trellis:project-audit — 项目级全局代码审查
 
-> **Workflow Position**: §5.1 → 前: 全部 `任务域=代码相关` 的任务完成 → 后: `/trellis:check` → （默认）`/trellis:finish-work`；任务级条件触发时：`/trellis:review-gate` → `/trellis:finish-work` → `/trellis:delivery`
+> **Workflow Position**: §5.1 → 正式模式前置入口优先来自 `/trellis:check` 或 `/trellis:review-gate`（全部 `任务域=代码相关` 的任务完成后重入）；预审模式也允许从 implementation / test-first 手动切入 → 后: 回到 `/trellis:check`（默认）或 `/trellis:review-gate`（当前任务已命中补充审查条件时）
 > **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:project-audit`） · ✅ OpenCode（TUI: `/trellis:project-audit`；CLI: `trellis/project-audit`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:project-audit` 命令；见 `codex/README.md`）
 
 > **Strong Gate**: 本阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束。project-audit 完成后，必须等待用户明确确认，不能自动切到 `check` / `finish-work` / `delivery`。
@@ -54,8 +54,14 @@ description: 所有代码任务都完成了？进入项目级全局代码审查�
   - 影响多个 feature / module / package 共用的核心模块，且已知下游消费者不少于 3 处
   - 改变多个层之间共享的数据 contract / serialization / validation 语义
   - 影响全局启动 / 构建 / runtime 初始化 / 全局状态一致性
-  - 一旦出错，会造成跨功能、跨任务或跨模块系统性失效
+- 一旦出错，会造成跨功能、跨任务或跨模块系统性失效
 - 外包 / 新客户项目在交付前
+
+正式模式下，标准编排入口应满足以下其一：
+
+- 当前任务已位于 `check`，用户确认要在最终收尾前补做项目级总复核
+- 当前任务已位于 `review-gate`，需要在任务级补充审查之外，再做一次项目级统一回看
+- 若当前任务还停留在 `implementation` / `test-first`，可先进入预审模式，完成后再回到 `check` / `review-gate`
 
 **不强制触发的情况**（Lite 链路）：
 
@@ -72,6 +78,7 @@ description: 所有代码任务都完成了？进入项目级全局代码审查�
 
 - 允许完整执行下面三步
 - 允许实际修改代码
+- 常见入口为 `implementation` / `test-first`
 - 但**不**将项目级 `PROJECT-AUDIT` 任务标记为最终完成
 - 后续当全部 `代码相关` 任务都完成后，仍需再执行一次正式 `project-audit`
 

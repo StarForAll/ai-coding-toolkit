@@ -93,8 +93,8 @@ STAGE_TRANSITIONS: dict[str, list[str]] = {
     "implementation": ["test-first", "check", "project-audit"],
     "test-first": ["implementation", "check", "project-audit"],
     "project-audit": ["check", "review-gate"],
-    "check": ["review-gate", "implementation", "finish-work"],
-    "review-gate": ["finish-work", "implementation"],
+    "check": ["project-audit", "review-gate", "implementation", "finish-work"],
+    "review-gate": ["project-audit", "finish-work", "implementation"],
     "finish-work": ["delivery"],
     "delivery": ["record-session"],
     "record-session": [],
@@ -106,7 +106,7 @@ STAGE_STATUSES = {
     "completed",
 }
 EXECUTION_STAGES = {"implementation", "test-first"}
-COORDINATION_STAGES = {"feasibility", "brainstorm", "design", "plan"}
+COORDINATION_STAGES = {"feasibility", "brainstorm", "design", "plan", "project-audit"}
 LEAF_REQUIRED_STAGES = STAGES - COORDINATION_STAGES
 SUPPORTED_STATE_VERSION = 1
 PROJECT_ESTIMATE_REQUIRED_STAGES = STAGES - {"feasibility", "brainstorm"}

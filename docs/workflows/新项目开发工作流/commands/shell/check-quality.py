@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """质量检查辅助脚本。
 
-用法: python3 check-quality.py [task_dir] [--test-cmd CMD] [--lint-cmd CMD] [--typecheck-cmd CMD]
+用法: python3 check-quality.py [task_dir] [--test-cmd CMD] [--lint-cmd CMD] [--typecheck-cmd CMD] [--extra-check LABEL=CMD]
 """
 
 from __future__ import annotations
@@ -10,6 +10,32 @@ import argparse
 import subprocess
 import sys
 from pathlib import Path
+from typing import NamedTuple
+
+
+class CheckResult(NamedTuple):
+    label: str
+    command: str | None
+    status: str
+    detail: str | None = None
+
+
+def _print_result(result: CheckResult) -> None:
+    print(f"\n--- {result.label} ---")
+    print(f"Result: {result.status}")
+    if result.command:
+        print(f"Command: {result.command}")
+    if result.detail:
+        print(result.detail)
+
+
+def parse_extra_check(value: str) -> tuple[str, str]:
+    label, sep, cmd = value.partition("=")
+    label = label.strip()
+    cmd = cmd.strip()
+    if not sep or not label or not cmd:
+        raise argparse.ArgumentTypeError("extra checks must use LABEL=COMMAND format")
+    return label, cmd
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -22,34 +48,40 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         dest="typecheck_cmd",
         help="User-confirmed type-check command for the current project",
     )
+    parser.add_argument(
+        "--extra-check",
+        dest="extra_checks",
+        action="append",
+        default=[],
+        type=parse_extra_check,
+        metavar="LABEL=COMMAND",
+        help="Additional user-confirmed verification such as build/e2e/migration",
+    )
     return parser.parse_args(argv)
 
 
-def run_check(cmd: str, label: str) -> bool | None:
+def run_check(cmd: str, label: str) -> CheckResult:
     """运行检查命令并报告结果。"""
-    print(f"\n--- {label} ---")
     try:
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
         if result.returncode == 0:
-            print(f"✅ {label} 通过")
-        else:
-            print(f"❌ {label} 未通过")
-            if result.stdout.strip():
-                print(result.stdout.strip()[:500])
-        return result.returncode == 0
+            return CheckResult(label=label, command=cmd, status="pass")
+
+        details: list[str] = [f"Exit Code: {result.returncode}"]
+        stdout = result.stdout.strip()
+        stderr = result.stderr.strip()
+        if stdout:
+            details.append(f"stdout:\n{stdout[:800]}")
+        if stderr:
+            details.append(f"stderr:\n{stderr[:800]}")
+        return CheckResult(label=label, command=cmd, status="fail", detail="\n".join(details))
     except subprocess.TimeoutExpired:
-        print(f"⚠️  {label} 超时")
-        return False
-    except FileNotFoundError:
-        print(f"⚠️  命令不存在，跳过")
-        return None
+        return CheckResult(label=label, command=cmd, status="fail", detail="Reason: command timed out after 60s")
 
 
-def run_optional_check(cmd: str | None, label: str) -> bool | None:
+def run_optional_check(cmd: str | None, label: str) -> CheckResult:
     if not cmd:
-        print(f"\n--- {label} ---")
-        print("⚠️  未提供已确认命令，跳过")
-        return None
+        return CheckResult(label=label, command=None, status="not run", detail="Reason: 未提供已确认命令")
     return run_check(cmd, label)
 
 
@@ -59,9 +91,9 @@ def main() -> int:
 
     print("=== 质量检查 ===")
 
-    print("说明：测试 / lint / type-check 命令必须来自技术架构确认后由用户明确的项目化输入。")
+    print("说明：测试 / lint / type-check / extra-check 命令必须来自技术架构确认后由用户明确的项目化输入。")
 
-    results: list[bool | None] = []
+    results: list[CheckResult] = []
 
     # 1. 测试
     results.append(run_optional_check(args.test_cmd, "测试状态"))
@@ -72,7 +104,17 @@ def main() -> int:
     # 3. Type check
     results.append(run_optional_check(args.typecheck_cmd, "Type Check 状态"))
 
-    provided_commands = [cmd for cmd in (args.test_cmd, args.lint_cmd, args.typecheck_cmd) if cmd]
+    for label, cmd in args.extra_checks:
+        results.append(run_check(cmd, label))
+
+    for result in results:
+        _print_result(result)
+
+    provided_commands = [
+        cmd
+        for cmd in (args.test_cmd, args.lint_cmd, args.typecheck_cmd, *(cmd for _, cmd in args.extra_checks))
+        if cmd
+    ]
     if not provided_commands:
         print()
         print("❌ 未提供任何已确认的验证命令；质量检查不能在无证据输入下视为通过")
@@ -100,9 +142,12 @@ def main() -> int:
     print()
     print("=== 质量检查完成 ===")
     print("下一步：根据以上结果生成 check.md 检查结果")
+    print("\n--- Summary ---")
+    for result in results:
+        print(f"- {result.label}: {result.status}")
     if not provided_commands:
         return 1
-    if any(r is False for r in results):
+    if any(result.status == "fail" for result in results):
         return 1
     return 0
 

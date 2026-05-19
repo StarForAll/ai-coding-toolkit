@@ -651,6 +651,23 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
         self.assertIn("workflow-state 校验通过", validate.stdout)
 
+    def test_validate_allows_parent_task_with_children_during_project_audit(self) -> None:
+        root, task_dir = self.make_fixture()
+        (task_dir / "task.json").write_text('{"status":"planning","children":["04-15-child-task"]}\n', encoding="utf-8")
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_project_audit_report(task_dir)
+
+        self.run_script("init", str(task_dir), "--stage", "project-audit")
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
+        self.assertIn("workflow-state 校验通过", validate.stdout)
+
     def test_validate_plan_requires_task_plan_artifacts(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
@@ -1783,6 +1800,25 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         data = json.loads(result.stdout)
         self.assertNotEqual(data["action"], "repair_needed")
+        self.assertNotIn("children", data["reason"])
+
+    def test_cmd_route_reenters_parent_project_audit_task_with_children(self) -> None:
+        root, task_dir = self.make_fixture()
+        (task_dir / "task.json").write_text('{"status":"planning","children":["04-15-child-task"]}\n', encoding="utf-8")
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_project_audit_report(task_dir)
+        self.run_script("init", str(task_dir), "--stage", "project-audit")
+
+        result = self.run_script("route", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "reenter")
         self.assertNotIn("children", data["reason"])
 
     def test_cmd_route_awaiting_confirmation(self) -> None:
@@ -3597,6 +3633,65 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "--execution-authorized", "true",
             "--transition-from", "brainstorm",
             "--allowed-next", "implementation,check,project-audit",
+        )
+        self.assertEqual(ok_set.returncode, 0, msg=ok_set.stdout + ok_set.stderr)
+
+    def test_check_allows_project_audit_transition(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_check_report(task_dir)
+        self.run_script("init", str(task_dir), "--stage", "check")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "project-audit,review-gate,implementation,finish-work",
+        )
+
+        ok_set = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "project-audit",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "check",
+            "--allowed-next", "check,review-gate",
+        )
+        self.assertEqual(ok_set.returncode, 0, msg=ok_set.stdout + ok_set.stderr)
+
+    def test_review_gate_allows_project_audit_transition(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_check_report(task_dir)
+        self.write_review_gate_round(task_dir)
+        self.run_script("init", str(task_dir), "--stage", "review-gate")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "project-audit,finish-work,implementation",
+        )
+
+        ok_set = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "project-audit",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "review-gate",
+            "--allowed-next", "check,review-gate",
         )
         self.assertEqual(ok_set.returncode, 0, msg=ok_set.stdout + ok_set.stderr)
 
