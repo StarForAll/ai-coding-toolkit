@@ -1594,8 +1594,8 @@ class WorkflowStateScriptTests(unittest.TestCase):
     # route subcommand tests
     # ------------------------------------------------------------------
 
-    def test_cmd_route_first_entry(self) -> None:
-        """No active task and no tasks anywhere -> first_entry."""
+    def test_cmd_route_no_task_requires_entry_choice(self) -> None:
+        """No active task and no tasks anywhere -> entry_choice_required."""
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
         self.addCleanup(shutil.rmtree, root)
         (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
@@ -1607,9 +1607,10 @@ class WorkflowStateScriptTests(unittest.TestCase):
         import json as _json
         data = _json.loads(result.stdout)
         self.assertEqual(data["target"], "feasibility")
-        self.assertEqual(data["action"], "first_entry")
+        self.assertEqual(data["action"], "entry_choice_required")
+        self.assertIn("只读分析", data["reason"])
 
-    def test_cmd_route_first_entry_personal_profile_without_assessment_still_targets_feasibility(self) -> None:
+    def test_cmd_route_no_task_personal_profile_without_assessment_still_targets_feasibility(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
         self.addCleanup(shutil.rmtree, root)
         (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
@@ -1636,6 +1637,14 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "# [workflow-embed-patch:preserve-parent-active-task]\n",
             encoding="utf-8",
         )
+        (root / ".trellis" / "scripts" / "common" / "tasks.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_queue.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
         (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
             "# strong-gate-phase-patch-applied\n",
             encoding="utf-8",
@@ -1646,10 +1655,10 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         data = json.loads(result.stdout)
         self.assertEqual(data["target"], "feasibility")
-        self.assertEqual(data["action"], "first_entry")
+        self.assertEqual(data["action"], "entry_choice_required")
         self.assertEqual(data["profile_hint"], "personal")
 
-    def test_cmd_route_first_entry_reuses_existing_assessment_for_brainstorm(self) -> None:
+    def test_cmd_route_no_task_reuses_existing_assessment_for_brainstorm(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
         self.addCleanup(shutil.rmtree, root)
         (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
@@ -1661,7 +1670,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         data = json.loads(result.stdout)
         self.assertEqual(data["target"], "brainstorm")
-        self.assertEqual(data["action"], "first_entry")
+        self.assertEqual(data["action"], "entry_choice_required")
         self.assertEqual(data["profile_hint"], "personal")
 
     def test_cmd_route_without_active_task_enters_recovery(self) -> None:
@@ -1962,6 +1971,68 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "--project-root",
             str(root),
             env_overrides={"TRELLIS_CONTEXT_ID": None, "CODEX_THREAD_ID": "codex-test-thread"},
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "reenter")
+        self.assertEqual(data["stage"], "implementation")
+
+    def test_cmd_route_does_not_let_unrelated_session_block_keyed_degraded_fallback(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        other_session = root / ".trellis" / ".runtime" / "sessions" / "other-window.json"
+        other_session.write_text(
+            json.dumps({"current_task": ".trellis/tasks/04-15-other-task"}, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / ".runtime" / "degraded-active-task-term-demo.json").write_text(
+            json.dumps({"current_task": ".trellis/tasks/04-15-sample-task"}, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        state = {
+            "version": 1,
+            "stage": "implementation",
+            "stage_status": "in_progress",
+            "current_block": None,
+            "completed_blocks": [],
+            "allowed_next_stages": [],
+            "awaiting_user_confirmation": False,
+            "last_confirmed_transition": {
+                "from": "plan",
+                "to": "implementation",
+                "confirmed_at": "2026-05-19T00:00:00+00:00",
+            },
+            "notes": [],
+            "checkpoints": {
+                "architecture_confirmed": True,
+                "context7_review_completed": True,
+                "execution_authorized": True,
+            },
+            "updated_at": "2026-05-19T00:00:00+00:00",
+        }
+        (task_dir / "workflow-state.json").write_text(
+            json.dumps(state, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        (root / "docs" / "requirements" / "developer-facing-prd.md").write_text("# developer\n", encoding="utf-8")
+        self.write_context7_review(task_dir)
+
+        result = self.run_script(
+            "route",
+            "--project-root",
+            str(root),
+            env_overrides={
+                "TRELLIS_CONTEXT_ID": None,
+                "CODEX_THREAD_ID": None,
+                "TERM_SESSION_ID": "term-demo",
+            },
+            cwd=root,
         )
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
@@ -2480,8 +2551,10 @@ class WorkflowStateScriptTests(unittest.TestCase):
                     "cli_types": ["codex"],
                     "critical_runtime_patches": [
                         "inject-workflow-state",
+                        "session-start-strong-gate",
                         "task-start-strong-gate",
                         "task-create-preserve-active",
+                        "task-status-view-strong-gate",
                         "workflow-phase-strong-gate",
                     ],
                     "patched_codex_skills": [
@@ -2505,12 +2578,24 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "# [workflow-embed-patch:prefer-workflow-state-json]\n",
             encoding="utf-8",
         )
+        (root / ".codex" / "hooks" / "session-start.py").write_text(
+            "# strong-gate-session-start-patch-applied\n# [workflow-embed-patch:session-start-route-first]\n",
+            encoding="utf-8",
+        )
         (root / ".trellis" / "scripts" / "task.py").write_text(
             "# [workflow-embed-patch:strong-gate-no-status-flip]\n",
             encoding="utf-8",
         )
         (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
             "# [workflow-embed-patch:preserve-parent-active-task]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "tasks.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_queue.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
             encoding="utf-8",
         )
         (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
@@ -2572,6 +2657,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
                         "session-start-strong-gate",
                         "task-start-strong-gate",
                         "task-create-preserve-active",
+                        "task-status-view-strong-gate",
                         "workflow-phase-strong-gate",
                     ],
                 },
@@ -2621,6 +2707,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
                         "session-start-strong-gate",
                         "task-start-strong-gate",
                         "task-create-preserve-active",
+                        "task-status-view-strong-gate",
                         "workflow-phase-strong-gate",
                     ],
                 },
@@ -2647,6 +2734,14 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "# [workflow-embed-patch:strong-gate-no-status-flip]\n",
             encoding="utf-8",
         )
+        (root / ".trellis" / "scripts" / "common" / "tasks.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_queue.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
         (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
             "# strong-gate-phase-patch-applied\n",
             encoding="utf-8",
@@ -2655,6 +2750,14 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "# [workflow-embed-patch:preserve-parent-active-task]\n"
             "def broken(:\n"
             "    pass\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "tasks.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_queue.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
             encoding="utf-8",
         )
 
@@ -2681,6 +2784,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
                         "session-start-strong-gate",
                         "task-start-strong-gate",
                         "task-create-preserve-active",
+                        "task-status-view-strong-gate",
                         "workflow-phase-strong-gate",
                     ],
                 },
@@ -2700,6 +2804,14 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
         (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
             "# [workflow-embed-patch:preserve-parent-active-task]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "tasks.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_queue.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
             encoding="utf-8",
         )
         (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
@@ -2729,6 +2841,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
                         "session-start-strong-gate",
                         "task-start-strong-gate",
                         "task-create-preserve-active",
+                        "task-status-view-strong-gate",
                         "workflow-phase-strong-gate",
                     ],
                 },
@@ -2748,6 +2861,14 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
         (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
             "# [workflow-embed-patch:preserve-parent-active-task]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "tasks.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_queue.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
             encoding="utf-8",
         )
         (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
@@ -2774,7 +2895,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(data["action"], "embed_invalid")
         self.assertIn("execFileSync", data["reason"])
 
-    def test_cmd_route_codex_embed_does_not_require_session_start_patch(self) -> None:
+    def test_cmd_route_codex_embed_requires_session_start_patch(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
         self.addCleanup(shutil.rmtree, root)
         (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
@@ -2786,8 +2907,10 @@ class WorkflowStateScriptTests(unittest.TestCase):
                     "cli_types": ["codex"],
                     "critical_runtime_patches": [
                         "inject-workflow-state",
+                        "session-start-strong-gate",
                         "task-start-strong-gate",
                         "task-create-preserve-active",
+                        "task-status-view-strong-gate",
                         "workflow-phase-strong-gate",
                     ],
                 },
@@ -2814,6 +2937,14 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "# [workflow-embed-patch:preserve-parent-active-task]\n",
             encoding="utf-8",
         )
+        (root / ".trellis" / "scripts" / "common" / "tasks.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_queue.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
         (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
             "# strong-gate-phase-patch-applied\n",
             encoding="utf-8",
@@ -2823,7 +2954,8 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         data = json.loads(result.stdout)
-        self.assertNotEqual(data["action"], "embed_invalid")
+        self.assertEqual(data["action"], "embed_invalid")
+        self.assertIn(".codex/hooks/session-start.py", data["reason"])
 
     def test_cmd_route_embed_invalid_when_distributed_command_content_drifts_across_platforms(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
@@ -2841,6 +2973,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
                         "session-start-strong-gate",
                         "task-start-strong-gate",
                         "task-create-preserve-active",
+                        "task-status-view-strong-gate",
                         "workflow-phase-strong-gate",
                     ],
                 },
@@ -2868,6 +3001,10 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "# [workflow-embed-patch:prefer-workflow-state-json]\n",
             encoding="utf-8",
         )
+        (root / ".codex" / "hooks" / "session-start.py").write_text(
+            "# strong-gate-session-start-patch-applied\n# [workflow-embed-patch:session-start-route-first]\n",
+            encoding="utf-8",
+        )
         (root / ".opencode" / "plugins").mkdir(parents=True, exist_ok=True)
         (root / ".opencode" / "plugins" / "inject-workflow-state.js").write_text(
             "// [workflow-embed-patch:prefer-workflow-state-json]\n"
@@ -2887,6 +3024,14 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
         (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
             "# [workflow-embed-patch:preserve-parent-active-task]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "tasks.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_queue.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
             encoding="utf-8",
         )
         (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(

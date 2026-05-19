@@ -288,6 +288,45 @@ BASELINE_TASK_STORE_CONTENT = (
     "    print(colored(f'Created task: {dir_name}', Colors.GREEN))\n"
     "    return 0\n"
 )
+BASELINE_COMMON_TASKS_CONTENT = (
+    "from collections.abc import Iterator\n"
+    "from pathlib import Path\n\n"
+    "from .io import read_json\n"
+    "from .paths import FILE_TASK_JSON\n"
+    "from .types import TaskInfo\n\n"
+    "def load_task(task_dir: Path) -> TaskInfo | None:\n"
+    "    task_json = task_dir / FILE_TASK_JSON\n"
+    "    if not task_json.is_file():\n"
+    "        return None\n"
+    "    data = read_json(task_json)\n"
+    "    if not data:\n"
+    "        return None\n"
+    "    return TaskInfo(\n"
+    "        dir_name=task_dir.name,\n"
+    "        directory=task_dir,\n"
+    "        title=data.get(\"title\") or data.get(\"name\") or \"unknown\",\n"
+    "        status=data.get(\"status\", \"unknown\"),\n"
+    "        assignee=data.get(\"assignee\", \"\"),\n"
+    "        priority=data.get(\"priority\", \"P2\"),\n"
+    "        children=tuple(data.get(\"children\", [])),\n"
+    "        parent=data.get(\"parent\"),\n"
+    "        package=data.get(\"package\"),\n"
+    "        raw=data,\n"
+    "    )\n\n"
+    "def iter_active_tasks(tasks_dir: Path) -> Iterator[TaskInfo]:\n"
+    "    return iter(())\n\n"
+    "def get_all_statuses(tasks_dir: Path) -> dict[str, str]:\n"
+    "    return {t.dir_name: t.status for t in iter_active_tasks(tasks_dir)}\n\n"
+    "def children_progress(children, all_statuses) -> str:\n"
+    "    return \"\"\n"
+)
+BASELINE_TASK_QUEUE_CONTENT = (
+    "from .tasks import iter_active_tasks\n\n"
+    "def list_tasks_by_status(filter_status=None, repo_root=None):\n"
+    "    return []\n\n"
+    "def list_pending_tasks(repo_root=None):\n"
+    "    return list_tasks_by_status(\"planning\", repo_root)\n"
+)
 BASELINE_WORKFLOW_PHASE_CONTENT = (
     "def get_step(step):\n"
     "    return f'legacy step {step}'\n"
@@ -582,6 +621,14 @@ class WorkflowInstallerTests(unittest.TestCase):
                 BASELINE_TASK_STORE_CONTENT,
                 encoding="utf-8",
             )
+            (root / ".trellis" / "scripts" / "common" / "tasks.py").write_text(
+                BASELINE_COMMON_TASKS_CONTENT,
+                encoding="utf-8",
+            )
+            (root / ".trellis" / "scripts" / "common" / "task_queue.py").write_text(
+                BASELINE_TASK_QUEUE_CONTENT,
+                encoding="utf-8",
+            )
             (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
                 BASELINE_WORKFLOW_PHASE_CONTENT,
                 encoding="utf-8",
@@ -869,6 +916,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertNotIn("session-start.py: 强门禁补丁缺失", combined)
         self.assertNotIn("task.py: strong-gate no-status-flip 补丁缺失", combined)
         self.assertNotIn("common/task_store.py: preserve-active 补丁缺失", combined)
+        self.assertNotIn("common/tasks.py: strong-gate task status view 补丁缺失", combined)
+        self.assertNotIn("common/task_queue.py: strong-gate pending-task 视图补丁缺失", combined)
         self.assertNotIn("common/workflow_phase.py: 强门禁补丁缺失", combined)
 
     def mark_legacy_codex_installed(self, fixture_root: Path) -> None:
@@ -1021,6 +1070,7 @@ class WorkflowInstallerTests(unittest.TestCase):
                 "session-start-strong-gate",
                 "task-start-strong-gate",
                 "task-create-preserve-active",
+                "task-status-view-strong-gate",
                 "workflow-phase-strong-gate",
             ],
         )
@@ -1070,6 +1120,8 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         python_targets = [
             fixture / ".trellis" / "scripts" / "task.py",
+            fixture / ".trellis" / "scripts" / "common" / "tasks.py",
+            fixture / ".trellis" / "scripts" / "common" / "task_queue.py",
             fixture / ".trellis" / "scripts" / "common" / "task_store.py",
             fixture / ".trellis" / "scripts" / "common" / "workflow_phase.py",
             fixture / ".claude" / "hooks" / "inject-workflow-state.py",
@@ -1118,13 +1170,16 @@ class WorkflowInstallerTests(unittest.TestCase):
         install = self.install_workflow(fixture)
         self.assert_install_result_usable(install)
 
-        target = fixture / ".claude" / "hooks" / "session-start.py"
-        content = target.read_text(encoding="utf-8")
-        self.assertIn(SESSION_START_STRONG_GATE_PATCH_MARKER, content)
-        self.assertIn("workflow-state.route", content)
-        self.assertNotIn("Case 3: Task completed", content)
-        self.assertNotIn("Status: READY", content)
-        self.assertNotIn("Status: PLANNING", content)
+        for target in (
+            fixture / ".claude" / "hooks" / "session-start.py",
+            fixture / ".codex" / "hooks" / "session-start.py",
+        ):
+            content = target.read_text(encoding="utf-8")
+            self.assertIn(SESSION_START_STRONG_GATE_PATCH_MARKER, content)
+            self.assertIn("workflow-state.route", content)
+            self.assertNotIn("Case 3: Task completed", content)
+            self.assertNotIn("Status: READY", content)
+            self.assertNotIn("Status: PLANNING", content)
 
     def test_nl_routing_maps_record_progress_to_finish_work_not_record_session(self) -> None:
         content = (COMMANDS_DIR / "install-workflow.py").read_text(encoding="utf-8")
@@ -1178,6 +1233,20 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn('if active.task_path:', task_py)
         self.assertIn('degraded-active-task-{runtime_key}.json', task_py)
         self.assertIn('degraded_runtime / "degraded-active-task.json"', task_py)
+
+    def test_install_patches_task_views_to_use_stage_based_status(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        tasks_py = (fixture / ".trellis" / "scripts" / "common" / "tasks.py").read_text(encoding="utf-8")
+        task_queue_py = (fixture / ".trellis" / "scripts" / "common" / "task_queue.py").read_text(encoding="utf-8")
+        self.assertIn("# [workflow-embed-patch:strong-gate-task-status-view]", tasks_py)
+        self.assertIn('_display_status(task_dir, data)', tasks_py)
+        self.assertIn("# [workflow-embed-patch:strong-gate-task-status-view]", task_queue_py)
+        self.assertIn('return list_tasks_by_status(None, repo_root)', task_queue_py)
 
     def test_install_personal_profile_keeps_ownership_cards_and_helpers(self) -> None:
         fixture = self.create_fixture()
@@ -1282,7 +1351,7 @@ class WorkflowInstallerTests(unittest.TestCase):
             BASELINE_TRELLIS_CONTINUE_SKILL_CONTENT,
         )
 
-    def test_install_does_not_patch_codex_session_start_when_only_turn_level_hook_is_managed(self) -> None:
+    def test_install_patches_codex_session_start_to_remove_legacy_startup_semantics(self) -> None:
         fixture = self.create_fixture(include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
 
@@ -1290,23 +1359,22 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         combined = install.stdout + install.stderr
-        self.assertNotIn(
-            "[Codex] session-start.py: 存在但未接 workflow 补丁（当前合同下视为可选辅助面）",
-            combined,
-        )
         self.assertIn(
-            "[Codex] session-start.py: 存在但未接 workflow 补丁（可选辅助面，当前合同下不作为必需 carrier）",
+            "[Codex] session-start.py 强门禁补丁已应用",
             combined,
         )
         codex_session_start = (fixture / ".codex" / "hooks" / "session-start.py").read_text(encoding="utf-8")
-        self.assertNotIn(SESSION_START_STRONG_GATE_PATCH_MARKER, codex_session_start)
+        self.assertIn(SESSION_START_STRONG_GATE_PATCH_MARKER, codex_session_start)
+        self.assertIn("workflow-state.route", codex_session_start)
         record = json.loads((fixture / ".trellis" / "workflow-installed.json").read_text(encoding="utf-8"))
         self.assertEqual(
             record["critical_runtime_patches"],
             [
                 "inject-workflow-state",
+                "session-start-strong-gate",
                 "task-start-strong-gate",
                 "task-create-preserve-active",
+                "task-status-view-strong-gate",
                 "workflow-phase-strong-gate",
             ],
         )

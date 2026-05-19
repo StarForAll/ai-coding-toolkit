@@ -94,6 +94,12 @@ cleanup_stale_contract_references = _INSTALL_WORKFLOW.cleanup_stale_contract_ref
 patch_inject_workflow_state_hook = _INSTALL_WORKFLOW.patch_inject_workflow_state_hook
 patch_task_start_degraded_fallback = _INSTALL_WORKFLOW.patch_task_start_degraded_fallback
 patch_opencode_session_utils = _INSTALL_WORKFLOW.patch_opencode_session_utils
+patch_task_status_views = _INSTALL_WORKFLOW.patch_task_status_views
+patch_session_start_no_task_guidance = _INSTALL_WORKFLOW.patch_session_start_no_task_guidance
+_apply_patch_session_start = _INSTALL_WORKFLOW._apply_patch_session_start
+_apply_patch_task_start = _INSTALL_WORKFLOW._apply_patch_task_start
+_apply_patch_task_create_preserve_active = _INSTALL_WORKFLOW._apply_patch_task_create_preserve_active
+_apply_patch_workflow_phase = _INSTALL_WORKFLOW._apply_patch_workflow_phase
 replace_workflow_task_mechanism = _INSTALL_WORKFLOW._replace_workflow_task_mechanism
 _HOOK_PATCH_MARKER = _INSTALL_WORKFLOW._HOOK_PATCH_MARKER
 _SESSION_START_STRONG_GATE_PATCH_MARKER = _INSTALL_WORKFLOW._SESSION_START_STRONG_GATE_PATCH_MARKER
@@ -105,6 +111,7 @@ _TASK_DEGRADED_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_DEGRADED_PATCH_MARKER
 _TASK_CURRENT_DEGRADED_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_CURRENT_DEGRADED_PATCH_MARKER
 _TASK_NO_STATUS_FLIP_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_NO_STATUS_FLIP_PATCH_MARKER
 _TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER
+_TASK_STATUS_VIEW_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_STATUS_VIEW_PATCH_MARKER
 _OPENCODE_SESSION_UTILS_PATCH_MARKER = _INSTALL_WORKFLOW._OPENCODE_SESSION_UTILS_PATCH_MARKER
 _WORKFLOW_PHASE_PATCH_MARKER = _INSTALL_WORKFLOW._WORKFLOW_PHASE_PATCH_MARKER
 # Reuse install-workflow markers for idempotency checks
@@ -913,11 +920,13 @@ def detect_conflicts_codex(
             _SESSION_START_STRONG_GATE_PATCH_MARKER in session_start_content
             and _SESSION_START_ROUTE_FIRST_MARKER in session_start_content
         ):
-            ok("[Codex] session-start.py: 可选辅助面已接上强门禁补丁")
+            ok("[Codex] session-start.py: 强门禁补丁已应用")
         else:
-            info("[Codex] session-start.py: 存在但未接 workflow 补丁（可选辅助面，当前合同下不作为必需 carrier）")
+            err("[Codex] session-start.py: 强门禁补丁缺失，仍保留 legacy READY/NOT READY 启动面")
+            conflicts += 1
     else:
-        info("[Codex] session-start.py 缺失（当前合同下不作为必需 carrier）")
+        err("[Codex] session-start.py 缺失")
+        conflicts += 1
 
     claude_hook = root / ".claude" / "hooks" / "inject-workflow-state.py"
     if claude_hook.exists():
@@ -996,6 +1005,24 @@ def detect_conflicts_codex(
             ok("[Shared] common/task_store.py: preserve-active 补丁已应用")
         else:
             err("[Shared] common/task_store.py: preserve-active 补丁缺失")
+            conflicts += 1
+
+    task_views = root / ".trellis" / "scripts" / "common" / "tasks.py"
+    if task_views.exists():
+        task_views_content = task_views.read_text(encoding="utf-8")
+        if _TASK_STATUS_VIEW_PATCH_MARKER in task_views_content:
+            ok("[Shared] common/tasks.py: strong-gate task status view 补丁已应用")
+        else:
+            err("[Shared] common/tasks.py: strong-gate task status view 补丁缺失")
+            conflicts += 1
+
+    task_queue = root / ".trellis" / "scripts" / "common" / "task_queue.py"
+    if task_queue.exists():
+        task_queue_content = task_queue.read_text(encoding="utf-8")
+        if _TASK_STATUS_VIEW_PATCH_MARKER in task_queue_content:
+            ok("[Shared] common/task_queue.py: strong-gate pending-task 视图补丁已应用")
+        else:
+            err("[Shared] common/task_queue.py: strong-gate pending-task 视图补丁缺失")
             conflicts += 1
 
     workflow_phase = root / ".trellis" / "scripts" / "common" / "workflow_phase.py"
@@ -1783,8 +1810,17 @@ def main() -> int:
     remove_obsolete_deployed_scripts(dst_scripts, record, profile=profile)
     deploy_scripts(src, dst_scripts, profile=profile)
 
-    # Patch workflow_phase.py with strong-gate rejection
-    _apply_patch_workflow_phase_upgrade(src, dst_scripts)
+    # Re-apply runtime strong-gate patches after helper/script refresh so
+    # upgrade paths converge with fresh install behavior.
+    patch_inject_workflow_state_hook(root, dry_run=False)
+    _apply_patch_session_start(src, root, dry_run=False)
+    patch_task_start_degraded_fallback(root, dry_run=False)
+    patch_opencode_session_utils(root, dry_run=False)
+    patch_session_start_no_task_guidance(root, dry_run=False)
+    _apply_patch_workflow_phase(src, root, dry_run=False)
+    _apply_patch_task_start(src, root, dry_run=False)
+    _apply_patch_task_create_preserve_active(src, root, dry_run=False)
+    patch_task_status_views(root, dry_run=False)
 
     # 更新安装记录
     write_install_record(rec_file, current_version, installed_version, cli_types, record)

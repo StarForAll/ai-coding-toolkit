@@ -125,31 +125,36 @@ CRITICAL_RUNTIME_PATCHES = [
     "session-start-strong-gate",
     "task-start-strong-gate",
     "task-create-preserve-active",
+    "task-status-view-strong-gate",
     "workflow-phase-strong-gate",
 ]
 INJECT_WORKFLOW_STATE_PATCH_MARKER = "# [workflow-embed-patch:prefer-workflow-state-json]"
 SESSION_START_STRONG_GATE_PATCH_MARKER = "# strong-gate-session-start-patch-applied"
 TASK_START_STRONG_GATE_PATCH_MARKER = "# [workflow-embed-patch:strong-gate-no-status-flip]"
 TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER = "# [workflow-embed-patch:preserve-parent-active-task]"
+TASK_STATUS_VIEW_PATCH_MARKER = "# [workflow-embed-patch:strong-gate-task-status-view]"
 WORKFLOW_PHASE_STRONG_GATE_PATCH_MARKER = "# strong-gate-phase-patch-applied"
 
 
 def critical_runtime_patches_for_cli_types(cli_types: list[str] | tuple[str, ...]) -> list[str]:
     """Return the runtime patch contract actually required for the selected CLIs.
 
-    Codex currently relies on the turn-level hook carrier (`hooks.json` ->
-    `inject-workflow-state.py`) rather than a workflow-managed SessionStart
-    contract. Keep SessionStart as a required runtime patch only for the CLIs
-    where this workflow actively patches and depends on that surface.
+    Codex still relies primarily on the turn-level hook carrier (`hooks.json` ->
+    `inject-workflow-state.py`), but its baseline repo layout also carries a
+    `session-start.py` auxiliary surface. Leaving that file on legacy
+    READY/NOT READY semantics reintroduces a second truth at startup, so this
+    workflow now patches and verifies the startup surface for every CLI whose
+    fresh baseline provides it.
     """
     selected = {str(item) for item in cli_types}
     patches = ["inject-workflow-state"]
-    if selected & {"claude", "opencode"}:
+    if selected & {"claude", "opencode", "codex"}:
         patches.append("session-start-strong-gate")
     patches.extend(
         [
             "task-start-strong-gate",
             "task-create-preserve-active",
+            "task-status-view-strong-gate",
             "workflow-phase-strong-gate",
         ]
     )

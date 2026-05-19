@@ -249,11 +249,6 @@ def degraded_active_task_paths(repo_root: Path) -> list[Path]:
 
 
 def resolve_degraded_task_dir(repo_root: Path) -> Path | None:
-    if session_runtime_has_any_current_task(repo_root):
-        # Degraded fallback is only a last resort when no live session state
-        # exists. If any session file already carries a current_task pointer,
-        # prefer explicit recovery instead of guessing from a degraded pointer.
-        return None
     for degraded_path in degraded_active_task_paths(repo_root):
         degraded = read_json(degraded_path)
         if not degraded:
@@ -1831,6 +1826,7 @@ CRITICAL_RUNTIME_PATCH_NAMES = (
     "session-start-strong-gate",
     "task-start-strong-gate",
     "task-create-preserve-active",
+    "task-status-view-strong-gate",
     "workflow-phase-strong-gate",
 )
 INJECT_WORKFLOW_STATE_PATCH_MARKER = "# [workflow-embed-patch:prefer-workflow-state-json]"
@@ -1839,6 +1835,7 @@ SESSION_START_STRONG_GATE_PATCH_MARKER = "# strong-gate-session-start-patch-appl
 OPENCODE_SESSION_UTILS_PATCH_MARKER = "// [workflow-embed-patch:strong-gate-session-utils]"
 TASK_START_STRONG_GATE_PATCH_MARKER = "# [workflow-embed-patch:strong-gate-no-status-flip]"
 TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER = "# [workflow-embed-patch:preserve-parent-active-task]"
+TASK_STATUS_VIEW_PATCH_MARKER = "# [workflow-embed-patch:strong-gate-task-status-view]"
 WORKFLOW_PHASE_STRONG_GATE_PATCH_MARKER = "# strong-gate-phase-patch-applied"
 DISTRIBUTED_COMMAND_NAMES = (
     "feasibility",
@@ -1886,6 +1883,16 @@ def _critical_patch_paths(repo_root: Path, cli_types: set[str]) -> list[tuple[st
             TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER,
         ),
         (
+            "task-status-view-strong-gate",
+            repo_root / ".trellis" / "scripts" / "common" / "tasks.py",
+            TASK_STATUS_VIEW_PATCH_MARKER,
+        ),
+        (
+            "task-status-view-strong-gate",
+            repo_root / ".trellis" / "scripts" / "common" / "task_queue.py",
+            TASK_STATUS_VIEW_PATCH_MARKER,
+        ),
+        (
             "workflow-phase-strong-gate",
             repo_root / ".trellis" / "scripts" / "common" / "workflow_phase.py",
             WORKFLOW_PHASE_STRONG_GATE_PATCH_MARKER,
@@ -1913,6 +1920,11 @@ def _critical_patch_paths(repo_root: Path, cli_types: set[str]) -> list[tuple[st
                     "inject-workflow-state",
                     repo_root / ".codex" / "hooks" / "inject-workflow-state.py",
                     INJECT_WORKFLOW_STATE_PATCH_MARKER,
+                ),
+                (
+                    "session-start-strong-gate",
+                    repo_root / ".codex" / "hooks" / "session-start.py",
+                    SESSION_START_STRONG_GATE_PATCH_MARKER,
                 ),
             ]
         )
@@ -2290,8 +2302,12 @@ def cmd_route(args: argparse.Namespace) -> int:
                                 profile_hint = "personal"
                     _route_result(
                         target,
-                        "first_entry",
-                        reason,
+                        "entry_choice_required",
+                        (
+                            f"{reason}。若当前意图是 workflow / 项目只读分析、元审计或 A/A+ 纯分析，"
+                            "保持 no_task 直接分析，不要把仓库误当成新项目入口；"
+                            f"若当前意图是开始新的实现任务，则进入 {target}"
+                        ),
                         profile_hint=profile_hint or "unknown",
                     )
                 else:

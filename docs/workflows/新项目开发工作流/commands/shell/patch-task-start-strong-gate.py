@@ -2,10 +2,11 @@
 """Patch task.py cmd_start() to skip status flip under strong-gate model.
 
 When installed into a target project, this patch modifies task.py's cmd_start()
-so that when a workflow-state.json exists in the active task directory, it does
-NOT flip task.json status from planning → in_progress. Under the strong-gate
-model, workflow-state.json.stage is the single source of truth; flipping
-task.json.status creates a dual-truth conflict.
+so it no longer flips task.json status from planning → in_progress at all.
+Under the strong-gate model, workflow-state.json.stage is the single source of
+truth; continuing to mutate task.json progress values keeps producing legacy
+semantics after startup even when routing has already moved to stage-based
+authority.
 """
 
 from __future__ import annotations
@@ -46,13 +47,8 @@ def patch_task_start(target_path: Path) -> bool:
         return (
             f"{indent}{PATCH_MARKER}\n"
             f"{indent}if {var_name} and {var_name}.get(\"status\") == \"planning\":\n"
-            f"{indent}    if (full_path / \"workflow-state.json\").is_file():\n"
-            f"{indent}        print(colored(\"⏭ Strong-gate mode: skipping task.json status flip "
-            f"(workflow-state.json is source of truth)\", Colors.YELLOW))\n"
-            f"{indent}    else:\n"
-            f"{indent}        {var_name}[\"status\"] = \"in_progress\"\n"
-            f"{indent}        if write_json(task_json_path, {var_name}):\n"
-            f"{indent}            print(colored(\"{message}\", Colors.GREEN))\n"
+            f"{indent}    print(colored(\"⏭ Strong-gate mode: skipping legacy task.json status flip "
+            f"(workflow-state.py route is authoritative)\", Colors.YELLOW))\n"
         )
 
     new_content, replacements = pattern.subn(_replace, content)

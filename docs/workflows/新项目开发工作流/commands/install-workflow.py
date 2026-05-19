@@ -77,6 +77,7 @@ from workflow_assets import (
     PATCH_BASELINE_SHARED_DOCS,
     SESSION_START_STRONG_GATE_PATCH_MARKER,
     TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER,
+    TASK_STATUS_VIEW_PATCH_MARKER,
     TASK_START_STRONG_GATE_PATCH_MARKER,
     VALID_PROFILES,
     WORKFLOW_DOCS_DIR,
@@ -208,21 +209,23 @@ _BASELINE_WORKFLOW_TASK_MECHANISM = (
 _STRONG_GATE_WORKFLOW_TASK_MECHANISM = (
     "**Current-task mechanism**: `task.py create` creates the task directory and "
     "(when session identity is available) auto-sets the per-session active-task "
-    "pointer so the planning breadcrumb fires immediately. `task.py start` always "
-    "refreshes the active-task pointer for the current session; in strong-gate "
-    "installs, if the active task already has `workflow-state.json`, patched "
-    "`task.py start` does **not** treat `task.json.status` as the stage source of "
-    "truth and may skip the legacy `planning -> in_progress` flip. Runtime stage "
-    "routing is determined by `.trellis/.runtime/sessions/<context>.json -> "
-    "$TASK_DIR/workflow-state.json.stage`, while `task.json.status` remains a "
-    "legacy lifecycle field for task bookkeeping only. State is stored under "
-    "`.trellis/.runtime/sessions/`; if no context key is available from hook "
-    "input, `TRELLIS_CONTEXT_ID`, or a platform-native session environment "
-    "variable, `task.py start` falls back to degraded recovery behavior instead of "
-    "being the stage authority. `task.py finish` deletes the current session file "
-    "(status unchanged). `task.py archive <task>` writes `status=completed`, moves "
-    "the directory to `archive/`, and deletes any runtime session files that still "
-    "point at the archived task."
+    "pointer. Runtime stage routing is determined by `.trellis/.runtime/sessions/"
+    "<context>.json -> $TASK_DIR/workflow-state.json.stage`, while `task.json."
+    "status` is bookkeeping only and must not carry a second progress truth in "
+    "task views or startup carriers. Patched `task.py start` refreshes the active-"
+    "task pointer for the current session but does **not** perform the legacy "
+    "`planning -> in_progress` flip. If `workflow-state.json` is missing, strong-"
+    "gate task views surface a `needs-init` / repair-oriented status instead of "
+    "reusing legacy planning semantics. State is stored under `.trellis/.runtime/"
+    "sessions/`; if no context key is available from hook input, "
+    "`TRELLIS_CONTEXT_ID`, or a platform-native session environment variable, "
+    "`task.py start` falls back to degraded recovery behavior and writes a runtime-"
+    "keyed fallback file (`degraded-active-task-<runtime-key>.json`, with the "
+    "shared `degraded-active-task.json` kept as compatibility fallback). "
+    "`task.py finish` deletes the current session file (status unchanged). "
+    "`task.py archive <task>` writes `status=completed`, moves the directory to "
+    "`archive/`, and deletes any runtime session files that still point at the "
+    "archived task."
 )
 _WORKFLOW_TASK_MECHANISM_BLOCK_RE = re.compile(
     r"\*\*Current-task mechanism\*\*:.*?(?=\n\n(?:### |## |<!--)|\Z)",
@@ -1468,7 +1471,10 @@ def _apply_patch_session_start(src: Path, root: Path, *, dry_run: bool) -> bool:
         warn("[Shared] patch-session-start-strong-gate.py 不存在，跳过补丁")
         return False
 
-    targets = [("Claude", root / ".claude" / "hooks" / "session-start.py")]
+    targets = [
+        ("Claude", root / ".claude" / "hooks" / "session-start.py"),
+        ("Codex", root / ".codex" / "hooks" / "session-start.py"),
+    ]
     if dry_run:
         planned = [label for label, target in targets if target.exists()]
         for label in planned:
@@ -1567,11 +1573,99 @@ def _apply_patch_task_create_preserve_active(src: Path, root: Path, *, dry_run: 
     return False
 
 
+def patch_task_status_views(root: Path, *, dry_run: bool) -> bool:
+    """Patch task runtime views to prefer workflow-state over legacy task status."""
+    tasks_path = root / ".trellis" / "scripts" / "common" / "tasks.py"
+    task_queue_path = root / ".trellis" / "scripts" / "common" / "task_queue.py"
+    task_cli_path = root / ".trellis" / "scripts" / "task.py"
+
+    any_patched = False
+
+    if tasks_path.exists():
+        content = tasks_path.read_text(encoding="utf-8")
+        patched = content
+        if _TASK_STATUS_VIEW_PATCH_MARKER not in patched:
+            anchor = "\n\ndef load_task(task_dir: Path) -> TaskInfo | None:\n"
+            helper = """
+WORKFLOW_STATE_FILE_NAME = "workflow-state.json"
+TERMINAL_TASK_STATUSES = {"completed", "done", "archived"}
+
+
+# [workflow-embed-patch:strong-gate-task-status-view]
+def _display_status(task_dir: Path, data: dict) -> str:
+    state = read_json(task_dir / WORKFLOW_STATE_FILE_NAME)
+    if isinstance(state, dict):
+        stage = state.get("stage")
+        if isinstance(stage, str) and stage:
+            return stage
+        return "repair_needed"
+
+    raw_status = data.get("status", "unknown")
+    if raw_status in TERMINAL_TASK_STATUSES:
+        return "completed"
+    if isinstance(raw_status, str) and raw_status:
+        return "needs-init"
+    return "unknown"
+"""
+            if anchor in patched:
+                patched = patched.replace(anchor, "\n\n" + helper.rstrip() + anchor, 1)
+            patched = patched.replace(
+                '        status=data.get("status", "unknown"),\n',
+                '        status=_display_status(task_dir, data),\n',
+                1,
+            )
+        if patched != content:
+            if dry_run:
+                info("[Shared] 将补丁 common/tasks.py → 任务视图改为 stage / needs-init")
+            else:
+                tasks_path.write_text(patched, encoding="utf-8")
+                ok("[Shared] common/tasks.py 已补丁 → 任务视图改为 stage / needs-init")
+            any_patched = True
+
+    if task_queue_path.exists():
+        content = task_queue_path.read_text(encoding="utf-8")
+        patched = content
+        target = '    return list_tasks_by_status("planning", repo_root)\n'
+        replacement = (
+            f"    {_TASK_STATUS_VIEW_PATCH_MARKER}\n"
+            "    # Under strong-gate installs, active task views are stage-based.\n"
+            "    # \"Pending\" therefore means every non-archived active task rather than\n"
+            "    # the legacy raw task.json status=planning subset.\n"
+            "    return list_tasks_by_status(None, repo_root)\n"
+        )
+        if _TASK_STATUS_VIEW_PATCH_MARKER not in patched and target in patched:
+            patched = patched.replace(target, replacement, 1)
+        if patched != content:
+            if dry_run:
+                info("[Shared] 将补丁 common/task_queue.py → list_pending_tasks 不再依赖 planning")
+            else:
+                task_queue_path.write_text(patched, encoding="utf-8")
+                ok("[Shared] common/task_queue.py 已补丁 → list_pending_tasks 不再依赖 planning")
+            any_patched = True
+
+    if task_cli_path.exists():
+        content = task_cli_path.read_text(encoding="utf-8")
+        patched = content.replace(
+            "  --status, -s <s>     Filter by status (planning, in_progress, review, completed)\n",
+            "  --status, -s <s>     Filter by workflow display status / stage (e.g. needs-init, feasibility, design, completed)\n",
+        )
+        if patched != content:
+            if dry_run:
+                info("[Shared] 将更新 task.py --status 帮助文本 → 使用 workflow display status / stage")
+            else:
+                task_cli_path.write_text(patched, encoding="utf-8")
+                ok("[Shared] task.py --status 帮助文本已更新 → 使用 workflow display status / stage")
+            any_patched = True
+
+    return any_patched
+
+
 # ── Issue 1+7: patch deployed inject-workflow-state.py hook ──
 _HOOK_PATCH_MARKER = INJECT_WORKFLOW_STATE_PATCH_MARKER
 _SESSION_START_STRONG_GATE_PATCH_MARKER = SESSION_START_STRONG_GATE_PATCH_MARKER
 _TASK_NO_STATUS_FLIP_PATCH_MARKER = TASK_START_STRONG_GATE_PATCH_MARKER
 _TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER = TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER
+_TASK_STATUS_VIEW_PATCH_MARKER = TASK_STATUS_VIEW_PATCH_MARKER
 _WORKFLOW_PHASE_PATCH_MARKER = WORKFLOW_PHASE_STRONG_GATE_PATCH_MARKER
 
 
@@ -1638,7 +1732,8 @@ _SESSION_START_NO_TASK_LINE2 = '"to clarify requirements and create a task via `
 _SESSION_START_NO_TASK_NEW = (
     '"Next-Action: Consult the AGENTS.md NL routing table for profile-specific entry routing. '
     'For outsourcing profile: run `python3 ./.trellis/scripts/workflow/workflow-state.py route` '
-    'to detect first-entry and load `/trellis:feasibility`. '
+    'to detect whether this is a read-only analysis turn or a real first-entry task turn; '
+    'only load `/trellis:feasibility` when the route result and the current intent both indicate task creation. '
     'For personal profile: load skill `trellis-brainstorm` to clarify requirements '
     'and create a task via `python3 ./.trellis/scripts/task.py create`.\\n"'
 )
@@ -1915,11 +2010,12 @@ def cleanup_stale_contract_references(root: Path, *, dry_run: bool) -> bool:
 
 
 def patch_task_start_degraded_fallback(root: Path, *, dry_run: bool) -> bool:
-    """Patch task.py so degraded start writes a fallback active-task file.
+    """Patch task.py so degraded start writes recoverable active-task files.
 
-    The strong-gate router already knows how to recover from
-    `.trellis/.runtime/degraded-active-task.json`, but the Trellis baseline
-    `task.py start` degraded branch never writes it.
+    The strong-gate router prefers a runtime-keyed degraded pointer when one is
+    available, while keeping `.trellis/.runtime/degraded-active-task.json` as a
+    shared compatibility fallback. The Trellis baseline `task.py start`
+    degraded branch never writes either file.
     """
     task_path = root / ".trellis" / "scripts" / "task.py"
     if not task_path.exists():
@@ -2051,7 +2147,7 @@ def patch_task_start_degraded_fallback(root: Path, *, dry_run: bool) -> bool:
     if not dry_run:
         task_path.write_text(patched, encoding="utf-8")
     if dry_run:
-        info("[Shared] 将补丁 task.py degraded start fallback / current-read → .trellis/.runtime/degraded-active-task.json")
+        info("[Shared] 将补丁 task.py degraded start fallback / current-read → runtime-keyed degraded-active-task 文件")
     else:
         ok("[Shared] task.py degraded start fallback / current-read 已补丁")
     return True
@@ -3007,6 +3103,7 @@ def main() -> int:
             # Patch task.py cmd_start to skip status flip under strong-gate
             _apply_patch_task_start(src, root, dry_run=args.dry_run)
             _apply_patch_task_create_preserve_active(src, root, dry_run=args.dry_run)
+            patch_task_status_views(root, dry_run=args.dry_run)
         print()
 
         if not any(t and t["errors"] for t in total.values()):
