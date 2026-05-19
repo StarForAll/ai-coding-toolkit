@@ -1,0 +1,7 @@
+{"file":".trellis/spec/docs/index.md","reason":"检查阶段如果同步修改 workflow 命令文档，需要验证文档边界与传播契约。"}
+{"file":".trellis/spec/scripts/index.md","reason":"质量验证覆盖 workflow helper scripts 与测试时，需遵守脚本索引约定。"}
+{"file":".trellis/spec/scripts/python-conventions.md","reason":"验证 Python helper script 修改是否仍符合脚本约定。"}
+{"file":".trellis/spec/scripts/workflow-installer-upgrade-contracts.md","reason":"确认脚本改动不会破坏工作流安装/升级/嵌入契约。"}
+{"file":".trellis/spec/scripts/workflow-command-doc-contracts.md","reason":"若门禁契约变化同步到了命令文档，检查其结构与标准段落。"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"检查 route/validate/repair 门禁逻辑是否避免重复与再次漂移。"}
+{"file":".trellis/tasks/05-19-audit-fix-workflow-state-gates/research/workflow-state-gates-audit.md","reason":"对照本轮证据源验证已修复问题与剩余风险。"}

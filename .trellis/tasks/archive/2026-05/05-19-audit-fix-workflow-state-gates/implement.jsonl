@@ -1,0 +1,7 @@
+{"file":".trellis/spec/docs/index.md","reason":"工作流源文档属于 product docs，需要遵守 repo-local 文档边界与传播规则。"}
+{"file":".trellis/spec/scripts/index.md","reason":"本任务修改 workflow helper scripts 与测试，需要先遵守脚本层索引与清单。"}
+{"file":".trellis/spec/scripts/python-conventions.md","reason":"workflow-state.py 与 check-quality.py 都是 Python helper script，需保持脚本约定一致。"}
+{"file":".trellis/spec/scripts/workflow-installer-upgrade-contracts.md","reason":"修改工作流 helper/安装契约时，需要保持 source-to-deploy 与 install record 边界一致。"}
+{"file":".trellis/spec/scripts/workflow-command-doc-contracts.md","reason":"若同步修正文档，需保持命令文档结构与门禁块约定。"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"阶段退出门禁与强门禁证据校验应尽量复用共享逻辑，避免 route/validate 漂移。"}
+{"file":".trellis/tasks/05-19-audit-fix-workflow-state-gates/research/workflow-state-gates-audit.md","reason":"记录当前轮对 /tmp 目标项目与源工作流的证据化审计结论。"}
