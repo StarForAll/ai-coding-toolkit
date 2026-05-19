@@ -1206,7 +1206,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         shared_workflow_ref = (
             fixture / ".agents" / "skills" / "trellis-meta" / "references" / "local-architecture" / "workflow.md"
         ).read_text(encoding="utf-8")
-        self.assertIn("workflow-state.json.stage", shared_workflow_ref)
+        self.assertIn("workflow-state.py route", shared_workflow_ref)
+        self.assertIn("route metadata", shared_workflow_ref)
         self.assertIn("finish-work -> delivery -> record-session", shared_workflow_ref)
 
     def test_install_migrates_legacy_agents_to_trellis_naming(self) -> None:

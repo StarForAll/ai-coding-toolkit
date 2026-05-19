@@ -1448,7 +1448,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         import json as _json
         data = _json.loads(result.stdout)
-        self.assertEqual(data["action"], "repair_needed")
+        self.assertEqual(data["action"], "blocked")
         self.assertIn("assessment", data["reason"])
 
     def test_cmd_route_blocks_plan_when_recommended_task_prd_missing(self) -> None:
