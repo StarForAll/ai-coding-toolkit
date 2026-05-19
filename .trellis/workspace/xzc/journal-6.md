@@ -373,3 +373,36 @@ Audited the embedded workflow against a rebuilt tmp target, fixed brainstorm ent
 ### Next Steps
 
 - None - task complete
+
+
+## Session 256: 审计并修复新项目工作流状态门禁缺陷
+
+**Date**: 2026-05-19
+**Task**: 审计并修复新项目工作流状态门禁缺陷
+**Branch**: `main`
+
+### Summary
+
+基于重建后的 /tmp 目标项目审计并修复 strong-gate 验证链、brainstorm 退出门禁、trellis-start patch、route-failed fallback 与安装器回归测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ba733d9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

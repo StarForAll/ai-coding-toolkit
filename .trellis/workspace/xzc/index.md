@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-6.md`
-- **Total Sessions**: 255
+- **Total Sessions**: 256
 - **Last Active**: 2026-05-19
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-6.md` | ~375 | Active |
+| `journal-6.md` | ~408 | Active |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
@@ -34,6 +34,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 256 | 2026-05-19 | 审计并修复新项目工作流状态门禁缺陷 | `ba733d9` | `main` |
 | 255 | 2026-05-19 | Audit and fix embedded workflow entry gates | `586d110`, `bc5f146`, `b3087c7` | `main` |
 | 254 | 2026-05-19 | workflow audit: align record-session asset contracts | `fbfa098`, `0ccad43` | `main` |
 | 253 | 2026-05-19 | 修复嵌入工作流强门禁路由注入漂移 | `c3b3655`, `9a0a422` | `main` |
