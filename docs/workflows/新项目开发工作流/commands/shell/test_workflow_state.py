@@ -777,6 +777,9 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
         (requirements_dir / "developer-facing-prd.md").write_text("# developer\n- body\n", encoding="utf-8")
         (root / "README.md").unlink()
+        design_dir = task_dir / "design"
+        design_dir.mkdir(parents=True, exist_ok=True)
+        (design_dir / "source-watermark-plan.md").write_text(self.VALID_SOURCE_WATERMARK_PLAN, encoding="utf-8")
 
         self.run_script("init", str(task_dir), "--stage", "design")
         self.run_script(
@@ -854,6 +857,43 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
         self.assertIn("README.en.md", validate.stdout)
+
+    def test_validate_design_exit_matches_route_for_ownership_design_gate(self) -> None:
+        root, task_dir = self.make_fixture()
+        requirements_dir = root / "docs" / "requirements"
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (requirements_dir / "developer-facing-prd.md").write_text("# developer\n- body\n", encoding="utf-8")
+        self.write_context7_review(task_dir)
+
+        self.run_script("init", str(task_dir), "--stage", "design")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--architecture-confirmed",
+            "true",
+            "--context7-review-completed",
+            "true",
+            "--completed-blocks",
+            "block-a,block-b,block-c,block-d",
+            "--stage-status",
+            "awaiting_user_confirmation",
+            "--awaiting-user-confirmation",
+            "true",
+        )
+
+        route = self.run_script("route", str(task_dir), "--project-root", str(root))
+        route_data = json.loads(route.stdout)
+        self.assertEqual(route_data["action"], "awaiting_confirmation_with_blockers")
+        self.assertIn("source-watermark-plan.md", "".join(route_data.get("blockers", [])))
+
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("source-watermark-plan.md", validate.stdout)
 
     def test_set_rejects_plan_stage_execution_authorized_true(self) -> None:
         root, task_dir = self.make_fixture()
@@ -1364,6 +1404,13 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
     def test_validate_passes_when_brainstorm_has_no_customer_prd_yet(self) -> None:
         root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (root / "docs" / "requirements" / "customer-facing-prd.md").unlink()
         (task_dir / "prd.md").write_text(
             "# sample brainstorm draft\n\n"
             f"{self.VALID_BRAINSTORM_ESTIMATE}\n"
@@ -1376,12 +1423,70 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "- `open_items`: `none`\n",
             encoding="utf-8",
         )
-        (task_dir / "assessment.md").write_text(self.VALID_INTERNAL_ASSESSMENT, encoding="utf-8")
 
         self.run_script("init", str(task_dir), "--stage", "brainstorm")
         validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
 
         self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
+
+    def test_validate_brainstorm_exit_requires_customer_prd_for_design_path(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix="",
+        )
+        (task_dir / "prd.md").write_text(
+            "# sample brainstorm draft\n\n"
+            f"{self.VALID_BRAINSTORM_ESTIMATE}\n"
+            "## 阶段出口快照\n"
+            "- `complexity_decision`: `M1`\n"
+            "- `ui_lane_decision`: `mixed`\n"
+            "- `cross_platform_scope`: `claude-opencode-codex`\n"
+            "- `estimate_refresh_result`: `initial`\n"
+            "- `kill_criteria`: `none`\n"
+            "- `open_items`: `none`\n",
+            encoding="utf-8",
+        )
+
+        self.run_script("init", str(task_dir), "--stage", "brainstorm")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status",
+            "awaiting_user_confirmation",
+            "--awaiting-user-confirmation",
+            "true",
+            "--allowed-next",
+            "design,plan",
+        )
+
+        route = self.run_script("route", str(task_dir), "--project-root", str(root))
+        route_data = json.loads(route.stdout)
+        self.assertEqual(route_data["action"], "awaiting_confirmation_with_blockers")
+        self.assertIn("customer-facing-prd.md", "".join(route_data.get("blockers", [])))
+
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("customer-facing-prd.md", validate.stdout)
+
+        blocked_set = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage",
+            "design",
+            "--stage-status",
+            "in_progress",
+            "--awaiting-user-confirmation",
+            "false",
+            "--transition-from",
+            "brainstorm",
+            "--allowed-next",
+            "plan",
+        )
+        self.assertEqual(blocked_set.returncode, 1, msg=blocked_set.stdout + blocked_set.stderr)
+        self.assertIn("customer-facing-prd.md", blocked_set.stdout)
 
     def test_validate_passes_when_implementation_uses_task_prd_only_for_l0_path(self) -> None:
         root, task_dir = self.make_fixture()
@@ -1597,6 +1702,40 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(data["action"], "reenter")
         self.assertEqual(data["stage"], "design")
         self.assertEqual(data["stage_status"], "in_progress")
+
+    def test_cmd_route_delivery_reenter_blocks_when_finish_work_gate_missing(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.run_script("init", str(task_dir), "--stage", "delivery")
+
+        result = self.run_script("route", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "blocked")
+        self.assertIn("finish-work-checklist.md", "".join(data.get("blockers", [])))
+
+    def test_cmd_route_review_gate_reenter_blocks_when_check_gate_missing(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.run_script("init", str(task_dir), "--stage", "review-gate")
+
+        result = self.run_script("route", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "blocked")
+        self.assertIn("check.md", "".join(data.get("blockers", [])))
 
     def test_cmd_route_reenters_from_session_runtime_without_task_arg(self) -> None:
         root, task_dir = self.make_fixture()
@@ -1999,6 +2138,61 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("缺少交付产物", result.stdout)
         self.assertIn("不得进入 record-session", result.stdout)
+
+    def test_validate_record_session_stage_requires_outsourcing_delivery_proofs(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+            assessment_content=self.VALID_EXTERNAL_ASSESSMENT,
+        )
+        self.write_delivery_artifacts(task_dir, include_outsourcing_proofs=False)
+        (task_dir / "delivery" / "transfer-checklist.md").write_text(
+            "# transfer checklist\n"
+            "- retained-control delivery\n"
+            "- milestone_payment_schedule\n"
+            "- non_payment_remedy_path\n"
+            "- dispute_escalation_path\n",
+            encoding="utf-8",
+        )
+        (task_dir / "delivery" / "deliverables.md").write_text(
+            "# 交付物\n"
+            "- 交付清单\n",
+            encoding="utf-8",
+        )
+        state = {
+            "version": 1,
+            "stage": "record-session",
+            "stage_status": "in_progress",
+            "current_block": None,
+            "completed_blocks": [],
+            "allowed_next_stages": [],
+            "awaiting_user_confirmation": False,
+            "last_confirmed_transition": {
+                "from": "delivery",
+                "to": "record-session",
+                "confirmed_at": "2026-05-19T00:00:00+00:00",
+            },
+            "notes": [],
+            "checkpoints": {
+                "architecture_confirmed": True,
+                "context7_review_completed": True,
+                "execution_authorized": False,
+            },
+            "updated_at": "2026-05-19T00:00:00+00:00",
+        }
+        (task_dir / "workflow-state.json").write_text(
+            json.dumps(state, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("ownership-proof.md", result.stdout)
+        self.assertIn("source-watermark-verification.md", result.stdout)
 
     def test_cmd_route_ignores_degraded_when_session_files_exist(self) -> None:
         root, task_dir = self.make_fixture()
@@ -2630,6 +2824,98 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         data = json.loads(result.stdout)
         self.assertNotEqual(data["action"], "embed_invalid")
+
+    def test_cmd_route_embed_invalid_when_distributed_command_content_drifts_across_platforms(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "scripts" / "common").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            json.dumps(
+                {
+                    "profile": "outsourcing",
+                    "cli_types": ["claude", "opencode", "codex"],
+                    "commands": ["record-session"],
+                    "critical_runtime_patches": [
+                        "inject-workflow-state",
+                        "session-start-strong-gate",
+                        "task-start-strong-gate",
+                        "task-create-preserve-active",
+                        "workflow-phase-strong-gate",
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "library-lock.yaml").write_text(
+            "packs:\n  - pack.requirements-discovery-foundation\n",
+            encoding="utf-8",
+        )
+        (root / ".claude" / "hooks").mkdir(parents=True, exist_ok=True)
+        (root / ".claude" / "hooks" / "inject-workflow-state.py").write_text(
+            "# [workflow-embed-patch:prefer-workflow-state-json]\n",
+            encoding="utf-8",
+        )
+        (root / ".claude" / "hooks" / "session-start.py").write_text(
+            "# strong-gate-session-start-patch-applied\n",
+            encoding="utf-8",
+        )
+        (root / ".codex" / "hooks").mkdir(parents=True, exist_ok=True)
+        (root / ".codex" / "hooks" / "inject-workflow-state.py").write_text(
+            "# [workflow-embed-patch:prefer-workflow-state-json]\n",
+            encoding="utf-8",
+        )
+        (root / ".opencode" / "plugins").mkdir(parents=True, exist_ok=True)
+        (root / ".opencode" / "plugins" / "inject-workflow-state.js").write_text(
+            "// [workflow-embed-patch:prefer-workflow-state-json]\n"
+            'import { execFileSync } from "child_process"\n'
+            'const PYTHON_CMD = "python3"\n'
+            "function buildBreadcrumb(id, status, templates, source = null, extraLines = []) { const task = { extraLines }; return status + task.extraLines.join(\"\\n\") }\n",
+            encoding="utf-8",
+        )
+        (root / ".opencode" / "lib").mkdir(parents=True, exist_ok=True)
+        (root / ".opencode" / "lib" / "session-utils.js").write_text(
+            "// [workflow-embed-patch:strong-gate-session-utils]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "task.py").write_text(
+            "# [workflow-embed-patch:strong-gate-no-status-flip]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
+            "# [workflow-embed-patch:preserve-parent-active-task]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
+            "# strong-gate-phase-patch-applied\n",
+            encoding="utf-8",
+        )
+        (root / ".claude" / "commands" / "trellis").mkdir(parents=True, exist_ok=True)
+        (root / ".opencode" / "commands" / "trellis").mkdir(parents=True, exist_ok=True)
+        (root / ".agents" / "skills" / "record-session").mkdir(parents=True, exist_ok=True)
+        (root / ".claude" / "commands" / "trellis" / "record-session.md").write_text(
+            "# record-session\n\n统一正文\n",
+            encoding="utf-8",
+        )
+        (root / ".opencode" / "commands" / "trellis" / "record-session.md").write_text(
+            "# record-session\n\n不同正文\n",
+            encoding="utf-8",
+        )
+        (root / ".agents" / "skills" / "record-session" / "SKILL.md").write_text(
+            "# record-session\n\n第三份正文\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "embed_invalid")
+        self.assertIn("record-session", data["reason"])
+        self.assertIn("内容漂移", data["reason"])
 
     # ------------------------------------------------------------------
     # repair subcommand tests
@@ -3429,6 +3715,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             r"review-gate(?:/|-)?.*目录|review-gate-round-",
         )
 
+        self.write_check_report(task_dir)
         self.write_review_gate_round(task_dir)
         allowed = self.run_script("route", str(task_dir), "--project-root", str(root))
         allowed_data = json.loads(allowed.stdout)

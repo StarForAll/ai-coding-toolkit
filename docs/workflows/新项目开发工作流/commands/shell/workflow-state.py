@@ -17,6 +17,7 @@ import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+import hashlib
 
 def _resolve_trellis_scripts_dir() -> Path:
     for candidate_root in Path(__file__).resolve().parents:
@@ -707,7 +708,7 @@ def validate_review_gate_gate(task_dir: Path, errors: list[str]) -> None:
 
 
 def validate_record_session_gate(task_dir: Path, errors: list[str]) -> None:
-    validate_delivery_gate(task_dir, errors)
+    validate_delivery_gate(task_dir, errors, find_repo_root(task_dir))
 
 
 def validate_delivery_gate(task_dir: Path, errors: list[str], repo_root: Path | None = None) -> None:
@@ -816,7 +817,14 @@ def validate_stage_transition_gates(
         validate_project_doc_boundary(candidate_state, repo_root, task_dir, errors)
 
     if current_state.get("stage") == "brainstorm":
-        validate_brainstorm_exit_gate(current_state, repo_root, task_dir, errors)
+        allowed_targets = design_path_candidates_from_state(candidate_state)
+        validate_brainstorm_exit_gate(
+            current_state,
+            repo_root,
+            task_dir,
+            errors,
+            require_customer_prd=bool(allowed_targets & {"design", "plan"}),
+        )
 
     if current_state.get("stage") == "design" and new_stage == "plan":
         validate_design_exit_gate(task_dir, errors)
@@ -987,6 +995,12 @@ def collect_route_readiness_blockers(
             blockers.append("当前推荐执行任务说明卡缺少项目级粗估字段，不能进入执行态")
         blockers.extend(collect_dependency_blockers(task_dir, repo_root))
 
+    if stage == "delivery":
+        validate_finish_work_gate(task_dir, blockers)
+
+    if stage == "review-gate":
+        validate_check_gate(task_dir, blockers)
+
     return blockers
 
 
@@ -1056,14 +1070,21 @@ def validate_stage_exit_artifacts(
 
     stage = state.get("stage")
     if stage == "brainstorm":
+        allowed_targets = design_path_candidates_from_state(state)
+        exit_ready = state.get("stage_status") in EXIT_READY_STATUSES
         validate_brainstorm_exit_gate(
             state,
             repo_root,
             task_dir,
             errors,
-            require_exit_snapshot=state.get("stage_status") in EXIT_READY_STATUSES,
-            require_customer_prd=False,
+            require_exit_snapshot=exit_ready,
+            require_customer_prd=exit_ready and bool(allowed_targets & {"design", "plan"}),
         )
+    elif stage == "design":
+        if state.get("stage_status") in EXIT_READY_STATUSES:
+            validate_project_doc_boundary(state, repo_root, task_dir, errors)
+            validate_context7_review_artifact(task_dir, state, errors)
+            validate_design_exit_gate(task_dir, errors)
     elif stage == "plan":
         validate_plan_gate(task_dir, errors)
     elif stage == "check":
@@ -1819,6 +1840,18 @@ OPENCODE_SESSION_UTILS_PATCH_MARKER = "// [workflow-embed-patch:strong-gate-sess
 TASK_START_STRONG_GATE_PATCH_MARKER = "# [workflow-embed-patch:strong-gate-no-status-flip]"
 TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER = "# [workflow-embed-patch:preserve-parent-active-task]"
 WORKFLOW_PHASE_STRONG_GATE_PATCH_MARKER = "# strong-gate-phase-patch-applied"
+DISTRIBUTED_COMMAND_NAMES = (
+    "feasibility",
+    "brainstorm",
+    "design",
+    "plan",
+    "test-first",
+    "project-audit",
+    "check",
+    "review-gate",
+    "delivery",
+    "record-session",
+)
 
 
 def _load_install_record_data(install_record: Path) -> dict[str, Any]:
@@ -2035,6 +2068,67 @@ def _detect_missing_patched_codex_skills(repo_root: Path, record: dict[str, Any]
     return problems
 
 
+def _managed_distributed_command_names(record: dict[str, Any]) -> list[str]:
+    commands = record.get("commands")
+    if isinstance(commands, list):
+        names = [str(item) for item in commands if isinstance(item, str)]
+        return [name for name in names if name in DISTRIBUTED_COMMAND_NAMES]
+    return []
+
+
+def _distributed_command_path_variants(
+    repo_root: Path,
+    cli_types: set[str],
+    command_name: str,
+) -> list[Path]:
+    paths: list[Path] = []
+    if "claude" in cli_types:
+        paths.append(repo_root / ".claude" / "commands" / "trellis" / f"{command_name}.md")
+    if "opencode" in cli_types:
+        paths.append(repo_root / ".opencode" / "commands" / "trellis" / f"{command_name}.md")
+    if "codex" in cli_types:
+        paths.append(repo_root / ".agents" / "skills" / command_name / "SKILL.md")
+    return paths
+
+
+def _normalized_hash(content: str) -> str:
+    normalized = content.replace("\r\n", "\n").strip()
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _detect_distributed_command_drift(repo_root: Path, record: dict[str, Any]) -> list[str]:
+    cli_types = _install_record_cli_types(record)
+    problems: list[str] = []
+    for command_name in _managed_distributed_command_names(record):
+        variants: list[tuple[Path, str]] = []
+        missing_paths: list[Path] = []
+        for path in _distributed_command_path_variants(repo_root, cli_types, command_name):
+            if not path.is_file():
+                missing_paths.append(path)
+                continue
+            try:
+                content = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                problems.append(f"{path.relative_to(repo_root)} 不可读（distributed command: {command_name}）")
+                continue
+            variants.append((path, _normalized_hash(content)))
+
+        if missing_paths:
+            missing_desc = ", ".join(path.relative_to(repo_root).as_posix() for path in missing_paths)
+            problems.append(f"{command_name} 缺少受管副本: {missing_desc}")
+            continue
+
+        if len(variants) < 2:
+            continue
+
+        hashes = {digest for _path, digest in variants}
+        if len(hashes) > 1:
+            variant_desc = ", ".join(path.relative_to(repo_root).as_posix() for path, _digest in variants)
+            problems.append(f"{command_name} 内容漂移: {variant_desc}")
+
+    return problems
+
+
 def detect_embed_invalid(repo_root: Path) -> str | None:
     install_record = repo_root / INSTALL_RECORD
     if not install_record.is_file():
@@ -2060,6 +2154,10 @@ def detect_embed_invalid(repo_root: Path) -> str | None:
     missing_codex_skills = _detect_missing_patched_codex_skills(repo_root, record)
     if missing_codex_skills:
         return "patched codex skill 未完整落地: " + "; ".join(missing_codex_skills)
+
+    distributed_drift = _detect_distributed_command_drift(repo_root, record)
+    if distributed_drift:
+        return "distributed command 内容漂移: " + "; ".join(distributed_drift)
 
     return None
 

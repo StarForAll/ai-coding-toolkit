@@ -980,6 +980,9 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("finish-work → delivery → record-session", finish_work_text)
         # 补丁已条件化：验证质量平台门禁口径，不再硬断言特定 sonar 内容
         self.assertIn("质量平台门禁", finish_work_text)
+        record_session_text = (fixture / ".claude" / "commands" / "trellis" / "record-session.md").read_text(encoding="utf-8")
+        self.assertIn("只负责确认：当前 task 已满足 **进入 `record-session` 之前** 的 `delivery` 完整性门禁", record_session_text)
+        self.assertIn("不代表** `archive`、`add_session.py`", record_session_text)
         task_py_text = (fixture / ".trellis" / "scripts" / "task.py").read_text(encoding="utf-8")
         self.assertIn(TASK_DEGRADED_PATCH_MARKER, task_py_text)
         self.assertIn(TASK_CURRENT_DEGRADED_PATCH_MARKER, task_py_text)

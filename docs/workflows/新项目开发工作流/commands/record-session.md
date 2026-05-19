@@ -45,6 +45,10 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route <task-dir> --proje
 python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 ```
 
+这里的 `validate` 只负责确认：当前 task 已满足 **进入 `record-session` 之前** 的 `delivery` 完整性门禁，尤其是交付物、外包交付控制、归属证明/水印验证等产物是否已经齐全。
+
+它**不代表** `archive`、`add_session.py`、`.trellis/workspace` / `.trellis/tasks` / `.trellis/.runtime/sessions` 的元数据清理已经完成；这些属于下面 Step 2-4 的真实收尾动作与后置校验。
+
 若 `route` 仍显示当前阶段是 `delivery` / `finish-work` / 其他阶段，或 `validate` 报告缺少交付产物，则不得直接执行本命令中的 archive / add_session 步骤。先回到缺失阶段补齐门禁。
 
 ---
@@ -82,6 +86,7 @@ git status --short .trellis/workspace .trellis/tasks
 
 判定规则：
 
+- `workflow-state.py validate <task-dir>` 返回 0：说明允许进入 `record-session`，**不等于** close-out 已完成
 - `archive` 与 `add_session.py` 都返回 0：会话记录与元数据闭环完成
 - 任一步返回非 0：close-out 不算完成，先处理 Trellis 基线写入失败原因
 - `git status --short .trellis/workspace .trellis/tasks` 输出应为空
