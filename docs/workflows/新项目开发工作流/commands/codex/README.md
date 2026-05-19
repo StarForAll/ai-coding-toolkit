@@ -104,7 +104,8 @@ ls .codex/skills/parallel/SKILL.md 2>/dev/null
 还要补一层边界：
 
 - `feasibility`、`brainstorm`、`design`、`plan`、`test-first`、`check`、`review-gate`、`delivery` 这类阶段技能，通常来自当前 workflow 的嵌入资产
-- `trellis-continue`、`trellis-finish-work` 这类技能/入口，默认应先理解为 **Trellis 基线能力**；当前 workflow 会在目标项目已有 `trellis-continue` / `trellis-finish-work` skill 时注入项目化补丁；legacy `start` / `finish-work` / `record-session` 仅作为旧目标项目兼容输入
+- `trellis-continue`、`trellis-finish-work` 这类技能/入口，默认应先理解为 **Trellis 基线能力**；当前 workflow 会在目标项目已有 `trellis-continue` / `trellis-finish-work` skill 时注入项目化补丁；legacy `start` / `finish-work` 仅作为旧目标项目兼容输入
+- `record-session` 在当前 workflow 中属于共享分发的 close-out 阶段 skill；只有旧目标项目残留 baseline `record-session` 时，才按兼容链路处理
 - `trellis-continue` 在当前 workflow 里的增强包括：自动选择具体 task、自动执行 before-dev 步骤、自动生成或刷新当前 task 的 `before-dev.md`
 - 卸载时也保持同一边界：`trellis-continue` / `trellis-finish-work` 这类 baseline patch 只在**活动 skills 目录**恢复备份；legacy 同名文件仅在旧目标项目兼容路径中处理
 

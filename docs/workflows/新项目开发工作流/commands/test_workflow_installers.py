@@ -935,6 +935,7 @@ class WorkflowInstallerTests(unittest.TestCase):
             record_data["patched_baseline_commands"],
             ["continue", "finish-work"],
         )
+        self.assertNotIn("record-session", record_data["patched_baseline_commands"])
         self.assertEqual(record_data["patched_shared_docs"], ["workflow.md"])
         self.assertEqual(
             record_data["critical_runtime_patches"],
@@ -2256,6 +2257,31 @@ class WorkflowInstallerTests(unittest.TestCase):
             updated_record["patched_codex_skills"],
             ["trellis-continue", "trellis-finish-work", "trellis-start"],
         )
+
+    def test_upgrade_merge_rewrites_patched_baseline_commands_without_record_session(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        record_path = fixture / ".trellis" / "workflow-installed.json"
+        record_data = json.loads(record_path.read_text(encoding="utf-8"))
+        record_data["patched_baseline_commands"] = ["continue", "finish-work", "record-session"]
+        record_path.write_text(json.dumps(record_data, ensure_ascii=False, indent=2), encoding="utf-8")
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--merge",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        updated = json.loads(record_path.read_text(encoding="utf-8"))
+        self.assertEqual(updated["patched_baseline_commands"], ["continue", "finish-work"])
 
     def test_upgrade_merge_clears_residual_attempt_record_after_success(self) -> None:
         fixture = self.create_fixture()

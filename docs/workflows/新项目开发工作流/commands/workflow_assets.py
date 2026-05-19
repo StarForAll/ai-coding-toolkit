@@ -23,7 +23,7 @@ WORKFLOW_VERSION = "0.1.28"
 WORKFLOW_SCHEMA_VERSION = "2"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增
 COMPATIBLE_TRELLIS_VERSION = "0.5.17"
 
-PATCH_BASELINE_COMMANDS = ["continue", "finish-work", "record-session"]
+PATCH_BASELINE_COMMANDS = ["continue", "finish-work"]
 LEGACY_PATCH_BASELINE_COMMANDS = ["start", "finish-work", "record-session"]
 CODEX_PATCH_BASELINE_SKILLS = ["trellis-continue", "trellis-finish-work", "trellis-start"]
 LEGACY_CODEX_PATCH_BASELINE_SKILLS = ["start", "finish-work"]
@@ -194,8 +194,8 @@ def command_finish_work_candidates() -> list[str]:
 
 
 def command_record_session_candidates() -> list[str]:
-    """Record-session is now a fresh patch baseline command in the finish-work → delivery → record-session chain."""
-    return [PATCH_BASELINE_COMMANDS[2], LEGACY_PATCH_BASELINE_COMMANDS[2]]
+    """Record-session remains a distributed/legacy-compatible close-out entry."""
+    return [LEGACY_PATCH_BASELINE_COMMANDS[2]]
 
 
 def _strip_conditional_blocks(content: str, tag: str) -> str:
@@ -361,16 +361,6 @@ def build_managed_asset_specs(cli_types: list[str]) -> list[ManagedAssetSpec]:
     for cli_type in cli_types:
         if cli_type in ("claude", "opencode"):
             for name in PATCH_BASELINE_COMMANDS:
-                specs.append(
-                    ManagedAssetSpec(
-                        asset_id=f"{cli_type}:{name}",
-                        category="patch-baseline",
-                        cli_type=cli_type,
-                        kind="command",
-                        name=name,
-                    )
-                )
-            for name in command_record_session_candidates():
                 specs.append(
                     ManagedAssetSpec(
                         asset_id=f"{cli_type}:{name}",

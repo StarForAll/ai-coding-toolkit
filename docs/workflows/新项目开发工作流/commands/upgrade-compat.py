@@ -13,7 +13,7 @@
 - 目标项目必须已完成当前最新 Trellis 官方升级；否则连只读分析和本脚本都不允许执行
 - 建议先完成三态分析（A 纯净基线 / B 最新 workflow 期望状态 / C 目标项目真实状态）
 - 当前 workflow 会重新部署合并型 + 纯新增型阶段命令资产
-- 当前 fresh baseline 的 `continue.md` / `finish-work.md` 属于 Trellis 基线命令，升级脚本负责恢复并重新注入 workflow 补丁；legacy `start.md` / `record-session.md` 仅按旧目标项目兼容路径处理
+- 当前 fresh baseline 的 `continue.md` / `finish-work.md` 属于 Trellis 基线命令，升级脚本负责恢复并重新注入 workflow 补丁；`record-session.md` 属于 workflow 分发的 close-out 命令，legacy baseline `start.md` / `record-session.md` 仅按旧目标项目兼容路径处理
 - 若 Trellis 或 workflow 自身发生结构性 breaking change，本脚本不替代人工迁移判断
 """
 
@@ -149,7 +149,7 @@ _IGNORE_EMBED_ATTEMPT_ENV = "WORKFLOW_IGNORE_EMBED_ATTEMPT"
 # 当前 workflow 分发的阶段命令。
 # `brainstorm` / `check` 与 Trellis 基线同名，但当前 workflow 采用合并后的阶段语义；
 # fresh baseline `continue` / `finish-work` 仍来自 Trellis 基线，并由当前 workflow 注入补丁；
-# legacy `start` / `record-session` 仅按旧目标项目兼容路径处理。
+# legacy `start` / `record-session` 仅按旧目标项目兼容路径处理；fresh baseline patch 只覆盖 `continue` / `finish-work`。
 _CLI_DIRS = CLI_DIRS
 _CLI_ALT_DIRS = CLI_ALT_DIRS
 _ALL_CLI_TYPES = ALL_CLI_TYPES
@@ -1402,7 +1402,10 @@ def write_install_record(
                 "overlay_commands": OVERLAY_BASELINE_COMMANDS,
                 "added_commands": ADDED_COMMANDS,
                 "disabled_commands": OPTIONAL_DISABLED_BASELINE_COMMANDS,
-                "patched_baseline_commands": PATCH_BASELINE_COMMANDS,
+                "patched_baseline_commands": [
+                    command_phase_router_candidates()[0],
+                    command_finish_work_candidates()[0],
+                ],
                 "patched_codex_skills": CODEX_PATCH_BASELINE_SKILLS,
                 "patched_shared_docs": PATCH_BASELINE_SHARED_DOCS,
                 "critical_runtime_patches": critical_runtime_patches_for_cli_types(cli_types),

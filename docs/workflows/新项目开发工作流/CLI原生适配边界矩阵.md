@@ -14,7 +14,8 @@
    - 安装器继续负责 legacy bare-name → trellis-* 迁移（rename）
 2. **workflow-managed subset（当前真实）**
    - Claude / OpenCode / Codex 的阶段命令（feasibility / brainstorm / design / plan / test-first / project-audit / check / review-gate / delivery）
-   - Trellis 基线补丁（Claude / OpenCode: continue / finish-work / record-session；Codex: trellis-continue / trellis-finish-work）
+- Trellis 基线补丁（Claude / OpenCode: continue / finish-work；Codex: trellis-continue / trellis-finish-work）
+- `record-session` 作为 workflow 分发的 close-out 阶段命令保留；legacy baseline `record-session` 仅按旧目标项目兼容路径处理
    - legacy `start` 仅作为旧目标项目升级兼容输入，不是当前 fresh baseline 要求
    - 这是当前 workflow 安装器、升级分析、卸载、回归测试共同覆盖的子集
 
@@ -96,7 +97,7 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 | 资产 | 目标位置 | 分类 | 说明 |
 |------|---------|------|------|
 | 阶段命令（feasibility / brainstorm / design / plan / test-first / project-audit / check / review-gate / delivery） | `.claude/commands/trellis/*.md` | 安装器管理 | 同源 Markdown + 路径改写 |
-| Trellis 基线命令补丁（continue / finish-work / record-session） | `.claude/commands/trellis/continue.md`、`finish-work.md`、`record-session.md` | 安装器管理 | 当前 Trellis 0.5 fresh baseline 注入补丁；legacy `start` 仅用于旧目标项目迁移或兼容 |
+| Trellis 基线命令补丁（continue / finish-work） | `.claude/commands/trellis/continue.md`、`finish-work.md` | 安装器管理 | 当前 Trellis 0.5 fresh baseline 注入补丁；`record-session.md` 由 workflow 分发，legacy `start` / baseline `record-session` 仅用于旧目标项目迁移或兼容 |
 | 通用辅助脚本 | `.trellis/scripts/workflow/` | 安装器管理 | shell helper 脚本 |
 | Trellis 基线 workflow 指南补丁 | `.trellis/workflow.md` | 安装器管理 | 保留 Trellis 基线文档 → 注入 workflow 项目化补丁（当前只增强 Development Process / Session End 区块） |
 | 项目长期规则 | `AGENTS.md` | 半托管（手动维护为主） | 稳定执行规则、证据门禁由人工维护；`<!-- TRELLIS:START ... TRELLIS:END -->` 由 `trellis init` 托管，`<!-- workflow-nl-routing-start ... workflow-nl-routing-end -->` 由 workflow 安装器托管 |
@@ -115,7 +116,7 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 | 资产 | 目标位置 | 分类 | 说明 |
 |------|---------|------|------|
 | 阶段命令（feasibility / brainstorm / design / plan / test-first / project-audit / check / review-gate / delivery） | `.opencode/commands/trellis/*.md` | 安装器管理 | 与 Claude 同源 Markdown + 路径改写 |
-| Trellis 基线命令补丁（continue / finish-work / record-session） | `.opencode/commands/trellis/continue.md`、`finish-work.md`、`record-session.md` | 安装器管理 | 当前 Trellis 0.5 fresh baseline 注入补丁；legacy `start` 仅用于旧目标项目迁移或兼容 |
+| Trellis 基线命令补丁（continue / finish-work） | `.opencode/commands/trellis/continue.md`、`finish-work.md` | 安装器管理 | 当前 Trellis 0.5 fresh baseline 注入补丁；`record-session.md` 由 workflow 分发，legacy `start` / baseline `record-session` 仅用于旧目标项目迁移或兼容 |
 | 通用辅助脚本 | `.trellis/scripts/workflow/` | 安装器管理 | 与 Claude 共用，不重复部署 |
 | Trellis 基线 workflow 指南补丁 | `.trellis/workflow.md` | 安装器管理 | 与 Claude / Codex 共用同一份目标项目 workflow 指南，保持 close-out 与 child-task 规则一致 |
 | 共享 skills 承载面（非 OpenCode 正式入口） | `.agents/skills/*/SKILL.md` | 安装器管理（与 Codex 共用单份落盘） | OpenCode 官方 skills 扫描链路会命中 `.agents/skills/`；当前 workflow 仅把这里视为共享分发与漂移核对范围，不把它当成 OpenCode 的推荐或正式触发入口 |

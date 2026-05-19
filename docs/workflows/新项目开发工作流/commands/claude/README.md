@@ -109,6 +109,7 @@ Claude Code 的用户入口仍是项目命令：
 
 - `continue.md`：保留基线命令，再由 workflow 注入 Phase Router
 - `finish-work.md`：保留基线命令，再由 workflow 注入项目化补丁
+- `record-session.md`：由 workflow 作为 close-out 阶段命令分发；若旧目标项目仍残留 baseline `record-session.md`，安装器只按 legacy compatibility 处理
 
 旧目标项目若仍存在 `start.md` / `record-session.md`，安装器只按 legacy compatibility 处理，不把它们作为 fresh baseline 要求。其中 `continue.md` 的增强还包括：
 

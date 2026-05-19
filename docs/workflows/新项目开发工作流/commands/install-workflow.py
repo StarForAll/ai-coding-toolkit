@@ -10,7 +10,8 @@
 - 只有“纯净初始态”目标项目才允许执行首次嵌入；若检测到任何当前 workflow 的历史嵌入痕迹，必须阻止继续安装
 - 当前 workflow 是“嵌入 + 增强”模型，不会重建 Trellis 原生命令全集
 - `feasibility` 到 `delivery`（含 `project-audit`）这类阶段资产由当前 workflow 分发
-- `continue` / `finish-work` / `record-session` 默认来自当前 Trellis 基线；当前 workflow 会在这些基线上追加补丁增强
+- `continue` / `finish-work` 默认来自当前 Trellis 基线；当前 workflow 会在这些基线上追加补丁增强
+- `record-session` 作为 close-out 阶段命令由当前 workflow 分发，legacy 目标项目中遗留的 baseline `record-session` 只按兼容路径处理
 - close-out 中的 `archive` 仍直接复用目标项目 Trellis 基线 `task.py`；若目标项目不是当前最新 Trellis 基线，可能不包含 archive auto-commit pathspec 修复
 - 安装器会自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines` 则清理，不存在则跳过；若遗留的 repo-global `.current-task` 仍指向该 bootstrap task，则同步做兼容清理
 - 一旦开始正式安装，安装器会先写入 `.trellis/workflow-embed-attempt.json`；若安装失败，该失败标记会保留，后续嵌入必须先由用户手动处理
@@ -154,8 +155,8 @@ _CLI_DIRS = CLI_DIRS
 _CLI_ALT_DIRS = CLI_ALT_DIRS
 _ALL_CLI_TYPES = ALL_CLI_TYPES
 # 对 Trellis 原生命令做增强时使用的补丁标记。
-# 当前 workflow 会增强 fresh baseline `continue.md` / `finish-work.md` / `record-session.md`；
-# legacy `start.md` 仅在旧目标项目兼容路径中处理。
+# 当前 workflow 会增强 fresh baseline `continue.md` / `finish-work.md`；
+# `record-session.md` 由 workflow 分发，legacy baseline `record-session.md` 仅在旧目标项目兼容路径中处理。
 _PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 _STATUS_ROUTING_MARKER = "## Step 3: Decide Where You Are"
 _STATUS_ROUTING_END_MARKER = "## Step 4: Load the Specific Step"
