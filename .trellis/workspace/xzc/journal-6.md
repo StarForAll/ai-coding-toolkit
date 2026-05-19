@@ -599,3 +599,36 @@ Audited the embedded workflow against a rebuilt tmp target, fixed brainstorm ent
 ### Next Steps
 
 - None - task complete
+
+
+## Session 263: 修复新项目开发工作流状态机与终态门禁
+
+**Date**: 2026-05-19
+**Task**: 修复新项目开发工作流状态机与终态门禁
+**Branch**: `main`
+
+### Summary
+
+修复 workflow-state 强门禁分叉与嵌入漂移检测，补齐 record-session 终态说明，并新增状态机与安装器回归验证。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `aa50cfc` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
