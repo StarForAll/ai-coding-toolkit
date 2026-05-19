@@ -1024,6 +1024,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", start_text)
         trellis_start_text = (fixture / ".agents" / "skills" / "trellis-start" / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("## Workflow Phase Router Patch `[AI]`", trellis_start_text)
+        self.assertIn("Route initial user intent through the installed workflow router", trellis_start_text)
         self.assertNotIn("--step 2.1 --platform codex", trellis_start_text)
         self.assertNotIn("## Step 4: Decide next action", trellis_start_text)
         finish_work = fixture / ".claude" / "commands" / "trellis" / "finish-work.md"
@@ -1332,8 +1333,10 @@ class WorkflowInstallerTests(unittest.TestCase):
         task_py = (fixture / ".trellis" / "scripts" / "task.py").read_text(encoding="utf-8")
         self.assertIn("# [workflow-embed-patch:strong-gate-task-status-view]", tasks_py)
         self.assertIn('display_status, display_extra = _display_status(task_dir, data)', tasks_py)
-        self.assertIn("_route_status_summary(task_dir)", tasks_py)
-        self.assertIn("_module_cache", tasks_py)
+        self.assertIn("_workflow_state_summary(state)", tasks_py)
+        self.assertNotIn("_route_status_summary(task_dir)", tasks_py)
+        self.assertNotIn("_module_cache", tasks_py)
+        self.assertNotIn("cmd_route(", tasks_py)
         self.assertNotIn("subprocess.run(", tasks_py)
         self.assertIn('data["_workflow_display_extra"] = display_extra', tasks_py)
         self.assertIn("# [workflow-embed-patch:strong-gate-task-status-view]", task_queue_py)
@@ -1433,12 +1436,14 @@ class WorkflowInstallerTests(unittest.TestCase):
         start_skill = fixture / ".agents" / "skills" / "trellis-continue" / "SKILL.md"
         start_text = start_skill.read_text(encoding="utf-8")
         self.assertIn("## Workflow Phase Router Patch `[AI]`", start_text)
+        self.assertIn("Re-enter the current workflow stage through the workflow router", start_text)
         self.assertIn("stay in the current phase-router entry", start_text)
         self.assertIn("Do not assume a public `implementation` skill exists.", start_text)
         self.assertIn("If `target=finish-work`, use `trellis-finish-work`.", start_text)
         self.assertNotIn("Steps 1-4 替换说明", start_text)
         self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", start_text)
         self.assertNotIn("<WORKFLOW_DIR>/commands/shell", start_text)
+        self.assertNotIn("figures out which phase/step to pick up at", start_text)
         self.assertEqual(
             (fixture / ".agents" / "skills" / ".backup-original" / "trellis-continue" / "SKILL.md").read_text(
                 encoding="utf-8"

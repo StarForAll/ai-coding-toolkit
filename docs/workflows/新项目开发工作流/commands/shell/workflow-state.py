@@ -141,6 +141,37 @@ BRAINSTORM_EXIT_SNAPSHOT_FIELDS = (
     "kill_criteria",
     "open_items",
 )
+CODEX_PHASE_ROUTER_SKILL_MARKER = "## Workflow Phase Router Patch `[AI]`"
+CODEX_FINISH_WORK_SKILL_MARKER = "<!-- finish-work-projectization-patch -->"
+PATCHED_CODEX_SKILL_REQUIREMENTS: dict[str, dict[str, tuple[str, ...]]] = {
+    "trellis-continue": {
+        "must_contain": (
+            CODEX_PHASE_ROUTER_SKILL_MARKER,
+            "workflow router",
+        ),
+        "must_not_contain": (
+            "figures out which phase/step to pick up at",
+        ),
+    },
+    "trellis-finish-work": {
+        "must_contain": (
+            CODEX_FINISH_WORK_SKILL_MARKER,
+            "prepare the delivery hand-off",
+        ),
+        "must_not_contain": (
+            "archive completed tasks, and record session progress to the developer journal",
+        ),
+    },
+    "trellis-start": {
+        "must_contain": (
+            CODEX_PHASE_ROUTER_SKILL_MARKER,
+            "workflow router",
+        ),
+        "must_not_contain": (
+            "routes to brainstorm, direct edit, or task workflow",
+        ),
+    },
+}
 
 
 def now_iso() -> str:
@@ -248,7 +279,8 @@ def degraded_active_task_paths(repo_root: Path) -> list[Path]:
     return paths
 
 
-def resolve_degraded_task_dir(repo_root: Path) -> Path | None:
+def degraded_active_task_candidates(repo_root: Path) -> list[tuple[Path, Path]]:
+    candidates: list[tuple[Path, Path]] = []
     for degraded_path in degraded_active_task_paths(repo_root):
         degraded = read_json(degraded_path)
         if not degraded:
@@ -259,8 +291,13 @@ def resolve_degraded_task_dir(repo_root: Path) -> Path | None:
         resolved = resolve_task_ref(task_ref, repo_root)
         if resolved is None or not resolved.is_dir():
             continue
-        return resolved.resolve()
-    return None
+        candidates.append((degraded_path, resolved.resolve()))
+    return candidates
+
+
+def resolve_degraded_task_dir(repo_root: Path) -> Path | None:
+    candidates = degraded_active_task_candidates(repo_root)
+    return candidates[0][1] if candidates else None
 
 
 def bool_arg(raw: str) -> bool:
@@ -996,6 +1033,22 @@ def collect_route_readiness_blockers(
     if stage == "review-gate":
         validate_check_gate(task_dir, blockers)
 
+    return blockers
+
+
+def collect_non_execution_reentry_blockers(
+    task_dir: Path,
+    repo_root: Path,
+    state: dict[str, Any],
+) -> list[str]:
+    stage = state.get("stage")
+    if stage not in STAGES - {"feasibility"}:
+        return []
+
+    blockers: list[str] = []
+    validate_external_project_controls(task_dir, repo_root, state, blockers)
+    validate_ownership_policy_controls(task_dir, repo_root, state, blockers)
+    validate_project_doc_boundary(state, repo_root, task_dir, blockers)
     return blockers
 
 
@@ -2073,9 +2126,28 @@ def _detect_missing_patched_codex_skills(repo_root: Path, record: dict[str, Any]
         except UnicodeDecodeError:
             problems.append(f"{target.relative_to(repo_root)} 不可读（patched codex skill: {skill_name}）")
             continue
-        if skill_name == "trellis-start" and "## Workflow Phase Router Patch `[AI]`" not in content:
+        requirements = PATCHED_CODEX_SKILL_REQUIREMENTS.get(skill_name)
+        if requirements is None:
+            continue
+        missing_fragments = [
+            fragment
+            for fragment in requirements.get("must_contain", ())
+            if fragment not in content
+        ]
+        stale_fragments = [
+            fragment
+            for fragment in requirements.get("must_not_contain", ())
+            if fragment in content
+        ]
+        if missing_fragments or stale_fragments:
+            reasons: list[str] = []
+            if missing_fragments:
+                reasons.append("缺少补丁语义片段: " + " / ".join(missing_fragments))
+            if stale_fragments:
+                reasons.append("仍残留旧语义片段: " + " / ".join(stale_fragments))
             problems.append(
-                f"{target.relative_to(repo_root)} 缺少强门禁 Phase Router 补丁（patched codex skill: trellis-start）"
+                f"{target.relative_to(repo_root)} 语义漂移（patched codex skill: {skill_name}）: "
+                + "；".join(reasons)
             )
     return problems
 
@@ -2249,96 +2321,109 @@ def cmd_route(args: argparse.Namespace) -> int:
                 return 0
             task_dir = resolved_active.resolve()
         else:
-            degraded_task_dir = resolve_degraded_task_dir(repo_root)
-            if degraded_task_dir is not None:
-                task_dir = degraded_task_dir
+            degraded_candidates = degraded_active_task_candidates(repo_root)
+            if degraded_candidates:
+                degraded_path, degraded_task_dir = degraded_candidates[0]
+                try:
+                    degraded_label = degraded_task_dir.relative_to(repo_root).as_posix()
+                except ValueError:
+                    degraded_label = str(degraded_task_dir)
+                _route_result(
+                    None,
+                    "recovery_needed",
+                    (
+                        f"检测到 degraded active-task fallback 指向 {degraded_label}"
+                        f"（来源 {degraded_path.name}）。该 fallback 仅作为恢复线索，"
+                        "不会自动作为当前任务继续执行；请执行 task.py start <task-dir> 明确确认目标任务"
+                    ),
+                )
+                return 0
+
+            tasks_root = repo_root / ".trellis" / "tasks"
+            has_any_task = False
+            if tasks_root.is_dir():
+                for candidate in tasks_root.iterdir():
+                    if candidate.is_dir() and (candidate / TASK_FILE_NAME).is_file():
+                        has_any_task = True
+                        break
+            if not has_any_task:
+                # Detect project profile and whether an existing assessment
+                # explicitly allows direct brainstorm re-entry.
+                profile_hint = None
+                target = "feasibility"
+                reason = "当前 session 尚无 active task，首次进入 feasibility"
+                assessment_path = repo_root / ASSESSMENT_FILE
+                if assessment_path.is_file():
+                    try:
+                        a_content = assessment_path.read_text(encoding="utf-8")
+                        engagement_type = extract_backticked_field(a_content, "project_engagement_type")
+                        if engagement_type and engagement_type != "external_outsourcing":
+                            profile_hint = "personal"
+                        elif engagement_type == "external_outsourcing":
+                            profile_hint = "outsourcing"
+                        allow_brainstorm = False
+                        for line in a_content.splitlines():
+                            if "是否允许进入 brainstorm" not in line:
+                                continue
+                            if "是" in line or "`yes`" in line or ": yes" in line.lower():
+                                allow_brainstorm = True
+                            break
+                        if allow_brainstorm:
+                            target = "brainstorm"
+                            reason = "当前 session 尚无 active task，但已存在允许进入 brainstorm 的 assessment"
+                    except (OSError, UnicodeDecodeError):
+                        pass
+                else:
+                    install_record_path = repo_root / INSTALL_RECORD
+                    if install_record_path.is_file():
+                        try:
+                            import json as _json
+                            installed_data = _json.loads(install_record_path.read_text(encoding="utf-8"))
+                            installed_profile = installed_data.get("profile")
+                            if installed_profile == "outsourcing":
+                                profile_hint = "outsourcing"
+                            else:
+                                profile_hint = "personal"
+                        except (OSError, UnicodeDecodeError, ValueError):
+                            profile_hint = "personal"
+                _route_result(
+                    target,
+                    "entry_choice_required",
+                    (
+                        f"{reason}。若当前意图是 workflow / 项目只读分析、元审计或 A/A+ 纯分析，"
+                        "保持 no_task 直接分析，不要把仓库误当成新项目入口；"
+                        f"若当前意图是开始新的实现任务，则进入 {target}"
+                    ),
+                    profile_hint=profile_hint or "unknown",
+                )
             else:
-                tasks_root = repo_root / ".trellis" / "tasks"
-                has_any_task = False
-                if tasks_root.is_dir():
+                # Enumerate existing tasks for actionable guidance
+                existing_tasks = []
+                try:
                     for candidate in tasks_root.iterdir():
                         if candidate.is_dir() and (candidate / TASK_FILE_NAME).is_file():
-                            has_any_task = True
-                            break
-                if not has_any_task:
-                    # Detect project profile and whether an existing assessment
-                    # explicitly allows direct brainstorm re-entry.
-                    profile_hint = None
-                    target = "feasibility"
-                    reason = "当前 session 尚无 active task，首次进入 feasibility"
-                    assessment_path = repo_root / ASSESSMENT_FILE
-                    if assessment_path.is_file():
-                        try:
-                            a_content = assessment_path.read_text(encoding="utf-8")
-                            engagement_type = extract_backticked_field(a_content, "project_engagement_type")
-                            if engagement_type and engagement_type != "external_outsourcing":
-                                profile_hint = "personal"
-                            elif engagement_type == "external_outsourcing":
-                                profile_hint = "outsourcing"
-                            allow_brainstorm = False
-                            for line in a_content.splitlines():
-                                if "是否允许进入 brainstorm" not in line:
-                                    continue
-                                if "是" in line or "`yes`" in line or ": yes" in line.lower():
-                                    allow_brainstorm = True
-                                break
-                            if allow_brainstorm:
-                                target = "brainstorm"
-                                reason = "当前 session 尚无 active task，但已存在允许进入 brainstorm 的 assessment"
-                        except (OSError, UnicodeDecodeError):
-                            pass
-                    else:
-                        install_record_path = repo_root / INSTALL_RECORD
-                        if install_record_path.is_file():
-                            try:
-                                import json as _json
-                                installed_data = _json.loads(install_record_path.read_text(encoding="utf-8"))
-                                installed_profile = installed_data.get("profile")
-                                if installed_profile == "outsourcing":
-                                    profile_hint = "outsourcing"
-                                else:
-                                    profile_hint = "personal"
-                            except (OSError, UnicodeDecodeError, ValueError):
-                                profile_hint = "personal"
-                    _route_result(
-                        target,
-                        "entry_choice_required",
-                        (
-                            f"{reason}。若当前意图是 workflow / 项目只读分析、元审计或 A/A+ 纯分析，"
-                            "保持 no_task 直接分析，不要把仓库误当成新项目入口；"
-                            f"若当前意图是开始新的实现任务，则进入 {target}"
-                        ),
-                        profile_hint=profile_hint or "unknown",
+                            t_stage = None
+                            t_state_path = candidate / "workflow-state.json"
+                            if t_state_path.is_file():
+                                t_state = read_json(t_state_path)
+                                if isinstance(t_state, dict):
+                                    t_stage = t_state.get("stage")
+                            task_label = candidate.name
+                            if t_stage:
+                                task_label += f"({t_stage})"
+                            existing_tasks.append(task_label)
+                except OSError:
+                    pass
+                if existing_tasks:
+                    task_list_str = ", ".join(existing_tasks)
+                    reason = (
+                        f"当前 session 未解析到 active task。已有任务: {task_list_str}。"
+                        f"请执行 task.py start <task-dir> 切换到目标任务"
                     )
                 else:
-                    # Enumerate existing tasks for actionable guidance
-                    existing_tasks = []
-                    try:
-                        for candidate in tasks_root.iterdir():
-                            if candidate.is_dir() and (candidate / TASK_FILE_NAME).is_file():
-                                t_data = read_json(candidate / TASK_FILE_NAME)
-                                t_stage = None
-                                t_state_path = candidate / "workflow-state.json"
-                                if t_state_path.is_file():
-                                    t_state = read_json(t_state_path)
-                                    if isinstance(t_state, dict):
-                                        t_stage = t_state.get("stage")
-                                task_label = candidate.name
-                                if t_stage:
-                                    task_label += f"({t_stage})"
-                                existing_tasks.append(task_label)
-                    except OSError:
-                        pass
-                    if existing_tasks:
-                        task_list_str = ", ".join(existing_tasks)
-                        reason = (
-                            f"当前 session 未解析到 active task。已有任务: {task_list_str}。"
-                            f"请执行 task.py start <task-dir> 切换到目标任务"
-                        )
-                    else:
-                        reason = "当前 session 未解析到 active task；请先明确当前任务或重新进入目标阶段"
-                    _route_result(None, "recovery_needed", reason)
-                return 0
+                    reason = "当前 session 未解析到 active task；请先明确当前任务或重新进入目标阶段"
+                _route_result(None, "recovery_needed", reason)
+            return 0
 
     # Step 3: validate the resolved task
     if not task_dir.is_dir():
@@ -2461,14 +2546,17 @@ def cmd_route(args: argparse.Namespace) -> int:
         )
         return 0
 
-    # Non-execution stage — simple reenter with optional warnings
-    warnings: list[str] = []
-    if stage in STAGES - {"feasibility"}:
-        # Collect non-blocking gate warnings for reenter scenarios
-        warn_errors: list[str] = []
-        validate_external_project_controls(task_dir, repo_root, state, warn_errors)
-        validate_ownership_policy_controls(task_dir, repo_root, state, warn_errors)
-        warnings.extend(warn_errors)
+    non_execution_blockers = collect_non_execution_reentry_blockers(task_dir, repo_root, state)
+    if non_execution_blockers:
+        _route_result(
+            stage or None,
+            "blocked",
+            non_execution_blockers[0],
+            stage=stage or None,
+            stage_status=stage_status or None,
+            blockers=non_execution_blockers,
+        )
+        return 0
 
     _route_result(
         stage,
@@ -2476,7 +2564,6 @@ def cmd_route(args: argparse.Namespace) -> int:
         f"当前 stage={stage}, status={stage_status}",
         stage=stage,
         stage_status=stage_status,
-        warnings=warnings if warnings else None,
     )
     return 0
 

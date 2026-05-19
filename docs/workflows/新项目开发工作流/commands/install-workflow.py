@@ -179,6 +179,33 @@ _FINISH_WORK_STEP4_END_HEADING = "## Reference"
 _CODEX_START_SKILL_MARKER = "## Workflow Phase Router Patch `[AI]`"
 _CODEX_START_CURRENT_STEP1_HEADING = "## Step 1: Current state"
 _CODEX_START_CURRENT_STEP4_HEADING = "## Step 4: Decide next action"
+_CODEX_CONTINUE_DESCRIPTION = (
+    'description: "Re-enter the current workflow stage through the workflow router '
+    'and follow the next action it returns. Use when resuming an installed '
+    'target-project task and you need the router to decide the current stage, '
+    'blockers, or next stage entry."'
+)
+_CODEX_START_DESCRIPTION = (
+    'description: "Route initial user intent through the installed workflow router '
+    'and load the correct first-entry or recovery branch. Use when beginning a '
+    'session, resuming work, or when you need the router to decide whether to stay '
+    'in no_task or enter a stage."'
+)
+_CODEX_CONTINUE_OLD_INTRO = "Resume work on the current task — pick up at the right phase/step in `.trellis/workflow.md`."
+_CODEX_CONTINUE_NEW_INTRO = (
+    "Resume work on the current task by asking the installed workflow router for "
+    "the authoritative current stage and next action."
+)
+_CODEX_START_OLD_INTRO = (
+    "Initialize a Trellis-managed development session. This platform has no "
+    "session-start hook, so manually load the equivalent context by following "
+    "these steps (each one mirrors a section the hook would otherwise inject)."
+)
+_CODEX_START_NEW_INTRO = (
+    "Load session context, then use the workflow router below as the only "
+    "authority for first-entry, recovery, or stage-entry decisions in an "
+    "installed target project."
+)
 _TASK_CURRENT_DEGRADED_PATCH_MARKER = "# [workflow-embed-patch:degraded-current-read]"
 _WORKFLOW_PATCH_MARKER = "<!-- workflow-projectization-patch -->"
 _WORKFLOW_START_HEADING = "## Development Process"
@@ -221,7 +248,9 @@ _STRONG_GATE_WORKFLOW_TASK_MECHANISM = (
     "`TRELLIS_CONTEXT_ID`, or a platform-native session environment variable, "
     "`task.py start` falls back to degraded recovery behavior and writes a runtime-"
     "keyed fallback file (`degraded-active-task-<runtime-key>.json`, with the "
-    "shared `degraded-active-task.json` kept as compatibility fallback). "
+    "shared `degraded-active-task.json` kept as compatibility fallback). These "
+    "degraded files are recovery hints only: route must surface them for manual "
+    "confirmation instead of auto-selecting the task. "
     "`task.py finish` deletes the current session file (status unchanged). "
     "`task.py archive <task>` writes `status=completed`, moves the directory to "
     "`archive/`, and deletes any runtime session files that still point at the "
@@ -982,6 +1011,13 @@ def build_codex_phase_router_skill_content(content: str, patch_text: str) -> str
         patch_text = patch_text[runtime_idx:]
     if _CODEX_START_SKILL_MARKER in content:
         return content
+    if "name: trellis-start\n" in content:
+        content = re.sub(r"(?m)^description: .+$", _CODEX_START_DESCRIPTION, content, count=1)
+        content = content.replace(_CODEX_START_OLD_INTRO, _CODEX_START_NEW_INTRO)
+    if "name: trellis-continue\n" in content:
+        content = re.sub(r"(?m)^description: .+$", _CODEX_CONTINUE_DESCRIPTION, content, count=1)
+        content = content.replace(_CODEX_CONTINUE_OLD_INTRO, _CODEX_CONTINUE_NEW_INTRO)
+        content = content.replace("Original baseline Codex continue skill.", _CODEX_CONTINUE_NEW_INTRO)
 
     heading_pairs = [
         ("## Step 1: Load Current Context", "## Step 4: Load the Specific Step"),
@@ -1586,7 +1622,12 @@ def _apply_patch_task_create_preserve_active(src: Path, root: Path, *, dry_run: 
 
 
 def patch_task_status_views(root: Path, *, dry_run: bool) -> bool:
-    """Patch task runtime views to prefer workflow-state over legacy task status."""
+    """Patch task runtime views to read workflow-state directly.
+
+    Task list / queue views are observational. They should not execute
+    `workflow-state.py route` per task because that hides route failures behind a
+    silent fallback and makes list performance scale with router work.
+    """
     tasks_path = root / ".trellis" / "scripts" / "common" / "tasks.py"
     task_queue_path = root / ".trellis" / "scripts" / "common" / "task_queue.py"
     task_cli_path = root / ".trellis" / "scripts" / "task.py"
@@ -1609,72 +1650,21 @@ def _shorten_status_detail(value: str, limit: int = 72) -> str:
     return collapsed[: limit - 1] + "…"
 
 
-def _route_status_summary(task_dir: Path) -> tuple[str | None, str | None]:
-    script_path = task_dir.parents[1] / "scripts" / "workflow" / "workflow-state.py"
-    repo_root = task_dir
-    while repo_root != repo_root.parent and not (repo_root / ".trellis").is_dir():
-        repo_root = repo_root.parent
-    if not (repo_root / ".trellis").is_dir():
-        return None, None
-    if not script_path.is_file():
-        return None, None
-
-    try:
-        import argparse as _argparse
-        import contextlib as _contextlib
-        import importlib.util as _importlib_util
-        import io as _io
-        import json as _json
-
-        cache = getattr(_route_status_summary, "_module_cache", {})
-        cache_key = str(script_path)
-        module = cache.get(cache_key)
-        if module is None:
-            spec = _importlib_util.spec_from_file_location("_trellis_workflow_state_tasks", str(script_path))
-            if spec is None or spec.loader is None:
-                return None, None
-            module = _importlib_util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            cache[cache_key] = module
-            _route_status_summary._module_cache = cache
-        if not hasattr(module, "cmd_route"):
-            return None, None
-
-        buffer = _io.StringIO()
-        with _contextlib.redirect_stdout(buffer):
-            exit_code = module.cmd_route(
-                _argparse.Namespace(project_root=str(repo_root), task_dir=str(task_dir))
-            )
-    except Exception:
-        return None, None
-
-    if exit_code != 0:
-        return None, None
-
-    try:
-        payload = _json.loads(buffer.getvalue())
-    except Exception:
-        return None, None
-
-    stage = payload.get("stage")
-    action = payload.get("action")
-    target = payload.get("target")
-    blockers = payload.get("blockers")
-    reason = payload.get("reason")
-
-    status = stage if isinstance(stage, str) and stage else None
+def _workflow_state_summary(state: dict) -> str | None:
     summary_parts: list[str] = []
-    if isinstance(action, str) and action not in {"", "reenter"}:
-        summary_parts.append(action)
-    if isinstance(target, str) and target and target != stage:
-        summary_parts.append(f"target={target}")
-    if isinstance(blockers, list) and blockers:
-        summary_parts.append(_shorten_status_detail(str(blockers[0])))
-    elif isinstance(reason, str) and reason and action not in {"", "reenter"}:
-        summary_parts.append(_shorten_status_detail(reason))
+    stage_status = state.get("stage_status")
+    if isinstance(stage_status, str) and stage_status and stage_status != "in_progress":
+        summary_parts.append(f"status={stage_status}")
 
-    summary = " | ".join(summary_parts) if summary_parts else None
-    return status, summary
+    current_block = state.get("current_block")
+    if isinstance(current_block, str) and current_block.strip():
+        summary_parts.append(f"block={_shorten_status_detail(current_block)}")
+
+    awaiting = state.get("awaiting_user_confirmation")
+    if awaiting is True and stage_status != "awaiting_user_confirmation":
+        summary_parts.append("awaiting_user_confirmation=true")
+
+    return " | ".join(summary_parts) if summary_parts else None
 
 
 def _display_status(task_dir: Path, data: dict) -> tuple[str, str | None]:
@@ -1682,8 +1672,7 @@ def _display_status(task_dir: Path, data: dict) -> tuple[str, str | None]:
     if isinstance(state, dict):
         stage = state.get("stage")
         if isinstance(stage, str) and stage:
-            route_status, route_summary = _route_status_summary(task_dir)
-            return route_status or stage, route_summary
+            return stage, _workflow_state_summary(state)
         return "repair_needed", "repair_needed"
 
     raw_status = data.get("status", "unknown")
@@ -1716,8 +1705,7 @@ def _display_status(task_dir: Path, data: dict) -> str:
 """
         if (
             _TASK_STATUS_VIEW_PATCH_MARKER not in patched
-            or "_route_status_summary(task_dir)" not in patched
-            or "_module_cache" not in patched
+            or "_workflow_state_summary(state)" not in patched
         ):
             anchor = "\n\ndef load_task(task_dir: Path) -> TaskInfo | None:\n"
             if legacy_helper.strip() in patched:
@@ -1753,10 +1741,10 @@ def _display_status(task_dir: Path, data: dict) -> str:
         )
         if patched != content:
             if dry_run:
-                info("[Shared] 将补丁 common/tasks.py → 任务视图改为 route-aware stage + strong-gate 摘要")
+                info("[Shared] 将补丁 common/tasks.py → 任务视图改为 workflow-state stage + strong-gate 摘要")
             else:
                 tasks_path.write_text(patched, encoding="utf-8")
-                ok("[Shared] common/tasks.py 已补丁 → 任务视图改为 route-aware stage + strong-gate 摘要")
+                ok("[Shared] common/tasks.py 已补丁 → 任务视图改为 workflow-state stage + strong-gate 摘要")
             any_patched = True
 
     if task_queue_path.exists():

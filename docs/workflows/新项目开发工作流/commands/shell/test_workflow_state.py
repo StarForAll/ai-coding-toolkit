@@ -1771,7 +1771,9 @@ class WorkflowStateScriptTests(unittest.TestCase):
             task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
             customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
         )
+        self.write_context7_review(task_dir)
         self.run_script("init", str(task_dir), "--stage", "plan")
+        self.run_script("set", str(task_dir), "--context7-review-completed", "true")
 
         result = self.run_script("route", "--project-root", str(root))
 
@@ -1908,7 +1910,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(data["action"], "repair_needed")
         self.assertIn("allowed_next_stages", "".join(data.get("blockers", [])))
 
-    def test_cmd_route_uses_degraded_fallback_even_when_platform_context_key_exists(self) -> None:
+    def test_cmd_route_requires_manual_confirmation_when_only_degraded_fallback_exists(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
             root,
@@ -1959,10 +1961,11 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         data = json.loads(result.stdout)
-        self.assertEqual(data["action"], "reenter")
-        self.assertEqual(data["stage"], "implementation")
+        self.assertEqual(data["action"], "recovery_needed")
+        self.assertIn("degraded active-task fallback", data["reason"])
+        self.assertIn("task.py start <task-dir>", data["reason"])
 
-    def test_cmd_route_uses_degraded_when_session_file_exists_without_current_task(self) -> None:
+    def test_cmd_route_requires_manual_confirmation_when_session_file_has_no_current_task(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
             root,
@@ -2013,10 +2016,11 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         data = json.loads(result.stdout)
-        self.assertEqual(data["action"], "reenter")
-        self.assertEqual(data["stage"], "implementation")
+        self.assertEqual(data["action"], "recovery_needed")
+        self.assertIn("degraded active-task fallback", data["reason"])
+        self.assertIn("task.py start <task-dir>", data["reason"])
 
-    def test_cmd_route_does_not_let_unrelated_session_block_keyed_degraded_fallback(self) -> None:
+    def test_cmd_route_surfaces_keyed_degraded_hint_even_with_other_session_runtime(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
             root,
@@ -2075,10 +2079,11 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         data = json.loads(result.stdout)
-        self.assertEqual(data["action"], "reenter")
-        self.assertEqual(data["stage"], "implementation")
+        self.assertEqual(data["action"], "recovery_needed")
+        self.assertIn("degraded-active-task-term-demo.json", data["reason"])
+        self.assertIn("04-15-sample-task", data["reason"])
 
-    def test_cmd_route_prefers_keyed_degraded_fallback_over_shared_file(self) -> None:
+    def test_cmd_route_prefers_keyed_degraded_hint_over_shared_file(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
             root,
@@ -2165,8 +2170,10 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         data = json.loads(result.stdout)
-        self.assertEqual(data["action"], "reenter")
-        self.assertEqual(data["stage"], "implementation")
+        self.assertEqual(data["action"], "recovery_needed")
+        self.assertIn("degraded-active-task-term-demo.json", data["reason"])
+        self.assertIn("04-15-sample-task", data["reason"])
+        self.assertNotIn("04-15-other-task", data["reason"])
 
     def test_validate_uses_degraded_fallback_when_session_pointer_missing(self) -> None:
         root, task_dir = self.make_fixture()
@@ -2663,6 +2670,227 @@ class WorkflowStateScriptTests(unittest.TestCase):
         data = json.loads(result.stdout)
         self.assertEqual(data["action"], "embed_invalid")
         self.assertIn("trellis-start", data["reason"])
+
+    def test_cmd_route_embed_invalid_when_patched_codex_continue_skill_drifts(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "scripts" / "common").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            json.dumps(
+                {
+                    "profile": "outsourcing",
+                    "cli_types": ["codex"],
+                    "critical_runtime_patches": [
+                        "inject-workflow-state",
+                        "session-start-strong-gate",
+                        "task-start-strong-gate",
+                        "task-create-preserve-active",
+                        "task-status-view-strong-gate",
+                        "workflow-phase-strong-gate",
+                    ],
+                    "patched_codex_skills": [
+                        "trellis-continue",
+                        "trellis-finish-work",
+                        "trellis-start",
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "library-lock.yaml").write_text(
+            "packs:\n  - pack.requirements-discovery-foundation\n",
+            encoding="utf-8",
+        )
+        (root / ".codex" / "hooks").mkdir(parents=True, exist_ok=True)
+        (root / ".codex" / "hooks" / "inject-workflow-state.py").write_text(
+            "# [workflow-embed-patch:prefer-workflow-state-json]\n",
+            encoding="utf-8",
+        )
+        (root / ".codex" / "hooks" / "session-start.py").write_text(
+            "# strong-gate-session-start-patch-applied\n# [workflow-embed-patch:session-start-route-first]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "task.py").write_text(
+            "# [workflow-embed-patch:strong-gate-no-status-flip]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
+            "# [workflow-embed-patch:preserve-parent-active-task]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "tasks.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_queue.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
+            "# strong-gate-phase-patch-applied\n",
+            encoding="utf-8",
+        )
+        skills_root = root / ".agents" / "skills"
+        (skills_root / "trellis-continue").mkdir(parents=True, exist_ok=True)
+        (skills_root / "trellis-continue" / "SKILL.md").write_text(
+            "---\n"
+            "name: trellis-continue\n"
+            'description: "Resume work on the current task. Loads the workflow Phase Index, figures out which phase/step to pick up at, then pulls the step-level detail via get_context.py --mode phase. Use when coming back to an in-progress task and you need to know what to do next."\n'
+            "---\n\n"
+            "## Workflow Phase Router Patch `[AI]`\n",
+            encoding="utf-8",
+        )
+        (skills_root / "trellis-finish-work").mkdir(parents=True, exist_ok=True)
+        (skills_root / "trellis-finish-work" / "SKILL.md").write_text(
+            "<!-- finish-work-projectization-patch -->\nprepare the delivery hand-off\n",
+            encoding="utf-8",
+        )
+        (skills_root / "trellis-start").mkdir(parents=True, exist_ok=True)
+        (skills_root / "trellis-start" / "SKILL.md").write_text(
+            "Route initial user intent through the installed workflow router\n## Workflow Phase Router Patch `[AI]`\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "embed_invalid")
+        self.assertIn("trellis-continue", data["reason"])
+
+    def test_cmd_route_embed_invalid_when_patched_codex_finish_work_skill_drifts(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "scripts" / "common").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            json.dumps(
+                {
+                    "profile": "outsourcing",
+                    "cli_types": ["codex"],
+                    "critical_runtime_patches": [
+                        "inject-workflow-state",
+                        "session-start-strong-gate",
+                        "task-start-strong-gate",
+                        "task-create-preserve-active",
+                        "task-status-view-strong-gate",
+                        "workflow-phase-strong-gate",
+                    ],
+                    "patched_codex_skills": [
+                        "trellis-continue",
+                        "trellis-finish-work",
+                        "trellis-start",
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "library-lock.yaml").write_text(
+            "packs:\n  - pack.requirements-discovery-foundation\n",
+            encoding="utf-8",
+        )
+        (root / ".codex" / "hooks").mkdir(parents=True, exist_ok=True)
+        (root / ".codex" / "hooks" / "inject-workflow-state.py").write_text(
+            "# [workflow-embed-patch:prefer-workflow-state-json]\n",
+            encoding="utf-8",
+        )
+        (root / ".codex" / "hooks" / "session-start.py").write_text(
+            "# strong-gate-session-start-patch-applied\n# [workflow-embed-patch:session-start-route-first]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "task.py").write_text(
+            "# [workflow-embed-patch:strong-gate-no-status-flip]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
+            "# [workflow-embed-patch:preserve-parent-active-task]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "tasks.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_queue.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
+            "# strong-gate-phase-patch-applied\n",
+            encoding="utf-8",
+        )
+        skills_root = root / ".agents" / "skills"
+        (skills_root / "trellis-continue").mkdir(parents=True, exist_ok=True)
+        (skills_root / "trellis-continue" / "SKILL.md").write_text(
+            "Re-enter the current workflow stage through the workflow router\n## Workflow Phase Router Patch `[AI]`\n",
+            encoding="utf-8",
+        )
+        (skills_root / "trellis-finish-work").mkdir(parents=True, exist_ok=True)
+        (skills_root / "trellis-finish-work" / "SKILL.md").write_text(
+            "---\n"
+            "name: trellis-finish-work\n"
+            'description: "Wrap up the current session: verify quality gate passed, remind user to commit, archive completed tasks, and record session progress to the developer journal. Use when done coding and ready to end the session."\n'
+            "---\n\n"
+            "<!-- finish-work-projectization-patch -->\n",
+            encoding="utf-8",
+        )
+        (skills_root / "trellis-start").mkdir(parents=True, exist_ok=True)
+        (skills_root / "trellis-start" / "SKILL.md").write_text(
+            "Route initial user intent through the installed workflow router\n## Workflow Phase Router Patch `[AI]`\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "embed_invalid")
+        self.assertIn("trellis-finish-work", data["reason"])
+
+    def test_cmd_route_blocks_design_reentry_when_ownership_policy_is_invalid(self) -> None:
+        root, task_dir = self.make_fixture()
+        invalid_assessment = self.VALID_INTERNAL_ASSESSMENT.replace(
+            "- `source_watermark_channels`: `visible`\n",
+            "",
+        )
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+            assessment_content=invalid_assessment,
+        )
+        self.run_script("init", str(task_dir), "--stage", "design")
+
+        result = self.run_script("route", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "blocked")
+        self.assertIn("source_watermark_channels", "".join(data.get("blockers", [])))
+
+    def test_cmd_route_blocks_plan_reentry_when_project_doc_boundary_is_invalid(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.run_script("init", str(task_dir), "--stage", "plan")
+
+        result = self.run_script("route", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "blocked")
+        self.assertIn("context7-review.md", "".join(data.get("blockers", [])))
 
     def test_cmd_route_embed_invalid_when_install_record_exists_without_library_lock(self) -> None:
         """workflow-installed.json exists but library-lock.yaml is missing -> embed_invalid."""

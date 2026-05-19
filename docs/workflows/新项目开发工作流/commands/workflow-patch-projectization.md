@@ -20,7 +20,7 @@
 
 4. Implement only after execution authorization
    --> plan -> implementation / test-first requires checkpoints.execution_authorized=true
-   --> If task.py start runs without session identity, it must also write a runtime-keyed degraded fallback file under .trellis/.runtime/ (with degraded-active-task.json kept as compatibility fallback) for later recovery
+   --> If task.py start runs without session identity, it must also write a runtime-keyed degraded fallback file under .trellis/.runtime/ (with degraded-active-task.json kept as compatibility fallback) for later recovery; these degraded files are recovery hints only and route must still require an explicit task confirmation instead of auto-resuming them
 
 5. Verify and commit
    --> Run the project's frozen verification commands when scaffold exists (see spec docs)
@@ -33,7 +33,7 @@
    --> archive and add_session happen only at record-session
 ```
 
-`python3 ./.trellis/scripts/task.py finish` remains available when you intentionally need to clear the current session's active task without archiving a completed task. Do not use it as a substitute for final close-out. In degraded mode, `task.py start` must leave a recoverable runtime-keyed fallback file under `.trellis/.runtime/`; the shared `degraded-active-task.json` remains only as a compatibility fallback.
+`python3 ./.trellis/scripts/task.py finish` remains available when you intentionally need to clear the current session's active task without archiving a completed task. Do not use it as a substitute for final close-out. In degraded mode, `task.py start` must leave a recoverable runtime-keyed fallback file under `.trellis/.runtime/`; the shared `degraded-active-task.json` remains only as a compatibility fallback. `workflow-state.py route` should surface these files as recovery clues, not silently treat them as the current active task.
 
 For workflows that split work into a parent coordination task plus child execution tasks:
 
@@ -169,7 +169,7 @@ For repair scenarios, append `--force` to bypass validation gates.
 
 ## Customizing Trellis (for forks)
 
-This section is for developers who want to modify the Trellis workflow itself. All customization is done by editing this file; the scripts are parsers only.
+This section is for developers who want to modify the installed Trellis workflow itself. Prompt copy lives in this file, but the runtime contract also lives in `workflow-state.py`, installer patchers, and carrier patches. If you change stage semantics, routing, degraded recovery, or gate behavior, update the corresponding runtime scripts and patch templates in the same change instead of treating them as parser-only helpers.
 
 ### Changing what a step means
 
