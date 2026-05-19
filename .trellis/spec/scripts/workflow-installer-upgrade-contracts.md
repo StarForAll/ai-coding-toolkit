@@ -228,13 +228,14 @@ Workflow embed / analysis / repair scripts must distinguish three asset classes:
    - `trellis-finish-work`
    - Contract: keep Trellis baseline content, then inject workflow patch content
 
-   Legacy `start` / `record-session` are old-target compatibility inputs only. `record-session` has retired from the current fresh-baseline patch list; close-out should follow Trellis native `finish-work` / `add_session.py`. Installed target projects with residual legacy patch markers should be handled by `upgrade-compat`.
+   Legacy `start` / baseline `record-session` are old-target compatibility inputs only. `record-session` has retired from the current fresh-baseline **patch** list, but it is still a current workflow-distributed terminal close-out stage. The live close-out chain is `finish-work -> delivery -> record-session`, and `task.py archive` + `add_session.py` execute at the `record-session` stage. Installed target projects with residual legacy patch markers should be handled by `upgrade-compat`.
 
 2. **Overlay baseline commands**
    - same-name commands whose deployed file is fully distributed by the workflow while semantically replacing the live baseline copy
    - current known set:
      - `brainstorm`
      - `check`
+     - `record-session`
    - Contract: backup original baseline copy before install; uninstall must restore baseline copy
 
 3. **Added commands**
@@ -506,7 +507,7 @@ When a workflow introduces or changes a helper script that is invoked as a manda
 Examples of user-visible gate contracts:
 
 - a delivery-phase command that blocks formal delivery until a helper returns success
-- a close-out flow whose final session record behavior must stay aligned with Trellis native `finish-work` / `add_session.py`（`record-session` 命令已退役）
+- a close-out flow whose final session record behavior must stay aligned with the workflow terminal chain `finish-work -> delivery -> record-session`, with `task.py archive` followed by `add_session.py` inside `record-session`
 
 Do not treat phase-gate helpers as "nice to have" copied scripts once their command docs make them required.
 
@@ -646,6 +647,7 @@ When modifying these contracts, update or add tests that prove:
    - `delete`
 10. `--check` fails when:
    - patch markers drift
+   - runtime patch markers still exist but startup guidance / session-context text still contains legacy READY auto-continue instructions
    - `.trellis/workflow.md` patch content drifts while the marker still exists
    - installer-managed `AGENTS.md` routing block is missing or drifts when `AGENTS.md` exists
    - `workflow-embed-attempt.json` exists
@@ -675,6 +677,7 @@ Recommended assertion points:
 
 - command-specific drift message is emitted
 - helper-script drift message is emitted
+- runtime patch health checks fail when marker-presence coexists with legacy READY auto-continue prompt residue
 - analysis report includes action classification for each managed asset
 - follow-up `--check` returns success after `--merge` / `--force` in supported scenarios
 
@@ -694,6 +697,7 @@ Recommended assertion points:
 #### Correct
 
 - classify workflow assets as patch-based baseline, overlay baseline, and added commands
+- keep workflow-facing docs and matrices aligned with `workflow_assets.py` when classifying assets such as `record-session`
 - keep `workflow_assets.py` as the shared source for asset enumeration and deployment layout
 - use `A/B/C` analysis to decide `keep / add / replace / merge / delete`
 - use source-vs-deployed content checks for distributed commands and helper scripts
