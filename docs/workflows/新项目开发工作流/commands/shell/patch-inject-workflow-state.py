@@ -389,12 +389,157 @@ def _ensure_js_code_block_strip(content: str) -> str:
         return content
     anchor = '    content = readFileSync(workflowPath, "utf-8")\n'
     if anchor not in content:
-        raise ValueError("js plugin missing readFileSync anchor")
+        return content
     return content.replace(anchor, anchor + strip_line, 1)
+
+
+def _ensure_js_route_runtime_deps(content: str) -> str:
+    patched = content
+    if 'import { execFileSync } from "child_process"\n' not in patched:
+        if 'import { TrellisContext, debugLog, isTrellisSubagent } from "../lib/trellis-context.js"\n' in patched:
+            patched = patched.replace(
+                'import { TrellisContext, debugLog, isTrellisSubagent } from "../lib/trellis-context.js"\n',
+                'import { TrellisContext, debugLog, isTrellisSubagent } from "../lib/trellis-context.js"\nimport { execFileSync } from "child_process"\n',
+                1,
+            )
+        elif 'import { TrellisContext } from "../lib/trellis-context.js"\n' in patched:
+            patched = patched.replace(
+                'import { TrellisContext } from "../lib/trellis-context.js"\n',
+                'import { TrellisContext } from "../lib/trellis-context.js"\nimport { execFileSync } from "child_process"\n',
+                1,
+            )
+        elif 'import { join } from "path"\n' in patched:
+            patched = patched.replace(
+                'import { join } from "path"\n',
+                'import { join } from "path"\nimport { execFileSync } from "child_process"\n',
+                1,
+            )
+        else:
+            raise ValueError("js hook missing anchor for execFileSync import")
+    if 'const PYTHON_CMD = "python3"\n' not in patched:
+        child_process_anchor = 'import { execFileSync } from "child_process"\n'
+        if child_process_anchor not in patched:
+            raise ValueError("js hook missing child_process import anchor for PYTHON_CMD")
+        patched = patched.replace(child_process_anchor, child_process_anchor + 'const PYTHON_CMD = "python3"\n\n', 1)
+    return patched
+
+
+def _replace_js_function(content: str, signature_prefix: str, replacement: str) -> str:
+    start = content.find(signature_prefix)
+    if start == -1:
+        raise ValueError(f"missing JS function signature: {signature_prefix}")
+    brace_start = content.find("{", start)
+    if brace_start == -1:
+        raise ValueError(f"missing opening brace for JS function: {signature_prefix}")
+
+    depth = 0
+    i = brace_start
+    in_single = False
+    in_double = False
+    in_template = False
+    in_line_comment = False
+    in_block_comment = False
+    escaped = False
+
+    while i < len(content):
+        ch = content[i]
+        nxt = content[i + 1] if i + 1 < len(content) else ""
+
+        if in_line_comment:
+            if ch == "\n":
+                in_line_comment = False
+            i += 1
+            continue
+        if in_block_comment:
+            if ch == "*" and nxt == "/":
+                in_block_comment = False
+                i += 2
+                continue
+            i += 1
+            continue
+        if in_single:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == "'":
+                in_single = False
+            i += 1
+            continue
+        if in_double:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_double = False
+            i += 1
+            continue
+        if in_template:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == "`":
+                in_template = False
+            i += 1
+            continue
+
+        if ch == "/" and nxt == "/":
+            in_line_comment = True
+            i += 2
+            continue
+        if ch == "/" and nxt == "*":
+            in_block_comment = True
+            i += 2
+            continue
+        if ch == "'":
+            in_single = True
+            i += 1
+            continue
+        if ch == '"':
+            in_double = True
+            i += 1
+            continue
+        if ch == "`":
+            in_template = True
+            i += 1
+            continue
+
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                return content[:start] + replacement.rstrip() + "\n\n" + content[end:]
+        i += 1
+
+    raise ValueError(f"unterminated JS function body: {signature_prefix}")
 
 
 def _patch_js_baseline_fixture(content: str) -> str:
     patched = content
+    if 'import { execFileSync } from "child_process"\n' not in patched:
+        if 'import { basename, join } from "path"\n' in patched:
+            patched = patched.replace(
+                'import { basename, join } from "path"\n',
+                'import { basename, join } from "path"\nimport { execFileSync } from "child_process"\n',
+                1,
+            )
+        elif 'import { join } from "path"\n' in patched:
+            patched = patched.replace(
+                'import { join } from "path"\n',
+                'import { join } from "path"\nimport { execFileSync } from "child_process"\n',
+                1,
+            )
+        else:
+            raise ValueError("js baseline fixture missing path import anchor for execFileSync")
+    if 'const PYTHON_CMD = "python3"\n' not in patched:
+        child_process_anchor = 'import { execFileSync } from "child_process"\n'
+        if child_process_anchor not in patched:
+            raise ValueError("js baseline fixture missing child_process import anchor for PYTHON_CMD")
+        patched = patched.replace(child_process_anchor, child_process_anchor + 'const PYTHON_CMD = "python3"\n\n', 1)
     if "  const rawStatus = typeof taskData.status === \"string\" ? taskData.status : \"\"\n" not in patched:
         task_status_anchor = "  const taskTitle = taskData.title || taskRef\n"
         if task_status_anchor not in patched:
@@ -492,23 +637,24 @@ def patch_js_hook(target_path: Path) -> bool:
         JS_ROUTE_PATCH_MARKER in content
         and "workflow-state.route" in content
         and "task.extraLines" in content
+        and 'import { execFileSync } from "child_process"' in content
+        and 'const PYTHON_CMD = "python3"' in content
     ):
         print(f"✅ {target_path} 已包含 route-centered workflow-state 补丁，跳过")
         return True
 
     try:
         patched = _ensure_js_code_block_strip(content)
-        if "function getActiveTask(ctx, platformInput = null) {" in patched and "function buildBreadcrumb(id, status, templates, source = null) {" in patched:
-            patched = _replace_section(
+        patched = _ensure_js_route_runtime_deps(patched)
+        if "function getActiveTask(ctx, platformInput = null) {" in patched and "function buildBreadcrumb(" in patched:
+            patched = _replace_js_function(
                 patched,
                 "function getActiveTask(ctx, platformInput = null) {",
-                "/**\n * Build the <workflow-state>...</workflow-state> block.",
                 JS_GET_ACTIVE_TASK_BLOCK,
             )
-            patched = _replace_section(
+            patched = _replace_js_function(
                 patched,
-                "function buildBreadcrumb(id, status, templates, source = null) {",
-                "// OpenCode 1.2.x expects plugins to be factory functions",
+                "function buildBreadcrumb(",
                 JS_BUILD_BREADCRUMB_BLOCK,
             )
         else:
@@ -539,14 +685,24 @@ def patch_js_hook(target_path: Path) -> bool:
         print(f"⚠️ {target_path} 缺少预期结构，跳过补丁: {exc}")
         return False
 
-    if "function buildBreadcrumb(id, status, templates, source = null)" in patched:
-        old_call = "            ? buildBreadcrumb(task.id, task.status, templates, task.source)\n"
-        new_call = "            ? buildBreadcrumb(task.id, task.status, templates, task.source, task.extraLines)\n"
-        if "task.extraLines" not in patched:
-            if old_call not in patched:
-                print(f"⚠️ {target_path} 中未找到 buildBreadcrumb 调用，跳过补丁")
-                return False
-            patched = patched.replace(old_call, new_call, 1)
+    if "task.extraLines" not in patched:
+        call_pattern = re.compile(
+            r"(?P<indent>\s*)\?\s*buildBreadcrumb\(task\.id,\s*task\.status,\s*templates,\s*task\.source\)\n"
+        )
+        patched, replacements = call_pattern.subn(
+            lambda match: (
+                f"{match.group('indent')}? buildBreadcrumb(task.id, task.status, templates, task.source, task.extraLines)\n"
+            ),
+            patched,
+            count=1,
+        )
+        if replacements == 0:
+            print(f"⚠️ {target_path} 中未找到 buildBreadcrumb 调用，跳过补丁")
+            return False
+
+    if 'import { execFileSync } from "child_process"' not in patched or 'const PYTHON_CMD = "python3"' not in patched:
+        print(f"⚠️ {target_path} route-centered JS 补丁缺少 execFileSync/PYTHON_CMD 依赖注入")
+        return False
 
     target_path.write_text(patched, encoding="utf-8")
     print(f"✅ 已为 {target_path} 应用 route-centered workflow-state 补丁 (JS)")

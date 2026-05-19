@@ -120,6 +120,48 @@ def ok(message: str) -> None:
     print(f"{G}✅ {message}{N}")
 
 
+def _js_runtime_contract_issues(path: Path, content: str) -> list[str]:
+    issues: list[str] = []
+    if 'import { execFileSync } from "child_process"' not in content:
+        issues.append(f"{path.name}: 缺少 execFileSync 导入")
+    if 'const PYTHON_CMD = "python3"' not in content:
+        issues.append(f"{path.name}: 缺少 PYTHON_CMD 定义")
+    if "function buildBreadcrumb(id, status, templates, source = null" in content and "task.extraLines" not in content:
+        issues.append(f"{path.name}: 缺少 task.extraLines 透传")
+    return issues
+
+
+def _task_runtime_import_issues(path: Path, content: str) -> list[str]:
+    issues: list[str] = []
+    if _TASK_DEGRADED_PATCH_MARKER in content or _TASK_CURRENT_DEGRADED_PATCH_MARKER in content:
+        if "import os" not in content:
+            issues.append(f"{path.name}: degraded fallback 补丁缺少 os 导入")
+        if "import re" not in content:
+            issues.append(f"{path.name}: degraded fallback 补丁缺少 re 导入")
+    return issues
+
+
+def detect_runtime_patch_contract_conflicts(root: Path, cli_types: list[str]) -> int:
+    conflicts = 0
+
+    task_py = root / ".trellis" / "scripts" / "task.py"
+    if task_py.exists():
+        task_issues = _task_runtime_import_issues(task_py, task_py.read_text(encoding="utf-8"))
+        if task_issues:
+            err("[Shared] task.py: " + "；".join(task_issues))
+            conflicts += 1
+
+    if "opencode" in cli_types:
+        opencode_js = root / ".opencode" / "plugins" / "inject-workflow-state.js"
+        if opencode_js.exists():
+            js_issues = _js_runtime_contract_issues(opencode_js, opencode_js.read_text(encoding="utf-8"))
+            if js_issues:
+                err("[OpenCode] inject-workflow-state.js: " + "；".join(js_issues))
+                conflicts += 1
+
+    return conflicts
+
+
 def warn(message: str) -> None:
     print(f"{Y}⚠️  {message}{N}")
 
@@ -914,7 +956,12 @@ def detect_conflicts_codex(
             _OPENCODE_ROUTE_HOOK_PATCH_MARKER in js_content
             and "workflow-state.route" in js_content
         ):
-            ok("[OpenCode] inject-workflow-state.js: plugin 补丁已应用")
+            js_issues = _js_runtime_contract_issues(opencode_js, js_content)
+            if js_issues:
+                err("[OpenCode] inject-workflow-state.js: " + "；".join(js_issues))
+                conflicts += 1
+            else:
+                ok("[OpenCode] inject-workflow-state.js: plugin 补丁已应用")
         else:
             warn("[OpenCode] inject-workflow-state.js: plugin 补丁未应用（route-centered breadcrumb 未启用）")
     # OpenCode plugin absence is not a conflict — OpenCode may not be installed
@@ -936,6 +983,10 @@ def detect_conflicts_codex(
             ok("[Shared] task.py: strong-gate no-status-flip 补丁已应用")
         else:
             err("[Shared] task.py: strong-gate no-status-flip 补丁缺失")
+            conflicts += 1
+        task_runtime_issues = _task_runtime_import_issues(task_py, task_content)
+        if task_runtime_issues:
+            err("[Shared] task.py: " + "；".join(task_runtime_issues))
             conflicts += 1
 
     task_store = root / ".trellis" / "scripts" / "common" / "task_store.py"
@@ -1533,6 +1584,7 @@ def main() -> int:
     total_conflicts += detect_obsolete_shared_script_conflicts(dst_scripts, record, profile=profile)
     total_conflicts += detect_execution_card_conflicts(src, root, profile=profile)
     total_conflicts += detect_conflicts_workflow_doc(src, root, profile=profile)
+    total_conflicts += detect_runtime_patch_contract_conflicts(root, cli_types)
     total_conflicts += detect_conflicts_agents_md(root)
     total_conflicts += detect_conflicts_added_commands_missing(record, root, cli_types)
     print(f"   总冲突: {total_conflicts}")

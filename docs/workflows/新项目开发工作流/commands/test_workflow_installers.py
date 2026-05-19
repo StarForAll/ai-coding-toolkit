@@ -398,6 +398,44 @@ BASELINE_OPENCODE_SESSION_START_PLUGIN = (
     "import { buildSessionContext } from \"../lib/session-utils.js\"\n"
     "export default async () => ({\"chat.message\": async () => buildSessionContext})\n"
 )
+BASELINE_OPENCODE_INJECT_WORKFLOW_STATE_PLUGIN = (
+    "/* global process */\n"
+    "import { existsSync, readFileSync } from \"fs\"\n"
+    "import { join } from \"path\"\n"
+    "import { TrellisContext } from \"../lib/trellis-context.js\"\n\n"
+    "function getActiveTask(ctx, platformInput = null) {\n"
+    "  const active = ctx.getActiveTask(platformInput)\n"
+    "  const taskRef = active.taskPath\n"
+    "  if (!taskRef) return null\n"
+    "  const taskDir = ctx.resolveTaskDir(taskRef)\n"
+    "  if (active.stale || !taskDir || !existsSync(taskDir)) {\n"
+    "    return { id: taskRef.split(\"/\").pop(), status: \"stale\", source: active.source }\n"
+    "  }\n"
+    "  const taskJsonPath = join(taskDir, \"task.json\")\n"
+    "  if (!existsSync(taskJsonPath)) return null\n"
+    "  const data = JSON.parse(readFileSync(taskJsonPath, \"utf-8\"))\n"
+    "  const status = typeof data.status === \"string\" ? data.status : \"\"\n"
+    "  if (!status) return null\n"
+    "  return { id: data.id || taskRef.split(\"/\").pop(), status, source: active.source }\n"
+    "}\n\n"
+    "function buildBreadcrumb(id, status, templates, source = null) {\n"
+    "  return `<workflow-state>\\n${id}:${status}:${source}\\n</workflow-state>`\n"
+    "}\n\n"
+    "export default async ({ directory }) => {\n"
+    "  const ctx = new TrellisContext(directory)\n"
+    "  return {\n"
+    "    \"chat.message\": async (input, output) => {\n"
+    "      const templates = {}\n"
+    "      const task = getActiveTask(ctx, input)\n"
+    "      const breadcrumb = task\n"
+    "        ? buildBreadcrumb(task.id, task.status, templates, task.source)\n"
+    "        : buildBreadcrumb(null, \"no_task\", templates)\n"
+    "      const parts = output?.parts || []\n"
+    "      parts.unshift({ type: \"text\", text: breadcrumb })\n"
+    "    },\n"
+    "  }\n"
+    "}\n"
+)
 BASELINE_TRELLIS_CONTINUE_SKILL_CONTENT = (
     "---\n"
     "name: trellis-continue\n"
@@ -647,6 +685,10 @@ class WorkflowInstallerTests(unittest.TestCase):
             )
             (root / ".opencode" / "plugins" / "session-start.js").write_text(
                 BASELINE_OPENCODE_SESSION_START_PLUGIN,
+                encoding="utf-8",
+            )
+            (root / ".opencode" / "plugins" / "inject-workflow-state.js").write_text(
+                BASELINE_OPENCODE_INJECT_WORKFLOW_STATE_PLUGIN,
                 encoding="utf-8",
             )
             opencode_agent_prefix = "trellis-" if use_latest_trellis_baseline else ""
@@ -1041,6 +1083,30 @@ class WorkflowInstallerTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+    def test_install_patches_task_script_with_runtime_imports_for_degraded_fallback(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assert_install_result_usable(install)
+
+        task_script = (fixture / ".trellis" / "scripts" / "task.py").read_text(encoding="utf-8")
+        self.assertIn("import os", task_script)
+        self.assertIn("import re", task_script)
+        self.assertIn("degraded-active-task-{runtime_key}.json", task_script)
+
+    def test_install_patches_opencode_inject_workflow_state_with_runtime_contract(self) -> None:
+        fixture = self.create_fixture(include_opencode=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assert_install_result_usable(install)
+
+        opencode_inject = (fixture / ".opencode" / "plugins" / "inject-workflow-state.js").read_text(encoding="utf-8")
+        self.assertIn('import { execFileSync } from "child_process"', opencode_inject)
+        self.assertIn('const PYTHON_CMD = "python3"', opencode_inject)
+        self.assertIn("task.extraLines", opencode_inject)
 
     def test_install_session_start_patch_removes_legacy_tail_logic(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
@@ -2188,6 +2254,39 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("session-start.py", result.stdout)
         self.assertIn("task.py", result.stdout)
         self.assertIn("task_store.py", result.stdout)
+
+    def test_upgrade_check_detects_incomplete_runtime_patch_contracts(self) -> None:
+        fixture = self.create_fixture(include_opencode=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        opencode_inject = fixture / ".opencode" / "plugins" / "inject-workflow-state.js"
+        opencode_inject.write_text(
+            opencode_inject.read_text(encoding="utf-8")
+            .replace('import { execFileSync } from "child_process"\n', "")
+            .replace('const PYTHON_CMD = "python3"\n\n', ""),
+            encoding="utf-8",
+        )
+        task_py = fixture / ".trellis" / "scripts" / "task.py"
+        task_py.write_text(
+            task_py.read_text(encoding="utf-8").replace("import os\n", "").replace("import re\n", ""),
+            encoding="utf-8",
+        )
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("inject-workflow-state.js", result.stdout)
+        self.assertIn("task.py", result.stdout)
 
     def test_upgrade_check_allows_legacy_missing_version_keys(self) -> None:
         fixture = self.create_fixture()

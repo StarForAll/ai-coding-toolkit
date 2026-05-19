@@ -1922,6 +1922,64 @@ def _python_compile_error(
     return None
 
 
+def _js_runtime_contract_errors(
+    repo_root: Path,
+    path: Path,
+    patch_name: str,
+    content: str,
+) -> list[str]:
+    if path.suffix != ".js":
+        return []
+
+    problems: list[str] = []
+    if patch_name == "inject-workflow-state":
+        if 'import { execFileSync } from "child_process"' not in content:
+            problems.append(
+                f"{path.relative_to(repo_root)} 缺少 execFileSync 导入"
+                f"（critical runtime patch: {patch_name}）"
+            )
+        if 'const PYTHON_CMD = "python3"' not in content:
+            problems.append(
+                f"{path.relative_to(repo_root)} 缺少 PYTHON_CMD 定义"
+                f"（critical runtime patch: {patch_name}）"
+            )
+        if "function buildBreadcrumb(id, status, templates, source = null" in content and "task.extraLines" not in content:
+            problems.append(
+                f"{path.relative_to(repo_root)} 缺少 task.extraLines 透传"
+                f"（critical runtime patch: {patch_name}）"
+            )
+    return problems
+
+
+def _task_runtime_contract_errors(
+    repo_root: Path,
+    path: Path,
+    patch_name: str,
+    content: str,
+) -> list[str]:
+    if path.name != "task.py":
+        return []
+
+    problems: list[str] = []
+    if patch_name == "task-start-strong-gate":
+        if TASK_START_STRONG_GATE_PATCH_MARKER in content:
+            uses_degraded_runtime = (
+                '# [workflow-embed-patch:degraded-active-task]' in content
+                or '# [workflow-embed-patch:degraded-current-read]' in content
+            )
+            if uses_degraded_runtime and "import os" not in content:
+                problems.append(
+                    f"{path.relative_to(repo_root)} 缺少 os 导入"
+                    f"（critical runtime patch: {patch_name}）"
+                )
+            if uses_degraded_runtime and "import re" not in content:
+                problems.append(
+                    f"{path.relative_to(repo_root)} 缺少 re 导入"
+                    f"（critical runtime patch: {patch_name}）"
+                )
+    return problems
+
+
 def _detect_missing_critical_runtime_patches(repo_root: Path, record: dict[str, Any]) -> list[str]:
     expected = _expected_critical_runtime_patches(record)
     if not expected:
@@ -1945,6 +2003,9 @@ def _detect_missing_critical_runtime_patches(repo_root: Path, record: dict[str, 
         compile_error = _python_compile_error(repo_root, path, patch_name, content)
         if compile_error is not None:
             missing.append(compile_error)
+            continue
+        missing.extend(_js_runtime_contract_errors(repo_root, path, patch_name, content))
+        missing.extend(_task_runtime_contract_errors(repo_root, path, patch_name, content))
     return missing
 
 

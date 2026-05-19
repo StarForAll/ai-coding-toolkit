@@ -1929,6 +1929,22 @@ def patch_task_start_degraded_fallback(root: Path, *, dry_run: bool) -> bool:
     patched = content
     applied = False
 
+    def _ensure_task_imports(text: str) -> str:
+        updated = text
+        if "import os\n" not in updated:
+            if "import argparse\n" in updated:
+                updated = updated.replace("import argparse\n", "import argparse\nimport os\n", 1)
+            else:
+                updated = "import os\n" + updated
+        if "import re\n" not in updated:
+            if "import os\n" in updated:
+                updated = updated.replace("import os\n", "import os\nimport re\n", 1)
+            elif "import argparse\n" in updated:
+                updated = updated.replace("import argparse\n", "import argparse\nimport re\n", 1)
+            else:
+                updated = "import re\n" + updated
+        return updated
+
     anchor = '        # Still flip task.json status: planning → in_progress so downstream phases proceed.\n'
     if _TASK_DEGRADED_PATCH_MARKER not in patched:
         if anchor not in patched:
@@ -2029,6 +2045,8 @@ def patch_task_start_degraded_fallback(root: Path, *, dry_run: bool) -> bool:
     if not applied:
         ok("[Shared] task.py degraded fallback / current-read 补丁已存在")
         return False
+
+    patched = _ensure_task_imports(patched)
 
     if not dry_run:
         task_path.write_text(patched, encoding="utf-8")

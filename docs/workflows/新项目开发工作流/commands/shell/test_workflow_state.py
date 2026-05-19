@@ -2520,6 +2520,66 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(data["action"], "embed_invalid")
         self.assertIn(".opencode", data["reason"])
 
+    def test_cmd_route_embed_invalid_when_opencode_runtime_patch_is_incomplete(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "scripts" / "common").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            json.dumps(
+                {
+                    "profile": "outsourcing",
+                    "cli_types": ["opencode"],
+                    "critical_runtime_patches": [
+                        "inject-workflow-state",
+                        "session-start-strong-gate",
+                        "task-start-strong-gate",
+                        "task-create-preserve-active",
+                        "workflow-phase-strong-gate",
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "library-lock.yaml").write_text(
+            "packs:\n  - pack.requirements-discovery-foundation\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "task.py").write_text(
+            "# [workflow-embed-patch:strong-gate-no-status-flip]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
+            "# [workflow-embed-patch:preserve-parent-active-task]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
+            "# strong-gate-phase-patch-applied\n",
+            encoding="utf-8",
+        )
+        (root / ".opencode" / "plugins").mkdir(parents=True, exist_ok=True)
+        (root / ".opencode" / "plugins" / "inject-workflow-state.js").write_text(
+            "// [workflow-embed-patch:prefer-workflow-state-json]\n"
+            "function getActiveTask() { return { status: 'workflow-state.route_failed', source: 'workflow-state.route_failed', extraLines: [] } }\n"
+            "function buildBreadcrumb(id, status, templates, source = null, extraLines = []) { return status }\n",
+            encoding="utf-8",
+        )
+        (root / ".opencode" / "lib").mkdir(parents=True, exist_ok=True)
+        (root / ".opencode" / "lib" / "session-utils.js").write_text(
+            "// [workflow-embed-patch:strong-gate-session-utils]\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "embed_invalid")
+        self.assertIn("execFileSync", data["reason"])
+
     def test_cmd_route_codex_embed_does_not_require_session_start_patch(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
         self.addCleanup(shutil.rmtree, root)
