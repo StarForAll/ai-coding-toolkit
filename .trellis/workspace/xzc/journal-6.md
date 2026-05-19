@@ -666,3 +666,36 @@ Audited the embedded workflow against a rebuilt tmp target, fixed brainstorm ent
 ### Next Steps
 
 - None - task complete
+
+
+## Session 265: 修复新项目开发工作流审计与门禁缺陷
+
+**Date**: 2026-05-19
+**Task**: 修复新项目开发工作流审计与门禁缺陷
+**Branch**: `main`
+
+### Summary
+
+修复 project-audit 正式进入链与 leaf-only 缺陷，增强任务状态展示的 strong-gate 摘要，升级 check-quality 证据输出，并补充相关回归测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `319e28e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
