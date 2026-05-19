@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-6.md`
-- **Total Sessions**: 257
+- **Total Sessions**: 258
 - **Last Active**: 2026-05-19
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-6.md` | ~441 | Active |
+| `journal-6.md` | ~472 | Active |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
@@ -34,6 +34,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 258 | 2026-05-19 | 优化大众玩家游戏评论 Agent 元提示词 | - | `main` |
 | 257 | 2026-05-19 | 修复工作流恢复闭环 | `494dce6` | `main` |
 | 256 | 2026-05-19 | 审计并修复新项目工作流状态门禁缺陷 | `ba733d9` | `main` |
 | 255 | 2026-05-19 | Audit and fix embedded workflow entry gates | `586d110`, `bc5f146`, `b3087c7` | `main` |

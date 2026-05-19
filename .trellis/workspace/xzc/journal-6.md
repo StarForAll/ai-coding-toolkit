@@ -439,3 +439,34 @@ Audited the embedded workflow against a rebuilt tmp target, fixed brainstorm ent
 ### Next Steps
 
 - None - task complete
+
+
+## Session 258: 优化大众玩家游戏评论 Agent 元提示词
+
+**Date**: 2026-05-19
+**Task**: 优化大众玩家游戏评论 Agent 元提示词
+**Branch**: `main`
+
+### Summary
+
+按用户指令对 tmp/大众玩家游戏评论Agent.md 做四项定向优化：玩家角色具体化为 15-40 岁三段人群（综合大众视角输出）、新增手机端专属四维度（耗电/离线/推送/单手操作）、优化建议补充流失阶段和预期影响视角、明确信息不足时的最低门槛分级（必需项缺失降级为初步印象）。文件不入库（tmp/ 忽略）。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
