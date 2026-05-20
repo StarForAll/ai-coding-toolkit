@@ -329,7 +329,7 @@ _NL_ROUTING_SECTION = """\
 | 更新规范、新发现、沉淀经验 | `/trellis:update-spec` | 描述规范更新意图，或显式触发 `trellis-update-spec` skill | 规范更新 |
 | 跨层检查、跨模块、影响面 | `/trellis:check` + 手动指定跨层范围 | 描述跨层检查意图，或显式触发 `check` skill 并说明跨层范围 | 当前未提供专用 `check-cross-layer` skill；用 `/trellis:check` 替代 |
 | 集成 skill、添加 skill | 手动完成 skill 集成 | 手动完成 skill 集成 | 当前未提供专用 `integrate-skill` skill；按 skill 文档手动集成 |
-| 读规范、开发前准备、看看有什么规范 | `/trellis:before-dev` | 描述开发前准备意图，或显式触发 `trellis-before-dev` skill | 开发前读规范；默认主链里也会由 continue 自动执行 |
+| 读规范、开发前准备、看看有什么规范 | `/trellis:continue` | 描述开发前准备意图，或显式触发 `trellis-before-dev` skill | 开发前读规范；当前 workflow 默认由 continue 自动执行 before-dev，不承诺存在独立 `/trellis:before-dev` 命令 |
 | 新人入门、项目介绍、怎么用 trellis | 阅读 AGENTS.md NL 路由表 | 阅读 AGENTS.md 路由表 | 当前未提供专用 `onboard` skill；按项目文档入门 |
 | 创建命令、新命令、加个命令 | 按平台格式手动创建 | 按平台格式手动创建 | 当前未提供专用 `create-command` skill；按对应 CLI 格式手动创建 |
 
@@ -1585,6 +1585,53 @@ def patch_trellis_meta_references(src: Path, root: Path, *, dry_run: bool) -> bo
     return any_patched
 
 
+_BRAINSTORM_WHEN_TO_USE_OLD = (
+    "Triggered from /trellis:start when the user describes a development task, especially when:"
+)
+_BRAINSTORM_WHEN_TO_USE_NEW = (
+    "Triggered from `/trellis:brainstorm`, or when `/trellis:continue` routes into brainstorm, "
+    "when the user describes a development task, especially when:"
+)
+_BRAINSTORM_RELATED_COMMANDS_OLD = """| `/trellis:start` | Entry point that triggers brainstorm |
+| `/trellis:finish-work` | After implementation is complete |
+| `/trellis:update-spec` | If new patterns emerge during work |"""
+_BRAINSTORM_RELATED_COMMANDS_NEW = """| `/trellis:brainstorm` | Direct brainstorm stage entry |
+| `/trellis:continue` | Phase Router entry that may route here when requirements still need clarification |
+| `/trellis:finish-work` | After implementation is complete |
+| `/trellis:update-spec` | If new patterns emerge during work |"""
+
+
+def patch_platform_brainstorm_skills(root: Path, *, dry_run: bool) -> bool:
+    """Patch platform-local brainstorm skills that still advertise /trellis:start."""
+    targets = [
+        ("Claude", root / ".claude" / "skills" / "trellis-brainstorm" / "SKILL.md"),
+        ("OpenCode", root / ".opencode" / "skills" / "trellis-brainstorm" / "SKILL.md"),
+    ]
+
+    any_patched = False
+    for label, target_path in targets:
+        if not target_path.exists():
+            continue
+        content = target_path.read_text(encoding="utf-8")
+        patched = content
+        changed = False
+        if _BRAINSTORM_WHEN_TO_USE_OLD in patched:
+            patched = patched.replace(_BRAINSTORM_WHEN_TO_USE_OLD, _BRAINSTORM_WHEN_TO_USE_NEW)
+            changed = True
+        if _BRAINSTORM_RELATED_COMMANDS_OLD in patched:
+            patched = patched.replace(_BRAINSTORM_RELATED_COMMANDS_OLD, _BRAINSTORM_RELATED_COMMANDS_NEW)
+            changed = True
+        if not changed:
+            continue
+        if dry_run:
+            info(f"[{label}] 将更新 trellis-brainstorm skill 入口文案")
+        else:
+            target_path.write_text(patched, encoding="utf-8")
+            ok(f"[{label}] trellis-brainstorm skill 入口文案已更新")
+        any_patched = True
+    return any_patched
+
+
 def _apply_patch_task_create_preserve_active(src: Path, root: Path, *, dry_run: bool) -> bool:
     """Patch common/task_store.py so child-task create can preserve the parent active task."""
     import importlib.util
@@ -2149,6 +2196,33 @@ def cleanup_stale_contract_references(root: Path, *, dry_run: bool) -> bool:
         info("[Shared] 将替换 workflow-state-contract.md 引用 → workflow-state.py --help")
     else:
         ok("[Shared] 已替换 workflow-state-contract.md 引用 → workflow-state.py --help")
+    return True
+
+
+_CROSS_LAYER_GUIDE_STALE_LINE = "- [ ] Run `/trellis:check-cross-layer` to verify nothing was missed"
+_CROSS_LAYER_GUIDE_FIXED_LINE = (
+    "- [ ] Run `/trellis:check` and specify the cross-layer scope manually to verify nothing was missed"
+)
+
+
+def patch_cross_layer_thinking_guide(root: Path, *, dry_run: bool) -> bool:
+    """Patch stale baseline guidance that still points to /trellis:check-cross-layer."""
+    guide_path = root / ".trellis" / "spec" / "guides" / "cross-layer-thinking-guide.md"
+    if not guide_path.exists():
+        return False
+
+    content = guide_path.read_text(encoding="utf-8")
+    if _CROSS_LAYER_GUIDE_FIXED_LINE in content:
+        return False
+    if _CROSS_LAYER_GUIDE_STALE_LINE not in content:
+        return False
+
+    patched = content.replace(_CROSS_LAYER_GUIDE_STALE_LINE, _CROSS_LAYER_GUIDE_FIXED_LINE)
+    if dry_run:
+        info("[Shared] 将更新 cross-layer-thinking-guide.md 里的 check-cross-layer 旧入口")
+    else:
+        guide_path.write_text(patched, encoding="utf-8")
+        ok("[Shared] cross-layer-thinking-guide.md 已更新为 /trellis:check 替代口径")
     return True
 
 
@@ -3240,6 +3314,8 @@ def main() -> int:
             inject_workflow_no_task_patch(src, root, dry_run=args.dry_run, profile=profile)
             inject_workflow_breadcrumb_patch(src, root, dry_run=args.dry_run, profile=profile)
             patch_trellis_meta_references(src, root, dry_run=args.dry_run)
+            patch_platform_brainstorm_skills(root, dry_run=args.dry_run)
+            patch_cross_layer_thinking_guide(root, dry_run=args.dry_run)
 
             # Issue 2: cleanup legacy three-phase breadcrumb blocks after strong-gate patches
             cleanup_legacy_phase_router_sections(root, dry_run=args.dry_run)

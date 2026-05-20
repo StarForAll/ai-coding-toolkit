@@ -1487,14 +1487,17 @@ class WorkflowInstallerTests(unittest.TestCase):
             fixture / ".agents" / "skills" / "trellis-meta" / "references" / "local-architecture" / "workflow.md",
             fixture / ".agents" / "skills" / "trellis-meta" / "references" / "local-architecture" / "context-injection.md",
             fixture / ".agents" / "skills" / "trellis-meta" / "references" / "platform-files" / "hooks-and-settings.md",
+            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
             fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-workflow.md",
             fixture / ".claude" / "skills" / "trellis-meta" / "references" / "local-architecture" / "workflow.md",
             fixture / ".claude" / "skills" / "trellis-meta" / "references" / "local-architecture" / "context-injection.md",
             fixture / ".claude" / "skills" / "trellis-meta" / "references" / "platform-files" / "hooks-and-settings.md",
+            fixture / ".claude" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
             fixture / ".claude" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-workflow.md",
             fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "local-architecture" / "workflow.md",
             fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "local-architecture" / "context-injection.md",
             fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "platform-files" / "hooks-and-settings.md",
+            fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
             fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-workflow.md",
         ]
         for path in stale_files:
@@ -1514,6 +1517,72 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("workflow-state.py route", shared_workflow_ref)
         self.assertIn("route metadata", shared_workflow_ref)
         self.assertIn("finish-work -> delivery -> record-session", shared_workflow_ref)
+        opencode_change_hooks = (
+            fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn(".opencode/package.json", opencode_change_hooks)
+        self.assertIn(".opencode/plugins/", opencode_change_hooks)
+
+    def test_install_patches_platform_brainstorm_skills_away_from_trellis_start(self) -> None:
+        fixture = self.create_fixture(include_opencode=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        stale_skill = """---
+name: trellis-brainstorm
+description: stale brainstorm
+---
+
+## When to Use
+
+Triggered from /trellis:start when the user describes a development task, especially when:
+
+## Related Commands
+
+| Command | When to Use |
+|---------|-------------|
+| `/trellis:start` | Entry point that triggers brainstorm |
+| `/trellis:finish-work` | After implementation is complete |
+| `/trellis:update-spec` | If new patterns emerge during work |
+"""
+        for path in [
+            fixture / ".claude" / "skills" / "trellis-brainstorm" / "SKILL.md",
+            fixture / ".opencode" / "skills" / "trellis-brainstorm" / "SKILL.md",
+        ]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(stale_skill, encoding="utf-8")
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        for path in [
+            fixture / ".claude" / "skills" / "trellis-brainstorm" / "SKILL.md",
+            fixture / ".opencode" / "skills" / "trellis-brainstorm" / "SKILL.md",
+        ]:
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("/trellis:brainstorm", content)
+            self.assertIn("/trellis:continue", content)
+            self.assertNotIn("Triggered from /trellis:start", content)
+            self.assertNotIn("| `/trellis:start` | Entry point that triggers brainstorm |", content)
+
+    def test_install_patches_cross_layer_guide_check_entry(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        guide_path = fixture / ".trellis" / "spec" / "guides" / "cross-layer-thinking-guide.md"
+        guide_path.parent.mkdir(parents=True, exist_ok=True)
+        guide_path.write_text(
+            "# Cross-Layer Thinking Guide\n\n"
+            "## Cross-Platform Template Consistency\n\n"
+            "- [ ] Run `/trellis:check-cross-layer` to verify nothing was missed\n",
+            encoding="utf-8",
+        )
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        patched = guide_path.read_text(encoding="utf-8")
+        self.assertIn("/trellis:check` and specify the cross-layer scope manually", patched)
+        self.assertNotIn("/trellis:check-cross-layer", patched)
 
     def test_install_migrates_legacy_agents_to_trellis_naming(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True, use_latest_trellis_baseline=False)
@@ -2144,6 +2213,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("Codex：通过 `AGENTS.md` 自然语言路由或显式触发对应 skill", agents_md)
         self.assertIn("调研、研究、查资料", agents_md)
         self.assertIn("trellis-research", agents_md)
+        self.assertIn("当前 workflow 默认由 continue 自动执行 before-dev", agents_md)
+        self.assertNotIn("| 读规范、开发前准备、看看有什么规范 | `/trellis:before-dev` |", agents_md)
 
     def test_install_dry_run_reports_preview_without_writing_files(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)

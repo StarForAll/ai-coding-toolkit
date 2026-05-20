@@ -76,7 +76,7 @@ $TASK_DIR/before-dev.md
 边界说明：
 
 - 当前 workflow 里，`before-dev.md` 由 `/trellis:continue` 在进入 implementation / test-first 前自动执行 before-dev 步骤时生成或刷新
-- 手动单独调用 `/trellis:before-dev` 仍按 Trellis 基线语义理解为“读规范 / 注入项目知识”，不默认承诺一定会单独生成 `before-dev.md`
+- 手动单独触发开发前准备（例如 Codex 的 `trellis-before-dev` skill）仍按 Trellis 基线语义理解为“读规范 / 注入项目知识”，不默认承诺一定会单独生成 `before-dev.md`
 
 ## 流程
 

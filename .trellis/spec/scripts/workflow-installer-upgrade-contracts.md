@@ -183,9 +183,15 @@ Target-project deployed copies are derived state:
 
 - Claude: `.claude/commands/trellis/*.md`
 - OpenCode: `.opencode/commands/trellis/*.md`
+- Claude platform-local workflow skills: `.claude/skills/*/SKILL.md`
+- OpenCode platform-local workflow skills: `.opencode/skills/*/SKILL.md`
 - Codex shared workflow skills: `.agents/skills/*/SKILL.md`
 - Codex local / cleanup scope: `.codex/skills/*/SKILL.md` only for Codex-local project skills, optional disabled entries such as `parallel`, and duplicate shared-skill drift cleanup
 - installer-managed routing block: `AGENTS.md` inside `<!-- workflow-nl-routing-start ... workflow-nl-routing-end -->`
+- workflow-managed reference-doc patch carriers such as:
+  - `.agents/skills/trellis-meta/references/**`
+  - `.claude/skills/trellis-meta/references/**`
+  - `.opencode/skills/trellis-meta/references/**`
 - Trellis-native implementation agents:
   - Claude: `.claude/agents/trellis-{research,implement,check}.md`
   - OpenCode: `.opencode/agents/trellis-{research,implement,check}.md`
@@ -195,6 +201,7 @@ Target-project deployed copies are derived state:
   - `trellis-implement` / `trellis-check` remain Trellis-native and must not be overlaid
 - shared helper scripts: `.trellis/scripts/workflow/*.py`
 - shared project workflow guide patch: `.trellis/workflow.md`
+- target-project baseline guide patches under `.trellis/spec/guides/*.md` when the workflow explicitly repairs trellis-native stale operator guidance
 - install-only collaboration reminder: root-level `todo.txt`
 
 Special rule for `todo.txt`:
