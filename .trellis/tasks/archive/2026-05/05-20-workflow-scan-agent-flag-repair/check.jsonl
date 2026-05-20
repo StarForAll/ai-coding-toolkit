@@ -1,0 +1,4 @@
+{"file":".trellis/spec/skills/index.md","reason":"Verify coupled skill contract remains aligned after scan-side execution mode changes."}
+{"file":".trellis/spec/skills/workflow-scan.md","reason":"Verify workflow-scan skill still satisfies its behavioral contract."}
+{"file":".trellis/spec/skills/workflow-repair.md","reason":"Verify repair-side assumptions stay compatible with scan output regardless of execution mode."}
+{"file":".trellis/spec/universal-domains/agent-collaboration/agent-role-boundaries/normative-rules.md","reason":"Verify optional multi-agent instructions preserve explicit ownership and authority boundaries."}

@@ -1,0 +1,7 @@
+{"file":".trellis/spec/skills/index.md","reason":"Skill authoring and coupled-contract rules for workflow-scan/workflow-repair."}
+{"file":".trellis/spec/skills/workflow-scan.md","reason":"Behavioral contract for workflow-scan that must be updated for the new --agent execution mode."}
+{"file":".trellis/spec/skills/workflow-repair.md","reason":"Paired repair-side contract that must stay aligned when scan-side execution assumptions change."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Cross-layer drift prevention because this change spans skills, specs, and validation scripts."}
+{"file":".trellis/spec/universal-domains/agent-collaboration/agent-role-boundaries/normative-rules.md","reason":"Role-boundary requirements for optional multi-agent execution mode."}
+{"file":".trellis/spec/universal-domains/agent-collaboration/delegation-policy/normative-rules.md","reason":"Delegation constraints for explicit --agent use."}
+{"file":".trellis/spec/universal-domains/agent-collaboration/handoff-contracts/normative-rules.md","reason":"Handoff requirements so helper agents cannot own final scan completion semantics."}
