@@ -933,3 +933,37 @@ Validated /tmp/trellis-0.5.17-2 findings, repaired workflow installer routing an
 ### Next Steps
 
 - None - task complete
+
+
+## Session 273: workflow-repair-2026-05-20-broken-carrier-links
+
+**Date**: 2026-05-20
+**Task**: workflow-repair-2026-05-20-broken-carrier-links
+**Branch**: `main`
+
+### Summary
+
+修正 workflow 安装产物中的执行卡相对路径，并把 Codex session-start 合同收敛为“仅在显式接线时才强制”这一边界；同步更新校验器、维护文档与回归测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8395164` | (see git log) |
+| `750a2c1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

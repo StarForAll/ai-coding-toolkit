@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-6.md`
-- **Total Sessions**: 272
+- **Total Sessions**: 273
 - **Last Active**: 2026-05-20
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-6.md` | ~935 | Active |
+| `journal-6.md` | ~969 | Active |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
@@ -34,6 +34,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 273 | 2026-05-20 | workflow-repair-2026-05-20-broken-carrier-links | `8395164`, `750a2c1` | `main` |
 | 272 | 2026-05-20 | workflow-repair-2026-05-20-codex-skills-empty | `b83828b` | `main` |
 | 271 | 2026-05-20 | workflow repair: fix stale routing and patch coverage | `4d2b6ef` | `main` |
 | 270 | 2026-05-20 | Refine workflow scan and repair skill contracts | `815c620` | `main` |
