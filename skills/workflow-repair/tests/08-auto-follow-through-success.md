@@ -18,8 +18,10 @@ Main-session repair with auto follow-through into normal close-out.
 ## Expected Key Behaviors
 
 - keep the normal repair verification flow unchanged before any auto close-out
+- re-enter the current repair task through `continue` before and after commit
 - reply `ok` only to the current repair task's one-shot commit confirmation
-- invoke the available Trellis finish-work command surface after commit
+- invoke the available Trellis finish-work surface only after `continue`
+  recommends it
 - update the repair log from `pending` to `reached-finish-work`
 
 ## Must Not

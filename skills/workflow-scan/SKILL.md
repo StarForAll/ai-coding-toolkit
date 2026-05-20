@@ -8,6 +8,11 @@ compatibility: Requires `trellis` on PATH, access to the temp project fixture, l
 
 ## Version History
 
+- **v2.5**: Refined the paired repair-side compatibility note for
+  `workflow-repair --auto`, clarifying that scan output remains schema-stable
+  while repair-side close-out may now loop through current-task `continue`,
+  fall back from command surfaces to same-session skill surfaces, and still
+  stay outside the shared scan/report schema
 - **v2.4**: Added paired repair-side compatibility note for
   `workflow-repair --auto`, clarifying that scan output stays schema-stable
   while repair-side close-out behavior may optionally continue automatically in

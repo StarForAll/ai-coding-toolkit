@@ -1,13 +1,17 @@
 ---
 name: workflow-repair
 description: Apply safe source-workflow fixes from a `WORKFLOW_QUESTIONS.md` report. Use when re-checking an embedded Trellis temp project report, consulting prior workflow issue history, and repairing `docs/workflows/新项目开发工作流/`.
-compatibility: Requires `trellis` on PATH, access to the temp project report plus the workflow source repo, ability to run `task.py create` and `task.py start`, and inline CLI execution with local filesystem access. Repair itself remains main-session inline, but it accepts validated reports produced by either inline `workflow-scan` runs or explicit `workflow-scan --agent` runs. When `--auto` is requested, the current session is expected to support the repository's normal task close-out flow, including commit confirmation and an available Trellis finish-work command surface; if unavailable, auto follow-through stops gracefully at the blocker.
+compatibility: Requires `trellis` on PATH, access to the temp project report plus the workflow source repo, ability to run `task.py create` and `task.py start`, and inline CLI execution with local filesystem access. Repair itself remains main-session inline, but it accepts validated reports produced by either inline `workflow-scan` runs or explicit `workflow-scan --agent` runs. When `--auto` is requested, the current session is expected to support the repository's normal task close-out flow, including current-task `continue` re-entry, commit confirmation, and a reachable Trellis `finish-work` surface exposed either as a command or as a same-session skill; if both surfaces are unavailable at the moment they are needed, auto follow-through stops gracefully at the blocker.
 ---
 
 # workflow-repair
 
 ## Version History
 
+- **v2.5**: Refined `--auto` into a current-task Trellis close-out loop driven
+  by `continue` first, added command-surface to skill-surface fallback rules
+  for `continue` / `finish-work`, and defined stop conditions when `continue`
+  closes the task or cannot safely advance further
 - **v2.4**: Added explicit `--auto` follow-through mode so repair can continue
   into task close-out only after successful repair verification, using current-
   task-scoped commit confirmation plus the platform's available Trellis
@@ -146,7 +150,7 @@ Use this skill when any of the following is true:
 | `report_path` | No | auto-detect | Absolute path to `WORKFLOW_QUESTIONS.md` |
 | `temp_project_path` | No | from report | Absolute path to the temp project root |
 | `target_focus` | No | empty | Specific WS-NNN IDs to prioritize |
-| `--auto` | No | off | After a successful repair run, continue through the current task's normal close-out flow instead of stopping at the repair summary. If that flow asks for one-shot commit confirmation for this task, reply `ok`, then invoke the available Trellis finish-work command surface once the task is actually ready. |
+| `--auto` | No | off | After a successful repair run, keep re-entering the current repair task's normal Trellis close-out flow through the available `continue` surface instead of stopping at the repair summary. If that flow asks for one-shot commit confirmation for this task, reply `ok`, keep using `continue` after commit until it recommends `finish-work` or closes the task, then invoke the available Trellis finish-work surface once the task is actually ready. |
 
 ### Report Path Resolution
 
@@ -191,11 +195,30 @@ Determine continuation mode from the current user request:
   reply `ok` exactly once and continue.
 - If any other interactive prompt appears, stop and report the blocker instead
   of guessing a reply.
-- After the current task's work is actually ready for wrap-up, invoke the
-  available Trellis finish-work command surface for the current
-  platform/session. Examples: `trellis-finish-work` or `/trellis:finish-work`.
-- If no Trellis finish-work command surface is available in the current
+- In `auto-follow-through` mode, the post-repair close-out path must re-enter
+  the current repair task's normal Trellis flow through the available
+  `continue` surface before attempting `finish-work`.
+- Treat a Trellis surface as available in this priority order:
+  1. callable platform command surface for the current session
+  2. same-session skill surface available in the current project/runtime
+  Only when both are unavailable should the surface be treated as missing.
+- For `continue`, examples include `trellis-continue` or
+  `/trellis:continue` as command surfaces, plus a same-session
+  `trellis-continue` skill surface when the platform exposes the behavior as a
+  skill instead of a command.
+- For `finish-work`, examples include `trellis-finish-work` or
+  `/trellis:finish-work` as command surfaces, plus a same-session
+  `trellis-finish-work` skill surface when the platform exposes the behavior as
+  a skill instead of a command.
+- If no Trellis `continue` surface is available in the current
   platform/session, stop and report the blocker. Do not simulate or replace
+  `continue`.
+- If no Trellis finish-work command surface is available in the current
+  platform/session, fall back to the same-session `trellis-finish-work` skill
+  surface when it exists.
+- If no Trellis `finish-work` surface is available in the current
+  platform/session after checking both the command surface and the same-session
+  skill surface, stop and report the blocker. Do not simulate or replace
   `finish-work`.
 - If the current task is not ready for commit or finish-work, stop after the
   repair summary and report the blocker instead of forcing completion.
@@ -578,39 +601,79 @@ This step has two sub-phases:
    run, stop the close-out flow and report that there is no repair-side work to
    commit or close out automatically.
 5. Continue into the current task's remaining required close-out flow instead
-   of stopping at the repair summary.
-6. If that flow asks for one-shot commit-plan confirmation for the current
+   of stopping at the repair summary. Start that re-entry with the available
+   Trellis `continue` surface for the current platform/session.
+6. Resolve the `continue` surface in this priority order:
+   - callable platform command surface for the current session
+   - same-session `trellis-continue` skill surface available in the current
+     project/runtime
+   If neither exists, stop the close-out flow and report the blocker. Do not
+   simulate or replace `continue`.
+7. Each time `continue` is invoked, inspect the resulting state before
+   deciding the next move:
+   - if it surfaces what appears to be the current repair task's one-shot
+     commit confirmation, route that prompt through Step 12.8 instead of treating
+     it as ordinary loop progress
+   - if it recommends or routes to `finish-work`, transition to the
+     `finish-work` surface-resolution step below
+   - if it clearly indicates the current repair task is already closed,
+     completed, archived, or otherwise no longer has remaining close-out work,
+     stop the loop and treat auto follow-through as complete with outcome
+     `reached-task-close` without another `continue`
+   - if it keeps the task in a current-task close-out stage that still needs
+     another normal Trellis re-entry, invoke `continue` again
+   - if the same repair task reaches 5 consecutive `continue` re-entries in
+     this auto-follow-through run without ending at `finish-work`,
+     `reached-task-close`, or a clearly new close-out checkpoint, stop and
+     report a blocker instead of risking an infinite loop. For this rule, a
+     "clearly new close-out checkpoint" means a state transition that is
+     explicit in the current task's close-out flow, such as:
+     from "awaiting commit confirmation" to "commit completed", from
+     "commit completed" to "finish-work recommended", or another clearly named
+     close-out milestone that shows the task progressed rather than merely
+     re-printing the same non-terminal state
+   - if it cannot be determined whether the task advanced, closed, or changed
+     stages safely, stop and report the blocker instead of looping blindly
+8. If the prompt routed here from Step 12.7 asks for one-shot commit-plan
+   confirmation for the current
    repair task, reply `ok` exactly once.
    Treat a prompt as that confirmation only when it is clearly about committing
    the current repair task and explicitly asks for a yes/confirm style response.
    If the close-out flow changes in a way that makes that one-shot
    identification unreliable, stop the close-out flow instead of risking
    over-confirmation.
-7. If any other interactive prompt appears, stop the close-out flow and report
+9. After a successful commit for the current repair task, return to the
+   `continue` loop instead of jumping directly to `finish-work`. The loop ends
+   only when `continue` recommends `finish-work`, or when `continue` itself
+   makes it clear that the current repair task has already been closed.
+10. If any other interactive prompt appears, stop the close-out flow and report
    the blocker. Do not guess, auto-answer, or reinterpret it as commit
    confirmation.
-8. Do not auto-answer unrelated prompts or broaden the commit scope beyond the
+11. Do not auto-answer unrelated prompts or broaden the commit scope beyond the
    current task.
-9. If no Trellis finish-work command surface is available in the current
-   platform/session, stop the close-out flow and report the blocker. Do not
-   simulate or replace `finish-work`.
-10. After the current task's work is committed and the task is otherwise ready,
-    invoke the available Trellis finish-work command surface for the current
-    platform/session. Examples: `trellis-finish-work` or
-    `/trellis:finish-work`.
-11. If commit or finish-work cannot safely proceed, stop the close-out flow and
+12. Resolve the `finish-work` surface in this priority order:
+    - callable platform command surface for the current session
+    - same-session `trellis-finish-work` skill surface available in the
+      current project/runtime
+    If neither exists, stop the close-out flow and report the blocker. Do not
+    simulate or replace `finish-work`.
+13. After the `continue` loop indicates that the current repair task's work is
+    committed and the task is otherwise ready, invoke the available
+    `finish-work` surface for the current platform/session.
+14. If commit or finish-work cannot safely proceed, stop the close-out flow and
     report the blocker instead of forcing completion.
     If `git commit` itself fails mechanically (for example hook rejection,
     conflict, or another commit-time error), leave the repair changes in place,
     record/report the blocker, and do not pretend the task was closed out.
-12. **Phase B**: update the repair log with the final
+15. **Phase B**: update the repair log with the final
     `Auto Follow-Through Outcome` value:
     - `reached-finish-work`, or
+    - `reached-task-close`, or
     - `stopped-with-blocker: <brief reason>`
     If the blocker happened after commit but before task wrap-up completed,
     record that fact in the blocker reason rather than introducing a separate
     outcome enum.
-13. If this run resumed after an older repair log for the same task was left at
+16. If this run resumed after an older repair log for the same task was left at
     `pending`, update that older continuation result to
     `interrupted: session-did-not-complete` before recording the new final
     outcome.
@@ -620,8 +683,8 @@ This step has two sub-phases:
     value, not from filename ordering alone.
     If the current process itself is interrupted before Phase B runs, the log
     may remain at `pending` until a later run performs this recovery step.
-14. Echo whether auto follow-through reached finish-work or stopped with a
-    blocker.
+17. Echo whether auto follow-through reached finish-work, reached normal task
+    closure, or stopped with a blocker.
 
 ## Decision State Semantics
 
@@ -646,12 +709,15 @@ This step has two sub-phases:
 | No findings in report | Write the repair log and an issue-history document with `total-attempted: 0` and all counts at 0. |
 | Fix scope violation | Skip the fix, record the violation in the repair log. Do not modify files outside the allowed three locations. |
 | Post-repair verification failure | Revert the change, record the failure and revert in the repair log. |
+| `--auto` requested but commit-confirmation identification is unreliable | Stop the close-out flow, report the blocker, and do not risk over-confirmation. |
 | `--auto` requested and a non-commit interactive prompt appears | Stop after the repair summary or current close-out point, report the blocker, and do not guess a reply. |
-| `--auto` requested but no finish-work command surface is available | Stop after the repair summary or current close-out point, report the blocker, and do not simulate finish-work. |
+| `--auto` requested but no continue surface is available | Stop after the repair summary or current close-out point, report the blocker, and do not simulate continue. |
+| `--auto` requested but no finish-work surface is available | Stop after the repair summary or current close-out point, report the blocker, and do not simulate finish-work. |
 | `--auto` requested but no effective repair succeeded | Stop after the repair summary, record that no effective repair was made, and do not continue to commit confirmation or finish-work. |
 | `--auto` requested but findings exist and all of them resolve to `ignored` | Stop after the repair summary, record that no repair-side work was produced, and do not continue to commit confirmation or finish-work. |
 | `--auto` requested but no repair-side code changes exist | Stop after the repair summary, record that no repair-side work exists to close out automatically, and do not continue to commit confirmation or finish-work. |
 | `--auto` requested but close-out is not ready or not safe | Stop after the repair summary, explain the blocker, and do not auto-confirm commits or invoke finish-work. |
+| `--auto` requested but continue cannot prove whether the task advanced or closed | Stop after the current close-out point, report the blocker, and do not keep looping blindly. |
 | User rejects all | Write the repair log and an issue-history document with all findings as `skipped`. No workflow source files modified. |
 
 ## Related Skills
@@ -683,6 +749,15 @@ Required persisted scenario files:
 - `tests/22-authorized-to-repair-partial-accept-with-auto.md`
 - `tests/23-target-focus-with-out-of-focus-high-severity.md`
 - `tests/24-auto-mixed-success-and-reverted.md`
+- `tests/25-auto-falls-back-to-skill-surfaces.md`
+- `tests/26-auto-stops-when-continue-surface-missing.md`
+- `tests/27-auto-continue-closes-task.md`
+- `tests/28-auto-stops-on-continue-loop-limit.md`
+- `tests/29-auto-mixed-surface-availability.md`
+- `tests/30-auto-stops-on-unreliable-commit-confirmation.md`
+- `tests/31-auto-continue-closes-task-before-commit.md`
+- `tests/32-auto-mixed-surface-availability-reversed.md`
+- `tests/33-auto-close-out-not-ready-or-safe.md`
 
 ## Examples
 
@@ -794,13 +869,17 @@ AI:
 7. Apply the confirmed repairs
 8. Complete post-repair strict review
 9. Write the repair log and `tmp/workflow-issues/0008.md`
-10. The current task reaches its normal commit-plan confirmation prompt
-11. Reply `ok`
-12. The current task's work commits land
-13. Invoke the available Trellis finish-work command surface for this session
+10. Re-enter the current repair task through the available `continue` surface
+11. The current task reaches its normal commit-plan confirmation prompt
+12. Reply `ok`
+13. The current task's work commits land
+14. Re-enter the current repair task through `continue` again
+15. `continue` now recommends `finish-work`
+16. Invoke the available `finish-work` surface for this session
     (for example `trellis-finish-work`; some platforms may expose
-    `/trellis:finish-work` instead)
-14. Echo that the repair task finished end to end
+    `/trellis:finish-work` instead, or expose the same behavior as a
+    `trellis-finish-work` skill surface)
+17. Echo that the repair task finished end to end
 ```
 
 ### Example 6: `--auto` Stops On Blocker
@@ -833,7 +912,11 @@ AI:
 4. Authorization Mode transitions to post-plan-confirmation
 5. Execute the confirmed repairs
 6. Post-repair checks pass
-7. Continue into Step 12 auto wrap-up for the dedicated repair task
+7. Re-enter the dedicated repair task through the available `continue`
+   surface
+8. Handle the current task's one-shot commit confirmation only if it appears
+9. Continue re-entering through `continue` until the task reaches
+   `finish-work` or `reached-task-close`
 ```
 
 ### Example 8: `target_focus` With `--auto`
@@ -849,5 +932,46 @@ AI:
 4. If an out-of-focus finding is higher severity, surface that clearly so the
    user sees the repair scope is narrowed rather than fully clean
 5. Execute the focused repair work only
-6. Continue or stop auto follow-through based on the focused scope rules
+6. If auto follow-through proceeds, re-enter the current task through
+   `continue` and apply the same focused-scope safety rules before any later
+   `finish-work` step
+7. Continue or stop auto follow-through based on the focused scope rules
+```
+
+### Example 9: Command Surface Missing, Skill Surface Available
+
+```text
+User: /workflow-repair --auto
+
+AI:
+1. Resolve and validate the report as usual
+2. Execute the confirmed repairs
+3. Current platform/session does not expose callable `/trellis:continue` or
+   `/trellis:finish-work` command surfaces
+4. Detect same-session skill surfaces `trellis-continue` and
+   `trellis-finish-work` in the current project/runtime
+5. Re-enter close-out through `trellis-continue`
+6. Reply `ok` to the repair task's one-shot commit confirmation
+7. Re-enter `trellis-continue` after commit until it recommends finish-work
+8. Invoke `trellis-finish-work`
+9. Report successful end-to-end follow-through instead of stopping on a false
+   "missing command surface" blocker
+```
+
+### Example 10: `continue` Closes The Task Before `finish-work`
+
+```text
+User: /workflow-repair --auto
+
+AI:
+1. Resolve and validate the report as usual
+2. Execute the confirmed repairs
+3. Re-enter the repair task through the available `continue` surface
+4. Reply `ok` to the current repair task's commit confirmation
+5. Re-enter the repair task through `continue` again
+6. `continue` now reports that the current repair task has already completed /
+   closed and there is no further close-out work for this task
+7. Stop the loop without another `continue`
+8. Report successful auto follow-through with final outcome
+   `reached-task-close`
 ```

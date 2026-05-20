@@ -45,6 +45,16 @@ workflow product source under `docs/workflows/新项目开发工作流/`.
 11. `--auto` depends on the current Trellis platform's close-out interaction
     flow. If that platform flow changes, the repair-side auto-follow-through
     behavior must be re-verified before being trusted.
+12. `--auto` close-out must re-enter the current repair task through the
+    normal Trellis `continue` surface before `finish-work`; it is not a direct
+    jump from repair summary to finish-work.
+13. When a Trellis close-out surface is needed, availability must be checked
+    in this order: callable platform command surface first, then same-session
+    skill surface in the current project/runtime. Only when both are absent may
+    the skill treat that surface as missing.
+14. `--auto` must stop its `continue` loop when the current repair task is
+    clearly closed/completed by `continue`, and must also stop when it cannot
+    prove whether another `continue` would be safe.
 
 ---
 
@@ -122,10 +132,30 @@ When `--auto` is requested, the skill must:
 - stop when the close-out flow changes in a way that makes single-shot commit
   confirmation unreliable, rather than risking over-confirmation
 - stop when any other interactive prompt appears; do not guess a reply
-- invoke the available Trellis finish-work command surface only after the task
+- re-enter close-out through the current task's `continue` surface before
+  attempting `finish-work`
+- keep using `continue` after commit until it either recommends `finish-work`
+  or clearly indicates that the current repair task has already closed
+- keep the `reply ok exactly once` action centralized in the commit-
+  confirmation step rather than duplicating it in the generic `continue`
+  inspection step
+- record normal task closure reached via `continue` distinctly from
+  `reached-finish-work`, rather than pretending finish-work ran when it did not
+- bound the `continue` loop with a fixed per-run ceiling so the skill does not
+  re-enter forever when safe advancement cannot be proved
+- stop rather than looping blindly when `continue` cannot prove whether the
+  task advanced, changed stage, or closed
+- invoke the available Trellis finish-work surface only after the task
   is actually ready for wrap-up
-- stop when no finish-work command surface exists in the current
+- stop when no `continue` surface exists in the current platform/session; do
+  not invent a substitute re-entry path
+- stop when no finish-work surface exists in the current
   platform/session; do not invent a substitute close-out path
+- support asymmetric command/skill surface availability as long as each needed
+  close-out action can still resolve to either a callable command surface or a
+  same-session skill surface at the moment it is needed
+- treat both directions of that asymmetric availability as valid:
+  command→skill and skill→command
 - keep repair-side agent behavior unchanged even if the request also mentions
   `--agent`; `--auto` must not be treated as agent-mode expansion
 - treat findings outside an explicit `target_focus` as outside the close-out
@@ -244,8 +274,17 @@ When editing `skills/workflow-repair/`, confirm all of the following:
   guessing a reply
 - `--auto` now explicitly stops when one-shot commit confirmation cannot be
   identified reliably
-- `--auto` now explicitly stops when no finish-work command surface is
+- `--auto` now explicitly uses `continue` to drive post-repair close-out
+- `--auto` now explicitly falls back from command surface to same-session
+  skill surface for both `continue` and `finish-work`
+- `--auto` now explicitly stops when no finish-work surface is
   available
+- `--auto` now explicitly stops when no continue surface is available
+- `--auto` now explicitly stops when `continue` cannot prove whether the task
+  advanced or closed safely
+- `--auto` now explicitly caps same-task `continue` re-entry loops
+- `--auto` now explicitly recognizes the case where `continue` itself closes
+  the current repair task
 - repeated findings now force broader closure or escalation
 - same-pattern sweep behavior is still documented and logged
 - contract-surface coverage and repeat-trigger checks are still documented in the plan/log artifacts

@@ -449,8 +449,23 @@ validate_workflow_scan_repair_contract() {
   grep -Fq "yes/confirm style response" "$repair_skill" || fail "$repair_skill missing commit-confirmation recognition guidance"
   grep -Fq "never transitioned past" "$repair_skill" || fail "$repair_skill missing explicit scope note for the analysis-only no-op rule"
   grep -Fq "one-shot" "$repair_skill" || fail "$repair_skill missing explicit unreliable-identification guard for commit confirmation"
+  grep -Fq "commit-confirmation identification is unreliable" "$repair_skill" || fail "$repair_skill missing explicit blocked behavior for unreliable commit-confirmation identification"
   grep -Fq "If any other interactive prompt appears" "$repair_skill" || fail "$repair_skill missing explicit stop rule for non-commit prompts"
   grep -Fq "If no Trellis finish-work command surface is available" "$repair_skill" || fail "$repair_skill missing explicit blocked behavior without finish-work command surface"
+  grep -Fq "same-session skill surface available in the current project/runtime" "$repair_skill" || fail "$repair_skill missing command-to-skill fallback priority rule"
+  grep -Fq "same-session \`trellis-continue\` skill surface available" "$repair_skill" || fail "$repair_skill missing explicit continue skill-surface fallback rule"
+  grep -Fq "same-session \`trellis-finish-work\` skill surface available" "$repair_skill" || fail "$repair_skill missing explicit finish-work skill-surface fallback rule"
+  grep -Fq "If no Trellis \`continue\` surface is available" "$repair_skill" || fail "$repair_skill missing explicit blocked behavior without continue surface"
+  grep -Fq "Start that re-entry with the available" "$repair_skill" || fail "$repair_skill missing explicit continue-first close-out loop rule"
+  grep -Fq "After a successful commit for the current repair task, return to the" "$repair_skill" || fail "$repair_skill missing explicit post-commit continue-loop rule"
+  grep -Fq "reached-task-close" "$repair_skill" || fail "$repair_skill missing explicit continue-closes-task success outcome"
+  grep -Fq "5 consecutive \`continue\` re-entries" "$repair_skill" || fail "$repair_skill missing bounded continue-loop ceiling"
+  grep -Fq "tests/28-auto-stops-on-continue-loop-limit.md" "$repair_skill" || fail "$repair_skill missing persisted scenario declaration for continue-loop ceiling"
+  grep -Fq "tests/29-auto-mixed-surface-availability.md" "$repair_skill" || fail "$repair_skill missing persisted scenario declaration for mixed-surface availability"
+  grep -Fq "tests/30-auto-stops-on-unreliable-commit-confirmation.md" "$repair_skill" || fail "$repair_skill missing persisted scenario declaration for unreliable commit-confirmation identification"
+  grep -Fq "tests/31-auto-continue-closes-task-before-commit.md" "$repair_skill" || fail "$repair_skill missing persisted scenario declaration for first-continue task closure"
+  grep -Fq "tests/32-auto-mixed-surface-availability-reversed.md" "$repair_skill" || fail "$repair_skill missing persisted scenario declaration for reversed mixed-surface availability"
+  grep -Fq "tests/33-auto-close-out-not-ready-or-safe.md" "$repair_skill" || fail "$repair_skill missing persisted scenario declaration for unsafe close-out readiness"
   grep -Fq "interrupted: session-did-not-complete" "$repair_skill" || fail "$repair_skill missing stale-pending continuation recovery rule"
   grep -Fq "latest" "$repair_skill" || fail "$repair_skill missing explicit resume-detection source for stale pending recovery"
   grep -Fq "repair log still shows" "$repair_skill" || fail "$repair_skill missing explicit pending-log signal for resumed-run detection"
@@ -512,6 +527,7 @@ validate_workflow_scan_repair_contract() {
   grep -Fq "\`pending\` until the continuation result is known" "$repair_log_template" || fail "$repair_log_template missing pending-to-final continuation logging rule"
   grep -Fq "\`not-applicable\`" "$repair_log_template" || fail "$repair_log_template missing not-applicable rule for stop-after-summary mode"
   grep -Fq "interrupted: session-did-not-complete" "$repair_log_template" || fail "$repair_log_template missing interrupted continuation recovery state"
+  grep -Fq "reached-task-close" "$repair_log_template" || fail "$repair_log_template missing explicit continuation outcome for normal task closure"
   grep -Fq "stopped-with-blocker: <brief reason> | interrupted: session-did-not-complete" "$repair_log_template" || fail "$repair_log_template missing single-line continuation outcome value set"
   grep -Fq "total-succeeded + total-failed + total-reverted" "$repair_log_template" || fail "$repair_log_template missing explicit total-attempted definition"
   grep -Fq "highest \`repair-timestamp\` value" "$repair_log_template" || fail "$repair_log_template missing explicit latest-log selection rule"
@@ -556,7 +572,16 @@ validate_workflow_scan_repair_contract() {
     "skills/workflow-repair/tests/21-auto-all-findings-ignored.md" \
     "skills/workflow-repair/tests/22-authorized-to-repair-partial-accept-with-auto.md" \
     "skills/workflow-repair/tests/23-target-focus-with-out-of-focus-high-severity.md" \
-    "skills/workflow-repair/tests/24-auto-mixed-success-and-reverted.md"
+    "skills/workflow-repair/tests/24-auto-mixed-success-and-reverted.md" \
+    "skills/workflow-repair/tests/25-auto-falls-back-to-skill-surfaces.md" \
+    "skills/workflow-repair/tests/26-auto-stops-when-continue-surface-missing.md" \
+    "skills/workflow-repair/tests/27-auto-continue-closes-task.md" \
+    "skills/workflow-repair/tests/28-auto-stops-on-continue-loop-limit.md" \
+    "skills/workflow-repair/tests/29-auto-mixed-surface-availability.md" \
+    "skills/workflow-repair/tests/30-auto-stops-on-unreliable-commit-confirmation.md" \
+    "skills/workflow-repair/tests/31-auto-continue-closes-task-before-commit.md" \
+    "skills/workflow-repair/tests/32-auto-mixed-surface-availability-reversed.md" \
+    "skills/workflow-repair/tests/33-auto-close-out-not-ready-or-safe.md"
   do
     [ -f "$test_file" ] || fail "missing $test_file"
     grep -Fq "## Purpose" "$test_file" || fail "$test_file missing Purpose section"

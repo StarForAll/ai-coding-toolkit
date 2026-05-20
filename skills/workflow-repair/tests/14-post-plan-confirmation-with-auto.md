@@ -10,7 +10,7 @@ follow-through.
 
 User input:
 
-> Run `/workflow-repair --auto` to analyze first. After the correction plan is shown, the user explicitly accepts all or partial execution, repairs succeed sufficiently, and the close-out flow remains safe.
+> Run `/workflow-repair --auto` to analyze first. After the correction plan is shown, the user explicitly accepts all or partial execution, repairs succeed sufficiently, and the close-out flow remains safe with the normal `continue`-driven progression.
 
 ## Expected Mode
 
@@ -23,11 +23,16 @@ Analysis-first repair run that transitions into execution-time
 - switch authorization state from `analysis-only` to `post-plan-confirmation`
   only after explicit approval
 - execute the confirmed repairs
-- continue into Step 12 auto wrap-up only after repair execution actually ran
+- re-enter the current repair task through `continue` only after repair
+  execution actually ran
+- keep using `continue` after commit until the task reaches `finish-work` or
+  `reached-task-close`
 
 ## Must Not
 
 - must not treat `--auto` as active before explicit execution approval
 - must not skip the Step 8 approval boundary
+- must not jump directly from post-plan-confirmation execution to
+  `finish-work` without the `continue` loop
 - must not lose the continuation-mode disclosure when transitioning into
   `post-plan-confirmation`

@@ -104,8 +104,11 @@ The above plan will modify files ONLY within:
 If the current user instruction already explicitly says to fix real confirmed issues, the skill may treat that instruction as standing authorization after this plan is echoed. Otherwise it must stop here and wait for a decision.
 
 If continuation mode = `auto-follow-through`, a successful repair run will then
-continue into the current task's normal close-out flow. That continuation still
-requires the usual commit-readiness and finish-work safety gates.
+re-enter the current task's normal close-out flow through the available
+`continue` surface. That continuation still requires the usual commit-readiness
+and finish-work safety gates, and may stop early if `continue` itself closes
+the task or if no safe `continue` / `finish-work` surface is available, in
+which case it must stop and report a blocker.
 
 Authorization Mode in this plan reflects plan-presentation time only. If
 execution later transitions to `post-plan-confirmation`, treat the repair log
@@ -151,9 +154,9 @@ Awaiting your decision.
 7. Every `adopted` and `trellis-native` block must explain the root-cause class and why the plan is broad enough to avoid a repeated trigger.
 8. The plan must name the dedicated repair task and report how many prior issue-history docs were loaded from `tmp/workflow-issues/`.
 9. If continuation mode = `auto-follow-through`, the plan must state that auto
-   follow-through happens only after successful repair verification and only
-   within the current task's normal close-out flow, and that it will stop and
-   report a blocker if close-out cannot proceed safely.
+   follow-through happens only after successful repair verification, re-enters
+   the current task through the available `continue` surface, and stops with a
+   reported blocker if `continue` / `finish-work` cannot proceed safely.
 10. If the current run began as `analysis-only` and the user explicitly accepts
    execution in Step 8, the plan/log state may transition to
    `post-plan-confirmation` for the actual repair execution.
