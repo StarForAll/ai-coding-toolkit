@@ -967,3 +967,36 @@ Validated /tmp/trellis-0.5.17-2 findings, repaired workflow installer routing an
 ### Next Steps
 
 - None - task complete
+
+
+## Session 274: Repair workflow routing drift for skill-only entries
+
+**Date**: 2026-05-20
+**Task**: Repair workflow routing drift for skill-only entries
+**Branch**: `main`
+
+### Summary
+
+Repaired the workflow's Claude/OpenCode routing contract so skill-only carriers are no longer advertised as missing slash commands, added regression coverage, and captured the installer/command-doc contract in spec.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a4c555c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
