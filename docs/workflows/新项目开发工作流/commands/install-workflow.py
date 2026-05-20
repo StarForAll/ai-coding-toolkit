@@ -1439,18 +1439,18 @@ def inject_workflow_breadcrumb_patch(src: Path, root: Path, *, dry_run: bool, pr
 
 
 def _apply_patch_workflow_phase(src: Path, root: Path, *, dry_run: bool) -> bool:
-    """Apply patch-workflow-phase.py to the deployed workflow_phase.py helper."""
+    """Apply patch-workflow-phase-strong-gate.py to the deployed helper."""
     import importlib.util
 
     target_wf_phase = root / ".trellis" / "scripts" / "common" / "workflow_phase.py"
-    patch_script = src / "shell" / "patch-workflow-phase.py"
+    patch_script = src / "shell" / "patch-workflow-phase-strong-gate.py"
 
     if not target_wf_phase.exists():
         info("[Shared] workflow_phase.py 不存在，跳过强门禁补丁")
         return False
 
     if not patch_script.exists():
-        warn("[Shared] patch-workflow-phase.py 不存在，跳过强门禁补丁")
+        warn("[Shared] patch-workflow-phase-strong-gate.py 不存在，跳过强门禁补丁")
         return False
 
     if dry_run:
@@ -1459,7 +1459,7 @@ def _apply_patch_workflow_phase(src: Path, root: Path, *, dry_run: bool) -> bool
 
     spec = importlib.util.spec_from_file_location("patch_workflow_phase", patch_script)
     if spec is None or spec.loader is None:
-        warn("[Shared] patch-workflow-phase.py 加载失败")
+        warn("[Shared] patch-workflow-phase-strong-gate.py 加载失败")
         return False
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -1470,7 +1470,7 @@ def _apply_patch_workflow_phase(src: Path, root: Path, *, dry_run: bool) -> bool
             ok("[Shared] workflow_phase.py 强门禁补丁已应用")
         return result
 
-    warn("[Shared] patch-workflow-phase.py 缺少 patch_workflow_phase 函数")
+    warn("[Shared] patch-workflow-phase-strong-gate.py 缺少 patch_workflow_phase 函数")
     return False
 
 
@@ -1693,185 +1693,33 @@ def _apply_patch_task_create_preserve_active(src: Path, root: Path, *, dry_run: 
 
 
 def patch_task_status_views(root: Path, *, dry_run: bool) -> bool:
-    """Patch task runtime views to read workflow-state directly.
+    """Patch task runtime views to read workflow-state directly."""
+    import importlib.util
 
-    Task list / queue views are observational. They should not execute
-    `workflow-state.py route` per task because that hides route failures behind a
-    silent fallback and makes list performance scale with router work.
-    """
-    tasks_path = root / ".trellis" / "scripts" / "common" / "tasks.py"
-    task_queue_path = root / ".trellis" / "scripts" / "common" / "task_queue.py"
-    task_cli_path = root / ".trellis" / "scripts" / "task.py"
+    patch_script = Path(__file__).resolve().parent / "shell" / "patch-task-status-view-strong-gate.py"
+    if not patch_script.exists():
+        warn("[Shared] patch-task-status-view-strong-gate.py 不存在，跳过补丁")
+        return False
 
-    any_patched = False
+    if dry_run:
+        info("[Shared] 将对 task runtime views 应用 strong-gate task-status-view 补丁")
+        return True
 
-    if tasks_path.exists():
-        content = tasks_path.read_text(encoding="utf-8")
-        patched = content
-        helper = """
-WORKFLOW_STATE_FILE_NAME = "workflow-state.json"
-TERMINAL_TASK_STATUSES = {"completed", "done", "archived"}
+    spec = importlib.util.spec_from_file_location("patch_task_status_view_strong_gate", patch_script)
+    if spec is None or spec.loader is None:
+        warn("[Shared] patch-task-status-view-strong-gate.py 加载失败")
+        return False
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
 
+    if hasattr(module, "patch_task_status_views"):
+        result = module.patch_task_status_views(root)
+        if result:
+            ok("[Shared] task runtime views 强门禁补丁已应用")
+        return result
 
-# [workflow-embed-patch:strong-gate-task-status-view]
-def _shorten_status_detail(value: str, limit: int = 72) -> str:
-    collapsed = " ".join(value.split())
-    if len(collapsed) <= limit:
-        return collapsed
-    return collapsed[: limit - 1] + "…"
-
-
-def _workflow_state_summary(state: dict) -> str | None:
-    summary_parts: list[str] = []
-    stage_status = state.get("stage_status")
-    if isinstance(stage_status, str) and stage_status and stage_status != "in_progress":
-        summary_parts.append(f"status={stage_status}")
-
-    current_block = state.get("current_block")
-    if isinstance(current_block, str) and current_block.strip():
-        summary_parts.append(f"block={_shorten_status_detail(current_block)}")
-
-    awaiting = state.get("awaiting_user_confirmation")
-    if awaiting is True and stage_status != "awaiting_user_confirmation":
-        summary_parts.append("awaiting_user_confirmation=true")
-
-    return " | ".join(summary_parts) if summary_parts else None
-
-
-def _display_status(task_dir: Path, data: dict) -> tuple[str, str | None]:
-    state = read_json(task_dir / WORKFLOW_STATE_FILE_NAME)
-    if isinstance(state, dict):
-        stage = state.get("stage")
-        if isinstance(stage, str) and stage:
-            return stage, _workflow_state_summary(state)
-        return "repair_needed", "repair_needed"
-
-    raw_status = data.get("status", "unknown")
-    if raw_status in TERMINAL_TASK_STATUSES:
-        return "completed", None
-    if isinstance(raw_status, str) and raw_status:
-        return "needs-init", None
-    return "unknown", None
-"""
-        legacy_helper = """
-WORKFLOW_STATE_FILE_NAME = "workflow-state.json"
-TERMINAL_TASK_STATUSES = {"completed", "done", "archived"}
-
-
-# [workflow-embed-patch:strong-gate-task-status-view]
-def _display_status(task_dir: Path, data: dict) -> str:
-    state = read_json(task_dir / WORKFLOW_STATE_FILE_NAME)
-    if isinstance(state, dict):
-        stage = state.get("stage")
-        if isinstance(stage, str) and stage:
-            return stage
-        return "repair_needed"
-
-    raw_status = data.get("status", "unknown")
-    if raw_status in TERMINAL_TASK_STATUSES:
-        return "completed"
-    if isinstance(raw_status, str) and raw_status:
-        return "needs-init"
-    return "unknown"
-"""
-        if (
-            _TASK_STATUS_VIEW_PATCH_MARKER not in patched
-            or "_workflow_state_summary(state)" not in patched
-        ):
-            anchor = "\n\ndef load_task(task_dir: Path) -> TaskInfo | None:\n"
-            if legacy_helper.strip() in patched:
-                patched = patched.replace(legacy_helper.strip(), helper.strip(), 1)
-            elif anchor in patched:
-                patched = patched.replace(anchor, "\n\n" + helper.rstrip() + anchor, 1)
-        if 'data["_workflow_display_extra"] = display_extra' not in patched:
-            patched = patched.replace(
-                '    if not data:\n        return None\n\n    return TaskInfo(\n',
-                '    if not data:\n        return None\n\n'
-                '    display_status, display_extra = _display_status(task_dir, data)\n'
-                '    data["_workflow_display_extra"] = display_extra\n\n'
-                '    return TaskInfo(\n',
-                1,
-            )
-            patched = patched.replace(
-                '    if not data:\n        return None\n    return TaskInfo(\n',
-                '    if not data:\n        return None\n'
-                '    display_status, display_extra = _display_status(task_dir, data)\n'
-                '    data["_workflow_display_extra"] = display_extra\n'
-                '    return TaskInfo(\n',
-                1,
-            )
-        patched = patched.replace(
-            '        status=data.get("status", "unknown"),\n',
-            '        status=display_status,\n',
-            1,
-        )
-        patched = patched.replace(
-            '        status=_display_status(task_dir, data),\n',
-            '        status=display_status,\n',
-            1,
-        )
-        if patched != content:
-            if dry_run:
-                info("[Shared] 将补丁 common/tasks.py → 任务视图改为 workflow-state stage + strong-gate 摘要")
-            else:
-                tasks_path.write_text(patched, encoding="utf-8")
-                ok("[Shared] common/tasks.py 已补丁 → 任务视图改为 workflow-state stage + strong-gate 摘要")
-            any_patched = True
-
-    if task_queue_path.exists():
-        content = task_queue_path.read_text(encoding="utf-8")
-        patched = content
-        target = '    return list_tasks_by_status("planning", repo_root)\n'
-        replacement = (
-            f"    {_TASK_STATUS_VIEW_PATCH_MARKER}\n"
-            "    # Under strong-gate installs, active task views are stage-based.\n"
-            "    # \"Pending\" therefore means every non-archived active task rather than\n"
-            "    # the legacy raw task.json status=planning subset.\n"
-            "    return list_tasks_by_status(None, repo_root)\n"
-        )
-        if _TASK_STATUS_VIEW_PATCH_MARKER not in patched and target in patched:
-            patched = patched.replace(target, replacement, 1)
-        if patched != content:
-            if dry_run:
-                info("[Shared] 将补丁 common/task_queue.py → list_pending_tasks 不再依赖 planning")
-            else:
-                task_queue_path.write_text(patched, encoding="utf-8")
-                ok("[Shared] common/task_queue.py 已补丁 → list_pending_tasks 不再依赖 planning")
-            any_patched = True
-
-    if task_cli_path.exists():
-        content = task_cli_path.read_text(encoding="utf-8")
-        patched = content.replace(
-            "  --status, -s <s>     Filter by status (planning, in_progress, review, completed)\n",
-            "  --status, -s <s>     Filter by workflow display status / stage (e.g. needs-init, feasibility, design, completed)\n",
-        )
-        patched = patched.replace(
-            '            print(f"{prefix}{dir_name}/ ({t.status}){pkg_tag}{progress}{marker}")\n',
-            '            extra = t.raw.get("_workflow_display_extra")\n'
-            '            extra_tag = f" {{{extra}}}" if extra else ""\n'
-            '            print(f"{prefix}{dir_name}/ ({t.status}){pkg_tag}{progress}{extra_tag}{marker}")\n',
-            1,
-        )
-        patched = patched.replace(
-            '            print(f"{prefix}{dir_name}/ ({t.status}){pkg_tag}{progress} [{colored(t.assignee or \'-\', Colors.CYAN)}]{marker}")\n',
-            '            extra = t.raw.get("_workflow_display_extra")\n'
-            '            extra_tag = f" {{{extra}}}" if extra else ""\n'
-            '            print(f"{prefix}{dir_name}/ ({t.status}){pkg_tag}{progress}{extra_tag} [{colored(t.assignee or \'-\', Colors.CYAN)}]{marker}")\n',
-            1,
-        )
-        patched = patched.replace(
-            "  python3 task.py list --mine --status in_progress   # List my in-progress tasks\n",
-            "  python3 task.py list --mine --status check         # List my tasks currently in check stage\n",
-        )
-        if patched != content:
-            if dry_run:
-                info("[Shared] 将更新 task.py 任务列表展示与 --status 帮助文本 → 使用 workflow display status / stage")
-            else:
-                task_cli_path.write_text(patched, encoding="utf-8")
-                ok("[Shared] task.py 任务列表展示与 --status 帮助文本已更新 → 使用 workflow display status / stage")
-            any_patched = True
-
-    return any_patched
+    warn("[Shared] patch-task-status-view-strong-gate.py 缺少 patch_task_status_views 函数")
+    return False
 
 
 # ── Issue 1+7: patch deployed inject-workflow-state.py hook ──

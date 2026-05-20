@@ -53,10 +53,12 @@ HELPER_SCRIPTS = [
     "ownership-proof-validate.py",
     "source-watermark-guard.py",
     "patch-workflow-phase.py",
+    "patch-workflow-phase-strong-gate.py",
     "patch-inject-workflow-state.py",
     "patch-session-start-strong-gate.py",
     "patch-task-start-strong-gate.py",
     "patch-task-create-preserve-active.py",
+    "patch-task-status-view-strong-gate.py",
 ]
 RETIRED_HELPER_SCRIPTS = [
     "record-session-helper.py",

@@ -506,6 +506,78 @@ Repair-path boundary:
 - `--force` may restore from stored baseline backup only when the target project is still within the same structural model
 - neither `--merge` nor `--force` should be documented as the main path for structural breaks
 
+#### 3.4.1 Critical Runtime Patch Capability Contract
+
+The install-record field `workflow-installed.json["critical_runtime_patches"]`
+tracks **runtime patch capabilities**, not a one-to-one list of helper-script
+filenames that must appear on disk unchanged.
+
+Contract:
+
+- each capability name must map to at least one workflow-managed repair surface:
+  - a distributed helper script under `docs/workflows/<name>/commands/shell/*.py`, or
+  - an installer / upgrade patch entrypoint that is intentionally sourced from
+    such a helper script, or
+  - a validator-side marker check whose target-project patch carrier is already
+    defined elsewhere in the same source contract
+- when a capability is implemented via helper script distribution, the helper
+  must also appear in:
+  - `workflow_assets.py` helper enumeration
+  - install-record `scripts`
+  - installer deployment behavior
+  - upgrade repair behavior
+  - regression tests
+- do not leave a capability name in `critical_runtime_patches` after renaming,
+  merging, or splitting its helper-script carrier unless the new carrier mapping
+  is updated in the same change
+- scan / audit / repair flows must judge missing-patch defects from the
+  **capability-to-carrier mapping**, not from a naive "capability name must
+  equal helper filename stem" assumption
+
+Validation & error behavior:
+
+- if a capability's mapped helper / carrier is absent from source enumeration or
+  deployment logic, treat that as contract drift
+- if the target-project patched runtime carrier lacks the required patch marker,
+  treat that as a real missing critical runtime patch
+- if runtime behavior is patched correctly but source helper enumeration no
+  longer explains how the capability lands on disk, treat that as a source-side
+  contract defect to fix before the next workflow release
+
+Good / Base / Bad:
+
+- Good: capability names, helper enumeration, deployment logic, and validator
+  checks all describe the same patch surface
+- Base: one capability maps to a wrapper helper that delegates to a legacy
+  implementation helper, but both source/deploy/test surfaces stay aligned
+- Bad: install record advertises a critical capability while no source helper or
+  repair entrypoint explains how that capability is deployed or repaired
+
+Tests Required:
+
+- install regression asserts that every distributed helper required by the
+  current `critical_runtime_patches` contract is deployed
+- runtime validation regression fails when a capability's patched target carrier
+  is missing its marker
+- source-side regression covers renamed / wrapper helper carriers so capability
+  names and helper filenames cannot silently drift apart
+
+Wrong vs Correct:
+
+#### Wrong
+
+- assume every `critical_runtime_patches` item must have an identical helper
+  filename stem on disk
+- rename or wrap a patch helper without updating helper enumeration, installer,
+  upgrade repair, and tests together
+
+#### Correct
+
+- treat `critical_runtime_patches` as runtime patch capability names with an
+  explicit source-to-carrier mapping
+- update helper enumeration, deployment, upgrade repair, validation, and tests
+  in the same change whenever a capability's carrier changes
+
 #### 3.4.2 Phase-Gate Helper Distribution Contract
 
 When a workflow introduces or changes a helper script that is invoked as a mandatory phase gate:

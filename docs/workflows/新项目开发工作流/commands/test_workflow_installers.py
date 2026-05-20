@@ -25,6 +25,8 @@ UPGRADE_SCRIPT = COMMANDS_DIR / "upgrade-compat.py"
 UNINSTALL_SCRIPT = COMMANDS_DIR / "uninstall-workflow.py"
 PATCH_TASK_CREATE_SCRIPT = COMMANDS_DIR / "shell" / "patch-task-create-preserve-active.py"
 PATCH_WORKFLOW_PHASE_SCRIPT = COMMANDS_DIR / "shell" / "patch-workflow-phase.py"
+PATCH_WORKFLOW_PHASE_STRONG_GATE_SCRIPT = COMMANDS_DIR / "shell" / "patch-workflow-phase-strong-gate.py"
+PATCH_TASK_STATUS_VIEW_STRONG_GATE_SCRIPT = COMMANDS_DIR / "shell" / "patch-task-status-view-strong-gate.py"
 EMBED_CONFIRM_ENV = "WORKFLOW_EMBED_EXECUTOR_CONFIRMED"
 ATTEMPT_RECORD_NAME = "workflow-embed-attempt.json"
 PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
@@ -1104,6 +1106,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         for helper_name in HELPER_SCRIPTS:
             helper_path = fixture / ".trellis" / "scripts" / "workflow" / helper_name
             self.assertTrue(helper_path.exists(), f"{helper_name} should be deployed")
+        self.assertTrue(PATCH_WORKFLOW_PHASE_STRONG_GATE_SCRIPT.exists())
+        self.assertTrue(PATCH_TASK_STATUS_VIEW_STRONG_GATE_SCRIPT.exists())
         change_card = fixture / ".trellis" / "workflow-docs" / "需求变更管理执行卡.md"
         ownership_card = fixture / ".trellis" / "workflow-docs" / "源码水印与归属证据链执行卡.md"
         self.assertTrue(change_card.exists(), "需求变更管理执行卡.md should be deployed")

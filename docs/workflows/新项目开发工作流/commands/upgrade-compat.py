@@ -693,23 +693,23 @@ def detect_conflicts_workflow_doc(src: Path, root: Path, *, profile: str = DEFAU
 
 
 def _apply_patch_workflow_phase_upgrade(src: Path, dst_scripts: Path) -> bool:
-    """Apply patch-workflow-phase.py to the deployed workflow_phase.py helper (upgrade mode)."""
+    """Apply patch-workflow-phase-strong-gate.py to the deployed helper (upgrade mode)."""
     import importlib.util
 
     target_wf_phase = dst_scripts / "workflow_phase.py"
-    patch_script = src / "shell" / "patch-workflow-phase.py"
+    patch_script = src / "shell" / "patch-workflow-phase-strong-gate.py"
 
     if not target_wf_phase.exists():
         info("[Shared] workflow_phase.py 不存在，跳过强门禁补丁")
         return False
 
     if not patch_script.exists():
-        warn("[Shared] patch-workflow-phase.py 不存在，跳过强门禁补丁")
+        warn("[Shared] patch-workflow-phase-strong-gate.py 不存在，跳过强门禁补丁")
         return False
 
     spec = importlib.util.spec_from_file_location("patch_workflow_phase", patch_script)
     if spec is None or spec.loader is None:
-        warn("[Shared] patch-workflow-phase.py 加载失败")
+        warn("[Shared] patch-workflow-phase-strong-gate.py 加载失败")
         return False
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -720,7 +720,7 @@ def _apply_patch_workflow_phase_upgrade(src: Path, dst_scripts: Path) -> bool:
             ok("[Shared] workflow_phase.py 强门禁补丁已应用")
         return result
 
-    warn("[Shared] patch-workflow-phase.py 缺少 patch_workflow_phase 函数")
+    warn("[Shared] patch-workflow-phase-strong-gate.py 缺少 patch_workflow_phase 函数")
     return False
 
 
