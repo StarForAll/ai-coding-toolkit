@@ -1034,3 +1034,36 @@ Strengthened the workflow-scan/workflow-repair shared report contract, added val
 ### Next Steps
 
 - None - task complete
+
+
+## Session 276: Refine workflow-scan agent mode contract
+
+**Date**: 2026-05-20
+**Task**: Refine workflow-scan agent mode contract
+**Branch**: `main`
+
+### Summary
+
+Refined workflow-scan's optional agent mode contract, added helper handoff guidance and scenario tests, aligned workflow-repair intake wording, and hardened skill validation for public-vs-repo-local surfaces and agent-mode edge cases.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `303ff33` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

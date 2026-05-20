@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-6.md`
-- **Total Sessions**: 275
+- **Total Sessions**: 276
 - **Last Active**: 2026-05-20
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-6.md` | ~1036 | Active |
+| `journal-6.md` | ~1069 | Active |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
@@ -34,6 +34,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 276 | 2026-05-20 | Refine workflow-scan agent mode contract | `303ff33` | `main` |
 | 275 | 2026-05-20 | Harden workflow scan repair contract validation | `1f3930b`, `5f4cabd` | `main` |
 | 274 | 2026-05-20 | Repair workflow routing drift for skill-only entries | `a4c555c` | `main` |
 | 273 | 2026-05-20 | workflow-repair-2026-05-20-broken-carrier-links | `8395164`, `750a2c1` | `main` |
