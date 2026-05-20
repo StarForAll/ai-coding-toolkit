@@ -1000,3 +1000,37 @@ Repaired the workflow's Claude/OpenCode routing contract so skill-only carriers 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 275: Harden workflow scan repair contract validation
+
+**Date**: 2026-05-20
+**Task**: Harden workflow scan repair contract validation
+**Branch**: `main`
+
+### Summary
+
+Strengthened the workflow-scan/workflow-repair shared report contract, added validator coverage for schema/count drift, and closed the workflow-scan-report-contract-repair task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1f3930b` | (see git log) |
+| `5f4cabd` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
