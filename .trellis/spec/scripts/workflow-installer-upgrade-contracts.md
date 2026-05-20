@@ -204,6 +204,13 @@ Target-project deployed copies are derived state:
 - target-project baseline guide patches under `.trellis/spec/guides/*.md` when the workflow explicitly repairs trellis-native stale operator guidance
 - install-only collaboration reminder: root-level `todo.txt`
 
+Entry-surface contract:
+
+- user-facing routing or recommendation text must only advertise an entry surface that is actually deployed for that CLI
+- if a Claude/OpenCode capability is carried only by `.claude/skills/*/SKILL.md` or `.opencode/skills/*/SKILL.md`, and no matching `.claude/commands/trellis/*.md` / `.opencode/commands/trellis/*.md` command carrier exists, the text must describe it as a skill or natural-language trigger, not as `/trellis:<name>`
+- `.agents/skills/` may still participate as a shared distribution or drift-check surface, but it does not by itself justify advertising a Claude/OpenCode slash-command entry
+- installer-managed `AGENTS.md` routing blocks, command-doc next-step tables, mapping docs, generated mindmaps, and installer regression fixtures must stay aligned on this entry-surface distinction
+
 Special rule for `todo.txt`:
 
 - `install-workflow.py` intentionally keeps `ensure_project_todo()` and may create a root-level `todo.txt`

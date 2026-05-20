@@ -325,8 +325,8 @@ _NL_ROUTING_SECTION = """\
 | 调研、研究、查资料、查文档、看源码、搜代码、搜资料、技术调研、仓库分析 | 调用当前 CLI 的 `trellis-research` 子代理能力（若平台支持） | 描述研究意图，或显式触发 `trellis-research` agent | implementation 内部 research 链入口；用于代码/文档/仓库检索，不等于正式阶段命令 |
 | 开始写代码、实现、开发、编码、动手、修这个功能、开始改代码 | `/trellis:continue` | 描述当前实现意图，或显式触发 `trellis-continue` skill | implementation 的公开重入入口。没有对称的 `/trellis:implementation` 命令；continue 会先做 Phase Router 判断，再在当前 task 上执行 implementation 内部链 |
 | 开始、新会话、继续、下一步 | `/trellis:continue` | 描述当前意图，或显式触发 `trellis-continue` skill | Phase Router 自动检测；legacy `/trellis:start` 仅兼容旧目标项目 |
-| 卡住了、反复出错、死循环、调不通 | `/trellis:break-loop` | 描述排障意图，或显式触发 `trellis-break-loop` skill | 深度 bug 分析 |
-| 更新规范、新发现、沉淀经验 | `/trellis:update-spec` | 描述规范更新意图，或显式触发 `trellis-update-spec` skill | 规范更新 |
+| 卡住了、反复出错、死循环、调不通 | 描述排障意图，或显式触发 `trellis-break-loop` skill | 描述排障意图，或显式触发 `trellis-break-loop` skill | 深度 bug 分析 |
+| 更新规范、新发现、沉淀经验 | 描述规范更新意图，或显式触发 `trellis-update-spec` skill | 描述规范更新意图，或显式触发 `trellis-update-spec` skill | 规范更新 |
 | 跨层检查、跨模块、影响面 | `/trellis:check` + 手动指定跨层范围 | 描述跨层检查意图，或显式触发 `check` skill 并说明跨层范围 | 当前未提供专用 `check-cross-layer` skill；用 `/trellis:check` 替代 |
 | 集成 skill、添加 skill | 手动完成 skill 集成 | 手动完成 skill 集成 | 当前未提供专用 `integrate-skill` skill；按 skill 文档手动集成 |
 | 读规范、开发前准备、看看有什么规范 | `/trellis:continue` | 描述开发前准备意图，或显式触发 `trellis-before-dev` skill | 开发前读规范；当前 workflow 默认由 continue 自动执行 before-dev，不承诺存在独立 `/trellis:before-dev` 命令 |
@@ -1595,10 +1595,14 @@ _BRAINSTORM_WHEN_TO_USE_NEW = (
 _BRAINSTORM_RELATED_COMMANDS_OLD = """| `/trellis:start` | Entry point that triggers brainstorm |
 | `/trellis:finish-work` | After implementation is complete |
 | `/trellis:update-spec` | If new patterns emerge during work |"""
+_BRAINSTORM_RELATED_COMMAND_START_OLD = "| `/trellis:start` | Entry point that triggers brainstorm |"
+_BRAINSTORM_RELATED_COMMAND_FINISH = "| `/trellis:finish-work` | After implementation is complete |"
+_BRAINSTORM_RELATED_COMMAND_UPDATE_OLD = "| `/trellis:update-spec` | If new patterns emerge during work |"
+_BRAINSTORM_RELATED_COMMAND_UPDATE_NEW = "| `trellis-update-spec` skill | If new patterns emerge during work |"
 _BRAINSTORM_RELATED_COMMANDS_NEW = """| `/trellis:brainstorm` | Direct brainstorm stage entry |
 | `/trellis:continue` | Phase Router entry that may route here when requirements still need clarification |
 | `/trellis:finish-work` | After implementation is complete |
-| `/trellis:update-spec` | If new patterns emerge during work |"""
+| `trellis-update-spec` skill | If new patterns emerge during work |"""
 
 
 def patch_platform_brainstorm_skills(root: Path, *, dry_run: bool) -> bool:
@@ -1620,6 +1624,26 @@ def patch_platform_brainstorm_skills(root: Path, *, dry_run: bool) -> bool:
             changed = True
         if _BRAINSTORM_RELATED_COMMANDS_OLD in patched:
             patched = patched.replace(_BRAINSTORM_RELATED_COMMANDS_OLD, _BRAINSTORM_RELATED_COMMANDS_NEW)
+            changed = True
+        elif _BRAINSTORM_RELATED_COMMAND_START_OLD in patched:
+            replacement_lines = "\n".join(
+                [
+                    "| `/trellis:brainstorm` | Direct brainstorm stage entry |",
+                    "| `/trellis:continue` | Phase Router entry that may route here when requirements still need clarification |",
+                    _BRAINSTORM_RELATED_COMMAND_FINISH,
+                ]
+            )
+            patched = patched.replace(
+                "\n".join(
+                    [
+                        _BRAINSTORM_RELATED_COMMAND_START_OLD,
+                        _BRAINSTORM_RELATED_COMMAND_FINISH,
+                    ]
+                ),
+                replacement_lines,
+            )
+            patched = patched.replace(_BRAINSTORM_RELATED_COMMAND_START_OLD, replacement_lines)
+            patched = patched.replace(_BRAINSTORM_RELATED_COMMAND_UPDATE_OLD, _BRAINSTORM_RELATED_COMMAND_UPDATE_NEW)
             changed = True
         if not changed:
             continue

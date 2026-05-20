@@ -106,7 +106,7 @@ const tree = [
         { html:'6.6 Bug反馈学习',  cls:'L2', det:'5Why分析 · 知识沉淀<br>预防措施 · 定期复盘', id:'p6_6' },
         { html:'/trellis:finish-work', cls:'L3', id:'p6_c1', cp:'.claude/commands/trellis/finish-work.md', cd:'提交前检查 · checklist 落盘' },
         { html:'/trellis:delivery',    cls:'L3', id:'p6_c2', cp:'.claude/commands/trellis/delivery.md', cd:'测试交付 · 验收清单' },
-        { html:'/trellis:break-loop',  cls:'L3', id:'p6_c3', cp:'.claude/commands/trellis/break-loop.md', cd:'缺陷反复 · 深根因分析' },
+        { html:'trellis-break-loop skill',  cls:'L3', id:'p6_c3', cp:'.claude/skills/trellis-break-loop/SKILL.md', cd:'缺陷反复 · 深根因分析' },
       ]},
       { html:'§7 交付与沉淀', cls:'L1 c7', id:'p7', sub:'<span class="cmd">/trellis:delivery → record-session</span>', children:[
         { html:'7.1 文档更新',   cls:'L2', det:'客户版: 不含AI<br>开发版: 含AI', id:'p7_1' },
@@ -125,7 +125,7 @@ const tree = [
       { html:'回退修改流', cls:'BR', id:'br_fallback', bdesc:'质量检查/审查/交付<br>发现偏差', btrig:'check → start 修复<br>review-gate → start 修复<br>delivery → start 修复', side:'left', children:[
         { html:'check 有偏差', cls:'L2', det:'§5.1.x 质量检查未通过<br>→ 回到 start 修复', id:'br_fb_1' },
         { html:'review-gate 未收敛', cls:'L2', det:'多CLI审查未通过<br>→ 回到 start 修复', id:'br_fb_2' },
-        { html:'delivery 有缺陷', cls:'L2', det:'§6+§7 测试交付未通过<br>→ break-loop 或回到 start', id:'br_fb_3' },
+        { html:'delivery 有缺陷', cls:'L2', det:'§6+§7 测试交付未通过<br>→ trellis-break-loop skill 或回到 start', id:'br_fb_3' },
       ]},
       { html:'跳阶段前进', cls:'BR', id:'br_skip', bdesc:'满足前置条件时<br>可跳过中间阶段', btrig:'仅限特定场景', side:'left', children:[
         { html:'L0 直接 Start', cls:'L2', det:'无需继续细分即可达到合适任务粒度<br>影响面小<br>不需重设计', id:'br_sk_1' },

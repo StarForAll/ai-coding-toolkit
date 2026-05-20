@@ -314,10 +314,10 @@ $TASK_DIR/
 | 验收结果 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
 | 全部通过，准备收尾 | `/trellis:record-session` | 进入会话收尾，或显式触发 `record-session` skill | **默认推荐**。前提：`workflow-state.py route` 已进入 `record-session`，且 `workflow-state.py validate <task-dir>` 已通过；在 `record-session` 阶段按 Trellis 原生顺序先 archive，再通过 `add_session.py` 完成记录与元数据闭环 |
-| 有 P0/P1 缺陷 | `/trellis:break-loop` | 进入深度排障，或显式触发 `break-loop` skill | 深度分析 Bug 根因 |
+| 有 P0/P1 缺陷 | 描述排障意图，或显式触发 `trellis-break-loop` skill | 进入深度排障，或显式触发 `trellis-break-loop` skill | 深度分析 Bug 根因 |
 | 有 P2/P3 缺陷 | `/trellis:continue` | 回到实施阶段，或显式触发 `trellis-continue` skill | 回到实施阶段修复 |
 | 验收中出现冻结后新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先完成变更评估与确认；不要直接混入当前交付 |
-| 需要更新规范文档 | `/trellis:update-spec` | 记录并更新规范，或显式触发 `update-spec` skill | 沉淀新发现的模式到 spec |
+| 需要更新规范文档 | 描述规范更新意图，或显式触发 `trellis-update-spec` skill | 记录并更新规范，或显式触发 `trellis-update-spec` skill | 沉淀新发现的模式到 spec |
 | 需要请求代码审查 | `multi-cli-review` / `multi-cli-review-action` 能力 | `multi-cli-review` / `multi-cli-review-action` skill | 提交前外部审查与报告汇总 |
 | 需要归档任务 | `python3 ./.trellis/scripts/task.py archive <name>` | 同左 | 归档在 `/trellis:record-session` 阶段执行，不在 delivery 或 finish-work 阶段 |
 | 不确定下一步 | `/trellis:delivery` | 描述当前收尾意图，或显式触发 `delivery` skill | 先停留在 delivery 阶段澄清，而不是自动进入 record-session |

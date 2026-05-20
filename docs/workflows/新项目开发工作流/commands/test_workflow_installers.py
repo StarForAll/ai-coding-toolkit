@@ -1577,7 +1577,7 @@ Triggered from /trellis:start when the user describes a development task, especi
 |---------|-------------|
 | `/trellis:start` | Entry point that triggers brainstorm |
 | `/trellis:finish-work` | After implementation is complete |
-| `/trellis:update-spec` | If new patterns emerge during work |
+| `trellis-update-spec` skill | If new patterns emerge during work |
 """
         for path in [
             fixture / ".claude" / "skills" / "trellis-brainstorm" / "SKILL.md",

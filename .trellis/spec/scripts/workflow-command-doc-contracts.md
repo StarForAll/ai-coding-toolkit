@@ -66,6 +66,7 @@ Requirements:
 - Must include at least one **默认推荐** row
 - Must include a `/trellis:start` fallback row
 - Must have separate Claude/OpenCode and Codex columns (Codex does not support `/trellis:xxx` commands)
+- Must not advertise a Claude/OpenCode `/trellis:<name>` entry unless the workflow actually deploys the matching `.claude/commands/trellis/<name>.md` / `.opencode/commands/trellis/<name>.md` carrier; skill-only capabilities must be written as skill or natural-language entry text instead
 
 #### 3.3 Step Numbering
 
