@@ -1,6 +1,25 @@
 #!/usr/bin/env zsh
 set -euo pipefail
 
+# --- Parse arguments ---
+CUSTOM_PROJECT_PATH=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --project-path)
+      if [[ $# -lt 2 ]]; then
+        echo "ERROR: --project-path requires a value" >&2
+        exit 1
+      fi
+      CUSTOM_PROJECT_PATH="$2"
+      shift 2
+      ;;
+    *)
+      echo "ERROR: Unknown argument: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
 VERSION="$(trellis -v 2>/dev/null | head -1)"
 if [[ -z "$VERSION" ]]; then
   echo "ERROR: trellis -v failed" >&2
@@ -8,9 +27,14 @@ if [[ -z "$VERSION" ]]; then
 fi
 
 TMPDIR_PREFIX="/tmp/trellis-${VERSION}"
-TARGET_PROJECT="${TMPDIR_PREFIX}-2"
 WORKFLOW_ROOT="/ops/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流"
 PYTHON_BIN="/ops/softwares/python/bin/python3"
+
+if [[ -n "$CUSTOM_PROJECT_PATH" ]]; then
+  TARGET_PROJECT="$CUSTOM_PROJECT_PATH"
+else
+  TARGET_PROJECT="${TMPDIR_PREFIX}-2"
+fi
 
 run_cmd() {
   local desc="$1"; shift
@@ -21,8 +45,15 @@ run_cmd() {
   return 1
 }
 
-# --- Step 1: clean old dirs ---
-run_cmd "rm -rf ${TMPDIR_PREFIX}*" rm -rf "${TMPDIR_PREFIX}"*
+# --- Step 1: clean old dirs (only in default /tmp mode) ---
+if [[ -z "$CUSTOM_PROJECT_PATH" ]]; then
+  run_cmd "rm -rf ${TMPDIR_PREFIX}*" rm -rf "${TMPDIR_PREFIX}"*
+else
+  if [[ -e "$TARGET_PROJECT" ]]; then
+    echo "ERROR: --project-path target already exists: ${TARGET_PROJECT}" >&2
+    exit 1
+  fi
+fi
 
 # --- Step 2: mkcd ---
 mkdir -p "$TARGET_PROJECT"
