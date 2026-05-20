@@ -900,3 +900,36 @@ Validated /tmp/trellis-0.5.17-2 findings, repaired workflow installer routing an
 ### Next Steps
 
 - None - task complete
+
+
+## Session 272: workflow-repair-2026-05-20-codex-skills-empty
+
+**Date**: 2026-05-20
+**Task**: workflow-repair-2026-05-20-codex-skills-empty
+**Branch**: `main`
+
+### Summary
+
+复核 /tmp/trellis-0.5.17-2 的 workflow scan 报告，确认 10 条 finding 中 9 条为误报或已被当前 source worktree 闭合，保留 trellis-spec-bootstarp 命名问题为 manual-decision，并记录 repair log。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b83828b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
