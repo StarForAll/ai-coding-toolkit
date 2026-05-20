@@ -1134,3 +1134,37 @@ Aligned critical runtime patch capability names with distributed helper carriers
 ### Next Steps
 
 - None - task complete
+
+
+## Session 279: Repair workflow-repair auto close-out contract
+
+**Date**: 2026-05-21
+**Task**: Repair workflow-repair auto close-out contract
+**Branch**: `main`
+
+### Summary
+
+Tightened workflow-repair --auto close-out rules, added fallback and loop-boundary tests, synced repo-local spec and validation.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `52d40b7` | (see git log) |
+| `100676a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
