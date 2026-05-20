@@ -1100,3 +1100,37 @@ Documented and tested workflow-repair --auto close-out behavior, synced workflow
 ### Next Steps
 
 - None - task complete
+
+
+## Session 278: Repair runtime patch helper contract drift
+
+**Date**: 2026-05-20
+**Task**: Repair runtime patch helper contract drift
+**Branch**: `main`
+
+### Summary
+
+Aligned critical runtime patch capability names with distributed helper carriers, added strong-gate wrapper helpers, updated installer/upgrade paths, and recorded workflow repair artifacts.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2a43f78` | (see git log) |
+| `14d229a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
