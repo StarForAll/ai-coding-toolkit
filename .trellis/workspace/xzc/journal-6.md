@@ -867,3 +867,36 @@ Reworked workflow-scan to target temp-project-only workflow surfaces, strengthen
 ### Next Steps
 
 - None - task complete
+
+
+## Session 271: workflow repair: fix stale routing and patch coverage
+
+**Date**: 2026-05-20
+**Task**: workflow repair: fix stale routing and patch coverage
+**Branch**: `main`
+
+### Summary
+
+Validated /tmp/trellis-0.5.17-2 findings, repaired workflow installer routing and patch coverage, added trellis-meta change-hooks patch, updated installer spec, and recorded workflow issue history.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4d2b6ef` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

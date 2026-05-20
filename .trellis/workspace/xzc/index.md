@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-6.md`
-- **Total Sessions**: 270
+- **Total Sessions**: 271
 - **Last Active**: 2026-05-20
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-6.md` | ~869 | Active |
+| `journal-6.md` | ~902 | Active |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
@@ -34,6 +34,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 271 | 2026-05-20 | workflow repair: fix stale routing and patch coverage | `4d2b6ef` | `main` |
 | 270 | 2026-05-20 | Refine workflow scan and repair skill contracts | `815c620` | `main` |
 | 269 | 2026-05-20 | workflow scan and repair skills | `cb9e583`, `d4298ed`, `cdb5030` | `main` |
 | 268 | 2026-05-20 | 修复嵌入工作流运行时门禁与恢复逻辑 | `df978a7` | `main` |
