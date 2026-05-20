@@ -1067,3 +1067,36 @@ Refined workflow-scan's optional agent mode contract, added helper handoff guida
 ### Next Steps
 
 - None - task complete
+
+
+## Session 277: Refine workflow-repair auto close-out contract
+
+**Date**: 2026-05-20
+**Task**: Refine workflow-repair auto close-out contract
+**Branch**: `main`
+
+### Summary
+
+Documented and tested workflow-repair --auto close-out behavior, synced workflow-scan pairing notes, and tightened skill validation checks.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `17c3ece` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
