@@ -1,0 +1,92 @@
+# Workflow Issue History Template
+
+This document defines the per-execution issue-history summary that
+`workflow-repair` writes to `tmp/workflow-issues/`.
+
+---
+
+## Document Purpose
+
+The issue-history summary is the persistent cross-run memory for repeated or
+similar workflow defects. Every later `workflow-repair` run must read all
+numeric Markdown files in `tmp/workflow-issues/` before deciding whether a
+finding is new, repeated, or part of a known problem family.
+
+---
+
+## Document Location
+
+Write exactly one file per repair execution to:
+
+`tmp/workflow-issues/NNNN.md`
+
+Rules:
+
+- filename stem must be numeric only
+- numbering must be monotonic increasing within the directory
+- use four-digit zero padding: `0001.md`, `0002.md`, `0003.md`, ...
+
+---
+
+## Document Structure
+
+### Header
+
+```markdown
+---
+issue-history-version: 1
+protocol: workflow-scan-repair-v2
+temp-project-version: {trellis version or temp-project .trellis/.version value}
+temp-project-root: {absolute temp project path}
+report-path: {absolute path to WORKFLOW_QUESTIONS.md}
+repair-task: {absolute or repo-relative path to the dedicated repair task directory}
+created-at: {ISO 8601}
+total-issues: {N}
+---
+
+# Workflow Issue History
+
+## Session Summary
+
+- Temp Project Version: {temp-project-version}
+- Temp Project Root: {temp-project-root}
+- Report Path: {report-path}
+- Repair Task: {repair-task}
+- Issue Count: {total-issues}
+```
+
+### Per-Issue Entry
+
+```markdown
+---
+
+### {WS-ID}: {problem title}
+
+- **Problem ID / Title**: {WS-ID and title, or another stable problem label if no WS-ID exists}
+- **Root Cause**: {named root-cause class}
+- **Repaired Files**:
+  - {relative path within docs/workflows/新项目开发工作流/}
+  - {another file, if any}
+- **Variant Sweep Scope**: {same-pattern or same-root-cause locations fixed together, or `none`}
+- **Trellis-Native**: yes | no
+- **Unresolved Items**:
+  - {remaining risk, blocked sibling, or `none`}
+```
+
+### Rules
+
+1. Every execution must write one document even when no fixes were applied.
+2. The required per-issue fields are:
+   - temp project version
+   - report path
+   - problem title/ID
+   - root cause
+   - repaired files
+   - variant sweep scope
+   - whether the issue was trellis-native
+   - unresolved items
+3. If no issue was repaired, the document must still record why:
+   ignored, blocked, rejected, or no findings.
+4. Later runs must read all files in this directory and compare new findings
+   against the stored titles/IDs, root causes, repaired files, and variant
+   sweep scopes.

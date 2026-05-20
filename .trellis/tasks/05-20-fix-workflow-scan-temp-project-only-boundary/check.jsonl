@@ -1,0 +1,5 @@
+{"file":".trellis/spec/skills/index.md","reason":"Verify coupled skill protocol wording stays aligned across scan/repair/template"}
+{"file":".trellis/spec/skills/workflow-scan.md","reason":"Review scan-side boundary and output rules after removing source-repo assumptions"}
+{"file":".trellis/spec/skills/workflow-repair.md","reason":"Review repair-side intake assumptions for compatibility with the new scan report"}
+{"file":".trellis/spec/docs/index.md","reason":"Confirm documentation changes preserve source-vs-target boundary language"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Review cross-layer sync obligations after protocol changes"}

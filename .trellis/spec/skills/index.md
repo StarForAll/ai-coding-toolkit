@@ -103,9 +103,12 @@ These two files form the **workflow-scan-repair** coupled pair:
 - scan-side `WORKFLOW_QUESTIONS.md` emission contract (temp project)
 - repair-side `WORKFLOW_QUESTIONS.md` intake contract (source project)
 - shared document format defined in `skills/workflow-scan/references/scan-output-template.md`
-- shared metadata fields: `protocol` (workflow-scan-repair-v1), `trellis-version`, `workflow-version`, `compatible-trellis-version`, `scan-timestamp`, `temp-project-root`, `source-project-root`, `total-findings`, finding IDs (`WS-NNN`)
+- repair-side auxiliary artifacts and memory surfaces:
+  `correction-plan-template.md`, `repair-log-template.md`,
+  `issue-history-template.md`, and `tmp/workflow-issues/`
+- shared metadata fields: `protocol` (workflow-scan-repair-v2), `trellis-version`, `workflow-version`, `workflow-schema-version`, `scan-timestamp`, `temp-project-root`, `total-findings`, finding IDs (`WS-NNN`)
 - shared origin classification: `trellis-native` vs `workflow-source` (determines repair routing)
-- shared evidence-layer taxonomy: `generated-target-baseline`, `generated-target-installed`, `source-repo-reference`
+- shared evidence-layer taxonomy: `generated-target-baseline`, `generated-target-installed`, `generated-target-runtime`
 - shared category values: `script-behavior`, `cli-adaptation`, `post-install-artifact`, `document-reference`, `residual`, `new`
 - shared role boundaries: scan produces findings only (never edits source), repair consumes and fixes (only within `docs/workflows/新项目开发工作流/`)
 
@@ -115,21 +118,33 @@ If a change modifies **either** of these files in a way that can affect the
 shared protocol or contract format, the other file must be reviewed and updated
 in the **same change**.
 
+Treat this as a **bidirectional maintenance rule**, not a one-way reminder:
+
+- if `workflow-scan` changes, `workflow-repair` must receive the matching
+  intake/behavior/template adaptations in the same change
+- if `workflow-repair` changes, `workflow-scan` must receive the matching
+  emission/behavior/template adaptations in the same change
+- do not leave one side on the old contract and plan to "sync later"
+
 Do not treat them as independently maintainable when changing:
 
 - WORKFLOW_QUESTIONS.md frontmatter fields or finding entry schema
-- protocol version (`workflow-scan-repair-v1`)
+- protocol version (`workflow-scan-repair-v2`)
 - category, origin, or evidence-layer value sets
 - finding ID format (`WS-NNN`)
 - severity estimate semantics (P0/P1/P2)
 - role boundaries such as "scan only" vs "repair fixes"
 - temp project path resolution logic
+- repair-task bootstrap behavior
+- issue-history document schema or `tmp/workflow-issues/` numbering rules
 
 ### Minimum Verification For This Pair
 
 After editing either file:
 
 - confirm whether the paired skill also needs a matching change
+- if the initiating file changed any shared behavior or role boundary, make the
+  paired skill diff in the same change instead of relying on review notes alone
 - read both diffs together before finishing
 - verify there is no protocol drift between scan output format and repair intake expectations
 - verify finding entry schema fields remain aligned across both SKILL.md files and the shared template
