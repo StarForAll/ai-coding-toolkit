@@ -3,6 +3,16 @@
 This document defines the contract format for the bridge document between
 `workflow-scan` (producer) and `workflow-repair` (consumer).
 
+Execution-mode note:
+
+- `workflow-scan` may gather evidence inline by default or via explicit
+  `--agent` helper assistance.
+- This **MUST NOT** change the `WORKFLOW_QUESTIONS.md` schema.
+- The final report is always coordinator-owned and must pass the same
+  read-back validation before `workflow-repair` may consume it.
+- Helper handoff artifacts, if any, are internal scan-side working context only
+  and are not part of the shared scan/repair protocol surface.
+
 ---
 
 ## File Location

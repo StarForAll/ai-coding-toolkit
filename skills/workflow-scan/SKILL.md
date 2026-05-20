@@ -1,13 +1,18 @@
 ---
 name: workflow-scan
 description: Generate a `WORKFLOW_QUESTIONS.md` report for an embedded Trellis temp project. Use when scanning the full workflow currently in use inside the temp project for problems, gaps, residual issues, or new issues before source-side repair.
-compatibility: Requires `trellis` on PATH, access to the temp project fixture, and inline CLI execution with local filesystem access.
+compatibility: Requires `trellis` on PATH, access to the temp project fixture, local filesystem access, and either inline CLI execution or an agent-capable session when `--agent` is explicitly requested.
 ---
 
 # workflow-scan
 
 ## Version History
 
+- **v2.3**: Added explicit `--agent` opt-in and capability criteria, kept
+  inline scan as the default, clarified coordinator-owned report writing plus
+  hard-block behavior when agent mode is unsupported, and added helper-failure
+  / conflict-compensation rules, a reusable handoff template, and scenario
+  tests for agent-assisted success/failure paths
 - **v2.1**: Added mandatory read-back validation for generated reports, count
   consistency checks, and explicit contract-drift guards before scan success
 - **v2.0**: Re-scoped the skill to analyze only the full workflow content currently present in the temp project; removed source-repo inputs, source-repo evidence layers, and source-location requirements from the scan contract
@@ -56,29 +61,51 @@ Use this skill when any of the following is true:
 
 1. **Scan only**: this skill produces a question/evidence document; it never
    edits workflow source files or any code.
-2. **Main CLI only**: do not use agents, sub-agents, or task orchestration. Run
-   the scan directly in the current CLI session.
-3. **Temp project only**: this skill runs in or targets a Trellis temp project.
+2. **Inline default**: without `--agent`, do not use agents, sub-agents, or
+   task orchestration. Run the scan directly in the current CLI session.
+3. **Explicit agent opt-in only**: use helper agents only when the input
+   explicitly includes `--agent`. Do not switch to agent-assisted mode on your
+   own.
+4. **Coordinator ownership is mandatory**: when `--agent` is present, the
+   current CLI session remains the scan coordinator. Multiple helper agents may
+   inspect bounded temp-project surfaces and return evidence, but only the
+   coordinator may decide final findings, write `WORKFLOW_QUESTIONS.md`, or
+   report success.
+5. **No silent fallback for `--agent`**: if `--agent` is requested but the
+   current platform/session cannot safely run helper agents, stop as
+   **Blocked / Agent Mode Unsupported** instead of quietly reverting to inline
+   mode.
+   This rule applies to mode selection only. Once helper dispatch has already
+   started, coordinator-side local compensation for helper failure is still
+   allowed and is not considered a forbidden silent fallback.
+6. **Bounded agent mode only**: `--agent` is an evidence-gathering aid, not a
+   general orchestration mode. Use only a small number of helper agents with
+   non-overlapping scopes sized to reduce context pressure rather than maximize
+   parallelism.
+7. **No task-state side effects**: `--agent` does not authorize task creation,
+   task switching, or any file edits by helper agents. Their scope is read-only
+   evidence gathering.
+8. **Temp project only**: this skill runs in or targets a Trellis temp project.
    The analysis target is the temp project's currently installed workflow, not
    the current source repository.
-4. **Embedded-workflow truth target**: judge whether issues exist from the full
+9. **Embedded-workflow truth target**: judge whether issues exist from the full
    workflow result under `/tmp/trellis-{VERSION}-2`, not from any external
    source tree.
-5. **All active workflow surfaces count**: scan the full workflow content that
+10. **All active workflow surfaces count**: scan the full workflow content that
    the temp project is currently using, not only
    `.trellis/workflow-installed.json`.
-6. **Evidence comes from the temp project only**: every finding must use an
+11. **Evidence comes from the temp project only**: every finding must use an
    `Evidence Layer` value grounded in the temp project's actual state.
-7. **Conservative severity**: severity estimates are preliminary, set by the
+12. **Conservative severity**: severity estimates are preliminary, set by the
    scan running in isolation before repair. Mark explicitly as estimates.
-8. **Complete catalog**: every anomaly discovered must be recorded. Do not
+13. **Complete catalog**: every anomaly discovered must be recorded. Do not
    filter by severity during the scan phase.
-9. **Origin classification is mandatory**: every finding must classify as
+14. **Origin classification is mandatory**: every finding must classify as
    either `trellis-native` (produced by `trellis init`) or `workflow-source`
    (introduced by the embedded workflow's install/patch layer).
-10. **Contract format**: the output must use the `WORKFLOW_QUESTIONS.md` format
+15. **Contract format**: the output must use the `WORKFLOW_QUESTIONS.md` format
     exactly as defined in `references/scan-output-template.md`.
-11. **Read-back validation is mandatory**: after writing
+16. **Read-back validation is mandatory**: after writing
     `WORKFLOW_QUESTIONS.md`, the skill must read the file back and verify the
     required frontmatter keys, summary sections, and finding schema before it
     may report success.
@@ -89,6 +116,43 @@ Use this skill when any of the following is true:
 |-------|----------|---------|---------|
 | `temp_project_path` | No | auto-detect | Absolute path to temp project root |
 | `candidate_focus` | No | empty | Supplementary focus areas to prioritize |
+| `--agent` | No | off | Mode-switch flag. When present, the coordinator may use multiple helper agents for bounded read-only evidence gathering. Without it, the scan must stay inline in the current CLI session. |
+
+### Execution Mode Resolution
+
+1. Treat execution mode as `agent-assisted` only when the user explicitly asks
+   for helper-agent use, either by:
+   - including the literal `--agent` token in the request, or
+   - using equivalent natural language such as "use multiple agents",
+     "scan this with helper agents", or "do the scan with multi-agent help"
+2. If the user does not explicitly request helper-agent use, execution mode is
+   `inline`.
+   Requests such as "scan deeper", "scan faster", or "do a more thorough scan"
+   do not by themselves enable helper-agent mode.
+3. In `agent-assisted` mode, the current CLI session remains the coordinator:
+   - helper agents may take only concrete, non-overlapping evidence-gathering
+     slices
+   - helper agents must not write files, answer overwrite prompts, or finalize
+     findings/severity
+4. If `--agent` is present but the current platform/session cannot safely run
+   multiple helper agents with explicit ownership boundaries, stop as
+   **Blocked / Agent Mode Unsupported**.
+5. Treat the current platform/session as agent-capable only when all of the
+   following are true:
+   - helper agents can actually be invoked in this environment rather than only
+     being theoretically supported by the product family
+   - the coordinator can pass explicit scope boundaries and receive a distinct
+     handoff back from each helper
+   - helper execution does not violate a stronger repo-local or session-local
+     rule such as Codex inline main-session constraints
+6. If any capability criterion above is uncertain, prefer the conservative
+   result: stop as **Blocked / Agent Mode Unsupported** instead of guessing.
+7. Execution mode must not change the output file location, frontmatter, or
+   finding schema. Inline and `--agent` runs emit the same
+   `WORKFLOW_QUESTIONS.md` contract.
+8. This skill defines behavior only. The concrete helper-dispatch mechanism is
+   platform-specific and may differ across executors; do not assume a single
+   universal Agent tool or API binding from this contract alone.
 
 ### Temp Project Path Resolution
 
@@ -106,9 +170,10 @@ Format specification: see `references/scan-output-template.md`.
 
 ## Workflow
 
-### Step 0: Environment Preflight
+### Step 0: Environment and Mode Preflight
 
-1. Resolve the temp project path (see Path Resolution above).
+1. Resolve the temp project path and execution mode (see the Inputs and
+   Resolution sections above).
 2. Verify the temp project is a valid Trellis-initialized project:
    - `.trellis/` directory exists
    - `.trellis/.version` exists and is readable
@@ -129,6 +194,8 @@ Format specification: see `references/scan-output-template.md`.
    **Blocked / Workflow Not Embedded**.
 7. If `WORKFLOW_QUESTIONS.md` already exists at the temp project root: stop and
    ask whether to overwrite or append.
+8. If execution mode is `agent-assisted`, do not dispatch helper agents until
+   Steps 0.1-0.7 have passed and any overwrite decision has been resolved.
 
 ### Step 1: Workflow Surface Inventory
 
@@ -156,6 +223,54 @@ Format specification: see `references/scan-output-template.md`.
    directly obvious, state that inference explicitly inside the finding
    evidence.
 5. Build an artifact inventory that later steps reference.
+
+### Step 1A: Optional `--agent` Work Split
+
+Use this step only when execution mode is `agent-assisted`.
+
+1. The coordinator defines concrete, non-overlapping helper scopes before any
+   delegation. Good examples:
+   - scripts and commands
+   - CLI adaptation carriers
+   - workflow documents and cross-references
+   - runtime-control surfaces
+   - recommended helper-count ceiling: 3 by default, 4 only when the workflow
+     surface split is still clearly non-overlapping and the coordinator can
+     justify the extra handoff cost
+2. Each helper agent must receive:
+   - explicit read-only scope boundaries
+   - the exact temp-project paths or artifact class it owns
+   - a required handoff format from
+     `references/helper-handoff-template.md`, containing confirmed facts,
+     candidate issues, open questions, and relative paths
+3. Helper agents must not:
+   - write `WORKFLOW_QUESTIONS.md`
+   - edit any file
+   - invent evidence outside the temp project
+   - decide final severity or deduplicate findings across helpers
+4. The coordinator must review every helper handoff. If a helper result is
+   incomplete, ambiguous, malformed, timed out, or fails outright, the
+   coordinator treats that helper as non-authoritative, fills the evidence gap
+   locally, and may skip the slice rather than failing the whole scan.
+   Partial helper output may still be used as a lead for local re-check, but it
+   must not be promoted directly into final findings without coordinator
+   confirmation from temp-project evidence.
+5. If two helper handoffs conflict, the coordinator must resolve the conflict
+   in the main session using temp-project evidence before carrying either claim
+   into final findings. Do not average, merge, or silently pick one helper's
+   claim without local verification. If the conflict remains unresolved after
+   local re-check, drop the disputed claim from final findings rather than
+   guessing. The unresolved conflict itself is not a workflow finding unless
+   separate temp-project evidence independently supports one.
+6. Keep helper-agent resource usage intentionally small:
+   - use only the minimum number of helper agents needed for concrete
+     non-overlapping slices
+   - avoid delegating tiny or tightly coupled checks whose coordination cost
+     exceeds their context-saving benefit
+   - if agent coordination stops being net-beneficial, continue inline instead
+     of widening the agent fan-out
+7. Delegation is optional per step. Keep tightly coupled blocking decisions in
+   the coordinator session instead of forcing them through helper agents.
 
 ### Step 2: Script, Command, Skill, Hook, and Agent Verification
 
@@ -260,7 +375,8 @@ For every installed workflow document or installed runtime-control document:
    - `p0-count`
    - `p1-count`
    - `p2-count`
-5. Write to the temp project root as `WORKFLOW_QUESTIONS.md`.
+5. Only the coordinator writes to the temp project root as
+   `WORKFLOW_QUESTIONS.md`, even in `--agent` mode.
 6. Immediately read the file back and verify all of the following before
    declaring success:
    - the frontmatter contains every required key above using the exact
@@ -297,6 +413,9 @@ For every installed workflow document or installed runtime-control document:
 | Temp project not found | Stop as **Blocked / Temp Project Not Found**. Suggest creating or locating the temp project first. |
 | Temp project not fully initialized | Stop as **Blocked / Invalid Temp Project**. Verify `.trellis/` and `.version` exist. |
 | Temp project not workflow-embedded | Stop as **Blocked / Workflow Not Embedded**. Verify the temp project really contains an embedded workflow instead of only the Trellis baseline. |
+| `--agent` requested but unsupported | Stop as **Blocked / Agent Mode Unsupported**. Explain that the current platform/session cannot safely run the required helper agents. Do not silently fall back to inline mode. |
+| Helper handoffs all fail or time out for a delegated slice | Keep coordinator ownership. Re-check the slice locally when safe, or skip that slice conservatively instead of treating helper failure itself as a workflow finding. |
+| Helper claims conflict and local re-check cannot resolve the dispute | Drop the disputed claim from final findings rather than guessing. Continue the scan if the remaining evidence still supports a valid report. |
 | `WORKFLOW_QUESTIONS.md` already exists | Stop and ask whether to overwrite or append. |
 | No findings | Write `WORKFLOW_QUESTIONS.md` with `total-findings: 0` and all counts at 0, then still perform the Step 6 read-back validation before reporting success. |
 
@@ -307,6 +426,31 @@ For every installed workflow document or installed runtime-control document:
 - `workflow-audit`: comprehensive audit with version gates, evidence mainline,
   and runtime validation (complementary, not replacement)
 - `workflow-capability-audit`: version-drift audit
+
+## References
+
+- `references/scan-output-template.md`
+- `references/helper-handoff-template.md`
+
+## Tests
+
+Required persisted scenario files:
+
+- `tests/01-inline-default-no-agents.md`
+- `tests/02-agent-assisted-supported.md`
+- `tests/03-agent-mode-unsupported.md`
+- `tests/04-helper-failure-local-compensation.md`
+- `tests/05-unresolved-helper-conflict-dropped.md`
+- `tests/06-partial-helper-output-local-followup.md`
+- `tests/07-inline-when-speed-or-depth-only.md`
+
+Every test file must use the same structure:
+
+- `Purpose`
+- `Input`
+- `Expected Mode`
+- `Expected Key Behaviors`
+- `Must Not`
 
 ## Examples
 
@@ -329,7 +473,41 @@ AI:
    ➡️ Next: run /workflow-repair in the source project
 ```
 
-### Example 2: Temp Project Not Found
+### Example 2: Agent-Assisted Scan
+
+```text
+User: /workflow-scan --agent
+
+AI:
+1. Resolve the temp project path and confirm that the current session can use helper agents safely
+2. Keep coordinator ownership in the current session for overwrite prompts, final finding judgment, report writing, and read-back validation
+3. Split independent scan slices across multiple helper agents:
+   - helper A: scripts and commands
+   - helper B: CLI adaptation surfaces
+   - helper C: workflow documents and runtime-control references
+4. Review each helper handoff, fill any evidence gaps locally, and compile one shared `WORKFLOW_QUESTIONS.md`
+5. Read the report back and verify the required frontmatter keys, summary sections, and count consistency
+6. Echo:
+   ✅ Workflow scan complete
+   📁 Temp Project: /tmp/trellis-{LIVE_VERSION}-2
+   📄 Report: /tmp/trellis-{LIVE_VERSION}-2/WORKFLOW_QUESTIONS.md
+   📊 Findings: 4 total (P0: 1, P1: 1, P2: 2)
+   ➡️ Next: run /workflow-repair in the source project
+```
+
+### Example 3: Agent Mode Unsupported
+
+```text
+User: /workflow-scan --agent
+
+AI:
+❌ Blocked / Agent Mode Unsupported
+   The current platform/session cannot safely run helper agents with explicit ownership boundaries.
+   Reason: helper invocation is unavailable here, or a stronger session rule still requires inline execution.
+   Next: re-run `/workflow-scan` inline, or move to an agent-capable main session that allows bounded helper delegation.
+```
+
+### Example 4: Temp Project Not Found
 
 ```text
 User: /workflow-scan
@@ -341,7 +519,7 @@ AI:
    Suggestion: create or locate the temp project first, then re-run /workflow-scan.
 ```
 
-### Example 3: Clean Install With No Issues
+### Example 5: Clean Install With No Issues
 
 ```text
 User: /workflow-scan

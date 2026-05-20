@@ -1,13 +1,16 @@
 ---
 name: workflow-repair
 description: Apply safe source-workflow fixes from a `WORKFLOW_QUESTIONS.md` report. Use when re-checking an embedded Trellis temp project report, consulting prior workflow issue history, and repairing `docs/workflows/新项目开发工作流/`.
-compatibility: Requires `trellis` on PATH, access to the temp project report plus the workflow source repo, ability to run `task.py create` and `task.py start`, and inline CLI execution with local filesystem access.
+compatibility: Requires `trellis` on PATH, access to the temp project report plus the workflow source repo, ability to run `task.py create` and `task.py start`, and inline CLI execution with local filesystem access. Repair itself remains main-session inline, but it accepts validated reports produced by either inline `workflow-scan` runs or explicit `workflow-scan --agent` runs.
 ---
 
 # workflow-repair
 
 ## Version History
 
+- **v2.3**: Clarified that repair-side intake is execution-mode agnostic and
+  depends only on the validated `WORKFLOW_QUESTIONS.md` contract, whether the
+  scan ran inline or with explicit `--agent` assistance
 - **v2.2**: Clarified that successful `workflow-scan` output must already pass
   scan-side read-back validation and that repair-side intake stops when the
   shared report contract is still incomplete
@@ -117,6 +120,13 @@ Use this skill when any of the following is true:
     the exact format defined in
     `skills/workflow-scan/references/scan-output-template.md`. If the protocol
     version does not match, stop.
+18. **Execution-mode agnostic intake**: repair-side validation depends on the
+    final `WORKFLOW_QUESTIONS.md` contract only. A report produced by
+    `workflow-scan --agent` is acceptable only if the coordinator's final
+    output still passes the same shared read-back validation as an inline scan.
+19. **No implied repair-side agent mode**: scan-side `--agent` support does
+    not extend to `workflow-repair`. Repair remains main-CLI-only unless its
+    own contract changes in a separate scoped update.
 
 ## Inputs
 
@@ -220,6 +230,8 @@ Three artifacts:
    scan-side contract failure and stop instead of trying to infer the intended
    fields from alternate names such as `generated_at`, `trellis_version`,
    `temp_project_path`, or `total_findings`.
+8. Do not reject or special-case the report based on whether the scan was run
+   inline or with `--agent`; only the validated document contract matters.
 
 ### Step 2: Parse and Classify Findings
 
@@ -540,7 +552,19 @@ AI:
 4. Continue the repair flow inside that task
 ```
 
-### Example 3: Analysis Only, No Auto-Repair
+### Example 3: Report Produced By `workflow-scan --agent`
+
+```text
+User: /workflow-repair
+
+AI:
+1. Resolve `/tmp/trellis-{LIVE_VERSION}-2/WORKFLOW_QUESTIONS.md`
+2. Validate the shared report contract exactly as usual
+3. Note that the report may have been produced by `workflow-scan --agent`, but repair-side intake stays execution-mode agnostic
+4. Continue verifying findings from the validated report and the temp project
+```
+
+### Example 4: Analysis Only, No Auto-Repair
 
 ```text
 User: /workflow-repair

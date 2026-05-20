@@ -33,6 +33,11 @@ workflow product source under `docs/workflows/新项目开发工作流/`.
    the installer can repair future target projects.
 7. The skill does not require a same-run re-embed; instead it must complete a
    strict source-side review before it claims success.
+8. Repair-side intake is execution-mode agnostic: a scan produced inline or via
+   explicit `--agent` assistance is equally acceptable if the final
+   `WORKFLOW_QUESTIONS.md` passes the shared contract validation.
+9. Scan-side `--agent` support does not imply repair-side agent support; repair
+   remains a main-session-only skill unless its own scope boundary changes.
 
 ---
 
@@ -140,6 +145,9 @@ This coupling is **bidirectional and mandatory**:
 - whenever `workflow-scan` changes the emitted report contract, this repair
   skill must be adapted in the same change; do not leave repair-side intake on
   the previous contract
+- when `workflow-scan` changes execution-mode rules without changing the report
+  schema, this repair spec must still state that intake remains based on the
+  validated report contract rather than on scan execution topology
 - the pair must stay aligned on the scan-side read-back validation rule so
   repair-side intake assumptions match what a successful scan is allowed to emit
 - intake must reject reports whose declared total/severity counts do not match
@@ -156,6 +164,8 @@ When editing `skills/workflow-repair/`, confirm all of the following:
   are not reintroduced
 - the skill still forbids agent/sub-agent execution
 - the skill still verifies against the temp project, not only source files
+- repair-side intake remains agnostic to whether scan ran inline or with
+  explicit `--agent`
 - the skill still reads all `tmp/workflow-issues/` history docs and writes one
   new issue-history file per run
 - explicit repair authorization and analysis-only behavior remain distinct
@@ -183,5 +193,9 @@ Minimum expected validation:
 - verify the scan-side contract now includes an explicit read-back validation
   gate and that repair-side intake assumptions still match that stronger output
   guarantee
+- verify repair-side wording does not make inline-only assumptions about how
+  scan evidence was gathered before the final report was written
+- verify repair-side examples include at least one report intake path for a
+  validated `workflow-scan --agent` output
 - verify the paired `workflow-scan` diff is an actual compatibility adaptation
   when the repair-side contract changed, not just an unchanged carryover

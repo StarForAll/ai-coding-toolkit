@@ -26,11 +26,17 @@ It does not fix source files.
    not the source repository runtime.
 2. The canonical fixture path is `/tmp/trellis-{VERSION}-2`, where `VERSION`
    comes from `trellis -v`, unless an explicit override is provided.
-3. The skill runs inline in the current CLI session. Do not route through
-   agents or sub-agents.
-4. The skill never edits workflow source files, temp-project files, or task
+3. The default execution mode is inline in the current CLI session.
+4. Helper agents are allowed only when the user explicitly provides
+   `--agent`; this is an opt-in execution mode, not the default behavior.
+5. In `--agent` mode, the current CLI session remains the coordinator and owns
+   overwrite decisions, final finding judgment, report writing, and read-back
+   validation.
+6. `--agent` is a bounded evidence-gathering mode, not a general orchestration
+   license; helper count and scope must stay intentionally small.
+7. The skill never edits workflow source files, temp-project files, or task
    state. It only writes `WORKFLOW_QUESTIONS.md`.
-5. The scan must not require or depend on the source repository as an evidence
+8. The scan must not require or depend on the source repository as an evidence
    input.
 
 ---
@@ -46,6 +52,45 @@ The skill must:
 - stop instead of guessing when the path is ambiguous
 - verify `.trellis/` and `.trellis/.version`
 - verify that workflow-embed markers exist, not just Trellis baseline markers
+
+### 1A. Execution Mode Resolution
+
+The skill must:
+
+- treat `--agent` as the only valid trigger for agent-assisted execution
+- accept explicit natural-language equivalents to `--agent` only when they
+  clearly request helper-agent use rather than merely asking for speed or depth
+- keep inline execution as the default when `--agent` is absent
+- keep "speed/depth only" requests inline unless they also explicitly ask for
+  helper-agent use
+- stop as **Blocked / Agent Mode Unsupported** when `--agent` is requested but
+  the current platform/session cannot safely support helper agents
+- use explicit capability criteria rather than vague product-family labels when
+  deciding whether the current session is truly agent-capable
+- keep helper scopes read-only and bounded to concrete evidence-gathering
+  slices
+- keep helper count intentionally small; a recommended ceiling of 3 should be
+  the default, with 4 requiring an explicit concrete scope justification
+- require the coordinator to resolve conflicting helper output before report
+  generation
+- keep the output file path and report schema identical across inline and
+  `--agent` runs
+- treat helper-dispatch mechanics as platform-specific implementation detail
+  rather than as a single universal tool-binding promised by this skill
+
+Agent-capable means all of the following are true at runtime:
+
+- helper invocation is actually available in the current session
+- helper agents can receive bounded ownership and return a distinct handoff
+- no stronger repo-local/platform-local rule forbids helper use in this session
+  (for example Codex inline main-session constraints)
+
+If any of the above is unknown, the skill must treat the mode as unsupported.
+
+The blocking rule for unsupported `--agent` mode applies at mode-selection
+time. After helper dispatch has legitimately started, coordinator-side local
+compensation for helper failure is allowed and is not considered an invalid
+silent fallback.
 
 ### 2. Temp-Project-Only Evidence Model
 
@@ -90,6 +135,9 @@ This coupling is **bidirectional and mandatory**:
   `skills/workflow-repair/SKILL.md` surface must be updated in the same change
 - the adaptation is not optional or deferrable; do not leave repair-side intake
   or examples on the previous contract
+- scan-side execution-mode changes must state whether they do or do not affect
+  repair-side intake assumptions; if they do not, that compatibility statement
+  still belongs in the paired repair-side update
 
 ### 4. Evidence Discipline
 
@@ -99,6 +147,10 @@ The skill must:
 - tag each finding with the strongest supported temp-project evidence layer
 - state inference explicitly when direct proof is unavailable
 - record residual and new issues, not only user-supplied suspicions
+- keep helper-agent handoffs separate from final findings; helper evidence is
+  input to the coordinator, not a substitute for the coordinator's judgment
+- require helper handoffs to follow a concrete reusable template when
+  `--agent` is used
 
 ### 5. Output Discipline
 
@@ -126,13 +178,28 @@ Before the skill reports success, it must read the generated
 If the generated file drifts into snake_case or omits a required section, the
 skill must treat that as a failed scan output and correct it before stopping.
 
+In `--agent` mode, the coordinator alone must perform this read-back
+validation. Helper agents must not be treated as having completed the scan.
+
+If helper execution fails, times out, returns malformed output, or conflicts
+with sibling helper evidence, the coordinator must resolve or compensate in the
+main session rather than treating the helper state itself as authoritative.
+
 ---
 
 ## Review Checklist
 
 When editing `skills/workflow-scan/`, confirm all of the following:
 
-- the skill still forbids agent/sub-agent execution
+- inline execution is still the default when `--agent` is absent
+- `--agent` is the only explicit trigger for helper-agent execution
+- helper-agent execution still leaves the current CLI session as coordinator
+- the skill still blocks instead of silently falling back when `--agent` is
+  requested but unsupported
+- the agent-capable decision criteria are explicit enough to distinguish real
+  runtime availability from product-family assumptions
+- helper failure/conflict handling still routes final authority back to the
+  coordinator
 - the skill still targets `/tmp/trellis-{VERSION}-2` by default
 - the skill still emits `WORKFLOW_QUESTIONS.md` only
 - the skill no longer requires source-project-root or source-repo evidence
@@ -151,6 +218,16 @@ Minimum expected validation:
   - `skills/workflow-scan/SKILL.md`
   - `skills/workflow-repair/SKILL.md`
   - `skills/workflow-scan/references/scan-output-template.md`
+- scenario coverage for:
+  - inline default without agents
+  - successful `--agent` use in a supported session
+  - `Blocked / Agent Mode Unsupported`
+  - helper failure compensated locally by the coordinator
+  - unresolved helper conflicts dropped conservatively instead of guessed through
+  - partial helper output used only as a lead for local coordinator follow-up
+  - speed/depth-only requests staying inline
+- verify the scan-side `--agent` mode still leaves the shared output contract
+  unchanged and that repair-side intake remains execution-mode agnostic
 - verify the scan-side instructions now require a read-back validation step and
   explicitly guard against snake_case contract drift
 - when the repair-side memory/auxiliary surfaces change, confirm whether the
@@ -158,3 +235,32 @@ Minimum expected validation:
   compatibility with `tmp/workflow-issues/` consumption
 - verify the paired `workflow-repair` diff is an actual compatibility
   adaptation when the scan-side contract changed, not just an unchanged carryover
+
+## References
+
+- `skills/workflow-scan/references/scan-output-template.md`
+- `skills/workflow-scan/references/helper-handoff-template.md`
+
+## Validation
+
+`workflow-scan` should now carry persisted scenario tests in the same contract
+style used by the repository's more complex workflow skills.
+
+Each test file must use:
+
+1. `Purpose`
+2. `Input`
+3. `Expected Mode`
+4. `Expected Key Behaviors`
+5. `Must Not`
+
+First-version scenario set should cover at least:
+
+- inline default with no helper agents
+- supported `--agent` execution with coordinator-owned finalization
+- explicit `Blocked / Agent Mode Unsupported`
+- helper failure/timeout/malformed-handoff compensated locally by the
+  coordinator
+- unresolved helper conflicts dropped conservatively instead of guessed through
+- partial helper output does not bypass coordinator confirmation
+- speed/depth wording alone does not enable helper-agent mode

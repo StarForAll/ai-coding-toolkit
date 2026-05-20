@@ -112,6 +112,10 @@ These two files form the **workflow-scan-repair** coupled pair:
 - shared category values: `script-behavior`, `cli-adaptation`, `post-install-artifact`, `document-reference`, `residual`, `new`
 - shared role boundaries: scan produces findings only (never edits source), repair consumes and fixes (only within `docs/workflows/新项目开发工作流/`)
 - scan-side success is gated on a read-back validation of the generated report's exact frontmatter and section schema
+- scan may run inline by default or with explicit `--agent` assistance, but the
+  execution mode must not alter the shared report schema or repair-side intake
+- scan-side helper handoff assets, if introduced for `--agent`, remain internal
+  to scan execution and must not leak into the shared scan/repair protocol
 
 ### Required Rule
 
@@ -126,6 +130,12 @@ Treat this as a **bidirectional maintenance rule**, not a one-way reminder:
 - if `workflow-repair` changes, `workflow-scan` must receive the matching
   emission/behavior/template adaptations in the same change
 - do not leave one side on the old contract and plan to "sync later"
+- if scan-side execution topology changes (for example inline vs explicit
+  `--agent` assistance), document in the same change whether repair-side intake
+  remains unaffected or requires adaptation
+- if scan-side execution topology introduces helper-only references or tests,
+  keep those assets clearly marked as internal scan-side machinery rather than
+  shared repair intake requirements
 
 Do not treat them as independently maintainable when changing:
 
@@ -152,6 +162,10 @@ After editing either file:
 - verify the repo validation layer still checks the workflow-scan/workflow-repair critical shared field set
 - verify total/severity count semantics remain aligned between scan output,
   repair intake, and the shared template
+- verify execution-mode wording does not accidentally reintroduce an inline-only
+  assumption on either side of the pair
+- verify any helper-handoff references stay outside the shared
+  `workflow-scan-repair-v2` protocol surface
 
 ---
 

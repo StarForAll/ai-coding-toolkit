@@ -1,6 +1,11 @@
 #!/usr/bin/env sh
 set -eu
 
+# Space-separated skill ids intentionally defined in both `skills/` and a
+# repo-local skill surface. Keep empty by default; add an entry only when the
+# split is intentional and separately documented.
+ALLOWLIST_PUBLIC_AND_REPO_LOCAL_DUPLICATES=""
+
 fail() {
   echo "ERROR: $*" >&2
   exit 1
@@ -100,9 +105,11 @@ fi
 # ── Spec cross-validation ──
 # For each spec under .trellis/spec/skills/*.md that lists Required persisted
 # scenario files or references, verify:
-#   1. Declared files exist in BOTH repo-local skill directories
-#   2. tests/ and references/ file lists are identical between .agents/ and .claude/
-# This catches single-side drift that would otherwise be missed.
+#   1. For repo-local maintainer skills: declared files exist in BOTH
+#      repo-local skill directories, and file lists do not drift.
+#   2. For installable public skills: declared files exist under skills/<name>/.
+# This catches single-side drift while still supporting public skills that do
+# not have .agents/.claude mirrors.
 
 spec_cross_fail=0
 
@@ -120,74 +127,129 @@ if [ -d ".trellis/spec/skills" ]; then
     # Collect declared reference basenames from spec
     spec_ref_files="$(sed -n '/^## References/,/^---\|^## /{ /^- /{ s/.*references\///; s/`.*//; p } }' "$spec_file")"
 
-    # Also read from the repo-local SKILL.md files
+    public_skill_md="skills/$spec_name/SKILL.md"
     agents_skill_md=".agents/skills/$spec_name/SKILL.md"
     claude_skill_md=".claude/skills/$spec_name/SKILL.md"
 
-    # Build merged test file list from spec + both SKILL.md files
-    # Only extract lines that contain "tests/" in the path
-    all_test_files="$spec_test_files"
+    public_dir="skills/$spec_name"
+    agents_dir=".agents/skills/$spec_name"
+    claude_dir=".claude/skills/$spec_name"
+    has_public=0
+    has_repo_local=0
+
+    [ -f "$public_skill_md" ] && has_public=1
+    if [ -f "$agents_skill_md" ] || [ -f "$claude_skill_md" ]; then
+      has_repo_local=1
+    fi
+
+    public_test_files="$spec_test_files"
+    public_ref_files="$spec_ref_files"
+    repo_local_test_files="$spec_test_files"
+    repo_local_ref_files="$spec_ref_files"
+
+    if [ -f "$public_skill_md" ]; then
+      public_repo_tests="$(sed -n '/Required persisted scenario\|^## Tests/,/^---\|^## /{ /^- /{ /tests\//{ s/.*tests\///; s/`.*//; p } } }' "$public_skill_md")"
+      public_repo_refs="$(sed -n '/^## References/,/^---\|^## /{ /^- /{ /references\//{ s/.*references\///; s/`.*//; p } } }' "$public_skill_md")"
+      public_test_files="$(printf '%s\n%s' "$public_test_files" "$public_repo_tests")"
+      public_ref_files="$(printf '%s\n%s' "$public_ref_files" "$public_repo_refs")"
+    fi
+    public_test_files="$(echo "$public_test_files" | sort -u | { grep -v '^$' || true; })"
+    public_ref_files="$(echo "$public_ref_files" | sort -u | { grep -v '^$' || true; })"
+
     for repo_md in "$agents_skill_md" "$claude_skill_md"; do
       if [ -f "$repo_md" ]; then
         repo_tests="$(sed -n '/Required persisted scenario\|^## Tests/,/^---\|^## /{ /^- /{ /tests\//{ s/.*tests\///; s/`.*//; p } } }' "$repo_md")"
-        all_test_files="$(printf '%s\n%s' "$all_test_files" "$repo_tests")"
-      fi
-    done
-    all_test_files="$(echo "$all_test_files" | sort -u | { grep -v '^$' || true; })"
-
-    # Build merged reference file list
-    # Only extract lines that contain "references/" in the path
-    all_ref_files="$spec_ref_files"
-    for repo_md in "$agents_skill_md" "$claude_skill_md"; do
-      if [ -f "$repo_md" ]; then
         repo_refs="$(sed -n '/^## References/,/^---\|^## /{ /^- /{ /references\//{ s/.*references\///; s/`.*//; p } } }' "$repo_md")"
-        all_ref_files="$(printf '%s\n%s' "$all_ref_files" "$repo_refs")"
+        repo_local_test_files="$(printf '%s\n%s' "$repo_local_test_files" "$repo_tests")"
+        repo_local_ref_files="$(printf '%s\n%s' "$repo_local_ref_files" "$repo_refs")"
       fi
     done
-    all_ref_files="$(echo "$all_ref_files" | sort -u | { grep -v '^$' || true; })"
+    repo_local_test_files="$(echo "$repo_local_test_files" | sort -u | { grep -v '^$' || true; })"
+    repo_local_ref_files="$(echo "$repo_local_ref_files" | sort -u | { grep -v '^$' || true; })"
 
-    # Check declared files exist in BOTH repo-local directories
-    for repo_dir in ".agents/skills/$spec_name" ".claude/skills/$spec_name"; do
-      repo_label="$(echo "$repo_dir" | cut -d/ -f1)"
-
-      if [ -n "$all_test_files" ]; then
-        if [ ! -d "$repo_dir/tests" ]; then
-          echo "ERROR: $spec_name ($repo_label): declares test files but $repo_dir/tests/ does not exist" >&2
+    if [ "$has_public" -eq 1 ]; then
+      if [ -n "$public_test_files" ]; then
+        if [ ! -d "$public_dir/tests" ]; then
+          echo "ERROR: $spec_name (public): declares test files but $public_dir/tests/ does not exist" >&2
           spec_cross_fail=1
         else
-          # Check each declared test file
-          for tf in $all_test_files; do
-            if [ ! -f "$repo_dir/tests/$tf" ]; then
-              echo "ERROR: $spec_name ($repo_label): declared tests/$tf missing" >&2
+          for tf in $public_test_files; do
+            if [ ! -f "$public_dir/tests/$tf" ]; then
+              echo "ERROR: $spec_name (public): declared tests/$tf missing" >&2
               spec_cross_fail=1
             fi
           done
         fi
       fi
 
-      if [ -n "$all_ref_files" ]; then
-        if [ ! -d "$repo_dir/references" ]; then
-          echo "ERROR: $spec_name ($repo_label): declares reference files but $repo_dir/references/ does not exist" >&2
+      if [ -n "$public_ref_files" ]; then
+        if [ ! -d "$public_dir/references" ]; then
+          echo "ERROR: $spec_name (public): declares reference files but $public_dir/references/ does not exist" >&2
           spec_cross_fail=1
         else
-          # Check each declared reference file
-          for rf in $all_ref_files; do
-            if [ ! -f "$repo_dir/references/$rf" ]; then
-              echo "ERROR: $spec_name ($repo_label): declared references/$rf missing" >&2
+          for rf in $public_ref_files; do
+            if [ ! -f "$public_dir/references/$rf" ]; then
+              echo "ERROR: $spec_name (public): declared references/$rf missing" >&2
               spec_cross_fail=1
             fi
           done
         fi
       fi
-    done
+    fi
+
+    if [ "$has_public" -eq 1 ] && [ "$has_repo_local" -eq 1 ]; then
+      case " $ALLOWLIST_PUBLIC_AND_REPO_LOCAL_DUPLICATES " in
+        *" $spec_name "*)
+          ;;
+        *)
+          echo "ERROR: $spec_name is defined in both skills/ and repo-local skill directories; add an allowlist entry here only if the split is intentional and separately documented" >&2
+          spec_cross_fail=1
+          ;;
+      esac
+    fi
+
+    # Check declared files exist in BOTH repo-local directories when this is a
+    # repo-local maintainer skill surface.
+    if [ "$has_repo_local" -eq 1 ]; then
+      for repo_dir in "$agents_dir" "$claude_dir"; do
+        repo_label="$(echo "$repo_dir" | cut -d/ -f1)"
+
+        if [ -n "$repo_local_test_files" ]; then
+          if [ ! -d "$repo_dir/tests" ]; then
+            echo "ERROR: $spec_name ($repo_label): declares test files but $repo_dir/tests/ does not exist" >&2
+            spec_cross_fail=1
+          else
+            # Check each declared test file
+            for tf in $repo_local_test_files; do
+              if [ ! -f "$repo_dir/tests/$tf" ]; then
+                echo "ERROR: $spec_name ($repo_label): declared tests/$tf missing" >&2
+                spec_cross_fail=1
+              fi
+            done
+          fi
+        fi
+
+        if [ -n "$repo_local_ref_files" ]; then
+          if [ ! -d "$repo_dir/references" ]; then
+            echo "ERROR: $spec_name ($repo_label): declares reference files but $repo_dir/references/ does not exist" >&2
+            spec_cross_fail=1
+          else
+            # Check each declared reference file
+            for rf in $repo_local_ref_files; do
+              if [ ! -f "$repo_dir/references/$rf" ]; then
+                echo "ERROR: $spec_name ($repo_label): declared references/$rf missing" >&2
+                spec_cross_fail=1
+              fi
+            done
+          fi
+        fi
+      done
+    fi
 
     # ── Dual-surface file-list drift detection ──
     # For skills in both .agents/ and .claude/, verify tests/ and references/
     # file lists are identical. Content differences are a separate concern.
-    agents_dir=".agents/skills/$spec_name"
-    claude_dir=".claude/skills/$spec_name"
-
-    if [ -d "$agents_dir/tests" ] && [ -d "$claude_dir/tests" ]; then
+    if [ "$has_repo_local" -eq 1 ] && [ -d "$agents_dir/tests" ] && [ -d "$claude_dir/tests" ]; then
       agents_test_list="$(ls "$agents_dir/tests/" 2>/dev/null | sort)"
       claude_test_list="$(ls "$claude_dir/tests/" 2>/dev/null | sort)"
       if [ "$agents_test_list" != "$claude_test_list" ]; then
@@ -198,7 +260,7 @@ if [ -d ".trellis/spec/skills" ]; then
       fi
     fi
 
-    if [ -d "$agents_dir/references" ] && [ -d "$claude_dir/references" ]; then
+    if [ "$has_repo_local" -eq 1 ] && [ -d "$agents_dir/references" ] && [ -d "$claude_dir/references" ]; then
       agents_ref_list="$(ls "$agents_dir/references/" 2>/dev/null | sort)"
       claude_ref_list="$(ls "$claude_dir/references/" 2>/dev/null | sort)"
       if [ "$agents_ref_list" != "$claude_ref_list" ]; then
@@ -219,6 +281,7 @@ validate_workflow_scan_repair_contract() {
   scan_skill="skills/workflow-scan/SKILL.md"
   repair_skill="skills/workflow-repair/SKILL.md"
   scan_template="skills/workflow-scan/references/scan-output-template.md"
+  scan_handoff_template="skills/workflow-scan/references/helper-handoff-template.md"
   correction_plan_template="skills/workflow-repair/references/correction-plan-template.md"
   repair_log_template="skills/workflow-repair/references/repair-log-template.md"
   issue_history_template="skills/workflow-repair/references/issue-history-template.md"
@@ -229,6 +292,7 @@ validate_workflow_scan_repair_contract() {
   [ -f "$scan_skill" ] || fail "missing $scan_skill"
   [ -f "$repair_skill" ] || fail "missing $repair_skill"
   [ -f "$scan_template" ] || fail "missing $scan_template"
+  [ -f "$scan_handoff_template" ] || fail "missing $scan_handoff_template"
   [ -f "$correction_plan_template" ] || fail "missing $correction_plan_template"
   [ -f "$repair_log_template" ] || fail "missing $repair_log_template"
   [ -f "$issue_history_template" ] || fail "missing $issue_history_template"
@@ -285,6 +349,34 @@ validate_workflow_scan_repair_contract() {
   grep -Fq "p0-count" "$scan_template" || fail "$scan_template missing count consistency reference for p0-count"
   grep -Fq "p1-count" "$scan_template" || fail "$scan_template missing count consistency reference for p1-count"
   grep -Fq "p2-count" "$scan_template" || fail "$scan_template missing count consistency reference for p2-count"
+  grep -Fq "Execution-mode note:" "$scan_template" || fail "$scan_template missing execution-mode note"
+  grep -Fq "\`--agent\` helper assistance" "$scan_template" || fail "$scan_template missing explicit --agent execution-mode note"
+  grep -Eq 'MUST NOT.*WORKFLOW_QUESTIONS\.md.*schema' "$scan_template" || fail "$scan_template missing normative no-schema-change rule"
+  grep -Fq "coordinator-owned" "$scan_template" || fail "$scan_template missing coordinator-owned report note"
+  grep -Fq "not part of the shared scan/repair protocol surface" "$scan_template" || fail "$scan_template missing explicit helper-handoff boundary note"
+  grep -Fq "## Helper Scope" "$scan_handoff_template" || fail "$scan_handoff_template missing Helper Scope section"
+  grep -Fq "## Confirmed Facts" "$scan_handoff_template" || fail "$scan_handoff_template missing Confirmed Facts section"
+  grep -Fq "## Candidate Issues" "$scan_handoff_template" || fail "$scan_handoff_template missing Candidate Issues section"
+  grep -Fq "## Open Questions" "$scan_handoff_template" || fail "$scan_handoff_template missing Open Questions section"
+  grep -Fq "## Relative Paths" "$scan_handoff_template" || fail "$scan_handoff_template missing Relative Paths section"
+  grep -Fq "## Status" "$scan_handoff_template" || fail "$scan_handoff_template missing Status section"
+
+  for test_file in \
+    "skills/workflow-scan/tests/01-inline-default-no-agents.md" \
+    "skills/workflow-scan/tests/02-agent-assisted-supported.md" \
+    "skills/workflow-scan/tests/03-agent-mode-unsupported.md" \
+    "skills/workflow-scan/tests/04-helper-failure-local-compensation.md" \
+    "skills/workflow-scan/tests/05-unresolved-helper-conflict-dropped.md" \
+    "skills/workflow-scan/tests/06-partial-helper-output-local-followup.md" \
+    "skills/workflow-scan/tests/07-inline-when-speed-or-depth-only.md"
+  do
+    [ -f "$test_file" ] || fail "missing $test_file"
+    grep -Fq "## Purpose" "$test_file" || fail "$test_file missing Purpose section"
+    grep -Fq "## Input" "$test_file" || fail "$test_file missing Input section"
+    grep -Fq "## Expected Mode" "$test_file" || fail "$test_file missing Expected Mode section"
+    grep -Fq "## Expected Key Behaviors" "$test_file" || fail "$test_file missing Expected Key Behaviors section"
+    grep -Fq "## Must Not" "$test_file" || fail "$test_file missing Must Not section"
+  done
 
   # Guard against known drift that blocked workflow-repair intake.
   for bad_key in \
@@ -304,12 +396,36 @@ validate_workflow_scan_repair_contract() {
   done
 
   grep -Fq "Read-back validation is mandatory" "$scan_skill" || fail "$scan_skill missing read-back validation rule"
+  grep -Fq "\`--agent\`" "$scan_skill" || fail "$scan_skill missing explicit --agent input contract"
+  grep -Fq "Inline default" "$scan_skill" || fail "$scan_skill missing inline-default execution rule"
+  grep -Fq "Explicit agent opt-in only" "$scan_skill" || fail "$scan_skill missing explicit agent opt-in rule"
+  grep -Fq "including the literal \`--agent\` token in the request" "$scan_skill" || fail "$scan_skill missing literal --agent trigger rule"
+  grep -Fq "using equivalent natural language such as" "$scan_skill" || fail "$scan_skill missing natural-language equivalent trigger rule"
+  grep -Fq "scan deeper" "$scan_skill" || fail "$scan_skill missing speed/depth example"
+  grep -Fq "do not by themselves enable helper-agent mode" "$scan_skill" || fail "$scan_skill missing explicit speed/depth-only inline rule"
+  grep -Fq "Coordinator ownership is mandatory" "$scan_skill" || fail "$scan_skill missing coordinator ownership rule for agent mode"
+  grep -Fq "Blocked / Agent Mode Unsupported" "$scan_skill" || fail "$scan_skill missing blocked behavior for unsupported agent mode"
+  grep -Fq "Treat the current platform/session as agent-capable only when all of the" "$scan_skill" || fail "$scan_skill missing explicit agent-capable criteria"
+  grep -Fq "helper-handoff-template.md" "$scan_skill" || fail "$scan_skill missing helper handoff template reference"
+  grep -Fq "timed out, or fails outright" "$scan_skill" || fail "$scan_skill missing helper failure compensation rule"
+  grep -Fq "If two helper handoffs conflict" "$scan_skill" || fail "$scan_skill missing helper conflict resolution rule"
+  grep -Fq "recommended helper-count ceiling: 3 by default, 4 only" "$scan_skill" || fail "$scan_skill missing recommended helper-count ceiling"
+  grep -Fq "Partial helper output may still be used as a lead for local re-check" "$scan_skill" || fail "$scan_skill missing partial-helper local follow-up rule"
+  grep -Fq "This skill defines behavior only." "$scan_skill" || fail "$scan_skill missing behavior-only dispatch note"
+  grep -Fq "platform-specific and may differ across executors" "$scan_skill" || fail "$scan_skill missing explicit platform-specific dispatch note"
+  grep -Fq "minimum number of helper agents needed" "$scan_skill" || fail "$scan_skill missing bounded resource usage rule"
+  grep -Fq "This rule applies to mode selection only" "$scan_skill" || fail "$scan_skill missing explicit scope boundary for no-silent-fallback rule"
   grep -Fq "Immediately read the file back and verify" "$scan_skill" || fail "$scan_skill missing explicit post-write verification step"
   grep -Fq "count and per-severity counts" "$scan_skill" || fail "$scan_skill missing count consistency validation"
   grep -Fq "snake_case" "$scan_skill" || fail "$scan_skill should explicitly guard against snake_case contract drift"
 
   grep -Fq "\`document-type\` must be \`workflow-questions\`" "$repair_skill" || fail "$repair_skill missing repair-side intake requirement for document-type"
   grep -Fq "\`protocol\` must be \`workflow-scan-repair-v2\`" "$repair_skill" || fail "$repair_skill missing repair-side intake requirement for protocol"
+  grep -Fq "Execution-mode agnostic intake" "$repair_skill" || fail "$repair_skill missing execution-mode agnostic intake rule"
+  grep -Fq "\`--agent\`" "$repair_skill" || fail "$repair_skill missing explicit compatibility reference to --agent scan mode"
+  grep -Fq "No implied repair-side agent mode" "$repair_skill" || fail "$repair_skill missing no-implied-agent-mode clarification"
+  grep -Fq "Report Produced By \`workflow-scan --agent\`" "$repair_skill" || fail "$repair_skill missing example for --agent-produced report intake"
+  grep -Fq "accepts validated reports produced by either inline \`workflow-scan\` runs or explicit \`workflow-scan --agent\` runs" "$repair_skill" || fail "$repair_skill missing compatibility note for inline and --agent scan reports"
   for repair_key in \
     "\`trellis-version\`" \
     "\`workflow-version\`" \
@@ -345,6 +461,14 @@ validate_workflow_scan_repair_contract() {
   grep -Fq "read-back validation" "$scan_spec" || fail "$scan_spec missing read-back validation contract"
   grep -Fq "read-back validation" "$repair_spec" || fail "$repair_spec missing paired read-back validation note"
   grep -Fq "read-back validation" "$skills_index" || fail "$skills_index missing paired contract read-back validation note"
+  grep -Fq "\`--agent\`" "$scan_spec" || fail "$scan_spec missing explicit --agent mode contract"
+  grep -Fq "execution-mode agnostic" "$repair_spec" || fail "$repair_spec missing execution-mode agnostic note"
+  grep -Fq "\`--agent\` assistance" "$skills_index" || fail "$skills_index missing paired execution-mode note"
+  grep -Fq "helper failure/timeout/malformed-handoff compensated locally" "$scan_spec" || fail "$scan_spec missing helper failure scenario coverage note"
+  grep -Fq "unresolved helper conflicts dropped conservatively instead of guessed through" "$scan_spec" || fail "$scan_spec missing unresolved helper conflict scenario coverage note"
+  grep -Fq "partial helper output used only as a lead for local coordinator follow-up" "$scan_spec" || fail "$scan_spec missing partial-helper scenario coverage note"
+  grep -Fq "speed/depth-only requests staying inline" "$scan_spec" || fail "$scan_spec missing speed/depth-only scenario coverage note"
+  grep -Fq "main-session-only skill" "$repair_spec" || fail "$repair_spec missing repair-side no-agent clarification"
   grep -Fq "count fields match the actual number of findings" "$scan_spec" || fail "$scan_spec missing count consistency contract"
   grep -Fq "declared total/severity counts" "$repair_spec" || fail "$repair_spec missing repair-side count consistency contract"
   grep -Fq "total/severity count semantics" "$skills_index" || fail "$skills_index missing paired count consistency note"
