@@ -40,6 +40,7 @@ temp-project-version: {trellis version or temp-project .trellis/.version value}
 temp-project-root: {absolute temp project path}
 report-path: {absolute path to WORKFLOW_QUESTIONS.md}
 repair-task: {absolute or repo-relative path to the dedicated repair task directory}
+continuation-mode: {stop-after-summary | auto-follow-through}
 created-at: {ISO 8601}
 total-issues: {N}
 ---
@@ -52,6 +53,7 @@ total-issues: {N}
 - Temp Project Root: {temp-project-root}
 - Report Path: {report-path}
 - Repair Task: {repair-task}
+- Continuation Mode: {stop-after-summary | auto-follow-through}
 - Issue Count: {total-issues}
 ```
 
@@ -85,8 +87,10 @@ total-issues: {N}
    - variant sweep scope
    - whether the issue was trellis-native
    - unresolved items
-3. If no issue was repaired, the document must still record why:
+3. The session-level header/summary fields must include:
+   - continuation mode
+4. If no issue was repaired, the document must still record why:
    ignored, blocked, rejected, or no findings.
-4. Later runs must read all files in this directory and compare new findings
+5. Later runs must read all files in this directory and compare new findings
    against the stored titles/IDs, root causes, repaired files, and variant
    sweep scopes.

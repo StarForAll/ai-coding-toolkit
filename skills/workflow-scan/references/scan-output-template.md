@@ -7,9 +7,14 @@ Execution-mode note:
 
 - `workflow-scan` may gather evidence inline by default or via explicit
   `--agent` helper assistance.
+- `workflow-repair` may later run with plain repair flow or explicit `--auto`
+  close-out follow-through in the source project.
 - This **MUST NOT** change the `WORKFLOW_QUESTIONS.md` schema.
 - The final report is always coordinator-owned and must pass the same
   read-back validation before `workflow-repair` may consume it.
+- Repair-side `--auto` changes only post-repair source-project close-out
+  behavior. It does not add report fields or alter repair-side intake rules for
+  this document.
 - Helper handoff artifacts, if any, are internal scan-side working context only
   and are not part of the shared scan/repair protocol surface.
 

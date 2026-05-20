@@ -38,6 +38,13 @@ workflow product source under `docs/workflows/新项目开发工作流/`.
    `WORKFLOW_QUESTIONS.md` passes the shared contract validation.
 9. Scan-side `--agent` support does not imply repair-side agent support; repair
    remains a main-session-only skill unless its own scope boundary changes.
+10. `--auto` is an explicit repair-side continuation mode only. It may continue
+    into current-task close-out after a successful repair run, but it must not
+    bypass plan presentation, authorization, verification, commit readiness, or
+    finish-work safety gates.
+11. `--auto` depends on the current Trellis platform's close-out interaction
+    flow. If that platform flow changes, the repair-side auto-follow-through
+    behavior must be re-verified before being trusted.
 
 ---
 
@@ -94,6 +101,60 @@ The skill must distinguish:
   correction plan is echoed
 - analysis-only requests, which must stop after the correction plan until the
   user confirms execution
+- explicit `--auto` requests, which may continue into current-task close-out
+  only after the normal repair flow has already succeeded
+- `post-plan-confirmation`, which is the execution-time authorization state
+  after an analysis-only run receives explicit Step 8 confirmation to proceed
+
+### 4A. Auto Follow-Through Discipline
+
+When `--auto` is requested, the skill must:
+
+- keep `--auto` opt-in and literal rather than inferring it from vague
+  "continue" language
+- treat `--auto` as a post-repair continuation mode, not as expanded repair
+  authority
+- continue only within the current repair task's normal close-out flow
+- reply `ok` only when the current task's own one-shot commit confirmation
+  prompt appears
+- require commit-confirmation detection to be explicit to the current repair
+  task and to clearly ask for a yes/confirm style response before replying `ok`
+- stop when the close-out flow changes in a way that makes single-shot commit
+  confirmation unreliable, rather than risking over-confirmation
+- stop when any other interactive prompt appears; do not guess a reply
+- invoke the available Trellis finish-work command surface only after the task
+  is actually ready for wrap-up
+- stop when no finish-work command surface exists in the current
+  platform/session; do not invent a substitute close-out path
+- keep repair-side agent behavior unchanged even if the request also mentions
+  `--agent`; `--auto` must not be treated as agent-mode expansion
+- treat findings outside an explicit `target_focus` as outside the close-out
+  safety decision for `--auto`
+- if out-of-focus findings carry higher severity, require the correction plan
+  to surface that fact so auto close-out is visibly understood as narrowed
+  scope rather than as a fully clean report
+- treat `--auto` as having no effect when authorization remains
+  `analysis-only` and repair execution never actually runs
+- allow `--auto` to continue after partial acceptance only when unresolved
+  `blocked` / `manual-decision` items are recorded clearly enough that the
+  resulting commit will not misrepresent the repair as fully complete
+- stop when `total-succeeded = 0` and `total-attempted > 0` rather than
+  continuing to commit/finish-work as if a successful repair occurred
+- write continuation outcome into the repair log in two phases:
+  `pending` before Step 12 completes, then the final outcome after Step 12
+- define `total-attempted` as every repair item that actually entered
+  execution, regardless of whether the final status became succeeded, failed,
+  or reverted
+- treat Step 12 blockers as stopping the close-out flow only; the log update
+  and final outcome report must still run afterward
+- on a later resumed run, convert stale `pending` continuation state to
+  `interrupted: session-did-not-complete` before recording a newer final
+  outcome
+- treat the latest repair log under the current repair task as the source for
+  detecting whether a resumed run is recovering stale `pending` state, using
+  the highest `repair-timestamp` value rather than filename ordering alone
+- stop and report a blocker instead of forcing commit confirmation or
+  finish-work when readiness is unclear or unsafe
 
 ### 5. Variant Discipline
 
@@ -168,10 +229,30 @@ When editing `skills/workflow-repair/`, confirm all of the following:
   explicit `--agent`
 - the skill still reads all `tmp/workflow-issues/` history docs and writes one
   new issue-history file per run
+- issue-history docs now record continuation mode when `--auto` is part of the
+  execution context
 - explicit repair authorization and analysis-only behavior remain distinct
+- `--auto` remains explicit, post-repair only, and current-task scoped
+- `--auto` now explicitly no-ops when repair execution never runs under
+  `analysis-only`
+- that no-op rule now explicitly applies only when authorization never advanced
+  beyond `analysis-only`
+- `post-plan-confirmation` is now explicitly defined and remains distinct from
+  both `analysis-only` and `authorized-to-repair`
+- `--auto` still does not create any repair-side `--agent` interaction
+- `--auto` now explicitly stops on non-commit interactive prompts instead of
+  guessing a reply
+- `--auto` now explicitly stops when one-shot commit confirmation cannot be
+  identified reliably
+- `--auto` now explicitly stops when no finish-work command surface is
+  available
 - repeated findings now force broader closure or escalation
 - same-pattern sweep behavior is still documented and logged
 - contract-surface coverage and repeat-trigger checks are still documented in the plan/log artifacts
+- repair-log timing now records continuation outcome without contradicting Step
+  11 / Step 12 ordering
+- `--auto` still stops instead of forcing finish-work when commit readiness or
+  close-out safety is not satisfied
 - any protocol, field, role-boundary, example, or behavior change is mirrored
   by a matching `workflow-scan` adaptation and shared-template update in the
   same change
@@ -197,5 +278,7 @@ Minimum expected validation:
   scan evidence was gathered before the final report was written
 - verify repair-side examples include at least one report intake path for a
   validated `workflow-scan --agent` output
+- verify `--auto` is documented as explicit, post-repair only, and blocked when
+  the current task is not ready for commit/finish-work
 - verify the paired `workflow-scan` diff is an actual compatibility adaptation
   when the repair-side contract changed, not just an unchanged carryover

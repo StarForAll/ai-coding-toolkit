@@ -1,13 +1,17 @@
 ---
 name: workflow-repair
 description: Apply safe source-workflow fixes from a `WORKFLOW_QUESTIONS.md` report. Use when re-checking an embedded Trellis temp project report, consulting prior workflow issue history, and repairing `docs/workflows/新项目开发工作流/`.
-compatibility: Requires `trellis` on PATH, access to the temp project report plus the workflow source repo, ability to run `task.py create` and `task.py start`, and inline CLI execution with local filesystem access. Repair itself remains main-session inline, but it accepts validated reports produced by either inline `workflow-scan` runs or explicit `workflow-scan --agent` runs.
+compatibility: Requires `trellis` on PATH, access to the temp project report plus the workflow source repo, ability to run `task.py create` and `task.py start`, and inline CLI execution with local filesystem access. Repair itself remains main-session inline, but it accepts validated reports produced by either inline `workflow-scan` runs or explicit `workflow-scan --agent` runs. When `--auto` is requested, the current session is expected to support the repository's normal task close-out flow, including commit confirmation and an available Trellis finish-work command surface; if unavailable, auto follow-through stops gracefully at the blocker.
 ---
 
 # workflow-repair
 
 ## Version History
 
+- **v2.4**: Added explicit `--auto` follow-through mode so repair can continue
+  into task close-out only after successful repair verification, using current-
+  task-scoped commit confirmation plus the platform's available Trellis
+  finish-work command surface
 - **v2.3**: Clarified that repair-side intake is execution-mode agnostic and
   depends only on the validated `WORKFLOW_QUESTIONS.md` contract, whether the
   scan ran inline or with explicit `--agent` assistance
@@ -51,6 +55,8 @@ Use this skill when any of the following is true:
   workflow based on real confirmed problems
 - the user asks to "repair workflow issues" or "fix workflow findings"
 - the user asks to "apply workflow corrections" or "run workflow-repair"
+- the user wants the repair flow to continue automatically into normal task
+  close-out by explicitly adding `--auto`
 - the same class of workflow issue has already reappeared after one or more
   earlier repair attempts
 - a workflow-scan cycle has completed and the repair phase should begin
@@ -127,6 +133,11 @@ Use this skill when any of the following is true:
 19. **No implied repair-side agent mode**: scan-side `--agent` support does
     not extend to `workflow-repair`. Repair remains main-CLI-only unless its
     own contract changes in a separate scoped update.
+20. **`--auto` is explicit and gated**: auto follow-through is allowed only
+    when the input explicitly includes `--auto`. It never bypasses correction-
+    plan presentation, repair authorization, post-repair verification, current-
+    task commit readiness, or the normal safety gates required before
+    `finish-work`.
 
 ## Inputs
 
@@ -135,6 +146,7 @@ Use this skill when any of the following is true:
 | `report_path` | No | auto-detect | Absolute path to `WORKFLOW_QUESTIONS.md` |
 | `temp_project_path` | No | from report | Absolute path to the temp project root |
 | `target_focus` | No | empty | Specific WS-NNN IDs to prioritize |
+| `--auto` | No | off | After a successful repair run, continue through the current task's normal close-out flow instead of stopping at the repair summary. If that flow asks for one-shot commit confirmation for this task, reply `ok`, then invoke the available Trellis finish-work command surface once the task is actually ready. |
 
 ### Report Path Resolution
 
@@ -154,6 +166,44 @@ Determine execution mode from the current user request:
 - If the user asks only to analyze, judge, or produce a plan, use
   `analysis-only`.
 - If ambiguous, default to `analysis-only`.
+- If the request started as `analysis-only` and the user later explicitly
+  accepts all or partial execution in Step 8, switch authorization mode to
+  `post-plan-confirmation` for the actual repair execution, repair-log
+  recording, and any later auto follow-through decisions.
+
+### Auto Follow-Through Mode
+
+Determine continuation mode from the current user request:
+
+- If the user explicitly includes the literal `--auto` token, use
+  `auto-follow-through`.
+- Otherwise, use `stop-after-summary`.
+- `--auto` changes only what happens after a successful repair run. It does not
+  skip correction-plan presentation, repair authorization, post-repair
+  verification, or any required Trellis close-out prerequisite.
+- When `target_focus` explicitly narrows the repair scope, findings outside that
+  focus do not participate in the close-out safety decision for `--auto`.
+  If those out-of-focus findings carry higher severity, surface that fact in
+  the correction plan so the user can see that auto close-out is proceeding on
+  a narrowed repair scope rather than on a fully clean report.
+- In `auto-follow-through` mode, if the current repair task reaches a normal
+  close-out prompt that asks for one-shot commit confirmation for this task,
+  reply `ok` exactly once and continue.
+- If any other interactive prompt appears, stop and report the blocker instead
+  of guessing a reply.
+- After the current task's work is actually ready for wrap-up, invoke the
+  available Trellis finish-work command surface for the current
+  platform/session. Examples: `trellis-finish-work` or `/trellis:finish-work`.
+- If no Trellis finish-work command surface is available in the current
+  platform/session, stop and report the blocker. Do not simulate or replace
+  `finish-work`.
+- If the current task is not ready for commit or finish-work, stop after the
+  repair summary and report the blocker instead of forcing completion.
+- If authorization mode stays `analysis-only` and the user rejects or never
+  confirms execution, `--auto` has no effect because no repair run completed.
+- If the request also includes `--agent`, ignore that flag for mode expansion:
+  repair remains main-session-only and `--auto` does not introduce any
+  repair-side agent interaction.
 
 ### Issue History Directory
 
@@ -176,6 +226,10 @@ Three artifacts:
 3. **Issue history summary**: written to
    `tmp/workflow-issues/{NNNN}.md`. Format: see
    `references/issue-history-template.md`.
+
+If continuation mode = `auto-follow-through`, the skill also continues into the
+current task's normal close-out flow after these repair artifacts are written
+and echoes that follow-through result inline.
 
 ## Workflow
 
@@ -222,7 +276,11 @@ Three artifacts:
    - use `temp_project_path` if provided
    - otherwise read `temp-project-root` from the report
    - if neither is available, derive `/tmp/trellis-{VERSION}-2`
-4. Determine repair authorization mode (see `Repair Authorization Mode` above).
+4. Determine repair authorization mode and continuation mode (see the
+   `Repair Authorization Mode` and `Auto Follow-Through Mode` sections above).
+   If the request also included `--agent`, note once that repair-side
+   `--agent` is not supported and that any `--auto` follow-through still runs
+   in main-session-only mode.
 5. If protocol mismatch: stop as **Blocked / Protocol Version Mismatch**.
 6. If the temp project root does not exist or does not match the report
    context: stop as **Blocked / Temp Project Mismatch**.
@@ -394,6 +452,13 @@ Format the complete correction plan using
    - **Modify**: request adjustments to specific proposed fixes
 4. If the user chooses **Modify**: adjust the specified fixes and re-present
    the updated plan before proceeding.
+5. If continuation mode = `auto-follow-through`, the presented plan must
+   explicitly say that a successful run will continue into the current task's
+   normal close-out flow, and that auto follow-through will stop and report a
+   blocker if close-out cannot proceed safely.
+   If the run started as `analysis-only` and later received explicit execution
+   approval, ensure that the presented plan still includes the continuation
+   mode / blocker disclosure before execution proceeds.
 
 ### Step 9: Execute Confirmed Repairs
 
@@ -441,9 +506,15 @@ If verification fails for a fix:
 - Record the revert in the repair log.
 - Mark the fix status as `failed` or `reverted`.
 
-### Step 11: Write Repair Log, Issue History, and Stop
+### Step 11: Write Repair Log, Issue History, and Summarize
 
 1. Write the repair log using `references/repair-log-template.md`.
+   - If continuation mode = `auto-follow-through`, set
+     `Auto Follow-Through Outcome` to `pending` at this stage because Step 12
+     has not finished yet.
+   - Record `total-attempted` as every repair item that actually entered
+     execution, regardless of whether it later succeeded, failed, or was
+     reverted.
 2. Save the repair log to the current repair task directory.
 3. Ensure `tmp/workflow-issues/` exists.
 4. Determine the next numeric issue-history filename:
@@ -459,6 +530,7 @@ If verification fails for a fix:
    - total history documents read
    - adopted / ignored / blocked / manual-decision / trellis-native counts
    - succeeded / failed / skipped counts
+   - continuation mode
    - repair log path
    - issue-history path
 7. Optional next steps:
@@ -466,6 +538,90 @@ If verification fails for a fix:
      workflow behavior
    - or run `workflow-audit` for comprehensive validation
 8. Do not delete task files or the issue-history document.
+
+### Step 12: Optional `--auto` Task Wrap-Up
+
+Use this step only when continuation mode = `auto-follow-through`.
+
+This step has two sub-phases:
+
+- **Phase A — Evaluate And Decide**: determine whether close-out may continue,
+  or whether the close-out flow must stop with a blocker reason.
+- **Phase B — Record And Report**: always update the repair log with the final
+  continuation outcome and echo that outcome, even when Phase A blocked the
+  close-out flow.
+
+1. **Phase A**: confirm that the repair run is actually ready to continue:
+   - every attempted fix has a terminal recorded status:
+     `verified`, `failed`, or `reverted`
+   - no `blocked` or `manual-decision` item remains unresolved in a way that
+     would make task close-out misleading or unsafe
+   - treat a `blocked` or `manual-decision` item as sufficiently resolved for
+     close-out only when its reason is recorded in the repair log/correction
+     plan and it does not represent an incomplete repair that would make the
+     commit misleading
+   - when `total-blocked + total-manual-decision > 0` but
+     `total-succeeded > 0`, auto follow-through may still continue only if the
+     unresolved items are recorded clearly enough that the resulting commit will
+     not misrepresent the repair as fully complete
+   - the working tree is in the state required by the normal Trellis close-out
+     flow for this task
+2. If `total-succeeded = 0` and `total-attempted > 0`, stop the close-out flow
+   and record/report that no effective repair was made. Do not continue to
+   commit confirmation or finish-work.
+3. If authorization mode = `analysis-only` and execution never actually ran,
+   stop the close-out flow. `--auto` does not override the lack of repair
+   execution.
+   This rule applies only when the authorization state never transitioned past
+   `analysis-only`.
+4. If `total-attempted = 0`, or if no code changes were made during the repair
+   run, stop the close-out flow and report that there is no repair-side work to
+   commit or close out automatically.
+5. Continue into the current task's remaining required close-out flow instead
+   of stopping at the repair summary.
+6. If that flow asks for one-shot commit-plan confirmation for the current
+   repair task, reply `ok` exactly once.
+   Treat a prompt as that confirmation only when it is clearly about committing
+   the current repair task and explicitly asks for a yes/confirm style response.
+   If the close-out flow changes in a way that makes that one-shot
+   identification unreliable, stop the close-out flow instead of risking
+   over-confirmation.
+7. If any other interactive prompt appears, stop the close-out flow and report
+   the blocker. Do not guess, auto-answer, or reinterpret it as commit
+   confirmation.
+8. Do not auto-answer unrelated prompts or broaden the commit scope beyond the
+   current task.
+9. If no Trellis finish-work command surface is available in the current
+   platform/session, stop the close-out flow and report the blocker. Do not
+   simulate or replace `finish-work`.
+10. After the current task's work is committed and the task is otherwise ready,
+    invoke the available Trellis finish-work command surface for the current
+    platform/session. Examples: `trellis-finish-work` or
+    `/trellis:finish-work`.
+11. If commit or finish-work cannot safely proceed, stop the close-out flow and
+    report the blocker instead of forcing completion.
+    If `git commit` itself fails mechanically (for example hook rejection,
+    conflict, or another commit-time error), leave the repair changes in place,
+    record/report the blocker, and do not pretend the task was closed out.
+12. **Phase B**: update the repair log with the final
+    `Auto Follow-Through Outcome` value:
+    - `reached-finish-work`, or
+    - `stopped-with-blocker: <brief reason>`
+    If the blocker happened after commit but before task wrap-up completed,
+    record that fact in the blocker reason rather than introducing a separate
+    outcome enum.
+13. If this run resumed after an older repair log for the same task was left at
+    `pending`, update that older continuation result to
+    `interrupted: session-did-not-complete` before recording the new final
+    outcome.
+    Treat a resumed run as detected when the current repair task's latest
+    repair log still shows `Auto Follow-Through Outcome: pending`.
+    Determine that latest repair log from the greatest `repair-timestamp`
+    value, not from filename ordering alone.
+    If the current process itself is interrupted before Phase B runs, the log
+    may remain at `pending` until a later run performs this recovery step.
+14. Echo whether auto follow-through reached finish-work or stopped with a
+    blocker.
 
 ## Decision State Semantics
 
@@ -490,6 +646,12 @@ If verification fails for a fix:
 | No findings in report | Write the repair log and an issue-history document with `total-attempted: 0` and all counts at 0. |
 | Fix scope violation | Skip the fix, record the violation in the repair log. Do not modify files outside the allowed three locations. |
 | Post-repair verification failure | Revert the change, record the failure and revert in the repair log. |
+| `--auto` requested and a non-commit interactive prompt appears | Stop after the repair summary or current close-out point, report the blocker, and do not guess a reply. |
+| `--auto` requested but no finish-work command surface is available | Stop after the repair summary or current close-out point, report the blocker, and do not simulate finish-work. |
+| `--auto` requested but no effective repair succeeded | Stop after the repair summary, record that no effective repair was made, and do not continue to commit confirmation or finish-work. |
+| `--auto` requested but findings exist and all of them resolve to `ignored` | Stop after the repair summary, record that no repair-side work was produced, and do not continue to commit confirmation or finish-work. |
+| `--auto` requested but no repair-side code changes exist | Stop after the repair summary, record that no repair-side work exists to close out automatically, and do not continue to commit confirmation or finish-work. |
+| `--auto` requested but close-out is not ready or not safe | Stop after the repair summary, explain the blocker, and do not auto-confirm commits or invoke finish-work. |
 | User rejects all | Write the repair log and an issue-history document with all findings as `skipped`. No workflow source files modified. |
 
 ## Related Skills
@@ -499,6 +661,28 @@ If verification fails for a fix:
 - `workflow-audit`: comprehensive audit with version gates, evidence mainline,
   and runtime validation (complementary, not replacement)
 - `workflow-capability-audit`: version-drift audit
+
+## Tests
+
+Required persisted scenario files:
+
+- `tests/08-auto-follow-through-success.md`
+- `tests/09-auto-stops-on-zero-success.md`
+- `tests/10-auto-no-effect-under-analysis-only.md`
+- `tests/11-auto-stops-on-unexpected-prompt.md`
+- `tests/12-auto-blocked-without-finish-work-surface.md`
+- `tests/13-post-plan-confirmation-mode.md`
+- `tests/14-post-plan-confirmation-with-auto.md`
+- `tests/15-partial-accept-with-documented-blockers.md`
+- `tests/16-interrupted-pending-recovery.md`
+- `tests/17-commit-succeeds-but-finish-work-fails.md`
+- `tests/18-auto-zero-findings.md`
+- `tests/19-git-commit-fails-during-auto.md`
+- `tests/20-auto-with-preexisting-active-task.md`
+- `tests/21-auto-all-findings-ignored.md`
+- `tests/22-authorized-to-repair-partial-accept-with-auto.md`
+- `tests/23-target-focus-with-out-of-focus-high-severity.md`
+- `tests/24-auto-mixed-success-and-reverted.md`
 
 ## Examples
 
@@ -583,4 +767,87 @@ AI:
    🔧 Applied: 0 so far
    📝 Repair log: not written yet
    🗂 Issue history: not written yet
+```
+
+If the user had written `/workflow-repair --auto` with the same analysis-only
+intent and still declined execution, the result would be the same: `--auto`
+would have no effect because no repair run completed.
+
+If the user instead accepted a partial repair run under `analysis-only` and all
+confirmed repairs later failed or were reverted, `--auto` would no longer be a
+no-op. Step 12.2 would stop follow-through as a blocker because execution did
+run, but no effective repair succeeded.
+
+### Example 5: Repair With `--auto` Follow-Through
+
+```text
+User: /workflow-repair --auto
+
+AI:
+1. Resolve `/tmp/trellis-{LIVE_VERSION}-2/WORKFLOW_QUESTIONS.md`
+2. Create and start a dedicated repair task
+3. Detect continuation mode = auto-follow-through
+4. Authorization Mode: authorized-to-repair
+5. Validate the shared report contract and verify findings exactly as usual
+6. Present the correction plan, explicitly noting that a successful run will
+   continue into the current task's close-out flow
+7. Apply the confirmed repairs
+8. Complete post-repair strict review
+9. Write the repair log and `tmp/workflow-issues/0008.md`
+10. The current task reaches its normal commit-plan confirmation prompt
+11. Reply `ok`
+12. The current task's work commits land
+13. Invoke the available Trellis finish-work command surface for this session
+    (for example `trellis-finish-work`; some platforms may expose
+    `/trellis:finish-work` instead)
+14. Echo that the repair task finished end to end
+```
+
+### Example 6: `--auto` Stops On Blocker
+
+```text
+User: /workflow-repair --auto
+
+AI:
+1. Resolve and validate the report as usual
+2. Verify the findings and execute the confirmed repairs
+3. Post-repair review completes, but `total-succeeded = 0` and
+   `total-attempted > 0`
+4. Write the repair log and issue-history document
+5. Stop after the repair summary
+
+   ⏸ Auto follow-through stopped
+   Reason: no effective repair was made, so commit confirmation and
+   finish-work would be misleading
+```
+
+### Example 7: `post-plan-confirmation` With `--auto`
+
+```text
+User: /workflow-repair --auto
+
+AI:
+1. Initial Authorization Mode: analysis-only
+2. Present correction plan with continuation mode = auto-follow-through
+3. User replies: Accept all
+4. Authorization Mode transitions to post-plan-confirmation
+5. Execute the confirmed repairs
+6. Post-repair checks pass
+7. Continue into Step 12 auto wrap-up for the dedicated repair task
+```
+
+### Example 8: `target_focus` With `--auto`
+
+```text
+User: /workflow-repair --auto --target_focus WS-002
+
+AI:
+1. Resolve and validate the report as usual
+2. Limit execution focus to WS-002
+3. Note in the correction plan that out-of-focus findings remain outside the
+   auto close-out safety decision
+4. If an out-of-focus finding is higher severity, surface that clearly so the
+   user sees the repair scope is narrowed rather than fully clean
+5. Execute the focused repair work only
+6. Continue or stop auto follow-through based on the focused scope rules
 ```

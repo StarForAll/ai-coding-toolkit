@@ -8,6 +8,10 @@ compatibility: Requires `trellis` on PATH, access to the temp project fixture, l
 
 ## Version History
 
+- **v2.4**: Added paired repair-side compatibility note for
+  `workflow-repair --auto`, clarifying that scan output stays schema-stable
+  while repair-side close-out behavior may optionally continue automatically in
+  the source project
 - **v2.3**: Added explicit `--agent` opt-in and capability criteria, kept
   inline scan as the default, clarified coordinator-owned report writing plus
   hard-block behavior when agent mode is unsupported, and added helper-failure
@@ -84,7 +88,9 @@ Use this skill when any of the following is true:
    parallelism.
 7. **No task-state side effects**: `--agent` does not authorize task creation,
    task switching, or any file edits by helper agents. Their scope is read-only
-   evidence gathering.
+   evidence gathering. Execution-mode changes also do not alter repair-side
+   intake assumptions; the validated report contract remains the sole basis for
+   repair-side processing.
 8. **Temp project only**: this skill runs in or targets a Trellis temp project.
    The analysis target is the temp project's currently installed workflow, not
    the current source repository.
@@ -108,7 +114,9 @@ Use this skill when any of the following is true:
 16. **Read-back validation is mandatory**: after writing
     `WORKFLOW_QUESTIONS.md`, the skill must read the file back and verify the
     required frontmatter keys, summary sections, and finding schema before it
-    may report success.
+    may report success. This validation also serves as the shared contract gate
+    ensuring the emitted report satisfies `workflow-repair` intake
+    assumptions.
 
 ## Inputs
 
@@ -153,6 +161,10 @@ Use this skill when any of the following is true:
 8. This skill defines behavior only. The concrete helper-dispatch mechanism is
    platform-specific and may differ across executors; do not assume a single
    universal Agent tool or API binding from this contract alone.
+9. Repair-side `--auto` follow-through is outside scan execution mode. If the
+   user later runs `workflow-repair --auto` in the source project, that changes
+   only post-repair close-out behavior and must not change scan output,
+   overwrite handling, or the shared report schema.
 
 ### Temp Project Path Resolution
 
@@ -429,6 +441,13 @@ For every installed workflow document or installed runtime-control document:
 
 ## References
 
+- paired repair-side compatibility note:
+  - `workflow-repair --auto` is allowed later in the source project, but it
+    must not change scan output generation, overwrite handling, or the shared
+    `WORKFLOW_QUESTIONS.md` schema
+  - any scan-side change to shared protocol, field, role boundary, or repair-
+    relevant assumption must ship with the matching `workflow-repair`
+    adaptation in the same change
 - `references/scan-output-template.md`
 - `references/helper-handoff-template.md`
 
@@ -471,6 +490,11 @@ AI:
    📄 Report: /tmp/trellis-{LIVE_VERSION}-2/WORKFLOW_QUESTIONS.md
    📊 Findings: 5 total (P0: 1, P1: 2, P2: 2)
    ➡️ Next: run /workflow-repair in the source project
+      Optional: use `/workflow-repair --auto` only if you want the later
+      source-project repair run to continue into its normal close-out flow
+      Note: that auto close-out applies to the dedicated repair task that
+      `workflow-repair` creates or switches to, not to any unrelated
+      pre-existing task
 ```
 
 ### Example 2: Agent-Assisted Scan
@@ -493,6 +517,11 @@ AI:
    📄 Report: /tmp/trellis-{LIVE_VERSION}-2/WORKFLOW_QUESTIONS.md
    📊 Findings: 4 total (P0: 1, P1: 1, P2: 2)
    ➡️ Next: run /workflow-repair in the source project
+      Optional: use `/workflow-repair --auto` only if you want the later
+      source-project repair run to continue into its normal close-out flow
+      Note: that auto close-out applies to the dedicated repair task that
+      `workflow-repair` creates or switches to, not to any unrelated
+      pre-existing task
 ```
 
 ### Example 3: Agent Mode Unsupported

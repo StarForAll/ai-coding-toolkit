@@ -40,6 +40,7 @@ Exception: if the current user instruction already explicitly requests repair of
 - Blocked: {N}
 - Trellis-native (patch within workflow): {N}
 - Authorization Mode: analysis-only | authorized-to-repair | post-plan-confirmation
+- Continuation Mode: stop-after-summary | auto-follow-through
 ```
 
 ### Per-Finding Decision Block
@@ -102,6 +103,19 @@ The above plan will modify files ONLY within:
 
 If the current user instruction already explicitly says to fix real confirmed issues, the skill may treat that instruction as standing authorization after this plan is echoed. Otherwise it must stop here and wait for a decision.
 
+If continuation mode = `auto-follow-through`, a successful repair run will then
+continue into the current task's normal close-out flow. That continuation still
+requires the usual commit-readiness and finish-work safety gates.
+
+Authorization Mode in this plan reflects plan-presentation time only. If
+execution later transitions to `post-plan-confirmation`, treat the repair log
+as the execution-time source of truth.
+
+If continuation mode = `auto-follow-through` and the repair scope was narrowed
+explicitly (for example via `target_focus`), the plan should make that narrowed
+scope visible rather than implying that all report findings are being carried
+through close-out.
+
 Options:
 1. **Accept all** — apply all adopted and trellis-native fixes
 2. **Accept partial** — specify which WS-NNN findings to apply
@@ -136,3 +150,14 @@ Awaiting your decision.
 6. Every `adopted` and `trellis-native` block must state whether a same-pattern variant sweep was performed.
 7. Every `adopted` and `trellis-native` block must explain the root-cause class and why the plan is broad enough to avoid a repeated trigger.
 8. The plan must name the dedicated repair task and report how many prior issue-history docs were loaded from `tmp/workflow-issues/`.
+9. If continuation mode = `auto-follow-through`, the plan must state that auto
+   follow-through happens only after successful repair verification and only
+   within the current task's normal close-out flow, and that it will stop and
+   report a blocker if close-out cannot proceed safely.
+10. If the current run began as `analysis-only` and the user explicitly accepts
+   execution in Step 8, the plan/log state may transition to
+   `post-plan-confirmation` for the actual repair execution.
+11. The correction-plan header records the authorization mode at the time the
+    plan is presented. If execution approval later changes the mode to
+    `post-plan-confirmation`, record that transition in the repair log rather
+    than retroactively treating the already-presented plan header as final.

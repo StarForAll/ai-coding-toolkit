@@ -399,6 +399,13 @@ validate_workflow_scan_repair_contract() {
   grep -Fq "\`--agent\`" "$scan_skill" || fail "$scan_skill missing explicit --agent input contract"
   grep -Fq "Inline default" "$scan_skill" || fail "$scan_skill missing inline-default execution rule"
   grep -Fq "Explicit agent opt-in only" "$scan_skill" || fail "$scan_skill missing explicit agent opt-in rule"
+  grep -Fq "workflow-repair --auto" "$scan_skill" || fail "$scan_skill missing paired repair-side --auto compatibility note"
+  grep -Fq "must not change scan output" "$scan_skill" || fail "$scan_skill missing scan-side schema stability note for repair-side --auto"
+  grep -Fq "repair-side" "$scan_skill" || fail "$scan_skill missing explicit repair-side intake-assumption invariance note"
+  grep -Fq "intake assumptions" "$scan_skill" || fail "$scan_skill missing explicit repair-side intake-assumption invariance note"
+  grep -Fq "shared contract gate" "$scan_skill" || fail "$scan_skill missing explicit shared-contract-gate note for read-back validation"
+  grep -Fq "matching \`workflow-repair\`" "$scan_skill" || fail "$scan_skill missing explicit reverse-direction coupled-update duty"
+  grep -Fq "adaptation in the same change" "$scan_skill" || fail "$scan_skill missing explicit reverse-direction coupled-update duty"
   grep -Fq "including the literal \`--agent\` token in the request" "$scan_skill" || fail "$scan_skill missing literal --agent trigger rule"
   grep -Fq "using equivalent natural language such as" "$scan_skill" || fail "$scan_skill missing natural-language equivalent trigger rule"
   grep -Fq "scan deeper" "$scan_skill" || fail "$scan_skill missing speed/depth example"
@@ -423,7 +430,42 @@ validate_workflow_scan_repair_contract() {
   grep -Fq "\`protocol\` must be \`workflow-scan-repair-v2\`" "$repair_skill" || fail "$repair_skill missing repair-side intake requirement for protocol"
   grep -Fq "Execution-mode agnostic intake" "$repair_skill" || fail "$repair_skill missing execution-mode agnostic intake rule"
   grep -Fq "\`--agent\`" "$repair_skill" || fail "$repair_skill missing explicit compatibility reference to --agent scan mode"
+  grep -Fq "\`--auto\`" "$repair_skill" || fail "$repair_skill missing explicit --auto input contract"
   grep -Fq "No implied repair-side agent mode" "$repair_skill" || fail "$repair_skill missing no-implied-agent-mode clarification"
+  grep -Fq "auto-follow-through" "$repair_skill" || fail "$repair_skill missing explicit auto follow-through mode"
+  grep -Fq "reply \`ok\` exactly once" "$repair_skill" || fail "$repair_skill missing bounded commit-confirmation rule for --auto"
+  grep -Fq "trellis-finish-work" "$repair_skill" || fail "$repair_skill missing finish-work command surface example for --auto"
+  grep -Fq "request also includes \`--agent\`" "$repair_skill" || fail "$repair_skill missing explicit no-interaction rule for --auto with --agent"
+  grep -Fq "authorization mode stays \`analysis-only\`" "$repair_skill" || fail "$repair_skill missing explicit no-effect rule for --auto under analysis-only rejection"
+  grep -Fq "post-plan-confirmation" "$repair_skill" || fail "$repair_skill missing explicit post-plan-confirmation authorization state"
+  grep -Fq "total-succeeded = 0" "$repair_skill" || fail "$repair_skill missing zero-success blocker rule for --auto"
+  grep -Fq "total-attempted" "$repair_skill" || fail "$repair_skill missing explicit total-attempted recording rule"
+  grep -Fq "Auto Follow-Through Outcome" "$repair_skill" || fail "$repair_skill missing continuation outcome logging rule"
+  grep -Fq "update the repair log with the final" "$repair_skill" || fail "$repair_skill missing post-step-12 repair-log update step"
+  grep -Fq "\`Auto Follow-Through Outcome\` value" "$repair_skill" || fail "$repair_skill missing explicit final continuation outcome update rule"
+  grep -Fq "stop the close-out flow" "$repair_skill" || fail "$repair_skill missing explicit distinction between stopping close-out and final reporting"
+  grep -Fq "Phase B" "$repair_skill" || fail "$repair_skill missing explicit record-and-report phase for Step 12"
+  grep -Fq "total-blocked + total-manual-decision > 0" "$repair_skill" || fail "$repair_skill missing partial-accept unresolved-items rule"
+  grep -Fq "yes/confirm style response" "$repair_skill" || fail "$repair_skill missing commit-confirmation recognition guidance"
+  grep -Fq "never transitioned past" "$repair_skill" || fail "$repair_skill missing explicit scope note for the analysis-only no-op rule"
+  grep -Fq "one-shot" "$repair_skill" || fail "$repair_skill missing explicit unreliable-identification guard for commit confirmation"
+  grep -Fq "If any other interactive prompt appears" "$repair_skill" || fail "$repair_skill missing explicit stop rule for non-commit prompts"
+  grep -Fq "If no Trellis finish-work command surface is available" "$repair_skill" || fail "$repair_skill missing explicit blocked behavior without finish-work command surface"
+  grep -Fq "interrupted: session-did-not-complete" "$repair_skill" || fail "$repair_skill missing stale-pending continuation recovery rule"
+  grep -Fq "latest" "$repair_skill" || fail "$repair_skill missing explicit resume-detection source for stale pending recovery"
+  grep -Fq "repair log still shows" "$repair_skill" || fail "$repair_skill missing explicit pending-log signal for resumed-run detection"
+  grep -Fq "repair-timestamp" "$repair_skill" || fail "$repair_skill missing explicit timestamp-based latest-log rule"
+  grep -Fq "\`git commit\` itself fails mechanically" "$repair_skill" || fail "$repair_skill missing explicit commit-failure handling rule during auto follow-through"
+  grep -Fq "target_focus" "$repair_skill" || fail "$repair_skill missing explicit target_focus scoping rule for auto close-out"
+  grep -Fq "close-out safety decision" "$repair_skill" || fail "$repair_skill missing explicit target_focus scoping rule for auto close-out"
+  grep -Fq "out-of-focus findings carry higher severity" "$repair_skill" || fail "$repair_skill missing explicit visibility rule for narrowed-scope auto close-out"
+  grep -Fq "close-out cannot proceed safely" "$repair_skill" || fail "$repair_skill missing plan-stage blocker disclosure for auto follow-through"
+  grep -Fq "sufficiently resolved for" "$repair_skill" || fail "$repair_skill missing explicit resolution test for blocked/manual-decision items"
+  grep -Fq "repair-side agent interaction" "$repair_skill" || fail "$repair_skill missing explicit user-facing note when --agent is ignored"
+  grep -Fq "\`--agent\` is not supported" "$repair_skill" || fail "$repair_skill missing explicit user-facing note when --agent is ignored"
+  grep -Fq "stop after the" "$repair_skill" || fail "$repair_skill missing stop-after-summary rule for unsafe --auto close-out"
+  grep -Fq "repair summary and report the blocker" "$repair_skill" || fail "$repair_skill missing blocker-report rule for unsafe --auto close-out"
+  grep -Fq "instead of forcing completion" "$repair_skill" || fail "$repair_skill missing blocker escalation rule for unsafe --auto close-out"
   grep -Fq "Report Produced By \`workflow-scan --agent\`" "$repair_skill" || fail "$repair_skill missing example for --agent-produced report intake"
   grep -Fq "accepts validated reports produced by either inline \`workflow-scan\` runs or explicit \`workflow-scan --agent\` runs" "$repair_skill" || fail "$repair_skill missing compatibility note for inline and --agent scan reports"
   for repair_key in \
@@ -455,14 +497,38 @@ validate_workflow_scan_repair_contract() {
   grep -Fq "{workflow-version from WORKFLOW_QUESTIONS.md}" "$correction_plan_template" || fail "$correction_plan_template missing workflow-version placeholder from scan report"
   grep -Fq "{scan-timestamp from WORKFLOW_QUESTIONS.md}" "$correction_plan_template" || fail "$correction_plan_template missing scan-timestamp placeholder from scan report"
   grep -Fq "{temp-project-root from WORKFLOW_QUESTIONS.md}" "$correction_plan_template" || fail "$correction_plan_template missing temp-project-root placeholder from scan report"
+  grep -Fq "Continuation Mode" "$correction_plan_template" || fail "$correction_plan_template missing continuation-mode header field"
+  grep -Fq "execution-time source of truth" "$correction_plan_template" || fail "$correction_plan_template missing footer note redirecting execution-time mode to repair log"
+  grep -Fq "narrowed" "$correction_plan_template" || fail "$correction_plan_template missing visibility note for narrowed-scope auto close-out"
+  grep -Fq "auto-follow-through" "$correction_plan_template" || fail "$correction_plan_template missing auto-follow-through documentation"
+  grep -Fq "stop and" "$correction_plan_template" || fail "$correction_plan_template missing explicit blocker disclosure for auto follow-through"
+  grep -Fq "report a blocker" "$correction_plan_template" || fail "$correction_plan_template missing explicit blocker disclosure for auto follow-through"
+  grep -Fq "If continuation mode = \`auto-follow-through\`" "$correction_plan_template" || fail "$correction_plan_template missing continuation-mode-scoped auto rule"
+  grep -Fq "authorization mode at the time the" "$correction_plan_template" || fail "$correction_plan_template missing timing rule for authorization-mode header"
   grep -Fq "{absolute path to WORKFLOW_QUESTIONS.md}" "$repair_log_template" || fail "$repair_log_template missing source-report placeholder"
+  grep -Fq "continuation-mode:" "$repair_log_template" || fail "$repair_log_template missing continuation-mode frontmatter"
+  grep -Fq "total-reverted:" "$repair_log_template" || fail "$repair_log_template missing total-reverted counter"
+  grep -Fq "Auto Follow-Through Outcome" "$repair_log_template" || fail "$repair_log_template missing structured continuation outcome field"
+  grep -Fq "\`pending\` until the continuation result is known" "$repair_log_template" || fail "$repair_log_template missing pending-to-final continuation logging rule"
+  grep -Fq "\`not-applicable\`" "$repair_log_template" || fail "$repair_log_template missing not-applicable rule for stop-after-summary mode"
+  grep -Fq "interrupted: session-did-not-complete" "$repair_log_template" || fail "$repair_log_template missing interrupted continuation recovery state"
+  grep -Fq "stopped-with-blocker: <brief reason> | interrupted: session-did-not-complete" "$repair_log_template" || fail "$repair_log_template missing single-line continuation outcome value set"
+  grep -Fq "total-succeeded + total-failed + total-reverted" "$repair_log_template" || fail "$repair_log_template missing explicit total-attempted definition"
+  grep -Fq "highest \`repair-timestamp\` value" "$repair_log_template" || fail "$repair_log_template missing explicit latest-log selection rule"
+  grep -Fq "continuation-mode:" "$issue_history_template" || fail "$issue_history_template missing continuation-mode frontmatter"
+  grep -Fq "Continuation Mode:" "$issue_history_template" || fail "$issue_history_template missing continuation mode session-summary field"
   grep -Fq "{absolute path to WORKFLOW_QUESTIONS.md}" "$issue_history_template" || fail "$issue_history_template missing report-path placeholder"
+  grep -Fq "session-level header/summary fields" "$issue_history_template" || fail "$issue_history_template missing explicit session-level scoping for continuation mode"
+  if [ "$(grep -Ec '^[0-9]+\. ' "$issue_history_template")" -ne "$(grep -Eo '^[0-9]+\.' "$issue_history_template" | sort -u | wc -l | tr -d ' ')" ]; then
+    fail "$issue_history_template has duplicated numbered rules"
+  fi
 
   grep -Fq "read-back validation" "$scan_spec" || fail "$scan_spec missing read-back validation contract"
   grep -Fq "read-back validation" "$repair_spec" || fail "$repair_spec missing paired read-back validation note"
   grep -Fq "read-back validation" "$skills_index" || fail "$skills_index missing paired contract read-back validation note"
   grep -Fq "\`--agent\`" "$scan_spec" || fail "$scan_spec missing explicit --agent mode contract"
   grep -Fq "execution-mode agnostic" "$repair_spec" || fail "$repair_spec missing execution-mode agnostic note"
+  grep -Fq "post-plan-confirmation" "$repair_spec" || fail "$repair_spec missing explicit post-plan-confirmation spec note"
   grep -Fq "\`--agent\` assistance" "$skills_index" || fail "$skills_index missing paired execution-mode note"
   grep -Fq "helper failure/timeout/malformed-handoff compensated locally" "$scan_spec" || fail "$scan_spec missing helper failure scenario coverage note"
   grep -Fq "unresolved helper conflicts dropped conservatively instead of guessed through" "$scan_spec" || fail "$scan_spec missing unresolved helper conflict scenario coverage note"
@@ -472,6 +538,33 @@ validate_workflow_scan_repair_contract() {
   grep -Fq "count fields match the actual number of findings" "$scan_spec" || fail "$scan_spec missing count consistency contract"
   grep -Fq "declared total/severity counts" "$repair_spec" || fail "$repair_spec missing repair-side count consistency contract"
   grep -Fq "total/severity count semantics" "$skills_index" || fail "$skills_index missing paired count consistency note"
+
+  for test_file in \
+    "skills/workflow-repair/tests/08-auto-follow-through-success.md" \
+    "skills/workflow-repair/tests/09-auto-stops-on-zero-success.md" \
+    "skills/workflow-repair/tests/10-auto-no-effect-under-analysis-only.md" \
+    "skills/workflow-repair/tests/11-auto-stops-on-unexpected-prompt.md" \
+    "skills/workflow-repair/tests/12-auto-blocked-without-finish-work-surface.md" \
+    "skills/workflow-repair/tests/13-post-plan-confirmation-mode.md" \
+    "skills/workflow-repair/tests/14-post-plan-confirmation-with-auto.md" \
+    "skills/workflow-repair/tests/15-partial-accept-with-documented-blockers.md" \
+    "skills/workflow-repair/tests/16-interrupted-pending-recovery.md" \
+    "skills/workflow-repair/tests/17-commit-succeeds-but-finish-work-fails.md" \
+    "skills/workflow-repair/tests/18-auto-zero-findings.md" \
+    "skills/workflow-repair/tests/19-git-commit-fails-during-auto.md" \
+    "skills/workflow-repair/tests/20-auto-with-preexisting-active-task.md" \
+    "skills/workflow-repair/tests/21-auto-all-findings-ignored.md" \
+    "skills/workflow-repair/tests/22-authorized-to-repair-partial-accept-with-auto.md" \
+    "skills/workflow-repair/tests/23-target-focus-with-out-of-focus-high-severity.md" \
+    "skills/workflow-repair/tests/24-auto-mixed-success-and-reverted.md"
+  do
+    [ -f "$test_file" ] || fail "missing $test_file"
+    grep -Fq "## Purpose" "$test_file" || fail "$test_file missing Purpose section"
+    grep -Fq "## Input" "$test_file" || fail "$test_file missing Input section"
+    grep -Fq "## Expected Mode" "$test_file" || fail "$test_file missing Expected Mode section"
+    grep -Fq "## Expected Key Behaviors" "$test_file" || fail "$test_file missing Expected Key Behaviors section"
+    grep -Fq "## Must Not" "$test_file" || fail "$test_file missing Must Not section"
+  done
 }
 
 validate_workflow_scan_repair_contract
