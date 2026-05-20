@@ -188,6 +188,16 @@ def info(message: str) -> None:
     print(f"{C}ℹ️  {message}{N}")
 
 
+def _codex_session_start_is_wired(hooks_json: Path) -> bool:
+    if not hooks_json.exists():
+        return False
+    try:
+        payload = json.loads(hooks_json.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return False
+    return "session-start.py" in json.dumps(payload, ensure_ascii=False)
+
+
 # ── 常量 ──
 _PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 _INJECTION_MARKER = "## Operation Types"
@@ -903,6 +913,7 @@ def detect_conflicts_codex(
     else:
         warn("[Codex] hooks.json 缺失")
         conflicts += 1
+    codex_session_start_wired = _codex_session_start_is_wired(hooks_json)
 
     inject_workflow_state = root / ".codex" / "hooks" / "inject-workflow-state.py"
     if inject_workflow_state.exists():
@@ -936,9 +947,11 @@ def detect_conflicts_codex(
         else:
             err("[Codex] session-start.py: 强门禁补丁缺失，仍保留 legacy READY/NOT READY 启动面")
             conflicts += 1
-    else:
-        err("[Codex] session-start.py 缺失")
+    elif codex_session_start_wired:
+        err("[Codex] session-start.py 缺失（hooks.json 已接线该 startup 辅助面）")
         conflicts += 1
+    else:
+        info("[Codex] session-start.py 未接线，按可选 startup 辅助面处理")
 
     claude_hook = root / ".claude" / "hooks" / "inject-workflow-state.py"
     if claude_hook.exists():

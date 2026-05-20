@@ -1916,7 +1916,33 @@ def _install_record_cli_types(record: dict[str, Any]) -> set[str]:
     return {str(item) for item in cli_types if isinstance(item, str)}
 
 
-def _expected_critical_runtime_patches(record: dict[str, Any]) -> set[str]:
+def _codex_session_start_is_wired(repo_root: Path) -> bool:
+    hooks_json = repo_root / ".codex" / "hooks.json"
+    if not hooks_json.is_file():
+        return False
+    try:
+        payload = json.loads(hooks_json.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return False
+    return "session-start.py" in json.dumps(payload, ensure_ascii=False)
+
+
+def _expected_critical_runtime_patches(repo_root: Path, record: dict[str, Any]) -> set[str]:
+    cli_types = _install_record_cli_types(record)
+    if cli_types:
+        expected = {
+            "inject-workflow-state",
+            "task-start-strong-gate",
+            "task-create-preserve-active",
+            "task-status-view-strong-gate",
+            "workflow-phase-strong-gate",
+        }
+        if cli_types & {"claude", "opencode"}:
+            expected.add("session-start-strong-gate")
+        if "codex" in cli_types and _codex_session_start_is_wired(repo_root):
+            expected.add("session-start-strong-gate")
+        return expected
+
     configured = record.get("critical_runtime_patches")
     if isinstance(configured, list):
         return {
@@ -1928,6 +1954,7 @@ def _expected_critical_runtime_patches(record: dict[str, Any]) -> set[str]:
 
 
 def _critical_patch_paths(repo_root: Path, cli_types: set[str]) -> list[tuple[str, Path, str]]:
+    codex_session_start_wired = "codex" in cli_types and _codex_session_start_is_wired(repo_root)
     checks = [
         ("task-start-strong-gate", repo_root / ".trellis" / "scripts" / "task.py", TASK_START_STRONG_GATE_PATCH_MARKER),
         (
@@ -1967,20 +1994,21 @@ def _critical_patch_paths(repo_root: Path, cli_types: set[str]) -> list[tuple[st
             ]
         )
     if "codex" in cli_types:
-        checks.extend(
-            [
-                (
-                    "inject-workflow-state",
-                    repo_root / ".codex" / "hooks" / "inject-workflow-state.py",
-                    INJECT_WORKFLOW_STATE_PATCH_MARKER,
-                ),
+        checks.append(
+            (
+                "inject-workflow-state",
+                repo_root / ".codex" / "hooks" / "inject-workflow-state.py",
+                INJECT_WORKFLOW_STATE_PATCH_MARKER,
+            )
+        )
+        if codex_session_start_wired:
+            checks.append(
                 (
                     "session-start-strong-gate",
                     repo_root / ".codex" / "hooks" / "session-start.py",
                     SESSION_START_STRONG_GATE_PATCH_MARKER,
-                ),
-            ]
-        )
+                )
+            )
     if "opencode" in cli_types:
         checks.extend(
             [
@@ -2079,7 +2107,7 @@ def _task_runtime_contract_errors(
 
 
 def _detect_missing_critical_runtime_patches(repo_root: Path, record: dict[str, Any]) -> list[str]:
-    expected = _expected_critical_runtime_patches(record)
+    expected = _expected_critical_runtime_patches(repo_root, record)
     if not expected:
         return []
     cli_types = _install_record_cli_types(record)

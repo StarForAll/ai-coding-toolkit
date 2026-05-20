@@ -1128,8 +1128,17 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertNotIn("[阶段状态机与强门禁协议](", deployed_feasibility)
         self.assertNotIn("../源码水印与归属证据链执行卡.md", deployed_feasibility)
         self.assertIn(
-            "[源码水印与归属证据链执行卡](.trellis/workflow-docs/源码水印与归属证据链执行卡.md)",
+            "[源码水印与归属证据链执行卡](../../../.trellis/workflow-docs/源码水印与归属证据链执行卡.md)",
             deployed_feasibility,
+        )
+        design_skill = (fixture / ".agents" / "skills" / "design" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn(
+            "[需求变更管理执行卡](../../../.trellis/workflow-docs/需求变更管理执行卡.md)",
+            design_skill,
+        )
+        self.assertNotIn(
+            "[需求变更管理执行卡](.trellis/workflow-docs/需求变更管理执行卡.md)",
+            design_skill,
         )
 
     def test_install_deployed_runtime_helpers_compile(self) -> None:
@@ -1471,13 +1480,35 @@ class WorkflowInstallerTests(unittest.TestCase):
             record["critical_runtime_patches"],
             [
                 "inject-workflow-state",
-                "session-start-strong-gate",
                 "task-start-strong-gate",
                 "task-create-preserve-active",
                 "task-status-view-strong-gate",
                 "workflow-phase-strong-gate",
             ],
         )
+
+    def test_upgrade_check_allows_missing_unwired_codex_session_start(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture, "--cli", "codex")
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        (fixture / ".codex" / "hooks" / "session-start.py").unlink()
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            "--cli",
+            "codex",
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("session-start.py 未接线", result.stdout)
+        self.assertNotIn("session-start.py 缺失", result.stdout)
 
     def test_install_patches_trellis_meta_references_with_strong_gate_guidance(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
@@ -1522,6 +1553,10 @@ class WorkflowInstallerTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn(".opencode/package.json", opencode_change_hooks)
         self.assertIn(".opencode/plugins/", opencode_change_hooks)
+        codex_change_hooks = (
+            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn(".codex/hooks.json -> .codex/hooks/inject-workflow-state.py", codex_change_hooks)
 
     def test_install_patches_platform_brainstorm_skills_away_from_trellis_start(self) -> None:
         fixture = self.create_fixture(include_opencode=True)

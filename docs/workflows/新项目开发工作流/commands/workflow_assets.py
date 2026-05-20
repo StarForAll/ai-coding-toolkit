@@ -140,15 +140,14 @@ def critical_runtime_patches_for_cli_types(cli_types: list[str] | tuple[str, ...
     """Return the runtime patch contract actually required for the selected CLIs.
 
     Codex still relies primarily on the turn-level hook carrier (`hooks.json` ->
-    `inject-workflow-state.py`), but its baseline repo layout also carries a
-    `session-start.py` auxiliary surface. Leaving that file on legacy
-    READY/NOT READY semantics reintroduces a second truth at startup, so this
-    workflow now patches and verifies the startup surface for every CLI whose
-    fresh baseline provides it.
+    `inject-workflow-state.py`). If a target project also keeps a
+    `session-start.py` auxiliary surface, the installer patches it when present,
+    but fresh Codex install records do not treat that startup helper as an
+    unconditional critical patch unless the target project explicitly wires it.
     """
     selected = {str(item) for item in cli_types}
     patches = ["inject-workflow-state"]
-    if selected & {"claude", "opencode", "codex"}:
+    if selected & {"claude", "opencode"}:
         patches.append("session-start-strong-gate")
     patches.extend(
         [
@@ -231,7 +230,10 @@ def prepare_command_content(source_path: Path, *, profile: str = DEFAULT_PROFILE
     content = content.replace("见 `opencode/README.md`", "OpenCode 入口见目标项目 AGENTS.md 路由表")
     content = content.replace("见 `codex/README.md`", "Codex 入口见目标项目 AGENTS.md 路由表")
     content = content.replace("[阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md)", "阶段状态机与强门禁协议")
-    _docs_dir = WORKFLOW_DOCS_DIR
+    # Distributed commands and shared stage skills both live three directories
+    # below the target-project root, so execution-card links must climb back to
+    # the root before resolving .trellis/workflow-docs/.
+    _docs_dir = f"../../../{WORKFLOW_DOCS_DIR}"
     content = content.replace(
         "[需求变更管理执行卡](../需求变更管理执行卡.md)",
         f"[需求变更管理执行卡]({_docs_dir}/需求变更管理执行卡.md)",

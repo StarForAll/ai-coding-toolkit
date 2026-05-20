@@ -42,7 +42,7 @@ First find the platform carrier for the current target:
 ```text
 Claude Code: .claude/settings.json -> .claude/hooks/session-start.py
 OpenCode: .opencode/package.json -> .opencode/plugins/session-start.js
-Codex: .codex/hooks.json -> .codex/hooks/session-start.py
+Codex: .codex/hooks.json -> .codex/hooks/inject-workflow-state.py
 ```
 
 If the carrier ultimately calls `.trellis/scripts/get_context.py` or `session_context.py`, editing the local Trellis script is usually more robust than hard-coding content directly inside the hook/plugin wrapper.
