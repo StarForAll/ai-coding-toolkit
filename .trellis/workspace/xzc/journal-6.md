@@ -834,3 +834,36 @@ Added workflow-scan and workflow-repair skills, introduced paired skill specs an
 ### Next Steps
 
 - None - task complete
+
+
+## Session 270: Refine workflow scan and repair skill contracts
+
+**Date**: 2026-05-20
+**Task**: Refine workflow scan and repair skill contracts
+**Branch**: `main`
+
+### Summary
+
+Reworked workflow-scan to target temp-project-only workflow surfaces, strengthened workflow-repair with dedicated repair tasks and tmp/workflow-issues history, and synced paired skill/spec contracts.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `815c620` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
