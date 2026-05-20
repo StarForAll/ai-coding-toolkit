@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-6.md`
-- **Total Sessions**: 268
+- **Total Sessions**: 269
 - **Last Active**: 2026-05-20
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-6.md` | ~801 | Active |
+| `journal-6.md` | ~836 | Active |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
@@ -34,6 +34,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 269 | 2026-05-20 | workflow scan and repair skills | `cb9e583`, `d4298ed`, `cdb5030` | `main` |
 | 268 | 2026-05-20 | 修复嵌入工作流运行时门禁与恢复逻辑 | `df978a7` | `main` |
 | 267 | 2026-05-19 | 审计并修复嵌入工作流强门禁路由残留 | `995308b` | `main` |
 | 266 | 2026-05-19 | 修复工作流强门禁与收尾路由残留 | `6494489`, `d4dfbb5` | `main` |

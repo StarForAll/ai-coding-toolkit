@@ -799,3 +799,38 @@ Audited the embedded workflow against a rebuilt tmp target, fixed brainstorm ent
 ### Next Steps
 
 - None - task complete
+
+
+## Session 269: workflow scan and repair skills
+
+**Date**: 2026-05-20
+**Task**: workflow scan and repair skills
+**Branch**: `main`
+
+### Summary
+
+Added workflow-scan and workflow-repair skills, introduced paired skill specs and templates, hardened workflow-repair against repeated findings and leftover issues, and added the temp project init script used by the workflow analysis flow.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cb9e583` | (see git log) |
+| `d4298ed` | (see git log) |
+| `cdb5030` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
