@@ -1,0 +1,4 @@
+{"file":".trellis/spec/skills/index.md","reason":"Skill authoring and paired-contract maintenance rules for workflow-scan/workflow-repair."}
+{"file":".trellis/spec/skills/workflow-repair.md","reason":"Repo-local behavioral contract and review checklist for workflow-repair auto follow-through."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Check whether continue/finish-work surface rules already exist elsewhere before adding duplicate wording."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Track source skill, paired skill note, tests, and repo-local spec updates together."}
