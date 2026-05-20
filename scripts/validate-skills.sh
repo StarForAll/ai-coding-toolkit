@@ -6,6 +6,29 @@ fail() {
   exit 1
 }
 
+extract_section_code_block() {
+  _path="$1"
+  _section="$2"
+  awk -v section="$_section" '
+    $0 == section { in_section=1; next }
+    in_code {
+      print
+      if (/^```$/) {
+        exit
+      }
+      next
+    }
+    in_section && /^```/ {
+      if (!in_code) {
+        in_code=1
+        print
+        next
+      }
+    }
+    in_section && /^### / { exit }
+  ' "$_path"
+}
+
 validate_skill_dir() {
   _dir="$1"
   _label="$2"
@@ -191,5 +214,142 @@ fi
 if [ "$spec_cross_fail" -ne 0 ]; then
   fail "spec cross-validation failed: declared files missing or dual-surface drift detected"
 fi
+
+validate_workflow_scan_repair_contract() {
+  scan_skill="skills/workflow-scan/SKILL.md"
+  repair_skill="skills/workflow-repair/SKILL.md"
+  scan_template="skills/workflow-scan/references/scan-output-template.md"
+  correction_plan_template="skills/workflow-repair/references/correction-plan-template.md"
+  repair_log_template="skills/workflow-repair/references/repair-log-template.md"
+  issue_history_template="skills/workflow-repair/references/issue-history-template.md"
+  scan_spec=".trellis/spec/skills/workflow-scan.md"
+  repair_spec=".trellis/spec/skills/workflow-repair.md"
+  skills_index=".trellis/spec/skills/index.md"
+
+  [ -f "$scan_skill" ] || fail "missing $scan_skill"
+  [ -f "$repair_skill" ] || fail "missing $repair_skill"
+  [ -f "$scan_template" ] || fail "missing $scan_template"
+  [ -f "$correction_plan_template" ] || fail "missing $correction_plan_template"
+  [ -f "$repair_log_template" ] || fail "missing $repair_log_template"
+  [ -f "$issue_history_template" ] || fail "missing $issue_history_template"
+  [ -f "$scan_spec" ] || fail "missing $scan_spec"
+  [ -f "$repair_spec" ] || fail "missing $repair_spec"
+  [ -f "$skills_index" ] || fail "missing $skills_index"
+
+  frontmatter_block="$(extract_section_code_block "$scan_template" '### YAML Frontmatter (Required)')"
+  [ -n "$frontmatter_block" ] || fail "$scan_template missing YAML frontmatter example block"
+
+  findings_block="$(extract_section_code_block "$scan_template" '### Findings Section (Required)')"
+  [ -n "$findings_block" ] || fail "$scan_template missing markdown findings example block"
+
+  # Shared frontmatter keys required by the workflow-scan/workflow-repair pair.
+  for key in \
+    "document-type: workflow-questions" \
+    "protocol: workflow-scan-repair-v2" \
+    "trellis-version:" \
+    "workflow-version:" \
+    "workflow-schema-version:" \
+    "scan-timestamp:" \
+    "temp-project-root:" \
+    "total-findings:" \
+    "p0-count:" \
+    "p1-count:" \
+    "p2-count:"
+  do
+    echo "$frontmatter_block" | grep -Fq "$key" || fail "$scan_template frontmatter example missing shared contract key: $key"
+  done
+
+  for section in \
+    "## Scan Summary" \
+    "## Analysis Summary" \
+    "### WS-NNN"
+  do
+    grep -Fq "$section" "$scan_template" || fail "$scan_template missing required section marker: $section"
+  done
+
+  for field in \
+    "- **Category**:" \
+    "- **Severity Estimate**:" \
+    "- **Origin**:" \
+    "- **Evidence Layer**:" \
+    "- **Evidence**:" \
+    "- **Temp Project Location**:" \
+    "- **Description**:" \
+    "- **Suggested Investigation**:"
+  do
+    echo "$findings_block" | grep -Fq -- "$field" || fail "$scan_template findings example missing required field: $field"
+  done
+
+  grep -Fq "Count consistency rule:" "$scan_template" || fail "$scan_template missing count consistency rule section"
+  grep -Fq "total-findings" "$scan_template" || fail "$scan_template missing count consistency reference for total-findings"
+  grep -Fq "p0-count" "$scan_template" || fail "$scan_template missing count consistency reference for p0-count"
+  grep -Fq "p1-count" "$scan_template" || fail "$scan_template missing count consistency reference for p1-count"
+  grep -Fq "p2-count" "$scan_template" || fail "$scan_template missing count consistency reference for p2-count"
+
+  # Guard against known drift that blocked workflow-repair intake.
+  for bad_key in \
+    "generated_at:" \
+    "trellis_version:" \
+    "workflow_version:" \
+    "workflow_schema_version:" \
+    "temp_project_path:" \
+    "total_findings:" \
+    "p0_count:" \
+    "p1_count:" \
+    "p2_count:"
+  do
+    if grep -Fq "$bad_key" "$scan_template"; then
+      fail "$scan_template contains drift-prone snake_case key: $bad_key"
+    fi
+  done
+
+  grep -Fq "Read-back validation is mandatory" "$scan_skill" || fail "$scan_skill missing read-back validation rule"
+  grep -Fq "Immediately read the file back and verify" "$scan_skill" || fail "$scan_skill missing explicit post-write verification step"
+  grep -Fq "count and per-severity counts" "$scan_skill" || fail "$scan_skill missing count consistency validation"
+  grep -Fq "snake_case" "$scan_skill" || fail "$scan_skill should explicitly guard against snake_case contract drift"
+
+  grep -Fq "\`document-type\` must be \`workflow-questions\`" "$repair_skill" || fail "$repair_skill missing repair-side intake requirement for document-type"
+  grep -Fq "\`protocol\` must be \`workflow-scan-repair-v2\`" "$repair_skill" || fail "$repair_skill missing repair-side intake requirement for protocol"
+  for repair_key in \
+    "\`trellis-version\`" \
+    "\`workflow-version\`" \
+    "\`workflow-schema-version\`" \
+    "\`scan-timestamp\`" \
+    "\`temp-project-root\`" \
+    "\`total-findings\`" \
+    "\`p0-count\`" \
+    "\`p1-count\`" \
+    "\`p2-count\`"
+  do
+    grep -Fq "$repair_key" "$repair_skill" || fail "$repair_skill missing repair-side intake key reference: $repair_key"
+  done
+  grep -Fq "## Scan Summary" "$repair_skill" || fail "$repair_skill missing repair-side section validation for Scan Summary"
+  grep -Fq "## Analysis Summary" "$repair_skill" || fail "$repair_skill missing repair-side section validation for Analysis Summary"
+  grep -Fq "### WS-NNN" "$repair_skill" || fail "$repair_skill missing repair-side section validation for finding headings"
+  grep -Fq "count and per-severity counts" "$repair_skill" || fail "$repair_skill missing count consistency validation"
+
+  for template in \
+    "$correction_plan_template" \
+    "$repair_log_template" \
+    "$issue_history_template"
+  do
+    grep -Fq "workflow-scan-repair-v2" "$template" || fail "$template missing shared protocol version"
+  done
+  grep -Fq "{trellis-version from WORKFLOW_QUESTIONS.md}" "$correction_plan_template" || fail "$correction_plan_template missing trellis-version placeholder from scan report"
+  grep -Fq "{workflow-version from WORKFLOW_QUESTIONS.md}" "$correction_plan_template" || fail "$correction_plan_template missing workflow-version placeholder from scan report"
+  grep -Fq "{scan-timestamp from WORKFLOW_QUESTIONS.md}" "$correction_plan_template" || fail "$correction_plan_template missing scan-timestamp placeholder from scan report"
+  grep -Fq "{temp-project-root from WORKFLOW_QUESTIONS.md}" "$correction_plan_template" || fail "$correction_plan_template missing temp-project-root placeholder from scan report"
+  grep -Fq "{absolute path to WORKFLOW_QUESTIONS.md}" "$repair_log_template" || fail "$repair_log_template missing source-report placeholder"
+  grep -Fq "{absolute path to WORKFLOW_QUESTIONS.md}" "$issue_history_template" || fail "$issue_history_template missing report-path placeholder"
+
+  grep -Fq "read-back validation" "$scan_spec" || fail "$scan_spec missing read-back validation contract"
+  grep -Fq "read-back validation" "$repair_spec" || fail "$repair_spec missing paired read-back validation note"
+  grep -Fq "read-back validation" "$skills_index" || fail "$skills_index missing paired contract read-back validation note"
+  grep -Fq "count fields match the actual number of findings" "$scan_spec" || fail "$scan_spec missing count consistency contract"
+  grep -Fq "declared total/severity counts" "$repair_spec" || fail "$repair_spec missing repair-side count consistency contract"
+  grep -Fq "total/severity count semantics" "$skills_index" || fail "$skills_index missing paired count consistency note"
+}
+
+validate_workflow_scan_repair_contract
 
 echo "OK: validated $found skill(s) + spec cross-check passed"

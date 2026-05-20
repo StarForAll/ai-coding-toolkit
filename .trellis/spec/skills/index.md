@@ -111,6 +111,7 @@ These two files form the **workflow-scan-repair** coupled pair:
 - shared evidence-layer taxonomy: `generated-target-baseline`, `generated-target-installed`, `generated-target-runtime`
 - shared category values: `script-behavior`, `cli-adaptation`, `post-install-artifact`, `document-reference`, `residual`, `new`
 - shared role boundaries: scan produces findings only (never edits source), repair consumes and fixes (only within `docs/workflows/新项目开发工作流/`)
+- scan-side success is gated on a read-back validation of the generated report's exact frontmatter and section schema
 
 ### Required Rule
 
@@ -148,6 +149,9 @@ After editing either file:
 - read both diffs together before finishing
 - verify there is no protocol drift between scan output format and repair intake expectations
 - verify finding entry schema fields remain aligned across both SKILL.md files and the shared template
+- verify the repo validation layer still checks the workflow-scan/workflow-repair critical shared field set
+- verify total/severity count semantics remain aligned between scan output,
+  repair intake, and the shared template
 
 ---
 

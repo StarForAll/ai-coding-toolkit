@@ -8,6 +8,9 @@ compatibility: Requires `trellis` on PATH, access to the temp project report plu
 
 ## Version History
 
+- **v2.2**: Clarified that successful `workflow-scan` output must already pass
+  scan-side read-back validation and that repair-side intake stops when the
+  shared report contract is still incomplete
 - **v2.1**: Added mandatory repair-task bootstrap, `tmp/workflow-issues/` history documents, all-history replay on every run, strict-review completion rules without mandatory re-embed, and expanded write-scope rules for task and issue-history artifacts
 - **v2.0**: Aligned intake with temp-project-only scan reports; removed source-project-root matching and source-location requirements from the shared report contract
 - **v1.4**: Added recurrence-closure, contract-surface coverage, and anti-regression gates to reduce repeated repairs and leftover issues
@@ -192,6 +195,14 @@ Three artifacts:
 1. Read `WORKFLOW_QUESTIONS.md` and validate frontmatter:
    - `document-type` must be `workflow-questions`
    - `protocol` must be `workflow-scan-repair-v2`
+   - the shared scan-side report keys must still be present:
+     `trellis-version`, `workflow-version`, `workflow-schema-version`,
+     `scan-timestamp`, `temp-project-root`, `total-findings`, `p0-count`,
+     `p1-count`, `p2-count`
+   - required report sections must still exist:
+     `## Scan Summary`, `## Analysis Summary`, and `### WS-NNN` finding blocks
+   - the `total-findings`, `p0-count`, `p1-count`, and `p2-count` values must
+     match the actual finding count and per-severity counts in the report body
 2. Read version fields:
    - `trellis-version` from report vs `trellis -v` current
    - `workflow-version` from report vs the current source workflow version when
@@ -205,6 +216,10 @@ Three artifacts:
 5. If protocol mismatch: stop as **Blocked / Protocol Version Mismatch**.
 6. If the temp project root does not exist or does not match the report
    context: stop as **Blocked / Temp Project Mismatch**.
+7. If the shared keys/sections above are missing, treat the report as a
+   scan-side contract failure and stop instead of trying to infer the intended
+   fields from alternate names such as `generated_at`, `trellis_version`,
+   `temp_project_path`, or `total_findings`.
 
 ### Step 2: Parse and Classify Findings
 

@@ -81,7 +81,7 @@ The skill must:
   for each repair execution
 - keep numbering monotonic within that directory
 
-### 3. Authorization Discipline
+### 4. Authorization Discipline
 
 The skill must distinguish:
 
@@ -90,7 +90,7 @@ The skill must distinguish:
 - analysis-only requests, which must stop after the correction plan until the
   user confirms execution
 
-### 4. Variant Discipline
+### 5. Variant Discipline
 
 For every confirmed safe issue, the skill must search only within
 `docs/workflows/新项目开发工作流/` for same-pattern or same-root-cause siblings.
@@ -104,7 +104,7 @@ It may repair those siblings in the same run only when:
 The sweep result must be recorded in both the correction plan and the repair
 log, even when no sibling fix was needed.
 
-### 5. Contract-Surface Discipline
+### 6. Contract-Surface Discipline
 
 For each adopted or trellis-native fix, the skill must map the workflow-local
 surfaces that should stay aligned if the fix is correct.
@@ -121,7 +121,7 @@ If a finding is caused by partial cross-file drift, the skill must not treat a
 single-file patch as sufficient unless it explicitly proves the other surfaces
 do not need updates.
 
-### 6. Coupled Artifact Discipline
+### 7. Coupled Artifact Discipline
 
 The skill must keep all repair-side protocol surfaces aligned:
 
@@ -140,6 +140,10 @@ This coupling is **bidirectional and mandatory**:
 - whenever `workflow-scan` changes the emitted report contract, this repair
   skill must be adapted in the same change; do not leave repair-side intake on
   the previous contract
+- the pair must stay aligned on the scan-side read-back validation rule so
+  repair-side intake assumptions match what a successful scan is allowed to emit
+- intake must reject reports whose declared total/severity counts do not match
+  the actual finding blocks in the report body
 
 ---
 
@@ -176,5 +180,8 @@ Minimum expected validation:
   - `skills/workflow-repair/references/correction-plan-template.md`
   - `skills/workflow-repair/references/repair-log-template.md`
   - `skills/workflow-repair/references/issue-history-template.md`
+- verify the scan-side contract now includes an explicit read-back validation
+  gate and that repair-side intake assumptions still match that stronger output
+  guarantee
 - verify the paired `workflow-scan` diff is an actual compatibility adaptation
   when the repair-side contract changed, not just an unchanged carryover

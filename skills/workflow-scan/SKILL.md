@@ -8,6 +8,8 @@ compatibility: Requires `trellis` on PATH, access to the temp project fixture, a
 
 ## Version History
 
+- **v2.1**: Added mandatory read-back validation for generated reports, count
+  consistency checks, and explicit contract-drift guards before scan success
 - **v2.0**: Re-scoped the skill to analyze only the full workflow content currently present in the temp project; removed source-repo inputs, source-repo evidence layers, and source-location requirements from the scan contract
 - **v1.3**: Aligned frontmatter with the latest public skill spec by making the description explicitly cover both purpose and trigger, and by adding compatibility requirements
 - **v1.2**: Replaced misleading fixed example paths and version literals with runtime-sensitive placeholders
@@ -76,6 +78,10 @@ Use this skill when any of the following is true:
    (introduced by the embedded workflow's install/patch layer).
 10. **Contract format**: the output must use the `WORKFLOW_QUESTIONS.md` format
     exactly as defined in `references/scan-output-template.md`.
+11. **Read-back validation is mandatory**: after writing
+    `WORKFLOW_QUESTIONS.md`, the skill must read the file back and verify the
+    required frontmatter keys, summary sections, and finding schema before it
+    may report success.
 
 ## Inputs
 
@@ -240,15 +246,43 @@ For every installed workflow document or installed runtime-control document:
    - gap / missing-surface analysis
    - residual issue summary
    - new issue summary
-4. Set frontmatter `protocol: workflow-scan-repair-v2` (must match the current
-   coupled contract version).
-5. Write the document using the format from
-   `references/scan-output-template.md`.
-6. Write to the temp project root as `WORKFLOW_QUESTIONS.md`.
+4. Write the document using the format from
+   `references/scan-output-template.md`. In particular, the frontmatter must
+   contain these exact keys and spellings:
+   - `document-type: workflow-questions`
+   - `protocol: workflow-scan-repair-v2`
+   - `trellis-version`
+   - `workflow-version`
+   - `workflow-schema-version`
+   - `scan-timestamp`
+   - `temp-project-root`
+   - `total-findings`
+   - `p0-count`
+   - `p1-count`
+   - `p2-count`
+5. Write to the temp project root as `WORKFLOW_QUESTIONS.md`.
+6. Immediately read the file back and verify all of the following before
+   declaring success:
+   - the frontmatter contains every required key above using the exact
+     kebab-case spellings from the shared template
+   - the report contains `## Scan Summary`
+   - the report contains `## Analysis Summary`
+   - the report contains a `### WS-NNN` heading for every finding
+   - the `total-findings`, `p0-count`, `p1-count`, and `p2-count` values match
+     the actual finding count and per-severity counts in the document body
+   - each finding block includes Category, Severity Estimate, Origin, Evidence
+     Layer, Evidence, Temp Project Location, Description, and Suggested
+     Investigation
+7. If any required key or section is missing, or if snake_case replacements
+   or alternate names such as `generated_at`, `trellis_version`,
+   `temp_project_path`, or `total_findings` appear instead of the shared
+   contract fields, treat the run as failed and correct the document before
+   proceeding.
 
 ### Step 7: Echo and Stop
 
-1. Echo the output summary:
+1. Echo the output summary only after the read-back validation in Step 6
+   passes:
    - temp project path
    - output file path
    - total findings, P0/P1/P2 counts
@@ -264,7 +298,7 @@ For every installed workflow document or installed runtime-control document:
 | Temp project not fully initialized | Stop as **Blocked / Invalid Temp Project**. Verify `.trellis/` and `.version` exist. |
 | Temp project not workflow-embedded | Stop as **Blocked / Workflow Not Embedded**. Verify the temp project really contains an embedded workflow instead of only the Trellis baseline. |
 | `WORKFLOW_QUESTIONS.md` already exists | Stop and ask whether to overwrite or append. |
-| No findings | Write `WORKFLOW_QUESTIONS.md` with `total-findings: 0` and all counts at 0. |
+| No findings | Write `WORKFLOW_QUESTIONS.md` with `total-findings: 0` and all counts at 0, then still perform the Step 6 read-back validation before reporting success. |
 
 ## Related Skills
 

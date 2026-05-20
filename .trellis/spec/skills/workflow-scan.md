@@ -81,6 +81,7 @@ The skill must emit `WORKFLOW_QUESTIONS.md` in the shared
 - finding ID format `WS-NNN`
 - category/origin/evidence-layer vocabularies
 - analysis-summary semantics
+- the required read-back validation step before the scan may report success
 
 This coupling is **bidirectional and mandatory**:
 
@@ -109,6 +110,22 @@ repair. It must therefore contain:
   residual issues, and new issues
 - concrete per-finding suggested investigation guidance
 
+Before the skill reports success, it must read the generated
+`WORKFLOW_QUESTIONS.md` back and verify the exact shared contract surface:
+
+- frontmatter includes `document-type`, `protocol`, `trellis-version`,
+  `workflow-version`, `workflow-schema-version`, `scan-timestamp`,
+  `temp-project-root`, `total-findings`, `p0-count`, `p1-count`, and
+  `p2-count`
+- the report contains `## Scan Summary`
+- the report contains `## Analysis Summary`
+- finding sections use `### WS-NNN`
+- the count fields match the actual number of findings and their P0/P1/P2
+  severity split in the document body
+
+If the generated file drifts into snake_case or omits a required section, the
+skill must treat that as a failed scan output and correct it before stopping.
+
 ---
 
 ## Review Checklist
@@ -134,6 +151,8 @@ Minimum expected validation:
   - `skills/workflow-scan/SKILL.md`
   - `skills/workflow-repair/SKILL.md`
   - `skills/workflow-scan/references/scan-output-template.md`
+- verify the scan-side instructions now require a read-back validation step and
+  explicitly guard against snake_case contract drift
 - when the repair-side memory/auxiliary surfaces change, confirm whether the
   scan-side report wording or investigation guidance must be updated for
   compatibility with `tmp/workflow-issues/` consumption

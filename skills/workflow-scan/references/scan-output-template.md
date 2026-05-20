@@ -48,6 +48,13 @@ p2-count: <N>
 | `p1-count` | Yes | Count of P1 findings |
 | `p2-count` | Yes | Count of P2 findings |
 
+Count consistency rule:
+
+- `total-findings` must match the actual number of `### WS-NNN` finding blocks
+  in the document body
+- `p0-count`, `p1-count`, and `p2-count` must match the actual severity split
+  declared in the finding blocks
+
 ### Scan Summary Section (Required)
 
 After frontmatter, include a brief summary:
