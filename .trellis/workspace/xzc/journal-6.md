@@ -1350,3 +1350,37 @@ Repaired workflow installer compatibility for strong-gate phase step lookup and 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 285: Workflow repair helper patch close-out
+
+**Date**: 2026-05-21
+**Task**: Workflow repair helper patch close-out
+**Branch**: `main`
+
+### Summary
+
+Repaired workflow patch helper contracts, removed stale AGENTS legacy start prompts, preserved workflow_phase docstrings, and recorded the repair audit trail.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `10a5a90` | (see git log) |
+| `26a54e7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
