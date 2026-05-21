@@ -1,0 +1,8 @@
+{"file":".trellis/spec/docs/index.md","reason":"workflow documentation propagation and boundary rules for docs/workflows changes"}
+{"file":".trellis/spec/commands/index.md","reason":"command README maintenance guidance for platform-specific workflow docs"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"cross-layer drift prevention for source docs, platform READMEs, and maintainer boundary docs"}
+{"file":"docs/workflows/新项目开发工作流/CLI原生适配边界矩阵.md","reason":"primary maintainer boundary contract for CLI carriers"}
+{"file":"docs/workflows/新项目开发工作流/装后隐藏目录与托管边界核对清单.md","reason":"post-install verification contract that future scans and maintainers consult"}
+{"file":"docs/workflows/新项目开发工作流/commands/claude/README.md","reason":"Claude carrier boundary reference"}
+{"file":"docs/workflows/新项目开发工作流/commands/opencode/README.md","reason":"OpenCode carrier boundary reference"}
+{"file":"docs/workflows/新项目开发工作流/commands/codex/README.md","reason":"Codex carrier boundary reference"}
