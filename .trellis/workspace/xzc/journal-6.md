@@ -1317,3 +1317,36 @@ Clarified workflow carrier review boundaries, recorded the repair task, and clos
 ### Next Steps
 
 - None - task complete
+
+
+## Session 284: Workflow repair: installer compatibility
+
+**Date**: 2026-05-21
+**Task**: Workflow repair: installer compatibility
+**Branch**: `main`
+
+### Summary
+
+Repaired workflow installer compatibility for strong-gate phase step lookup and requirements-foundation example import; added regression coverage and recorded repair artifacts.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6fb3c4d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
