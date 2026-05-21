@@ -1,0 +1,3 @@
+{"file":".trellis/spec/docs/index.md","reason":"Workflow docs under docs/workflows/** must preserve source-vs-target boundaries and propagation rules."}
+{"file":".trellis/spec/platforms/codex-workflow-behavior.md","reason":"Codex inline/no-subagent behavior is central to WS-003/WS-004 boundary judgments."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"This repair changes cross-layer workflow documentation and must avoid source/deployment drift."}
