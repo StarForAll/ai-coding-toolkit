@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 import json
 
-from workflow_assets import HELPER_SCRIPTS
+from workflow_assets import HELPER_SCRIPTS, build_managed_audit_extra_specs
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -886,6 +886,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         assert patched is not None
         self.assertIn(WORKFLOW_PATCH_MARKER, patched)
         self.assertIn(module._STRONG_GATE_WORKFLOW_TASK_MECHANISM, patched)
+        self.assertIn("#### 1.1 Requirement exploration", patched)
+        self.assertIn("#### 3.5 Wrap-up reminder", patched)
         self.assertNotIn("flips `task.json.status` from `planning` to `in_progress`", patched)
 
     def test_upgrade_build_workflow_content_replaces_task_mechanism_without_legacy_headings(self) -> None:
@@ -904,6 +906,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         assert patched is not None
         self.assertIn(WORKFLOW_PATCH_MARKER, patched)
         self.assertIn(module._INSTALL_WORKFLOW._STRONG_GATE_WORKFLOW_TASK_MECHANISM, patched)
+        self.assertIn("#### 1.1 Requirement exploration", patched)
+        self.assertIn("#### 3.5 Wrap-up reminder", patched)
         self.assertNotIn("flips `task.json.status` from `planning` to `in_progress`", patched)
 
     def detect_embed_state(self, fixture_root: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -1773,6 +1777,24 @@ Triggered from /trellis:start when the user describes a development task, especi
         self.assertTrue(readme_governance.exists(), "README governance spec should be imported during installation")
         readme_governance_text = readme_governance.read_text(encoding="utf-8")
         self.assertIn("README.md", readme_governance_text)
+        examples_dir = (
+            fixture
+            / ".trellis"
+            / "library-assets"
+            / "examples"
+            / "universal-domains"
+            / "product-and-requirements"
+        )
+        self.assertTrue(examples_dir.exists(), "requirements foundation example directory should be imported")
+        assembled_example = (
+            fixture
+            / ".trellis"
+            / "library-assets"
+            / "examples"
+            / "assembled-packs"
+            / "requirements-discovery-foundation.md"
+        )
+        self.assertTrue(assembled_example.exists(), "assembled-pack example should be imported")
         self.assertIn("README.en.md", readme_governance_text)
         self.assertIn("default Simplified Chinese entry", readme_governance_text)
         self.assertFalse((fixture / ".trellis" / "tasks" / "00-bootstrap-guidelines").exists())
@@ -1781,6 +1803,19 @@ Triggered from /trellis:start when the user describes a development task, especi
         self.assertNotIn("再使用 trellis-library/cli.py assemble 为当前项目补充真实 spec 集合", install.stdout)
         self.assertIn("Trellis bootstrap 任务已删除", install.stdout)
         self.assertIn("README.en.md", install.stdout)
+
+    def test_managed_audit_extra_specs_include_requirements_example_assets(self) -> None:
+        extras = build_managed_audit_extra_specs(["claude", "opencode", "codex"])
+        requirements_spec = next(item for item in extras if item.capability == "shared-pack:requirements-discovery-foundation-import")
+
+        self.assertIn(
+            ".trellis/library-assets/examples/universal-domains/product-and-requirements",
+            requirements_spec.claude_paths,
+        )
+        self.assertIn(
+            ".trellis/library-assets/examples/assembled-packs/requirements-discovery-foundation.md",
+            requirements_spec.codex_paths,
+        )
 
     def test_install_clears_stale_current_task_when_bootstrap_task_is_removed(self) -> None:
         fixture = self.create_fixture(bootstrap_as_current_task=True)

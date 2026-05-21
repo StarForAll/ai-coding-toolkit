@@ -201,6 +201,9 @@ Target-project deployed copies are derived state:
   - `trellis-implement` / `trellis-check` remain Trellis-native and must not be overlaid
 - shared helper scripts: `.trellis/scripts/workflow/*.py`
 - shared project workflow guide patch: `.trellis/workflow.md`
+- requirements-foundation example assets when the imported lock references them, such as:
+  - `.trellis/library-assets/examples/universal-domains/product-and-requirements/**`
+  - `.trellis/library-assets/examples/assembled-packs/requirements-discovery-foundation.md`
 - target-project baseline guide patches under `.trellis/spec/guides/*.md` when the workflow explicitly repairs trellis-native stale operator guidance
 - install-only collaboration reminder: root-level `todo.txt`
 
@@ -376,6 +379,7 @@ Compatibility code should therefore:
      - `.trellis/workflow.md`
    - Contract:
      - keep the Trellis baseline workflow guide, then inject workflow projectization content into the documented section boundaries
+     - if the projectized workflow removes the old Phase 1/2/3 narrative, it must still preserve a compatibility read surface for baseline step readers that call `get_context.py --mode phase --step <X.Y>`; strong-gate routing and baseline step lookup may coexist, but step lookup must not silently degrade to `Step not found`
      - installer must back up the original baseline copy before first patching
      - uninstall / force-restore paths must restore the original baseline copy when a backup exists
      - drift detection must at minimum verify the workflow patch marker is still present
@@ -751,6 +755,12 @@ When modifying these contracts, update or add tests that prove:
    - `trellis-continue` / `trellis-finish-work` patch health is checked and repaired only in the active skills directory
    - legacy `start` / `finish-work` names are covered only as old-target compatibility inputs
    - uninstall / `--force` restore follow the same write-scope boundary for `.agents/skills/`, optional disabled entries, active baseline patches, and `.codex/skills/` duplicate cleanup
+16. requirements-foundation import coverage is covered by regression tests:
+   - installer must not leave `.trellis/library-lock.yaml` referencing example assets under `.trellis/library-assets/**` unless those example assets were actually copied into the target project
+   - managed audit extra specs for `shared-pack:requirements-discovery-foundation-import` must stay aligned with the real imported output set
+17. patched workflow guide compatibility is covered by regression tests:
+   - the installed `.trellis/workflow.md` keeps the strong-gate stage contract
+   - the same installed file still contains a baseline-compatible `#### X.Y` step-read surface for `get_context.py --mode phase --step`
 
 Current regression anchors:
 

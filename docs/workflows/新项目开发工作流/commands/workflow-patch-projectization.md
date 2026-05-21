@@ -165,6 +165,97 @@ All transitions follow a two-step protocol: **(A)** signal readiness by setting 
 
 For repair scenarios, append `--force` to bypass validation gates.
 
+### Baseline Step Compatibility
+
+The strong-gate workflow keeps stage routing in `workflow-state.py`, but some
+baseline Trellis utilities still read `workflow.md` via
+`get_context.py --mode phase --step <X.Y>`. The numbered headings below are a
+compatibility layer for those readers. They do **not** replace the strong-gate
+stage machine above.
+
+#### 1.0 Create task
+
+Use `workflow-state.py route --project-root <project-root>` to decide the first
+allowed entry. For new outsourcing work, start at `feasibility`; for pure
+read-only / maintainer analysis, remain at `no_task`.
+
+#### 1.1 Requirement exploration
+
+Requirement discovery lives in the `brainstorm` stage. Enter it only after the
+current route or prior stage allows `brainstorm`, and keep all requirement
+artifacts in the active task directory instead of relying on chat memory.
+
+#### 1.2 Research
+
+Research may happen inside `feasibility`, `brainstorm`, `design`, or later
+execution stages, but findings should still be persisted to task files before
+they are treated as stage-complete evidence.
+
+#### 1.3 Configure context
+
+The current routing source of truth is `workflow-state.json.stage`. Any
+task-local context, execution cards, design artifacts, or delivery proofs must
+be aligned with the currently confirmed stage before advancing.
+
+#### 1.4 Activate task
+
+`task.py start <task-dir>` still marks the task as the active task for the
+current session, but under strong-gate it does **not** advance
+`workflow-state.json.stage`; stage changes happen only through
+`workflow-state.py set`.
+
+#### 1.5 Completion criteria
+
+Phase-1-style planning is complete only when the current stage artifacts are
+written, route / validation says the next stage is allowed, and the human has
+confirmed any required transition gate.
+
+#### 2.1 Implement
+
+Implementation happens only after `plan -> implementation` or
+`plan -> test-first` transition approval, with
+`checkpoints.execution_authorized=true` present on the transition that opens
+execution.
+
+#### 2.2 Quality check
+
+Quality review belongs to `check` and, when required, `review-gate`. Use the
+project's frozen verification matrix plus any stage-specific artifacts that the
+current workflow requires.
+
+#### 2.3 Rollback
+
+If execution reveals a stage defect, move back to the correct prior stage
+through the strong-gate transition rules instead of silently treating the task
+as still "in progress".
+
+#### 3.1 Quality verification
+
+Final verification happens at `finish-work`, after `check` / `review-gate`
+leave the task ready for close-out and before any delivery or session record
+steps run.
+
+#### 3.2 Debug retrospective
+
+When the same issue repeats, capture the root cause before close-out so the
+next route does not restart from the same broken assumption.
+
+#### 3.3 Spec update
+
+Stage-complete knowledge must be written back to the relevant spec or workflow
+artifact before the task moves into final close-out.
+
+#### 3.4 Commit changes
+
+Commit only the current task's verified work after `finish-work` confirms the
+close-out checklist. `delivery` and `record-session` remain later stages, not a
+shortcut from implementation.
+
+#### 3.5 Wrap-up reminder
+
+The strong-gate close-out order is `finish-work -> delivery -> record-session`.
+`archive` and `add_session.py` run only at `record-session`.
+
 ---
 
 ## Customizing Trellis (for forks)

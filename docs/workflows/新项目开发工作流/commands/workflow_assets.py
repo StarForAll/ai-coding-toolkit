@@ -475,6 +475,8 @@ def build_managed_audit_extra_specs(cli_types: list[str]) -> list[ManagedAuditEx
     )
     requirements_foundation_paths = (
         ".trellis/library-lock.yaml",
+        ".trellis/library-assets/examples/universal-domains/product-and-requirements",
+        ".trellis/library-assets/examples/assembled-packs/requirements-discovery-foundation.md",
         ".trellis/spec/universal-domains/verification/evidence-requirements/overview.md",
         ".trellis/spec/universal-domains/project-governance/readme-governance/overview.md",
         ".trellis/checklists/universal-domains/product-and-requirements/developer-facing-prd-checklist.md",

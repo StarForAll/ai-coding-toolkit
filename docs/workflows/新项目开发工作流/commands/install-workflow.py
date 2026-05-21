@@ -2815,6 +2815,7 @@ def import_requirements_foundation(root: Path, dry_run: bool) -> bool:
         str(root),
         "--pack",
         _REQUIREMENTS_FOUNDATION_PACK,
+        "--include-examples",
         "--auto",
     ]
     if dry_run:
