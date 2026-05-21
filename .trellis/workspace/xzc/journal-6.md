@@ -1450,3 +1450,38 @@ Closed the workflow-repair run by recording the repair task, tightening workflow
 ### Next Steps
 
 - None - task complete
+
+
+## Session 288: workflow complexity repair and scan/repair guardrails
+
+**Date**: 2026-05-21
+**Task**: workflow complexity repair and scan/repair guardrails
+**Branch**: `main`
+
+### Summary
+
+Repaired upgrade-compat refresh for stale strong-gate artifacts and added anti-overrepair guardrails to workflow-scan/workflow-repair.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `df95515` | (see git log) |
+| `96fb63e` | (see git log) |
+| `f2ba0f6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
