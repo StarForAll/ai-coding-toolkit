@@ -26,7 +26,7 @@ total-skipped: 10
 - Repair Time: `2026-05-21T14:25:21+08:00`
 - Authorization Mode: `authorized-to-repair`
 - Continuation Mode: `auto-follow-through`
-- Auto Follow-Through Outcome: `pending`
+- Auto Follow-Through Outcome: `reached-task-close`
 - User Confirmation: `not-needed`
 
 ---

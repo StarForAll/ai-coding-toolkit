@@ -1236,3 +1236,50 @@ Tightened workflow-repair --auto close-out scope/proof rules, synced repair-side
 ### Next Steps
 
 - None - task complete
+
+
+## Session 282: workflow-repair ws001-ws004 boundaries
+
+**Date**: 2026-05-21
+**Task**: workflow-repair ws001-ws004 boundaries
+**Branch**: `main`
+
+### Summary
+
+Clarified repeated workflow carrier false positives, fixed missing needs-init breadcrumb coverage, and repaired stale installed execution-card references.
+
+### Main Changes
+
+- Rechecked `/tmp/trellis-0.5.17-2/WORKFLOW_QUESTIONS.md` against temp-project runtime surfaces, workflow source docs, installer contracts, and prior issue-history runs.
+- Clarified repeated false-positive boundaries for Claude/OpenCode/Codex carrier expectations:
+  - Claude/OpenCode do not need mirrored `trellis-start` / `trellis-continue` / `trellis-finish-work` skill copies in platform-local skill trees.
+  - Codex shared workflow skills live in `.agents/skills/`; `.codex/skills/` remains a secondary carrier and may legitimately stay empty.
+  - Codex startup routing is hook-driven; turn-level hook wiring is the default contract and `SessionStart` is optional unless explicitly wired.
+  - Codex does not require a Claude/OpenCode-style `inject-subagent-context` hook carrier under the current inline contract.
+- Fixed real workflow-source documentation drift:
+  - Added the missing `[workflow-state:needs-init]` breadcrumb block to the workflow projectization patch source.
+  - Updated `需求变更管理执行卡.md` to point at installed target-project runtime surfaces instead of source-only docs and removed stale numbered-section references.
+- Added regression assertions in `commands/test_workflow_installers.py` for the new `needs-init` block and the repaired execution-card content.
+- Verification:
+  - `/ops/softwares/python/bin/python3 -m unittest discover -s docs/workflows/新项目开发工作流/commands -p 'test_workflow_installers.py'`
+  - Result: `Ran 119 tests ... OK`
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `07624da` | (see git log) |
+| `098b03b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

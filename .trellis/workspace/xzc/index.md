@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-6.md`
-- **Total Sessions**: 281
+- **Total Sessions**: 282
 - **Last Active**: 2026-05-21
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-6.md` | ~1238 | Active |
+| `journal-6.md` | ~1285 | Active |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
@@ -34,6 +34,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 282 | 2026-05-21 | workflow-repair ws001-ws004 boundaries | `07624da`, `098b03b` | `main` |
 | 281 | 2026-05-21 | workflow-repair auto closeout guard | `e7b9930`, `c85d750` | `main` |
 | 280 | 2026-05-21 | workflow-repair: rewrite deployed trellis-library paths | `4d69d57`, `6dd4eb2` | `main` |
 | 279 | 2026-05-21 | Repair workflow-repair auto close-out contract | `52d40b7`, `100676a` | `main` |
