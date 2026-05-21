@@ -106,10 +106,11 @@ These two files form the **workflow-scan-repair** coupled pair:
 - repair-side auxiliary artifacts and memory surfaces:
   `correction-plan-template.md`, `repair-log-template.md`,
   `issue-history-template.md`, and `tmp/workflow-issues/`
-- shared metadata fields: `protocol` (workflow-scan-repair-v2), `trellis-version`, `workflow-version`, `workflow-schema-version`, `scan-timestamp`, `temp-project-root`, `total-findings`, finding IDs (`WS-NNN`)
+- shared metadata fields: `protocol` (workflow-scan-repair-v3), `trellis-version`, `workflow-version`, `workflow-schema-version`, `scan-timestamp`, `temp-project-root`, `total-findings`, finding IDs (`WS-NNN`)
 - shared origin classification: `trellis-native` vs `workflow-source` (determines repair routing)
 - shared evidence-layer taxonomy: `generated-target-baseline`, `generated-target-installed`, `generated-target-runtime`
 - shared category values: `script-behavior`, `cli-adaptation`, `post-install-artifact`, `document-reference`, `residual`, `new`
+- shared repair-classification values: `confirmed-defect`, `design-debt`, `evidence-gap`
 - shared role boundaries: scan produces findings only (never edits source), repair consumes and fixes (only within `docs/workflows/新项目开发工作流/`)
 - scan-side success is gated on a read-back validation of the generated report's exact frontmatter and section schema
 - scan may run inline by default or with explicit `--agent` assistance, but the
@@ -140,7 +141,7 @@ Treat this as a **bidirectional maintenance rule**, not a one-way reminder:
 Do not treat them as independently maintainable when changing:
 
 - WORKFLOW_QUESTIONS.md frontmatter fields or finding entry schema
-- protocol version (`workflow-scan-repair-v2`)
+- protocol version (`workflow-scan-repair-v3`)
 - category, origin, or evidence-layer value sets
 - finding ID format (`WS-NNN`)
 - severity estimate semantics (P0/P1/P2)
@@ -165,7 +166,7 @@ After editing either file:
 - verify execution-mode wording does not accidentally reintroduce an inline-only
   assumption on either side of the pair
 - verify any helper-handoff references stay outside the shared
-  `workflow-scan-repair-v2` protocol surface
+  `workflow-scan-repair-v3` protocol surface
 
 ---
 

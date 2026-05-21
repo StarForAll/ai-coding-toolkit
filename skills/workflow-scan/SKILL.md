@@ -8,6 +8,9 @@ compatibility: Requires `trellis` on PATH, access to the temp project fixture, l
 
 ## Version History
 
+- **v2.8**: Added mandatory repair-classification guardrails so scan findings
+  must distinguish `confirmed-defect`, `design-debt`, and `evidence-gap`, and
+  upgraded the shared report contract to `workflow-scan-repair-v3`
 - **v2.7**: Refined the paired repair-side compatibility note to clarify that
   `workflow-repair --auto` still stays outside the shared scan schema while now
   rejecting mixed-scope or misleading current-task commit confirmations
@@ -121,9 +124,18 @@ Use this skill when any of the following is true:
 14. **Origin classification is mandatory**: every finding must classify as
    either `trellis-native` (produced by `trellis init`) or `workflow-source`
    (introduced by the embedded workflow's install/patch layer).
-15. **Contract format**: the output must use the `WORKFLOW_QUESTIONS.md` format
+15. **Repair classification is mandatory**: every finding must additionally
+    classify as `confirmed-defect`, `design-debt`, or `evidence-gap`.
+16. **No complexity-only inflation**: if an observation is only about
+    complexity, maintainability, ergonomics, or possible over-design without a
+    concrete temp-project contradiction, it must be classified as
+    `design-debt`, not `confirmed-defect`.
+17. **No evidence-gap inflation**: if the temp-project evidence is still
+    insufficient to confirm a real defect or source-owned root cause, the item
+    must be classified as `evidence-gap`, not `confirmed-defect`.
+18. **Contract format**: the output must use the `WORKFLOW_QUESTIONS.md` format
     exactly as defined in `references/scan-output-template.md`.
-16. **Read-back validation is mandatory**: after writing
+19. **Read-back validation is mandatory**: after writing
     `WORKFLOW_QUESTIONS.md`, the skill must read the file back and verify the
     required frontmatter keys, summary sections, and finding schema before it
     may report success. This validation also serves as the shared contract gate
@@ -373,6 +385,8 @@ For every installed workflow document or installed runtime-control document:
 2. For each finding, include all required fields per the finding entry schema:
    - Category (from the 6 allowed values)
    - Severity Estimate (P0/P1/P2, preliminary)
+   - Repair Classification (`confirmed-defect`, `design-debt`, or
+     `evidence-gap`)
    - Origin (`trellis-native` or `workflow-source`)
    - Evidence Layer (`generated-target-baseline`,
      `generated-target-installed`, or `generated-target-runtime`)
@@ -388,11 +402,14 @@ For every installed workflow document or installed runtime-control document:
    - gap / missing-surface analysis
    - residual issue summary
    - new issue summary
+   - confirmed-defect summary
+   - design-debt summary
+   - evidence-gap summary
 4. Write the document using the format from
    `references/scan-output-template.md`. In particular, the frontmatter must
    contain these exact keys and spellings:
    - `document-type: workflow-questions`
-   - `protocol: workflow-scan-repair-v2`
+   - `protocol: workflow-scan-repair-v3`
    - `trellis-version`
    - `workflow-version`
    - `workflow-schema-version`
@@ -413,9 +430,11 @@ For every installed workflow document or installed runtime-control document:
    - the report contains a `### WS-NNN` heading for every finding
    - the `total-findings`, `p0-count`, `p1-count`, and `p2-count` values match
      the actual finding count and per-severity counts in the document body
-   - each finding block includes Category, Severity Estimate, Origin, Evidence
-     Layer, Evidence, Temp Project Location, Description, and Suggested
-     Investigation
+   - the analysis summary includes Confirmed Defects, Design-Debt Items, and
+     Evidence-Gap Items
+   - each finding block includes Category, Severity Estimate, Repair
+     Classification, Origin, Evidence Layer, Evidence, Temp Project Location,
+     Description, and Suggested Investigation
 7. If any required key or section is missing, or if snake_case replacements
    or alternate names such as `generated_at`, `trellis_version`,
    `temp_project_path`, or `total_findings` appear instead of the shared
@@ -477,6 +496,7 @@ Required persisted scenario files:
 - `tests/05-unresolved-helper-conflict-dropped.md`
 - `tests/06-partial-helper-output-local-followup.md`
 - `tests/07-inline-when-speed-or-depth-only.md`
+- `tests/08-classifies-repair-eligibility-before-emitting-findings.md`
 
 Every test file must use the same structure:
 

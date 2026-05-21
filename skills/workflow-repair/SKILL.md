@@ -8,6 +8,10 @@ compatibility: Requires `trellis` on PATH, access to the temp project report plu
 
 ## Version History
 
+- **v2.8**: Added report-side repair-classification gating so
+  `confirmed-defect` is the only default repair-ready class, while
+  `design-debt` and `evidence-gap` stop conservative by default, and upgraded
+  the shared report contract to `workflow-scan-repair-v3`
 - **v2.7**: Tightened `--auto` commit-scope confirmation boundaries so mixed-
   scope prompts and misleading all-success/result wording block instead of
   auto-confirming, and formally defined `current repair-task artifacts`
@@ -148,6 +152,15 @@ Use this skill when any of the following is true:
     plan presentation, repair authorization, post-repair verification, current-
     task commit readiness, or the normal safety gates required before
     `finish-work`.
+21. **Default repair-ready scope is narrow**: only findings whose report-side
+    repair classification is `confirmed-defect` may enter the ordinary adopted
+    repair path by default.
+22. **Design debt is not auto-repair**: `design-debt` findings must default to
+    `manual-decision` or `ignored` unless the user explicitly broadens scope
+    beyond confirmed defects after the correction plan is shown.
+23. **Evidence gaps block source edits**: `evidence-gap` findings must default
+    to `blocked` or `manual-decision` until further temp-project or audit
+    evidence closes the gap.
 
 ## Inputs
 
@@ -349,7 +362,7 @@ and echoes that follow-through result inline.
 
 1. Read `WORKFLOW_QUESTIONS.md` and validate frontmatter:
    - `document-type` must be `workflow-questions`
-   - `protocol` must be `workflow-scan-repair-v2`
+   - `protocol` must be `workflow-scan-repair-v3`
    - the shared scan-side report keys must still be present:
      `trellis-version`, `workflow-version`, `workflow-schema-version`,
      `scan-timestamp`, `temp-project-root`, `total-findings`, `p0-count`,
@@ -358,6 +371,9 @@ and echoes that follow-through result inline.
      `## Scan Summary`, `## Analysis Summary`, and `### WS-NNN` finding blocks
    - the `total-findings`, `p0-count`, `p1-count`, and `p2-count` values must
      match the actual finding count and per-severity counts in the report body
+   - each finding block must include `Repair Classification`
+   - the analysis summary must expose `Confirmed Defects`,
+     `Design-Debt Items`, and `Evidence-Gap Items`
 2. Read version fields:
    - `trellis-version` from report vs `trellis -v` current
    - `workflow-version` from report vs the current source workflow version when
@@ -385,11 +401,34 @@ and echoes that follow-through result inline.
 ### Step 2: Parse and Classify Findings
 
 1. Extract all findings from the report. Each finding has: WS-NNN ID, Category,
-   Severity Estimate, Origin, Evidence Layer, Evidence list, Temp Project
-   Location, Description, Suggested Investigation.
-2. Group findings by Origin (`trellis-native` vs `workflow-source`).
-3. Within each origin group, sort by Severity Estimate (P0 first, then P1,
+   Severity Estimate, Repair Classification, Origin, Evidence Layer, Evidence
+   list, Temp Project Location, Description, Suggested Investigation.
+2. Group findings first by Repair Classification (`confirmed-defect`,
+   `design-debt`, `evidence-gap`).
+3. Within each repair-classification group, group by Origin
+   (`trellis-native` vs `workflow-source`).
+4. Within each origin group, sort by Severity Estimate (P0 first, then P1,
    then P2).
+
+### Step 2A: Apply The Default Repair-Eligibility Gate
+
+Before any source-side fix decision is drafted:
+
+1. `confirmed-defect` findings may proceed into the ordinary verification and
+   adoption flow.
+2. `design-debt` findings must not be treated as adopted-fix candidates by
+   default.
+   - Keep them at `manual-decision` when a broader design trade-off or explicit
+     user scope choice is still needed.
+   - Keep them at `ignored` when they are merely optimization ideas and the
+     current request is still limited to real confirmed defects.
+3. `evidence-gap` findings must not enter source-edit execution.
+   - Keep them at `blocked` when more temp-project proof or broader audit
+     evidence is needed.
+   - Keep them at `manual-decision` only when the missing evidence can be
+     closed by an explicit user decision rather than by guessing.
+4. The correction plan must make this gating visible instead of silently
+   treating every finding as equally repair-ready.
 
 ### Step 3: Load Repair History and Issue Memory
 
@@ -888,6 +927,8 @@ Required persisted scenario files:
 - `tests/50-auto-stops-on-target-focus-scope-proof-failure.md`
 - `tests/51-auto-reports-misleading-plus-insufficient-explicitness.md`
 - `tests/52-auto-stops-on-honest-wording-without-explicit-task-scope.md`
+- `tests/53-design-debt-defaults-to-manual-decision.md`
+- `tests/54-evidence-gap-defaults-to-blocked.md`
 
 ## Examples
 
@@ -900,7 +941,7 @@ AI:
 1. Auto-detect report from the current `trellis -v` result: `/tmp/trellis-{LIVE_VERSION}-2/WORKFLOW_QUESTIONS.md`
 2. Read the report header and derive short topic `session-start-gate`
 3. Create and start a dedicated task `workflow-repair-<date>-session-start-gate`
-4. Validate frontmatter: protocol=workflow-scan-repair-v2
+4. Validate frontmatter: protocol=workflow-scan-repair-v3
 5. Resolve temp project root from the report
 6. Read all prior issue-history docs from `tmp/workflow-issues/`
 7. Parse 5 findings: P0×1, P1×2, P2×2

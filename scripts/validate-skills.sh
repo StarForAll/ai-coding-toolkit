@@ -309,7 +309,7 @@ validate_workflow_scan_repair_contract() {
   # Shared frontmatter keys required by the workflow-scan/workflow-repair pair.
   for key in \
     "document-type: workflow-questions" \
-    "protocol: workflow-scan-repair-v2" \
+    "protocol: workflow-scan-repair-v3" \
     "trellis-version:" \
     "workflow-version:" \
     "workflow-schema-version:" \
@@ -334,6 +334,7 @@ validate_workflow_scan_repair_contract() {
   for field in \
     "- **Category**:" \
     "- **Severity Estimate**:" \
+    "- **Repair Classification**:" \
     "- **Origin**:" \
     "- **Evidence Layer**:" \
     "- **Evidence**:" \
@@ -349,6 +350,9 @@ validate_workflow_scan_repair_contract() {
   grep -Fq "p0-count" "$scan_template" || fail "$scan_template missing count consistency reference for p0-count"
   grep -Fq "p1-count" "$scan_template" || fail "$scan_template missing count consistency reference for p1-count"
   grep -Fq "p2-count" "$scan_template" || fail "$scan_template missing count consistency reference for p2-count"
+  grep -Fq "Confirmed Defects" "$scan_template" || fail "$scan_template missing confirmed-defects analysis summary field"
+  grep -Fq "Design-Debt Items" "$scan_template" || fail "$scan_template missing design-debt analysis summary field"
+  grep -Fq "Evidence-Gap Items" "$scan_template" || fail "$scan_template missing evidence-gap analysis summary field"
   grep -Fq "Execution-mode note:" "$scan_template" || fail "$scan_template missing execution-mode note"
   grep -Fq "\`--agent\` helper assistance" "$scan_template" || fail "$scan_template missing explicit --agent execution-mode note"
   grep -Eq 'MUST NOT.*WORKFLOW_QUESTIONS\.md.*schema' "$scan_template" || fail "$scan_template missing normative no-schema-change rule"
@@ -368,7 +372,8 @@ validate_workflow_scan_repair_contract() {
     "skills/workflow-scan/tests/04-helper-failure-local-compensation.md" \
     "skills/workflow-scan/tests/05-unresolved-helper-conflict-dropped.md" \
     "skills/workflow-scan/tests/06-partial-helper-output-local-followup.md" \
-    "skills/workflow-scan/tests/07-inline-when-speed-or-depth-only.md"
+    "skills/workflow-scan/tests/07-inline-when-speed-or-depth-only.md" \
+    "skills/workflow-scan/tests/08-classifies-repair-eligibility-before-emitting-findings.md"
   do
     [ -f "$test_file" ] || fail "missing $test_file"
     grep -Fq "## Purpose" "$test_file" || fail "$test_file missing Purpose section"
@@ -425,9 +430,12 @@ validate_workflow_scan_repair_contract() {
   grep -Fq "Immediately read the file back and verify" "$scan_skill" || fail "$scan_skill missing explicit post-write verification step"
   grep -Fq "count and per-severity counts" "$scan_skill" || fail "$scan_skill missing count consistency validation"
   grep -Fq "snake_case" "$scan_skill" || fail "$scan_skill should explicitly guard against snake_case contract drift"
+  grep -Fq "Repair classification is mandatory" "$scan_skill" || fail "$scan_skill missing mandatory repair-classification guard"
+  grep -Fq "No complexity-only inflation" "$scan_skill" || fail "$scan_skill missing design-debt anti-inflation guard"
+  grep -Fq "No evidence-gap inflation" "$scan_skill" || fail "$scan_skill missing evidence-gap anti-inflation guard"
 
   grep -Fq "\`document-type\` must be \`workflow-questions\`" "$repair_skill" || fail "$repair_skill missing repair-side intake requirement for document-type"
-  grep -Fq "\`protocol\` must be \`workflow-scan-repair-v2\`" "$repair_skill" || fail "$repair_skill missing repair-side intake requirement for protocol"
+  grep -Fq "\`protocol\` must be \`workflow-scan-repair-v3\`" "$repair_skill" || fail "$repair_skill missing repair-side intake requirement for protocol"
   grep -Fq "Execution-mode agnostic intake" "$repair_skill" || fail "$repair_skill missing execution-mode agnostic intake rule"
   grep -Fq "\`--agent\`" "$repair_skill" || fail "$repair_skill missing explicit compatibility reference to --agent scan mode"
   grep -Fq "\`--auto\`" "$repair_skill" || fail "$repair_skill missing explicit --auto input contract"
@@ -500,18 +508,25 @@ validate_workflow_scan_repair_contract() {
   grep -Fq "## Analysis Summary" "$repair_skill" || fail "$repair_skill missing repair-side section validation for Analysis Summary"
   grep -Fq "### WS-NNN" "$repair_skill" || fail "$repair_skill missing repair-side section validation for finding headings"
   grep -Fq "count and per-severity counts" "$repair_skill" || fail "$repair_skill missing count consistency validation"
+  grep -Fq "Default repair-ready scope is narrow" "$repair_skill" || fail "$repair_skill missing confirmed-defect-only default gate"
+  grep -Fq "Design debt is not auto-repair" "$repair_skill" || fail "$repair_skill missing design-debt default stop rule"
+  grep -Fq "Evidence gaps block source edits" "$repair_skill" || fail "$repair_skill missing evidence-gap default stop rule"
 
   for template in \
     "$correction_plan_template" \
     "$repair_log_template" \
     "$issue_history_template"
   do
-    grep -Fq "workflow-scan-repair-v2" "$template" || fail "$template missing shared protocol version"
+    grep -Fq "workflow-scan-repair-v3" "$template" || fail "$template missing shared protocol version"
   done
   grep -Fq "{trellis-version from WORKFLOW_QUESTIONS.md}" "$correction_plan_template" || fail "$correction_plan_template missing trellis-version placeholder from scan report"
   grep -Fq "{workflow-version from WORKFLOW_QUESTIONS.md}" "$correction_plan_template" || fail "$correction_plan_template missing workflow-version placeholder from scan report"
   grep -Fq "{scan-timestamp from WORKFLOW_QUESTIONS.md}" "$correction_plan_template" || fail "$correction_plan_template missing scan-timestamp placeholder from scan report"
   grep -Fq "{temp-project-root from WORKFLOW_QUESTIONS.md}" "$correction_plan_template" || fail "$correction_plan_template missing temp-project-root placeholder from scan report"
+  grep -Fq "Report-side confirmed defects" "$correction_plan_template" || fail "$correction_plan_template missing report-side confirmed-defect summary"
+  grep -Fq "Report-side design-debt items" "$correction_plan_template" || fail "$correction_plan_template missing report-side design-debt summary"
+  grep -Fq "Report-side evidence-gap items" "$correction_plan_template" || fail "$correction_plan_template missing report-side evidence-gap summary"
+  grep -Fq "**Report Classification**" "$correction_plan_template" || fail "$correction_plan_template missing report classification field"
   grep -Fq "Continuation Mode" "$correction_plan_template" || fail "$correction_plan_template missing continuation-mode header field"
   grep -Fq "execution-time source of truth" "$correction_plan_template" || fail "$correction_plan_template missing footer note redirecting execution-time mode to repair log"
   grep -Fq "narrowed" "$correction_plan_template" || fail "$correction_plan_template missing visibility note for narrowed-scope auto close-out"
@@ -521,6 +536,7 @@ validate_workflow_scan_repair_contract() {
   grep -Fq "If continuation mode = \`auto-follow-through\`" "$correction_plan_template" || fail "$correction_plan_template missing continuation-mode-scoped auto rule"
   grep -Fq "authorization mode at the time the" "$correction_plan_template" || fail "$correction_plan_template missing timing rule for authorization-mode header"
   grep -Fq "{absolute path to WORKFLOW_QUESTIONS.md}" "$repair_log_template" || fail "$repair_log_template missing source-report placeholder"
+  grep -Fq "**Report Classification**" "$repair_log_template" || fail "$repair_log_template missing report classification field"
   grep -Fq "continuation-mode:" "$repair_log_template" || fail "$repair_log_template missing continuation-mode frontmatter"
   grep -Fq "total-reverted:" "$repair_log_template" || fail "$repair_log_template missing total-reverted counter"
   grep -Fq "Auto Follow-Through Outcome" "$repair_log_template" || fail "$repair_log_template missing structured continuation outcome field"
@@ -534,6 +550,7 @@ validate_workflow_scan_repair_contract() {
   grep -Fq "continuation-mode:" "$issue_history_template" || fail "$issue_history_template missing continuation-mode frontmatter"
   grep -Fq "Continuation Mode:" "$issue_history_template" || fail "$issue_history_template missing continuation mode session-summary field"
   grep -Fq "{absolute path to WORKFLOW_QUESTIONS.md}" "$issue_history_template" || fail "$issue_history_template missing report-path placeholder"
+  grep -Fq "**Report Classification**" "$issue_history_template" || fail "$issue_history_template missing report classification field"
   grep -Fq "session-level header/summary fields" "$issue_history_template" || fail "$issue_history_template missing explicit session-level scoping for continuation mode"
   if [ "$(grep -Ec '^[0-9]+\. ' "$issue_history_template")" -ne "$(grep -Eo '^[0-9]+\.' "$issue_history_template" | sort -u | wc -l | tr -d ' ')" ]; then
     fail "$issue_history_template has duplicated numbered rules"

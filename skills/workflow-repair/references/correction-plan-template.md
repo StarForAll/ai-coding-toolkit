@@ -22,7 +22,7 @@ Exception: if the current user instruction already explicitly requests repair of
 
 ## Report Source
 
-- Protocol: workflow-scan-repair-v2
+- Protocol: workflow-scan-repair-v3
 - Trellis Version (at scan time): {trellis-version from WORKFLOW_QUESTIONS.md}
 - Workflow Version: {workflow-version from WORKFLOW_QUESTIONS.md}
 - Scan Timestamp: {scan-timestamp from WORKFLOW_QUESTIONS.md}
@@ -34,6 +34,9 @@ Exception: if the current user instruction already explicitly requests repair of
 ## Verification Summary
 
 - Total findings in report: {N}
+- Report-side confirmed defects: {N}
+- Report-side design-debt items: {N}
+- Report-side evidence-gap items: {N}
 - Confirmed (adopted): {N}
 - False alarms (ignored): {N}
 - Needs manual decision: {N}
@@ -53,6 +56,8 @@ Each finding gets a decision block:
 ### WS-NNN: {title from report}
 
 **Decision**: adopted | ignored | blocked | manual-decision | trellis-native
+
+**Report Classification**: confirmed-defect | design-debt | evidence-gap
 
 **Verification Result**: {brief result of re-checking against the temp project and source project}
 
@@ -158,17 +163,22 @@ Awaiting your decision.
 6. Every `adopted` and `trellis-native` block must state whether a same-pattern variant sweep was performed.
 7. Every `adopted` and `trellis-native` block must explain the root-cause class and why the plan is broad enough to avoid a repeated trigger.
 8. The plan must name the dedicated repair task and report how many prior issue-history docs were loaded from `tmp/workflow-issues/`.
-9. If continuation mode = `auto-follow-through`, the plan must state that auto
+9. `design-debt` items must not be auto-presented as ordinary adopted fixes unless
+   the current user instruction explicitly broadens scope beyond confirmed defects.
+10. `evidence-gap` items must not be auto-presented as ordinary adopted fixes;
+    the plan must keep them at `blocked` or `manual-decision` until the missing
+    proof is resolved.
+11. If continuation mode = `auto-follow-through`, the plan must state that auto
    follow-through happens only after successful repair verification, re-enters
    the current task through the available `continue` surface, and stops with a
    reported blocker if `continue` / `finish-work` cannot proceed safely.
-10. If the plan documents mixed succeeded/reverted work, partial acceptance, or
+12. If the plan documents mixed succeeded/reverted work, partial acceptance, or
     `target_focus`, the later auto close-out path must not be described in a
     way that would imply every attempted or every report finding was verified.
-11. If the current run began as `analysis-only` and the user explicitly accepts
+13. If the current run began as `analysis-only` and the user explicitly accepts
    execution in Step 8, the plan/log state may transition to
    `post-plan-confirmation` for the actual repair execution.
-12. The correction-plan header records the authorization mode at the time the
+14. The correction-plan header records the authorization mode at the time the
     plan is presented. If execution approval later changes the mode to
     `post-plan-confirmation`, record that transition in the repair log rather
     than retroactively treating the already-presented plan header as final.

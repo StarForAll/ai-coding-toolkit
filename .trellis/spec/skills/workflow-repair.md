@@ -71,7 +71,7 @@ The skill must:
 - create a dedicated repair task if none exists
 - create a new dedicated repair task and switch to it when another task is
   already active
-- validate the shared `workflow-scan-repair-v2` protocol
+- validate the shared `workflow-scan-repair-v3` protocol
 - resolve the temp project from the report before judging findings
 - stop instead of guessing when report/temp context does not line up
 
@@ -93,6 +93,11 @@ Before adoption, it must:
 - classify the item as `ignored` rather than `manual-decision` when the temp-
   project symptom only reflects a Trellis-native hook/runtime convention that
   the current workflow embed preserved unchanged
+- honor the report-side repair classification as a default safety gate:
+  `confirmed-defect` may enter normal repair verification, `design-debt`
+  defaults to non-adopted handling unless the user explicitly broadens scope,
+  and `evidence-gap` must stop for more proof before any source edit is
+  allowed
 
 If a finding appears to be a repeat of an earlier repair attempt, the skill must
 escalate rather than reapply the same narrow patch blindly.
@@ -415,6 +420,8 @@ When editing `skills/workflow-repair/`, confirm all of the following:
   beyond mixed-scope plus misleading-result
 - persisted tests now include the case where honest wording still fails because
   explicit current-task scoping is missing
+- persisted tests now include report-side `design-debt` and `evidence-gap`
+  findings that must not auto-enter adopted repair execution
 - any protocol, field, role-boundary, example, or behavior change is mirrored
   by a matching `workflow-scan` adaptation and shared-template update in the
   same change
@@ -438,6 +445,9 @@ Minimum expected validation:
   guarantee
 - verify repair-side wording does not make inline-only assumptions about how
   scan evidence was gathered before the final report was written
+- verify repair-side intake now treats report-side repair classification as the
+  default anti-overrepair gate instead of assuming every finding is equally
+  repair-ready
 - verify repair-side examples include at least one report intake path for a
   validated `workflow-scan --agent` output
 - verify `--auto` is documented as explicit, post-repair only, and blocked when

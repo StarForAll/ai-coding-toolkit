@@ -129,12 +129,14 @@ The skill must not require:
 ### 3. Coupled Report Contract
 
 The skill must emit `WORKFLOW_QUESTIONS.md` in the shared
-`workflow-scan-repair-v2` format and keep the following aligned with
+`workflow-scan-repair-v3` format and keep the following aligned with
 `workflow-repair`:
 
 - frontmatter fields
 - finding ID format `WS-NNN`
 - category/origin/evidence-layer vocabularies
+- repair-classification vocabulary:
+  `confirmed-defect`, `design-debt`, `evidence-gap`
 - analysis-summary semantics
 - the required read-back validation step before the scan may report success
 
@@ -193,8 +195,11 @@ Before the skill reports success, it must read the generated
 - the report contains `## Scan Summary`
 - the report contains `## Analysis Summary`
 - finding sections use `### WS-NNN`
+- each finding includes `Repair Classification`
 - the count fields match the actual number of findings and their P0/P1/P2
   severity split in the document body
+- the analysis summary exposes the three repair-classification lists so repair
+  intake can stay conservative by default
 
 If the generated file drifts into snake_case or omits a required section, the
 skill must treat that as a failed scan output and correct it before stopping.
@@ -252,6 +257,8 @@ Minimum expected validation:
 - verify any paired repair-side `--auto` close-out change is documented here as
   a compatibility note only, without implying any scan-side schema or overwrite
   behavior change
+- verify the shared report contract now forces every finding to distinguish
+  `confirmed-defect`, `design-debt`, and `evidence-gap`
 - verify the scan-side instructions now require a read-back validation step and
   explicitly guard against snake_case contract drift
 - when the repair-side memory/auxiliary surfaces change, confirm whether the
@@ -288,3 +295,5 @@ First-version scenario set should cover at least:
 - unresolved helper conflicts dropped conservatively instead of guessed through
 - partial helper output does not bypass coordinator confirmation
 - speed/depth wording alone does not enable helper-agent mode
+- the shared report contract does not let complexity-only or insufficiently
+  evidenced observations masquerade as repair-ready defects

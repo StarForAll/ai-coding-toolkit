@@ -3,7 +3,7 @@
 Use this template only for internal helper-agent handoffs during
 `workflow-scan --agent`.
 
-This artifact is **not** part of the shared `workflow-scan-repair-v2`
+This artifact is **not** part of the shared `workflow-scan-repair-v3`
 protocol. `workflow-repair` does not read it.
 
 ```markdown

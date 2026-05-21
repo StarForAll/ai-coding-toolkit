@@ -35,7 +35,7 @@ Rules:
 ```markdown
 ---
 issue-history-version: 1
-protocol: workflow-scan-repair-v2
+protocol: workflow-scan-repair-v3
 temp-project-version: {trellis version or temp-project .trellis/.version value}
 temp-project-root: {absolute temp project path}
 report-path: {absolute path to WORKFLOW_QUESTIONS.md}
@@ -65,6 +65,7 @@ total-issues: {N}
 ### {WS-ID}: {problem title}
 
 - **Problem ID / Title**: {WS-ID and title, or another stable problem label if no WS-ID exists}
+- **Report Classification**: confirmed-defect | design-debt | evidence-gap
 - **Root Cause**: {named root-cause class}
 - **Repaired Files**:
   - {relative path within docs/workflows/新项目开发工作流/}
@@ -82,6 +83,7 @@ total-issues: {N}
    - temp project version
    - report path
    - problem title/ID
+   - report classification
    - root cause
    - repaired files
    - variant sweep scope

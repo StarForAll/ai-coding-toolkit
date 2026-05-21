@@ -34,7 +34,7 @@ result: `/tmp/trellis-{VERSION}-2/WORKFLOW_QUESTIONS.md`
 ```yaml
 ---
 document-type: workflow-questions
-protocol: workflow-scan-repair-v2
+protocol: workflow-scan-repair-v3
 trellis-version: <from the current `trellis -v` output, for example <LIVE_TRELLIS_VERSION>>
 workflow-version: <from the temp project's installed workflow surfaces, for example `.trellis/workflow-installed.json` `workflow_version`; use `unknown` when no reliable in-project value exists>
 workflow-schema-version: <from `.trellis/workflow-installed.json` when available; otherwise `unknown`>
@@ -52,7 +52,7 @@ p2-count: <N>
 | Field | Required | Source |
 |-------|----------|--------|
 | `document-type` | Yes | Fixed value: `workflow-questions` |
-| `protocol` | Yes | Fixed value: `workflow-scan-repair-v2` |
+| `protocol` | Yes | Fixed value: `workflow-scan-repair-v3` |
 | `trellis-version` | Yes | Output of the current `trellis -v` command at runtime |
 | `workflow-version` | Yes | Best supported value from the temp project's installed workflow surfaces |
 | `workflow-schema-version` | Yes | `.trellis/workflow-installed.json` `workflow_schema_version` when available, otherwise `unknown` |
@@ -100,6 +100,9 @@ issues" handoff:
 - Gap / Missing-Surface Analysis: <short synthesis of missing or incomplete workflow surfaces; use `none` if not present>
 - Residual Issues: <WS-ID list or `none`>
 - New Issues: <WS-ID list or `none`>
+- Confirmed Defects: <WS-ID list or `none`>
+- Design-Debt Items: <WS-ID list or `none`>
+- Evidence-Gap Items: <WS-ID list or `none`>
 ```
 
 Rules:
@@ -111,6 +114,12 @@ Rules:
 - `Residual Issues` should list findings whose main classification is
   retired/stale leftovers.
 - `New Issues` should list findings whose main classification is `new`.
+- `Confirmed Defects` should list findings whose repair classification is
+  `confirmed-defect`.
+- `Design-Debt Items` should list findings whose repair classification is
+  `design-debt`.
+- `Evidence-Gap Items` should list findings whose repair classification is
+  `evidence-gap`.
 
 ### Findings Section (Required)
 
@@ -121,6 +130,7 @@ Each finding is a level-3 heading with structured fields:
 
 - **Category**: script-behavior | cli-adaptation | post-install-artifact | document-reference | residual | new
 - **Severity Estimate**: P0 | P1 | P2
+- **Repair Classification**: confirmed-defect | design-debt | evidence-gap
 - **Origin**: trellis-native | workflow-source
 - **Evidence Layer**: generated-target-baseline | generated-target-installed | generated-target-runtime
 - **Evidence**:
@@ -172,6 +182,19 @@ Each finding is a level-3 heading with structured fields:
 **Note**: Severity is **preliminary** — set by the scan running in isolation
 before repair. `workflow-repair` re-verifies and may reclassify.
 
+### Repair Classification
+
+| Value | Meaning | Default Repair Posture |
+|-------|---------|------------------------|
+| `confirmed-defect` | Temp-project evidence shows a concrete contradiction, broken behavior, missing/stale managed artifact, or another real defect that is actionable as workflow repair work | eligible for normal repair verification |
+| `design-debt` | The concern is about complexity, maintainability, ergonomics, or over-design, but the temp project does not yet show a concrete installed-workflow defect or contradiction | do not auto-repair; treat as manual scope decision |
+| `evidence-gap` | The observation looks suspicious, but the temp-project evidence is still insufficient to confirm a real defect or source-owned root cause | do not auto-repair; gather more evidence first |
+
+`Repair Classification` is the anti-overrepair guardrail. It determines whether
+`workflow-repair` may treat the finding as part of the default repair-ready set.
+It does **not** replace `Severity Estimate`; the two axes answer different
+questions.
+
 ### Finding IDs
 
 - Prefix: `WS-` (workflow-scan)
@@ -187,7 +210,7 @@ before repair. `workflow-repair` re-verifies and may reclassify.
 ```markdown
 ---
 document-type: workflow-questions
-protocol: workflow-scan-repair-v2
+protocol: workflow-scan-repair-v3
 trellis-version: <LIVE_TRELLIS_VERSION>
 workflow-version: 0.1.28
 workflow-schema-version: 2
@@ -216,11 +239,15 @@ p2-count: 1
 - Gap / Missing-Surface Analysis: Codex skill resolution needs confirmation because the temp project exposes an empty `.codex/skills/` directory while workflow skills live under `.agents/skills/`.
 - Residual Issues: WS-003
 - New Issues: none
+- Confirmed Defects: WS-001
+- Design-Debt Items: WS-002
+- Evidence-Gap Items: none
 
 ### WS-001: patch-session-start-strong-gate.py uses legacy READY/NOT READY semantics
 
 - **Category**: script-behavior
 - **Severity Estimate**: P0
+- **Repair Classification**: confirmed-defect
 - **Origin**: workflow-source
 - **Evidence Layer**: generated-target-installed
 - **Evidence**:
@@ -235,6 +262,7 @@ p2-count: 1
 
 - **Category**: cli-adaptation
 - **Severity Estimate**: P1
+- **Repair Classification**: design-debt
 - **Origin**: trellis-native
 - **Evidence Layer**: generated-target-runtime
 - **Evidence**:
@@ -249,6 +277,7 @@ p2-count: 1
 
 - **Category**: residual
 - **Severity Estimate**: P2
+- **Repair Classification**: confirmed-defect
 - **Origin**: workflow-source
 - **Evidence Layer**: generated-target-installed
 - **Evidence**:
@@ -264,7 +293,7 @@ p2-count: 1
 
 ## Protocol Version
 
-Current protocol version: `workflow-scan-repair-v2`
+Current protocol version: `workflow-scan-repair-v3`
 
 Runtime-value rule:
 
