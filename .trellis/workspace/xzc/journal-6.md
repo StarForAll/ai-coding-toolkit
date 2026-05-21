@@ -1417,3 +1417,36 @@ Repaired workflow runtime and breadcrumb contracts, archived the workflow-repair
 ### Next Steps
 
 - None - task complete
+
+
+## Session 287: Workflow repair boundary closure
+
+**Date**: 2026-05-21
+**Task**: Workflow repair boundary closure
+**Branch**: `main`
+
+### Summary
+
+Closed the workflow-repair run by recording the repair task, tightening workflow-scan/workflow-repair ownership-boundary specs, and confirming the reported bootstarp/python3 findings are ignored under the current embed contract.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ca61271` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
