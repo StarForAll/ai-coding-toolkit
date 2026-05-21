@@ -99,6 +99,13 @@ OpenCode 下的 MCP / skills 配置不应全部堆进 `instructions`。
 
 因此，看到 `.opencode/skills/` 里没有这三个 Trellis baseline 入口，不应直接判定为 workflow 漏装或平台技能树残缺。
 
+再补一条判断顺序，避免把共享发现面误判成正式入口缺失：
+
+- 对 OpenCode 的阶段能力，先看 `.opencode/commands/trellis/*.md` 这个正式入口面
+- `.opencode/skills/*` 与 `.agents/skills/*` 只负责 OpenCode 的原生技能发现面或共享承载面补充
+- 因此，不要因为 `.opencode/skills/` 没镜像全部阶段 skill，或 `.agents/skills/` 数量更多，就把命令面已经完整的安装结果判成缺 13 个 skill
+- 若看到 `.opencode/commands/trellis/.backup-original/` 或 `.agents/skills/.backup-original/`，应先按恢复面理解；存在本身不构成 defect
+
 ## 推荐承载方式
 
 ### 1. Commands：用 `.opencode/commands/` 承载 workflow 命令

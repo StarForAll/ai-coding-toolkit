@@ -58,6 +58,13 @@ Claude Code 是当前 workflow 维护的三种原生适配之一，并保留项�
 
 因此，看到 `.claude/skills/` 里没有这三个 Trellis baseline 入口，不应直接判定为 workflow 漏装或技能树不完整。
 
+再补一条判断顺序，避免把 carrier 混看成“缺 13 个 skill”：
+
+- 对 Claude 的阶段能力，先看 `.claude/commands/trellis/*.md` 这个正式入口面
+- `.claude/skills/*` 只负责 Claude-native skill 能力；它不需要镜像 `.agents/skills/` 里的共享阶段 skill
+- 因此，不要因为 `.claude/skills/` 没有和 `.agents/skills/` 一样多的阶段 skill，就把命令面已经完整的安装结果判成漏装
+- 若看到 `.claude/commands/trellis/.backup-original/`，应先按恢复面理解；存在本身不构成 defect
+
 ## 安装时序
 
 若你的目标是让 Claude Code 在目标项目里直接可用这套 workflow，推荐做法是：

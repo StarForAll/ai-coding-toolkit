@@ -109,6 +109,11 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 | 项目 Git 前置条件 | `origin ≥ 2 push URL` | 运行前置/仅校验 | 安装器校验，不负责配置 |
 | Trellis init 产物 | `.trellis/.version` | 运行前置/仅校验 | 安装器校验，由 `trellis init` 负责 |
 
+补充判断规则：
+
+- 对 Claude 的“阶段能力是否可用”判断，先看 `.claude/commands/trellis/*.md` 这组正式入口，再看 `.claude/skills/*` 是否存在平台私有补充能力；不要因为它没有镜像 `.agents/skills/` 的共享阶段 skill，就直接判成少装
+- `.claude/commands/trellis/.backup-original/` 是安装器/升级器保留的恢复面；其存在本身不构成 defect，只有活动入口缺失、恢复配对断裂，或有人把备份内容误当当前合同，才需要继续追查
+
 ---
 
 ## OpenCode
@@ -132,6 +137,11 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 - `opencode.json` — instructions / provider / MCP 配置
 - `AGENTS.md` 的手动段（workflow 不托管的章节）
 - `.opencode/plugins/*.js` + `.opencode/package.json` — plugin 层（`trellis init` 产物，workflow 不重复分发）
+
+补充判断规则：
+
+- 对 OpenCode 的“阶段能力是否可用”判断，先看 `.opencode/commands/trellis/*.md` 这组正式入口，再看 `.opencode/skills/*` 与 `.agents/skills/*` 是否提供原生技能发现面；不能因为 `.opencode/skills/` 没镜像所有阶段 skill，就把命令面已经完备的安装结果判成缺 13 个 skill
+- `.opencode/commands/trellis/.backup-original/` 与 `.agents/skills/.backup-original/` 都应先按恢复面理解；存在本身不代表 residual defect
 
 ---
 
@@ -180,8 +190,10 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 - `.agents/skills/` 承载共享 / 通用 workflow skills，也是当前证据下 Codex 的 repo-scoped skills 唯一主承载面与主入口
 - `.codex/skills/` 承载 Codex 特有或本地侧 skills，是条件出现的 secondary carrier
 - 因此 `.codex/skills/` 不应被默认视为与 `.agents/skills/` 并列的共享 workflow 主入口，也不应被默认视为 `trellis-continue` / `trellis-finish-work` 这类共享 baseline skill 的补丁目标
+- `.codex/commands/` 不属于当前 workflow 对 Codex 的正式入口模型；缺少该目录本身不构成 carrier incomplete
 - Claude Code 官方技能目录仍是 `.claude/skills/`；当前没有官方证据表明 Claude Code 会读取 `.agents/skills/`
 - 对 Codex 的 `start`/首次路由判断，也不要把 `SessionStart` 当成唯一前提；当前常见主路径是 turn-level hook，`session-start.py` 只有在目标项目显式接线时才属于 startup 辅助面
+- `.agents/skills/.backup-original/` 或 `.codex/skills/.backup-original/` 默认是恢复面；只有活动入口缺失、恢复配对断裂，或备份被错误当成现行入口时，才把它升级成问题
 
 装后/升级后核对仍建议显式检查主目录，并只在次级目录实际存在时继续检查其条件性影响面：
 

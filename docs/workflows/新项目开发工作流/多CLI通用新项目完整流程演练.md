@@ -131,7 +131,10 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
   - 对 Codex：它是当前 workflow 共享 skills 的唯一主承载面，也是当前证据下 Codex 的 repo-scoped skills 主入口
   - 对 OpenCode：官方会发现它，但当前 workflow 的正式主入口仍是 `.opencode/commands/trellis/`
   - 对 Claude Code：当前没有官方证据表明会读取 `.agents/skills/`
+- 对 Claude/OpenCode 的阶段可用性，先看 `.claude/commands/trellis/` / `.opencode/commands/trellis/`；不要因为对应 `skills/` 目录没有镜像全部阶段 skill，就把命令面完整的安装结果判成缺项
 - `.codex/skills/` 只应保留 Codex 独有或项目自定义的 secondary-carrier skills，若出现重复 shared skills 应视为漂移并清理
+- 对 Codex：先判断 `.agents/skills/` 主承载面，再判断 `.codex/skills/`；缺少 `.codex/commands/` 不单独构成异常
+- `.backup-original/` 目录默认是安装器/升级器保留的恢复面；存在本身不算 defect，只需确认活动入口仍健康、备份未被误当成当前合同
 - `.codex/hooks.json`、`.codex/hooks/inject-workflow-state.py`、`.claude/settings*.json`、`opencode.json.instructions` 仍属于人工维护或 Trellis baseline 资产，不应误以为安装器会替你补齐
 
 安装完成后，这套 workflow 的实际使用仍然可以是**渐进性披露**的：

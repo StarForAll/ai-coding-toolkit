@@ -85,6 +85,8 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 因此 `.codex/skills/` 不应再出现 `feasibility` 到 `delivery` 这类共享阶段 skills 的重复副本
 - 若 `trellis-start` / `trellis-continue` / `trellis-finish-work` 不在 `.codex/skills/`，应先检查 `.agents/skills/`；这三个入口默认补丁目标就是活动 shared skills 目录，而不是 `.codex/skills/`
 - 因而 `.codex/skills/` 为空或只保留本地侧 skills，本身不构成 shared workflow 漏装
+- `.codex/commands/` 也不是当前 workflow 对 Codex 的正式入口面；判断 `WS-008` 这类问题时，应先看 `.agents/skills/`、`.codex/hooks*`、`.codex/agents/*` 是否满足合同，再看 `.codex/skills/` secondary carrier，而不是把“没有 `.codex/commands/`”直接记成异常
+- 若看到 `.agents/skills/.backup-original/` 或 `.codex/skills/.backup-original/`，应先按恢复面理解；存在本身不构成 defect
 
 装后/升后核对仍建议先检查两条路径是否都存在；只有次级目录实际存在时，才继续核对其内容：
 
