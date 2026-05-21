@@ -1202,3 +1202,37 @@ Rewrote deployed trellis-library guidance to the host-side absolute CLI path and
 ### Next Steps
 
 - None - task complete
+
+
+## Session 281: workflow-repair auto closeout guard
+
+**Date**: 2026-05-21
+**Task**: workflow-repair auto closeout guard
+**Branch**: `main`
+
+### Summary
+
+Tightened workflow-repair --auto close-out scope/proof rules, synced repair-side specs/templates, and added persisted scenarios for commit-scope confirmation edge cases.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e7b9930` | (see git log) |
+| `c85d750` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
