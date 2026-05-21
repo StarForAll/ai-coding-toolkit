@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-6.md`
-- **Total Sessions**: 285
+- **Total Sessions**: 286
 - **Last Active**: 2026-05-21
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-6.md` | ~1386 | Active |
+| `journal-6.md` | ~1419 | Active |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
@@ -34,6 +34,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 286 | 2026-05-21 | Repair workflow runtime and breadcrumb contracts | `0e430bb` | `main` |
 | 285 | 2026-05-21 | Workflow repair helper patch close-out | `10a5a90`, `26a54e7` | `main` |
 | 284 | 2026-05-21 | Workflow repair: installer compatibility | `6fb3c4d` | `main` |
 | 283 | 2026-05-21 | Workflow repair carrier boundaries | `7f445e0`, `24958c7` | `main` |

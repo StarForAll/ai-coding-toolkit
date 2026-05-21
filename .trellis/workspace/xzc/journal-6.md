@@ -1384,3 +1384,36 @@ Repaired workflow patch helper contracts, removed stale AGENTS legacy start prom
 ### Next Steps
 
 - None - task complete
+
+
+## Session 286: Repair workflow runtime and breadcrumb contracts
+
+**Date**: 2026-05-21
+**Task**: Repair workflow runtime and breadcrumb contracts
+**Branch**: `main`
+
+### Summary
+
+Repaired workflow runtime and breadcrumb contracts, archived the workflow-repair task, and recorded the repair session artifacts.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0e430bb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
