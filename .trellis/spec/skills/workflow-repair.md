@@ -125,15 +125,79 @@ When `--auto` is requested, the skill must:
 - treat `--auto` as a post-repair continuation mode, not as expanded repair
   authority
 - continue only within the current repair task's normal close-out flow
-- reply `ok` only when the current task's own one-shot commit confirmation
-  prompt appears
+- reply `ok` only when the current task's own eligible commit confirmation
+  prompt appears; that eligible confirmation may be either the one-shot commit
+  confirmation itself or an explicit current-task commit-plan / commit-scope
+  confirmation that still asks for `ok`/yes-style approval
+- define `unrecognized working-tree files` as working-tree paths surfaced by
+  the close-out flow outside the proposed commit batches and requiring explicit
+  include/exclude judgment; they may be modified or untracked
+- define `current repair-task artifacts` as files that live inside the current
+  repair task directory and are being enumerated by the close-out flow as part
+  of that task's commit scope
+- treat current repair-task artifacts as independently acceptable by task-
+  directory membership plus explicit current-task prompt scoping; they do not
+  need separate current-run output proof
+- define the current repair run's independently provable output set as
+  out-of-directory files inside the skill's other allowed write-scope
+  locations when the current run can tie them to its own recorded outputs:
+  - workflow source files changed by confirmed repair work under
+    `docs/workflows/新项目开发工作流/`
+  - the current run's own `tmp/workflow-issues/NNNN.md` output
+- a file counts as tied to this run's recorded outputs only when the current
+  run's repair log records it as a changed, written, or output file for this
+  run
+- exclude reverted files from that independently provable output set; a file
+  changed and later reverted during post-repair verification is not a remaining
+  current-run output for close-out
+- reverted files inside the current repair task directory are likewise not
+  remaining current-run outputs for close-out, even though the files still live
+  in the task directory
+- allow unrecognized working-tree files only when the prompt frames them as
+  part of the current repair task's commit scope and the skill can still prove
+  they belong inside that scope independently
+- treat that independent proof as path-plus-run-membership proof rather than as
+  task-directory membership alone for out-of-directory files
 - require commit-confirmation detection to be explicit to the current repair
   task and to clearly ask for a yes/confirm style response before replying `ok`
+- treat phrasing such as `commit the current repair task changes`,
+  `commit the current repair task artifacts`, or `commit the focused repairs`
+  as minimum-acceptable examples of explicit current-task scope when the rest
+  of the prompt stays consistent with that scope
+- treat those examples as illustrative rather than exhaustive; semantically
+  equivalent phrasing may also qualify when it meets the same explicit
+  current-task scope bar
+- treat phrasing such as `commit these changes` or `commit working tree
+  changes` as insufficient by itself because it does not explicitly frame the
+  scope as the current repair task
+- stop when the prompt includes working-tree files outside the current repair task's
+  commit scope or otherwise mixes task scope with non-task scope
+- stop when the prompt's commit-scope or repair-result wording would
+  materially overstate the actual repair outcome, including reverted, failed,
+  unresolved, or out-of-focus work
+- treat wording such as `all fixes verified` or `commit these verified fixes`
+  as materially overstating the outcome whenever any attempted fix was
+  reverted, failed, unresolved, or left outside `target_focus`
+- treat wording such as `commit the successful repairs` or `commit the current
+  repair task changes` as potentially honest when it does not imply every
+  attempted or every reported fix was verified and when the file list remains
+  consistent with that narrower claim
+- stop when the prompt does not make either the current-task commit scope or
+  the one-shot approval request explicit enough to trust
 - stop when the close-out flow changes in a way that makes single-shot commit
   confirmation unreliable, rather than risking over-confirmation
+- if multiple blocker causes trigger at once, report all triggered causes in
+  the blocker reason rather than collapsing them to a single label
 - stop when any other interactive prompt appears; do not guess a reply
 - re-enter close-out through the current task's `continue` surface before
   attempting `finish-work`
+- define one close-out run as the full post-repair continuation sequence
+  beginning with the first `continue` re-entry for this repair task and ending
+  only when the task reaches `finish-work`, `reached-task-close`, or stops with
+  a blocker
+- if a blocker ends that sequence and the task is later resumed, treat the
+  resumed continuation as a new close-out run rather than as a continuation of
+  the previous one
 - keep using `continue` after commit until it either recommends `finish-work`
   or clearly indicates that the current repair task has already closed
 - keep the `reply ok exactly once` action centralized in the commit-
@@ -272,6 +336,29 @@ When editing `skills/workflow-repair/`, confirm all of the following:
 - `--auto` still does not create any repair-side `--agent` interaction
 - `--auto` now explicitly stops on non-commit interactive prompts instead of
   guessing a reply
+- `--auto` now explicitly allows current-task commit-scope confirmations that
+  enumerate proposed commits or task artifacts when they still ask for
+  `ok`/yes-style approval
+- `--auto` now explicitly restricts unrecognized working-tree files to those that the
+  prompt frames as part of the current repair task's commit scope
+- `unrecognized working-tree files` are now explicitly defined instead of being
+  inferred from git-specific shorthand
+- `current repair-task artifacts` are now explicitly defined instead of being
+  implied only by examples
+- task-directory artifacts now qualify by directory membership plus explicit
+  current-task scoping, while only out-of-directory files need current-run
+  recorded-output proof
+- independent scope proof now explicitly extends across all three allowed
+  write-scope locations for the current repair run, not just the task
+  directory
+- `tie to this run's recorded outputs` is now explicitly defined in terms of
+  repair-log evidence for changed, written, or output files
+- repeated auto-close-out term definitions are now intentionally centralized in
+  the main follow-through rules with shorter references elsewhere
+- `--auto` now explicitly stops on mixed-scope commit prompts that include
+  non-task working-tree files
+- `--auto` now explicitly stops when commit-scope or repair-result wording
+  would overstate the actual repair outcome
 - `--auto` now explicitly stops when one-shot commit confirmation cannot be
   identified reliably
 - `--auto` now explicitly uses `continue` to drive post-repair close-out
@@ -292,6 +379,36 @@ When editing `skills/workflow-repair/`, confirm all of the following:
   11 / Step 12 ordering
 - `--auto` still stops instead of forcing finish-work when commit readiness or
   close-out safety is not satisfied
+- persisted tests now include mixed-scope and misleading-result blocker
+  scenarios for commit-scope confirmations
+- persisted tests now include the case where prompt framing claims one outside-
+  task working-tree path belongs to the current task scope but independent
+  proof fails
+- persisted tests now include the positive case where a workflow source file or
+  current-run issue-history file is outside the task directory but still
+  independently provable as part of the current repair run
+- persisted tests now include the positive case where task-directory files from
+  an older run remain acceptable when the prompt still scopes them to the
+  current task
+- persisted tests now include the blocker case where a previous run's
+  out-of-directory workflow file is listed again without current-run proof
+- persisted tests now include `target_focus` plus misleading all-success
+  close-out wording
+- persisted tests now include the positive case where partial success/revert
+  results may still continue when close-out wording stays honest
+- persisted tests now include the blocker case where the same close-out run
+  surfaces a second qualifying commit confirmation
+- persisted tests now include the blocker case where task-directory files are
+  listed without explicit current-task scoping
+- persisted tests now include the positive `target_focus` case where the prompt
+  honestly says `the focused repairs`
+- persisted tests now split pure working-tree-file prompts into explicit
+  continue-vs-stop cases
+- persisted tests now include `target_focus` plus failed scope proof
+- persisted tests now include an additional multi-cause blocker combination
+  beyond mixed-scope plus misleading-result
+- persisted tests now include the case where honest wording still fails because
+  explicit current-task scoping is missing
 - any protocol, field, role-boundary, example, or behavior change is mirrored
   by a matching `workflow-scan` adaptation and shared-template update in the
   same change

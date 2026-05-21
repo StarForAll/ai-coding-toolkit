@@ -10,7 +10,7 @@ loop stops without forcing another `continue` or a fake finish-work step.
 
 User input:
 
-> Run `/workflow-repair --auto`. Repairs succeed. Auto follow-through re-enters the current repair task through `continue`, handles the normal one-shot commit confirmation, and on the next `continue` call the task is reported as already completed/closed with no remaining close-out work.
+> Run `/workflow-repair --auto`. Repairs succeed. Auto follow-through re-enters the current repair task through `continue`, handles the normal one-shot commit confirmation or an equivalent explicit current-task commit-scope confirmation, and on the next `continue` call the task is reported as already completed/closed with no remaining close-out work.
 
 ## Expected Mode
 
@@ -20,7 +20,8 @@ Auto follow-through completed via normal task closure reached through
 ## Expected Key Behaviors
 
 - re-enter the current repair task through `continue`
-- reply `ok` only to the repair task's one-shot commit confirmation
+- reply `ok` only to the repair task's one-shot commit confirmation or
+  eligible explicit current-task commit-scope confirmation
 - detect that a later `continue` reports the repair task as already closed
 - record a successful final outcome for normal task closure rather than a
   blocker

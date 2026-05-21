@@ -109,6 +109,11 @@ re-enter the current task's normal close-out flow through the available
 and finish-work safety gates, and may stop early if `continue` itself closes
 the task or if no safe `continue` / `finish-work` surface is available, in
 which case it must stop and report a blocker.
+If a later close-out confirmation enumerates unrecognized working-tree files, those
+files qualify for auto-confirmation only when the prompt explicitly frames them
+as part of the current repair task's commit scope. Prompts that mix in broader
+non-task files, or that would overstate the actual repair result, must stop
+with a blocker instead of being auto-confirmed.
 
 Authorization Mode in this plan reflects plan-presentation time only. If
 execution later transitions to `post-plan-confirmation`, treat the repair log
@@ -157,10 +162,13 @@ Awaiting your decision.
    follow-through happens only after successful repair verification, re-enters
    the current task through the available `continue` surface, and stops with a
    reported blocker if `continue` / `finish-work` cannot proceed safely.
-10. If the current run began as `analysis-only` and the user explicitly accepts
+10. If the plan documents mixed succeeded/reverted work, partial acceptance, or
+    `target_focus`, the later auto close-out path must not be described in a
+    way that would imply every attempted or every report finding was verified.
+11. If the current run began as `analysis-only` and the user explicitly accepts
    execution in Step 8, the plan/log state may transition to
    `post-plan-confirmation` for the actual repair execution.
-11. The correction-plan header records the authorization mode at the time the
+12. The correction-plan header records the authorization mode at the time the
     plan is presented. If execution approval later changes the mode to
     `post-plan-confirmation`, record that transition in the repair log rather
     than retroactively treating the already-presented plan header as final.

@@ -8,6 +8,13 @@ compatibility: Requires `trellis` on PATH, access to the temp project fixture, l
 
 ## Version History
 
+- **v2.7**: Refined the paired repair-side compatibility note to clarify that
+  `workflow-repair --auto` still stays outside the shared scan schema while now
+  rejecting mixed-scope or misleading current-task commit confirmations
+- **v2.6**: Updated the paired repair-side compatibility note to clarify that
+  `workflow-repair --auto` may now accept explicit current-task
+  commit-plan/scope confirmations that enumerate proposed commits or task
+  artifacts, while scan output and the shared report schema remain unchanged
 - **v2.5**: Refined the paired repair-side compatibility note for
   `workflow-repair --auto`, clarifying that scan output remains schema-stable
   while repair-side close-out may now loop through current-task `continue`,
@@ -168,8 +175,11 @@ Use this skill when any of the following is true:
    universal Agent tool or API binding from this contract alone.
 9. Repair-side `--auto` follow-through is outside scan execution mode. If the
    user later runs `workflow-repair --auto` in the source project, that changes
-   only post-repair close-out behavior and must not change scan output,
-   overwrite handling, or the shared report schema.
+   only post-repair close-out behavior, including repair-side handling of
+   explicit current-task commit-plan/scope confirmations. Those repair-side
+   prompts may still be rejected when they mix non-task files into the commit
+   scope or would misstate the actual repair result, and none of that may
+   change scan output, overwrite handling, or the shared report schema.
 
 ### Temp Project Path Resolution
 

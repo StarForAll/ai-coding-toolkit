@@ -8,6 +8,12 @@ compatibility: Requires `trellis` on PATH, access to the temp project report plu
 
 ## Version History
 
+- **v2.7**: Tightened `--auto` commit-scope confirmation boundaries so mixed-
+  scope prompts and misleading all-success/result wording block instead of
+  auto-confirming, and formally defined `current repair-task artifacts`
+- **v2.6**: Expanded `--auto` commit-confirmation detection to accept explicit
+  current-task commit-plan/scope confirmations that enumerate proposed commits
+  or task-local artifacts while still asking for one-shot `ok`/yes approval
 - **v2.5**: Refined `--auto` into a current-task Trellis close-out loop driven
   by `continue` first, added command-surface to skill-surface fallback rules
   for `continue` / `finish-work`, and defined stop conditions when `continue`
@@ -150,7 +156,7 @@ Use this skill when any of the following is true:
 | `report_path` | No | auto-detect | Absolute path to `WORKFLOW_QUESTIONS.md` |
 | `temp_project_path` | No | from report | Absolute path to the temp project root |
 | `target_focus` | No | empty | Specific WS-NNN IDs to prioritize |
-| `--auto` | No | off | After a successful repair run, keep re-entering the current repair task's normal Trellis close-out flow through the available `continue` surface instead of stopping at the repair summary. If that flow asks for one-shot commit confirmation for this task, reply `ok`, keep using `continue` after commit until it recommends `finish-work` or closes the task, then invoke the available Trellis finish-work surface once the task is actually ready. |
+| `--auto` | No | off | After a successful repair run, continue into the current repair task's normal Trellis close-out flow instead of stopping at the repair summary. Eligible commit confirmations, independent scope proof, blocker rules, and post-commit continuation are defined in `Auto Follow-Through Mode` and Step 12.8 below. |
 
 ### Report Path Resolution
 
@@ -191,13 +197,75 @@ Determine continuation mode from the current user request:
   the correction plan so the user can see that auto close-out is proceeding on
   a narrowed repair scope rather than on a fully clean report.
 - In `auto-follow-through` mode, if the current repair task reaches a normal
-  close-out prompt that asks for one-shot commit confirmation for this task,
-  reply `ok` exactly once and continue.
+  close-out prompt that asks for its one-shot commit confirmation, including an
+  explicit commit-plan/scope confirmation that asks for `ok`/yes-style
+  approval while naming proposed commits, unrecognized working-tree files that the
+  prompt explicitly frames as part of the current repair task's commit scope,
+  or current repair-task artifacts, reply `ok` exactly once and continue.
+- `unrecognized working-tree files` means working-tree paths that the close-out
+  flow surfaces outside the proposed commit batches and requires the operator
+  to include or exclude explicitly; they may be modified or untracked.
+- `current repair-task artifacts` means any file that lives inside the current
+  repair task directory and is being enumerated by the close-out flow as part
+  of the task's commit scope.
+- Current repair-task artifacts are acceptable by task-directory membership
+  plus explicit current-task prompt scoping; they do not need separate current-
+  run output proof.
+- The current repair run's independently provable output set applies only to
+  out-of-directory files from the skill's other allowed write-scope locations
+  when this run can tie them to its own recorded outputs:
+  - workflow source files changed by confirmed repair work under
+    `docs/workflows/新项目开发工作流/`
+  - the current run's own `tmp/workflow-issues/NNNN.md` output
+- A file counts as tied to this run's recorded outputs only when the current
+  run's repair log records it as a changed, written, or output file for this
+  run.
+- Exclude reverted files from that independently provable output set; a file
+  changed and later reverted during post-repair verification is not a remaining
+  current-run output for close-out.
+- Reverted files inside the current repair task directory are likewise not
+  remaining current-run outputs for close-out, even though the files still live
+  in the task directory.
+- If the prompt includes working-tree files outside the current repair task's commit
+  scope, or the close-out flow does not make that scope explicit enough to
+  prove current-task-only scope, stop and report the blocker instead of
+  treating it as eligible for auto-confirmation.
+- Minimum-acceptable explicit current-task scoping examples include wording
+  such as `commit the current repair task changes`, `commit the current repair
+  task artifacts`, or `commit the focused repairs` when the rest of the prompt
+  stays consistent with that scope.
+- Those examples are illustrative rather than exhaustive; semantically
+  equivalent phrasing may also qualify when it meets the same explicit
+  current-task scope bar.
+- Insufficient scoping examples include wording such as `commit these changes`
+  or `commit working tree changes` when they do not explicitly frame the scope
+  as the current repair task.
+- If the prompt's commit-scope or repair-result wording would materially
+  misstate the actual repair outcome, such as implying that all attempted fixes
+  are verified even though some were reverted, failed, left unresolved, or
+  left out by `target_focus`, stop and report the blocker instead of
+  auto-confirming it.
+- Wording such as `commit the successful repairs` or `commit the current repair
+  task changes` may be honest when it does not imply every attempted or every
+  reported fix was verified and when the file list remains consistent with that
+  narrower claim.
+- Bounded auto-confirmation rule: per Step 12.8, reply `ok` exactly once, and
+  only for the current repair task's eligible commit confirmation. Here
+  `exactly once` means once per close-out run for the first qualifying one-shot
+  confirmation prompt, not once per subsequent qualifying prompt inside that
+  same run and not once for the entire repair task across later resumed runs.
 - If any other interactive prompt appears, stop and report the blocker instead
   of guessing a reply.
 - In `auto-follow-through` mode, the post-repair close-out path must re-enter
   the current repair task's normal Trellis flow through the available
   `continue` surface before attempting `finish-work`.
+- One close-out run means the full post-repair continuation sequence beginning
+  with the first `continue` re-entry for this repair task and ending only when
+  the task reaches `finish-work`, `reached-task-close`, or stops with a
+  blocker.
+- If a blocker ends that sequence and the task is later resumed, treat the
+  resumed continuation as a new close-out run rather than as a continuation of
+  the previous one.
 - Treat a Trellis surface as available in this priority order:
   1. callable platform command surface for the current session
   2. same-session skill surface available in the current project/runtime
@@ -612,8 +680,9 @@ This step has two sub-phases:
 7. Each time `continue` is invoked, inspect the resulting state before
    deciding the next move:
    - if it surfaces what appears to be the current repair task's one-shot
-     commit confirmation, route that prompt through Step 12.8 instead of treating
-     it as ordinary loop progress
+     commit confirmation or explicit current-task commit-plan/scope
+     confirmation, route that prompt through Step 12.8 instead of treating it
+     as ordinary loop progress
    - if it recommends or routes to `finish-work`, transition to the
      `finish-work` surface-resolution step below
    - if it clearly indicates the current repair task is already closed,
@@ -634,11 +703,50 @@ This step has two sub-phases:
      re-printing the same non-terminal state
    - if it cannot be determined whether the task advanced, closed, or changed
      stages safely, stop and report the blocker instead of looping blindly
-8. If the prompt routed here from Step 12.7 asks for one-shot commit-plan
-   confirmation for the current
-   repair task, reply `ok` exactly once.
-   Treat a prompt as that confirmation only when it is clearly about committing
-   the current repair task and explicitly asks for a yes/confirm style response.
+8. If the prompt routed here from Step 12.7 asks for the current repair task's
+   one-shot commit confirmation or commit-plan/scope confirmation, reply `ok`
+   exactly once. Treat a prompt as that confirmation only when it is clearly
+   about committing the current repair task and explicitly asks for a
+   yes/confirm style response.
+   A prompt still qualifies when it enumerates proposed commits, unrecognized
+   working-tree files that the prompt explicitly frames as part of the current repair
+   task's commit scope, or current repair-task artifacts as part of that
+   current-task commit scope, as long as it keeps the decision scoped to the
+   current repair task and asks for a one-shot approval such as `ok`.
+   Evaluate the prompt in this order: explicit current-task scoping first, then
+   file-scope proof, then repair-result honesty, then repeated-confirmation
+   checks.
+   Use the definitions and independently provable output-set rules from
+   `Auto Follow-Through Mode` above when judging these paths.
+   Current repair-task artifacts qualify by task-directory membership plus
+   explicit current-task scoping alone.
+   If the prompt includes any working-tree file outside the current repair task's
+   commit scope, or cannot prove that every enumerated working-tree file belongs
+   inside that scope through that independently provable output set, treat it
+   as a case where commit-confirmation
+   identification is unreliable.
+   If the prompt's commit-scope description or repair-result wording would
+   materially misstate what this run actually succeeded, reverted, left
+   unresolved, or left outside `target_focus`, treat it as a case where
+   commit-confirmation identification is unreliable.
+   Wording such as `all fixes verified` or `commit these verified fixes`
+   counts as materially misstating the result whenever any attempted fix was
+   reverted, failed, unresolved, or left outside `target_focus`.
+   If the same close-out run surfaces a second otherwise-qualifying commit
+   confirmation after this step has already auto-replied once, treat that as a
+   close-out flow change and stop instead of auto-confirming again.
+   When stopping for any of the blocker cases above, the Phase B blocker reason
+   must state explicitly whether the stop happened because of mixed scope,
+   misleading repair-result wording, insufficient explicitness / independent
+   proof, or repeated confirmation inside the same close-out run.
+   If multiple blocker causes trigger at once, report all triggered causes in
+   the blocker reason rather than collapsing them to a single label.
+   Here `reply ok exactly once` means once for this qualifying one-shot prompt;
+   it does not forbid replying `ok` to a later distinct qualifying prompt in a
+   different close-out run.
+   If the prompt does not make that current-task scope or one-shot approval
+   request explicit enough, treat it as a case where commit-confirmation
+   identification is unreliable.
    If the close-out flow changes in a way that makes that one-shot
    identification unreliable, stop the close-out flow instead of risking
    over-confirmation.
@@ -709,7 +817,10 @@ This step has two sub-phases:
 | No findings in report | Write the repair log and an issue-history document with `total-attempted: 0` and all counts at 0. |
 | Fix scope violation | Skip the fix, record the violation in the repair log. Do not modify files outside the allowed three locations. |
 | Post-repair verification failure | Revert the change, record the failure and revert in the repair log. |
-| `--auto` requested but commit-confirmation identification is unreliable | Stop the close-out flow, report the blocker, and do not risk over-confirmation. |
+| `--auto` requested but commit-confirmation identification is unreliable | Stop the close-out flow, report the blocker, and do not risk over-confirmation. This row covers residual insufficient explicitness or failed independent proof, including reverted-file exclusion cases, that do not already fall into the more specific mixed-scope, misleading-result, or repeated-confirmation rows below. The blocker reason must still state the underlying cause explicitly. |
+| `--auto` requested but the commit-scope prompt includes non-task working-tree files or otherwise mixes scopes | Stop the close-out flow, report the blocker, and do not auto-confirm a mixed-scope commit range. |
+| `--auto` requested but the commit-scope or repair-result wording would misstate the actual repair outcome | Stop the close-out flow, report the blocker, and do not auto-confirm a misleading commit description. |
+| `--auto` requested but the same close-out run surfaces a second qualifying commit confirmation | Stop the close-out flow, report the blocker, and do not auto-confirm again inside the same close-out run. |
 | `--auto` requested and a non-commit interactive prompt appears | Stop after the repair summary or current close-out point, report the blocker, and do not guess a reply. |
 | `--auto` requested but no continue surface is available | Stop after the repair summary or current close-out point, report the blocker, and do not simulate continue. |
 | `--auto` requested but no finish-work surface is available | Stop after the repair summary or current close-out point, report the blocker, and do not simulate finish-work. |
@@ -758,6 +869,25 @@ Required persisted scenario files:
 - `tests/31-auto-continue-closes-task-before-commit.md`
 - `tests/32-auto-mixed-surface-availability-reversed.md`
 - `tests/33-auto-close-out-not-ready-or-safe.md`
+- `tests/34-auto-handles-current-task-commit-scope-confirmation.md`
+- `tests/35-auto-stops-when-commit-scope-includes-non-task-files.md`
+- `tests/36-auto-stops-on-misleading-commit-scope-result-claim.md`
+- `tests/37-auto-stops-when-framed-working-tree-file-is-outside-task-dir.md`
+- `tests/38-auto-allows-provable-write-scope-files-outside-task-dir.md`
+- `tests/39-auto-stops-on-target-focus-misleading-all-fixes-verified.md`
+- `tests/40-auto-continues-when-commit-scope-wording-is-honest-despite-partial-results.md`
+- `tests/41-auto-allows-task-dir-files-without-current-run-proof.md`
+- `tests/42-auto-stops-on-previous-run-out-of-directory-file.md`
+- `tests/43-auto-stops-on-second-qualifying-confirmation-in-same-run.md`
+- `tests/44-auto-stops-when-task-dir-files-lack-explicit-task-scoping.md`
+- `tests/45-auto-stops-when-reverted-file-is-still-claimed-in-commit-scope.md`
+- `tests/46-auto-continues-on-target-focus-honest-focused-repairs-wording.md`
+- `tests/47-auto-continues-on-pure-working-tree-files-when-all-provable.md`
+- `tests/48-auto-stops-on-pure-working-tree-files-when-one-is-unprovable.md`
+- `tests/49-auto-reports-all-triggered-blocker-causes.md`
+- `tests/50-auto-stops-on-target-focus-scope-proof-failure.md`
+- `tests/51-auto-reports-misleading-plus-insufficient-explicitness.md`
+- `tests/52-auto-stops-on-honest-wording-without-explicit-task-scope.md`
 
 ## Examples
 
@@ -914,7 +1044,8 @@ AI:
 6. Post-repair checks pass
 7. Re-enter the dedicated repair task through the available `continue`
    surface
-8. Handle the current task's one-shot commit confirmation only if it appears
+8. Handle the current task's one-shot commit confirmation or eligible explicit
+   current-task commit-plan/scope confirmation only if it appears
 9. Continue re-entering through `continue` until the task reaches
    `finish-work` or `reached-task-close`
 ```
@@ -951,7 +1082,8 @@ AI:
 4. Detect same-session skill surfaces `trellis-continue` and
    `trellis-finish-work` in the current project/runtime
 5. Re-enter close-out through `trellis-continue`
-6. Reply `ok` to the repair task's one-shot commit confirmation
+6. Reply `ok` to the repair task's one-shot commit confirmation or eligible
+   explicit current-task commit-plan/scope confirmation
 7. Re-enter `trellis-continue` after commit until it recommends finish-work
 8. Invoke `trellis-finish-work`
 9. Report successful end-to-end follow-through instead of stopping on a false
@@ -967,11 +1099,148 @@ AI:
 1. Resolve and validate the report as usual
 2. Execute the confirmed repairs
 3. Re-enter the repair task through the available `continue` surface
-4. Reply `ok` to the current repair task's commit confirmation
+4. Reply `ok` to the current repair task's eligible commit confirmation or
+   explicit current-task commit-plan/scope confirmation
 5. Re-enter the repair task through `continue` again
 6. `continue` now reports that the current repair task has already completed /
    closed and there is no further close-out work for this task
 7. Stop the loop without another `continue`
 8. Report successful auto follow-through with final outcome
    `reached-task-close`
+```
+
+### Example 11: Current-Task Commit-Scope Confirmation With Task Artifacts
+
+```text
+User: /workflow-repair --auto
+
+AI:
+1. Resolve and validate the report as usual
+2. Execute the confirmed repairs
+3. Re-enter the repair task through the available `continue` surface
+4. The close-out prompt lists proposed commits plus current repair task
+   artifacts such as `check.jsonl`, `implement.jsonl`, or `task.json`
+5. The same prompt explicitly says those artifacts are being treated as part of
+   the current repair task's commit scope, and any listed unrecognized working-tree
+   files are framed as belonging to that same current-task scope, and every
+   listed path can also be independently proved as part of this run's allowed
+   write-scope outputs, and asks for a one-shot `ok`
+6. Because the prompt is still clearly about committing the current repair
+   task, reply `ok`
+7. Continue the normal close-out loop after commit instead of stopping on a
+   false ambiguity blocker
+```
+
+### Example 12: Mixed-Scope Commit Prompt Stops Auto Follow-Through
+
+```text
+User: /workflow-repair --auto
+
+AI:
+1. Resolve and validate the report as usual
+2. Execute the confirmed repairs
+3. Re-enter the repair task through the available `continue` surface
+4. The close-out prompt lists current repair-task artifacts together with dirty
+   working-tree files that are not framed as belonging to the current repair task's commit
+   scope
+5. Because the commit range is now mixed-scope, treat the prompt as unreliable
+   and stop with a blocker instead of replying `ok`
+```
+
+### Example 13: Misleading Result Claim Stops Auto Follow-Through
+
+```text
+User: /workflow-repair --auto
+
+AI:
+1. Resolve and validate the report as usual
+2. Execute the confirmed repairs
+3. Some attempted fixes succeed, but another attempted fix is reverted
+4. A later close-out prompt says "reply ok to commit these verified fixes" in a
+   way that would imply every attempted repair passed
+5. Because the prompt would materially misstate the actual repair outcome,
+   treat commit-confirmation identification as unreliable and stop with a
+   blocker instead of replying `ok`
+```
+
+### Example 14: Provable Workflow File Outside Task Directory Still Qualifies
+
+```text
+User: /workflow-repair --auto
+
+AI:
+1. Resolve and validate the report as usual
+2. Execute the confirmed repairs
+3. The current run records a repaired workflow source file under
+   `docs/workflows/新项目开发工作流/` plus the current task log outputs
+4. A later close-out prompt enumerates that workflow source file together with
+   current task artifacts and asks for `ok`
+5. Because every listed path is independently provable as part of this run's
+   allowed write-scope outputs, reply `ok` and continue instead of stopping on
+   a false blocker
+```
+
+### Example 15: Older Task-Directory Files Still Qualify
+
+```text
+User: /workflow-repair --auto
+
+AI:
+1. Resolve and validate the report as usual
+2. Execute the confirmed repairs
+3. The current repair task directory already contains an older repair log from
+   a previous run, and the current close-out prompt enumerates it together with
+   this run's task artifacts as part of the current task commit scope
+4. Because those paths are still current repair-task artifacts inside the task
+   directory, treat them as eligible without requiring separate current-run
+   output proof
+5. Continue evaluating any out-of-directory files under the stricter
+   independently provable output-set rule
+```
+
+### Example 16: Honest Partial-Result Wording Still Allows Close-Out
+
+```text
+User: /workflow-repair --auto
+
+AI:
+1. Resolve and validate the report as usual
+2. Execute the confirmed repairs
+3. Some attempted fixes succeed, while another attempted fix is reverted
+4. A later close-out prompt asks for `ok` while describing the scope honestly
+   as the current repair changes, without claiming that all attempted fixes
+   were verified
+5. Because the wording stays truthful and every enumerated path is otherwise
+   eligible, reply `ok` and continue instead of stopping on a false
+   misleading-result blocker
+```
+
+### Example 17: Same-Run Repeated Confirmation Stops Auto Follow-Through
+
+```text
+User: /workflow-repair --auto
+
+AI:
+1. Resolve and validate the report as usual
+2. Execute the confirmed repairs
+3. Re-enter the repair task through the available `continue` surface
+4. Reply `ok` to one qualifying current-task commit confirmation
+5. Before the close-out run ends, the flow unexpectedly surfaces another
+   otherwise-qualifying commit confirmation for the same run
+6. Treat that second confirmation as a close-out flow change and stop with a
+   blocker instead of auto-confirming again
+```
+
+### Example 18: Honest Focused-Repairs Wording Still Allows Continue
+
+```text
+User: /workflow-repair --auto --target_focus WS-002
+
+AI:
+1. Resolve and validate the report as usual
+2. Execute only the focused repair work
+3. A later close-out prompt asks for `ok` to commit `the focused repairs`
+   without implying that out-of-focus findings were also fixed
+4. Because the wording stays explicitly scoped and honest, continue instead of
+   treating it as a misleading-result blocker
 ```

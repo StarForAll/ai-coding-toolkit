@@ -92,6 +92,16 @@ time. After helper dispatch has legitimately started, coordinator-side local
 compensation for helper failure is allowed and is not considered an invalid
 silent fallback.
 
+Repair-side `--auto` follow-through remains outside scan execution mode. The
+paired `workflow-repair` skill already broadened its current-task commit
+confirmation detection, and this scan skill should document that compatibility
+note only to the extent needed to keep it explicit that scan output and the
+shared `WORKFLOW_QUESTIONS.md` schema remain unchanged.
+Repair-side close-out also already tightened its rejection rules for mixed-
+scope or misleading current-task commit confirmations, and this scan skill
+should still document that only as a repair-side compatibility note rather
+than implying any scan-side schema or overwrite-flow change.
+
 ### 2. Temp-Project-Only Evidence Model
 
 The skill must analyze the temp project's currently used workflow surfaces from
@@ -228,6 +238,9 @@ Minimum expected validation:
   - speed/depth-only requests staying inline
 - verify the scan-side `--agent` mode still leaves the shared output contract
   unchanged and that repair-side intake remains execution-mode agnostic
+- verify any paired repair-side `--auto` close-out change is documented here as
+  a compatibility note only, without implying any scan-side schema or overwrite
+  behavior change
 - verify the scan-side instructions now require a read-back validation step and
   explicitly guard against snake_case contract drift
 - when the repair-side memory/auxiliary surfaces change, confirm whether the

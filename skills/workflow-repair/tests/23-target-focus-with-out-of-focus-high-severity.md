@@ -25,6 +25,8 @@ finding.
   plan so the narrowed scope is visible to the user
 - avoid implying that the full report is clean when only the focused scope was
   repaired
+- leave room for a later close-out blocker if commit-scope wording would imply
+  the out-of-focus work was also verified
 
 ## Must Not
 
