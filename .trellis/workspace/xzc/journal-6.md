@@ -1283,3 +1283,37 @@ Clarified repeated workflow carrier false positives, fixed missing needs-init br
 ### Next Steps
 
 - None - task complete
+
+
+## Session 283: Workflow repair carrier boundaries
+
+**Date**: 2026-05-21
+**Task**: Workflow repair carrier boundaries
+**Branch**: `main`
+
+### Summary
+
+Clarified workflow carrier review boundaries, recorded the repair task, and closed the session.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7f445e0` | (see git log) |
+| `24958c7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
