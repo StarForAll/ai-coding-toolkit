@@ -83,6 +83,8 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - `.agents/skills/`：共享 / 通用 workflow skills 的唯一主承载面，也是当前证据下 Codex 的 repo-scoped skills 主入口
 - `.codex/skills/`：Codex 特有或本地侧技能的 secondary 承载面
 - 因此 `.codex/skills/` 不应再出现 `feasibility` 到 `delivery` 这类共享阶段 skills 的重复副本
+- 若 `trellis-start` / `trellis-continue` / `trellis-finish-work` 不在 `.codex/skills/`，应先检查 `.agents/skills/`；这三个入口默认补丁目标就是活动 shared skills 目录，而不是 `.codex/skills/`
+- 因而 `.codex/skills/` 为空或只保留本地侧 skills，本身不构成 shared workflow 漏装
 
 装后/升后核对仍建议先检查两条路径是否都存在；只有次级目录实际存在时，才继续核对其内容：
 
@@ -184,6 +186,11 @@ Codex 支持 hooks。对这套 workflow，当前推荐通过项目 `.codex/hooks
 - `.codex/hooks/inject-workflow-state.py`
 
 这条链路的作用是：把 Trellis workflow 运行时所需的上下文自动装进 Codex 会话，而不是要求用户每次手动粘贴。若项目额外保留 `session-start.py`，应把它视为可选的 repo-local / Trellis-baseline 辅助面，而不是当前 workflow 合同里唯一必需的挂接点。
+
+再补两条容易被误判的边界：
+
+- `start`/首次路由的真实触发，依赖的是**当前 CLI 已接线的 hook 链**。对 Codex 当前合同来说，默认主路径是 turn-level `UserPromptSubmit -> inject-workflow-state.py`；只有目标项目显式接线时，`session-start.py` 才参与 startup 辅助面
+- Codex 当前 fresh-baseline 不要求 Claude/OpenCode 那种 `inject-subagent-context` hook 同形态副本。当前主路径是 `codex.dispatch_mode = inline`；非 inline delegated 路径由 agent/self-loading 或平台前导完成上下文读取，而不是靠 `.codex/hooks/inject-subagent-context.py` 这个固定文件名
 
 还要补一条 dispatch 边界，避免把 Codex 的平台能力误读成当前 workflow 的默认执行方式：
 

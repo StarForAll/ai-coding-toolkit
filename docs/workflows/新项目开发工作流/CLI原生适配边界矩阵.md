@@ -170,8 +170,10 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 
 补充说明：
 
+- `.claude/skills/` 与 `.opencode/skills/` 当前都不要求镜像 `trellis-start` / `trellis-continue` / `trellis-finish-work`；Claude/OpenCode 的 fresh-baseline 正式入口仍分别是命令目录里的 `continue.md` / `finish-work.md`，legacy `start` 仅旧目标项目兼容
 - 非活动目录中的 `trellis-continue` / `trellis-finish-work` 同名文件**不在** `upgrade-compat.py --check` 的 baseline patch 检测范围内；legacy `start` / `finish-work` 同名文件也不构成 fresh-baseline 要求
 - 这是设计边界，不是漏检：当前 workflow 安装器不会向非活动目录写入这两类 patch，因此这些文件不属于 workflow 托管漂移面
+- Codex 也不要求与 Claude/OpenCode 同形态的 `inject-subagent-context` hook carrier。当前主合同是 inline + turn hook；只有显式 delegated / non-inline 路径才会进入 agent 侧上下文读取
 
 这意味着目录边界应理解为：
 
@@ -179,6 +181,7 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 - `.codex/skills/` 承载 Codex 特有或本地侧 skills，是条件出现的 secondary carrier
 - 因此 `.codex/skills/` 不应被默认视为与 `.agents/skills/` 并列的共享 workflow 主入口，也不应被默认视为 `trellis-continue` / `trellis-finish-work` 这类共享 baseline skill 的补丁目标
 - Claude Code 官方技能目录仍是 `.claude/skills/`；当前没有官方证据表明 Claude Code 会读取 `.agents/skills/`
+- 对 Codex 的 `start`/首次路由判断，也不要把 `SessionStart` 当成唯一前提；当前常见主路径是 turn-level hook，`session-start.py` 只有在目标项目显式接线时才属于 startup 辅助面
 
 装后/升级后核对仍建议显式检查主目录，并只在次级目录实际存在时继续检查其条件性影响面：
 

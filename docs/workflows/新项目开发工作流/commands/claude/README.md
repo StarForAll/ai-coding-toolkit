@@ -50,6 +50,14 @@ Claude Code 是当前 workflow 维护的三种原生适配之一，并保留项�
 
 > 注意：`.agents/skills/*/SKILL.md` 不是仅服务于 Codex 的路径。按 OpenCode 官方 skills 文档（<https://opencode.ai/docs/skills/>），OpenCode 同样会扫描 `.agents/skills/`；Claude Code 则通过自己的 `.claude/skills/*/SKILL.md` 独立工作。换言之，`.agents/skills/` 下的阶段 skills 会进入 OpenCode 与 Codex 的可发现范围；对 OpenCode 来说，这里只应视为共享承载面与漂移核对范围，而不是它的正式入口。
 
+还要补一条容易被误判的边界：
+
+- Claude 的 fresh-baseline 正式入口是 `.claude/commands/trellis/continue.md` / `finish-work.md`
+- `.claude/skills/` 在当前 workflow 里不要求镜像 `trellis-start` / `trellis-continue` / `trellis-finish-work`
+- legacy `start` 只用于旧目标项目兼容输入，不是当前 fresh-baseline 要求
+
+因此，看到 `.claude/skills/` 里没有这三个 Trellis baseline 入口，不应直接判定为 workflow 漏装或技能树不完整。
+
 ## 安装时序
 
 若你的目标是让 Claude Code 在目标项目里直接可用这套 workflow，推荐做法是：
