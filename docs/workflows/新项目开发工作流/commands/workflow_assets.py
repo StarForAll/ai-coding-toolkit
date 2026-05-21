@@ -224,14 +224,34 @@ def _clean_conditional_markers(content: str, tag: str) -> str:
     return content
 
 
+def source_repo_root() -> Path:
+    """Return the authoring-repo root that owns the workflow product."""
+    return Path(__file__).resolve().parents[4]
+
+
+def trellis_library_root() -> Path:
+    """Return the host-side trellis-library directory used by workflow tooling."""
+    return source_repo_root() / "trellis-library"
+
+
+def trellis_library_cli_path() -> Path:
+    """Return the host-side trellis-library CLI path used by workflow tooling."""
+    return trellis_library_root() / "cli.py"
+
+
 def prepare_command_content(source_path: Path, *, profile: str = DEFAULT_PROFILE) -> str:
     """Return target-project-facing command content after deployment rewrites."""
     content = source_path.read_text(encoding="utf-8")
+    trellis_library_cli = trellis_library_cli_path().as_posix()
+    trellis_library_dir = trellis_library_root().as_posix()
     content = content.replace("<WORKFLOW_DIR>/commands/shell/", ".trellis/scripts/workflow/")
     content = content.replace("docs/workflows/新项目开发工作流/commands/shell/", ".trellis/scripts/workflow/")
     content = content.replace("见 `opencode/README.md`", "OpenCode 入口见目标项目 AGENTS.md 路由表")
     content = content.replace("见 `codex/README.md`", "Codex 入口见目标项目 AGENTS.md 路由表")
     content = content.replace("[阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md)", "阶段状态机与强门禁协议")
+    content = content.replace("`trellis-library/cli.py assemble`", f"`{trellis_library_cli} assemble`")
+    content = content.replace("python3 trellis-library/cli.py ", f"python3 {trellis_library_cli} ")
+    content = content.replace("从 `trellis-library` 选择并导入", f"从宿主仓库中的 `{trellis_library_dir}` 选择并导入")
     # Distributed commands and shared stage skills both live three directories
     # below the target-project root, so execution-card links must climb back to
     # the root before resolving .trellis/workflow-docs/.

@@ -27,6 +27,8 @@ PATCH_TASK_CREATE_SCRIPT = COMMANDS_DIR / "shell" / "patch-task-create-preserve-
 PATCH_WORKFLOW_PHASE_SCRIPT = COMMANDS_DIR / "shell" / "patch-workflow-phase.py"
 PATCH_WORKFLOW_PHASE_STRONG_GATE_SCRIPT = COMMANDS_DIR / "shell" / "patch-workflow-phase-strong-gate.py"
 PATCH_TASK_STATUS_VIEW_STRONG_GATE_SCRIPT = COMMANDS_DIR / "shell" / "patch-task-status-view-strong-gate.py"
+TRELLIS_LIBRARY_CLI = (REPO_ROOT / "trellis-library" / "cli.py").as_posix()
+TRELLIS_LIBRARY_DIR = (REPO_ROOT / "trellis-library").as_posix()
 EMBED_CONFIRM_ENV = "WORKFLOW_EMBED_EXECUTOR_CONFIRMED"
 ATTEMPT_RECORD_NAME = "workflow-embed-attempt.json"
 PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
@@ -1315,9 +1317,13 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("context7-review.md", deployed_design)
         self.assertIn("Context7", deployed_design)
         self.assertIn("context7_review_completed", deployed_design)
+        self.assertIn(f"`{TRELLIS_LIBRARY_CLI} assemble`", deployed_design)
+        self.assertNotIn("`trellis-library/cli.py assemble`", deployed_design)
         deployed_plan = (fixture / ".claude" / "commands" / "trellis" / "plan.md").read_text(encoding="utf-8")
         self.assertIn("## 任务粒度判断", deployed_plan)
         self.assertIn("granularity_decision", deployed_plan)
+        self.assertIn(f"从宿主仓库中的 `{TRELLIS_LIBRARY_DIR}` 选择并导入", deployed_plan)
+        self.assertNotIn("从 `trellis-library` 选择并导入", deployed_plan)
 
     def test_install_patches_task_current_source_to_read_degraded_fallback(self) -> None:
         fixture = self.create_fixture(include_codex=True)
@@ -1763,6 +1769,8 @@ Triggered from /trellis:start when the user describes a development task, especi
         self.assertIn("default Simplified Chinese entry", readme_governance_text)
         self.assertFalse((fixture / ".trellis" / "tasks" / "00-bootstrap-guidelines").exists())
         self.assertIn("初始 spec 基线已导入", install.stdout)
+        self.assertIn(f"{TRELLIS_LIBRARY_CLI} assemble", install.stdout)
+        self.assertNotIn("再使用 trellis-library/cli.py assemble 为当前项目补充真实 spec 集合", install.stdout)
         self.assertIn("Trellis bootstrap 任务已删除", install.stdout)
         self.assertIn("README.en.md", install.stdout)
 

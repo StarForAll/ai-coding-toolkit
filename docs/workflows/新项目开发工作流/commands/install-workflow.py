@@ -79,6 +79,7 @@ from workflow_assets import (
     TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER,
     TASK_STATUS_VIEW_PATCH_MARKER,
     TASK_START_STRONG_GATE_PATCH_MARKER,
+    trellis_library_cli_path,
     VALID_PROFILES,
     WORKFLOW_DOCS_DIR,
     WORKFLOW_SCHEMA_VERSION,
@@ -2805,7 +2806,7 @@ def deploy_execution_cards(src: Path, root: Path, dry_run: bool, *, profile: str
 def import_requirements_foundation(root: Path, dry_run: bool) -> bool:
     """安装后自动导入需求发现基础资产。"""
     repo_root = Path(__file__).resolve().parents[4]
-    cli_path = repo_root / "trellis-library" / "cli.py"
+    cli_path = trellis_library_cli_path()
     command = [
         sys.executable,
         str(cli_path),
@@ -3309,6 +3310,7 @@ def main() -> int:
 
     print()
     if not args.dry_run:
+        trellis_library_cli = trellis_library_cli_path().as_posix()
         print("  下一步（推荐）:")
         if bootstrap_cleanup == "removed":
             print(
@@ -3319,9 +3321,9 @@ def main() -> int:
             print(f"    1. 安装器已自动导入 {_REQUIREMENTS_FOUNDATION_PACK}；目标项目未创建 {_BOOTSTRAP_TASK_NAME}，清理已跳过")
         else:
             print(f"    1. 安装器已自动导入 {_REQUIREMENTS_FOUNDATION_PACK}；{_BOOTSTRAP_TASK_NAME} 清理状态: {bootstrap_cleanup}")
-        print("       请先确认 trellis-library assemble 的导入结果已记录到 .trellis/library-lock.yaml")
+        print(f"       请先确认 {trellis_library_cli} assemble 的导入结果已记录到 .trellis/library-lock.yaml")
         print("    2. 若目标项目不是当前最新 Trellis 基线，先升级 Trellis；当前 workflow 的 archive 收尾仍直接复用基线 task.py 行为")
-        print("    3. 技术架构确认后，再使用 trellis-library/cli.py assemble 为当前项目补充真实 spec 集合")
+        print(f"    3. 技术架构确认后，再使用 {trellis_library_cli} assemble 为当前项目补充真实 spec 集合")
         print("    4. 在目标项目根 README.md 中说明 todo.txt 的存在与用途")
         print("    5. 当前 workflow 默认启用源码水印与归属证明门禁（`ownership_proof_required` 常规默认值为 `yes`）；交付前使用 .trellis/scripts/workflow/ownership-proof-validate.py 做阶段校验，并在后续改动触碰受保护水印片段时使用 .trellis/scripts/workflow/source-watermark-guard.py 做保持/修复检查")
         print("    6. 同一目标项目中各 CLI 的入口协议不同，请分别按各自原生入口使用")
