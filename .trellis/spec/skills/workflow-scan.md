@@ -161,6 +161,17 @@ The skill must:
   input to the coordinator, not a substitute for the coordinator's judgment
 - require helper handoffs to follow a concrete reusable template when
   `--agent` is used
+- verify source ownership boundary before escalating a temp-project observation
+  into an actionable repair-side finding
+- avoid reporting a `workflow-source` defect when the observed surface is a
+  newly introduced shared or external baseline carrier that is not authored
+  from `docs/workflows/新项目开发工作流/`
+- avoid reporting a workflow defect when the temp project merely preserves a
+  Trellis-native hook/runtime convention that the current workflow embed did
+  not change
+- emit such observations only when the current workflow explicitly claims
+  ownership of that entry surface or changed that runtime behavior; otherwise
+  omit them from the actionable finding set
 
 ### 5. Output Discipline
 

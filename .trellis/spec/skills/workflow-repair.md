@@ -87,6 +87,12 @@ Before adoption, it must:
 - identify a concrete root-cause class instead of stopping at the visible symptom
 - prefer `ignored`, `blocked`, or `manual-decision` over unsafe auto-adoption
 - complete strict source-side review rather than requiring a same-run re-embed
+- classify the item as `ignored` rather than `manual-decision` when the temp-
+  project symptom is real but sits outside the current workflow product-source
+  ownership boundary under `docs/workflows/新项目开发工作流/`
+- classify the item as `ignored` rather than `manual-decision` when the temp-
+  project symptom only reflects a Trellis-native hook/runtime convention that
+  the current workflow embed preserved unchanged
 
 If a finding appears to be a repeat of an earlier repair attempt, the skill must
 escalate rather than reapply the same narrow patch blindly.
