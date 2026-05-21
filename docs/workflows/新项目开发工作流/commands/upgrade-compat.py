@@ -131,7 +131,7 @@ def _js_runtime_contract_issues(path: Path, content: str) -> list[str]:
     issues: list[str] = []
     if 'import { execFileSync } from "child_process"' not in content:
         issues.append(f"{path.name}: 缺少 execFileSync 导入")
-    if 'const PYTHON_CMD = "python3"' not in content:
+    if 'const PYTHON_CMD = process.env.TRELLIS_PYTHON || "python3"' not in content:
         issues.append(f"{path.name}: 缺少 PYTHON_CMD 定义")
     if "function buildBreadcrumb(id, status, templates, source = null" in content and "task.extraLines" not in content:
         issues.append(f"{path.name}: 缺少 task.extraLines 透传")

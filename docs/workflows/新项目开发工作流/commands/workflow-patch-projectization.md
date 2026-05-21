@@ -319,6 +319,7 @@ For the workflow state machine's runtime contract, the locations of all status w
 Current stage: **feasibility** — first project assessment gate.
 Load `/trellis:feasibility` to evaluate project viability, risk, and engagement type.
 All new projects must pass feasibility before entering brainstorm.
+If the project may require ownership proof, freeze `source_watermark_*` and `ownership_proof_required` in line with `源码水印与归属证据链执行卡` before stage exit.
 Run `python3 ./.trellis/scripts/workflow/workflow-state.py route` to check routing.
 [/workflow-state:feasibility]
 
@@ -329,6 +330,8 @@ Prerequisite:
 
 - outsourcing / external-delivery projects: valid `assessment.md` from feasibility
 - personal profile first-entry: `brainstorm` may bootstrap the minimum `assessment.md` baseline in-place, but it must be complete before leaving `brainstorm`
+- if the project does not explicitly set `ownership_proof_required = no`, personal-profile bootstrap must also freeze `source_watermark_level`, `source_watermark_channels`, and `ownership_proof_required` before stage exit
+During requirement iteration, keep the execution-card obligations visible: requirement-scope changes must follow `需求变更管理执行卡`, and ownership / watermark-sensitive projects must preserve the upstream constraints later enforced by `源码水印与归属证据链执行卡`.
 After prd.md and jsonl are curated, set `stage_status = awaiting_user_confirmation` for design/plan transition.
 [/workflow-state:brainstorm]
 
@@ -343,6 +346,7 @@ Run `python3 ./.trellis/scripts/workflow/workflow-state.py validate <task-dir> -
 Current stage: **plan** — task decomposition and scheduling.
 Load `/trellis:plan` to decompose work into child tasks with prd.md.
 **Hard prohibition**: no implementation code, no scaffolding, no migration scripts.
+If ownership proof is enabled, decompose the watermark / ownership tasks required by `源码水印与归属证据链执行卡` instead of leaving them implicit.
 Set `stage_status = awaiting_user_confirmation` when plan is ready for user approval.
 [/workflow-state:plan]
 
@@ -388,6 +392,7 @@ After this stage, proceed to `delivery`. Archive and add_session are performed a
 [workflow-state:delivery]
 Current stage: **delivery** — project handover and deployment.
 Load `/trellis:delivery` for acceptance, deliverables, and ownership proof.
+If ownership proof is enabled, verify the final evidence chain against `源码水印与归属证据链执行卡` before leaving delivery.
 [/workflow-state:delivery]
 
 [workflow-state:record-session]
@@ -455,7 +460,7 @@ Do not treat the current stage as trustworthy. Inspect the header `Reason:` line
 [workflow-state:no_task]
 No active task. **A Direct answer** — pure Q&A / explanation / lookup / chat; no file writes + one-line answer + repo reads ≤ 2 files → AI judges, no override needed.
 **A+ Deep analysis** — multi-file read-only audit / architecture review / diagnostic report; file writes limited to analysis docs (research/, temp files); no source code / config / project file modification allowed. Creates a task only if the user explicitly asks to act on findings.
-**B Create a task** — any implementation / code change / build / refactor work. For outsourcing profile: entry sequence starts with route intent choice — (1) `python3 ./.trellis/scripts/workflow/workflow-state.py route` → (2) if `action=entry_choice_required` and当前意图是开始新任务，load `/trellis:feasibility` (the feasibility skill will automatically create the task directory and initialize `workflow-state.json`)；若当前只是 workflow / 项目只读分析、元审计或 A/A+ 纯分析，则停留在 `no_task` 直接分析，不创建任务 → (3) after feasibility passes, `trellis-brainstorm` for prd iteration → (4) `task.py start <task-dir>`. For personal profile: (1) `task.py create "<title>"` → (2) `trellis-brainstorm` — personal profile can skip feasibility but **must** supplement core fields of `assessment.md` during brainstorm (`project_engagement_type=non_outsourcing` + `source_watermark_*` + `ownership_proof_required`), otherwise subsequent stage gate validation will block → (3) `task.py start <task-dir>`. **"It looks small" is NOT grounds for downgrading B to A+ or C**.
+**B Create a task** — any implementation / code change / build / refactor work. For outsourcing profile: entry sequence starts with route intent choice — (1) `python3 ./.trellis/scripts/workflow/workflow-state.py route` → (2) if `action=entry_choice_required` and当前意图是开始新任务，load `/trellis:feasibility` (the feasibility skill will automatically create the task directory and initialize `workflow-state.json`)；若当前只是 workflow / 项目只读分析、元审计或 A/A+ 纯分析，则停留在 `no_task` 直接分析，不创建任务 → (3) after feasibility passes, load `/trellis:brainstorm` for prd iteration → (4) `task.py start <task-dir>`. For personal profile: (1) `task.py create "<title>"` → (2) load `/trellis:brainstorm` — personal profile can skip feasibility but **must** supplement core fields of `assessment.md` during brainstorm (`project_engagement_type=non_outsourcing` + `source_watermark_*` + `ownership_proof_required`), otherwise subsequent stage gate validation will block → (3) `task.py start <task-dir>`. **"It looks small" is NOT grounds for downgrading B to A+ or C**.
 `task.py start` in this branch only persists or repairs the active-task pointer for the current session. It does **not** advance `workflow-state.json.stage`, and in strong-gate installs it also does **not** keep producing the legacy `planning → in_progress` status flip; stage changes must still be performed via `workflow-state.py set` after the current stage reaches `awaiting_user_confirmation`.
 **C Inline change** (per-turn only, escape hatch for B) — the user's CURRENT message MUST contain one of: "skip trellis" / "no task" / "just do it" / "don't create a task" / "跳过 trellis" / "别走流程" / "小修一下" / "直接改" / "先别建任务" → briefly acknowledge ("ok, skipping trellis flow this turn"), then inline. **Without seeing one of these phrases you must NOT inline on your own**; do not invent an override the user never said.
 [/workflow-state:no_task]

@@ -382,6 +382,7 @@ Compatibility code should therefore:
    - Contract:
      - keep the Trellis baseline workflow guide, then inject workflow projectization content into the documented section boundaries
      - if the projectized workflow removes the old Phase 1/2/3 narrative, it must still preserve a compatibility read surface for baseline step readers that call `get_context.py --mode phase --step <X.Y>`; strong-gate routing and baseline step lookup may coexist, but step lookup must not silently degrade to `Step not found`
+     - when the strong-gate breadcrumb patch changes stage-entry or stage-exit requirements, the same change must propagate every still-applicable execution-card obligation and no-task bootstrap requirement into the matching stage blocks in the workflow patch source; do not leave requirement-change routing, `source_watermark_*`, `ownership_proof_required`, or delivery-time ownership-proof checks visible only in one entry surface
      - installer must back up the original baseline copy before first patching
      - uninstall / force-restore paths must restore the original baseline copy when a backup exists
      - drift detection must at minimum verify the workflow patch marker is still present
@@ -546,6 +547,11 @@ Validation & error behavior:
   deployment logic, treat that as contract drift
 - if the target-project patched runtime carrier lacks the required patch marker,
   treat that as a real missing critical runtime patch
+- if a JS hook carrier depends on Python helper execution, its runtime contract
+  must accept a resolved interpreter override before falling back to the bare
+  platform default; for the current workflow this means
+  `process.env.TRELLIS_PYTHON || "python3"` rather than a hardcoded
+  `"python3"`-only contract
 - if runtime behavior is patched correctly but source helper enumeration no
   longer explains how the capability lands on disk, treat that as a source-side
   contract defect to fix before the next workflow release
@@ -766,6 +772,10 @@ When modifying these contracts, update or add tests that prove:
 18. patch helper CLI + introspection compatibility is covered by regression tests:
    - patch helpers expose standard `--help`
    - Python-target patch helpers do not destroy preserved function docstrings when they inject strong-gate logic
+19. strong-gate workflow/doc runtime contracts are covered by regression tests:
+   - the installed `.trellis/workflow.md` stage breadcrumbs surface the execution-card and watermark/ownership obligations required by the current workflow contract
+   - injected JS workflow-state carriers require `process.env.TRELLIS_PYTHON || "python3"` instead of a hardcoded `python3` string
+   - deployed execution cards that reference target-project formal docs do not imply those docs must preexist when the workflow is responsible for creating or backfilling them at runtime
 
 Current regression anchors:
 
@@ -949,6 +959,19 @@ Previous behavior stripped these to plain text. New behavior keeps them as worki
 - Execution card files exist in `.trellis/workflow-docs/`
 - Content matches workflow source
 - Profile determines which cards are expected
+
+#### 3.5 Runtime-Created Target-Doc References
+
+When an execution card or workflow-managed document references target-project
+artifacts under paths such as `docs/requirements/**`, the source wording must
+distinguish between:
+
+- a path that must already exist before the workflow starts, and
+- a formal target-project document path that the workflow may create or
+  backfill during runtime
+
+Do not describe a runtime-created formal-doc path as if its absence at project
+start were itself a workflow defect.
 
 ### 4. Validation & Error Matrix
 

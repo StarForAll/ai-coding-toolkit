@@ -2064,7 +2064,7 @@ def _js_runtime_contract_errors(
                 f"{path.relative_to(repo_root)} 缺少 execFileSync 导入"
                 f"（critical runtime patch: {patch_name}）"
             )
-        if 'const PYTHON_CMD = "python3"' not in content:
+        if 'const PYTHON_CMD = process.env.TRELLIS_PYTHON || "python3"' not in content:
             problems.append(
                 f"{path.relative_to(repo_root)} 缺少 PYTHON_CMD 定义"
                 f"（critical runtime patch: {patch_name}）"

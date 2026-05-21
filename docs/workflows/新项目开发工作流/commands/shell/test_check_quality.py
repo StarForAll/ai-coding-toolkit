@@ -10,10 +10,18 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
+
+import importlib.util
+from unittest import mock
 
 
 SCRIPT = Path(__file__).resolve().parent / "check-quality.py"
 PYTHON = sys.executable
+SPEC = importlib.util.spec_from_file_location("check_quality_module", SCRIPT)
+assert SPEC is not None and SPEC.loader is not None
+CHECK_QUALITY = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(CHECK_QUALITY)
 
 
 class CheckQualityScriptTests(unittest.TestCase):
@@ -71,6 +79,25 @@ class CheckQualityScriptTests(unittest.TestCase):
         self.assertIn("stdout:\nout", result.stdout)
         self.assertIn("stderr:\nerr", result.stdout)
 
+    def test_git_queries_use_list_form_subprocess_calls(self) -> None:
+        task_dir = self.make_task_dir()
+        test_cmd = self.python_cmd("print('ok')")
+        with mock.patch.object(
+            CHECK_QUALITY,
+            "run_git_query",
+            side_effect=[
+                subprocess.CompletedProcess(["git", "diff", "--name-only"], 0, stdout="", stderr=""),
+                subprocess.CompletedProcess(
+                    ["git", "ls-files", "--others", "--exclude-standard"], 0, stdout="", stderr=""
+                ),
+            ],
+        ) as mocked_git:
+            with mock.patch.object(sys, "argv", [str(SCRIPT), str(task_dir), "--test-cmd", test_cmd]):
+                exit_code = CHECK_QUALITY.main()
+
+        self.assertEqual(exit_code, 0)
+        mocked_git.assert_any_call(["git", "diff", "--name-only"])
+        mocked_git.assert_any_call(["git", "ls-files", "--others", "--exclude-standard"])
 
 if __name__ == "__main__":
     unittest.main()

@@ -490,11 +490,15 @@ def _ensure_js_route_runtime_deps(content: str) -> str:
             )
         else:
             raise ValueError("js hook missing anchor for execFileSync import")
-    if 'const PYTHON_CMD = "python3"\n' not in patched:
+    if 'const PYTHON_CMD = process.env.TRELLIS_PYTHON || "python3"\n' not in patched:
         child_process_anchor = 'import { execFileSync } from "child_process"\n'
         if child_process_anchor not in patched:
             raise ValueError("js hook missing child_process import anchor for PYTHON_CMD")
-        patched = patched.replace(child_process_anchor, child_process_anchor + 'const PYTHON_CMD = "python3"\n\n', 1)
+        patched = patched.replace(
+            child_process_anchor,
+            child_process_anchor + 'const PYTHON_CMD = process.env.TRELLIS_PYTHON || "python3"\n\n',
+            1,
+        )
     return patched
 
 
@@ -609,11 +613,15 @@ def _patch_js_baseline_fixture(content: str) -> str:
             )
         else:
             raise ValueError("js baseline fixture missing path import anchor for execFileSync")
-    if 'const PYTHON_CMD = "python3"\n' not in patched:
+    if 'const PYTHON_CMD = process.env.TRELLIS_PYTHON || "python3"\n' not in patched:
         child_process_anchor = 'import { execFileSync } from "child_process"\n'
         if child_process_anchor not in patched:
             raise ValueError("js baseline fixture missing child_process import anchor for PYTHON_CMD")
-        patched = patched.replace(child_process_anchor, child_process_anchor + 'const PYTHON_CMD = "python3"\n\n', 1)
+        patched = patched.replace(
+            child_process_anchor,
+            child_process_anchor + 'const PYTHON_CMD = process.env.TRELLIS_PYTHON || "python3"\n\n',
+            1,
+        )
     if "  const rawStatus = typeof taskData.status === \"string\" ? taskData.status : \"\"\n" not in patched:
         task_status_anchor = "  const taskTitle = taskData.title || taskRef\n"
         if task_status_anchor not in patched:
@@ -708,7 +716,7 @@ def patch_js_hook(target_path: Path) -> bool:
         and "workflow-state.route" in content
         and "task.extraLines" in content
         and 'import { execFileSync } from "child_process"' in content
-        and 'const PYTHON_CMD = "python3"' in content
+        and 'const PYTHON_CMD = process.env.TRELLIS_PYTHON || "python3"' in content
         and "ACTION_BREADCRUMB_KEYS" in content
     ):
         print(f"✅ {target_path} 已包含 route-centered workflow-state 补丁，跳过")
@@ -771,7 +779,10 @@ def patch_js_hook(target_path: Path) -> bool:
             print(f"⚠️ {target_path} 中未找到 buildBreadcrumb 调用，跳过补丁")
             return False
 
-    if 'import { execFileSync } from "child_process"' not in patched or 'const PYTHON_CMD = "python3"' not in patched:
+    if (
+        'import { execFileSync } from "child_process"' not in patched
+        or 'const PYTHON_CMD = process.env.TRELLIS_PYTHON || "python3"' not in patched
+    ):
         print(f"⚠️ {target_path} route-centered JS 补丁缺少 execFileSync/PYTHON_CMD 依赖注入")
         return False
 

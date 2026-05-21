@@ -20,6 +20,10 @@ class CheckResult(NamedTuple):
     detail: str | None = None
 
 
+def run_git_query(args: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(args, capture_output=True, text=True, check=False)
+
+
 def _print_result(result: CheckResult) -> None:
     print(f"\n--- {result.label} ---")
     print(f"Result: {result.status}")
@@ -122,8 +126,8 @@ def main() -> int:
     # 4. Git 状态
     print("\n--- Git 状态 ---")
     try:
-        changed = subprocess.run("git diff --name-only", shell=True, capture_output=True, text=True)
-        untracked = subprocess.run("git ls-files --others --exclude-standard", shell=True, capture_output=True, text=True)
+        changed = run_git_query(["git", "diff", "--name-only"])
+        untracked = run_git_query(["git", "ls-files", "--others", "--exclude-standard"])
         changed_count = len(changed.stdout.strip().splitlines()) if changed.stdout.strip() else 0
         untracked_count = len(untracked.stdout.strip().splitlines()) if untracked.stdout.strip() else 0
         print(f"已修改文件: {changed_count}")

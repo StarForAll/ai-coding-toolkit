@@ -3391,7 +3391,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (root / ".opencode" / "plugins" / "inject-workflow-state.js").write_text(
             "// [workflow-embed-patch:prefer-workflow-state-json]\n"
             'import { execFileSync } from "child_process"\n'
-            'const PYTHON_CMD = "python3"\n'
+            'const PYTHON_CMD = process.env.TRELLIS_PYTHON || "python3"\n'
             "function buildBreadcrumb(id, status, templates, source = null, extraLines = []) { const task = { extraLines }; return status + task.extraLines.join(\"\\n\") }\n",
             encoding="utf-8",
         )

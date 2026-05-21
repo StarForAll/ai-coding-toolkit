@@ -383,7 +383,7 @@ BASELINE_OPENCODE_SESSION_UTILS_CONTENT = (
     "import { existsSync, readFileSync } from \"fs\"\n"
     "import { basename, join } from \"path\"\n"
     "import { execFileSync } from \"child_process\"\n"
-    "const PYTHON_CMD = \"python3\"\n\n"
+    "const PYTHON_CMD = process.env.TRELLIS_PYTHON || \"python3\"\n\n"
     "function hasCuratedJsonlEntry(jsonlPath) {\n"
     "  return existsSync(jsonlPath)\n"
     "}\n\n"
@@ -1011,6 +1011,10 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(WORKFLOW_PATCH_MARKER, workflow_doc_text)
         self.assertIn("task.py start <task-dir>", workflow_doc_text)
         self.assertIn("does **not** advance `workflow-state.json.stage`", workflow_doc_text)
+        self.assertIn("load `/trellis:brainstorm` for prd iteration", workflow_doc_text)
+        self.assertIn("source_watermark_level", workflow_doc_text)
+        self.assertIn("需求变更管理执行卡", workflow_doc_text)
+        self.assertIn("源码水印与归属证据链执行卡", workflow_doc_text)
         self.assertNotIn("flips `task.json.status` from `planning` to `in_progress`", workflow_doc_text)
         self.assertIn("python3 ./.trellis/scripts/add_session.py", workflow_doc_text)
         self.assertIn("finish-work-checklist.md", workflow_doc_text)
@@ -1079,6 +1083,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         if opencode_inject_path.exists():
             opencode_inject = opencode_inject_path.read_text(encoding="utf-8")
             self.assertIn("ACTION_BREADCRUMB_KEYS", opencode_inject)
+            self.assertIn('const PYTHON_CMD = process.env.TRELLIS_PYTHON || "python3"', opencode_inject)
             self.assertNotIn("if (!rawStatus) return null", opencode_inject)
             self.assertIn("workflow-state.route_failed", opencode_inject)
             self.assertNotIn("fall back to task.json status", opencode_inject)
@@ -1124,13 +1129,14 @@ class WorkflowInstallerTests(unittest.TestCase):
         change_card_text = change_card.read_text(encoding="utf-8")
         self.assertIn(".trellis/workflow.md", change_card_text)
         self.assertIn("continue` / `trellis-continue", change_card_text)
+        self.assertIn("运行期创建或补齐 `docs/requirements/customer-facing-prd.md`", change_card_text)
         self.assertNotIn("§2.5", change_card_text)
         self.assertNotIn("§2.4", change_card_text)
         self.assertNotIn("commands/delivery.md", change_card_text)
         self.assertNotIn("CLI原生适配边界矩阵.md", change_card_text)
         ownership_card_text = ownership_card.read_text(encoding="utf-8")
-        self.assertIn(".trellis/scripts/workflow/ownership-proof-validate.py", ownership_card_text)
-        self.assertIn(".trellis/scripts/workflow/source-watermark-guard.py", ownership_card_text)
+        self.assertIn("./.trellis/scripts/workflow/ownership-proof-validate.py", ownership_card_text)
+        self.assertIn("./.trellis/scripts/workflow/source-watermark-guard.py", ownership_card_text)
         self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", ownership_card_text)
         self.assertNotIn("<WORKFLOW_DIR>/commands/shell", ownership_card_text)
         self.assertEqual(record_data["workflow_version"], "0.1.28")
@@ -1210,7 +1216,7 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         opencode_inject = (fixture / ".opencode" / "plugins" / "inject-workflow-state.js").read_text(encoding="utf-8")
         self.assertIn('import { execFileSync } from "child_process"', opencode_inject)
-        self.assertIn('const PYTHON_CMD = "python3"', opencode_inject)
+        self.assertIn('const PYTHON_CMD = process.env.TRELLIS_PYTHON || "python3"', opencode_inject)
         self.assertIn("ACTION_BREADCRUMB_KEYS", opencode_inject)
         self.assertIn("Stage: ${routeStage}", opencode_inject)
         self.assertNotIn("if (!rawStatus) return null", opencode_inject)
@@ -2602,7 +2608,7 @@ Triggered from /trellis:start when the user describes a development task, especi
         opencode_inject.write_text(
             opencode_inject.read_text(encoding="utf-8")
             .replace('import { execFileSync } from "child_process"\n', "")
-            .replace('const PYTHON_CMD = "python3"\n\n', ""),
+            .replace('const PYTHON_CMD = process.env.TRELLIS_PYTHON || "python3"\n\n', ""),
             encoding="utf-8",
         )
         task_py = fixture / ".trellis" / "scripts" / "task.py"
