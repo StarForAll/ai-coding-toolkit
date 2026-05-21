@@ -300,7 +300,7 @@ _NL_ROUTING_SECTION = """\
 > - Claude Code / OpenCode：优先使用项目级 `/trellis:xxx` 命令；OpenCode CLI 可使用 `trellis/xxx`
 > - Codex：通过 `AGENTS.md` 自然语言路由或显式触发对应 skill；不要期待项目级 `/trellis:xxx` 命令目录
 > - 本表用于缩小候选范围，不表示所有 CLI 都存在确定性的自动命令路由；若命中歧义、缺少前置条件或上下文不足，仍应先确认再进入对应阶段
-> - 当前 workflow 采用强门禁阶段状态机：阶段切换必须由用户明确确认；`/trellis:continue` 只重入当前已确认阶段，不自动跨阶段推进；legacy `/trellis:start` 仅用于旧目标项目兼容
+> - 当前 workflow 采用强门禁阶段状态机：阶段切换必须由用户明确确认；`/trellis:continue` 只重入当前已确认阶段，不自动跨阶段推进
 
 ### 工作流阶段命令
 
@@ -325,7 +325,7 @@ _NL_ROUTING_SECTION = """\
 |-----------|------------------------|------------|------|
 | 调研、研究、查资料、查文档、看源码、搜代码、搜资料、技术调研、仓库分析 | 调用当前 CLI 的 `trellis-research` 子代理能力（若平台支持） | 描述研究意图，或显式触发 `trellis-research` agent | implementation 内部 research 链入口；用于代码/文档/仓库检索，不等于正式阶段命令 |
 | 开始写代码、实现、开发、编码、动手、修这个功能、开始改代码 | `/trellis:continue` | 描述当前实现意图，或显式触发 `trellis-continue` skill | implementation 的公开重入入口。没有对称的 `/trellis:implementation` 命令；continue 会先做 Phase Router 判断，再在当前 task 上执行 implementation 内部链 |
-| 开始、新会话、继续、下一步 | `/trellis:continue` | 描述当前意图，或显式触发 `trellis-continue` skill | Phase Router 自动检测；legacy `/trellis:start` 仅兼容旧目标项目 |
+| 开始、新会话、继续、下一步 | `/trellis:continue` | 描述当前意图，或显式触发 `trellis-continue` skill | Phase Router 自动检测 |
 | 卡住了、反复出错、死循环、调不通 | 描述排障意图，或显式触发 `trellis-break-loop` skill | 描述排障意图，或显式触发 `trellis-break-loop` skill | 深度 bug 分析 |
 | 更新规范、新发现、沉淀经验 | 描述规范更新意图，或显式触发 `trellis-update-spec` skill | 描述规范更新意图，或显式触发 `trellis-update-spec` skill | 规范更新 |
 | 跨层检查、跨模块、影响面 | `/trellis:check` + 手动指定跨层范围 | 描述跨层检查意图，或显式触发 `check` skill 并说明跨层范围 | 当前未提供专用 `check-cross-layer` skill；用 `/trellis:check` 替代 |
@@ -337,7 +337,7 @@ _NL_ROUTING_SECTION = """\
 ### 歧义消解
 
 - 多个命令匹配时：当前阶段上下文 > 精确关键词 > 当前已确认阶段优先 > 模糊语义
-- 无法确定时：路由到 `/trellis:continue`（Phase Router 自动检测）；legacy `/trellis:start` 仅用于旧目标项目兼容
+- 无法确定时：路由到 `/trellis:continue`（Phase Router 自动检测）
 - 当前 workflow 明确禁用基于 `parallel/worktree` 的后台 dispatch + PR 完成路径；如用户提到并行开发，应先回到 `/trellis:plan` 重新安排任务依赖，不再默认路由到 `parallel`
 - top-2 优先级接近时：向用户确认意图，而不是假定已经完成自动精确路由
 
@@ -3330,9 +3330,9 @@ def main() -> int:
         print("    6. 同一目标项目中各 CLI 的入口协议不同，请分别按各自原生入口使用")
         for cli_type in cli_types:
             if cli_type == "claude":
-                print("       - Claude Code → /trellis:continue（legacy /trellis:start 仅兼容旧目标项目）")
+                print("       - Claude Code → /trellis:continue")
             elif cli_type == "opencode":
-                print("       - OpenCode → /trellis:continue（TUI）或 trellis/continue（CLI）；legacy start 仅兼容旧目标项目")
+                print("       - OpenCode → /trellis:continue（TUI）或 trellis/continue（CLI）")
             elif cli_type == "codex":
                 print("       - Codex → 描述需求或显式触发对应 skill；不要期待项目级 /trellis:continue")
         print(f"  卸载: python3 {src}/uninstall-workflow.py")

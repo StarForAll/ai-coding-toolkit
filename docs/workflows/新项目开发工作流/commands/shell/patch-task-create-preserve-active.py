@@ -12,8 +12,8 @@ invocation only.
 
 from __future__ import annotations
 
+import argparse
 import re
-import sys
 from pathlib import Path
 
 PATCH_MARKER = "# [workflow-embed-patch:preserve-parent-active-task]"
@@ -68,12 +68,17 @@ def patch_task_store(target_path: Path) -> bool:
     return True
 
 
-def main() -> int:
-    if len(sys.argv) < 2:
-        print("Usage: patch-task-create-preserve-active.py <target_task_store.py_path>")
-        return 1
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Apply the preserve-active patch to a target common/task_store.py file."
+    )
+    parser.add_argument("target_path", help="Path to the target common/task_store.py file")
+    return parser
 
-    target_path = Path(sys.argv[1]).resolve()
+
+def main() -> int:
+    args = build_parser().parse_args()
+    target_path = Path(args.target_path).resolve()
     if patch_task_store(target_path):
         return 0
     return 1

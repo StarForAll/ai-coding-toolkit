@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-import sys
+import argparse
 from pathlib import Path
 
 PATCH_MARKER = "# [workflow-embed-patch:strong-gate-task-status-view]"
@@ -203,12 +203,17 @@ def patch_task_status_views(root: Path) -> bool:
     return any(results)
 
 
-def main() -> int:
-    if len(sys.argv) < 2:
-        print("用法: patch-task-status-view-strong-gate.py <target_repo_root>")
-        return 1
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Apply the strong-gate task status view patches to a target repository root."
+    )
+    parser.add_argument("target_root", help="Path to the target repository root")
+    return parser
 
-    target_root = Path(sys.argv[1]).resolve()
+
+def main() -> int:
+    args = build_parser().parse_args()
+    target_root = Path(args.target_root).resolve()
     return 0 if patch_task_status_views(target_root) else 1
 
 

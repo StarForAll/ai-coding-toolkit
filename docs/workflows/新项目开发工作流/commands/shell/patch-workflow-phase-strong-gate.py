@@ -3,8 +3,8 @@
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
-import sys
 from pathlib import Path
 
 
@@ -23,12 +23,17 @@ def patch_workflow_phase(target_path: Path) -> bool:
     return bool(module.patch_workflow_phase(target_path))
 
 
-def main() -> int:
-    if len(sys.argv) < 2:
-        print("用法: patch-workflow-phase-strong-gate.py <target_workflow_phase.py_path>")
-        return 1
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Apply the compatibility wrapper for the strong-gate workflow_phase patch."
+    )
+    parser.add_argument("target_path", help="Path to the target workflow_phase.py file")
+    return parser
 
-    target_path = Path(sys.argv[1]).resolve()
+
+def main() -> int:
+    args = build_parser().parse_args()
+    target_path = Path(args.target_path).resolve()
     return 0 if patch_workflow_phase(target_path) else 1
 
 

@@ -335,6 +335,7 @@ BASELINE_TASK_QUEUE_CONTENT = (
 )
 BASELINE_WORKFLOW_PHASE_CONTENT = (
     "def get_step(step):\n"
+    "    \"\"\"Return the legacy step body.\"\"\"\n"
     "    return f'legacy step {step}'\n"
 )
 BASELINE_INJECT_WORKFLOW_STATE_HOOK_CONTENT = (
@@ -868,6 +869,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         runtime_module = importlib.util.module_from_spec(module_spec)
         module_spec.loader.exec_module(runtime_module)
 
+        self.assertEqual(runtime_module.get_step.__doc__, "Return the legacy step body.")
         self.assertEqual(runtime_module.get_step("1.0"), "")
 
     def test_build_workflow_content_replaces_task_mechanism_without_legacy_headings(self) -> None:
@@ -2305,6 +2307,8 @@ Triggered from /trellis:start when the user describes a development task, especi
         self.assertIn("trellis-research", agents_md)
         self.assertIn("当前 workflow 默认由 continue 自动执行 before-dev", agents_md)
         self.assertNotIn("| 读规范、开发前准备、看看有什么规范 | `/trellis:before-dev` |", agents_md)
+        self.assertNotIn("legacy `/trellis:start`", agents_md)
+        self.assertNotIn("legacy start", agents_md)
 
     def test_install_dry_run_reports_preview_without_writing_files(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
@@ -3295,6 +3299,8 @@ Triggered from /trellis:start when the user describes a development task, especi
         updated_agents = agents_md.read_text(encoding="utf-8")
         self.assertIn("workflow-nl-routing-start", updated_agents)
         self.assertIn("自然语言命令路由", updated_agents)
+        self.assertNotIn("legacy `/trellis:start`", updated_agents)
+        self.assertNotIn("legacy start", updated_agents)
 
         followup_check = self.run_script(
             UPGRADE_SCRIPT,

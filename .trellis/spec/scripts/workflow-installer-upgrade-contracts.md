@@ -371,6 +371,8 @@ Compatibility code should therefore:
      - installer must copy it into the target project
      - install record `scripts` must include it
      - installer regression tests must assert both deployment presence and install-record inclusion
+     - helper / patch scripts invoked directly by operators must expose standard `-h` / `--help` behavior instead of treating help flags as positional file paths
+     - patch helpers that modify target-project Python function bodies must preserve the target function's leading docstring and baseline-compatible introspection/read surface unless the workflow contract explicitly retires that surface
      - retired helper names that are no longer workflow-managed must be tracked in shared asset definitions so `upgrade-compat.py --check` can flag stale deployed residue and `--merge` can remove it
      - if a helper becomes a required phase gate, the relevant walkthrough / mapping docs must mention the validation command
 
@@ -761,6 +763,9 @@ When modifying these contracts, update or add tests that prove:
 17. patched workflow guide compatibility is covered by regression tests:
    - the installed `.trellis/workflow.md` keeps the strong-gate stage contract
    - the same installed file still contains a baseline-compatible `#### X.Y` step-read surface for `get_context.py --mode phase --step`
+18. patch helper CLI + introspection compatibility is covered by regression tests:
+   - patch helpers expose standard `--help`
+   - Python-target patch helpers do not destroy preserved function docstrings when they inject strong-gate logic
 
 Current regression anchors:
 

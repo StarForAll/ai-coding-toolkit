@@ -8,7 +8,8 @@ workflow-state.json with a valid strong-gate stage is detected.
 
 from __future__ import annotations
 
-import sys
+import argparse
+import ast
 from pathlib import Path
 
 PATCH_MARKER = "# strong-gate-phase-patch-applied"
@@ -71,31 +72,50 @@ def patch_workflow_phase(target_path: Path) -> bool:
         print(f"✅ {target_path} 已包含强门禁补丁，跳过")
         return True
 
-    # Find the get_step function and inject the patch at its start
-    # Look for the first return statement in get_step
-    import re
-    # Insert patch after the function def line and initial setup
-    pattern = re.compile(r'(def get_step\([^)]*\)[^:]*:\n)')
-    match = pattern.search(content)
-    if not match:
+    try:
+        module = ast.parse(content)
+    except SyntaxError:
+        print(f"⚠️ {target_path} 不是合法 Python 文件，跳过补丁")
+        return False
+
+    get_step_node = None
+    for node in module.body:
+        if isinstance(node, ast.FunctionDef) and node.name == "get_step":
+            get_step_node = node
+            break
+
+    if get_step_node is None:
         print(f"⚠️ {target_path} 中未找到 get_step 函数定义，跳过补丁")
         return False
 
-    insert_pos = match.end()
-    patch_with_marker = f"    {PATCH_MARKER}\n{PATCH_BLOCK}\n"
+    insert_line = get_step_node.lineno
+    if (
+        get_step_node.body
+        and isinstance(get_step_node.body[0], ast.Expr)
+        and isinstance(getattr(get_step_node.body[0], "value", None), ast.Constant)
+        and isinstance(get_step_node.body[0].value.value, str)
+    ):
+        insert_line = get_step_node.body[0].end_lineno or insert_line
 
-    new_content = content[:insert_pos] + patch_with_marker + content[insert_pos:]
+    lines = content.splitlines(keepends=True)
+    patch_with_marker = f"    {PATCH_MARKER}\n{PATCH_BLOCK}\n"
+    new_content = "".join(lines[:insert_line]) + patch_with_marker + "".join(lines[insert_line:])
     target_path.write_text(new_content, encoding="utf-8")
     print(f"✅ 已为 {target_path} 应用强门禁阶段补丁")
     return True
 
 
-def main() -> int:
-    if len(sys.argv) < 2:
-        print("用法: patch-workflow-phase.py <target_workflow_phase.py_path>")
-        return 1
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Apply the strong-gate workflow_phase.py patch to a target workflow_phase.py file."
+    )
+    parser.add_argument("target_path", help="Path to the target workflow_phase.py file")
+    return parser
 
-    target_path = Path(sys.argv[1]).resolve()
+
+def main() -> int:
+    args = build_parser().parse_args()
+    target_path = Path(args.target_path).resolve()
     if patch_workflow_phase(target_path):
         return 0
     return 1

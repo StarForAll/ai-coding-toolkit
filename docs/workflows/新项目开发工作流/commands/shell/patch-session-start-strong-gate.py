@@ -19,8 +19,8 @@ must follow `workflow-state.py route` and stop at blockers or confirmation gates
 
 from __future__ import annotations
 
+import argparse
 import re
-import sys
 from pathlib import Path
 
 PATCH_MARKER = "# strong-gate-session-start-patch-applied"
@@ -174,12 +174,17 @@ def patch_session_start(target_path: Path) -> bool:
     return True
 
 
-def main() -> int:
-    if len(sys.argv) < 2:
-        print("Usage: patch-session-start-strong-gate.py <target_session_start.py_path>")
-        return 1
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Apply the strong-gate session-start patch to a target session-start.py file."
+    )
+    parser.add_argument("target_path", help="Path to the target session-start.py file")
+    return parser
 
-    target_path = Path(sys.argv[1]).resolve()
+
+def main() -> int:
+    args = build_parser().parse_args()
+    target_path = Path(args.target_path).resolve()
     if patch_session_start(target_path):
         return 0
     return 1
