@@ -1022,8 +1022,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("parent coordinator records", workflow_doc_text)
         self.assertIn("does not automatically authorize", workflow_doc_text)
         self.assertIn("[workflow-state:blocked]", workflow_doc_text)
-        self.assertIn("[workflow-state:needs-init]", workflow_doc_text)
         self.assertIn("[workflow-state:repair_needed]", workflow_doc_text)
+        self.assertNotIn("[workflow-state:needs-init]", workflow_doc_text)
         self.assertIn("[workflow-state:awaiting_confirmation_with_blockers]", workflow_doc_text)
         self.assertIn("do **not** expect a public `/trellis:implementation` command", workflow_doc_text)
         self.assertNotIn("Phase 1: Plan    → figure out what to do", workflow_doc_text)
@@ -1373,6 +1373,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("# [workflow-embed-patch:strong-gate-task-status-view]", tasks_py)
         self.assertIn('display_status, display_extra = _display_status(task_dir, data)', tasks_py)
         self.assertIn("_workflow_state_summary(state)", tasks_py)
+        self.assertNotIn("needs-init", tasks_py)
         self.assertNotIn("_route_status_summary(task_dir)", tasks_py)
         self.assertNotIn("_module_cache", tasks_py)
         self.assertNotIn("cmd_route(", tasks_py)
@@ -3240,6 +3241,186 @@ Triggered from /trellis:start when the user describes a development task, especi
         record_data = json.loads((fixture / ".trellis" / "workflow-installed.json").read_text(encoding="utf-8"))
         self.assertEqual(record_data["workflow_version"], "0.1.28")
         self.assertEqual(record_data["previous_version"], "0.5.0-rc.3")
+
+        followup_check = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+        self.assertEqual(followup_check.returncode, 0, msg=followup_check.stdout + followup_check.stderr)
+
+    def test_upgrade_check_detects_needs_init_residue_in_installed_artifacts(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        workflow_md = fixture / ".trellis" / "workflow.md"
+        workflow_text = workflow_md.read_text(encoding="utf-8")
+        workflow_text = workflow_text.replace(
+            "If `workflow-state.json` is missing or not yet initialized, strong-gate task views surface `repair_needed` instead of ",
+            "If `workflow-state.json` is missing, strong-gate task views surface a `needs-init` / repair-oriented status instead of ",
+        )
+        workflow_text = workflow_text.replace(
+            "[workflow-state:repair_needed]\n"
+            "Route action: **repair_needed** — workflow state is missing, uninitialized, stale, or structurally invalid.\n",
+            "[workflow-state:needs-init]\n"
+            "Route action: **needs-init** — the current task exists, but `workflow-state.json` has not been initialized yet.\n"
+            "Do **not** fall back to legacy `planning` semantics. Initialize or repair the task's workflow state first, then rerun `workflow-state.py route`.\n"
+            "If this is a freshly created task, enter the correct first stage instead of jumping straight into implementation.\n"
+            "[/workflow-state:needs-init]\n\n"
+            "[workflow-state:repair_needed]\n"
+            "Route action: **repair_needed** — workflow state is missing, stale, or structurally invalid.\n",
+        )
+        workflow_md.write_text(workflow_text, encoding="utf-8")
+
+        tasks_py = fixture / ".trellis" / "scripts" / "common" / "tasks.py"
+        tasks_text = tasks_py.read_text(encoding="utf-8").replace(
+            '        return "repair_needed", "workflow-state.json missing"\n',
+            '        return "needs-init", None\n',
+        )
+        tasks_py.write_text(tasks_text, encoding="utf-8")
+
+        task_py = fixture / ".trellis" / "scripts" / "task.py"
+        task_text = task_py.read_text(encoding="utf-8") + (
+            "\n  --status, -s <s>     Filter by workflow display status / stage "
+            "(e.g. needs-init, feasibility, design, completed)\n"
+        )
+        task_py.write_text(task_text, encoding="utf-8")
+
+        patch_script = fixture / ".trellis" / "scripts" / "workflow" / "patch-task-status-view-strong-gate.py"
+        patch_text = patch_script.read_text(encoding="utf-8").replace(
+            '        return "repair_needed", "workflow-state.json missing"\n',
+            '        return "needs-init", None\n',
+        ).replace(
+            '        return "repair_needed"\n',
+            '        return "needs-init"\n',
+            1,
+        ).replace(
+            "  --status, -s <s>     Filter by workflow display status / stage (e.g. repair_needed, feasibility, design, completed)\n",
+            "  --status, -s <s>     Filter by workflow display status / stage (e.g. needs-init, feasibility, design, completed)\n",
+        )
+        patch_script.write_text(patch_text, encoding="utf-8")
+
+        workflow_state_helper = fixture / ".trellis" / "scripts" / "workflow" / "workflow-state.py"
+        helper_text = workflow_state_helper.read_text(encoding="utf-8").replace(
+            "缺少 workflow-state.json（可能因任务创建于工作流安装之前，或当前任务尚未初始化阶段状态）。",
+            "缺少 workflow-state.json（可能因任务创建于工作流安装之前）。",
+        )
+        workflow_state_helper.write_text(helper_text, encoding="utf-8")
+
+        check = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertNotEqual(check.returncode, 0)
+        combined = check.stdout + check.stderr
+        self.assertIn(".trellis/workflow.md: needs-init 状态块残留", combined)
+        self.assertIn(".trellis/workflow.md: task system 文案仍将未初始化状态写成 needs-init", combined)
+        self.assertIn("common/tasks.py: 仍将缺失 workflow-state.json 显示为 needs-init", combined)
+        self.assertIn("task.py: --status 示例仍使用 needs-init", combined)
+        self.assertIn("辅助脚本内容漂移: workflow-state.py", combined)
+        self.assertIn("辅助脚本内容漂移: patch-task-status-view-strong-gate.py", combined)
+
+    def test_upgrade_merge_refreshes_needs_init_residue_from_installed_artifacts(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        workflow_md = fixture / ".trellis" / "workflow.md"
+        workflow_text = workflow_md.read_text(encoding="utf-8")
+        workflow_text = workflow_text.replace(
+            "If `workflow-state.json` is missing or not yet initialized, strong-gate task views surface `repair_needed` instead of ",
+            "If `workflow-state.json` is missing, strong-gate task views surface a `needs-init` / repair-oriented status instead of ",
+        )
+        workflow_text = workflow_text.replace(
+            "[workflow-state:repair_needed]\n"
+            "Route action: **repair_needed** — workflow state is missing, uninitialized, stale, or structurally invalid.\n",
+            "[workflow-state:needs-init]\n"
+            "Route action: **needs-init** — the current task exists, but `workflow-state.json` has not been initialized yet.\n"
+            "Do **not** fall back to legacy `planning` semantics. Initialize or repair the task's workflow state first, then rerun `workflow-state.py route`.\n"
+            "If this is a freshly created task, enter the correct first stage instead of jumping straight into implementation.\n"
+            "[/workflow-state:needs-init]\n\n"
+            "[workflow-state:repair_needed]\n"
+            "Route action: **repair_needed** — workflow state is missing, stale, or structurally invalid.\n",
+        )
+        workflow_md.write_text(workflow_text, encoding="utf-8")
+
+        tasks_py = fixture / ".trellis" / "scripts" / "common" / "tasks.py"
+        tasks_text = tasks_py.read_text(encoding="utf-8").replace(
+            '        return "repair_needed", "workflow-state.json missing"\n',
+            '        return "needs-init", None\n',
+        )
+        tasks_py.write_text(tasks_text, encoding="utf-8")
+
+        task_py = fixture / ".trellis" / "scripts" / "task.py"
+        task_text = task_py.read_text(encoding="utf-8") + (
+            "\n  --status, -s <s>     Filter by workflow display status / stage "
+            "(e.g. needs-init, feasibility, design, completed)\n"
+        )
+        task_py.write_text(task_text, encoding="utf-8")
+
+        patch_script = fixture / ".trellis" / "scripts" / "workflow" / "patch-task-status-view-strong-gate.py"
+        patch_text = patch_script.read_text(encoding="utf-8").replace(
+            '        return "repair_needed", "workflow-state.json missing"\n',
+            '        return "needs-init", None\n',
+        ).replace(
+            '        return "repair_needed"\n',
+            '        return "needs-init"\n',
+            1,
+        ).replace(
+            "  --status, -s <s>     Filter by workflow display status / stage (e.g. repair_needed, feasibility, design, completed)\n",
+            "  --status, -s <s>     Filter by workflow display status / stage (e.g. needs-init, feasibility, design, completed)\n",
+        )
+        patch_script.write_text(patch_text, encoding="utf-8")
+
+        workflow_state_helper = fixture / ".trellis" / "scripts" / "workflow" / "workflow-state.py"
+        helper_text = workflow_state_helper.read_text(encoding="utf-8").replace(
+            "缺少 workflow-state.json（可能因任务创建于工作流安装之前，或当前任务尚未初始化阶段状态）。",
+            "缺少 workflow-state.json（可能因任务创建于工作流安装之前）。",
+        )
+        workflow_state_helper.write_text(helper_text, encoding="utf-8")
+
+        merge = self.run_script(
+            UPGRADE_SCRIPT,
+            "--merge",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+        self.assertEqual(merge.returncode, 0, msg=merge.stdout + merge.stderr)
+
+        refreshed_workflow = workflow_md.read_text(encoding="utf-8")
+        self.assertNotIn("needs-init / repair-oriented status", refreshed_workflow)
+        self.assertNotIn("[workflow-state:needs-init]", refreshed_workflow)
+        self.assertIn("missing or not yet initialized", refreshed_workflow)
+        self.assertIn("missing, uninitialized, stale, or structurally invalid", refreshed_workflow)
+
+        refreshed_tasks = tasks_py.read_text(encoding="utf-8")
+        self.assertNotIn("needs-init", refreshed_tasks)
+        self.assertIn('return "repair_needed", "workflow-state.json missing"', refreshed_tasks)
+
+        refreshed_task = task_py.read_text(encoding="utf-8")
+        self.assertNotIn("e.g. needs-init, feasibility", refreshed_task)
+        self.assertIn("e.g. repair_needed, feasibility, design, completed", refreshed_task)
+
+        refreshed_patch = patch_script.read_text(encoding="utf-8")
+        self.assertIn('return "repair_needed", "workflow-state.json missing"', refreshed_patch)
+        self.assertIn('patched = patched.replace(', refreshed_patch)
+        self.assertIn('  --status, -s <s>     Filter by workflow display status / stage (e.g. repair_needed, feasibility, design, completed)', refreshed_patch)
+
+        refreshed_helper = workflow_state_helper.read_text(encoding="utf-8")
+        self.assertIn("或当前任务尚未初始化阶段状态", refreshed_helper)
+        self.assertNotIn("缺少 workflow-state.json（可能因任务创建于工作流安装之前）。", refreshed_helper)
 
         followup_check = self.run_script(
             UPGRADE_SCRIPT,

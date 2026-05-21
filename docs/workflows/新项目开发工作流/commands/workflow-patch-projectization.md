@@ -429,14 +429,8 @@ Route action: **recovery_needed** — the workflow cannot determine the active t
 Do not guess from filenames or chat history. Ask the user to clarify the current task, or explicitly reselect it with `task.py start <task-dir>`.
 [/workflow-state:recovery_needed]
 
-[workflow-state:needs-init]
-Route action: **needs-init** — the current task exists, but `workflow-state.json` has not been initialized yet.
-Do **not** fall back to legacy `planning` semantics. Initialize or repair the task's workflow state first, then rerun `workflow-state.py route`.
-If this is a freshly created task, enter the correct first stage instead of jumping straight into implementation.
-[/workflow-state:needs-init]
-
 [workflow-state:repair_needed]
-Route action: **repair_needed** — workflow state is missing, stale, or structurally invalid.
+Route action: **repair_needed** — workflow state is missing, uninitialized, stale, or structurally invalid.
 Run `workflow-state.py repair <task-dir>` first. If it reports `repair_ready`, confirm before applying; if it reports `manual_confirmation_required`, ask the user to confirm the currently approved stage instead of inferring it from artifacts.
 Execution stages such as `implementation` / `test-first` also require explicit `--execution-authorized true` and `--transition-from <previous-stage>`.
 [/workflow-state:repair_needed]

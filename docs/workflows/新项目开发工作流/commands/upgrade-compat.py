@@ -347,7 +347,40 @@ def workflow_patch_matches_source(src: Path, workflow_md: Path, *, profile: str 
         "Current stage: **implementation**",
         "workflow-state.py set <dir> --stage brainstorm --stage-status in_progress --awaiting-user-confirmation false --allowed-next design,plan,implementation,test-first",
     )
-    return all(snippet in patch_text and snippet in content for snippet in anchor_snippets)
+    if not all(snippet in patch_text and snippet in content for snippet in anchor_snippets):
+        return False
+    return not _workflow_doc_contract_issues(content)
+
+
+def _workflow_doc_contract_issues(content: str) -> list[str]:
+    issues: list[str] = []
+    if "surface a `needs-init` / repair-oriented status" in content:
+        issues.append("task system 文案仍将未初始化状态写成 needs-init")
+
+    open_tag = "[workflow-state:needs-init]"
+    close_tag = "[/workflow-state:needs-init]"
+    if open_tag in content and close_tag in content:
+        open_idx = content.find(open_tag)
+        close_idx = content.find(close_tag, open_idx + len(open_tag))
+        if close_idx != -1:
+            issues.append("needs-init 状态块残留")
+
+    if "Route action: **repair_needed** — workflow state is missing, stale, or structurally invalid." in content:
+        issues.append("repair_needed 状态块仍遗漏未初始化场景")
+
+    return issues
+
+
+def _task_status_view_contract_issues(
+    task_views_content: str,
+    task_content: str | None,
+) -> list[str]:
+    issues: list[str] = []
+    if 'return "needs-init", None' in task_views_content or 'return "needs-init"' in task_views_content:
+        issues.append("common/tasks.py: 仍将缺失 workflow-state.json 显示为 needs-init")
+    if task_content and "needs-init" in task_content:
+        issues.append("task.py: --status 示例仍使用 needs-init")
+    return issues
 
 
 def build_finish_work_content(content: str, patch_text: str) -> str | None:
@@ -687,6 +720,10 @@ def detect_conflicts_workflow_doc(src: Path, root: Path, *, profile: str = DEFAU
         err(f"[Shared] .trellis/workflow.md: 引用不存在的 {_STALE_CONTRACT_PATTERN}")
         conflicts += 1
 
+    for issue in _workflow_doc_contract_issues(content):
+        err(f"[Shared] .trellis/workflow.md: {issue}")
+        conflicts += 1
+
     if conflicts == 0:
         ok("[Shared] .trellis/workflow.md: 一致性检查通过")
     return conflicts
@@ -1006,6 +1043,7 @@ def detect_conflicts_codex(
     # OpenCode plugin absence is not a conflict — OpenCode may not be installed
 
     task_py = root / ".trellis" / "scripts" / "task.py"
+    task_content: str | None = None
     if task_py.exists():
         task_content = task_py.read_text(encoding="utf-8")
         if _TASK_DEGRADED_PATCH_MARKER in task_content:
@@ -1044,6 +1082,9 @@ def detect_conflicts_codex(
             ok("[Shared] common/tasks.py: strong-gate task status view 补丁已应用")
         else:
             err("[Shared] common/tasks.py: strong-gate task status view 补丁缺失")
+            conflicts += 1
+        for issue in _task_status_view_contract_issues(task_views_content, task_content):
+            err(f"[Shared] {issue}")
             conflicts += 1
 
     task_queue = root / ".trellis" / "scripts" / "common" / "task_queue.py"
@@ -1673,9 +1714,11 @@ def main() -> int:
     if args.mode == "force":
         if not restore_workflow_from_original_backup(root):
             return 1
-    if not has_workflow_patch(root / ".trellis" / "workflow.md") and not inject_workflow_patch(src, root, profile=profile):
-        err("[Shared] workflow.md 项目化补丁恢复失败")
-        return 1
+    workflow_md = root / ".trellis" / "workflow.md"
+    if args.mode == "force" or not workflow_patch_matches_source(src, workflow_md, profile=profile):
+        if not inject_workflow_patch(src, root, profile=profile):
+            err("[Shared] workflow.md 项目化补丁恢复失败")
+            return 1
     # Inject strong-gate patches for existing projects that predate these markers
     inject_workflow_phase_index_patch(src, root, dry_run=False, profile=profile)
     inject_workflow_no_task_patch(src, root, dry_run=False, profile=profile)

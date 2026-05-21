@@ -50,7 +50,7 @@ def _display_status(task_dir: Path, data: dict) -> tuple[str, str | None]:
     if raw_status in TERMINAL_TASK_STATUSES:
         return "completed", None
     if isinstance(raw_status, str) and raw_status:
-        return "needs-init", None
+        return "repair_needed", "workflow-state.json missing"
     return "unknown", None
 """
 
@@ -72,7 +72,7 @@ def _display_status(task_dir: Path, data: dict) -> str:
     if raw_status in TERMINAL_TASK_STATUSES:
         return "completed"
     if isinstance(raw_status, str) and raw_status:
-        return "needs-init"
+        return "repair_needed"
     return "unknown"
 """
 
@@ -84,6 +84,14 @@ def patch_task_views(tasks_path: Path) -> bool:
 
     content = tasks_path.read_text(encoding="utf-8")
     patched = content
+    patched = patched.replace(
+        '        return "needs-init", None\n',
+        '        return "repair_needed", "workflow-state.json missing"\n',
+    )
+    patched = patched.replace(
+        '        return "needs-init"\n',
+        '        return "repair_needed"\n',
+    )
     if PATCH_MARKER not in patched or "_workflow_state_summary(state)" not in patched:
         anchor = "\n\ndef load_task(task_dir: Path) -> TaskInfo | None:\n"
         if LEGACY_TASKS_HELPER.strip() in patched:
@@ -160,7 +168,11 @@ def patch_task_cli(task_cli_path: Path) -> bool:
     content = task_cli_path.read_text(encoding="utf-8")
     patched = content.replace(
         "  --status, -s <s>     Filter by status (planning, in_progress, review, completed)\n",
+        "  --status, -s <s>     Filter by workflow display status / stage (e.g. repair_needed, feasibility, design, completed)\n",
+    )
+    patched = patched.replace(
         "  --status, -s <s>     Filter by workflow display status / stage (e.g. needs-init, feasibility, design, completed)\n",
+        "  --status, -s <s>     Filter by workflow display status / stage (e.g. repair_needed, feasibility, design, completed)\n",
     )
     patched = patched.replace(
         '            print(f"{prefix}{dir_name}/ ({t.status}){pkg_tag}{progress}{marker}")\n',

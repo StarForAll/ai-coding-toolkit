@@ -2465,7 +2465,7 @@ def cmd_route(args: argparse.Namespace) -> int:
         _route_result(
             None,
             "repair_needed",
-            "缺少 workflow-state.json（可能因任务创建于工作流安装之前）。请先执行 workflow-state.py repair <task-dir>。若输出 repair_ready，在用户确认后再配合 --apply；若输出 manual_confirmation_required，必须按当前已确认阶段显式补齐 --stage，执行阶段还要补 --execution-authorized true 与 --transition-from <上一阶段>。",
+            "缺少 workflow-state.json（可能因任务创建于工作流安装之前，或当前任务尚未初始化阶段状态）。请先执行 workflow-state.py repair <task-dir>。若输出 repair_ready，在用户确认后再配合 --apply；若输出 manual_confirmation_required，必须按当前已确认阶段显式补齐 --stage，执行阶段还要补 --execution-authorized true 与 --transition-from <上一阶段>。",
         )
         return 0
 
