@@ -1,0 +1,4 @@
+{"file":".trellis/spec/skills/index.md","reason":"shared skill-spec maintenance rules and coupled update requirements for installable skills"}
+{"file":".trellis/spec/skills/workflow-repair.md","reason":"authoritative repair-side behavioral spec being updated in this task"}
+{"file":".trellis/spec/skills/workflow-scan.md","reason":"paired compatibility note requirements for scan-side same-change sync"}
+{"file":".trellis/spec/guides/index.md","reason":"shared repo maintenance thinking guide index relevant to skill/spec consistency changes"}
