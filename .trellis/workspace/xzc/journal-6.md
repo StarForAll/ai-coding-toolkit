@@ -1168,3 +1168,37 @@ Tightened workflow-repair --auto close-out rules, added fallback and loop-bounda
 ### Next Steps
 
 - None - task complete
+
+
+## Session 280: workflow-repair: rewrite deployed trellis-library paths
+
+**Date**: 2026-05-21
+**Task**: workflow-repair: rewrite deployed trellis-library paths
+**Branch**: `main`
+
+### Summary
+
+Rewrote deployed trellis-library guidance to the host-side absolute CLI path and recorded focused workflow-repair artifacts.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4d69d57` | (see git log) |
+| `6dd4eb2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
