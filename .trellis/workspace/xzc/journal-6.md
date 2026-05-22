@@ -1485,3 +1485,36 @@ Repaired upgrade-compat refresh for stale strong-gate artifacts and added anti-o
 ### Next Steps
 
 - None - task complete
+
+
+## Session 289: repair workflow source maintenance contracts
+
+**Date**: 2026-05-22
+**Task**: repair workflow source maintenance contracts
+**Branch**: `main`
+
+### Summary
+
+Verified workflow issues against /tmp/trellis-0.5.17-2, fixed the patch-helper CLI contract, reduced overview drift by extracting large templates, and aligned strong-gate stage docs/tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0cf8edc` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
