@@ -11,7 +11,7 @@
 - `PLANNING`: 无 prd.md 或 implement.jsonl 无条目 -> 建议加载 `trellis-brainstorm`
 - `READY`: prd.md + curated jsonl 存在 -> 建议分发 `trellis-implement`
 
-在强门禁模型中，路由依据应为 `workflow-state.json` 的 `stage` 字段，由 `workflow-state.py route` 命令计算。旧逻辑无法区分 `workflow-state.py` 当前定义的完整阶段链（例如 feasibility/brainstorm/design/plan/implementation/test-first/project-audit/check/review-gate/finish-work/delivery/record-session），也无法反映阶段门禁状态。
+在强门禁模型中，路由依据应为 `workflow-state.json` 的 `stage` 字段，由 `workflow-state.py route` 命令计算。旧逻辑无法区分 `workflow-state.py` 当前定义的正式阶段链（例如 feasibility/brainstorm/design/plan/implementation/project-audit/check/review-gate/delivery），也无法反映阶段门禁状态；同时要记住原生 `finish-work` 不属于这条项目级阶段链，而是当前活动任务的单任务终态入口。
 
 ### 补丁行为
 
@@ -19,7 +19,7 @@
 
 1. 定位 `.trellis/scripts/workflow/workflow-state.py`
 2. 无论 `workflow-state.json` 是否存在，都执行 `workflow-state.py route <task_dir> --project-root <project-root>`
-3. 读取路由 JSON 中的 `action`、`stage`、`stage_status`、`blockers`、`target`、`reason`
+3. 读取路由 JSON 中的 `action`、`stage`、`status`、`blockers`、`target`、`reason`
 4. 构建结构化状态字符串并直接返回
 5. 只有在 route helper 缺失、route 执行失败、或输出非法 JSON 时，才退回简单 `ACTIVE` 状态
 
@@ -38,7 +38,7 @@
 Status: STRONG-GATE (<stage-or-action>)
 Task: <task_title>
 Source: workflow-state.route
-Stage-Status: <stage_status>
+Status-Detail: <status>
 Action: <action>
 Target-Stage: <target>        (仅当 target 非空)
 Reason: <reason>              (仅当 reason 非空)

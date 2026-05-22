@@ -245,14 +245,13 @@ Workflow embed / analysis / repair scripts must distinguish three asset classes:
    - `trellis-finish-work`
    - Contract: keep Trellis baseline content, then inject workflow patch content
 
-   Legacy `start` / baseline `record-session` are old-target compatibility inputs only. `record-session` has retired from the current fresh-baseline **patch** list, but it is still a current workflow-distributed terminal close-out stage. The live close-out chain is `finish-work -> delivery -> record-session`, and `task.py archive` + `add_session.py` execute at the `record-session` stage. Installed target projects with residual legacy patch markers should be handled by `upgrade-compat`.
+   Legacy `start` / baseline `record-session` are old-target compatibility inputs only. `record-session` has retired from the current fresh-baseline patch and distribution model. Native Trellis `finish-work` is the normal single-task terminal entry: it performs the current active task's `task.py archive` followed by `add_session.py`. `delivery` is a separate project-level / handoff-level workflow phase and must not be conflated with native `finish-work` semantics. Installed target projects with residual legacy `record-session` carriers or patch markers should be handled by `upgrade-compat`.
 
 2. **Overlay baseline commands**
    - same-name commands whose deployed file is fully distributed by the workflow while semantically replacing the live baseline copy
    - current known set:
      - `brainstorm`
      - `check`
-     - `record-session`
    - Contract: backup original baseline copy before install; uninstall must restore baseline copy
 
 3. **Added commands**
@@ -261,7 +260,6 @@ Workflow embed / analysis / repair scripts must distinguish three asset classes:
      - `feasibility`
      - `design`
      - `plan`
-     - `test-first`
      - `project-audit`
      - `review-gate`
      - `delivery`
@@ -293,7 +291,7 @@ Current confirmed baseline drift (observed from fresh `trellis init` output):
 
 - Claude / OpenCode command carrier:
   - `continue.md` replaces the old `start.md` baseline entrypoint
-  - `record-session.md` may be absent because close-out is folded into `finish-work.md`
+  - `record-session.md` may be absent because close-out is folded into native `finish-work.md`
 - Codex shared skill carrier:
   - baseline patch targets are `trellis-continue` and `trellis-finish-work`
   - legacy `start` / `finish-work` skill names should be treated only as migration inputs, not as fresh-baseline assumptions
@@ -315,7 +313,7 @@ Compatibility code should therefore:
      - shared / generic layer and workflow distributed-skill target: `.agents/skills/`
      - Codex-local / project-custom layer and duplicate shared-skill drift cleanup surface: `.codex/skills/`
    - Contract:
-     - workflow distributed skills (`feasibility`, `brainstorm`, `design`, `plan`, `test-first`, `project-audit`, `check`, `review-gate`, `delivery`) must be deployed to `.agents/skills/` only
+     - workflow distributed skills (`feasibility`, `brainstorm`, `design`, `plan`, `project-audit`, `check`, `review-gate`, `delivery`) must be deployed to `.agents/skills/` only
      - `.codex/skills/` must not be treated as a required shared workflow skill deployment target; duplicate shared workflow skills found there are drift and should be detected / cleaned up
      - patch-based baseline skills for Codex (`trellis-continue`, `trellis-finish-work`) must be enhanced **only in the active skills directory** resolved by `resolve_codex_skills_dir`
      - legacy `start` / `finish-work` skill names are old-target compatibility inputs only, not current fresh-baseline patch targets

@@ -16,8 +16,8 @@
 
 ```text
 feasibility -> brainstorm -> design -> plan -> implementation
--> test-first -> project-audit -> check -> review-gate
--> finish-work -> delivery -> record-session
+-> project-audit -> check -> review-gate
+-> delivery
 ```
 
 The installed workflow does not use the old `planning / in_progress / completed` route table as its routing source of truth.
@@ -49,7 +49,7 @@ The injected block may still use the current strong-gate stage template, for exa
 [/workflow-state:design]
 ```
 
-Typical live blocks are stage-based (`design`, `plan`, `finish-work`, `delivery`) plus `no_task`. However the injected header must also carry the authoritative route metadata (`action`, `stage_status`, `blockers`, `target`, `reason`) so blocked or repair-needed states are not downgraded into a plain stage breadcrumb. Do not assume `planning` / `in_progress` / `completed` blocks remain meaningful after this workflow is installed.
+Typical live blocks are stage-based (`design`, `plan`, `implementation`, `delivery`) plus `no_task`. However the injected header must also carry the authoritative route metadata (`action`, `status`, `blockers`, `target`, `reason`) so blocked or repair-needed states are not downgraded into a plain stage breadcrumb. Do not assume `planning` / `in_progress` / `completed` blocks remain meaningful after this workflow is installed.
 
 ## Local Modification Patterns
 
@@ -60,7 +60,7 @@ Common changes:
 | Add or rename a stage | `.trellis/workflow.md` plus `.trellis/scripts/workflow/workflow-state.py` |
 | Change task creation policy | `[workflow-state:no_task]` block plus the entry skill/command patches |
 | Change stage routing rules | `workflow-state.py route` and the corresponding continue/start carrier files |
-| Change close-out flow | `finish-work`, `delivery`, `record-session`, and workflow-state gate logic together |
+| Change close-out flow | native `finish-work`, `delivery`, and workflow-state gate logic together |
 | Change platform differences | Update the relevant command/skill/hook carrier after the semantic change is defined |
 
 ## Close-Out Boundary
@@ -68,11 +68,10 @@ Common changes:
 The current close-out chain is:
 
 ```text
-finish-work -> delivery -> record-session
+delivery -> native finish-work
 ```
 
-- `finish-work` freezes `finish-work-checklist.md` and close-out evidence.
 - `delivery` handles acceptance and deliverables.
-- `record-session` performs `task.py archive` plus `add_session.py`.
+- native `finish-work` freezes `finish-work-checklist.md`, then performs `task.py archive` plus `add_session.py`.
 
-Do not describe `/trellis:finish-work` as the stage that archives the task or records the session.
+Do not describe `record-session` as part of the fresh-baseline strong-gate stage chain; it is legacy compatibility only.

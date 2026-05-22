@@ -37,7 +37,7 @@ Do not describe this as "matching the current task status" unless you are explic
 Practical meaning:
 
 - the breadcrumb body may still come from the current stage's `[workflow-state:STAGE]` block
-- but the injected header should surface route-only fields such as `action`, `stage_status`, `blockers`, `target`, and `reason`
+- but the injected header should surface route-only fields such as `action`, `status`, `blockers`, `target`, and `reason`
 - therefore `blocked`, `context_needed`, or `repair_needed` must not look identical to an ordinary `design` / `plan` / `implementation` re-entry
 
 ## sub-agent context

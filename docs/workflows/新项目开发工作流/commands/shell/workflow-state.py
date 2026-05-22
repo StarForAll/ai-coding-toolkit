@@ -88,9 +88,9 @@ STAGE_TRANSITIONS: dict[str, list[str]] = {
     "design": ["plan"],
     "plan": ["implementation"],
     "implementation": ["check", "project-audit"],
-    "check": ["implementation", "review-gate"],
-    "review-gate": ["implementation"],
-    "project-audit": ["delivery"],
+    "check": ["implementation", "review-gate", "project-audit", "delivery"],
+    "review-gate": ["implementation", "project-audit", "delivery"],
+    "project-audit": ["check", "review-gate", "delivery"],
     "delivery": [],
 }
 STAGE_STATUSES = {
@@ -150,7 +150,8 @@ PATCHED_CODEX_SKILL_REQUIREMENTS: dict[str, dict[str, tuple[str, ...]]] = {
     "trellis-finish-work": {
         "must_contain": (
             CODEX_FINISH_WORK_SKILL_MARKER,
-            "prepare the delivery hand-off",
+            "archive the active task",
+            "record the session journal",
         ),
         "must_not_contain": (
             "archive completed tasks, and record session progress to the developer journal",
@@ -237,7 +238,12 @@ def resolve_task_dir(path_str: str) -> Path:
 
 def load_state(task_dir: Path) -> tuple[Path, dict[str, Any] | None]:
     state_path = task_dir / STATE_FILE_NAME
-    return state_path, read_json(state_path)
+    state = read_json(state_path)
+    if isinstance(state, dict) and "status" not in state:
+        legacy_status = state.get("stage_status")
+        if isinstance(legacy_status, str):
+            state["status"] = legacy_status
+    return state_path, state
 
 
 def session_runtime_has_any_current_task(repo_root: Path) -> bool:
@@ -444,7 +450,7 @@ def recover_repair_state(
         repaired["completed_blocks"] = existing_completed
 
     if candidate_stage in EXECUTION_STAGES:
-        existing_status = state.get("status") or state.get("status")  # backward compat
+        existing_status = state.get("status") or state.get("stage_status")
         if existing_status in STAGE_STATUSES:
             repaired["status"] = existing_status
 
@@ -459,6 +465,10 @@ def recover_repair_state(
                 field_value = existing_checkpoints.get(field_name)
                 if isinstance(field_value, bool):
                     repaired_checkpoints[field_name] = field_value
+
+        existing_transition = state.get("last_confirmed_transition")
+        if transition_payload_is_valid(existing_transition, target_stage=candidate_stage):
+            repaired["last_confirmed_transition"] = existing_transition
 
     return repaired
 
@@ -480,6 +490,14 @@ def apply_repair_overrides(repaired: dict[str, Any], args: argparse.Namespace) -
         checkpoints["context7_review_completed"] = args.context7_review_completed
     if getattr(args, "execution_authorized", None) is not None:
         checkpoints["execution_authorized"] = args.execution_authorized
+    if getattr(args, "clear_last_transition", False):
+        repaired["last_confirmed_transition"] = None
+    elif getattr(args, "transition_from", None) is not None:
+        repaired["last_confirmed_transition"] = {
+            "from": args.transition_from,
+            "to": repaired.get("stage"),
+            "confirmed_at": now_iso(),
+        }
 
 
 def validate_plan_gate(task_dir: Path, errors: list[str]) -> None:
@@ -779,18 +797,21 @@ def validate_stage_transition_gates(
     if new_stage == "review-gate":
         validate_check_gate(task_dir, errors)
 
+    if current_stage == "check" and new_stage == "delivery":
+        validate_check_gate(task_dir, errors)
+
     if current_stage == "project-audit":
         validate_project_audit_gate(task_dir, errors)
 
     if current_stage == "review-gate":
         validate_review_gate_gate(task_dir, errors)
 
-    # Project-audit → delivery requires project-audit artifacts
+    # Entering delivery requires upstream review artifacts, but delivery
+    # artifacts themselves are produced inside the delivery stage and are only
+    # enforced when leaving that stage for the native finish-work close-out.
     if new_stage == "delivery":
         if current_stage == "project-audit":
             validate_project_audit_gate(task_dir, errors)
-        # Also validate delivery artifacts when entering delivery stage
-        validate_delivery_gate(task_dir, errors, repo_root)
 
 
 def validate_execution_boundary(state: dict[str, Any], errors: list[str]) -> None:
@@ -933,9 +954,6 @@ def collect_route_readiness_blockers(
             blockers.append("当前推荐执行任务说明卡缺少项目级粗估字段，不能进入执行态")
         blockers.extend(collect_dependency_blockers(task_dir, repo_root))
 
-    if stage == "delivery":
-        validate_finish_work_gate(task_dir, blockers)
-
     if stage == "review-gate":
         validate_check_gate(task_dir, blockers)
 
@@ -1055,8 +1073,6 @@ def validate_stage_exit_artifacts(
     elif stage == "review-gate":
         validate_review_gate_gate(task_dir, errors)
     elif stage == "delivery":
-        # delivery 阶段需要先验证 finish-work-checklist.md
-        validate_finish_work_gate(task_dir, errors)
         validate_delivery_gate(task_dir, errors, repo_root)
 
 
@@ -1253,7 +1269,7 @@ def validate_external_project_controls(
         ):
             if target_stage is None:
                 errors.append(
-                    "缺少 assessment.md；personal profile 首次入口可在当前 brainstorm 阶段补齐最小 assessment 基线，补齐后再继续本阶段。"
+            "缺少 assessment.md；personal profile 首次入口可在当前 brainstorm 阶段补齐最小 assessment 基线，补齐后再继续本阶段。"
                 )
             else:
                 errors.append(
@@ -1306,7 +1322,7 @@ def validate_external_project_controls(
             f"{assessment_file.relative_to(repo_root).as_posix()} 的 `kickoff_payment_received` 只能填写 `yes` / `no`"
         )
     elif stage in EXECUTION_STAGES and kickoff_received != "yes":
-        errors.append("外包项目在启动款未确认到账前，不得进入 implementation")
+        errors.append("外包项目在启动款未确认到账前，不得进入 implementation / test-first")
 
     delivery_track = extract_backticked_field(content, "delivery_control_track")
     if delivery_track is None:
@@ -1437,7 +1453,13 @@ def find_missing_markers(path: Path, markers: tuple[str, ...]) -> list[str]:
 
 
 def design_path_candidates_from_state(state: dict[str, Any]) -> set[str]:
-    # Deprecated: allowed_next_stages removed, now derive from STAGE_TRANSITIONS
+    allowed_next_override = state.get("allowed_next_stages")
+    if isinstance(allowed_next_override, list) and all(isinstance(item, str) for item in allowed_next_override):
+        return {item for item in allowed_next_override if item in STAGES or item == "test-first"}
+    allowed_next_cli = state.get("_allowed_next_override")
+    if isinstance(allowed_next_cli, list) and all(isinstance(item, str) for item in allowed_next_cli):
+        return {item for item in allowed_next_cli if item in STAGES or item == "test-first"}
+    # Deprecated fallback: derive from canonical graph when no override is present.
     current_stage = state.get("stage", "")
     allowed_next = STAGE_TRANSITIONS.get(current_stage, [])
     return {item for item in allowed_next if isinstance(item, str)}
@@ -1630,7 +1652,10 @@ def build_pending_state_for_set(
         pending["current_block"] = args.current_block
     if args.completed_blocks is not None:
         pending["completed_blocks"] = [item for item in args.completed_blocks.split(",") if item]
-    # Note: args.allowed_next is deprecated (allowed_next_stages field removed)
+    # Keep one-shot CLI override for route/validation compatibility while the
+    # persisted state no longer stores allowed_next_stages as a schema field.
+    if args.allowed_next is not None:
+        pending["_allowed_next_override"] = [item for item in args.allowed_next.split(",") if item]
     if args.awaiting_user_confirmation is not None:
         pending["awaiting_user_confirmation"] = args.awaiting_user_confirmation
     if args.architecture_confirmed is not None:
@@ -2429,7 +2454,7 @@ def cmd_route(args: argparse.Namespace) -> int:
             "repair_needed",
             state_errors[0],
             stage=state.get("stage") if isinstance(state.get("stage"), str) else None,
-            stage_status=state.get("status") if isinstance(state.get("status"), str) else None,
+            status=state.get("status") if isinstance(state.get("status"), str) else None,
             blockers=state_errors,
         )
         return 0
@@ -2447,7 +2472,7 @@ def cmd_route(args: argparse.Namespace) -> int:
                 "context_needed",
                 f"当前 task 处于 leaf-required stage={stage} 但含有 children，需切换到子任务执行。子任务: {children_list}。请执行 task.py start <child-task-dir>",
                 stage=stage,
-                stage_status=status or None,
+                status=status or None,
             )
             return 0
 
@@ -2463,7 +2488,7 @@ def cmd_route(args: argparse.Namespace) -> int:
                 "awaiting_confirmation_with_blockers",
                 f"当前 stage={stage}, status=awaiting_user_confirmation 但仍存在 readiness blockers",
                 stage=stage,
-                stage_status=status,
+                status=status,
                 blockers=all_blockers,
             )
         else:
@@ -2472,7 +2497,7 @@ def cmd_route(args: argparse.Namespace) -> int:
                 "awaiting_confirmation",
                 f"当前 stage={stage}, status=awaiting_user_confirmation",
                 stage=stage,
-                stage_status=status,
+                status=status,
             )
         return 0
 
@@ -2483,7 +2508,7 @@ def cmd_route(args: argparse.Namespace) -> int:
             "blocked",
             primary_reason,
             stage=stage or None,
-            stage_status=status or None,
+            status=status or None,
             blockers=readiness_blockers,
         )
         return 0
@@ -2512,7 +2537,7 @@ def cmd_route(args: argparse.Namespace) -> int:
                 "blocked",
                 f"当前 stage={stage} 存在阻塞条件",
                 stage=stage,
-                stage_status=status,
+                status=status,
                 blockers=blockers,
             )
             return 0
@@ -2522,7 +2547,7 @@ def cmd_route(args: argparse.Namespace) -> int:
             "reenter",
             f"当前 stage={stage}, status={status}",
             stage=stage,
-            stage_status=status,
+            status=status,
             warnings=route_warnings,
         )
         return 0
@@ -2534,7 +2559,7 @@ def cmd_route(args: argparse.Namespace) -> int:
             "blocked",
             non_execution_blockers[0],
             stage=stage or None,
-            stage_status=status or None,
+            status=status or None,
             blockers=non_execution_blockers,
         )
         return 0
@@ -2544,7 +2569,7 @@ def cmd_route(args: argparse.Namespace) -> int:
         "reenter",
         f"当前 stage={stage}, status={status}",
         stage=stage,
-        stage_status=status,
+        status=status,
         warnings=route_warnings,
     )
     return 0
@@ -2574,6 +2599,38 @@ def cmd_repair(args: argparse.Namespace) -> int:
         validate_execution_boundary(state, check_errors)
         validate_leaf_task(task_dir_path, state.get("stage"), check_errors)
         if not check_errors:
+            if args.apply:
+                candidate_stage = state.get("stage")
+                if isinstance(candidate_stage, str) and candidate_stage in STAGES:
+                    repaired = recover_repair_state(candidate_stage, state)
+                    apply_repair_overrides(repaired, args)
+                    repaired_errors: list[str] = []
+                    validate_state_shape(repaired, repaired_errors)
+                    validate_execution_boundary(repaired, repaired_errors)
+                    validate_leaf_task(task_dir_path, candidate_stage, repaired_errors)
+                    if repaired_errors:
+                        print(
+                            json.dumps(
+                                {
+                                    "status": "repair_blocked",
+                                    "stage": candidate_stage,
+                                    "blockers": repaired_errors,
+                                    "message": "workflow-state.json 可读取，但规范化重建后仍不合法",
+                                },
+                                ensure_ascii=False,
+                                indent=2,
+                            )
+                        )
+                        return 1
+                    write_json(state_path, repaired)
+                    print(
+                        json.dumps(
+                            {"status": "applied", "stage": candidate_stage, "path": str(state_path)},
+                            ensure_ascii=False,
+                            indent=2,
+                        )
+                    )
+                    return 0
             result = {
                 "status": "ok",
                 "message": "workflow-state.json 已存在且合法",
@@ -2633,6 +2690,7 @@ def cmd_repair(args: argparse.Namespace) -> int:
             (
                 "checkpoints.execution_authorized" in error
                 or "last_confirmed_transition" in error
+                or "execution_authorized" in error
             )
             for error in repair_errors
         ):

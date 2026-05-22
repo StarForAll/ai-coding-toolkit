@@ -5,10 +5,10 @@ description: 开发完成？准备交付 — 验收测试、交付物生成、�
 
 # /trellis:delivery — 项目测试、交付与沉淀
 
-> **Workflow Position**: §6 → 前: `/trellis:project-audit` 或 `/trellis:check` → 后: Trellis 原生 `/Trellis 原生 /finish-work`（最终 archive + journal 记录）
+> **Workflow Position**: §6 → 前: `/trellis:project-audit` 或 `/trellis:check` → 后: 视当前项目是否存在项目级交付事件，决定是否还需要单任务级 Trellis 原生 `/trellis:finish-work` 收尾
 > **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:delivery`） · ✅ OpenCode（TUI: `/trellis:delivery`；CLI: `trellis/delivery`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:delivery` 命令；见 `codex/README.md`）
 
-> **Strong Gate**: 本阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束。delivery 完成后，使用 Trellis 原生 `/Trellis 原生 /finish-work` 命令完成任务归档和会话记录。
+> **Strong Gate**: 本阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束。`delivery` 是项目级/交付级验收与交付阶段，不等同于单任务级 `finish-work`。若当前轮还需要对**当前活动任务**做原生 Trellis 收尾，再进入 `/trellis:finish-work`。
 
 ---
 
@@ -241,16 +241,16 @@ python3 <WORKFLOW_DIR>/commands/shell/source-watermark-guard.py --task-dir <task
 进入最终 close-out 前，先确认：
 
 - 已完成内容已由人工测试并提交
-- 当前 workflow 收尾链路为：**Trellis 原生 /finish-work → delivery → Trellis 原生 /finish-work**
-  - `Trellis 原生 /finish-work` 只做提交检查清单与收尾证据，**不执行 archive**
-  - `delivery` 负责验收与交付物
-  - `Trellis 原生 /finish-work` 才执行 `task.py archive` + `add_session.py`
+- 当前 workflow 里，`delivery` 与 Trellis 原生 `/finish-work` 是**不同层级**的动作：
+  - `delivery` 负责项目级/交付级验收与交付物
+  - Trellis 原生 `/finish-work` 负责**当前活动任务**的单任务收尾冻结，并执行 `task.py archive` + `add_session.py`
+  - 不要把 `delivery` 写成“原生 `finish-work` 的定义组成部分”，也不要把原生 `finish-work` 改写成项目级交付阶段
 - 当前执行任务已完成，且本轮收尾只围绕**当前任务**
 - 未完成任务不要误归档；非当前任务不要借本轮收尾顺手自动提交
 - 不为了补齐新规则或整理台账而批量回写旧任务、旧会话记录或已归档目录
 - staged 区不得混入非目标变更；若存在 staged 污染，必须先中断处理
 
-archive 与 session 记录的执行在 `Trellis 原生 /finish-work` 阶段完成，不在 delivery 阶段执行。具体操作步骤参见 `Trellis 原生 /finish-work.md`。
+若当前轮还需要关闭当前活动任务，则 `archive` 与 session 记录在 Trellis 原生 `/finish-work` 中完成，不在 `delivery` 阶段执行。具体操作步骤参见 `Trellis 原生 /finish-work.md`。
 
 判定规则：
 
@@ -307,11 +307,11 @@ $TASK_DIR/
 
 | 验收结果 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
-| 全部通过，准备收尾 | `/finish-work` | 进入会话收尾，或显式触发 `Trellis 原生 /finish-work` skill | **默认推荐**。前提：`workflow-state.py route` 已进入 `Trellis 原生 /finish-work`，且 `workflow-state.py validate <task-dir>` 已通过；在 `Trellis 原生 /finish-work` 阶段按 Trellis 原生顺序先 archive，再通过 `add_session.py` 完成记录与元数据闭环 |
+| 全部通过，且当前活动任务也准备关闭 | `/finish-work` | 进入会话收尾，或显式触发 `Trellis 原生 /finish-work` skill | **默认推荐**。前提：如果当前轮需要收尾当前活动任务，再进入 Trellis 原生 `finish-work`；它按 Trellis 原生顺序先 archive，再通过 `add_session.py` 完成记录与元数据闭环 |
 | 有 P0/P1 缺陷 | 描述排障意图，或显式触发 `trellis-break-loop` skill | 进入深度排障，或显式触发 `trellis-break-loop` skill | 深度分析 Bug 根因 |
 | 有 P2/P3 缺陷 | `/trellis:continue` | 回到实施阶段，或显式触发 `trellis-continue` skill | 回到实施阶段修复 |
 | 验收中出现冻结后新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先完成变更评估与确认；不要直接混入当前交付 |
 | 需要更新规范文档 | 描述规范更新意图，或显式触发 `trellis-update-spec` skill | 记录并更新规范，或显式触发 `trellis-update-spec` skill | 沉淀新发现的模式到 spec |
 | 需要请求代码审查 | `multi-cli-review` / `multi-cli-review-action` 能力 | `multi-cli-review` / `multi-cli-review-action` skill | 提交前外部审查与报告汇总 |
-| 需要归档任务 | `python3 ./.trellis/scripts/task.py archive <name>` | 同左 | 归档在 `/finish-work` 阶段执行，不在 delivery 或 Trellis 原生 /finish-work 阶段 |
-| 不确定下一步 | `/trellis:delivery` | 描述当前收尾意图，或显式触发 `delivery` skill | 先停留在 delivery 阶段澄清，而不是自动进入 Trellis 原生 /finish-work |
+| 需要归档任务 | `python3 ./.trellis/scripts/task.py archive <name>` | 同左 | 归档在 `/finish-work` 阶段执行，不在 `delivery` 阶段单独执行 |
+| 不确定下一步 | `/trellis:delivery` | 描述当前交付/收尾意图，或显式触发 `delivery` skill | 先判断现在需要的是项目级交付动作，还是当前活动任务的单任务 finish-work 收尾 |

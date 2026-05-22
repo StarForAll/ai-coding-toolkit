@@ -1098,7 +1098,6 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
         self.assertIn("execution_authorized 必须为 true", validate.stdout)
-        self.assertIn("进入执行阶段的确认记录", validate.stdout)
 
     def test_validate_passes_when_implementation_has_confirmation_record(self) -> None:
         root, task_dir = self.make_fixture()
@@ -1332,7 +1331,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         # Attempt 1: without awaiting_user_confirmation -> rejected at transition gate
         illegal_set = self.run_script("set", str(task_dir), "--stage", "implementation")
         self.assertEqual(illegal_set.returncode, 1, msg=illegal_set.stdout + illegal_set.stderr)
-        self.assertIn("stage_status 必须为 awaiting_user_confirmation", illegal_set.stdout)
+        self.assertIn("status 必须为 awaiting_user_confirmation", illegal_set.stdout)
 
         # Attempt 2: set awaiting_user_confirmation but still no execution_authorized -> rejected
         self.run_script(
@@ -1412,10 +1411,9 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
 
-        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
-        self.assertIn("last_confirmed_transition.to 必须等于当前 stage", validate.stdout)
+        self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
 
-    def test_validate_passes_when_test_first_has_confirmation_record(self) -> None:
+    def test_validate_passes_when_implementation_has_confirmation_record_from_brainstorm(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
             root,
@@ -1424,24 +1422,24 @@ class WorkflowStateScriptTests(unittest.TestCase):
             customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
         )
 
-        self.run_script("init", str(task_dir), "--stage", "test-first")
+        self.run_script("init", str(task_dir), "--stage", "implementation")
         self.run_script(
             "set",
             str(task_dir),
             "--execution-authorized",
             "true",
             "--transition-from",
-            "plan",
+            "brainstorm",
         )
         validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
 
         self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
 
-    def test_validate_fails_when_test_first_tries_to_bypass_project_estimate_gate(self) -> None:
+    def test_validate_fails_when_implementation_tries_to_bypass_project_estimate_gate(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(root, task_dir)
 
-        self.run_script("init", str(task_dir), "--stage", "test-first")
+        self.run_script("init", str(task_dir), "--stage", "implementation")
         self.run_script(
             "set",
             str(task_dir),
@@ -1827,9 +1825,9 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(data["target"], "design")
         self.assertEqual(data["action"], "reenter")
         self.assertEqual(data["stage"], "design")
-        self.assertEqual(data["stage_status"], "in_progress")
+        self.assertEqual(data["status"], "in_progress")
 
-    def test_cmd_route_delivery_reenter_blocks_when_finish_work_gate_missing(self) -> None:
+    def test_cmd_route_delivery_reenter_checks_delivery_artifacts(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
             root,
@@ -1843,8 +1841,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         data = json.loads(result.stdout)
-        self.assertEqual(data["action"], "blocked")
-        self.assertIn("finish-work-checklist.md", "".join(data.get("blockers", [])))
+        self.assertEqual(data["action"], "reenter")
 
     def test_cmd_route_review_gate_reenter_blocks_when_check_gate_missing(self) -> None:
         root, task_dir = self.make_fixture()
@@ -1931,10 +1928,9 @@ class WorkflowStateScriptTests(unittest.TestCase):
                 {
                     "version": 1,
                     "stage": "implementation",
-                    "stage_status": "in_progress",
+                    "status": "in_progress",
                     "current_block": None,
                     "completed_blocks": [],
-                    "allowed_next_stages": ["test-first", "check", "project-audit"],
                     "awaiting_user_confirmation": False,
                     "last_confirmed_transition": {
                         "from": "plan",
@@ -1966,7 +1962,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertIn("task.py start <child-task-dir>", data["reason"])
 
     def test_cmd_route_awaiting_confirmation(self) -> None:
-        """workflow-state has stage_status=awaiting_user_confirmation -> awaiting_confirmation."""
+        """workflow-state has status=awaiting_user_confirmation -> awaiting_confirmation."""
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
             root,
@@ -1995,7 +1991,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(data["target"], "design")
         self.assertEqual(data["action"], "awaiting_confirmation")
         self.assertEqual(data["stage"], "design")
-        self.assertEqual(data["stage_status"], "awaiting_user_confirmation")
+        self.assertEqual(data["status"], "awaiting_user_confirmation")
 
     def test_cmd_route_no_active_task_recovery(self) -> None:
         """Existing tasks but no active task -> recovery_needed."""
@@ -2043,7 +2039,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.run_script("init", str(task_dir), "--stage", "design")
         state_path = task_dir / "workflow-state.json"
         state = json.loads(state_path.read_text(encoding="utf-8"))
-        state["allowed_next_stages"] = ["not-a-stage"]
+        state["status"] = "totally-invalid-status"
         state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
         result = self.run_script("route", str(task_dir), "--project-root", str(root))
@@ -2051,7 +2047,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         data = json.loads(result.stdout)
         self.assertEqual(data["action"], "repair_needed")
-        self.assertIn("allowed_next_stages", "".join(data.get("blockers", [])))
+        self.assertIn("status 非法", "".join(data.get("blockers", [])))
 
     def test_cmd_route_requires_manual_confirmation_when_only_degraded_fallback_exists(self) -> None:
         root, task_dir = self.make_fixture()
@@ -2358,7 +2354,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("workflow-state 校验通过", result.stdout)
 
-    def test_validate_record_session_stage_requires_delivery_artifacts(self) -> None:
+    def test_validate_rejects_record_session_as_non_canonical_stage(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
             root,
@@ -2395,10 +2391,10 @@ class WorkflowStateScriptTests(unittest.TestCase):
         result = self.run_script("validate", str(task_dir), "--project-root", str(root))
 
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("缺少交付产物", result.stdout)
-        self.assertIn("不得进入 record-session", result.stdout)
+        self.assertIn("stage 非法", result.stdout)
+        self.assertIn("record-session", result.stdout)
 
-    def test_validate_record_session_stage_requires_outsourcing_delivery_proofs(self) -> None:
+    def test_validate_rejects_record_session_even_with_outsourcing_artifacts(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
             root,
@@ -2450,8 +2446,8 @@ class WorkflowStateScriptTests(unittest.TestCase):
         result = self.run_script("validate", str(task_dir), "--project-root", str(root))
 
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("ownership-proof.md", result.stdout)
-        self.assertIn("source-watermark-verification.md", result.stdout)
+        self.assertIn("stage 非法", result.stdout)
+        self.assertIn("record-session", result.stdout)
 
     def test_cmd_route_ignores_degraded_when_session_files_exist(self) -> None:
         root, task_dir = self.make_fixture()
@@ -2782,7 +2778,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         data = json.loads(result.stdout)
         self.assertEqual(data["action"], "awaiting_confirmation")
 
-    def test_route_brainstorm_execution_path_blocks_when_complexity_is_not_l0(self) -> None:
+    def test_route_brainstorm_execution_path_no_longer_forces_l0_blocker(self) -> None:
         root, task_dir = self.make_fixture()
         (task_dir / "prd.md").write_text(
             "# sample task\n\n"
@@ -2808,11 +2804,9 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         result = self.run_script("route", str(task_dir), "--project-root", str(root))
         data = json.loads(result.stdout)
-        self.assertEqual(data["action"], "awaiting_confirmation_with_blockers")
-        self.assertIn("complexity_decision", "".join(data.get("blockers", [])))
-        self.assertIn("L0", "".join(data.get("blockers", [])))
+        self.assertEqual(data["action"], "awaiting_confirmation")
 
-    def test_cmd_set_blocks_brainstorm_to_execution_when_complexity_is_not_l0(self) -> None:
+    def test_cmd_set_allows_brainstorm_to_execution_when_inputs_are_complete(self) -> None:
         root, task_dir = self.make_fixture()
         (task_dir / "prd.md").write_text(
             "# sample task\n\n"
@@ -2845,10 +2839,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             cwd=root,
         )
 
-        self.assertNotEqual(result.returncode, 0)
-        combined = result.stdout + result.stderr
-        self.assertIn("complexity_decision", combined)
-        self.assertIn("L0", combined)
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
     def test_route_execution_stage_blocks_when_project_estimate_markers_missing(self) -> None:
         root, task_dir = self.make_fixture()
@@ -3035,7 +3026,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
         (skills_root / "trellis-finish-work").mkdir(parents=True, exist_ok=True)
         (skills_root / "trellis-finish-work" / "SKILL.md").write_text(
-            "<!-- finish-work-projectization-patch -->\nprepare the delivery hand-off\n",
+            "<!-- finish-work-projectization-patch -->\narchive the active task\nrecord the session journal\n",
             encoding="utf-8",
         )
         (skills_root / "trellis-start").mkdir(parents=True, exist_ok=True)
@@ -3213,7 +3204,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
         (skills_root / "trellis-finish-work").mkdir(parents=True, exist_ok=True)
         (skills_root / "trellis-finish-work" / "SKILL.md").write_text(
-            "<!-- finish-work-projectization-patch -->\nprepare the delivery hand-off\n",
+            "<!-- finish-work-projectization-patch -->\narchive the active task\nrecord the session journal\n",
             encoding="utf-8",
         )
         (skills_root / "trellis-start").mkdir(parents=True, exist_ok=True)
@@ -3821,9 +3812,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         data = json.loads(result.stdout)
-        self.assertEqual(data["action"], "embed_invalid")
-        self.assertIn("record-session", data["reason"])
-        self.assertIn("内容漂移", data["reason"])
+        self.assertEqual(data["action"], "entry_choice_required")
 
     # ------------------------------------------------------------------
     # repair subcommand tests
@@ -3933,10 +3922,9 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         repaired = json.loads((task_dir / "workflow-state.json").read_text(encoding="utf-8"))
         self.assertEqual(repaired["stage"], "plan")
-        self.assertEqual(repaired["stage_status"], "in_progress")
-        self.assertFalse(repaired["awaiting_user_confirmation"])
-        self.assertIsNone(repaired["last_confirmed_transition"])
-        self.assertEqual(repaired["allowed_next_stages"], ["implementation", "test-first"])
+        self.assertEqual(repaired["status"], "in_progress")
+        self.assertNotIn("awaiting_user_confirmation", repaired)
+        self.assertNotIn("last_confirmed_transition", repaired)
         self.assertFalse(repaired["checkpoints"]["architecture_confirmed"])
         self.assertFalse(repaired["checkpoints"]["context7_review_completed"])
 
@@ -3971,7 +3959,9 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         repaired = json.loads((task_dir / "workflow-state.json").read_text(encoding="utf-8"))
-        self.assertEqual(repaired["allowed_next_stages"], ["implementation", "test-first"])
+        self.assertEqual(repaired["stage"], "plan")
+        self.assertEqual(repaired["status"], "in_progress")
+        self.assertNotIn("allowed_next_stages", repaired)
 
     def test_cmd_repair_preserves_valid_execution_confirmation_for_same_stage(self) -> None:
         root, task_dir = self.make_fixture()
@@ -4006,13 +3996,13 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         repaired = json.loads((task_dir / "workflow-state.json").read_text(encoding="utf-8"))
         self.assertEqual(repaired["stage"], "implementation")
-        self.assertEqual(repaired["stage_status"], "awaiting_user_confirmation")
-        self.assertTrue(repaired["awaiting_user_confirmation"])
+        self.assertEqual(repaired["status"], "awaiting_user_confirmation")
+        self.assertNotIn("awaiting_user_confirmation", repaired)
         self.assertTrue(repaired["checkpoints"]["execution_authorized"])
         self.assertEqual(repaired["last_confirmed_transition"]["from"], "plan")
         self.assertEqual(repaired["last_confirmed_transition"]["to"], "implementation")
         self.assertEqual(repaired["completed_blocks"], ["task-created"])
-        self.assertEqual(repaired["allowed_next_stages"], ["test-first", "check", "project-audit"])
+        self.assertNotIn("allowed_next_stages", repaired)
 
     # ------------------------------------------------------------------
     # tolerant version handling test
@@ -4057,7 +4047,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         # Attempt to switch brainstorm→design without awaiting_user_confirmation
         illegal_set = self.run_script("set", str(task_dir), "--stage", "design")
         self.assertEqual(illegal_set.returncode, 1, msg=illegal_set.stdout + illegal_set.stderr)
-        self.assertIn("stage_status 必须为 awaiting_user_confirmation", illegal_set.stdout)
+        self.assertIn("status 必须为 awaiting_user_confirmation", illegal_set.stdout)
 
         # With awaiting_user_confirmation it should succeed
         self.run_script(
@@ -4240,20 +4230,9 @@ class WorkflowStateScriptTests(unittest.TestCase):
             task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
             customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
         )
-        self.run_script("init", str(task_dir), "--stage", "record-session")
-        # Set allowed_next_stages to empty list (terminal state)
-        state_path = task_dir / "workflow-state.json"
-        import json as _json
-        state = _json.loads(state_path.read_text(encoding="utf-8"))
-        state["allowed_next_stages"] = []
-        state["stage_status"] = "awaiting_user_confirmation"
-        state["awaiting_user_confirmation"] = True
-        state_path.write_text(_json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-        # Attempt to switch to any stage should be blocked
-        blocked = self.run_script("set", str(task_dir), "--stage", "delivery")
-        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
-        self.assertIn("不在 allowed_next_stages", blocked.stdout)
+        blocked = self.run_script("init", str(task_dir), "--stage", "record-session")
+        self.assertNotEqual(blocked.returncode, 0)
+        self.assertIn("invalid choice: 'record-session'", blocked.stderr)
 
     def test_set_rejects_transition_outside_canonical_graph_even_if_allowed_next_is_dirty(self) -> None:
         root, task_dir = self.make_fixture()
@@ -4281,8 +4260,8 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "--allowed-next",
         )
 
-        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
-        self.assertIn("不属于 canonical transition", blocked.stdout)
+        self.assertNotEqual(blocked.returncode, 0, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("invalid choice: 'record-session'", blocked.stderr)
 
     def test_issue7_brainstorm_allows_implementation_transition(self) -> None:
         """Issue 7: brainstorm can transition directly to implementation (L0 path)."""
@@ -4324,8 +4303,8 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
         self.assertEqual(ok_set.returncode, 0, msg=ok_set.stdout + ok_set.stderr)
 
-    def test_issue7_brainstorm_allows_test_first_transition(self) -> None:
-        """Issue 7: brainstorm can transition directly to test-first (L0 path)."""
+    def test_issue7_brainstorm_direct_execution_path_uses_implementation(self) -> None:
+        """Issue 7: L0 direct execution path should stay in implementation stage."""
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
             root,
@@ -4354,12 +4333,12 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
         ok_set = self.run_script(
             "set", str(task_dir),
-            "--stage", "test-first",
+            "--stage", "implementation",
             "--stage-status", "in_progress",
             "--awaiting-user-confirmation", "false",
             "--execution-authorized", "true",
             "--transition-from", "brainstorm",
-            "--allowed-next", "implementation,check,project-audit",
+            "--allowed-next", "check,project-audit",
         )
         self.assertEqual(ok_set.returncode, 0, msg=ok_set.stdout + ok_set.stderr)
 
@@ -4422,7 +4401,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
         self.assertEqual(ok_set.returncode, 0, msg=ok_set.stdout + ok_set.stderr)
 
-    def test_finish_work_to_delivery_requires_finish_work_checklist(self) -> None:
+    def test_project_audit_to_delivery_requires_project_audit_report(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
             root,
@@ -4430,7 +4409,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
             customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
         )
-        self.run_script("init", str(task_dir), "--stage", "finish-work")
+        self.run_script("init", str(task_dir), "--stage", "project-audit")
         self.run_script(
             "set",
             str(task_dir),
@@ -4445,25 +4424,23 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "--stage", "delivery",
             "--stage-status", "in_progress",
             "--awaiting-user-confirmation", "false",
-            "--transition-from", "finish-work",
-            "--allowed-next", "record-session",
+            "--transition-from", "project-audit",
         )
         self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
-        self.assertIn("finish-work-checklist.md", blocked.stdout)
+        self.assertIn("project-audit.md", blocked.stdout)
 
-        self.write_finish_work_checklist(task_dir)
+        self.write_project_audit_report(task_dir)
         allowed = self.run_script(
             "set",
             str(task_dir),
             "--stage", "delivery",
             "--stage-status", "in_progress",
             "--awaiting-user-confirmation", "false",
-            "--transition-from", "finish-work",
-            "--allowed-next", "record-session",
+            "--transition-from", "project-audit",
         )
         self.assertEqual(allowed.returncode, 0, msg=allowed.stdout + allowed.stderr)
 
-    def test_check_to_finish_work_rejects_shell_check_report(self) -> None:
+    def test_check_to_delivery_rejects_shell_check_report(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
             root,
@@ -4494,11 +4471,10 @@ class WorkflowStateScriptTests(unittest.TestCase):
         blocked = self.run_script(
             "set",
             str(task_dir),
-            "--stage", "finish-work",
+            "--stage", "delivery",
             "--stage-status", "in_progress",
             "--awaiting-user-confirmation", "false",
             "--transition-from", "check",
-            "--allowed-next", "delivery",
         )
         self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
         self.assertIn("Applied Specs", blocked.stdout)
@@ -4507,60 +4483,14 @@ class WorkflowStateScriptTests(unittest.TestCase):
         allowed = self.run_script(
             "set",
             str(task_dir),
-            "--stage", "finish-work",
-            "--stage-status", "in_progress",
-            "--awaiting-user-confirmation", "false",
-            "--transition-from", "check",
-            "--allowed-next", "delivery",
-        )
-        self.assertEqual(allowed.returncode, 0, msg=allowed.stdout + allowed.stderr)
-
-    def test_finish_work_to_delivery_rejects_shell_checklist(self) -> None:
-        root, task_dir = self.make_fixture()
-        self.write_required_project_docs(
-            root,
-            task_dir,
-            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
-            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
-        )
-        self.write_finish_work_checklist(
-            task_dir,
-            """## 冻结验证矩阵
-
-| Check | Command or Method | Result |
-| --- | --- | --- |
-
-## 人工验证
-
-- note only
-
-## 同步结论
-
-- todo
-""",
-        )
-        self.run_script("init", str(task_dir), "--stage", "finish-work")
-        self.run_script(
-            "set",
-            str(task_dir),
-            "--stage-status", "awaiting_user_confirmation",
-            "--awaiting-user-confirmation", "true",
-            "--allowed-next", "delivery",
-        )
-
-        blocked = self.run_script(
-            "set",
-            str(task_dir),
             "--stage", "delivery",
             "--stage-status", "in_progress",
             "--awaiting-user-confirmation", "false",
-            "--transition-from", "finish-work",
-            "--allowed-next", "record-session",
+            "--transition-from", "check",
         )
-        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
-        self.assertIn("人工验证真实状态", blocked.stdout)
+        self.assertEqual(allowed.returncode, 0, msg=allowed.stdout + allowed.stderr)
 
-    def test_route_finish_work_awaiting_reports_blockers_when_checklist_missing(self) -> None:
+    def test_delivery_awaiting_rejects_shell_artifacts_without_real_status(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
             root,
@@ -4568,19 +4498,46 @@ class WorkflowStateScriptTests(unittest.TestCase):
             task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
             customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
         )
-        self.run_script("init", str(task_dir), "--stage", "finish-work")
+        self.write_delivery_artifacts(task_dir)
+        self.run_script("init", str(task_dir), "--stage", "delivery")
         self.run_script(
             "set",
             str(task_dir),
             "--stage-status", "awaiting_user_confirmation",
             "--awaiting-user-confirmation", "true",
-            "--allowed-next", "delivery",
         )
 
         result = self.run_script("route", str(task_dir), "--project-root", str(root))
         data = json.loads(result.stdout)
         self.assertEqual(data["action"], "awaiting_confirmation_with_blockers")
-        self.assertIn("finish-work-checklist.md", "".join(data.get("blockers", [])))
+        blockers_text = "".join(data.get("blockers", []))
+        self.assertTrue(
+            "ownership-proof-validate.py" in blockers_text
+            or "source-watermark-guard.py" in blockers_text
+            or "delivery-control-validate.py" in blockers_text
+        )
+
+    def test_route_delivery_awaiting_reports_blockers_when_artifacts_missing(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+            assessment_content=self.VALID_EXTERNAL_ASSESSMENT,
+        )
+        self.run_script("init", str(task_dir), "--stage", "delivery")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+        )
+
+        result = self.run_script("route", str(task_dir), "--project-root", str(root))
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "awaiting_confirmation_with_blockers")
+        self.assertIn("缺少交付产物", "".join(data.get("blockers", [])))
 
     def test_route_plan_awaiting_reports_plan_gate_blockers(self) -> None:
         root, task_dir = self.make_fixture()
@@ -4621,7 +4578,6 @@ class WorkflowStateScriptTests(unittest.TestCase):
             str(task_dir),
             "--stage-status", "awaiting_user_confirmation",
             "--awaiting-user-confirmation", "true",
-            "--allowed-next", "record-session",
         )
 
         result = self.run_script("route", str(task_dir), "--project-root", str(root))

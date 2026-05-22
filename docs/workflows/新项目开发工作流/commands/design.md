@@ -66,7 +66,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 - 设计决策
 - `.trellis/spec` 对齐
 - 自动化检查矩阵
-- `finish-work` / `record-session` 项目化适配
+- `finish-work` 原生 close-out 项目化适配
 - README 中的技术架构部分
 - `docs/requirements/developer-facing-prd.md`
 
@@ -193,7 +193,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 - `design/DDD.md` / `IDD.md` / `AID.md`
 - `.trellis/spec` 对齐结果
 - 自动化检查矩阵
-- `finish-work` / `record-session` 项目化补丁
+- `finish-work` 原生 close-out 项目化补丁
 
 ### Step 4: 条件文档触发面判断（仅判断，不正式落盘）
 
@@ -369,7 +369,7 @@ design 后半段不得一次性跑完，而要按多个子块分段执行。每�
 3. 对目标项目中所有与已确认技术架构直接相关的全部 spec 执行一次基于 `Context7` 的错漏复核
 4. 明确项目自动化检查矩阵
 5. 同步适配当前项目的 `/trellis:finish-work`
-6. 同步适配当前项目的 close-out 基线（当前 fresh baseline 的 close-out 主入口为 `/trellis:finish-work` / `trellis-finish-work`，最终归档/会话记录入口为 `/trellis:record-session`；legacy 直达语义仅旧目标项目兼容）
+6. 同步适配当前项目的 close-out 基线（当前 fresh baseline 的 close-out 主入口为 `/trellis:finish-work` / `trellis-finish-work`；最终归档/会话记录由 Trellis 原生 `finish-work` 内部完成；`record-session` 仅保留 legacy 兼容语义）
 7. 若 `ownership_proof_required = yes`，同步建立源码水印与归属证明基线
 
 `Context7` spec 复核要求：

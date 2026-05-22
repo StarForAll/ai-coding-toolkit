@@ -13,7 +13,7 @@
 - 目标项目必须已完成当前最新 Trellis 官方升级；否则连只读分析和本脚本都不允许执行
 - 建议先完成三态分析（A 纯净基线 / B 最新 workflow 期望状态 / C 目标项目真实状态）
 - 当前 workflow 会重新部署合并型 + 纯新增型阶段命令资产
-- 当前 fresh baseline 的 `continue.md` / `finish-work.md` 属于 Trellis 基线命令，升级脚本负责恢复并重新注入 workflow 补丁；`record-session.md` 属于 workflow 分发的 close-out 命令，legacy baseline `start.md` / `record-session.md` 仅按旧目标项目兼容路径处理
+- 当前 fresh baseline 的 `continue.md` / `finish-work.md` 属于 Trellis 基线命令，升级脚本负责恢复并重新注入 workflow 补丁；原生 `finish-work` 负责当前活动任务的正常 `archive + add_session.py` 收尾；legacy baseline `start.md` / `record-session.md` 仅按旧目标项目兼容路径处理
 - 若 Trellis 或 workflow 自身发生结构性 breaking change，本脚本不替代人工迁移判断
 """
 
@@ -328,9 +328,9 @@ def workflow_patch_matches_source(src: Path, workflow_md: Path, *, profile: str 
         return False
 
     required_snippets = (
-        "finish-work -> delivery",
+        "delivery -> native finish-work",
         "does **not** advance `workflow-state.json.stage`",
-        "Current stage: **finish-work**",
+        "Current stage: **delivery**",
     )
     if any(snippet not in content for snippet in required_snippets):
         return False
@@ -342,7 +342,7 @@ def workflow_patch_matches_source(src: Path, workflow_md: Path, *, profile: str 
     # still fails, without requiring the whole patched section to remain verbatim.
     patch_text = prepare_command_content(patch, profile=profile)
     anchor_snippets = (
-        "Phase A — pre-commit (`/trellis:finish-work`)",
+        "Phase B — native close-out (`/trellis:finish-work`)",
         "Current stage: **implementation**",
         "workflow-state.py set <dir> --stage brainstorm --stage-status in_progress --awaiting-user-confirmation false --allowed-next design,plan,implementation",
     )

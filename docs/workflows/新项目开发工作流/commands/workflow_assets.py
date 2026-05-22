@@ -198,7 +198,7 @@ def command_finish_work_candidates() -> list[str]:
 
 
 def command_record_session_candidates() -> list[str]:
-    """Record-session remains a distributed/legacy-compatible close-out entry."""
+    """Record-session is kept only for legacy target-project compatibility."""
     return [LEGACY_PATCH_BASELINE_COMMANDS[2]]
 
 

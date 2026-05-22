@@ -19,7 +19,7 @@ When the user wants to change Trellis stages, next-action hints, task-creation p
 | Change whether to create a task when there is no task | `[workflow-state:no_task]` plus entry routing patches |
 | Change the next step in a specific stage | The matching `[workflow-state:<stage>]` block and, if routing changes, `workflow-state.py route` |
 | Change whether sub-agents are required | Stage instructions plus platform-specific entry files |
-| Change close-out behavior | `finish-work`, `delivery`, `record-session`, and their validators together |
+| Change close-out behavior | clarify separately whether the change belongs to task-level native `finish-work` or project-level `delivery`, then update the matching validators/carriers together |
 
 ## Modification Steps
 
@@ -35,7 +35,7 @@ In strong-gate projects, `/trellis:continue` does not resume from a static `task
 - `action`
 - `target`
 - `stage`
-- `stage_status`
+- `status`
 - `blockers`
 
 Examples:
@@ -52,4 +52,4 @@ Examples:
 
 - Do not add new behavior by writing custom `task.json.status` values alone; that is not the strong-gate routing source of truth.
 - If you need a new breadcrumb key, make sure the routing layer can actually emit it and decide whether the change belongs in the template key, the injected header, or both.
-- For finish-work changes, remember the active close-out chain is `finish-work -> delivery -> record-session`.
+- For finish-work changes, remember the boundary: native `finish-work` is the task-level terminal entry (`archive + add_session.py` for the current active task), while `delivery` is a separate project-level / handoff-level phase.

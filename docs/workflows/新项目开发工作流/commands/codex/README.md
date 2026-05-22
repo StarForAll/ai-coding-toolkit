@@ -107,15 +107,15 @@ ls .codex/skills/parallel/SKILL.md 2>/dev/null
 
 还要补一层边界：
 
-- `feasibility`、`brainstorm`、`design`、`plan`、`test-first`、`check`、`review-gate`、`delivery` 这类阶段技能，通常来自当前 workflow 的嵌入资产
+- `feasibility`、`brainstorm`、`design`、`plan`、`check`、`review-gate`、`delivery` 这类阶段技能，通常来自当前 workflow 的嵌入资产
 - `trellis-continue`、`trellis-finish-work` 这类技能/入口，默认应先理解为 **Trellis 基线能力**；当前 workflow 会在目标项目已有 `trellis-continue` / `trellis-finish-work` skill 时注入项目化补丁；legacy `start` / `finish-work` 仅作为旧目标项目兼容输入
-- `record-session` 在当前 workflow 中属于共享分发的 close-out 阶段 skill；只有旧目标项目残留 baseline `record-session` 时，才按兼容链路处理
+- `record-session` 不再属于当前 fresh baseline 的正式收尾主链；只有旧目标项目残留 baseline `record-session` 时，才按兼容链路处理
 - `trellis-continue` 在当前 workflow 里的增强包括：自动选择具体 task、自动执行 before-dev 步骤、自动生成或刷新当前 task 的 `before-dev.md`
 - 卸载时也保持同一边界：`trellis-continue` / `trellis-finish-work` 这类 baseline patch 只在**活动 skills 目录**恢复备份；legacy 同名文件仅在旧目标项目兼容路径中处理
 
 如果忽略“先有 Trellis，再嵌入 workflow”这层关系，就会误把继承资产看成 workflow 漏装或少定义。
 
-还要补一条 close-out 边界：当前 fresh baseline 的收尾链路从 `trellis-finish-work` 进入，但最终归档与会话记录只在 `record-session` 阶段执行，顺序是先 `archive` 再 `add_session.py`；legacy 直接 `record-session` 若存在才进入兼容补丁 / 清理检查。最终的 `archive` 继续直接调用目标项目 Trellis 基线里的 `python3 ./.trellis/scripts/task.py archive`。因此，目标项目最好先升级到当前最新 Trellis；否则即使 workflow 已安装成功，终态收尾链路仍可能继承旧基线中的 archive metadata auto-commit 问题。
+还要补一条 close-out 边界：当前 fresh baseline 的收尾主链是 `delivery -> trellis-finish-work`。原生 `trellis-finish-work` 本身就是正常终态入口，负责当前活动任务的 `archive + add_session.py`；当前 workflow 不需要、也不应再额外发明第二套终态流程。最终的 `archive` 继续直接调用目标项目 Trellis 基线里的 `python3 ./.trellis/scripts/task.py archive`。因此，目标项目最好先升级到当前最新 Trellis；否则即使 workflow 已安装成功，终态收尾链路仍可能继承旧基线中的 archive metadata auto-commit 问题。
 
 ### close-out 路径
 

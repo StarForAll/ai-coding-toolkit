@@ -111,7 +111,6 @@ Claude Code 的用户入口仍是项目命令：
 ├── brainstorm.md
 ├── design.md
 ├── plan.md
-├── test-first.md
 ├── project-audit.md
 ├── check.md
 ├── review-gate.md
@@ -124,7 +123,7 @@ Claude Code 的用户入口仍是项目命令：
 
 - `continue.md`：保留基线命令，再由 workflow 注入 Phase Router
 - `finish-work.md`：保留基线命令，再由 workflow 注入项目化补丁
-- `record-session.md`：由 workflow 作为 close-out 阶段命令分发；若旧目标项目仍残留 baseline `record-session.md`，安装器只按 legacy compatibility 处理
+- `record-session.md`：若旧目标项目仍残留 baseline `record-session.md`，安装器只按 legacy compatibility 处理；当前 fresh baseline 不再把它作为正式收尾主链入口
 
 旧目标项目若仍存在 `start.md` / `record-session.md`，安装器只按 legacy compatibility 处理，不把它们作为 fresh baseline 要求。其中 `continue.md` 的增强还包括：
 
@@ -134,7 +133,7 @@ Claude Code 的用户入口仍是项目命令：
 
 因此，不要把“当前 workflow 命令树只列到 `delivery`”理解成“目标项目没有 `continue` / `finish-work`”。
 
-还要补一条 close-out 边界：当前 fresh baseline 的收尾链路从 Trellis 原生 `finish-work` 进入，但最终归档与会话记录只在 `record-session` 阶段执行，顺序是先 `archive` 再 `add_session.py`；legacy 直接 `record-session` 若存在才进入兼容补丁 / 清理检查。因此，目标项目最好先升级到当前最新 Trellis；否则即使 workflow 已安装成功，终态收尾链路仍可能继承旧基线中的 archive metadata auto-commit 问题。
+还要补一条 close-out 边界：当前 fresh baseline 的收尾主链是 `delivery -> Trellis 原生 finish-work`。原生 `finish-work` 本身就是正常终态入口，负责当前活动任务的 `archive + add_session.py`；当前 workflow 不需要、也不应再额外发明第二套终态流程。legacy `record-session` 若存在只进入兼容补丁 / 清理检查。因此，目标项目最好先升级到当前最新 Trellis；否则即使 workflow 已安装成功，终态收尾链路仍可能继承旧基线中的 archive metadata auto-commit 问题。
 
 这层负责：
 

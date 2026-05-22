@@ -11,7 +11,7 @@
 - 当前 workflow 是“嵌入 + 增强”模型，不会重建 Trellis 原生命令全集
 - `feasibility` 到 `delivery`（含 `project-audit`）这类阶段资产由当前 workflow 分发
 - `continue` / `finish-work` 默认来自当前 Trellis 基线；当前 workflow 会在这些基线上追加补丁增强
-- `record-session` 作为 close-out 阶段命令由当前 workflow 分发，legacy 目标项目中遗留的 baseline `record-session` 只按兼容路径处理
+- `record-session` 不再属于当前 fresh baseline 的正式分发命令；Trellis 原生 `finish-work` 负责当前活动任务的正常 `archive + add_session.py` 收尾；legacy 目标项目中遗留的 baseline `record-session` 只按兼容路径处理
 - close-out 中的 `archive` 仍直接复用目标项目 Trellis 基线 `task.py`；若目标项目不是当前最新 Trellis 基线，可能不包含 archive auto-commit pathspec 修复
 - 安装器会自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines` 则清理，不存在则跳过；若遗留的 repo-global `.current-task` 仍指向该 bootstrap task，则同步做兼容清理
 - 一旦开始正式安装，安装器会先写入 `.trellis/workflow-embed-attempt.json`；若安装失败，该失败标记会保留，后续嵌入必须先由用户手动处理
@@ -158,7 +158,7 @@ _CLI_ALT_DIRS = CLI_ALT_DIRS
 _ALL_CLI_TYPES = ALL_CLI_TYPES
 # 对 Trellis 原生命令做增强时使用的补丁标记。
 # 当前 workflow 会增强 fresh baseline `continue.md` / `finish-work.md`；
-# `record-session.md` 由 workflow 分发，legacy baseline `record-session.md` 仅在旧目标项目兼容路径中处理。
+# `record-session.md` 不再属于 fresh-baseline workflow 分发面；legacy baseline `record-session.md` 仅在旧目标项目兼容路径中处理。
 _PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 _STATUS_ROUTING_MARKER = "## Step 3: Decide Where You Are"
 _STATUS_ROUTING_END_MARKER = "## Step 4: Load the Specific Step"
@@ -310,14 +310,14 @@ _NL_ROUTING_SECTION = """\
 | 需求、PRD、明确需求、需求文档、需求分析、想法、梳理需求、讨论方案、判断要不要拆任务 | `/trellis:brainstorm` | 描述需求澄清意图，或显式触发 `brainstorm` skill | §2 需求发现。前提：已存在有效 assessment；personal profile 首次入口例外，可在本阶段内补齐 assessment 基线 |
 | 设计、架构、架构设计、选型、接口设计、方案、技术方案、开始设计、画架构图、设计方案 | `/trellis:design` | 描述设计阶段意图，或显式触发 `design` skill | §3 设计阶段 |
 | 拆任务、排期、计划、任务分解、里程碑、估时、做计划、工作分解、工作计划 | `/trellis:plan` | 描述任务拆解意图，或显式触发 `plan` skill | §4 任务拆解 |
-| 写测试、TDD、测试驱动、先写测试、测试用例、验收测试 | `/trellis:test-first` | 描述测试先行意图，或显式触发 `test-first` skill | §4.3 测试先行 |
+| 写测试、TDD、测试驱动、先写测试、测试用例、验收测试 | `/trellis:continue` | 描述测试先行意图，并在 implementation 内按 TDD 方式执行，或显式触发相关测试先行 skill | implementation 内的测试先行入口，不是独立公开阶段命令 |
 | 项目全局审查、全局代码审查、代码查缺补漏、项目审计、project-audit | `/trellis:project-audit` | 描述项目级审查意图，或显式触发 `project-audit` skill | §5.1 项目全局审查 |
 | 检查一下、质量检查、对照 spec、对照规范、自检、有没有偏差 | `/trellis:check` | 描述质量检查意图，或显式触发 `check` skill | §5.1.x 质量检查 |
 | 补充审查、多 CLI 审查、多人审查、让其他 CLI 看一下、review-gate、审查门禁 | `/trellis:review-gate` | 描述补充审查意图，或显式触发 `review-gate` skill | §5.1.y 补充审查 |
 | 提交前检查、准备提交、完成检查、commit 前、收尾 | `/trellis:finish-work` | 描述提交前检查意图，或显式触发 `trellis-finish-work` skill | §6 提交检查 |
 | 交付、部署、上线、发布、测试通过、准备交付、跑验收、整理交付物、项目收尾 | `/trellis:delivery` | 描述交付收尾意图，或显式触发 `delivery` skill | §6+§7 测试交付 |
-| 记录、保存进度 | `/trellis:record-session` | 描述最终归档 / 会话记录意图，或显式触发 `record-session` skill | 终态收尾入口。若当前未到 `record-session`，会先被强门禁阻断并提示回到缺失阶段 |
-| 收工、结束工作 | `/trellis:record-session` | 描述最终归档 / 会话记录意图，或显式触发 `record-session` skill | 终态收尾入口。若当前未到 `record-session`，会先被强门禁阻断并提示回到缺失阶段 |
+| 记录、保存进度 | `/trellis:finish-work` | 描述当前活动任务的最终收尾 / 归档 / 会话记录意图，或显式触发 `trellis-finish-work` skill | native Trellis task-level close-out 入口。若当前轮同时存在项目级交付收口，再单独进入 `delivery` |
+| 收工、结束工作 | `/trellis:finish-work` | 描述当前活动任务的最终收尾 / 归档 / 会话记录意图，或显式触发 `trellis-finish-work` skill | native Trellis task-level close-out 入口。若当前轮同时存在项目级交付收口，再单独进入 `delivery` |
 
 ### 框架通用命令
 
@@ -945,22 +945,23 @@ def build_finish_work_content(content: str, patch_text: str) -> str | None:
 
     content = content.replace(
         'description: "Wrap up the current session: verify quality gate passed, remind user to commit, archive completed tasks, and record session progress to the developer journal. Use when done coding and ready to end the session."',
-        'description: "Wrap up the current session: verify quality gate passed, collect close-out evidence, and prepare the delivery hand-off. Use when implementation is complete and ready for pre-delivery close-out."',
+        'description: "Wrap up the current session: verify quality gate passed, collect close-out evidence, and complete native Trellis close-out after delivery. Use when delivery is complete and the task is ready to be archived and journaled."',
     )
     content = content.replace(
         "Wrap up the current session: archive the active task (and any other completed-but-unarchived tasks the user wants to clean up) and record the session journal. Code commits are NOT done here — those happen in workflow Phase 3.4 before you invoke this command.",
-        "Wrap up the current session: verify close-out evidence, confirm the frozen quality matrix, and prepare to enter `delivery`. Code commits are NOT done here — those happen in workflow Phase 3.4 before you invoke this command. Archive + add_session happen later at `record-session`.",
+        "Wrap up the current session: verify close-out evidence, confirm the frozen quality matrix, and complete the native Trellis archive + session-record steps after delivery. Code commits are NOT done here — those happen in workflow Phase 3.4 before you invoke this command.",
     )
 
-    # Step 2 misleading archive language correction (strong-gate model):
-    # archiving only happens in record-session, not in finish-work.
+    # Step 2 archive language correction: keep native finish-work ownership of
+    # archive/add_session, but avoid implying that unrelated tasks should be
+    # swept up casually in the same round.
     content = content.replace(
         "current active task is always archived in Step 3 regardless",
-        "current active task is NOT archived in finish-work; archiving is deferred to the record-session stage",
+        "current active task is archived by native finish-work after delivery confirms the close-out gates",
     )
     content = content.replace(
         "archive them too in this round",
-        "note them for archiving in the record-session stage",
+        "archive them only if the user explicitly confirms they belong in this native finish-work round",
     )
 
     # Prefer replacing the full old Step 1-4 body when present so the

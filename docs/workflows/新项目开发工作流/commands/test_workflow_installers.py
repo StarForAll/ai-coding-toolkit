@@ -1052,7 +1052,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertNotIn("pnpm lint", finish_work_text)
         self.assertNotIn("archive the active task", finish_work_text)
         self.assertNotIn("Step 3/4 替换说明", finish_work_text)
-        self.assertIn("finish-work → delivery", finish_work_text)
+        self.assertIn("当前活动任务", finish_work_text)
+        self.assertIn("不是同一层级的阶段定义", finish_work_text)
         # 补丁已条件化：验证质量平台门禁口径，不再硬断言特定 sonar 内容
         self.assertIn("质量平台门禁", finish_work_text)
         codex_finish_work_text = (
@@ -1247,10 +1248,10 @@ class WorkflowInstallerTests(unittest.TestCase):
             self.assertNotIn("Status: READY", content)
             self.assertNotIn("Status: PLANNING", content)
 
-    def test_nl_routing_maps_record_progress_to_record_session(self) -> None:
+    def test_nl_routing_maps_record_progress_to_finish_work(self) -> None:
         content = (COMMANDS_DIR / "install-workflow.py").read_text(encoding="utf-8")
-        self.assertIn("| 记录、保存进度 | `/trellis:record-session` |", content)
-        self.assertNotIn("| 记录、保存进度 | `/trellis:finish-work` |", content)
+        self.assertIn("| 记录、保存进度 | `/trellis:finish-work` |", content)
+        self.assertNotIn("| 记录、保存进度 | `/trellis:record-session` |", content)
 
     def test_nl_routing_maps_implementation_entry_to_continue(self) -> None:
         content = (COMMANDS_DIR / "install-workflow.py").read_text(encoding="utf-8")
@@ -1302,18 +1303,17 @@ class WorkflowInstallerTests(unittest.TestCase):
             self.assertNotIn(LEGACY_READY_AUTOCONTINUE_LINE, content)
             self.assertIn(STRONG_GATE_READY_GUIDANCE_LINE, content)
 
-    def test_cli_matrix_treats_record_session_as_distributed_not_baseline_patch(self) -> None:
+    def test_cli_matrix_treats_record_session_as_legacy_only(self) -> None:
         matrix = (COMMANDS_DIR.parent / "CLI原生适配边界矩阵.md").read_text(encoding="utf-8")
         self.assertNotIn("continue / finish-work / record-session ✅", matrix)
-        self.assertIn("workflow 分发的 `record-session` 终态命令/skill", matrix)
+        self.assertNotIn("workflow 分发的 `record-session` 终态命令/skill", matrix)
         self.assertNotIn("`record-session` 基线入口 + workflow patch", matrix)
 
-    def test_full_walkthrough_closeout_example_keeps_delivery_before_record_session(self) -> None:
+    def test_full_walkthrough_closeout_example_keeps_delivery_before_native_finish_work(self) -> None:
         walkthrough = (COMMANDS_DIR.parent / "完整流程演练.md").read_text(encoding="utf-8")
-        self.assertIn("### 最小收尾样例：`finish-work` → `delivery` → `record-session`", walkthrough)
+        self.assertIn("delivery → Trellis 原生 `/finish-work`", walkthrough)
         self.assertIn("再通过 `/trellis:delivery` 确认验收结论和交付物", walkthrough)
-        self.assertIn("最后进入 `/trellis:record-session` 执行终态归档与会话记录", walkthrough)
-        self.assertNotIn("### 最小收尾样例：`finish-work` → session record", walkthrough)
+        self.assertIn("最后进入 Trellis 原生 `/finish-work` 执行终态归档与会话记录", walkthrough)
 
     def test_delivery_docs_do_not_reference_missing_skills(self) -> None:
         docs_to_check = [
@@ -1585,7 +1585,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("workflow-state.py route", shared_workflow_ref)
         self.assertIn("route metadata", shared_workflow_ref)
-        self.assertIn("finish-work -> delivery -> record-session", shared_workflow_ref)
+        self.assertIn("delivery -> native finish-work", shared_workflow_ref)
         opencode_change_hooks = (
             fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md"
         ).read_text(encoding="utf-8")
@@ -2161,7 +2161,7 @@ Triggered from `start` (Trellis command) when the user describes a development t
             REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "commands" / "session-start-patch-strong-gate.md"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("完整阶段链（例如", doc)
+        self.assertIn("正式阶段链（例如", doc)
         self.assertIn("project-audit", doc)
         self.assertNotIn(
             "feasibility/brainstorm/design/plan/implementation/test-first/check/review-gate/finish-work/delivery/record-session",
@@ -2407,7 +2407,7 @@ Triggered from `start` (Trellis command) when the user describes a development t
         self.assertFalse((fixture / ".trellis" / ATTEMPT_RECORD_NAME).exists())
         self.assertFalse((fixture / ".agents" / "skills" / "review-gate").exists())
         self.assertNotIn("workflow-nl-routing-start", (fixture / "AGENTS.md").read_text(encoding="utf-8"))
-        self.assertIn("[codex] 命令: 10/10, 补丁: 4, agents: 0, 脚本: 0, 手动基线校验: 2".lower(), result.stdout.lower())
+        self.assertIn("[codex] 命令: 8/8, 补丁: 4, agents: 0, 脚本: 0, 手动基线校验: 2".lower(), result.stdout.lower())
 
     def test_install_dry_run_does_not_migrate_legacy_agents(self) -> None:
         """--dry-run must NOT perform actual file renames on disk."""
@@ -3264,7 +3264,7 @@ Triggered from `start` (Trellis command) when the user describes a development t
         self.assertIn(PHASE_ROUTER_MARKER, broken_start.read_text(encoding="utf-8"))
         self.assertNotIn("无法自动注入", result.stdout)
 
-    def test_upgrade_check_reports_missing_record_session_file(self) -> None:
+    def test_upgrade_check_tolerates_missing_legacy_record_session_file(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
 
@@ -3282,9 +3282,7 @@ Triggered from `start` (Trellis command) when the user describes a development t
             env=self.latest_env_for(fixture),
         )
 
-        # record-session is now a DISTRIBUTED_COMMAND; removing it is detected as drift
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("record-session", result.stdout + result.stderr)
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
     def test_upgrade_merge_restores_drift_and_followup_check_passes(self) -> None:
         fixture = self.create_fixture()

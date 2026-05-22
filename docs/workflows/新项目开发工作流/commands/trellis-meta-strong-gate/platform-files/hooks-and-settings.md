@@ -30,7 +30,7 @@ Whether these files exist depends on which `trellis init --<platform>` surfaces 
 | Script | Purpose |
 | --- | --- |
 | `session-start.py` | Optional session-start overview when that platform wires the event. |
-| `inject-workflow-state.py` | Emits the current stage template plus route metadata such as `action`, `stage_status`, and `blockers`. |
+| `inject-workflow-state.py` | Emits the current stage template plus route metadata such as `action`, `status`, and `blockers`. |
 | `inject-subagent-context.py` | Injects PRD, JSONL context, and related spec/research. |
 | `inject-shell-session-context.py` | Lets shell commands inherit Trellis session identity. |
 

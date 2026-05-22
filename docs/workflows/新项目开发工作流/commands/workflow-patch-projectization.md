@@ -19,7 +19,7 @@
    --> After explicit user confirmation, switch stage via workflow-state.py set
 
 4. Implement only after execution authorization
-   --> plan -> implementation / test-first requires checkpoints.execution_authorized=true
+   --> plan -> implementation requires checkpoints.execution_authorized=true
    --> If task.py start runs without session identity, it must also write a runtime-keyed degraded fallback file under .trellis/.runtime/ (with degraded-active-task.json kept as compatibility fallback) for later recovery; these degraded files are recovery hints only and route must still require an explicit task confirmation instead of auto-resuming them
 
 5. Verify and commit
@@ -29,8 +29,8 @@
    --> git commit -m "type(scope): description"
 
 6. Final close-out
-   --> finish-work -> delivery -> record-session
-   --> archive and add_session happen only at record-session
+   --> delivery handles project-level / handoff-level acceptance and deliverables
+   --> native finish-work handles current active task archive + add_session
 ```
 
 `python3 ./.trellis/scripts/task.py finish` remains available when you intentionally need to clear the current session's active task without archiving a completed task. Do not use it as a substitute for final close-out. In degraded mode, `task.py start` must leave a recoverable runtime-keyed fallback file under `.trellis/.runtime/`; the shared `degraded-active-task.json` remains only as a compatibility fallback. `workflow-state.py route` should surface these files as recovery clues, not silently treat them as the current active task.
@@ -38,7 +38,7 @@
 For workflows that split work into a parent coordination task plus child execution tasks:
 
 - freeze the project test-first baseline once in design/spec docs
-- select one concrete child task before entering test-first or implementation
+- select one concrete child task before entering implementation
 - completing the current child task does not automatically authorize the next child task
 - after a child task is completed or archived, update the parent coordinator records in the same round so the latest completed frontier, pending frontier, and next selectable child task stay synchronized
 - the next child task may start only after the human explicitly names or approves that task in the current round
@@ -70,9 +70,9 @@ For workflows that split work into a parent coordination task plus child executi
 
 ## Session End
 
-### One-Click Session Recording
+### Native Finish-Work Close-Out
 
-The strong-gate workflow no longer archives at `finish-work`. Session recording belongs to the terminal `record-session` stage only:
+The strong-gate workflow reuses native Trellis `finish-work` for terminal close-out after `delivery`:
 
 ```bash
 python3 ./.trellis/scripts/task.py archive <task-name>
@@ -85,34 +85,30 @@ python3 ./.trellis/scripts/add_session.py \
 git status --short .trellis/workspace .trellis/tasks
 ```
 
-Expected metadata status output: empty. This command pair is a `record-session` stage action, not a generic finish-work shortcut.
+Expected metadata status output: empty. This remains the native `finish-work` close-out action.
 
 Notes:
 
-- Close-out follows this order: **finish-work → delivery → record-session**. `archive` and `add_session` are performed at the `record-session` stage, not at `finish-work`.
-- `finish-work` only handles commit checklist and close-out evidence; it does NOT archive the task.
-- `delivery` handles acceptance, deliverables, and ownership proof.
-- `record-session` performs the final `task.py archive` + `add_session.py` to complete the workflow cycle.
-- Detailed close-out gates still belong to the installed `/trellis:finish-work` / `trellis-finish-work` and `/trellis:delivery` entries. Directly invoking `/trellis:record-session` remains an old-target compatibility entry; in the strong-gate flow the `record-session` stage is reached only after `delivery`.
+- `delivery` handles project-level acceptance, deliverables, and ownership proof.
+- Native `finish-work` handles the current active task's final `task.py archive` + `add_session.py`.
+- If a workflow instance needs both in the same round, treat them as different layers: project-level `delivery` plus task-level native `finish-work`.
+- `record-session` remains only as a legacy compatibility entry for older target projects; it is not part of the fresh-baseline strong-gate stage chain.
 
 ### Pre-end Checklist
 
-Close-out runs in three phases:
+Close-out runs in two phases:
 
-**Phase A — pre-commit (`/trellis:finish-work`)**
+**Phase A — delivery (`/trellis:delivery`)**
 
 1. Frozen verification matrix executed or truthfully marked `deferred` / `not run`
 2. Manual browser / app verification completed where required
 3. `finish-work-checklist.md` records the current close-out evidence
 4. Spec docs updated if needed
+5. Deliverables assembled and verified
+6. Acceptance confirmed
+7. Ownership proof validated (outsourcing profile)
 
-**Phase B — delivery (`/trellis:delivery`)**
-
-1. Deliverables assembled and verified
-2. Acceptance confirmed
-3. Ownership proof validated (outsourcing profile)
-
-**Phase C — post-delivery (`/trellis:record-session`)**
+**Phase B — native close-out (`/trellis:finish-work`)**
 
 1. Current completed task archived; if it is a child task, the parent coordinator records are also synchronized to the new completed frontier
 2. `add_session.py` completed successfully for the current session record
@@ -125,10 +121,10 @@ Close-out runs in three phases:
 <!-- workflow-projectization-phase-index-patch -->
 
 ```
-feasibility → brainstorm → design → plan → implementation → test-first → project-audit → check → review-gate → finish-work → delivery → record-session
+feasibility → brainstorm → design → plan → implementation → project-audit → check → review-gate → delivery
 ```
 
-Stage transition gates are enforced by `workflow-state.py set --stage <next>`; use `--force` to bypass for repair scenarios. `finish-work` may only transition to `delivery` — the shortcut `finish-work → record-session` is not allowed, as it would bypass the delivery gate.
+Stage transition gates are enforced by `workflow-state.py set --stage <next>`; use `--force` to bypass for repair scenarios. Native `finish-work` runs after `delivery` and is not modeled as a `workflow-state` stage.
 
 ### Stage Transition Quick Reference
 
@@ -138,31 +134,23 @@ All transitions follow a two-step protocol: **(A)** signal readiness by setting 
 |---|---|---|
 | no_task → feasibility | N/A (outsourcing first entry) | `workflow-state.py route` → if `action=entry_choice_required` and当前意图是开始新任务，再进入 `/trellis:feasibility`；若只是只读分析 / 元审计，则保持 `no_task` 直接分析 |
 | no_task → brainstorm | N/A (personal first entry) | `workflow-state.py route` → if `action=entry_choice_required` and `target=brainstorm`，先创建 task，并立即 `workflow-state.py init "$TASK_DIR" --stage brainstorm` 初始化阶段状态，再进入 `/trellis:brainstorm`；离开本阶段前必须在当前 task 内补齐 assessment 最低基线 |
-| feasibility → brainstorm | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage brainstorm --stage-status in_progress --awaiting-user-confirmation false --allowed-next design,plan,implementation,test-first --transition-from feasibility` |
+| feasibility → brainstorm | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage brainstorm --stage-status in_progress --awaiting-user-confirmation false --allowed-next design,plan,implementation --transition-from feasibility` |
 | brainstorm → design | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage design --stage-status in_progress --awaiting-user-confirmation false --allowed-next plan --transition-from brainstorm` |
-| brainstorm → plan | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage plan --stage-status in_progress --awaiting-user-confirmation false --allowed-next implementation,test-first --transition-from brainstorm` |
-| brainstorm → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next test-first,check,project-audit --transition-from brainstorm` |
-| brainstorm → test-first | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage test-first --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next implementation,check,project-audit --transition-from brainstorm` |
-| design → plan | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage plan --stage-status in_progress --awaiting-user-confirmation false --allowed-next implementation,test-first --transition-from design` |
-| plan → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next test-first,check,project-audit --transition-from plan` |
-| plan → test-first | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage test-first --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next implementation,check,project-audit --transition-from plan` |
-| implementation → check | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage check --stage-status in_progress --awaiting-user-confirmation false --allowed-next project-audit,review-gate,implementation,finish-work` |
-| implementation → test-first | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage test-first --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next implementation,check,project-audit --transition-from implementation` |
+| brainstorm → plan | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage plan --stage-status in_progress --awaiting-user-confirmation false --allowed-next implementation --transition-from brainstorm` |
+| brainstorm → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next check,project-audit --transition-from brainstorm` |
+| design → plan | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage plan --stage-status in_progress --awaiting-user-confirmation false --allowed-next implementation --transition-from design` |
+| plan → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next check,project-audit --transition-from plan` |
+| implementation → check | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage check --stage-status in_progress --awaiting-user-confirmation false --allowed-next project-audit,review-gate,implementation,delivery` |
 | implementation → project-audit | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage project-audit --stage-status in_progress --awaiting-user-confirmation false --allowed-next check,review-gate --transition-from implementation` |
-| test-first → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next test-first,check,project-audit --transition-from test-first` |
-| test-first → check | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage check --stage-status in_progress --awaiting-user-confirmation false --allowed-next project-audit,review-gate,implementation,finish-work --transition-from test-first` |
-| test-first → project-audit | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage project-audit --stage-status in_progress --awaiting-user-confirmation false --allowed-next check,review-gate --transition-from test-first` |
-| project-audit → check | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage check --stage-status in_progress --awaiting-user-confirmation false --allowed-next project-audit,review-gate,implementation,finish-work --transition-from project-audit` |
-| project-audit → review-gate | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage review-gate --stage-status in_progress --awaiting-user-confirmation false --allowed-next project-audit,finish-work,implementation --transition-from project-audit` |
+| project-audit → check | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage check --stage-status in_progress --awaiting-user-confirmation false --allowed-next project-audit,review-gate,implementation,delivery --transition-from project-audit` |
+| project-audit → review-gate | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage review-gate --stage-status in_progress --awaiting-user-confirmation false --allowed-next project-audit,delivery,implementation --transition-from project-audit` |
 | check → project-audit | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage project-audit --stage-status in_progress --awaiting-user-confirmation false --allowed-next check,review-gate --transition-from check` |
-| check → review-gate | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage review-gate --stage-status in_progress --awaiting-user-confirmation false --allowed-next finish-work,implementation` |
-| check → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next test-first,check,project-audit --transition-from check` |
-| check → finish-work | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage finish-work --stage-status in_progress --awaiting-user-confirmation false --allowed-next delivery` |
+| check → review-gate | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage review-gate --stage-status in_progress --awaiting-user-confirmation false --allowed-next delivery,implementation` |
+| check → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next check,project-audit --transition-from check` |
+| check → delivery | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage delivery --stage-status in_progress --awaiting-user-confirmation false --transition-from check` |
 | review-gate → project-audit | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage project-audit --stage-status in_progress --awaiting-user-confirmation false --allowed-next check,review-gate --transition-from review-gate` |
-| review-gate → finish-work | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage finish-work --stage-status in_progress --awaiting-user-confirmation false --allowed-next delivery` |
-| review-gate → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next test-first,check,project-audit --transition-from review-gate` |
-| finish-work → delivery | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage delivery --stage-status in_progress --awaiting-user-confirmation false --allowed-next record-session` |
-| delivery → record-session | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage record-session --stage-status in_progress --awaiting-user-confirmation false --allowed-next` |
+| review-gate → delivery | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage delivery --stage-status in_progress --awaiting-user-confirmation false --transition-from review-gate` |
+| review-gate → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next check,project-audit --transition-from review-gate` |
 
 For repair scenarios, append `--force` to bypass validation gates.
 
@@ -213,10 +201,10 @@ confirmed any required transition gate.
 
 #### 2.1 Implement
 
-Implementation happens only after `plan -> implementation` or
-`plan -> test-first` transition approval, with
+Implementation happens only after `plan -> implementation` transition approval, with
 `checkpoints.execution_authorized=true` present on the transition that opens
-execution.
+execution. If the team chooses a test-first style, that still runs inside
+implementation rather than via a separate workflow-state stage.
 
 #### 2.2 Quality check
 
@@ -232,9 +220,8 @@ as still "in progress".
 
 #### 3.1 Quality verification
 
-Final verification happens at `finish-work`, after `check` / `review-gate`
-leave the task ready for close-out and before any delivery or session record
-steps run.
+Final workflow-stage verification happens before and inside `delivery`, after
+`check` / `review-gate` leave the task ready for close-out.
 
 #### 3.2 Debug retrospective
 
@@ -248,14 +235,14 @@ artifact before the task moves into final close-out.
 
 #### 3.4 Commit changes
 
-Commit only the current task's verified work after `finish-work` confirms the
-close-out checklist. `delivery` and `record-session` remain later stages, not a
-shortcut from implementation.
+Commit only the current task's verified work before entering `delivery`.
+Native Trellis `finish-work` runs later as terminal close-out, not as a
+workflow-state stage shortcut from implementation.
 
 #### 3.5 Wrap-up reminder
 
-The strong-gate close-out order is `finish-work -> delivery -> record-session`.
-`archive` and `add_session.py` run only at `record-session`.
+The strong-gate close-out order is `delivery -> native finish-work`.
+`archive` and `add_session.py` run in native Trellis `finish-work`.
 
 ---
 
@@ -358,51 +345,35 @@ Current stage: **implementation** — code writing phase.
 `checkpoints.execution_authorized` must be `true` before entering.
 Re-enter this stage through `/trellis:continue`; do **not** expect a public `/trellis:implementation` command or same-named shared skill.
 For sub-agent dispatch mode: dispatch `trellis-implement` sub-agent. For inline dispatch mode (`codex.dispatch_mode=inline`): implement directly (load `trellis-before-dev` first).
-After implementation, proceed to `check` or `test-first`.
+If you need TDD-style verification, do it inside implementation rather than switching to a separate `test-first` stage.
+After implementation, proceed to `check`.
 [/workflow-state:implementation]
-
-[workflow-state:test-first]
-Current stage: **test-first** — write tests before implementation code.
-Load `/trellis:test-first` skill for TDD-driven verification.
-`checkpoints.execution_authorized` must be `true`.
-[/workflow-state:test-first]
 
 [workflow-state:project-audit]
 Current stage: **project-audit** — full-project quality review.
-Formal mode typically re-enters here from `check` / `review-gate`; pre-audit may enter early from `implementation` / `test-first`.
+Formal mode typically re-enters here from `check` / `review-gate`; pre-audit may enter early from `implementation`.
 Load `/trellis:project-audit` for cross-cutting quality assessment.
 [/workflow-state:project-audit]
 
 [workflow-state:check]
 Current stage: **check** — quality check against spec and conventions.
 Load `/trellis:check` to validate implementation against specifications.
-After passing, proceed to `project-audit`, `review-gate`, back to `implementation`, or directly to `finish-work` (when no project-audit / review-gate is needed).
+After passing, proceed to `project-audit`, `review-gate`, back to `implementation`, or directly to `delivery` (when no project-audit / review-gate is needed).
 [/workflow-state:check]
 
 [workflow-state:review-gate]
 Current stage: **review-gate** — multi-CLI supplementary review.
 Load `/trellis:review-gate` for additional cross-platform quality assurance.
-If the task still needs a formal project-level sweep, it may re-enter `project-audit` from here before `finish-work`.
-After passing, proceed to `finish-work`.
+If the task still needs a formal project-level sweep, it may re-enter `project-audit` from here before `delivery`.
+After passing, proceed to `delivery`.
 [/workflow-state:review-gate]
-
-[workflow-state:finish-work]
-Current stage: **finish-work** — commit preparation and close-out evidence.
-Load `/trellis:finish-work` for commit checklist and close-out evidence collection.
-After this stage, proceed to `delivery`. Archive and add_session are performed at the `record-session` stage, NOT here.
-[/workflow-state:finish-work]
 
 [workflow-state:delivery]
 Current stage: **delivery** — project handover and deployment.
 Load `/trellis:delivery` for acceptance, deliverables, and ownership proof.
 If ownership proof is enabled, verify the final evidence chain against `源码水印与归属证据链执行卡` before leaving delivery.
+After delivery completes, enter native Trellis `/trellis:finish-work` for the final archive + session-record close-out.
 [/workflow-state:delivery]
-
-[workflow-state:record-session]
-Current stage: **record-session** — workflow cycle complete.
-This is the strong-gate terminal stage. Run `task.py archive <task-name>` then `add_session.py` to finalize close-out. The workflow cycle is now complete.
-The legacy `/trellis:record-session` command remains available as a backwards-compatible entry point for older projects that use the baseline three-phase model; in the strong-gate flow this stage is reached automatically after `delivery`.
-[/workflow-state:record-session]
 
 [workflow-state:awaiting_confirmation]
 Route action: **awaiting_confirmation** — stop at the confirmation boundary.
@@ -435,7 +406,7 @@ Do not guess from filenames or chat history. Ask the user to clarify the current
 [workflow-state:repair_needed]
 Route action: **repair_needed** — workflow state is missing, uninitialized, stale, or structurally invalid.
 Run `workflow-state.py repair <task-dir>` first. If it reports `repair_ready`, confirm before applying; if it reports `manual_confirmation_required`, ask the user to confirm the currently approved stage instead of inferring it from artifacts.
-Execution stages such as `implementation` / `test-first` also require explicit `--execution-authorized true` and `--transition-from <previous-stage>`.
+Execution re-entry such as `implementation` requires explicit `--execution-authorized true` and `--transition-from <previous-stage>`.
 [/workflow-state:repair_needed]
 
 [workflow-state:embed_invalid]
