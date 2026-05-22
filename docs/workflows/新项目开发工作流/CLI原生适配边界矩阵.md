@@ -13,9 +13,8 @@
    - 当前 workflow 默认依赖这三份 Trellis 原生 agent
    - 安装器继续负责 legacy bare-name → trellis-* 迁移（rename）
 2. **workflow-managed subset（当前真实）**
-   - Claude / OpenCode / Codex 的阶段命令（feasibility / brainstorm / design / plan / test-first / project-audit / check / review-gate / delivery）
-- Trellis 基线补丁（Claude / OpenCode: continue / finish-work；Codex: trellis-continue / trellis-finish-work）
-- `record-session` 作为 workflow 分发的 close-out 阶段命令保留；legacy baseline `record-session` 仅按旧目标项目兼容路径处理
+   - Claude / OpenCode / Codex 的阶段命令（feasibility / brainstorm / design / plan / implementation / check / review-gate / project-audit / delivery）
+   - Trellis 基线补丁（Claude / OpenCode: continue / finish-work；Codex: trellis-continue / trellis-finish-work）
    - legacy `start` 仅作为旧目标项目升级兼容输入，不是当前 fresh baseline 要求
    - 这是当前 workflow 安装器、升级分析、卸载、回归测试共同覆盖的子集
 
@@ -96,8 +95,8 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 
 | 资产 | 目标位置 | 分类 | 说明 |
 |------|---------|------|------|
-| 阶段命令（feasibility / brainstorm / design / plan / test-first / project-audit / check / review-gate / delivery） | `.claude/commands/trellis/*.md` | 安装器管理 | 同源 Markdown + 路径改写 |
-| Trellis 基线命令补丁（continue / finish-work） | `.claude/commands/trellis/continue.md`、`finish-work.md` | 安装器管理 | 当前 Trellis 0.5 fresh baseline 注入补丁；`record-session.md` 由 workflow 分发，legacy `start` / baseline `record-session` 仅用于旧目标项目迁移或兼容 |
+| 阶段命令（feasibility / brainstorm / design / plan / implementation / check / review-gate / project-audit / delivery） | `.claude/commands/trellis/*.md` | 安装器管理 | 同源 Markdown + 路径改写 |
+| Trellis 基线命令补丁（continue / finish-work） | `.claude/commands/trellis/continue.md`、`finish-work.md` | 安装器管理 | 当前 Trellis 0.5 fresh baseline 注入补丁；legacy `start` 仅用于旧目标项目迁移或兼容 |
 | 通用辅助脚本 | `.trellis/scripts/workflow/` | 安装器管理 | shell helper 脚本 |
 | Trellis 基线 workflow 指南补丁 | `.trellis/workflow.md` | 安装器管理 | 保留 Trellis 基线文档 → 注入 workflow 项目化补丁（当前只增强 Development Process / Session End 区块） |
 | 项目长期规则 | `AGENTS.md` | 半托管（手动维护为主） | 稳定执行规则、证据门禁由人工维护；`<!-- TRELLIS:START ... TRELLIS:END -->` 由 `trellis init` 托管，`<!-- workflow-nl-routing-start ... workflow-nl-routing-end -->` 由 workflow 安装器托管 |
@@ -120,8 +119,8 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 
 | 资产 | 目标位置 | 分类 | 说明 |
 |------|---------|------|------|
-| 阶段命令（feasibility / brainstorm / design / plan / test-first / project-audit / check / review-gate / delivery） | `.opencode/commands/trellis/*.md` | 安装器管理 | 与 Claude 同源 Markdown + 路径改写 |
-| Trellis 基线命令补丁（continue / finish-work） | `.opencode/commands/trellis/continue.md`、`finish-work.md` | 安装器管理 | 当前 Trellis 0.5 fresh baseline 注入补丁；`record-session.md` 由 workflow 分发，legacy `start` / baseline `record-session` 仅用于旧目标项目迁移或兼容 |
+| 阶段命令（feasibility / brainstorm / design / plan / implementation / check / review-gate / project-audit / delivery） | `.opencode/commands/trellis/*.md` | 安装器管理 | 与 Claude 同源 Markdown + 路径改写 |
+| Trellis 基线命令补丁（continue / finish-work） | `.opencode/commands/trellis/continue.md`、`finish-work.md` | 安装器管理 | 当前 Trellis 0.5 fresh baseline 注入补丁；legacy `start` 仅用于旧目标项目迁移或兼容 |
 | 通用辅助脚本 | `.trellis/scripts/workflow/` | 安装器管理 | 与 Claude 共用，不重复部署 |
 | Trellis 基线 workflow 指南补丁 | `.trellis/workflow.md` | 安装器管理 | 与 Claude / Codex 共用同一份目标项目 workflow 指南，保持 close-out 与 child-task 规则一致 |
 | 共享 skills 承载面（非 OpenCode 正式入口） | `.agents/skills/*/SKILL.md` | 安装器管理（与 Codex 共用单份落盘） | OpenCode 官方 skills 扫描链路会命中 `.agents/skills/`；当前 workflow 仅把这里视为共享分发与漂移核对范围，不把它当成 OpenCode 的推荐或正式触发入口 |
@@ -149,9 +148,8 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 
 | 资产 | 目标位置 | 分类 | 说明 |
 |------|---------|------|------|
-| workflow 阶段 skills（feasibility / brainstorm / design / plan / test-first / project-audit / check / review-gate / delivery） | `.agents/skills/<phase>/SKILL.md` | 安装器管理（共享 skills 单点落盘） | 共享 skills 只落在 `.agents/skills/`；按当前官方文档与 A/B 证据，这是 Codex 的 repo-scoped shared/workflow skills 唯一主承载面，也是其 repo-scoped skills 主入口；OpenCode 即使会扫描到，也只作为共享承载面处理，不作为其正式入口 |
-| Trellis 基线 skill 补丁（trellis-continue / trellis-finish-work） | 活动 skills 目录下的 `trellis-continue/SKILL.md`、`trellis-finish-work/SKILL.md` | 安装器管理（活动目录增强） | **只在 `resolve_codex_skills_dir(root)` 解析出的活动 skills 目录**追加 workflow patch；当前 `trellis init` 下通常是 `.agents/skills/`；legacy `start` / `finish-work` 仅用于旧目标项目兼容 |
-| legacy `record-session` skill | 活动 skills 目录下可能存在的 `record-session/SKILL.md` | fresh baseline patch / legacy 兼容 | 当前 Trellis 0.5 fresh baseline 包含 `record-session`（archive + add_session 在此阶段执行）；若旧目标项目仍存在 legacy 版本，按 close-out 兼容面检查 |
+| workflow 阶段 skills（feasibility / brainstorm / design / plan / implementation / check / review-gate / project-audit / delivery） | `.agents/skills/<phase>/SKILL.md` | 安装器管理（共享 skills 单点落盘） | 共享 skills 只落在 `.agents/skills/`；按当前官方文档与 A/B 证据，这是 Codex 的 repo-scoped shared/workflow skills 唯一主承载面，也是其 repo-scoped skills 主入口；OpenCode 即使会扫描到，也只作为共享承载面处理，不作为其正式入口 |
+| Trellis 基线 skill 补丁（trellis-continue / trellis-finish-work） | 活动 skills 目录下的 `trellis-continue/SKILL.md`、`trellis-finish-work/SKILL.md` | 安装器管理（活动目录增强） | **只在 `resolve_codex_skills_dir(root)` 解析出的活动 skills 目录**追加 workflow patch；当前 `trellis init` 下通常是 `.agents/skills/`；legacy `start` 仅用于旧目标项目兼容 |
 | parallel skill 入口移除 | 各 skills 目录下的 `parallel/SKILL.md` | 安装器管理（条件移除） | **只在存在 parallel 的目录**执行：先备份，再把 `parallel` 从嵌入面移除；若不存在则跳过 |
 | 通用辅助脚本 | `.trellis/scripts/workflow/` | 安装器管理 | 与 Claude/OpenCode 共用 |
 | Trellis 基线 workflow 指南补丁 | `.trellis/workflow.md` | 安装器管理 | 与 Claude/OpenCode 共用；Codex hooks 注入的 `.trellis/workflow.md` 应与安装器增强后的文档保持一致 |
@@ -174,14 +172,14 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 `trellis init` 在部分样本里可能同时落盘 `.agents/skills/` 与 `.codex/skills/` 两个目录；但当前 fresh `0.5.15` 基线默认可稳定观察到的是 `.agents/skills/`，不应再把 `.codex/skills/parallel` 当作必然出现的默认现象。当前安装器对这两类目录采用分层策略：
 
 - `install-workflow.py` 只向 `.agents/skills/` 写入共享阶段 skills
-- `trellis-continue` / `trellis-finish-work` baseline patch 只增强**活动 skills 目录**；legacy `start` / `finish-work` 仅作为旧目标项目兼容输入
+- `trellis-continue` / `trellis-finish-work` baseline patch 只增强**活动 skills 目录**；legacy `start` 仅作为旧目标项目兼容输入
 - `parallel` 入口按"存在才移除，不存在就跳过"处理
 - `upgrade-compat.py --check` 只在 `.agents/skills/` 检查共享分发 skills；若 `.codex/skills/` 中出现重复 shared skills，则视为重复副本
 
 补充说明：
 
-- `.claude/skills/` 与 `.opencode/skills/` 当前都不要求镜像 `trellis-start` / `trellis-continue` / `trellis-finish-work`；Claude/OpenCode 的 fresh-baseline 正式入口仍分别是命令目录里的 `continue.md` / `finish-work.md`，legacy `start` 仅旧目标项目兼容
-- 非活动目录中的 `trellis-continue` / `trellis-finish-work` 同名文件**不在** `upgrade-compat.py --check` 的 baseline patch 检测范围内；legacy `start` / `finish-work` 同名文件也不构成 fresh-baseline 要求
+- `.claude/skills/` 与 `.opencode/skills/` 当前都不要求镜像 `trellis-continue` / `trellis-finish-work`；Claude/OpenCode 的 fresh-baseline 正式入口仍分别是命令目录里的 `continue.md` / `finish-work.md`，legacy `start` 仅旧目标项目兼容
+- 非活动目录中的 `trellis-continue` / `trellis-finish-work` 同名文件**不在** `upgrade-compat.py --check` 的 baseline patch 检测范围内；legacy `start` 同名文件也不构成 fresh-baseline 要求
 - 这是设计边界，不是漏检：当前 workflow 安装器不会向非活动目录写入这两类 patch，因此这些文件不属于 workflow 托管漂移面
 - Codex 也不要求与 Claude/OpenCode 同形态的 `inject-subagent-context` hook carrier。当前主合同是 inline + turn hook；只有显式 delegated / non-inline 路径才会进入 agent 侧上下文读取
 
@@ -218,8 +216,8 @@ ls .codex/skills/.backup-original/parallel/SKILL.md 2>/dev/null
 | 资产类型 | Claude | OpenCode | Codex |
 |---------|--------|----------|-------|
 | 阶段命令入口 | `.claude/commands/trellis/*.md` ✅ 安装器 | `.opencode/commands/trellis/*.md` ✅ 安装器 | `.agents/skills/*/SKILL.md` ✅ 安装器（`.codex/skills/*` 仅保留 Codex 独有或项目自定义 skills） |
-| 基线补丁 | continue / finish-work ✅；legacy `start` / baseline `record-session` 仅兼容 | continue / finish-work ✅；legacy `start` / baseline `record-session` 仅兼容 | trellis-continue / trellis-finish-work ✅（仅活动 skills 目录）；legacy `start` / `finish-work` 仅兼容 |
-| 收尾入口 | `finish-work.md` → `delivery` → `record-session.md` | `finish-work.md` → `delivery` → `record-session.md` | `trellis-finish-work` skill → `delivery` → `record-session` skill |
+| 基线补丁 | continue / finish-work ✅；legacy `start` 仅兼容 | continue / finish-work ✅；legacy `start` 仅兼容 | trellis-continue / trellis-finish-work ✅（仅活动 skills 目录）；legacy `start` 仅兼容 |
+| 收尾入口 | `finish-work.md` → `delivery` → Trellis 原生 `/finish-work` | `finish-work.md` → `delivery` → Trellis 原生 `/finish-work` | `trellis-finish-work` skill → `delivery` → Trellis 原生 `/finish-work` |
 | 辅助脚本 | `.trellis/scripts/workflow/` ✅ | 共用 ✅ | 共用 ✅ |
 | 嵌入尝试记录 | `.trellis/workflow-embed-attempt.json` ✅ 安装器（开始写入，成功后清理） | 共用 ✅ | 共用 ✅ |
 | 项目规则 | `AGENTS.md` ⚠️ 半托管 | `AGENTS.md` ⚠️ 半托管 | `AGENTS.md` ⚠️ 半托管 |
@@ -237,7 +235,6 @@ ls .codex/skills/.backup-original/parallel/SKILL.md 2>/dev/null
 
 | 资产/行为 | 实际位置 | 分类 | 说明 |
 |-----------|----------|------|------|
-| `record-session` 元数据闭环 | workflow 分发的 `record-session` 终态命令/skill | overlay / distributed close-out stage | 当前 workflow 分发 `record-session` 终态阶段；该阶段执行 `task.py archive` + `add_session.py`。若目标项目仍残留 baseline `record-session`，只按旧目标项目兼容面检查 |
 | `finish-work` 收尾行为 | Trellis 原生 `finish-work` 基线 + workflow patch | Trellis 基线管理 | workflow 不再分发 helper；`finish-work` 只做提交检查清单与收尾证据，**不执行 archive** |
 | `archive` 任务归档行为 | `.trellis/scripts/task.py` / `.trellis/scripts/common/task_store.py` | 运行前置/仅校验 | 仍由目标项目 Trellis 基线提供，当前 workflow **不分发** 这段基线代码 |
 | archive metadata auto-commit pathspec 修复 | Trellis 基线 close-out 实现 | 运行前置/仅校验 | 若目标项目不是当前最新 Trellis 基线，收尾链路仍可能继承旧基线中的 archive bug；建议先升级 Trellis，再使用当前 workflow 的收尾链路 |
@@ -246,7 +243,6 @@ ls .codex/skills/.backup-original/parallel/SKILL.md 2>/dev/null
 
 补充约束：
 
-- legacy `record-session` 若存在并被当前 workflow 注入兼容补丁，最终仍应回到目标项目 Trellis 基线的 `archive` / `add_session.py` 行为
 - 因此，这类 close-out 行为是否稳定，取决于目标项目当前 Trellis 基线是否已包含相应修复，而不是取决于 workflow 是否额外分发了 helper
 - 若要验证该前提，优先检查目标项目 `.trellis/.version` 是否已升级到当前最新 Trellis 版本
 
@@ -274,12 +270,12 @@ ls .codex/skills/.backup-original/parallel/SKILL.md 2>/dev/null
 |--------|--------|----------|-------|
 | 任务拆分 / lane 规划 / `task_plan.md` 摘要 | ✅ | ✅ | ✅ |
 | 生成项目基础代码 / 具体实现代码 | ❌ 禁止 | ❌ 禁止 | ❌ 禁止 |
-| 未确认前直接切到 `implementation` / `test-first` | ❌ 禁止 | ❌ 禁止 | ❌ 禁止 |
+| 未确认前直接切到 `implementation` | ❌ 禁止 | ❌ 禁止 | ❌ 禁止 |
 
 补充约束：
 
 - `plan` 阶段只做任务划分与规划，不做具体任务执行
-- 只有用户明确确认后，才允许进入某个叶子 task 的 `implementation` / `test-first`
+- 只有用户明确确认后，才允许进入某个叶子 task 的 `implementation`
 
 ---
 

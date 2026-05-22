@@ -12,7 +12,7 @@
 
 它只做三件事：
 
-- 说明新项目主链从 `feasibility` 到 `finish-work → delivery → record-session` 应该怎么走
+- 说明新项目主链从 `feasibility` 到 `delivery` 应该怎么走，以及如何使用 Trellis 原生 `/finish-work` 收尾
 - 明确 Claude Code、OpenCode、Codex 的入口差异
 - 给出每个阶段推荐调用的 MCP / skills、典型降级方式和退出门禁
 
@@ -88,14 +88,12 @@ git remote set-url --add --push origin <第二个仓库URL>
 
 - `continue` / `trellis-continue` 是 **Trellis 原生命令/技能基线 + workflow Phase Router 增强**
 - `finish-work` / `trellis-finish-work` 是 **Trellis 原生命令/技能基线 + workflow 项目化补丁**，不是当前 workflow 新增分发的独立源文件
-- legacy `start` / `record-session` 仅作为旧目标项目兼容输入
+- legacy `start` 仅作为旧目标项目兼容输入
 - `archive` 仍直接复用目标项目 Trellis 基线里的 `python3 ./.trellis/scripts/task.py archive`，不是当前 workflow 额外分发的一份 helper
 - 当前 workflow 默认启用作者归属保护（`ownership_proof_required` 常规默认值为 `yes`）；除非项目明确写 `no`，否则源码水印与归属证明都应视为 workflow 的正式产物层，而不是交付前临时想起的补丁动作
 - 若 design 中已经声明了 `Protected Watermark Snippets`，后续任何实现/修复任务都必须把这些片段当成“不能顺手改坏”的保留面；只有明确声明可自动恢复的低风险片段，才允许用 `source-watermark-guard.py --mode repair` 自动回补
 
-如果忽略这层嵌入关系，就容易把“继承基线”误判成“workflow 漏了命令”。
-
-对应到本次 close-out 行为，还要再加一条：若目标项目不是通过当前最新 Trellis 初始化/升级得到的，那么即使 workflow 本身已经安装成功，`record-session -> archive` 这条终态链路也可能仍然继承旧基线中的 archive bug；不应再把 `finish-work` 描述成直接执行 archive 的阶段。
+如果忽略这层嵌入关系，就容易把”继承基线”误判成”workflow 漏了命令”。
 
 还要额外记住一条：`finish-work` 的项目化补丁虽然会按 Claude Code / OpenCode / Codex 各自原生格式落地，但它承载的**项目检查矩阵含义必须一致**，因为这部分由项目技术架构决定，不由 CLI 类型决定。
 
