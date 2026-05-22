@@ -399,6 +399,42 @@ class WorkflowStateScriptTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def write_minimal_installed_workflow_record(self, root: Path, *, profile: str) -> None:
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            json.dumps({"profile": profile}, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "library-lock.yaml").write_text(
+            "packs:\n  - pack.requirements-discovery-foundation\n",
+            encoding="utf-8",
+        )
+        (root / ".claude" / "hooks").mkdir(parents=True, exist_ok=True)
+        (root / ".claude" / "hooks" / "session-start.py").write_text(
+            "# strong-gate-session-start-patch-applied\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "scripts" / "task.py").write_text(
+            "# [workflow-embed-patch:strong-gate-no-status-flip]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
+            "# [workflow-embed-patch:preserve-parent-active-task]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "tasks.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_queue.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
+            "# strong-gate-phase-patch-applied\n",
+            encoding="utf-8",
+        )
+
     def write_context7_review(self, task_dir: Path, content: str | None = None) -> None:
         design_dir = task_dir / "design"
         design_dir.mkdir(parents=True, exist_ok=True)
@@ -1627,7 +1663,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(data["action"], "entry_choice_required")
         self.assertIn("只读分析", data["reason"])
 
-    def test_cmd_route_no_task_personal_profile_without_assessment_still_targets_feasibility(self) -> None:
+    def test_cmd_route_no_task_personal_profile_without_assessment_targets_brainstorm(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
         self.addCleanup(shutil.rmtree, root)
         (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
@@ -1671,9 +1707,73 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         data = json.loads(result.stdout)
-        self.assertEqual(data["target"], "feasibility")
+        self.assertEqual(data["target"], "brainstorm")
         self.assertEqual(data["action"], "entry_choice_required")
         self.assertEqual(data["profile_hint"], "personal")
+        self.assertIn("assessment 基线", data["reason"])
+
+    def test_cmd_route_no_task_outsourcing_profile_without_assessment_still_targets_feasibility(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "scripts" / "common").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / ".runtime" / "sessions").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            json.dumps({"profile": "outsourcing"}, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "library-lock.yaml").write_text(
+            "packs:\n  - pack.requirements-discovery-foundation\n",
+            encoding="utf-8",
+        )
+        (root / ".claude" / "hooks").mkdir(parents=True, exist_ok=True)
+        (root / ".claude" / "hooks" / "session-start.py").write_text(
+            "# strong-gate-session-start-patch-applied\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "task.py").write_text(
+            "# [workflow-embed-patch:strong-gate-no-status-flip]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
+            "# [workflow-embed-patch:preserve-parent-active-task]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "tasks.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_queue.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
+            "# strong-gate-phase-patch-applied\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["target"], "feasibility")
+        self.assertEqual(data["action"], "entry_choice_required")
+        self.assertEqual(data["profile_hint"], "outsourcing")
+
+    def test_cmd_route_no_task_unknown_profile_prefers_feasibility_with_unknown_hint(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / ".runtime" / "sessions").mkdir(parents=True, exist_ok=True)
+        self.write_minimal_installed_workflow_record(root, profile="legacy-unknown")
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["target"], "feasibility")
+        self.assertEqual(data["action"], "entry_choice_required")
+        self.assertEqual(data["profile_hint"], "unknown")
 
     def test_cmd_route_no_task_reuses_existing_assessment_for_brainstorm(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
@@ -1822,6 +1922,48 @@ class WorkflowStateScriptTests(unittest.TestCase):
         data = json.loads(result.stdout)
         self.assertEqual(data["action"], "reenter")
         self.assertNotIn("children", data["reason"])
+
+    def test_cmd_route_returns_context_needed_for_execution_parent_with_children(self) -> None:
+        root, task_dir = self.make_fixture()
+        (task_dir / "task.json").write_text('{"status":"planning","children":["04-15-child-task"]}\n', encoding="utf-8")
+        (task_dir / "workflow-state.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "stage": "implementation",
+                    "stage_status": "in_progress",
+                    "current_block": None,
+                    "completed_blocks": [],
+                    "allowed_next_stages": ["test-first", "check", "project-audit"],
+                    "awaiting_user_confirmation": False,
+                    "last_confirmed_transition": {
+                        "from": "plan",
+                        "to": "implementation",
+                        "confirmed_at": "2026-05-22T00:00:00+00:00",
+                    },
+                    "notes": [],
+                    "checkpoints": {
+                        "architecture_confirmed": True,
+                        "context7_review_completed": True,
+                        "execution_authorized": True,
+                    },
+                    "updated_at": "2026-05-22T00:00:00+00:00",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_script("route", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "context_needed")
+        self.assertEqual(data["stage"], "implementation")
+        self.assertIn("04-15-child-task", data["reason"])
+        self.assertIn("task.py start <child-task-dir>", data["reason"])
 
     def test_cmd_route_awaiting_confirmation(self) -> None:
         """workflow-state has stage_status=awaiting_user_confirmation -> awaiting_confirmation."""
@@ -2350,6 +2492,152 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(data["action"], "blocked")
         self.assertIn("assessment", data["reason"])
 
+    def test_validate_allows_personal_brainstorm_bootstrap_without_assessment(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_minimal_installed_workflow_record(root, profile="personal")
+        (task_dir / "prd.md").write_text(
+            "# sample\n\n"
+            f"{self.VALID_BRAINSTORM_ESTIMATE}",
+            encoding="utf-8",
+        )
+        self.run_script("init", str(task_dir), "--stage", "brainstorm")
+
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
+        self.assertIn("assessment.md 基线尚未补齐", validate.stdout)
+        self.assertIn("✅ workflow-state 校验通过", validate.stdout)
+
+    def test_route_personal_brainstorm_bootstrap_reenter_emits_warning(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_minimal_installed_workflow_record(root, profile="personal")
+        (task_dir / "prd.md").write_text(
+            "# sample\n\n"
+            f"{self.VALID_BRAINSTORM_ESTIMATE}",
+            encoding="utf-8",
+        )
+        self.run_script("init", str(task_dir), "--stage", "brainstorm")
+
+        result = self.run_script("route", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "reenter")
+        self.assertIn("warnings", data)
+        self.assertIn("assessment.md 基线尚未补齐", "".join(data["warnings"]))
+
+    def test_route_personal_brainstorm_bootstrap_exemption_ends_after_assessment_file_exists(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_minimal_installed_workflow_record(root, profile="personal")
+        (task_dir / "prd.md").write_text("# sample\n", encoding="utf-8")
+        self.run_script("init", str(task_dir), "--stage", "brainstorm")
+        (task_dir / "assessment.md").write_text(
+            "# assessment\n"
+            "- `project_engagement_type`: `non_outsourcing`\n"
+            "- 法律/合规风险结论：通过\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_script("route", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "blocked")
+        self.assertIn("是否允许进入 brainstorm", data["reason"])
+
+    def test_set_personal_brainstorm_to_design_requires_assessment_after_bootstrap_phase(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_minimal_installed_workflow_record(root, profile="personal")
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=(
+                f"{self.VALID_BRAINSTORM_ESTIMATE}\n"
+                "## 阶段出口快照\n"
+                "- `complexity_decision`: `L0`\n"
+                "- `ui_lane_decision`: `no-ui`\n"
+                "- `cross_platform_scope`: `codex-only`\n"
+                "- `estimate_refresh_result`: `unchanged`\n"
+                "- `kill_criteria`: `none`\n"
+                "- `open_items`: `none`\n"
+            ),
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (task_dir / "assessment.md").unlink()
+        self.run_script("init", str(task_dir), "--stage", "brainstorm")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status",
+            "awaiting_user_confirmation",
+            "--awaiting-user-confirmation",
+            "true",
+        )
+
+        transition = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage",
+            "design",
+            "--stage-status",
+            "in_progress",
+            "--awaiting-user-confirmation",
+            "false",
+            "--transition-from",
+            "brainstorm",
+        )
+
+        self.assertEqual(transition.returncode, 1, msg=transition.stdout + transition.stderr)
+        self.assertIn("personal profile 首次入口必须先在当前 brainstorm 阶段补齐最小 assessment 基线", transition.stdout)
+
+    def test_validate_personal_brainstorm_with_partial_assessment_reports_specific_missing_fields(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_minimal_installed_workflow_record(root, profile="personal")
+        (task_dir / "prd.md").write_text(
+            "# sample\n\n"
+            f"{self.VALID_BRAINSTORM_ESTIMATE}",
+            encoding="utf-8",
+        )
+        self.run_script("init", str(task_dir), "--stage", "brainstorm")
+        (task_dir / "assessment.md").write_text(
+            "# assessment\n"
+            "- `project_engagement_type`: `non_outsourcing`\n"
+            "- 法律/合规风险结论：通过\n",
+            encoding="utf-8",
+        )
+
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("source_watermark_level", validate.stdout)
+        self.assertIn("ownership_proof_required", validate.stdout)
+        self.assertNotIn("缺少 assessment.md", validate.stdout)
+
+    def test_route_personal_brainstorm_awaiting_confirmation_without_assessment_reports_bootstrap_gap(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_minimal_installed_workflow_record(root, profile="personal")
+        (task_dir / "prd.md").write_text(
+            "# sample\n\n"
+            f"{self.VALID_BRAINSTORM_ESTIMATE}",
+            encoding="utf-8",
+        )
+        self.run_script("init", str(task_dir), "--stage", "brainstorm")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status",
+            "awaiting_user_confirmation",
+            "--awaiting-user-confirmation",
+            "true",
+        )
+
+        result = self.run_script("route", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "awaiting_confirmation_with_blockers")
+        self.assertIn("personal profile 首次入口可在当前 brainstorm 阶段补齐最小 assessment 基线", "".join(data.get("blockers", [])))
+
     def test_cmd_route_blocks_plan_when_recommended_task_prd_missing(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
@@ -2853,6 +3141,98 @@ class WorkflowStateScriptTests(unittest.TestCase):
         data = json.loads(result.stdout)
         self.assertEqual(data["action"], "embed_invalid")
         self.assertIn("trellis-finish-work", data["reason"])
+
+    def test_cmd_route_embed_invalid_when_patched_codex_brainstorm_helper_skill_drifts(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "scripts" / "common").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            json.dumps(
+                {
+                    "profile": "outsourcing",
+                    "cli_types": ["codex"],
+                    "critical_runtime_patches": [
+                        "inject-workflow-state",
+                        "session-start-strong-gate",
+                        "task-start-strong-gate",
+                        "task-create-preserve-active",
+                        "task-status-view-strong-gate",
+                        "workflow-phase-strong-gate",
+                    ],
+                    "patched_codex_skills": [
+                        "trellis-continue",
+                        "trellis-finish-work",
+                        "trellis-start",
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "library-lock.yaml").write_text(
+            "packs:\n  - pack.requirements-discovery-foundation\n",
+            encoding="utf-8",
+        )
+        (root / ".codex" / "hooks").mkdir(parents=True, exist_ok=True)
+        (root / ".codex" / "hooks" / "inject-workflow-state.py").write_text(
+            "# [workflow-embed-patch:prefer-workflow-state-json]\n",
+            encoding="utf-8",
+        )
+        (root / ".codex" / "hooks" / "session-start.py").write_text(
+            "# strong-gate-session-start-patch-applied\n# [workflow-embed-patch:session-start-route-first]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "task.py").write_text(
+            "# [workflow-embed-patch:strong-gate-no-status-flip]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
+            "# [workflow-embed-patch:preserve-parent-active-task]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "tasks.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_queue.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
+            "# strong-gate-phase-patch-applied\n",
+            encoding="utf-8",
+        )
+        skills_root = root / ".agents" / "skills"
+        (skills_root / "trellis-continue").mkdir(parents=True, exist_ok=True)
+        (skills_root / "trellis-continue" / "SKILL.md").write_text(
+            "Re-enter the current workflow stage through the workflow router\n## Workflow Phase Router Patch `[AI]`\n",
+            encoding="utf-8",
+        )
+        (skills_root / "trellis-finish-work").mkdir(parents=True, exist_ok=True)
+        (skills_root / "trellis-finish-work" / "SKILL.md").write_text(
+            "<!-- finish-work-projectization-patch -->\nprepare the delivery hand-off\n",
+            encoding="utf-8",
+        )
+        (skills_root / "trellis-start").mkdir(parents=True, exist_ok=True)
+        (skills_root / "trellis-start" / "SKILL.md").write_text(
+            "Route initial user intent through the installed workflow router\n## Workflow Phase Router Patch `[AI]`\n",
+            encoding="utf-8",
+        )
+        (skills_root / "trellis-brainstorm").mkdir(parents=True, exist_ok=True)
+        (skills_root / "trellis-brainstorm" / "SKILL.md").write_text(
+            "Triggered from `start` (Trellis command)\n| ``start` (Trellis command)` | Entry point that triggers brainstorm |\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "embed_invalid")
+        self.assertIn("trellis-brainstorm", data["reason"])
 
     def test_cmd_route_blocks_design_reentry_when_ownership_policy_is_invalid(self) -> None:
         root, task_dir = self.make_fixture()

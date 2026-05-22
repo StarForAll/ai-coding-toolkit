@@ -1012,6 +1012,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("task.py start <task-dir>", workflow_doc_text)
         self.assertIn("does **not** advance `workflow-state.json.stage`", workflow_doc_text)
         self.assertIn("load `/trellis:brainstorm` for prd iteration", workflow_doc_text)
+        self.assertIn("no_task → brainstorm", workflow_doc_text)
+        self.assertIn("personal first entry", workflow_doc_text)
         self.assertIn("source_watermark_level", workflow_doc_text)
         self.assertIn("需求变更管理执行卡", workflow_doc_text)
         self.assertIn("源码水印与归属证据链执行卡", workflow_doc_text)
@@ -1040,6 +1042,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         trellis_start_text = (fixture / ".agents" / "skills" / "trellis-start" / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("## Workflow Phase Router Patch `[AI]`", trellis_start_text)
         self.assertIn("Route initial user intent through the installed workflow router", trellis_start_text)
+        self.assertIn("personal-profile first entry may enter `brainstorm` directly", trellis_start_text)
+        self.assertIn("bootstrap the minimum assessment baseline", trellis_start_text)
         self.assertNotIn("--step 2.1 --platform codex", trellis_start_text)
         self.assertNotIn("## Step 4: Decide next action", trellis_start_text)
         finish_work = fixture / ".claude" / "commands" / "trellis" / "finish-work.md"
@@ -1068,6 +1072,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         claude_session_start = (fixture / ".claude" / "hooks" / "session-start.py").read_text(encoding="utf-8")
         self.assertIn(SESSION_START_STRONG_GATE_PATCH_MARKER, claude_session_start)
         self.assertNotIn(LEGACY_READY_AUTOCONTINUE_LINE, claude_session_start)
+        self.assertIn("For personal profile: also run `python3 ./.trellis/scripts/workflow/workflow-state.py route` first", claude_session_start)
         codex_session_start = (fixture / ".codex" / "hooks" / "session-start.py").read_text(encoding="utf-8")
         self.assertIn(SESSION_START_STRONG_GATE_PATCH_MARKER, codex_session_start)
         self.assertNotIn(LEGACY_READY_AUTOCONTINUE_LINE, codex_session_start)
@@ -1151,12 +1156,17 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(".trellis/scripts/workflow/feasibility-check.py", deployed_feasibility)
         self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", deployed_feasibility)
         self.assertIn("OpenCode 入口见目标项目 AGENTS.md 路由表", deployed_feasibility)
+        self.assertIn("personal profile 首次入口例外", deployed_feasibility)
         self.assertNotIn("[阶段状态机与强门禁协议](", deployed_feasibility)
         self.assertNotIn("../源码水印与归属证据链执行卡.md", deployed_feasibility)
         self.assertIn(
             "[源码水印与归属证据链执行卡](../../../.trellis/workflow-docs/源码水印与归属证据链执行卡.md)",
             deployed_feasibility,
         )
+        shared_feasibility_skill = (fixture / ".agents" / "skills" / "feasibility" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("personal profile 首次入口例外", shared_feasibility_skill)
         design_skill = (fixture / ".agents" / "skills" / "design" / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn(
             "[需求变更管理执行卡](../../../.trellis/workflow-docs/需求变更管理执行卡.md)",
@@ -1590,7 +1600,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(".codex/hooks.json -> .codex/hooks/inject-workflow-state.py", codex_change_hooks)
 
     def test_install_patches_platform_brainstorm_skills_away_from_trellis_start(self) -> None:
-        fixture = self.create_fixture(include_opencode=True)
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
 
         stale_skill = """---
@@ -1610,12 +1620,32 @@ Triggered from /trellis:start when the user describes a development task, especi
 | `/trellis:finish-work` | After implementation is complete |
 | `trellis-update-spec` skill | If new patterns emerge during work |
 """
+        shared_stale_skill = """---
+name: trellis-brainstorm
+description: stale brainstorm
+---
+
+## When to Use
+
+Triggered from `start` (Trellis command) when the user describes a development task, especially when:
+
+## Related Commands
+
+| Command | When to Use |
+|---------|-------------|
+| ``start` (Trellis command)` | Entry point that triggers brainstorm |
+| ``finish-work` (Trellis command)` | After implementation is complete |
+| ``update-spec` (Trellis command)` | If new patterns emerge during work |
+"""
         for path in [
             fixture / ".claude" / "skills" / "trellis-brainstorm" / "SKILL.md",
             fixture / ".opencode" / "skills" / "trellis-brainstorm" / "SKILL.md",
         ]:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(stale_skill, encoding="utf-8")
+        shared_path = fixture / ".agents" / "skills" / "trellis-brainstorm" / "SKILL.md"
+        shared_path.parent.mkdir(parents=True, exist_ok=True)
+        shared_path.write_text(shared_stale_skill, encoding="utf-8")
 
         install = self.install_workflow(fixture)
 
@@ -1627,8 +1657,20 @@ Triggered from /trellis:start when the user describes a development task, especi
             content = path.read_text(encoding="utf-8")
             self.assertIn("/trellis:brainstorm", content)
             self.assertIn("/trellis:continue", content)
+            self.assertIn("personal-profile first entry may go directly to `/trellis:brainstorm`", content)
+            self.assertIn("assessment.md", content)
+            self.assertIn("project_engagement_type", content)
+            self.assertIn("ownership_proof_required", content)
             self.assertNotIn("Triggered from /trellis:start", content)
             self.assertNotIn("| `/trellis:start` | Entry point that triggers brainstorm |", content)
+        shared_content = shared_path.read_text(encoding="utf-8")
+        self.assertIn("Triggered when the installed workflow routes into brainstorm", shared_content)
+        self.assertIn("personal-profile first entry may go directly to `/trellis:brainstorm`", shared_content)
+        self.assertIn("project_engagement_type", shared_content)
+        self.assertIn("ownership_proof_required", shared_content)
+        self.assertIn("trellis-continue", shared_content)
+        self.assertNotIn("Triggered from `start` (Trellis command)", shared_content)
+        self.assertNotIn("| ``start` (Trellis command)` | Entry point that triggers brainstorm |", shared_content)
 
     def test_install_patches_cross_layer_guide_check_entry(self) -> None:
         fixture = self.create_fixture()
@@ -2343,6 +2385,8 @@ Triggered from /trellis:start when the user describes a development task, especi
         agents_md = (fixture / "AGENTS.md").read_text(encoding="utf-8")
         self.assertIn("Claude / OpenCode 入口 | Codex 入口", agents_md)
         self.assertIn("Codex：通过 `AGENTS.md` 自然语言路由或显式触发对应 skill", agents_md)
+        self.assertIn("personal profile 首次入口可直接 `brainstorm`", agents_md)
+        self.assertIn("personal profile 首次入口例外，可在本阶段内补齐 assessment 基线", agents_md)
         self.assertIn("调研、研究、查资料", agents_md)
         self.assertIn("trellis-research", agents_md)
         self.assertIn("当前 workflow 默认由 continue 自动执行 before-dev", agents_md)

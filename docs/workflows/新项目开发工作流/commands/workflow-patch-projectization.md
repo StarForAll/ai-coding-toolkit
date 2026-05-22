@@ -137,6 +137,7 @@ All transitions follow a two-step protocol: **(A)** signal readiness by setting 
 | From → To | Step A: Signal readiness | Step B: After user confirms |
 |---|---|---|
 | no_task → feasibility | N/A (outsourcing first entry) | `workflow-state.py route` → if `action=entry_choice_required` and当前意图是开始新任务，再进入 `/trellis:feasibility`；若只是只读分析 / 元审计，则保持 `no_task` 直接分析 |
+| no_task → brainstorm | N/A (personal first entry) | `workflow-state.py route` → if `action=entry_choice_required` and `target=brainstorm`，先创建 task，并立即 `workflow-state.py init "$TASK_DIR" --stage brainstorm` 初始化阶段状态，再进入 `/trellis:brainstorm`；离开本阶段前必须在当前 task 内补齐 assessment 最低基线 |
 | feasibility → brainstorm | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage brainstorm --stage-status in_progress --awaiting-user-confirmation false --allowed-next design,plan,implementation,test-first --transition-from feasibility` |
 | brainstorm → design | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage design --stage-status in_progress --awaiting-user-confirmation false --allowed-next plan --transition-from brainstorm` |
 | brainstorm → plan | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage plan --stage-status in_progress --awaiting-user-confirmation false --allowed-next implementation,test-first --transition-from brainstorm` |
@@ -318,7 +319,8 @@ For the workflow state machine's runtime contract, the locations of all status w
 [workflow-state:feasibility]
 Current stage: **feasibility** — first project assessment gate.
 Load `/trellis:feasibility` to evaluate project viability, risk, and engagement type.
-All new projects must pass feasibility before entering brainstorm.
+Outsourcing / external-delivery first-entry work must pass feasibility before entering brainstorm. Personal-profile first entry may route directly to brainstorm, but must complete the minimum assessment baseline before leaving that stage.
+When both repo-root `assessment.md` and `.trellis/workflow-installed.json` profile hints exist, route trusts `assessment.md` / `project_engagement_type` first. The install-record profile is only a fallback when no reusable assessment exists yet.
 If the project may require ownership proof, freeze `source_watermark_*` and `ownership_proof_required` in line with `源码水印与归属证据链执行卡` before stage exit.
 Run `python3 ./.trellis/scripts/workflow/workflow-state.py route` to check routing.
 [/workflow-state:feasibility]
@@ -330,6 +332,7 @@ Prerequisite:
 
 - outsourcing / external-delivery projects: valid `assessment.md` from feasibility
 - personal profile first-entry: `brainstorm` may bootstrap the minimum `assessment.md` baseline in-place, but it must be complete before leaving `brainstorm`
+- minimum bootstrap fields: `project_engagement_type`, `法律/合规风险结论`, `source_watermark_level`, `source_watermark_channels`, `zero_width_watermark_enabled`, `subtle_code_marker_enabled`, `ownership_proof_required`
 - if the project does not explicitly set `ownership_proof_required = no`, personal-profile bootstrap must also freeze `source_watermark_level`, `source_watermark_channels`, and `ownership_proof_required` before stage exit
 During requirement iteration, keep the execution-card obligations visible: requirement-scope changes must follow `需求变更管理执行卡`, and ownership / watermark-sensitive projects must preserve the upstream constraints later enforced by `源码水印与归属证据链执行卡`.
 After prd.md and jsonl are curated, set `stage_status = awaiting_user_confirmation` for design/plan transition.

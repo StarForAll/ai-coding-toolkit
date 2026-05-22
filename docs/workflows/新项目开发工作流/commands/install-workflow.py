@@ -306,8 +306,8 @@ _NL_ROUTING_SECTION = """\
 
 | 触发关键词 | Claude / OpenCode 入口 | Codex 入口 | 说明 |
 |-----------|------------------------|------------|------|
-| 评估、能做吗、报价、新项目、风险、可行性、接不接、看看这个项目、能不能接、估个价、接私活、外包项目、客户需求 | `/trellis:feasibility` | 描述可行性评估意图，或显式触发 `feasibility` skill | §1 可行性评估。首次立项必经；若已有有效 assessment，可复用结果 |
-| 需求、PRD、明确需求、需求文档、需求分析、想法、梳理需求、讨论方案、判断要不要拆任务 | `/trellis:brainstorm` | 描述需求澄清意图，或显式触发 `brainstorm` skill | §2 需求发现。前提：已存在有效 assessment |
+| 评估、能做吗、报价、新项目、风险、可行性、接不接、看看这个项目、能不能接、估个价、接私活、外包项目、客户需求 | `/trellis:feasibility` | 描述可行性评估意图，或显式触发 `feasibility` skill | §1 可行性评估。外包/新客户首次立项默认先走这里；personal profile 首次入口可直接 `brainstorm`，也可自愿先做评估；若 route 返回 `profile_hint=unknown`，保持 feasibility 保守回退并先确认项目应按 personal 还是 outsourcing 理解；若已有有效 assessment，可复用结果 |
+| 需求、PRD、明确需求、需求文档、需求分析、想法、梳理需求、讨论方案、判断要不要拆任务 | `/trellis:brainstorm` | 描述需求澄清意图，或显式触发 `brainstorm` skill | §2 需求发现。前提：已存在有效 assessment；personal profile 首次入口例外，可在本阶段内补齐 assessment 基线 |
 | 设计、架构、架构设计、选型、接口设计、方案、技术方案、开始设计、画架构图、设计方案 | `/trellis:design` | 描述设计阶段意图，或显式触发 `design` skill | §3 设计阶段 |
 | 拆任务、排期、计划、任务分解、里程碑、估时、做计划、工作分解、工作计划 | `/trellis:plan` | 描述任务拆解意图，或显式触发 `plan` skill | §4 任务拆解 |
 | 写测试、TDD、测试驱动、先写测试、测试用例、验收测试 | `/trellis:test-first` | 描述测试先行意图，或显式触发 `test-first` skill | §4.3 测试先行 |
@@ -1593,6 +1593,27 @@ _BRAINSTORM_WHEN_TO_USE_NEW = (
     "Triggered from `/trellis:brainstorm`, or when `/trellis:continue` routes into brainstorm, "
     "when the user describes a development task, especially when:"
 )
+_BRAINSTORM_SHARED_WHEN_TO_USE_OLD = (
+    "Triggered from `start` (Trellis command) when the user describes a development task, especially when:"
+)
+_BRAINSTORM_SHARED_WHEN_TO_USE_NEW = (
+    "Triggered when the installed workflow routes into brainstorm, or when the user explicitly asks "
+    "for requirements discovery, especially when:"
+)
+_BRAINSTORM_WORKFLOW_NOTE = """\
+> Workflow note: in projects that installed `docs/workflows/新项目开发工作流`, outsourcing / external-delivery first-entry work should still go through `/trellis:feasibility` when no reusable assessment exists.
+>
+> A personal-profile first entry may go directly to `/trellis:brainstorm`, but before leaving brainstorm it must create the task and backfill the minimum `assessment.md` baseline:
+> - `project_engagement_type`
+> - `法律/合规风险结论`
+> - `source_watermark_level`
+> - `source_watermark_channels`
+> - `zero_width_watermark_enabled`
+> - `subtle_code_marker_enabled`
+> - `ownership_proof_required`
+>
+> For full bootstrap steps, refer to the shared brainstorm stage skill (`.agents/skills/brainstorm/SKILL.md`) Gate 0 and Step 0 sections.
+"""
 _BRAINSTORM_RELATED_COMMANDS_OLD = """| `/trellis:start` | Entry point that triggers brainstorm |
 | `/trellis:finish-work` | After implementation is complete |
 | `/trellis:update-spec` | If new patterns emerge during work |"""
@@ -1604,13 +1625,21 @@ _BRAINSTORM_RELATED_COMMANDS_NEW = """| `/trellis:brainstorm` | Direct brainstor
 | `/trellis:continue` | Phase Router entry that may route here when requirements still need clarification |
 | `/trellis:finish-work` | After implementation is complete |
 | `trellis-update-spec` skill | If new patterns emerge during work |"""
+_BRAINSTORM_SHARED_RELATED_COMMANDS_OLD = """| ``start` (Trellis command)` | Entry point that triggers brainstorm |
+| ``finish-work` (Trellis command)` | After implementation is complete |
+| ``update-spec` (Trellis command)` | If new patterns emerge during work |"""
+_BRAINSTORM_SHARED_RELATED_COMMANDS_NEW = """| `brainstorm` stage skill | Direct brainstorm-stage entry in the installed workflow |
+| `trellis-continue` skill | Phase Router entry that may route here when requirements still need clarification |
+| `trellis-finish-work` skill | After implementation is complete |
+| `trellis-update-spec` skill | If new patterns emerge during work |"""
 
 
 def patch_platform_brainstorm_skills(root: Path, *, dry_run: bool) -> bool:
-    """Patch platform-local brainstorm skills that still advertise /trellis:start."""
+    """Patch brainstorm helper skills that still advertise legacy start semantics."""
     targets = [
         ("Claude", root / ".claude" / "skills" / "trellis-brainstorm" / "SKILL.md"),
         ("OpenCode", root / ".opencode" / "skills" / "trellis-brainstorm" / "SKILL.md"),
+        ("Shared", root / ".agents" / "skills" / "trellis-brainstorm" / "SKILL.md"),
     ]
 
     any_patched = False
@@ -1623,8 +1652,26 @@ def patch_platform_brainstorm_skills(root: Path, *, dry_run: bool) -> bool:
         if _BRAINSTORM_WHEN_TO_USE_OLD in patched:
             patched = patched.replace(_BRAINSTORM_WHEN_TO_USE_OLD, _BRAINSTORM_WHEN_TO_USE_NEW)
             changed = True
+        if _BRAINSTORM_SHARED_WHEN_TO_USE_OLD in patched:
+            patched = patched.replace(_BRAINSTORM_SHARED_WHEN_TO_USE_OLD, _BRAINSTORM_SHARED_WHEN_TO_USE_NEW)
+            changed = True
+        if _BRAINSTORM_WORKFLOW_NOTE not in patched and _BRAINSTORM_WHEN_TO_USE_NEW in patched:
+            patched = patched.replace(
+                _BRAINSTORM_WHEN_TO_USE_NEW,
+                _BRAINSTORM_WHEN_TO_USE_NEW + "\n\n" + _BRAINSTORM_WORKFLOW_NOTE,
+            )
+            changed = True
+        if _BRAINSTORM_WORKFLOW_NOTE not in patched and _BRAINSTORM_SHARED_WHEN_TO_USE_NEW in patched:
+            patched = patched.replace(
+                _BRAINSTORM_SHARED_WHEN_TO_USE_NEW,
+                _BRAINSTORM_SHARED_WHEN_TO_USE_NEW + "\n\n" + _BRAINSTORM_WORKFLOW_NOTE,
+            )
+            changed = True
         if _BRAINSTORM_RELATED_COMMANDS_OLD in patched:
             patched = patched.replace(_BRAINSTORM_RELATED_COMMANDS_OLD, _BRAINSTORM_RELATED_COMMANDS_NEW)
+            changed = True
+        if _BRAINSTORM_SHARED_RELATED_COMMANDS_OLD in patched:
+            patched = patched.replace(_BRAINSTORM_SHARED_RELATED_COMMANDS_OLD, _BRAINSTORM_SHARED_RELATED_COMMANDS_NEW)
             changed = True
         elif _BRAINSTORM_RELATED_COMMAND_START_OLD in patched:
             replacement_lines = "\n".join(
@@ -1792,12 +1839,18 @@ def patch_inject_workflow_state_hook(root: Path, *, dry_run: bool) -> bool:
 _SESSION_START_NO_TASK_MARKER = "# [workflow-embed-patch:session-start-nl-routing]"
 _SESSION_START_NO_TASK_LINE1 = '"Next-Action: After the user describes their intent, load skill `trellis-brainstorm` "'
 _SESSION_START_NO_TASK_LINE2 = '"to clarify requirements and create a task via `python3 ./.trellis/scripts/task.py create`.\\n"'
+_SESSION_START_NO_TASK_LEGACY_PHRASE = (
+    "Next-Action: After the user describes their intent, load skill `trellis-brainstorm` "
+    "to clarify requirements and create a task via `python3 ./.trellis/scripts/task.py create`."
+)
+_SESSION_START_NO_TASK_MARKER_ANCHOR = "    if not active.task_path:\n"
 _SESSION_START_NO_TASK_NEW = (
     '"Next-Action: Consult the AGENTS.md NL routing table for profile-specific entry routing. '
     'For outsourcing profile: run `python3 ./.trellis/scripts/workflow/workflow-state.py route` '
     'to detect whether this is a read-only analysis turn or a real first-entry task turn; '
     'only load `/trellis:feasibility` when the route result and the current intent both indicate task creation. '
-    'For personal profile: load skill `trellis-brainstorm` to clarify requirements '
+    'For personal profile: also run `python3 ./.trellis/scripts/workflow/workflow-state.py route` first; '
+    'if route keeps `target=brainstorm`, then load skill `trellis-brainstorm` to clarify requirements '
     'and create a task via `python3 ./.trellis/scripts/task.py create`.\\n"'
 )
 
@@ -1851,14 +1904,22 @@ def patch_session_start_no_task_guidance(root: Path, *, dry_run: bool) -> bool:
 
     match = _match_session_start_no_task_old(content)
     if match is None:
-        warn("[Shared] session-start.py no-task 指导未命中目标代码，跳过")
-        return False
-
-    old_text, _, _ = match
-    patched = content.replace(
-        old_text,
-        _SESSION_START_NO_TASK_MARKER + "\n            " + _SESSION_START_NO_TASK_NEW,
-    )
+        if _SESSION_START_NO_TASK_LEGACY_PHRASE not in content:
+            warn("[Shared] session-start.py no-task 指导未命中目标代码，跳过")
+            return False
+        patched = content.replace(_SESSION_START_NO_TASK_LEGACY_PHRASE, _SESSION_START_NO_TASK_NEW.strip('"'))
+        if _SESSION_START_NO_TASK_MARKER not in patched and _SESSION_START_NO_TASK_MARKER_ANCHOR in patched:
+            patched = patched.replace(
+                _SESSION_START_NO_TASK_MARKER_ANCHOR,
+                _SESSION_START_NO_TASK_MARKER_ANCHOR + "        " + _SESSION_START_NO_TASK_MARKER + "\n",
+                1,
+            )
+    else:
+        old_text, _, _ = match
+        patched = content.replace(
+            old_text,
+            _SESSION_START_NO_TASK_MARKER + "\n            " + _SESSION_START_NO_TASK_NEW,
+        )
 
     if patched == content:
         warn("[Shared] session-start.py 补丁未生效，跳过")

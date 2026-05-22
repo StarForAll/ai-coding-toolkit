@@ -171,6 +171,17 @@ PATCHED_CODEX_SKILL_REQUIREMENTS: dict[str, dict[str, tuple[str, ...]]] = {
             "routes to brainstorm, direct edit, or task workflow",
         ),
     },
+    "trellis-brainstorm": {
+        "must_contain": (
+            "Workflow note: in projects that installed `docs/workflows/新项目开发工作流`",
+            "`project_engagement_type`",
+            "`ownership_proof_required`",
+        ),
+        "must_not_contain": (
+            "Triggered from `start` (Trellis command)",
+            "| ``start` (Trellis command)` | Entry point that triggers brainstorm |",
+        ),
+    },
 }
 
 
@@ -991,7 +1002,13 @@ def collect_route_readiness_blockers(
         assessment_file = find_assessment_file(task_dir, repo_root)
         if assessment_file is None:
             if not is_personal_brainstorm_bootstrap_allowed(task_dir, repo_root, state):
-                blockers.append("缺少 assessment.md；必须先完成 feasibility 才允许继续 brainstorm")
+                if installed_workflow_profile(repo_root) == "personal":
+                    blockers.append(
+                        "缺少 assessment.md；personal profile 首次入口可在当前 brainstorm 阶段补齐最小 assessment 基线。"
+                        "请先补齐 assessment，再继续或退出本阶段。"
+                    )
+                else:
+                    blockers.append("缺少 assessment.md；必须先完成 feasibility 才允许继续 brainstorm")
         else:
             content = assessment_file.read_text(encoding="utf-8")
             allow_line_present = False
@@ -1034,6 +1051,19 @@ def collect_route_readiness_blockers(
         validate_check_gate(task_dir, blockers)
 
     return blockers
+
+
+def collect_nonblocking_warnings(
+    task_dir: Path,
+    repo_root: Path,
+    state: dict[str, Any],
+) -> list[str]:
+    warnings: list[str] = []
+    if state.get("stage") == "brainstorm" and is_personal_brainstorm_bootstrap_allowed(task_dir, repo_root, state):
+        warnings.append(
+            "assessment.md 基线尚未补齐（personal bootstrap 允许当前 brainstorm 继续，但离开 brainstorm 前必须完成最小 assessment 字段）。"
+        )
+    return warnings
 
 
 def collect_non_execution_reentry_blockers(
@@ -1204,6 +1234,14 @@ def is_personal_brainstorm_bootstrap_allowed(
     return isinstance(install_record, dict) and install_record.get("profile") == "personal"
 
 
+def installed_workflow_profile(repo_root: Path) -> str | None:
+    install_record = read_json(repo_root / INSTALL_RECORD)
+    if not isinstance(install_record, dict):
+        return None
+    profile = install_record.get("profile")
+    return profile if profile in {"personal", "outsourcing"} else None
+
+
 def extract_backticked_field(content: str, field_name: str) -> str | None:
     pattern = re.compile(rf'`{re.escape(field_name)}`:\s*`?(.+?)`?(?:\n|$)')
     match = pattern.search(content)
@@ -1326,6 +1364,20 @@ def validate_external_project_controls(
             target_stage is None
             and is_personal_brainstorm_bootstrap_allowed(task_dir, repo_root, state)
         ):
+            return
+        transition = state.get("last_confirmed_transition")
+        transition_from = transition.get("from") if isinstance(transition, dict) else None
+        if installed_workflow_profile(repo_root) == "personal" and (
+            state.get("stage") == "brainstorm" or transition_from == "brainstorm"
+        ):
+            if target_stage is None:
+                errors.append(
+                    "缺少 assessment.md；personal profile 首次入口可在当前 brainstorm 阶段补齐最小 assessment 基线，补齐后再继续本阶段。"
+                )
+            else:
+                errors.append(
+                    f"缺少 assessment.md；personal profile 首次入口必须先在当前 brainstorm 阶段补齐最小 assessment 基线，才能进入 {target_stage}"
+                )
             return
         errors.append("缺少 assessment.md；任何项目都必须先经过 feasibility 并完成项目类别判断")
         return
@@ -1832,6 +1884,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
     print("=== workflow-state 校验 ===")
     errors: list[str] = []
+    warnings: list[str] = []
 
     if state is None:
         print(f"❌ {state_path} 不存在或无法读取")
@@ -1848,6 +1901,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
         else:
             validate_session_active_task(task_dir, repo_root, errors)
     if repo_root is not None:
+        warnings.extend(collect_nonblocking_warnings(task_dir, repo_root, state))
         validate_leaf_task(task_dir, state.get("stage"), errors)
         validate_external_project_controls(task_dir, repo_root, state, errors)
         validate_ownership_policy_controls(task_dir, repo_root, state, errors)
@@ -1862,6 +1916,9 @@ def cmd_validate(args: argparse.Namespace) -> int:
         for message in errors:
             print(f"❌ {message}")
         return 1
+
+    for message in warnings:
+        print(f"⚠️  {message}")
 
     print("✅ workflow-state 校验通过")
     return 0
@@ -2138,11 +2195,18 @@ def _detect_missing_critical_runtime_patches(repo_root: Path, record: dict[str, 
 def _detect_missing_patched_codex_skills(repo_root: Path, record: dict[str, Any]) -> list[str]:
     configured = record.get("patched_codex_skills")
     if not isinstance(configured, list):
-        return []
+        configured = []
 
     problems: list[str] = []
     shared_skills_dir = repo_root / ".agents" / "skills"
-    for skill_name in configured:
+    skills_to_check: list[str] = [skill_name for skill_name in configured if isinstance(skill_name, str)]
+    for optional_name in PATCHED_CODEX_SKILL_REQUIREMENTS:
+        if optional_name in skills_to_check:
+            continue
+        if (shared_skills_dir / optional_name / "SKILL.md").is_file():
+            skills_to_check.append(optional_name)
+
+    for skill_name in skills_to_check:
         if not isinstance(skill_name, str):
             continue
         target = shared_skills_dir / skill_name / "SKILL.md"
@@ -2410,17 +2474,29 @@ def cmd_route(args: argparse.Namespace) -> int:
                             installed_profile = installed_data.get("profile")
                             if installed_profile == "outsourcing":
                                 profile_hint = "outsourcing"
-                            else:
+                            elif installed_profile == "personal":
                                 profile_hint = "personal"
+                                target = "brainstorm"
+                                reason = (
+                                    "当前 session 尚无 active task，personal profile 首次入口可直接进入 brainstorm，"
+                                    "并在该阶段补齐 assessment 基线"
+                                )
+                            else:
+                                profile_hint = "unknown"
                         except (OSError, UnicodeDecodeError, ValueError):
-                            profile_hint = "personal"
+                            profile_hint = "unknown"
                 _route_result(
                     target,
                     "entry_choice_required",
                     (
                         f"{reason}。若当前意图是 workflow / 项目只读分析、元审计或 A/A+ 纯分析，"
                         "保持 no_task 直接分析，不要把仓库误当成新项目入口；"
-                        f"若当前意图是开始新的实现任务，则进入 {target}"
+                        + (
+                            "若 `profile_hint=unknown`，请先确认当前项目应按 personal 还是 outsourcing 理解，再决定是否跳过 feasibility；"
+                            if profile_hint == "unknown"
+                            else ""
+                        )
+                        + f"若当前意图是开始新的实现任务，则进入 {target}"
                     ),
                     profile_hint=profile_hint or "unknown",
                 )
@@ -2501,6 +2577,7 @@ def cmd_route(args: argparse.Namespace) -> int:
             return 0
 
     readiness_blockers = collect_route_readiness_blockers(task_dir, repo_root, state)
+    route_warnings = collect_nonblocking_warnings(task_dir, repo_root, state)
 
     if stage_status == "awaiting_user_confirmation":
         exit_blockers = collect_exit_gate_blockers(task_dir, repo_root, state)
@@ -2571,6 +2648,7 @@ def cmd_route(args: argparse.Namespace) -> int:
             f"当前 stage={stage}, status={stage_status}",
             stage=stage,
             stage_status=stage_status,
+            warnings=route_warnings,
         )
         return 0
 
@@ -2592,6 +2670,7 @@ def cmd_route(args: argparse.Namespace) -> int:
         f"当前 stage={stage}, status={stage_status}",
         stage=stage,
         stage_status=stage_status,
+        warnings=route_warnings,
     )
     return 0
 
