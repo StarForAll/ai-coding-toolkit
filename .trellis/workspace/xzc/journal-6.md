@@ -1518,3 +1518,37 @@ Verified workflow issues against /tmp/trellis-0.5.17-2, fixed the patch-helper C
 ### Next Steps
 
 - None - task complete
+
+
+## Session 290: Workflow Audit Personal Bootstrap Routing Fixes
+
+**Date**: 2026-05-22
+**Task**: Workflow Audit Personal Bootstrap Routing Fixes
+**Branch**: `main`
+
+### Summary
+
+Verified embedded-workflow issues against /tmp fixture, repaired personal-bootstrap routing/docs/tests, and recorded the audit findings for the workflow source.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `611cb92` | (see git log) |
+| `5c0f2bb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
