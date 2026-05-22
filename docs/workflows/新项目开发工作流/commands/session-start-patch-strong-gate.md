@@ -11,7 +11,7 @@
 - `PLANNING`: 无 prd.md 或 implement.jsonl 无条目 -> 建议加载 `trellis-brainstorm`
 - `READY`: prd.md + curated jsonl 存在 -> 建议分发 `trellis-implement`
 
-在强门禁模型中，路由依据应为 `workflow-state.json` 的 `stage` 字段，由 `workflow-state.py route` 命令计算。旧逻辑无法区分具体阶段（feasibility/brainstorm/design/plan/implementation/test-first/check/review-gate/finish-work/delivery/record-session），也无法反映阶段门禁状态。
+在强门禁模型中，路由依据应为 `workflow-state.json` 的 `stage` 字段，由 `workflow-state.py route` 命令计算。旧逻辑无法区分 `workflow-state.py` 当前定义的完整阶段链（例如 feasibility/brainstorm/design/plan/implementation/test-first/project-audit/check/review-gate/finish-work/delivery/record-session），也无法反映阶段门禁状态。
 
 ### 补丁行为
 

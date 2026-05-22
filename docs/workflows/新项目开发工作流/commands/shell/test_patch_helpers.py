@@ -16,6 +16,7 @@ PYTHON = (
 )
 SHELL_DIR = REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "commands" / "shell"
 PATCH_SCRIPTS = [
+    SHELL_DIR / "patch-inject-workflow-state.py",
     SHELL_DIR / "patch-session-start-strong-gate.py",
     SHELL_DIR / "patch-task-start-strong-gate.py",
     SHELL_DIR / "patch-task-create-preserve-active.py",

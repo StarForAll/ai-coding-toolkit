@@ -15,6 +15,7 @@ fresh subprocess on every turn.
 
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 from pathlib import Path
@@ -791,13 +792,24 @@ def patch_js_hook(target_path: Path) -> bool:
     return True
 
 
-def main() -> int:
-    if len(sys.argv) < 2:
-        print("用法: patch-inject-workflow-state.py <target_hook_path> [<target_hook_path2> ...]")
-        return 1
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Apply the route-centered inject-workflow-state patch to Python or JS hook carriers."
+    )
+    parser.add_argument(
+        "target_paths",
+        nargs="+",
+        help="One or more target inject-workflow-state hook files (.py or .js).",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
 
     success = True
-    for path_str in sys.argv[1:]:
+    for path_str in args.target_paths:
         target_path = Path(path_str).resolve()
         if target_path.suffix == ".py":
             if not patch_python_hook(target_path):

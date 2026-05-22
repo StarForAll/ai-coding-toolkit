@@ -2117,6 +2117,39 @@ Triggered from /trellis:start when the user describes a development task, especi
         self.assertIn("repo-scoped skills 主入口", walkthrough)
         self.assertIn("secondary-carrier skills", walkthrough)
 
+    def test_session_start_patch_doc_tracks_current_stage_chain(self) -> None:
+        doc = (
+            REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "commands" / "session-start-patch-strong-gate.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("完整阶段链（例如", doc)
+        self.assertIn("project-audit", doc)
+        self.assertNotIn(
+            "feasibility/brainstorm/design/plan/implementation/test-first/check/review-gate/finish-work/delivery/record-session",
+            doc,
+        )
+
+    def test_workflow_overview_extracts_large_inline_templates(self) -> None:
+        workflow_root = REPO_ROOT / "docs" / "workflows" / "新项目开发工作流"
+        overview = (workflow_root / "工作流总纲.md").read_text(encoding="utf-8")
+        phase2_templates = (workflow_root / "阶段二：需求文档与变更模板.md").read_text(encoding="utf-8")
+        phase34_templates = (workflow_root / "阶段三四：设计与任务模板.md").read_text(encoding="utf-8")
+        appendix_doc = (workflow_root / "附录：评估安全与意图机制.md").read_text(encoding="utf-8")
+
+        self.assertIn("阶段二：需求文档与变更模板", overview)
+        self.assertIn("阶段三四：设计与任务模板", overview)
+        self.assertIn("附录：评估安全与意图机制", overview)
+
+        self.assertNotIn("# 变更单 CHANGE-XXX", overview)
+        self.assertNotIn("# Task Creation Checklist: [任务名称]", overview)
+        self.assertNotIn("# AI 设计粗稿", overview)
+        self.assertNotIn("# Intent.md - [项目名称]", overview)
+
+        self.assertIn("# 变更单 CHANGE-XXX", phase2_templates)
+        self.assertIn("# Task Creation Checklist: [任务名称]", phase34_templates)
+        self.assertIn("# AI 设计粗稿", phase34_templates)
+        self.assertIn("# Intent.md - [项目名称]", appendix_doc)
+
     def test_install_creates_and_clears_attempt_record_on_success(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
         self.addCleanup(shutil.rmtree, fixture)
