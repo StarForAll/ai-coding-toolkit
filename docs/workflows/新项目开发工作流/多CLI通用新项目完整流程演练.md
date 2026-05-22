@@ -246,7 +246,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 若是新建目标项目，则在**第一次进入 workflow** 前，本地主分支和初始分支已统一为 `main`；若此时还没有有效 `assessment.md`，外包/对外交付项目应先进入 `feasibility`，personal profile 首次入口可直接进入 `brainstorm` 并在阶段内补齐 assessment 基线；若目标项目已存在本地提交历史，则只记录现状，不强制改分支
 - 形成 `assessment.md`
 - 明确是否允许进入 `brainstorm`
-- 若为外部项目，项目类别、启动款门禁与交付控制轨道已定；在 `kickoff_payment_received = yes` 前，不得进入 implementation / test-first
+- 若为外部项目，项目类别、启动款门禁与交付控制轨道已定；在 `kickoff_payment_received = yes` 前，不得进入 implementation
 
 ---
 
@@ -304,7 +304,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 若走 `L1/L2 -> design` 路径，已在目标项目 `docs/requirements/` 下生成：
   - `customer-facing-prd.md`
 - 若走 `L1/L2 -> design` 路径，`customer-facing-prd.md` 已补齐 `## 项目级粗估摘要`
-- 若走 `L0 -> start` / `test-first` 路径，则 `customer-facing-prd.md` 不强制，但 `task_dir/prd.md` 中的项目级粗估仍不可跳过
+- 若走 `L0 -> implementation` 路径，则 `customer-facing-prd.md` 不强制，但 `task_dir/prd.md` 中的项目级粗估仍不可跳过
 - `developer-facing-prd.md` 不在此时强制生成；它等到 design 阶段技术架构确认后再正式落盘
 - `task_dir/prd.md` 的 `## 阶段出口快照` 已明确：
   - `complexity_decision`
@@ -313,7 +313,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
   - `estimate_refresh_result`
   - `kill_criteria`
   - `open_items`
-- 已决定走 `design`、`plan` 还是极小任务直进 `start`
+- 已决定走 `design`、`plan` 还是极小任务直进 `implementation`
 - 若下一步进入 `design`，已明确会在 `design -> 3.7` 把 `sonar-scanner` 纳入项目自动化检查矩阵
 - 已进入“等待用户确认是否切换阶段”的状态，而不是自动跳转
 
@@ -321,7 +321,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 >
 > `task_dir/prd.md` 仍然可以作为阶段内工作底稿，但它不是项目级正式需求文档的替代品。
 >
-> 通用新项目默认继续走 `design`。只有边界极小、当前事项无需继续细分即可达到合适任务粒度的 `L0` 事项，才建议直接进 `start`。
+> 通用新项目默认继续走 `design`。只有边界极小、当前事项无需继续细分即可达到合适任务粒度的 `L0` 事项，才建议直接进 `implementation`。
 
 ---
 
@@ -329,7 +329,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 目标
 
-冻结关键设计决策，补齐项目 spec 基线，并同步适配后续 `finish-work → delivery → record-session` 的项目化门禁。
+冻结关键设计决策，补齐项目 spec 基线，并同步适配后续 `delivery` 与 Trellis 原生 `/finish-work` 的项目化门禁。
 
 当前阶段拆成两段：
 
@@ -435,9 +435,9 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 同时在这里完成：
 
-- `/trellis:finish-work` 的首次项目化适配
-- close-out 基线适配（当前 fresh baseline 的 close-out 主入口为 `/trellis:finish-work` / `trellis-finish-work`，最终归档/会话记录入口为 `/trellis:record-session`；legacy 直达语义仅旧目标项目兼容）
-- `finish-work-checklist.md` 的最小证据口径
+- Trellis 原生 `/finish-work` 的首次项目化适配
+- close-out 基线适配（当前 fresh baseline 的 close-out 主入口为 Trellis 原生 `/finish-work` / `trellis-finish-work`）
+- 项目化检查矩阵的最小证据口径
 - design 权威文档中的系统边界 / 外部依赖 / ownership 边界
 - 若 `ownership_proof_required = yes`，同步冻结：
   - `WMID`
@@ -455,7 +455,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 关键设计文档与项目 spec 已对齐
 - 已完成 `DDD.md` / `IDD.md` / `AID.md` / `STITCH-PROMPT.md` 的条件判定；凡判定涉及者，已在当前阶段直接细化
 - 自动化检查矩阵已明确，且已包含明确质量平台门禁（采用 Sonar 的项目必须写真实命令，未采用时必须写替代门禁和原因）
-- `finish-work → delivery → record-session` 的项目化基线已定
+- `delivery` 与 Trellis 原生 `/finish-work` 的项目化基线已定
 - `design-export.py --validate` 已通过，且 `TAD.md` 不再只是空壳标题
 - `workflow-state.py validate` 已通过，并确认 `developer-facing-prd.md`、项目根 `README.md` 与 `README.en.md` 已到位
 - 已完成 design 退出检查，且用户已明确确认允许进入 plan
@@ -523,25 +523,25 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - 每个 task 的全局门禁来源已明确
 - 已生成当前推荐执行任务说明卡，先向用户说明该 task 的目标、边界、依赖、验收与风险
 - 当前推荐 leaf task 至少已补齐最小 `prd.md`，不再是 Trellis 基线里的 `NOT READY` 任务
-- 已决定进入 `start` 主链（需要显式先测时才额外进入 `test-first`），但尚未开工
-- 已明确当前要执行的叶子 task，并把状态停在“等待用户确认是否进入 implementation/test-first”
-- 进入 `implementation` / `test-first` 前，必须通过 `workflow-state` 显式设置 `checkpoints.execution_authorized = true`，并记录 `last_confirmed_transition`
+- 已决定进入 `implementation` 主链，但尚未开工
+- 已明确当前要执行的叶子 task，并把状态停在”等待用户确认是否进入 implementation”
+- 进入 `implementation` 前，必须通过 `workflow-state` 显式设置 `checkpoints.execution_authorized = true`，并记录 `last_confirmed_transition`
 - `plan` 阶段未生成基础代码、未编写实现代码、未直接执行任何具体 task
 - `plan-validate.py` 已通过，且 `task_plan.md` 中的 walking skeleton / packaging skeleton / performance probe / 后置性能回归与优化任务 / CI 边界 / P1 降级候选 已明确
 
 ---
 
-## 阶段 5：Start 主链（可选手动 Test-First）
+## 阶段 5：Implementation（可选测试驱动模式）
 
 ### 目标
 
-先选定当前 task，先向用户说明这次要开的 task 信息，再由 `start` 自动执行 `before-dev`、补当前 task 的门禁，之后进入实现闭环。
+先选定当前 task，先向用户说明这次要开的 task 信息，再由 `continue` 自动执行 `before-dev`、补当前 task 的门禁，之后进入实现闭环。
 
 ### CLI 入口差异
 
-- Claude Code：默认 `/trellis:continue`；只有显式先测时才 `/trellis:test-first`
-- OpenCode：默认 TUI 用 `/trellis:continue`、CLI 用 `trellis/continue`；只有显式先测时才进入 `test-first`
-- Codex：默认描述当前实现意图或显式触发 `trellis-continue` skill；只有显式先测时才进入 `test-first`
+- Claude Code：`/trellis:continue`（可选测试驱动模式）
+- OpenCode：TUI 用 `/trellis:continue`、CLI 用 `trellis/continue`（可选测试驱动模式）
+- Codex：描述当前实现意图或显式触发 `trellis-continue` skill（可选测试驱动模式）
 
 ### 推荐 MCP / Skills
 
@@ -620,9 +620,9 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### CLI 入口差异
 
-- Claude Code：`/trellis:check` → （默认）`/trellis:finish-work`；命中 `review-gate` 硬条件、或软条件判定达到 `recommended`、或用户显式要求时 → `/trellis:review-gate`
-- OpenCode：TUI 用 `/trellis:check`、`/trellis:finish-work`（或条件触发 `/trellis:review-gate`）；CLI 用 `trellis/check`、`trellis/finish-work`
-- Codex：自然语言描述或显式触发 `check`、`finish-work` skill；条件触发时再用 `review-gate` skill
+- Claude Code：`/trellis:check` → （默认）`/trellis:delivery`；命中 `review-gate` 硬条件、或软条件判定达到 `recommended`、或用户显式要求时 → `/trellis:review-gate`
+- OpenCode：TUI 用 `/trellis:check`、`/trellis:delivery`（或条件触发 `/trellis:review-gate`）；CLI 用 `trellis/check`、`trellis/delivery`
+- Codex：自然语言描述或显式触发 `check`、`delivery` skill；条件触发时再用 `review-gate` skill
 
 ### 推荐 MCP / Skills
 
@@ -648,41 +648,9 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ---
 
-## 阶段 8：Finish-Work
-
-### 目标
-
-在提交前用项目真实检查矩阵证明“这轮工作可以交给人测试或提交”。
-
-### CLI 入口差异
-
-- Claude Code：`/trellis:finish-work`
-- OpenCode：TUI 用 `/trellis:finish-work`，CLI 用 `trellis/finish-work`
-- Codex：自然语言描述或显式触发 `finish-work` skill
-
-### 推荐 MCP / Skills
-
-- `verification-before-completion`
-
-### 典型降级方式
-
-- 没法运行某项检查时，明确写 `not run` 和原因，不要说“应该没问题”
-- 不用默认 `lint/test/build` 占位词替代真实项目检查矩阵
-
-### 外部交付项目分支
-
-这里只做轻量提醒：若本轮涉及交付控制文档、授权条款或移交 checklist，也应纳入提交前检查证据。
-
-### 退出门禁
-
-- 真实执行了本项目要求的检查
-- 结果按 `pass / fail / not run` 记录
-- 当前 task 已有 `finish-work-checklist.md`，至少记录冻结验证矩阵、人工验证状态、spec/docs 同步结论
-- 可以进入 `delivery`
-
 ---
 
-## 阶段 9：Delivery
+## 阶段 8：Delivery
 
 ### 目标
 
