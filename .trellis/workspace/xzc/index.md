@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-6.md`
-- **Total Sessions**: 290
+- **Total Sessions**: 291
 - **Last Active**: 2026-05-22
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-6.md` | ~1554 | Active |
+| `journal-6.md` | ~1588 | Active |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
@@ -34,6 +34,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 291 | 2026-05-22 | 简化工作流：修复过度复杂化和边界模糊问题 | `12e25e4`, `59ceeca` | `main` |
 | 290 | 2026-05-22 | Workflow Audit Personal Bootstrap Routing Fixes | `611cb92`, `5c0f2bb` | `main` |
 | 289 | 2026-05-22 | repair workflow source maintenance contracts | `0cf8edc` | `main` |
 | 288 | 2026-05-21 | workflow complexity repair and scan/repair guardrails | `df95515`, `96fb63e`, `f2ba0f6` | `main` |

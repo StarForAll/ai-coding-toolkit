@@ -1552,3 +1552,37 @@ Verified embedded-workflow issues against /tmp fixture, repaired personal-bootst
 ### Next Steps
 
 - None - task complete
+
+
+## Session 291: 简化工作流：修复过度复杂化和边界模糊问题
+
+**Date**: 2026-05-22
+**Task**: 简化工作流：修复过度复杂化和边界模糊问题
+**Branch**: `main`
+
+### Summary
+
+完成工作流简化任务：阶段 12→9，状态字段 9→7，删除 11 个文件，代码减少 1483 行。修复 2 个关键问题：(1) 恢复 be25eb2 错误删除的 5 个关键 patch 脚本和配置残留清理；(2) 恢复 405e028 错误删除的 finish-work-patch-projectization.md。装后自检通过（0 个冲突）。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `12e25e4` | (see git log) |
+| `59ceeca` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
