@@ -1617,3 +1617,69 @@ Verified embedded-workflow issues against /tmp fixture, repaired personal-bootst
 ### Next Steps
 
 - None - task complete
+
+
+## Session 293: workflow: closeout state sync
+
+**Date**: 2026-05-22
+**Task**: workflow: closeout state sync
+**Branch**: `main`
+
+### Summary
+
+Clarified native finish-work vs project-level delivery boundaries, aligned workflow assets/specs/tests, and archived the task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `eb61b27` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 294: workflow: closeout state sync
+
+**Date**: 2026-05-22
+**Task**: workflow: closeout state sync
+**Branch**: `main`
+
+### Summary
+
+Clarified native finish-work vs project-level delivery boundaries, aligned workflow assets/specs/tests, and archived the task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `eb61b27` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
