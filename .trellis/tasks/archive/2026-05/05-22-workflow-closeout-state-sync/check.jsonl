@@ -1,0 +1,6 @@
+{"file":".trellis/spec/docs/index.md","reason":"verify doc propagation, source/deployed boundary, and workflow source wording consistency"}
+{"file":".trellis/spec/scripts/index.md","reason":"quality-check entry index for workflow scripts and command docs"}
+{"file":".trellis/spec/scripts/workflow-installer-upgrade-contracts.md","reason":"check installer/upgrade changes against product-source contracts and drift rules"}
+{"file":".trellis/spec/scripts/workflow-command-doc-contracts.md","reason":"check every workflow command doc and walkthrough update for propagation completeness"}
+{"file":".trellis/tasks/05-22-workflow-closeout-state-sync/prd.md","reason":"task acceptance criteria and confirmed scope for review"}
+{"file":".trellis/tasks/05-22-workflow-closeout-state-sync/info.md","reason":"review expected verification surface and execution order"}

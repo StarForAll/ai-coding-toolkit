@@ -1,0 +1,6 @@
+{"file":".trellis/spec/docs/index.md","reason":"repo-local documentation rules for workflow source assets, propagation, and source/deployed boundary"}
+{"file":".trellis/spec/scripts/index.md","reason":"entry index for workflow installer/upgrade and command-doc authoring specs"}
+{"file":".trellis/spec/scripts/workflow-installer-upgrade-contracts.md","reason":"constraints for modifying install-workflow.py and upgrade-compat.py safely"}
+{"file":".trellis/spec/scripts/workflow-command-doc-contracts.md","reason":"contracts for updating workflow command docs and keeping propagated wording consistent"}
+{"file":".trellis/tasks/05-22-workflow-closeout-state-sync/prd.md","reason":"current task requirements, confirmed boundaries, and acceptance criteria"}
+{"file":".trellis/tasks/05-22-workflow-closeout-state-sync/info.md","reason":"implementation order, risk notes, and next-turn execution guidance"}
