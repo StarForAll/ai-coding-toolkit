@@ -1052,17 +1052,14 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertNotIn("pnpm lint", finish_work_text)
         self.assertNotIn("archive the active task", finish_work_text)
         self.assertNotIn("Step 3/4 替换说明", finish_work_text)
-        self.assertIn("finish-work → delivery → record-session", finish_work_text)
+        self.assertIn("finish-work → delivery", finish_work_text)
         # 补丁已条件化：验证质量平台门禁口径，不再硬断言特定 sonar 内容
         self.assertIn("质量平台门禁", finish_work_text)
         codex_finish_work_text = (
             fixture / ".agents" / "skills" / "trellis-finish-work" / "SKILL.md"
         ).read_text(encoding="utf-8")
-        self.assertNotIn("hand off to `delivery` / `record-session`", codex_finish_work_text)
-        self.assertNotIn("hand off to delivery / record-session", codex_finish_work_text)
-        record_session_text = (fixture / ".claude" / "commands" / "trellis" / "record-session.md").read_text(encoding="utf-8")
-        self.assertIn("只负责确认：当前 task 已满足 **进入 `record-session` 之前** 的 `delivery` 完整性门禁", record_session_text)
-        self.assertIn("不代表** `archive`、`add_session.py`", record_session_text)
+        self.assertNotIn("hand off to `delivery`", codex_finish_work_text)
+        self.assertNotIn("hand off to delivery", codex_finish_work_text)
         task_py_text = (fixture / ".trellis" / "scripts" / "task.py").read_text(encoding="utf-8")
         self.assertIn(TASK_DEGRADED_PATCH_MARKER, task_py_text)
         self.assertIn(TASK_CURRENT_DEGRADED_PATCH_MARKER, task_py_text)
@@ -1097,7 +1094,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         record_data = json.loads(record.read_text(encoding="utf-8"))
         self.assertIn("brainstorm", record_data["commands"])
         self.assertIn("project-audit", record_data["commands"])
-        self.assertEqual(record_data["overlay_commands"], ["brainstorm", "check", "record-session"])
+        self.assertEqual(record_data["overlay_commands"], ["brainstorm", "check"])
         self.assertEqual(record_data["disabled_commands"], ["parallel"])
         self.assertEqual(
             record_data["patched_baseline_commands"],
@@ -1972,8 +1969,8 @@ Triggered from `start` (Trellis command) when the user describes a development t
         workflow_doc = fixture / ".trellis" / "workflow.md"
         workflow_doc.write_text(
             workflow_doc.read_text(encoding="utf-8").replace(
-                "workflow-state.py set <dir> --stage brainstorm --stage-status in_progress --awaiting-user-confirmation false --allowed-next design,plan,implementation,test-first",
-                "workflow-state.py set <dir> --stage brainstorm --stage-status blocked --awaiting-user-confirmation false --allowed-next design,plan,implementation,test-first",
+                "workflow-state.py set <dir> --stage brainstorm --stage-status in_progress --awaiting-user-confirmation false --allowed-next design,plan,implementation",
+                "workflow-state.py set <dir> --stage brainstorm --stage-status blocked --awaiting-user-confirmation false --allowed-next design,plan,implementation",
             ),
             encoding="utf-8",
         )

@@ -1306,7 +1306,7 @@ def validate_external_project_controls(
             f"{assessment_file.relative_to(repo_root).as_posix()} 的 `kickoff_payment_received` 只能填写 `yes` / `no`"
         )
     elif stage in EXECUTION_STAGES and kickoff_received != "yes":
-        errors.append("外包项目在启动款未确认到账前，不得进入 implementation / test-first")
+        errors.append("外包项目在启动款未确认到账前，不得进入 implementation")
 
     delivery_track = extract_backticked_field(content, "delivery_control_track")
     if delivery_track is None:
@@ -1482,7 +1482,7 @@ def validate_brainstorm_exit_gate(
                 rendered_value = complexity_decision or "(missing)"
                 errors.append(
                     f"{TASK_PRD.as_posix()} 的 `complexity_decision`={rendered_value!r}；"
-                    "brainstorm 仅允许 `L0` 直接进入 implementation/test-first，其他复杂度必须先进入 design/plan"
+                    "brainstorm 仅允许 `L0` 直接进入 implementation，其他复杂度必须先进入 design/plan"
                 )
 
     if require_customer_prd and allowed_targets & {"design", "plan"}:

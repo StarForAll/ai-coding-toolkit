@@ -28,20 +28,18 @@ LEGACY_PATCH_BASELINE_COMMANDS = ["start", "finish-work", "record-session"]
 CODEX_PATCH_BASELINE_SKILLS = ["trellis-continue", "trellis-finish-work", "trellis-start"]
 LEGACY_CODEX_PATCH_BASELINE_SKILLS = ["start", "finish-work"]
 PATCH_BASELINE_SHARED_DOCS = ["workflow.md"]
-OVERLAY_BASELINE_COMMANDS = ["brainstorm", "check", "record-session"]
+OVERLAY_BASELINE_COMMANDS = ["brainstorm", "check"]
 OPTIONAL_DISABLED_BASELINE_COMMANDS = ["parallel"]
-ADDED_COMMANDS = ["feasibility", "design", "plan", "test-first", "project-audit", "review-gate", "delivery"]
+ADDED_COMMANDS = ["feasibility", "design", "plan", "project-audit", "review-gate", "delivery"]
 DISTRIBUTED_COMMANDS = [
     "feasibility",
     "brainstorm",
     "design",
     "plan",
-    "test-first",
     "project-audit",
     "check",
     "review-gate",
     "delivery",
-    "record-session",
 ]
 HELPER_SCRIPTS = [
     "feasibility-check.py",

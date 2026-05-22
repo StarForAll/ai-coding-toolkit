@@ -328,10 +328,9 @@ def workflow_patch_matches_source(src: Path, workflow_md: Path, *, profile: str 
         return False
 
     required_snippets = (
-        "finish-work -> delivery -> record-session",
+        "finish-work -> delivery",
         "does **not** advance `workflow-state.json.stage`",
         "Current stage: **finish-work**",
-        "Current stage: **record-session**",
     )
     if any(snippet not in content for snippet in required_snippets):
         return False
@@ -345,7 +344,7 @@ def workflow_patch_matches_source(src: Path, workflow_md: Path, *, profile: str 
     anchor_snippets = (
         "Phase A — pre-commit (`/trellis:finish-work`)",
         "Current stage: **implementation**",
-        "workflow-state.py set <dir> --stage brainstorm --stage-status in_progress --awaiting-user-confirmation false --allowed-next design,plan,implementation,test-first",
+        "workflow-state.py set <dir> --stage brainstorm --stage-status in_progress --awaiting-user-confirmation false --allowed-next design,plan,implementation",
     )
     if not all(snippet in patch_text and snippet in content for snippet in anchor_snippets):
         return False

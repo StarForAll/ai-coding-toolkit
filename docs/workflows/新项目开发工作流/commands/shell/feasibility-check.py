@@ -169,7 +169,7 @@ ASSESSMENT_TEMPLATE = """# 项目可行性评估
 | 字段 | 最低要求 | 下游影响 |
 |------|----------|----------|
 | `project_engagement_type` | 所有项目必填；外包项目填 `external_outsourcing`，其余填 `non_outsourcing` | 决定是否启用外包项目商务与交付控制门禁 |
-| `kickoff_payment_ratio` | 外包项目必填，且最低不少于 `30%` | 决定 implementation / test-first 的开工前提 |
+| `kickoff_payment_ratio` | 外包项目必填，且最低不少于 `30%` | 决定 implementation 的开工前提 |
 | `kickoff_payment_received` | 外包项目必填，取值为 `yes` / `no` | 决定是否允许开工 |
 | `delivery_control_track` | 外包项目必填，取值为 `hosted_deployment` / `trial_authorization` | 决定 design 阶段的交付治理 spec 选择 |
 | `delivery_control_handover_trigger` | 外包项目必填，明确最终控制权移交触发条件 | 决定 plan / delivery 阶段何时允许最终移交 |
@@ -344,7 +344,7 @@ def step_validate(task_dir: Path) -> int:
         else:
             print(f"✅ `kickoff_payment_received`: {kickoff_received}")
             if kickoff_received == "no":
-                warnings.append("外包项目尚未确认启动款到账；后续不得进入 implementation / test-first")
+                warnings.append("外包项目尚未确认启动款到账；后续不得进入 implementation")
 
         track_value = extract_backticked_field(content, "delivery_control_track")
         if track_value is None:
