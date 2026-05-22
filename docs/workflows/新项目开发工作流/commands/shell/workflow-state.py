@@ -77,27 +77,21 @@ STAGES = {
     "design",
     "plan",
     "implementation",
-    "test-first",
-    "project-audit",
     "check",
     "review-gate",
-    "finish-work",
+    "project-audit",
     "delivery",
-    "record-session",
 }
 STAGE_TRANSITIONS: dict[str, list[str]] = {
     "feasibility": ["brainstorm"],
-    "brainstorm": ["design", "plan", "implementation", "test-first"],
+    "brainstorm": ["design", "plan", "implementation"],
     "design": ["plan"],
-    "plan": ["implementation", "test-first"],
-    "implementation": ["test-first", "check", "project-audit"],
-    "test-first": ["implementation", "check", "project-audit"],
-    "project-audit": ["check", "review-gate"],
-    "check": ["project-audit", "review-gate", "implementation", "finish-work"],
-    "review-gate": ["project-audit", "finish-work", "implementation"],
-    "finish-work": ["delivery"],
-    "delivery": ["record-session"],
-    "record-session": [],
+    "plan": ["implementation"],
+    "implementation": ["check", "project-audit"],
+    "check": ["implementation", "review-gate"],
+    "review-gate": ["implementation"],
+    "project-audit": ["delivery"],
+    "delivery": [],
 }
 STAGE_STATUSES = {
     "in_progress",
@@ -105,13 +99,13 @@ STAGE_STATUSES = {
     "awaiting_user_confirmation",
     "completed",
 }
-EXECUTION_STAGES = {"implementation", "test-first"}
+EXECUTION_STAGES = {"implementation"}
 COORDINATION_STAGES = {"feasibility", "brainstorm", "design", "plan", "project-audit"}
 LEAF_REQUIRED_STAGES = STAGES - COORDINATION_STAGES
 SUPPORTED_STATE_VERSION = 1
 PROJECT_ESTIMATE_REQUIRED_STAGES = STAGES - {"feasibility", "brainstorm"}
 # 只在 design/plan 校验 customer-facing PRD 的粗估摘要。
-# 原因：L0 可在 brainstorm 收口后直接进入 start/implementation 或显式进入 test-first，
+# 原因：L0 可在 brainstorm 收口后直接进入 start/implementation，
 # 这些路径允许只保留 task-local prd.md 而不强制正式 customer-facing PRD。
 # design/plan 负责第一次校验正式 customer-facing PRD 的粗估摘要；
 # feasibility/brainstorm 之后的全部后续阶段则持续依赖 task-local prd.md 中的项目级粗估。
@@ -220,13 +214,9 @@ def build_default_state(stage: str) -> dict[str, Any]:
     return {
         "version": 1,
         "stage": stage,
-        "stage_status": "in_progress",
+        "status": "in_progress",
         "current_block": None,
         "completed_blocks": [],
-        "allowed_next_stages": list(STAGE_TRANSITIONS.get(stage, [])),
-        "awaiting_user_confirmation": False,
-        "last_confirmed_transition": None,
-        "notes": [],
         "checkpoints": {
             "architecture_confirmed": False,
             "context7_review_completed": False,
@@ -367,17 +357,14 @@ def validate_state_shape(state: dict[str, Any], errors: list[str]) -> None:
     if "version" not in state:
         state["version"] = SUPPORTED_STATE_VERSION
     # Tolerant: ignore unknown keys (only validate required keys)
+    # Note: stage_status and allowed_next_stages are deprecated and no longer validated
 
     required_keys = {
         "version",
         "stage",
-        "stage_status",
+        "status",
         "current_block",
         "completed_blocks",
-        "allowed_next_stages",
-        "awaiting_user_confirmation",
-        "last_confirmed_transition",
-        "notes",
         "checkpoints",
         "updated_at",
     }
@@ -395,9 +382,9 @@ def validate_state_shape(state: dict[str, Any], errors: list[str]) -> None:
     if stage not in STAGES:
         errors.append(f"stage 非法: {stage!r}")
 
-    stage_status = state.get("stage_status")
-    if stage_status not in STAGE_STATUSES:
-        errors.append(f"stage_status 非法: {stage_status!r}")
+    status = state.get("status")
+    if status not in STAGE_STATUSES:
+        errors.append(f"status 非法: {status!r}")
 
     current_block = state.get("current_block")
     if current_block is not None and not isinstance(current_block, str):
@@ -406,27 +393,6 @@ def validate_state_shape(state: dict[str, Any], errors: list[str]) -> None:
     completed_blocks = state.get("completed_blocks")
     if not isinstance(completed_blocks, list) or not all(isinstance(item, str) for item in completed_blocks):
         errors.append("completed_blocks 必须是字符串数组")
-
-    allowed_next = state.get("allowed_next_stages")
-    if not isinstance(allowed_next, list) or not all(isinstance(item, str) for item in allowed_next):
-        errors.append("allowed_next_stages 必须是字符串数组")
-    else:
-        invalid_next = [item for item in allowed_next if item not in STAGES]
-        if invalid_next:
-            errors.append(f"allowed_next_stages 存在非法阶段: {', '.join(invalid_next)}")
-
-    awaiting = state.get("awaiting_user_confirmation")
-    if not isinstance(awaiting, bool):
-        errors.append("awaiting_user_confirmation 必须是布尔值")
-
-    if awaiting is True and stage_status != "awaiting_user_confirmation":
-        errors.append("awaiting_user_confirmation=true 时，stage_status 必须为 awaiting_user_confirmation")
-    if stage_status == "awaiting_user_confirmation" and awaiting is not True:
-        errors.append("stage_status=awaiting_user_confirmation 时，awaiting_user_confirmation 必须为 true")
-
-    notes = state.get("notes")
-    if not isinstance(notes, list) or not all(isinstance(item, str) for item in notes):
-        errors.append("notes 必须是字符串数组")
 
     checkpoints = state.get("checkpoints")
     if not isinstance(checkpoints, dict):
@@ -441,18 +407,6 @@ def validate_state_shape(state: dict[str, Any], errors: list[str]) -> None:
         execution_authorized = checkpoints.get("execution_authorized")
         if not isinstance(execution_authorized, bool):
             errors.append("checkpoints.execution_authorized 必须是布尔值")
-
-    transition = state.get("last_confirmed_transition")
-    if transition is not None:
-        if not isinstance(transition, dict):
-            errors.append("last_confirmed_transition 必须是对象或 null")
-        else:
-            if not isinstance(transition.get("from"), str):
-                errors.append("last_confirmed_transition.from 必须存在且为字符串")
-            if not isinstance(transition.get("to"), str):
-                errors.append("last_confirmed_transition.to 必须存在且为字符串")
-            if not isinstance(transition.get("confirmed_at"), str):
-                errors.append("last_confirmed_transition.confirmed_at 必须存在且为字符串")
 
 
 def transition_payload_is_valid(
@@ -489,32 +443,10 @@ def recover_repair_state(
     if isinstance(existing_completed, list) and all(isinstance(item, str) for item in existing_completed):
         repaired["completed_blocks"] = existing_completed
 
-    existing_allowed_next = state.get("allowed_next_stages")
-    canonical_allowed_next = set(STAGE_TRANSITIONS.get(candidate_stage, []))
-    if (
-        isinstance(existing_allowed_next, list)
-        and all(isinstance(item, str) for item in existing_allowed_next)
-        and set(existing_allowed_next).issubset(canonical_allowed_next)
-    ):
-        repaired["allowed_next_stages"] = existing_allowed_next
-
-    existing_notes = state.get("notes")
-    if isinstance(existing_notes, list) and all(isinstance(item, str) for item in existing_notes):
-        repaired["notes"] = existing_notes
-
     if candidate_stage in EXECUTION_STAGES:
-        existing_stage_status = state.get("stage_status")
-        existing_awaiting = state.get("awaiting_user_confirmation")
-        if (
-            existing_stage_status in STAGE_STATUSES
-            and isinstance(existing_awaiting, bool)
-            and (
-                (existing_awaiting is True and existing_stage_status == "awaiting_user_confirmation")
-                or (existing_awaiting is False and existing_stage_status != "awaiting_user_confirmation")
-            )
-        ):
-            repaired["stage_status"] = existing_stage_status
-            repaired["awaiting_user_confirmation"] = existing_awaiting
+        existing_status = state.get("status") or state.get("status")  # backward compat
+        if existing_status in STAGE_STATUSES:
+            repaired["status"] = existing_status
 
         existing_checkpoints = state.get("checkpoints")
         if isinstance(existing_checkpoints, dict):
@@ -528,26 +460,18 @@ def recover_repair_state(
                 if isinstance(field_value, bool):
                     repaired_checkpoints[field_name] = field_value
 
-        existing_transition = state.get("last_confirmed_transition")
-        if transition_payload_is_valid(existing_transition, target_stage=candidate_stage):
-            repaired["last_confirmed_transition"] = existing_transition
-
     return repaired
 
 
 def apply_repair_overrides(repaired: dict[str, Any], args: argparse.Namespace) -> None:
-    if getattr(args, "stage_status", None):
-        repaired["stage_status"] = args.stage_status
+    if getattr(args, "status", None):
+        repaired["status"] = args.status
     if getattr(args, "clear_current_block", False):
         repaired["current_block"] = None
     elif getattr(args, "current_block", None) is not None:
         repaired["current_block"] = args.current_block
     if getattr(args, "completed_blocks", None) is not None:
         repaired["completed_blocks"] = [item for item in args.completed_blocks.split(",") if item]
-    if getattr(args, "allowed_next", None) is not None:
-        repaired["allowed_next_stages"] = [item for item in args.allowed_next.split(",") if item]
-    if getattr(args, "awaiting_user_confirmation", None) is not None:
-        repaired["awaiting_user_confirmation"] = args.awaiting_user_confirmation
 
     checkpoints = repaired.setdefault("checkpoints", {})
     if getattr(args, "architecture_confirmed", None) is not None:
@@ -557,25 +481,9 @@ def apply_repair_overrides(repaired: dict[str, Any], args: argparse.Namespace) -
     if getattr(args, "execution_authorized", None) is not None:
         checkpoints["execution_authorized"] = args.execution_authorized
 
-    if getattr(args, "clear_last_transition", False):
-        repaired["last_confirmed_transition"] = None
-    elif getattr(args, "transition_from", None) is not None:
-        repaired["last_confirmed_transition"] = {
-            "from": args.transition_from,
-            "to": repaired.get("stage"),
-            "confirmed_at": now_iso(),
-        }
-
-    if getattr(args, "note", None):
-        notes = repaired.setdefault("notes", [])
-        if not isinstance(notes, list):
-            notes = []
-            repaired["notes"] = notes
-        notes.append(args.note)
-
 
 def validate_plan_gate(task_dir: Path, errors: list[str]) -> None:
-    """Validate plan artifacts before entering implementation or test-first."""
+    """Validate plan artifacts before entering implementation."""
     checklist_path = task_dir / TASK_CREATION_CHECKLIST_FILE
     if checklist_path.is_file():
         content = checklist_path.read_text(encoding="utf-8")
@@ -624,7 +532,7 @@ def validate_check_gate(task_dir: Path, errors: list[str]) -> None:
     """Validate check.md exists and has minimum content structure before leaving check stage."""
     check_path = task_dir / CHECK_MD_FILE
     if not check_path.is_file():
-        errors.append("缺少 check.md；check 阶段产物未生成，不得进入 review-gate 或 finish-work")
+        errors.append("缺少 check.md；check 阶段产物未生成，不得进入 review-gate")
         return
     content = check_path.read_text(encoding="utf-8")
     missing_sections: list[str] = []
@@ -643,23 +551,23 @@ def validate_check_gate(task_dir: Path, errors: list[str]) -> None:
     if missing_sections:
         errors.append(
             f"check.md 缺少必要章节: {', '.join(missing_sections)}；"
-            "check 阶段产物不完整，不得进入 review-gate 或 finish-work"
+            "check 阶段产物不完整，不得进入 review-gate"
         )
         return
 
     if not re.search(r"\b(pass|fail|not run)\b|通过|失败|未运行", content, re.IGNORECASE):
         errors.append(
             "check.md 缺少真实验证结论（pass / fail / not run）；"
-            "check 阶段产物不完整，不得进入 review-gate 或 finish-work"
+            "check 阶段产物不完整，不得进入 review-gate"
         )
 
 
 def validate_finish_work_gate(task_dir: Path, errors: list[str]) -> None:
-    """Validate frozen close-out evidence before leaving finish-work for delivery."""
+    """Validate finish-work-checklist.md as a prerequisite for delivery stage."""
     checklist_path = task_dir / FINISH_WORK_CHECKLIST_FILE
     if not checklist_path.is_file():
         errors.append(
-            "缺少 finish-work-checklist.md；finish-work 阶段未冻结验证矩阵与收尾证据，不得进入 delivery"
+            "缺少 finish-work-checklist.md；delivery 阶段前置条件未满足，未冻结验证矩阵与收尾证据"
         )
         return
 
@@ -676,19 +584,19 @@ def validate_finish_work_gate(task_dir: Path, errors: list[str]) -> None:
     if missing_sections:
         errors.append(
             f"finish-work-checklist.md 缺少必要内容: {', '.join(missing_sections)}；"
-            "finish-work 阶段证据不完整，不得进入 delivery"
+            "delivery 阶段前置条件不完整"
         )
         return
 
     if not re.search(r"\b(pass|fail|not run)\b|通过|失败|未运行", content, re.IGNORECASE):
         errors.append(
             "finish-work-checklist.md 缺少真实验证结论（pass / fail / not run）；"
-            "finish-work 阶段证据不完整，不得进入 delivery"
+            "delivery 阶段前置条件不完整"
         )
     if not re.search(r"当前状态|status|证据缺口|evidence gap", content, re.IGNORECASE):
         errors.append(
             "finish-work-checklist.md 缺少人工验证真实状态或证据缺口；"
-            "finish-work 阶段证据不完整，不得进入 delivery"
+            "delivery 阶段前置条件不完整"
         )
 
 
@@ -750,12 +658,8 @@ def validate_review_gate_gate(task_dir: Path, errors: list[str]) -> None:
         )
 
 
-def validate_record_session_gate(task_dir: Path, errors: list[str]) -> None:
-    validate_delivery_gate(task_dir, errors, find_repo_root(task_dir))
-
-
 def validate_delivery_gate(task_dir: Path, errors: list[str], repo_root: Path | None = None) -> None:
-    """Validate delivery artifacts before entering record-session."""
+    """Validate delivery artifacts before completing delivery stage."""
     missing = [
         artifact.as_posix()
         for artifact in DELIVERY_ARTIFACTS
@@ -763,7 +667,7 @@ def validate_delivery_gate(task_dir: Path, errors: list[str], repo_root: Path | 
     ]
     if missing:
         errors.append(
-            f"缺少交付产物: {', '.join(missing)}；delivery 阶段未完成，不得进入 record-session"
+            f"缺少交付产物: {', '.join(missing)}；delivery 阶段未完成"
         )
     # Outsourcing-specific delivery artifact checks
     if repo_root is not None:
@@ -783,7 +687,7 @@ def validate_delivery_gate(task_dir: Path, errors: list[str], repo_root: Path | 
                 if missing_outsourcing:
                     errors.append(
                         f"外包项目缺少交付产物: {', '.join(missing_outsourcing)}；"
-                        "delivery 阶段未完成，不得进入 record-session"
+                        "delivery 阶段未完成"
                     )
     run_gate_validator(
         "delivery-control-validate.py",
@@ -836,11 +740,6 @@ def validate_stage_transition_gates(
         )
         return
 
-    if "allowed_next_stages" not in candidate_state or not isinstance(
-        candidate_state.get("allowed_next_stages"), list
-    ):
-        candidate_state["allowed_next_stages"] = list(STAGE_TRANSITIONS.get(new_stage, []))
-
     # Stages >= brainstorm require external project controls and ownership policy
     if new_stage in STAGES - {"feasibility"}:
         gate_errors: list[str] = []
@@ -876,8 +775,8 @@ def validate_stage_transition_gates(
     if new_stage in EXECUTION_STAGES and current_state.get("stage") == "plan":
         validate_plan_gate(task_dir, errors)
 
-    # Check → finish-work/review-gate requires check.md
-    if new_stage in {"finish-work", "review-gate"}:
+    # Check → review-gate requires check.md
+    if new_stage == "review-gate":
         validate_check_gate(task_dir, errors)
 
     if current_stage == "project-audit":
@@ -886,12 +785,11 @@ def validate_stage_transition_gates(
     if current_stage == "review-gate":
         validate_review_gate_gate(task_dir, errors)
 
-    # Finish-work → delivery requires the frozen close-out checklist
+    # Project-audit → delivery requires project-audit artifacts
     if new_stage == "delivery":
-        validate_finish_work_gate(task_dir, errors)
-
-    # Delivery → record-session requires delivery artifacts
-    if new_stage == "record-session":
+        if current_stage == "project-audit":
+            validate_project_audit_gate(task_dir, errors)
+        # Also validate delivery artifacts when entering delivery stage
         validate_delivery_gate(task_dir, errors, repo_root)
 
 
@@ -899,20 +797,11 @@ def validate_execution_boundary(state: dict[str, Any], errors: list[str]) -> Non
     stage = state.get("stage")
     checkpoints = state.get("checkpoints", {})
     execution_authorized = checkpoints.get("execution_authorized", False)
-    transition = state.get("last_confirmed_transition")
 
     if stage in EXECUTION_STAGES:
         if execution_authorized is not True:
             errors.append(
                 f"当前 stage={stage!r} 时，checkpoints.execution_authorized 必须为 true"
-            )
-        if not isinstance(transition, dict):
-            errors.append(
-                f"当前 stage={stage!r} 时，必须保留 last_confirmed_transition 作为进入执行阶段的确认记录"
-            )
-        elif transition.get("to") != stage:
-            errors.append(
-                f"当前 stage={stage!r} 时，last_confirmed_transition.to 必须等于当前 stage"
             )
     else:
         if execution_authorized is True:
@@ -1103,9 +992,6 @@ def collect_exit_gate_blockers(
     elif stage == "plan":
         validate_plan_gate(task_dir, blockers)
 
-    elif stage == "finish-work":
-        validate_finish_work_gate(task_dir, blockers)
-
     elif stage == "delivery":
         validate_delivery_gate(task_dir, blockers, repo_root)
 
@@ -1114,9 +1000,6 @@ def collect_exit_gate_blockers(
 
     elif stage == "review-gate":
         validate_review_gate_gate(task_dir, blockers)
-
-    elif stage == "record-session":
-        validate_record_session_gate(task_dir, blockers)
 
     elif stage == "design":
         validate_project_doc_boundary(state, repo_root, task_dir, blockers)
@@ -1149,7 +1032,7 @@ def validate_stage_exit_artifacts(
     stage = state.get("stage")
     if stage == "brainstorm":
         allowed_targets = design_path_candidates_from_state(state)
-        exit_ready = state.get("stage_status") in EXIT_READY_STATUSES
+        exit_ready = state.get("status") in EXIT_READY_STATUSES
         validate_brainstorm_exit_gate(
             state,
             repo_root,
@@ -1159,7 +1042,7 @@ def validate_stage_exit_artifacts(
             require_customer_prd=exit_ready and bool(allowed_targets & {"design", "plan"}),
         )
     elif stage == "design":
-        if state.get("stage_status") in EXIT_READY_STATUSES:
+        if state.get("status") in EXIT_READY_STATUSES:
             validate_project_doc_boundary(state, repo_root, task_dir, errors)
             validate_context7_review_artifact(task_dir, state, errors)
             validate_design_exit_gate(task_dir, errors)
@@ -1167,16 +1050,14 @@ def validate_stage_exit_artifacts(
         validate_plan_gate(task_dir, errors)
     elif stage == "check":
         validate_check_gate(task_dir, errors)
-    elif stage == "finish-work":
-        validate_finish_work_gate(task_dir, errors)
     elif stage == "project-audit":
         validate_project_audit_gate(task_dir, errors)
     elif stage == "review-gate":
         validate_review_gate_gate(task_dir, errors)
     elif stage == "delivery":
+        # delivery 阶段需要先验证 finish-work-checklist.md
+        validate_finish_work_gate(task_dir, errors)
         validate_delivery_gate(task_dir, errors, repo_root)
-    elif stage == "record-session":
-        validate_record_session_gate(task_dir, errors)
 
 
 def load_task_json(path: Path) -> dict[str, Any] | None:
@@ -1225,7 +1106,7 @@ def is_personal_brainstorm_bootstrap_allowed(
     """Whether personal-profile brainstorm may bootstrap assessment in place."""
     if state.get("stage") != "brainstorm":
         return False
-    if state.get("stage_status") != "in_progress":
+    if state.get("status") != "in_progress":
         return False
     if find_assessment_file(task_dir, repo_root) is not None:
         return False
@@ -1556,9 +1437,9 @@ def find_missing_markers(path: Path, markers: tuple[str, ...]) -> list[str]:
 
 
 def design_path_candidates_from_state(state: dict[str, Any]) -> set[str]:
-    allowed_next = state.get("allowed_next_stages")
-    if not isinstance(allowed_next, list):
-        return set()
+    # Deprecated: allowed_next_stages removed, now derive from STAGE_TRANSITIONS
+    current_stage = state.get("stage", "")
+    allowed_next = STAGE_TRANSITIONS.get(current_stage, [])
     return {item for item in allowed_next if isinstance(item, str)}
 
 
@@ -1625,7 +1506,7 @@ def validate_context7_review_artifact(
     architecture_confirmed = checkpoints.get("architecture_confirmed", False)
     context7_review_completed = checkpoints.get("context7_review_completed", False)
     stage = state.get("stage")
-    final_design_exit = design_exit_ready(state) and state.get("stage_status") in EXIT_READY_STATUSES
+    final_design_exit = design_exit_ready(state) and state.get("status") in EXIT_READY_STATUSES
 
     if stage == "plan":
         should_enforce = True
@@ -1681,7 +1562,7 @@ def validate_project_doc_boundary(
     stage = state.get("stage")
     checkpoints = state.get("checkpoints", {})
     architecture_confirmed = checkpoints.get("architecture_confirmed", False)
-    final_design_exit = design_exit_ready(state) and state.get("stage_status") in EXIT_READY_STATUSES
+    final_design_exit = design_exit_ready(state) and state.get("status") in EXIT_READY_STATUSES
 
     customer_prd = project_root / CUSTOMER_PRD
     developer_prd = project_root / DEVELOPER_PRD
@@ -1740,16 +1621,16 @@ def build_pending_state_for_set(
     if current_stage in EXECUTION_STAGES and pending_stage not in EXECUTION_STAGES:
         checkpoints = pending.setdefault("checkpoints", {})
         checkpoints["execution_authorized"] = False
+    # Note: args.stage_status and args.allowed_next are deprecated, but kept for backward compatibility
     if args.stage_status:
-        pending["stage_status"] = args.stage_status
+        pending["status"] = args.stage_status
     if args.clear_current_block:
         pending["current_block"] = None
     elif args.current_block is not None:
         pending["current_block"] = args.current_block
     if args.completed_blocks is not None:
         pending["completed_blocks"] = [item for item in args.completed_blocks.split(",") if item]
-    if args.allowed_next is not None:
-        pending["allowed_next_stages"] = [item for item in args.allowed_next.split(",") if item]
+    # Note: args.allowed_next is deprecated (allowed_next_stages field removed)
     if args.awaiting_user_confirmation is not None:
         pending["awaiting_user_confirmation"] = args.awaiting_user_confirmation
     if args.architecture_confirmed is not None:
@@ -1815,11 +1696,7 @@ def cmd_set(args: argparse.Namespace) -> int:
 
     if args.stage:
         if pending_stage != current_stage and not args.force:
-            # 1. allowed_next_stages gate
-            allowed = state.get("allowed_next_stages", [])
-            if isinstance(allowed, list) and pending_stage not in allowed:
-                print(f"❌ 阶段切换被拒绝: {current_stage!r} → {pending_stage!r} 不在 allowed_next_stages {allowed} 中；如需强制切换请使用 --force")
-                return 1
+            # 1. canonical transition gate
             canonical_next = STAGE_TRANSITIONS.get(current_stage, [])
             if pending_stage not in canonical_next:
                 print(
@@ -1828,9 +1705,9 @@ def cmd_set(args: argparse.Namespace) -> int:
                 return 1
             # 2. awaiting_user_confirmation gate for all non-trivial stage transitions
             if pending_stage not in {"feasibility"}:
-                current_status = state.get("stage_status", "")
+                current_status = state.get("status", "")
                 if current_status != "awaiting_user_confirmation":
-                    print(f"❌ 阶段切换被拒绝: 进入 {pending_stage!r} 前 stage_status 必须为 awaiting_user_confirmation；当前为 {current_status!r}。如需强制切换请使用 --force")
+                    print(f"❌ 阶段切换被拒绝: 进入 {pending_stage!r} 前 status 必须为 awaiting_user_confirmation；当前为 {current_status!r}。如需强制切换请使用 --force")
                     return 1
             # 3. execution_authorized gate for execution stages
             if pending_stage in EXECUTION_STAGES:
@@ -1952,12 +1829,10 @@ DISTRIBUTED_COMMAND_NAMES = (
     "brainstorm",
     "design",
     "plan",
-    "test-first",
     "project-audit",
     "check",
     "review-gate",
     "delivery",
-    "record-session",
 )
 
 
@@ -2344,7 +2219,7 @@ def _route_result(
     reason: str,
     *,
     stage: str | None = None,
-    stage_status: str | None = None,
+    status: str | None = None,
     blockers: list[str] | None = None,
     warnings: list[str] | None = None,
     profile_hint: str | None = None,
@@ -2355,8 +2230,8 @@ def _route_result(
     }
     if stage is not None:
         result["stage"] = stage
-    if stage_status is not None:
-        result["stage_status"] = stage_status
+    if status is not None:
+        result["status"] = status
     result["reason"] = reason
     result["blockers"] = blockers or []
     if warnings:
@@ -2554,14 +2429,14 @@ def cmd_route(args: argparse.Namespace) -> int:
             "repair_needed",
             state_errors[0],
             stage=state.get("stage") if isinstance(state.get("stage"), str) else None,
-            stage_status=state.get("stage_status") if isinstance(state.get("stage_status"), str) else None,
+            stage_status=state.get("status") if isinstance(state.get("status"), str) else None,
             blockers=state_errors,
         )
         return 0
 
     # Step 4: route by stage
     stage = state.get("stage", "")
-    stage_status = state.get("stage_status", "")
+    status = state.get("status", "")
     checkpoints = state.get("checkpoints", {})
     if task_data and stage_requires_leaf(stage):
         children = task_data.get("children", [])
@@ -2572,14 +2447,14 @@ def cmd_route(args: argparse.Namespace) -> int:
                 "context_needed",
                 f"当前 task 处于 leaf-required stage={stage} 但含有 children，需切换到子任务执行。子任务: {children_list}。请执行 task.py start <child-task-dir>",
                 stage=stage,
-                stage_status=stage_status or None,
+                stage_status=status or None,
             )
             return 0
 
     readiness_blockers = collect_route_readiness_blockers(task_dir, repo_root, state)
     route_warnings = collect_nonblocking_warnings(task_dir, repo_root, state)
 
-    if stage_status == "awaiting_user_confirmation":
+    if status == "awaiting_user_confirmation":
         exit_blockers = collect_exit_gate_blockers(task_dir, repo_root, state)
         all_blockers = readiness_blockers + exit_blockers
         if all_blockers:
@@ -2588,7 +2463,7 @@ def cmd_route(args: argparse.Namespace) -> int:
                 "awaiting_confirmation_with_blockers",
                 f"当前 stage={stage}, status=awaiting_user_confirmation 但仍存在 readiness blockers",
                 stage=stage,
-                stage_status=stage_status,
+                stage_status=status,
                 blockers=all_blockers,
             )
         else:
@@ -2597,7 +2472,7 @@ def cmd_route(args: argparse.Namespace) -> int:
                 "awaiting_confirmation",
                 f"当前 stage={stage}, status=awaiting_user_confirmation",
                 stage=stage,
-                stage_status=stage_status,
+                stage_status=status,
             )
         return 0
 
@@ -2608,7 +2483,7 @@ def cmd_route(args: argparse.Namespace) -> int:
             "blocked",
             primary_reason,
             stage=stage or None,
-            stage_status=stage_status or None,
+            stage_status=status or None,
             blockers=readiness_blockers,
         )
         return 0
@@ -2637,7 +2512,7 @@ def cmd_route(args: argparse.Namespace) -> int:
                 "blocked",
                 f"当前 stage={stage} 存在阻塞条件",
                 stage=stage,
-                stage_status=stage_status,
+                stage_status=status,
                 blockers=blockers,
             )
             return 0
@@ -2645,9 +2520,9 @@ def cmd_route(args: argparse.Namespace) -> int:
         _route_result(
             stage,
             "reenter",
-            f"当前 stage={stage}, status={stage_status}",
+            f"当前 stage={stage}, status={status}",
             stage=stage,
-            stage_status=stage_status,
+            stage_status=status,
             warnings=route_warnings,
         )
         return 0
@@ -2659,7 +2534,7 @@ def cmd_route(args: argparse.Namespace) -> int:
             "blocked",
             non_execution_blockers[0],
             stage=stage or None,
-            stage_status=stage_status or None,
+            stage_status=status or None,
             blockers=non_execution_blockers,
         )
         return 0
@@ -2667,9 +2542,9 @@ def cmd_route(args: argparse.Namespace) -> int:
     _route_result(
         stage,
         "reenter",
-        f"当前 stage={stage}, status={stage_status}",
+        f"当前 stage={stage}, status={status}",
         stage=stage,
-        stage_status=stage_status,
+        stage_status=status,
         warnings=route_warnings,
     )
     return 0
