@@ -957,8 +957,16 @@ def prompt_for_profile() -> str:
 
 def resolve_install_profile(profile_arg: str | None) -> str:
     """Resolve the install profile without relying on an implicit default."""
-    if profile_arg in VALID_PROFILES:
-        return profile_arg
+    _PROFILE_ALIASES = {
+        "p": "personal",
+        "o": "outsourcing",
+    }
+    if profile_arg is not None:
+        normalized = _PROFILE_ALIASES.get(profile_arg.strip().lower())
+        if normalized:
+            return normalized
+        if profile_arg in VALID_PROFILES:
+            return profile_arg
     if should_prompt_for_profile():
         return prompt_for_profile()
     sys.exit(
@@ -3258,8 +3266,8 @@ def main() -> int:
     p.add_argument("--project-root", type=Path, default=None, help="项目根目录（默认自动检测）")
     p.add_argument("--cli", type=str, default=None,
                    help="指定 CLI 类型，逗号分隔: claude,opencode,codex（默认安装全部检测到的 CLI；此参数仅用于过滤）")
-    p.add_argument("--profile", choices=VALID_PROFILES, default=None,
-                   help="安装配置: personal（排除外包内容）/ outsourcing（完整内容）")
+    p.add_argument("--profile", default=None,
+                   help="安装配置: personal（排除外包内容）/ outsourcing（完整内容），支持首字母简写 p / o")
     p.add_argument("--dry-run", action="store_true", help="预览安装结果，不实际写入")
     args = p.parse_args()
 
