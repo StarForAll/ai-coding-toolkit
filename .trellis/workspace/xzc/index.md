@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-6.md`
-- **Total Sessions**: 295
+- **Total Sessions**: 296
 - **Last Active**: 2026-05-23
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-6.md` | ~1719 | Active |
+| `journal-6.md` | ~1752 | Active |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
 | `journal-3.md` | ~1984 | Archived |
@@ -34,6 +34,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 296 | 2026-05-23 | Audit and fix workflow overdesign | `322b87f` | `main` |
 | 295 | 2026-05-23 | fix workflow installer profile contract and bootstrap cleanup | `a9f59e1`, `322abfa` | `main` |
 | 294 | 2026-05-22 | workflow: closeout state sync | `eb61b27` | `main` |
 | 293 | 2026-05-22 | workflow: closeout state sync | `eb61b27` | `main` |

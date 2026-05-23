@@ -1717,3 +1717,36 @@ Fixed workflow installer profile selection and bootstrap cleanup contracts, alig
 ### Next Steps
 
 - None - task complete
+
+
+## Session 296: Audit and fix workflow overdesign
+
+**Date**: 2026-05-23
+**Task**: Audit and fix workflow overdesign
+**Branch**: `main`
+
+### Summary
+
+Audited the embedded new-project workflow, removed the degraded active-task fallback contract from the source workflow, aligned install/upgrade/runtime docs and tests, and verified workflow installer/state tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `322b87f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
