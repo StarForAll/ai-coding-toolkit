@@ -1683,3 +1683,37 @@ Clarified native finish-work vs project-level delivery boundaries, aligned workf
 ### Next Steps
 
 - None - task complete
+
+
+## Session 295: fix workflow installer profile contract and bootstrap cleanup
+
+**Date**: 2026-05-23
+**Task**: fix workflow installer profile contract and bootstrap cleanup
+**Branch**: `main`
+
+### Summary
+
+Fixed workflow installer profile selection and bootstrap cleanup contracts, aligned workflow source docs/examples with explicit profile handling, corrected finish-work codex skill validation against workflow source, and verified embedded target recovery via upgrade-compat merge.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a9f59e1` | (see git log) |
+| `322abfa` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
