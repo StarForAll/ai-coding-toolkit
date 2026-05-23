@@ -92,7 +92,6 @@ cleanup_legacy_breadcrumb_blocks = _INSTALL_WORKFLOW.cleanup_legacy_breadcrumb_b
 cleanup_legacy_phase_router_sections = _INSTALL_WORKFLOW.cleanup_legacy_phase_router_sections
 cleanup_stale_contract_references = _INSTALL_WORKFLOW.cleanup_stale_contract_references
 patch_inject_workflow_state_hook = _INSTALL_WORKFLOW.patch_inject_workflow_state_hook
-patch_task_start_degraded_fallback = _INSTALL_WORKFLOW.patch_task_start_degraded_fallback
 patch_opencode_session_utils = _INSTALL_WORKFLOW.patch_opencode_session_utils
 patch_task_status_views = _INSTALL_WORKFLOW.patch_task_status_views
 patch_session_start_no_task_guidance = _INSTALL_WORKFLOW.patch_session_start_no_task_guidance
@@ -107,9 +106,6 @@ _ROUTE_HOOK_PATCH_MARKER = "# [workflow-embed-patch:prefer-workflow-route]"
 _OPENCODE_ROUTE_HOOK_PATCH_MARKER = "// [workflow-embed-patch:prefer-workflow-route]"
 _SESSION_START_ROUTE_FIRST_MARKER = "# [workflow-embed-patch:session-start-route-first]"
 _STALE_CONTRACT_PATTERN = _INSTALL_WORKFLOW._STALE_CONTRACT_PATTERN
-_TASK_DEGRADED_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_DEGRADED_PATCH_MARKER
-_TASK_CURRENT_DEGRADED_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_CURRENT_DEGRADED_PATCH_MARKER
-_TASK_NO_STATUS_FLIP_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_NO_STATUS_FLIP_PATCH_MARKER
 _TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER
 _TASK_STATUS_VIEW_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_STATUS_VIEW_PATCH_MARKER
 _OPENCODE_SESSION_UTILS_PATCH_MARKER = _INSTALL_WORKFLOW._OPENCODE_SESSION_UTILS_PATCH_MARKER
@@ -146,13 +142,7 @@ def _legacy_ready_guidance_issues(path: Path, content: str) -> list[str]:
 
 
 def _task_runtime_import_issues(path: Path, content: str) -> list[str]:
-    issues: list[str] = []
-    if _TASK_DEGRADED_PATCH_MARKER in content or _TASK_CURRENT_DEGRADED_PATCH_MARKER in content:
-        if "import os" not in content:
-            issues.append(f"{path.name}: degraded fallback 补丁缺少 os 导入")
-        if "import re" not in content:
-            issues.append(f"{path.name}: degraded fallback 补丁缺少 re 导入")
-    return issues
+    return []
 
 
 def detect_runtime_patch_contract_conflicts(root: Path, cli_types: list[str]) -> int:
@@ -1045,21 +1035,6 @@ def detect_conflicts_codex(
     task_content: str | None = None
     if task_py.exists():
         task_content = task_py.read_text(encoding="utf-8")
-        if _TASK_DEGRADED_PATCH_MARKER in task_content:
-            ok("[Shared] task.py: degraded-active-task fallback 补丁已应用")
-        else:
-            err("[Shared] task.py: degraded-active-task fallback 补丁缺失")
-            conflicts += 1
-        if _TASK_CURRENT_DEGRADED_PATCH_MARKER in task_content:
-            ok("[Shared] task.py: degraded current-task fallback 补丁已应用")
-        else:
-            err("[Shared] task.py: degraded current-task fallback 补丁缺失")
-            conflicts += 1
-        if _TASK_NO_STATUS_FLIP_PATCH_MARKER in task_content:
-            ok("[Shared] task.py: strong-gate no-status-flip 补丁已应用")
-        else:
-            err("[Shared] task.py: strong-gate no-status-flip 补丁缺失")
-            conflicts += 1
         task_runtime_issues = _task_runtime_import_issues(task_py, task_content)
         if task_runtime_issues:
             err("[Shared] task.py: " + "；".join(task_runtime_issues))
@@ -1727,7 +1702,6 @@ def main() -> int:
     cleanup_legacy_phase_router_sections(root, dry_run=False)
     cleanup_stale_contract_references(root, dry_run=False)
     patch_inject_workflow_state_hook(root, dry_run=False)
-    patch_task_start_degraded_fallback(root, dry_run=False)
     patch_opencode_session_utils(root, dry_run=False)
     agents_md = root / "AGENTS.md"
     if agents_md.exists() and (
@@ -1891,7 +1865,6 @@ def main() -> int:
     # upgrade paths converge with fresh install behavior.
     patch_inject_workflow_state_hook(root, dry_run=False)
     _apply_patch_session_start(src, root, dry_run=False)
-    patch_task_start_degraded_fallback(root, dry_run=False)
     patch_opencode_session_utils(root, dry_run=False)
     patch_session_start_no_task_guidance(root, dry_run=False)
     _apply_patch_workflow_phase(src, root, dry_run=False)

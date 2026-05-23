@@ -207,7 +207,6 @@ _CODEX_START_NEW_INTRO = (
     "authority for first-entry, recovery, or stage-entry decisions in an "
     "installed target project."
 )
-_TASK_CURRENT_DEGRADED_PATCH_MARKER = "# [workflow-embed-patch:degraded-current-read]"
 _WORKFLOW_PATCH_MARKER = "<!-- workflow-projectization-patch -->"
 _WORKFLOW_START_HEADING = "## Development Process"
 _WORKFLOW_END_HEADING = "## File Descriptions"
@@ -247,11 +246,8 @@ _STRONG_GATE_WORKFLOW_TASK_MECHANISM = (
     "reusing legacy planning semantics. State is stored under `.trellis/.runtime/"
     "sessions/`; if no context key is available from hook input, "
     "`TRELLIS_CONTEXT_ID`, or a platform-native session environment variable, "
-    "`task.py start` falls back to degraded recovery behavior and writes a runtime-"
-    "keyed fallback file (`degraded-active-task-<runtime-key>.json`, with the "
-    "shared `degraded-active-task.json` kept as compatibility fallback). These "
-    "degraded files are recovery hints only: route must surface them for manual "
-    "confirmation instead of auto-selecting the task. "
+    "`task.py start` follows the Trellis baseline degraded behavior and does not "
+    "persist an active-task pointer for that shell. "
     "`task.py finish` deletes the current session file (status unchanged). "
     "`task.py archive <task>` writes `status=completed`, moves the directory to "
     "`archive/`, and deletes any runtime session files that still point at the "
@@ -844,50 +840,6 @@ def clear_bootstrap_session_runtime_if_needed(root: Path, dry_run: bool) -> int:
 
     cleared = clear_task_from_sessions(bootstrap_ref, root)
     ok(f"已清理 bootstrap session active-task 引用 → {bootstrap_ref} ({cleared} 个 session)")
-    return cleared
-
-
-def _bootstrap_degraded_runtime_paths(root: Path) -> list[Path]:
-    runtime_dir = root / ".trellis" / ".runtime"
-    if not runtime_dir.is_dir():
-        return []
-
-    bootstrap_ref = f".trellis/tasks/{_BOOTSTRAP_TASK_NAME}"
-    matches: list[Path] = []
-    for degraded_path in runtime_dir.glob("degraded-active-task*.json"):
-        try:
-            payload = json.loads(degraded_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-            continue
-        if not isinstance(payload, dict):
-            continue
-        current_task = payload.get("current_task")
-        if not isinstance(current_task, str):
-            continue
-        if normalize_task_ref(current_task, root) == bootstrap_ref:
-            matches.append(degraded_path)
-    return matches
-
-
-def clear_bootstrap_degraded_runtime_if_needed(root: Path, dry_run: bool) -> int:
-    """清理仍指向 bootstrap task 的 degraded active-task fallback 文件。"""
-    matches = _bootstrap_degraded_runtime_paths(root)
-    if not matches:
-        return 0
-
-    bootstrap_ref = f".trellis/tasks/{_BOOTSTRAP_TASK_NAME}"
-    if dry_run:
-        info(f"将清理 bootstrap degraded active-task 引用 → {bootstrap_ref} ({len(matches)} 个文件)")
-        return len(matches)
-
-    cleared = 0
-    for degraded_path in matches:
-        try:
-            degraded_path.unlink()
-        except OSError:
-            continue
-        cleared += 1
-    ok(f"已清理 bootstrap degraded active-task 引用 → {bootstrap_ref} ({cleared} 个文件)")
     return cleared
 
 
@@ -2232,7 +2184,6 @@ def cleanup_legacy_customizing_section(root: Path, *, dry_run: bool) -> bool:
 # ── Issue 6: cleanup stale workflow-state-contract.md references ──
 _STALE_CONTRACT_PATTERN = ".trellis/spec/cli/backend/workflow-state-contract.md"
 _STALE_CONTRACT_REPLACEMENT = "workflow-state.py --help"
-_TASK_DEGRADED_PATCH_MARKER = "# [workflow-embed-patch:degraded-active-task]"
 _OPENCODE_SESSION_UTILS_PATCH_MARKER = "// [workflow-embed-patch:strong-gate-session-utils]"
 
 
@@ -2280,150 +2231,6 @@ def patch_cross_layer_thinking_guide(root: Path, *, dry_run: bool) -> bool:
     else:
         guide_path.write_text(patched, encoding="utf-8")
         ok("[Shared] cross-layer-thinking-guide.md 已更新为 /trellis:check 替代口径")
-    return True
-
-
-def patch_task_start_degraded_fallback(root: Path, *, dry_run: bool) -> bool:
-    """Patch task.py so degraded start writes recoverable active-task files.
-
-    The strong-gate router prefers a runtime-keyed degraded pointer when one is
-    available, while keeping `.trellis/.runtime/degraded-active-task.json` as a
-    shared compatibility fallback. The Trellis baseline `task.py start`
-    degraded branch never writes either file.
-    """
-    task_path = root / ".trellis" / "scripts" / "task.py"
-    if not task_path.exists():
-        return False
-
-    content = task_path.read_text(encoding="utf-8")
-    patched = content
-    applied = False
-
-    def _ensure_task_imports(text: str) -> str:
-        updated = text
-        if "import os\n" not in updated:
-            if "import argparse\n" in updated:
-                updated = updated.replace("import argparse\n", "import argparse\nimport os\n", 1)
-            else:
-                updated = "import os\n" + updated
-        if "import re\n" not in updated:
-            if "import os\n" in updated:
-                updated = updated.replace("import os\n", "import os\nimport re\n", 1)
-            elif "import argparse\n" in updated:
-                updated = updated.replace("import argparse\n", "import argparse\nimport re\n", 1)
-            else:
-                updated = "import re\n" + updated
-        return updated
-
-    anchor = '        # Still flip task.json status: planning → in_progress so downstream phases proceed.\n'
-    if _TASK_DEGRADED_PATCH_MARKER not in patched:
-        if anchor not in patched:
-            warn("[Shared] task.py degraded fallback 补丁未命中目标代码，跳过 start 分支写入补丁")
-        else:
-            patch_block = """\
-        # [workflow-embed-patch:degraded-active-task]
-        degraded_runtime = repo_root / ".trellis" / ".runtime"
-        degraded_runtime.mkdir(parents=True, exist_ok=True)
-        runtime_key = os.environ.get("TRELLIS_CONTEXT_ID", "").strip() or os.environ.get("TERM_SESSION_ID", "").strip() or f"ppid-{os.getppid()}"
-        runtime_key = re.sub(r"[^A-Za-z0-9._-]+", "_", runtime_key).strip("._-")[:160]
-        degraded_path = (
-            degraded_runtime / f"degraded-active-task-{runtime_key}.json"
-            if runtime_key
-            else degraded_runtime / "degraded-active-task.json"
-        )
-        degraded_payload = {
-            "current_task": task_dir,
-            "updated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
-            "source": "task.py start (degraded)",
-        }
-        if write_json(degraded_path, degraded_payload):
-            print(colored("✓ Wrote degraded active-task fallback", Colors.GREEN))
-
-"""
-            patched = patched.replace(anchor, patch_block + anchor, 1)
-            applied = True
-
-    finish_anchor = '    if task_json_path.is_file():\n        run_task_hooks("after_finish", task_json_path, repo_root)\n    return 0\n'
-    finish_patch = """\
-    degraded_runtime = repo_root / ".trellis" / ".runtime"
-    degraded_paths = list(degraded_runtime.glob("degraded-active-task*.json")) if degraded_runtime.is_dir() else []
-    for degraded_path in degraded_paths:
-        payload = read_json(degraded_path)
-        if isinstance(payload, dict) and payload.get("current_task") == current:
-            degraded_path.unlink()
-
-"""
-    if finish_anchor in patched:
-        if finish_patch not in patched:
-            patched = patched.replace(finish_anchor, finish_patch + finish_anchor, 1)
-            applied = True
-
-    current_anchor = '    if args.source:\n        print(f"Current task: {active.task_path or \'(none)\'}")\n        print(f"Source: {active.source}")\n        if active.stale:\n            print("State: stale")\n        return 0 if active.task_path else 1\n\n    if active.task_path:\n        print(active.task_path)\n        return 0\n\n    return 1\n'
-    current_patch = """\
-    if args.source:
-        if active.task_path:
-            print(f"Current task: {active.task_path}")
-            print(f"Source: {active.source}")
-            if active.stale:
-                print("State: stale")
-            return 0
-        # [workflow-embed-patch:degraded-current-read]
-        degraded_runtime = repo_root / ".trellis" / ".runtime"
-        runtime_key = os.environ.get("TRELLIS_CONTEXT_ID", "").strip() or os.environ.get("TERM_SESSION_ID", "").strip() or f"ppid-{os.getppid()}"
-        runtime_key = re.sub(r"[^A-Za-z0-9._-]+", "_", runtime_key).strip("._-")[:160]
-        degraded_candidates = []
-        if runtime_key:
-            degraded_candidates.append(degraded_runtime / f"degraded-active-task-{runtime_key}.json")
-        degraded_candidates.append(degraded_runtime / "degraded-active-task.json")
-        for degraded_path in degraded_candidates:
-            payload = read_json(degraded_path)
-            current_task = payload.get("current_task") if isinstance(payload, dict) else None
-            if isinstance(current_task, str) and current_task.strip():
-                print(f"Current task: {current_task}")
-                print("Source: degraded-active-task")
-                return 0
-        print("Current task: (none)")
-        print("Source: none")
-        if active.stale:
-            print("State: stale")
-        return 1
-
-    if active.task_path:
-        print(active.task_path)
-        return 0
-
-    degraded_runtime = repo_root / ".trellis" / ".runtime"
-    runtime_key = os.environ.get("TRELLIS_CONTEXT_ID", "").strip() or os.environ.get("TERM_SESSION_ID", "").strip() or f"ppid-{os.getppid()}"
-    runtime_key = re.sub(r"[^A-Za-z0-9._-]+", "_", runtime_key).strip("._-")[:160]
-    degraded_candidates = []
-    if runtime_key:
-        degraded_candidates.append(degraded_runtime / f"degraded-active-task-{runtime_key}.json")
-    degraded_candidates.append(degraded_runtime / "degraded-active-task.json")
-    for degraded_path in degraded_candidates:
-        payload = read_json(degraded_path)
-        current_task = payload.get("current_task") if isinstance(payload, dict) else None
-        if isinstance(current_task, str) and current_task.strip():
-            print(current_task)
-            return 0
-
-    return 1
-"""
-    if _TASK_CURRENT_DEGRADED_PATCH_MARKER not in patched and current_anchor in patched:
-        patched = patched.replace(current_anchor, current_patch, 1)
-        applied = True
-
-    if not applied:
-        ok("[Shared] task.py degraded fallback / current-read 补丁已存在")
-        return False
-
-    patched = _ensure_task_imports(patched)
-
-    if not dry_run:
-        task_path.write_text(patched, encoding="utf-8")
-    if dry_run:
-        info("[Shared] 将补丁 task.py degraded start fallback / current-read → runtime-keyed degraded-active-task 文件")
-    else:
-        ok("[Shared] task.py degraded start fallback / current-read 已补丁")
     return True
 
 
@@ -3206,7 +3013,6 @@ def remove_bootstrap_task(root: Path, dry_run: bool) -> str:
     task_dir = root / ".trellis" / "tasks" / _BOOTSTRAP_TASK_NAME
     current_task_cleared = clear_bootstrap_current_task_if_needed(root, dry_run)
     session_refs_cleared = clear_bootstrap_session_runtime_if_needed(root, dry_run)
-    degraded_refs_cleared = clear_bootstrap_degraded_runtime_if_needed(root, dry_run)
 
     if not task_dir.exists():
         info(f"{_BOOTSTRAP_TASK_NAME} 不存在，跳过清理")
@@ -3219,7 +3025,7 @@ def remove_bootstrap_task(root: Path, dry_run: bool) -> str:
     else:
         task_dir.unlink()
     ok(f"Trellis bootstrap 任务已删除 → {_BOOTSTRAP_TASK_NAME}")
-    if not current_task_cleared and session_refs_cleared == 0 and degraded_refs_cleared == 0:
+    if not current_task_cleared and session_refs_cleared == 0:
         info("bootstrap task 引用无需清理")
     return "removed"
 
@@ -3390,7 +3196,6 @@ def main() -> int:
             # Issue 1+7: patch deployed inject-workflow-state.py hook
             patch_inject_workflow_state_hook(root, dry_run=args.dry_run)
             _apply_patch_session_start(src, root, dry_run=args.dry_run)
-            patch_task_start_degraded_fallback(root, dry_run=args.dry_run)
             patch_opencode_session_utils(root, dry_run=args.dry_run)
 
             # C2: patch session-start no-task guidance to reference NL routing table

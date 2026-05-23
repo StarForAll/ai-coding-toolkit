@@ -36,8 +36,6 @@ FINISH_WORK_MARKER = "<!-- finish-work-projectization-patch -->"
 PARALLEL_DISABLED_MARKER = "<!-- workflow-parallel-disabled -->"
 WORKFLOW_PATCH_MARKER = "<!-- workflow-projectization-patch -->"
 TRELLIS_META_PATCH_MARKER = "<!-- workflow-embed-patch:trellis-meta-strong-gate -->"
-TASK_DEGRADED_PATCH_MARKER = "# [workflow-embed-patch:degraded-active-task]"
-TASK_CURRENT_DEGRADED_PATCH_MARKER = "# [workflow-embed-patch:degraded-current-read]"
 OPENCODE_SESSION_UTILS_PATCH_MARKER = "// [workflow-embed-patch:strong-gate-session-utils]"
 SESSION_START_STRONG_GATE_PATCH_MARKER = "# strong-gate-session-start-patch-applied"
 TASK_NO_STATUS_FLIP_PATCH_MARKER = "# [workflow-embed-patch:strong-gate-no-status-flip]"
@@ -905,19 +903,12 @@ class WorkflowInstallerTests(unittest.TestCase):
     def test_install_removes_bootstrap_task_before_first_route(self) -> None:
         fixture = self.create_fixture(bootstrap_as_current_task=True)
         self.addCleanup(shutil.rmtree, fixture)
-        degraded_path = fixture / ".trellis" / ".runtime" / "degraded-active-task.json"
-        degraded_path.write_text(
-            json.dumps({"current_task": ".trellis/tasks/00-bootstrap-guidelines"}, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
 
         install = self.install_workflow(fixture, "--profile", "outsourcing")
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
         self.assertFalse((fixture / ".trellis" / "tasks" / "00-bootstrap-guidelines").exists())
         self.assertFalse((fixture / ".trellis" / ".current-task").exists())
         self.assertFalse((fixture / ".trellis" / ".runtime" / "sessions" / "test-context.json").exists())
-        self.assertFalse(degraded_path.exists())
-        self.assertIn("已清理 bootstrap degraded active-task 引用", install.stdout)
 
     def test_embed_entry_scripts_and_docs_pass_explicit_outsourcing_profile(self) -> None:
         temp_project_script = (REPO_ROOT / "commands" / "shell" / "init-trellis-temp-project.sh").read_text(
@@ -1212,8 +1203,6 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertNotIn("hand off to `delivery`", codex_finish_work_text)
         self.assertNotIn("hand off to delivery", codex_finish_work_text)
         task_py_text = (fixture / ".trellis" / "scripts" / "task.py").read_text(encoding="utf-8")
-        self.assertIn(TASK_DEGRADED_PATCH_MARKER, task_py_text)
-        self.assertIn(TASK_CURRENT_DEGRADED_PATCH_MARKER, task_py_text)
         self.assertIn(TASK_NO_STATUS_FLIP_PATCH_MARKER, task_py_text)
         task_store_text = (fixture / ".trellis" / "scripts" / "common" / "task_store.py").read_text(encoding="utf-8")
         self.assertIn(TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER, task_store_text)
@@ -1353,18 +1342,6 @@ class WorkflowInstallerTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
-    def test_install_patches_task_script_with_runtime_imports_for_degraded_fallback(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assert_install_result_usable(install)
-
-        task_script = (fixture / ".trellis" / "scripts" / "task.py").read_text(encoding="utf-8")
-        self.assertIn("import os", task_script)
-        self.assertIn("import re", task_script)
-        self.assertIn("degraded-active-task-{runtime_key}.json", task_script)
-
     def test_install_patches_opencode_inject_workflow_state_with_runtime_contract(self) -> None:
         fixture = self.create_fixture(include_opencode=True)
         self.addCleanup(shutil.rmtree, fixture)
@@ -1501,21 +1478,6 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("granularity_decision", deployed_plan)
         self.assertIn(f"从宿主仓库中的 `{TRELLIS_LIBRARY_DIR}` 选择并导入", deployed_plan)
         self.assertNotIn("从 `trellis-library` 选择并导入", deployed_plan)
-
-    def test_install_patches_task_current_source_to_read_degraded_fallback(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
-        task_py = (fixture / ".trellis" / "scripts" / "task.py").read_text(encoding="utf-8")
-        self.assertIn('print("Source: degraded-active-task")', task_py)
-        self.assertIn('print("Current task: (none)")', task_py)
-        self.assertIn('if args.source:', task_py)
-        self.assertIn('if active.task_path:', task_py)
-        self.assertIn('degraded-active-task-{runtime_key}.json', task_py)
-        self.assertIn('degraded_runtime / "degraded-active-task.json"', task_py)
 
     def test_install_patches_task_views_to_use_stage_based_status(self) -> None:
         fixture = self.create_fixture(include_codex=True)
@@ -2047,7 +2009,14 @@ Triggered from `start` (Trellis command) when the user describes a development t
         fixture = self.create_fixture(bootstrap_as_current_task=True)
         self.addCleanup(shutil.rmtree, fixture)
 
-        result = self.run_script(INSTALL_SCRIPT, "--project-root", str(fixture), "--dry-run")
+        result = self.run_script(
+            INSTALL_SCRIPT,
+            "--project-root",
+            str(fixture),
+            "--dry-run",
+            "--profile",
+            "outsourcing",
+        )
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("将清理 bootstrap current-task 引用", result.stdout)
@@ -2545,7 +2514,14 @@ Triggered from `start` (Trellis command) when the user describes a development t
         fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
         self.addCleanup(shutil.rmtree, fixture)
 
-        result = self.run_script(INSTALL_SCRIPT, "--project-root", str(fixture), "--dry-run")
+        result = self.run_script(
+            INSTALL_SCRIPT,
+            "--project-root",
+            str(fixture),
+            "--dry-run",
+            "--profile",
+            "outsourcing",
+        )
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("将写入安装记录", result.stdout)
@@ -2571,8 +2547,11 @@ Triggered from `start` (Trellis command) when the user describes a development t
 
         result = self.run_script(
             INSTALL_SCRIPT,
-            "--project-root", str(fixture),
+            "--project-root",
+            str(fixture),
             "--dry-run",
+            "--profile",
+            "outsourcing",
             env={EMBED_CONFIRM_ENV: "1"},
         )
 
@@ -2600,6 +2579,8 @@ Triggered from `start` (Trellis command) when the user describes a development t
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture),
+            "--profile",
+            "outsourcing",
             env={EMBED_CONFIRM_ENV: "1"},
         )
 
@@ -2615,6 +2596,8 @@ Triggered from `start` (Trellis command) when the user describes a development t
             str(fixture),
             "--cli",
             "claude,opencode",
+            "--profile",
+            "outsourcing",
             env={EMBED_CONFIRM_ENV: "1"},
         )
 
@@ -2819,7 +2802,6 @@ Triggered from `start` (Trellis command) when the user describes a development t
 
         self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("session-start.py", result.stdout)
-        self.assertIn("task.py", result.stdout)
         self.assertIn("task_store.py", result.stdout)
 
     def test_upgrade_check_detects_incomplete_runtime_patch_contracts(self) -> None:
@@ -2836,11 +2818,6 @@ Triggered from `start` (Trellis command) when the user describes a development t
             .replace('const PYTHON_CMD = process.env.TRELLIS_PYTHON || "python3"\n\n', ""),
             encoding="utf-8",
         )
-        task_py = fixture / ".trellis" / "scripts" / "task.py"
-        task_py.write_text(
-            task_py.read_text(encoding="utf-8").replace("import os\n", "").replace("import re\n", ""),
-            encoding="utf-8",
-        )
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
         result = self.run_script(
@@ -2853,7 +2830,6 @@ Triggered from `start` (Trellis command) when the user describes a development t
 
         self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("inject-workflow-state.js", result.stdout)
-        self.assertIn("task.py", result.stdout)
 
     def test_upgrade_check_allows_legacy_missing_version_keys(self) -> None:
         fixture = self.create_fixture()

@@ -20,7 +20,7 @@
 
 4. Implement only after execution authorization
    --> plan -> implementation requires checkpoints.execution_authorized=true
-   --> If task.py start runs without session identity, it must also write a runtime-keyed degraded fallback file under .trellis/.runtime/ (with degraded-active-task.json kept as compatibility fallback) for later recovery; these degraded files are recovery hints only and route must still require an explicit task confirmation instead of auto-resuming them
+   --> If task.py start runs without session identity, it follows the Trellis baseline degraded behavior for that shell and does not persist a separate degraded active-task fallback contract; users should re-run it inside a session-aware AI environment when task binding is required
 
 5. Verify and commit
    --> Run the project's frozen verification commands when scaffold exists (see spec docs)
@@ -33,7 +33,7 @@
    --> native finish-work handles current active task archive + add_session
 ```
 
-`python3 ./.trellis/scripts/task.py finish` remains available when you intentionally need to clear the current session's active task without archiving a completed task. Do not use it as a substitute for final close-out. In degraded mode, `task.py start` must leave a recoverable runtime-keyed fallback file under `.trellis/.runtime/`; the shared `degraded-active-task.json` remains only as a compatibility fallback. `workflow-state.py route` should surface these files as recovery clues, not silently treat them as the current active task.
+`python3 ./.trellis/scripts/task.py finish` remains available when you intentionally need to clear the current session's active task without archiving a completed task. Do not use it as a substitute for final close-out. When session identity is unavailable, `task.py start` follows the Trellis baseline degraded behavior and the router should rely on the normal Trellis session runtime only.
 
 For workflows that split work into a parent coordination task plus child execution tasks:
 

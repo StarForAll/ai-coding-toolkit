@@ -56,7 +56,7 @@ The user sees a "current task," but Trellis stores active task state per session
 
 `task.py start` writes the task path into the runtime session file for the current session. `task.py current --source` shows the current task and where it came from. Different AI windows can point to different tasks without overwriting each other.
 
-If the platform or shell environment has no stable session identity, `task.py start` may be unable to set the active task. Strong-gate installs use runtime-keyed degraded fallback files under `.trellis/.runtime/` as a last-resort recovery aid; the AI should still avoid guessing from an unrelated session pointer.
+If the platform or shell environment has no stable session identity, `task.py start` may be unable to set the active task. In that case, follow the Trellis baseline degraded behavior for the current shell and do not guess from an unrelated session pointer.
 
 ## JSONL Context
 

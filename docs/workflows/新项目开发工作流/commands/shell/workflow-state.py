@@ -260,53 +260,6 @@ def session_runtime_has_any_current_task(repo_root: Path) -> bool:
     return False
 
 
-def _degraded_runtime_key() -> str | None:
-    context_key = resolve_context_key()
-    if context_key:
-        safe_key = re.sub(r"[^A-Za-z0-9._-]+", "_", context_key).strip("._-")
-        return safe_key[:160] if safe_key else None
-
-    terminal_key = os.environ.get("TERM_SESSION_ID", "").strip()
-    if terminal_key:
-        safe_key = re.sub(r"[^A-Za-z0-9._-]+", "_", terminal_key).strip("._-")
-        return safe_key[:160] if safe_key else None
-
-    fallback = f"ppid-{os.getppid()}"
-    safe_key = re.sub(r"[^A-Za-z0-9._-]+", "_", fallback).strip("._-")
-    return safe_key[:160] if safe_key else None
-
-
-def degraded_active_task_paths(repo_root: Path) -> list[Path]:
-    runtime_dir = repo_root / ".trellis" / ".runtime"
-    paths: list[Path] = []
-    runtime_key = _degraded_runtime_key()
-    if runtime_key:
-        paths.append(runtime_dir / f"degraded-active-task-{runtime_key}.json")
-    paths.append(runtime_dir / "degraded-active-task.json")
-    return paths
-
-
-def degraded_active_task_candidates(repo_root: Path) -> list[tuple[Path, Path]]:
-    candidates: list[tuple[Path, Path]] = []
-    for degraded_path in degraded_active_task_paths(repo_root):
-        degraded = read_json(degraded_path)
-        if not degraded:
-            continue
-        task_ref = degraded.get("current_task")
-        if not isinstance(task_ref, str) or not task_ref.strip():
-            continue
-        resolved = resolve_task_ref(task_ref, repo_root)
-        if resolved is None or not resolved.is_dir():
-            continue
-        candidates.append((degraded_path, resolved.resolve()))
-    return candidates
-
-
-def resolve_degraded_task_dir(repo_root: Path) -> Path | None:
-    candidates = degraded_active_task_candidates(repo_root)
-    return candidates[0][1] if candidates else None
-
-
 def bool_arg(raw: str) -> bool:
     lowered = raw.strip().lower()
     if lowered in {"1", "true", "yes", "y", "on"}:
@@ -833,27 +786,22 @@ def validate_execution_boundary(state: dict[str, Any], errors: list[str]) -> Non
 
 def validate_session_active_task(task_dir: Path, repo_root: Path, errors: list[str]) -> None:
     active = resolve_active_task(repo_root)
-    source_label = "Trellis session runtime"
     if not active.task_path:
-        resolved_active = resolve_degraded_task_dir(repo_root)
-        source_label = "degraded active-task fallback"
-        if resolved_active is None:
-            errors.append("无法从 Trellis session runtime 或 degraded fallback 解析当前活动任务")
-            return
-    else:
-        if active.stale:
-            errors.append(f"Trellis session runtime 中的当前活动任务已失效: {active.task_path}")
-            return
-        resolved_active = resolve_task_ref(active.task_path, repo_root)
-        if resolved_active is None:
-            errors.append(f"无法解析当前活动任务路径: {active.task_path}")
-            return
+        errors.append("无法从 Trellis session runtime 解析当前活动任务")
+        return
+    if active.stale:
+        errors.append(f"Trellis session runtime 中的当前活动任务已失效: {active.task_path}")
+        return
+    resolved_active = resolve_task_ref(active.task_path, repo_root)
+    if resolved_active is None:
+        errors.append(f"无法解析当前活动任务路径: {active.task_path}")
+        return
 
     if resolved_active.resolve() != task_dir.resolve():
         expected = task_dir.resolve().relative_to(repo_root).as_posix()
         actual = resolved_active.resolve().relative_to(repo_root).as_posix()
         errors.append(
-            f"{source_label} 指向 {actual}，与当前 task {expected} 不一致"
+            f"Trellis session runtime 指向 {actual}，与当前 task {expected} 不一致"
         )
 
 
@@ -2040,27 +1988,7 @@ def _task_runtime_contract_errors(
     patch_name: str,
     content: str,
 ) -> list[str]:
-    if path.name != "task.py":
-        return []
-
-    problems: list[str] = []
-    if patch_name == "task-start-strong-gate":
-        if TASK_START_STRONG_GATE_PATCH_MARKER in content:
-            uses_degraded_runtime = (
-                '# [workflow-embed-patch:degraded-active-task]' in content
-                or '# [workflow-embed-patch:degraded-current-read]' in content
-            )
-            if uses_degraded_runtime and "import os" not in content:
-                problems.append(
-                    f"{path.relative_to(repo_root)} 缺少 os 导入"
-                    f"（critical runtime patch: {patch_name}）"
-                )
-            if uses_degraded_runtime and "import re" not in content:
-                problems.append(
-                    f"{path.relative_to(repo_root)} 缺少 re 导入"
-                    f"（critical runtime patch: {patch_name}）"
-                )
-    return problems
+    return []
 
 
 def _detect_missing_critical_runtime_patches(repo_root: Path, record: dict[str, Any]) -> list[str]:
@@ -2313,24 +2241,6 @@ def cmd_route(args: argparse.Namespace) -> int:
                 return 0
             task_dir = resolved_active.resolve()
         else:
-            degraded_candidates = degraded_active_task_candidates(repo_root)
-            if degraded_candidates:
-                degraded_path, degraded_task_dir = degraded_candidates[0]
-                try:
-                    degraded_label = degraded_task_dir.relative_to(repo_root).as_posix()
-                except ValueError:
-                    degraded_label = str(degraded_task_dir)
-                _route_result(
-                    None,
-                    "recovery_needed",
-                    (
-                        f"检测到 degraded active-task fallback 指向 {degraded_label}"
-                        f"（来源 {degraded_path.name}）。该 fallback 仅作为恢复线索，"
-                        "不会自动作为当前任务继续执行；请执行 task.py start <task-dir> 明确确认目标任务"
-                    ),
-                )
-                return 0
-
             tasks_root = repo_root / ".trellis" / "tasks"
             has_any_task = False
             if tasks_root.is_dir():
