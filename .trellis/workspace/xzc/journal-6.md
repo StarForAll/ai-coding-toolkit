@@ -1816,3 +1816,36 @@ Audited the embedded new-project workflow, fixed doc and helper drift, and verif
 ### Next Steps
 
 - None - task complete
+
+
+## Session 299: Repair embedded workflow strong-gate drift
+
+**Date**: 2026-05-23
+**Task**: Repair embedded workflow strong-gate drift
+**Branch**: `main`
+
+### Summary
+
+Repaired embedded strong-gate workflow drift by restoring project-audit to delivery transition coverage and aligning current entry and implementation wording with the live implementation-only stage model.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9e768fe` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
