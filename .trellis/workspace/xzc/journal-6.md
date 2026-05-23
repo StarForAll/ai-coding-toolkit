@@ -1849,3 +1849,36 @@ Repaired embedded strong-gate workflow drift by restoring project-audit to deliv
 ### Next Steps
 
 - None - task complete
+
+
+## Session 300: Repair embedded workflow routing and docs
+
+**Date**: 2026-05-23
+**Task**: Repair embedded workflow routing and docs
+**Branch**: `main`
+
+### Summary
+
+Fixed strong-gate workflow source drift, restored phase-step compatibility, added OpenCode subagent strong-gate patching, and aligned workflow docs/tests with the delivery -> native finish-work close-out chain.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `807ea61` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
