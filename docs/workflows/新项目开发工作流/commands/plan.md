@@ -48,7 +48,7 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
 - 当前阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束
 - `/trellis:plan` 只允许重入当前已确认的 plan 阶段，不允许顺手自动进入实现
 - `plan` 完成后，必须先输出已完成/未完成/缺失项，再等待用户确认
-- 只有用户确认后，才允许把执行态切到具体叶子 task 的 implementation / test-first 分支
+- 只有用户确认后，才允许把执行态切到具体叶子 task 的 implementation（需要测试先行时，在 implementation 内按测试先行模式执行）
 - `plan` 阶段 `execution_authorized` 必须为 `false`，由 validate 强制。
 
 `/trellis:plan` 的职责是：
@@ -78,7 +78,7 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
 - 借“先补个基础文件”“先做一点”为名提前开工
 - 因重新进入 `/trellis:plan` 而自动恢复某个 task 的 implementation
 - 在未获用户明确确认前，把当前 session 的 active task 切到实施叶子 task
-- 在未获用户明确确认前，把任何 `workflow-state.stage` 改成 `implementation` / `test-first`
+- 在未获用户明确确认前，把任何 `workflow-state.stage` 改成 `implementation`
 
 ## 历史数据防漂移要求
 
@@ -501,8 +501,8 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 
 其中：
 
-- `开工授权确认任务` 负责把”启动款比例是否达标、启动款是否已到账、是否允许进入 implementation / test-first”单独落盘
-- 若 `kickoff_payment_received != yes`，该任务只能停在等待确认或阻断状态，不得把执行态推进到 implementation / test-first
+- `开工授权确认任务` 负责把”启动款比例是否达标、启动款是否已到账、是否允许进入 implementation”单独落盘
+- 若 `kickoff_payment_received != yes`，该任务只能停在等待确认或阻断状态，不得把执行态推进到 implementation
 <!-- endif:outsourcing -->
 
 若 `ownership_proof_required = yes`，`task_plan.md` 摘要中还需显式列出：
@@ -553,7 +553,7 @@ $TASK_DIR/
 补充状态约束：
 
 - 如果当前 root task 在 plan 阶段拆出了 children，则继续实施前应把当前 session 的 active task 切到实际要执行的叶子任务
-- 在进入 implementation / test-first 前，必须先用“当前推荐执行任务（待确认）”说明卡向用户说明本轮要开的 task 信息，再等待用户确认
+- 在进入 implementation 前，必须先用“当前推荐执行任务（待确认）”说明卡向用户说明本轮要开的 task 信息，再等待用户确认
 - 父任务只保留汇总意义，不应继续作为执行态叶子任务持有 `workflow-state.json`
 
 ## 下一步推荐
@@ -567,7 +567,7 @@ $TASK_DIR/
 | 你的意图 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
 | 确认进入某个具体 task 的 implementation | `/trellis:continue` | 直接进入实施，或显式触发 `trellis-continue` skill | **默认推荐**。仅在用户明确确认 plan 已完成后才允许；先切换到目标叶子 task，再由 continue 自动执行 before-dev 并补 task 门禁 |
-| 显式先测某个 task | `/trellis:test-first` | 进入测试驱动，或显式触发 `test-first` skill | 非默认主链；仅在明确要 TDD / 补验证证据时使用 |
+| 显式先测某个 task | `/trellis:continue` | 描述测试先行意图，或显式触发 `trellis-continue` skill | 非默认主链；在 implementation 内按测试先行方式执行并补验证证据 |
 | 拆解不合理，重新拆 | `/trellis:plan` | 继续任务拆解，或显式触发 `plan` skill | 重新执行拆解流程 |
 | 设计有问题 | `/trellis:design` | 回退设计阶段，或显式触发 `design` skill | 回退到设计阶段 |
 | 冻结后出现新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先冻结当前计划；用户接受并入当前轮次后再回到受影响的最早阶段更新计划 |

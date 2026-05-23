@@ -81,9 +81,9 @@ const tree = [
       { html:'§4 任务分解与准备', cls:'L1 c4', id:'p4', sub:'<span class="cmd">/trellis:plan</span>', children:[
         { html:'4.1 AI驱动任务拆解', cls:'L2', det:'先做 readiness gate<br>拆真实 Trellis task<br>当前推荐 leaf task 补最小 prd.md<br>task_plan.md 只保留摘要', id:'p4_1' },
         { html:'4.2 任务排期',       cls:'L2', det:'按项目域规划串行 lane<br>不把并行当默认主链', id:'p4_2' },
-        { html:'4.3 手动 Test-First',  cls:'L2', det:'仅在显式先测/补证据时进入<br>非默认主链', id:'p4_3' },
+        { html:'4.3 测试先行模式',  cls:'L2', det:'仅在显式先测/补证据时进入<br>作为 implementation 内部模式执行', id:'p4_3' },
         { html:'/trellis:plan',      cls:'L3', id:'p4_c1', cp:'.claude/commands/trellis/plan.md', cd:'任务拆解 · 输出 task 图摘要' },
-        { html:'/trellis:test-first',cls:'L3', id:'p4_c2', cp:'.claude/commands/trellis/test-first.md', cd:'手动测试驱动入口' },
+        { html:'/trellis:continue',cls:'L3', id:'p4_c2', cp:'.claude/commands/trellis/continue.md', cd:'implementation 重入入口（可按测试先行方式执行）' },
         { html:'project-planner / writing-plans（未提供，按 plan 步骤执行）', cls:'SK', id:'p4_s', su:'§4 计划 skills' },
       ]},
       { html:'§5 开发实施循环', cls:'L1 c5', id:'p5', sub:'<span class="cmd">/trellis:continue</span>', children:[
@@ -97,7 +97,7 @@ const tree = [
         { html:'/trellis:review-gate',cls:'L3', id:'p5_c2', cp:'.claude/commands/trellis/review-gate.md', cd:'多CLI补充审查' },
         { html:'coding-standards / simplify', cls:'SK', id:'p5_s', su:'§5 编码 skills' },
       ]},
-      { html:'§6 项目整体测试', cls:'L1 c6', id:'p6', sub:'<span class="cmd">/trellis:finish-work → delivery</span>', children:[
+      { html:'§6 项目整体测试', cls:'L1 c6', id:'p6', sub:'<span class="cmd">/trellis:check → /trellis:delivery</span>', children:[
         { html:'6.1 自动化测试',   cls:'L2', det:'执行自动化测试脚本<br>AI生成代码专项测试', id:'p6_1' },
         { html:'6.2 可用性测试',   cls:'L2', det:'业务流程/需求实现<br>用户场景测试', id:'p6_2' },
         { html:'6.3 性能测试',     cls:'L2', det:'响应时间/吞吐量<br>TTFT/ITL/AI API延迟', id:'p6_3' },
@@ -108,12 +108,12 @@ const tree = [
         { html:'/trellis:delivery',    cls:'L3', id:'p6_c2', cp:'.claude/commands/trellis/delivery.md', cd:'测试交付 · 验收清单' },
         { html:'trellis-break-loop skill',  cls:'L3', id:'p6_c3', cp:'.claude/skills/trellis-break-loop/SKILL.md', cd:'缺陷反复 · 深根因分析' },
       ]},
-      { html:'§7 交付与沉淀', cls:'L1 c7', id:'p7', sub:'<span class="cmd">/trellis:delivery → record-session</span>', children:[
+      { html:'§7 交付与沉淀', cls:'L1 c7', id:'p7', sub:'<span class="cmd">/trellis:delivery → native finish-work</span>', children:[
         { html:'7.1 文档更新',   cls:'L2', det:'客户版: 不含AI<br>开发版: 含AI', id:'p7_1' },
         { html:'7.2 项目交付',   cls:'L2', det:'客户/开发交付物<br>acceptance/deliverables/transfer-checklist<br>双轨交付门禁<br>尾款后最终移交', id:'p7_2' },
         { html:'7.3 项目复盘与流程问题说明',   cls:'L2', det:'项目复盘<br>手动说明缺陷与待优化点', id:'p7_3' },
-        { html:'7.4 会话记录',   cls:'L2', det:'record-session<br>先 archive 再 add_session<br>元数据闭环校验', id:'p7_4' },
-        { html:'/trellis:delivery', cls:'L3', id:'p7_c', cp:'.claude/commands/trellis/delivery.md', cd:'交付收口 · 进入 record-session 前入口' },
+        { html:'7.4 会话记录',   cls:'L2', det:'native finish-work<br>先 archive 再 add_session<br>元数据闭环校验', id:'p7_4' },
+        { html:'/trellis:finish-work', cls:'L3', id:'p7_c', cp:'.claude/commands/trellis/finish-work.md', cd:'native 收尾入口' },
         { html:'人工记录',        cls:'L3', id:'p7_d', cd:'非默认主链；按需手动说明 workflow 问题' },
       ]},
       // ── Left-side branch flows (expand leftward) ──
@@ -122,13 +122,13 @@ const tree = [
         { html:'新增/修改/删除', cls:'L2', det:'评估影响/收费→确认<br>接受后并入当前轮次<br>→ 回写双PRD', id:'br_ch_2' },
         { html:'用户不接受', cls:'L2', det:'维持冻结基线<br>不混入当前交付<br>按当前轮次忽略', id:'br_ch_3' },
       ]},
-      { html:'回退修改流', cls:'BR', id:'br_fallback', bdesc:'质量检查/审查/交付<br>发现偏差', btrig:'check → start 修复<br>review-gate → start 修复<br>delivery → start 修复', side:'left', children:[
-        { html:'check 有偏差', cls:'L2', det:'§5.1.x 质量检查未通过<br>→ 回到 start 修复', id:'br_fb_1' },
-        { html:'review-gate 未收敛', cls:'L2', det:'多CLI审查未通过<br>→ 回到 start 修复', id:'br_fb_2' },
-        { html:'delivery 有缺陷', cls:'L2', det:'§6+§7 测试交付未通过<br>→ trellis-break-loop skill 或回到 start', id:'br_fb_3' },
+      { html:'回退修改流', cls:'BR', id:'br_fallback', bdesc:'质量检查/审查/交付<br>发现偏差', btrig:'check → continue 修复<br>review-gate → continue 修复<br>delivery → continue 修复', side:'left', children:[
+        { html:'check 有偏差', cls:'L2', det:'§5.1.x 质量检查未通过<br>→ 回到 continue / implementation 修复', id:'br_fb_1' },
+        { html:'review-gate 未收敛', cls:'L2', det:'多CLI审查未通过<br>→ 回到 continue / implementation 修复', id:'br_fb_2' },
+        { html:'delivery 有缺陷', cls:'L2', det:'§6+§7 测试交付未通过<br>→ trellis-break-loop skill 或回到 continue', id:'br_fb_3' },
       ]},
       { html:'跳阶段前进', cls:'BR', id:'br_skip', bdesc:'满足前置条件时<br>可跳过中间阶段', btrig:'仅限特定场景', side:'left', children:[
-        { html:'L0 直接 Start', cls:'L2', det:'无需继续细分即可达到合适任务粒度<br>影响面小<br>不需重设计', id:'br_sk_1' },
+        { html:'L0 直接 Implementation', cls:'L2', det:'无需继续细分即可达到合适任务粒度<br>影响面小<br>不需重设计', id:'br_sk_1' },
         { html:'复用 feasibility 结果', cls:'L2', det:'已有有效 assessment<br>且前提未变化时<br>→ 不重跑 feasibility，继续 brainstorm', id:'br_sk_2' },
       ]},
       { html:'终止/暂停', cls:'BR', id:'br_stop', bdesc:'可行性评估不通过', btrig:'assessment.md 决策分支', side:'left', children:[

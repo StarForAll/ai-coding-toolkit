@@ -16,6 +16,8 @@ import sys
 import unicodedata
 from pathlib import Path
 
+from workflow_common import PLACEHOLDER_MARKERS
+
 
 REQUIRED_SECTIONS = [
     "概述",
@@ -50,7 +52,6 @@ LEGACY_MARKERS = [
     "并行属性",
     "冲突说明",
 ]
-PLACEHOLDER_MARKERS = ("待补充", "待定", "暂空", "后续补充", "TBD", "TODO", "FIXME", "...")
 TASK_CARD_MARKERS = ("任务路径", "任务标题", "本轮目标", "本轮不做", "前置依赖", "验收锚点", "风险提醒", "推荐主执行 CLI")
 LEAF_PRD_REQUIRED_SECTIONS = (
     ("Goal", "目标"),

@@ -6,7 +6,7 @@ Cursor 使用 `.cursor/commands/` 目录，无 `trellis:` 前缀。
 
 ```bash
 # 将工作流命令部署到 Cursor
-for cmd in feasibility brainstorm design plan test-first check review-gate delivery; do
+for cmd in feasibility brainstorm design plan check review-gate delivery; do
   # 提取 markdown 内容（去掉 YAML frontmatter）
   sed '1,/^---$/d' "docs/workflows/新项目开发工作流/commands/${cmd}.md" | \
   sed '1,/^---$/d' > ".cursor/commands/${cmd}.md"
@@ -21,7 +21,6 @@ done
 | `/trellis:brainstorm` | `/brainstorm` |
 | `/trellis:design` | `/design` |
 | `/trellis:plan` | `/plan` |
-| `/trellis:test-first` | `/test-first` |
 | `/trellis:check` | `/check` |
 | `/trellis:review-gate` | `/review-gate` |
 | `/trellis:delivery` | `/delivery` |

@@ -19,6 +19,12 @@ from pathlib import Path
 from typing import Any
 import hashlib
 
+from workflow_common import (
+    MIN_KICKOFF_PAYMENT_RATIO,
+    PLACEHOLDER_MARKERS,
+    extract_backticked_field,
+)
+
 def _resolve_trellis_scripts_dir() -> Path:
     for candidate_root in Path(__file__).resolve().parents:
         scripts_dir = candidate_root / ".trellis" / "scripts"
@@ -59,7 +65,6 @@ ROOT_README_EN = Path("README.en.md")
 ASSESSMENT_FILE = Path("assessment.md")
 CONTEXT7_REVIEW_FILE = Path("design/context7-review.md")
 VALID_ENGAGEMENT_TYPES = {"external_outsourcing", "non_outsourcing"}
-MIN_KICKOFF_PAYMENT_RATIO = 30.0
 VALID_SOURCE_WATERMARK_LEVELS = {"none", "basic", "hybrid", "forensic"}
 EXIT_READY_STATUSES = {"awaiting_user_confirmation", "completed"}
 OWNERSHIP_POLICY_FIELDS = (
@@ -125,7 +130,6 @@ CUSTOMER_ESTIMATE_MARKERS = (
     "预计完工窗口",
     "估算说明",
 )
-PLACEHOLDER_MARKERS = ("待补充", "待定", "暂空", "后续补充", "TBD", "TODO", "FIXME", "...")
 
 BRAINSTORM_EXIT_SNAPSHOT_FIELDS = (
     "complexity_decision",
@@ -1087,15 +1091,6 @@ def installed_workflow_profile(repo_root: Path) -> str | None:
     return profile if profile in {"personal", "outsourcing"} else None
 
 
-def extract_backticked_field(content: str, field_name: str) -> str | None:
-    pattern = re.compile(rf'`{re.escape(field_name)}`:\s*`?(.+?)`?(?:\n|$)')
-    match = pattern.search(content)
-    if not match:
-        return None
-    value = match.group(1).strip()
-    return value or None
-
-
 def normalize_yes_no_field(value: str | None) -> bool | None:
     if value is None:
         return None
@@ -1403,10 +1398,10 @@ def find_missing_markers(path: Path, markers: tuple[str, ...]) -> list[str]:
 def design_path_candidates_from_state(state: dict[str, Any]) -> set[str]:
     allowed_next_override = state.get("allowed_next_stages")
     if isinstance(allowed_next_override, list) and all(isinstance(item, str) for item in allowed_next_override):
-        return {item for item in allowed_next_override if item in STAGES or item == "test-first"}
+        return {item for item in allowed_next_override if item in STAGES}
     allowed_next_cli = state.get("_allowed_next_override")
     if isinstance(allowed_next_cli, list) and all(isinstance(item, str) for item in allowed_next_cli):
-        return {item for item in allowed_next_cli if item in STAGES or item == "test-first"}
+        return {item for item in allowed_next_cli if item in STAGES}
     # Deprecated fallback: derive from canonical graph when no override is present.
     current_stage = state.get("stage", "")
     allowed_next = STAGE_TRANSITIONS.get(current_stage, [])

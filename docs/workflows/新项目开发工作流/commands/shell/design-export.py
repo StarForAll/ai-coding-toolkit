@@ -7,10 +7,11 @@ import argparse
 import unicodedata
 from pathlib import Path
 
+from workflow_common import PLACEHOLDER_MARKERS
+
 
 REQUIRED_FILES = ["index.md", "TAD.md", "ODD-dev.md", "ODD-user.md"]
 CONDITIONAL_FILES = ["DDD.md", "IDD.md", "AID.md", "STITCH-PROMPT.md"]
-PLACEHOLDER_MARKERS = ("待补充", "待定", "暂空", "后续补充", "TBD", "TODO", "FIXME", "...")
 TAD_REQUIRED_SECTIONS = [
     "## 架构冻结清单",
     "## 系统边界与外部依赖",

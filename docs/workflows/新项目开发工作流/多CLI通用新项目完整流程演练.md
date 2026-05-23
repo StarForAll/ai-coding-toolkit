@@ -697,7 +697,7 @@ python3 .trellis/scripts/workflow/ownership-proof-validate.py --phase delivery -
 
 ---
 
-## 阶段 10：Finish-Work（Session Record）
+## 阶段 10：Native Finish-Work
 
 ### 目标
 

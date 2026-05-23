@@ -2352,7 +2352,7 @@ Triggered from `start` (Trellis command) when the user describes a development t
         self.assertIn("正式阶段链（例如", doc)
         self.assertIn("project-audit", doc)
         self.assertNotIn(
-            "feasibility/brainstorm/design/plan/implementation/test-first/check/review-gate/finish-work/delivery/record-session",
+            "feasibility/brainstorm/design/plan/implementation/check/review-gate/finish-work/delivery/record-session",
             doc,
         )
 

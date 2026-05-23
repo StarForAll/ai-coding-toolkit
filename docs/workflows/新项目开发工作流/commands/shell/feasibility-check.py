@@ -15,21 +15,17 @@ import re
 import sys
 from pathlib import Path
 
+from workflow_common import (
+    MIN_KICKOFF_PAYMENT_RATIO,
+    PLACEHOLDER_MARKERS,
+    extract_backticked_field,
+)
+
 
 VALID_ENGAGEMENT_TYPES = {"external_outsourcing", "non_outsourcing"}
 VALID_EXTERNAL_TRACKS = {"hosted_deployment", "trial_authorization"}
 VALID_BOOLEAN_VALUES = {"yes", "no"}
-MIN_KICKOFF_PAYMENT_RATIO = 30.0
 VALID_SOURCE_WATERMARK_LEVELS = {"none", "basic", "hybrid", "forensic"}
-PLACEHOLDER_MARKERS = ("待补充", "待定", "暂空", "后续补充", "TBD", "TODO", "FIXME", "...")
-
-
-def extract_backticked_field(content: str, field_name: str) -> str | None:
-    match = re.search(rf'`{re.escape(field_name)}`:\s*`?(.+?)`?(?:\n|$)', content)
-    if not match:
-        return None
-    value = match.group(1).strip()
-    return value or None
 
 
 def parse_kickoff_payment_ratio(raw_value: str) -> tuple[bool, str]:

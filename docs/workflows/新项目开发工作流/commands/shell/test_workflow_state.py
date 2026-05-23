@@ -2295,7 +2295,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             str(task_dir),
             "--stage-status", "awaiting_user_confirmation",
             "--awaiting-user-confirmation", "true",
-            "--allowed-next", "implementation,test-first",
+            "--allowed-next", "implementation",
         )
 
         result = self.run_script("route", str(task_dir), "--project-root", str(root))
@@ -2346,7 +2346,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             str(task_dir),
             "--stage-status", "awaiting_user_confirmation",
             "--awaiting-user-confirmation", "true",
-            "--allowed-next", "implementation,test-first",
+            "--allowed-next", "implementation",
         )
 
         result = self.run_script("route", str(task_dir), "--project-root", str(root))
@@ -2374,12 +2374,12 @@ class WorkflowStateScriptTests(unittest.TestCase):
             str(task_dir),
             "--stage-status", "awaiting_user_confirmation",
             "--awaiting-user-confirmation", "true",
-            "--allowed-next", "implementation,test-first",
+            "--allowed-next", "implementation",
         )
 
         result = self.run_script("route", str(task_dir), "--project-root", str(root))
         data = json.loads(result.stdout)
-        self.assertEqual(data["action"], "awaiting_confirmation")
+        self.assertEqual(data["action"], "awaiting_confirmation_with_blockers")
 
     def test_cmd_set_allows_brainstorm_to_execution_when_inputs_are_complete(self) -> None:
         root, task_dir = self.make_fixture()
@@ -2387,7 +2387,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "# sample task\n\n"
             f"{self.VALID_BRAINSTORM_ESTIMATE}\n"
             "## 阶段出口快照\n"
-            "- `complexity_decision`: `L2`\n"
+            "- `complexity_decision`: `L0`\n"
             "- `ui_lane_decision`: `no-ui`\n"
             "- `cross_platform_scope`: `codex-only`\n"
             "- `estimate_refresh_result`: `initial`\n"
@@ -2402,7 +2402,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             str(task_dir),
             "--stage-status", "awaiting_user_confirmation",
             "--awaiting-user-confirmation", "true",
-            "--allowed-next", "implementation,test-first",
+            "--allowed-next", "implementation",
         )
 
         result = self.run_script(
@@ -3473,7 +3473,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "stage_status": "awaiting_user_confirmation",
             "current_block": None,
             "completed_blocks": ["split-tasks"],
-            "allowed_next_stages": ["implementation", "test-first"],
+            "allowed_next_stages": ["implementation"],
             "awaiting_user_confirmation": True,
             "last_confirmed_transition": {
                 "from": "design",
@@ -3731,7 +3731,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "--stage-status", "in_progress",
             "--awaiting-user-confirmation", "false",
             "--transition-from", "design",
-            "--allowed-next", "implementation,test-first",
+            "--allowed-next", "implementation",
             "--architecture-confirmed", "true",
             "--context7-review-completed", "true",
         )
@@ -3852,7 +3852,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "set", str(task_dir),
             "--stage-status", "awaiting_user_confirmation",
             "--awaiting-user-confirmation", "true",
-            "--allowed-next", "design,plan,implementation,test-first",
+            "--allowed-next", "design,plan,implementation",
         )
         (task_dir / "prd.md").write_text(
             "# sample task\n\n"
@@ -3874,7 +3874,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "--awaiting-user-confirmation", "false",
             "--execution-authorized", "true",
             "--transition-from", "brainstorm",
-            "--allowed-next", "test-first,check,project-audit",
+            "--allowed-next", "check,project-audit",
         )
         self.assertEqual(ok_set.returncode, 0, msg=ok_set.stdout + ok_set.stderr)
 
@@ -3892,7 +3892,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "set", str(task_dir),
             "--stage-status", "awaiting_user_confirmation",
             "--awaiting-user-confirmation", "true",
-            "--allowed-next", "design,plan,implementation,test-first",
+            "--allowed-next", "design,plan,implementation",
         )
         (task_dir / "prd.md").write_text(
             "# sample task\n\n"

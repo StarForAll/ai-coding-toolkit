@@ -199,7 +199,7 @@ $TASK_DIR/check.md
 | 基本合规，可直接进入收尾 | `/trellis:finish-work` | 进入提交前检查，或显式触发 `finish-work` skill | **默认推荐**（Lite / Standard）。仅在用户明确确认后才允许进入收尾 |
 | 命中 review-gate 硬条件，或用户显式要求进入补充审查 | `/trellis:review-gate` | 进入补充审查判断，或显式触发 `review-gate` skill | **条件触发**。仅在用户明确确认后才允许切换到 review-gate |
 | 存在实现偏差，需先修复 | `/trellis:continue` | 回到实施阶段，或显式触发 `trellis-continue` skill | 回到 implementation 内部链修复偏差项，再重新执行正式 `check` |
-| 测试或验证证据不足 | `/trellis:test-first` | 回到测试驱动，或显式触发 `test-first` skill | 先补验证证据，再重新执行 `check` |
+| 测试或验证证据不足 | `/trellis:continue` | 回到 implementation 并说明测试先行意图，或显式触发 `trellis-continue` skill | 先补验证证据，再重新执行 `check` |
 | 发现上下文污染 | `/trellis:continue` | 开新会话并重新描述当前意图，或显式触发 `trellis-continue` skill | 停止当前会话，开新会话并注入决策摘要 |
 | 偏差来自冻结后新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先完成评估与确认；用户接受并入当前轮次后再回到受影响的最早阶段 |
 | 偏差仅是纯澄清 | 留在当前阶段 | 留在当前阶段 | 仅限不改变范围、接口契约、验收标准、成本、工期 |

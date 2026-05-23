@@ -42,6 +42,7 @@ DISTRIBUTED_COMMANDS = [
     "delivery",
 ]
 HELPER_SCRIPTS = [
+    "workflow_common.py",
     "feasibility-check.py",
     "design-export.py",
     "workflow-state.py",
