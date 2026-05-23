@@ -1750,3 +1750,36 @@ Audited the embedded new-project workflow, removed the degraded active-task fall
 ### Next Steps
 
 - None - task complete
+
+
+## Session 297: audit workflow strong-gate status mapping fixes
+
+**Date**: 2026-05-23
+**Task**: audit workflow strong-gate status mapping fixes
+**Branch**: `main`
+
+### Summary
+
+Fixed route/status field mapping regressions in strong-gate workflow patches, corrected terminal task display semantics, added installer regression coverage, and documented status-contract maintenance checks for future Trellis/workflow changes.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `909476d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
