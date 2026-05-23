@@ -4,6 +4,7 @@ import importlib.util
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -1210,12 +1211,14 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(SESSION_START_STRONG_GATE_PATCH_MARKER, claude_session_start)
         self.assertNotIn(LEGACY_READY_AUTOCONTINUE_LINE, claude_session_start)
         self.assertIn("For personal profile: also run `python3 ./.trellis/scripts/workflow/workflow-state.py route` first", claude_session_start)
+        self.assertIn('_r_stage_status = _route_data.get("status", "")', claude_session_start)
         codex_session_start = (fixture / ".codex" / "hooks" / "session-start.py").read_text(encoding="utf-8")
         self.assertIn(SESSION_START_STRONG_GATE_PATCH_MARKER, codex_session_start)
         self.assertNotIn(LEGACY_READY_AUTOCONTINUE_LINE, codex_session_start)
         claude_inject = (fixture / ".claude" / "hooks" / "inject-workflow-state.py").read_text(encoding="utf-8")
         self.assertIn("use_action_status =", claude_inject)
         self.assertIn('extra_lines.append(f"Stage: {route_stage}")', claude_inject)
+        self.assertIn('route_stage_status = route_data.get("status", "")', claude_inject)
         self.assertIn("workflow-state.route_failed", claude_inject)
         self.assertNotIn("fall back to task.json status", claude_inject)
         opencode_session_utils = (fixture / ".opencode" / "lib" / "session-utils.js").read_text(encoding="utf-8")
@@ -1492,6 +1495,9 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("# [workflow-embed-patch:strong-gate-task-status-view]", tasks_py)
         self.assertIn('display_status, display_extra = _display_status(task_dir, data)', tasks_py)
         self.assertIn("_workflow_state_summary(state)", tasks_py)
+        self.assertIn('stage_status = state.get("status") or state.get("stage_status")', tasks_py)
+        self.assertIn('if raw_status in TERMINAL_TASK_STATUSES:', tasks_py)
+        self.assertIn('return "completed", None', tasks_py)
         self.assertNotIn("needs-init", tasks_py)
         self.assertNotIn("_route_status_summary(task_dir)", tasks_py)
         self.assertNotIn("_module_cache", tasks_py)
@@ -1502,6 +1508,69 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn('return list_tasks_by_status(None, repo_root)', task_queue_py)
         self.assertNotIn("Still flip task.json status: planning → in_progress", task_py)
         self.assertIn("Strong-gate mode keeps workflow-state.py route as the only stage authority.", task_py)
+
+    def test_install_task_view_keeps_completed_status_when_workflow_state_file_remains(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        task_dir = fixture / ".trellis" / "tasks" / "05-23-completed-task"
+        task_dir.mkdir(parents=True, exist_ok=True)
+        (task_dir / "task.json").write_text(
+            json.dumps(
+                {
+                    "id": "completed-task",
+                    "name": "completed-task",
+                    "title": "Completed Task",
+                    "status": "completed",
+                    "assignee": "xzc",
+                    "priority": "P2",
+                    "children": [],
+                    "parent": None,
+                    "package": None,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        (task_dir / "workflow-state.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "stage": "check",
+                    "status": "in_progress",
+                    "current_block": None,
+                    "completed_blocks": [],
+                    "checkpoints": {},
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        scripts_dir = fixture / ".trellis" / "scripts"
+        common_dir = scripts_dir / "common"
+        shutil.copy(REPO_ROOT / ".trellis" / "scripts" / "common" / "io.py", common_dir / "io.py")
+        shutil.copy(REPO_ROOT / ".trellis" / "scripts" / "common" / "paths.py", common_dir / "paths.py")
+        shutil.copy(REPO_ROOT / ".trellis" / "scripts" / "common" / "types.py", common_dir / "types.py")
+        sys.path.insert(0, str(scripts_dir))
+        self.addCleanup(lambda: sys.path.remove(str(scripts_dir)) if str(scripts_dir) in sys.path else None)
+        sys.modules.pop("common", None)
+        sys.modules.pop("common.io", None)
+        sys.modules.pop("common.paths", None)
+        sys.modules.pop("common.tasks", None)
+        sys.modules.pop("common.types", None)
+
+        import common.tasks as tasks_module
+
+        loaded = tasks_module.load_task(task_dir)
+        self.assertIsNotNone(loaded)
+        self.assertEqual(loaded.status, "completed")
+        self.assertIsNone(loaded.raw.get("_workflow_display_extra"))
 
     def test_install_personal_profile_keeps_ownership_cards_and_helpers(self) -> None:
         fixture = self.create_fixture()

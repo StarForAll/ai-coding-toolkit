@@ -114,7 +114,7 @@ def get_active_task(root: Path, input_data: dict) -> Optional[tuple[str, str, st
     if route_data is not None:
         route_stage = route_data.get(\"stage\", \"\")
         route_action = route_data.get(\"action\", \"\")
-        route_stage_status = route_data.get(\"stage_status\", \"\")
+        route_stage_status = route_data.get(\"status\", \"\")
         route_target = route_data.get(\"target\", \"\")
         route_reason = route_data.get(\"reason\", \"\")
         route_blockers = route_data.get(\"blockers\", [])
@@ -241,7 +241,7 @@ function getActiveTask(ctx, platformInput = null) {
       const routeData = JSON.parse(output)
       const routeStage = typeof routeData.stage === \"string\" ? routeData.stage : \"\"
       const routeAction = typeof routeData.action === \"string\" ? routeData.action : \"\"
-      const routeStageStatus = typeof routeData.stage_status === \"string\" ? routeData.stage_status : \"\"
+      const routeStageStatus = typeof routeData.status === \"string\" ? routeData.status : \"\"
       const routeTarget = typeof routeData.target === \"string\" ? routeData.target : \"\"
       const routeReason = typeof routeData.reason === \"string\" ? routeData.reason : \"\"
       const routeBlockers = Array.isArray(routeData.blockers) ? routeData.blockers : []
@@ -319,7 +319,7 @@ PY_BASELINE_ROUTE_SNIPPET = """# [workflow-embed-patch:prefer-workflow-state-jso
                 route_data = _json.loads(route_result.stdout.strip())
                 route_stage = route_data.get("stage", "")
                 route_action = route_data.get("action", "")
-                route_stage_status = route_data.get("stage_status", "")
+                route_stage_status = route_data.get("status", "")
                 route_target = route_data.get("target", "")
                 route_reason = route_data.get("reason", "")
                 route_blockers = route_data.get("blockers", [])
@@ -389,7 +389,7 @@ JS_BASELINE_ROUTE_SNIPPET = """  // [workflow-embed-patch:prefer-workflow-state-
       const routeData = JSON.parse(output)
       const routeStage = typeof routeData.stage === "string" ? routeData.stage : ""
       const routeAction = typeof routeData.action === "string" ? routeData.action : ""
-      const routeStageStatus = typeof routeData.stage_status === "string" ? routeData.stage_status : ""
+      const routeStageStatus = typeof routeData.status === "string" ? routeData.status : ""
       const routeTarget = typeof routeData.target === "string" ? routeData.target : ""
       const routeReason = typeof routeData.reason === "string" ? routeData.reason : ""
       const routeBlockers = Array.isArray(routeData.blockers) ? routeData.blockers : []

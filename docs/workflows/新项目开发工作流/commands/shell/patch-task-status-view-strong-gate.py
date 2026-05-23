@@ -23,7 +23,7 @@ def _shorten_status_detail(value: str, limit: int = 72) -> str:
 
 def _workflow_state_summary(state: dict) -> str | None:
     summary_parts: list[str] = []
-    stage_status = state.get("stage_status")
+    stage_status = state.get("status") or state.get("stage_status")
     if isinstance(stage_status, str) and stage_status and stage_status != "in_progress":
         summary_parts.append(f"status={stage_status}")
 
@@ -39,16 +39,16 @@ def _workflow_state_summary(state: dict) -> str | None:
 
 
 def _display_status(task_dir: Path, data: dict) -> tuple[str, str | None]:
+    raw_status = data.get("status", "unknown")
+    if raw_status in TERMINAL_TASK_STATUSES:
+        return "completed", None
+
     state = read_json(task_dir / WORKFLOW_STATE_FILE_NAME)
     if isinstance(state, dict):
         stage = state.get("stage")
         if isinstance(stage, str) and stage:
             return stage, _workflow_state_summary(state)
         return "repair_needed", "repair_needed"
-
-    raw_status = data.get("status", "unknown")
-    if raw_status in TERMINAL_TASK_STATUSES:
-        return "completed", None
     if isinstance(raw_status, str) and raw_status:
         return "repair_needed", "workflow-state.json missing"
     return "unknown", None
@@ -61,16 +61,16 @@ TERMINAL_TASK_STATUSES = {"completed", "done", "archived"}
 
 # [workflow-embed-patch:strong-gate-task-status-view]
 def _display_status(task_dir: Path, data: dict) -> str:
+    raw_status = data.get("status", "unknown")
+    if raw_status in TERMINAL_TASK_STATUSES:
+        return "completed"
+
     state = read_json(task_dir / WORKFLOW_STATE_FILE_NAME)
     if isinstance(state, dict):
         stage = state.get("stage")
         if isinstance(stage, str) and stage:
             return stage
         return "repair_needed"
-
-    raw_status = data.get("status", "unknown")
-    if raw_status in TERMINAL_TASK_STATUSES:
-        return "completed"
     if isinstance(raw_status, str) and raw_status:
         return "repair_needed"
     return "unknown"
