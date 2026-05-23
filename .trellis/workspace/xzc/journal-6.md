@@ -1783,3 +1783,36 @@ Fixed route/status field mapping regressions in strong-gate workflow patches, co
 ### Next Steps
 
 - None - task complete
+
+
+## Session 298: Audit embedded workflow fixes
+
+**Date**: 2026-05-23
+**Task**: Audit embedded workflow fixes
+**Branch**: `main`
+
+### Summary
+
+Audited the embedded new-project workflow, fixed doc and helper drift, and verified the target-project route path after redeploy.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a9c2996` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
