@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Patch workflow_phase.py to reject old #### X.Y step lookups when strong-gate model is active.
+"""Patch workflow_phase.py to preserve step-level compatibility under strong-gate mode.
 
-When installed into a target project, this patch modifies workflow_phase.py's
-get_step() so that it refuses to return old Phase 1/2/3 steps if a
-workflow-state.json with a valid strong-gate stage is detected.
+When installed into a target project, this patch keeps workflow_phase.py's
+get_step() compatible with the strong-gate workflow by preserving step-level
+lookup for the baseline `get_context.py --mode phase --step <X.Y>` contract.
 """
 
 from __future__ import annotations
@@ -17,7 +17,8 @@ PATCH_MARKER = "# strong-gate-phase-patch-applied"
 PATCH_BLOCK = '''
     # --- strong-gate phase patch ---
     # When a workflow-state.json with a valid strong-gate stage exists,
-    # refuse to return old #### X.Y step matches and direct to route instead.
+    # keep the step-level compatibility layer available for baseline
+    # get_context.py --mode phase --step lookups.
     try:
         import json as _json
         import subprocess as _sp
@@ -49,8 +50,7 @@ PATCH_BLOCK = '''
                 "project-audit", "delivery",
             }
             if _stage in _STRONG_GATE_STAGES:
-                print("⚠️ 强门禁模式下旧 step 查询已禁用，请使用 workflow-state.py route", file=_sys.stderr)
-                return ""
+                pass
     except Exception:
         pass
     # --- end strong-gate phase patch ---

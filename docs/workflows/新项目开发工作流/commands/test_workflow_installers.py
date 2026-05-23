@@ -1010,7 +1010,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         module_spec.loader.exec_module(runtime_module)
 
         self.assertEqual(runtime_module.get_step.__doc__, "Return the legacy step body.")
-        self.assertEqual(runtime_module.get_step("1.0"), "")
+        self.assertEqual(runtime_module.get_step("1.0"), "legacy step 1.0")
 
     def test_build_workflow_content_replaces_task_mechanism_without_legacy_headings(self) -> None:
         import importlib.util
@@ -1250,6 +1250,7 @@ class WorkflowInstallerTests(unittest.TestCase):
             [
                 "inject-workflow-state",
                 "session-start-strong-gate",
+                "opencode-inject-subagent-context",
                 "task-start-strong-gate",
                 "task-create-preserve-active",
                 "task-status-view-strong-gate",

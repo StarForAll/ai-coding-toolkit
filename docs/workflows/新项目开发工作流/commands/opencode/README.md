@@ -276,7 +276,9 @@ OpenCode 不应被写成“和 Claude 完全等价”，因为它在 hook / suba
 - **命令层**：可原生承载
 - **rules 层**：可原生承载
 - **agents 层**：可原生承载
-- **subagent hook 注入层**：需额外验证，不应默认与 Claude 等价
+- **subagent hook 注入层**：需额外验证，不应默认与 Claude 等价；当前 workflow 通过 source-side patch 额外约束：
+  - `inject-subagent-context.js` 只有在 `workflow-state.py route` 允许的阶段才为 `implement` / `check` 注入上下文
+  - Bash 的 `TRELLIS_CONTEXT_ID` 桥接只应作用于 Trellis 相关命令，不应无差别改写普通用户 shell
 
 ## 推荐部署映射
 

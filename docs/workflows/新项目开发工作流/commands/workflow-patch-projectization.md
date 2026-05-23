@@ -300,6 +300,41 @@ For the workflow state machine's runtime contract, the locations of all status w
 
 ---
 
+## Skill Routing
+
+When a user request matches one of these intents, route to the corresponding stage entry first. Under the strong-gate model this routing table remains a required quick-reference layer even though the detailed per-turn enforcement now lives in the stage breadcrumb blocks below.
+
+| User intent | Stage / route | Primary execution surface |
+|---|---|---|
+| New project assessment, can we take it, quote/risk/feasibility | `feasibility` | Claude/OpenCode: `/trellis:feasibility`; Codex: natural language or `feasibility` skill |
+| Requirement discovery, PRD clarification, decide whether to split tasks | `brainstorm` | Claude/OpenCode: `/trellis:brainstorm`; Codex: natural language or `brainstorm` skill |
+| Architecture/design/spec alignment | `design` | Claude/OpenCode: `/trellis:design`; Codex: natural language or `design` skill |
+| Task decomposition / scheduling / readiness gate | `plan` | Claude/OpenCode: `/trellis:plan`; Codex: natural language or `plan` skill |
+| Resume implementation on the current approved leaf task | `continue` → `implementation` | Claude/OpenCode: `/trellis:continue`; Codex: natural language or `trellis-continue` skill |
+| Project-wide audit / cross-task quality sweep | `project-audit` | Claude/OpenCode: `/trellis:project-audit`; Codex: natural language or `project-audit` skill |
+| Task-level formal quality check | `check` | Claude/OpenCode: `/trellis:check`; Codex: natural language or `check` skill |
+| Multi-CLI supplementary review gate | `review-gate` | Claude/OpenCode: `/trellis:review-gate`; Codex: natural language or `review-gate` skill |
+| Delivery / acceptance / handoff artifacts | `delivery` | Claude/OpenCode: `/trellis:delivery`; Codex: natural language or `delivery` skill |
+| Single-task terminal close-out after delivery | native `finish-work` | Claude/OpenCode: `/trellis:finish-work`; Codex: natural language or `trellis-finish-work` skill |
+
+For implementation internals, keep this distinction explicit:
+
+- `trellis-research` / `trellis-implement` / `trellis-check` are Trellis-native implementation-chain roles used inside the implementation stage
+- they are not public top-level workflow stages
+- Codex inline mode still performs the equivalent work in the main session instead of manually dispatching that chain
+
+### DO NOT skip skills / route guards
+
+| What you're thinking | Why it's wrong under strong-gate |
+|---|---|
+| "This looks simple, I can skip feasibility/brainstorm and just start coding" | First-entry routing is stage-gated. If the current route says feasibility or brainstorm, skipping it breaks the state machine and later validation. |
+| "I already know what stage we're in from the files on disk" | Stage is determined by `active task -> workflow-state.json`, not by guessing from `design/`, `check.md`, or other artifacts. |
+| "The next stage is obvious, I'll auto-advance after this reply" | Only the user can confirm stage transitions. AI can recommend, not advance implicitly. |
+| "Implementation self-check is enough; formal check/review-gate can be skipped" | The implementation chain and formal `check` / `review-gate` are different layers. Skipping the formal layer hides stage-exit defects. |
+| "Delivery already happened, so finish-work is implied" | `delivery` and native `finish-work` are different layers; finish-work remains the single-task close-out entry after delivery, not an automatic side effect. |
+
+---
+
 ## Strong-Gate Breadcrumb Blocks
 
 <!-- workflow-projectization-breadcrumb-patch -->

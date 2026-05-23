@@ -76,6 +76,7 @@ from workflow_assets import (
     PATCH_BASELINE_COMMANDS,
     PATCH_BASELINE_SHARED_DOCS,
     SESSION_START_STRONG_GATE_PATCH_MARKER,
+    OPENCODE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER,
     TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER,
     TASK_STATUS_VIEW_PATCH_MARKER,
     TASK_START_STRONG_GATE_PATCH_MARKER,
@@ -1852,6 +1853,7 @@ _TASK_NO_STATUS_FLIP_PATCH_MARKER = TASK_START_STRONG_GATE_PATCH_MARKER
 _TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER = TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER
 _TASK_STATUS_VIEW_PATCH_MARKER = TASK_STATUS_VIEW_PATCH_MARKER
 _WORKFLOW_PHASE_PATCH_MARKER = WORKFLOW_PHASE_STRONG_GATE_PATCH_MARKER
+_OPENCODE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER = OPENCODE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER
 
 
 def patch_inject_workflow_state_hook(root: Path, *, dry_run: bool) -> bool:
@@ -2323,6 +2325,40 @@ function getTaskStatus(ctx, platformInput = null) {
         else:
             ok("[Shared] .opencode/lib/session-utils.js 已升级 → 移除 READY 自动续跑提示")
     return True
+
+
+def patch_opencode_inject_subagent_context(root: Path, *, dry_run: bool) -> bool:
+    """Patch OpenCode inject-subagent-context.js with strong-gate checks."""
+    import importlib.util
+
+    target_path = root / ".opencode" / "plugins" / "inject-subagent-context.js"
+    patch_script = Path(__file__).resolve().parent / "shell" / "patch-opencode-inject-subagent-context.py"
+
+    if not target_path.exists():
+        return False
+    if not patch_script.exists():
+        warn("[Shared] patch-opencode-inject-subagent-context.py 不存在，跳过补丁")
+        return False
+
+    if dry_run:
+        info("[Shared] 将对 .opencode/plugins/inject-subagent-context.js 应用 strong-gate 补丁")
+        return True
+
+    spec = importlib.util.spec_from_file_location("patch_opencode_inject_subagent_context", patch_script)
+    if spec is None or spec.loader is None:
+        warn("[Shared] patch-opencode-inject-subagent-context.py 加载失败")
+        return False
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    if hasattr(module, "patch_opencode_inject_subagent_context"):
+        result = module.patch_opencode_inject_subagent_context(target_path)
+        if result:
+            ok("[Shared] .opencode/plugins/inject-subagent-context.js 强门禁补丁已应用")
+        return result
+
+    warn("[Shared] patch-opencode-inject-subagent-context.py 缺少 patch_opencode_inject_subagent_context 函数")
+    return False
 
 
 def _migrate_legacy_agents(root: Path, cli_type: str, cli_label: str, *, dry_run: bool = False) -> dict:
@@ -3197,6 +3233,7 @@ def main() -> int:
             patch_inject_workflow_state_hook(root, dry_run=args.dry_run)
             _apply_patch_session_start(src, root, dry_run=args.dry_run)
             patch_opencode_session_utils(root, dry_run=args.dry_run)
+            patch_opencode_inject_subagent_context(root, dry_run=args.dry_run)
 
             # C2: patch session-start no-task guidance to reference NL routing table
             patch_session_start_no_task_guidance(root, dry_run=args.dry_run)

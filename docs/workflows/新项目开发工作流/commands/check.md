@@ -5,10 +5,10 @@ description: 代码写完了？检查一下 — 基于真实改动范围和项�
 
 # /trellis:check — 实现后质量检查
 
-> **Workflow Position**: §5.1.x → 前: `/trellis:continue` 实施完成 → 后: `/trellis:finish-work`（默认）/ `/trellis:review-gate`（条件触发）
+> **Workflow Position**: §5.1.x → 前: `/trellis:continue` 实施完成 → 后: `/trellis:delivery`（默认）/ `/trellis:review-gate`（条件触发）
 > **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:check`） · ✅ OpenCode（TUI: `/trellis:check`；CLI: `trellis/check`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:check` 命令；见 `codex/README.md`）
 
-> **Strong Gate**: 本阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束。`check` 完成后不能自动进入 `review-gate` 或 `finish-work`，必须先等待用户确认。
+> **Strong Gate**: 本阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束。`check` 完成后不能自动进入 `review-gate`、`delivery` 或 native `finish-work`，必须先等待用户确认。
 
 ---
 
@@ -18,13 +18,13 @@ description: 代码写完了？检查一下 — 基于真实改动范围和项�
 - "对照 spec 看看有没有问题"
 - "做一轮质量检查"
 - "实现写完了，先 check 一下"
-- 当前任务代码已完成，需要在进入 `review-gate` 或 `finish-work` 之前先做一次任务级质量检查
+- 当前任务代码已完成，需要在进入 `review-gate` 或 `delivery` 之前先做一次任务级质量检查
 
 > 以下场景不要误路由到本命令：
 >
 > - 需要跨层影响排查 → `/trellis:check`（跨层范围手动指定）
 > - 需要多 CLI 补充审查门禁 → `/trellis:review-gate`
-> - 需要提交前完整收尾检查 → `/trellis:finish-work`
+> - 需要项目级交付 / 收尾前检查 → `/trellis:delivery`
 
 ---
 
@@ -35,7 +35,7 @@ description: 代码写完了？检查一下 — 基于真实改动范围和项�
 1. 基于真实改动范围定位适用的 spec / guideline
 2. 执行项目确认过的验证命令并记录证据
 3. 检查实现偏差、边界风险、安全与性能问题
-4. 输出结构化 `check.md`，供 `review-gate` / `finish-work` 消费
+4. 输出结构化 `check.md`，供 `review-gate` / `delivery` / native `finish-work` 消费
 
 补充边界：
 
@@ -174,7 +174,7 @@ $TASK_DIR/check.md
 
 - 重复已修复的错误？→ 停止，开新会话
 - 输出方向偏离？→ 导出决策摘要
-- 若风险仍不明确，先进入 `/trellis:review-gate` 做正式判定（可能判定为 `skip`），不直接跳到 `finish-work`
+- 若风险仍不明确，先进入 `/trellis:review-gate` 做正式判定（可能判定为 `skip`），不直接跳到 native `finish-work`
 
 ---
 
@@ -216,4 +216,4 @@ $TASK_DIR/check.md
   - 用户显式要求进入 `review-gate`
 - 或根据当前改动的软条件预判，进入 `review-gate` 后大概率会被判定为 `recommended`
 
-不满足以上条件时，check 可直接进入 finish-work，无需经过 review-gate。
+不满足以上条件时，check 可直接进入 delivery，无需经过 review-gate；若当前轮还需要关闭当前 active task，再在 delivery 之后进入 native finish-work。

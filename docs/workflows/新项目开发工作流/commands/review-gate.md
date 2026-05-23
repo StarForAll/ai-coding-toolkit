@@ -5,12 +5,12 @@ description: 质量检查完成了？进入任务级补充审查门禁 — 判�
 
 # /trellis:review-gate — 任务级多 CLI 补充审查门禁
 
-> **Workflow Position**: §5.1.x → 前: `/trellis:check`（条件触发） → 后: `/trellis:finish-work`
+> **Workflow Position**: §5.1.x → 前: `/trellis:check`（条件触发） → 后: `/trellis:delivery`
 >
-> **触发条件**：review-gate 不是所有 check 的必经步骤。默认只在明确高风险条件或用户显式要求时触发；普通检查可直接从 check 进入 finish-work。
+> **触发条件**：review-gate 不是所有 check 的必经步骤。默认只在明确高风险条件或用户显式要求时触发；普通检查可直接从 check 进入 delivery，若当前轮还需要关闭当前 active task，再在 delivery 之后进入 native finish-work。
 > **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:review-gate`） · ✅ OpenCode（TUI: `/trellis:review-gate`；CLI: `trellis/review-gate`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:review-gate` 命令；见 `codex/README.md`）
 
-> **Strong Gate**: 本阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束。review-gate 完成后，必须等待用户明确确认，不能自动进入 `finish-work`。
+> **Strong Gate**: 本阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束。review-gate 完成后，必须等待用户明确确认，不能自动进入 `delivery` 或 native `finish-work`。
 
 ---
 
@@ -135,7 +135,7 @@ description: 质量检查完成了？进入任务级补充审查门禁 — 判�
 | `required` | 命中任一硬条件 | 必须执行多 CLI 审查 |
 | `recommended` | 未命中硬条件，但可信度层因”测试或验证证据明显不足”单独达到中门槛 | 建议执行；若现有验证已足够且用户接受风险，可跳过并写明原因 |
 | `recommended` | 未命中硬条件，但多个软条件叠加达到现有中门槛 | 同上 |
-| `skip` | 否则 | 无需执行，直接进入 `/trellis:finish-work` |
+| `skip` | 否则 | 无需执行，进入 `/trellis:delivery`；若当前轮还需要关闭当前 active task，再在 delivery 后进入 native `/trellis:finish-work` |
 
 将判定写入：
 
@@ -319,7 +319,7 @@ tmp/multi-cli-review/<task-id>/
 
 | 判定结果 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
-| `skip`，可直接提交前检查 | `/trellis:finish-work` | 进入提交前检查，或显式触发 `finish-work` skill | **默认推荐**。仅在用户明确确认后才允许进入提交前检查 |
+| `skip`，可直接进入交付收口 | `/trellis:delivery` | 进入交付收口，或显式触发 `delivery` skill | **默认推荐**。仅在用户明确确认后才允许进入 delivery；若当前轮还需要关闭当前 active task，再在 delivery 后进入 native finish-work |
 | 接受 `recommended` | 在已具备 `multi-cli-review` 能力的其他 CLI 中运行 `multi-cli-review`（`lite`） | 在目标 CLI 中发起 lite 审查，或显式触发 `multi-cli-review` skill | **默认 1 个 reviewer**。若发现新问题，再进入 `multi-cli-review-action` |
 | `required` | 在已具备 `multi-cli-review` 能力的其他 CLI 中运行 `multi-cli-review`（`full`） | 在目标 CLI 中发起 full 审查，或显式触发 `multi-cli-review` skill | **默认 2 个 reviewer**；若目标 CLI 尚未具备该 skill，先补齐能力再执行 |
 | 报告已就绪，准备汇总修复 | `multi-cli-review-action` 能力 | `multi-cli-review-action` skill | 当前 CLI 先汇总报告、输出 `summary`、等待用户确认后仅执行低回归的 `adopted` 修复，再重新验证 |

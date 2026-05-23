@@ -98,9 +98,15 @@ PATCH_BLOCK = '''
                     "to transition stages when gate conditions are met."
                 )
                 return "\\n".join(_lines)
-        return f"Status: ACTIVE\\nTask: {task_title}\\nSource: {active.source}"
+        return (
+            f"Status: ACTIVE (route unavailable)\\nTask: {task_title}\\nSource: {active.source}"
+            "\\nNext-Action: Re-run `workflow-state.py route` after restoring the helper or its runtime dependency."
+        )
     except Exception:
-        return f"Status: ACTIVE\\nTask: {task_title}\\nSource: {active.source}"
+        return (
+            f"Status: ACTIVE (route failed)\\nTask: {task_title}\\nSource: {active.source}"
+            "\\nNext-Action: Inspect workflow-state.py route failure and retry before continuing stage work."
+        )
     # --- end strong-gate session-start patch ---
 '''
 

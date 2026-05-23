@@ -93,6 +93,7 @@ cleanup_legacy_phase_router_sections = _INSTALL_WORKFLOW.cleanup_legacy_phase_ro
 cleanup_stale_contract_references = _INSTALL_WORKFLOW.cleanup_stale_contract_references
 patch_inject_workflow_state_hook = _INSTALL_WORKFLOW.patch_inject_workflow_state_hook
 patch_opencode_session_utils = _INSTALL_WORKFLOW.patch_opencode_session_utils
+patch_opencode_inject_subagent_context = _INSTALL_WORKFLOW.patch_opencode_inject_subagent_context
 patch_task_status_views = _INSTALL_WORKFLOW.patch_task_status_views
 patch_session_start_no_task_guidance = _INSTALL_WORKFLOW.patch_session_start_no_task_guidance
 _apply_patch_session_start = _INSTALL_WORKFLOW._apply_patch_session_start
@@ -109,6 +110,7 @@ _STALE_CONTRACT_PATTERN = _INSTALL_WORKFLOW._STALE_CONTRACT_PATTERN
 _TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER
 _TASK_STATUS_VIEW_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_STATUS_VIEW_PATCH_MARKER
 _OPENCODE_SESSION_UTILS_PATCH_MARKER = _INSTALL_WORKFLOW._OPENCODE_SESSION_UTILS_PATCH_MARKER
+_OPENCODE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER = _INSTALL_WORKFLOW._OPENCODE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER
 _WORKFLOW_PHASE_PATCH_MARKER = _INSTALL_WORKFLOW._WORKFLOW_PHASE_PATCH_MARKER
 # Reuse install-workflow markers for idempotency checks
 _WORKFLOW_PHASE_INDEX_MARKER = _INSTALL_WORKFLOW._WORKFLOW_PHASE_INDEX_MARKER
@@ -1073,10 +1075,13 @@ def detect_conflicts_codex(
     workflow_phase = root / ".trellis" / "scripts" / "common" / "workflow_phase.py"
     if workflow_phase.exists():
         workflow_phase_content = workflow_phase.read_text(encoding="utf-8")
-        if _WORKFLOW_PHASE_PATCH_MARKER in workflow_phase_content:
+        if (
+            _WORKFLOW_PHASE_PATCH_MARKER in workflow_phase_content
+            and "旧 step 查询已禁用" not in workflow_phase_content
+        ):
             ok("[Shared] common/workflow_phase.py: 强门禁补丁已应用")
         else:
-            err("[Shared] common/workflow_phase.py: 强门禁补丁缺失")
+            err("[Shared] common/workflow_phase.py: 强门禁补丁缺失或仍禁用 step 兼容查询")
             conflicts += 1
 
     opencode_session_utils = root / ".opencode" / "lib" / "session-utils.js"
@@ -1091,6 +1096,19 @@ def detect_conflicts_codex(
                 ok("[OpenCode] session-utils.js: 强门禁 session context 补丁已应用")
         else:
             warn("[OpenCode] session-utils.js: 仍在使用 READY/NOT READY 旧语义；如当前项目启用 session-start plugin 应补丁")
+
+    opencode_subagent_plugin = root / ".opencode" / "plugins" / "inject-subagent-context.js"
+    if opencode_subagent_plugin.exists():
+        plugin_content = opencode_subagent_plugin.read_text(encoding="utf-8")
+        if (
+            _OPENCODE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER in plugin_content
+            and "shouldAllowTaskInjection(" in plugin_content
+            and "loadRouteData(" in plugin_content
+        ):
+            ok("[OpenCode] inject-subagent-context.js: 强门禁子代理补丁已应用")
+        else:
+            err("[OpenCode] inject-subagent-context.js: 强门禁子代理补丁缺失或不完整")
+            conflicts += 1
 
     # 对每个 skills 目录分别检查 parallel：当前 Codex 合同是“移除嵌入面，但保留备份”
     parallel_conflicts = 0
@@ -1703,6 +1721,7 @@ def main() -> int:
     cleanup_stale_contract_references(root, dry_run=False)
     patch_inject_workflow_state_hook(root, dry_run=False)
     patch_opencode_session_utils(root, dry_run=False)
+    patch_opencode_inject_subagent_context(root, dry_run=False)
     agents_md = root / "AGENTS.md"
     if agents_md.exists() and (
         not has_agents_md_routing(agents_md) or not agents_md_routing_matches_source(agents_md)
@@ -1866,6 +1885,7 @@ def main() -> int:
     patch_inject_workflow_state_hook(root, dry_run=False)
     _apply_patch_session_start(src, root, dry_run=False)
     patch_opencode_session_utils(root, dry_run=False)
+    patch_opencode_inject_subagent_context(root, dry_run=False)
     patch_session_start_no_task_guidance(root, dry_run=False)
     _apply_patch_workflow_phase(src, root, dry_run=False)
     _apply_patch_task_start(src, root, dry_run=False)

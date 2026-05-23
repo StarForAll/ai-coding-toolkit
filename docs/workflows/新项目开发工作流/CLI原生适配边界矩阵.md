@@ -193,6 +193,7 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 - 对 Codex 的 `start`/首次路由判断，也不要把 `SessionStart` 当成唯一前提；当前常见主路径是 turn-level hook，`session-start.py` 只有在目标项目显式接线时才属于 startup 辅助面
 - `.agents/skills/.backup-original/` 或 `.codex/skills/.backup-original/` 默认是恢复面；只有活动入口缺失、恢复配对断裂，或备份被错误当成现行入口时，才把它升级成问题
 - `workflow-state.py route` 的 JSON 输出契约只把 `stage` 和 `status` 作为主字段；`Stage-Status` 是 hook / session header 的展示信息，不是 route 主字段。维护者若修改 `workflow-state.py route`，必须同步复查 `patch-inject-workflow-state.py`、`patch-session-start-strong-gate.py`、`patch-task-status-view-strong-gate.py`，否则会再次出现“route 输出已变更但装后载体仍读旧字段”的回归
+- OpenCode 的 `.opencode/plugins/inject-subagent-context.js` 当前也属于需要跟随强门禁语义复查的 runtime carrier；若阶段门禁、route 输出、或 Trellis 子代理上下文模型变更，必须同步复查 `patch-opencode-inject-subagent-context.py`
 
 装后/升级后核对仍建议显式检查主目录，并只在次级目录实际存在时继续检查其条件性影响面：
 

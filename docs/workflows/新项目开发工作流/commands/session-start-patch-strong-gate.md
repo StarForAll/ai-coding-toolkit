@@ -21,7 +21,7 @@
 2. 无论 `workflow-state.json` 是否存在，都执行 `workflow-state.py route <task_dir> --project-root <project-root>`
 3. 读取路由 JSON 中的 `action`、`stage`、`status`、`blockers`、`target`、`reason`
 4. 构建结构化状态字符串并直接返回
-5. 只有在 route helper 缺失、route 执行失败、或输出非法 JSON 时，才退回简单 `ACTIVE` 状态
+5. 只有在 route helper 缺失、route 执行失败、或输出非法 JSON 时，才退回带原因和下一步提示的 `ACTIVE (...)` 降级状态
 
 这样 `repair_needed`、`context_needed`、`awaiting_confirmation_with_blockers` 等正式路由结果不会被 SessionStart 隐藏。
 
@@ -59,7 +59,7 @@ Next-Action: Follow the action above...
 
 ### Fallback 行为
 
-以下情况补丁返回简单 `ACTIVE` 状态（不 fallback 到旧 PLANNING/READY 逻辑）：
+以下情况补丁返回带原因的 `ACTIVE (...)` 降级状态（不 fallback 到旧 PLANNING/READY 逻辑）：
 
 - `workflow-state.py` 脚本未找到
 - `workflow-state.py route` 执行失败或输出非法 JSON

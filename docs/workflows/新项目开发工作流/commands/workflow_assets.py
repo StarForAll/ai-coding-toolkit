@@ -54,6 +54,7 @@ HELPER_SCRIPTS = [
     "patch-workflow-phase.py",
     "patch-workflow-phase-strong-gate.py",
     "patch-inject-workflow-state.py",
+    "patch-opencode-inject-subagent-context.py",
     "patch-session-start-strong-gate.py",
     "patch-task-start-strong-gate.py",
     "patch-task-create-preserve-active.py",
@@ -123,6 +124,7 @@ AGENTS_NL_ROUTING_MARKERS = (
 )
 CRITICAL_RUNTIME_PATCHES = [
     "inject-workflow-state",
+    "opencode-inject-subagent-context",
     "session-start-strong-gate",
     "task-start-strong-gate",
     "task-create-preserve-active",
@@ -135,6 +137,7 @@ TASK_START_STRONG_GATE_PATCH_MARKER = "# [workflow-embed-patch:strong-gate-no-st
 TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER = "# [workflow-embed-patch:preserve-parent-active-task]"
 TASK_STATUS_VIEW_PATCH_MARKER = "# [workflow-embed-patch:strong-gate-task-status-view]"
 WORKFLOW_PHASE_STRONG_GATE_PATCH_MARKER = "# strong-gate-phase-patch-applied"
+OPENCODE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER = "// [workflow-embed-patch:opencode-subagent-gates]"
 
 
 def critical_runtime_patches_for_cli_types(cli_types: list[str] | tuple[str, ...]) -> list[str]:
@@ -150,6 +153,8 @@ def critical_runtime_patches_for_cli_types(cli_types: list[str] | tuple[str, ...
     patches = ["inject-workflow-state"]
     if selected & {"claude", "opencode"}:
         patches.append("session-start-strong-gate")
+    if "opencode" in selected:
+        patches.append("opencode-inject-subagent-context")
     patches.extend(
         [
             "task-start-strong-gate",

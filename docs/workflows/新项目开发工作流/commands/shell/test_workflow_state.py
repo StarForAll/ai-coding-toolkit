@@ -2994,6 +2994,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
                     "cli_types": ["opencode"],
                     "critical_runtime_patches": [
                         "inject-workflow-state",
+                        "opencode-inject-subagent-context",
                         "session-start-strong-gate",
                         "task-start-strong-gate",
                         "task-create-preserve-active",
@@ -3051,6 +3052,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
                     "cli_types": ["opencode"],
                     "critical_runtime_patches": [
                         "inject-workflow-state",
+                        "opencode-inject-subagent-context",
                         "session-start-strong-gate",
                         "task-start-strong-gate",
                         "task-create-preserve-active",
@@ -3299,6 +3301,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
                     "commands": ["record-session"],
                     "critical_runtime_patches": [
                         "inject-workflow-state",
+                        "opencode-inject-subagent-context",
                         "session-start-strong-gate",
                         "task-start-strong-gate",
                         "task-create-preserve-active",
