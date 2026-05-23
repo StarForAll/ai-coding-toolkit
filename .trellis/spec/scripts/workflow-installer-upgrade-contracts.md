@@ -831,7 +831,7 @@ Recommended assertion points:
 def prepare_command_content(source_path: Path, *, profile: str = DEFAULT_PROFILE) -> str
 ```
 
-Profile values: `"personal"` | `"outsourcing"` (default: `"outsourcing"`)
+Profile values: `"personal"` | `"outsourcing"` (install-time choice must be explicit)
 
 ### 3. Contracts
 
@@ -868,7 +868,16 @@ Install deploys `HELPER_SCRIPTS` for outsourcing, `CORE_HELPER_SCRIPTS` for pers
 
 #### 3.4 Profile in Install Record
 
-`workflow-installed.json` must include `"profile"` field. Missing profile defaults to `"outsourcing"` for backward compatibility.
+`workflow-installed.json` must include `"profile"` field on fresh installs.
+
+Installer contract:
+- install-time `--profile` must not silently default
+- when `--profile` is omitted in an interactive terminal, installer must require an explicit `personal` / `outsourcing` choice
+- when `--profile` is omitted in a non-interactive environment, installer must exit non-zero and tell the caller to pass `--profile`
+
+Backward-compat boundary:
+- read-only compatibility analysis may still treat a missing legacy install-record `profile` as `"outsourcing"` only when reconciling older target projects that predate the explicit-profile contract
+- this fallback is for legacy records only; it must not be reused as the fresh-install behavior
 
 ### 4. Validation & Error Matrix
 
@@ -876,13 +885,14 @@ Install deploys `HELPER_SCRIPTS` for outsourcing, `CORE_HELPER_SCRIPTS` for pers
 |-----------|-------|
 | Unmatched `<!-- if:outsourcing -->` without `<!-- endif:outsourcing -->` | Regex silently skips (no error); content leaks into personal build |
 | Profile not in `VALID_PROFILES` | argparse rejects at CLI level |
-| Missing `profile` in install record during `--check` | Default to `"outsourcing"` |
+| Missing `--profile` during fresh install in non-interactive environment | Installer exits non-zero and requires explicit `--profile` |
+| Missing `profile` in legacy install record during `--check` | Legacy compatibility path may treat it as `"outsourcing"` |
 
 ### 5. Good / Base / Bad Cases
 
 - **Good**: personal profile trims outsourcing sections; `--check` uses same profile to verify
 - **Base**: outsourcing profile keeps all content, markers stripped
-- **Bad**: install with personal, check with outsourcing default → false drift on every outsourcing-marked command
+- **Bad**: fresh install omits `--profile` and silently lands on outsourcing → wrong contract captured in deploy output and install record
 
 ### 6. Tests Required
 

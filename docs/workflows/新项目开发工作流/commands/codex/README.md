@@ -43,6 +43,7 @@ Codex 官方确实有 built-in slash commands，但那是 Codex 自身的交互�
 WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1 /ops/softwares/python/bin/python3 \
 docs/workflows/新项目开发工作流/commands/install-workflow.py \
 --project-root <target-project> \
+--profile outsourcing \
 --cli codex
 ```
 

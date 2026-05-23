@@ -45,6 +45,7 @@ OpenCode 已具备承载这套 workflow 的原生命令、rules、agents、skill
 WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1 /ops/softwares/python/bin/python3 \
 docs/workflows/新项目开发工作流/commands/install-workflow.py \
 --project-root <target-project> \
+--profile outsourcing \
 --cli opencode
 ```
 

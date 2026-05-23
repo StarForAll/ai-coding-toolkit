@@ -103,7 +103,7 @@ git remote set-url --add --push origin <第二个仓库URL>
 
 1. 先在目标项目执行 `trellis init`
 2. 再按《[工作流嵌入执行规范](./工作流嵌入执行规范.md)》先运行 `detect-embed-state.py`，确认状态为 `INITIAL_BASELINE_READY`
-3. 再运行当前 workflow 目录里的 `commands/install-workflow.py`
+3. 再运行当前 workflow 目录里的 `commands/install-workflow.py`，并显式传入 `--profile`
 4. 安装脚本把这套 workflow 嵌入到目标项目，并按各 CLI 官方原生格式完成内容适配
 5. 安装脚本自动导入 `pack.requirements-discovery-foundation`；其中默认包含需求发现规范与项目级 `README` 双语治理规则；若目标项目存在 `00-bootstrap-guidelines`，则一并清理；若遗留的 repo-global `.current-task` 仍指向该 bootstrap task，也同步做兼容清理；否则跳过
 6. 安装完成后，先按《[装后隐藏目录与托管边界核对清单](./装后隐藏目录与托管边界核对清单.md)》完成装后核对
@@ -114,7 +114,8 @@ git remote set-url --add --push origin <第二个仓库URL>
 ```bash
 WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1 /ops/softwares/python/bin/python3 \
 docs/workflows/新项目开发工作流/commands/install-workflow.py \
---project-root <target-project>
+--project-root <target-project> \
+--profile outsourcing
 ```
 
 如果只想装部分 CLI，再加 `--cli` 过滤。
