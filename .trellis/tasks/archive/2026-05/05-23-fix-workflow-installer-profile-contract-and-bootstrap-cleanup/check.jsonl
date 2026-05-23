@@ -1,0 +1,4 @@
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"检查安装器、运行时、文档、安装记录是否同步收敛"}
+{"file":"docs/workflows/新项目开发工作流/工作流总纲.md","reason":"验证安装契约、bootstrap 清理口径与装后行为一致"}
+{"file":"docs/workflows/新项目开发工作流/命令映射.md","reason":"验证 profile 和首次入口相关文案未与实现漂移"}
+{"file":".trellis/tasks/05-23-fix-workflow-installer-profile-contract-and-bootstrap-cleanup/prd.md","reason":"按任务验收标准做最终检查"}

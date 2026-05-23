@@ -1,0 +1,6 @@
+{"file":".trellis/spec/docs/index.md","reason":"文档与工作流产品边界，避免把源仓库维护规则与目标项目运行行为混淆"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"本任务跨 installer、runtime、docs、install record 多层，实施前需要检查联动点"}
+{"file":"docs/workflows/新项目开发工作流/工作流总纲.md","reason":"确认安装顺序、bootstrap 清理承诺、装后边界和用户入口说明"}
+{"file":"docs/workflows/新项目开发工作流/命令映射.md","reason":"确认 profile 与首次入口相关文案的同步来源"}
+{"file":".trellis/tasks/05-23-fix-workflow-installer-profile-contract-and-bootstrap-cleanup/prd.md","reason":"本任务的目标、范围、验收标准和关键约束"}
+{"file":".trellis/tasks/05-23-fix-workflow-installer-profile-contract-and-bootstrap-cleanup/info.md","reason":"记录用户确认的产品决策与真实运行证据"}
