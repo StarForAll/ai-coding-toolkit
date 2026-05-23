@@ -1159,7 +1159,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
 
         self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
-        self.assertIn("启动款未确认到账前，不得进入 implementation / test-first", validate.stdout)
+        self.assertIn("启动款未确认到账前，不得进入 implementation", validate.stdout)
 
     def test_validate_allows_external_execution_after_kickoff_received(self) -> None:
         root, task_dir = self.make_fixture()
@@ -1404,7 +1404,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             .replace('"execution_authorized": false', '"execution_authorized": true')
             .replace(
                 '"last_confirmed_transition": null',
-                '"last_confirmed_transition": {"from": "plan", "to": "test-first", "confirmed_at": "2026-04-16T00:00:00+00:00"}',
+                '"last_confirmed_transition": {"from": "plan", "to": "implementation", "confirmed_at": "2026-04-16T00:00:00+00:00"}',
             ),
             encoding="utf-8",
         )

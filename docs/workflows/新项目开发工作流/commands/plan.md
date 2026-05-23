@@ -278,7 +278,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 补充约束：
 
 - 在 `plan` 阶段从父任务拆出 child task 时，默认应保留当前 parent coordinator 作为 session active task；不要因为 `create --parent` 就偷偷切到新 child task
-- 只有在用户明确确认“当前推荐执行任务（待确认）”之后，才允许把 session active task 切到真正要进入 `implementation` / `test-first` 的叶子任务
+  - 只有在用户明确确认“当前推荐执行任务（待确认）”之后，才允许把 session active task 切到真正要进入 `implementation` 的叶子任务
 - `TRELLIS_PRESERVE_ACTIVE_TASK=1` 只用于“协调态拆任务但暂不切执行上下文”这一步；进入执行态前必须回到真实 leaf task
 
 至少要保证：**当前推荐执行任务（待确认）对应的 leaf task 目录已经具备最小 `prd.md`**，
@@ -366,7 +366,7 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 说明：
 
 - `Trellis Task 清单`：列出现实存在的 task / child task / 性能回归与优化任务 / project-audit task
-- `当前推荐执行任务（待确认）`：输出当前准备进入 implementation / test-first 的叶子 task 说明卡，至少写清任务路径、任务标题、本轮目标、本轮不做、前置依赖、验收锚点、风险提醒、推荐主执行 CLI；且该 leaf task 目录至少已补齐最小 `prd.md`
+- `当前推荐执行任务（待确认）`：输出当前准备进入 implementation 的叶子 task 说明卡；若该 task 计划采用 TDD，只在说明卡里注明“implementation 内的 test-first 风格”，而不是写成独立阶段。说明卡至少写清任务路径、任务标题、本轮目标、本轮不做、前置依赖、验收锚点、风险提醒、推荐主执行 CLI；且该 leaf task 目录至少已补齐最小 `prd.md`
 - `依赖关系`：只描述依赖和顺序，不写实时状态
 - `任务粒度判断`：显式记录当前事项是否还应继续细分，以及当前推荐 task 为什么已经达到合适粒度；这里必须保留人工判断空间，不使用机械评分表
 - `早期探针与骨架任务`：明确 walking skeleton / smoke、packaging skeleton、performance probe 的前置安排；不适用时写 `not_applicable` + 原因

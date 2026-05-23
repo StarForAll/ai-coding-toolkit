@@ -139,7 +139,7 @@ python3 <WORKFLOW_DIR>/commands/shell/feasibility-check.py --step estimate
 - 若判定为外包、定制开发或新客户项目（`project_engagement_type = external_outsourcing`），必须同步执行以下控制判断：
 <!-- if:outsourcing -->
   - 启动款门禁：首款比例至少为 `30%`，默认建议 `30%` 或 `40%`
-  - 开工状态：在 `kickoff_payment_received = yes` 前，不得进入 implementation / test-first
+  - 开工状态：在 `kickoff_payment_received = yes` 前，不得进入 implementation
   - 交付控制轨道必须明确，不允许停留在”未确定”
   - **首选轨：托管部署**，尾款前只提供开发者控制的试运行环境
   - **备选轨：试运行授权**，仅在双方明确接受授权方案时使用
@@ -336,7 +336,7 @@ $TASK_DIR/
 | 字段 | 填写位置 | 作用 | 下游消费点 |
 |---|---|---|---|
 | `project_engagement_type` | `## 概览` | 判断是否启用外包项目控制分支 | 所有后续阶段先判定项目类别；非外包项目不启用首/尾款控制 |
-| `kickoff_payment_ratio` | `## 概览` | 冻结外包项目的最低启动款比例 | `/trellis:continue` / `workflow-state.py` 判断 implementation / test-first 是否允许开启 |
+| `kickoff_payment_ratio` | `## 概览` | 冻结外包项目的最低启动款比例 | `/trellis:continue` / `workflow-state.py` 判断 implementation 是否允许开启 |
 | `kickoff_payment_received` | `## 概览` | 冻结外包项目是否已满足开工门禁 | `/trellis:continue` / `workflow-state.py` 阻止在首款未到账时开工 |
 | `delivery_control_track` | `## 概览` | 决定交付轨道 | `/trellis:design` 选择必选 spec；`/trellis:plan` 决定是否拆试运行授权任务 |
 | `delivery_control_handover_trigger` | `## 概览` | 定义最终控制权移交触发条件 | `/trellis:plan` 设置前置依赖；`/trellis:delivery` 判断是否允许最终移交 |
@@ -380,7 +380,7 @@ $TASK_DIR/
 <!-- if:outsourcing -->
 - 外包项目必须填写 `kickoff_payment_ratio` 与 `kickoff_payment_received`
 - 外包项目至少填完 `delivery_control_*` 字段，不能只写中文描述不写机器字段
-- 外包项目在 `kickoff_payment_received != yes` 时，不得进入 implementation / test-first
+- 外包项目在 `kickoff_payment_received != yes` 时，不得进入 implementation
 - 若 `delivery_control_track = trial_authorization`，`trial_authorization_terms.*` 不得留空
 <!-- endif:outsourcing -->
 - 所有项目都不得只写”会做水印”这种自然语言描述；必须显式填写 `source_watermark_*` 与 `ownership_proof_required`

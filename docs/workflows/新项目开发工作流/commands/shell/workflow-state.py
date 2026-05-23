@@ -1265,7 +1265,7 @@ def validate_external_project_controls(
             f"{assessment_file.relative_to(repo_root).as_posix()} 的 `kickoff_payment_received` 只能填写 `yes` / `no`"
         )
     elif stage in EXECUTION_STAGES and kickoff_received != "yes":
-        errors.append("外包项目在启动款未确认到账前，不得进入 implementation / test-first")
+        errors.append("外包项目在启动款未确认到账前，不得进入 implementation")
 
     delivery_track = extract_backticked_field(content, "delivery_control_track")
     if delivery_track is None:
