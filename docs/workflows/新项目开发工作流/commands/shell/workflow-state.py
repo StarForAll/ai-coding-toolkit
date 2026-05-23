@@ -150,8 +150,8 @@ PATCHED_CODEX_SKILL_REQUIREMENTS: dict[str, dict[str, tuple[str, ...]]] = {
     "trellis-finish-work": {
         "must_contain": (
             CODEX_FINISH_WORK_SKILL_MARKER,
-            "archive the active task",
-            "record the session journal",
+            "complete native Trellis close-out after delivery",
+            "archive + session-record steps after delivery",
         ),
         "must_not_contain": (
             "archive completed tasks, and record session progress to the developer journal",

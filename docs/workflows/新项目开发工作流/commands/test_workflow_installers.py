@@ -555,6 +555,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         script: Path,
         *args: str,
         env: dict[str, str] | None = None,
+        input_text: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
         merged_env = os.environ.copy()
         if env:
@@ -566,6 +567,7 @@ class WorkflowInstallerTests(unittest.TestCase):
             capture_output=True,
             check=False,
             env=merged_env,
+            input=input_text,
         )
 
     def create_fixture(
@@ -622,6 +624,10 @@ class WorkflowInstallerTests(unittest.TestCase):
             )
             (root / ".trellis" / "scripts" / "task.py").write_text(
                 BASELINE_TASK_PY_CONTENT,
+                encoding="utf-8",
+            )
+            (root / ".trellis" / "scripts" / "common" / "__init__.py").write_text(
+                "",
                 encoding="utf-8",
             )
             (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
@@ -801,13 +807,155 @@ class WorkflowInstallerTests(unittest.TestCase):
         return root
 
     def install_workflow(self, fixture_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+        forwarded_args = list(args)
+        if "--profile" not in forwarded_args:
+            forwarded_args = ["--profile", "outsourcing", *forwarded_args]
         return self.run_script(
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture_root),
-            *args,
+            *forwarded_args,
             env={EMBED_CONFIRM_ENV: "1"},
         )
+
+    def test_install_requires_explicit_profile_in_non_interactive_mode(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        result = self.run_script(
+            INSTALL_SCRIPT,
+            "--project-root",
+            str(fixture),
+            env={EMBED_CONFIRM_ENV: "1"},
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--profile", result.stdout + result.stderr)
+        self.assertIn("非交互", result.stdout + result.stderr)
+        self.assertFalse((fixture / ".trellis" / "workflow-installed.json").exists())
+
+    def test_install_prompts_for_profile_in_interactive_mode(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        result = self.run_script(
+            INSTALL_SCRIPT,
+            "--project-root",
+            str(fixture),
+            env={EMBED_CONFIRM_ENV: "1", "FORCE_INTERACTIVE_PROFILE_PROMPT": "1"},
+            input_text="personal\n",
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("请选择安装 profile", result.stdout)
+        record = json.loads((fixture / ".trellis" / "workflow-installed.json").read_text(encoding="utf-8"))
+        self.assertEqual(record["profile"], "personal")
+
+    def test_install_prompt_accepts_profile_initial(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        result = self.run_script(
+            INSTALL_SCRIPT,
+            "--project-root",
+            str(fixture),
+            env={EMBED_CONFIRM_ENV: "1", "FORCE_INTERACTIVE_PROFILE_PROMPT": "1"},
+            input_text="p\n",
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        record = json.loads((fixture / ".trellis" / "workflow-installed.json").read_text(encoding="utf-8"))
+        self.assertEqual(record["profile"], "personal")
+
+    def test_install_dry_run_prompts_for_profile_in_interactive_mode(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        result = self.run_script(
+            INSTALL_SCRIPT,
+            "--project-root",
+            str(fixture),
+            "--dry-run",
+            env={"FORCE_INTERACTIVE_PROFILE_PROMPT": "1"},
+            input_text="outsourcing\n",
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("请选择安装 profile", result.stdout)
+        self.assertIn("Profile: outsourcing", result.stdout)
+        self.assertFalse((fixture / ".trellis" / "workflow-installed.json").exists())
+
+    def test_install_dry_run_prompt_accepts_profile_initial(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        result = self.run_script(
+            INSTALL_SCRIPT,
+            "--project-root",
+            str(fixture),
+            "--dry-run",
+            env={"FORCE_INTERACTIVE_PROFILE_PROMPT": "1"},
+            input_text="o\n",
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("Profile: outsourcing", result.stdout)
+        self.assertFalse((fixture / ".trellis" / "workflow-installed.json").exists())
+
+    def test_install_removes_bootstrap_task_before_first_route(self) -> None:
+        fixture = self.create_fixture(bootstrap_as_current_task=True)
+        self.addCleanup(shutil.rmtree, fixture)
+        degraded_path = fixture / ".trellis" / ".runtime" / "degraded-active-task.json"
+        degraded_path.write_text(
+            json.dumps({"current_task": ".trellis/tasks/00-bootstrap-guidelines"}, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+
+        install = self.install_workflow(fixture, "--profile", "outsourcing")
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.assertFalse((fixture / ".trellis" / "tasks" / "00-bootstrap-guidelines").exists())
+        self.assertFalse((fixture / ".trellis" / ".current-task").exists())
+        self.assertFalse((fixture / ".trellis" / ".runtime" / "sessions" / "test-context.json").exists())
+        self.assertFalse(degraded_path.exists())
+        self.assertIn("已清理 bootstrap degraded active-task 引用", install.stdout)
+
+    def test_embed_entry_scripts_and_docs_pass_explicit_outsourcing_profile(self) -> None:
+        temp_project_script = (REPO_ROOT / "commands" / "shell" / "init-trellis-temp-project.sh").read_text(
+            encoding="utf-8"
+        )
+        quick_commands = (REPO_ROOT / "trellis常用提示语句.txt").read_text(encoding="utf-8")
+
+        self.assertIn("--profile \"$INSTALL_PROFILE\" --dry-run", temp_project_script)
+        self.assertIn("--profile \"$INSTALL_PROFILE\"", temp_project_script)
+        self.assertIn("prompt_profile()", temp_project_script)
+        self.assertIn("--profile outsourcing --dry-run", quick_commands)
+        self.assertIn("--profile outsourcing", quick_commands)
+
+    def test_install_entry_docs_state_profile_must_be_explicit(self) -> None:
+        workflow_overview = (REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "工作流总纲.md").read_text(
+            encoding="utf-8"
+        )
+        command_mapping = (REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "命令映射.md").read_text(
+            encoding="utf-8"
+        )
+        embed_spec = (REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "工作流嵌入执行规范.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("必须显式传入 `--profile`", workflow_overview)
+        self.assertIn("显式传入 `--profile`", command_mapping)
+        self.assertIn("`--profile` 必须显式传入", embed_spec)
+
+    def test_finish_work_skill_matches_current_codex_validation_contract(self) -> None:
+        workflow_state = (COMMANDS_DIR / "shell" / "workflow-state.py").read_text(encoding="utf-8")
+        finish_work_patch = (COMMANDS_DIR / "finish-work-patch-projectization.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("complete native Trellis close-out after delivery", workflow_state)
+        self.assertIn("archive + session-record steps after delivery", workflow_state)
+        self.assertIn("Trellis 原生 `finish-work` 是**当前活动任务**的正常终态入口", finish_work_patch)
+        self.assertIn("使用 Trellis 原生 `finish-work` 完成最终 `archive + add_session`", finish_work_patch)
 
     def test_patch_task_create_preserve_active_produces_compilable_python(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="workflow-task-store-patch-"))
@@ -1059,6 +1207,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         codex_finish_work_text = (
             fixture / ".agents" / "skills" / "trellis-finish-work" / "SKILL.md"
         ).read_text(encoding="utf-8")
+        self.assertIn("archive + session-record steps after delivery", codex_finish_work_text)
+        self.assertIn("使用 Trellis 原生 `finish-work` 完成最终 `archive + add_session`", codex_finish_work_text)
         self.assertNotIn("hand off to `delivery`", codex_finish_work_text)
         self.assertNotIn("hand off to delivery", codex_finish_work_text)
         task_py_text = (fixture / ".trellis" / "scripts" / "task.py").read_text(encoding="utf-8")

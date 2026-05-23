@@ -22,7 +22,7 @@
 - 新建目标项目默认使用 `main` 作为本地主分支 / 初始分支；已有本地提交历史的项目可保留当前分支
 - Codex 至少存在 .agents/skills/ 或 .codex/skills/ 之一
 
-用法: python3 install-workflow.py [--project-root /path/to/project] [--cli claude,opencode,codex] [--dry-run]
+用法: python3 install-workflow.py [--project-root /path/to/project] [--cli claude,opencode,codex] [--profile personal|outsourcing] [--dry-run]
 卸载: python3 uninstall-workflow.py
 """
 import argparse
@@ -279,6 +279,7 @@ _REFS_HEADS_PREFIX = "refs/heads/"
 _PACKED_REFS_FILE = "packed-refs"
 _PARALLEL_DISABLED_MARKER = "<!-- workflow-parallel-disabled -->"
 _EMBED_EXECUTOR_CONFIRM_ENV = "WORKFLOW_EMBED_EXECUTOR_CONFIRMED"
+_FORCE_INTERACTIVE_PROFILE_PROMPT_ENV = "FORCE_INTERACTIVE_PROFILE_PROMPT"
 _ENTRY_COMMAND_CANDIDATES = ("continue", "start")
 _LEGACY_READY_AUTOCONTINUE_LINE = "If a task is READY, execute its Next required action without asking whether to continue."
 _STRONG_GATE_READY_GUIDANCE_LINES = (
@@ -846,6 +847,50 @@ def clear_bootstrap_session_runtime_if_needed(root: Path, dry_run: bool) -> int:
     return cleared
 
 
+def _bootstrap_degraded_runtime_paths(root: Path) -> list[Path]:
+    runtime_dir = root / ".trellis" / ".runtime"
+    if not runtime_dir.is_dir():
+        return []
+
+    bootstrap_ref = f".trellis/tasks/{_BOOTSTRAP_TASK_NAME}"
+    matches: list[Path] = []
+    for degraded_path in runtime_dir.glob("degraded-active-task*.json"):
+        try:
+            payload = json.loads(degraded_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        current_task = payload.get("current_task")
+        if not isinstance(current_task, str):
+            continue
+        if normalize_task_ref(current_task, root) == bootstrap_ref:
+            matches.append(degraded_path)
+    return matches
+
+
+def clear_bootstrap_degraded_runtime_if_needed(root: Path, dry_run: bool) -> int:
+    """清理仍指向 bootstrap task 的 degraded active-task fallback 文件。"""
+    matches = _bootstrap_degraded_runtime_paths(root)
+    if not matches:
+        return 0
+
+    bootstrap_ref = f".trellis/tasks/{_BOOTSTRAP_TASK_NAME}"
+    if dry_run:
+        info(f"将清理 bootstrap degraded active-task 引用 → {bootstrap_ref} ({len(matches)} 个文件)")
+        return len(matches)
+
+    cleared = 0
+    for degraded_path in matches:
+        try:
+            degraded_path.unlink()
+        except OSError:
+            continue
+        cleared += 1
+    ok(f"已清理 bootstrap degraded active-task 引用 → {bootstrap_ref} ({cleared} 个文件)")
+    return cleared
+
+
 def ensure_project_prereqs(root: Path) -> None:
     """校验目标项目满足 workflow 嵌入前提。"""
     git_marker = root / ".git"
@@ -868,6 +913,59 @@ def ensure_project_prereqs(root: Path) -> None:
             f"git remote set-url --add --push origin <第二个仓库URL>{N}"
         )
     enforce_initial_main_branch_policy(root)
+
+
+def _env_truthy(name: str) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def should_prompt_for_profile() -> bool:
+    """Return whether the installer may interactively ask the user to choose a profile."""
+    if _env_truthy(_FORCE_INTERACTIVE_PROFILE_PROMPT_ENV):
+        return True
+    try:
+        return sys.stdin.isatty() and sys.stdout.isatty()
+    except OSError:
+        return False
+
+
+def prompt_for_profile() -> str:
+    """Prompt the user to explicitly choose a workflow profile."""
+    prompt = "请选择安装 profile (`personal` / `outsourcing`，也可输入 `p` / `o`): "
+    aliases = {
+        "p": "personal",
+        "o": "outsourcing",
+    }
+    while True:
+        try:
+            choice = input(prompt).strip().lower()
+        except EOFError:
+            sys.exit(
+                f"{R}未显式传入 --profile，且交互式 profile 选择被中断。"
+                "请重新执行并显式传入 --profile personal 或 --profile outsourcing。"
+                f"{N}"
+            )
+        if choice in aliases:
+            return aliases[choice]
+        if choice in VALID_PROFILES:
+            return choice
+        warn("无效 profile，请输入 personal / outsourcing，或使用简写 p / o")
+
+
+def resolve_install_profile(profile_arg: str | None) -> str:
+    """Resolve the install profile without relying on an implicit default."""
+    if profile_arg in VALID_PROFILES:
+        return profile_arg
+    if should_prompt_for_profile():
+        return prompt_for_profile()
+    sys.exit(
+        f"{R}未显式传入 --profile，且当前为非交互环境。"
+        "请使用 --profile personal 或 --profile outsourcing 重新执行安装。"
+        f"{N}"
+    )
 
 
 def ensure_embed_executor_confirmed(dry_run: bool) -> None:
@@ -948,8 +1046,24 @@ def build_finish_work_content(content: str, patch_text: str) -> str | None:
         'description: "Wrap up the current session: verify quality gate passed, collect close-out evidence, and complete native Trellis close-out after delivery. Use when delivery is complete and the task is ready to be archived and journaled."',
     )
     content = content.replace(
+        'description: "Baseline finish-work skill"',
+        'description: "Wrap up the current session: verify quality gate passed, collect close-out evidence, and complete native Trellis close-out after delivery. Use when delivery is complete and the task is ready to be archived and journaled."',
+    )
+    content = content.replace(
         "Wrap up the current session: archive the active task (and any other completed-but-unarchived tasks the user wants to clean up) and record the session journal. Code commits are NOT done here — those happen in workflow Phase 3.4 before you invoke this command.",
         "Wrap up the current session: verify close-out evidence, confirm the frozen quality matrix, and complete the native Trellis archive + session-record steps after delivery. Code commits are NOT done here — those happen in workflow Phase 3.4 before you invoke this command.",
+    )
+    content = content.replace(
+        "Before submitting or committing, use this checklist to ensure work completeness.",
+        "Wrap up the current session: verify close-out evidence, confirm the frozen quality matrix, and complete the native Trellis archive + session-record steps after delivery. Code commits are NOT done here — those happen in workflow Phase 3.4 before you invoke this command.",
+    )
+    content = content.replace(
+        "**Timing**: After code is written and tested, before commit",
+        "",
+    )
+    content = content.replace(
+        "## Checklist",
+        "# Finish Work",
     )
 
     # Step 2 archive language correction: keep native finish-work ownership of
@@ -3084,6 +3198,7 @@ def remove_bootstrap_task(root: Path, dry_run: bool) -> str:
     task_dir = root / ".trellis" / "tasks" / _BOOTSTRAP_TASK_NAME
     current_task_cleared = clear_bootstrap_current_task_if_needed(root, dry_run)
     session_refs_cleared = clear_bootstrap_session_runtime_if_needed(root, dry_run)
+    degraded_refs_cleared = clear_bootstrap_degraded_runtime_if_needed(root, dry_run)
 
     if not task_dir.exists():
         info(f"{_BOOTSTRAP_TASK_NAME} 不存在，跳过清理")
@@ -3096,7 +3211,7 @@ def remove_bootstrap_task(root: Path, dry_run: bool) -> str:
     else:
         task_dir.unlink()
     ok(f"Trellis bootstrap 任务已删除 → {_BOOTSTRAP_TASK_NAME}")
-    if not current_task_cleared and session_refs_cleared == 0:
+    if not current_task_cleared and session_refs_cleared == 0 and degraded_refs_cleared == 0:
         info("bootstrap task 引用无需清理")
     return "removed"
 
@@ -3143,8 +3258,8 @@ def main() -> int:
     p.add_argument("--project-root", type=Path, default=None, help="项目根目录（默认自动检测）")
     p.add_argument("--cli", type=str, default=None,
                    help="指定 CLI 类型，逗号分隔: claude,opencode,codex（默认安装全部检测到的 CLI；此参数仅用于过滤）")
-    p.add_argument("--profile", choices=VALID_PROFILES, default=DEFAULT_PROFILE,
-                   help=f"安装配置: personal（排除外包内容）/ outsourcing（完整内容，默认: {DEFAULT_PROFILE}）")
+    p.add_argument("--profile", choices=VALID_PROFILES, default=None,
+                   help="安装配置: personal（排除外包内容）/ outsourcing（完整内容）")
     p.add_argument("--dry-run", action="store_true", help="预览安装结果，不实际写入")
     args = p.parse_args()
 
@@ -3171,6 +3286,8 @@ def main() -> int:
             f"检测到的 workflow 痕迹:\n{trace_lines}{N}"
         )
 
+    profile = resolve_install_profile(args.profile)
+
     print()
     print("╔══════════════════════════════════════════╗")
     print("║   自定义工作流 → Trellis 嵌入安装（多CLI） ║")
@@ -3179,12 +3296,11 @@ def main() -> int:
     info(f"检测到 CLI: {', '.join(cli_types)}")
     if not args.cli:
         info("默认策略: 在同一目标项目中同时部署全部检测到的 CLI 适配层；如需过滤请使用 --cli")
-    info(f"Profile: {args.profile}")
+    info(f"Profile: {profile}")
     if args.dry_run:
         warn("DRY RUN 模式 — 不实际写入文件")
     print()
 
-    profile = args.profile
     attempt_record_created = False
     if not args.dry_run:
         write_embed_attempt_record(src, root, cli_types)

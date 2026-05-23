@@ -27,8 +27,8 @@ PYTHON_BIN="/ops/softwares/python/bin/python3"
 
 # 默认是外部项目，如果加入 --profile personal 就是内部个人项目不会包含外包要求
 # 当 dry-run 通过之后执行真正的命令
-"$PYTHON_BIN" "$WORKFLOW_ROOT/commands/install-workflow.py" --project-root "$TARGET_PROJECT" --dry-run
-WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1 "$PYTHON_BIN" "$WORKFLOW_ROOT/commands/install-workflow.py" --project-root "$TARGET_PROJECT"
+"$PYTHON_BIN" "$WORKFLOW_ROOT/commands/install-workflow.py" --project-root "$TARGET_PROJECT" --profile outsourcing --dry-run
+WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1 "$PYTHON_BIN" "$WORKFLOW_ROOT/commands/install-workflow.py" --project-root "$TARGET_PROJECT" --profile outsourcing
 # 完整性校验
 "$PYTHON_BIN" "$WORKFLOW_ROOT/commands/upgrade-compat.py" --project-root "$TARGET_PROJECT" --check
 -------------------------------------------
@@ -84,4 +84,3 @@ skill修复模板:
 根据项目实际情况对STXX任务完成情况分析[需要对项目进行全量深层分析]，先分析存在哪些错漏
 
 git add . && git commit -m ""
-
