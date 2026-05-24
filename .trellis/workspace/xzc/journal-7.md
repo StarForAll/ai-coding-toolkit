@@ -39,3 +39,36 @@ Audited the embedded workflow-state architecture, split the workflow-state helpe
 ### Next Steps
 
 - None - task complete
+
+
+## Session 305: Repair embedded strong-gate workflow contracts
+
+**Date**: 2026-05-24
+**Task**: Repair embedded strong-gate workflow contracts
+**Branch**: `main`
+
+### Summary
+
+Repaired and clarified embedded new-project workflow contracts, strengthened strong-gate validation/routing behavior, and verified workflow-state plus installer regressions.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f442997` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
