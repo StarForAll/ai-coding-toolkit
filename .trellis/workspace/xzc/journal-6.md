@@ -1951,3 +1951,36 @@ Verified embedded workflow issues against /tmp fixture, fixed install/uninstall 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 303: audit embedded workflow agent blocking
+
+**Date**: 2026-05-24
+**Task**: audit embedded workflow agent blocking
+**Branch**: `main`
+
+### Summary
+
+Audited embedded workflow agent blocking paths, patched Claude/OpenCode/Codex runtime guards and synchronized workflow docs/tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0bfaf4d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
