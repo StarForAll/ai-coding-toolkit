@@ -1917,3 +1917,37 @@ Audited the embedded new-project workflow against /tmp/trellis-0.5.17-2, repaire
 ### Next Steps
 
 - None - task complete
+
+
+## Session 302: repair embedded workflow runtime contracts and routing guidance
+
+**Date**: 2026-05-24
+**Task**: repair embedded workflow runtime contracts and routing guidance
+**Branch**: `main`
+
+### Summary
+
+Verified embedded workflow issues against /tmp fixture, fixed install/uninstall record contracts, added finish-work checklist template, surfaced task.py start strong-gate help, added OpenCode subagent guard feedback, documented bootstrap cleanup timing, clarified that embedded workflow should prefer main-session flow over manual agent/subagent dispatch, and updated regression coverage.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e61776d` | (see git log) |
+| `57a21e7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
