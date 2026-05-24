@@ -3256,10 +3256,12 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
         (root / ".opencode" / "plugins" / "inject-subagent-context.js").write_text(
             "// [workflow-embed-patch:opencode-subagent-gates]\n"
+            "function buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt) { return originalPrompt }\n"
             "function shouldAllowTaskInjection(routeData, subagentType) { return subagentType !== \"forbidden\" }\n"
             "function loadRouteData(ctx, taskDir) { return { stage: \"implementation\", action: \"reenter\", target: \"implementation\" } }\n"
             "const allowedStages = new Set([\"implementation\", \"check\", \"review-gate\", \"project-audit\", \"delivery\"])\n"
             "loadRouteData(ctx, ctx.resolveTaskDir(taskDir))\n"
+            "Strong-gate blocked this subagent dispatch.\n"
             "strong-gate route does not allow subagent injection\n",
             encoding="utf-8",
         )
@@ -3662,10 +3664,12 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
         (root / ".opencode" / "plugins" / "inject-subagent-context.js").write_text(
             "// [workflow-embed-patch:opencode-subagent-gates]\n"
+            "function buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt) { return originalPrompt }\n"
             "function shouldAllowTaskInjection(routeData, subagentType) { return subagentType !== \"forbidden\" }\n"
             "function loadRouteData(ctx, taskDir) { return { stage: \"implementation\", action: \"reenter\", target: \"implementation\" } }\n"
             "const allowedStages = new Set([\"implementation\", \"check\", \"review-gate\", \"project-audit\", \"delivery\"])\n"
             "loadRouteData(ctx, ctx.resolveTaskDir(taskDir))\n"
+            "Strong-gate blocked this subagent dispatch.\n"
             "strong-gate route does not allow subagent injection\n",
             encoding="utf-8",
         )

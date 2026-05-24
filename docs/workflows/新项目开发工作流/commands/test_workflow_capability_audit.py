@@ -280,6 +280,10 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         (root / ".trellis" / "workflow-docs").mkdir(parents=True, exist_ok=True)
         for card_name in ("需求变更管理执行卡.md", "源码水印与归属证据链执行卡.md"):
             (root / ".trellis" / "workflow-docs" / card_name).write_text(f"# {card_name}\n", encoding="utf-8")
+        (root / ".trellis" / "workflow-docs" / "finish-work-checklist-template.md").write_text(
+            "# finish-work checklist template\n",
+            encoding="utf-8",
+        )
         (root / "todo.txt").write_text("workflow todo\n", encoding="utf-8")
         (root / ".trellis" / ".backup-original").mkdir(parents=True, exist_ok=True)
         (root / ".claude" / "commands" / "trellis" / ".backup-original").mkdir(parents=True, exist_ok=True)
@@ -648,7 +652,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self._remove_compatible_anchor()
         module.update_compatible_anchor("0.5.0")
         lines = WORKFLOW_ASSETS.read_text(encoding="utf-8").splitlines()
-        schema_index = lines.index('WORKFLOW_SCHEMA_VERSION = "2"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增')
+        schema_index = lines.index('WORKFLOW_SCHEMA_VERSION = "3"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增')
         self.assertEqual(lines[schema_index + 1], 'COMPATIBLE_TRELLIS_VERSION = "0.5.0"')
 
     def test_script_enters_full_audit_when_current_version_is_newer(self) -> None:
@@ -690,6 +694,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         expected_capabilities = {
             "shared-artifact:todo-reminder-file",
             "shared-doc:execution-cards",
+            "shared-doc:finish-work-checklist-template",
             "shared-artifact:workflow-installed-record",
             "shared-pack:requirements-discovery-foundation-import",
             "shared-doc:agents-nl-routing-block",
@@ -754,7 +759,11 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         controlled_tmp = Path(tempfile.mkdtemp(prefix="workflow-capability-audit-tmp-"))
         self._temp_dirs.append(controlled_tmp)
         context_id = "test-failure-cleanup"
-        original_task = ".trellis/tasks/03-19-implement-agents-source"
+        original_task_dir = self._create_task_dir(
+            "03-19-implement-agents-source",
+            "source task before workflow-capability-audit failure",
+        )
+        original_task = f".trellis/tasks/{original_task_dir.name}"
         self._write_session_current_task(context_id, original_task)
         env = {
             "PATH": f"{fake_bin}:{os.environ['PATH']}",
@@ -766,7 +775,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         current_task = self._read_session_current_task(context_id)
         self.assertEqual(current_task, original_task)
         current_task_dirs = set(d.name for d in TRELLIS_TASKS_DIR.iterdir()) if TRELLIS_TASKS_DIR.is_dir() else set()
-        self.assertEqual(current_task_dirs, self._pre_task_dirs)
+        self.assertEqual(current_task_dirs, self._pre_task_dirs | {original_task_dir.name})
         self.assertEqual(list(controlled_tmp.iterdir()), [])
 
     def test_full_audit_rejects_preexisting_top_level_audit_directory_without_deleting_it(self) -> None:

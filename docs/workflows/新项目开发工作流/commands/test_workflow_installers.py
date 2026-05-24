@@ -270,7 +270,11 @@ BASELINE_TASK_PY_CONTENT = (
     "    if active.task_path:\n"
     "        print(active.task_path)\n"
     "        return 0\n\n"
-    "    return 1\n"
+    "    return 1\n\n"
+    "def show_usage():\n"
+    "    print(\"  python3 task.py start <dir>                        Set active task\\n\")\n\n"
+    "def build_parser():\n"
+    "    p_start = subparsers.add_parser(\"start\", help=\"Set active task\")\n"
 )
 BASELINE_TASK_STORE_CONTENT = (
     "from common.log import Colors, colored\n"
@@ -1232,6 +1236,14 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertNotIn("hand off to delivery", codex_finish_work_text)
         task_py_text = (fixture / ".trellis" / "scripts" / "task.py").read_text(encoding="utf-8")
         self.assertIn(TASK_NO_STATUS_FLIP_PATCH_MARKER, task_py_text)
+        self.assertIn(
+            'help="Set active task (strong-gate: refresh pointer only; does not flip task.json status or advance workflow stage)"',
+            task_py_text,
+        )
+        self.assertIn(
+            "Set active task (strong-gate: pointer only; stage changes still go through workflow-state.py)",
+            task_py_text,
+        )
         task_store_text = (fixture / ".trellis" / "scripts" / "common" / "task_store.py").read_text(encoding="utf-8")
         self.assertIn(TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER, task_store_text)
         claude_session_start = (fixture / ".claude" / "hooks" / "session-start.py").read_text(encoding="utf-8")
@@ -1254,6 +1266,11 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn('stripped === "## Customizing Trellis (for forks)"', opencode_session_utils)
         self.assertNotIn('stripped === "## Workflow State Breadcrumbs"', opencode_session_utils)
         self.assertIn("function stripBreadcrumbTagBlocks(content)", opencode_session_utils)
+        opencode_subagent_path = fixture / ".opencode" / "plugins" / "inject-subagent-context.js"
+        if opencode_subagent_path.exists():
+            opencode_subagent = opencode_subagent_path.read_text(encoding="utf-8")
+            self.assertIn("buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt)", opencode_subagent)
+            self.assertIn("Strong-gate blocked this subagent dispatch.", opencode_subagent)
         opencode_inject_path = fixture / ".opencode" / "plugins" / "inject-workflow-state.js"
         if opencode_inject_path.exists():
             opencode_inject = opencode_inject_path.read_text(encoding="utf-8")
@@ -1316,8 +1333,20 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", ownership_card_text)
         self.assertNotIn("<WORKFLOW_DIR>/commands/shell", ownership_card_text)
         self.assertEqual(record_data["workflow_version"], "0.1.28")
-        self.assertEqual(record_data["workflow_schema_version"], "2")
+        self.assertEqual(record_data["workflow_schema_version"], "3")
         self.assertEqual(record_data["initial_pack"], "pack.requirements-discovery-foundation")
+        self.assertIn(
+            "spec.universal-domains.product-and-requirements.problem-definition",
+            record_data["initial_pack_assets"],
+        )
+        self.assertIn(
+            ".trellis/library-assets/examples/assembled-packs/requirements-discovery-foundation.md",
+            record_data["initial_pack_target_paths"],
+        )
+        self.assertEqual(record_data["initial_pack_cleanup_policy"], "retain-imported-assets")
+        self.assertEqual(record_data["workflow_doc_cleanup_policy"], "remove-on-uninstall")
+        self.assertIn("finish-work-checklist-template.md", record_data["workflow_shared_docs"])
+        self.assertIn("workflow-phase-index-strong-gate", record_data["workflow_doc_patch_components"])
         parallel = fixture / ".claude" / "commands" / "trellis" / "parallel.md"
         self.assertFalse(parallel.exists())
         self.assertTrue((fixture / ".claude" / "commands" / "trellis" / ".backup-original" / "parallel.md").exists())
@@ -1347,6 +1376,12 @@ class WorkflowInstallerTests(unittest.TestCase):
             "[需求变更管理执行卡](.trellis/workflow-docs/需求变更管理执行卡.md)",
             design_skill,
         )
+        finish_work_template = fixture / ".trellis" / "workflow-docs" / "finish-work-checklist-template.md"
+        self.assertTrue(finish_work_template.exists(), "finish-work-checklist-template.md should be deployed")
+        finish_work_template_text = finish_work_template.read_text(encoding="utf-8")
+        self.assertIn("## 冻结验证矩阵", finish_work_template_text)
+        self.assertIn("## 人工验证", finish_work_template_text)
+        self.assertIn("## 同步结论", finish_work_template_text)
 
     def test_install_deployed_runtime_helpers_compile(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
@@ -2169,6 +2204,37 @@ Triggered from `start` (Trellis command) when the user describes a development t
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertEqual(workflow_doc.read_text(encoding="utf-8"), BASELINE_WORKFLOW_CONTENT)
 
+    def test_install_agents_routing_warns_against_manual_agent_subagent_path(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        agents_text = (fixture / "AGENTS.md").read_text(encoding="utf-8")
+        self.assertIn("不建议把 `agent / subagent` 当作默认主执行路径", agents_text)
+        self.assertIn("不要手工派发 `trellis-research` 子代理", agents_text)
+
+    def test_uninstall_removes_workflow_shared_docs_but_retains_library_import_assets(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        workflow_docs_dir = fixture / ".trellis" / "workflow-docs"
+        self.assertTrue((workflow_docs_dir / "需求变更管理执行卡.md").exists())
+        self.assertTrue((workflow_docs_dir / "finish-work-checklist-template.md").exists())
+        library_lock = fixture / ".trellis" / "library-lock.yaml"
+        self.assertTrue(library_lock.exists())
+
+        result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertFalse(workflow_docs_dir.exists(), "workflow-docs should be removed on uninstall")
+        self.assertTrue(library_lock.exists(), "library-lock.yaml should be retained by policy")
+        self.assertIn("保留 requirements-foundation 导入资产与 library-lock.yaml", result.stdout)
+        self.assertNotIn("Trellis 已恢复原始状态", result.stdout)
+
     def test_upgrade_check_detects_workflow_doc_patch_drift(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
@@ -2868,6 +2934,7 @@ Triggered from `start` (Trellis command) when the user describes a development t
         record_data.pop("patched_baseline_commands", None)
         record_data.pop("initial_pack", None)
         record_data.pop("bootstrap_task_removed", None)
+        record_data.pop("workflow_shared_docs", None)
         record_data.pop("patched_codex_skills", None)
         record_path.write_text(json.dumps(record_data, ensure_ascii=False, indent=2), encoding="utf-8")
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
@@ -2885,6 +2952,7 @@ Triggered from `start` (Trellis command) when the user describes a development t
         self.assertIn("patched_baseline_commands", result.stdout)
         self.assertIn("initial_pack", result.stdout)
         self.assertIn("bootstrap_task_removed", result.stdout)
+        self.assertIn("workflow_shared_docs", result.stdout)
         self.assertNotIn("patched_codex_skills", result.stdout)
 
     def test_upgrade_check_detects_missing_critical_runtime_patches(self) -> None:
@@ -3000,7 +3068,10 @@ Triggered from `start` (Trellis command) when the user describes a development t
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         updated = json.loads(record_path.read_text(encoding="utf-8"))
         self.assertEqual(updated["workflow_version"], "0.1.28")
-        self.assertEqual(updated["workflow_schema_version"], "2")
+        self.assertEqual(updated["workflow_schema_version"], "3")
+        self.assertIn("finish-work-checklist-template.md", updated["workflow_shared_docs"])
+        self.assertIn("example.assembled-packs.requirements-discovery-foundation", updated["initial_pack_assets"])
+        self.assertEqual(updated["initial_pack_cleanup_policy"], "retain-imported-assets")
 
     def test_upgrade_check_warns_when_bootstrap_cleanup_record_conflicts_with_filesystem(self) -> None:
         fixture = self.create_fixture()

@@ -71,6 +71,41 @@ class PatchHelperScriptTests(unittest.TestCase):
 
         self.assertEqual(runtime_module.get_step.__doc__, "Return the legacy step body.")
 
+    def test_patch_task_start_refreshes_help_and_usage_text(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="task-start-help-"))
+        self.addCleanup(shutil.rmtree, root)
+        target = root / "task.py"
+        target.write_text(
+            "from common.log import Colors, colored\n"
+            "from common.io import read_json, write_json\n\n"
+            "def cmd_start(args):\n"
+            "    if task_json_path.is_file():\n"
+            "        data = read_json(task_json_path)\n"
+            "        if data and data.get(\"status\") == \"planning\":\n"
+            "            data[\"status\"] = \"in_progress\"\n"
+            "            if write_json(task_json_path, data):\n"
+            "                print(colored(\"✓ Status: planning → in_progress\", Colors.GREEN))\n"
+            "    return 0\n\n"
+            "def show_usage():\n"
+            "    print(\"  python3 task.py start <dir>                        Set active task\\n\")\n\n"
+            "def build_parser():\n"
+            "    p_start = subparsers.add_parser(\"start\", help=\"Set active task\")\n",
+            encoding="utf-8",
+        )
+
+        spec = importlib.util.spec_from_file_location("patch_task_start", SHELL_DIR / "patch-task-start-strong-gate.py")
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        applied = module.patch_task_start(target)
+        self.assertTrue(applied, "patch_task_start should patch the task.py fixture")
+
+        patched = target.read_text(encoding="utf-8")
+        self.assertIn("strong-gate: refresh pointer only", patched)
+        self.assertIn("stage changes still go through workflow-state.py", patched)
+
     def test_patch_inject_workflow_state_maps_stale_suffixes_to_stale_block(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="inject-workflow-state-stale-"))
         self.addCleanup(shutil.rmtree, root)
@@ -153,6 +188,70 @@ class PatchHelperScriptTests(unittest.TestCase):
         self.assertIn('lookup_key.startswith("stale_")', patched)
         self.assertIn('lookup_key = "stale"', patched)
         self.assertIn('display_status = "stale"', patched)
+
+    def test_patch_opencode_inject_subagent_context_adds_block_feedback(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="opencode-subagent-guard-"))
+        self.addCleanup(shutil.rmtree, root)
+        target = root / "inject-subagent-context.js"
+        target.write_text(
+            'const ACTIVE_TASK_HINT_RE = /^\\s*Active task:\\s*(\\S+)\\s*$/m\n'
+            'import { join } from "path"\n'
+            "function injectTrellisContextIntoBash(ctx, input, output, hostPlatform, env) {\n"
+            "  const args = output?.args\n"
+            "  const commandKey = getBashCommandKey(args)\n"
+            "  if (!commandKey) return false\n"
+            "  const command = args[commandKey]\n"
+            "  if (!command.trim()) return false\n"
+            "  if (commandStartsWithTrellisContext(command)) return false\n"
+            "  const contextKey = ctx.getContextKey(input)\n"
+            "  if (!contextKey) return false\n"
+            "  args[commandKey] = `${buildTrellisContextPrefix(contextKey, hostPlatform, env)}${command}`\n"
+            "  return true\n"
+            "}\n"
+            "async function before(ctx, input, output) {\n"
+            "  const args = output?.args\n"
+            "  const rawSubagentType = args.subagent_type\n"
+            "  const subagentType = (rawSubagentType || '').replace(/^trellis-/, '')\n"
+            "  const originalPrompt = args.prompt || ''\n"
+            "  let taskDir = null\n"
+            "  const fallback = ctx._resolveSingleSessionFallback()\n"
+            "  if (fallback?.taskPath) {\n"
+            "    const fallbackDir = ctx.resolveTaskDir(fallback.taskPath)\n"
+            "    if (fallbackDir) {\n"
+            "      taskDir = fallback.taskPath\n"
+            "    }\n"
+            "  }\n"
+            "          if (!taskDir) {\n"
+            "            const fallback = ctx._resolveSingleSessionFallback()\n"
+            "            if (fallback?.taskPath) {\n"
+            "              const fallbackDir = ctx.resolveTaskDir(fallback.taskPath)\n"
+            "              if (fallbackDir && existsSync(fallbackDir)) {\n"
+            "                taskDir = fallback.taskPath\n"
+            "                taskSource = fallback.source\n"
+            "                debugLog(\"inject\", \"Resolved task via single-session fallback:\", taskDir, \"source:\", taskSource)\n"
+            "              }\n"
+            "            }\n"
+            "          }\n"
+            "}\n",
+            encoding="utf-8",
+        )
+
+        spec = importlib.util.spec_from_file_location(
+            "patch_opencode_inject_subagent_context",
+            SHELL_DIR / "patch-opencode-inject-subagent-context.py",
+        )
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        applied = module.patch_opencode_inject_subagent_context(target)
+        self.assertTrue(applied, "OpenCode subagent patch should apply to the fixture")
+
+        patched = target.read_text(encoding="utf-8")
+        self.assertIn("buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt)", patched)
+        self.assertIn("Strong-gate blocked this subagent dispatch.", patched)
+        self.assertIn("args.prompt = buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt)", patched)
 
 
 if __name__ == "__main__":
