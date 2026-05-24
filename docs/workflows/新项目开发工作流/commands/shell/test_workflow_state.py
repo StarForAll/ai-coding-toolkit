@@ -3146,6 +3146,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
                     "cli_types": ["opencode"],
                     "critical_runtime_patches": [
                         "inject-workflow-state",
+                        "claude-inject-subagent-context",
                         "opencode-inject-subagent-context",
                         "session-start-strong-gate",
                         "task-start-strong-gate",
@@ -3610,9 +3611,10 @@ class WorkflowStateScriptTests(unittest.TestCase):
                 {
                     "profile": "outsourcing",
                     "cli_types": ["claude", "opencode", "codex"],
-                    "commands": ["record-session"],
+                    "commands": ["brainstorm"],
                     "critical_runtime_patches": [
                         "inject-workflow-state",
+                        "claude-inject-subagent-context",
                         "opencode-inject-subagent-context",
                         "session-start-strong-gate",
                         "task-start-strong-gate",
@@ -3638,6 +3640,15 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
         (root / ".claude" / "hooks" / "session-start.py").write_text(
             "# strong-gate-session-start-patch-applied\n",
+            encoding="utf-8",
+        )
+        (root / ".claude" / "hooks" / "inject-subagent-context.py").write_text(
+            "# [workflow-embed-patch:claude-subagent-gates]\n"
+            "def _emit_blocked_subagent_output(*args, **kwargs):\n"
+            "    return None\n"
+            "# Strong-gate blocked this subagent dispatch.\n"
+            "# current embedded workflow disables agent/subagent execution paths\n"
+            "_emit_blocked_subagent_output(subagent_type, original_prompt, tool_input)\n",
             encoding="utf-8",
         )
         (root / ".codex" / "hooks").mkdir(parents=True, exist_ok=True)
@@ -3695,17 +3706,17 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
         (root / ".claude" / "commands" / "trellis").mkdir(parents=True, exist_ok=True)
         (root / ".opencode" / "commands" / "trellis").mkdir(parents=True, exist_ok=True)
-        (root / ".agents" / "skills" / "record-session").mkdir(parents=True, exist_ok=True)
-        (root / ".claude" / "commands" / "trellis" / "record-session.md").write_text(
-            "# record-session\n\n统一正文\n",
+        (root / ".agents" / "skills" / "brainstorm").mkdir(parents=True, exist_ok=True)
+        (root / ".claude" / "commands" / "trellis" / "brainstorm.md").write_text(
+            "# brainstorm\n\n统一正文\n",
             encoding="utf-8",
         )
-        (root / ".opencode" / "commands" / "trellis" / "record-session.md").write_text(
-            "# record-session\n\n不同正文\n",
+        (root / ".opencode" / "commands" / "trellis" / "brainstorm.md").write_text(
+            "# brainstorm\n\n不同正文\n",
             encoding="utf-8",
         )
-        (root / ".agents" / "skills" / "record-session" / "SKILL.md").write_text(
-            "# record-session\n\n第三份正文\n",
+        (root / ".agents" / "skills" / "brainstorm" / "SKILL.md").write_text(
+            "# brainstorm\n\n第三份正文\n",
             encoding="utf-8",
         )
 
@@ -3713,7 +3724,8 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         data = json.loads(result.stdout)
-        self.assertEqual(data["action"], "entry_choice_required")
+        self.assertEqual(data["action"], "embed_invalid")
+        self.assertIn("brainstorm 内容漂移", data["reason"])
 
     # ------------------------------------------------------------------
     # repair subcommand tests

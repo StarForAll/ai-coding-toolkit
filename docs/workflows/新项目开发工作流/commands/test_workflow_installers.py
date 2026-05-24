@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import argparse
+import contextlib
 import importlib.util
+import io
+import json
 import os
 import shutil
 import subprocess
@@ -8,7 +12,6 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-import json
 
 from workflow_assets import HELPER_SCRIPTS, build_managed_audit_extra_specs
 
@@ -969,13 +972,13 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("`--profile` 必须显式传入", embed_spec)
 
     def test_finish_work_skill_matches_current_codex_validation_contract(self) -> None:
-        workflow_state = (COMMANDS_DIR / "shell" / "workflow-state.py").read_text(encoding="utf-8")
+        embed_integrity = (COMMANDS_DIR / "shell" / "embed_integrity.py").read_text(encoding="utf-8")
         finish_work_patch = (COMMANDS_DIR / "finish-work-patch-projectization.md").read_text(
             encoding="utf-8"
         )
 
-        self.assertIn("complete native Trellis close-out after delivery", workflow_state)
-        self.assertIn("archive + session-record steps after delivery", workflow_state)
+        self.assertIn("complete native Trellis close-out after delivery", embed_integrity)
+        self.assertIn("archive + session-record steps after delivery", embed_integrity)
         self.assertIn("Trellis 原生 `finish-work` 是**当前活动任务**的正常终态入口", finish_work_patch)
         self.assertIn("使用 Trellis 原生 `finish-work` 完成最终 `archive + add_session`", finish_work_patch)
 
@@ -1424,6 +1427,105 @@ class WorkflowInstallerTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+    def test_install_deployed_route_helper_survives_file_based_hook_import(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assert_install_result_usable(install)
+
+        workflow_scripts = fixture / ".trellis" / "scripts" / "workflow"
+        for helper_name in (
+            "state_utils.py",
+            "validators_core.py",
+            "validators_gates.py",
+            "embed_integrity.py",
+        ):
+            self.assertTrue(
+                (workflow_scripts / helper_name).exists(),
+                f"{helper_name} should be deployed with workflow-state.py",
+            )
+
+        task_dir = fixture / ".trellis" / "tasks" / "05-24-route-import-check"
+        task_dir.mkdir(parents=True, exist_ok=True)
+        (task_dir / "task.json").write_text(
+            json.dumps(
+                {
+                    "id": "05-24-route-import-check",
+                    "title": "route import check",
+                    "status": "planning",
+                    "children": [],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (task_dir / "workflow-state.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "stage": "feasibility",
+                    "status": "in_progress",
+                    "current_block": None,
+                    "completed_blocks": [],
+                    "checkpoints": {
+                        "architecture_confirmed": False,
+                        "context7_review_completed": False,
+                        "execution_authorized": False,
+                    },
+                    "updated_at": "2026-05-24T00:00:00+00:00",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        install_record_path = fixture / ".trellis" / "workflow-installed.json"
+        install_record = json.loads(install_record_path.read_text(encoding="utf-8"))
+        install_record.pop("patched_codex_skills", None)
+        install_record_path.write_text(
+            json.dumps(install_record, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        (fixture / ".trellis" / "scripts" / "common" / "active_task.py").write_text(
+            "from pathlib import Path\n"
+            "from types import SimpleNamespace\n\n"
+            "def resolve_active_task(_repo_root):\n"
+            "    return SimpleNamespace(task_path=None, stale=False, source='fixture')\n\n"
+            "def resolve_task_ref(task_path, _repo_root):\n"
+            "    return Path(task_path) if task_path else None\n",
+            encoding="utf-8",
+        )
+        (fixture / ".claude" / "hooks" / "inject-subagent-context.py").write_text(
+            "# [workflow-embed-patch:claude-subagent-gates]\n"
+            "def _emit_blocked_subagent_output(*args, **kwargs):\n"
+            "    return None\n"
+            "# Strong-gate blocked this subagent dispatch.\n"
+            "# current embedded workflow disables agent/subagent execution paths\n"
+            "_emit_blocked_subagent_output(subagent_type, original_prompt, tool_input)\n",
+            encoding="utf-8",
+        )
+
+        workflow_state_path = workflow_scripts / "workflow-state.py"
+        spec = importlib.util.spec_from_file_location("embedded_workflow_state", workflow_state_path)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            exit_code = module.cmd_route(
+                argparse.Namespace(project_root=str(fixture), task_dir=str(task_dir))
+            )
+        self.assertEqual(exit_code, 0)
+        route_data = json.loads(buffer.getvalue())
+        self.assertEqual(route_data["action"], "reenter")
+        self.assertEqual(route_data["stage"], "feasibility")
 
     def test_install_patches_opencode_inject_workflow_state_with_runtime_contract(self) -> None:
         fixture = self.create_fixture(include_opencode=True)
