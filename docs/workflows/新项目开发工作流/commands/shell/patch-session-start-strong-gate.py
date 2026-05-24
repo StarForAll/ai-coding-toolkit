@@ -30,6 +30,37 @@ STRONG_GATE_READY_GUIDANCE_LINES = (
     "Treat `workflow-state.py route` / <task-status> as the only authority for the next action.\n"
     "Do NOT auto-continue across blockers or confirmation gates; when routing asks for confirmation, repair, or task selection, surface that requirement first."
 )
+LEGACY_SUBAGENT_GUIDANCE_BLOCK = """        "- If you're spawning an implement/check sub-agent, context is injected "
+        "or loaded by the sub-agent via `{task}/implement.jsonl` / `check.jsonl`. "
+        "You do NOT need to read these indexes yourself.\\n"
+        "- For agent-capable platforms, the default is to dispatch "
+        "`trellis-implement` and `trellis-check` (so JSONL context is loaded by "
+        "the sub-agents) rather than editing code in the main session. "
+        "Honor a per-turn user override only if the user's current message "
+        "explicitly opts out (see <task-status> below for override phrases).\\n"
+        "- Sub-agent self-exemption: if you are reading this as a `trellis-implement` "
+        "or `trellis-check` sub-agent, the \\"dispatch trellis-implement / trellis-check\\" "
+        "rule above does NOT apply to you — you are already the dispatched sub-agent. "
+        "Do NOT spawn another sub-agent of the same kind; implement / check directly.\\n\\n"
+"""
+LEGACY_SUBAGENT_GUIDANCE_BLOCK_AUTOMATIC = """        "- If you're spawning an implement/check sub-agent, context is injected "
+        "automatically via `{task}/implement.jsonl` / `check.jsonl`. You do NOT "
+        "need to read these indexes yourself.\\n"
+        "- For agent-capable platforms, the default is to dispatch "
+        "`trellis-implement` and `trellis-check` (so JSONL context is loaded by "
+        "the sub-agents) rather than editing code in the main session. "
+        "Honor a per-turn user override only if the user's current message "
+        "explicitly opts out (see <task-status> below for override phrases).\\n"
+        "- Sub-agent self-exemption: if you are reading this as a `trellis-implement` "
+        "or `trellis-check` sub-agent, the \\"dispatch trellis-implement / trellis-check\\" "
+        "rule above does NOT apply to you — you are already the dispatched sub-agent. "
+        "Do NOT spawn another sub-agent of the same kind; implement / check directly.\\n\\n"
+"""
+EMBEDDED_MAIN_SESSION_ONLY_GUIDANCE_BLOCK = """        "- This embedded workflow explicitly disables `agent / sub-agent` execution paths. "
+        "Do NOT dispatch `trellis-research`, `trellis-implement`, `trellis-check`, or other platform agents/sub-agents from the main session.\\n"
+        "- Read the relevant task/spec context in the current main session and perform research / implementation / checking directly through the current stage entry.\\n"
+        "- If you are already inside a spawned sub-agent, treat it as a blocked path for this embedded workflow: do not continue editing here; return control to the main session.\\n\\n"
+"""
 TAIL_START_RE = re.compile(
     r'task_status\s*=\s*task_data\.get\(\s*["\']status["\']\s*,\s*["\']unknown["\']\s*\)\s*\n'
 )
@@ -142,6 +173,20 @@ def _replace_legacy_ready_autocontinue(content: str) -> tuple[str, bool]:
     return content.replace(LEGACY_READY_AUTOCONTINUE_LINE, STRONG_GATE_READY_GUIDANCE_LINES), True
 
 
+def _replace_legacy_subagent_guidance(content: str) -> tuple[str, bool]:
+    for old_block in (
+        LEGACY_SUBAGENT_GUIDANCE_BLOCK,
+        LEGACY_SUBAGENT_GUIDANCE_BLOCK_AUTOMATIC,
+    ):
+        if old_block in content:
+            return content.replace(
+                old_block,
+                EMBEDDED_MAIN_SESSION_ONLY_GUIDANCE_BLOCK,
+                1,
+            ), True
+    return content, False
+
+
 def patch_session_start(target_path: Path) -> bool:
     """Apply the strong-gate patch to session-start.py's _get_task_status().
 
@@ -156,6 +201,7 @@ def patch_session_start(target_path: Path) -> bool:
     route_patch_present = PATCH_MARKER in content and ROUTE_FIRST_MARKER in content
     route_applied = False
     ready_guidance_applied = False
+    subagent_guidance_applied = False
 
     if not route_patch_present:
         replaced = _replace_legacy_tail(patched)
@@ -166,12 +212,13 @@ def patch_session_start(target_path: Path) -> bool:
         route_applied = True
 
     patched, ready_guidance_applied = _replace_legacy_ready_autocontinue(patched)
-    if not route_applied and not ready_guidance_applied:
+    patched, subagent_guidance_applied = _replace_legacy_subagent_guidance(patched)
+    if not route_applied and not ready_guidance_applied and not subagent_guidance_applied:
         print(f"OK: {target_path} already contains full strong-gate patch, skipping")
         return True
 
     target_path.write_text(patched, encoding="utf-8")
-    if route_applied and ready_guidance_applied:
+    if route_applied and (ready_guidance_applied or subagent_guidance_applied):
         print(f"OK: Upgraded strong-gate session-start patch in {target_path} (route + startup guidance)")
     elif route_applied:
         print(f"OK: Applied strong-gate session-start patch to {target_path}")

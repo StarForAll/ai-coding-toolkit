@@ -81,6 +81,7 @@ from workflow_assets import (
     PATCH_BASELINE_SHARED_DOCS,
     SESSION_START_STRONG_GATE_PATCH_MARKER,
     OPENCODE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER,
+    CLAUDE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER,
     TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER,
     TASK_STATUS_VIEW_PATCH_MARKER,
     TASK_START_STRONG_GATE_PATCH_MARKER,
@@ -305,7 +306,7 @@ _NL_ROUTING_SECTION = """\
 > - Codex：通过 `AGENTS.md` 自然语言路由或显式触发对应 skill；不要期待项目级 `/trellis:xxx` 命令目录
 > - 本表用于缩小候选范围，不表示所有 CLI 都存在确定性的自动命令路由；若命中歧义、缺少前置条件或上下文不足，仍应先确认再进入对应阶段
 > - 当前 workflow 采用强门禁阶段状态机：阶段切换必须由用户明确确认；`/trellis:continue` 只重入当前已确认阶段，不自动跨阶段推进
-> - 当前嵌入 workflow 不建议把 `agent / subagent` 当作默认主执行路径；即使平台仍保留 `trellis-*` agent carrier，也只视为底层承载或兼容面，优先由当前主会话通过阶段入口推进
+> - 当前嵌入 workflow **显式禁用** `agent / subagent` 路径；即使平台仍保留 `trellis-*` agent carrier 或通用 agent/subagent 能力，也不得派发，所有 research / implement / check 都必须由当前主会话按阶段入口直接完成
 
 ### 工作流阶段命令
 
@@ -328,7 +329,7 @@ _NL_ROUTING_SECTION = """\
 
 | 触发关键词 | Claude / OpenCode 入口 | Codex 入口 | 说明 |
 |-----------|------------------------|------------|------|
-| 调研、研究、查资料、查文档、看源码、搜代码、搜资料、技术调研、仓库分析 | 描述研究意图，并由当前主会话继续处理；不要手工派发 `trellis-research` 子代理 | 描述研究意图，或显式触发 `trellis-research` skill / agent（若当前项目明确允许） | implementation 内部 research 能力入口；默认不作为公开 agent/subagent 主路径 |
+| 调研、研究、查资料、查文档、看源码、搜代码、搜资料、技术调研、仓库分析 | 描述研究意图，并由当前主会话继续处理；禁止派发 `trellis-research` 或其他 agent/subagent | 描述研究意图，并由当前主会话继续处理；禁止派发 `trellis-research` 或其他 agent/subagent | implementation 内部 research 仍由主会话直接完成；当前嵌入 workflow 已显式禁用 agent/subagent 路径 |
 | 开始写代码、实现、开发、编码、动手、修这个功能、开始改代码 | `/trellis:continue` | 描述当前实现意图，或显式触发 `trellis-continue` skill | implementation 的公开重入入口。没有对称的 `/trellis:implementation` 命令；continue 会先做 Phase Router 判断，再在当前 task 上执行 implementation 内部链 |
 | 开始、新会话、继续、下一步 | `/trellis:continue` | 描述当前意图，或显式触发 `trellis-continue` skill | Phase Router 自动检测 |
 | 卡住了、反复出错、死循环、调不通 | 描述排障意图，或显式触发 `trellis-break-loop` skill | 描述排障意图，或显式触发 `trellis-break-loop` skill | 深度 bug 分析 |
@@ -1861,6 +1862,7 @@ _TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER = TASK_CREATE_PRESERVE_ACTIVE_PATCH_MA
 _TASK_STATUS_VIEW_PATCH_MARKER = TASK_STATUS_VIEW_PATCH_MARKER
 _WORKFLOW_PHASE_PATCH_MARKER = WORKFLOW_PHASE_STRONG_GATE_PATCH_MARKER
 _OPENCODE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER = OPENCODE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER
+_CLAUDE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER = CLAUDE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER
 
 
 def patch_inject_workflow_state_hook(root: Path, *, dry_run: bool) -> bool:
@@ -1919,6 +1921,40 @@ def patch_inject_workflow_state_hook(root: Path, *, dry_run: bool) -> bool:
     return any_patched
 
 
+def patch_claude_inject_subagent_context(root: Path, *, dry_run: bool) -> bool:
+    """Patch Claude inject-subagent-context.py to block embedded workflow agent dispatch."""
+    import importlib.util
+
+    target_path = root / ".claude" / "hooks" / "inject-subagent-context.py"
+    patch_script = Path(__file__).resolve().parent / "shell" / "patch-claude-inject-subagent-context.py"
+
+    if not target_path.exists():
+        return False
+    if not patch_script.exists():
+        warn("[Shared] patch-claude-inject-subagent-context.py 不存在，跳过补丁")
+        return False
+
+    if dry_run:
+        info("[Claude] 将对 .claude/hooks/inject-subagent-context.py 应用 strong-gate 补丁")
+        return True
+
+    spec = importlib.util.spec_from_file_location("patch_claude_inject_subagent_context", patch_script)
+    if spec is None or spec.loader is None:
+        warn("[Shared] patch-claude-inject-subagent-context.py 加载失败")
+        return False
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    if hasattr(module, "patch_claude_inject_subagent_context"):
+        result = module.patch_claude_inject_subagent_context(target_path)
+        if result:
+            ok("[Claude] .claude/hooks/inject-subagent-context.py 强门禁补丁已应用")
+        return result
+
+    warn("[Shared] patch-claude-inject-subagent-context.py 缺少 patch_claude_inject_subagent_context 函数")
+    return False
+
+
 # ── C2: patch session-start no-task guidance to reference NL routing table ──
 _SESSION_START_NO_TASK_MARKER = "# [workflow-embed-patch:session-start-nl-routing]"
 _SESSION_START_NO_TASK_LINE1 = '"Next-Action: After the user describes their intent, load skill `trellis-brainstorm` "'
@@ -1936,6 +1972,22 @@ _SESSION_START_NO_TASK_NEW = (
     'For personal profile: also run `python3 ./.trellis/scripts/workflow/workflow-state.py route` first; '
     'if route keeps `target=brainstorm`, then load skill `trellis-brainstorm` to clarify requirements '
     'and create a task via `python3 ./.trellis/scripts/task.py create`.\\n"'
+)
+_SESSION_START_RESEARCH_REMINDER_OLD = (
+    '"Research reminder: for research-heavy tasks (comparing tools, reading external docs, "'
+    '\n'
+    '            "cross-platform surveys), spawn `trellis-research` sub-agents via the Task tool — "'
+    '\n'
+    '            "they persist findings to `{TASK_DIR}/research/*.md` and keep main context clean. "'
+    '\n'
+    '            "Do NOT do 10+ inline WebFetch/WebSearch in the main conversation.\\n"'
+)
+_SESSION_START_RESEARCH_REMINDER_NEW = (
+    '"Research reminder: keep research in the main session for this embedded workflow. "'
+    '\n'
+    '            "Do NOT dispatch `trellis-research` or other agents/sub-agents. "'
+    '\n'
+    '            "Once a task exists, persist durable findings directly to `{TASK_DIR}/research/*.md`.\\n"'
 )
 
 
@@ -1977,44 +2029,51 @@ def patch_session_start_no_task_guidance(root: Path, *, dry_run: bool) -> bool:
     task.py create, which bypasses the feasibility gate for outsourcing profile.
     This patch updates the guidance to check the profile and route accordingly.
     """
-    hook_path = root / ".claude" / "hooks" / "session-start.py"
-    if not hook_path.exists():
-        return False
+    targets = [
+        ("Claude", root / ".claude" / "hooks" / "session-start.py"),
+        ("Codex", root / ".codex" / "hooks" / "session-start.py"),
+    ]
+    any_patched = False
 
-    content = hook_path.read_text(encoding="utf-8")
-    if _SESSION_START_NO_TASK_MARKER in content:
-        ok("[Shared] session-start.py no-task guidance 补丁已存在")
-        return False
+    for label, hook_path in targets:
+        if not hook_path.exists():
+            continue
+        content = hook_path.read_text(encoding="utf-8")
+        patched = content
+        changed = False
 
-    match = _match_session_start_no_task_old(content)
-    if match is None:
-        if _SESSION_START_NO_TASK_LEGACY_PHRASE not in content:
-            warn("[Shared] session-start.py no-task 指导未命中目标代码，跳过")
-            return False
-        patched = content.replace(_SESSION_START_NO_TASK_LEGACY_PHRASE, _SESSION_START_NO_TASK_NEW.strip('"'))
-        if _SESSION_START_NO_TASK_MARKER not in patched and _SESSION_START_NO_TASK_MARKER_ANCHOR in patched:
+        match = _match_session_start_no_task_old(patched)
+        if match is not None:
+            old_text, _, _ = match
             patched = patched.replace(
-                _SESSION_START_NO_TASK_MARKER_ANCHOR,
-                _SESSION_START_NO_TASK_MARKER_ANCHOR + "        " + _SESSION_START_NO_TASK_MARKER + "\n",
-                1,
+                old_text,
+                _SESSION_START_NO_TASK_MARKER + "\n            " + _SESSION_START_NO_TASK_NEW,
             )
-    else:
-        old_text, _, _ = match
-        patched = content.replace(
-            old_text,
-            _SESSION_START_NO_TASK_MARKER + "\n            " + _SESSION_START_NO_TASK_NEW,
-        )
+            changed = True
+        elif _SESSION_START_NO_TASK_LEGACY_PHRASE in patched:
+            patched = patched.replace(_SESSION_START_NO_TASK_LEGACY_PHRASE, _SESSION_START_NO_TASK_NEW.strip('"'))
+            changed = True
+            if _SESSION_START_NO_TASK_MARKER not in patched and _SESSION_START_NO_TASK_MARKER_ANCHOR in patched:
+                patched = patched.replace(
+                    _SESSION_START_NO_TASK_MARKER_ANCHOR,
+                    _SESSION_START_NO_TASK_MARKER_ANCHOR + "        " + _SESSION_START_NO_TASK_MARKER + "\n",
+                    1,
+                )
+        if _SESSION_START_RESEARCH_REMINDER_OLD in patched:
+            patched = patched.replace(_SESSION_START_RESEARCH_REMINDER_OLD, _SESSION_START_RESEARCH_REMINDER_NEW, 1)
+            changed = True
 
-    if patched == content:
-        warn("[Shared] session-start.py 补丁未生效，跳过")
-        return False
+        if not changed:
+            continue
 
-    if not dry_run:
-        hook_path.write_text(patched, encoding="utf-8")
-        ok("[Shared] session-start.py no-task guidance 已补丁（引用 NL 路由表）")
-    else:
-        info("[Shared] 将补丁 session-start.py no-task guidance（引用 NL 路由表）")
-    return True
+        if not dry_run:
+            hook_path.write_text(patched, encoding="utf-8")
+            ok(f"[{label}] session-start.py no-task guidance 已补丁（引用 NL 路由表并禁用 research sub-agent）")
+        else:
+            info(f"[{label}] 将补丁 session-start.py no-task guidance（引用 NL 路由表并禁用 research sub-agent）")
+        any_patched = True
+
+    return any_patched
 
 
 # ── Issue 2: cleanup legacy three-phase breadcrumb blocks ──
@@ -2252,6 +2311,7 @@ def patch_opencode_session_utils(root: Path, *, dry_run: bool) -> bool:
     patched = content
     route_applied = False
     ready_guidance_applied = False
+    subagent_guidance_applied = False
     workflow_range_applied = False
     breadcrumb_strip_applied = False
 
@@ -2261,6 +2321,16 @@ def patch_opencode_session_utils(root: Path, *, dry_run: bool) -> bool:
 function stripBreadcrumbTagBlocks(content) {
   return content.replace(/\\[workflow-state:[^\\]]+\\][\\s\\S]*?\\[\\/workflow-state:[^\\]]+\\]\\n?/g, "").trimEnd()
 }
+"""
+    subagent_guidance_old = """    "- If you're spawning an implement/check sub-agent, context is injected " +
+    "automatically via `{task}/implement.jsonl` / `check.jsonl`. You do NOT " +
+    "need to read these indexes yourself.\\n" +
+    "- For agent-capable platforms, do NOT edit code directly in the main " +
+    "session; dispatch `trellis-implement` and `trellis-check` so JSONL " +
+    "context is loaded by the sub-agents.\\n"
+"""
+    subagent_guidance_new = """    "- This embedded workflow explicitly disables `agent / subagent` execution paths. Do NOT dispatch `trellis-research`, `trellis-implement`, `trellis-check`, or other agents/subagents from the main session.\\n" +
+    "- Read the relevant task/spec context in the current main session and perform research / implementation / checking directly through the current stage entry.\\n"
 """
 
     if _OPENCODE_SESSION_UTILS_PATCH_MARKER in patched:
@@ -2324,6 +2394,10 @@ function getTaskStatus(ctx, platformInput = null) {
         patched = patched.replace(workflow_range_old, workflow_range_new)
         workflow_range_applied = True
 
+    if subagent_guidance_old in patched:
+        patched = patched.replace(subagent_guidance_old, subagent_guidance_new, 1)
+        subagent_guidance_applied = True
+
     if "function stripBreadcrumbTagBlocks(content)" not in patched:
         anchor = "export function buildSessionContext(ctx, platformInput = null) {"
         if anchor in patched:
@@ -2344,7 +2418,7 @@ function getTaskStatus(ctx, platformInput = null) {
         breadcrumb_strip_applied = True
 
     patched, ready_guidance_applied = _replace_legacy_ready_autocontinue(patched)
-    if not route_applied and not ready_guidance_applied and not workflow_range_applied and not breadcrumb_strip_applied:
+    if not route_applied and not ready_guidance_applied and not subagent_guidance_applied and not workflow_range_applied and not breadcrumb_strip_applied:
         return False
 
     if not dry_run:
@@ -2355,6 +2429,8 @@ function getTaskStatus(ctx, platformInput = null) {
             actions.append("改用 workflow-state.py route")
         if ready_guidance_applied:
             actions.append("移除 READY 自动续跑提示")
+        if subagent_guidance_applied:
+            actions.append("改为 main-session-only 指导")
         if workflow_range_applied:
             actions.append("修正 workflow 提取结束锚点")
         if breadcrumb_strip_applied:
@@ -2366,6 +2442,8 @@ function getTaskStatus(ctx, platformInput = null) {
             actions.append("改用 workflow-state.py route")
         if ready_guidance_applied:
             actions.append("移除 READY 自动续跑提示")
+        if subagent_guidance_applied:
+            actions.append("改为 main-session-only 指导")
         if workflow_range_applied:
             actions.append("修正 workflow 提取结束锚点")
         if breadcrumb_strip_applied:
@@ -3284,6 +3362,7 @@ def main() -> int:
             # Issue 1+7: patch deployed inject-workflow-state.py hook
             patch_inject_workflow_state_hook(root, dry_run=args.dry_run)
             _apply_patch_session_start(src, root, dry_run=args.dry_run)
+            patch_claude_inject_subagent_context(root, dry_run=args.dry_run)
             patch_opencode_session_utils(root, dry_run=args.dry_run)
             patch_opencode_inject_subagent_context(root, dry_run=args.dry_run)
 

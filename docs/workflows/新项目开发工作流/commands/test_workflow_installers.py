@@ -1199,6 +1199,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertNotIn("[workflow-state:needs-init]", workflow_doc_text)
         self.assertIn("[workflow-state:awaiting_confirmation_with_blockers]", workflow_doc_text)
         self.assertIn("do **not** expect a public `/trellis:implementation` command", workflow_doc_text)
+        self.assertIn("Global execution rule", workflow_doc_text)
+        self.assertIn("Do not dispatch `trellis-research`, `trellis-implement`, `trellis-check`", workflow_doc_text)
         self.assertNotIn("Phase 1: Plan    → figure out what to do", workflow_doc_text)
         start_text = (fixture / ".claude" / "commands" / "trellis" / "continue.md").read_text(encoding="utf-8")
         self.assertIn(
@@ -1251,6 +1253,12 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertNotIn(LEGACY_READY_AUTOCONTINUE_LINE, claude_session_start)
         self.assertIn("For personal profile: also run `python3 ./.trellis/scripts/workflow/workflow-state.py route` first", claude_session_start)
         self.assertIn('_r_stage_status = _route_data.get("status", "")', claude_session_start)
+        claude_subagent_hook_path = fixture / ".claude" / "hooks" / "inject-subagent-context.py"
+        if claude_subagent_hook_path.exists():
+            claude_subagent_hook = claude_subagent_hook_path.read_text(encoding="utf-8")
+            self.assertIn("# [workflow-embed-patch:claude-subagent-gates]", claude_subagent_hook)
+            self.assertIn("Strong-gate blocked this subagent dispatch.", claude_subagent_hook)
+            self.assertIn("current embedded workflow disables agent/subagent execution paths", claude_subagent_hook)
         codex_session_start = (fixture / ".codex" / "hooks" / "session-start.py").read_text(encoding="utf-8")
         self.assertIn(SESSION_START_STRONG_GATE_PATCH_MARKER, codex_session_start)
         self.assertNotIn(LEGACY_READY_AUTOCONTINUE_LINE, codex_session_start)
@@ -1260,6 +1268,9 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn('route_stage_status = route_data.get("status", "")', claude_inject)
         self.assertIn("workflow-state.route_failed", claude_inject)
         self.assertNotIn("fall back to task.json status", claude_inject)
+        codex_inject = (fixture / ".codex" / "hooks" / "inject-workflow-state.py").read_text(encoding="utf-8")
+        self.assertIn("workflow-state.route_failed", codex_inject)
+        self.assertNotIn("fall back to task.json status", codex_inject)
         opencode_session_utils = (fixture / ".opencode" / "lib" / "session-utils.js").read_text(encoding="utf-8")
         self.assertIn(OPENCODE_SESSION_UTILS_PATCH_MARKER, opencode_session_utils)
         self.assertNotIn(LEGACY_READY_AUTOCONTINUE_LINE, opencode_session_utils)
@@ -1271,6 +1282,8 @@ class WorkflowInstallerTests(unittest.TestCase):
             opencode_subagent = opencode_subagent_path.read_text(encoding="utf-8")
             self.assertIn("buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt)", opencode_subagent)
             self.assertIn("Strong-gate blocked this subagent dispatch.", opencode_subagent)
+            self.assertIn("current embedded workflow disables agent/subagent execution paths", opencode_subagent)
+            self.assertIn("return false", opencode_subagent)
         opencode_inject_path = fixture / ".opencode" / "plugins" / "inject-workflow-state.js"
         if opencode_inject_path.exists():
             opencode_inject = opencode_inject_path.read_text(encoding="utf-8")
@@ -1297,6 +1310,7 @@ class WorkflowInstallerTests(unittest.TestCase):
             [
                 "inject-workflow-state",
                 "session-start-strong-gate",
+                "claude-inject-subagent-context",
                 "opencode-inject-subagent-context",
                 "task-start-strong-gate",
                 "task-create-preserve-active",
@@ -1788,6 +1802,83 @@ class WorkflowInstallerTests(unittest.TestCase):
             ],
         )
 
+    def test_patch_session_start_no_task_guidance_removes_research_subagent_hint(self) -> None:
+        fixture = Path(tempfile.mkdtemp(prefix="session-start-no-task-guidance-"))
+        self.addCleanup(shutil.rmtree, fixture)
+        session_start = fixture / ".claude" / "hooks" / "session-start.py"
+        session_start.parent.mkdir(parents=True, exist_ok=True)
+        session_start.write_text(
+            "def _get_task_status():\n"
+            "    active = type('Active', (), {'source': 'none', 'task_path': None})()\n"
+            "    if not active.task_path:\n"
+            "        return (\n"
+            "            \"Status: NO ACTIVE TASK\\n\"\n"
+            "            f\"Source: {active.source}\\n\"\n"
+            "            \"Next-Action: After the user describes their intent, load skill `trellis-brainstorm` \"\n"
+            "            \"to clarify requirements and create a task via `python3 ./.trellis/scripts/task.py create`.\\n\"\n"
+            "            \"Research reminder: for research-heavy tasks (comparing tools, reading external docs, \"\n"
+            "            \"cross-platform surveys), spawn `trellis-research` sub-agents via the Task tool — \"\n"
+            "            \"they persist findings to `{TASK_DIR}/research/*.md` and keep main context clean. \"\n"
+            "            \"Do NOT do 10+ inline WebFetch/WebSearch in the main conversation.\\n\"\n"
+            "        )\n",
+            encoding="utf-8",
+        )
+
+        install_spec = importlib.util.spec_from_file_location("install_workflow", INSTALL_SCRIPT)
+        self.assertIsNotNone(install_spec)
+        self.assertIsNotNone(install_spec.loader)
+        install_module = importlib.util.module_from_spec(install_spec)
+        install_spec.loader.exec_module(install_module)
+
+        patched = install_module.patch_session_start_no_task_guidance(fixture, dry_run=False)
+        self.assertTrue(patched)
+        claude_session_start = session_start.read_text(encoding="utf-8")
+        self.assertNotIn("spawn `trellis-research` sub-agents via the Task tool", claude_session_start)
+        self.assertIn("keep research in the main session for this embedded workflow", claude_session_start)
+        self.assertIn("persist durable findings directly to `{TASK_DIR}/research/*.md`", claude_session_start)
+
+    def test_patch_claude_inject_subagent_context_blocks_dispatch(self) -> None:
+        fixture = Path(tempfile.mkdtemp(prefix="claude-inject-subagent-context-"))
+        self.addCleanup(shutil.rmtree, fixture)
+        hook_path = fixture / ".claude" / "hooks" / "inject-subagent-context.py"
+        hook_path.parent.mkdir(parents=True, exist_ok=True)
+        hook_path.write_text(
+            "import json\n"
+            "import sys\n"
+            "AGENT_IMPLEMENT = \"trellis-implement\"\n"
+            "AGENT_CHECK = \"trellis-check\"\n"
+            "AGENT_RESEARCH = \"trellis-research\"\n"
+            "AGENTS_ALL = (AGENT_IMPLEMENT, AGENT_CHECK, AGENT_RESEARCH)\n"
+            "\n"
+            "def main():\n"
+            "    subagent_type = \"trellis-research\"\n"
+            "    original_prompt = \"research\"\n"
+            "    tool_input = {\"prompt\": original_prompt}\n"
+            "    # Only handle subagent types we care about\n"
+            "    if subagent_type not in AGENTS_ALL:\n"
+            "        sys.exit(0)\n"
+            "\n"
+            "    # Find repo root\n"
+            "    repo_root = \"/tmp\"\n"
+            "\n"
+            "if __name__ == \"__main__\":\n"
+            "    main()\n",
+            encoding="utf-8",
+        )
+
+        install_spec = importlib.util.spec_from_file_location("install_workflow", INSTALL_SCRIPT)
+        self.assertIsNotNone(install_spec)
+        self.assertIsNotNone(install_spec.loader)
+        install_module = importlib.util.module_from_spec(install_spec)
+        install_spec.loader.exec_module(install_module)
+
+        patched = install_module.patch_claude_inject_subagent_context(fixture, dry_run=False)
+        self.assertTrue(patched)
+        patched_text = hook_path.read_text(encoding="utf-8")
+        self.assertIn("# [workflow-embed-patch:claude-subagent-gates]", patched_text)
+        self.assertIn("Strong-gate blocked this subagent dispatch.", patched_text)
+        self.assertIn("current embedded workflow disables agent/subagent execution paths", patched_text)
+
     def test_upgrade_check_allows_missing_unwired_codex_session_start(self) -> None:
         fixture = self.create_fixture(include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
@@ -2212,8 +2303,51 @@ Triggered from `start` (Trellis command) when the user describes a development t
         self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
 
         agents_text = (fixture / "AGENTS.md").read_text(encoding="utf-8")
-        self.assertIn("不建议把 `agent / subagent` 当作默认主执行路径", agents_text)
-        self.assertIn("不要手工派发 `trellis-research` 子代理", agents_text)
+        self.assertIn("显式禁用** `agent / subagent` 路径", agents_text)
+        self.assertIn("禁止派发 `trellis-research` 或其他 agent/subagent", agents_text)
+        self.assertNotIn("trellis-research` skill / agent", agents_text)
+
+    def test_patch_opencode_session_utils_rewrites_subagent_guidance(self) -> None:
+        fixture = Path(tempfile.mkdtemp(prefix="opencode-session-utils-"))
+        self.addCleanup(shutil.rmtree, fixture)
+        session_utils = fixture / ".opencode" / "lib" / "session-utils.js"
+        session_utils.parent.mkdir(parents=True, exist_ok=True)
+        session_utils.write_text(
+            "function getTaskStatus(ctx, platformInput = null) {\n"
+            "  return \"READY\"\n"
+            "}\n"
+            "\n"
+            "function loadTrellisConfig() {\n"
+            "  return null\n"
+            "}\n"
+            "\n"
+            "export function buildSessionContext(ctx, platformInput = null) {\n"
+            "  parts.push(\n"
+            "    \"Project spec indexes are listed by path below. Each index contains a \" +\n"
+            "    \"**Pre-Development Checklist** listing the specific guideline files to \" +\n"
+            "    \"read before coding.\\n\\n\" +\n"
+            "    \"- If you're spawning an implement/check sub-agent, context is injected \" +\n"
+            "    \"automatically via `{task}/implement.jsonl` / `check.jsonl`. You do NOT \" +\n"
+            "    \"need to read these indexes yourself.\\n\" +\n"
+            "    \"- For agent-capable platforms, do NOT edit code directly in the main \" +\n"
+            "    \"session; dispatch `trellis-implement` and `trellis-check` so JSONL \" +\n"
+            "    \"context is loaded by the sub-agents.\\n\"\n"
+            "  )\n"
+            "}\n",
+            encoding="utf-8",
+        )
+
+        install_spec = importlib.util.spec_from_file_location("install_workflow", INSTALL_SCRIPT)
+        self.assertIsNotNone(install_spec)
+        self.assertIsNotNone(install_spec.loader)
+        install_module = importlib.util.module_from_spec(install_spec)
+        install_spec.loader.exec_module(install_module)
+
+        patched = install_module.patch_opencode_session_utils(fixture, dry_run=False)
+        self.assertTrue(patched)
+        patched_text = session_utils.read_text(encoding="utf-8")
+        self.assertIn("explicitly disables `agent / subagent` execution paths", patched_text)
+        self.assertNotIn("dispatch `trellis-implement` and `trellis-check`", patched_text)
 
     def test_uninstall_removes_workflow_shared_docs_but_retains_library_import_assets(self) -> None:
         fixture = self.create_fixture()

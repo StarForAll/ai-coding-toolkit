@@ -202,8 +202,13 @@ Claude Code 的 hooks 是这套 workflow 的关键承载层之一。当前仓库
 推荐分工：
 
 - `session-start.py`：注入 Trellis 会话上下文与 workflow 启动说明
-- `inject-subagent-context.py`：对子代理注入 implement / check / debug 上下文
+- `inject-subagent-context.py`：在当前嵌入 workflow 下应被安装器补丁改造成显式阻断 carrier；若命中 `trellis-*` 子代理派发，必须把控制权交回主会话
 - `ralph-loop.py`：在特定审查收口点执行自动循环或门禁逻辑
+
+补充边界：
+
+- 对当前嵌入 workflow，Claude Code 同样显式禁用 `agent / subagent` 执行路径
+- 即使目标项目仍保留 `trellis-research / trellis-implement / trellis-check` 或对应 hook carrier，也只能视为底层/历史承载面，不得当作当前 workflow 的可用执行入口
 
 ### 4. Agents：由 Trellis 0.5+ 原生提供，workflow 安装器不再 overlay
 

@@ -236,10 +236,10 @@ Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-ch
 
 当前嵌入 workflow 的主执行路径补充说明：
 
-- 不要把 `agents / subagents` 当作 OpenCode 下的默认或推荐主执行路径
+- 当前嵌入 workflow 对 OpenCode **显式禁用** `agents / subagents` 执行路径
 - 正式入口仍是 `.opencode/commands/trellis/*.md` 与主会话命令流转
-- 即使目标项目仍存在 `trellis-research / trellis-implement / trellis-check` carrier，它们也只视为底层承载或兼容面
-- 若 `inject-subagent-context.js` 因阶段守卫拒绝注入，当前补丁会向 prompt 注入显式阻断说明，要求把控制权交回主会话，而不是静默继续
+- 即使目标项目仍存在 `trellis-research / trellis-implement / trellis-check` carrier，它们也只视为被当前 workflow 禁用的底层承载面
+- `inject-subagent-context.js` 在当前 workflow 下应始终向 prompt 注入显式阻断说明，把控制权交回主会话，而不是静默继续
 
 维护者侧例外：
 
@@ -284,8 +284,8 @@ OpenCode 不应被写成“和 Claude 完全等价”，因为它在 hook / suba
 - **rules 层**：可原生承载
 - **agents 层**：可原生承载
 - **subagent hook 注入层**：需额外验证，不应默认与 Claude 等价；当前 workflow 通过 source-side patch 额外约束：
-  - `inject-subagent-context.js` 只有在 `workflow-state.py route` 允许的阶段才为 `implement` / `check` 注入上下文
-  - 若当前阶段不允许该子代理，插件会向 prompt 注入显式阻断说明，而不是只写 debug log
+  - `inject-subagent-context.js` 对当前嵌入 workflow 统一阻断 `implement / check / research` 子代理路径
+  - 插件会向 prompt 注入显式阻断说明，把控制权交回主会话，而不是只写 debug log
   - Bash 的 `TRELLIS_CONTEXT_ID` 桥接只应作用于 Trellis 相关命令，不应无差别改写普通用户 shell
 
 ## 推荐部署映射

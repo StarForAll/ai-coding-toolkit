@@ -16,6 +16,7 @@ PYTHON = (
 )
 SHELL_DIR = REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "commands" / "shell"
 PATCH_SCRIPTS = [
+    SHELL_DIR / "patch-claude-inject-subagent-context.py",
     SHELL_DIR / "patch-inject-workflow-state.py",
     SHELL_DIR / "patch-session-start-strong-gate.py",
     SHELL_DIR / "patch-task-start-strong-gate.py",
@@ -251,7 +252,238 @@ class PatchHelperScriptTests(unittest.TestCase):
         patched = target.read_text(encoding="utf-8")
         self.assertIn("buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt)", patched)
         self.assertIn("Strong-gate blocked this subagent dispatch.", patched)
+        self.assertIn("current embedded workflow disables agent/subagent execution paths", patched)
         self.assertIn("args.prompt = buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt)", patched)
+        self.assertIn("return false", patched)
+        self.assertNotIn(': "unknown"', patched)
+
+    def test_patch_claude_inject_subagent_context_blocks_dispatch(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="claude-subagent-guard-"))
+        self.addCleanup(shutil.rmtree, root)
+        target = root / "inject-subagent-context.py"
+        target.write_text(
+            "import json\n"
+            "import sys\n"
+            "AGENT_IMPLEMENT = \"trellis-implement\"\n"
+            "AGENT_CHECK = \"trellis-check\"\n"
+            "AGENT_RESEARCH = \"trellis-research\"\n"
+            "AGENTS_ALL = (AGENT_IMPLEMENT, AGENT_CHECK, AGENT_RESEARCH)\n"
+            "\n"
+            "def main():\n"
+            "    subagent_type = \"trellis-research\"\n"
+            "    original_prompt = \"do work\"\n"
+            "    tool_input = {\"prompt\": original_prompt}\n"
+            "    # Only handle subagent types we care about\n"
+            "    if subagent_type not in AGENTS_ALL:\n"
+            "        sys.exit(0)\n"
+            "\n"
+            "    # Find repo root\n"
+            "    repo_root = \"/tmp\"\n"
+            "\n"
+            "if __name__ == \"__main__\":\n"
+            "    main()\n",
+            encoding="utf-8",
+        )
+
+        spec = importlib.util.spec_from_file_location(
+            "patch_claude_inject_subagent_context",
+            SHELL_DIR / "patch-claude-inject-subagent-context.py",
+        )
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        applied = module.patch_claude_inject_subagent_context(target)
+        self.assertTrue(applied, "Claude subagent patch should apply to the fixture")
+
+        patched = target.read_text(encoding="utf-8")
+        self.assertIn("# [workflow-embed-patch:claude-subagent-gates]", patched)
+        self.assertIn("def _emit_blocked_subagent_output(", patched)
+        self.assertIn("Strong-gate blocked this subagent dispatch.", patched)
+        self.assertIn("current embedded workflow disables agent/subagent execution paths", patched)
+        self.assertIn("_emit_blocked_subagent_output(subagent_type, original_prompt, tool_input)", patched)
+        self.assertNotIn("repo_root = \"/tmp\"", patched)
+
+    def test_patch_session_start_replaces_subagent_guidance_with_main_session_only(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="session-start-guidance-"))
+        self.addCleanup(shutil.rmtree, root)
+        target = root / "session-start.py"
+        target.write_text(
+            "def _get_task_status():\n"
+            "    task_status = task_data.get(\"status\", \"unknown\")\n"
+            "    return task_status\n"
+            "\n"
+            "def _load_trellis_config():\n"
+            "    return {}\n"
+            "\n"
+            "def build_session_context(output):\n"
+            "    output.write(\n"
+            "        \"Project spec indexes are listed by path below. Each index contains a \"\n"
+            "        \"**Pre-Development Checklist** listing the specific guideline files to \"\n"
+            "        \"read before coding.\\n\\n\"\n"
+            "        \"- If you're spawning an implement/check sub-agent, context is injected \"\n"
+            "        \"or loaded by the sub-agent via `{task}/implement.jsonl` / `check.jsonl`. \"\n"
+            "        \"You do NOT need to read these indexes yourself.\\n\"\n"
+            "        \"- For agent-capable platforms, the default is to dispatch \"\n"
+            "        \"`trellis-implement` and `trellis-check` (so JSONL context is loaded by \"\n"
+            "        \"the sub-agents) rather than editing code in the main session. \"\n"
+            "        \"Honor a per-turn user override only if the user's current message \"\n"
+            "        \"explicitly opts out (see <task-status> below for override phrases).\\n\"\n"
+            "        \"- Sub-agent self-exemption: if you are reading this as a `trellis-implement` \"\n"
+            "        \"or `trellis-check` sub-agent, the \\\"dispatch trellis-implement / trellis-check\\\" \"\n"
+            "        \"rule above does NOT apply to you — you are already the dispatched sub-agent. \"\n"
+            "        \"Do NOT spawn another sub-agent of the same kind; implement / check directly.\\n\\n\"\n"
+            "    )\n"
+            "\n"
+            "def main():\n"
+            "    return 0\n",
+            encoding="utf-8",
+        )
+
+        spec = importlib.util.spec_from_file_location(
+            "patch_session_start_strong_gate",
+            SHELL_DIR / "patch-session-start-strong-gate.py",
+        )
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        applied = module.patch_session_start(target)
+        self.assertTrue(applied, "session-start guidance patch should apply to the fixture")
+
+        patched = target.read_text(encoding="utf-8")
+        self.assertIn("explicitly disables `agent / sub-agent` execution paths", patched)
+        self.assertIn("return control to the main session", patched)
+        self.assertNotIn("the default is to dispatch", patched)
+
+    def test_patch_session_start_replaces_codex_subagent_guidance_variant(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="session-start-guidance-codex-"))
+        self.addCleanup(shutil.rmtree, root)
+        target = root / "session-start.py"
+        target.write_text(
+            "def _get_task_status():\n"
+            "    task_status = task_data.get(\"status\", \"unknown\")\n"
+            "    return task_status\n"
+            "\n"
+            "def _load_trellis_config():\n"
+            "    return {}\n"
+            "\n"
+            "def build_session_context(output):\n"
+            "    output.write(\n"
+            "        \"Project spec indexes are listed by path below. Each index contains a \"\n"
+            "        \"**Pre-Development Checklist** listing the specific guideline files to \"\n"
+            "        \"read before coding.\\n\\n\"\n"
+            "        \"- If you're spawning an implement/check sub-agent, context is injected \"\n"
+            "        \"automatically via `{task}/implement.jsonl` / `check.jsonl`. You do NOT \"\n"
+            "        \"need to read these indexes yourself.\\n\"\n"
+            "        \"- For agent-capable platforms, the default is to dispatch \"\n"
+            "        \"`trellis-implement` and `trellis-check` (so JSONL context is loaded by \"\n"
+            "        \"the sub-agents) rather than editing code in the main session. \"\n"
+            "        \"Honor a per-turn user override only if the user's current message \"\n"
+            "        \"explicitly opts out (see <task-status> below for override phrases).\\n\"\n"
+            "        \"- Sub-agent self-exemption: if you are reading this as a `trellis-implement` \"\n"
+            "        \"or `trellis-check` sub-agent, the \\\"dispatch trellis-implement / trellis-check\\\" \"\n"
+            "        \"rule above does NOT apply to you — you are already the dispatched sub-agent. \"\n"
+            "        \"Do NOT spawn another sub-agent of the same kind; implement / check directly.\\n\\n\"\n"
+            "    )\n"
+            "\n"
+            "def main():\n"
+            "    return 0\n",
+            encoding="utf-8",
+        )
+
+        spec = importlib.util.spec_from_file_location(
+            "patch_session_start_strong_gate",
+            SHELL_DIR / "patch-session-start-strong-gate.py",
+        )
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        applied = module.patch_session_start(target)
+        self.assertTrue(applied, "codex session-start guidance patch should apply to the fixture")
+
+        patched = target.read_text(encoding="utf-8")
+        self.assertIn("explicitly disables `agent / sub-agent` execution paths", patched)
+        self.assertNotIn("the default is to dispatch", patched)
+
+    def test_patch_python_hook_forces_codex_inline_mode(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="codex-inline-hook-"))
+        self.addCleanup(shutil.rmtree, root)
+        target = root / "inject-workflow-state.py"
+        target.write_text(
+            "import re\n"
+            "import sys\n"
+            "from pathlib import Path\n"
+            "\n"
+            "def load_breadcrumbs(workflow: Path):\n"
+            "    if workflow:\n"
+            "        content = workflow.read_text(encoding=\"utf-8\")\n"
+            "        return []\n"
+            "    return []\n"
+            "\n"
+            "def get_active_task(root: Path, input_data: dict):\n"
+            "    task_id = \"task-1\"\n"
+            "    status = \"planning\"\n"
+            "    active = type(\"Active\", (), {\"source\": \"session\"})()\n"
+            "    return task_id, status, active.source\n"
+            "\n"
+            "def _codex_mode_banner(config: dict) -> str:\n"
+            "    mode = \"inline\"\n"
+            "    if isinstance(config, dict):\n"
+            "        codex_cfg = config.get(\"codex\")\n"
+            "        if isinstance(codex_cfg, dict):\n"
+            "            cfg_mode = codex_cfg.get(\"dispatch_mode\")\n"
+            "            if cfg_mode in (\"inline\", \"sub-agent\"):\n"
+            "                mode = cfg_mode\n"
+            "    return f\"<codex-mode>{mode}</codex-mode>\"\n"
+            "\n"
+            "def resolve_breadcrumb_key(status: str, platform: str | None, config: dict) -> str:\n"
+            "    if platform == \"codex\":\n"
+            "        mode = \"inline\"\n"
+            "        if isinstance(config, dict):\n"
+            "            codex_cfg = config.get(\"codex\")\n"
+            "            if isinstance(codex_cfg, dict):\n"
+            "                cfg_mode = codex_cfg.get(\"dispatch_mode\")\n"
+            "                if cfg_mode in (\"inline\", \"sub-agent\"):\n"
+            "                    mode = cfg_mode\n"
+            "        return f\"{status}-inline\" if mode == \"inline\" else status\n"
+            "    return status\n"
+            "\n"
+            "def build_breadcrumb(task_id, status, templates, source=None, breadcrumb_key=None, extra_lines=None):\n"
+            "    return status\n"
+            "\n",
+            encoding="utf-8",
+        )
+        target.write_text(
+            target.read_text(encoding="utf-8")
+            + "task = get_active_task(root, input_data)\n"
+            + "if task:\n"
+            + "        task_id, status, source = task\n"
+            + "        breadcrumb = build_breadcrumb(\n"
+            + "            task_id, status, templates, source, breadcrumb_key=status_key\n"
+            + "        )\n",
+            encoding="utf-8",
+        )
+
+        spec = importlib.util.spec_from_file_location(
+            "patch_inject_workflow_state",
+            SHELL_DIR / "patch-inject-workflow-state.py",
+        )
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        applied = module.patch_python_hook(target)
+        self.assertTrue(applied, "python hook patch should apply to the fixture")
+
+        patched = target.read_text(encoding="utf-8")
+        self.assertIn('return "<codex-mode>inline</codex-mode>"', patched)
+        self.assertNotIn('cfg_mode in ("inline", "sub-agent")', patched)
 
 
 if __name__ == "__main__":

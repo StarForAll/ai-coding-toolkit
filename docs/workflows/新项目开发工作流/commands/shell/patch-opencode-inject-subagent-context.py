@@ -33,28 +33,11 @@ function parseRouteStatus(taskStatusText) {
 }
 
 function shouldAllowTaskInjection(routeData, subagentType) {
-  if (!routeData || typeof routeData !== "object") return false
-  const action = typeof routeData.action === "string" ? routeData.action : ""
-  const stage = typeof routeData.stage === "string" ? routeData.stage : ""
-  const target = typeof routeData.target === "string" ? routeData.target : ""
   const allowedStages = new Set(["implementation", "check", "review-gate", "project-audit", "delivery"])
-
-  if (action === "reenter" && target === "implementation") {
-    return subagentType === "implement" || subagentType === "check"
-  }
-  if (action === "awaiting_confirmation" || action === "awaiting_confirmation_with_blockers") {
-    return false
-  }
-  if (action === "blocked" || action === "repair_needed" || action === "recovery_needed" || action === "context_needed" || action === "embed_invalid") {
-    return false
-  }
-  if (allowedStages.has(stage)) {
-    if (stage === "implementation") {
-      return subagentType === "implement" || subagentType === "check"
-    }
-    return subagentType === "check"
-  }
-  return subagentType === "research"
+  void routeData
+  void subagentType
+  void allowedStages
+  return false
 }
 
 function loadRouteData(ctx, taskDir) {
@@ -81,38 +64,41 @@ function loadRouteData(ctx, taskDir) {
 }
 
 function buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt) {
-  const action = typeof routeData?.action === "string" && routeData.action.trim()
-    ? routeData.action.trim()
-    : "unknown"
-  const stage = typeof routeData?.stage === "string" && routeData.stage.trim()
-    ? routeData.stage.trim()
-    : "unknown"
-  const target = typeof routeData?.target === "string" && routeData.target.trim()
-    ? routeData.target.trim()
-    : "unknown"
   const reason = typeof routeData?.reason === "string" && routeData.reason.trim()
     ? routeData.reason.trim()
-    : "workflow-state.py route did not allow this subagent"
+    : "current embedded workflow disables agent/subagent execution paths"
   const blockers = Array.isArray(routeData?.blockers) && routeData.blockers.length
     ? routeData.blockers.join(" | ")
     : "none"
   const warnings = Array.isArray(routeData?.warnings) && routeData.warnings.length
     ? routeData.warnings.join(" | ")
     : "none"
-  return [
+  const lines = [
     "Strong-gate blocked this subagent dispatch.",
     `Subagent: ${subagentType}`,
-    `Action: ${action}`,
-    `Stage: ${stage}`,
-    `Target: ${target}`,
     `Reason: ${reason}`,
-    `Blockers: ${blockers}`,
-    `Warnings: ${warnings}`,
+  ]
+  const action = typeof routeData?.action === "string" && routeData.action.trim()
+    ? routeData.action.trim()
+    : ""
+  const stage = typeof routeData?.stage === "string" && routeData.stage.trim()
+    ? routeData.stage.trim()
+    : ""
+  const target = typeof routeData?.target === "string" && routeData.target.trim()
+    ? routeData.target.trim()
+    : ""
+  if (action) lines.push(`Action: ${action}`)
+  if (stage) lines.push(`Stage: ${stage}`)
+  if (target) lines.push(`Target: ${target}`)
+  if (blockers !== "none") lines.push(`Blockers: ${blockers}`)
+  if (warnings !== "none") lines.push(`Warnings: ${warnings}`)
+  lines.push(
     "Required next step: return control to the main session and follow the current workflow stage entry instead of continuing inside this subagent.",
     "",
     "Original prompt:",
     originalPrompt || "",
-  ].join("\\n")
+  )
+  return lines.join("\\n")
 }
 """
 
@@ -178,6 +164,80 @@ def patch_opencode_inject_subagent_context(target_path: Path) -> bool:
             print(f"⚠️ {target_path} 中未找到 Active task hint anchor，跳过")
             return False
         patched = patched.replace(anchor, anchor + "\n" + ROUTE_HELPER_BLOCK + "\n", 1)
+    else:
+        old_block = """function buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt) {
+  const action = typeof routeData?.action === "string" && routeData.action.trim()
+    ? routeData.action.trim()
+    : "unknown"
+  const stage = typeof routeData?.stage === "string" && routeData.stage.trim()
+    ? routeData.stage.trim()
+    : "unknown"
+  const target = typeof routeData?.target === "string" && routeData.target.trim()
+    ? routeData.target.trim()
+    : "unknown"
+  const reason = typeof routeData?.reason === "string" && routeData.reason.trim()
+    ? routeData.reason.trim()
+    : "current embedded workflow disables agent/subagent execution paths"
+  const blockers = Array.isArray(routeData?.blockers) && routeData.blockers.length
+    ? routeData.blockers.join(" | ")
+    : "none"
+  const warnings = Array.isArray(routeData?.warnings) && routeData.warnings.length
+    ? routeData.warnings.join(" | ")
+    : "none"
+  return [
+    "Strong-gate blocked this subagent dispatch.",
+    `Subagent: ${subagentType}`,
+    `Action: ${action}`,
+    `Stage: ${stage}`,
+    `Target: ${target}`,
+    `Reason: ${reason}`,
+    `Blockers: ${blockers}`,
+    `Warnings: ${warnings}`,
+    "Required next step: return control to the main session and follow the current workflow stage entry instead of continuing inside this subagent.",
+    "",
+    "Original prompt:",
+    originalPrompt || "",
+  ].join("\\n")
+}"""
+        new_block = """function buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt) {
+  const reason = typeof routeData?.reason === "string" && routeData.reason.trim()
+    ? routeData.reason.trim()
+    : "current embedded workflow disables agent/subagent execution paths"
+  const blockers = Array.isArray(routeData?.blockers) && routeData.blockers.length
+    ? routeData.blockers.join(" | ")
+    : "none"
+  const warnings = Array.isArray(routeData?.warnings) && routeData.warnings.length
+    ? routeData.warnings.join(" | ")
+    : "none"
+  const lines = [
+    "Strong-gate blocked this subagent dispatch.",
+    `Subagent: ${subagentType}`,
+    `Reason: ${reason}`,
+  ]
+  const action = typeof routeData?.action === "string" && routeData.action.trim()
+    ? routeData.action.trim()
+    : ""
+  const stage = typeof routeData?.stage === "string" && routeData.stage.trim()
+    ? routeData.stage.trim()
+    : ""
+  const target = typeof routeData?.target === "string" && routeData.target.trim()
+    ? routeData.target.trim()
+    : ""
+  if (action) lines.push(`Action: ${action}`)
+  if (stage) lines.push(`Stage: ${stage}`)
+  if (target) lines.push(`Target: ${target}`)
+  if (blockers !== "none") lines.push(`Blockers: ${blockers}`)
+  if (warnings !== "none") lines.push(`Warnings: ${warnings}`)
+  lines.push(
+    "Required next step: return control to the main session and follow the current workflow stage entry instead of continuing inside this subagent.",
+    "",
+    "Original prompt:",
+    originalPrompt || "",
+  )
+  return lines.join("\\n")
+}"""
+        if old_block in patched:
+            patched = patched.replace(old_block, new_block, 1)
 
     if 'import { execFileSync } from "child_process"' not in patched:
         patched = patched.replace('import { join } from "path"\n', 'import { join } from "path"\nimport { execFileSync } from "child_process"\n', 1)

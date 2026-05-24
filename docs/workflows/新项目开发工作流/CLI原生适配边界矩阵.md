@@ -103,7 +103,7 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 | AGENTS.md NL 路由块 | `AGENTS.md` 内 `workflow-nl-routing` 区段 | 安装器管理 | 由 `install-workflow.py` 注入/更新，不要手工覆盖 |
 | 共享运行时基线 | `.claude/settings.json` | 手动维护 | hooks 接线、默认 deny |
 | 本机权限扩展 | `.claude/settings.local.json` | 手动维护 | MCP allowlist、本地调试 |
-| 会话与子代理 hooks | `.claude/hooks/*.py` | 手动维护 | session-start / inject-subagent-context |
+| 会话与子代理 hooks | `.claude/hooks/*.py` | 手动维护 | session-start / inject-subagent-context；对当前嵌入 workflow，后者应被 source-side patch 改造成显式阻断 carrier |
 | 子代理定义 | `.claude/agents/*.md` | Trellis 原生管理 | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 安装器不再 overlay 到目标项目，仅做 legacy 迁移；源仓库 carrier 可含项目级增强 |
 | 项目 Git 前置条件 | `origin ≥ 2 push URL` | 运行前置/仅校验 | 安装器校验，不负责配置 |
 | Trellis init 产物 | `.trellis/.version` | 运行前置/仅校验 | 安装器校验，由 `trellis init` 负责 |
@@ -156,7 +156,7 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 | 项目长期规则 | `AGENTS.md` | 半托管（手动维护为主） | 与 Claude/OpenCode 共用；`TRELLIS` managed block 与 `workflow-nl-routing` 区段由 `trellis init` / `install-workflow.py` 分别托管 |
 | Codex 项目配置 | `.codex/config.toml` | 手动维护 | `AGENTS.md` fallback 等项目配置 |
 | 会话上下文注入 | `.codex/hooks.json` + `.codex/hooks/*.py` | 手动维护 / Trellis baseline | 当前 workflow 主载体仍是 turn 级 hook（如 `UserPromptSubmit -> inject-workflow-state.py`）；`session-start.py` 只在目标项目显式接线或保留该 startup 辅助面时才纳入强门禁补丁与巡检范围 |
-| 子代理定义 | `.codex/agents/*.toml` | Trellis 原生管理 | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 安装器不再 overlay 到目标项目，仅做 legacy 迁移；源仓库 carrier 可含项目级增强。若目标项目保持 `codex.dispatch_mode = inline`，这些 agents 只服务显式 delegated / non-inline 路径，不构成 inline 主会话的临时逃生口 |
+| 子代理定义 | `.codex/agents/*.toml` | Trellis 原生管理 | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 安装器不再 overlay 到目标项目，仅做 legacy 迁移；源仓库 carrier 可含项目级增强。对当前嵌入 workflow，这些 agents 统一视为禁用的底层承载面，不构成主会话可派发路径 |
 | 项目 Git 前置条件 | `origin ≥ 2 push URL` | 运行前置/仅校验 | 安装器校验 |
 | Trellis init 产物 | `.trellis/.version` | 运行前置/仅校验 | 安装器校验 |
 
@@ -181,7 +181,7 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 - `.claude/skills/` 与 `.opencode/skills/` 当前都不要求镜像 `trellis-continue` / `trellis-finish-work`；Claude/OpenCode 的 fresh-baseline 正式入口仍分别是命令目录里的 `continue.md` / `finish-work.md`，legacy `start` 仅旧目标项目兼容
 - 非活动目录中的 `trellis-continue` / `trellis-finish-work` 同名文件**不在** `upgrade-compat.py --check` 的 baseline patch 检测范围内；legacy `start` 同名文件也不构成 fresh-baseline 要求
 - 这是设计边界，不是漏检：当前 workflow 安装器不会向非活动目录写入这两类 patch，因此这些文件不属于 workflow 托管漂移面
-- Codex 也不要求与 Claude/OpenCode 同形态的 `inject-subagent-context` hook carrier。当前主合同是 inline + turn hook；只有显式 delegated / non-inline 路径才会进入 agent 侧上下文读取
+- Codex 也不要求与 Claude/OpenCode 同形态的 `inject-subagent-context` hook carrier。当前主合同是 main-session-only + turn hook；即使底层存在 delegated / non-inline 承载面，当前嵌入 workflow 也不允许把它们作为执行路径使用
 
 这意味着目录边界应理解为：
 

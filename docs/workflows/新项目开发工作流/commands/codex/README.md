@@ -17,7 +17,7 @@ Codex 官方确实有 built-in slash commands，但那是 Codex 自身的交互�
 
 - 同一个项目里同时存在 `.claude/commands/trellis/`、`.opencode/commands/trellis/`、`.agents/skills/*`
 - 这**不代表** Codex 也获得了项目级 `/trellis:xxx` 命令目录
-- Codex 在该项目中的 workflow 入口依然是 skills / AGENTS / hooks；`subagents` 只代表可能存在的底层 carrier，不代表当前嵌入 workflow 适合把它们当作主执行路径
+- Codex 在该项目中的 workflow 入口依然是 skills / AGENTS / hooks；`subagents` 只代表可能存在但被当前嵌入 workflow 显式禁用的底层 carrier，不代表可用执行路径
 - 并且这些 skills 里有一部分来自 Trellis 原生基线，有一部分才是当前 workflow 额外嵌入的阶段资产
 
 前置条件也必须说清：
@@ -47,7 +47,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 --cli codex
 ```
 
-3. 安装完成后，在目标项目内优先通过 skills / AGENTS / hooks 与主会话直接使用这套 workflow；若底层仍存在 `subagents` carrier，也只视为兼容承载面；初始 spec 基线由安装脚本完成，不再手工复制
+3. 安装完成后，在目标项目内优先通过 skills / AGENTS / hooks 与主会话直接使用这套 workflow；若底层仍存在 `subagents` carrier，也只视为被当前 workflow 禁用的底层承载面；初始 spec 基线由安装脚本完成，不再手工复制
 
 ## 在多 CLI 同装中的定位
 
@@ -104,7 +104,7 @@ ls .codex/skills/parallel/SKILL.md 2>/dev/null
 
 - 直接用自然语言描述需求，由 skill 自动匹配
 - 或显式触发对应 skill
-- 必要时再配合 Codex 自身的 built-in slash commands 管理会话、模型或 subagents
+- 必要时再配合 Codex 自身的 built-in slash commands 管理会话或模型；不要把 built-in subagents 当作这套 workflow 的执行入口
 
 还要补一层边界：
 
@@ -193,14 +193,14 @@ Codex 支持 hooks。对这套 workflow，当前推荐通过项目 `.codex/hooks
 再补两条容易被误判的边界：
 
 - `start`/首次路由的真实触发，依赖的是**当前 CLI 已接线的 hook 链**。对 Codex 当前合同来说，默认主路径是 turn-level `UserPromptSubmit -> inject-workflow-state.py`；只有目标项目显式接线时，`session-start.py` 才参与 startup 辅助面
-- Codex 当前 fresh-baseline 不要求 Claude/OpenCode 那种 `inject-subagent-context` hook 同形态副本。当前主路径是 `codex.dispatch_mode = inline`；非 inline delegated 路径由 agent/self-loading 或平台前导完成上下文读取，而不是靠 `.codex/hooks/inject-subagent-context.py` 这个固定文件名
+- Codex 当前 fresh-baseline 不要求 Claude/OpenCode 那种 `inject-subagent-context` hook 同形态副本。当前嵌入 workflow 的主路径是 main-session-only；即使底层仍残留 delegated / non-inline carrier，也不得使用，而不是靠 `.codex/hooks/inject-subagent-context.py` 这类固定文件名去补齐一条可派发路径
 
 还要补一条 dispatch 边界，避免把 Codex 的平台能力误读成当前 workflow 的默认执行方式：
 
-- 当目标项目的 `.trellis/config.yaml` 仍保持 `codex.dispatch_mode = inline` 时，Codex 主会话必须保持 inline，不得手工派发 `trellis-implement` / `trellis-check` / `trellis-research` 一类 sub-agent，也不得改用 `spawn_agent`、`explorer`、`worker` 等通用平台 sub-agent / agent 能力绕过这条约束
-- 此时 `.codex/agents/*.toml` 只服务于显式 delegated / non-inline 路径；它们不是 inline 主会话下的临时逃生口
-- 即使目标项目同时启用了 Codex 的 multi-agent 相关平台能力，这些能力也只应被理解为非 inline 路径的基础设施，不覆盖上面这条 inline 约束
-- 因此，判断当前应否派发 sub-agent 时，优先看目标项目的 `codex.dispatch_mode` 与 workflow 当前阶段要求，不要只因为 `.codex/agents/` 存在或平台支持 multi-agent 就推断“现在可以派”
+- 对当前嵌入 workflow，不论目标项目是否仍保留 `codex.dispatch_mode` 字段，Codex 主会话都必须保持 main-session-only，不得手工派发 `trellis-implement` / `trellis-check` / `trellis-research` 一类 sub-agent，也不得改用 `spawn_agent`、`explorer`、`worker` 等通用平台 agent 能力绕过这条约束
+- `.codex/agents/*.toml` 在当前 workflow 下只应被视为残留/兼容 carrier，而不是任何可用执行入口
+- 即使目标项目同时启用了 Codex 的 multi-agent 相关平台能力，这些能力也不能覆盖当前 workflow 的 main-session-only 约束
+- 因此，判断当前应否派发 sub-agent 时，答案对当前嵌入 workflow 恒为“否”；不要只因为 `.codex/agents/` 存在或平台支持 multi-agent 就推断“现在可以派”
 
 ### 3. Skills：workflow 阶段入口由 skills 承载
 
@@ -265,9 +265,9 @@ Codex 在这两步里只允许承担：
 - `plan` skill 在 Codex 下也只能做任务划分与规划，不允许生成基础代码或直接进入 implementation
 - `plan` 阶段的 `execution_authorized` 必须保持为 `false`；只有用户明确确认进入 `implementation` 后，才允许显式设为 `true`
 
-### 4. Subagents：仅作为 `.codex/agents/*.toml` 承载面，不作为推荐主路径
+### 4. Subagents：仅作为残留承载面，不作为当前 workflow 可用路径
 
-Codex 官方支持 subagents。对当前嵌入 workflow，它们只应被理解为可存在的底层承载面，而不是推荐的主执行路径：
+Codex 官方支持 subagents。对当前嵌入 workflow，它们只应被理解为可存在但被显式禁用的底层承载面：
 
 - `research`
 - `implement`
@@ -282,7 +282,7 @@ Codex 官方支持 subagents。对当前嵌入 workflow，它们只应被理解�
 └── trellis-check.toml
 ```
 
-这层负责”阶段内角色分工”的承载可能性，不负责对用户暴露 workflow 命令入口，也不意味着主会话应手工派发它们。
+这层只说明平台可能存在对应 carrier，不负责对用户暴露 workflow 命令入口，也不意味着主会话或内部流程可以派发它们。
 
 Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check` agents（`trellis init` 产物），覆盖 9 个平台。workflow 安装器不再维护自定义 Codex agent 源资产或 overlay 这些定义到目标项目；安装器仅做 legacy bare-name → trellis-* 迁移。本源仓库的 carrier agent 文件可能含有项目级 capability-enhancement，详见 `.trellis/spec/agents/index.md`。
 
@@ -290,23 +290,23 @@ Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-ch
 
 - 对齐 agent 角色语义
 - 对齐安装 / 升级 / 漂移检测
-- 继续遵循 Codex 官方 `subagents` / `hooks` 边界
+- 继续遵循 Codex 官方 `subagents` / `hooks` 边界，同时保持当前 workflow 的 main-session-only 约束
 
 其中：
 
-- `trellis-research.toml`：保持只读，但必须遵守统一证据门禁
+- `trellis-research.toml`：若仅作为平台残留 carrier 存在，仍应保持只读并遵守统一证据门禁
   - 项目内部代码定位优先 `ace.search_context`
   - 第三方库 / 框架 / SDK 官方文档必须先 `Context7`
   - 最新信息、版本、今日事实优先 `grok-search`
   - 深度技术调研 / 竞品分析优先 `exa_web_search_advanced_exa(type=deep-reasoning)`
   - GitHub 仓库理解优先 `deepwiki`
   - 未经过 `Context7`，不得输出 API / 配置 / 版本结论；若能力不可用，必须标记 `[Evidence Gap]`
-- `trellis-implement.toml`：保持 `workspace-write`
-- `trellis-check.toml`：保持 `workspace-write` 的可修复 implementation-stage check agent
+- `trellis-implement.toml`：若残留存在，仍保持 `workspace-write`
+- `trellis-check.toml`：若残留存在，仍保持 `workspace-write`
 
 需要特别区分：
 
-- `trellis-check.toml`：implementation 内部链的自修复检查 agent
+- `trellis-check.toml`：平台残留 carrier 名称，不代表当前 workflow 允许走 implementation 内部 agent 链
 - `/trellis:check`：implementation 之后的正式质量门禁阶段
 
 二者不是同一层能力。
@@ -332,14 +332,14 @@ Codex 官方内建 slash commands 是平台级控制能力，例如：
 对 Trellis 来说，正确做法是：
 
 - 用 Codex built-in slash commands 管理 Codex 本身
-- 用 `AGENTS.md + hooks + skills + subagents` 承载 Trellis workflow；若目标项目保持 `codex.dispatch_mode = inline`，其中 subagents 只代表可用承载面，不代表 Codex 主会话可以手工派发
+- 用 `AGENTS.md + hooks + skills` 承载 Trellis workflow；若目标项目仍残留 subagents carrier，也视为被当前 workflow 显式禁用的底层承载面
 - 不把其他 CLI 的 `/trellis:xxx` 文案误当成 Codex 的项目命令协议
 
 补充边界：
 
 - Trellis 原生 `plan agent` / `dispatch agent` 不属于当前 workflow 主链；当前 workflow 只吸收 `plan agent` 的 readiness gate 与最小 task-ready 产物意识
 - 当前 workflow 不采用 `parallel/worktree` 驱动的 `plan -> dispatch -> create-pr` 流水线
-- implementation 阶段只保留 Trellis 原生 `trellis-research -> trellis-implement -> trellis-check` 这一组内部角色链；若目标项目保持 `codex.dispatch_mode = inline`，Codex 主会话不手工派发这条链，而改由主会话直接完成对应 research / implement / check
+- implementation 阶段仍要完成 `research -> implement -> check` 这组职责，但当前 workflow 显式禁用 Trellis agent/subagent 派发，因此必须由主会话直接完成对应 research / implement / check
 
 ## 推荐部署映射
 
@@ -382,7 +382,7 @@ Codex 官方内建 slash commands 是平台级控制能力，例如：
 
 这里的结论来自两部分证据：
 
-- 官方明确文档化了 built-in slash commands、AGENTS、hooks、subagents
+- 官方明确文档化了 built-in slash commands、AGENTS、hooks、subagents；这证明平台支持这些能力，但不改变当前嵌入 workflow 对 subagents 的禁用结论
 - 当前仓库真实实现选择了 `AGENTS + hooks + skills + agents`，而不是 `.claude/commands` 镜像
 
 ### 2. 非交互执行仍受 provider / 网络 /账户状态影响
@@ -492,7 +492,7 @@ Codex 对这套 workflow 的正确描述应该是：
 
 - **不是**“没有统一命令扩展机制”
 - **不是**“只能靠脚本 + markdown 上下文注入”
-- 而是“具备 AGENTS / hooks / skills / subagents / built-in slash commands 的强 workflow 承载能力，但 workflow 入口应按 skills 模型设计，而不是照搬 Claude 命令目录”
+- 而是“具备 AGENTS / hooks / skills / subagents / built-in slash commands 的强 workflow 承载能力，但对当前嵌入 workflow，入口应按 skills + 主会话模型设计，不能把 subagents 当作可用执行路径，也不能照搬 Claude 命令目录”
 
 当前 `/tmp` smoke test 的额外发现：
 

@@ -1871,6 +1871,7 @@ LIBRARY_LOCK = ".trellis/library-lock.yaml"
 REQUIREMENTS_FOUNDATION_PACK = "pack.requirements-discovery-foundation"
 CRITICAL_RUNTIME_PATCH_NAMES = (
     "inject-workflow-state",
+    "claude-inject-subagent-context",
     "opencode-inject-subagent-context",
     "session-start-strong-gate",
     "task-start-strong-gate",
@@ -1881,6 +1882,7 @@ CRITICAL_RUNTIME_PATCH_NAMES = (
 INJECT_WORKFLOW_STATE_PATCH_MARKER = "# [workflow-embed-patch:prefer-workflow-state-json]"
 OPENCODE_INJECT_WORKFLOW_STATE_PATCH_MARKER = "// [workflow-embed-patch:prefer-workflow-state-json]"
 OPENCODE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER = "// [workflow-embed-patch:opencode-subagent-gates]"
+CLAUDE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER = "# [workflow-embed-patch:claude-subagent-gates]"
 SESSION_START_STRONG_GATE_PATCH_MARKER = "# strong-gate-session-start-patch-applied"
 OPENCODE_SESSION_UTILS_PATCH_MARKER = "// [workflow-embed-patch:strong-gate-session-utils]"
 TASK_START_STRONG_GATE_PATCH_MARKER = "# [workflow-embed-patch:strong-gate-no-status-flip]"
@@ -1934,6 +1936,8 @@ def _expected_critical_runtime_patches(repo_root: Path, record: dict[str, Any]) 
         }
         if cli_types & {"claude", "opencode"}:
             expected.add("session-start-strong-gate")
+        if "claude" in cli_types:
+            expected.add("claude-inject-subagent-context")
         if "opencode" in cli_types:
             expected.add("opencode-inject-subagent-context")
         if "codex" in cli_types and _codex_session_start_is_wired(repo_root):
@@ -1982,6 +1986,11 @@ def _critical_patch_paths(repo_root: Path, cli_types: set[str]) -> list[tuple[st
                     "inject-workflow-state",
                     repo_root / ".claude" / "hooks" / "inject-workflow-state.py",
                     INJECT_WORKFLOW_STATE_PATCH_MARKER,
+                ),
+                (
+                    "claude-inject-subagent-context",
+                    repo_root / ".claude" / "hooks" / "inject-subagent-context.py",
+                    CLAUDE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER,
                 ),
                 (
                     "session-start-strong-gate",
@@ -2102,7 +2111,22 @@ def _task_runtime_contract_errors(
     patch_name: str,
     content: str,
 ) -> list[str]:
-    return []
+    problems: list[str] = []
+    if patch_name == "claude-inject-subagent-context":
+        required_fragments = (
+            "def _emit_blocked_subagent_output(",
+            "Strong-gate blocked this subagent dispatch.",
+            "current embedded workflow disables agent/subagent execution paths",
+            "_emit_blocked_subagent_output(subagent_type, original_prompt, tool_input)",
+        )
+        for fragment in required_fragments:
+            if fragment in content:
+                continue
+            problems.append(
+                f"{path.relative_to(repo_root)} 缺少补丁语义片段 `{fragment}`"
+                f"（critical runtime patch: {patch_name}）"
+            )
+    return problems
 
 
 def _detect_missing_critical_runtime_patches(repo_root: Path, record: dict[str, Any]) -> list[str]:

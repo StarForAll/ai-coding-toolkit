@@ -74,17 +74,17 @@ Before writing implementation code:
 5. Keep work scoped to the selected leaf task only.
 6. Do not auto-continue to the next task after completion — require a new explicit re-entry through the current entry skill.
 
-Within `implementation`, use this internal role chain:
+Within `implementation`, keep the following responsibilities in the main session:
 
 ```text
-trellis-research -> trellis-implement -> trellis-check
+research -> implement -> check
 ```
 
 Rules:
 
-- The internal `trellis-check` agent is not the same as the formal `check` stage.
-- If the target project keeps `codex.dispatch_mode = inline`, Codex main sessions do not manually dispatch this chain and instead perform the corresponding research / implement / check work inline.
-- After the chain completes, only recommend the `check` skill as a candidate next stage and wait for user confirmation.
-- If the formal `check` stage fails, return to `implementation` and re-run the internal chain.
+- The names above describe responsibility order only; this embedded workflow explicitly disables dispatching these agents/subagents from the main session.
+- The internal `trellis-check` responsibility is not the same as the formal `check` stage.
+- Perform the corresponding research / implement / check work directly in the main session, then only recommend the `check` skill as a candidate next stage and wait for user confirmation.
+- If the formal `check` stage fails, return to `implementation` and re-run the same main-session responsibility order.
 - For `UI -> 首版代码界面` tasks: Codex cannot be the main executor; completion must produce `design/frontend-ui-spec.md`.
 - For external outsourcing projects, do not enter implementation or test-first until `assessment.md` records `kickoff_payment_received = yes`.

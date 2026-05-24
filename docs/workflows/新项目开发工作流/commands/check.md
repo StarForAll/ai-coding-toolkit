@@ -39,9 +39,9 @@ description: 代码写完了？检查一下 — 基于真实改动范围和项�
 
 补充边界：
 
-- implementation 阶段内部默认允许存在 Trellis 原生 `trellis-research -> trellis-implement -> trellis-check` 这条 agent 链；但若目标项目保持 `codex.dispatch_mode = inline`，Codex 主会话不手工派发这条链，而改由主会话直接完成对应 research / implement / check
-- 这里的 `trellis-check` 属于 implementation 内部自检 agent，不是正式 `/trellis:check` 阶段
-- `/trellis:check` 只在 implementation 内部链完成并经用户确认后进入
+- 当前嵌入 workflow 显式禁用 `trellis-research` / `trellis-implement` / `trellis-check` 这类 agent/subagent 执行路径；implementation 内的 research / implement / 自检必须由主会话直接完成
+- 这里提到的 research / implement / checking 只是 implementation 内部能力分工，不代表允许派发对应 agent
+- `/trellis:check` 只在 implementation 主会话工作完成并经用户确认后进入
 
 ---
 

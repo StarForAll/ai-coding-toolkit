@@ -24,6 +24,26 @@ PY_PATCH_MARKER = "# [workflow-embed-patch:prefer-workflow-state-json]"
 PY_ROUTE_PATCH_MARKER = "# [workflow-embed-patch:prefer-workflow-route]"
 JS_PATCH_MARKER = "// [workflow-embed-patch:prefer-workflow-state-json]"
 JS_ROUTE_PATCH_MARKER = "// [workflow-embed-patch:prefer-workflow-route]"
+PY_CODEX_INLINE_ONLY_BLOCK = """def _codex_mode_banner(config: dict) -> str:
+    \"\"\"Emit a fixed inline `<codex-mode>` banner for the embedded workflow.
+
+    This workflow explicitly disables Codex sub-agent dispatch after embed, so
+    the main session must always remain on the inline execution path even if a
+    target project keeps a stale `codex.dispatch_mode` setting.
+    \"\"\"
+    _ = config
+    return "<codex-mode>inline</codex-mode>"
+
+
+def resolve_breadcrumb_key(
+    status: str, platform: str | None, config: dict
+) -> str:
+    \"\"\"Force Codex to use inline breadcrumb keys for the embedded workflow.\"\"\"
+    _ = config
+    if platform == "codex":
+        return f"{status}-inline"
+    return status
+"""
 
 PY_GET_ACTIVE_TASK_BLOCK = """_ACTION_BREADCRUMB_KEYS = {
     "awaiting_confirmation",
@@ -682,6 +702,13 @@ def patch_python_hook(target_path: Path) -> bool:
             )
         else:
             patched = _patch_python_baseline_fixture(patched)
+        if "def _codex_mode_banner(config: dict) -> str:" in patched and "def build_breadcrumb(" in patched:
+            patched = _replace_section(
+                patched,
+                "def _codex_mode_banner(config: dict) -> str:",
+                "def build_breadcrumb(",
+                PY_CODEX_INLINE_ONLY_BLOCK,
+            )
     except ValueError as exc:
         print(f"⚠️ {target_path} 缺少预期结构，跳过补丁: {exc}")
         return False

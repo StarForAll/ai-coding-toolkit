@@ -98,6 +98,7 @@ cleanup_legacy_breadcrumb_blocks = _INSTALL_WORKFLOW.cleanup_legacy_breadcrumb_b
 cleanup_legacy_phase_router_sections = _INSTALL_WORKFLOW.cleanup_legacy_phase_router_sections
 cleanup_stale_contract_references = _INSTALL_WORKFLOW.cleanup_stale_contract_references
 patch_inject_workflow_state_hook = _INSTALL_WORKFLOW.patch_inject_workflow_state_hook
+patch_claude_inject_subagent_context = _INSTALL_WORKFLOW.patch_claude_inject_subagent_context
 patch_opencode_session_utils = _INSTALL_WORKFLOW.patch_opencode_session_utils
 patch_opencode_inject_subagent_context = _INSTALL_WORKFLOW.patch_opencode_inject_subagent_context
 patch_task_status_views = _INSTALL_WORKFLOW.patch_task_status_views
@@ -108,6 +109,7 @@ _apply_patch_task_create_preserve_active = _INSTALL_WORKFLOW._apply_patch_task_c
 _apply_patch_workflow_phase = _INSTALL_WORKFLOW._apply_patch_workflow_phase
 replace_workflow_task_mechanism = _INSTALL_WORKFLOW._replace_workflow_task_mechanism
 _HOOK_PATCH_MARKER = _INSTALL_WORKFLOW._HOOK_PATCH_MARKER
+_CLAUDE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER = _INSTALL_WORKFLOW._CLAUDE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER
 _SESSION_START_STRONG_GATE_PATCH_MARKER = _INSTALL_WORKFLOW._SESSION_START_STRONG_GATE_PATCH_MARKER
 _ROUTE_HOOK_PATCH_MARKER = "# [workflow-embed-patch:prefer-workflow-route]"
 _OPENCODE_ROUTE_HOOK_PATCH_MARKER = "// [workflow-embed-patch:prefer-workflow-route]"
@@ -146,6 +148,10 @@ def _legacy_ready_guidance_issues(path: Path, content: str) -> list[str]:
     issues: list[str] = []
     if _INSTALL_WORKFLOW._LEGACY_READY_AUTOCONTINUE_LINE in content:
         issues.append(f"{path.name}: 仍保留 READY 自动续跑提示")
+    if "the default is to dispatch " in content and "`trellis-implement` and `trellis-check`" in content:
+        issues.append(f"{path.name}: 仍保留默认 dispatch trellis-implement/trellis-check 的旧子代理提示")
+    if "spawn `trellis-research` sub-agents via the Task tool" in content:
+        issues.append(f"{path.name}: 仍保留 trellis-research 子代理研究提醒")
     return issues
 
 
@@ -1030,6 +1036,19 @@ def detect_conflicts_codex(
             err("[Claude] session-start.py: 强门禁补丁缺失或仍会隐藏 repair_needed")
             conflicts += 1
 
+    claude_subagent_hook = root / ".claude" / "hooks" / "inject-subagent-context.py"
+    if claude_subagent_hook.exists():
+        claude_subagent_content = claude_subagent_hook.read_text(encoding="utf-8")
+        if (
+            _CLAUDE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER in claude_subagent_content
+            and "Strong-gate blocked this subagent dispatch." in claude_subagent_content
+            and "current embedded workflow disables agent/subagent execution paths" in claude_subagent_content
+        ):
+            ok("[Claude] inject-subagent-context.py: 强门禁子代理补丁已应用")
+        else:
+            err("[Claude] inject-subagent-context.py: 强门禁子代理补丁缺失或不完整")
+            conflicts += 1
+
     # Issue 2: check OpenCode plugin patch
     opencode_js = root / ".opencode" / "plugins" / "inject-workflow-state.js"
     if opencode_js.exists():
@@ -1748,6 +1767,7 @@ def main() -> int:
     cleanup_legacy_phase_router_sections(root, dry_run=False)
     cleanup_stale_contract_references(root, dry_run=False)
     patch_inject_workflow_state_hook(root, dry_run=False)
+    patch_claude_inject_subagent_context(root, dry_run=False)
     patch_opencode_session_utils(root, dry_run=False)
     patch_opencode_inject_subagent_context(root, dry_run=False)
     agents_md = root / "AGENTS.md"
@@ -1912,6 +1932,7 @@ def main() -> int:
     # upgrade paths converge with fresh install behavior.
     patch_inject_workflow_state_hook(root, dry_run=False)
     _apply_patch_session_start(src, root, dry_run=False)
+    patch_claude_inject_subagent_context(root, dry_run=False)
     patch_opencode_session_utils(root, dry_run=False)
     patch_opencode_inject_subagent_context(root, dry_run=False)
     patch_session_start_no_task_guidance(root, dry_run=False)

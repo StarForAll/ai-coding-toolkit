@@ -376,11 +376,13 @@ If ownership proof is enabled, decompose the watermark / ownership tasks require
 Set `stage_status = awaiting_user_confirmation` when plan is ready for user approval.
 [/workflow-state:plan]
 
+**Global execution rule**: this embedded workflow is main-session-only in every stage. Do not dispatch `trellis-research`, `trellis-implement`, `trellis-check`, or other platform agents/sub-agents; keep all execution in the current main session.
+
 [workflow-state:implementation]
 Current stage: **implementation** — code writing phase.
 `checkpoints.execution_authorized` must be `true` before entering.
 Re-enter this stage through `/trellis:continue`; do **not** expect a public `/trellis:implementation` command or same-named shared skill.
-For sub-agent dispatch mode: dispatch `trellis-implement` sub-agent. For inline dispatch mode (`codex.dispatch_mode=inline`): implement directly (load `trellis-before-dev` first).
+This embedded workflow is main-session-only: do the implementation work directly in the current session (load `trellis-before-dev` first) and do not dispatch `trellis-implement` or other sub-agents.
 If `ownership_proof_required = yes` and design has declared `Protected Watermark Snippets`, run `source-watermark-guard.py --task-dir <task-dir> --mode check` before touching protected files; only explicitly declared low-risk snippets may use `--mode repair`, and you must rerun `--mode check` afterwards.
 If you need TDD-style verification, do it inside implementation rather than switching to a separate `test-first` stage.
 After implementation, proceed to `check`.

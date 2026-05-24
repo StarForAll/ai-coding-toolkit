@@ -55,7 +55,12 @@ Next-Action: Follow the action above...
 
 ### 冪等性
 
-补丁通过 `# strong-gate-session-start-patch-applied` 与 `# [workflow-embed-patch:session-start-route-first]` 标记检测 route-first 版本，并额外检查 `<ready>` 提示块是否还残留 READY 自动续跑文案。重复调用不会重复注入，但会升级旧 patch 遗留的入口提示残渣。
+补丁通过 `# strong-gate-session-start-patch-applied` 与 `# [workflow-embed-patch:session-start-route-first]` 标记检测 route-first 版本，并额外检查两类遗留提示是否仍然残留：
+
+- `<ready>` 提示块里的 READY 自动续跑文案
+- `no_task` 提示块里“派发 `trellis-research` 子代理做外部研究”的旧提醒
+
+重复调用不会重复注入，但会升级旧 patch 遗留的入口提示残渣。
 
 ### Fallback 行为
 
