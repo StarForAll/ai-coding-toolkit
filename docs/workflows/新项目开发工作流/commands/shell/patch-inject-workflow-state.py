@@ -168,13 +168,27 @@ PY_BUILD_BREADCRUMB_BLOCK = """def build_breadcrumb(
     - `no_task` pseudo-status (task_id is None) → header omits task info
     \"\"\"
     lookup_key = breadcrumb_key or status
+    display_status = status
+    if "stale" in templates and (
+        status == "stale"
+        or status.startswith("stale_")
+        or lookup_key == "stale"
+        or lookup_key.startswith("stale_")
+        or lookup_key.startswith("stale-")
+    ):
+        lookup_key = "stale"
+        display_status = "stale"
     body = templates.get(lookup_key)
     if body is None and lookup_key != status:
         body = templates.get(status)
     if body is None:
         body = \"Refer to workflow.md for current step.\"
 
-    header_lines = [f\"Status: {status}\" if task_id is None else f\"Task: {task_id} ({status})\"]
+    header_lines = [
+        f\"Status: {display_status}\"
+        if task_id is None
+        else f\"Task: {task_id} ({display_status})\"
+    ]
     if source:
         header_lines.append(f\"Source: {source}\")
     if extra_lines:

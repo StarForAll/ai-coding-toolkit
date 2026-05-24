@@ -686,7 +686,7 @@ def detect_conflicts_workflow_doc(src: Path, root: Path, *, profile: str = DEFAU
     # text and cross-references inside workflow.md.
     content = workflow_md.read_text(encoding="utf-8")
     if _WORKFLOW_BREADCRUMB_MARKER in content:
-        legacy_tags = ("stale", "planning", "planning-inline", "in_progress", "in_progress-inline", "completed")
+        legacy_tags = ("planning", "planning-inline", "in_progress", "in_progress-inline", "completed")
         found_residual = False
         for tag in legacy_tags:
             open_tag = f"[workflow-state:{tag}]"

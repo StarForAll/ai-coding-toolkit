@@ -139,6 +139,18 @@ BRAINSTORM_EXIT_SNAPSHOT_FIELDS = (
     "kill_criteria",
     "open_items",
 )
+REVIEW_GATE_DECISIONS = {"skip", "recommended", "required"}
+REVIEW_GATE_HARD_CONDITION_FIELDS = (
+    ("auth_or_sensitive", "认证 / 授权 / 权限边界 / 敏感信息处理"),
+    ("data_migration_or_schema_change", "数据迁移 / schema 变化 / 删除 / 回填"),
+    (
+        "public_api_or_cross_layer_contract_or_external_integration",
+        "公共 API / 跨层 contract / 外部系统集成",
+    ),
+    ("payment_queue_cache_concurrency", "支付 / 消息队列 / 缓存一致性 / 并发状态"),
+    ("shared_core_with_blast_radius", "共享核心模块且 blast radius 明显"),
+    ("explicit_user_review_gate_request", "用户显式要求进入 review-gate"),
+)
 CODEX_PHASE_ROUTER_SKILL_MARKER = "## Workflow Phase Router Patch `[AI]`"
 CODEX_FINISH_WORK_SKILL_MARKER = "<!-- finish-work-projectization-patch -->"
 PATCHED_CODEX_SKILL_REQUIREMENTS: dict[str, dict[str, tuple[str, ...]]] = {
@@ -146,9 +158,18 @@ PATCHED_CODEX_SKILL_REQUIREMENTS: dict[str, dict[str, tuple[str, ...]]] = {
         "must_contain": (
             CODEX_PHASE_ROUTER_SKILL_MARKER,
             "workflow router",
+            "workflow-state.py route",
+            "Do not use `status=planning` / `status=in_progress`",
+            "stay in the current phase-router entry",
+            "Do not assume a public `implementation` skill exists.",
         ),
         "must_not_contain": (
             "figures out which phase/step to pick up at",
+            "task state shows planning",
+            "task state shows in progress",
+            "implementation done, not yet checked",
+            "check passed",
+            "Load the Specific Step",
         ),
     },
     "trellis-finish-work": {
@@ -156,6 +177,7 @@ PATCHED_CODEX_SKILL_REQUIREMENTS: dict[str, dict[str, tuple[str, ...]]] = {
             CODEX_FINISH_WORK_SKILL_MARKER,
             "complete native Trellis close-out after delivery",
             "archive + session-record steps after delivery",
+            "Code commits are NOT done here",
         ),
         "must_not_contain": (
             "archive completed tasks, and record session progress to the developer journal",
@@ -165,9 +187,18 @@ PATCHED_CODEX_SKILL_REQUIREMENTS: dict[str, dict[str, tuple[str, ...]]] = {
         "must_contain": (
             CODEX_PHASE_ROUTER_SKILL_MARKER,
             "workflow router",
+            "workflow-state.py route",
+            "Do not use `status=planning` / `status=in_progress`",
+            "stay in the current phase-router entry",
+            "Do not assume a public `implementation` skill exists.",
         ),
         "must_not_contain": (
             "routes to brainstorm, direct edit, or task workflow",
+            "task state shows planning",
+            "task state shows in progress",
+            "implementation done, not yet checked",
+            "check passed",
+            "Load the Specific Step",
         ),
     },
     "trellis-brainstorm": {
@@ -503,7 +534,7 @@ def validate_design_exit_gate(task_dir: Path, errors: list[str]) -> None:
     )
 
 
-def validate_check_gate(task_dir: Path, errors: list[str]) -> None:
+def validate_check_gate(task_dir: Path, errors: list[str], *, for_delivery: bool = False) -> None:
     """Validate check.md exists and has minimum content structure before leaving check stage."""
     check_path = task_dir / CHECK_MD_FILE
     if not check_path.is_file():
@@ -535,6 +566,58 @@ def validate_check_gate(task_dir: Path, errors: list[str]) -> None:
             "check.md 缺少真实验证结论（pass / fail / not run）；"
             "check 阶段产物不完整，不得进入 review-gate"
         )
+        return
+
+    validate_check_review_gate_decision(content, errors, for_delivery=for_delivery)
+
+
+def validate_check_review_gate_decision(
+    content: str,
+    errors: list[str],
+    *,
+    for_delivery: bool = False,
+) -> None:
+    if not re.search(r"^\s*##+\s*(?:Review-Gate Decision|补充审查判定)\s*$", content, re.MULTILINE):
+        errors.append(
+            "check.md 缺少 Review-Gate Decision / 补充审查判定章节；"
+            "check 阶段产物不完整，不得进入后续阶段"
+        )
+        return
+
+    decision = extract_backticked_field(content, "review_gate_decision")
+    if decision not in REVIEW_GATE_DECISIONS:
+        rendered = decision or "(missing)"
+        errors.append(
+            f"check.md 的 `review_gate_decision` 非法: {rendered!r}；"
+            "只能填写 `skip` / `recommended` / `required`"
+        )
+        return
+
+    reason = extract_backticked_field(content, "review_gate_reason")
+    if is_placeholder_like(reason):
+        errors.append("check.md 的 `review_gate_reason` 未填写具体结论")
+
+    hard_hits: list[str] = []
+    for field_name, label in REVIEW_GATE_HARD_CONDITION_FIELDS:
+        raw_value = extract_backticked_field(content, field_name)
+        normalized = normalize_yes_no_field(raw_value)
+        if normalized is None:
+            rendered = raw_value or "(missing)"
+            errors.append(
+                f"check.md 的 `{field_name}` 非法: {rendered!r}；只能填写 `yes` / `no`"
+            )
+            continue
+        if normalized is True:
+            hard_hits.append(label)
+
+    if hard_hits and decision != "required":
+        errors.append(
+            "check.md 命中了 review-gate 硬条件，但 `review_gate_decision` 不是 `required`: "
+            + " / ".join(hard_hits)
+        )
+
+    if for_delivery and decision == "required":
+        errors.append("check.md 的 `review_gate_decision`=`required`；不得从 check 直接进入 delivery")
 
 
 def validate_finish_work_gate(task_dir: Path, errors: list[str]) -> None:
@@ -755,7 +838,7 @@ def validate_stage_transition_gates(
         validate_check_gate(task_dir, errors)
 
     if current_stage == "check" and new_stage == "delivery":
-        validate_check_gate(task_dir, errors)
+        validate_check_gate(task_dir, errors, for_delivery=True)
 
     if current_stage == "project-audit":
         validate_project_audit_gate(task_dir, errors)
@@ -1441,14 +1524,24 @@ def validate_brainstorm_exit_gate(
             errors.append(
                 f"{TASK_PRD.as_posix()} 缺少阶段出口快照字段: {', '.join(missing_snapshot)}"
             )
-        elif allowed_targets and allowed_targets.issubset(EXECUTION_STAGES):
-            complexity_decision = extract_backticked_field(task_content, "complexity_decision")
-            if complexity_decision != "L0":
-                rendered_value = complexity_decision or "(missing)"
+        else:
+            placeholder_snapshot = [
+                field
+                for field in BRAINSTORM_EXIT_SNAPSHOT_FIELDS
+                if is_placeholder_like(extract_backticked_field(task_content, field))
+            ]
+            if placeholder_snapshot:
                 errors.append(
-                    f"{TASK_PRD.as_posix()} 的 `complexity_decision`={rendered_value!r}；"
-                    "brainstorm 仅允许 `L0` 直接进入 implementation，其他复杂度必须先进入 design/plan"
+                    f"{TASK_PRD.as_posix()} 的阶段出口快照字段未填写有效结论: {', '.join(placeholder_snapshot)}"
                 )
+            elif allowed_targets and allowed_targets.issubset(EXECUTION_STAGES):
+                complexity_decision = extract_backticked_field(task_content, "complexity_decision")
+                if complexity_decision != "L0":
+                    rendered_value = complexity_decision or "(missing)"
+                    errors.append(
+                        f"{TASK_PRD.as_posix()} 的 `complexity_decision`={rendered_value!r}；"
+                        "brainstorm 仅允许 `L0` 直接进入 implementation，其他复杂度必须先进入 design/plan"
+                    )
 
     if require_customer_prd and allowed_targets & {"design", "plan"}:
         customer_prd = project_root / CUSTOMER_PRD
@@ -1778,6 +1871,7 @@ LIBRARY_LOCK = ".trellis/library-lock.yaml"
 REQUIREMENTS_FOUNDATION_PACK = "pack.requirements-discovery-foundation"
 CRITICAL_RUNTIME_PATCH_NAMES = (
     "inject-workflow-state",
+    "opencode-inject-subagent-context",
     "session-start-strong-gate",
     "task-start-strong-gate",
     "task-create-preserve-active",
@@ -1786,6 +1880,7 @@ CRITICAL_RUNTIME_PATCH_NAMES = (
 )
 INJECT_WORKFLOW_STATE_PATCH_MARKER = "# [workflow-embed-patch:prefer-workflow-state-json]"
 OPENCODE_INJECT_WORKFLOW_STATE_PATCH_MARKER = "// [workflow-embed-patch:prefer-workflow-state-json]"
+OPENCODE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER = "// [workflow-embed-patch:opencode-subagent-gates]"
 SESSION_START_STRONG_GATE_PATCH_MARKER = "# strong-gate-session-start-patch-applied"
 OPENCODE_SESSION_UTILS_PATCH_MARKER = "// [workflow-embed-patch:strong-gate-session-utils]"
 TASK_START_STRONG_GATE_PATCH_MARKER = "# [workflow-embed-patch:strong-gate-no-status-flip]"
@@ -1839,6 +1934,8 @@ def _expected_critical_runtime_patches(repo_root: Path, record: dict[str, Any]) 
         }
         if cli_types & {"claude", "opencode"}:
             expected.add("session-start-strong-gate")
+        if "opencode" in cli_types:
+            expected.add("opencode-inject-subagent-context")
         if "codex" in cli_types and _codex_session_start_is_wired(repo_root):
             expected.add("session-start-strong-gate")
         return expected
@@ -1922,6 +2019,11 @@ def _critical_patch_paths(repo_root: Path, cli_types: set[str]) -> list[tuple[st
                     repo_root / ".opencode" / "lib" / "session-utils.js",
                     OPENCODE_SESSION_UTILS_PATCH_MARKER,
                 ),
+                (
+                    "opencode-inject-subagent-context",
+                    repo_root / ".opencode" / "plugins" / "inject-subagent-context.js",
+                    OPENCODE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER,
+                ),
             ]
         )
     return checks
@@ -1972,6 +2074,21 @@ def _js_runtime_contract_errors(
         if "function buildBreadcrumb(id, status, templates, source = null" in content and "task.extraLines" not in content:
             problems.append(
                 f"{path.relative_to(repo_root)} 缺少 task.extraLines 透传"
+                f"（critical runtime patch: {patch_name}）"
+            )
+    elif patch_name == "opencode-inject-subagent-context":
+        required_fragments = (
+            "function shouldAllowTaskInjection(routeData, subagentType)",
+            "function loadRouteData(ctx, taskDir)",
+            'const allowedStages = new Set(["implementation", "check", "review-gate", "project-audit", "delivery"])',
+            "loadRouteData(ctx, ctx.resolveTaskDir(taskDir))",
+            "strong-gate route does not allow subagent injection",
+        )
+        for fragment in required_fragments:
+            if fragment in content:
+                continue
+            problems.append(
+                f"{path.relative_to(repo_root)} 缺少补丁语义片段 `{fragment}`"
                 f"（critical runtime patch: {patch_name}）"
             )
     return problems

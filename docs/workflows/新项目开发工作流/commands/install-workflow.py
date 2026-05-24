@@ -2012,7 +2012,6 @@ def patch_session_start_no_task_guidance(root: Path, *, dry_run: bool) -> bool:
 
 # ── Issue 2: cleanup legacy three-phase breadcrumb blocks ──
 _LEGACY_BREADCRUMB_TAGS = (
-    "stale",
     "planning",
     "planning-inline",
     "in_progress",
@@ -2027,7 +2026,7 @@ def cleanup_legacy_breadcrumb_blocks(root: Path, *, dry_run: bool) -> int:
     """Remove legacy three-phase breadcrumb blocks from embedded workflow.md (Issue 2).
 
     After strong-gate Phase Index + breadcrumb patches are applied, the old
-    three-phase breadcrumb blocks (stale, planning, planning-inline, in_progress,
+    three-phase breadcrumb blocks (planning, planning-inline, in_progress,
     in_progress-inline, completed) should be removed to avoid duplicate
     [workflow-state:STATUS] blocks that confuse the hook parser.
     """
@@ -2246,6 +2245,16 @@ def patch_opencode_session_utils(root: Path, *, dry_run: bool) -> bool:
     patched = content
     route_applied = False
     ready_guidance_applied = False
+    workflow_range_applied = False
+    breadcrumb_strip_applied = False
+
+    workflow_range_old = 'stripped === "## Workflow State Breadcrumbs"'
+    workflow_range_new = 'stripped === "## Customizing Trellis (for forks)"'
+    strip_helper = """\
+function stripBreadcrumbTagBlocks(content) {
+  return content.replace(/\\[workflow-state:[^\\]]+\\][\\s\\S]*?\\[\\/workflow-state:[^\\]]+\\]\\n?/g, "").trimEnd()
+}
+"""
 
     if _OPENCODE_SESSION_UTILS_PATCH_MARKER in patched:
         ok("[Shared] .opencode/lib/session-utils.js 强门禁补丁已存在")
@@ -2304,26 +2313,57 @@ function getTaskStatus(ctx, platformInput = null) {
             next_func = len(patched)
         patched = patched[:func_start] + new_block.rstrip() + "\n\n" + patched[next_func:].lstrip("\n")
 
+    if workflow_range_old in patched:
+        patched = patched.replace(workflow_range_old, workflow_range_new)
+        workflow_range_applied = True
+
+    if "function stripBreadcrumbTagBlocks(content)" not in patched:
+        anchor = "export function buildSessionContext(ctx, platformInput = null) {"
+        if anchor in patched:
+            patched = patched.replace(anchor, strip_helper + "\n" + anchor, 1)
+            breadcrumb_strip_applied = True
+
+    phase_slice_old = """    if (rangeStart !== -1) {
+      overviewLines.push(...allLines.slice(rangeStart, rangeEnd))
+    }
+"""
+    phase_slice_new = """    if (rangeStart !== -1) {
+      const phaseSlice = allLines.slice(rangeStart, rangeEnd).join("\\n")
+      overviewLines.push(stripBreadcrumbTagBlocks(phaseSlice))
+    }
+"""
+    if phase_slice_old in patched:
+        patched = patched.replace(phase_slice_old, phase_slice_new, 1)
+        breadcrumb_strip_applied = True
+
     patched, ready_guidance_applied = _replace_legacy_ready_autocontinue(patched)
-    if not route_applied and not ready_guidance_applied:
+    if not route_applied and not ready_guidance_applied and not workflow_range_applied and not breadcrumb_strip_applied:
         return False
 
     if not dry_run:
         session_utils.write_text(patched, encoding="utf-8")
     if dry_run:
-        if route_applied and ready_guidance_applied:
-            info("[Shared] 将补丁 .opencode/lib/session-utils.js → 改用 workflow-state.py route，并移除 READY 自动续跑提示")
-        elif route_applied:
-            info("[Shared] 将补丁 .opencode/lib/session-utils.js → 改用 workflow-state.py route")
-        else:
-            info("[Shared] 将升级 .opencode/lib/session-utils.js → 移除 READY 自动续跑提示")
+        actions: list[str] = []
+        if route_applied:
+            actions.append("改用 workflow-state.py route")
+        if ready_guidance_applied:
+            actions.append("移除 READY 自动续跑提示")
+        if workflow_range_applied:
+            actions.append("修正 workflow 提取结束锚点")
+        if breadcrumb_strip_applied:
+            actions.append("剥离 breadcrumb tag blocks")
+        info("[Shared] 将升级 .opencode/lib/session-utils.js → " + "，".join(actions))
     else:
-        if route_applied and ready_guidance_applied:
-            ok("[Shared] .opencode/lib/session-utils.js 已升级 → 改用 workflow-state.py route，并移除 READY 自动续跑提示")
-        elif route_applied:
-            ok("[Shared] .opencode/lib/session-utils.js 已补丁 → 改用 workflow-state.py route")
-        else:
-            ok("[Shared] .opencode/lib/session-utils.js 已升级 → 移除 READY 自动续跑提示")
+        actions = []
+        if route_applied:
+            actions.append("改用 workflow-state.py route")
+        if ready_guidance_applied:
+            actions.append("移除 READY 自动续跑提示")
+        if workflow_range_applied:
+            actions.append("修正 workflow 提取结束锚点")
+        if breadcrumb_strip_applied:
+            actions.append("剥离 breadcrumb tag blocks")
+        ok("[Shared] .opencode/lib/session-utils.js 已升级 → " + "，".join(actions))
     return True
 
 
