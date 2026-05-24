@@ -48,9 +48,11 @@ from workflow_assets import (
     EXECUTION_CARDS,
     find_first_existing_codex_skill_path,
     HELPER_SCRIPTS,
+    INITIAL_PACK_CLEANUP_POLICY,
     legacy_agent_target_path,
     LEGACY_AGENT_NAMES,
     MANAGED_ENHANCED_AGENT_NAMES,
+    managed_workflow_docs_for_profile,
     list_all_codex_skills_dirs,
     OPTIONAL_DISABLED_BASELINE_COMMANDS,
     OUTSOURCING_EXECUTION_CARDS,
@@ -58,8 +60,12 @@ from workflow_assets import (
     OVERLAY_BASELINE_COMMANDS,
     PATCH_BASELINE_COMMANDS,
     PATCH_BASELINE_SHARED_DOCS,
+    REQUIREMENTS_FOUNDATION_ASSET_IDS,
+    REQUIREMENTS_FOUNDATION_TARGET_PATHS,
     RETIRED_HELPER_SCRIPTS,
     WORKFLOW_DOCS_DIR,
+    WORKFLOW_DOC_CLEANUP_POLICY,
+    WORKFLOW_DOC_PATCH_COMPONENTS,
     WORKFLOW_SCHEMA_VERSION,
     WORKFLOW_VERSION,
     check_latest_trellis_prerequisite,
@@ -225,6 +231,14 @@ _REQUIRED_INSTALL_RECORD_KEYS = {
     "initial_pack",
     "bootstrap_task_removed",
     "execution_cards",
+}
+_SCHEMA_3_REQUIRED_INSTALL_RECORD_KEYS = {
+    "initial_pack_assets",
+    "initial_pack_target_paths",
+    "initial_pack_cleanup_policy",
+    "workflow_shared_docs",
+    "workflow_doc_cleanup_policy",
+    "workflow_doc_patch_components",
 }
 _LEGACY_OPTIONAL_VERSION_KEYS = {
     "workflow_version",
@@ -410,6 +424,11 @@ def detect_install_record_schema_conflicts(record: dict) -> int:
         return 0
 
     missing_required = sorted(key for key in _REQUIRED_INSTALL_RECORD_KEYS if key not in record)
+    schema_version = str(record.get("workflow_schema_version") or "").strip()
+    if schema_version.isdigit() and int(schema_version) >= 3:
+        missing_required.extend(
+            key for key in sorted(_SCHEMA_3_REQUIRED_INSTALL_RECORD_KEYS) if key not in record
+        )
     missing_legacy_versions = sorted(key for key in _LEGACY_OPTIONAL_VERSION_KEYS if key not in record)
 
     if missing_required:
@@ -1104,6 +1123,8 @@ def detect_conflicts_codex(
             _OPENCODE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER in plugin_content
             and "shouldAllowTaskInjection(" in plugin_content
             and "loadRouteData(" in plugin_content
+            and "buildBlockedSubagentPrompt(" in plugin_content
+            and "Strong-gate blocked this subagent dispatch." in plugin_content
         ):
             ok("[OpenCode] inject-subagent-context.js: 强门禁子代理补丁已应用")
         else:
@@ -1169,24 +1190,22 @@ def detect_execution_card_conflicts(src: Path, root: Path, *, profile: str = DEF
     conflicts = 0
     workflow_root = src.parent
     dst = root / WORKFLOW_DOCS_DIR
-    cards = list(EXECUTION_CARDS)
-    if profile == "outsourcing":
-        cards.extend(OUTSOURCING_EXECUTION_CARDS)
+    cards = managed_workflow_docs_for_profile(profile)
     for card_name in cards:
         card_dst = dst / card_name
         card_src = workflow_root / card_name
         if not card_dst.exists():
-            warn(f"[Shared] 执行卡缺失: {WORKFLOW_DOCS_DIR}/{card_name}")
+            warn(f"[Shared] workflow 共享文档缺失: {WORKFLOW_DOCS_DIR}/{card_name}")
             conflicts += 1
             continue
         if card_src.exists():
             expected = card_src.read_text(encoding="utf-8")
             actual = read_text(card_dst)
             if actual != expected:
-                err(f"[Shared] 执行卡内容漂移: {WORKFLOW_DOCS_DIR}/{card_name}")
+                err(f"[Shared] workflow 共享文档内容漂移: {WORKFLOW_DOCS_DIR}/{card_name}")
                 conflicts += 1
     if conflicts == 0:
-        ok("[Shared] 所有执行卡内容一致")
+        ok("[Shared] 所有 workflow 共享文档内容一致")
     return conflicts
 
 
@@ -1535,6 +1554,9 @@ def write_install_record(
     cards = list(EXECUTION_CARDS)
     if profile == DEFAULT_PROFILE:
         cards.extend(OUTSOURCING_EXECUTION_CARDS)
+    workflow_shared_docs = prior_record.get("workflow_shared_docs")
+    if not isinstance(workflow_shared_docs, list) or not workflow_shared_docs:
+        workflow_shared_docs = managed_workflow_docs_for_profile(profile)
     rec_file.write_text(
         json.dumps(
             {
@@ -1554,15 +1576,21 @@ def write_install_record(
                 ],
                 "patched_codex_skills": CODEX_PATCH_BASELINE_SKILLS,
                 "patched_shared_docs": PATCH_BASELINE_SHARED_DOCS,
+                "workflow_doc_patch_components": WORKFLOW_DOC_PATCH_COMPONENTS,
                 "critical_runtime_patches": critical_runtime_patches_for_cli_types(cli_types),
                 # Legacy compatibility field: keep writing [] until a future
                 # install-record schema bump removes it explicitly.
                 "managed_enhanced_agents": MANAGED_ENHANCED_AGENT_NAMES,
                 "scripts": _managed_helper_scripts_for_profile(profile),
                 "execution_cards": cards,
+                "workflow_shared_docs": workflow_shared_docs,
+                "workflow_doc_cleanup_policy": WORKFLOW_DOC_CLEANUP_POLICY,
                 "workflow_version": WORKFLOW_VERSION,
                 "workflow_schema_version": WORKFLOW_SCHEMA_VERSION,
                 "initial_pack": initial_pack,
+                "initial_pack_assets": REQUIREMENTS_FOUNDATION_ASSET_IDS,
+                "initial_pack_target_paths": REQUIREMENTS_FOUNDATION_TARGET_PATHS,
+                "initial_pack_cleanup_policy": INITIAL_PACK_CLEANUP_POLICY,
                 "bootstrap_task_removed": bootstrap_task_removed,
                 "bootstrap_cleanup_status": bootstrap_cleanup_status,
             },

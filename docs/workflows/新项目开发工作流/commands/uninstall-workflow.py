@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""卸载工作流，恢复 Trellis 原始状态（多 CLI 支持）。
+"""卸载工作流托管载体，恢复基线入口层（多 CLI 支持）。
 
 用法: python3 uninstall-workflow.py [--project-root /path/to/project] [--cli claude,opencode,codex]
 """
@@ -21,6 +21,7 @@ from workflow_assets import (
     DISTRIBUTED_COMMANDS,
     legacy_agent_target_path,
     LEGACY_AGENT_NAMES,
+    managed_workflow_docs_for_profile,
     OPTIONAL_DISABLED_BASELINE_COMMANDS,
     OVERLAY_BASELINE_COMMANDS,
     resolve_codex_skills_dir,
@@ -35,6 +36,7 @@ _CLI_ALT_DIRS = CLI_ALT_DIRS
 _ALL_CLI_TYPES = ALL_CLI_TYPES
 _AGENTS_NL_ROUTING_MARKER = "<!-- workflow-nl-routing-start -->"
 _AGENTS_NL_ROUTING_END = "<!-- workflow-nl-routing-end -->"
+_DEFAULT_INITIAL_PACK = "pack.requirements-discovery-foundation"
 
 
 def _restore_first_available_command_backup(
@@ -105,6 +107,46 @@ def load_install_record(rec_file: Path) -> dict:
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         warn(f"workflow-installed.json 损坏，将使用默认卸载列表: {exc}")
         return {}
+
+
+def remove_workflow_shared_docs(root: Path, record: dict) -> None:
+    workflow_docs_dir = root / ".trellis" / "workflow-docs"
+    docs = record.get("workflow_shared_docs")
+    if not isinstance(docs, list) or not docs:
+        docs = managed_workflow_docs_for_profile(record.get("profile", "outsourcing"))
+
+    removed = 0
+    for name in docs:
+        if not isinstance(name, str) or not name:
+            continue
+        path = workflow_docs_dir / name
+        if path.exists():
+            path.unlink()
+            ok(f"workflow-docs 已删除: {name}")
+            removed += 1
+
+    if workflow_docs_dir.is_dir():
+        try:
+            workflow_docs_dir.rmdir()
+            ok(".trellis/workflow-docs/ 已删除")
+        except OSError:
+            if removed:
+                info(".trellis/workflow-docs/ 中仍有非 workflow 文件，保留目录")
+
+
+def report_initial_pack_retention(root: Path, record: dict) -> None:
+    initial_pack = record.get("initial_pack") or _DEFAULT_INITIAL_PACK
+    if not isinstance(initial_pack, str) or not initial_pack:
+        return
+
+    lock_file = root / ".trellis" / "library-lock.yaml"
+    if not lock_file.exists():
+        return
+
+    info(
+        "保留 requirements-foundation 导入资产与 library-lock.yaml："
+        f"{initial_pack} 可能已经与用户后续导入合并，workflow 卸载不会自动删除这些 library 资产。"
+    )
 
 
 def split_commands(commands: list[str], overlay_commands: list[str] | None, added_commands: list[str] | None) -> tuple[list[str], list[str]]:
@@ -498,6 +540,12 @@ def main() -> int:
         shutil.rmtree(dst_scripts)
         ok(".trellis/scripts/workflow/ 已删除")
 
+    # 删除 workflow 共享文档（执行卡 / checklist 模板）
+    remove_workflow_shared_docs(root, record)
+
+    # requirements-discovery-foundation 导入资产保持保留，只提示当前策略
+    report_initial_pack_retention(root, record)
+
     # 删除安装记录
     if rec_file.exists():
         rec_file.unlink()
@@ -510,7 +558,9 @@ def main() -> int:
     restore_shared_workflow_doc(root)
 
     print()
-    print("✅ 卸载完成 — Trellis 已恢复原始状态")
+    print("✅ 卸载完成 — workflow 托管载体已移除")
+    if (root / ".trellis" / "library-lock.yaml").exists():
+        print("ℹ️  requirements-discovery-foundation 导入资产与 library-lock.yaml 按当前策略保留")
     print()
     return 0
 

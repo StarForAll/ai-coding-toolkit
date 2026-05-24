@@ -18,6 +18,21 @@ from pathlib import Path
 PATCH_MARKER = "# [workflow-embed-patch:strong-gate-no-status-flip]"
 LEGACY_STATUS_COMMENT = "# Still flip task.json status: planning → in_progress so downstream phases proceed.\n"
 UPDATED_STATUS_COMMENT = "# Strong-gate mode keeps workflow-state.py route as the only stage authority.\n"
+START_HELP_OLD = 'p_start = subparsers.add_parser("start", help="Set active task")\n'
+START_HELP_NEW = (
+    'p_start = subparsers.add_parser("start", help="Set active task '
+    '(strong-gate: refresh pointer only; does not flip task.json status or advance workflow stage)")\n'
+)
+START_USAGE_PRINT_OLD = 'print("  python3 task.py start <dir>                        Set active task\\n")\n'
+START_USAGE_PRINT_NEW = (
+    'print("  python3 task.py start <dir>                        Set active task '
+    '(strong-gate: pointer only; stage changes still go through workflow-state.py)\\n")\n'
+)
+START_DOC_OLD = "    python3 task.py start <dir>                 # Set active task\n"
+START_DOC_NEW = (
+    "    python3 task.py start <dir>                 # Set active task pointer only; "
+    "stage changes still go through workflow-state.py\n"
+)
 
 
 def patch_task_start(target_path: Path) -> bool:
@@ -31,8 +46,15 @@ def patch_task_start(target_path: Path) -> bool:
 
     content = target_path.read_text(encoding="utf-8")
     content = content.replace(LEGACY_STATUS_COMMENT, UPDATED_STATUS_COMMENT)
+    content = content.replace(START_HELP_OLD, START_HELP_NEW)
+    content = content.replace(START_USAGE_PRINT_OLD, START_USAGE_PRINT_NEW)
+    content = content.replace(START_DOC_OLD, START_DOC_NEW)
 
     if PATCH_MARKER in content:
+        if START_HELP_NEW not in content or START_USAGE_PRINT_NEW not in content:
+            target_path.write_text(content, encoding="utf-8")
+            print(f"OK: Refreshed strong-gate task.py start help text in {target_path}")
+            return True
         print(f"OK: {target_path} already contains strong-gate no-status-flip patch, skipping")
         return True
 

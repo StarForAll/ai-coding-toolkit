@@ -7,7 +7,7 @@ Codex 对这套 workflow 的正确承载模型不是 `.claude/commands/` 式自�
 - `.codex/hooks.json` + `.codex/hooks/*.py`：按当前 hook 配置在用户回合等事件注入 Trellis 上下文
 - `.agents/skills/*/SKILL.md`：共享 workflow 入口与阶段技能；按当前官方文档与 A/B 证据，这是 Codex 的 repo-scoped skills 唯一主承载面，也是其 repo-scoped skills 主入口
 - `.codex/skills/*/SKILL.md`：仅 Codex 独有或项目自定义的额外技能；属于条件出现的 secondary skills carrier，不是共享 workflow 主入口
-- `.codex/agents/*.toml`：trellis-research / trellis-implement / trellis-check 一类子代理（Trellis 0.5+ 原生提供）
+- `.codex/agents/*.toml`：trellis-research / trellis-implement / trellis-check 一类子代理 carrier（Trellis 0.5+ 原生提供），不是当前嵌入 workflow 的推荐主执行路径
 
 Codex 官方确实有 built-in slash commands，但那是 Codex 自身的交互控制能力，不等于“项目自定义 workflow 命令分发目录”。
 适配时应遵循 Codex 官方原生格式要求，但前置条件、阶段语义和初始化动作必须与 Claude Code / OpenCode 保持一致。
@@ -17,7 +17,7 @@ Codex 官方确实有 built-in slash commands，但那是 Codex 自身的交互�
 
 - 同一个项目里同时存在 `.claude/commands/trellis/`、`.opencode/commands/trellis/`、`.agents/skills/*`
 - 这**不代表** Codex 也获得了项目级 `/trellis:xxx` 命令目录
-- Codex 在该项目中的 workflow 入口依然是 skills / AGENTS / hooks / subagents
+- Codex 在该项目中的 workflow 入口依然是 skills / AGENTS / hooks；`subagents` 只代表可能存在的底层 carrier，不代表当前嵌入 workflow 适合把它们当作主执行路径
 - 并且这些 skills 里有一部分来自 Trellis 原生基线，有一部分才是当前 workflow 额外嵌入的阶段资产
 
 前置条件也必须说清：
@@ -47,7 +47,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 --cli codex
 ```
 
-3. 安装完成后，在目标项目内通过 skills / AGENTS / hooks / subagents 直接使用这套 workflow；初始 spec 基线由安装脚本完成，不再手工复制
+3. 安装完成后，在目标项目内优先通过 skills / AGENTS / hooks 与主会话直接使用这套 workflow；若底层仍存在 `subagents` carrier，也只视为兼容承载面；初始 spec 基线由安装脚本完成，不再手工复制
 
 ## 在多 CLI 同装中的定位
 
@@ -265,9 +265,9 @@ Codex 在这两步里只允许承担：
 - `plan` skill 在 Codex 下也只能做任务划分与规划，不允许生成基础代码或直接进入 implementation
 - `plan` 阶段的 `execution_authorized` 必须保持为 `false`；只有用户明确确认进入 `implementation` 后，才允许显式设为 `true`
 
-### 4. Subagents：用 `.codex/agents/*.toml` 承载研究/实现/检查角色
+### 4. Subagents：仅作为 `.codex/agents/*.toml` 承载面，不作为推荐主路径
 
-Codex 官方支持 subagents。对 Trellis workflow，推荐用它承载：
+Codex 官方支持 subagents。对当前嵌入 workflow，它们只应被理解为可存在的底层承载面，而不是推荐的主执行路径：
 
 - `research`
 - `implement`
@@ -282,7 +282,7 @@ Codex 官方支持 subagents。对 Trellis workflow，推荐用它承载：
 └── trellis-check.toml
 ```
 
-这层负责”阶段内角色分工”，不负责对用户暴露 workflow 命令入口。
+这层负责”阶段内角色分工”的承载可能性，不负责对用户暴露 workflow 命令入口，也不意味着主会话应手工派发它们。
 
 Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check` agents（`trellis init` 产物），覆盖 9 个平台。workflow 安装器不再维护自定义 Codex agent 源资产或 overlay 这些定义到目标项目；安装器仅做 legacy bare-name → trellis-* 迁移。本源仓库的 carrier agent 文件可能含有项目级 capability-enhancement，详见 `.trellis/spec/agents/index.md`。
 

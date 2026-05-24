@@ -79,6 +79,41 @@ function loadRouteData(ctx, taskDir) {
     return null
   }
 }
+
+function buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt) {
+  const action = typeof routeData?.action === "string" && routeData.action.trim()
+    ? routeData.action.trim()
+    : "unknown"
+  const stage = typeof routeData?.stage === "string" && routeData.stage.trim()
+    ? routeData.stage.trim()
+    : "unknown"
+  const target = typeof routeData?.target === "string" && routeData.target.trim()
+    ? routeData.target.trim()
+    : "unknown"
+  const reason = typeof routeData?.reason === "string" && routeData.reason.trim()
+    ? routeData.reason.trim()
+    : "workflow-state.py route did not allow this subagent"
+  const blockers = Array.isArray(routeData?.blockers) && routeData.blockers.length
+    ? routeData.blockers.join(" | ")
+    : "none"
+  const warnings = Array.isArray(routeData?.warnings) && routeData.warnings.length
+    ? routeData.warnings.join(" | ")
+    : "none"
+  return [
+    "Strong-gate blocked this subagent dispatch.",
+    `Subagent: ${subagentType}`,
+    `Action: ${action}`,
+    `Stage: ${stage}`,
+    `Target: ${target}`,
+    `Reason: ${reason}`,
+    `Blockers: ${blockers}`,
+    `Warnings: ${warnings}`,
+    "Required next step: return control to the main session and follow the current workflow stage entry instead of continuing inside this subagent.",
+    "",
+    "Original prompt:",
+    originalPrompt || "",
+  ].join("\\n")
+}
 """
 
 BASH_INJECTION_OLD = """function injectTrellisContextIntoBash(ctx, input, output, hostPlatform, env) {
@@ -168,6 +203,7 @@ def patch_opencode_inject_subagent_context(target_path: Path) -> bool:
     route_guard_insert = route_guard_anchor + """
           const routeData = taskDir ? loadRouteData(ctx, ctx.resolveTaskDir(taskDir)) : null
           if (!shouldAllowTaskInjection(routeData, subagentType)) {
+            args.prompt = buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt)
             debugLog("inject", "Skipping - strong-gate route does not allow subagent injection", JSON.stringify(routeData))
             return
           }

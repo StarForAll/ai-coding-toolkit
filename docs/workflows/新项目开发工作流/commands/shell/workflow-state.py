@@ -2080,8 +2080,10 @@ def _js_runtime_contract_errors(
         required_fragments = (
             "function shouldAllowTaskInjection(routeData, subagentType)",
             "function loadRouteData(ctx, taskDir)",
+            "function buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt)",
             'const allowedStages = new Set(["implementation", "check", "review-gate", "project-audit", "delivery"])',
             "loadRouteData(ctx, ctx.resolveTaskDir(taskDir))",
+            "Strong-gate blocked this subagent dispatch.",
             "strong-gate route does not allow subagent injection",
         )
         for fragment in required_fragments:

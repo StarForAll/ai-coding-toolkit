@@ -64,9 +64,13 @@ from workflow_assets import (
     EXECUTION_CARDS,
     find_first_existing_codex_skill_path,
     HELPER_SCRIPTS,
+    INITIAL_PACK_CLEANUP_POLICY,
+    REQUIREMENTS_FOUNDATION_ASSET_IDS,
+    REQUIREMENTS_FOUNDATION_TARGET_PATHS,
     INJECT_WORKFLOW_STATE_PATCH_MARKER,
     legacy_agent_target_path,
     LEGACY_AGENT_NAMES,
+    managed_workflow_docs_for_profile,
     MANAGED_ENHANCED_AGENT_NAMES,
     list_all_codex_skills_dirs,
     OPTIONAL_DISABLED_BASELINE_COMMANDS,
@@ -83,6 +87,8 @@ from workflow_assets import (
     trellis_library_cli_path,
     VALID_PROFILES,
     WORKFLOW_DOCS_DIR,
+    WORKFLOW_DOC_CLEANUP_POLICY,
+    WORKFLOW_DOC_PATCH_COMPONENTS,
     WORKFLOW_SCHEMA_VERSION,
     WORKFLOW_VERSION,
     WORKFLOW_PHASE_STRONG_GATE_PATCH_MARKER,
@@ -299,6 +305,7 @@ _NL_ROUTING_SECTION = """\
 > - Codex：通过 `AGENTS.md` 自然语言路由或显式触发对应 skill；不要期待项目级 `/trellis:xxx` 命令目录
 > - 本表用于缩小候选范围，不表示所有 CLI 都存在确定性的自动命令路由；若命中歧义、缺少前置条件或上下文不足，仍应先确认再进入对应阶段
 > - 当前 workflow 采用强门禁阶段状态机：阶段切换必须由用户明确确认；`/trellis:continue` 只重入当前已确认阶段，不自动跨阶段推进
+> - 当前嵌入 workflow 不建议把 `agent / subagent` 当作默认主执行路径；即使平台仍保留 `trellis-*` agent carrier，也只视为底层承载或兼容面，优先由当前主会话通过阶段入口推进
 
 ### 工作流阶段命令
 
@@ -321,7 +328,7 @@ _NL_ROUTING_SECTION = """\
 
 | 触发关键词 | Claude / OpenCode 入口 | Codex 入口 | 说明 |
 |-----------|------------------------|------------|------|
-| 调研、研究、查资料、查文档、看源码、搜代码、搜资料、技术调研、仓库分析 | 调用当前 CLI 的 `trellis-research` 子代理能力（若平台支持） | 描述研究意图，或显式触发 `trellis-research` agent | implementation 内部 research 链入口；用于代码/文档/仓库检索，不等于正式阶段命令 |
+| 调研、研究、查资料、查文档、看源码、搜代码、搜资料、技术调研、仓库分析 | 描述研究意图，并由当前主会话继续处理；不要手工派发 `trellis-research` 子代理 | 描述研究意图，或显式触发 `trellis-research` skill / agent（若当前项目明确允许） | implementation 内部 research 能力入口；默认不作为公开 agent/subagent 主路径 |
 | 开始写代码、实现、开发、编码、动手、修这个功能、开始改代码 | `/trellis:continue` | 描述当前实现意图，或显式触发 `trellis-continue` skill | implementation 的公开重入入口。没有对称的 `/trellis:implementation` 命令；continue 会先做 Phase Router 判断，再在当前 task 上执行 implementation 内部链 |
 | 开始、新会话、继续、下一步 | `/trellis:continue` | 描述当前意图，或显式触发 `trellis-continue` skill | Phase Router 自动检测 |
 | 卡住了、反复出错、死循环、调不通 | 描述排障意图，或显式触发 `trellis-break-loop` skill | 描述排障意图，或显式触发 `trellis-break-loop` skill | 深度 bug 分析 |
@@ -2846,12 +2853,10 @@ def deploy_helper_scripts(src: Path, root: Path, dry_run: bool, *, profile: str 
 
 
 def deploy_execution_cards(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAULT_PROFILE) -> int:
-    """分发执行卡文档到 .trellis/workflow-docs/"""
+    """分发 workflow 共享文档到 .trellis/workflow-docs/"""
     workflow_root = src.parent  # commands/ 的上一级即 workflow 根目录
     dst = root / WORKFLOW_DOCS_DIR
-    cards = list(EXECUTION_CARDS)
-    if profile == "outsourcing":
-        cards.extend(OUTSOURCING_EXECUTION_CARDS)
+    cards = managed_workflow_docs_for_profile(profile)
     count = 0
     if not dry_run:
         dst.mkdir(parents=True, exist_ok=True)
@@ -3033,6 +3038,7 @@ def write_install_record(
     cards = list(EXECUTION_CARDS)
     if profile == "outsourcing":
         cards.extend(OUTSOURCING_EXECUTION_CARDS)
+    workflow_shared_docs = managed_workflow_docs_for_profile(profile)
     if not dry_run:
         rec.write_text(json.dumps({
             "trellis_version": ver,
@@ -3049,15 +3055,21 @@ def write_install_record(
             ],
             "patched_codex_skills": CODEX_PATCH_BASELINE_SKILLS,
             "patched_shared_docs": PATCH_BASELINE_SHARED_DOCS,
+            "workflow_doc_patch_components": WORKFLOW_DOC_PATCH_COMPONENTS,
             "critical_runtime_patches": critical_runtime_patches_for_cli_types(cli_types),
             # Legacy compatibility field: fresh installs no longer manage
             # enhanced agents, but older records/readers still understand it.
             "managed_enhanced_agents": MANAGED_ENHANCED_AGENT_NAMES,
             "scripts": list(scripts),
             "execution_cards": cards,
+            "workflow_shared_docs": workflow_shared_docs,
+            "workflow_doc_cleanup_policy": WORKFLOW_DOC_CLEANUP_POLICY,
             "workflow_version": WORKFLOW_VERSION,
             "workflow_schema_version": WORKFLOW_SCHEMA_VERSION,
             "initial_pack": _REQUIREMENTS_FOUNDATION_PACK,
+            "initial_pack_assets": REQUIREMENTS_FOUNDATION_ASSET_IDS,
+            "initial_pack_target_paths": REQUIREMENTS_FOUNDATION_TARGET_PATHS,
+            "initial_pack_cleanup_policy": INITIAL_PACK_CLEANUP_POLICY,
             "bootstrap_task_removed": bootstrap_task_removed,
             "bootstrap_cleanup_status": bootstrap_cleanup,
         }, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -3240,12 +3252,12 @@ def main() -> int:
             script_count, script_total = deploy_helper_scripts(src, root, args.dry_run, profile=profile)
             info(f"辅助脚本: {script_count}/{script_total} 个")
 
-            # 执行卡文档
-            update_embed_attempt_record(root, last_step="deploy-execution-cards")
+            # workflow 共享文档（执行卡 / checklist 模板）
+            update_embed_attempt_record(root, last_step="deploy-workflow-docs")
             print()
-            print("📄 执行卡文档...")
+            print("📄 workflow 共享文档...")
             card_count = deploy_execution_cards(src, root, args.dry_run, profile=profile)
-            info(f"执行卡: {card_count} 个")
+            info(f"workflow 共享文档: {card_count} 个")
 
             update_embed_attempt_record(root, last_step="patch-workflow-doc")
             inject_workflow_patch(src, root, dry_run=args.dry_run, profile=profile)

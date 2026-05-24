@@ -20,7 +20,7 @@ CLI_ALT_DIRS = {
 }
 ALL_CLI_TYPES = ["claude", "opencode", "codex"]
 WORKFLOW_VERSION = "0.1.28"
-WORKFLOW_SCHEMA_VERSION = "2"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增
+WORKFLOW_SCHEMA_VERSION = "3"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增
 COMPATIBLE_TRELLIS_VERSION = "0.5.17"
 
 PATCH_BASELINE_COMMANDS = ["continue", "finish-work"]
@@ -112,7 +112,62 @@ CORE_HELPER_SCRIPTS = [s for s in HELPER_SCRIPTS if s not in OUTSOURCING_ONLY_SC
 # ── Execution cards ──
 EXECUTION_CARDS = ["需求变更管理执行卡.md", "源码水印与归属证据链执行卡.md"]
 OUTSOURCING_EXECUTION_CARDS: list[str] = []
+WORKFLOW_SHARED_DOCS = [*EXECUTION_CARDS, "finish-work-checklist-template.md"]
+OUTSOURCING_WORKFLOW_SHARED_DOCS: list[str] = []
 WORKFLOW_DOCS_DIR = ".trellis/workflow-docs"
+WORKFLOW_DOC_CLEANUP_POLICY = "remove-on-uninstall"
+INITIAL_PACK_CLEANUP_POLICY = "retain-imported-assets"
+REQUIREMENTS_FOUNDATION_ASSET_IDS = [
+    "spec.universal-domains.product-and-requirements.problem-definition",
+    "spec.universal-domains.product-and-requirements.scope-boundary",
+    "spec.universal-domains.product-and-requirements.requirement-clarification",
+    "spec.universal-domains.project-governance.readme-governance",
+    "spec.universal-domains.verification.evidence-requirements",
+    "spec.universal-domains.product-and-requirements.acceptance-criteria",
+    "spec.universal-domains.product-and-requirements.prd-documentation",
+    "spec.universal-domains.product-and-requirements.prd-documentation-customer-facing",
+    "spec.universal-domains.architecture.system-boundaries",
+    "spec.universal-domains.product-and-requirements.prd-documentation-developer-facing",
+    "template.universal-domains.product-and-requirements.acceptance-criteria-template",
+    "template.universal-domains.product-and-requirements.customer-facing-prd-template",
+    "template.universal-domains.product-and-requirements.developer-facing-prd-template",
+    "checklist.universal-domains.product-and-requirements.acceptance-quality-checklist",
+    "checklist.universal-domains.product-and-requirements.customer-facing-prd-checklist",
+    "checklist.universal-domains.product-and-requirements.developer-facing-prd-checklist",
+    "example.universal-domains.product-and-requirements.product-and-requirements-examples",
+    "spec.scenarios.discovery-and-planning.solution-comparison",
+    "example.assembled-packs.requirements-discovery-foundation",
+]
+REQUIREMENTS_FOUNDATION_TARGET_PATHS = [
+    ".trellis/spec/universal-domains/product-and-requirements/problem-definition",
+    ".trellis/spec/universal-domains/product-and-requirements/scope-boundary",
+    ".trellis/spec/universal-domains/product-and-requirements/requirement-clarification",
+    ".trellis/spec/universal-domains/project-governance/readme-governance",
+    ".trellis/spec/universal-domains/verification/evidence-requirements",
+    ".trellis/spec/universal-domains/product-and-requirements/acceptance-criteria",
+    ".trellis/spec/universal-domains/product-and-requirements/prd-documentation",
+    ".trellis/spec/universal-domains/product-and-requirements/prd-documentation-customer-facing",
+    ".trellis/spec/universal-domains/architecture/system-boundaries",
+    ".trellis/spec/universal-domains/product-and-requirements/prd-documentation-developer-facing",
+    ".trellis/templates/universal-domains/product-and-requirements/acceptance-criteria-template.md",
+    ".trellis/templates/universal-domains/product-and-requirements/customer-facing-prd-template.md",
+    ".trellis/templates/universal-domains/product-and-requirements/developer-facing-prd-template.md",
+    ".trellis/checklists/universal-domains/product-and-requirements/acceptance-quality-checklist.md",
+    ".trellis/checklists/universal-domains/product-and-requirements/customer-facing-prd-checklist.md",
+    ".trellis/checklists/universal-domains/product-and-requirements/developer-facing-prd-checklist.md",
+    ".trellis/library-assets/examples/universal-domains/product-and-requirements",
+    ".trellis/spec/scenarios/discovery-and-planning/solution-comparison",
+    ".trellis/library-assets/examples/assembled-packs/requirements-discovery-foundation.md",
+]
+WORKFLOW_DOC_PATCH_COMPONENTS = [
+    "workflow-task-mechanism-projectization",
+    "workflow-phase-index-strong-gate",
+    "workflow-no-task-strong-gate",
+    "workflow-breadcrumb-strong-gate",
+    "workflow-legacy-breadcrumb-cleanup",
+    "workflow-legacy-phase-router-cleanup",
+    "workflow-contract-reference-cleanup",
+]
 LEGACY_AGENT_NAMES = ["research", "implement", "check"]
 # Reserved for legacy install-record compatibility and historical capability
 # categories. Fresh installs keep this list empty and do not overlay native
@@ -164,6 +219,13 @@ def critical_runtime_patches_for_cli_types(cli_types: list[str] | tuple[str, ...
         ]
     )
     return patches
+
+
+def managed_workflow_docs_for_profile(profile: str = DEFAULT_PROFILE) -> list[str]:
+    docs = list(WORKFLOW_SHARED_DOCS)
+    if profile == DEFAULT_PROFILE:
+        docs.extend(OUTSOURCING_WORKFLOW_SHARED_DOCS)
+    return docs
 
 
 def legacy_agent_target_path(root: Path, cli_type: str, agent_name: str) -> Path:
@@ -477,13 +539,10 @@ def build_managed_audit_extra_specs(cli_types: list[str]) -> list[ManagedAuditEx
     execution_card_paths = tuple(
         f"{WORKFLOW_DOCS_DIR}/{name}" for name in [*EXECUTION_CARDS, *OUTSOURCING_EXECUTION_CARDS]
     )
+    finish_work_template_paths = (f"{WORKFLOW_DOCS_DIR}/finish-work-checklist-template.md",)
     requirements_foundation_paths = (
         ".trellis/library-lock.yaml",
-        ".trellis/library-assets/examples/universal-domains/product-and-requirements",
-        ".trellis/library-assets/examples/assembled-packs/requirements-discovery-foundation.md",
-        ".trellis/spec/universal-domains/verification/evidence-requirements/overview.md",
-        ".trellis/spec/universal-domains/project-governance/readme-governance/overview.md",
-        ".trellis/checklists/universal-domains/product-and-requirements/developer-facing-prd-checklist.md",
+        *REQUIREMENTS_FOUNDATION_TARGET_PATHS,
     )
 
     return [
@@ -500,6 +559,13 @@ def build_managed_audit_extra_specs(cli_types: list[str]) -> list[ManagedAuditEx
             claude_paths=execution_card_paths,
             opencode_paths=execution_card_paths,
             codex_paths=execution_card_paths,
+        ),
+        ManagedAuditExtraSpec(
+            capability="shared-doc:finish-work-checklist-template",
+            mechanism="Workflow deploys a finish-work checklist template under .trellis/workflow-docs/ for close-out evidence scaffolding.",
+            claude_paths=finish_work_template_paths,
+            opencode_paths=finish_work_template_paths,
+            codex_paths=finish_work_template_paths,
         ),
         ManagedAuditExtraSpec(
             capability="shared-pack:requirements-discovery-foundation-import",

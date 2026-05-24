@@ -19,6 +19,7 @@
   - 人工验证的真实状态与证据缺口
   - 若为 child task，parent 记录同步状态
   - 若为 Trellis / workflow 相关修改，隐藏目录联动同步状态
+- [ ] 若当前 task 还没有 `finish-work-checklist.md`，先以 `.trellis/workflow-docs/finish-work-checklist-template.md` 为骨架生成，再填写真实结果
 - [ ] 当前轮次必须落盘 `finish-work-checklist.md`；不能只靠会话输出临时描述来替代强门禁证据文件
 
 ```bash
