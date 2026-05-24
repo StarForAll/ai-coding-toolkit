@@ -1882,3 +1882,38 @@ Fixed strong-gate workflow source drift, restored phase-step compatibility, adde
 ### Next Steps
 
 - None - task complete
+
+
+## Session 301: Repair embedded workflow strong-gate and install contracts
+
+**Date**: 2026-05-24
+**Task**: Repair embedded workflow strong-gate and install contracts
+**Branch**: `main`
+
+### Summary
+
+Audited the embedded new-project workflow against /tmp/trellis-0.5.17-2, repaired strong-gate transition/runtime gaps, fixed OpenCode session context extraction and stale breadcrumb routing, aligned workflow docs, and added installer/runtime regression coverage.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6a7e415` | (see git log) |
+| `f2483d0` | (see git log) |
+| `122862d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
