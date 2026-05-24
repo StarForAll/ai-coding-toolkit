@@ -43,6 +43,10 @@ DISTRIBUTED_COMMANDS = [
 ]
 HELPER_SCRIPTS = [
     "workflow_common.py",
+    "state_utils.py",
+    "validators_core.py",
+    "validators_gates.py",
+    "embed_integrity.py",
     "feasibility-check.py",
     "design-export.py",
     "workflow-state.py",
@@ -64,6 +68,8 @@ HELPER_SCRIPTS = [
 RETIRED_HELPER_SCRIPTS = [
     "record-session-helper.py",
     "metadata-autocommit-guard.py",
+    "state_validators.py",
+    "state_collectors.py",
 ]
 LATEST_TRELLIS_VERSION_ENV = "TRELLIS_LATEST_VERSION"
 CURRENT_TRELLIS_VERSION_ENV = "TRELLIS_CURRENT_VERSION"
