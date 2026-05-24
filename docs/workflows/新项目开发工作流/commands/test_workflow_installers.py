@@ -438,6 +438,32 @@ BASELINE_OPENCODE_SESSION_UTILS_CONTENT = (
     "    \"Per-turn only; do NOT invent an override the user did not say.\"\n"
     "  )\n"
     "}\n"
+    "\n"
+    "function loadTrellisConfig() {\n"
+    "  return null\n"
+    "}\n"
+    "\n"
+    "export function buildSessionContext(ctx, platformInput = null) {\n"
+    "  const workflowContent = ctx.readProjectFile(\".trellis/workflow.md\")\n"
+    "  if (!workflowContent) return \"\"\n"
+    "  const allLines = workflowContent.split(\"\\n\")\n"
+    "  const overviewLines = []\n"
+    "  let rangeStart = -1\n"
+    "  let rangeEnd = allLines.length\n"
+    "  for (let i = 0; i < allLines.length; i++) {\n"
+    "    const stripped = allLines[i].trim()\n"
+    "    if (rangeStart === -1 && stripped === \"## Phase Index\") {\n"
+    "      rangeStart = i\n"
+    "    } else if (rangeStart !== -1 && stripped === \"## Workflow State Breadcrumbs\") {\n"
+    "      rangeEnd = i\n"
+    "      break\n"
+    "    }\n"
+    "  }\n"
+    "  if (rangeStart !== -1) {\n"
+    "    overviewLines.push(...allLines.slice(rangeStart, rangeEnd))\n"
+    "  }\n"
+    "  return overviewLines.join(\"\\n\")\n"
+    "}\n"
 )
 BASELINE_OPENCODE_SESSION_START_PLUGIN = (
     "import { buildSessionContext } from \"../lib/session-utils.js\"\n"
@@ -1165,6 +1191,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("does not automatically authorize", workflow_doc_text)
         self.assertIn("[workflow-state:blocked]", workflow_doc_text)
         self.assertIn("[workflow-state:repair_needed]", workflow_doc_text)
+        self.assertIn("[workflow-state:stale]", workflow_doc_text)
         self.assertNotIn("[workflow-state:needs-init]", workflow_doc_text)
         self.assertIn("[workflow-state:awaiting_confirmation_with_blockers]", workflow_doc_text)
         self.assertIn("do **not** expect a public `/trellis:implementation` command", workflow_doc_text)
@@ -1224,6 +1251,9 @@ class WorkflowInstallerTests(unittest.TestCase):
         opencode_session_utils = (fixture / ".opencode" / "lib" / "session-utils.js").read_text(encoding="utf-8")
         self.assertIn(OPENCODE_SESSION_UTILS_PATCH_MARKER, opencode_session_utils)
         self.assertNotIn(LEGACY_READY_AUTOCONTINUE_LINE, opencode_session_utils)
+        self.assertIn('stripped === "## Customizing Trellis (for forks)"', opencode_session_utils)
+        self.assertNotIn('stripped === "## Workflow State Breadcrumbs"', opencode_session_utils)
+        self.assertIn("function stripBreadcrumbTagBlocks(content)", opencode_session_utils)
         opencode_inject_path = fixture / ".opencode" / "plugins" / "inject-workflow-state.js"
         if opencode_inject_path.exists():
             opencode_inject = opencode_inject_path.read_text(encoding="utf-8")
@@ -1668,6 +1698,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("Re-enter the current workflow stage through the workflow router", start_text)
         self.assertIn("stay in the current phase-router entry", start_text)
         self.assertIn("Do not assume a public `implementation` skill exists.", start_text)
+        self.assertIn("source-watermark-guard.py", start_text)
         self.assertIn("If `target=finish-work`, use `trellis-finish-work`.", start_text)
         self.assertNotIn("Steps 1-4 替换说明", start_text)
         self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", start_text)
@@ -1679,6 +1710,21 @@ class WorkflowInstallerTests(unittest.TestCase):
             ),
             BASELINE_TRELLIS_CONTINUE_SKILL_CONTENT,
         )
+
+    def test_install_deploys_check_command_with_review_gate_decision_and_delivery_default(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        opencode_check = (fixture / ".opencode" / "commands" / "trellis" / "check.md").read_text(encoding="utf-8")
+        codex_check = (fixture / ".agents" / "skills" / "check" / "SKILL.md").read_text(encoding="utf-8")
+        for content in (opencode_check, codex_check):
+            self.assertIn("## Review-Gate Decision", content)
+            self.assertIn("`review_gate_decision`", content)
+            self.assertIn("`explicit_user_review_gate_request`", content)
+            self.assertIn("| 基本合规，可直接进入交付收口 | `/trellis:delivery` |", content)
 
     def test_install_patches_codex_session_start_to_remove_legacy_startup_semantics(self) -> None:
         fixture = self.create_fixture(include_codex=True)

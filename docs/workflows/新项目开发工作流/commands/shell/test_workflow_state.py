@@ -529,8 +529,18 @@ class WorkflowStateScriptTests(unittest.TestCase):
 ## Uncovered Risks
 - none
 
+## Review-Gate Decision
+- `review_gate_decision`: `skip`
+- `review_gate_reason`: `未命中 review-gate 硬条件，现有验证证据足够`
+- `auth_or_sensitive`: `no`
+- `data_migration_or_schema_change`: `no`
+- `public_api_or_cross_layer_contract_or_external_integration`: `no`
+- `payment_queue_cache_concurrency`: `no`
+- `shared_core_with_blast_radius`: `no`
+- `explicit_user_review_gate_request`: `no`
+
 ## Suggested Next Step
-- /trellis:finish-work
+- /trellis:delivery
 """,
             encoding="utf-8",
         )
@@ -1522,6 +1532,43 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
         self.assertIn("customer-facing-prd.md", validate.stdout)
 
+    def test_validate_brainstorm_exit_rejects_placeholder_snapshot_values(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (task_dir / "prd.md").write_text(
+            "# sample brainstorm draft\n\n"
+            f"{self.VALID_BRAINSTORM_ESTIMATE}\n"
+            "## 阶段出口快照\n"
+            "- `complexity_decision`: `M1`\n"
+            "- `ui_lane_decision`: `待补充`\n"
+            "- `cross_platform_scope`: `claude-opencode-codex`\n"
+            "- `estimate_refresh_result`: `initial`\n"
+            "- `kill_criteria`: `none`\n"
+            "- `open_items`: `TODO`\n",
+            encoding="utf-8",
+        )
+
+        self.run_script("init", str(task_dir), "--stage", "brainstorm")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status",
+            "awaiting_user_confirmation",
+            "--awaiting-user-confirmation",
+            "true",
+            "--allowed-next",
+            "design,plan",
+        )
+
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("阶段出口快照字段未填写有效结论", validate.stdout)
+
         blocked_set = self.run_script(
             "set",
             str(task_dir),
@@ -1537,7 +1584,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "plan",
         )
         self.assertEqual(blocked_set.returncode, 1, msg=blocked_set.stdout + blocked_set.stderr)
-        self.assertIn("customer-facing-prd.md", blocked_set.stdout)
+        self.assertIn("阶段出口快照字段未填写有效结论", blocked_set.stdout)
 
     def test_validate_passes_when_implementation_uses_task_prd_only_for_l0_path(self) -> None:
         root, task_dir = self.make_fixture()
@@ -2617,6 +2664,111 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(data["action"], "embed_invalid")
         self.assertIn("trellis-continue", data["reason"])
 
+    def test_cmd_route_embed_invalid_when_patched_codex_continue_skill_retains_hidden_status_routing(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "scripts" / "common").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            json.dumps(
+                {
+                    "profile": "outsourcing",
+                    "cli_types": ["codex"],
+                    "critical_runtime_patches": [
+                        "inject-workflow-state",
+                        "session-start-strong-gate",
+                        "task-start-strong-gate",
+                        "task-create-preserve-active",
+                        "task-status-view-strong-gate",
+                        "workflow-phase-strong-gate",
+                    ],
+                    "patched_codex_skills": [
+                        "trellis-continue",
+                        "trellis-finish-work",
+                        "trellis-start",
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "library-lock.yaml").write_text(
+            "packs:\n  - pack.requirements-discovery-foundation\n",
+            encoding="utf-8",
+        )
+        (root / ".codex" / "hooks").mkdir(parents=True, exist_ok=True)
+        (root / ".codex" / "hooks" / "inject-workflow-state.py").write_text(
+            "# [workflow-embed-patch:prefer-workflow-state-json]\n",
+            encoding="utf-8",
+        )
+        (root / ".codex" / "hooks" / "session-start.py").write_text(
+            "# strong-gate-session-start-patch-applied\n# [workflow-embed-patch:session-start-route-first]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "task.py").write_text(
+            "# [workflow-embed-patch:strong-gate-no-status-flip]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
+            "# [workflow-embed-patch:preserve-parent-active-task]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "tasks.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_queue.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
+            "# strong-gate-phase-patch-applied\n",
+            encoding="utf-8",
+        )
+        skills_root = root / ".agents" / "skills"
+        (skills_root / "trellis-continue").mkdir(parents=True, exist_ok=True)
+        (skills_root / "trellis-continue" / "SKILL.md").write_text(
+            "---\n"
+            "name: trellis-continue\n"
+            'description: "Re-enter the current workflow stage through the workflow router and follow the next action it returns."\n'
+            "---\n\n"
+            "## Workflow Phase Router Patch `[AI]`\n"
+            "workflow router\n"
+            "workflow-state.py route\n"
+            "Do not use `status=planning` / `status=in_progress`\n"
+            "stay in the current phase-router entry\n"
+            "Do not assume a public `implementation` skill exists.\n"
+            "Hidden stale branch: if task state shows planning, load brainstorm; if task state shows in progress and implementation done, not yet checked, skip ahead.\n",
+            encoding="utf-8",
+        )
+        (skills_root / "trellis-finish-work").mkdir(parents=True, exist_ok=True)
+        (skills_root / "trellis-finish-work" / "SKILL.md").write_text(
+            "<!-- finish-work-projectization-patch -->\n"
+            "complete native Trellis close-out after delivery\n"
+            "archive + session-record steps after delivery\n"
+            "Code commits are NOT done here\n",
+            encoding="utf-8",
+        )
+        (skills_root / "trellis-start").mkdir(parents=True, exist_ok=True)
+        (skills_root / "trellis-start" / "SKILL.md").write_text(
+            "## Workflow Phase Router Patch `[AI]`\n"
+            "workflow router\n"
+            "workflow-state.py route\n"
+            "Do not use `status=planning` / `status=in_progress`\n"
+            "stay in the current phase-router entry\n"
+            "Do not assume a public `implementation` skill exists.\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "embed_invalid")
+        self.assertIn("trellis-continue", data["reason"])
+
     def test_cmd_route_embed_invalid_when_patched_codex_finish_work_skill_drifts(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
         self.addCleanup(shutil.rmtree, root)
@@ -3102,6 +3254,15 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "// [workflow-embed-patch:strong-gate-session-utils]\n",
             encoding="utf-8",
         )
+        (root / ".opencode" / "plugins" / "inject-subagent-context.js").write_text(
+            "// [workflow-embed-patch:opencode-subagent-gates]\n"
+            "function shouldAllowTaskInjection(routeData, subagentType) { return subagentType !== \"forbidden\" }\n"
+            "function loadRouteData(ctx, taskDir) { return { stage: \"implementation\", action: \"reenter\", target: \"implementation\" } }\n"
+            "const allowedStages = new Set([\"implementation\", \"check\", \"review-gate\", \"project-audit\", \"delivery\"])\n"
+            "loadRouteData(ctx, ctx.resolveTaskDir(taskDir))\n"
+            "strong-gate route does not allow subagent injection\n",
+            encoding="utf-8",
+        )
 
         result = self.run_script("route", "--project-root", str(root))
 
@@ -3109,6 +3270,155 @@ class WorkflowStateScriptTests(unittest.TestCase):
         data = json.loads(result.stdout)
         self.assertEqual(data["action"], "embed_invalid")
         self.assertIn("execFileSync", data["reason"])
+
+    def test_cmd_route_embed_invalid_when_opencode_subagent_patch_is_missing(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "scripts" / "common").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            json.dumps(
+                {
+                    "profile": "outsourcing",
+                    "cli_types": ["opencode"],
+                    "critical_runtime_patches": [
+                        "inject-workflow-state",
+                        "opencode-inject-subagent-context",
+                        "session-start-strong-gate",
+                        "task-start-strong-gate",
+                        "task-create-preserve-active",
+                        "task-status-view-strong-gate",
+                        "workflow-phase-strong-gate",
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "library-lock.yaml").write_text(
+            "packs:\n  - pack.requirements-discovery-foundation\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "task.py").write_text(
+            "# [workflow-embed-patch:strong-gate-no-status-flip]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
+            "# [workflow-embed-patch:preserve-parent-active-task]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "tasks.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_queue.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
+            "# strong-gate-phase-patch-applied\n",
+            encoding="utf-8",
+        )
+        (root / ".opencode" / "plugins").mkdir(parents=True, exist_ok=True)
+        (root / ".opencode" / "plugins" / "inject-workflow-state.js").write_text(
+            'import { execFileSync } from "child_process"\n'
+            'const PYTHON_CMD = process.env.TRELLIS_PYTHON || "python3"\n'
+            "// [workflow-embed-patch:prefer-workflow-state-json]\n"
+            "function buildBreadcrumb(id, status, templates, source = null, task = {}) { return task.extraLines }\n",
+            encoding="utf-8",
+        )
+        (root / ".opencode" / "lib").mkdir(parents=True, exist_ok=True)
+        (root / ".opencode" / "lib" / "session-utils.js").write_text(
+            "// [workflow-embed-patch:strong-gate-session-utils]\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "embed_invalid")
+        self.assertIn("inject-subagent-context.js", data["reason"])
+
+    def test_cmd_route_embed_invalid_when_opencode_subagent_patch_is_incomplete(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "scripts" / "common").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            json.dumps(
+                {
+                    "profile": "outsourcing",
+                    "cli_types": ["opencode"],
+                    "critical_runtime_patches": [
+                        "inject-workflow-state",
+                        "opencode-inject-subagent-context",
+                        "session-start-strong-gate",
+                        "task-start-strong-gate",
+                        "task-create-preserve-active",
+                        "task-status-view-strong-gate",
+                        "workflow-phase-strong-gate",
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "library-lock.yaml").write_text(
+            "packs:\n  - pack.requirements-discovery-foundation\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "task.py").write_text(
+            "# [workflow-embed-patch:strong-gate-no-status-flip]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
+            "# [workflow-embed-patch:preserve-parent-active-task]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "tasks.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_queue.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
+            "# strong-gate-phase-patch-applied\n",
+            encoding="utf-8",
+        )
+        (root / ".opencode" / "plugins").mkdir(parents=True, exist_ok=True)
+        (root / ".opencode" / "plugins" / "inject-workflow-state.js").write_text(
+            'import { execFileSync } from "child_process"\n'
+            'const PYTHON_CMD = process.env.TRELLIS_PYTHON || "python3"\n'
+            "// [workflow-embed-patch:prefer-workflow-state-json]\n"
+            "function buildBreadcrumb(id, status, templates, source = null, task = {}) { return task.extraLines }\n",
+            encoding="utf-8",
+        )
+        (root / ".opencode" / "plugins" / "inject-subagent-context.js").write_text(
+            "// [workflow-embed-patch:opencode-subagent-gates]\n"
+            "export function fake() {\n"
+            "  return true\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        (root / ".opencode" / "lib").mkdir(parents=True, exist_ok=True)
+        (root / ".opencode" / "lib" / "session-utils.js").write_text(
+            "// [workflow-embed-patch:strong-gate-session-utils]\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "embed_invalid")
+        self.assertIn("inject-subagent-context.js", data["reason"])
 
     def test_cmd_route_codex_embed_allows_unwired_session_start_surface(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
@@ -3348,6 +3658,15 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (root / ".opencode" / "lib").mkdir(parents=True, exist_ok=True)
         (root / ".opencode" / "lib" / "session-utils.js").write_text(
             "// [workflow-embed-patch:strong-gate-session-utils]\n",
+            encoding="utf-8",
+        )
+        (root / ".opencode" / "plugins" / "inject-subagent-context.js").write_text(
+            "// [workflow-embed-patch:opencode-subagent-gates]\n"
+            "function shouldAllowTaskInjection(routeData, subagentType) { return subagentType !== \"forbidden\" }\n"
+            "function loadRouteData(ctx, taskDir) { return { stage: \"implementation\", action: \"reenter\", target: \"implementation\" } }\n"
+            "const allowedStages = new Set([\"implementation\", \"check\", \"review-gate\", \"project-audit\", \"delivery\"])\n"
+            "loadRouteData(ctx, ctx.resolveTaskDir(taskDir))\n"
+            "strong-gate route does not allow subagent injection\n",
             encoding="utf-8",
         )
         (root / ".trellis" / "scripts" / "task.py").write_text(
@@ -4067,6 +4386,120 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "--transition-from", "check",
         )
         self.assertEqual(allowed.returncode, 0, msg=allowed.stdout + allowed.stderr)
+
+    def test_check_to_delivery_requires_review_gate_decision_section(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (task_dir / "check.md").write_text(
+            """# Check Report
+
+## Changed Scope
+- src/example.ts
+
+## Applied Specs
+- .trellis/spec/scripts/python-conventions.md
+
+## Verification Results
+- lint: pass
+- test: pass
+
+## Deviations
+- none
+
+## Uncovered Risks
+- none
+
+## Suggested Next Step
+- /trellis:delivery
+""",
+            encoding="utf-8",
+        )
+        self.run_script("init", str(task_dir), "--stage", "check")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "review-gate,implementation,delivery",
+        )
+
+        blocked = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "delivery",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "check",
+        )
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("Review-Gate Decision", blocked.stdout)
+
+    def test_check_to_delivery_blocks_when_hard_condition_is_marked_yes(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_check_report(
+            task_dir,
+            content="""# Check Report
+
+## Changed Scope
+- src/auth.ts
+
+## Applied Specs
+- .trellis/spec/scripts/python-conventions.md
+
+## Verification Results
+- lint: pass
+- test: pass
+
+## Deviations
+- none
+
+## Uncovered Risks
+- none
+
+## Review-Gate Decision
+- `review_gate_decision`: `skip`
+- `review_gate_reason`: `想直接交付`
+- `auth_or_sensitive`: `yes`
+- `data_migration_or_schema_change`: `no`
+- `public_api_or_cross_layer_contract_or_external_integration`: `no`
+- `payment_queue_cache_concurrency`: `no`
+- `shared_core_with_blast_radius`: `no`
+- `explicit_user_review_gate_request`: `no`
+
+## Suggested Next Step
+- /trellis:delivery
+""",
+        )
+        self.run_script("init", str(task_dir), "--stage", "check")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "review-gate,implementation,delivery",
+        )
+
+        blocked = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "delivery",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "check",
+        )
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("review_gate_decision", blocked.stdout)
 
     def test_delivery_awaiting_rejects_shell_artifacts_without_real_status(self) -> None:
         root, task_dir = self.make_fixture()
