@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """Embedded-workflow integrity checks for workflow-state routing.
 
-These checks intentionally validate content-level semantic markers, not just
-file presence, because the embed contract depends on patched runtime carriers
-and distributed skill surfaces preserving specific workflow semantics.
+The strong-gate router must refuse to continue when runtime-critical carrier
+patches or helper semantics are actually broken. However, target projects may
+legitimately accumulate low-risk textual drift in distributed command copies or
+patch marker placement. This module therefore distinguishes:
+
+- fatal integrity failures: runtime behavior is no longer trustworthy
+- advisory drift warnings: embed still works, but source/target copies drifted
 """
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import sys
@@ -362,15 +367,22 @@ def _detect_missing_critical_runtime_patches(repo_root: Path, record: dict[str, 
         except UnicodeDecodeError:
             missing.append(f"{path.relative_to(repo_root)} 不可读（critical runtime patch: {patch_name}）")
             continue
-        if marker not in content:
-            missing.append(f"{path.relative_to(repo_root)} 缺少补丁标记（critical runtime patch: {patch_name}）")
-            continue
         compile_error = _python_compile_error(repo_root, path, patch_name, content)
         if compile_error is not None:
             missing.append(compile_error)
             continue
-        missing.extend(_js_runtime_contract_errors(repo_root, path, patch_name, content))
-        missing.extend(_task_runtime_contract_errors(repo_root, path, patch_name, content))
+        marker_present = marker in content
+        runtime_errors: list[str] = []
+        runtime_errors.extend(_js_runtime_contract_errors(repo_root, path, patch_name, content))
+        runtime_errors.extend(_task_runtime_contract_errors(repo_root, path, patch_name, content))
+        if runtime_errors:
+            missing.extend(runtime_errors)
+            continue
+        if not marker_present:
+            missing.append(
+                f"{path.relative_to(repo_root)} 缺少补丁标记且无法确认已按当前合同保留 embed patch provenance"
+                f"（critical runtime patch: {patch_name}）"
+            )
     return missing
 
 
@@ -487,6 +499,32 @@ def _detect_distributed_command_drift(repo_root: Path, record: dict[str, Any]) -
     return problems
 
 
+def collect_embed_advisories(repo_root: Path) -> list[str]:
+    """Collect non-fatal embed drift warnings.
+
+    These items do not block `workflow-state.py route`, but they should be
+    surfaced so maintainers can repair drift before it turns into a real
+    compatibility failure.
+    """
+
+    install_record = repo_root / INSTALL_RECORD
+    if not install_record.is_file():
+        return []
+
+    record = _load_install_record_data(install_record)
+    advisories: list[str] = []
+
+    missing_codex_skills = _detect_missing_patched_codex_skills(repo_root, record)
+    if missing_codex_skills:
+        advisories.append("patched codex skill 漂移: " + "; ".join(missing_codex_skills))
+
+    distributed_drift = _detect_distributed_command_drift(repo_root, record)
+    if distributed_drift:
+        advisories.append("distributed command 内容漂移: " + "; ".join(distributed_drift))
+
+    return advisories
+
+
 def detect_embed_invalid(repo_root: Path) -> str | None:
     install_record = repo_root / INSTALL_RECORD
     if not install_record.is_file():
@@ -509,12 +547,34 @@ def detect_embed_invalid(repo_root: Path) -> str | None:
     if missing_patches:
         return "critical runtime patch 未完整落地: " + "; ".join(missing_patches)
 
-    missing_codex_skills = _detect_missing_patched_codex_skills(repo_root, record)
-    if missing_codex_skills:
-        return "patched codex skill 未完整落地: " + "; ".join(missing_codex_skills)
-
-    distributed_drift = _detect_distributed_command_drift(repo_root, record)
-    if distributed_drift:
-        return "distributed command 内容漂移: " + "; ".join(distributed_drift)
-
     return None
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Embedded workflow integrity helper")
+    parser.add_argument("project_root", nargs="?", default=".", help="Target project root")
+    parser.add_argument(
+        "--force-ignore-embed-check",
+        action="store_true",
+        help="Bypass non-fatal embed drift checks and emit advisories instead",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    repo_root = Path(args.project_root).resolve()
+    invalid = detect_embed_invalid(repo_root)
+    advisories = collect_embed_advisories(repo_root)
+    if invalid is not None and not args.force_ignore_embed_check:
+        print(invalid)
+        return 1
+    if invalid is not None and args.force_ignore_embed_check:
+        print(f"⚠️  {invalid}")
+    for advisory in advisories:
+        print(f"⚠️  {advisory}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

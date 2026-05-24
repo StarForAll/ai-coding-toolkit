@@ -14,7 +14,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from workflow_common import extract_backticked_field  # noqa: E402
-from embed_integrity import detect_embed_invalid  # noqa: E402
+from embed_integrity import collect_embed_advisories, detect_embed_invalid  # noqa: E402
 from state_utils import (  # noqa: E402
     ASSESSMENT_FILE,
     EXECUTION_STAGES,
@@ -70,6 +70,8 @@ from validators_gates import (  # noqa: E402
     validate_stage_transition_gates,
 )
 
+_EXTRA_ROUTE_WARNINGS: list[str] = []
+
 
 def _route_result(
     target: str | None,
@@ -92,8 +94,11 @@ def _route_result(
         result["status"] = status
     result["reason"] = reason
     result["blockers"] = blockers or []
-    if warnings:
-        result["warnings"] = warnings
+    merged_warnings = [*warnings] if warnings else []
+    if _EXTRA_ROUTE_WARNINGS:
+        merged_warnings.extend(_EXTRA_ROUTE_WARNINGS)
+    if merged_warnings:
+        result["warnings"] = merged_warnings
     if profile_hint is not None:
         result["profile_hint"] = profile_hint
     print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -157,7 +162,7 @@ def _route_entry_choice_without_any_task(repo_root: Path, tasks_root: Path) -> i
 
     _route_result(
         target,
-        "entry_choice_required",
+        "profile_confirmation_required" if profile_hint == "unknown" else "entry_choice_required",
         (
             f"{reason}。若当前意图是 workflow / 项目只读分析、元审计或 A/A+ 纯分析，"
             "保持 no_task 直接分析，不要把仓库误当成新项目入口；"
@@ -166,7 +171,11 @@ def _route_entry_choice_without_any_task(repo_root: Path, tasks_root: Path) -> i
                 if profile_hint == "unknown"
                 else ""
             )
-            + f"若当前意图是开始新的实现任务，则进入 {target}"
+            + (
+                "请直接询问用户当前项目应按 outsourcing 还是 personal 处理，"
+                if profile_hint == "unknown"
+                else f"若当前意图是开始新的实现任务，则进入 {target}"
+            )
         ),
         profile_hint=profile_hint or "unknown",
     )
@@ -375,7 +384,7 @@ def _collect_exit_gate_blockers(
     elif stage == "design":
         validate_project_doc_boundary(state, repo_root, task_dir, blockers)
         validate_context7_review_artifact(task_dir, state, blockers)
-        validate_design_exit_gate(task_dir, blockers)
+        validate_design_exit_gate(task_dir, repo_root, state, blockers)
     elif stage == "brainstorm":
         allowed_targets = design_path_candidates_from_state(state)
         validate_brainstorm_exit_gate(
@@ -669,6 +678,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
 
 def cmd_route(args: argparse.Namespace) -> int:
+    global _EXTRA_ROUTE_WARNINGS
     repo_root = _resolve_route_repo_root(args)
     if repo_root is None:
         print(json.dumps({"error": "无法定位 repo root"}, ensure_ascii=False, indent=2), file=sys.stderr)
@@ -676,8 +686,13 @@ def cmd_route(args: argparse.Namespace) -> int:
 
     embed_invalid_reason = detect_embed_invalid(repo_root)
     if embed_invalid_reason is not None:
-        _route_result(None, "embed_invalid", embed_invalid_reason)
-        return 0
+        if getattr(args, "force_ignore_embed_check", False):
+            _EXTRA_ROUTE_WARNINGS = [embed_invalid_reason, *collect_embed_advisories(repo_root)]
+        else:
+            _route_result(None, "embed_invalid", embed_invalid_reason)
+            return 0
+    else:
+        _EXTRA_ROUTE_WARNINGS = collect_embed_advisories(repo_root)
 
     task_dir, status_code = _resolve_route_task_dir(args, repo_root)
     if task_dir is None:
@@ -791,7 +806,9 @@ def cmd_repair(args: argparse.Namespace) -> int:
             missing_confirmation_args.append("--transition-from <上一阶段>")
 
     repair_status = "repair_ready"
-    if repair_errors:
+    if candidate_stage in EXECUTION_STAGES and missing_confirmation_args:
+        repair_status = "manual_confirmation_required"
+    elif repair_errors:
         if candidate_stage in EXECUTION_STAGES and missing_confirmation_args and all(
             (
                 "checkpoints.execution_authorized" in error
@@ -814,8 +831,11 @@ def cmd_repair(args: argparse.Namespace) -> int:
             if not repair_errors
             else (
                 (
-                    f"当前 stage={candidate_stage} 属于执行阶段；还需要用户显式确认执行授权信息后才能重建。"
+                    f"当前 stage={candidate_stage} 属于执行阶段；repair 不允许隐式推断执行授权。"
+                    f" 还需要用户显式确认执行授权信息后才能重建。"
                     f" 请补充 {' '.join(missing_confirmation_args)}，必要时再配合 --apply。"
+                    " 示例：python3 ./.trellis/scripts/workflow/workflow-state.py repair "
+                    "<task-dir> --stage implementation --execution-authorized true --transition-from plan"
                 )
                 if repair_status == "manual_confirmation_required"
                 else (
@@ -896,6 +916,11 @@ def build_parser() -> argparse.ArgumentParser:
     route_parser = subparsers.add_parser("route", help="compute routing target for /trellis:continue")
     route_parser.add_argument("task_dir", nargs="?", default=None)
     route_parser.add_argument("--project-root")
+    route_parser.add_argument(
+        "--force-ignore-embed-check",
+        action="store_true",
+        help="Bypass non-fatal embed drift checks and continue routing",
+    )
     route_parser.set_defaults(func=cmd_route)
 
     repair_parser = subparsers.add_parser("repair", help="safely rebuild missing or broken workflow-state.json")

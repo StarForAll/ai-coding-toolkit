@@ -34,12 +34,15 @@ from state_utils import (  # noqa: E402
     design_path_candidates_from_state,
     find_assessment_file,
     find_missing_markers,
+    installed_workflow_profile,
     is_placeholder_like,
+    is_personal_brainstorm_bootstrap_allowed,
     normalize_yes_no_field,
     run_gate_validator,
 )
 from validators_core import (  # noqa: E402
     validate_context7_review_artifact,
+    validate_design_engineering_alignment_contract,
     validate_external_project_controls,
     validate_leaf_task,
     validate_ownership_policy_controls,
@@ -83,13 +86,15 @@ def validate_plan_gate(task_dir: Path, errors: list[str]) -> None:
     )
 
 
-def validate_design_exit_gate(task_dir: Path, errors: list[str]) -> None:
+def validate_design_exit_gate(task_dir: Path, repo_root: Path | None, state: dict[str, Any], errors: list[str]) -> None:
     run_gate_validator(
         "ownership-proof-validate.py",
         ["--phase", "design", "--task-dir", str(task_dir)],
         errors,
         label="ownership-proof-validate.py design 校验",
     )
+    if repo_root is not None:
+        validate_design_engineering_alignment_contract(task_dir, repo_root, state, errors)
 
 
 def validate_check_review_gate_decision(
@@ -341,6 +346,16 @@ def validate_brainstorm_exit_gate(
 ) -> None:
     validate_external_project_controls(task_dir, project_root, state, errors)
     validate_ownership_policy_controls(task_dir, project_root, state, errors)
+    if installed_workflow_profile(project_root) == "personal" and not is_personal_brainstorm_bootstrap_allowed(task_dir, project_root, state):
+        assessment_file = find_assessment_file(task_dir, project_root)
+        if assessment_file is None:
+            errors.append(
+                "personal profile 首次入口必须先在当前 brainstorm 阶段补齐最小 assessment 基线；"
+                "至少包括 `project_engagement_type`、`法律/合规风险结论`、"
+                "`source_watermark_level`、`source_watermark_channels`、"
+                "`zero_width_watermark_enabled`、`subtle_code_marker_enabled`、"
+                "`ownership_proof_required`、`是否允许进入 brainstorm`"
+            )
 
     task_prd = task_dir / TASK_PRD
     if not task_prd.is_file():
@@ -440,7 +455,7 @@ def validate_stage_transition_gates(
         )
 
     if current_state.get("stage") == "design" and new_stage == "plan":
-        validate_design_exit_gate(task_dir, errors)
+        validate_design_exit_gate(task_dir, repo_root, current_state, errors)
 
     if new_stage in EXECUTION_STAGES and current_state.get("stage") == "plan":
         validate_plan_gate(task_dir, errors)
@@ -486,7 +501,7 @@ def validate_stage_exit_artifacts(
         if state.get("status") in EXIT_READY_STATUSES:
             validate_project_doc_boundary(state, repo_root, task_dir, errors)
             validate_context7_review_artifact(task_dir, state, errors)
-            validate_design_exit_gate(task_dir, errors)
+            validate_design_exit_gate(task_dir, repo_root, state, errors)
     elif stage == "plan":
         validate_plan_gate(task_dir, errors)
     elif stage == "check":

@@ -1,6 +1,6 @@
 ---
 name: review-gate
-description: 质量检查完成了？进入任务级补充审查门禁 — 判断是否需要多 CLI 审查，生成 reviewer 指令包，汇总修复并重新验证。触发词：补充审查、多 CLI 审查、多人审查、让其他 CLI 看一下、review-gate、审查门禁
+description: 质量检查完成了？进入任务级补充审查门禁 — 判断是否需要多 CLI 审查，生成 reviewer 指令包，汇总修复并重新验证。适用场景提示：补充审查、多 CLI 审查、多人审查、让其他 CLI 看一下、review-gate、审查门禁
 ---
 
 # /trellis:review-gate — 任务级多 CLI 补充审查门禁

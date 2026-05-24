@@ -18,6 +18,7 @@ from state_utils import (  # noqa: E402
     CUSTOMER_ESTIMATE_MARKERS,
     CUSTOMER_PRD,
     DEVELOPER_PRD,
+    DESIGN_ALLOWED_CURRENT_BLOCKS,
     EXECUTION_STAGES,
     EXIT_READY_STATUSES,
     LEAF_REQUIRED_STAGES,
@@ -39,6 +40,7 @@ from state_utils import (  # noqa: E402
     is_personal_brainstorm_bootstrap_allowed,
     is_placeholder_like,
     load_task_json,
+    normalize_design_current_block,
     normalize_yes_no_field,
     parse_channels,
     resolve_active_task,
@@ -80,6 +82,13 @@ def validate_state_shape(state: dict[str, Any], errors: list[str]) -> None:
     current_block = state.get("current_block")
     if current_block is not None and not isinstance(current_block, str):
         errors.append("current_block 必须是字符串或 null")
+    elif isinstance(current_block, str) and state.get("stage") == "design":
+        normalized_current_block = normalize_design_current_block(current_block)
+        if normalized_current_block not in DESIGN_ALLOWED_CURRENT_BLOCKS:
+            errors.append(
+                "design 阶段的 current_block 非法："
+                f"{current_block!r}；只能使用 input-review / option-research / A / B / C / D"
+            )
 
     completed_blocks = state.get("completed_blocks")
     if not isinstance(completed_blocks, list) or not all(isinstance(item, str) for item in completed_blocks):
@@ -460,3 +469,33 @@ def validate_project_doc_boundary(
         errors.append("design 退出前缺少项目根 README.en.md；块 C 的英文补充版尚未真正完成")
 
     validate_context7_review_artifact(task_dir, state, errors)
+
+
+def validate_design_engineering_alignment_contract(
+    task_dir: Path,
+    repo_root: Path,
+    state: dict[str, Any],
+    errors: list[str],
+) -> None:
+    if state.get("stage") != "design":
+        return
+    if not design_exit_ready(state) or state.get("status") not in EXIT_READY_STATUSES:
+        return
+
+    task_prd = task_dir / TASK_PRD
+    if task_prd.is_file():
+        task_prd_text = task_prd.read_text(encoding="utf-8")
+        required_task_markers = (
+            "自动化检查矩阵",
+            "质量平台门禁",
+            "close-out 主入口",
+            "archive 前置条件",
+            "元数据边界",
+        )
+        missing_task_markers = [marker for marker in required_task_markers if marker not in task_prd_text]
+        if missing_task_markers:
+            errors.append(
+                "design 退出前 task 工作底稿缺少工程化联动结论: "
+                + ", ".join(missing_task_markers)
+                + "；块 D 尚未真正完成"
+            )

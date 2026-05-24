@@ -79,6 +79,20 @@ class CheckQualityScriptTests(unittest.TestCase):
         self.assertIn("stdout:\nout", result.stdout)
         self.assertIn("stderr:\nerr", result.stdout)
 
+    def test_scope_is_reported_in_output(self) -> None:
+        task_dir = self.make_task_dir()
+        test_cmd = self.python_cmd("print('ok')")
+
+        result = self.run_script(
+            str(task_dir),
+            "--test-cmd", test_cmd,
+            "--scope", "frontend,backend,api",
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("手动指定跨层范围: frontend,backend,api", result.stdout)
+        self.assertIn("- Cross-Layer Scope: frontend,backend,api", result.stdout)
+
     def test_git_queries_use_list_form_subprocess_calls(self) -> None:
         task_dir = self.make_task_dir()
         test_cmd = self.python_cmd("print('ok')")

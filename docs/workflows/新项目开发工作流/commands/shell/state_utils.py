@@ -63,6 +63,7 @@ ROOT_README = Path("README.md")
 ROOT_README_EN = Path("README.en.md")
 ASSESSMENT_FILE = Path("assessment.md")
 CONTEXT7_REVIEW_FILE = Path("design/context7-review.md")
+FINISH_WORK_PATCH_FILE = Path("finish-work-patch-projectization.md")
 VALID_ENGAGEMENT_TYPES = {"external_outsourcing", "non_outsourcing"}
 VALID_SOURCE_WATERMARK_LEVELS = {"none", "basic", "hybrid", "forensic"}
 EXIT_READY_STATUSES = {"awaiting_user_confirmation", "completed"}
@@ -74,6 +75,14 @@ OWNERSHIP_POLICY_FIELDS = (
     "ownership_proof_required",
 )
 DESIGN_EXIT_REQUIRED_BLOCKS = {"A", "B", "C", "D"}
+DESIGN_ALLOWED_CURRENT_BLOCKS = {
+    "input-review",
+    "option-research",
+    "A",
+    "B",
+    "C",
+    "D",
+}
 
 STAGES = {
     "feasibility",
@@ -240,7 +249,18 @@ def summarize_validator_output(stdout: str, stderr: str) -> str:
     if not combined:
         return ""
     lines = [line.strip() for line in combined.splitlines() if line.strip()]
-    return lines[-1] if lines else combined
+    if not lines:
+        return combined
+
+    failure_lines = [
+        line
+        for line in lines
+        if line.startswith("❌") or line.lower().startswith("error:")
+    ]
+    if failure_lines:
+        return " | ".join(failure_lines[:3])
+
+    return " | ".join(lines[:3])
 
 
 def run_gate_validator(
@@ -504,6 +524,33 @@ def normalize_design_block_name(raw: str) -> str | None:
         "spec-alignment": "D",
     }
     return mapping.get(normalized)
+
+
+def normalize_design_current_block(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    normalized = raw.strip().lower().replace("_", "-")
+    mapping = {
+        "input-review": "input-review",
+        "input review": "input-review",
+        "option-research": "option-research",
+        "option research": "option-research",
+        "tech-selection": "option-research",
+        "tech selection": "option-research",
+        "spec-alignment": "D",
+        "engineering-alignment": "D",
+        "engineering alignment": "D",
+        "project-docs": "C",
+        "project docs": "C",
+        "design-docs": "B",
+        "design docs": "B",
+        "developer-facing-prd": "A",
+        "developer-facing-prd.md": "A",
+        "developer facing prd": "A",
+    }
+    if normalized in mapping:
+        return mapping[normalized]
+    return normalize_design_block_name(raw)
 
 
 def design_exit_ready(state: dict[str, Any]) -> bool:

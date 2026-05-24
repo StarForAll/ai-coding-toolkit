@@ -2,6 +2,40 @@
 
 <!-- workflow-projectization-patch -->
 
+### Command Architecture
+
+This installed workflow combines Trellis baseline entrypoints with workflow-defined stage entrypoints.
+
+| Category | What it means in installed target projects |
+|---|---|
+| Baseline commands | Trellis already ships the baseline entrypoints such as `continue` and native `finish-work`; this workflow patches them instead of redefining Trellis itself |
+| Added workflow commands | This workflow adds project-stage entrypoints such as `feasibility`, `design`, `plan`, `project-audit`, `review-gate`, and `delivery` |
+| Overlay commands | `brainstorm` and `check` keep the same public entry name as the baseline, but the installed target-project copy is the workflow-enhanced version |
+| Disabled commands | `parallel` is intentionally removed from the active command surface because strong-gate requires a single active task, explicit stage confirmation, and a non-forked mainline |
+
+### Script Organization
+
+Installed target projects keep Trellis baseline runtime helpers under `.trellis/scripts/` and workflow-owned strong-gate helpers under `.trellis/scripts/workflow/`.
+
+| Path family | Ownership boundary |
+|---|---|
+| `.trellis/scripts/*.py`, `.trellis/scripts/common/*.py` | Trellis baseline runtime and shared task/session helpers |
+| `.trellis/scripts/workflow/*.py` | Workflow-installed strong-gate helpers, validators, and patch-repair support owned by this workflow |
+
+When debugging or customizing an installed target project, treat `.trellis/scripts/workflow/` as workflow-managed and Trellis baseline scripts as upstream baseline unless a workflow patch explicitly says otherwise.
+
+### Spec Management
+
+This workflow does not replace the target project's entire `.trellis/spec/` tree. Instead it layers on top of a baseline pack import plus project-local extension.
+
+| Layer | Role |
+|---|---|
+| `initial_pack` / `initial_pack_assets` | Installer imports `pack.requirements-discovery-foundation` as the workflow's baseline requirements/spec foundation |
+| `initial_pack_cleanup_policy = retain-imported-assets` | Imported foundation assets remain in the target project after install; uninstall does not delete them by default |
+| project `.trellis/spec/` updates during design | The workflow then expects the project to extend/refine those imported specs according to the confirmed architecture |
+
+So the merge strategy is: import baseline pack → retain imported assets → project/workflow refine the relevant specs in-place.
+
 ### Task Development Flow
 
 ```text
@@ -161,7 +195,10 @@ The strong-gate workflow keeps stage routing in `workflow-state.py`, but some
 baseline Trellis utilities still read `workflow.md` via
 `get_context.py --mode phase --step <X.Y>`. The numbered headings below are a
 compatibility layer for those readers. They do **not** replace the strong-gate
-stage machine above.
+stage machine above, and they are **not** the preferred entry model for new
+strong-gate target projects. New projects should follow `workflow-state.py route`
+plus the stage machine; the numbered step blocks remain only to preserve
+baseline step lookups such as `get_context.py --mode phase --step <X.Y>`.
 
 #### 1.0 Create task
 

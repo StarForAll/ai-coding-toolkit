@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """质量检查辅助脚本。
 
-用法: python3 check-quality.py [task_dir] [--test-cmd CMD] [--lint-cmd CMD] [--typecheck-cmd CMD] [--extra-check LABEL=CMD]
+用法: python3 check-quality.py [task_dir] [--test-cmd CMD] [--lint-cmd CMD]
+[--typecheck-cmd CMD] [--extra-check LABEL=CMD] [--scope frontend,backend,api]
 """
 
 from __future__ import annotations
@@ -61,6 +62,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         metavar="LABEL=COMMAND",
         help="Additional user-confirmed verification such as build/e2e/migration",
     )
+    parser.add_argument(
+        "--scope",
+        dest="scope",
+        help="Manual cross-layer scope such as frontend,backend,api",
+    )
     return parser.parse_args(argv)
 
 
@@ -96,6 +102,8 @@ def main() -> int:
     print("=== 质量检查 ===")
 
     print("说明：测试 / lint / type-check / extra-check 命令必须来自技术架构确认后由用户明确的项目化输入。")
+    if args.scope:
+        print(f"手动指定跨层范围: {args.scope}")
 
     results: list[CheckResult] = []
 
@@ -147,6 +155,8 @@ def main() -> int:
     print("=== 质量检查完成 ===")
     print("下一步：根据以上结果生成 check.md 检查结果")
     print("\n--- Summary ---")
+    if args.scope:
+        print(f"- Cross-Layer Scope: {args.scope}")
     for result in results:
         print(f"- {result.label}: {result.status}")
     if not provided_commands:

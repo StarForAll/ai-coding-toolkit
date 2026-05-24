@@ -730,7 +730,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
 
         self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
-        self.assertIn("task_plan.md", validate.stdout)
+        self.assertIn("task_creation_checklist.md", validate.stdout)
 
     def test_validate_still_rejects_execution_task_with_children(self) -> None:
         root, task_dir = self.make_fixture()
@@ -920,6 +920,61 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
         self.assertIn("README.en.md", validate.stdout)
+
+    def test_validate_rejects_unknown_design_current_block(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+
+        self.run_script("init", str(task_dir), "--stage", "design")
+        invalid_set = self.run_script("set", str(task_dir), "--current-block", "totally-custom-block")
+        self.assertEqual(invalid_set.returncode, 1, msg=invalid_set.stdout + invalid_set.stderr)
+        self.assertIn("current_block 非法", invalid_set.stdout)
+
+    def test_validate_design_exit_requires_finish_work_patch_contract(self) -> None:
+        root, task_dir = self.make_fixture()
+        requirements_dir = root / "docs" / "requirements"
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=(
+                f"{self.VALID_BRAINSTORM_ESTIMATE}\n"
+                "## 自动化检查矩阵\n"
+                "- 质量平台门禁：sonar-scanner\n"
+                "- close-out 主入口：/trellis:finish-work\n"
+                "- archive 前置条件：delivery 完成且当前 active task 已验收\n"
+                "- 元数据边界：只允许当前 active task 的 archive + session record\n"
+            ),
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (requirements_dir / "developer-facing-prd.md").write_text("# developer\n- body\n", encoding="utf-8")
+        self.write_context7_review(task_dir)
+        design_dir = task_dir / "design"
+        design_dir.mkdir(parents=True, exist_ok=True)
+        (design_dir / "source-watermark-plan.md").write_text(self.VALID_SOURCE_WATERMARK_PLAN, encoding="utf-8")
+
+        self.run_script("init", str(task_dir), "--stage", "design")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--architecture-confirmed",
+            "true",
+            "--context7-review-completed",
+            "true",
+            "--completed-blocks",
+            "block-a,block-b,block-c,block-d",
+            "--stage-status",
+            "awaiting_user_confirmation",
+            "--awaiting-user-confirmation",
+            "true",
+        )
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
 
     def test_validate_design_exit_matches_route_for_ownership_design_gate(self) -> None:
         root, task_dir = self.make_fixture()
@@ -1817,8 +1872,23 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         data = json.loads(result.stdout)
         self.assertEqual(data["target"], "feasibility")
-        self.assertEqual(data["action"], "entry_choice_required")
+        self.assertEqual(data["action"], "profile_confirmation_required")
         self.assertEqual(data["profile_hint"], "unknown")
+        self.assertIn("请直接询问用户当前项目应按 outsourcing 还是 personal 处理", data["reason"])
+
+    def test_cmd_route_no_task_personal_profile_still_entry_choice_required(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / ".runtime" / "sessions").mkdir(parents=True, exist_ok=True)
+        self.write_minimal_installed_workflow_record(root, profile="personal")
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "entry_choice_required")
+        self.assertEqual(data["profile_hint"], "personal")
 
     def test_cmd_route_no_task_reuses_existing_assessment_for_brainstorm(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
@@ -2486,7 +2556,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(data["action"], "blocked")
         self.assertIn("项目级粗估", "".join(data.get("blockers", [])))
 
-    def test_cmd_route_embed_invalid_when_patched_codex_start_skill_drifts(self) -> None:
+    def test_cmd_route_warns_when_patched_codex_start_skill_drifts(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
         self.addCleanup(shutil.rmtree, root)
         (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
@@ -2570,10 +2640,11 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         data = json.loads(result.stdout)
-        self.assertEqual(data["action"], "embed_invalid")
-        self.assertIn("trellis-start", data["reason"])
+        self.assertEqual(data["action"], "entry_choice_required")
+        self.assertIn("warnings", data)
+        self.assertIn("trellis-start", "".join(data["warnings"]))
 
-    def test_cmd_route_embed_invalid_when_patched_codex_continue_skill_drifts(self) -> None:
+    def test_cmd_route_warns_when_patched_codex_continue_skill_drifts(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
         self.addCleanup(shutil.rmtree, root)
         (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
@@ -2661,10 +2732,11 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         data = json.loads(result.stdout)
-        self.assertEqual(data["action"], "embed_invalid")
-        self.assertIn("trellis-continue", data["reason"])
+        self.assertEqual(data["action"], "entry_choice_required")
+        self.assertIn("warnings", data)
+        self.assertIn("trellis-continue", "".join(data["warnings"]))
 
-    def test_cmd_route_embed_invalid_when_patched_codex_continue_skill_retains_hidden_status_routing(self) -> None:
+    def test_cmd_route_warns_when_patched_codex_continue_skill_retains_hidden_status_routing(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
         self.addCleanup(shutil.rmtree, root)
         (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
@@ -2766,10 +2838,11 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         data = json.loads(result.stdout)
-        self.assertEqual(data["action"], "embed_invalid")
-        self.assertIn("trellis-continue", data["reason"])
+        self.assertEqual(data["action"], "entry_choice_required")
+        self.assertIn("warnings", data)
+        self.assertIn("trellis-continue", "".join(data["warnings"]))
 
-    def test_cmd_route_embed_invalid_when_patched_codex_finish_work_skill_drifts(self) -> None:
+    def test_cmd_route_warns_when_patched_codex_finish_work_skill_drifts(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
         self.addCleanup(shutil.rmtree, root)
         (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
@@ -2857,10 +2930,11 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         data = json.loads(result.stdout)
-        self.assertEqual(data["action"], "embed_invalid")
-        self.assertIn("trellis-finish-work", data["reason"])
+        self.assertEqual(data["action"], "entry_choice_required")
+        self.assertIn("warnings", data)
+        self.assertIn("trellis-finish-work", "".join(data["warnings"]))
 
-    def test_cmd_route_embed_invalid_when_patched_codex_brainstorm_helper_skill_drifts(self) -> None:
+    def test_cmd_route_warns_when_patched_codex_brainstorm_helper_skill_drifts(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
         self.addCleanup(shutil.rmtree, root)
         (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
@@ -2949,8 +3023,9 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         data = json.loads(result.stdout)
-        self.assertEqual(data["action"], "embed_invalid")
-        self.assertIn("trellis-brainstorm", data["reason"])
+        self.assertEqual(data["action"], "entry_choice_required")
+        self.assertIn("warnings", data)
+        self.assertIn("trellis-brainstorm", "".join(data["warnings"]))
 
     def test_cmd_route_blocks_design_reentry_when_ownership_policy_is_invalid(self) -> None:
         root, task_dir = self.make_fixture()
@@ -3005,6 +3080,132 @@ class WorkflowStateScriptTests(unittest.TestCase):
         data = _json.loads(result.stdout)
         self.assertEqual(data["action"], "embed_invalid")
         self.assertIn(".trellis/library-lock.yaml", data["reason"])
+
+    def test_cmd_route_force_ignore_embed_check_demotes_nonfatal_drift_to_warning(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "scripts" / "common").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            json.dumps(
+                {
+                    "profile": "outsourcing",
+                    "cli_types": ["claude", "opencode", "codex"],
+                    "commands": ["brainstorm"],
+                    "critical_runtime_patches": [
+                        "inject-workflow-state",
+                        "claude-inject-subagent-context",
+                        "opencode-inject-subagent-context",
+                        "session-start-strong-gate",
+                        "task-start-strong-gate",
+                        "task-create-preserve-active",
+                        "task-status-view-strong-gate",
+                        "workflow-phase-strong-gate",
+                    ],
+                    "patched_codex_skills": ["trellis-continue", "trellis-finish-work", "trellis-start"],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "library-lock.yaml").write_text(
+            "packs:\n  - pack.requirements-discovery-foundation\n",
+            encoding="utf-8",
+        )
+        (root / ".claude" / "hooks").mkdir(parents=True, exist_ok=True)
+        (root / ".claude" / "hooks" / "session-start.py").write_text(
+            "# strong-gate-session-start-patch-applied\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "task.py").write_text(
+            "# [workflow-embed-patch:strong-gate-no-status-flip]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
+            "# [workflow-embed-patch:preserve-parent-active-task]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "tasks.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_queue.py").write_text(
+            "# [workflow-embed-patch:strong-gate-task-status-view]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
+            "# strong-gate-phase-patch-applied\n",
+            encoding="utf-8",
+        )
+        (root / ".claude" / "commands" / "trellis").mkdir(parents=True, exist_ok=True)
+        (root / ".opencode" / "commands" / "trellis").mkdir(parents=True, exist_ok=True)
+        (root / ".agents" / "skills" / "brainstorm").mkdir(parents=True, exist_ok=True)
+        (root / ".claude" / "commands" / "trellis" / "brainstorm.md").write_text("# brainstorm\n", encoding="utf-8")
+        (root / ".opencode" / "commands" / "trellis" / "brainstorm.md").write_text("# brainstorm\n", encoding="utf-8")
+        (root / ".agents" / "skills" / "brainstorm" / "SKILL.md").write_text("# brainstorm\n", encoding="utf-8")
+
+        script = Path(__file__).resolve().parent / "embed_integrity.py"
+        result = subprocess.run(
+            [PYTHON, str(script), str(root), "--force-ignore-embed-check"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("⚠️", result.stdout)
+
+    def test_embed_integrity_force_ignore_allows_advisory_drift_script_output(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            json.dumps(
+                {
+                    "profile": "outsourcing",
+                    "cli_types": ["claude", "opencode", "codex"],
+                    "commands": ["brainstorm"],
+                    "critical_runtime_patches": [
+                        "inject-workflow-state",
+                        "claude-inject-subagent-context",
+                        "opencode-inject-subagent-context",
+                        "session-start-strong-gate",
+                        "task-start-strong-gate",
+                        "task-create-preserve-active",
+                        "task-status-view-strong-gate",
+                        "workflow-phase-strong-gate",
+                    ],
+                    "patched_codex_skills": ["trellis-continue", "trellis-finish-work", "trellis-start"],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "library-lock.yaml").write_text(
+            "packs:\n  - pack.requirements-discovery-foundation\n",
+            encoding="utf-8",
+        )
+        (root / ".claude" / "commands" / "trellis").mkdir(parents=True, exist_ok=True)
+        (root / ".opencode" / "commands" / "trellis").mkdir(parents=True, exist_ok=True)
+        (root / ".agents" / "skills" / "brainstorm").mkdir(parents=True, exist_ok=True)
+        (root / ".claude" / "commands" / "trellis" / "brainstorm.md").write_text("# brainstorm\n", encoding="utf-8")
+        (root / ".opencode" / "commands" / "trellis" / "brainstorm.md").write_text("# brainstorm\n", encoding="utf-8")
+        (root / ".agents" / "skills" / "brainstorm" / "SKILL.md").write_text("# brainstorm\n", encoding="utf-8")
+
+        script = Path(__file__).resolve().parent / "embed_integrity.py"
+        result = subprocess.run(
+            [PYTHON, str(script), str(root), "--force-ignore-embed-check"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("⚠️", result.stdout)
 
     def test_cmd_route_embed_invalid_when_critical_runtime_patches_are_missing(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
@@ -3601,7 +3802,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(data["action"], "embed_invalid")
         self.assertIn(".codex/hooks/session-start.py", data["reason"])
 
-    def test_cmd_route_embed_invalid_when_distributed_command_content_drifts_across_platforms(self) -> None:
+    def test_cmd_route_warns_when_distributed_command_content_drifts_across_platforms(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
         self.addCleanup(shutil.rmtree, root)
         (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
@@ -3724,8 +3925,9 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         data = json.loads(result.stdout)
-        self.assertEqual(data["action"], "embed_invalid")
-        self.assertIn("brainstorm 内容漂移", data["reason"])
+        self.assertEqual(data["action"], "entry_choice_required")
+        self.assertIn("warnings", data)
+        self.assertIn("brainstorm 内容漂移", "".join(data["warnings"]))
 
     # ------------------------------------------------------------------
     # repair subcommand tests
@@ -4054,6 +4256,16 @@ class WorkflowStateScriptTests(unittest.TestCase):
         design_dir = task_dir / "design"
         design_dir.mkdir(parents=True, exist_ok=True)
         (design_dir / "source-watermark-plan.md").write_text(self.VALID_SOURCE_WATERMARK_PLAN, encoding="utf-8")
+        task_prd = task_dir / "prd.md"
+        task_prd.write_text(
+            task_prd.read_text(encoding="utf-8")
+            + "\n## 自动化检查矩阵\n"
+            + "- 质量平台门禁：sonar-scanner\n"
+            + "- close-out 主入口：/trellis:finish-work\n"
+            + "- archive 前置条件：delivery 完成且当前 active task 已验收\n"
+            + "- 元数据边界：只允许当前 active task 的 archive + session record\n",
+            encoding="utf-8",
+        )
 
         self.run_script("init", str(task_dir), "--stage", "design")
         self.run_script(
@@ -4587,7 +4799,11 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         data = json.loads(result.stdout)
         self.assertEqual(data["action"], "awaiting_confirmation_with_blockers")
-        self.assertIn("task_plan.md", "".join(data.get("blockers", [])))
+        blockers_text = "".join(data.get("blockers", []))
+        self.assertIn("plan-validate.py", blockers_text)
+        self.assertTrue(
+            "task_plan.md" in blockers_text or "task_creation_checklist.md" in blockers_text
+        )
 
     def test_route_delivery_awaiting_reports_validator_blockers_not_just_file_presence(self) -> None:
         root, task_dir = self.make_fixture()

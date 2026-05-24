@@ -1,6 +1,6 @@
 ---
 name: check
-description: 代码写完了？检查一下 — 基于真实改动范围和项目 spec 执行质量检查，运行项目化验证命令，输出偏差清单与下一步建议。触发词：检查一下、质量检查、对照 spec、对照规范、自检、有没有偏差
+description: 代码写完了？检查一下 — 基于真实改动范围和项目 spec 执行质量检查，运行项目化验证命令，输出偏差清单与下一步建议。适用场景提示：检查一下、质量检查、对照 spec、对照规范、自检、有没有偏差
 ---
 
 # /trellis:check — 实现后质量检查
@@ -25,6 +25,8 @@ description: 代码写完了？检查一下 — 基于真实改动范围和项�
 > - 需要跨层影响排查 → `/trellis:check`（跨层范围手动指定）
 > - 需要多 CLI 补充审查门禁 → `/trellis:review-gate`
 > - 需要项目级交付 / 收尾前检查 → `/trellis:delivery`
+>
+> 这里的“跨层范围手动指定”是指：继续使用当前 `check` 入口，但在执行 `check-quality.py` 时显式补充 `--scope frontend,backend,api` 这类范围声明，并在 `check.md` 的 `Changed Scope` 中同步写出受影响层。
 
 ---
 
@@ -94,6 +96,7 @@ python3 <WORKFLOW_DIR>/commands/shell/check-quality.py \
   --test-cmd "<user-confirmed test command>" \
   --lint-cmd "<user-confirmed lint command>" \
   --typecheck-cmd "<user-confirmed type-check command>" \
+  --scope "frontend,backend,api" \
   --extra-check "Build=<user-confirmed build command>" \
   --extra-check "E2E=<user-confirmed e2e command>" \
   --extra-check "Migration=<user-confirmed migration validation command>"
@@ -103,6 +106,7 @@ python3 <WORKFLOW_DIR>/commands/shell/check-quality.py \
 
 - test / lint / typecheck 命令必须来自技术架构确认后的项目化输入
 - 若当前项目还需要 build / e2e / migration / 平台质量门禁，使用 `--extra-check "标签=命令"` 追加，不要把它们口头带过
+- 若需要手动指定跨层检查范围，使用 `--scope frontend,backend,api` 这类显式声明；它用于提示当前轮 check 应重点覆盖哪些层，不替代 `check.md` 中 `Changed Scope` 的事实记录
 - 若当前项目没有某一项检查，则省略对应参数，并在结果中标记 `not run`
 - 不猜默认命令，不把其他项目习惯硬套到当前项目
 - 失败输出必须保留关键 stdout / stderr 证据，不能只给一句“没过”
