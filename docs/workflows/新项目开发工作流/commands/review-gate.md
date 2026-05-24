@@ -45,6 +45,7 @@ description: 质量检查完成了？进入任务级补充审查门禁 — 判�
 至少读取：
 
 - `$TASK_DIR/check.md`
+- `check.md` 中的 `## Review-Gate Decision` / `补充审查判定` 章节
 - 当前任务的目标 / 验收标准 / 关联设计文档
 - 当前任务改动范围、验证结果、风险点
 

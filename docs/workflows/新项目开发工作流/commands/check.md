@@ -149,6 +149,10 @@ $TASK_DIR/check.md
 - 验证命令与 `pass / fail / not run`
 - 偏差清单
 - 未覆盖风险
+- `Review-Gate Decision` / `补充审查判定`
+  - `review_gate_decision`: `skip` / `recommended` / `required`
+  - `review_gate_reason`: 当前为什么判成该结果
+  - 6 个任务级硬条件的 `yes` / `no` 留痕
 - 建议人工关注模块
 - 推荐下一步
 
@@ -166,6 +170,17 @@ $TASK_DIR/check.md
 ## Deviations
 
 ## Uncovered Risks
+
+## Review-Gate Decision
+
+- `review_gate_decision`: `skip`
+- `review_gate_reason`: `未命中 review-gate 硬条件，现有验证证据足够`
+- `auth_or_sensitive`: `no`
+- `data_migration_or_schema_change`: `no`
+- `public_api_or_cross_layer_contract_or_external_integration`: `no`
+- `payment_queue_cache_concurrency`: `no`
+- `shared_core_with_blast_radius`: `no`
+- `explicit_user_review_gate_request`: `no`
 
 ## Suggested Next Step
 ```
@@ -196,14 +211,14 @@ $TASK_DIR/check.md
 
 | 检查结果 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
-| 基本合规，可直接进入收尾 | `/trellis:finish-work` | 进入提交前检查，或显式触发 `finish-work` skill | **默认推荐**（Lite / Standard）。仅在用户明确确认后才允许进入收尾 |
+| 基本合规，可直接进入交付收口 | `/trellis:delivery` | 进入交付收口，或显式触发 `delivery` skill | **默认推荐**（Lite / Standard）。仅在用户明确确认后才允许进入 delivery；若当前轮还需要关闭当前 active task，再在 delivery 后进入 native finish-work |
 | 命中 review-gate 硬条件，或用户显式要求进入补充审查 | `/trellis:review-gate` | 进入补充审查判断，或显式触发 `review-gate` skill | **条件触发**。仅在用户明确确认后才允许切换到 review-gate |
 | 存在实现偏差，需先修复 | `/trellis:continue` | 回到实施阶段，或显式触发 `trellis-continue` skill | 回到 implementation 内部链修复偏差项，再重新执行正式 `check` |
 | 测试或验证证据不足 | `/trellis:continue` | 回到 implementation 并说明测试先行意图，或显式触发 `trellis-continue` skill | 先补验证证据，再重新执行 `check` |
 | 发现上下文污染 | `/trellis:continue` | 开新会话并重新描述当前意图，或显式触发 `trellis-continue` skill | 停止当前会话，开新会话并注入决策摘要 |
 | 偏差来自冻结后新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先完成评估与确认；用户接受并入当前轮次后再回到受影响的最早阶段 |
 | 偏差仅是纯澄清 | 留在当前阶段 | 留在当前阶段 | 仅限不改变范围、接口契约、验收标准、成本、工期 |
-| 不确定下一步 | `/trellis:finish-work` | 描述当前检查结果，或显式触发 `finish-work` skill | 优先进入提交前检查 |
+| 不确定下一步 | `/trellis:delivery` | 描述当前检查结果，或显式触发 `delivery` skill | 先确认当前轮是否明确跳过 review-gate，再进入交付收口 |
 
 **review-gate 触发条件**（不是所有 check 都必须走 review-gate）：
 
@@ -215,5 +230,7 @@ $TASK_DIR/check.md
   - 共享核心模块且 blast radius 明显
   - 用户显式要求进入 `review-gate`
 - 或根据当前改动的软条件预判，进入 `review-gate` 后大概率会被判定为 `recommended`
+
+`check.md` 必须把这组判定结果结构化写入 `## Review-Gate Decision`。若其中任一硬条件为 `yes`，则 `review_gate_decision` 只能写 `required`；不得再从 `check` 直接切到 `delivery`。
 
 不满足以上条件时，check 可直接进入 delivery，无需经过 review-gate；若当前轮还需要关闭当前 active task，再在 delivery 之后进入 native finish-work。

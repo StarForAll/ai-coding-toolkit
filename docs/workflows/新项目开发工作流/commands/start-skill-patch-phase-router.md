@@ -70,8 +70,9 @@ Before writing implementation code:
 1. Treat this phase-router entry itself as the public re-entry point for `implementation`; there is no symmetric public `implementation` skill.
 2. Confirm the current task is a leaf task.
 3. Run before-dev and write or refresh `$TASK_DIR/before-dev.md`.
-4. Keep work scoped to the selected leaf task only.
-5. Do not auto-continue to the next task after completion — require a new explicit re-entry through the current entry skill.
+4. If `ownership_proof_required = yes` and design has declared `Protected Watermark Snippets`, run `.trellis/scripts/workflow/source-watermark-guard.py --task-dir <task-dir> --mode check` before touching the protected files. Only snippets explicitly declared as low-risk auto-repair may use `--mode repair`, and you must rerun `--mode check` afterwards.
+5. Keep work scoped to the selected leaf task only.
+6. Do not auto-continue to the next task after completion — require a new explicit re-entry through the current entry skill.
 
 Within `implementation`, use this internal role chain:
 

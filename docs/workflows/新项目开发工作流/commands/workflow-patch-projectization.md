@@ -137,7 +137,7 @@ All transitions follow a two-step protocol: **(A)** signal readiness by setting 
 | feasibility → brainstorm | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage brainstorm --stage-status in_progress --awaiting-user-confirmation false --allowed-next design,plan,implementation --transition-from feasibility` |
 | brainstorm → design | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage design --stage-status in_progress --awaiting-user-confirmation false --allowed-next plan --transition-from brainstorm` |
 | brainstorm → plan | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage plan --stage-status in_progress --awaiting-user-confirmation false --allowed-next implementation --transition-from brainstorm` |
-| brainstorm → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next check,project-audit --transition-from brainstorm` |
+| brainstorm → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next check,project-audit --transition-from brainstorm`（仅当 `prd.md` 的 `complexity_decision = L0` 时允许） |
 | design → plan | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage plan --stage-status in_progress --awaiting-user-confirmation false --allowed-next implementation --transition-from design` |
 | plan → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next check,project-audit --transition-from plan` |
 | implementation → check | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage check --stage-status in_progress --awaiting-user-confirmation false --allowed-next project-audit,review-gate,implementation,delivery` |
@@ -381,6 +381,7 @@ Current stage: **implementation** — code writing phase.
 `checkpoints.execution_authorized` must be `true` before entering.
 Re-enter this stage through `/trellis:continue`; do **not** expect a public `/trellis:implementation` command or same-named shared skill.
 For sub-agent dispatch mode: dispatch `trellis-implement` sub-agent. For inline dispatch mode (`codex.dispatch_mode=inline`): implement directly (load `trellis-before-dev` first).
+If `ownership_proof_required = yes` and design has declared `Protected Watermark Snippets`, run `source-watermark-guard.py --task-dir <task-dir> --mode check` before touching protected files; only explicitly declared low-risk snippets may use `--mode repair`, and you must rerun `--mode check` afterwards.
 If you need TDD-style verification, do it inside implementation rather than switching to a separate `test-first` stage.
 After implementation, proceed to `check`.
 [/workflow-state:implementation]
@@ -454,6 +455,12 @@ Stop normal task execution and repair the workflow installation first. Check `.t
 Route action: **workflow-state.route_failed** — the route helper itself failed.
 Do not treat the current stage as trustworthy. Inspect the header `Reason:` line, fix the route helper or its runtime dependency, then retry.
 [/workflow-state:workflow-state.route_failed]
+
+[workflow-state:stale]
+Active task pointer is stale: the session still points at a task directory that no longer exists.
+Before continuing stage work, inspect the stale pointer with `python3 ./.trellis/scripts/task.py current --source`, then either run `task.py finish` to clear it or `task.py start <task-dir>` to repoint the session at the correct live task.
+Do **not** treat this as `no_task`, and do not silently continue implementation / check / delivery work against missing task context.
+[/workflow-state:stale]
 
 ---
 

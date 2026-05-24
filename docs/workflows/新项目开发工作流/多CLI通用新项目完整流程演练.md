@@ -255,7 +255,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 目标
 
-先按 task-first 建立或更新 `prd.md` 工作底稿，自动读取上下文并在必要时 research-first；然后确认需求描述是否准确，统一做 `L0/L1/L2` 分类；离开 brainstorm 前必须先补齐不可跳过的项目级粗估：`task_dir/prd.md` 中的 `## 项目级粗估` 与 `customer-facing-prd.md` 中的 `## 项目级粗估摘要`；进入 design 前至少需补齐 `customer-facing-prd.md`，`developer-facing-prd.md` 等到 design 阶段技术架构确认后再正式生成；`L0` 单任务闭环可只保留 `prd.md` 轻量基线，但仍不能跳过粗估。若 research-first 之后只剩一个可信方向，必须明确写“当前无可比方案”与原因，不要为了凑流程伪造方案对比。离开本阶段前，`prd.md` 还应补齐 `## 阶段出口快照`，至少记录 UI lane 判定、跨平台范围、粗估刷新结果、kill criteria 与未解决项；这组字段当前主要用于文档与人工复核，不是 `workflow-state.py` 的逐字段脚本硬门禁。
+先按 task-first 建立或更新 `prd.md` 工作底稿，自动读取上下文并在必要时 research-first；然后确认需求描述是否准确，统一做 `L0/L1/L2` 分类；离开 brainstorm 前必须先补齐不可跳过的项目级粗估：`task_dir/prd.md` 中的 `## 项目级粗估` 与 `customer-facing-prd.md` 中的 `## 项目级粗估摘要`；进入 design 前至少需补齐 `customer-facing-prd.md`，`developer-facing-prd.md` 等到 design 阶段技术架构确认后再正式生成；`L0` 单任务闭环可只保留 `prd.md` 轻量基线，但仍不能跳过粗估。若 research-first 之后只剩一个可信方向，必须明确写“当前无可比方案”与原因，不要为了凑流程伪造方案对比。离开本阶段前，`prd.md` 还应补齐 `## 阶段出口快照`，至少记录 UI lane 判定、跨平台范围、粗估刷新结果、kill criteria 与未解决项；当前 workflow 会校验这些字段是否存在且不是明显占位值，其中 `complexity_decision` 在直达 implementation 时还必须为 `L0`。
 
 ### CLI 入口差异
 
