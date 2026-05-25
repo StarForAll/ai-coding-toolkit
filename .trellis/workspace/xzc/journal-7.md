@@ -141,3 +141,37 @@ Repaired workflow first-entry feasibility enforcement, aligned embed integrity c
 ### Next Steps
 
 - None - task complete
+
+
+## Session 308: Repair embedded workflow gates and archive guard
+
+**Date**: 2026-05-25
+**Task**: Repair embedded workflow gates and archive guard
+**Branch**: `main`
+
+### Summary
+
+Audited embedded 新项目开发工作流 issues against /tmp/trellis-0.5.17-2, tightened project-audit/review-gate/delivery evidence gates, added archive closeout guard plus independent behavior tests, and verified 313 workflow tests passing.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `51c8644` | (see git log) |
+| `a22c7ec` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

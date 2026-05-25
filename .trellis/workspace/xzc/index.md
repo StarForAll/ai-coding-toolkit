@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-7.md`
-- **Total Sessions**: 307
+- **Total Sessions**: 308
 - **Last Active**: 2026-05-25
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-7.md` | ~143 | Active |
+| `journal-7.md` | ~177 | Active |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
@@ -35,6 +35,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 308 | 2026-05-25 | Repair embedded workflow gates and archive guard | `51c8644`, `a22c7ec` | `main` |
 | 307 | 2026-05-25 | Repair embedded workflow strong-gate routing and integrity checks | `cda468f`, `9bebdc7` | `main` |
 | 306 | 2026-05-25 | Audit embedded workflow fixes | `da9d503`, `8e1aa30`, `b7eebf4` | `main` |
 | 305 | 2026-05-24 | Repair embedded strong-gate workflow contracts | `f442997` | `main` |
