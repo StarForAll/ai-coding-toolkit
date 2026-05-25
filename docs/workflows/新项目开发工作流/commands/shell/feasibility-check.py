@@ -19,6 +19,9 @@ from workflow_common import (
     MIN_KICKOFF_PAYMENT_RATIO,
     PLACEHOLDER_MARKERS,
     extract_backticked_field,
+    is_placeholder_like,
+    normalize_yes_no_field,
+    parse_channels,
 )
 
 
@@ -35,57 +38,6 @@ def parse_kickoff_payment_ratio(raw_value: str) -> tuple[bool, str]:
     if min(percentages) < MIN_KICKOFF_PAYMENT_RATIO:
         return False, f"启动款比例至少应为 {int(MIN_KICKOFF_PAYMENT_RATIO)}%"
     return True, ", ".join(f"{value:g}%" for value in percentages)
-
-
-def normalize_boolean_field(value: str | None) -> bool | None:
-    if value is None:
-        return None
-    lowered = value.strip().strip("`").lower()
-    if lowered == "yes":
-        return True
-    if lowered == "no":
-        return False
-    return None
-
-
-def parse_channels(raw: str | None) -> set[str]:
-    if not raw:
-        return set()
-    parts = re.split(r"[,\uFF0C/\s]+", raw.lower())
-    channels = {part for part in parts if part}
-    normalized = set()
-    for channel in channels:
-        if channel in {"visible", "可见", "可见水印"}:
-            normalized.add("visible")
-        elif channel in {"zero-width", "zero", "zw", "零宽", "zero_width"}:
-            normalized.add("zero-width")
-        elif channel in {"subtle", "subtle-marker", "subtle-markers", "marker", "markers", "隐蔽", "不起眼"}:
-            normalized.add("subtle-markers")
-        elif channel in {"zero-watermark", "zero-watermarks", "fingerprint", "fingerprints", "零水印", "指纹"}:
-            normalized.add("zero-watermark")
-        else:
-            normalized.add(channel)
-    return normalized
-
-
-def is_placeholder_like(text: str | None) -> bool:
-    if text is None:
-        return True
-    normalized = text.strip().lstrip("-").strip().strip("`*_ \t\r\n")
-    if not normalized:
-        return True
-    lowered = normalized.lower()
-    for marker in PLACEHOLDER_MARKERS:
-        lowered_marker = marker.lower()
-        if not lowered.startswith(lowered_marker):
-            continue
-        if len(lowered) == len(lowered_marker):
-            return True
-        next_char = normalized[len(marker)]
-        if next_char.isspace():
-            return True
-    return normalized in {"...", ".", "例如"}
-
 
 def step_compliance() -> None:
     print("=== 法律与合规风险初筛清单 ===")
@@ -438,7 +390,7 @@ def step_validate(task_dir: Path) -> int:
             print(f"✅ `source_watermark_channels`: {', '.join(sorted(channels))}")
 
     zero_width_raw = extract_backticked_field(content, "zero_width_watermark_enabled")
-    zero_width_enabled = normalize_boolean_field(zero_width_raw)
+    zero_width_enabled = normalize_yes_no_field(zero_width_raw)
     if zero_width_raw is None:
         errors.append("缺少 `zero_width_watermark_enabled` 字段")
     elif zero_width_enabled is None:
@@ -447,7 +399,7 @@ def step_validate(task_dir: Path) -> int:
         print(f"✅ `zero_width_watermark_enabled`: {zero_width_raw}")
 
     subtle_raw = extract_backticked_field(content, "subtle_code_marker_enabled")
-    subtle_enabled = normalize_boolean_field(subtle_raw)
+    subtle_enabled = normalize_yes_no_field(subtle_raw)
     if subtle_raw is None:
         errors.append("缺少 `subtle_code_marker_enabled` 字段")
     elif subtle_enabled is None:
@@ -456,7 +408,7 @@ def step_validate(task_dir: Path) -> int:
         print(f"✅ `subtle_code_marker_enabled`: {subtle_raw}")
 
     ownership_raw = extract_backticked_field(content, "ownership_proof_required")
-    ownership_required = normalize_boolean_field(ownership_raw)
+    ownership_required = normalize_yes_no_field(ownership_raw)
     if ownership_raw is None:
         errors.append("缺少 `ownership_proof_required` 字段")
     elif ownership_required is None:

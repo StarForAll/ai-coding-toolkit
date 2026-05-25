@@ -9,11 +9,15 @@ import re
 import sys
 from pathlib import Path
 
-from workflow_common import find_assessment_in_lineage
+from workflow_common import (
+    extract_markdown_field,
+    find_assessment_in_lineage,
+    normalize_yes_no_field,
+    parse_channels,
+)
 
 
 VALID_LEVELS = {"none", "basic", "hybrid", "forensic"}
-TRUE_VALUES = {"yes", "true", "on", "1", "是"}
 WMID_PATTERN = re.compile(r"\bwm_[A-Za-z0-9_-]{4,}\b")
 
 
@@ -53,46 +57,14 @@ def print_result(ok: bool, success: str, failure: str) -> bool:
     return False
 
 
-def normalize_bool(value: str | None) -> bool:
-    """Normalize a yes/no-like field to bool."""
-    if value is None:
-        return False
-    return value.strip().strip("`").lower() in TRUE_VALUES
-
-
 def extract_field(content: str, field_name: str) -> str | None:
-    """Extract a markdown list-style field value."""
-    pattern = re.compile(
-        rf"(?:`)?{re.escape(field_name)}(?:`)?\s*:\s*(.+?)(?:\n|$)",
-        re.IGNORECASE,
-    )
-    match = pattern.search(content)
-    if not match:
-        return None
-    value = match.group(1).strip()
-    value = value.strip("`").strip()
-    return value or None
+    """Backward-compatible alias for markdown field extraction."""
+    return extract_markdown_field(content, field_name)
 
 
-def parse_channels(raw: str | None) -> set[str]:
-    """Parse comma-separated channels into a normalized set."""
-    if not raw:
-        return set()
-    parts = re.split(r"[,\uFF0C/\s]+", raw.lower())
-    channels = {part for part in parts if part}
-    normalized = set()
-    for channel in channels:
-        if channel in {"visible", "可见", "可见水印", "comment", "comments"}:
-            normalized.add("visible")
-        elif channel in {"zero-width", "zero", "zw", "零宽", "zero_width"}:
-            normalized.add("zero-width")
-        elif channel in {"subtle", "subtle-marker", "subtle-markers", "marker", "markers", "隐蔽", "不起眼"}:
-            normalized.add("subtle-markers")
-        elif channel in {"zero-watermark", "zero-watermarks", "fingerprint", "fingerprints", "零水印", "指纹"}:
-            normalized.add("zero-watermark")
-        else:
-            normalized.add(channel)
-    return normalized
+def normalize_bool(value: str | None) -> bool:
+    """Backward-compatible alias for yes/no normalization."""
+    return normalize_yes_no_field(value) is True
 
 
 def load_assessment(task_dir: Path) -> tuple[str | None, set[str], bool, bool, bool]:
@@ -102,11 +74,11 @@ def load_assessment(task_dir: Path) -> tuple[str | None, set[str], bool, bool, b
         raise FileNotFoundError(f"{assessment_file} 不存在")
 
     content = assessment_file.read_text(encoding="utf-8")
-    level = extract_field(content, "source_watermark_level")
-    channels = parse_channels(extract_field(content, "source_watermark_channels"))
-    zero_width_enabled = normalize_bool(extract_field(content, "zero_width_watermark_enabled"))
-    subtle_enabled = normalize_bool(extract_field(content, "subtle_code_marker_enabled"))
-    ownership_required = normalize_bool(extract_field(content, "ownership_proof_required"))
+    level = extract_markdown_field(content, "source_watermark_level")
+    channels = parse_channels(extract_markdown_field(content, "source_watermark_channels"))
+    zero_width_enabled = normalize_yes_no_field(extract_markdown_field(content, "zero_width_watermark_enabled")) is True
+    subtle_enabled = normalize_yes_no_field(extract_markdown_field(content, "subtle_code_marker_enabled")) is True
+    ownership_required = normalize_yes_no_field(extract_markdown_field(content, "ownership_proof_required")) is True
     return level, channels, zero_width_enabled, subtle_enabled, ownership_required
 
 
@@ -152,11 +124,11 @@ def validate_feasibility(task_dir: Path) -> tuple[int, int, bool, set[str], bool
     checks = 0
     passed = 0
 
-    level = extract_field(content, "source_watermark_level")
-    channels = parse_channels(extract_field(content, "source_watermark_channels"))
-    zero_width_enabled = normalize_bool(extract_field(content, "zero_width_watermark_enabled"))
-    subtle_enabled = normalize_bool(extract_field(content, "subtle_code_marker_enabled"))
-    ownership_required = normalize_bool(extract_field(content, "ownership_proof_required"))
+    level = extract_markdown_field(content, "source_watermark_level")
+    channels = parse_channels(extract_markdown_field(content, "source_watermark_channels"))
+    zero_width_enabled = normalize_yes_no_field(extract_markdown_field(content, "zero_width_watermark_enabled")) is True
+    subtle_enabled = normalize_yes_no_field(extract_markdown_field(content, "subtle_code_marker_enabled")) is True
+    ownership_required = normalize_yes_no_field(extract_markdown_field(content, "ownership_proof_required")) is True
 
     checks += 1
     if level and level.lower() in VALID_LEVELS:
@@ -171,19 +143,19 @@ def validate_feasibility(task_dir: Path) -> tuple[int, int, bool, set[str], bool
         passed += print_result(False, "", "`source_watermark_channels` 缺失或为空")
 
     checks += 1
-    if extract_field(content, "zero_width_watermark_enabled") is not None:
+    if extract_markdown_field(content, "zero_width_watermark_enabled") is not None:
         passed += print_result(True, f"`zero_width_watermark_enabled`: {zero_width_enabled}", "")
     else:
         passed += print_result(False, "", "缺少 `zero_width_watermark_enabled` 字段")
 
     checks += 1
-    if extract_field(content, "subtle_code_marker_enabled") is not None:
+    if extract_markdown_field(content, "subtle_code_marker_enabled") is not None:
         passed += print_result(True, f"`subtle_code_marker_enabled`: {subtle_enabled}", "")
     else:
         passed += print_result(False, "", "缺少 `subtle_code_marker_enabled` 字段")
 
     checks += 1
-    if extract_field(content, "ownership_proof_required") is not None:
+    if extract_markdown_field(content, "ownership_proof_required") is not None:
         passed += print_result(True, f"`ownership_proof_required`: {ownership_required}", "")
     else:
         passed += print_result(False, "", "缺少 `ownership_proof_required` 字段")
