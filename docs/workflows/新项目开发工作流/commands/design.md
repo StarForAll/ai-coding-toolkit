@@ -43,8 +43,8 @@ description: 需求冻结了？开始设计 — 先核对设计输入，再做�
 python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 ```
 
-默认按给定 `<task-dir>` 校验当前阶段 artifact / exit gate；若你还需要确认当前 session 的 active task 绑定到该任务，再显式追加 `--require-active-task-check`。
-校验通过后继续当前阶段；失败时按输出的错误项逐项修复后重试。
+默认按给定 `<task-dir>` 校验当前阶段**已落盘**的 artifact / exit gate 契约；它不适合作为“尚未产生产物时的空跑入口检查”。
+若你还需要确认当前 session 的 active task 绑定到该任务，再显式追加 `--require-active-task-check`。先进入当前阶段并补齐该阶段最小基线后，再运行此校验。
 
 进入 `/trellis:design` 前，需求已冻结，且已形成目标项目的：
 
@@ -219,7 +219,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 | 项目内现有实现 / 代码上下文定位 | `ace.search_context` | 当需要定位项目内相似实现、受影响文件或既有约束时 | 默认优先；回退：`Read + Glob/Grep` |
 | 最新版本 / 发布动态 / 今日事实 | `grok-search` | 当设计判断依赖最新版本、发布日期、官方动态时 | 默认优先；回退：`exa`，仍不足时标记 `[Evidence Gap]` |
 | 参考 GitHub 开源架构 | `deepwiki` | 当需要参考外部开源项目时 | 回退：`exa_web_search_exa` |
-| 技术选型深度研究 | `exa_web_search_advanced_exa(type=deep-reasoning)` | 当需要进行技术方案深度调研时 | 回退：`grok-search`。没有官方文档证据时，不下 API/框架细节结论，只保留待验证设计假设 |
+| 技术选型深度研究 | `exa_web_search_advanced_exa(type=auto)` | 当需要进行技术方案深度调研时 | 建议同时给出 2-3 个 `additionalQueries` 变体；回退：`grok-search`。没有官方文档证据时，不下 API/框架细节结论，只保留待验证设计假设 |
 | 复杂架构推理 | `sequential-thinking` | 当涉及 ≥3 个技术方案对比或推理步骤 >3 步时 | 复杂决策场景 |
 | 架构图可视化 | `markmap` | 当需要生成架构图或模块依赖图时 | 架构图/模块依赖图 |
 | 框架 / SDK API 文档 | `Context7` | 当需要查询第三方库或框架官方文档时 | 技术选型必查 |
@@ -230,8 +230,8 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 |------|-------|
 | 架构模式 | `architecture-patterns` |
 | 后端架构 | `backend-patterns` |
-| API 设计 | `api-design-principles` |
-| 数据库 | `postgresql-table-design` |
+| API 设计 | `API Designer` |
+| 数据库 | `backend-patterns` |
 | 文档撰写 | `doc-coauthoring` |
 
 执行要求：

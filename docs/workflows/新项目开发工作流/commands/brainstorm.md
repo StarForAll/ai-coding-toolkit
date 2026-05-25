@@ -87,8 +87,8 @@ description: 需求还不够稳？先按 Trellis 原生需求发现主链收集�
 python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 ```
 
-默认按给定 `<task-dir>` 校验当前阶段所需的 artifact / exit gate；只有需要同时核对“当前 session 是否正指向这个 task”时，才追加 `--require-active-task-check`。
-校验通过后继续当前阶段；失败时按输出的错误项逐项修复后重试。
+默认按给定 `<task-dir>` 校验当前阶段**已落盘**的 artifact / exit gate；它不适合作为“尚未产生产物时的空跑入口检查”。只有需要同时核对“当前 session 是否正指向这个 task”时，才追加 `--require-active-task-check`。
+先进入当前阶段并补齐该阶段最小基线，再运行此校验；失败时按输出的错误项逐项修复后重试。
 
 若当前还是首次入口、尚无 `$TASK_DIR`，先执行下方 Step 0 创建任务目录并初始化 `workflow-state.json`，再回到这里运行校验；不要在没有 task 的情况下空跑 `validate <task-dir>`。
 

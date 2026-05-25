@@ -161,6 +161,9 @@ $TASK_DIR/check.md
 - `Review-Gate Decision` / `补充审查判定`
   - `review_gate_decision`: `skip` / `recommended` / `required`
   - `review_gate_reason`: 当前为什么判成该结果
+  - 若 `review_gate_decision = recommended` 且准备直接进入 `delivery`，必须额外写：
+    - `recommended_review_skip_accepted_by_user`: `yes`
+    - `recommended_review_skip_acceptance_note`: 用户为何接受跳过本轮补充审查
   - 6 个任务级硬条件的 `yes` / `no` 留痕
 - 建议人工关注模块
 - 推荐下一步
@@ -185,6 +188,8 @@ $TASK_DIR/check.md
 - `review_gate_decision`: `skip`
 - `review_gate_reason`: `未命中 review-gate 硬条件，现有验证证据足够`
 - `check_gate_status`: `pass` / `fail`
+- `recommended_review_skip_accepted_by_user`: `yes` / `no`（仅当 `review_gate_decision = recommended` 且准备直接进入 `delivery`）
+- `recommended_review_skip_acceptance_note`: `<仅当上一字段为 yes 时填写>`
 - `auth_or_sensitive`: `no`
 - `data_migration_or_schema_change`: `no`
 - `public_api_or_cross_layer_contract_or_external_integration`: `no`
@@ -253,6 +258,6 @@ $TASK_DIR/check.md
   - 用户显式要求进入 `review-gate`
 - 或根据当前改动的软条件预判，进入 `review-gate` 后大概率会被判定为 `recommended`
 
-`check.md` 必须把这组判定结果结构化写入 `## Review-Gate Decision`。若其中任一硬条件为 `yes`，则 `review_gate_decision` 只能写 `required`；不得再从 `check` 直接切到 `delivery`。
+`check.md` 必须把这组判定结果结构化写入 `## Review-Gate Decision`。若其中任一硬条件为 `yes`，则 `review_gate_decision` 只能写 `required`；不得再从 `check` 直接切到 `delivery`。若 `review_gate_decision = recommended` 且仍准备直接进入 `delivery`，则必须额外记录 `recommended_review_skip_accepted_by_user = yes` 与 `recommended_review_skip_acceptance_note`。
 
 不满足以上条件时，check 可直接进入 delivery，无需经过 review-gate；若当前轮还需要关闭当前 active task，再在 delivery 之后进入 native finish-work。

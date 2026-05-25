@@ -215,7 +215,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 - `demand-risk-assessment`
 - `grok-search`
-- `exa_web_search_advanced_exa(type=deep-reasoning)`
+- `exa_web_search_advanced_exa(type=auto)`
 - `deepwiki`
 - `sequential-thinking`
 
@@ -361,7 +361,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - `doc-coauthoring`
 - `architecture-patterns`
 - `backend-patterns`
-- `api-design-principles`
+- `API Designer`
 
 ### 典型降级方式
 
@@ -486,7 +486,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 - 没有结构化拆解能力时，至少按“范围 / 风险 / 验收 / 依赖 / 回归”五列拆任务
 - 对不确定项单独列成待补信息，不要混入已承诺任务
-- 若拆任务依赖第三方官方文档或最新版本判断，仍按全局路由：`Context7` / `grok-search` / `exa_web_search_advanced_exa(type=deep-reasoning)`
+- 若拆任务依赖第三方官方文档或最新版本判断，仍按全局路由：`Context7` / `grok-search` / `exa_web_search_advanced_exa(type=auto)`
 
 ### 外部交付项目分支
 
@@ -510,7 +510,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 - `## 范围收敛与降级预案`
 - `## 阶段出口快照`
 
-并且无论项目是否启用源码水印，都必须把 `性能回归与优化任务` 拆成真实 Trellis task：
+仅当 `task_creation_checklist.md` 中 `post_mainline_performance_task = yes` 时，才把 `性能回归与优化任务` 拆成真实 Trellis task；若为 `no`，必须记录 `post_mainline_performance_task_reason`：
 
 - 它固定位于目标主干任务链之后
 - 它负责主干完成后的性能回归对比与优化闭环

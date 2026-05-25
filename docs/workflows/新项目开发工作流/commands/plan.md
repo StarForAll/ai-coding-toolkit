@@ -130,7 +130,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py set <task-dir> \
 
 - 若拆任务时需要确认第三方框架 / SDK 官方文档，优先 `Context7`
 - 若依赖最新版本、近期发布或今日事实，优先 `grok-search`
-- 只有在需要深度技术调研或多方案对比时，才进入 `exa_web_search_advanced_exa(type=deep-reasoning)`
+- 只有在需要深度技术调研或多方案对比时，才进入 `exa_web_search_advanced_exa(type=auto)`，并配合 2-3 个 `additionalQueries` 变体
 - 项目内既有实现、影响面和相似任务边界，优先 `ace.search_context`
 
 ```bash
@@ -238,26 +238,27 @@ $TASK_DIR/task_creation_checklist.md
 
 - TASK-A：<主干任务 1>
 - TASK-B：<主干任务 2>
-- `性能回归与优化任务`：主干任务完成后的固定后置任务（必选）
+- `性能回归与优化任务`：主干任务完成后的条件后置任务（按适用性决定）
 - PROJECT-AUDIT：<如适用>
 
 ## 依赖与项目域草案
 
-- 项目域 A：TASK-A → TASK-B → 性能回归与优化任务
-- PROJECT-AUDIT（如适用）依赖全部代码相关 task 完成，且不得早于 `性能回归与优化任务`
+- 项目域 A：TASK-A → TASK-B → 性能回归与优化任务（仅当 `post_mainline_performance_task = yes`）
+- PROJECT-AUDIT（如适用）依赖全部代码相关 task 完成；若存在 `性能回归与优化任务`，则不得早于该任务
 
 ## 人工确认清单
 
 - [ ] 已确认拟创建的 Trellis task 列表
 - [ ] 已确认主干任务链与项目域 lane
-- [ ] 已确认 `性能回归与优化任务` 为主干后的固定必选任务
+- [ ] 已确认是否需要在主干后保留 `性能回归与优化任务`
 - [ ] 已确认当前推荐执行任务的边界与验收锚点
 
 ## 人工确认结果
 
 - `task_creation_confirmed`: `yes`
 - `confirmed_scope`: <当前已冻结的任务范围>
-- `post_mainline_performance_task`: `yes`
+- `post_mainline_performance_task`: `yes` / `no`
+- `post_mainline_performance_task_reason`: <当填写 `no` 时，说明为什么本轮不需要独立性能回归 task>
 ```
 
 若用户尚未确认：
@@ -329,11 +330,12 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
   - `walking skeleton / smoke`：尽早跑通一条最短主链，验证前后端/模块契约是否闭环
   - `packaging skeleton`：凡是存在打包 / 分发 / 原生壳风险的项目，都应尽早产出最小骨架，而不是等所有模块完成后再第一次构建
   - `performance probe`：凡是存在体积、启动时间、内存或关键性能指标的项目，都应尽早产出 baseline / canary 测量
-- 无论项目是否启用源码水印，都**必须**额外拆出一个独立的后置 task：`性能回归与优化任务`
+- 仅当 `task_creation_checklist.md` 中 `post_mainline_performance_task = yes` 时，才额外拆出一个独立的后置 task：`性能回归与优化任务`
   - 该 task 只能在目标主干任务链完成后开始
   - 该 task 负责对主干完成后的关键性能指标做回归对比，并在必要时完成优化闭环
   - 指标至少覆盖与项目相关的体积 / 启动时间 / 内存 / 响应速度中的适用项
   - 若存在 `PROJECT-AUDIT`，则 `PROJECT-AUDIT` 不得早于该 task
+  - 若填写 `post_mainline_performance_task = no`，必须同时写出 `post_mainline_performance_task_reason`，并在 `task_plan.md` 中省略该 task 的任务行、依赖行与图摘要
 - 若项目包含前端视觉落地链路，必须额外拆出一个独立 task：`UI -> 首版代码界面`
   - 该 task 只负责把已确认 UI 原型落成第一版代码界面
   - 该 task **禁止**使用 Codex 作为主执行器，必须改用 Claude Code / OpenCode
@@ -407,8 +409,8 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 |---------|------|--------|------|
 | .trellis/tasks/04-14-task-a | implementation | 项目域 A | ... |
 | .trellis/tasks/04-14-task-b | implementation | 项目域 A | ... |
-| .trellis/tasks/04-14-performance-opt | implementation | 全局 | 主干完成后的性能回归与优化任务 |
-| .trellis/tasks/04-14-project-audit | project-audit | 全局 | 全部代码相关 task 完成后才允许开始 |
+| .trellis/tasks/04-14-performance-opt | implementation | 全局 | 主干完成后的性能回归与优化任务；`code_related=yes` |
+| .trellis/tasks/04-14-project-audit | project-audit | 全局 | 全部代码相关 task 完成后才允许开始；`code_related=no` |
 
 ## 当前推荐执行任务（待确认）
 
@@ -441,6 +443,14 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 - `walking_skeleton_or_smoke`: <对应 task / not_applicable + 原因>
 - `packaging_skeleton`: <对应 task / not_applicable + 原因>
 - `performance_probe`: <对应 task / not_applicable + 原因>
+
+补充约束：
+
+- `Trellis Task 清单` 建议在 `说明` 列显式写 `code_related=yes` / `code_related=no`
+- validator 会优先采用这个显式标记，再退回到保守关键词判断
+- 对文档整理、纯交付、纯流程、审查载体类 task，建议显式写 `code_related=no`
+- 对迁移、性能、安全、实现类 task，建议显式写 `code_related=yes`
+- 若任务名称接近“性能测试文档”“安全审计报告”“安全说明文档”这类非实现项，即使当前关键词兜底通常不会误判，也建议显式写 `code_related=no`
 
 ## 自动化策略摘要
 
@@ -537,14 +547,14 @@ python3 <WORKFLOW_DIR>/commands/shell/plan-validate.py <task-dir>
 python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 ```
 
-这里的 `workflow-state.py validate <task-dir>` 默认只校该 task 的阶段 artifact / exit gate，不要求当前 session 已经把 active task 切到它；若需要额外验证当前 session 绑定，再显式追加 `--require-active-task-check`。
+这里的 `workflow-state.py validate <task-dir>` 默认只校该 task **已落盘**的阶段 artifact / exit gate，不要求当前 session 已经把 active task 切到它；它不适合作为“尚未产生产物时的空跑入口检查”。若需要额外验证当前 session 绑定，再显式追加 `--require-active-task-check`。
 
 校验重点：
 
 - `task_creation_checklist.md` 是否存在且已明确记录人工确认结果
 - `task_plan.md` 结构是否完整
 - `task_plan.md` 中列出的关键 task 是否已真实存在
-- `性能回归与优化任务` 是否已作为真实 Trellis task 出现，并位于主干之后
+- 若 `post_mainline_performance_task = yes`，`性能回归与优化任务` 是否已作为真实 Trellis task 出现，并位于主干之后；若为 `no`，是否已写明 `post_mainline_performance_task_reason`
 - `当前推荐执行任务（待确认）`对应 leaf task 的最小 `prd.md` 是否存在
 - 是否写清项目域执行策略、依赖关系、早期探针、自动化策略、范围收敛预案、门禁摘要、任务图摘要、阶段出口快照
 

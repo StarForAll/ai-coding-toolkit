@@ -144,7 +144,7 @@ Codex 下的 MCP / skills 配置也不应全部堆进 `AGENTS.md` 或启动注�
 - 源码水印与归属证明在当前 workflow 中默认启用（`ownership_proof_required` 常规默认值为 `yes`）；若项目明确设置为 `no`，才可跳过以下内容：
   - 长期策略（是否启用、零宽字符边界、不起眼代码标识禁区）放 `AGENTS.md`
   - 设计 / 交付产物继续放 `$TASK_DIR/design/source-watermark-plan.md`、`$TASK_DIR/delivery/ownership-proof.md`、`$TASK_DIR/delivery/source-watermark-verification.md`
-  - `plan` 阶段继续按 workflow 规则拆出：可见源码水印、零宽字符水印（若启用）、隐蔽代码标识（若启用）、水印验证、归属证明包任务；并且无论是否启用源码水印，都必须在主干任务后追加 `性能回归与优化任务`
+  - `plan` 阶段继续按 workflow 规则拆出：可见源码水印、零宽字符水印（若启用）、隐蔽代码标识（若启用）、水印验证、归属证明包任务；若 `post_mainline_performance_task = yes`，还需在主干任务后追加 `性能回归与优化任务`
   - 静态校验通过 `.trellis/scripts/workflow/ownership-proof-validate.py` 执行
   - 若设计里声明了 `Protected Watermark Snippets`，后续改动还要执行 `.trellis/scripts/workflow/source-watermark-guard.py --mode check`；只有显式声明可恢复的低风险片段才允许 `--mode repair`
 
@@ -298,7 +298,7 @@ Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-ch
   - 项目内部代码定位优先 `ace.search_context`
   - 第三方库 / 框架 / SDK 官方文档必须先 `Context7`
   - 最新信息、版本、今日事实优先 `grok-search`
-  - 深度技术调研 / 竞品分析优先 `exa_web_search_advanced_exa(type=deep-reasoning)`
+  - 深度技术调研 / 竞品分析优先 `exa_web_search_advanced_exa(type=auto)`
   - GitHub 仓库理解优先 `deepwiki`
   - 未经过 `Context7`，不得输出 API / 配置 / 版本结论；若能力不可用，必须标记 `[Evidence Gap]`
 - `trellis-implement.toml`：若残留存在，仍保持 `workspace-write`

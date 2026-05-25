@@ -113,7 +113,7 @@ STAGE_STATUSES = {
     "completed",
 }
 EXECUTION_STAGES = {"implementation"}
-COORDINATION_STAGES = {"feasibility", "brainstorm", "design", "plan", "project-audit"}
+COORDINATION_STAGES = {"feasibility", "brainstorm", "design", "plan", "project-audit", "delivery"}
 LEAF_REQUIRED_STAGES = STAGES - COORDINATION_STAGES
 SUPPORTED_STATE_VERSION = 1
 PROJECT_ESTIMATE_REQUIRED_STAGES = STAGES - {"feasibility", "brainstorm"}

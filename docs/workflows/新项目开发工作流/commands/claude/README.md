@@ -244,7 +244,7 @@ Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-ch
 - 项目内部代码定位优先 `ace.search_context`
 - 第三方库 / 框架 / SDK 官方文档必须先 `Context7`
 - 最新信息、版本、今日事实优先 `grok-search`
-- 深度技术调研 / 竞品分析优先 `exa_web_search_advanced_exa(type=deep-reasoning)`
+- 深度技术调研 / 竞品分析优先 `exa_web_search_advanced_exa(type=auto)`
 - GitHub 仓库理解优先 `deepwiki`
 - 未经过 `Context7`，不得输出 API / 配置 / 版本结论；若能力不可用，必须标记 `[Evidence Gap]`
 

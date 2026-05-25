@@ -78,7 +78,10 @@ description: 所有代码任务都完成了？进入项目级全局代码审查�
 
 - 若 `task_plan.md` 已声明独立 `PROJECT-AUDIT` task，则该 task 内的 `project-audit.md` 是唯一正式出口证据
 - 当前 active task 内的 `project-audit.md` 仅可作为预审记录或未拆独立 `PROJECT-AUDIT` task 时的兼容载体
-- 本命令执行完成后，可以将独立 `PROJECT-AUDIT` task 标记为 `已完成`
+- 本命令执行完成后，可以将独立 `PROJECT-AUDIT` task 视为“正式完成”；这里的完成不再只等同于 archive 后的 `task.json.status = completed`
+- 当前 workflow 接受两类正式完成证据：
+  - 代码相关 task 已 archive，`task.json.status = completed`
+  - 代码相关 task 尚未 archive，但其 `workflow-state` 已进入 `check` / `review-gate` / `project-audit` / `delivery` 之一，且该 task 的 `check.md` 已闭环
 
 ### 手动触发（预审模式）
 
@@ -331,6 +334,12 @@ tmp/multi-cli-review/<task-id>-project-audit/
 - `project_audit_gate_status`: `pass` / `fail` / `not_run`
 - `task_level_check_status`: `pass` / `fail` / `not_run` / `not_needed`
 - 失败后的处理动作 / 剩余阻塞：
+
+补充契约：
+
+- `task_level_check_status` 记录的是“当前 active task 的任务级 check 是否仍闭环”，不是要求 formal `PROJECT-AUDIT` carrier 自己再持有一份 `check.md`
+- 若 `task_plan.md` 的 `Trellis Task 清单` 存在歧义，建议在 `说明` 列显式写 `code_related=yes` / `code_related=no`，避免仅凭关键词推断哪些 task 属于“代码相关”
+- 当前关键词兜底已刻意避免把“性能测试文档”“安全审计报告”这类非实现任务自动视为代码相关；但只要任务命名仍可能让人误读，仍建议显式写 `code_related=no`
 
 > 约束：只有 `Mode = formal` 的文档才能作为 `delivery` 的项目级阶段出口；`pre-audit` 只代表预审，可作为回到 `check` / `review-gate` 的过程证据，但不得作为最终 project-audit 完成证据。
 

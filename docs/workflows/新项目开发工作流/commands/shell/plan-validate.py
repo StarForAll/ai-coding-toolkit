@@ -246,6 +246,31 @@ def field_has_allowed_value(section_lines: list[str], field: str, allowed: tuple
     return match.group(1).strip().lower() in {value.lower() for value in allowed}
 
 
+def extract_field_value(section_lines: list[str], field: str) -> str | None:
+    pattern = rf"{re.escape(field)}\s*[：:]\s*`?([^`\n]+?)`?(?:\s|$)"
+    match = re.search(pattern, section_text(section_lines))
+    if not match:
+        return None
+    return match.group(1).strip()
+
+
+def post_mainline_performance_task_required(checklist_path: Path) -> tuple[bool | None, str | None]:
+    if not checklist_path.is_file():
+        return None, None
+    content = checklist_path.read_text(encoding="utf-8")
+    lines = content.splitlines()
+    result_section = find_section_lines(lines, "人工确认结果")
+    raw_value = extract_field_value(result_section, "`post_mainline_performance_task`")
+    if raw_value is None:
+        return None, None
+    normalized = raw_value.lower()
+    if normalized == "yes":
+        return True, None
+    if normalized == "no":
+        return False, extract_field_value(result_section, "`post_mainline_performance_task_reason`")
+    return None, None
+
+
 def validate_task_creation_checklist(checklist_path: Path) -> tuple[bool, str]:
     if not checklist_path.is_file():
         return False, "缺少 task_creation_checklist.md；真实创建 Trellis task 前的人工确认依据不存在"
@@ -269,11 +294,15 @@ def validate_task_creation_checklist(checklist_path: Path) -> tuple[bool, str]:
     if not field_has_expected_value(result_section, "`task_creation_confirmed`", "yes"):
         return False, "task_creation_checklist.md 未明确记录 `task_creation_confirmed: yes`，不得进入真实 task 创建后的验证"
 
-    if not field_has_expected_value(result_section, "`post_mainline_performance_task`", "yes"):
-        return False, "task_creation_checklist.md 未明确确认主干后固定保留 `性能回归与优化任务`"
-
-    if PERFORMANCE_TASK_LABEL not in content:
-        return False, "task_creation_checklist.md 未列出必选的 `性能回归与优化任务`"
+    performance_required, performance_reason = post_mainline_performance_task_required(checklist_path)
+    if performance_required is None:
+        return False, "task_creation_checklist.md 的 `post_mainline_performance_task` 只能填写 `yes` / `no`"
+    if performance_required:
+        if PERFORMANCE_TASK_LABEL not in content:
+            return False, "task_creation_checklist.md 未列出必选的 `性能回归与优化任务`"
+    else:
+        if is_placeholder_like(performance_reason):
+            return False, "task_creation_checklist.md 已声明不需要 `性能回归与优化任务`，但缺少 `post_mainline_performance_task_reason`"
 
     return True, "task_creation_checklist.md 已存在且人工确认结果完整"
 
@@ -314,6 +343,7 @@ def main() -> int:
     print("=== 任务拆解摘要结构验证 ===")
 
     checklist_ok, checklist_message = validate_task_creation_checklist(checklist_file)
+    performance_task_required, _ = post_mainline_performance_task_required(checklist_file)
     checks = 1
     passed = print_result(
         checklist_ok,
@@ -545,24 +575,45 @@ def main() -> int:
         "`granularity_decision` 只能填写 `split_further` 或 `keep_current_granularity`",
     )
 
+    expected_performance_task_count = 1 if performance_task_required is not False else 0
     checks += 1
     passed += print_result(
-        performance_task_count == 1,
-        "Trellis Task 清单已包含唯一的后置 `性能回归与优化任务`",
-        "Trellis Task 清单中缺少或重复定义 `性能回归与优化任务`",
+        performance_task_count == expected_performance_task_count,
+        (
+            "Trellis Task 清单已包含唯一的后置 `性能回归与优化任务`"
+            if performance_task_required is not False
+            else "Trellis Task 清单已按适用性移除 `性能回归与优化任务`"
+        ),
+        (
+            "Trellis Task 清单中缺少或重复定义 `性能回归与优化任务`"
+            if performance_task_required is not False
+            else "task_creation_checklist.md 已声明无需 `性能回归与优化任务`，但 Trellis Task 清单仍保留了该任务"
+        ),
     )
 
-    performance_dependency_ok = PERFORMANCE_TASK_LABEL in dependency_section
+    performance_dependency_ok = (
+        PERFORMANCE_TASK_LABEL in dependency_section
+        if performance_task_required is not False
+        else PERFORMANCE_TASK_LABEL not in dependency_section
+    )
     checks += 1
     passed += print_result(
         performance_dependency_ok,
-        "依赖关系已写明 `性能回归与优化任务` 的主干后置位置",
-        "依赖关系未写明 `性能回归与优化任务` 的依赖位置",
+        (
+            "依赖关系已写明 `性能回归与优化任务` 的主干后置位置"
+            if performance_task_required is not False
+            else "依赖关系已按适用性移除 `性能回归与优化任务` 依赖"
+        ),
+        (
+            "依赖关系未写明 `性能回归与优化任务` 的依赖位置"
+            if performance_task_required is not False
+            else "task_creation_checklist.md 已声明无需 `性能回归与优化任务`，但依赖关系仍包含该任务"
+        ),
     )
 
     project_audit_dependency_ok = True
     project_audit_dependency_message = "当前任务图未声明 project-audit，可跳过 PROJECT-AUDIT 时序约束检查"
-    if project_audit_count == 1:
+    if project_audit_count == 1 and performance_task_required is not False:
         project_audit_dependency_ok, project_audit_dependency_message = validate_project_audit_dependency(
             find_section_lines(lines, "依赖关系")
         )
@@ -573,16 +624,28 @@ def main() -> int:
         project_audit_dependency_message,
     )
 
-    performance_graph_ok = PERFORMANCE_TASK_LABEL in graph_section
+    performance_graph_ok = (
+        PERFORMANCE_TASK_LABEL in graph_section
+        if performance_task_required is not False
+        else PERFORMANCE_TASK_LABEL not in graph_section
+    )
     checks += 1
     passed += print_result(
         performance_graph_ok,
-        "任务图摘要已包含 `性能回归与优化任务`",
-        "任务图摘要未包含 `性能回归与优化任务`",
+        (
+            "任务图摘要已包含 `性能回归与优化任务`"
+            if performance_task_required is not False
+            else "任务图摘要已按适用性移除 `性能回归与优化任务`"
+        ),
+        (
+            "任务图摘要未包含 `性能回归与优化任务`"
+            if performance_task_required is not False
+            else "task_creation_checklist.md 已声明无需 `性能回归与优化任务`，但任务图摘要仍包含该任务"
+        ),
     )
 
     performance_before_audit_ok = True
-    if performance_graph_ok and "PROJECT-AUDIT" in graph_section:
+    if performance_task_required is not False and performance_graph_ok and "PROJECT-AUDIT" in graph_section:
         performance_index = graph_section.find(PERFORMANCE_TASK_LABEL)
         project_audit_index = graph_section.find("PROJECT-AUDIT")
         performance_before_audit_ok = performance_index <= project_audit_index
