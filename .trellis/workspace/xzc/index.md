@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-7.md`
-- **Total Sessions**: 311
+- **Total Sessions**: 312
 - **Last Active**: 2026-05-25
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-7.md` | ~277 | Active |
+| `journal-7.md` | ~311 | Active |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
@@ -35,6 +35,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 312 | 2026-05-25 | Repair embedded workflow project-audit gates | `8e97522`, `b590271` | `main` |
 | 311 | 2026-05-25 | Repair embedded workflow gate contracts | `5af6ceb` | `main` |
 | 310 | 2026-05-25 | 修复嵌入工作流门禁与兼容性问题 | `c4e00a4` | `main` |
 | 309 | 2026-05-25 | 修复嵌入工作流阶段门禁与交付串联 | `c5ae8b7`, `4be7017` | `main` |

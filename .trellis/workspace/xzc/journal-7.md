@@ -275,3 +275,37 @@ Repaired embedded workflow gate validation contracts: enforced missing gate stat
 ### Next Steps
 
 - None - task complete
+
+
+## Session 312: Repair embedded workflow project-audit gates
+
+**Date**: 2026-05-25
+**Task**: Repair embedded workflow project-audit gates
+**Branch**: `main`
+
+### Summary
+
+Audited and repaired embedded workflow project-audit, delivery, and transition gate contracts; aligned docs and added regression coverage.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8e97522` | (see git log) |
+| `b590271` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
