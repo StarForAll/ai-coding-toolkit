@@ -2524,8 +2524,8 @@ Triggered from `start` (Trellis command) when the user describes a development t
         workflow_doc = fixture / ".trellis" / "workflow.md"
         workflow_doc.write_text(
             workflow_doc.read_text(encoding="utf-8").replace(
-                "workflow-state.py set <dir> --stage brainstorm --stage-status in_progress --awaiting-user-confirmation false --allowed-next design,plan,implementation",
-                "workflow-state.py set <dir> --stage brainstorm --stage-status blocked --awaiting-user-confirmation false --allowed-next design,plan,implementation",
+                "workflow-state.py set <dir> --stage brainstorm --stage-status in_progress --awaiting-user-confirmation false --allowed-next design,plan,implementation --transition-from feasibility",
+                "workflow-state.py set <dir> --stage brainstorm --stage-status blocked --awaiting-user-confirmation false --allowed-next design,plan,implementation --transition-from feasibility",
             ),
             encoding="utf-8",
         )
