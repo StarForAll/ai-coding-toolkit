@@ -107,3 +107,37 @@ Audited the embedded new-project workflow against /tmp/trellis-0.5.17-2, fixed b
 ### Next Steps
 
 - None - task complete
+
+
+## Session 307: Repair embedded workflow strong-gate routing and integrity checks
+
+**Date**: 2026-05-25
+**Task**: Repair embedded workflow strong-gate routing and integrity checks
+**Branch**: `main`
+
+### Summary
+
+Repaired workflow first-entry feasibility enforcement, aligned embed integrity checks with real installed runtime semantics, removed dead bootstrap code, tightened workflow-state test helpers, and synced repo-local workflow maintenance specs.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cda468f` | (see git log) |
+| `9bebdc7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
