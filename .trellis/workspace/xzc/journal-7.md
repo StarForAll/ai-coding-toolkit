@@ -309,3 +309,37 @@ Audited and repaired embedded workflow project-audit, delivery, and transition g
 ### Next Steps
 
 - None - task complete
+
+
+## Session 313: Repair embedded workflow strong-gate contracts
+
+**Date**: 2026-05-26
+**Task**: Repair embedded workflow strong-gate contracts
+**Branch**: `main`
+
+### Summary
+
+Repaired embedded workflow strong-gate contracts, tightened project-audit and delivery gates, conditioned performance tasks, fixed capability routing, and added regression coverage.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `43f9f08` | (see git log) |
+| `aafc275` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
