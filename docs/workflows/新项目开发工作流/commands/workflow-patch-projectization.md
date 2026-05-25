@@ -392,7 +392,10 @@ Prerequisite:
 
 - outsourcing / external-delivery projects: valid `assessment.md` from feasibility
 - personal profile first-entry: `brainstorm` may bootstrap the minimum `assessment.md` baseline in-place, but it must be complete before leaving `brainstorm`
-- minimum bootstrap fields: `project_engagement_type`, `法律/合规风险结论`, `source_watermark_level`, `source_watermark_channels`, `zero_width_watermark_enabled`, `subtle_code_marker_enabled`, `ownership_proof_required`
+- minimum bootstrap fields: `project_engagement_type`, `法律/合规风险结论`, `source_watermark_level`, `source_watermark_channels`, `zero_width_watermark_enabled`, `subtle_code_marker_enabled`, `ownership_proof_required`, `是否允许进入 brainstorm`
+- minimum baseline vs full feasibility assessment: the personal bootstrap branch only satisfies the minimum gate needed to stay in `brainstorm` and leave it safely; it does **not** replace the fuller risk-analysis, pricing, negotiation, and external-delivery assessment fields that `/trellis:feasibility` may record
+- whether personal projects must later return to `feasibility`: not by default. If the project remains an internal/non-outsourcing effort and no later decision needs the full feasibility artifact set, it may continue from `brainstorm` into later stages. If the project later introduces outsourcing-style delivery control, pricing/negotiation commitments, or other assumptions that the minimum baseline does not cover, return to `/trellis:feasibility` and complete the fuller assessment there before proceeding
+- if a personal-profile task wants to enrich the assessment beyond the minimum baseline while still inside `brainstorm`, it may keep writing the same `assessment.md` in-place. Return to `/trellis:feasibility` only when the project needs the full feasibility decision path, not merely because more detail was added
 - if the project does not explicitly set `ownership_proof_required = no`, personal-profile bootstrap must also freeze `source_watermark_level`, `source_watermark_channels`, and `ownership_proof_required` before stage exit
 During requirement iteration, keep the execution-card obligations visible: requirement-scope changes must follow `需求变更管理执行卡`, and ownership / watermark-sensitive projects must preserve the upstream constraints later enforced by `源码水印与归属证据链执行卡`.
 After prd.md and jsonl are curated, set `stage_status = awaiting_user_confirmation` for design/plan transition.
@@ -401,7 +404,14 @@ After prd.md and jsonl are curated, set `stage_status = awaiting_user_confirmati
 [workflow-state:design]
 Current stage: **design** — architecture and design document creation.
 Load `/trellis:design` to produce developer-facing PRD (block A), design docs (block B), project docs (block C), and engineering alignment (block D).
-Blocks A and B require user confirmation before proceeding.
+Block/file mapping summary:
+
+- block A → `docs/requirements/developer-facing-prd.md`
+- block B → design authority docs such as `design/TAD.md`, `design/ODD-dev.md`, `design/ODD-user.md`, plus conditional design artifacts like `design/DDD.md`, `design/IDD.md`, `design/AID.md`, `design/STITCH-PROMPT.md`, `design/specs/<module>.md`, `design/pages/<page>.md`, and `design/source-watermark-plan.md` when applicable
+- block C → project-facing docs such as project-root `README.md`, `README.en.md`, and target-project `docs/` updates aligned to the confirmed architecture
+- block D → engineering alignment work: projectized `.trellis/spec/` refinement, `Context7` review via `design/context7-review.md`, the automation/quality verification matrix, and the `/trellis:finish-work` / close-out adaptation baseline
+`engineering alignment (block D)` is the stage area where the project-level automation check matrix is finalized; installed `quality-guidelines.md` files may still contain a workflow-aware placeholder, but the real verification matrix must be frozen by this block
+Each design block requires a stop-and-confirm boundary before proceeding to the next block; do not treat A/B as the only confirmation points.
 Run `python3 ./.trellis/scripts/workflow/workflow-state.py validate <task-dir> --project-root <root>` to check exit readiness.
 [/workflow-state:design]
 
@@ -481,7 +491,26 @@ Do not guess from filenames or chat history. Ask the user to clarify the current
 
 [workflow-state:repair_needed]
 Route action: **repair_needed** — workflow state is missing, uninitialized, stale, or structurally invalid.
-Run `workflow-state.py repair <task-dir>` first. If it reports `repair_ready`, confirm before applying; if it reports `manual_confirmation_required`, ask the user to confirm the currently approved stage instead of inferring it from artifacts.
+Run `workflow-state.py repair <task-dir>` first.
+Basic usage:
+
+- inspect only: `python3 ./.trellis/scripts/workflow/workflow-state.py repair <task-dir>`
+- rebuild after confirmation: `python3 ./.trellis/scripts/workflow/workflow-state.py repair <task-dir> --stage <stage> --apply`
+- execution-stage rebuild: `python3 ./.trellis/scripts/workflow/workflow-state.py repair <task-dir> --stage implementation --execution-authorized true --transition-from <previous-stage> --apply`
+
+Status meanings:
+
+- `repair_ready`: the helper has enough evidence and explicit inputs to rebuild a valid `workflow-state.json`; confirm with the user, then rerun with `--apply`
+- `manual_confirmation_required`: the helper refuses to guess a required stage or execution authorization detail; ask the user to confirm the currently approved stage and any required execution boundary flags, then rerun with those explicit arguments
+- `repair_blocked`: the remaining state is still structurally inconsistent even after normalization; fix the listed blockers first
+
+Recovery path:
+
+1. run `repair` without `--apply` to inspect status/evidence/blockers
+2. if status is `repair_ready`, confirm with the user and rerun with `--apply`
+3. if status is `manual_confirmation_required`, gather the missing stage / execution-boundary confirmation from the user, then rerun with the required flags
+4. after apply succeeds, rerun `workflow-state.py route` or `workflow-state.py validate <task-dir>` before resuming the stage body
+
 Execution re-entry such as `implementation` requires explicit `--execution-authorized true` and `--transition-from <previous-stage>`.
 [/workflow-state:repair_needed]
 
@@ -509,8 +538,8 @@ Do **not** treat this as `no_task`, and do not silently continue implementation 
 
 [workflow-state:no_task]
 No active task. **A Direct answer** — pure Q&A / explanation / lookup / chat; no file writes + one-line answer + repo reads ≤ 2 files → AI judges, no override needed.
-**A+ Deep analysis** — multi-file read-only audit / architecture review / diagnostic report; file writes limited to analysis docs (research/, temp files); no source code / config / project file modification allowed. Creates a task only if the user explicitly asks to act on findings.
-**B Create a task** — any implementation / code change / build / refactor work. For outsourcing profile: entry sequence starts with route intent choice — (1) `python3 ./.trellis/scripts/workflow/workflow-state.py route` → (2) if `action=entry_choice_required` and当前意图是开始新任务，load `/trellis:feasibility` (the feasibility skill will automatically create the task directory and initialize `workflow-state.json`)；若当前只是 workflow / 项目只读分析、元审计或 A/A+ 纯分析，则停留在 `no_task` 直接分析，不创建任务 → (3) after feasibility passes, load `/trellis:brainstorm` for prd iteration → (4) `task.py start <task-dir>`. For personal profile: (1) `task.py create "<title>"` → (2) load `/trellis:brainstorm` — personal profile can skip feasibility but **must** supplement core fields of `assessment.md` during brainstorm (`project_engagement_type=non_outsourcing` + `source_watermark_*` + `ownership_proof_required`), otherwise subsequent stage gate validation will block → (3) `task.py start <task-dir>`. **"It looks small" is NOT grounds for downgrading B to A+ or C**.
+**A+ Deep analysis** — multi-file read-only audit / architecture review / diagnostic report; file writes limited to disposable `tmp/` artifacts or other explicitly analysis-only scratch paths used only to support the current read-only analysis; no source code / config / project file modification allowed. Do **not** treat ordinary project-root docs, specs, workflow assets, or user-facing product files as “temp files”. Creates a task only if the user explicitly asks to act on findings, or if the next step clearly changes from read-only analysis into implementation / source editing / durable workflow asset updates.
+**B Create a task** — any implementation / code change / build / refactor work. For outsourcing profile: entry sequence starts with route intent choice — (1) `python3 ./.trellis/scripts/workflow/workflow-state.py route` → (2) if `action=entry_choice_required` and当前意图是开始新任务，load `/trellis:feasibility` (the feasibility skill will automatically create the task directory and initialize `workflow-state.json`)；若当前只是 workflow / 项目只读分析、元审计或 A/A+ 纯分析，则停留在 `no_task` 直接分析，不创建任务 → (3) after feasibility passes, load `/trellis:brainstorm` for prd iteration → (4) `task.py start <task-dir>`. For personal profile: (1) `task.py create "<title>"` → (2) load `/trellis:brainstorm` — personal profile can skip feasibility but **must** supplement the minimum `assessment.md` baseline during brainstorm (`project_engagement_type=non_outsourcing`, `法律/合规风险结论`, `source_watermark_level`, `source_watermark_channels`, `zero_width_watermark_enabled`, `subtle_code_marker_enabled`, `ownership_proof_required`, `是否允许进入 brainstorm=是`), otherwise subsequent stage gate validation will block → (3) `task.py start <task-dir>`. **"It looks small" is NOT grounds for downgrading B to A+ or C**.
 `task.py start` in this branch only persists or repairs the active-task pointer for the current session. It does **not** advance `workflow-state.json.stage`, and in strong-gate installs it also does **not** keep producing the legacy `planning → in_progress` status flip; stage changes must still be performed via `workflow-state.py set` after the current stage reaches `awaiting_user_confirmation`.
 **C Inline change** (per-turn only, escape hatch for B) — the user's CURRENT message MUST contain one of: "skip trellis" / "no task" / "just do it" / "don't create a task" / "跳过 trellis" / "别走流程" / "小修一下" / "直接改" / "先别建任务" → briefly acknowledge ("ok, skipping trellis flow this turn"), then inline. **Without seeing one of these phrases you must NOT inline on your own**; do not invent an override the user never said.
 [/workflow-state:no_task]

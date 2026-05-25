@@ -137,6 +137,12 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py init "$TASK_DIR" --stage
 
 这组字段是“允许 personal 首次入口直接 brainstorm”的补偿性门禁，不可拖到 design / plan 再回填。
 
+说明：
+
+- 这组“最小 `assessment.md` 基线”只负责支撑 personal 首次入口在 `brainstorm` 内合法停留并安全离开，不等于 feasibility 的完整评估产物。
+- 若当前 personal 项目后续仍只是内部/自有项目，且不需要 feasibility 中更完整的风险、商务或外部交付控制结论，则不强制回到 `/trellis:feasibility`。
+- 若项目后续引入了外包/定制交付控制、付款/谈判约束、或其他超出这组最低字段的前提，应回到 `/trellis:feasibility` 补齐完整 assessment，而不是继续把 brainstorm 当成 feasibility 的替代物。
+
 `$TASK_DIR/prd.md` 至少保留这些区块：
 
 ```markdown
