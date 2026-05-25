@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-7.md`
-- **Total Sessions**: 305
-- **Last Active**: 2026-05-24
+- **Total Sessions**: 306
+- **Last Active**: 2026-05-25
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-7.md` | ~74 | Active |
+| `journal-7.md` | ~109 | Active |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
@@ -35,6 +35,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 306 | 2026-05-25 | Audit embedded workflow fixes | `da9d503`, `8e1aa30`, `b7eebf4` | `main` |
 | 305 | 2026-05-24 | Repair embedded strong-gate workflow contracts | `f442997` | `main` |
 | 304 | 2026-05-24 | Audit embedded workflow-state architecture in 新项目开发工作流 | `4b5d375`, `9cc8ea4` | `main` |
 | 303 | 2026-05-24 | audit embedded workflow agent blocking | `0bfaf4d` | `main` |

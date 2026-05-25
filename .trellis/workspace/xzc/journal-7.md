@@ -72,3 +72,38 @@ Repaired and clarified embedded new-project workflow contracts, strengthened str
 ### Next Steps
 
 - None - task complete
+
+
+## Session 306: Audit embedded workflow fixes
+
+**Date**: 2026-05-25
+**Task**: Audit embedded workflow fixes
+**Branch**: `main`
+
+### Summary
+
+Audited the embedded new-project workflow against /tmp/trellis-0.5.17-2, fixed brainstorm bootstrap and check guidance drift, clarified repair/design/no-task routing docs, and reduced helper duplication in workflow validation scripts.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `da9d503` | (see git log) |
+| `8e1aa30` | (see git log) |
+| `b7eebf4` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
