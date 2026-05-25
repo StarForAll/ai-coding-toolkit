@@ -376,3 +376,36 @@ Repaired embedded workflow delivery-gate alignment between task-level check and 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 315: Audit embedded workflow state gates
+
+**Date**: 2026-05-26
+**Task**: Audit embedded workflow state gates
+**Branch**: `main`
+
+### Summary
+
+Audited and repaired embedded workflow project-audit state gates, aligned state transitions and delivery gate behavior, and validated the workflow asset tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b3a510a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
