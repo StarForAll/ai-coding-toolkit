@@ -242,3 +242,36 @@ Audited embedded 新项目开发工作流 issues against /tmp/trellis-0.5.17-2, 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 311: Repair embedded workflow gate contracts
+
+**Date**: 2026-05-25
+**Task**: Repair embedded workflow gate contracts
+**Branch**: `main`
+
+### Summary
+
+Repaired embedded workflow gate validation contracts: enforced missing gate statuses, aligned multi-cli-review path checks, tightened structured Mode/Decision parsing, and added regression coverage.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5af6ceb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
