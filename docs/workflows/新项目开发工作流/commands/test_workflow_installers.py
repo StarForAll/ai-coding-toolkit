@@ -1659,6 +1659,23 @@ class WorkflowInstallerTests(unittest.TestCase):
             for skill_name in forbidden:
                 self.assertNotIn(skill_name, content, msg=f"{path} still references missing skill {skill_name}")
 
+    def test_design_and_research_docs_do_not_reference_invalid_exa_type_or_missing_skills(self) -> None:
+        docs_to_check = [
+            COMMANDS_DIR / "design.md",
+            COMMANDS_DIR / "plan.md",
+            COMMANDS_DIR / "feasibility.md",
+            COMMANDS_DIR.parent / "工作流总纲.md",
+        ]
+        forbidden_snippets = (
+            "exa_web_search_advanced_exa(type=deep-reasoning)",
+            "api-design-principles",
+            "postgresql-table-design",
+        )
+        for path in docs_to_check:
+            content = path.read_text(encoding="utf-8")
+            for snippet in forbidden_snippets:
+                self.assertNotIn(snippet, content, msg=f"{path} still references invalid routing snippet {snippet}")
+
     def test_install_removes_legacy_three_phase_workflow_contract(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)

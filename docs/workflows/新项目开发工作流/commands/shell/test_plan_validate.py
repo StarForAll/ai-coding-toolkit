@@ -356,6 +356,36 @@ class PlanValidateScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
         self.assertIn("性能回归与优化任务", result.stdout)
 
+    def test_plan_without_performance_task_passes_when_checklist_marks_not_needed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
+            checklist = (
+                VALID_CHECKLIST
+                .replace("- `post_mainline_performance_task`: `yes`\n", "- `post_mainline_performance_task`: `no`\n- `post_mainline_performance_task_reason`: 当前范围无独立性能回归轮次价值\n")
+                .replace("- `性能回归与优化任务`：主干任务完成后的固定后置任务（必选）\n", "")
+                .replace("- PROJECT-AUDIT：项目级终局任务\n", "")
+                .replace("- [x] 已确认 `性能回归与优化任务` 为主干后的固定必选任务\n", "")
+                .replace("- `confirmed_scope`: 当前主干任务链 + 后置性能回归与优化任务 + 项目级审查\n", "- `confirmed_scope`: 当前主干任务链\n")
+            )
+            (task_dir / "task_creation_checklist.md").write_text(checklist, encoding="utf-8")
+            plan = (
+                VALID_PLAN
+                .replace("| .trellis/tasks/04-14-performance-opt | implementation | 全局 | 主干完成后的性能回归与优化任务 |\n", "")
+                .replace("| .trellis/tasks/04-14-project-audit | project-audit | 全局 | 全部代码相关 task 完成后才允许开始 |\n", "")
+                .replace("- 性能回归与优化任务依赖全部主干任务完成\n", "")
+                .replace("- .trellis/tasks/04-14-project-audit 依赖全部代码相关 task 完成，且不得早于性能回归与优化任务\n", "")
+                .replace("- 主链：.trellis/tasks/04-14-task-a → .trellis/tasks/04-14-task-b → 性能回归与优化任务\n", "- 主链：.trellis/tasks/04-14-task-a → .trellis/tasks/04-14-task-b\n")
+                .replace("- 全局终局任务：PROJECT-AUDIT（条件触发；不得早于性能回归与优化任务）\n", "")
+            )
+            self.write_plan(task_dir, plan)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("task_plan.md 结构验证通过", result.stdout)
+
     def test_missing_project_audit_performance_constraint_in_dependencies_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp_root:
             root = Path(temp_root)
