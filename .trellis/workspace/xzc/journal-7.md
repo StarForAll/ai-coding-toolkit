@@ -209,3 +209,36 @@ Audited embedded 新项目开发工作流 issues against /tmp/trellis-0.5.17-2, 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 310: 修复嵌入工作流门禁与兼容性问题
+
+**Date**: 2026-05-25
+**Task**: 修复嵌入工作流门禁与兼容性问题
+**Branch**: `main`
+
+### Summary
+
+审计并修复新项目开发工作流的嵌入门禁、交付契约和旧项目兼容路径，补齐回归测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c4e00a4` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
