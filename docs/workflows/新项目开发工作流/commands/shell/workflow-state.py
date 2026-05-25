@@ -531,6 +531,13 @@ def cmd_init(args: argparse.Namespace) -> int:
     if state_path.exists() and not args.force:
         print(f"❌ {state_path} 已存在；如需覆盖请使用 --force")
         return 1
+    if args.stage in EXECUTION_STAGES:
+        print(
+            "❌ init 不允许直接创建执行阶段状态；"
+            "请先初始化上游非执行阶段，再通过 workflow-state.py set 或 repair "
+            "显式补齐 --execution-authorized true 和 --transition-from <上一阶段> 后进入 implementation"
+        )
+        return 1
 
     data = build_default_state(args.stage)
     write_json(state_path, data)

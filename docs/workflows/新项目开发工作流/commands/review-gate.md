@@ -172,7 +172,13 @@ $TASK_DIR/review-gate/review-gate-round-<N>.md
 
 - 先提示用户在对应 CLI 中补齐对应 skill
 - **不要**降级为临时上下文注入或其他兼容协议继续该审查层
-- 若用户确认当前无法补齐 skill，记录"未执行原因 + 当前残余风险"后直接跳过 review-gate，进入下一步
+- 仅当本轮判定为 `recommended + lite`，且用户明确接受残余风险时，才允许以 `not_run` 结束本轮 review-gate
+- 若允许以 `not_run` 结束，必须在 `review-gate-round-<N>.md` 中同时写明：
+  - `review_gate_closure_status: not_run`
+  - `review_gate_capability_gap: yes`
+  - `review_gate_capability_gap_acknowledged_by_user: yes`
+  - `review_gate_capability_gap_reason`
+- `required` 不允许因能力缺口降级为 `not_run`
 
 用户触发边界：
 
@@ -327,8 +333,12 @@ tmp/multi-cli-review/<task-id>/
   - `## Decision` 中必须以结构化单值写入 `review_gate_decision`，只能是 `skip` / `recommended` / `required`
   - `## Mode` 中必须以结构化单值写入 `review_gate_mode`，只能是 `lite` / `full`
   - `review_gate_closure_status` 必须是 `pass` / `fail` / `not_run`
+- 当 `review_gate_closure_status = not_run` 时，仅允许用于 `recommended + lite`，且必须额外写入：
+  - `review_gate_capability_gap: yes`
+  - `review_gate_capability_gap_acknowledged_by_user: yes`
+  - `review_gate_capability_gap_reason`
 - 当 `Decision` 为 `recommended` 或 `required` 时，必须生成 `reviewer-commands-round-<N>.md`
-- `recommended + lite` 至少需要 1 份真实 reviewer 报告；不能只生成指令包
+- `recommended + lite` 至少需要 1 份真实 reviewer 报告；不能只生成指令包。唯一例外是上面的 capability-gap `not_run` 闭环
 - 当 `Mode = full` 时，必须补齐 `summary-round-<N>.md`
 - `required + full` 至少需要 2 份真实 reviewer 报告，且 reviewer 报告路径必须落在 `tmp/multi-cli-review/<task-id>/review-round-<N>/`
 - 当 `Decision = required` 时，`Mode` 必须是 `full`

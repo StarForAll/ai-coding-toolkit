@@ -17,6 +17,10 @@ description: 开发完成？准备交付 — 验收测试、交付物生成、�
 - 当上游来自项目级 `project-audit` 时，`delivery` 同时消费：
   - 当前 active task 的 `check.md`
   - 正式 `project-audit` 载体中的项目级总复核结论；若 `task_plan.md` 已声明独立 `PROJECT-AUDIT` task，则应以该 task 内的 `project-audit.md` 为准
+- `delivery` 消费任务级 `check` 与项目级 `project-audit` 时，二者是**并列双门禁**，不是互相替代：
+  - `check` 证明当前 active task 的任务级质量闭环
+  - `project-audit` 证明项目整体代码面的项目级总复核闭环
+- 因此，只要 `task_plan.md` 已把 `PROJECT-AUDIT` 写成正式终局任务，进入 `delivery` 前就必须同时满足这两类证据；不能把“formal PROJECT-AUDIT 已完成”误解成可跳过当前 active task 的 `check.md`
 - 若 `project-audit.md` 标记本轮存在代码修改，则不得直接进入 `delivery`，必须先回到 `/trellis:check`
 
 ---

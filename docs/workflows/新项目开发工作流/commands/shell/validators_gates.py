@@ -201,6 +201,21 @@ def _project_audit_tasks_from_plan(plan_path: Path) -> list[str]:
     return tasks
 
 
+def _resolve_project_audit_check_task_dir(task_dir: Path) -> Path:
+    if (task_dir / CHECK_MD_FILE).is_file():
+        return task_dir
+    task_data = load_task_json(task_dir)
+    if not isinstance(task_data, dict):
+        return task_dir
+    parent_name = task_data.get("parent")
+    if not isinstance(parent_name, str) or not parent_name.strip():
+        return task_dir
+    parent_dir = task_dir.parent / parent_name.strip()
+    if (parent_dir / CHECK_MD_FILE).is_file():
+        return parent_dir
+    return task_dir
+
+
 def _code_related_task_rows_from_plan(plan_path: Path) -> list[tuple[str, str, str, str]]:
     rows: list[tuple[str, str, str, str]] = []
     for raw_line in plan_path.read_text(encoding="utf-8").splitlines():
@@ -482,6 +497,136 @@ def _validate_project_audit_delivery_linkage(
         )
 
 
+def _validate_project_audit_non_check_exit(
+    content: str,
+    errors: list[str],
+    *,
+    target_stage: str,
+) -> None:
+    if target_stage == "check":
+        return
+
+    code_change_raw = extract_backticked_field(content, "project_audit_code_changes")
+    code_changes = normalize_yes_no_field(code_change_raw)
+    if code_change_raw is None:
+        errors.append(
+            "project-audit.md 缺少 `project_audit_code_changes` 字段；"
+            f"离开 project-audit 进入 {target_stage} 前必须明确本轮是否发生代码修改"
+        )
+        return
+    if code_changes is None:
+        errors.append("project-audit.md 的 `project_audit_code_changes` 只能填写 `yes` / `no`")
+        return
+    if code_changes is True:
+        errors.append(
+            "project-audit.md 标记本轮存在代码修改；"
+            f"不得从 project-audit 直接进入 {target_stage}，必须先回到任务级 check 重新闭环"
+        )
+
+
+def _review_gate_capability_gap_allows_not_run(
+    task_dir: Path,
+    report_path: Path,
+    content: str,
+    errors: list[str],
+    *,
+    decision: str | None,
+    mode: str | None,
+) -> bool:
+    if decision != "recommended" or mode != "lite":
+        return False
+    if _extract_review_gate_closure_status(content) != "not_run":
+        return False
+
+    gap_raw = extract_backticked_field(content, "review_gate_capability_gap")
+    gap = normalize_yes_no_field(gap_raw)
+    if gap_raw is None:
+        errors.append(
+            f"{report_path.relative_to(task_dir).as_posix()} 缺少 `review_gate_capability_gap`；"
+            "当 review-gate 因能力缺口未执行时必须显式说明"
+        )
+        return False
+    if gap is not True:
+        rendered = gap_raw or "(missing)"
+        errors.append(
+            f"{report_path.relative_to(task_dir).as_posix()} 的 `review_gate_capability_gap` 必须为 `yes`，当前为 {rendered!r}"
+        )
+        return False
+
+    ack_raw = extract_backticked_field(content, "review_gate_capability_gap_acknowledged_by_user")
+    ack = normalize_yes_no_field(ack_raw)
+    if ack_raw is None:
+        errors.append(
+            f"{report_path.relative_to(task_dir).as_posix()} 缺少 `review_gate_capability_gap_acknowledged_by_user`；"
+            "当 review-gate 因能力缺口未执行时必须记录用户是否接受该残余风险"
+        )
+        return False
+    if ack is not True:
+        rendered = ack_raw or "(missing)"
+        errors.append(
+            f"{report_path.relative_to(task_dir).as_posix()} 的 `review_gate_capability_gap_acknowledged_by_user` 必须为 `yes`，当前为 {rendered!r}"
+        )
+        return False
+
+    reason = extract_backticked_field(content, "review_gate_capability_gap_reason")
+    if is_placeholder_like(reason):
+        errors.append(
+            f"{report_path.relative_to(task_dir).as_posix()} 缺少 `review_gate_capability_gap_reason`；"
+            "必须说明缺失的能力、为何无法补齐，以及为何本轮允许带风险跳过"
+        )
+        return False
+    return True
+
+
+def _validate_required_formal_project_audit_for_delivery(
+    task_dir: Path,
+    repo_root: Path,
+    errors: list[str],
+    *,
+    check_task_dir: Path,
+) -> None:
+    plan_path = find_task_plan_file(task_dir, repo_root)
+    if plan_path is None or not _task_plan_declares_project_audit(plan_path):
+        return
+
+    project_audit_tasks = _project_audit_tasks_from_plan(plan_path)
+    if not project_audit_tasks:
+        errors.append(
+            "task_plan.md 已声明 `PROJECT-AUDIT` / project-audit，但未提供结构化的 project-audit task 行；"
+            "不得进入 delivery"
+        )
+        return
+
+    matched = False
+    first_candidate_errors: list[str] = []
+    for task_name in project_audit_tasks:
+        candidate_dir = task_dir.parent / task_name
+        if not candidate_dir.is_dir():
+            if not first_candidate_errors:
+                first_candidate_errors.append(
+                    f"task_plan.md 声明的 PROJECT-AUDIT task 不存在: {task_name}"
+                )
+            continue
+        candidate_errors: list[str] = []
+        _validate_formal_project_audit_task(
+            candidate_dir,
+            candidate_errors,
+            check_task_dir=check_task_dir,
+        )
+        if not candidate_errors:
+            matched = True
+            break
+        if not first_candidate_errors:
+            first_candidate_errors.extend(candidate_errors)
+
+    if not matched:
+        errors.append(
+            "task_plan.md 已声明 `PROJECT-AUDIT` / project-audit task，但至少需要一个候选 task 满足正式门禁；"
+            "不得进入 delivery"
+        )
+        errors.extend(first_candidate_errors)
+
+
 def _validate_review_gate_evidence(task_dir: Path, report_path: Path, content: str, errors: list[str]) -> None:
     valid_decisions = {"skip", "recommended", "required"}
     decision = _extract_single_keyword_from_section(
@@ -511,6 +656,15 @@ def _validate_review_gate_evidence(task_dir: Path, report_path: Path, content: s
             f"{report_path.relative_to(task_dir).as_posix()} 的 Decision=`required` 时，Mode 必须为 `full`"
         )
 
+    capability_gap_not_run = _review_gate_capability_gap_allows_not_run(
+        task_dir,
+        report_path,
+        content,
+        errors,
+        decision=decision,
+        mode=mode,
+    )
+
     review_gate_dir = task_dir / "review-gate"
     report_name = report_path.stem
     round_suffix = report_name.removeprefix("review-gate-round-")
@@ -521,13 +675,13 @@ def _validate_review_gate_evidence(task_dir: Path, report_path: Path, content: s
     action_file = review_root / "action.md"
     reviewer_reports_dir = review_root
 
-    if decision in {"recommended", "required"} and not reviewer_commands.is_file():
+    if decision in {"recommended", "required"} and not reviewer_commands.is_file() and not capability_gap_not_run:
         errors.append(
             f"{reviewer_commands.relative_to(task_dir).as_posix()} 缺失；review-gate 缺少 reviewer 指令包"
         )
 
     reviewer_reports = sorted(reviewer_reports_dir.glob(f"review-round-{round_suffix}/*.md"))
-    if decision == "recommended" and mode == "lite" and not reviewer_reports:
+    if decision == "recommended" and mode == "lite" and not reviewer_reports and not capability_gap_not_run:
         errors.append(
             "recommended + lite 的 review-gate 缺少真实 reviewer 报告；"
             "不能只生成指令包就视为补充审查完成"
@@ -998,42 +1152,12 @@ def validate_delivery_gate(task_dir: Path, errors: list[str], repo_root: Path | 
     elif not missing:
         errors.append("delivery/acceptance.md 缺失，无法判断 `delivery_gate_status`")
     if repo_root is not None:
-        plan_path = find_task_plan_file(task_dir, repo_root)
-        if plan_path is not None and _task_plan_declares_project_audit(plan_path):
-            project_audit_tasks = _project_audit_tasks_from_plan(plan_path)
-            if not project_audit_tasks:
-                errors.append(
-                    "task_plan.md 已声明 `PROJECT-AUDIT` / project-audit，但未提供结构化的 project-audit task 行；"
-                    "不得进入 delivery"
-                )
-            if project_audit_tasks:
-                matched = False
-                first_candidate_errors: list[str] = []
-                for task_name in project_audit_tasks:
-                    candidate_dir = task_dir.parent / task_name
-                    if not candidate_dir.is_dir():
-                        if not first_candidate_errors:
-                            first_candidate_errors.append(
-                                f"task_plan.md 声明的 PROJECT-AUDIT task 不存在: {task_name}"
-                            )
-                        continue
-                    candidate_errors: list[str] = []
-                    _validate_formal_project_audit_task(
-                        candidate_dir,
-                        candidate_errors,
-                        check_task_dir=task_dir,
-                    )
-                    if not candidate_errors:
-                        matched = True
-                        break
-                    if not first_candidate_errors:
-                        first_candidate_errors.extend(candidate_errors)
-                if not matched:
-                    errors.append(
-                        "task_plan.md 已声明 `PROJECT-AUDIT` / project-audit task，但至少需要一个候选 task 满足正式门禁；"
-                        "不得进入 delivery"
-                    )
-                    errors.extend(first_candidate_errors)
+        _validate_required_formal_project_audit_for_delivery(
+            task_dir,
+            repo_root,
+            errors,
+            check_task_dir=task_dir,
+        )
         assessment_path = find_assessment_file(task_dir, repo_root)
         if assessment_path is not None:
             assessment_content = assessment_path.read_text(encoding="utf-8")
@@ -1225,21 +1349,42 @@ def validate_stage_transition_gates(
 
     if current_stage == "check" and new_stage == "delivery":
         validate_check_gate(task_dir, errors, for_delivery=True)
+        _validate_required_formal_project_audit_for_delivery(
+            task_dir,
+            repo_root,
+            errors,
+            check_task_dir=task_dir,
+        )
 
     if current_stage == "project-audit":
+        check_task_dir = _resolve_project_audit_check_task_dir(task_dir)
         validate_project_audit_gate(
             task_dir,
             errors,
             require_delivery_linkage=(new_stage == "delivery"),
+            check_task_dir=check_task_dir,
         )
+        if new_stage not in {"check", "delivery"} and (task_dir / "project-audit.md").is_file():
+            content = (task_dir / "project-audit.md").read_text(encoding="utf-8")
+            _validate_project_audit_non_check_exit(content, errors, target_stage=new_stage)
+        if new_stage == "delivery":
+            _validate_required_formal_project_audit_for_delivery(
+                task_dir,
+                repo_root,
+                errors,
+                check_task_dir=check_task_dir,
+            )
 
     if current_stage == "review-gate":
         validate_review_gate_gate(task_dir, errors)
         if new_stage == "delivery":
             validate_check_gate(task_dir, errors, for_delivery=True, downstream_stage="delivery")
-
-    if new_stage == "delivery" and current_stage == "project-audit":
-        validate_project_audit_gate(task_dir, errors, require_delivery_linkage=True)
+            _validate_required_formal_project_audit_for_delivery(
+                task_dir,
+                repo_root,
+                errors,
+                check_task_dir=task_dir,
+            )
 
 
 def validate_stage_exit_artifacts(

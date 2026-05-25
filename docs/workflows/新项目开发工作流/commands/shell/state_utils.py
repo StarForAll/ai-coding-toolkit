@@ -606,8 +606,6 @@ def build_pending_state_for_set(
         pending["completed_blocks"] = [item for item in args.completed_blocks.split(",") if item]
     if args.allowed_next is not None:
         pending["_allowed_next_override"] = [item for item in args.allowed_next.split(",") if item]
-    if args.awaiting_user_confirmation is not None:
-        pending["awaiting_user_confirmation"] = args.awaiting_user_confirmation
     if args.architecture_confirmed is not None:
         checkpoints = pending.setdefault("checkpoints", {})
         checkpoints["architecture_confirmed"] = args.architecture_confirmed

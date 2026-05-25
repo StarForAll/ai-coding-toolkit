@@ -412,6 +412,11 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 | .trellis/tasks/04-14-performance-opt | implementation | 全局 | 主干完成后的性能回归与优化任务；`code_related=yes` |
 | .trellis/tasks/04-14-project-audit | project-audit | 全局 | 全部代码相关 task 完成后才允许开始；`code_related=no` |
 
+补充约束：
+
+- 只要 `任务图摘要`、`依赖关系` 或其他正式摘要区块里已经把 `PROJECT-AUDIT` 写成当前轮的终局任务，就必须在 `Trellis Task 清单` 中同时给出对应的结构化 `project-audit` task 行
+- 不允许只在说明性文字里提到 `PROJECT-AUDIT`，却不落真实 task 行；否则后续 `delivery` 无法判定 formal project-audit carrier
+
 ## 当前推荐执行任务（待确认）
 
 - 任务路径：.trellis/tasks/04-14-task-a

@@ -151,6 +151,15 @@ This skill **must** fully validate the following aspects for any workflow under 
    - If the latest official docs, repo-local evidence, and actual development-use evidence all support the current state, record the item as a false alarm / non-defect rather than manufacturing a fix
    - When a candidate issue turns out to be non-defective, ignore it rather than turning it into a low-value optimization target
 
+7. **Task-level vs project-level gate distinction** - When auditing workflow closure logic:
+   - Treat task-level `check` and project-level `project-audit` as separate dimensions, not as two names for the same carrier
+   - Do not misclassify "delivery requires both the current active task's `check.md` and the formal `PROJECT-AUDIT` carrier" as carrier conflation; that is the intended dual-gate model when project-level audit is declared
+   - A real defect exists only when the workflow asks the wrong artifact to prove the wrong dimension, or when transition-time and validation-time gates disagree about which dual-gate evidence is required
+   - If a dedicated `PROJECT-AUDIT` task exists, the audit must distinguish:
+     - whether the workflow correctly treats that task as the formal project-level carrier
+     - whether the workflow still separately requires the current active task's task-level `check`
+   - Findings that complain only that both dimensions are required at once, without showing a dimension mismatch or gate inconsistency, are false alarms
+
 Each confirmed issue in the audit report must include a validation action that describes how the issue was detected. The detailed schema lives in `## Report Contracts`.
 
 ---

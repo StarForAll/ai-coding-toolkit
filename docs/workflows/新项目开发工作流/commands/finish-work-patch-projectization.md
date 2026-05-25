@@ -45,6 +45,7 @@
 
 - [ ] 若当前项目存在项目级/交付级收口要求，相关 `delivery` 证据已完成
 - [ ] 当前 task 已形成或更新 `finish-work-checklist.md`（见上方 §1）
+- [ ] 已先执行 `python3 ./.trellis/scripts/workflow/workflow-state.py validate <task-dir>`，确认当前 task 的 `delivery` 门禁已真实通过；`finish-work` 不得只凭文字 checklist 假定 `delivery` 已完成
 - [ ] 使用 Trellis 原生 `finish-work` 完成最终 `archive + add_session`，不要再额外发明第二套 close-out helper
 - [ ] 若目标项目的 `.trellis/` 元数据自动提交失败，按目标项目当前 Trellis 基线能力处理，不在 workflow 层额外发明 helper 分支
 
