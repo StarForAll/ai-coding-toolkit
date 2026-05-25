@@ -175,3 +175,37 @@ Audited embedded 新项目开发工作流 issues against /tmp/trellis-0.5.17-2, 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 309: 修复嵌入工作流阶段门禁与交付串联
+
+**Date**: 2026-05-25
+**Task**: 修复嵌入工作流阶段门禁与交付串联
+**Branch**: `main`
+
+### Summary
+
+审计并修复新项目开发工作流在目标项目中的阶段门禁、project-audit 与任务级 check 串联、review-gate 证据门禁以及 L0 直达 implementation 的工程化基线要求，完成回归测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c5ae8b7` | (see git log) |
+| `4be7017` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
