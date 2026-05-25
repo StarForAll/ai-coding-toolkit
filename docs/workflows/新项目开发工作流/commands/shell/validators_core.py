@@ -36,6 +36,7 @@ from state_utils import (  # noqa: E402
     design_exit_ready,
     find_assessment_file,
     find_missing_markers,
+    find_task_prd_with_markers,
     is_placeholder_like,
     load_task_json,
     normalize_design_current_block,
@@ -159,6 +160,10 @@ def validate_leaf_task(task_dir: Path, stage: str | None, errors: list[str]) -> 
     children = task_data.get("children", [])
     if isinstance(children, list) and children:
         errors.append("当前 task 已有 children，不应继续作为执行态叶子任务持有 workflow-state")
+
+
+def resolve_project_estimate_prd(task_dir: Path, repo_root: Path) -> Path | None:
+    return find_task_prd_with_markers(task_dir, repo_root, TASK_ESTIMATE_MARKERS)
 
 
 def validate_external_project_controls(
@@ -418,7 +423,8 @@ def validate_project_doc_boundary(
             errors.append(f"缺少 {TASK_PRD.as_posix()}，当前阶段不满足项目级粗估门禁")
         else:
             missing_task_markers = find_missing_markers(task_prd, TASK_ESTIMATE_MARKERS)
-            if missing_task_markers:
+            inherited_task_prd = find_task_prd_with_markers(task_dir, project_root, TASK_ESTIMATE_MARKERS)
+            if missing_task_markers and inherited_task_prd is None:
                 errors.append(
                     f"{TASK_PRD.as_posix()} 缺少项目级粗估字段: {', '.join(missing_task_markers)}"
                 )

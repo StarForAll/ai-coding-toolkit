@@ -294,6 +294,12 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 至少要保证：**当前推荐执行任务（待确认）对应的 leaf task 目录已经具备最小 `prd.md`**，
 避免该 task 在 Trellis 基线里被判定为 `NOT READY`。
 
+补充约束：
+
+- 这里的“最小 `prd.md`”仍然只要求 leaf task 自己的目标 / 范围 / 验收 / CLI 信息
+- 若该 leaf task 是从父级 `plan` task 拆出的实施子任务，则项目级粗估允许沿 parent lineage 继承；不要求把 `## 项目级粗估` 整段复制到每个 leaf
+- 但**不允许** leaf task 连最小 `prd.md` 都没有；“沿父级继承项目级粗估”不能被滥用成占位目录
+
 推荐最小模板：
 
 ```markdown
@@ -319,6 +325,14 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 
 - Claude Code / OpenCode / Codex
 ```
+
+如果该 leaf task 将作为真正进入 `implementation` 的执行任务，还应在用户确认后先显式初始化阶段状态：
+
+```bash
+python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py init <leaf-task-dir> --stage plan
+```
+
+然后再进入 `plan -> implementation` 的正式切换命令。不要对一个尚未生成 `workflow-state.json` 的 leaf task 直接执行 `set --stage implementation`。
 
 拆分规则：
 

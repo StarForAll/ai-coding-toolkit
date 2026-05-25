@@ -201,7 +201,7 @@ def _project_audit_tasks_from_plan(plan_path: Path) -> list[str]:
     return tasks
 
 
-def _resolve_project_audit_check_task_dir(task_dir: Path) -> Path:
+def _resolve_task_level_check_task_dir(task_dir: Path) -> Path:
     if (task_dir / CHECK_MD_FILE).is_file():
         return task_dir
     task_data = load_task_json(task_dir)
@@ -522,8 +522,7 @@ def _validate_project_audit_non_check_exit(
             "project-audit.md 标记本轮存在代码修改；"
             f"不得从 project-audit 直接进入 {target_stage}，必须先回到任务级 check 重新闭环"
         )
-
-
+        return
 def _review_gate_capability_gap_allows_not_run(
     task_dir: Path,
     report_path: Path,
@@ -997,6 +996,7 @@ def validate_project_audit_gate(
     errors: list[str],
     *,
     require_delivery_linkage: bool = False,
+    require_exit_gate_status: bool = False,
     check_task_dir: Path | None = None,
 ) -> None:
     report_path = task_dir / "project-audit.md"
@@ -1041,16 +1041,22 @@ def validate_project_audit_gate(
     _validate_project_audit_multi_cli_review_artifacts(task_dir, content, errors)
     gate_status = _extract_project_audit_gate_status(content)
     if gate_status is None:
-        if require_delivery_linkage and _should_enforce_missing_gate_status():
+        if (require_delivery_linkage or require_exit_gate_status) and _should_enforce_missing_gate_status():
             errors.append(
                 "project-audit.md 缺少 `project_audit_gate_status`；"
                 "必须明确当前项目级审查是否允许进入后续阶段"
             )
-    elif require_delivery_linkage and _is_blocking_status(gate_status, allow_not_run=True):
-        errors.append(
-            f"project-audit.md 的 `project_audit_gate_status`={gate_status!r}；"
-            "当前项目级审查仍存在阻断项，不得进入 delivery"
-        )
+    elif (require_delivery_linkage or require_exit_gate_status) and _is_blocking_status(gate_status, allow_not_run=True):
+        if require_delivery_linkage:
+            errors.append(
+                f"project-audit.md 的 `project_audit_gate_status`={gate_status!r}；"
+                "当前项目级审查仍存在阻断项，不得进入 delivery"
+            )
+        else:
+            errors.append(
+                f"project-audit.md 的 `project_audit_gate_status`={gate_status!r}；"
+                "当前项目级审查仍存在阻断项，不得进入后续阶段"
+            )
     if mode == "formal":
         _validate_project_audit_task_plan_completion(task_dir, errors)
     if require_delivery_linkage:
@@ -1072,6 +1078,7 @@ def _validate_formal_project_audit_task(
         task_dir,
         errors,
         require_delivery_linkage=True,
+        require_exit_gate_status=True,
         check_task_dir=check_task_dir,
     )
     task_data = load_task_json(task_dir)
@@ -1124,6 +1131,7 @@ def validate_review_gate_gate(task_dir: Path, errors: list[str]) -> None:
 
 
 def validate_delivery_gate(task_dir: Path, errors: list[str], repo_root: Path | None = None) -> None:
+    check_task_dir = _resolve_task_level_check_task_dir(task_dir)
     missing = [
         artifact.as_posix()
         for artifact in DELIVERY_ARTIFACTS
@@ -1131,7 +1139,7 @@ def validate_delivery_gate(task_dir: Path, errors: list[str], repo_root: Path | 
     ]
     if missing:
         errors.append(f"缺少交付产物: {', '.join(missing)}；delivery 阶段未完成")
-    validate_check_gate(task_dir, errors, for_delivery=True, downstream_stage="delivery")
+    validate_check_gate(check_task_dir, errors, for_delivery=True, downstream_stage="delivery")
     validate_finish_work_gate(task_dir, errors)
     _validate_delivery_doc_contract(task_dir, errors)
     acceptance_path = task_dir / "delivery" / "acceptance.md"
@@ -1156,7 +1164,7 @@ def validate_delivery_gate(task_dir: Path, errors: list[str], repo_root: Path | 
             task_dir,
             repo_root,
             errors,
-            check_task_dir=task_dir,
+            check_task_dir=check_task_dir,
         )
         assessment_path = find_assessment_file(task_dir, repo_root)
         if assessment_path is not None:
@@ -1357,11 +1365,12 @@ def validate_stage_transition_gates(
         )
 
     if current_stage == "project-audit":
-        check_task_dir = _resolve_project_audit_check_task_dir(task_dir)
+        check_task_dir = _resolve_task_level_check_task_dir(task_dir)
         validate_project_audit_gate(
             task_dir,
             errors,
             require_delivery_linkage=(new_stage == "delivery"),
+            require_exit_gate_status=True,
             check_task_dir=check_task_dir,
         )
         if new_stage not in {"check", "delivery"} and (task_dir / "project-audit.md").is_file():
@@ -1418,7 +1427,11 @@ def validate_stage_exit_artifacts(
     elif stage == "check":
         validate_check_gate(task_dir, errors)
     elif stage == "project-audit":
-        validate_project_audit_gate(task_dir, errors)
+        validate_project_audit_gate(
+            task_dir,
+            errors,
+            require_exit_gate_status=state.get("status") in EXIT_READY_STATUSES,
+        )
     elif stage == "review-gate":
         validate_review_gate_gate(task_dir, errors)
     elif stage == "delivery":

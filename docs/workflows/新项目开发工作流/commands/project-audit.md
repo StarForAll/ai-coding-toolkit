@@ -45,6 +45,7 @@ description: 所有代码任务都完成了？进入项目级全局代码审查�
 - 保留 `project-audit -> delivery`，但它不是对任务级 `check` 的替代：
   - 若本轮 `project-audit` 发生代码修改，必须先回到 `/trellis:check`，不得直接进入 `/trellis:delivery`
   - 若本轮 `project-audit` 只有分析/确认、没有新增代码修改，且当前 active task 的 `check.md` 已闭环，才允许直接进入 `/trellis:delivery`
+- 离开 `project-audit` 前，无论是去 `check`、`review-gate` 还是 `delivery`，都必须先写出结构化 `project_audit_gate_status`
 
 ---
 
@@ -83,6 +84,7 @@ description: 所有代码任务都完成了？进入项目级全局代码审查�
   - `check`：任务级质量闭环
   - `project-audit`：项目级总复核闭环
 - `delivery` 消费的是这两类并列证据，而不是要求 formal `PROJECT-AUDIT` carrier 自己再持有一份任务级 `check.md`
+- 因此，若 formal `PROJECT-AUDIT` 是独立 carrier task，`delivery` 应继续消费“当前 active task 的 `check.md` + formal `PROJECT-AUDIT` 载体中的项目级结论”，而不是把 carrier task 误判成任务级 `check` 的拥有者
 - 本命令执行完成后，可以将独立 `PROJECT-AUDIT` task 视为“正式完成”；这里的完成不再只等同于 archive 后的 `task.json.status = completed`
 - 当前 workflow 接受两类正式完成证据：
   - 代码相关 task 已 archive，`task.json.status = completed`

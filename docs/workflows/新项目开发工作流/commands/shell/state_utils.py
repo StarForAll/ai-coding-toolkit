@@ -103,7 +103,7 @@ STAGE_TRANSITIONS: dict[str, list[str]] = {
     "implementation": ["check", "project-audit"],
     "check": ["implementation", "review-gate", "project-audit", "delivery"],
     "review-gate": ["implementation", "project-audit", "delivery"],
-    "project-audit": ["implementation", "check", "review-gate", "delivery"],
+    "project-audit": ["check", "review-gate", "delivery"],
     "delivery": [],
 }
 STAGE_STATUSES = {
@@ -360,8 +360,11 @@ def recover_repair_state(
 
 
 def apply_repair_overrides(repaired: dict[str, Any], args: argparse.Namespace) -> None:
-    if getattr(args, "stage_status", None):
-        repaired["status"] = args.stage_status
+    requested_status, status_error = resolve_stage_status_override(args)
+    if status_error:
+        raise ValueError(status_error)
+    if requested_status:
+        repaired["status"] = requested_status
     if getattr(args, "clear_current_block", False):
         repaired["current_block"] = None
     elif getattr(args, "current_block", None) is not None:
@@ -391,6 +394,24 @@ def load_task_json(path: Path) -> dict[str, Any] | None:
     if isinstance(data, dict):
         return data
     return None
+
+
+def resolve_stage_status_override(args: argparse.Namespace) -> tuple[str | None, str | None]:
+    explicit_status = getattr(args, "stage_status", None)
+    awaiting_flag = getattr(args, "awaiting_user_confirmation", None)
+    if awaiting_flag is None:
+        return explicit_status, None
+
+    alias_status = "awaiting_user_confirmation" if awaiting_flag else "in_progress"
+    compatible_statuses = {alias_status}
+    if awaiting_flag:
+        compatible_statuses.add("completed")
+    if explicit_status is not None and explicit_status not in compatible_statuses:
+        return None, (
+            "--awaiting-user-confirmation 与 --stage-status 冲突；"
+            f"前者要求 status={alias_status!r}，后者要求 status={explicit_status!r}"
+        )
+    return explicit_status or alias_status, None
 
 
 def iter_task_lineage(task_dir: Path, repo_root: Path) -> list[Path]:
@@ -429,6 +450,28 @@ def find_task_plan_file(task_dir: Path, repo_root: Path) -> Path | None:
         plan_file = candidate_dir / TASK_PLAN_FILE
         if plan_file.is_file():
             return plan_file
+    return None
+
+
+def find_task_prd_file(task_dir: Path, repo_root: Path) -> Path | None:
+    for candidate_dir in iter_task_lineage(task_dir, repo_root):
+        prd_file = candidate_dir / TASK_PRD
+        if prd_file.is_file():
+            return prd_file
+    return None
+
+
+def find_task_prd_with_markers(
+    task_dir: Path,
+    repo_root: Path,
+    markers: tuple[str, ...] | list[str],
+) -> Path | None:
+    for candidate_dir in iter_task_lineage(task_dir, repo_root):
+        prd_file = candidate_dir / TASK_PRD
+        if not prd_file.is_file():
+            continue
+        if not find_missing_markers(prd_file, markers):
+            return prd_file
     return None
 
 def installed_workflow_profile(repo_root: Path) -> str | None:
@@ -596,8 +639,11 @@ def build_pending_state_for_set(
     if current_stage in EXECUTION_STAGES and pending_stage not in EXECUTION_STAGES:
         checkpoints = pending.setdefault("checkpoints", {})
         checkpoints["execution_authorized"] = False
-    if args.stage_status:
-        pending["status"] = args.stage_status
+    requested_status, status_error = resolve_stage_status_override(args)
+    if status_error:
+        raise ValueError(status_error)
+    if requested_status:
+        pending["status"] = requested_status
     if args.clear_current_block:
         pending["current_block"] = None
     elif args.current_block is not None:

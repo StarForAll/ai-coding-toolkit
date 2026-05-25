@@ -55,6 +55,7 @@ from validators_core import (  # noqa: E402
     validate_leaf_task,
     validate_ownership_policy_controls,
     validate_project_doc_boundary,
+    resolve_project_estimate_prd,
     validate_session_active_task,
     validate_state_shape,
 )
@@ -315,7 +316,10 @@ def _collect_route_readiness_blockers(
         task_prd = task_dir / TASK_PRD
         if not task_prd.is_file():
             blockers.append("当前推荐执行任务说明卡缺少最小 prd.md，不能进入执行态")
-        elif find_missing_markers(task_prd, TASK_ESTIMATE_MARKERS):
+        elif (
+            find_missing_markers(task_prd, TASK_ESTIMATE_MARKERS)
+            and resolve_project_estimate_prd(task_dir, repo_root) is None
+        ):
             blockers.append("当前推荐执行任务说明卡缺少项目级粗估字段，不能进入执行态")
         blockers.extend(_collect_dependency_blockers(task_dir, repo_root))
 
@@ -563,7 +567,11 @@ def cmd_set(args: argparse.Namespace) -> int:
         return 1
 
     current_stage = state.get("stage", "")
-    pending_state = build_pending_state_for_set(state, args)
+    try:
+        pending_state = build_pending_state_for_set(state, args)
+    except ValueError as exc:
+        print(f"❌ {exc}")
+        return 1
     pending_stage = pending_state.get("stage", current_stage)
 
     if args.stage and pending_stage != current_stage and not args.force:
@@ -742,7 +750,17 @@ def cmd_repair(args: argparse.Namespace) -> int:
                 candidate_stage = state.get("stage")
                 if isinstance(candidate_stage, str) and candidate_stage in STAGES:
                     repaired = recover_repair_state(candidate_stage, state)
-                    apply_repair_overrides(repaired, args)
+                    try:
+                        apply_repair_overrides(repaired, args)
+                    except ValueError as exc:
+                        print(
+                            json.dumps(
+                                {"status": "repair_blocked", "message": str(exc)},
+                                ensure_ascii=False,
+                                indent=2,
+                            )
+                        )
+                        return 1
                     repaired_errors: list[str] = []
                     validate_state_shape(repaired, repaired_errors)
                     validate_execution_boundary(repaired, repaired_errors)
@@ -808,7 +826,11 @@ def cmd_repair(args: argparse.Namespace) -> int:
         return 1 if args.apply else 0
 
     repaired = recover_repair_state(candidate_stage, state)
-    apply_repair_overrides(repaired, args)
+    try:
+        apply_repair_overrides(repaired, args)
+    except ValueError as exc:
+        print(json.dumps({"status": "repair_blocked", "message": str(exc)}, ensure_ascii=False, indent=2))
+        return 1
 
     repair_errors: list[str] = []
     validate_state_shape(repaired, repair_errors)
