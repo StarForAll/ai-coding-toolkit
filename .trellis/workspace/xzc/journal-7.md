@@ -343,3 +343,36 @@ Repaired embedded workflow strong-gate contracts, tightened project-audit and de
 ### Next Steps
 
 - None - task complete
+
+
+## Session 314: Fix workflow project-audit delivery gates
+
+**Date**: 2026-05-26
+**Task**: Fix workflow project-audit delivery gates
+**Branch**: `main`
+
+### Summary
+
+Repaired embedded workflow delivery-gate alignment between task-level check and project-level project-audit, tightened workflow-state execution entry, added review-gate capability-gap closure, and updated workflow-audit spec to avoid future dimension-mismatch false alarms.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `eb6b3dd` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
