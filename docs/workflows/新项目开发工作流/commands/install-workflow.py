@@ -3028,7 +3028,9 @@ Until the design stage completes the matrix definition:
 
 - Do NOT fabricate or assume verification commands
 - Do NOT use generic package-manager placeholder commands
-- Reference the design stage output for the actual automation check matrix
+- Reference the projectized design output for the actual automation check matrix
+- Prefer the current task's design artifacts (for example `design/context7-review.md` and the engineering-alignment notes that record the automation check matrix)
+- If the layer index still remains a generic baseline template, treat this file plus the task-local design artifacts as the authoritative fallback instead of assuming a separate `Quality Check` navigation section exists
 
 ---
 

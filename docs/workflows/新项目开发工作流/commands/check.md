@@ -77,14 +77,18 @@ python3 ./.trellis/scripts/get_context.py --mode packages
 然后执行：
 
 1. 读取对应 `.trellis/spec/<package>/<layer>/index.md`
-2. 跟随 `Quality Check` section 找到实际 guideline 文件
-3. 阅读具体 guideline，而不是只停留在 index
+2. 优先从 index 中定位当前层已经项目化的 guideline；若 index 仍是通用模板，则继续读取该层的 `quality-guidelines.md`
+3. 结合 design 阶段 `§3.7` 已沉淀的项目化证据继续定位：
+   - `$TASK_DIR/design/context7-review.md`
+   - 当前 task 或上游 task 中记录自动化检查矩阵的位置
+   - `finish-work-checklist.md` 中已经冻结的验证矩阵（若当前任务已进入 close-out 准备态）
+4. 阅读具体 guideline 和项目化矩阵，而不是只停留在 index
 
 最低要求：
 
 - 不能只凭记忆判断“应该没问题”
 - 不能跳过与当前改动直接相关的质量规则
-- 若 spec / guideline 缺失，必须标记 `[Evidence Gap]`
+- 若 index 仍停留在通用模板、`quality-guidelines.md` 也只剩占位说明，且当前 task / 设计产物中仍找不到真实项目化规则来源，必须标记 `[Evidence Gap]`
 
 ### Step 3: 执行项目化验证
 
