@@ -356,7 +356,7 @@ def workflow_patch_matches_source(src: Path, workflow_md: Path, *, profile: str 
     anchor_snippets = (
         "Phase B — native close-out (`/trellis:finish-work`)",
         "Current stage: **implementation**",
-        "workflow-state.py set <dir> --stage brainstorm --stage-status in_progress --awaiting-user-confirmation false --allowed-next design,plan,implementation",
+        "workflow-state.py set <dir> --stage brainstorm --stage-status in_progress --awaiting-user-confirmation false --allowed-next design,plan,implementation --transition-from feasibility",
     )
     if not all(snippet in patch_text and snippet in content for snippet in anchor_snippets):
         return False

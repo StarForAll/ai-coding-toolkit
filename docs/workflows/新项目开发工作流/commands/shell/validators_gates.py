@@ -198,6 +198,53 @@ def _project_audit_tasks_from_plan(plan_path: Path) -> list[str]:
     return tasks
 
 
+def _code_related_task_rows_from_plan(plan_path: Path) -> list[tuple[str, str, str]]:
+    rows: list[tuple[str, str, str]] = []
+    for raw_line in plan_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if ".trellis/tasks/" not in line or not line.startswith("|"):
+            continue
+        columns = [column.strip() for column in line.strip().strip("|").split("|")]
+        if len(columns) < 3:
+            continue
+        task_path = columns[0]
+        task_type = columns[1].lower()
+        project_domain = columns[2]
+        rows.append((task_path, task_type, project_domain))
+    return rows
+
+
+def _task_row_is_code_related(task_type: str, project_domain: str, note: str = "") -> bool:
+    normalized_type = task_type.strip().lower()
+    normalized_domain = project_domain.strip().lower()
+    normalized_note = note.strip().lower()
+
+    if normalized_type == "project-audit":
+        return False
+    if normalized_type == "implementation":
+        return True
+
+    code_markers = (
+        "代码相关",
+        "code-related",
+        "code related",
+        "研发",
+        "engineering",
+        "开发",
+        "性能",
+        "performance",
+        "安全",
+        "security",
+        "迁移",
+        "migration",
+        "全局",
+        "shared",
+        "core",
+    )
+    haystack = " ".join(part for part in (normalized_type, normalized_domain, normalized_note) if part)
+    return any(marker in haystack for marker in code_markers)
+
+
 def _validate_project_audit_mode(content: str, errors: list[str]) -> None:
     mode = _extract_single_keyword_from_section(
         content,
@@ -253,21 +300,11 @@ def _validate_project_audit_task_plan_completion(task_dir: Path, errors: list[st
         )
         return
 
-    task_rows: list[str] = []
-    for raw_line in plan_path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if ".trellis/tasks/" not in line or not line.startswith("|"):
-            continue
-        columns = [column.strip() for column in line.strip().strip("|").split("|")]
-        if len(columns) < 2:
-            continue
-        task_path = columns[0]
-        task_type = columns[1].lower()
-        if task_type == "project-audit":
-            continue
-        if task_type not in {"implementation"}:
-            continue
-        task_rows.append(task_path)
+    task_rows = [
+        task_path
+        for task_path, task_type, project_domain in _code_related_task_rows_from_plan(plan_path)
+        if _task_row_is_code_related(task_type, project_domain)
+    ]
 
     for task_path in task_rows:
         task_name = Path(task_path).name
@@ -359,7 +396,7 @@ def _validate_project_audit_multi_cli_review_artifacts(task_dir: Path, content: 
 
 
 def _validate_project_audit_delivery_linkage(task_dir: Path, content: str, errors: list[str]) -> None:
-    validate_check_gate(task_dir, errors, for_delivery=True)
+    validate_check_gate(task_dir, errors, for_delivery=True, downstream_stage="delivery")
 
     code_change_raw = extract_backticked_field(content, "project_audit_code_changes")
     code_changes = normalize_yes_no_field(code_change_raw)
@@ -381,10 +418,10 @@ def _validate_project_audit_delivery_linkage(task_dir: Path, content: str, error
         )
         return
 
-    if code_changes is True and task_level_check_status != "pass":
+    if code_changes is True:
         errors.append(
-            "project-audit.md 标记本轮存在代码修改时，`task_level_check_status` 必须为 `pass`；"
-            "需要先回到任务级 check 重新闭环"
+            "project-audit.md 标记本轮存在代码修改；project-audit 后不得直接进入 delivery，"
+            "必须先回到任务级 check 重新闭环"
         )
     if code_changes is False and task_level_check_status not in {"pass", "not_needed"}:
         errors.append(
@@ -623,10 +660,16 @@ def validate_check_review_gate_decision(
         errors.append("check.md 的 `review_gate_decision`=`required`；不得从 check 直接进入 delivery")
 
 
-def validate_check_gate(task_dir: Path, errors: list[str], *, for_delivery: bool = False) -> None:
+def validate_check_gate(
+    task_dir: Path,
+    errors: list[str],
+    *,
+    for_delivery: bool = False,
+    downstream_stage: str = "review-gate",
+) -> None:
     check_path = task_dir / CHECK_MD_FILE
     if not check_path.is_file():
-        errors.append("缺少 check.md；check 阶段产物未生成，不得进入 review-gate")
+        errors.append(f"缺少 check.md；check 阶段产物未生成，不得进入 {downstream_stage}")
         return
     content = check_path.read_text(encoding="utf-8")
     missing_sections: list[str] = []
@@ -645,28 +688,28 @@ def validate_check_gate(task_dir: Path, errors: list[str], *, for_delivery: bool
     if missing_sections:
         errors.append(
             f"check.md 缺少必要章节: {', '.join(missing_sections)}；"
-            "check 阶段产物不完整，不得进入 review-gate"
+            f"check 阶段产物不完整，不得进入 {downstream_stage}"
         )
         return
 
     if not re.search(r"\b(pass|fail|not run)\b|通过|失败|未运行", content, re.IGNORECASE):
         errors.append(
             "check.md 缺少真实验证结论（pass / fail / not run）；"
-            "check 阶段产物不完整，不得进入 review-gate"
+            f"check 阶段产物不完整，不得进入 {downstream_stage}"
         )
         return
 
     gate_status = _extract_check_gate_status(content)
     if gate_status is None:
-        if for_delivery and _should_enforce_missing_gate_status():
+        if _should_enforce_missing_gate_status():
             errors.append(
                 "check.md 缺少 `check_gate_status`；"
                 "必须明确当前任务级 check 是否允许进入后续阶段"
             )
-    elif for_delivery and _is_blocking_status(gate_status):
+    elif _is_blocking_status(gate_status):
         errors.append(
             f"check.md 的 `check_gate_status`={gate_status!r}；"
-            "当前任务级 check 尚未闭环，不得进入 delivery"
+            "当前任务级 check 尚未闭环，不得进入后续阶段"
         )
 
     validate_check_review_gate_decision(content, errors, for_delivery=for_delivery)
@@ -755,7 +798,17 @@ def validate_project_audit_gate(
         )
         return
 
-    _validate_project_audit_mode(content, errors)
+    mode = _extract_single_keyword_from_section(
+        content,
+        "Mode",
+        {"formal", "pre_audit"},
+        field_name="project_audit_mode",
+    )
+    if mode is None:
+        errors.append("project-audit.md 的 `Mode` 未声明合法值；只能是 `formal` 或 `pre-audit`")
+        return
+    if require_delivery_linkage:
+        _validate_project_audit_mode(content, errors)
     _validate_project_audit_evidence(content, errors)
     _validate_project_audit_multi_cli_review_artifacts(task_dir, content, errors)
     gate_status = _extract_project_audit_gate_status(content)
@@ -770,16 +823,23 @@ def validate_project_audit_gate(
             f"project-audit.md 的 `project_audit_gate_status`={gate_status!r}；"
             "当前项目级审查仍存在阻断项，不得进入 delivery"
         )
-    mode = _extract_single_keyword_from_section(
-        content,
-        "Mode",
-        {"formal", "pre_audit"},
-        field_name="project_audit_mode",
-    )
     if mode == "formal":
         _validate_project_audit_task_plan_completion(task_dir, errors)
     if require_delivery_linkage:
         _validate_project_audit_delivery_linkage(task_dir, content, errors)
+
+
+def _validate_formal_project_audit_task(task_dir: Path, errors: list[str]) -> None:
+    validate_project_audit_gate(task_dir, errors, require_delivery_linkage=True)
+    task_data = load_task_json(task_dir)
+    if task_data is None:
+        errors.append(f"formal PROJECT-AUDIT task 不可读: {task_dir.name}")
+        return
+    task_status = task_data.get("status")
+    if task_status != "completed":
+        errors.append(
+            f"formal PROJECT-AUDIT task 尚未完成: {task_dir.name} (status={task_status})"
+        )
 
 
 def validate_review_gate_gate(task_dir: Path, errors: list[str]) -> None:
@@ -859,17 +919,28 @@ def validate_delivery_gate(task_dir: Path, errors: list[str], repo_root: Path | 
             project_audit_tasks = _project_audit_tasks_from_plan(plan_path)
             if project_audit_tasks:
                 matched = False
+                first_candidate_errors: list[str] = []
                 for task_name in project_audit_tasks:
                     candidate_dir = task_dir.parent / task_name
-                    task_data = load_task_json(candidate_dir)
-                    if task_data is not None and task_data.get("status") == "completed":
+                    if not candidate_dir.is_dir():
+                        if not first_candidate_errors:
+                            first_candidate_errors.append(
+                                f"task_plan.md 声明的 PROJECT-AUDIT task 不存在: {task_name}"
+                            )
+                        continue
+                    candidate_errors: list[str] = []
+                    _validate_formal_project_audit_task(candidate_dir, candidate_errors)
+                    if not candidate_errors:
                         matched = True
                         break
+                    if not first_candidate_errors:
+                        first_candidate_errors.extend(candidate_errors)
                 if not matched:
                     errors.append(
-                        "task_plan.md 已声明 `PROJECT-AUDIT` / project-audit task，但未找到已完成的正式项目级审查；"
+                        "task_plan.md 已声明 `PROJECT-AUDIT` / project-audit task，但至少需要一个候选 task 满足正式门禁；"
                         "不得进入 delivery"
                     )
+                    errors.extend(first_candidate_errors)
         assessment_path = find_assessment_file(task_dir, repo_root)
         if assessment_path is not None:
             assessment_content = assessment_path.read_text(encoding="utf-8")

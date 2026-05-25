@@ -566,6 +566,19 @@ def cmd_set(args: argparse.Namespace) -> int:
                 f"❌ 阶段切换被拒绝: {current_stage!r} → {pending_stage!r} 不属于 canonical transition {canonical_next}；如需强制切换请使用 --force"
             )
             return 1
+        if args.transition_from is None:
+            print(
+                f"❌ 阶段切换被拒绝: {current_stage!r} → {pending_stage!r} 缺少 --transition-from；"
+                "所有正式阶段切换都必须记录 last_confirmed_transition。"
+                " 如需强制切换请使用 --force"
+            )
+            return 1
+        if args.transition_from != current_stage:
+            print(
+                f"❌ 阶段切换被拒绝: --transition-from={args.transition_from!r} 与当前阶段 {current_stage!r} 不一致；"
+                "如需强制切换请使用 --force"
+            )
+            return 1
         current_allowed_targets = design_path_candidates_from_state(state)
         if pending_stage not in current_allowed_targets:
             rendered_allowed = ", ".join(sorted(current_allowed_targets)) or "(none)"
