@@ -48,6 +48,147 @@ from validators_core import (  # noqa: E402
 )
 
 
+def _missing_required_sections(content: str, sections: tuple[str, ...]) -> list[str]:
+    missing: list[str] = []
+    for section in sections:
+        if not re.search(rf"^\s*##+\s*{re.escape(section)}\s*$", content, re.MULTILINE):
+            missing.append(section)
+    return missing
+
+
+def _extract_section_body(content: str, heading: str) -> str:
+    pattern = re.compile(
+        rf"^\s*##+\s*{re.escape(heading)}\s*$\n(?P<body>.*?)(?=^\s*##+\s|\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    match = pattern.search(content)
+    if not match:
+        return ""
+    return match.group("body").strip()
+
+
+def _has_status_marker(content: str) -> bool:
+    return bool(re.search(r"\b(pass|fail|not run)\b|通过|失败|未运行", content, re.IGNORECASE))
+
+
+def _validate_project_audit_mode(content: str, errors: list[str]) -> None:
+    mode_body = _extract_section_body(content, "Mode")
+    lowered = mode_body.lower()
+    if "formal" in lowered:
+        return
+    if "pre-audit" in lowered:
+        errors.append("project-audit.md 当前仍是 `pre-audit`；预审不能作为正式 project-audit 出口")
+        return
+    errors.append("project-audit.md 的 `Mode` 未声明合法值；只能是 `formal` 或 `pre-audit`")
+
+
+def _validate_project_audit_evidence(content: str, errors: list[str]) -> None:
+    matrix_body = _extract_section_body(content, "Project-Level Verification Matrix")
+    required_matrix_markers = (
+        "project-task-coverage",
+        "统一代码漏洞检测",
+        "统一代码质量总检",
+    )
+    missing_matrix = [marker for marker in required_matrix_markers if marker not in matrix_body]
+    if missing_matrix:
+        errors.append(
+            "project-audit.md 的 Project-Level Verification Matrix 缺少必要聚合证据字段: "
+            + ", ".join(missing_matrix)
+        )
+
+    results_body = _extract_section_body(content, "Project-Level Verification Results")
+    if not _has_status_marker(results_body):
+        errors.append(
+            "project-audit.md 的 Project-Level Verification Results 缺少真实验证结论（pass / fail / not run）"
+        )
+
+
+def _validate_review_gate_evidence(task_dir: Path, report_path: Path, content: str, errors: list[str]) -> None:
+    decision_body = _extract_section_body(content, "Decision").lower()
+    mode_body = _extract_section_body(content, "Mode").lower()
+    valid_decisions = {"skip", "recommended", "required"}
+    decision = next((item for item in valid_decisions if item in decision_body), None)
+    if decision is None:
+        errors.append(
+            f"{report_path.relative_to(task_dir).as_posix()} 的 Decision 非法；只能是 skip / recommended / required"
+        )
+
+    valid_modes = {"lite", "full"}
+    mode = next((item for item in valid_modes if item in mode_body), None)
+    if mode is None:
+        errors.append(
+            f"{report_path.relative_to(task_dir).as_posix()} 的 Mode 非法；只能是 lite / full"
+        )
+
+    review_gate_dir = task_dir / "review-gate"
+    report_name = report_path.stem
+    round_suffix = report_name.removeprefix("review-gate-round-")
+    reviewer_commands = review_gate_dir / f"reviewer-commands-round-{round_suffix}.md"
+    summary_round = review_gate_dir / f"summary-round-{round_suffix}.md"
+    action_round = review_gate_dir / f"action-round-{round_suffix}.md"
+
+    if decision in {"recommended", "required"} and not reviewer_commands.is_file():
+        errors.append(
+            f"{reviewer_commands.relative_to(task_dir).as_posix()} 缺失；review-gate 缺少 reviewer 指令包"
+        )
+
+    if mode == "full" and not summary_round.is_file():
+        errors.append(
+            f"{summary_round.relative_to(task_dir).as_posix()} 缺失；full 模式 review-gate 必须沉淀聚合摘要"
+        )
+
+    if summary_round.is_file():
+        summary_content = summary_round.read_text(encoding="utf-8")
+        if not _has_status_marker(summary_content):
+            errors.append(
+                f"{summary_round.relative_to(task_dir).as_posix()} 缺少真实验证/采纳结论（pass / fail / not run）"
+            )
+
+    if action_round.is_file():
+        action_content = action_round.read_text(encoding="utf-8")
+        if "adopted" not in action_content.lower() and "采纳" not in action_content:
+            errors.append(
+                f"{action_round.relative_to(task_dir).as_posix()} 缺少采纳/拒绝决策记录；无法证明修复后闭环"
+            )
+
+
+def _validate_delivery_doc_contract(task_dir: Path, errors: list[str]) -> None:
+    contract = {
+        "acceptance.md": (
+            "Acceptance Criteria Status",
+            "Blocking Findings",
+            "Acceptance Gate",
+            "当前交付状态",
+        ),
+        "deliverables.md": (
+            "Closeout Assets",
+            "Verification Evidence",
+            "Current Status",
+            "Residual Risks",
+        ),
+        "transfer-checklist.md": (
+            "当前事件允许移交什么",
+            "当前事件禁止标记为已移交什么",
+            "触发条件 / 付款 / 权限 / 证明材料是否齐备",
+        ),
+    }
+    delivery_dir = task_dir / "delivery"
+    for filename, sections in contract.items():
+        file_path = delivery_dir / filename
+        if not file_path.is_file():
+            continue
+        content = file_path.read_text(encoding="utf-8")
+        missing_sections = _missing_required_sections(content, sections)
+        if missing_sections:
+            errors.append(
+                f"delivery/{filename} 缺少必要章节: {', '.join(missing_sections)}；delivery 文档契约未满足"
+            )
+        elif not _has_status_marker(content):
+            errors.append(
+                f"delivery/{filename} 缺少真实状态结论（pass / fail / not run）；delivery 文档契约未满足"
+            )
+
+
 def validate_plan_gate(task_dir: Path, errors: list[str]) -> None:
     checklist_path = task_dir / TASK_CREATION_CHECKLIST_FILE
     if checklist_path.is_file():
@@ -236,15 +377,17 @@ def validate_project_audit_gate(task_dir: Path, errors: list[str]) -> None:
         "Remaining Risks",
         "Suggested Next Step",
     )
-    for section in required_sections:
-        if not re.search(rf"^\s*##+\s*{re.escape(section)}\s*$", content, re.MULTILINE):
-            missing_sections.append(section)
+    missing_sections = _missing_required_sections(content, required_sections)
 
     if missing_sections:
         errors.append(
             f"project-audit.md 缺少必要章节: {', '.join(missing_sections)}；"
             "project-audit 阶段证据不完整，不得进入后续阶段"
         )
+        return
+
+    _validate_project_audit_mode(content, errors)
+    _validate_project_audit_evidence(content, errors)
 
 
 def validate_review_gate_gate(task_dir: Path, errors: list[str]) -> None:
@@ -263,16 +406,19 @@ def validate_review_gate_gate(task_dir: Path, errors: list[str]) -> None:
         return
 
     content = reports[-1].read_text(encoding="utf-8")
-    missing_sections: list[str] = []
-    for section in ("Decision", "Trigger Evidence", "Mode", "Recommended Next Step"):
-        if not re.search(rf"^\s*##+\s*{re.escape(section)}\s*$", content, re.MULTILINE):
-            missing_sections.append(section)
+    missing_sections = _missing_required_sections(
+        content,
+        ("Decision", "Trigger Evidence", "Mode", "Recommended Next Step"),
+    )
 
     if missing_sections:
         errors.append(
             f"{reports[-1].relative_to(task_dir).as_posix()} 缺少必要章节: {', '.join(missing_sections)}；"
             "review-gate 阶段证据不完整，不得进入后续阶段"
         )
+        return
+
+    _validate_review_gate_evidence(task_dir, reports[-1], content, errors)
 
 
 def validate_delivery_gate(task_dir: Path, errors: list[str], repo_root: Path | None = None) -> None:
@@ -283,6 +429,8 @@ def validate_delivery_gate(task_dir: Path, errors: list[str], repo_root: Path | 
     ]
     if missing:
         errors.append(f"缺少交付产物: {', '.join(missing)}；delivery 阶段未完成")
+    validate_finish_work_gate(task_dir, errors)
+    _validate_delivery_doc_contract(task_dir, errors)
     if repo_root is not None:
         assessment_path = find_assessment_file(task_dir, repo_root)
         if assessment_path is not None:
@@ -375,9 +523,9 @@ def validate_brainstorm_exit_gate(
                 errors.append(
                     f"{TASK_PRD.as_posix()} 的阶段出口快照字段未填写有效结论: {', '.join(placeholder_snapshot)}"
                 )
-            elif allowed_targets and allowed_targets.issubset(EXECUTION_STAGES):
+            else:
                 complexity_decision = extract_backticked_field(task_content, "complexity_decision")
-                if complexity_decision != "L0":
+                if "implementation" in allowed_targets and complexity_decision != "L0":
                     rendered_value = complexity_decision or "(missing)"
                     errors.append(
                         f"{TASK_PRD.as_posix()} 的 `complexity_decision`={rendered_value!r}；"
@@ -432,9 +580,14 @@ def validate_stage_transition_gates(
         validate_project_doc_boundary(candidate_state, repo_root, task_dir, errors)
 
     if current_state.get("stage") == "brainstorm":
-        allowed_targets = design_path_candidates_from_state(candidate_state)
+        allowed_targets = {
+            new_stage
+        } if new_stage in STAGES else design_path_candidates_from_state(candidate_state)
         validate_brainstorm_exit_gate(
-            current_state,
+            {
+                **current_state,
+                "_allowed_next_override": sorted(allowed_targets),
+            },
             repo_root,
             task_dir,
             errors,

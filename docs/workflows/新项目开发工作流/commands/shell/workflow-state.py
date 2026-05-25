@@ -860,7 +860,24 @@ def cmd_repair(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="workflow strong-gate state helper")
+    parser = argparse.ArgumentParser(
+        description=(
+            "workflow strong-gate state helper\n\n"
+            "Runtime contract:\n"
+            "- authoritative stage router for embedded strong-gate workflows\n"
+            "- validates stage exit artifacts and canonical transitions\n"
+            "- repair path for missing/corrupt workflow-state.json\n\n"
+            "Writer table:\n"
+            "- workflow-state.py init/set/repair write workflow-state.json\n"
+            "- task.py start refreshes active-task pointer only; route remains authoritative\n"
+            "- task.py archive is bookkeeping only and must not bypass close-out gates\n\n"
+            "Test invariants:\n"
+            "- non-L0 brainstorm work must not jump directly to implementation\n"
+            "- project-audit/review-gate/delivery exits require structured evidence, not file presence only\n"
+            "- route/validate/set must agree on stage-gate semantics"
+        ),
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     init_parser = subparsers.add_parser("init", help="create a default workflow-state.json")

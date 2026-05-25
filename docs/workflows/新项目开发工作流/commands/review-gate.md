@@ -308,6 +308,15 @@ tmp/multi-cli-review/<task-id>/
 └── .processed.json        # 当前 CLI / multi-cli-review-action 维护
 ```
 
+最小契约补充：
+
+- `review-gate-round-<N>.md`
+  - `## Decision` 必须是 `skip` / `recommended` / `required`
+  - `## Mode` 必须是 `lite` / `full`
+- 当 `Decision` 为 `recommended` 或 `required` 时，必须生成 `reviewer-commands-round-<N>.md`
+- 当 `Mode = full` 时，必须补齐 `summary-round-<N>.md`
+- 若已发生采纳/拒绝与修复动作，需有 `action.md` 或 `action-round-<N>.md` 记录当前 CLI 的聚合决策与复验结果
+
 ---
 
 ## 下一步推荐

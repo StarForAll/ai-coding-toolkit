@@ -280,6 +280,7 @@ tmp/multi-cli-review/<task-id>-project-audit/
 - formal / pre-audit
 
 ## Project-Level Verification Matrix
+- `project-task-coverage`: 已覆盖哪些代码相关 task / 哪些例外暂未纳入 / 哪些仍阻塞 delivery
 - 项目级统一代码漏洞检测命令：
 - 项目级统一代码质量总检命令：
 - `not run + 原因`（如适用）：
@@ -297,6 +298,8 @@ tmp/multi-cli-review/<task-id>-project-audit/
 - 项目级统一代码漏洞检测：
 - 项目级统一代码质量总检：
 - 失败后的处理动作 / 剩余阻塞：
+
+> 约束：只有 `Mode = formal` 的文档才能作为项目级阶段出口；`pre-audit` 只代表预审，不得作为最终 project-audit 完成证据。
 
 ## Remaining Risks
 

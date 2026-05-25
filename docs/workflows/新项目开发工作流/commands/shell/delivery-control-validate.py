@@ -30,6 +30,14 @@ VALID_EXTERNAL_TRACKS = {"hosted_deployment", "trial_authorization"}
 VALID_BOOLEAN_VALUES = {"yes", "no"}
 
 
+def _missing_sections(content: str, sections: tuple[str, ...]) -> list[str]:
+    missing: list[str] = []
+    for section in sections:
+        if not re.search(rf"^\s*##+\s*{re.escape(section)}\s*$", content, re.MULTILINE):
+            missing.append(section)
+    return missing
+
+
 def print_result(ok: bool, success: str, failure: str) -> int:
     """打印验证结果，返回 1 表示通过，0 表示失败"""
     if ok:
@@ -335,6 +343,23 @@ def validate_delivery(delivery_dir: Path, is_trial: bool) -> tuple[int, int]:
     if checklist_file.exists():
         print("\n检查移交清单内容...")
         content = checklist_file.read_text(encoding="utf-8")
+        checks += 1
+        missing_sections = _missing_sections(
+            content,
+            (
+                "当前事件允许移交什么",
+                "当前事件禁止标记为已移交什么",
+                "触发条件 / 付款 / 权限 / 证明材料是否齐备",
+            ),
+        )
+        if missing_sections:
+            passed += print_result(
+                False,
+                "",
+                "移交清单缺少必要章节: " + ", ".join(missing_sections),
+            )
+        else:
+            passed += print_result(True, "移交清单章节契约完整", "")
         
         # 检查是否有交付事件类型标注
         checks += 1
@@ -380,11 +405,28 @@ def validate_delivery(delivery_dir: Path, is_trial: bool) -> tuple[int, int]:
         content = deliverables_file.read_text(encoding="utf-8")
         
         checks += 1
-        # 检查是否有明确的交付物分类
-        if "交付物" in content or "交付清单" in content:
-            passed += print_result(True, "交付物清单已定义", "")
+        missing_sections = _missing_sections(
+            content,
+            ("Closeout Assets", "Verification Evidence", "Current Status", "Residual Risks"),
+        )
+        if missing_sections:
+            passed += print_result(False, "", "交付物清单缺少必要章节: " + ", ".join(missing_sections))
         else:
-            passed += print_result(False, "", "交付物清单未明确")
+            passed += print_result(True, "交付物清单已定义", "")
+
+    acceptance_file = delivery_dir / "acceptance.md"
+    if acceptance_file.exists():
+        print("\n检查验收文档...")
+        content = acceptance_file.read_text(encoding="utf-8")
+        checks += 1
+        missing_sections = _missing_sections(
+            content,
+            ("Acceptance Criteria Status", "Blocking Findings", "Acceptance Gate", "当前交付状态"),
+        )
+        if missing_sections:
+            passed += print_result(False, "", "验收文档缺少必要章节: " + ", ".join(missing_sections))
+        else:
+            passed += print_result(True, "验收文档契约完整", "")
     
     print(f"\n交付阶段验证: {passed}/{checks} 通过")
     return passed, checks
