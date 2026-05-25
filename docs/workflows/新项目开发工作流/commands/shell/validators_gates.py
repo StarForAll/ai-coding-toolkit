@@ -95,7 +95,65 @@ def _is_blocking_status(status: str | None, *, allow_not_run: bool = False) -> b
 
 
 def _should_enforce_missing_gate_status() -> bool:
-    return False
+    return True
+
+
+def _normalize_keyword(value: str) -> str:
+    return value.strip().strip("`").strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def _normalized_nonempty_lines(section_body: str) -> list[str]:
+    values: list[str] = []
+    for raw_line in section_body.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        line = re.sub(r"^[-*+]\s*", "", line).strip()
+        if not line:
+            continue
+        values.append(_normalize_keyword(line))
+    return values
+
+
+def _extract_single_keyword_from_section(
+    content: str,
+    heading: str,
+    valid_values: set[str],
+    *,
+    field_name: str | None = None,
+) -> str | None:
+    if field_name is not None:
+        raw_value = extract_backticked_field(content, field_name)
+        if raw_value is not None:
+            normalized = _normalize_keyword(raw_value)
+            if normalized in valid_values:
+                return normalized
+            return None
+
+    lines = _normalized_nonempty_lines(_extract_section_body(content, heading))
+    matched = {line for line in lines if line in valid_values}
+    if len(matched) == 1 and len(lines) == 1:
+        return next(iter(matched))
+    return None
+
+
+def _repo_root_from_task_dir(task_dir: Path) -> Path:
+    if task_dir.parent.name == "tasks" and task_dir.parent.parent.name == ".trellis":
+        return task_dir.parent.parent.parent
+    return task_dir.parent.parent
+
+
+def _has_action_decision_marker(content: str) -> bool:
+    lowered = content.lower()
+    return any(marker in lowered for marker in ("adopted", "rejected", "采纳", "拒绝"))
+
+
+def _project_audit_tmp_root(task_dir: Path) -> Path:
+    return _repo_root_from_task_dir(task_dir) / "tmp" / "multi-cli-review" / f"{task_dir.name}-project-audit"
+
+
+def _review_gate_tmp_root(task_dir: Path) -> Path:
+    return _repo_root_from_task_dir(task_dir) / "tmp" / "multi-cli-review" / task_dir.name
 
 
 def _extract_check_gate_status(content: str) -> str | None:
@@ -141,11 +199,15 @@ def _project_audit_tasks_from_plan(plan_path: Path) -> list[str]:
 
 
 def _validate_project_audit_mode(content: str, errors: list[str]) -> None:
-    mode_body = _extract_section_body(content, "Mode")
-    lowered = mode_body.lower()
-    if "formal" in lowered:
+    mode = _extract_single_keyword_from_section(
+        content,
+        "Mode",
+        {"formal", "pre_audit"},
+        field_name="project_audit_mode",
+    )
+    if mode == "formal":
         return
-    if "pre-audit" in lowered:
+    if mode == "pre_audit":
         errors.append("project-audit.md 当前仍是 `pre-audit`；预审不能作为正式 project-audit 出口")
         return
     errors.append("project-audit.md 的 `Mode` 未声明合法值；只能是 `formal` 或 `pre-audit`")
@@ -182,9 +244,13 @@ def _validate_project_audit_evidence(content: str, errors: list[str]) -> None:
 
 
 def _validate_project_audit_task_plan_completion(task_dir: Path, errors: list[str]) -> None:
-    repo_root = task_dir.parent.parent
+    repo_root = _repo_root_from_task_dir(task_dir)
     plan_path = find_task_plan_file(task_dir, repo_root)
     if plan_path is None:
+        errors.append(
+            "formal project-audit 缺少 task_plan.md；"
+            "无法证明全部代码相关任务已完成，不得作为正式 project-audit 出口"
+        )
         return
 
     task_rows: list[str] = []
@@ -197,7 +263,9 @@ def _validate_project_audit_task_plan_completion(task_dir: Path, errors: list[st
             continue
         task_path = columns[0]
         task_type = columns[1].lower()
-        if task_type != "implementation":
+        if task_type == "project-audit":
+            continue
+        if task_type not in {"implementation"}:
             continue
         task_rows.append(task_path)
 
@@ -216,6 +284,77 @@ def _validate_project_audit_task_plan_completion(task_dir: Path, errors: list[st
         if task_status != "completed":
             errors.append(
                 f"task_plan.md 中代码相关任务未全部完成: {task_name} (status={task_status})"
+            )
+
+
+def _validate_project_audit_multi_cli_review_artifacts(task_dir: Path, content: str, errors: list[str]) -> None:
+    process_dir = task_dir / "project-audit"
+    root_tmp = _project_audit_tmp_root(task_dir)
+
+    reviewer_commands = sorted(process_dir.glob("reviewer-commands-round-*.md"))
+    action_rounds = sorted(process_dir.glob("action-round-*.md"))
+    review_round_dirs = sorted(root_tmp.glob("review-round-*"))
+    summary_rounds = sorted(root_tmp.glob("summary-round-*.md"))
+    action_file = root_tmp / "action.md"
+
+    multi_cli_markers = (
+        "multi-cli-review",
+        "reviewer-commands-round-",
+        "reviewer:",
+        "review-round-",
+        "action-round-",
+        "summary-round-",
+    )
+    multi_cli_used = any(marker in content for marker in multi_cli_markers)
+    if not multi_cli_used and not reviewer_commands and not action_rounds and not review_round_dirs and not summary_rounds and not action_file.is_file():
+        return
+
+    if not reviewer_commands:
+        errors.append("project-audit 使用了 multi-cli-review 证据，但缺少 project-audit/reviewer-commands-round-<N>.md")
+
+    if not review_round_dirs:
+        errors.append(
+            "project-audit 使用了 multi-cli-review 证据，但缺少 "
+            f"{root_tmp.relative_to(_repo_root_from_task_dir(task_dir)).as_posix()}/review-round-<N>/"
+        )
+    else:
+        for review_round_dir in review_round_dirs:
+            reports = sorted(review_round_dir.glob("*.md"))
+            if len(reports) < 2:
+                errors.append(
+                    f"{review_round_dir.relative_to(_repo_root_from_task_dir(task_dir)).as_posix()} reviewer 报告不足 2 份；"
+                    "project-audit 内部 full 审查未完成"
+                )
+
+    if review_round_dirs and not summary_rounds:
+        errors.append(
+            "project-audit 已存在 reviewer 报告，但缺少 tmp/multi-cli-review/<task-id>-project-audit/summary-round-<N>.md"
+        )
+    for summary_round in summary_rounds:
+        summary_content = summary_round.read_text(encoding="utf-8")
+        if not _has_status_marker(summary_content):
+            errors.append(
+                f"{summary_round.relative_to(_repo_root_from_task_dir(task_dir)).as_posix()} 缺少真实验证/采纳结论（pass / fail / not run）"
+            )
+
+    if review_round_dirs and not action_rounds and not action_file.is_file():
+        errors.append(
+            "project-audit 已存在 reviewer 报告，但缺少 project-audit/action-round-<N>.md 或 "
+            "tmp/multi-cli-review/<task-id>-project-audit/action.md"
+        )
+
+    for action_round in action_rounds:
+        action_content = action_round.read_text(encoding="utf-8")
+        if not _has_action_decision_marker(action_content):
+            errors.append(
+                f"{action_round.relative_to(task_dir).as_posix()} 缺少采纳/拒绝决策记录；无法证明 project-audit 闭环"
+            )
+
+    if action_file.is_file():
+        action_content = action_file.read_text(encoding="utf-8")
+        if not _has_action_decision_marker(action_content):
+            errors.append(
+                f"{action_file.relative_to(_repo_root_from_task_dir(task_dir)).as_posix()} 缺少采纳/拒绝决策记录；无法证明 project-audit 闭环"
             )
 
 
@@ -254,17 +393,25 @@ def _validate_project_audit_delivery_linkage(task_dir: Path, content: str, error
 
 
 def _validate_review_gate_evidence(task_dir: Path, report_path: Path, content: str, errors: list[str]) -> None:
-    decision_body = _extract_section_body(content, "Decision").lower()
-    mode_body = _extract_section_body(content, "Mode").lower()
     valid_decisions = {"skip", "recommended", "required"}
-    decision = next((item for item in valid_decisions if item in decision_body), None)
+    decision = _extract_single_keyword_from_section(
+        content,
+        "Decision",
+        valid_decisions,
+        field_name="review_gate_decision",
+    )
     if decision is None:
         errors.append(
             f"{report_path.relative_to(task_dir).as_posix()} 的 Decision 非法；只能是 skip / recommended / required"
         )
 
     valid_modes = {"lite", "full"}
-    mode = next((item for item in valid_modes if item in mode_body), None)
+    mode = _extract_single_keyword_from_section(
+        content,
+        "Mode",
+        valid_modes,
+        field_name="review_gate_mode",
+    )
     if mode is None:
         errors.append(
             f"{report_path.relative_to(task_dir).as_posix()} 的 Mode 非法；只能是 lite / full"
@@ -278,9 +425,11 @@ def _validate_review_gate_evidence(task_dir: Path, report_path: Path, content: s
     report_name = report_path.stem
     round_suffix = report_name.removeprefix("review-gate-round-")
     reviewer_commands = review_gate_dir / f"reviewer-commands-round-{round_suffix}.md"
-    summary_round = review_gate_dir / f"summary-round-{round_suffix}.md"
+    review_root = _review_gate_tmp_root(task_dir)
+    summary_round = review_root / f"summary-round-{round_suffix}.md"
     action_round = review_gate_dir / f"action-round-{round_suffix}.md"
-    reviewer_reports_dir = task_dir / "tmp" / "multi-cli-review"
+    action_file = review_root / "action.md"
+    reviewer_reports_dir = review_root
 
     if decision in {"recommended", "required"} and not reviewer_commands.is_file():
         errors.append(
@@ -301,25 +450,31 @@ def _validate_review_gate_evidence(task_dir: Path, report_path: Path, content: s
 
     if mode == "full" and not summary_round.is_file():
         errors.append(
-            f"{summary_round.relative_to(task_dir).as_posix()} 缺失；full 模式 review-gate 必须沉淀聚合摘要"
+            f"{summary_round.relative_to(_repo_root_from_task_dir(task_dir)).as_posix()} 缺失；full 模式 review-gate 必须沉淀聚合摘要"
         )
 
     if summary_round.is_file():
         summary_content = summary_round.read_text(encoding="utf-8")
         if not _has_status_marker(summary_content):
             errors.append(
-                f"{summary_round.relative_to(task_dir).as_posix()} 缺少真实验证/采纳结论（pass / fail / not run）"
+                f"{summary_round.relative_to(_repo_root_from_task_dir(task_dir)).as_posix()} 缺少真实验证/采纳结论（pass / fail / not run）"
             )
 
     if action_round.is_file():
         action_content = action_round.read_text(encoding="utf-8")
-        if "adopted" not in action_content.lower() and "采纳" not in action_content:
+        if not _has_action_decision_marker(action_content):
             errors.append(
                 f"{action_round.relative_to(task_dir).as_posix()} 缺少采纳/拒绝决策记录；无法证明修复后闭环"
             )
+    elif action_file.is_file():
+        action_content = action_file.read_text(encoding="utf-8")
+        if not _has_action_decision_marker(action_content):
+            errors.append(
+                f"{action_file.relative_to(_repo_root_from_task_dir(task_dir)).as_posix()} 缺少采纳/拒绝决策记录；无法证明修复后闭环"
+            )
     elif decision in {"recommended", "required"} and reviewer_reports:
         errors.append(
-            f"{action_round.relative_to(task_dir).as_posix()} 缺失；已有 reviewer 报告时必须沉淀采纳/拒绝闭环记录"
+            f"{action_file.relative_to(_repo_root_from_task_dir(task_dir)).as_posix()} 缺失；已有 reviewer 报告时必须沉淀采纳/拒绝闭环记录"
         )
 
 
@@ -602,6 +757,7 @@ def validate_project_audit_gate(
 
     _validate_project_audit_mode(content, errors)
     _validate_project_audit_evidence(content, errors)
+    _validate_project_audit_multi_cli_review_artifacts(task_dir, content, errors)
     gate_status = _extract_project_audit_gate_status(content)
     if gate_status is None:
         if require_delivery_linkage and _should_enforce_missing_gate_status():
@@ -614,8 +770,13 @@ def validate_project_audit_gate(
             f"project-audit.md 的 `project_audit_gate_status`={gate_status!r}；"
             "当前项目级审查仍存在阻断项，不得进入 delivery"
         )
-    mode_body = _extract_section_body(content, "Mode").lower()
-    if "formal" in mode_body:
+    mode = _extract_single_keyword_from_section(
+        content,
+        "Mode",
+        {"formal", "pre_audit"},
+        field_name="project_audit_mode",
+    )
+    if mode == "formal":
         _validate_project_audit_task_plan_completion(task_dir, errors)
     if require_delivery_linkage:
         _validate_project_audit_delivery_linkage(task_dir, content, errors)

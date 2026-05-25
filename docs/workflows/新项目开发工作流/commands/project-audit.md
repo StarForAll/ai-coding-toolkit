@@ -295,7 +295,7 @@ tmp/multi-cli-review/<task-id>-project-audit/
 # Project Audit Report
 
 ## Mode
-- formal / pre-audit
+- `project_audit_mode`: `formal` / `pre-audit`
 
 ## Project-Level Verification Matrix
 - `project-task-coverage`: 已覆盖哪些代码相关 task / 哪些例外暂未纳入 / 哪些仍阻塞 delivery

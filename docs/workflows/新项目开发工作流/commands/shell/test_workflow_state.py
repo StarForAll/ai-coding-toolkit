@@ -829,8 +829,117 @@ class WorkflowStateScriptTests(unittest.TestCase):
             customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
         )
         self.write_project_audit_report(task_dir)
+        self.write_task_plan_with_code_tasks(
+            root,
+            task_dir,
+            statuses={
+                "04-15-sample-task": "completed",
+                "04-15-performance-opt": "completed",
+            },
+        )
 
         self.run_script("init", str(task_dir), "--stage", "project-audit")
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
+        self.assertIn("workflow-state 校验通过", validate.stdout)
+
+    def test_validate_project_audit_formal_requires_task_plan(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_project_audit_report(task_dir)
+        self.run_script("init", str(task_dir), "--stage", "project-audit")
+
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("task_plan.md", validate.stdout)
+
+    def test_validate_project_audit_formal_blocks_when_code_related_tasks_are_incomplete(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_project_audit_report(task_dir)
+        self.write_task_plan_with_code_tasks(
+            root,
+            task_dir,
+            statuses={
+                "04-15-sample-task": "completed",
+                "04-15-performance-opt": "in_progress",
+            },
+        )
+        self.run_script("init", str(task_dir), "--stage", "project-audit")
+
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("代码相关任务未全部完成", validate.stdout)
+
+    def test_validate_project_audit_accepts_structured_project_audit_mode_field(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_project_audit_report(
+            task_dir,
+            content="""# Project Audit Report
+
+## Mode
+- `project_audit_mode`: `formal`
+
+## Project-Level Verification Matrix
+- `project-task-coverage`: all code-related tasks complete; no approved exceptions; no delivery blockers
+- 项目级统一代码漏洞检测命令：not run + reason
+- 项目级统一代码质量总检命令：not run + reason
+
+## Confirmed Findings
+- [self] no blocking issue
+
+## Candidate Findings / Reviewer Evidence
+- [self] none
+
+## Confirmed Fix Plan
+- no-op
+
+## Applied Changes
+- no-op
+- `project_audit_code_changes`: `no`
+
+## Project-Level Verification Results
+- 项目级统一代码漏洞检测：not run + reason
+- 项目级统一代码质量总检：not run + reason
+- `project_audit_gate_status`: `pass`
+- `task_level_check_status`: `not_needed`
+
+## Remaining Risks
+- none
+
+## Suggested Next Step
+- /trellis:check
+""",
+        )
+        self.write_task_plan_with_code_tasks(
+            root,
+            task_dir,
+            statuses={
+                "04-15-sample-task": "completed",
+                "04-15-performance-opt": "completed",
+            },
+        )
+        self.run_script("init", str(task_dir), "--stage", "project-audit")
+
         validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
 
         self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
@@ -1563,7 +1672,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
         self.assertIn("retrospective.md", validate.stdout)
 
-    def test_validate_delivery_allows_legacy_artifacts_without_retrospective(self) -> None:
+    def test_validate_delivery_blocks_without_delivery_and_finish_work_gate_status(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
             root,
@@ -1587,7 +1696,10 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
         self.run_script("init", str(task_dir), "--stage", "delivery")
         validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
-        self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertTrue(
+            "delivery_gate_status" in validate.stdout or "finish_work_gate_status" in validate.stdout
+        )
 
     def test_validate_delivery_accepts_complete_contract_with_finish_work_checklist(self) -> None:
         root, task_dir = self.make_fixture()
@@ -5399,7 +5511,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
         self.assertIn("project_audit_gate_status", blocked.stdout)
 
-    def test_project_audit_to_delivery_allows_legacy_report_without_project_audit_gate_status(self) -> None:
+    def test_project_audit_to_delivery_blocks_without_project_audit_gate_status(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
             root,
@@ -5453,7 +5565,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "--awaiting-user-confirmation", "true",
             "--allowed-next", "delivery",
         )
-        allowed = self.run_script(
+        blocked = self.run_script(
             "set",
             str(task_dir),
             "--stage", "delivery",
@@ -5461,7 +5573,8 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "--awaiting-user-confirmation", "false",
             "--transition-from", "project-audit",
         )
-        self.assertEqual(allowed.returncode, 0, msg=allowed.stdout + allowed.stderr)
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("project_audit_gate_status", blocked.stdout)
 
     def test_project_audit_to_delivery_allows_no_code_change_with_task_level_check_evidence(self) -> None:
         root, task_dir = self.make_fixture()
@@ -5473,6 +5586,14 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
         self.write_check_report(task_dir)
         self.write_project_audit_report(task_dir)
+        self.write_task_plan_with_code_tasks(
+            root,
+            task_dir,
+            statuses={
+                "04-15-sample-task": "completed",
+                "04-15-performance-opt": "completed",
+            },
+        )
         self.run_script("init", str(task_dir), "--stage", "project-audit")
         self.run_script(
             "set",
@@ -5683,7 +5804,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
         self.assertIn("check_gate_status", blocked.stdout)
 
-    def test_check_to_delivery_allows_legacy_report_without_check_gate_status(self) -> None:
+    def test_check_to_delivery_blocks_without_check_gate_status(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
             root,
@@ -5735,7 +5856,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "--awaiting-user-confirmation", "true",
             "--allowed-next", "review-gate,implementation,delivery",
         )
-        allowed = self.run_script(
+        blocked = self.run_script(
             "set",
             str(task_dir),
             "--stage", "delivery",
@@ -5743,7 +5864,8 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "--awaiting-user-confirmation", "false",
             "--transition-from", "check",
         )
-        self.assertEqual(allowed.returncode, 0, msg=allowed.stdout + allowed.stderr)
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("check_gate_status", blocked.stdout)
 
     def test_check_to_delivery_blocks_when_hard_condition_is_marked_yes(self) -> None:
         root, task_dir = self.make_fixture()
@@ -5806,6 +5928,89 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
         self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
         self.assertIn("review_gate_decision", blocked.stdout)
+
+    def test_validate_review_gate_rejects_ambiguous_decision_and_mode_values(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_review_gate_round(
+            task_dir,
+            content="""# Review Gate Round
+
+## Decision
+- skip / required
+
+## Trigger Evidence
+- high risk
+
+## Mode
+- lite / full
+
+## Recommended Next Step
+- /trellis:delivery
+- `review_gate_closure_status`: `pass`
+""",
+        )
+        self.run_script("init", str(task_dir), "--stage", "review-gate")
+
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("Decision 非法", validate.stdout)
+        self.assertIn("Mode 非法", validate.stdout)
+
+    def test_validate_review_gate_uses_root_tmp_multi_cli_review_contract(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_review_gate_round(
+            task_dir,
+            content="""# Review Gate Round
+
+## Decision
+- `review_gate_decision`: `required`
+
+## Trigger Evidence
+- high risk
+
+## Mode
+- `review_gate_mode`: `full`
+
+## Recommended Next Step
+- /trellis:delivery
+- `review_gate_closure_status`: `pass`
+""",
+        )
+        review_gate_dir = task_dir / "review-gate"
+        (review_gate_dir / "reviewer-commands-round-1.md").write_text("# reviewer commands\n", encoding="utf-8")
+
+        wrong_tmp = task_dir / "tmp" / "multi-cli-review" / task_dir.name / "review-round-1"
+        wrong_tmp.mkdir(parents=True, exist_ok=True)
+        (wrong_tmp / "a.md").write_text("# reviewer a\n", encoding="utf-8")
+        (wrong_tmp / "b.md").write_text("# reviewer b\n", encoding="utf-8")
+
+        self.run_script("init", str(task_dir), "--stage", "review-gate")
+        blocked = self.run_script("validate", str(task_dir), "--project-root", str(root))
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("reviewer 报告不足 2 份", blocked.stdout)
+
+        root_tmp = root / "tmp" / "multi-cli-review" / task_dir.name
+        (root_tmp / "review-round-1").mkdir(parents=True, exist_ok=True)
+        (root_tmp / "review-round-1" / "a.md").write_text("# reviewer a\n", encoding="utf-8")
+        (root_tmp / "review-round-1" / "b.md").write_text("# reviewer b\n", encoding="utf-8")
+        (root_tmp / "summary-round-1.md").write_text("- pass\n", encoding="utf-8")
+        (root_tmp / "action.md").write_text("- adopted\n", encoding="utf-8")
+
+        allowed = self.run_script("validate", str(task_dir), "--project-root", str(root))
+        self.assertEqual(allowed.returncode, 0, msg=allowed.stdout + allowed.stderr)
 
     def test_delivery_awaiting_rejects_shell_artifacts_without_real_status(self) -> None:
         root, task_dir = self.make_fixture()
@@ -5934,6 +6139,14 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertIn("project-audit.md", "".join(blocked_data.get("blockers", [])))
 
         self.write_project_audit_report(task_dir)
+        self.write_task_plan_with_code_tasks(
+            root,
+            task_dir,
+            statuses={
+                "04-15-sample-task": "completed",
+                "04-15-performance-opt": "completed",
+            },
+        )
         allowed = self.run_script("route", str(task_dir), "--project-root", str(root))
         allowed_data = json.loads(allowed.stdout)
         self.assertEqual(allowed_data["action"], "awaiting_confirmation")
