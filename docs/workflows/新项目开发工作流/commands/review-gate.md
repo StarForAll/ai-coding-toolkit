@@ -157,6 +157,7 @@ $TASK_DIR/review-gate/review-gate-round-<N>.md
 - `full` 默认使用 **2 个 reviewer**
 - `full` 最多允许扩展到 **4 个 reviewer**
 - `project-audit` 内部使用 `multi-cli-review` 时不复用这里的 `lite`，仍按其自身的 full 口径处理
+- 若 `Decision = required`，`Mode` 必须是 `full`；不得用 `required + lite` 规避正式聚合审查
 
 ### Step 4: 确认能力前置并生成 reviewer 指令包
 
@@ -258,6 +259,18 @@ tmp/multi-cli-review/<task-id>/review-round-<N>/<reviewer-id>.md
 
 若 `lite` 模式下 reviewer 没有提出新的有效问题，则可直接记录“无新增有效问题”，不必强制进入 `multi-cli-review-action`。
 
+### Step 6.5: 写入等待确认状态
+
+当本轮判定、聚合结论和必要修复都已落盘后，必须显式写入等待确认状态：
+
+```bash
+python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py set <task-dir> \
+  --stage-status awaiting_user_confirmation \
+  --awaiting-user-confirmation true
+```
+
+只有在用户明确确认后，才允许切到 `delivery` / `implementation` / `project-audit`。
+
 ### Step 7: 重新验证与关闭
 
 当前 CLI 根据修复结果重新跑该任务的质量检查 / 验证：
@@ -315,6 +328,7 @@ tmp/multi-cli-review/<task-id>/
   - `## Mode` 必须是 `lite` / `full`
 - 当 `Decision` 为 `recommended` 或 `required` 时，必须生成 `reviewer-commands-round-<N>.md`
 - 当 `Mode = full` 时，必须补齐 `summary-round-<N>.md`
+- 当 `Decision = required` 时，`Mode` 必须是 `full`
 - 若已发生采纳/拒绝与修复动作，需有 `action.md` 或 `action-round-<N>.md` 记录当前 CLI 的聚合决策与复验结果
 
 ---

@@ -18,6 +18,7 @@ from embed_integrity import collect_embed_advisories, detect_embed_invalid  # no
 from state_utils import (  # noqa: E402
     ASSESSMENT_FILE,
     EXECUTION_STAGES,
+    EXIT_READY_STATUSES,
     INSTALL_RECORD,
     ROOT_README_EN,
     STAGES,
@@ -410,14 +411,14 @@ def _route_valid_task_state(
     readiness_blockers = _collect_route_readiness_blockers(task_dir, repo_root, state)
     route_warnings = _collect_nonblocking_warnings(task_dir, repo_root, state)
 
-    if status == "awaiting_user_confirmation":
+    if status in EXIT_READY_STATUSES:
         exit_blockers = _collect_exit_gate_blockers(task_dir, repo_root, state)
         all_blockers = readiness_blockers + exit_blockers
         if all_blockers:
             _route_result(
                 stage,
                 "awaiting_confirmation_with_blockers",
-                f"当前 stage={stage}, status=awaiting_user_confirmation 但仍存在 readiness blockers",
+                f"当前 stage={stage}, status={status} 但仍存在 readiness blockers",
                 stage=stage,
                 status=status,
                 blockers=all_blockers,
@@ -426,7 +427,7 @@ def _route_valid_task_state(
             _route_result(
                 stage,
                 "awaiting_confirmation",
-                f"当前 stage={stage}, status=awaiting_user_confirmation",
+                f"当前 stage={stage}, status={status}",
                 stage=stage,
                 status=status,
             )
@@ -565,11 +566,20 @@ def cmd_set(args: argparse.Namespace) -> int:
                 f"❌ 阶段切换被拒绝: {current_stage!r} → {pending_stage!r} 不属于 canonical transition {canonical_next}；如需强制切换请使用 --force"
             )
             return 1
+        current_allowed_targets = design_path_candidates_from_state(state)
+        if pending_stage not in current_allowed_targets:
+            rendered_allowed = ", ".join(sorted(current_allowed_targets)) or "(none)"
+            print(
+                f"❌ 阶段切换被拒绝: 当前阶段的 allowed-next 子集不包含 {pending_stage!r}；"
+                f"允许值为 {rendered_allowed}。如需强制切换请使用 --force"
+            )
+            return 1
         if pending_stage not in {"feasibility"}:
             current_status = state.get("status", "")
-            if current_status != "awaiting_user_confirmation":
+            if current_status not in EXIT_READY_STATUSES:
                 print(
-                    f"❌ 阶段切换被拒绝: 进入 {pending_stage!r} 前 status 必须为 awaiting_user_confirmation；当前为 {current_status!r}。如需强制切换请使用 --force"
+                    f"❌ 阶段切换被拒绝: 进入 {pending_stage!r} 前 status 必须为 awaiting_user_confirmation"
+                    f"（或 legacy alias `completed`）；当前为 {current_status!r}。如需强制切换请使用 --force"
                 )
                 return 1
         if pending_stage in EXECUTION_STAGES:

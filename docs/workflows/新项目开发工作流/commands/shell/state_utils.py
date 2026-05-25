@@ -141,6 +141,10 @@ BRAINSTORM_EXIT_SNAPSHOT_FIELDS = (
     "kill_criteria",
     "open_items",
 )
+L0_DIRECT_EXECUTION_MARKERS = (
+    "automation_matrix_source",
+    "closeout_baseline_source",
+)
 REVIEW_GATE_DECISIONS = {"skip", "recommended", "required"}
 REVIEW_GATE_HARD_CONDITION_FIELDS = (
     ("auth_or_sensitive", "认证 / 授权 / 权限边界 / 敏感信息处理"),

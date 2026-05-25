@@ -22,6 +22,7 @@ from state_utils import (  # noqa: E402
     EXECUTION_STAGES,
     EXIT_READY_STATUSES,
     FINISH_WORK_CHECKLIST_FILE,
+    L0_DIRECT_EXECUTION_MARKERS,
     PROJECT_ESTIMATE_REQUIRED_STAGES,
     REVIEW_GATE_DECISIONS,
     REVIEW_GATE_HARD_CONDITION_FIELDS,
@@ -35,6 +36,7 @@ from state_utils import (  # noqa: E402
     find_assessment_file,
     find_missing_markers,
     is_placeholder_like,
+    load_task_json,
     normalize_yes_no_field,
     run_gate_validator,
 )
@@ -82,6 +84,15 @@ def _validate_project_audit_mode(content: str, errors: list[str]) -> None:
     errors.append("project-audit.md 的 `Mode` 未声明合法值；只能是 `formal` 或 `pre-audit`")
 
 
+def _normalize_project_audit_check_status(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().strip("`").lower().replace("-", "_").replace(" ", "_")
+    if normalized in {"pass", "fail", "not_run", "not_needed"}:
+        return normalized
+    return None
+
+
 def _validate_project_audit_evidence(content: str, errors: list[str]) -> None:
     matrix_body = _extract_section_body(content, "Project-Level Verification Matrix")
     required_matrix_markers = (
@@ -103,6 +114,77 @@ def _validate_project_audit_evidence(content: str, errors: list[str]) -> None:
         )
 
 
+def _validate_project_audit_task_plan_completion(task_dir: Path, errors: list[str]) -> None:
+    plan_path = task_dir / TASK_PLAN_FILE
+    if not plan_path.is_file():
+        return
+
+    task_rows: list[str] = []
+    for raw_line in plan_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if ".trellis/tasks/" not in line or not line.startswith("|"):
+            continue
+        columns = [column.strip() for column in line.strip().strip("|").split("|")]
+        if len(columns) < 2:
+            continue
+        task_path = columns[0]
+        task_type = columns[1].lower()
+        if task_type != "implementation":
+            continue
+        task_rows.append(task_path)
+
+    for task_path in task_rows:
+        task_name = Path(task_path).name
+        if task_name == task_dir.name:
+            continue
+        referenced_dir = task_dir.parent / task_name
+        task_data = load_task_json(referenced_dir)
+        if task_data is None:
+            errors.append(
+                f"task_plan.md 引用的代码相关任务不存在或不可读: {task_path}"
+            )
+            continue
+        task_status = task_data.get("status")
+        if task_status != "completed":
+            errors.append(
+                f"task_plan.md 中代码相关任务未全部完成: {task_name} (status={task_status})"
+            )
+
+
+def _validate_project_audit_delivery_linkage(task_dir: Path, content: str, errors: list[str]) -> None:
+    validate_check_gate(task_dir, errors, for_delivery=True)
+
+    code_change_raw = extract_backticked_field(content, "project_audit_code_changes")
+    code_changes = normalize_yes_no_field(code_change_raw)
+    if code_change_raw is None:
+        errors.append("project-audit.md 缺少 `project_audit_code_changes` 字段")
+    elif code_changes is None:
+        errors.append("project-audit.md 的 `project_audit_code_changes` 只能填写 `yes` / `no`")
+
+    task_level_check_raw = extract_backticked_field(content, "task_level_check_status")
+    task_level_check_status = _normalize_project_audit_check_status(task_level_check_raw)
+    if task_level_check_raw is None:
+        errors.append("project-audit.md 缺少 `task_level_check_status` 字段")
+        return
+    if task_level_check_status is None:
+        rendered = task_level_check_raw or "(missing)"
+        errors.append(
+            f"project-audit.md 的 `task_level_check_status` 非法: {rendered!r}；"
+            "只能填写 `pass` / `fail` / `not_run` / `not_needed`"
+        )
+        return
+
+    if code_changes is True and task_level_check_status != "pass":
+        errors.append(
+            "project-audit.md 标记本轮存在代码修改时，`task_level_check_status` 必须为 `pass`；"
+            "需要先回到任务级 check 重新闭环"
+        )
+    if code_changes is False and task_level_check_status not in {"pass", "not_needed"}:
+        errors.append(
+            "project-audit.md 标记本轮无代码修改时，`task_level_check_status` 只能为 `pass` 或 `not_needed`"
+        )
+
+
 def _validate_review_gate_evidence(task_dir: Path, report_path: Path, content: str, errors: list[str]) -> None:
     decision_body = _extract_section_body(content, "Decision").lower()
     mode_body = _extract_section_body(content, "Mode").lower()
@@ -118,6 +200,10 @@ def _validate_review_gate_evidence(task_dir: Path, report_path: Path, content: s
     if mode is None:
         errors.append(
             f"{report_path.relative_to(task_dir).as_posix()} 的 Mode 非法；只能是 lite / full"
+        )
+    elif decision == "required" and mode != "full":
+        errors.append(
+            f"{report_path.relative_to(task_dir).as_posix()} 的 Decision=`required` 时，Mode 必须为 `full`"
         )
 
     review_gate_dir = task_dir / "review-gate"
@@ -358,7 +444,12 @@ def validate_finish_work_gate(task_dir: Path, errors: list[str]) -> None:
         )
 
 
-def validate_project_audit_gate(task_dir: Path, errors: list[str]) -> None:
+def validate_project_audit_gate(
+    task_dir: Path,
+    errors: list[str],
+    *,
+    require_delivery_linkage: bool = False,
+) -> None:
     report_path = task_dir / "project-audit.md"
     if not report_path.is_file():
         errors.append("缺少 project-audit.md；project-audit 阶段未沉淀项目级审查结论，不得进入后续阶段")
@@ -388,6 +479,11 @@ def validate_project_audit_gate(task_dir: Path, errors: list[str]) -> None:
 
     _validate_project_audit_mode(content, errors)
     _validate_project_audit_evidence(content, errors)
+    mode_body = _extract_section_body(content, "Mode").lower()
+    if "formal" in mode_body:
+        _validate_project_audit_task_plan_completion(task_dir, errors)
+    if require_delivery_linkage:
+        _validate_project_audit_delivery_linkage(task_dir, content, errors)
 
 
 def validate_review_gate_gate(task_dir: Path, errors: list[str]) -> None:
@@ -531,6 +627,16 @@ def validate_brainstorm_exit_gate(
                         f"{TASK_PRD.as_posix()} 的 `complexity_decision`={rendered_value!r}；"
                         "brainstorm 仅允许 `L0` 直接进入 implementation，其他复杂度必须先进入 design/plan"
                     )
+                elif "implementation" in allowed_targets:
+                    missing_direct_execution_markers = find_missing_markers(
+                        task_prd,
+                        L0_DIRECT_EXECUTION_MARKERS,
+                    )
+                    if missing_direct_execution_markers:
+                        errors.append(
+                            f"{TASK_PRD.as_posix()} 缺少 L0 直达 implementation 的基线来源字段: "
+                            + ", ".join(missing_direct_execution_markers)
+                        )
 
     if require_customer_prd and allowed_targets & {"design", "plan"}:
         customer_prd = project_root / CUSTOMER_PRD
@@ -561,6 +667,14 @@ def validate_stage_transition_gates(
     if current_stage is not None and new_stage != current_stage and new_stage not in canonical_next:
         errors.append(
             f"阶段切换被拒绝: {current_stage!r} → {new_stage!r} 不属于 canonical transition {canonical_next}"
+        )
+        return
+    current_allowed_targets = design_path_candidates_from_state(current_state)
+    if new_stage != current_stage and new_stage not in current_allowed_targets:
+        rendered_allowed = ", ".join(sorted(current_allowed_targets)) or "(none)"
+        errors.append(
+            f"阶段切换被拒绝: {current_stage!r} 当前 allowed-next 子集不包含 {new_stage!r}；"
+            f"允许值为 {rendered_allowed}"
         )
         return
 
@@ -607,13 +721,17 @@ def validate_stage_transition_gates(
         validate_check_gate(task_dir, errors, for_delivery=True)
 
     if current_stage == "project-audit":
-        validate_project_audit_gate(task_dir, errors)
+        validate_project_audit_gate(
+            task_dir,
+            errors,
+            require_delivery_linkage=(new_stage == "delivery"),
+        )
 
     if current_stage == "review-gate":
         validate_review_gate_gate(task_dir, errors)
 
     if new_stage == "delivery" and current_stage == "project-audit":
-        validate_project_audit_gate(task_dir, errors)
+        validate_project_audit_gate(task_dir, errors, require_delivery_linkage=True)
 
 
 def validate_stage_exit_artifacts(

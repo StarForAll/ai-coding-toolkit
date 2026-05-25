@@ -10,6 +10,14 @@ description: 开发完成？准备交付 — 验收测试、交付物生成、�
 
 > **Strong Gate**: 本阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束。`delivery` 是项目级/交付级验收与交付阶段，不等同于单任务级 `finish-work`。若当前轮还需要对**当前活动任务**做原生 Trellis 收尾，再进入 `/trellis:finish-work`。
 
+补充边界：
+
+- 当上游来自任务级 `check` 时，`delivery` 直接消费当前 active task 的 `check.md`
+- 当上游来自项目级 `project-audit` 时，`delivery` 同时消费：
+  - 当前 active task 的 `check.md`
+  - `project-audit.md` 中的项目级总复核结论
+- 若 `project-audit.md` 标记本轮存在代码修改，则不得直接进入 `delivery`，必须先回到 `/trellis:check`
+
 ---
 
 ## When to Use (自然触发)
@@ -218,6 +226,18 @@ python3 <WORKFLOW_DIR>/commands/shell/source-watermark-guard.py --task-dir <task
 ### Step 9: 项目复盘
 
 本步骤只保留当前项目的复盘与人工说明，不再要求单独的 workflow 缺陷反馈机制闭环。
+
+### Step 10: 写入等待确认状态
+
+当 `delivery/*` 交付产物、`finish-work-checklist.md` 与本轮验收结论都已经完成后，必须显式写入等待确认状态：
+
+```bash
+python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py set <task-dir> \
+  --stage-status awaiting_user_confirmation \
+  --awaiting-user-confirmation true
+```
+
+只有在用户明确确认后，才允许把当前轮视为项目级主链完成，并决定是否继续进入原生 `/trellis:finish-work`。
 
 `retrospective.md` 重点记录：
 

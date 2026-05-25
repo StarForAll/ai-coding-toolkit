@@ -50,6 +50,7 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
 - `plan` 完成后，必须先输出已完成/未完成/缺失项，再等待用户确认
 - 只有用户确认后，才允许把执行态切到具体叶子 task 的 implementation（需要测试先行时，在 implementation 内按测试先行模式执行）
 - `plan` 阶段 `execution_authorized` 必须为 `false`，由 validate 强制。
+- 等待确认不是口头状态；必须把 `workflow-state.json.status` 写成 `awaiting_user_confirmation`
 
 `/trellis:plan` 的职责是：
 
@@ -79,6 +80,14 @@ description: 设计好了？拆任务 — 以 Trellis task 为主执行单元做
 - 因重新进入 `/trellis:plan` 而自动恢复某个 task 的 implementation
 - 在未获用户明确确认前，把当前 session 的 active task 切到实施叶子 task
 - 在未获用户明确确认前，把任何 `workflow-state.stage` 改成 `implementation`
+
+当 `task_creation_checklist.md`、真实 task 和 `task_plan.md` 已完成并准备等待人工确认时，必须执行：
+
+```bash
+python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py set <task-dir> \
+  --stage-status awaiting_user_confirmation \
+  --awaiting-user-confirmation true
+```
 
 ## 历史数据防漂移要求
 

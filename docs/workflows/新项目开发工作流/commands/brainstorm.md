@@ -323,6 +323,10 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py init "$TASK_DIR" --stage
 - 若用户明确要求其他文件也做人性化处理，即使它不在默认范围内，也按同口径执行 `humanizer-zh`
 - `docs/requirements/developer-facing-prd.md` 不在本条默认范围内
 - `L0` 若直接进入 `continue` / `implementation`，可继续不强制生成 `customer-facing-prd.md`，但**仍必须**先在 `task_dir/prd.md` 中补齐项目级粗估
+- `L0` 若直接进入 `continue` / `implementation`，除 `## 项目级粗估` 与 `## 阶段出口快照` 外，还必须在 `prd.md` 明确：
+  - `automation_matrix_source`
+  - `closeout_baseline_source`
+- 这两个字段用于证明当前项目已经存在可复用的自动化检查矩阵来源与 close-out 基线来源；若无法明确写出，说明当前项目还没建立好工程化基线，应先进入 `design/plan`
 - `task_dir/prd.md` 继续保留为阶段内工作底稿，但不能替代项目级正式需求文档
 - 若暂时无法给出单点值，也必须给出**区间估算**与适用前提；”后面再说””先不估”都不算通过
 - 由 `workflow-state.py validate` 强制检查项目级粗估门禁。
@@ -448,6 +452,14 @@ docs/requirements/
 ## 下一步推荐
 
 **当前状态**: 已完成需求发现与任务生成前置路由判断；在用户明确确认前，仍停留在 brainstorm 阶段。
+
+在输出当前轮已完成/未完成项之后，必须显式写入等待确认状态：
+
+```bash
+python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py set <task-dir> \
+  --stage-status awaiting_user_confirmation \
+  --awaiting-user-confirmation true
+```
 
 > 本节定义的是阶段完成后的推荐输出口径，用于帮助当前 CLI 或协作者说明下一步；它不是框架层自动跳转保证。
 

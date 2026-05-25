@@ -39,6 +39,12 @@ description: 所有代码任务都完成了？进入项目级全局代码审查�
 - `project-audit` 新发现的问题留在当前阶段内处理，不回挂到具体任务
 - 若需要多 CLI 审查能力，它在本阶段内作为辅助分析或修复手段使用，不转入任务级 `review-gate`
 - 本阶段内部若使用 `multi-cli-review`，固定按 **full** 口径执行，不复用任务级 `review-gate` 的 `lite` 模式
+- `project-audit` 与任务级 `check` 不是同一层：
+  - `check` 负责**当前 active task / 当前实施轮**的任务级质量闭环
+  - `project-audit` 负责**项目整体代码面**的项目级总复核
+- 保留 `project-audit -> delivery`，但它不是对任务级 `check` 的替代：
+  - 若本轮 `project-audit` 发生代码修改，必须先回到 `/trellis:check`
+  - 若本轮 `project-audit` 只有分析/确认、没有新增代码修改，且当前 active task 的 `check.md` 已闭环，才允许直接进入 `/trellis:delivery`
 
 ---
 
@@ -225,7 +231,7 @@ $TASK_DIR/project-audit/reviewer-commands-round-<N>.md
 
 - 修改必须只围绕 `project-audit` 已确认的全局缺口
 - 不借此扩大范围做新的需求扩张
-- 改完后不要直接进入交付；下一步必须回到 `/trellis:check`
+- 若本阶段发生代码修改，不要直接进入交付；下一步必须回到 `/trellis:check`
 - 在本阶段完成前，必须执行已确认的项目级代码漏洞检测与代码质量总检，并把结论写入 `project-audit.md`
 
 执行阶段可按需要使用：
@@ -247,6 +253,18 @@ $TASK_DIR/project-audit/action-round-<N>.md
 
 - 记录本次预审结论与已做修改
 - 但不把 `PROJECT-AUDIT` 标记为最终完成
+
+### Step 4: 写入等待确认状态
+
+当本轮 `project-audit` 的分析/修复与项目级验证结论已经写入 `project-audit.md` 后，必须显式写入等待确认状态：
+
+```bash
+python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py set <task-dir> \
+  --stage-status awaiting_user_confirmation \
+  --awaiting-user-confirmation true
+```
+
+仅在用户明确确认后，才允许切到 `check` / `review-gate` / `delivery`。
 
 ---
 
@@ -293,10 +311,12 @@ tmp/multi-cli-review/<task-id>-project-audit/
 ## Confirmed Fix Plan
 
 ## Applied Changes
+- `project_audit_code_changes`: `yes` / `no`
 
 ## Project-Level Verification Results
 - 项目级统一代码漏洞检测：
 - 项目级统一代码质量总检：
+- `task_level_check_status`: `pass` / `fail` / `not_run` / `not_needed`
 - 失败后的处理动作 / 剩余阻塞：
 
 > 约束：只有 `Mode = formal` 的文档才能作为项目级阶段出口；`pre-audit` 只代表预审，不得作为最终 project-audit 完成证据。
@@ -318,7 +338,8 @@ tmp/multi-cli-review/<task-id>-project-audit/
 
 | 当前结果 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
-| 已完成本轮审查与修复 | `/trellis:check` | 进入质量检查，或显式触发 `check` skill | **默认推荐**。仅在用户明确确认后才允许进入质量检查 |
+| 已完成本轮审查且本轮发生代码修改 | `/trellis:check` | 进入质量检查，或显式触发 `check` skill | **默认推荐**。仅在用户明确确认后才允许进入质量检查 |
+| 已完成本轮审查且本轮无代码修改 | `/trellis:delivery` | 进入交付收口，或显式触发 `delivery` skill | 前提：当前 active task 的 `check.md` 已闭环，且 `project-audit.md` 中 `task_level_check_status` 与 `project_audit_code_changes` 已满足门禁 |
 | 只完成分析，仍需继续讨论 | `/trellis:project-audit` | 继续项目级审查，或显式触发 `project-audit` skill | 留在当前阶段继续收敛 |
 | 方案未确认 | `/trellis:project-audit` | 继续项目级审查，或显式触发 `project-audit` skill | 先确认方案，不进入后续门禁 |
 | 审查发现冻结后新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先完成变更评估，不直接混入本轮审查修改 |

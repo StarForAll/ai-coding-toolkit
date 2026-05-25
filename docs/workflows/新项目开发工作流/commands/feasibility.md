@@ -57,6 +57,14 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py init "$TASK_DIR" --stage
 
 若评估结论为 `暂停` 或 `拒绝`，保留该目录中的 `assessment.md` 作为决策记录，不进入后续阶段。若评估结论允许继续，Step 4 复用同一个 `TASK_DIR`，不再重复创建正式任务目录。
 
+当 `assessment.md` 已完成并准备等待用户确认是否进入后续阶段时，必须显式写入：
+
+```bash
+python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py set "$TASK_DIR" \
+  --stage-status awaiting_user_confirmation \
+  --awaiting-user-confirmation true
+```
+
 ### Step 1: 法律与合规风险初筛（必须先做）
 
 ```bash

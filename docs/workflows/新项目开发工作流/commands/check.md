@@ -44,6 +44,7 @@ description: 代码写完了？检查一下 — 基于真实改动范围和项�
 - 当前嵌入 workflow 显式禁用 `trellis-research` / `trellis-implement` / `trellis-check` 这类 agent/subagent 执行路径；implementation 内的 research / implement / 自检必须由主会话直接完成
 - 这里提到的 research / implement / checking 只是 implementation 内部能力分工，不代表允许派发对应 agent
 - `/trellis:check` 只在 implementation 主会话工作完成并经用户确认后进入
+- `check.md` 记录的是**当前 active task / 当前实施轮**的任务级质量结论，不替代 `project-audit` 的项目级总复核
 
 ---
 
@@ -192,6 +193,18 @@ $TASK_DIR/check.md
 
 ## Suggested Next Step
 ```
+
+### Step 5.5: 写入等待确认状态
+
+当 `check.md` 已完成并且当前轮任务级验证结论已经落盘后，必须显式写入等待确认状态：
+
+```bash
+python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py set <task-dir> \
+  --stage-status awaiting_user_confirmation \
+  --awaiting-user-confirmation true
+```
+
+只在用户明确确认后，才允许切到 `delivery` / `review-gate` / `project-audit` / `implementation`。
 
 ### Step 6: 上下文污染检测
 
