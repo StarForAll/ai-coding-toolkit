@@ -80,9 +80,34 @@ PLAN_WITH_DELIVERY = """\
 """
 
 DELIVERY_DIR_CONTENT = {
-    "transfer-checklist.md": "# Transfer Checklist\n\nretained-control delivery\n\n- milestone_payment_schedule\n- non_payment_remedy_path\n- dispute_escalation_path\n",
-    "deliverables.md": "# Deliverables\n\n交付物清单\n",
-    "acceptance.md": "# Acceptance\n",
+    "transfer-checklist.md": "# Transfer Checklist\n\n"
+    "## 当前事件允许移交什么\n"
+    "- docs\n\n"
+    "## 当前事件禁止标记为已移交什么\n"
+    "- production keys\n\n"
+    "## 触发条件 / 付款 / 权限 / 证明材料是否齐备\n"
+    "- retained-control delivery\n"
+    "- milestone_payment_schedule\n"
+    "- non_payment_remedy_path\n"
+    "- dispute_escalation_path\n",
+    "deliverables.md": "# Deliverables\n\n"
+    "## Closeout Assets\n"
+    "- docs\n\n"
+    "## Verification Evidence\n"
+    "- lint: pass\n\n"
+    "## Current Status\n"
+    "- pass\n\n"
+    "## Residual Risks\n"
+    "- none\n",
+    "acceptance.md": "# Acceptance\n\n"
+    "## Acceptance Criteria Status\n"
+    "- sample: pass\n\n"
+    "## Blocking Findings\n"
+    "- none\n\n"
+    "## Acceptance Gate\n"
+    "- pass\n\n"
+    "## 当前交付状态\n"
+    "- pass\n",
 }
 
 
@@ -246,6 +271,30 @@ class DeliveryControlValidateTests(unittest.TestCase):
             (delivery / name).write_text(content, encoding="utf-8")
         result = self.run_script("--phase", "delivery", "--task-dir", str(d))
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+    def test_delivery_fails_when_acceptance_contract_is_placeholder_only(self) -> None:
+        d = self._make_task_dir()
+        (d / "assessment.md").write_text(COMPLETE_HOSTED_ASSESSMENT, encoding="utf-8")
+        delivery = d / "delivery"
+        delivery.mkdir()
+        for name, content in DELIVERY_DIR_CONTENT.items():
+            (delivery / name).write_text(content, encoding="utf-8")
+        (delivery / "acceptance.md").write_text("# acceptance\n", encoding="utf-8")
+        result = self.run_script("--phase", "delivery", "--task-dir", str(d))
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("Acceptance Criteria Status", result.stdout + result.stderr)
+
+    def test_delivery_fails_when_deliverables_contract_is_placeholder_only(self) -> None:
+        d = self._make_task_dir()
+        (d / "assessment.md").write_text(COMPLETE_HOSTED_ASSESSMENT, encoding="utf-8")
+        delivery = d / "delivery"
+        delivery.mkdir()
+        for name, content in DELIVERY_DIR_CONTENT.items():
+            (delivery / name).write_text(content, encoding="utf-8")
+        (delivery / "deliverables.md").write_text("# deliverables\n", encoding="utf-8")
+        result = self.run_script("--phase", "delivery", "--task-dir", str(d))
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("Closeout Assets", result.stdout + result.stderr)
 
     def test_delivery_fails_when_transfer_checklist_missing_new_remedy_fields(self) -> None:
         d = self._make_task_dir()

@@ -13,6 +13,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
 from workflow_assets import HELPER_SCRIPTS, build_managed_audit_extra_specs
 
 
@@ -280,6 +284,7 @@ BASELINE_TASK_PY_CONTENT = (
     "    p_start = subparsers.add_parser(\"start\", help=\"Set active task\")\n"
 )
 BASELINE_TASK_STORE_CONTENT = (
+    "import sys\n"
     "from common.log import Colors, colored\n"
     "from common.io import read_json, write_json\n\n"
     "def cmd_create(args):\n"
@@ -298,6 +303,17 @@ BASELINE_TASK_STORE_CONTENT = (
     "    except Exception:\n"
     "        pass\n"
     "    print(colored(f'Created task: {dir_name}', Colors.GREEN))\n"
+    "    return 0\n\n"
+    "def cmd_archive(args):\n"
+    "    repo_root = get_repo_root()\n"
+    "    task_dir = repo_root / '.trellis' / 'tasks' / 'sample'\n"
+    "    dir_name = task_dir.name\n"
+    "    task_json_path = task_dir / FILE_TASK_JSON\n"
+    "    if task_json_path.is_file():\n"
+    "        data = read_json(task_json_path)\n"
+    "        if data:\n"
+    "            data['status'] = 'completed'\n"
+    "            write_json(task_json_path, data)\n"
     "    return 0\n"
 )
 BASELINE_COMMON_TASKS_CONTENT = (
@@ -1252,6 +1268,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         )
         task_store_text = (fixture / ".trellis" / "scripts" / "common" / "task_store.py").read_text(encoding="utf-8")
         self.assertIn(TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER, task_store_text)
+        self.assertIn("archive only after workflow close-out gate validation", task_store_text)
         claude_session_start = (fixture / ".claude" / "hooks" / "session-start.py").read_text(encoding="utf-8")
         self.assertIn(SESSION_START_STRONG_GATE_PATCH_MARKER, claude_session_start)
         self.assertNotIn(LEGACY_READY_AUTOCONTINUE_LINE, claude_session_start)
@@ -4228,6 +4245,25 @@ Triggered from `start` (Trellis command) when the user describes a development t
         restored_text = finish_work.read_text(encoding="utf-8")
         self.assertIn(FINISH_WORK_MARKER, restored_text)
         self.assertNotIn("pnpm lint", restored_text)
+
+    def test_install_deploys_archive_closeout_patch_and_help_contract(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assert_install_result_usable(install)
+
+        task_store = fixture / ".trellis" / "scripts" / "common" / "task_store.py"
+        task_store_text = task_store.read_text(encoding="utf-8")
+        self.assertIn("workflow close-out gate validation", task_store_text)
+        self.assertIn("finish-work-checklist.md", task_store_text)
+        self.assertIn("workflow-state.json", task_store_text)
+
+        workflow_state = fixture / ".trellis" / "scripts" / "workflow" / "workflow-state.py"
+        workflow_state_text = workflow_state.read_text(encoding="utf-8")
+        self.assertIn("Runtime contract", workflow_state_text)
+        self.assertIn("Writer table", workflow_state_text)
+        self.assertIn("Test invariants", workflow_state_text)
 
     def test_force_restores_codex_start_skill_from_backup_and_reapplies_patch(self) -> None:
         fixture = self.create_fixture(include_codex=True)
