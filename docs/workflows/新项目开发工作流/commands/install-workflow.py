@@ -312,8 +312,8 @@ _NL_ROUTING_SECTION = """\
 
 | 触发关键词 | Claude / OpenCode 入口 | Codex 入口 | 说明 |
 |-----------|------------------------|------------|------|
-| 评估、能做吗、报价、新项目、风险、可行性、接不接、看看这个项目、能不能接、估个价、接私活、外包项目、客户需求 | `/trellis:feasibility` | 描述可行性评估意图，或显式触发 `feasibility` skill | §1 可行性评估。外包/新客户首次立项默认先走这里；personal profile 首次入口可直接 `brainstorm`，也可自愿先做评估；若 route 返回 `profile_hint=unknown`，保持 feasibility 保守回退并先确认项目应按 personal 还是 outsourcing 理解；若已有有效 assessment，可复用结果 |
-| 需求、PRD、明确需求、需求文档、需求分析、想法、梳理需求、讨论方案、判断要不要拆任务 | `/trellis:brainstorm` | 描述需求澄清意图，或显式触发 `brainstorm` skill | §2 需求发现。前提：已存在有效 assessment；personal profile 首次入口例外，可在本阶段内补齐 assessment 基线 |
+| 评估、能做吗、报价、新项目、风险、可行性、接不接、看看这个项目、能不能接、估个价、接私活、外包项目、客户需求 | `/trellis:feasibility` | 描述可行性评估意图，或显式触发 `feasibility` skill | §1 可行性评估。所有新实现任务默认先走这里；若 route 返回 `profile_hint=unknown`，保持 feasibility 保守回退并先确认项目应按 personal 还是 outsourcing 理解；若已有仍有效的 assessment，可复用结果 |
+| 需求、PRD、明确需求、需求文档、需求分析、想法、梳理需求、讨论方案、判断要不要拆任务 | `/trellis:brainstorm` | 描述需求澄清意图，或显式触发 `brainstorm` skill | §2 需求发现。前提：已存在有效 assessment，并且 assessment 明确允许进入 brainstorm |
 | 设计、架构、架构设计、选型、接口设计、方案、技术方案、开始设计、画架构图、设计方案 | `/trellis:design` | 描述设计阶段意图，或显式触发 `design` skill | §3 设计阶段 |
 | 拆任务、排期、计划、任务分解、里程碑、估时、做计划、工作分解、工作计划 | `/trellis:plan` | 描述任务拆解意图，或显式触发 `plan` skill | §4 任务拆解 |
 | 写测试、TDD、测试驱动、先写测试、测试用例、验收测试 | `/trellis:continue` | 描述测试先行意图，并在 implementation 内按 TDD 方式执行，或显式触发相关测试先行 skill | implementation 内的测试先行入口，不是独立公开阶段命令 |
@@ -1687,16 +1687,9 @@ _BRAINSTORM_SHARED_WHEN_TO_USE_NEW = (
 _BRAINSTORM_WORKFLOW_NOTE = """\
 > Workflow note: in projects that installed `docs/workflows/新项目开发工作流`, outsourcing / external-delivery first-entry work should still go through `/trellis:feasibility` when no reusable assessment exists.
 >
-> A personal-profile first entry may go directly to `/trellis:brainstorm`, but before leaving brainstorm it must create the task and backfill the minimum `assessment.md` baseline:
-> - `project_engagement_type`
-> - `法律/合规风险结论`
-> - `source_watermark_level`
-> - `source_watermark_channels`
-> - `zero_width_watermark_enabled`
-> - `subtle_code_marker_enabled`
-> - `ownership_proof_required`
+> All new implementation work must still pass `/trellis:feasibility` first. Only projects with a reusable and still-valid `assessment.md` may route directly into `/trellis:brainstorm`.
 >
-> For full bootstrap steps, refer to the shared brainstorm stage skill (`.agents/skills/brainstorm/SKILL.md`) Gate 0 and Step 0 sections.
+> Before entering brainstorm, confirm that `assessment.md` still reflects the current customer, scope, and legal/compliance assumptions, and that it explicitly allows entering brainstorm.
 """
 _BRAINSTORM_RELATED_COMMANDS_OLD = """| `/trellis:start` | Entry point that triggers brainstorm |
 | `/trellis:finish-work` | After implementation is complete |
@@ -1970,8 +1963,7 @@ _SESSION_START_NO_TASK_NEW = (
     'to detect whether this is a read-only analysis turn or a real first-entry task turn; '
     'only load `/trellis:feasibility` when the route result and the current intent both indicate task creation. '
     'For personal profile: also run `python3 ./.trellis/scripts/workflow/workflow-state.py route` first; '
-    'if route keeps `target=brainstorm`, then load skill `trellis-brainstorm` to clarify requirements '
-    'and create a task via `python3 ./.trellis/scripts/task.py create`.\\n"'
+    'new implementation work still enters `/trellis:feasibility` first unless route explicitly reuses an existing valid assessment and keeps `target=brainstorm`.\\n"'
 )
 _SESSION_START_RESEARCH_REMINDER_OLD = (
     '"Research reminder: for research-heavy tasks (comparing tools, reading external docs, "'

@@ -31,7 +31,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py route --project-root <pr
 
 | action | 含义 | 执行动作 |
 |--------|------|---------|
-| `entry_choice_required` | 当前 session 尚无 active task，且项目中也没有可继续任务 | 先判断当前意图。如果是 workflow / 项目只读分析、元审计或 A/A+ 纯分析，则保持 `no_task` 直接分析，不创建任务；如果是开始新的实现任务，再进入 `target` 对应的正式入口。若项目还没有可复用的有效 assessment，outsourcing profile 默认入口应先走 `/trellis:feasibility`；personal profile 的首次入口可直接进入 `/trellis:brainstorm`，但此时只允许补齐“留在/离开 brainstorm 所需的最低 assessment 基线”，不等于已经完成完整 feasibility 评估。其他场景只有在 route 明确复用了现有 assessment 并允许继续 brainstorm 时，才进入 `/trellis:brainstorm`。若 route 同时给出 `profile_hint=unknown`，保持 `feasibility` 的保守回退，并先**直接询问用户当前项目应按 outsourcing 还是 personal 处理**；不要尝试从聊天语气、仓库名或零散文档自行猜测，也不要直接跳过 feasibility。不要期待存在公开的 `/trellis:implementation` 入口。 |
+| `entry_choice_required` | 当前 session 尚无 active task，且项目中也没有可继续任务 | 先判断当前意图。如果是 workflow / 项目只读分析、元审计或 A/A+ 纯分析，则保持 `no_task` 直接分析，不创建任务；如果是开始新的实现任务，再进入 `target` 对应的正式入口。若项目还没有可复用的有效 assessment，则所有项目默认入口都应先走 `/trellis:feasibility`；只有在 route 明确复用了现有 assessment 且允许继续 brainstorm 时，才进入 `/trellis:brainstorm`。若 route 同时给出 `profile_hint=unknown`，保持 `feasibility` 的保守回退，并先**直接询问用户当前项目应按 outsourcing 还是 personal 处理**；不要尝试从聊天语气、仓库名或零散文档自行猜测，也不要跳过 feasibility。不要期待存在公开的 `/trellis:implementation` 入口。 |
 | `profile_confirmation_required` | 当前无法从 assessment 或安装记录稳定判断项目类型 | 先直接询问用户当前项目应按 `outsourcing` 还是 `personal` 处理；在用户确认前，不要继续按默认 feasibility 或 brainstorm 推进，也不要自行猜测 |
 | `reenter` | 重入当前阶段 | 若 `target=implementation`，继续留在当前 `/trellis:continue` 入口并按下方“实施阶段额外约束”执行；其他阶段再路由到 `/trellis:<target>`（`target` 字段即目标阶段）。 |
 | `awaiting_confirmation` | 阶段完成等待确认 | 展示已完成/未完成/缺失项，等用户确认 |

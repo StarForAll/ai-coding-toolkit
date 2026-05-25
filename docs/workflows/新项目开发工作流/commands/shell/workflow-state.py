@@ -35,7 +35,6 @@ from state_utils import (  # noqa: E402
     find_missing_markers,
     find_repo_root,
     installed_workflow_profile,
-    is_personal_brainstorm_bootstrap_allowed,
     load_state,
     load_task_json,
     now_iso,
@@ -150,11 +149,6 @@ def _route_entry_choice_without_any_task(repo_root: Path, tasks_root: Path) -> i
                     profile_hint = "outsourcing"
                 elif installed_profile == "personal":
                     profile_hint = "personal"
-                    target = "brainstorm"
-                    reason = (
-                        "当前 session 尚无 active task，personal profile 首次入口可直接进入 brainstorm，"
-                        "并在该阶段补齐 assessment 基线"
-                    )
                 else:
                     profile_hint = "unknown"
             except (OSError, UnicodeDecodeError, ValueError):
@@ -167,7 +161,7 @@ def _route_entry_choice_without_any_task(repo_root: Path, tasks_root: Path) -> i
             f"{reason}。若当前意图是 workflow / 项目只读分析、元审计或 A/A+ 纯分析，"
             "保持 no_task 直接分析，不要把仓库误当成新项目入口；"
             + (
-                "若 `profile_hint=unknown`，请先确认当前项目应按 personal 还是 outsourcing 理解，再决定是否跳过 feasibility；"
+                "若 `profile_hint=unknown`，请先确认当前项目应按 personal 还是 outsourcing 理解；"
                 if profile_hint == "unknown"
                 else ""
             )
@@ -285,14 +279,10 @@ def _collect_route_readiness_blockers(
     if stage == "brainstorm":
         assessment_file = find_assessment_file(task_dir, repo_root)
         if assessment_file is None:
-            if not is_personal_brainstorm_bootstrap_allowed(task_dir, repo_root, state):
-                if installed_workflow_profile(repo_root) == "personal":
-                    blockers.append(
-                        "缺少 assessment.md；personal profile 首次入口可在当前 brainstorm 阶段补齐最小 assessment 基线。"
-                        "请先补齐 assessment，再继续或退出本阶段。"
-                    )
-                else:
-                    blockers.append("缺少 assessment.md；必须先完成 feasibility 才允许继续 brainstorm")
+            if installed_workflow_profile(repo_root) == "personal":
+                blockers.append("缺少 assessment.md；任何项目都必须先完成 feasibility 才允许继续 brainstorm")
+            else:
+                blockers.append("缺少 assessment.md；必须先完成 feasibility 才允许继续 brainstorm")
         else:
             content = assessment_file.read_text(encoding="utf-8")
             allow_line_present = False
@@ -340,10 +330,6 @@ def _collect_nonblocking_warnings(
     state: dict[str, Any],
 ) -> list[str]:
     warnings: list[str] = []
-    if state.get("stage") == "brainstorm" and is_personal_brainstorm_bootstrap_allowed(task_dir, repo_root, state):
-        warnings.append(
-            "assessment.md 基线尚未补齐（personal bootstrap 允许当前 brainstorm 继续，但离开 brainstorm 前必须完成最小 assessment 字段）。"
-        )
     return warnings
 
 
@@ -780,6 +766,8 @@ def cmd_repair(args: argparse.Namespace) -> int:
         result = {
             "status": "manual_confirmation_required",
             "evidence": evidence,
+            "required_confirmation_args": ["--stage <stage>"],
+            "missing_confirmation_items": ["current_stage"],
             "message": (
                 "无法从现有 workflow-state.json 自恢复当前阶段。"
                 "repair 不会根据 prd.md、task_plan.md、design/、check.md 等产物推断 stage。"
@@ -826,6 +814,15 @@ def cmd_repair(args: argparse.Namespace) -> int:
         "stage": candidate_stage,
         "evidence": evidence,
         "blockers": repair_errors,
+        "required_confirmation_args": missing_confirmation_args,
+        "missing_confirmation_items": [
+            item
+            for item, flag in (
+                ("execution_authorized", "--execution-authorized true"),
+                ("transition_from", "--transition-from <上一阶段>"),
+            )
+            if flag in missing_confirmation_args
+        ],
         "message": (
             f"已准备按 stage={candidate_stage} 重建 workflow-state.json"
             if not repair_errors

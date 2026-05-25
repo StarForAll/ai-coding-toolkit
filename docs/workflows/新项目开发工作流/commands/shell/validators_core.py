@@ -36,8 +36,6 @@ from state_utils import (  # noqa: E402
     design_exit_ready,
     find_assessment_file,
     find_missing_markers,
-    installed_workflow_profile,
-    is_personal_brainstorm_bootstrap_allowed,
     is_placeholder_like,
     load_task_json,
     normalize_design_current_block,
@@ -174,22 +172,6 @@ def validate_external_project_controls(
     stage = target_stage if target_stage is not None else state.get("stage")
     assessment_file = find_assessment_file(task_dir, repo_root)
     if assessment_file is None:
-        if target_stage is None and is_personal_brainstorm_bootstrap_allowed(task_dir, repo_root, state):
-            return
-        transition = state.get("last_confirmed_transition")
-        transition_from = transition.get("from") if isinstance(transition, dict) else None
-        if installed_workflow_profile(repo_root) == "personal" and (
-            state.get("stage") == "brainstorm" or transition_from == "brainstorm"
-        ):
-            if target_stage is None:
-                errors.append(
-                    "缺少 assessment.md；personal profile 首次入口可在当前 brainstorm 阶段补齐最小 assessment 基线，补齐后再继续本阶段。"
-                )
-            else:
-                errors.append(
-                    f"缺少 assessment.md；personal profile 首次入口必须先在当前 brainstorm 阶段补齐最小 assessment 基线，才能进入 {target_stage}"
-                )
-            return
         errors.append("缺少 assessment.md；任何项目都必须先经过 feasibility 并完成项目类别判断")
         return
 
@@ -293,8 +275,6 @@ def validate_ownership_policy_controls(
 ) -> None:
     assessment_file = find_assessment_file(task_dir, repo_root)
     if assessment_file is None:
-        if is_personal_brainstorm_bootstrap_allowed(task_dir, repo_root, state):
-            return
         return
 
     content = assessment_file.read_text(encoding="utf-8")

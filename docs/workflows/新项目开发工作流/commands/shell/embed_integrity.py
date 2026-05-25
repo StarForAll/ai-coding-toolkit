@@ -111,8 +111,8 @@ PATCHED_CODEX_SKILL_REQUIREMENTS: dict[str, dict[str, tuple[str, ...]]] = {
     "trellis-brainstorm": {
         "must_contain": (
             "Workflow note: in projects that installed `docs/workflows/新项目开发工作流`",
-            "`project_engagement_type`",
-            "`ownership_proof_required`",
+            "All new implementation work must still pass `/trellis:feasibility` first.",
+            "assessment.md",
         ),
         "must_not_contain": (
             "Triggered from `start` (Trellis command)",
@@ -350,6 +350,54 @@ def _task_runtime_contract_errors(
     return problems
 
 
+def _python_runtime_contract_errors(
+    repo_root: Path,
+    path: Path,
+    patch_name: str,
+    content: str,
+) -> list[str]:
+    if path.suffix != ".py":
+        return []
+
+    path_text = path.as_posix()
+    fragment_requirements: tuple[str, ...] = ()
+    if patch_name == "task-start-strong-gate":
+        fragment_requirements = (
+            "stage changes still go through workflow-state.py",
+            "workflow-state.py route is authoritative",
+        )
+    elif patch_name == "task-create-preserve-active":
+        fragment_requirements = (
+            "TRELLIS_PRESERVE_ACTIVE_TASK",
+            "Preserving current active task while creating child task",
+        )
+    elif patch_name == "task-status-view-strong-gate":
+        if path_text.endswith("/common/tasks.py"):
+            fragment_requirements = (
+                "_workflow_state_summary",
+                "_display_status",
+                "workflow-state.json missing",
+            )
+        elif path_text.endswith("/common/task_queue.py"):
+            fragment_requirements = (
+                "list_tasks_by_status(None, repo_root)",
+            )
+    elif patch_name == "workflow-phase-strong-gate":
+        fragment_requirements = (
+            "_STRONG_GATE_STAGES",
+        )
+
+    problems: list[str] = []
+    for fragment in fragment_requirements:
+        if fragment in content:
+            continue
+        problems.append(
+            f"{path.relative_to(repo_root)} 缺少补丁语义片段 `{fragment}`"
+            f"（critical runtime patch: {patch_name}）"
+        )
+    return problems
+
+
 def _detect_missing_critical_runtime_patches(repo_root: Path, record: dict[str, Any]) -> list[str]:
     expected = _expected_critical_runtime_patches(repo_root, record)
     if not expected:
@@ -373,6 +421,7 @@ def _detect_missing_critical_runtime_patches(repo_root: Path, record: dict[str, 
             continue
         marker_present = marker in content
         runtime_errors: list[str] = []
+        runtime_errors.extend(_python_runtime_contract_errors(repo_root, path, patch_name, content))
         runtime_errors.extend(_js_runtime_contract_errors(repo_root, path, patch_name, content))
         runtime_errors.extend(_task_runtime_contract_errors(repo_root, path, patch_name, content))
         if runtime_errors:

@@ -244,7 +244,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### 退出门禁
 
-- 若是新建目标项目，则在**第一次进入 workflow** 前，本地主分支和初始分支已统一为 `main`；若此时还没有有效 `assessment.md`，外包/对外交付项目应先进入 `feasibility`，personal profile 首次入口可直接进入 `brainstorm` 并在阶段内补齐 assessment 基线；若目标项目已存在本地提交历史，则只记录现状，不强制改分支
+- 若是新建目标项目，则在**第一次进入 workflow** 前，本地主分支和初始分支已统一为 `main`；若此时还没有有效 `assessment.md`，任何项目都应先进入 `feasibility`；若目标项目已存在本地提交历史，则只记录现状，不强制改分支
 - 形成 `assessment.md`
 - 明确是否允许进入 `brainstorm`
 - 若为外部项目，项目类别、启动款门禁与交付控制轨道已定；在 `kickoff_payment_received = yes` 前，不得进入 implementation

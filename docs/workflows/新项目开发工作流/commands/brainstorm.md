@@ -29,8 +29,7 @@ description: 需求还不够稳？先按 Trellis 原生需求发现主链收集�
 ## 前置条件与边界
 
 - 外包/对外交付项目在进入本命令前，默认已完成 `assessment.md` 驱动的可行性评估，且明确允许进入需求发现。
-- 个人项目在 workflow 首次入口允许直接进入 `brainstorm` 创建任务与工作底稿，但必须在本阶段补齐 `assessment.md` 的核心字段基线；若直到准备离开 `brainstorm` 时仍未补齐，后续阶段门禁仍会阻断。
-- 若当前项目尚未形成有效 `assessment.md`，且不属于“个人项目首次进入 brainstorm 补 assessment 基线”的受控场景，或客户主体、需求范围、法律/合规前提发生足以推翻评估结论的变化，必须先回 `/trellis:feasibility`，不允许直接开始 `brainstorm`。
+- 个人项目也不再提供“首次入口直接进入 `brainstorm`”的例外；只要缺少有效 `assessment.md`，或客户主体、需求范围、法律/合规前提发生足以推翻评估结论的变化，就必须先回 `/trellis:feasibility`，不允许直接开始 `brainstorm`。
 - 若已存在有效 `assessment.md`，且当前只是继续同一轮需求推进，可直接复用该评估结果，不需要重复执行 `feasibility`。
 - 若目标项目属于新建仓库，则在首次进入 workflow 时仍应先通过与 `/trellis:feasibility` Step 0 同口径的 `main` 分支门禁；已有本地提交历史的项目仅记录现状，不强制改分支。
 - 本命令负责**需求发现 + 任务生成前置路由**，不直接替代后续设计、计划、实现和审查阶段。
@@ -102,10 +101,8 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 
 特殊说明：
 
-- 外包项目或已有历史 assessment 的项目：进入本阶段前就应满足上述条件。
-- 个人项目首次入口：允许先创建 `brainstorm` task，再在本阶段补齐 `assessment.md` 最低基线；但在准备离开 `brainstorm` 前，`workflow-state.py validate` / `route` 仍会要求这些字段完整满足。
-
-若不满足以上任一条件，且不属于上述受控的 personal bootstrap 场景，停止当前 `brainstorm`，先回 `/trellis:feasibility` 重新评估。
+- 无论项目类别为何，进入本阶段前都应已经满足上述 assessment 前置条件。
+- 若不满足以上任一条件，停止当前 `brainstorm`，先回 `/trellis:feasibility` 重新评估。
 
 ### Step 0: Ensure Task Exists (ALWAYS)
 
@@ -124,24 +121,7 @@ TASK_DIR=$(python3 ./.trellis/scripts/task.py create "brainstorm: <short goal>")
 python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py init "$TASK_DIR" --stage brainstorm
 ```
 
-若当前项目属于 personal profile 且还没有 `assessment.md`，在 `prd.md` 工作底稿建立后应尽快补一份最小 `assessment.md`，至少冻结：
-
-- `project_engagement_type = non_outsourcing`
-- `法律/合规风险结论`
-- `source_watermark_level`
-- `source_watermark_channels`
-- `zero_width_watermark_enabled`
-- `subtle_code_marker_enabled`
-- `ownership_proof_required`
-- `是否允许进入 brainstorm = 是`
-
-这组字段是“允许 personal 首次入口直接 brainstorm”的补偿性门禁，不可拖到 design / plan 再回填。
-
-说明：
-
-- 这组“最小 `assessment.md` 基线”只负责支撑 personal 首次入口在 `brainstorm` 内合法停留并安全离开，不等于 feasibility 的完整评估产物。
-- 若当前 personal 项目后续仍只是内部/自有项目，且不需要 feasibility 中更完整的风险、商务或外部交付控制结论，则不强制回到 `/trellis:feasibility`。
-- 若项目后续引入了外包/定制交付控制、付款/谈判约束、或其他超出这组最低字段的前提，应回到 `/trellis:feasibility` 补齐完整 assessment，而不是继续把 brainstorm 当成 feasibility 的替代物。
+若当前还没有 `assessment.md`，不要试图在 `brainstorm` 内补齐替代 feasibility；应先回 `/trellis:feasibility` 生成或更新 assessment，再回来继续本阶段。
 
 `$TASK_DIR/prd.md` 至少保留这些区块：
 

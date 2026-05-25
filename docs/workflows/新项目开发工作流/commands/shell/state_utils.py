@@ -419,23 +419,6 @@ def find_assessment_file(task_dir: Path, repo_root: Path) -> Path | None:
             return assessment
     return None
 
-
-def is_personal_brainstorm_bootstrap_allowed(
-    task_dir: Path,
-    repo_root: Path,
-    state: dict[str, Any],
-) -> bool:
-    if state.get("stage") != "brainstorm":
-        return False
-    if state.get("status") != "in_progress":
-        return False
-    if find_assessment_file(task_dir, repo_root) is not None:
-        return False
-
-    install_record = read_json(repo_root / INSTALL_RECORD)
-    return isinstance(install_record, dict) and install_record.get("profile") == "personal"
-
-
 def installed_workflow_profile(repo_root: Path) -> str | None:
     install_record = read_json(repo_root / INSTALL_RECORD)
     if not isinstance(install_record, dict):

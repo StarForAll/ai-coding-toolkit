@@ -8,7 +8,7 @@ description: 新项目？先评估可行性 — 合规审查、风险评估、�
 > **Workflow Position**: §1 → 前: 无 → 后: `/trellis:brainstorm`
 > **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:feasibility`） · ✅ OpenCode（TUI: `/trellis:feasibility`；CLI: `trellis/feasibility`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:feasibility` 命令；见 `codex/README.md`）
 >
-> **Gate Rule**: 对于新项目 / 新客户需求 / 首次立项，`/trellis:feasibility` 默认是进入 `/trellis:brainstorm` 前的前置门禁；只有在已形成仍有效的 `assessment.md` 且评估前提未变化时，才允许复用既有评估结果而不重跑本阶段。**personal profile 首次入口例外**：可直接进入 `/trellis:brainstorm`，并在该阶段内补齐最小 `assessment.md` 基线；若 personal 用户仍主动进入本命令，则表示自愿先做项目可行性评估，可继续执行本阶段。
+> **Gate Rule**: 对于新项目 / 新客户需求 / 首次立项，`/trellis:feasibility` 默认是进入 `/trellis:brainstorm` 前的前置门禁；只有在已形成仍有效的 `assessment.md` 且评估前提未变化时，才允许复用既有评估结果而不重跑本阶段。不存在按 profile 跳过 feasibility 的首次入口例外。
 
 > **Strong Gate**: 本阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束。可行性评估完成后，仍需等待用户明确确认，不能自动切到 `brainstorm` / `design` / `start`。
 
@@ -28,13 +28,10 @@ description: 新项目？先评估可行性 — 合规审查、风险评估、�
 ### 前置条件与出口约束
 
 - 本命令面向**新项目立项、外包接单、客户需求初聊**等“先判断值不值得接”的场景。
-- personal profile 的轻量自有项目在首次入口可直接进入 `/trellis:brainstorm` 并在阶段内补齐 `assessment.md` 基线，因此本命令对这类场景不是唯一入口；但如果 personal 用户主动选择先做立项/风险评估，仍可继续使用本命令。
-- 这里所说的 personal 首次入口“基线”只覆盖离开 `brainstorm` 前必须冻结的最低 assessment 字段，不等同于本命令可继续产出的完整 feasibility 评估内容（如风险分析、商务预判、外部交付控制字段等）。
 - 若当前项目还没有有效 `assessment.md`，或客户主体、需求范围、法律/合规前提发生足以推翻结论的变化，必须先执行本命令，不允许直接进入 `/trellis:brainstorm`。
 - 若本命令是**当前项目第一次进入 workflow 的入口**，且目标项目为新建仓库，则应先确认本地主分支和初始分支为 `main`；若当前仓库尚无本地提交历史且分支不是 `main`，先修正分支，再继续 workflow。
 - 若目标项目已经存在本地提交历史或已有存量开发内容，则不强制切换成 `main`，但应把当前分支策略作为初始化边界记录清楚。
 - 若已存在有效 `assessment.md`，且本轮只是继续同一项目的后续阶段，可复用该评估结果，不需要重复执行本命令。
-- personal 项目若仅在 `brainstorm` 内补齐最低 baseline，后续不强制回到 feasibility；只有当项目后来需要完整 feasibility 决策链所覆盖的结论或字段时，才应回到本命令补齐。
 - 判断 `assessment.md` 是否仍有效时，至少确认：`总体决策` 不是 `暂停/拒绝`、`是否允许进入 brainstorm = 是`、`法律/合规风险结论` 已明确，且当前前提未发生足以推翻评估结论的变化。
 - 若评估结论为 `暂停`，必须先补信息或完成谈判动作，再重新运行本命令。
 - 若评估结论为 `拒绝`，应终止该项目链路，不进入 `/trellis:brainstorm`。这里的 `拒绝` 指项目级接单/立项决策，不是冻结后变更场景中的“用户不接受并入当前轮次”。
