@@ -1006,7 +1006,7 @@ python3 .trellis/scripts/workflow/workflow-state.py route [task-dir] \
   [--project-root /path]
 ```
 
-`task-dir` is optional. When absent, route resolves the active task from Trellis' session-scoped runtime and otherwise falls into `first_entry` / `recovery_needed`.
+`task-dir` is optional. When absent, route resolves the active task from Trellis' session-scoped runtime and otherwise falls into `entry_choice_required` / `recovery_needed`.
 
 ### 3. Contracts
 
@@ -1015,9 +1015,9 @@ python3 .trellis/scripts/workflow/workflow-state.py route [task-dir] \
 ```json
 {
   "target": "design" | null,
-  "action": "reenter" | "first_entry" | "awaiting_confirmation" | "blocked" | "recovery_needed" | "repair_needed" | "embed_invalid",
+  "action": "reenter" | "entry_choice_required" | "profile_confirmation_required" | "awaiting_confirmation" | "awaiting_confirmation_with_blockers" | "blocked" | "recovery_needed" | "repair_needed" | "embed_invalid",
   "stage": "design",
-  "stage_status": "in_progress",
+  "status": "in_progress",
   "reason": "...",
   "blockers": []
 }
@@ -1027,9 +1027,11 @@ python3 .trellis/scripts/workflow/workflow-state.py route [task-dir] \
 
 | Action | Meaning | Phase Router behavior |
 |--------|---------|----------------------|
-| `first_entry` | No active task and no resumable task exists in the target project | Route to `/trellis:feasibility` |
+| `entry_choice_required` | No active task and no resumable task exists in the target project | Route by intent; for new implementation work the first stage is always `/trellis:feasibility` unless route is reusing an existing valid assessment and explicitly targets `brainstorm` |
+| `profile_confirmation_required` | Project type cannot be trusted from assessment/install metadata | Ask user to confirm project type before proceeding |
 | `reenter` | Normal re-entry to current stage | Route to `/trellis:<target>` |
 | `awaiting_confirmation` | Stage done, pending user confirm | Show status, wait for user |
+| `awaiting_confirmation_with_blockers` | Stage reached confirmation point but blockers remain | Show blockers, do not ask for confirmation until fixed |
 | `blocked` | Execution gate not met | Show blockers, do not proceed |
 | `recovery_needed` | Cannot determine the current active task | Ask user to clarify |
 | `repair_needed` | State file missing/broken | Run `repair` subcommand |
@@ -1044,7 +1046,7 @@ python3 .trellis/scripts/workflow/workflow-state.py route [task-dir] \
 
 | Condition | Output |
 |-----------|--------|
-| No active task and no task directories | `first_entry` → feasibility |
+| No active task and no task directories | `entry_choice_required` → feasibility |
 | No active task but task directories exist | `recovery_needed` |
 | Active task → non-leaf task | `repair_needed` |
 | Active task → missing workflow-state.json | `repair_needed` |
@@ -1071,40 +1073,40 @@ python3 .trellis/scripts/workflow/workflow-state.py repair <task-dir> \
 
 #### Inference Rules
 
-| Artifact present | Inferred stage |
-|-----------------|----------------|
-| No assessment.md in task lineage | `feasibility` |
-| assessment.md exists, no customer-facing-prd.md | `brainstorm` |
-| customer-facing-prd.md exists, no design/ dir | `design` |
-| design/ exists, no task_plan.md | `design` |
-| task_plan.md exists | `plan` |
+- `repair` does **not** infer stage from `prd.md`, `task_plan.md`, `design/`, `check.md`, or similar artifacts.
+- If `workflow-state.json` still contains a valid `stage`, the helper may preserve that explicit value.
+- Otherwise the caller must supply `--stage <stage>`.
+- Execution re-entry additionally requires explicit confirmation fields such as `--execution-authorized true` and `--transition-from <previous-stage>`.
 
 #### Output Format
 
 ```json
 {
-  "status": "ok" | "repair_needed",
-  "inferred_stage": "design",
-  "confidence": "high" | "medium" | "low",
+  "status": "ok" | "repair_ready" | "manual_confirmation_required" | "repair_blocked",
+  "stage": "design",
   "evidence": ["..."],
+  "blockers": ["..."],
+  "required_confirmation_args": ["--stage <stage>"],
+  "missing_confirmation_items": ["current_stage"],
   "message": "..."
 }
 ```
 
 #### Write Gate
 
-- Without `--apply`: read-only, outputs inference
-- With `--apply`: creates `workflow-state.json` using `build_default_state(inferred_stage)`
+- Without `--apply`: read-only, outputs rebuild readiness plus any missing confirmation fields
+- With `--apply`: writes only when the resulting rebuilt state is already valid under `validate_state_shape`, `validate_execution_boundary`, and leaf-task checks
 
 ### 4. Wrong vs Correct
 
 #### Wrong
 - Auto-apply without user confirmation in AI layer
-- Infer execution stages (implementation, test-first) — these require explicit user confirmation
+- Infer stage from task artifacts such as `prd.md`, `task_plan.md`, `design/`, or `check.md`
+- Infer execution authorization implicitly for implementation re-entry
 
 #### Correct
-- Output inference, let Phase Router prompt user to confirm
-- Only infer pre-execution stages (feasibility through plan)
+- Output explicit missing confirmation fields, let Phase Router or user confirm them
+- Require `--stage <stage>` when state cannot be recovered from existing workflow-state data
 
 ---
 
