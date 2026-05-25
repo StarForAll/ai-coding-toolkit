@@ -79,6 +79,37 @@ PLAN_WITH_DELIVERY = """\
 | .trellis/tasks/04-14-control-handover | delivery | delivery | 控制权移交任务 |
 """
 
+PLAN_WITH_TRIAL_DELIVERY = """\
+# Task Plan
+
+## 外部项目交付控制
+
+### 交付控制任务
+- 开工授权确认任务
+- 试运行版交付任务
+- 永久授权切换任务
+- 源码移交任务
+- 控制权移交任务
+
+### 开工触发条件
+- 首款到账后才允许 implementation（kickoff_payment_received: yes）
+- 里程碑付款按 `milestone_payment_schedule` 执行
+
+### 交付触发条件
+- 尾款到账后触发控制权移交（handover_trigger: final_payment_received）
+- 若客户拒付，按 `non_payment_remedy_path` 执行
+- 若出现验收争议，按 `dispute_escalation_path` 升级
+
+## Trellis Task 清单
+
+| 任务路径 | 类型 | 项目域 | 说明 |
+|---------|------|--------|------|
+| .trellis/tasks/04-14-trial-delivery | implementation | delivery | 试运行版交付任务 |
+| .trellis/tasks/04-14-permanent-auth | delivery | delivery | 永久授权切换任务 |
+| .trellis/tasks/04-14-source-handover | delivery | delivery | 源码移交任务 |
+| .trellis/tasks/04-14-control-handover | delivery | delivery | 控制权移交任务 |
+"""
+
 DELIVERY_DIR_CONTENT = {
     "transfer-checklist.md": "# Transfer Checklist\n\n"
     "## 当前事件允许移交什么\n"
@@ -107,7 +138,15 @@ DELIVERY_DIR_CONTENT = {
     "## Acceptance Gate\n"
     "- pass\n\n"
     "## 当前交付状态\n"
-    "- pass\n",
+    "- pass\n"
+    "- `delivery_gate_status`: `pass`\n",
+    "retrospective.md": "# Retrospective\n\n"
+    "## 本轮验收\n"
+    "- pass\n\n"
+    "## 返工\n"
+    "- none\n\n"
+    "## 摩擦点\n"
+    "- none\n",
 }
 
 
@@ -244,6 +283,22 @@ class DeliveryControlValidateTests(unittest.TestCase):
             "# 评估\n- `project_engagement_type`: `non_outsourcing`\n",
             encoding="utf-8",
         )
+        result = self.run_script("--phase", "plan", "--task-dir", str(d))
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+    def test_plan_passes_for_trial_authorization_without_hosted_deploy_task(self) -> None:
+        d = self._make_task_dir()
+        (d / "assessment.md").write_text(COMPLETE_TRIAL_ASSESSMENT, encoding="utf-8")
+        task_root = d / ".trellis" / "tasks"
+        task_root.mkdir(parents=True)
+        for name in (
+            "04-14-trial-delivery",
+            "04-14-permanent-auth",
+            "04-14-source-handover",
+            "04-14-control-handover",
+        ):
+            (task_root / name).mkdir(parents=True)
+        (d / "task_plan.md").write_text(PLAN_WITH_TRIAL_DELIVERY, encoding="utf-8")
         result = self.run_script("--phase", "plan", "--task-dir", str(d))
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 

@@ -16,6 +16,7 @@
 - 当前状态：`pass` / `fail` / `not run`
 - 证据缺口：`none` / `<缺口说明>`
 - 人工验证说明：
+- `finish_work_gate_status`: `pass` / `fail`
 
 ## 同步结论
 

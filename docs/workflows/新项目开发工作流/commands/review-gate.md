@@ -326,10 +326,13 @@ tmp/multi-cli-review/<task-id>/
 - `review-gate-round-<N>.md`
   - `## Decision` 必须是 `skip` / `recommended` / `required`
   - `## Mode` 必须是 `lite` / `full`
+  - `review_gate_closure_status` 必须是 `pass` / `fail` / `not_run`
 - 当 `Decision` 为 `recommended` 或 `required` 时，必须生成 `reviewer-commands-round-<N>.md`
+- `recommended + lite` 至少需要 1 份真实 reviewer 报告；不能只生成指令包
 - 当 `Mode = full` 时，必须补齐 `summary-round-<N>.md`
+- `required + full` 至少需要 2 份真实 reviewer 报告，且 reviewer 报告路径必须落在 `tmp/multi-cli-review/<task-id>/review-round-<N>/`
 - 当 `Decision = required` 时，`Mode` 必须是 `full`
-- 若已发生采纳/拒绝与修复动作，需有 `action.md` 或 `action-round-<N>.md` 记录当前 CLI 的聚合决策与复验结果
+- 若已生成 reviewer 报告，需有 `action.md` 或 `action-round-<N>.md` 记录当前 CLI 的采纳/拒绝决策与复验结果
 
 ---
 

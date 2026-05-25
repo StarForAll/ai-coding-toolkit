@@ -184,6 +184,7 @@ $TASK_DIR/check.md
 
 - `review_gate_decision`: `skip`
 - `review_gate_reason`: `未命中 review-gate 硬条件，现有验证证据足够`
+- `check_gate_status`: `pass` / `fail`
 - `auth_or_sensitive`: `no`
 - `data_migration_or_schema_change`: `no`
 - `public_api_or_cross_layer_contract_or_external_integration`: `no`

@@ -343,6 +343,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
 - 当前状态：已完成基础人工验证
 - 证据缺口：none
+- `finish_work_gate_status`: `pass`
 
 ## 同步结论
 
@@ -511,6 +512,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
 ## Project-Level Verification Results
 - 项目级统一代码漏洞检测：not run + reason
 - 项目级统一代码质量总检：not run + reason
+- `project_audit_gate_status`: `pass`
 - `task_level_check_status`: `not_needed`
 
 ## Remaining Risks
@@ -569,6 +571,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
 ## Recommended Next Step
 - /trellis:finish-work
+- `review_gate_closure_status`: `pass`
 """,
             encoding="utf-8",
         )
@@ -597,6 +600,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
 ## Review-Gate Decision
 - `review_gate_decision`: `skip`
 - `review_gate_reason`: `未命中 review-gate 硬条件，现有验证证据足够`
+- `check_gate_status`: `pass`
 - `auth_or_sensitive`: `no`
 - `data_migration_or_schema_change`: `no`
 - `public_api_or_cross_layer_contract_or_external_integration`: `no`
@@ -629,7 +633,8 @@ class WorkflowStateScriptTests(unittest.TestCase):
                 "## Acceptance Gate\n"
                 "- pass\n\n"
                 "## 当前交付状态\n"
-                "- pass\n",
+                "- pass\n\n"
+                "- `delivery_gate_status`: `pass`\n",
                 encoding="utf-8",
             )
             (delivery_dir / "deliverables.md").write_text(
@@ -657,10 +662,21 @@ class WorkflowStateScriptTests(unittest.TestCase):
                 "- dispute_escalation_path: pass\n",
                 encoding="utf-8",
             )
+            (delivery_dir / "retrospective.md").write_text(
+                "# Retrospective\n\n"
+                "## 本轮验收\n"
+                "- pass\n\n"
+                "## 返工\n"
+                "- none\n\n"
+                "## 摩擦点\n"
+                "- none\n",
+                encoding="utf-8",
+            )
         else:
             (delivery_dir / "acceptance.md").write_text("# acceptance\n", encoding="utf-8")
             (delivery_dir / "deliverables.md").write_text("# deliverables\n", encoding="utf-8")
             (delivery_dir / "transfer-checklist.md").write_text("# transfer checklist\n", encoding="utf-8")
+            (delivery_dir / "retrospective.md").write_text("# retrospective\n", encoding="utf-8")
         if include_outsourcing_proofs:
             (delivery_dir / "ownership-proof.md").write_text("# ownership proof\n", encoding="utf-8")
             (delivery_dir / "source-watermark-verification.md").write_text(
@@ -1447,6 +1463,39 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertIn("required", validate.stdout)
         self.assertIn("full", validate.stdout)
 
+    def test_validate_review_gate_recommended_lite_requires_real_reviewer_report(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_review_gate_round(
+            task_dir,
+            content="""# Review Gate Round
+
+## Decision
+- recommended
+
+## Trigger Evidence
+- verification evidence is thin
+
+## Mode
+- lite
+
+## Recommended Next Step
+- /trellis:delivery
+- `review_gate_closure_status`: `pass`
+""",
+        )
+        review_gate_dir = task_dir / "review-gate"
+        (review_gate_dir / "reviewer-commands-round-1.md").write_text("# commands\n", encoding="utf-8")
+        self.run_script("init", str(task_dir), "--stage", "review-gate")
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("reviewer 报告", validate.stdout)
+
     def test_validate_delivery_requires_delivery_artifacts(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
@@ -1496,6 +1545,49 @@ class WorkflowStateScriptTests(unittest.TestCase):
         validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
         self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
         self.assertTrue("acceptance.md" in validate.stdout or "deliverables.md" in validate.stdout)
+
+    def test_validate_delivery_rejects_invalid_retrospective_contract_when_present(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+            assessment_content=self.VALID_EXTERNAL_ASSESSMENT,
+        )
+        self.write_delivery_artifacts(task_dir, valid_contract=True, include_outsourcing_proofs=True)
+        (task_dir / "delivery" / "retrospective.md").write_text("# retrospective\n", encoding="utf-8")
+        self.write_finish_work_checklist(task_dir)
+        self.run_script("init", str(task_dir), "--stage", "delivery")
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("retrospective.md", validate.stdout)
+
+    def test_validate_delivery_allows_legacy_artifacts_without_retrospective(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+            assessment_content=self.VALID_EXTERNAL_ASSESSMENT,
+        )
+        self.write_delivery_artifacts(task_dir, valid_contract=True, include_outsourcing_proofs=True)
+        (task_dir / "delivery" / "retrospective.md").unlink()
+        self.write_finish_work_checklist(task_dir)
+        acceptance_path = task_dir / "delivery" / "acceptance.md"
+        acceptance_path.write_text(
+            acceptance_path.read_text(encoding="utf-8").replace("- `delivery_gate_status`: `pass`\n", ""),
+            encoding="utf-8",
+        )
+        checklist_path = task_dir / "finish-work-checklist.md"
+        checklist_path.write_text(
+            checklist_path.read_text(encoding="utf-8").replace("- `finish_work_gate_status`: `pass`\n", ""),
+            encoding="utf-8",
+        )
+        self.run_script("init", str(task_dir), "--stage", "delivery")
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+        self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
 
     def test_validate_delivery_accepts_complete_contract_with_finish_work_checklist(self) -> None:
         root, task_dir = self.make_fixture()
@@ -5212,6 +5304,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
 ## Project-Level Verification Results
 - 项目级统一代码漏洞检测：not run + reason
 - 项目级统一代码质量总检：not run + reason
+- `project_audit_gate_status`: `pass`
 - `task_level_check_status`: `not_needed`
 
 ## Remaining Risks
@@ -5239,6 +5332,136 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
         self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
         self.assertIn("task_level_check_status", blocked.stdout)
+
+    def test_project_audit_to_delivery_blocks_when_project_audit_gate_status_is_fail(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_check_report(task_dir)
+        self.write_project_audit_report(
+            task_dir,
+            content="""# Project Audit Report
+
+## Mode
+- formal
+
+## Project-Level Verification Matrix
+- `project-task-coverage`: all code-related tasks complete; no approved exceptions; no delivery blockers
+- 项目级统一代码漏洞检测命令：not run + reason
+- 项目级统一代码质量总检命令：not run + reason
+
+## Confirmed Findings
+- [self] no blocking issue
+
+## Candidate Findings / Reviewer Evidence
+- [self] none
+
+## Confirmed Fix Plan
+- no-op
+
+## Applied Changes
+- no-op
+- `project_audit_code_changes`: `no`
+
+## Project-Level Verification Results
+- 项目级统一代码漏洞检测：not run + reason
+- 项目级统一代码质量总检：not run + reason
+- `project_audit_gate_status`: `fail`
+- `task_level_check_status`: `pass`
+
+## Remaining Risks
+- none
+
+## Suggested Next Step
+- /trellis:delivery
+""",
+        )
+        self.run_script("init", str(task_dir), "--stage", "project-audit")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "delivery",
+        )
+        blocked = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "delivery",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "project-audit",
+        )
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("project_audit_gate_status", blocked.stdout)
+
+    def test_project_audit_to_delivery_allows_legacy_report_without_project_audit_gate_status(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_check_report(task_dir)
+        self.write_project_audit_report(
+            task_dir,
+            content="""# Project Audit Report
+
+## Mode
+- formal
+
+## Project-Level Verification Matrix
+- `project-task-coverage`: all code-related tasks complete; no approved exceptions; no delivery blockers
+- 项目级统一代码漏洞检测命令：not run + reason
+- 项目级统一代码质量总检命令：not run + reason
+
+## Confirmed Findings
+- [self] no blocking issue
+
+## Candidate Findings / Reviewer Evidence
+- [self] none
+
+## Confirmed Fix Plan
+- no-op
+
+## Applied Changes
+- no-op
+- `project_audit_code_changes`: `no`
+
+## Project-Level Verification Results
+- 项目级统一代码漏洞检测：not run + reason
+- 项目级统一代码质量总检：not run + reason
+- `task_level_check_status`: `pass`
+
+## Remaining Risks
+- none
+
+## Suggested Next Step
+- /trellis:delivery
+""",
+        )
+        self.run_script("init", str(task_dir), "--stage", "project-audit")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "delivery",
+        )
+        allowed = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "delivery",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "project-audit",
+        )
+        self.assertEqual(allowed.returncode, 0, msg=allowed.stdout + allowed.stderr)
 
     def test_project_audit_to_delivery_allows_no_code_change_with_task_level_check_evidence(self) -> None:
         root, task_dir = self.make_fixture()
@@ -5397,6 +5620,130 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
         self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
         self.assertIn("Review-Gate Decision", blocked.stdout)
+
+    def test_check_to_delivery_blocks_when_check_gate_status_is_fail(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_check_report(
+            task_dir,
+            content="""# Check Report
+
+## Changed Scope
+- src/example.ts
+
+## Applied Specs
+- .trellis/spec/scripts/python-conventions.md
+
+## Verification Results
+- lint: pass
+- test: pass
+
+## Deviations
+- none
+
+## Uncovered Risks
+- none
+
+## Review-Gate Decision
+- `review_gate_decision`: `skip`
+- `review_gate_reason`: `未命中 review-gate 硬条件，现有验证证据足够`
+- `check_gate_status`: `fail`
+- `auth_or_sensitive`: `no`
+- `data_migration_or_schema_change`: `no`
+- `public_api_or_cross_layer_contract_or_external_integration`: `no`
+- `payment_queue_cache_concurrency`: `no`
+- `shared_core_with_blast_radius`: `no`
+- `explicit_user_review_gate_request`: `no`
+
+## Suggested Next Step
+- /trellis:delivery
+""",
+        )
+        self.run_script("init", str(task_dir), "--stage", "check")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "review-gate,implementation,delivery",
+        )
+        blocked = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "delivery",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "check",
+        )
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("check_gate_status", blocked.stdout)
+
+    def test_check_to_delivery_allows_legacy_report_without_check_gate_status(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_check_report(
+            task_dir,
+            content="""# Check Report
+
+## Changed Scope
+- src/example.ts
+
+## Applied Specs
+- .trellis/spec/scripts/python-conventions.md
+
+## Verification Results
+- lint: pass
+- test: pass
+
+## Deviations
+- none
+
+## Uncovered Risks
+- none
+
+## Review-Gate Decision
+- `review_gate_decision`: `skip`
+- `review_gate_reason`: `未命中 review-gate 硬条件，现有验证证据足够`
+- `auth_or_sensitive`: `no`
+- `data_migration_or_schema_change`: `no`
+- `public_api_or_cross_layer_contract_or_external_integration`: `no`
+- `payment_queue_cache_concurrency`: `no`
+- `shared_core_with_blast_radius`: `no`
+- `explicit_user_review_gate_request`: `no`
+
+## Suggested Next Step
+- /trellis:delivery
+""",
+        )
+        self.write_delivery_artifacts(task_dir, valid_contract=True)
+        self.write_finish_work_checklist(task_dir)
+        self.run_script("init", str(task_dir), "--stage", "check")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "review-gate,implementation,delivery",
+        )
+        allowed = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "delivery",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "check",
+        )
+        self.assertEqual(allowed.returncode, 0, msg=allowed.stdout + allowed.stderr)
 
     def test_check_to_delivery_blocks_when_hard_condition_is_marked_yes(self) -> None:
         root, task_dir = self.make_fixture()

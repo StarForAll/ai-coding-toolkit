@@ -229,18 +229,16 @@ def validate_task_plan(plan_file: Path, is_trial: bool) -> tuple[int, int]:
         passed += print_result(False, "", "缺少 `外部项目交付控制` 章节")
     
     # 2. 检查是否拆分了关键交付控制任务
-    required_tasks = [
-        ("开工授权确认任务", True),
-        ("托管部署任务", True),  # (任务名, 是否必须)
-        ("源码移交任务", True),
-        ("控制权移交任务", True),
-    ]
-    
+    required_tasks = [("开工授权确认任务", True), ("源码移交任务", True), ("控制权移交任务", True)]
     if is_trial:
-        required_tasks.extend([
-            ("试运行版交付任务", True),
-            ("永久授权切换任务", True),
-        ])
+        required_tasks.extend(
+            [
+                ("试运行版交付任务", True),
+                ("永久授权切换任务", True),
+            ]
+        )
+    else:
+        required_tasks.append(("托管部署任务", True))
     
     print("\n检查交付控制任务拆分...")
     for task_name, is_required in required_tasks:

@@ -103,7 +103,7 @@ STAGE_TRANSITIONS: dict[str, list[str]] = {
     "implementation": ["check", "project-audit"],
     "check": ["implementation", "review-gate", "project-audit", "delivery"],
     "review-gate": ["implementation", "project-audit", "delivery"],
-    "project-audit": ["check", "review-gate", "delivery"],
+    "project-audit": ["implementation", "check", "review-gate", "delivery"],
     "delivery": [],
 }
 STAGE_STATUSES = {
@@ -421,6 +421,14 @@ def find_assessment_file(task_dir: Path, repo_root: Path) -> Path | None:
         assessment = candidate_dir / ASSESSMENT_FILE
         if assessment.is_file():
             return assessment
+    return None
+
+
+def find_task_plan_file(task_dir: Path, repo_root: Path) -> Path | None:
+    for candidate_dir in iter_task_lineage(task_dir, repo_root):
+        plan_file = candidate_dir / TASK_PLAN_FILE
+        if plan_file.is_file():
+            return plan_file
     return None
 
 def installed_workflow_profile(repo_root: Path) -> str | None:

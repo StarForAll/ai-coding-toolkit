@@ -34,6 +34,7 @@ from state_utils import (  # noqa: E402
     TASK_PRD,
     design_path_candidates_from_state,
     find_assessment_file,
+    find_task_plan_file,
     find_missing_markers,
     is_placeholder_like,
     load_task_json,
@@ -71,6 +72,72 @@ def _extract_section_body(content: str, heading: str) -> str:
 
 def _has_status_marker(content: str) -> bool:
     return bool(re.search(r"\b(pass|fail|not run)\b|通过|失败|未运行", content, re.IGNORECASE))
+
+
+def _extract_structured_status(content: str, field_name: str) -> str | None:
+    raw_value = extract_backticked_field(content, field_name)
+    if raw_value is None:
+        return None
+    normalized = raw_value.strip().strip("`").lower().replace("-", "_").replace(" ", "_")
+    if normalized in {"pass", "fail", "not_run", "not_applicable", "not_needed"}:
+        return normalized
+    return None
+
+
+def _is_blocking_status(status: str | None, *, allow_not_run: bool = False) -> bool:
+    if status == "pass":
+        return False
+    if allow_not_run and status == "not_run":
+        return False
+    if status in {"not_applicable", "not_needed"}:
+        return False
+    return status is not None
+
+
+def _should_enforce_missing_gate_status() -> bool:
+    return False
+
+
+def _extract_check_gate_status(content: str) -> str | None:
+    return _extract_structured_status(content, "check_gate_status")
+
+
+def _extract_project_audit_gate_status(content: str) -> str | None:
+    return _extract_structured_status(content, "project_audit_gate_status")
+
+
+def _extract_review_gate_closure_status(content: str) -> str | None:
+    return _extract_structured_status(content, "review_gate_closure_status")
+
+
+def _extract_delivery_gate_status(content: str) -> str | None:
+    return _extract_structured_status(content, "delivery_gate_status")
+
+
+def _extract_finish_work_gate_status(content: str) -> str | None:
+    return _extract_structured_status(content, "finish_work_gate_status")
+
+
+def _task_plan_declares_project_audit(plan_path: Path) -> bool:
+    content = plan_path.read_text(encoding="utf-8")
+    return "PROJECT-AUDIT" in content or "project-audit" in content.lower()
+
+
+def _project_audit_tasks_from_plan(plan_path: Path) -> list[str]:
+    tasks: list[str] = []
+    for raw_line in plan_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if ".trellis/tasks/" not in line or not line.startswith("|"):
+            continue
+        columns = [column.strip() for column in line.strip().strip("|").split("|")]
+        if len(columns) < 2:
+            continue
+        task_path = columns[0]
+        task_type = columns[1].lower()
+        if task_type != "project-audit":
+            continue
+        tasks.append(Path(task_path).name)
+    return tasks
 
 
 def _validate_project_audit_mode(content: str, errors: list[str]) -> None:
@@ -115,8 +182,9 @@ def _validate_project_audit_evidence(content: str, errors: list[str]) -> None:
 
 
 def _validate_project_audit_task_plan_completion(task_dir: Path, errors: list[str]) -> None:
-    plan_path = task_dir / TASK_PLAN_FILE
-    if not plan_path.is_file():
+    repo_root = task_dir.parent.parent
+    plan_path = find_task_plan_file(task_dir, repo_root)
+    if plan_path is None:
         return
 
     task_rows: list[str] = []
@@ -212,10 +280,23 @@ def _validate_review_gate_evidence(task_dir: Path, report_path: Path, content: s
     reviewer_commands = review_gate_dir / f"reviewer-commands-round-{round_suffix}.md"
     summary_round = review_gate_dir / f"summary-round-{round_suffix}.md"
     action_round = review_gate_dir / f"action-round-{round_suffix}.md"
+    reviewer_reports_dir = task_dir / "tmp" / "multi-cli-review"
 
     if decision in {"recommended", "required"} and not reviewer_commands.is_file():
         errors.append(
             f"{reviewer_commands.relative_to(task_dir).as_posix()} 缺失；review-gate 缺少 reviewer 指令包"
+        )
+
+    reviewer_reports = sorted(reviewer_reports_dir.glob(f"review-round-{round_suffix}/*.md"))
+    if decision == "recommended" and mode == "lite" and not reviewer_reports:
+        errors.append(
+            "recommended + lite 的 review-gate 缺少真实 reviewer 报告；"
+            "不能只生成指令包就视为补充审查完成"
+        )
+    if decision == "required" and len(reviewer_reports) < 2:
+        errors.append(
+            "required + full 的 review-gate reviewer 报告不足 2 份；"
+            "不能视为 full 审查已完成"
         )
 
     if mode == "full" and not summary_round.is_file():
@@ -236,6 +317,10 @@ def _validate_review_gate_evidence(task_dir: Path, report_path: Path, content: s
             errors.append(
                 f"{action_round.relative_to(task_dir).as_posix()} 缺少采纳/拒绝决策记录；无法证明修复后闭环"
             )
+    elif decision in {"recommended", "required"} and reviewer_reports:
+        errors.append(
+            f"{action_round.relative_to(task_dir).as_posix()} 缺失；已有 reviewer 报告时必须沉淀采纳/拒绝闭环记录"
+        )
 
 
 def _validate_delivery_doc_contract(task_dir: Path, errors: list[str]) -> None:
@@ -272,6 +357,18 @@ def _validate_delivery_doc_contract(task_dir: Path, errors: list[str]) -> None:
         elif not _has_status_marker(content):
             errors.append(
                 f"delivery/{filename} 缺少真实状态结论（pass / fail / not run）；delivery 文档契约未满足"
+            )
+
+    retrospective_path = delivery_dir / "retrospective.md"
+    if retrospective_path.is_file():
+        retrospective_content = retrospective_path.read_text(encoding="utf-8")
+        missing_sections = _missing_required_sections(
+            retrospective_content,
+            ("本轮验收", "返工", "摩擦点"),
+        )
+        if missing_sections:
+            errors.append(
+                f"delivery/retrospective.md 缺少必要章节: {', '.join(missing_sections)}；delivery 文档契约未满足"
             )
 
 
@@ -404,6 +501,19 @@ def validate_check_gate(task_dir: Path, errors: list[str], *, for_delivery: bool
         )
         return
 
+    gate_status = _extract_check_gate_status(content)
+    if gate_status is None:
+        if for_delivery and _should_enforce_missing_gate_status():
+            errors.append(
+                "check.md 缺少 `check_gate_status`；"
+                "必须明确当前任务级 check 是否允许进入后续阶段"
+            )
+    elif for_delivery and _is_blocking_status(gate_status):
+        errors.append(
+            f"check.md 的 `check_gate_status`={gate_status!r}；"
+            "当前任务级 check 尚未闭环，不得进入 delivery"
+        )
+
     validate_check_review_gate_decision(content, errors, for_delivery=for_delivery)
 
 
@@ -443,6 +553,19 @@ def validate_finish_work_gate(task_dir: Path, errors: list[str]) -> None:
             "delivery 阶段前置条件不完整"
         )
 
+    gate_status = _extract_finish_work_gate_status(content)
+    if gate_status is None:
+        if _should_enforce_missing_gate_status():
+            errors.append(
+                "finish-work-checklist.md 缺少 `finish_work_gate_status`；"
+                "必须明确当前收尾冻结证据是否允许进入 delivery / finish-work"
+            )
+    elif _is_blocking_status(gate_status, allow_not_run=False):
+        errors.append(
+            f"finish-work-checklist.md 的 `finish_work_gate_status`={gate_status!r}；"
+            "收尾冻结证据仍有阻断项，不得进入 delivery"
+        )
+
 
 def validate_project_audit_gate(
     task_dir: Path,
@@ -479,6 +602,18 @@ def validate_project_audit_gate(
 
     _validate_project_audit_mode(content, errors)
     _validate_project_audit_evidence(content, errors)
+    gate_status = _extract_project_audit_gate_status(content)
+    if gate_status is None:
+        if require_delivery_linkage and _should_enforce_missing_gate_status():
+            errors.append(
+                "project-audit.md 缺少 `project_audit_gate_status`；"
+                "必须明确当前项目级审查是否允许进入后续阶段"
+            )
+    elif require_delivery_linkage and _is_blocking_status(gate_status, allow_not_run=True):
+        errors.append(
+            f"project-audit.md 的 `project_audit_gate_status`={gate_status!r}；"
+            "当前项目级审查仍存在阻断项，不得进入 delivery"
+        )
     mode_body = _extract_section_body(content, "Mode").lower()
     if "formal" in mode_body:
         _validate_project_audit_task_plan_completion(task_dir, errors)
@@ -514,6 +649,19 @@ def validate_review_gate_gate(task_dir: Path, errors: list[str]) -> None:
         )
         return
 
+    closure_status = _extract_review_gate_closure_status(content)
+    if closure_status is None:
+        if _should_enforce_missing_gate_status():
+            errors.append(
+                f"{reports[-1].relative_to(task_dir).as_posix()} 缺少 `review_gate_closure_status`；"
+                "必须明确本轮补充审查是否允许关闭或进入下游阶段"
+            )
+    elif _is_blocking_status(closure_status, allow_not_run=True):
+        errors.append(
+            f"{reports[-1].relative_to(task_dir).as_posix()} 的 `review_gate_closure_status`={closure_status!r}；"
+            "当前补充审查仍未闭环，不得进入后续阶段"
+        )
+
     _validate_review_gate_evidence(task_dir, reports[-1], content, errors)
 
 
@@ -527,7 +675,40 @@ def validate_delivery_gate(task_dir: Path, errors: list[str], repo_root: Path | 
         errors.append(f"缺少交付产物: {', '.join(missing)}；delivery 阶段未完成")
     validate_finish_work_gate(task_dir, errors)
     _validate_delivery_doc_contract(task_dir, errors)
+    acceptance_path = task_dir / "delivery" / "acceptance.md"
+    if acceptance_path.is_file():
+        acceptance_content = acceptance_path.read_text(encoding="utf-8")
+        delivery_gate_status = _extract_delivery_gate_status(acceptance_content)
+        if delivery_gate_status is None:
+            if _should_enforce_missing_gate_status():
+                errors.append(
+                    "delivery/acceptance.md 缺少 `delivery_gate_status`；"
+                    "必须明确当前交付事件是否允许进入最终收尾"
+                )
+        elif _is_blocking_status(delivery_gate_status, allow_not_run=False):
+            errors.append(
+                f"delivery/acceptance.md 的 `delivery_gate_status`={delivery_gate_status!r}；"
+                "当前交付仍存在阻断项，不得通过 delivery 门禁"
+            )
+    elif not missing:
+        errors.append("delivery/acceptance.md 缺失，无法判断 `delivery_gate_status`")
     if repo_root is not None:
+        plan_path = find_task_plan_file(task_dir, repo_root)
+        if plan_path is not None and _task_plan_declares_project_audit(plan_path):
+            project_audit_tasks = _project_audit_tasks_from_plan(plan_path)
+            if project_audit_tasks:
+                matched = False
+                for task_name in project_audit_tasks:
+                    candidate_dir = task_dir.parent / task_name
+                    task_data = load_task_json(candidate_dir)
+                    if task_data is not None and task_data.get("status") == "completed":
+                        matched = True
+                        break
+                if not matched:
+                    errors.append(
+                        "task_plan.md 已声明 `PROJECT-AUDIT` / project-audit task，但未找到已完成的正式项目级审查；"
+                        "不得进入 delivery"
+                    )
         assessment_path = find_assessment_file(task_dir, repo_root)
         if assessment_path is not None:
             assessment_content = assessment_path.read_text(encoding="utf-8")

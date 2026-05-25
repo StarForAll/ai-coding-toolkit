@@ -165,6 +165,7 @@ python3 <WORKFLOW_DIR>/commands/shell/source-watermark-guard.py --task-dir <task
   - Blocking Findings
   - Acceptance Gate
   - 当前交付状态
+  - `delivery_gate_status`
 - `delivery/deliverables.md`
   - Closeout Assets
   - Verification Evidence
@@ -284,9 +285,8 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py set <task-dir> \
 
 ```
 $TASK_DIR/
-├── Trellis 原生 /finish-work-checklist.md
+├── finish-work-checklist.md
 └── delivery/
-    ├── test-report.md
     ├── acceptance.md
     ├── deliverables.md
     ├── transfer-checklist.md
@@ -297,16 +297,18 @@ $TASK_DIR/
 
 最小内容要求：
 
-- `Trellis 原生 /finish-work-checklist.md`
+- `finish-work-checklist.md`
   - 冻结验证矩阵
   - 人工验证状态
   - spec / 文档同步结论
   - child-task parent record sync（如适用）
+  - `finish_work_gate_status`
 - `delivery/acceptance.md`
-  - `Acceptance Criteria`
+  - `Acceptance Criteria Status`
   - `Blocking Findings`
   - `Acceptance Gate`
-  - `Closeout Note`
+  - `当前交付状态`
+  - `delivery_gate_status`
 - `delivery/deliverables.md`
   - `Closeout Assets`
   - `Verification Evidence`
@@ -315,6 +317,10 @@ $TASK_DIR/
 - `delivery/transfer-checklist.md`
   - 对外项目：必填
   - 内部项目：若无真实移交事件，可标注 `not applicable`
+- `delivery/retrospective.md`
+  - 本轮验收
+  - 返工
+  - 摩擦点
 - 这些文件都必须如实记录实际状态；没有证据时写 `not run` / `not applicable`，不要伪造通过
 
 ## 下一步推荐

@@ -316,6 +316,7 @@ tmp/multi-cli-review/<task-id>-project-audit/
 ## Project-Level Verification Results
 - 项目级统一代码漏洞检测：
 - 项目级统一代码质量总检：
+- `project_audit_gate_status`: `pass` / `fail` / `not_run`
 - `task_level_check_status`: `pass` / `fail` / `not_run` / `not_needed`
 - 失败后的处理动作 / 剩余阻塞：
 
@@ -339,7 +340,7 @@ tmp/multi-cli-review/<task-id>-project-audit/
 | 当前结果 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
 | 已完成本轮审查且本轮发生代码修改 | `/trellis:check` | 进入质量检查，或显式触发 `check` skill | **默认推荐**。仅在用户明确确认后才允许进入质量检查 |
-| 已完成本轮审查且本轮无代码修改 | `/trellis:delivery` | 进入交付收口，或显式触发 `delivery` skill | 前提：当前 active task 的 `check.md` 已闭环，且 `project-audit.md` 中 `task_level_check_status` 与 `project_audit_code_changes` 已满足门禁 |
+| 已完成本轮审查且本轮无代码修改 | `/trellis:delivery` | 进入交付收口，或显式触发 `delivery` skill | 前提：当前 active task 的 `check.md` 已闭环，且 `project-audit.md` 中 `project_audit_gate_status`、`task_level_check_status` 与 `project_audit_code_changes` 已满足门禁 |
 | 只完成分析，仍需继续讨论 | `/trellis:project-audit` | 继续项目级审查，或显式触发 `project-audit` skill | 留在当前阶段继续收敛 |
 | 方案未确认 | `/trellis:project-audit` | 继续项目级审查，或显式触发 `project-audit` skill | 先确认方案，不进入后续门禁 |
 | 审查发现冻结后新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先完成变更评估，不直接混入本轮审查修改 |

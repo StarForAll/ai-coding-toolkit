@@ -500,11 +500,17 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 外部项目若采用”托管部署 / 试运行授权”的双轨交付控制，仍需在 `task_plan.md` 摘要中显式列出：
 
 - `开工授权确认任务`
-- `试运行版交付任务`
-- `托管部署任务`
-- `永久授权切换任务`
 - `源码移交任务`
 - `控制权移交任务`
+
+若 `delivery_control_track = hosted_deployment`，再额外列出：
+
+- `托管部署任务`
+
+若 `delivery_control_track = trial_authorization`，再额外列出：
+
+- `试运行版交付任务`
+- `永久授权切换任务`
 
 但这些任务也应优先落成真实 Trellis task，而不是只留在摘要里。
 
