@@ -576,3 +576,37 @@ Audited and fixed embedded workflow stage-gate behavior, task-vs-project audit h
 ### Next Steps
 
 - None - task complete
+
+
+## Session 321: workflow-validate-matrix runtime bundling
+
+**Date**: 2026-05-26
+**Task**: workflow-validate-matrix runtime bundling
+**Branch**: `main`
+
+### Summary
+
+Bundled workflow-validate-matrix runtime into the installable skill, added sync/drift guards, and validated the 5-scenario matrix in bundle mode.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e59c109` | (see git log) |
+| `f1eed6e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
