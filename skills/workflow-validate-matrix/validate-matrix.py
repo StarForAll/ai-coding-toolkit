@@ -2,7 +2,7 @@
 """Matrix validation for workflow installation across multiple scenarios.
 
 Usage:
-    python3 validate-matrix.py [--keep-temp] [--output PATH]
+    /ops/softwares/python/bin/python3 validate-matrix.py [--keep-temp] [--output PATH]
 """
 
 import argparse
@@ -17,11 +17,16 @@ from constants import (
     SCENARIOS,
     TEMP_DIR_PATTERN,
     MIN_DISK_SPACE,
-    WORKFLOW_SOURCE_REL,
 )
 from scenario_setup import setup_scenario
 from validation_runner import run_validations
 from report_generator import generate_report, parse_validation_output_to_findings
+from runtime_bundle_manager import (
+    assert_bundle_in_sync_if_repo_available,
+    bundle_workflow_root,
+    require_authoring_repo_root,
+    workflow_version_and_schema,
+)
 
 
 def check_disk_space() -> bool:
@@ -58,24 +63,6 @@ def get_trellis_version() -> str:
     except Exception:
         return "unknown"
 
-
-def find_workflow_source() -> Path:
-    """Find workflow source directory."""
-    # Try to find from current directory upward
-    current = Path.cwd()
-
-    for _ in range(5):  # Search up to 5 levels
-        candidate = current / WORKFLOW_SOURCE_REL
-        if candidate.exists() and (candidate / "commands" / "install-workflow.py").exists():
-            return candidate
-        current = current.parent
-
-    raise FileNotFoundError(
-        f"Could not find workflow source at {WORKFLOW_SOURCE_REL}. "
-        "Make sure you're running this from the workflow source project."
-    )
-
-
 def create_temp_dir(scenario_name: str, timestamp: str) -> Path:
     """Create unique temp directory for a scenario."""
     temp_dir = Path(TEMP_DIR_PATTERN.format(timestamp=timestamp, scenario=scenario_name))
@@ -92,7 +79,8 @@ def cleanup_temp_dir(temp_dir: Path) -> None:
 def run_scenario(
     scenario: Dict[str, Any],
     timestamp: str,
-    workflow_source: Path,
+    workflow_root: Path,
+    repo_root: Path,
 ) -> Dict[str, Any]:
     """Run validation for a single scenario."""
     scenario_name = scenario["name"]
@@ -103,18 +91,19 @@ def run_scenario(
     try:
         # Setup scenario
         print(f"    Setting up {scenario_name}...", flush=True)
-        setup_scenario(scenario_name, temp_dir, workflow_source)
+        setup_scenario(scenario, temp_dir, workflow_root, repo_root)
 
         # Run validations
         print(f"    Running validations...", flush=True)
         validation_results = run_validations(
             temp_dir,
-            workflow_source,
-            scenario["profile"],
-            scenario["cli"],
+            workflow_root,
+            repo_root,
+            scenario,
         )
 
-        # Check if any validation failed
+        findings = parse_validation_output_to_findings(validation_results, scenario_name)
+
         failed_steps = [r for r in validation_results if not r.success]
 
         if failed_steps:
@@ -126,11 +115,9 @@ def run_scenario(
                 "status": "failed",
                 "error": error_msg,
                 "error_details": "\n".join([r.error for r in failed_steps]),
+                "findings": findings,
                 "temp_dir": str(temp_dir),
             }
-
-        # Parse findings
-        findings = parse_validation_output_to_findings(validation_results, scenario_name)
 
         print(f"    ✅ Success: {len(findings)} findings", flush=True)
         return {
@@ -149,6 +136,7 @@ def run_scenario(
             "status": "failed",
             "error": str(e),
             "error_details": str(e),
+            "findings": [],
             "temp_dir": str(temp_dir),
         }
 
@@ -178,6 +166,15 @@ def main() -> int:
     # Pre-flight checks
     print("\n1. Pre-flight checks...")
 
+    try:
+        repo_root = require_authoring_repo_root()
+        assert_bundle_in_sync_if_repo_available(repo_root)
+        workflow_root = bundle_workflow_root()
+        print(f"✅ Using runtime bundle: {workflow_root}")
+    except RuntimeError as e:
+        print(f"❌ {e}")
+        return 1
+
     if not check_disk_space():
         print("❌ Insufficient disk space (need at least 500MB in /tmp)")
         return 1
@@ -186,15 +183,12 @@ def main() -> int:
         print("❌ 'trellis' command not found in PATH")
         return 1
 
-    try:
-        workflow_source = find_workflow_source()
-        print(f"✅ Found workflow source: {workflow_source}")
-    except FileNotFoundError as e:
-        print(f"❌ {e}")
-        return 1
-
     trellis_version = get_trellis_version()
     print(f"✅ Trellis version: {trellis_version}")
+
+    workflow_version, workflow_schema_version = workflow_version_and_schema()
+    print(f"✅ Workflow version: {workflow_version}")
+    print(f"✅ Workflow schema version: {workflow_schema_version}")
 
     # Run scenarios
     print(f"\n2. Running {len(SCENARIOS)} scenarios...")
@@ -202,7 +196,7 @@ def main() -> int:
     scenario_results = []
 
     for scenario in SCENARIOS:
-        result = run_scenario(scenario, timestamp, workflow_source)
+        result = run_scenario(scenario, timestamp, workflow_root, repo_root)
         scenario_results.append(result)
 
     # Generate report
@@ -211,7 +205,8 @@ def main() -> int:
         generate_report(
             scenario_results,
             args.output,
-            workflow_version="current",  # TODO: read from workflow_assets.py
+            workflow_version=workflow_version,
+            workflow_schema_version=workflow_schema_version,
             trellis_version=trellis_version,
         )
         print(f"✅ Report written to: {args.output}")
@@ -222,13 +217,24 @@ def main() -> int:
     # Cleanup
     if not args.keep_temp:
         print("\n4. Cleaning up temp directories...")
+        matrix_root = Path(scenario_results[0]["temp_dir"]).parent if scenario_results else None
+        preserved = 0
         for result in scenario_results:
             temp_dir = Path(result["temp_dir"])
+            has_findings = bool(result.get("findings"))
+            if result["status"] != "success" or has_findings:
+                print(f"  📁 Keeping scenario dir with findings/failure: {temp_dir}")
+                preserved += 1
+                continue
             try:
                 cleanup_temp_dir(temp_dir)
                 print(f"  ✅ Cleaned: {temp_dir}")
             except Exception as e:
                 print(f"  ⚠️  Failed to clean {temp_dir}: {e}")
+        if matrix_root is not None:
+            matrix_root.mkdir(parents=True, exist_ok=True)
+            if preserved == 0:
+                print(f"  📁 Keeping matrix root for report context: {matrix_root}")
     else:
         print("\n4. Keeping temp directories (--keep-temp):")
         for result in scenario_results:
@@ -242,7 +248,8 @@ def main() -> int:
     successful = [r for r in scenario_results if r["status"] == "success"]
     failed = [r for r in scenario_results if r["status"] == "failed"]
 
-    total_findings = sum(len(r.get("findings", [])) for r in successful)
+    # Calculate total findings (same as report)
+    total_findings = sum(len(r.get("findings", [])) for r in successful) + len(failed)
 
     print(f"Scenarios tested: {len(scenario_results)}")
     print(f"  ✅ Successful: {len(successful)}")
@@ -250,14 +257,21 @@ def main() -> int:
     print(f"Total findings: {total_findings}")
     print(f"Report: {args.output}")
 
+    # Determine exit code
+    exit_code = 0
     if len(failed) > 0:
         print("\n⚠️  Some scenarios failed. Review the report for details.")
         print("➡️  Next: Fix critical failures, then run /workflow-repair")
-    else:
+        exit_code = 1
+    elif total_findings > 0:
         print("\n✅ All scenarios completed successfully!")
         print("➡️  Next: Run /workflow-repair to fix the issues")
+        exit_code = 0  # Findings are not failures, just issues to fix
+    else:
+        print("\n✅ All scenarios passed with no issues!")
+        exit_code = 0
 
-    return 0
+    return exit_code
 
 
 if __name__ == "__main__":

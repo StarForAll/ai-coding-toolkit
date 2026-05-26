@@ -1,40 +1,144 @@
 """Report generator for workflow-validate-matrix."""
 
+from __future__ import annotations
+
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any
 
-from constants import PROTOCOL_VERSION, DOCUMENT_TYPE
+from constants import DOCUMENT_TYPE, PROTOCOL_VERSION
+
+
+REPAIR_CLASSIFICATIONS = ("confirmed-defect", "design-debt", "evidence-gap")
+SEVERITIES = ("P0", "P1", "P2")
+REQUIRED_FINDING_FIELDS = (
+    "Category",
+    "Severity Estimate",
+    "Repair Classification",
+    "Origin",
+    "Evidence Layer",
+    "Evidence",
+    "Temp Project Location",
+    "Description",
+    "Suggested Investigation",
+)
+
+
+def _matrix_root(scenario_results: list[dict[str, Any]]) -> Path:
+    if not scenario_results:
+        return Path("/tmp/unknown").resolve()
+    return Path(str(scenario_results[0].get("temp_dir", "/tmp/unknown"))).resolve().parent
+
+
+def _relative_location(matrix_root: Path, finding: dict[str, Any]) -> str:
+    temp_dir = Path(str(finding.get("temp_dir", matrix_root))).resolve()
+    location = str(finding.get("location", ".") or ".")
+    raw_path = Path(location)
+    if raw_path.is_absolute():
+        try:
+            return raw_path.resolve().relative_to(matrix_root).as_posix()
+        except ValueError:
+            return raw_path.as_posix()
+
+    try:
+        scenario_root = temp_dir.relative_to(matrix_root).as_posix()
+    except ValueError:
+        scenario_root = str(finding.get("scenario", temp_dir.name))
+
+    if location in ("", "."):
+        return scenario_root
+    return f"{scenario_root}/{location}".replace("//", "/")
+
+
+def _flatten_findings(scenario_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
+    for result in scenario_results:
+        scenario_name = str(result.get("scenario", "unknown"))
+        temp_dir = str(result.get("temp_dir", ""))
+        result_findings = result.get("findings", [])
+        if isinstance(result_findings, list):
+            for finding in result_findings:
+                if isinstance(finding, dict):
+                    normalized = dict(finding)
+                    normalized.setdefault("scenario", scenario_name)
+                    normalized.setdefault("temp_dir", temp_dir)
+                    findings.append(normalized)
+        if result.get("status") == "failed" and not result_findings:
+            findings.append(
+                {
+                    "title": f"Scenario validation failed - {scenario_name}",
+                    "scenario": scenario_name,
+                    "temp_dir": temp_dir,
+                    "category": "script-behavior",
+                    "severity": "P0",
+                    "repair_classification": "confirmed-defect",
+                    "origin": "workflow-source",
+                    "evidence_layer": "generated-target-runtime",
+                    "evidence": [
+                        f"Scenario: {scenario_name}",
+                        f"Error: {result.get('error', 'Unknown error')}",
+                        f"Details: {result.get('error_details', 'N/A')}",
+                    ],
+                    "location": ".",
+                    "description": (
+                        f"Validation failed for scenario '{scenario_name}', indicating a critical issue "
+                        "in the workflow installation or validation chain."
+                    ),
+                    "investigation": "Review the scenario error details and fix the underlying workflow source issue.",
+                }
+            )
+
+    for index, finding in enumerate(findings, start=1):
+        finding["id"] = f"WS-{index:03d}"
+    return findings
+
+
+def _count_by_severity(findings: list[dict[str, Any]]) -> dict[str, int]:
+    return {severity: sum(1 for finding in findings if finding.get("severity") == severity) for severity in SEVERITIES}
+
+
+def _group_by_repair_classification(findings: list[dict[str, Any]]) -> dict[str, list[str]]:
+    groups = {classification: [] for classification in REPAIR_CLASSIFICATIONS}
+    for finding in findings:
+        classification = str(finding.get("repair_classification", "evidence-gap"))
+        if classification in groups:
+            groups[classification].append(str(finding["id"]))
+    return groups
+
+
+def _as_evidence_lines(value: Any) -> list[str]:
+    if isinstance(value, list):
+        lines = [str(item).strip() for item in value if str(item).strip()]
+    else:
+        lines = [line.strip() for line in str(value or "N/A").splitlines() if line.strip()]
+    return lines or ["N/A"]
+
+
+def _render_evidence(value: Any, scenario: str) -> str:
+    lines = [f"  - Scenario: {scenario}"]
+    for item in _as_evidence_lines(value):
+        lines.append(f"  - {item}")
+    return "\n".join(lines)
 
 
 def generate_report(
-    scenario_results: List[Dict[str, Any]],
+    scenario_results: list[dict[str, Any]],
     output_path: Path,
     workflow_version: str,
+    workflow_schema_version: str,
     trellis_version: str,
 ) -> None:
     """Generate WORKFLOW_QUESTIONS.md report."""
+    findings = _flatten_findings(scenario_results)
+    total_findings = len(findings)
+    severity_counts = _count_by_severity(findings)
+    repair_groups = _group_by_repair_classification(findings)
 
-    # Count findings and scenarios
-    total_findings = 0
-    p0_count = 0
-    p1_count = 0
-    p2_count = 0
-    successful_scenarios = []
-    failed_scenarios = []
-
-    for result in scenario_results:
-        if result["status"] == "success":
-            successful_scenarios.append(result)
-            total_findings += len(result.get("findings", []))
-            # Count by severity (placeholder - real implementation would parse findings)
-        else:
-            failed_scenarios.append(result)
-
-    # Generate frontmatter
     timestamp = datetime.now(timezone.utc).isoformat()
     scenarios_tested = len(scenario_results)
-    scenario_names = [r["scenario"] for r in scenario_results]
+    scenario_names = [result["scenario"] for result in scenario_results]
+    matrix_root = _matrix_root(scenario_results)
+    temp_project_root = str(matrix_root)
 
     frontmatter = f"""---
 document-type: {DOCUMENT_TYPE}
@@ -44,167 +148,233 @@ scenarios-tested: {scenarios_tested}
 scenarios: {scenario_names}
 trellis-version: {trellis_version}
 workflow-version: {workflow_version}
-workflow-schema-version: unknown
+workflow-schema-version: {workflow_schema_version}
 scan-timestamp: {timestamp}
-temp-project-root: multiple
+temp-project-root: {temp_project_root}
 total-findings: {total_findings}
-p0-count: {p0_count}
-p1-count: {p1_count}
-p2-count: {p2_count}
+p0-count: {severity_counts['P0']}
+p1-count: {severity_counts['P1']}
+p2-count: {severity_counts['P2']}
 ---
 
 """
 
-    # Generate scan summary
-    scan_summary = f"""## Scan Summary
+    scan_summary = f"""# Workflow Scan Report
 
-Matrix validation across {scenarios_tested} scenarios.
+## Scan Summary
 
-**Scenarios Tested**:
+- Trellis Version: {trellis_version}
+- Workflow Version: {workflow_version}
+- Workflow Schema Version: {workflow_schema_version}
+- Scan Time: {timestamp}
+- Temp Project Root: {temp_project_root}
+- Total Findings: {total_findings} (P0: {severity_counts['P0']}, P1: {severity_counts['P1']}, P2: {severity_counts['P2']})
+
+**Matrix Validation**: {scenarios_tested} scenarios tested
+
+**Scenario Results**:
 """
 
     for result in scenario_results:
         status_icon = "✅" if result["status"] == "success" else "❌"
-        scan_summary += f"- {status_icon} **{result['scenario']}**: {result['status']}\n"
+        findings_count = len(result.get("findings", []))
+        scan_summary += f"- {status_icon} **{result['scenario']}**: {result['status']} ({findings_count} findings)\n"
+    scan_summary += "\n"
 
-    scan_summary += f"""
-**Results**:
-- Total scenarios: {scenarios_tested}
-- Successful: {len(successful_scenarios)}
-- Failed: {len(failed_scenarios)}
-- Total findings: {total_findings}
+    problem_analysis = "none"
+    if total_findings:
+        problem_analysis = f"Matrix validation found {total_findings} issue(s) across {scenarios_tested} scenario(s)"
 
-"""
+    failed_scenarios = [result for result in scenario_results if result["status"] != "success"]
+    gap_analysis = "none"
+    if failed_scenarios:
+        gap_analysis = (
+            f"{len(failed_scenarios)} scenario(s) failed validation: "
+            + ", ".join(str(result["scenario"]) for result in failed_scenarios)
+        )
 
-    # Generate scenario results section
-    scenario_section = """## Scenario Results
-
-"""
-
-    for result in scenario_results:
-        scenario_section += f"""### Scenario: {result['scenario']}
-
-**Status**: {result['status']}
-"""
-
-        if result["status"] == "success":
-            findings_count = len(result.get("findings", []))
-            scenario_section += f"""**Findings**: {findings_count} issues found
-**Description**: {result.get('description', 'N/A')}
-
-"""
-        else:
-            scenario_section += f"""**Error**: {result.get('error', 'Unknown error')}
-**Details**: {result.get('error_details', 'N/A')}
-
-"""
-
-    # Generate analysis summary
     analysis_summary = f"""## Analysis Summary
 
-### Overall Assessment
-
-Matrix validation tested {scenarios_tested} scenarios. {len(successful_scenarios)} succeeded, {len(failed_scenarios)} failed.
-
-### Confirmed Defects
-
-{total_findings} issues found across successful scenarios.
-
-### Design-Debt Items
-
-None identified in this run.
-
-### Evidence-Gap Items
-
-Failed scenarios require investigation before repair.
+- Problem Analysis: {problem_analysis}
+- Gap / Missing-Surface Analysis: {gap_analysis}
+- Residual Issues: none
+- New Issues: none
+- Confirmed Defects: {', '.join(repair_groups['confirmed-defect']) if repair_groups['confirmed-defect'] else 'none'}
+- Design-Debt Items: {', '.join(repair_groups['design-debt']) if repair_groups['design-debt'] else 'none'}
+- Evidence-Gap Items: {', '.join(repair_groups['evidence-gap']) if repair_groups['evidence-gap'] else 'none'}
 
 """
 
-    # Generate findings section
-    findings_section = """## Findings
-
-"""
-
-    if total_findings == 0 and len(failed_scenarios) == 0:
+    findings_section = "## Findings\n\n"
+    if not findings:
         findings_section += "No issues found. All scenarios passed validation.\n\n"
-    elif total_findings == 0 and len(failed_scenarios) > 0:
-        findings_section += "No findings from successful scenarios. See failed scenarios above.\n\n"
     else:
-        # Aggregate findings from all successful scenarios
-        finding_id = 1
-        for result in successful_scenarios:
-            for finding in result.get("findings", []):
-                findings_section += f"""### WS-{finding_id:03d}
+        for finding in findings:
+            scenario = str(finding.get("scenario", "unknown"))
+            findings_section += f"""### {finding['id']}: {finding.get('title', 'Issue detected')}
 
-**Scenario**: {result['scenario']}
-**Category**: {finding.get('category', 'Unknown')}
-**Severity Estimate**: {finding.get('severity', 'P2')}
-**Repair Classification**: {finding.get('repair_classification', 'evidence-gap')}
-**Origin**: {finding.get('origin', 'workflow-source')}
-**Evidence Layer**: {finding.get('evidence_layer', 'generated-target-installed')}
-
-**Evidence**:
-{finding.get('evidence', 'N/A')}
-
-**Temp Project Location**: {finding.get('location', 'N/A')}
-
-**Description**: {finding.get('description', 'N/A')}
-
-**Suggested Investigation**: {finding.get('investigation', 'N/A')}
+- **Category**: {finding.get('category', 'script-behavior')}
+- **Severity Estimate**: {finding.get('severity', 'P2')}
+- **Repair Classification**: {finding.get('repair_classification', 'evidence-gap')}
+- **Origin**: {finding.get('origin', 'workflow-source')}
+- **Evidence Layer**: {finding.get('evidence_layer', 'generated-target-installed')}
+- **Evidence**:
+{_render_evidence(finding.get('evidence', 'N/A'), scenario)}
+- **Temp Project Location**: {_relative_location(matrix_root, finding)}
+- **Description**: {finding.get('description', 'N/A')}
+- **Suggested Investigation**: {finding.get('investigation', 'N/A')}
 
 """
-                finding_id += 1
 
-    # Combine all sections
-    report = (
-        frontmatter
-        + scan_summary
-        + scenario_section
-        + analysis_summary
-        + findings_section
-    )
-
-    # Write report
+    report = frontmatter + scan_summary + analysis_summary + findings_section
     output_path.write_text(report, encoding="utf-8")
+    verify_report(output_path)
+
+
+def _frontmatter_and_body(content: str) -> tuple[dict[str, str], str]:
+    if not content.startswith("---\n"):
+        raise ValueError("Report missing frontmatter")
+    parts = content.split("---\n", 2)
+    if len(parts) < 3:
+        raise ValueError("Report frontmatter malformed")
+
+    frontmatter: dict[str, str] = {}
+    for line in parts[1].splitlines():
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        frontmatter[key.strip()] = value.strip()
+    return frontmatter, parts[2]
+
+
+def _parse_summary_ids(body: str, label: str) -> list[str]:
+    prefix = f"- {label}:"
+    for line in body.splitlines():
+        if line.startswith(prefix):
+            raw = line.split(":", 1)[1].strip()
+            if raw == "none":
+                return []
+            return [item.strip() for item in raw.split(",") if item.strip()]
+    raise ValueError(f"Analysis Summary missing {label}")
+
+
+def _parse_finding_blocks(body: str) -> list[dict[str, str]]:
+    blocks: list[dict[str, str]] = []
+    current: dict[str, str] | None = None
+    for line in body.splitlines():
+        if line.startswith("### WS-"):
+            if current is not None:
+                blocks.append(current)
+            ws_id = line.split(":", 1)[0].replace("### ", "").strip()
+            current = {"id": ws_id, "heading": line}
+            continue
+        if current is None:
+            continue
+        if line.startswith("- **") and "**:" in line:
+            key = line.split("**", 2)[1]
+            value = line.split(":", 1)[1].strip()
+            current[key] = value
+    if current is not None:
+        blocks.append(current)
+    return blocks
+
+
+def verify_report(report_path: Path) -> None:
+    """Verify report frontmatter, body counts, summary IDs, and required fields."""
+    try:
+        content = report_path.read_text(encoding="utf-8")
+        frontmatter, body = _frontmatter_and_body(content)
+
+        required_frontmatter = {
+            "document-type",
+            "protocol",
+            "trellis-version",
+            "workflow-version",
+            "workflow-schema-version",
+            "scan-timestamp",
+            "temp-project-root",
+            "total-findings",
+            "p0-count",
+            "p1-count",
+            "p2-count",
+        }
+        missing_frontmatter = sorted(required_frontmatter - set(frontmatter))
+        if missing_frontmatter:
+            raise ValueError(f"Missing frontmatter keys: {', '.join(missing_frontmatter)}")
+        if frontmatter["document-type"] != DOCUMENT_TYPE:
+            raise ValueError(f"document-type mismatch: {frontmatter['document-type']}")
+        if frontmatter["protocol"] != PROTOCOL_VERSION:
+            raise ValueError(f"protocol mismatch: {frontmatter['protocol']}")
+        if not Path(frontmatter["temp-project-root"]).is_absolute():
+            raise ValueError("temp-project-root must be absolute")
+        for section in ("## Scan Summary", "## Analysis Summary", "## Findings"):
+            if section not in body:
+                raise ValueError(f"Missing section: {section}")
+
+        findings = _parse_finding_blocks(body)
+        expected_total = int(frontmatter["total-findings"])
+        if len(findings) != expected_total:
+            raise ValueError(f"Finding count mismatch: frontmatter says {expected_total}, body has {len(findings)}")
+
+        expected_ids = [f"WS-{index:03d}" for index in range(1, expected_total + 1)]
+        actual_ids = [finding["id"] for finding in findings]
+        if actual_ids != expected_ids:
+            raise ValueError(f"Finding IDs are not sequential: {actual_ids}")
+
+        severity_counts = {
+            severity: sum(1 for finding in findings if finding.get("Severity Estimate") == severity)
+            for severity in SEVERITIES
+        }
+        for severity, frontmatter_key in (("P0", "p0-count"), ("P1", "p1-count"), ("P2", "p2-count")):
+            if severity_counts[severity] != int(frontmatter[frontmatter_key]):
+                raise ValueError(
+                    f"{frontmatter_key} mismatch: frontmatter says {frontmatter[frontmatter_key]}, "
+                    f"body has {severity_counts[severity]}"
+                )
+
+        for finding in findings:
+            missing_fields = [field for field in REQUIRED_FINDING_FIELDS if field not in finding]
+            if missing_fields:
+                raise ValueError(f"{finding['id']} missing fields: {', '.join(missing_fields)}")
+            classification = finding.get("Repair Classification", "")
+            if classification not in REPAIR_CLASSIFICATIONS:
+                raise ValueError(f"{finding['id']} has invalid Repair Classification: {classification}")
+
+        body_groups = {classification: [] for classification in REPAIR_CLASSIFICATIONS}
+        for finding in findings:
+            body_groups[finding["Repair Classification"]].append(finding["id"])
+
+        summary_groups = {
+            "confirmed-defect": _parse_summary_ids(body, "Confirmed Defects"),
+            "design-debt": _parse_summary_ids(body, "Design-Debt Items"),
+            "evidence-gap": _parse_summary_ids(body, "Evidence-Gap Items"),
+        }
+        if summary_groups != body_groups:
+            raise ValueError(f"Analysis Summary classification IDs do not match finding body: {summary_groups} != {body_groups}")
+    except Exception as exc:
+        raise RuntimeError(f"Report verification failed: {exc}") from exc
 
 
 def parse_validation_output_to_findings(
-    validation_results: List[Any], scenario_name: str
-) -> List[Dict[str, Any]]:
-    """Parse validation command outputs into findings.
+    validation_results: list[Any],
+    scenario_name: str,
+) -> list[dict[str, Any]]:
+    """Collect structured findings from validation results.
 
-    This is a simplified version for MVP.
-    Real implementation would parse actual command outputs.
+    Kept as a public helper for tests and compatibility with the original
+    implementation. Findings now come from each validation step, including
+    successful commands that emit warnings.
     """
-    findings = []
-
+    findings: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
     for result in validation_results:
-        if not result.success and result.error:
-            # Convert errors to findings
-            findings.append({
-                "category": "Validation Failure",
-                "severity": "P1",
-                "repair_classification": "confirmed-defect",
-                "origin": "workflow-source",
-                "evidence_layer": "generated-target-runtime",
-                "evidence": f"Step '{result.step}' failed with error: {result.error}",
-                "location": f"Scenario: {scenario_name}",
-                "description": f"Validation step '{result.step}' failed during matrix validation",
-                "investigation": f"Review {result.step} output and fix the underlying issue",
-            })
-
-        # Parse output for specific issues (simplified for MVP)
-        if "conflict" in result.output.lower() or "error" in result.output.lower():
-            findings.append({
-                "category": "Compatibility Issue",
-                "severity": "P2",
-                "repair_classification": "confirmed-defect",
-                "origin": "workflow-source",
-                "evidence_layer": "generated-target-installed",
-                "evidence": result.output[:500],  # First 500 chars
-                "location": f"Scenario: {scenario_name}, Step: {result.step}",
-                "description": f"Potential issue detected in {result.step} output",
-                "investigation": "Review the output and determine if this is a real issue",
-            })
-
+        result_findings = getattr(result, "findings", []) or []
+        for finding in result_findings:
+            key = (str(finding.get("step", getattr(result, "step", ""))), str(finding.get("title", "")))
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized = dict(finding)
+            normalized.setdefault("scenario", scenario_name)
+            findings.append(normalized)
     return findings

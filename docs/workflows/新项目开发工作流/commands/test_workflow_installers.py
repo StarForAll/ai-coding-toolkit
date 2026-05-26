@@ -3510,6 +3510,7 @@ Triggered from `start` (Trellis command) when the user describes a development t
         record_data = json.loads((fixture / ".trellis" / "workflow-installed.json").read_text(encoding="utf-8"))
         self.assertEqual(record_data["cli_types"], ["claude", "opencode"])
         self.assertIn("patched_codex_skills", record_data)
+        self.assertEqual(record_data["patched_codex_skills"], [])
 
     def test_upgrade_check_detects_phase_router_drift_even_when_versions_match(self) -> None:
         fixture = self.create_fixture()

@@ -611,4 +611,6 @@ validate_workflow_scan_repair_contract() {
 
 validate_workflow_scan_repair_contract
 
+/ops/softwares/python/bin/python3 scripts/sync-workflow-validate-matrix-runtime.py --check >/dev/null
+
 echo "OK: validated $found skill(s) + spec cross-check passed"
