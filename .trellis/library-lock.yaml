@@ -4,36 +4,54 @@ library:
   source: local
   source_path: /ops/projects/personal/ai-coding-toolkit/trellis-library
   manifest_version: 1
-  manifest_checksum: e3bfe0668d1729196563ab674528e2491fdd7c46967b5046582fec9acda38df1
+  manifest_checksum: fa44e6b015423cda066ba746c17f37dc7d008fd51dcf273078697d861d230bc9
   imported_at: '2026-03-18T22:22:05+08:00'
 project:
   target_root: /ops/projects/personal/ai-coding-toolkit
   trellis_root: /ops/projects/personal/ai-coding-toolkit/.trellis
 selection:
-  packs: []
+  packs:
+  - pack.requirements-discovery-foundation
   assets:
-  - spec.universal-domains.project-governance.change-management
-  - spec.universal-domains.verification.verification-gates
-  - spec.universal-domains.verification.evidence-requirements
-  - spec.universal-domains.product-and-requirements.scope-boundary
-  - spec.universal-domains.context-engineering.context-layering
-  - spec.universal-domains.ai-execution.prompt-boundaries
-  - spec.universal-domains.ai-execution.tool-call-policy
-  - spec.universal-domains.ai-execution.structured-output-policy
-  - spec.universal-domains.ai-execution.model-selection-and-fallback
-  - spec.universal-domains.context-engineering.context-budgeting
-  - spec.universal-domains.context-engineering.context-contamination
-  - spec.universal-domains.context-engineering.decision-summary-injection
-  - checklist.universal-domains.context-engineering.context-health-checklist
-  - spec.universal-domains.agent-collaboration.agent-role-boundaries
-  - spec.universal-domains.agent-collaboration.delegation-policy
-  - spec.universal-domains.agent-collaboration.handoff-contracts
   - checklist.universal-domains.agent-collaboration.delegation-readiness-checklist
   - checklist.universal-domains.agent-collaboration.handoff-readiness-checklist
-  - template.universal-domains.agent-collaboration.agent-handoff-template
+  - checklist.universal-domains.context-engineering.context-health-checklist
+  - checklist.universal-domains.product-and-requirements.acceptance-quality-checklist
+  - checklist.universal-domains.product-and-requirements.customer-facing-prd-checklist
+  - checklist.universal-domains.product-and-requirements.developer-facing-prd-checklist
+  - example.assembled-packs.requirements-discovery-foundation
+  - example.universal-domains.product-and-requirements.product-and-requirements-examples
   - script.validation.validate-library-sync
   - script.validation.validate-links
   - script.validation.validate-overview-links
+  - spec.scenarios.discovery-and-planning.solution-comparison
+  - spec.universal-domains.agent-collaboration.agent-role-boundaries
+  - spec.universal-domains.agent-collaboration.delegation-policy
+  - spec.universal-domains.agent-collaboration.handoff-contracts
+  - spec.universal-domains.ai-execution.model-selection-and-fallback
+  - spec.universal-domains.ai-execution.prompt-boundaries
+  - spec.universal-domains.ai-execution.structured-output-policy
+  - spec.universal-domains.ai-execution.tool-call-policy
+  - spec.universal-domains.architecture.system-boundaries
+  - spec.universal-domains.context-engineering.context-budgeting
+  - spec.universal-domains.context-engineering.context-contamination
+  - spec.universal-domains.context-engineering.context-layering
+  - spec.universal-domains.context-engineering.decision-summary-injection
+  - spec.universal-domains.product-and-requirements.acceptance-criteria
+  - spec.universal-domains.product-and-requirements.prd-documentation
+  - spec.universal-domains.product-and-requirements.prd-documentation-customer-facing
+  - spec.universal-domains.product-and-requirements.prd-documentation-developer-facing
+  - spec.universal-domains.product-and-requirements.problem-definition
+  - spec.universal-domains.product-and-requirements.requirement-clarification
+  - spec.universal-domains.product-and-requirements.scope-boundary
+  - spec.universal-domains.project-governance.change-management
+  - spec.universal-domains.project-governance.readme-governance
+  - spec.universal-domains.verification.evidence-requirements
+  - spec.universal-domains.verification.verification-gates
+  - template.universal-domains.agent-collaboration.agent-handoff-template
+  - template.universal-domains.product-and-requirements.acceptance-criteria-template
+  - template.universal-domains.product-and-requirements.customer-facing-prd-template
+  - template.universal-domains.product-and-requirements.developer-facing-prd-template
 imports:
 - asset_id: spec.universal-domains.project-governance.change-management
   type: spec
@@ -92,7 +110,7 @@ imports:
   imported_at: '2026-03-29T18:07:05+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_scan_at: null
   last_local_checksum: 29b391bc3e554acb711a982a95999117e266c827ada1e78419b40edcf4f909bc
   contribution:
     eligible: false
@@ -105,6 +123,8 @@ imports:
     sync_targets: []
   notes: Initial bootstrap import for spec.universal-domains.verification.evidence-requirements
   last_observed_checksum: 29b391bc3e554acb711a982a95999117e266c827ada1e78419b40edcf4f909bc
+  last_blocked_at: null
+  blocked_count: 0
 - asset_id: spec.universal-domains.product-and-requirements.scope-boundary
   type: spec
   source_path: specs/universal-domains/product-and-requirements/scope-boundary
@@ -115,7 +135,7 @@ imports:
   imported_at: '2026-03-29T18:07:05+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_scan_at: null
   last_local_checksum: 2e0c44a88434671818831c6a68ad6e5d87c9a1c03d606b8affbde6b312212062
   contribution:
     eligible: false
@@ -129,6 +149,8 @@ imports:
     sync_targets: []
   notes: Initial bootstrap import for spec.universal-domains.product-and-requirements.scope-boundary
   last_observed_checksum: 2e0c44a88434671818831c6a68ad6e5d87c9a1c03d606b8affbde6b312212062
+  last_blocked_at: null
+  blocked_count: 0
 - asset_id: spec.universal-domains.context-engineering.context-layering
   type: spec
   source_path: specs/universal-domains/context-engineering/context-layering
@@ -907,7 +929,7 @@ imports:
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_scan_at: null
   last_local_checksum: 93c08a98f518269faee6f4cdc5776e79b4e0fd30c257f2aecc6de81c5e12ed77
   contribution:
     eligible: false
@@ -922,18 +944,20 @@ imports:
     sync_targets: []
   notes: Batch 3 bootstrap import for spec.universal-domains.product-and-requirements.acceptance-criteria
   last_observed_checksum: 93c08a98f518269faee6f4cdc5776e79b4e0fd30c257f2aecc6de81c5e12ed77
+  last_blocked_at: null
+  blocked_count: 0
 - asset_id: spec.universal-domains.product-and-requirements.prd-documentation-customer-facing
   type: spec
   source_path: specs/universal-domains/product-and-requirements/prd-documentation-customer-facing
   target_path: .trellis/spec/universal-domains/product-and-requirements/prd-documentation-customer-facing
   import_mode: directory
   source_version: 1.1.0
-  source_checksum: 8073225a13581254228e60455fea0dc700ca46f3bf472274864d4ef8e6a6d9a9
+  source_checksum: c13c54950106b0632a186b8d287f8b1cb0be117e59585f0abce6d8e5c1cb1b07
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-05-04T15:03:36+08:00'
-  last_local_checksum: 8073225a13581254228e60455fea0dc700ca46f3bf472274864d4ef8e6a6d9a9
+  last_local_scan_at: null
+  last_local_checksum: c13c54950106b0632a186b8d287f8b1cb0be117e59585f0abce6d8e5c1cb1b07
   contribution:
     eligible: false
     mode: none
@@ -947,19 +971,21 @@ imports:
     - spec.universal-domains.product-and-requirements.scope-boundary
     sync_targets: []
   notes: Batch 3 bootstrap import for spec.universal-domains.product-and-requirements.prd-documentation-customer-facing
-  last_observed_checksum: 8073225a13581254228e60455fea0dc700ca46f3bf472274864d4ef8e6a6d9a9
+  last_observed_checksum: c13c54950106b0632a186b8d287f8b1cb0be117e59585f0abce6d8e5c1cb1b07
+  last_blocked_at: null
+  blocked_count: 0
 - asset_id: spec.universal-domains.product-and-requirements.prd-documentation-developer-facing
   type: spec
   source_path: specs/universal-domains/product-and-requirements/prd-documentation-developer-facing
   target_path: .trellis/spec/universal-domains/product-and-requirements/prd-documentation-developer-facing
   import_mode: directory
   source_version: 1.1.0
-  source_checksum: 4dfabac92b4fa0a6d0f6ee6bfe4608d3d73765243d284398bdb4503b5a157c9e
+  source_checksum: 8c5fb20b00c20c252d6a02b2f7ffeda1397f96fffbeeee95e694cc185411e9ed
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-05-04T15:03:36+08:00'
-  last_local_checksum: 4dfabac92b4fa0a6d0f6ee6bfe4608d3d73765243d284398bdb4503b5a157c9e
+  last_local_scan_at: null
+  last_local_checksum: 8c5fb20b00c20c252d6a02b2f7ffeda1397f96fffbeeee95e694cc185411e9ed
   contribution:
     eligible: false
     mode: none
@@ -973,7 +999,9 @@ imports:
     - spec.universal-domains.product-and-requirements.acceptance-criteria
     sync_targets: []
   notes: Batch 3 bootstrap import for spec.universal-domains.product-and-requirements.prd-documentation-developer-facing
-  last_observed_checksum: 4dfabac92b4fa0a6d0f6ee6bfe4608d3d73765243d284398bdb4503b5a157c9e
+  last_observed_checksum: 8c5fb20b00c20c252d6a02b2f7ffeda1397f96fffbeeee95e694cc185411e9ed
+  last_blocked_at: null
+  blocked_count: 0
 - asset_id: spec.universal-domains.product-and-requirements.problem-definition
   type: spec
   source_path: specs/universal-domains/product-and-requirements/problem-definition
@@ -984,7 +1012,7 @@ imports:
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_scan_at: null
   last_local_checksum: cea2d22befec45440f39c7e7cc5de6cc5446f694f813076ff72e51b7bcbb75f9
   contribution:
     eligible: false
@@ -997,6 +1025,8 @@ imports:
     sync_targets: []
   notes: Batch 3 bootstrap import for spec.universal-domains.product-and-requirements.problem-definition
   last_observed_checksum: cea2d22befec45440f39c7e7cc5de6cc5446f694f813076ff72e51b7bcbb75f9
+  last_blocked_at: null
+  blocked_count: 0
 - asset_id: spec.universal-domains.product-and-requirements.requirement-clarification
   type: spec
   source_path: specs/universal-domains/product-and-requirements/requirement-clarification
@@ -1007,7 +1037,7 @@ imports:
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_scan_at: null
   last_local_checksum: 04ef1c4ef61912d1e4a0cd4566882fedac2e32dbe729e21d83993c0e979a6489
   contribution:
     eligible: false
@@ -1021,6 +1051,8 @@ imports:
     sync_targets: []
   notes: Batch 3 bootstrap import for spec.universal-domains.product-and-requirements.requirement-clarification
   last_observed_checksum: 04ef1c4ef61912d1e4a0cd4566882fedac2e32dbe729e21d83993c0e979a6489
+  last_blocked_at: null
+  blocked_count: 0
 - asset_id: checklist.universal-domains.product-and-requirements.acceptance-quality-checklist
   type: checklist
   source_path: checklists/universal-domains/product-and-requirements/acceptance-quality-checklist.md
@@ -1031,7 +1063,7 @@ imports:
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_scan_at: null
   last_local_checksum: 40d2d2d4253513faa0a78cdb49035141b08cc7b56fcb5e7b60f0239b9ede75d0
   contribution:
     eligible: false
@@ -1045,6 +1077,8 @@ imports:
     sync_targets: []
   notes: Batch 3 bootstrap import for checklist.universal-domains.product-and-requirements.acceptance-quality-checklist
   last_observed_checksum: 40d2d2d4253513faa0a78cdb49035141b08cc7b56fcb5e7b60f0239b9ede75d0
+  last_blocked_at: null
+  blocked_count: 0
 - asset_id: checklist.universal-domains.product-and-requirements.customer-facing-prd-checklist
   type: checklist
   source_path: checklists/universal-domains/product-and-requirements/customer-facing-prd-checklist.md
@@ -1055,7 +1089,7 @@ imports:
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_scan_at: null
   last_local_checksum: 1b4d31e8d63f1a8f04b7063749454b63b1696b967bc7f3df4ede18653ab0f73d
   contribution:
     eligible: false
@@ -1070,6 +1104,8 @@ imports:
     sync_targets: []
   notes: Batch 3 bootstrap import for checklist.universal-domains.product-and-requirements.customer-facing-prd-checklist
   last_observed_checksum: 1b4d31e8d63f1a8f04b7063749454b63b1696b967bc7f3df4ede18653ab0f73d
+  last_blocked_at: null
+  blocked_count: 0
 - asset_id: checklist.universal-domains.product-and-requirements.developer-facing-prd-checklist
   type: checklist
   source_path: checklists/universal-domains/product-and-requirements/developer-facing-prd-checklist.md
@@ -1080,7 +1116,7 @@ imports:
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_scan_at: null
   last_local_checksum: a41e2cedf06110b4488ed891da53a2b9a11be2d818b44dd9d12527d2b50d7591
   contribution:
     eligible: false
@@ -1095,6 +1131,8 @@ imports:
     sync_targets: []
   notes: Batch 3 bootstrap import for checklist.universal-domains.product-and-requirements.developer-facing-prd-checklist
   last_observed_checksum: a41e2cedf06110b4488ed891da53a2b9a11be2d818b44dd9d12527d2b50d7591
+  last_blocked_at: null
+  blocked_count: 0
 - asset_id: template.universal-domains.product-and-requirements.acceptance-criteria-template
   type: template
   source_path: templates/universal-domains/product-and-requirements/acceptance-criteria-template.md
@@ -1105,7 +1143,7 @@ imports:
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_scan_at: null
   last_local_checksum: 2589bc288573961089c917635dd87ecebdf0a725c1cad97e73051f005ceb4ddb
   contribution:
     eligible: false
@@ -1119,6 +1157,8 @@ imports:
     sync_targets: []
   notes: Batch 3 bootstrap import for template.universal-domains.product-and-requirements.acceptance-criteria-template
   last_observed_checksum: 2589bc288573961089c917635dd87ecebdf0a725c1cad97e73051f005ceb4ddb
+  last_blocked_at: null
+  blocked_count: 0
 - asset_id: template.universal-domains.product-and-requirements.customer-facing-prd-template
   type: template
   source_path: templates/universal-domains/product-and-requirements/customer-facing-prd-template.md
@@ -1129,7 +1169,7 @@ imports:
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_scan_at: null
   last_local_checksum: 3cec476e15a18f7d50be072c47da13e85d8648bfde8f74a50193f4a20bd231b2
   contribution:
     eligible: false
@@ -1144,6 +1184,8 @@ imports:
     sync_targets: []
   notes: Batch 3 bootstrap import for template.universal-domains.product-and-requirements.customer-facing-prd-template
   last_observed_checksum: 3cec476e15a18f7d50be072c47da13e85d8648bfde8f74a50193f4a20bd231b2
+  last_blocked_at: null
+  blocked_count: 0
 - asset_id: template.universal-domains.product-and-requirements.developer-facing-prd-template
   type: template
   source_path: templates/universal-domains/product-and-requirements/developer-facing-prd-template.md
@@ -1154,7 +1196,7 @@ imports:
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-05-04T15:03:36+08:00'
+  last_local_scan_at: null
   last_local_checksum: 32428e6020a34f25c8cf4913bb9dc23aea609a4b19fc4d31aa17dac2b77a8b59
   contribution:
     eligible: false
@@ -1169,6 +1211,8 @@ imports:
     sync_targets: []
   notes: Batch 3 bootstrap import for template.universal-domains.product-and-requirements.developer-facing-prd-template
   last_observed_checksum: 32428e6020a34f25c8cf4913bb9dc23aea609a4b19fc4d31aa17dac2b77a8b59
+  last_blocked_at: null
+  blocked_count: 0
 - asset_id: template.universal-domains.verification.definition-of-done-template
   type: template
   source_path: templates/universal-domains/verification/definition-of-done-template.md
@@ -1251,12 +1295,12 @@ imports:
   target_path: .trellis/spec/examples/universal-domains/product-and-requirements
   import_mode: directory
   source_version: 1.0.0
-  source_checksum: 55892eff8897cd07a74798c45d7af28e9e0528a7abd29b1c753bd7b5144d3d95
+  source_checksum: b257b98f7917ad5f4ef908fd9492fd86e706ae90171b933d11243aae6dfcf45f
   imported_at: '2026-03-29T18:17:18.982083+08:00'
   upstream_sync: follow-upstream
   local_state: clean
-  last_local_scan_at: '2026-05-04T15:03:36+08:00'
-  last_local_checksum: 55892eff8897cd07a74798c45d7af28e9e0528a7abd29b1c753bd7b5144d3d95
+  last_local_scan_at: null
+  last_local_checksum: b257b98f7917ad5f4ef908fd9492fd86e706ae90171b933d11243aae6dfcf45f
   contribution:
     eligible: false
     mode: none
@@ -1273,7 +1317,145 @@ imports:
     - checklist.universal-domains.product-and-requirements.developer-facing-prd-checklist
     sync_targets: []
   notes: Batch 3 bootstrap import for example.universal-domains.product-and-requirements.product-and-requirements-examples
-  last_observed_checksum: 55892eff8897cd07a74798c45d7af28e9e0528a7abd29b1c753bd7b5144d3d95
+  last_observed_checksum: b257b98f7917ad5f4ef908fd9492fd86e706ae90171b933d11243aae6dfcf45f
+  last_blocked_at: null
+  blocked_count: 0
+- asset_id: spec.universal-domains.project-governance.readme-governance
+  type: spec
+  source_path: specs/universal-domains/project-governance/readme-governance
+  target_path: .trellis/spec/universal-domains/project-governance/readme-governance
+  import_mode: directory
+  source_version: 1.0.0
+  source_checksum: 74ebf9fb992ee6952f7ad48caabc65cbd149f87cadad21e91414d9e4f73e9957
+  imported_at: '2026-05-26T19:09:08+08:00'
+  upstream_sync: follow-upstream
+  local_state: clean
+  last_local_scan_at: null
+  last_local_checksum: 74ebf9fb992ee6952f7ad48caabc65cbd149f87cadad21e91414d9e4f73e9957
+  last_observed_checksum: 74ebf9fb992ee6952f7ad48caabc65cbd149f87cadad21e91414d9e4f73e9957
+  last_blocked_at: null
+  blocked_count: 0
+  contribution:
+    eligible: true
+    mode: selective
+    reviewed: false
+    proposed: false
+    last_proposed_at: null
+  relations:
+    depends_on: []
+    sync_targets: []
+  notes: ''
+- asset_id: spec.universal-domains.product-and-requirements.prd-documentation
+  type: spec
+  source_path: specs/universal-domains/product-and-requirements/prd-documentation
+  target_path: .trellis/spec/universal-domains/product-and-requirements/prd-documentation
+  import_mode: directory
+  source_version: 1.0.0
+  source_checksum: 44c7c1a819f4e1a67386d84e1b0573b4de23eb0e751adc001032024dd3638d00
+  imported_at: '2026-05-26T19:09:08+08:00'
+  upstream_sync: follow-upstream
+  local_state: clean
+  last_local_scan_at: null
+  last_local_checksum: 44c7c1a819f4e1a67386d84e1b0573b4de23eb0e751adc001032024dd3638d00
+  last_observed_checksum: 44c7c1a819f4e1a67386d84e1b0573b4de23eb0e751adc001032024dd3638d00
+  last_blocked_at: null
+  blocked_count: 0
+  contribution:
+    eligible: true
+    mode: selective
+    reviewed: false
+    proposed: false
+    last_proposed_at: null
+  relations:
+    depends_on:
+    - spec.universal-domains.product-and-requirements.problem-definition
+    - spec.universal-domains.product-and-requirements.scope-boundary
+    - spec.universal-domains.product-and-requirements.acceptance-criteria
+    sync_targets: []
+  notes: ''
+- asset_id: spec.universal-domains.architecture.system-boundaries
+  type: spec
+  source_path: specs/universal-domains/architecture/system-boundaries
+  target_path: .trellis/spec/universal-domains/architecture/system-boundaries
+  import_mode: directory
+  source_version: 1.0.0
+  source_checksum: d74d1ebc32fd5e22722175b2c7e918cb5257a22cab42fafe13632b5190efa667
+  imported_at: '2026-05-26T19:09:08+08:00'
+  upstream_sync: follow-upstream
+  local_state: clean
+  last_local_scan_at: null
+  last_local_checksum: d74d1ebc32fd5e22722175b2c7e918cb5257a22cab42fafe13632b5190efa667
+  last_observed_checksum: d74d1ebc32fd5e22722175b2c7e918cb5257a22cab42fafe13632b5190efa667
+  last_blocked_at: null
+  blocked_count: 0
+  contribution:
+    eligible: true
+    mode: selective
+    reviewed: false
+    proposed: false
+    last_proposed_at: null
+  relations:
+    depends_on:
+    - spec.universal-domains.product-and-requirements.problem-definition
+    sync_targets: []
+  notes: ''
+- asset_id: spec.scenarios.discovery-and-planning.solution-comparison
+  type: spec
+  source_path: specs/scenarios/discovery-and-planning/solution-comparison
+  target_path: .trellis/spec/scenarios/discovery-and-planning/solution-comparison
+  import_mode: directory
+  source_version: 1.0.0
+  source_checksum: e95542c8c395066ab344d10f2fa7177db10451075bd0b5093f74a8c8ff2437fe
+  imported_at: '2026-05-26T19:09:08+08:00'
+  upstream_sync: follow-upstream
+  local_state: clean
+  last_local_scan_at: null
+  last_local_checksum: e95542c8c395066ab344d10f2fa7177db10451075bd0b5093f74a8c8ff2437fe
+  last_observed_checksum: e95542c8c395066ab344d10f2fa7177db10451075bd0b5093f74a8c8ff2437fe
+  last_blocked_at: null
+  blocked_count: 0
+  contribution:
+    eligible: true
+    mode: selective
+    reviewed: false
+    proposed: false
+    last_proposed_at: null
+  relations:
+    depends_on:
+    - spec.universal-domains.product-and-requirements.problem-definition
+    - spec.universal-domains.product-and-requirements.requirement-clarification
+    sync_targets: []
+  notes: ''
+- asset_id: example.assembled-packs.requirements-discovery-foundation
+  type: example
+  source_path: examples/assembled-packs/requirements-discovery-foundation.md
+  target_path: .trellis/library-assets/examples/assembled-packs/requirements-discovery-foundation.md
+  import_mode: file
+  source_version: 1.0.0
+  source_checksum: db31bc5b8662c2233a4b13e6978c9cf3e59fe8c1fb6fc569bf96e880186e0006
+  imported_at: '2026-05-26T19:09:08+08:00'
+  upstream_sync: follow-upstream
+  local_state: clean
+  last_local_scan_at: null
+  last_local_checksum: db31bc5b8662c2233a4b13e6978c9cf3e59fe8c1fb6fc569bf96e880186e0006
+  last_observed_checksum: db31bc5b8662c2233a4b13e6978c9cf3e59fe8c1fb6fc569bf96e880186e0006
+  last_blocked_at: null
+  blocked_count: 0
+  contribution:
+    eligible: false
+    mode: none
+    reviewed: false
+    proposed: false
+    last_proposed_at: null
+  relations:
+    depends_on:
+    - spec.universal-domains.product-and-requirements.problem-definition
+    - spec.universal-domains.product-and-requirements.scope-boundary
+    - spec.universal-domains.product-and-requirements.requirement-clarification
+    - spec.universal-domains.product-and-requirements.acceptance-criteria
+    - spec.scenarios.discovery-and-planning.solution-comparison
+    sync_targets: []
+  notes: ''
 compiled:
   enabled: false
   last_built_at: null
