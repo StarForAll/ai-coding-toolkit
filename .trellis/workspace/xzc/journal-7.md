@@ -475,3 +475,37 @@ Audited and fixed embedded workflow stage-gate behavior, task-vs-project audit h
 ### Next Steps
 
 - None - task complete
+
+
+## Session 318: 修复嵌入工作流门禁与维护边界
+
+**Date**: 2026-05-26
+**Task**: 修复嵌入工作流门禁与维护边界
+**Branch**: `main`
+
+### Summary
+
+修复 embedded workflow 的转场指引、plan/delivery/formal audit 校验、Codex main-session-only 与 route/advisory 漂移；补回归测试并同步 maintainer 边界说明到 workflow 文档与 spec。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cd19540` | (see git log) |
+| `21f28f0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
