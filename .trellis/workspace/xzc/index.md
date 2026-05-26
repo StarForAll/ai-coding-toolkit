@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-7.md`
-- **Total Sessions**: 319
+- **Total Sessions**: 320
 - **Last Active**: 2026-05-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-7.md` | ~545 | Active |
+| `journal-7.md` | ~578 | Active |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
@@ -35,6 +35,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 320 | 2026-05-26 | 新增 workflow-validate-matrix skill 打破增量发现循环 | `61d0b9b` | `main` |
 | 319 | 2026-05-26 | 修复嵌入工作流门禁与交付控制缺陷 | `176b30c`, `5e5ac5a` | `main` |
 | 318 | 2026-05-26 | 修复嵌入工作流门禁与维护边界 | `cd19540`, `21f28f0` | `main` |
 | 317 | 2026-05-26 | Audit embedded workflow handoff and runtime regression coverage | `9a1612c` | `main` |

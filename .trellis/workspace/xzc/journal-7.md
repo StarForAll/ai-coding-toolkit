@@ -543,3 +543,36 @@ Audited and fixed embedded workflow stage-gate behavior, task-vs-project audit h
 ### Next Steps
 
 - None - task complete
+
+
+## Session 320: 新增 workflow-validate-matrix skill 打破增量发现循环
+
+**Date**: 2026-05-26
+**Task**: 新增 workflow-validate-matrix skill 打破增量发现循环
+**Branch**: `main`
+
+### Summary
+
+创建 workflow-validate-matrix skill，通过矩阵验证（3个场景：clean, existing-trellis, existing-workflow）一次性发现所有工作流问题，打破 fix→test→发现新问题→重复 的循环。生成兼容 workflow-repair 的报告，支持继续执行策略（部分失败不阻塞）。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `61d0b9b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
