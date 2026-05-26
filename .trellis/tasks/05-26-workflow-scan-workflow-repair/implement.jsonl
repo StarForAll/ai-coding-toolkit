@@ -1,0 +1,5 @@
+{"file": "skills/workflow-scan/SKILL.md", "reason": "了解现有 workflow-scan 的协议和输出格式"}
+{"file": "skills/workflow-repair/SKILL.md", "reason": "了解 workflow-repair 的输入格式要求"}
+{"file": "skills/workflow-scan/references/scan-output-template.md", "reason": "WORKFLOW_QUESTIONS.md 报告模板"}
+{"file": "docs/workflows/新项目开发工作流/commands/workflow_assets.py", "reason": "工作流常量定义（VALID_PROFILES, DEFAULT_PROFILE 等）"}
+{"file": ".trellis/tasks/05-26-workflow-scan-workflow-repair/prd.md", "reason": "当前任务的完整需求文档"}
