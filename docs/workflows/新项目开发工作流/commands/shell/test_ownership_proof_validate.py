@@ -120,6 +120,16 @@ PLAN_WITH_WATERMARK_TASKS = """\
 ## 依赖关系
 
 - 先完成 `source-watermark-plan.md`
+
+## Trellis Task 清单
+
+| 任务路径 | 类型 | 项目域 | 说明 |
+|---------|------|--------|------|
+| .trellis/tasks/visible-watermark | implementation | 全局 | 可见源码水印任务 |
+| .trellis/tasks/zero-width-watermark | implementation | 全局 | 零宽字符水印任务 |
+| .trellis/tasks/subtle-code-marker | implementation | 全局 | 隐蔽代码标识任务 |
+| .trellis/tasks/watermark-verification | implementation | 全局 | 水印验证任务 |
+| .trellis/tasks/ownership-proof-bundle | implementation | 全局 | 归属证明包任务 |
 """
 
 DELIVERY_DIR_CONTENT = {
@@ -270,9 +280,57 @@ class OwnershipProofValidateTests(unittest.TestCase):
     def test_plan_passes_when_required_tasks_exist(self) -> None:
         task_dir = self._make_task_dir()
         (task_dir / "assessment.md").write_text(COMPLETE_ASSESSMENT, encoding="utf-8")
+        task_root = task_dir / ".trellis" / "tasks"
+        task_root.mkdir(parents=True)
+        for name in (
+            "visible-watermark",
+            "zero-width-watermark",
+            "subtle-code-marker",
+            "watermark-verification",
+            "ownership-proof-bundle",
+        ):
+            (task_root / name).mkdir(parents=True)
         (task_dir / "task_plan.md").write_text(PLAN_WITH_WATERMARK_TASKS, encoding="utf-8")
         result = self.run_script("--phase", "plan", "--task-dir", str(task_dir))
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+    def test_plan_fails_when_required_watermark_tasks_have_no_real_task_rows(self) -> None:
+        task_dir = self._make_task_dir()
+        (task_dir / "assessment.md").write_text(COMPLETE_ASSESSMENT, encoding="utf-8")
+        (task_dir / "task_plan.md").write_text(
+            "# Task Plan\n\n"
+            "## 当前推荐执行任务（待确认）\n\n"
+            "- 可见源码水印任务\n"
+            "- 零宽字符水印任务\n"
+            "- 隐蔽代码标识任务\n"
+            "- 水印验证任务\n"
+            "- 归属证明包任务\n",
+            encoding="utf-8",
+        )
+        result = self.run_script("--phase", "plan", "--task-dir", str(task_dir))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("真实 Trellis task", result.stdout + result.stderr)
+
+    def test_plan_fails_when_required_watermark_task_row_path_missing(self) -> None:
+        task_dir = self._make_task_dir()
+        (task_dir / "assessment.md").write_text(COMPLETE_ASSESSMENT, encoding="utf-8")
+        task_root = task_dir / ".trellis" / "tasks"
+        task_root.mkdir(parents=True)
+        for name in (
+            "visible-watermark",
+            "zero-width-watermark",
+            "subtle-code-marker",
+            "watermark-verification",
+        ):
+            (task_root / name).mkdir(parents=True)
+        broken = PLAN_WITH_WATERMARK_TASKS.replace(
+            "| .trellis/tasks/ownership-proof-bundle | implementation | 全局 | 归属证明包任务 |\n",
+            "| .trellis/tasks/ownership-proof-bundle-missing | implementation | 全局 | 归属证明包任务 |\n",
+        )
+        (task_dir / "task_plan.md").write_text(broken, encoding="utf-8")
+        result = self.run_script("--phase", "plan", "--task-dir", str(task_dir))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("归属证明包任务", result.stdout + result.stderr)
 
     def test_plan_skips_when_ownership_proof_not_required(self) -> None:
         task_dir = self._make_task_dir()
@@ -349,6 +407,16 @@ class OwnershipProofValidateTests(unittest.TestCase):
         design_dir = task_dir / "design"
         design_dir.mkdir()
         (design_dir / "source-watermark-plan.md").write_text(SOURCE_WATERMARK_PLAN, encoding="utf-8")
+        task_root = task_dir / ".trellis" / "tasks"
+        task_root.mkdir(parents=True)
+        for name in (
+            "visible-watermark",
+            "zero-width-watermark",
+            "subtle-code-marker",
+            "watermark-verification",
+            "ownership-proof-bundle",
+        ):
+            (task_root / name).mkdir(parents=True)
         (task_dir / "task_plan.md").write_text(PLAN_WITH_WATERMARK_TASKS, encoding="utf-8")
         delivery_dir = task_dir / "delivery"
         delivery_dir.mkdir()

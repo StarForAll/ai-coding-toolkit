@@ -349,13 +349,14 @@ tmp/multi-cli-review/<task-id>-project-audit/
 - 项目级统一代码质量总检：
 - `project_audit_gate_status`: `pass` / `fail`
 - `task_level_check_status`: `pass` / `fail` / `not_run` / `not_needed`
-- `task_level_check_task`: `current_active_task` / `self` / `parent` / `<task-dir-name>` / `.trellis/tasks/<task-dir-name>`
+- `task_level_check_task`: `<task-dir-name>` / `.trellis/tasks/<task-dir-name>`
 - 失败后的处理动作 / 剩余阻塞：
 
 补充契约：
 
 - `task_level_check_status` 记录的是“当前 active task 的任务级 check 是否仍闭环”，不是要求 formal `PROJECT-AUDIT` carrier 自己再持有一份 `check.md`
-- `task_level_check_task` 必须显式指出任务级 `check.md` 属于哪个 task；只有旧数据兼容路径才允许依赖 parent/self 猜测
+- `task_level_check_task` 必须显式指出任务级 `check.md` 属于哪个真实 task；新文档不得再使用 `current_active_task` / `self` / `parent` 这类隐式 owner 写法
+- 旧项目中残留的 `current_active_task` / `self` / `parent` 只作为兼容读取路径保留，不再是推荐新写法
 - 旧项目若仍残留 `project_audit_gate_status = not_run`，当前 workflow 仍会识别该值以保持向后兼容；但它现在一律视为**阻断态**，不得继续进入 `review-gate` / `delivery`。需要在补完本轮 project-audit 后，将字段改写为 `pass` 或 `fail`
 - 只要 `project_audit_code_changes = yes`，本阶段的唯一合法下游出口是回到任务级 `check`；不得改走 `review-gate` 或 `delivery`
 - 若 `task_plan.md` 的 `Trellis Task 清单` 存在歧义，建议在 `说明` 列显式写 `code_related=yes` / `code_related=no`，避免仅凭关键词推断哪些 task 属于“代码相关”

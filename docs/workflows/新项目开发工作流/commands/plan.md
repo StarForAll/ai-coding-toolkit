@@ -222,6 +222,10 @@ $TASK_DIR/task_creation_checklist.md
 - `task_creation_confirmed`: `yes`
 - `confirmed_scope`: <当前已确认的任务范围>
 - `post_mainline_performance_task`: `yes`
+- `project_audit_required`: `yes` / `no`
+- `project_audit_required_reason`: <为什么本轮需要或不需要 formal PROJECT-AUDIT>
+- `ui_frontend_baseline_task_required`: `yes` / `no`
+- `ui_frontend_baseline_task_reason`: <为什么需要或不需要 `UI -> 首版代码界面` task>
 ```
 
 确认前可以先写成 `no` / `pending`，但只有在用户明确确认后，才允许改为 `yes` 并继续下一步。
@@ -259,6 +263,10 @@ $TASK_DIR/task_creation_checklist.md
 - `confirmed_scope`: <当前已冻结的任务范围>
 - `post_mainline_performance_task`: `yes` / `no`
 - `post_mainline_performance_task_reason`: <当填写 `no` 时，说明为什么本轮不需要独立性能回归 task>
+- `project_audit_required`: `yes` / `no`
+- `project_audit_required_reason`: <当填写 `yes` / `no` 时，都说明判断依据>
+- `ui_frontend_baseline_task_required`: `yes` / `no`
+- `ui_frontend_baseline_task_reason`: <当 design 已识别 UI 视觉落地链路时，说明为什么需要独立前端基线 task>
 ```
 
 若用户尚未确认：
@@ -359,6 +367,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py repair <leaf-task-dir> \
   - 该 task **禁止**使用 Codex 作为主执行器，必须改用 Claude Code / OpenCode
   - 该 task 的完成定义必须包含 `design/frontend-ui-spec.md`
   - 后续所有前端视觉相关 task 默认依赖这份 `frontend-ui-spec.md`
+  - `task_creation_checklist.md` 中应显式写 `ui_frontend_baseline_task_required = yes`
 - 若 `ownership_proof_required = yes`，至少还必须拆出以下 task：
   - `可见源码水印任务`（必选；只要启用了归属证明门禁，默认必须存在）
   - `零宽字符水印任务`（当 `zero_width_watermark_enabled = yes`）
@@ -396,6 +405,10 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py repair <leaf-task-dir> \
 
 - `Trellis Task 清单`：列出现实存在的 task / child task / 性能回归与优化任务 / project-audit task
 - `当前推荐执行任务（待确认）`：输出当前准备进入 implementation 的叶子 task 说明卡；若该 task 计划采用 TDD，只在说明卡里注明“implementation 内的 test-first 风格”，而不是写成独立阶段。说明卡至少写清任务路径、任务标题、本轮目标、本轮不做、前置依赖、验收锚点、风险提醒、推荐主执行 CLI；且该 leaf task 目录至少已补齐最小 `prd.md`
+- 路径格式约束：
+  - source 文档中的规范写法是 `.trellis/tasks/<task-dir-name>`
+  - `tasks/<task-dir-name>` 与 `./tasks/<task-dir-name>` 只作为兼容输入由 validator 容忍
+  - 不要使用 `.tasks/<task-dir-name>`、裸 `<task-dir-name>` 或其他自造前缀；这些格式不属于当前 workflow 契约
 - `依赖关系`：只描述依赖和顺序，不写实时状态
 - `任务粒度判断`：显式记录当前事项是否还应继续细分，以及当前推荐 task 为什么已经达到合适粒度；这里必须保留人工判断空间，不使用机械评分表
 - `早期探针与骨架任务`：明确 walking skeleton / smoke、packaging skeleton、performance probe 的前置安排；不适用时写 `not_applicable` + 原因
@@ -407,6 +420,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py repair <leaf-task-dir> \
 - 若存在前端视觉落地链路，必须在 `门禁摘要` 或 `任务图摘要` 中明确：
   - `UI -> 首版代码界面` task 的专属边界
   - `design/frontend-ui-spec.md` 是后续前端任务的统一约束来源
+  - 且 `Trellis Task 清单` 中必须存在唯一对应的真实 task 行，不能只在摘要里提到
 
 推荐最小模板：
 
@@ -528,6 +542,12 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py repair <leaf-task-dir> \
 - 发版前或交付前
 - 高 blast radius（仅当其满足项目级高影响面条件时）
 - 外包 / 新客户项目
+
+补充执行契约：
+
+- `task_creation_checklist.md` 中应显式写 `project_audit_required = yes / no`
+- 当 `project_audit_required = yes` 时，`Trellis Task 清单` 中必须存在唯一对应的 `project-audit` task 行
+- 不能只在 `任务图摘要`、`依赖关系` 或说明性文本中提到 `PROJECT-AUDIT`，却不落真实 task 行
 
 <!-- if:outsourcing -->
 外部项目若采用”托管部署 / 试运行授权”的双轨交付控制，仍需在 `task_plan.md` 摘要中显式列出：

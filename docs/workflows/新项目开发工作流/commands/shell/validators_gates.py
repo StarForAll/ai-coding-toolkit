@@ -603,10 +603,29 @@ def _validate_project_audit_task_plan_completion(task_dir: Path, errors: list[st
 
         state_data = read_json(referenced_dir / "workflow-state.json")
         stage = state_data.get("stage") if isinstance(state_data, dict) else None
-        stage_ready = stage in {"check", "review-gate", "project-audit", "delivery"}
         check_errors: list[str] = []
         validate_check_gate(referenced_dir, check_errors, downstream_stage="project-audit")
-        if stage_ready and not check_errors:
+        if stage == "check" and not check_errors:
+            continue
+        if stage == "review-gate" and not check_errors:
+            review_gate_errors: list[str] = []
+            validate_review_gate_gate(referenced_dir, review_gate_errors)
+            if not review_gate_errors:
+                continue
+            detail = f"status={task_status}, stage={stage}, review_gate={' / '.join(review_gate_errors)}"
+            errors.append(
+                f"task_plan.md 中代码相关任务未全部完成: {task_name} ({detail})"
+            )
+            continue
+        if stage == "delivery" and not check_errors:
+            delivery_errors: list[str] = []
+            validate_delivery_gate(referenced_dir, delivery_errors, repo_root)
+            if not delivery_errors:
+                continue
+            detail = f"status={task_status}, stage={stage}, delivery_gate={' / '.join(delivery_errors)}"
+            errors.append(
+                f"task_plan.md 中代码相关任务未全部完成: {task_name} ({detail})"
+            )
             continue
 
         detail = f"status={task_status}"

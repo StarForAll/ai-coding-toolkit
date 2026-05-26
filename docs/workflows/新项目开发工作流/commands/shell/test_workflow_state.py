@@ -273,6 +273,9 @@ class WorkflowStateScriptTests(unittest.TestCase):
 |---------|------|--------|------|
 | .trellis/tasks/04-15-sample-task | implementation | 后端域 | 当前任务 |
 | .trellis/tasks/04-15-performance-opt | implementation | 全局 | 性能回归与优化任务 |
+| .trellis/tasks/04-15-visible-watermark | implementation | 全局 | 可见源码水印任务 |
+| .trellis/tasks/04-15-watermark-verification | implementation | 全局 | 水印验证任务 |
+| .trellis/tasks/04-15-ownership-proof-bundle | implementation | 全局 | 归属证明包任务 |
 
 ## 当前推荐执行任务（待确认）
 - 任务路径：.trellis/tasks/04-15-sample-task
@@ -326,8 +329,6 @@ class WorkflowStateScriptTests(unittest.TestCase):
 - not_applicable
 
 - 可见源码水印任务
-- 零宽字符水印任务
-- 隐蔽代码标识任务
 - 水印验证任务
 - 归属证明包任务
 - source-watermark-plan.md
@@ -373,6 +374,10 @@ class WorkflowStateScriptTests(unittest.TestCase):
 - `task_creation_confirmed`: `yes`
 - `confirmed_scope`: 当前任务
 - `post_mainline_performance_task`: `yes`
+- `project_audit_required`: `no`
+- `project_audit_required_reason`: 当前默认 fixture 不要求项目级终局审查
+- `ui_frontend_baseline_task_required`: `no`
+- `ui_frontend_baseline_task_reason`: 当前默认 fixture 不包含前端视觉落地链路
 """
 
     def run_script(
@@ -513,6 +518,20 @@ class WorkflowStateScriptTests(unittest.TestCase):
             content or self.VALID_CONTEXT7_REVIEW,
             encoding="utf-8",
         )
+
+    def write_ownership_plan_task_dirs(self, root: Path) -> None:
+        tasks_root = root / ".trellis" / "tasks"
+        for name in (
+            "04-15-visible-watermark",
+            "04-15-watermark-verification",
+            "04-15-ownership-proof-bundle",
+        ):
+            task_dir = tasks_root / name
+            task_dir.mkdir(parents=True, exist_ok=True)
+            (task_dir / "task.json").write_text(
+                json.dumps({"id": name, "name": name, "status": "planning", "children": []}, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
 
     def write_finish_work_checklist(self, task_dir: Path, content: str | None = None) -> None:
         (task_dir / "finish-work-checklist.md").write_text(
@@ -868,6 +887,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         performance_task_dir = root / ".trellis" / "tasks" / "04-15-performance-opt"
         performance_task_dir.mkdir(parents=True, exist_ok=True)
         (performance_task_dir / "task.json").write_text('{"status":"planning","children":[]}\n', encoding="utf-8")
+        self.write_ownership_plan_task_dirs(root)
         (task_dir / "task_plan.md").write_text(self.VALID_OWNERSHIP_PLAN, encoding="utf-8")
         (task_dir / "task_creation_checklist.md").write_text(self.VALID_TASK_CREATION_CHECKLIST, encoding="utf-8")
         (task_dir / "prd.md").write_text(
@@ -920,6 +940,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         performance_task_dir = root / ".trellis" / "tasks" / "04-15-performance-opt"
         performance_task_dir.mkdir(parents=True, exist_ok=True)
         (performance_task_dir / "task.json").write_text('{"status":"planning","children":[]}\n', encoding="utf-8")
+        self.write_ownership_plan_task_dirs(root)
         child_plan = self.VALID_OWNERSHIP_PLAN.replace(
             ".trellis/tasks/04-15-sample-task",
             ".trellis/tasks/04-15-child-task",
@@ -1113,7 +1134,225 @@ class WorkflowStateScriptTests(unittest.TestCase):
         validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
 
         self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
-        self.assertIn("workflow-state 校验通过", validate.stdout)
+
+    def test_validate_project_audit_requires_review_gate_closure_when_referenced_task_stage_is_review_gate(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_project_audit_report(task_dir)
+
+        tasks_root = root / ".trellis" / "tasks"
+        candidate_dir = tasks_root / "04-15-review-gate-task"
+        candidate_dir.mkdir(parents=True, exist_ok=True)
+        (candidate_dir / "task.json").write_text(
+            json.dumps({"id": "04-15-review-gate-task", "name": "04-15-review-gate-task", "status": "in_progress"}, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        self.write_check_report(candidate_dir)
+        (candidate_dir / "workflow-state.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "stage": "review-gate",
+                    "status": "awaiting_user_confirmation",
+                    "current_block": None,
+                    "completed_blocks": [],
+                    "checkpoints": {
+                        "architecture_confirmed": True,
+                        "context7_review_completed": True,
+                        "execution_authorized": False,
+                    },
+                    "updated_at": "2026-05-25T00:00:00+00:00",
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        self.write_task_plan_with_code_tasks(
+            root,
+            task_dir,
+            statuses={"04-15-review-gate-task": "in_progress"},
+        )
+
+        self.run_script("init", str(task_dir), "--stage", "project-audit")
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("review-gate", validate.stdout)
+
+    def test_validate_project_audit_accepts_referenced_review_gate_task_with_closed_review_gate(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_project_audit_report(task_dir)
+
+        tasks_root = root / ".trellis" / "tasks"
+        candidate_dir = tasks_root / "04-15-review-gate-task"
+        candidate_dir.mkdir(parents=True, exist_ok=True)
+        (candidate_dir / "task.json").write_text(
+            json.dumps({"id": "04-15-review-gate-task", "name": "04-15-review-gate-task", "status": "in_progress"}, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        self.write_check_report(candidate_dir)
+        self.write_review_gate_round(candidate_dir)
+        (candidate_dir / "workflow-state.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "stage": "review-gate",
+                    "status": "awaiting_user_confirmation",
+                    "current_block": None,
+                    "completed_blocks": [],
+                    "checkpoints": {
+                        "architecture_confirmed": True,
+                        "context7_review_completed": True,
+                        "execution_authorized": False,
+                    },
+                    "updated_at": "2026-05-25T00:00:00+00:00",
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        self.write_task_plan_with_code_tasks(
+            root,
+            task_dir,
+            statuses={"04-15-review-gate-task": "in_progress"},
+        )
+
+        self.run_script("init", str(task_dir), "--stage", "project-audit")
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
+
+    def test_validate_project_audit_blocks_when_referenced_review_gate_task_has_failed_closure(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_project_audit_report(task_dir)
+
+        tasks_root = root / ".trellis" / "tasks"
+        candidate_dir = tasks_root / "04-15-review-gate-task"
+        candidate_dir.mkdir(parents=True, exist_ok=True)
+        (candidate_dir / "task.json").write_text(
+            json.dumps({"id": "04-15-review-gate-task", "name": "04-15-review-gate-task", "status": "in_progress"}, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        self.write_check_report(candidate_dir)
+        self.write_review_gate_round(
+            candidate_dir,
+            content="""# Review Gate Round
+
+## Decision
+- required
+
+## Trigger Evidence
+- high risk
+
+## Mode
+- full
+
+## Recommended Next Step
+- /trellis:project-audit
+- `review_gate_closure_status`: `fail`
+""",
+        )
+        (candidate_dir / "workflow-state.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "stage": "review-gate",
+                    "status": "awaiting_user_confirmation",
+                    "current_block": None,
+                    "completed_blocks": [],
+                    "checkpoints": {
+                        "architecture_confirmed": True,
+                        "context7_review_completed": True,
+                        "execution_authorized": False,
+                    },
+                    "updated_at": "2026-05-25T00:00:00+00:00",
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        self.write_task_plan_with_code_tasks(
+            root,
+            task_dir,
+            statuses={"04-15-review-gate-task": "in_progress"},
+        )
+
+        self.run_script("init", str(task_dir), "--stage", "project-audit")
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("review_gate", validate.stdout)
+
+    def test_validate_project_audit_requires_delivery_closure_when_referenced_task_stage_is_delivery(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+            assessment_content=self.VALID_EXTERNAL_ASSESSMENT,
+        )
+        self.write_project_audit_report(task_dir)
+
+        tasks_root = root / ".trellis" / "tasks"
+        candidate_dir = tasks_root / "04-15-delivery-task"
+        candidate_dir.mkdir(parents=True, exist_ok=True)
+        (candidate_dir / "task.json").write_text(
+            json.dumps({"id": "04-15-delivery-task", "name": "04-15-delivery-task", "status": "in_progress"}, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        self.write_check_report(candidate_dir)
+        (candidate_dir / "workflow-state.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "stage": "delivery",
+                    "status": "awaiting_user_confirmation",
+                    "current_block": None,
+                    "completed_blocks": [],
+                    "checkpoints": {
+                        "architecture_confirmed": True,
+                        "context7_review_completed": True,
+                        "execution_authorized": False,
+                    },
+                    "updated_at": "2026-05-25T00:00:00+00:00",
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        self.write_task_plan_with_code_tasks(
+            root,
+            task_dir,
+            statuses={"04-15-delivery-task": "in_progress"},
+        )
+
+        self.run_script("init", str(task_dir), "--stage", "project-audit")
+        validate = self.run_script("validate", str(task_dir), "--project-root", str(root))
+
+        self.assertEqual(validate.returncode, 1, msg=validate.stdout + validate.stderr)
+        self.assertIn("delivery", validate.stdout)
 
     def test_validate_project_audit_ignores_explicit_non_code_related_rows(self) -> None:
         root, task_dir = self.make_fixture()
@@ -1402,6 +1641,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
         )
         self.write_context7_review(task_dir)
+        self.write_ownership_plan_task_dirs(root)
         (task_dir / "task_plan.md").write_text(self.VALID_OWNERSHIP_PLAN, encoding="utf-8")
 
         self.run_script("init", str(task_dir), "--stage", "plan")
@@ -1704,6 +1944,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         performance_task_dir = root / ".trellis" / "tasks" / "04-15-performance-opt"
         performance_task_dir.mkdir(parents=True, exist_ok=True)
         (performance_task_dir / "task.json").write_text('{"status":"planning","children":[]}\n', encoding="utf-8")
+        self.write_ownership_plan_task_dirs(root)
         (task_dir / "task_plan.md").write_text(self.VALID_OWNERSHIP_PLAN, encoding="utf-8")
         (task_dir / "task_creation_checklist.md").write_text(self.VALID_TASK_CREATION_CHECKLIST, encoding="utf-8")
         (task_dir / "prd.md").write_text(
@@ -2534,6 +2775,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         performance_task_dir = root / ".trellis" / "tasks" / "04-15-performance-opt"
         performance_task_dir.mkdir(parents=True, exist_ok=True)
         (performance_task_dir / "task.json").write_text('{"status":"planning","children":[]}\n', encoding="utf-8")
+        self.write_ownership_plan_task_dirs(root)
         (task_dir / "task_plan.md").write_text(self.VALID_OWNERSHIP_PLAN, encoding="utf-8")
         (task_dir / "task_creation_checklist.md").write_text(self.VALID_TASK_CREATION_CHECKLIST, encoding="utf-8")
         design_dir = task_dir / "design"

@@ -44,6 +44,12 @@ CHECKLIST_REQUIRED_SECTIONS = [
     "人工确认结果",
 ]
 CHECKLIST_RESULT_FIELDS = ("`task_creation_confirmed`", "`confirmed_scope`", "`post_mainline_performance_task`")
+CHECKLIST_OPTIONAL_DECISION_FIELDS = (
+    "`project_audit_required`",
+    "`project_audit_required_reason`",
+    "`ui_frontend_baseline_task_required`",
+    "`ui_frontend_baseline_task_reason`",
+)
 LEGACY_MARKERS = [
     "任务执行矩阵",
     "当前可开始任务",
@@ -74,6 +80,7 @@ EXIT_SNAPSHOT_FIELDS = ("`frozen_lanes`", "`current_recommended_task`", "`open_b
 PERFORMANCE_TASK_LABEL = "性能回归与优化任务"
 PROJECT_AUDIT_MARKERS = ("PROJECT-AUDIT", "project-audit")
 PROJECT_AUDIT_ORDER_MARKERS = ("不得早于", "不早于")
+UI_BASELINE_TASK_LABEL = "UI -> 首版代码界面"
 
 
 def print_result(ok: bool, success: str, failure: str) -> int:
@@ -315,7 +322,55 @@ def validate_task_creation_checklist(checklist_path: Path) -> tuple[bool, str]:
         if is_placeholder_like(performance_reason):
             return False, "task_creation_checklist.md 已声明不需要 `性能回归与优化任务`，但缺少 `post_mainline_performance_task_reason`"
 
+    project_audit_required = extract_field_value(result_section, "`project_audit_required`")
+    if project_audit_required is not None and project_audit_required.lower() not in {"yes", "no"}:
+        return False, "task_creation_checklist.md 的 `project_audit_required` 只能填写 `yes` / `no`"
+    if project_audit_required == "yes":
+        project_audit_reason = extract_field_value(result_section, "`project_audit_required_reason`")
+        if is_placeholder_like(project_audit_reason):
+            return False, "task_creation_checklist.md 已声明需要 `PROJECT-AUDIT`，但缺少 `project_audit_required_reason`"
+
+    ui_baseline_required = extract_field_value(result_section, "`ui_frontend_baseline_task_required`")
+    if ui_baseline_required is not None and ui_baseline_required.lower() not in {"yes", "no"}:
+        return False, "task_creation_checklist.md 的 `ui_frontend_baseline_task_required` 只能填写 `yes` / `no`"
+    if ui_baseline_required == "yes":
+        ui_baseline_reason = extract_field_value(result_section, "`ui_frontend_baseline_task_reason`")
+        if is_placeholder_like(ui_baseline_reason):
+            return False, "task_creation_checklist.md 已声明需要 `UI -> 首版代码界面` task，但缺少 `ui_frontend_baseline_task_reason`"
+
     return True, "task_creation_checklist.md 已存在且人工确认结果完整"
+
+
+def extract_yes_no_field(section_lines: list[str], field: str) -> bool | None:
+    raw_value = extract_field_value(section_lines, field)
+    if raw_value is None:
+        return None
+    lowered = raw_value.lower()
+    if lowered == "yes":
+        return True
+    if lowered == "no":
+        return False
+    return None
+
+
+def project_audit_required(checklist_path: Path) -> tuple[bool, str | None]:
+    if not checklist_path.is_file():
+        return False, None
+    lines = checklist_path.read_text(encoding="utf-8").splitlines()
+    result_section = find_section_lines(lines, "人工确认结果")
+    required = extract_yes_no_field(result_section, "`project_audit_required`")
+    reason = extract_field_value(result_section, "`project_audit_required_reason`")
+    return required is True, reason
+
+
+def ui_frontend_baseline_task_required(checklist_path: Path) -> tuple[bool, str | None]:
+    if not checklist_path.is_file():
+        return False, None
+    lines = checklist_path.read_text(encoding="utf-8").splitlines()
+    result_section = find_section_lines(lines, "人工确认结果")
+    required = extract_yes_no_field(result_section, "`ui_frontend_baseline_task_required`")
+    reason = extract_field_value(result_section, "`ui_frontend_baseline_task_reason`")
+    return required is True, reason
 
 
 def validate_project_audit_dependency(section_lines: list[str]) -> tuple[bool, str]:
@@ -343,6 +398,10 @@ def task_plan_declares_project_audit(content: str) -> bool:
     return "PROJECT-AUDIT" in content or "project-audit" in content.lower()
 
 
+def task_plan_mentions_ui_baseline(content: str) -> bool:
+    return UI_BASELINE_TASK_LABEL in content
+
+
 def main() -> int:
     if any(arg in {"-h", "--help"} for arg in sys.argv[1:]):
         print("用法: python3 plan-validate.py [task_dir]")
@@ -359,6 +418,8 @@ def main() -> int:
 
     checklist_ok, checklist_message = validate_task_creation_checklist(checklist_file)
     performance_task_required, _ = post_mainline_performance_task_required(checklist_file)
+    project_audit_is_required, _project_audit_reason = project_audit_required(checklist_file)
+    ui_baseline_required, _ui_baseline_reason = ui_frontend_baseline_task_required(checklist_file)
     checks = 1
     passed = print_result(
         checklist_ok,
@@ -568,6 +629,13 @@ def main() -> int:
         "任务图已声明 `PROJECT-AUDIT` / project-audit，但 Trellis Task 清单缺少唯一的 project-audit task 行",
     )
 
+    checks += 1
+    passed += print_result(
+        (not project_audit_is_required) or project_audit_count == 1,
+        "条件性必建 PROJECT-AUDIT 已落成真实 task",
+        "task_creation_checklist.md 已声明当前轮必须生成 `PROJECT-AUDIT`，但 Trellis Task 清单缺少唯一的 project-audit task 行",
+    )
+
     dependency_section = "\n".join(find_section_lines(lines, "依赖关系"))
     dependency_ok = has_meaningful_text(dependency_section)
     checks += 1
@@ -575,6 +643,33 @@ def main() -> int:
         dependency_ok,
         "依赖关系章节已填写",
         "依赖关系章节为空或仍是占位内容",
+    )
+
+    ui_baseline_count = 0
+    if has_task_table and header_ok:
+        for row in rows:
+            if len(row) != len(header):
+                continue
+            row_text = " | ".join(row)
+            if UI_BASELINE_TASK_LABEL in row_text:
+                ui_baseline_count += 1
+
+    ui_baseline_summary_ok = (
+        (UI_BASELINE_TASK_LABEL in gates_section or UI_BASELINE_TASK_LABEL in graph_section)
+        and "design/frontend-ui-spec.md" in (gates_section + "\n" + graph_section)
+    )
+    checks += 1
+    passed += print_result(
+        (not ui_baseline_required) or ui_baseline_count == 1,
+        "前端视觉首版基线 task 已落成真实 task",
+        "task_creation_checklist.md 已声明需要 `UI -> 首版代码界面` task，但 Trellis Task 清单缺少唯一对应 task 行",
+    )
+
+    checks += 1
+    passed += print_result(
+        (not ui_baseline_required) or ui_baseline_summary_ok,
+        "前端视觉首版基线链路已写清统一约束来源",
+        "当前 plan 已声明存在前端视觉落地链路，但 `门禁摘要` / `任务图摘要` 未同时写清 `UI -> 首版代码界面` 与 `design/frontend-ui-spec.md`",
     )
 
     granularity_section = find_section_lines(lines, "任务粒度判断")

@@ -74,6 +74,7 @@ PLAN_WITH_DELIVERY = """\
 
 | 任务路径 | 类型 | 项目域 | 说明 |
 |---------|------|--------|------|
+| .trellis/tasks/04-14-kickoff-auth | implementation | delivery | 开工授权确认任务 |
 | .trellis/tasks/04-14-hosted-deploy | implementation | delivery | 托管部署任务 |
 | .trellis/tasks/04-14-source-handover | delivery | delivery | 源码移交任务 |
 | .trellis/tasks/04-14-control-handover | delivery | delivery | 控制权移交任务 |
@@ -104,6 +105,7 @@ PLAN_WITH_TRIAL_DELIVERY = """\
 
 | 任务路径 | 类型 | 项目域 | 说明 |
 |---------|------|--------|------|
+| .trellis/tasks/04-14-kickoff-auth | implementation | delivery | 开工授权确认任务 |
 | .trellis/tasks/04-14-trial-delivery | implementation | delivery | 试运行版交付任务 |
 | .trellis/tasks/04-14-permanent-auth | delivery | delivery | 永久授权切换任务 |
 | .trellis/tasks/04-14-source-handover | delivery | delivery | 源码移交任务 |
@@ -251,7 +253,7 @@ class DeliveryControlValidateTests(unittest.TestCase):
         (d / "assessment.md").write_text(COMPLETE_HOSTED_ASSESSMENT, encoding="utf-8")
         task_root = d / ".trellis" / "tasks"
         task_root.mkdir(parents=True)
-        for name in ("04-14-hosted-deploy", "04-14-source-handover", "04-14-control-handover"):
+        for name in ("04-14-kickoff-auth", "04-14-hosted-deploy", "04-14-source-handover", "04-14-control-handover"):
             (task_root / name).mkdir(parents=True)
         (d / "task_plan.md").write_text(PLAN_WITH_DELIVERY, encoding="utf-8")
         result = self.run_script("--phase", "plan", "--task-dir", str(d))
@@ -262,7 +264,7 @@ class DeliveryControlValidateTests(unittest.TestCase):
         (d / "assessment.md").write_text(COMPLETE_HOSTED_ASSESSMENT, encoding="utf-8")
         task_root = d / ".trellis" / "tasks"
         task_root.mkdir(parents=True)
-        for name in ("04-14-hosted-deploy", "04-14-source-handover", "04-14-control-handover"):
+        for name in ("04-14-kickoff-auth", "04-14-hosted-deploy", "04-14-source-handover", "04-14-control-handover"):
             (task_root / name).mkdir(parents=True)
         content = PLAN_WITH_DELIVERY.replace(
             "- 若客户拒付，按 `non_payment_remedy_path` 执行\n",
@@ -292,6 +294,68 @@ class DeliveryControlValidateTests(unittest.TestCase):
         task_root = d / ".trellis" / "tasks"
         task_root.mkdir(parents=True)
         for name in (
+            "04-14-kickoff-auth",
+            "04-14-trial-delivery",
+            "04-14-permanent-auth",
+            "04-14-source-handover",
+            "04-14-control-handover",
+        ):
+            (task_root / name).mkdir(parents=True)
+        (d / "task_plan.md").write_text(PLAN_WITH_TRIAL_DELIVERY, encoding="utf-8")
+        result = self.run_script("--phase", "plan", "--task-dir", str(d))
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+    def test_plan_fails_when_required_delivery_tasks_have_no_real_task_rows(self) -> None:
+        d = self._make_task_dir()
+        (d / "assessment.md").write_text(COMPLETE_HOSTED_ASSESSMENT, encoding="utf-8")
+        (d / "task_plan.md").write_text(
+            "# Task Plan\n\n"
+            "## 外部项目交付控制\n\n"
+            "- 开工授权确认任务\n"
+            "- 托管部署任务\n"
+            "- 源码移交任务\n"
+            "- 控制权移交任务\n\n"
+            "## Trellis Task 清单\n\n"
+            "| 任务路径 | 类型 | 项目域 | 说明 |\n"
+            "|---------|------|--------|------|\n",
+            encoding="utf-8",
+        )
+        result = self.run_script("--phase", "plan", "--task-dir", str(d))
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("真实 Trellis task", result.stdout + result.stderr)
+
+    def test_plan_fails_when_required_delivery_task_row_path_missing(self) -> None:
+        d = self._make_task_dir()
+        (d / "assessment.md").write_text(COMPLETE_HOSTED_ASSESSMENT, encoding="utf-8")
+        task_root = d / ".trellis" / "tasks"
+        task_root.mkdir(parents=True)
+        for name in ("04-14-kickoff-auth", "04-14-source-handover"):
+            (task_root / name).mkdir(parents=True)
+        broken = PLAN_WITH_DELIVERY.replace(
+            "| .trellis/tasks/04-14-hosted-deploy | implementation | delivery | 托管部署任务 |\n",
+            "",
+        ).replace(
+            "| .trellis/tasks/04-14-control-handover | delivery | delivery | 控制权移交任务 |\n",
+            "| .trellis/tasks/04-14-control-handover-missing | delivery | delivery | 控制权移交任务 |\n",
+        )
+        (d / "task_plan.md").write_text(broken, encoding="utf-8")
+        result = self.run_script("--phase", "plan", "--task-dir", str(d))
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("控制权移交任务", result.stdout + result.stderr)
+
+    def test_plan_phase_detects_trial_track_via_field_parsing_not_literal_line(self) -> None:
+        d = self._make_task_dir()
+        (d / "assessment.md").write_text(
+            COMPLETE_TRIAL_ASSESSMENT.replace(
+                "- `delivery_control_track`: `trial_authorization`\n",
+                "- `delivery_control_track`:   trial_authorization\n",
+            ),
+            encoding="utf-8",
+        )
+        task_root = d / ".trellis" / "tasks"
+        task_root.mkdir(parents=True)
+        for name in (
+            "04-14-kickoff-auth",
             "04-14-trial-delivery",
             "04-14-permanent-auth",
             "04-14-source-handover",
@@ -380,7 +444,7 @@ class DeliveryControlValidateTests(unittest.TestCase):
         (d / "assessment.md").write_text(COMPLETE_HOSTED_ASSESSMENT, encoding="utf-8")
         task_root = d / ".trellis" / "tasks"
         task_root.mkdir(parents=True)
-        for name in ("04-14-hosted-deploy", "04-14-source-handover", "04-14-control-handover"):
+        for name in ("04-14-kickoff-auth", "04-14-hosted-deploy", "04-14-source-handover", "04-14-control-handover"):
             (task_root / name).mkdir(parents=True)
         (d / "task_plan.md").write_text(PLAN_WITH_DELIVERY, encoding="utf-8")
         delivery = d / "delivery"

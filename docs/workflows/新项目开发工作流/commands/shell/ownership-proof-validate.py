@@ -11,9 +11,12 @@ from pathlib import Path
 
 from workflow_common import (
     extract_markdown_field,
+    extract_trellis_task_rows,
     find_assessment_in_lineage,
     normalize_yes_no_field,
     parse_channels,
+    resolve_task_table_path,
+    task_note_matches_label,
 )
 
 
@@ -324,6 +327,25 @@ def validate_task_plan(task_dir: Path, enabled: bool, zero_width_enabled: bool, 
             passed += print_result(True, f"已拆分 `{task_name}`", "")
         else:
             passed += print_result(False, "", f"`task_plan.md` 缺少 `{task_name}`")
+
+    for task_name in required_tasks:
+        checks += 1
+        matched_paths: list[Path] = []
+        for row in extract_trellis_task_rows(content):
+            if not task_note_matches_label(row.get("说明", ""), task_name):
+                continue
+            task_path = row.get("任务路径", "")
+            if not task_path:
+                continue
+            matched_paths.append(resolve_task_table_path(task_dir, task_path))
+        if not matched_paths:
+            passed += print_result(False, "", f"`{task_name}` 只出现在摘要文本中，未落成真实 Trellis task")
+            continue
+        existing_paths = [path for path in matched_paths if path.is_dir()]
+        if not existing_paths:
+            passed += print_result(False, "", f"`{task_name}` 已写入 task 清单，但对应任务目录不存在")
+            continue
+        passed += print_result(True, f"`{task_name}` 已落成真实 Trellis task", "")
 
     checks += 1
     if "source-watermark-plan.md" in content:

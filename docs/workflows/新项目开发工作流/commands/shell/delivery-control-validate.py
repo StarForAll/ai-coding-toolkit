@@ -21,7 +21,10 @@ from typing import Optional
 from workflow_common import (
     MIN_KICKOFF_PAYMENT_RATIO,
     extract_backticked_field,
+    extract_trellis_task_rows,
     find_assessment_in_lineage,
+    resolve_task_table_path,
+    task_note_matches_label,
 )
 
 
@@ -45,6 +48,26 @@ def print_result(ok: bool, success: str, failure: str) -> int:
         return 1
     print(f"❌ {failure}")
     return 0
+
+
+def load_delivery_control_track(assessment_file: Path) -> str | None:
+    if not assessment_file.exists():
+        return None
+    content = assessment_file.read_text(encoding="utf-8")
+    return extract_backticked_field(content, "delivery_control_track")
+
+
+def _task_rows_by_note(content: str, task_name: str, task_dir: Path) -> list[Path]:
+    matched: list[Path] = []
+    for row in extract_trellis_task_rows(content):
+        note = row.get("说明", "")
+        if not task_note_matches_label(note, task_name):
+            continue
+        task_path = row.get("任务路径", "")
+        if not task_path:
+            continue
+        matched.append(resolve_task_table_path(task_dir, task_path))
+    return matched
 
 
 def validate_assessment(assessment_file: Path) -> tuple[int, int, bool]:
@@ -250,18 +273,20 @@ def validate_task_plan(plan_file: Path, is_trial: bool) -> tuple[int, int]:
         else:
             checks -= 1  # 非必须任务，不计入检查
     
-    # 3. 检查 task 图摘要 / task 清单中是否有交付控制任务
-    checks += 1
-    has_task_summary = "## Trellis Task 清单" in content or "## 任务图摘要" in content
-    if has_task_summary:
-        delivery_tasks = ["交付", "移交", "授权", "部署"]
-        has_delivery_task = any(task in content for task in delivery_tasks)
-        if has_delivery_task:
-            passed += print_result(True, "task 图摘要包含交付控制任务", "")
-        else:
-            passed += print_result(False, "", "task 图摘要缺少交付控制相关任务")
-    else:
-        passed += print_result(False, "", "未找到 `Trellis Task 清单` 或 `任务图摘要` 章节")
+    # 3. 检查关键交付控制任务是否已落成真实 Trellis task
+    for task_name, is_required in required_tasks:
+        if not is_required:
+            continue
+        checks += 1
+        matched_paths = _task_rows_by_note(content, task_name, plan_file.parent)
+        if not matched_paths:
+            passed += print_result(False, "", f"`{task_name}` 只出现在摘要文本中，未落成真实 Trellis task")
+            continue
+        existing_paths = [path for path in matched_paths if path.is_dir()]
+        if not existing_paths:
+            passed += print_result(False, "", f"`{task_name}` 已写入 task 清单，但对应任务目录不存在")
+            continue
+        passed += print_result(True, f"`{task_name}` 已落成真实 Trellis task", "")
     
     # 4. 检查是否有明确的开工款触发条件依赖
     checks += 1
@@ -535,10 +560,7 @@ def main() -> int:
         if engagement_type == "non_outsourcing":
             print("ℹ️  非外包项目无需执行外包项目交付控制 plan 校验")
             return 0
-        is_trial = False
-        if assessment_file.exists():
-            content = assessment_file.read_text(encoding="utf-8")
-            is_trial = '`delivery_control_track`: `trial_authorization`' in content
+        is_trial = load_delivery_control_track(assessment_file) == "trial_authorization"
         
         passed, checks = validate_task_plan(args.task_dir / "task_plan.md", is_trial)
         return 0 if passed == checks else 1
@@ -549,10 +571,7 @@ def main() -> int:
         if engagement_type == "non_outsourcing":
             print("ℹ️  非外包项目无需执行外包项目交付控制 delivery 校验")
             return 0
-        is_trial = False
-        if assessment_file.exists():
-            content = assessment_file.read_text(encoding="utf-8")
-            is_trial = '`delivery_control_track`: `trial_authorization`' in content
+        is_trial = load_delivery_control_track(assessment_file) == "trial_authorization"
         
         passed, checks = validate_delivery(args.task_dir / "delivery", is_trial)
         return 0 if passed == checks else 1

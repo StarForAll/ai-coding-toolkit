@@ -40,6 +40,10 @@ VALID_CHECKLIST = """# Task Creation Checklist
 - `task_creation_confirmed`: `yes`
 - `confirmed_scope`: 当前主干任务链 + 后置性能回归与优化任务 + 项目级审查
 - `post_mainline_performance_task`: `yes`
+- `project_audit_required`: `yes`
+- `project_audit_required_reason`: 多任务跨模块且属于交付前阶段
+- `ui_frontend_baseline_task_required`: `no`
+- `ui_frontend_baseline_task_reason`: 当前任务不包含前端视觉落地链路
 """
 
 VALID_PLAN = """# Task Plan: Sample
@@ -118,6 +122,111 @@ VALID_PLAN = """# Task Plan: Sample
 - `open_blockers`: none
 - `task_creation_confirmed`: yes
 - `reopen_conditions`: 若 smoke / packaging skeleton 失败则回到 plan
+"""
+
+VALID_UI_CHECKLIST = """# Task Creation Checklist
+
+## 概述
+- 来源：示例
+- 当前阶段目标：冻结前端视觉任务拆分
+
+## 拟创建的 Trellis Task
+- TASK-A：主干任务 1
+- `UI -> 首版代码界面`：前端视觉首版代码界面任务
+
+## 依赖与项目域草案
+- 前端域：TASK-A → UI -> 首版代码界面
+
+## 人工确认清单
+- [x] 已确认拟创建的 Trellis task 列表
+- [x] 已确认主干任务链与项目域 lane
+- [x] 已确认前端视觉首版代码界面 task 的专属边界
+
+## 人工确认结果
+- `task_creation_confirmed`: `yes`
+- `confirmed_scope`: 当前主干任务链 + 首版前端界面基线 task
+- `post_mainline_performance_task`: `no`
+- `post_mainline_performance_task_reason`: 当前范围不需要单独性能回归 task
+- `project_audit_required`: `no`
+- `project_audit_required_reason`: 当前范围为单任务内前端基线链路
+- `ui_frontend_baseline_task_required`: `yes`
+- `ui_frontend_baseline_task_reason`: design 已确认存在前端视觉落地链路
+"""
+
+VALID_UI_PLAN = """# Task Plan: Sample
+
+## 概述
+- 来源：示例
+- 目标：验证前端视觉首版 task 门禁
+
+## 项目域执行策略
+- 前端域：.trellis/tasks/04-14-task-a → .trellis/tasks/04-14-ui-baseline（域内串行，不自动续跑）
+
+## Trellis Task 清单
+
+| 任务路径 | 类型 | 项目域 | 说明 |
+|---------|------|--------|------|
+| .trellis/tasks/04-14-task-a | implementation | 前端域 | 基础前端实现 |
+| .trellis/tasks/04-14-ui-baseline | implementation | 前端域 | UI -> 首版代码界面；code_related=yes |
+
+## 当前推荐执行任务（待确认）
+- 任务路径：.trellis/tasks/04-14-task-a
+- 任务标题：TASK-A
+- 本轮目标：完成首版基线前置能力
+- 本轮不做：不推进后续视觉微调
+- 前置依赖：无
+- 验收锚点：前端基线能力可验证
+- 风险提醒：视觉链路变化先回 plan
+- 推荐主执行 CLI：Claude Code
+
+## 依赖关系
+
+- .trellis/tasks/04-14-ui-baseline 依赖 .trellis/tasks/04-14-task-a
+
+## 任务粒度判断
+
+- `granularity_decision`: keep_current_granularity
+- `decision_reason`: 首版代码界面需要单独 task 承担
+- `closure_target`: 形成首版前端界面基线
+- `non_split_risk`: acceptable
+- `human_judgement_notes`: 当前已明确前端视觉落地链路
+
+## 早期探针与骨架任务
+
+- `walking_skeleton_or_smoke`: 前端 smoke
+- `packaging_skeleton`: not_applicable，当前无打包壳风险
+- `performance_probe`: not_applicable，当前无独立性能探针
+
+## 自动化策略摘要
+
+- `ci_strategy`: GitHub Actions
+- `local_vs_ci_boundary`: 本地跑 smoke，CI 跑完整矩阵
+
+## 范围收敛与降级预案
+
+- `kill_criteria`: 若基线能力失败则回退
+- `p1_downgrade_candidates`: 视觉细节可降级
+
+## 门禁摘要
+
+- 项目级全局门禁：lint / typecheck / test / quality gate
+- 创建门禁：真实 Trellis task 创建前，必须先完成 task_creation_checklist.md 并获得人工确认
+- task 级门禁：进入某个 task 实现前，由 /trellis:continue 自动执行 before-dev，并把当前有效门禁落到 $TASK_DIR/before-dev.md
+- 前端视觉落地链路：`UI -> 首版代码界面` 为独立 task，后续前端任务统一受 `design/frontend-ui-spec.md` 约束
+
+## 任务图摘要
+
+- 主链：.trellis/tasks/04-14-task-a → .trellis/tasks/04-14-ui-baseline
+- 前端视觉基线：`UI -> 首版代码界面`
+- `design/frontend-ui-spec.md` 是后续前端任务统一约束来源
+
+## 阶段出口快照
+
+- `frozen_lanes`: frontend
+- `current_recommended_task`: .trellis/tasks/04-14-task-a
+- `open_blockers`: none
+- `task_creation_confirmed`: yes
+- `reopen_conditions`: 若前端基线边界变化则回到 plan
 """
 
 LEGACY_PLAN = VALID_PLAN + """
@@ -368,6 +477,8 @@ class PlanValidateScriptTests(unittest.TestCase):
                 .replace("- PROJECT-AUDIT：项目级终局任务\n", "")
                 .replace("- [x] 已确认 `性能回归与优化任务` 为主干后的固定必选任务\n", "")
                 .replace("- `confirmed_scope`: 当前主干任务链 + 后置性能回归与优化任务 + 项目级审查\n", "- `confirmed_scope`: 当前主干任务链\n")
+                .replace("- `project_audit_required`: `yes`\n", "- `project_audit_required`: `no`\n")
+                .replace("- `project_audit_required_reason`: 多任务跨模块且属于交付前阶段\n", "- `project_audit_required_reason`: 当前范围不需要项目级终局审查\n")
             )
             (task_dir / "task_creation_checklist.md").write_text(checklist, encoding="utf-8")
             plan = (
@@ -419,6 +530,108 @@ class PlanValidateScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
         self.assertIn("PROJECT-AUDIT", result.stdout)
         self.assertIn("project-audit task 行", result.stdout)
+
+    def test_multiple_project_audit_task_rows_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
+            (root / ".trellis" / "tasks" / "04-14-project-audit-b").mkdir(parents=True, exist_ok=True)
+            broken = VALID_PLAN.replace(
+                "| .trellis/tasks/04-14-project-audit | project-audit | 全局 | 全部代码相关 task 完成后才允许开始 |\n",
+                "| .trellis/tasks/04-14-project-audit | project-audit | 全局 | 全部代码相关 task 完成后才允许开始 |\n"
+                "| .trellis/tasks/04-14-project-audit-b | project-audit | 全局 | 备用 project-audit |\n",
+            )
+            self.write_plan(task_dir, broken)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("project-audit 任务超过 1 个", result.stdout)
+
+    def test_required_project_audit_without_structured_task_row_fails_even_without_textual_declaration(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
+            broken = (
+                VALID_PLAN
+                .replace("| .trellis/tasks/04-14-project-audit | project-audit | 全局 | 全部代码相关 task 完成后才允许开始 |\n", "")
+                .replace("- 全局终局任务：PROJECT-AUDIT（条件触发；不得早于性能回归与优化任务）\n", "")
+            )
+            self.write_plan(task_dir, broken)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("PROJECT-AUDIT", result.stdout)
+        self.assertIn("条件", result.stdout)
+
+    def test_plan_with_no_required_project_audit_can_omit_project_audit_task(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
+            checklist = (
+                VALID_CHECKLIST
+                .replace("- `project_audit_required`: `yes`\n", "- `project_audit_required`: `no`\n")
+                .replace("- `project_audit_required_reason`: 多任务跨模块且属于交付前阶段\n", "- `project_audit_required_reason`: 当前范围不需要项目级终局审查\n")
+            )
+            (task_dir / "task_creation_checklist.md").write_text(checklist, encoding="utf-8")
+            plan = (
+                VALID_PLAN
+                .replace("| .trellis/tasks/04-14-project-audit | project-audit | 全局 | 全部代码相关 task 完成后才允许开始 |\n", "")
+                .replace("- .trellis/tasks/04-14-project-audit 依赖全部代码相关 task 完成，且不得早于性能回归与优化任务\n", "")
+                .replace("- 全局终局任务：PROJECT-AUDIT（条件触发；不得早于性能回归与优化任务）\n", "")
+            )
+            self.write_plan(task_dir, plan)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("task_plan.md 结构验证通过", result.stdout)
+
+    def test_ui_frontend_baseline_task_required_fails_when_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_root = root / ".trellis" / "tasks"
+            task_root.mkdir(parents=True, exist_ok=True)
+            task_dir = task_root / "04-14-plan-root"
+            task_dir.mkdir(parents=True, exist_ok=True)
+            (task_dir / "task_creation_checklist.md").write_text(VALID_UI_CHECKLIST, encoding="utf-8")
+            (task_root / "04-14-task-a").mkdir(parents=True, exist_ok=True)
+            self.write_leaf_prd(root, "04-14-task-a")
+            broken = (
+                VALID_UI_PLAN
+                .replace("| .trellis/tasks/04-14-ui-baseline | implementation | 前端域 | UI -> 首版代码界面；code_related=yes |\n", "")
+                .replace("- .trellis/tasks/04-14-ui-baseline 依赖 .trellis/tasks/04-14-task-a\n", "")
+                .replace("- 前端视觉基线：`UI -> 首版代码界面`\n", "")
+                .replace("- `design/frontend-ui-spec.md` 是后续前端任务统一约束来源\n", "")
+            )
+            self.write_plan(task_dir, broken)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("UI -> 首版代码界面", result.stdout)
+
+    def test_ui_frontend_baseline_task_required_passes_when_present(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_root = root / ".trellis" / "tasks"
+            task_root.mkdir(parents=True, exist_ok=True)
+            task_dir = task_root / "04-14-plan-root"
+            task_dir.mkdir(parents=True, exist_ok=True)
+            (task_dir / "task_creation_checklist.md").write_text(VALID_UI_CHECKLIST, encoding="utf-8")
+            (task_root / "04-14-task-a").mkdir(parents=True, exist_ok=True)
+            (task_root / "04-14-ui-baseline").mkdir(parents=True, exist_ok=True)
+            self.write_leaf_prd(root, "04-14-task-a")
+            self.write_plan(task_dir, VALID_UI_PLAN)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("task_plan.md 结构验证通过", result.stdout)
 
     def test_project_audit_before_performance_in_graph_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp_root:
@@ -572,6 +785,22 @@ class PlanValidateScriptTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("task_plan.md 结构验证通过", result.stdout)
+
+    def test_dot_tasks_prefix_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
+            plan_with_dot_tasks_prefix = VALID_PLAN.replace(
+                ".trellis/tasks/04-14-task-a",
+                ".tasks/04-14-task-a",
+            )
+            self.write_plan(task_dir, plan_with_dot_tasks_prefix)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("存在不存在的任务路径", result.stdout)
 
     def test_bilingual_section_falls_back_to_non_empty_variant(self) -> None:
         with tempfile.TemporaryDirectory() as temp_root:
