@@ -21,6 +21,7 @@ description: 开发完成？准备交付 — 验收测试、交付物生成、�
   - `check` 证明当前 active task 的任务级质量闭环
   - `project-audit` 证明项目整体代码面的项目级总复核闭环
 - 因此，只要 `task_plan.md` 已把 `PROJECT-AUDIT` 写成正式终局任务，进入 `delivery` 前就必须同时满足这两类证据；不能把“formal PROJECT-AUDIT 已完成”误解成可跳过当前 active task 的 `check.md`
+- 若 formal `PROJECT-AUDIT` 是独立 carrier task，则 `project-audit.md` 必须显式写出 `task_level_check_task`，用于绑定当前任务级 `check.md` 的真实 owner；不能只靠 parent/self 猜测
 - 若 `project-audit.md` 标记本轮存在代码修改，则不得直接进入 `delivery`，必须先回到 `/trellis:check`
 
 ---

@@ -140,6 +140,17 @@ def resolve_task_path(repo_root: Path, task_path: str) -> Path:
     return repo_root / normalized
 
 
+def load_task_parent(task_dir: Path) -> str | None:
+    task_json = task_dir / "task.json"
+    if not task_json.is_file():
+        return None
+    match = re.search(r'"parent"\s*:\s*"([^"]+)"', task_json.read_text(encoding="utf-8"))
+    if not match:
+        return None
+    parent_name = match.group(1).strip()
+    return parent_name or None
+
+
 def extract_task_card_value(section_lines: list[str], label: str) -> str:
     prefix = f"- {label}："
     for line in section_lines:
@@ -466,10 +477,14 @@ def main() -> int:
     )
 
     recommended_task_path = extract_task_card_value(task_card_lines, "任务路径")
+    current_task_name = task_dir.name
+    parent_task_name = load_task_parent(task_dir)
     recommended_task_prd_ok = False
     recommended_task_prd_message = "当前推荐执行任务对应 leaf task 缺少最小 prd.md"
     if recommended_task_path:
         recommended_task_dir = resolve_task_path(repo_root, recommended_task_path)
+        if recommended_task_dir.name in {current_task_name, parent_task_name}:
+            recommended_task_dir = task_dir
         recommended_task_prd_ok, recommended_task_prd_message = validate_leaf_prd(recommended_task_dir / "prd.md")
 
     checks += 1

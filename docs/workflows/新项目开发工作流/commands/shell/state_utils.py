@@ -453,6 +453,14 @@ def find_task_plan_file(task_dir: Path, repo_root: Path) -> Path | None:
     return None
 
 
+def find_task_creation_checklist_file(task_dir: Path, repo_root: Path) -> Path | None:
+    for candidate_dir in iter_task_lineage(task_dir, repo_root):
+        checklist_file = candidate_dir / TASK_CREATION_CHECKLIST_FILE
+        if checklist_file.is_file():
+            return checklist_file
+    return None
+
+
 def find_task_prd_file(task_dir: Path, repo_root: Path) -> Path | None:
     for candidate_dir in iter_task_lineage(task_dir, repo_root):
         prd_file = candidate_dir / TASK_PRD

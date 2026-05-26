@@ -33,6 +33,7 @@ from state_utils import (  # noqa: E402
     TASK_PLAN_FILE,
     TASK_PRD,
     design_path_candidates_from_state,
+    find_task_creation_checklist_file,
     find_assessment_file,
     find_task_plan_file,
     find_missing_markers,
@@ -69,6 +70,13 @@ def _extract_section_body(content: str, heading: str) -> str:
     if not match:
         return ""
     return match.group("body").strip()
+
+
+def _extract_backticked_status_from_text(text: str) -> str | None:
+    match = re.search(r"[：:]\s*`?(pass|fail|not run|not_run|not applicable|not_applicable|not needed|not_needed)`?", text, re.IGNORECASE)
+    if not match:
+        return None
+    return match.group(1).lower().replace(" ", "_")
 
 
 def _has_status_marker(content: str) -> bool:
@@ -142,6 +150,152 @@ def _repo_root_from_task_dir(task_dir: Path) -> Path:
     if task_dir.parent.name == "tasks" and task_dir.parent.parent.name == ".trellis":
         return task_dir.parent.parent.parent
     return task_dir.parent.parent
+
+
+def _resolve_plan_gate_owner_dir(task_dir: Path) -> Path:
+    repo_root = _repo_root_from_task_dir(task_dir)
+    plan_path = find_task_plan_file(task_dir, repo_root)
+    if plan_path is not None:
+        return plan_path.parent
+    checklist_path = find_task_creation_checklist_file(task_dir, repo_root)
+    if checklist_path is not None:
+        return checklist_path.parent
+    return task_dir
+
+
+def _parse_task_reference_tokens(raw_value: str) -> set[str]:
+    tokens: set[str] = set()
+    for raw_token in re.split(r"[,\n;]+", raw_value):
+        token = raw_token.strip().strip("`").strip()
+        if not token or token.lower() in {"none", "n/a", "na"}:
+            continue
+        if token.startswith(".trellis/tasks/") or token.startswith("tasks/"):
+            tokens.add(Path(token).name)
+            continue
+        if "/" not in token and "." not in token:
+            tokens.add(token)
+    return tokens
+
+
+def _resolve_task_level_check_dir_from_field(
+    task_dir: Path,
+    raw_value: str | None,
+    *,
+    fallback_dir: Path | None = None,
+) -> Path | None:
+    if raw_value is None:
+        return None
+
+    normalized = raw_value.strip().strip("`").strip()
+    lowered = normalized.lower().replace("-", "_").replace(" ", "_")
+    if lowered == "current_active_task":
+        return fallback_dir
+    if lowered == "self":
+        return task_dir
+    if lowered == "parent":
+        task_data = load_task_json(task_dir)
+        parent_name = task_data.get("parent") if isinstance(task_data, dict) else None
+        if isinstance(parent_name, str) and parent_name.strip():
+            return task_dir.parent / parent_name.strip()
+        return None
+
+    repo_root = _repo_root_from_task_dir(task_dir)
+    if normalized.startswith(".trellis/tasks/") or normalized.startswith("tasks/"):
+        return repo_root / normalized.replace("tasks/", ".trellis/tasks/", 1) if normalized.startswith("tasks/") else repo_root / normalized
+
+    if "/" not in normalized:
+        return task_dir.parent / normalized
+
+    return None
+
+
+def _extract_coverage_line(content: str) -> str | None:
+    matrix_body = _extract_section_body(content, "Project-Level Verification Matrix")
+    for raw_line in matrix_body.splitlines():
+        if "project-task-coverage" in raw_line:
+            return raw_line.strip()
+    return None
+
+
+def _parse_project_task_coverage(coverage_line: str | None) -> tuple[str | None, set[str], set[str], str | None]:
+    if coverage_line is None:
+        return None, set(), set(), None
+
+    lowered = coverage_line.lower()
+    coverage_mode: str | None = None
+    covered_tasks: set[str] = set()
+    exception_tasks: set[str] = set()
+    blockers_state: str | None = None
+
+    if "all code-related tasks complete" in lowered:
+        coverage_mode = "all"
+    elif "covers " in lowered and " only" in lowered:
+        coverage_mode = "listed"
+        match = re.search(r"covers\s+(.+?)\s+only", coverage_line, re.IGNORECASE)
+        if match:
+            covered_tasks = _parse_task_reference_tokens(match.group(1))
+    else:
+        covered_match = re.search(r"covered\s*=\s*([^;]+)", coverage_line, re.IGNORECASE)
+        if covered_match:
+            coverage_mode = "listed"
+            covered_tasks = _parse_task_reference_tokens(covered_match.group(1))
+
+    exceptions_match = re.search(r"exceptions\s*=\s*([^;]+)", coverage_line, re.IGNORECASE)
+    if exceptions_match:
+        exception_tasks = _parse_task_reference_tokens(exceptions_match.group(1))
+    elif "no approved exceptions" in lowered or "exceptions=none" in lowered:
+        exception_tasks = set()
+
+    if "no delivery blockers" in lowered or "blockers=none" in lowered:
+        blockers_state = "none"
+    elif "blockers remain" in lowered or "delivery blockers remain" in lowered:
+        blockers_state = "nonempty"
+
+    return coverage_mode, covered_tasks, exception_tasks, blockers_state
+
+
+def _validate_project_audit_results_consistency(content: str, errors: list[str]) -> None:
+    results_body = _extract_section_body(content, "Project-Level Verification Results")
+    gate_status = _extract_project_audit_gate_status(content)
+    coverage_line = _extract_coverage_line(content)
+    _coverage_mode, _covered_tasks, _exception_tasks, blockers_state = _parse_project_task_coverage(coverage_line)
+
+    if gate_status == "pass":
+        for label in ("项目级统一代码漏洞检测", "项目级统一代码质量总检"):
+            for raw_line in results_body.splitlines():
+                if label not in raw_line:
+                    continue
+                line_status = _extract_backticked_status_from_text(raw_line)
+                if line_status == "fail":
+                    errors.append(
+                        f"project-audit.md 的 `{label}` 结果为 fail，但 `project_audit_gate_status` 仍是 `pass`"
+                    )
+                    break
+        if blockers_state == "nonempty":
+            errors.append(
+                "project-audit.md 的 `project-task-coverage` 仍声明存在 blockers，但 `project_audit_gate_status` 仍是 `pass`"
+            )
+
+
+def _validate_delivery_results_consistency(task_dir: Path, errors: list[str]) -> None:
+    acceptance_path = task_dir / "delivery" / "acceptance.md"
+    if not acceptance_path.is_file():
+        return
+    content = acceptance_path.read_text(encoding="utf-8")
+    gate_status = _extract_delivery_gate_status(content)
+    if gate_status != "pass":
+        return
+
+    current_status_body = _extract_section_body(content, "当前交付状态")
+    acceptance_gate_body = _extract_section_body(content, "Acceptance Gate")
+    combined = "\n".join(part for part in (current_status_body, acceptance_gate_body) if part)
+    for raw_line in combined.splitlines():
+        line_status = _extract_backticked_status_from_text(raw_line)
+        if line_status == "fail":
+            errors.append(
+                "delivery/acceptance.md 的 Acceptance Gate / 当前交付状态包含 fail，但 `delivery_gate_status` 仍是 `pass`"
+            )
+            break
 
 
 def _has_action_decision_marker(content: str) -> bool:
@@ -256,6 +410,8 @@ def _task_row_is_code_related(task_type: str, project_domain: str, note: str = "
         return False
     if normalized_type == "implementation":
         return True
+    if normalized_type in {"frontend", "backend", "feature", "bugfix", "fix", "refactor"}:
+        return True
 
     code_markers = (
         "代码相关",
@@ -336,6 +492,12 @@ def _validate_project_audit_evidence(content: str, errors: list[str]) -> None:
             "project-audit.md 的 Project-Level Verification Results 缺少真实验证结论（pass / fail / not run）"
         )
 
+    coverage_line = _extract_coverage_line(content)
+    if coverage_line is None:
+        errors.append(
+            "project-audit.md 的 Project-Level Verification Matrix 缺少 `project-task-coverage` 行"
+        )
+
 
 def _validate_project_audit_task_plan_completion(task_dir: Path, errors: list[str]) -> None:
     repo_root = _repo_root_from_task_dir(task_dir)
@@ -347,11 +509,27 @@ def _validate_project_audit_task_plan_completion(task_dir: Path, errors: list[st
         )
         return
 
-    task_rows = [
-        task_path
+    code_related_rows = [
+        (task_path, task_type, project_domain, note)
         for task_path, task_type, project_domain, note in _code_related_task_rows_from_plan(plan_path)
         if _task_row_is_code_related(task_type, project_domain, note)
     ]
+    task_rows = [task_path for task_path, _task_type, _project_domain, _note in code_related_rows]
+    expected_tasks = {Path(task_path).name for task_path in task_rows if Path(task_path).name != task_dir.name}
+
+    coverage_line = _extract_coverage_line((task_dir / "project-audit.md").read_text(encoding="utf-8"))
+    coverage_mode, covered_tasks, exception_tasks, _blockers_state = _parse_project_task_coverage(coverage_line)
+    effective_covered = expected_tasks - exception_tasks
+    if coverage_mode == "listed":
+        if covered_tasks != effective_covered:
+            errors.append(
+                "project-audit.md 的 `project-task-coverage` 与 task_plan.md 中应覆盖的代码相关任务集合不一致"
+            )
+    elif coverage_mode == "all":
+        if exception_tasks and not exception_tasks.issubset(expected_tasks):
+            errors.append(
+                "project-audit.md 的 `project-task-coverage` 例外项包含 task_plan.md 中不存在的任务"
+            )
 
     for task_path in task_rows:
         task_name = Path(task_path).name
@@ -464,7 +642,22 @@ def _validate_project_audit_delivery_linkage(
     *,
     check_task_dir: Path | None = None,
 ) -> None:
-    validate_check_gate(check_task_dir or task_dir, errors, for_delivery=True, downstream_stage="delivery")
+    task_level_check_task_raw = extract_backticked_field(content, "task_level_check_task")
+    explicit_check_dir = _resolve_task_level_check_dir_from_field(
+        task_dir,
+        task_level_check_task_raw,
+        fallback_dir=check_task_dir or task_dir,
+    )
+    if task_level_check_task_raw is None:
+        errors.append(
+            "project-audit.md 缺少 `task_level_check_task` 字段；必须显式绑定当前任务级 check 证据所属 task"
+        )
+    elif explicit_check_dir is None or not explicit_check_dir.is_dir():
+        errors.append(
+            "project-audit.md 的 `task_level_check_task` 无法解析到合法 task 目录"
+        )
+    else:
+        validate_check_gate(explicit_check_dir, errors, for_delivery=True, downstream_stage="delivery")
 
     code_change_raw = extract_backticked_field(content, "project_audit_code_changes")
     code_changes = normalize_yes_no_field(code_change_raw)
@@ -771,7 +964,8 @@ def _validate_delivery_doc_contract(task_dir: Path, errors: list[str]) -> None:
 
 
 def validate_plan_gate(task_dir: Path, errors: list[str]) -> None:
-    checklist_path = task_dir / TASK_CREATION_CHECKLIST_FILE
+    gate_owner_dir = _resolve_plan_gate_owner_dir(task_dir)
+    checklist_path = gate_owner_dir / TASK_CREATION_CHECKLIST_FILE
     if checklist_path.is_file():
         content = checklist_path.read_text(encoding="utf-8")
         if "`task_creation_confirmed`" in content:
@@ -780,7 +974,7 @@ def validate_plan_gate(task_dir: Path, errors: list[str]) -> None:
                     "task_creation_checklist.md 存在但 task_creation_confirmed 未确认为 yes；"
                     "不得进入执行阶段"
                 )
-        plan_path = task_dir / TASK_PLAN_FILE
+        plan_path = gate_owner_dir / TASK_PLAN_FILE
         if not plan_path.is_file():
             errors.append(
                 "task_creation_checklist.md 存在但缺少 task_plan.md；"
@@ -788,19 +982,19 @@ def validate_plan_gate(task_dir: Path, errors: list[str]) -> None:
             )
     run_gate_validator(
         "plan-validate.py",
-        [str(task_dir)],
+        [str(gate_owner_dir)],
         errors,
         label="plan-validate.py 结构验证",
     )
     run_gate_validator(
         "delivery-control-validate.py",
-        ["--phase", "plan", "--task-dir", str(task_dir)],
+        ["--phase", "plan", "--task-dir", str(gate_owner_dir)],
         errors,
         label="delivery-control-validate.py plan 校验",
     )
     run_gate_validator(
         "ownership-proof-validate.py",
-        ["--phase", "plan", "--task-dir", str(task_dir)],
+        ["--phase", "plan", "--task-dir", str(gate_owner_dir)],
         errors,
         label="ownership-proof-validate.py plan 校验",
     )
@@ -937,6 +1131,15 @@ def validate_check_gate(
             f"check.md 的 `check_gate_status`={gate_status!r}；"
             "当前任务级 check 尚未闭环，不得进入后续阶段"
         )
+    elif gate_status == "pass":
+        verification_body = _extract_section_body(content, "Verification Results")
+        for raw_line in verification_body.splitlines():
+            line_status = _extract_backticked_status_from_text(raw_line)
+            if line_status == "fail":
+                errors.append(
+                    "check.md 的 Verification Results 包含 fail，但 `check_gate_status` 仍是 `pass`"
+                )
+                break
 
     validate_check_review_gate_decision(content, errors, for_delivery=for_delivery)
 
@@ -1046,7 +1249,20 @@ def validate_project_audit_gate(
                 "project-audit.md 缺少 `project_audit_gate_status`；"
                 "必须明确当前项目级审查是否允许进入后续阶段"
             )
-    elif (require_delivery_linkage or require_exit_gate_status) and _is_blocking_status(gate_status, allow_not_run=True):
+    elif (require_delivery_linkage or require_exit_gate_status) and gate_status == "not_run":
+        if require_delivery_linkage:
+            errors.append(
+                "project-audit.md 的 `project_audit_gate_status`=`not_run`；"
+                "该值仅作为旧记录兼容输入保留，当前会阻断 delivery。"
+                "请完成本轮 project-audit 并将其更新为 `pass` 或 `fail`。"
+            )
+        else:
+            errors.append(
+                "project-audit.md 的 `project_audit_gate_status`=`not_run`；"
+                "该值仅作为旧记录兼容输入保留，当前会阻断后续阶段。"
+                "请完成本轮 project-audit 并将其更新为 `pass` 或 `fail`。"
+            )
+    elif (require_delivery_linkage or require_exit_gate_status) and _is_blocking_status(gate_status, allow_not_run=False):
         if require_delivery_linkage:
             errors.append(
                 f"project-audit.md 的 `project_audit_gate_status`={gate_status!r}；"
@@ -1059,6 +1275,7 @@ def validate_project_audit_gate(
             )
     if mode == "formal":
         _validate_project_audit_task_plan_completion(task_dir, errors)
+    _validate_project_audit_results_consistency(content, errors)
     if require_delivery_linkage:
         _validate_project_audit_delivery_linkage(
             task_dir,
@@ -1159,6 +1376,7 @@ def validate_delivery_gate(task_dir: Path, errors: list[str], repo_root: Path | 
             )
     elif not missing:
         errors.append("delivery/acceptance.md 缺失，无法判断 `delivery_gate_status`")
+    _validate_delivery_results_consistency(task_dir, errors)
     if repo_root is not None:
         _validate_required_formal_project_audit_for_delivery(
             task_dir,
