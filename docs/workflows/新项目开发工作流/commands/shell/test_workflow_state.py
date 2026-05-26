@@ -4271,6 +4271,108 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertIn("warnings", data)
         self.assertIn("trellis-brainstorm", "".join(data["warnings"]))
 
+    def test_cmd_route_does_not_warn_when_codex_config_comments_mention_enabled_true_but_effective_value_is_false(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "scripts" / "common").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            json.dumps(
+                {
+                    "profile": "outsourcing",
+                    "cli_types": ["codex"],
+                    "critical_runtime_patches": [
+                        "inject-workflow-state",
+                        "session-start-strong-gate",
+                        "task-start-strong-gate",
+                        "task-create-preserve-active",
+                        "task-status-view-strong-gate",
+                        "workflow-phase-strong-gate",
+                    ],
+                    "patched_codex_skills": [
+                        "trellis-continue",
+                        "trellis-finish-work",
+                        "trellis-start",
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "library-lock.yaml").write_text(
+            "packs:\n  - pack.requirements-discovery-foundation\n",
+            encoding="utf-8",
+        )
+        (root / ".codex").mkdir(parents=True, exist_ok=True)
+        (root / ".codex" / "config.toml").write_text(
+            "# `enabled = true` is required inside the table — historical baseline comment only.\n"
+            "# [workflow-embed-patch:codex-main-session-only]\n"
+            "[features.multi_agent_v2]\n"
+            "enabled = false\n"
+            "max_concurrent_threads_per_session = 6\n",
+            encoding="utf-8",
+        )
+        (root / ".codex" / "hooks").mkdir(parents=True, exist_ok=True)
+        (root / ".codex" / "hooks" / "inject-workflow-state.py").write_text(
+            "# [workflow-embed-patch:prefer-workflow-state-json]\n",
+            encoding="utf-8",
+        )
+        (root / ".codex" / "hooks" / "session-start.py").write_text(
+            "# strong-gate-session-start-patch-applied\n# [workflow-embed-patch:session-start-route-first]\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "task.py").write_text(
+            self.STRONG_GATE_TASK_PY,
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
+            self.STRONG_GATE_TASK_STORE,
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "tasks.py").write_text(
+            self.STRONG_GATE_TASKS,
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_queue.py").write_text(
+            self.STRONG_GATE_TASK_QUEUE,
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
+            self.STRONG_GATE_WORKFLOW_PHASE,
+            encoding="utf-8",
+        )
+        skills_root = root / ".agents" / "skills"
+        (skills_root / "trellis-continue").mkdir(parents=True, exist_ok=True)
+        (skills_root / "trellis-continue" / "SKILL.md").write_text(
+            "## Workflow Phase Router Patch `[AI]`\n",
+            encoding="utf-8",
+        )
+        (skills_root / "trellis-finish-work").mkdir(parents=True, exist_ok=True)
+        (skills_root / "trellis-finish-work" / "SKILL.md").write_text(
+            "<!-- finish-work-projectization-patch -->\n",
+            encoding="utf-8",
+        )
+        (skills_root / "trellis-start").mkdir(parents=True, exist_ok=True)
+        (skills_root / "trellis-start" / "SKILL.md").write_text(
+            "## Workflow Phase Router Patch `[AI]`\n"
+            "workflow router\n"
+            "workflow-state.py route\n"
+            "Do not use `status=planning` / `status=in_progress`\n"
+            "stay in the current phase-router entry\n"
+            "Do not assume a public `implementation` skill exists.\n"
+            "| New feature / unclear requirements | `brainstorm` |\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "entry_choice_required")
+        self.assertNotIn("codex config 漂移", "".join(data.get("warnings", [])))
+
     def test_cmd_route_blocks_design_reentry_when_ownership_policy_is_invalid(self) -> None:
         root, task_dir = self.make_fixture()
         invalid_assessment = self.VALID_INTERNAL_ASSESSMENT.replace(
@@ -7807,6 +7909,77 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
         self.assertIn("Verification Results 包含 fail", blocked.stdout)
+
+    def test_check_to_delivery_blocks_when_bilingual_verification_sections_conflict(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_delivery_artifacts(task_dir, valid_contract=True)
+        self.write_finish_work_checklist(task_dir)
+        (task_dir / "check.md").write_text(
+            """# Check Report
+
+## Changed Scope
+- src/example.ts
+
+## Applied Specs
+- .trellis/spec/scripts/python-conventions.md
+
+## Verification Results
+- lint: pass
+- test: pass
+
+## 验证结果
+- lint: pass
+- test: fail
+
+## Deviations
+- none
+
+## Uncovered Risks
+- none
+
+## Review-Gate Decision
+- `review_gate_decision`: `skip`
+- `review_gate_reason`: `验证已足够`
+- `check_gate_status`: `pass`
+- `auth_or_sensitive`: `no`
+- `data_migration_or_schema_change`: `no`
+- `public_api_or_cross_layer_contract_or_external_integration`: `no`
+- `payment_queue_cache_concurrency`: `no`
+- `shared_core_with_blast_radius`: `no`
+- `explicit_user_review_gate_request`: `no`
+
+## Suggested Next Step
+- /trellis:delivery
+""",
+            encoding="utf-8",
+        )
+        self.run_script("init", str(task_dir), "--stage", "check")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "review-gate,implementation,delivery",
+        )
+
+        blocked = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "delivery",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "check",
+        )
+
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("Verification Results / 验证结果", blocked.stdout)
+        self.assertIn("内容不一致", blocked.stdout)
 
     def test_check_to_delivery_blocks_without_check_gate_status(self) -> None:
         root, task_dir = self.make_fixture()

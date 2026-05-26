@@ -98,6 +98,7 @@ PATCHED_CODEX_SKILL_REQUIREMENTS: dict[str, dict[str, tuple[str, ...]]] = {
             "Do not use `status=planning` / `status=in_progress`",
             "stay in the current phase-router entry",
             "Do not assume a public `implementation` skill exists.",
+            "| New feature / unclear requirements | `brainstorm` |",
         ),
         "must_not_contain": (
             "routes to brainstorm, direct edit, or task workflow",
@@ -106,6 +107,7 @@ PATCHED_CODEX_SKILL_REQUIREMENTS: dict[str, dict[str, tuple[str, ...]]] = {
             "implementation done, not yet checked",
             "check passed",
             "Load the Specific Step",
+            "| New feature / unclear requirements | `trellis-brainstorm` |",
         ),
     },
     "trellis-brainstorm": {
@@ -548,6 +550,79 @@ def _detect_distributed_command_drift(repo_root: Path, record: dict[str, Any]) -
     return problems
 
 
+def _workflow_doc_contract_advisories(repo_root: Path) -> list[str]:
+    workflow_md = repo_root / ".trellis" / "workflow.md"
+    if not workflow_md.is_file():
+        return []
+    content = workflow_md.read_text(encoding="utf-8")
+    issues: list[str] = []
+    if "workflow-state.py init <leaf-dir> --stage plan" in content:
+        issues.append(".trellis/workflow.md 仍使用 `init <leaf-dir> --stage plan` 作为 leaf 执行态补建指引")
+    if "workflow-state.py init <leaf-dir> --stage project-audit" in content:
+        issues.append(".trellis/workflow.md 仍使用 `init <leaf-dir> --stage project-audit` 作为任务级 owner handoff 指引")
+    return issues
+
+
+def _distributed_command_contract_advisories(repo_root: Path, record: dict[str, Any]) -> list[str]:
+    cli_types = _install_record_cli_types(record)
+    problems: list[str] = []
+    delivery_paths = _distributed_command_path_variants(repo_root, cli_types, "delivery")
+    for path in delivery_paths:
+        if not path.is_file():
+            continue
+        content = path.read_text(encoding="utf-8")
+        if "| 全部通过，且当前活动任务也准备关闭 | `/finish-work` |" in content:
+            problems.append(f"{path.relative_to(repo_root)} 默认 finish-work 入口仍写成 `/finish-work`")
+    plan_paths = _distributed_command_path_variants(repo_root, cli_types, "plan")
+    for path in plan_paths:
+        if not path.is_file():
+            continue
+        content = path.read_text(encoding="utf-8")
+        if "workflow-state.py init <leaf-task-dir> --stage plan" in content:
+            problems.append(f"{path.relative_to(repo_root)} 仍要求 `init --stage plan` 作为 leaf 执行态补建")
+    return problems
+
+
+def _shared_script_contract_advisories(repo_root: Path) -> list[str]:
+    plan_validate = repo_root / ".trellis" / "scripts" / "workflow" / "plan-validate.py"
+    if not plan_validate.is_file():
+        return []
+    content = plan_validate.read_text(encoding="utf-8")
+    if "缺少唯一的 project-audit task 行" in content:
+        return []
+    return [".trellis/scripts/workflow/plan-validate.py 未提前拦截“声明了 PROJECT-AUDIT 但缺少结构化 project-audit task 行”"]
+
+
+def _extract_toml_table_body(content: str, heading: str) -> str | None:
+    marker = f"{heading}\n"
+    start = content.find(marker)
+    if start == -1:
+        return None
+    body_start = start + len(marker)
+    next_table = content.find("\n[", body_start)
+    if next_table == -1:
+        return content[body_start:]
+    return content[body_start:next_table]
+
+
+def _codex_config_advisories(repo_root: Path) -> list[str]:
+    config_path = repo_root / ".codex" / "config.toml"
+    if not config_path.is_file():
+        return []
+    content = config_path.read_text(encoding="utf-8")
+    body = _extract_toml_table_body(content, "[features.multi_agent_v2]")
+    if body is None:
+        return []
+    effective_lines = [
+        line.strip()
+        for line in body.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    if any(line == "enabled = true" for line in effective_lines):
+        return [".codex/config.toml 仍启用 multi_agent_v2，未落 main-session-only 配置补丁"]
+    return []
+
+
 def collect_embed_advisories(repo_root: Path) -> list[str]:
     """Collect non-fatal embed drift warnings.
 
@@ -570,6 +645,22 @@ def collect_embed_advisories(repo_root: Path) -> list[str]:
     distributed_drift = _detect_distributed_command_drift(repo_root, record)
     if distributed_drift:
         advisories.append("distributed command 内容漂移: " + "; ".join(distributed_drift))
+
+    workflow_contract = _workflow_doc_contract_advisories(repo_root)
+    if workflow_contract:
+        advisories.append("workflow contract 漂移: " + "; ".join(workflow_contract))
+
+    distributed_contract = _distributed_command_contract_advisories(repo_root, record)
+    if distributed_contract:
+        advisories.append("distributed command 合同漂移: " + "; ".join(distributed_contract))
+
+    script_contract = _shared_script_contract_advisories(repo_root)
+    if script_contract:
+        advisories.append("shared script 合同漂移: " + "; ".join(script_contract))
+
+    codex_config = _codex_config_advisories(repo_root)
+    if codex_config:
+        advisories.append("codex config 漂移: " + "; ".join(codex_config))
 
     return advisories
 

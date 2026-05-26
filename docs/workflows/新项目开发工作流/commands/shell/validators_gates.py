@@ -72,9 +72,39 @@ def _extract_section_body(content: str, heading: str) -> str:
     return match.group("body").strip()
 
 
-def _extract_first_section_body(content: str, headings: tuple[str, ...]) -> str:
+def _has_section_heading(content: str, heading: str) -> bool:
+    return bool(re.search(rf"^\s*##+\s*{re.escape(heading)}\s*$", content, re.MULTILINE))
+
+
+def _normalize_section_body_for_comparison(body: str) -> str:
+    normalized_lines = [line.strip() for line in body.splitlines() if line.strip()]
+    return "\n".join(normalized_lines)
+
+
+def _validate_equivalent_section_conflict(
+    content: str,
+    headings: tuple[str, ...],
+    errors: list[str],
+    *,
+    document_name: str,
+) -> str:
+    present_bodies: list[tuple[str, str]] = []
     for heading in headings:
-        body = _extract_section_body(content, heading)
+        if _has_section_heading(content, heading):
+            present_bodies.append((heading, _extract_section_body(content, heading)))
+
+    if len(present_bodies) > 1:
+        normalized = {
+            heading: _normalize_section_body_for_comparison(body)
+            for heading, body in present_bodies
+        }
+        if len(set(normalized.values())) > 1:
+            errors.append(
+                f"{document_name} 同时存在 {' / '.join(headings)} 章节，但内容不一致；"
+                "请保留单一事实源或同步两者"
+            )
+
+    for _heading, body in present_bodies:
         if body:
             return body
     return ""
@@ -1188,7 +1218,12 @@ def validate_check_gate(
             "当前任务级 check 尚未闭环，不得进入后续阶段"
         )
     elif gate_status == "pass":
-        verification_body = _extract_first_section_body(content, ("Verification Results", "验证结果"))
+        verification_body = _validate_equivalent_section_conflict(
+            content,
+            ("Verification Results", "验证结果"),
+            errors,
+            document_name="check.md",
+        )
         for raw_line in verification_body.splitlines():
             line_status = _extract_backticked_status_from_text(raw_line)
             if line_status == "fail":

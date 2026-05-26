@@ -339,6 +339,10 @@ def validate_project_audit_dependency(section_lines: list[str]) -> tuple[bool, s
     return False, "依赖关系未写明 PROJECT-AUDIT 不得早于 `性能回归与优化任务` 的约束"
 
 
+def task_plan_declares_project_audit(content: str) -> bool:
+    return "PROJECT-AUDIT" in content or "project-audit" in content.lower()
+
+
 def main() -> int:
     if any(arg in {"-h", "--help"} for arg in sys.argv[1:]):
         print("用法: python3 plan-validate.py [task_dir]")
@@ -554,6 +558,14 @@ def main() -> int:
         project_audit_count <= 1,
         "project-audit 任务数量合法（0 或 1）",
         "Trellis Task 清单中的 project-audit 任务超过 1 个",
+    )
+
+    project_audit_declared = task_plan_declares_project_audit(content)
+    checks += 1
+    passed += print_result(
+        (not project_audit_declared) or project_audit_count == 1,
+        "PROJECT-AUDIT 声明与结构化 task 行保持一致",
+        "任务图已声明 `PROJECT-AUDIT` / project-audit，但 Trellis Task 清单缺少唯一的 project-audit task 行",
     )
 
     dependency_section = "\n".join(find_section_lines(lines, "依赖关系"))

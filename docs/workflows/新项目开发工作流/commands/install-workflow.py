@@ -215,6 +215,11 @@ _CODEX_START_NEW_INTRO = (
     "authority for first-entry, recovery, or stage-entry decisions in an "
     "installed target project."
 )
+_CODEX_START_QUICKREF_OLD = "| New feature / unclear requirements | `trellis-brainstorm` |"
+_CODEX_START_QUICKREF_NEW = "| New feature / unclear requirements | `brainstorm` |"
+_CODEX_MAIN_SESSION_ONLY_MARKER = "# [workflow-embed-patch:codex-main-session-only]"
+_CODEX_MAIN_SESSION_ONLY_TABLE = "[features.multi_agent_v2]"
+_CODEX_MAIN_SESSION_ONLY_LINE = "enabled = false"
 _WORKFLOW_PATCH_MARKER = "<!-- workflow-projectization-patch -->"
 _WORKFLOW_START_HEADING = "## Development Process"
 _WORKFLOW_END_HEADING = "## File Descriptions"
@@ -1094,15 +1099,16 @@ def build_codex_phase_router_skill_content(content: str, patch_text: str) -> str
     runtime_idx = patch_text.find(_CODEX_START_SKILL_MARKER)
     if runtime_idx != -1:
         patch_text = patch_text[runtime_idx:]
-    if _CODEX_START_SKILL_MARKER in content:
-        return content
     if "name: trellis-start\n" in content:
         content = re.sub(r"(?m)^description: .+$", _CODEX_START_DESCRIPTION, content, count=1)
         content = content.replace(_CODEX_START_OLD_INTRO, _CODEX_START_NEW_INTRO)
+        content = content.replace(_CODEX_START_QUICKREF_OLD, _CODEX_START_QUICKREF_NEW)
     if "name: trellis-continue\n" in content:
         content = re.sub(r"(?m)^description: .+$", _CODEX_CONTINUE_DESCRIPTION, content, count=1)
         content = content.replace(_CODEX_CONTINUE_OLD_INTRO, _CODEX_CONTINUE_NEW_INTRO)
         content = content.replace("Original baseline Codex continue skill.", _CODEX_CONTINUE_NEW_INTRO)
+    if _CODEX_START_SKILL_MARKER in content:
+        return content
 
     heading_pairs = [
         ("## Step 1: Load Current Context", "## Step 4: Load the Specific Step"),
@@ -1145,22 +1151,82 @@ def inject_codex_phase_router_skill_patch(
         return False
 
     content = target_path.read_text(encoding="utf-8")
-    if _CODEX_START_SKILL_MARKER in content:
-        ok(f"[{cli_label}] {target_label} Phase Router 补丁已存在")
-        return False
-
     patch = src / "start-skill-patch-phase-router.md"
     if not patch.exists():
         warn(f"[{cli_label}] start-skill-patch-phase-router.md 不存在")
         return False
 
     new_content = build_codex_phase_router_skill_content(content, prepare_command_content(patch))
+    if new_content == content:
+        ok(f"[{cli_label}] {target_label} Phase Router 补丁已存在")
+        return False
     if not dry_run:
         target_path.write_text(new_content, encoding="utf-8")
     if dry_run:
         info(f"[{cli_label}] 将注入 {target_label} Phase Router 补丁")
     else:
         ok(f"[{cli_label}] {target_label} Phase Router 补丁已注入")
+    return True
+
+
+def patch_codex_config_main_session_only(root: Path, *, dry_run: bool) -> bool:
+    """Disable Codex multi-agent orchestration when project config exists.
+
+    The embedded workflow contract is main-session-only. When `.codex/config.toml`
+    exists, apply a narrow managed patch to keep `features.multi_agent_v2`
+    disabled without rewriting unrelated project settings.
+    """
+
+    config_path = root / ".codex" / "config.toml"
+    if not config_path.exists():
+        warn("[Codex] config.toml 不存在，无法落 main-session-only 配置补丁")
+        return False
+
+    content = config_path.read_text(encoding="utf-8")
+    updated = content
+
+    table_pattern = re.compile(
+        r"(?ms)^(?P<prefix>[ \t]*)(?P<marker># \[workflow-embed-patch:codex-main-session-only\]\n)?"
+        r"(?P<table>\[features\.multi_agent_v2\]\n)(?P<body>.*?)(?=^\[|\Z)"
+    )
+    match = table_pattern.search(updated)
+    if match:
+        prefix = match.group("prefix")
+        body = match.group("body")
+        normalized_body = body
+        if re.search(r"(?m)^enabled\s*=\s*true\b", normalized_body):
+            normalized_body = re.sub(r"(?m)^enabled\s*=\s*true\b", _CODEX_MAIN_SESSION_ONLY_LINE, normalized_body, count=1)
+        elif not re.search(r"(?m)^enabled\s*=\s*false\b", normalized_body):
+            normalized_body = _CODEX_MAIN_SESSION_ONLY_LINE + "\n" + normalized_body.lstrip("\n")
+        replacement = (
+            f"{prefix}{_CODEX_MAIN_SESSION_ONLY_MARKER}\n"
+            f"{prefix}{_CODEX_MAIN_SESSION_ONLY_TABLE}\n"
+            f"{normalized_body}"
+        )
+        updated = updated[:match.start()] + replacement + updated[match.end():]
+    else:
+        suffix = "" if updated.endswith("\n") else "\n"
+        updated = (
+            updated
+            + suffix
+            + "\n"
+            + _CODEX_MAIN_SESSION_ONLY_MARKER
+            + "\n"
+            + _CODEX_MAIN_SESSION_ONLY_TABLE
+            + "\n"
+            + _CODEX_MAIN_SESSION_ONLY_LINE
+            + "\n"
+        )
+
+    if updated == content:
+        ok("[Codex] config.toml main-session-only 配置补丁已存在")
+        return False
+
+    if not dry_run:
+        config_path.write_text(updated, encoding="utf-8")
+        ok("[Codex] config.toml 已补丁为 main-session-only")
+    else:
+        info("[Codex] 将补丁 .codex/config.toml 为 main-session-only")
     return True
 
 
@@ -2884,6 +2950,9 @@ def deploy_codex(src: Path, root: Path, dry_run: bool, *, profile: str = DEFAULT
         result["manual_checks"] += 1
     else:
         warn("[Codex] hooks.json 不存在，Codex hook 注入未配置")
+
+    if patch_codex_config_main_session_only(root, dry_run=dry_run):
+        result["patches"] += 1
 
     inject_workflow_state = root / ".codex" / "hooks" / "inject-workflow-state.py"
     if inject_workflow_state.exists():

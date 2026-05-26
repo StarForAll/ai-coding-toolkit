@@ -101,6 +101,7 @@ patch_inject_workflow_state_hook = _INSTALL_WORKFLOW.patch_inject_workflow_state
 patch_claude_inject_subagent_context = _INSTALL_WORKFLOW.patch_claude_inject_subagent_context
 patch_opencode_session_utils = _INSTALL_WORKFLOW.patch_opencode_session_utils
 patch_opencode_inject_subagent_context = _INSTALL_WORKFLOW.patch_opencode_inject_subagent_context
+patch_codex_config_main_session_only = _INSTALL_WORKFLOW.patch_codex_config_main_session_only
 patch_task_status_views = _INSTALL_WORKFLOW.patch_task_status_views
 patch_session_start_no_task_guidance = _INSTALL_WORKFLOW.patch_session_start_no_task_guidance
 _apply_patch_session_start = _INSTALL_WORKFLOW._apply_patch_session_start
@@ -118,6 +119,11 @@ _STALE_CONTRACT_PATTERN = _INSTALL_WORKFLOW._STALE_CONTRACT_PATTERN
 _TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER
 _TASK_STATUS_VIEW_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_STATUS_VIEW_PATCH_MARKER
 _OPENCODE_SESSION_UTILS_PATCH_MARKER = _INSTALL_WORKFLOW._OPENCODE_SESSION_UTILS_PATCH_MARKER
+_CODEX_START_QUICKREF_OLD = _INSTALL_WORKFLOW._CODEX_START_QUICKREF_OLD
+_CODEX_START_QUICKREF_NEW = _INSTALL_WORKFLOW._CODEX_START_QUICKREF_NEW
+_CODEX_MAIN_SESSION_ONLY_MARKER = _INSTALL_WORKFLOW._CODEX_MAIN_SESSION_ONLY_MARKER
+_CODEX_MAIN_SESSION_ONLY_TABLE = _INSTALL_WORKFLOW._CODEX_MAIN_SESSION_ONLY_TABLE
+_CODEX_MAIN_SESSION_ONLY_LINE = _INSTALL_WORKFLOW._CODEX_MAIN_SESSION_ONLY_LINE
 _OPENCODE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER = _INSTALL_WORKFLOW._OPENCODE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER
 _WORKFLOW_PHASE_PATCH_MARKER = _INSTALL_WORKFLOW._WORKFLOW_PHASE_PATCH_MARKER
 # Reuse install-workflow markers for idempotency checks
@@ -296,6 +302,58 @@ def has_codex_start_skill_patch(start_skill_path: Path) -> bool:
     return _CODEX_START_SKILL_MARKER in start_skill_path.read_text(encoding="utf-8")
 
 
+def _distributed_command_contract_issues(command_name: str, content: str) -> list[str]:
+    issues: list[str] = []
+    if command_name == "plan" and "workflow-state.py init <leaf-task-dir> --stage plan" in content:
+        issues.append("leaf task 缺少 workflow-state.json 时仍要求 `init --stage plan`；应改为 `repair` + 显式执行态重建")
+    if command_name == "delivery" and "| 全部通过，且当前活动任务也准备关闭 | `/finish-work` |" in content:
+        issues.append("默认 finish-work 入口仍写成 `/finish-work`；Claude/OpenCode 应使用 `/trellis:finish-work`")
+    return issues
+
+
+def _shared_script_contract_issues(script_name: str, content: str) -> list[str]:
+    issues: list[str] = []
+    if script_name == "plan-validate.py" and "缺少唯一的 project-audit task 行" not in content:
+        issues.append("未提前拦截“声明了 PROJECT-AUDIT 但缺少结构化 project-audit task 行”")
+    return issues
+
+
+def _codex_start_skill_contract_issues(content: str) -> list[str]:
+    issues: list[str] = []
+    if _CODEX_START_QUICKREF_OLD in content:
+        issues.append("quick reference 仍把新功能/需求不清路由到 `trellis-brainstorm`")
+    if _CODEX_START_QUICKREF_NEW not in content:
+        issues.append("quick reference 缺少 `brainstorm` 正式阶段入口")
+    return issues
+
+
+def _extract_toml_table_body(content: str, heading: str) -> str | None:
+    marker = f"{heading}\n"
+    start = content.find(marker)
+    if start == -1:
+        return None
+    body_start = start + len(marker)
+    next_table = content.find("\n[", body_start)
+    if next_table == -1:
+        return content[body_start:]
+    return content[body_start:next_table]
+
+
+def _codex_config_contract_issues(content: str) -> list[str]:
+    issues: list[str] = []
+    body = _extract_toml_table_body(content, _CODEX_MAIN_SESSION_ONLY_TABLE)
+    if body is None:
+        issues.append(f"缺少 {_CODEX_MAIN_SESSION_ONLY_TABLE} 配置表，无法结构性禁用 Codex multi-agent")
+        return issues
+    if _CODEX_MAIN_SESSION_ONLY_MARKER not in content:
+        issues.append("缺少 main-session-only 配置补丁标记")
+    if _CODEX_MAIN_SESSION_ONLY_LINE not in body:
+        issues.append("multi_agent_v2 未显式禁用为 `enabled = false`")
+    if "enabled = true" in body:
+        issues.append("multi_agent_v2 仍为 `enabled = true`")
+    return issues
+
+
 def has_workflow_patch(workflow_md: Path) -> bool:
     if not workflow_md.exists():
         return False
@@ -378,6 +436,12 @@ def _workflow_doc_contract_issues(content: str) -> list[str]:
 
     if "Route action: **repair_needed** — workflow state is missing, stale, or structurally invalid." in content:
         issues.append("repair_needed 状态块仍遗漏未初始化场景")
+
+    if "workflow-state.py init <leaf-dir> --stage plan" in content:
+        issues.append("仍使用 `init <leaf-dir> --stage plan` 作为 leaf 执行态补建指引；应改为 `repair ... --stage implementation --execution-authorized true --transition-from plan --apply`")
+
+    if "workflow-state.py init <leaf-dir> --stage project-audit" in content:
+        issues.append("仍使用 `init <leaf-dir> --stage project-audit` 作为任务级 owner handoff 指引")
 
     return issues
 
@@ -611,6 +675,9 @@ def detect_conflicts_claude(src: Path, dst_cmds: Path, *, profile: str = DEFAULT
         if actual != expected:
             err(f"[Claude] 命令内容漂移: /trellis:{name}")
             command_conflicts += 1
+        for issue in _distributed_command_contract_issues(name, actual):
+            err(f"[Claude] {name}.md: {issue}")
+            command_conflicts += 1
     if command_conflicts:
         conflicts += command_conflicts
     else:
@@ -665,6 +732,9 @@ def detect_conflicts_opencode(src: Path, dst_cmds: Path, *, profile: str = DEFAU
             continue
         if actual != expected:
             err(f"[OpenCode] 命令内容漂移: {name}")
+            command_conflicts += 1
+        for issue in _distributed_command_contract_issues(name, actual):
+            err(f"[OpenCode] {name}.md: {issue}")
             command_conflicts += 1
     if command_conflicts:
         conflicts += command_conflicts
@@ -907,6 +977,9 @@ def detect_conflicts_codex(
         if actual != expected:
             err(f"[Codex] shared skill 内容漂移: {name} ({shared_skills_dir.relative_to(root)})")
             skill_conflicts += 1
+        for issue in _distributed_command_contract_issues(name, actual):
+            err(f"[Codex] {name} skill ({shared_skills_dir.relative_to(root)}): {issue}")
+            skill_conflicts += 1
     if skill_conflicts:
         conflicts += skill_conflicts
     else:
@@ -959,6 +1032,16 @@ def detect_conflicts_codex(
         err(f"[Codex] {router_skill.parent.name} skill ({primary_skills_dir.relative_to(root)}): Phase Router 补丁缺失")
         conflicts += 1
 
+    optional_start_skill = primary_skills_dir / "trellis-start" / "SKILL.md"
+    if optional_start_skill.exists():
+        start_content = optional_start_skill.read_text(encoding="utf-8")
+        start_issues = _codex_start_skill_contract_issues(start_content)
+        if start_issues:
+            err("[Codex] trellis-start skill: " + "；".join(start_issues))
+            conflicts += 1
+        else:
+            ok("[Codex] trellis-start skill: quick reference 与正式阶段入口一致")
+
     # hooks 是全局的，只检查一次
     hooks_json = root / ".codex" / "hooks.json"
     if hooks_json.exists():
@@ -967,6 +1050,17 @@ def detect_conflicts_codex(
         warn("[Codex] hooks.json 缺失")
         conflicts += 1
     codex_session_start_wired = _codex_session_start_is_wired(hooks_json)
+
+    codex_config = root / ".codex" / "config.toml"
+    if codex_config.exists():
+        config_issues = _codex_config_contract_issues(codex_config.read_text(encoding="utf-8"))
+        if config_issues:
+            err("[Codex] .codex/config.toml: " + "；".join(config_issues))
+            conflicts += 1
+        else:
+            ok("[Codex] .codex/config.toml: main-session-only 配置补丁正常")
+    else:
+        warn("[Codex] .codex/config.toml 缺失，无法结构性禁用 Codex multi-agent")
 
     inject_workflow_state = root / ".codex" / "hooks" / "inject-workflow-state.py"
     if inject_workflow_state.exists():
@@ -1182,6 +1276,9 @@ def detect_shared_script_conflicts(src: Path, dst_scripts: Path, *, profile: str
             continue
         if actual != expected:
             err(f"[Shared] 辅助脚本内容漂移: {name}")
+            conflicts += 1
+        for issue in _shared_script_contract_issues(name, actual):
+            err(f"[Shared] {name}: {issue}")
             conflicts += 1
     if conflicts == 0:
         ok("[Shared] 所有辅助脚本内容一致")
@@ -1920,6 +2017,16 @@ def main() -> int:
                 ):
                     err("[Codex] finish-work 项目化补丁恢复失败")
                     return 1
+            optional_start_skill = primary_skills_dir / "trellis-start" / "SKILL.md"
+            if optional_start_skill.exists():
+                if not inject_codex_phase_router_skill_patch(
+                    src,
+                    optional_start_skill,
+                    f"{optional_start_skill.parent.name} skill ({primary_skills_dir.relative_to(root)})",
+                ) and _codex_start_skill_contract_issues(optional_start_skill.read_text(encoding="utf-8")):
+                    err("[Codex] trellis-start skill 入口文案恢复失败")
+                    return 1
+            patch_codex_config_main_session_only(root, dry_run=False)
             _migrate_legacy_agents_upgrade(src, root, "codex", "Codex")
 
     cleanup_old_workflow_backups(root)

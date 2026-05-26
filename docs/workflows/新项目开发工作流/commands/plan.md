@@ -326,13 +326,17 @@ python3 ./.trellis/scripts/task.py add-subtask "$TASK_DIR" "$CHILD_DIR"
 - Claude Code / OpenCode / Codex
 ```
 
-如果该 leaf task 将作为真正进入 `implementation` 的执行任务，还应在用户确认后先显式初始化阶段状态：
+如果该 leaf task 将作为真正进入 `implementation` 的执行任务，且当前还没有 `workflow-state.json`，不要先写一个 `in_progress` 的 `plan` 状态再硬切执行态。应在用户明确确认进入执行后，直接按当前已确认阶段重建合法状态：
 
 ```bash
-python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py init <leaf-task-dir> --stage plan
+python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py repair <leaf-task-dir> \
+  --stage implementation \
+  --execution-authorized true \
+  --transition-from plan \
+  --apply
 ```
 
-然后再进入 `plan -> implementation` 的正式切换命令。不要对一个尚未生成 `workflow-state.json` 的 leaf task 直接执行 `set --stage implementation`。
+如果想先看缺什么，再去补显式确认参数，先执行不带 `--apply` 的 `repair`。不要对一个尚未生成 `workflow-state.json` 的 leaf task 直接执行 `set --stage implementation`，也不要先 `init --stage plan` 再假装它已经到达可离开 plan 的确认点。
 
 拆分规则：
 

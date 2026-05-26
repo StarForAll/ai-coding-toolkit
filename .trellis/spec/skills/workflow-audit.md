@@ -151,6 +151,9 @@ This skill **must** fully validate the following aspects for any workflow under 
    - Do not recommend optimization when the current state is evidence-backed, intentionally scoped, and does not break behavior, closure, or maintainability
    - If the latest official docs, repo-local evidence, and actual development-use evidence all support the current state, record the item as a false alarm / non-defect rather than manufacturing a fix
    - When a candidate issue turns out to be non-defective, ignore it rather than turning it into a low-value optimization target
+   - The default threat model is **ordinary personal use / honest operator behavior**, not adversarial bypass analysis
+   - If a problem appears only after deliberate file tampering, forged state, or intentional bypass of the documented command/routing constraints, and the ordinary supported path does not trigger it, do not classify it as a workflow defect by default
+   - Escalate such cases only when the user explicitly asks for adversarial / security / bypass analysis, or when the workflow contract itself already claims resistance to that class of misuse
 
 7. **Task-level vs project-level gate distinction** - When auditing workflow closure logic:
    - Treat task-level `check` and project-level `project-audit` as separate dimensions, not as two names for the same carrier
@@ -382,6 +385,7 @@ Compare document claims against actual definition completeness:
 - 若三源冲突仍不能证明真实缺陷，则保守落到 `Evidence Gap` / `Needs Clarification`，而不是直接生成 confirmed issue；若冲突更像上游 CLI capability drift，则提示转到 `workflow-capability-audit`
 - 对“看起来可以更统一/更干净”的点，先判断是否真是缺陷；不是缺陷的就忽略，不得做负面优化
 - 明确的人类/维护者意图可以作为解释差异为何存在的上下文，但意图本身不会自动把 non-defect 变成 defect；除非用户明确要求设计变更，否则不要把这类差异升级成 confirmed issue 或默认修复方向
+- 默认只按**正常使用 / 诚实使用路径**判断真实缺陷，不把刻意篡改文件、伪造状态、故意绕过命令约束后才出现的问题，直接升级成 confirmed issue
 - 隐藏目录托管边界：安装后产物是否与 trellis 基线 + workflow 声明的托管范围一致
 - `generated target project` 证据必须区分 clean `trellis init` baseline 与 workflow-installed state；不得把 baseline 自带产物直接归因给 workflow
 - 不得把 repo-local 的其他平台隐藏目录直接当作当前 workflow 缺失适配的证据；除非 `workflow_assets.py` 明确把它们纳入 managed surface

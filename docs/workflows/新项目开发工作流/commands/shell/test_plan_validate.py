@@ -403,6 +403,23 @@ class PlanValidateScriptTests(unittest.TestCase):
         self.assertIn("PROJECT-AUDIT", result.stdout)
         self.assertIn("性能回归与优化任务", result.stdout)
 
+    def test_declared_project_audit_without_structured_task_row_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_root:
+            root = Path(temp_root)
+            task_dir = self.create_task_fixture(root)
+            self.write_leaf_prd(root, "04-14-task-a")
+            broken = VALID_PLAN.replace(
+                "| .trellis/tasks/04-14-project-audit | project-audit | 全局 | 全部代码相关 task 完成后才允许开始 |\n",
+                "",
+            )
+            self.write_plan(task_dir, broken)
+
+            result = self.run_script(task_dir)
+
+        self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
+        self.assertIn("PROJECT-AUDIT", result.stdout)
+        self.assertIn("project-audit task 行", result.stdout)
+
     def test_project_audit_before_performance_in_graph_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp_root:
             root = Path(temp_root)

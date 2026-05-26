@@ -340,7 +340,7 @@ $TASK_DIR/
 
 | 验收结果 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
-| 全部通过，且当前活动任务也准备关闭 | `/finish-work` | 进入会话收尾，或显式触发 `Trellis 原生 /finish-work` skill | **默认推荐**。前提：如果当前轮需要收尾当前活动任务，再进入 Trellis 原生 `finish-work`；它按 Trellis 原生顺序先 archive，再通过 `add_session.py` 完成记录与元数据闭环 |
+| 全部通过，且当前活动任务也准备关闭 | `/trellis:finish-work` | 进入会话收尾，或显式触发 `trellis-finish-work` skill | **默认推荐**。前提：如果当前轮需要收尾当前活动任务，再进入 Trellis 原生 `finish-work`；它按 Trellis 原生顺序先 archive，再通过 `add_session.py` 完成记录与元数据闭环 |
 | 有 P0/P1 缺陷 | 描述排障意图，或显式触发 `trellis-break-loop` skill | 进入深度排障，或显式触发 `trellis-break-loop` skill | 深度分析 Bug 根因 |
 | 有 P2/P3 缺陷 | `/trellis:continue` | 回到实施阶段，或显式触发 `trellis-continue` skill | 回到实施阶段修复 |
 | 验收中出现冻结后新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先完成变更评估与确认；不要直接混入当前交付 |

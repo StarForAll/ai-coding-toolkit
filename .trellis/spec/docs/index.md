@@ -251,6 +251,7 @@ These rules have historically required cross-document propagation:
 - **multi-cli reviewer command pairing**: "需要调用 `multi-cli-review` 时，按当前模式生成匹配的 reviewer 命令：`lite` 默认 1 条，`full` 默认至少 2 条且只在 `--reviewer-id` 上不同；需要进入汇总修复时，同时生成匹配的 `multi-cli-review-action` 聚合命令；task-level `reviewer-id` 默认使用 `a/b/c/d` 这类字母槽位，真实 CLI 身份记录在 `source-cli`" — appears in review-gate, project-audit, 总纲, walkthrough, platform instructions, and any reviewer command pack templates
 - **workflow embed execution contract**: "只有纯净初始态目标项目才允许执行首次嵌入；只要嵌入前置条件、初始态判定、非初始态阻断、完整/有效嵌入判定、托管资产范围、`install-workflow.py` / `upgrade-compat.py --check` 行为、`workflow-embed-attempt.json` / `workflow-installed.json` 语义、或 CLI 原生入口承载方式发生变化，就必须同步评估 `工作流嵌入执行规范.md` 是否需要更新" — appears in 嵌入执行规范, 总纲, 命令映射, walkthrough, CLI 边界矩阵, 装后核对清单, platform README, installer / checker scripts, and installer regression tests
 - **command-source vs maintainer-doc boundary**: "阶段命令源文档只保留产品/runtime 语义；维护者专用说明不得混入 `commands/*.md`，而应同步落到 `装后隐藏目录与托管边界核对清单.md`、`CLI原生适配边界矩阵.md`、`目标项目兼容升级方案指导.md` 与必要的平台 README" — appears in command-doc authoring spec, maintenance docs, platform README, and any tests/assertions that verify deployed command content
+- **ordinary-use defect boundary**: "当前 workflow 的缺陷判定默认面向个人正常使用 / 诚实使用路径；只有通过刻意篡改文件、伪造状态、主动绕过命令约束等恶意方式才会触发，而正常使用链路下不会出现的问题，不按默认漏洞/缺陷口径处理" — appears in 总纲, 通俗版, 目标项目兼容升级方案指导, 结构性迁移设计, and `workflow-audit` spec
 
 ---
 

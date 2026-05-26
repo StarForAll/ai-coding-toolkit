@@ -117,7 +117,20 @@ BASELINE_START_SKILL_CONTENT = (
     "## Step 4: Decide next action\n\n"
     "```bash\n"
     "python3 ./.trellis/scripts/get_context.py --mode phase --step 2.1 --platform codex\n"
-    "```\n"
+    "```\n\n"
+    "## Skill routing (quick reference)\n\n"
+    "| User intent | Skill |\n"
+    "|---|---|\n"
+    "| New feature / unclear requirements | `trellis-brainstorm` |\n"
+)
+BASELINE_CODEX_CONFIG_CONTENT = (
+    '# Project-scoped Codex defaults for Trellis workflows.\n'
+    'project_doc_fallback_filenames = ["AGENTS.md"]\n\n'
+    "[features.multi_agent_v2]\n"
+    "enabled = true\n"
+    "max_concurrent_threads_per_session = 6\n"
+    "min_wait_timeout_ms = 480000\n"
+    "default_wait_timeout_ms = 480000\n"
 )
 BASELINE_FINISH_WORK_CONTENT = (
     "# Finish Work - Pre-Commit Checklist\n\n"
@@ -841,6 +854,10 @@ class WorkflowInstallerTests(unittest.TestCase):
             )
             (root / ".codex" / "hooks").mkdir(parents=True)
             (root / ".codex" / "agents").mkdir(parents=True)
+            (root / ".codex" / "config.toml").write_text(
+                BASELINE_CODEX_CONFIG_CONTENT,
+                encoding="utf-8",
+            )
             (root / ".codex" / "hooks.json").write_text("{}", encoding="utf-8")
             (root / ".codex" / "hooks" / "inject-workflow-state.py").write_text(
                 BASELINE_INJECT_WORKFLOW_STATE_HOOK_CONTENT,
@@ -1918,6 +1935,18 @@ class WorkflowInstallerTests(unittest.TestCase):
             BASELINE_TRELLIS_CONTINUE_SKILL_CONTENT,
         )
 
+    def test_install_patches_optional_codex_start_skill_quick_reference_to_brainstorm(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        start_skill = fixture / ".agents" / "skills" / "trellis-start" / "SKILL.md"
+        start_text = start_skill.read_text(encoding="utf-8")
+        self.assertIn("| New feature / unclear requirements | `brainstorm` |", start_text)
+        self.assertNotIn("| New feature / unclear requirements | `trellis-brainstorm` |", start_text)
+
     def test_install_deploys_check_command_with_review_gate_decision_and_delivery_default(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
@@ -1932,6 +1961,32 @@ class WorkflowInstallerTests(unittest.TestCase):
             self.assertIn("`review_gate_decision`", content)
             self.assertIn("`explicit_user_review_gate_request`", content)
             self.assertIn("| 基本合规，可直接进入交付收口 | `/trellis:delivery` |", content)
+
+    def test_install_delivery_uses_canonical_trellis_finish_work_entry(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        claude_delivery = (fixture / ".claude" / "commands" / "trellis" / "delivery.md").read_text(encoding="utf-8")
+        codex_delivery = (fixture / ".agents" / "skills" / "delivery" / "SKILL.md").read_text(encoding="utf-8")
+        for content in (claude_delivery, codex_delivery):
+            self.assertIn("| 全部通过，且当前活动任务也准备关闭 | `/trellis:finish-work` |", content)
+            self.assertNotIn("| 全部通过，且当前活动任务也准备关闭 | `/finish-work` |", content)
+
+    def test_install_disables_codex_multi_agent_config_when_present(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        config_text = (fixture / ".codex" / "config.toml").read_text(encoding="utf-8")
+        self.assertIn("[features.multi_agent_v2]", config_text)
+        self.assertIn("enabled = false", config_text)
+        self.assertIn("[workflow-embed-patch:codex-main-session-only]", config_text)
+        self.assertNotIn("enabled = true", config_text)
 
     def test_install_patches_codex_session_start_to_remove_legacy_startup_semantics(self) -> None:
         fixture = self.create_fixture(include_codex=True)
@@ -3383,7 +3438,7 @@ Triggered from `start` (Trellis command) when the user describes a development t
         self.assertFalse((fixture / ".trellis" / ATTEMPT_RECORD_NAME).exists())
         self.assertFalse((fixture / ".agents" / "skills" / "review-gate").exists())
         self.assertNotIn("workflow-nl-routing-start", (fixture / "AGENTS.md").read_text(encoding="utf-8"))
-        self.assertIn("[codex] 命令: 8/8, 补丁: 4, agents: 0, 脚本: 0, 手动基线校验: 2".lower(), result.stdout.lower())
+        self.assertIn("[codex] 命令: 8/8, 补丁: 5, agents: 0, 脚本: 0, 手动基线校验: 2".lower(), result.stdout.lower())
 
     def test_install_dry_run_does_not_migrate_legacy_agents(self) -> None:
         """--dry-run must NOT perform actual file renames on disk."""
@@ -3890,6 +3945,119 @@ Triggered from `start` (Trellis command) when the user describes a development t
 
         self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("start skill (.agents/skills): Phase Router 补丁缺失", result.stdout)
+
+    def test_upgrade_check_detects_codex_start_skill_legacy_brainstorm_quick_reference(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        start_skill = fixture / ".agents" / "skills" / "trellis-start" / "SKILL.md"
+        start_skill.write_text(
+            start_skill.read_text(encoding="utf-8").replace(
+                "| New feature / unclear requirements | `brainstorm` |",
+                "| New feature / unclear requirements | `trellis-brainstorm` |",
+            ),
+            encoding="utf-8",
+        )
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("trellis-start", result.stdout)
+        self.assertIn("trellis-brainstorm", result.stdout)
+
+    def test_upgrade_check_detects_delivery_finish_work_entry_surface_drift(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        delivery = fixture / ".claude" / "commands" / "trellis" / "delivery.md"
+        delivery.write_text(
+            delivery.read_text(encoding="utf-8").replace(
+                "| 全部通过，且当前活动任务也准备关闭 | `/trellis:finish-work` |",
+                "| 全部通过，且当前活动任务也准备关闭 | `/finish-work` |",
+            ),
+            encoding="utf-8",
+        )
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("delivery.md", result.stdout)
+        self.assertIn("/trellis:finish-work", result.stdout)
+
+    def test_upgrade_check_detects_illegal_leaf_state_init_guidance(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        workflow_doc = fixture / ".trellis" / "workflow.md"
+        workflow_doc.write_text(
+            workflow_doc.read_text(encoding="utf-8").replace(
+                "repair <task-dir> --stage implementation --execution-authorized true --transition-from <previous-stage> --apply",
+                "init <leaf-dir> --stage plan`；然后再对该 leaf task 执行 `workflow-state.py set <leaf-dir> --stage implementation",
+            ),
+            encoding="utf-8",
+        )
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn("workflow.md", result.stdout)
+        self.assertIn("repair", result.stdout)
+
+    def test_upgrade_check_detects_enabled_codex_multi_agent_config(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        config_path = fixture / ".codex" / "config.toml"
+        config_path.write_text(
+            config_path.read_text(encoding="utf-8").replace("enabled = false", "enabled = true"),
+            encoding="utf-8",
+        )
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        self.assertIn(".codex/config.toml", result.stdout)
+        self.assertIn("multi_agent_v2", result.stdout)
 
     def test_upgrade_check_detects_codex_secondary_skills_dir_parallel_drift(self) -> None:
         fixture = self.create_fixture(include_codex=True)
