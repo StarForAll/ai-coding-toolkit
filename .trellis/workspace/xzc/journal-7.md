@@ -509,3 +509,37 @@ Audited and fixed embedded workflow stage-gate behavior, task-vs-project audit h
 ### Next Steps
 
 - None - task complete
+
+
+## Session 319: 修复嵌入工作流门禁与交付控制缺陷
+
+**Date**: 2026-05-26
+**Task**: 修复嵌入工作流门禁与交付控制缺陷
+**Branch**: `main`
+
+### Summary
+
+修复嵌入工作流中的 PROJECT-AUDIT 条件强制、交付/归属证明真实 task 门禁、UI 前端基线链路、显式 task-level owner 绑定与 project-audit 上游闭环校验，并补齐对应测试与文档契约。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `176b30c` | (see git log) |
+| `5e5ac5a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

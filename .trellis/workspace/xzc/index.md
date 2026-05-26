@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-7.md`
-- **Total Sessions**: 318
+- **Total Sessions**: 319
 - **Last Active**: 2026-05-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-7.md` | ~511 | Active |
+| `journal-7.md` | ~545 | Active |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
@@ -35,6 +35,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 319 | 2026-05-26 | 修复嵌入工作流门禁与交付控制缺陷 | `176b30c`, `5e5ac5a` | `main` |
 | 318 | 2026-05-26 | 修复嵌入工作流门禁与维护边界 | `cd19540`, `21f28f0` | `main` |
 | 317 | 2026-05-26 | Audit embedded workflow handoff and runtime regression coverage | `9a1612c` | `main` |
 | 316 | 2026-05-26 | Patch embedded workflow task-plan and delivery gates | `2181f11` | `main` |
