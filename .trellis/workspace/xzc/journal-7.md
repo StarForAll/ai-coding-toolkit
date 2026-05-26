@@ -409,3 +409,36 @@ Audited and repaired embedded workflow project-audit state gates, aligned state 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 316: Patch embedded workflow task-plan and delivery gates
+
+**Date**: 2026-05-26
+**Task**: Patch embedded workflow task-plan and delivery gates
+**Branch**: `main`
+
+### Summary
+
+Audited and fixed embedded workflow plan/project-audit/delivery gate behavior, tightened project-audit legacy not_run handling, and added regression coverage.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2181f11` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
