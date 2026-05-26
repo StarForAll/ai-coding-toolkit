@@ -72,6 +72,14 @@ def _extract_section_body(content: str, heading: str) -> str:
     return match.group("body").strip()
 
 
+def _extract_first_section_body(content: str, headings: tuple[str, ...]) -> str:
+    for heading in headings:
+        body = _extract_section_body(content, heading)
+        if body:
+            return body
+    return ""
+
+
 def _extract_backticked_status_from_text(text: str) -> str | None:
     match = re.search(r"[：:]\s*`?(pass|fail|not run|not_run|not applicable|not_applicable|not needed|not_needed)`?", text, re.IGNORECASE)
     if not match:
@@ -207,6 +215,23 @@ def _resolve_task_level_check_dir_from_field(
         return task_dir.parent / normalized
 
     return None
+
+
+def _resolve_delivery_check_task_dir(task_dir: Path) -> Path | None:
+    fallback_dir = _resolve_task_level_check_task_dir(task_dir)
+    report_path = task_dir / "project-audit.md"
+    if not report_path.is_file():
+        return fallback_dir
+
+    content = report_path.read_text(encoding="utf-8")
+    task_level_check_task_raw = extract_backticked_field(content, "task_level_check_task")
+    if task_level_check_task_raw is None:
+        return fallback_dir
+    return _resolve_task_level_check_dir_from_field(
+        task_dir,
+        task_level_check_task_raw,
+        fallback_dir=fallback_dir,
+    )
 
 
 def _extract_coverage_line(content: str) -> str | None:
@@ -716,6 +741,37 @@ def _validate_project_audit_non_check_exit(
             f"不得从 project-audit 直接进入 {target_stage}，必须先回到任务级 check 重新闭环"
         )
         return
+
+
+def _validate_project_audit_task_level_handoff(
+    task_dir: Path,
+    content: str,
+    errors: list[str],
+    *,
+    target_stage: str,
+) -> None:
+    if target_stage not in {"check", "review-gate"}:
+        return
+
+    task_level_check_task_raw = extract_backticked_field(content, "task_level_check_task")
+    resolved_dir = _resolve_task_level_check_dir_from_field(
+        task_dir,
+        task_level_check_task_raw,
+        fallback_dir=_resolve_task_level_check_task_dir(task_dir),
+    )
+    if resolved_dir is None or resolved_dir == task_dir:
+        return
+
+    repo_root = _repo_root_from_task_dir(task_dir)
+    target_dir = resolved_dir.relative_to(repo_root).as_posix()
+    errors.append(
+        "project-audit.md 已将任务级 check 证据绑定到 "
+        f"{target_dir}；`{target_stage}` 是任务级阶段，必须先执行 "
+        f"`python3 ./.trellis/scripts/task.py start {target_dir}` 把当前 active task 切回该 task，"
+        "再在那个 task 上执行阶段切换，不能在项目级 PROJECT-AUDIT carrier 上直接进入任务级阶段"
+    )
+
+
 def _review_gate_capability_gap_allows_not_run(
     task_dir: Path,
     report_path: Path,
@@ -878,9 +934,9 @@ def _validate_review_gate_evidence(task_dir: Path, report_path: Path, content: s
             "recommended + lite 的 review-gate 缺少真实 reviewer 报告；"
             "不能只生成指令包就视为补充审查完成"
         )
-    if decision == "required" and len(reviewer_reports) < 2:
+    if mode == "full" and decision in {"recommended", "required"} and len(reviewer_reports) < 2:
         errors.append(
-            "required + full 的 review-gate reviewer 报告不足 2 份；"
+            f"{decision} + full 的 review-gate reviewer 报告不足 2 份；"
             "不能视为 full 审查已完成"
         )
 
@@ -1132,7 +1188,7 @@ def validate_check_gate(
             "当前任务级 check 尚未闭环，不得进入后续阶段"
         )
     elif gate_status == "pass":
-        verification_body = _extract_section_body(content, "Verification Results")
+        verification_body = _extract_first_section_body(content, ("Verification Results", "验证结果"))
         for raw_line in verification_body.splitlines():
             line_status = _extract_backticked_status_from_text(raw_line)
             if line_status == "fail":
@@ -1348,7 +1404,7 @@ def validate_review_gate_gate(task_dir: Path, errors: list[str]) -> None:
 
 
 def validate_delivery_gate(task_dir: Path, errors: list[str], repo_root: Path | None = None) -> None:
-    check_task_dir = _resolve_task_level_check_task_dir(task_dir)
+    check_task_dir = _resolve_delivery_check_task_dir(task_dir)
     missing = [
         artifact.as_posix()
         for artifact in DELIVERY_ARTIFACTS
@@ -1356,7 +1412,8 @@ def validate_delivery_gate(task_dir: Path, errors: list[str], repo_root: Path | 
     ]
     if missing:
         errors.append(f"缺少交付产物: {', '.join(missing)}；delivery 阶段未完成")
-    validate_check_gate(check_task_dir, errors, for_delivery=True, downstream_stage="delivery")
+    if check_task_dir is not None:
+        validate_check_gate(check_task_dir, errors, for_delivery=True, downstream_stage="delivery")
     validate_finish_work_gate(task_dir, errors)
     _validate_delivery_doc_contract(task_dir, errors)
     acceptance_path = task_dir / "delivery" / "acceptance.md"
@@ -1548,6 +1605,20 @@ def validate_stage_transition_gates(
 
     if new_stage in PROJECT_ESTIMATE_REQUIRED_STAGES:
         validate_project_doc_boundary(candidate_state, repo_root, task_dir, errors)
+
+    if current_stage == "project-audit" and new_stage in {"check", "review-gate"}:
+        report_path = task_dir / "project-audit.md"
+        if report_path.is_file():
+            handoff_errors: list[str] = []
+            _validate_project_audit_task_level_handoff(
+                task_dir,
+                report_path.read_text(encoding="utf-8"),
+                handoff_errors,
+                target_stage=new_stage,
+            )
+            if handoff_errors:
+                errors.extend(handoff_errors)
+                return
 
     if current_state.get("stage") == "brainstorm":
         allowed_targets = {

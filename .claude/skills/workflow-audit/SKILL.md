@@ -127,6 +127,7 @@ This skill must fully validate the following aspects for any workflow under audi
    - `.agents/skills/` must be interpreted with its dual role in mind: repo-local shared deployment layer in this source repo, shared workflow skill carrier in target projects
    - report artifact mismatches as confirmed issues with source-layer-tagged evidence
    - generated target-project files may only be attributed to the workflow after that baseline-vs-installed comparison
+   - do not classify the absence of source-repo authoring tests (for example `test_workflow_state.py`) inside the generated target project as a defect by itself; those tests belong to the authoring repository, while target-project runtime validation should be performed via source-repo fixture tests and explicit runtime command checks
    - install-only low-stakes reminder artifacts such as the workflow-created root `todo.txt` are not defects by default; if documented as non-gating reminders, they may be contextual outputs rather than managed-surface failures
 
 4. **Codex handoff boundary**
@@ -144,6 +145,21 @@ This skill must fully validate the following aspects for any workflow under audi
    - do not recommend optimization when the current state is evidence-backed, intentionally scoped, and does not break behavior, closure, or maintainability
    - if the latest official docs, repo-local evidence, and actual development-use evidence all support the current state, record the item as a false alarm / non-defect rather than manufacturing a fix
    - when a candidate issue turns out to be non-defective, ignore it rather than turning it into a low-value optimization target
+
+7. **Task-level vs project-level gate distinction**
+   - treat task-level `check` and project-level `project-audit` as separate dimensions, not as two names for the same carrier
+   - do not misclassify "delivery requires both the current active task's `check.md` and the formal `PROJECT-AUDIT` carrier" as carrier conflation; that is the intended dual-gate model when project-level audit is declared
+   - a real defect exists only when the workflow asks the wrong artifact to prove the wrong dimension, or when transition-time and validation-time gates disagree about which dual-gate evidence is required
+   - if a dedicated `PROJECT-AUDIT` task exists, the audit must distinguish:
+     - whether the workflow correctly treats that task as the formal project-level carrier
+     - whether the workflow still separately requires the current active task's task-level `check`
+   - if the workflow leaves project-level `project-audit` to re-enter task-level `check` or `review-gate`, the audit must verify the handoff model explicitly:
+     - whether the workflow switches back to the task named by `task_level_check_task` before entering the task-level stage
+     - whether the workflow blocks or warns against entering a task-level gate directly on the project-level `PROJECT-AUDIT` carrier when the carrier is not the task-level owner
+   - under the current strong-gate single-active-task model, an explicit `task.py start <task-dir>` handoff may be the correct boundary behavior rather than a defect by itself
+   - do not report "project-audit cannot directly become review-gate/check on the same carrier" as a defect by itself; that restriction is often the correct enforcement of the dimension boundary
+   - the real defect in that area is missing or contradictory handoff semantics between the project-level carrier and the task-level owner
+   - findings that complain only that both dimensions are required at once, without showing a dimension mismatch or gate inconsistency, are false alarms
 
 Each confirmed issue must include a `validation action` describing exactly how the issue was detected.
 

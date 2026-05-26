@@ -129,6 +129,7 @@ This skill **must** fully validate the following aspects for any workflow under 
    - Command scripts, skill definitions, agent configurations
    - The audit must report discrepancies as confirmed issues with source-layer tags
    - Generated target-project files may only be attributed to the workflow after that baseline-vs-installed comparison
+   - Do not classify the absence of source-repo authoring tests (for example `test_workflow_state.py`) inside the generated target project as a defect by itself; those tests belong to the authoring repository, while target-project runtime validation should be performed via source-repo fixture tests and explicit runtime command checks
 
    Special interpretation rule:
    - install-only low-stakes reminder artifacts such as the workflow-created root `todo.txt` are **not** defects by default
@@ -158,6 +159,12 @@ This skill **must** fully validate the following aspects for any workflow under 
    - If a dedicated `PROJECT-AUDIT` task exists, the audit must distinguish:
      - whether the workflow correctly treats that task as the formal project-level carrier
      - whether the workflow still separately requires the current active task's task-level `check`
+   - If the workflow leaves project-level `project-audit` to re-enter task-level `check` or `review-gate`, the audit must verify the handoff model explicitly:
+     - whether the workflow switches back to the task named by `task_level_check_task` before entering the task-level stage
+     - whether the workflow blocks or warns against entering a task-level gate directly on the project-level `PROJECT-AUDIT` carrier when the carrier is not the task-level owner
+   - Under the current strong-gate single-active-task model, an explicit `task.py start <task-dir>` handoff may be the correct boundary behavior rather than a defect by itself
+   - Do not report "project-audit cannot directly become review-gate/check on the same carrier" as a defect by itself; that restriction is often the correct enforcement of the dimension boundary
+   - The real defect in that area is missing or contradictory handoff semantics between the project-level carrier and the task-level owner
    - Findings that complain only that both dimensions are required at once, without showing a dimension mismatch or gate inconsistency, are false alarms
 
 Each confirmed issue in the audit report must include a validation action that describes how the issue was detected. The detailed schema lives in `## Report Contracts`.

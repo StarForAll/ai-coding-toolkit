@@ -369,7 +369,7 @@ def _collect_exit_gate_blockers(
     elif stage == "delivery":
         validate_delivery_gate(task_dir, blockers, repo_root)
     elif stage == "project-audit":
-        validate_project_audit_gate(task_dir, blockers)
+        validate_project_audit_gate(task_dir, blockers, require_exit_gate_status=True)
     elif stage == "review-gate":
         validate_review_gate_gate(task_dir, blockers)
     elif stage == "design":

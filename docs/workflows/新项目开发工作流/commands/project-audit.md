@@ -42,6 +42,7 @@ description: 所有代码任务都完成了？进入项目级全局代码审查�
 - `project-audit` 与任务级 `check` 不是同一层：
   - `check` 负责**当前 active task / 当前实施轮**的任务级质量闭环
   - `project-audit` 负责**项目整体代码面**的项目级总复核
+- 因此，若 formal `PROJECT-AUDIT` 是独立 carrier task，离开 `project-audit` 回到任务级 `check` / `review-gate` 时，必须先切回 `task_level_check_task` 指向的任务级 owner，再在那个 task 上进入任务级阶段；不能在项目级 carrier 上直接把 stage 写成任务级阶段
 - 保留 `project-audit -> delivery`，但它不是对任务级 `check` 的替代：
   - 若本轮 `project-audit` 发生代码修改，必须先回到 `/trellis:check`，不得直接进入 `/trellis:delivery`
   - 若本轮 `project-audit` 只有分析/确认、没有新增代码修改，且当前 active task 的 `check.md` 已闭环，才允许直接进入 `/trellis:delivery`
@@ -85,6 +86,7 @@ description: 所有代码任务都完成了？进入项目级全局代码审查�
   - `project-audit`：项目级总复核闭环
 - `delivery` 消费的是这两类并列证据，而不是要求 formal `PROJECT-AUDIT` carrier 自己再持有一份任务级 `check.md`
 - 因此，若 formal `PROJECT-AUDIT` 是独立 carrier task，`delivery` 应继续消费“当前 active task 的 `check.md` + formal `PROJECT-AUDIT` 载体中的项目级结论”，而不是把 carrier task 误判成任务级 `check` 的拥有者
+- 但如果 formal `PROJECT-AUDIT` 之后还要回到任务级 `check` / `review-gate`，则必须先切回 `task_level_check_task` 指向的任务级 owner，再在那个 task 上进入任务级阶段；`PROJECT-AUDIT` carrier 只负责项目级证据，不直接充当任务级 gate owner
 - 本命令执行完成后，可以将独立 `PROJECT-AUDIT` task 视为“正式完成”；这里的完成不再只等同于 archive 后的 `task.json.status = completed`
 - 当前 workflow 接受两类正式完成证据：
   - 代码相关 task 已 archive，`task.json.status = completed`
@@ -287,6 +289,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py set <task-dir> \
 - `Mode = pre-audit` 可以回到 `check` / `review-gate`
 - `Mode = pre-audit` 不得直接作为 `delivery` 的正式项目级出口
 - 只要 `project_audit_code_changes = yes`，就必须先回到 `check`
+- 若 formal `PROJECT-AUDIT` 是独立 carrier task，且 `task_level_check_task` 指向其他 task，则这里的“回到 `check` / `review-gate`”指的是先切回该任务级 owner，再在那个 task 上继续任务级门禁
 
 ---
 

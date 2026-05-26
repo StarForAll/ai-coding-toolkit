@@ -678,6 +678,10 @@ class WorkflowInstallerTests(unittest.TestCase):
                 "",
                 encoding="utf-8",
             )
+            (root / ".trellis" / "scripts" / "common" / "active_task.py").write_text(
+                (REPO_ROOT / ".trellis" / "scripts" / "common" / "active_task.py").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
             (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
                 BASELINE_TASK_STORE_CONTENT,
                 encoding="utf-8",
@@ -1103,6 +1107,21 @@ class WorkflowInstallerTests(unittest.TestCase):
 
     def detect_embed_state(self, fixture_root: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
         return self.run_script(DETECT_EMBED_STATE_SCRIPT, "--project-root", str(fixture_root), *args, env=env)
+
+    def run_embedded_workflow_state(
+        self,
+        fixture_root: Path,
+        *args: str,
+        env: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        merged_env = {"TRELLIS_CONTEXT_ID": "embedded-workflow-state-test"}
+        if env:
+            merged_env.update(env)
+        return self.run_script(
+            fixture_root / ".trellis" / "scripts" / "workflow" / "workflow-state.py",
+            *args,
+            env=merged_env,
+        )
 
     def latest_env_for(self, fixture_root: Path) -> dict[str, str]:
         version_path = fixture_root / ".trellis" / ".version"
@@ -2431,6 +2450,383 @@ Triggered from `start` (Trellis command) when the user describes a development t
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertEqual(workflow_doc.read_text(encoding="utf-8"), BASELINE_WORKFLOW_CONTENT)
+
+    def test_install_workflow_doc_keeps_canonical_allowed_next_examples(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        workflow_doc_text = (fixture / ".trellis" / "workflow.md").read_text(encoding="utf-8")
+        self.assertIn(
+            "workflow-state.py set <dir> --stage project-audit --stage-status in_progress --awaiting-user-confirmation false --allowed-next check,review-gate,delivery --transition-from implementation",
+            workflow_doc_text,
+        )
+        self.assertIn(
+            "workflow-state.py set <dir> --stage review-gate --stage-status in_progress --awaiting-user-confirmation false --allowed-next project-audit,delivery,implementation --transition-from check",
+            workflow_doc_text,
+        )
+        self.assertIn("task_level_check_task", workflow_doc_text)
+        self.assertIn("先把 session active task 切回该任务级 task", workflow_doc_text)
+
+    def test_installed_workflow_state_blocks_check_to_delivery_when_chinese_verification_results_contains_fail(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        task_dir = fixture / ".trellis" / "tasks" / "04-15-sample-task"
+        task_dir.mkdir(parents=True, exist_ok=True)
+        (task_dir / "task.json").write_text('{"status":"planning","children":[]}\n', encoding="utf-8")
+        (fixture / "README.md").write_text("# project\n", encoding="utf-8")
+        (fixture / "README.en.md").write_text("# project\n", encoding="utf-8")
+        requirements_dir = fixture / "docs" / "requirements"
+        requirements_dir.mkdir(parents=True, exist_ok=True)
+        (requirements_dir / "customer-facing-prd.md").write_text(
+            "# customer-facing prd\n\n"
+            "## 项目级粗估摘要\n"
+            "- 预计总工期：3-4 个工作日\n"
+            "- 预计完工窗口：2026-04-20 ~ 2026-04-23\n"
+            "- 估算说明：基于当前已确认范围的区间粗估\n",
+            encoding="utf-8",
+        )
+        (task_dir / "prd.md").write_text(
+            "# sample task\n\n"
+            "## 项目级粗估\n"
+            "- `total_effort_hours`: `16`\n"
+            "- 预计总工时：12-16 人时\n"
+            "- 预计总工期：3-4 个工作日\n"
+            "- 预计完工窗口：2026-04-20 ~ 2026-04-23\n"
+            "- 估算置信度：中\n"
+            "- 估算前提：需求范围维持当前冻结版本\n",
+            encoding="utf-8",
+        )
+        (task_dir / "assessment.md").write_text(
+            "# assessment\n"
+            "- `project_engagement_type`: `non_outsourcing`\n"
+            "- `source_watermark_level`: `none`\n"
+            "- `source_watermark_channels`: `none`\n"
+            "- `zero_width_watermark_enabled`: `no`\n"
+            "- `subtle_code_marker_enabled`: `no`\n"
+            "- `ownership_proof_required`: `no`\n"
+            "- 法律/合规风险结论：通过\n"
+            "- 是否允许进入 brainstorm：是\n",
+            encoding="utf-8",
+        )
+        (task_dir / "check.md").write_text(
+            "# Check Report\n\n"
+            "## 变更范围\n"
+            "- src/example.ts\n\n"
+            "## 适用规范\n"
+            "- .trellis/spec/scripts/python-conventions.md\n\n"
+            "## 验证结果\n"
+            "- lint: pass\n"
+            "- test: fail\n\n"
+            "## 偏差清单\n"
+            "- none\n\n"
+            "## 未覆盖风险\n"
+            "- none\n\n"
+            "## Review-Gate Decision\n"
+            "- `review_gate_decision`: `skip`\n"
+            "- `review_gate_reason`: `验证已足够`\n"
+            "- `check_gate_status`: `pass`\n"
+            "- `auth_or_sensitive`: `no`\n"
+            "- `data_migration_or_schema_change`: `no`\n"
+            "- `public_api_or_cross_layer_contract_or_external_integration`: `no`\n"
+            "- `payment_queue_cache_concurrency`: `no`\n"
+            "- `shared_core_with_blast_radius`: `no`\n"
+            "- `explicit_user_review_gate_request`: `no`\n\n"
+            "## 推荐下一步\n"
+            "- /trellis:delivery\n",
+            encoding="utf-8",
+        )
+
+        self.assertEqual(
+            self.run_embedded_workflow_state(fixture, "init", str(task_dir), "--stage", "check").returncode,
+            0,
+        )
+        self.assertEqual(
+            self.run_embedded_workflow_state(
+                fixture,
+                "set",
+                str(task_dir),
+                "--stage-status", "awaiting_user_confirmation",
+                "--awaiting-user-confirmation", "true",
+                "--allowed-next", "review-gate,implementation,delivery",
+            ).returncode,
+            0,
+        )
+
+        blocked = self.run_embedded_workflow_state(
+            fixture,
+            "set",
+            str(task_dir),
+            "--stage", "delivery",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "check",
+        )
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("Verification Results 包含 fail", blocked.stdout)
+
+    def test_installed_workflow_state_uses_explicit_task_level_check_task_for_formal_project_audit_delivery(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        (fixture / "README.md").write_text("# project\n", encoding="utf-8")
+        (fixture / "README.en.md").write_text("# project\n", encoding="utf-8")
+        requirements_dir = fixture / "docs" / "requirements"
+        requirements_dir.mkdir(parents=True, exist_ok=True)
+        (requirements_dir / "customer-facing-prd.md").write_text(
+            "# customer-facing prd\n\n"
+            "## 项目级粗估摘要\n"
+            "- 预计总工期：3-4 个工作日\n"
+            "- 预计完工窗口：2026-04-20 ~ 2026-04-23\n"
+            "- 估算说明：基于当前已确认范围的区间粗估\n",
+            encoding="utf-8",
+        )
+
+        task_dir = fixture / ".trellis" / "tasks" / "04-15-sample-task"
+        task_dir.mkdir(parents=True, exist_ok=True)
+        (task_dir / "task.json").write_text(json.dumps({"id": task_dir.name, "name": task_dir.name, "status": "completed"}, ensure_ascii=False) + "\n", encoding="utf-8")
+        (task_dir / "prd.md").write_text(
+            "# sample task\n\n"
+            "## 项目级粗估\n"
+            "- `total_effort_hours`: `16`\n"
+            "- 预计总工时：12-16 人时\n"
+            "- 预计总工期：3-4 个工作日\n"
+            "- 预计完工窗口：2026-04-20 ~ 2026-04-23\n"
+            "- 估算置信度：中\n"
+            "- 估算前提：需求范围维持当前冻结版本\n",
+            encoding="utf-8",
+        )
+        (task_dir / "assessment.md").write_text(
+            "# assessment\n"
+            "- `project_engagement_type`: `non_outsourcing`\n"
+            "- `source_watermark_level`: `none`\n"
+            "- `source_watermark_channels`: `none`\n"
+            "- `zero_width_watermark_enabled`: `no`\n"
+            "- `subtle_code_marker_enabled`: `no`\n"
+            "- `ownership_proof_required`: `no`\n"
+            "- 法律/合规风险结论：通过\n"
+            "- 是否允许进入 brainstorm：是\n",
+            encoding="utf-8",
+        )
+        (task_dir / "check.md").write_text(
+            "# Check Report\n\n"
+            "## Changed Scope\n"
+            "- src/example.ts\n\n"
+            "## Applied Specs\n"
+            "- .trellis/spec/scripts/python-conventions.md\n\n"
+            "## Verification Results\n"
+            "- test: pass\n"
+            "- lint: not run\n\n"
+            "## Deviations\n"
+            "- none\n\n"
+            "## Uncovered Risks\n"
+            "- none\n\n"
+            "## Review-Gate Decision\n"
+            "- `review_gate_decision`: `skip`\n"
+            "- `review_gate_reason`: `未命中 review-gate 硬条件，现有验证证据足够`\n"
+            "- `check_gate_status`: `pass`\n"
+            "- `auth_or_sensitive`: `no`\n"
+            "- `data_migration_or_schema_change`: `no`\n"
+            "- `public_api_or_cross_layer_contract_or_external_integration`: `no`\n"
+            "- `payment_queue_cache_concurrency`: `no`\n"
+            "- `shared_core_with_blast_radius`: `no`\n"
+            "- `explicit_user_review_gate_request`: `no`\n\n"
+            "## Suggested Next Step\n"
+            "- /trellis:delivery\n",
+            encoding="utf-8",
+        )
+        (task_dir / "delivery").mkdir(parents=True, exist_ok=True)
+        (task_dir / "delivery" / "acceptance.md").write_text(
+            "# Acceptance\n\n## Acceptance Criteria Status\n- sample criterion: pass\n\n## Blocking Findings\n- none\n\n## Acceptance Gate\n- pass\n\n## 当前交付状态\n- pass\n\n- `delivery_gate_status`: `pass`\n",
+            encoding="utf-8",
+        )
+        (task_dir / "delivery" / "deliverables.md").write_text(
+            "# Deliverables\n\n## Closeout Assets\n- source bundle\n\n## Verification Evidence\n- lint: pass\n\n## Current Status\n- pass\n\n## Residual Risks\n- none\n",
+            encoding="utf-8",
+        )
+        (task_dir / "delivery" / "transfer-checklist.md").write_text(
+            "# Transfer Checklist\n\n"
+            "## 当前事件允许移交什么\n"
+            "- retained-control delivery\n"
+            "- docs\n\n"
+            "## 当前事件禁止标记为已移交什么\n"
+            "- production keys\n\n"
+            "## 触发条件 / 付款 / 权限 / 证明材料是否齐备\n"
+            "- milestone_payment_schedule: pass\n"
+            "- non_payment_remedy_path: pass\n"
+            "- dispute_escalation_path: pass\n",
+            encoding="utf-8",
+        )
+        (task_dir / "finish-work-checklist.md").write_text(
+            "## 冻结验证矩阵\n\n"
+            "| Check | Command or Method | Result |\n"
+            "| --- | --- | --- |\n"
+            "| lint | npm run lint | pass |\n\n"
+            "## 人工验证\n\n"
+            "- 当前状态：已完成基础人工验证\n"
+            "- 证据缺口：none\n"
+            "- `finish_work_gate_status`: `pass`\n\n"
+            "## 同步结论\n\n"
+            "- spec/docs 同步：done\n"
+            "- hidden-dir sync：n/a\n",
+            encoding="utf-8",
+        )
+
+        formal_dir = fixture / ".trellis" / "tasks" / "04-15-project-audit-formal"
+        formal_dir.mkdir(parents=True, exist_ok=True)
+        (formal_dir / "task.json").write_text(json.dumps({"id": formal_dir.name, "name": formal_dir.name, "status": "in_progress"}, ensure_ascii=False) + "\n", encoding="utf-8")
+        (formal_dir / "prd.md").write_text((task_dir / "prd.md").read_text(encoding="utf-8"), encoding="utf-8")
+        (formal_dir / "assessment.md").write_text((task_dir / "assessment.md").read_text(encoding="utf-8"), encoding="utf-8")
+        (formal_dir / "task_plan.md").write_text(
+            "\n".join(
+                [
+                    "# Task Plan",
+                    "",
+                    "## Trellis Task 清单",
+                    "",
+                    "| 任务路径 | 类型 | 项目域 | 说明 |",
+                    "|---------|------|--------|------|",
+                    f"| .trellis/tasks/{task_dir.name} | implementation | 全局 | current task |",
+                    "| .trellis/tasks/04-15-project-audit-formal | project-audit | 全局 | formal project audit |",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (formal_dir / "project-audit.md").write_text(
+            "# Project Audit Report\n\n"
+            "## Mode\n- formal\n\n"
+            "## Project-Level Verification Matrix\n"
+            "- `project-task-coverage`: all code-related tasks complete; no approved exceptions; no delivery blockers\n"
+            "- 项目级统一代码漏洞检测命令：not run + reason\n"
+            "- 项目级统一代码质量总检命令：not run + reason\n\n"
+            "## Confirmed Findings\n- [self] no blocking issue\n\n"
+            "## Candidate Findings / Reviewer Evidence\n- [self] none\n\n"
+            "## Confirmed Fix Plan\n- no-op\n\n"
+            "## Applied Changes\n- no-op\n- `project_audit_code_changes`: `no`\n\n"
+            "## Project-Level Verification Results\n"
+            "- 项目级统一代码漏洞检测：not run + reason\n"
+            "- 项目级统一代码质量总检：not run + reason\n"
+            "- `project_audit_gate_status`: `pass`\n"
+            "- `task_level_check_status`: `pass`\n"
+            f"- `task_level_check_task`: `.trellis/tasks/{task_dir.name}`\n\n"
+            "## Remaining Risks\n- none\n\n"
+            "## Suggested Next Step\n- /trellis:delivery\n",
+            encoding="utf-8",
+        )
+        (formal_dir / "delivery").mkdir(parents=True, exist_ok=True)
+        shutil.copy2(task_dir / "delivery" / "acceptance.md", formal_dir / "delivery" / "acceptance.md")
+        shutil.copy2(task_dir / "delivery" / "deliverables.md", formal_dir / "delivery" / "deliverables.md")
+        shutil.copy2(task_dir / "delivery" / "transfer-checklist.md", formal_dir / "delivery" / "transfer-checklist.md")
+        shutil.copy2(task_dir / "finish-work-checklist.md", formal_dir / "finish-work-checklist.md")
+
+        self.assertEqual(
+            self.run_embedded_workflow_state(fixture, "init", str(formal_dir), "--stage", "delivery").returncode,
+            0,
+        )
+        validate = self.run_embedded_workflow_state(
+            fixture,
+            "validate",
+            str(formal_dir),
+            "--project-root",
+            str(fixture),
+        )
+        self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
+
+    def test_installed_workflow_state_requires_two_reviewer_reports_for_recommended_full(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        task_dir = fixture / ".trellis" / "tasks" / "04-15-sample-task"
+        task_dir.mkdir(parents=True, exist_ok=True)
+        (task_dir / "task.json").write_text('{"status":"planning","children":[]}\n', encoding="utf-8")
+        (fixture / "README.md").write_text("# project\n", encoding="utf-8")
+        (fixture / "README.en.md").write_text("# project\n", encoding="utf-8")
+        requirements_dir = fixture / "docs" / "requirements"
+        requirements_dir.mkdir(parents=True, exist_ok=True)
+        (requirements_dir / "customer-facing-prd.md").write_text(
+            "# customer-facing prd\n\n"
+            "## 项目级粗估摘要\n"
+            "- 预计总工期：3-4 个工作日\n"
+            "- 预计完工窗口：2026-04-20 ~ 2026-04-23\n"
+            "- 估算说明：基于当前已确认范围的区间粗估\n",
+            encoding="utf-8",
+        )
+        (task_dir / "prd.md").write_text(
+            "# sample task\n\n"
+            "## 项目级粗估\n"
+            "- `total_effort_hours`: `16`\n"
+            "- 预计总工时：12-16 人时\n"
+            "- 预计总工期：3-4 个工作日\n"
+            "- 预计完工窗口：2026-04-20 ~ 2026-04-23\n"
+            "- 估算置信度：中\n"
+            "- 估算前提：需求范围维持当前冻结版本\n",
+            encoding="utf-8",
+        )
+        (task_dir / "assessment.md").write_text(
+            "# assessment\n"
+            "- `project_engagement_type`: `non_outsourcing`\n"
+            "- `source_watermark_level`: `none`\n"
+            "- `source_watermark_channels`: `none`\n"
+            "- `zero_width_watermark_enabled`: `no`\n"
+            "- `subtle_code_marker_enabled`: `no`\n"
+            "- `ownership_proof_required`: `no`\n"
+            "- 法律/合规风险结论：通过\n"
+            "- 是否允许进入 brainstorm：是\n",
+            encoding="utf-8",
+        )
+        review_gate_dir = task_dir / "review-gate"
+        review_gate_dir.mkdir(parents=True, exist_ok=True)
+        (review_gate_dir / "review-gate-round-1.md").write_text(
+            "# Review Gate Round\n\n"
+            "## Decision\n- `review_gate_decision`: `recommended`\n\n"
+            "## Trigger Evidence\n- 建议额外审查\n\n"
+            "## Mode\n- `review_gate_mode`: `full`\n\n"
+            "## Recommended Next Step\n- /trellis:delivery\n- `review_gate_closure_status`: `pass`\n",
+            encoding="utf-8",
+        )
+        (review_gate_dir / "reviewer-commands-round-1.md").write_text("# reviewer commands\n", encoding="utf-8")
+        review_root = fixture / "tmp" / "multi-cli-review" / task_dir.name / "review-round-1"
+        review_root.mkdir(parents=True, exist_ok=True)
+        (review_root / "a.md").write_text("# reviewer a\n", encoding="utf-8")
+        (review_root.parent / "summary-round-1.md").write_text("- pass\n", encoding="utf-8")
+        (review_root.parent / "action.md").write_text("- adopted\n", encoding="utf-8")
+
+        self.assertEqual(
+            self.run_embedded_workflow_state(fixture, "init", str(task_dir), "--stage", "review-gate").returncode,
+            0,
+        )
+        blocked = self.run_embedded_workflow_state(
+            fixture,
+            "validate",
+            str(task_dir),
+            "--project-root",
+            str(fixture),
+        )
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("recommended + full", blocked.stdout)
+
+        (review_root / "b.md").write_text("# reviewer b\n", encoding="utf-8")
+        allowed = self.run_embedded_workflow_state(
+            fixture,
+            "validate",
+            str(task_dir),
+            "--project-root",
+            str(fixture),
+        )
+        self.assertEqual(allowed.returncode, 0, msg=allowed.stdout + allowed.stderr)
 
     def test_install_agents_routing_warns_against_manual_agent_subagent_path(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
