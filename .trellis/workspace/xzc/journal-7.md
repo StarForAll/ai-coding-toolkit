@@ -442,3 +442,36 @@ Audited and fixed embedded workflow plan/project-audit/delivery gate behavior, t
 ### Next Steps
 
 - None - task complete
+
+
+## Session 317: Audit embedded workflow handoff and runtime regression coverage
+
+**Date**: 2026-05-26
+**Task**: Audit embedded workflow handoff and runtime regression coverage
+**Branch**: `main`
+
+### Summary
+
+Audited and fixed embedded workflow stage-gate behavior, task-vs-project audit handoff, Chinese verification-result handling, and added embedded runtime regression coverage.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9a1612c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
