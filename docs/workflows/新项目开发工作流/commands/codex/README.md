@@ -3,7 +3,7 @@
 Codex 对这套 workflow 的正确承载模型不是 `.claude/commands/` 式自定义 slash command，而是：
 
 - `AGENTS.md`：项目级长期稳定规则
-- `.codex/config.toml`：项目级 Codex 配置与 `AGENTS.md` fallback
+- `.codex/config.toml`：项目级 Codex 配置与 `AGENTS.md` fallback；当前 workflow 安装器在文件已存在时会追加/修正 main-session-only 窄补丁，把 `features.multi_agent_v2.enabled` 压成 `false`
 - `.codex/hooks.json` + `.codex/hooks/*.py`：按当前 hook 配置在用户回合等事件注入 Trellis 上下文
 - `.agents/skills/*/SKILL.md`：共享 workflow 入口与阶段技能；按当前官方文档与 A/B 证据，这是 Codex 的 repo-scoped skills 唯一主承载面，也是其 repo-scoped skills 主入口
 - `.codex/skills/*/SKILL.md`：仅 Codex 独有或项目自定义的额外技能；属于条件出现的 secondary skills carrier，不是共享 workflow 主入口
@@ -168,6 +168,12 @@ Codex 官方支持 `AGENTS.md` 指令链。对 Trellis workflow，推荐把长�
 project_doc_fallback_filenames = ["AGENTS.md"]
 ```
 
+补充边界：
+
+- 安装器不会整体接管 `.codex/config.toml`
+- 它只在文件已存在时，窄范围修正 `features.multi_agent_v2.enabled = false`
+- 目的不是替代项目自己的 Codex 配置，而是把当前 embedded workflow 的 main-session-only 合同落到结构层，降低“提示词禁用但平台 multi-agent 仍开启”的漂移风险
+
 ### 2. Hooks：用 `.codex/hooks.json` 注入 Trellis 上下文
 
 Codex 支持 hooks。对这套 workflow，当前推荐通过项目 `.codex/hooks.json` 在 `UserPromptSubmit` 等 turn 级事件注入 Trellis 上下文；不要把当前产品合同写死成“必须依赖 `SessionStart`”。
@@ -179,7 +185,7 @@ Codex 支持 hooks。对这套 workflow，当前推荐通过项目 `.codex/hooks
 
 激活边界要单独说明：
 
-- 项目级 `.codex/` 配置层只有在 target project 被标记为 trusted 时才会加载；未受信任时，本地 `.codex/config.toml`、`.codex/hooks.json`、`.codex/hooks/*.py` 都不会生效
+- 项目级 `.codex/` 配置层只有在 target project 被标记为 trusted 时才会加载；未受信任时，本地 `.codex/config.toml`、`.codex/hooks.json`、`.codex/hooks/*.py` 都不会生效；因此即使安装器已把 `multi_agent_v2` 压成 `false`，未 trusted 时这条结构性约束仍依赖用户让项目配置真正生效
 - 当前官方文档把 `codex_hooks` 视为 stable / 默认启用能力，但更高优先级的 user/system config 仍可能关闭 hooks 或覆盖 hook 来源
 - 因此，若 hooks 不生效，排查顺序应先看 trust 状态，再看 effective merged config 与实际 hook 源
 
@@ -199,7 +205,7 @@ Codex 支持 hooks。对这套 workflow，当前推荐通过项目 `.codex/hooks
 
 - 对当前嵌入 workflow，不论目标项目是否仍保留 `codex.dispatch_mode` 字段，Codex 主会话都必须保持 main-session-only，不得手工派发 `trellis-implement` / `trellis-check` / `trellis-research` 一类 sub-agent，也不得改用 `spawn_agent`、`explorer`、`worker` 等通用平台 agent 能力绕过这条约束
 - `.codex/agents/*.toml` 在当前 workflow 下只应被视为残留/兼容 carrier，而不是任何可用执行入口
-- 即使目标项目同时启用了 Codex 的 multi-agent 相关平台能力，这些能力也不能覆盖当前 workflow 的 main-session-only 约束
+- 若 `.codex/config.toml` 存在，安装器会把 `features.multi_agent_v2.enabled` 压成 `false`；即使后续被手动改回 `true`，也不能覆盖当前 workflow 的 main-session-only 约束
 - 因此，判断当前应否派发 sub-agent 时，答案对当前嵌入 workflow 恒为“否”；不要只因为 `.codex/agents/` 存在或平台支持 multi-agent 就推断“现在可以派”
 
 ### 3. Skills：workflow 阶段入口由 skills 承载
@@ -348,7 +354,7 @@ Codex 官方内建 slash commands 是平台级控制能力，例如：
 | 工作流资产 | Codex 目标位置 | 说明 | 安装器管理 |
 |-----------|----------------|------|-----------|
 | 项目长期规则 | `AGENTS.md` | 长期稳定的项目规则和执行原则 | ❌ 手动维护 |
-| Codex 项目配置 | `.codex/config.toml` | 指定 `AGENTS.md` fallback 等项目级配置 | ❌ 手动维护 |
+| Codex 项目配置 | `.codex/config.toml` | 指定 `AGENTS.md` fallback 等项目级配置；若文件存在则追加 main-session-only 窄补丁 | ⚠️ 安装器窄补丁 + 手动维护 |
 | 会话上下文注入 | `.codex/hooks.json` + `.codex/hooks/*.py` | 自动注入 Trellis workflow 上下文；当前常见是 turn 级 hook，`SessionStart` 仅在目标项目显式接线时启用 | ❌ 手动维护 |
 | workflow 技能 | `.agents/skills/*/SKILL.md`（共享唯一主承载面） / `.codex/skills/*/SKILL.md`（仅 Codex 独有或项目自定义的 secondary carrier） | `.agents/skills/` 承载共享阶段 skills；`trellis-continue` / `trellis-finish-work` 属于活动 skills 目录中的 Trellis 基线入口并由安装器追加项目化补丁；`.codex/skills/` 不承载重复 shared skills，也不应被描述成与 `.agents/skills/` 并列的共享 workflow 主入口 | ✅ `install-workflow.py` |
 | 子代理 | `.codex/agents/*.toml` | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 安装器不再 overlay 到目标项目，仅做 legacy bare-name → trellis-* 迁移；源仓库 carrier 可有项目级增强 | ✅ legacy 迁移由 `install-workflow.py` |

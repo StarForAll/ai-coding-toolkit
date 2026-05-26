@@ -154,7 +154,7 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 | 通用辅助脚本 | `.trellis/scripts/workflow/` | 安装器管理 | 与 Claude/OpenCode 共用 |
 | Trellis 基线 workflow 指南补丁 | `.trellis/workflow.md` | 安装器管理 | 与 Claude/OpenCode 共用；Codex hooks 注入的 `.trellis/workflow.md` 应与安装器增强后的文档保持一致 |
 | 项目长期规则 | `AGENTS.md` | 半托管（手动维护为主） | 与 Claude/OpenCode 共用；`TRELLIS` managed block 与 `workflow-nl-routing` 区段由 `trellis init` / `install-workflow.py` 分别托管 |
-| Codex 项目配置 | `.codex/config.toml` | 手动维护 | `AGENTS.md` fallback 等项目配置 |
+| Codex 项目配置 | `.codex/config.toml` | 安装器窄补丁 + 手动维护 | 安装器在文件已存在时只修正 `features.multi_agent_v2.enabled=false`，用于落实 main-session-only；其余如 `AGENTS.md` fallback、trust 相关配置仍属项目手动维护 |
 | 会话上下文注入 | `.codex/hooks.json` + `.codex/hooks/*.py` | 手动维护 / Trellis baseline | 当前 workflow 主载体仍是 turn 级 hook（如 `UserPromptSubmit -> inject-workflow-state.py`）；`session-start.py` 只在目标项目显式接线或保留该 startup 辅助面时才纳入强门禁补丁与巡检范围 |
 | 子代理定义 | `.codex/agents/*.toml` | Trellis 原生管理 | Trellis 0.5+ 原生提供 `trellis-research` / `trellis-implement` / `trellis-check`；workflow 安装器不再 overlay 到目标项目，仅做 legacy 迁移；源仓库 carrier 可含项目级增强。对当前嵌入 workflow，这些 agents 统一视为禁用的底层承载面，不构成主会话可派发路径 |
 | 项目 Git 前置条件 | `origin ≥ 2 push URL` | 运行前置/仅校验 | 安装器校验 |
@@ -162,7 +162,7 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 
 **安装器不负责的 Codex 原生资产**（需手动维护）：
 
-- `.codex/config.toml` — Codex 项目级配置
+- `.codex/config.toml` — Codex 项目级配置；安装器仅在文件已存在时追加/修正 main-session-only 窄补丁，其余字段仍由项目维护
 - `.codex/hooks.json` + `.codex/hooks/*.py` — Codex hook carrier（主载体通常是 turn 级注入；`session-start.py` 仅在目标项目实际保留并接线时才纳入强门禁补丁与巡检范围，避免 startup 面语义漂移）
 - 其他非 `trellis-research / trellis-implement / trellis-check` 的 `.codex/agents/*.toml`
 - `AGENTS.md` 的手动段（workflow 不托管的章节）
