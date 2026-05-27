@@ -64,6 +64,11 @@ workflow product source under `docs/workflows/新项目开发工作流/`.
     treated as workflow defects by default when temp-project evidence shows
     they are intentional restore surfaces paired with active patched/overlay
     assets in `.trellis/workflow-installed.json`.
+17. Cross-task convergence must not be treated as a fresh start just because a
+    new dedicated repair task was created. If the same temp-project/report
+    lineage already produced two earlier ordinary repair tasks, the next
+    attempt must escalate to audit / break-loop instead of continuing another
+    routine repair batch.
 
 ---
 
@@ -82,6 +87,14 @@ The skill must:
   already active
 - validate the shared `workflow-scan-repair-v4` protocol
 - resolve the temp project from the report before judging findings
+- derive a repair-lineage identity from `source-report`, `temp-project-root`,
+  and `trellis-version`, using `scan-timestamp` / `repair-lineage-key` as
+  stronger evidence when those fields are available
+- normalize `repair-lineage-key` as
+  `normalize(source-report) + "|" + normalize(temp-project-root) + "|" + trellis-version`,
+  where `normalize(path)` resolves absolute paths when possible, converts
+  separators to `/`, collapses redundant separators, and strips trailing `/`
+  except for filesystem root
 - stop instead of guessing when report/temp context does not line up
 
 ### 2. Verification Discipline
@@ -129,6 +142,14 @@ The skill must:
   `Blocked / Invalid Embedded State`
 - use same-version task-local closure artifacts as the convergence memory
   surface for the current repair task
+- inspect earlier repair-task logs across `.trellis/tasks/` and archive for the
+  same repair lineage before assuming the current task is a fresh ordinary run
+- fall back to legacy matching on `source-report` + `temp-project-root` +
+  `trellis-version` when older logs predate explicit lineage fields
+- treat workflow version bumps as insufficient to reset the same repair lineage
+  on their own
+- stop ordinary repair execution and escalate to audit / break-loop if two
+  earlier repair tasks already match the same lineage
 - optional `tmp/workflow-issues/` outputs are audit shadows only, not the
   primary v4 repair-decision memory
 - when the optional shadow is omitted, the repair log should record

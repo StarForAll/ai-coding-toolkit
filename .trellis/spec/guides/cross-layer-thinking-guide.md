@@ -150,6 +150,16 @@ because the file still exists
 **Good**: For source-to-target workflow deployments, verify the deployed copy
 still matches the current source contract, not just the path shape
 
+### Mistake 4.5: Task-Local Memory Treated As Whole-System Convergence
+
+**Bad**: Designing a repair loop that only remembers the current task's
+artifacts, then creating a new task for every repair attempt and assuming the
+new task is a fresh convergence state
+
+**Good**: When workflow maintenance can span multiple repair tasks, define an
+explicit cross-task lineage key and escalation rule so repeated scan/repair
+attempts stop as an audit problem instead of silently continuing
+
 ---
 
 ## Checklist for Boundary-Crossing Changes
@@ -165,6 +175,8 @@ After implementation:
 - [ ] Verified copied/deployed paths match the intended layout
 - [ ] Verified config/metadata reflects the actual state on disk
 - [ ] Verified related docs/instructions were updated if behavior changed
+- [ ] Verified task-local artifacts are not the only memory surface when the
+      workflow can loop across multiple tasks
 - [ ] If `multi-cli-review` or `multi-cli-review-action` changed, verified the paired skill was reviewed and updated when needed
 - [ ] Verified ambiguous paths are labeled as source repo, task runtime, or target project
 - [ ] Verified the relevant command/test path still passes end to end

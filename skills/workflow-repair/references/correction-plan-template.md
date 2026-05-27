@@ -30,6 +30,7 @@ Exception: if the current user instruction already explicitly requests repair of
 - Report File: {absolute path to WORKFLOW_QUESTIONS.md}
 - Repair Task: {absolute or repo-relative path to the dedicated repair task directory}
 - Base Workflow Version: {current source workflow version before repair}
+- Cross-Task Lineage Status: {first-task | repeated-across-tasks | escalated-needs-audit}
 
 ## Verification Summary
 
@@ -163,22 +164,25 @@ Awaiting your decision.
 7. Every `adopted` and `trellis-native` block must explain the root-cause class and why the plan is broad enough to avoid a repeated trigger.
 8. The plan must name the dedicated repair task and record the current base
    workflow version used for stale-report validation and later version bump.
-9. `design-debt` items must not be auto-presented as ordinary adopted fixes unless
+9. The plan should make cross-task lineage status visible when the same temp-
+   project/report lineage already produced earlier repair tasks, especially
+   when the ordinary repair flow is being stopped in favor of audit.
+10. `design-debt` items must not be auto-presented as ordinary adopted fixes unless
    the current user instruction explicitly broadens scope beyond confirmed defects.
-10. `evidence-gap` items must not be auto-presented as ordinary adopted fixes;
+11. `evidence-gap` items must not be auto-presented as ordinary adopted fixes;
     the plan must keep them at `blocked` or `manual-decision` until the missing
     proof is resolved.
-11. If continuation mode = `auto-follow-through`, the plan must state that auto
+12. If continuation mode = `auto-follow-through`, the plan must state that auto
    follow-through happens only after successful repair verification, re-enters
    the current task through the available `continue` surface, and stops with a
    reported blocker if `continue` / `finish-work` cannot proceed safely.
-12. If the plan documents mixed succeeded/reverted work, partial acceptance, or
+13. If the plan documents mixed succeeded/reverted work, partial acceptance, or
     `target_focus`, the later auto close-out path must not be described in a
     way that would imply every attempted or every report finding was verified.
-13. If the current run began as `analysis-only` and the user explicitly accepts
+14. If the current run began as `analysis-only` and the user explicitly accepts
    execution in Step 8, the plan/log state may transition to
    `post-plan-confirmation` for the actual repair execution.
-14. The correction-plan header records the authorization mode at the time the
+15. The correction-plan header records the authorization mode at the time the
     plan is presented. If execution approval later changes the mode to
     `post-plan-confirmation`, record that transition in the repair log rather
     than retroactively treating the already-presented plan header as final.

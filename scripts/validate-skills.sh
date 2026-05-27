@@ -513,6 +513,9 @@ validate_workflow_scan_repair_contract() {
   grep -Fq "Default repair-ready scope is narrow" "$repair_skill" || fail "$repair_skill missing confirmed-defect-only default gate"
   grep -Fq "Design debt is not auto-repair" "$repair_skill" || fail "$repair_skill missing design-debt default stop rule"
   grep -Fq "Evidence gaps block source edits" "$repair_skill" || fail "$repair_skill missing evidence-gap default stop rule"
+  grep -Fq "normalize(source-report)" "$repair_skill" || fail "$repair_skill missing repair-lineage normalization rule"
+  grep -Fq "strip a trailing" "$repair_skill" || fail "$repair_skill missing repair-lineage path normalization detail"
+  grep -Fq "prompt-level skill fixtures" "$repair_skill" || fail "$repair_skill missing explicit fixture-vs-executable-tests note"
 
   for template in \
     "$correction_plan_template" \
@@ -562,6 +565,7 @@ validate_workflow_scan_repair_contract() {
   grep -Fq "stopped-with-blocker: <brief reason> | interrupted: session-did-not-complete" "$repair_log_template" || fail "$repair_log_template missing single-line continuation outcome value set"
   grep -Fq "total-succeeded + total-failed + total-reverted" "$repair_log_template" || fail "$repair_log_template missing explicit total-attempted definition"
   grep -Fq "highest \`repair-timestamp\` value" "$repair_log_template" || fail "$repair_log_template missing explicit latest-log selection rule"
+  grep -Fq "normalize(source-report) + \"|\" + normalize(temp-project-root) + \"|\" + trellis-version" "$repair_log_template" || fail "$repair_log_template missing explicit repair-lineage-key derivation rule"
   grep -Fq "continuation-mode:" "$issue_history_template" || fail "$issue_history_template missing continuation-mode frontmatter"
   grep -Fq "Continuation Mode:" "$issue_history_template" || fail "$issue_history_template missing continuation mode session-summary field"
   grep -Fq "{absolute path to WORKFLOW_QUESTIONS.md}" "$issue_history_template" || fail "$issue_history_template missing report-path placeholder"
@@ -587,38 +591,12 @@ validate_workflow_scan_repair_contract() {
   grep -Fq "declared total/severity counts" "$repair_spec" || fail "$repair_spec missing repair-side count consistency contract"
   grep -Fq "total/severity count semantics" "$skills_index" || fail "$skills_index missing paired count consistency note"
 
-  for test_file in \
-    "skills/workflow-repair/tests/08-auto-follow-through-success.md" \
-    "skills/workflow-repair/tests/09-auto-stops-on-zero-success.md" \
-    "skills/workflow-repair/tests/10-auto-no-effect-under-analysis-only.md" \
-    "skills/workflow-repair/tests/11-auto-stops-on-unexpected-prompt.md" \
-    "skills/workflow-repair/tests/12-auto-blocked-without-finish-work-surface.md" \
-    "skills/workflow-repair/tests/13-post-plan-confirmation-mode.md" \
-    "skills/workflow-repair/tests/14-post-plan-confirmation-with-auto.md" \
-    "skills/workflow-repair/tests/15-partial-accept-with-documented-blockers.md" \
-    "skills/workflow-repair/tests/16-interrupted-pending-recovery.md" \
-    "skills/workflow-repair/tests/17-commit-succeeds-but-finish-work-fails.md" \
-    "skills/workflow-repair/tests/18-auto-zero-findings.md" \
-    "skills/workflow-repair/tests/19-git-commit-fails-during-auto.md" \
-    "skills/workflow-repair/tests/20-auto-with-preexisting-active-task.md" \
-    "skills/workflow-repair/tests/21-auto-all-findings-ignored.md" \
-    "skills/workflow-repair/tests/22-authorized-to-repair-partial-accept-with-auto.md" \
-    "skills/workflow-repair/tests/23-target-focus-with-out-of-focus-high-severity.md" \
-    "skills/workflow-repair/tests/24-auto-mixed-success-and-reverted.md" \
-    "skills/workflow-repair/tests/25-auto-falls-back-to-skill-surfaces.md" \
-    "skills/workflow-repair/tests/26-auto-stops-when-continue-surface-missing.md" \
-    "skills/workflow-repair/tests/27-auto-continue-closes-task.md" \
-    "skills/workflow-repair/tests/28-auto-stops-on-continue-loop-limit.md" \
-    "skills/workflow-repair/tests/29-auto-mixed-surface-availability.md" \
-    "skills/workflow-repair/tests/30-auto-stops-on-unreliable-commit-confirmation.md" \
-    "skills/workflow-repair/tests/31-auto-continue-closes-task-before-commit.md" \
-    "skills/workflow-repair/tests/32-auto-mixed-surface-availability-reversed.md" \
-    "skills/workflow-repair/tests/33-auto-close-out-not-ready-or-safe.md" \
-    "skills/workflow-repair/tests/55-stale-scan-report-blocked.md" \
-    "skills/workflow-repair/tests/56-invalid-embedded-state-schema-mismatch.md" \
-    "skills/workflow-repair/tests/57-closure-unresolved-in-scope-blocks-closeout.md" \
-    "skills/workflow-repair/tests/58-closure-new-family-stops-auto-progression.md"
-  do
+  repair_test_files="$(sed -n '/Required persisted scenario/,/^## Examples\|^## /{ /^- /{ /tests\//{ s/.*tests\///; s/`.*//; p } } }' "$repair_skill")"
+  echo "$repair_test_files" | grep -Fq "61-third-repair-task-same-lineage-escalates-to-needs-audit.md" || fail "$repair_skill missing persisted scenario declaration for third repair-task lineage escalation"
+  echo "$repair_test_files" | grep -Fq "62-legacy-repair-log-fallback-still-catches-lineage-loop.md" || fail "$repair_skill missing persisted scenario declaration for legacy lineage fallback"
+  echo "$repair_test_files" | grep -Fq "63-version-bump-does-not-reset-repair-lineage.md" || fail "$repair_skill missing persisted scenario declaration for version-bump lineage continuity"
+  for tf in $repair_test_files; do
+    test_file="skills/workflow-repair/tests/$tf"
     [ -f "$test_file" ] || fail "missing $test_file"
     grep -Fq "## Purpose" "$test_file" || fail "$test_file missing Purpose section"
     grep -Fq "## Input" "$test_file" || fail "$test_file missing Input section"

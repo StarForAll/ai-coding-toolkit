@@ -27,6 +27,9 @@ before it writes the log, so there is no project-root fallback.
 repair-log-version: 1
 protocol: workflow-scan-repair-v4
 source-report: {absolute path to WORKFLOW_QUESTIONS.md}
+scan-timestamp: {scan-timestamp from WORKFLOW_QUESTIONS.md}
+temp-project-root: {absolute temp-project-root from WORKFLOW_QUESTIONS.md}
+repair-lineage-key: {normalize(source-report) + "|" + normalize(temp-project-root) + "|" + trellis-version}
 repair-task: {absolute or repo-relative path to the dedicated repair task directory}
 issue-history-file: {absolute or repo-relative path to tmp/workflow-issues/NNNN.md | none}
 base-workflow-version: {workflow version at repair start}
@@ -46,6 +49,9 @@ total-skipped: {N}
 ## Session Info
 
 - Source Report: {absolute path to WORKFLOW_QUESTIONS.md}
+- Scan Timestamp: {scan-timestamp from WORKFLOW_QUESTIONS.md}
+- Temp Project Root: {absolute temp-project-root from WORKFLOW_QUESTIONS.md}
+- Repair Lineage Key: {normalized lineage key}
 - Repair Task: {absolute or repo-relative path to the dedicated repair task directory}
 - Issue History File: {absolute or repo-relative path to tmp/workflow-issues/NNNN.md | none}
 - Base Workflow Version: {base-workflow-version}
@@ -147,45 +153,51 @@ Each applied fix gets a record:
    was written.
    When no shadow file is written, set `issue-history-file: none` and
    `Issue History File: none` instead of omitting the field.
-9. If a run executes a `design-debt` item intentionally, the log should make
+9. The log must record enough lineage metadata for later cross-task repair-loop
+   detection: at minimum `source-report`, `scan-timestamp` when available,
+   `temp-project-root`, `trellis-version`, and `repair-lineage-key`.
+10. Later repair tasks may fall back to older logs that lack
+    `repair-lineage-key`, so new logs should prefer explicit lineage fields
+    instead of relying on path coincidence alone.
+11. If a run executes a `design-debt` item intentionally, the log should make
    the scope broadening explicit rather than implying that the item was a
    default confirmed defect.
-10. When later close-out rules need to prove that an out-of-directory file
+12. When later close-out rules need to prove that an out-of-directory file
    belongs to this run's commit scope, the log should provide that evidence by
    listing the file as changed, written, or output by this run.
-11. If continuation mode = `auto-follow-through`, the log should also record
+13. If continuation mode = `auto-follow-through`, the log should also record
    whether post-repair continuation reached finish-work, reached normal task
    closure via `continue`, or stopped with a blocker.
-12. If auto follow-through stops because a later commit-scope confirmation
+14. If auto follow-through stops because a later commit-scope confirmation
     included non-task files or misleading repair-result wording, the blocker
     reason should state that explicitly rather than implying the prompt was
     safely accepted. This is the blocker-reason form of the broader honesty
     rule below.
-13. If the blocker was instead caused by insufficient explicitness or failed
+15. If the blocker was instead caused by insufficient explicitness or failed
     independent scope proof, the blocker reason should state that explicitly
     rather than collapsing it into a generic `unreliable` label.
-14. If multiple blocker causes apply at once, the blocker reason should report
+16. If multiple blocker causes apply at once, the blocker reason should report
     all triggered causes in one concise summary rather than choosing one and
     hiding the others.
-15. Because Step 11 writes the log before Step 12 finishes, the log should use
+17. Because Step 11 writes the log before Step 12 finishes, the log should use
     `pending` until the continuation result is known, then update the same log
     with the final outcome after Step 12 completes or blocks.
-16. When continuation mode = `stop-after-summary`, set Auto Follow-Through
+18. When continuation mode = `stop-after-summary`, set Auto Follow-Through
     Outcome to `not-applicable` and skip the pending-to-final update cycle.
-17. If a later run resumes the same task and finds an older repair log still at
+19. If a later run resumes the same task and finds an older repair log still at
     `pending`, convert that stale value to
     `interrupted: session-did-not-complete` before recording the newer
     continuation outcome.
-18. `total-attempted` counts every repair item that actually entered execution,
+20. `total-attempted` counts every repair item that actually entered execution,
     regardless of final outcome. Define it as:
     `total-succeeded + total-failed + total-reverted`.
-19. When documenting mixed succeeded/reverted work, partial acceptance, or
+21. When documenting mixed succeeded/reverted work, partial acceptance, or
     `target_focus`, the log must not describe the later commit scope as if all
     attempted repairs or all report findings were verified. This is the
-    document-level honesty rule that Rules 11-13 narrow to blocker wording.
-20. When multiple repair logs exist under the same task, determine the
+    document-level honesty rule that Rules 13-15 narrow to blocker wording.
+22. When multiple repair logs exist under the same task, determine the
     "latest repair log" from the highest `repair-timestamp` value in
     frontmatter rather than from filename ordering alone.
-21. The high-level repair log should summarize and link closure-round artifacts
+23. The high-level repair log should summarize and link closure-round artifacts
     rather than flatten all closure-round findings into the per-fix repair
     record structure.
