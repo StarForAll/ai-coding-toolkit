@@ -676,3 +676,37 @@ Removed the workflow-validate-matrix skill, deleted its project-local spec and s
 ### Next Steps
 
 - None - task complete
+
+
+## Session 324: workflow-scan-repair v4 convergence redesign
+
+**Date**: 2026-05-27
+**Task**: workflow-scan-repair v4 convergence redesign
+**Branch**: `main`
+
+### Summary
+
+Upgraded workflow-scan/workflow-repair to v4 convergence model: enforced same-version stale-report blocking, introduced closure-round artifacts, downgraded issue-history to optional audit shadow, migrated workflow version format to 0.1.2800, and tightened related templates/specs/tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c0f9d0f` | (see git log) |
+| `9b399e5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
