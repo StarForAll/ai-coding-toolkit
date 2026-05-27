@@ -776,3 +776,37 @@ Closed workflow repair drift loops, tightened upgrade-compat drift detection, ad
 ### Next Steps
 
 - None - task complete
+
+
+## Session 327: Workflow repair: drift hardening and lineage escalation
+
+**Date**: 2026-05-27
+**Task**: Workflow repair: drift hardening and lineage escalation
+**Branch**: `main`
+
+### Summary
+
+Repaired installed workflow drift across Codex start routing, Claude subagent deny gating, and brainstorm placeholder links; then tightened workflow-repair with cross-task lineage escalation, lineage-key normalization, scenario coverage, and validate-skills contract checks.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3242cea` | (see git log) |
+| `54db438` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
