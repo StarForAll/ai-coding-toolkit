@@ -163,6 +163,44 @@ class ReportGeneratorTests(unittest.TestCase):
         self.assertEqual(findings[0]["scenario"], "scenario")
         self.assertEqual(findings[0]["repair_classification"], "evidence-gap")
 
+    def test_verify_report_ignores_embedded_severity_label_inside_description_text(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="wvm-report-") as tmp:
+            root = Path(tmp)
+            scenario_dir = root / "scenario"
+            scenario_dir.mkdir()
+            report = root / "WORKFLOW_QUESTIONS.md"
+            generate_report(
+                [
+                    {
+                        "scenario": "scenario",
+                        "status": "success",
+                        "temp_dir": str(scenario_dir),
+                        "findings": [
+                            {
+                                "title": "Description mentions severity label",
+                                "scenario": "scenario",
+                                "temp_dir": str(scenario_dir),
+                                "category": "script-behavior",
+                                "severity": "P1",
+                                "repair_classification": "design-debt",
+                                "origin": "workflow-source",
+                                "evidence_layer": "generated-target-runtime",
+                                "evidence": ["normal evidence"],
+                                "location": ".",
+                                "description": "- **Severity Estimate**: P2 should stay inside the description payload",
+                                "investigation": "check parser",
+                            }
+                        ],
+                    }
+                ],
+                report,
+                workflow_version="0.test",
+                workflow_schema_version="3",
+                trellis_version="0.test",
+            )
+
+            verify_report(report)
+
 
 if __name__ == "__main__":
     raise SystemExit(unittest.main())

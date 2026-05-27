@@ -17,7 +17,7 @@ Run comprehensive matrix validation across multiple temporary project scenarios 
 
 This skill creates multiple temporary projects, installs the workflow in each, runs validation checks, and generates a consolidated report compatible with `workflow-repair`.
 
-**Scope**: This skill validates workflow installation mechanics (detect-embed-state, install-workflow, upgrade-compat, workflow-state). It does NOT perform deep workflow-scan level audits of all workflow surfaces. For comprehensive audits, use `workflow-scan` on each scenario separately.
+**Scope**: This skill validates workflow installation mechanics (detect-embed-state, install-workflow, upgrade-compat, workflow-state, embed_integrity, installed-surface contract checks). It does NOT perform deep workflow-scan level audits of all workflow surfaces, does NOT validate `uninstall-workflow.py`, and does NOT perform full semantic review of `.trellis/workflow.md` beyond install/runtime contract checks that already surface through `upgrade-compat --check` and `embed_integrity.py`. For uninstall coverage, rely on installer regression tests. For comprehensive workflow-surface audits, use `workflow-scan` on each scenario separately.
 
 ## When to Use
 
@@ -32,6 +32,8 @@ Use this skill when:
 
 - Quick iteration on a single scenario: use `workflow-scan` instead (5-10 seconds vs 6-9 minutes)
 - You only have one specific scenario to test
+- You need uninstall-path validation: use the installer/uninstall regression suite, not this matrix
+- You need full `.trellis/workflow.md` semantic auditing beyond install/runtime contract validation: use `workflow-scan` or workflow audit tooling
 - You're working on non-workflow code
 
 ## Core Rules
@@ -72,7 +74,7 @@ Format: Compatible with `workflow-scan-repair-v3` protocol, with additional matr
 
 For each scenario:
 
-1. Create unique temp directory under `/tmp/trellis-matrix-{timestamp}/{scenario}`
+1. Create unique temp directory under `/tmp/trellis-matrix-{timestamp-with-microseconds}/{scenario}`
 2. Initialize scenario-specific state
 3. Record scenario metadata
 
@@ -91,8 +93,10 @@ For each scenario:
    - Setup scenario (git init, initial commit, trellis init, and scenario fixtures)
    - Run `detect-embed-state.py --json` before install and match the exact expected status
    - Install workflow when the scenario is a fresh-install scenario
-   - Run post-install integrity checks for required files and `workflow-installed.json`
+   - For blocked / already-installed scenarios, attempt install once and verify that it is explicitly rejected
+   - Run post-install integrity checks using the bundled `workflow_assets.py` contract to validate installed assets, audit surfaces, and `workflow-installed.json`
    - Run `detect-embed-state.py --json` after install and expect `ALREADY_VALID_EMBEDDED`
+   - Run `embed_integrity.py` and expect success for valid installs
    - Run `workflow-state.py route` and fail on blocking actions such as `embed_invalid`
    - Run `upgrade-compat.py --check` only for installed/upgrade scenarios
 2. Collect structured findings from both failed steps and successful commands that emit warnings
@@ -104,7 +108,7 @@ For each scenario:
 2. Assign `WS-NNN` IDs exactly once in render order
 3. Write `WORKFLOW_QUESTIONS.md` with matrix-specific metadata and one matrix root
 4. Read the report back and verify frontmatter counts, severity counts, required fields, sequential IDs, and Analysis Summary classification IDs
-5. Clean up temp directories without deleting scenario dirs referenced by findings or failures (unless `--keep-temp`)
+5. Clean up temp directories without deleting scenario dirs referenced by findings or failures (unless `--keep-temp`); if nothing is preserved, remove the matrix root too
 
 ### Step 5: Summary
 

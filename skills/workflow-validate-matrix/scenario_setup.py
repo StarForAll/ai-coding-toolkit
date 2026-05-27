@@ -157,7 +157,7 @@ def setup_preinstalled_workflow(temp_dir: Path, workflow_root: Path, scenario: d
     record["previous_workflow_version"] = record.get("workflow_version", "unknown")
     record["previous_workflow_schema_version"] = record.get("workflow_schema_version", "unknown")
     record["workflow_version"] = "0.0.0-matrix-legacy"
-    record["workflow_schema_version"] = 2
+    record["workflow_schema_version"] = "2"
     record_path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
 
 

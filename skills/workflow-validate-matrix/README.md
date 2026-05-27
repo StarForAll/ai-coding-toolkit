@@ -10,6 +10,11 @@ on live `docs/workflows/.../commands/` paths at execution time.
 
 Breaks the incremental discovery loop by testing workflow installation across multiple scenarios in a single run.
 
+Scope boundary:
+- Covers install / detect / upgrade-check / runtime integrity only
+- Does not validate `uninstall-workflow.py`; rely on installer regression tests for that path
+- Does not perform full `.trellis/workflow.md` semantic auditing beyond install/runtime contract checks already surfaced by `upgrade-compat --check` and `embed_integrity.py`
+
 ## Quick Start
 
 ### As a Skill (Recommended)
@@ -60,17 +65,19 @@ Run these from the workflow authoring repository root.
 ## What It Does
 
 1. **Pre-flight checks**: Verifies runtime bundle sync, disk space, trellis availability, and authoring-repo context
-2. **Creates 5 temp projects** under one matrix root (`/tmp/trellis-matrix-{timestamp}/`)
+2. **Creates 5 temp projects** under one matrix root (`/tmp/trellis-matrix-{timestamp-with-microseconds}/`)
 3. **Runs full validation** in each:
    - Setup scenario (git init, initial commit, trellis init, scenario-specific fixtures)
    - Run pre-install `detect-embed-state.py --json` with exact status matching
    - Install workflow for fresh-install scenarios
-   - Verify required installed files and `workflow-installed.json`
+   - For blocked / already-installed scenarios, attempt install once and verify explicit rejection
+   - Verify managed installed assets, audit surfaces, and `workflow-installed.json`
    - Run post-install `detect-embed-state.py --json`
+   - Run `embed_integrity.py`
    - Run `workflow-state.py route` and flag blocking actions such as `embed_invalid`
    - Run `upgrade-compat.py --check` for installed/upgrade scenarios
 4. **Generates consolidated report**: `WORKFLOW_QUESTIONS.md` compatible with `workflow-repair`
-5. **Cleans up**: Removes scenario directories not referenced by findings/failures; keeps the matrix root for report context
+5. **Cleans up**: Removes scenario directories not referenced by findings/failures; if nothing is preserved, removes the matrix root too
 
 ## Output
 

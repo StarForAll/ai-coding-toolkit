@@ -13,10 +13,11 @@ from constants import (
     BLOCKING_ROUTE_ACTIONS,
     EMBED_STATE_VALID,
     PYTHON_BIN,
-    REQUIRED_POST_INSTALL_PATHS,
     STEP_TIMEOUT,
 )
 from runtime_bundle_manager import SOURCE_REPO_ROOT_ENV
+
+_WORKFLOW_ASSETS_MODULE_CACHE: dict[Path, Any] = {}
 
 
 @dataclass
@@ -303,35 +304,370 @@ def run_install_workflow(
     return ValidationResult(step="install-workflow", success=True, output=output, findings=findings)
 
 
+def run_install_block_check(
+    temp_dir: Path,
+    workflow_root: Path,
+    repo_root: Path,
+    scenario_name: str,
+    profile: str,
+    cli: str,
+    expected_substrings: list[str],
+) -> ValidationResult:
+    """Run install-workflow.py and verify it is rejected for blocked/already-installed scenarios."""
+    script = workflow_root / "commands" / "install-workflow.py"
+    env = os.environ.copy()
+    env["WORKFLOW_EMBED_EXECUTOR_CONFIRMED"] = "1"
+    env[SOURCE_REPO_ROOT_ENV] = str(repo_root)
+
+    try:
+        result = _run_command(
+            [
+                PYTHON_BIN,
+                str(script),
+                "--project-root",
+                str(temp_dir),
+                "--profile",
+                profile,
+                "--cli",
+                cli,
+            ],
+            cwd=repo_root,
+            env=env,
+        )
+    except subprocess.TimeoutExpired:
+        finding = make_finding(
+            title="install-workflow block check timed out",
+            step="install-workflow-blocked",
+            scenario_name=scenario_name,
+            temp_dir=temp_dir,
+            severity="P0",
+            repair_classification="confirmed-defect",
+            evidence=["Timeout after 5 minutes"],
+            description="install-workflow.py block check did not complete within the validation timeout.",
+            investigation="Run install-workflow.py directly on the blocked scenario fixture.",
+        )
+        return ValidationResult(step="install-workflow-blocked", success=False, error=finding["description"], findings=[finding])
+    except Exception as exc:
+        finding = make_finding(
+            title="install-workflow block check could not run",
+            step="install-workflow-blocked",
+            scenario_name=scenario_name,
+            temp_dir=temp_dir,
+            severity="P0",
+            repair_classification="confirmed-defect",
+            evidence=[str(exc)],
+            description="install-workflow.py block check failed before producing output.",
+            investigation="Verify the Python interpreter and install-workflow.py path.",
+        )
+        return ValidationResult(step="install-workflow-blocked", success=False, error=str(exc), findings=[finding])
+
+    output = _combined_output(result)
+    if result.returncode == 0:
+        finding = make_finding(
+            title="install-workflow unexpectedly allowed blocked reinstall",
+            step="install-workflow-blocked",
+            scenario_name=scenario_name,
+            temp_dir=temp_dir,
+            severity="P0",
+            repair_classification="confirmed-defect",
+            evidence=[output or "install-workflow.py exited 0"],
+            description="install-workflow.py should reject this scenario but returned success.",
+            investigation="Check install-workflow.py embed-state gate before writing any install artifacts.",
+        )
+        return ValidationResult(step="install-workflow-blocked", success=False, output=output, error=finding["description"], findings=[finding])
+
+    missing_substrings = [token for token in expected_substrings if token not in output]
+    if missing_substrings:
+        finding = make_finding(
+            title="install-workflow block output missing expected evidence",
+            step="install-workflow-blocked",
+            scenario_name=scenario_name,
+            temp_dir=temp_dir,
+            severity="P1",
+            repair_classification="confirmed-defect",
+            evidence=[
+                f"missing expected substrings: {missing_substrings}",
+                output or "No output",
+            ],
+            description="install-workflow.py rejected the scenario, but the blocking evidence/output is incomplete.",
+            investigation="Keep the rejection reason explicit so matrix validation and users can tell why install was blocked.",
+        )
+        return ValidationResult(step="install-workflow-blocked", success=False, output=output, error=finding["description"], findings=[finding])
+
+    findings = _warning_findings(
+        step="install-workflow-blocked",
+        scenario_name=scenario_name,
+        temp_dir=temp_dir,
+        output=output,
+    )
+    return ValidationResult(step="install-workflow-blocked", success=True, output=output, findings=findings)
+
+
+def _load_workflow_assets_module(workflow_root: Path):
+    assets_path = (workflow_root / "commands" / "workflow_assets.py").resolve()
+    cached = _WORKFLOW_ASSETS_MODULE_CACHE.get(assets_path)
+    if cached is not None:
+        return cached
+
+    import importlib.util
+    import sys
+
+    spec = importlib.util.spec_from_file_location("workflow_validate_matrix_bundle_assets", assets_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load bundled workflow_assets.py: {assets_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    _WORKFLOW_ASSETS_MODULE_CACHE[assets_path] = module
+    return module
+
+
+def _expected_helper_scripts_for_profile(workflow_assets: Any, profile: str) -> set[str]:
+    default_profile = str(getattr(workflow_assets, "DEFAULT_PROFILE", "outsourcing"))
+    default_scripts = [str(item) for item in getattr(workflow_assets, "HELPER_SCRIPTS", [])]
+    core_scripts = [str(item) for item in getattr(workflow_assets, "CORE_HELPER_SCRIPTS", default_scripts)]
+    return set(default_scripts if profile == default_profile else core_scripts)
+
+
+def _required_substrings_findings(
+    *,
+    scenario_name: str,
+    temp_dir: Path,
+    rel_path: str,
+    content: str,
+    required_substrings: tuple[str, ...],
+    title_prefix: str,
+    investigation: str,
+) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
+    for needle in required_substrings:
+        if needle in content:
+            continue
+        findings.append(
+            make_finding(
+                title=f"{title_prefix} missing expected content",
+                step="post-install-integrity",
+                scenario_name=scenario_name,
+                temp_dir=temp_dir,
+                severity="P1",
+                repair_classification="confirmed-defect",
+                evidence=[f"path={rel_path}", f"missing substring={needle}"],
+                description=f"{rel_path} exists but does not contain expected workflow-managed content.",
+                investigation=investigation,
+                category="post-install-artifact",
+                evidence_layer="generated-target-installed",
+                location=rel_path,
+            )
+        )
+    return findings
+
+
+def _candidate_paths_for_spec(spec: Any, root: Path, workflow_assets: Any) -> list[Path]:
+    path = spec.locate(root)
+    if path is None:
+        return []
+    if getattr(spec, "kind", "") != "skill" or getattr(spec, "cli_type", "") != "codex":
+        return [path]
+
+    candidates: list[Path] = []
+    primary = path
+    candidates.append(primary)
+    try:
+        secondary_dir = workflow_assets.codex_secondary_skills_dir(root)
+    except Exception:
+        secondary_dir = None
+    if secondary_dir is not None:
+        candidates.append(secondary_dir / getattr(spec, "name") / "SKILL.md")
+    deduped: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        deduped.append(candidate)
+        seen.add(candidate)
+    return deduped
+
+
+def _candidate_paths_from_relative(rel_path: str, root: Path, workflow_assets: Any) -> list[Path]:
+    path = root / rel_path
+    if not rel_path.startswith(".codex/skills/.backup-original"):
+        return [path]
+    try:
+        shared_dir = workflow_assets.codex_shared_skills_dir(root)
+    except Exception:
+        shared_dir = None
+    shared_backup = shared_dir / ".backup-original" if shared_dir is not None else None
+    candidates = [candidate for candidate in [path, shared_backup] if candidate is not None]
+    deduped: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        deduped.append(candidate)
+        seen.add(candidate)
+    return deduped
+
+
 def run_post_install_integrity(
     temp_dir: Path,
+    workflow_root: Path,
     scenario_name: str,
     profile: str,
     cli: str,
 ) -> ValidationResult:
     """Verify installed files and workflow-installed.json semantics."""
     findings: list[dict[str, Any]] = []
+    workflow_assets = None
+    cli_types = [item.strip() for item in cli.split(",") if item.strip()]
+    expected_scripts_from_record: set[str] | None = None
+    try:
+        workflow_assets = _load_workflow_assets_module(workflow_root)
+        asset_specs = workflow_assets.build_managed_asset_specs(cli_types)
+        extra_specs = workflow_assets.build_managed_audit_extra_specs(cli_types)
+    except Exception as exc:
+        findings.append(
+            make_finding(
+                title="Unable to load workflow asset contract",
+                step="post-install-integrity",
+                scenario_name=scenario_name,
+                temp_dir=temp_dir,
+                severity="P0",
+                repair_classification="confirmed-defect",
+                evidence=[str(exc)],
+                description="Matrix validation could not load the bundled workflow asset contract.",
+                investigation="Check that runtime_bundle/workflow/commands/workflow_assets.py exists and remains importable.",
+                category="post-install-artifact",
+                evidence_layer="generated-target-runtime",
+                location="runtime_bundle/workflow/commands/workflow_assets.py",
+            )
+        )
+        asset_specs = []
+        extra_specs = []
 
-    for rel_path in REQUIRED_POST_INSTALL_PATHS:
-        if not (temp_dir / rel_path).exists():
+    record_path = temp_dir / ".trellis" / "workflow-installed.json"
+    record: dict[str, Any] | None = None
+    if record_path.exists():
+        try:
+            record = json.loads(record_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            record = None
+    if isinstance(record, dict) and isinstance(record.get("scripts"), list):
+        expected_scripts_from_record = {str(item) for item in record["scripts"]}
+
+    for spec in asset_specs:
+        candidate_paths = _candidate_paths_for_spec(spec, temp_dir, workflow_assets)
+        if not candidate_paths:
+            continue
+        relative_path = candidate_paths[0].relative_to(temp_dir).as_posix()
+        if spec.category == "disabled-baseline":
+            if any(path.exists() for path in candidate_paths):
+                findings.append(
+                    make_finding(
+                        title=f"Disabled baseline asset should be absent: {spec.asset_id}",
+                        step="post-install-integrity",
+                        scenario_name=scenario_name,
+                        temp_dir=temp_dir,
+                        severity="P0",
+                        repair_classification="confirmed-defect",
+                        evidence=[f"Unexpected path present: {relative_path}"],
+                        description="A disabled baseline asset still exists after installation.",
+                        investigation=f"Check why install-workflow.py did not remove disabled asset {spec.asset_id}.",
+                        category="post-install-artifact",
+                        evidence_layer="generated-target-installed",
+                        location=relative_path,
+                    )
+                )
+            continue
+        if getattr(spec, "kind", "") == "script" and expected_scripts_from_record is not None:
+            if getattr(spec, "name", "") not in expected_scripts_from_record:
+                continue
+        if not any(path.exists() for path in candidate_paths):
             findings.append(
                 make_finding(
-                    title=f"Missing installed artifact: {rel_path}",
+                    title=f"Missing installed asset: {spec.asset_id}",
                     step="post-install-integrity",
                     scenario_name=scenario_name,
                     temp_dir=temp_dir,
                     severity="P0",
                     repair_classification="confirmed-defect",
-                    evidence=[f"Missing path: {rel_path}"],
-                    description="install-workflow.py completed, but a required installed artifact is absent.",
-                    investigation=f"Check why install-workflow.py did not create {rel_path}.",
+                    evidence=[f"Missing path: {relative_path}"],
+                    description="install-workflow.py completed, but a managed installed asset is absent.",
+                    investigation=f"Check why install-workflow.py did not deploy {spec.asset_id}.",
                     category="post-install-artifact",
                     evidence_layer="generated-target-installed",
-                    location=rel_path,
+                    location=relative_path,
                 )
             )
 
-    record_path = temp_dir / ".trellis" / "workflow-installed.json"
+    checked_extra_targets: set[tuple[str, str]] = set()
+    for extra in extra_specs:
+        cli_path_map = {
+            "claude": getattr(extra, "claude_paths", ()),
+            "opencode": getattr(extra, "opencode_paths", ()),
+            "codex": getattr(extra, "codex_paths", ()),
+        }
+        for cli_type, rel_paths in cli_path_map.items():
+            if cli_type not in set(cli_types):
+                continue
+            for rel_path in rel_paths:
+                dedupe_key = (extra.capability, rel_path)
+                if dedupe_key in checked_extra_targets:
+                    continue
+                checked_extra_targets.add(dedupe_key)
+                targets = _candidate_paths_from_relative(rel_path, temp_dir, workflow_assets)
+                if not any(target.exists() for target in targets):
+                    findings.append(
+                        make_finding(
+                            title=f"Missing audit surface: {extra.capability}",
+                            step="post-install-integrity",
+                            scenario_name=scenario_name,
+                            temp_dir=temp_dir,
+                            severity="P0",
+                            repair_classification="confirmed-defect",
+                            evidence=[f"capability={extra.capability}", f"missing path={rel_path}"],
+                            description="A documented workflow-managed audit surface is missing after installation.",
+                            investigation=f"Reconcile install-workflow.py deployment with workflow_assets.py contract for {extra.capability}.",
+                            category="post-install-artifact",
+                            evidence_layer="generated-target-installed",
+                            location=rel_path,
+                        )
+                    )
+                    continue
+                readable_target = next((target for target in targets if target.exists() and target.is_file()), None)
+                if not extra.required_substrings or readable_target is None:
+                    continue
+                try:
+                    content = readable_target.read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError) as exc:
+                    findings.append(
+                        make_finding(
+                            title=f"Unreadable audit surface: {extra.capability}",
+                            step="post-install-integrity",
+                            scenario_name=scenario_name,
+                            temp_dir=temp_dir,
+                            severity="P0",
+                            repair_classification="confirmed-defect",
+                            evidence=[f"path={rel_path}", str(exc)],
+                            description="A workflow-managed audit surface exists but cannot be read for validation.",
+                            investigation="Check file encoding and deployment integrity.",
+                            category="post-install-artifact",
+                            evidence_layer="generated-target-installed",
+                            location=rel_path,
+                        )
+                    )
+                    continue
+                findings.extend(
+                    _required_substrings_findings(
+                        scenario_name=scenario_name,
+                        temp_dir=temp_dir,
+                        rel_path=rel_path,
+                        content=content,
+                        required_substrings=tuple(extra.required_substrings),
+                        title_prefix=extra.capability,
+                        investigation=f"Reconcile {rel_path} with workflow_assets.py content contract for {extra.capability}.",
+                    )
+                )
+
     if record_path.exists():
         try:
             record = json.loads(record_path.read_text(encoding="utf-8"))
@@ -359,6 +695,9 @@ def run_post_install_integrity(
                 "profile",
                 "cli_types",
             }
+            expected_scripts_from_record = (
+                set(record.get("scripts", [])) if isinstance(record.get("scripts"), list) else set()
+            )
             missing = sorted(key for key in required_keys if key not in record)
             if missing:
                 findings.append(
@@ -411,6 +750,32 @@ def run_post_install_integrity(
                         ],
                         description="The install record does not include all CLI adapters requested by the scenario.",
                         investigation="Check CLI detection/filtering in install-workflow.py.",
+                        category="post-install-artifact",
+                        evidence_layer="generated-target-installed",
+                        location=".trellis/workflow-installed.json",
+                    )
+                )
+            expected_scripts = (
+                _expected_helper_scripts_for_profile(workflow_assets, profile)
+                if workflow_assets is not None
+                else set()
+            )
+            actual_scripts = expected_scripts_from_record
+            if expected_scripts and expected_scripts != actual_scripts:
+                findings.append(
+                    make_finding(
+                        title="workflow-installed.json scripts list mismatch",
+                        step="post-install-integrity",
+                        scenario_name=scenario_name,
+                        temp_dir=temp_dir,
+                        severity="P1",
+                        repair_classification="confirmed-defect",
+                        evidence=[
+                            f"expected scripts={sorted(expected_scripts)}",
+                            f"actual scripts={sorted(actual_scripts)}",
+                        ],
+                        description="The install record does not describe the helper script set that the profile should deploy.",
+                        investigation="Check install record writing and profile-specific helper script selection.",
                         category="post-install-artifact",
                         evidence_layer="generated-target-installed",
                         location=".trellis/workflow-installed.json",
@@ -498,6 +863,77 @@ def run_upgrade_compat(
 
     findings = _warning_findings(step="upgrade-compat", scenario_name=scenario_name, temp_dir=temp_dir, output=output)
     return ValidationResult(step="upgrade-compat", success=True, output=output, findings=findings)
+
+
+def run_embed_integrity(temp_dir: Path, scenario_name: str) -> ValidationResult:
+    """Run embed_integrity.py on the installed project."""
+    script = temp_dir / ".trellis" / "scripts" / "workflow" / "embed_integrity.py"
+    if not script.exists():
+        finding = make_finding(
+            title="embed_integrity.py missing after install",
+            step="embed-integrity",
+            scenario_name=scenario_name,
+            temp_dir=temp_dir,
+            severity="P0",
+            repair_classification="confirmed-defect",
+            evidence=["Missing .trellis/scripts/workflow/embed_integrity.py"],
+            description="The installed workflow cannot run embed_integrity because the helper script is missing.",
+            investigation="Check helper script deployment in install-workflow.py.",
+            category="post-install-artifact",
+            evidence_layer="generated-target-installed",
+            location=".trellis/scripts/workflow/embed_integrity.py",
+        )
+        return ValidationResult(step="embed-integrity", success=False, error=finding["description"], findings=[finding])
+
+    try:
+        result = _run_command([PYTHON_BIN, str(script), str(temp_dir)], cwd=temp_dir)
+    except subprocess.TimeoutExpired:
+        finding = make_finding(
+            title="embed_integrity.py timed out",
+            step="embed-integrity",
+            scenario_name=scenario_name,
+            temp_dir=temp_dir,
+            severity="P0",
+            repair_classification="confirmed-defect",
+            evidence=["Timeout after 5 minutes"],
+            description="embed_integrity.py did not complete within the validation timeout.",
+            investigation="Run embed_integrity.py directly in the installed fixture.",
+            location=".trellis/scripts/workflow/embed_integrity.py",
+        )
+        return ValidationResult(step="embed-integrity", success=False, error=finding["description"], findings=[finding])
+    except Exception as exc:
+        finding = make_finding(
+            title="embed_integrity.py could not run",
+            step="embed-integrity",
+            scenario_name=scenario_name,
+            temp_dir=temp_dir,
+            severity="P0",
+            repair_classification="confirmed-defect",
+            evidence=[str(exc)],
+            description="embed_integrity.py failed before producing output.",
+            investigation="Verify the Python interpreter and installed embed_integrity.py.",
+            location=".trellis/scripts/workflow/embed_integrity.py",
+        )
+        return ValidationResult(step="embed-integrity", success=False, error=str(exc), findings=[finding])
+
+    output = _combined_output(result)
+    if result.returncode != 0:
+        finding = make_finding(
+            title="embed_integrity.py reported invalid embed state",
+            step="embed-integrity",
+            scenario_name=scenario_name,
+            temp_dir=temp_dir,
+            severity="P0",
+            repair_classification="confirmed-defect",
+            evidence=[output or "No output"],
+            description="embed_integrity.py reported the installed workflow as invalid.",
+            investigation="Inspect the installed embed artifacts and integrity advisories.",
+            location=".trellis/scripts/workflow/embed_integrity.py",
+        )
+        return ValidationResult(step="embed-integrity", success=False, output=output, error=finding["description"], findings=[finding])
+
+    findings = _warning_findings(step="embed-integrity", scenario_name=scenario_name, temp_dir=temp_dir, output=output)
+    return ValidationResult(step="embed-integrity", success=True, output=output, findings=findings)
 
 
 def run_workflow_state(temp_dir: Path, scenario_name: str) -> ValidationResult:
@@ -611,9 +1047,22 @@ def run_validations(
         results.append(install_result)
         if not install_result.success:
             return results
+    elif scenario.get("verify_install_blocked", False):
+        block_result = run_install_block_check(
+            temp_dir,
+            workflow_root,
+            repo_root,
+            scenario_name,
+            profile,
+            cli,
+            [str(item) for item in scenario.get("expected_install_block_substrings", [])],
+        )
+        results.append(block_result)
+        if not block_result.success:
+            return results
 
     if scenario.get("run_post_checks", True):
-        results.append(run_post_install_integrity(temp_dir, scenario_name, profile, cli))
+        results.append(run_post_install_integrity(temp_dir, workflow_root, scenario_name, profile, cli))
         results.append(
             run_detect_embed_state(
                 temp_dir,
@@ -625,6 +1074,7 @@ def run_validations(
                 cli=cli,
             )
         )
+        results.append(run_embed_integrity(temp_dir, scenario_name))
         results.append(run_workflow_state(temp_dir, scenario_name))
 
     if scenario.get("run_upgrade_compat", False):

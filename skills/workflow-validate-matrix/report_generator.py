@@ -270,10 +270,12 @@ def _parse_finding_blocks(body: str) -> list[dict[str, str]]:
             continue
         if current is None:
             continue
-        if line.startswith("- **") and "**:" in line:
-            key = line.split("**", 2)[1]
-            value = line.split(":", 1)[1].strip()
-            current[key] = value
+        if line.startswith("- **") and "**:" in line and not line.startswith("  - "):
+            key_part, value = line[2:].split(":", 1)
+            if not key_part.startswith("**") or not key_part.endswith("**"):
+                continue
+            key = key_part[2:-2]
+            current[key] = value.strip()
     if current is not None:
         blocks.append(current)
     return blocks

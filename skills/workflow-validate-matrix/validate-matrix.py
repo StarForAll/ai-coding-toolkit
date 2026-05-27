@@ -9,7 +9,7 @@ import argparse
 import shutil
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Any
 
@@ -74,6 +74,12 @@ def cleanup_temp_dir(temp_dir: Path) -> None:
     """Clean up temp directory."""
     if temp_dir.exists():
         shutil.rmtree(temp_dir)
+
+
+def cleanup_matrix_root(matrix_root: Path) -> None:
+    """Remove the matrix root when no scenario directories need to be preserved."""
+    if matrix_root.exists():
+        shutil.rmtree(matrix_root)
 
 
 def run_scenario(
@@ -192,7 +198,7 @@ def main() -> int:
 
     # Run scenarios
     print(f"\n2. Running {len(SCENARIOS)} scenarios...")
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
     scenario_results = []
 
     for scenario in SCENARIOS:
@@ -232,9 +238,14 @@ def main() -> int:
             except Exception as e:
                 print(f"  ⚠️  Failed to clean {temp_dir}: {e}")
         if matrix_root is not None:
-            matrix_root.mkdir(parents=True, exist_ok=True)
             if preserved == 0:
-                print(f"  📁 Keeping matrix root for report context: {matrix_root}")
+                try:
+                    cleanup_matrix_root(matrix_root)
+                    print(f"  ✅ Cleaned matrix root: {matrix_root}")
+                except Exception as e:
+                    print(f"  ⚠️  Failed to clean matrix root {matrix_root}: {e}")
+            else:
+                print(f"  📁 Keeping matrix root with preserved scenarios: {matrix_root}")
     else:
         print("\n4. Keeping temp directories (--keep-temp):")
         for result in scenario_results:

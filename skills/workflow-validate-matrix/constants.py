@@ -20,15 +20,6 @@ BLOCKING_ROUTE_ACTIONS = {
     "repair_needed",
 }
 
-# Relative files that must exist after a successful install.
-REQUIRED_POST_INSTALL_PATHS = (
-    ".trellis/workflow-installed.json",
-    ".trellis/workflow.md",
-    ".trellis/library-lock.yaml",
-    ".trellis/scripts/workflow/workflow-state.py",
-    ".trellis/scripts/workflow/embed_integrity.py",
-)
-
 # Scenario definitions. Keep this small enough for pre-commit use, but diverse
 # enough that "matrix" covers state/profile/CLI/upgrade boundaries.
 SCENARIOS = [
@@ -80,6 +71,11 @@ SCENARIOS = [
         "mode": "blocked-state",
         "expected_pre_status": EMBED_STATE_BLOCKED,
         "run_install": False,
+        "verify_install_blocked": True,
+        "expected_install_block_substrings": [
+            "目标项目不是可执行首次嵌入的初始态",
+            "workflow-embed-attempt.json",
+        ],
         "run_upgrade_compat": False,
         "run_post_checks": False,
     },
@@ -93,15 +89,25 @@ SCENARIOS = [
         "expected_pre_status": EMBED_STATE_VALID,
         "expected_post_status": EMBED_STATE_VALID,
         "run_install": False,
+        "verify_install_blocked": True,
+        "expected_install_block_substrings": [
+            "目标项目不是可执行首次嵌入的初始态",
+            "workflow-installed.json",
+        ],
         "run_upgrade_compat": True,
         "run_post_checks": True,
     },
 ]
 
-# Validation commands
+# Validation step surface. Individual scenarios execute only the subset that
+# applies to their mode/profile/state.
 VALIDATION_STEPS = [
-    "detect-embed-state",
+    "detect-embed-state-pre",
     "install-workflow",
+    "install-workflow-blocked",
+    "post-install-integrity",
+    "detect-embed-state-post",
+    "embed-integrity",
     "upgrade-compat",
     "workflow-state",
 ]

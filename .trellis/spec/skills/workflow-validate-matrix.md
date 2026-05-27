@@ -44,6 +44,18 @@ Matrix runner:
   [--output PATH]
 ```
 
+Validation step surface:
+
+```text
+detect-embed-state-pre
+install-workflow | install-workflow-blocked
+post-install-integrity
+detect-embed-state-post
+embed-integrity
+workflow-state route
+upgrade-compat --check
+```
+
 ### 3. Contracts
 
 - The skill must keep `trellis` as an explicit runtime prerequisite.
@@ -61,6 +73,13 @@ Matrix runner:
   - content drift
   - extra stale bundle files
 - Shared workflow scripts that rely on source-repo discovery must support bundle execution by resolving the host source repo through explicit env override and/or upward search, not only by fixed `parents[N]` assumptions.
+- Blocked / already-installed scenarios must not stop at pre-check only; the matrix must execute `install-workflow.py` once and verify that installation is explicitly rejected with evidence-bearing output.
+- Fresh-install post checks must validate installed surfaces against the bundled workflow asset contract (`runtime_bundle/workflow/commands/workflow_assets.py`) rather than a small handwritten existence-only path list.
+- Post-install verification must include an actual `embed_integrity.py` execution, not only file presence.
+- Matrix scope stops at install/runtime validation. `uninstall-workflow.py` coverage remains outside this skill and must stay in the installer regression suite unless the matrix contract is explicitly expanded.
+- `.trellis/workflow.md` is validated only at the install/runtime contract level already surfaced by installed-surface checks, `upgrade-compat --check`, and `embed_integrity.py`; full document-semantic auditing belongs to workflow-scan / audit flows, not this matrix.
+- Matrix temp roots must be unique across rapid consecutive runs (microsecond-level timestamp or equivalent uniqueness) and must be deleted when no scenario directory needs preservation.
+- Report read-back verification must only parse top-level finding fields; embedded `- **Field**:` text inside description/evidence payloads must not be treated as real finding metadata.
 
 ### 4. Validation & Error Matrix
 
@@ -73,6 +92,9 @@ Matrix runner:
 | Runtime bundle in sync | continue normally |
 | Sync script `--check` finds drift | exit non-zero |
 | Sync script writes bundle | emit follow-up reminder to reinstall global skill |
+| Blocked/legacy scenario install attempt | install must exit non-zero and mention the blocking evidence |
+| Fresh install post-check | managed assets + audit surfaces + install record + embed_integrity must all validate |
+| No preserved scenario dirs remain | matrix root should be removed |
 
 ### 5. Good / Base / Bad Cases
 
@@ -105,8 +127,16 @@ Matrix runner:
   - `./scripts/validate-skills.sh` must invoke the bundle drift check
 - Runtime regression:
   - real matrix run succeeds using the bundled runtime path
+- Validation-runner regression:
+  - blocked scenarios assert `install-workflow.py` rejection, not just pre-check status
+  - post-install integrity uses bundled `workflow_assets.py` contract to validate installed surfaces
+  - disabled baseline assets (for example Codex `parallel`) are asserted absent, not present
+  - `embed_integrity.py` is executed and must return success for valid installs
+  - matrix root cleanup removes the parent temp root when nothing was preserved
 - Workflow command regression:
   - at least one installer-side test must still pass after replacing fixed `parents[4]` assumptions with source-root resolution
+- Report regression:
+  - `verify_report()` must ignore `- **Severity Estimate**:`-like text embedded inside description payloads
 
 ### 7. Wrong vs Correct
 
