@@ -528,6 +528,8 @@ validate_workflow_scan_repair_contract() {
   grep -Fq "Issue Family ID" "$closure_round_template" || fail "$closure_round_template missing issue-family identifier field"
   grep -Fq "Round Outcome" "$closure_round_template" || fail "$closure_round_template missing round outcome section"
   grep -Fq "same-version" "$closure_round_template" || fail "$closure_round_template missing same-version boundary note"
+  grep -Fq "round-outcome: blocked" "$closure_round_template" || fail "$closure_round_template missing blocked outcome guidance"
+  grep -Fq "round-outcome: needs-audit" "$closure_round_template" || fail "$closure_round_template missing needs-audit outcome guidance"
 
   grep -Fq "{trellis-version from WORKFLOW_QUESTIONS.md}" "$correction_plan_template" || fail "$correction_plan_template missing trellis-version placeholder from scan report"
   grep -Fq "{workflow-version from WORKFLOW_QUESTIONS.md}" "$correction_plan_template" || fail "$correction_plan_template missing workflow-version placeholder from scan report"
@@ -549,6 +551,9 @@ validate_workflow_scan_repair_contract() {
   grep -Fq "**Report Classification**" "$repair_log_template" || fail "$repair_log_template missing report classification field"
   grep -Fq "continuation-mode:" "$repair_log_template" || fail "$repair_log_template missing continuation-mode frontmatter"
   grep -Fq "total-reverted:" "$repair_log_template" || fail "$repair_log_template missing total-reverted counter"
+  grep -Fq "issue-history-file: {absolute or repo-relative path to tmp/workflow-issues/NNNN.md | none}" "$repair_log_template" || fail "$repair_log_template missing optional issue-history-file guidance"
+  grep -Fq "Issue History File: {absolute or repo-relative path to tmp/workflow-issues/NNNN.md | none}" "$repair_log_template" || fail "$repair_log_template missing optional issue-history body guidance"
+  grep -Fq "\`issue-history-file: none\`" "$repair_log_template" || fail "$repair_log_template missing explicit none fallback for omitted shadow file"
   grep -Fq "Auto Follow-Through Outcome" "$repair_log_template" || fail "$repair_log_template missing structured continuation outcome field"
   grep -Fq "\`pending\` until the continuation result is known" "$repair_log_template" || fail "$repair_log_template missing pending-to-final continuation logging rule"
   grep -Fq "\`not-applicable\`" "$repair_log_template" || fail "$repair_log_template missing not-applicable rule for stop-after-summary mode"

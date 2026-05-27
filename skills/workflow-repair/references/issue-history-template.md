@@ -15,7 +15,7 @@ real convergence memory surface.
 
 ## Document Location
 
-Write exactly one file per repair execution to:
+If the current run chooses to emit the optional shadow, write one file to:
 
 `tmp/workflow-issues/NNNN.md`
 
@@ -77,7 +77,8 @@ total-issues: {N}
 
 ### Rules
 
-1. Every execution must write one document even when no fixes were applied.
+1. A run may skip this artifact entirely. When skipped, the repair log should
+   record `issue-history-file: none`.
 2. The required per-issue fields are:
    - temp project version
    - report path

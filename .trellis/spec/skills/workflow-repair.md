@@ -116,6 +116,8 @@ The skill must:
   surface for the current repair task
 - optional `tmp/workflow-issues/` outputs are audit shadows only, not the
   primary v4 repair-decision memory
+- when the optional shadow is omitted, the repair log should record
+  `issue-history-file: none`
 
 ### 4. Authorization Discipline
 
@@ -339,6 +341,8 @@ When editing `skills/workflow-repair/`, confirm all of the following:
 - same-version task-local closure artifacts are now the repair memory surface
 - optional issue-history shadow output must not be treated as the primary v4
   decision path
+- when no shadow file is written, the repair log should say `none` explicitly
+  rather than leaving the field ambiguous
 - explicit repair authorization and analysis-only behavior remain distinct
 - `--auto` remains explicit, post-repair only, and current-task scoped
 - `--auto` now explicitly no-ops when repair execution never runs under

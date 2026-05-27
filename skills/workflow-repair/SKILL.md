@@ -673,6 +673,7 @@ After source-side verification succeeds for the applied fixes:
    - stop automatic progression of the current batch
    - return to a planning / decision checkpoint
    - do not close out or bump the workflow version
+   - record the round outcome as `needs-audit`
 8. If any new in-scope finding remains unresolved at the end of closure:
    - stop the run from close-out
    - do not bump the workflow version
@@ -680,7 +681,8 @@ After source-side verification succeeds for the applied fixes:
    - roll back that round's additions
    - record the rollback in the closure-round artifact and repair log
 10. If closure remains non-converged after the allowed same-family absorb
-    rounds, stop as broader non-convergence rather than continuing indefinitely.
+    rounds, stop as broader non-convergence rather than continuing indefinitely
+    and record the round outcome as `needs-audit`.
 
 ### Step 11: Write Repair Log, Closure Artifacts, and Summarize
 
@@ -697,6 +699,8 @@ After source-side verification succeeds for the applied fixes:
 4. Optionally write one `tmp/workflow-issues/{NNNN}.md` shadow file only as an
    auxiliary audit artifact; do not use it as the `v4` repair decision
    surface.
+   If no shadow file is written, record `issue-history-file: none` in the
+   repair log instead of implying that a file exists.
 5. Echo the summary:
    - report path consumed
    - repair task path

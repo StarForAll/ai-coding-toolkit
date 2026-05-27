@@ -135,5 +135,16 @@ round-outcome: clean | absorbed | blocked | needs-audit | reverted
    not close out or bump the workflow version.
 5. Findings from a new family must stop automatic progression of the current
    repair batch.
-6. These files are task-local same-version execution artifacts, not reusable
+6. Use `round-outcome: blocked` when fixture creation, command execution,
+   invalid embedded state, or another execution blocker prevents a reliable
+   closure judgment for the round.
+7. Use `round-outcome: needs-audit` when:
+   - closure discovers a new family and the current batch must stop for a
+     broader decision, or
+   - same-family non-convergence exceeds the bounded absorb rounds, or
+   - broader contract-surface ambiguity requires audit rather than another
+     routine absorb round.
+8. Use `round-outcome: reverted` when closure-added repairs for this round were
+   attempted and then rolled back.
+9. These files are task-local same-version execution artifacts, not reusable
    cross-version repair memory.

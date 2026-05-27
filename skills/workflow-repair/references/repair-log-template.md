@@ -28,7 +28,7 @@ repair-log-version: 1
 protocol: workflow-scan-repair-v4
 source-report: {absolute path to WORKFLOW_QUESTIONS.md}
 repair-task: {absolute or repo-relative path to the dedicated repair task directory}
-issue-history-file: {absolute or repo-relative path to tmp/workflow-issues/NNNN.md}
+issue-history-file: {absolute or repo-relative path to tmp/workflow-issues/NNNN.md | none}
 base-workflow-version: {workflow version at repair start}
 trellis-version: {current trellis version}
 repair-timestamp: {ISO 8601}
@@ -47,7 +47,7 @@ total-skipped: {N}
 
 - Source Report: {absolute path to WORKFLOW_QUESTIONS.md}
 - Repair Task: {absolute or repo-relative path to the dedicated repair task directory}
-- Issue History File: {absolute or repo-relative path to tmp/workflow-issues/NNNN.md}
+- Issue History File: {absolute or repo-relative path to tmp/workflow-issues/NNNN.md | none}
 - Base Workflow Version: {base-workflow-version}
 - Trellis Version: {current trellis version}
 - Repair Time: {ISO 8601 timestamp}
@@ -145,6 +145,8 @@ Each applied fix gets a record:
 8. The log must record the dedicated repair task path, the current run's base
    workflow version, and the optional legacy issue-history shadow file if one
    was written.
+   When no shadow file is written, set `issue-history-file: none` and
+   `Issue History File: none` instead of omitting the field.
 9. If a run executes a `design-debt` item intentionally, the log should make
    the scope broadening explicit rather than implying that the item was a
    default confirmed defect.
