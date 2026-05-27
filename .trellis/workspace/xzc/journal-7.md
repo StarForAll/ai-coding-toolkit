@@ -610,3 +610,36 @@ Bundled workflow-validate-matrix runtime into the installable skill, added sync/
 ### Next Steps
 
 - None - task complete
+
+
+## Session 322: workflow-validate-matrix skill 修复问题
+
+**Date**: 2026-05-27
+**Task**: workflow-validate-matrix skill 修复问题
+**Branch**: `main`
+
+### Summary
+
+审查并修复 workflow-validate-matrix 的场景验证、安装后完整性检查、报告解析、诊断收集与文档边界说明，补充回归测试并完成真实矩阵验证。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `69053da` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
