@@ -427,6 +427,7 @@ class PatchHelperScriptTests(unittest.TestCase):
         self.assertIn("buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt)", patched)
         self.assertIn("Strong-gate blocked this subagent dispatch.", patched)
         self.assertIn("current embedded workflow disables agent/subagent execution paths", patched)
+        self.assertIn("JSON.parse(raw)", patched)
         self.assertIn("args.prompt = buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt)", patched)
         self.assertIn("return false", patched)
         self.assertNotIn(': "unknown"', patched)

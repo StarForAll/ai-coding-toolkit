@@ -707,6 +707,35 @@ After source-side verification succeeds for the applied fixes:
     rounds, stop as broader non-convergence rather than continuing indefinitely
     and record the round outcome as `needs-audit`.
 
+### Step 10B: Bump Workflow Version After Converged Repair
+
+Use this step only when:
+
+- at least one repair item finished as `verified`
+- closure converged without unresolved in-scope findings
+- repair-side source changes remain in place
+
+Then:
+
+1. Treat the repair run's starting `WORKFLOW_VERSION` as the base version.
+2. Bump only the final numeric segment, for example:
+   - `0.1.2800 -> 0.1.2801`
+   - `0.1.9999 -> 0.1.10000`
+3. Use the workflow-local helper when available:
+
+```bash
+/ops/softwares/python/bin/python3 \
+docs/workflows/新项目开发工作流/commands/bump-workflow-version.py \
+--expected-current <base-workflow-version> \
+--summary "<one-line repair summary>"
+```
+
+4. Synchronize all active current-version references in the same change.
+5. If the helper reports that the current version no longer matches the base
+   version, stop instead of guessing which version to bump from.
+6. If the run is no-op, reverted, failed, blocked from convergence, or leaves
+   unresolved in-scope closure findings, do not bump the workflow version.
+
 ### Step 11: Write Repair Log, Closure Artifacts, and Summarize
 
 1. Write the repair log using `references/repair-log-template.md`.
@@ -728,6 +757,7 @@ After source-side verification succeeds for the applied fixes:
    - report path consumed
    - repair task path
    - base workflow version
+   - bumped workflow version, when Step 10B ran
    - adopted / ignored / blocked / manual-decision / trellis-native counts
    - succeeded / failed / skipped counts
    - continuation mode

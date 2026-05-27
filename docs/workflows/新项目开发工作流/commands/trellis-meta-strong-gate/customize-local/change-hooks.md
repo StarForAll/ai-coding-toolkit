@@ -29,7 +29,7 @@ Hooks/plugins are the automation layer that connects a platform to Trellis. In s
 
 ## Modification Steps
 
-1. Find the registration in the current platform settings/config.
+1. Find the relevant platform settings/config surface, then locate the actual registered or auto-discovered carrier path.
 2. Confirm the registered hook/plugin path exists.
 3. Read the carrier implementation and identify its inputs, outputs, and `.trellis/scripts/` dependencies.
 4. Modify the carrier behavior.
@@ -41,7 +41,7 @@ First find the platform carrier for the current target:
 
 ```text
 Claude Code: .claude/settings.json -> .claude/hooks/session-start.py
-OpenCode: .opencode/package.json -> .opencode/plugins/session-start.js
+OpenCode: .opencode/package.json (dependency/config surface) + .opencode/plugins/session-start.js (actual plugin carrier)
 Codex: .codex/hooks.json -> .codex/hooks/inject-workflow-state.py
 ```
 
@@ -60,7 +60,7 @@ If the task and JSONL are correct, determine whether the platform uses hook/plug
 
 ## Notes
 
-- Settings/config files handle registration; hook/plugin files handle behavior. Inspect both together.
+- Settings/config files handle registration or dependency activation; hook/plugin files handle behavior. Inspect both together.
 - Different platforms support different carrier shapes. Do not directly copy Claude hook paths into OpenCode or Codex guidance.
 - Hooks/plugins should read project-local `.trellis/`; they should not depend on Trellis upstream source paths.
 - Carrier failures should surface visible errors so AI does not silently lose context.

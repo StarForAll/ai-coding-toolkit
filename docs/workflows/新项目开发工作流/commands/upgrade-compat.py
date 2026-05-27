@@ -104,6 +104,8 @@ patch_opencode_inject_subagent_context = _INSTALL_WORKFLOW.patch_opencode_inject
 patch_codex_config_main_session_only = _INSTALL_WORKFLOW.patch_codex_config_main_session_only
 patch_task_status_views = _INSTALL_WORKFLOW.patch_task_status_views
 patch_session_start_no_task_guidance = _INSTALL_WORKFLOW.patch_session_start_no_task_guidance
+patch_trellis_meta_references = _INSTALL_WORKFLOW.patch_trellis_meta_references
+patch_platform_update_spec_skills = _INSTALL_WORKFLOW.patch_platform_update_spec_skills
 _apply_patch_session_start = _INSTALL_WORKFLOW._apply_patch_session_start
 _apply_patch_task_start = _INSTALL_WORKFLOW._apply_patch_task_start
 _apply_patch_task_create_preserve_active = _INSTALL_WORKFLOW._apply_patch_task_create_preserve_active
@@ -126,6 +128,15 @@ _CODEX_MAIN_SESSION_ONLY_TABLE = _INSTALL_WORKFLOW._CODEX_MAIN_SESSION_ONLY_TABL
 _CODEX_MAIN_SESSION_ONLY_LINE = _INSTALL_WORKFLOW._CODEX_MAIN_SESSION_ONLY_LINE
 _OPENCODE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER = _INSTALL_WORKFLOW._OPENCODE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER
 _WORKFLOW_PHASE_PATCH_MARKER = _INSTALL_WORKFLOW._WORKFLOW_PHASE_PATCH_MARKER
+_BRAINSTORM_WORKFLOW_NOTE = _INSTALL_WORKFLOW._BRAINSTORM_WORKFLOW_NOTE
+_BRAINSTORM_WHEN_TO_USE_OLD = _INSTALL_WORKFLOW._BRAINSTORM_WHEN_TO_USE_OLD
+_BRAINSTORM_SHARED_WHEN_TO_USE_OLD = _INSTALL_WORKFLOW._BRAINSTORM_SHARED_WHEN_TO_USE_OLD
+_BRAINSTORM_RELATED_COMMAND_START_OLD = _INSTALL_WORKFLOW._BRAINSTORM_RELATED_COMMAND_START_OLD
+_BRAINSTORM_RELATED_COMMAND_UPDATE_OLD = _INSTALL_WORKFLOW._BRAINSTORM_RELATED_COMMAND_UPDATE_OLD
+_UPDATE_SPEC_PLATFORM_REPLACEMENTS = _INSTALL_WORKFLOW._UPDATE_SPEC_PLATFORM_REPLACEMENTS
+_UPDATE_SPEC_SHARED_REPLACEMENTS = _INSTALL_WORKFLOW._UPDATE_SPEC_SHARED_REPLACEMENTS
+_CROSS_LAYER_GUIDE_STALE_LINE = _INSTALL_WORKFLOW._CROSS_LAYER_GUIDE_STALE_LINE
+_CROSS_LAYER_GUIDE_FIXED_LINE = _INSTALL_WORKFLOW._CROSS_LAYER_GUIDE_FIXED_LINE
 # Reuse install-workflow markers for idempotency checks
 _WORKFLOW_PHASE_INDEX_MARKER = _INSTALL_WORKFLOW._WORKFLOW_PHASE_INDEX_MARKER
 _WORKFLOW_BREADCRUMB_MARKER = _INSTALL_WORKFLOW._WORKFLOW_BREADCRUMB_MARKER
@@ -169,18 +180,149 @@ def detect_runtime_patch_contract_conflicts(root: Path, cli_types: list[str]) ->
     conflicts = 0
 
     task_py = root / ".trellis" / "scripts" / "task.py"
+    task_content: str | None = None
     if task_py.exists():
-        task_issues = _task_runtime_import_issues(task_py, task_py.read_text(encoding="utf-8"))
+        task_content = task_py.read_text(encoding="utf-8")
+        task_issues = _task_runtime_import_issues(task_py, task_content)
         if task_issues:
             err("[Shared] task.py: " + "；".join(task_issues))
+            conflicts += 1
+
+    if "claude" in cli_types:
+        claude_hook = root / ".claude" / "hooks" / "inject-workflow-state.py"
+        if claude_hook.exists():
+            claude_content = claude_hook.read_text(encoding="utf-8")
+            if (
+                _HOOK_PATCH_MARKER in claude_content
+                and _ROUTE_HOOK_PATCH_MARKER in claude_content
+                and "workflow-state.route" in claude_content
+            ):
+                ok("[Claude] inject-workflow-state.py: hook 补丁已应用")
+            else:
+                err("[Claude] inject-workflow-state.py: hook 补丁未应用（route-centered breadcrumb 未启用）")
+                conflicts += 1
+
+        claude_session_start = root / ".claude" / "hooks" / "session-start.py"
+        if claude_session_start.exists():
+            session_start_content = claude_session_start.read_text(encoding="utf-8")
+            if (
+                _SESSION_START_STRONG_GATE_PATCH_MARKER in session_start_content
+                and _SESSION_START_ROUTE_FIRST_MARKER in session_start_content
+            ):
+                ready_issues = _legacy_ready_guidance_issues(claude_session_start, session_start_content)
+                if ready_issues:
+                    err("[Claude] session-start.py: " + "；".join(ready_issues))
+                    conflicts += 1
+                else:
+                    ok("[Claude] session-start.py: 强门禁补丁已应用")
+            else:
+                err("[Claude] session-start.py: 强门禁补丁缺失或仍会隐藏 repair_needed")
+                conflicts += 1
+
+        claude_subagent_hook = root / ".claude" / "hooks" / "inject-subagent-context.py"
+        if claude_subagent_hook.exists():
+            claude_subagent_content = claude_subagent_hook.read_text(encoding="utf-8")
+            if (
+                _CLAUDE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER in claude_subagent_content
+                and "Strong-gate blocked this subagent dispatch." in claude_subagent_content
+                and "current embedded workflow disables agent/subagent execution paths" in claude_subagent_content
+            ):
+                ok("[Claude] inject-subagent-context.py: 强门禁子代理补丁已应用")
+            else:
+                err("[Claude] inject-subagent-context.py: 强门禁子代理补丁缺失或不完整")
+                conflicts += 1
+
+    task_store = root / ".trellis" / "scripts" / "common" / "task_store.py"
+    if task_store.exists():
+        task_store_content = task_store.read_text(encoding="utf-8")
+        if _TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER in task_store_content:
+            ok("[Shared] common/task_store.py: preserve-active 补丁已应用")
+        else:
+            err("[Shared] common/task_store.py: preserve-active 补丁缺失")
+            conflicts += 1
+
+    task_views = root / ".trellis" / "scripts" / "common" / "tasks.py"
+    if task_views.exists():
+        task_views_content = task_views.read_text(encoding="utf-8")
+        if _TASK_STATUS_VIEW_PATCH_MARKER in task_views_content:
+            ok("[Shared] common/tasks.py: strong-gate task status view 补丁已应用")
+        else:
+            err("[Shared] common/tasks.py: strong-gate task status view 补丁缺失")
+            conflicts += 1
+        for issue in _task_status_view_contract_issues(task_views_content, task_content):
+            err(f"[Shared] {issue}")
+            conflicts += 1
+
+    task_queue = root / ".trellis" / "scripts" / "common" / "task_queue.py"
+    if task_queue.exists():
+        task_queue_content = task_queue.read_text(encoding="utf-8")
+        if _TASK_STATUS_VIEW_PATCH_MARKER in task_queue_content:
+            ok("[Shared] common/task_queue.py: strong-gate pending-task 视图补丁已应用")
+        else:
+            err("[Shared] common/task_queue.py: strong-gate pending-task 视图补丁缺失")
+            conflicts += 1
+
+    workflow_phase = root / ".trellis" / "scripts" / "common" / "workflow_phase.py"
+    if workflow_phase.exists():
+        workflow_phase_content = workflow_phase.read_text(encoding="utf-8")
+        if (
+            _WORKFLOW_PHASE_PATCH_MARKER in workflow_phase_content
+            and "旧 step 查询已禁用" not in workflow_phase_content
+        ):
+            ok("[Shared] common/workflow_phase.py: 强门禁补丁已应用")
+        else:
+            err("[Shared] common/workflow_phase.py: 强门禁补丁缺失或仍禁用 step 兼容查询")
             conflicts += 1
 
     if "opencode" in cli_types:
         opencode_js = root / ".opencode" / "plugins" / "inject-workflow-state.js"
         if opencode_js.exists():
-            js_issues = _js_runtime_contract_issues(opencode_js, opencode_js.read_text(encoding="utf-8"))
-            if js_issues:
-                err("[OpenCode] inject-workflow-state.js: " + "；".join(js_issues))
+            js_content = opencode_js.read_text(encoding="utf-8")
+            if (
+                _HOOK_PATCH_MARKER not in js_content
+                and _OPENCODE_ROUTE_HOOK_PATCH_MARKER in js_content
+                and "workflow-state.route" in js_content
+            ) or (
+                _OPENCODE_ROUTE_HOOK_PATCH_MARKER in js_content
+                and "workflow-state.route" in js_content
+            ):
+                js_issues = _js_runtime_contract_issues(opencode_js, js_content)
+                if js_issues:
+                    err("[OpenCode] inject-workflow-state.js: " + "；".join(js_issues))
+                    conflicts += 1
+                else:
+                    ok("[OpenCode] inject-workflow-state.js: plugin 补丁已应用")
+            else:
+                warn("[OpenCode] inject-workflow-state.js: plugin 补丁未应用（route-centered breadcrumb 未启用）")
+
+        opencode_session_utils = root / ".opencode" / "lib" / "session-utils.js"
+        if opencode_session_utils.exists():
+            session_utils_content = opencode_session_utils.read_text(encoding="utf-8")
+            if _OPENCODE_SESSION_UTILS_PATCH_MARKER in session_utils_content:
+                ready_issues = _legacy_ready_guidance_issues(opencode_session_utils, session_utils_content)
+                if ready_issues:
+                    err("[OpenCode] session-utils.js: " + "；".join(ready_issues))
+                    conflicts += 1
+                else:
+                    ok("[OpenCode] session-utils.js: 强门禁 session context 补丁已应用")
+            else:
+                warn("[OpenCode] session-utils.js: 仍在使用 READY/NOT READY 旧语义；如当前项目启用 session-start plugin 应补丁")
+
+        opencode_subagent_plugin = root / ".opencode" / "plugins" / "inject-subagent-context.js"
+        if opencode_subagent_plugin.exists():
+            plugin_content = opencode_subagent_plugin.read_text(encoding="utf-8")
+            if (
+                _OPENCODE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER in plugin_content
+                and "shouldAllowTaskInjection(" in plugin_content
+                and "loadRouteData(" in plugin_content
+                and "buildBlockedSubagentPrompt(" in plugin_content
+                and "Strong-gate blocked this subagent dispatch." in plugin_content
+                and "JSON.parse(raw)" in plugin_content
+                and "normalizeRouteItems(" in plugin_content
+            ):
+                ok("[OpenCode] inject-subagent-context.js: 强门禁子代理补丁已应用")
+            else:
+                err("[OpenCode] inject-subagent-context.js: 强门禁子代理补丁缺失或不完整")
                 conflicts += 1
 
     return conflicts
@@ -443,6 +585,9 @@ def _workflow_doc_contract_issues(content: str) -> list[str]:
     if "workflow-state.py init <leaf-dir> --stage project-audit" in content:
         issues.append("仍使用 `init <leaf-dir> --stage project-audit` 作为任务级 owner handoff 指引")
 
+    if "python3 ./.trellis/scripts/task.py create-pr [name] [--dry-run]" in content:
+        issues.append("quick command list 仍引用已移除的 task.py create-pr")
+
     return issues
 
 
@@ -600,6 +745,146 @@ def expected_helper_script_content(src: Path, name: str) -> str | None:
         err(f"源辅助脚本缺失，无法校验: {source_path.name}")
         return None
     return read_text(source_path)
+
+
+def _brainstorm_skill_contract_issues(content: str, *, shared: bool) -> list[str]:
+    issues: list[str] = []
+    if shared:
+        if _BRAINSTORM_SHARED_WHEN_TO_USE_OLD in content:
+            issues.append("仍残留 `start` (Trellis command) 触发口径")
+        if "| ``start` (Trellis command)` | Entry point that triggers brainstorm |" in content:
+            issues.append("Related Commands 仍残留 shared start 入口")
+    else:
+        if _BRAINSTORM_WHEN_TO_USE_OLD in content:
+            issues.append("仍残留 `/trellis:start` 触发口径")
+        if _BRAINSTORM_RELATED_COMMAND_START_OLD in content:
+            issues.append("Related Commands 仍残留 `/trellis:start` 入口")
+        if _BRAINSTORM_RELATED_COMMAND_UPDATE_OLD in content:
+            issues.append("Related Commands 仍残留 `/trellis:update-spec` 入口")
+    if "spawn a `trellis-research` sub-agent via the Task tool" in content:
+        issues.append("仍残留 research sub-agent 派发文案")
+    return issues
+
+
+def _update_spec_skill_contract_issues(content: str, *, shared: bool) -> list[str]:
+    issues: list[str] = []
+    replacements = _UPDATE_SPEC_SHARED_REPLACEMENTS if shared else _UPDATE_SPEC_PLATFORM_REPLACEMENTS
+    for old, new in replacements:
+        if old in content:
+            issues.append(f"仍残留旧入口文案: {old}")
+    return issues
+
+
+def detect_conflicts_patched_skill_surfaces(root: Path, cli_types: list[str]) -> int:
+    conflicts = 0
+    checks = []
+    if "claude" in cli_types:
+        checks.extend(
+            [
+                (
+                    "[Claude] trellis-brainstorm skill",
+                    root / ".claude" / "skills" / "trellis-brainstorm" / "SKILL.md",
+                    lambda content: _brainstorm_skill_contract_issues(content, shared=False),
+                ),
+                (
+                    "[Claude] trellis-update-spec skill",
+                    root / ".claude" / "skills" / "trellis-update-spec" / "SKILL.md",
+                    lambda content: _update_spec_skill_contract_issues(content, shared=False),
+                ),
+            ]
+        )
+    if "opencode" in cli_types:
+        checks.extend(
+            [
+                (
+                    "[OpenCode] trellis-brainstorm skill",
+                    root / ".opencode" / "skills" / "trellis-brainstorm" / "SKILL.md",
+                    lambda content: _brainstorm_skill_contract_issues(content, shared=False),
+                ),
+                (
+                    "[OpenCode] trellis-update-spec skill",
+                    root / ".opencode" / "skills" / "trellis-update-spec" / "SKILL.md",
+                    lambda content: _update_spec_skill_contract_issues(content, shared=False),
+                ),
+            ]
+        )
+    if "codex" in cli_types:
+        checks.extend(
+            [
+                (
+                    "[Codex Shared] trellis-brainstorm skill",
+                    root / ".agents" / "skills" / "trellis-brainstorm" / "SKILL.md",
+                    lambda content: _brainstorm_skill_contract_issues(content, shared=True),
+                ),
+                (
+                    "[Codex Shared] trellis-update-spec skill",
+                    root / ".agents" / "skills" / "trellis-update-spec" / "SKILL.md",
+                    lambda content: _update_spec_skill_contract_issues(content, shared=True),
+                ),
+            ]
+        )
+
+    for label, path, issue_fn in checks:
+        content = read_text(path)
+        if content is None:
+            continue
+        issues = issue_fn(content)
+        if issues:
+            err(f"{label}: " + "；".join(issues))
+            conflicts += 1
+        else:
+            ok(f"{label}: 入口文案与主会话约束一致")
+    return conflicts
+
+
+def detect_conflicts_trellis_meta_references(src: Path, root: Path, cli_types: list[str]) -> int:
+    patch_root = src / "trellis-meta-strong-gate"
+    if not patch_root.is_dir():
+        warn("[Shared] trellis-meta-strong-gate/ 不存在，跳过 trellis-meta 参考文档检查")
+        return 0
+
+    conflicts = 0
+    targets = []
+    if "codex" in cli_types:
+        targets.append(("[Codex Shared] trellis-meta references", root / ".agents" / "skills" / "trellis-meta" / "references"))
+    if "claude" in cli_types:
+        targets.append(("[Claude] trellis-meta references", root / ".claude" / "skills" / "trellis-meta" / "references"))
+    if "opencode" in cli_types:
+        targets.append(("[OpenCode] trellis-meta references", root / ".opencode" / "skills" / "trellis-meta" / "references"))
+
+    for label, target_root in targets:
+        if not target_root.exists():
+            continue
+        label_conflicts = 0
+        for source_file in sorted(patch_root.rglob("*.md")):
+            rel = source_file.relative_to(patch_root)
+            target_file = target_root / rel
+            desired = source_file.read_text(encoding="utf-8")
+            actual = read_text(target_file)
+            if actual is None:
+                err(f"{label}: 文件缺失 {rel.as_posix()}")
+                label_conflicts += 1
+                continue
+            if actual != desired:
+                err(f"{label}: 内容漂移 {rel.as_posix()}")
+                label_conflicts += 1
+        conflicts += label_conflicts
+        if label_conflicts == 0:
+            ok(f"{label}: 参考文档内容一致")
+    return conflicts
+
+
+def detect_conflicts_cross_layer_guide(root: Path) -> int:
+    guide_path = root / ".trellis" / "spec" / "guides" / "cross-layer-thinking-guide.md"
+    content = read_text(guide_path)
+    if content is None:
+        return 0
+    if _CROSS_LAYER_GUIDE_STALE_LINE in content:
+        err("[Shared] cross-layer-thinking-guide.md: 仍残留 `/trellis:check-cross-layer` 旧入口")
+        return 1
+    if _CROSS_LAYER_GUIDE_FIXED_LINE in content:
+        ok("[Shared] cross-layer-thinking-guide.md: cross-layer 检查入口正常")
+    return 0
 
 
 def _managed_helper_scripts_for_profile(profile: str) -> list[str]:
@@ -1099,150 +1384,6 @@ def detect_conflicts_codex(
         conflicts += 1
     else:
         info("[Codex] session-start.py 未接线，按可选 startup 辅助面处理")
-
-    claude_hook = root / ".claude" / "hooks" / "inject-workflow-state.py"
-    if claude_hook.exists():
-        claude_content = claude_hook.read_text(encoding="utf-8")
-        if (
-            _HOOK_PATCH_MARKER in claude_content
-            and _ROUTE_HOOK_PATCH_MARKER in claude_content
-            and "workflow-state.route" in claude_content
-        ):
-            ok("[Claude] inject-workflow-state.py: hook 补丁已应用")
-        else:
-            err("[Claude] inject-workflow-state.py: hook 补丁未应用（route-centered breadcrumb 未启用）")
-            conflicts += 1
-
-    claude_session_start = root / ".claude" / "hooks" / "session-start.py"
-    if claude_session_start.exists():
-        session_start_content = claude_session_start.read_text(encoding="utf-8")
-        if (
-            _SESSION_START_STRONG_GATE_PATCH_MARKER in session_start_content
-            and _SESSION_START_ROUTE_FIRST_MARKER in session_start_content
-        ):
-            ready_issues = _legacy_ready_guidance_issues(claude_session_start, session_start_content)
-            if ready_issues:
-                err("[Claude] session-start.py: " + "；".join(ready_issues))
-                conflicts += 1
-            else:
-                ok("[Claude] session-start.py: 强门禁补丁已应用")
-        else:
-            err("[Claude] session-start.py: 强门禁补丁缺失或仍会隐藏 repair_needed")
-            conflicts += 1
-
-    claude_subagent_hook = root / ".claude" / "hooks" / "inject-subagent-context.py"
-    if claude_subagent_hook.exists():
-        claude_subagent_content = claude_subagent_hook.read_text(encoding="utf-8")
-        if (
-            _CLAUDE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER in claude_subagent_content
-            and "Strong-gate blocked this subagent dispatch." in claude_subagent_content
-            and "current embedded workflow disables agent/subagent execution paths" in claude_subagent_content
-        ):
-            ok("[Claude] inject-subagent-context.py: 强门禁子代理补丁已应用")
-        else:
-            err("[Claude] inject-subagent-context.py: 强门禁子代理补丁缺失或不完整")
-            conflicts += 1
-
-    # Issue 2: check OpenCode plugin patch
-    opencode_js = root / ".opencode" / "plugins" / "inject-workflow-state.js"
-    if opencode_js.exists():
-        js_content = opencode_js.read_text(encoding="utf-8")
-        if (
-            _HOOK_PATCH_MARKER not in js_content
-            and _OPENCODE_ROUTE_HOOK_PATCH_MARKER in js_content
-            and "workflow-state.route" in js_content
-        ) or (
-            _OPENCODE_ROUTE_HOOK_PATCH_MARKER in js_content
-            and "workflow-state.route" in js_content
-        ):
-            js_issues = _js_runtime_contract_issues(opencode_js, js_content)
-            if js_issues:
-                err("[OpenCode] inject-workflow-state.js: " + "；".join(js_issues))
-                conflicts += 1
-            else:
-                ok("[OpenCode] inject-workflow-state.js: plugin 补丁已应用")
-        else:
-            warn("[OpenCode] inject-workflow-state.js: plugin 补丁未应用（route-centered breadcrumb 未启用）")
-    # OpenCode plugin absence is not a conflict — OpenCode may not be installed
-
-    task_py = root / ".trellis" / "scripts" / "task.py"
-    task_content: str | None = None
-    if task_py.exists():
-        task_content = task_py.read_text(encoding="utf-8")
-        task_runtime_issues = _task_runtime_import_issues(task_py, task_content)
-        if task_runtime_issues:
-            err("[Shared] task.py: " + "；".join(task_runtime_issues))
-            conflicts += 1
-
-    task_store = root / ".trellis" / "scripts" / "common" / "task_store.py"
-    if task_store.exists():
-        task_store_content = task_store.read_text(encoding="utf-8")
-        if _TASK_CREATE_PRESERVE_ACTIVE_PATCH_MARKER in task_store_content:
-            ok("[Shared] common/task_store.py: preserve-active 补丁已应用")
-        else:
-            err("[Shared] common/task_store.py: preserve-active 补丁缺失")
-            conflicts += 1
-
-    task_views = root / ".trellis" / "scripts" / "common" / "tasks.py"
-    if task_views.exists():
-        task_views_content = task_views.read_text(encoding="utf-8")
-        if _TASK_STATUS_VIEW_PATCH_MARKER in task_views_content:
-            ok("[Shared] common/tasks.py: strong-gate task status view 补丁已应用")
-        else:
-            err("[Shared] common/tasks.py: strong-gate task status view 补丁缺失")
-            conflicts += 1
-        for issue in _task_status_view_contract_issues(task_views_content, task_content):
-            err(f"[Shared] {issue}")
-            conflicts += 1
-
-    task_queue = root / ".trellis" / "scripts" / "common" / "task_queue.py"
-    if task_queue.exists():
-        task_queue_content = task_queue.read_text(encoding="utf-8")
-        if _TASK_STATUS_VIEW_PATCH_MARKER in task_queue_content:
-            ok("[Shared] common/task_queue.py: strong-gate pending-task 视图补丁已应用")
-        else:
-            err("[Shared] common/task_queue.py: strong-gate pending-task 视图补丁缺失")
-            conflicts += 1
-
-    workflow_phase = root / ".trellis" / "scripts" / "common" / "workflow_phase.py"
-    if workflow_phase.exists():
-        workflow_phase_content = workflow_phase.read_text(encoding="utf-8")
-        if (
-            _WORKFLOW_PHASE_PATCH_MARKER in workflow_phase_content
-            and "旧 step 查询已禁用" not in workflow_phase_content
-        ):
-            ok("[Shared] common/workflow_phase.py: 强门禁补丁已应用")
-        else:
-            err("[Shared] common/workflow_phase.py: 强门禁补丁缺失或仍禁用 step 兼容查询")
-            conflicts += 1
-
-    opencode_session_utils = root / ".opencode" / "lib" / "session-utils.js"
-    if opencode_session_utils.exists():
-        session_utils_content = opencode_session_utils.read_text(encoding="utf-8")
-        if _OPENCODE_SESSION_UTILS_PATCH_MARKER in session_utils_content:
-            ready_issues = _legacy_ready_guidance_issues(opencode_session_utils, session_utils_content)
-            if ready_issues:
-                err("[OpenCode] session-utils.js: " + "；".join(ready_issues))
-                conflicts += 1
-            else:
-                ok("[OpenCode] session-utils.js: 强门禁 session context 补丁已应用")
-        else:
-            warn("[OpenCode] session-utils.js: 仍在使用 READY/NOT READY 旧语义；如当前项目启用 session-start plugin 应补丁")
-
-    opencode_subagent_plugin = root / ".opencode" / "plugins" / "inject-subagent-context.js"
-    if opencode_subagent_plugin.exists():
-        plugin_content = opencode_subagent_plugin.read_text(encoding="utf-8")
-        if (
-            _OPENCODE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER in plugin_content
-            and "shouldAllowTaskInjection(" in plugin_content
-            and "loadRouteData(" in plugin_content
-            and "buildBlockedSubagentPrompt(" in plugin_content
-            and "Strong-gate blocked this subagent dispatch." in plugin_content
-        ):
-            ok("[OpenCode] inject-subagent-context.js: 强门禁子代理补丁已应用")
-        else:
-            err("[OpenCode] inject-subagent-context.js: 强门禁子代理补丁缺失或不完整")
-            conflicts += 1
 
     # 对每个 skills 目录分别检查 parallel：当前 Codex 合同是“移除嵌入面，但保留备份”
     parallel_conflicts = 0
@@ -1823,6 +1964,9 @@ def main() -> int:
     total_conflicts += detect_obsolete_shared_script_conflicts(dst_scripts, record, profile=profile)
     total_conflicts += detect_execution_card_conflicts(src, root, profile=profile)
     total_conflicts += detect_conflicts_workflow_doc(src, root, profile=profile)
+    total_conflicts += detect_conflicts_patched_skill_surfaces(root, cli_types)
+    total_conflicts += detect_conflicts_trellis_meta_references(src, root, cli_types)
+    total_conflicts += detect_conflicts_cross_layer_guide(root)
     total_conflicts += detect_runtime_patch_contract_conflicts(root, cli_types)
     total_conflicts += detect_conflicts_agents_md(root)
     total_conflicts += detect_conflicts_added_commands_missing(record, root, cli_types)
@@ -2044,6 +2188,8 @@ def main() -> int:
     patch_opencode_inject_subagent_context(root, dry_run=False)
     patch_session_start_no_task_guidance(root, dry_run=False)
     _INSTALL_WORKFLOW.patch_platform_brainstorm_skills(root, dry_run=False)
+    patch_platform_update_spec_skills(root, dry_run=False)
+    patch_trellis_meta_references(src, root, dry_run=False)
     _apply_patch_workflow_phase(src, root, dry_run=False)
     _apply_patch_task_start(src, root, dry_run=False)
     _apply_patch_task_create_preserve_active(src, root, dry_run=False)

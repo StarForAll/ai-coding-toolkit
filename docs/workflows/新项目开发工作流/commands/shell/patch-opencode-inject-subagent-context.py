@@ -4,16 +4,51 @@
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 
 PATCH_MARKER = "// [workflow-embed-patch:opencode-subagent-gates]"
+ROUTE_HELPER_BLOCK_RE = re.compile(
+    r"// \[workflow-embed-patch:opencode-subagent-gates\]\n"
+    r"const PYTHON_CMD = process\.platform === \"win32\" \? \"python\" : \"python3\"\n"
+    r".*?(?=\nfunction injectTrellisContextIntoBash)",
+    re.S,
+)
 
 ROUTE_HELPER_BLOCK = """// [workflow-embed-patch:opencode-subagent-gates]
 const PYTHON_CMD = process.platform === "win32" ? "python" : "python3"
 
+function normalizeRouteItems(value) {
+  if (Array.isArray(value)) {
+    return value.map(item => String(item).trim()).filter(Boolean)
+  }
+  if (typeof value === "string" && value.trim()) {
+    return value.split(" | ").map(item => item.trim()).filter(Boolean)
+  }
+  return []
+}
+
 function parseRouteStatus(taskStatusText) {
   if (typeof taskStatusText !== "string" || !taskStatusText.trim()) return null
-  const lines = taskStatusText.split(/\\r?\\n/)
+  const raw = taskStatusText.trim()
+  if (raw.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return {
+          stage: typeof parsed.stage === "string" ? parsed.stage : "",
+          action: typeof parsed.action === "string" ? parsed.action : "",
+          target: typeof parsed.target === "string" ? parsed.target : "",
+          reason: typeof parsed.reason === "string" ? parsed.reason : "",
+          status: typeof parsed.status === "string" ? parsed.status : "",
+          blockers: normalizeRouteItems(parsed.blockers),
+          warnings: normalizeRouteItems(parsed.warnings),
+        }
+      }
+    } catch {}
+  }
+
+  const lines = raw.split(/\\r?\\n/)
   const routeData = {}
   for (const rawLine of lines) {
     const line = rawLine.trim()
@@ -26,10 +61,10 @@ function parseRouteStatus(taskStatusText) {
     else if (key === "Target" || key === "Target-Stage") routeData.target = value
     else if (key === "Reason") routeData.reason = value
     else if (key === "Stage-Status") routeData.status = value
-    else if (key === "Blockers") routeData.blockers = value ? value.split(" | ").map(item => item.trim()).filter(Boolean) : []
-    else if (key === "Warnings") routeData.warnings = value ? value.split(" | ").map(item => item.trim()).filter(Boolean) : []
+    else if (key === "Blockers") routeData.blockers = normalizeRouteItems(value)
+    else if (key === "Warnings") routeData.warnings = normalizeRouteItems(value)
   }
-  return routeData
+  return Object.keys(routeData).length ? routeData : null
 }
 
 function shouldAllowTaskInjection(routeData, subagentType) {
@@ -165,79 +200,7 @@ def patch_opencode_inject_subagent_context(target_path: Path) -> bool:
             return False
         patched = patched.replace(anchor, anchor + "\n" + ROUTE_HELPER_BLOCK + "\n", 1)
     else:
-        old_block = """function buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt) {
-  const action = typeof routeData?.action === "string" && routeData.action.trim()
-    ? routeData.action.trim()
-    : "unknown"
-  const stage = typeof routeData?.stage === "string" && routeData.stage.trim()
-    ? routeData.stage.trim()
-    : "unknown"
-  const target = typeof routeData?.target === "string" && routeData.target.trim()
-    ? routeData.target.trim()
-    : "unknown"
-  const reason = typeof routeData?.reason === "string" && routeData.reason.trim()
-    ? routeData.reason.trim()
-    : "current embedded workflow disables agent/subagent execution paths"
-  const blockers = Array.isArray(routeData?.blockers) && routeData.blockers.length
-    ? routeData.blockers.join(" | ")
-    : "none"
-  const warnings = Array.isArray(routeData?.warnings) && routeData.warnings.length
-    ? routeData.warnings.join(" | ")
-    : "none"
-  return [
-    "Strong-gate blocked this subagent dispatch.",
-    `Subagent: ${subagentType}`,
-    `Action: ${action}`,
-    `Stage: ${stage}`,
-    `Target: ${target}`,
-    `Reason: ${reason}`,
-    `Blockers: ${blockers}`,
-    `Warnings: ${warnings}`,
-    "Required next step: return control to the main session and follow the current workflow stage entry instead of continuing inside this subagent.",
-    "",
-    "Original prompt:",
-    originalPrompt || "",
-  ].join("\\n")
-}"""
-        new_block = """function buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt) {
-  const reason = typeof routeData?.reason === "string" && routeData.reason.trim()
-    ? routeData.reason.trim()
-    : "current embedded workflow disables agent/subagent execution paths"
-  const blockers = Array.isArray(routeData?.blockers) && routeData.blockers.length
-    ? routeData.blockers.join(" | ")
-    : "none"
-  const warnings = Array.isArray(routeData?.warnings) && routeData.warnings.length
-    ? routeData.warnings.join(" | ")
-    : "none"
-  const lines = [
-    "Strong-gate blocked this subagent dispatch.",
-    `Subagent: ${subagentType}`,
-    `Reason: ${reason}`,
-  ]
-  const action = typeof routeData?.action === "string" && routeData.action.trim()
-    ? routeData.action.trim()
-    : ""
-  const stage = typeof routeData?.stage === "string" && routeData.stage.trim()
-    ? routeData.stage.trim()
-    : ""
-  const target = typeof routeData?.target === "string" && routeData.target.trim()
-    ? routeData.target.trim()
-    : ""
-  if (action) lines.push(`Action: ${action}`)
-  if (stage) lines.push(`Stage: ${stage}`)
-  if (target) lines.push(`Target: ${target}`)
-  if (blockers !== "none") lines.push(`Blockers: ${blockers}`)
-  if (warnings !== "none") lines.push(`Warnings: ${warnings}`)
-  lines.push(
-    "Required next step: return control to the main session and follow the current workflow stage entry instead of continuing inside this subagent.",
-    "",
-    "Original prompt:",
-    originalPrompt || "",
-  )
-  return lines.join("\\n")
-}"""
-        if old_block in patched:
-            patched = patched.replace(old_block, new_block, 1)
+        patched = ROUTE_HELPER_BLOCK_RE.sub(ROUTE_HELPER_BLOCK + "\n", patched, count=1)
 
     if 'import { execFileSync } from "child_process"' not in patched:
         patched = patched.replace('import { join } from "path"\n', 'import { join } from "path"\nimport { execFileSync } from "child_process"\n', 1)

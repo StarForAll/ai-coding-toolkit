@@ -295,6 +295,9 @@ _WORKFLOW_TASK_MECHANISM_BLOCK_RE = re.compile(
     r"\*\*Current-task mechanism\*\*:.*?(?=\n\n(?:### |## |<!--)|\Z)",
     re.S,
 )
+_WORKFLOW_CREATE_PR_QUICKREF_RE = re.compile(
+    r"\n# PR creation\npython3 \./\.trellis/scripts/task\.py create-pr \[name\] \[--dry-run\]\n"
+)
 _TODO_FILE_NAME = "todo.txt"
 _TODO_DEFAULT_LINE = "文档内容需要和实际当前的代码同步\n"
 _EMBED_ATTEMPT_FILE_NAME = "workflow-embed-attempt.json"
@@ -1298,23 +1301,26 @@ def build_workflow_content(content: str, patch_text: str) -> str | None:
 
 
 def _replace_workflow_task_mechanism(content: str) -> str:
-    """Refresh the baseline Current-task mechanism paragraph to the strong-gate contract."""
+    """Refresh strong-gate task docs and remove stale quick-reference lines."""
     if _STRONG_GATE_WORKFLOW_TASK_MECHANISM in content:
-        return content
-    if _BASELINE_WORKFLOW_TASK_MECHANISM in content:
-        return content.replace(
+        updated = content
+    elif _BASELINE_WORKFLOW_TASK_MECHANISM in content:
+        updated = content.replace(
             _BASELINE_WORKFLOW_TASK_MECHANISM,
             _STRONG_GATE_WORKFLOW_TASK_MECHANISM,
             1,
         )
-    match = _WORKFLOW_TASK_MECHANISM_BLOCK_RE.search(content)
-    if match is None:
-        return content
-    return (
-        content[:match.start()]
-        + _STRONG_GATE_WORKFLOW_TASK_MECHANISM
-        + content[match.end():]
-    )
+    else:
+        match = _WORKFLOW_TASK_MECHANISM_BLOCK_RE.search(content)
+        if match is None:
+            updated = content
+        else:
+            updated = (
+                content[:match.start()]
+                + _STRONG_GATE_WORKFLOW_TASK_MECHANISM
+                + content[match.end():]
+            )
+    return _WORKFLOW_CREATE_PR_QUICKREF_RE.sub("\n", updated, count=1)
 
 
 def inject_finish_work_patch(
@@ -1883,6 +1889,46 @@ _BRAINSTORM_RESEARCH_INTERNAL_HEADINGS = {
     for line in _BRAINSTORM_RESEARCH_SUBAGENT_BLOCK_OLD.splitlines()
     if line.startswith("### ")
 }
+_UPDATE_SPEC_PLATFORM_REPLACEMENTS = (
+    (
+        "  Learn something → /trellis:update-spec → Knowledge captured",
+        "  Learn something → `trellis-update-spec` skill → Knowledge captured",
+    ),
+    (
+        "  /trellis:break-loop ←──────────────────── Future sessions benefit",
+        "  `trellis-break-loop` skill ←──────────────────── Future sessions benefit",
+    ),
+    (
+        "- `/trellis:break-loop` - Analyzes bugs deeply, often reveals spec updates needed",
+        "- `trellis-break-loop` skill - Analyzes bugs deeply, often reveals spec updates needed",
+    ),
+    (
+        "- `/trellis:update-spec` - Actually makes the updates",
+        "- `trellis-update-spec` skill - Actually makes the updates",
+    ),
+)
+_UPDATE_SPEC_SHARED_REPLACEMENTS = (
+    (
+        "  Learn something → `update-spec` (Trellis command) → Knowledge captured",
+        "  Learn something → `trellis-update-spec` skill → Knowledge captured",
+    ),
+    (
+        "  `break-loop` (Trellis command) ←──────────────────── Future sessions benefit",
+        "  `trellis-break-loop` skill ←──────────────────── Future sessions benefit",
+    ),
+    (
+        "- ``break-loop` (Trellis command)` - Analyzes bugs deeply, often reveals spec updates needed",
+        "- `trellis-break-loop` skill - Analyzes bugs deeply, often reveals spec updates needed",
+    ),
+    (
+        "- ``update-spec` (Trellis command)` - Actually makes the updates",
+        "- `trellis-update-spec` skill - Actually makes the updates",
+    ),
+    (
+        "- ``finish-work` (Trellis command)` - Reminds you to check if specs need updates",
+        "- `trellis-finish-work` skill - Reminds you to check if specs need updates",
+    ),
+)
 
 
 def _patch_brainstorm_research_block(content: str) -> tuple[str, bool]:
@@ -1992,6 +2038,48 @@ def patch_platform_brainstorm_skills(root: Path, *, dry_run: bool) -> bool:
         else:
             target_path.write_text(patched, encoding="utf-8")
             ok(f"[{label}] trellis-brainstorm skill 强门禁文案已更新")
+        any_patched = True
+    return any_patched
+
+
+def patch_platform_update_spec_skills(root: Path, *, dry_run: bool) -> bool:
+    """Patch update-spec skills so each CLI advertises its real entry surface."""
+    targets = [
+        (
+            "Claude",
+            root / ".claude" / "skills" / "trellis-update-spec" / "SKILL.md",
+            _UPDATE_SPEC_PLATFORM_REPLACEMENTS,
+        ),
+        (
+            "OpenCode",
+            root / ".opencode" / "skills" / "trellis-update-spec" / "SKILL.md",
+            _UPDATE_SPEC_PLATFORM_REPLACEMENTS,
+        ),
+        (
+            "Shared",
+            root / ".agents" / "skills" / "trellis-update-spec" / "SKILL.md",
+            _UPDATE_SPEC_SHARED_REPLACEMENTS,
+        ),
+    ]
+
+    any_patched = False
+    for label, target_path, replacements in targets:
+        if not target_path.exists():
+            continue
+        content = target_path.read_text(encoding="utf-8")
+        patched = content
+        changed = False
+        for old, new in replacements:
+            if old in patched:
+                patched = patched.replace(old, new)
+                changed = True
+        if not changed:
+            continue
+        if dry_run:
+            info(f"[{label}] 将更新 trellis-update-spec skill 入口文案")
+        else:
+            target_path.write_text(patched, encoding="utf-8")
+            ok(f"[{label}] trellis-update-spec skill 入口文案已更新")
         any_patched = True
     return any_patched
 
@@ -3559,6 +3647,7 @@ def main() -> int:
             inject_workflow_breadcrumb_patch(src, root, dry_run=args.dry_run, profile=profile)
             patch_trellis_meta_references(src, root, dry_run=args.dry_run)
             patch_platform_brainstorm_skills(root, dry_run=args.dry_run)
+            patch_platform_update_spec_skills(root, dry_run=args.dry_run)
             patch_cross_layer_thinking_guide(root, dry_run=args.dry_run)
 
             # Issue 2: cleanup legacy three-phase breadcrumb blocks after strong-gate patches

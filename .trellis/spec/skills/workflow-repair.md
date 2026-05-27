@@ -134,6 +134,23 @@ The skill must:
 - when the optional shadow is omitted, the repair log should record
   `issue-history-file: none`
 
+### 3A. Version Bump Discipline
+
+When a repair run actually succeeds, the skill must:
+
+- bump `docs/workflows/新项目开发工作流/commands/workflow_assets.py::WORKFLOW_VERSION`
+  by incrementing only the final numeric segment
+- perform that bump only after closure has converged cleanly and one or more
+  repair items remain `verified`
+- synchronize the active current-version references in the same change,
+  including the workflow overview, command mapping, embed spec, current
+  mindmap label/title, and installer assertions that are defined as current-
+  version references by the repo contract
+- use the workflow-local version-bump helper when available instead of relying
+  on memory for the target file list
+- skip the version bump entirely when the run is no-op, reverted, failed,
+  blocked from convergence, or still has unresolved in-scope closure findings
+
 ### 4. Authorization Discipline
 
 The skill must distinguish:

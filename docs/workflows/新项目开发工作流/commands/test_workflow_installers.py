@@ -6,6 +6,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -31,6 +32,7 @@ INSTALL_SCRIPT = COMMANDS_DIR / "install-workflow.py"
 DETECT_EMBED_STATE_SCRIPT = COMMANDS_DIR / "detect-embed-state.py"
 UPGRADE_SCRIPT = COMMANDS_DIR / "upgrade-compat.py"
 UNINSTALL_SCRIPT = COMMANDS_DIR / "uninstall-workflow.py"
+BUMP_WORKFLOW_VERSION_SCRIPT = COMMANDS_DIR / "bump-workflow-version.py"
 PATCH_TASK_CREATE_SCRIPT = COMMANDS_DIR / "shell" / "patch-task-create-preserve-active.py"
 PATCH_WORKFLOW_PHASE_SCRIPT = COMMANDS_DIR / "shell" / "patch-workflow-phase.py"
 PATCH_WORKFLOW_PHASE_STRONG_GATE_SCRIPT = COMMANDS_DIR / "shell" / "patch-workflow-phase-strong-gate.py"
@@ -1008,6 +1010,114 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("显式传入 `--profile`", command_mapping)
         self.assertIn("`--profile` 必须显式传入", embed_spec)
 
+    def test_bump_workflow_version_script_updates_active_current_version_refs(self) -> None:
+        import importlib.util
+
+        temp_root = Path(tempfile.mkdtemp(prefix="workflow-version-bump-"))
+        self.addCleanup(shutil.rmtree, temp_root)
+
+        relative_targets = [
+            Path("docs/workflows/新项目开发工作流/commands/workflow_assets.py"),
+            Path("docs/workflows/新项目开发工作流/工作流总纲.md"),
+            Path("docs/workflows/新项目开发工作流/命令映射.md"),
+            Path("docs/workflows/新项目开发工作流/工作流嵌入执行规范.md"),
+            Path("docs/workflows/新项目开发工作流/工作流思维导图.html"),
+            Path("docs/workflows/新项目开发工作流/目标项目兼容升级方案指导.md"),
+            Path("docs/workflows/新项目开发工作流/commands/test_workflow_installers.py"),
+            Path("docs/workflows/新项目开发工作流/commands/test_upgrade_analysis.py"),
+        ]
+        for relative_path in relative_targets:
+            target = temp_root / relative_path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text((REPO_ROOT / relative_path).read_text(encoding="utf-8"), encoding="utf-8")
+
+        spec = importlib.util.spec_from_file_location("workflow_bump_version_test", BUMP_WORKFLOW_VERSION_SCRIPT)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+
+        current_version = module.read_current_version(
+            temp_root / "docs/workflows/新项目开发工作流/commands/workflow_assets.py"
+        )
+        bumped_version = module.bump_patch_version(current_version)
+
+        result = module.bump_workflow_version(
+            repo_root=temp_root,
+            expected_current=current_version,
+            new_version=bumped_version,
+            summary="version bump test summary",
+            date_text="2026-05-27",
+            dry_run=False,
+        )
+
+        self.assertEqual(result.old_version, current_version)
+        self.assertEqual(result.new_version, bumped_version)
+        self.assertTrue(result.changed_files)
+
+        workflow_assets = (temp_root / "docs/workflows/新项目开发工作流/commands/workflow_assets.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(f'WORKFLOW_VERSION = "{bumped_version}"', workflow_assets)
+        workflow_overview = (temp_root / "docs/workflows/新项目开发工作流/工作流总纲.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(f"# AI 辅助开发实战工作流 V{bumped_version}", workflow_overview)
+        self.assertIn(f"**当前 workflow 版本**：`{bumped_version}`", workflow_overview)
+        self.assertIn(f"| V{bumped_version} | 2026-05-27 | version bump test summary |", workflow_overview)
+        command_mapping = (temp_root / "docs/workflows/新项目开发工作流/命令映射.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(f"V{bumped_version}", command_mapping)
+        embed_spec = (temp_root / "docs/workflows/新项目开发工作流/工作流嵌入执行规范.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(f"`{bumped_version}`", embed_spec)
+        mindmap = (temp_root / "docs/workflows/新项目开发工作流/工作流思维导图.html").read_text(encoding="utf-8")
+        self.assertIn(f"V{bumped_version} - 思维导图", mindmap)
+        self.assertIn(f"V{bumped_version}',", mindmap)
+        upgrade_guide = (temp_root / "docs/workflows/新项目开发工作流/目标项目兼容升级方案指导.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(f"例如 `{bumped_version}`", upgrade_guide)
+        installer_tests = (temp_root / "docs/workflows/新项目开发工作流/commands/test_workflow_installers.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(f'self.assertEqual(record_data["workflow_version"], "{bumped_version}")', installer_tests)
+        self.assertIn(f'self.assertEqual(updated["workflow_version"], "{bumped_version}")', installer_tests)
+        upgrade_analysis_tests = (temp_root / "docs/workflows/新项目开发工作流/commands/test_upgrade_analysis.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(f'{{"workflow_version":"{bumped_version}","cli_types":["claude"]}}', upgrade_analysis_tests)
+
+    def test_active_workflow_version_refs_match_source_of_truth(self) -> None:
+        workflow_assets = (COMMANDS_DIR / "workflow_assets.py").read_text(encoding="utf-8")
+        version_match = re.search(r'WORKFLOW_VERSION = "(?P<version>\d+\.\d+\.\d+)"', workflow_assets)
+        self.assertIsNotNone(version_match)
+        version = version_match.group("version")
+
+        overview = (REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "工作流总纲.md").read_text(encoding="utf-8")
+        command_mapping = (REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "命令映射.md").read_text(
+            encoding="utf-8"
+        )
+        embed_spec = (REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "工作流嵌入执行规范.md").read_text(
+            encoding="utf-8"
+        )
+        mindmap = (REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "工作流思维导图.html").read_text(
+            encoding="utf-8"
+        )
+        upgrade_guide = (REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "目标项目兼容升级方案指导.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(f"# AI 辅助开发实战工作流 V{version}", overview)
+        self.assertIn(f"**当前 workflow 版本**：`{version}`", overview)
+        self.assertIn(f"V{version}", command_mapping)
+        self.assertIn(f"`{version}`", embed_spec)
+        self.assertIn(f"V{version} - 思维导图", mindmap)
+        self.assertIn(f"V{version}',", mindmap)
+        self.assertIn(f"例如 `{version}`", upgrade_guide)
+
     def test_finish_work_skill_matches_current_codex_validation_contract(self) -> None:
         embed_integrity = (COMMANDS_DIR / "shell" / "embed_integrity.py").read_text(encoding="utf-8")
         finish_work_patch = (COMMANDS_DIR / "finish-work-patch-projectization.md").read_text(
@@ -1100,6 +1210,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(module._STRONG_GATE_WORKFLOW_TASK_MECHANISM, patched)
         self.assertIn("#### 1.1 Requirement exploration", patched)
         self.assertIn("#### 3.5 Wrap-up reminder", patched)
+        self.assertNotIn("task.py create-pr [name] [--dry-run]", patched)
         self.assertNotIn("flips `task.json.status` from `planning` to `in_progress`", patched)
 
     def test_upgrade_build_workflow_content_replaces_task_mechanism_without_legacy_headings(self) -> None:
@@ -1120,6 +1231,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(module._INSTALL_WORKFLOW._STRONG_GATE_WORKFLOW_TASK_MECHANISM, patched)
         self.assertIn("#### 1.1 Requirement exploration", patched)
         self.assertIn("#### 3.5 Wrap-up reminder", patched)
+        self.assertNotIn("task.py create-pr [name] [--dry-run]", patched)
         self.assertNotIn("flips `task.json.status` from `planning` to `in_progress`", patched)
 
     def detect_embed_state(self, fixture_root: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -1340,6 +1452,7 @@ class WorkflowInstallerTests(unittest.TestCase):
             self.assertIn("buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt)", opencode_subagent)
             self.assertIn("Strong-gate blocked this subagent dispatch.", opencode_subagent)
             self.assertIn("current embedded workflow disables agent/subagent execution paths", opencode_subagent)
+            self.assertIn("JSON.parse(raw)", opencode_subagent)
             self.assertIn("return false", opencode_subagent)
         opencode_inject_path = fixture / ".opencode" / "plugins" / "inject-workflow-state.js"
         if opencode_inject_path.exists():
@@ -1403,7 +1516,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("./.trellis/scripts/workflow/source-watermark-guard.py", ownership_card_text)
         self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", ownership_card_text)
         self.assertNotIn("<WORKFLOW_DIR>/commands/shell", ownership_card_text)
-        self.assertEqual(record_data["workflow_version"], "0.1.2800")
+        self.assertEqual(record_data["workflow_version"], "0.1.2801")
         self.assertEqual(record_data["workflow_schema_version"], "3")
         self.assertEqual(record_data["initial_pack"], "pack.requirements-discovery-foundation")
         self.assertIn(
@@ -2158,10 +2271,84 @@ class WorkflowInstallerTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn(".opencode/package.json", opencode_change_hooks)
         self.assertIn(".opencode/plugins/", opencode_change_hooks)
+        self.assertNotIn(".opencode/package.json -> .opencode/plugins/session-start.js", opencode_change_hooks)
         codex_change_hooks = (
             fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md"
         ).read_text(encoding="utf-8")
         self.assertIn(".codex/hooks.json -> .codex/hooks/inject-workflow-state.py", codex_change_hooks)
+
+    def test_install_patches_update_spec_skills_to_real_entry_surfaces(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        stale_platform_skill = """---
+name: trellis-update-spec
+description: stale update spec
+---
+
+## Relationship to Other Commands
+
+```
+Development Flow:
+  Learn something → /trellis:update-spec → Knowledge captured
+       ↑                                  ↓
+  /trellis:break-loop ←──────────────────── Future sessions benefit
+  (deep bug analysis)
+```
+
+- `/trellis:break-loop` - Analyzes bugs deeply, often reveals spec updates needed
+- `/trellis:update-spec` - Actually makes the updates
+- `/trellis:finish-work` - Reminds you to check if specs need updates
+"""
+        stale_shared_skill = """---
+name: trellis-update-spec
+description: stale update spec
+---
+
+## Relationship to Other Commands
+
+```
+Development Flow:
+  Learn something → `update-spec` (Trellis command) → Knowledge captured
+       ↑                                  ↓
+  `break-loop` (Trellis command) ←──────────────────── Future sessions benefit
+  (deep bug analysis)
+```
+
+- ``break-loop` (Trellis command)` - Analyzes bugs deeply, often reveals spec updates needed
+- ``update-spec` (Trellis command)` - Actually makes the updates
+- ``finish-work` (Trellis command)` - Reminds you to check if specs need updates
+"""
+        for path in [
+            fixture / ".claude" / "skills" / "trellis-update-spec" / "SKILL.md",
+            fixture / ".opencode" / "skills" / "trellis-update-spec" / "SKILL.md",
+        ]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(stale_platform_skill, encoding="utf-8")
+        shared_path = fixture / ".agents" / "skills" / "trellis-update-spec" / "SKILL.md"
+        shared_path.parent.mkdir(parents=True, exist_ok=True)
+        shared_path.write_text(stale_shared_skill, encoding="utf-8")
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        for path in [
+            fixture / ".claude" / "skills" / "trellis-update-spec" / "SKILL.md",
+            fixture / ".opencode" / "skills" / "trellis-update-spec" / "SKILL.md",
+        ]:
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("`trellis-break-loop` skill", content)
+            self.assertIn("`trellis-update-spec` skill", content)
+            self.assertIn("/trellis:finish-work", content)
+            self.assertNotIn("/trellis:break-loop", content)
+            self.assertNotIn("/trellis:update-spec", content)
+        shared_content = shared_path.read_text(encoding="utf-8")
+        self.assertIn("`trellis-break-loop` skill", shared_content)
+        self.assertIn("`trellis-update-spec` skill", shared_content)
+        self.assertIn("`trellis-finish-work` skill", shared_content)
+        self.assertNotIn("`break-loop` (Trellis command)", shared_content)
+        self.assertNotIn("`update-spec` (Trellis command)", shared_content)
+        self.assertNotIn("`finish-work` (Trellis command)", shared_content)
 
     def test_install_patches_platform_brainstorm_skills_away_from_trellis_start(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
@@ -2259,6 +2446,109 @@ Why:
         self.assertNotIn("Triggered from `start` (Trellis command)", shared_content)
         self.assertNotIn("| ``start` (Trellis command)` | Entry point that triggers brainstorm |", shared_content)
         self.assertNotIn("spawn a `trellis-research` sub-agent via the Task tool", shared_content)
+
+    def test_upgrade_merge_refreshes_update_spec_skills_and_trellis_meta_hooks_docs(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        stale_platform_skill = """---
+name: trellis-update-spec
+description: stale update spec
+---
+
+## Relationship to Other Commands
+
+```
+Development Flow:
+  Learn something → /trellis:update-spec → Knowledge captured
+       ↑                                  ↓
+  /trellis:break-loop ←──────────────────── Future sessions benefit
+  (deep bug analysis)
+```
+
+- `/trellis:break-loop` - Analyzes bugs deeply, often reveals spec updates needed
+- `/trellis:update-spec` - Actually makes the updates
+- `/trellis:finish-work` - Reminds you to check if specs need updates
+"""
+        stale_shared_skill = """---
+name: trellis-update-spec
+description: stale update spec
+---
+
+## Relationship to Other Commands
+
+```
+Development Flow:
+  Learn something → `update-spec` (Trellis command) → Knowledge captured
+       ↑                                  ↓
+  `break-loop` (Trellis command) ←──────────────────── Future sessions benefit
+  (deep bug analysis)
+```
+
+- ``break-loop` (Trellis command)` - Analyzes bugs deeply, often reveals spec updates needed
+- ``update-spec` (Trellis command)` - Actually makes the updates
+- ``finish-work` (Trellis command)` - Reminds you to check if specs need updates
+"""
+        for path in [
+            fixture / ".claude" / "skills" / "trellis-update-spec" / "SKILL.md",
+            fixture / ".opencode" / "skills" / "trellis-update-spec" / "SKILL.md",
+        ]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(stale_platform_skill, encoding="utf-8")
+        shared_path = fixture / ".agents" / "skills" / "trellis-update-spec" / "SKILL.md"
+        shared_path.parent.mkdir(parents=True, exist_ok=True)
+        shared_path.write_text(stale_shared_skill, encoding="utf-8")
+
+        stale_change_hooks = """# stale
+
+## Example: Change New-Session Injection Content
+
+```text
+OpenCode: .opencode/package.json -> .opencode/plugins/session-start.js
+```
+"""
+        for path in [
+            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
+            fixture / ".claude" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
+            fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
+        ]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(stale_change_hooks, encoding="utf-8")
+
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--merge",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        for path in [
+            fixture / ".claude" / "skills" / "trellis-update-spec" / "SKILL.md",
+            fixture / ".opencode" / "skills" / "trellis-update-spec" / "SKILL.md",
+        ]:
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("`trellis-break-loop` skill", content)
+            self.assertIn("`trellis-update-spec` skill", content)
+            self.assertNotIn("/trellis:break-loop", content)
+            self.assertNotIn("/trellis:update-spec", content)
+        shared_content = shared_path.read_text(encoding="utf-8")
+        self.assertIn("`trellis-finish-work` skill", shared_content)
+        self.assertNotIn("`finish-work` (Trellis command)", shared_content)
+        for path in [
+            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
+            fixture / ".claude" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
+            fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
+        ]:
+            content = path.read_text(encoding="utf-8")
+            self.assertIn(".opencode/package.json (dependency/config surface)", content)
+            self.assertNotIn(".opencode/package.json -> .opencode/plugins/session-start.js", content)
 
     def test_upgrade_merge_patches_platform_brainstorm_skills_away_from_research_subagent_guidance(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
@@ -2699,6 +2989,7 @@ Keep only durable PRD-facing takeaways here.
         )
         self.assertIn("task_level_check_task", workflow_doc_text)
         self.assertIn("先把 session active task 切回该任务级 task", workflow_doc_text)
+        self.assertNotIn("task.py create-pr [name] [--dry-run]", workflow_doc_text)
 
     def test_installed_workflow_state_blocks_check_to_delivery_when_chinese_verification_results_contains_fail(self) -> None:
         fixture = self.create_fixture()
@@ -3185,6 +3476,169 @@ Keep only durable PRD-facing takeaways here.
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("workflow.md", result.stdout + result.stderr)
         self.assertIn("内容漂移", result.stdout + result.stderr)
+
+    def test_upgrade_check_detects_stale_postprocessed_skill_and_reference_surfaces(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        stale_platform_brainstorm = """---
+name: trellis-brainstorm
+description: stale brainstorm
+---
+
+## When to Use
+
+Triggered from /trellis:start when the user describes a development task, especially when:
+
+## Related Commands
+
+| Command | When to Use |
+|---------|-------------|
+| `/trellis:start` | Entry point that triggers brainstorm |
+| `/trellis:finish-work` | After implementation is complete |
+| `/trellis:update-spec` | If new patterns emerge during work |
+
+### Delegate to `trellis-research` sub-agent (don't research inline)
+
+For each research topic, **spawn a `trellis-research` sub-agent via the Task tool**.
+"""
+        stale_platform_update_spec = """---
+name: trellis-update-spec
+description: stale update spec
+---
+
+## Relationship to Other Commands
+
+```
+Development Flow:
+  Learn something → /trellis:update-spec → Knowledge captured
+       ↑                                  ↓
+  /trellis:break-loop ←──────────────────── Future sessions benefit
+  (deep bug analysis)
+```
+"""
+        stale_shared_brainstorm = """---
+name: trellis-brainstorm
+description: stale brainstorm
+---
+
+## When to Use
+
+Triggered from `start` (Trellis command) when the user describes a development task, especially when:
+"""
+        stale_shared_update_spec = """---
+name: trellis-update-spec
+description: stale update spec
+---
+
+## Relationship to Other Commands
+
+```
+Development Flow:
+  Learn something → `update-spec` (Trellis command) → Knowledge captured
+       ↑                                  ↓
+  `break-loop` (Trellis command) ←──────────────────── Future sessions benefit
+  (deep bug analysis)
+```
+"""
+        stale_change_hooks = """# stale
+
+## Example: Change New-Session Injection Content
+
+```text
+OpenCode: .opencode/package.json -> .opencode/plugins/session-start.js
+```
+"""
+
+        for path, content in [
+            (fixture / ".claude" / "skills" / "trellis-brainstorm" / "SKILL.md", stale_platform_brainstorm),
+            (fixture / ".opencode" / "skills" / "trellis-brainstorm" / "SKILL.md", stale_platform_brainstorm),
+            (fixture / ".claude" / "skills" / "trellis-update-spec" / "SKILL.md", stale_platform_update_spec),
+            (fixture / ".opencode" / "skills" / "trellis-update-spec" / "SKILL.md", stale_platform_update_spec),
+            (fixture / ".agents" / "skills" / "trellis-brainstorm" / "SKILL.md", stale_shared_brainstorm),
+            (fixture / ".agents" / "skills" / "trellis-update-spec" / "SKILL.md", stale_shared_update_spec),
+            (fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md", stale_change_hooks),
+            (fixture / ".claude" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md", stale_change_hooks),
+            (fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md", stale_change_hooks),
+        ]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+
+        guide_path = fixture / ".trellis" / "spec" / "guides" / "cross-layer-thinking-guide.md"
+        guide_path.parent.mkdir(parents=True, exist_ok=True)
+        guide_path.write_text(
+            "# Cross-Layer Thinking Guide\n\n"
+            "## Cross-Platform Template Consistency\n\n"
+            "- [ ] Run `/trellis:check-cross-layer` to verify nothing was missed\n",
+            encoding="utf-8",
+        )
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        combined = result.stdout + result.stderr
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("trellis-brainstorm skill", combined)
+        self.assertIn("trellis-update-spec skill", combined)
+        self.assertIn("trellis-meta references", combined)
+        self.assertIn("cross-layer-thinking-guide.md", combined)
+
+    def test_upgrade_check_detects_old_opencode_subagent_route_parser(self) -> None:
+        fixture = self.create_fixture(include_opencode=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        plugin_path = fixture / ".opencode" / "plugins" / "inject-subagent-context.js"
+        plugin_path.parent.mkdir(parents=True, exist_ok=True)
+        plugin_path.write_text(
+            """// [workflow-embed-patch:opencode-subagent-gates]
+function parseRouteStatus(taskStatusText) {
+  if (typeof taskStatusText !== "string" || !taskStatusText.trim()) return null
+  const lines = taskStatusText.split(/\\r?\\n/)
+  const routeData = {}
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+    if (!line || !line.includes(":")) continue
+    const idx = line.indexOf(":")
+    const key = line.slice(0, idx).trim()
+    const value = line.slice(idx + 1).trim()
+    if (key === "Stage") routeData.stage = value
+  }
+  return routeData
+}
+function shouldAllowTaskInjection(routeData, subagentType) { return false }
+function loadRouteData(ctx, taskDir) { return parseRouteStatus("Stage: feasibility") }
+function buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt) {
+  return "Strong-gate blocked this subagent dispatch."
+}
+""",
+            encoding="utf-8",
+        )
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        combined = result.stdout + result.stderr
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("inject-subagent-context.js", combined)
+        self.assertIn("强门禁子代理补丁缺失或不完整", combined)
 
     def test_upgrade_check_detects_embed_attempt_record_conflict(self) -> None:
         fixture = self.create_fixture()
@@ -3966,7 +4420,7 @@ Keep only durable PRD-facing takeaways here.
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         updated = json.loads(record_path.read_text(encoding="utf-8"))
-        self.assertEqual(updated["workflow_version"], "0.1.2800")
+        self.assertEqual(updated["workflow_version"], "0.1.2801")
         self.assertEqual(updated["workflow_schema_version"], "3")
         self.assertIn("finish-work-checklist-template.md", updated["workflow_shared_docs"])
         self.assertIn("example.assembled-packs.requirements-discovery-foundation", updated["initial_pack_assets"])
@@ -4636,7 +5090,7 @@ Keep only durable PRD-facing takeaways here.
         self.assertIn(PHASE_ROUTER_MARKER, start.read_text(encoding="utf-8"))
         self.assertIn(FINISH_WORK_MARKER, finish_work.read_text(encoding="utf-8"))
         record_data = json.loads((fixture / ".trellis" / "workflow-installed.json").read_text(encoding="utf-8"))
-        self.assertEqual(record_data["workflow_version"], "0.1.2800")
+        self.assertEqual(record_data["workflow_version"], "0.1.2801")
         self.assertEqual(record_data["previous_version"], "0.5.0-rc.3")
 
         followup_check = self.run_script(
