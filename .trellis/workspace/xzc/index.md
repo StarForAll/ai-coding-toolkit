@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-7.md`
-- **Total Sessions**: 327
+- **Total Sessions**: 328
 - **Last Active**: 2026-05-27
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-7.md` | ~812 | Active |
+| `journal-7.md` | ~846 | Active |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
@@ -35,6 +35,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 328 | 2026-05-27 | workflow-repair break-loop doc drift | `16d2383`, `8e4d056` | `main` |
 | 327 | 2026-05-27 | Workflow repair: drift hardening and lineage escalation | `3242cea`, `54db438` | `main` |
 | 326 | 2026-05-27 | Workflow repair drift closure and version bump | `96b56f7` | `main` |
 | 325 | 2026-05-27 | Repair workflow scan false positives and brainstorm carrier patching | `b1ca691` | `main` |

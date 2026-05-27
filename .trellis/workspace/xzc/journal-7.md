@@ -810,3 +810,37 @@ Repaired installed workflow drift across Codex start routing, Claude subagent de
 ### Next Steps
 
 - None - task complete
+
+
+## Session 328: workflow-repair break-loop doc drift
+
+**Date**: 2026-05-27
+**Task**: workflow-repair break-loop doc drift
+**Branch**: `main`
+
+### Summary
+
+Fixed workflow-scan repair classification docs, trellis-meta reference drift, and clarified intentionally gated subagent carriers; archived the repair task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `16d2383` | (see git log) |
+| `8e4d056` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
