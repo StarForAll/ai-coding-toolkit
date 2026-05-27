@@ -124,6 +124,8 @@ BASELINE_START_SKILL_CONTENT = (
     "| User intent | Skill |\n"
     "|---|---|\n"
     "| New feature / unclear requirements | `trellis-brainstorm` |\n"
+    "| About to write code | `trellis-before-dev` |\n"
+    "| Done coding / quality check | `trellis-check` |\n"
 )
 BASELINE_CODEX_CONFIG_CONTENT = (
     '# Project-scoped Codex defaults for Trellis workflows.\n'
@@ -1516,7 +1518,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("./.trellis/scripts/workflow/source-watermark-guard.py", ownership_card_text)
         self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", ownership_card_text)
         self.assertNotIn("<WORKFLOW_DIR>/commands/shell", ownership_card_text)
-        self.assertEqual(record_data["workflow_version"], "0.1.2801")
+        self.assertEqual(record_data["workflow_version"], "0.1.2802")
         self.assertEqual(record_data["workflow_schema_version"], "3")
         self.assertEqual(record_data["initial_pack"], "pack.requirements-discovery-foundation")
         self.assertIn(
@@ -1675,6 +1677,8 @@ class WorkflowInstallerTests(unittest.TestCase):
             "    return None\n"
             "# Strong-gate blocked this subagent dispatch.\n"
             "# current embedded workflow disables agent/subagent execution paths\n"
+            '# "permissionDecision": "deny"\n'
+            '# "permission": "deny"\n'
             "_emit_blocked_subagent_output(subagent_type, original_prompt, tool_input)\n",
             encoding="utf-8",
         )
@@ -2048,7 +2052,7 @@ class WorkflowInstallerTests(unittest.TestCase):
             BASELINE_TRELLIS_CONTINUE_SKILL_CONTENT,
         )
 
-    def test_install_patches_optional_codex_start_skill_quick_reference_to_brainstorm(self) -> None:
+    def test_install_patches_optional_codex_start_skill_quick_reference_to_formal_entries(self) -> None:
         fixture = self.create_fixture(include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
 
@@ -2058,7 +2062,11 @@ class WorkflowInstallerTests(unittest.TestCase):
         start_skill = fixture / ".agents" / "skills" / "trellis-start" / "SKILL.md"
         start_text = start_skill.read_text(encoding="utf-8")
         self.assertIn("| New feature / unclear requirements | `brainstorm` |", start_text)
+        self.assertIn("| About to write code | `trellis-continue` |", start_text)
+        self.assertIn("| Done coding / quality check | `check` |", start_text)
         self.assertNotIn("| New feature / unclear requirements | `trellis-brainstorm` |", start_text)
+        self.assertNotIn("| About to write code | `trellis-before-dev` |", start_text)
+        self.assertNotIn("| Done coding / quality check | `trellis-check` |", start_text)
 
     def test_install_deploys_check_command_with_review_gate_decision_and_delivery_default(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
@@ -2170,11 +2178,16 @@ class WorkflowInstallerTests(unittest.TestCase):
         hook_path.parent.mkdir(parents=True, exist_ok=True)
         hook_path.write_text(
             "import json\n"
+            "import os\n"
             "import sys\n"
             "AGENT_IMPLEMENT = \"trellis-implement\"\n"
             "AGENT_CHECK = \"trellis-check\"\n"
             "AGENT_RESEARCH = \"trellis-research\"\n"
             "AGENTS_ALL = (AGENT_IMPLEMENT, AGENT_CHECK, AGENT_RESEARCH)\n"
+            "\n"
+            "def _parse_hook_input(input_data):\n"
+            "    tool_input = input_data.get(\"tool_input\", {})\n"
+            "    return tool_input.get(\"subagent_type\"), tool_input.get(\"prompt\", \"\"), tool_input\n"
             "\n"
             "def main():\n"
             "    subagent_type = \"trellis-research\"\n"
@@ -2204,6 +2217,27 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("# [workflow-embed-patch:claude-subagent-gates]", patched_text)
         self.assertIn("Strong-gate blocked this subagent dispatch.", patched_text)
         self.assertIn("current embedded workflow disables agent/subagent execution paths", patched_text)
+        self.assertIn('"permissionDecision": "deny"', patched_text)
+        self.assertIn('"permission": "deny"', patched_text)
+
+        runtime = subprocess.run(
+            [PYTHON, str(hook_path)],
+            input=json.dumps(
+                {
+                    "tool_name": "Task",
+                    "tool_input": {
+                        "subagent_type": "trellis-check",
+                        "prompt": "Active task: .trellis/tasks/demo\\nrun checks",
+                    },
+                }
+            ),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(runtime.returncode, 0, msg=runtime.stdout + runtime.stderr)
+        self.assertIn('"permissionDecision": "deny"', runtime.stdout)
+        self.assertIn('"permission": "deny"', runtime.stdout)
 
     def test_upgrade_check_allows_missing_unwired_codex_session_start(self) -> None:
         fixture = self.create_fixture(include_codex=True)
@@ -2380,6 +2414,11 @@ Why:
 - It persists findings to `{TASK_DIR}/research/<topic>.md` (the contract — see `workflow.md` Phase 1.2)
 - It returns only `{file path, one-line summary}` to the main agent
 - Independent topics can be **parallelized** — spawn multiple sub-agents in one tool call
+
+## Research References
+
+* [`research/<topic-a>.md`](research/<topic-a>.md) — <one-line takeaway>
+* [`research/<topic-b>.md`](research/<topic-b>.md) — <one-line takeaway>
 """
         shared_stale_skill = """---
 name: trellis-brainstorm
@@ -2674,6 +2713,11 @@ Main agent then reads the persisted files and produces **2–3 feasible approach
 ### Research handoff summary
 
 Keep only durable PRD-facing takeaways here.
+
+## Research References
+
+* [`research/<topic-a>.md`](research/<topic-a>.md) — <one-line takeaway>
+* [`research/<topic-b>.md`](research/<topic-b>.md) — <one-line takeaway>
 """
         for path in [
             fixture / ".claude" / "skills" / "trellis-brainstorm" / "SKILL.md",
@@ -2695,9 +2739,13 @@ Keep only durable PRD-facing takeaways here.
             self.assertIn("Research in the main session", content)
             self.assertIn("### Research handoff summary", content)
             self.assertEqual(content.count("### Research steps"), 1)
+            self.assertIn("`research/<topic-a>.md`", content)
+            self.assertIn("`research/<topic-b>.md`", content)
             self.assertNotIn("### Research steps (to pass into each sub-agent prompt)", content)
             self.assertNotIn("Main agent then reads the persisted files", content)
             self.assertNotIn("spawn a `trellis-research` sub-agent via the Task tool", content)
+            self.assertNotIn("[`research/<topic-a>.md`](research/<topic-a>.md)", content)
+            self.assertNotIn("[`research/<topic-b>.md`](research/<topic-b>.md)", content)
 
     def test_install_patches_cross_layer_guide_check_entry(self) -> None:
         fixture = self.create_fixture()
@@ -4420,7 +4468,7 @@ function buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt) {
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         updated = json.loads(record_path.read_text(encoding="utf-8"))
-        self.assertEqual(updated["workflow_version"], "0.1.2801")
+        self.assertEqual(updated["workflow_version"], "0.1.2802")
         self.assertEqual(updated["workflow_schema_version"], "3")
         self.assertIn("finish-work-checklist-template.md", updated["workflow_shared_docs"])
         self.assertIn("example.assembled-packs.requirements-discovery-foundation", updated["initial_pack_assets"])
@@ -4604,6 +4652,41 @@ function buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt) {
         self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("trellis-start", result.stdout)
         self.assertIn("trellis-brainstorm", result.stdout)
+
+    def test_upgrade_check_detects_codex_start_skill_legacy_implementation_and_check_quick_reference(self) -> None:
+        fixture = self.create_fixture(include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        start_skill = fixture / ".agents" / "skills" / "trellis-start" / "SKILL.md"
+        start_skill.write_text(
+            start_skill.read_text(encoding="utf-8")
+            .replace(
+                "| About to write code | `trellis-continue` |",
+                "| About to write code | `trellis-before-dev` |",
+            )
+            .replace(
+                "| Done coding / quality check | `check` |",
+                "| Done coding / quality check | `trellis-check` |",
+            ),
+            encoding="utf-8",
+        )
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        combined = result.stdout + result.stderr
+        self.assertIn("trellis-before-dev", combined)
+        self.assertIn("trellis-check", combined)
 
     def test_upgrade_check_detects_delivery_finish_work_entry_surface_drift(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
@@ -5090,7 +5173,7 @@ function buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt) {
         self.assertIn(PHASE_ROUTER_MARKER, start.read_text(encoding="utf-8"))
         self.assertIn(FINISH_WORK_MARKER, finish_work.read_text(encoding="utf-8"))
         record_data = json.loads((fixture / ".trellis" / "workflow-installed.json").read_text(encoding="utf-8"))
-        self.assertEqual(record_data["workflow_version"], "0.1.2801")
+        self.assertEqual(record_data["workflow_version"], "0.1.2802")
         self.assertEqual(record_data["previous_version"], "0.5.0-rc.3")
 
         followup_check = self.run_script(

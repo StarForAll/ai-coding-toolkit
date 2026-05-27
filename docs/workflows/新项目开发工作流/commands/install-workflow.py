@@ -242,6 +242,10 @@ _CODEX_START_NEW_INTRO = (
 )
 _CODEX_START_QUICKREF_OLD = "| New feature / unclear requirements | `trellis-brainstorm` |"
 _CODEX_START_QUICKREF_NEW = "| New feature / unclear requirements | `brainstorm` |"
+_CODEX_START_IMPLEMENTATION_QUICKREF_OLD = "| About to write code | `trellis-before-dev` |"
+_CODEX_START_IMPLEMENTATION_QUICKREF_NEW = "| About to write code | `trellis-continue` |"
+_CODEX_START_CHECK_QUICKREF_OLD = "| Done coding / quality check | `trellis-check` |"
+_CODEX_START_CHECK_QUICKREF_NEW = "| Done coding / quality check | `check` |"
 _CODEX_MAIN_SESSION_ONLY_MARKER = "# [workflow-embed-patch:codex-main-session-only]"
 _CODEX_MAIN_SESSION_ONLY_TABLE = "[features.multi_agent_v2]"
 _CODEX_MAIN_SESSION_ONLY_LINE = "enabled = false"
@@ -1131,6 +1135,14 @@ def build_codex_phase_router_skill_content(content: str, patch_text: str) -> str
         content = re.sub(r"(?m)^description: .+$", _CODEX_START_DESCRIPTION, content, count=1)
         content = content.replace(_CODEX_START_OLD_INTRO, _CODEX_START_NEW_INTRO)
         content = content.replace(_CODEX_START_QUICKREF_OLD, _CODEX_START_QUICKREF_NEW)
+        content = content.replace(
+            _CODEX_START_IMPLEMENTATION_QUICKREF_OLD,
+            _CODEX_START_IMPLEMENTATION_QUICKREF_NEW,
+        )
+        content = content.replace(
+            _CODEX_START_CHECK_QUICKREF_OLD,
+            _CODEX_START_CHECK_QUICKREF_NEW,
+        )
     if "name: trellis-continue\n" in content:
         content = re.sub(r"(?m)^description: .+$", _CODEX_CONTINUE_DESCRIPTION, content, count=1)
         content = content.replace(_CODEX_CONTINUE_OLD_INTRO, _CODEX_CONTINUE_NEW_INTRO)
@@ -1884,6 +1896,10 @@ For each research topic:
 
 If research leaves only one credible direction, state that there is no credible alternative rather than fabricating a comparison.
 """
+_BRAINSTORM_PLACEHOLDER_LINK_REPLACEMENTS = (
+    ("[`research/<topic-a>.md`](research/<topic-a>.md)", "`research/<topic-a>.md`"),
+    ("[`research/<topic-b>.md`](research/<topic-b>.md)", "`research/<topic-b>.md`"),
+)
 _BRAINSTORM_RESEARCH_INTERNAL_HEADINGS = {
     line
     for line in _BRAINSTORM_RESEARCH_SUBAGENT_BLOCK_OLD.splitlines()
@@ -2031,6 +2047,10 @@ def patch_platform_brainstorm_skills(root: Path, *, dry_run: bool) -> bool:
         patched, research_block_changed = _patch_brainstorm_research_block(patched)
         if research_block_changed:
             changed = True
+        for old, new in _BRAINSTORM_PLACEHOLDER_LINK_REPLACEMENTS:
+            if old in patched:
+                patched = patched.replace(old, new)
+                changed = True
         if not changed:
             continue
         if dry_run:

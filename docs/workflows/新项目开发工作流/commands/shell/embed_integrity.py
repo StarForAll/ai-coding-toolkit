@@ -99,6 +99,8 @@ PATCHED_CODEX_SKILL_REQUIREMENTS: dict[str, dict[str, tuple[str, ...]]] = {
             "stay in the current phase-router entry",
             "Do not assume a public `implementation` skill exists.",
             "| New feature / unclear requirements | `brainstorm` |",
+            "| About to write code | `trellis-continue` |",
+            "| Done coding / quality check | `check` |",
         ),
         "must_not_contain": (
             "routes to brainstorm, direct edit, or task workflow",
@@ -108,6 +110,8 @@ PATCHED_CODEX_SKILL_REQUIREMENTS: dict[str, dict[str, tuple[str, ...]]] = {
             "check passed",
             "Load the Specific Step",
             "| New feature / unclear requirements | `trellis-brainstorm` |",
+            "| About to write code | `trellis-before-dev` |",
+            "| Done coding / quality check | `trellis-check` |",
         ),
     },
     "trellis-brainstorm": {
@@ -119,6 +123,8 @@ PATCHED_CODEX_SKILL_REQUIREMENTS: dict[str, dict[str, tuple[str, ...]]] = {
         "must_not_contain": (
             "Triggered from `start` (Trellis command)",
             "| ``start` (Trellis command)` | Entry point that triggers brainstorm |",
+            "[`research/<topic-a>.md`](research/<topic-a>.md)",
+            "[`research/<topic-b>.md`](research/<topic-b>.md)",
         ),
     },
 }
@@ -341,6 +347,8 @@ def _task_runtime_contract_errors(
             "Strong-gate blocked this subagent dispatch.",
             "current embedded workflow disables agent/subagent execution paths",
             "_emit_blocked_subagent_output(subagent_type, original_prompt, tool_input)",
+            '"permissionDecision": "deny"',
+            '"permission": "deny"',
         )
         for fragment in required_fragments:
             if fragment in content:

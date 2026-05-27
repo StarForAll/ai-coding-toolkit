@@ -123,6 +123,10 @@ _TASK_STATUS_VIEW_PATCH_MARKER = _INSTALL_WORKFLOW._TASK_STATUS_VIEW_PATCH_MARKE
 _OPENCODE_SESSION_UTILS_PATCH_MARKER = _INSTALL_WORKFLOW._OPENCODE_SESSION_UTILS_PATCH_MARKER
 _CODEX_START_QUICKREF_OLD = _INSTALL_WORKFLOW._CODEX_START_QUICKREF_OLD
 _CODEX_START_QUICKREF_NEW = _INSTALL_WORKFLOW._CODEX_START_QUICKREF_NEW
+_CODEX_START_IMPLEMENTATION_QUICKREF_OLD = _INSTALL_WORKFLOW._CODEX_START_IMPLEMENTATION_QUICKREF_OLD
+_CODEX_START_IMPLEMENTATION_QUICKREF_NEW = _INSTALL_WORKFLOW._CODEX_START_IMPLEMENTATION_QUICKREF_NEW
+_CODEX_START_CHECK_QUICKREF_OLD = _INSTALL_WORKFLOW._CODEX_START_CHECK_QUICKREF_OLD
+_CODEX_START_CHECK_QUICKREF_NEW = _INSTALL_WORKFLOW._CODEX_START_CHECK_QUICKREF_NEW
 _CODEX_MAIN_SESSION_ONLY_MARKER = _INSTALL_WORKFLOW._CODEX_MAIN_SESSION_ONLY_MARKER
 _CODEX_MAIN_SESSION_ONLY_TABLE = _INSTALL_WORKFLOW._CODEX_MAIN_SESSION_ONLY_TABLE
 _CODEX_MAIN_SESSION_ONLY_LINE = _INSTALL_WORKFLOW._CODEX_MAIN_SESSION_ONLY_LINE
@@ -226,6 +230,8 @@ def detect_runtime_patch_contract_conflicts(root: Path, cli_types: list[str]) ->
                 _CLAUDE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER in claude_subagent_content
                 and "Strong-gate blocked this subagent dispatch." in claude_subagent_content
                 and "current embedded workflow disables agent/subagent execution paths" in claude_subagent_content
+                and '"permissionDecision": "deny"' in claude_subagent_content
+                and '"permission": "deny"' in claude_subagent_content
             ):
                 ok("[Claude] inject-subagent-context.py: 强门禁子代理补丁已应用")
             else:
@@ -466,6 +472,14 @@ def _codex_start_skill_contract_issues(content: str) -> list[str]:
         issues.append("quick reference 仍把新功能/需求不清路由到 `trellis-brainstorm`")
     if _CODEX_START_QUICKREF_NEW not in content:
         issues.append("quick reference 缺少 `brainstorm` 正式阶段入口")
+    if _CODEX_START_IMPLEMENTATION_QUICKREF_OLD in content:
+        issues.append("quick reference 仍把实现意图路由到 `trellis-before-dev`")
+    if _CODEX_START_IMPLEMENTATION_QUICKREF_NEW not in content:
+        issues.append("quick reference 缺少 `trellis-continue` implementation 入口")
+    if _CODEX_START_CHECK_QUICKREF_OLD in content:
+        issues.append("quick reference 仍把 formal quality-check 意图路由到 `trellis-check`")
+    if _CODEX_START_CHECK_QUICKREF_NEW not in content:
+        issues.append("quick reference 缺少 formal `check` 阶段入口")
     return issues
 
 

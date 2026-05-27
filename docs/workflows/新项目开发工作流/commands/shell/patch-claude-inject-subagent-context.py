@@ -27,10 +27,10 @@ def _emit_blocked_subagent_output(subagent_type: str, original_prompt: str, tool
     output = {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
-            "permissionDecision": "allow",
+            "permissionDecision": "deny",
             "updatedInput": updated,
         },
-        "permission": "allow",
+        "permission": "deny",
         "updated_input": updated,
         "updatedInput": updated,
     }

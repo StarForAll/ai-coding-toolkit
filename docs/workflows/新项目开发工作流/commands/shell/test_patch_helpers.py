@@ -477,6 +477,8 @@ class PatchHelperScriptTests(unittest.TestCase):
         self.assertIn("def _emit_blocked_subagent_output(", patched)
         self.assertIn("Strong-gate blocked this subagent dispatch.", patched)
         self.assertIn("current embedded workflow disables agent/subagent execution paths", patched)
+        self.assertIn('"permissionDecision": "deny"', patched)
+        self.assertIn('"permission": "deny"', patched)
         self.assertIn("_emit_blocked_subagent_output(subagent_type, original_prompt, tool_input)", patched)
         self.assertNotIn("repo_root = \"/tmp\"", patched)
 
