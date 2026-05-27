@@ -710,3 +710,36 @@ Upgraded workflow-scan/workflow-repair to v4 convergence model: enforced same-ve
 ### Next Steps
 
 - None - task complete
+
+
+## Session 325: Repair workflow scan false positives and brainstorm carrier patching
+
+**Date**: 2026-05-27
+**Task**: Repair workflow scan false positives and brainstorm carrier patching
+**Branch**: `main`
+
+### Summary
+
+Repaired trellis-brainstorm carrier patching, tightened workflow scan/repair false-positive boundaries for restore surfaces and supported CLI scope, added regression tests, and archived the repair task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b1ca691` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
