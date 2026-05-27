@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-7.md`
-- **Total Sessions**: 322
+- **Total Sessions**: 323
 - **Last Active**: 2026-05-27
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-7.md` | ~645 | Active |
+| `journal-7.md` | ~678 | Active |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
@@ -35,6 +35,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 323 | 2026-05-27 | Remove workflow-validate-matrix skill | `2e68c06` | `main` |
 | 322 | 2026-05-27 | workflow-validate-matrix skill 修复问题 | `69053da` | `main` |
 | 321 | 2026-05-26 | workflow-validate-matrix runtime bundling | `e59c109`, `f1eed6e` | `main` |
 | 320 | 2026-05-26 | 新增 workflow-validate-matrix skill 打破增量发现循环 | `61d0b9b` | `main` |

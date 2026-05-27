@@ -643,3 +643,36 @@ Bundled workflow-validate-matrix runtime into the installable skill, added sync/
 ### Next Steps
 
 - None - task complete
+
+
+## Session 323: Remove workflow-validate-matrix skill
+
+**Date**: 2026-05-27
+**Task**: Remove workflow-validate-matrix skill
+**Branch**: `main`
+
+### Summary
+
+Removed the workflow-validate-matrix skill, deleted its project-local spec and sync hook, and cleaned the remaining validation/script residue.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2e68c06` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
