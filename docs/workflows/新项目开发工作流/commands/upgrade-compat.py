@@ -2043,6 +2043,7 @@ def main() -> int:
     patch_opencode_session_utils(root, dry_run=False)
     patch_opencode_inject_subagent_context(root, dry_run=False)
     patch_session_start_no_task_guidance(root, dry_run=False)
+    _INSTALL_WORKFLOW.patch_platform_brainstorm_skills(root, dry_run=False)
     _apply_patch_workflow_phase(src, root, dry_run=False)
     _apply_patch_task_start(src, root, dry_run=False)
     _apply_patch_task_create_preserve_active(src, root, dry_run=False)

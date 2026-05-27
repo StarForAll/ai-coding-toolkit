@@ -56,6 +56,14 @@ workflow product source under `docs/workflows/新项目开发工作流/`.
 14. `--auto` must stop its `continue` loop when the current repair task is
     clearly closed/completed by `continue`, and must also stop when it cannot
     prove whether another `continue` would be safe.
+15. Actionable defect judgment for this skill version is limited to the current
+    workflow's Claude Code / OpenCode / Codex managed surfaces. Findings that
+    depend only on other CLI usage remain out of scope unless the
+    workflow-managed surface is explicitly expanded.
+16. `.backup-original/` trees under managed command/skill carriers must not be
+    treated as workflow defects by default when temp-project evidence shows
+    they are intentional restore surfaces paired with active patched/overlay
+    assets in `.trellis/workflow-installed.json`.
 
 ---
 
@@ -94,6 +102,13 @@ Before adoption, it must:
 - classify the item as `ignored` rather than `manual-decision` when the temp-
   project symptom only reflects a Trellis-native hook/runtime convention that
   the current workflow embed preserved unchanged
+- classify the item as `ignored` rather than `manual-decision` when the temp-
+  project symptom depends only on a CLI outside the current supported
+  three-platform surface (Claude Code / OpenCode / Codex)
+- classify the item as `ignored` rather than `manual-decision` when the temp-
+  project symptom only reports `.backup-original/` carrier copies whose names
+  pair cleanly with active patched/overlay assets in
+  `.trellis/workflow-installed.json`
 - honor the report-side repair classification as a default safety gate:
   `confirmed-defect` may enter normal repair verification, `design-debt`
   defaults to non-adopted handling unless the user explicitly broadens scope,

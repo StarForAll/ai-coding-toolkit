@@ -8,6 +8,12 @@ compatibility: Requires `trellis` on PATH, access to the temp project report plu
 
 ## Version History
 
+- **v3.1**: Clarified that repair-side defect judgment in this skill version is
+  limited to Claude Code / OpenCode / Codex workflow surfaces; findings that
+  only depend on other CLI usage stay out of scope unless the managed surface
+  later expands
+- **v3.2**: Clarified that valid `.backup-original/` carrier trees paired with
+  active patched/overlay assets default to `ignored`, not repairable defects
 - **v3.0**: Upgraded the shared contract to `workflow-scan-repair-v4`,
   requires three-way same-version report validation, replaces cross-version
   issue-history memory with task-local closure artifacts, and makes bounded
@@ -168,6 +174,16 @@ Use this skill when any of the following is true:
 26. **Evidence gaps block source edits**: `evidence-gap` findings must default
     to `blocked` or `manual-decision` until further temp-project or audit
     evidence closes the gap.
+27. **Supported CLI defect scope is fixed for this skill version**: repair-side
+    adoption may concern only the current workflow's Claude Code / OpenCode /
+    Codex managed surfaces. If a finding depends only on behavior in some other
+    CLI and does not break these three supported surfaces, it is out of scope
+    and must not be treated as a current workflow defect.
+28. **Preserved restore surfaces are not auto-defects**: findings that only
+    complain about `.backup-original/` carrier trees must default to `ignored`
+    when temp-project evidence shows those copies are intentional restore
+    surfaces paired with active patched/overlay assets in
+    `.trellis/workflow-installed.json`.
 
 ## Inputs
 
@@ -500,7 +516,14 @@ project:
 8. Apply the **negative-optimization guardrail**: if a fix would change
    behavior that currently works correctly (even if the code looks wrong),
    prefer `manual-decision` over `adopted`.
-9. If the item is a repeated finding and the current fix proposal does not
+9. If the symptom depends only on a CLI outside the current supported
+   three-platform surface (Claude Code / OpenCode / Codex), downgrade the item
+   to `ignored` instead of treating it as a current workflow defect.
+10. If the symptom is only that a managed `.backup-original/` carrier tree is
+   present, and the temp project's install record plus active asset names show
+   it is an intentional restore surface, downgrade the item to `ignored`
+   instead of treating it as a current workflow defect.
+11. If the item is a repeated finding and the current fix proposal does not
    explain why the earlier repair missed it, downgrade the item to
    `manual-decision` or `blocked`.
 
@@ -984,6 +1007,7 @@ Required persisted scenario files:
 - `tests/56-invalid-embedded-state-schema-mismatch.md`
 - `tests/57-closure-unresolved-in-scope-blocks-closeout.md`
 - `tests/58-closure-new-family-stops-auto-progression.md`
+- `tests/59-backup-original-restore-surface-defaults-to-ignored.md`
 
 ## Examples
 

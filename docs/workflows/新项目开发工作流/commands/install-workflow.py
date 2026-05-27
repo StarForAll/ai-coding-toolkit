@@ -1800,6 +1800,127 @@ _BRAINSTORM_SHARED_RELATED_COMMANDS_NEW = """| `brainstorm` stage skill | Direct
 | `trellis-continue` skill | Phase Router entry that may route here when requirements still need clarification |
 | `trellis-finish-work` skill | After implementation is complete |
 | `trellis-update-spec` skill | If new patterns emerge during work |"""
+_BRAINSTORM_RESEARCH_SUBAGENT_BLOCK_OLD = """### Delegate to `trellis-research` sub-agent (don't research inline)
+
+For each research topic, **spawn a `trellis-research` sub-agent via the Task tool** — don't do WebFetch / WebSearch / `gh api` inline in the main conversation.
+
+Why:
+- The sub-agent has its own context window → doesn't pollute brainstorm context with raw tool output
+- It persists findings to `{TASK_DIR}/research/<topic>.md` (the contract — see `workflow.md` Phase 1.2)
+- It returns only `{file path, one-line summary}` to the main agent
+- Independent topics can be **parallelized** — spawn multiple sub-agents in one tool call
+
+> **Codex exception**: on Codex CLI, do NOT dispatch `trellis-research` for research-first mode — do the research inline (WebFetch / WebSearch in the main session) and write findings to `{TASK_DIR}/research/<topic>.md` yourself. Reason: Codex `spawn_agent` runs sub-agents with `fork_turns="none"` (isolated context, no parent session inheritance), so the research sub-agent cannot resolve the active task path via `task.py current` and silently aborts without producing files. Inline research on Codex avoids this failure mode. The 3+ inline research calls limit (B rule in `workflow.md`) is relaxed for Codex specifically.
+
+Agent type: `trellis-research`
+Task description template: "Research <specific question>; persist findings to `{TASK_DIR}/research/<topic-slug>.md`."
+
+❌ Bad (what you must NOT do):
+```
+Main agent: WebFetch(url-A) → WebFetch(url-B) → Bash(gh api ...)
+          → WebSearch(q1) → WebSearch(q2) → ... (10+ inline calls)
+          → Write(research/topic.md)
+```
+→ Pollutes main context with raw HTML/JSON, burns tokens.
+
+✅ Good:
+```
+Main agent: Task(subagent_type="trellis-research",
+                 prompt="Research topic A; persist to research/topic-a.md")
+          + Task(subagent_type="trellis-research",
+                 prompt="Research topic B; persist to research/topic-b.md")
+          + Task(subagent_type="trellis-research",
+                 prompt="Research topic C; persist to research/topic-c.md")
+→ Reads research/topic-{a,b,c}.md after they finish.
+```
+
+### Research steps (to pass into each sub-agent prompt)
+
+Each `trellis-research` sub-agent should:
+
+1. Identify 2–4 comparable tools/patterns for its topic
+2. Summarize common conventions and why they exist
+3. Map conventions onto our repo constraints
+4. Write findings to `{TASK_DIR}/research/<topic>.md`
+
+Main agent then reads the persisted files and produces **2–3 feasible approaches** in PRD.
+"""
+_BRAINSTORM_RESEARCH_INLINE_BLOCK_NEW = """### Research in the main session (main-session-only workflow)
+
+For each research topic, **do the research inline in the current main session** and persist durable findings to `{TASK_DIR}/research/<topic>.md` yourself.
+
+Why:
+- This embedded workflow explicitly disables `agent / subagent` execution paths, including `trellis-research`
+- The installed workflow contract requires research / implement / check to stay in the main session even when native Trellis carriers still exist
+- Durable findings should still be written to `{TASK_DIR}/research/<topic>.md` so later stages can reference them
+
+Rules:
+- Do NOT dispatch `trellis-research` or any other agent/sub-agent from brainstorm
+- Keep external evidence concise in the conversation, then write the durable summary to `research/*.md`
+- If multiple research angles are needed, handle them sequentially or with normal main-session tooling, not Task-based sub-agents
+
+✅ Good:
+```
+Main session: WebFetch/WebSearch/read docs as needed
+            → summarize the durable result
+            → write `research/topic-a.md`
+            → compare options in PRD
+```
+
+### Research steps
+
+For each research topic:
+
+1. Identify 2–4 comparable tools/patterns when genuine alternatives exist
+2. Summarize common conventions and why they exist
+3. Map conventions onto our repo constraints
+4. Write findings to `{TASK_DIR}/research/<topic>.md`
+
+If research leaves only one credible direction, state that there is no credible alternative rather than fabricating a comparison.
+"""
+_BRAINSTORM_RESEARCH_INTERNAL_HEADINGS = {
+    line
+    for line in _BRAINSTORM_RESEARCH_SUBAGENT_BLOCK_OLD.splitlines()
+    if line.startswith("### ")
+}
+
+
+def _patch_brainstorm_research_block(content: str) -> tuple[str, bool]:
+    """Rewrite stale research-subagent guidance to main-session-only guidance."""
+    if _BRAINSTORM_RESEARCH_SUBAGENT_BLOCK_OLD in content:
+        return (
+            content.replace(
+                _BRAINSTORM_RESEARCH_SUBAGENT_BLOCK_OLD,
+                _BRAINSTORM_RESEARCH_INLINE_BLOCK_NEW,
+                1,
+            ),
+            True,
+        )
+
+    lines = content.splitlines()
+    start_marker = "### Delegate to `trellis-research` sub-agent (don't research inline)"
+    start_idx = next((idx for idx, line in enumerate(lines) if line == start_marker), None)
+    if start_idx is None:
+        return content, False
+
+    in_fence = False
+    end_idx = len(lines)
+    for idx in range(start_idx + 1, len(lines)):
+        stripped = lines[idx].strip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if not in_fence and lines[idx].startswith("### "):
+            if lines[idx] in _BRAINSTORM_RESEARCH_INTERNAL_HEADINGS:
+                continue
+            end_idx = idx
+            break
+
+    replacement_lines = _BRAINSTORM_RESEARCH_INLINE_BLOCK_NEW.splitlines()
+    patched = "\n".join([*lines[:start_idx], *replacement_lines, *lines[end_idx:]])
+    if content.endswith("\n"):
+        patched += "\n"
+    return patched, True
 
 
 def patch_platform_brainstorm_skills(root: Path, *, dry_run: bool) -> bool:
@@ -1861,13 +1982,16 @@ def patch_platform_brainstorm_skills(root: Path, *, dry_run: bool) -> bool:
             patched = patched.replace(_BRAINSTORM_RELATED_COMMAND_START_OLD, replacement_lines)
             patched = patched.replace(_BRAINSTORM_RELATED_COMMAND_UPDATE_OLD, _BRAINSTORM_RELATED_COMMAND_UPDATE_NEW)
             changed = True
+        patched, research_block_changed = _patch_brainstorm_research_block(patched)
+        if research_block_changed:
+            changed = True
         if not changed:
             continue
         if dry_run:
-            info(f"[{label}] 将更新 trellis-brainstorm skill 入口文案")
+            info(f"[{label}] 将更新 trellis-brainstorm skill 强门禁文案")
         else:
             target_path.write_text(patched, encoding="utf-8")
-            ok(f"[{label}] trellis-brainstorm skill 入口文案已更新")
+            ok(f"[{label}] trellis-brainstorm skill 强门禁文案已更新")
         any_patched = True
     return any_patched
 

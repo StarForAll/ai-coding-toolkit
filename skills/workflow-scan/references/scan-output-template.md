@@ -153,7 +153,7 @@ Each finding is a level-3 heading with structured fields:
 | `cli-adaptation` | A CLI carrier surface (skill/command/agent/hook) is missing, inconsistent, or behaviorally drifted |
 | `post-install-artifact` | An artifact that should exist after install is missing, malformed, or contains wrong content |
 | `document-reference` | A cross-reference in an installed document is broken or stale |
-| `residual` | An artifact from a retired/removed feature still exists and should have been cleaned up |
+| `residual` | An artifact from a retired/removed feature still exists and should have been cleaned up; intentionally preserved restore surfaces such as valid `.backup-original/` copies are not residual by default |
 | `new` | An issue not previously cataloged, potentially from a recent change |
 
 ### Origin Values

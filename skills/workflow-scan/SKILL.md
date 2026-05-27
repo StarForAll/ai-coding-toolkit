@@ -8,6 +8,13 @@ compatibility: Requires `trellis` on PATH, access to the temp project fixture, l
 
 ## Version History
 
+- **v3.1**: Clarified that actionable defect judgment in this skill version is
+  limited to Claude Code / OpenCode / Codex workflow surfaces; issues seen
+  only in other CLI usage stay out of scope unless the managed surface later
+  expands
+- **v3.2**: Clarified that valid `.backup-original/` carrier trees paired with
+  active patched/overlay assets are intentional restore surfaces, not residual
+  workflow defects
 - **v3.0**: Upgraded the shared contract to `workflow-scan-repair-v4`,
   requires concrete workflow version/schema fields, and aligns scan output with
   same-version stale-report blocking on the repair side
@@ -150,6 +157,17 @@ Use this skill when any of the following is true:
     from the embedded target. If either field is missing or unresolved, stop as
     **Blocked / Invalid Embedded State** instead of emitting a repair-usable
     report.
+21. **Supported CLI defect scope is fixed for this skill version**: actionable
+    findings may concern only the current workflow's Claude Code / OpenCode /
+    Codex managed surfaces. If a symptom appears only when using some other CLI
+    and does not break these three supported surfaces, record it at most as
+    out-of-scope context and do not emit it as a workflow defect.
+22. **Preserved restore surfaces are not residual defects by default**:
+    `.backup-original/` trees under managed command/skill carriers must not be
+    reported as workflow defects when temp-project evidence shows they are
+    backup copies paired with active patched/overlay assets recorded in
+    `.trellis/workflow-installed.json` (for example `patched_baseline_commands`
+    or `patched_codex_skills`).
 
 ## Inputs
 
@@ -513,6 +531,7 @@ Required persisted scenario files:
 - `tests/06-partial-helper-output-local-followup.md`
 - `tests/07-inline-when-speed-or-depth-only.md`
 - `tests/08-classifies-repair-eligibility-before-emitting-findings.md`
+- `tests/09-backup-original-preservation-is-not-defect.md`
 
 Every test file must use the same structure:
 

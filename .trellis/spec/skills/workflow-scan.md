@@ -38,6 +38,14 @@ It does not fix source files.
    state. It only writes `WORKFLOW_QUESTIONS.md`.
 8. The scan must not require or depend on the source repository as an evidence
    input.
+9. Actionable defect judgment for this skill version is limited to the current
+   workflow's Claude Code / OpenCode / Codex managed surfaces. Observations
+   that exist only under other CLI usage remain out of scope unless the
+   workflow-managed surface is explicitly expanded.
+10. `.backup-original/` trees under managed command/skill carriers must not be
+   treated as residual defects by default when temp-project evidence shows they
+   are paired backup copies for active patched/overlay assets recorded in
+   `.trellis/workflow-installed.json`.
 
 ---
 
@@ -176,6 +184,9 @@ The skill must:
 - emit such observations only when the current workflow explicitly claims
   ownership of that entry surface or changed that runtime behavior; otherwise
   omit them from the actionable finding set
+- omit observations that depend only on unsupported CLI usage outside the
+  current Claude Code / OpenCode / Codex surface; they may be noted as context
+  only when they help explain an in-scope three-platform behavior
 
 ### 5. Output Discipline
 

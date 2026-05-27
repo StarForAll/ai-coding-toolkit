@@ -20,6 +20,9 @@
 
 补充说明：
 
+- 当前 workflow 的默认缺陷/兼容性判定范围，只覆盖 **Claude Code / OpenCode / Codex** 这三个平台的 managed surface
+- 若某问题只在其他 CLI 的使用路径下出现，而不影响这三个平台的当前合同面，则它属于 out-of-scope 现象，不能直接记为当前 workflow defect
+- 只有当 `workflow_assets.py` 后续显式扩展 managed surface，把新增平台纳入当前 workflow 合同后，这类问题才进入默认问题判定范围
 - `.iflow/agents/` 当前属于仓库级 live deployment 范围，但**不在**本 workflow 安装器的 managed subset 内
 - 因此，若当前问题与 `trellis-research` / `trellis-implement` / `trellis-check` 的部署有关，应优先按 Trellis 原生 baseline 理解；workflow 安装器只负责 legacy 迁移，不负责 fresh install overlay
 

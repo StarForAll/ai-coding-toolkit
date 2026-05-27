@@ -2183,6 +2183,16 @@ Triggered from /trellis:start when the user describes a development task, especi
 | `/trellis:start` | Entry point that triggers brainstorm |
 | `/trellis:finish-work` | After implementation is complete |
 | `trellis-update-spec` skill | If new patterns emerge during work |
+
+### Delegate to `trellis-research` sub-agent (don't research inline)
+
+For each research topic, **spawn a `trellis-research` sub-agent via the Task tool** — don't do WebFetch / WebSearch / `gh api` inline in the main conversation.
+
+Why:
+- The sub-agent has its own context window → doesn't pollute brainstorm context with raw tool output
+- It persists findings to `{TASK_DIR}/research/<topic>.md` (the contract — see `workflow.md` Phase 1.2)
+- It returns only `{file path, one-line summary}` to the main agent
+- Independent topics can be **parallelized** — spawn multiple sub-agents in one tool call
 """
         shared_stale_skill = """---
 name: trellis-brainstorm
@@ -2200,6 +2210,16 @@ Triggered from `start` (Trellis command) when the user describes a development t
 | ``start` (Trellis command)` | Entry point that triggers brainstorm |
 | ``finish-work` (Trellis command)` | After implementation is complete |
 | ``update-spec` (Trellis command)` | If new patterns emerge during work |
+
+### Delegate to `trellis-research` sub-agent (don't research inline)
+
+For each research topic, **spawn a `trellis-research` sub-agent via the Task tool** — don't do WebFetch / WebSearch / `gh api` inline in the main conversation.
+
+Why:
+- The sub-agent has its own context window → doesn't pollute brainstorm context with raw tool output
+- It persists findings to `{TASK_DIR}/research/<topic>.md` (the contract — see `workflow.md` Phase 1.2)
+- It returns only `{file path, one-line summary}` to the main agent
+- Independent topics can be **parallelized** — spawn multiple sub-agents in one tool call
 """
         for path in [
             fixture / ".claude" / "skills" / "trellis-brainstorm" / "SKILL.md",
@@ -2224,15 +2244,170 @@ Triggered from `start` (Trellis command) when the user describes a development t
             self.assertIn("All new implementation work must still pass `/trellis:feasibility` first", content)
             self.assertIn("assessment.md", content)
             self.assertIn("assessment.md", content)
+            self.assertIn("Research in the main session", content)
+            self.assertIn("Do NOT dispatch `trellis-research`", content)
             self.assertNotIn("Triggered from /trellis:start", content)
             self.assertNotIn("| `/trellis:start` | Entry point that triggers brainstorm |", content)
+            self.assertNotIn("spawn a `trellis-research` sub-agent via the Task tool", content)
         shared_content = shared_path.read_text(encoding="utf-8")
         self.assertIn("Triggered when the installed workflow routes into brainstorm", shared_content)
         self.assertIn("All new implementation work must still pass `/trellis:feasibility` first", shared_content)
         self.assertIn("assessment.md", shared_content)
         self.assertIn("trellis-continue", shared_content)
+        self.assertIn("Research in the main session", shared_content)
+        self.assertIn("Do NOT dispatch `trellis-research`", shared_content)
         self.assertNotIn("Triggered from `start` (Trellis command)", shared_content)
         self.assertNotIn("| ``start` (Trellis command)` | Entry point that triggers brainstorm |", shared_content)
+        self.assertNotIn("spawn a `trellis-research` sub-agent via the Task tool", shared_content)
+
+    def test_upgrade_merge_patches_platform_brainstorm_skills_away_from_research_subagent_guidance(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        stale_skill = """---
+name: trellis-brainstorm
+description: stale brainstorm
+---
+
+## When to Use
+
+Triggered from /trellis:start when the user describes a development task, especially when:
+
+## Related Commands
+
+| Command | When to Use |
+|---------|-------------|
+| `/trellis:start` | Entry point that triggers brainstorm |
+| `/trellis:finish-work` | After implementation is complete |
+| `trellis-update-spec` skill | If new patterns emerge during work |
+
+### Delegate to `trellis-research` sub-agent (don't research inline)
+
+For each research topic, **spawn a `trellis-research` sub-agent via the Task tool** — don't do WebFetch / WebSearch / `gh api` inline in the main conversation.
+
+Why:
+- The sub-agent has its own context window → doesn't pollute brainstorm context with raw tool output
+- It persists findings to `{TASK_DIR}/research/<topic>.md` (the contract — see `workflow.md` Phase 1.2)
+- It returns only `{file path, one-line summary}` to the main agent
+- Independent topics can be **parallelized** — spawn multiple sub-agents in one tool call
+"""
+        shared_stale_skill = stale_skill.replace(
+            "Triggered from /trellis:start when the user describes a development task, especially when:",
+            "Triggered from `start` (Trellis command) when the user describes a development task, especially when:",
+        ).replace(
+            "| `/trellis:start` | Entry point that triggers brainstorm |",
+            "| ``start` (Trellis command)` | Entry point that triggers brainstorm |",
+        ).replace(
+            "| `/trellis:finish-work` | After implementation is complete |",
+            "| ``finish-work` (Trellis command)` | After implementation is complete |",
+        ).replace(
+            "| `trellis-update-spec` skill | If new patterns emerge during work |",
+            "| ``update-spec` (Trellis command)` | If new patterns emerge during work |",
+        )
+        for path in [
+            fixture / ".claude" / "skills" / "trellis-brainstorm" / "SKILL.md",
+            fixture / ".opencode" / "skills" / "trellis-brainstorm" / "SKILL.md",
+        ]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(stale_skill, encoding="utf-8")
+        shared_path = fixture / ".agents" / "skills" / "trellis-brainstorm" / "SKILL.md"
+        shared_path.parent.mkdir(parents=True, exist_ok=True)
+        shared_path.write_text(shared_stale_skill, encoding="utf-8")
+
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--merge",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        for path in [
+            fixture / ".claude" / "skills" / "trellis-brainstorm" / "SKILL.md",
+            fixture / ".opencode" / "skills" / "trellis-brainstorm" / "SKILL.md",
+        ]:
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("Research in the main session", content)
+            self.assertIn("Do NOT dispatch `trellis-research`", content)
+            self.assertNotIn("spawn a `trellis-research` sub-agent via the Task tool", content)
+        shared_content = shared_path.read_text(encoding="utf-8")
+        self.assertIn("Triggered when the installed workflow routes into brainstorm", shared_content)
+        self.assertIn("Research in the main session", shared_content)
+        self.assertIn("Do NOT dispatch `trellis-research`", shared_content)
+        self.assertNotIn("spawn a `trellis-research` sub-agent via the Task tool", shared_content)
+
+    def test_install_patches_brainstorm_research_block_when_followup_heading_is_renamed(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        stale_skill = """---
+name: trellis-brainstorm
+description: stale brainstorm
+---
+
+## When to Use
+
+Triggered from /trellis:start when the user describes a development task, especially when:
+
+### Delegate to `trellis-research` sub-agent (don't research inline)
+
+For each research topic, **spawn a `trellis-research` sub-agent via the Task tool** — don't do WebFetch / WebSearch / `gh api` inline in the main conversation.
+
+Why:
+- The sub-agent has its own context window → doesn't pollute brainstorm context with raw tool output
+- It persists findings to `{TASK_DIR}/research/<topic>.md` (the contract — see `workflow.md` Phase 1.2)
+- It returns only `{file path, one-line summary}` to the main agent
+- Independent topics can be **parallelized** — spawn multiple sub-agents in one tool call
+
+> **Codex exception**: on Codex CLI, do NOT dispatch `trellis-research` for research-first mode — do the research inline (WebFetch / WebSearch in the main session) and write findings to `{TASK_DIR}/research/<topic>.md` yourself.
+
+Agent type: `trellis-research`
+Task description template: "Research <specific question>; persist findings to `{TASK_DIR}/research/<topic-slug>.md`."
+
+### Research steps (to pass into each sub-agent prompt)
+
+Each `trellis-research` sub-agent should:
+
+1. Identify 2–4 comparable tools/patterns for its topic
+2. Summarize common conventions and why they exist
+3. Map conventions onto our repo constraints
+4. Write findings to `{TASK_DIR}/research/<topic>.md`
+
+Main agent then reads the persisted files and produces **2–3 feasible approaches** in PRD.
+
+### Research handoff summary
+
+Keep only durable PRD-facing takeaways here.
+"""
+        for path in [
+            fixture / ".claude" / "skills" / "trellis-brainstorm" / "SKILL.md",
+            fixture / ".opencode" / "skills" / "trellis-brainstorm" / "SKILL.md",
+            fixture / ".agents" / "skills" / "trellis-brainstorm" / "SKILL.md",
+        ]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(stale_skill, encoding="utf-8")
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        for path in [
+            fixture / ".claude" / "skills" / "trellis-brainstorm" / "SKILL.md",
+            fixture / ".opencode" / "skills" / "trellis-brainstorm" / "SKILL.md",
+            fixture / ".agents" / "skills" / "trellis-brainstorm" / "SKILL.md",
+        ]:
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("Research in the main session", content)
+            self.assertIn("### Research handoff summary", content)
+            self.assertEqual(content.count("### Research steps"), 1)
+            self.assertNotIn("### Research steps (to pass into each sub-agent prompt)", content)
+            self.assertNotIn("Main agent then reads the persisted files", content)
+            self.assertNotIn("spawn a `trellis-research` sub-agent via the Task tool", content)
 
     def test_install_patches_cross_layer_guide_check_entry(self) -> None:
         fixture = self.create_fixture()
