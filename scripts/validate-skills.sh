@@ -284,6 +284,7 @@ validate_workflow_scan_repair_contract() {
   scan_handoff_template="skills/workflow-scan/references/helper-handoff-template.md"
   correction_plan_template="skills/workflow-repair/references/correction-plan-template.md"
   repair_log_template="skills/workflow-repair/references/repair-log-template.md"
+  closure_round_template="skills/workflow-repair/references/closure-round-template.md"
   issue_history_template="skills/workflow-repair/references/issue-history-template.md"
   scan_spec=".trellis/spec/skills/workflow-scan.md"
   repair_spec=".trellis/spec/skills/workflow-repair.md"
@@ -295,6 +296,7 @@ validate_workflow_scan_repair_contract() {
   [ -f "$scan_handoff_template" ] || fail "missing $scan_handoff_template"
   [ -f "$correction_plan_template" ] || fail "missing $correction_plan_template"
   [ -f "$repair_log_template" ] || fail "missing $repair_log_template"
+  [ -f "$closure_round_template" ] || fail "missing $closure_round_template"
   [ -f "$issue_history_template" ] || fail "missing $issue_history_template"
   [ -f "$scan_spec" ] || fail "missing $scan_spec"
   [ -f "$repair_spec" ] || fail "missing $repair_spec"
@@ -309,7 +311,7 @@ validate_workflow_scan_repair_contract() {
   # Shared frontmatter keys required by the workflow-scan/workflow-repair pair.
   for key in \
     "document-type: workflow-questions" \
-    "protocol: workflow-scan-repair-v3" \
+    "protocol: workflow-scan-repair-v4" \
     "trellis-version:" \
     "workflow-version:" \
     "workflow-schema-version:" \
@@ -435,7 +437,7 @@ validate_workflow_scan_repair_contract() {
   grep -Fq "No evidence-gap inflation" "$scan_skill" || fail "$scan_skill missing evidence-gap anti-inflation guard"
 
   grep -Fq "\`document-type\` must be \`workflow-questions\`" "$repair_skill" || fail "$repair_skill missing repair-side intake requirement for document-type"
-  grep -Fq "\`protocol\` must be \`workflow-scan-repair-v3\`" "$repair_skill" || fail "$repair_skill missing repair-side intake requirement for protocol"
+  grep -Fq "\`protocol\` must be \`workflow-scan-repair-v4\`" "$repair_skill" || fail "$repair_skill missing repair-side intake requirement for protocol"
   grep -Fq "Execution-mode agnostic intake" "$repair_skill" || fail "$repair_skill missing execution-mode agnostic intake rule"
   grep -Fq "\`--agent\`" "$repair_skill" || fail "$repair_skill missing explicit compatibility reference to --agent scan mode"
   grep -Fq "\`--auto\`" "$repair_skill" || fail "$repair_skill missing explicit --auto input contract"
@@ -515,10 +517,18 @@ validate_workflow_scan_repair_contract() {
   for template in \
     "$correction_plan_template" \
     "$repair_log_template" \
+    "$closure_round_template" \
     "$issue_history_template"
   do
-    grep -Fq "workflow-scan-repair-v3" "$template" || fail "$template missing shared protocol version"
+    grep -Fq "workflow-scan-repair-v4" "$template" || fail "$template missing shared protocol version"
   done
+  grep -Fq "base-workflow-version:" "$closure_round_template" || fail "$closure_round_template missing base-workflow-version field"
+  grep -Fq "round:" "$closure_round_template" || fail "$closure_round_template missing round field"
+  grep -Fq "scenario-id" "$closure_round_template" || fail "$closure_round_template missing scenario-id field"
+  grep -Fq "Issue Family ID" "$closure_round_template" || fail "$closure_round_template missing issue-family identifier field"
+  grep -Fq "Round Outcome" "$closure_round_template" || fail "$closure_round_template missing round outcome section"
+  grep -Fq "same-version" "$closure_round_template" || fail "$closure_round_template missing same-version boundary note"
+
   grep -Fq "{trellis-version from WORKFLOW_QUESTIONS.md}" "$correction_plan_template" || fail "$correction_plan_template missing trellis-version placeholder from scan report"
   grep -Fq "{workflow-version from WORKFLOW_QUESTIONS.md}" "$correction_plan_template" || fail "$correction_plan_template missing workflow-version placeholder from scan report"
   grep -Fq "{scan-timestamp from WORKFLOW_QUESTIONS.md}" "$correction_plan_template" || fail "$correction_plan_template missing scan-timestamp placeholder from scan report"
@@ -598,7 +608,11 @@ validate_workflow_scan_repair_contract() {
     "skills/workflow-repair/tests/30-auto-stops-on-unreliable-commit-confirmation.md" \
     "skills/workflow-repair/tests/31-auto-continue-closes-task-before-commit.md" \
     "skills/workflow-repair/tests/32-auto-mixed-surface-availability-reversed.md" \
-    "skills/workflow-repair/tests/33-auto-close-out-not-ready-or-safe.md"
+    "skills/workflow-repair/tests/33-auto-close-out-not-ready-or-safe.md" \
+    "skills/workflow-repair/tests/55-stale-scan-report-blocked.md" \
+    "skills/workflow-repair/tests/56-invalid-embedded-state-schema-mismatch.md" \
+    "skills/workflow-repair/tests/57-closure-unresolved-in-scope-blocks-closeout.md" \
+    "skills/workflow-repair/tests/58-closure-new-family-stops-auto-progression.md"
   do
     [ -f "$test_file" ] || fail "missing $test_file"
     grep -Fq "## Purpose" "$test_file" || fail "$test_file missing Purpose section"

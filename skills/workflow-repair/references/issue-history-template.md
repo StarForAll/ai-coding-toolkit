@@ -1,16 +1,15 @@
 # Workflow Issue History Template
 
-This document defines the per-execution issue-history summary that
-`workflow-repair` writes to `tmp/workflow-issues/`.
+This document defines the optional legacy-shadow issue-history summary that
+`workflow-repair` may still write to `tmp/workflow-issues/`.
 
 ---
 
 ## Document Purpose
 
-The issue-history summary is the persistent cross-run memory for repeated or
-similar workflow defects. Every later `workflow-repair` run must read all
-numeric Markdown files in `tmp/workflow-issues/` before deciding whether a
-finding is new, repeated, or part of a known problem family.
+In `workflow-scan-repair-v4`, this file is no longer a primary repair decision
+input. Same-version task-local repair logs and closure-round artifacts are the
+real convergence memory surface.
 
 ---
 
@@ -35,7 +34,7 @@ Rules:
 ```markdown
 ---
 issue-history-version: 1
-protocol: workflow-scan-repair-v3
+protocol: workflow-scan-repair-v4
 temp-project-version: {trellis version or temp-project .trellis/.version value}
 temp-project-root: {absolute temp project path}
 report-path: {absolute path to WORKFLOW_QUESTIONS.md}
@@ -93,6 +92,5 @@ total-issues: {N}
    - continuation mode
 4. If no issue was repaired, the document must still record why:
    ignored, blocked, rejected, or no findings.
-5. Later runs must read all files in this directory and compare new findings
-   against the stored titles/IDs, root causes, repaired files, and variant
-   sweep scopes.
+5. Later `v4` runs may keep this file as an audit shadow, but must not use it
+   as their main cross-version repair memory surface.

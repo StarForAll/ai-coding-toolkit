@@ -34,10 +34,10 @@ result: `/tmp/trellis-{VERSION}-2/WORKFLOW_QUESTIONS.md`
 ```yaml
 ---
 document-type: workflow-questions
-protocol: workflow-scan-repair-v3
+protocol: workflow-scan-repair-v4
 trellis-version: <from the current `trellis -v` output, for example <LIVE_TRELLIS_VERSION>>
-workflow-version: <from the temp project's installed workflow surfaces, for example `.trellis/workflow-installed.json` `workflow_version`; use `unknown` when no reliable in-project value exists>
-workflow-schema-version: <from `.trellis/workflow-installed.json` when available; otherwise `unknown`>
+workflow-version: <from the temp project's installed workflow surfaces, for example `.trellis/workflow-installed.json` `workflow_version`; successful reports must not use `unknown`>
+workflow-schema-version: <from `.trellis/workflow-installed.json`; successful reports must not use `unknown`>
 scan-timestamp: <ISO 8601, e.g. 2026-05-20T14:30:00+08:00>
 temp-project-root: <absolute path derived from the live trellis version, e.g. /tmp/trellis-<LIVE_TRELLIS_VERSION>-2>
 total-findings: <N>
@@ -52,10 +52,10 @@ p2-count: <N>
 | Field | Required | Source |
 |-------|----------|--------|
 | `document-type` | Yes | Fixed value: `workflow-questions` |
-| `protocol` | Yes | Fixed value: `workflow-scan-repair-v3` |
+| `protocol` | Yes | Fixed value: `workflow-scan-repair-v4` |
 | `trellis-version` | Yes | Output of the current `trellis -v` command at runtime |
-| `workflow-version` | Yes | Best supported value from the temp project's installed workflow surfaces |
-| `workflow-schema-version` | Yes | `.trellis/workflow-installed.json` `workflow_schema_version` when available, otherwise `unknown` |
+| `workflow-version` | Yes | Value from the temp project's installed workflow surfaces; successful reports must not use `unknown` |
+| `workflow-schema-version` | Yes | `.trellis/workflow-installed.json` `workflow_schema_version`; successful reports must not use `unknown` |
 | `scan-timestamp` | Yes | ISO 8601, local timezone |
 | `temp-project-root` | Yes | Absolute path to temp project root |
 | `total-findings` | Yes | Count of all findings in this document |
@@ -210,9 +210,9 @@ questions.
 ```markdown
 ---
 document-type: workflow-questions
-protocol: workflow-scan-repair-v3
+protocol: workflow-scan-repair-v4
 trellis-version: <LIVE_TRELLIS_VERSION>
-workflow-version: 0.1.28
+workflow-version: 0.1.2800
 workflow-schema-version: 2
 scan-timestamp: 2026-05-20T14:30:00+08:00
 temp-project-root: /tmp/trellis-<LIVE_TRELLIS_VERSION>-2
@@ -227,7 +227,7 @@ p2-count: 1
 ## Scan Summary
 
 - Trellis Version: <LIVE_TRELLIS_VERSION>
-- Workflow Version: 0.1.28
+- Workflow Version: 0.1.2800
 - Workflow Schema Version: 2
 - Scan Time: 2026-05-20T14:30:00+08:00
 - Temp Project Root: /tmp/trellis-<LIVE_TRELLIS_VERSION>-2
@@ -293,13 +293,17 @@ p2-count: 1
 
 ## Protocol Version
 
-Current protocol version: `workflow-scan-repair-v3`
+Current protocol version: `workflow-scan-repair-v4`
 
 Runtime-value rule:
 
 - Example placeholders such as `<LIVE_TRELLIS_VERSION>` are illustrative only.
 - Real values must come from the temp project's current installed workflow
   surfaces and the live `trellis -v` result at execution time.
+- Successful reports must not emit `workflow-version: unknown` or
+  `workflow-schema-version: unknown`. If the temp project cannot provide both
+  fields reliably, the scan must stop as invalid embedded state instead of
+  producing a repair-consumable report.
 
 If the format changes in a way that breaks backward compatibility, increment
 the version. `workflow-repair` must validate the protocol field and stop if it

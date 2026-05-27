@@ -8,6 +8,10 @@ compatibility: Requires `trellis` on PATH, access to the temp project fixture, l
 
 ## Version History
 
+- **v3.0**: Upgraded the shared contract to `workflow-scan-repair-v4`,
+  requires concrete workflow version/schema fields, and aligns scan output with
+  same-version stale-report blocking on the repair side
+
 - **v2.8**: Added mandatory repair-classification guardrails so scan findings
   must distinguish `confirmed-defect`, `design-debt`, and `evidence-gap`, and
   upgraded the shared report contract to `workflow-scan-repair-v3`
@@ -141,6 +145,11 @@ Use this skill when any of the following is true:
     may report success. This validation also serves as the shared contract gate
     ensuring the emitted report satisfies `workflow-repair` intake
     assumptions.
+20. **Concrete workflow version fields are mandatory**: successful scan output
+    must include real `workflow-version` and `workflow-schema-version` values
+    from the embedded target. If either field is missing or unresolved, stop as
+    **Blocked / Invalid Embedded State** instead of emitting a repair-usable
+    report.
 
 ## Inputs
 
@@ -227,13 +236,17 @@ Format specification: see `references/scan-output-template.md`.
    - `.trellis/workflow-installed.json` → `workflow_version`,
      `workflow_schema_version`, `critical_runtime_patches`, `commands`,
      `scripts`, `cli_types`, and other install-record fields if present
-5. If the temp project is not fully initialized (no `.trellis/` or no
+5. Require both `workflow_version` and `workflow_schema_version` to be present
+   in successful scan output:
+   - if either field is absent, empty, or effectively `unknown`, stop as
+     **Blocked / Invalid Embedded State**
+6. If the temp project is not fully initialized (no `.trellis/` or no
    `.version`): stop as **Blocked / Invalid Temp Project**.
-6. If the temp project is not workflow-embedded: stop as
+7. If the temp project is not workflow-embedded: stop as
    **Blocked / Workflow Not Embedded**.
-7. If `WORKFLOW_QUESTIONS.md` already exists at the temp project root: stop and
+8. If `WORKFLOW_QUESTIONS.md` already exists at the temp project root: stop and
    ask whether to overwrite or append.
-8. If execution mode is `agent-assisted`, do not dispatch helper agents until
+9. If execution mode is `agent-assisted`, do not dispatch helper agents until
    Steps 0.1-0.7 have passed and any overwrite decision has been resolved.
 
 ### Step 1: Workflow Surface Inventory
@@ -409,7 +422,7 @@ For every installed workflow document or installed runtime-control document:
    `references/scan-output-template.md`. In particular, the frontmatter must
    contain these exact keys and spellings:
    - `document-type: workflow-questions`
-   - `protocol: workflow-scan-repair-v3`
+   - `protocol: workflow-scan-repair-v4`
    - `trellis-version`
    - `workflow-version`
    - `workflow-schema-version`
@@ -440,6 +453,9 @@ For every installed workflow document or installed runtime-control document:
    `temp_project_path`, or `total_findings` appear instead of the shared
    contract fields, treat the run as failed and correct the document before
    proceeding.
+8. If `workflow-version` or `workflow-schema-version` resolves to `unknown`,
+   empty, or any other placeholder rather than a concrete embedded value, stop
+   as **Blocked / Invalid Embedded State** instead of reporting success.
 
 ### Step 7: Echo and Stop
 

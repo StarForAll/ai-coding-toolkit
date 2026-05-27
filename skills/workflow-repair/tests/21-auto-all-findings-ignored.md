@@ -20,7 +20,7 @@ produced.
 ## Expected Key Behaviors
 
 - re-verify the findings and classify all of them as `ignored`
-- produce the repair log and issue-history record without any applied fixes
+- produce the repair log without any applied fixes
 - stop the close-out flow because there is no repair-side work to commit
 
 ## Must Not

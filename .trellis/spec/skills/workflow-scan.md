@@ -129,7 +129,7 @@ The skill must not require:
 ### 3. Coupled Report Contract
 
 The skill must emit `WORKFLOW_QUESTIONS.md` in the shared
-`workflow-scan-repair-v3` format and keep the following aligned with
+`workflow-scan-repair-v4` format and keep the following aligned with
 `workflow-repair`:
 
 - frontmatter fields
@@ -139,6 +139,8 @@ The skill must emit `WORKFLOW_QUESTIONS.md` in the shared
   `confirmed-defect`, `design-debt`, `evidence-gap`
 - analysis-summary semantics
 - the required read-back validation step before the scan may report success
+- concrete workflow-version / workflow-schema-version values; successful output
+  must not use `unknown`
 
 This coupling is **bidirectional and mandatory**:
 
@@ -263,7 +265,7 @@ Minimum expected validation:
   explicitly guard against snake_case contract drift
 - when the repair-side memory/auxiliary surfaces change, confirm whether the
   scan-side report wording or investigation guidance must be updated for
-  compatibility with `tmp/workflow-issues/` consumption
+  compatibility with same-version closure-round consumption
 - verify the paired `workflow-repair` diff is an actual compatibility
   adaptation when the scan-side contract changed, not just an unchanged carryover
 

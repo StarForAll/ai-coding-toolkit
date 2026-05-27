@@ -8,10 +8,15 @@ compatibility: Requires `trellis` on PATH, access to the temp project report plu
 
 ## Version History
 
+- **v3.0**: Upgraded the shared contract to `workflow-scan-repair-v4`,
+  requires three-way same-version report validation, replaces cross-version
+  issue-history memory with task-local closure artifacts, and makes bounded
+  closure part of repair convergence
+
 - **v2.8**: Added report-side repair-classification gating so
   `confirmed-defect` is the only default repair-ready class, while
   `design-debt` and `evidence-gap` stop conservative by default, and upgraded
-  the shared report contract to `workflow-scan-repair-v3`
+  the prior shared report contract to `workflow-scan-repair-v3`
 - **v2.7**: Tightened `--auto` commit-scope confirmation boundaries so mixed-
   scope prompts and misleading all-success/result wording block instead of
   auto-confirming, and formally defined `current repair-task artifacts`
@@ -54,10 +59,9 @@ Its target of judgment is still the embedded workflow result in
 `/tmp/trellis-{VERSION}-2`; the source repository is the repair location, not
 the primary truth source for whether a reported issue exists.
 
-This skill does **not** require a fresh re-embed as part of the same run. It
-must instead use strict source-side review, repeat-trigger checks, variant
-sweeps, and history-aware closure to reduce the chance of introducing new
-problems.
+This skill now requires bounded same-run closure verification using fresh
+task-local fixtures. Strict source-side review still matters, but it is no
+longer the only convergence gate.
 
 ## When to Use
 
@@ -105,60 +109,63 @@ Use this skill when any of the following is true:
    dedicated trellis repair task. If there is no active task, create one and
    continue. If there is already an active task, create a new repair task and
    switch to it instead of reusing the existing task.
-8. **Issue-history memory is required**: every run must read all numeric
-   history documents under `tmp/workflow-issues/` before deciding whether a
-   finding is new, repeated, or part of a previously repaired problem cluster.
-9. **Repair artifacts persist**: task files and workflow issue history files
-   are NOT deleted after completion; they serve as the permanent audit trail.
-10. **Conservative adoption**: only adopt a fix where the repair is clear,
+8. **Same-version truth only**: repair may consume only reports whose
+   workflow-version matches the temp-project install record and the current
+   source `WORKFLOW_VERSION`.
+9. **Cross-version issue-history replay is removed**: old
+   `tmp/workflow-issues/` memory is not part of the `v4` repair decision path.
+10. **Repair artifacts persist**: task files remain the audit trail, including
+    task-local closure-round artifacts.
+11. **Conservative adoption**: only adopt a fix where the repair is clear,
     minimal, and safe. If in doubt, mark as `manual-decision`.
-11. **Root-cause closure is required**: do not stop at symptom repair. Every
+12. **Root-cause closure is required**: do not stop at symptom repair. Every
     adopted or trellis-native fix must explain why the issue survived into the
     temp project and what source-side change closes that path.
-12. **Variant sweep is required**: once a finding is confirmed, search only
+13. **Variant sweep is required**: once a finding is confirmed, search only
     within `docs/workflows/新项目开发工作流/` for the same pattern or same
     root-cause class and fix safe siblings together.
-13. **Contract-surface closure is required**: if a fix changes a behavior
+14. **Contract-surface closure is required**: if a fix changes a behavior
     contract, path, marker, declaration, or workflow rule, update every
     in-scope source surface that must stay aligned in the same repair batch when
     safe. This can include scripts, docs, metadata declarations, and in-tree
     tests under the workflow directory.
-14. **Repeated-findings escalation**: if a current finding matches a previously
-    attempted repair cluster in the repair logs or issue-history documents, do
-    not repeat the same narrow patch blindly. Expand the investigation to the
-    missed contract surfaces or mark the item `manual-decision`.
-15. **Trellis-native routing**: when Origin = `trellis-native`, the fix must
+15. **Bounded closure is required**: after source edits, repair must run fresh
+    closure verification rounds and may not close out or bump the workflow
+    version while unresolved new in-scope findings remain.
+16. **Closure scope is bounded**: closure may auto-absorb only same-family,
+    same-contract-surface findings. New-family findings stop automatic
+    progression of the current repair batch.
+17. **Trellis-native routing**: when Origin = `trellis-native`, the fix must
     NOT modify files outside the workflow directory. Design a patch within the
     workflow so the installer can apply it (add patch script to `commands/`,
     update `HELPER_SCRIPTS`, or add overlay/post-install adjustment).
-16. **One-pass strict review**: do not require a same-run re-embed of the
-    workflow into a fresh temp project as a completion gate. Instead, the skill
-    must complete a strict source-side review covering variant sweep,
-    contract-surface verification, repeat-trigger checks, history-aware closure,
-    and side-effect analysis before claiming success.
-17. **Coupled contract**: this skill must consume `WORKFLOW_QUESTIONS.md` in
+18. **Round-local rollback**: if closure-added repairs fail inside a round, the
+    round's additions must roll back without forcing a full repair-batch reset.
+19. **Current closure truth wins**: current same-version closure evidence
+    overrides older scan interpretation when they conflict.
+20. **Coupled contract**: this skill must consume `WORKFLOW_QUESTIONS.md` in
     the exact format defined in
     `skills/workflow-scan/references/scan-output-template.md`. If the protocol
     version does not match, stop.
-18. **Execution-mode agnostic intake**: repair-side validation depends on the
+21. **Execution-mode agnostic intake**: repair-side validation depends on the
     final `WORKFLOW_QUESTIONS.md` contract only. A report produced by
     `workflow-scan --agent` is acceptable only if the coordinator's final
     output still passes the same shared read-back validation as an inline scan.
-19. **No implied repair-side agent mode**: scan-side `--agent` support does
+22. **No implied repair-side agent mode**: scan-side `--agent` support does
     not extend to `workflow-repair`. Repair remains main-CLI-only unless its
     own contract changes in a separate scoped update.
-20. **`--auto` is explicit and gated**: auto follow-through is allowed only
+23. **`--auto` is explicit and gated**: auto follow-through is allowed only
     when the input explicitly includes `--auto`. It never bypasses correction-
     plan presentation, repair authorization, post-repair verification, current-
     task commit readiness, or the normal safety gates required before
     `finish-work`.
-21. **Default repair-ready scope is narrow**: only findings whose report-side
+24. **Default repair-ready scope is narrow**: only findings whose report-side
     repair classification is `confirmed-defect` may enter the ordinary adopted
     repair path by default.
-22. **Design debt is not auto-repair**: `design-debt` findings must default to
+25. **Design debt is not auto-repair**: `design-debt` findings must default to
     `manual-decision` or `ignored` unless the user explicitly broadens scope
     beyond confirmed defects after the correction plan is shown.
-23. **Evidence gaps block source edits**: `evidence-gap` findings must default
+26. **Evidence gaps block source edits**: `evidence-gap` findings must default
     to `blocked` or `manual-decision` until further temp-project or audit
     evidence closes the gap.
 
@@ -229,7 +236,7 @@ Determine continuation mode from the current user request:
   when this run can tie them to its own recorded outputs:
   - workflow source files changed by confirmed repair work under
     `docs/workflows/新项目开发工作流/`
-  - the current run's own `tmp/workflow-issues/NNNN.md` output
+  - the current run's own optional `tmp/workflow-issues/NNNN.md` audit shadow
 - A file counts as tied to this run's recorded outputs only when the current
   run's repair log records it as a changed, written, or output file for this
   run.
@@ -309,26 +316,29 @@ Determine continuation mode from the current user request:
   repair remains main-session-only and `--auto` does not introduce any
   repair-side agent interaction.
 
-### Issue History Directory
+### Optional Legacy Issue-History Shadow
 
-Fixed location: `tmp/workflow-issues/`
+Optional location: `tmp/workflow-issues/`
 
-- Each repair execution writes exactly one numeric Markdown file there:
-  `0001.md`, `0002.md`, `0003.md`, ...
-- Every later run must read all numeric Markdown files in that directory before
-  verifying findings.
+- A `v4` repair run may still write one numeric Markdown file there as an
+  audit shadow.
+- `v4` repair decisions must not depend on reading that directory as a
+  cross-version memory source.
 
 ## Output
 
-Three artifacts:
+Four artifacts:
 
 1. **Correction plan**: presented to the user inline (not written to file
    unless the user requests it). Format: see
    `references/correction-plan-template.md`.
 2. **Repair log**: written to the current repair task directory. Format: see
    `references/repair-log-template.md`.
-3. **Issue history summary**: written to
-   `tmp/workflow-issues/{NNNN}.md`. Format: see
+3. **Closure round artifacts**: written to the current repair task directory
+   as `closure-round-<N>.md`. Format: see
+   `references/closure-round-template.md`.
+4. **Issue-history shadow**: optional, written to
+   `tmp/workflow-issues/{NNNN}.md` only as an audit shadow. Format: see
    `references/issue-history-template.md`.
 
 If continuation mode = `auto-follow-through`, the skill also continues into the
@@ -362,7 +372,7 @@ and echoes that follow-through result inline.
 
 1. Read `WORKFLOW_QUESTIONS.md` and validate frontmatter:
    - `document-type` must be `workflow-questions`
-   - `protocol` must be `workflow-scan-repair-v3`
+   - `protocol` must be `workflow-scan-repair-v4`
    - the shared scan-side report keys must still be present:
      `trellis-version`, `workflow-version`, `workflow-schema-version`,
      `scan-timestamp`, `temp-project-root`, `total-findings`, `p0-count`,
@@ -376,9 +386,12 @@ and echoes that follow-through result inline.
      `Design-Debt Items`, and `Evidence-Gap Items`
 2. Read version fields:
    - `trellis-version` from report vs `trellis -v` current
-   - `workflow-version` from report vs the current source workflow version when
-     such a comparison is useful
-   - `workflow-schema-version` from report when present
+   - `workflow-version` from report
+   - `workflow-schema-version` from report
+   - current source `WORKFLOW_VERSION`
+   - current source `WORKFLOW_SCHEMA_VERSION`
+   - temp-project install-record `workflow_version`
+   - temp-project install-record `workflow_schema_version`
 3. Resolve the temp project root:
    - use `temp_project_path` if provided
    - otherwise read `temp-project-root` from the report
@@ -389,13 +402,20 @@ and echoes that follow-through result inline.
    `--agent` is not supported and that any `--auto` follow-through still runs
    in main-session-only mode.
 5. If protocol mismatch: stop as **Blocked / Protocol Version Mismatch**.
-6. If the temp project root does not exist or does not match the report
+6. If report workflow version, temp-project install-record workflow version,
+   and current source `WORKFLOW_VERSION` are not all equal: stop as
+   **Blocked / Stale Scan Report** and tell the user to re-embed and re-run
+   `workflow-scan`.
+7. If the workflow versions match but any compared
+   `workflow-schema-version` does not match the current source schema version:
+   stop as **Blocked / Invalid Embedded State**.
+8. If the temp project root does not exist or does not match the report
    context: stop as **Blocked / Temp Project Mismatch**.
-7. If the shared keys/sections above are missing, treat the report as a
+9. If the shared keys/sections above are missing, treat the report as a
    scan-side contract failure and stop instead of trying to infer the intended
    fields from alternate names such as `generated_at`, `trellis_version`,
    `temp_project_path`, or `total_findings`.
-8. Do not reject or special-case the report based on whether the scan was run
+10. Do not reject or special-case the report based on whether the scan was run
    inline or with `--agent`; only the validated document contract matters.
 
 ### Step 2: Parse and Classify Findings
@@ -430,28 +450,20 @@ Before any source-side fix decision is drafted:
 4. The correction plan must make this gating visible instead of silently
    treating every finding as equally repair-ready.
 
-### Step 3: Load Repair History and Issue Memory
+### Step 3: Build Same-Version Repair Context
 
-Before verifying findings, inspect all prior issue memory available in the
-current project:
+Before verifying findings:
 
-1. Read every numeric Markdown file under `tmp/workflow-issues/` if the
-   directory exists.
-2. If the directory does not exist yet, treat the history set as empty.
-3. Check the current repair task directory for earlier workflow-repair logs if
-   this run is being resumed.
-4. For each current finding, compare against all loaded history docs using:
-   - problem title or WS-ID
-   - named root-cause class
-   - repaired file paths
-   - variant sweep scope
-   - key marker/path/string evidence
-5. Build a recurrence note for each finding:
+1. Check the current repair task directory for earlier repair logs or
+   closure-round artifacts if this run is being resumed.
+2. Treat same-version task-local closure artifacts as the only convergence
+   memory surface for this repair task.
+3. Do not read old `tmp/workflow-issues/` documents as cross-version repair
+   memory in `v4`.
+4. Build recurrence notes from current-task same-version evidence only:
    - `first-seen`
-   - `repeated-after-prior-repair`
-   - `no-history-found`
-6. If a finding looks repeated after an earlier repair, require a broader
-   contract-surface review before marking it `adopted`.
+   - `repeated-within-current-repair`
+   - `no-prior-task-evidence`
 
 ### Step 4: Verify Each Finding Against Temp Project and Source Project
 
@@ -504,8 +516,8 @@ For every finding marked `adopted` or `trellis-native`:
    - the side effects remain understandable and low-risk
 3. If a similar location might be affected but the root cause is not clearly
    the same, document it in the plan instead of auto-fixing it.
-4. Record the sweep result in the correction plan, repair log, and issue
-   history summary, even if the result is `none`.
+4. Record the sweep result in the correction plan, repair log, and any
+   same-version closure-round artifacts, even if the result is `none`.
 
 ### Step 6: Build Contract-Surface Coverage Map
 
@@ -537,7 +549,7 @@ For each `adopted` or `trellis-native` finding:
    - Change Type: add / modify / remove
    - Root Cause Class: the class identified in verification
    - Recurrence Status:
-     `first-seen` | `repeated-after-prior-repair` | `no-history-found`
+     `first-seen` | `repeated-within-current-repair` | `no-prior-task-evidence`
    - Related Variants Covered: the sibling files or patterns fixed together, or
      `none`
    - Contract Surfaces Covered: every `must-update` and `must-verify-only`
@@ -548,8 +560,8 @@ For each `adopted` or `trellis-native` finding:
    - Check `workflow_assets.py` consistency
    - Check whether the same stale marker/path/string still exists elsewhere in
      the workflow directory
-   - Check whether all similar issues from `tmp/workflow-issues/` that are
-     clearly in scope are either fixed together or explicitly listed as
+   - Check whether same-version task-local evidence suggests closely related
+     in-scope variants that should be fixed together or explicitly left
      unresolved
 3. Write side-effect analysis: list every downstream reference, CLI surface, or
    script affected and how.
@@ -624,8 +636,8 @@ No same-run re-embed is required. Instead, for each applied fix, verify:
    marker/path/string/contract symptom that caused the current finding. If the
    same trigger still exists in an in-scope location, mark the fix
    `unverified`.
-7. **History-closure check**: compare the applied fixes against the loaded
-   `tmp/workflow-issues/` documents and confirm that clearly similar in-scope
+7. **Task-evidence closure check**: compare the applied fixes against current
+   task-local same-version evidence and confirm that clearly similar in-scope
    problems were either fixed together or explicitly recorded as unresolved.
 8. **Overall**: if all checks pass, mark as `verified`. If any fails, mark as
    `unverified` and record the failure.
@@ -636,7 +648,41 @@ If verification fails for a fix:
 - Record the revert in the repair log.
 - Mark the fix status as `failed` or `reverted`.
 
-### Step 11: Write Repair Log, Issue History, and Summarize
+### Step 10A: Run Bounded Closure Verification
+
+After source-side verification succeeds for the applied fixes:
+
+1. Create a fresh isolated fixture for each required closure scenario.
+2. Run the default closure scenario `clean-outsourcing-all-cli`.
+3. Expand closure scenarios mechanically only when the touched surface class
+   requires it:
+   - profile-specific logic → add `clean-personal-all-cli`
+   - install / upgrade / cleanup / runtime-patch logic → add
+     `existing-trellis-outsourcing-all-cli` and
+     `existing-workflow-outsourcing-all-cli`
+4. Write one `closure-round-<N>.md` artifact for each closure round.
+5. For every closure finding:
+   - assign a task-local closure ID such as `CR1-F01`
+   - record `issue-family-id`, `scenario-id`, `round`, `in-scope`, and
+     `disposition`
+6. If closure discovers a new in-scope finding in the same family and same
+   contract surface:
+   - absorb it only within the bounded same-family closure rules
+   - allow at most two closure absorb rounds
+7. If closure discovers a new family:
+   - stop automatic progression of the current batch
+   - return to a planning / decision checkpoint
+   - do not close out or bump the workflow version
+8. If any new in-scope finding remains unresolved at the end of closure:
+   - stop the run from close-out
+   - do not bump the workflow version
+9. If closure-added repairs fail within a round:
+   - roll back that round's additions
+   - record the rollback in the closure-round artifact and repair log
+10. If closure remains non-converged after the allowed same-family absorb
+    rounds, stop as broader non-convergence rather than continuing indefinitely.
+
+### Step 11: Write Repair Log, Closure Artifacts, and Summarize
 
 1. Write the repair log using `references/repair-log-template.md`.
    - If continuation mode = `auto-follow-through`, set
@@ -646,28 +692,26 @@ If verification fails for a fix:
      execution, regardless of whether it later succeeded, failed, or was
      reverted.
 2. Save the repair log to the current repair task directory.
-3. Ensure `tmp/workflow-issues/` exists.
-4. Determine the next numeric issue-history filename:
-   - list all numeric stems under `tmp/workflow-issues/`
-   - choose `max + 1`
-   - write the filename as four-digit zero-padded Markdown:
-     `0001.md`, `0002.md`, `0003.md`, ...
-5. Write exactly one issue-history document for this repair execution using
-   `references/issue-history-template.md`.
-6. Echo the summary:
+3. Ensure each closure round has a corresponding `closure-round-<N>.md`
+   artifact in the current repair task directory.
+4. Optionally write one `tmp/workflow-issues/{NNNN}.md` shadow file only as an
+   auxiliary audit artifact; do not use it as the `v4` repair decision
+   surface.
+5. Echo the summary:
    - report path consumed
    - repair task path
-   - total history documents read
+   - base workflow version
    - adopted / ignored / blocked / manual-decision / trellis-native counts
    - succeeded / failed / skipped counts
    - continuation mode
    - repair log path
-   - issue-history path
-7. Optional next steps:
+   - closure-round artifact paths
+   - optional issue-history shadow path, if written
+6. Optional next steps:
    - later re-run `workflow-scan` on a fresh temp project to verify the broader
      workflow behavior
    - or run `workflow-audit` for comprehensive validation
-8. Do not delete task files or the issue-history document.
+7. Do not delete task files or closure-round artifacts.
 
 ### Step 12: Optional `--auto` Task Wrap-Up
 
@@ -852,8 +896,11 @@ This step has two sub-phases:
 | Protocol version mismatch | Stop as **Blocked / Protocol Version Mismatch**. The report was produced by a different protocol version. |
 | Temp project mismatch | Stop as **Blocked / Temp Project Mismatch**. The report and the live temp project do not line up. |
 | Repeated finding with no broader safe fix | Stop as **Blocked / Repeated Finding Needs Broader Closure**. Do not repeat a previously narrow patch without a stronger closure plan. |
-| Issue-history write failure | Stop as **Blocked / Issue History Write Failed**. The run must not finish without recording the new issue-history document. |
-| No findings in report | Write the repair log and an issue-history document with `total-attempted: 0` and all counts at 0. |
+| Stale scan report | Stop as **Blocked / Stale Scan Report**. Tell the user to re-embed and re-run `workflow-scan`. |
+| Invalid embedded state | Stop as **Blocked / Invalid Embedded State**. The version/schema evidence does not represent a valid same-version embedded target. |
+| Closure does not converge within bounded rounds | Stop as broader non-convergence and require audit or a new explicit decision. |
+| Issue-history shadow write failure | Record that the optional audit shadow could not be written, but do not let that override the primary task-local repair/closure artifacts. |
+| No findings in report | Write the repair log with `total-attempted: 0` and all counts at 0. |
 | Fix scope violation | Skip the fix, record the violation in the repair log. Do not modify files outside the allowed three locations. |
 | Post-repair verification failure | Revert the change, record the failure and revert in the repair log. |
 | `--auto` requested but commit-confirmation identification is unreliable | Stop the close-out flow, report the blocker, and do not risk over-confirmation. This row covers residual insufficient explicitness or failed independent proof, including reverted-file exclusion cases, that do not already fall into the more specific mixed-scope, misleading-result, or repeated-confirmation rows below. The blocker reason must still state the underlying cause explicitly. |
@@ -868,7 +915,7 @@ This step has two sub-phases:
 | `--auto` requested but no repair-side code changes exist | Stop after the repair summary, record that no repair-side work exists to close out automatically, and do not continue to commit confirmation or finish-work. |
 | `--auto` requested but close-out is not ready or not safe | Stop after the repair summary, explain the blocker, and do not auto-confirm commits or invoke finish-work. |
 | `--auto` requested but continue cannot prove whether the task advanced or closed | Stop after the current close-out point, report the blocker, and do not keep looping blindly. |
-| User rejects all | Write the repair log and an issue-history document with all findings as `skipped`. No workflow source files modified. |
+| User rejects all | Write the repair log with all findings as `skipped`. No workflow source files modified. |
 
 ## Related Skills
 
@@ -929,6 +976,10 @@ Required persisted scenario files:
 - `tests/52-auto-stops-on-honest-wording-without-explicit-task-scope.md`
 - `tests/53-design-debt-defaults-to-manual-decision.md`
 - `tests/54-evidence-gap-defaults-to-blocked.md`
+- `tests/55-stale-scan-report-blocked.md`
+- `tests/56-invalid-embedded-state-schema-mismatch.md`
+- `tests/57-closure-unresolved-in-scope-blocks-closeout.md`
+- `tests/58-closure-new-family-stops-auto-progression.md`
 
 ## Examples
 
@@ -941,9 +992,10 @@ AI:
 1. Auto-detect report from the current `trellis -v` result: `/tmp/trellis-{LIVE_VERSION}-2/WORKFLOW_QUESTIONS.md`
 2. Read the report header and derive short topic `session-start-gate`
 3. Create and start a dedicated task `workflow-repair-<date>-session-start-gate`
-4. Validate frontmatter: protocol=workflow-scan-repair-v3
+4. Validate frontmatter: protocol=workflow-scan-repair-v4
 5. Resolve temp project root from the report
-6. Read all prior issue-history docs from `tmp/workflow-issues/`
+6. Confirm report version, temp-project version, and source `WORKFLOW_VERSION`
+   are all the same
 7. Parse 5 findings: P0×1, P1×2, P2×2
 8. Verify each against the temp project and source workflow:
    - WS-001 (P0): confirmed → adopted
@@ -958,16 +1010,16 @@ AI:
 13. Apply WS-001 and WS-004 fixes
 14. Post-repair strict review passes without requiring a same-run re-embed
 15. Write repair log to the repair task directory
-16. Write `tmp/workflow-issues/0007.md`
+16. Write `closure-round-1.md` after bounded same-version closure verification
 17. Echo:
     ✅ Workflow repair complete
     📄 Report consumed: /tmp/trellis-{LIVE_VERSION}-2/WORKFLOW_QUESTIONS.md
     📁 Repair task: .trellis/tasks/{task-id}/
-    📚 History docs read: 6
+    🔖 Base workflow version: 0.1.2800
     📊 Findings: 5 total (adopted: 1, ignored: 2, blocked: 0, manual: 1, trellis-native: 1)
     🔧 Applied: 2 succeeded, 0 failed, 1 skipped
     📝 Repair log: .trellis/tasks/{task-id}/workflow-repair-log.md
-    🗂 Issue history: tmp/workflow-issues/0007.md
+    🔁 Closure: .trellis/tasks/{task-id}/closure-round-1.md
 ```
 
 ### Example 2: No Active Task Yet
@@ -1001,8 +1053,8 @@ User: /workflow-repair
 
 AI:
 1. Create and switch into a dedicated repair task
-2. Read all issue-history docs from `tmp/workflow-issues/`
-3. Verify 3 findings against the temp project and source workflow
+2. Verify 3 findings against the temp project and source workflow
+3. Confirm the report is not stale before any repair planning
 4. Build correction plan (2 adopted, 1 ignored)
 5. Current user request asks only for judgment, so mode = analysis-only
 6. Present plan and stop for confirmation
@@ -1012,7 +1064,7 @@ AI:
    📊 Findings: 3 total (adopted: 2, ignored: 1)
    🔧 Applied: 0 so far
    📝 Repair log: not written yet
-   🗂 Issue history: not written yet
+   🔁 Closure: not written yet
 ```
 
 If the user had written `/workflow-repair --auto` with the same analysis-only
@@ -1039,7 +1091,7 @@ AI:
    continue into the current task's close-out flow
 7. Apply the confirmed repairs
 8. Complete post-repair strict review
-9. Write the repair log and `tmp/workflow-issues/0008.md`
+9. Write the repair log and `closure-round-1.md`
 10. Re-enter the current repair task through the available `continue` surface
 11. The current task reaches its normal commit-plan confirmation prompt
 12. Reply `ok`
@@ -1063,7 +1115,7 @@ AI:
 2. Verify the findings and execute the confirmed repairs
 3. Post-repair review completes, but `total-succeeded = 0` and
    `total-attempted > 0`
-4. Write the repair log and issue-history document
+4. Write the repair log and record that no closure round was needed
 5. Stop after the repair summary
 
    ⏸ Auto follow-through stopped

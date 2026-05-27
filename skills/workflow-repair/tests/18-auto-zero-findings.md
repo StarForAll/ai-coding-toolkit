@@ -17,7 +17,7 @@ Auto follow-through blocked because there is no repair-side work to close out.
 
 ## Expected Key Behaviors
 
-- write the repair log and issue-history document with zero attempted repairs
+- write the repair log with zero attempted repairs
 - stop the close-out flow because there are no repair-side code changes
 - report that `--auto` found no repair work to commit or close out automatically
 

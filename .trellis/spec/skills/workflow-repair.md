@@ -20,11 +20,12 @@ workflow product source under `docs/workflows/新项目开发工作流/`.
 `workflow-repair` must preserve all of the following:
 
 1. File modification scope is locked to `docs/workflows/新项目开发工作流/`,
-   the dedicated current repair task directory, and `tmp/workflow-issues/`.
+   the dedicated current repair task directory, and optional audit-shadow
+   outputs under `tmp/workflow-issues/`.
 2. The skill must always create/switch to a dedicated repair task before it
    writes task-local artifacts; it must not reuse a pre-existing active task.
-3. Task-local repair artifacts and issue-history documents may be written, but
-   they are never deleted as part of the run.
+3. Task-local repair artifacts such as repair logs and closure-round artifacts
+   may be written, and they are never deleted as part of the run.
 4. The temp project remains the primary truth source for whether a reported
    issue exists.
 5. The skill runs inline in the current CLI session. Do not route through
@@ -71,7 +72,7 @@ The skill must:
 - create a dedicated repair task if none exists
 - create a new dedicated repair task and switch to it when another task is
   already active
-- validate the shared `workflow-scan-repair-v3` protocol
+- validate the shared `workflow-scan-repair-v4` protocol
 - resolve the temp project from the report before judging findings
 - stop instead of guessing when report/temp context does not line up
 
@@ -106,13 +107,15 @@ escalate rather than reapply the same narrow patch blindly.
 
 The skill must:
 
-- read all numeric Markdown documents under `tmp/workflow-issues/` before
-  deciding whether a finding is new or repeated
-- compare repeatedness using problem title/ID, root cause, repaired files,
-  variant sweep scope, and key marker/path evidence
-- write exactly one new numeric Markdown document to `tmp/workflow-issues/`
-  for each repair execution
-- keep numbering monotonic within that directory
+- require report workflow version, temp-project install-record workflow
+  version, and current source `WORKFLOW_VERSION` to match before repair may
+  proceed
+- treat matching workflow version with mismatched schema version as
+  `Blocked / Invalid Embedded State`
+- use same-version task-local closure artifacts as the convergence memory
+  surface for the current repair task
+- optional `tmp/workflow-issues/` outputs are audit shadows only, not the
+  primary v4 repair-decision memory
 
 ### 4. Authorization Discipline
 
@@ -154,7 +157,7 @@ When `--auto` is requested, the skill must:
   locations when the current run can tie them to its own recorded outputs:
   - workflow source files changed by confirmed repair work under
     `docs/workflows/新项目开发工作流/`
-  - the current run's own `tmp/workflow-issues/NNNN.md` output
+  - the current run's own optional `tmp/workflow-issues/NNNN.md` audit shadow
 - a file counts as tied to this run's recorded outputs only when the current
   run's repair log records it as a changed, written, or output file for this
   run
@@ -299,6 +302,7 @@ The skill must keep all repair-side protocol surfaces aligned:
 - `skills/workflow-repair/SKILL.md`
 - `skills/workflow-repair/references/correction-plan-template.md`
 - `skills/workflow-repair/references/repair-log-template.md`
+- `skills/workflow-repair/references/closure-round-template.md`
 - `skills/workflow-repair/references/issue-history-template.md`
 - the shared scan report template used by `workflow-scan`
 
@@ -332,10 +336,9 @@ When editing `skills/workflow-repair/`, confirm all of the following:
 - the skill still verifies against the temp project, not only source files
 - repair-side intake remains agnostic to whether scan ran inline or with
   explicit `--agent`
-- the skill still reads all `tmp/workflow-issues/` history docs and writes one
-  new issue-history file per run
-- issue-history docs now record continuation mode when `--auto` is part of the
-  execution context
+- same-version task-local closure artifacts are now the repair memory surface
+- optional issue-history shadow output must not be treated as the primary v4
+  decision path
 - explicit repair authorization and analysis-only behavior remain distinct
 - `--auto` remains explicit, post-repair only, and current-task scoped
 - `--auto` now explicitly no-ops when repair execution never runs under
@@ -396,7 +399,7 @@ When editing `skills/workflow-repair/`, confirm all of the following:
   task working-tree path belongs to the current task scope but independent
   proof fails
 - persisted tests now include the positive case where a workflow source file or
-  current-run issue-history file is outside the task directory but still
+  current-run optional issue-history shadow file is outside the task directory but still
   independently provable as part of the current repair run
 - persisted tests now include the positive case where task-directory files from
   an older run remain acceptable when the prompt still scopes them to the

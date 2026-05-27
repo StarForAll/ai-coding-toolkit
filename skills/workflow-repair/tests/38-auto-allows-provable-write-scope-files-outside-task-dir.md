@@ -11,7 +11,7 @@ run inside the skill's allowed write-scope locations.
 
 User input:
 
-> Run `/workflow-repair --auto`. Repairs succeed. The current run records repaired workflow source files under `docs/workflows/新项目开发工作流/`, writes the current task artifacts, and writes the current run's `tmp/workflow-issues/NNNN.md` file. A later close-out confirmation enumerates some combination of those paths, explicitly frames them as part of the current repair task's commit scope, and asks for `ok`.
+> Run `/workflow-repair --auto`. Repairs succeed. The current run records repaired workflow source files under `docs/workflows/新项目开发工作流/`, writes the current task artifacts, and may also write the current run's optional `tmp/workflow-issues/NNNN.md` audit-shadow file. A later close-out confirmation enumerates some combination of those paths, explicitly frames them as part of the current repair task's commit scope, and asks for `ok`.
 
 ## Expected Mode
 
@@ -22,8 +22,8 @@ provable as part of the current repair run's allowed write-scope outputs.
 
 - treat workflow source files repaired by the current run as eligible even
   though they live outside the current task directory
-- treat the current run's own `tmp/workflow-issues/NNNN.md` output as eligible
-  when it is enumerated in the commit scope
+- treat the current run's own optional `tmp/workflow-issues/NNNN.md`
+  audit-shadow output as eligible when it is enumerated in the commit scope
 - require repair-log-backed independent proof for every enumerated out-of-
   directory path before replying `ok`
 

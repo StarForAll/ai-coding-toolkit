@@ -105,8 +105,9 @@ These two files form the **workflow-scan-repair** coupled pair:
 - shared document format defined in `skills/workflow-scan/references/scan-output-template.md`
 - repair-side auxiliary artifacts and memory surfaces:
   `correction-plan-template.md`, `repair-log-template.md`,
-  `issue-history-template.md`, and `tmp/workflow-issues/`
-- shared metadata fields: `protocol` (workflow-scan-repair-v3), `trellis-version`, `workflow-version`, `workflow-schema-version`, `scan-timestamp`, `temp-project-root`, `total-findings`, finding IDs (`WS-NNN`)
+  `closure-round-template.md`, and optional
+  `issue-history-template.md` / `tmp/workflow-issues/` audit-shadow outputs
+- shared metadata fields: `protocol` (workflow-scan-repair-v4), `trellis-version`, `workflow-version`, `workflow-schema-version`, `scan-timestamp`, `temp-project-root`, `total-findings`, finding IDs (`WS-NNN`)
 - shared origin classification: `trellis-native` vs `workflow-source` (determines repair routing)
 - shared evidence-layer taxonomy: `generated-target-baseline`, `generated-target-installed`, `generated-target-runtime`
 - shared category values: `script-behavior`, `cli-adaptation`, `post-install-artifact`, `document-reference`, `residual`, `new`
@@ -141,14 +142,14 @@ Treat this as a **bidirectional maintenance rule**, not a one-way reminder:
 Do not treat them as independently maintainable when changing:
 
 - WORKFLOW_QUESTIONS.md frontmatter fields or finding entry schema
-- protocol version (`workflow-scan-repair-v3`)
+- protocol version (`workflow-scan-repair-v4`)
 - category, origin, or evidence-layer value sets
 - finding ID format (`WS-NNN`)
 - severity estimate semantics (P0/P1/P2)
 - role boundaries such as "scan only" vs "repair fixes"
 - temp project path resolution logic
 - repair-task bootstrap behavior
-- issue-history document schema or `tmp/workflow-issues/` numbering rules
+- closure-round artifact schema or optional issue-history shadow schema
 
 ### Minimum Verification For This Pair
 
@@ -166,7 +167,7 @@ After editing either file:
 - verify execution-mode wording does not accidentally reintroduce an inline-only
   assumption on either side of the pair
 - verify any helper-handoff references stay outside the shared
-  `workflow-scan-repair-v3` protocol surface
+  `workflow-scan-repair-v4` protocol surface
 
 ---
 

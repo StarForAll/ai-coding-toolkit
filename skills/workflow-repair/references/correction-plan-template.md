@@ -22,14 +22,14 @@ Exception: if the current user instruction already explicitly requests repair of
 
 ## Report Source
 
-- Protocol: workflow-scan-repair-v3
+- Protocol: workflow-scan-repair-v4
 - Trellis Version (at scan time): {trellis-version from WORKFLOW_QUESTIONS.md}
 - Workflow Version: {workflow-version from WORKFLOW_QUESTIONS.md}
 - Scan Timestamp: {scan-timestamp from WORKFLOW_QUESTIONS.md}
 - Temp Project: {temp-project-root from WORKFLOW_QUESTIONS.md}
 - Report File: {absolute path to WORKFLOW_QUESTIONS.md}
 - Repair Task: {absolute or repo-relative path to the dedicated repair task directory}
-- Prior Issue History Loaded: {N} document(s) from `tmp/workflow-issues/`
+- Base Workflow Version: {current source workflow version before repair}
 
 ## Verification Summary
 
@@ -63,7 +63,7 @@ Each finding gets a decision block:
 
 **Root Cause Class**: {stale declaration drift | incomplete installer patch | partial cross-file update | wrong runtime assumption | missing cleanup / residual artifact | other}
 
-**Recurrence Status**: {first-seen | repeated-after-prior-repair | no-history-found}
+**Recurrence Status**: {first-seen | repeated-within-current-repair | no-prior-task-evidence}
 
 #### {If adopted or trellis-native:}
 
@@ -76,7 +76,7 @@ Each finding gets a decision block:
 - **Contract Surfaces Covered**: {every must-update / must-verify-only surface, or `none`}
 - **Side-Effect Analysis**: {what downstream references, other CLIs, or other scripts are affected and how}
 - **Repeat-Trigger Prevention**: {why this fix should prevent the same report pattern from recurring}
-- **History Match Summary**: {matching prior issue-history docs, or `none`}
+- **Task Evidence Summary**: {same-version closure/task evidence, or `none`}
 
 #### {If ignored:}
 
@@ -104,7 +104,6 @@ The above plan will modify files ONLY within:
 
 - `docs/workflows/新项目开发工作流/`
 - the current repair task directory
-- `tmp/workflow-issues/`
 
 If the current user instruction already explicitly says to fix real confirmed issues, the skill may treat that instruction as standing authorization after this plan is echoed. Otherwise it must stop here and wait for a decision.
 
@@ -162,7 +161,8 @@ Awaiting your decision.
 5. Files outside `docs/workflows/新项目开发工作流/` must never appear in the "File" field of a proposed fix.
 6. Every `adopted` and `trellis-native` block must state whether a same-pattern variant sweep was performed.
 7. Every `adopted` and `trellis-native` block must explain the root-cause class and why the plan is broad enough to avoid a repeated trigger.
-8. The plan must name the dedicated repair task and report how many prior issue-history docs were loaded from `tmp/workflow-issues/`.
+8. The plan must name the dedicated repair task and record the current base
+   workflow version used for stale-report validation and later version bump.
 9. `design-debt` items must not be auto-presented as ordinary adopted fixes unless
    the current user instruction explicitly broadens scope beyond confirmed defects.
 10. `evidence-gap` items must not be auto-presented as ordinary adopted fixes;
