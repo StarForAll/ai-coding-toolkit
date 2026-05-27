@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-7.md`
-- **Total Sessions**: 325
+- **Total Sessions**: 326
 - **Last Active**: 2026-05-27
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-7.md` | ~745 | Active |
+| `journal-7.md` | ~778 | Active |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
@@ -35,6 +35,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 326 | 2026-05-27 | Workflow repair drift closure and version bump | `96b56f7` | `main` |
 | 325 | 2026-05-27 | Repair workflow scan false positives and brainstorm carrier patching | `b1ca691` | `main` |
 | 324 | 2026-05-27 | workflow-scan-repair v4 convergence redesign | `c0f9d0f`, `9b399e5` | `main` |
 | 323 | 2026-05-27 | Remove workflow-validate-matrix skill | `2e68c06` | `main` |

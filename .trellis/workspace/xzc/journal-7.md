@@ -743,3 +743,36 @@ Repaired trellis-brainstorm carrier patching, tightened workflow scan/repair fal
 ### Next Steps
 
 - None - task complete
+
+
+## Session 326: Workflow repair drift closure and version bump
+
+**Date**: 2026-05-27
+**Task**: Workflow repair drift closure and version bump
+**Branch**: `main`
+
+### Summary
+
+Closed workflow repair drift loops, tightened upgrade-compat drift detection, added workflow version bump automation, and advanced the workflow to 0.1.2801.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `96b56f7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
