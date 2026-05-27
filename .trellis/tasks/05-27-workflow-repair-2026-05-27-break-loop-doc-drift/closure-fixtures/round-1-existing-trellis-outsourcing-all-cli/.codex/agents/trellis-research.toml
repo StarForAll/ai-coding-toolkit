@@ -1,0 +1,3 @@
+name = "trellis-research"
+description = "baseline research"
+sandbox_mode = "read-only"

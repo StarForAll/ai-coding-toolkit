@@ -1,0 +1,9 @@
+# Project-scoped Codex defaults for Trellis workflows.
+project_doc_fallback_filenames = ["AGENTS.md"]
+
+# [workflow-embed-patch:codex-main-session-only]
+[features.multi_agent_v2]
+enabled = false
+max_concurrent_threads_per_session = 6
+min_wait_timeout_ms = 480000
+default_wait_timeout_ms = 480000

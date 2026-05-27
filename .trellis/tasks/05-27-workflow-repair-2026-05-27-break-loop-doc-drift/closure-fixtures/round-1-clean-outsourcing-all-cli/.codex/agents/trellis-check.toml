@@ -1,0 +1,3 @@
+name = "trellis-check"
+description = "baseline check"
+sandbox_mode = "read-only"

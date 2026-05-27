@@ -1,0 +1,149 @@
+{
+  "trellis_version": "0.5.0-rc.3",
+  "installed": "2026-05-27T13:47:27.144982+00:00",
+  "cli_types": [
+    "claude",
+    "opencode",
+    "codex"
+  ],
+  "profile": "outsourcing",
+  "commands": [
+    "feasibility",
+    "brainstorm",
+    "design",
+    "plan",
+    "project-audit",
+    "check",
+    "review-gate",
+    "delivery"
+  ],
+  "overlay_commands": [
+    "brainstorm",
+    "check"
+  ],
+  "added_commands": [
+    "feasibility",
+    "design",
+    "plan",
+    "project-audit",
+    "review-gate",
+    "delivery"
+  ],
+  "disabled_commands": [
+    "parallel"
+  ],
+  "patched_baseline_commands": [
+    "continue",
+    "finish-work"
+  ],
+  "patched_codex_skills": [
+    "trellis-continue",
+    "trellis-finish-work",
+    "trellis-start"
+  ],
+  "patched_shared_docs": [
+    "workflow.md"
+  ],
+  "workflow_doc_patch_components": [
+    "workflow-task-mechanism-projectization",
+    "workflow-phase-index-strong-gate",
+    "workflow-no-task-strong-gate",
+    "workflow-breadcrumb-strong-gate",
+    "workflow-legacy-breadcrumb-cleanup",
+    "workflow-legacy-phase-router-cleanup",
+    "workflow-contract-reference-cleanup"
+  ],
+  "critical_runtime_patches": [
+    "inject-workflow-state",
+    "session-start-strong-gate",
+    "claude-inject-subagent-context",
+    "opencode-inject-subagent-context",
+    "task-start-strong-gate",
+    "task-create-preserve-active",
+    "task-status-view-strong-gate",
+    "workflow-phase-strong-gate"
+  ],
+  "managed_enhanced_agents": [],
+  "scripts": [
+    "workflow_common.py",
+    "state_utils.py",
+    "validators_core.py",
+    "validators_gates.py",
+    "embed_integrity.py",
+    "feasibility-check.py",
+    "design-export.py",
+    "workflow-state.py",
+    "plan-validate.py",
+    "check-quality.py",
+    "delivery-control-validate.py",
+    "ownership-proof-validate.py",
+    "source-watermark-guard.py",
+    "patch-workflow-phase.py",
+    "patch-workflow-phase-strong-gate.py",
+    "patch-claude-inject-subagent-context.py",
+    "patch-inject-workflow-state.py",
+    "patch-opencode-inject-subagent-context.py",
+    "patch-session-start-strong-gate.py",
+    "patch-task-start-strong-gate.py",
+    "patch-task-create-preserve-active.py",
+    "patch-task-status-view-strong-gate.py"
+  ],
+  "execution_cards": [
+    "需求变更管理执行卡.md",
+    "源码水印与归属证据链执行卡.md"
+  ],
+  "workflow_shared_docs": [
+    "需求变更管理执行卡.md",
+    "源码水印与归属证据链执行卡.md",
+    "finish-work-checklist-template.md"
+  ],
+  "workflow_doc_cleanup_policy": "remove-on-uninstall",
+  "workflow_version": "0.1.2802",
+  "workflow_schema_version": "3",
+  "initial_pack": "pack.requirements-discovery-foundation",
+  "initial_pack_assets": [
+    "spec.universal-domains.product-and-requirements.problem-definition",
+    "spec.universal-domains.product-and-requirements.scope-boundary",
+    "spec.universal-domains.product-and-requirements.requirement-clarification",
+    "spec.universal-domains.project-governance.readme-governance",
+    "spec.universal-domains.verification.evidence-requirements",
+    "spec.universal-domains.product-and-requirements.acceptance-criteria",
+    "spec.universal-domains.product-and-requirements.prd-documentation",
+    "spec.universal-domains.product-and-requirements.prd-documentation-customer-facing",
+    "spec.universal-domains.architecture.system-boundaries",
+    "spec.universal-domains.product-and-requirements.prd-documentation-developer-facing",
+    "template.universal-domains.product-and-requirements.acceptance-criteria-template",
+    "template.universal-domains.product-and-requirements.customer-facing-prd-template",
+    "template.universal-domains.product-and-requirements.developer-facing-prd-template",
+    "checklist.universal-domains.product-and-requirements.acceptance-quality-checklist",
+    "checklist.universal-domains.product-and-requirements.customer-facing-prd-checklist",
+    "checklist.universal-domains.product-and-requirements.developer-facing-prd-checklist",
+    "example.universal-domains.product-and-requirements.product-and-requirements-examples",
+    "spec.scenarios.discovery-and-planning.solution-comparison",
+    "example.assembled-packs.requirements-discovery-foundation"
+  ],
+  "initial_pack_target_paths": [
+    ".trellis/spec/universal-domains/product-and-requirements/problem-definition",
+    ".trellis/spec/universal-domains/product-and-requirements/scope-boundary",
+    ".trellis/spec/universal-domains/product-and-requirements/requirement-clarification",
+    ".trellis/spec/universal-domains/project-governance/readme-governance",
+    ".trellis/spec/universal-domains/verification/evidence-requirements",
+    ".trellis/spec/universal-domains/product-and-requirements/acceptance-criteria",
+    ".trellis/spec/universal-domains/product-and-requirements/prd-documentation",
+    ".trellis/spec/universal-domains/product-and-requirements/prd-documentation-customer-facing",
+    ".trellis/spec/universal-domains/architecture/system-boundaries",
+    ".trellis/spec/universal-domains/product-and-requirements/prd-documentation-developer-facing",
+    ".trellis/templates/universal-domains/product-and-requirements/acceptance-criteria-template.md",
+    ".trellis/templates/universal-domains/product-and-requirements/customer-facing-prd-template.md",
+    ".trellis/templates/universal-domains/product-and-requirements/developer-facing-prd-template.md",
+    ".trellis/checklists/universal-domains/product-and-requirements/acceptance-quality-checklist.md",
+    ".trellis/checklists/universal-domains/product-and-requirements/customer-facing-prd-checklist.md",
+    ".trellis/checklists/universal-domains/product-and-requirements/developer-facing-prd-checklist.md",
+    ".trellis/library-assets/examples/universal-domains/product-and-requirements",
+    ".trellis/spec/scenarios/discovery-and-planning/solution-comparison",
+    ".trellis/library-assets/examples/assembled-packs/requirements-discovery-foundation.md"
+  ],
+  "initial_pack_cleanup_policy": "retain-imported-assets",
+  "bootstrap_task_removed": true,
+  "bootstrap_cleanup_status": "removed"
+}

@@ -1,0 +1,3 @@
+name = "trellis-implement"
+description = "baseline implement"
+sandbox_mode = "workspace-write"
