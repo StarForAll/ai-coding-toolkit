@@ -1945,6 +1945,51 @@ _UPDATE_SPEC_SHARED_REPLACEMENTS = (
         "- `trellis-finish-work` skill - Reminds you to check if specs need updates",
     ),
 )
+_BREAK_LOOP_SKILL_REPLACEMENTS = (
+    (
+        "- If it's a cross-platform issue → update `cross-platform-thinking-guide.md`",
+        "- If it's a cross-platform or cross-tool consistency issue → update `cross-layer-thinking-guide.md`",
+    ),
+    (
+        "2. **Sync templates** - After updating `.trellis/spec/`, sync to `src/templates/markdown/spec/`",
+        "2. **Do not assume a template mirror** - Keep the required updates in the real `.trellis/spec/` files; sync extra mirrors only when this project actually has one",
+    ),
+)
+_CHECK_SKILL_REPLACEMENTS = (
+    (
+        '  grep -r "pattern" src/',
+        '  rg -n --hidden -g \'!.git\' "pattern" .',
+    ),
+)
+
+
+def _patch_skill_replacements(
+    targets: list[tuple[str, Path, tuple[tuple[str, str], ...]]],
+    *,
+    dry_run: bool,
+    patch_label: str,
+) -> bool:
+    """Apply simple stale-text replacement patches to installed skill carriers."""
+    any_patched = False
+    for label, target_path, replacements in targets:
+        if not target_path.exists():
+            continue
+        content = target_path.read_text(encoding="utf-8")
+        patched = content
+        changed = False
+        for old, new in replacements:
+            if old in patched:
+                patched = patched.replace(old, new)
+                changed = True
+        if not changed:
+            continue
+        if dry_run:
+            info(f"[{label}] 将更新 {patch_label}")
+        else:
+            target_path.write_text(patched, encoding="utf-8")
+            ok(f"[{label}] {patch_label}已更新")
+        any_patched = True
+    return any_patched
 
 
 def _patch_brainstorm_research_block(content: str) -> tuple[str, bool]:
@@ -2064,7 +2109,8 @@ def patch_platform_brainstorm_skills(root: Path, *, dry_run: bool) -> bool:
 
 def patch_platform_update_spec_skills(root: Path, *, dry_run: bool) -> bool:
     """Patch update-spec skills so each CLI advertises its real entry surface."""
-    targets = [
+    return _patch_skill_replacements(
+        [
         (
             "Claude",
             root / ".claude" / "skills" / "trellis-update-spec" / "SKILL.md",
@@ -2080,28 +2126,60 @@ def patch_platform_update_spec_skills(root: Path, *, dry_run: bool) -> bool:
             root / ".agents" / "skills" / "trellis-update-spec" / "SKILL.md",
             _UPDATE_SPEC_SHARED_REPLACEMENTS,
         ),
-    ]
+        ],
+        dry_run=dry_run,
+        patch_label="trellis-update-spec skill 入口文案",
+    )
 
-    any_patched = False
-    for label, target_path, replacements in targets:
-        if not target_path.exists():
-            continue
-        content = target_path.read_text(encoding="utf-8")
-        patched = content
-        changed = False
-        for old, new in replacements:
-            if old in patched:
-                patched = patched.replace(old, new)
-                changed = True
-        if not changed:
-            continue
-        if dry_run:
-            info(f"[{label}] 将更新 trellis-update-spec skill 入口文案")
-        else:
-            target_path.write_text(patched, encoding="utf-8")
-            ok(f"[{label}] trellis-update-spec skill 入口文案已更新")
-        any_patched = True
-    return any_patched
+
+def patch_platform_break_loop_skills(root: Path, *, dry_run: bool) -> bool:
+    """Patch break-loop skills away from nonexistent guide/template targets."""
+    return _patch_skill_replacements(
+        [
+            (
+                "Claude",
+                root / ".claude" / "skills" / "trellis-break-loop" / "SKILL.md",
+                _BREAK_LOOP_SKILL_REPLACEMENTS,
+            ),
+            (
+                "OpenCode",
+                root / ".opencode" / "skills" / "trellis-break-loop" / "SKILL.md",
+                _BREAK_LOOP_SKILL_REPLACEMENTS,
+            ),
+            (
+                "Shared",
+                root / ".agents" / "skills" / "trellis-break-loop" / "SKILL.md",
+                _BREAK_LOOP_SKILL_REPLACEMENTS,
+            ),
+        ],
+        dry_run=dry_run,
+        patch_label="trellis-break-loop skill 后续动作指引",
+    )
+
+
+def patch_platform_check_skills(root: Path, *, dry_run: bool) -> bool:
+    """Patch check skills to search the actual repo root instead of `src/`."""
+    return _patch_skill_replacements(
+        [
+            (
+                "Claude",
+                root / ".claude" / "skills" / "trellis-check" / "SKILL.md",
+                _CHECK_SKILL_REPLACEMENTS,
+            ),
+            (
+                "OpenCode",
+                root / ".opencode" / "skills" / "trellis-check" / "SKILL.md",
+                _CHECK_SKILL_REPLACEMENTS,
+            ),
+            (
+                "Shared",
+                root / ".agents" / "skills" / "trellis-check" / "SKILL.md",
+                _CHECK_SKILL_REPLACEMENTS,
+            ),
+        ],
+        dry_run=dry_run,
+        patch_label="trellis-check skill 代码搜索指引",
+    )
 
 
 def _apply_patch_task_create_preserve_active(src: Path, root: Path, *, dry_run: bool) -> bool:
@@ -3668,6 +3746,8 @@ def main() -> int:
             patch_trellis_meta_references(src, root, dry_run=args.dry_run)
             patch_platform_brainstorm_skills(root, dry_run=args.dry_run)
             patch_platform_update_spec_skills(root, dry_run=args.dry_run)
+            patch_platform_break_loop_skills(root, dry_run=args.dry_run)
+            patch_platform_check_skills(root, dry_run=args.dry_run)
             patch_cross_layer_thinking_guide(root, dry_run=args.dry_run)
 
             # Issue 2: cleanup legacy three-phase breadcrumb blocks after strong-gate patches

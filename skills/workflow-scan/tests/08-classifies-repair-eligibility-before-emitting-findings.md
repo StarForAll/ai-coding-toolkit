@@ -15,6 +15,10 @@ distinguish between:
 User input:
 
 > Run `/workflow-scan` against an embedded temp project where one installed runtime surface clearly contradicts another installed runtime surface, one observation is only a complexity / maintainability concern without a concrete installed-workflow contradiction, and one observation looks suspicious but cannot yet be confirmed from the temp project evidence alone.
+>
+> Also include one carrier that is still present on disk, but whose installed
+> workflow docs explicitly say it is intentionally gated off for now and kept
+> only as a compatibility or future-reenable surface.
 
 ## Expected Mode
 
@@ -27,6 +31,8 @@ Inline scan in the current CLI session using the shared v3 report contract.
 - the contradiction item must be classified as `confirmed-defect`
 - the complexity-only item must be classified as `design-debt`
 - the insufficient-evidence item must be classified as `evidence-gap`
+- the intentionally gated-but-present carrier item must not be classified as
+  `confirmed-defect` unless the temp project shows a separate contradiction
 - the analysis summary must make the three classes visible so repair-side
   intake can stay conservative by default
 

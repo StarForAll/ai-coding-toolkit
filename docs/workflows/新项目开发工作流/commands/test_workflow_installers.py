@@ -2095,6 +2095,9 @@ class WorkflowInstallerTests(unittest.TestCase):
         for content in (claude_delivery, codex_delivery):
             self.assertIn("| 全部通过，且当前活动任务也准备关闭 | `/trellis:finish-work` |", content)
             self.assertNotIn("| 全部通过，且当前活动任务也准备关闭 | `/finish-work` |", content)
+            self.assertIn("Claude / OpenCode 使用 `/trellis:finish-work`", content)
+            self.assertIn("Codex 使用 `trellis-finish-work` skill", content)
+            self.assertNotIn("Trellis 原生 /finish-work.md", content)
 
     def test_install_disables_codex_multi_agent_config_when_present(self) -> None:
         fixture = self.create_fixture(include_codex=True)
@@ -2270,16 +2273,19 @@ class WorkflowInstallerTests(unittest.TestCase):
             fixture / ".agents" / "skills" / "trellis-meta" / "references" / "local-architecture" / "workflow.md",
             fixture / ".agents" / "skills" / "trellis-meta" / "references" / "local-architecture" / "context-injection.md",
             fixture / ".agents" / "skills" / "trellis-meta" / "references" / "platform-files" / "hooks-and-settings.md",
+            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "add-project-local-conventions.md",
             fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
             fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-workflow.md",
             fixture / ".claude" / "skills" / "trellis-meta" / "references" / "local-architecture" / "workflow.md",
             fixture / ".claude" / "skills" / "trellis-meta" / "references" / "local-architecture" / "context-injection.md",
             fixture / ".claude" / "skills" / "trellis-meta" / "references" / "platform-files" / "hooks-and-settings.md",
+            fixture / ".claude" / "skills" / "trellis-meta" / "references" / "customize-local" / "add-project-local-conventions.md",
             fixture / ".claude" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
             fixture / ".claude" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-workflow.md",
             fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "local-architecture" / "workflow.md",
             fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "local-architecture" / "context-injection.md",
             fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "platform-files" / "hooks-and-settings.md",
+            fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "add-project-local-conventions.md",
             fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
             fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-workflow.md",
         ]
@@ -2306,6 +2312,11 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn(".opencode/package.json", opencode_change_hooks)
         self.assertIn(".opencode/plugins/", opencode_change_hooks)
         self.assertNotIn(".opencode/package.json -> .opencode/plugins/session-start.js", opencode_change_hooks)
+        add_project_local_conventions = (
+            fixture / ".claude" / "skills" / "trellis-meta" / "references" / "customize-local" / "add-project-local-conventions.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("cross-layer-thinking-guide.md", add_project_local_conventions)
+        self.assertNotIn("cross-platform-thinking-guide.md", add_project_local_conventions)
         codex_change_hooks = (
             fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md"
         ).read_text(encoding="utf-8")
@@ -2383,6 +2394,80 @@ Development Flow:
         self.assertNotIn("`break-loop` (Trellis command)", shared_content)
         self.assertNotIn("`update-spec` (Trellis command)", shared_content)
         self.assertNotIn("`finish-work` (Trellis command)", shared_content)
+
+    def test_install_patches_break_loop_skills_away_from_missing_guides_and_mirrors(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        stale_skill = """---
+name: trellis-break-loop
+description: stale break loop
+---
+
+## After Analysis: Immediate Actions
+
+1. **Update spec/guides** - Don't just list TODOs, actually update the relevant files:
+   - If it's a cross-platform issue → update `cross-platform-thinking-guide.md`
+
+2. **Sync templates** - After updating `.trellis/spec/`, sync to `src/templates/markdown/spec/`
+"""
+        for path in [
+            fixture / ".claude" / "skills" / "trellis-break-loop" / "SKILL.md",
+            fixture / ".opencode" / "skills" / "trellis-break-loop" / "SKILL.md",
+            fixture / ".agents" / "skills" / "trellis-break-loop" / "SKILL.md",
+        ]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(stale_skill, encoding="utf-8")
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        for path in [
+            fixture / ".claude" / "skills" / "trellis-break-loop" / "SKILL.md",
+            fixture / ".opencode" / "skills" / "trellis-break-loop" / "SKILL.md",
+            fixture / ".agents" / "skills" / "trellis-break-loop" / "SKILL.md",
+        ]:
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("cross-layer-thinking-guide.md", content)
+            self.assertIn("Do not assume a template mirror", content)
+            self.assertNotIn("cross-platform-thinking-guide.md", content)
+            self.assertNotIn("src/templates/markdown/spec/", content)
+
+    def test_install_patches_trellis_check_skills_to_repo_root_rg_search(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        stale_skill = """---
+name: trellis-check
+description: stale check
+---
+
+### B. Code Reuse (modifying constants, creating utilities)
+
+- [ ] Searched for existing similar code before creating new?
+  ```bash
+  grep -r "pattern" src/
+  ```
+"""
+        for path in [
+            fixture / ".claude" / "skills" / "trellis-check" / "SKILL.md",
+            fixture / ".opencode" / "skills" / "trellis-check" / "SKILL.md",
+            fixture / ".agents" / "skills" / "trellis-check" / "SKILL.md",
+        ]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(stale_skill, encoding="utf-8")
+
+        install = self.install_workflow(fixture)
+
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        for path in [
+            fixture / ".claude" / "skills" / "trellis-check" / "SKILL.md",
+            fixture / ".opencode" / "skills" / "trellis-check" / "SKILL.md",
+            fixture / ".agents" / "skills" / "trellis-check" / "SKILL.md",
+        ]:
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("""rg -n --hidden -g '!.git' "pattern" .""", content)
+            self.assertNotIn('grep -r "pattern" src/', content)
 
     def test_install_patches_platform_brainstorm_skills_away_from_trellis_start(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
@@ -2549,13 +2634,27 @@ Development Flow:
 OpenCode: .opencode/package.json -> .opencode/plugins/session-start.js
 ```
 """
+        stale_add_project_local_conventions = """# stale
+
+## Write To `.trellis/spec/`
+
+```text
+.trellis/spec/guides/cross-platform-thinking-guide.md
+```
+"""
         for path in [
             fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
+            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "add-project-local-conventions.md",
             fixture / ".claude" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
+            fixture / ".claude" / "skills" / "trellis-meta" / "references" / "customize-local" / "add-project-local-conventions.md",
             fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
+            fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "add-project-local-conventions.md",
         ]:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(stale_change_hooks, encoding="utf-8")
+            path.write_text(
+                stale_add_project_local_conventions if path.name == "add-project-local-conventions.md" else stale_change_hooks,
+                encoding="utf-8",
+            )
 
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
@@ -2582,12 +2681,85 @@ OpenCode: .opencode/package.json -> .opencode/plugins/session-start.js
         self.assertNotIn("`finish-work` (Trellis command)", shared_content)
         for path in [
             fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
+            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "add-project-local-conventions.md",
             fixture / ".claude" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
+            fixture / ".claude" / "skills" / "trellis-meta" / "references" / "customize-local" / "add-project-local-conventions.md",
             fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
+            fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "add-project-local-conventions.md",
         ]:
             content = path.read_text(encoding="utf-8")
-            self.assertIn(".opencode/package.json (dependency/config surface)", content)
-            self.assertNotIn(".opencode/package.json -> .opencode/plugins/session-start.js", content)
+            if path.name == "add-project-local-conventions.md":
+                self.assertIn("cross-layer-thinking-guide.md", content)
+                self.assertNotIn("cross-platform-thinking-guide.md", content)
+            else:
+                self.assertIn(".opencode/package.json (dependency/config surface)", content)
+                self.assertNotIn(".opencode/package.json -> .opencode/plugins/session-start.js", content)
+
+    def test_upgrade_merge_refreshes_break_loop_and_check_skills(self) -> None:
+        fixture = self.create_fixture(include_opencode=True, include_codex=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        stale_break_loop = """---
+name: trellis-break-loop
+description: stale break loop
+---
+
+- If it's a cross-platform issue → update `cross-platform-thinking-guide.md`
+
+2. **Sync templates** - After updating `.trellis/spec/`, sync to `src/templates/markdown/spec/`
+"""
+        stale_check = """---
+name: trellis-check
+description: stale check
+---
+
+```bash
+  grep -r "pattern" src/
+```
+"""
+        for path, content in [
+            (fixture / ".claude" / "skills" / "trellis-break-loop" / "SKILL.md", stale_break_loop),
+            (fixture / ".opencode" / "skills" / "trellis-break-loop" / "SKILL.md", stale_break_loop),
+            (fixture / ".agents" / "skills" / "trellis-break-loop" / "SKILL.md", stale_break_loop),
+            (fixture / ".claude" / "skills" / "trellis-check" / "SKILL.md", stale_check),
+            (fixture / ".opencode" / "skills" / "trellis-check" / "SKILL.md", stale_check),
+            (fixture / ".agents" / "skills" / "trellis-check" / "SKILL.md", stale_check),
+        ]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--merge",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        for path in [
+            fixture / ".claude" / "skills" / "trellis-break-loop" / "SKILL.md",
+            fixture / ".opencode" / "skills" / "trellis-break-loop" / "SKILL.md",
+            fixture / ".agents" / "skills" / "trellis-break-loop" / "SKILL.md",
+        ]:
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("cross-layer-thinking-guide.md", content)
+            self.assertIn("Do not assume a template mirror", content)
+            self.assertNotIn("cross-platform-thinking-guide.md", content)
+            self.assertNotIn("src/templates/markdown/spec/", content)
+        for path in [
+            fixture / ".claude" / "skills" / "trellis-check" / "SKILL.md",
+            fixture / ".opencode" / "skills" / "trellis-check" / "SKILL.md",
+            fixture / ".agents" / "skills" / "trellis-check" / "SKILL.md",
+        ]:
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("""rg -n --hidden -g '!.git' "pattern" .""", content)
+            self.assertNotIn('grep -r "pattern" src/', content)
 
     def test_upgrade_merge_patches_platform_brainstorm_skills_away_from_research_subagent_guidance(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
@@ -3600,14 +3772,38 @@ Development Flow:
 OpenCode: .opencode/package.json -> .opencode/plugins/session-start.js
 ```
 """
+        stale_break_loop = """---
+name: trellis-break-loop
+description: stale break loop
+---
+
+- If it's a cross-platform issue → update `cross-platform-thinking-guide.md`
+
+2. **Sync templates** - After updating `.trellis/spec/`, sync to `src/templates/markdown/spec/`
+"""
+        stale_check = """---
+name: trellis-check
+description: stale check
+---
+
+```bash
+  grep -r "pattern" src/
+```
+"""
 
         for path, content in [
             (fixture / ".claude" / "skills" / "trellis-brainstorm" / "SKILL.md", stale_platform_brainstorm),
             (fixture / ".opencode" / "skills" / "trellis-brainstorm" / "SKILL.md", stale_platform_brainstorm),
             (fixture / ".claude" / "skills" / "trellis-update-spec" / "SKILL.md", stale_platform_update_spec),
             (fixture / ".opencode" / "skills" / "trellis-update-spec" / "SKILL.md", stale_platform_update_spec),
+            (fixture / ".claude" / "skills" / "trellis-break-loop" / "SKILL.md", stale_break_loop),
+            (fixture / ".opencode" / "skills" / "trellis-break-loop" / "SKILL.md", stale_break_loop),
+            (fixture / ".claude" / "skills" / "trellis-check" / "SKILL.md", stale_check),
+            (fixture / ".opencode" / "skills" / "trellis-check" / "SKILL.md", stale_check),
             (fixture / ".agents" / "skills" / "trellis-brainstorm" / "SKILL.md", stale_shared_brainstorm),
             (fixture / ".agents" / "skills" / "trellis-update-spec" / "SKILL.md", stale_shared_update_spec),
+            (fixture / ".agents" / "skills" / "trellis-break-loop" / "SKILL.md", stale_break_loop),
+            (fixture / ".agents" / "skills" / "trellis-check" / "SKILL.md", stale_check),
             (fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md", stale_change_hooks),
             (fixture / ".claude" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md", stale_change_hooks),
             (fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md", stale_change_hooks),
@@ -3637,6 +3833,8 @@ OpenCode: .opencode/package.json -> .opencode/plugins/session-start.js
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("trellis-brainstorm skill", combined)
         self.assertIn("trellis-update-spec skill", combined)
+        self.assertIn("trellis-break-loop skill", combined)
+        self.assertIn("trellis-check skill", combined)
         self.assertIn("trellis-meta references", combined)
         self.assertIn("cross-layer-thinking-guide.md", combined)
 

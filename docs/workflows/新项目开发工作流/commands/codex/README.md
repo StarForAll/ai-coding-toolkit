@@ -207,6 +207,8 @@ Codex 支持 hooks。对这套 workflow，当前推荐通过项目 `.codex/hooks
 - `.codex/agents/*.toml` 在当前 workflow 下只应被视为残留/兼容 carrier，而不是任何可用执行入口
 - 若 `.codex/config.toml` 存在，安装器会把 `features.multi_agent_v2.enabled` 压成 `false`；即使后续被手动改回 `true`，也不能覆盖当前 workflow 的 main-session-only 约束
 - 因此，判断当前应否派发 sub-agent 时，答案对当前嵌入 workflow 恒为“否”；不要只因为 `.codex/agents/` 存在或平台支持 multi-agent 就推断“现在可以派”
+- 这里的“否”是当前阶段性的成熟度/稳定性约束，不是永久废弃 subagent 路径的结论。保留 `.codex/agents/*.toml` carrier，是为了后续如果 workflow 明确放开这条执行链时，不需要重新发明另一套承载面。
+- 因而，后续 `workflow-scan`、兼容核对或人工审查时，不应仅因为这些 carrier 仍存在就把它们记成 defect；只有当其它已安装 surface 又把用户路由进这条当前被禁用的路径时，才构成真实问题。
 
 ### 3. Skills：workflow 阶段入口由 skills 承载
 
@@ -278,6 +280,12 @@ Codex 官方支持 subagents。对当前嵌入 workflow，它们只应被理解�
 - `research`
 - `implement`
 - `check`
+
+补充判断：
+
+- “carrier 仍存在” 与 “当前允许使用” 是两回事。
+- 当前 workflow 的结论是：carrier 为未来可能恢复保留，但现阶段主合同仍是 `main-session-only`。
+- 因此，扫描或维护时若只观察到“存在但文档明确声明为当前禁用、未来可能恢复”，默认应视为预期中的 gated state，而不是自动升级成 defect。
 
 当前仓库已有对应定义：
 

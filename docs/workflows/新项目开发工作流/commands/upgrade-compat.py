@@ -106,6 +106,8 @@ patch_task_status_views = _INSTALL_WORKFLOW.patch_task_status_views
 patch_session_start_no_task_guidance = _INSTALL_WORKFLOW.patch_session_start_no_task_guidance
 patch_trellis_meta_references = _INSTALL_WORKFLOW.patch_trellis_meta_references
 patch_platform_update_spec_skills = _INSTALL_WORKFLOW.patch_platform_update_spec_skills
+patch_platform_break_loop_skills = _INSTALL_WORKFLOW.patch_platform_break_loop_skills
+patch_platform_check_skills = _INSTALL_WORKFLOW.patch_platform_check_skills
 _apply_patch_session_start = _INSTALL_WORKFLOW._apply_patch_session_start
 _apply_patch_task_start = _INSTALL_WORKFLOW._apply_patch_task_start
 _apply_patch_task_create_preserve_active = _INSTALL_WORKFLOW._apply_patch_task_create_preserve_active
@@ -139,6 +141,8 @@ _BRAINSTORM_RELATED_COMMAND_START_OLD = _INSTALL_WORKFLOW._BRAINSTORM_RELATED_CO
 _BRAINSTORM_RELATED_COMMAND_UPDATE_OLD = _INSTALL_WORKFLOW._BRAINSTORM_RELATED_COMMAND_UPDATE_OLD
 _UPDATE_SPEC_PLATFORM_REPLACEMENTS = _INSTALL_WORKFLOW._UPDATE_SPEC_PLATFORM_REPLACEMENTS
 _UPDATE_SPEC_SHARED_REPLACEMENTS = _INSTALL_WORKFLOW._UPDATE_SPEC_SHARED_REPLACEMENTS
+_BREAK_LOOP_SKILL_REPLACEMENTS = _INSTALL_WORKFLOW._BREAK_LOOP_SKILL_REPLACEMENTS
+_CHECK_SKILL_REPLACEMENTS = _INSTALL_WORKFLOW._CHECK_SKILL_REPLACEMENTS
 _CROSS_LAYER_GUIDE_STALE_LINE = _INSTALL_WORKFLOW._CROSS_LAYER_GUIDE_STALE_LINE
 _CROSS_LAYER_GUIDE_FIXED_LINE = _INSTALL_WORKFLOW._CROSS_LAYER_GUIDE_FIXED_LINE
 # Reuse install-workflow markers for idempotency checks
@@ -789,6 +793,26 @@ def _update_spec_skill_contract_issues(content: str, *, shared: bool) -> list[st
     return issues
 
 
+def _break_loop_skill_contract_issues(content: str) -> list[str]:
+    issues: list[str] = []
+    for old, _new in _BREAK_LOOP_SKILL_REPLACEMENTS:
+        if old not in content:
+            continue
+        if "cross-platform-thinking-guide.md" in old:
+            issues.append("仍残留不存在的 `cross-platform-thinking-guide.md` 指引")
+        elif "src/templates/markdown/spec/" in old:
+            issues.append("仍残留不存在的 `src/templates/markdown/spec/` mirror 同步指引")
+    return issues
+
+
+def _check_skill_contract_issues(content: str) -> list[str]:
+    issues: list[str] = []
+    for old, _new in _CHECK_SKILL_REPLACEMENTS:
+        if old in content:
+            issues.append("仍把代码搜索根写死为 `src/`")
+    return issues
+
+
 def detect_conflicts_patched_skill_surfaces(root: Path, cli_types: list[str]) -> int:
     conflicts = 0
     checks = []
@@ -805,6 +829,16 @@ def detect_conflicts_patched_skill_surfaces(root: Path, cli_types: list[str]) ->
                     root / ".claude" / "skills" / "trellis-update-spec" / "SKILL.md",
                     lambda content: _update_spec_skill_contract_issues(content, shared=False),
                 ),
+                (
+                    "[Claude] trellis-break-loop skill",
+                    root / ".claude" / "skills" / "trellis-break-loop" / "SKILL.md",
+                    _break_loop_skill_contract_issues,
+                ),
+                (
+                    "[Claude] trellis-check skill",
+                    root / ".claude" / "skills" / "trellis-check" / "SKILL.md",
+                    _check_skill_contract_issues,
+                ),
             ]
         )
     if "opencode" in cli_types:
@@ -820,6 +854,16 @@ def detect_conflicts_patched_skill_surfaces(root: Path, cli_types: list[str]) ->
                     root / ".opencode" / "skills" / "trellis-update-spec" / "SKILL.md",
                     lambda content: _update_spec_skill_contract_issues(content, shared=False),
                 ),
+                (
+                    "[OpenCode] trellis-break-loop skill",
+                    root / ".opencode" / "skills" / "trellis-break-loop" / "SKILL.md",
+                    _break_loop_skill_contract_issues,
+                ),
+                (
+                    "[OpenCode] trellis-check skill",
+                    root / ".opencode" / "skills" / "trellis-check" / "SKILL.md",
+                    _check_skill_contract_issues,
+                ),
             ]
         )
     if "codex" in cli_types:
@@ -834,6 +878,16 @@ def detect_conflicts_patched_skill_surfaces(root: Path, cli_types: list[str]) ->
                     "[Codex Shared] trellis-update-spec skill",
                     root / ".agents" / "skills" / "trellis-update-spec" / "SKILL.md",
                     lambda content: _update_spec_skill_contract_issues(content, shared=True),
+                ),
+                (
+                    "[Codex Shared] trellis-break-loop skill",
+                    root / ".agents" / "skills" / "trellis-break-loop" / "SKILL.md",
+                    _break_loop_skill_contract_issues,
+                ),
+                (
+                    "[Codex Shared] trellis-check skill",
+                    root / ".agents" / "skills" / "trellis-check" / "SKILL.md",
+                    _check_skill_contract_issues,
                 ),
             ]
         )
@@ -2203,6 +2257,8 @@ def main() -> int:
     patch_session_start_no_task_guidance(root, dry_run=False)
     _INSTALL_WORKFLOW.patch_platform_brainstorm_skills(root, dry_run=False)
     patch_platform_update_spec_skills(root, dry_run=False)
+    patch_platform_break_loop_skills(root, dry_run=False)
+    patch_platform_check_skills(root, dry_run=False)
     patch_trellis_meta_references(src, root, dry_run=False)
     _apply_patch_workflow_phase(src, root, dry_run=False)
     _apply_patch_task_start(src, root, dry_run=False)

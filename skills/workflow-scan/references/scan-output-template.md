@@ -190,6 +190,17 @@ before repair. `workflow-repair` re-verifies and may reclassify.
 | `design-debt` | The concern is about complexity, maintainability, ergonomics, or over-design, but the temp project does not yet show a concrete installed-workflow defect or contradiction | do not auto-repair; treat as manual scope decision |
 | `evidence-gap` | The observation looks suspicious, but the temp-project evidence is still insufficient to confirm a real defect or source-owned root cause | do not auto-repair; gather more evidence first |
 
+Additional classification rule:
+
+- When a carrier is still present but the installed workflow explicitly says it
+  is intentionally gated off for now, retained only as a compatibility surface,
+  or kept in place for possible future re-enable after maturity improves, that
+  observation is not a `confirmed-defect` by default.
+- If the temp project shows no concrete contradiction beyond that intentional
+  gated state, classify it as `design-debt`.
+- Escalate only when another installed surface contradicts the stated
+  “present but intentionally disabled” contract.
+
 `Repair Classification` is the anti-overrepair guardrail. It determines whether
 `workflow-repair` may treat the finding as part of the default repair-ready set.
 It does **not** replace `Severity Estimate`; the two axes answer different

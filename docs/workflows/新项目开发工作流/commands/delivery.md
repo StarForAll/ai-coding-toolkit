@@ -279,7 +279,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py set <task-dir> \
 - 不为了补齐新规则或整理台账而批量回写旧任务、旧会话记录或已归档目录
 - staged 区不得混入非目标变更；若存在 staged 污染，必须先中断处理
 
-若当前轮还需要关闭当前活动任务，则 `archive` 与 session 记录在 Trellis 原生 `/finish-work` 中完成，不在 `delivery` 阶段执行。具体操作步骤参见 `Trellis 原生 /finish-work.md`。
+若当前轮还需要关闭当前活动任务，则 `archive` 与 session 记录在 Trellis 原生 `/finish-work` 中完成，不在 `delivery` 阶段执行。具体操作步骤参见当前 CLI 的原生 finish-work carrier：Claude / OpenCode 使用 `/trellis:finish-work`，Codex 使用 `trellis-finish-work` skill。
 
 判定规则：
 

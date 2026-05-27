@@ -45,6 +45,10 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 - 若某平台确有行为差距（如 Codex class-2 缺 context self-loading），应通过 Trellis 上游机制或项目级配置解决，不在 workflow 源中补丁
 - 安装器 / 升级分析 / 卸载脚本不再读写 agent 内容，仅检测和迁移 legacy bare-name 文件
 - 维护者侧例外：当前 repo-local `workflow-audit` 不得把 Claude Code / OpenCode agent 执行链作为正式口径；即便平台原生支持，当前合同仍要求主会话执行，只有后续明确调整合同后才可放开
+- 当前保留这些原生 `trellis-*` agent/subagent carrier，不代表它们“已经重新成为正式执行路径”。
+  现在的禁用结论主要来自当前 workflow 对成熟度、交互成本和稳定性的阶段性判断；未来条件成熟时，完全可能恢复使用这条链路。
+- 因而，后续 `workflow-scan` 或人工核对若再次看到“carrier 仍存在，但当前文档明确声明为禁用/仅兼容保留”，默认应把它理解为
+  `present-but-intentionally-gated` 的设计边界信号，而不是直接升级成 defect；只有安装后的其它 surface 又把用户路由进这条被禁用路径时，才构成真实矛盾。
 
 **源仓库 carrier 增强 vs. 目标项目 baseline（两层边界区分）**：当前源仓库（authoring repo）自身对 `trellis-research` 做了项目级 capability-enhancement，例如 Claude/OpenCode 版本扩展了 ace、Context7、deepwiki、grok-search、exa_advanced 等工具路由，详见 `.trellis/spec/agents/index.md` Tool Capability Enhancement 段。这些增强属于 source repo 自身 carrier 能力，不再作为 fresh install overlay 同步到目标项目；目标项目默认回到 Trellis 原生 baseline。
 
@@ -198,6 +202,8 @@ workflow 不再维护 `commands/{claude,opencode,codex}/agents/` 源资产，也
 - `workflow-state.py route` 的 JSON 输出契约只把 `stage` 和 `status` 作为主字段；`Stage-Status` 是 hook / session header 的展示信息，不是 route 主字段。维护者若修改 `workflow-state.py route`，必须同步复查 `patch-inject-workflow-state.py`、`patch-session-start-strong-gate.py`、`patch-task-status-view-strong-gate.py`，否则会再次出现“route 输出已变更但装后载体仍读旧字段”的回归
 - `workflow-state.py route` 若返回 `warnings`，表示当前嵌入仍可运行，但装后 carrier / distributed copies 已出现非致命漂移；这类漂移应进入 source-side 修复或装后核对待办，而不是直接把 route 升级成 `embed_invalid`
 - OpenCode 的 `.opencode/plugins/inject-subagent-context.js` 当前也属于需要跟随强门禁语义复查的 runtime carrier；若阶段门禁、route 输出、或 Trellis 子代理上下文模型变更，必须同步复查 `patch-opencode-inject-subagent-context.py`
+- 对 `.codex/agents/*.toml`、`.claude/agents/*.md`、`.opencode/agents/*.md` 这类原生 carrier 也应使用同一口径：
+  “存在但当前禁用”本身不等于 defect。若当前文档已经明确说明它们只是为未来可能恢复保留的底层承载面，则扫描和维护都不应把其存在本身当成异常。
 
 装后/升级后核对仍建议显式检查主目录，并只在次级目录实际存在时继续检查其条件性影响面：
 

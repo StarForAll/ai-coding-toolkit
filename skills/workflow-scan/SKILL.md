@@ -141,6 +141,17 @@ Use this skill when any of the following is true:
     complexity, maintainability, ergonomics, or possible over-design without a
     concrete temp-project contradiction, it must be classified as
     `design-debt`, not `confirmed-defect`.
+16.1 **Intentional gated-carrier observations stay conservative**: if a
+    carrier is present on disk but the temp project's installed workflow docs
+    or runtime rules explicitly say that the path is intentionally gated off
+    for now, kept only as a compatibility carrier, or reserved for possible
+    future re-enable after maturity improves, the scan must not emit that
+    situation as a `confirmed-defect` by default.
+    - If the installed workflow still behaves consistently with that stated
+      contract, classify the concern as `design-debt` at most.
+    - Only upgrade it to `confirmed-defect` when the temp project shows a real
+      contradiction, such as the docs claiming the path is disabled while some
+      installed runtime surface still actively routes users into it.
 17. **No evidence-gap inflation**: if the temp-project evidence is still
     insufficient to confirm a real defect or source-owned root cause, the item
     must be classified as `evidence-gap`, not `confirmed-defect`.
