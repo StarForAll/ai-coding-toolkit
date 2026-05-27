@@ -26,7 +26,6 @@ Current supplement:
 - [workflow-capability-audit](./workflow-capability-audit.md) - behavioral spec for the repo-local maintainer skill surfaces `.agents/skills/workflow-capability-audit/` and `.claude/skills/workflow-capability-audit/`
 - [workflow-scan](./workflow-scan.md) - behavioral spec for the installable skill `skills/workflow-scan/` (scan half of coupled pair)
 - [workflow-repair](./workflow-repair.md) - behavioral spec for the installable skill `skills/workflow-repair/` (repair half of coupled pair)
-- [workflow-validate-matrix](./workflow-validate-matrix.md) - behavioral and packaging spec for the installable skill `skills/workflow-validate-matrix/`, including runtime bundle sync and drift-failure behavior
 
 ---
 
