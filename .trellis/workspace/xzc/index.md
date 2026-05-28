@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-7.md`
-- **Total Sessions**: 329
+- **Total Sessions**: 330
 - **Last Active**: 2026-05-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-7.md` | ~880 | Active |
+| `journal-7.md` | ~914 | Active |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
@@ -35,6 +35,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 330 | 2026-05-28 | Clarify workflow-scan retained carrier handling | `68af8f1`, `3ad3eac` | `main` |
 | 329 | 2026-05-28 | workflow audit runtime gate closure coverage | `b4de118`, `3fd950f` | `main` |
 | 328 | 2026-05-27 | workflow-repair break-loop doc drift | `16d2383`, `8e4d056` | `main` |
 | 327 | 2026-05-27 | Workflow repair: drift hardening and lineage escalation | `3242cea`, `54db438` | `main` |

@@ -878,3 +878,37 @@ Audited repeated workflow-scan findings, hardened embedded runtime gate closure 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 330: Clarify workflow-scan retained carrier handling
+
+**Date**: 2026-05-28
+**Task**: Clarify workflow-scan retained carrier handling
+**Branch**: `main`
+
+### Summary
+
+Clarified workflow-scan handling for intentionally disabled retained carriers, tightened finding-set wording, restored design-debt/evidence-gap template coverage, and aligned scenario expectations.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `68af8f1` | (see git log) |
+| `3ad3eac` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
