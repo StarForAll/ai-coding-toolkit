@@ -36,6 +36,9 @@ Inline scan in the current CLI session using the shared v4 report contract.
   contradiction
 - the analysis summary must make the three classes visible so repair-side
   intake can stay conservative by default
+- when `design-debt` and `evidence-gap` findings are present, the analysis
+  summary must still list their concrete finding IDs even though the disabled
+  carrier item itself is omitted from the finding set
 
 ## Must Not
 
@@ -46,3 +49,5 @@ Inline scan in the current CLI session using the shared v4 report contract.
 - must not emit a standalone finding whose only basis is that the retained
   carrier remains on disk while the installed workflow explicitly marks it as
   currently disabled
+- must not collapse `Design-Debt Items` or `Evidence-Gap Items` to `none` when
+  those classes still have real findings elsewhere in the same report

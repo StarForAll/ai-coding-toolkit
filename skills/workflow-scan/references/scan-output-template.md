@@ -229,10 +229,10 @@ workflow-version: 0.1.2800
 workflow-schema-version: 2
 scan-timestamp: 2026-05-20T14:30:00+08:00
 temp-project-root: /tmp/trellis-<LIVE_TRELLIS_VERSION>-2
-total-findings: 2
+total-findings: 4
 p0-count: 1
-p1-count: 0
-p2-count: 1
+p1-count: 1
+p2-count: 2
 ---
 
 # Workflow Scan Report
@@ -244,17 +244,17 @@ p2-count: 1
 - Workflow Schema Version: 2
 - Scan Time: 2026-05-20T14:30:00+08:00
 - Temp Project Root: /tmp/trellis-<LIVE_TRELLIS_VERSION>-2
-- Total Findings: 2 (P0: 1, P1: 0, P2: 1)
+- Total Findings: 4 (P0: 1, P1: 1, P2: 2)
 
 ## Analysis Summary
 
-- Problem Analysis: The main failure themes are one broken patch-script contract and one stale document reference.
-- Gap / Missing-Surface Analysis: none
+- Problem Analysis: The main failure themes are one broken patch-script contract, one stale document reference, one documentation maintainability concern, and one unresolved carrier-resolution ambiguity.
+- Gap / Missing-Surface Analysis: WS-004
 - Residual Issues: WS-002
-- New Issues: none
+- New Issues: WS-003
 - Confirmed Defects: WS-001, WS-002
-- Design-Debt Items: none
-- Evidence-Gap Items: none
+- Design-Debt Items: WS-003
+- Evidence-Gap Items: WS-004
 
 ### WS-001: patch-session-start-strong-gate.py uses legacy READY/NOT READY semantics
 
@@ -285,11 +285,43 @@ p2-count: 1
 - **Temp Project Location**: .trellis/workflow.md
 - **Description**: The installed workflow document still references a helper that is no longer part of the temp project's active workflow surfaces.
 - **Suggested Investigation**: Check the installed workflow document and related runtime docs in the temp project, then remove or replace the stale source-side reference if the temp-project evidence confirms it is obsolete.
+
+### WS-003: Duplicate carrier-explanation notes increase maintenance cost without contradicting runtime behavior
+
+- **Category**: new
+- **Severity Estimate**: P2
+- **Repair Classification**: design-debt
+- **Origin**: workflow-source
+- **Evidence Layer**: generated-target-installed
+- **Evidence**:
+  - `.trellis/workflow.md` and `.trellis/workflow-docs/命令映射.md` both explain the same Codex carrier fallback path in slightly different wording
+  - The temp project's actual installed carrier surfaces remain consistent with both descriptions
+  - No installed runtime surface shows a broken route or contradictory behavior
+- **Temp Project Location**: .trellis/workflow.md and .trellis/workflow-docs/命令映射.md
+- **Description**: The duplicate explanation does not currently break the installed workflow, but it increases maintenance cost and the chance of future wording drift.
+- **Suggested Investigation**: Confirm whether one installed document can become the single source of truth for this explanation without changing runtime behavior.
+
+### WS-004: Codex hook carrier ownership remains ambiguous in the installed temp project
+
+- **Category**: cli-adaptation
+- **Severity Estimate**: P1
+- **Repair Classification**: evidence-gap
+- **Origin**: trellis-native
+- **Evidence Layer**: generated-target-runtime
+- **Evidence**:
+  - `.codex/hooks.json` references a generic hook helper entry rather than naming the resolved installed carrier path directly
+  - `.trellis/workflow.md` says the Codex workflow adaptation should be active in the temp project
+  - The available temp-project evidence does not yet prove whether the active runtime resolves that helper through the workflow-managed carrier or a Trellis-native baseline surface
+- **Temp Project Location**: .codex/hooks.json and .trellis/workflow.md
+- **Description**: The installed carrier wiring looks suspicious, but the scan cannot yet prove a broken route or whether the root cause belongs to workflow-source or Trellis-native ownership.
+- **Suggested Investigation**: Re-check the installed hook/config surfaces and, if needed, exercise the Codex hook resolution path in the temp project before deciding whether a workflow-source repair is warranted.
 ```
 
 Intentionally disabled compatibility carriers are not shown in the example
 above because they should be omitted from the finding set unless another
-installed surface contradicts the disabled contract.
+installed surface contradicts the disabled contract. The example still keeps
+one `design-debt` item and one `evidence-gap` item so all three repair
+classification classes remain visible.
 
 ---
 

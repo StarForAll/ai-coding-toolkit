@@ -8,6 +8,9 @@ compatibility: Requires `trellis` on PATH, access to the temp project fixture, l
 
 ## Version History
 
+- **v3.4**: Clarified that the complete-catalog rule excludes contradiction-
+  free intentionally disabled retained carriers per rule 17, and restored
+  design-debt / evidence-gap coverage in the shared output example
 - **v3.3**: Clarified that a retained carrier explicitly documented as
   temporarily unavailable or intentionally disabled is omitted from
   `WORKFLOW_QUESTIONS.md` unless another installed surface contradicts that
@@ -134,8 +137,11 @@ Use this skill when any of the following is true:
    `Evidence Layer` value grounded in the temp project's actual state.
 12. **Conservative severity**: severity estimates are preliminary, set by the
    scan running in isolation before repair. Mark explicitly as estimates.
-13. **Complete catalog**: every anomaly discovered must be recorded. Do not
-   filter by severity during the scan phase.
+13. **Complete final finding set**: every anomaly that belongs in the final
+   finding set must be recorded. Do not filter that finding set by severity
+   during the scan phase. Intentionally disabled retained carriers without
+   contradictions may still be inspected during analysis, but rule 17 keeps
+   them out of the final finding set.
 14. **Origin classification is mandatory**: every finding must classify as
    either `trellis-native` (produced by `trellis init`) or `workflow-source`
    (introduced by the embedded workflow's install/patch layer).
