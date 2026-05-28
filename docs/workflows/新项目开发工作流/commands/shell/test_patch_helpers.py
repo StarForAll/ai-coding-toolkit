@@ -367,47 +367,28 @@ class PatchHelperScriptTests(unittest.TestCase):
     def test_patch_opencode_inject_subagent_context_adds_block_feedback(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="opencode-subagent-guard-"))
         self.addCleanup(shutil.rmtree, root)
-        target = root / "inject-subagent-context.js"
-        target.write_text(
-            'const ACTIVE_TASK_HINT_RE = /^\\s*Active task:\\s*(\\S+)\\s*$/m\n'
-            'import { join } from "path"\n'
-            "function injectTrellisContextIntoBash(ctx, input, output, hostPlatform, env) {\n"
-            "  const args = output?.args\n"
-            "  const commandKey = getBashCommandKey(args)\n"
-            "  if (!commandKey) return false\n"
-            "  const command = args[commandKey]\n"
-            "  if (!command.trim()) return false\n"
-            "  if (commandStartsWithTrellisContext(command)) return false\n"
-            "  const contextKey = ctx.getContextKey(input)\n"
-            "  if (!contextKey) return false\n"
-            "  args[commandKey] = `${buildTrellisContextPrefix(contextKey, hostPlatform, env)}${command}`\n"
-            "  return true\n"
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node is required for OpenCode plugin runtime verification")
+
+        (root / "package.json").write_text('{"type":"module"}\n', encoding="utf-8")
+        (root / "plugins").mkdir(parents=True, exist_ok=True)
+        (root / "lib").mkdir(parents=True, exist_ok=True)
+        (root / "lib" / "trellis-context.js").write_text(
+            "export class TrellisContext {\n"
+            "  constructor(directory) { this.directory = directory }\n"
+            "  getContextKey() { return null }\n"
+            "  readContext() { return null }\n"
+            "  normalizeTaskRef(taskRef) { return taskRef }\n"
+            "  resolveTaskDir(taskRef) { return taskRef }\n"
+            "  _resolveSingleSessionFallback() { return null }\n"
             "}\n"
-            "async function before(ctx, input, output) {\n"
-            "  const args = output?.args\n"
-            "  const rawSubagentType = args.subagent_type\n"
-            "  const subagentType = (rawSubagentType || '').replace(/^trellis-/, '')\n"
-            "  const originalPrompt = args.prompt || ''\n"
-            "  let taskDir = null\n"
-            "  const fallback = ctx._resolveSingleSessionFallback()\n"
-            "  if (fallback?.taskPath) {\n"
-            "    const fallbackDir = ctx.resolveTaskDir(fallback.taskPath)\n"
-            "    if (fallbackDir) {\n"
-            "      taskDir = fallback.taskPath\n"
-            "    }\n"
-            "  }\n"
-            "          if (!taskDir) {\n"
-            "            const fallback = ctx._resolveSingleSessionFallback()\n"
-            "            if (fallback?.taskPath) {\n"
-            "              const fallbackDir = ctx.resolveTaskDir(fallback.taskPath)\n"
-            "              if (fallbackDir && existsSync(fallbackDir)) {\n"
-            "                taskDir = fallback.taskPath\n"
-            "                taskSource = fallback.source\n"
-            "                debugLog(\"inject\", \"Resolved task via single-session fallback:\", taskDir, \"source:\", taskSource)\n"
-            "              }\n"
-            "            }\n"
-            "          }\n"
-            "}\n",
+            "export function debugLog() {}\n",
+            encoding="utf-8",
+        )
+        target = root / "plugins" / "inject-subagent-context.js"
+        target.write_text(
+            (REPO_ROOT / ".opencode" / "plugins" / "inject-subagent-context.js").read_text(encoding="utf-8"),
             encoding="utf-8",
         )
 
@@ -424,13 +405,105 @@ class PatchHelperScriptTests(unittest.TestCase):
         self.assertTrue(applied, "OpenCode subagent patch should apply to the fixture")
 
         patched = target.read_text(encoding="utf-8")
+        self.assertIn('const STRONG_GATE_BLOCKED_ERROR_NAME = "TrellisStrongGateBlockedError"', patched)
         self.assertIn("buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt)", patched)
+        self.assertIn("buildBlockedSubagentError(routeData, subagentType, originalPrompt)", patched)
         self.assertIn("Strong-gate blocked this subagent dispatch.", patched)
         self.assertIn("current embedded workflow disables agent/subagent execution paths", patched)
         self.assertIn("JSON.parse(raw)", patched)
-        self.assertIn("args.prompt = buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt)", patched)
-        self.assertIn("return false", patched)
+        self.assertIn("Embedded workflow keeps all Task-based subagent execution disabled.", patched)
+        self.assertIn("blockedError.name = STRONG_GATE_BLOCKED_ERROR_NAME", patched)
+        self.assertIn("throw blockedError", patched)
+        self.assertIn("error.name === STRONG_GATE_BLOCKED_ERROR_NAME", patched)
+        self.assertIn("throw error", patched)
         self.assertNotIn(': "unknown"', patched)
+
+        runner = root / "runner.mjs"
+        runner.write_text(
+            "import { pathToFileURL } from 'node:url'\n"
+            "const [pluginPath, directory] = process.argv.slice(2)\n"
+            "const mod = await import(pathToFileURL(pluginPath).href)\n"
+            "const hooks = await mod.default({ directory, platform: process.platform, env: process.env })\n"
+            "try {\n"
+            "  await hooks['tool.execute.before'](\n"
+            "    { tool: 'task' },\n"
+            "    { args: { subagent_type: 'trellis-check', prompt: 'run checks' } },\n"
+            "  )\n"
+            "  console.log(JSON.stringify({ status: 'no-throw' }))\n"
+            "} catch (error) {\n"
+            "  console.log(JSON.stringify({ status: 'threw', name: error?.name || '', message: String(error?.message || '') }))\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        runtime = subprocess.run(
+            [node, str(runner), str(target), str(root)],
+            cwd=root,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(runtime.returncode, 0, msg=runtime.stdout + runtime.stderr)
+        payload = json.loads(runtime.stdout.strip())
+        self.assertEqual(payload["status"], "threw")
+        self.assertEqual(payload["name"], "TrellisStrongGateBlockedError")
+        self.assertIn("Strong-gate blocked this subagent dispatch.", payload["message"])
+
+    def test_patch_opencode_inject_subagent_context_upgrades_intermediate_route_guard(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="opencode-subagent-intermediate-"))
+        self.addCleanup(shutil.rmtree, root)
+        target = root / "inject-subagent-context.js"
+        target.write_text(
+            'const ACTIVE_TASK_HINT_RE = /^\\s*Active task:\\s*(\\S+)\\s*$/m\n'
+            'import { join } from "path"\n'
+            'import { execFileSync } from "child_process"\n'
+            "function injectTrellisContextIntoBash(ctx, input, output, hostPlatform, env) {\n"
+            "  return true\n"
+            "}\n"
+            "async function before(ctx, input, output) {\n"
+            "  const args = output?.args\n"
+            "  const subagentType = 'check'\n"
+            "  const originalPrompt = args.prompt || ''\n"
+            "  let taskDir = null\n"
+            "          if (!taskDir) {\n"
+            "            const fallback = ctx._resolveSingleSessionFallback()\n"
+            "            if (fallback?.taskPath) {\n"
+            "              const fallbackDir = ctx.resolveTaskDir(fallback.taskPath)\n"
+            "              if (fallbackDir && existsSync(fallbackDir)) {\n"
+            "                taskDir = fallback.taskPath\n"
+            "                taskSource = fallback.source\n"
+            "                debugLog(\"inject\", \"Resolved task via single-session fallback:\", taskDir, \"source:\", taskSource)\n"
+            "              }\n"
+            "            }\n"
+            "          }\n"
+            "          const routeData = taskDir ? loadRouteData(ctx, ctx.resolveTaskDir(taskDir)) : null\n"
+            "          if (!shouldAllowTaskInjection(routeData, subagentType)) {\n"
+            "            const blockedMessage = buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt)\n"
+            "            debugLog(\"inject\", \"Skipping - strong-gate route does not allow subagent injection\", JSON.stringify(routeData))\n"
+            "            throw new Error(blockedMessage)\n"
+            "          }\n"
+            "        } catch (error) {\n"
+            "          debugLog(\"inject\", \"Error in tool.execute.before:\", error.message, error.stack)\n"
+            "        }\n"
+            "}\n",
+            encoding="utf-8",
+        )
+
+        spec = importlib.util.spec_from_file_location(
+            "patch_opencode_inject_subagent_context",
+            SHELL_DIR / "patch-opencode-inject-subagent-context.py",
+        )
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        applied = module.patch_opencode_inject_subagent_context(target)
+        self.assertTrue(applied, "OpenCode subagent patch should upgrade intermediate guard")
+
+        patched = target.read_text(encoding="utf-8")
+        self.assertIn("buildBlockedSubagentError(routeData, subagentType, originalPrompt)", patched)
+        self.assertIn("throw blockedError", patched)
+        self.assertNotIn("throw new Error(blockedMessage)", patched)
 
     def test_patch_claude_inject_subagent_context_blocks_dispatch(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="claude-subagent-guard-"))

@@ -373,6 +373,8 @@ Compatibility code should therefore:
      - patch helpers that modify target-project Python function bodies must preserve the target function's leading docstring and baseline-compatible introspection/read surface unless the workflow contract explicitly retires that surface
      - retired helper names that are no longer workflow-managed must be tracked in shared asset definitions so `upgrade-compat.py --check` can flag stale deployed residue and `--merge` can remove it
      - if a helper becomes a required phase gate, the relevant walkthrough / mapping docs must mention the validation command
+     - route-driven breadcrumb status/action keys emitted into installed carriers must stay within the breadcrumb tag charset that the workflow patch source advertises (currently `[A-Za-z0-9_-]+`) unless the workflow patch source, installed carrier parsers, and regression tests are widened together in the same change
+     - for OpenCode `tool.execute.before` strong-gate blockers, prompt rewrite alone is not a valid stop condition; the embedded workflow must terminate the Task call itself (for example by throwing an error that escapes the plugin hook), and integrity / upgrade checks must verify that execution-stop behavior rather than only text-fragment presence
 
 6. **Patch-based shared workflow document**
    - current known set:

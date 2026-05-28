@@ -8,6 +8,9 @@ compatibility: Requires `trellis` on PATH, access to the temp project report plu
 
 ## Version History
 
+- **v3.4**: Required behavior-level closure verification for runtime-carrier /
+  runtime-patch stop semantics so closure can no longer rely on
+  marker/text-only checks for those repair families
 - **v3.3**: Added cross-task repair-lineage escalation so a third ordinary
   repair attempt on the same temp-project/report lineage stops as
   `needs-audit` instead of continuing the incremental discovery loop
@@ -751,6 +754,10 @@ After source-side verification succeeds for the applied fixes:
    - install / upgrade / cleanup / runtime-patch logic → add
      `existing-trellis-outsourcing-all-cli` and
      `existing-workflow-outsourcing-all-cli`
+   - if the touched runtime-patch family changes a blocked / deny / route-stop
+     contract in an installed carrier, at least one closure scenario must
+     include a behavior-level assertion against that installed carrier path;
+     marker/text presence alone is insufficient for convergence
 4. Write one `closure-round-<N>.md` artifact for each closure round.
 5. For every closure finding:
    - assign a task-local closure ID such as `CR1-F01`
@@ -1115,6 +1122,7 @@ that cover the affected runtime surfaces.
 - `tests/61-third-repair-task-same-lineage-escalates-to-needs-audit.md`
 - `tests/62-legacy-repair-log-fallback-still-catches-lineage-loop.md`
 - `tests/63-version-bump-does-not-reset-repair-lineage.md`
+- `tests/64-closure-runtime-patch-requires-behavior-verification.md`
 
 ## Examples
 

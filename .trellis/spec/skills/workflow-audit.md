@@ -183,6 +183,12 @@ Use `workflow-audit` when the user wants to:
 - validate workflow embed/install behavior against a `/tmp + trellis init` baseline
 - verify CLI adaptation or Codex handoff boundaries
 
+When a temp-project workflow issue reappears after one or more scan/repair
+rounds, use the repo-level
+`guides/workflow-repeat-issue-triage.md` first to decide whether the current
+branch is same-lineage same-family recurrence, a new family on the same
+lineage, or a version-drift path.
+
 Do not use it for normal code review or ordinary product implementation tasks.
 Do not use it to determine whether a newer or older Trellis version is compatible with the workflow; that is `workflow-capability-audit`.
 

@@ -323,12 +323,19 @@ def detect_runtime_patch_contract_conflicts(root: Path, cli_types: list[str]) ->
             plugin_content = opencode_subagent_plugin.read_text(encoding="utf-8")
             if (
                 _OPENCODE_INJECT_SUBAGENT_CONTEXT_PATCH_MARKER in plugin_content
+                and 'const STRONG_GATE_BLOCKED_ERROR_NAME = "TrellisStrongGateBlockedError"' in plugin_content
                 and "shouldAllowTaskInjection(" in plugin_content
+                and "Embedded workflow keeps all Task-based subagent execution disabled." in plugin_content
                 and "loadRouteData(" in plugin_content
                 and "buildBlockedSubagentPrompt(" in plugin_content
+                and "buildBlockedSubagentError(" in plugin_content
                 and "Strong-gate blocked this subagent dispatch." in plugin_content
                 and "JSON.parse(raw)" in plugin_content
                 and "normalizeRouteItems(" in plugin_content
+                and "blockedError.name = STRONG_GATE_BLOCKED_ERROR_NAME" in plugin_content
+                and "throw blockedError" in plugin_content
+                and "error.name === STRONG_GATE_BLOCKED_ERROR_NAME" in plugin_content
+                and "throw error" in plugin_content
             ):
                 ok("[OpenCode] inject-subagent-context.js: 强门禁子代理补丁已应用")
             else:

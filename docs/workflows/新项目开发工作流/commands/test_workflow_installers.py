@@ -27,6 +27,11 @@ PYTHON = (
     if Path("/ops/softwares/python/bin/python3").exists()
     else shutil.which("python3") or shutil.which("python")
 )
+NODE = (
+    "/ops/softwares/nodeNpm/nodejs/bin/node"
+    if Path("/ops/softwares/nodeNpm/nodejs/bin/node").exists()
+    else shutil.which("node")
+)
 COMMANDS_DIR = REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "commands"
 INSTALL_SCRIPT = COMMANDS_DIR / "install-workflow.py"
 DETECT_EMBED_STATE_SCRIPT = COMMANDS_DIR / "detect-embed-state.py"
@@ -1437,10 +1442,10 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("use_action_status =", claude_inject)
         self.assertIn('extra_lines.append(f"Stage: {route_stage}")', claude_inject)
         self.assertIn('route_stage_status = route_data.get("status", "")', claude_inject)
-        self.assertIn("workflow-state.route_failed", claude_inject)
+        self.assertIn("workflow-state-route-failed", claude_inject)
         self.assertNotIn("fall back to task.json status", claude_inject)
         codex_inject = (fixture / ".codex" / "hooks" / "inject-workflow-state.py").read_text(encoding="utf-8")
-        self.assertIn("workflow-state.route_failed", codex_inject)
+        self.assertIn("workflow-state-route-failed", codex_inject)
         self.assertNotIn("fall back to task.json status", codex_inject)
         opencode_session_utils = (fixture / ".opencode" / "lib" / "session-utils.js").read_text(encoding="utf-8")
         self.assertIn(OPENCODE_SESSION_UTILS_PATCH_MARKER, opencode_session_utils)
@@ -1451,18 +1456,24 @@ class WorkflowInstallerTests(unittest.TestCase):
         opencode_subagent_path = fixture / ".opencode" / "plugins" / "inject-subagent-context.js"
         if opencode_subagent_path.exists():
             opencode_subagent = opencode_subagent_path.read_text(encoding="utf-8")
+            self.assertIn('const STRONG_GATE_BLOCKED_ERROR_NAME = "TrellisStrongGateBlockedError"', opencode_subagent)
             self.assertIn("buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt)", opencode_subagent)
+            self.assertIn("buildBlockedSubagentError(routeData, subagentType, originalPrompt)", opencode_subagent)
             self.assertIn("Strong-gate blocked this subagent dispatch.", opencode_subagent)
             self.assertIn("current embedded workflow disables agent/subagent execution paths", opencode_subagent)
             self.assertIn("JSON.parse(raw)", opencode_subagent)
-            self.assertIn("return false", opencode_subagent)
+            self.assertIn("Embedded workflow keeps all Task-based subagent execution disabled.", opencode_subagent)
+            self.assertIn("blockedError.name = STRONG_GATE_BLOCKED_ERROR_NAME", opencode_subagent)
+            self.assertIn("throw blockedError", opencode_subagent)
+            self.assertIn("error.name === STRONG_GATE_BLOCKED_ERROR_NAME", opencode_subagent)
+            self.assertIn("throw error", opencode_subagent)
         opencode_inject_path = fixture / ".opencode" / "plugins" / "inject-workflow-state.js"
         if opencode_inject_path.exists():
             opencode_inject = opencode_inject_path.read_text(encoding="utf-8")
             self.assertIn("ACTION_BREADCRUMB_KEYS", opencode_inject)
             self.assertIn('const PYTHON_CMD = process.env.TRELLIS_PYTHON || "python3"', opencode_inject)
             self.assertNotIn("if (!rawStatus) return null", opencode_inject)
-            self.assertIn("workflow-state.route_failed", opencode_inject)
+            self.assertIn("workflow-state-route-failed", opencode_inject)
             self.assertNotIn("fall back to task.json status", opencode_inject)
         record = fixture / ".trellis" / "workflow-installed.json"
         self.assertTrue(record.exists(), "workflow-installed.json should be created")
@@ -3885,6 +3896,57 @@ function buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt) {
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("inject-subagent-context.js", combined)
         self.assertIn("强门禁子代理补丁缺失或不完整", combined)
+
+    def test_upgrade_check_detects_opencode_subagent_patch_without_hard_stop(self) -> None:
+        fixture = self.create_fixture(include_opencode=True)
+        self.addCleanup(shutil.rmtree, fixture)
+
+        install = self.install_workflow(fixture)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+
+        plugin_path = fixture / ".opencode" / "plugins" / "inject-subagent-context.js"
+        plugin_path.parent.mkdir(parents=True, exist_ok=True)
+        plugin_path.write_text(
+            """// [workflow-embed-patch:opencode-subagent-gates]
+function normalizeRouteItems(value) {
+  if (Array.isArray(value)) return value
+  if (typeof value === "string" && value.trim()) return value.split(" | ").map(item => item.trim()).filter(Boolean)
+  return []
+}
+function parseRouteStatus(taskStatusText) {
+  const raw = taskStatusText.trim()
+  if (raw.startsWith("{")) return JSON.parse(raw)
+  return null
+}
+function shouldAllowTaskInjection(routeData, subagentType) { return false }
+function loadRouteData(ctx, taskDir) {
+  return parseRouteStatus("{\\"stage\\":\\"implementation\\",\\"action\\":\\"reenter\\",\\"target\\":\\"implementation\\"}")
+}
+function buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt) {
+  return "Strong-gate blocked this subagent dispatch."
+}
+const allowedStages = new Set(["implementation", "check", "review-gate", "project-audit", "delivery"])
+loadRouteData(ctx, ctx.resolveTaskDir(taskDir))
+args.prompt = buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt)
+debugLog("inject", "Skipping - strong-gate route does not allow subagent injection", JSON.stringify(routeData))
+""",
+            encoding="utf-8",
+        )
+        (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
+
+        result = self.run_script(
+            UPGRADE_SCRIPT,
+            "--check",
+            "--project-root",
+            str(fixture),
+            env=self.latest_env_for(fixture),
+        )
+
+        combined = result.stdout + result.stderr
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("inject-subagent-context.js", combined)
+        self.assertIn("强门禁子代理补丁缺失或不完整", combined)
+
 
     def test_upgrade_check_detects_embed_attempt_record_conflict(self) -> None:
         fixture = self.create_fixture()

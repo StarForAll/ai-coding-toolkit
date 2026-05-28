@@ -316,13 +316,19 @@ def _js_runtime_contract_errors(
             )
     elif patch_name == "opencode-inject-subagent-context":
         required_fragments = (
+            'const STRONG_GATE_BLOCKED_ERROR_NAME = "TrellisStrongGateBlockedError"',
             "function shouldAllowTaskInjection(routeData, subagentType)",
+            "Embedded workflow keeps all Task-based subagent execution disabled.",
             "function loadRouteData(ctx, taskDir)",
             "function buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt)",
-            'const allowedStages = new Set(["implementation", "check", "review-gate", "project-audit", "delivery"])',
+            "function buildBlockedSubagentError(routeData, subagentType, originalPrompt)",
             "loadRouteData(ctx, ctx.resolveTaskDir(taskDir))",
             "Strong-gate blocked this subagent dispatch.",
             "strong-gate route does not allow subagent injection",
+            "blockedError.name = STRONG_GATE_BLOCKED_ERROR_NAME",
+            "throw blockedError",
+            "error.name === STRONG_GATE_BLOCKED_ERROR_NAME",
+            "throw error",
         )
         for fragment in required_fragments:
             if fragment in content:

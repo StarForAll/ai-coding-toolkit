@@ -501,6 +501,8 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "    return None\n"
             "# Strong-gate blocked this subagent dispatch.\n"
             "# current embedded workflow disables agent/subagent execution paths\n"
+            '# "permissionDecision": "deny"\n'
+            '# "permission": "deny"\n'
             "_emit_blocked_subagent_output(subagent_type, original_prompt, tool_input)\n",
             encoding="utf-8",
         )
@@ -3198,6 +3200,8 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "    return None\n"
             "# Strong-gate blocked this subagent dispatch.\n"
             "# current embedded workflow disables agent/subagent execution paths\n"
+            '# "permissionDecision": "deny"\n'
+            '# "permission": "deny"\n'
             "_emit_blocked_subagent_output(subagent_type, original_prompt, tool_input)\n",
             encoding="utf-8",
         )
@@ -4886,6 +4890,8 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "    return None\n"
             "# Strong-gate blocked this subagent dispatch.\n"
             "# current embedded workflow disables agent/subagent execution paths\n"
+            '# "permissionDecision": "deny"\n'
+            '# "permission": "deny"\n'
             "_emit_blocked_subagent_output(subagent_type, original_prompt, tool_input)\n",
             encoding="utf-8",
         )
@@ -4972,6 +4978,8 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "    return None\n"
             "# Strong-gate blocked this subagent dispatch.\n"
             "# current embedded workflow disables agent/subagent execution paths\n"
+            '# "permissionDecision": "deny"\n'
+            '# "permission": "deny"\n'
             "_emit_blocked_subagent_output(subagent_type, original_prompt, tool_input)\n",
             encoding="utf-8",
         )
@@ -5048,6 +5056,8 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "    return None\n"
             "# Strong-gate blocked this subagent dispatch.\n"
             "# current embedded workflow disables agent/subagent execution paths\n"
+            '# "permissionDecision": "deny"\n'
+            '# "permission": "deny"\n'
             "_emit_blocked_subagent_output(subagent_type, original_prompt, tool_input)\n",
             encoding="utf-8",
         )
@@ -5198,7 +5208,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (root / ".opencode" / "plugins").mkdir(parents=True, exist_ok=True)
         (root / ".opencode" / "plugins" / "inject-workflow-state.js").write_text(
             "// [workflow-embed-patch:prefer-workflow-state-json]\n"
-            "function getActiveTask() { return { status: 'workflow-state.route_failed', source: 'workflow-state.route_failed', extraLines: [] } }\n"
+            "function getActiveTask() { return { status: 'workflow-state-route-failed', source: 'workflow-state-route-failed', extraLines: [] } }\n"
             "function buildBreadcrumb(id, status, templates, source = null, extraLines = []) { return status }\n",
             encoding="utf-8",
         )
@@ -5209,13 +5219,19 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
         (root / ".opencode" / "plugins" / "inject-subagent-context.js").write_text(
             "// [workflow-embed-patch:opencode-subagent-gates]\n"
+            "function normalizeRouteItems(value) { return Array.isArray(value) ? value : [] }\n"
+            "function buildBlockedSubagentError(routeData, subagentType, originalPrompt) { return new Error(originalPrompt) }\n"
             "function buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt) { return originalPrompt }\n"
             "function shouldAllowTaskInjection(routeData, subagentType) { return subagentType !== \"forbidden\" }\n"
             "function loadRouteData(ctx, taskDir) { return { stage: \"implementation\", action: \"reenter\", target: \"implementation\" } }\n"
-            "const allowedStages = new Set([\"implementation\", \"check\", \"review-gate\", \"project-audit\", \"delivery\"])\n"
+            "const STRONG_GATE_BLOCKED_ERROR_NAME = \"TrellisStrongGateBlockedError\"\n"
             "loadRouteData(ctx, ctx.resolveTaskDir(taskDir))\n"
             "Strong-gate blocked this subagent dispatch.\n"
-            "strong-gate route does not allow subagent injection\n",
+            "const blockedError = buildBlockedSubagentError(routeData, subagentType, originalPrompt)\n"
+            "blockedError.name = STRONG_GATE_BLOCKED_ERROR_NAME\n"
+            "throw blockedError\n"
+            "strong-gate route does not allow subagent injection\n"
+            "if (error instanceof Error && error.name === STRONG_GATE_BLOCKED_ERROR_NAME) { throw error }\n",
             encoding="utf-8",
         )
 
@@ -5225,6 +5241,91 @@ class WorkflowStateScriptTests(unittest.TestCase):
         data = json.loads(result.stdout)
         self.assertEqual(data["action"], "embed_invalid")
         self.assertIn("execFileSync", data["reason"])
+
+    def test_cmd_route_embed_invalid_when_opencode_subagent_patch_lacks_hard_stop(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "scripts" / "common").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            json.dumps(
+                {
+                    "profile": "outsourcing",
+                    "cli_types": ["opencode"],
+                    "critical_runtime_patches": [
+                        "inject-workflow-state",
+                        "opencode-inject-subagent-context",
+                        "session-start-strong-gate",
+                        "task-start-strong-gate",
+                        "task-create-preserve-active",
+                        "task-status-view-strong-gate",
+                        "workflow-phase-strong-gate",
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "library-lock.yaml").write_text(
+            "packs:\n  - pack.requirements-discovery-foundation\n",
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "task.py").write_text(
+            self.STRONG_GATE_TASK_PY,
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_store.py").write_text(
+            self.STRONG_GATE_TASK_STORE,
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "tasks.py").write_text(
+            self.STRONG_GATE_TASKS,
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "task_queue.py").write_text(
+            self.STRONG_GATE_TASK_QUEUE,
+            encoding="utf-8",
+        )
+        (root / ".trellis" / "scripts" / "common" / "workflow_phase.py").write_text(
+            self.STRONG_GATE_WORKFLOW_PHASE,
+            encoding="utf-8",
+        )
+        (root / ".opencode" / "plugins").mkdir(parents=True, exist_ok=True)
+        (root / ".opencode" / "plugins" / "inject-workflow-state.js").write_text(
+            "// [workflow-embed-patch:prefer-workflow-state-json]\n"
+            'import { execFileSync } from "child_process"\n'
+            'const PYTHON_CMD = process.env.TRELLIS_PYTHON || "python3"\n'
+            "function buildBreadcrumb(id, status, templates, source = null, extraLines = []) { const task = { extraLines }; return status + task.extraLines.join(\"\\n\") }\n",
+            encoding="utf-8",
+        )
+        (root / ".opencode" / "lib").mkdir(parents=True, exist_ok=True)
+        (root / ".opencode" / "lib" / "session-utils.js").write_text(
+            "// [workflow-embed-patch:strong-gate-session-utils]\n",
+            encoding="utf-8",
+        )
+        (root / ".opencode" / "plugins" / "inject-subagent-context.js").write_text(
+            "// [workflow-embed-patch:opencode-subagent-gates]\n"
+            "function normalizeRouteItems(value) { return Array.isArray(value) ? value : [] }\n"
+            "function parseRouteStatus(taskStatusText) { const raw = taskStatusText.trim(); if (raw.startsWith(\"{\")) return JSON.parse(raw); return null }\n"
+            "function buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt) { return originalPrompt }\n"
+            "function shouldAllowTaskInjection(routeData, subagentType) { return subagentType !== \"forbidden\" }\n"
+            "function loadRouteData(ctx, taskDir) { return { stage: \"implementation\", action: \"reenter\", target: \"implementation\" } }\n"
+            "const allowedStages = new Set([\"implementation\", \"check\", \"review-gate\", \"project-audit\", \"delivery\"])\n"
+            "loadRouteData(ctx, ctx.resolveTaskDir(taskDir))\n"
+            "Strong-gate blocked this subagent dispatch.\n"
+            "strong-gate route does not allow subagent injection\n"
+            "args.prompt = buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt)\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_script("route", "--project-root", str(root))
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["action"], "embed_invalid")
+        self.assertIn("blockedError.name = STRONG_GATE_BLOCKED_ERROR_NAME", data["reason"])
 
     def test_cmd_route_embed_invalid_when_opencode_subagent_patch_is_missing(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
@@ -5600,6 +5701,8 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "    return None\n"
             "# Strong-gate blocked this subagent dispatch.\n"
             "# current embedded workflow disables agent/subagent execution paths\n"
+            '# "permissionDecision": "deny"\n'
+            '# "permission": "deny"\n'
             "_emit_blocked_subagent_output(subagent_type, original_prompt, tool_input)\n",
             encoding="utf-8",
         )
@@ -5627,13 +5730,20 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
         (root / ".opencode" / "plugins" / "inject-subagent-context.js").write_text(
             "// [workflow-embed-patch:opencode-subagent-gates]\n"
+            "function normalizeRouteItems(value) { return Array.isArray(value) ? value : [] }\n"
+            "function parseRouteStatus(taskStatusText) { const raw = taskStatusText.trim(); if (raw.startsWith(\"{\")) return JSON.parse(raw); return null }\n"
+            "const STRONG_GATE_BLOCKED_ERROR_NAME = \"TrellisStrongGateBlockedError\"\n"
+            "function buildBlockedSubagentError(routeData, subagentType, originalPrompt) { const blockedError = new Error(originalPrompt); blockedError.name = STRONG_GATE_BLOCKED_ERROR_NAME; return blockedError }\n"
             "function buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt) { return originalPrompt }\n"
             "function shouldAllowTaskInjection(routeData, subagentType) { return subagentType !== \"forbidden\" }\n"
             "function loadRouteData(ctx, taskDir) { return { stage: \"implementation\", action: \"reenter\", target: \"implementation\" } }\n"
-            "const allowedStages = new Set([\"implementation\", \"check\", \"review-gate\", \"project-audit\", \"delivery\"])\n"
             "loadRouteData(ctx, ctx.resolveTaskDir(taskDir))\n"
             "Strong-gate blocked this subagent dispatch.\n"
-            "strong-gate route does not allow subagent injection\n",
+            "Embedded workflow keeps all Task-based subagent execution disabled.\n"
+            "const blockedError = buildBlockedSubagentError(routeData, subagentType, originalPrompt)\n"
+            "throw blockedError\n"
+            "strong-gate route does not allow subagent injection\n"
+            "if (error instanceof Error && error.name === STRONG_GATE_BLOCKED_ERROR_NAME) { throw error }\n",
             encoding="utf-8",
         )
         (root / ".trellis" / "scripts" / "task.py").write_text(

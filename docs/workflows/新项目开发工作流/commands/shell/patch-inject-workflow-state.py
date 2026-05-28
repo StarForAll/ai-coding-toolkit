@@ -53,7 +53,7 @@ PY_GET_ACTIVE_TASK_BLOCK = """_ACTION_BREADCRUMB_KEYS = {
     "repair_needed",
     "recovery_needed",
     "embed_invalid",
-    "workflow-state.route_failed",
+    "workflow-state-route-failed",
 }
 
 
@@ -164,8 +164,8 @@ def get_active_task(root: Path, input_data: dict) -> Optional[tuple[str, str, st
             )
         route_source = \"workflow-state.route\"
     elif route_error:
-        status = \"workflow-state.route_failed\"
-        route_source = \"workflow-state.route_failed\"
+        status = \"workflow-state-route-failed\"
+        route_source = \"workflow-state-route-failed\"
         extra_lines.append(f\"Reason: {route_error}\")
     if not status:
         return None
@@ -225,7 +225,7 @@ JS_GET_ACTIVE_TASK_BLOCK = """const ACTION_BREADCRUMB_KEYS = new Set([
   "repair_needed",
   "recovery_needed",
   "embed_invalid",
-  "workflow-state.route_failed",
+  "workflow-state-route-failed",
 ])
 
 function getActiveTask(ctx, platformInput = null) {
@@ -296,8 +296,8 @@ function getActiveTask(ctx, platformInput = null) {
       if (routeWarnings.length > 0) extraLines.push(`Warnings: ${routeWarnings.map(item => String(item)).join(\"; \")}`)
       source = \"workflow-state.route\"
     } catch (error) {
-      status = "workflow-state.route_failed"
-      source = "workflow-state.route_failed"
+      status = "workflow-state-route-failed"
+      source = "workflow-state-route-failed"
       extraLines.push(`Reason: ${String(error).split("\\n").pop()}`)
     }
   }
@@ -366,7 +366,7 @@ PY_BASELINE_ROUTE_SNIPPET = """# [workflow-embed-patch:prefer-workflow-state-jso
                     "repair_needed",
                     "recovery_needed",
                     "embed_invalid",
-                    "workflow-state.route_failed",
+                    "workflow-state-route-failed",
                 }
                 if use_action_status:
                     status = route_action
@@ -388,13 +388,13 @@ PY_BASELINE_ROUTE_SNIPPET = """# [workflow-embed-patch:prefer-workflow-state-jso
                     extra_lines.append("Warnings: " + "; ".join(str(item) for item in route_warnings))
                 route_source = "workflow-state.route"
             elif route_result.returncode != 0:
-                status = "workflow-state.route_failed"
-                route_source = "workflow-state.route_failed"
+                status = "workflow-state-route-failed"
+                route_source = "workflow-state-route-failed"
                 stderr_summary = route_result.stderr.strip() or route_result.stdout.strip() or "workflow-state.py route returned non-zero"
                 extra_lines.append(f"Reason: {stderr_summary.splitlines()[-1]}")
         except Exception as exc:
-            status = "workflow-state.route_failed"
-            route_source = "workflow-state.route_failed"
+            status = "workflow-state-route-failed"
+            route_source = "workflow-state-route-failed"
             extra_lines.append(f"Reason: {type(exc).__name__}: {exc}")
     return task_id, status, route_source, extra_lines
 """
@@ -436,7 +436,7 @@ JS_BASELINE_ROUTE_SNIPPET = """  // [workflow-embed-patch:prefer-workflow-state-
         "repair_needed",
         "recovery_needed",
         "embed_invalid",
-        "workflow-state.route_failed",
+        "workflow-state-route-failed",
       ]).has(routeAction)
       if (useActionStatus) {
         status = routeAction
@@ -453,8 +453,8 @@ JS_BASELINE_ROUTE_SNIPPET = """  // [workflow-embed-patch:prefer-workflow-state-
       if (routeWarnings.length > 0) extraLines.push(`Warnings: ${routeWarnings.map(item => String(item)).join("; ")}`)
       source = "workflow-state.route"
     } catch (error) {
-      status = "workflow-state.route_failed"
-      source = "workflow-state.route_failed"
+      status = "workflow-state-route-failed"
+      source = "workflow-state-route-failed"
       extraLines.push(`Reason: ${String(error).split("\\n").pop()}`)
     }
   }

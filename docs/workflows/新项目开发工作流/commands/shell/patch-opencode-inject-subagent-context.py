@@ -17,6 +17,7 @@ ROUTE_HELPER_BLOCK_RE = re.compile(
 
 ROUTE_HELPER_BLOCK = """// [workflow-embed-patch:opencode-subagent-gates]
 const PYTHON_CMD = process.platform === "win32" ? "python" : "python3"
+const STRONG_GATE_BLOCKED_ERROR_NAME = "TrellisStrongGateBlockedError"
 
 function normalizeRouteItems(value) {
   if (Array.isArray(value)) {
@@ -68,10 +69,7 @@ function parseRouteStatus(taskStatusText) {
 }
 
 function shouldAllowTaskInjection(routeData, subagentType) {
-  const allowedStages = new Set(["implementation", "check", "review-gate", "project-audit", "delivery"])
-  void routeData
-  void subagentType
-  void allowedStages
+  // Embedded workflow keeps all Task-based subagent execution disabled.
   return false
 }
 
@@ -135,6 +133,26 @@ function buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt) {
   )
   return lines.join("\\n")
 }
+
+function buildBlockedSubagentError(routeData, subagentType, originalPrompt) {
+  const blockedMessage = buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt)
+  const blockedError = new Error(blockedMessage)
+  blockedError.name = STRONG_GATE_BLOCKED_ERROR_NAME
+  return blockedError
+}
+"""
+
+ERROR_HANDLER_OLD = """        } catch (error) {
+          debugLog("inject", "Error in tool.execute.before:", error.message, error.stack)
+        }
+"""
+
+ERROR_HANDLER_NEW = """        } catch (error) {
+          if (error instanceof Error && error.name === STRONG_GATE_BLOCKED_ERROR_NAME) {
+            throw error
+          }
+          debugLog("inject", "Error in tool.execute.before:", error.message, error.stack)
+        }
 """
 
 BASH_INJECTION_OLD = """function injectTrellisContextIntoBash(ctx, input, output, hostPlatform, env) {
@@ -152,6 +170,34 @@ BASH_INJECTION_OLD = """function injectTrellisContextIntoBash(ctx, input, output
   args[commandKey] = `${buildTrellisContextPrefix(contextKey, hostPlatform, env)}${command}`
   return true
 }"""
+
+ROUTE_GUARD_REPLACEMENT = """          const routeData = taskDir ? loadRouteData(ctx, ctx.resolveTaskDir(taskDir)) : null
+          if (!shouldAllowTaskInjection(routeData, subagentType)) {
+            const blockedError = buildBlockedSubagentError(routeData, subagentType, originalPrompt)
+            debugLog("inject", "Skipping - strong-gate route does not allow subagent injection", JSON.stringify(routeData))
+            throw blockedError
+          }
+"""
+
+ROUTE_GUARD_LEGACY_RE = re.compile(
+    r"          const routeData = taskDir \? loadRouteData\(ctx, ctx\.resolveTaskDir\(taskDir\)\) : null\n"
+    r"          if \(!shouldAllowTaskInjection\(routeData, subagentType\)\) \{\n"
+    r"            args\.prompt = buildBlockedSubagentPrompt\(routeData, subagentType, originalPrompt\)\n"
+    r"            debugLog\(\"inject\", \"Skipping - strong-gate route does not allow subagent injection\", JSON\.stringify\(routeData\)\)\n"
+    r"            return\n"
+    r"          \}\n",
+    re.S,
+)
+
+ROUTE_GUARD_INTERMEDIATE_RE = re.compile(
+    r"          const routeData = taskDir \? loadRouteData\(ctx, ctx\.resolveTaskDir\(taskDir\)\) : null\n"
+    r"          if \(!shouldAllowTaskInjection\(routeData, subagentType\)\) \{\n"
+    r"            const blockedMessage = buildBlockedSubagentPrompt\(routeData, subagentType, originalPrompt\)\n"
+    r"            debugLog\(\"inject\", \"Skipping - strong-gate route does not allow subagent injection\", JSON\.stringify\(routeData\)\)\n"
+    r"            throw new Error\(blockedMessage\)\n"
+    r"          \}\n",
+    re.S,
+)
 
 BASH_INJECTION_NEW = """function injectTrellisContextIntoBash(ctx, input, output, hostPlatform, env) {
   const args = output?.args
@@ -171,19 +217,6 @@ BASH_INJECTION_NEW = """function injectTrellisContextIntoBash(ctx, input, output
   args[commandKey] = `${buildTrellisContextPrefix(contextKey, hostPlatform, env)}${command}`
   return true
 }"""
-
-INJECTION_GUARD_OLD = """          if (!AGENTS_ALL.includes(subagentType)) {
-            debugLog("inject", "Skipping - unsupported subagent_type")
-            return
-          }
-"""
-
-INJECTION_GUARD_NEW = """          if (!AGENTS_ALL.includes(subagentType)) {
-            debugLog("inject", "Skipping - unsupported subagent_type")
-            return
-          }
-"""
-
 
 def patch_opencode_inject_subagent_context(target_path: Path) -> bool:
     if not target_path.is_file():
@@ -208,9 +241,6 @@ def patch_opencode_inject_subagent_context(target_path: Path) -> bool:
     if BASH_INJECTION_OLD in patched:
         patched = patched.replace(BASH_INJECTION_OLD, BASH_INJECTION_NEW, 1)
 
-    if INJECTION_GUARD_OLD in patched:
-        patched = patched.replace(INJECTION_GUARD_OLD, INJECTION_GUARD_NEW, 1)
-
     route_guard_anchor = """          if (!taskDir) {
             const fallback = ctx._resolveSingleSessionFallback()
             if (fallback?.taskPath) {
@@ -223,16 +253,15 @@ def patch_opencode_inject_subagent_context(target_path: Path) -> bool:
             }
           }
 """
-    route_guard_insert = route_guard_anchor + """
-          const routeData = taskDir ? loadRouteData(ctx, ctx.resolveTaskDir(taskDir)) : null
-          if (!shouldAllowTaskInjection(routeData, subagentType)) {
-            args.prompt = buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt)
-            debugLog("inject", "Skipping - strong-gate route does not allow subagent injection", JSON.stringify(routeData))
-            return
-          }
-"""
-    if route_guard_anchor in patched and "loadRouteData(ctx, ctx.resolveTaskDir(taskDir))" not in patched:
-        patched = patched.replace(route_guard_anchor, route_guard_insert, 1)
+    if ROUTE_GUARD_INTERMEDIATE_RE.search(patched):
+        patched = ROUTE_GUARD_INTERMEDIATE_RE.sub(ROUTE_GUARD_REPLACEMENT, patched, count=1)
+    elif ROUTE_GUARD_LEGACY_RE.search(patched):
+        patched = ROUTE_GUARD_LEGACY_RE.sub(ROUTE_GUARD_REPLACEMENT, patched, count=1)
+    elif route_guard_anchor in patched and "loadRouteData(ctx, ctx.resolveTaskDir(taskDir))" not in patched:
+        patched = patched.replace(route_guard_anchor, route_guard_anchor + "\n" + ROUTE_GUARD_REPLACEMENT, 1)
+
+    if ERROR_HANDLER_OLD in patched:
+        patched = patched.replace(ERROR_HANDLER_OLD, ERROR_HANDLER_NEW, 1)
 
     if patched == content:
         print(f"✅ {target_path} 已包含 OpenCode strong-gate subagent patch，跳过")

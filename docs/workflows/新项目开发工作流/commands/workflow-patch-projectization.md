@@ -516,10 +516,10 @@ Route action: **embed_invalid** — the installed workflow surface is incomplete
 Stop normal task execution and repair the workflow installation first. Check `.trellis/workflow-installed.json`, `.trellis/library-lock.yaml`, helper scripts, and critical runtime patches before continuing.
 [/workflow-state:embed_invalid]
 
-[workflow-state:workflow-state.route_failed]
-Route action: **workflow-state.route_failed** — the route helper itself failed.
+[workflow-state:workflow-state-route-failed]
+Route action: **workflow-state-route-failed** — the route helper itself failed.
 Do not treat the current stage as trustworthy. Inspect the header `Reason:` line, fix the route helper or its runtime dependency, then retry.
-[/workflow-state:workflow-state.route_failed]
+[/workflow-state:workflow-state-route-failed]
 
 [workflow-state:stale]
 Active task pointer is stale: the session still points at a task directory that no longer exists.

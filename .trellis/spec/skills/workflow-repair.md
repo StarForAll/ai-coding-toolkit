@@ -131,6 +131,16 @@ Before adoption, it must:
 If a finding appears to be a repeat of an earlier repair attempt, the skill must
 escalate rather than reapply the same narrow patch blindly.
 
+Before choosing between another ordinary repair batch and a broader audit path
+for a repeated temp-project issue, consult the repo-level
+`guides/workflow-repeat-issue-triage.md` so the run distinguishes same-family
+recurrence from a truly new family or a version-drift case.
+
+When a repair changes runtime-carrier stop / deny / route semantics, closure
+must include at least one behavior-level assertion against the installed
+carrier path; marker/text presence alone is insufficient for convergence on
+that repair family.
+
 ### 3. Issue-History Discipline
 
 The skill must:

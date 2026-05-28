@@ -37,6 +37,7 @@ These guides help you **ask the right project-specific questions before making c
 |-------|---------|-------------|
 | [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md) | Identify patterns and reduce duplication | When you notice repeated patterns |
 | [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md) | Think through repo boundary changes | Features spanning multiple layers |
+| [Workflow Repeat-Issue Triage Guide](./workflow-repeat-issue-triage.md) | Route repeated temp-project workflow findings without falling into scan/repair loops | When `workflow-scan` findings reappear or lineage/family routing is unclear |
 
 ## Boundary
 
@@ -81,6 +82,15 @@ Keep guides here only when they are:
 - [ ] **You're creating a new validation or sync script** ← Search existing scripts first!
 
 → Read [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md)
+
+### When To Think About Repeated Workflow Findings
+
+- [ ] A temp project reports new issues right after a recent scan/repair cycle
+- [ ] The same lineage keeps producing slightly different runtime-carrier findings
+- [ ] You're unsure whether to use `workflow-audit`, `workflow-repair`, or `workflow-capability-audit`
+- [ ] Closure looked clean, but the installed runtime behavior still seems wrong
+
+→ Read [Workflow Repeat-Issue Triage Guide](./workflow-repeat-issue-triage.md)
 
 ---
 
