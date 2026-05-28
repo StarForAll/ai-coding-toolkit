@@ -24,7 +24,7 @@ Hooks/plugins are the automation layer that connects a platform to Trellis. In s
 | --- | --- |
 | session-start | Optional overview when a session starts, resets, or compacts. |
 | workflow-state | Emits the current strong-gate stage plus route metadata on each user input. |
-| sub-agent context | Injects PRD/spec/research before implementation/check/research agents start. |
+| compatibility carrier context | Injects PRD/spec/research before a retained agent carrier starts, when that carrier is explicitly being used. |
 | shell session bridge | Lets shell commands inherit the same Trellis session identity. |
 
 ## Modification Steps
@@ -56,7 +56,10 @@ python3 ./.trellis/scripts/task.py current --source
 python3 ./.trellis/scripts/task.py validate <task>
 ```
 
-If the task and JSONL are correct, determine whether the platform uses hook/plugin push or agent pull. For hook/plugin push, edit the matching `inject-subagent-context` carrier; for agent pull, edit the agent file.
+If the task and JSONL are correct, determine whether the retained compatibility
+carrier uses hook/plugin push or agent pull. For hook/plugin push, edit the
+matching `inject-subagent-context` carrier; for agent pull, edit the retained
+carrier file.
 
 ## Notes
 

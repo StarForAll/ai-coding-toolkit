@@ -40,14 +40,22 @@ Practical meaning:
 - but the injected header should surface route-only fields such as `action`, `status`, `blockers`, `target`, and `reason`
 - therefore `blocked`, `context_needed`, or `repair_needed` must not look identical to an ordinary `design` / `plan` / `implementation` re-entry
 
-## sub-agent context
+## compatibility carrier context
 
-Implement/check agents still need task context. Trellis has two loading modes:
+Retained agent carriers may still need task context, but in this installed
+workflow they are not the normal execution path.
 
-1. **hook push**: a platform hook injects `prd.md` and the files referenced by `implement.jsonl` / `check.jsonl`.
-2. **agent pull**: the agent definition instructs the agent to read the active task, PRD, and JSONL context after startup.
+If the user is explicitly inspecting a retained compatibility carrier, Trellis
+still has two loading modes for that carrier:
 
-In both modes, JSONL files remain the key interface, but stage routing still comes from `workflow-state.py route`.
+1. **hook push**: a platform hook injects `prd.md` and the files referenced by
+   `implement.jsonl` / `check.jsonl`.
+2. **agent pull**: the retained carrier definition reads the active task, PRD,
+   and JSONL context after startup.
+
+In both modes, JSONL files remain the key interface, but normal workflow-stage
+routing for this installed workflow still comes from `workflow-state.py route`
+plus main-session guidance.
 
 ## Local Customization Points
 
@@ -55,7 +63,7 @@ In both modes, JSONL files remain the key interface, but stage routing still com
 | --- | --- |
 | Change session-start injected content | The platform's session-start carrier, if that project actually wires one. |
 | Change per-turn workflow-state rules | `[workflow-state:STAGE]` blocks in `.trellis/workflow.md`, plus the carrier logic that decides which route metadata is surfaced in the injected header. |
-| Change how sub-agents read context | Platform agent definitions, `inject-subagent-context`, or agent preludes. |
+| Change how a retained compatibility carrier reads context | Platform agent definitions, `inject-subagent-context`, or retained carrier preludes. |
 | Change active task resolution | `.trellis/scripts/common/active_task.py`. |
 
 When modifying context injection, verify two things: the correct active task resolves, and the correct strong-gate stage/breadcrumb is emitted.

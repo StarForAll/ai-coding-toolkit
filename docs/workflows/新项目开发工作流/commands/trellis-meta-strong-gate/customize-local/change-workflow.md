@@ -18,7 +18,7 @@ When the user wants to change Trellis stages, next-action hints, task-creation p
 | Change stage names or stage order | `.trellis/workflow.md` and `workflow-state.py` together |
 | Change whether to create a task when there is no task | `[workflow-state:no_task]` plus entry routing patches |
 | Change the next step in a specific stage | The matching `[workflow-state:<stage>]` block and, if routing changes, `workflow-state.py route` |
-| Change whether sub-agents are required | Stage instructions plus platform-specific entry files |
+| Change whether retained agent carriers stay disabled or are re-enabled | Stage instructions plus platform-specific entry files |
 | Change close-out behavior | clarify separately whether the change belongs to task-level native `finish-work` or project-level `delivery`, then update the matching validators/carriers together |
 
 ## Modification Steps

@@ -1529,7 +1529,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("./.trellis/scripts/workflow/source-watermark-guard.py", ownership_card_text)
         self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", ownership_card_text)
         self.assertNotIn("<WORKFLOW_DIR>/commands/shell", ownership_card_text)
-        self.assertEqual(record_data["workflow_version"], "0.1.2802")
+        self.assertEqual(record_data["workflow_version"], "0.1.2803")
         self.assertEqual(record_data["workflow_schema_version"], "3")
         self.assertEqual(record_data["initial_pack"], "pack.requirements-discovery-foundation")
         self.assertIn(
@@ -2280,26 +2280,16 @@ class WorkflowInstallerTests(unittest.TestCase):
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
         self.addCleanup(shutil.rmtree, fixture)
 
-        stale_files = [
-            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "local-architecture" / "workflow.md",
-            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "local-architecture" / "context-injection.md",
-            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "platform-files" / "hooks-and-settings.md",
-            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "add-project-local-conventions.md",
-            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
-            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-workflow.md",
-            fixture / ".claude" / "skills" / "trellis-meta" / "references" / "local-architecture" / "workflow.md",
-            fixture / ".claude" / "skills" / "trellis-meta" / "references" / "local-architecture" / "context-injection.md",
-            fixture / ".claude" / "skills" / "trellis-meta" / "references" / "platform-files" / "hooks-and-settings.md",
-            fixture / ".claude" / "skills" / "trellis-meta" / "references" / "customize-local" / "add-project-local-conventions.md",
-            fixture / ".claude" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
-            fixture / ".claude" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-workflow.md",
-            fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "local-architecture" / "workflow.md",
-            fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "local-architecture" / "context-injection.md",
-            fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "platform-files" / "hooks-and-settings.md",
-            fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "add-project-local-conventions.md",
-            fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
-            fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-workflow.md",
-        ]
+        patch_root = COMMANDS_DIR / "trellis-meta-strong-gate"
+        rel_files = sorted(path.relative_to(patch_root) for path in patch_root.rglob("*.md"))
+        stale_files = []
+        for carrier_root in [
+            fixture / ".agents" / "skills" / "trellis-meta" / "references",
+            fixture / ".claude" / "skills" / "trellis-meta" / "references",
+            fixture / ".opencode" / "skills" / "trellis-meta" / "references",
+        ]:
+            for rel in rel_files:
+                stale_files.append(carrier_root / rel)
         for path in stale_files:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("# stale\nlegacy status routing\n", encoding="utf-8")
@@ -2332,6 +2322,21 @@ class WorkflowInstallerTests(unittest.TestCase):
             fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md"
         ).read_text(encoding="utf-8")
         self.assertIn(".codex/hooks.json -> .codex/hooks/inject-workflow-state.py", codex_change_hooks)
+        shared_change_workflow = (
+            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-workflow.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("retained agent carriers stay disabled or are re-enabled", shared_change_workflow)
+        self.assertNotIn("Change whether sub-agents are required", shared_change_workflow)
+        shared_agents_ref = (
+            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "platform-files" / "agents.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("not the normal execution path", shared_agents_ref)
+        self.assertIn("Do **not** dispatch `trellis-research`", shared_agents_ref)
+        shared_platform_map = (
+            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "platform-files" / "platform-map.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("main-session-first", shared_platform_map)
+        self.assertIn("carrier existence does not imply dispatch is allowed", shared_platform_map)
 
     def test_install_patches_update_spec_skills_to_real_entry_surfaces(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
@@ -2653,19 +2658,27 @@ OpenCode: .opencode/package.json -> .opencode/plugins/session-start.js
 .trellis/spec/guides/cross-platform-thinking-guide.md
 ```
 """
-        for path in [
-            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
-            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "add-project-local-conventions.md",
-            fixture / ".claude" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
-            fixture / ".claude" / "skills" / "trellis-meta" / "references" / "customize-local" / "add-project-local-conventions.md",
-            fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md",
-            fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "add-project-local-conventions.md",
+        patch_root = COMMANDS_DIR / "trellis-meta-strong-gate"
+        rel_files = sorted(path.relative_to(patch_root) for path in patch_root.rglob("*.md"))
+        for carrier_root in [
+            fixture / ".agents" / "skills" / "trellis-meta" / "references",
+            fixture / ".claude" / "skills" / "trellis-meta" / "references",
+            fixture / ".opencode" / "skills" / "trellis-meta" / "references",
         ]:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(
-                stale_add_project_local_conventions if path.name == "add-project-local-conventions.md" else stale_change_hooks,
-                encoding="utf-8",
-            )
+            for rel in rel_files:
+                path = carrier_root / rel
+                path.parent.mkdir(parents=True, exist_ok=True)
+                if path.name == "add-project-local-conventions.md":
+                    content = stale_add_project_local_conventions
+                elif path.name == "change-hooks.md":
+                    content = stale_change_hooks
+                elif path.name == "agents.md":
+                    content = "# stale\nlegacy sub-agent routing\n"
+                elif path.name == "platform-map.md":
+                    content = "# stale\nsub-agent directories are the active path\n"
+                else:
+                    content = "# stale\nlegacy status routing\n"
+                path.write_text(content, encoding="utf-8")
 
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
@@ -2705,6 +2718,11 @@ OpenCode: .opencode/package.json -> .opencode/plugins/session-start.js
             else:
                 self.assertIn(".opencode/package.json (dependency/config surface)", content)
                 self.assertNotIn(".opencode/package.json -> .opencode/plugins/session-start.js", content)
+        merged_platform_map = (
+            fixture / ".agents" / "skills" / "trellis-meta" / "references" / "platform-files" / "platform-map.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("main-session-first", merged_platform_map)
+        self.assertIn("carrier existence does not imply dispatch is allowed", merged_platform_map)
 
     def test_upgrade_merge_refreshes_break_loop_and_check_skills(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
@@ -3801,6 +3819,8 @@ description: stale check
   grep -r "pattern" src/
 ```
 """
+        patch_root = COMMANDS_DIR / "trellis-meta-strong-gate"
+        rel_files = sorted(path.relative_to(patch_root) for path in patch_root.rglob("*.md"))
 
         for path, content in [
             (fixture / ".claude" / "skills" / "trellis-brainstorm" / "SKILL.md", stale_platform_brainstorm),
@@ -3815,12 +3835,28 @@ description: stale check
             (fixture / ".agents" / "skills" / "trellis-update-spec" / "SKILL.md", stale_shared_update_spec),
             (fixture / ".agents" / "skills" / "trellis-break-loop" / "SKILL.md", stale_break_loop),
             (fixture / ".agents" / "skills" / "trellis-check" / "SKILL.md", stale_check),
-            (fixture / ".agents" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md", stale_change_hooks),
-            (fixture / ".claude" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md", stale_change_hooks),
-            (fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md", stale_change_hooks),
         ]:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
+        for carrier_root in [
+            fixture / ".agents" / "skills" / "trellis-meta" / "references",
+            fixture / ".claude" / "skills" / "trellis-meta" / "references",
+            fixture / ".opencode" / "skills" / "trellis-meta" / "references",
+        ]:
+            for rel in rel_files:
+                path = carrier_root / rel
+                path.parent.mkdir(parents=True, exist_ok=True)
+                if path.exists():
+                    continue
+                if path.name == "change-hooks.md":
+                    content = stale_change_hooks
+                elif path.name == "agents.md":
+                    content = "# stale\nlegacy sub-agent routing\n"
+                elif path.name == "platform-map.md":
+                    content = "# stale\nsub-agent directories are the active path\n"
+                else:
+                    content = "# stale\nlegacy status routing\n"
+                path.write_text(content, encoding="utf-8")
 
         guide_path = fixture / ".trellis" / "spec" / "guides" / "cross-layer-thinking-guide.md"
         guide_path.parent.mkdir(parents=True, exist_ok=True)
@@ -3847,6 +3883,8 @@ description: stale check
         self.assertIn("trellis-break-loop skill", combined)
         self.assertIn("trellis-check skill", combined)
         self.assertIn("trellis-meta references", combined)
+        self.assertIn("platform-files/agents.md", combined)
+        self.assertIn("platform-files/platform-map.md", combined)
         self.assertIn("cross-layer-thinking-guide.md", combined)
 
     def test_upgrade_check_detects_old_opencode_subagent_route_parser(self) -> None:
@@ -4728,7 +4766,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         updated = json.loads(record_path.read_text(encoding="utf-8"))
-        self.assertEqual(updated["workflow_version"], "0.1.2802")
+        self.assertEqual(updated["workflow_version"], "0.1.2803")
         self.assertEqual(updated["workflow_schema_version"], "3")
         self.assertIn("finish-work-checklist-template.md", updated["workflow_shared_docs"])
         self.assertIn("example.assembled-packs.requirements-discovery-foundation", updated["initial_pack_assets"])
@@ -5433,7 +5471,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn(PHASE_ROUTER_MARKER, start.read_text(encoding="utf-8"))
         self.assertIn(FINISH_WORK_MARKER, finish_work.read_text(encoding="utf-8"))
         record_data = json.loads((fixture / ".trellis" / "workflow-installed.json").read_text(encoding="utf-8"))
-        self.assertEqual(record_data["workflow_version"], "0.1.2802")
+        self.assertEqual(record_data["workflow_version"], "0.1.2803")
         self.assertEqual(record_data["previous_version"], "0.5.0-rc.3")
 
         followup_check = self.run_script(

@@ -10,7 +10,8 @@ settings/config files usually register:
 
 - optional session-start carrier: injects a Trellis overview when a session starts or resets.
 - per-turn workflow-state carrier: emits the current strong-gate stage on each user input.
-- sub-agent context carrier: injects task context when implementation/check/research agents start.
+- compatibility carrier context: injects task context when a retained agent
+  carrier is explicitly used.
 - shell/session bridge: lets shell commands see the same Trellis session identity.
 - platform plugin or extension entry points.
 
@@ -31,7 +32,7 @@ Whether these files exist depends on which `trellis init --<platform>` surfaces 
 | --- | --- |
 | `session-start.py` | Optional session-start overview when that platform wires the event. |
 | `inject-workflow-state.py` | Emits the current stage template plus route metadata such as `action`, `status`, and `blockers`. |
-| `inject-subagent-context.py` | Injects PRD, JSONL context, and related spec/research. |
+| `inject-subagent-context.py` | Injects PRD, JSONL context, and related spec/research for retained compatibility carriers when they are explicitly used. |
 | `inject-shell-session-context.py` | Lets shell commands inherit Trellis session identity. |
 
 ## Modification Principles

@@ -85,7 +85,10 @@ Monorepo example (prefix with package name):
 {"file": ".trellis/spec/<package>/unit-test/conventions.md", "reason": "Package test expectations"}
 ```
 
-Sub-agents or platform preludes read these JSONL files and load the referenced specs. On platforms without sub-agent support, the AI should read the relevant specs directly according to the workflow.
+The live workflow path or, when explicitly relevant, retained compatibility
+carriers read these JSONL files and load the referenced specs. On platforms
+without agent-carrier use in the current workflow, the AI should read the
+relevant specs directly according to the workflow.
 
 ## What Specs Should Contain
 

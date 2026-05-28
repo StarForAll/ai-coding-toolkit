@@ -24,8 +24,8 @@ The Trellis task system is stored entirely under `.trellis/tasks/` in the user p
 | `task.json` | Task metadata: status, assignee, priority, branch, parent/child tasks, and similar fields. |
 | `prd.md` | Requirements document; the most important business context during implementation. |
 | `info.md` | Optional technical design. |
-| `implement.jsonl` | List of spec/research files the implement agent must read first. |
-| `check.jsonl` | List of spec/research files the check agent must read first. |
+| `implement.jsonl` | List of spec/research files the live implementation flow or a retained implement carrier must read first. |
+| `check.jsonl` | List of spec/research files the live checking flow or a retained check carrier must read first. |
 | `research/` | Research artifacts. Complex findings should not live only in chat. |
 
 ## `task.json`
@@ -60,7 +60,9 @@ If the platform or shell environment has no stable session identity, `task.py st
 
 ## JSONL Context
 
-`implement.jsonl` and `check.jsonl` are context manifests for sub-agents to read first.
+`implement.jsonl` and `check.jsonl` are context manifests for the live
+workflow-driven execution path and, when explicitly relevant, retained
+compatibility carriers to read first.
 
 Format:
 
