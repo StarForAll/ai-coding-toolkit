@@ -33,6 +33,10 @@ agents/
   - 通用“产品市场前景判断专家”
   - 重点能力：当前市场前景判断、需求信号核验、竞争与分发压力分析、go/no-go 输出
   - 适配目标平台：Claude Code / OpenCode / Codex
+- `mobile-game-player-reviewer/`
+  - 通用“大众玩家手机游戏分析员”
+  - 重点能力：手游体验优劣分析、付费公平性判断、手机端专项诊断、流失风险与改进优先级输出
+  - 适配目标平台：Claude Code / OpenCode / Codex
 
 ## 作者辅助资产
 
