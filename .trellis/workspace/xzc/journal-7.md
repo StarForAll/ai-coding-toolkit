@@ -1013,3 +1013,36 @@ Added a cross-CLI source agent for mobile game strategy analysis, updated agent/
 ### Next Steps
 
 - None - task complete
+
+
+## Session 334: Harden workflow-scan/repair false-positive guards
+
+**Date**: 2026-05-28
+**Task**: Harden workflow-scan/repair false-positive guards
+**Branch**: `main`
+
+### Summary
+
+Tightened workflow-scan and workflow-repair coupled contracts to stop Codex carrier false positives, added shared-surface positive-path guard rules, expanded scenario fixtures, and validated the skill/spec cross-checks.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `19d2935` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
