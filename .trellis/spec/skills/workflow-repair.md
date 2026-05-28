@@ -64,24 +64,30 @@ workflow product source under `docs/workflows/新项目开发工作流/`.
     treated as workflow defects by default when temp-project evidence shows
     they are intentional restore surfaces paired with active patched/overlay
     assets in `.trellis/workflow-installed.json`.
-17. Cross-task convergence must not be treated as a fresh start just because a
+17. When a finding points at existing temp-project files or installed
+    artifacts, the skill must perform a focused truth precheck before
+    cross-task lineage escalation or any downstream repair action. False alarms
+    discovered by reading those files and the matching source workflow surfaces
+    must be recorded as `ignored`, not escalated as broader non-convergence.
+18. Cross-task convergence must not be treated as a fresh start just because a
     new dedicated repair task was created. If the same temp-project/report
-    lineage already produced two earlier ordinary repair tasks, the next
-    attempt must escalate to audit / break-loop instead of continuing another
-    routine repair batch.
-18. Repair-side default-ignore rules must also cover scan-side Codex false
+    lineage already produced two earlier ordinary repair tasks and one or more
+    truth-surviving findings remain after the precheck, the next attempt must
+    escalate to audit / break-loop instead of continuing another routine repair
+    batch.
+19. Repair-side default-ignore rules must also cover scan-side Codex false
     positives: empty `.codex/skills/` secondary carriers, contract-consistent
     uppercase `SKILL.md`, and disabled-command active absence such as removed
     `parallel` surfaces are not workflow defects by default unless another
     installed surface contradicts the temp-project contract.
-19. Repair-side verification must analyze the contents and surrounding wording
+20. Repair-side verification must analyze the contents and surrounding wording
     of the relevant temp-project and source files before adopting a
     document-reference or post-install-artifact finding whose claim turns on
     wording, filename mismatch, or missing-path shape. The analysis should be
     focused on the surfaces needed to decide the reported contradiction; a scan
     report title, missing-path existence check, or `confirmed-defect` label is
     not enough to justify source edits.
-20. Installed templates and task-local runtime evidence files must not be
+21. Installed templates and task-local runtime evidence files must not be
     conflated. When the temp project has an installed shared template such as
     `.trellis/workflow-docs/finish-work-checklist-template.md`, and installed
     workflow surfaces describe `finish-work-checklist.md` as a file generated
@@ -124,6 +130,10 @@ The skill must treat every scan finding as a hypothesis.
 
 Before adoption, it must:
 
+- when the finding points at existing temp-project evidence files or installed
+  artifacts, read those files and perform a focused truth precheck before
+  cross-task lineage escalation, repair execution, closure, or version-bump
+  decisions
 - inspect the referenced temp-project artifact when available
 - infer and inspect the relevant source-side repair surface
 - cross-check relevant declarations such as `workflow_assets.py`
@@ -178,6 +188,10 @@ Before adoption, it must:
   project symptom only reports a missing task-local runtime evidence file that
   is generated later from an installed template, and no current task has
   reached the gate requiring that runtime file
+- exclude findings resolved as `ignored` by the truth precheck from later
+  cross-task lineage escalation; if all findings resolve this way, record a
+  no-op truth judgment and stop without source edits, closure rounds, or a
+  workflow version bump
 - honor the report-side repair classification as a default safety gate:
   `confirmed-defect` may enter normal repair verification, `design-debt`
   defaults to non-adopted handling unless the user explicitly broadens scope,
@@ -214,8 +228,9 @@ The skill must:
   `trellis-version` when older logs predate explicit lineage fields
 - treat workflow version bumps as insufficient to reset the same repair lineage
   on their own
-- stop ordinary repair execution and escalate to audit / break-loop if two
-  earlier repair tasks already match the same lineage
+- after the focused truth precheck, stop ordinary repair execution and escalate
+  to audit / break-loop if two earlier repair tasks already match the same
+  lineage and at least one truth-surviving finding remains
 - optional `tmp/workflow-issues/` outputs are audit shadows only, not the
   primary v4 repair-decision memory
 - when the optional shadow is omitted, the repair log should record
@@ -555,6 +570,9 @@ When editing `skills/workflow-repair/`, confirm all of the following:
 - persisted tests now include positive cases proving template/runtime guards do
   not suppress real missing-template, reached-gate missing-runtime, or
   immediate-after-install contradiction findings
+- persisted tests now include the case where focused truth precheck must run
+  before cross-task lineage escalation when the report points at existing
+  temp-project evidence files
 - when a future workflow contract adds another installed-template /
   task-local-runtime artifact pair, add paired scan and repair scenario tests
   in the same change

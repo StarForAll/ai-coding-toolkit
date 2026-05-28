@@ -8,6 +8,9 @@ compatibility: Requires `trellis` on PATH, access to the temp project report plu
 
 ## Version History
 
+- **v3.10**: Required focused truth precheck for findings with existing
+  temp-project evidence files before cross-task lineage escalation or other
+  downstream repair actions
 - **v3.9**: Added repair-side false-positive handling for installed shared
   templates versus later-generated task-local runtime evidence files, and
   clarified that filename/path-shape document-reference findings require
@@ -169,60 +172,67 @@ Use this skill when any of the following is true:
 15. **Bounded closure is required**: after source edits, repair must run fresh
     closure verification rounds and may not close out or bump the workflow
     version while unresolved new in-scope findings remain.
-16. **Cross-task loop escalation is required**: if two earlier repair tasks
-    already consumed the same repair lineage, a third ordinary repair attempt
-    must stop as `needs-audit` / broader closure escalation instead of
+16. **Truth precheck precedes escalation**: when a finding points at existing
+    temp-project files or installed artifacts, read the relevant contents and
+    focused source workflow surfaces needed to decide whether the problem is
+    real before cross-task lineage escalation, repair execution, closure, or
+    version-bump decisions. False alarms discovered here must be recorded as
+    `ignored` rather than escalated as broader non-convergence.
+17. **Cross-task loop escalation is required**: after the truth precheck above,
+    if two earlier repair tasks already consumed the same repair lineage and
+    one or more truth-surviving findings remain, a third ordinary repair
+    attempt must stop as `needs-audit` / broader closure escalation instead of
     continuing as another routine repair batch.
-17. **Repair lineage matching must survive version bumps**: later repair tasks
+18. **Repair lineage matching must survive version bumps**: later repair tasks
     on the same temp-project/report lineage must still be treated as the same
     loop even if an earlier repair task already bumped `WORKFLOW_VERSION`.
-18. **Closure scope is bounded**: closure may auto-absorb only same-family,
+19. **Closure scope is bounded**: closure may auto-absorb only same-family,
     same-contract-surface findings. New-family findings stop automatic
     progression of the current repair batch.
-19. **Trellis-native routing**: when Origin = `trellis-native`, the fix must
+20. **Trellis-native routing**: when Origin = `trellis-native`, the fix must
     NOT modify files outside the workflow directory. Design a patch within the
     workflow so the installer can apply it (add patch script to `commands/`,
     update `HELPER_SCRIPTS`, or add overlay/post-install adjustment).
-20. **Round-local rollback**: if closure-added repairs fail inside a round, the
+21. **Round-local rollback**: if closure-added repairs fail inside a round, the
     round's additions must roll back without forcing a full repair-batch reset.
-21. **Current closure truth wins**: current same-version closure evidence
+22. **Current closure truth wins**: current same-version closure evidence
     overrides older scan interpretation when they conflict.
-22. **Coupled contract**: this skill must consume `WORKFLOW_QUESTIONS.md` in
+23. **Coupled contract**: this skill must consume `WORKFLOW_QUESTIONS.md` in
     the exact format defined in
     `skills/workflow-scan/references/scan-output-template.md`. If the protocol
     version does not match, stop.
-23. **Execution-mode agnostic intake**: repair-side validation depends on the
+24. **Execution-mode agnostic intake**: repair-side validation depends on the
     final `WORKFLOW_QUESTIONS.md` contract only. A report produced by
     `workflow-scan --agent` is acceptable only if the coordinator's final
     output still passes the same shared read-back validation as an inline scan.
-24. **No implied repair-side agent mode**: scan-side `--agent` support does
+25. **No implied repair-side agent mode**: scan-side `--agent` support does
     not extend to `workflow-repair`. Repair remains main-CLI-only unless its
     own contract changes in a separate scoped update.
-25. **`--auto` is explicit and gated**: auto follow-through is allowed only
+26. **`--auto` is explicit and gated**: auto follow-through is allowed only
     when the input explicitly includes `--auto`. It never bypasses correction-
     plan presentation, repair authorization, post-repair verification, current-
     task commit readiness, or the normal safety gates required before
     `finish-work`.
-26. **Default repair-ready scope is narrow**: only findings whose report-side
+27. **Default repair-ready scope is narrow**: only findings whose report-side
     repair classification is `confirmed-defect` may enter the ordinary adopted
     repair path by default.
-27. **Design debt is not auto-repair**: `design-debt` findings must default to
+28. **Design debt is not auto-repair**: `design-debt` findings must default to
     `manual-decision` or `ignored` unless the user explicitly broadens scope
     beyond confirmed defects after the correction plan is shown.
-28. **Evidence gaps block source edits**: `evidence-gap` findings must default
+29. **Evidence gaps block source edits**: `evidence-gap` findings must default
     to `blocked` or `manual-decision` until further temp-project or audit
     evidence closes the gap.
-29. **Supported CLI defect scope is fixed for this skill version**: repair-side
+30. **Supported CLI defect scope is fixed for this skill version**: repair-side
     adoption may concern only the current workflow's Claude Code / OpenCode /
     Codex managed surfaces. If a finding depends only on behavior in some other
     CLI and does not break these three supported surfaces, it is out of scope
     and must not be treated as a current workflow defect.
-30. **Preserved restore surfaces are not auto-defects**: findings that only
+31. **Preserved restore surfaces are not auto-defects**: findings that only
     complain about `.backup-original/` carrier trees must default to `ignored`
     when temp-project evidence shows those copies are intentional restore
     surfaces paired with active patched/overlay assets in
     `.trellis/workflow-installed.json`.
-31. **Explicitly disabled retained carriers are not auto-defects**: findings
+32. **Explicitly disabled retained carriers are not auto-defects**: findings
     that only complain that a retained compatibility/subagent carrier remains
     on disk must default to `ignored` when the temp project's installed docs
     or runtime rules explicitly say that carrier is currently unavailable or
@@ -230,25 +240,25 @@ Use this skill when any of the following is true:
     disabled contract. Contradictions include installed workflow docs still
     teaching its usage, hooks/config/runtime controls still invoking it, or
     another installed command/skill/agent surface still routing through it.
-32. **Codex secondary skill emptiness is not an auto-defect**: findings that
+33. **Codex secondary skill emptiness is not an auto-defect**: findings that
     only complain that `.codex/skills/` is empty, or that shared workflow
     skills are absent there, must default to `ignored` when the temp project's
     installed workflow surfaces treat `.agents/skills/` as the shared workflow
     primary carrier and `.codex/skills/` only as a secondary carrier for
     Codex-specific or project-local extra skills.
-33. **Uppercase `SKILL.md` is not an auto-defect when contract-consistent**:
+34. **Uppercase `SKILL.md` is not an auto-defect when contract-consistent**:
     findings that only complain about uppercase `SKILL.md` instead of
     lowercase `skill.md` must default to `ignored` when the temp project's
     installed workflow surfaces and runtime docs consistently use uppercase
     `SKILL.md`.
-34. **Disabled-command active absence is not an auto-defect**: findings that
+35. **Disabled-command active absence is not an auto-defect**: findings that
     only complain that an intentionally disabled command/skill surface such as
     `parallel` has no active command file, marker, or stub must default to
     `ignored` when the temp project's installed workflow contract says that
     the surface is disabled and removed from the active embedded state, unless
     another installed surface explicitly requires a retained active marker or
     stub.
-35. **Template/runtime file separation is not an auto-defect**: findings that
+36. **Template/runtime file separation is not an auto-defect**: findings that
     only complain that an installed document references a task-local runtime
     file which does not yet exist must default to `ignored` when the temp
     project contains the corresponding installed template and the installed
@@ -575,9 +585,38 @@ Before any source-side fix decision is drafted:
 4. The correction plan must make this gating visible instead of silently
    treating every finding as equally repair-ready.
 
+### Step 2B: Run Evidence-File Truth Precheck
+
+Before cross-task lineage escalation or any downstream repair action:
+
+1. For every finding whose `Temp Project Location` points at existing files or
+   installed artifacts, read the relevant temp-project contents needed to judge
+   whether the reported problem actually exists.
+2. Read only the focused source workflow surfaces needed to compare the
+   temp-project evidence against the source contract. Prefer exact referenced
+   docs, scripts, declarations, and `workflow_assets.py` entries over broad
+   directory scans.
+3. Apply the repair-side false-positive guardrails during this precheck,
+   including retained disabled carriers, `.backup-original` restore surfaces,
+   `.codex/skills/` secondary-carrier emptiness, uppercase `SKILL.md`,
+   disabled-command active absence, and installed-template versus task-local
+   runtime-file separation.
+4. If the finding does not survive the temp-project/source cross-check, mark it
+   `ignored` immediately and record the concrete evidence source. It must not
+   participate in later cross-task lineage escalation.
+5. If the relevant temp-project file is missing, ambiguous, or insufficient to
+   decide truth, leave the finding as truth-surviving with a tentative
+   `blocked` / `manual-decision` / normal-verification disposition, then
+   continue the ordinary flow.
+6. If all report findings resolve to `ignored` during this precheck:
+   - write/summarize the task-local truth judgment and repair log
+   - stop with no source edits, no closure round, and no workflow version bump
+   - do not escalate the run as broader non-convergence merely because earlier
+     repair tasks shared the same lineage
+
 ### Step 3: Build Same-Version Repair Context
 
-Before verifying findings:
+After Step 2B has separated false alarms from truth-surviving findings:
 
 1. Check the current repair task directory for earlier repair logs or
    closure-round artifacts if this run is being resumed.
@@ -586,15 +625,17 @@ Before verifying findings:
 3. Do not read old `tmp/workflow-issues/` documents as cross-version repair
    memory in `v4`.
 4. Build cross-task repair-lineage context from other repair tasks before
-   assuming this is a fresh ordinary run:
+   assuming the remaining truth-surviving findings belong to a fresh ordinary
+   run:
    - inspect other repair-task logs under `.trellis/tasks/` and archive
    - prefer exact lineage matches via `repair-lineage-key`
    - when older logs do not yet record `repair-lineage-key`, fall back to
      matching `source-report` + `temp-project-root` + `trellis-version`
    - do not let an intervening workflow version bump hide the same repeated
      temp-project/report lineage
-5. If two earlier repair tasks already match the same lineage, stop ordinary
-   repair execution and escalate to audit:
+5. If two earlier repair tasks already match the same lineage and one or more
+   truth-surviving findings remain, stop ordinary repair execution and escalate
+   to audit:
    - mark the run as broader cross-task non-convergence rather than as a fresh
      ordinary repair batch
    - return to a planning / decision checkpoint instead of drafting another
@@ -605,15 +646,16 @@ Before verifying findings:
      `workflow-audit`, `trellis-break-loop`, or an equivalent broader closure
      decision
 6. Build recurrence notes from current-task same-version evidence only when the
-   cross-task lineage gate above does not already stop the run:
+   cross-task lineage gate above does not already stop the remaining
+   truth-surviving findings:
    - `first-seen`
    - `repeated-within-current-repair`
    - `no-prior-task-evidence`
 
 ### Step 4: Verify Each Finding Against Temp Project and Source Project
 
-For each finding, re-check against both the temp project and the source
-project:
+For each finding that was not already marked `ignored` / terminal by Step 2B,
+re-check against both the temp project and the source project:
 
 1. Read the `Temp Project Location` artifact (if specified) in the temp
    project.
@@ -1124,7 +1166,7 @@ This step has two sub-phases:
 | Protocol version mismatch | Stop as **Blocked / Protocol Version Mismatch**. The report was produced by a different protocol version. |
 | Temp project mismatch | Stop as **Blocked / Temp Project Mismatch**. The report and the live temp project do not line up. |
 | Repeated finding with no broader safe fix | Stop as **Blocked / Repeated Finding Needs Broader Closure**. Do not repeat a previously narrow patch without a stronger closure plan. |
-| Third ordinary repair task on the same lineage | Stop as **Blocked / Cross-Task Convergence Escalation Required**. Do not keep opening fresh repair tasks for the same temp-project/report lineage; escalate to audit / break-loop instead. |
+| Third ordinary repair task on the same lineage | First run the evidence-file truth precheck for findings whose referenced temp-project files exist. If all findings resolve to `ignored`, stop as a no-op truth judgment rather than broader non-convergence. If one or more truth-surviving findings remain, stop as **Blocked / Cross-Task Convergence Escalation Required**. Do not keep opening fresh repair tasks for the same temp-project/report lineage; escalate to audit / break-loop instead. |
 | Stale scan report | Stop as **Blocked / Stale Scan Report**. Tell the user to re-embed and re-run `workflow-scan`. |
 | Invalid embedded state | Stop as **Blocked / Invalid Embedded State**. The version/schema evidence does not represent a valid same-version embedded target. |
 | Closure does not converge within bounded rounds | Stop as broader non-convergence and require audit or a new explicit decision. |
@@ -1228,6 +1270,7 @@ that cover the affected runtime surfaces.
 - `tests/70-disabled-command-active-absence-defaults-to-ignored.md`
 - `tests/71-finish-work-checklist-template-defaults-to-ignored.md`
 - `tests/72-finish-work-checklist-positive-cases-stay-actionable.md`
+- `tests/73-truth-precheck-precedes-lineage-escalation.md`
 
 ## Examples
 
