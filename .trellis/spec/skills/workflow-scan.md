@@ -334,3 +334,7 @@ First-version scenario set should cover at least:
   evidenced observations masquerade as repair-ready defects
 - shared-carrier observations require temp-project ownership proof before they
   may enter the actionable finding set
+- workflow-owned shared-carrier observations still enter the actionable finding
+  set when temp-project ownership proof is present
+- workflow-patched shared surfaces are not allowed to bypass the actionable
+  finding set merely because they still live under a shared carrier directory

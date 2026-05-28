@@ -8,6 +8,9 @@ compatibility: Requires `trellis` on PATH, access to the temp project fixture, l
 
 ## Version History
 
+- **v3.7**: Added positive scenario coverage for shared surfaces that are
+  truly workflow-owned or workflow-patched, so ownership gating tests both the
+  omit path and the actionable-finding path
 - **v3.6**: Clarified that a shared or external baseline skill/reference under
   an in-scope carrier is not a workflow defect unless temp-project evidence
   shows the current workflow explicitly owns or patched that surface
@@ -581,6 +584,8 @@ Required persisted scenario files:
 - `tests/09-backup-original-preservation-is-not-defect.md`
 - `tests/10-retained-disabled-subagent-carrier-is-not-finding.md`
 - `tests/11-non-workflow-owned-shared-skill-surface-is-not-finding.md`
+- `tests/12-workflow-owned-shared-skill-surface-is-finding.md`
+- `tests/13-workflow-patched-shared-surface-enters-actionable-finding-set.md`
 
 Every test file must use the same structure:
 
