@@ -207,6 +207,15 @@ Additional classification rule:
   and removes it from the active embedded state, the absence of an active
   command/skill file is not a finding by itself unless another installed
   surface explicitly requires a retained marker or stub.
+- When an installed workflow references a task-local runtime evidence file
+  that is generated later from an installed template, the runtime file's
+  absence in a fresh temp project is not a finding by itself. For example,
+  `.trellis/workflow-docs/finish-work-checklist-template.md` is an installed
+  shared template, while `finish-work-checklist.md` is created later as
+  task-local close-out evidence. Emit a finding only if the template is
+  missing, the task has reached the gate where the runtime file is required
+  but the file is absent, or another installed surface explicitly claims the
+  runtime file must exist immediately after install.
 - If the temp project shows no concrete contradiction beyond that intentional
   gated state, omit it from the `### WS-NNN` finding set.
 - Contradiction examples include installed workflow docs still teaching that

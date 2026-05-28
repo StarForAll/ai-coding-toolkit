@@ -8,6 +8,9 @@ compatibility: Requires `trellis` on PATH, access to the temp project fixture, l
 
 ## Version History
 
+- **v3.9**: Added a false-positive guard for installed shared-document
+  templates versus task-local runtime evidence files, such as
+  `finish-work-checklist-template.md` vs generated `finish-work-checklist.md`
 - **v3.8**: Added explicit false-positive guards for Codex shared-vs-secondary
   skill carriers, uppercase `SKILL.md` skill-file convention, and
   intentionally removed disabled-command active surfaces such as `parallel`
@@ -245,6 +248,20 @@ Use this skill when any of the following is true:
     embedded surface, the scan must not require a separate `.disabled` marker,
     placeholder command file, or active skill stub unless another installed
     surface explicitly says such an artifact should exist.
+29. **Installed templates are not task-local runtime evidence files**: when an
+    installed workflow surface references a task-local file that is generated
+    later during a workflow stage, the scan must not report the file as a
+    missing post-install artifact merely because it does not exist in a fresh
+    temp project. For example, `.trellis/workflow-docs/finish-work-checklist-template.md`
+    is the installed shared template, while `finish-work-checklist.md` is the
+    task-local close-out evidence file created when a task reaches
+    delivery/finish-work readiness. If the template exists and installed
+    workflow surfaces explain that the runtime file is generated from it, the
+    absence of the runtime file before that stage is not a finding. Emit a
+    finding only when a task that should have generated the runtime file is
+    already at the relevant gate, the template is missing, or an installed
+    surface incorrectly claims the runtime file must exist immediately after
+    install.
 
 ## Inputs
 
@@ -481,7 +498,11 @@ For every installed workflow document or installed runtime-control document:
 2. Check that helper-script references use the installed temp-project paths
    actually present in the temp project.
 3. Check that execution-card references resolve when such cards are installed.
-4. Flag any broken, stale, contradictory, or misleading references.
+4. Distinguish installed shared templates from task-local runtime artifacts.
+   A reference to a later-generated task file is not broken solely because the
+   file does not exist in a fresh temp project when installed docs explain the
+   generation path and the corresponding template exists.
+5. Flag any broken, stale, contradictory, or misleading references.
 
 ### Step 5: Residual and New Issue Detection
 

@@ -69,9 +69,16 @@ It does not fix source files.
    uppercase `SKILL.md`, the scan must not escalate that filename convention
    into a finding merely because lowercase `skill.md` is absent.
 16. When an installed workflow explicitly disables a command/skill surface and
-   the active embedded state removes that surface rather than leaving a marker
-   file, the scan must treat active absence as a valid disabled state unless
-   another installed surface explicitly requires a retained marker/stub.
+    the active embedded state removes that surface rather than leaving a marker
+    file, the scan must treat active absence as a valid disabled state unless
+    another installed surface explicitly requires a retained marker/stub.
+17. Installed templates and task-local runtime evidence files must not be
+    conflated. When the temp project has an installed shared template such as
+    `.trellis/workflow-docs/finish-work-checklist-template.md`, and installed
+    workflow surfaces describe `finish-work-checklist.md` as a file generated
+    later for the current task's close-out evidence, a fresh temp project
+    missing `finish-work-checklist.md` must not be treated as a post-install
+    defect by itself.
 
 ---
 
@@ -360,3 +367,6 @@ First-version scenario set should cover at least:
   project contract consistently uses that filename
 - disabled-command active absence is accepted when the installed workflow
   explicitly removes the surface instead of leaving a marker
+- installed shared templates are distinguished from task-local runtime evidence
+  files, so a fresh temp project is not flagged merely because
+  `finish-work-checklist.md` has not been generated yet
