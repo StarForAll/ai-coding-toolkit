@@ -121,3 +121,25 @@ is real.
   `.trellis/spec/skills/workflow-repair.md`, and added
   `skills/workflow-repair/tests/71-finish-work-checklist-template-defaults-to-ignored.md`.
 - Verification: `./scripts/validate-skills.sh` and `git diff --check` passed.
+
+## Follow-Up Review Fixes
+
+The user then provided review findings about the scan/repair hardening.
+
+- True issue: `skills/workflow-scan/SKILL.md` had not registered
+  `tests/17-finish-work-checklist-template-is-not-missing-runtime-file.md`.
+  Fixed by adding test 17 to the persisted tests list.
+- True issue: scan and repair only had the negative template/runtime case.
+  Fixed by adding positive scenario tests:
+  `skills/workflow-scan/tests/18-finish-work-checklist-positive-cases-are-findings.md`
+  and
+  `skills/workflow-repair/tests/72-finish-work-checklist-positive-cases-stay-actionable.md`.
+- True issue: the repair-side content-analysis rule was broader than needed.
+  Fixed by narrowing it to document-reference / post-install-artifact findings
+  whose claim turns on wording, filename mismatch, or missing-path shape, with
+  focused analysis of only the relevant surfaces.
+- Partially actionable issue: the current workflow has only one known
+  template/runtime pair, so there are no sibling pairs to test today. Added
+  spec guidance requiring paired scan/repair tests whenever a future
+  installed-template / task-local-runtime artifact pair is introduced.
+- Verification: `./scripts/validate-skills.sh` and `git diff --check` passed.

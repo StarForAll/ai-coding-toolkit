@@ -76,9 +76,11 @@ workflow product source under `docs/workflows/新项目开发工作流/`.
     installed surface contradicts the temp-project contract.
 19. Repair-side verification must analyze the contents and surrounding wording
     of the relevant temp-project and source files before adopting a
-    document-reference or post-install-artifact finding. A scan report title,
-    missing-path existence check, or `confirmed-defect` label is not enough to
-    justify source edits.
+    document-reference or post-install-artifact finding whose claim turns on
+    wording, filename mismatch, or missing-path shape. The analysis should be
+    focused on the surfaces needed to decide the reported contradiction; a scan
+    report title, missing-path existence check, or `confirmed-defect` label is
+    not enough to justify source edits.
 20. Installed templates and task-local runtime evidence files must not be
     conflated. When the temp project has an installed shared template such as
     `.trellis/workflow-docs/finish-work-checklist-template.md`, and installed
@@ -550,6 +552,12 @@ When editing `skills/workflow-repair/`, confirm all of the following:
   Codex/filename/disabled-surface false-positive guards added on the scan side
 - persisted tests now include repair-side handling for installed shared
   templates versus later-generated task-local runtime evidence files
+- persisted tests now include positive cases proving template/runtime guards do
+  not suppress real missing-template, reached-gate missing-runtime, or
+  immediate-after-install contradiction findings
+- when a future workflow contract adds another installed-template /
+  task-local-runtime artifact pair, add paired scan and repair scenario tests
+  in the same change
 - any protocol, field, role-boundary, example, or behavior change is mirrored
   by a matching `workflow-scan` adaptation and shared-template update in the
   same change

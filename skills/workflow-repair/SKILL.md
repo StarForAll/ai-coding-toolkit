@@ -10,8 +10,8 @@ compatibility: Requires `trellis` on PATH, access to the temp project report plu
 
 - **v3.9**: Added repair-side false-positive handling for installed shared
   templates versus later-generated task-local runtime evidence files, and
-  clarified that document-reference findings require content-level verification
-  before adoption
+  clarified that filename/path-shape document-reference findings require
+  focused content-level verification before adoption
 - **v3.8**: Clarified that scan findings based only on empty
   `.codex/skills/`, uppercase `SKILL.md`, or disabled-command active absence
   such as removed `parallel` surfaces default to `ignored` unless another
@@ -620,8 +620,9 @@ project:
 2. Infer the likely source-side repair surface from the finding's temp-project
    evidence and description.
 3. Read the relevant source-project file(s) needed to test that hypothesis.
-4. For document-reference and post-install-artifact findings, inspect the
-   relevant file contents and surrounding wording before deciding whether the
+4. For document-reference and post-install-artifact findings whose claim turns
+   on wording, filename mismatch, or missing-path shape, inspect only the
+   relevant file contents and surrounding wording needed to decide whether the
    finding is real. Do not adopt a finding solely from filename mismatch,
    missing-path existence checks, report title wording, or the scan-side
    `confirmed-defect` label.
@@ -1226,6 +1227,7 @@ that cover the affected runtime surfaces.
 - `tests/69-uppercase-skill-md-convention-defaults-to-ignored.md`
 - `tests/70-disabled-command-active-absence-defaults-to-ignored.md`
 - `tests/71-finish-work-checklist-template-defaults-to-ignored.md`
+- `tests/72-finish-work-checklist-positive-cases-stay-actionable.md`
 
 ## Examples
 

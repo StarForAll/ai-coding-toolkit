@@ -648,6 +648,8 @@ Required persisted scenario files:
 - `tests/14-codex-secondary-skills-empty-is-not-finding.md`
 - `tests/15-uppercase-skill-md-convention-is-not-finding.md`
 - `tests/16-disabled-command-removal-without-marker-is-not-finding.md`
+- `tests/17-finish-work-checklist-template-is-not-missing-runtime-file.md`
+- `tests/18-finish-work-checklist-positive-cases-are-findings.md`
 
 Every test file must use the same structure:
 

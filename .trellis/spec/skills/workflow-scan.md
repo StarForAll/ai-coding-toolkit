@@ -370,3 +370,9 @@ First-version scenario set should cover at least:
 - installed shared templates are distinguished from task-local runtime evidence
   files, so a fresh temp project is not flagged merely because
   `finish-work-checklist.md` has not been generated yet
+- positive cases prove template/runtime guards do not suppress real
+  missing-template, reached-gate missing-runtime, or immediate-after-install
+  contradiction findings
+- when a future workflow contract adds another installed-template /
+  task-local-runtime artifact pair, add paired scan and repair scenario tests
+  in the same change
