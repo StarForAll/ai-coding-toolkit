@@ -947,3 +947,36 @@ Clarified workflow-scan handling for intentionally disabled retained carriers, t
 ### Next Steps
 
 - None - task complete
+
+
+## Session 332: Add mobile game player reviewer agent
+
+**Date**: 2026-05-28
+**Task**: Add mobile game player reviewer agent
+**Branch**: `main`
+
+### Summary
+
+Created a source-only mobile-game-player-reviewer agent from the大众玩家 prompt, added cross-CLI deployment guidance, examples, validation records, and resolved JSONL traceability review feedback.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2c565e8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
