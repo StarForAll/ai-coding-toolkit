@@ -8,6 +8,10 @@ compatibility: Requires `trellis` on PATH, access to the temp project report plu
 
 ## Version History
 
+- **v3.5**: Clarified that legacy scan findings which only complain about a
+  retained carrier explicitly documented as temporarily disabled must default
+  to `ignored` unless another installed surface contradicts that disabled
+  contract
 - **v3.4**: Required behavior-level closure verification for runtime-carrier /
   runtime-patch stop semantics so closure can no longer rely on
   marker/text-only checks for those repair families
@@ -203,6 +207,14 @@ Use this skill when any of the following is true:
     when temp-project evidence shows those copies are intentional restore
     surfaces paired with active patched/overlay assets in
     `.trellis/workflow-installed.json`.
+31. **Explicitly disabled retained carriers are not auto-defects**: findings
+    that only complain that a retained compatibility/subagent carrier remains
+    on disk must default to `ignored` when the temp project's installed docs
+    or runtime rules explicitly say that carrier is currently unavailable or
+    intentionally disabled, unless another installed surface contradicts that
+    disabled contract. Contradictions include installed workflow docs still
+    teaching its usage, hooks/config/runtime controls still invoking it, or
+    another installed command/skill/agent surface still routing through it.
 
 ### Repair Lineage
 
@@ -594,7 +606,14 @@ project:
    present, and the temp project's install record plus active asset names show
    it is an intentional restore surface, downgrade the item to `ignored`
    instead of treating it as a current workflow defect.
-11. If the item is a repeated finding and the current fix proposal does not
+11. If the symptom is only that a retained compatibility/subagent carrier
+   remains on disk, and the temp project's installed docs or runtime rules
+   explicitly mark it as currently disabled/unavailable with no contradictory
+   installed surface, downgrade the item to `ignored` instead of treating it
+   as a current workflow defect. Contradictory surfaces include installed docs
+   still teaching its usage, hooks/config/runtime controls still invoking it,
+   or another installed command/skill/agent surface still routing through it.
+12. If the item is a repeated finding and the current fix proposal does not
    explain why the earlier repair missed it, downgrade the item to
    `manual-decision` or `blocked`.
 

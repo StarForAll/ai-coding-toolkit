@@ -195,11 +195,13 @@ Additional classification rule:
 - When a carrier is still present but the installed workflow explicitly says it
   is intentionally gated off for now, retained only as a compatibility surface,
   or kept in place for possible future re-enable after maturity improves, that
-  observation is not a `confirmed-defect` by default.
+  observation is omitted from the finding set unless another installed surface
+  contradicts the stated “present but intentionally disabled” contract.
 - If the temp project shows no concrete contradiction beyond that intentional
-  gated state, classify it as `design-debt`.
-- Escalate only when another installed surface contradicts the stated
-  “present but intentionally disabled” contract.
+  gated state, omit it from the `### WS-NNN` finding set.
+- Contradiction examples include installed workflow docs still teaching that
+  carrier's usage, hooks/config/runtime controls still invoking it, or another
+  installed command/skill/agent surface still routing through it.
 
 `Repair Classification` is the anti-overrepair guardrail. It determines whether
 `workflow-repair` may treat the finding as part of the default repair-ready set.
@@ -227,9 +229,9 @@ workflow-version: 0.1.2800
 workflow-schema-version: 2
 scan-timestamp: 2026-05-20T14:30:00+08:00
 temp-project-root: /tmp/trellis-<LIVE_TRELLIS_VERSION>-2
-total-findings: 3
+total-findings: 2
 p0-count: 1
-p1-count: 1
+p1-count: 0
 p2-count: 1
 ---
 
@@ -242,16 +244,16 @@ p2-count: 1
 - Workflow Schema Version: 2
 - Scan Time: 2026-05-20T14:30:00+08:00
 - Temp Project Root: /tmp/trellis-<LIVE_TRELLIS_VERSION>-2
-- Total Findings: 3 (P0: 1, P1: 1, P2: 1)
+- Total Findings: 2 (P0: 1, P1: 0, P2: 1)
 
 ## Analysis Summary
 
-- Problem Analysis: The main failure themes are one broken patch-script contract, one Codex adaptation ambiguity, and one stale document reference.
-- Gap / Missing-Surface Analysis: Codex skill resolution needs confirmation because the temp project exposes an empty `.codex/skills/` directory while workflow skills live under `.agents/skills/`.
-- Residual Issues: WS-003
+- Problem Analysis: The main failure themes are one broken patch-script contract and one stale document reference.
+- Gap / Missing-Surface Analysis: none
+- Residual Issues: WS-002
 - New Issues: none
-- Confirmed Defects: WS-001
-- Design-Debt Items: WS-002
+- Confirmed Defects: WS-001, WS-002
+- Design-Debt Items: none
 - Evidence-Gap Items: none
 
 ### WS-001: patch-session-start-strong-gate.py uses legacy READY/NOT READY semantics
@@ -269,22 +271,7 @@ p2-count: 1
 - **Description**: The patch script uses legacy READY/NOT READY semantics instead of the marker-based strong-gate behavior exposed by the temp project's current workflow surfaces. This means the gate check may pass when it should block.
 - **Suggested Investigation**: Re-check the installed patch script and the temp project's other startup/runtime-control surfaces to confirm whether the embedded workflow still relies on the legacy check.
 
-### WS-002: Codex .codex/skills/ directory is empty but .agents/skills/ has workflow skills
-
-- **Category**: cli-adaptation
-- **Severity Estimate**: P1
-- **Repair Classification**: design-debt
-- **Origin**: trellis-native
-- **Evidence Layer**: generated-target-runtime
-- **Evidence**:
-  - `.codex/skills/` exists but contains no SKILL.md files
-  - `.agents/skills/` contains the workflow skills the temp project currently exposes
-  - The temp project's installed workflow surfaces rely on `.agents/skills/` as the effective carrier
-- **Temp Project Location**: .codex/skills/ and .agents/skills/
-- **Description**: The empty `.codex/skills/` directory is a baseline/runtime surface that may confuse tools scanning the wrong carrier first, even though the temp project's active workflow currently lives under `.agents/skills/`.
-- **Suggested Investigation**: Verify in the temp project which Codex carrier is actually authoritative, then decide whether the workflow should patch or document that behavior more clearly.
-
-### WS-003: Stale reference to record-session-helper.py in workflow.md
+### WS-002: Stale reference to record-session-helper.py in workflow.md
 
 - **Category**: residual
 - **Severity Estimate**: P2
@@ -299,6 +286,10 @@ p2-count: 1
 - **Description**: The installed workflow document still references a helper that is no longer part of the temp project's active workflow surfaces.
 - **Suggested Investigation**: Check the installed workflow document and related runtime docs in the temp project, then remove or replace the stale source-side reference if the temp-project evidence confirms it is obsolete.
 ```
+
+Intentionally disabled compatibility carriers are not shown in the example
+above because they should be omitted from the finding set unless another
+installed surface contradicts the disabled contract.
 
 ---
 

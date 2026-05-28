@@ -8,6 +8,10 @@ compatibility: Requires `trellis` on PATH, access to the temp project fixture, l
 
 ## Version History
 
+- **v3.3**: Clarified that a retained carrier explicitly documented as
+  temporarily unavailable or intentionally disabled is omitted from
+  `WORKFLOW_QUESTIONS.md` unless another installed surface contradicts that
+  disabled contract
 - **v3.1**: Clarified that actionable defect judgment in this skill version is
   limited to Claude Code / OpenCode / Codex workflow surfaces; issues seen
   only in other CLI usage stay out of scope unless the managed surface later
@@ -141,39 +145,48 @@ Use this skill when any of the following is true:
     complexity, maintainability, ergonomics, or possible over-design without a
     concrete temp-project contradiction, it must be classified as
     `design-debt`, not `confirmed-defect`.
-16.1 **Intentional gated-carrier observations stay conservative**: if a
+17. **Intentional gated-carrier observations stay conservative**: if a
     carrier is present on disk but the temp project's installed workflow docs
     or runtime rules explicitly say that the path is intentionally gated off
     for now, kept only as a compatibility carrier, or reserved for possible
     future re-enable after maturity improves, the scan must not emit that
-    situation as a `confirmed-defect` by default.
+    situation as a finding unless another installed surface contradicts that
+    disabled contract.
+    This includes retained subagent/helper carriers that the temp project
+    explicitly marks as currently unavailable or temporarily disabled.
     - If the installed workflow still behaves consistently with that stated
-      contract, classify the concern as `design-debt` at most.
-    - Only upgrade it to `confirmed-defect` when the temp project shows a real
-      contradiction, such as the docs claiming the path is disabled while some
-      installed runtime surface still actively routes users into it.
-17. **No evidence-gap inflation**: if the temp-project evidence is still
+      contract, omit the item from the final `WORKFLOW_QUESTIONS.md` findings.
+      At most, mention it as non-finding context while explaining why it was
+      intentionally excluded.
+    - Only emit a finding when the temp project shows a real contradiction,
+      such as the docs claiming the path is disabled while some installed
+      runtime surface still actively routes users into it.
+    - Other contradiction examples include installed workflow docs still
+      teaching that carrier's usage, hook/config/runtime-control surfaces still
+      invoking it, or another installed command/skill/agent surface still
+      routing through it as an active entry path.
+18. **No evidence-gap inflation**: if the temp-project evidence is still
     insufficient to confirm a real defect or source-owned root cause, the item
     must be classified as `evidence-gap`, not `confirmed-defect`.
-18. **Contract format**: the output must use the `WORKFLOW_QUESTIONS.md` format
+19. **Contract format**: the output must use the `WORKFLOW_QUESTIONS.md` format
     exactly as defined in `references/scan-output-template.md`.
-19. **Read-back validation is mandatory**: after writing
+20. **Read-back validation is mandatory**: after writing
     `WORKFLOW_QUESTIONS.md`, the skill must read the file back and verify the
     required frontmatter keys, summary sections, and finding schema before it
     may report success. This validation also serves as the shared contract gate
     ensuring the emitted report satisfies `workflow-repair` intake
     assumptions.
-20. **Concrete workflow version fields are mandatory**: successful scan output
+21. **Concrete workflow version fields are mandatory**: successful scan output
     must include real `workflow-version` and `workflow-schema-version` values
     from the embedded target. If either field is missing or unresolved, stop as
     **Blocked / Invalid Embedded State** instead of emitting a repair-usable
     report.
-21. **Supported CLI defect scope is fixed for this skill version**: actionable
+22. **Supported CLI defect scope is fixed for this skill version**: actionable
     findings may concern only the current workflow's Claude Code / OpenCode /
     Codex managed surfaces. If a symptom appears only when using some other CLI
     and does not break these three supported surfaces, record it at most as
     out-of-scope context and do not emit it as a workflow defect.
-22. **Preserved restore surfaces are not residual defects by default**:
+23. **Preserved restore surfaces are not residual defects by default**:
     `.backup-original/` trees under managed command/skill carriers must not be
     reported as workflow defects when temp-project evidence shows they are
     backup copies paired with active patched/overlay assets recorded in

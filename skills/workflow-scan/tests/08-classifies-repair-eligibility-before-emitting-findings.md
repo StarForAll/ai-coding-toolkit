@@ -22,7 +22,7 @@ User input:
 
 ## Expected Mode
 
-Inline scan in the current CLI session using the shared v3 report contract.
+Inline scan in the current CLI session using the shared v4 report contract.
 
 ## Expected Key Behaviors
 
@@ -31,8 +31,9 @@ Inline scan in the current CLI session using the shared v3 report contract.
 - the contradiction item must be classified as `confirmed-defect`
 - the complexity-only item must be classified as `design-debt`
 - the insufficient-evidence item must be classified as `evidence-gap`
-- the intentionally gated-but-present carrier item must not be classified as
-  `confirmed-defect` unless the temp project shows a separate contradiction
+- the intentionally gated-but-present carrier item must be omitted from the
+  `### WS-NNN` finding set unless the temp project shows a separate
+  contradiction
 - the analysis summary must make the three classes visible so repair-side
   intake can stay conservative by default
 
@@ -42,3 +43,6 @@ Inline scan in the current CLI session using the shared v3 report contract.
   into a repair-ready defect
 - must not omit the finding-level repair classification just because severity,
   category, or origin is already present
+- must not emit a standalone finding whose only basis is that the retained
+  carrier remains on disk while the installed workflow explicitly marks it as
+  currently disabled

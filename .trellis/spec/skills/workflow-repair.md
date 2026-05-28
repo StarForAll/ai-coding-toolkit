@@ -122,6 +122,14 @@ Before adoption, it must:
   project symptom only reports `.backup-original/` carrier copies whose names
   pair cleanly with active patched/overlay assets in
   `.trellis/workflow-installed.json`
+- classify the item as `ignored` rather than `manual-decision` when the temp-
+  project symptom only reports a retained compatibility/subagent carrier that
+  the temp project's installed docs or runtime rules explicitly mark as
+  currently disabled or temporarily unavailable, and no other installed
+  surface contradicts that disabled contract; contradictions include installed
+  workflow docs still teaching its usage, hooks/config/runtime controls still
+  invoking it, or another installed command/skill/agent surface still routing
+  through it
 - honor the report-side repair classification as a default safety gate:
   `confirmed-defect` may enter normal repair verification, `design-debt`
   defaults to non-adopted handling unless the user explicitly broadens scope,

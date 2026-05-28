@@ -46,6 +46,12 @@ It does not fix source files.
    treated as residual defects by default when temp-project evidence shows they
    are paired backup copies for active patched/overlay assets recorded in
    `.trellis/workflow-installed.json`.
+11. A retained carrier that the temp project's installed docs or runtime rules
+   explicitly mark as currently unavailable / intentionally disabled must not
+   be emitted as a finding unless another installed surface contradicts that
+   disabled contract. Contradictions include cases where installed workflow
+   docs still teach its usage, hooks/config/runtime controls still invoke it,
+   or another installed command/skill/agent surface still routes through it.
 
 ---
 
@@ -173,6 +179,9 @@ The skill must:
   input to the coordinator, not a substitute for the coordinator's judgment
 - require helper handoffs to follow a concrete reusable template when
   `--agent` is used
+- omit retained compatibility/subagent carriers from the final finding set when
+  the temp project's installed surfaces consistently describe them as
+  intentionally disabled or temporarily unavailable
 - verify source ownership boundary before escalating a temp-project observation
   into an actionable repair-side finding
 - avoid reporting a `workflow-source` defect when the observed surface is a
@@ -242,6 +251,8 @@ When editing `skills/workflow-scan/`, confirm all of the following:
 - the skill still targets `/tmp/trellis-{VERSION}-2` by default
 - the skill still emits `WORKFLOW_QUESTIONS.md` only
 - the skill no longer requires source-project-root or source-repo evidence
+- intentionally disabled retained carriers are omitted from findings unless a
+  contradictory installed surface exists
 - any protocol, field, role-boundary, example, or behavior change is mirrored
   by a matching `skills/workflow-repair/` adaptation and shared-template update
   in the same change
