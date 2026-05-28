@@ -16,11 +16,12 @@
 
 ### 源资产层（Source Assets）
 
-> ⚠️ 以下目录目前仅含 README 骨架，实际资产暂直接维护于对应工具部署层。
+> ⚠️ `agents/` 已开始承载真实 source agent 资产，但尚未成为所有工具部署文件的自动同步源。
+> `commands/*` 源资产目录仍主要是 README 骨架，实际 command 资产暂直接维护于对应工具部署层。
 
 | 目录 | 说明 |
 |------|------|
-| `agents/` | Agent 源资产（tool-agnostic 的系统提示词、权限边界、工作流定义），当前仅 README，待填充 |
+| `agents/` | Agent 源资产（tool-agnostic 的系统提示词、权限边界、工作流定义），已部分填充，详见 `agents/README.md` |
 | `commands/claude/` | Claude Code 命令源资产，当前仅 README，待填充 |
 | `commands/codex/` | Codex CLI 命令源资产，当前仅 README，待填充 |
 | `commands/shell/` | 通用 shell 脚本，当前仅 README，待填充 |
@@ -59,8 +60,8 @@ agents/<id>/SYSTEM.md       ──→    .claude/agents/<role>.md
 commands/<tool>/            ──→    .<tool>/commands/<ns>/<name>.md
 ```
 
-> **当前状态**：`agents/` 与 `commands/` 源资产层尚未建立（仅含 README 骨架），
-> agent 与 command 资产暂直接维护于各工具部署目录（`.claude/`、`.opencode/`、`.codex/`、`commands/` 待填充）。
+> **当前状态**：`agents/` 源资产层已部分建立，但尚未自动同步到所有工具部署目录；
+> command 资产暂直接维护于各工具部署目录（`.claude/`、`.opencode/`、`.codex/`、`commands/` 待填充）。
 > 详见 `.trellis/spec/agents/index.md` 和 `.trellis/spec/commands/index.md`。
 
 ### 关于自动化工作流的说明

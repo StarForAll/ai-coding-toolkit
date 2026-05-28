@@ -16,11 +16,12 @@ Reusable assets accumulated from AI-assisted programming work: specs, templates,
 
 ### Source Asset Layer
 
-> ⚠️ These directories currently contain README skeletons only. Real assets are still maintained directly in the corresponding tool deployment layer.
+> ⚠️ `agents/` now contains real source agent assets, but it is not yet the automatic sync source for every tool deployment file.
+> `commands/*` source asset directories are still mostly README skeletons; real command assets are still maintained directly in the corresponding tool deployment layer.
 
 | Directory | Description |
 |------|------|
-| `agents/` | Agent source assets (tool-agnostic system prompts, permission boundaries, workflow definitions); currently README-only and waiting to be populated |
+| `agents/` | Agent source assets (tool-agnostic system prompts, permission boundaries, workflow definitions); partially populated, see `agents/README.md` |
 | `commands/claude/` | Claude Code command source assets; currently README-only and waiting to be populated |
 | `commands/codex/` | Codex CLI command source assets; currently README-only and waiting to be populated |
 | `commands/shell/` | Shared shell scripts; currently README-only and waiting to be populated |
@@ -59,8 +60,8 @@ agents/<id>/SYSTEM.md            ──→   .claude/agents/<role>.md
 commands/<tool>/                 ──→   .<tool>/commands/<ns>/<name>.md
 ```
 
-> **Current status**: the `agents/` and `commands/` source layers have not been built yet and currently contain README skeletons only.
-> Agent and command assets are still maintained directly in tool deployment directories (`.claude/`, `.opencode/`, `.codex/`, while `commands/` is waiting to be populated).
+> **Current status**: the `agents/` source layer is partially built, but it is not yet automatically synced to every tool deployment directory.
+> Command assets are still maintained directly in tool deployment directories (`.claude/`, `.opencode/`, `.codex/`, while `commands/` is waiting to be populated).
 > See `.trellis/spec/agents/index.md` and `.trellis/spec/commands/index.md` for details.
 
 ### Notes on Automated Workflows
