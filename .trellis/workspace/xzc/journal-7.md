@@ -1081,3 +1081,36 @@ Triaged workflow scan false positives, hardened workflow-scan and workflow-repai
 ### Next Steps
 
 - None - task complete
+
+
+## Session 336: Harden workflow-repair truth precheck
+
+**Date**: 2026-05-28
+**Task**: Harden workflow-repair truth precheck
+**Branch**: `main`
+
+### Summary
+
+Updated workflow-repair to run focused truth precheck on existing temp-project evidence before cross-task lineage escalation, added regression scenario 73, synchronized workflow-repair spec, and archived the repair task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d23867b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
