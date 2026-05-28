@@ -12,19 +12,19 @@ Reusable assets accumulated from AI-assisted programming work: specs, templates,
 |------|------|
 | `trellis-library/` | **Core asset library**: specs, templates, checklists, examples, schemas, and scripts managed through `manifest.yaml` |
 | `.trellis/spec/` | **Live project spec workspace**: defines how assets in this repository are authored and maintained, with 11 spec layers (agents, checklists, commands, docs, examples, guides, library-assets, platforms, scripts, skills, templates) |
-| `skills/` | Skills discoverable and installable through **Skills CLI** (`npx skills`) (4 skills) |
+| `skills/` | Skills discoverable and installable through **Skills CLI** (`npx skills`) (6 skills) |
 
 ### Source Asset Layer
 
 > ⚠️ `agents/` now contains real source agent assets, but it is not yet the automatic sync source for every tool deployment file.
-> `commands/*` source asset directories are still mostly README skeletons; real command assets are still maintained directly in the corresponding tool deployment layer.
+> `commands/*` is still mostly scaffolded source surface; `commands/shell/` already contains a shared helper script, Claude/OpenCode live command assets are still mainly edited in deployment directories, and Codex is not a `.commands/`-style carrier model here.
 
 | Directory | Description |
 |------|------|
 | `agents/` | Agent source assets (tool-agnostic system prompts, permission boundaries, workflow definitions); partially populated, see `agents/README.md` |
-| `commands/claude/` | Claude Code command source assets; currently README-only and waiting to be populated |
-| `commands/codex/` | Codex CLI command source assets; currently README-only and waiting to be populated |
-| `commands/shell/` | Shared shell scripts; currently README-only and waiting to be populated |
+| `commands/claude/` | Claude Code command source assets; still mostly README scaffolding |
+| `commands/codex/` | Codex CLI helper/source assets; still mostly README scaffolding and not equivalent to `.codex/commands/` |
+| `commands/shell/` | Shared shell scripts and helper entrypoints; already includes `init-trellis-temp-project.sh` |
 
 ### Tool Deployments
 
@@ -57,11 +57,13 @@ agents/<id>/SYSTEM.md            ──→   .claude/agents/<role>.md
                                 ──→   .opencode/agents/<role>.md
                                 ──→   .codex/agents/<role>.toml
 
-commands/<tool>/                 ──→   .<tool>/commands/<ns>/<name>.md
+commands/claude/<id>/            ──→   .claude/commands/<ns>/<name>.md
+commands/shell/<id>.sh           ──→   referenced directly or copied into helper flows
+commands/codex/<id>/             ──→   Codex config / hooks / skills / helper assets
 ```
 
 > **Current status**: the `agents/` source layer is partially built, but it is not yet automatically synced to every tool deployment directory.
-> Command assets are still maintained directly in tool deployment directories (`.claude/`, `.opencode/`, `.codex/`, while `commands/` is waiting to be populated).
+> The `commands/` source layer is not yet converged into one sync model: `commands/shell/` already contains a shared helper script, Claude/OpenCode live command assets are still mainly maintained in deployment directories, and Codex currently relies on `AGENTS.md`, `.codex/config.toml`, hooks, `.agents/skills/`, and `.codex/agents/` rather than a project command directory.
 > See `.trellis/spec/agents/index.md` and `.trellis/spec/commands/index.md` for details.
 
 ### Notes on Automated Workflows

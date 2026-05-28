@@ -20,8 +20,8 @@ Primary asset types:
 - `skills/`: skill source assets maintained in this repo
 - `.agents/`: shared deployment layer scanned by compatible skill loaders; in this repository it is currently populated by shared Trellis skills under `.agents/skills/`
 - `.claude/`, `.opencode/`, `.codex/`, `.kiro/`, `.qoder/`: current platform integration and deployment layer
-- `agents/`: currently a placeholder scaffold with README-only guidance; it is not yet the live source of truth for the managed Trellis agent trio
-- `commands/`: repo-root scaffold docs; do not confuse this directory with the workflow-local agent source
+- `agents/`: source agent asset layer with real repo-authored agent directories plus authoring templates; it is not the live source of truth for the managed Trellis native agent trio
+- `commands/`: repo-root command/source-helper layer; currently still mostly scaffold docs, but it already includes shared shell helper assets and should not be confused with the workflow-local command product source
 - current workflow product source tree: lives under `docs/workflows/新项目开发工作流/`; its command, installer, and CLI-adapter source assets live under `docs/workflows/新项目开发工作流/commands/`
 - `.trellis/.template-hashes.json`: drift-tracking record for Trellis-managed deployment files across platform directories
 

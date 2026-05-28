@@ -14,7 +14,7 @@ This is a **meta-project** — an AI coding toolkit that maintains both reusable
 - **Shell** validation scripts
 - **SKILL.md** skill definitions (YAML frontmatter + markdown)
 - **Agent** source assets (`agents/<id>/`) deployed to `.claude/agents/`, `.opencode/agents/`, `.codex/agents/`
-- **Command** source assets (`commands/<tool>/`) deployed to tool-specific command directories
+- **Command** source assets (`commands/<tool>/`) deployed to platform-specific command, helper, config, or skill surfaces depending on the tool
 - **Workflow assets** under `docs/workflows/**`, including command source files, installers, and workflow conventions
 
 `.trellis/spec/` is the live spec workspace for this repository. It is narrower

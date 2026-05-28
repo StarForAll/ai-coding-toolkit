@@ -1,8 +1,8 @@
 # Command Asset Specification
 
 > **⚠️ IMPORTANT**: This spec describes the TARGET architecture, not current practice.
-> Current workflow: Edit directly in `.claude/commands/`、`.opencode/commands/`
-> To implement this architecture: populate `commands/<tool>/<id>/` source layer, then enable sync to tool directories
+> Current workflow: edit live command docs directly in `.claude/commands/` and `.opencode/commands/`; keep shared shell helpers in `commands/shell/`; treat Codex as a config / hooks / skills / helper-asset surface rather than a project command directory.
+> To implement this architecture: populate `commands/<tool>/<id>/` source layer, then enable sync to the appropriate deployment surfaces.
 
 > How to author command source assets for multiple AI CLI tools.
 
@@ -10,13 +10,19 @@
 
 ## Current State
 
-**Source asset directories** (`commands/claude/<id>/`、`commands/codex/<id>/`、`commands/shell/<id>/`) are empty — only top-level README files exist, no actual scripts.
+**Source asset directories** are still incomplete:
+- `commands/claude/` and `commands/codex/` currently remain at top-level README scaffolding
+- `commands/shell/` is no longer empty; it already contains shared helper scripts such as `init-trellis-temp-project.sh`
 
 **Tool command directories** (`.claude/commands/`、`.opencode/commands/`) contain live commands,
 but are **not synchronized** from `commands/<tool>/` source.
-Current practice is **direct editing** in tool directories.
+Current practice is still **direct editing** in tool command directories for Claude/OpenCode.
 
-**To close the gap:** populate `commands/<tool>/<id>/` with real scripts, then apply the deployment mapping.
+**Codex** does not currently use a project `.codex/commands/` discovery directory in this repo.
+Its live integration is primarily carried by `AGENTS.md`, `.codex/config.toml`,
+`.codex/hooks*`, `.agents/skills/`, and `.codex/agents/`.
+
+**To close the gap:** continue populating `commands/<tool>/<id>/` with real source assets, then apply the deployment mapping appropriate to each platform surface.
 
 ---
 
@@ -141,9 +147,9 @@ Before finalizing a new command source asset:
 - **Unpaired reviewer handoff**: Commands that ask other CLIs to run reviewer work but fail to emit the matching `multi-cli-review-action` command for the current CLI
 - **Divergent reviewer prompts**: Default reviewer command pairs that differ in review description or `--review-focus` when the only intended difference is `--reviewer-id`
 
-## Platform Drift Status (as of 2026-05-04)
+## Platform Drift Status (as of 2026-05-28)
 
-Source layer `commands/` is empty (only README.md files). Tool command directories contain live content. Drift inventory below classifies differences for the source-layer convergence task (`03-19-implement-commands-source`).
+Source layer `commands/` is still only partially populated: `commands/shell/` now has live helper content, while `commands/claude/` and `commands/codex/` remain mostly scaffold-only. Tool command directories still contain live content. Drift inventory below classifies differences for the source-layer convergence task (`03-19-implement-commands-source`).
 
 ### Drift Classification
 

@@ -12,19 +12,19 @@
 |------|------|
 | `trellis-library/` | **核心资产库**：specs、templates、checklists、examples、schemas、scripts，通过 `manifest.yaml` 注册管理 |
 | `.trellis/spec/` | **项目活规范工作区**：定义如何编写和维护本仓库资产，11 个规范层（agents、checklists、commands、docs、examples、guides、library-assets、platforms、scripts、skills、templates） |
-| `skills/` | 可被 **Skills CLI**（`npx skills`）发现与安装的技能（4 个） |
+| `skills/` | 可被 **Skills CLI**（`npx skills`）发现与安装的技能（6 个） |
 
 ### 源资产层（Source Assets）
 
 > ⚠️ `agents/` 已开始承载真实 source agent 资产，但尚未成为所有工具部署文件的自动同步源。
-> `commands/*` 源资产目录仍主要是 README 骨架，实际 command 资产暂直接维护于对应工具部署层。
+> `commands/*` 源资产层仍以脚手架为主；其中 `commands/shell/` 已有共享脚本，Claude / OpenCode 的 live command 资产仍主要直接维护于对应工具部署层，Codex 也不是 `.commands/` 型承载模型。
 
 | 目录 | 说明 |
 |------|------|
 | `agents/` | Agent 源资产（tool-agnostic 的系统提示词、权限边界、工作流定义），已部分填充，详见 `agents/README.md` |
-| `commands/claude/` | Claude Code 命令源资产，当前仅 README，待填充 |
-| `commands/codex/` | Codex CLI 命令源资产，当前仅 README，待填充 |
-| `commands/shell/` | 通用 shell 脚本，当前仅 README，待填充 |
+| `commands/claude/` | Claude Code 命令源资产，当前仍以 README 骨架为主 |
+| `commands/codex/` | Codex CLI 辅助资产源层，当前仍以 README 骨架为主；不等于 `.codex/commands/` |
+| `commands/shell/` | 通用 shell 脚本与辅助入口；当前已包含 `init-trellis-temp-project.sh` |
 
 ### 工具部署层（Tool Deployments）
 
@@ -57,11 +57,13 @@ agents/<id>/SYSTEM.md       ──→    .claude/agents/<role>.md
                              ──→    .opencode/agents/<role>.md
                              ──→    .codex/agents/<role>.toml
 
-commands/<tool>/            ──→    .<tool>/commands/<ns>/<name>.md
+commands/claude/<id>/       ──→    .claude/commands/<ns>/<name>.md
+commands/shell/<id>.sh      ──→    直接引用 / 复制到辅助流程
+commands/codex/<id>/        ──→    Codex config / hooks / skills / helper assets
 ```
 
 > **当前状态**：`agents/` 源资产层已部分建立，但尚未自动同步到所有工具部署目录；
-> command 资产暂直接维护于各工具部署目录（`.claude/`、`.opencode/`、`.codex/`、`commands/` 待填充）。
+> `commands/` 源资产层仍未收口成统一同步模型：`commands/shell/` 已有共享脚本，Claude / OpenCode 的 live command 资产仍主要直接维护于部署目录，Codex 当前主承载面则是 `AGENTS.md`、`.codex/config.toml`、hooks、`.agents/skills/` 与 `.codex/agents/`。
 > 详见 `.trellis/spec/agents/index.md` 和 `.trellis/spec/commands/index.md`。
 
 ### 关于自动化工作流的说明

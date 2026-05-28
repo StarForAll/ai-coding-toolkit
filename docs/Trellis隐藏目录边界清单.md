@@ -145,8 +145,8 @@ ignored runtime residue
 3. 如果是 manual file，看它是否仍符合 repo 当前主路径。
 4. 如果是 ignored runtime residue，优先做清理或降噪，不要直接上升为实现缺陷。
 
-## 本轮已处理的 runtime 修复
+## Runtime 备注
 
-当前仓库已清理 `.trellis/.runtime/sessions/` 中指向不存在 task 的 stale session 文件，只保留仍指向 live task 的 session 记录。
+本文不把某一时刻的 runtime 清理结果当作长期事实来源。
 
-后续若再次出现同类问题，按本文的 “Ignored Runtime Residue” 口径处理。
+若后续发现 `.trellis/.runtime/sessions/` 中仍有 stale session、或又出现新的 marker / backup 残留，继续按本文的 “Ignored Runtime Residue” 口径处理：先归类为运行时残留，再决定是否清理；不要把瞬时现场状态直接写成 repo 的长期既成事实。
