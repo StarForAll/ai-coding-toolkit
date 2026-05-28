@@ -1147,3 +1147,36 @@ Updated workflow-repair to run focused truth precheck on existing temp-project e
 ### Next Steps
 
 - None - task complete
+
+
+## Session 338: 更新工作流思维导图
+
+**Date**: 2026-05-29
+**Task**: 更新工作流思维导图
+**Branch**: `main`
+
+### Summary
+
+根据 /tmp/trellis-0.5.17-2 实际嵌入的 workflow 更新 docs/workflows/新项目开发工作流/工作流思维导图.html；补充强门禁阶段机、main-session-only、禁 parallel/subagent、项目级审查、交付与原生 finish-work 分层，并完成结构、单测和浏览器渲染验证。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0e3e2d2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

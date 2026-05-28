@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-7.md`
-- **Total Sessions**: 337
-- **Last Active**: 2026-05-28
+- **Total Sessions**: 338
+- **Last Active**: 2026-05-29
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-7.md` | ~1149 | Active |
+| `journal-7.md` | ~1182 | Active |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
@@ -35,6 +35,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 338 | 2026-05-29 | 更新工作流思维导图 | `0e3e2d2` | `main` |
 | 337 | 2026-05-28 | 同步仓库文档现状 | `dcdf6e2` | `main` |
 | 336 | 2026-05-28 | Harden workflow-repair truth precheck | `d23867b` | `main` |
 | 335 | 2026-05-28 | Harden workflow scan and repair false-positive handling | `f2a07a8`, `ccd6a80`, `f0079d6` | `main` |
