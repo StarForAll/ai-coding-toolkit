@@ -1046,3 +1046,38 @@ Tightened workflow-scan and workflow-repair coupled contracts to stop Codex carr
 ### Next Steps
 
 - None - task complete
+
+
+## Session 335: Harden workflow scan and repair false-positive handling
+
+**Date**: 2026-05-28
+**Task**: Harden workflow scan and repair false-positive handling
+**Branch**: `main`
+
+### Summary
+
+Triaged workflow scan false positives, hardened workflow-scan and workflow-repair template/runtime handling, added positive and negative scenario coverage, and archived the repair task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f2a07a8` | (see git log) |
+| `ccd6a80` | (see git log) |
+| `f0079d6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
