@@ -1114,3 +1114,36 @@ Updated workflow-repair to run focused truth precheck on existing temp-project e
 ### Next Steps
 
 - None - task complete
+
+
+## Session 337: 同步仓库文档现状
+
+**Date**: 2026-05-28
+**Task**: 同步仓库文档现状
+**Branch**: `main`
+
+### Summary
+
+同步修正仓库入口文档与 repo-local spec 的当前事实描述，避免 AI CLI 或用户误判 agents/commands/source-deploy 边界、Codex carrier 模型和 runtime residue 状态。验证 validate-skills 与 trellis-library strict validation 通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dcdf6e2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
