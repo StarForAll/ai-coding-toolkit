@@ -74,6 +74,20 @@ workflow product source under `docs/workflows/新项目开发工作流/`.
     uppercase `SKILL.md`, and disabled-command active absence such as removed
     `parallel` surfaces are not workflow defects by default unless another
     installed surface contradicts the temp-project contract.
+19. Repair-side verification must analyze the contents and surrounding wording
+    of the relevant temp-project and source files before adopting a
+    document-reference or post-install-artifact finding. A scan report title,
+    missing-path existence check, or `confirmed-defect` label is not enough to
+    justify source edits.
+20. Installed templates and task-local runtime evidence files must not be
+    conflated. When the temp project has an installed shared template such as
+    `.trellis/workflow-docs/finish-work-checklist-template.md`, and installed
+    workflow surfaces describe `finish-work-checklist.md` as a file generated
+    later for the current task's close-out evidence, a fresh temp project
+    missing `finish-work-checklist.md` must be classified as `ignored` unless
+    a task has already reached the gate where the generated file is required,
+    the template is missing, or another installed surface explicitly says the
+    runtime file must exist immediately after install.
 
 ---
 
@@ -158,6 +172,10 @@ Before adoption, it must:
   `parallel` has no active command/skill file, marker, or stub, and the temp
   project's installed workflow contract says that surface is disabled and
   removed from the active embedded state
+- classify the item as `ignored` rather than `manual-decision` when the temp-
+  project symptom only reports a missing task-local runtime evidence file that
+  is generated later from an installed template, and no current task has
+  reached the gate requiring that runtime file
 - honor the report-side repair classification as a default safety gate:
   `confirmed-defect` may enter normal repair verification, `design-debt`
   defaults to non-adopted handling unless the user explicitly broadens scope,
@@ -530,6 +548,8 @@ When editing `skills/workflow-repair/`, confirm all of the following:
   findings that must not auto-enter adopted repair execution
 - persisted tests now include both the shared-surface positive path and the
   Codex/filename/disabled-surface false-positive guards added on the scan side
+- persisted tests now include repair-side handling for installed shared
+  templates versus later-generated task-local runtime evidence files
 - any protocol, field, role-boundary, example, or behavior change is mirrored
   by a matching `workflow-scan` adaptation and shared-template update in the
   same change

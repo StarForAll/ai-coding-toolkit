@@ -8,6 +8,10 @@ compatibility: Requires `trellis` on PATH, access to the temp project report plu
 
 ## Version History
 
+- **v3.9**: Added repair-side false-positive handling for installed shared
+  templates versus later-generated task-local runtime evidence files, and
+  clarified that document-reference findings require content-level verification
+  before adoption
 - **v3.8**: Clarified that scan findings based only on empty
   `.codex/skills/`, uppercase `SKILL.md`, or disabled-command active absence
   such as removed `parallel` surfaces default to `ignored` unless another
@@ -244,6 +248,19 @@ Use this skill when any of the following is true:
     the surface is disabled and removed from the active embedded state, unless
     another installed surface explicitly requires a retained active marker or
     stub.
+35. **Template/runtime file separation is not an auto-defect**: findings that
+    only complain that an installed document references a task-local runtime
+    file which does not yet exist must default to `ignored` when the temp
+    project contains the corresponding installed template and the installed
+    workflow surfaces explain that the runtime file is generated later during
+    the relevant stage. For example,
+    `.trellis/workflow-docs/finish-work-checklist-template.md` is the installed
+    shared template, while `finish-work-checklist.md` is current-task
+    close-out evidence created when a task reaches delivery / finish-work
+    readiness. Treat it as actionable only if the template is missing, a task
+    has already reached the gate where the runtime file is required and the
+    file is absent, or another installed surface explicitly claims the runtime
+    file must exist immediately after install.
 
 ### Repair Lineage
 
@@ -603,18 +620,23 @@ project:
 2. Infer the likely source-side repair surface from the finding's temp-project
    evidence and description.
 3. Read the relevant source-project file(s) needed to test that hypothesis.
-4. Compare the temp-project behavior/evidence against the source-side
+4. For document-reference and post-install-artifact findings, inspect the
+   relevant file contents and surrounding wording before deciding whether the
+   finding is real. Do not adopt a finding solely from filename mismatch,
+   missing-path existence checks, report title wording, or the scan-side
+   `confirmed-defect` label.
+5. Compare the temp-project behavior/evidence against the source-side
    declaration and the finding evidence.
-5. Cross-reference with workflow-local declarations such as
+6. Cross-reference with workflow-local declarations such as
    `workflow_assets.py` when relevant to the suspected repair path.
-6. Identify the root-cause class before deciding:
+7. Identify the root-cause class before deciding:
    - stale declaration drift
    - incomplete installer patch
    - partial cross-file update
    - wrong runtime assumption
    - missing cleanup / residual artifact
    - another clearly named root-cause class
-7. Assign a verification result:
+8. Assign a verification result:
    - **Confirmed**: the finding is real in the temp project and the source
      workflow contains a clear, safe repair path → mark as `adopted`
    - **False alarm**: the finding is already fixed, was misidentified, or does
@@ -625,44 +647,49 @@ project:
      risk, or a trade-off → mark as `manual-decision`
    - **Trellis-native**: the issue is in a trellis-installed artifact, not
      workflow source → mark as `trellis-native`
-8. Apply the **negative-optimization guardrail**: if a fix would change
+9. Apply the **negative-optimization guardrail**: if a fix would change
    behavior that currently works correctly (even if the code looks wrong),
    prefer `manual-decision` over `adopted`.
-9. If the symptom depends only on a CLI outside the current supported
+10. If the symptom depends only on a CLI outside the current supported
    three-platform surface (Claude Code / OpenCode / Codex), downgrade the item
    to `ignored` instead of treating it as a current workflow defect.
-10. If the symptom is only that a managed `.backup-original/` carrier tree is
+11. If the symptom is only that a managed `.backup-original/` carrier tree is
    present, and the temp project's install record plus active asset names show
    it is an intentional restore surface, downgrade the item to `ignored`
    instead of treating it as a current workflow defect.
-11. If the symptom is only that a retained compatibility/subagent carrier
+12. If the symptom is only that a retained compatibility/subagent carrier
    remains on disk, and the temp project's installed docs or runtime rules
    explicitly mark it as currently disabled/unavailable with no contradictory
    installed surface, downgrade the item to `ignored` instead of treating it
    as a current workflow defect. Contradictory surfaces include installed docs
    still teaching its usage, hooks/config/runtime controls still invoking it,
    or another installed command/skill/agent surface still routing through it.
-12. If the symptom is a shared or external baseline surface under an in-scope
+13. If the symptom is a shared or external baseline surface under an in-scope
    carrier directory, but the temp project does not show that the current
    workflow explicitly owns, patches, or routes through that surface,
    downgrade the item to `ignored` instead of treating it as a current
    workflow defect.
-13. If the temp project does show that a shared-carrier surface is workflow-owned or workflow-patched, keep that item in the normal verification path rather than downgrading it to `ignored` solely because it lives under `.agents/skills/` or another shared carrier.
-14. If the symptom is only that `.codex/skills/` is empty, or that shared
+14. If the temp project does show that a shared-carrier surface is workflow-owned or workflow-patched, keep that item in the normal verification path rather than downgrading it to `ignored` solely because it lives under `.agents/skills/` or another shared carrier.
+15. If the symptom is only that `.codex/skills/` is empty, or that shared
    workflow skills are absent there, and the temp project's installed surfaces
    treat `.agents/skills/` as the shared workflow primary carrier while
    `.codex/skills/` remains only a secondary carrier, downgrade the item to
    `ignored` instead of treating it as a current workflow defect.
-15. If the symptom is only that installed skill files use uppercase
+16. If the symptom is only that installed skill files use uppercase
    `SKILL.md`, and the temp project's installed workflow surfaces consistently
    use that filename convention, downgrade the item to `ignored` instead of
    treating it as a current workflow defect.
-16. If the symptom is only that an intentionally disabled surface such as
+17. If the symptom is only that an intentionally disabled surface such as
    `parallel` has no active command/skill file, marker, or stub, and the temp
    project's installed workflow contract says that the surface is disabled and
    removed from the active embedded state, downgrade the item to `ignored`
    instead of treating it as a current workflow defect.
-17. If the item is a repeated finding and the current fix proposal does not
+18. If the symptom is only that an installed document references a task-local
+   runtime artifact that is generated later from an installed template,
+   downgrade the item to `ignored` when the template exists, the installed
+   surfaces explain the generation path, and no task has reached the gate
+   requiring that runtime artifact.
+19. If the item is a repeated finding and the current fix proposal does not
    explain why the earlier repair missed it, downgrade the item to
    `manual-decision` or `blocked`.
 
@@ -1198,6 +1225,7 @@ that cover the affected runtime surfaces.
 - `tests/68-codex-secondary-skills-empty-defaults-to-ignored.md`
 - `tests/69-uppercase-skill-md-convention-defaults-to-ignored.md`
 - `tests/70-disabled-command-active-absence-defaults-to-ignored.md`
+- `tests/71-finish-work-checklist-template-defaults-to-ignored.md`
 
 ## Examples
 

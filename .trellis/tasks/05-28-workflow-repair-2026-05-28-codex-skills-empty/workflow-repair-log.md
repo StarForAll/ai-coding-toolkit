@@ -104,3 +104,20 @@ The user then requested a cause judgment and skill hardening when appropriate.
 - WS-002 cause: `workflow-scan` contract gap. The skill did not yet explicitly distinguish installed shared templates from later-generated task-local runtime evidence files.
 - Applied fix: strengthened `skills/workflow-scan/SKILL.md`, `skills/workflow-scan/references/scan-output-template.md`, `.trellis/spec/skills/workflow-scan.md`, and added `skills/workflow-scan/tests/17-finish-work-checklist-template-is-not-missing-runtime-file.md`.
 - Verification: `./scripts/validate-skills.sh` passed.
+
+## workflow-repair Skill Assessment
+
+The user then requested the same hardening on `workflow-repair`, with emphasis
+on reading the relevant file contents before deciding whether a reported issue
+is real.
+
+- Assessment artifact: `.trellis/tasks/05-28-workflow-repair-2026-05-28-codex-skills-empty/workflow-repair-skill-assessment.md`
+- Existing coverage: `workflow-repair` already had the Codex secondary-skill
+  empty-directory false-positive guard through test 68.
+- Gap found: repair-side wording did not explicitly call out content-level
+  verification for document-reference / post-install-artifact findings, nor the
+  installed-template vs task-local-runtime-file false-positive pattern.
+- Applied fix: strengthened `skills/workflow-repair/SKILL.md`,
+  `.trellis/spec/skills/workflow-repair.md`, and added
+  `skills/workflow-repair/tests/71-finish-work-checklist-template-defaults-to-ignored.md`.
+- Verification: `./scripts/validate-skills.sh` and `git diff --check` passed.
