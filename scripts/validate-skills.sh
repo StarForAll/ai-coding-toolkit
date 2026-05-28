@@ -375,7 +375,15 @@ validate_workflow_scan_repair_contract() {
     "skills/workflow-scan/tests/05-unresolved-helper-conflict-dropped.md" \
     "skills/workflow-scan/tests/06-partial-helper-output-local-followup.md" \
     "skills/workflow-scan/tests/07-inline-when-speed-or-depth-only.md" \
-    "skills/workflow-scan/tests/08-classifies-repair-eligibility-before-emitting-findings.md"
+    "skills/workflow-scan/tests/08-classifies-repair-eligibility-before-emitting-findings.md" \
+    "skills/workflow-scan/tests/09-backup-original-preservation-is-not-defect.md" \
+    "skills/workflow-scan/tests/10-retained-disabled-subagent-carrier-is-not-finding.md" \
+    "skills/workflow-scan/tests/11-non-workflow-owned-shared-skill-surface-is-not-finding.md" \
+    "skills/workflow-scan/tests/12-workflow-owned-shared-skill-surface-is-finding.md" \
+    "skills/workflow-scan/tests/13-workflow-patched-shared-surface-enters-actionable-finding-set.md" \
+    "skills/workflow-scan/tests/14-codex-secondary-skills-empty-is-not-finding.md" \
+    "skills/workflow-scan/tests/15-uppercase-skill-md-convention-is-not-finding.md" \
+    "skills/workflow-scan/tests/16-disabled-command-removal-without-marker-is-not-finding.md"
   do
     [ -f "$test_file" ] || fail "missing $test_file"
     grep -Fq "## Purpose" "$test_file" || fail "$test_file missing Purpose section"
@@ -435,6 +443,12 @@ validate_workflow_scan_repair_contract() {
   grep -Fq "Repair classification is mandatory" "$scan_skill" || fail "$scan_skill missing mandatory repair-classification guard"
   grep -Fq "No complexity-only inflation" "$scan_skill" || fail "$scan_skill missing design-debt anti-inflation guard"
   grep -Fq "No evidence-gap inflation" "$scan_skill" || fail "$scan_skill missing evidence-gap anti-inflation guard"
+  grep -Fq "Codex shared-vs-secondary skill carriers must stay distinct" "$scan_skill" || fail "$scan_skill missing Codex shared-vs-secondary carrier rule"
+  grep -Fq "Uppercase \`SKILL.md\` is a valid skill-file convention here" "$scan_skill" || fail "$scan_skill missing uppercase SKILL.md false-positive guard"
+  grep -Fq "Disabled-command removal may be satisfied by active absence" "$scan_skill" || fail "$scan_skill missing disabled-command active-absence rule"
+  grep -Fq ".codex/skills/" "$scan_template" || fail "$scan_template missing Codex secondary-carrier note"
+  grep -Fq "uppercase \`SKILL.md\`" "$scan_template" || fail "$scan_template missing uppercase SKILL.md note"
+  grep -Fq "parallel" "$scan_template" || fail "$scan_template missing disabled-command active-absence note"
 
   grep -Fq "\`document-type\` must be \`workflow-questions\`" "$repair_skill" || fail "$repair_skill missing repair-side intake requirement for document-type"
   grep -Fq "\`protocol\` must be \`workflow-scan-repair-v4\`" "$repair_skill" || fail "$repair_skill missing repair-side intake requirement for protocol"
@@ -513,9 +527,28 @@ validate_workflow_scan_repair_contract() {
   grep -Fq "Default repair-ready scope is narrow" "$repair_skill" || fail "$repair_skill missing confirmed-defect-only default gate"
   grep -Fq "Design debt is not auto-repair" "$repair_skill" || fail "$repair_skill missing design-debt default stop rule"
   grep -Fq "Evidence gaps block source edits" "$repair_skill" || fail "$repair_skill missing evidence-gap default stop rule"
+  grep -Fq "Codex secondary skill emptiness is not an auto-defect" "$repair_skill" || fail "$repair_skill missing Codex secondary-carrier ignore rule"
+  grep -Fq "Uppercase \`SKILL.md\` is not an auto-defect when contract-consistent" "$repair_skill" || fail "$repair_skill missing uppercase SKILL.md ignore rule"
+  grep -Fq "Disabled-command active absence is not an auto-defect" "$repair_skill" || fail "$repair_skill missing disabled-command active-absence ignore rule"
+  grep -Fq "keep that item in the normal verification path" "$repair_skill" || fail "$repair_skill missing shared-surface positive-path verification rule"
   grep -Fq "normalize(source-report)" "$repair_skill" || fail "$repair_skill missing repair-lineage normalization rule"
   grep -Fq "strip a trailing" "$repair_skill" || fail "$repair_skill missing repair-lineage path normalization detail"
   grep -Fq "prompt-level skill fixtures" "$repair_skill" || fail "$repair_skill missing explicit fixture-vs-executable-tests note"
+  for repair_test_file in \
+    "skills/workflow-repair/tests/65-non-workflow-owned-shared-baseline-finding-defaults-to-ignored.md" \
+    "skills/workflow-repair/tests/66-workflow-owned-shared-surface-stays-actionable.md" \
+    "skills/workflow-repair/tests/67-workflow-patched-shared-surface-stays-actionable.md" \
+    "skills/workflow-repair/tests/68-codex-secondary-skills-empty-defaults-to-ignored.md" \
+    "skills/workflow-repair/tests/69-uppercase-skill-md-convention-defaults-to-ignored.md" \
+    "skills/workflow-repair/tests/70-disabled-command-active-absence-defaults-to-ignored.md"
+  do
+    [ -f "$repair_test_file" ] || fail "missing $repair_test_file"
+    grep -Fq "## Purpose" "$repair_test_file" || fail "$repair_test_file missing Purpose section"
+    grep -Fq "## Input" "$repair_test_file" || fail "$repair_test_file missing Input section"
+    grep -Fq "## Expected Mode" "$repair_test_file" || fail "$repair_test_file missing Expected Mode section"
+    grep -Fq "## Expected Key Behaviors" "$repair_test_file" || fail "$repair_test_file missing Expected Key Behaviors section"
+    grep -Fq "## Must Not" "$repair_test_file" || fail "$repair_test_file missing Must Not section"
+  done
 
   for template in \
     "$correction_plan_template" \

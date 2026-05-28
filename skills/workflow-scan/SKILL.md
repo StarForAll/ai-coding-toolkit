@@ -8,6 +8,9 @@ compatibility: Requires `trellis` on PATH, access to the temp project fixture, l
 
 ## Version History
 
+- **v3.8**: Added explicit false-positive guards for Codex shared-vs-secondary
+  skill carriers, uppercase `SKILL.md` skill-file convention, and
+  intentionally removed disabled-command active surfaces such as `parallel`
 - **v3.7**: Added positive scenario coverage for shared surfaces that are
   truly workflow-owned or workflow-patched, so ownership gating tests both the
   omit path and the actionable-finding path
@@ -218,6 +221,30 @@ Use this skill when any of the following is true:
     external baseline carrier that the embedded workflow did not explicitly
     claim, patch, or route through, omit it from the actionable finding set
     rather than emitting it as a workflow defect.
+25. **Workflow-owned shared surfaces must stay actionable**: when temp-project
+    ownership proof is present for a shared-carrier surface, the scan must
+    keep that observation in the actionable finding set rather than omitting
+    it merely because the file lives under `.agents/skills/` or another shared
+    carrier.
+26. **Codex shared-vs-secondary skill carriers must stay distinct**: for the
+    supported Codex workflow surface, `.agents/skills/*/SKILL.md` is the
+    shared workflow primary carrier, while `.codex/skills/*/SKILL.md` is only
+    a secondary carrier for Codex-specific or project-local extra skills. The
+    scan must not emit a finding merely because `.codex/skills/` is empty or
+    because shared workflow skills are absent there, unless another installed
+    surface explicitly claims that a current workflow-owned skill should live
+    under `.codex/skills/`.
+27. **Uppercase `SKILL.md` is a valid skill-file convention here**: the scan
+    must not emit a finding merely because installed skill files use
+    uppercase `SKILL.md` instead of lowercase `skill.md` when the temp
+    project's supported workflow surfaces, installed docs, or other installed
+    skill carriers consistently use `SKILL.md`.
+28. **Disabled-command removal may be satisfied by active absence**: when the
+    temp project's installed workflow rules say a command/skill surface such
+    as `parallel` is intentionally disabled and removed from the active
+    embedded surface, the scan must not require a separate `.disabled` marker,
+    placeholder command file, or active skill stub unless another installed
+    surface explicitly says such an artifact should exist.
 
 ## Inputs
 
@@ -434,6 +461,17 @@ For each CLI carrier in the temp project:
    - hook scripts that reference wrong or missing paths
    - runtime-control drift between installed docs/config and actual patched
      files
+5. **Codex carrier boundaries**: for `.agents/skills/` and `.codex/skills/`,
+   verify carrier role before emitting a finding:
+   - treat `.agents/skills/*/SKILL.md` as the shared workflow primary carrier
+     when installed docs/runtime rules describe it that way
+   - treat `.codex/skills/` as a secondary carrier unless installed evidence
+     shows a current workflow-owned Codex-specific skill should live there
+   - do not classify an empty `.codex/skills/` directory as a defect by itself
+   - do not classify uppercase `SKILL.md` as a defect by itself when the temp
+     project consistently uses that convention
+   - do not classify removed `parallel` active surfaces as a defect by itself
+     when the installed workflow explicitly disables that path
 
 ### Step 4: Document and Reference Integrity
 
@@ -586,6 +624,9 @@ Required persisted scenario files:
 - `tests/11-non-workflow-owned-shared-skill-surface-is-not-finding.md`
 - `tests/12-workflow-owned-shared-skill-surface-is-finding.md`
 - `tests/13-workflow-patched-shared-surface-enters-actionable-finding-set.md`
+- `tests/14-codex-secondary-skills-empty-is-not-finding.md`
+- `tests/15-uppercase-skill-md-convention-is-not-finding.md`
+- `tests/16-disabled-command-removal-without-marker-is-not-finding.md`
 
 Every test file must use the same structure:
 

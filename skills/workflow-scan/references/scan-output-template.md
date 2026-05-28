@@ -197,6 +197,16 @@ Additional classification rule:
   or kept in place for possible future re-enable after maturity improves, that
   observation is omitted from the finding set unless another installed surface
   contradicts the stated “present but intentionally disabled” contract.
+- For Codex, `.agents/skills/` is the shared workflow primary carrier and
+  `.codex/skills/` is a secondary carrier for Codex-specific or project-local
+  extras. An empty `.codex/skills/` directory or the absence of shared
+  workflow skills there is not a finding by itself.
+- When installed workflow surfaces consistently use uppercase `SKILL.md`, that
+  filename convention is not a finding by itself.
+- When an installed workflow explicitly disables a surface such as `parallel`
+  and removes it from the active embedded state, the absence of an active
+  command/skill file is not a finding by itself unless another installed
+  surface explicitly requires a retained marker or stub.
 - If the temp project shows no concrete contradiction beyond that intentional
   gated state, omit it from the `### WS-NNN` finding set.
 - Contradiction examples include installed workflow docs still teaching that

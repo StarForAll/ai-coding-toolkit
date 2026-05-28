@@ -8,6 +8,14 @@ compatibility: Requires `trellis` on PATH, access to the temp project report plu
 
 ## Version History
 
+- **v3.8**: Clarified that scan findings based only on empty
+  `.codex/skills/`, uppercase `SKILL.md`, or disabled-command active absence
+  such as removed `parallel` surfaces default to `ignored` unless another
+  installed surface contradicts the current temp-project contract
+- **v3.7**: Clarified the positive shared-surface ownership path so findings
+  on workflow-owned or workflow-patched shared carriers must still enter normal
+  verification instead of being ignored solely because the surface lives under
+  a shared carrier directory
 - **v3.6**: Clarified compatibility with scan-side ownership gating so older
   reports that still flag non-workflow-owned shared baseline surfaces default
   to `ignored` unless temp-project evidence shows current workflow ownership
@@ -218,6 +226,24 @@ Use this skill when any of the following is true:
     disabled contract. Contradictions include installed workflow docs still
     teaching its usage, hooks/config/runtime controls still invoking it, or
     another installed command/skill/agent surface still routing through it.
+32. **Codex secondary skill emptiness is not an auto-defect**: findings that
+    only complain that `.codex/skills/` is empty, or that shared workflow
+    skills are absent there, must default to `ignored` when the temp project's
+    installed workflow surfaces treat `.agents/skills/` as the shared workflow
+    primary carrier and `.codex/skills/` only as a secondary carrier for
+    Codex-specific or project-local extra skills.
+33. **Uppercase `SKILL.md` is not an auto-defect when contract-consistent**:
+    findings that only complain about uppercase `SKILL.md` instead of
+    lowercase `skill.md` must default to `ignored` when the temp project's
+    installed workflow surfaces and runtime docs consistently use uppercase
+    `SKILL.md`.
+34. **Disabled-command active absence is not an auto-defect**: findings that
+    only complain that an intentionally disabled command/skill surface such as
+    `parallel` has no active command file, marker, or stub must default to
+    `ignored` when the temp project's installed workflow contract says that
+    the surface is disabled and removed from the active embedded state, unless
+    another installed surface explicitly requires a retained active marker or
+    stub.
 
 ### Repair Lineage
 
@@ -621,7 +647,22 @@ project:
    workflow explicitly owns, patches, or routes through that surface,
    downgrade the item to `ignored` instead of treating it as a current
    workflow defect.
-13. If the item is a repeated finding and the current fix proposal does not
+13. If the temp project does show that a shared-carrier surface is workflow-owned or workflow-patched, keep that item in the normal verification path rather than downgrading it to `ignored` solely because it lives under `.agents/skills/` or another shared carrier.
+14. If the symptom is only that `.codex/skills/` is empty, or that shared
+   workflow skills are absent there, and the temp project's installed surfaces
+   treat `.agents/skills/` as the shared workflow primary carrier while
+   `.codex/skills/` remains only a secondary carrier, downgrade the item to
+   `ignored` instead of treating it as a current workflow defect.
+15. If the symptom is only that installed skill files use uppercase
+   `SKILL.md`, and the temp project's installed workflow surfaces consistently
+   use that filename convention, downgrade the item to `ignored` instead of
+   treating it as a current workflow defect.
+16. If the symptom is only that an intentionally disabled surface such as
+   `parallel` has no active command/skill file, marker, or stub, and the temp
+   project's installed workflow contract says that the surface is disabled and
+   removed from the active embedded state, downgrade the item to `ignored`
+   instead of treating it as a current workflow defect.
+17. If the item is a repeated finding and the current fix proposal does not
    explain why the earlier repair missed it, downgrade the item to
    `manual-decision` or `blocked`.
 
@@ -1152,6 +1193,11 @@ that cover the affected runtime surfaces.
 - `tests/63-version-bump-does-not-reset-repair-lineage.md`
 - `tests/64-closure-runtime-patch-requires-behavior-verification.md`
 - `tests/65-non-workflow-owned-shared-baseline-finding-defaults-to-ignored.md`
+- `tests/66-workflow-owned-shared-surface-stays-actionable.md`
+- `tests/67-workflow-patched-shared-surface-stays-actionable.md`
+- `tests/68-codex-secondary-skills-empty-defaults-to-ignored.md`
+- `tests/69-uppercase-skill-md-convention-defaults-to-ignored.md`
+- `tests/70-disabled-command-active-absence-defaults-to-ignored.md`
 
 ## Examples
 

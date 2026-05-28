@@ -69,6 +69,11 @@ workflow product source under `docs/workflows/新项目开发工作流/`.
     lineage already produced two earlier ordinary repair tasks, the next
     attempt must escalate to audit / break-loop instead of continuing another
     routine repair batch.
+18. Repair-side default-ignore rules must also cover scan-side Codex false
+    positives: empty `.codex/skills/` secondary carriers, contract-consistent
+    uppercase `SKILL.md`, and disabled-command active absence such as removed
+    `parallel` surfaces are not workflow defects by default unless another
+    installed surface contradicts the temp-project contract.
 
 ---
 
@@ -134,6 +139,25 @@ Before adoption, it must:
   scan report points at a shared or external baseline surface under an
   in-scope carrier directory, but the temp project does not show that the
   current workflow explicitly owns, patches, or routes through that surface
+- keep workflow-owned or workflow-patched shared surfaces in the normal
+  verification path; a finding must not be downgraded to `ignored` merely
+  because the affected file lives under `.agents/skills/` or another shared
+  carrier when the temp project does show current workflow ownership or patch
+  evidence
+- classify the item as `ignored` rather than `manual-decision` when the temp-
+  project symptom only reports empty `.codex/skills/` secondary carriers or
+  missing shared workflow skills there, and the temp project's installed
+  workflow surfaces treat `.agents/skills/` as the shared workflow primary
+  carrier while `.codex/skills/` remains only a secondary carrier
+- classify the item as `ignored` rather than `manual-decision` when the temp-
+  project symptom only complains about uppercase `SKILL.md`, and the temp
+  project's installed workflow surfaces consistently use that filename
+  convention
+- classify the item as `ignored` rather than `manual-decision` when the temp-
+  project symptom only complains that an intentionally disabled surface such as
+  `parallel` has no active command/skill file, marker, or stub, and the temp
+  project's installed workflow contract says that surface is disabled and
+  removed from the active embedded state
 - honor the report-side repair classification as a default safety gate:
   `confirmed-defect` may enter normal repair verification, `design-debt`
   defaults to non-adopted handling unless the user explicitly broadens scope,
@@ -504,6 +528,8 @@ When editing `skills/workflow-repair/`, confirm all of the following:
   explicit current-task scoping is missing
 - persisted tests now include report-side `design-debt` and `evidence-gap`
   findings that must not auto-enter adopted repair execution
+- persisted tests now include both the shared-surface positive path and the
+  Codex/filename/disabled-surface false-positive guards added on the scan side
 - any protocol, field, role-boundary, example, or behavior change is mirrored
   by a matching `workflow-scan` adaptation and shared-template update in the
   same change

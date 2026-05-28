@@ -56,6 +56,22 @@ It does not fix source files.
    that the current workflow owns that surface. The scan must require
    temp-project ownership evidence before escalating a shared-surface
    observation into an actionable workflow finding.
+13. When temp-project ownership proof is present for a shared-carrier surface,
+   the scan must keep that observation in the actionable finding set rather
+   than omitting it merely because the file lives under `.agents/skills/` or
+   another shared carrier.
+14. For the supported Codex workflow surface, `.agents/skills/` is the shared
+   workflow primary skill carrier and `.codex/skills/` is only a secondary
+   carrier for Codex-specific or project-local extra skills. The scan must not
+   treat an empty `.codex/skills/` directory or missing shared workflow skills
+   there as a defect by itself.
+15. When the temp project's installed workflow surfaces consistently use
+   uppercase `SKILL.md`, the scan must not escalate that filename convention
+   into a finding merely because lowercase `skill.md` is absent.
+16. When an installed workflow explicitly disables a command/skill surface and
+   the active embedded state removes that surface rather than leaving a marker
+   file, the scan must treat active absence as a valid disabled state unless
+   another installed surface explicitly requires a retained marker/stub.
 
 ---
 
@@ -338,3 +354,9 @@ First-version scenario set should cover at least:
   set when temp-project ownership proof is present
 - workflow-patched shared surfaces are not allowed to bypass the actionable
   finding set merely because they still live under a shared carrier directory
+- Codex shared-vs-secondary carrier rules prevent `.codex/skills/` emptiness
+  from being treated as a defect by default
+- uppercase `SKILL.md` convention does not become a finding when the temp
+  project contract consistently uses that filename
+- disabled-command active absence is accepted when the installed workflow
+  explicitly removes the surface instead of leaving a marker
