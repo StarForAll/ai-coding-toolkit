@@ -8,6 +8,9 @@ compatibility: Requires `trellis` on PATH, access to the temp project report plu
 
 ## Version History
 
+- **v3.6**: Clarified compatibility with scan-side ownership gating so older
+  reports that still flag non-workflow-owned shared baseline surfaces default
+  to `ignored` unless temp-project evidence shows current workflow ownership
 - **v3.5**: Clarified that legacy scan findings which only complain about a
   retained carrier explicitly documented as temporarily disabled must default
   to `ignored` unless another installed surface contradicts that disabled
@@ -613,7 +616,12 @@ project:
    as a current workflow defect. Contradictory surfaces include installed docs
    still teaching its usage, hooks/config/runtime controls still invoking it,
    or another installed command/skill/agent surface still routing through it.
-12. If the item is a repeated finding and the current fix proposal does not
+12. If the symptom is a shared or external baseline surface under an in-scope
+   carrier directory, but the temp project does not show that the current
+   workflow explicitly owns, patches, or routes through that surface,
+   downgrade the item to `ignored` instead of treating it as a current
+   workflow defect.
+13. If the item is a repeated finding and the current fix proposal does not
    explain why the earlier repair missed it, downgrade the item to
    `manual-decision` or `blocked`.
 
@@ -1138,10 +1146,12 @@ that cover the affected runtime surfaces.
 - `tests/57-closure-unresolved-in-scope-blocks-closeout.md`
 - `tests/58-closure-new-family-stops-auto-progression.md`
 - `tests/59-backup-original-restore-surface-defaults-to-ignored.md`
+- `tests/60-successful-repair-bumps-version.md`
 - `tests/61-third-repair-task-same-lineage-escalates-to-needs-audit.md`
 - `tests/62-legacy-repair-log-fallback-still-catches-lineage-loop.md`
 - `tests/63-version-bump-does-not-reset-repair-lineage.md`
 - `tests/64-closure-runtime-patch-requires-behavior-verification.md`
+- `tests/65-non-workflow-owned-shared-baseline-finding-defaults-to-ignored.md`
 
 ## Examples
 

@@ -52,6 +52,10 @@ It does not fix source files.
    disabled contract. Contradictions include cases where installed workflow
    docs still teach its usage, hooks/config/runtime controls still invoke it,
    or another installed command/skill/agent surface still routes through it.
+12. A shared-carrier path such as `.agents/skills/` does not by itself prove
+   that the current workflow owns that surface. The scan must require
+   temp-project ownership evidence before escalating a shared-surface
+   observation into an actionable workflow finding.
 
 ---
 
@@ -184,6 +188,9 @@ The skill must:
   intentionally disabled or temporarily unavailable
 - verify source ownership boundary before escalating a temp-project observation
   into an actionable repair-side finding
+- treat shared-carrier placement alone as insufficient ownership proof; a file
+  living under `.agents/skills/` or another in-scope carrier does not by
+  itself make that surface workflow-owned
 - avoid reporting a `workflow-source` defect when the observed surface is a
   newly introduced shared or external baseline carrier that is not authored
   from `docs/workflows/新项目开发工作流/`
@@ -193,6 +200,10 @@ The skill must:
 - emit such observations only when the current workflow explicitly claims
   ownership of that entry surface or changed that runtime behavior; otherwise
   omit them from the actionable finding set
+- use temp-project-only ownership signals such as
+  `.trellis/workflow-installed.json`, workflow patch markers/watermarks,
+  installed docs/runtime rules, and active patched-carrier names before
+  escalating a shared-surface observation into `workflow-source`
 - omit observations that depend only on unsupported CLI usage outside the
   current Claude Code / OpenCode / Codex surface; they may be noted as context
   only when they help explain an in-scope three-platform behavior
@@ -321,3 +332,5 @@ First-version scenario set should cover at least:
 - speed/depth wording alone does not enable helper-agent mode
 - the shared report contract does not let complexity-only or insufficiently
   evidenced observations masquerade as repair-ready defects
+- shared-carrier observations require temp-project ownership proof before they
+  may enter the actionable finding set

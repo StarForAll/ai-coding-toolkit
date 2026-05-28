@@ -130,6 +130,10 @@ Before adoption, it must:
   workflow docs still teaching its usage, hooks/config/runtime controls still
   invoking it, or another installed command/skill/agent surface still routing
   through it
+- classify the item as `ignored` rather than `manual-decision` when an older
+  scan report points at a shared or external baseline surface under an
+  in-scope carrier directory, but the temp project does not show that the
+  current workflow explicitly owns, patches, or routes through that surface
 - honor the report-side repair classification as a default safety gate:
   `confirmed-defect` may enter normal repair verification, `design-debt`
   defaults to non-adopted handling unless the user explicitly broadens scope,

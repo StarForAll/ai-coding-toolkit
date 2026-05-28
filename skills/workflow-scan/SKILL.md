@@ -8,6 +8,9 @@ compatibility: Requires `trellis` on PATH, access to the temp project fixture, l
 
 ## Version History
 
+- **v3.6**: Clarified that a shared or external baseline skill/reference under
+  an in-scope carrier is not a workflow defect unless temp-project evidence
+  shows the current workflow explicitly owns or patched that surface
 - **v3.4**: Clarified that the complete-catalog rule excludes contradiction-
   free intentionally disabled retained carriers per rule 17, and restored
   design-debt / evidence-gap coverage in the shared output example
@@ -198,6 +201,20 @@ Use this skill when any of the following is true:
     backup copies paired with active patched/overlay assets recorded in
     `.trellis/workflow-installed.json` (for example `patched_baseline_commands`
     or `patched_codex_skills`).
+24. **Shared-carrier location alone does not prove workflow ownership**: when a
+    surface exists under a shared carrier such as `.agents/skills/`, the scan
+    must not emit it as a workflow defect unless temp-project evidence shows
+    that the current workflow explicitly owns, patches, routes through, or
+    otherwise changed that surface. Acceptable temp-project ownership evidence
+    includes install-record fields, workflow patch markers/watermarks, active
+    patched-carrier pairings, or installed docs/runtime rules that explicitly
+    describe the surface as workflow-managed. A file living under
+    `.agents/skills/` or another in-scope carrier must stay out of the
+    actionable finding set unless the temp project also shows explicit
+    workflow ownership of that surface. If the observation is a shared or
+    external baseline carrier that the embedded workflow did not explicitly
+    claim, patch, or route through, omit it from the actionable finding set
+    rather than emitting it as a workflow defect.
 
 ## Inputs
 
@@ -562,6 +579,8 @@ Required persisted scenario files:
 - `tests/07-inline-when-speed-or-depth-only.md`
 - `tests/08-classifies-repair-eligibility-before-emitting-findings.md`
 - `tests/09-backup-original-preservation-is-not-defect.md`
+- `tests/10-retained-disabled-subagent-carrier-is-not-finding.md`
+- `tests/11-non-workflow-owned-shared-skill-surface-is-not-finding.md`
 
 Every test file must use the same structure:
 
