@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-7.md`
-- **Total Sessions**: 332
+- **Total Sessions**: 333
 - **Last Active**: 2026-05-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-7.md` | ~982 | Active |
+| `journal-7.md` | ~1015 | Active |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
@@ -35,6 +35,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 333 | 2026-05-28 | Add game strategy master agent | `237dd93` | `main` |
 | 332 | 2026-05-28 | Add mobile game player reviewer agent | `2c565e8` | `main` |
 | 331 | 2026-05-28 | workflow-repair trellis-meta strong-gate收尾 | `abf7af5`, `ce97643`, `a66e35f` | `main` |
 | 330 | 2026-05-28 | Clarify workflow-scan retained carrier handling | `68af8f1`, `3ad3eac` | `main` |
