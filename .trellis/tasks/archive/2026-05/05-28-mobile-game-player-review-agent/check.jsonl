@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/agents/index.md", "reason": "Quality checklist for new agent source assets: README, SYSTEM, TOOLS, DEPLOYMENT, examples, boundaries, and tool-agnostic prompt body."}
+{"file": ".trellis/spec/docs/index.md", "reason": "Quality checks for documentation structure, links, exact paths, source/deploy language, and validation notes."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Check that the source-only change does not create drift in live .claude/.opencode/.codex deployment copies."}
+{"file": ".trellis/tasks/05-28-mobile-game-player-review-agent/research/platform-agent-docs.md", "reason": "Check that deployment guidance is backed by current official platform documentation and states refresh boundaries."}

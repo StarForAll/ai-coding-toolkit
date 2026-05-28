@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/agents/index.md", "reason": "Authoring contract for agents/<id>/ source assets, tool-agnostic SYSTEM.md, source/deploy boundary, and cross-CLI wrapper expectations."}
+{"file": ".trellis/spec/docs/index.md", "reason": "Documentation conventions for directory README updates, source/deploy boundary wording, exact paths, and verification notes."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Boundary review for source agent assets versus live deployment copies across CLI directories."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Reuse check for existing agent templates and source-asset patterns before adding a new agent."}
+{"file": ".trellis/tasks/05-28-mobile-game-player-review-agent/research/platform-agent-docs.md", "reason": "Official CLI wrapper field evidence used for Claude Code, OpenCode, and Codex deployment guidance."}
