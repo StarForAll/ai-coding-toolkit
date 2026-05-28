@@ -912,3 +912,38 @@ Clarified workflow-scan handling for intentionally disabled retained carriers, t
 ### Next Steps
 
 - None - task complete
+
+
+## Session 331: workflow-repair trellis-meta strong-gate收尾
+
+**Date**: 2026-05-28
+**Task**: workflow-repair trellis-meta strong-gate收尾
+**Branch**: `main`
+
+### Summary
+
+收口workflow-scan shared-surface ownership gate，修复trellis-meta strong-gate reference bundle的agent/subagent误导文案并补齐安装器回归覆盖。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `abf7af5` | (see git log) |
+| `ce97643` | (see git log) |
+| `a66e35f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
