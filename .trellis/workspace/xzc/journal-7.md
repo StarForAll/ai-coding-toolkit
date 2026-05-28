@@ -844,3 +844,37 @@ Fixed workflow-scan repair classification docs, trellis-meta reference drift, an
 ### Next Steps
 
 - None - task complete
+
+
+## Session 329: workflow audit runtime gate closure coverage
+
+**Date**: 2026-05-28
+**Task**: workflow audit runtime gate closure coverage
+**Branch**: `main`
+
+### Summary
+
+Audited repeated workflow-scan findings, hardened embedded runtime gate closure coverage, promoted repeat-issue triage to repo-level spec, and recorded audit artifacts.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b4de118` | (see git log) |
+| `3fd950f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
