@@ -31,6 +31,9 @@ PYTHON_BIN="/ops/softwares/python/bin/python3"
 WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1 "$PYTHON_BIN" "$WORKFLOW_ROOT/commands/install-workflow.py" --project-root "$TARGET_PROJECT" --profile outsourcing
 # 完整性校验
 "$PYTHON_BIN" "$WORKFLOW_ROOT/commands/upgrade-compat.py" --project-root "$TARGET_PROJECT" --check
+
+# 安装 impeccable【claude/agents]
+npx impeccable skills install
 -------------------------------------------
 
 
