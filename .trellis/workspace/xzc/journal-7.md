@@ -1180,3 +1180,36 @@ Updated workflow-repair to run focused truth precheck on existing temp-project e
 ### Next Steps
 
 - None - task complete
+
+
+## Session 339: Fix workflow design and task-project gate routing
+
+**Date**: 2026-05-31
+**Task**: Fix workflow design and task-project gate routing
+**Branch**: `main`
+
+### Summary
+
+修复嵌入 workflow 的 design UI 门禁、task-level 与 project-level 阶段边界、formal PROJECT-AUDIT carrier 规则，并补齐对应回归测试与文档口径。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9cd29eb` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
