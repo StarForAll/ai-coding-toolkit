@@ -5,7 +5,7 @@ description: 开发完成？准备交付 — 验收测试、交付物生成、�
 
 # /trellis:delivery — 项目测试、交付与沉淀
 
-> **Workflow Position**: §6 → 前: `/trellis:project-audit` / `/trellis:check` / `/trellis:review-gate` → 后: 视当前项目是否存在项目级交付事件，决定是否还需要单任务级 Trellis 原生 `/trellis:finish-work` 收尾
+> **Workflow Position**: §6 → 前: `/trellis:project-audit` / `/trellis:check` → 后: 视当前项目是否存在项目级交付事件，决定是否还需要单任务级 Trellis 原生 `/trellis:finish-work` 收尾
 > **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:delivery`） · ✅ OpenCode（TUI: `/trellis:delivery`；CLI: `trellis/delivery`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:delivery` 命令；见 `codex/README.md`）
 
 > **Strong Gate**: 本阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束。`delivery` 是项目级/交付级验收与交付阶段，不等同于单任务级 `finish-work`。若当前轮还需要对**当前活动任务**做原生 Trellis 收尾，再进入 `/trellis:finish-work`。
@@ -13,7 +13,7 @@ description: 开发完成？准备交付 — 验收测试、交付物生成、�
 补充边界：
 
 - 当上游来自任务级 `check` 时，`delivery` 直接消费当前 active task 的 `check.md`
-- 当上游来自任务级 `review-gate` 时，`delivery` 消费当前 active task 的 `check.md` 与最新 `review-gate/review-gate-round-<N>.md`
+- 当上游来自任务级 `review-gate`，且当前 `review-gate -> delivery` 已被合法允许时，`delivery` 还应消费当前 active task 的 `check.md` 与最新 `review-gate/review-gate-round-<N>.md`
 - 当上游来自项目级 `project-audit` 时，`delivery` 同时消费：
   - 当前 active task 的 `check.md`
   - 正式 `project-audit` 载体中的项目级总复核结论；若 `task_plan.md` 已声明独立 `PROJECT-AUDIT` task，则应以该 task 内的 `project-audit.md` 为准
@@ -23,7 +23,7 @@ description: 开发完成？准备交付 — 验收测试、交付物生成、�
 - 因此，只要 `task_plan.md` 已把 `PROJECT-AUDIT` 写成正式终局任务，进入 `delivery` 前就必须同时满足这两类证据；不能把“formal PROJECT-AUDIT 已完成”误解成可跳过当前 active task 的 `check.md`
 - 若 formal `PROJECT-AUDIT` 是独立 carrier task，则 `project-audit.md` 必须显式写出 `task_level_check_task`，用于绑定当前任务级 `check.md` 的真实 owner；不能只靠 parent/self 猜测
 - `task_level_check_task` 在新文档里应填写真实 task dir name 或 `.trellis/tasks/<task-dir-name>`；`current_active_task` / `self` / `parent` 仅保留旧数据兼容读取，不再是推荐写法
-- 这条“显式绑定任务级 owner”的要求只用于把任务级 `check` 证据接到项目级 `delivery` 上；若 formal `PROJECT-AUDIT` 之后还要回到任务级 `check` / `review-gate`，则必须先切回 `task_level_check_task` 指向的任务级 owner，不能在项目级 carrier 上直接进入任务级阶段
+- 这条“显式绑定任务级 owner”的要求只用于把任务级 `check` 证据接到项目级 `delivery` 上；若 formal `PROJECT-AUDIT` 之后还要回到任务级 `check`，则必须先切回 `task_level_check_task` 指向的任务级 owner，不能在项目级 carrier 上直接进入任务级阶段
 - 若 `project-audit.md` 标记本轮存在代码修改，则不得直接进入 `delivery`，必须先回到 `/trellis:check`
 
 ---

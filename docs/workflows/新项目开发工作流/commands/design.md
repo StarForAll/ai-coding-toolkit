@@ -459,7 +459,8 @@ sonar-scanner \
 - 但两者都必须留在 design 阶段内完成
 - 每完成一个子块，都必须停下来给用户确认，不能一次性连续执行到底
 - 若块 C 先于块 D 执行，`README.md` / `README.en.md` 或项目 `docs/` 中引用的检查矩阵、spec 结论或收尾门禁应明确标注为“待 design 阶段块 D 最终确认”，避免被误认为已经定稿
-- `awaiting_user_confirmation` 在 design 阶段内部可能出现多次；只有 `completed_blocks` 已覆盖块 A/B/C/D 时，才表示“准备离开 design 的最终确认点”
+- `awaiting_user_confirmation` 在 design 阶段内部可能出现多次；`completed_blocks` 已覆盖块 A/B/C/D 只表示“进入最终退出检查候选态”，不等于已经获得离开 design 的资格
+- 若 `ui_lane_decision` 表示存在前端视觉落地链路，则即使 A/B/C/D 已完成，也必须额外补齐外部 UI 原型链路的最小证据：`design/STITCH-PROMPT.md` 与至少一份结构化页面/规格结论（如 `design/pages/*.md` 或 `design/specs/*.md`）
 
 ### Step 8: design 退出检查
 
@@ -496,6 +497,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py validate <task-dir>
 - `workflow-state.py validate` 通过
 - `docs/requirements/developer-facing-prd.md` 已生成
 - 项目根 `README.md` 与 `README.en.md` 已生成或确认可复用
+- 若 `ui_lane_decision` 表示存在前端视觉落地链路：`design/STITCH-PROMPT.md` 已形成可审阅正文，且 `design/pages/*.md` 或 `design/specs/*.md` 已沉淀结构化 UI 结论
 
 完成退出清单后：
 

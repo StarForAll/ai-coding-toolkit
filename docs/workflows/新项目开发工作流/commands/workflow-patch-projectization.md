@@ -154,8 +154,12 @@ Close-out runs in two phases:
 
 <!-- workflow-projectization-phase-index-patch -->
 
-```
-feasibility → brainstorm → design → plan → implementation → project-audit → check → review-gate → delivery
+```text
+feasibility → brainstorm → design → plan → implementation → check
+                               ↘ project-audit ↗
+task-level conditional side gate: check → review-gate → implementation
+project-level close-out: check / review-gate / project-audit → delivery
+when no formal PROJECT-AUDIT is declared, or on the formal carrier task
 ```
 
 Stage transition gates are enforced by `workflow-state.py set --stage <next>`; use `--force` to bypass for repair scenarios. Native `finish-work` runs after `delivery` and is not modeled as a `workflow-state` stage.
@@ -174,16 +178,14 @@ All transitions follow a two-step protocol: **(A)** signal readiness by setting 
 | design → plan | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage plan --stage-status in_progress --awaiting-user-confirmation false --allowed-next implementation --transition-from design` |
 | plan → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | 若当前 plan task 已拆出 children，先把 session active task 切到已确认的目标 leaf task；若该 leaf task 尚未生成 `workflow-state.json`，不要先 `init --stage plan`，而应直接按当前已确认执行边界执行 `workflow-state.py repair <leaf-dir> --stage implementation --execution-authorized true --transition-from plan --apply`。若 leaf task 已有合法状态文件，则再执行 `workflow-state.py set <leaf-dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next check,project-audit --transition-from plan`。leaf task 自身仍必须具备最小 `prd.md`；项目级粗估可沿 parent lineage 继承，不要求整段复制到 leaf。不得在仍带 children 的 parent task 上直接开启 implementation |
 | implementation → check | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage check --stage-status in_progress --awaiting-user-confirmation false --allowed-next project-audit,review-gate,implementation,delivery --transition-from implementation` |
-| implementation → project-audit | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage project-audit --stage-status in_progress --awaiting-user-confirmation false --allowed-next check,review-gate,delivery --transition-from implementation` |
+| implementation → project-audit | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage project-audit --stage-status in_progress --awaiting-user-confirmation false --allowed-next check,delivery --transition-from implementation` |
 | project-audit → check | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | 若当前 formal `PROJECT-AUDIT` 是独立 carrier task，且 `project-audit.md` 中 `task_level_check_task` 指向其他 task，则必须先把 session active task 切回该任务级 task（也就是 `task_level_check_task` 指向的 owner）。若 owner task 尚未生成 `workflow-state.json`，直接执行 `workflow-state.py repair <owner-dir> --stage check --apply`，把它重建为当前已确认的任务级 `check`；若 owner task 已有合法状态，则按 owner 自身的 task-level 当前阶段继续 `route` / `validate` / `set`，不要把 `transition-from project-audit` 写到这个任务级 owner 上。只有当前 task 本身就是任务级 owner 时，才可在当前 `<dir>` 上执行 `workflow-state.py set <dir> --stage check --stage-status in_progress --awaiting-user-confirmation false --allowed-next project-audit,review-gate,implementation,delivery --transition-from project-audit` |
-| project-audit → review-gate | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | 仅当 `project_audit_code_changes = no` 时允许；只要本轮改过代码，必须先回 `check`。若当前 formal `PROJECT-AUDIT` 是独立 carrier task，且 `project-audit.md` 中 `task_level_check_task` 指向其他 task，则必须先把 session active task 切回该任务级 task（也就是 `task_level_check_task` 指向的 owner）。若 owner task 尚未生成 `workflow-state.json`，直接执行 `workflow-state.py repair <owner-dir> --stage review-gate --apply`；若 owner task 已有合法状态，则按 owner 自身的 task-level 当前阶段继续 `route` / `validate` / `set`，不要把 `transition-from project-audit` 写到这个任务级 owner 上。只有当前 task 本身就是任务级 owner 时，才可在当前 `<dir>` 上执行 `workflow-state.py set <dir> --stage review-gate --stage-status in_progress --awaiting-user-confirmation false --allowed-next project-audit,delivery,implementation --transition-from project-audit`。无论去向是否为 delivery，离开 `project-audit` 前都必须先写出结构化 `project_audit_gate_status` |
-| project-audit → delivery | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage delivery --stage-status in_progress --awaiting-user-confirmation false --transition-from project-audit`（仅当当前 active task 的 `check.md` 已闭环，且 formal `PROJECT-AUDIT` 载体中的 `project_audit_gate_status` / `project_audit_code_changes` / `task_level_check_status` 均满足门禁时允许；二者是并列双门禁，不互相替代。delivery 消费的是当前 active task 的任务级 `check` 证据，不要求 formal `PROJECT-AUDIT` carrier 自己再持有一份 `check.md`） |
-| check → project-audit | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage project-audit --stage-status in_progress --awaiting-user-confirmation false --allowed-next check,review-gate,delivery --transition-from check` |
-| check → review-gate | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage review-gate --stage-status in_progress --awaiting-user-confirmation false --allowed-next project-audit,delivery,implementation --transition-from check` |
+| project-audit → delivery | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | formal-mode only：仅当当前 task 本身就是对应 carrier 时允许。进入 delivery 前要求当前 active task 的 `check.md` 已闭环，且 `project_audit_gate_status` / `project_audit_code_changes` / `task_level_check_status` 满足门禁 |
+| check → project-audit | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | 若当前轮未声明 formal `PROJECT-AUDIT`，则允许继续进入 project-audit；若已声明，则仅当当前 task 本身就是 formal carrier 时允许，否则 `workflow-state.py` 必须阻断并要求当前 task 只回 `implementation` 或进入 `review-gate` |
+| check → review-gate | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage review-gate --stage-status in_progress --awaiting-user-confirmation false --allowed-next implementation,delivery --transition-from check`（`delivery` 只是 superset；若已声明 formal `PROJECT-AUDIT` 且当前 task 不是 carrier，validator 仍会阻断并要求切回 owner） |
 | check → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next check,project-audit --transition-from check` |
-| check → delivery | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage delivery --stage-status in_progress --awaiting-user-confirmation false --transition-from check`（要求 `check.md` 中显式写出 `check_gate_status=pass`；若 `task_plan.md` 已声明 formal `PROJECT-AUDIT` task，则还必须同时满足该项目级 carrier 的正式门禁） |
-| review-gate → project-audit | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage project-audit --stage-status in_progress --awaiting-user-confirmation false --allowed-next check,review-gate,delivery --transition-from review-gate` |
-| review-gate → delivery | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage delivery --stage-status in_progress --awaiting-user-confirmation false --transition-from review-gate`（若 `task_plan.md` 已声明 formal `PROJECT-AUDIT` task，则还必须同时满足该项目级 carrier 的正式门禁） |
+| check → delivery | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | 若当前轮未声明 formal `PROJECT-AUDIT`，则允许当前 task 作为项目级 owner 继续进入 delivery；若已声明，则仅当当前 task 本身就是 formal carrier 时允许。两种情况下都要求 `check.md` 中显式写出 `check_gate_status=pass`；formal carrier 场景还需满足 formal `PROJECT-AUDIT` 的正式门禁 |
+| review-gate → delivery | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | 若当前轮未声明 formal `PROJECT-AUDIT`，则允许当前 task 在 review-gate 闭环后直接进入 delivery；若已声明，则仅当当前 task 本身就是 formal carrier 时允许。formal carrier 已声明但当前 task 不是它时，必须切回项目级 owner 再继续 delivery |
 | review-gate → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next check,project-audit --transition-from review-gate` |
 
 For repair scenarios, append `--force` to bypass validation gates.
@@ -432,7 +434,7 @@ After implementation, proceed to `check`.
 
 [workflow-state:project-audit]
 Current stage: **project-audit** — full-project quality review.
-Formal mode typically re-enters here from `check` / `review-gate`; pre-audit may enter early from `implementation`.
+Formal mode typically re-enters here from `check`; pre-audit may enter early from `implementation`.
 If `task_plan.md` declares a dedicated `PROJECT-AUDIT` task, that task becomes the sole formal carrier for project-level exit evidence consumed by `delivery`.
 This does **not** replace the current active task's task-level `check`; `delivery` consumes both dimensions together when project-level audit is declared.
 Load `/trellis:project-audit` for cross-cutting quality assessment.
@@ -441,14 +443,16 @@ Load `/trellis:project-audit` for cross-cutting quality assessment.
 [workflow-state:check]
 Current stage: **check** — quality check against spec and conventions.
 Load `/trellis:check` to validate implementation against specifications.
-After passing, proceed to `project-audit`, `review-gate`, back to `implementation`, or directly to `delivery` (when no project-audit / review-gate is needed).
+After passing, proceed to `review-gate`, back to `implementation`, or, when the current round has no formal `PROJECT-AUDIT` declaration or this task itself is the formal carrier, continue to `project-audit` / `delivery`.
 [/workflow-state:check]
 
 [workflow-state:review-gate]
 Current stage: **review-gate** — multi-CLI supplementary review.
 Load `/trellis:review-gate` for additional cross-platform quality assurance.
-If the task still needs a formal project-level sweep, it may re-enter `project-audit` from here before `delivery`.
-After passing, proceed to `delivery`.
+If the task still needs code changes, re-enter `implementation`.
+If the supplementary review is closed with no new task-level work, then:
+- when no formal `PROJECT-AUDIT` is declared, or this task itself is the formal carrier, the same task may continue to `delivery`
+- otherwise keep the task-level result here and resume project-level `project-audit` / `delivery` on the project-level owner instead of switching this task's stage
 [/workflow-state:review-gate]
 
 [workflow-state:delivery]

@@ -621,9 +621,9 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 
 ### CLI 入口差异
 
-- Claude Code：`/trellis:check` → （默认）`/trellis:delivery`；命中 `review-gate` 硬条件、或软条件判定达到 `recommended`、或用户显式要求时 → `/trellis:review-gate`
-- OpenCode：TUI 用 `/trellis:check`、`/trellis:delivery`（或条件触发 `/trellis:review-gate`）；CLI 用 `trellis/check`、`trellis/delivery`
-- Codex：自然语言描述或显式触发 `check`、`delivery` skill；条件触发时再用 `review-gate` skill
+- Claude Code：`/trellis:check` 默认只继续任务级闭环；命中 `review-gate` 硬条件、或软条件判定达到 `recommended`、或用户显式要求时 → `/trellis:review-gate`；只有当前 task 本身是 formal `PROJECT-AUDIT` carrier 时，才允许从 `check` 继续 `/trellis:delivery`
+- OpenCode：TUI 用 `/trellis:check`；条件触发时 `/trellis:review-gate`；只有 formal carrier 场景才继续 `/trellis:delivery`。CLI 用 `trellis/check`、`trellis/review-gate`、`trellis/delivery`
+- Codex：自然语言描述或显式触发 `check`、`review-gate` skill；只有 formal carrier 场景才继续 `delivery` skill
 
 ### 推荐 MCP / Skills
 

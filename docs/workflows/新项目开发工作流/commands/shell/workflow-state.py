@@ -62,11 +62,14 @@ from validators_core import (  # noqa: E402
 from validators_gates import (  # noqa: E402
     validate_brainstorm_exit_gate,
     validate_check_gate,
+    validate_check_project_stage_boundary,
     validate_delivery_gate,
     validate_design_exit_gate,
     validate_plan_gate,
     validate_project_audit_gate,
+    validate_project_audit_delivery_stage_boundary,
     validate_review_gate_gate,
+    validate_review_gate_project_stage_boundary,
     validate_stage_exit_artifacts,
     validate_stage_transition_gates,
 )
@@ -364,14 +367,33 @@ def _collect_exit_gate_blockers(
 
     if stage == "check":
         validate_check_gate(task_dir, blockers)
+        allowed_targets = design_path_candidates_from_state(state)
+        if allowed_targets & {"project-audit", "delivery"}:
+            validate_check_project_stage_boundary(
+                task_dir,
+                repo_root,
+                blockers,
+                target_stage="project-audit / delivery",
+            )
     elif stage == "plan":
         validate_plan_gate(task_dir, blockers)
     elif stage == "delivery":
         validate_delivery_gate(task_dir, blockers, repo_root)
     elif stage == "project-audit":
         validate_project_audit_gate(task_dir, blockers, require_exit_gate_status=True)
+        allowed_targets = design_path_candidates_from_state(state)
+        if "delivery" in allowed_targets:
+            validate_project_audit_delivery_stage_boundary(task_dir, repo_root, blockers)
     elif stage == "review-gate":
         validate_review_gate_gate(task_dir, blockers)
+        allowed_targets = design_path_candidates_from_state(state)
+        if "delivery" in allowed_targets:
+            validate_review_gate_project_stage_boundary(
+                task_dir,
+                repo_root,
+                blockers,
+                target_stage="delivery",
+            )
     elif stage == "design":
         validate_project_doc_boundary(state, repo_root, task_dir, blockers)
         validate_context7_review_artifact(task_dir, state, blockers)

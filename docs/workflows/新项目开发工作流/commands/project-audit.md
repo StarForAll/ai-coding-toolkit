@@ -5,7 +5,7 @@ description: 所有代码任务都完成了？进入项目级全局代码审查�
 
 # /trellis:project-audit — 项目级全局代码审查
 
-> **Workflow Position**: §5.1 → 正式模式前置入口优先来自 `/trellis:check` 或 `/trellis:review-gate`（全部 `任务域=代码相关` 的任务完成后重入）；预审模式也允许从 implementation 手动切入，若该实现采用 test-first 风格则仍视为 implementation 内部方法 → 后: 回到 `/trellis:check`（默认）或 `/trellis:review-gate`（当前任务已命中补充审查条件时）
+> **Workflow Position**: §5.1 → 正式模式前置入口优先来自 `/trellis:check` 或全部 `任务域=代码相关` 的任务完成后的项目级 owner 重入；预审模式也允许从 implementation 手动切入，若该实现采用 test-first 风格则仍视为 implementation 内部方法 → 后: 回到 `/trellis:check`（默认）或在无新增代码修改时进入 `/trellis:delivery`
 > **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:project-audit`） · ✅ OpenCode（TUI: `/trellis:project-audit`；CLI: `trellis/project-audit`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:project-audit` 命令；见 `codex/README.md`）
 
 > **Strong Gate**: 本阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束。project-audit 完成后，必须等待用户明确确认，不能自动切到 `check` / `finish-work` / `delivery`。
@@ -42,11 +42,11 @@ description: 所有代码任务都完成了？进入项目级全局代码审查�
 - `project-audit` 与任务级 `check` 不是同一层：
   - `check` 负责**当前 active task / 当前实施轮**的任务级质量闭环
   - `project-audit` 负责**项目整体代码面**的项目级总复核
-- 因此，若 formal `PROJECT-AUDIT` 是独立 carrier task，离开 `project-audit` 回到任务级 `check` / `review-gate` 时，必须先切回 `task_level_check_task` 指向的任务级 owner，再在那个 task 上进入任务级阶段；不能在项目级 carrier 上直接把 stage 写成任务级阶段
+- 因此，若 formal `PROJECT-AUDIT` 是独立 carrier task，离开 `project-audit` 回到任务级 `check` 时，必须先切回 `task_level_check_task` 指向的任务级 owner，再在那个 task 上进入任务级阶段；不能在项目级 carrier 上直接把 stage 写成任务级阶段
 - 保留 `project-audit -> delivery`，但它不是对任务级 `check` 的替代：
   - 若本轮 `project-audit` 发生代码修改，必须先回到 `/trellis:check`，不得直接进入 `/trellis:delivery`
-  - 若本轮 `project-audit` 只有分析/确认、没有新增代码修改，且当前 active task 的 `check.md` 已闭环，才允许直接进入 `/trellis:delivery`
-- 离开 `project-audit` 前，无论是去 `check`、`review-gate` 还是 `delivery`，都必须先写出结构化 `project_audit_gate_status`
+  - `project-audit -> delivery` 仍属于 formal-mode 项目级出口；只有当前 task 本身就是对应 carrier，且本轮只有分析/确认、没有新增代码修改并且当前 active task 的 `check.md` 已闭环时，才允许直接进入 `/trellis:delivery`
+- 离开 `project-audit` 前，无论是去 `check` 还是 `delivery`，都必须先写出结构化 `project_audit_gate_status`
 
 ---
 
@@ -68,8 +68,7 @@ description: 所有代码任务都完成了？进入项目级全局代码审查�
 正式模式下，标准编排入口应满足以下其一：
 
 - 当前任务已位于 `check`，用户确认要在最终收尾前补做项目级总复核
-- 当前任务已位于 `review-gate`，需要在任务级补充审查之外，再做一次项目级统一回看
-- 若当前任务还停留在 `implementation`，可先进入预审模式，完成后再回到 `check` / `review-gate`
+- 若当前任务还停留在 `implementation`，可先进入预审模式，完成后再回到 `check`
 
 **不强制触发的情况**（Lite 链路）：
 
@@ -86,11 +85,11 @@ description: 所有代码任务都完成了？进入项目级全局代码审查�
   - `project-audit`：项目级总复核闭环
 - `delivery` 消费的是这两类并列证据，而不是要求 formal `PROJECT-AUDIT` carrier 自己再持有一份任务级 `check.md`
 - 因此，若 formal `PROJECT-AUDIT` 是独立 carrier task，`delivery` 应继续消费“当前 active task 的 `check.md` + formal `PROJECT-AUDIT` 载体中的项目级结论”，而不是把 carrier task 误判成任务级 `check` 的拥有者
-- 但如果 formal `PROJECT-AUDIT` 之后还要回到任务级 `check` / `review-gate`，则必须先切回 `task_level_check_task` 指向的任务级 owner，再在那个 task 上进入任务级阶段；`PROJECT-AUDIT` carrier 只负责项目级证据，不直接充当任务级 gate owner
+- 若 formal `PROJECT-AUDIT` 之后还要回到任务级 `check`，则必须先切回 `task_level_check_task` 指向的任务级 owner，再在那个 task 上进入任务级阶段；`PROJECT-AUDIT` carrier 只负责项目级证据，不直接充当任务级 gate owner
 - 本命令执行完成后，可以将独立 `PROJECT-AUDIT` task 视为“正式完成”；这里的完成不再只等同于 archive 后的 `task.json.status = completed`
 - 当前 workflow 接受两类正式完成证据：
   - 代码相关 task 已 archive，`task.json.status = completed`
-  - 代码相关 task 尚未 archive，但其 `workflow-state` 已进入 `check` / `review-gate` / `project-audit` / `delivery` 之一，且该 task 的 `check.md` 已闭环
+- 代码相关 task 尚未 archive，但其 `workflow-state` 已进入 `check` / `project-audit` / `delivery` 之一，且该 task 的 `check.md` 已闭环
 
 ### 手动触发（预审模式）
 
@@ -103,7 +102,7 @@ description: 所有代码任务都完成了？进入项目级全局代码审查�
 - 常见入口为 `implementation`
 - 但**不**将项目级 `PROJECT-AUDIT` 任务标记为最终完成
 - 后续当全部 `代码相关` 任务都完成后，仍需再执行一次正式 `project-audit`
-- 预审记录可以作为回到 `check` / `review-gate` 的过程证据，但不能作为 `delivery` 的正式项目级出口证据
+- 预审记录可以作为回到 `check` 的过程证据，但不能作为 `delivery` 的正式项目级出口证据
 
 ---
 
@@ -283,13 +282,13 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py set <task-dir> \
   --awaiting-user-confirmation true
 ```
 
-仅在用户明确确认后，才允许切到 `check` / `review-gate` / `delivery`。
+仅在用户明确确认后，才允许切到 `check` / `delivery`。
 补充约束：
 
-- `Mode = pre-audit` 可以回到 `check` / `review-gate`
+- `Mode = pre-audit` 可以回到 `check`
 - `Mode = pre-audit` 不得直接作为 `delivery` 的正式项目级出口
 - 只要 `project_audit_code_changes = yes`，就必须先回到 `check`
-- 若 formal `PROJECT-AUDIT` 是独立 carrier task，且 `task_level_check_task` 指向其他 task，则这里的“回到 `check` / `review-gate`”指的是先切回该任务级 owner，再在那个 task 上继续任务级门禁
+- 若 formal `PROJECT-AUDIT` 是独立 carrier task，且 `task_level_check_task` 指向其他 task，则这里的“回到 `check`”指的是先切回该任务级 owner，再在那个 task 上继续任务级门禁
 
 ---
 
@@ -357,13 +356,13 @@ tmp/multi-cli-review/<task-id>-project-audit/
 - `task_level_check_status` 记录的是“当前 active task 的任务级 check 是否仍闭环”，不是要求 formal `PROJECT-AUDIT` carrier 自己再持有一份 `check.md`
 - `task_level_check_task` 必须显式指出任务级 `check.md` 属于哪个真实 task；新文档不得再使用 `current_active_task` / `self` / `parent` 这类隐式 owner 写法
 - 旧项目中残留的 `current_active_task` / `self` / `parent` 只作为兼容读取路径保留，不再是推荐新写法
-- 旧项目若仍残留 `project_audit_gate_status = not_run`，当前 workflow 仍会识别该值以保持向后兼容；但它现在一律视为**阻断态**，不得继续进入 `review-gate` / `delivery`。需要在补完本轮 project-audit 后，将字段改写为 `pass` 或 `fail`
-- 只要 `project_audit_code_changes = yes`，本阶段的唯一合法下游出口是回到任务级 `check`；不得改走 `review-gate` 或 `delivery`
+- 旧项目若仍残留 `project_audit_gate_status = not_run`，当前 workflow 仍会识别该值以保持向后兼容；但它现在一律视为**阻断态**，不得继续进入 `delivery`。需要在补完本轮 project-audit 后，将字段改写为 `pass` 或 `fail`
+- 只要 `project_audit_code_changes = yes`，本阶段的唯一合法下游出口是回到任务级 `check`；不得直接进入 `delivery`
 - 若 `task_plan.md` 的 `Trellis Task 清单` 存在歧义，建议在 `说明` 列显式写 `code_related=yes` / `code_related=no`，避免仅凭关键词推断哪些 task 属于“代码相关”
 - 当前关键词兜底已刻意避免把“性能测试文档”“安全审计报告”这类非实现任务自动视为代码相关；但只要任务命名仍可能让人误读，仍建议显式写 `code_related=no`
 - 结果段中的统一验证结论若存在 `fail`，则 `project_audit_gate_status` 不得写成 `pass`
 
-> 约束：只有 `Mode = formal` 的文档才能作为 `delivery` 的项目级阶段出口；`pre-audit` 只代表预审，可作为回到 `check` / `review-gate` 的过程证据，但不得作为最终 project-audit 完成证据。
+> 约束：只有 `Mode = formal` 的文档才能作为 `delivery` 的项目级阶段出口；`pre-audit` 只代表预审，可作为回到 `check` 的过程证据，但不得作为最终 project-audit 完成证据。
 
 ## Remaining Risks
 
@@ -383,7 +382,7 @@ tmp/multi-cli-review/<task-id>-project-audit/
 | 当前结果 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
 | 已完成本轮审查且本轮发生代码修改 | `/trellis:check` | 进入质量检查，或显式触发 `check` skill | **默认推荐**。仅在用户明确确认后才允许进入质量检查 |
-| 已完成本轮审查且本轮无代码修改 | `/trellis:delivery` | 进入交付收口，或显式触发 `delivery` skill | 前提：当前 active task 的 `check.md` 已闭环，且正式 `project-audit` 载体中的 `project_audit_gate_status`、`task_level_check_status` 与 `project_audit_code_changes` 已满足门禁 |
+| 已完成本轮审查且本轮无代码修改 | `/trellis:delivery` | 进入交付收口，或显式触发 `delivery` skill | 仅限 formal-mode 项目级出口：当前 task 必须就是 formal carrier，且仍需满足 `project_audit_gate_status`、`task_level_check_status` 与 `project_audit_code_changes` 门禁 |
 | 只完成分析，仍需继续讨论 | `/trellis:project-audit` | 继续项目级审查，或显式触发 `project-audit` skill | 留在当前阶段继续收敛 |
 | 方案未确认 | `/trellis:project-audit` | 继续项目级审查，或显式触发 `project-audit` skill | 先确认方案，不进入后续门禁 |
 | 审查发现冻结后新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先完成变更评估，不直接混入本轮审查修改 |

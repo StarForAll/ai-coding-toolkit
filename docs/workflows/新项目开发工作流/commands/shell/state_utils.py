@@ -101,9 +101,15 @@ STAGE_TRANSITIONS: dict[str, list[str]] = {
     "design": ["plan"],
     "plan": ["implementation"],
     "implementation": ["check", "project-audit"],
+    # Superset only: validators enforce project-level exits only after a formal
+    # PROJECT-AUDIT declaration exists. Without that declaration, Lite / simple
+    # tasks may continue from check into project-level closure on the same task.
     "check": ["implementation", "review-gate", "project-audit", "delivery"],
-    "review-gate": ["implementation", "project-audit", "delivery"],
-    "project-audit": ["check", "review-gate", "delivery"],
+    # Delivery is allowed from review-gate only when no formal PROJECT-AUDIT
+    # carrier is declared, or when the current task is that carrier. Validators
+    # enforce the carrier-aware restriction.
+    "review-gate": ["implementation", "delivery"],
+    "project-audit": ["check", "delivery"],
     "delivery": [],
 }
 STAGE_STATUSES = {

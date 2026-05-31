@@ -47,6 +47,42 @@ from state_utils import (  # noqa: E402
 )
 
 
+def _file_has_meaningful_body(path: Path) -> bool:
+    try:
+        content = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return False
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if not is_placeholder_like(stripped):
+            return True
+    return False
+
+
+def _ui_lane_requires_external_prototype(task_prd_text: str) -> bool:
+    ui_lane_decision = extract_backticked_field(task_prd_text, "ui_lane_decision")
+    if is_placeholder_like(ui_lane_decision):
+        return False
+    # Current workflow contract only treats explicit no-ui-like values as
+    # exempt. If new non-UI values are introduced later, expand this allowlist
+    # together with docs/tests instead of silently weakening the gate.
+    normalized = (ui_lane_decision or "").strip().lower().replace("_", "-")
+    return normalized not in {"", "no-ui", "none", "not-applicable"}
+
+
+def _design_dir_has_structured_ui_conclusions(design_dir: Path) -> bool:
+    for subdir_name in ("pages", "specs"):
+        subdir = design_dir / subdir_name
+        if not subdir.is_dir():
+            continue
+        for candidate in sorted(subdir.glob("*.md")):
+            if _file_has_meaningful_body(candidate):
+                return True
+    return False
+
+
 def validate_state_shape(state: dict[str, Any], errors: list[str]) -> None:
     if "version" not in state:
         state["version"] = SUPPORTED_STATE_VERSION
@@ -485,3 +521,18 @@ def validate_design_engineering_alignment_contract(
                 + ", ".join(missing_task_markers)
                 + "；块 D 尚未真正完成"
             )
+
+        if _ui_lane_requires_external_prototype(task_prd_text):
+            design_dir = task_dir / "design"
+            stitch_prompt_path = design_dir / "STITCH-PROMPT.md"
+            if not _file_has_meaningful_body(stitch_prompt_path):
+                errors.append(
+                    "design 退出前 `ui_lane_decision` 表示存在前端视觉落地链路，"
+                    "但缺少可审阅的 design/STITCH-PROMPT.md；尚未完成外部 UI 原型设计引导"
+                )
+            if not _design_dir_has_structured_ui_conclusions(design_dir):
+                errors.append(
+                    "design 退出前 `ui_lane_decision` 表示存在前端视觉落地链路，"
+                    "但 design/pages/*.md 或 design/specs/*.md 缺少可审阅的结构化 UI 结论；"
+                    "不能只凭 A/B/C/D 完成就离开 design"
+                )

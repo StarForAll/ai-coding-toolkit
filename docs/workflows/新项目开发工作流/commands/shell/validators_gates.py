@@ -387,10 +387,11 @@ def _extract_finish_work_gate_status(content: str) -> str | None:
 
 
 def _task_plan_declares_project_audit(plan_path: Path) -> bool:
-    content = plan_path.read_text(encoding="utf-8")
-    if _project_audit_tasks_from_plan(plan_path):
-        return True
-    return "PROJECT-AUDIT" in content or "project-audit" in content.lower()
+    # Runtime gating only treats structured project-audit task rows as a formal
+    # declaration. Plain-language mentions belong to plan validation, not stage
+    # enforcement, otherwise comments or summary prose can spuriously enable the
+    # formal carrier boundary.
+    return bool(_project_audit_tasks_from_plan(plan_path))
 
 
 def _project_audit_tasks_from_plan(plan_path: Path) -> list[str]:
@@ -408,6 +409,72 @@ def _project_audit_tasks_from_plan(plan_path: Path) -> list[str]:
             continue
         tasks.append(Path(task_path).name)
     return tasks
+
+
+def _current_task_is_formal_project_audit_carrier(task_dir: Path, repo_root: Path) -> bool:
+    plan_path = find_task_plan_file(task_dir, repo_root)
+    if plan_path is None:
+        return False
+    return task_dir.name in _project_audit_tasks_from_plan(plan_path)
+
+
+def _formal_project_audit_carrier_required(task_dir: Path, repo_root: Path) -> bool:
+    plan_path = find_task_plan_file(task_dir, repo_root)
+    if plan_path is None:
+        return False
+    return _task_plan_declares_project_audit(plan_path)
+
+
+def validate_check_project_stage_boundary(
+    task_dir: Path,
+    repo_root: Path,
+    errors: list[str],
+    *,
+    target_stage: str | None = None,
+) -> None:
+    if not _formal_project_audit_carrier_required(task_dir, repo_root):
+        return
+    if _current_task_is_formal_project_audit_carrier(task_dir, repo_root):
+        return
+    rendered_target = target_stage or "project-audit / delivery"
+    errors.append(
+        "当前 `check` 仍属于任务级 gate，且当前 task 不是 formal PROJECT-AUDIT carrier；"
+        f"不得直接进入 {rendered_target}。请改为回 implementation 修复，或进入 review-gate 补充审查。"
+    )
+
+
+def validate_review_gate_project_stage_boundary(
+    task_dir: Path,
+    repo_root: Path,
+    errors: list[str],
+    *,
+    target_stage: str | None = None,
+) -> None:
+    if not _formal_project_audit_carrier_required(task_dir, repo_root):
+        return
+    if _current_task_is_formal_project_audit_carrier(task_dir, repo_root):
+        return
+    rendered_target = target_stage or "delivery"
+    errors.append(
+        "当前 `review-gate` 仍属于任务级补充审查 gate，且当前 task 不是 formal PROJECT-AUDIT carrier；"
+        f"不得直接进入 {rendered_target}。请回 implementation 修复，或切回 formal PROJECT-AUDIT owner 再继续项目级收口。"
+    )
+
+
+def validate_project_audit_delivery_stage_boundary(
+    task_dir: Path,
+    repo_root: Path,
+    errors: list[str],
+) -> None:
+    if not _formal_project_audit_carrier_required(task_dir, repo_root):
+        return
+    if _current_task_is_formal_project_audit_carrier(task_dir, repo_root):
+        return
+    errors.append(
+        "当前 `project-audit` 所在 task 不是 formal PROJECT-AUDIT carrier；"
+        "当 formal PROJECT-AUDIT 已声明时，不得从这个 task 直接进入 delivery。"
+        "请切回 formal PROJECT-AUDIT owner 再继续项目级交付收口。"
+    )
 
 
 def _resolve_task_level_check_task_dir(task_dir: Path) -> Path:
@@ -908,6 +975,7 @@ def _validate_required_formal_project_audit_for_delivery(
         _validate_formal_project_audit_task(
             candidate_dir,
             candidate_errors,
+            repo_root=repo_root,
             check_task_dir=check_task_dir,
         )
         if not candidate_errors:
@@ -1310,6 +1378,7 @@ def validate_project_audit_gate(
     *,
     require_delivery_linkage: bool = False,
     require_exit_gate_status: bool = False,
+    repo_root: Path | None = None,
     check_task_dir: Path | None = None,
 ) -> None:
     report_path = task_dir / "project-audit.md"
@@ -1350,6 +1419,11 @@ def validate_project_audit_gate(
         return
     if require_delivery_linkage:
         _validate_project_audit_mode(content, errors)
+        validate_project_audit_delivery_stage_boundary(
+            task_dir,
+            repo_root or _repo_root_from_task_dir(task_dir),
+            errors,
+        )
     _validate_project_audit_evidence(content, errors)
     _validate_project_audit_multi_cli_review_artifacts(task_dir, content, errors)
     gate_status = _extract_project_audit_gate_status(content)
@@ -1399,6 +1473,7 @@ def _validate_formal_project_audit_task(
     task_dir: Path,
     errors: list[str],
     *,
+    repo_root: Path | None = None,
     check_task_dir: Path | None = None,
 ) -> None:
     validate_project_audit_gate(
@@ -1406,6 +1481,7 @@ def _validate_formal_project_audit_task(
         errors,
         require_delivery_linkage=True,
         require_exit_gate_status=True,
+        repo_root=repo_root,
         check_task_dir=check_task_dir,
     )
     task_data = load_task_json(task_dir)
@@ -1660,7 +1736,7 @@ def validate_stage_transition_gates(
     if new_stage in PROJECT_ESTIMATE_REQUIRED_STAGES:
         validate_project_doc_boundary(candidate_state, repo_root, task_dir, errors)
 
-    if current_stage == "project-audit" and new_stage in {"check", "review-gate"}:
+    if current_stage == "project-audit" and new_stage == "check":
         report_path = task_dir / "project-audit.md"
         if report_path.is_file():
             handoff_errors: list[str] = []
@@ -1699,6 +1775,7 @@ def validate_stage_transition_gates(
         validate_check_gate(task_dir, errors)
 
     if current_stage == "check" and new_stage == "delivery":
+        validate_check_project_stage_boundary(task_dir, repo_root, errors, target_stage="delivery")
         validate_check_gate(task_dir, errors, for_delivery=True)
         _validate_required_formal_project_audit_for_delivery(
             task_dir,
@@ -1707,6 +1784,9 @@ def validate_stage_transition_gates(
             check_task_dir=task_dir,
         )
 
+    if current_stage == "check" and new_stage == "project-audit":
+        validate_check_project_stage_boundary(task_dir, repo_root, errors, target_stage="project-audit")
+
     if current_stage == "project-audit":
         check_task_dir = _resolve_task_level_check_task_dir(task_dir)
         validate_project_audit_gate(
@@ -1714,6 +1794,7 @@ def validate_stage_transition_gates(
             errors,
             require_delivery_linkage=(new_stage == "delivery"),
             require_exit_gate_status=True,
+            repo_root=repo_root,
             check_task_dir=check_task_dir,
         )
         if new_stage not in {"check", "delivery"} and (task_dir / "project-audit.md").is_file():
@@ -1730,6 +1811,7 @@ def validate_stage_transition_gates(
     if current_stage == "review-gate":
         validate_review_gate_gate(task_dir, errors)
         if new_stage == "delivery":
+            validate_review_gate_project_stage_boundary(task_dir, repo_root, errors, target_stage="delivery")
             validate_check_gate(task_dir, errors, for_delivery=True, downstream_stage="delivery")
             _validate_required_formal_project_audit_for_delivery(
                 task_dir,

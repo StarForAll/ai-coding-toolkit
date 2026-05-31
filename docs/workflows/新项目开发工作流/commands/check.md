@@ -5,7 +5,7 @@ description: 代码写完了？检查一下 — 基于真实改动范围和项�
 
 # /trellis:check — 实现后质量检查
 
-> **Workflow Position**: §5.1.x → 前: `/trellis:continue` 实施完成 → 后: `/trellis:delivery`（默认）/ `/trellis:review-gate`（条件触发）
+> **Workflow Position**: §5.1.x → 前: `/trellis:continue` 实施完成 → 后: `/trellis:review-gate`（条件触发）/ 回 `/trellis:continue` 修复；若当前轮未声明 formal `PROJECT-AUDIT`，或当前 task 本身就是 formal carrier，则允许在这个 stage 上继续项目级 `project-audit` / `delivery`
 > **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:check`） · ✅ OpenCode（TUI: `/trellis:check`；CLI: `trellis/check`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:check` 命令；见 `codex/README.md`）
 
 > **Strong Gate**: 本阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束。`check` 完成后不能自动进入 `review-gate`、`delivery` 或 native `finish-work`，必须先等待用户确认。
@@ -18,7 +18,7 @@ description: 代码写完了？检查一下 — 基于真实改动范围和项�
 - "对照 spec 看看有没有问题"
 - "做一轮质量检查"
 - "实现写完了，先 check 一下"
-- 当前任务代码已完成，需要在进入 `review-gate` 或 `delivery` 之前先做一次任务级质量检查
+- 当前任务代码已完成，需要在进入 `review-gate`，或把当前 task 的检查证据交给项目级 owner 消费之前，先做一次任务级质量检查
 
 > 以下场景不要误路由到本命令：
 >
@@ -45,6 +45,8 @@ description: 代码写完了？检查一下 — 基于真实改动范围和项�
 - 这里提到的 research / implement / checking 只是 implementation 内部能力分工，不代表允许派发对应 agent
 - `/trellis:check` 只在 implementation 主会话工作完成并经用户确认后进入
 - `check.md` 记录的是**当前 active task / 当前实施轮**的任务级质量结论，不替代 `project-audit` 的项目级总复核
+- 只有当 `task_plan.md` 已声明 formal `PROJECT-AUDIT` 且当前 task 不是对应 carrier 时，当前 stage 才只允许继续任务级动作：回 `implementation` 或进入 `review-gate`
+- 若当前轮未声明 formal `PROJECT-AUDIT`，则同一 task 可以作为项目级 owner 继续 `project-audit` / `delivery`
 
 ---
 
@@ -161,7 +163,7 @@ $TASK_DIR/check.md
 - `Review-Gate Decision` / `补充审查判定`
   - `review_gate_decision`: `skip` / `recommended` / `required`
   - `review_gate_reason`: 当前为什么判成该结果
-  - 若 `review_gate_decision = recommended` 且准备直接进入 `delivery`，必须额外写：
+  - 若 `review_gate_decision = recommended` 且准备在本 task 上直接进入 `delivery`（当前轮未声明 formal `PROJECT-AUDIT`，或当前 task 本身就是 formal carrier），必须额外写：
     - `recommended_review_skip_accepted_by_user`: `yes`
     - `recommended_review_skip_acceptance_note`: 用户为何接受跳过本轮补充审查
   - 6 个任务级硬条件的 `yes` / `no` 留痕
@@ -188,7 +190,7 @@ $TASK_DIR/check.md
 - `review_gate_decision`: `skip`
 - `review_gate_reason`: `未命中 review-gate 硬条件，现有验证证据足够`
 - `check_gate_status`: `pass` / `fail`
-- `recommended_review_skip_accepted_by_user`: `yes` / `no`（仅当 `review_gate_decision = recommended` 且准备直接进入 `delivery`）
+- `recommended_review_skip_accepted_by_user`: `yes` / `no`（仅当 `review_gate_decision = recommended` 且准备在本 task 上直接进入 `delivery`）
 - `recommended_review_skip_acceptance_note`: `<仅当上一字段为 yes 时填写>`
 - `auth_or_sensitive`: `no`
 - `data_migration_or_schema_change`: `no`
@@ -210,7 +212,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py set <task-dir> \
   --awaiting-user-confirmation true
 ```
 
-只在用户明确确认后，才允许切到 `delivery` / `review-gate` / `project-audit` / `implementation`。
+只在用户明确确认后，才允许切到 `review-gate` / `implementation`；若当前轮未声明 formal `PROJECT-AUDIT`，或当前 task 本身就是 formal carrier，则 `project-audit` / `delivery` 也允许继续留在当前 task 上。
 
 ### Step 6: 上下文污染检测
 
@@ -238,14 +240,16 @@ $TASK_DIR/check.md
 
 | 检查结果 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
-| 基本合规，可直接进入交付收口 | `/trellis:delivery` | 进入交付收口，或显式触发 `delivery` skill | **默认推荐**（Lite / Standard）。仅在用户明确确认后才允许进入 delivery；若当前轮还需要关闭当前 active task，再在 delivery 后进入 native finish-work |
+| 当前轮未声明 formal `PROJECT-AUDIT`，且基本合规 | `/trellis:delivery` | 进入交付收口，或显式触发 `delivery` skill | **Lite / 普通项目默认推荐**。当前 task 可作为项目级 owner 继续进入 delivery |
+| 当前轮已声明 formal `PROJECT-AUDIT`，但当前 task 不是 carrier | `/trellis:continue` 或 `/trellis:review-gate` | 回到实施阶段，或显式触发 `review-gate` skill | 当前 task 只承载任务级 `check`；不得在这个 stage 上直接进入 `project-audit` / `delivery` |
+| 当前 task 是 formal `PROJECT-AUDIT` carrier，且基本合规 | `/trellis:delivery` | 进入交付收口，或显式触发 `delivery` skill | 仅在 carrier task 上允许；进入 delivery 前仍需满足并列双门禁 |
 | 命中 review-gate 硬条件，或用户显式要求进入补充审查 | `/trellis:review-gate` | 进入补充审查判断，或显式触发 `review-gate` skill | **条件触发**。仅在用户明确确认后才允许切换到 review-gate |
 | 存在实现偏差，需先修复 | `/trellis:continue` | 回到实施阶段，或显式触发 `trellis-continue` skill | 回到 implementation 内部链修复偏差项，再重新执行正式 `check` |
 | 测试或验证证据不足 | `/trellis:continue` | 回到 implementation 并说明测试先行意图，或显式触发 `trellis-continue` skill | 先补验证证据，再重新执行 `check` |
 | 发现上下文污染 | `/trellis:continue` | 开新会话并重新描述当前意图，或显式触发 `trellis-continue` skill | 停止当前会话，开新会话并注入决策摘要 |
 | 偏差来自冻结后新增 / 修改 / 删除需求 | [需求变更管理执行卡](../../需求变更管理执行卡.md) | 同上 | 先完成评估与确认；用户接受并入当前轮次后再回到受影响的最早阶段 |
 | 偏差仅是纯澄清 | 留在当前阶段 | 留在当前阶段 | 仅限不改变范围、接口契约、验收标准、成本、工期 |
-| 不确定下一步 | `/trellis:delivery` | 描述当前检查结果，或显式触发 `delivery` skill | 先确认当前轮是否明确跳过 review-gate，再进入交付收口 |
+| 不确定下一步 | `/trellis:review-gate` | 描述当前检查结果，或显式触发 `review-gate` skill | 若当前轮已声明 formal `PROJECT-AUDIT` 且当前 task 不是 carrier，不要在本阶段默认建议项目级 `delivery` / `project-audit` |
 
 **review-gate 触发条件**（不是所有 check 都必须走 review-gate）：
 
@@ -258,6 +262,6 @@ $TASK_DIR/check.md
   - 用户显式要求进入 `review-gate`
 - 或根据当前改动的软条件预判，进入 `review-gate` 后大概率会被判定为 `recommended`
 
-`check.md` 必须把这组判定结果结构化写入 `## Review-Gate Decision`。若其中任一硬条件为 `yes`，则 `review_gate_decision` 只能写 `required`；不得再从 `check` 直接切到 `delivery`。若 `review_gate_decision = recommended` 且仍准备直接进入 `delivery`，则必须额外记录 `recommended_review_skip_accepted_by_user = yes` 与 `recommended_review_skip_acceptance_note`。
+`check.md` 必须把这组判定结果结构化写入 `## Review-Gate Decision`。若其中任一硬条件为 `yes`，则 `review_gate_decision` 只能写 `required`；不得再从 `check` 直接切到 `delivery`。若当前轮已声明 formal `PROJECT-AUDIT` 且当前 task 不是对应 carrier，则也不得从 `check` 直接切到 `project-audit` / `delivery`。若 `review_gate_decision = recommended` 且准备在本 task 上直接进入 `delivery`，则必须额外记录 `recommended_review_skip_accepted_by_user = yes` 与 `recommended_review_skip_acceptance_note`。
 
-不满足以上条件时，check 可直接进入 delivery，无需经过 review-gate；若当前轮还需要关闭当前 active task，再在 delivery 之后进入 native finish-work。
+不满足以上条件时，若当前轮未声明 formal `PROJECT-AUDIT`，或当前 task 本身就是 formal carrier，check 可直接进入 delivery，无需经过 review-gate；否则当前 task 仍只停留在任务级闭环，项目级 `project-audit` / `delivery` 需切回项目级 owner 再进入。
