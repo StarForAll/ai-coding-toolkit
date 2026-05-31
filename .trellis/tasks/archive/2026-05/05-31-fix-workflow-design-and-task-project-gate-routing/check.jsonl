@@ -1,0 +1,7 @@
+{"file":".trellis/spec/scripts/index.md","reason":"Check pass must cover workflow source Python validators and command-doc assets together."}
+{"file":".trellis/spec/scripts/python-conventions.md","reason":"Verification needs the same Python script contracts used during implementation."}
+{"file":".trellis/spec/scripts/workflow-command-doc-contracts.md","reason":"Review must confirm command-doc next-step and gate wording stay consistent with runtime behavior."}
+{"file":".trellis/spec/scripts/workflow-installer-upgrade-contracts.md","reason":"Project/task gate semantics in workflow source assets must remain aligned with managed deployment contracts."}
+{"file":".trellis/spec/docs/index.md","reason":"Check must enforce workflow rule propagation across affected docs under docs/workflows/**."}
+{"file":".trellis/spec/guides/index.md","reason":"Shared verification thinking applies to this cross-layer workflow repair."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"The review step must verify no cross-layer drift remains after the repair."}

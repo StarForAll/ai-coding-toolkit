@@ -1,0 +1,7 @@
+{"file":".trellis/spec/scripts/index.md","reason":"Workflow source changes touch Python validators and command-doc assets under docs/workflows/**/commands/."}
+{"file":".trellis/spec/scripts/python-conventions.md","reason":"State-machine validators and regression tests are Python files and must follow repo script conventions."}
+{"file":".trellis/spec/scripts/workflow-command-doc-contracts.md","reason":"Command markdown changes must preserve product/runtime semantics and next-step recommendation contracts."}
+{"file":".trellis/spec/scripts/workflow-installer-upgrade-contracts.md","reason":"Workflow source assets and target-project gate semantics must stay aligned across state helpers and managed docs."}
+{"file":".trellis/spec/docs/index.md","reason":"Workflow docs under docs/workflows/** are product assets and must follow repo-local propagation rules."}
+{"file":".trellis/spec/guides/index.md","reason":"Shared thinking guides apply before cross-layer workflow maintenance changes."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"This fix crosses command docs, validators, tests, and routing contracts and needs explicit boundary review."}
