@@ -61,3 +61,8 @@ git remote set-url --add --push origin git@gitee.com:xxx/yyy.git
 目标项目嵌入工作流之后,对应的AGENTS.md和实际的工作流不冲突兼容的;
 
 29. 具体任务在check时必须进行代码可用性和代码漏洞检测和代码质量检测，前两者是强门禁
+
+30. 子任务执行完成review-gate不能执行项目级别的delivery
+project-audit 和 delivery 都是项目级别的阶段，project-audit中使用review-gate可以流转到delivery；而任务级别[implementation]中的review-gate是不能流转到项目级别的project-audit/delivery
+
+

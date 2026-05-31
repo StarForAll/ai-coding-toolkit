@@ -8,6 +8,9 @@ git remote set-url --add --push origin git@gitee.com:AllstarsBelongToMe/项目�
 git remote set-url --add --push origin git@github.com:StarForAll/项目名称.git
 git remote -v
 trellis init --claude --opencode --codex -y -u xzc
+sed -i '/min_wait_timeout_ms = 480000/a default_wait_timeout_ms = 480000' .codex/config.toml
+# 安装 impeccable【claude/agents] 不需要补充前缀,会导致其他skill使用也出现前缀
+npx impeccable skills install
 
 # 可选，但需要事先在 sonar服务端补充对应项目
 sonar-scanner -Dsonar.projectKey=目标项目key -Dsonar.token=$SONAR_TOKEN -Dsonar.host.url=https://sonarqube.xzc.com:13785 -Dsonar.sources=.
@@ -32,12 +35,39 @@ WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1 "$PYTHON_BIN" "$WORKFLOW_ROOT/commands/insta
 # 完整性校验
 "$PYTHON_BIN" "$WORKFLOW_ROOT/commands/upgrade-compat.py" --project-root "$TARGET_PROJECT" --check
 
-# 安装 impeccable【claude/agents]
-npx impeccable skills install
+chmod +x .git/hooks/post-commit
+
+cat >> .gitignore << 'EOF'
+.ace-tool/
+.scannerwork/
+tmp/
+*.backup
+.trellis/.pending-record-session/
+.claude/settings.local.json
+EOF
 -------------------------------------------
+
+codex --yolo
+opencode
+claude
+
+打开cli之后必须首先进行以下操作,索引是会根据最新文件修改时间判断的
+测试 ace.search_context 可用性:
+1. 不可用：去官网[https://app.augmentcode.com/settings/personal-api-tokens]更新url和token，重新进入cli
+2. git add . && git commit -m "初始化"
+3. 对当前项目中所有文件修改时间但不修改内容，然后再次 ace.search_context 可用性，尤其是对隐藏目录和docs目录中的文件内容的索引
 
 
 文件已经更新，需要根据最新的实际内容再次进行相同的深入分析，判断是否还存在缺漏和错误
+
+对当前正在执行的 feasibility 阶段,以下问题是否实际存在，先判断分析问题是否存在，然后针对存在的问题进行修复，但需要注意修复不能导致新的问题出现作：
+
+在design阶段A-D块完成之后新开对话,"根据当前已有的所有项目信息，大致说明一下所有的页面，用户需要进行验证，避免可能存在的错漏" --- 修正补完文档,方便后续的UI设计
+新开对话-确定页面结构-完善-重新新开对话确定 --- 最后一轮确定使用 5.5模型
+
+在第一个子任务完成之后执行该操作:"修正当前项目中的 .gitignore 文件内容,避免不需要的文件上传，比如构建后的产物"
+
+对当前项目中全部文档进行深度扫描分析,对可能存在的错漏数据进行同步修正,避免给后续使用造成错判;
 
 对当前正在修复的skill,以下问题是否实际存在，先判断分析问题是否存在，然后针对存在的问题进行修复，但需要注意修复不能导致新的问题出现作：
 
