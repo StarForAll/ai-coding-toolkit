@@ -1246,3 +1246,37 @@ Tightened workflow implementation closeout boundaries, aligned workflow docs and
 ### Next Steps
 
 - None - task complete
+
+
+## Session 341: Optimize workflow installer regression runtime
+
+**Date**: 2026-06-01
+**Task**: Optimize workflow installer regression runtime
+**Branch**: `main`
+
+### Summary
+
+Added cached installed-fixture coverage, migrated downstream-state installer tests, tightened regression spec guidance, and cut full installer suite runtime while keeping full unittest verification green.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `959a1bc` | (see git log) |
+| `a194b70` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
