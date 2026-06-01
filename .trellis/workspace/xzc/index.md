@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-7.md`
-- **Total Sessions**: 339
-- **Last Active**: 2026-05-31
+- **Total Sessions**: 340
+- **Last Active**: 2026-06-01
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-7.md` | ~1215 | Active |
+| `journal-7.md` | ~1248 | Active |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
@@ -35,6 +35,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 340 | 2026-06-01 | Fix workflow implementation closeout routing | `9ea5ace` | `main` |
 | 339 | 2026-05-31 | Fix workflow design and task-project gate routing | `9cd29eb` | `main` |
 | 338 | 2026-05-29 | 更新工作流思维导图 | `0e3e2d2` | `main` |
 | 337 | 2026-05-28 | 同步仓库文档现状 | `dcdf6e2` | `main` |

@@ -1213,3 +1213,36 @@ Updated workflow-repair to run focused truth precheck on existing temp-project e
 ### Next Steps
 
 - None - task complete
+
+
+## Session 340: Fix workflow implementation closeout routing
+
+**Date**: 2026-06-01
+**Task**: Fix workflow implementation closeout routing
+**Branch**: `main`
+
+### Summary
+
+Tightened workflow implementation closeout boundaries, aligned workflow docs and installer expectations, and added regression coverage for child-task and force-path stage gates.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9ea5ace` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
