@@ -15,6 +15,8 @@ import re
 import sys
 from pathlib import Path
 
+from project_id_utils import require_installed_project_id, workflow_install_record_exists
+from state_utils import find_repo_root
 from workflow_common import (
     MIN_KICKOFF_PAYMENT_RATIO,
     PLACEHOLDER_MARKERS,
@@ -556,6 +558,13 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+    repo_root = find_repo_root(args.task_dir.resolve())
+    if args.step != "compliance" and workflow_install_record_exists(repo_root):
+        try:
+            require_installed_project_id(repo_root, "feasibility-check.py")
+        except RuntimeError as exc:
+            print(f"❌ {exc}")
+            return 1
 
     if args.step == "compliance":
         step_compliance()

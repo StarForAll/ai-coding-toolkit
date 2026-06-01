@@ -26,6 +26,8 @@ from workflow_common import (
     resolve_task_table_path,
     task_note_matches_label,
 )
+from project_id_utils import require_installed_project_id, workflow_install_record_exists
+from state_utils import find_repo_root
 
 
 VALID_ENGAGEMENT_TYPES = {"external_outsourcing", "non_outsourcing"}
@@ -546,6 +548,16 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+    repo_root = find_repo_root(args.task_dir.resolve())
+    if repo_root is None:
+        print("❌ 无法定位 repo root，不能读取 workflow-installed.json project_id")
+        return 1
+    if workflow_install_record_exists(repo_root):
+        try:
+            require_installed_project_id(repo_root, "delivery-control-validate.py")
+        except RuntimeError as exc:
+            print(f"❌ {exc}")
+            return 1
     
     if args.all:
         return validate_all_phases(args.task_dir)

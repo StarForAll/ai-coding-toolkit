@@ -390,6 +390,7 @@ _CLI_ALT_DIRS = CLI_ALT_DIRS
 _ALL_CLI_TYPES = ALL_CLI_TYPES
 _REQUIRED_INSTALL_RECORD_KEYS = {
     "trellis_version",
+    "project_id",
     "cli_types",
     "commands",
     "overlay_commands",
@@ -1883,6 +1884,9 @@ def write_install_record(
     bootstrap_task_removed = prior_record.get("bootstrap_task_removed", True)
     bootstrap_cleanup_status = prior_record.get("bootstrap_cleanup_status", "unknown")
     profile = prior_record.get("profile", DEFAULT_PROFILE)
+    project_id = prior_record.get("project_id")
+    if not isinstance(project_id, str) or not project_id.strip():
+        project_id = "_legacy_unknown_"
     cards = list(EXECUTION_CARDS)
     if profile == DEFAULT_PROFILE:
         cards.extend(OUTSOURCING_EXECUTION_CARDS)
@@ -1895,6 +1899,7 @@ def write_install_record(
                 "trellis_version": current_version,
                 "installed": installed,
                 "previous_version": previous_version,
+                "project_id": project_id,
                 "cli_types": cli_types,
                 "updated": now,
                 "profile": profile,

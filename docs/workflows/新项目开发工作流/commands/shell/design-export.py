@@ -7,6 +7,8 @@ import argparse
 import unicodedata
 from pathlib import Path
 
+from project_id_utils import require_installed_project_id, workflow_install_record_exists
+from state_utils import find_repo_root
 from workflow_common import PLACEHOLDER_MARKERS
 
 
@@ -262,6 +264,19 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+    repo_root = find_repo_root(args.design_dir.resolve())
+    if repo_root is None:
+        # Standalone design scaffolding/validation remains allowed outside an
+        # embedded workflow project; project_id gating applies only after install.
+        if args.scaffold:
+            return scaffold(args.design_dir)
+        return validate(args.design_dir)
+    if workflow_install_record_exists(repo_root):
+        try:
+            require_installed_project_id(repo_root, "design-export.py")
+        except RuntimeError as exc:
+            print(f"❌ {exc}")
+            return 1
     if args.scaffold:
         return scaffold(args.design_dir)
     return validate(args.design_dir)

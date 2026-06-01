@@ -13,6 +13,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from workflow_common import extract_backticked_field  # noqa: E402
+from project_id_utils import installed_workflow_project_id  # noqa: E402
 from state_utils import (  # noqa: E402
     BRAINSTORM_EXIT_SNAPSHOT_FIELDS,
     CHECK_MD_FILE,
@@ -1368,6 +1369,12 @@ def validate_check_gate(
         return
 
     gate_status = _extract_check_gate_status(content)
+    verification_body = _validate_equivalent_section_conflict(
+        content,
+        ("Verification Results", "验证结果"),
+        errors,
+        document_name="check.md",
+    )
     if gate_status is None:
         if _should_enforce_missing_gate_status():
             errors.append(
@@ -1380,12 +1387,6 @@ def validate_check_gate(
             "当前任务级 check 尚未闭环，不得进入后续阶段"
         )
     elif gate_status == "pass":
-        verification_body = _validate_equivalent_section_conflict(
-            content,
-            ("Verification Results", "验证结果"),
-            errors,
-            document_name="check.md",
-        )
         for raw_line in verification_body.splitlines():
             line_status = _extract_backticked_status_from_text(raw_line)
             if line_status == "fail":
@@ -1393,6 +1394,48 @@ def validate_check_gate(
                     "check.md 的 Verification Results 包含 fail，但 `check_gate_status` 仍是 `pass`"
                 )
                 break
+
+    sonar_status_line: str | None = None
+    sonar_command_line: str | None = None
+    for raw_line in verification_body.splitlines():
+        lowered = raw_line.lower()
+        if sonar_status_line is None and ("Sonar Verify" in raw_line or "sonar verify" in lowered):
+            sonar_status_line = raw_line
+        if sonar_command_line is None and "sonar verify -p " in lowered:
+            sonar_command_line = raw_line
+    if sonar_status_line is None:
+        errors.append(
+            "check.md 的 Verification Results 缺少强制 Sonar Verify 结果；"
+            "当前 workflow 要求先执行 `sonar verify -p <project-id>`"
+        )
+    else:
+        sonar_status = _extract_backticked_status_from_text(sonar_status_line)
+        if sonar_status != "pass":
+            errors.append(
+                "check.md 的 Sonar Verify 结果不是 `pass`；"
+                "当前任务级 check 尚未完成 sonar 闭环"
+            )
+        repo_root = _repo_root_from_task_dir(task_dir)
+        if repo_root is not None:
+            installed_project_id = installed_workflow_project_id(repo_root)
+            if installed_project_id is not None:
+                if sonar_command_line is None:
+                    errors.append(
+                        "check.md 的 Sonar Verify 缺少 `Command: sonar verify -p <project-id>` 留痕；"
+                        "无法证明本轮强制门禁针对的是当前安装项目"
+                    )
+                else:
+                    match = re.search(r"sonar verify -p\s+([A-Za-z](?:[A-Za-z0-9:_-]*[A-Za-z])?)", sonar_command_line)
+                    if match is None:
+                        errors.append(
+                            "check.md 的 Sonar Verify Command 行格式无效；"
+                            "应显式记录 `sonar verify -p <project-id>`"
+                        )
+                    elif match.group(1) != installed_project_id:
+                        errors.append(
+                            "check.md 的 Sonar Verify 记录与安装记录中的 project_id 不一致；"
+                            "不得伪造或复用其他项目的 sonar 结论"
+                        )
 
     validate_check_review_gate_decision(content, errors, for_delivery=for_delivery)
 

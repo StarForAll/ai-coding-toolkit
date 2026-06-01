@@ -8,10 +8,20 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
 from typing import NamedTuple
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from project_id_utils import find_repo_root, require_installed_project_id
+
+
+SONAR_VERIFY_TIMEOUT_SECONDS = 300
 
 
 class CheckResult(NamedTuple):
@@ -95,17 +105,97 @@ def run_optional_check(cmd: str | None, label: str) -> CheckResult:
     return run_check(cmd, label)
 
 
+def run_sonar_verify(project_id: str) -> CheckResult:
+    rendered_command = f"sonar verify -p {project_id}"
+    command = ["sonar", "verify", "-p", project_id]
+    timeout_raw = os.environ.get("WORKFLOW_SONAR_VERIFY_TIMEOUT_SECONDS", str(SONAR_VERIFY_TIMEOUT_SECONDS))
+    timeout_note: str | None = None
+    try:
+        timeout_seconds = int(timeout_raw)
+    except ValueError:
+        timeout_seconds = SONAR_VERIFY_TIMEOUT_SECONDS
+        timeout_note = (
+            f"Reason: WORKFLOW_SONAR_VERIFY_TIMEOUT_SECONDS={timeout_raw!r} 无效，"
+            f"已回退默认值 {SONAR_VERIFY_TIMEOUT_SECONDS}s"
+        )
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=timeout_seconds, check=False)
+    except FileNotFoundError:
+        return CheckResult(
+            label="Sonar Verify",
+            command=rendered_command,
+            status="fail",
+            detail="\n".join(part for part in [timeout_note, "Reason: sonar command not found"] if part),
+        )
+    except subprocess.TimeoutExpired:
+        return CheckResult(
+            label="Sonar Verify",
+            command=rendered_command,
+            status="fail",
+            detail="\n".join(
+                part for part in [timeout_note, f"Reason: command timed out after {timeout_seconds}s"] if part
+            ),
+        )
+
+    if result.returncode == 0:
+        return CheckResult(label="Sonar Verify", command=rendered_command, status="pass")
+
+    details: list[str] = [f"Exit Code: {result.returncode}"]
+    stdout = result.stdout.strip()
+    stderr = result.stderr.strip()
+    if stdout:
+        details.append(f"stdout:\n{stdout[:800]}")
+    if stderr:
+        details.append(f"stderr:\n{stderr[:800]}")
+    if timeout_note:
+        details.insert(0, timeout_note)
+    return CheckResult(
+        label="Sonar Verify",
+        command=rendered_command,
+        status="fail",
+        detail="\n".join(details),
+    )
+
+
 def main() -> int:
     args = parse_args(sys.argv[1:])
     task_dir = Path(args.task_dir)
+    repo_root = find_repo_root(task_dir.resolve())
+    if repo_root is None:
+        print("❌ 无法定位 repo root，不能读取 workflow-installed.json project_id")
+        return 1
+    try:
+        project_id = require_installed_project_id(repo_root, "check-quality.py")
+    except RuntimeError as exc:
+        print(f"❌ {exc}")
+        return 1
 
     print("=== 质量检查 ===")
 
     print("说明：测试 / lint / type-check / extra-check 命令必须来自技术架构确认后由用户明确的项目化输入。")
+    print("说明：本 workflow 强制先执行 `sonar verify -p <project-id>`；若失败，必须修复并排查同类问题后重新运行。")
+    print(f"Project ID: {project_id}")
     if args.scope:
         print(f"手动指定跨层范围: {args.scope}")
 
     results: list[CheckResult] = []
+
+    # 0. 强制质量平台门禁
+    sonar_result = run_sonar_verify(project_id)
+    results.append(sonar_result)
+    if sonar_result.status == "fail":
+        _print_result(sonar_result)
+        print()
+        print("❌ Sonar Verify 未通过；必须先修复当前问题。")
+        print("❌ 还需要主动排查是否存在同类问题，并将同类问题一并修复。")
+        print("❌ 完成修复后，重新执行 `sonar verify -p <project-id>`，通过后再重跑当前检查。")
+        print("=== 质量检查完成 ===")
+        print("下一步：修复 sonar 问题后重新执行 check-quality.py")
+        print("\n--- Summary ---")
+        if args.scope:
+            print(f"- Cross-Layer Scope: {args.scope}")
+        print(f"- {sonar_result.label}: {sonar_result.status}")
+        return 1
 
     # 1. 测试
     results.append(run_optional_check(args.test_cmd, "测试状态"))

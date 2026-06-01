@@ -15,6 +15,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from workflow_common import extract_backticked_field  # noqa: E402
 from embed_integrity import collect_embed_advisories, detect_embed_invalid  # noqa: E402
+from project_id_utils import require_installed_project_id  # noqa: E402
 from state_utils import (  # noqa: E402
     ASSESSMENT_FILE,
     EXECUTION_STAGES,
@@ -554,6 +555,13 @@ def _route_task_dir(task_dir: Path, repo_root: Path) -> int:
 
 def cmd_init(args: argparse.Namespace) -> int:
     task_dir = resolve_task_dir(args.task_dir)
+    repo_root = find_repo_root(task_dir)
+    if repo_root is not None:
+        try:
+            require_installed_project_id(repo_root, "workflow-state init")
+        except RuntimeError as exc:
+            print(f"❌ {exc}")
+            return 1
     state_path, _state = load_state(task_dir)
     if state_path.exists() and not args.force:
         print(f"❌ {state_path} 已存在；如需覆盖请使用 --force")
@@ -584,6 +592,13 @@ def cmd_show(args: argparse.Namespace) -> int:
 
 def cmd_set(args: argparse.Namespace) -> int:
     task_dir = resolve_task_dir(args.task_dir)
+    repo_root_for_project_id = find_repo_root(task_dir)
+    if repo_root_for_project_id is not None:
+        try:
+            require_installed_project_id(repo_root_for_project_id, "workflow-state set")
+        except RuntimeError as exc:
+            print(f"❌ {exc}")
+            return 1
     state_path, state = load_state(task_dir)
     if state is None:
         print(f"❌ {state_path} 不存在或无法读取；请先运行 init")
@@ -761,6 +776,12 @@ def cmd_route(args: argparse.Namespace) -> int:
     task_dir, status_code = _resolve_route_task_dir(args, repo_root)
     if task_dir is None:
         return status_code
+    try:
+        require_installed_project_id(repo_root, "workflow-state route")
+    except RuntimeError as exc:
+        message = str(exc)
+        _route_result(None, "blocked", message, blockers=[message])
+        return 1
     return _route_task_dir(task_dir, repo_root)
 
 
@@ -778,6 +799,13 @@ def cmd_repair(args: argparse.Namespace) -> int:
     if repo_root is None:
         print(json.dumps({"error": "无法定位 repo root"}, ensure_ascii=False, indent=2), file=sys.stderr)
         return 1
+
+    if args.apply:
+        try:
+            require_installed_project_id(repo_root, "workflow-state repair --apply")
+        except RuntimeError as exc:
+            print(json.dumps({"status": "repair_blocked", "message": str(exc)}, ensure_ascii=False, indent=2))
+            return 1
 
     state_path, state = load_state(task_dir_path)
     if state is not None:

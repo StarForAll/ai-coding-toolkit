@@ -25,6 +25,7 @@ if str(SCRIPT_DIR) not in sys.path:
 from workflow_common import (  # noqa: E402
     PLACEHOLDER_MARKERS,
 )
+from project_id_utils import INSTALL_RECORD, find_repo_root
 
 
 def _resolve_trellis_scripts_dir() -> Path:
@@ -44,7 +45,6 @@ from common.active_task import resolve_active_task, resolve_task_ref  # type: ig
 
 STATE_FILE_NAME = "workflow-state.json"
 TASK_FILE_NAME = "task.json"
-INSTALL_RECORD = ".trellis/workflow-installed.json"
 REQUIREMENTS_DIR = Path("docs/requirements")
 CUSTOMER_PRD = REQUIREMENTS_DIR / "customer-facing-prd.md"
 DEVELOPER_PRD = REQUIREMENTS_DIR / "developer-facing-prd.md"
@@ -183,17 +183,6 @@ def read_json(path: Path) -> dict[str, Any] | None:
 
 def write_json(path: Path, data: dict[str, Any]) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-
-def find_repo_root(start: Path) -> Path | None:
-    current = start.resolve()
-    if current.is_file():
-        current = current.parent
-    while current != current.parent:
-        if (current / ".trellis").is_dir():
-            return current
-        current = current.parent
-    return None
 
 
 def build_default_state(stage: str) -> dict[str, Any]:

@@ -22,7 +22,7 @@
 - 新建目标项目默认使用 `main` 作为本地主分支 / 初始分支；已有本地提交历史的项目可保留当前分支
 - Codex 至少存在 .agents/skills/ 或 .codex/skills/ 之一
 
-用法: python3 install-workflow.py [--project-root /path/to/project] [--cli claude,opencode,codex] [--profile personal|outsourcing] [--dry-run]
+用法: python3 install-workflow.py [--project-root /path/to/project] --project-id <id> [--cli claude,opencode,codex] [--profile personal|outsourcing] [--dry-run]
 卸载: python3 uninstall-workflow.py
 """
 import argparse
@@ -37,6 +37,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 _SOURCE_REPO_ROOT_ENV = "WORKFLOW_SOURCE_REPO_ROOT"
+COMMANDS_SHELL_DIR = Path(__file__).resolve().parent / "shell"
 
 
 def _resolve_trellis_scripts_dir() -> Path:
@@ -63,8 +64,11 @@ def _resolve_trellis_scripts_dir() -> Path:
 TRELLIS_SCRIPTS_DIR = _resolve_trellis_scripts_dir()
 if str(TRELLIS_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(TRELLIS_SCRIPTS_DIR))
+if str(COMMANDS_SHELL_DIR) not in sys.path:
+    sys.path.insert(0, str(COMMANDS_SHELL_DIR))
 
 from common.active_task import clear_task_from_sessions  # type: ignore[import-not-found]
+from project_id_utils import normalize_project_id as normalize_project_id_shared
 
 from workflow_assets import (
     ADDED_COMMANDS,
@@ -972,6 +976,27 @@ def resolve_install_profile(profile_arg: str | None) -> str:
         "请使用 --profile personal 或 --profile outsourcing 重新执行安装。"
         f"{N}"
     )
+
+
+def normalize_project_id(project_id_arg: str | None) -> str:
+    """Validate the mandatory target-project id used by workflow quality gates."""
+    if project_id_arg is None:
+        sys.exit(
+            f"{R}缺少 --project-id。新项目首次嵌入 workflow 时必须显式传入目标项目 id；"
+            "缺失该值时后续 workflow 操作全部禁止执行。"
+            f"{N}"
+        )
+    if not project_id_arg.strip():
+        sys.exit(f"{R}--project-id 不能为空或只包含空白。{N}")
+    project_id = normalize_project_id_shared(project_id_arg)
+    if project_id is None:
+        sys.exit(
+            f"{R}--project-id 格式无效: {project_id_arg!r}。"
+            "要求：strip() 后非空、无空白；首尾必须是英文字母；"
+            "非首尾字符仅允许英文字母、数字、冒号、连字符和下划线。"
+            f"{N}"
+        )
+    return project_id
 
 
 def ensure_embed_executor_confirmed(dry_run: bool) -> None:
@@ -3503,6 +3528,7 @@ def write_install_record(
     dry_run: bool,
     *,
     profile: str = DEFAULT_PROFILE,
+    project_id: str,
     bootstrap_cleanup: str = "unknown",
 ) -> None:
     now = datetime.now(timezone.utc).isoformat()
@@ -3519,6 +3545,7 @@ def write_install_record(
         rec.write_text(json.dumps({
             "trellis_version": ver,
             "installed": now,
+            "project_id": project_id,
             "cli_types": cli_types,
             "profile": profile,
             "commands": DISTRIBUTED_COMMANDS,
@@ -3550,9 +3577,9 @@ def write_install_record(
             "bootstrap_cleanup_status": bootstrap_cleanup,
         }, ensure_ascii=False, indent=2), encoding="utf-8")
     if dry_run:
-        info(f"将写入安装记录 → {rec.name} (Trellis {ver}, CLI: {', '.join(cli_types)})")
+        info(f"将写入安装记录 → {rec.name} (Trellis {ver}, CLI: {', '.join(cli_types)}, project_id: {project_id})")
     else:
-        ok(f"安装记录 → {rec.name} (Trellis {ver}, CLI: {', '.join(cli_types)})")
+        ok(f"安装记录 → {rec.name} (Trellis {ver}, CLI: {', '.join(cli_types)}, project_id: {project_id})")
 
 
 # ── todo.txt ──
@@ -3634,6 +3661,11 @@ def main() -> int:
         description="安装自定义工作流到 Trellis Git 项目（默认同一项目同时部署已检测到的 Claude Code / OpenCode / Codex 适配层）"
     )
     p.add_argument("--project-root", type=Path, default=None, help="项目根目录（默认自动检测）")
+    p.add_argument(
+        "--project-id",
+        required=True,
+        help="目标项目 id；必传。首尾必须是英文字母，非首尾可包含英文字母、数字、冒号、连字符和下划线",
+    )
     p.add_argument("--cli", type=str, default=None,
                    help="指定 CLI 类型，逗号分隔: claude,opencode,codex（默认安装全部检测到的 CLI；此参数仅用于过滤）")
     p.add_argument("--profile", default=None,
@@ -3665,6 +3697,7 @@ def main() -> int:
         )
 
     profile = resolve_install_profile(args.profile)
+    project_id = normalize_project_id(args.project_id)
 
     print()
     print("╔══════════════════════════════════════════╗")
@@ -3675,6 +3708,7 @@ def main() -> int:
     if not args.cli:
         info("默认策略: 在同一目标项目中同时部署全部检测到的 CLI 适配层；如需过滤请使用 --cli")
     info(f"Profile: {profile}")
+    info(f"Project ID: {project_id}")
     if args.dry_run:
         warn("DRY RUN 模式 — 不实际写入文件")
     print()
@@ -3806,7 +3840,14 @@ def main() -> int:
 
         # 安装记录
         update_embed_attempt_record(root, last_step="write-install-record")
-        write_install_record(root, cli_types, args.dry_run, profile=profile, bootstrap_cleanup=bootstrap_cleanup)
+        write_install_record(
+            root,
+            cli_types,
+            args.dry_run,
+            profile=profile,
+            project_id=project_id,
+            bootstrap_cleanup=bootstrap_cleanup,
+        )
 
         # NL 路由表注入 AGENTS.md（为无 hooks 的 CLI 提供路由支持）
         print()

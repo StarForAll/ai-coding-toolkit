@@ -16,6 +16,7 @@ import sys
 import unicodedata
 from pathlib import Path
 
+from project_id_utils import find_repo_root, require_installed_project_id, workflow_install_record_exists
 from workflow_common import PLACEHOLDER_MARKERS
 
 
@@ -89,15 +90,6 @@ def print_result(ok: bool, success: str, failure: str) -> int:
         return 1
     print(f"❌ {failure}")
     return 0
-
-
-def find_repo_root(start: Path) -> Path:
-    current = start.resolve()
-    while current != current.parent:
-        if (current / ".trellis").is_dir():
-            return current
-        current = current.parent
-    return start.resolve()
 
 
 def find_section_lines(lines: list[str], title: str) -> list[str]:
@@ -411,6 +403,16 @@ def main() -> int:
         return 0
 
     task_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(".")
+    repo_root = find_repo_root(task_dir.resolve())
+    if repo_root is None:
+        print("❌ 无法定位 repo root，不能读取 workflow-installed.json project_id")
+        return 1
+    if workflow_install_record_exists(repo_root):
+        try:
+            require_installed_project_id(repo_root, "plan-validate.py")
+        except RuntimeError as exc:
+            print(f"❌ {exc}")
+            return 1
     plan_file = task_dir / "task_plan.md"
     checklist_file = task_dir / TASK_CREATION_CHECKLIST_FILE
 
@@ -432,7 +434,6 @@ def main() -> int:
         return 1
     print("✅ task_plan.md 存在")
 
-    repo_root = find_repo_root(task_dir)
     content = plan_file.read_text(encoding="utf-8")
     lines = content.splitlines()
 

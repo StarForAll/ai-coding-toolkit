@@ -20,7 +20,7 @@ CLI_ALT_DIRS = {
 }
 ALL_CLI_TYPES = ["claude", "opencode", "codex"]
 WORKFLOW_VERSION = "0.1.2803"
-WORKFLOW_SCHEMA_VERSION = "3"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增
+WORKFLOW_SCHEMA_VERSION = "4"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增
 COMPATIBLE_TRELLIS_VERSION = "0.5.17"
 
 PATCH_BASELINE_COMMANDS = ["continue", "finish-work"]
@@ -43,6 +43,7 @@ DISTRIBUTED_COMMANDS = [
 ]
 HELPER_SCRIPTS = [
     "workflow_common.py",
+    "project_id_utils.py",
     "state_utils.py",
     "validators_core.py",
     "validators_gates.py",
@@ -129,6 +130,7 @@ REQUIREMENTS_FOUNDATION_ASSET_IDS = [
     "spec.universal-domains.product-and-requirements.scope-boundary",
     "spec.universal-domains.product-and-requirements.requirement-clarification",
     "spec.universal-domains.project-governance.readme-governance",
+    "spec.universal-domains.verification.verification-gates",
     "spec.universal-domains.verification.evidence-requirements",
     "spec.universal-domains.product-and-requirements.acceptance-criteria",
     "spec.universal-domains.product-and-requirements.prd-documentation",
@@ -150,6 +152,7 @@ REQUIREMENTS_FOUNDATION_TARGET_PATHS = [
     ".trellis/spec/universal-domains/product-and-requirements/scope-boundary",
     ".trellis/spec/universal-domains/product-and-requirements/requirement-clarification",
     ".trellis/spec/universal-domains/project-governance/readme-governance",
+    ".trellis/spec/universal-domains/verification/verification-gates",
     ".trellis/spec/universal-domains/verification/evidence-requirements",
     ".trellis/spec/universal-domains/product-and-requirements/acceptance-criteria",
     ".trellis/spec/universal-domains/product-and-requirements/prd-documentation",
