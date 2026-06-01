@@ -84,7 +84,7 @@ def patch_task_store(target_path: Path) -> bool:
         workflow_state = read_json(workflow_state_path)
         if isinstance(workflow_state, dict):
             stage = workflow_state.get("stage")
-            if stage not in {{None, "", "delivery"}}:
+            if stage not in {{None, "", "check", "review-gate", "delivery"}}:
                 print(
                     colored(
                         f"Error: archive only after workflow close-out gate validation "
@@ -94,6 +94,18 @@ def patch_task_store(target_path: Path) -> bool:
                     file=sys.stderr,
                 )
                 return 1
+            status = workflow_state.get("status")
+            if stage in {{"check", "review-gate", "delivery"}} and isinstance(status, str):
+                if status not in {{"awaiting_user_confirmation", "completed"}}:
+                    print(
+                        colored(
+                            f"Error: archive only after workflow close-out gate validation "
+                            f"(current workflow-state status={{status!r}} for stage={{stage!r}})",
+                            Colors.RED,
+                        ),
+                        file=sys.stderr,
+                    )
+                    return 1
     if not finish_work_checklist.is_file():
         print(
             colored(

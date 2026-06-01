@@ -347,10 +347,10 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py init "$TASK_DIR" --stage
 
 | 层级 | 适用场景 | brainstorm 产出要求 | 后续默认链路 |
 |------|---------|-------------------|------------|
-| **Lite** | L0 / 内部小任务 | 单份轻量需求基线即可（`prd.md`），但仍必须补齐 `## 项目级粗估` | brainstorm → continue（自动 before-dev）→ check → delivery → native finish-work |
-| **Standard** | L1 / 多文件任务 | `customer-facing-prd.md` + task 工作底稿；两者都必须补齐项目级粗估；`developer-facing-prd.md` 在设计确认后生成 | brainstorm → design → plan → continue（自动 before-dev）→ check → delivery → native finish-work |
+| **Lite** | L0 / 内部小任务 | 单份轻量需求基线即可（`prd.md`），但仍必须补齐 `## 项目级粗估` | brainstorm → continue（自动 before-dev）→ check → native finish-work |
+| **Standard** | L1 / 多文件任务 | `customer-facing-prd.md` + task 工作底稿；两者都必须补齐项目级粗估；`developer-facing-prd.md` 在设计确认后生成 | brainstorm → design → plan → continue（自动 before-dev）→ check → native finish-work（若当前 task 还承担项目级交付，则先 delivery） |
 <!-- if:outsourcing -->
-| **Strict** | L2 / 外包 / 新客户 / 高风险 / 跨层 | `customer-facing-prd.md` + feasibility + 项目级粗估 + design 3.7 + 交付控制 + project-audit（项目级）；若后续任务命中 `review-gate` 的硬条件，或用户显式要求进入补充审查，再触发 `review-gate`（任务级条件触发）；`developer-facing-prd.md` 在设计确认后生成 | 保留当前严格全链路；实施前仍由 continue 自动触发 before-dev，收尾顺序保持 delivery → native finish-work |
+| **Strict** | L2 / 外包 / 新客户 / 高风险 / 跨层 | `customer-facing-prd.md` + feasibility + 项目级粗估 + design 3.7 + 交付控制 + project-audit（项目级）；若后续任务命中 `review-gate` 的硬条件，或用户显式要求进入补充审查，再触发 `review-gate`（任务级条件触发）；`developer-facing-prd.md` 在设计确认后生成 | 保留当前严格全链路；实施前仍由 continue 自动触发 before-dev，任务级收口后进入 native finish-work；若当前 task 同时承担项目级交付，则 delivery 在前 |
 <!-- endif:outsourcing -->
 
 **L0 降级规则**：L0 任务可不强制生成项目级正式 PRD，但 `prd.md` 工作底稿仍需覆盖目标、范围、验收、边界四项。若后续发现任务复杂度超出预期，应在进入 design 前补齐 `customer-facing-prd.md`。

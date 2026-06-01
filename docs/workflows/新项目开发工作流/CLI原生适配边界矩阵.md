@@ -229,7 +229,7 @@ ls .codex/skills/.backup-original/parallel/SKILL.md 2>/dev/null
 |---------|--------|----------|-------|
 | 阶段命令入口 | `.claude/commands/trellis/*.md` ✅ 安装器 | `.opencode/commands/trellis/*.md` ✅ 安装器 | `.agents/skills/*/SKILL.md` ✅ 安装器（`.codex/skills/*` 仅保留 Codex 独有或项目自定义 skills） |
 | 基线补丁 | continue / finish-work ✅；legacy `start` 仅兼容 | continue / finish-work ✅；legacy `start` 仅兼容 | trellis-continue / trellis-finish-work ✅（仅活动 skills 目录）；legacy `start` 仅兼容 |
-| 收尾入口 | `finish-work.md` → `delivery` → Trellis 原生 `/finish-work` | `finish-work.md` → `delivery` → Trellis 原生 `/finish-work` | `trellis-finish-work` skill → `delivery` → Trellis 原生 `/finish-work` |
+| 收尾入口 | `finish-work.md` → Trellis 原生 `/finish-work`（若当前 task 同时承担项目级交付，则先完成 `delivery`） | `finish-work.md` → Trellis 原生 `/finish-work`（若当前 task 同时承担项目级交付，则先完成 `delivery`） | `trellis-finish-work` skill → Trellis 原生 `/finish-work`（若当前 task 同时承担项目级交付，则先完成 `delivery`） |
 | 辅助脚本 | `.trellis/scripts/workflow/` ✅ | 共用 ✅ | 共用 ✅ |
 | 嵌入尝试记录 | `.trellis/workflow-embed-attempt.json` ✅ 安装器（开始写入，成功后清理） | 共用 ✅ | 共用 ✅ |
 | 项目规则 | `AGENTS.md` ⚠️ 半托管 | `AGENTS.md` ⚠️ 半托管 | `AGENTS.md` ⚠️ 半托管 |

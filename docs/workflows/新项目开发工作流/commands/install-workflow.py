@@ -1049,19 +1049,19 @@ def build_finish_work_content(content: str, patch_text: str) -> str | None:
 
     content = content.replace(
         'description: "Wrap up the current session: verify quality gate passed, remind user to commit, archive completed tasks, and record session progress to the developer journal. Use when done coding and ready to end the session."',
-        'description: "Wrap up the current session: verify quality gate passed, collect close-out evidence, and complete native Trellis close-out after delivery. Use when delivery is complete and the task is ready to be archived and journaled."',
+        'description: "Wrap up the current session: verify quality gate passed, collect close-out evidence, and complete native Trellis close-out after task-level closure. Use when the task is ready to be archived and journaled; if the same task still carries project-level delivery, finish delivery first."',
     )
     content = content.replace(
         'description: "Baseline finish-work skill"',
-        'description: "Wrap up the current session: verify quality gate passed, collect close-out evidence, and complete native Trellis close-out after delivery. Use when delivery is complete and the task is ready to be archived and journaled."',
+        'description: "Wrap up the current session: verify quality gate passed, collect close-out evidence, and complete native Trellis close-out after task-level closure. Use when the task is ready to be archived and journaled; if the same task still carries project-level delivery, finish delivery first."',
     )
     content = content.replace(
         "Wrap up the current session: archive the active task (and any other completed-but-unarchived tasks the user wants to clean up) and record the session journal. Code commits are NOT done here — those happen in workflow Phase 3.4 before you invoke this command.",
-        "Wrap up the current session: verify close-out evidence, confirm the frozen quality matrix, and complete the native Trellis archive + session-record steps after delivery. Code commits are NOT done here — those happen in workflow Phase 3.4 before you invoke this command.",
+        "Wrap up the current session: verify close-out evidence, confirm the frozen quality matrix, and complete the native Trellis archive + session-record steps after task-level closure. If the same task still carries project-level delivery, finish delivery first. Code commits are NOT done here — those happen in workflow Phase 3.4 before you invoke this command.",
     )
     content = content.replace(
         "Before submitting or committing, use this checklist to ensure work completeness.",
-        "Wrap up the current session: verify close-out evidence, confirm the frozen quality matrix, and complete the native Trellis archive + session-record steps after delivery. Code commits are NOT done here — those happen in workflow Phase 3.4 before you invoke this command.",
+        "Wrap up the current session: verify close-out evidence, confirm the frozen quality matrix, and complete the native Trellis archive + session-record steps after task-level closure. If the same task still carries project-level delivery, finish delivery first. Code commits are NOT done here — those happen in workflow Phase 3.4 before you invoke this command.",
     )
     content = content.replace(
         "**Timing**: After code is written and tested, before commit",
@@ -1077,7 +1077,7 @@ def build_finish_work_content(content: str, patch_text: str) -> str | None:
     # swept up casually in the same round.
     content = content.replace(
         "current active task is always archived in Step 3 regardless",
-        "current active task is archived by native finish-work after delivery confirms the close-out gates",
+        "current active task is archived by native finish-work after task-level closure gates pass",
     )
     content = content.replace(
         "archive them too in this round",

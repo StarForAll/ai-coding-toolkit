@@ -65,6 +65,7 @@ from validators_gates import (  # noqa: E402
     validate_check_project_stage_boundary,
     validate_delivery_gate,
     validate_design_exit_gate,
+    validate_force_transition_boundaries,
     validate_plan_gate,
     validate_project_audit_gate,
     validate_project_audit_delivery_stage_boundary,
@@ -655,6 +656,23 @@ def cmd_set(args: argparse.Namespace) -> int:
                 for message in gate_errors:
                     print(f"❌ {message}")
                 print("❌ 阶段切换被拒绝: 门禁产物未齐；如需强制切换请使用 --force")
+                return 1
+
+    if args.stage and pending_stage != current_stage and args.force:
+        repo_root = find_repo_root(task_dir)
+        if repo_root is not None:
+            force_blockers: list[str] = []
+            validate_force_transition_boundaries(
+                task_dir,
+                repo_root,
+                current_stage=current_stage,
+                new_stage=pending_stage,
+                errors=force_blockers,
+            )
+            if force_blockers:
+                for message in force_blockers:
+                    print(f"❌ {message}")
+                print("❌ 阶段切换被拒绝: 该边界属于不可绕过的项目级/任务级分层约束")
                 return 1
 
     set_errors: list[str] = []

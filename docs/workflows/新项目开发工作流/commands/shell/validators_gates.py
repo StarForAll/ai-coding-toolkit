@@ -264,6 +264,14 @@ def _resolve_delivery_check_task_dir(task_dir: Path) -> Path | None:
     )
 
 
+def _current_task_has_parent(task_dir: Path) -> bool:
+    task_data = load_task_json(task_dir)
+    if not isinstance(task_data, dict):
+        return False
+    parent_name = task_data.get("parent")
+    return isinstance(parent_name, str) and bool(parent_name.strip())
+
+
 def _extract_coverage_line(content: str) -> str | None:
     matrix_body = _extract_section_body(content, "Project-Level Verification Matrix")
     for raw_line in matrix_body.splitlines():
@@ -432,9 +440,18 @@ def validate_check_project_stage_boundary(
     *,
     target_stage: str | None = None,
 ) -> None:
-    if not _formal_project_audit_carrier_required(task_dir, repo_root):
+    formal_project_audit_required = _formal_project_audit_carrier_required(task_dir, repo_root)
+    if formal_project_audit_required and _current_task_is_formal_project_audit_carrier(task_dir, repo_root):
         return
-    if _current_task_is_formal_project_audit_carrier(task_dir, repo_root):
+    if _current_task_has_parent(task_dir):
+        rendered_target = target_stage or "project-audit / delivery"
+        errors.append(
+            "当前 `check` 所在 task 是 child task；任务级子任务完成后应停留在任务级收口，"
+            f"不得直接进入项目级 {rendered_target}。若仍需补充审查或继续修复，请进入 `review-gate` / `implementation`；"
+            "若当前任务级闭环已完成，则直接在当前 task 上走 native `finish-work`。"
+        )
+        return
+    if not formal_project_audit_required:
         return
     rendered_target = target_stage or "project-audit / delivery"
     errors.append(
@@ -450,9 +467,18 @@ def validate_review_gate_project_stage_boundary(
     *,
     target_stage: str | None = None,
 ) -> None:
-    if not _formal_project_audit_carrier_required(task_dir, repo_root):
+    formal_project_audit_required = _formal_project_audit_carrier_required(task_dir, repo_root)
+    if formal_project_audit_required and _current_task_is_formal_project_audit_carrier(task_dir, repo_root):
         return
-    if _current_task_is_formal_project_audit_carrier(task_dir, repo_root):
+    if _current_task_has_parent(task_dir):
+        rendered_target = target_stage or "delivery"
+        errors.append(
+            "当前 `review-gate` 所在 task 是 child task；任务级子任务补充审查闭环后应停留在任务级收口，"
+            f"不得直接进入项目级 {rendered_target}。若仍需继续修复，请回 `implementation`；"
+            "若当前任务级闭环已完成，则直接在当前 task 上走 native `finish-work`。"
+        )
+        return
+    if not formal_project_audit_required:
         return
     rendered_target = target_stage or "delivery"
     errors.append(
@@ -461,11 +487,60 @@ def validate_review_gate_project_stage_boundary(
     )
 
 
+def validate_force_transition_boundaries(
+    task_dir: Path,
+    repo_root: Path,
+    *,
+    current_stage: str | None,
+    new_stage: str,
+    errors: list[str],
+) -> None:
+    if current_stage == "implementation" and new_stage in {"project-audit", "delivery"}:
+        errors.append(
+            f"强制切换仍不允许 `implementation` 直接进入项目级 `{new_stage}`；"
+            "请先完成任务级 `check`，再由符合条件的 owner / carrier 进入项目级阶段"
+        )
+        return
+
+    if current_stage == "check" and new_stage in {"project-audit", "delivery"}:
+        validate_check_project_stage_boundary(task_dir, repo_root, errors, target_stage=new_stage)
+        return
+
+    if current_stage == "review-gate" and new_stage == "project-audit":
+        errors.append(
+            "强制切换仍不允许任务级 `review-gate` 直接进入项目级 `project-audit`；"
+            "请先完成当前任务级收口，再由项目级 owner 进入 project-audit"
+        )
+        return
+
+    if current_stage == "review-gate" and new_stage == "delivery":
+        validate_review_gate_project_stage_boundary(task_dir, repo_root, errors, target_stage="delivery")
+        return
+
+    if current_stage == "project-audit" and new_stage == "delivery":
+        check_task_dir = _resolve_task_level_check_task_dir(task_dir)
+        validate_project_audit_gate(
+            task_dir,
+            errors,
+            require_delivery_linkage=True,
+            require_exit_gate_status=True,
+            repo_root=repo_root,
+            check_task_dir=check_task_dir,
+        )
+        return
+
+
 def validate_project_audit_delivery_stage_boundary(
     task_dir: Path,
     repo_root: Path,
     errors: list[str],
 ) -> None:
+    # No standalone child-task guard here on purpose:
+    # - non-carrier child tasks are already blocked before or at project-audit
+    #   entry (`check -> project-audit` or earlier implementation boundaries)
+    # - if a child task is also the formal PROJECT-AUDIT carrier, delivery must
+    #   remain allowed for that explicit carrier instead of being rejected only
+    #   because it has a parent task
     if not _formal_project_audit_carrier_required(task_dir, repo_root):
         return
     if _current_task_is_formal_project_audit_carrier(task_dir, repo_root):

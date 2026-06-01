@@ -5,12 +5,12 @@ description: 质量检查完成了？进入任务级补充审查门禁 — 判�
 
 # /trellis:review-gate — 任务级多 CLI 补充审查门禁
 
-> **Workflow Position**: §5.1.x → 前: `/trellis:check`（条件触发） → 后: 回 `/trellis:continue` 修复；若当前轮未声明 formal `PROJECT-AUDIT`，或当前 task 本身就是 formal carrier，则可继续 `delivery`；否则完成当前任务级补充审查闭环后切回项目级 owner 继续收口
+> **Workflow Position**: §5.1.x → 前: `/trellis:check`（条件触发） → 后: 回 `/trellis:continue` 修复；普通任务级闭环后进入 native `finish-work`；若当前 task 明确承担项目级收口，再继续 `delivery`
 >
-> **触发条件**：review-gate 不是所有 check 的必经步骤。默认只在明确高风险条件或用户显式要求时触发；普通检查可直接从 check 进入 delivery。`review-gate` 仍以任务级补充审查为主，但在未声明 formal `PROJECT-AUDIT` 的 Lite/普通场景，或当前 task 本身就是 formal carrier 时，可由同一 task 继续进入 `delivery`。
+> **触发条件**：review-gate 不是所有 check 的必经步骤。默认只在明确高风险条件或用户显式要求时触发；普通 implementation 子任务在任务级闭环后直接进入 native `finish-work`。`review-gate` 仍以任务级补充审查为主；只有当前 task 明确承担项目级收口时，才继续进入 `delivery`。
 > **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:review-gate`） · ✅ OpenCode（TUI: `/trellis:review-gate`；CLI: `trellis/review-gate`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:review-gate` 命令；见 `codex/README.md`）
 
-> **Strong Gate**: 本阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束。review-gate 完成后，必须等待用户明确确认；它可以回 implementation 修复，也可以在未声明 formal `PROJECT-AUDIT`，或当前 task 本身就是 formal carrier 时继续进入 `delivery`。若 formal carrier 已声明且当前 task 不是它，则必须切回项目级 owner。
+> **Strong Gate**: 本阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束。review-gate 完成后，必须等待用户明确确认；它可以回 implementation 修复，或在任务级闭环后进入 native `finish-work`。若当前 task 还承担项目级收口，再进入 `delivery`；若 formal carrier 已声明且当前 task 不是它，则必须切回项目级 owner。
 
 ---
 
@@ -136,7 +136,7 @@ description: 质量检查完成了？进入任务级补充审查门禁 — 判�
 | `required` | 命中任一硬条件 | 必须执行多 CLI 审查 |
 | `recommended` | 未命中硬条件，但可信度层因”测试或验证证据明显不足”单独达到中门槛 | 建议执行；若现有验证已足够且用户接受风险，可跳过并写明原因 |
 | `recommended` | 未命中硬条件，但多个软条件叠加达到现有中门槛 | 同上 |
-| `skip` | 否则 | 无需继续多 CLI 审查；若当前轮未声明 formal `PROJECT-AUDIT`，或当前 task 本身就是 formal carrier，则可由同一 task 继续进入 `delivery`；否则切回项目级 owner 再进入 |
+| `skip` | 否则 | 无需继续多 CLI 审查；普通 implementation 子任务在当前任务级闭环后进入 native `finish-work`；只有当前 task 明确承担项目级收口时，才继续 `delivery` |
 
 将判定写入：
 

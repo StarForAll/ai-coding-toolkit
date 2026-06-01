@@ -5,7 +5,7 @@ description: 所有代码任务都完成了？进入项目级全局代码审查�
 
 # /trellis:project-audit — 项目级全局代码审查
 
-> **Workflow Position**: §5.1 → 正式模式前置入口优先来自 `/trellis:check` 或全部 `任务域=代码相关` 的任务完成后的项目级 owner 重入；预审模式也允许从 implementation 手动切入，若该实现采用 test-first 风格则仍视为 implementation 内部方法 → 后: 回到 `/trellis:check`（默认）或在无新增代码修改时进入 `/trellis:delivery`
+> **Workflow Position**: §5.1 → 正式模式前置入口优先来自 `/trellis:check` 或全部 `任务域=代码相关` 的任务完成后的项目级 owner 重入；不允许把 implementation 子任务直接切成 `project-audit` stage → 后: 回到 `/trellis:check`（默认）或在无新增代码修改时进入 `/trellis:delivery`
 > **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:project-audit`） · ✅ OpenCode（TUI: `/trellis:project-audit`；CLI: `trellis/project-audit`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:project-audit` 命令；见 `codex/README.md`）
 
 > **Strong Gate**: 本阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束。project-audit 完成后，必须等待用户明确确认，不能自动切到 `check` / `finish-work` / `delivery`。
@@ -68,7 +68,8 @@ description: 所有代码任务都完成了？进入项目级全局代码审查�
 正式模式下，标准编排入口应满足以下其一：
 
 - 当前任务已位于 `check`，用户确认要在最终收尾前补做项目级总复核
-- 若当前任务还停留在 `implementation`，可先进入预审模式，完成后再回到 `check`
+- 若当前实现还没完成任务级 `check`，先完成当前任务级收口，再由项目级 owner 进入 `project-audit`
+- 若希望在 implementation 期间先做类似预审的快速扫描，也应先把当前任务推进到 `check`，再由项目级 owner 进入 `project-audit`
 
 **不强制触发的情况**（Lite 链路）：
 
@@ -99,7 +100,8 @@ description: 所有代码任务都完成了？进入项目级全局代码审查�
 
 - 允许完整执行下面三步
 - 允许实际修改代码
-- 常见入口为 `implementation`
+- 常见入口为项目级 owner 已完成任务级 `check` 后的提前总复核
+- 不允许把 implementation 子任务直接切成 `project-audit` stage
 - 但**不**将项目级 `PROJECT-AUDIT` 任务标记为最终完成
 - 后续当全部 `代码相关` 任务都完成后，仍需再执行一次正式 `project-audit`
 - 预审记录可以作为回到 `check` 的过程证据，但不能作为 `delivery` 的正式项目级出口证据

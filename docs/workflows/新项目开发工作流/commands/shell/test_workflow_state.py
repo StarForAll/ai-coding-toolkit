@@ -986,7 +986,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "--stage-status", "in_progress",
             "--awaiting-user-confirmation", "false",
             "--execution-authorized", "true",
-            "--allowed-next", "check,project-audit",
+            "--allowed-next", "check",
             "--transition-from", "plan",
         )
 
@@ -1765,7 +1765,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
                 "## 自动化检查矩阵\n"
                 "- 质量平台门禁：sonar-scanner\n"
                 "- close-out 主入口：/trellis:finish-work\n"
-                "- archive 前置条件：delivery 完成且当前 active task 已验收\n"
+                "- archive 前置条件：当前 active task 已完成任务级收口；若该 task 同时承担项目级交付，再先完成 delivery\n"
                 "- 元数据边界：只允许当前 active task 的 archive + session record\n"
                 "## 阶段出口快照\n"
                 "- `complexity_decision`: `M1`\n"
@@ -1815,7 +1815,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
                 "## 自动化检查矩阵\n"
                 "- 质量平台门禁：sonar-scanner\n"
                 "- close-out 主入口：/trellis:finish-work\n"
-                "- archive 前置条件：delivery 完成且当前 active task 已验收\n"
+                "- archive 前置条件：当前 active task 已完成任务级收口；若该 task 同时承担项目级交付，再先完成 delivery\n"
                 "- 元数据边界：只允许当前 active task 的 archive + session record\n"
                 "## 阶段出口快照\n"
                 "- `complexity_decision`: `M1`\n"
@@ -1995,7 +1995,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
                 "## 自动化检查矩阵\n"
                 "- 质量平台门禁：sonar-scanner\n"
                 "- close-out 主入口：/trellis:finish-work\n"
-                "- archive 前置条件：delivery 完成且当前 active task 已验收\n"
+                "- archive 前置条件：当前 active task 已完成任务级收口；若该 task 同时承担项目级交付，再先完成 delivery\n"
                 "- 元数据边界：只允许当前 active task 的 archive + session record\n"
             ),
             customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
@@ -2966,6 +2966,19 @@ class WorkflowStateScriptTests(unittest.TestCase):
             task_dir,
             task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
             customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (task_dir / "prd.md").write_text(
+            "# sample task\n\n"
+            f"{self.VALID_BRAINSTORM_ESTIMATE}\n"
+            f"{self.VALID_L0_DIRECT_EXECUTION_BASELINE}\n"
+            "## 阶段出口快照\n"
+            "- `complexity_decision`: `L0`\n"
+            "- `ui_lane_decision`: `no-ui`\n"
+            "- `cross_platform_scope`: `codex-only`\n"
+            "- `estimate_refresh_result`: `confirmed`\n"
+            "- `kill_criteria`: `none`\n"
+            "- `open_items`: `none`\n",
+            encoding="utf-8",
         )
         self.run_script("init", str(task_dir), "--stage", "brainstorm")
         self.run_script(
@@ -4436,8 +4449,8 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (skills_root / "trellis-finish-work").mkdir(parents=True, exist_ok=True)
         (skills_root / "trellis-finish-work" / "SKILL.md").write_text(
             "<!-- finish-work-projectization-patch -->\n"
-            "complete native Trellis close-out after delivery\n"
-            "archive + session-record steps after delivery\n"
+            "complete native Trellis close-out after task-level closure\n"
+            "archive + session-record steps after task-level closure\n"
             "Code commits are NOT done here\n",
             encoding="utf-8",
         )
@@ -6265,7 +6278,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             + "\n## 自动化检查矩阵\n"
             + "- 质量平台门禁：sonar-scanner\n"
             + "- close-out 主入口：/trellis:finish-work\n"
-            + "- archive 前置条件：delivery 完成且当前 active task 已验收\n"
+            + "- archive 前置条件：当前 active task 已完成任务级收口；若该 task 同时承担项目级交付，再先完成 delivery\n"
             + "- 元数据边界：只允许当前 active task 的 archive + session record\n",
             encoding="utf-8",
         )
@@ -6426,7 +6439,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "--awaiting-user-confirmation", "false",
             "--execution-authorized", "true",
             "--transition-from", "brainstorm",
-            "--allowed-next", "check,project-audit",
+            "--allowed-next", "check",
         )
         self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
         self.assertIn("automation_matrix_source", blocked.stdout)
@@ -6466,7 +6479,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "--awaiting-user-confirmation", "false",
             "--execution-authorized", "true",
             "--transition-from", "brainstorm",
-            "--allowed-next", "check,project-audit",
+            "--allowed-next", "check",
         )
         self.assertEqual(ok_set.returncode, 0, msg=ok_set.stdout + ok_set.stderr)
 
@@ -6506,7 +6519,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "--awaiting-user-confirmation", "false",
             "--execution-authorized", "true",
             "--transition-from", "brainstorm",
-            "--allowed-next", "check,project-audit",
+            "--allowed-next", "check",
         )
         self.assertEqual(ok_set.returncode, 0, msg=ok_set.stdout + ok_set.stderr)
 
@@ -6564,6 +6577,71 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "check,project-audit",
         )
         self.assertEqual(transitioned.returncode, 0, msg=transitioned.stdout + transitioned.stderr)
+
+    def test_implementation_to_project_audit_is_not_a_canonical_transition(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.run_script("init", str(task_dir), "--stage", "brainstorm")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "implementation",
+        )
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "implementation",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--execution-authorized", "true",
+            "--transition-from", "brainstorm",
+            "--allowed-next", "check",
+        )
+
+        blocked = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "project-audit",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "implementation",
+            "--allowed-next", "check,delivery",
+        )
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("canonical transition", blocked.stdout)
+
+    def test_force_still_blocks_implementation_to_project_audit(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_workflow_state(
+            task_dir,
+            stage="implementation",
+            execution_authorized=True,
+            transition_from="plan",
+        )
+
+        blocked = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "project-audit",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--force",
+        )
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("强制切换仍不允许 `implementation` 直接进入项目级 `project-audit`", blocked.stdout)
 
     def test_check_allows_project_audit_when_formal_project_audit_is_not_declared(self) -> None:
         root, task_dir = self.make_fixture()
@@ -6660,6 +6738,90 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(route_data["action"], "awaiting_confirmation_with_blockers")
         self.assertIn("formal PROJECT-AUDIT carrier", "".join(route_data.get("blockers", [])))
 
+    def test_check_child_task_blocks_project_audit_when_formal_project_audit_is_not_declared(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (task_dir / "task.json").write_text(
+            json.dumps(
+                {
+                    "id": task_dir.name,
+                    "name": task_dir.name,
+                    "status": "in_progress",
+                    "parent": "04-15-parent-task",
+                    "children": [],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.write_check_report(task_dir)
+        self.run_script("init", str(task_dir), "--stage", "check")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "project-audit,review-gate,implementation",
+        )
+
+        blocked = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "project-audit",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "check",
+            "--allowed-next", "check,review-gate",
+        )
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("child task", blocked.stdout)
+
+    def test_force_still_blocks_child_check_to_project_audit_when_formal_project_audit_is_not_declared(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (task_dir / "task.json").write_text(
+            json.dumps(
+                {
+                    "id": task_dir.name,
+                    "name": task_dir.name,
+                    "status": "in_progress",
+                    "parent": "04-15-parent-task",
+                    "children": [],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.write_check_report(task_dir)
+        self.write_workflow_state(
+            task_dir,
+            stage="check",
+            status="awaiting_user_confirmation",
+        )
+
+        blocked = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "project-audit",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--force",
+        )
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("child task", blocked.stdout)
+
     def test_check_to_delivery_allows_when_formal_project_audit_is_not_declared(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
@@ -6690,6 +6852,93 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
 
         self.assertEqual(allowed.returncode, 0, msg=allowed.stdout + allowed.stderr)
+
+    def test_check_child_task_blocks_delivery_when_formal_project_audit_is_not_declared(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (task_dir / "task.json").write_text(
+            json.dumps(
+                {
+                    "id": task_dir.name,
+                    "name": task_dir.name,
+                    "status": "in_progress",
+                    "parent": "04-15-parent-task",
+                    "children": [],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.write_check_report(task_dir)
+        self.write_delivery_artifacts(task_dir, valid_contract=True)
+        self.write_finish_work_checklist(task_dir)
+        self.run_script("init", str(task_dir), "--stage", "check")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "review-gate,implementation,delivery",
+        )
+
+        blocked = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "delivery",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "check",
+        )
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("child task", blocked.stdout)
+
+    def test_force_still_blocks_child_check_to_delivery_when_formal_project_audit_is_not_declared(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (task_dir / "task.json").write_text(
+            json.dumps(
+                {
+                    "id": task_dir.name,
+                    "name": task_dir.name,
+                    "status": "in_progress",
+                    "parent": "04-15-parent-task",
+                    "children": [],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.write_check_report(task_dir)
+        self.write_delivery_artifacts(task_dir, valid_contract=True)
+        self.write_finish_work_checklist(task_dir)
+        self.write_workflow_state(
+            task_dir,
+            stage="check",
+            status="awaiting_user_confirmation",
+        )
+
+        blocked = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "delivery",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--force",
+        )
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("child task", blocked.stdout)
 
     def test_check_to_delivery_allows_when_current_task_is_formal_project_audit_carrier(self) -> None:
         root, task_dir = self.make_fixture()
@@ -6741,6 +6990,47 @@ class WorkflowStateScriptTests(unittest.TestCase):
             root,
             task_dir,
             statuses={"04-15-sample-task": "completed"},
+        )
+        self.run_script("init", str(task_dir), "--stage", "check")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "project-audit,review-gate,implementation,delivery",
+        )
+
+        allowed = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "project-audit",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "check",
+            "--allowed-next", "check,delivery",
+        )
+
+        self.assertEqual(allowed.returncode, 0, msg=allowed.stdout + allowed.stderr)
+
+    def test_check_child_task_still_allows_project_audit_when_current_task_is_formal_project_audit_carrier(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_check_report(task_dir)
+        self.write_task_plan_with_code_tasks(
+            root,
+            task_dir,
+            statuses={"04-15-sample-task": "completed"},
+        )
+        task_data = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+        task_data["parent"] = "04-15-parent-task"
+        (task_dir / "task.json").write_text(
+            json.dumps(task_data, ensure_ascii=False) + "\n",
+            encoding="utf-8",
         )
         self.run_script("init", str(task_dir), "--stage", "check")
         self.run_script(
@@ -7450,6 +7740,42 @@ class WorkflowStateScriptTests(unittest.TestCase):
         )
         self.assertEqual(allowed.returncode, 0, msg=allowed.stdout + allowed.stderr)
 
+    def test_force_project_audit_to_delivery_allows_when_current_task_is_formal_project_audit_carrier(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_check_report(task_dir)
+        self.write_project_audit_report(task_dir)
+        self.write_task_plan_with_code_tasks(
+            root,
+            task_dir,
+            statuses={
+                "04-15-sample-task": "completed",
+                "04-15-performance-opt": "completed",
+            },
+        )
+        self.write_delivery_artifacts(task_dir, valid_contract=True)
+        self.write_finish_work_checklist(task_dir)
+        self.write_workflow_state(
+            task_dir,
+            stage="project-audit",
+            status="awaiting_user_confirmation",
+        )
+
+        allowed = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "delivery",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--force",
+        )
+        self.assertEqual(allowed.returncode, 0, msg=allowed.stdout + allowed.stderr)
+
     def test_project_audit_to_delivery_blocks_when_formal_project_audit_is_declared_on_other_task(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
@@ -7510,6 +7836,64 @@ class WorkflowStateScriptTests(unittest.TestCase):
             msg=blocked.stdout + blocked.stderr,
         )
         self.assertEqual(blocked.stdout.count("formal PROJECT-AUDIT carrier"), 1)
+
+    def test_force_project_audit_to_delivery_blocks_when_formal_project_audit_is_declared_on_other_task(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_check_report(task_dir)
+        formal_dir = root / ".trellis" / "tasks" / "04-15-project-audit-formal"
+        formal_dir.mkdir(parents=True, exist_ok=True)
+        (formal_dir / "task.json").write_text(
+            json.dumps({"id": "04-15-project-audit-formal", "name": "04-15-project-audit-formal", "status": "completed"}, ensure_ascii=False)
+            + "\n",
+            encoding="utf-8",
+        )
+        self.write_project_audit_report(formal_dir)
+        (task_dir / "task_plan.md").write_text(
+            "\n".join(
+                [
+                    "# Task Plan",
+                    "",
+                    "## Trellis Task 清单",
+                    "",
+                    "| 任务路径 | 类型 | 项目域 | 说明 |",
+                    "|---------|------|--------|------|",
+                    f"| .trellis/tasks/{task_dir.name} | implementation | 全局 | current task |",
+                    "| .trellis/tasks/04-15-project-audit-formal | project-audit | 全局 | formal project audit |",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.write_project_audit_report(task_dir)
+        self.write_delivery_artifacts(task_dir, valid_contract=True)
+        self.write_finish_work_checklist(task_dir)
+        self.write_workflow_state(
+            task_dir,
+            stage="project-audit",
+            status="awaiting_user_confirmation",
+        )
+
+        blocked = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "delivery",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--force",
+        )
+
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertTrue(
+            "formal PROJECT-AUDIT carrier" in blocked.stdout
+            or "至少需要一个候选 task 满足正式门禁" in blocked.stdout,
+            msg=blocked.stdout + blocked.stderr,
+        )
 
     def test_project_audit_to_delivery_blocks_without_task_plan_in_formal_mode(self) -> None:
         root, task_dir = self.make_fixture()
@@ -9171,6 +9555,95 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(allowed.returncode, 0, msg=allowed.stdout + allowed.stderr)
 
+    def test_review_gate_child_task_blocks_delivery_when_formal_project_audit_is_not_declared(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (task_dir / "task.json").write_text(
+            json.dumps(
+                {
+                    "id": task_dir.name,
+                    "name": task_dir.name,
+                    "status": "in_progress",
+                    "parent": "04-15-parent-task",
+                    "children": [],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.write_check_report(task_dir)
+        self.write_review_gate_round(task_dir)
+        self.write_delivery_artifacts(task_dir, valid_contract=True)
+        self.write_finish_work_checklist(task_dir)
+        self.run_script("init", str(task_dir), "--stage", "review-gate")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "delivery,implementation",
+        )
+
+        blocked = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "delivery",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "review-gate",
+        )
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("child task", blocked.stdout)
+
+    def test_force_still_blocks_child_review_gate_to_delivery_when_formal_project_audit_is_not_declared(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (task_dir / "task.json").write_text(
+            json.dumps(
+                {
+                    "id": task_dir.name,
+                    "name": task_dir.name,
+                    "status": "in_progress",
+                    "parent": "04-15-parent-task",
+                    "children": [],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.write_check_report(task_dir)
+        self.write_review_gate_round(task_dir)
+        self.write_delivery_artifacts(task_dir, valid_contract=True)
+        self.write_finish_work_checklist(task_dir)
+        self.write_workflow_state(
+            task_dir,
+            stage="review-gate",
+            status="awaiting_user_confirmation",
+        )
+
+        blocked = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "delivery",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--force",
+        )
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("child task", blocked.stdout)
+
     def test_review_gate_to_delivery_blocks_when_formal_project_audit_is_declared_on_other_task(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
@@ -9263,6 +9736,50 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(allowed.returncode, 0, msg=allowed.stdout + allowed.stderr)
 
+    def test_review_gate_child_task_still_allows_delivery_when_current_task_is_formal_project_audit_carrier(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_check_report(task_dir)
+        self.write_review_gate_round(task_dir)
+        self.write_project_audit_report(task_dir)
+        self.write_task_plan_with_code_tasks(
+            root,
+            task_dir,
+            statuses={"04-15-sample-task": "completed"},
+        )
+        task_data = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+        task_data["parent"] = "04-15-parent-task"
+        (task_dir / "task.json").write_text(
+            json.dumps(task_data, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        self.write_delivery_artifacts(task_dir, valid_contract=True)
+        self.write_finish_work_checklist(task_dir)
+        self.run_script("init", str(task_dir), "--stage", "review-gate")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "delivery,implementation",
+        )
+
+        allowed = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "delivery",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "review-gate",
+        )
+
+        self.assertEqual(allowed.returncode, 0, msg=allowed.stdout + allowed.stderr)
+
     def test_review_gate_stage_cannot_switch_to_project_audit_stage(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
@@ -9293,6 +9810,36 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
         self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
         self.assertIn("canonical transition", blocked.stdout)
+
+    def test_force_still_blocks_review_gate_to_project_audit(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        self.write_check_report(task_dir)
+        self.write_review_gate_round(task_dir)
+        self.run_script("init", str(task_dir), "--stage", "review-gate")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "project-audit,implementation",
+        )
+
+        blocked = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "project-audit",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--force",
+        )
+        self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
+        self.assertIn("强制切换仍不允许任务级 `review-gate` 直接进入项目级 `project-audit`", blocked.stdout)
 
     def test_validate_review_gate_uses_root_tmp_multi_cli_review_contract(self) -> None:
         root, task_dir = self.make_fixture()

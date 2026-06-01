@@ -565,7 +565,7 @@ def workflow_patch_matches_source(src: Path, workflow_md: Path, *, profile: str 
         return False
 
     required_snippets = (
-        "delivery -> native finish-work",
+        "task-level closure -> native finish-work",
         "does **not** advance `workflow-state.json.stage`",
         "Current stage: **delivery**",
     )

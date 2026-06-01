@@ -68,7 +68,7 @@ Common changes:
 The current close-out chain is:
 
 ```text
-delivery -> native finish-work
+task-level closure -> native finish-work
 ```
 
 - `delivery` handles acceptance and deliverables.

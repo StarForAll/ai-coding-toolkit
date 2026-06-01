@@ -281,6 +281,466 @@ class PatchHelperScriptTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertEqual(stderr.getvalue(), "")
 
+    def test_patch_task_store_archive_guard_allows_check_stage_after_validate_passes(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="task-store-archive-check-stage-"))
+        self.addCleanup(shutil.rmtree, root)
+        package_dir = root / "pkg"
+        package_dir.mkdir(parents=True, exist_ok=True)
+        (package_dir / "__init__.py").write_text("", encoding="utf-8")
+        (package_dir / "active_task.py").write_text(
+            "def resolve_context_key():\n"
+            "    return None\n\n"
+            "def set_active_task(task_dir, repo_root):\n"
+            "    return None\n",
+            encoding="utf-8",
+        )
+        target = package_dir / "task_store.py"
+        target.write_text(
+            "import json\n"
+            "import sys\n"
+            "from pathlib import Path\n\n"
+            "class Colors:\n"
+            "    RED = 'red'\n\n"
+            "def colored(message, _color):\n"
+            "    return message\n\n"
+            "FILE_TASK_JSON = 'task.json'\n\n"
+            "def get_repo_root():\n"
+            "    return Path(__file__).resolve().parents[1]\n\n"
+            "def read_json(path):\n"
+            "    return json.loads(path.read_text(encoding='utf-8')) if path.is_file() else None\n\n"
+            "def write_json(path, data):\n"
+            "    path.write_text(json.dumps(data), encoding='utf-8')\n"
+            "    return True\n\n"
+            "def cmd_create(args):\n"
+            "    repo_root = get_repo_root()\n"
+            "    task_dir = repo_root / '.trellis' / 'tasks' / 'sample'\n"
+            "    try:\n"
+            "        from .active_task import resolve_context_key, set_active_task\n"
+            "        if resolve_context_key():\n"
+            "            set_active_task('sample', repo_root)\n"
+            "    except Exception:\n"
+            "        pass\n"
+            "    return 0\n\n"
+            "def cmd_archive(args):\n"
+            "    repo_root = get_repo_root()\n"
+            "    task_dir = repo_root / '.trellis' / 'tasks' / 'sample'\n"
+            "    dir_name = task_dir.name\n"
+            "    task_json_path = task_dir / FILE_TASK_JSON\n"
+            "    if task_json_path.is_file():\n"
+            "        data = read_json(task_json_path)\n"
+            "        if data:\n"
+            "            data['status'] = 'completed'\n"
+            "            write_json(task_json_path, data)\n"
+            "    return 0\n",
+            encoding="utf-8",
+        )
+        task_dir = root / ".trellis" / "tasks" / "sample"
+        task_dir.mkdir(parents=True, exist_ok=True)
+        (task_dir / "task.json").write_text('{"status": "in_progress"}\n', encoding="utf-8")
+        (task_dir / "workflow-state.json").write_text(
+            '{"stage": "check", "status": "awaiting_user_confirmation"}\n',
+            encoding="utf-8",
+        )
+        (task_dir / "finish-work-checklist.md").write_text("ok\n", encoding="utf-8")
+        workflow_dir = root / ".trellis" / "scripts" / "workflow"
+        workflow_dir.mkdir(parents=True, exist_ok=True)
+        (workflow_dir / "workflow-state.py").write_text(
+            "#!/usr/bin/env python3\n"
+            "from __future__ import annotations\n"
+            "raise SystemExit(0)\n",
+            encoding="utf-8",
+        )
+
+        spec = importlib.util.spec_from_file_location("patch_task_store", SHELL_DIR / "patch-task-create-preserve-active.py")
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertTrue(module.patch_task_store(target))
+
+        import sys as _sys
+        if str(root) not in _sys.path:
+            _sys.path.insert(0, str(root))
+        runtime_spec = importlib.util.spec_from_file_location("pkg.task_store", target)
+        self.assertIsNotNone(runtime_spec)
+        self.assertIsNotNone(runtime_spec.loader)
+        runtime_module = importlib.util.module_from_spec(runtime_spec)
+        runtime_spec.loader.exec_module(runtime_module)
+
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            result = runtime_module.cmd_archive(object())
+        self.assertEqual(result, 0)
+        self.assertEqual(stderr.getvalue(), "")
+
+    def test_patch_task_store_archive_guard_allows_review_gate_stage_after_validate_passes(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="task-store-archive-review-gate-stage-"))
+        self.addCleanup(shutil.rmtree, root)
+        package_dir = root / "pkg"
+        package_dir.mkdir(parents=True, exist_ok=True)
+        (package_dir / "__init__.py").write_text("", encoding="utf-8")
+        (package_dir / "active_task.py").write_text(
+            "def resolve_context_key():\n"
+            "    return None\n\n"
+            "def set_active_task(task_dir, repo_root):\n"
+            "    return None\n",
+            encoding="utf-8",
+        )
+        target = package_dir / "task_store.py"
+        target.write_text(
+            "import json\n"
+            "import sys\n"
+            "from pathlib import Path\n\n"
+            "class Colors:\n"
+            "    RED = 'red'\n\n"
+            "def colored(message, _color):\n"
+            "    return message\n\n"
+            "FILE_TASK_JSON = 'task.json'\n\n"
+            "def get_repo_root():\n"
+            "    return Path(__file__).resolve().parents[1]\n\n"
+            "def read_json(path):\n"
+            "    return json.loads(path.read_text(encoding='utf-8')) if path.is_file() else None\n\n"
+            "def write_json(path, data):\n"
+            "    path.write_text(json.dumps(data), encoding='utf-8')\n"
+            "    return True\n\n"
+            "def cmd_create(args):\n"
+            "    repo_root = get_repo_root()\n"
+            "    task_dir = repo_root / '.trellis' / 'tasks' / 'sample'\n"
+            "    try:\n"
+            "        from .active_task import resolve_context_key, set_active_task\n"
+            "        if resolve_context_key():\n"
+            "            set_active_task('sample', repo_root)\n"
+            "    except Exception:\n"
+            "        pass\n"
+            "    return 0\n\n"
+            "def cmd_archive(args):\n"
+            "    repo_root = get_repo_root()\n"
+            "    task_dir = repo_root / '.trellis' / 'tasks' / 'sample'\n"
+            "    dir_name = task_dir.name\n"
+            "    task_json_path = task_dir / FILE_TASK_JSON\n"
+            "    if task_json_path.is_file():\n"
+            "        data = read_json(task_json_path)\n"
+            "        if data:\n"
+            "            data['status'] = 'completed'\n"
+            "            write_json(task_json_path, data)\n"
+            "    return 0\n",
+            encoding="utf-8",
+        )
+        task_dir = root / ".trellis" / "tasks" / "sample"
+        task_dir.mkdir(parents=True, exist_ok=True)
+        (task_dir / "task.json").write_text('{"status": "in_progress"}\n', encoding="utf-8")
+        (task_dir / "workflow-state.json").write_text(
+            '{"stage": "review-gate", "status": "awaiting_user_confirmation"}\n',
+            encoding="utf-8",
+        )
+        (task_dir / "finish-work-checklist.md").write_text("ok\n", encoding="utf-8")
+        workflow_dir = root / ".trellis" / "scripts" / "workflow"
+        workflow_dir.mkdir(parents=True, exist_ok=True)
+        (workflow_dir / "workflow-state.py").write_text(
+            "#!/usr/bin/env python3\n"
+            "from __future__ import annotations\n"
+            "raise SystemExit(0)\n",
+            encoding="utf-8",
+        )
+
+        spec = importlib.util.spec_from_file_location("patch_task_store", SHELL_DIR / "patch-task-create-preserve-active.py")
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertTrue(module.patch_task_store(target))
+
+        import sys as _sys
+        if str(root) not in _sys.path:
+            _sys.path.insert(0, str(root))
+        runtime_spec = importlib.util.spec_from_file_location("pkg.task_store", target)
+        self.assertIsNotNone(runtime_spec)
+        self.assertIsNotNone(runtime_spec.loader)
+        runtime_module = importlib.util.module_from_spec(runtime_spec)
+        runtime_spec.loader.exec_module(runtime_module)
+
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            result = runtime_module.cmd_archive(object())
+        self.assertEqual(result, 0)
+        self.assertEqual(stderr.getvalue(), "")
+
+    def test_patch_task_store_archive_guard_allows_delivery_stage_after_validate_passes_with_exit_ready_status(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="task-store-archive-delivery-stage-"))
+        self.addCleanup(shutil.rmtree, root)
+        package_dir = root / "pkg"
+        package_dir.mkdir(parents=True, exist_ok=True)
+        (package_dir / "__init__.py").write_text("", encoding="utf-8")
+        (package_dir / "active_task.py").write_text(
+            "def resolve_context_key():\n"
+            "    return None\n\n"
+            "def set_active_task(task_dir, repo_root):\n"
+            "    return None\n",
+            encoding="utf-8",
+        )
+        target = package_dir / "task_store.py"
+        target.write_text(
+            "import json\n"
+            "import sys\n"
+            "from pathlib import Path\n\n"
+            "class Colors:\n"
+            "    RED = 'red'\n\n"
+            "def colored(message, _color):\n"
+            "    return message\n\n"
+            "FILE_TASK_JSON = 'task.json'\n\n"
+            "def get_repo_root():\n"
+            "    return Path(__file__).resolve().parents[1]\n\n"
+            "def read_json(path):\n"
+            "    return json.loads(path.read_text(encoding='utf-8')) if path.is_file() else None\n\n"
+            "def write_json(path, data):\n"
+            "    path.write_text(json.dumps(data), encoding='utf-8')\n"
+            "    return True\n\n"
+            "def cmd_create(args):\n"
+            "    repo_root = get_repo_root()\n"
+            "    task_dir = repo_root / '.trellis' / 'tasks' / 'sample'\n"
+            "    try:\n"
+            "        from .active_task import resolve_context_key, set_active_task\n"
+            "        if resolve_context_key():\n"
+            "            set_active_task('sample', repo_root)\n"
+            "    except Exception:\n"
+            "        pass\n"
+            "    return 0\n\n"
+            "def cmd_archive(args):\n"
+            "    repo_root = get_repo_root()\n"
+            "    task_dir = repo_root / '.trellis' / 'tasks' / 'sample'\n"
+            "    dir_name = task_dir.name\n"
+            "    task_json_path = task_dir / FILE_TASK_JSON\n"
+            "    if task_json_path.is_file():\n"
+            "        data = read_json(task_json_path)\n"
+            "        if data:\n"
+            "            data['status'] = 'completed'\n"
+            "            write_json(task_json_path, data)\n"
+            "    return 0\n",
+            encoding="utf-8",
+        )
+        task_dir = root / ".trellis" / "tasks" / "sample"
+        task_dir.mkdir(parents=True, exist_ok=True)
+        (task_dir / "task.json").write_text('{"status": "in_progress"}\n', encoding="utf-8")
+        (task_dir / "workflow-state.json").write_text(
+            '{"stage": "delivery", "status": "awaiting_user_confirmation"}\n',
+            encoding="utf-8",
+        )
+        (task_dir / "finish-work-checklist.md").write_text("ok\n", encoding="utf-8")
+        workflow_dir = root / ".trellis" / "scripts" / "workflow"
+        workflow_dir.mkdir(parents=True, exist_ok=True)
+        (workflow_dir / "workflow-state.py").write_text(
+            "#!/usr/bin/env python3\n"
+            "from __future__ import annotations\n"
+            "raise SystemExit(0)\n",
+            encoding="utf-8",
+        )
+
+        spec = importlib.util.spec_from_file_location("patch_task_store", SHELL_DIR / "patch-task-create-preserve-active.py")
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertTrue(module.patch_task_store(target))
+
+        import sys as _sys
+        if str(root) not in _sys.path:
+            _sys.path.insert(0, str(root))
+        runtime_spec = importlib.util.spec_from_file_location("pkg.task_store", target)
+        self.assertIsNotNone(runtime_spec)
+        self.assertIsNotNone(runtime_spec.loader)
+        runtime_module = importlib.util.module_from_spec(runtime_spec)
+        runtime_spec.loader.exec_module(runtime_module)
+
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            result = runtime_module.cmd_archive(object())
+        self.assertEqual(result, 0)
+        self.assertEqual(stderr.getvalue(), "")
+
+    def test_patch_task_store_archive_guard_blocks_check_stage_without_exit_ready_status(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="task-store-archive-check-stage-blocked-"))
+        self.addCleanup(shutil.rmtree, root)
+        package_dir = root / "pkg"
+        package_dir.mkdir(parents=True, exist_ok=True)
+        (package_dir / "__init__.py").write_text("", encoding="utf-8")
+        (package_dir / "active_task.py").write_text(
+            "def resolve_context_key():\n"
+            "    return None\n\n"
+            "def set_active_task(task_dir, repo_root):\n"
+            "    return None\n",
+            encoding="utf-8",
+        )
+        target = package_dir / "task_store.py"
+        target.write_text(
+            "import json\n"
+            "import sys\n"
+            "from pathlib import Path\n\n"
+            "class Colors:\n"
+            "    RED = 'red'\n\n"
+            "def colored(message, _color):\n"
+            "    return message\n\n"
+            "FILE_TASK_JSON = 'task.json'\n\n"
+            "def get_repo_root():\n"
+            "    return Path(__file__).resolve().parents[1]\n\n"
+            "def read_json(path):\n"
+            "    return json.loads(path.read_text(encoding='utf-8')) if path.is_file() else None\n\n"
+            "def write_json(path, data):\n"
+            "    path.write_text(json.dumps(data), encoding='utf-8')\n"
+            "    return True\n\n"
+            "def cmd_create(args):\n"
+            "    repo_root = get_repo_root()\n"
+            "    task_dir = repo_root / '.trellis' / 'tasks' / 'sample'\n"
+            "    try:\n"
+            "        from .active_task import resolve_context_key, set_active_task\n"
+            "        if resolve_context_key():\n"
+            "            set_active_task('sample', repo_root)\n"
+            "    except Exception:\n"
+            "        pass\n"
+            "    return 0\n\n"
+            "def cmd_archive(args):\n"
+            "    repo_root = get_repo_root()\n"
+            "    task_dir = repo_root / '.trellis' / 'tasks' / 'sample'\n"
+            "    dir_name = task_dir.name\n"
+            "    task_json_path = task_dir / FILE_TASK_JSON\n"
+            "    if task_json_path.is_file():\n"
+            "        data = read_json(task_json_path)\n"
+            "        if data:\n"
+            "            data['status'] = 'completed'\n"
+            "            write_json(task_json_path, data)\n"
+            "    return 0\n",
+            encoding="utf-8",
+        )
+        task_dir = root / ".trellis" / "tasks" / "sample"
+        task_dir.mkdir(parents=True, exist_ok=True)
+        (task_dir / "task.json").write_text('{"status": "in_progress"}\n', encoding="utf-8")
+        (task_dir / "workflow-state.json").write_text(
+            '{"stage": "check", "status": "in_progress"}\n',
+            encoding="utf-8",
+        )
+        (task_dir / "finish-work-checklist.md").write_text("ok\n", encoding="utf-8")
+        workflow_dir = root / ".trellis" / "scripts" / "workflow"
+        workflow_dir.mkdir(parents=True, exist_ok=True)
+        (workflow_dir / "workflow-state.py").write_text(
+            "#!/usr/bin/env python3\n"
+            "from __future__ import annotations\n"
+            "raise SystemExit(0)\n",
+            encoding="utf-8",
+        )
+
+        spec = importlib.util.spec_from_file_location("patch_task_store", SHELL_DIR / "patch-task-create-preserve-active.py")
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertTrue(module.patch_task_store(target))
+
+        import sys as _sys
+        if str(root) not in _sys.path:
+            _sys.path.insert(0, str(root))
+        runtime_spec = importlib.util.spec_from_file_location("pkg.task_store", target)
+        self.assertIsNotNone(runtime_spec)
+        self.assertIsNotNone(runtime_spec.loader)
+        runtime_module = importlib.util.module_from_spec(runtime_spec)
+        runtime_spec.loader.exec_module(runtime_module)
+
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            result = runtime_module.cmd_archive(object())
+        self.assertEqual(result, 1)
+        self.assertIn("current workflow-state status", stderr.getvalue())
+
+    def test_patch_task_store_archive_guard_blocks_review_gate_stage_without_exit_ready_status(self) -> None:
+        root = Path(tempfile.mkdtemp(prefix="task-store-archive-review-gate-stage-blocked-"))
+        self.addCleanup(shutil.rmtree, root)
+        package_dir = root / "pkg"
+        package_dir.mkdir(parents=True, exist_ok=True)
+        (package_dir / "__init__.py").write_text("", encoding="utf-8")
+        (package_dir / "active_task.py").write_text(
+            "def resolve_context_key():\n"
+            "    return None\n\n"
+            "def set_active_task(task_dir, repo_root):\n"
+            "    return None\n",
+            encoding="utf-8",
+        )
+        target = package_dir / "task_store.py"
+        target.write_text(
+            "import json\n"
+            "import sys\n"
+            "from pathlib import Path\n\n"
+            "class Colors:\n"
+            "    RED = 'red'\n\n"
+            "def colored(message, _color):\n"
+            "    return message\n\n"
+            "FILE_TASK_JSON = 'task.json'\n\n"
+            "def get_repo_root():\n"
+            "    return Path(__file__).resolve().parents[1]\n\n"
+            "def read_json(path):\n"
+            "    return json.loads(path.read_text(encoding='utf-8')) if path.is_file() else None\n\n"
+            "def write_json(path, data):\n"
+            "    path.write_text(json.dumps(data), encoding='utf-8')\n"
+            "    return True\n\n"
+            "def cmd_create(args):\n"
+            "    repo_root = get_repo_root()\n"
+            "    task_dir = repo_root / '.trellis' / 'tasks' / 'sample'\n"
+            "    try:\n"
+            "        from .active_task import resolve_context_key, set_active_task\n"
+            "        if resolve_context_key():\n"
+            "            set_active_task('sample', repo_root)\n"
+            "    except Exception:\n"
+            "        pass\n"
+            "    return 0\n\n"
+            "def cmd_archive(args):\n"
+            "    repo_root = get_repo_root()\n"
+            "    task_dir = repo_root / '.trellis' / 'tasks' / 'sample'\n"
+            "    dir_name = task_dir.name\n"
+            "    task_json_path = task_dir / FILE_TASK_JSON\n"
+            "    if task_json_path.is_file():\n"
+            "        data = read_json(task_json_path)\n"
+            "        if data:\n"
+            "            data['status'] = 'completed'\n"
+            "            write_json(task_json_path, data)\n"
+            "    return 0\n",
+            encoding="utf-8",
+        )
+        task_dir = root / ".trellis" / "tasks" / "sample"
+        task_dir.mkdir(parents=True, exist_ok=True)
+        (task_dir / "task.json").write_text('{"status": "in_progress"}\n', encoding="utf-8")
+        (task_dir / "workflow-state.json").write_text(
+            '{"stage": "review-gate", "status": "blocked"}\n',
+            encoding="utf-8",
+        )
+        (task_dir / "finish-work-checklist.md").write_text("ok\n", encoding="utf-8")
+        workflow_dir = root / ".trellis" / "scripts" / "workflow"
+        workflow_dir.mkdir(parents=True, exist_ok=True)
+        (workflow_dir / "workflow-state.py").write_text(
+            "#!/usr/bin/env python3\n"
+            "from __future__ import annotations\n"
+            "raise SystemExit(0)\n",
+            encoding="utf-8",
+        )
+
+        spec = importlib.util.spec_from_file_location("patch_task_store", SHELL_DIR / "patch-task-create-preserve-active.py")
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertTrue(module.patch_task_store(target))
+
+        import sys as _sys
+        if str(root) not in _sys.path:
+            _sys.path.insert(0, str(root))
+        runtime_spec = importlib.util.spec_from_file_location("pkg.task_store", target)
+        self.assertIsNotNone(runtime_spec)
+        self.assertIsNotNone(runtime_spec.loader)
+        runtime_module = importlib.util.module_from_spec(runtime_spec)
+        runtime_spec.loader.exec_module(runtime_module)
+
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            result = runtime_module.cmd_archive(object())
+        self.assertEqual(result, 1)
+        self.assertIn("current workflow-state status", stderr.getvalue())
+
     def test_patch_inject_workflow_state_maps_stale_suffixes_to_stale_block(self) -> None:
         root = Path(tempfile.mkdtemp(prefix="inject-workflow-state-stale-"))
         self.addCleanup(shutil.rmtree, root)

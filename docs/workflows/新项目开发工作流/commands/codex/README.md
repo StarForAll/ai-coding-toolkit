@@ -116,7 +116,7 @@ ls .codex/skills/parallel/SKILL.md 2>/dev/null
 
 如果忽略“先有 Trellis，再嵌入 workflow”这层关系，就会误把继承资产看成 workflow 漏装或少定义。
 
-还要补一条 close-out 边界：当前 fresh baseline 的收尾主链是 `delivery -> trellis-finish-work`。原生 `trellis-finish-work` 本身就是正常终态入口，负责当前活动任务的 `archive + add_session.py`；当前 workflow 不需要、也不应再额外发明第二套终态流程。最终的 `archive` 继续直接调用目标项目 Trellis 基线里的 `python3 ./.trellis/scripts/task.py archive`。因此，目标项目最好先升级到当前最新 Trellis；否则即使 workflow 已安装成功，终态收尾链路仍可能继承旧基线中的 archive metadata auto-commit 问题。
+还要补一条 close-out 边界：当前 fresh baseline 的收尾主链是“任务级收口完成后进入 `trellis-finish-work`”；若当前 task 同时承担项目级交付，则 `delivery` 在前。原生 `trellis-finish-work` 本身就是正常终态入口，负责当前活动任务的 `archive + add_session.py`；当前 workflow 不需要、也不应再额外发明第二套终态流程。最终的 `archive` 继续直接调用目标项目 Trellis 基线里的 `python3 ./.trellis/scripts/task.py archive`。因此，目标项目最好先升级到当前最新 Trellis；否则即使 workflow 已安装成功，终态收尾链路仍可能继承旧基线中的 archive metadata auto-commit 问题。
 
 ### close-out 路径
 

@@ -1131,8 +1131,8 @@ class WorkflowInstallerTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertIn("complete native Trellis close-out after delivery", embed_integrity)
-        self.assertIn("archive + session-record steps after delivery", embed_integrity)
+        self.assertIn("complete native Trellis close-out after task-level closure", embed_integrity)
+        self.assertIn("archive + session-record steps after task-level closure", embed_integrity)
         self.assertIn("Trellis 原生 `finish-work` 是**当前活动任务**的正常终态入口", finish_work_patch)
         self.assertIn("使用 Trellis 原生 `finish-work` 完成最终 `archive + add_session`", finish_work_patch)
 
@@ -1407,7 +1407,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         codex_finish_work_text = (
             fixture / ".agents" / "skills" / "trellis-finish-work" / "SKILL.md"
         ).read_text(encoding="utf-8")
-        self.assertIn("archive + session-record steps after delivery", codex_finish_work_text)
+        self.assertIn("archive + session-record steps after task-level closure", codex_finish_work_text)
         self.assertIn("使用 Trellis 原生 `finish-work` 完成最终 `archive + add_session`", codex_finish_work_text)
         self.assertNotIn("hand off to `delivery`", codex_finish_work_text)
         self.assertNotIn("hand off to delivery", codex_finish_work_text)
@@ -1805,9 +1805,9 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertNotIn("workflow 分发的 `record-session` 终态命令/skill", matrix)
         self.assertNotIn("`record-session` 基线入口 + workflow patch", matrix)
 
-    def test_full_walkthrough_closeout_example_keeps_delivery_before_native_finish_work(self) -> None:
+    def test_full_walkthrough_closeout_example_keeps_task_level_closeout_before_native_finish_work(self) -> None:
         walkthrough = (COMMANDS_DIR.parent / "完整流程演练.md").read_text(encoding="utf-8")
-        self.assertIn("delivery → Trellis 原生 `/finish-work`", walkthrough)
+        self.assertIn("任务级收口完成后进入 Trellis 原生 `/finish-work`", walkthrough)
         self.assertIn("再通过 `/trellis:delivery` 确认验收结论和交付物", walkthrough)
         self.assertIn("最后进入 Trellis 原生 `/finish-work` 执行终态归档与会话记录", walkthrough)
 
@@ -2092,7 +2092,14 @@ class WorkflowInstallerTests(unittest.TestCase):
             self.assertIn("## Review-Gate Decision", content)
             self.assertIn("`review_gate_decision`", content)
             self.assertIn("`explicit_user_review_gate_request`", content)
-            self.assertIn("| 基本合规，可直接进入交付收口 | `/trellis:delivery` |", content)
+            self.assertIn(
+                "| 当前 task 只是普通 implementation 子任务，且基本合规 | `/trellis:finish-work` |",
+                content,
+            )
+            self.assertIn(
+                "| 当前 task 明确承担项目级收口，且基本合规 | `/trellis:delivery` |",
+                content,
+            )
 
     def test_install_delivery_uses_canonical_trellis_finish_work_entry(self) -> None:
         fixture = self.create_fixture(include_opencode=True, include_codex=True)
@@ -2306,7 +2313,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("workflow-state.py route", shared_workflow_ref)
         self.assertIn("route metadata", shared_workflow_ref)
-        self.assertIn("delivery -> native finish-work", shared_workflow_ref)
+        self.assertIn("task-level closure -> native finish-work", shared_workflow_ref)
         opencode_change_hooks = (
             fixture / ".opencode" / "skills" / "trellis-meta" / "references" / "customize-local" / "change-hooks.md"
         ).read_text(encoding="utf-8")
@@ -3229,11 +3236,15 @@ Keep only durable PRD-facing takeaways here.
 
         workflow_doc_text = (fixture / ".trellis" / "workflow.md").read_text(encoding="utf-8")
         self.assertIn(
+            "workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next check --transition-from brainstorm",
+            workflow_doc_text,
+        )
+        self.assertNotIn(
             "workflow-state.py set <dir> --stage project-audit --stage-status in_progress --awaiting-user-confirmation false --allowed-next check,review-gate,delivery --transition-from implementation",
             workflow_doc_text,
         )
         self.assertIn(
-            "workflow-state.py set <dir> --stage review-gate --stage-status in_progress --awaiting-user-confirmation false --allowed-next project-audit,delivery,implementation --transition-from check",
+            "workflow-state.py set <dir> --stage review-gate --stage-status in_progress --awaiting-user-confirmation false --allowed-next implementation,delivery --transition-from check",
             workflow_doc_text,
         )
         self.assertIn("task_level_check_task", workflow_doc_text)

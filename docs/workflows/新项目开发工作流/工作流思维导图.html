@@ -116,7 +116,7 @@ const tree = [
         { html:'验证与验收', cls:'L2', det:'执行 design 冻结的真实验证矩阵<br>记录自动化 / 手工 / 性能 / 可用性证据<br>核心场景 100% 通过，P0/P1 为 0', id:'p7_2' },
         { html:'交付物', cls:'L2', det:'delivery/acceptance.md<br>delivery/deliverables.md<br>delivery/transfer-checklist.md<br>delivery/retrospective.md<br>非技术读者文档按需 humanizer-zh', id:'p7_3' },
         { html:'外部交付控制', cls:'L2', det:'托管部署轨: 尾款前只交演示/试运行/验收材料<br>试运行授权轨: 限期/续期/到期行为必须披露<br>最终控制权移交需满足 handover trigger', id:'p7_4' },
-        { html:'Native Finish-Work', cls:'L2', det:'delivery 之后才进入 Trellis 原生 finish-work<br>负责当前活动任务 archive + add_session<br>不是 workflow-state stage<br>不替代项目级 delivery', id:'p7_5' },
+        { html:'Native Finish-Work', cls:'L2', det:'任务级收口后进入 Trellis 原生 finish-work<br>若当前 task 同时承担项目级交付，则 delivery 在前<br>负责当前活动任务 archive + add_session<br>不是 workflow-state stage', id:'p7_5' },
         { html:'门禁: 交付证明', cls:'GT', id:'p7_g1', det:'delivery_gate_status 通过<br>delivery-control-validate 通过<br>ownership proof / source watermark 验证通过<br>finish-work-checklist.md 记录真实结果' },
         { html:'/trellis:delivery', cls:'L3', id:'p7_c1', cp:'.claude/.opencode/commands/trellis/delivery.md', cd:'项目级验收、交付与沉淀' },
         { html:'/trellis:finish-work', cls:'L3', id:'p7_c2', cp:'.claude/.opencode/commands/trellis/finish-work.md', cd:'Trellis 原生 task-level close-out' },
@@ -126,7 +126,7 @@ const tree = [
       { html:'强门禁切换协议', cls:'BR', id:'br_gate', bdesc:'所有 stage transition<br>必须二段式确认', btrig:'awaiting_user_confirmation<br>→ user confirm<br>→ workflow-state.py set', side:'left', children:[
         { html:'AI 只声明就绪', cls:'L2', det:'先设置 stage_status=awaiting_user_confirmation<br>展示已完成/缺失/风险<br>不自动进入下一阶段', id:'br_gate_1' },
         { html:'用户确认后切换', cls:'L2', det:'workflow-state.py set --stage next<br>一次性合并 checkpoint flags<br>如 execution_authorized / allowed-next / transition-from', id:'br_gate_2' },
-        { html:'finish-work 例外', cls:'L2', det:'native finish-work 在 delivery 后执行<br>不属于 workflow-state stage<br>不能从 implementation 直接 shortcut', id:'br_gate_3' },
+        { html:'finish-work 例外', cls:'L2', det:'native finish-work 在任务级收口后执行<br>若当前 task 同时承担项目级交付，则 delivery 在前<br>不属于 workflow-state stage<br>不能从 implementation 直接 shortcut', id:'br_gate_3' },
       ]},
       { html:'状态修复与阻断', cls:'BR', id:'br_state', bdesc:'状态缺失、损坏或上下文不明<br>不得凭文件名猜阶段', btrig:'blocked / repair_needed<br>context_needed / recovery_needed<br>embed_invalid', side:'left', children:[
         { html:'context_needed', cls:'L2', det:'当前 task 仍有 children<br>先切到正确 child task<br>不能在 parent 上推进 leaf 阶段', id:'br_state_1' },

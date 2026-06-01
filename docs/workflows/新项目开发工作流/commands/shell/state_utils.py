@@ -100,7 +100,7 @@ STAGE_TRANSITIONS: dict[str, list[str]] = {
     "brainstorm": ["design", "plan", "implementation"],
     "design": ["plan"],
     "plan": ["implementation"],
-    "implementation": ["check", "project-audit"],
+    "implementation": ["check"],
     # Superset only: validators enforce project-level exits only after a formal
     # PROJECT-AUDIT declaration exists. Without that declaration, Lite / simple
     # tasks may continue from check into project-level closure on the same task.

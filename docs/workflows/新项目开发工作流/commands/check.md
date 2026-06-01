@@ -5,7 +5,7 @@ description: 代码写完了？检查一下 — 基于真实改动范围和项�
 
 # /trellis:check — 实现后质量检查
 
-> **Workflow Position**: §5.1.x → 前: `/trellis:continue` 实施完成 → 后: `/trellis:review-gate`（条件触发）/ 回 `/trellis:continue` 修复；若当前轮未声明 formal `PROJECT-AUDIT`，或当前 task 本身就是 formal carrier，则允许在这个 stage 上继续项目级 `project-audit` / `delivery`
+> **Workflow Position**: §5.1.x → 前: `/trellis:continue` 实施完成 → 后: native `/trellis:finish-work`（普通任务级收尾）/ `/trellis:review-gate`（条件触发）/ 回 `/trellis:continue` 修复；若当前 task 明确承担项目级收口，再继续 `project-audit` / `delivery`
 > **Cross-CLI**: ✅ Claude Code（项目命令：`/trellis:check`） · ✅ OpenCode（TUI: `/trellis:check`；CLI: `trellis/check`；见 `opencode/README.md`） · ⚠️ Codex（通过 AGENTS.md NL 路由触发，不提供项目级 `/trellis:check` 命令；见 `codex/README.md`）
 
 > **Strong Gate**: 本阶段受 [阶段状态机与强门禁协议](../阶段状态机与强门禁协议.md) 约束。`check` 完成后不能自动进入 `review-gate`、`delivery` 或 native `finish-work`，必须先等待用户确认。
@@ -46,7 +46,8 @@ description: 代码写完了？检查一下 — 基于真实改动范围和项�
 - `/trellis:check` 只在 implementation 主会话工作完成并经用户确认后进入
 - `check.md` 记录的是**当前 active task / 当前实施轮**的任务级质量结论，不替代 `project-audit` 的项目级总复核
 - 只有当 `task_plan.md` 已声明 formal `PROJECT-AUDIT` 且当前 task 不是对应 carrier 时，当前 stage 才只允许继续任务级动作：回 `implementation` 或进入 `review-gate`
-- 若当前轮未声明 formal `PROJECT-AUDIT`，则同一 task 可以作为项目级 owner 继续 `project-audit` / `delivery`
+- 普通 implementation 子任务在当前阶段闭环后，默认进入 native `finish-work` 做单任务收尾
+- 只有当前 task 明确承担项目级收口时，才继续 `project-audit` / `delivery`
 
 ---
 
@@ -212,7 +213,7 @@ python3 <WORKFLOW_DIR>/commands/shell/workflow-state.py set <task-dir> \
   --awaiting-user-confirmation true
 ```
 
-只在用户明确确认后，才允许切到 `review-gate` / `implementation`；若当前轮未声明 formal `PROJECT-AUDIT`，或当前 task 本身就是 formal carrier，则 `project-audit` / `delivery` 也允许继续留在当前 task 上。
+只在用户明确确认后，才允许切到 `review-gate` / `implementation`；若当前 task 只需要任务级收口，则在当前阶段闭环后进入 native `finish-work`；只有当前 task 明确承担项目级收口时，才继续 `project-audit` / `delivery`。
 
 ### Step 6: 上下文污染检测
 
@@ -240,7 +241,8 @@ $TASK_DIR/check.md
 
 | 检查结果 | Claude / OpenCode 推荐入口 | Codex 推荐入口 | 说明 |
 |---------|---------------------------|----------------|------|
-| 当前轮未声明 formal `PROJECT-AUDIT`，且基本合规 | `/trellis:delivery` | 进入交付收口，或显式触发 `delivery` skill | **Lite / 普通项目默认推荐**。当前 task 可作为项目级 owner 继续进入 delivery |
+| 当前 task 只是普通 implementation 子任务，且基本合规 | `/trellis:finish-work` | 描述当前活动任务的最终收尾 / 归档 / 会话记录意图，或显式触发 `trellis-finish-work` skill | **默认推荐**。任务级质量闭环后直接做单任务收尾，不进入项目级 `project-audit` / `delivery` |
+| 当前 task 明确承担项目级收口，且基本合规 | `/trellis:delivery` | 进入交付收口，或显式触发 `delivery` skill | 仅项目级 owner / formal carrier 使用。进入 delivery 前仍需满足对应项目级门禁 |
 | 当前轮已声明 formal `PROJECT-AUDIT`，但当前 task 不是 carrier | `/trellis:continue` 或 `/trellis:review-gate` | 回到实施阶段，或显式触发 `review-gate` skill | 当前 task 只承载任务级 `check`；不得在这个 stage 上直接进入 `project-audit` / `delivery` |
 | 当前 task 是 formal `PROJECT-AUDIT` carrier，且基本合规 | `/trellis:delivery` | 进入交付收口，或显式触发 `delivery` skill | 仅在 carrier task 上允许；进入 delivery 前仍需满足并列双门禁 |
 | 命中 review-gate 硬条件，或用户显式要求进入补充审查 | `/trellis:review-gate` | 进入补充审查判断，或显式触发 `review-gate` skill | **条件触发**。仅在用户明确确认后才允许切换到 review-gate |

@@ -82,8 +82,8 @@ PATCHED_CODEX_SKILL_REQUIREMENTS: dict[str, dict[str, tuple[str, ...]]] = {
     "trellis-finish-work": {
         "must_contain": (
             CODEX_FINISH_WORK_SKILL_MARKER,
-            "complete native Trellis close-out after delivery",
-            "archive + session-record steps after delivery",
+            "complete native Trellis close-out after task-level closure",
+            "archive + session-record steps after task-level closure",
             "Code commits are NOT done here",
         ),
         "must_not_contain": (

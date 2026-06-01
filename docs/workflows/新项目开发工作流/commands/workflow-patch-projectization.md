@@ -106,7 +106,7 @@ For workflows that split work into a parent coordination task plus child executi
 
 ### Native Finish-Work Close-Out
 
-The strong-gate workflow reuses native Trellis `finish-work` for terminal close-out after `delivery`:
+The strong-gate workflow reuses native Trellis `finish-work` for terminal close-out after task-level closure:
 
 ```bash
 python3 ./.trellis/scripts/task.py archive <task-name>
@@ -123,24 +123,24 @@ Expected metadata status output: empty. This remains the native `finish-work` cl
 
 Notes:
 
-- `delivery` handles project-level acceptance, deliverables, and ownership proof.
+- `delivery` handles project-level acceptance, deliverables, and ownership proof when the current task actually carries project-level close-out.
 - Native `finish-work` handles the current active task's final `task.py archive` + `add_session.py`.
-- If a workflow instance needs both in the same round, treat them as different layers: project-level `delivery` plus task-level native `finish-work`.
+- If a workflow instance needs both in the same round, treat them as different layers: project-level `delivery` plus task-level native `finish-work`; `delivery` happens first only in that project-level case.
 - `record-session` remains only as a legacy compatibility entry for older target projects; it is not part of the fresh-baseline strong-gate stage chain.
 
 ### Pre-end Checklist
 
 Close-out runs in two phases:
 
-**Phase A — delivery (`/trellis:delivery`)**
+**Phase A — task-level closure (`/trellis:check` / `/trellis:review-gate` / `/trellis:delivery` as applicable)**
 
 1. Frozen verification matrix executed or truthfully marked `deferred` / `not run`
 2. Manual browser / app verification completed where required
 3. `finish-work-checklist.md` records the current close-out evidence
 4. Spec docs updated if needed
-5. Deliverables assembled and verified
-6. Acceptance confirmed
-7. Ownership proof validated (outsourcing profile)
+5. If the current task also carries project-level close-out: deliverables assembled and verified
+6. If the current task also carries project-level close-out: acceptance confirmed
+7. If the current task also carries project-level close-out: ownership proof validated (outsourcing profile)
 
 **Phase B — native close-out (`/trellis:finish-work`)**
 
@@ -162,7 +162,7 @@ project-level close-out: check / review-gate / project-audit → delivery
 when no formal PROJECT-AUDIT is declared, or on the formal carrier task
 ```
 
-Stage transition gates are enforced by `workflow-state.py set --stage <next>`; use `--force` to bypass for repair scenarios. Native `finish-work` runs after `delivery` and is not modeled as a `workflow-state` stage.
+Stage transition gates are enforced by `workflow-state.py set --stage <next>`; use `--force` to bypass for repair scenarios. Native `finish-work` runs after task-level closure and is not modeled as a `workflow-state` stage; when the same task also carries project-level delivery, `delivery` still happens before `finish-work`.
 
 ### Stage Transition Quick Reference
 
@@ -174,21 +174,25 @@ All transitions follow a two-step protocol: **(A)** signal readiness by setting 
 | feasibility → brainstorm | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage brainstorm --stage-status in_progress --awaiting-user-confirmation false --allowed-next design,plan,implementation --transition-from feasibility` |
 | brainstorm → design | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage design --stage-status in_progress --awaiting-user-confirmation false --allowed-next plan --transition-from brainstorm` |
 | brainstorm → plan | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage plan --stage-status in_progress --awaiting-user-confirmation false --allowed-next implementation --transition-from brainstorm` |
-| brainstorm → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next check,project-audit --transition-from brainstorm`（仅当 `prd.md` 的 `complexity_decision = L0`，且已写出 `automation_matrix_source` 与 `closeout_baseline_source` 时允许） |
+| brainstorm → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next check --transition-from brainstorm`（仅当 `prd.md` 的 `complexity_decision = L0`，且已写出 `automation_matrix_source` 与 `closeout_baseline_source` 时允许） |
 | design → plan | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage plan --stage-status in_progress --awaiting-user-confirmation false --allowed-next implementation --transition-from design` |
-| plan → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | 若当前 plan task 已拆出 children，先把 session active task 切到已确认的目标 leaf task；若该 leaf task 尚未生成 `workflow-state.json`，不要先 `init --stage plan`，而应直接按当前已确认执行边界执行 `workflow-state.py repair <leaf-dir> --stage implementation --execution-authorized true --transition-from plan --apply`。若 leaf task 已有合法状态文件，则再执行 `workflow-state.py set <leaf-dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next check,project-audit --transition-from plan`。leaf task 自身仍必须具备最小 `prd.md`；项目级粗估可沿 parent lineage 继承，不要求整段复制到 leaf。不得在仍带 children 的 parent task 上直接开启 implementation |
-| implementation → check | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage check --stage-status in_progress --awaiting-user-confirmation false --allowed-next project-audit,review-gate,implementation,delivery --transition-from implementation` |
-| implementation → project-audit | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage project-audit --stage-status in_progress --awaiting-user-confirmation false --allowed-next check,delivery --transition-from implementation` |
+| plan → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | 若当前 plan task 已拆出 children，先把 session active task 切到已确认的目标 leaf task；若该 leaf task 尚未生成 `workflow-state.json`，不要先 `init --stage plan`，而应直接按当前已确认执行边界执行 `workflow-state.py repair <leaf-dir> --stage implementation --execution-authorized true --transition-from plan --apply`。若 leaf task 已有合法状态文件，则再执行 `workflow-state.py set <leaf-dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next check --transition-from plan`。leaf task 自身仍必须具备最小 `prd.md`；项目级粗估可沿 parent lineage 继承，不要求整段复制到 leaf。不得在仍带 children 的 parent task 上直接开启 implementation |
+| implementation → check | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage check --stage-status in_progress --awaiting-user-confirmation false --allowed-next project-audit,review-gate,implementation,delivery --transition-from implementation`（这里保留 `check` 阶段的完整 superset 提示，与 `STAGE_TRANSITIONS["check"]` 一致；child task 仍会被 validator 阻断，普通 implementation child task 的默认后续路径仍是 native `finish-work`） |
 | project-audit → check | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | 若当前 formal `PROJECT-AUDIT` 是独立 carrier task，且 `project-audit.md` 中 `task_level_check_task` 指向其他 task，则必须先把 session active task 切回该任务级 task（也就是 `task_level_check_task` 指向的 owner）。若 owner task 尚未生成 `workflow-state.json`，直接执行 `workflow-state.py repair <owner-dir> --stage check --apply`，把它重建为当前已确认的任务级 `check`；若 owner task 已有合法状态，则按 owner 自身的 task-level 当前阶段继续 `route` / `validate` / `set`，不要把 `transition-from project-audit` 写到这个任务级 owner 上。只有当前 task 本身就是任务级 owner 时，才可在当前 `<dir>` 上执行 `workflow-state.py set <dir> --stage check --stage-status in_progress --awaiting-user-confirmation false --allowed-next project-audit,review-gate,implementation,delivery --transition-from project-audit` |
 | project-audit → delivery | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | formal-mode only：仅当当前 task 本身就是对应 carrier 时允许。进入 delivery 前要求当前 active task 的 `check.md` 已闭环，且 `project_audit_gate_status` / `project_audit_code_changes` / `task_level_check_status` 满足门禁 |
-| check → project-audit | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | 若当前轮未声明 formal `PROJECT-AUDIT`，则允许继续进入 project-audit；若已声明，则仅当当前 task 本身就是 formal carrier 时允许，否则 `workflow-state.py` 必须阻断并要求当前 task 只回 `implementation` 或进入 `review-gate` |
+| check → project-audit | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | 若当前 task 是 child task，则无论是否声明 formal `PROJECT-AUDIT` 都必须阻断，child task 只允许停留在任务级收口并走 native `finish-work`。非 child task 场景下：若当前轮未声明 formal `PROJECT-AUDIT`，则允许继续进入 project-audit；若已声明，则仅当当前 task 本身就是 formal carrier 时允许，否则 `workflow-state.py` 必须阻断并要求当前 task 只回 `implementation` 或进入 `review-gate` |
 | check → review-gate | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage review-gate --stage-status in_progress --awaiting-user-confirmation false --allowed-next implementation,delivery --transition-from check`（`delivery` 只是 superset；若已声明 formal `PROJECT-AUDIT` 且当前 task 不是 carrier，validator 仍会阻断并要求切回 owner） |
-| check → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next check,project-audit --transition-from check` |
-| check → delivery | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | 若当前轮未声明 formal `PROJECT-AUDIT`，则允许当前 task 作为项目级 owner 继续进入 delivery；若已声明，则仅当当前 task 本身就是 formal carrier 时允许。两种情况下都要求 `check.md` 中显式写出 `check_gate_status=pass`；formal carrier 场景还需满足 formal `PROJECT-AUDIT` 的正式门禁 |
-| review-gate → delivery | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | 若当前轮未声明 formal `PROJECT-AUDIT`，则允许当前 task 在 review-gate 闭环后直接进入 delivery；若已声明，则仅当当前 task 本身就是 formal carrier 时允许。formal carrier 已声明但当前 task 不是它时，必须切回项目级 owner 再继续 delivery |
-| review-gate → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next check,project-audit --transition-from review-gate` |
+| check → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next check --transition-from check` |
+| check → delivery | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | 若当前 task 是 child task，则无论是否声明 formal `PROJECT-AUDIT` 都必须阻断，child task 在任务级闭环后直接走 native `finish-work`。非 child task 场景下：若当前轮未声明 formal `PROJECT-AUDIT`，则允许当前 task 作为项目级 owner 继续进入 delivery；若已声明，则仅当当前 task 本身就是 formal carrier 时允许。两种情况下都要求 `check.md` 中显式写出 `check_gate_status=pass`；formal carrier 场景还需满足 formal `PROJECT-AUDIT` 的正式门禁 |
+| review-gate → delivery | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | 若当前 task 是 child task，则无论是否声明 formal `PROJECT-AUDIT` 都必须阻断，child task 在任务级闭环后直接走 native `finish-work`。非 child task 场景下：若当前轮未声明 formal `PROJECT-AUDIT`，则允许当前 task 在 review-gate 闭环后直接进入 delivery；若已声明，则仅当当前 task 本身就是 formal carrier 时允许。formal carrier 已声明但当前 task 不是它时，必须切回项目级 owner 再继续 delivery |
+| review-gate → implementation | `workflow-state.py set <dir> --stage-status awaiting_user_confirmation --awaiting-user-confirmation true` | `workflow-state.py set <dir> --stage implementation --stage-status in_progress --awaiting-user-confirmation false --execution-authorized true --allowed-next check --transition-from review-gate` |
+
+Note: examples that write `allowed-next` show the superset stored into `workflow-state.json` for later re-entry hints. They do **not** override `STAGE_TRANSITIONS` or validator gates; child-task blocking, formal carrier ownership, and other project-level boundaries still decide whether a listed target is actually reachable.
 
 For repair scenarios, append `--force` to bypass validation gates.
+`--force` is a repair-only escape hatch. It does not redefine canonical routes or make a normally blocked project-level transition part of the supported workflow semantics.
+Current hard exception: even under `--force`, task-level `implementation` / `review-gate` may not jump directly into project-level `project-audit`, and `project-audit -> delivery` still must satisfy the same formal carrier / delivery-linkage gate as the non-force path.
+
 
 ### Baseline Step Compatibility
 
@@ -280,7 +284,7 @@ workflow-state stage shortcut from implementation.
 
 #### 3.5 Wrap-up reminder
 
-The strong-gate close-out order is `delivery -> native finish-work`.
+The strong-gate close-out order is `task-level closure -> native finish-work`.
 `archive` and `add_session.py` run in native Trellis `finish-work`.
 
 ---
@@ -353,7 +357,7 @@ When a user request matches one of these intents, route to the corresponding sta
 | Task-level formal quality check | `check` | Claude/OpenCode: `/trellis:check`; Codex: natural language or `check` skill |
 | Multi-CLI supplementary review gate | `review-gate` | Claude/OpenCode: `/trellis:review-gate`; Codex: natural language or `review-gate` skill |
 | Delivery / acceptance / handoff artifacts | `delivery` | Claude/OpenCode: `/trellis:delivery`; Codex: natural language or `delivery` skill |
-| Single-task terminal close-out after delivery | native `finish-work` | Claude/OpenCode: `/trellis:finish-work`; Codex: natural language or `trellis-finish-work` skill |
+| Single-task terminal close-out after task-level closure | native `finish-work` | Claude/OpenCode: `/trellis:finish-work`; Codex: natural language or `trellis-finish-work` skill |
 
 For implementation internals, keep this distinction explicit:
 
@@ -369,7 +373,7 @@ For implementation internals, keep this distinction explicit:
 | "I already know what stage we're in from the files on disk" | Stage is determined by `active task -> workflow-state.json`, not by guessing from `design/`, `check.md`, or other artifacts. |
 | "The next stage is obvious, I'll auto-advance after this reply" | Only the user can confirm stage transitions. AI can recommend, not advance implicitly. |
 | "Implementation self-check is enough; formal check/review-gate can be skipped" | The implementation chain and formal `check` / `review-gate` are different layers. Skipping the formal layer hides stage-exit defects. |
-| "Delivery already happened, so finish-work is implied" | `delivery` and native `finish-work` are different layers; finish-work remains the single-task close-out entry after delivery, not an automatic side effect. |
+| "Delivery already happened, so finish-work is implied" | `delivery` and native `finish-work` are different layers; finish-work remains the single-task close-out entry after task-level closure, not an automatic side effect. |
 
 ---
 
@@ -434,7 +438,7 @@ After implementation, proceed to `check`.
 
 [workflow-state:project-audit]
 Current stage: **project-audit** — full-project quality review.
-Formal mode typically re-enters here from `check`; pre-audit may enter early from `implementation`.
+Formal mode typically re-enters here from `check`; do not switch an implementation child task directly into the `project-audit` stage.
 If `task_plan.md` declares a dedicated `PROJECT-AUDIT` task, that task becomes the sole formal carrier for project-level exit evidence consumed by `delivery`.
 This does **not** replace the current active task's task-level `check`; `delivery` consumes both dimensions together when project-level audit is declared.
 Load `/trellis:project-audit` for cross-cutting quality assessment.
@@ -443,7 +447,9 @@ Load `/trellis:project-audit` for cross-cutting quality assessment.
 [workflow-state:check]
 Current stage: **check** — quality check against spec and conventions.
 Load `/trellis:check` to validate implementation against specifications.
-After passing, proceed to `review-gate`, back to `implementation`, or, when the current round has no formal `PROJECT-AUDIT` declaration or this task itself is the formal carrier, continue to `project-audit` / `delivery`.
+Default path after a normal implementation child task closes here: enter native `finish-work`.
+If more task-level work is needed, proceed to `review-gate` or back to `implementation`.
+Only when this task is not a child task and the current round has no formal `PROJECT-AUDIT` declaration, or this task itself is the formal carrier, continue to `project-audit` / `delivery`.
 [/workflow-state:check]
 
 [workflow-state:review-gate]
@@ -451,7 +457,7 @@ Current stage: **review-gate** — multi-CLI supplementary review.
 Load `/trellis:review-gate` for additional cross-platform quality assurance.
 If the task still needs code changes, re-enter `implementation`.
 If the supplementary review is closed with no new task-level work, then:
-- when no formal `PROJECT-AUDIT` is declared, or this task itself is the formal carrier, the same task may continue to `delivery`
+- when this task is not a child task and no formal `PROJECT-AUDIT` is declared, or this task itself is the formal carrier, the same task may continue to `delivery`
 - otherwise keep the task-level result here and resume project-level `project-audit` / `delivery` on the project-level owner instead of switching this task's stage
 [/workflow-state:review-gate]
 
