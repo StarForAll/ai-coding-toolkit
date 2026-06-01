@@ -4,6 +4,7 @@ set -euo pipefail
 # --- Parse arguments ---
 CUSTOM_PROJECT_PATH=""
 INSTALL_PROFILE=""
+PROJECT_ID=""
 
 normalize_profile() {
   local raw="${1:l}"
@@ -38,6 +39,24 @@ prompt_profile() {
   done
 }
 
+prompt_project_id() {
+  if [[ ! -t 0 || ! -t 1 ]]; then
+    echo "ERROR: --project-id is required in non-interactive mode" >&2
+    exit 1
+  fi
+
+  local input
+  while true; do
+    printf '请输入 project id: ' >&2
+    read -r input
+    if [[ "$input" =~ ^[A-Za-z]([A-Za-z0-9:_-]*[A-Za-z])?$ ]]; then
+      echo "$input"
+      return 0
+    fi
+    echo "ERROR: invalid --project-id (must start/end with letters; middle may contain letters, digits, :, -, _)" >&2
+  done
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --project-path)
@@ -59,6 +78,14 @@ while [[ $# -gt 0 ]]; do
       fi
       shift 2
       ;;
+    --project-id)
+      if [[ $# -lt 2 ]]; then
+        echo "ERROR: --project-id requires a value" >&2
+        exit 1
+      fi
+      PROJECT_ID="$2"
+      shift 2
+      ;;
     *)
       echo "ERROR: Unknown argument: $1" >&2
       exit 1
@@ -68,6 +95,10 @@ done
 
 if [[ -z "$INSTALL_PROFILE" ]]; then
   INSTALL_PROFILE="$(prompt_profile)"
+fi
+
+if [[ -z "$PROJECT_ID" ]]; then
+  PROJECT_ID="$(prompt_project_id)"
 fi
 
 VERSION="$(trellis -v 2>/dev/null | head -1)"
@@ -139,11 +170,11 @@ run_cmd "detect-embed-state" \
 
 # --- Step 11: install-workflow --dry-run ---
 run_cmd "install-workflow --dry-run" \
-  "$PYTHON_BIN" "$WORKFLOW_ROOT/commands/install-workflow.py" --project-root "$TARGET_PROJECT" --profile "$INSTALL_PROFILE" --dry-run
+  "$PYTHON_BIN" "$WORKFLOW_ROOT/commands/install-workflow.py" --project-root "$TARGET_PROJECT" --project-id "$PROJECT_ID" --profile "$INSTALL_PROFILE" --dry-run
 
 # --- Step 12: install-workflow ---
 run_cmd "install-workflow" \
-  env WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1 "$PYTHON_BIN" "$WORKFLOW_ROOT/commands/install-workflow.py" --project-root "$TARGET_PROJECT" --profile "$INSTALL_PROFILE"
+  env WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1 "$PYTHON_BIN" "$WORKFLOW_ROOT/commands/install-workflow.py" --project-root "$TARGET_PROJECT" --project-id "$PROJECT_ID" --profile "$INSTALL_PROFILE"
 
 # --- Step 13: upgrade-compat --check ---
 run_cmd "upgrade-compat --check" \

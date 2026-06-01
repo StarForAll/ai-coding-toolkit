@@ -35,6 +35,7 @@ workflow source assets -> expected deployed copies -> target-project live copies
 ```bash
 python3 docs/workflows/<name>/commands/install-workflow.py \
   [--project-root /path/to/project] \
+  --project-id <id> \
   [--cli claude,opencode,codex] \
   [--profile personal|outsourcing] \
   [--dry-run]
@@ -111,6 +112,7 @@ Failure-state keys that may appear when install does not complete:
 Current installer-written keys:
 
 - `trellis_version`
+- `project_id`
 - `cli_types`
 - `profile`
 - `commands`

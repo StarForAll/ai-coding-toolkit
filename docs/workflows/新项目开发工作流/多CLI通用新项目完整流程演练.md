@@ -115,6 +115,7 @@ git remote set-url --add --push origin <第二个仓库URL>
 WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1 /ops/softwares/python/bin/python3 \
 docs/workflows/新项目开发工作流/commands/install-workflow.py \
 --project-root <target-project> \
+--project-id <project-id> \
 --profile outsourcing
 ```
 
@@ -315,7 +316,7 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
   - `kill_criteria`
   - `open_items`
 - 已决定走 `design`、`plan` 还是极小任务直进 `implementation`
-- 若下一步进入 `design`，已明确会在 `design -> 3.7` 把 `sonar-scanner` 纳入项目自动化检查矩阵
+- 若下一步进入 `design`，已明确会在 `design -> 3.7` 把 `sonar verify -p <project-id>` 纳入项目自动化检查矩阵
 - 已进入“等待用户确认是否切换阶段”的状态，而不是自动跳转
 
 > 这条门禁约束的是**使用该 workflow 的目标项目**，不是当前 workflow 仓库本身必须先有这两份文档。

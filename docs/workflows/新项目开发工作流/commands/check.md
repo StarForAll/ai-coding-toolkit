@@ -112,6 +112,9 @@ python3 <WORKFLOW_DIR>/commands/shell/check-quality.py \
 
 约束：
 
+- `check-quality.py` 会先从 `.trellis/workflow-installed.json` 读取强制 `project_id`，并优先执行 `sonar verify -p <project-id>`
+- 若缺少有效 `project_id`，当前 check 阶段必须 hard stop，不能继续做任何后续 workflow 操作
+- 若 `sonar verify -p <project-id>` 失败，必须先修复问题，再主动排查同类问题；只要发生修复，就必须重新执行同一条 sonar verify，直到结果为 pass
 - test / lint / typecheck 命令必须来自技术架构确认后的项目化输入
 - 若当前项目还需要 build / e2e / migration / 平台质量门禁，使用 `--extra-check "标签=命令"` 追加，不要把它们口头带过
 - 若需要手动指定跨层检查范围，使用 `--scope frontend,backend,api` 这类显式声明；它用于提示当前轮 check 应重点覆盖哪些层，不替代 `check.md` 中 `Changed Scope` 的事实记录
@@ -181,6 +184,18 @@ $TASK_DIR/check.md
 ## Applied Specs
 
 ## Verification Results
+
+- Sonar Verify: `pass` / `fail`
+- Command: `sonar verify -p <project-id>`
+- test / lint / typecheck / extra-check: `pass` / `fail` / `not run`
+
+## Sonar Verify 闭环记录
+
+- 首次执行: `sonar verify -p <project-id>` - `pass` / `fail`
+- 首次失败问题摘要: `<若首次失败则记录关键问题>`
+- 同类问题排查: `<排查范围、发现、修复项；若未发现则写 none>`
+- 最终状态: `pass`
+- 最终命令留痕: `Command: sonar verify -p <project-id>`
 
 ## Deviations
 

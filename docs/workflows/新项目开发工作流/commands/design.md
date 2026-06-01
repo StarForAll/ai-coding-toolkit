@@ -443,14 +443,10 @@ design 后半段不得一次性跑完，而要按多个子块分段执行。每�
 - 必须有明确的质量平台门禁
 - 采用 Sonar 的项目必须写真实命令，未采用时必须写替代门禁和原因
 
-采用 Sonar 的项目，`sonar-scanner` 至少应以当前项目可执行的真实命令骨架写入检查矩阵，例如：
+采用 Sonar 的项目，安装时写入的 `project_id` 会成为后续 workflow 的强制质量平台标识；设计阶段至少应把 `sonar verify -p <project-id>` 明确写入检查矩阵，例如：
 
 ```bash
-sonar-scanner \
-  -Dsonar.projectKey=<target-project-key> \
-  -Dsonar.token=$SONAR_TOKEN \
-  -Dsonar.host.url=https://sonarqube.xzc.com:13785 \
-  -Dsonar.sources=.
+sonar verify -p <project-id>
 ```
 
 #### 块 C / 块 D 的顺序
