@@ -1280,3 +1280,38 @@ Added cached installed-fixture coverage, migrated downstream-state installer tes
 ### Next Steps
 
 - None - task complete
+
+
+## Session 342: Add sonar verify check gate
+
+**Date**: 2026-06-01
+**Task**: Add sonar verify check gate
+**Branch**: `main`
+
+### Summary
+
+Added project-id-gated sonar verify workflow contract and synced install/runtime/docs/tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `82c910c` | (see git log) |
+| `f06c449` | (see git log) |
+| `05bc644` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
