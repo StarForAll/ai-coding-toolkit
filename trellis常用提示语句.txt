@@ -12,16 +12,11 @@ sed -i '/min_wait_timeout_ms = 480000/a default_wait_timeout_ms = 480000' .codex
 # 安装 impeccable【claude/agents] 不需要补充前缀,会导致其他skill使用也出现前缀
 npx impeccable skills install
 
-# 可选，但需要事先在 sonar服务端补充对应项目
-sonar-scanner -Dsonar.projectKey=目标项目key -Dsonar.token=$SONAR_TOKEN -Dsonar.host.url=https://sonarqube.xzc.com:13785 -Dsonar.sources=.
+sonar integrate git --hook pre-commit
+chmod +x .git/hooks/post-commit .git/hooks/pre-commit
 
 
-# 方式1:cli 嵌入命令
-"""
-严格读取 /ops/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/工作流嵌入执行规范.md ，根据该文件中的状态判定和标准执行顺序，将 /ops/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流 对应的 workflow 嵌入当前项目。先执行 detect-embed-state.py；只有当状态为 INITIAL_BASELINE_READY 时才继续正式嵌入；若不是该状态，则停止并说明原因。
-"""
-
-# 方式2:shell 命令执行
+# 方式1:shell 命令执行嵌入 --- 有且只有这一种方式
 WORKFLOW_ROOT="/ops/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流"
 TARGET_PROJECT="项目路径"
 PYTHON_BIN="/ops/softwares/python/bin/python3"

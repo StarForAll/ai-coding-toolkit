@@ -64,5 +64,10 @@ git remote set-url --add --push origin git@gitee.com:xxx/yyy.git
 
 30. 子任务执行完成review-gate不能执行项目级别的delivery
 project-audit 和 delivery 都是项目级别的阶段，project-audit中使用review-gate可以流转到delivery；而任务级别[implementation]中的review-gate是不能流转到项目级别的project-audit/delivery
+子任务支持本任务归档,不需要整体项目完成再归档
+
+31. check 步骤补充 sonar verify 补充,该检查如果出现问题则进行修复直到没有问题为止
+
+32. 有且只有shell命令方式嵌入工作流
 
 
