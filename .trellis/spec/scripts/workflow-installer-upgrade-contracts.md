@@ -792,6 +792,18 @@ Recommended assertion points:
 - analysis report includes action classification for each managed asset
 - follow-up `--check` returns success after `--merge` / `--force` in supported scenarios
 
+Installer regression tests must keep suite runtime under control when new related cases are added:
+
+- Rule: future new tests that only validate post-install state, drift detection, merge repair, or uninstall behavior must default to a process-local cached installed fixture instead of running a fresh full install per test
+- Rule: only tests whose subject is installer execution behavior itself may keep using a fresh full `install_workflow()` path, such as dry-run, profile prompt, prerequisite failure, executor-confirmation, attempt-record lifecycle, first-install blocking, and explicit install smoke coverage
+- Good: build the cached source fixture by running the real installer once, including the post-install `upgrade-compat.py --check`; return a copied fixture per test before any mutation
+- Good: use cached installed fixtures for artifact assertions, upgrade drift/merge cases, and uninstall cases whose subject is the post-install state
+- Bad: add new downstream-state tests that each rerun the full installer without a behavior-specific reason
+- Bad: add an environment switch that skips the installer post-install self-check just to make tests faster
+- Required assertion point: the cache helper must prove clone isolation so a mutation in one test cannot affect later tests
+- Required assertion point: distinct fixture keys must resolve to distinct cached installed sources; do not let different baseline/install variants silently reuse the same cache entry
+- Required review question for future additions: “Does this new test really need a fresh installer execution, or is it only asserting post-install state?”
+
 ---
 
 ### 7. Wrong vs Correct

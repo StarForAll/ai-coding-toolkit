@@ -620,6 +620,20 @@ BASELINE_CODEX_CHECK_TOML = (
 
 
 class WorkflowInstallerTests(unittest.TestCase):
+    _installed_fixture_cache: dict[
+        tuple[tuple[tuple[str, object], ...], tuple[str, ...]],
+        Path,
+    ] = {}
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        try:
+            for fixture_root in set(cls._installed_fixture_cache.values()):
+                shutil.rmtree(fixture_root, ignore_errors=True)
+            cls._installed_fixture_cache.clear()
+        finally:
+            super().tearDownClass()
+
     def run_script(
         self,
         script: Path,
@@ -896,6 +910,77 @@ class WorkflowInstallerTests(unittest.TestCase):
             env={EMBED_CONFIRM_ENV: "1"},
         )
 
+    def installed_fixture(self, *install_args: str, **fixture_kwargs: object) -> Path:
+        source = self._cached_installed_fixture_source(tuple(install_args), fixture_kwargs)
+        clone = Path(tempfile.mkdtemp(prefix="workflow-installers-clone-"))
+        shutil.rmtree(clone)
+        shutil.copytree(source, clone)
+        self.addCleanup(shutil.rmtree, clone, ignore_errors=True)
+        return clone
+
+    def _cached_installed_fixture_source(
+        self,
+        install_args: tuple[str, ...],
+        fixture_kwargs: dict[str, object],
+    ) -> Path:
+        if "--dry-run" in install_args:
+            raise AssertionError("installed_fixture() must not be used for dry-run installer tests")
+
+        key = (tuple(sorted(fixture_kwargs.items())), install_args)
+        cached = self._installed_fixture_cache.get(key)
+        if cached is not None:
+            return cached
+
+        source = self.create_fixture(**fixture_kwargs)
+        try:
+            install = self.install_workflow(source, *install_args)
+        except Exception:
+            shutil.rmtree(source, ignore_errors=True)
+            raise
+        if install.returncode != 0:
+            shutil.rmtree(source, ignore_errors=True)
+        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        self.assertIn("装后自检通过", install.stdout)
+        self.assertTrue((source / ".trellis" / "workflow-installed.json").exists())
+        self.assertFalse((source / ".trellis" / ATTEMPT_RECORD_NAME).exists())
+        self._installed_fixture_cache[key] = source
+        return source
+
+    def test_cached_installed_fixture_returns_isolated_clones(self) -> None:
+        first = self.installed_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
+        (first / "cache-isolation-marker.txt").write_text("mutated clone\n", encoding="utf-8")
+
+        second = self.installed_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
+
+        self.assertTrue((second / ".trellis" / "workflow-installed.json").exists())
+        self.assertFalse((second / "cache-isolation-marker.txt").exists())
+
+    def test_cached_installed_fixture_uses_distinct_sources_for_distinct_keys(self) -> None:
+        codex_source = self._cached_installed_fixture_source((), {"include_codex": True})
+        opencode_source = self._cached_installed_fixture_source((), {"include_opencode": True})
+
+        self.assertNotEqual(codex_source, opencode_source)
+        self.assertTrue((codex_source / ".codex").exists())
+        self.assertFalse((codex_source / ".opencode").exists())
+        self.assertFalse((opencode_source / ".codex").exists())
+        self.assertTrue((opencode_source / ".opencode").exists())
+
+    def test_cached_installed_fixture_cleans_source_when_install_raises(self) -> None:
+        source = self.create_fixture(current_branch="cache-cleanup-exception")
+        original_create_fixture = self.create_fixture
+        original_install_workflow = self.install_workflow
+
+        self.addCleanup(setattr, self, "create_fixture", original_create_fixture)
+        self.addCleanup(setattr, self, "install_workflow", original_install_workflow)
+
+        self.create_fixture = lambda **_kwargs: source  # type: ignore[method-assign]
+        self.install_workflow = lambda *_args: (_ for _ in ()).throw(RuntimeError("simulated install crash"))  # type: ignore[method-assign]
+
+        with self.assertRaisesRegex(RuntimeError, "simulated install crash"):
+            self._cached_installed_fixture_source((), {"current_branch": "cache-cleanup-exception"})
+
+        self.assertFalse(source.exists())
+
     def test_install_requires_explicit_profile_in_non_interactive_mode(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
@@ -981,11 +1066,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertFalse((fixture / ".trellis" / "workflow-installed.json").exists())
 
     def test_install_removes_bootstrap_task_before_first_route(self) -> None:
-        fixture = self.create_fixture(bootstrap_as_current_task=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture, "--profile", "outsourcing")
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture("--profile", "outsourcing", bootstrap_as_current_task=True)
         self.assertFalse((fixture / ".trellis" / "tasks" / "00-bootstrap-guidelines").exists())
         self.assertFalse((fixture / ".trellis" / ".current-task").exists())
         self.assertFalse((fixture / ".trellis" / ".runtime" / "sessions" / "test-context.json").exists())
@@ -1330,12 +1411,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         (agents_backup_dir / "trellis-check.toml").write_text(BASELINE_CODEX_CHECK_TOML, encoding="utf-8")
 
     def test_install_deploys_record_session_closure_helper_and_patch(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-
-        self.assert_install_result_usable(install)
+        fixture = self.installed_fixture(include_opencode=True, include_codex=True)
         brainstorm = fixture / ".claude" / "commands" / "trellis" / "brainstorm.md"
         self.assertTrue(brainstorm.exists(), "brainstorm.md should be deployed")
         project_audit = fixture / ".claude" / "commands" / "trellis" / "project-audit.md"
@@ -1583,11 +1659,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("## 同步结论", finish_work_template_text)
 
     def test_install_deployed_runtime_helpers_compile(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assert_install_result_usable(install)
+        fixture = self.installed_fixture(include_opencode=True, include_codex=True)
 
         python_targets = [
             fixture / ".trellis" / "scripts" / "task.py",
@@ -1611,11 +1683,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
     def test_install_deployed_route_helper_survives_file_based_hook_import(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assert_install_result_usable(install)
+        fixture = self.installed_fixture()
 
         workflow_scripts = fixture / ".trellis" / "scripts" / "workflow"
         for helper_name in (
@@ -1712,11 +1780,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertEqual(route_data["stage"], "feasibility")
 
     def test_install_patches_opencode_inject_workflow_state_with_runtime_contract(self) -> None:
-        fixture = self.create_fixture(include_opencode=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assert_install_result_usable(install)
+        fixture = self.installed_fixture(include_opencode=True)
 
         opencode_inject = (fixture / ".opencode" / "plugins" / "inject-workflow-state.js").read_text(encoding="utf-8")
         self.assertIn('import { execFileSync } from "child_process"', opencode_inject)
@@ -1727,11 +1791,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("task.extraLines", opencode_inject)
 
     def test_install_session_start_patch_removes_legacy_tail_logic(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assert_install_result_usable(install)
+        fixture = self.installed_fixture(include_opencode=True, include_codex=True)
 
         for target in (
             fixture / ".claude" / "hooks" / "session-start.py",
@@ -1755,11 +1815,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("没有对称的 `/trellis:implementation` 命令", content)
 
     def test_upgrade_merge_removes_ready_autocontinue_prompt_residue(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True, include_codex=True)
 
         for target in (
             fixture / ".claude" / "hooks" / "session-start.py",
@@ -1866,12 +1922,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertNotIn("从 `trellis-library` 选择并导入", deployed_plan)
 
     def test_install_patches_task_views_to_use_stage_based_status(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_codex=True)
         tasks_py = (fixture / ".trellis" / "scripts" / "common" / "tasks.py").read_text(encoding="utf-8")
         task_queue_py = (fixture / ".trellis" / "scripts" / "common" / "task_queue.py").read_text(encoding="utf-8")
         task_py = (fixture / ".trellis" / "scripts" / "task.py").read_text(encoding="utf-8")
@@ -1893,11 +1944,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("Strong-gate mode keeps workflow-state.py route as the only stage authority.", task_py)
 
     def test_install_task_view_keeps_completed_status_when_workflow_state_file_remains(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_codex=True)
 
         task_dir = fixture / ".trellis" / "tasks" / "05-23-completed-task"
         task_dir.mkdir(parents=True, exist_ok=True)
@@ -1956,12 +2003,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIsNone(loaded.raw.get("_workflow_display_extra"))
 
     def test_install_personal_profile_keeps_ownership_cards_and_helpers(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture, "--profile", "personal")
-
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture("--profile", "personal")
         record_data = json.loads((fixture / ".trellis" / "workflow-installed.json").read_text(encoding="utf-8"))
         self.assertEqual(record_data["profile"], "personal")
         self.assertEqual(
@@ -1989,11 +2031,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("source-watermark-guard.py", deployed_delivery)
 
     def test_upgrade_merge_respects_personal_profile_for_commands_and_codex_skills(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture, "--profile", "personal")
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture("--profile", "personal", include_codex=True)
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
 
         merge = self.run_script(
@@ -2015,12 +2053,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("source-watermark-guard.py", delivery_skill)
 
     def test_install_patches_finish_work_for_opencode_and_codex(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True, include_codex=True)
         opencode_finish_work = fixture / ".opencode" / "commands" / "trellis" / "finish-work.md"
         codex_finish_work = fixture / ".agents" / "skills" / "trellis-finish-work" / "SKILL.md"
         opencode_parallel = fixture / ".opencode" / "commands" / "trellis" / "parallel.md"
@@ -2038,12 +2071,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertFalse(codex_parallel.exists())
 
     def test_install_patches_codex_continue_skill_phase_router(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_codex=True)
         start_skill = fixture / ".agents" / "skills" / "trellis-continue" / "SKILL.md"
         start_text = start_skill.read_text(encoding="utf-8")
         self.assertIn("## Workflow Phase Router Patch `[AI]`", start_text)
@@ -2064,12 +2092,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         )
 
     def test_install_patches_optional_codex_start_skill_quick_reference_to_formal_entries(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_codex=True)
         start_skill = fixture / ".agents" / "skills" / "trellis-start" / "SKILL.md"
         start_text = start_skill.read_text(encoding="utf-8")
         self.assertIn("| New feature / unclear requirements | `brainstorm` |", start_text)
@@ -2080,12 +2103,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertNotIn("| Done coding / quality check | `trellis-check` |", start_text)
 
     def test_install_deploys_check_command_with_review_gate_decision_and_delivery_default(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True, include_codex=True)
         opencode_check = (fixture / ".opencode" / "commands" / "trellis" / "check.md").read_text(encoding="utf-8")
         codex_check = (fixture / ".agents" / "skills" / "check" / "SKILL.md").read_text(encoding="utf-8")
         for content in (opencode_check, codex_check):
@@ -2102,12 +2120,7 @@ class WorkflowInstallerTests(unittest.TestCase):
             )
 
     def test_install_delivery_uses_canonical_trellis_finish_work_entry(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True, include_codex=True)
         claude_delivery = (fixture / ".claude" / "commands" / "trellis" / "delivery.md").read_text(encoding="utf-8")
         codex_delivery = (fixture / ".agents" / "skills" / "delivery" / "SKILL.md").read_text(encoding="utf-8")
         for content in (claude_delivery, codex_delivery):
@@ -2118,12 +2131,7 @@ class WorkflowInstallerTests(unittest.TestCase):
             self.assertNotIn("Trellis 原生 /finish-work.md", content)
 
     def test_install_disables_codex_multi_agent_config_when_present(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_codex=True)
         config_text = (fixture / ".codex" / "config.toml").read_text(encoding="utf-8")
         self.assertIn("[features.multi_agent_v2]", config_text)
         self.assertIn("enabled = false", config_text)
@@ -2261,11 +2269,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn('"permission": "deny"', runtime.stdout)
 
     def test_upgrade_check_allows_missing_unwired_codex_session_start(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture, "--cli", "codex")
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture("--cli", "codex", include_codex=True)
 
         (fixture / ".codex" / "hooks" / "session-start.py").unlink()
 
@@ -2595,11 +2599,7 @@ Why:
         self.assertNotIn("spawn a `trellis-research` sub-agent via the Task tool", shared_content)
 
     def test_upgrade_merge_refreshes_update_spec_skills_and_trellis_meta_hooks_docs(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True, include_codex=True)
 
         stale_platform_skill = """---
 name: trellis-update-spec
@@ -2732,11 +2732,7 @@ OpenCode: .opencode/package.json -> .opencode/plugins/session-start.js
         self.assertIn("carrier existence does not imply dispatch is allowed", merged_platform_map)
 
     def test_upgrade_merge_refreshes_break_loop_and_check_skills(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True, include_codex=True)
 
         stale_break_loop = """---
 name: trellis-break-loop
@@ -2798,11 +2794,7 @@ description: stale check
             self.assertNotIn('grep -r "pattern" src/', content)
 
     def test_upgrade_merge_patches_platform_brainstorm_skills_away_from_research_subagent_guidance(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True, include_codex=True)
 
         stale_skill = """---
 name: trellis-brainstorm
@@ -2990,12 +2982,7 @@ Keep only durable PRD-facing takeaways here.
         self.assertFalse((fixture / ".codex" / "agents" / "research.toml").exists())
 
     def test_install_keeps_codex_native_agents_unchanged(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_codex=True)
         codex_trellis_agents = fixture / ".codex" / "agents"
         self.assertEqual(
             (codex_trellis_agents / "trellis-research.toml").read_text(encoding="utf-8"),
@@ -3013,12 +3000,7 @@ Keep only durable PRD-facing takeaways here.
         self.assertFalse((fixture / ".trellis" / ".backup-original" / "codex-agents").exists())
 
     def test_install_keeps_native_research_agents_in_target_project(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True, include_codex=True)
         claude_research = (fixture / ".claude" / "agents" / "trellis-research.md").read_text(encoding="utf-8")
         opencode_research = (fixture / ".opencode" / "agents" / "trellis-research.md").read_text(encoding="utf-8")
         codex_research = (fixture / ".codex" / "agents" / "trellis-research.toml").read_text(encoding="utf-8")
@@ -3028,11 +3010,7 @@ Keep only durable PRD-facing takeaways here.
         self.assertEqual(codex_research, BASELINE_CODEX_RESEARCH_TOML)
 
     def test_upgrade_check_ignores_native_research_agent_content_drift(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True, include_codex=True)
 
         claude_research = fixture / ".claude" / "agents" / "trellis-research.md"
         claude_research.write_text("# drifted research\n", encoding="utf-8")
@@ -3050,11 +3028,7 @@ Keep only durable PRD-facing takeaways here.
         self.assertNotIn("agent 内容漂移", result.stdout)
 
     def test_upgrade_merge_does_not_rewrite_native_research_agent(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True, include_codex=True)
 
         claude_research = fixture / ".claude" / "agents" / "trellis-research.md"
         claude_research.write_text("# drifted research\n", encoding="utf-8")
@@ -3214,11 +3188,7 @@ Keep only durable PRD-facing takeaways here.
         self.assertIn("已清理 bootstrap session active-task 引用", install.stdout)
 
     def test_uninstall_restores_workflow_doc(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
         workflow_doc = fixture / ".trellis" / "workflow.md"
         self.assertIn(WORKFLOW_PATCH_MARKER, workflow_doc.read_text(encoding="utf-8"))
 
@@ -3228,11 +3198,7 @@ Keep only durable PRD-facing takeaways here.
         self.assertEqual(workflow_doc.read_text(encoding="utf-8"), BASELINE_WORKFLOW_CONTENT)
 
     def test_install_workflow_doc_keeps_canonical_allowed_next_examples(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         workflow_doc_text = (fixture / ".trellis" / "workflow.md").read_text(encoding="utf-8")
         self.assertIn(
@@ -3252,11 +3218,7 @@ Keep only durable PRD-facing takeaways here.
         self.assertNotIn("task.py create-pr [name] [--dry-run]", workflow_doc_text)
 
     def test_installed_workflow_state_blocks_check_to_delivery_when_chinese_verification_results_contains_fail(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         task_dir = fixture / ".trellis" / "tasks" / "04-15-sample-task"
         task_dir.mkdir(parents=True, exist_ok=True)
@@ -3353,11 +3315,7 @@ Keep only durable PRD-facing takeaways here.
         self.assertIn("Verification Results 包含 fail", blocked.stdout)
 
     def test_installed_workflow_state_uses_explicit_task_level_check_task_for_formal_project_audit_delivery(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         (fixture / "README.md").write_text("# project\n", encoding="utf-8")
         (fixture / "README.en.md").write_text("# project\n", encoding="utf-8")
@@ -3524,11 +3482,7 @@ Keep only durable PRD-facing takeaways here.
         self.assertEqual(validate.returncode, 0, msg=validate.stdout + validate.stderr)
 
     def test_installed_workflow_state_requires_two_reviewer_reports_for_recommended_full(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         task_dir = fixture / ".trellis" / "tasks" / "04-15-sample-task"
         task_dir.mkdir(parents=True, exist_ok=True)
@@ -3610,11 +3564,7 @@ Keep only durable PRD-facing takeaways here.
         self.assertEqual(allowed.returncode, 0, msg=allowed.stdout + allowed.stderr)
 
     def test_install_agents_routing_warns_against_manual_agent_subagent_path(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
 
         agents_text = (fixture / "AGENTS.md").read_text(encoding="utf-8")
         self.assertIn("显式禁用** `agent / subagent` 路径", agents_text)
@@ -3664,11 +3614,7 @@ Keep only durable PRD-facing takeaways here.
         self.assertNotIn("dispatch `trellis-implement` and `trellis-check`", patched_text)
 
     def test_uninstall_removes_workflow_shared_docs_but_retains_library_import_assets(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
         workflow_docs_dir = fixture / ".trellis" / "workflow-docs"
         self.assertTrue((workflow_docs_dir / "需求变更管理执行卡.md").exists())
         self.assertTrue((workflow_docs_dir / "finish-work-checklist-template.md").exists())
@@ -3684,11 +3630,7 @@ Keep only durable PRD-facing takeaways here.
         self.assertNotIn("Trellis 已恢复原始状态", result.stdout)
 
     def test_upgrade_check_detects_workflow_doc_patch_drift(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         workflow_doc = fixture / ".trellis" / "workflow.md"
         workflow_doc.write_text(
@@ -3709,11 +3651,7 @@ Keep only durable PRD-facing takeaways here.
         self.assertIn("workflow.md", result.stdout + result.stderr)
 
     def test_upgrade_check_detects_workflow_doc_content_drift_while_marker_intact(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         workflow_doc = fixture / ".trellis" / "workflow.md"
         workflow_doc.write_text(
@@ -3738,11 +3676,7 @@ Keep only durable PRD-facing takeaways here.
         self.assertIn("内容漂移", result.stdout + result.stderr)
 
     def test_upgrade_check_detects_stale_postprocessed_skill_and_reference_surfaces(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True, include_codex=True)
 
         stale_platform_brainstorm = """---
 name: trellis-brainstorm
@@ -3899,11 +3833,7 @@ description: stale check
         self.assertIn("cross-layer-thinking-guide.md", combined)
 
     def test_upgrade_check_detects_old_opencode_subagent_route_parser(self) -> None:
-        fixture = self.create_fixture(include_opencode=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True)
 
         plugin_path = fixture / ".opencode" / "plugins" / "inject-subagent-context.js"
         plugin_path.parent.mkdir(parents=True, exist_ok=True)
@@ -3947,11 +3877,7 @@ function buildBlockedSubagentPrompt(routeData, subagentType, originalPrompt) {
         self.assertIn("强门禁子代理补丁缺失或不完整", combined)
 
     def test_upgrade_check_detects_opencode_subagent_patch_without_hard_stop(self) -> None:
-        fixture = self.create_fixture(include_opencode=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True)
 
         plugin_path = fixture / ".opencode" / "plugins" / "inject-subagent-context.js"
         plugin_path.parent.mkdir(parents=True, exist_ok=True)
@@ -3998,11 +3924,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
 
 
     def test_upgrade_check_detects_embed_attempt_record_conflict(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
         (fixture / ".trellis" / ATTEMPT_RECORD_NAME).write_text(
             json.dumps({"status": "failed"}, ensure_ascii=False),
             encoding="utf-8",
@@ -4022,11 +3944,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("status=failed", result.stdout + result.stderr)
 
     def test_upgrade_check_allows_attempt_record_during_installer_self_check_env(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
         (fixture / ".trellis" / ATTEMPT_RECORD_NAME).write_text(
             json.dumps({"status": "failed", "last_step": "post-install-check"}, ensure_ascii=False),
             encoding="utf-8",
@@ -4046,11 +3964,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
     def test_upgrade_check_detects_agents_md_routing_drift(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
 
         agents_md = fixture / "AGENTS.md"
         content = agents_md.read_text(encoding="utf-8")
@@ -4071,12 +3985,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("AGENTS.md: NL 路由表缺失", result.stdout + result.stderr)
 
     def test_install_initializes_project_todo_file(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
         todo_path = fixture / "todo.txt"
         self.assertTrue(todo_path.exists(), "todo.txt should be created during installation")
         self.assertEqual(todo_path.read_text(encoding="utf-8"), DEFAULT_PROJECT_TODO)
@@ -4248,11 +4157,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertEqual(payload["traces"], [])
 
     def test_detect_embed_state_reports_already_valid_embedded(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
 
         result = self.detect_embed_state(fixture, "--json", env=self.latest_env_for(fixture))
 
@@ -4379,12 +4284,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("缺少 .trellis/.version", install.stderr)
 
     def test_install_injects_agents_md_routing_and_multi_cli_assets(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
         self.assertTrue((fixture / ".opencode" / "commands" / "trellis" / "brainstorm.md").exists())
         self.assertTrue((fixture / ".agents" / "skills" / "brainstorm" / "SKILL.md").exists())
 
@@ -4499,11 +4399,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertEqual(record_data["patched_codex_skills"], [])
 
     def test_upgrade_check_detects_phase_router_drift_even_when_versions_match(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         backup_start = fixture / ".claude" / "commands" / "trellis" / ".backup-original" / "continue.md"
         target_start = fixture / ".claude" / "commands" / "trellis" / "continue.md"
@@ -4521,11 +4417,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("Phase Router 丢失", result.stdout)
 
     def test_upgrade_check_detects_missing_helper_scripts(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         helper = fixture / ".trellis" / "scripts" / "workflow" / "workflow-state.py"
         helper.unlink()
@@ -4544,11 +4436,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("workflow-state.py", result.stdout)
 
     def test_upgrade_check_blocks_when_target_is_not_latest_trellis(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         result = self.run_script(
             UPGRADE_SCRIPT,
@@ -4563,11 +4451,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("禁止执行当前步骤", result.stdout)
 
     def test_upgrade_check_detects_helper_script_drift_for_opencode_only(self) -> None:
-        fixture = self.create_fixture(include_opencode=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True)
 
         helper = fixture / ".trellis" / "scripts" / "workflow" / "check-quality.py"
         helper.write_text(helper.read_text(encoding="utf-8") + "\n# drift\n", encoding="utf-8")
@@ -4588,11 +4472,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("check-quality.py", result.stdout)
 
     def test_upgrade_check_detects_obsolete_helper_script_residue(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         stale_helper = fixture / ".trellis" / "scripts" / "workflow" / "record-session-helper.py"
         stale_helper.write_text("# obsolete helper residue\n", encoding="utf-8")
@@ -4611,11 +4491,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("record-session-helper.py", result.stdout)
 
     def test_upgrade_merge_removes_obsolete_helper_script_residue(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         stale_helper = fixture / ".trellis" / "scripts" / "workflow" / "record-session-helper.py"
         stale_helper.write_text("# obsolete helper residue\n", encoding="utf-8")
@@ -4633,11 +4509,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertFalse(stale_helper.exists())
 
     def test_upgrade_check_detects_install_record_schema_drift(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         record_path = fixture / ".trellis" / "workflow-installed.json"
         record_data = json.loads(record_path.read_text(encoding="utf-8"))
@@ -4666,11 +4538,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertNotIn("patched_codex_skills", result.stdout)
 
     def test_upgrade_check_detects_missing_critical_runtime_patches(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assert_install_result_usable(install)
+        fixture = self.installed_fixture(include_codex=True)
 
         (fixture / ".claude" / "hooks" / "session-start.py").write_text(
             BASELINE_SESSION_START_CONTENT,
@@ -4699,11 +4567,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("task_store.py", result.stdout)
 
     def test_upgrade_check_detects_incomplete_runtime_patch_contracts(self) -> None:
-        fixture = self.create_fixture(include_opencode=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True)
 
         opencode_inject = fixture / ".opencode" / "plugins" / "inject-workflow-state.js"
         opencode_inject.write_text(
@@ -4726,11 +4590,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("inject-workflow-state.js", result.stdout)
 
     def test_upgrade_check_allows_legacy_missing_version_keys(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         record_path = fixture / ".trellis" / "workflow-installed.json"
         record_data = json.loads(record_path.read_text(encoding="utf-8"))
@@ -4754,11 +4614,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("legacy/unknown", result.stdout)
 
     def test_upgrade_merge_backfills_legacy_missing_version_keys_even_without_conflicts(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         record_path = fixture / ".trellis" / "workflow-installed.json"
         record_data = json.loads(record_path.read_text(encoding="utf-8"))
@@ -4784,11 +4640,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertEqual(updated["initial_pack_cleanup_policy"], "retain-imported-assets")
 
     def test_upgrade_check_warns_when_bootstrap_cleanup_record_conflicts_with_filesystem(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         bootstrap_dir = fixture / ".trellis" / "tasks" / "00-bootstrap-guidelines"
         bootstrap_dir.mkdir(parents=True, exist_ok=True)
@@ -4807,11 +4659,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("bootstrap_cleanup_status=removed", result.stdout + result.stderr)
 
     def test_upgrade_check_warns_when_bootstrap_dry_run_removed_conflicts_with_filesystem(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         record_path = fixture / ".trellis" / "workflow-installed.json"
         record_data = json.loads(record_path.read_text(encoding="utf-8"))
@@ -4835,11 +4683,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("bootstrap_cleanup_status=dry-run-removed", result.stdout + result.stderr)
 
     def test_upgrade_force_backfills_legacy_missing_codex_patch_record(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_codex=True)
 
         self.apply_legacy_codex_workflow_state(fixture)
         record_path = fixture / ".trellis" / "workflow-installed.json"
@@ -4864,11 +4708,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         )
 
     def test_upgrade_merge_rewrites_patched_baseline_commands_without_record_session(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         record_path = fixture / ".trellis" / "workflow-installed.json"
         record_data = json.loads(record_path.read_text(encoding="utf-8"))
@@ -4889,11 +4729,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertEqual(updated["patched_baseline_commands"], ["continue", "finish-work"])
 
     def test_upgrade_merge_clears_residual_attempt_record_after_success(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         attempt_record = fixture / ".trellis" / ATTEMPT_RECORD_NAME
         attempt_record.write_text(json.dumps({"status": "failed"}, ensure_ascii=False), encoding="utf-8")
@@ -4911,11 +4747,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertFalse(attempt_record.exists(), "successful merge should clear residual attempt record")
 
     def test_upgrade_check_detects_codex_start_skill_patch_drift(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_codex=True)
         self.apply_legacy_codex_workflow_state(fixture)
 
         start_skill = fixture / ".agents" / "skills" / "start" / "SKILL.md"
@@ -4934,11 +4766,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("start skill (.agents/skills): Phase Router 补丁缺失", result.stdout)
 
     def test_upgrade_check_detects_codex_start_skill_legacy_brainstorm_quick_reference(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_codex=True)
 
         start_skill = fixture / ".agents" / "skills" / "trellis-start" / "SKILL.md"
         start_skill.write_text(
@@ -4963,11 +4791,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("trellis-brainstorm", result.stdout)
 
     def test_upgrade_check_detects_codex_start_skill_legacy_implementation_and_check_quick_reference(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_codex=True)
 
         start_skill = fixture / ".agents" / "skills" / "trellis-start" / "SKILL.md"
         start_skill.write_text(
@@ -4998,11 +4822,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("trellis-check", combined)
 
     def test_upgrade_check_detects_delivery_finish_work_entry_surface_drift(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True, include_codex=True)
 
         delivery = fixture / ".claude" / "commands" / "trellis" / "delivery.md"
         delivery.write_text(
@@ -5027,11 +4847,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("/trellis:finish-work", result.stdout)
 
     def test_upgrade_check_detects_illegal_leaf_state_init_guidance(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         workflow_doc = fixture / ".trellis" / "workflow.md"
         workflow_doc.write_text(
@@ -5056,11 +4872,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("repair", result.stdout)
 
     def test_upgrade_check_detects_enabled_codex_multi_agent_config(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_codex=True)
 
         config_path = fixture / ".codex" / "config.toml"
         config_path.write_text(
@@ -5109,11 +4921,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("parallel skill (.codex/skills): 应已从嵌入面移除", result.stdout)
 
     def test_upgrade_check_no_longer_checks_agent_drift(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_codex=True)
         self.mark_legacy_codex_installed(fixture)
 
         codex_check = fixture / ".codex" / "agents" / "trellis-check.toml"
@@ -5131,11 +4939,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
     def test_upgrade_check_still_ignores_non_research_claude_agent_drift(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         claude_check = fixture / ".claude" / "agents" / "trellis-check.md"
         claude_check.write_text("# drifted check\n", encoding="utf-8")
@@ -5152,11 +4956,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
     def test_upgrade_check_still_ignores_non_research_opencode_agent_drift(self) -> None:
-        fixture = self.create_fixture(include_opencode=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True)
 
         opencode_check = fixture / ".opencode" / "agents" / "trellis-check.md"
         opencode_check.write_text("# drifted check\n", encoding="utf-8")
@@ -5173,11 +4973,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
     def test_upgrade_merge_no_longer_restores_codex_managed_agent(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_codex=True)
         self.mark_legacy_codex_installed(fixture)
 
         codex_check = fixture / ".codex" / "agents" / "trellis-check.toml"
@@ -5197,11 +4993,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn('sandbox_mode = "read-only"', updated)
 
     def test_upgrade_merge_still_ignores_non_research_claude_agent_drift(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         claude_check = fixture / ".claude" / "agents" / "trellis-check.md"
         claude_check.write_text("# drifted check\n", encoding="utf-8")
@@ -5220,11 +5012,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertEqual(updated, "# drifted check\n")
 
     def test_upgrade_merge_still_ignores_non_research_opencode_agent_drift(self) -> None:
-        fixture = self.create_fixture(include_opencode=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True)
 
         opencode_check = fixture / ".opencode" / "agents" / "trellis-check.md"
         opencode_check.write_text("# drifted check\n", encoding="utf-8")
@@ -5243,11 +5031,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertEqual(updated, "# drifted check\n")
 
     def test_uninstall_migrates_legacy_agents_and_restores_backups(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_codex=True)
         self.mark_legacy_codex_installed(fixture)
 
         merge = self.run_script(
@@ -5272,11 +5056,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
     def test_uninstall_preserves_native_trellis_agents_no_backup(self) -> None:
         """Post-0.5: workflow no longer overlays agents; uninstall must NOT
         delete Trellis-native trellis-*.md files when no backup exists."""
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         claude_research = fixture / ".claude" / "agents" / "trellis-research.md"
         self.assertTrue(claude_research.exists(), "trellis-research.md should exist before uninstall")
@@ -5290,11 +5070,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
     def test_uninstall_removes_legacy_bare_name_agents(self) -> None:
         """Legacy bare-name agent files (research.md) are leftovers from
         pre-0.5 installs and should be cleaned up by uninstall."""
-        fixture = self.create_fixture(use_latest_trellis_baseline=False)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(use_latest_trellis_baseline=False)
 
         # After install, legacy bare-name should be migrated to trellis-*
         legacy_research = fixture / ".claude" / "agents" / "research.md"
@@ -5311,11 +5087,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
     def test_uninstall_restores_agents_from_backup(self) -> None:
         """When a workflow backup exists, uninstall restores the backup
         content for both Claude and OpenCode agents."""
-        fixture = self.create_fixture(include_opencode=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True)
 
         claude_research = fixture / ".claude" / "agents" / "trellis-research.md"
         opencode_check = fixture / ".opencode" / "agents" / "trellis-check.md"
@@ -5331,22 +5103,14 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
             self.assertEqual(restored, BASELINE_AGENT_CHECK_MD)
 
     def test_uninstall_removes_agents_created_by_legacy_migration(self) -> None:
-        fixture = self.create_fixture(include_codex=True, use_latest_trellis_baseline=False)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_codex=True, use_latest_trellis_baseline=False)
 
         result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
     def test_upgrade_check_detects_brainstorm_command_drift(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         brainstorm = fixture / ".claude" / "commands" / "trellis" / "brainstorm.md"
         brainstorm.write_text("# drifted brainstorm\n", encoding="utf-8")
@@ -5364,11 +5128,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("命令内容漂移: /trellis:brainstorm", result.stdout)
 
     def test_upgrade_check_detects_check_command_drift(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         check = fixture / ".claude" / "commands" / "trellis" / "check.md"
         check.write_text("# drifted check\n", encoding="utf-8")
@@ -5386,11 +5146,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("命令内容漂移: /trellis:check", result.stdout)
 
     def test_upgrade_check_detects_finish_work_patch_drift(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         finish_work = fixture / ".claude" / "commands" / "trellis" / "finish-work.md"
         content = finish_work.read_text(encoding="utf-8").replace(FINISH_WORK_MARKER, "<!-- missing -->")
@@ -5409,11 +5165,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("finish-work.md: 项目化补丁缺失", result.stdout)
 
     def test_force_recovers_start_from_backup_when_injection_marker_is_missing(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         broken_start = fixture / ".claude" / "commands" / "trellis" / "continue.md"
         broken_start.write_text(
@@ -5436,11 +5188,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertNotIn("无法自动注入", result.stdout)
 
     def test_upgrade_check_tolerates_missing_legacy_record_session_file(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         (fixture / ".claude" / "commands" / "trellis" / "record-session.md").unlink()
         (fixture / ".trellis" / ".version").write_text("2.1.0\n", encoding="utf-8")
@@ -5456,11 +5204,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
 
     def test_upgrade_merge_restores_drift_and_followup_check_passes(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         start = fixture / ".claude" / "commands" / "trellis" / "continue.md"
         finish_work = fixture / ".claude" / "commands" / "trellis" / "finish-work.md"
@@ -5495,11 +5239,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertEqual(followup_check.returncode, 0, msg=followup_check.stdout + followup_check.stderr)
 
     def test_upgrade_check_detects_needs_init_residue_in_installed_artifacts(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_codex=True)
 
         workflow_md = fixture / ".trellis" / "workflow.md"
         workflow_text = workflow_md.read_text(encoding="utf-8")
@@ -5573,11 +5313,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("辅助脚本内容漂移: patch-task-status-view-strong-gate.py", combined)
 
     def test_upgrade_merge_refreshes_needs_init_residue_from_installed_artifacts(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_codex=True)
 
         workflow_md = fixture / ".trellis" / "workflow.md"
         workflow_text = workflow_md.read_text(encoding="utf-8")
@@ -5675,11 +5411,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertEqual(followup_check.returncode, 0, msg=followup_check.stdout + followup_check.stderr)
 
     def test_upgrade_merge_preserves_legacy_entry_command_while_migrating_agent_names(self) -> None:
-        fixture = self.create_fixture(include_codex=True, use_latest_trellis_baseline=False)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_codex=True, use_latest_trellis_baseline=False)
 
         legacy_start = fixture / ".claude" / "commands" / "trellis" / "start.md"
         self.assertTrue(legacy_start.exists())
@@ -5704,11 +5436,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertFalse((fixture / ".claude" / "agents" / "research.md").exists())
 
     def test_upgrade_merge_restores_agents_md_routing(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
 
         agents_md = fixture / "AGENTS.md"
         content = agents_md.read_text(encoding="utf-8")
@@ -5772,11 +5500,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertFalse(codex_parallel.exists())
 
     def test_upgrade_merge_preserves_bootstrap_cleanup_status(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         record_path = fixture / ".trellis" / "workflow-installed.json"
         record_data = json.loads(record_path.read_text(encoding="utf-8"))
@@ -5826,11 +5550,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertFalse(codex_parallel.exists())
 
     def test_force_restores_finish_work_from_backup_and_reapplies_patch(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         finish_work = fixture / ".claude" / "commands" / "trellis" / "finish-work.md"
         finish_work.write_text("# broken finish-work\n\nmissing expected sections\n", encoding="utf-8")
@@ -5850,11 +5570,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertNotIn("pnpm lint", restored_text)
 
     def test_install_deploys_archive_closeout_patch_and_help_contract(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assert_install_result_usable(install)
+        fixture = self.installed_fixture(include_opencode=True, include_codex=True)
 
         task_store = fixture / ".trellis" / "scripts" / "common" / "task_store.py"
         task_store_text = task_store.read_text(encoding="utf-8")
@@ -5869,11 +5585,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("Test invariants", workflow_state_text)
 
     def test_force_restores_codex_start_skill_from_backup_and_reapplies_patch(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_codex=True)
         self.apply_legacy_codex_workflow_state(fixture)
 
         start_skill = fixture / ".agents" / "skills" / "start" / "SKILL.md"
@@ -5894,11 +5606,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("Workflow Phase Router Patch", restored_text)
 
     def test_force_fails_when_codex_active_baseline_backup_is_missing(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_codex=True)
         self.apply_legacy_codex_workflow_state(fixture)
 
         start_backup = fixture / ".agents" / "skills" / ".backup-original" / "start" / "SKILL.md"
@@ -5921,11 +5629,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("缺少 .backup-original/trellis-continue 或 start", result.stdout + result.stderr)
 
     def test_uninstall_tolerates_corrupted_install_record(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
 
         record = fixture / ".trellis" / "workflow-installed.json"
         record.write_text("{ invalid json", encoding="utf-8")
@@ -5942,11 +5646,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("pnpm lint", finish_work)
 
     def test_uninstall_restores_codex_start_and_finish_work_skills(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_codex=True)
         self.apply_legacy_codex_workflow_state(fixture)
         start_skill = fixture / ".agents" / "skills" / "start" / "SKILL.md"
         self.assertIn("Workflow Phase Router Patch", start_skill.read_text(encoding="utf-8"))
@@ -5964,11 +5664,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertIn("pnpm lint", restored_text)
 
     def test_uninstall_restores_codex_skills_when_record_lacks_patched_codex_skills(self) -> None:
-        fixture = self.create_fixture(include_codex=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_codex=True)
         self.apply_legacy_codex_workflow_state(fixture)
         record_path = fixture / ".trellis" / "workflow-installed.json"
         record_data = json.loads(record_path.read_text(encoding="utf-8"))
@@ -5987,11 +5683,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertNotIn(FINISH_WORK_MARKER, patched_skill.read_text(encoding="utf-8"))
 
     def test_uninstall_restores_overlapped_baseline_check_command(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
         patched_check = fixture / ".claude" / "commands" / "trellis" / "check.md"
         self.assertIn("/trellis:check", patched_check.read_text(encoding="utf-8"))
         self.assertEqual(
@@ -6006,11 +5698,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertEqual(restored_text, BASELINE_CHECK_CONTENT)
 
     def test_uninstall_restores_overlapped_baseline_brainstorm_command(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
         patched_brainstorm = fixture / ".claude" / "commands" / "trellis" / "brainstorm.md"
         self.assertIn("/trellis:brainstorm", patched_brainstorm.read_text(encoding="utf-8"))
         self.assertEqual(
@@ -6025,11 +5713,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertEqual(restored_text, BASELINE_BRAINSTORM_CONTENT)
 
     def test_uninstall_restores_disabled_parallel_command(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
         patched_parallel = fixture / ".claude" / "commands" / "trellis" / "parallel.md"
         self.assertFalse(patched_parallel.exists())
         self.assertEqual(
@@ -6044,11 +5728,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertEqual(restored_text, BASELINE_PARALLEL_CONTENT)
 
     def test_uninstall_removes_agents_md_routing_section(self) -> None:
-        fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
         self.assertIn("workflow-nl-routing-start", (fixture / "AGENTS.md").read_text(encoding="utf-8"))
 
         result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
@@ -6058,11 +5738,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertNotIn("workflow-nl-routing-start", (fixture / "AGENTS.md").read_text(encoding="utf-8"))
 
     def test_uninstall_leaves_default_todo_file_untouched(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
         self.assertTrue((fixture / "todo.txt").exists())
 
         result = self.run_script(UNINSTALL_SCRIPT, "--project-root", str(fixture))
@@ -6072,11 +5748,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertEqual((fixture / "todo.txt").read_text(encoding="utf-8"), DEFAULT_PROJECT_TODO)
 
     def test_uninstall_leaves_modified_todo_file_untouched(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        install = self.install_workflow(fixture)
-        self.assertEqual(install.returncode, 0, msg=install.stdout + install.stderr)
+        fixture = self.installed_fixture()
         todo_path = fixture / "todo.txt"
         todo_path.write_text("自定义提醒\n", encoding="utf-8")
 
