@@ -414,6 +414,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             json.dumps({"current_task": ".trellis/tasks/04-15-sample-task"}, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
+        self.write_minimal_installed_workflow_record(root, profile="outsourcing")
         return root, task_dir
 
     def write_required_project_docs(
@@ -483,7 +484,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
 
     def write_minimal_installed_workflow_record(self, root: Path, *, profile: str) -> None:
         (root / ".trellis" / "workflow-installed.json").write_text(
-            json.dumps({"profile": profile}, ensure_ascii=False) + "\n",
+            json.dumps({"profile": profile, "project_id": "workflowfixture"}, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
         (root / ".trellis" / "library-lock.yaml").write_text(
@@ -676,6 +677,8 @@ class WorkflowStateScriptTests(unittest.TestCase):
 - .trellis/spec/scripts/python-conventions.md
 
 ## Verification Results
+- Sonar Verify: pass
+- Command: sonar verify -p workflowfixture
 - test: pass
 - lint: not run
 
@@ -1763,7 +1766,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             task_prd_suffix=(
                 f"{self.VALID_BRAINSTORM_ESTIMATE}\n"
                 "## 自动化检查矩阵\n"
-                "- 质量平台门禁：sonar-scanner\n"
+                "- 质量平台门禁：sonar verify -p <project-id>\n"
                 "- close-out 主入口：/trellis:finish-work\n"
                 "- archive 前置条件：当前 active task 已完成任务级收口；若该 task 同时承担项目级交付，再先完成 delivery\n"
                 "- 元数据边界：只允许当前 active task 的 archive + session record\n"
@@ -1813,7 +1816,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             task_prd_suffix=(
                 f"{self.VALID_BRAINSTORM_ESTIMATE}\n"
                 "## 自动化检查矩阵\n"
-                "- 质量平台门禁：sonar-scanner\n"
+                "- 质量平台门禁：sonar verify -p <project-id>\n"
                 "- close-out 主入口：/trellis:finish-work\n"
                 "- archive 前置条件：当前 active task 已完成任务级收口；若该 task 同时承担项目级交付，再先完成 delivery\n"
                 "- 元数据边界：只允许当前 active task 的 archive + session record\n"
@@ -1993,7 +1996,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             task_prd_suffix=(
                 f"{self.VALID_BRAINSTORM_ESTIMATE}\n"
                 "## 自动化检查矩阵\n"
-                "- 质量平台门禁：sonar-scanner\n"
+                "- 质量平台门禁：sonar verify -p <project-id>\n"
                 "- close-out 主入口：/trellis:finish-work\n"
                 "- archive 前置条件：当前 active task 已完成任务级收口；若该 task 同时承担项目级交付，再先完成 delivery\n"
                 "- 元数据边界：只允许当前 active task 的 archive + session record\n"
@@ -3327,7 +3330,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (root / ".trellis" / "scripts" / "common").mkdir(parents=True, exist_ok=True)
         (root / ".trellis" / ".runtime" / "sessions").mkdir(parents=True, exist_ok=True)
         (root / ".trellis" / "workflow-installed.json").write_text(
-            json.dumps({"profile": "outsourcing"}, ensure_ascii=False) + "\n",
+            json.dumps({"profile": "outsourcing", "project_id": "workflowfixture"}, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
         (root / ".trellis" / "library-lock.yaml").write_text(
@@ -4195,6 +4198,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (root / ".trellis" / "workflow-installed.json").write_text(
             json.dumps(
                 {
+                    "project_id": "workflowfixture",
                     "profile": "outsourcing",
                     "cli_types": ["codex"],
                     "critical_runtime_patches": [
@@ -4283,6 +4287,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (root / ".trellis" / "workflow-installed.json").write_text(
             json.dumps(
                 {
+                    "project_id": "workflowfixture",
                     "profile": "outsourcing",
                     "cli_types": ["codex"],
                     "critical_runtime_patches": [
@@ -4375,6 +4380,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (root / ".trellis" / "workflow-installed.json").write_text(
             json.dumps(
                 {
+                    "project_id": "workflowfixture",
                     "profile": "outsourcing",
                     "cli_types": ["codex"],
                     "critical_runtime_patches": [
@@ -4481,6 +4487,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (root / ".trellis" / "workflow-installed.json").write_text(
             json.dumps(
                 {
+                    "project_id": "workflowfixture",
                     "profile": "outsourcing",
                     "cli_types": ["codex"],
                     "critical_runtime_patches": [
@@ -4573,6 +4580,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (root / ".trellis" / "workflow-installed.json").write_text(
             json.dumps(
                 {
+                    "project_id": "workflowfixture",
                     "profile": "outsourcing",
                     "cli_types": ["codex"],
                     "critical_runtime_patches": [
@@ -4666,6 +4674,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (root / ".trellis" / "workflow-installed.json").write_text(
             json.dumps(
                 {
+                    "project_id": "workflowfixture",
                     "profile": "outsourcing",
                     "cli_types": ["codex"],
                     "critical_runtime_patches": [
@@ -4804,7 +4813,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         root = Path(tempfile.mkdtemp(prefix="workflow-state-test-"))
         self.addCleanup(shutil.rmtree, root)
         (root / ".trellis" / "tasks").mkdir(parents=True, exist_ok=True)
-        (root / ".trellis" / "workflow-installed.json").write_text('{"installed":"now"}\n', encoding="utf-8")
+        (root / ".trellis" / "workflow-installed.json").write_text('{"installed":"now","project_id":"workflowfixture"}\n', encoding="utf-8")
 
         result = self.run_script("route", "--project-root", str(root))
 
@@ -4822,6 +4831,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (root / ".trellis" / "workflow-installed.json").write_text(
             json.dumps(
                 {
+                    "project_id": "workflowfixture",
                     "profile": "outsourcing",
                     "cli_types": ["claude", "opencode", "codex"],
                     "commands": ["brainstorm"],
@@ -4897,6 +4907,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (root / ".trellis" / "workflow-installed.json").write_text(
             json.dumps(
                 {
+                    "project_id": "workflowfixture",
                     "profile": "outsourcing",
                     "cli_types": ["claude", "opencode", "codex"],
                     "commands": ["brainstorm"],
@@ -4949,6 +4960,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (root / ".trellis" / "workflow-installed.json").write_text(
             json.dumps(
                 {
+                    "project_id": "workflowfixture",
                     "profile": "outsourcing",
                     "cli_types": ["claude", "codex"],
                     "critical_runtime_patches": [
@@ -4999,6 +5011,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (root / ".trellis" / "workflow-installed.json").write_text(
             json.dumps(
                 {
+                    "project_id": "workflowfixture",
                     "profile": "outsourcing",
                     "cli_types": ["claude"],
                     "critical_runtime_patches": [
@@ -5087,6 +5100,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (root / ".trellis" / "workflow-installed.json").write_text(
             json.dumps(
                 {
+                    "project_id": "workflowfixture",
                     "profile": "outsourcing",
                     "cli_types": ["claude"],
                     "critical_runtime_patches": [
@@ -5164,6 +5178,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (root / ".trellis" / "workflow-installed.json").write_text(
             json.dumps(
                 {
+                    "project_id": "workflowfixture",
                     "profile": "outsourcing",
                     "cli_types": ["claude"],
                     "critical_runtime_patches": [
@@ -5245,6 +5260,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (root / ".trellis" / "workflow-installed.json").write_text(
             json.dumps(
                 {
+                    "project_id": "workflowfixture",
                     "profile": "outsourcing",
                     "cli_types": ["opencode"],
                     "critical_runtime_patches": [
@@ -5304,6 +5320,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (root / ".trellis" / "workflow-installed.json").write_text(
             json.dumps(
                 {
+                    "project_id": "workflowfixture",
                     "profile": "outsourcing",
                     "cli_types": ["opencode"],
                     "critical_runtime_patches": [
@@ -5391,6 +5408,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (root / ".trellis" / "workflow-installed.json").write_text(
             json.dumps(
                 {
+                    "project_id": "workflowfixture",
                     "profile": "outsourcing",
                     "cli_types": ["opencode"],
                     "critical_runtime_patches": [
@@ -5476,6 +5494,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (root / ".trellis" / "workflow-installed.json").write_text(
             json.dumps(
                 {
+                    "project_id": "workflowfixture",
                     "profile": "outsourcing",
                     "cli_types": ["opencode"],
                     "critical_runtime_patches": [
@@ -5547,6 +5566,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         (root / ".trellis" / "workflow-installed.json").write_text(
             json.dumps(
                 {
+                    "project_id": "workflowfixture",
                     "profile": "outsourcing",
                     "cli_types": ["opencode"],
                     "critical_runtime_patches": [
@@ -6276,7 +6296,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
         task_prd.write_text(
             task_prd.read_text(encoding="utf-8")
             + "\n## 自动化检查矩阵\n"
-            + "- 质量平台门禁：sonar-scanner\n"
+            + "- 质量平台门禁：sonar verify -p <project-id>\n"
             + "- close-out 主入口：/trellis:finish-work\n"
             + "- archive 前置条件：当前 active task 已完成任务级收口；若该 task 同时承担项目级交付，再先完成 delivery\n"
             + "- 元数据边界：只允许当前 active task 的 archive + session record\n",
@@ -9222,6 +9242,77 @@ class WorkflowStateScriptTests(unittest.TestCase):
         self.assertEqual(blocked.returncode, 1, msg=blocked.stdout + blocked.stderr)
         self.assertIn("check_gate_status", blocked.stdout)
 
+    def test_check_to_delivery_accepts_single_letter_project_id_in_sonar_command(self) -> None:
+        root, task_dir = self.make_fixture()
+        self.write_required_project_docs(
+            root,
+            task_dir,
+            task_prd_suffix=self.VALID_BRAINSTORM_ESTIMATE,
+            customer_prd_suffix=self.VALID_CUSTOMER_ESTIMATE,
+        )
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            json.dumps({"profile": "outsourcing", "project_id": "A"}, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        self.write_delivery_artifacts(task_dir, valid_contract=True)
+        self.write_finish_work_checklist(task_dir)
+        self.write_check_report(
+            task_dir,
+            content="""# Check Report
+
+## Changed Scope
+- src/example.ts
+
+## Applied Specs
+- .trellis/spec/scripts/python-conventions.md
+
+## Verification Results
+- Sonar Verify: pass
+- Command: sonar verify -p A
+- test: pass
+- lint: not run
+
+## Deviations
+- none
+
+## Uncovered Risks
+- none
+
+## Review-Gate Decision
+- `review_gate_decision`: `skip`
+- `review_gate_reason`: `未命中 review-gate 硬条件，现有验证证据足够`
+- `check_gate_status`: `pass`
+- `auth_or_sensitive`: `no`
+- `data_migration_or_schema_change`: `no`
+- `public_api_or_cross_layer_contract_or_external_integration`: `no`
+- `payment_queue_cache_concurrency`: `no`
+- `shared_core_with_blast_radius`: `no`
+- `explicit_user_review_gate_request`: `no`
+
+## Suggested Next Step
+- /trellis:delivery
+""",
+        )
+        self.run_script("init", str(task_dir), "--stage", "check")
+        self.run_script(
+            "set",
+            str(task_dir),
+            "--stage-status", "awaiting_user_confirmation",
+            "--awaiting-user-confirmation", "true",
+            "--allowed-next", "review-gate,implementation,delivery",
+        )
+
+        allowed = self.run_script(
+            "set",
+            str(task_dir),
+            "--stage", "delivery",
+            "--stage-status", "in_progress",
+            "--awaiting-user-confirmation", "false",
+            "--transition-from", "check",
+        )
+
+        self.assertEqual(allowed.returncode, 0, msg=allowed.stdout + allowed.stderr)
+
     def test_check_to_review_gate_blocks_without_check_gate_status(self) -> None:
         root, task_dir = self.make_fixture()
         self.write_required_project_docs(
@@ -9521,6 +9612,14 @@ class WorkflowStateScriptTests(unittest.TestCase):
 ## Suggested Next Step
 - /trellis:review-gate
 """,
+        )
+        (task_dir / "check.md").write_text(
+            (task_dir / "check.md").read_text(encoding="utf-8").replace(
+                "## Verification Results\n",
+                "## Verification Results\n- Sonar Verify: pass\n- Command: sonar verify -p workflowfixture\n",
+                1,
+            ),
+            encoding="utf-8",
         )
         self.write_review_gate_round(task_dir)
         self.run_script("init", str(task_dir), "--stage", "review-gate")

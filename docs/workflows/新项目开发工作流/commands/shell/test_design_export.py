@@ -44,6 +44,13 @@ VALID_TAD = """# TAD
 
 
 class DesignExportTests(unittest.TestCase):
+    def seed_install_record(self, root: Path) -> None:
+        (root / ".trellis").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            '{"project_id":"workflowfixture","profile":"outsourcing"}\n',
+            encoding="utf-8",
+        )
+
     def run_script(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [PYTHON, str(SCRIPT), *args],
@@ -54,8 +61,11 @@ class DesignExportTests(unittest.TestCase):
         )
 
     def _make_design_dir(self) -> Path:
-        d = Path(tempfile.mkdtemp(prefix="design-export-test-"))
-        self.addCleanup(shutil.rmtree, d)
+        root = Path(tempfile.mkdtemp(prefix="design-export-test-"))
+        self.addCleanup(shutil.rmtree, root)
+        self.seed_install_record(root)
+        d = root / "design"
+        d.mkdir()
         return d
 
     def _write_required(self, d: Path) -> None:

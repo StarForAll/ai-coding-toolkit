@@ -153,6 +153,13 @@ DELIVERY_DIR_CONTENT = {
 
 
 class DeliveryControlValidateTests(unittest.TestCase):
+    def seed_install_record(self, root: Path) -> None:
+        (root / ".trellis").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            '{"project_id":"workflowfixture","profile":"outsourcing"}\n',
+            encoding="utf-8",
+        )
+
     def run_script(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [PYTHON, str(SCRIPT), *args],
@@ -165,6 +172,7 @@ class DeliveryControlValidateTests(unittest.TestCase):
     def _make_task_dir(self) -> Path:
         d = Path(tempfile.mkdtemp(prefix="dcv-test-"))
         self.addCleanup(shutil.rmtree, d)
+        self.seed_install_record(d)
         return d
 
     # ── feasibility phase ──

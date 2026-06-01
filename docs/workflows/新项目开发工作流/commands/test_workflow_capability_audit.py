@@ -652,7 +652,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self._remove_compatible_anchor()
         module.update_compatible_anchor("0.5.0")
         lines = WORKFLOW_ASSETS.read_text(encoding="utf-8").splitlines()
-        schema_index = lines.index('WORKFLOW_SCHEMA_VERSION = "3"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增')
+        schema_index = lines.index('WORKFLOW_SCHEMA_VERSION = "4"  # 安装记录 JSON 的 schema 版本，安装记录结构变化时递增')
         self.assertEqual(lines[schema_index + 1], 'COMPATIBLE_TRELLIS_VERSION = "0.5.0"')
 
     def test_script_enters_full_audit_when_current_version_is_newer(self) -> None:

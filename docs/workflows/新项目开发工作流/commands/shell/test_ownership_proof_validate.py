@@ -141,6 +141,13 @@ DELIVERY_DIR_CONTENT = {
 
 
 class OwnershipProofValidateTests(unittest.TestCase):
+    def seed_install_record(self, root: Path) -> None:
+        (root / ".trellis").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            '{"project_id":"workflowfixture","profile":"outsourcing"}\n',
+            encoding="utf-8",
+        )
+
     def run_script(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [PYTHON, str(SCRIPT), *args],
@@ -153,6 +160,7 @@ class OwnershipProofValidateTests(unittest.TestCase):
     def _make_task_dir(self) -> Path:
         path = Path(tempfile.mkdtemp(prefix="ownership-proof-"))
         self.addCleanup(shutil.rmtree, path)
+        self.seed_install_record(path)
         return path
 
     def test_feasibility_fails_when_assessment_missing(self) -> None:

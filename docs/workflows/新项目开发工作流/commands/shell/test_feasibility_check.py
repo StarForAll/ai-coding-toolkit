@@ -17,6 +17,13 @@ SCRIPT = REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "comman
 
 
 class FeasibilityCheckTests(unittest.TestCase):
+    def seed_install_record(self, root: Path) -> None:
+        (root / ".trellis").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            '{"project_id":"workflowfixture","profile":"outsourcing"}\n',
+            encoding="utf-8",
+        )
+
     def run_script(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [PYTHON, str(SCRIPT), *args],
@@ -33,10 +40,17 @@ class FeasibilityCheckTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         self.assertIn("法律与合规风险初筛清单", result.stdout)
 
+    def test_compliance_step_runs_without_project_id(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            result = self.run_script("--step", "compliance", "--task-dir", td)
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+            self.assertIn("法律与合规风险初筛清单", result.stdout)
+
     # ── estimate step ──
 
     def test_estimate_creates_template_when_missing(self) -> None:
         with tempfile.TemporaryDirectory() as td:
+            self.seed_install_record(Path(td))
             result = self.run_script("--step", "estimate", "--task-dir", td)
             self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
             assessment = Path(td) / "assessment.md"
@@ -52,6 +66,7 @@ class FeasibilityCheckTests(unittest.TestCase):
 
     def test_estimate_prints_existing_assessment(self) -> None:
         with tempfile.TemporaryDirectory() as td:
+            self.seed_install_record(Path(td))
             assessment = Path(td) / "assessment.md"
             assessment.write_text("# existing\n", encoding="utf-8")
             result = self.run_script("--step", "estimate", "--task-dir", td)
@@ -62,6 +77,7 @@ class FeasibilityCheckTests(unittest.TestCase):
 
     def test_risk_analysis_creates_assessment_from_requirement_file(self) -> None:
         with tempfile.TemporaryDirectory() as td:
+            self.seed_install_record(Path(td))
             req = Path(td) / "req.md"
             req.write_text("build a login page", encoding="utf-8")
             result = self.run_script(
@@ -75,6 +91,7 @@ class FeasibilityCheckTests(unittest.TestCase):
 
     def test_risk_analysis_fails_on_empty_requirement(self) -> None:
         with tempfile.TemporaryDirectory() as td:
+            self.seed_install_record(Path(td))
             req = Path(td) / "req.md"
             req.write_text("   \n", encoding="utf-8")
             result = self.run_script(
@@ -88,6 +105,7 @@ class FeasibilityCheckTests(unittest.TestCase):
 
     def test_validate_fails_when_assessment_missing(self) -> None:
         with tempfile.TemporaryDirectory() as td:
+            self.seed_install_record(Path(td))
             result = self.run_script("--step", "validate", "--task-dir", td)
             self.assertEqual(result.returncode, 1)
 
@@ -101,6 +119,7 @@ class FeasibilityCheckTests(unittest.TestCase):
             "✅ 通过\n"
         )
         with tempfile.TemporaryDirectory() as td:
+            self.seed_install_record(Path(td))
             (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
             result = self.run_script("--step", "validate", "--task-dir", td)
             self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
@@ -124,6 +143,7 @@ class FeasibilityCheckTests(unittest.TestCase):
             "✅ 通过\n"
         )
         with tempfile.TemporaryDirectory() as td:
+            self.seed_install_record(Path(td))
             (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
             result = self.run_script("--step", "validate", "--task-dir", td)
             self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
@@ -146,6 +166,7 @@ class FeasibilityCheckTests(unittest.TestCase):
             "✅ 通过\n"
         )
         with tempfile.TemporaryDirectory() as td:
+            self.seed_install_record(Path(td))
             (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
             result = self.run_script("--step", "validate", "--task-dir", td)
             self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
@@ -163,6 +184,7 @@ class FeasibilityCheckTests(unittest.TestCase):
             "✅ 通过\n"
         )
         with tempfile.TemporaryDirectory() as td:
+            self.seed_install_record(Path(td))
             (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
             result = self.run_script("--step", "validate", "--task-dir", td)
             self.assertEqual(result.returncode, 1, msg=result.stdout + result.stderr)
@@ -185,6 +207,7 @@ class FeasibilityCheckTests(unittest.TestCase):
             "- `delivery_control_retained_scope`: source code and keys\n"
         )
         with tempfile.TemporaryDirectory() as td:
+            self.seed_install_record(Path(td))
             (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
             result = self.run_script("--step", "validate", "--task-dir", td)
             self.assertEqual(result.returncode, 1)
@@ -212,6 +235,7 @@ class FeasibilityCheckTests(unittest.TestCase):
             "- `ownership_proof_required`: `yes`\n"
         )
         with tempfile.TemporaryDirectory() as td:
+            self.seed_install_record(Path(td))
             (Path(td) / "assessment.md").write_text(content, encoding="utf-8")
             result = self.run_script("--step", "validate", "--task-dir", td)
             self.assertEqual(result.returncode, 1)

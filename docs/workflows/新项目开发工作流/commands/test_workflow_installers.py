@@ -900,6 +900,8 @@ class WorkflowInstallerTests(unittest.TestCase):
 
     def install_workflow(self, fixture_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
         forwarded_args = list(args)
+        if "--project-id" not in forwarded_args:
+            forwarded_args = ["--project-id", "workflowfixture", *forwarded_args]
         if "--profile" not in forwarded_args:
             forwarded_args = ["--profile", "outsourcing", *forwarded_args]
         return self.run_script(
@@ -989,6 +991,8 @@ class WorkflowInstallerTests(unittest.TestCase):
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture),
+            "--project-id",
+            "workflowfixture",
             env={EMBED_CONFIRM_ENV: "1"},
         )
 
@@ -1005,6 +1009,8 @@ class WorkflowInstallerTests(unittest.TestCase):
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture),
+            "--project-id",
+            "workflowfixture",
             env={EMBED_CONFIRM_ENV: "1", "FORCE_INTERACTIVE_PROFILE_PROMPT": "1"},
             input_text="personal\n",
         )
@@ -1022,6 +1028,8 @@ class WorkflowInstallerTests(unittest.TestCase):
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture),
+            "--project-id",
+            "workflowfixture",
             env={EMBED_CONFIRM_ENV: "1", "FORCE_INTERACTIVE_PROFILE_PROMPT": "1"},
             input_text="p\n",
         )
@@ -1038,6 +1046,8 @@ class WorkflowInstallerTests(unittest.TestCase):
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture),
+            "--project-id",
+            "workflowfixture",
             "--dry-run",
             env={"FORCE_INTERACTIVE_PROFILE_PROMPT": "1"},
             input_text="outsourcing\n",
@@ -1056,6 +1066,8 @@ class WorkflowInstallerTests(unittest.TestCase):
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture),
+            "--project-id",
+            "workflowfixture",
             "--dry-run",
             env={"FORCE_INTERACTIVE_PROFILE_PROMPT": "1"},
             input_text="o\n",
@@ -1080,8 +1092,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("--profile \"$INSTALL_PROFILE\" --dry-run", temp_project_script)
         self.assertIn("--profile \"$INSTALL_PROFILE\"", temp_project_script)
         self.assertIn("prompt_profile()", temp_project_script)
-        self.assertIn("--profile outsourcing --dry-run", quick_commands)
-        self.assertIn("--profile outsourcing", quick_commands)
+        self.assertIn("--project-id <project-id> --profile outsourcing --dry-run", quick_commands)
+        self.assertIn("--project-id <project-id> --profile outsourcing", quick_commands)
 
     def test_install_entry_docs_state_profile_must_be_explicit(self) -> None:
         workflow_overview = (REPO_ROOT / "docs" / "workflows" / "新项目开发工作流" / "工作流总纲.md").read_text(
@@ -1606,7 +1618,8 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertNotIn("docs/workflows/新项目开发工作流/commands/shell", ownership_card_text)
         self.assertNotIn("<WORKFLOW_DIR>/commands/shell", ownership_card_text)
         self.assertEqual(record_data["workflow_version"], "0.1.2803")
-        self.assertEqual(record_data["workflow_schema_version"], "3")
+        self.assertEqual(record_data["workflow_schema_version"], "4")
+        self.assertEqual(record_data["project_id"], "workflowfixture")
         self.assertEqual(record_data["initial_pack"], "pack.requirements-discovery-foundation")
         self.assertIn(
             "spec.universal-domains.product-and-requirements.problem-definition",
@@ -3161,6 +3174,8 @@ Keep only durable PRD-facing takeaways here.
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture),
+            "--project-id",
+            "workflowfixture",
             "--dry-run",
             "--profile",
             "outsourcing",
@@ -3265,6 +3280,8 @@ Keep only durable PRD-facing takeaways here.
             "## 适用规范\n"
             "- .trellis/spec/scripts/python-conventions.md\n\n"
             "## 验证结果\n"
+            "- Sonar Verify: pass\n"
+            "- Command: sonar verify -p workflowfixture\n"
             "- lint: pass\n"
             "- test: fail\n\n"
             "## 偏差清单\n"
@@ -3363,6 +3380,8 @@ Keep only durable PRD-facing takeaways here.
             "## Applied Specs\n"
             "- .trellis/spec/scripts/python-conventions.md\n\n"
             "## Verification Results\n"
+            "- Sonar Verify: pass\n"
+            "- Command: sonar verify -p workflowfixture\n"
             "- test: pass\n"
             "- lint: not run\n\n"
             "## Deviations\n"
@@ -3453,6 +3472,7 @@ Keep only durable PRD-facing takeaways here.
             "## Confirmed Fix Plan\n- no-op\n\n"
             "## Applied Changes\n- no-op\n- `project_audit_code_changes`: `no`\n\n"
             "## Project-Level Verification Results\n"
+            "- Sonar Verify: pass\n"
             "- 项目级统一代码漏洞检测：not run + reason\n"
             "- 项目级统一代码质量总检：not run + reason\n"
             "- `project_audit_gate_status`: `pass`\n"
@@ -3530,6 +3550,35 @@ Keep only durable PRD-facing takeaways here.
             "## Trigger Evidence\n- 建议额外审查\n\n"
             "## Mode\n- `review_gate_mode`: `full`\n\n"
             "## Recommended Next Step\n- /trellis:delivery\n- `review_gate_closure_status`: `pass`\n",
+            encoding="utf-8",
+        )
+        (task_dir / "check.md").write_text(
+            "# Check Report\n\n"
+            "## Changed Scope\n"
+            "- src/example.ts\n\n"
+            "## Applied Specs\n"
+            "- .trellis/spec/scripts/python-conventions.md\n\n"
+            "## Verification Results\n"
+            "- Sonar Verify: pass\n"
+            "- Command: sonar verify -p workflowfixture\n"
+            "- lint: pass\n"
+            "- test: pass\n\n"
+            "## Deviations\n"
+            "- none\n\n"
+            "## Uncovered Risks\n"
+            "- none\n\n"
+            "## Review-Gate Decision\n"
+            "- `review_gate_decision`: `recommended`\n"
+            "- `review_gate_reason`: `建议额外审查`\n"
+            "- `check_gate_status`: `pass`\n"
+            "- `auth_or_sensitive`: `no`\n"
+            "- `data_migration_or_schema_change`: `no`\n"
+            "- `public_api_or_cross_layer_contract_or_external_integration`: `no`\n"
+            "- `payment_queue_cache_concurrency`: `no`\n"
+            "- `shared_core_with_blast_radius`: `no`\n"
+            "- `explicit_user_review_gate_request`: `no`\n\n"
+            "## Suggested Next Step\n"
+            "- /trellis:review-gate\n",
             encoding="utf-8",
         )
         (review_gate_dir / "reviewer-commands-round-1.md").write_text("# reviewer commands\n", encoding="utf-8")
@@ -4309,6 +4358,8 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture),
+            "--project-id",
+            "workflowfixture",
             "--dry-run",
             "--profile",
             "outsourcing",
@@ -4340,6 +4391,8 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture),
+            "--project-id",
+            "workflowfixture",
             "--dry-run",
             "--profile",
             "outsourcing",
@@ -4356,7 +4409,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
 
-        result = self.run_script(INSTALL_SCRIPT, "--project-root", str(fixture))
+        result = self.run_script(INSTALL_SCRIPT, "--project-root", str(fixture), "--project-id", "workflowfixture")
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("无法在 Codex 中嵌入成功", result.stderr)
@@ -4370,6 +4423,8 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture),
+            "--project-id",
+            "workflowfixture",
             "--profile",
             "outsourcing",
             env={EMBED_CONFIRM_ENV: "1"},
@@ -4385,6 +4440,8 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture),
+            "--project-id",
+            "workflowfixture",
             "--cli",
             "claude,opencode",
             "--profile",
@@ -4634,7 +4691,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
         updated = json.loads(record_path.read_text(encoding="utf-8"))
         self.assertEqual(updated["workflow_version"], "0.1.2803")
-        self.assertEqual(updated["workflow_schema_version"], "3")
+        self.assertEqual(updated["workflow_schema_version"], "4")
         self.assertIn("finish-work-checklist-template.md", updated["workflow_shared_docs"])
         self.assertIn("example.assembled-packs.requirements-discovery-foundation", updated["initial_pack_assets"])
         self.assertEqual(updated["initial_pack_cleanup_policy"], "retain-imported-assets")

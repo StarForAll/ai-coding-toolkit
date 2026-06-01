@@ -240,6 +240,13 @@ LEGACY_PLAN = VALID_PLAN + """
 
 
 class PlanValidateScriptTests(unittest.TestCase):
+    def seed_install_record(self, root: Path) -> None:
+        (root / ".trellis").mkdir(parents=True, exist_ok=True)
+        (root / ".trellis" / "workflow-installed.json").write_text(
+            '{"project_id":"workflowfixture","profile":"outsourcing"}\n',
+            encoding="utf-8",
+        )
+
     def run_script(self, task_dir: Path) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [PYTHON, str(SCRIPT), str(task_dir)],
@@ -261,6 +268,7 @@ class PlanValidateScriptTests(unittest.TestCase):
     def create_task_fixture(self, root: Path) -> Path:
         task_root = root / ".trellis" / "tasks"
         task_root.mkdir(parents=True, exist_ok=True)
+        self.seed_install_record(root)
         current_task = task_root / "04-14-plan-root"
         current_task.mkdir(parents=True, exist_ok=True)
         for name in ("04-14-task-a", "04-14-task-b", "04-14-performance-opt", "04-14-project-audit"):
@@ -594,6 +602,7 @@ class PlanValidateScriptTests(unittest.TestCase):
     def test_ui_frontend_baseline_task_required_fails_when_missing(self) -> None:
         with tempfile.TemporaryDirectory() as temp_root:
             root = Path(temp_root)
+            self.seed_install_record(root)
             task_root = root / ".trellis" / "tasks"
             task_root.mkdir(parents=True, exist_ok=True)
             task_dir = task_root / "04-14-plan-root"
@@ -618,6 +627,7 @@ class PlanValidateScriptTests(unittest.TestCase):
     def test_ui_frontend_baseline_task_required_passes_when_present(self) -> None:
         with tempfile.TemporaryDirectory() as temp_root:
             root = Path(temp_root)
+            self.seed_install_record(root)
             task_root = root / ".trellis" / "tasks"
             task_root.mkdir(parents=True, exist_ok=True)
             task_dir = task_root / "04-14-plan-root"
