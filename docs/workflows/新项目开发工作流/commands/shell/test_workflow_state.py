@@ -9631,7 +9631,7 @@ class WorkflowStateScriptTests(unittest.TestCase):
             "--allowed-next", "project-audit,delivery,implementation",
         )
 
-        blocked = self.run_script(
+        allowed = self.run_script(
             "set",
             str(task_dir),
             "--stage", "delivery",
