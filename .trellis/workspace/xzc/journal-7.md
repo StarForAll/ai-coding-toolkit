@@ -1315,3 +1315,38 @@ Added project-id-gated sonar verify workflow contract and synced install/runtime
 ### Next Steps
 
 - None - task complete
+
+
+## Session 343: human-terminal-only embed boundaries
+
+**Date**: 2026-06-03
+**Task**: human-terminal-only embed boundaries
+**Branch**: `main`
+
+### Summary
+
+将首次嵌入收紧为 human-terminal-only，补齐 workflow-audit 与 workflow-capability-audit 的人工 shell 边界与续跑协议，并恢复超出任务范围的项目级 delivery gate 语义。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5c99466` | (see git log) |
+| `3199fd0` | (see git log) |
+| `8daa7dc` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

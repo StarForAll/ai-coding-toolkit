@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-7.md`
-- **Total Sessions**: 342
-- **Last Active**: 2026-06-01
+- **Total Sessions**: 343
+- **Last Active**: 2026-06-03
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-7.md` | ~1317 | Active |
+| `journal-7.md` | ~1352 | Active |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
@@ -35,6 +35,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 343 | 2026-06-03 | human-terminal-only embed boundaries | `5c99466`, `3199fd0`, `8daa7dc` | `main` |
 | 342 | 2026-06-01 | Add sonar verify check gate | `82c910c`, `f06c449`, `05bc644` | `main` |
 | 341 | 2026-06-01 | Optimize workflow installer regression runtime | `959a1bc`, `a194b70` | `main` |
 | 340 | 2026-06-01 | Fix workflow implementation closeout routing | `9ea5ace` | `main` |
