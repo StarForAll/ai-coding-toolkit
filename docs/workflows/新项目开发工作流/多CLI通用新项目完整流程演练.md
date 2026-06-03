@@ -112,7 +112,7 @@ git remote set-url --add --push origin <第二个仓库URL>
 标准安装命令：
 
 ```bash
-WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1 /ops/softwares/python/bin/python3 \
+WORKFLOW_EMBED_HUMAN_CONFIRMED=1 /ops/softwares/python/bin/python3 \
 docs/workflows/新项目开发工作流/commands/install-workflow.py \
 --project-root <target-project> \
 --project-id <project-id> \
@@ -120,6 +120,12 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 ```
 
 如果只想装部分 CLI，再加 `--cli` 过滤。
+
+执行主体约束：
+
+- 首次嵌入只支持人类操作者在交互式系统终端中显式运行
+- AI agent、AI CLI 主会话、skills、slash command、subagent、自动化脚本都不得自主发起 formal embed
+- `WORKFLOW_EMBED_HUMAN_CONFIRMED=1` 只是前置确认；正式安装时仍需在终端中完成二次人工确认
 
 所以这里说的“嵌入”，默认指的是**`trellis init` 之后再执行安装脚本，把 workflow 直接装进目标项目**。
 安装后的初始需求发现基础资产由脚本导入，不再通过手工复制或自然语言提示“补装”。

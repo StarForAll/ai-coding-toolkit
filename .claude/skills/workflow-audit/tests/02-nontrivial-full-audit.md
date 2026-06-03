@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Verify that `workflow-audit` correctly enters the task-based runtime audit path when `/tmp + trellis init + embed/post-install validation` are required.
+Verify that `workflow-audit` correctly enters the task-based runtime audit path when `/tmp + trellis init + embed/post-install validation` are required, but stops and prompts for manual shell execution before running any embed-chain command itself.
 
 ## Input
 
@@ -24,12 +24,14 @@ Task-based runtime mode.
 - maintain `prd.md` in the task through the `trellis-brainstorm` path
 - maintain `audit-report.md`, seeded with step A/B/C evidence tagged with source layers
 - verify referenced script paths and check whether documented exit-code/output contracts remain machine-parseable when later workflow steps depend on them
-- execute step D: `/tmp` project creation, `trellis init`, embed chain, post-install verification
+- execute step D only up to `/tmp` project creation, `trellis init`, and baseline snapshot capture
+- stop before executing any embed-chain command itself
+- emit the manual human-terminal shell command block for `detect-embed-state.py`, `install-workflow.py --dry-run`, formal install, and `upgrade-compat.py --check`
 - treat files immediately after `trellis init` as clean baseline evidence, then compare post-install state against that baseline before attributing artifacts to the workflow
 - compare documented install artifacts against actual files, including hidden directories under `.trellis/`, `.claude/`, `.opencode/`, `.agents/`, and `.codex/`
 - when evaluating shared carriers, treat `.agents/skills/` presence alone as non-defective and `.codex/skills/` as a conditional secondary carrier rather than a default required artifact
 - when judging Claude Code / OpenCode / Codex native adaptation, combine the latest official CLI docs, repo-local evidence, and practical development-use evidence rather than relying on memory or directory presence alone
-- when formal install is executed in a valid non-Codex path, require post-install `upgrade-compat.py --check`
+- when the user later returns a valid human-terminal transcript for formal install, require post-install `upgrade-compat.py --check`
 - classify CLI adaptation gaps in step E as `present-but-incompatible` or `missing-but-valuable` when applicable
 - stop with a controlled next-step recommendation instead of auto-executing follow-up work
 - candidate_issues, if supplied, are referenced within each step without changing the execution path
@@ -43,6 +45,7 @@ Task-based runtime mode.
 - must not switch into task-based runtime mode without explaining why runtime validation is necessary
 - must not skip gap analysis before runtime validation
 - must not skip `/tmp` temporary-project validation
+- must not run `detect-embed-state.py`, `install-workflow.py --dry-run`, formal install, or `upgrade-compat.py --check` directly inside the skill once the manual embed boundary is reached
 - must not produce certain issue conclusions without evidence
 - must not attribute clean-baseline Trellis artifacts to the workflow merely because they still exist after install
 - must not classify the absence of `.codex/skills/` alone as a defect without contract evidence that the secondary carrier is required

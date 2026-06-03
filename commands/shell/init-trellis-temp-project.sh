@@ -173,11 +173,11 @@ run_cmd "install-workflow --dry-run" \
   "$PYTHON_BIN" "$WORKFLOW_ROOT/commands/install-workflow.py" --project-root "$TARGET_PROJECT" --project-id "$PROJECT_ID" --profile "$INSTALL_PROFILE" --dry-run
 
 # --- Step 12: install-workflow ---
-run_cmd "install-workflow" \
-  env WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1 "$PYTHON_BIN" "$WORKFLOW_ROOT/commands/install-workflow.py" --project-root "$TARGET_PROJECT" --project-id "$PROJECT_ID" --profile "$INSTALL_PROFILE"
-
-# --- Step 13: upgrade-compat --check ---
-run_cmd "upgrade-compat --check" \
-  "$PYTHON_BIN" "$WORKFLOW_ROOT/commands/upgrade-compat.py" --project-root "$TARGET_PROJECT" --check
-
-echo "trellis工作流临时项目新建成功: ${TARGET_PROJECT}"
+echo "人工执行要求: formal embed 只能由人类操作者在交互式系统终端中显式运行并确认。"
+echo "请在 shell 中按以下顺序手动执行，并在 formal install 时完成 EMBED 确认："
+echo "\"$PYTHON_BIN\" \"$WORKFLOW_ROOT/commands/detect-embed-state.py\" --project-root \"$TARGET_PROJECT\""
+echo "\"$PYTHON_BIN\" \"$WORKFLOW_ROOT/commands/install-workflow.py\" --project-root \"$TARGET_PROJECT\" --project-id \"$PROJECT_ID\" --profile \"$INSTALL_PROFILE\" --dry-run"
+echo "WORKFLOW_EMBED_HUMAN_CONFIRMED=1 \"$PYTHON_BIN\" \"$WORKFLOW_ROOT/commands/install-workflow.py\" --project-root \"$TARGET_PROJECT\" --project-id \"$PROJECT_ID\" --profile \"$INSTALL_PROFILE\""
+echo "\"$PYTHON_BIN\" \"$WORKFLOW_ROOT/commands/upgrade-compat.py\" --project-root \"$TARGET_PROJECT\" --check"
+echo "注意: 第 3 条命令执行过程中需要按提示输入: EMBED $PROJECT_ID"
+exit 0

@@ -1,9 +1,8 @@
-# 36 Agent-only Handoff Stop
+# 36 Agent-only Continuation Is Insufficient
 
 ## Purpose
 
-Verify that `workflow-audit` treats agent-only Claude Code/OpenCode availability
-as no usable non-Codex handoff target for the formal embed step.
+Verify that `workflow-audit` treats any agent-only continuation path as insufficient once the formal embed step requires a human terminal transcript.
 
 ## Input
 
@@ -13,18 +12,18 @@ User input:
 
 ## Expected Mode
 
-Task-based runtime mode blocked at the Codex handoff boundary.
+Task-based runtime mode blocked at the formal embed boundary.
 
 ## Expected Key Behaviors
 
-- reach the Codex handoff boundary through the normal A/B/C -> D path
-- recognize that the current contract allows only a main interactive Claude Code or OpenCode session for takeover
-- treat agent-only Claude Code/OpenCode availability as no usable non-Codex handoff target for this skill
-- stop as `Blocked / No Handoff Target`
+- reach the formal embed boundary through the normal A/B/C -> D path
+- recognize that the current contract allows only a human-operated interactive system terminal for the remaining formal embed commands
+- treat agent-only continuation as insufficient for this skill
+- stop as `Blocked / Human Confirmation Required`
 - explain that the formal embed step remains unverified because agent-based continuation is intentionally disallowed at the current stage
 
 ## Must Not
 
-- must not suggest using a Claude Code or OpenCode agent/sub-agent as the takeover executor
-- must not treat agent-only availability as a sufficient handoff path
+- must not suggest using a Claude Code or OpenCode agent/sub-agent as a substitute executor
+- must not treat agent-only availability as a sufficient continuation path
 - must not continue the formal embed step inside Codex

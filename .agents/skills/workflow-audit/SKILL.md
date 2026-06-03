@@ -5,37 +5,34 @@ description: Use when auditing whether the repo-local workflow rooted at `docs/w
 
 # workflow-audit
 
-`workflow-audit` is the maintainer-side audit entry point for workflows in this repository. It verifies whether workflow problems are real before any source edits, then produces evidence-based conclusions, repair directions, and controlled next-step recommendations.
+> Repo-local maintainer skill contract for auditing workflow definitions and workflow embed/adaptation behavior.
 
-If this file conflicts with `.trellis/spec/skills/workflow-audit.md`, treat the spec file as the behavioral source of truth.
-
-## Version Notes
-
-- `2026-05-15`: aligned the live skill frontmatter with the repo-local skill discovery contract, restored ordinary-review exclusion, and reinstated explicit cross-skill routing for version-drift compatibility audits; no audit-behavior change
+---
 
 ## Purpose
 
-Use this skill to:
+`workflow-audit` exists to audit workflows themselves, not ordinary application code.
 
-- audit workflow source assets under `docs/workflows/新项目开发工作流/`
-- audit workflow install / embed / post-install verification flows
-- audit Claude Code / OpenCode / Codex carrier and adaptation boundaries
-- verify whether candidate workflow issues are real rather than assuming they already are
+This skill covers:
+
+- workflow source-asset maintenance for the workflow rooted at `docs/workflows/新项目开发工作流/`
+- workflow install / embed / post-install validation
+- CLI-native adaptation checks for Claude Code / OpenCode / Codex
+- evidence-first validation of candidate workflow issues before any source edits
 
 `workflow-audit` is not a generic selector for arbitrary entries under `docs/workflows/`.
 Its only supported workflow target is `docs/workflows/新项目开发工作流/`.
 
-Do not use this skill to:
+It does not cover:
 
-- review ordinary business code
-- review application feature implementation quality
-- review product requirements or PRD content
-- perform generic code review unrelated to workflows
-- analyze Trellis version compatibility or upgrade drift; route that to `workflow-capability-audit`
+- ordinary business code review
+- product feature auditing
+- generic implementation quality review outside workflow definitions
+- Trellis version-drift or compatibility-upgrade analysis across versions; use `workflow-capability-audit` for that path
 
 ## Version Gate and Supported Surface
 
-`workflow-audit` is a same-version maintenance audit only, with one narrow user-approved exception for a patch-only stable mismatch.
+`workflow-audit` is a same-version workflow-maintenance audit only, with one narrow user-approved exception for a patch-only stable mismatch.
 
 Before any audit step, it must:
 
@@ -70,23 +67,30 @@ If the versions are a `minor version mismatch` and the user explicitly set `allo
 - continue normally
 - report both versions and the user-approved gate bypass explicitly
 - treat the bypass as run-local only; do not reinterpret it as compatibility approval
-- do not continue by rewriting `COMPATIBLE_TRELLIS_VERSION`
+- do **not** continue by rewriting `COMPATIBLE_TRELLIS_VERSION`
 
 If the versions differ in any other way, or the `minor version mismatch` was not explicitly allowed:
 
-- stop immediately as `Blocked / Version Drift`
+- stop immediately
+- classify the stop as `Blocked / Version Drift`
 - report both the compatible version and the actual version
 - if the mismatch is the contract-defined `minor version mismatch`, also explain that the user may rerun with `allow_minor_version_mismatch: yes` for this audit run only
-- otherwise tell the user to use `workflow-capability-audit`
-- do not continue into target resolution, evidence gathering, task creation, `/tmp` project creation, or runtime validation
+- otherwise direct the user to `workflow-capability-audit`
+- do **not** continue into target resolution, A/B/C evidence gathering, task creation, `/tmp` project creation, `trellis init`, or embed/post-install validation
 
-Supported audit surface is limited to:
+Supported workflow audit surface is limited to:
 
 - `Claude Code`
 - `OpenCode`
 - `Codex`
 
-Other repo-local platform directories are out of scope unless the workflow's own managed-surface contract later adds them.
+That support limit applies to:
+
+- per-CLI adaptation conclusions
+- temporary target-project artifact checks
+- hidden-directory scope during install/post-install verification
+
+Repo-local directories for other CLIs or carriers are out of scope for `workflow-audit` unless the workflow's own managed-surface contract explicitly adds them in the future.
 
 Currently excluded repo-local CLI directories and the reason:
 
@@ -101,97 +105,112 @@ Current execution policy for this skill:
 
 - `workflow-audit` runs in the invoking CLI's main interactive session
 - do not dispatch Claude Code or OpenCode agents/sub-agents to execute audit steps for this skill
-- if Codex reaches the formal embed boundary, any allowed continuation must move to a main interactive Claude Code or OpenCode session rather than to an agent
-- this is a temporary execution-efficiency constraint for `workflow-audit`, not a change to the supported audit surface
+- if runtime validation reaches the formal embed boundary, the audit must stop and require a human operator to run the remaining formal embed commands in an interactive system terminal
+- this is a workflow execution-boundary contract, not a temporary efficiency preference
 
 ## Audit Coverage Requirements
 
-This skill must fully validate the following aspects for any workflow under audit:
+This skill **must** fully validate the following aspects for any workflow under audit:
 
-1. **Script-behavior consistency**
-   - verify every referenced script exists at the documented path
-   - verify documented behavior matches the script's actual static or runtime behavior
-   - verify exit codes and output formats are machine-parseable when later workflow steps depend on them
-   - verify required environment-variable contracts are still honored; in particular, `install-workflow.py` must continue to refuse formal install unless `WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1` is set, because the Codex handoff boundary depends on it
+1. **Script-behavior consistency** - For every script referenced in workflow documentation (e.g., `detect-embed-state.py`, `install-workflow.py`, `upgrade-compat.py`), the audit must verify:
+   - The script exists at the documented path
+   - The script's actual behavior (via static analysis or runtime) matches documented claims
+   - Exit codes and output format are machine-parseable if the workflow depends on them
+   - Required environment-variable contracts are still honored. In particular, `install-workflow.py` must continue to refuse formal install unless `WORKFLOW_EMBED_HUMAN_CONFIRMED=1` is set, and formal install must remain gated to a human-operated interactive system terminal
 
-2. **CLI adaptation completeness**
-   - confirm workflow commands, skills, and agents are correctly mapped to each supported CLI's native carrier surface
-   - detect behavior drift when the same semantic action differs across CLIs
-   - classify missing or incomplete adaptations as `present-but-incompatible` or `missing-but-valuable`
-   - combine the latest official CLI documentation available at audit time, repo-local validated evidence, and actual development-use evidence before concluding native compatibility
-   - do not judge native adaptation from memory alone, or from carrier-file presence/absence alone
+2. **CLI adaptation completeness** - For each supported CLI (Claude Code, OpenCode, Codex), the audit must confirm:
+   - All workflow commands/skills/agents are correctly mapped to the CLI's native location
+   - No CLI-specific behavior drifts exist for the same semantic action
+   - Missing or incomplete adaptations are flagged as `present-but-incompatible` or `missing-but-valuable`
+   - Native-adaptation conclusions must combine:
+     - the latest official CLI documentation available at audit time
+     - repo-local validated evidence from this workflow authoring repository
+     - actual development-use evidence: the real maintainer/operator path, runtime gating behavior, and which carriers are primary vs conditional in day-to-day use
+   - The audit must not judge native adaptation from memory alone, or from carrier-file presence/absence alone
 
-3. **Post-install artifact verification**
-   - compare documented install artifacts against actual installed files, separating the clean `trellis init` baseline from the workflow-installed state after `install-workflow.py`
-   - include hidden directories in scope: `.trellis/`, `.claude/`, `.opencode/`, `.agents/`, `.codex/`
+3. **Post-install artifact verification** - The audit must compare documented installation artifacts against actual files created in the target project, separating the clean `trellis init` baseline from the workflow-installed state after `install-workflow.py`, including:
+   - Hidden directories (`.trellis/`, `.claude/`, `.opencode/`, `.agents/`, `.codex/`)
    - `.agents/skills/` must be interpreted with its dual role in mind: repo-local shared deployment layer in this source repo, shared workflow skill carrier in target projects
-   - report artifact mismatches as confirmed issues with source-layer-tagged evidence
-   - generated target-project files may only be attributed to the workflow after that baseline-vs-installed comparison
-   - do not classify the absence of source-repo authoring tests (for example `test_workflow_state.py`) inside the generated target project as a defect by itself; those tests belong to the authoring repository, while target-project runtime validation should be performed via source-repo fixture tests and explicit runtime command checks
-   - install-only low-stakes reminder artifacts such as the workflow-created root `todo.txt` are not defects by default; if documented as non-gating reminders, they may be contextual outputs rather than managed-surface failures
+   - Command scripts, skill definitions, agent configurations
+   - The audit must report discrepancies as confirmed issues with source-layer tags
+   - Generated target-project files may only be attributed to the workflow after that baseline-vs-installed comparison
+   - Do not classify the absence of source-repo authoring tests (for example `test_workflow_state.py`) inside the generated target project as a defect by itself; those tests belong to the authoring repository, while target-project runtime validation should be performed via source-repo fixture tests and explicit runtime command checks
 
-4. **Codex handoff boundary**
-   - stop and emit the dedicated handoff block when Codex reaches the formal embed step
-   - require handoff to a main interactive Claude Code or OpenCode session for the formal embed execution; agent/sub-agent takeover is not allowed for this skill at the current stage
-   - require returned handoff evidence to be merged back into `audit-report.md`
+   Special interpretation rule:
+   - install-only low-stakes reminder artifacts such as the workflow-created root `todo.txt` are **not** defects by default
+   - if such an artifact is documented as “does not change stage gates / command routing / runtime closure,” the audit must not classify its existence alone as over-management, corruption, or drift without stronger contradictory evidence
+   - such artifacts may still be mentioned as contextual outputs, but they are not mandatory managed-surface failures in the same class as hidden-directory carriers, command copies, helper scripts, or routing blocks
 
-5. **Runtime validation triggers**
-   - escalate to task-based runtime validation when any coverage requirement above cannot be resolved conclusively via static analysis
-   - escalate when workflow docs or scripts contain environment-conditional behavior
-   - escalate when the user explicitly requests `/tmp` validation or Codex handoff testing
+4. **Human-terminal boundary** - When runtime validation reaches the formal embed step, the skill must:
+   - stop and emit the dedicated human-terminal-required block
+   - require a human operator to execute the remaining formal embed commands in an interactive system terminal
+   - require the returned terminal transcript and key command outputs to be merged back into the audit report before any final runtime conclusion
 
-6. **Change-worthiness and negative-optimization guardrail**
-   - do not classify a path as change-worthy merely because another arrangement seems cleaner or more uniform
-   - do not recommend optimization when the current state is evidence-backed, intentionally scoped, and does not break behavior, closure, or maintainability
-   - if the latest official docs, repo-local evidence, and actual development-use evidence all support the current state, record the item as a false alarm / non-defect rather than manufacturing a fix
-   - when a candidate issue turns out to be non-defective, ignore it rather than turning it into a low-value optimization target
+5. **Runtime validation triggers** - The audit must automatically escalate to runtime validation (task-based runtime mode) when:
+   - Any of the above checks cannot be conclusively resolved via static analysis
+   - The workflow documentation or scripts contain conditional logic based on the environment
+   - The user explicitly requests `/tmp` validation or human-terminal-boundary testing
 
-7. **Task-level vs project-level gate distinction**
-   - treat task-level `check` and project-level `project-audit` as separate dimensions, not as two names for the same carrier
-   - do not misclassify "delivery requires both the current active task's `check.md` and the formal `PROJECT-AUDIT` carrier" as carrier conflation; that is the intended dual-gate model when project-level audit is declared
-   - a real defect exists only when the workflow asks the wrong artifact to prove the wrong dimension, or when transition-time and validation-time gates disagree about which dual-gate evidence is required
-   - if a dedicated `PROJECT-AUDIT` task exists, the audit must distinguish:
+6. **Change-worthiness and negative-optimization guardrail** - The audit must separate real defects from non-defect differences:
+   - Do not classify a path as change-worthy merely because another arrangement seems cleaner or more uniform
+   - Do not recommend optimization when the current state is evidence-backed, intentionally scoped, and does not break behavior, closure, or maintainability
+   - If the latest official docs, repo-local evidence, and actual development-use evidence all support the current state, record the item as a false alarm / non-defect rather than manufacturing a fix
+   - When a candidate issue turns out to be non-defective, ignore it rather than turning it into a low-value optimization target
+   - The default threat model is **ordinary personal use / honest operator behavior**, not adversarial bypass analysis
+   - If a problem appears only after deliberate file tampering, forged state, or intentional bypass of the documented command/routing constraints, and the ordinary supported path does not trigger it, do not classify it as a workflow defect by default
+   - Escalate such cases only when the user explicitly asks for adversarial / security / bypass analysis, or when the workflow contract itself already claims resistance to that class of misuse
+
+7. **Task-level vs project-level gate distinction** - When auditing workflow closure logic:
+   - Treat task-level `check` and project-level `project-audit` as separate dimensions, not as two names for the same carrier
+   - Do not misclassify "delivery requires both the current active task's `check.md` and the formal `PROJECT-AUDIT` carrier" as carrier conflation; that is the intended dual-gate model when project-level audit is declared
+   - A real defect exists only when the workflow asks the wrong artifact to prove the wrong dimension, or when transition-time and validation-time gates disagree about which dual-gate evidence is required
+   - If a dedicated `PROJECT-AUDIT` task exists, the audit must distinguish:
      - whether the workflow correctly treats that task as the formal project-level carrier
      - whether the workflow still separately requires the current active task's task-level `check`
-   - if the workflow leaves project-level `project-audit` to re-enter task-level `check` or `review-gate`, the audit must verify the handoff model explicitly:
+   - If the workflow leaves project-level `project-audit` to re-enter task-level `check` or `review-gate`, the audit must verify the handoff model explicitly:
      - whether the workflow switches back to the task named by `task_level_check_task` before entering the task-level stage
      - whether the workflow blocks or warns against entering a task-level gate directly on the project-level `PROJECT-AUDIT` carrier when the carrier is not the task-level owner
-   - under the current strong-gate single-active-task model, an explicit `task.py start <task-dir>` handoff may be the correct boundary behavior rather than a defect by itself
-   - do not report "project-audit cannot directly become review-gate/check on the same carrier" as a defect by itself; that restriction is often the correct enforcement of the dimension boundary
-   - the real defect in that area is missing or contradictory handoff semantics between the project-level carrier and the task-level owner
-   - findings that complain only that both dimensions are required at once, without showing a dimension mismatch or gate inconsistency, are false alarms
+   - Under the current strong-gate single-active-task model, an explicit `task.py start <task-dir>` handoff may be the correct boundary behavior rather than a defect by itself
+   - Do not report "project-audit cannot directly become review-gate/check on the same carrier" as a defect by itself; that restriction is often the correct enforcement of the dimension boundary
+   - The real defect in that area is missing or contradictory handoff semantics between the project-level carrier and the task-level owner
+   - Findings that complain only that both dimensions are required at once, without showing a dimension mismatch or gate inconsistency, are false alarms
 
-Each confirmed issue must include a `validation action` describing exactly how the issue was detected.
+Each confirmed issue in the audit report must include a validation action that describes how the issue was detected. The detailed schema lives in `## Report Contracts`.
+
+---
 
 ## Trigger Conditions
 
-This skill should trigger proactively when the user intends to:
+Use `workflow-audit` when the user wants to:
 
-- "audit this workflow"
-- "confirm whether `docs/workflows/新项目开发工作流/` really has a problem before changing it"
-- "check whether `docs/workflows/新项目开发工作流/` has defects"
-- "validate the embed / install / post-install behavior of `docs/workflows/新项目开发工作流/`"
-- "check whether Codex / Claude Code / OpenCode adaptation is correct"
-- "validate the Codex handoff boundary and stop condition"
-- "verify whether these workflow optimization points are real issues"
-- "create a temporary project under `/tmp` to validate `docs/workflows/新项目开发工作流/`"
+- audit or verify the maintained workflow rooted at `docs/workflows/新项目开发工作流/`
+- confirm whether workflow issues are real before changing source files
+- validate workflow embed/install behavior against a `/tmp + trellis init` baseline
+- verify CLI adaptation or formal-embed human-terminal boundaries
 
-Do not use this skill when the real problem is whether the workflow remains compatible after Trellis changed versions.
+When a temp-project workflow issue reappears after one or more scan/repair
+rounds, use the repo-level
+`guides/workflow-repeat-issue-triage.md` first to decide whether the current
+branch is same-lineage same-family recurrence, a new family on the same
+lineage, or a version-drift path.
 
-## Input
+Do not use it for normal code review or ordinary product implementation tasks.
+Do not use it to determine whether a newer or older Trellis version is compatible with the workflow; that is `workflow-capability-audit`.
 
-Natural-language input is allowed, but prefer the recommended field contract. A short copyable template lives in `references/input-template.md`.
+---
 
-Key fields:
+## Input Contract
+
+Natural language is allowed, but the recommended contract is:
 
 - `workflow_path`
   - only supported value: `docs/workflows/新项目开发工作流/`
   - when omitted, resolve it to `docs/workflows/新项目开发工作流/`
   - natural-language requests such as "audit this workflow" or "check the workflow" must bind to the same fixed workflow root
-  - do not infer the target from repo root, current working directory, active task, or sibling workflow directories
+  - must resolve to exactly one workflow root, and that root must be `docs/workflows/新项目开发工作流/`
 - `candidate_issues`
   - default: empty, meaning the skill discovers issues proactively through the full evidence mainline
-  - when supplied: supplementary focus points injected into each evidence step; the mainline still executes in full
+  - when supplied: supplementary focus points injected into each evidence step; the evidence mainline still executes in full regardless
   - always treated as hypotheses, never as confirmed defects
   - does not switch execution paths
 - `need_runtime_validation`
@@ -205,62 +224,37 @@ Key fields:
   - despite the name, it does **not** mean semver minor-number drift
   - if the field form is not used and the wording is ambiguous about the patch-only stable scope, treat it as `no`
 - `current_cli`
-  - default: infer from the runtime environment first
-  - ask the user only if a CLI-sensitive path is reached and the CLI still cannot be determined safely
-  - if provided explicitly, it must be one of `claude`, `opencode`, `codex`
+  - infer from runtime when possible
+  - ask the user only if a CLI-sensitive path is reached and ambiguity remains
+  - if provided explicitly, it must be one of: `claude`, `opencode`, `codex`
 
-Constraints:
+The contract intentionally omits any AI-CLI takeover preference field for formal embed continuation.
+Once the audit reaches the formal embed boundary, the only supported continuation is a human operator running the shell command chain in an interactive system terminal.
 
-- exactly one `workflow_path` per run
-- do not expose a dedicated `preferred_handoff_cli` field; default handoff order is `Claude Code -> OpenCode`
-- the handoff order applies only to allowed main interactive CLI sessions; it does not reopen the agent/sub-agent path
-- if the resolved `workflow_path` is anything other than `docs/workflows/新项目开发工作流/`, stop as `Blocked / Invalid Input`, explain that this skill audits only that root, and do not silently replace the requested target
-- if multiple workflow targets appear in the input, explain that this skill supports only `docs/workflows/新项目开发工作流/` and require the user to continue with that single supported root only
-- if the supported `docs/workflows/新项目开发工作流/` root does not exist on disk, stop as `Blocked / Invalid Input`, explain that the supported workflow root is missing from the repository checkout, and do not continue until the repository state is repaired
+If multiple workflow targets are supplied in one request, the skill must stop, explain that it supports only `docs/workflows/新项目开发工作流/`, and require the user to continue with that single supported root only.
 
-## Output
+If the resolved `workflow_path` is anything other than `docs/workflows/新项目开发工作流/`:
 
-Two output formats exist, serving three execution modes (see Workflow below for mode selection):
+- stop immediately
+- classify the stop as `Blocked / Invalid Input`
+- explain that this skill audits only `docs/workflows/新项目开发工作流/`
+- do not silently replace the requested target with the supported root
 
-- Lightweight static mode: use the simplified chat structure from `references/lightweight-output-template.md`
-- Task-based mode (static or runtime): incrementally maintain `audit-report.md` in the task, using `references/audit-report-template.md`
+If the supported `docs/workflows/新项目开发工作流/` root does not exist on disk:
 
-Both formats must:
+- stop immediately
+- classify the stop as `Blocked / Invalid Input`
+- explain that the supported workflow root is missing from the repository checkout
+- do not continue until the repository state is repaired
 
-- distinguish confirmed issues, unconfirmed items, false alarms, and blocked states
-- conclude only from evidence
-- stop with a controlled next-step recommendation
-- record `Compatible Anchor Version`, `Current Trellis Version`, and `Version Gate` (`passed` or `bypassed`) in the audit boundary section
-- when `Version Gate` is `bypassed`, also record `Bypass Detail` with the user-approved reason and the run-local-only disclaimer
+---
 
-Blind guessing is forbidden.
+## Evidence Mainline
 
-Every evidence item must retain one of these source-layer tags:
+A, B, C always execute in order, regardless of whether `candidate_issues` are supplied. `candidate_issues` serve as supplementary focus points referenced within each step — they do not change the mainline.
 
-- `source repo`
-- `generated target project`
-- `runtime command output`
-
-This is mandatory because gap analysis compares source-repo declarations against generated target-project state and runtime outputs. Conclusions without source-layer tags are invalid.
-
-Within the `generated target project` layer, explicitly distinguish whether the evidence came from the clean `trellis init` baseline or from the post-install workflow state. The comparison model is:
-
-- `source repo`
-- `generated target project` baseline (`trellis init`)
-- `generated target project` workflow-installed state (`install-workflow.py`)
-- `runtime command output`
-
-Per-CLI adaptation conclusions follow this scope rule:
-
-- keep the section in scope when the audit examined carrier mapping, CLI drift, CLI-specific installed artifacts, or the Codex handoff boundary
-- keep the section in lightweight output even when CLI adaptation is not in scope; mark each CLI entry as `not-applicable` with a brief reason instead of omitting the section
-- when CLI adaptation is examined, include for each CLI the official-doc source checked, the repo-local evidence checked, the practical development-use evidence checked, and whether those sources agree or differ
-- if a CLI entry is `not-applicable`, a brief reason is sufficient; do not force the detailed evidence trio fields for that CLI
-- when official docs, repo-local evidence, and practical development-use evidence disagree, record the disagreement explicitly instead of silently choosing one source as the winner
-
-Detailed blocked-state rules, confirmed-issue schema, priority rubric, and non-defect handling live in `## Report Contracts`. Until Step D runs, any finding whose severity still depends on runtime validation must remain `Blocked / Evidence Gap`.
-
-## Workflow
+D (Runtime Validation) is conditional, determined by findings from A/B/C and input parameters.
+E (Output Findings) always executes as the final report step.
 
 ### Step Naming Map
 
@@ -279,6 +273,38 @@ The workflow may refer to the same control flow with either evidence-step labels
 - `Step 4` creates task context and enters `trellis-brainstorm` when the task-based path is chosen
 
 They do not replace or rename the evidence-mainline labels above.
+
+Three execution modes determine which evidence steps run and how findings are delivered:
+
+| Mode | Steps | Task | trellis-brainstorm | prd.md | audit-report.md |
+|------|-------|------|------------|--------|-----------------|
+| Lightweight static | A, B, C, E | N | N | N | N |
+| Task-based static | A, B, C, E (D skipped) | Y | Y | Y | Y |
+| Task-based runtime | A, B, C, D, E | Y | Y | Y | Y |
+
+Mode selection is described in the Execution Modes section below.
+
+Every piece of evidence collected throughout the mainline must be tagged with its source layer:
+
+- `source repo` — files, documents, scripts within the workflow directory under `docs/workflows/`
+- `generated target project` — files inside the `/tmp` target project, including the clean `trellis init` baseline and the workflow-installed state after `install-workflow.py`
+- `runtime command output` — stdout/stderr/exit code from executed commands
+
+This labeling is mandatory because the core audit operation (gap analysis) compares what the source repo declares against what the target project actually contains. Without source-layer tags, the two are easily conflated.
+
+Within the `generated target project` layer, the audit must explicitly distinguish whether evidence came from the clean `trellis init` baseline or from the post-install workflow state. The comparison model is:
+
+- `source repo`
+- `generated target project` baseline (`trellis init`)
+- `generated target project` workflow-installed state (`install-workflow.py`)
+- `runtime command output`
+
+Per-CLI adaptation conclusions follow this scope rule:
+
+- the section is in scope when the audit examines CLI-specific carrier mapping, adaptation drift, CLI-specific installed artifacts, or the formal-embed human-terminal boundary
+- lightweight output should still keep the section even when CLI adaptation is not in scope; in that case, mark each CLI entry as `not-applicable` with a brief reason instead of omitting the section
+- if a CLI entry is `not-applicable`, a brief reason is sufficient; do not force the detailed evidence trio fields for that CLI
+- when official docs, repo-local evidence, and practical development-use evidence disagree, record the disagreement explicitly instead of silently choosing one source as the winner
 
 ### Step 0: Version preflight
 
@@ -299,23 +325,17 @@ If the audit stops for version drift:
 - otherwise recommend `workflow-capability-audit`
 - do not proceed to Step 1 or any later step
 
-### Step 1: Resolve target and parse input
+### Target Resolution and Binding
 
-1. Resolve exactly one workflow target.
-2. If `workflow_path` is omitted, or the user says "this workflow" / "the workflow" without naming another path, bind the target to `docs/workflows/新项目开发工作流/`.
-3. If the resolved target is anything other than `docs/workflows/新项目开发工作流/`, stop as `Blocked / Invalid Input`.
-4. Do not treat the current repo root, active task directory, or temporary target-project root as the workflow target.
-5. Parse input parameters: `candidate_issues`, `need_runtime_validation`, `force_full_brainstorm`, `current_cli`.
-6. Record the resolved workflow root explicitly in the output/report target section.
-7. Mode is NOT decided here — proceed to Step 2 regardless.
+Before step A begins:
 
-### Step 2: Execute evidence mainline A → B → C
+- resolve exactly one workflow target
+- if `workflow_path` is omitted, or the user says "this workflow" / "the workflow" without naming another path, bind the target to `docs/workflows/新项目开发工作流/`
+- if the resolved target is anything other than `docs/workflows/新项目开发工作流/`, stop as `Blocked / Invalid Input`
+- do not treat the current repo root, active task directory, or temporary target-project root as the workflow target
+- record the resolved workflow root explicitly in the output/report target section
 
-The following three sub-steps always execute. If `candidate_issues` were supplied, reference them as supplementary focus points within each sub-step. The mainline is the same whether mode ends up lightweight static or task-based.
-
-`grill-me` may be used as a clarification submode during gap analysis (step 2c) when key branches remain unresolved and continuing would require guessing. It is not a post-audit recommendation.
-
-#### 2a. Understand target system mechanics
+### A. Understand Target System Mechanics
 
 Before auditing the workflow, understand the system it operates within:
 
@@ -332,15 +352,15 @@ Before auditing the workflow, understand the system it operates within:
 - OpenCode carrier model: plugin-driven context loading plus native command/agent carriers; adaptation checks must account for both halves
 - Codex carrier model: `.codex/config.toml` / `.codex/hooks.json` are primary carrier/config surfaces; `.codex/skills/` is a conditional secondary carrier, not a default baseline artifact
 - Codex hook execution is runtime-gated by local enablement or approval, so installed carrier shape and live activation are separate audit questions
-- 各 CLI 原生承载方式（commands / skills / agents / hooks 的目录约定）
+- 各 CLI 的原生承载方式（commands / skills / agents / hooks 的目录约定）
 - 各 CLI 在实际开发使用中的主路径、条件路径、运行时 gating，以及“目录存在”与“真实可用”之间的区别
-- workflow 自身 install / upgrade / uninstall 脚本的实际行为
+- workflow 自身的 install / upgrade / uninstall 脚本实际行为
 - 工作流嵌入执行规范中的状态机与前置条件
 - current repo root, active task directory, and temporary target-project root are context inputs, not substitute audit targets
 - generated target-project evidence is about the temporary target project created for the audit, not this source repository's own hidden directories
 - generated target-project evidence must distinguish the clean `trellis init` baseline from the workflow-installed state after `install-workflow.py`
 
-#### 2b. Static evidence gathering
+### B. Static Evidence Gathering
 
 Read authoritative entry documents and indexes first, then trace references outward:
 
@@ -354,13 +374,13 @@ Read authoritative entry documents and indexes first, then trace references outw
 - capture practical-use evidence for each CLI when needed: which path maintainers actually rely on, which carrier is primary, which carrier is conditional, and which runtime gate decides live behavior
 - practical development-use evidence should prefer inspectable artifacts when possible: the CLI boundary matrix, platform READMEs, live carrier/config files, runtime gate definitions, and if Step D runs, command transcripts or runtime observations
 
-#### 2c. Structured gap analysis
+### C. Structured Gap Analysis
 
 Compare document claims against actual definition completeness:
 
 - 文档声明了某步骤 / 产物 / 边界，但对应定义文件缺失或不完整 → 确认为 gap
-- 流程层面"有"但执行闭环"没做完"的内容 → 记录为 incomplete closure
-- 跨文档引用一致性：是否引用了不存在的文件、旧路径、过时路径名
+- 流程层面"有"但执行闭环层面"没做完"的内容 → 记录为 incomplete closure
+- 跨文档引用的一致性：是否引用了不存在的文件、旧路径、或已过时的路径名
 - 各 CLI 适配层之间是否存在行为漂移（同一语义在不同 CLI 下实现不一致）
 - CLI 适配缺口必须归类为 `present-but-incompatible` 或 `missing-but-valuable`
 - `.agents/skills/` presence alone is not a defect; only contradictory managed-surface behavior or misleading duplicate exposure counts as a workflow issue
@@ -370,144 +390,165 @@ Compare document claims against actual definition completeness:
 - 若三源冲突仍不能证明真实缺陷，则保守落到 `Evidence Gap` / `Needs Clarification`，而不是直接生成 confirmed issue；若冲突更像上游 CLI capability drift，则提示转到 `workflow-capability-audit`
 - 对“看起来可以更统一/更干净”的点，先判断是否真是缺陷；不是缺陷的就忽略，不得做负面优化
 - 明确的人类/维护者意图可以作为解释差异为何存在的上下文，但意图本身不会自动把 non-defect 变成 defect；除非用户明确要求设计变更，否则不要把这类差异升级成 confirmed issue 或默认修复方向
+- 默认只按**正常使用 / 诚实使用路径**判断真实缺陷，不把刻意篡改文件、伪造状态、故意绕过命令约束后才出现的问题，直接升级成 confirmed issue
 - 隐藏目录托管边界：安装后产物是否与 trellis 基线 + workflow 声明的托管范围一致
 - `generated target project` 证据必须区分 clean `trellis init` baseline 与 workflow-installed state；不得把 baseline 自带产物直接归因给 workflow
 - 不得把 repo-local 的其他平台隐藏目录直接当作当前 workflow 缺失适配的证据；除非 `workflow_assets.py` 明确把它们纳入 managed surface
 
-### Step 3: Judge execution mode
+### D. Runtime Validation
 
-Based on input parameters and Step 2 findings, determine whether the audit runs in lightweight static or task-based mode.
+Required when embed / install / post-install behavior must be verified:
 
-**Task-based mode** (proceed to Step 4) when:
-- `need_runtime_validation: yes`
-- `need_runtime_validation: auto` AND Step 2 findings indicate:
-  - any audit-coverage requirement remains inconclusive after static analysis
-  - workflow scripts or docs contain environment-conditional behavior that can only be resolved at runtime
-  - `/tmp` temporary-project validation is needed
-  - embed / install / post-install behavior must be verified
-  - Codex handoff may be triggered
-- `force_full_brainstorm: yes` (enters task + trellis-brainstorm mainline; Step D is still judged separately in Step 4)
+- confirm the temporary target project's `.trellis/.version` matches the Step 0 actual `trellis -v` result; otherwise stop as `Blocked / Version Drift`
+- this runtime check is independent from the Step 0 `COMPATIBLE_TRELLIS_VERSION` gate; it verifies that the temporary baseline project was initialized by the same current runtime version, even if Step 0 used an allowed bypass
+- 在 `/tmp` 创建纯净 Git 项目，满足安装前置条件后执行 `trellis init`
+- 在 `trellis init` 完成后、执行 `install-workflow.py` 前，记录当前文件系统状态作为 clean baseline 快照；后续 post-install 比较与产物归因必须以该快照为基准
+- 到达嵌入执行边界时，不再由 audit 自身继续执行任何嵌入命令；必须停止并把完整 shell 命令链交给人类操作者手动执行
+- 检查安装后隐藏目录（`.trellis/`, `.claude/`, `.opencode/`, `.agents/`, `.codex/`）与 baseline 快照 + workflow 托管声明是否一致
+- 比较文档声明的安装产物与实际落盘产物
+- 如果 Step D 在 baseline 快照已捕获后失败，保留该 baseline 证据，并将后续 installed state 标记为 incomplete / unverified，禁止把未完成安装状态当作完整 workflow-installed 结论
+- 当运行时验证到达正式嵌入边界时，停止并要求人类终端 transcript（见 CLI and Handoff Rules）
 
-**Lightweight mode** (skip to Step 6) when:
-- `need_runtime_validation: no`, UNLESS Step 2 findings conclusively prove runtime validation is necessary (see escalation rule below)
-- `need_runtime_validation: auto` AND none of the Step D trigger conditions are met
-- `force_full_brainstorm: no` (default) AND none of the above task-based conditions apply
+### E. Output Findings
 
-**Escalation rule for `need_runtime_validation: no`**: If the user explicitly set `no` but Step 2 findings conclusively demonstrate that runtime validation is necessary, do NOT silently skip D. Instead, output a Needs Confirmation block using `references/needs-confirmation-template.md`, then let the user decide whether to proceed.
+Classify every finding:
 
-Lightweight mode: no task, no `prd.md`, no `audit-report.md`. Output using simplified template.
-Task-based mode: proceed to Step 4 (task + trellis-brainstorm). Whether Step D executes is judged separately after task context is built.
+- confirmed issues: P0 / P1 / P2 with full confirmed-issue schema
+- unconfirmed items / false alarms
+- blocked items: Blocked / Evidence Gap / Needs Clarification
+
+Blind guessing is forbidden. If critical branches remain unresolved, partial conclusions are allowed only when blocked branches are explicitly labeled.
+
+---
+
+## Execution Modes
+
+Mode is not a pre-decision made at input time. It is the outcome of evidence mainline steps A, B, and C. Steps A, B, and C always execute regardless of mode.
+
+After step C, two independent judgments determine the execution mode:
+
+**Judgment 1 — Taskify?** Should the audit create a task, enter trellis-brainstorm, and maintain `prd.md` + `audit-report.md`?
+
+- `force_full_brainstorm: yes` → yes: enter task-based path
+- `need_runtime_validation: yes` → yes: enter task-based path (D needed, which always requires task context)
+- `need_runtime_validation: auto` AND Step 2 findings indicate D trigger conditions are met → yes
+- Otherwise → no: lightweight static mode (skip to step E directly)
+
+**Judgment 2 — Execute D?** (Only meaningful if the answer to Judgment 1 is "yes")
+
+Step D is required when any of these are true:
+
+- `/tmp` temporary project validation is needed
+- `trellis init` must be executed
+- embed/install/post-install behavior must be verified
+- human-terminal boundary may be triggered
+- `need_runtime_validation` is `yes`
+
+`force_full_brainstorm: yes` does NOT by itself force Step D. D must be justified by one of the conditions above.
+
+When neither Judgment 1's conditions nor D-trigger conditions are met: lightweight static mode.
+When Judgment 1 is "yes" but D is not needed: task-based static mode (create task, enter trellis-brainstorm, maintain `prd.md` and `audit-report.md`, then skip D and go to E).
+When both judgments are "yes": task-based runtime mode (create task, enter trellis-brainstorm, maintain `prd.md` and `audit-report.md`, execute D, then output E).
+
+### Lightweight static mode
+
+- does not create a task
+- does not create `prd.md`
+- does not create `audit-report.md`
+- outputs using the simplified chat structure from `references/lightweight-output-template.md`
+
+### Task-based static mode
+
+When the skill determines task context is warranted but runtime validation is not required:
+
+- create audit task context (child task if another non-audit task is active, otherwise top-level)
+- resolve active-task state from the current session-scoped Trellis runtime; do not assume a repo-global active-task marker
+- enter the `trellis-brainstorm` mainline explicitly as the control container
+- create and maintain `prd.md` through the `trellis-brainstorm` path
+- maintain `audit-report.md` using `references/audit-report-template.md`
+- seed `audit-report.md` with findings from steps A/B/C already collected
+- skip step D → proceed to step E (report via `audit-report.md`)
+- may use `grill-me` as a conditional clarification submode
+- stop with a controlled next-step recommendation
+
+### Task-based runtime mode
+
+When the skill determines both task context and runtime validation are required:
+
+- all task-based static mode behaviors above, plus:
+- execute step D only up to the pre-embed boundary: `/tmp` project creation, `trellis init`, baseline snapshot, and evidence needed to prepare the manual shell command block
+- merge runtime evidence into `audit-report.md`
+- when D reaches the embed-execution boundary: emit the human-terminal-required block with the full manual shell command chain and stop (see CLI and Handoff Rules)
+- output step E via `audit-report.md`
+- stop with a controlled next-step recommendation
+
+If `/tmp` project creation, `trellis init`, or any required runtime-validation command fails before step D completes:
+
+- stop immediately
+- classify the stop as `Blocked / Runtime Execution Failure`
+- record the failing command, exit status, key stdout/stderr evidence, and what remains unverified
 
 ### Mode transition boundary
 
-When transitioning from Step 3 into any task-based mode:
+When transitioning from step C to a task-based mode:
 
-- explain the rationale for the chosen mode before creating task context
-- if entering task-based static, explain why task context is warranted and why Step D is not needed
-- if entering task-based runtime, explain why runtime validation is necessary
-- carry forward the Step 2 A/B/C evidence and seed `audit-report.md` with it
-- never switch modes silently
-- never discard A/B/C findings during the transition
+1. explain the rationale for the chosen mode
+2. if entering task-based static: explain why task context is warranted and why D is not needed
+3. if entering task-based runtime: explain why runtime validation is necessary
+4. proceed to create task context and enter trellis-brainstorm
+5. seed `audit-report.md` with already-collected evidence from steps A/B/C
 
-If task-based mode is chosen but the required `trellis-brainstorm` entrypoint is unavailable:
+Never switch modes silently. Never discard A/B/C findings when entering a task-based mode.
+
+If task-based mode is chosen but the required `trellis-brainstorm` entrypoint for the current CLI is unavailable:
 
 - stop immediately
 - classify the stop as `Blocked / Dependency Unavailable`
 - preserve the already-collected A/B/C evidence
 - do not silently fall back to lightweight mode
 
-### Step 4: Build task context and enter trellis-brainstorm
+### User-set `need_runtime_validation: no` conflict
 
-Only in task-based mode (when proceeding beyond Step 3):
+When the user explicitly set `need_runtime_validation: no` but step C findings conclusively demonstrate that runtime validation is necessary (D trigger conditions are met):
 
-- resolve active-task state from the current session-scoped Trellis runtime; do not assume a repo-global active-task marker
-- If a non-audit active task exists: create child audit task and switch into it immediately
-- If no active task exists: create top-level audit task
-- Default title: `workflow-audit: <workflow-name>`
-- Enter the `trellis-brainstorm` mainline as the control container
-- Maintain `prd.md` through the `trellis-brainstorm` path
-- Initialize `audit-report.md`, seeding it with evidence already collected in Step 2
+- do NOT silently skip D
+- output a Needs Confirmation block using `references/needs-confirmation-template.md`
+- let the user decide whether to override their original setting
+- do not proceed to D without explicit user confirmation
 
-After task context is built, judge whether Step D (runtime validation) is needed:
-- `need_runtime_validation: yes` → proceed to Step 5
-- `need_runtime_validation: no` AND Step 2 findings conclusively require runtime validation → output Needs Confirmation (see escalation rule and `references/needs-confirmation-template.md`) and stop; do NOT proceed until user responds
-- `need_runtime_validation: auto` AND Step 2 findings met D trigger conditions → proceed to Step 5
-- Otherwise → skip to Step 6
-- `force_full_brainstorm: yes` does NOT by itself trigger Step D; D still requires one of the conditions above
-
-### Step 5: Runtime validation (evidence mainline step D)
-
-Only in task-based runtime mode. Execute the validation:
-
-- confirm the temporary target project's `.trellis/.version` matches the Step 0 actual `trellis -v` result; otherwise stop as `Blocked / Version Drift`
-- this runtime check is independent from the Step 0 `COMPATIBLE_TRELLIS_VERSION` gate; it verifies that the temporary baseline project was initialized by the same current runtime version, even if Step 0 used an allowed bypass
-- 在 `/tmp` 创建纯净 Git 项目，满足安装前置条件后执行 `trellis init`
-- 在 `trellis init` 完成后、执行 `install-workflow.py` 前，记录当前文件系统状态作为 clean baseline 快照；后续 post-install 比较与产物归因必须以该快照为基准
-- 执行标准嵌入链: `detect-embed-state.py` → `install-workflow.py --dry-run` → `install-workflow.py` → `upgrade-compat.py --check`
-- 检查安装后隐藏目录（`.trellis/`, `.claude/`, `.opencode/`, `.agents/`, `.codex/`）与 baseline 快照 + workflow 托管声明是否一致
-- 对比文档声明的产物与实际落盘产物
-- 如果 Step D 在 baseline 快照已捕获后失败，保留该 baseline 证据，并将后续 installed state 标记为 incomplete / unverified，禁止把未完成安装状态当作完整 workflow-installed 结论
-
-If `/tmp` project creation, `trellis init`, or any required runtime-validation command fails before Step D completes:
-
-- stop immediately
-- classify the stop as `Blocked / Runtime Execution Failure`
-- record the failing command, exit status, key stdout/stderr evidence, and what remains unverified
-
-#### Codex boundary
-
-If this step reaches the formal temporary-project embed execution and the current main executor is Codex:
-
-- stop the formal embed execution immediately
-- emit a handoff block using `references/codex-handoff-template.md`
-- default handoff order: `Claude Code -> OpenCode`
-- if the user already established that Claude Code is unavailable or OpenCode is the only usable non-Codex CLI, override the default order and explain why
-- the handoff target must be a main interactive Claude Code or OpenCode session; do not continue this skill through an agent/sub-agent
-- require the handoff sequence to include: `detect-embed-state.py` → `install-workflow.py --dry-run` → formal install with non-Codex executor confirmation (`WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1` set in the takeover CLI's invocation environment) → `upgrade-compat.py --check`
-
-The `WORKFLOW_EMBED_EXECUTOR_CONFIRMED` env var is part of the boundary contract: `install-workflow.py` refuses formal install when it is unset. The audit must not treat the formal install step as covered by handoff evidence unless the env var was actually set in the returned command transcript.
-
-Constraints:
-
-- takeover CLI: main interactive Claude Code/OpenCode session only; runtime validation only, no workflow source edits
-- returned handoff evidence must be merged into `audit-report.md`
-- if no usable non-Codex main-session executor is available for the formal embed step, stop as `Blocked / No Handoff Target` and explain that the formal embed remains unverified
-
-### Step 6: Report and stop (evidence mainline step E)
-
-- Lightweight static mode: output using `references/lightweight-output-template.md`
-- Task-based mode (static or runtime): update and present `audit-report.md`
-
-After presenting the report, recommend the next step but do not execute it. Allowed recommendation targets:
-
-- `trellis-brainstorm`
-- `start`
-- `check`
-- `update-spec`
-- if none fit, give a plain-language next action
-
-Each recommendation must state:
-
-- why it is recommended
-- what trigger condition makes it the right choice now
-- why stronger alternatives were not selected
-
-Suggested fix directions and post-audit recommendations must obey the same change-worthiness guardrail already defined in `C. Structured Gap Analysis` and `Confirmed-Issue Schema`.
-
-Stop and wait for user confirmation.
+---
 
 ## Task Model
 
 All task references in this section are resolved from the current session-scoped Trellis runtime, not from a repo-global active-task file.
 
+### Task-based Audit with Existing Active Non-audit Task
+
+- create a dedicated child audit task
+- switch execution into that child task immediately
+
+### Task-based Audit with No Active Task
+
+- create a new top-level audit task
+
+### Task Naming
+
+Default title:
+
+`workflow-audit: <workflow-name>`
+
 ### Child Audit Task Completion
 
-These rules apply only after Step 6 has produced an audit conclusion inside a child audit task — they govern when the child task may close and execution may return to the parent task. They are not Step 4 task-creation rules.
+A child audit task is not complete when the audit report is merely produced.
 
-- do not return to parent merely because an audit report exists
-- workflow-audit only advances the task to "audit conclusion produced, waiting for confirmation"
-- once the user confirms the conclusion, remediation is handled by normal phases/skills inside the same child audit task
-- return to parent only after remediation is complete and the human confirms
+It becomes complete only after:
+
+1. audit conclusion has been produced
+2. user has confirmed the conclusion
+3. remediation work driven by that conclusion is completed
+4. the human confirms the child task is complete
+
+Only then may execution return to the parent task.
 
 ### Remediation Splitting
 
@@ -517,6 +558,8 @@ Inside a top-level or child audit task:
 - create implementation subtasks only when the repair scope is genuinely complex
 
 `workflow-audit` itself does not own remediation execution. It stops at the audit-conclusion boundary; later normal phases/skills handle the repair work in the same audit task.
+
+---
 
 ## Report Contracts
 
@@ -564,7 +607,7 @@ Use the following rubric to assign `P0` / `P1` / `P2` consistently. When in doub
 - `P0` — blocks workflow execution, install, or audit itself
   - the workflow cannot finish a documented step under any supported CLI
   - install / embed / upgrade scripts crash, exit with an undocumented non-zero status, or silently corrupt state
-  - a security or boundary contract is broken (e.g., `install-workflow.py` no longer enforces `WORKFLOW_EMBED_EXECUTOR_CONFIRMED`, allowing Codex to lead formal embed)
+  - a security or boundary contract is broken (e.g., `install-workflow.py` no longer enforces `WORKFLOW_EMBED_HUMAN_CONFIRMED` and human-terminal confirmation for formal install)
   - documented post-install artifact is entirely missing
 - `P1` — drift with real behavioral impact, but a workaround or partial path exists
   - documented behavior diverges from actual script behavior in a way an auditor or operator would notice (exit code shape, output schema, side-effect ordering)
@@ -593,9 +636,11 @@ This partial-findings blocked-item set is distinct from hard-stop exit classific
 - `Blocked / Invalid Input`
 - `Blocked / Dependency Unavailable`
 - `Blocked / Runtime Execution Failure`
-- `Blocked / No Handoff Target`
+- `Blocked / Human Confirmation Required`
 
 Use `Blocked / <subtype>` when the audit itself cannot continue reliably and must stop. Do not treat those hard-stop classifications as ordinary partial blocked-item labels inside an otherwise continuing audit report.
+
+---
 
 ## CLI and Handoff Rules
 
@@ -611,47 +656,61 @@ Do not collapse them into one generic statement.
 
 ### Main-session-only execution policy
 
-At the current stage, `workflow-audit` must execute in the current CLI's main interactive session. Claude Code or OpenCode agents/sub-agents are not allowed to execute audit steps for this skill.
+At the current stage, `workflow-audit` must execute in the current CLI's main
+interactive session. Claude Code or OpenCode agents/sub-agents are not allowed
+to execute audit steps for this skill.
 
-If runtime reality offers only agent-based Claude Code/OpenCode execution for a required Codex handoff, treat that the same as having no usable non-Codex handoff target for this run.
+If runtime reality offers only AI-executed continuation for the formal embed
+step, treat that as insufficient. The audit still requires a human operator to
+run the remaining embed commands in an interactive system terminal.
 
-### Codex Boundary
+### Formal Embed Boundary
 
-Codex may participate in:
+Any AI CLI may participate in:
 
 - source reading
 - evidence gathering
 - analysis
 - reporting
 
-Codex must not be the main executor of the first formal embed step into the temporary target project.
+No AI CLI may be treated as the authorized executor of the first formal embed
+step into the temporary target project.
 
-### Codex Handoff
+### Human Terminal Required
 
-When the audit reaches the formal temporary-project embed step under Codex:
+When the audit reaches the formal temporary-project embed step:
 
 - stop execution there
-- emit a handoff block
-- use the template from `references/codex-handoff-template.md`
-- prefer `Claude Code -> OpenCode` unless explicit user constraints override it
-- require the takeover to happen in a main interactive Claude Code or OpenCode session, not through an agent/sub-agent
-- require the handoff sequence to cover:
-  - state detection
-  - install dry-run
-  - formal install with explicit non-Codex executor confirmation, performed with `WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1` set in the environment of the takeover CLI's invocation
-  - post-install `upgrade-compat.py --check`
+- emit a human-terminal-required block
+- use the template from `references/human-terminal-required-template.md`
+- require a human operator to execute the remaining commands in an interactive system terminal, not through Claude Code, OpenCode, Codex, or any agent/sub-agent shell/tool path
+- require the returned human-terminal sequence to cover:
+  - `detect-embed-state.py`
+  - `install-workflow.py --dry-run`
+  - formal install with `WORKFLOW_EMBED_HUMAN_CONFIRMED=1`
+  - the terminal-side explicit confirmation prompt for `EMBED <project-id>`
+  - `upgrade-compat.py --check`
 
-The `WORKFLOW_EMBED_EXECUTOR_CONFIRMED` environment variable is part of the boundary contract: `install-workflow.py` uses it to refuse formal install when the operator has not explicitly acknowledged the takeover, so the audit must not treat the formal install step as covered by handoff evidence unless the env var was actually set in the returned command transcript.
+The `WORKFLOW_EMBED_HUMAN_CONFIRMED` environment variable is part of the
+boundary contract: `install-workflow.py` uses it only as a precondition to the
+human-operated formal install path, and the audit must not treat the formal
+install step as covered unless the returned terminal transcript shows both the
+env-var usage and the explicit confirmation sequence.
 
-Any handoff CLI remains limited to runtime validation only during the audit stage and must not modify workflow source files.
+The human-terminal continuation remains limited to runtime validation only
+during the audit stage and must not modify workflow source files.
 
-Returned evidence from the handoff path must be merged back into the current audit report.
+Returned evidence from the human-terminal path must be merged back into the
+current audit report.
 
-If the user constraints or runtime reality rule out all usable non-Codex executors for the formal embed step:
+If the current run cannot obtain a human terminal transcript for the formal
+embed step:
 
 - stop immediately
-- classify the stop as `Blocked / No Handoff Target`
-- explain that the formal embed step remains unverified because no allowed main-session takeover CLI is available
+- classify the stop as `Blocked / Human Confirmation Required`
+- explain that the formal embed step remains unverified until a human operator runs the remaining embed commands in an interactive system terminal
+
+---
 
 ## Post-audit Routing
 
@@ -683,6 +742,8 @@ Suggested fix directions and post-audit recommendations must obey the same chang
 
 The skill must stop after presenting the report and routing guidance. It must not auto-execute the next phase.
 
+---
+
 ## Sync Rules
 
 Behavioral source of truth:
@@ -713,6 +774,8 @@ If the same behavior change also touches companion templates/tests, the same cha
 
 When a behavior change could affect the task-based audit path's dependence on `trellis-brainstorm`, review that dependency explicitly rather than assuming the coupling still holds.
 
+---
+
 ## Related Files
 
 Primary source-of-truth and executable surfaces:
@@ -738,101 +801,3 @@ Directly related contracts:
 - `.claude/skills/workflow-capability-audit/SKILL.md`
 - `.agents/skills/trellis-brainstorm/SKILL.md`
 - `.claude/skills/trellis-brainstorm/SKILL.md`
-
-## References
-
-Read these only when needed:
-
-- `references/input-template.md`
-  when the input field template or a full input example is needed
-- `references/lightweight-output-template.md`
-  when lightweight-mode output is needed
-- `references/audit-report-template.md`
-  when a task-based audit report must be maintained
-- `references/needs-confirmation-template.md`
-  when the escalation rule triggers and a Needs Confirmation block must be output
-- `references/codex-handoff-template.md`
-  when Codex must stop and hand off the formal embed step
-
-## Tests
-
-Required persisted scenario files:
-
-- `tests/01-lightweight-static.md`
-- `tests/02-nontrivial-full-audit.md`
-- `tests/03-codex-handoff.md`
-- `tests/04-task-based-static.md`
-- `tests/05-need-runtime-validation-no-escalation.md`
-- `tests/06-multi-target-input-stop.md`
-- `tests/07-child-audit-task.md`
-- `tests/08-post-audit-routing.md`
-- `tests/09-grill-me-gap-clarification.md`
-- `tests/10-opencode-priority-handoff.md`
-- `tests/11-invalid-workflow-path.md`
-- `tests/12-brainstorm-dependency-unavailable.md`
-- `tests/13-runtime-execution-failure.md`
-- `tests/14-no-handoff-target.md`
-- `tests/15-source-layer-tag-compliance.md`
-- `tests/16-candidate-issues-supplemental-focus.md`
-- `tests/17-per-cli-not-applicable-section.md`
-- `tests/18-confirmed-issue-minimum-schema.md`
-- `tests/19-current-cli-inference-failure.md`
-- `tests/20-script-behavior-mismatch.md`
-- `tests/21-version-drift-stop.md`
-- `tests/22-implicit-default-workflow-root.md`
-- `tests/23-unsupported-explicit-workflow-root.md`
-- `tests/24-active-task-not-audit-target.md`
-- `tests/25-temp-project-not-workflow-source.md`
-- `tests/26-ambiguous-natural-language-target.md`
-- `tests/27-baseline-installed-no-diff.md`
-- `tests/28-trellis-init-partial-baseline-failure.md`
-- `tests/29-native-cli-doc-and-practical-evidence.md`
-- `tests/30-non-defect-no-negative-optimization.md`
-- `tests/31-todo-reminder-non-defect.md`
-- `tests/32-allowed-minor-version-mismatch.md`
-- `tests/33-prerelease-drift-ignores-bypass.md`
-- `tests/34-wider-drift-ignores-bypass.md`
-- `tests/35-main-session-only-execution.md`
-- `tests/36-agent-only-handoff-stop.md`
-
-Every test file must use the same structure:
-
-- `Purpose`
-- `Input`
-- `Expected Mode`
-- `Expected Key Behaviors`
-- `Must Not`
-
-## Examples
-
-### Example 1: Lightweight static audit
-
-Input:
-Check whether `docs/workflows/新项目开发工作流/` has obvious structural or rule-propagation issues. Do not perform `/tmp` validation yet.
-
-Output:
-Remain in lightweight static mode, perform static inspection only, produce the simplified structured result, and do not create a task.
-
-### Example 2: Task-based runtime audit
-
-Input:
-Audit the embed flow of `docs/workflows/新项目开发工作流/`. Create a temporary project under `/tmp`, run `trellis init`, and verify the stop-and-handoff behavior when Codex reaches the formal embed step.
-
-Output:
-Enter the task-based runtime path, create an audit task, enter the `trellis-brainstorm` mainline as the control container, emit a Codex handoff block when required, and maintain `audit-report.md` inside the task.
-
-### Example 3: Version drift stop
-
-Input:
-Audit `docs/workflows/新项目开发工作流/`, but the current local `trellis -v` no longer matches the workflow's declared compatible version and no explicit `allow_minor_version_mismatch: yes` bypass applies.
-
-Output:
-Stop immediately as `Blocked / Version Drift`, report both version values, and either point to `allow_minor_version_mismatch: yes` for a contract-defined `minor version mismatch` or tell the user to use `workflow-capability-audit` for all other drift. Do not create a task or continue the audit.
-
-### Example 4: Explicitly allowed minor version mismatch
-
-Input:
-Audit `docs/workflows/新项目开发工作流/` for static rule-propagation issues only. The declared compatible version is `0.5.0`, the current `trellis -v` is `0.5.5`, and the user explicitly set `allow_minor_version_mismatch: yes`.
-
-Output:
-Continue the audit, record both version values and the user-approved gate bypass explicitly, and keep treating the run as a same-maintenance workflow audit rather than as compatibility approval.

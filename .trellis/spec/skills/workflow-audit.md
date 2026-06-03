@@ -100,8 +100,8 @@ Current execution policy for this skill:
 
 - `workflow-audit` runs in the invoking CLI's main interactive session
 - do not dispatch Claude Code or OpenCode agents/sub-agents to execute audit steps for this skill
-- if Codex reaches the formal embed boundary, any allowed continuation must move to a main interactive Claude Code or OpenCode session rather than to an agent
-- this is a temporary execution-efficiency constraint for `workflow-audit`, not a change to the supported audit surface
+- if runtime validation reaches the formal embed boundary, the audit must stop and require a human operator to run the remaining formal embed commands in an interactive system terminal
+- this is a workflow execution-boundary contract, not a temporary efficiency preference
 
 ## Audit Coverage Requirements
 
@@ -111,7 +111,7 @@ This skill **must** fully validate the following aspects for any workflow under 
    - The script exists at the documented path
    - The script's actual behavior (via static analysis or runtime) matches documented claims
    - Exit codes and output format are machine-parseable if the workflow depends on them
-   - Required environment-variable contracts are still honored. In particular, `install-workflow.py` must continue to refuse formal install unless `WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1` is set, because the Codex handoff boundary depends on it
+   - Required environment-variable contracts are still honored. In particular, `install-workflow.py` must continue to refuse formal install unless `WORKFLOW_EMBED_HUMAN_CONFIRMED=1` is set, and formal install must remain gated to a human-operated interactive system terminal
 
 2. **CLI adaptation completeness** - For each supported CLI (Claude Code, OpenCode, Codex), the audit must confirm:
    - All workflow commands/skills/agents are correctly mapped to the CLI's native location
@@ -136,15 +136,15 @@ This skill **must** fully validate the following aspects for any workflow under 
    - if such an artifact is documented as “does not change stage gates / command routing / runtime closure,” the audit must not classify its existence alone as over-management, corruption, or drift without stronger contradictory evidence
    - such artifacts may still be mentioned as contextual outputs, but they are not mandatory managed-surface failures in the same class as hidden-directory carriers, command copies, helper scripts, or routing blocks
 
-4. **Codex handoff boundary** - When Codex is the primary executor and the audit reaches the formal embed step, the skill must:
-   - Stop and emit a handoff block using the dedicated template
-   - Require handoff to a main interactive Claude Code or OpenCode session for the embed execution; agent/sub-agent takeover is not allowed for this skill at the current stage
-   - Merge back evidence from the handoff into the audit report
+4. **Human-terminal boundary** - When runtime validation reaches the formal embed step, the skill must:
+   - stop and emit the dedicated human-terminal-required block
+   - require a human operator to execute the remaining formal embed commands in an interactive system terminal
+   - require the returned terminal transcript and key command outputs to be merged back into the audit report before any final runtime conclusion
 
 5. **Runtime validation triggers** - The audit must automatically escalate to runtime validation (task-based runtime mode) when:
    - Any of the above checks cannot be conclusively resolved via static analysis
    - The workflow documentation or scripts contain conditional logic based on the environment
-   - The user explicitly requests `/tmp` validation or Codex handoff testing
+   - The user explicitly requests `/tmp` validation or human-terminal-boundary testing
 
 6. **Change-worthiness and negative-optimization guardrail** - The audit must separate real defects from non-defect differences:
    - Do not classify a path as change-worthy merely because another arrangement seems cleaner or more uniform
@@ -181,7 +181,7 @@ Use `workflow-audit` when the user wants to:
 - audit or verify the maintained workflow rooted at `docs/workflows/新项目开发工作流/`
 - confirm whether workflow issues are real before changing source files
 - validate workflow embed/install behavior against a `/tmp + trellis init` baseline
-- verify CLI adaptation or Codex handoff boundaries
+- verify CLI adaptation or formal-embed human-terminal boundaries
 
 When a temp-project workflow issue reappears after one or more scan/repair
 rounds, use the repo-level
@@ -223,14 +223,8 @@ Natural language is allowed, but the recommended contract is:
   - ask the user only if a CLI-sensitive path is reached and ambiguity remains
   - if provided explicitly, it must be one of: `claude`, `opencode`, `codex`
 
-The contract intentionally omits `preferred_handoff_cli`.
-
-Default handoff order remains:
-
-1. `Claude Code`
-2. `OpenCode`
-
-Natural-language user constraints may override this order.
+The contract intentionally omits any AI-CLI takeover preference field for formal embed continuation.
+Once the audit reaches the formal embed boundary, the only supported continuation is a human operator running the shell command chain in an interactive system terminal.
 
 If multiple workflow targets are supplied in one request, the skill must stop, explain that it supports only `docs/workflows/新项目开发工作流/`, and require the user to continue with that single supported root only.
 
@@ -302,7 +296,7 @@ Within the `generated target project` layer, the audit must explicitly distingui
 
 Per-CLI adaptation conclusions follow this scope rule:
 
-- the section is in scope when the audit examines CLI-specific carrier mapping, adaptation drift, CLI-specific installed artifacts, or the Codex handoff boundary
+- the section is in scope when the audit examines CLI-specific carrier mapping, adaptation drift, CLI-specific installed artifacts, or the formal-embed human-terminal boundary
 - lightweight output should still keep the section even when CLI adaptation is not in scope; in that case, mark each CLI entry as `not-applicable` with a brief reason instead of omitting the section
 - if a CLI entry is `not-applicable`, a brief reason is sufficient; do not force the detailed evidence trio fields for that CLI
 - when official docs, repo-local evidence, and practical development-use evidence disagree, record the disagreement explicitly instead of silently choosing one source as the winner
@@ -404,11 +398,11 @@ Required when embed / install / post-install behavior must be verified:
 - this runtime check is independent from the Step 0 `COMPATIBLE_TRELLIS_VERSION` gate; it verifies that the temporary baseline project was initialized by the same current runtime version, even if Step 0 used an allowed bypass
 - 在 `/tmp` 创建纯净 Git 项目，满足安装前置条件后执行 `trellis init`
 - 在 `trellis init` 完成后、执行 `install-workflow.py` 前，记录当前文件系统状态作为 clean baseline 快照；后续 post-install 比较与产物归因必须以该快照为基准
-- 执行标准嵌入链: `detect-embed-state.py` → `install-workflow.py --dry-run` → `install-workflow.py` → `upgrade-compat.py --check`
+- 到达嵌入执行边界时，不再由 audit 自身继续执行任何嵌入命令；必须停止并把完整 shell 命令链交给人类操作者手动执行
 - 检查安装后隐藏目录（`.trellis/`, `.claude/`, `.opencode/`, `.agents/`, `.codex/`）与 baseline 快照 + workflow 托管声明是否一致
 - 比较文档声明的安装产物与实际落盘产物
 - 如果 Step D 在 baseline 快照已捕获后失败，保留该 baseline 证据，并将后续 installed state 标记为 incomplete / unverified，禁止把未完成安装状态当作完整 workflow-installed 结论
-- 当 Codex 为主执行器时，触发 Codex handoff（见 CLI and Handoff Rules）
+- 当运行时验证到达正式嵌入边界时，停止并要求人类终端 transcript（见 CLI and Handoff Rules）
 
 ### E. Output Findings
 
@@ -442,7 +436,7 @@ Step D is required when any of these are true:
 - `/tmp` temporary project validation is needed
 - `trellis init` must be executed
 - embed/install/post-install behavior must be verified
-- Codex handoff may be triggered
+- human-terminal boundary may be triggered
 - `need_runtime_validation` is `yes`
 
 `force_full_brainstorm: yes` does NOT by itself force Step D. D must be justified by one of the conditions above.
@@ -477,10 +471,9 @@ When the skill determines task context is warranted but runtime validation is no
 When the skill determines both task context and runtime validation are required:
 
 - all task-based static mode behaviors above, plus:
-- execute step D within CLI-allowed boundaries: `/tmp` project, `trellis init`, embed chain, post-install verification (Codex must stop and hand off before formal embed)
-- if Codex hands off, the receiving executor must be a main interactive Claude Code or OpenCode session rather than an agent/sub-agent
+- execute step D only up to the pre-embed boundary: `/tmp` project creation, `trellis init`, baseline snapshot, and evidence needed to prepare the manual shell command block
 - merge runtime evidence into `audit-report.md`
-- when D reaches Codex boundary: emit handoff block (see CLI and Handoff Rules)
+- when D reaches the embed-execution boundary: emit the human-terminal-required block with the full manual shell command chain and stop (see CLI and Handoff Rules)
 - output step E via `audit-report.md`
 - stop with a controlled next-step recommendation
 
@@ -609,7 +602,7 @@ Use the following rubric to assign `P0` / `P1` / `P2` consistently. When in doub
 - `P0` — blocks workflow execution, install, or audit itself
   - the workflow cannot finish a documented step under any supported CLI
   - install / embed / upgrade scripts crash, exit with an undocumented non-zero status, or silently corrupt state
-  - a security or boundary contract is broken (e.g., `install-workflow.py` no longer enforces `WORKFLOW_EMBED_EXECUTOR_CONFIRMED`, allowing Codex to lead formal embed)
+  - a security or boundary contract is broken (e.g., `install-workflow.py` no longer enforces `WORKFLOW_EMBED_HUMAN_CONFIRMED` and human-terminal confirmation for formal install)
   - documented post-install artifact is entirely missing
 - `P1` — drift with real behavioral impact, but a workaround or partial path exists
   - documented behavior diverges from actual script behavior in a way an auditor or operator would notice (exit code shape, output schema, side-effect ordering)
@@ -638,7 +631,7 @@ This partial-findings blocked-item set is distinct from hard-stop exit classific
 - `Blocked / Invalid Input`
 - `Blocked / Dependency Unavailable`
 - `Blocked / Runtime Execution Failure`
-- `Blocked / No Handoff Target`
+- `Blocked / Human Confirmation Required`
 
 Use `Blocked / <subtype>` when the audit itself cannot continue reliably and must stop. Do not treat those hard-stop classifications as ordinary partial blocked-item labels inside an otherwise continuing audit report.
 
@@ -662,47 +655,55 @@ At the current stage, `workflow-audit` must execute in the current CLI's main
 interactive session. Claude Code or OpenCode agents/sub-agents are not allowed
 to execute audit steps for this skill.
 
-If runtime reality offers only agent-based Claude Code/OpenCode execution for a
-required Codex handoff, treat that the same as having no usable non-Codex
-handoff target for this run.
+If runtime reality offers only AI-executed continuation for the formal embed
+step, treat that as insufficient. The audit still requires a human operator to
+run the remaining embed commands in an interactive system terminal.
 
-### Codex Boundary
+### Formal Embed Boundary
 
-Codex may participate in:
+Any AI CLI may participate in:
 
 - source reading
 - evidence gathering
 - analysis
 - reporting
 
-Codex must not be the main executor of the first formal embed step into the temporary target project.
+No AI CLI may be treated as the authorized executor of the first formal embed
+step into the temporary target project.
 
-### Codex Handoff
+### Human Terminal Required
 
-When the audit reaches the formal temporary-project embed step under Codex:
+When the audit reaches the formal temporary-project embed step:
 
 - stop execution there
-- emit a handoff block
-- use the template from `references/codex-handoff-template.md`
-- prefer `Claude Code -> OpenCode` unless explicit user constraints override it
-- require the takeover to happen in a main interactive Claude Code or OpenCode session, not through an agent/sub-agent
-- require the handoff sequence to cover:
-  - state detection
-  - install dry-run
-  - formal install with explicit non-Codex executor confirmation, performed with `WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1` set in the environment of the takeover CLI's invocation
-  - post-install `upgrade-compat.py --check`
+- emit a human-terminal-required block
+- use the template from `references/human-terminal-required-template.md`
+- require a human operator to execute the remaining commands in an interactive system terminal, not through Claude Code, OpenCode, Codex, or any agent/sub-agent shell/tool path
+- require the returned human-terminal sequence to cover:
+  - `detect-embed-state.py`
+  - `install-workflow.py --dry-run`
+  - formal install with `WORKFLOW_EMBED_HUMAN_CONFIRMED=1`
+  - the terminal-side explicit confirmation prompt for `EMBED <project-id>`
+  - `upgrade-compat.py --check`
 
-The `WORKFLOW_EMBED_EXECUTOR_CONFIRMED` environment variable is part of the boundary contract: `install-workflow.py` uses it to refuse formal install when the operator has not explicitly acknowledged the takeover, so the audit must not treat the formal install step as covered by handoff evidence unless the env var was actually set in the returned command transcript.
+The `WORKFLOW_EMBED_HUMAN_CONFIRMED` environment variable is part of the
+boundary contract: `install-workflow.py` uses it only as a precondition to the
+human-operated formal install path, and the audit must not treat the formal
+install step as covered unless the returned terminal transcript shows both the
+env-var usage and the explicit confirmation sequence.
 
-Any handoff CLI remains limited to runtime validation only during the audit stage and must not modify workflow source files.
+The human-terminal continuation remains limited to runtime validation only
+during the audit stage and must not modify workflow source files.
 
-Returned evidence from the handoff path must be merged back into the current audit report.
+Returned evidence from the human-terminal path must be merged back into the
+current audit report.
 
-If the user constraints or runtime reality rule out all usable non-Codex executors for the formal embed step:
+If the current run cannot obtain a human terminal transcript for the formal
+embed step:
 
 - stop immediately
-- classify the stop as `Blocked / No Handoff Target`
-- explain that the formal embed step remains unverified because no allowed main-session takeover CLI is available
+- classify the stop as `Blocked / Human Confirmation Required`
+- explain that the formal embed step remains unverified until a human operator runs the remaining embed commands in an interactive system terminal
 
 ---
 

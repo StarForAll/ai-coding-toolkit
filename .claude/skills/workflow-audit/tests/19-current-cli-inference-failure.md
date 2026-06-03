@@ -8,7 +8,7 @@ Verify that `workflow-audit` asks the user to clarify `current_cli` only when a 
 
 User input:
 
-> Audit the formal embed handoff behavior for `docs/workflows/新项目开发工作流/`, but imagine the current execution surface is ambiguous and you cannot reliably infer which CLI is running.
+> Audit the formal embed human-terminal boundary behavior for `docs/workflows/新项目开发工作流/`, but imagine the current execution surface is ambiguous and you cannot reliably infer which CLI is running.
 
 ## Expected Mode
 

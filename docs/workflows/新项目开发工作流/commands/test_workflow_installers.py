@@ -2,17 +2,20 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import errno
 import importlib.util
 import io
 import json
 import os
 import re
+import select
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
@@ -44,7 +47,7 @@ PATCH_WORKFLOW_PHASE_STRONG_GATE_SCRIPT = COMMANDS_DIR / "shell" / "patch-workfl
 PATCH_TASK_STATUS_VIEW_STRONG_GATE_SCRIPT = COMMANDS_DIR / "shell" / "patch-task-status-view-strong-gate.py"
 TRELLIS_LIBRARY_CLI = (REPO_ROOT / "trellis-library" / "cli.py").as_posix()
 TRELLIS_LIBRARY_DIR = (REPO_ROOT / "trellis-library").as_posix()
-EMBED_CONFIRM_ENV = "WORKFLOW_EMBED_EXECUTOR_CONFIRMED"
+EMBED_CONFIRM_ENV = "WORKFLOW_EMBED_HUMAN_CONFIRMED"
 ATTEMPT_RECORD_NAME = "workflow-embed-attempt.json"
 PHASE_ROUTER_MARKER = "## Phase Router `[AI]`"
 FINISH_WORK_MARKER = "<!-- finish-work-projectization-patch -->"
@@ -641,6 +644,11 @@ class WorkflowInstallerTests(unittest.TestCase):
         env: dict[str, str] | None = None,
         input_text: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
+        """Run a script over plain pipes.
+
+        Use this for non-interactive paths, dry-run installer checks, and
+        assertions that intentionally require a non-TTY execution surface.
+        """
         merged_env = os.environ.copy()
         if env:
             merged_env.update(env)
@@ -653,6 +661,115 @@ class WorkflowInstallerTests(unittest.TestCase):
             env=merged_env,
             input=input_text,
         )
+
+    def run_script_tty(
+        self,
+        script: Path,
+        *args: str,
+        env: dict[str, str] | None = None,
+        input_text: str | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        """Run a script behind a pseudo-terminal.
+
+        Use this for formal install paths or any test that must satisfy the
+        installer's human-terminal gate and interactive input requirements.
+        This helper relies on Unix-style PTY primitives (`os.openpty`) and is
+        therefore intended for the Linux/macOS CI/runtime environments used by
+        this repository.
+        """
+        merged_env = os.environ.copy()
+        if env:
+            merged_env.update(env)
+        master_fd, slave_fd = os.openpty()
+        try:
+            proc = subprocess.Popen(
+                [PYTHON, str(script), *args],
+                cwd=REPO_ROOT,
+                stdin=slave_fd,
+                stdout=slave_fd,
+                stderr=subprocess.PIPE,
+                text=False,
+                close_fds=True,
+                env=merged_env,
+            )
+        finally:
+            os.close(slave_fd)
+
+        output = bytearray()
+        stderr_output = bytearray()
+        pending_input = input_text.encode("utf-8") if input_text else b""
+        input_sent = False
+
+        try:
+            while True:
+                if pending_input and not input_sent:
+                    os.write(master_fd, pending_input)
+                    input_sent = True
+                ready, _, _ = select.select([master_fd], [], [], 0.1)
+                if ready:
+                    try:
+                        chunk = os.read(master_fd, 4096)
+                    except OSError as exc:
+                        if exc.errno == errno.EIO:
+                            chunk = b""
+                        else:
+                            raise
+                    if chunk:
+                        output.extend(chunk)
+                if proc.poll() is not None:
+                    while True:
+                        try:
+                            chunk = os.read(master_fd, 4096)
+                        except OSError as exc:
+                            if exc.errno == errno.EIO:
+                                break
+                            raise
+                        if not chunk:
+                            break
+                        output.extend(chunk)
+                    break
+            if proc.stderr is not None:
+                try:
+                    stderr_output.extend(proc.stderr.read() or b"")
+                finally:
+                    proc.stderr.close()
+        finally:
+            os.close(master_fd)
+
+        return subprocess.CompletedProcess(
+            [PYTHON, str(script), *args],
+            proc.wait(),
+            stdout=output.decode("utf-8", errors="replace"),
+            stderr=stderr_output.decode("utf-8", errors="replace"),
+        )
+
+    def run_script_plain(
+        self,
+        script: Path,
+        *args: str,
+        env: dict[str, str] | None = None,
+        input_text: str | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        """Explicit plain subprocess alias for readability in tests.
+
+        Prefer this name when the test is specifically about non-interactive
+        behavior so the absence of a TTY is obvious at the call site.
+        """
+        merged_env = os.environ.copy()
+        if env:
+            merged_env.update(env)
+        return subprocess.run(
+            [PYTHON, str(script), *args],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+            env=merged_env,
+            input=input_text,
+        )
+
+    def human_confirm_input(self, project_id: str = "workflowfixture") -> str:
+        return f"EMBED {project_id}\n"
 
     def create_fixture(
         self,
@@ -904,12 +1021,14 @@ class WorkflowInstallerTests(unittest.TestCase):
             forwarded_args = ["--project-id", "workflowfixture", *forwarded_args]
         if "--profile" not in forwarded_args:
             forwarded_args = ["--profile", "outsourcing", *forwarded_args]
-        return self.run_script(
+        project_id = forwarded_args[forwarded_args.index("--project-id") + 1]
+        return self.run_script_tty(
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture_root),
             *forwarded_args,
             env={EMBED_CONFIRM_ENV: "1"},
+            input_text=self.human_confirm_input(project_id),
         )
 
     def installed_fixture(self, *install_args: str, **fixture_kwargs: object) -> Path:
@@ -983,16 +1102,17 @@ class WorkflowInstallerTests(unittest.TestCase):
 
         self.assertFalse(source.exists())
 
-    def test_install_requires_explicit_profile_in_non_interactive_mode(self) -> None:
+    def test_install_dry_run_requires_explicit_profile_in_non_interactive_mode(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
 
-        result = self.run_script(
+        result = self.run_script_plain(
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture),
             "--project-id",
             "workflowfixture",
+            "--dry-run",
             env={EMBED_CONFIRM_ENV: "1"},
         )
 
@@ -1005,18 +1125,17 @@ class WorkflowInstallerTests(unittest.TestCase):
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
 
-        result = self.run_script(
+        result = self.run_script_tty(
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture),
             "--project-id",
             "workflowfixture",
             env={EMBED_CONFIRM_ENV: "1", "FORCE_INTERACTIVE_PROFILE_PROMPT": "1"},
-            input_text="personal\n",
+            input_text="personal\nEMBED workflowfixture\n",
         )
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
-        self.assertIn("请选择安装 profile", result.stdout)
         record = json.loads((fixture / ".trellis" / "workflow-installed.json").read_text(encoding="utf-8"))
         self.assertEqual(record["profile"], "personal")
 
@@ -1024,14 +1143,14 @@ class WorkflowInstallerTests(unittest.TestCase):
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
 
-        result = self.run_script(
+        result = self.run_script_tty(
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture),
             "--project-id",
             "workflowfixture",
             env={EMBED_CONFIRM_ENV: "1", "FORCE_INTERACTIVE_PROFILE_PROMPT": "1"},
-            input_text="p\n",
+            input_text="p\nEMBED workflowfixture\n",
         )
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
@@ -1042,7 +1161,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
 
-        result = self.run_script(
+        result = self.run_script_plain(
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture),
@@ -1062,7 +1181,7 @@ class WorkflowInstallerTests(unittest.TestCase):
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
 
-        result = self.run_script(
+        result = self.run_script_plain(
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture),
@@ -1092,6 +1211,9 @@ class WorkflowInstallerTests(unittest.TestCase):
         self.assertIn("--profile \"$INSTALL_PROFILE\" --dry-run", temp_project_script)
         self.assertIn("--profile \"$INSTALL_PROFILE\"", temp_project_script)
         self.assertIn("prompt_profile()", temp_project_script)
+        self.assertIn("detect-embed-state.py", temp_project_script)
+        self.assertIn("upgrade-compat.py", temp_project_script)
+        self.assertIn("EMBED $PROJECT_ID", temp_project_script)
         self.assertIn("--project-id <project-id> --profile outsourcing --dry-run", quick_commands)
         self.assertIn("--project-id <project-id> --profile outsourcing", quick_commands)
 
@@ -3170,7 +3292,7 @@ Keep only durable PRD-facing takeaways here.
         fixture = self.create_fixture(bootstrap_as_current_task=True)
         self.addCleanup(shutil.rmtree, fixture)
 
-        result = self.run_script(
+        result = self.run_script_tty(
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture),
@@ -4354,7 +4476,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
         self.addCleanup(shutil.rmtree, fixture)
 
-        result = self.run_script(
+        result = self.run_script_tty(
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture),
@@ -4387,7 +4509,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertTrue(legacy_research.exists())
         self.assertFalse(trellis_research.exists())
 
-        result = self.run_script(
+        result = self.run_script_tty(
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture),
@@ -4405,17 +4527,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         # trellis-* must NOT exist (no actual creation)
         self.assertFalse(trellis_research.exists(), "dry-run must not create trellis-* agents on disk")
 
-    def test_install_requires_embed_executor_confirmation(self) -> None:
-        fixture = self.create_fixture()
-        self.addCleanup(shutil.rmtree, fixture)
-
-        result = self.run_script(INSTALL_SCRIPT, "--project-root", str(fixture), "--project-id", "workflowfixture")
-
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("无法在 Codex 中嵌入成功", result.stderr)
-        self.assertIn(EMBED_CONFIRM_ENV, result.stderr)
-
-    def test_install_proceeds_after_embed_executor_confirmation(self) -> None:
+    def test_install_requires_human_embed_confirmation(self) -> None:
         fixture = self.create_fixture()
         self.addCleanup(shutil.rmtree, fixture)
 
@@ -4427,7 +4539,65 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
             "workflowfixture",
             "--profile",
             "outsourcing",
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("仅支持人类操作者在系统终端中显式运行", result.stderr)
+        self.assertIn(EMBED_CONFIRM_ENV, result.stderr)
+
+    def test_install_requires_interactive_terminal_for_formal_install(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        result = self.run_script_plain(
+            INSTALL_SCRIPT,
+            "--project-root",
+            str(fixture),
+            "--project-id",
+            "workflowfixture",
+            "--profile",
+            "outsourcing",
             env={EMBED_CONFIRM_ENV: "1"},
+            input_text="",
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("交互式系统终端", result.stdout + result.stderr)
+
+    def test_install_requires_exact_human_confirmation_string(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        result = self.run_script_tty(
+            INSTALL_SCRIPT,
+            "--project-root",
+            str(fixture),
+            "--project-id",
+            "workflowfixture",
+            "--profile",
+            "outsourcing",
+            env={EMBED_CONFIRM_ENV: "1"},
+            input_text="WRONG\n",
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("人工确认串不匹配", result.stderr)
+        self.assertIn("EMBED workflowfixture", result.stdout + result.stderr)
+
+    def test_install_proceeds_after_human_terminal_confirmation(self) -> None:
+        fixture = self.create_fixture()
+        self.addCleanup(shutil.rmtree, fixture)
+
+        result = self.run_script_tty(
+            INSTALL_SCRIPT,
+            "--project-root",
+            str(fixture),
+            "--project-id",
+            "workflowfixture",
+            "--profile",
+            "outsourcing",
+            env={EMBED_CONFIRM_ENV: "1"},
+            input_text=self.human_confirm_input(),
         )
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
@@ -4436,7 +4606,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         fixture = self.create_fixture(include_opencode=True, include_codex=True, include_agents_md=True)
         self.addCleanup(shutil.rmtree, fixture)
 
-        result = self.run_script(
+        result = self.run_script_tty(
             INSTALL_SCRIPT,
             "--project-root",
             str(fixture),
@@ -4447,6 +4617,7 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
             "--profile",
             "outsourcing",
             env={EMBED_CONFIRM_ENV: "1"},
+            input_text=self.human_confirm_input(),
         )
 
         self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
@@ -4454,6 +4625,37 @@ debugLog("inject", "Skipping - strong-gate route does not allow subagent injecti
         self.assertEqual(record_data["cli_types"], ["claude", "opencode"])
         self.assertIn("patched_codex_skills", record_data)
         self.assertEqual(record_data["patched_codex_skills"], [])
+
+    def test_install_profile_prompt_eof_exits_cleanly(self) -> None:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("workflow_install_workflow_test", INSTALL_SCRIPT)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        with patch("builtins.input", side_effect=EOFError):
+            with self.assertRaises(SystemExit) as exc:
+                module.prompt_for_profile()
+        self.assertIn("交互式 profile 选择被中断", str(exc.exception))
+
+    def test_install_human_confirmation_eof_exits_cleanly(self) -> None:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("workflow_install_workflow_test", INSTALL_SCRIPT)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        with (
+            patch.dict(os.environ, {EMBED_CONFIRM_ENV: "1"}, clear=False),
+            patch("builtins.input", side_effect=EOFError),
+            patch.object(sys.stdin, "isatty", return_value=True),
+            patch.object(sys.stdout, "isatty", return_value=True),
+        ):
+            with self.assertRaises(SystemExit) as exc:
+                module.ensure_human_terminal_embed_confirmation(False, "workflowfixture")
+        self.assertIn("未读取到人工确认输入", str(exc.exception))
 
     def test_upgrade_check_detects_phase_router_drift_even_when_versions_match(self) -> None:
         fixture = self.installed_fixture()

@@ -52,7 +52,7 @@ Task-based static mode (task + trellis-brainstorm + `prd.md` + `audit-report.md`
 - must not execute runtime validation (Step D) when findings do not justify it
 - must not create `/tmp` project
 - must not run `trellis init`
-- must not emit Codex handoff block (D not reached)
+- must not emit the human-terminal-required block (D not reached)
 - must not silently drop the task or trellis-brainstorm context
 - must not output using the lightweight template
 - must not auto-execute Step D even if A/B/C findings indicate it is needed

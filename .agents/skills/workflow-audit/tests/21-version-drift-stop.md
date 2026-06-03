@@ -29,7 +29,7 @@ Hard-stop before normal mode selection: `Blocked / Version Drift`.
 - if the mismatch is patch-only stable, allow the response to mention `allow_minor_version_mismatch: yes` as a run-local retry option
 - otherwise direct the user to `workflow-capability-audit` for compatibility-upgrade work
 - do not create a task, `prd.md`, or `audit-report.md`
-- do not proceed into Step 1 target resolution, A/B/C evidence gathering, `/tmp` temporary-project creation, `trellis init`, or Codex handoff logic
+- do not proceed into Step 1 target resolution, A/B/C evidence gathering, `/tmp` temporary-project creation, `trellis init`, or formal-embed human-terminal-boundary logic
 
 ## Must Not
 

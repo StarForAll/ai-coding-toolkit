@@ -26,7 +26,7 @@ PYTHON_BIN="/ops/softwares/python/bin/python3"
 # 默认是外部项目，如果加入 --profile personal 就是内部个人项目不会包含外包要求
 # 当 dry-run 通过之后执行真正的命令
 "$PYTHON_BIN" "$WORKFLOW_ROOT/commands/install-workflow.py" --project-root "$TARGET_PROJECT" --project-id <project-id> --profile outsourcing --dry-run
-WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1 "$PYTHON_BIN" "$WORKFLOW_ROOT/commands/install-workflow.py" --project-root "$TARGET_PROJECT" --project-id <project-id> --profile outsourcing
+WORKFLOW_EMBED_HUMAN_CONFIRMED=1 "$PYTHON_BIN" "$WORKFLOW_ROOT/commands/install-workflow.py" --project-root "$TARGET_PROJECT" --project-id <project-id> --profile outsourcing
 # 完整性校验
 "$PYTHON_BIN" "$WORKFLOW_ROOT/commands/upgrade-compat.py" --project-root "$TARGET_PROJECT" --check
 

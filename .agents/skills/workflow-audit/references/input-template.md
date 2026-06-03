@@ -41,7 +41,7 @@ Comparison model used by the audit:
   - default: `auto`
   - meanings:
     - `auto`: start with static evidence and escalate only when runtime validation is actually required
-    - `yes`: after completing A/B/C, the audit MUST enter task-based runtime mode and proceed to Step D, executing within CLI-allowed boundaries (Codex must stop and hand off before formal embed)
+    - `yes`: after completing A/B/C, the audit MUST enter task-based runtime mode and proceed to Step D; when Step D reaches the formal embed boundary, the audit must stop and require a human terminal transcript for the remaining embed commands
     - `no`: stay on static/document-only audit unless the skill later proves that runtime validation is necessary; in that case it must output a Needs Confirmation block and wait for the user to decide whether to proceed
 
 - `force_full_brainstorm`
@@ -84,17 +84,16 @@ Do **not** accept as equivalent:
 - Comparison model inside the audit is `source repo` vs clean `trellis init` baseline vs workflow-installed state after `install-workflow.py` vs `runtime command output`
 - Version preflight always runs first: compare `trellis -v` with `COMPATIBLE_TRELLIS_VERSION` in `docs/workflows/新项目开发工作流/commands/workflow_assets.py`
 - Only an explicit `allow_minor_version_mismatch: yes` can bypass a contract-defined patch-only stable mismatch; all prerelease-related or broader drift still stop as `Blocked / Version Drift`
-- No dedicated `preferred_handoff_cli` field
-- Default handoff order is always `Claude Code -> OpenCode`
-- Any Codex handoff must continue in a main interactive Claude Code or OpenCode session; agent/sub-agent takeover is intentionally out of scope for now
-- A user may override the order only by stating the real environment constraint explicitly in natural language
+- No dedicated AI-CLI takeover field exists for formal embed continuation
+- Reaching the formal embed boundary always requires a human operator to run the remaining commands in an interactive system terminal
+- Agent/sub-agent takeover is intentionally out of scope
 
 ## Full Example
 
 ```yaml
 workflow_path: docs/workflows/新项目开发工作流/
 candidate_issues:
-  - Whether Codex really stops and hands off correctly before the formal embed step
+  - Whether runtime validation really stops and requires a human terminal transcript before the formal embed step
   - Whether post-install verification guidance has drifted from the installer behavior
 need_runtime_validation: auto
 force_full_brainstorm: yes

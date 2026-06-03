@@ -15,7 +15,7 @@
 - close-out 中的 `archive` 仍直接复用目标项目 Trellis 基线 `task.py`；若目标项目不是当前最新 Trellis 基线，可能不包含 archive auto-commit pathspec 修复
 - 安装器会自动导入 `pack.requirements-discovery-foundation`；若目标项目存在 `00-bootstrap-guidelines` 则清理，不存在则跳过；若遗留的 repo-global `.current-task` 仍指向该 bootstrap task，则同步做兼容清理
 - 一旦开始正式安装，安装器会先写入 `.trellis/workflow-embed-attempt.json`；若安装失败，该失败标记会保留，后续嵌入必须先由用户手动处理
-- 首次嵌入执行应由可稳定执行项目安装脚本的入口（如 shell、Claude Code、OpenCode）完成；Codex 适合作为安装完成后的使用入口，不建议主导执行嵌入步骤
+- 首次嵌入执行禁止由 AI agent、AI CLI 主会话、skills、slash command、subagent 或自动编排链路自主发起；仅支持人类操作者在系统终端中显式运行并确认完整命令链
 
 前提:
 - 目标项目是 Git 仓库，`origin` 至少有两个 push URL，已执行 trellis init，且存在对应 CLI 目录
@@ -323,7 +323,8 @@ _HEAD_FILE_NAME = "HEAD"
 _REFS_HEADS_PREFIX = "refs/heads/"
 _PACKED_REFS_FILE = "packed-refs"
 _PARALLEL_DISABLED_MARKER = "<!-- workflow-parallel-disabled -->"
-_EMBED_EXECUTOR_CONFIRM_ENV = "WORKFLOW_EMBED_EXECUTOR_CONFIRMED"
+_EMBED_HUMAN_CONFIRM_ENV = "WORKFLOW_EMBED_HUMAN_CONFIRMED"
+_EMBED_CONFIRMATION_PREFIX = "EMBED "
 _FORCE_INTERACTIVE_PROFILE_PROMPT_ENV = "FORCE_INTERACTIVE_PROFILE_PROMPT"
 _ENTRY_COMMAND_CANDIDATES = ("continue", "start")
 _LEGACY_READY_AUTOCONTINUE_LINE = "If a task is READY, execute its Next required action without asking whether to continue."
@@ -999,21 +1000,47 @@ def normalize_project_id(project_id_arg: str | None) -> str:
     return project_id
 
 
-def ensure_embed_executor_confirmed(dry_run: bool) -> None:
-    """Block until caller confirms this embed is not being executed from Codex.
-
-    The workflow still supports Codex after install. This guard only protects the
-    initial embed execution step.
-    """
-    if os.environ.get(_EMBED_EXECUTOR_CONFIRM_ENV) == "1":
-        return
+def ensure_human_terminal_embed_confirmation(dry_run: bool, project_id: str) -> None:
+    """Require an explicit human-operated terminal confirmation for formal install."""
     if dry_run:
         return
-    message = (
-        "当前工作流嵌入步骤无法在 Codex 中嵌入成功，只能在 Claude Code / OpenCode（或直接 shell）中执行嵌入操作。\n"
-        f"请确认当前执行这一步的不是 Codex；若确认无误，请重新执行并设置环境变量 {_EMBED_EXECUTOR_CONFIRM_ENV}=1。"
+
+    if os.environ.get(_EMBED_HUMAN_CONFIRM_ENV) != "1":
+        message = (
+            "首次嵌入仅支持人类操作者在系统终端中显式运行并确认，"
+            "禁止 AI agent、AI CLI 主会话、skills、slash command、subagent 或自动编排链路自主发起。\n"
+            f"请由人类在系统终端中重新执行，并显式设置环境变量 {_EMBED_HUMAN_CONFIRM_ENV}=1。"
+        )
+        sys.exit(f"{R}{message}{N}")
+
+    try:
+        interactive_terminal = sys.stdin.isatty() and sys.stdout.isatty()
+    except OSError:
+        interactive_terminal = False
+    if not interactive_terminal:
+        sys.exit(
+            f"{R}首次正式嵌入必须由人类在交互式系统终端中执行；"
+            "当前执行面不是受支持的人类交互式终端。"
+            f"{N}"
+        )
+
+    expected = f"{_EMBED_CONFIRMATION_PREFIX}{project_id}"
+    prompt = (
+        "人工确认：首次正式嵌入只能由人类在系统终端中发起。\n"
+        f"如确认继续，请准确输入 `{expected}` 后回车： "
     )
-    sys.exit(f"{R}{message}{N}")
+    try:
+        entered = input(prompt).strip()
+    except EOFError:
+        sys.exit(
+            f"{R}未读取到人工确认输入。"
+            f"请重新执行并在提示时准确输入 `{expected}`。{N}"
+        )
+    if entered != expected:
+        sys.exit(
+            f"{R}人工确认串不匹配。"
+            f"请重新执行并准确输入 `{expected}`。{N}"
+        )
 
 
 # ── 命令文件预处理 ──
@@ -3676,7 +3703,7 @@ def main() -> int:
     src = Path(__file__).resolve().parent
     root = args.project_root or find_root(Path(__file__))
     ensure_project_prereqs(root)
-    ensure_embed_executor_confirmed(args.dry_run)
+    project_id = normalize_project_id(args.project_id)
 
     # 检测 CLI 类型
     requested = [x.strip() for x in args.cli.split(",")] if args.cli else None
@@ -3697,7 +3724,7 @@ def main() -> int:
         )
 
     profile = resolve_install_profile(args.profile)
-    project_id = normalize_project_id(args.project_id)
+    ensure_human_terminal_embed_confirmation(args.dry_run, project_id)
 
     print()
     print("╔══════════════════════════════════════════╗")

@@ -73,7 +73,7 @@ Claude Code 是当前 workflow 维护的三种原生适配之一，并保留项�
 2. 运行：
 
 ```bash
-WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1 /ops/softwares/python/bin/python3 \
+WORKFLOW_EMBED_HUMAN_CONFIRMED=1 /ops/softwares/python/bin/python3 \
 docs/workflows/新项目开发工作流/commands/install-workflow.py \
 --project-root <target-project> \
 --project-id <project-id> \
@@ -81,7 +81,8 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 --cli claude
 ```
 
-3. 安装完成后，在目标项目内直接使用 `/trellis:<phase>`；初始 spec 基线由安装脚本完成，不再手工复制
+3. 上述 formal embed 必须由人类操作者在交互式系统终端中显式运行并确认；Claude Code 主会话本身不是被允许的首次嵌入执行主体
+4. 安装完成后，在目标项目内直接使用 `/trellis:<phase>`；初始 spec 基线由安装脚本完成，不再手工复制
 
 ## 渐进性披露（安装后的使用层）
 

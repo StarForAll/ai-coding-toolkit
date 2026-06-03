@@ -40,7 +40,7 @@ Codex 官方确实有 built-in slash commands，但那是 Codex 自身的交互�
 2. 运行：
 
 ```bash
-WORKFLOW_EMBED_EXECUTOR_CONFIRMED=1 /ops/softwares/python/bin/python3 \
+WORKFLOW_EMBED_HUMAN_CONFIRMED=1 /ops/softwares/python/bin/python3 \
 docs/workflows/新项目开发工作流/commands/install-workflow.py \
 --project-root <target-project> \
 --project-id <project-id> \
@@ -48,7 +48,8 @@ docs/workflows/新项目开发工作流/commands/install-workflow.py \
 --cli codex
 ```
 
-3. 安装完成后，在目标项目内优先通过 skills / AGENTS / hooks 与主会话直接使用这套 workflow；若底层仍存在 `subagents` carrier，也只视为被当前 workflow 禁用的底层承载面；初始 spec 基线由安装脚本完成，不再手工复制
+3. 上述 formal embed 必须由人类操作者在交互式系统终端中显式运行并确认；Codex 主会话、skills、hooks、subagents 都不是被允许的首次嵌入执行主体
+4. 安装完成后，在目标项目内优先通过 skills / AGENTS / hooks 与主会话直接使用这套 workflow；若底层仍存在 `subagents` carrier，也只视为被当前 workflow 禁用的底层承载面；初始 spec 基线由安装脚本完成，不再手工复制
 
 ## 在多 CLI 同装中的定位
 

@@ -8,13 +8,13 @@ Verify that `candidate_issues` act only as supplementary focus points inside the
 
 User input:
 
-> Audit `docs/workflows/新项目开发工作流/` and pay special attention to whether Codex handoff wording drifted and whether post-install verification guidance still matches the installer. Keep it static unless the evidence truly requires more.
+> Audit `docs/workflows/新项目开发工作流/` and pay special attention to whether the human-terminal boundary wording drifted and whether post-install verification guidance still matches the installer. Keep it static unless the evidence truly requires more.
 
 Interpreted as:
 ```yaml
 workflow_path: docs/workflows/新项目开发工作流/
 candidate_issues:
-  - Whether Codex handoff wording drifted
+  - Whether the human-terminal boundary wording drifted
   - Whether post-install verification guidance still matches installer behavior
 need_runtime_validation: auto
 force_full_brainstorm: no
