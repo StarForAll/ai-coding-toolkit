@@ -92,6 +92,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--record-correction", action="append", default=[], help="Applied correction note to append to capability-report.md.")
     parser.add_argument("--record-revalidation", action="append", default=[], help="Post-fix revalidation note to append to capability-report.md.")
     parser.add_argument("--finalize-fixture-destruction", action="store_true", help="Mark A/B fixture destruction as finally confirmed by the user.")
+    parser.add_argument("--continue-after-human-shell", action="store_true", help="Continue the audit after a human operator has executed the manual shell embed command chain for B.")
+    parser.add_argument("--manual-shell-evidence", action="append", default=[], help="Evidence bullet to record when continuing after the manual human-shell embed command chain.")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable output")
     return parser
 
@@ -407,6 +409,34 @@ def append_bullets_to_section(text: str, heading: str, bullets: list[str], place
     return text[:start] + section + text[next_section:]
 
 
+def manual_shell_status(report_text: str) -> str | None:
+    try:
+        section = _read_section(report_text, "## Manual Shell Continuation Required")
+    except RuntimeError:
+        return None
+    match = re.search(r"^- Status: (.+)$", section, flags=re.MULTILINE)
+    return match.group(1).strip() if match else None
+
+
+def refresh_manual_shell_section(
+    report_text: str,
+    *,
+    status: str,
+    command_block: str,
+    evidence: list[str],
+) -> str:
+    evidence_lines = [f"  - {item}" for item in evidence] if evidence else ["  - none recorded yet"]
+    replacement_lines = [
+        f"- Status: {status}",
+        "- Evidence:",
+        *evidence_lines,
+        "",
+        "- Command Chain:",
+        command_block,
+    ]
+    return replace_section(report_text, "## Manual Shell Continuation Required", replacement_lines)
+
+
 def _section_has_recorded_items(text: str, heading: str) -> bool:
     return "- none yet" not in _read_section(text, heading)
 
@@ -415,8 +445,15 @@ def refresh_stop_point_section(report_text: str) -> str:
     destroyed = re.search(r"^- Destroyed: yes$", report_text, flags=re.MULTILINE) is not None
     final_confirmed = re.search(r"^- Final destruction confirmed by user: yes$", report_text, flags=re.MULTILINE) is not None
     confirmed_fix_scope_recorded = _section_has_recorded_items(report_text, "## Confirmed Fix Scope")
+    manual_shell = manual_shell_status(report_text)
 
-    if destroyed and final_confirmed:
+    if manual_shell == "pending":
+        replacement_lines = [
+            "- Auto-continue allowed: No",
+            "- User confirmation required for:",
+            "  - whether to run the manual shell embed command chain for B and return the terminal transcript/evidence",
+        ]
+    elif destroyed and final_confirmed:
         replacement_lines = [
             "- Auto-continue allowed: No",
             "- User confirmation required for:",
@@ -761,25 +798,41 @@ def _codex_runtime_boundary_message(detail: str) -> str:
     )
 
 
-def install_workflow_into(root: Path) -> None:
-    command = [
-        PYTHON,
-        str(SCRIPT_DIR / "install-workflow.py"),
-        "--project-root",
-        str(root),
-    ]
-    env = os.environ.copy()
-    env["WORKFLOW_EMBED_EXECUTOR_CONFIRMED"] = "1"
-    result = subprocess.run(
-        command,
-        cwd=REPO_ROOT,
-        text=True,
-        capture_output=True,
-        check=False,
-        env=env,
+class HumanShellRequiredError(RuntimeError):
+    def __init__(self, root: Path, project_id: str, command_block: str) -> None:
+        super().__init__("Human shell execution required for workflow embed continuation.")
+        self.root = root
+        self.project_id = project_id
+        self.command_block = command_block
+
+
+def build_manual_embed_project_id(root: Path) -> str:
+    base = re.sub(r"[^a-zA-Z0-9_-]+", "", root.name)
+    if not base or not base[0].isalpha():
+        base = f"workflowcapability{base}"
+    if not base[-1].isalpha():
+        base = f"{base}b"
+    return base[:48]
+
+
+def build_manual_embed_command_block(root: Path, project_id: str, profile: str = "<profile>") -> str:
+    return "\n".join(
+        [
+            "```bash",
+            "# Replace `<profile>` with `personal` or `outsourcing` before running the install commands below.",
+            f'/ops/softwares/python/bin/python3 "{SCRIPT_DIR / "detect-embed-state.py"}" --project-root "{root}"',
+            f'/ops/softwares/python/bin/python3 "{SCRIPT_DIR / "install-workflow.py"}" --project-root "{root}" --project-id "{project_id}" --profile {profile} --dry-run',
+            f'WORKFLOW_EMBED_HUMAN_CONFIRMED=1 /ops/softwares/python/bin/python3 "{SCRIPT_DIR / "install-workflow.py"}" --project-root "{root}" --project-id "{project_id}" --profile {profile}',
+            f'/ops/softwares/python/bin/python3 "{SCRIPT_DIR / "upgrade-compat.py"}" --project-root "{root}" --check',
+            "# During formal install, complete the terminal confirmation prompt: EMBED <project-id>",
+            "```",
+        ]
     )
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "install-workflow failed")
+
+
+def install_workflow_into(root: Path) -> None:
+    project_id = build_manual_embed_project_id(root)
+    raise HumanShellRequiredError(root, project_id, build_manual_embed_command_block(root, project_id))
 
 
 def initialize_prd(task_dir: Path, current_version: str, compatible_anchor: str) -> None:
@@ -1245,6 +1298,7 @@ def initialize_capability_report(
     b_root: Path,
     managed_rows: list[dict[str, Any]],
     dependent_rows: list[dict[str, Any]],
+    manual_shell_command_block: str | None = None,
 ) -> None:
     report_path = task_dir / "capability-report.md"
     structural_result, structural_signals, structural_why = derive_structural_break(managed_rows, dependent_rows)
@@ -1266,6 +1320,7 @@ def initialize_capability_report(
 - Step 0 version gate passed — Layer: runtime command output
 - Fresh A fixture created — Layer: generated target project
 - Fresh B fixture created — Layer: generated target project
+{"- Workflow embed into B has NOT been executed by this audit run; human shell continuation is required — Layer: source repo" if manual_shell_command_block else ""}
 
 ## Native CLI Adaptation Evidence
 <!-- Fill this section during Step B AI review unless the execution engine already prefilled it. -->
@@ -1285,6 +1340,8 @@ def initialize_capability_report(
 
 ## Discovered Baseline Capabilities
 {chr(10).join(f"- {item}" for item in summarize_baseline_capabilities(a_root))}
+
+{"## Manual Shell Continuation Required\n- Status: pending\n- Evidence:\n  - none recorded yet\n\n- Command Chain:\n" + manual_shell_command_block + "\n" if manual_shell_command_block else ""}
 
 ## Workflow-Managed Surface Matrix
 
@@ -1323,14 +1380,97 @@ def initialize_capability_report(
 - Auto-continue allowed: No
 - User confirmation required for:
   - whether to proceed from audit into confirmed compatibility-fix work
+{"  - whether to run the manual shell embed command chain for B and return the terminal transcript" if manual_shell_command_block else ""}
 """
     report_path.write_text(content, encoding="utf-8")
+
+
+def continue_after_human_shell(
+    task_dir: Path,
+    manual_shell_evidence: list[str],
+) -> dict[str, object]:
+    report_path = task_dir / "capability-report.md"
+    report_text = report_path.read_text(encoding="utf-8")
+    a_root, b_root = parse_fixture_roots_from_report(report_path)
+    a_root = validate_fixture_root(a_root, "workflow-capability-audit-a-", "A")
+    b_root = validate_fixture_root(b_root, "workflow-capability-audit-b-", "B")
+    install_record = b_root / ".trellis" / "workflow-installed.json"
+    if not install_record.is_file():
+        raise RuntimeError(
+            "B fixture does not yet show a completed workflow embed. Run the manual shell command chain first, then continue."
+        )
+    if (b_root / ".trellis" / "workflow-embed-attempt.json").exists():
+        raise RuntimeError(
+            "B fixture still contains workflow-embed-attempt.json, which indicates the manual shell embed chain did not finish cleanly."
+        )
+    cli_types = detect_cli_types_from_roots(a_root, b_root)
+    managed_rows = build_workflow_managed_rows(a_root, b_root, cli_types)
+    dependent_rows = build_workflow_dependent_rows(a_root, b_root)
+    updated = report_text
+    updated = replace_section(
+        updated,
+        "## Evidence-Gathering Actions Executed In This Round",
+        [
+            "- Step 0 version gate passed — Layer: runtime command output",
+            "- Fresh A fixture created — Layer: generated target project",
+            "- Fresh B fixture created — Layer: generated target project",
+            "- Human operator completed the manual shell embed command chain for B — Layer: runtime command output",
+            *[f"- {item} — Layer: runtime command output" for item in manual_shell_evidence],
+        ],
+    )
+    command_block = build_manual_embed_command_block(b_root, build_manual_embed_project_id(b_root))
+    updated = refresh_manual_shell_section(
+        updated,
+        status="completed",
+        command_block=command_block,
+        evidence=manual_shell_evidence,
+    )
+    updated = replace_section(
+        updated,
+        "## Workflow-Managed Surface Matrix",
+        ["", *_render_matrix(managed_rows).splitlines()],
+    )
+    updated = replace_section(
+        updated,
+        "## Workflow-Dependent Trellis-Native Surface Matrix",
+        ["", *_render_matrix(dependent_rows).splitlines()],
+    )
+    updated = refresh_structural_break_section(updated)
+    updated = refresh_stop_point_section(updated)
+    report_path.write_text(updated, encoding="utf-8")
+    return {
+        "mode": "continued-after-human-shell",
+        "task_dir": str(task_dir.relative_to(REPO_ROOT)),
+        "capability_report": str(report_path),
+        "report_path": str(report_path),
+        "a_root": str(a_root),
+        "b_root": str(b_root),
+        "managed_rows": len(managed_rows),
+        "dependent_rows": len(dependent_rows),
+        "manual_shell_evidence_items": len(manual_shell_evidence),
+    }
 
 
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     assets = ASSETS
+
+    if args.continue_after_human_shell:
+        if not args.task_dir:
+            print("--task-dir is required for --continue-after-human-shell.", file=sys.stderr)
+            return 1
+        try:
+            task_dir = resolve_audit_task_dir(args.task_dir)
+            payload = continue_after_human_shell(task_dir, args.manual_shell_evidence)
+        except RuntimeError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
 
     if args.supplemental_capability:
         if not args.task_dir:
@@ -1503,6 +1643,7 @@ def main() -> int:
     }
     a_root: Path | None = None
     b_root: Path | None = None
+    manual_shell_required: HumanShellRequiredError | None = None
     try:
         task_dir_ref = run_task_create(args.task_title, parent)
         task_dir_preexisted = Path(task_dir_ref).name in existing_task_dir_names
@@ -1517,11 +1658,53 @@ def main() -> int:
 
         a_root = create_fixture_root("workflow-capability-audit-a-", developer_name)
         b_root = create_fixture_root("workflow-capability-audit-b-", developer_name)
-        install_workflow_into(b_root)
+        initialize_prd(task_dir, current_version, compatible_anchor)
+        try:
+            install_workflow_into(b_root)
+        except HumanShellRequiredError as exc:
+            manual_shell_required = exc
+            initialize_capability_report(
+                task_dir,
+                args.current_cli,
+                current_version,
+                compatible_anchor,
+                gate_result,
+                reason,
+                a_root,
+                b_root,
+                [],
+                [],
+                manual_shell_command_block=exc.command_block,
+            )
+            payload = {
+                "gate_result": gate_result,
+                "reason": reason,
+                "current_trellis_version": current_version,
+                "compatible_anchor": compatible_anchor,
+                "task_dir": task_dir_ref,
+                "a_root": str(a_root),
+                "b_root": str(b_root),
+                "capability_report": f"{task_dir_ref}/capability-report.md",
+                "requires_user_confirmation": True,
+                "requires_human_shell_embed": True,
+                "human_shell_commands": exc.command_block,
+                "next_action": "Run the manual shell embed command chain for B and return the terminal transcript.",
+            }
+            if args.json:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                print("## Human Shell Required")
+                print()
+                print("The capability audit reached the workflow-embed boundary for fixture B.")
+                print("This audit must stop here and wait for a human operator to run the following shell commands manually:")
+                print()
+                print(exc.command_block)
+                print()
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            return 0
         cli_types = detect_cli_types_from_roots(a_root, b_root)
         managed_rows = build_workflow_managed_rows(a_root, b_root, cli_types)
         dependent_rows = build_workflow_dependent_rows(a_root, b_root)
-        initialize_prd(task_dir, current_version, compatible_anchor)
         initialize_capability_report(
             task_dir,
             args.current_cli,

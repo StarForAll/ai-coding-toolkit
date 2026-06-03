@@ -518,6 +518,7 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
         self,
         *args: str,
         env: dict[str, str] | None = None,
+        manual_shell_stop: bool = False,
     ) -> subprocess.CompletedProcess[str]:
         module = load_script_module()
         stdout = io.StringIO()
@@ -544,13 +545,19 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             context_id = merged_env.get("TRELLIS_CONTEXT_ID", "test-context")
             self._write_session_current_task(context_id, task_dir)
 
+        install_patch = (
+            patch.object(module, "install_workflow_into", side_effect=module.install_workflow_into)
+            if manual_shell_stop
+            else patch.object(module, "install_workflow_into", return_value=None)
+        )
+
         with (
             patch.dict(os.environ, merged_env, clear=False),
             patch.object(sys, "argv", [str(SCRIPT), *args]),
             patch.object(module, "run_task_create", side_effect=fake_run_task_create),
             patch.object(module, "run_task_start", side_effect=fake_run_task_start),
             patch.object(module, "create_fixture_root", side_effect=fake_create_fixture_root),
-            patch.object(module, "install_workflow_into", return_value=None),
+            install_patch,
             patch.object(module, "detect_cli_types_from_roots", return_value=["claude", "opencode", "codex"]),
             patch.object(module, "build_workflow_managed_rows", return_value=self._fake_managed_rows()),
             patch.object(module, "build_workflow_dependent_rows", return_value=self._fake_dependent_rows()),
@@ -564,6 +571,80 @@ class WorkflowCapabilityAuditTests(unittest.TestCase):
             stdout=stdout.getvalue(),
             stderr=stderr.getvalue(),
         )
+
+    def run_script_with_fake_continue_after_human_shell(
+        self,
+        task_dir: str,
+        *args: str,
+        env: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        module = load_script_module()
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        merged_env = os.environ.copy()
+        merged_env["TRELLIS_CONTEXT_ID"] = "test-context"
+        if env:
+            merged_env.update(env)
+        with (
+            patch.dict(os.environ, merged_env, clear=False),
+            patch.object(sys, "argv", [str(SCRIPT), "--task-dir", task_dir, "--continue-after-human-shell", *args]),
+            patch.object(module, "detect_cli_types_from_roots", return_value=["claude", "opencode", "codex"]),
+            patch.object(module, "build_workflow_managed_rows", return_value=self._fake_managed_rows()),
+            patch.object(module, "build_workflow_dependent_rows", return_value=self._fake_dependent_rows()),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            code = module.main()
+        return subprocess.CompletedProcess(
+            args=[PYTHON, str(SCRIPT), "--task-dir", task_dir, "--continue-after-human-shell", *args],
+            returncode=code,
+            stdout=stdout.getvalue(),
+            stderr=stderr.getvalue(),
+        )
+
+    def test_full_audit_stops_for_human_shell_embed_boundary(self) -> None:
+        assets = load_assets_module()
+        env = {assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9"}
+        result = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env, manual_shell_stop=True)
+        self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["requires_human_shell_embed"])
+        self.assertIn("WORKFLOW_EMBED_HUMAN_CONFIRMED=1", payload["human_shell_commands"])
+        self.assertIn("install-workflow.py", payload["human_shell_commands"])
+        self.assertIn("--profile <profile>", payload["human_shell_commands"])
+        self.assertIn("EMBED <project-id>", payload["human_shell_commands"])
+        self._track_fixtures_from_payload(payload)
+        report_path = REPO_ROOT / payload["capability_report"]
+        report_text = report_path.read_text(encoding="utf-8")
+        self.assertIn("## Manual Shell Continuation Required", report_text)
+        self.assertIn("WORKFLOW_EMBED_HUMAN_CONFIRMED=1", report_text)
+
+    def test_continue_after_human_shell_updates_report_and_matrices(self) -> None:
+        assets = load_assets_module()
+        env = {assets.CURRENT_TRELLIS_VERSION_ENV: "9.9.9"}
+        first = self.run_script_with_fake_full_audit("--current-cli", "claude", "--json", env=env, manual_shell_stop=True)
+        self.assertEqual(first.returncode, 0, msg=first.stdout + first.stderr)
+        payload = json.loads(first.stdout)
+        self._track_fixtures_from_payload(payload)
+        b_root = Path(payload["b_root"])
+        (b_root / ".trellis" / "workflow-installed.json").write_text("{}", encoding="utf-8")
+
+        second = self.run_script_with_fake_continue_after_human_shell(
+            payload["task_dir"],
+            "--manual-shell-evidence",
+            "Human operator completed the shell chain and returned the terminal transcript.",
+            "--json",
+            env=env,
+        )
+        self.assertEqual(second.returncode, 0, msg=second.stdout + second.stderr)
+        second_payload = json.loads(second.stdout)
+        self.assertEqual(second_payload["mode"], "continued-after-human-shell")
+        report_path = REPO_ROOT / payload["capability_report"]
+        report_text = report_path.read_text(encoding="utf-8")
+        self.assertIn("- Status: completed", report_text)
+        self.assertIn("Human operator completed the shell chain and returned the terminal transcript.", report_text)
+        self.assertIn("WM-001", report_text)
+        self.assertIn("TN-001", report_text)
 
     def test_compare_trellis_versions_orders_prerelease_before_stable(self) -> None:
         assets = load_assets_module()

@@ -42,10 +42,15 @@ This is the sole allowed pre-audit source edit exception:
 ## 3. Full Audit Continuation
 
 When `current > compatible`, the script creates or switches into the audit
-task, creates fresh `A/B`, installs the workflow into `B`, and initializes:
+task, creates fresh `A/B`, and initializes:
 
 - `prd.md`
 - `capability-report.md`
+
+If the run reaches the point where `B` would need workflow embed commands, the
+script must stop and output a manual human-shell command chain instead of
+executing `detect-embed-state.py`, `install-workflow.py --dry-run`, formal
+install, or `upgrade-compat.py --check` itself.
 
 When `current == compatible`, the same full-audit path is allowed only if the
 user explicitly wants a same-version audit and the caller passes
@@ -81,6 +86,32 @@ Returned JSON includes at least:
 - `a_root`
 - `b_root`
 - `capability_report`
+
+When the script stops at the manual shell boundary, returned JSON also includes:
+
+- `requires_human_shell_embed`
+- `human_shell_commands`
+- `next_action`
+
+## 3.1 Continue After Human Shell Execution
+
+After the human operator runs the returned shell command chain on `B` and brings back the transcript/evidence, continue the same audit task instead of creating a new one:
+
+```bash
+/ops/softwares/python/bin/python3 \
+docs/workflows/新项目开发工作流/commands/workflow-capability-audit.py \
+--task-dir .trellis/tasks/<existing-capability-audit-task> \
+--continue-after-human-shell \
+--manual-shell-evidence "Human operator completed the embed shell chain and returned the transcript." \
+--json
+```
+
+This path:
+
+- reuses the same A/B fixtures
+- expects `B` to already contain the manual-shell embed result
+- updates `capability-report.md`
+- rebuilds the workflow-managed and workflow-dependent matrices from the existing A/B roots
 
 Codex execution note:
 

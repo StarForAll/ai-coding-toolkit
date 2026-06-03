@@ -14,7 +14,7 @@ This skill covers:
 - fresh `/tmp + trellis init` baseline discovery for the current Trellis version
 - A/B comparison between:
   - `A`: fresh Trellis baseline
-  - `B`: fresh Trellis baseline + current workflow install
+  - `B`: fresh Trellis baseline prepared for current workflow install, with formal embed continuation delegated to a human-operated shell
 - capability/compatibility judgment for:
   - workflow-managed surfaces
   - Trellis-native capabilities that the workflow depends on even when they are not installer-managed
@@ -213,6 +213,14 @@ Natural language is allowed, but the recommended contract is:
   - default: `false`
   - required when the user explicitly wants a same-version full audit
   - has effect only when `current == compatible`
+- `continue_after_human_shell`
+  - optional boolean
+  - default: `false`
+  - use only when resuming an existing `workflow-capability-audit` task after the human operator has manually executed the shell embed chain for `B`
+- `manual_shell_evidence`
+  - optional repeated evidence bullets
+  - used together with `continue_after_human_shell`
+  - records a short summary of what the returned human shell transcript proved
 
 No initial `user_supplemented_capabilities` field exists in first version.
 
@@ -220,6 +228,7 @@ Reason:
 
 - missed capability supplementation happens **after** one discovery pass
 - it is a correction loop, not an initial input-mode switch
+- manual shell continuation is also a later-round continuation path, not an initial input-mode switch
 
 ---
 
@@ -251,6 +260,7 @@ Within the audit task:
 `capability-report.md` is the single evolving evidence artifact across:
 
 - initial audit
+- manual shell embed continuation for `B`
 - confirmed fix scope
 - applied compatibility corrections
 - post-fix revalidation
@@ -264,7 +274,7 @@ It must not freeze at the first audit conclusion if the workflow enters the conf
 Full audit must create fresh temporary projects:
 
 - `A`: fresh Trellis baseline
-- `B`: fresh Trellis baseline + installed current workflow
+- `B`: fresh Trellis baseline prepared for workflow embed continuation
 
 Rules:
 
@@ -293,7 +303,18 @@ The canonical execution engine (`docs/workflows/新项目开发工作流/command
 - create the audit task
 - create fresh A/B fixtures
 - generate initial `prd.md`
-- generate `capability-report.md` with the baseline capability matrix
+- if the run reaches workflow embed for `B`, stop and emit the manual human-shell command chain instead of executing embed commands itself
+- generate `capability-report.md`; when the human-shell boundary is reached before `B` is embedded, the report must record that pending continuation state explicitly
+
+### A.1 Continue After Human Shell
+
+When the human operator has manually executed the shell embed chain for `B` and returned the transcript/evidence:
+
+- reuse the same audit task
+- reuse the same A/B fixture roots from `capability-report.md`
+- update `capability-report.md` to mark the manual shell continuation as completed
+- rebuild the workflow-managed and workflow-dependent matrices from the existing A/B roots
+- continue the audit from the same task/report instead of creating a fresh audit task
 
 The script discovers managed-surface rows from `workflow_assets.py` specs and dependent-surface rows from known Trellis-native carrier definitions.
 
