@@ -1350,3 +1350,56 @@ Added project-id-gated sonar verify workflow contract and synced install/runtime
 ### Next Steps
 
 - None - task complete
+
+
+## Session 344: Pi 平台 Trellis 全链路冒烟测试
+<!-- trellis-session: v=2 fp=1056d2562afd7878 -->
+
+**Date**: 2026-10-15
+**Task**: Pi 平台 Trellis 全链路冒烟测试
+**Branch**: `main`
+
+### Summary
+
+End-to-end smoke test of Pi Trellis integration: task lifecycle, subagent context injection (implement/check/research, parallel), archive
+
+### Main Changes
+
+- Created and archived task 10-15-pi-trellis-smoke-test; verified session binding via pi_* session key
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] trellis_subagent single/parallel dispatch: all runs received full task context (PRD, curated spec w/ truncation notice)
+- [OK] task.py create/start/validate/archive gates all functional
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- No source changes needed; Pi integration verified working
+
+
+## Session 345: DSH 平台 Trellis 全链路冒烟测试
+<!-- trellis-session: v=2 fp=839d07a74cac2774 -->
+
+**Date**: 2026-10-15
+**Task**: DSH 平台 Trellis 全链路冒烟测试
+**Branch**: `main`
+
+### Summary
+
+End-to-end smoke test of the new DSH (.dsh) Trellis platform layer: session-scoped task pointer write/read in the main DSH session, foreground subagent dispatch for implement/check roles, evidence artifact under the task dir, and archive/journal close-out. Found: child DSH sessions cannot resolve the parent pointer (bare-uuid subagent session ids), and archive auto-commit fails when the task dir was never git-tracked.
+
+### Git Commits
+
+(No commits - planning session)
+
+### Status
+
+[OK] **Completed**
