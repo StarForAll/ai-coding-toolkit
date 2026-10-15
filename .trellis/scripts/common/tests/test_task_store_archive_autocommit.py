@@ -52,8 +52,8 @@ class TaskStoreArchiveAutocommitTests(unittest.TestCase):
         shutil.move(str(task_dir), str(archived_task))
 
         result = task_store._auto_commit_archive(task_dir.name, repo_root, [task_dir.name])
-        # 0.5.17: _auto_commit_archive returns None instead of bool
-        self.assertIsNone(result)
+        # 0.7.0: _auto_commit_archive reports a bool (True = staged+committed)
+        self.assertTrue(result)
 
         status = self.git(repo_root, "status", "--short", "--", ".trellis/tasks")
         self.assertEqual(status.stdout.strip(), "", msg=status.stdout + status.stderr)
@@ -66,8 +66,8 @@ class TaskStoreArchiveAutocommitTests(unittest.TestCase):
         repo_root, task_dir = self.create_repo()
 
         result = task_store._auto_commit_archive(task_dir.name, repo_root, [task_dir.name])
-        # 0.5.17: returns None (function return type changed from bool to None)
-        self.assertIsNone(result)
+        # 0.7.0: bool return; nothing was staged because the task never moved
+        self.assertFalse(result)
 
     def test_archive_respects_session_auto_commit_config(self) -> None:
         repo_root, task_dir = self.create_repo()
@@ -95,22 +95,25 @@ class TaskStoreArchiveAutocommitTests(unittest.TestCase):
                         ["04-16-sample-task"],
                     )
 
-        # 0.5.17: returns None instead of True/False
-        self.assertIsNone(result)
+        # 0.7.0: bool return (True = skipped by config, nothing staged)
+        self.assertTrue(result)
         safe_git_add_mock.assert_not_called()
         self.assertIn("session_auto_commit: false", stderr.getvalue())
 
     def test_auto_commit_archive_reports_git_failure_on_readonly_failure(self) -> None:
+        """A failing `git add` must surface an actionable warning, not silence.
+
+        0.7.0 routes `safe_git_add(..., retry_on_index_lock=True)`: when the raw
+        git error mentions `.git/index.lock` the function prints the
+        retry-exhaustion guidance instead of echoing git's stderr verbatim.
+        A read-only filesystem is reported by git as an index.lock creation
+        failure, so it lands on that branch. The contract under test is
+        "the git failure is reported with a remedy" — not the exact upstream
+        wording, which changed shape.
+        """
         repo_root, _ = self.create_repo()
 
         stderr = StringIO()
-        # 0.5.17: _auto_commit_archive calls run_git multiple times:
-        #   1. git add (safe_git_add) — uses run_git internally
-        #   2. git rm --cached (unconditional)
-        #   3. git diff --cached --quiet
-        #   4. git commit
-        # When safe_git_add fails (returns False), the function returns early
-        # after printing a warning, so only the git add call matters.
         with patch.object(
             task_store,
             "safe_git_add",
@@ -123,10 +126,11 @@ class TaskStoreArchiveAutocommitTests(unittest.TestCase):
                     ["04-16-sample-task"],
                 )
 
-        # 0.5.17: returns None instead of False
-        self.assertIsNone(result)
+        # 0.7.0: bool return; False = git add failed and the source was tracked
+        self.assertFalse(result)
         output = stderr.getvalue()
-        self.assertIn("Read-only file system", output)
+        self.assertIn("git add gave up after", output)
+        self.assertIn("index.lock", output)
 
 
 if __name__ == "__main__":

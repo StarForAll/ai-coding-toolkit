@@ -20,7 +20,7 @@ Phase 3: Finish  -> final verification, preserve lessons, and wrap up
 
 Each phase contains numbered steps, such as `1.3 Configure context`. These numbers are not runtime fields in `task.json`; they are workflow structure for AI and humans to read.
 
-## Skill Routing
+## Active Task Routing
 
 `workflow.md` separates routing by platform capability:
 

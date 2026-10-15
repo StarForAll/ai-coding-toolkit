@@ -52,6 +52,18 @@ At minimum: the current active task (if any). Plus any extra tasks the user conf
 
 If there is no active task and the user did not confirm any cleanup archives, skip this step.
 
+### Archiving work that never had its own branch
+
+`task.py archive` refuses a task whose `branch` and `base_branch` are equal, because a PR cannot target its own branch. That refusal is correct for a PR-backed task, but it also fires on the ordinary case of working **directly on the base branch** (`main`): `create` stamps `base_branch` with the repo default, `start` records the checked-out branch, and on `main` both end up `main`.
+
+That metadata is truthful for a task that never had a branch of its own, so archive it with the explicit acknowledgement:
+
+```bash
+python3 ./.trellis/scripts/task.py archive <task-name> --skip-branch-validation
+```
+
+Use the flag **only** when the task genuinely never had its own branch. If the task was PR-backed and its metadata is wrong — `branch` missing, or a feature branch recorded as its own target — repair the fields instead, with `task.py set-branch` / `task.py set-base-branch`. The flag skips the missing-branch check as well, so reaching for it there would hide a record that cannot describe what was merged.
+
 ## Step 4: Record session journal
 
 ```bash

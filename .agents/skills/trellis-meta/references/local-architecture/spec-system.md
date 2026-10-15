@@ -65,11 +65,11 @@ This command lists packages and spec layers for the current project. Use this ou
 
 ## How Specs Enter Tasks
 
-Before a task enters implementation, Phase 1.3 should write relevant specs into `implement.jsonl` / `check.jsonl`:
+Before a task enters implementation, planning may write relevant specs into `implement.jsonl` / `check.jsonl` when the task needs spec or research context beyond the task artifacts:
 
 ```jsonl
-{"file": ".trellis/spec/cli/backend/index.md", "reason": "CLI backend conventions"}
-{"file": ".trellis/spec/cli/unit-test/conventions.md", "reason": "Test expectations"}
+{"file": ".trellis/spec/docs/index.md", "reason": "Project documentation conventions"}
+{"file": ".trellis/spec/library-assets/index.md", "reason": "Library asset conventions"}
 ```
 
 Sub-agents or platform preludes read these JSONL files and load the referenced specs. On platforms without sub-agent support, the AI should read the relevant specs directly according to the workflow.

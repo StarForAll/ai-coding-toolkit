@@ -21,10 +21,20 @@ SCRIPTS_DIR = REPO_ROOT / ".trellis" / "scripts"
 ACTIVE_TASK_PATH = SCRIPTS_DIR / "common" / "active_task.py"
 TASK_PATH = SCRIPTS_DIR / "task.py"
 STATUSLINE_PATH = REPO_ROOT / ".claude" / "hooks" / "statusline.py"
-PYTHON = "/ops/softwares/python/bin/python3"
+
+# `common.*` uses relative imports, so it must be reached as a package. Running
+# this module via `python3 -m unittest` from `.trellis/scripts` already puts that
+# directory on sys.path; add it defensively so the relative-path invocation
+# `python3 <file>` fails loudly on a real assertion instead of ImportError.
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+
+from common import active_task as active_task_module  # noqa: E402
+import task as task_module  # noqa: E402
 
 
 def _load_module(module_name: str, path: Path):
+    """Load a module that lives outside the `common` package (e.g. statusline)."""
     spec = importlib.util.spec_from_file_location(module_name, path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"Unable to load module: {path}")
@@ -37,10 +47,8 @@ def _load_module(module_name: str, path: Path):
 class RuntimeActiveTaskConvergenceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        if str(SCRIPTS_DIR) not in sys.path:
-            sys.path.insert(0, str(SCRIPTS_DIR))
-        cls.active_task = _load_module("trellis_active_task_runtime_test", ACTIVE_TASK_PATH)
-        cls.task_module = _load_module("trellis_task_runtime_test", TASK_PATH)
+        cls.active_task = active_task_module
+        cls.task_module = task_module
         cls.statusline = _load_module("trellis_statusline_runtime_test", STATUSLINE_PATH)
 
     def make_repo(self, *, task_name: str = "05-14-sample-task", status: str = "planning") -> Path:
@@ -132,7 +140,14 @@ class RuntimeActiveTaskConvergenceTest(unittest.TestCase):
         self.assertIsNone(active.task_path)
         self.assertEqual(active.source, "none")
 
-    def test_resolve_active_task_prefers_session_fallback_over_none(self) -> None:
+    def test_resolve_active_task_single_session_fallback_requires_opt_in(self) -> None:
+        """0.7.0: single-session inference became opt-in.
+
+        ``resolve_active_task`` no longer infers ownership from "exactly one
+        session file exists" unless the caller passes
+        ``allow_single_session_fallback=True`` — pull-based child-agent callers
+        opt in explicitly. Both halves of that contract are asserted here.
+        """
         repo_root = self.make_repo(status="in_progress")
         self.addCleanup(shutil.rmtree, repo_root)
         session_path = repo_root / ".trellis" / ".runtime" / "sessions" / "only-session.json"
@@ -141,10 +156,18 @@ class RuntimeActiveTaskConvergenceTest(unittest.TestCase):
             encoding="utf-8",
         )
         with patch.object(self.active_task, "resolve_context_key", return_value=None):
-            active = self.active_task.resolve_active_task(repo_root)
+            default_active = self.active_task.resolve_active_task(repo_root)
+            opted_in = self.active_task.resolve_active_task(
+                repo_root, allow_single_session_fallback=True
+            )
 
-        self.assertEqual(active.source, "session-fallback:only-session")
-        self.assertEqual(active.task_path, ".trellis/tasks/05-14-sample-task")
+        with self.subTest(case="default refuses to infer"):
+            self.assertIsNone(default_active.task_path)
+            self.assertEqual(default_active.source, "none")
+
+        with self.subTest(case="explicit opt-in resolves"):
+            self.assertEqual(opted_in.source, "session-fallback:only-session")
+            self.assertEqual(opted_in.task_path, ".trellis/tasks/05-14-sample-task")
 
     def test_resolve_active_task_skips_degraded_when_context_key_exists(self) -> None:
         repo_root = self.make_repo(status="in_progress")

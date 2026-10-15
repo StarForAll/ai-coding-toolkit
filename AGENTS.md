@@ -19,7 +19,7 @@ Primary asset types:
 - `.trellis/`: project-local Trellis workflow runtime and maintenance layer: `workflow.md`, `spec/`, `tasks/`, `workspace/`, `scripts/`, runtime state, library sync metadata, and managed-file hash tracking
 - `skills/`: skill source assets maintained in this repo
 - `.agents/`: shared deployment layer scanned by compatible skill loaders; in this repository it is currently populated by shared Trellis skills under `.agents/skills/`
-- `.claude/`, `.opencode/`, `.codex/`, `.kiro/`, `.qoder/`: current platform integration and deployment layer
+- `.claude/`, `.codex/`: current platform integration and deployment layer for this repository (the Trellis 0.7.0 upgrade retired `.opencode/` and `.qoder/`; `.kiro/` is not deployed here either). `.agents/skills/` above is the shared skill layer Codex consumes.
 - `agents/`: source agent asset layer with real repo-authored agent directories plus authoring templates; it is not the live source of truth for the managed Trellis native agent trio
 - `commands/`: repo-root command/source-helper layer; currently still mostly scaffold docs, but it already includes shared shell helper assets and should not be confused with the workflow-local command product source
 - current workflow product source tree: lives under `docs/workflows/新项目开发工作流/`; its command, installer, and CLI-adapter source assets live under `docs/workflows/新项目开发工作流/commands/`
@@ -29,17 +29,17 @@ Primary asset types:
 
 ```bash
 # Validate trellis-library manifest and asset sync
-/ops/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings
+/softwares/python/bin/python3 trellis-library/cli.py validate --strict-warnings
 
 # Validate skills structure
 ./scripts/validate-skills.sh
 
 # Run CLI unit tests
-/ops/softwares/python/bin/python3 -m unittest trellis-library/tests/test_cli.py
+/softwares/python/bin/python3 -m unittest trellis-library/tests/test_cli.py
 
 # Get session context and active task inventory
-/ops/softwares/python/bin/python3 ./.trellis/scripts/get_context.py
-/ops/softwares/python/bin/python3 ./.trellis/scripts/task.py list
+/softwares/python/bin/python3 ./.trellis/scripts/get_context.py
+/softwares/python/bin/python3 ./.trellis/scripts/task.py list
 ```
 
 ## Working Rules
@@ -65,14 +65,12 @@ Primary asset types:
 - In this repository, project-local Trellis skills, agents, and command-like entrypoints are typically referenced with the `trellis-...` form, for example `trellis-check`, `trellis-before-dev`, and `trellis-continue`.
 - Some workflow product docs may describe target-project CLI entrypoints such as `/trellis:...` or `trellis/...`; treat those as installed target-project surfaces, not the default invocation form for this repository.
 - Trellis 0.5+ provides native `trellis-research`, `trellis-implement`, and `trellis-check` agents directly. The workflow no longer deploys or manages its own agent overlay; it only migrates legacy bare-name files (e.g. `research.md`) to the Trellis-native `trellis-*` naming convention during install/upgrade.
-- Platform agent formats differ: Claude/OpenCode/Qoder use Markdown wrappers, Codex uses TOML, and Kiro uses JSON plus hook declarations.
-- For workflow maintenance, compare rendered agent copies against the shared source plus renderer contract, not only by cross-platform string equality; small platform-localized wording or path examples may differ.
-- Claude, OpenCode, and Kiro can push sub-agent context via `inject-subagent-context` hooks/plugins. Codex self-loads task context in agent files. In the current Qoder deployment, `trellis-implement` and `trellis-check` self-load `prd.md`, `info.md`, and JSONL context, while `trellis-research` resolves the active task/output path itself and there is no dedicated Qoder subagent-context hook in `.qoder/settings.json`.
+- Platform agent formats differ: Claude Code uses Markdown wrappers, Codex uses TOML. (Upstream also supports OpenCode/Qoder Markdown wrappers and Kiro JSON+hooks, but this repository does not deploy those platforms.)
+- For workflow maintenance, compare rendered agent copies against the shared source plus renderer contract, not only by cross-platform string equality; small platform-localized wording or path examples may differ. Only the Claude Code and Codex renderings still exist in this repository.
+- Claude Code pushes sub-agent context via its `.claude/hooks/inject-subagent-context.py` PreToolUse hook. Codex consumes the same shared script through `.codex/hooks/inject-subagent-context.py` on its native `SubagentStart` event, and its agent `.toml` files keep a child-side self-loading fallback.
 - Codex relies on `AGENTS.md`, `.codex/config.toml`, `.codex/hooks.json`, `.agents/skills/`, and `.codex/agents/`; do not assume a project-level `/trellis:...` command directory exists there. The `.codex/` project layer only becomes effective when the repo is trusted, the user-level hooks feature is enabled, and installed hooks pass Codex's one-time `/hooks` approval.
 - When `.trellis/config.yaml` keeps `codex.dispatch_mode: inline` (the current default in this repository), the main Codex session must not use agents at all. This is an absolute rule: do not call generic platform agents such as `spawn_agent`, `explorer`, or `worker`, and do not manually invoke `.codex/agents/trellis-*`. Stay inline in the main session unless the project explicitly switches Codex to `sub-agent`.
 - Use Trellis native `finish-work` as the normal close-out path in this repository after the workflow's required code-commit step. `add_session.py` is the underlying session-recording step used by that flow and a manual fallback when explicitly needed; do not introduce repo-local helper-based close-out flows unless the platform contract is explicitly changed.
-- Kiro uses `.kiro/` hooks, agents, and skills to connect into the same `.trellis` state.
-- Qoder uses `.qoder/` hooks, skills, and agents to connect into the same `.trellis` state.
 
 <!-- TRELLIS:START -->
 # Trellis Instructions

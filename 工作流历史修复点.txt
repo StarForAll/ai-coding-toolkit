@@ -68,6 +68,6 @@ project-audit 和 delivery 都是项目级别的阶段，project-audit中使用r
 
 31. check 步骤补充 sonar verify 补充,该检查如果出现问题则进行修复直到没有问题为止
 
-32. 有且只有shell命令方式嵌入工作流
+32. 有且只有shell命令方式嵌入工作流，不能使用 ai cli等agent执行
 
 
