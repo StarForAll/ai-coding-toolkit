@@ -1403,3 +1403,25 @@ End-to-end smoke test of the new DSH (.dsh) Trellis platform layer: session-scop
 ### Status
 
 [OK] **Completed**
+
+
+## Session 346: ZCode 平台 Trellis 冒烟测试
+<!-- trellis-session: v=2 fp=72fccbf33d8f5db2 -->
+
+**Date**: 2026-10-15
+**Task**: ZCode 平台 Trellis 冒烟测试
+**Branch**: `main`
+
+### Summary
+
+对 .zcode/ 集成层完成端到端冒烟：任务生命周期主链、SessionStart/UserPromptSubmit 注入、主会话 Bash 会话票据桥均验证通过；发现两项缺陷（子代理上下文注入失效：inject-subagent-context.py 对 camelCase 载荷的死回退；子代理 Bash 无票据桥）与一项结构性缺口（create auto-bind 不可达），均如实记录；trellis-implement / trellis-check 原生子代理调度成功，prelude 兜底链路有效，质检结论 PASS-WITH-NOTES。详见归档任务目录 report.md。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a1d2bd2` | test(trellis): ZCode 平台全链路冒烟测试 |
+
+### Status
+
+[OK] **Completed**

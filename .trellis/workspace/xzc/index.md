@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-7.md`
-- **Total Sessions**: 345
+- **Total Sessions**: 346
 - **Last Active**: 2026-10-15
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-7.md` | ~1405 | Active |
+| `journal-7.md` | ~1427 | Active |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
@@ -35,6 +35,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 346 | 2026-10-15 | ZCode 平台 Trellis 冒烟测试 | `a1d2bd2` | `main` |
 | 345 | 2026-10-15 | DSH 平台 Trellis 全链路冒烟测试 | - | `main` |
 | 344 | 2026-10-15 | Pi 平台 Trellis 全链路冒烟测试 | - | `main` |
 | 343 | 2026-06-03 | human-terminal-only embed boundaries | `5c99466`, `3199fd0`, `8daa7dc` | `main` |
