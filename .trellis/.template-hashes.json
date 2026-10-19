@@ -838,7 +838,7 @@
     ".trellis/scripts/common/__pycache__/types.cpython-314.pyc": "f3b668cafc41d39d534847de1413f9ea2f7e492ae3ff5fc2748bf846cb368931",
     ".trellis/scripts/common/__pycache__/workflow_phase.cpython-311.pyc": "c1087c1fee1765e53f72bb9c3c32707b979ce52e46c877e4f45c9e8aa2cac887",
     ".trellis/scripts/common/__pycache__/workflow_phase.cpython-312.pyc": "52cbbfaec09d446d0191010fb532d307e507d5074135e7c83618a71950d69480",
-    ".trellis/scripts/common/__pycache__/workflow_phase.cpython-313.pyc": "a38bf5fdf6c9f156b74b8c550f276cd826210db6c91a4b1567297d8ab5b42ece",
+    ".trellis/scripts/common/__pycache__/workflow_phase.cpython-313.pyc": "4396815e5f7f0391a39967cba4d77f1ef71088158d32108b7e5d749dc29255b9",
     ".trellis/scripts/common/__pycache__/workflow_phase.cpython-314.pyc": "a54cfdb3a709688b0e1dd1cfc1a7f8a49aadd485a91cfe44eb0c466cc855d1ae",
     ".trellis/scripts/common/__pycache__/workflow_selection.cpython-313.pyc": "5a284e1a7df3bd4922c377ad91a9b2edafcbdcc6974e180671b8f2d2bde7e91d",
     ".trellis/scripts/common/__pycache__/workflow_selection.cpython-314.pyc": "15d7557b08a7fbd083e7fbb6bcf89b396701ad822017602df23a428b11b82def",
@@ -914,6 +914,10 @@
     ".trellis/scripts/write-library-lock.py": "2ec7103ea03fa71902d28e0c3c3d93a23599a12045ce5ecdffb671a0339bd9f0",
     ".trellis/templates/universal-domains/product-and-requirements/acceptance-criteria-template.md": "2589bc288573961089c917635dd87ecebdf0a725c1cad97e73051f005ceb4ddb",
     ".trellis/templates/universal-domains/product-and-requirements/customer-facing-prd-template.md": "3cec476e15a18f7d50be072c47da13e85d8648bfde8f74a50193f4a20bd231b2",
-    ".trellis/templates/universal-domains/product-and-requirements/developer-facing-prd-template.md": "32428e6020a34f25c8cf4913bb9dc23aea609a4b19fc4d31aa17dac2b77a8b59"
+    ".trellis/templates/universal-domains/product-and-requirements/developer-facing-prd-template.md": "32428e6020a34f25c8cf4913bb9dc23aea609a4b19fc4d31aa17dac2b77a8b59",
+    ".trellis/.runtime/update-check-claude_sess_65981aab-0813-44b2-87f9-444fa7b81e51.marker": "77c2ca150b61c7330da139378ffd3940d093f1bd74a1294689345d27e15b5124",
+    ".trellis/.runtime/update-check-claude_sess_b76901bf-e3a7-4664-b7ad-582d0237c05f.marker": "77c2ca150b61c7330da139378ffd3940d093f1bd74a1294689345d27e15b5124",
+    ".trellis/.runtime/update-check-dsh_session-ebf0d88c-3fb9-4517-b522-ee72ff93abc2.marker": "77c2ca150b61c7330da139378ffd3940d093f1bd74a1294689345d27e15b5124",
+    ".trellis/.runtime/update-check-pi_01a13fff-375e-737c-8836-8bcdca011c2a.marker": "77c2ca150b61c7330da139378ffd3940d093f1bd74a1294689345d27e15b5124"
   }
 }

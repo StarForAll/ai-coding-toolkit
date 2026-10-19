@@ -89,6 +89,19 @@ Key contracts:
 
 ---
 
+## Reviewing Design/Contract Docs
+
+When the task is to **review** (not edit) a design or contract document under
+`docs/workflows/` — especially `workflow-design.md` — read
+[Design-Doc Review Thinking Guide](../guides/design-review-thinking-guide.md)
+first. It defines the evidence bar, the four filters, the required "excluded
+candidates" section, and the known false-positive patterns.
+
+Version drift in derived docs (for example a flow diagram still labeled v24) is
+a report item, not a design defect.
+
+---
+
 ## README Standards
 
 ### Project Root README

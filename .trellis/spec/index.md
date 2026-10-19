@@ -93,6 +93,7 @@ Current support-layer status:
 | [Thinking Guides](./guides/index.md) | `.trellis/spec/guides/` |
 | [Code Reuse Thinking](./guides/code-reuse-thinking-guide.md) | Pattern identification |
 | [Cross-Layer Thinking](./guides/cross-layer-thinking-guide.md) | Repo boundary and drift prevention |
+| [Design-Doc Review Thinking](./guides/design-review-thinking-guide.md) | Review design/contract docs without false positives |
 
 ### Scope Boundary
 
@@ -131,6 +132,7 @@ live workflow-authoring inputs.
 | Define a skill | `skills/index.md` |
 | Change platform-specific runtime behavior | `platforms/index.md` |
 | Design or update workflow docs in `docs/workflows/**` | `docs/index.md` + relevant `universal-domains/**` concerns |
+| Review a design/contract doc (e.g. `docs/workflows/workflow-design.md`) | `guides/design-review-thinking-guide.md` |
 | Any repo-maintenance task | `guides/index.md` |
 
 ---
