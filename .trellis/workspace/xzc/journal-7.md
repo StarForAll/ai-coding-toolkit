@@ -1465,3 +1465,25 @@ End-to-end smoke test of the new DSH (.dsh) Trellis platform layer: session-scop
 
 - 重启 dsh web 以加载 0.3.9
 - 如需同步上游 dsh-trellis，另行确认
+
+
+## Session 348: dsh-trellis 安装态对标与 0.1.0 修正
+<!-- trellis-session: v=2 fp=6cd99c89756ebdac -->
+
+**Date**: 2026-10-21
+**Task**: dsh-trellis 安装态对标与 0.1.0 修正
+**Branch**: `main`
+
+### Summary
+
+真实 DSH/Codex 对照验证 dsh-trellis：核心能力逐字节对齐，修复 inline 块缺失静默降级与 inline 派发门禁；新增项目首次使用时自动补 dsh.dispatch_mode: inline（锁内重读、原子写入）；版本重置 0.1.0 并固化版本策略；新增 pre-push client 构建钩子。单测 321/317 pass，4 skip。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cac69df` | feat(dsh-trellis): 自动引导 dispatch_mode 并收紧 inline 模式 |
+
+### Status
+
+[OK] **Completed**
