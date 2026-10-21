@@ -8,6 +8,7 @@ import {
   mapStatus,
   normalizeDshCommandRefs,
   FALLBACK_BREADCRUMB,
+  MISSING_WORKFLOW_BREADCRUMB,
 } from "../lib/workflow.js";
 import { truncateUtf8 } from "../lib/breadcrumb.js";
 
@@ -291,7 +292,7 @@ test("resolveTrellisState: a missing workflow file also degrades visibly", async
     cache: new Map(),
   });
   assert.equal(state.status, "no_task");
-  assert.equal(state.body, FALLBACK_BREADCRUMB);
+  assert.equal(state.body, MISSING_WORKFLOW_BREADCRUMB);
 });
 
 test("normalizeDshCommandRefs maps Codex command references to DSH", () => {

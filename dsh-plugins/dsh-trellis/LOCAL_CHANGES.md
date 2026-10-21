@@ -303,7 +303,8 @@ See `docs/validation-0.1.0-local.md`.
 - Upstream monitoring is triggered from the browser but performed by the Host
   (a closed page performs no checks; the interval resumes on the next load).
   Only a page can raise a desktop notification; only the Host can read GitHub's
-  CORS-less Atom feeds without the REST API quota.
+  CORS-less Atom feeds. REST is used only as a fallback after the Atom feed
+  fails, so the unauthenticated quota is not spent on every check.
 - The monitor sends only repository or package names to `github.com` and
   `registry.npmjs.org`; it sends no project content, settings, or credentials.
   The route accepts only GET and only fetches URLs it constructs from validated
@@ -342,7 +343,7 @@ authoritative scope and manual checks.
 | `lib/trellis-config.js` | Accept single-line flow mappings (`section: {key: value}`) for every owned section. | `dsh: {dispatch_mode: inline}` was silently treated as `auto`, bypassing the inline guard. |
 | `lib/workflow.js` | Visible fallback when a Trellis root has no readable workflow state block; normalize Codex-style `/trellis:<name>` refs; inline banner now includes `--allow-empty-context`. | Match Trellis's visible degradation, DSH command surface, and the inline start gate. |
 | `lib/subagent-context.js` | Research uses the spec-tree/search-tips context; pushed role contract strips pull-only sections. | Align research with Codex and remove contradictory instructions. |
-| `lib/upstream.js` | Friendly timeout errors, `allSettled` partial commit/release results. | Manual version checks must not surface raw `This operation was aborted`. |
+| `lib/upstream.js` | Friendly timeout errors, Atom→GitHub REST fallback, `allSettled` partial commit/release results. | Manual version checks must not surface raw `This operation was aborted` and should still return data when Atom is unreachable. |
 | `src/client/version-check.js`, `src/client/VersionMonitor.jsx`, `src/client/locales.js` | Render partial upstream results and a retry hint. | Same. |
 | `lib/project-defaults.js` | Cache write failures per project/process. | Read-only projects retried a failing config write on every model step. |
 | `lib/wait-tool.js` | Optional `timeout_ms`; timeout returns `state=timeout`, `outcome=unknown`. | Prevent unbounded waits without guessing success. |

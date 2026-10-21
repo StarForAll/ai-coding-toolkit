@@ -5,6 +5,7 @@ import {
   decodeXml,
   fetchCommitFeed,
   fetchNpmDistTags,
+  fetchReleaseFeed,
   parseCommitFeed,
   parsePackageName,
   parseReleaseFeed,
@@ -199,4 +200,57 @@ test("a hanging GitHub feed returns a friendly partial result", async () => {
   assert.equal(payload.release, null);
   assert.match(payload.errors.map((entry) => entry.message).join(" "), /timed out after 10 ms/);
   assert.doesNotMatch(response.body, /This operation was aborted/);
+});
+
+test("fetchCommitFeed falls back to the REST API when Atom is unavailable", async () => {
+  const urls = [];
+  const commit = await fetchCommitFeed({
+    repo: { owner: "a", repo: "b" },
+    fetchImpl: async (url) => {
+      urls.push(url);
+      if (url.endsWith("commits.atom")) throw new Error("feed offline");
+      return jsonResponse([{
+        sha: "abcdef1234567",
+        html_url: "https://github.com/a/b/commit/abcdef1234567",
+        commit: {
+          message: "fix: fallback\n\nbody",
+          author: { date: "2026-10-21T00:00:00Z" },
+        },
+      }]);
+    },
+  });
+  assert.deepEqual(urls, [
+    "https://github.com/a/b/commits.atom",
+    "https://api.github.com/repos/a/b/commits?per_page=1",
+  ]);
+  assert.equal(commit.sha, "abcdef1234567");
+  assert.equal(commit.message, "fix: fallback");
+  assert.equal(commit.date, "2026-10-21T00:00:00Z");
+});
+
+test("fetchReleaseFeed falls back to the REST API and treats 404 as no release", async () => {
+  const release = await fetchReleaseFeed({
+    repo: { owner: "a", repo: "b" },
+    fetchImpl: async (url) => {
+      if (url.endsWith("releases.atom")) throw new Error("feed offline");
+      return jsonResponse([{
+        tag_name: "v0.1.1",
+        published_at: "2026-10-21T00:00:00Z",
+        html_url: "https://github.com/a/b/releases/tag/v0.1.1",
+      }]);
+    },
+  });
+  assert.deepEqual(release, {
+    tag: "v0.1.1",
+    date: "2026-10-21T00:00:00Z",
+    url: "https://github.com/a/b/releases/tag/v0.1.1",
+  });
+  const none = await fetchReleaseFeed({
+    repo: { owner: "a", repo: "b" },
+    fetchImpl: async (url) => {
+      if (url.endsWith("releases.atom")) throw new Error("feed offline");
+      return jsonResponse({ message: "Not Found" }, 404);
+    },
+  });
+  assert.equal(none, null);
 });

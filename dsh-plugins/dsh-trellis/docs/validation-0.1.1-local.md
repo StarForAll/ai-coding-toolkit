@@ -16,7 +16,7 @@ handled as a version-check partial-result problem.
 
 ```text
 pnpm test
-tests 338 / pass 334 / fail 0 / skipped 4
+tests 340 / pass 336 / fail 0 / skipped 4
 ```
 
 Coverage added for:

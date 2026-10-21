@@ -112,9 +112,10 @@ DeepSeek Harness (dsh) host 插件：把 [Trellis](https://github.com/mindfold-a
   - 关闭“版本监控”开关会隐藏间隔、通知、三个来源地址与整个检查面板；自动检查间隔为 0
     时只保留手动检查；手动检查用当前草稿值，自动检查用已保存配置。
   - 检查由 **Host 侧**执行并通过同源路由 `/dsh-trellis/version-check` 提供给设置页：
-    GitHub 的 Atom feed（`commits.atom` / `releases.atom`）没有 CORS 头，而 REST API
-    未认证配额（60 次/小时）正是浏览器端 403 的来源；Host 只访问由校验后的
-    `owner/repo` 拼出的 Atom 地址，以及 npm registry 的 `dist-tags`，不接受任意 URL。
+    GitHub 的 Atom feed（`commits.atom` / `releases.atom`）没有 CORS 头；Host 优先读
+    Atom，失败后才回退到 GitHub REST（未认证配额 60 次/小时），避免每次检查消耗配额。
+    Host 只访问由校验后的 `owner/repo` 拼出的地址，以及 npm registry 的 `dist-tags`，
+    不接受任意 URL。
     新变化经 `Notification` 发桌面通知（未授权时只显示页内结果），手动检查另发一条本次汇总通知。
 
 ## 安装
@@ -224,8 +225,9 @@ dsh plugin --profile headless add file:C:/path/to/dsh-trellis
   `spec_injection` / `prompt_injection` / `context_injection` 同步支持。
 - **inline 启动**：`<dsh-mode>` 横幅补充 `task.py start --allow-empty-context`
   提示。
-- **版本检查**：GitHub/npm 请求超时转为可读的局部结果；commit/release feed 独立
-  结算，UI 显示“部分结果”而不是原始 `This operation was aborted`。
+- **版本检查**：GitHub/npm 请求超时转为可读的局部结果；Atom feed 不可达时
+  回退到 GitHub REST，commit/release feed 独立结算，UI 显示“部分结果”而不是
+  原始 `This operation was aborted`。
 - **稳定性**：只读项目的 `dsh.dispatch_mode` 写入失败按进程缓存；`trellis_wait`
   支持可选 `timeout_ms`，超时返回 fail-closed 的 `timeout/unknown`。
 

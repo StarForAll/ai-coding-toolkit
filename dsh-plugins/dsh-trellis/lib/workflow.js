@@ -52,12 +52,17 @@ export const DSH_INLINE_NOTE =
   "specs with trellis-update-spec, then commit (Phase 3.4) and run " +
   "/trellis-finish-work.\n" +
   "Inline task start: when implement.jsonl / check.jsonl are intentionally empty, " +
-  "run `task.py start <task> --allow-empty-context`; do not curate jsonl in inline mode.\n" +
+  "run `python3 ./.trellis/scripts/task.py start <task> --allow-empty-context`; " +
+  "do not curate jsonl in inline mode.\n" +
   "</dsh-mode>";
 
 /** The degrading fallback when workflow.md lacks a block for the resolved status. */
 export const FALLBACK_BREADCRUMB =
   "Refer to `.trellis/workflow.md` for the current workflow step (no matching [workflow-state] block found).";
+
+/** Missing/unreadable workflow file: keep the repair target explicit. */
+export const MISSING_WORKFLOW_BREADCRUMB =
+  "Refer to `.trellis/workflow.md` for the current workflow step (the workflow file is missing or unreadable).";
 
 const DSH_COMMAND_REFS = Object.freeze(new Map([
   ["start", "/trellis-start"],
@@ -497,8 +502,11 @@ export async function resolveTrellisState({
   // generic line and the user is expected to repair workflow.md. Returning
   // null here made the DSH session completely silent, including the bootstrap
   // nudge.
+  const workflowFallback = content === null || content === undefined
+    ? MISSING_WORKFLOW_BREADCRUMB
+    : FALLBACK_BREADCRUMB;
   let body = blocks.size === 0
-    ? (rawStatus === "task_error" ? TASK_ERROR_BREADCRUMB : FALLBACK_BREADCRUMB)
+    ? (rawStatus === "task_error" ? TASK_ERROR_BREADCRUMB : workflowFallback)
     : (status === "task_error"
       ? blocks.get(status) || TASK_ERROR_BREADCRUMB
       : block ?? FALLBACK_BREADCRUMB);

@@ -426,8 +426,7 @@ export async function buildSpecDirectoryOverview(root) {
  * @returns {Promise<string | null>}
  */
 export async function buildResearchContext({ root, taskPath, limits }) {
-  const taskDir = await containedPath(root, taskPath);
-  if (taskDir === null) return null;
+  if ((await containedPath(root, taskPath)) === null) return null;
   const parts = [await buildSpecDirectoryOverview(root)];
   const budget = new Budget(limits.maxTotalBytes);
   const manifestPath = `${taskPath.replace(/\/+$/, "")}/research.jsonl`;

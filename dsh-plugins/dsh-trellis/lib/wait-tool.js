@@ -112,25 +112,6 @@ function timeoutResult(subagentId, timeoutMs) {
   };
 }
 
-const TIMEOUT = Symbol("trellis-wait-timeout");
-
-function withTimeout(promise, timeoutMs) {
-  if (!(timeoutMs > 0)) return promise;
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => resolve(TIMEOUT), timeoutMs);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
-}
-
 /** Catalogs prove ownership, not residency or successful completion. */
 function childActivity(ctx, parent, child) {
   if (child.kind === "child") {
@@ -225,15 +206,25 @@ export function registerWaitTool(ctx) {
         },
       },
       async execute(args, exec) {
-        const signal = exec.signal
-          ? AbortSignal.any([exec.signal, lifetime.signal])
-          : lifetime.signal;
-        signal.throwIfAborted();
+        lifetime.signal.throwIfAborted();
         const parent = exec.agent;
         if (!parent)
           throw new Error(
             "trellis_wait requires a calling agent (exec.agent was undefined)",
           );
+        const timeoutMs =
+          typeof args.timeout_ms === "number" && args.timeout_ms > 0
+            ? args.timeout_ms
+            : 0;
+        const timeoutController = timeoutMs > 0 ? new AbortController() : null;
+        const timer = timeoutController === null
+          ? null
+          : setTimeout(() => timeoutController.abort(new Error("trellis_wait timeout")), timeoutMs);
+        const signals = [lifetime.signal];
+        if (exec.signal) signals.push(exec.signal);
+        if (timeoutController !== null) signals.push(timeoutController.signal);
+        const signal = AbortSignal.any(signals);
+        const onTimeout = () => timeoutController?.signal.aborted === true;
 
         // Install the listener before reading the durable catalog so settlement
         // cannot slip through the validation/read-to-wait window.
@@ -243,6 +234,7 @@ export function registerWaitTool(ctx) {
           signal,
         );
         try {
+          signal.throwIfAborted();
           const entries = await ctx.subagents.listChildren(
             parent.id,
             signal,
@@ -266,19 +258,14 @@ export function registerWaitTool(ctx) {
             return inactiveResult(args.subagent_id);
           }
 
-          const timeoutMs =
-            typeof args.timeout_ms === "number" && args.timeout_ms > 0
-              ? args.timeout_ms
-              : 0;
-          const info = await withTimeout(waiter.promise, timeoutMs);
-          if (info === TIMEOUT) {
-            waiter.cancel();
-            return timeoutResult(args.subagent_id, timeoutMs);
-          }
+          const info = await waiter.promise;
           return settledResult(args.subagent_id, info);
         } catch (error) {
           waiter.cancel();
+          if (onTimeout()) return timeoutResult(args.subagent_id, timeoutMs);
           throw error;
+        } finally {
+          if (timer !== null) clearTimeout(timer);
         }
       },
     }),

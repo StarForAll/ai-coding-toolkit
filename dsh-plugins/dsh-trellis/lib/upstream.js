@@ -132,20 +132,20 @@ export function parseReleaseFeed(xml) {
  * @param {number} [options.timeoutMs]
  * @returns {Promise<string>}
  */
-export async function fetchText({ url, fetchImpl = globalThis.fetch, timeoutMs = 10_000 }) {
+export async function fetchText({ url, fetchImpl = globalThis.fetch, timeoutMs = 10_000, accept = "application/atom+xml, application/xml;q=0.9, */*;q=0.1" }) {
   if (typeof fetchImpl !== "function") throw new UpstreamError("fetch is not available");
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetchImpl(url, {
       headers: {
-        accept: "application/atom+xml, application/xml;q=0.9, */*;q=0.1",
+        accept,
         "user-agent": "dsh-trellis",
       },
       signal: controller.signal,
     });
     if (!response.ok) {
-      throw new UpstreamError(`GET ${url} returned ${response.status}`);
+      throw new UpstreamError(`GET ${url} returned ${response.status}`, response.status);
     }
     const text = await response.text();
     if (text.length > MAX_FEED_CHARS) {
@@ -170,7 +170,35 @@ export async function fetchText({ url, fetchImpl = globalThis.fetch, timeoutMs =
 }
 
 /**
- * Latest commit from the repository's Atom feed.
+ * Fetch and parse one GitHub REST JSON document.
+ * @param {object} options
+ * @param {string} options.url
+ * @param {typeof fetch} [options.fetchImpl]
+ * @param {number} [options.timeoutMs]
+ * @returns {Promise<any>}
+ */
+export async function fetchGithubJson({ url, fetchImpl, timeoutMs }) {
+  const text = await fetchText({
+    url,
+    fetchImpl,
+    timeoutMs,
+    accept: "application/vnd.github+json, application/json;q=0.9, */*;q=0.1",
+  });
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new UpstreamError(`GET ${url} returned invalid JSON`);
+  }
+}
+
+/**
+ * Latest commit from the repository's Atom feed, falling back to GitHub's
+ * REST API when the feed is slow or blocked.
+ *
+ * The Atom feed has no unauthenticated quota but is not always reachable from
+ * every network; the REST fallback is limited by GitHub's public quota and is
+ * therefore only contacted after the feed fails.
+ *
  * @param {object} options
  * @param {{owner: string, repo: string}} options.repo
  * @param {typeof fetch} [options.fetchImpl]
@@ -179,18 +207,53 @@ export async function fetchText({ url, fetchImpl = globalThis.fetch, timeoutMs =
  *   message: string, url: string}>}
  */
 export async function fetchCommitFeed({ repo, fetchImpl, timeoutMs }) {
-  const xml = await fetchText({
-    url: `https://github.com/${repo.owner}/${repo.repo}/commits.atom`,
-    fetchImpl,
-    timeoutMs,
-  });
-  const commit = parseCommitFeed(xml);
-  if (commit === null) throw new UpstreamError(`could not parse ${repo.owner}/${repo.repo} commits feed`);
-  return commit;
+  try {
+    const xml = await fetchText({
+      url: `https://github.com/${repo.owner}/${repo.repo}/commits.atom`,
+      fetchImpl,
+      timeoutMs,
+    });
+    const commit = parseCommitFeed(xml);
+    if (commit === null) throw new UpstreamError(`could not parse ${repo.owner}/${repo.repo} commits feed`);
+    return commit;
+  } catch (feedError) {
+    try {
+      const payload = await fetchGithubJson({
+        url: `https://api.github.com/repos/${repo.owner}/${repo.repo}/commits?per_page=1`,
+        fetchImpl,
+        timeoutMs,
+      });
+      const first = Array.isArray(payload) ? payload[0] : null;
+      const sha = typeof first?.sha === "string" ? first.sha : "";
+      if (sha === "") throw new UpstreamError("REST commit response had no sha");
+      const message = typeof first?.commit?.message === "string"
+        ? first.commit.message.split(/\r?\n/)[0].trim().slice(0, 120)
+        : "";
+      const date = typeof first?.commit?.author?.date === "string"
+        ? first.commit.author.date
+        : null;
+      return {
+        sha,
+        shortSha: sha.slice(0, 7),
+        date,
+        message,
+        url: typeof first?.html_url === "string"
+          ? first.html_url
+          : `https://github.com/${repo.owner}/${repo.repo}/commit/${sha}`,
+      };
+    } catch (apiError) {
+      throw new UpstreamError(
+        `commits feed failed (${feedError?.message ?? feedError}); REST fallback failed (${apiError?.message ?? apiError})`,
+        502,
+      );
+    }
+  }
 }
 
 /**
- * Latest release from the repository's Atom feed, or null when it has none.
+ * Latest release from the repository's Atom feed, falling back to GitHub's REST
+ * API. A repository without releases is a valid null; a failed feed is not.
+ *
  * @param {object} options
  * @param {{owner: string, repo: string}} options.repo
  * @param {typeof fetch} [options.fetchImpl]
@@ -198,13 +261,38 @@ export async function fetchCommitFeed({ repo, fetchImpl, timeoutMs }) {
  * @returns {Promise<{tag: string, date: string | null, url: string} | null>}
  */
 export async function fetchReleaseFeed({ repo, fetchImpl, timeoutMs }) {
-  const xml = await fetchText({
-    url: `https://github.com/${repo.owner}/${repo.repo}/releases.atom`,
-    fetchImpl,
-    timeoutMs,
-  });
-  // A repository with no releases is a valid null; a failed feed is not.
-  return parseReleaseFeed(xml);
+  try {
+    const xml = await fetchText({
+      url: `https://github.com/${repo.owner}/${repo.repo}/releases.atom`,
+      fetchImpl,
+      timeoutMs,
+    });
+    return parseReleaseFeed(xml);
+  } catch (feedError) {
+    try {
+      const payload = await fetchGithubJson({
+        url: `https://api.github.com/repos/${repo.owner}/${repo.repo}/releases?per_page=1`,
+        fetchImpl,
+        timeoutMs,
+      });
+      const first = Array.isArray(payload) ? payload[0] : null;
+      const tag = typeof first?.tag_name === "string" ? first.tag_name : "";
+      if (tag === "") return null;
+      return {
+        tag,
+        date: typeof first.published_at === "string" ? first.published_at : null,
+        url: typeof first.html_url === "string"
+          ? first.html_url
+          : `https://github.com/${repo.owner}/${repo.repo}/releases/tag/${encodeURIComponent(tag)}`,
+      };
+    } catch (apiError) {
+      if (apiError instanceof UpstreamError && apiError.status === 404) return null;
+      throw new UpstreamError(
+        `releases feed failed (${feedError?.message ?? feedError}); REST fallback failed (${apiError?.message ?? apiError})`,
+        502,
+      );
+    }
+  }
 }
 
 /**
