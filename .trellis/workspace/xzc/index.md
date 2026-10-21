@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-7.md`
-- **Total Sessions**: 348
+- **Total Sessions**: 349
 - **Last Active**: 2026-10-21
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-7.md` | ~1489 | Active |
+| `journal-7.md` | ~1528 | Active |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
@@ -35,6 +35,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 349 | 2026-10-21 | dsh-trellis 0.1.1 对等性审计与修复 | `5baa8d7`, `bca5a15`, `27d3f21` | `main` |
 | 348 | 2026-10-21 | dsh-trellis 安装态对标与 0.1.0 修正 | `cac69df` | `main` |
 | 347 | 2026-10-21 | dsh-trellis 对标验证与 0.3.9 修复 | `810d8a0` | `main` |
 | 346 | 2026-10-15 | ZCode 平台 Trellis 冒烟测试 | `a1d2bd2` | `main` |

@@ -1487,3 +1487,42 @@ End-to-end smoke test of the new DSH (.dsh) Trellis platform layer: session-scop
 ### Status
 
 [OK] **Completed**
+
+
+## Session 349: dsh-trellis 0.1.1 对等性审计与修复
+<!-- trellis-session: v=2 fp=7e9245e4506ed419 -->
+
+**Date**: 2026-10-21
+**Task**: dsh-trellis 0.1.1 对等性审计与修复
+**Branch**: `main`
+
+### Summary
+
+完成 dsh-trellis 对等性审计、P2/P3 修复、安装态 E2E 与 trellis-check 循环；归档任务。
+
+### Main Changes
+
+- 修复 research 子代理上下文、零块 workflow 降级、flow-style 配置、DSH 命令归一、角色契约去拉取化、wait 超时、版本检查 abort/REST 回退
+- 新增 role-contract 模块与对应单测；更新 README/validation/spec
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5baa8d7` | dsh-trellis插件版本更新 |
+| `bca5a15` | dsh-trellis插件版本更新 |
+| `27d3f21` | docs: record dsh-trellis 0.1.1 parity verification |
+
+### Testing
+
+- [OK] pnpm test: 340 tests / 336 pass / 0 fail / 4 skip
+- [OK] 安装态 0.1.1 E2E：broken workflow、flow-style inline、research/implement push、wait timeout 通过
+- [OK] 当前 DSH 进程版本检查路由 200，返回 commit/release，无原始 abort
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 浏览器点击“手动校验”按钮与 /compact 重注入仍未自动化验证
