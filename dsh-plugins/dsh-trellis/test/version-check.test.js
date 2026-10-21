@@ -193,3 +193,29 @@ test("isCheckDue respects the switch, the interval and the recorded time", () =>
   assert.equal(isCheckDue({ versionCheck: false, versionCheckIntervalMinutes: 1 }, storage, 10_000 + 61_000), false);
   assert.equal(isCheckDue({ versionCheck: true, versionCheckIntervalMinutes: 0 }, storage, 10_000 + 61_000), false);
 });
+
+test("a partial commit feed is shown as a retryable result, not a raw abort", async () => {
+  const storage = memoryStorage();
+  const result = await runVersionCheck({
+    config: { versionCheckPluginRepo: "https://github.com/a/plugin" },
+    storage,
+    now: 7,
+    fetchImpl: async () => jsonResponse({
+      ok: true,
+      commit: null,
+      release: {
+        tag: "v0.3.0",
+        url: "https://github.com/a/plugin/releases/tag/v0.3.0",
+        date: "2026-10-01",
+      },
+      errors: [{ feed: "commits", message: "GitHub request timed out after 10000 ms" }],
+    }),
+  });
+  const row = result.results[0];
+  assert.equal(row.ok, true);
+  assert.equal(row.partial, true);
+  assert.equal(row.latestRelease.tag, "v0.3.0");
+  assert.match(row.error, /timed out after 10000 ms/);
+  assert.doesNotMatch(row.error, /This operation was aborted/);
+  assert.equal(storage.getItem(`${SEEN_PREFIX}plugin`), null);
+});

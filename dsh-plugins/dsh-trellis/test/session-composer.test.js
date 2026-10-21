@@ -139,3 +139,21 @@ test("composer: a zero breadcrumb budget still bootstraps the project config", a
   assert.deepEqual(composed, []);
   assert.match(await fs.readFile(proj(".trellis/config.yaml")), /\ndsh:\n  dispatch_mode: inline\n$/);
 });
+
+test("composer: a Trellis project with a broken workflow still gets fallback + bootstrap", async () => {
+  const fs = memoryFs({
+    [proj(".trellis/workflow.md")]: "# no state blocks\n",
+    [proj(".trellis/config.yaml")]: "dsh:\n  dispatch_mode: auto\n",
+  });
+  const composed = await composerFor(fs).compose(agent, prompt("hello"));
+  assert.equal(composed.length, 2);
+  const text = composed.map(messageText).join("\n");
+  assert.match(text, /Trellis workflow state: no_task/);
+  assert.match(text, /no matching \[workflow-state\] block found/);
+  assert.match(text, /<trellis-bootstrap>/);
+});
+
+test("composer: a non-Trellis directory stays silent", async () => {
+  const fs = memoryFs({});
+  assert.deepEqual(await composerFor(fs).compose(agent, prompt("hello")), []);
+});

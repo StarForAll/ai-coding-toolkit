@@ -222,3 +222,27 @@ test("ensureDshDefaults applies the merge to the fresh file, preserving concurre
   assert.doesNotMatch(text, /a: 1/);
   assert.match(text, /\ndsh:\n  dispatch_mode: inline\n$/);
 });
+
+test("ensureDshDefaults caches a write failure instead of retrying every step", async () => {
+  let writes = 0;
+  const warnings = [];
+  const shim = {
+    async readFile() { return "a: 1\n"; },
+    async writeFile() { writes += 1; throw new Error("read-only filesystem"); },
+    async rename() {},
+    async mkdir() {},
+    async rmdir() {},
+    async stat() { return null; },
+    async unlink() {},
+  };
+  const ensure = createDshDefaultsEnsurer({
+    fs: shim,
+    logger: { warn: (...args) => warnings.push(args) },
+  });
+  const first = await ensure({ root: "/tmp/readonly", configText: "a: 1\n" });
+  const second = await ensure({ root: "/tmp/readonly", configText: "a: 1\n" });
+  assert.equal(first.reason, "write-failed");
+  assert.equal(second.reason, "write-failed");
+  assert.equal(writes, 1);
+  assert.equal(warnings.length, 1);
+});

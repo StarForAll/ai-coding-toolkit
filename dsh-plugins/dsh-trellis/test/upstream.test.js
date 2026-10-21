@@ -172,10 +172,31 @@ test("the handler rejects invalid input, cross-site calls and bad methods", asyn
   }
 });
 
-test("an upstream failure becomes a per-source error, not a crash", async () => {
+test("an upstream failure becomes a partial result, not a raw crash", async () => {
   const fetchImpl = async () => { throw new Error("offline"); };
   const { req, res, response } = harness({ query: "?source=plugin&url=https%3A%2F%2Fgithub.com%2Fa%2Fb" });
   await createVersionCheckHandler({ fetchImpl })(req, res);
-  assert.equal(response.status, 500);
-  assert.match(JSON.parse(response.body).error, /offline/);
+  assert.equal(response.status, 200);
+  const payload = JSON.parse(response.body);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.commit, null);
+  assert.equal(payload.release, null);
+  assert.match(payload.errors.map((entry) => entry.message).join(" "), /offline/);
+});
+
+test("a hanging GitHub feed returns a friendly partial result", async () => {
+  const fetchImpl = (_url, { signal }) => new Promise((_resolve, reject) => {
+    signal.addEventListener("abort", () => {
+      reject(Object.assign(new Error("This operation was aborted"), { name: "AbortError" }));
+    }, { once: true });
+  });
+  const { req, res, response } = harness({ query: "?source=plugin&url=https%3A%2F%2Fgithub.com%2Fa%2Fb" });
+  await createVersionCheckHandler({ fetchImpl, timeoutMs: 10 })(req, res);
+  assert.equal(response.status, 200);
+  const payload = JSON.parse(response.body);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.commit, null);
+  assert.equal(payload.release, null);
+  assert.match(payload.errors.map((entry) => entry.message).join(" "), /timed out after 10 ms/);
+  assert.doesNotMatch(response.body, /This operation was aborted/);
 });

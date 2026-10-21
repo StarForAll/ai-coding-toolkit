@@ -223,3 +223,19 @@ test("unload during a delayed catalog lookup aborts it and cannot report inactiv
   release([{ ...runningChild, activity: "inactive" }]);
   await rejected;
 });
+
+test("trellis_wait supports an optional timeout with a fail-closed result", async () => {
+  const state = harness([runningChild]);
+  const result = await state.tool.execute(
+    { subagent_id: runningChild.id, timeout_ms: 10 },
+    { agent: state.parent, signal: new AbortController().signal },
+  );
+  assert.equal(result.state, "timeout");
+  assert.equal(result.outcome, "unknown");
+  assert.equal(result.timeoutMs, 10);
+  assert.equal(state.listenerCount(), 0);
+  assert.match(
+    state.tool.output.render({}, result)[0].text,
+    /did not settle within 10 ms/,
+  );
+});

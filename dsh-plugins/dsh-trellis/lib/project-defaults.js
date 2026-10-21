@@ -151,16 +151,25 @@ export function createDshDefaultsEnsurer({
   cache,
 } = {}) {
   const warned = new Set();
+  // A project that cannot accept the bootstrap (read-only checkout, immutable
+  // config, failed rename) would otherwise retry the same lock/write on every
+  // model step. A process-local negative cache keeps one warning and zero
+  // repeated IO; a new DSH process gets one fresh attempt.
+  const failedRoots = new Map();
 
   /**
    * @param {{root: string, configText: string | null}} project
    * @returns {Promise<MergeResult>}
    */
   return async function ensureDshDefaults({ root, configText }) {
+    const cachedFailure = failedRoots.get(root);
+    if (cachedFailure !== undefined) return cachedFailure;
     const merged = mergeDshDispatchMode(configText);
     if (!merged.changed) return merged;
     if (typeof fs.writeFile !== "function" || typeof fs.rename !== "function") {
-      return { ...merged, changed: false, reason: "fs-readonly" };
+      const result = { ...merged, changed: false, reason: "fs-readonly" };
+      failedRoots.set(root, result);
+      return result;
     }
     // Transient state lives under `.trellis/.runtime/`, which Trellis ignores;
     // a crashed session must not leave a lock file in the tracked tree.
@@ -199,7 +208,9 @@ export function createDshDefaultsEnsurer({
           error,
         );
       }
-      return { ...merged, changed: false, reason: "write-failed" };
+      const result = { ...merged, changed: false, reason: "write-failed" };
+      failedRoots.set(root, result);
+      return result;
     } finally {
       await releaseLock(lockPath, fs);
     }

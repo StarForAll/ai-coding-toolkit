@@ -20,9 +20,9 @@ DeepSeek Harness (dsh) host 插件：把 [Trellis](https://github.com/mindfold-a
 
 ## 本地分支：对齐 Codex 的三项 Trellis 接线
 
-本副本基于上游 0.1.12；版本号已于 2026-10-21 重置，当前本地版本为 **0.1.0**
+本副本基于上游 0.1.12；版本号已于 2026-10-21 重置，当前本地版本为 **0.1.1**
 （重置前的 0.1.12–0.3.10 只保留在 `LOCAL_CHANGES.md` 与历史验证记录中）。
-后续普通修改按 `0.1.0 → 0.1.1` 递增；只有运行时/配置契约破坏或大改才提升次版本/主版本。
+后续普通修改按 `0.1.0 → 0.1.1 → 0.1.2` 递增；只有运行时/配置契约破坏或大改才提升次版本/主版本。
 三项主链路已经对齐，但 DSH 的事件形状仍带来下面的差异，因此本插件不宣称与 Codex
 完全一致。**注意**：下文“Web 配置菜单”等上游章节描述的是上游版本；本副本的
 配置入口已迁移到 **设置 → Trellis**，插件详情页不再显示表单。
@@ -67,15 +67,15 @@ DeepSeek Harness (dsh) host 插件：把 [Trellis](https://github.com/mindfold-a
   不替它编造工作流状态；child-side 技能仍是它的 pull 路径。
 - 子代理 push 先注入角色契约，再注入 curated task context：角色正文来自目标项目
   已安装的 `.dsh/skills/trellis-agent-<role>/SKILL.md`（去掉 YAML frontmatter），
-  上限 16 KiB；任务上下文继续复用 Trellis 自身的 `context_injection` 预算
-  （`max_file_bytes` / `max_artifact_bytes` / `max_total_bytes`），按角色读取
-  `implement.jsonl` / `check.jsonl` / `research.jsonl` 与 `prd.md` /
-  `design.md` / `implement.md`；清单为空时在 prompt 中明说，不制造“没有规范”
-  的错觉。角色技能缺失时至少注入路径提示，不静默省略。child-pull 技能仍然有效，
-  push 是增量而非替代。
-- 子代理 push 会说明“任务上下文已经由 dsh-trellis 准备好”。角色 skill 里面向原生
-  DSH 的“必须自己加载上下文”步骤对这份预置上下文已满足；skill 仍可要求读取额外
-  spec，子代理应继续读。
+  上限 16 KiB；推送副本会删除只属于 pull 路径的“自己加载上下文”段落，避免与
+  “上下文已准备”矛盾。磁盘上的 skill 保持原样，child-pull 仍然有效。
+- implement/check 继续复用 Trellis 自身的 `context_injection` 预算
+  （`max_file_bytes` / `max_artifact_bytes` / `max_total_bytes`），读取
+  `implement.jsonl` / `check.jsonl` 与 `prd.md` / `design.md` / `implement.md`。
+  research 改为 Codex 同款的项目结构上下文：`.trellis/spec` 目录树 +
+  `get_context.py --mode packages` + 搜索提示；可选的 `research.jsonl` 有真实条目时
+  才内联，空清单不再产生“no curated entries”误导提示。角色技能缺失时至少注入
+  路径提示，不静默省略。
 - 项目根发现默认 `projectRootMarkers: [".trellis", ".git"]`：`.trellis` 优先，
   与 Codex 的 `find_trellis_root()` 一致，未 `git init` 的 Trellis 项目也能注入。
 - 本地副本边界：本副本为个人使用的 Strategy A 就地维护版本，不发布 npm；旧 0.2.0
@@ -121,12 +121,15 @@ DeepSeek Harness (dsh) host 插件：把 [Trellis](https://github.com/mindfold-a
 
 ### 本地源码替换已安装的 npm 版（本次使用的方式）
 
-当前 `web` profile 已用本地源码目录替换 npm 版 `dsh-trellis`：
+当前 `web` profile 使用的是 **ssh git 依赖快照**，不是软链：
 
 ```text
-# profile package.json 结果
-"dsh-trellis": "link:/home/xzc/projects/personal/ai-coding-toolkit/dsh-plugins/dsh-trellis"
+# 当前 profile package.json 结果
+"dsh-trellis": "ssh://git@forgejo.xzc.com/xzc/ai-coding-toolkit.git#path:dsh-plugins/dsh-trellis"
 ```
+
+因此直接编辑 `dsh-plugins/dsh-trellis` 的源码不会热更新已安装插件；需要重新执行
+安装/更新并重启 DSH。下面的 `link:` 流程只用于本地开发，不是当前安装态。
 
 安装步骤（DSH 内置插件管理器；已安装同名包时必须先移除）：
 
@@ -135,7 +138,7 @@ DeepSeek Harness (dsh) host 插件：把 [Trellis](https://github.com/mindfold-a
 
 返回 `application: "applied"` 即已生效；Host 半会随 runtime 重挂载，新增的
 `<trellis-bootstrap>` 独立消息在下一轮即可观察到。`link:` 依赖直接指向源码目录：
-移动或删除该目录会使 profile 失效；只想固定快照时改用 `file:`。
+移动或删除该目录会使 profile 失效；只想固定快照时改用 `file:` 或 git 依赖。
 
 推送到远程仓库后，可将同一 package 作为 git 依赖安装（预期形态，未在本轮验证）：
 
@@ -205,6 +208,28 @@ dsh plugin --profile headless add file:C:/path/to/dsh-trellis
 配套要求：项目的 Trellis 平台需包含 dsh（`trellis init --dsh`，见 Trellis-DeepSeekHarness 适配分支），且 `.trellis/scripts` 需包含读取原生 `DSH_SESSION_ID` 的适配（已含在同一分支）。当前源码的 Host peer 范围显式包含 `^0.2.0-rc.1` 和 `^0.2.1-alpha.2`，保留既有版本范围；开发基线固定为 `0.2.0-rc.1`，隔离回归覆盖开发章节列出的七个宿主，不代表逐个重新验证所有历史版本。新版 DSH 的 peer 准入使用 `includePrerelease: true`，与 npm 默认匹配不同；通过准入不等于实际兼容，不应使用 `allow-version` 绕过缺失的 API。Web 配置只在具备对应 client surface 的 profile 中加载。
 
 运行时需要 profile 提供 `sessionProjections` 服务；该依赖由插件的 `inject` 声明。自定义或精简 profile 若未组装此服务，需先加载 `@deepseek-ai/dsh-session-projection`，否则插件会等待依赖，不会退回直接扫描历史。
+
+### 0.1.1：对等性修复轮
+
+- **research 子代理上下文**：改为 Codex 同款 `.trellis/spec` 目录树 +
+  `get_context.py --mode packages` + 搜索提示；`research.jsonl` 仅在存在真实条目时
+  内联，空清单不再产生误导性提示。
+- **角色契约**：推送副本删除 pull-only 的“自己加载上下文”段落，磁盘 skill 保持
+  不变；research 的 Step 1 改为使用 dispatch 中的 `Active task:`。
+- **workflow 降级**：Trellis 项目 workflow 缺失/不可读/零状态块时输出可见 generic
+  面包屑与 bootstrap；普通 Git 仓库仍保持静默。
+- **命令引用**：注入正文中的 `/trellis:finish-work` 等 Codex 形态归一为 DSH
+  技能/命令名。
+- **配置解析**：支持 `dsh: {dispatch_mode: inline}` 等 flow-style section；
+  `spec_injection` / `prompt_injection` / `context_injection` 同步支持。
+- **inline 启动**：`<dsh-mode>` 横幅补充 `task.py start --allow-empty-context`
+  提示。
+- **版本检查**：GitHub/npm 请求超时转为可读的局部结果；commit/release feed 独立
+  结算，UI 显示“部分结果”而不是原始 `This operation was aborted`。
+- **稳定性**：只读项目的 `dsh.dispatch_mode` 写入失败按进程缓存；`trellis_wait`
+  支持可选 `timeout_ms`，超时返回 fail-closed 的 `timeout/unknown`。
+
+版本：`0.1.0` → `0.1.1`；client bundle 已用 `pnpm run build:client` 重建。
 
 ### 0.1.11：DSH 0.2.0-rc.2 兼容验证
 

@@ -137,14 +137,14 @@ echo "compaction=$(zstd -dc "$f" | grep -c '"type":"compaction/end"')"
 **步骤**：
 
 1. 完全退出并重启 DSH Web。
-2. 打开插件/设置页，确认 `dsh-trellis` 版本显示为 `0.1.0`（或设置页显示的实际构建版本）。
+2. 打开插件/设置页，确认 `dsh-trellis` 版本显示为 `0.1.1`（或设置页显示的实际构建版本）。
 3. 分别执行一次 `/trellis-status`、`/trellis-finish`。
 4. 检查可用工具中只有一份 `trellis_wait`，命令只有一组 `/trellis-status`、`/trellis-finish`。
 5. 查看启动日志/页面控制台，确认没有插件加载错误、重复注册错误或未捕获异常。
 
 **正确效果**：
 
-- 版本为 0.1.0；两个命令各执行一次并返回正常结果（无任务时也是 success）。
+- 版本为 0.1.1；两个命令各执行一次并返回正常结果（无任务时也是 success）。
 - 不出现重复命令、重复工具或重复设置页。
 - 启动日志无 `dsh-trellis` 相关错误；只有一份插件实例运行。
 

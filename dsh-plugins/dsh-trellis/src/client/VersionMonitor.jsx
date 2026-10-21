@@ -109,6 +109,25 @@ export function VersionMonitor({ config, t, disabled }) {
                   </a>
                   <span className="dsh-trellis-monitor-meta">{row.npm.name}</span>
                 </>
+              ) : row.ok && row.partial ? (
+                <>
+                  <span className="dsh-trellis-monitor-status" data-partial="true">
+                    {t("monitor.partial")}
+                  </span>
+                  {row.latestRelease ? (
+                    <a
+                      className="dsh-trellis-monitor-link"
+                      href={row.latestRelease.url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {row.latestRelease.tag}
+                    </a>
+                  ) : null}
+                  <span className="dsh-trellis-monitor-meta">
+                    {row.error} · {t("monitor.partialHint")}
+                  </span>
+                </>
               ) : row.ok && row.latest !== undefined ? (
                 <>
                   <span

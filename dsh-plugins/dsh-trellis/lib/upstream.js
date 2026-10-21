@@ -152,6 +152,18 @@ export async function fetchText({ url, fetchImpl = globalThis.fetch, timeoutMs =
       throw new UpstreamError(`GET ${url} returned an oversized feed`);
     }
     return text;
+  } catch (error) {
+    if (error instanceof UpstreamError) throw error;
+    if (controller.signal.aborted || error?.name === "AbortError") {
+      throw new UpstreamError(
+        `GitHub request timed out after ${timeoutMs} ms`,
+        504,
+      );
+    }
+    throw new UpstreamError(
+      `GitHub request failed: ${error?.message ?? String(error)}`,
+      502,
+    );
   } finally {
     clearTimeout(timer);
   }
@@ -186,16 +198,13 @@ export async function fetchCommitFeed({ repo, fetchImpl, timeoutMs }) {
  * @returns {Promise<{tag: string, date: string | null, url: string} | null>}
  */
 export async function fetchReleaseFeed({ repo, fetchImpl, timeoutMs }) {
-  try {
-    const xml = await fetchText({
-      url: `https://github.com/${repo.owner}/${repo.repo}/releases.atom`,
-      fetchImpl,
-      timeoutMs,
-    });
-    return parseReleaseFeed(xml);
-  } catch {
-    return null;
-  }
+  const xml = await fetchText({
+    url: `https://github.com/${repo.owner}/${repo.repo}/releases.atom`,
+    fetchImpl,
+    timeoutMs,
+  });
+  // A repository with no releases is a valid null; a failed feed is not.
+  return parseReleaseFeed(xml);
 }
 
 /**
@@ -227,6 +236,18 @@ export async function fetchNpmDistTags({ name, fetchImpl = globalThis.fetch, tim
       throw new UpstreamError(`npm registry returned no dist-tags for ${name}`);
     }
     return tags;
+  } catch (error) {
+    if (error instanceof UpstreamError) throw error;
+    if (controller.signal.aborted || error?.name === "AbortError") {
+      throw new UpstreamError(
+        `npm registry request timed out after ${timeoutMs} ms`,
+        504,
+      );
+    }
+    throw new UpstreamError(
+      `npm registry request failed: ${error?.message ?? String(error)}`,
+      502,
+    );
   } finally {
     clearTimeout(timer);
   }
@@ -276,11 +297,29 @@ export function createVersionCheckHandler({ fetchImpl, timeoutMs } = {}) {
           sendJson(res, 400, { ok: false, error: "unrecognized GitHub repository URL" });
           return;
         }
-        const [commit, release] = await Promise.all([
+        // A slow commits feed must not discard an otherwise usable release
+        // feed (or vice versa). The browser renders partial results and keeps
+        // the previous baseline; a raw AbortError never reaches the UI.
+        const [commitResult, releaseResult] = await Promise.allSettled([
           fetchCommitFeed({ repo, fetchImpl, timeoutMs }),
           fetchReleaseFeed({ repo, fetchImpl, timeoutMs }),
         ]);
-        sendJson(res, 200, { ok: true, commit, release });
+        const errors = [];
+        const commit = commitResult.status === "fulfilled" ? commitResult.value : null;
+        if (commitResult.status === "rejected") {
+          errors.push({
+            feed: "commits",
+            message: commitResult.reason?.message ?? String(commitResult.reason),
+          });
+        }
+        const release = releaseResult.status === "fulfilled" ? releaseResult.value : null;
+        if (releaseResult.status === "rejected") {
+          errors.push({
+            feed: "releases",
+            message: releaseResult.reason?.message ?? String(releaseResult.reason),
+          });
+        }
+        sendJson(res, 200, { ok: true, commit, release, errors });
         return;
       }
       if (source === "npm") {

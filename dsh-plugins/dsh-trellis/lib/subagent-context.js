@@ -20,6 +20,7 @@ import { isAbsolute, join, resolve, sep } from "node:path";
 import { createUserMessage } from "@deepseek-ai/dsh-llm";
 import { nodeFs } from "./node-fs.js";
 import { contextInjectionLimits } from "./trellis-config.js";
+import { stripPullOnlyContext } from "./role-contract.js";
 import { findProjectRoot, resolveActiveTask, sanitizeContextKey } from "./workflow.js";
 import { resolveWorkingDirectory } from "./working-directory.js";
 
@@ -90,7 +91,10 @@ export async function readRoleInstructions({ root, role, maxBytes = ROLE_INSTRUC
   } catch {
     return null;
   }
-  const body = stripYamlFrontmatter(text).trim();
+  const body = stripPullOnlyContext(
+    stripYamlFrontmatter(text).trim(),
+    role,
+  );
   if (body === "") return null;
   if (maxBytes > 0 && Buffer.byteLength(body, "utf8") > maxBytes) {
     return `${truncateUtf8(body, maxBytes)}\n[Trellis: role instructions truncated at ${maxBytes} bytes — read ${relativePath} for the full content]`;
@@ -356,6 +360,106 @@ export async function readManifest(root, manifestPath) {
 }
 
 /**
+ * Build the project-structure overview Codex gives a research sub-agent.
+ *
+ * Research is a discovery role: the useful context is where specs live and how
+ * to enumerate packages/layers, not the task's implementation artifacts. The
+ * on-disk `research.jsonl` is optional legacy input; when it has real entries
+ * they are still materialized, but an empty manifest is not turned into a
+ * misleading "no context was injected" notice.
+ *
+ * @param {string} root
+ * @returns {Promise<string>}
+ */
+export async function buildSpecDirectoryOverview(root) {
+  const specRoot = join(root, ".trellis", "spec");
+  const lines = [".trellis/spec/"];
+  let packages = [];
+  try {
+    packages = (await readdir(specRoot, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    // A project without a spec tree still gets the search contract below.
+  }
+  for (let index = 0; index < packages.length; index += 1) {
+    const name = packages[index];
+    let layers = [];
+    try {
+      layers = (await readdir(join(specRoot, name), { withFileTypes: true }))
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .sort();
+    } catch {
+      // A package directory that cannot be listed is still named.
+    }
+    const prefix = index === packages.length - 1 ? "└── " : "├── ";
+    lines.push(`${prefix}${name}/${layers.length > 0 ? ` (${layers.join(", ")})` : ""}`);
+  }
+  return [
+    "## Project Spec Directory Structure",
+    "",
+    "```",
+    ...lines,
+    "```",
+    "",
+    "To get structured package info, run: `python3 ./.trellis/scripts/get_context.py --mode packages`",
+    "",
+    "## Search Tips",
+    "",
+    "- Spec files: `.trellis/spec/**/*.md`",
+    "- Code search: Use Glob and Grep tools",
+    "- Tech solutions: use the available web/code search tools",
+  ].join("\n");
+}
+
+/**
+ * Research context: project spec overview first, optional curated research
+ * entries second. Task artifacts are intentionally not inlined — Codex's
+ * research hook does not inject them, and the role's job is discovery.
+ *
+ * @param {object} options
+ * @param {string} options.root
+ * @param {string} options.taskPath
+ * @param {{maxFileBytes: number, maxArtifactBytes: number, maxTotalBytes: number}} options.limits
+ * @returns {Promise<string | null>}
+ */
+export async function buildResearchContext({ root, taskPath, limits }) {
+  const taskDir = await containedPath(root, taskPath);
+  if (taskDir === null) return null;
+  const parts = [await buildSpecDirectoryOverview(root)];
+  const budget = new Budget(limits.maxTotalBytes);
+  const manifestPath = `${taskPath.replace(/\/+$/, "")}/research.jsonl`;
+  const entries = await readManifest(root, manifestPath);
+  if (entries.length > 0) {
+    for (const entry of entries) {
+      if (entry.type === "directory") {
+        parts.push(
+          ...(await materializeDirectory({
+            root,
+            dirPath: entry.file,
+            reason: entry.reason,
+            limits,
+            budget,
+          })),
+        );
+        continue;
+      }
+      const block = await materializeFile({
+        root,
+        filePath: entry.file,
+        reason: entry.reason,
+        limits,
+        budget,
+      });
+      if (block !== null) parts.push(block);
+    }
+  }
+  return parts.join("\n\n");
+}
+
+/**
  * Build the curated context for one role.
  * @param {object} options
  * @param {string} options.root
@@ -365,6 +469,9 @@ export async function readManifest(root, manifestPath) {
  * @returns {Promise<string | null>}
  */
 export async function buildSubagentContext({ root, taskPath, role, limits }) {
+  if (role === "research") {
+    return buildResearchContext({ root, taskPath, limits });
+  }
   const taskDir = await containedPath(root, taskPath);
   if (taskDir === null) return null;
   const budget = new Budget(limits.maxTotalBytes);
@@ -462,11 +569,10 @@ export function subagentContextMessage({ role, taskPath, context, roleInstructio
     "## Role Instructions",
     "",
     "The task context below was prepared by dsh-trellis before this message.",
-    "The role skill's \"Required: Load Trellis Context First\" section is fully",
-    "satisfied by this message: do NOT run `task.py current`, do NOT ask the",
-    "user for a task path, and do NOT re-read task artifacts to discover the",
-    "task — they are included below. Apply the rest of the role instructions",
-    "as written, and still read any additional specs they name.",
+    "Do not run `task.py current`, do not ask the user for a task path, and do",
+    "not re-read task artifacts to discover the task — they are included below.",
+    "Apply the role instructions as written, and still read any additional specs",
+    "they name.",
     "",
     contract,
     "",

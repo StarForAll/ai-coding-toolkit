@@ -6,6 +6,7 @@ import {
   resolveTrellisState,
   sanitizeContextKey,
   mapStatus,
+  normalizeDshCommandRefs,
   FALLBACK_BREADCRUMB,
 } from "../lib/workflow.js";
 import { truncateUtf8 } from "../lib/breadcrumb.js";
@@ -259,7 +260,7 @@ test("resolveTrellisState: multiple foreign session pointers refuse to guess", a
   assert.equal(state.taskPath, null);
 });
 
-test("resolveTrellisState: zero workflow-state blocks → silent", async () => {
+test("resolveTrellisState: zero workflow-state blocks degrades visibly", async () => {
   const fs = memoryFs({
     [proj(".git")]: "",
     [proj(join(".trellis", "workflow.md"))]: "# no blocks",
@@ -271,7 +272,37 @@ test("resolveTrellisState: zero workflow-state blocks → silent", async () => {
     fs,
     cache: new Map(),
   });
-  assert.equal(state, null);
+  assert.equal(state.status, "no_task");
+  assert.equal(state.taskPath, null);
+  assert.equal(state.body, FALLBACK_BREADCRUMB);
+  assert.match(state.digest, /^[a-f0-9]{40}$/);
+});
+
+test("resolveTrellisState: a missing workflow file also degrades visibly", async () => {
+  const fs = memoryFs({
+    [proj(".git")]: "",
+    [proj(join(".trellis", "config.yaml"))]: "",
+  });
+  const state = await resolveTrellisState({
+    cwd: proj(""),
+    markers: [".git"],
+    contextKey: "dsh_x",
+    fs,
+    cache: new Map(),
+  });
+  assert.equal(state.status, "no_task");
+  assert.equal(state.body, FALLBACK_BREADCRUMB);
+});
+
+test("normalizeDshCommandRefs maps Codex command references to DSH", () => {
+  assert.equal(
+    normalizeDshCommandRefs("run `/trellis:finish-work` or `/trellis:status`"),
+    "run `/trellis-finish-work` or `/trellis-status`",
+  );
+  assert.equal(
+    normalizeDshCommandRefs("unknown `/trellis:unknown` stays"),
+    "unknown `/trellis:unknown` stays",
+  );
 });
 
 test("resolveTrellisState: in_progress with no matching block uses fallback text", async () => {
@@ -803,4 +834,71 @@ test("resolveTrellisState: dsh inline announces the mode for statuses without an
   });
   assert.equal(state.status, "completed");
   assert.match(state.body, /<dsh-mode>/);
+});
+
+test("resolveTrellisState: flow-style dsh.dispatch_mode selects the inline block", async () => {
+  const fs = memoryFs({
+    [proj(".git")]: "",
+    [proj(join(".trellis", "config.yaml"))]: "dsh: {dispatch_mode: inline}\n",
+    [proj(join(".trellis", "workflow.md"))]: `[workflow-state:in_progress]
+BASE
+[/workflow-state:in_progress]
+[workflow-state:in_progress-inline]
+INLINE
+[/workflow-state:in_progress-inline]
+`,
+    [proj(join(".trellis", "tasks", "t", "task.json"))]: JSON.stringify({
+      status: "in_progress",
+    }),
+    [proj(join(".trellis", ".runtime", "sessions", "dsh_x.json"))]:
+      JSON.stringify({ current_task: ".trellis/tasks/t" }),
+  });
+  const state = await resolveTrellisState({
+    cwd: proj(""),
+    markers: [".git"],
+    contextKey: "dsh_x",
+    fs,
+    cache: new Map(),
+  });
+  assert.equal(state.status, "in_progress-inline");
+  assert.match(state.body, /^INLINE/m);
+  assert.match(state.body, /<dsh-mode>/);
+  assert.match(state.body, /--allow-empty-context/);
+});
+
+test("resolveTrellisState: command refs in a state body are DSH-native", async () => {
+  const fs = memoryFs({
+    [proj(".git")]: "",
+    [proj(join(".trellis", "config.yaml"))]: "dsh:\n  dispatch_mode: auto\n",
+    [proj(join(".trellis", "workflow.md"))]: `[workflow-state:in_progress]
+Flow: commit then \`/trellis:finish-work\`.
+[/workflow-state:in_progress]
+`,
+    [proj(join(".trellis", "tasks", "t", "task.json"))]: JSON.stringify({
+      status: "in_progress",
+    }),
+    [proj(join(".trellis", ".runtime", "sessions", "dsh_x.json"))]:
+      JSON.stringify({ current_task: ".trellis/tasks/t" }),
+  });
+  const state = await resolveTrellisState({
+    cwd: proj(""),
+    markers: [".git"],
+    contextKey: "dsh_x",
+    fs,
+    cache: new Map(),
+  });
+  assert.match(state.body, /\/trellis-finish-work/);
+  assert.doesNotMatch(state.body, /\/trellis:finish-work/);
+});
+
+test("resolveTrellisState: a plain Git repository without .trellis stays silent", async () => {
+  const fs = memoryFs({ [proj(".git")]: "" });
+  const state = await resolveTrellisState({
+    cwd: proj(""),
+    markers: [".git", ".trellis"],
+    contextKey: "dsh_x",
+    fs,
+    cache: new Map(),
+  });
+  assert.equal(state, null);
 });

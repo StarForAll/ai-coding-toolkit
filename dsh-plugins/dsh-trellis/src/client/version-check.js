@@ -253,10 +253,28 @@ export async function runVersionCheck({
       }
 
       const commit = payload.commit;
-      if (commit === undefined || typeof commit.sha !== "string") {
-        throw new Error("version-check route returned no commit");
-      }
       const release = payload.release ?? null;
+      const errors = Array.isArray(payload.errors) ? payload.errors : [];
+      if (commit === undefined || commit === null || typeof commit.sha !== "string") {
+        // The Host keeps the two Atom feeds independent. A commit-feed timeout
+        // is a partial answer, not a failed check: show the release (if any)
+        // and a retry hint instead of the raw AbortError.
+        const detail = errors
+          .map((entry) => entry?.message)
+          .filter((message) => typeof message === "string" && message !== "")
+          .join("; ");
+        results.push({
+          ...source,
+          value,
+          ok: true,
+          partial: true,
+          latestRelease: release,
+          errors,
+          url: release?.url ?? undefined,
+          error: detail || "commit feed unavailable",
+        });
+        continue;
+      }
       const updateAvailable = release !== null && localVersion !== undefined
         ? compareVersions(release.tag, localVersion) > 0
         : false;
@@ -271,6 +289,7 @@ export async function runVersionCheck({
         latest: commit,
         latestRelease: release,
         updateAvailable,
+        warnings: errors,
         isNew,
         firstSeen,
       });

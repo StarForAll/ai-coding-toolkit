@@ -325,3 +325,26 @@ vendored auto-sync scripts/patch directories are explicitly not needed; plugin
 exclusivity is limited to a desktop notification warning. See
 `../plugin-create.md` ("范围排除") and `docs/manual-verification.md` for the
 authoritative scope and manual checks.
+
+## 0.1.1 — parity-fix round (2026-10-21)
+
+### Added
+
+| File | Purpose |
+| --- | --- |
+| `lib/role-contract.js` | Removes pull-only context-loading instructions from the pushed role-contract copy; keeps the on-disk skill unchanged for the pull path. |
+| `docs/validation-0.1.1-local.md` | Verification record for this round. |
+
+### Changed
+
+| File | Change | Reason |
+| --- | --- | --- |
+| `lib/trellis-config.js` | Accept single-line flow mappings (`section: {key: value}`) for every owned section. | `dsh: {dispatch_mode: inline}` was silently treated as `auto`, bypassing the inline guard. |
+| `lib/workflow.js` | Visible fallback when a Trellis root has no readable workflow state block; normalize Codex-style `/trellis:<name>` refs; inline banner now includes `--allow-empty-context`. | Match Trellis's visible degradation, DSH command surface, and the inline start gate. |
+| `lib/subagent-context.js` | Research uses the spec-tree/search-tips context; pushed role contract strips pull-only sections. | Align research with Codex and remove contradictory instructions. |
+| `lib/upstream.js` | Friendly timeout errors, `allSettled` partial commit/release results. | Manual version checks must not surface raw `This operation was aborted`. |
+| `src/client/version-check.js`, `src/client/VersionMonitor.jsx`, `src/client/locales.js` | Render partial upstream results and a retry hint. | Same. |
+| `lib/project-defaults.js` | Cache write failures per project/process. | Read-only projects retried a failing config write on every model step. |
+| `lib/wait-tool.js` | Optional `timeout_ms`; timeout returns `state=timeout`, `outcome=unknown`. | Prevent unbounded waits without guessing success. |
+| `README.md`, `.trellis/spec/platforms/dsh-workflow-behavior.md` | Installation form is a git dependency snapshot, not a symlink; document 0.1.1 behavior. | Align docs with the actual profile and behavior. |
+| `package.json`, `lib/client.js` | Version `0.1.1`; rebuild client bundle. | Release bookkeeping. |

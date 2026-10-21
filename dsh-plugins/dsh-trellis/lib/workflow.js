@@ -51,11 +51,51 @@ export const DSH_INLINE_NOTE =
   "tool is not needed in this mode. Verify with the trellis-check skill, update " +
   "specs with trellis-update-spec, then commit (Phase 3.4) and run " +
   "/trellis-finish-work.\n" +
+  "Inline task start: when implement.jsonl / check.jsonl are intentionally empty, " +
+  "run `task.py start <task> --allow-empty-context`; do not curate jsonl in inline mode.\n" +
   "</dsh-mode>";
 
 /** The degrading fallback when workflow.md lacks a block for the resolved status. */
 export const FALLBACK_BREADCRUMB =
   "Refer to `.trellis/workflow.md` for the current workflow step (no matching [workflow-state] block found).";
+
+const DSH_COMMAND_REFS = Object.freeze(new Map([
+  ["start", "/trellis-start"],
+  ["continue", "/trellis-continue"],
+  ["finish-work", "/trellis-finish-work"],
+  ["check", "/trellis-check"],
+  ["before-dev", "/trellis-before-dev"],
+  ["update-spec", "/trellis-update-spec"],
+  ["brainstorm", "/trellis-brainstorm"],
+  ["break-loop", "/trellis-break-loop"],
+  ["session-insight", "/trellis-session-insight"],
+  ["spec-bootstrap", "/trellis-spec-bootstrap"],
+  ["meta", "/trellis-meta"],
+  ["channel", "/trellis-channel"],
+  ["status", "/trellis-status"],
+  ["finish", "/trellis-finish"],
+  ["doctor", "/trellis-doctor"],
+]));
+
+/**
+ * Rewrite Codex-style `/trellis:<name>` references in a breadcrumb body to the
+ * DSH command/skill surface.
+ *
+ * Trellis's shared workflow.md is platform-neutral in intent but currently
+ * hardcodes Codex command references inside its state blocks. DSH has no
+ * colon command namespace: session rituals are skills (`/trellis-finish-work`)
+ * and utility commands are flat (`/trellis-status`). Unknown references are
+ * left untouched rather than guessed.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function normalizeDshCommandRefs(text) {
+  return String(text).replace(
+    /\/trellis:([A-Za-z0-9_-]+)/g,
+    (match, name) => DSH_COMMAND_REFS.get(name) ?? match,
+  );
+}
 
 /** Old workflows may not yet define task_error; never turn a bad record into no_task. */
 export const TASK_ERROR_BREADCRUMB =
@@ -406,6 +446,11 @@ export async function resolveTrellisState({
 }) {
   const root = resolvedRoot ?? await findProjectRoot(cwd, markers, fs);
   if (root === null) return null;
+  // `.git` is an accepted marker so a Trellis checkout whose root also has a
+  // Git directory is found from a subdirectory. It is not proof that the
+  // directory is a Trellis project: a plain Git repository must stay silent
+  // rather than receive the broken-workflow fallback.
+  if (!(await fs.exists(join(root, ".trellis")))) return null;
   const task = await resolveActiveTask(root, contextKey, fs);
   const workflowPath = await resolveWorkflowPath({
     root,
@@ -414,9 +459,9 @@ export async function resolveTrellisState({
     cache,
   });
   const content = await readCached(workflowPath, fs, cache);
-  if (content === null || content === undefined) return null;
-  const blocks = parseWorkflowStateBlocks(content);
-  if (blocks.size === 0) return null;
+  const blocks = content === null || content === undefined
+    ? new Map()
+    : parseWorkflowStateBlocks(content);
   // `codex.dispatch_mode` is Codex-only and is deliberately ignored here.
   // DSH has its own `dsh.dispatch_mode` switch; when it selects inline, the
   // platform-neutral `*-inline` phase block is reused when the workflow file
@@ -441,15 +486,23 @@ export async function resolveTrellisState({
   //      the banner, not the block choice, is what carries the mode.
   const inlineMode = dshDispatchMode(configText) === "inline";
   const inlineBlock =
+    blocks.size > 0 &&
     inlineMode &&
     (rawStatus === "planning" || rawStatus === "in_progress") &&
     blocks.has(`${rawStatus}-inline`);
   const status = inlineBlock ? `${rawStatus}-inline` : rawStatus;
   const block = blocks.get(status);
-  let body =
-    status === "task_error"
+  // A Trellis root with a missing/unreadable workflow, or one whose template
+  // lost every state block, must stay visible: the Codex hook degrades to a
+  // generic line and the user is expected to repair workflow.md. Returning
+  // null here made the DSH session completely silent, including the bootstrap
+  // nudge.
+  let body = blocks.size === 0
+    ? (rawStatus === "task_error" ? TASK_ERROR_BREADCRUMB : FALLBACK_BREADCRUMB)
+    : (status === "task_error"
       ? blocks.get(status) || TASK_ERROR_BREADCRUMB
-      : block ?? FALLBACK_BREADCRUMB;
+      : block ?? FALLBACK_BREADCRUMB);
+  body = normalizeDshCommandRefs(body);
   if (inlineMode) {
     body = `${body}\n\n${DSH_INLINE_NOTE}`;
   }

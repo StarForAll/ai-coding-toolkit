@@ -98,6 +98,39 @@ function inactiveResult(subagentId) {
   };
 }
 
+function timeoutResult(subagentId, timeoutMs) {
+  return {
+    subagentId,
+    state: "timeout",
+    outcome: "unknown",
+    stopReason: "timeout",
+    timeoutMs,
+    runId: "",
+    provider: "",
+    assistantOutputBlocks: 0,
+    settlementNoticeQueued: false,
+  };
+}
+
+const TIMEOUT = Symbol("trellis-wait-timeout");
+
+function withTimeout(promise, timeoutMs) {
+  if (!(timeoutMs > 0)) return promise;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve(TIMEOUT), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 /** Catalogs prove ownership, not residency or successful completion. */
 function childActivity(ctx, parent, child) {
   if (child.kind === "child") {
@@ -133,6 +166,11 @@ export function registerWaitTool(ctx) {
           description:
             "Direct continuable subagent id returned by the `subagent` tool.",
         },
+        timeout_ms: {
+          type: "number",
+          description:
+            "Optional wait budget in milliseconds. 0 or omitted waits until settlement; a timeout returns state=timeout, outcome=unknown.",
+        },
       },
       output: {
         schema: {
@@ -146,6 +184,7 @@ export function registerWaitTool(ctx) {
             runId: { type: "string", required: true },
             provider: { type: "string", required: true },
             assistantOutputBlocks: { type: "number", required: true },
+            timeoutMs: { type: "number" },
             settlementNoticeQueued: {
               type: "boolean", required: true,
               description: "Compatibility field: false means notice delivery is unverified, not proven absent.",
@@ -153,6 +192,14 @@ export function registerWaitTool(ctx) {
           },
         },
         render(_args, value) {
+          if (value.state === "timeout") {
+            return [
+              {
+                type: "text",
+                text: `subagent ${value.subagentId} did not settle within ${value.timeoutMs} ms; no completion was proven. Inspect its transcript or wait again with a larger timeout_ms.`,
+              },
+            ];
+          }
           if (value.state === "already-inactive") {
             return [
               {
@@ -219,7 +266,15 @@ export function registerWaitTool(ctx) {
             return inactiveResult(args.subagent_id);
           }
 
-          const info = await waiter.promise;
+          const timeoutMs =
+            typeof args.timeout_ms === "number" && args.timeout_ms > 0
+              ? args.timeout_ms
+              : 0;
+          const info = await withTimeout(waiter.promise, timeoutMs);
+          if (info === TIMEOUT) {
+            waiter.cancel();
+            return timeoutResult(args.subagent_id, timeoutMs);
+          }
           return settledResult(args.subagent_id, info);
         } catch (error) {
           waiter.cancel();

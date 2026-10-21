@@ -14,6 +14,7 @@
 /** @typedef {Map<string, SectionValue>} Section */
 
 const SECTION_RE = /^([A-Za-z_][A-Za-z0-9_-]*)\s*:\s*(?:#.*)?$/;
+const FLOW_SECTION_RE = /^([A-Za-z_][A-Za-z0-9_-]*)\s*:\s*\{(.*)\}\s*(?:#.*)?$/;
 const KEY_RE = /^\s*([A-Za-z_][A-Za-z0-9_-]*)\s*:\s*(.*)$/;
 const ITEM_RE = /^\s*-\s*(.*)$/;
 
@@ -72,10 +73,113 @@ export function parseFlowSequence(value) {
 }
 
 /**
+ * Split a flow mapping body on top-level commas, respecting quotes and
+ * bracketed flow sequences. Nested mappings are not part of the Trellis
+ * config subset; their commas are still protected so the caller can skip the
+ * entry instead of mis-splitting it.
+ * @param {string} body
+ * @returns {string[]}
+ */
+function splitFlowEntries(body) {
+  const entries = [];
+  let start = 0;
+  let quote = "";
+  let depth = 0;
+  for (let index = 0; index < body.length; index += 1) {
+    const char = body[index];
+    if (quote !== "") {
+      if (char === quote && body[index - 1] !== "\\") quote = "";
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === "[" || char === "{") {
+      depth += 1;
+      continue;
+    }
+    if (char === "]" || char === "}") {
+      if (depth > 0) depth -= 1;
+      continue;
+    }
+    if (char === "," && depth === 0) {
+      entries.push(body.slice(start, index));
+      start = index + 1;
+    }
+  }
+  entries.push(body.slice(start));
+  return entries;
+}
+
+/**
+ * Parse one-line flow mapping (`section: {key: value, ...}`).
+ *
+ * This is the same deliberately small YAML subset the block parser handles:
+ * scalar values, flow sequences, and inline comments. A nested flow mapping or
+ * a malformed entry is skipped rather than guessed, so every reader keeps its
+ * documented default.
+ * @param {string} body
+ * @returns {Map<string, SectionValue>}
+ */
+export function parseFlowMapping(body) {
+  const section = new Map();
+  for (const rawEntry of splitFlowEntries(body)) {
+    const entry = rawEntry.trim();
+    if (entry === "") continue;
+    let quote = "";
+    let depth = 0;
+    let separator = -1;
+    for (let index = 0; index < entry.length; index += 1) {
+      const char = entry[index];
+      if (quote !== "") {
+        if (char === quote && entry[index - 1] !== "\\") quote = "";
+        continue;
+      }
+      if (char === '"' || char === "'") {
+        quote = char;
+        continue;
+      }
+      if (char === "[" || char === "{") {
+        depth += 1;
+        continue;
+      }
+      if (char === "]" || char === "}") {
+        if (depth > 0) depth -= 1;
+        continue;
+      }
+      if (char === ":" && depth === 0) {
+        separator = index;
+        break;
+      }
+    }
+    if (separator === -1) continue;
+    const key = entry.slice(0, separator).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(key)) continue;
+    const raw = stripComment(entry.slice(separator + 1)).trim();
+    if (raw === "") {
+      section.set(key, "");
+      continue;
+    }
+    if (raw.startsWith("[") && raw.endsWith("]")) {
+      section.set(key, parseFlowSequence(raw));
+      continue;
+    }
+    // Nested mappings are outside the subset; leave the key absent so callers
+    // fall back instead of reading a half-parsed structure.
+    if (raw.startsWith("{") || raw.endsWith("}")) continue;
+    section.set(key, unquote(raw));
+  }
+  return section;
+}
+
+/**
  * Read one top-level mapping section from a config document.
  *
  * Returns `null` when the section is absent, so callers can distinguish
  * "missing" (use defaults) from "present but empty" (all keys default).
+ * Both block mappings (`section:` + indented keys) and the single-line flow
+ * mapping (`section: {key: value}`) are accepted.
  *
  * @param {string | null | undefined} content - config.yaml text.
  * @param {string} name - top-level section name.
@@ -84,6 +188,10 @@ export function parseFlowSequence(value) {
 export function parseSection(content, name) {
   if (typeof content !== "string" || content === "") return null;
   const lines = content.split(/\r?\n/);
+  for (const line of lines) {
+    const flow = FLOW_SECTION_RE.exec(line);
+    if (flow !== null && flow[1] === name) return parseFlowMapping(flow[2]);
+  }
   let index = lines.findIndex((line) => {
     const match = SECTION_RE.exec(line);
     return match !== null && match[1] === name;

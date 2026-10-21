@@ -121,3 +121,38 @@ test("dshInlineDispatchAllowed defaults to false and reads the escape hatch", ()
     false,
   );
 });
+
+test("parseSection accepts single-line flow mappings", () => {
+  const flow = [
+    "dsh: { dispatch_mode: inline, inline_allow_dispatch: true }",
+    'prompt_injection: {skip_keyword: "skip-trellis"}',
+    "spec_injection: {enabled: false, tools: [Edit, Write]}",
+    "context_injection: {max_total_bytes: 4096}",
+  ].join("\n");
+  assert.equal(parseSection(flow, "dsh").get("dispatch_mode"), "inline");
+  assert.equal(parseSection(flow, "dsh").get("inline_allow_dispatch"), "true");
+  assert.equal(parseSection(flow, "prompt_injection").get("skip_keyword"), "skip-trellis");
+  assert.deepEqual(parseSection(flow, "spec_injection").get("tools"), ["Edit", "Write"]);
+  assert.equal(parseSection(flow, "spec_injection").get("enabled"), "false");
+  assert.equal(parseSection(flow, "context_injection").get("max_total_bytes"), "4096");
+});
+
+test("flow-style sections drive the same settings readers as block sections", () => {
+  const flow = [
+    "dsh: { dispatch_mode: inline, inline_allow_dispatch: true }",
+    "spec_injection: {enabled: false, tools: [Edit, Write], max_spec_chars: 1200}",
+    "context_injection: {max_total_bytes: 4096}",
+  ].join("\n");
+  assert.equal(dshInlineDispatchAllowed(flow), true);
+  const settings = specInjectionSettings(flow);
+  assert.equal(settings.enabled, false);
+  assert.deepEqual(settings.tools, ["edit", "write"]);
+  assert.equal(settings.maxSpecChars, 1200);
+  assert.equal(contextInjectionLimits(flow).maxTotalBytes, 4096);
+});
+
+test("a malformed flow mapping falls back to defaults instead of throwing", () => {
+  assert.equal(parseSection("dsh: {dispatch_mode: inline", "dsh"), null);
+  const nested = parseSection("dsh: {dispatch_mode: {nested: inline}}", "dsh");
+  assert.equal(nested.size, 0);
+});

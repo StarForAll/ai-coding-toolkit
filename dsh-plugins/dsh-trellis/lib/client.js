@@ -284,8 +284,22 @@ window.__ModuleLoader__.load({
 						continue;
 					}
 					const commit = payload.commit;
-					if (commit === void 0 || typeof commit.sha !== "string") throw new Error("version-check route returned no commit");
 					const release = payload.release ?? null;
+					const errors = Array.isArray(payload.errors) ? payload.errors : [];
+					if (commit === void 0 || commit === null || typeof commit.sha !== "string") {
+						const detail = errors.map((entry) => entry?.message).filter((message) => typeof message === "string" && message !== "").join("; ");
+						results.push({
+							...source,
+							value,
+							ok: true,
+							partial: true,
+							latestRelease: release,
+							errors,
+							url: release?.url ?? void 0,
+							error: detail || "commit feed unavailable"
+						});
+						continue;
+					}
 					const updateAvailable = release !== null && localVersion !== void 0 ? compareVersions(release.tag, localVersion) > 0 : false;
 					const firstSeen = previous === null;
 					const isNew = !firstSeen && previous !== commit.sha;
@@ -298,6 +312,7 @@ window.__ModuleLoader__.load({
 						latest: commit,
 						latestRelease: release,
 						updateAvailable,
+						warnings: errors,
 						isNew,
 						firstSeen
 					});
@@ -593,7 +608,7 @@ window.__ModuleLoader__.load({
 		* `__DSH_TRELLIS_VERSION__` is replaced by tsdown with the package version.
 		* Source-level tests and any unbundled load keep the literal fallback.
 		*/
-		const PLUGIN_VERSION = "0.1.0";
+		const PLUGIN_VERSION = "0.1.1";
 		//#endregion
 		//#region src/client/VersionMonitor.jsx
 		/**
@@ -725,6 +740,27 @@ window.__ModuleLoader__.load({
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 									className: "dsh-trellis-monitor-meta",
 									children: row.npm.name
+								})
+							] }) : row.ok && row.partial ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: "dsh-trellis-monitor-status",
+									"data-partial": "true",
+									children: t("monitor.partial")
+								}),
+								row.latestRelease ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("a", {
+									className: "dsh-trellis-monitor-link",
+									href: row.latestRelease.url,
+									target: "_blank",
+									rel: "noreferrer",
+									children: row.latestRelease.tag
+								}) : null,
+								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+									className: "dsh-trellis-monitor-meta",
+									children: [
+										row.error,
+										" · ",
+										t("monitor.partialHint")
+									]
 								})
 							] }) : row.ok && row.latest !== void 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
@@ -1227,6 +1263,8 @@ window.__ModuleLoader__.load({
 			"monitor.versionChanged": "官方版本有变化",
 			"monitor.updateAvailable": "有新版本",
 			"monitor.disabledSource": "未配置（已跳过）",
+			"monitor.partial": "部分结果",
+			"monitor.partialHint": "可稍后重试；上次基线未被覆盖。",
 			"monitor.source.plugin": "上游 fork",
 			"monitor.source.trellis": "Trellis",
 			"monitor.source.dsh": "DSH"
@@ -1298,6 +1336,8 @@ window.__ModuleLoader__.load({
 			"monitor.versionChanged": "Official version changed",
 			"monitor.updateAvailable": "Newer release",
 			"monitor.disabledSource": "Not configured (skipped)",
+			"monitor.partial": "Partial result",
+			"monitor.partialHint": "Retry later; the previous baseline was kept.",
 			"monitor.source.plugin": "Upstream fork",
 			"monitor.source.trellis": "Trellis",
 			"monitor.source.dsh": "DSH"

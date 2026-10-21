@@ -10,6 +10,7 @@ import {
   readManifest,
   readRoleInstructions,
   registerSubagentContext,
+  buildResearchContext,
   stripYamlFrontmatter,
   subagentContextMessage,
   truncateUtf8,
@@ -117,8 +118,8 @@ test("subagentContextMessage keeps a role pointer when the skill is absent", () 
   assert.match(message.content[0].text, /## Role Instructions/);
   // The push overrides the role skill's "load context yourself" step instead
   // of leaving the child with two contradictory instructions.
-  assert.match(message.content[0].text, /do NOT run `task\.py current`/);
-  assert.match(
+  assert.match(message.content[0].text, /Do not run `task\.py current`/);
+  assert.doesNotMatch(
     message.content[0].text,
     /"Required: Load Trellis Context First" section is fully/,
   );
@@ -253,4 +254,91 @@ test("registerSubagentContext stays silent outside a Trellis role's first step",
     await pre({ agent: child, messages: roleless, step: 1 }, async () => rolelessDecision),
     rolelessDecision,
   );
+});
+
+test("readRoleInstructions strips pull-only context instructions from the pushed copy", async (t) => {
+  const { root } = await fixture(t);
+  await writeFile(
+    join(root, ".dsh", "skills", "trellis-agent-implement", "SKILL.md"),
+    [
+      "---",
+      "name: trellis-agent-implement",
+      "description: test",
+      "---",
+      "# Implement Agent",
+      "",
+      "## Required: Load Trellis Context First",
+      "",
+      "This platform does NOT auto-inject task context via hook. Before doing anything else, you MUST load context yourself.",
+      "",
+      "### Step 1: Find the active task path",
+      "",
+      "Run `python3 ./.trellis/scripts/task.py current --source` or ask the user.",
+      "",
+      "## Recursion Guard",
+      "",
+      "Do not spawn another role.",
+      "",
+      "dsh does not auto-inject SessionStart task context. Always pull context as required below.",
+      "",
+      "## Context",
+      "",
+      "Read the specs.",
+      "",
+    ].join("\n"),
+  );
+  const body = await readRoleInstructions({ root, role: "implement" });
+  assert.match(body, /## Task Context/);
+  assert.match(body, /## Recursion Guard/);
+  assert.match(body, /## Context/);
+  assert.doesNotMatch(body, /MUST load context yourself/);
+  assert.doesNotMatch(body, /does NOT auto-inject/);
+  assert.doesNotMatch(body, /Run `python3 .*task\.py current/);
+  assert.doesNotMatch(body, /ask the user which task|ask the user where/);
+});
+
+test("readRoleInstructions rewrites the research task-resolution step", async (t) => {
+  const { root } = await fixture(t);
+  await mkdir(join(root, ".dsh", "skills", "trellis-agent-research"), { recursive: true });
+  await writeFile(
+    join(root, ".dsh", "skills", "trellis-agent-research", "SKILL.md"),
+    [
+      "---",
+      "name: trellis-agent-research",
+      "description: test",
+      "---",
+      "# Research Agent",
+      "",
+      "## Workflow",
+      "",
+      "### Step 1: Resolve Current Task",
+      "",
+      "Run `python3 ./.trellis/scripts/task.py current --source`. If no task, ask the user where to write output.",
+      "",
+      "### Step 2: Understand Search Request",
+      "",
+      "Classify the request.",
+      "",
+    ].join("\n"),
+  );
+  const body = await readRoleInstructions({ root, role: "research" });
+  assert.match(body, /### Step 1: Prepare Output Directory/);
+  assert.match(body, /\{TASK_DIR\}\/research\//);
+  assert.match(body, /### Step 2: Understand Search Request/);
+  assert.doesNotMatch(body, /task\.py current/);
+  assert.doesNotMatch(body, /ask the user where/);
+});
+
+test("buildSubagentContext gives research the spec tree instead of task artifacts", async (t) => {
+  const { root, task } = await fixture(t);
+  const context = await buildResearchContext({
+    root,
+    taskPath: task,
+    limits: { maxFileBytes: 32768, maxArtifactBytes: 65536, maxTotalBytes: 131072 },
+  });
+  assert.match(context, /## Project Spec Directory Structure/);
+  assert.match(context, /## Search Tips/);
+  assert.match(context, /get_context\.py --mode packages/);
+  assert.doesNotMatch(context, /The requirement\./);
+  assert.doesNotMatch(context, /no curated entries/);
 });
