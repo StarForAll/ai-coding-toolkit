@@ -1425,3 +1425,43 @@ End-to-end smoke test of the new DSH (.dsh) Trellis platform layer: session-scop
 ### Status
 
 [OK] **Completed**
+
+
+## Session 347: dsh-trellis 对标验证与 0.3.9 修复
+<!-- trellis-session: v=2 fp=3b8e5cb6bea389fa -->
+
+**Date**: 2026-10-21
+**Task**: dsh-trellis 对标验证与 0.3.9 修复
+**Branch**: `main`
+
+### Summary
+
+复现并修复 dsh-trellis 的 workflow-state 解析/状态映射/指针归一/项目级配置缺口；新增 DSH 自己的 dsh.dispatch_mode 内联模式；补回归测试与平台规范。
+
+### Main Changes
+
+- workflow-state 正则改为标签后必须换行，no_task 从 4605 字符/66 行回到 421 字符/3 行
+- 状态透传（completed/自定义）、stale 检测、workflow 变体优先级、项目 skip_keyword、指针归一
+- 新增 dsh.dispatch_mode（auto/inline）：inline 复用阶段块并追加 <dsh-mode> DSH 说明
+- 插件版本 0.3.8→0.3.9；新增 dsh 平台规范与 0.3.8/0.3.9 验证记录
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `810d8a0` | fix(dsh-trellis): 对齐 Trellis 契约并新增 DSH inline 模式 |
+
+### Testing
+
+- [OK] dsh-plugins/dsh-trellis: node --test "test/*.test.js" → 295 tests / 291 pass / 0 fail / 4 skip
+- [OK] headless 真实 DSH 会话：no_task 491 字节；inline 模式 in_progress-inline 788 字节（含 banner）
+- [OK] 真实 workflow.md 解析与 Codex hook 逐块对照一致
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 重启 dsh web 以加载 0.3.9
+- 如需同步上游 dsh-trellis，另行确认
