@@ -58,9 +58,11 @@ and release. A hanging-feed unit test with a 10 ms timeout returns 200 with
 `commit:null`, `release:null`, and `errors[0].message = "GitHub request timed
 out after 10 ms"`; the raw `This operation was aborted` string is absent.
 
-The running Web UI process still uses the previously installed bundle. To see
-this in the UI, reinstall/update the profile dependency and restart DSH; the
-current profile is an ssh git dependency snapshot, not a symlink.
+The second commit (`bca5a15`) is installed and the current Web process started
+after the install (`22:58:59` vs file mtime `22:58:53`), so the running Host
+uses this bundle. The settings-page click itself was not automated because the
+Web process requires its launch-time auth URL; the same-origin route and the
+built client bundle were verified separately.
 
 ## Not verified here
 

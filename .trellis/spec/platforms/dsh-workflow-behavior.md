@@ -10,9 +10,12 @@ Define how the main DSH session should behave in this repository's Trellis
 setup, and how the local `dsh-trellis` carrier realizes Trellis behavior.
 This is about the **current repository**, not about installed target projects.
 
-The carrier lives at `dsh-plugins/dsh-trellis` and is symlinked into the `web`
-profile (`~/.dsh/profiles/web/node_modules/dsh-trellis`). Editing `lib/**`
-requires a DSH restart before the running session sees it.
+The carrier lives at `dsh-plugins/dsh-trellis`. The `web` profile currently
+installs it as an ssh git dependency snapshot
+(`~/.dsh/profiles/web/node_modules/dsh-trellis`), not a symlink. Editing
+`lib/**` requires reinstalling/updating that dependency and restarting DSH
+before the running session sees it; a `link:` install is a local-development
+alternative, not the current profile shape.
 
 ---
 
@@ -133,3 +136,29 @@ in `LOCAL_CHANGES.md` and the `validation-0.3.*` records.
   (`docs/validation-<version>-local.md`) in agreement. The client bundle's
   `PLUGIN_VERSION` is stamped from `package.json` at build time (`pnpm run
   build:client`), so rebuild it as part of a version change.
+
+---
+
+## 0.1.1 Behavior Notes
+
+- **Flow-style config** — `parseSection` accepts `section: {key: value}` for
+  `dsh`, `spec_injection`, `prompt_injection`, and `context_injection`; an
+  explicit `dsh: {dispatch_mode: inline}` therefore selects inline and remains
+  subject to the inline dispatch guard.
+- **Broken workflow visibility** — when a Trellis root has a missing,
+  unreadable, or zero-state-block `workflow.md`, the plugin emits the generic
+  fallback breadcrumb plus the normal `no_task` bootstrap. A plain Git
+  repository without `.trellis` stays silent.
+- **Command references** — injected state bodies normalize
+  `/trellis:<name>` to the DSH skill/command surface before the digest is
+  computed.
+- **Research push** — research children receive the `.trellis/spec` directory
+  overview plus `get_context.py --mode packages` and search tips; task
+  artifacts are not inlined for that role. An empty `research.jsonl` is not
+  reported as missing context.
+- **Role contract push** — pull-only context-loading sections are removed from
+  the pushed copy only; the on-disk `.dsh/skills/trellis-agent-*` contracts
+  remain the pull path.
+- **Version check** — GitHub Atom/npm timeouts are reported as partial results
+  with a retry hint; the raw `This operation was aborted` text must not reach
+  the settings page.
