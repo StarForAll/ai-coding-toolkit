@@ -21,6 +21,8 @@ import { join } from "node:path";
 import { breadcrumbMessage, hasSkipKeyword } from "./breadcrumb.js";
 import { bootstrapMessage } from "./bootstrap.js";
 import { nodeFs } from "./node-fs.js";
+import { resolveTrellisProject } from "./project.js";
+import { createDshDefaultsEnsurer } from "./project-defaults.js";
 import {
   readCached,
   resolveTrellisState,
@@ -58,21 +60,54 @@ export function isSubagentSession(agent) {
 export function createSessionComposer(resolved, ctx, dependencies = {}) {
   const fs = dependencies.fs ?? nodeFs;
   const cache = new Map();
+  // One-time (per project, per changed state) migration: Trellis projects that
+  // install this plugin start in the mode the plugin documents. The ensurer is
+  // idempotent and refuses to overwrite an explicit value, so it is safe to
+  // attempt on every step; the session-local cache keeps the common case at one
+  // read and no writes.
+  const ensureProjectDefaults = createDshDefaultsEnsurer({
+    fs,
+    logger: ctx.logger,
+    cache,
+  });
 
   const compose = async (agent, messages, signal) => {
-    if (resolved.maxBytes <= 0 || !Number.isFinite(resolved.maxBytes)) return [];
     const cwd = await resolveWorkingDirectory(ctx, agent, signal);
     const subagent = isSubagentSession(agent);
     const sessionId = agent.session.header.id ?? "";
     const contextKey =
       sessionId === "" ? "" : `dsh_${sanitizeContextKey(sessionId)}`;
     signal?.throwIfAborted();
+    // Bootstrap runs before state resolution so the very first turn already
+    // sees `dsh.dispatch_mode: inline`; the write also invalidates the shared
+    // read cache, which makes that re-read observe the new file.
+    const project = await resolveTrellisProject({
+      ctx,
+      agent,
+      signal,
+      cwd,
+      fs,
+      cache,
+      markers: resolved.projectRootMarkers,
+    });
+    if (project !== null) {
+      try {
+        await ensureProjectDefaults(project);
+      } catch (error) {
+        ctx.logger?.warn?.("dsh-trellis project defaults failed: %o", error);
+      }
+    }
+    signal?.throwIfAborted();
+    // The project bootstrap is about enabling the plugin, not about rendering a
+    // breadcrumb: a zero byte budget still normalizes the project config.
+    if (resolved.maxBytes <= 0 || !Number.isFinite(resolved.maxBytes)) return [];
     const state = await resolveTrellisState({
       cwd,
       markers: resolved.projectRootMarkers,
       contextKey,
       fs,
       cache,
+      root: project?.root ?? null,
     });
     signal?.throwIfAborted();
     if (state === null) return [];

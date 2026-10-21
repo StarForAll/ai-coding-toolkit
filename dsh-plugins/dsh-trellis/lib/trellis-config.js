@@ -189,6 +189,24 @@ export function parseBoolean(raw, fallback) {
 }
 
 /**
+ * Resolve the `dsh.inline_allow_dispatch` escape hatch.
+ *
+ * `dsh.dispatch_mode: inline` tells the main session to implement and check
+ * directly, and the dispatch guard refuses `trellis-agent-implement` /
+ * `trellis-agent-check` dispatch unless this flag is explicitly `true`.
+ * `trellis-agent-research` stays allowed either way (discovery is not
+ * implementation). Absent, malformed, or `false` keeps the gate closed.
+ *
+ * @param {string | null | undefined} configText - `.trellis/config.yaml`.
+ * @returns {boolean}
+ */
+export function dshInlineDispatchAllowed(configText) {
+  const section = parseSection(configText, "dsh");
+  if (section === null) return false;
+  return parseBoolean(section.get("inline_allow_dispatch"), false);
+}
+
+/**
  * Non-negative integer. Negative or non-numeric values fall back.
  * @param {SectionValue | undefined} raw
  * @param {number} fallback

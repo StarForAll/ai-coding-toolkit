@@ -10,23 +10,44 @@ const proj = (rel) => join(projectRoot, rel);
 /** Minimal in-memory fs shim ({exists, stat, readFile}) for the composer. */
 function memoryFs(initial = {}) {
   const files = new Map(Object.entries(initial));
+  const dirs = new Set();
   const mtimes = new Map();
   let tick = 1;
   return {
     async exists(path) {
-      if (files.has(path)) return true;
+      if (files.has(path) || dirs.has(path)) return true;
       const prefix = `${path}${sep}`;
-      return [...files.keys()].some((p) => p.startsWith(prefix));
+      return [...files.keys(), ...dirs].some((p) => p.startsWith(prefix));
     },
     async stat(path) {
       const prefix = `${path}${sep}`;
-      const dir = !files.has(path) && [...files.keys()].some((p) => p.startsWith(prefix));
+      const dir = dirs.has(path) ||
+        (!files.has(path) && [...files.keys(), ...dirs].some((p) => p.startsWith(prefix)));
       if (!files.has(path) && !dir) return null;
       if (!mtimes.has(path)) mtimes.set(path, tick++);
       return { mtimeMs: mtimes.get(path), isDirectory: dir };
     },
     async readFile(path) {
       return files.has(path) ? files.get(path) : null;
+    },
+    async writeFile(path, content) {
+      files.set(path, content);
+      mtimes.set(path, tick++);
+    },
+    async rename(from, to) {
+      files.set(to, files.get(from));
+      files.delete(from);
+      mtimes.set(to, tick++);
+    },
+    async mkdir(path) {
+      dirs.add(path);
+      mtimes.set(path, tick++);
+    },
+    async rmdir(path) {
+      dirs.delete(path);
+    },
+    async unlink(path) {
+      files.delete(path);
     },
   };
 }
@@ -83,4 +104,38 @@ test("composer: child agent with no task is silent", async () => {
     },
   };
   assert.equal((await composer.compose(child, prompt("hello"))).length, 0);
+});
+
+function messageText(message) {
+  return message.content.map((part) => part.text ?? "").join("");
+}
+
+test("composer: bootstraps dsh.dispatch_mode before the first breadcrumb", async () => {
+  const fs = fsWithConfig("session_auto_commit: false\n");
+  const composer = composerFor(fs);
+  const composed = await composer.compose(agent, prompt("hello"));
+  const crumb = composed.find((message) => messageText(message).includes("Trellis workflow state"));
+  assert.ok(crumb, "breadcrumb expected");
+  assert.match(messageText(crumb), /<dsh-mode>/);
+  assert.match(
+    await fs.readFile(proj(".trellis/config.yaml")),
+    /\ndsh:\n  dispatch_mode: inline\n$/,
+  );
+});
+
+test("composer: an explicit dispatch_mode is not overwritten", async () => {
+  const source = "dsh:\n  dispatch_mode: auto\n";
+  const fs = fsWithConfig(source);
+  const composed = await composerFor(fs).compose(agent, prompt("hello"));
+  const crumb = composed.find((message) => messageText(message).includes("Trellis workflow state"));
+  assert.ok(crumb, "breadcrumb expected");
+  assert.doesNotMatch(messageText(crumb), /<dsh-mode>/);
+  assert.equal(await fs.readFile(proj(".trellis/config.yaml")), source);
+});
+
+test("composer: a zero breadcrumb budget still bootstraps the project config", async () => {
+  const fs = fsWithConfig("a: 1\n");
+  const composed = await composerFor(fs, { maxBytes: 0 }).compose(agent, prompt("hello"));
+  assert.deepEqual(composed, []);
+  assert.match(await fs.readFile(proj(".trellis/config.yaml")), /\ndsh:\n  dispatch_mode: inline\n$/);
 });

@@ -22,10 +22,12 @@
  * @module dsh-trellis/dispatch-guard
  */
 import { createUserMessage } from "@deepseek-ai/dsh-llm";
+import { join } from "node:path";
 import { resolveTrellisProject } from "./project.js";
 import { nodeFs } from "./node-fs.js";
-import { readTaskStatus, resolveActiveTask } from "./workflow.js";
+import { dshDispatchMode, readTaskStatus, resolveActiveTask } from "./workflow.js";
 import { dshContextKey } from "./session-env.js";
+import { dshInlineDispatchAllowed } from "./trellis-config.js";
 
 export const SOURCE_KIND = "dsh-trellis";
 export const SOURCE_FORM = "dispatch-guard";
@@ -100,6 +102,28 @@ export function denyReason(role) {
 }
 
 /**
+ * Deny reason for an implement/check dispatch while the project works inline.
+ *
+ * This is the DSH counterpart of the `dsh-mode` banner: the banner tells the
+ * model, the guard enforces it. Codex only documents inline mode, so this is a
+ * deliberate DSH-only gate, with an explicit project-level escape hatch for
+ * callers that really do want to delegate from an inline project.
+ *
+ * @param {"implement" | "check"} role
+ * @returns {string}
+ */
+export function inlineDenyReason(role) {
+  return (
+    `Trellis inline mode: the main session implements and checks directly, so ` +
+    `trellis-agent-${role} dispatch is refused.\n\n` +
+    "Do the work in this session, or make the delegation explicit: set " +
+    "`.trellis/config.yaml` `dsh.dispatch_mode: auto`, or add " +
+    "`dsh.inline_allow_dispatch: true` for this project.\n\n" +
+    "Codex only documents inline mode and does not block dispatch; this plugin fails closed."
+  );
+}
+
+/**
  * Register the dispatch guard.
  *
  * @param {import("@deepseek-ai/cordis").Context} ctx
@@ -130,6 +154,18 @@ export function registerDispatchGuard(ctx, resolved) {
       });
       // Outside a Trellis project the guard has nothing to protect.
       if (project === null) return decision;
+      // Inline mode is a project-level contract: the main session does the
+      // work itself. Research remains the discovery role and stays allowed.
+      const configText = await nodeFs.readFile(
+        join(project.root, ".trellis", "config.yaml"),
+      );
+      if (
+        role !== "research" &&
+        dshDispatchMode(configText) === "inline" &&
+        !dshInlineDispatchAllowed(configText)
+      ) {
+        return { kind: "deny", reason: inlineDenyReason(role) };
+      }
       const sessionId = exec.agent?.session?.header?.id ?? "";
       const readable = await hasReadableTask({
         root: project.root,

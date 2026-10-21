@@ -37,6 +37,9 @@ Primary asset types:
 # Run CLI unit tests
 /softwares/python/bin/python3 -m unittest trellis-library/tests/test_cli.py
 
+# Install the tracked git hooks (pre-push rebuilds the dsh-trellis client bundle)
+./scripts/install-git-hooks.sh
+
 # Get session context and active task inventory
 /softwares/python/bin/python3 ./.trellis/scripts/get_context.py
 /softwares/python/bin/python3 ./.trellis/scripts/task.py list
@@ -53,6 +56,12 @@ Primary asset types:
 - If you edit the project root README, update `README.md` and `README.en.md` together.
 - Keep `.trellis/workspace/` journal files under 2000 lines.
 - Run the relevant validation commands before claiming completion.
+- `dsh-trellis` is installed from git in some environments, and git dependencies never run
+  `prepack`: `dsh-plugins/dsh-trellis/lib/client.js` must be built and committed before pushing.
+  The tracked pre-push hook (`.git/hooks/pre-push` -> `scripts/git-hooks/pre-push`, installed by
+  `./scripts/install-git-hooks.sh`) rebuilds it and aborts the push when the rebuild leaves an
+  uncommitted bundle. Do not bypass it with `--no-verify` unless you have rebuilt and committed
+  the bundle yourself.
 - When this repository's Trellis workflow or platform-integration behavior changes, use the same change/review to manually re-check the guidance outside this file's `TRELLIS:START` / `TRELLIS:END` block against `.trellis/workflow.md`, `.codex/config.toml`, and the relevant `trellis-*` skills so local summary text does not drift from the managed workflow.
 
 ## Language Policy

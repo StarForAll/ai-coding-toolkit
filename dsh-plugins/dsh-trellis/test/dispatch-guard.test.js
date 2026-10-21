@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import {
   denyReason,
   hasReadableTask,
+  inlineDenyReason,
   parseDispatchRequest,
   registerDispatchGuard,
 } from "../lib/dispatch-guard.js";
@@ -166,4 +167,65 @@ test("the guard ignores non-dispatch tools, non-Trellis prompts, and host denial
   );
   const denied = { kind: "deny", reason: "host policy" };
   assert.deepEqual(await pre(exec(root, { text: "trellis-agent-implement" }), async () => denied), denied);
+});
+
+test("inline mode refuses implement/check dispatch even with a readable task", async (t) => {
+  const { root, task } = await project(t);
+  await writeFile(join(root, ".trellis", "config.yaml"), "dsh:\n  dispatch_mode: inline\n");
+  const { ctx, listeners } = harness();
+  t.after(registerDispatchGuard(ctx, { projectRootMarkers: [".trellis"] }));
+  const pre = listeners.get("tools/pre-execute");
+
+  const implement = await pre(
+    exec(root, { text: `Active task: ${task}\ntrellis-agent-implement` }),
+    async () => ({ kind: "allow" }),
+  );
+  assert.equal(implement.kind, "deny");
+  assert.equal(implement.reason, inlineDenyReason("implement"));
+
+  const check = await pre(
+    exec(root, { callId: "c2", text: `Active task: ${task}\ntrellis-agent-check` }),
+    async () => ({ kind: "allow" }),
+  );
+  assert.equal(check.kind, "deny");
+  assert.equal(check.reason, inlineDenyReason("check"));
+});
+
+test("inline mode still allows research", async (t) => {
+  const { root } = await project(t);
+  await writeFile(join(root, ".trellis", "config.yaml"), "dsh:\n  dispatch_mode: inline\n");
+  const { ctx, listeners } = harness();
+  t.after(registerDispatchGuard(ctx, { projectRootMarkers: [".trellis"] }));
+  const pre = listeners.get("tools/pre-execute");
+  assert.deepEqual(
+    await pre(exec(root, { text: "trellis-agent-research: compare approaches" }), async () => ({ kind: "allow" })),
+    { kind: "allow" },
+  );
+});
+
+test("dsh.inline_allow_dispatch is the explicit escape hatch", async (t) => {
+  const { root, task } = await project(t);
+  await writeFile(
+    join(root, ".trellis", "config.yaml"),
+    "dsh:\n  dispatch_mode: inline\n  inline_allow_dispatch: true\n",
+  );
+  const { ctx, listeners } = harness();
+  t.after(registerDispatchGuard(ctx, { projectRootMarkers: [".trellis"] }));
+  const pre = listeners.get("tools/pre-execute");
+  assert.deepEqual(
+    await pre(exec(root, { text: `Active task: ${task}\ntrellis-agent-implement` }), async () => ({ kind: "allow" })),
+    { kind: "allow" },
+  );
+});
+
+test("auto mode keeps dispatching allowed for a readable task", async (t) => {
+  const { root, task } = await project(t);
+  await writeFile(join(root, ".trellis", "config.yaml"), "dsh:\n  dispatch_mode: auto\n");
+  const { ctx, listeners } = harness();
+  t.after(registerDispatchGuard(ctx, { projectRootMarkers: [".trellis"] }));
+  const pre = listeners.get("tools/pre-execute");
+  assert.deepEqual(
+    await pre(exec(root, { text: `Active task: ${task}\ntrellis-agent-implement` }), async () => ({ kind: "allow" })),
+    { kind: "allow" },
+  );
 });

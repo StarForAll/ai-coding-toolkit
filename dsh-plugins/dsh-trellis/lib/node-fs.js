@@ -3,7 +3,15 @@
  *
  * @module dsh-trellis/node-fs
  */
-import { stat as nodeStat, readFile as nodeReadFile } from "node:fs/promises";
+import {
+  stat as nodeStat,
+  readFile as nodeReadFile,
+  writeFile as nodeWriteFile,
+  rename as nodeRename,
+  mkdir as nodeMkdir,
+  rmdir as nodeRmdir,
+  unlink as nodeUnlink,
+} from "node:fs/promises";
 
 /** @type {import("./workflow.js").FsShim} */
 export const nodeFs = {
@@ -29,5 +37,23 @@ export const nodeFs = {
     } catch {
       return null;
     }
+  },
+  // Write surface used by the one-time project-config migration. Read-only
+  // callers never touch these, and test shims that omit them are detected by
+  // the writer instead of failing halfway.
+  async writeFile(path, content, options) {
+    await nodeWriteFile(path, content, options);
+  },
+  async rename(from, to) {
+    await nodeRename(from, to);
+  },
+  async mkdir(path, options) {
+    await nodeMkdir(path, options);
+  },
+  async rmdir(path) {
+    await nodeRmdir(path);
+  },
+  async unlink(path) {
+    await nodeUnlink(path);
   },
 };

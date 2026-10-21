@@ -774,7 +774,7 @@ test("resolveTrellisState: invalid dsh.dispatch_mode falls back to auto", async 
   assert.equal(state.status, "planning");
 });
 
-test("resolveTrellisState: dsh inline without a matching block keeps the base block and no banner", async () => {
+test("resolveTrellisState: dsh inline without a matching block keeps the base block but still announces the mode", async () => {
   const fs = memoryFs({
     [proj(".git")]: "",
     [proj(".trellis/workflow.md")]: WORKFLOW_MD,
@@ -786,5 +786,21 @@ test("resolveTrellisState: dsh inline without a matching block keeps the base bl
     cwd: projectRoot, markers: [".git"], contextKey: "dsh_me", fs, cache: new Map(),
   });
   assert.equal(state.status, "planning");
-  assert.doesNotMatch(state.body, /<dsh-mode>/);
+  assert.match(state.body, /^Load trellis-brainstorm; stay in planning\./);
+  assert.match(state.body, /<dsh-mode>/);
+});
+
+test("resolveTrellisState: dsh inline announces the mode for statuses without an inline variant", async () => {
+  const fs = memoryFs({
+    [proj(".git")]: "",
+    [proj(".trellis/workflow.md")]: WORKFLOW_MD,
+    [proj(".trellis/config.yaml")]: "dsh:\n  dispatch_mode: inline\n",
+    [proj(".trellis/.runtime/sessions/dsh_me.json")]: '{"current_task":".trellis/tasks/t"}',
+    [proj(".trellis/tasks/t/task.json")]: '{"status":"completed"}',
+  });
+  const state = await resolveTrellisState({
+    cwd: projectRoot, markers: [".git"], contextKey: "dsh_me", fs, cache: new Map(),
+  });
+  assert.equal(state.status, "completed");
+  assert.match(state.body, /<dsh-mode>/);
 });

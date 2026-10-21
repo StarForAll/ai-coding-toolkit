@@ -24,14 +24,38 @@ carrier selects them only for `platform == "codex"`).
 
 | `dsh.dispatch_mode` | Main-session behavior | Breadcrumb |
 | --- | --- | --- |
-| `auto` (default) | dispatch `trellis-agent-implement` / `trellis-agent-check` role sub-agents | base `planning` / `in_progress` blocks |
-| `inline` | implement and check directly in the main session; do not dispatch role sub-agents; `trellis_wait` is unnecessary; verify with the `trellis-check` skill | `*-inline` block plus the `<dsh-mode>` banner |
+| `inline` (bootstrapped default) | implement and check directly in the main session; do not dispatch role sub-agents; `trellis_wait` is unnecessary; verify with the `trellis-check` skill | `*-inline` block when defined, plus the `<dsh-mode>` banner on every status |
+| `auto` (library fallback / explicit opt-out) | dispatch `trellis-agent-implement` / `trellis-agent-check` role sub-agents | base `planning` / `in_progress` blocks |
 
-Unknown values fall back to `auto`. A missing `*-inline` block also keeps the
-base block rather than inventing inline guidance.
+Unknown values fall back to `auto`. A missing `*-inline` block keeps the base
+block as phase wording; the `<dsh-mode>` banner is still emitted, because the
+banner — not the block choice — declares the mode.
 
 This repository pins `inline` to match its standing main-session rule; Codex
 pins its own `codex.dispatch_mode: inline` independently.
+
+## Project Bootstrap: `dsh.dispatch_mode`
+
+Installing and enabling the plugin bootstraps the project instead of asking the
+user to add the key by hand. Before the first state resolution of a project, the
+plugin ensures `.trellis/config.yaml` contains `dsh.dispatch_mode: inline`.
+
+Rules:
+
+- add the key only when it is absent; an explicit `auto` (or any value) is
+  authoritative and is never overwritten;
+- preserve comments, ordering, and line endings; never rewrite the file when the
+  key is already present;
+- never create a missing `.trellis/config.yaml` — the plugin supplements a
+  Trellis project, it does not invent one;
+- write atomically (temp + rename) under a directory lock, and re-read the
+  file while holding the lock before merging, so two sessions starting together
+  cannot append the section twice or overwrite each other's edits;
+- a read-only project or a failed write degrades to the library fallback
+  `auto` for that run and logs one warning.
+
+Because the bootstrap runs before state resolution, the first turn already sees
+`inline`; the read cache is invalidated as part of the write.
 
 ---
 
@@ -89,3 +113,23 @@ When reviewing DSH behavior in this repository, verify:
 ---
 
 **Language**: English
+
+---
+
+## Versioning Policy for the Local `dsh-trellis` Carrier
+
+The carrier's version numbering restarted at **0.1.0** on 2026-10-21. Pre-reset
+versions (upstream `0.1.12` through the local `0.3.10`) remain only as history
+in `LOCAL_CHANGES.md` and the `validation-0.3.*` records.
+
+- Normal fixes, features, and documentation changes bump the **patch**:
+  `0.1.0` → `0.1.1` → `0.1.2`.
+- A **minor** or **major** bump is reserved for significant changes: a breaking
+  runtime or configuration contract, a manifest/settings-surface break, or a
+  rewrite large enough that projects must re-verify integration.
+- Do not jump to `0.2.0` or higher for ordinary work; "it is a feature" is not a
+  reason to change the major/minor component.
+- Keep `package.json`, `README.md`, `LOCAL_CHANGES.md`, and the release record
+  (`docs/validation-<version>-local.md`) in agreement. The client bundle's
+  `PLUGIN_VERSION` is stamped from `package.json` at build time (`pnpm run
+  build:client`), so rebuild it as part of a version change.

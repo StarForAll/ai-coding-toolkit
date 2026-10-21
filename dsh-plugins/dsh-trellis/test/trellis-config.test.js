@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   contextInjectionLimits,
+  dshInlineDispatchAllowed,
   normalizeToolName,
   parseBoolean,
   parseCount,
@@ -102,4 +103,21 @@ test("normalizeToolName lower-cases and folds MultiEdit", () => {
   assert.equal(normalizeToolName("Edit"), "edit");
   assert.equal(normalizeToolName(" MultiEdit "), "edit");
   assert.equal(normalizeToolName("WRITE"), "write");
+});
+
+test("dshInlineDispatchAllowed defaults to false and reads the escape hatch", () => {
+  assert.equal(dshInlineDispatchAllowed(""), false);
+  assert.equal(dshInlineDispatchAllowed("dsh:\n  dispatch_mode: inline\n"), false);
+  assert.equal(
+    dshInlineDispatchAllowed("dsh:\n  dispatch_mode: inline\n  inline_allow_dispatch: true\n"),
+    true,
+  );
+  assert.equal(
+    dshInlineDispatchAllowed("dsh:\n  inline_allow_dispatch: \"yes\"\n"),
+    true,
+  );
+  assert.equal(
+    dshInlineDispatchAllowed("dsh:\n  inline_allow_dispatch: maybe\n"),
+    false,
+  );
 });

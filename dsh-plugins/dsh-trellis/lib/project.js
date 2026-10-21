@@ -25,6 +25,12 @@ export const TRELLIS_MARKERS = Object.freeze([".trellis"]);
  * @param {AbortSignal | undefined} options.signal
  * @param {object} [options.fs] - filesystem shim.
  * @param {Map<string, {mtimeMs: number, content: string | null}>} [options.cache]
+ * @param {string} [options.cwd] - an already-resolved working directory. The
+ *   session composer resolves cwd once and hands it here so the project
+ *   bootstrap and the state resolver cannot disagree about the root.
+ * @param {string[]} [options.markers] - root markers; the composer passes its
+ *   configured `projectRootMarkers` so a project the user excluded is not
+ *   silently adopted by the bootstrap.
  * @returns {Promise<{root: string, configText: string | null, cwd: string} | null>}
  */
 export async function resolveTrellisProject({
@@ -33,9 +39,11 @@ export async function resolveTrellisProject({
   signal,
   fs = nodeFs,
   cache,
+  cwd: resolvedCwd,
+  markers = TRELLIS_MARKERS,
 }) {
-  const cwd = await resolveWorkingDirectory(ctx, agent, signal);
-  const root = await findProjectRoot(cwd, TRELLIS_MARKERS, fs);
+  const cwd = resolvedCwd ?? await resolveWorkingDirectory(ctx, agent, signal);
+  const root = await findProjectRoot(cwd, markers, fs);
   if (root === null) return null;
   const configPath = join(root, ".trellis", "config.yaml");
   const configText = cache

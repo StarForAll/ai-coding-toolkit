@@ -1,0 +1,69 @@
+#!/usr/bin/env sh
+# Build the dsh-trellis client bundle before a push that carries plugin changes.
+#
+# Why a git hook instead of `prepack`: git dependencies are installed from a
+# checkout and pnpm/npm do NOT run `prepack` for them (verified with pnpm
+# 12.14.0). The host loads `lib/client.js` for the settings page, so a checkout
+# without a committed, current bundle ships stale or missing client code.
+#
+# Policy:
+#   - only build when the pushed commits actually touch dsh-plugins/dsh-trellis;
+#   - build with `pnpm run build:client`;
+#   - if the build dirties `lib/client.js` / `lib/client.js.map`, abort the push
+#     and ask for a commit. The hook cannot add the rebuilt bundle to commits
+#     that are already made, and silently pushing a stale bundle is the failure
+#     this hook exists to prevent.
+#
+# Enable it with `./scripts/install-git-hooks.sh`. `git push --no-verify`
+# bypasses it, by design.
+set -eu
+
+fail() {
+  echo "ERROR: pre-push: $*" >&2
+  exit 1
+}
+
+PLUGIN_DIR="dsh-plugins/dsh-trellis"
+BUNDLE_FILES="$PLUGIN_DIR/lib/client.js $PLUGIN_DIR/lib/client.js.map"
+
+[ -f "$PLUGIN_DIR/package.json" ] || exit 0
+
+scope=0
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+  [ -z "${local_sha:-}" ] && continue
+  case "$local_sha" in
+    0000000000000000000000000000000000000000) continue ;;
+  esac
+  if [ -z "${remote_sha:-}" ] || [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+    changed=$(git log --format= --name-only "$local_sha" --not --remotes -- "$PLUGIN_DIR" 2>/dev/null | sed '/^$/d' | head -n 1 || true)
+  else
+    changed=$(git diff --name-only "$remote_sha" "$local_sha" -- "$PLUGIN_DIR" 2>/dev/null | head -n 1 || true)
+  fi
+  [ -n "$changed" ] && scope=1
+done
+
+[ "$scope" -eq 1 ] || exit 0
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "WARN: pre-push: pnpm not found; skipping the dsh-trellis client build." >&2
+  echo "WARN: pre-push: install pnpm or run 'cd $PLUGIN_DIR && pnpm run build:client' before pushing." >&2
+  exit 0
+fi
+
+echo "pre-push: building dsh-trellis client bundle (git installs do not run prepack)..." >&2
+if ! (cd "$PLUGIN_DIR" && pnpm run build:client >/dev/null); then
+  fail "'pnpm run build:client' failed; push aborted."
+fi
+
+if ! git diff HEAD --quiet -- $BUNDLE_FILES; then
+  echo "ERROR: pre-push: the client bundle changed during the build, but the push" >&2
+  echo "ERROR: pre-push: only contains committed objects. Commit the rebuilt bundle and push again:" >&2
+  echo "" >&2
+  git status --short -- $BUNDLE_FILES >&2
+  echo "" >&2
+  echo "ERROR: pre-push:   git add $BUNDLE_FILES" >&2
+  echo "ERROR: pre-push:   git commit -m 'chore(dsh-trellis): rebuild client bundle'" >&2
+  exit 1
+fi
+
+exit 0

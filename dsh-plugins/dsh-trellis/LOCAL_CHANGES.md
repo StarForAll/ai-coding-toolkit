@@ -4,8 +4,21 @@ This copy is modified in place (Strategy A). Upstream files keep their
 behaviour unless listed here. Runtime package identity (`name`,
 `cordis.patch.yml` id, settings namespace, exports) is unchanged, so this copy
 replaces upstream `dsh-trellis` rather than coexisting with it. The version is
-bumped to `0.3.9` so installers do not treat the local build as "already at
+bumped to `0.1.0` so installers do not treat the local build as "already at
 0.1.12" and skip it.
+
+## Version scheme (restarted 2026-10-21)
+
+The carrier's version numbering restarted at `0.1.0`. Pre-reset versions
+(`0.1.12` upstream through local `0.3.10`) remain only as history below and in
+the `validation-0.3.*` records.
+
+- Normal fixes/features/docs bump the patch: `0.1.0` -> `0.1.1` -> `0.1.2`.
+- Minor/major bumps are reserved for significant changes (breaking runtime or
+  configuration contracts, manifest/settings-surface breaks, or a rewrite that
+  requires re-verifying integration). Do not use `0.2.0+` for ordinary work.
+- `package.json`, `README.md`, this file, and the release record must agree;
+  `pnpm run build:client` re-stamps `PLUGIN_VERSION` in `lib/client.js`.
 
 ## Added files
 
@@ -54,6 +67,7 @@ bumped to `0.3.9` so installers do not treat the local build as "already at
 | `docs/validation-0.3.7-local.md` | Role-contract push, persistent spec state, and bootstrap documentation record for 0.3.7. |
 | `docs/validation-0.3.8-local.md` | Verification record for the 0.3.8 parity-fix round (state parsing, status mapping, workflow selection, skip keyword, inline, role-push wording). |
 | `docs/validation-0.3.9-local.md` | Verification record for the DSH `dsh.dispatch_mode` inline feature. |
+| `docs/validation-0.1.0-local.md` | Release record for 0.1.0: version restart, automatic `dsh.dispatch_mode` bootstrap, inline boundary fixes, and the inline dispatch gate. |
 | `docs/manual-verification.md` | User-only manual acceptance steps and expected effects (no automated checks). |
 | `UPSTREAM_BASE.yaml` | Maintenance metadata (upstream baseline, unknown commit). |
 | `LOCAL_CHANGES.md` | This file. |
@@ -210,6 +224,56 @@ Verification: 295 tests, 291 pass, 0 fail, 4 skip. Real headless DSH session
 with `dsh.dispatch_mode: inline` receives `Trellis workflow state:
 in_progress-inline` with the `<dsh-mode>` banner (788 bytes); `auto` and
 `no_task` sessions are unchanged.
+
+## Release 0.1.0 (2026-10-21, version restart)
+
+Installed-state end-to-end audit (`10-21-dsh-trellis-installed-e2e-inline-audit`)
+found two inline-mode boundaries:
+
+- A workflow variant without a `*-inline` block silently dropped the mode banner,
+  so a trimmed workflow re-taught auto semantics to an inline project (Codex keeps
+  emitting `<codex-mode>inline>` in the same situation). The banner is now emitted
+  for every status whenever `dsh.dispatch_mode: inline`, independent of block
+  selection.
+- Inline mode was advisory only. The dispatch guard now refuses
+  `trellis-agent-implement` / `trellis-agent-check` dispatch under inline mode and
+  keeps `trellis-agent-research` allowed; `dsh.inline_allow_dispatch: true` is the
+  explicit project-level escape hatch.
+
+Also documented: cross-platform `spec_injection.tools` naming (shared config must
+use Trellis' capitalized names because Codex does not normalize), the invalid
+`dsh.dispatch_mode` fallback to `auto`, and the `task.py start
+--allow-empty-context` friction in inline mode.
+
+### Automatic `dsh.dispatch_mode` bootstrap
+
+Enabling the plugin now migrates a Trellis project on first use: before the
+first state resolution, `.trellis/config.yaml` is ensured to contain
+`dsh.dispatch_mode: inline`. The migration only adds a missing key, preserves
+comments/order/line endings, never overwrites an explicit value, never creates a
+missing config, writes atomically under a directory lock, re-reads the file while
+holding the lock before merging (so a stale snapshot cannot duplicate the key or
+overwrite concurrent edits), and degrades to `auto` with one warning on failure. The pure merge (`mergeDshDispatchMode`) and the IO
+policy (`createDshDefaultsEnsurer`) live in `lib/project-defaults.js`; the
+composer reuses one project root for the bootstrap and the state resolver so the
+first turn already sees the new mode.
+
+### Pre-push client build
+
+Git dependencies never run `prepack`, so a pushed checkout must already carry a
+current `lib/client.js`. The repository now tracks `scripts/git-hooks/pre-push`
+and installs it into `.git/hooks/pre-push` via `scripts/install-git-hooks.sh`.
+It builds only when the pushed commits touch `dsh-plugins/dsh-trellis`, and it
+aborts the push when the rebuild dirties `lib/client.js`/`lib/client.js.map`
+(the commit that is being pushed cannot carry a post-commit build). Existing
+`core.hooksPath` managers that chain to `.git/hooks` (Sonar) keep working.
+
+### Version restart
+
+Version reset to `0.1.0`; see the version scheme section above and
+`.trellis/spec/platforms/dsh-workflow-behavior.md`.
+
+See `docs/validation-0.1.0-local.md`.
 
 ## Known differences from Codex
 

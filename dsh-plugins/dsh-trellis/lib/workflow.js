@@ -36,11 +36,13 @@ export function sanitizeContextKey(value) {
 }
 
 /**
- * Mode banner appended to `*-inline` bodies only when the project selects
- * `dsh.dispatch_mode: inline`. The `*-inline` blocks come from Trellis and are
- * marked Codex-only; their phase contract is platform-neutral, but they do not
- * mention DSH-specific mechanics. This banner restores exactly those mechanics
- * for inline mode without forking the workflow file.
+ * Mode banner appended whenever the project selects `dsh.dispatch_mode: inline`,
+ * independent of which workflow-state block was chosen. The `*-inline` blocks
+ * come from Trellis and are marked Codex-only; their phase contract is
+ * platform-neutral, but they do not mention DSH-specific mechanics. This banner
+ * restores exactly those mechanics for inline mode without forking the workflow
+ * file, and it is the only signal that survives when a custom workflow variant
+ * has no `*-inline` block.
  */
 export const DSH_INLINE_NOTE =
   "<dsh-mode>\n" +
@@ -388,6 +390,10 @@ export function mapStatus(status) {
  * @param {string} options.contextKey - sanitized session context key.
  * @param {object} options.fs - filesystem shim ({exists, readFile, stat}).
  * @param {Map<string, {mtimeMs: number, content: string | null}>} options.cache
+ * @param {string | null} [options.root] - an already-resolved project root.
+ *   Callers that ran a project bootstrap (for example the session composer's
+ *   `dsh.dispatch_mode` migration) reuse it so both layers agree on one root
+ *   and the config re-read observes the write.
  * @returns {Promise<{root: string, status: string, taskPath: string | null, body: string, digest: string} | null>}
  */
 export async function resolveTrellisState({
@@ -396,8 +402,9 @@ export async function resolveTrellisState({
   contextKey,
   fs,
   cache,
+  root: resolvedRoot = null,
 }) {
-  const root = await findProjectRoot(cwd, markers, fs);
+  const root = resolvedRoot ?? await findProjectRoot(cwd, markers, fs);
   if (root === null) return null;
   const task = await resolveActiveTask(root, contextKey, fs);
   const workflowPath = await resolveWorkflowPath({
@@ -412,26 +419,39 @@ export async function resolveTrellisState({
   if (blocks.size === 0) return null;
   // `codex.dispatch_mode` is Codex-only and is deliberately ignored here.
   // DSH has its own `dsh.dispatch_mode` switch; when it selects inline, the
-  // platform-neutral `*-inline` phase block is reused and the DSH-specific
-  // mechanics are restored by the mode banner below.
+  // platform-neutral `*-inline` phase block is reused when the workflow file
+  // defines it, and the DSH-specific mechanics are always restored by the mode
+  // banner below. The banner is the mode signal; the block is only a phase
+  // wording choice.
   const configText = await readCached(
     join(root, ".trellis", "config.yaml"),
     fs,
     cache,
   );
   const rawStatus = mapStatus(task?.status ?? null);
-  const inline =
+  // Two independent decisions:
+  //   1. which block to show — the `*-inline` phase block exists only for the
+  //      two dispatch phases, and only when the resolved workflow file defines
+  //      it (custom variants may not);
+  //   2. whether this project works inline — a project-level mode that must be
+  //      announced even when the variant has no `*-inline` block, otherwise a
+  //      trimmed workflow would silently re-teach the auto-mode contract
+  //      ("curate implement.jsonl", "dispatch implement/check") to an inline
+  //      project. Codex keeps emitting `<codex-mode>inline>` in that case too;
+  //      the banner, not the block choice, is what carries the mode.
+  const inlineMode = dshDispatchMode(configText) === "inline";
+  const inlineBlock =
+    inlineMode &&
     (rawStatus === "planning" || rawStatus === "in_progress") &&
-    dshDispatchMode(configText) === "inline" &&
     blocks.has(`${rawStatus}-inline`);
-  const status = inline ? `${rawStatus}-inline` : rawStatus;
+  const status = inlineBlock ? `${rawStatus}-inline` : rawStatus;
   const block = blocks.get(status);
   let body =
     status === "task_error"
       ? blocks.get(status) || TASK_ERROR_BREADCRUMB
       : block ?? FALLBACK_BREADCRUMB;
-  if (inline && block !== undefined) {
-    body = `${block}\n\n${DSH_INLINE_NOTE}`;
+  if (inlineMode) {
+    body = `${body}\n\n${DSH_INLINE_NOTE}`;
   }
   const digest = createHash("sha1")
     .update(`${status}\n${task?.path ?? ""}\n${body}`)
