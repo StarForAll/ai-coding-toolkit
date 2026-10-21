@@ -1,0 +1,169 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import {
+  denyReason,
+  hasReadableTask,
+  parseDispatchRequest,
+  registerDispatchGuard,
+} from "../lib/dispatch-guard.js";
+import { dshContextKey } from "../lib/session-env.js";
+
+const prompt = (text) => ({ content: [{ type: "text", text }] });
+
+async function project(t) {
+  const root = await mkdtemp(join(tmpdir(), "dsh-trellis-guard-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const task = ".trellis/tasks/demo";
+  await mkdir(join(root, task), { recursive: true });
+  await mkdir(join(root, ".trellis", ".runtime", "sessions"), { recursive: true });
+  await writeFile(join(root, task, "task.json"), JSON.stringify({ status: "in_progress" }));
+  await writeFile(join(root, ".trellis", "workflow.md"), "[workflow-state:no_task]\nIdle.\n[/workflow-state:no_task]\n");
+  return { root, task };
+}
+
+function harness() {
+  const listeners = new Map();
+  const ctx = {
+    on(event, listener) {
+      listeners.set(event, listener);
+      return () => listeners.delete(event);
+    },
+    logger: { warn() {} },
+  };
+  return { ctx, listeners };
+}
+
+const exec = (root, { callId = "call-1", name = "subagent", text = "" } = {}) => ({
+  callId,
+  name,
+  arguments: { prompt: text },
+  agent: { session: { header: { id: "parent-1", cwd: root } } },
+});
+
+test("parseDispatchRequest reads the role and the Active task prelude", () => {
+  assert.deepEqual(
+    parseDispatchRequest("Load `.dsh/skills/trellis-agent-check/SKILL.md`.\nActive task: .trellis/tasks/x"),
+    { role: "check", taskPath: ".trellis/tasks/x" },
+  );
+  assert.deepEqual(parseDispatchRequest("trellis-agent-research: find it"), {
+    role: "research",
+    taskPath: null,
+  });
+  assert.deepEqual(parseDispatchRequest("plain task"), { role: null, taskPath: null });
+});
+
+test("hasReadableTask accepts the parent pointer, the prelude, and nothing else", async (t) => {
+  const { root, task } = await project(t);
+  const pointer = join(root, ".trellis", ".runtime", "sessions", `${dshContextKey("parent-1")}.json`);
+  await writeFile(pointer, JSON.stringify({ current_task: task }));
+
+  assert.equal(await hasReadableTask({ root, taskPath: null, sessionId: "parent-1" }), true);
+  assert.equal(await hasReadableTask({ root, taskPath: task, sessionId: "other" }), true);
+  assert.equal(await hasReadableTask({ root, taskPath: null, sessionId: "other" }), false);
+  assert.equal(
+    await hasReadableTask({ root, taskPath: ".trellis/tasks/missing", sessionId: "parent-1" }),
+    false,
+  );
+});
+
+test("a stale parent pointer is not a readable task", async (t) => {
+  const { root, task } = await project(t);
+  const pointer = join(
+    root, ".trellis", ".runtime", "sessions", `${dshContextKey("parent-1")}.json`,
+  );
+  // The pointed-at directory does not exist: Trellis calls this `stale`, and a
+  // child dispatched from it would have no task to read.
+  await writeFile(pointer, JSON.stringify({ current_task: ".trellis/tasks/gone" }));
+  assert.equal(
+    await hasReadableTask({ root, taskPath: null, sessionId: "parent-1" }),
+    false,
+  );
+  // A prelude naming the same vanished directory is refused for the same reason.
+  assert.equal(
+    await hasReadableTask({
+      root, taskPath: ".trellis/tasks/gone", sessionId: "parent-1",
+    }),
+    false,
+  );
+  // The same pointer shape is accepted once it names a live task.
+  await writeFile(pointer, JSON.stringify({ current_task: task }));
+  assert.equal(
+    await hasReadableTask({ root, taskPath: null, sessionId: "parent-1" }),
+    true,
+  );
+});
+
+test("an implement dispatch without evidence is denied with an actionable reason", async (t) => {
+  const { root } = await project(t);
+  const { ctx, listeners } = harness();
+  const dispose = registerDispatchGuard(ctx, { projectRootMarkers: [".trellis"] });
+  t.after(dispose);
+
+  const decision = await listeners.get("tools/pre-execute")(
+    exec(root, { text: "Active: no task here. Load trellis-agent-implement." }),
+    async () => ({ kind: "allow" }),
+  );
+  assert.equal(decision.kind, "deny");
+  assert.match(decision.reason, /no readable active task for trellis-agent-implement/);
+  assert.equal(decision.reason, denyReason("implement"));
+});
+
+test("a readable pointer or prelude allows the dispatch", async (t) => {
+  const { root, task } = await project(t);
+  const { ctx, listeners } = harness();
+  t.after(registerDispatchGuard(ctx, { projectRootMarkers: [".trellis"] }));
+  const pre = listeners.get("tools/pre-execute");
+
+  const pointer = join(root, ".trellis", ".runtime", "sessions", `${dshContextKey("parent-1")}.json`);
+  await writeFile(pointer, JSON.stringify({ current_task: task }));
+  assert.deepEqual(
+    await pre(exec(root, { text: "trellis-agent-implement" }), async () => ({ kind: "allow" })),
+    { kind: "allow" },
+  );
+
+  const other = { ...exec(root, { callId: "c2", text: `Active task: ${task}\ntrellis-agent-check` }) };
+  other.agent = { session: { header: { id: "unbound", cwd: root } } };
+  assert.deepEqual(
+    await pre(other, async () => ({ kind: "allow" })),
+    { kind: "allow" },
+  );
+});
+
+test("research is allowed without a task and told to confirm its output location", async (t) => {
+  const { root } = await project(t);
+  const { ctx, listeners } = harness();
+  t.after(registerDispatchGuard(ctx, { projectRootMarkers: [".trellis"] }));
+  const pre = listeners.get("tools/pre-execute");
+  const post = listeners.get("tools/post-execute");
+  const run = exec(root, { callId: "r1", text: "trellis-agent-research: compare approaches" });
+
+  assert.deepEqual(await pre(run, async () => ({ kind: "allow" })), { kind: "allow" });
+  const after = await post(run, {}, async () => ({ kind: "accept" }));
+  assert.equal(after.additionalContexts.length, 1);
+  assert.match(after.additionalContexts[0].content[0].text, /Confirm where its findings/);
+
+  // The notice is delivered once, not on every later tool call.
+  const again = await post(run, {}, async () => ({ kind: "accept" }));
+  assert.equal(again.additionalContexts, undefined);
+});
+
+test("the guard ignores non-dispatch tools, non-Trellis prompts, and host denials", async (t) => {
+  const { root } = await project(t);
+  const { ctx, listeners } = harness();
+  t.after(registerDispatchGuard(ctx, { projectRootMarkers: [".trellis"] }));
+  const pre = listeners.get("tools/pre-execute");
+
+  assert.deepEqual(
+    await pre(exec(root, { name: "edit", text: "trellis-agent-implement" }), async () => ({ kind: "allow" })),
+    { kind: "allow" },
+  );
+  assert.deepEqual(
+    await pre(exec(root, { text: "summarise this file" }), async () => ({ kind: "allow" })),
+    { kind: "allow" },
+  );
+  const denied = { kind: "deny", reason: "host policy" };
+  assert.deepEqual(await pre(exec(root, { text: "trellis-agent-implement" }), async () => denied), denied);
+});

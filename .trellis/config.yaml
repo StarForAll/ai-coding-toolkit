@@ -150,6 +150,14 @@ channel:
 codex:
   dispatch_mode: inline  # or "auto"; legacy alias for auto: "sub-agent"
 
+# DSH counterpart of codex.dispatch_mode, read by the dsh-trellis plugin.
+# "auto" (plugin default) keeps the base blocks and the sub-agent dispatch
+# protocol; "inline" makes the main DSH session implement/check directly and
+# selects the platform-neutral *-inline phase block plus the DSH mode banner.
+# Codex ignores this key; DSH ignores codex.dispatch_mode.
+dsh:
+  dispatch_mode: inline
+
 #-------------------------------------------------------------------------------
 # Sub-agent context injection limits
 #-------------------------------------------------------------------------------

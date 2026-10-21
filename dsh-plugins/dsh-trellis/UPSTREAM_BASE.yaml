@@ -1,0 +1,16 @@
+# Upstream baseline for this local copy.
+#
+# This directory is a local copy of the upstream dsh-trellis plugin, extended in
+# place for Strategy A (modify the existing local copy; no fork, no rename).
+#
+# - `commit` is unknown: the copy was taken without a recorded upstream commit.
+#   Do not fill it in from memory; resolve it from the upstream repository
+#   before syncing again.
+# - `syncedAt` records the local directory's copy date, not a verified tag date.
+# - This file is maintenance metadata only. It is not read at runtime and is not
+#   part of the installed package (`package.json#files` stays `lib` + patch).
+name: dsh-trellis
+version: 0.1.12
+commit: unknown
+source: https://github.com/SajoLuo/dsh-trellis
+syncedAt: 2026-10-19
