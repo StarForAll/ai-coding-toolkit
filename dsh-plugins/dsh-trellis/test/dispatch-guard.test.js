@@ -229,3 +229,98 @@ test("auto mode keeps dispatching allowed for a readable task", async (t) => {
     { kind: "allow" },
   );
 });
+
+test("parseDispatchRequest falls back to the dispatch description", () => {
+  assert.deepEqual(
+    parseDispatchRequest("Implement the plan.", "trellis-agent-implement"),
+    { role: "implement", taskPath: null },
+  );
+  // The prompt wins over the description when both name a role.
+  assert.deepEqual(
+    parseDispatchRequest("trellis-agent-research: compare", "trellis-agent-check"),
+    { role: "research", taskPath: null },
+  );
+  // A description that is not a Trellis role stays generic.
+  assert.deepEqual(
+    parseDispatchRequest("plain task", "update docs"),
+    { role: null, taskPath: null },
+  );
+  // Talking about a role is not selecting it: the whole label must be the role.
+  for (const description of [
+    "研究 trellis-agent-implement 插件的 README",
+    "about trellis-agent-check plugin docs",
+    "trellis-agent-implement task",
+  ]) {
+    assert.deepEqual(
+      parseDispatchRequest("plain task", description),
+      { role: null, taskPath: null },
+      description,
+    );
+  }
+  // Wrapping punctuation and case do not change an exact role label.
+  assert.equal(parseDispatchRequest("plain task", "`Trellis-Agent-Check`").role, "check");
+  assert.equal(parseDispatchRequest("plain task", "trellis-research.").role, "research");
+});
+
+test("a topical description is allowed just like a generic dispatch", async (t) => {
+  const { root } = await project(t);
+  const { ctx, listeners } = harness();
+  t.after(registerDispatchGuard(ctx, { projectRootMarkers: [".trellis"] }));
+  const pre = listeners.get("tools/pre-execute");
+  const call = {
+    callId: "topic-1",
+    name: "subagent",
+    arguments: {
+      prompt: "Do it.",
+      description: "研究 trellis-agent-implement 插件的 README",
+    },
+    agent: { session: { header: { id: "parent-1", cwd: root } } },
+  };
+  // No task and no role: this is a generic dispatch, so nothing is refused.
+  assert.deepEqual(await pre(call, async () => ({ kind: "allow" })), { kind: "allow" });
+
+  await writeFile(join(root, ".trellis", "config.yaml"), "dsh:\n  dispatch_mode: inline\n");
+  assert.deepEqual(await pre(call, async () => ({ kind: "allow" })), { kind: "allow" });
+});
+
+test("the inline guard sees a role that only the description names", async (t) => {
+  const { root, task } = await project(t);
+  await writeFile(join(root, ".trellis", "config.yaml"), "dsh:\n  dispatch_mode: inline\n");
+  const { ctx, listeners } = harness();
+  t.after(registerDispatchGuard(ctx, { projectRootMarkers: [".trellis"] }));
+  const pre = listeners.get("tools/pre-execute");
+
+  const call = {
+    callId: "d1",
+    name: "subagent",
+    arguments: { prompt: `Active task: ${task}\nDo the work.`, description: "trellis-agent-implement" },
+    agent: { session: { header: { id: "parent-1", cwd: root } } },
+  };
+  const decision = await pre(call, async () => ({ kind: "allow" }));
+  assert.equal(decision.kind, "deny");
+  assert.equal(decision.reason, inlineDenyReason("implement"));
+});
+
+test("a description-only check dispatch without a task is still refused", async (t) => {
+  const { root } = await project(t);
+  await writeFile(join(root, ".trellis", "config.yaml"), "dsh:\n  dispatch_mode: auto\n");
+  const { ctx, listeners } = harness();
+  t.after(registerDispatchGuard(ctx, { projectRootMarkers: [".trellis"] }));
+  const pre = listeners.get("tools/pre-execute");
+  const call = {
+    callId: "d2",
+    name: "subagent_fork",
+    arguments: { prompt: "Verify the change.", description: "trellis-agent-check" },
+    agent: { session: { header: { id: "unbound", cwd: root } } },
+  };
+  const decision = await pre(call, async () => ({ kind: "allow" }));
+  assert.equal(decision.kind, "deny");
+  assert.equal(decision.reason, denyReason("check"));
+});
+
+test("the inline denial leaves the config change to the user", () => {
+  const reason = inlineDenyReason("implement");
+  assert.match(reason, /user's decision, not\s+yours/);
+  assert.match(reason, /Do not edit `\.trellis\/config\.yaml`/);
+  assert.match(reason, /not a security boundary/);
+});

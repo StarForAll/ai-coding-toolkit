@@ -349,3 +349,27 @@ authoritative scope and manual checks.
 | `lib/wait-tool.js` | Optional `timeout_ms`; timeout returns `state=timeout`, `outcome=unknown`. | Prevent unbounded waits without guessing success. |
 | `README.md`, `.trellis/spec/platforms/dsh-workflow-behavior.md` | Installation form is a git dependency snapshot, not a symlink; document 0.1.1 behavior. | Align docs with the actual profile and behavior. |
 | `package.json`, `lib/client.js` | Version `0.1.1`; rebuild client bundle. | Release bookkeeping. |
+
+## 0.1.2 — defect-fix round (2026-10-22)
+
+### Added
+
+| File | Purpose |
+| --- | --- |
+| `lib/subagent-identity.js` | Host-only `sessionProjections` unit that folds the child's own `subagent/descriptor` label, so a role named only in the dispatch `description` is recognized without deprecated synchronous log reads. |
+| `test/subagent-identity.test.js` | Label folding, fork-inherited descriptor ignored, late registration, legacy registry shape, missing-registry degradation. |
+| `test/native-subagent-push.test.js` | Real AgentLoop + Session integration: descriptor-label-only push, and topical-label silence. |
+| `test/role-contract.test.js` | Whole-label role matching (`roleFromLabel`). |
+
+### Changed
+
+| File | Change | Reason |
+| --- | --- | --- |
+| `lib/dispatch-guard.js` | Role = prompt match, else `roleFromLabel(description)`; inline denial names leaving inline as the user's decision and forbids editing `.trellis/config.yaml`. | A role named only in `description` used to skip both the guard and the push; a writable-config guard cannot be called enforcement. |
+| `lib/subagent-context.js` | Role = prompt match, else the child descriptor label through whole-label matching; push states that the inlined role skill must not be loaded again; one "prepared" statement; fallback only asks to load the skill. | Remove the push/parent-prompt/skill conflict and the duplicated context paragraph. |
+| `lib/role-contract.js` | `TASK_CONTEXT_SECTION` points at `## Curated Context` without repeating the prepared sentence; new `roleFromLabel`. | Same; `roleFromLabel` requires the **whole** label to be a role name so topical descriptions ("研究 trellis-agent-implement 插件的 README", "about trellis-agent-check plugin docs") stay generic. |
+| `lib/subagent-context.js` (push) | Consumes `roleFromLabel` for the descriptor label. | 0.1.2's first cut used a substring match and misclassified topical labels: a generic child could receive the Check role contract, and a topical `description` could trip the guard. |
+| `README.md` | Role-source wording, whole-label rule, guard described as a prompt-level gate; upstream lineage/history/npm-install sections removed. | Docs must match behavior; README describes this plugin only. |
+| `.trellis/spec/platforms/dsh-workflow-behavior.md` | 0.1.2 behavior notes: role sources, push contract, prompt-level guard, README scope. | Durable contract for future sessions. |
+| `test/*.test.js` | Regression tests for description/label recognition, denial text, push text uniqueness, real-runtime push. | Prevent the 0.1.2 regressions from returning. |
+| `package.json`, `lib/client.js` | Version `0.1.2`; rebuild client bundle. | Release bookkeeping. |

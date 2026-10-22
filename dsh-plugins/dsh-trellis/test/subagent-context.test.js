@@ -118,12 +118,66 @@ test("subagentContextMessage keeps a role pointer when the skill is absent", () 
   assert.match(message.content[0].text, /## Role Instructions/);
   // The push overrides the role skill's "load context yourself" step instead
   // of leaving the child with two contradictory instructions.
-  assert.match(message.content[0].text, /Do not run `task\.py current`/);
+  assert.match(message.content[0].text, /do not run[\s\S]{0,20}`task\.py current`/);
   assert.doesNotMatch(
     message.content[0].text,
     /"Required: Load Trellis Context First" section is fully/,
   );
+  // No skill body was inlined, so the message must not claim one is below.
+  assert.doesNotMatch(message.content[0].text, /role skill is included immediately below/);
   assert.match(message.content[0].text, /Curated\./);
+  // The prepared-context statement appears exactly once in one push.
+  assert.equal(
+    message.content[0].text.split("prepared by dsh-trellis").length - 1,
+    1,
+  );
+});
+
+test("subagentContextMessage tells the child not to reload an inlined skill", () => {
+  const message = subagentContextMessage({
+    role: "implement",
+    taskPath: ".trellis/tasks/demo",
+    context: "Curated.",
+    roleInstructions: "## Task Context\n\nSee below.\n\n# Implement\n\nDo the work.",
+  });
+  const text = message.content[0].text;
+  assert.match(text, /role skill is included immediately below/);
+  assert.match(text, /Do not load `\.dsh\/skills\/trellis-agent-implement\/SKILL\.md` again/);
+  assert.match(text, /ignore any "load the task context yourself" step/);
+  assert.match(text, /# Implement/);
+  // One preamble, one context pointer: the old duplication must not return.
+  assert.equal(text.split("prepared by dsh-trellis").length - 1, 1);
+  assert.equal((text.match(/^## Task Context$/gm) ?? []).length, 1);
+  // The skill pointer fallback is not appended when the body is inlined.
+  assert.doesNotMatch(text, /Load `\.dsh\/skills\/trellis-agent-implement\/SKILL\.md` once/);
+});
+
+test("parseDispatchPrompt falls back to the child descriptor label", () => {
+  const roleless = [prompt("Active task: .trellis/tasks/demo\nResearch the spec tree.")];
+  assert.deepEqual(parseDispatchPrompt(roleless, "trellis-agent-research"), {
+    role: "research",
+    taskPath: ".trellis/tasks/demo",
+    finish: false,
+  });
+  // The prompt still wins when both carry a role.
+  assert.equal(
+    parseDispatchPrompt([prompt("trellis-agent-check")], "trellis-agent-implement").role,
+    "check",
+  );
+  // A label that is not a Trellis role keeps the push silent.
+  assert.equal(parseDispatchPrompt(roleless, "fix the flaky test").role, null);
+  assert.equal(parseDispatchPrompt(roleless, null).role, null);
+  // A label that only mentions a role (a research topic) is not a role.
+  assert.equal(
+    parseDispatchPrompt(roleless, "about trellis-agent-check plugin docs").role,
+    null,
+  );
+  assert.equal(
+    parseDispatchPrompt(roleless, "研究 trellis-agent-implement 插件的 README").role,
+    null,
+  );
+  // Exact labels still work, including wrapping backticks and case.
+  assert.equal(parseDispatchPrompt(roleless, "`Trellis-Agent-Check`").role, "check");
 });
 
 test("parentTaskPath drops a stale parent pointer", async (t) => {

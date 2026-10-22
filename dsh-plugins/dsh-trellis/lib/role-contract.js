@@ -17,12 +17,36 @@
  * @module dsh-trellis/role-contract
  */
 
+/** Role spellings a dispatch label may carry: `trellis-agent-<role>` / `trellis-<role>`. */
+const LABEL_ROLE_RE = /^(?:trellis-agent-|trellis-)(implement|check|research)$/;
+
+/**
+ * Decide whether a dispatch `description` / descriptor `label` *is* a role.
+ *
+ * The label is a short display string supplied by the caller, so a substring
+ * match is not evidence: "研究 trellis-agent-implement 插件的 README" or
+ * "about trellis-agent-check plugin docs" talk about a role rather than select
+ * one. Only a whole-label role name (ignoring wrapping quotes/punctuation and
+ * case) selects the role; anything longer stays generic, exactly like a
+ * dispatch with no role at all.
+ *
+ * @param {unknown} label
+ * @returns {"implement" | "check" | "research" | null}
+ */
+export function roleFromLabel(label) {
+  if (typeof label !== "string") return null;
+  const stripped = label
+    .trim()
+    .replace(/^[\s`'"\u201c\u201d\u2018\u2019(\[{<]+/, "")
+    .replace(/[\s`'"\u201c\u201d\u2018\u2019)\]}>,.;:!?\uff0c\u3002\uff1b\uff1a\uff01\uff1f\u3001]+$/, "")
+    .toLowerCase();
+  return LABEL_ROLE_RE.exec(stripped)?.[1] ?? null;
+}
+
 export const TASK_CONTEXT_SECTION = `## Task Context
 
-The task context below was prepared by dsh-trellis before this message.
-Do not run \`task.py current\`, do not ask the user for a task path, and do not
-re-read task artifacts to discover the task. Still read any additional specs
-named by the role instructions.
+The curated task context is included at the end of this message under
+\`## Curated Context\`.
 
 `;
 

@@ -12,6 +12,7 @@ import {
   isBootstrapMessage,
 } from "../lib/bootstrap.js";
 import { createSessionComposer } from "../lib/session-composer.js";
+import { SUBAGENT_IDENTITY_PROJECTION_KEY as IDENTITY_KEY } from "../lib/subagent-identity.js";
 import { dshContextKey } from "../lib/session-env.js";
 import { sessionRuntime } from "./helpers/session-runtime.js";
 import { apply, inject, insertBreadcrumbDecision } from "../lib/index.js";
@@ -186,6 +187,7 @@ test("enabled plugin registers commands, wait tool, tool hooks, and a sub-agent 
     "command:trellis-status",
     `projection:${BOOTSTRAP_KEY}`,
     `projection:${KEY}`,
+    `projection:${IDENTITY_KEY}`,
     "shell-env:dsh-trellis-session",
     "tool:trellis_wait",
   ]);
@@ -215,6 +217,7 @@ test("settings namespace remounts the plugin from saved values", () => {
     "listener:tools/pre-execute",
     `projection:${BOOTSTRAP_KEY}`,
     `projection:${KEY}`,
+    `projection:${IDENTITY_KEY}`,
     "shell-env:dsh-trellis-session",
     "tool:trellis_wait",
   ]);
@@ -230,6 +233,7 @@ test("settings namespace remounts the plugin from saved values", () => {
     "listener:tools/pre-execute",
     `projection:${BOOTSTRAP_KEY}`,
     `projection:${KEY}`,
+    `projection:${IDENTITY_KEY}`,
     "shell-env:dsh-trellis-session",
     "tool:trellis_wait",
   ]);
@@ -250,6 +254,7 @@ test("settings provider detach falls back to the profile composition entry", () 
     "listener:tools/pre-execute",
     `projection:${BOOTSTRAP_KEY}`,
     `projection:${KEY}`,
+    `projection:${IDENTITY_KEY}`,
     "shell-env:dsh-trellis-session",
     "tool:trellis_wait",
   ]);

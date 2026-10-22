@@ -20,12 +20,22 @@ import { isAbsolute, join, resolve, sep } from "node:path";
 import { createUserMessage } from "@deepseek-ai/dsh-llm";
 import { nodeFs } from "./node-fs.js";
 import { contextInjectionLimits } from "./trellis-config.js";
-import { stripPullOnlyContext } from "./role-contract.js";
+import { roleFromLabel, stripPullOnlyContext } from "./role-contract.js";
+import { registerSubagentIdentity } from "./subagent-identity.js";
 import { findProjectRoot, resolveActiveTask, sanitizeContextKey } from "./workflow.js";
 import { resolveWorkingDirectory } from "./working-directory.js";
 
 export const SOURCE_KIND = "dsh-trellis";
 export const SOURCE_FORM = "subagent-context";
+
+/** `trellis-agent-<role>` first, then the bare `trellis-<role>` alias. */
+const AGENT_ROLE_RE = /\btrellis-agent-(implement|check|research)\b/;
+const BARE_ROLE_RE = /\btrellis-(implement|check|research)\b/;
+
+/** @param {string} text @returns {string | null} */
+function roleFrom(text) {
+  return AGENT_ROLE_RE.exec(text)?.[1] ?? BARE_ROLE_RE.exec(text)?.[1] ?? null;
+}
 
 /** Role name → curated manifest file inside the task directory. */
 const ROLE_MANIFEST = Object.freeze({
@@ -110,10 +120,7 @@ export async function readRoleInstructions({ root, role, maxBytes = ROLE_INSTRUC
  * @returns {string}
  */
 export function roleInstructionsFallback(role) {
-  return [
-    `Load \`.dsh/skills/trellis-agent-${role}/SKILL.md\` once before acting.`,
-    "The task context below is already prepared by dsh-trellis.",
-  ].join("\n");
+  return `Load \`.dsh/skills/trellis-agent-${role}/SKILL.md\` once before acting.`;
 }
 
 /**
@@ -137,23 +144,27 @@ function messageText(messages) {
  * Recover the Trellis role and `Active task:` path from a dispatch prompt.
  *
  * Dispatch prompts start with `Active task: <task path>` by contract, so the
- * path is present even when the parent session pointer is stale. A missing role
- * means "not a Trellis role agent": the push stays silent and the child-side
- * skill remains the only context source, matching Codex's behaviour.
+ * path is present even when the parent session pointer is stale. The role comes
+ * from the prompt first and from the child's descriptor `label` second: DSH
+ * records the dispatch `description` argument as that label, so a user who
+ * names the role only there still gets the role contract pushed.
+ *
+ * A missing role in both places means "not a Trellis role agent": the push
+ * stays silent and the child-side skill remains the only context source,
+ * matching Codex's behaviour for generic children.
  *
  * @param {Array<{content?: unknown}>} messages
+ * @param {string | null} [label] - descriptor label of the child session.
  * @returns {{role: string | null, taskPath: string | null, finish: boolean}}
  */
-export function parseDispatchPrompt(messages) {
+export function parseDispatchPrompt(messages, label = null) {
   const text = messageText(messages);
-  const roleMatch =
-    /\btrellis-agent-(implement|check|research)\b/.exec(text) ??
-    /\btrellis-(implement|check|research)\b/.exec(text);
+  const labelText = typeof label === "string" ? label : "";
   const taskMatch = /Active task:\s*([^\s`'"<>]+)/.exec(text);
   let taskPath = taskMatch?.[1] ?? null;
   if (taskPath !== null) taskPath = taskPath.replace(/[.,;:]+$/, "");
   return {
-    role: roleMatch?.[1] ?? null,
+    role: roleFrom(text) ?? roleFromLabel(labelText),
     taskPath,
     finish: /\[finish\]/i.test(text),
   };
@@ -546,6 +557,12 @@ export async function buildSubagentContext({ root, taskPath, role, limits }) {
  * This is the DSH equivalent of Codex's agent TOML `developer_instructions`
  * plus `SubagentStart` context in one child-visible message.
  *
+ * The preamble is the single authoritative statement about where the task
+ * context comes from. When the role skill is inlined, the message also tells
+ * the child not to load that skill again: the dispatch prompt and the on-disk
+ * skill both say "load the role skill", and following them would both waste
+ * tokens and re-read artifacts this message already carries.
+ *
  * @param {object} options
  * @param {string} options.role
  * @param {string} options.taskPath
@@ -554,7 +571,14 @@ export async function buildSubagentContext({ root, taskPath, role, limits }) {
  * @returns {ReturnType<typeof createUserMessage>}
  */
 export function subagentContextMessage({ role, taskPath, context, roleInstructions = null }) {
-  const contract = roleInstructions ?? roleInstructionsFallback(role);
+  const inlined = roleInstructions !== null;
+  const contract = inlined ? roleInstructions : roleInstructionsFallback(role);
+  const skillPrecedence = inlined
+    ? `The complete \`trellis-agent-${role}\` role skill is included immediately below. ` +
+      `Do not load \`.dsh/skills/trellis-agent-${role}/SKILL.md\` again, and ignore any ` +
+      "\"load the task context yourself\" step inside it — this message already carries " +
+      "the task context."
+    : contract;
   const text = [
     "<!-- trellis-hook-injected -->",
     `# Trellis Native ${role[0].toUpperCase()}${role.slice(1)} Subagent`,
@@ -567,13 +591,15 @@ export function subagentContextMessage({ role, taskPath, context, roleInstructio
     "",
     "## Role Instructions",
     "",
-    "The task context below was prepared by dsh-trellis before this message.",
-    "Do not run `task.py current`, do not ask the user for a task path, and do",
-    "not re-read task artifacts to discover the task — they are included below.",
+    "The task context was prepared by dsh-trellis before this message: do not run",
+    "`task.py current`, do not ask the user for a task path, and do not re-read task",
+    "artifacts to discover the task — they are included below.",
+    "",
+    skillPrecedence,
+    "",
+    ...(inlined ? [contract, ""] : []),
     "Apply the role instructions as written, and still read any additional specs",
     "they name.",
-    "",
-    contract,
     "",
     "## Curated Context",
     "",
@@ -612,6 +638,7 @@ export async function parentTaskPath(root, parentSessionId) {
  */
 export function registerSubagentContext(ctx, resolved) {
   const injected = new Set();
+  const identity = registerSubagentIdentity(ctx);
   let disposed = false;
   const warn = (error) => {
     ctx.logger?.warn?.("dsh-trellis subagent context push failed: %o", error);
@@ -627,7 +654,10 @@ export function registerSubagentContext(ctx, resolved) {
     const id = agent.session.id ?? header.id ?? "";
     if (id === "" || injected.has(id)) return decision;
     try {
-      const parsed = parseDispatchPrompt(decision.messages);
+      const parsed = parseDispatchPrompt(
+        decision.messages,
+        identity.labelOf(agent.session),
+      );
       if (parsed.role === null) return decision;
       const cwd = await resolveWorkingDirectory(ctx, agent, payload.signal);
       const root = await findProjectRoot(cwd, [".trellis"], nodeFs);
@@ -666,5 +696,6 @@ export function registerSubagentContext(ctx, resolved) {
     disposed = true;
     disposeStep();
     injected.clear();
+    identity.dispose();
   };
 }

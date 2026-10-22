@@ -28,6 +28,7 @@ import { nodeFs } from "./node-fs.js";
 import { dshDispatchMode, readTaskStatus, resolveActiveTask } from "./workflow.js";
 import { dshContextKey } from "./session-env.js";
 import { dshInlineDispatchAllowed } from "./trellis-config.js";
+import { roleFromLabel } from "./role-contract.js";
 
 export const SOURCE_KIND = "dsh-trellis";
 export const SOURCE_FORM = "dispatch-guard";
@@ -39,13 +40,22 @@ const ROLE_RE = /\btrellis-agent-(implement|check|research)\b/;
 const TASK_PRELUDE_RE = /Active task:\s*([^\s`'"<>]+)/;
 
 /**
- * Recover the role and task prelude from a dispatch prompt.
+ * Recover the role and task prelude from a dispatch request.
+ *
+ * The prompt is authoritative for the task prelude, and it is also the
+ * preferred role signal. DSH records the `description` argument as the child's
+ * durable label, so a dispatch whose description *is* the role still selects the
+ * role — otherwise the guard would be bypassed by moving the role name there.
+ * A description that merely mentions the role stays generic; see
+ * {@link roleFromLabel}.
+ *
  * @param {unknown} prompt
+ * @param {unknown} [description]
  * @returns {{role: "implement" | "check" | "research" | null, taskPath: string | null}}
  */
-export function parseDispatchRequest(prompt) {
+export function parseDispatchRequest(prompt, description) {
   const text = typeof prompt === "string" ? prompt : "";
-  const role = ROLE_RE.exec(text)?.[1] ?? null;
+  const role = ROLE_RE.exec(text)?.[1] ?? roleFromLabel(description);
   const taskPath = TASK_PRELUDE_RE.exec(text)?.[1]?.replace(/[.,;:]+$/, "") ?? null;
   return { role, taskPath };
 }
@@ -116,10 +126,13 @@ export function inlineDenyReason(role) {
   return (
     `Trellis inline mode: the main session implements and checks directly, so ` +
     `trellis-agent-${role} dispatch is refused.\n\n` +
-    "Do the work in this session, or make the delegation explicit: set " +
-    "`.trellis/config.yaml` `dsh.dispatch_mode: auto`, or add " +
-    "`dsh.inline_allow_dispatch: true` for this project.\n\n" +
-    "Codex only documents inline mode and does not block dispatch; this plugin fails closed."
+    "Do the work in this session. Leaving inline mode is the user's decision, not " +
+    "yours: only when the user explicitly asked for this delegation, ask them to " +
+    "switch `.trellis/config.yaml` to `dsh.dispatch_mode: auto` or to set " +
+    "`dsh.inline_allow_dispatch: true` themselves. Do not edit `.trellis/config.yaml` " +
+    "to get past this guard.\n\n" +
+    "Codex only documents inline mode and does not block dispatch; this plugin's guard " +
+    "is a prompt-level gate, not a security boundary."
   );
 }
 
@@ -142,7 +155,10 @@ export function registerDispatchGuard(ctx, resolved) {
     const decision = await next();
     if (disposed || decision.kind !== "allow") return decision;
     if (!GUARDED_TOOLS.includes(exec.name)) return decision;
-    const { role, taskPath } = parseDispatchRequest(exec.arguments?.prompt);
+    const { role, taskPath } = parseDispatchRequest(
+      exec.arguments?.prompt,
+      exec.arguments?.description,
+    );
     if (role === null) return decision;
     try {
       const project = await resolveTrellisProject({
