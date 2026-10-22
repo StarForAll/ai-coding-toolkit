@@ -17,18 +17,26 @@
  * @module dsh-trellis/role-contract
  */
 
-/** Role spellings a dispatch label may carry: `trellis-agent-<role>` / `trellis-<role>`. */
-const LABEL_ROLE_RE = /^(?:trellis-agent-|trellis-)(implement|check|research)$/;
+/**
+ * Role spellings a dispatch label may start with: `trellis-agent-<role>` /
+ * `trellis-<role>`. The role name must be the label's first token, followed by
+ * the end of the label or a separate annotation: whitespace plus `:`/`：`,
+ * `(`/`（`, `[`/`【`, `-`, `–`, or `—`.
+ */
+const LABEL_ROLE_RE =
+  /^(?:trellis-agent-|trellis-)(implement|check|research)(?=$|\s*[:：([【（\-–—《])/;
 
 /**
- * Decide whether a dispatch `description` / descriptor `label` *is* a role.
+ * Decide whether a dispatch `description` / descriptor `label` names a role.
  *
  * The label is a short display string supplied by the caller, so a substring
  * match is not evidence: "研究 trellis-agent-implement 插件的 README" or
  * "about trellis-agent-check plugin docs" talk about a role rather than select
- * one. Only a whole-label role name (ignoring wrapping quotes/punctuation and
- * case) selects the role; anything longer stays generic, exactly like a
- * dispatch with no role at all.
+ * one. A label selects the role when it *starts* with the role name and either
+ * ends there or continues with an annotation (`(audit round 3)`,
+ * `: implement the task`, `— round 3`). A role name followed by plain prose
+ * ("trellis-agent-check plugin docs") stays generic, as does any mention that
+ * is not the first token.
  *
  * @param {unknown} label
  * @returns {"implement" | "check" | "research" | null}
@@ -37,8 +45,8 @@ export function roleFromLabel(label) {
   if (typeof label !== "string") return null;
   const stripped = label
     .trim()
-    .replace(/^[\s`'"\u201c\u201d\u2018\u2019(\[{<]+/, "")
-    .replace(/[\s`'"\u201c\u201d\u2018\u2019)\]}>,.;:!?\uff0c\u3002\uff1b\uff1a\uff01\uff1f\u3001]+$/, "")
+    .replace(/^[\s`'"\u201c\u201d\u2018\u2019(\[{<\uff08\u3010\u300a\u3008]+/, "")
+    .replace(/[\s`'"\u201c\u201d\u2018\u2019)\]}>,.;:!?\uff0c\u3002\uff1b\uff1a\uff01\uff1f\u3001\uff09\u3011\u300b\u3009]+$/, "")
     .toLowerCase();
   return LABEL_ROLE_RE.exec(stripped)?.[1] ?? null;
 }

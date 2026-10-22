@@ -260,6 +260,11 @@ test("parseDispatchRequest falls back to the dispatch description", () => {
   // Wrapping punctuation and case do not change an exact role label.
   assert.equal(parseDispatchRequest("plain task", "`Trellis-Agent-Check`").role, "check");
   assert.equal(parseDispatchRequest("plain task", "trellis-research.").role, "research");
+  // A role name with an annotation still selects the role.
+  assert.equal(
+    parseDispatchRequest("plain task", "trellis-agent-implement (audit round 3)").role,
+    "implement",
+  );
 });
 
 test("a topical description is allowed just like a generic dispatch", async (t) => {

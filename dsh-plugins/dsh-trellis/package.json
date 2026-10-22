@@ -1,6 +1,6 @@
 {
   "name": "dsh-trellis",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Trellis workflow integration for DeepSeek Harness: workflow breadcrumbs, Codex-parity bootstrap and path-scoped spec injection, sub-agent context push with a fail-closed dispatch guard, automatic project-level dsh.dispatch_mode bootstrap, a settings page with doctor and version monitoring, utility commands, and native session identity.",
   "type": "module",
   "main": "lib/index.js",

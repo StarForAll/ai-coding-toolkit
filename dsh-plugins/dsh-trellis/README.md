@@ -20,7 +20,7 @@ DeepSeek Harness (dsh) host 插件：把 [Trellis](https://github.com/mindfold-a
 
 ## 对齐 Codex 的三项 Trellis 接线
 
-当前版本 **0.1.2**。普通修改按 `0.1.0 → 0.1.1 → 0.1.2` 递增；只有运行时/配置契约
+当前版本 **0.1.3**。普通修改按 `0.1.0 → 0.1.1 → 0.1.2 → 0.1.3` 递增；只有运行时/配置契约
 破坏或大改才提升次版本/主版本。三项主链路已经对齐，但 DSH 的事件形状仍带来下面的
 差异，因此本插件不宣称与 Codex 完全一致。
 
@@ -30,7 +30,7 @@ DeepSeek Harness (dsh) host 插件：把 [Trellis](https://github.com/mindfold-a
 | --- | --- | --- |
 | 无任务 bootstrap | `UserPromptSubmit` 每轮附 `<trellis-bootstrap>` | 独立消息家族（`source.kind=dsh-trellis`、`source.form=bootstrap`）与独立 projection：新根会话每会话一次，与面包屑状态变化解耦，只有压缩移除后才重新提示；子代理永不注入。**首轮没有开始 Trellis 时，本会话后续不再重复催促是设计选择，不是缺陷**（见下文） |
 | 路径级 spec 注入 | `PreToolUse` 匹配 Edit/Write；FULL 时 deny-once | `tools/pre-execute` deny-once（reason 携带 spec 正文）；ticket 通过 `tools/post-execute` 的 `additionalContexts` 在下一请求送达；去重记录持久化到 `.trellis/.runtime/spec-inject/` |
-| 子代理上下文 push | `SubagentStart` 注入 developer context + agent TOML 角色指令 | 子代理首个 `agent/pre-step` 注入角色契约（`.dsh/skills/trellis-agent-*/SKILL.md` 正文）与 curated task context；角色取自 dispatch prompt，prompt 不含角色时回退到 dispatch `description`（DSH 记录为子代理 descriptor label，只有整体就是角色名时才生效）；父会话指针作为 `Active task:` 缺失时的回退 |
+| 子代理上下文 push | `SubagentStart` 注入 developer context + agent TOML 角色指令 | 子代理首个 `agent/pre-step` 注入角色契约（`.dsh/skills/trellis-agent-*/SKILL.md` 正文）与 curated task context；角色取自 dispatch prompt，prompt 不含角色时回退到 dispatch `description`（DSH 记录为子代理 descriptor label，以角色名开头、可带括号/冒号/破折号说明时才生效）；父会话指针作为 `Active task:` 缺失时的回退 |
 
 实现细节与边界：
 
@@ -65,9 +65,10 @@ DeepSeek Harness (dsh) host 插件：把 [Trellis](https://github.com/mindfold-a
   `inject-subagent-context.py` 对非 Trellis 子代理类型是 silent return，本插件同样
   不替它编造工作流状态；child-side 技能仍是它的 pull 路径。角色识别同时接受 dispatch
   prompt 与 dispatch `description`（prompt 优先），因此“把角色名写在 `description`
-  里”的派发不会被误判为 generic。`description` 必须是**完整**的角色名（忽略大小写与
-  包裹的引号/标点）才算角色：像 `研究 trellis-agent-implement 插件的 README` 这种
-  只是在谈论角色名的“话题型”描述仍按 generic 处理，不会误触守卫或推送错角色契约。
+  里”的派发不会被误判为 generic。`description` 必须以**角色名开头**（忽略大小写与
+  包裹的引号；可以带 `(audit round 3)`、`: task`、`— round 3` 这类标注）才算角色：
+  像 `研究 trellis-agent-implement 插件的 README`、`about trellis-agent-check plugin
+  docs` 这种只是谈论角色名的“话题型”描述仍按 generic 处理，不会误触守卫或推送错角色契约。
 - 子代理 push 先注入角色契约，再注入 curated task context：角色正文来自目标项目
   已安装的 `.dsh/skills/trellis-agent-<role>/SKILL.md`（去掉 YAML frontmatter），
   上限 16 KiB；推送副本会删除只属于 pull 路径的“自己加载上下文”段落，并明确告诉
@@ -96,8 +97,9 @@ DeepSeek Harness (dsh) host 插件：把 [Trellis](https://github.com/mindfold-a
   插件冲突检测状态。doctor 只报告本地状态，不发起网络检查（版本检查在设置页）。
 - **派发守卫（默认开启）**：`trellis-agent-implement` / `trellis-agent-check` 派发
   时，父会话指针或 `Active task:` 前奏必须指向可读的 `task.json`，否则 deny；
-  角色同样从 prompt 或 dispatch `description` 识别（`description` 整体等于角色名才
-  算），把角色名写进 `description` 不会绕过守卫，话题型 `description` 也不会被误拦。
+  角色同样从 prompt 或 dispatch `description` 识别（`description` 以角色名开头才
+  算，可带括号/冒号/破折号标注），把角色名写进 `description` 不会绕过守卫，话题型
+  `description` 也不会被误拦。
   `research` 允许无任务派发，并在下一请求提示确认输出位置。这比 Codex 的
   “silent return + 子代理无上下文运行”更严格，属于 DSH 增强；它是**提示性闸门**，
   不是安全边界（见下文 inline 语义）。
@@ -171,15 +173,24 @@ git 依赖不会执行 `prepack`（`pnpm pack`/`publish` 才会），因此 `lib
 
 运行时需要 profile 提供 `sessionProjections` 服务；该依赖由插件的 `inject` 声明。自定义或精简 profile 若未组装此服务，需先加载 `@deepseek-ai/dsh-session-projection`，否则插件会等待依赖，不会退回直接扫描历史。
 
+### 0.1.3：角色 label 补强
+
+- **角色 label**：`description` / descriptor label 不再要求与角色名完全相等。label
+  以角色名开头、后面是结尾或独立标注（空白 + `:`/`：`、`(`/`（`、`[`/`【`、`-`、
+  `–`、`—`）时即识别为角色，例如 `trellis-agent-implement (audit round 3)`。
+- **话题型保持 generic**：`研究 trellis-agent-implement 插件的 README`、
+  `about trellis-agent-check plugin docs`、以及角色名后接普通词语的
+  `trellis-agent-check plugin docs` 都不选角色。
+- 版本：`0.1.2` → `0.1.3`；client bundle 已用 `pnpm run build:client` 重建。
+
 ### 0.1.2：缺陷修复轮
 
 - **角色识别**：派发守卫与子代理 push 除 dispatch prompt 外，还接受 dispatch
   `description`（DSH 记录为子代理 `subagent/descriptor` 的 label）；prompt 优先，
-  description/label 兜底。兜底只在 label **整体就是角色名**时生效（忽略大小写与包裹
-  引号/标点），所以把角色名写进 `description` 不再让 push 静默失效、也不再绕过 inline
-  守卫，而 `研究 trellis-agent-implement 插件的 README` 这类话题型描述仍按 generic
-  处理，不会被误拒或误推角色契约。label 经 `sessionProjections` 折叠读取，不使用已
-  弃用的同步事件读取。
+  description/label 兜底。首版要求 label 整体等于角色名；0.1.3 放宽为“角色名开头 +
+  可选标注”（见下）。把角色名写进 `description` 不再让 push 静默失效、也不再绕过
+  inline 守卫，而 `研究 trellis-agent-implement 插件的 README` 这类话题型描述仍按
+  generic 处理。label 经 `sessionProjections` 折叠读取，不使用已弃用的同步事件读取。
 - **push 文案**：明确“角色 skill 正文已随消息送达、不要再次加载、忽略其中‘自己加载
   上下文’的步骤”；只有 skill 缺失时才提示加载路径。同一条 push 中“上下文已准备”
   只出现一次（`## Task Context` 段不再重复）。

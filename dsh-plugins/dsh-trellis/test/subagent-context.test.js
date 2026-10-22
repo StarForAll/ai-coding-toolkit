@@ -178,6 +178,11 @@ test("parseDispatchPrompt falls back to the child descriptor label", () => {
   );
   // Exact labels still work, including wrapping backticks and case.
   assert.equal(parseDispatchPrompt(roleless, "`Trellis-Agent-Check`").role, "check");
+  // A role name with an annotation also selects the role.
+  assert.equal(
+    parseDispatchPrompt(roleless, "trellis-agent-implement (audit round 3)").role,
+    "implement",
+  );
 });
 
 test("parentTaskPath drops a stale parent pointer", async (t) => {

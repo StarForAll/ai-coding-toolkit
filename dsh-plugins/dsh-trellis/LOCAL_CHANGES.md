@@ -373,3 +373,14 @@ authoritative scope and manual checks.
 | `.trellis/spec/platforms/dsh-workflow-behavior.md` | 0.1.2 behavior notes: role sources, push contract, prompt-level guard, README scope. | Durable contract for future sessions. |
 | `test/*.test.js` | Regression tests for description/label recognition, denial text, push text uniqueness, real-runtime push. | Prevent the 0.1.2 regressions from returning. |
 | `package.json`, `lib/client.js` | Version `0.1.2`; rebuild client bundle. | Release bookkeeping. |
+
+## 0.1.3 — role-label follow-up (2026-10-22)
+
+### Changed
+
+| File | Change | Reason |
+| --- | --- | --- |
+| `lib/role-contract.js` | `roleFromLabel` accepts a role that *starts* the label, followed by the end or an annotation (`:`, `(`, `[`, `-`, `—`, fullwidth variants). | 0.1.2 required the whole label to equal the role, so a real dispatch label like `trellis-agent-implement (audit round 3)` stayed generic and lost the push. Topical mentions that are not the first token (`研究 trellis-agent-implement 插件的 README`, `about trellis-agent-check plugin docs`) remain generic. |
+| `test/role-contract.test.js`, `test/dispatch-guard.test.js`, `test/subagent-context.test.js` | Annotated-label cases; plain-prose labels stay generic. | Lock the new rule and its boundary. |
+| `README.md`, `.trellis/spec/platforms/dsh-workflow-behavior.md` | Document the role-prefix rule. | Docs must match behavior. |
+| `package.json`, `lib/client.js` | Version `0.1.3`; rebuild client bundle. | Release bookkeeping. |
