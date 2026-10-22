@@ -9,6 +9,7 @@ import {
   normalizeDshCommandRefs,
   FALLBACK_BREADCRUMB,
   MISSING_WORKFLOW_BREADCRUMB,
+  STALE_BREADCRUMB,
 } from "../lib/workflow.js";
 import { truncateUtf8 } from "../lib/breadcrumb.js";
 
@@ -576,7 +577,7 @@ test("resolveTrellisState: pointer to a missing directory is stale, with its own
   assert.equal(state.body, "Repair the stale pointer.");
 });
 
-test("resolveTrellisState: stale without a stale block degrades to the fallback line", async () => {
+test("resolveTrellisState: stale without a stale block keeps the stale diagnosis", async () => {
   const fs = memoryFs({
     [proj(".git")]: "",
     [proj(".trellis/workflow.md")]: WORKFLOW_MD,
@@ -587,7 +588,22 @@ test("resolveTrellisState: stale without a stale block degrades to the fallback 
     cwd: projectRoot, markers: [".git"], contextKey: "dsh_me", fs, cache: new Map(),
   });
   assert.equal(state.status, "stale");
-  assert.equal(state.body, FALLBACK_BREADCRUMB);
+  assert.equal(state.body, STALE_BREADCRUMB);
+  assert.match(state.body, /not a missing \[workflow-state\] block/);
+});
+
+test("resolveTrellisState: stale stays explicit when the workflow has no state blocks", async () => {
+  const fs = memoryFs({
+    [proj(".git")]: "",
+    [proj(".trellis/workflow.md")]: "# no state blocks\n",
+    [proj(".trellis/.runtime/sessions/dsh_me.json")]:
+      '{"current_task":".trellis/tasks/gone"}',
+  });
+  const state = await resolveTrellisState({
+    cwd: projectRoot, markers: [".git"], contextKey: "dsh_me", fs, cache: new Map(),
+  });
+  assert.equal(state.status, "stale");
+  assert.equal(state.body, STALE_BREADCRUMB);
 });
 
 function variantProject(extra = {}) {

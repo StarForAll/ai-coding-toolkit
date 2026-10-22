@@ -200,6 +200,21 @@ test("composer: a Trellis project with a broken workflow still gets fallback + b
   assert.match(text, /<trellis-bootstrap>/);
 });
 
+test("composer: a stale pointer gets the repair breadcrumb and bootstrap", async () => {
+  const fs = memoryFs({
+    [proj(".trellis/workflow.md")]: WORKFLOW,
+    [proj(".trellis/config.yaml")]: "dsh:\n  dispatch_mode: auto\n",
+    [proj(".trellis/.runtime/sessions/dsh_session-1.json")]:
+      '{"current_task":".trellis/tasks/gone"}',
+  });
+  const composed = await composerFor(fs).compose(agent, prompt("hello"));
+  assert.equal(composed.length, 2);
+  const text = composed.map(messageText).join("\n");
+  assert.match(text, /Trellis workflow state: stale/);
+  assert.match(text, /stale pointer/);
+  assert.match(text, /<trellis-bootstrap>/);
+});
+
 test("composer: a non-Trellis directory stays silent", async () => {
   const fs = memoryFs({});
   assert.deepEqual(await composerFor(fs).compose(agent, prompt("hello")), []);

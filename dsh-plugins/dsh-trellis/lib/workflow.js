@@ -64,6 +64,19 @@ export const FALLBACK_BREADCRUMB =
 export const MISSING_WORKFLOW_BREADCRUMB =
   "Refer to `.trellis/workflow.md` for the current workflow step (the workflow file is missing or unreadable).";
 
+/**
+ * A pointer to a task directory that no longer exists. The generic
+ * "no matching [workflow-state] block" line blamed the workflow file and told
+ * the model nothing actionable; Codex silently degrades the same state to
+ * no_task. Keep the diagnostic but name the repair target explicitly, like the
+ * task_error fallback does.
+ */
+export const STALE_BREADCRUMB =
+  "The active task pointer for this session names a task directory that no longer exists. " +
+  "This is a stale pointer, not a missing [workflow-state] block. Inspect " +
+  "`.trellis/.runtime/sessions/` and repair the pointer, or clear it with " +
+  "`python3 .trellis/scripts/task.py finish`, before creating or activating another task.";
+
 const DSH_COMMAND_REFS = Object.freeze(new Map([
   ["start", "/trellis-start"],
   ["continue", "/trellis-continue"],
@@ -505,11 +518,18 @@ export async function resolveTrellisState({
   const workflowFallback = content === null || content === undefined
     ? MISSING_WORKFLOW_BREADCRUMB
     : FALLBACK_BREADCRUMB;
-  let body = blocks.size === 0
-    ? (rawStatus === "task_error" ? TASK_ERROR_BREADCRUMB : workflowFallback)
-    : (status === "task_error"
-      ? blocks.get(status) || TASK_ERROR_BREADCRUMB
-      : block ?? FALLBACK_BREADCRUMB);
+  let body;
+  if (status === "task_error") {
+    body = blocks.get(status) || TASK_ERROR_BREADCRUMB;
+  } else if (status === "stale") {
+    // A project may define its own repair wording; otherwise keep the
+    // stale-specific diagnosis instead of the generic missing-block line.
+    body = blocks.get(status) || STALE_BREADCRUMB;
+  } else if (blocks.size === 0) {
+    body = workflowFallback;
+  } else {
+    body = block ?? FALLBACK_BREADCRUMB;
+  }
   body = normalizeDshCommandRefs(body);
   if (inlineMode) {
     body = `${body}\n\n${DSH_INLINE_NOTE}`;

@@ -20,7 +20,7 @@ DeepSeek Harness (dsh) host 插件：把 [Trellis](https://github.com/mindfold-a
 
 ## 对齐 Codex 的三项 Trellis 接线
 
-当前版本 **0.1.4**。普通修改按 `0.1.0 → 0.1.1 → 0.1.2 → 0.1.3 → 0.1.4` 递增；只有运行时/配置契约
+当前版本 **0.1.5**。普通修改按 `0.1.0 → 0.1.1 → 0.1.2 → 0.1.3 → 0.1.4 → 0.1.5` 递增；只有运行时/配置契约
 破坏或大改才提升次版本/主版本。三项主链路已经对齐，但 DSH 的事件形状仍带来下面的
 差异，因此本插件不宣称与 Codex 完全一致。
 
@@ -58,6 +58,12 @@ DeepSeek Harness (dsh) host 插件：把 [Trellis](https://github.com/mindfold-a
   加载 `trellis-start`，或通过压缩/clear 让消息被移除后再次注入；新会话会重新注入。
   headless 用 `--session-id` 在新进程 resume 时，projection 状态不跨进程恢复，可能再注入
   一次；Web 同一进程内不会重复。Codex 在每个无任务轮次重复提醒，本插件不复制该频率。
+
+- **stale 指针**：指针指向已不存在的任务目录时，面包屑使用专用正文说明“这是失效指针，
+  不是缺少 workflow 状态块”，并提示检查 `.trellis/.runtime/sessions/` 或用
+  `python3 .trellis/scripts/task.py finish` 清理；同时像 `no_task` 一样补一次 bootstrap。
+  项目若定义了 `[workflow-state:stale]` 块，则优先使用项目文案。Codex 在该场景直接降级为
+  `no_task`，DSH 保留诊断信息（0.1.5）。
 - 子代理是委托会话，不是新的根会话：没有自己绑定的任务时，插件不再向子代理注入
   `no_task` 面包屑或 bootstrap；它的任务上下文只来自 push，避免与 `Active task:`
   矛盾。子代理自己绑定任务后仍会收到对应状态的面包屑，但不会收到 bootstrap。
@@ -173,6 +179,18 @@ git 依赖不会执行 `prepack`（`pnpm pack`/`publish` 才会），因此 `lib
 
 运行时需要 profile 提供 `sessionProjections` 服务；该依赖由插件的 `inject` 声明。自定义或精简 profile 若未组装此服务，需先加载 `@deepseek-ai/dsh-session-projection`，否则插件会等待依赖，不会退回直接扫描历史。
 
+### 0.1.5：stale 指针诊断与 bootstrap 补齐
+
+- **缺陷**：活动任务指针指向已删除/不存在的任务目录时，面包屑正文退化为
+  `no matching [workflow-state] block found.`，把“指针失效”误报成“workflow 缺块”，
+  且不再注入 bootstrap。Codex 同场景直接降级为 `no_task` 并继续提醒。
+- **修复**：`resolveTrellisState` 为 `stale` 提供专用正文（项目自定义
+  `[workflow-state:stale]` 块仍然优先），明确这是失效指针并给出修复/清理路径；
+  composer 对 `stale` 与 `no_task` 一样追加一次性 bootstrap。`stale` 状态本身保留，
+  不静默改写成 `no_task`。
+- **文档**：补充默认 dispatch mode（`inline`）与 Codex（`auto`）的差异说明。
+- 版本：`0.1.4` → `0.1.5`；client bundle 已用 `pnpm run build:client` 重建。
+
 ### 0.1.4：skip 词改为按 turn 生效
 
 - **缺陷**：`no-trellis`（或项目 `prompt_injection.skip_keyword`）原先只在触发它的那个
@@ -255,6 +273,10 @@ dsh:
 ```
 
 Codex 对应的 `codex.dispatch_mode` 不会被 DSH 读取；两个平台各用各的模式。
+
+**与 Codex 默认值的差异**：Trellis 的 Codex 侧默认 `auto`（派发角色子代理），本插件引导的
+默认是 `inline`（主会话直接实现/检查）。`auto` 在 DSH 上已实测可用；切换由用户显式设置，
+插件不覆盖显式值。
 
 `inline` 的语义与边界（0.1.0 起）：
 

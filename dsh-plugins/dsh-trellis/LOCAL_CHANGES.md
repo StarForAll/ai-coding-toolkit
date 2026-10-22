@@ -404,3 +404,23 @@ authoritative scope and manual checks.
 | `README.md` | Skip keyword documented as turn-scoped; sub-agent task source corrected to "dispatch prompt `Active task:` first, parent pointer as fallback, no push when neither exists". | The old wording said the pointer came first, which is the reverse of `subagent-context.js`; the no-task silence also needed to be stated. |
 | `.trellis/spec/platforms/dsh-workflow-behavior.md` | 0.1.4 behaviour note. | Durable contract for future sessions. |
 | `package.json`, `lib/client.js` | Version `0.1.4`; rebuild client bundle (only the `PLUGIN_VERSION` stamp changed, sourcemap byte-identical). | Release bookkeeping. |
+
+## 0.1.5 — stale-pointer diagnosis (2026-10-22)
+
+### Added
+
+| File | Purpose |
+| --- | --- |
+| `docs/validation-0.1.5-local.md` | Verification record for this round. |
+
+### Changed
+
+| File | Change | Reason |
+| --- | --- | --- |
+| `lib/workflow.js` | `STALE_BREADCRUMB` names the stale pointer as the repair target (inspect `.trellis/.runtime/sessions/`, or `task.py finish`); a project `[workflow-state:stale]` block still wins, otherwise the built-in text replaces the generic "no matching [workflow-state] block" fallback, including when the workflow file has no state blocks. | The old fallback blamed the workflow file for a broken pointer and gave no repair path. Codex degrades the same state to `no_task`; this keeps the diagnostic but makes it actionable. |
+| `lib/session-composer.js` | A `stale` state now appends the one-time bootstrap exactly like `no_task`. | The pointer failure means "no usable active task"; without the nudge the repair prompt arrived with no reminder that Trellis exists. |
+| `test/workflow.test.js` | Stale-without-block test expects `STALE_BREADCRUMB`; new case for a workflow with no state blocks. | Lock the new wording and its precedence. |
+| `test/session-composer.test.js` | Stale pointer produces breadcrumb + bootstrap. | Lock the composer decision. |
+| `README.md` | 0.1.5 changelog, stale-pointer bullet, and the default `inline` vs Codex `auto` difference. | Docs must match behaviour. |
+| `.trellis/spec/platforms/dsh-workflow-behavior.md` | Workflow-state contract for `stale`. | Durable contract for future sessions. |
+| `package.json`, `lib/client.js` | Version `0.1.5`; rebuild client bundle. | Release bookkeeping. |
