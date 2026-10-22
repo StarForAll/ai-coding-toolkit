@@ -1550,3 +1550,26 @@ End-to-end smoke test of the new DSH (.dsh) Trellis platform layer: session-scop
 ### Status
 
 [OK] **Completed**
+
+
+## Session 351: dsh-trellis 0.1.1 全链路实测验证与两轮修复审查
+<!-- trellis-session: v=2 fp=0ef1c594b7e62607 -->
+
+**Date**: 2026-10-22
+**Task**: dsh-trellis 0.1.1 全链路实测验证与两轮修复审查
+**Branch**: `main`
+
+### Summary
+
+在 /tmp 临时项目用真实 LLM 会话完成 dsh-trellis 0.1.1 的 C1-C10 全链路验证（verification-report.md）：三条 Codex 主链路对齐、DSH 不足项全部补上，发现 P1-1/P2-1/P2-2/P3-1 问题；随后两轮独立审查修复任务（fix-review-report.md / fix-review-report-r3.md），确认 0.1.2/0.1.3 修复真实有效——含 roleFromLabel 整体标签匹配消除话题型 description 误判——未再发现新回归。审查方式坚持实际调用验证而非静态分析。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `97f8735` | dsh-trellis插件版本更新-0.1.2 |
+| `877365a` | dsh-trellis插件版本更新-0.1.3 |
+
+### Status
+
+[OK] **Completed**
