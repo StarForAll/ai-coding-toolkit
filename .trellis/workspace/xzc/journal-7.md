@@ -1573,3 +1573,25 @@ End-to-end smoke test of the new DSH (.dsh) Trellis platform layer: session-scop
 ### Status
 
 [OK] **Completed**
+
+
+## Session 352: dsh-trellis 0.1.3 parity 全量验证 + 0.1.4 修复审查
+<!-- trellis-session: v=2 fp=c76d1c02cffdcd9f -->
+
+**Date**: 2026-10-22
+**Task**: dsh-trellis 0.1.3 parity 全量验证 + 0.1.4 修复审查
+**Branch**: `main`
+
+### Summary
+
+对 dsh-trellis 0.1.3 做全量 Codex parity 验证（G1 修复回归/G2 C1-C10 重跑/G3 补足评估/G4 缺漏扫描，20 个真实 dsh 会话事件日志取证），产出 verification-report.md：主链路对齐，新发现 D1（no-trellis 跳过词只按 step 生效）+ O2（research push 依赖父指针）。修复由其他任务以 0.1.4 发布后，本任务独立真实性审查：真实会话 V1-V6 确认 turn 级 skip 修复、无跨 turn 泄漏；O2 按文档化路线落实（三点新表述实测吻合）；回归排查未发现新问题（正常注入/spec 注入/零干扰/子代理 push/362 项测试/版本契约全过）。审查结论已追加至任务报告。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `29965e0` | dsh-trellis插件版本更新-0.1.4 |
+
+### Status
+
+[OK] **Completed**
