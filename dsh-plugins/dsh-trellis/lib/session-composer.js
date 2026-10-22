@@ -15,6 +15,13 @@
  * breadcrumb only when it has bound a task itself, and never the bootstrap
  * nudge.
  *
+ * The skip keyword is decided per **turn**, not per step. `agent/pre-step`
+ * hands each step only the batch it claims from the inbox, so the user prompt
+ * that carried the keyword is gone by the second step of the same turn (it
+ * carries tool results instead). Codex decides the same escape hatch once per
+ * `UserPromptSubmit`, so the composer remembers the skipped turn and stays
+ * silent for its remaining steps.
+ *
  * @module dsh-trellis/session-composer
  */
 import { join } from "node:path";
@@ -55,11 +62,16 @@ export function isSubagentSession(agent) {
  * @param {object} resolved - normalized plugin config.
  * @param {import("@deepseek-ai/cordis").Context} ctx
  * @param {{fs?: typeof nodeFs}} [dependencies]
- * @returns {{compose(agent: any, messages: any[], signal?: AbortSignal): Promise<any[]>}}
+ * @returns {{compose(agent: any, messages: any[], signal?: AbortSignal, position?: {turn?: number}): Promise<any[]>}}
  */
 export function createSessionComposer(resolved, ctx, dependencies = {}) {
   const fs = dependencies.fs ?? nodeFs;
   const cache = new Map();
+  // Turn-scoped skip memory. Weakly keyed by the agent, which is one per
+  // session, so nothing outlives the session it belongs to and no session id
+  // bookkeeping is needed. Only the latest skipped turn is kept: turn numbers
+  // are monotonic within one agent, so an equality check is enough.
+  const skippedTurns = new WeakMap();
   // One-time (per project, per changed state) migration: Trellis projects that
   // install this plugin start in the mode the plugin documents. The ensurer is
   // idempotent and refuses to overwrite an explicit value, so it is safe to
@@ -71,7 +83,7 @@ export function createSessionComposer(resolved, ctx, dependencies = {}) {
     cache,
   });
 
-  const compose = async (agent, messages, signal) => {
+  const compose = async (agent, messages, signal, position = {}) => {
     const cwd = await resolveWorkingDirectory(ctx, agent, signal);
     const subagent = isSubagentSession(agent);
     const sessionId = agent.session.header.id ?? "";
@@ -98,6 +110,13 @@ export function createSessionComposer(resolved, ctx, dependencies = {}) {
       }
     }
     signal?.throwIfAborted();
+    // The skip keyword was already found earlier in this turn; only the batch
+    // that carried it is visible to a later step, so the decision is remembered
+    // here instead of being re-derived from `messages`. The project bootstrap
+    // above still runs: skipping the breadcrumb is about workflow state, not
+    // about enabling the plugin.
+    const turn = position?.turn;
+    if (Number.isInteger(turn) && skippedTurns.get(agent) === turn) return [];
     // The project bootstrap is about enabling the plugin, not about rendering a
     // breadcrumb: a zero byte budget still normalizes the project config.
     if (resolved.maxBytes <= 0 || !Number.isFinite(resolved.maxBytes)) return [];
@@ -120,7 +139,13 @@ export function createSessionComposer(resolved, ctx, dependencies = {}) {
       cache,
     );
     const keyword = promptInjectionSkipKeyword(configText) ?? resolved.skipKeyword;
-    if (hasSkipKeyword(messages, keyword)) return [];
+    if (hasSkipKeyword(messages, keyword)) {
+      // One decision per turn, like Codex's per-prompt hook: the steps that
+      // follow a skipped prompt stay silent even though their batch only holds
+      // tool results.
+      if (Number.isInteger(turn)) skippedTurns.set(agent, turn);
+      return [];
+    }
     // A delegated child without a task of its own has nothing truthful to say
     // here: its task context, when it has one, is the push message. Silence is
     // the only state that cannot contradict that push.

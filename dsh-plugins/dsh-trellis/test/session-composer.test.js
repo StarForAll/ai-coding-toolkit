@@ -106,6 +106,53 @@ test("composer: child agent with no task is silent", async () => {
   assert.equal((await composer.compose(child, prompt("hello"))).length, 0);
 });
 
+test("composer: the skip keyword covers every step of its turn", async () => {
+  const composer = composerFor(fsWithConfig(null));
+  // Step 1 carries the prompt, so it decides the turn.
+  assert.deepEqual(
+    await composer.compose(agent, prompt("no-trellis this turn"), undefined, { turn: 1 }),
+    [],
+  );
+  // A later step only claims the tool result; the decision must still stand.
+  assert.deepEqual(
+    await composer.compose(agent, prompt("tool output"), undefined, { turn: 1 }),
+    [],
+  );
+  // The next turn is a fresh decision.
+  assert.equal(
+    (await composer.compose(agent, prompt("now do the work"), undefined, { turn: 2 })).length,
+    2,
+  );
+});
+
+test("composer: a keyword seen mid-turn skips the rest of that turn only", async () => {
+  const composer = composerFor(fsWithConfig(null));
+  assert.equal(
+    (await composer.compose(agent, prompt("start"), undefined, { turn: 1 })).length,
+    2,
+  );
+  assert.deepEqual(
+    await composer.compose(agent, prompt("no-trellis"), undefined, { turn: 1 }),
+    [],
+  );
+  assert.deepEqual(
+    await composer.compose(agent, prompt("more tool output"), undefined, { turn: 1 }),
+    [],
+  );
+  assert.equal(
+    (await composer.compose(agent, prompt("next turn"), undefined, { turn: 2 })).length,
+    2,
+  );
+});
+
+test("composer: without a turn position the skip stays step-scoped", async () => {
+  // Hosts that do not report a turn keep the previous behaviour instead of
+  // silently remembering a decision they cannot scope.
+  const composer = composerFor(fsWithConfig(null));
+  assert.deepEqual(await composer.compose(agent, prompt("no-trellis")), []);
+  assert.equal((await composer.compose(agent, prompt("tool output"))).length, 2);
+});
+
 function messageText(message) {
   return message.content.map((part) => part.text ?? "").join("");
 }

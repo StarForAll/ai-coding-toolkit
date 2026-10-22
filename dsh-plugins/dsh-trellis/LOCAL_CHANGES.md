@@ -384,3 +384,23 @@ authoritative scope and manual checks.
 | `test/role-contract.test.js`, `test/dispatch-guard.test.js`, `test/subagent-context.test.js` | Annotated-label cases; plain-prose labels stay generic. | Lock the new rule and its boundary. |
 | `README.md`, `.trellis/spec/platforms/dsh-workflow-behavior.md` | Document the role-prefix rule. | Docs must match behavior. |
 | `package.json`, `lib/client.js` | Version `0.1.3`; rebuild client bundle. | Release bookkeeping. |
+
+## 0.1.4 — skip-keyword turn scope (2026-10-22)
+
+### Added
+
+| File | Purpose |
+| --- | --- |
+| `test/breadcrumb-skip-turn.test.js` | Real AgentLoop + Session + plugin: a skipped turn stays silent across its steps, the next turn resumes, a project `skip_keyword` behaves the same, and the project defaults migration still runs while the breadcrumb is skipped. |
+| `docs/validation-0.1.4-local.md` | Verification record for this round. |
+
+### Changed
+
+| File | Change | Reason |
+| --- | --- | --- |
+| `lib/session-composer.js` | The skip keyword is decided once per turn (`position.turn`) and remembered in a `WeakMap` keyed by the agent; later steps of that turn return no messages. Without a turn position the old step-scoped behaviour remains. | `agent/pre-step` hands each step only the inbox batch it claims, so step 2 of the same turn holds tool results instead of the prompt. `hasSkipKeyword(messages)` therefore re-injected breadcrumb + bootstrap in a turn whose prompt asked to skip it; Codex decides the same escape hatch once per `UserPromptSubmit`. |
+| `lib/index.js` | Passes `turn` from the `agent/pre-step` payload to the composer. | The composer cannot scope a decision it cannot name. |
+| `test/session-composer.test.js`, `test/index.test.js` | Turn-scoped skip, mid-turn keyword, no-turn fallback, queued-breadcrumb clearing, and next-turn resume. | Lock the semantics and the degradation path. |
+| `README.md` | Skip keyword documented as turn-scoped; sub-agent task source corrected to "dispatch prompt `Active task:` first, parent pointer as fallback, no push when neither exists". | The old wording said the pointer came first, which is the reverse of `subagent-context.js`; the no-task silence also needed to be stated. |
+| `.trellis/spec/platforms/dsh-workflow-behavior.md` | 0.1.4 behaviour note. | Durable contract for future sessions. |
+| `package.json`, `lib/client.js` | Version `0.1.4`; rebuild client bundle (only the `PLUGIN_VERSION` stamp changed, sourcemap byte-identical). | Release bookkeeping. |

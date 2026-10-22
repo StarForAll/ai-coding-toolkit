@@ -2,10 +2,10 @@
 
 DeepSeek Harness (dsh) host 插件：把 [Trellis](https://github.com/mindfold-ai/Trellis) 工作流带进 dsh，并尽量沿用 DSH 原生能力补齐 Codex / Claude Code 级体验：
 
-1. **每轮 workflow-state 面包屑注入** — 在每个 `agent/pre-step`，解析项目 `.trellis/workflow.md`（或任务/个人/团队选定的 workflow 变体）的 `[workflow-state:*]` 块 + 活跃任务状态（no_task / stale / task_error / planning / in_progress / completed / 团队自定义状态），把对应面包屑注入会话（与 `dsh-agent-instructions` 的注入管道相同）。未变化不重复注入；被压缩后自动重注入；提示词里出现独立单词 `no-trellis`（或项目 `prompt_injection.skip_keyword` 配置的词）可跳过当轮。
+1. **每轮 workflow-state 面包屑注入** — 在每个 `agent/pre-step`，解析项目 `.trellis/workflow.md`（或任务/个人/团队选定的 workflow 变体）的 `[workflow-state:*]` 块 + 活跃任务状态（no_task / stale / task_error / planning / in_progress / completed / 团队自定义状态），把对应面包屑注入会话（与 `dsh-agent-instructions` 的注入管道相同）。未变化不重复注入；被压缩后自动重注入；提示词里出现独立单词 `no-trellis`（或项目 `prompt_injection.skip_keyword` 配置的词）可跳过该轮（turn）的全部请求，包括工具调用之后的后续 step（与 Codex 的 `UserPromptSubmit` 按轮判定一致）。
 2. **隔离的原生会话上下文身份** — 从当前 agent 的 DSH 原生 session header 生成受管的 `DSH_TRELLIS_CONTEXT_ID`，让 `task.py start/create/current` 解析到会话级 active-task 指针，并在子代理身份不同于 shell 自身 session 时优先使用被转发的身份；插件命令启动的子进程也显式使用同一个 DSH 身份。
 3. **原生子代理同步** — 安装插件后，Trellis 角色可用 DSH continuable 后台子代理；主会话先继续独立工作，耗尽后可调用事件驱动的 `trellis_wait`。它监听 DSH 的 `subagent/end`，利用 lifecycle 自带的 run/provider/output-block 元数据返回 `completed / failed / aborted / unknown` 的 fail-closed 结论。`error`、`max-tokens`、`refusal` 和未来未知失败原因都不会被误报成通过。rc.8 在父会话 idle 时也会用原生 settlement notice 唤醒，因此已经结束当前轮时无需额外调用 wait。
-4. **子代理首步上下文 push** — 在子代理第一个 `agent/pre-step` 注入角色契约（目标项目 `.dsh/skills/trellis-agent-<role>/SKILL.md` 正文，去掉 frontmatter）与 curated task context。父会话指针缺失时回退到 dispatch prompt 的 `Active task:`；角色 skill 缺失时至少注入路径提示，不静默省略。
+4. **子代理首步上下文 push** — 在子代理第一个 `agent/pre-step` 注入角色契约（目标项目 `.dsh/skills/trellis-agent-<role>/SKILL.md` 正文，去掉 frontmatter）与 curated task context。任务路径优先取 dispatch prompt 的 `Active task:`，其次才是父会话指针；两者都取不到（父会话从未绑定任务）时不 push —— 与 Codex 在 task_dir 缺失时静默返回一致，research 另外会收到 dispatch-guard 的输出位置提醒。角色 skill 缺失时至少注入路径提示，不静默省略。
 5. **`/trellis` 命令** — `/trellis-status`（活跃任务 + git 状态）、`/trellis-finish`（只读检查 + 安全收尾清单，不提前清 active-task 指针）。任务读取优先使用 `task.py current --json`；旧版 Trellis（0.6.10 之前没有该参数）自动回退到 `current --source` 的文档化输出。命令输出不进模型历史；真正的会话收尾走技能面 `/trellis-finish-work`，由技能先归档再写 journal。rc.8 下两条零输入命令使用 `recordInput: false`，并显式拒绝参数和图片附件，避免静默忽略输入。
 6. **项目级模式引导** — 插件启用后，在首次解析某个 Trellis 项目的状态之前，自动确保
    `.trellis/config.yaml` 含 `dsh.dispatch_mode: inline`（缺省即内联）。只补缺失键，
@@ -20,7 +20,7 @@ DeepSeek Harness (dsh) host 插件：把 [Trellis](https://github.com/mindfold-a
 
 ## 对齐 Codex 的三项 Trellis 接线
 
-当前版本 **0.1.3**。普通修改按 `0.1.0 → 0.1.1 → 0.1.2 → 0.1.3` 递增；只有运行时/配置契约
+当前版本 **0.1.4**。普通修改按 `0.1.0 → 0.1.1 → 0.1.2 → 0.1.3 → 0.1.4` 递增；只有运行时/配置契约
 破坏或大改才提升次版本/主版本。三项主链路已经对齐，但 DSH 的事件形状仍带来下面的
 差异，因此本插件不宣称与 Codex 完全一致。
 
@@ -172,6 +172,20 @@ git 依赖不会执行 `prepack`（`pnpm pack`/`publish` 才会），因此 `lib
 配套要求：项目的 Trellis 平台需包含 dsh（`trellis init --dsh`，见 Trellis-DeepSeekHarness 适配分支），且 `.trellis/scripts` 需包含读取原生 `DSH_SESSION_ID` 的适配（已含在同一分支）。当前源码的 Host peer 范围显式包含 `^0.2.0-rc.1` 和 `^0.2.1-alpha.2`，保留既有版本范围；开发基线固定为 `0.2.0-rc.1`；其它宿主版本用 `test:compat` 在临时副本中单独验证，不代表逐个重新验证所有历史版本。新版 DSH 的 peer 准入使用 `includePrerelease: true`，与 npm 默认匹配不同；通过准入不等于实际兼容，不应使用 `allow-version` 绕过缺失的 API。Web 配置只在具备对应 client surface 的 profile 中加载。
 
 运行时需要 profile 提供 `sessionProjections` 服务；该依赖由插件的 `inject` 声明。自定义或精简 profile 若未组装此服务，需先加载 `@deepseek-ai/dsh-session-projection`，否则插件会等待依赖，不会退回直接扫描历史。
+
+### 0.1.4：skip 词改为按 turn 生效
+
+- **缺陷**：`no-trellis`（或项目 `prompt_injection.skip_keyword`）原先只在触发它的那个
+  step 生效。DSH 的 `agent/pre-step` 只把 inbox claim 到的新消息批次交给监听器，模型
+  调用工具后的 step 2 批次里没有带关键词的用户 prompt，于是同一轮仍然注入面包屑与
+  bootstrap；README 与 Codex 的按轮语义都要求跳过整轮。
+- **修复**：composer 在命中关键词时记住该 `turn`（`WeakMap` 以 agent 为键，随会话
+  回收），同一 turn 的后续 step 直接静默；下一个 turn 重新判定。项目引导
+  （`dsh.dispatch_mode`）不受跳过影响，与 `maxBytes: 0` 一样仍会执行。宿主若不提供
+  `turn`，退化为原来的按 step 判定，不会记忆无法归属的决定。
+- **文档更正**：子代理 push 的任务来源优先级是 dispatch prompt 的 `Active task:` 优先、
+  父会话指针兜底（原 README 写反了）；两者都没有时不 push，这一点现在明说。
+- 版本：`0.1.3` → `0.1.4`；client bundle 已用 `pnpm run build:client` 重建。
 
 ### 0.1.3：角色 label 补强
 

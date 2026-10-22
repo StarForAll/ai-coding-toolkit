@@ -40,7 +40,7 @@ const fields = {
     .string()
     .default("no-trellis")
     .description(
-      "Standalone prompt keyword that skips one breadcrumb injection; empty disables the escape hatch.",
+      "Standalone prompt keyword that skips breadcrumb injection for the whole turn (every step it triggers); empty disables the escape hatch.",
     ),
   /** Python executable used by /trellis commands. Empty selects a platform-aware fallback chain. */
   pythonCmd: z

@@ -315,10 +315,10 @@ async function preStepRuntime(t, config = {}, cwd = fixtureCwd, sessionMeta = { 
     session: ctx.sessions.create("pre-step", { meta: sessionMeta }),
     inbox: inbox(),
   };
-  const run = async ({ messages = [prompt("Continue")], decision, step = 2, signal } = {}) => {
+  const run = async ({ messages = [prompt("Continue")], decision, step = 2, turn, signal } = {}) => {
     const input = decision ?? { kind: "enter", messages, startsRequestSeries: true };
     const listener = state.listeners.filter((entry) => entry.event === "agent/pre-step")[0].listener;
-    return listener({ agent, messages, step, signal }, async () => input);
+    return listener({ agent, messages, step, turn, signal }, async () => input);
   };
   return { ctx, state, agent, run };
 }
@@ -589,6 +589,27 @@ test("an unloaded pre-step listener cannot inject after its downstream continuat
   release(decision);
   assert.equal(await pending, decision);
   assert.deepEqual(agent.inbox.nextStep, []);
+});
+
+test("a skipped turn stays silent for its remaining steps and the next turn resumes", async (t) => {
+  const { agent, run } = await preStepRuntime(t);
+  // A breadcrumb queued for the next step must not leak into a skipped turn.
+  await run({ decision: { kind: "reject" }, turn: 1, step: 1 });
+  assert.equal(agent.inbox.nextStep.filter(isBreadcrumbMessage).length, 1);
+  assert.equal(agent.inbox.nextStep.filter(isBootstrapMessage).length, 1);
+
+  const skipped = await run({ messages: [prompt("no-trellis this turn")], turn: 2, step: 1 });
+  assert.equal(skipped.messages.some(isBreadcrumbMessage), false);
+  assert.equal(agent.inbox.nextStep.length, 0);
+
+  // Step 2 claims only the tool result, which cannot repeat the keyword.
+  const laterStep = await run({ messages: [prompt("tool output")], turn: 2, step: 2 });
+  assert.equal(laterStep.messages.some(isBreadcrumbMessage), false);
+  assert.equal(laterStep.messages.some(isBootstrapMessage), false);
+
+  const nextTurn = await run({ messages: [prompt("Continue")], turn: 3, step: 1 });
+  assert.equal(nextTurn.messages.filter(isBreadcrumbMessage).length, 1);
+  assert.equal(nextTurn.messages.filter(isBootstrapMessage).length, 1);
 });
 
 test("skip, disabled byte budget, missing project, and cancellation do not inject", async (t) => {

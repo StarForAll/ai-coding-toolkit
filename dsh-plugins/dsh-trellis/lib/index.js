@@ -251,12 +251,12 @@ function registerSessionMessages(ctx, resolved) {
       { isOwn: isBreadcrumbMessage, projection: registerBreadcrumbProjection(ctx) },
       { isOwn: isBootstrapMessage, projection: registerBootstrapProjection(ctx) },
     );
-    disposeStep = ctx.on("agent/pre-step", async ({ agent, messages, step, signal }, next) => {
+    disposeStep = ctx.on("agent/pre-step", async ({ agent, messages, step, turn, signal }, next) => {
       const decision = await next();
       if (disposed) return decision;
       let desired;
       try {
-        const composed = await compose(agent, messages, signal);
+        const composed = await compose(agent, messages, signal, { turn });
         if (disposed) return decision;
         // Each family is deduped independently: a visible breadcrumb never
         // suppresses the bootstrap nudge, and vice versa.
