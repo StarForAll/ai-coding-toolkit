@@ -1595,3 +1595,25 @@ End-to-end smoke test of the new DSH (.dsh) Trellis platform layer: session-scop
 ### Status
 
 [OK] **Completed**
+
+
+## Session 353: dsh-trellis 0.1.5 安装复核与 stale 勘误
+<!-- trellis-session: v=2 fp=cef84a55e636cd7a -->
+
+**Date**: 2026-10-22
+**Task**: dsh-trellis 0.1.5 安装复核与 stale 勘误
+**Branch**: `main`
+
+### Summary
+
+用已安装 0.1.5（web profile）复测主链路与 D1 修复：stale 专用正文、bootstrap、spec deny-once、子代理 push、守卫、skip、非 Trellis 零注入均符合预期，未发现新问题；更正 Codex stale 对照的假阳性及机制描述（resolve_context_key 的 DSH 环境身份优先于 payload session_id），同步 README/spec/validation/report；测试 364/360/0/4。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ec7f48c` | docs(dsh-trellis): correct stale-parity audit and record verification |
+
+### Status
+
+[OK] **Completed**
