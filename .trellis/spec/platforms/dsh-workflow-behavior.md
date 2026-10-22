@@ -111,7 +111,14 @@ When reviewing DSH behavior in this repository, verify:
 - `codex.dispatch_mode` changes do not alter DSH breadcrumbs
 - plugin changes are verified with `node --test "test/*.test.js"` in
   `dsh-plugins/dsh-trellis`, plus a real `.trellis/workflow.md` parse
+- a dispatch whose `description` only mentions a role
+  (`研究 trellis-agent-implement 插件的 README`,
+  `about trellis-agent-check plugin docs`) stays generic: no guard decision and
+  no role push; a role name at the label's start (optionally with a
+  parenthetical/colon/dash annotation) selects the role
 - a DSH restart is called out whenever `lib/**` changed during the session
+- a version change updates `package.json`, `README.md`, `LOCAL_CHANGES.md`, and
+  `docs/validation-<version>-local.md` together
 
 ---
 
@@ -162,3 +169,74 @@ in `LOCAL_CHANGES.md` and the `validation-0.3.*` records.
 - **Version check** — GitHub Atom/npm timeouts are reported as partial results
   with a retry hint; the raw `This operation was aborted` text must not reach
   the settings page.
+
+---
+
+## 0.1.2–0.1.3 Behavior Notes
+
+### Design Decision: role identity has two sources
+
+**Context**: Role detection used to read only the dispatch prompt. DSH records
+the `subagent` / `subagent_fork` `description` argument as the child's durable
+`subagent/descriptor` label, so a role named only there was silently treated as
+a generic child: no push, and no inline guard (the same parser feeds both).
+
+**Decision**: role = first match in the dispatch prompt, then the dispatch
+`description` (guard) / child descriptor `label` (push). Prompt wins when both
+carry one. `Active task:` still comes from the prompt only.
+
+**Role-label rule**: the label is display text, not an instruction channel. It
+selects a role when it *starts* with `trellis-agent-<role>` / `trellis-<role>`
+(case-insensitive; leading quotes/brackets ignored) and is followed by the end
+of the label or an annotation separator: whitespace plus `:`/`：`, `(`/`（`,
+`[`/`【`, `-`, `–`, `—` (e.g. `trellis-agent-implement (audit round 3)`).
+A label that merely mentions the name — `研究 trellis-agent-implement 插件的
+README`, `about trellis-agent-check plugin docs` — stays generic: no guard
+decision and no role-contract push. So does a role name followed by plain words
+(`trellis-agent-check plugin docs`). A bare substring match regressed 0.1.1
+(topical descriptions were refused and generic children received a wrong role
+contract); whole-label equality (0.1.2) dropped annotated role labels. The
+prompt keeps its substring match because it is the instruction channel
+(`Load the trellis-agent-check role skill …`) and a stricter rule would silently
+drop legitimate pushes.
+
+**Contracts**:
+
+- guard — `parseDispatchRequest(prompt, description)`; `exec.arguments` carries
+  both for `subagent` and `subagent_fork`.
+- push — `parseDispatchPrompt(messages, label)`; the label is read through
+  `sessionProjections` (`dsh-trellis.subagent-identity`, host-only state
+  `{ inherited, label? }`), never via `eventAt` / `snapshotEvents` /
+  `ownEvents`. An inherited descriptor (forked child) is ignored via
+  `event.seq < inherited`.
+- degradation — a profile without the projection service yields `labelOf() =>
+  null`; detection falls back to the prompt with no error.
+
+**Tests**: `test/subagent-identity.test.js`,
+`test/native-subagent-push.test.js` (real AgentLoop + Session + descriptor),
+`test/dispatch-guard.test.js` (description-only inline denial),
+`test/role-contract.test.js` (role-prefix and topical labels).
+
+### Push contract: one authoritative context statement
+
+- The preamble is the only place that says "the task context was prepared"; the
+  `## Task Context` replacement section must not repeat it.
+- When the role skill body is inlined, the push must say so and forbid a second
+  load of `.dsh/skills/trellis-agent-<role>/SKILL.md`; when the skill is
+  missing, the fallback may only ask for that one load.
+- `subagentContextMessage` byte budget and task materialization are unchanged.
+
+### Dispatch guard is a prompt-level gate
+
+`inline` refuses `trellis-agent-implement` / `trellis-agent-check` dispatch,
+but the project config is writable by the same agent that receives the denial.
+The denial therefore names leaving inline as the **user's** decision and tells
+the model not to edit `.trellis/config.yaml`; README and code must not claim the
+guard enforces the contract or is a security boundary.
+
+### README scope
+
+`dsh-plugins/dsh-trellis/README.md` describes this plugin only. Upstream fork
+lineage, release history, and npm-install instructions for the upstream package
+must not be reintroduced; version notes stay in `docs/validation-*` and
+`LOCAL_CHANGES.md`.
