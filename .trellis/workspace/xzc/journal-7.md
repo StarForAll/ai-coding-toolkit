@@ -1526,3 +1526,27 @@ End-to-end smoke test of the new DSH (.dsh) Trellis platform layer: session-scop
 ### Next Steps
 
 - 浏览器点击“手动校验”按钮与 /compact 重注入仍未自动化验证
+
+
+## Session 350: dsh-trellis 缺陷修复与实际调用验证（0.1.2/0.1.3）
+<!-- trellis-session: v=2 fp=18f2371efde6f770 -->
+
+**Date**: 2026-10-22
+**Task**: dsh-trellis 缺陷修复与实际调用验证（0.1.2/0.1.3）
+**Branch**: `main`
+
+### Summary
+
+修复角色识别（prompt/description/descriptor label）、push 文案矛盾与重复、守卫表述；只保留角色名开头+标注的 label，话题型描述保持 generic；README 去除上游 fork 说明；补 0.1.2/0.1.3 簿记与验证记录。356 项测试全绿，安装态真实会话验证通过。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `437edcf` | docs(spec): record dsh-trellis 0.1.3 role-label contracts |
+| `877365a` | dsh-trellis插件版本更新-0.1.3 |
+| `97f8735` | dsh-trellis插件版本更新-0.1.2 |
+
+### Status
+
+[OK] **Completed**
