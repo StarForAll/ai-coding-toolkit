@@ -62,8 +62,9 @@ DeepSeek Harness (dsh) host 插件：把 [Trellis](https://github.com/mindfold-a
 - **stale 指针**：指针指向已不存在的任务目录时，面包屑使用专用正文说明“这是失效指针，
   不是缺少 workflow 状态块”，并提示检查 `.trellis/.runtime/sessions/` 或用
   `python3 .trellis/scripts/task.py finish` 清理；同时像 `no_task` 一样补一次 bootstrap。
-  项目若定义了 `[workflow-state:stale]` 块，则优先使用项目文案。Codex 在该场景直接降级为
-  `no_task`，DSH 保留诊断信息（0.1.5）。
+  项目若定义了 `[workflow-state:stale]` 块，则优先使用项目文案。Codex 在该场景保留
+  `stale_session` 标签并输出通用兜底行，且不附 bootstrap；DSH 的专用正文与 bootstrap
+  是增强，不是 parity 对齐（0.1.5）。
 - 子代理是委托会话，不是新的根会话：没有自己绑定的任务时，插件不再向子代理注入
   `no_task` 面包屑或 bootstrap；它的任务上下文只来自 push，避免与 `Active task:`
   矛盾。子代理自己绑定任务后仍会收到对应状态的面包屑，但不会收到 bootstrap。
@@ -183,7 +184,8 @@ git 依赖不会执行 `prepack`（`pnpm pack`/`publish` 才会），因此 `lib
 
 - **缺陷**：活动任务指针指向已删除/不存在的任务目录时，面包屑正文退化为
   `no matching [workflow-state] block found.`，把“指针失效”误报成“workflow 缺块”，
-  且不再注入 bootstrap。Codex 同场景直接降级为 `no_task` 并继续提醒。
+  且不再注入 bootstrap。Codex 同场景保留 `stale_session` 标签与通用兜底行，且不附
+  bootstrap；DSH 的专用正文与 bootstrap 是增强，不是与 Codex 对齐。
 - **修复**：`resolveTrellisState` 为 `stale` 提供专用正文（项目自定义
   `[workflow-state:stale]` 块仍然优先），明确这是失效指针并给出修复/清理路径；
   composer 对 `stale` 与 `no_task` 一样追加一次性 bootstrap。`stale` 状态本身保留，

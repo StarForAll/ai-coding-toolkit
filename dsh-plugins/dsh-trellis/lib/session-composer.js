@@ -152,9 +152,9 @@ export function createSessionComposer(resolved, ctx, dependencies = {}) {
     if (subagent && state.status === "no_task") return [];
     const composed = [breadcrumbMessage(state, resolved.maxBytes)];
     // A stale pointer means "no usable active task" for this turn, so it gets
-    // the same one-time bootstrap nudge as no_task. Codex degrades the same
-    // state to no_task and keeps nudging; without this the repaired-path hint
-    // would arrive with no reminder that Trellis exists.
+    // the same one-time bootstrap nudge as no_task. Codex keeps its
+    // `stale_session` label and emits no bootstrap (its notice is appended only
+    // when the task is absent), so this nudge is a DSH enhancement, not parity.
     if (!subagent && (state.status === "no_task" || state.status === "stale")) {
       composed.push(bootstrapMessage());
     }

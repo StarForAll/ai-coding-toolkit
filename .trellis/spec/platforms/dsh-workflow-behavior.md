@@ -94,6 +94,14 @@ While `auto`:
 - A session pointer is normalized like `common/active_task.py`
   (`tasks/<slug>`, `./`, absolute paths); a missing or non-directory target is
   `stale`, a readable directory with an unreadable `task.json` is `task_error`.
+- A stale pointer keeps its own diagnostic: when `workflow.md` has no
+  `[workflow-state:stale]` block, the breadcrumb uses `STALE_BREADCRUMB`
+  (names the pointer as the repair target) instead of the generic
+  "no matching [workflow-state] block" line, and the one-time bootstrap is
+  appended for `stale` exactly as for `no_task`. `stale` is never rewritten to
+  `no_task`. Codex keeps the same state as `stale_session` and emits its generic
+  fallback line without a bootstrap; the explicit repair text and the bootstrap
+  are DSH enhancements, not parity with Codex.
 - Workflow selection follows Trellis precedence: task `workflow` pin →
   `.trellis/.developer` → `config.yaml default_workflow` → global
   `.trellis/workflow.md`.
@@ -117,6 +125,15 @@ When reviewing DSH behavior in this repository, verify:
   no role push; a role name at the label's start (optionally with a
   parenthetical/colon/dash annotation) selects the role
 - a DSH restart is called out whenever `lib/**` changed during the session
+- when comparing a hook against Codex, clear inherited DSH identity variables
+  (`DSH_TRELLIS_CONTEXT_ID`, `DSH_SHELL`, `DSH_SESSION_ID`) before invoking
+  `.codex/hooks/*.py`. `common/active_task.py#resolve_context_key` prefers those
+  env-derived keys (the DSH override first, then the `DSH_SHELL=1` +
+  `DSH_SESSION_ID` pair, then the generic `TRELLIS_CONTEXT_ID`) over the payload
+  `session_id`. A temporary project without the matching pointer therefore
+  yields a fabricated `no_task` + bootstrap baseline. `_detect_platform` does
+  not recognise DSH, and the payload `session_id` is not turned into a
+  `dsh_<id>` key.
 - a version change updates `package.json`, `README.md`, `LOCAL_CHANGES.md`, and
   `docs/validation-<version>-local.md` together
 

@@ -67,9 +67,10 @@ export const MISSING_WORKFLOW_BREADCRUMB =
 /**
  * A pointer to a task directory that no longer exists. The generic
  * "no matching [workflow-state] block" line blamed the workflow file and told
- * the model nothing actionable; Codex silently degrades the same state to
- * no_task. Keep the diagnostic but name the repair target explicitly, like the
- * task_error fallback does.
+ * the model nothing actionable. Codex keeps the same state as `stale_session`
+ * and emits its generic fallback line without a bootstrap; this text instead
+ * names the repair target explicitly, like the task_error fallback does. The
+ * bootstrap appended for stale is a DSH enhancement, not parity.
  */
 export const STALE_BREADCRUMB =
   "The active task pointer for this session names a task directory that no longer exists. " +
