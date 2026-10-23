@@ -179,8 +179,10 @@ dsh plugin --profile web add github:<owner>/<repo>
 ```
 
 git 依赖不会执行 `prepack`（`pnpm pack`/`publish` 才会），因此 `lib/client.js` 必须保持已构建并
-随仓库提交。源码仓库提供了一个跟踪的 pre-push 钩子：推送涉及本插件的提交前会自动执行
-`pnpm run build:client`，如果重建后 bundle 仍未提交则中止推送并给出提交命令。启用方式：
+随仓库提交。源码仓库的跟踪 pre-push 钩子检查推送涉及的每个 `dsh-plugins/` 插件：本插件声明了
+`build:client`，所以会先执行 `pnpm run build:client`，重建后工作区不干净就中止推送并给出提交
+命令；没有构建脚本、bundle 直接入库的插件（如 `dsh-default-prompt`）不重建，只要求工作区已
+提交。启用方式：
 
 ```bash
 ./scripts/install-git-hooks.sh

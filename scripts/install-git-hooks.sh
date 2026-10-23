@@ -1,10 +1,12 @@
 #!/usr/bin/env sh
 # Install the repository's tracked git hooks into this clone.
 #
-# The dsh-trellis pre-push hook rebuilds `lib/client.js` because git
-# dependencies never run `prepack`. It is linked into `.git/hooks/pre-push`
-# rather than replacing `core.hooksPath`, so an existing hook manager (for
-# example Sonar's, which chains to `.git/hooks/pre-push`) keeps working.
+# The pre-push hook verifies DSH plugins before a push that carries plugin
+# changes: plugins that declare `build:client` are rebuilt (git dependencies
+# never run `prepack`) and every pushed plugin worktree must be clean. It is
+# linked into `.git/hooks/pre-push` rather than replacing `core.hooksPath`, so an
+# existing hook manager (for example Sonar's, which chains to
+# `.git/hooks/pre-push`) keeps working.
 set -eu
 
 fail() {
@@ -37,7 +39,7 @@ if [ -e "$target" ] || [ -L "$target" ]; then
   if [ -L "$target" ] && [ "$(readlink "$target")" = "$root/$source_path" ]; then
     same_link=1
   fi
-  if [ "$same_link" -eq 0 ] && ! grep -q "Build the dsh-trellis client bundle before a push" "$target" 2>/dev/null; then
+  if [ "$same_link" -eq 0 ] && ! grep -q "Verify DSH plugins before a push that carries plugin changes" "$target" 2>/dev/null; then
     fail "refusing to overwrite an existing $target; move it aside and re-run."
   fi
 fi

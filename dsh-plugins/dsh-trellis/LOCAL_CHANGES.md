@@ -268,6 +268,14 @@ aborts the push when the rebuild dirties `lib/client.js`/`lib/client.js.map`
 (the commit that is being pushed cannot carry a post-commit build). Existing
 `core.hooksPath` managers that chain to `.git/hooks` (Sonar) keep working.
 
+The hook is now manifest-driven across `dsh-plugins/`: any pushed plugin that
+declares `build:client` is rebuilt and must leave a clean worktree, while a
+plugin that commits its client bundle as source (`dsh-default-prompt`, no build
+script) is not rebuilt and simply has to be committed before the push. This
+keeps the stale-bundle guard on the plugin that has a build and adds the
+same guard against pushing an edited-but-uncommitted bundle on the one that
+does not.
+
 ### Version restart
 
 Version reset to `0.1.0`; see the version scheme section above and
