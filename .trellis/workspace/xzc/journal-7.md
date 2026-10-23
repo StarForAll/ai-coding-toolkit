@@ -1617,3 +1617,26 @@ End-to-end smoke test of the new DSH (.dsh) Trellis platform layer: session-scop
 ### Status
 
 [OK] **Completed**
+
+
+## Session 354: dsh-trellis parity verification and 0.1.6 fixes
+<!-- trellis-session: v=2 fp=3b407f7890bbacdd -->
+
+**Date**: 2026-10-23
+**Task**: dsh-trellis parity verification and 0.1.6 fixes
+**Branch**: `main`
+
+### Summary
+
+Verify dsh-trellis against Codex/Trellis mechanisms in a temp project; fix role false positives, cwd-relative spec matching, read-only inline default; update headless profile to 0.1.6; record upstream Trellis as read-only and archive the task.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8cf1e13` | dsh-trellis插件版本更新-0.1.6 |
+| `c2b87d1` | docs(trellis): record 0.1.6 behavior and upstream read-only policy |
+
+### Status
+
+[OK] **Completed**
