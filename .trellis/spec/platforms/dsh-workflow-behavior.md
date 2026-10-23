@@ -19,6 +19,26 @@ alternative, not the current profile shape.
 
 ---
 
+## Upstream Trellis Is Read-Only
+
+The official Trellis source checkout (for example `~/projects/other/Trellis`) is
+a **read-only reference** in this environment. There is no permission to modify
+it, and it must not become a repair target.
+
+- Design, fix, and improve Trellis plugins/workflows only in this repository's
+  assets (`dsh-plugins/`, `.trellis/spec/`, docs, workflow sources). Do not
+  propose or apply patches to the upstream checkout.
+- An upstream behavior difference is an **observation**, not a defect to fix
+  here. Do not put it in an issue list, execution plan, or acceptance criteria;
+  record it as a boundary/limitation and, only when needed, design a local
+  workaround inside this repository's own surfaces.
+- Concretely: the Codex-in-DSH identity precedence and the upstream DSH
+  workflow/`DSH.md` staleness (`run_in_background`, "foreground" wording) are
+  upstream observations. They are intentionally ignored as issues in this
+  repository; do not reopen them as defects or propose upstream patches.
+
+---
+
 ## Core Rule: DSH Owns Its Dispatch Mode
 
 DSH reads `.trellis/config.yaml` `dsh.dispatch_mode`; it must not read or reuse
@@ -27,38 +47,33 @@ carrier selects them only for `platform == "codex"`).
 
 | `dsh.dispatch_mode` | Main-session behavior | Breadcrumb |
 | --- | --- | --- |
-| `inline` (bootstrapped default) | implement and check directly in the main session; do not dispatch role sub-agents; `trellis_wait` is unnecessary; verify with the `trellis-check` skill | `*-inline` block when defined, plus the `<dsh-mode>` banner on every status |
-| `auto` (library fallback / explicit opt-out) | dispatch `trellis-agent-implement` / `trellis-agent-check` role sub-agents | base `planning` / `in_progress` blocks |
+| `inline` (default when the key is absent) | implement and check directly in the main session; do not dispatch role sub-agents; `trellis_wait` is unnecessary; verify with the `trellis-check` skill | `*-inline` block when defined, plus the `<dsh-mode>` banner on every status |
+| `auto` (explicit `auto` / legacy `sub-agent`) | dispatch `trellis-agent-implement` / `trellis-agent-check` role sub-agents | base `planning` / `in_progress` blocks |
 
-Unknown values fall back to `auto`. A missing `*-inline` block keeps the base
-block as phase wording; the `<dsh-mode>` banner is still emitted, because the
-banner — not the block choice — declares the mode.
+Unknown values fall back to `inline` (fail-safe: a typo must not silently enable
+dispatch). A missing `*-inline` block keeps the base block as phase wording; the
+`<dsh-mode>` banner is still emitted, because the banner — not the block choice —
+declares the mode. The banner also overrides Trellis phase detail that still
+says "Spawn the implement sub-agent" (Trellis 0.7.0-beta.4 has no DSH-inline
+variant).
 
 This repository pins `inline` to match its standing main-session rule; Codex
 pins its own `codex.dispatch_mode: inline` independently.
 
-## Project Bootstrap: `dsh.dispatch_mode`
+## Project Config Is Read-Only
 
-Installing and enabling the plugin bootstraps the project instead of asking the
-user to add the key by hand. Before the first state resolution of a project, the
-plugin ensures `.trellis/config.yaml` contains `dsh.dispatch_mode: inline`.
+The plugin reads `.trellis/config.yaml` and never writes it. A missing `dsh`
+section or `dispatch_mode` key means `inline`; there is no first-session
+migration, no appended key, and no backup/atomic-write path to maintain.
 
-Rules:
+Consequences:
 
-- add the key only when it is absent; an explicit `auto` (or any value) is
-  authoritative and is never overwritten;
-- preserve comments, ordering, and line endings; never rewrite the file when the
-  key is already present;
-- never create a missing `.trellis/config.yaml` — the plugin supplements a
-  Trellis project, it does not invent one;
-- write atomically (temp + rename) under a directory lock, and re-read the
-  file while holding the lock before merging, so two sessions starting together
-  cannot append the section twice or overwrite each other's edits;
-- a read-only project or a failed write degrades to the library fallback
-  `auto` for that run and logs one warning.
-
-Because the bootstrap runs before state resolution, the first turn already sees
-`inline`; the read cache is invalidated as part of the write.
+- a tracked `config.yaml` is never dirtied by a session and `trellis update`
+  never sees a plugin-made edit;
+- `trellis update -f` cannot remove a plugin-written section because there is
+  none to remove;
+- an explicit `auto` / `sub-agent` remains the only way to enable dispatch;
+- a read-only project behaves identically to a writable one.
 
 ---
 
@@ -74,6 +89,11 @@ While `dsh.dispatch_mode: inline`:
   `trellis-update-spec`
 - the close-out path is unchanged: commit in Phase 3.4, then
   `/trellis-finish-work` (archive + journal)
+- the `<dsh-mode>` banner overrides any phase detail or skill text that still
+  instructs the main session to spawn implement/check
+- `task.py start` still needs `--allow-empty-context`: Trellis treats the
+  presence of `.dsh` as sub-agent-capable (`_SUBAGENT_CONFIG_DIRS`) regardless of
+  `dsh.dispatch_mode`, and inline mode does not curate jsonl
 
 While `auto`:
 
@@ -107,6 +127,34 @@ While `auto`:
   `.trellis/workflow.md`.
 - Project `prompt_injection.skip_keyword` takes precedence over the plugin's
   `skipKeyword`; boundaries match Trellis's `prompt_has_skip_keyword`.
+- The skip keyword is decided **once per turn**, not per step: `agent/pre-step`
+  hands each step only the batch it claims from the inbox, so the prompt that
+  carried the keyword is not visible at step 2. The composer remembers the
+  skipped `turn` per agent and stays silent for its remaining steps; the next
+  turn decides again. Skipping only affects message composition; the plugin
+  never writes project configuration. A host that reports no `turn` degrades to
+  step scope and must not be described as turn-scoped.
+
+---
+
+## Path-Scoped Spec Contract
+
+- Tools pass a raw `file_path`. DSH resolves a relative path against the
+  agent's current working directory, which may be a subdirectory of the
+  Trellis project root. The plugin therefore resolves **both** interpretations
+  (`normalizeRepoRelativeFrom(root, cwd, filePath)` first,
+  `normalizeRepoRelative(root, filePath)` second) and unions the matches,
+  deduplicating by spec path and keeping the most specific glob.
+- The primary `editedRel` is the cwd-relative candidate when it matches; the
+  `<spec-context file="…">` attribute must name a repo-relative path, never an
+  absolute one.
+- Over-injection is the deliberate fail-safe: a file path written
+  repo-relative from a subdirectory (`src/x.ts` while cwd is `src/`) may match
+  both interpretations. Missing a governing spec is worse than teaching it
+  twice.
+- Deny-once, ticket, refresh-window, persistence, and compaction reset are
+  unchanged. The Codex hook has the same root-relative limitation; 0.1.6 fixes
+  it on the DSH side only (upstream not changed).
 
 ---
 
@@ -114,16 +162,22 @@ While `auto`:
 
 When reviewing DSH behavior in this repository, verify:
 
-- `dsh.dispatch_mode` is the only dispatch switch consulted by the plugin
-- inline sessions do not dispatch role sub-agents and still run the check skill
+- `dsh.dispatch_mode` is the only dispatch switch consulted by the plugin;
+  missing/unknown values are `inline`, and a session never writes
+  `.trellis/config.yaml`
+- inline sessions do not dispatch role sub-agents (the banner overrides phase
+  detail) and still run the check skill; `task.py start` needs
+  `--allow-empty-context` because `.dsh` triggers the jsonl gate
 - `codex.dispatch_mode` changes do not alter DSH breadcrumbs
 - plugin changes are verified with `node --test "test/*.test.js"` in
   `dsh-plugins/dsh-trellis`, plus a real `.trellis/workflow.md` parse
-- a dispatch whose `description` only mentions a role
-  (`研究 trellis-agent-implement 插件的 README`,
-  `about trellis-agent-check plugin docs`) stays generic: no guard decision and
-  no role push; a role name at the label's start (optionally with a
-  parenthetical/colon/dash annotation) selects the role
+- a role is selected only by a prompt declaration (first-line prefix, `Role:`
+  line, or `You are the <role> sub-agent/role` sentence) or a strict
+  `description` prefix; path/prose mentions
+  (`.dsh/skills/trellis-agent-<role>/SKILL.md`, `Run the trellis-check skill`)
+  stay generic: no guard decision and no role push
+- a relative `edit`/`write` path from a subdirectory session still matches
+  specs written against repo-relative paths (`src/**/*.ts`)
 - a DSH restart is called out whenever `lib/**` changed during the session
 - when comparing a hook against Codex, clear inherited DSH identity variables
   (`DSH_TRELLIS_CONTEXT_ID`, `DSH_SHELL`, `DSH_SESSION_ID`) before invoking
@@ -136,6 +190,9 @@ When reviewing DSH behavior in this repository, verify:
   `dsh_<id>` key.
 - a version change updates `package.json`, `README.md`, `LOCAL_CHANGES.md`, and
   `docs/validation-<version>-local.md` together
+- upstream Trellis findings (identity precedence, template/DSH.md staleness) are
+  recorded as read-only observations only; never as actionable issues or
+  upstream patches
 
 ---
 
@@ -198,9 +255,22 @@ the `subagent` / `subagent_fork` `description` argument as the child's durable
 `subagent/descriptor` label, so a role named only there was silently treated as
 a generic child: no push, and no inline guard (the same parser feeds both).
 
-**Decision**: role = first match in the dispatch prompt, then the dispatch
-`description` (guard) / child descriptor `label` (push). Prompt wins when both
-carry one. `Active task:` still comes from the prompt only.
+**Decision** (0.1.6): role = a *declared* role in the dispatch prompt, then the
+dispatch `description` (guard) / child descriptor `label` (push). Prompt wins
+when both carry one. `Active task:` still comes from the prompt only.
+
+**Prompt declaration rule** (0.1.6): the prompt selects a role only through one
+of these shapes — a first-line role prefix (`trellis-agent-implement`,
+`trellis-implement: …`, `trellis-implement (round 3)`), a dedicated line
+(`Role: trellis-agent-implement` / `Agent: trellis-check`), or the Trellis
+dispatch sentence (`You are the trellis-implement sub-agent/role`). A path
+mention (`.dsh/skills/trellis-agent-<role>/SKILL.md`) or ordinary prose
+(`Run the trellis-check skill …`) is **not** a declaration: no push and no guard
+decision. This closes the 0.1.5 false positive where a generic child that only
+read the role skill file received an implement push, and an unbound generic
+dispatch could be refused. Intended dispatches must include the declaration
+line; the workflow's own phase text already says to tell the child it is the
+role sub-agent, and `description` remains the fallback.
 
 **Role-label rule**: the label is display text, not an instruction channel. It
 selects a role when it *starts* with `trellis-agent-<role>` / `trellis-<role>`
@@ -212,10 +282,10 @@ README`, `about trellis-agent-check plugin docs` — stays generic: no guard
 decision and no role-contract push. So does a role name followed by plain words
 (`trellis-agent-check plugin docs`). A bare substring match regressed 0.1.1
 (topical descriptions were refused and generic children received a wrong role
-contract); whole-label equality (0.1.2) dropped annotated role labels. The
-prompt keeps its substring match because it is the instruction channel
-(`Load the trellis-agent-check role skill …`) and a stricter rule would silently
-drop legitimate pushes.
+contract); whole-label equality (0.1.2) dropped annotated role labels; the
+0.1.1–0.1.5 prompt substring scan regressed the reverse case in 0.1.6 (path and
+prose mentions selected a role). The declarative prompt rule above is the
+current contract.
 
 **Contracts**:
 
@@ -232,10 +302,15 @@ drop legitimate pushes.
 **Tests**: `test/subagent-identity.test.js`,
 `test/native-subagent-push.test.js` (real AgentLoop + Session + descriptor),
 `test/dispatch-guard.test.js` (description-only inline denial),
-`test/role-contract.test.js` (role-prefix and topical labels).
+`test/role-contract.test.js` (role-prefix, declaration, topical labels, and
+path/prose false positives).
 
 ### Push contract: one authoritative context statement
 
+- Task source order is dispatch prompt `Active task:` first, the parent
+  session pointer second; when neither resolves, nothing is pushed (Codex's
+  `SubagentStart` hook also returns without a task directory). Research keeps
+  its post-dispatch notice about where findings must be persisted.
 - The preamble is the only place that says "the task context was prepared"; the
   `## Task Context` replacement section must not repeat it.
 - When the role skill body is inlined, the push must say so and forbid a second

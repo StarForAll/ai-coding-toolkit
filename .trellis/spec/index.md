@@ -17,6 +17,12 @@ This is a **meta-project** — an AI coding toolkit that maintains both reusable
 - **Command** source assets (`commands/<tool>/`) deployed to platform-specific command, helper, config, or skill surfaces depending on the tool
 - **Workflow assets** under `docs/workflows/**`, including command source files, installers, and workflow conventions
 
+**Upstream boundary**: the official Trellis upstream checkout (for example
+`~/projects/other/Trellis`) is a read-only reference — this environment has no
+permission to modify it. Trellis plugin/workflow design and fixes happen only in
+this repository's own assets; upstream behavior differences are recorded as
+observations/boundaries, not as issues to fix or upstream patches.
+
 `.trellis/spec/` is the live spec workspace for this repository. It is narrower
 than `trellis-library/` as a source library, but wider than a pure
 "repo-maintenance only" directory:

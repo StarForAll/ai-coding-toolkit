@@ -63,6 +63,7 @@ Primary asset types:
   uncommitted bundle. Do not bypass it with `--no-verify` unless you have rebuilt and committed
   the bundle yourself.
 - When this repository's Trellis workflow or platform-integration behavior changes, use the same change/review to manually re-check the guidance outside this file's `TRELLIS:START` / `TRELLIS:END` block against `.trellis/workflow.md`, `.codex/config.toml`, and the relevant `trellis-*` skills so local summary text does not drift from the managed workflow.
+- The official Trellis upstream checkout (for example `~/projects/other/Trellis`) is a **read-only reference**: this environment has no permission to modify it. Design and fix Trellis plugins/workflows only inside this repository's own assets; record upstream behavior differences as observations/boundaries, not as issues to fix, and do not propose upstream patches.
 
 ## Language Policy
 
