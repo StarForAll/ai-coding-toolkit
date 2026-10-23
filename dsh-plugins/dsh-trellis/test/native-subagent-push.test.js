@@ -22,13 +22,20 @@ class RecordingAdapter extends LlmAdapter {
   }
 }
 
-const user = (text) => ({ role: "user", content: [{ type: "text", text }] });
+const user = (text) => ({
+  role: "user",
+  content: [{ type: "text", text }],
+  source: { kind: "user" },
+});
 
-const requestText = (options) =>
-  (options.messages ?? [])
+const requestText = (adapter) => {
+  assert.ok(adapter.requests.length > 0, "the child produced no model request");
+  const options = adapter.requests.at(-1);
+  return (options.messages ?? [])
     .flatMap((message) => message.content ?? [])
     .map((part) => (typeof part?.text === "string" ? part.text : ""))
     .join("\n");
+};
 
 async function trellisProject(t) {
   const root = await mkdtemp(join(tmpdir(), "dsh-trellis-push-"));
@@ -80,7 +87,7 @@ test("a real child whose role only the dispatch label names still receives the p
   child.followup(user(`Active task: ${task}\nImplement the task.`));
   await child.whenIdle();
 
-  const text = requestText(adapter.requests.at(-1));
+  const text = requestText(adapter);
   assert.match(text, /# Trellis Native Implement Subagent/);
   assert.match(text, /Do not load `\.dsh\/skills\/trellis-agent-implement\/SKILL\.md` again/);
   assert.match(text, /Do the role\./);
@@ -116,7 +123,7 @@ test("a topical dispatch label stays generic in a real child", {
   child.followup(user(`Active task: ${task}\nSummarise the change.`));
   await child.whenIdle();
 
-  const text = requestText(adapter.requests.at(-1));
+  const text = requestText(adapter);
   assert.doesNotMatch(text, /Trellis Native Implement Subagent/);
   assert.match(text, /Summarise the change\./);
 });

@@ -1,0 +1,37 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const ev='/tmp/dsh-trellis-full-usage-audit-1023/evidence-final';
+const load=id=>fs.readFileSync(`${ev}/${id}.jsonl`,'utf8').trim().split('\n').map(JSON.parse);
+const requests=id=>load(id).filter(e=>e.kind==='request');
+const emitted=id=>load(id).filter(e=>e.kind==='event'&&e.event.type==='user/message').map(e=>e.event.data.message??e.event.data).filter(m=>m.source?.kind==='dsh-trellis');
+const results=JSON.parse(fs.readFileSync(`${ev}/suite-results.json`));
+const byId=new Map(results.map(r=>[r.id,r]));
+const checks=[];
+function check(name,fn){try{fn();checks.push({name,status:'pass'});}catch(error){checks.push({name,status:'fail',error:error.message});}}
+check('all 24 suite invocations have session and final events',()=>{assert.equal(results.length,24);for(const r of results){assert.equal(r.status,0);assert.ok(r.sid);assert.ok(r.final);}});
+check('bootstrap exactly once on new root session',()=>{assert.equal(emitted('r01-bootstrap').filter(m=>m.source.form==='bootstrap').length,1);assert.equal(emitted('r01-bootstrap').filter(m=>m.source.form==='breadcrumb').length,1);});
+check('resume does not duplicate bootstrap or breadcrumb',()=>assert.equal(emitted('r02-resume').length,0));
+check('skip remains silent through the tool continuation',()=>{assert.equal(requests('r03-skip').length,2);assert.equal(emitted('r03-skip').length,0);});
+for(const id of ['r04-spec','r05-spec-repeat'])check(id+' denies once then writes',()=>{const ts=byId.get(id).tools;assert.equal(ts[0].status,'error');assert.match(ts[0].result,/<spec-context/);assert.equal(ts[1].status,'completed');});
+check('cross-process spec dedupe survives resume',()=>assert.ok(byId.get('r06-spec-resume').tools.every(t=>t.status==='completed')));
+check('inline dispatch guard fires before child startup',()=>{assert.match(byId.get('r07-inline-guard').tools[0].result,/inline mode/);assert.equal(requests('r07-inline-guard').filter(r=>r.child).length,0);});
+check('unknown wait id fails closed',()=>assert.match(byId.get('r08-invalid-wait').tools[0].result,/only wait for a direct/));
+check('bare profile has no plugin messages or wait tool',()=>{assert.equal(emitted('r09-bare-smoke').length,0);assert.ok(!requests('r09-bare-smoke')[0].options.tools.some(t=>t.name==='trellis_wait'));});
+check('bare profile write has no spec denial',()=>assert.ok(byId.get('r10-bare-write').tools.every(t=>t.status==='completed')));
+check('headless slash text reaches model unchanged without command lifecycle',()=>{assert.ok(requests('r11-headless-text')[0].options.messages.some(m=>m.content?.some(p=>p.text==='/trellis-status')));assert.equal(load('r11-headless-text').filter(e=>e.kind==='event'&&e.event.type==='command/run').length,0);});
+for(const id of ['r12-auto-child','r13-auto-child-repeat'])check(id+' child receives role/spec/PRD and parent gets native notice',()=>{
+ const rs=requests(id),child=rs.find(r=>r.child);assert.ok(child);const pushed=child.options.messages.filter(m=>m.source?.form==='subagent-context');assert.equal(pushed.length,1);const t=pushed[0].content[0].text;assert.match(t,/Trellis Native Implement Subagent/);assert.match(t,/AUDIT-SPEC-7F3A/);assert.match(t,/Bootstrap Task/);assert.ok(rs.at(-1).options.messages.some(m=>m.source?.kind==='subagent-settled'));assert.match(byId.get(id).tools[1].result,/completed/);
+});
+for(const [id,status] of [['r15-state-planning','planning-inline'],['r15-state-in_progress','in_progress-inline'],['r15-state-completed','completed'],['r15-state-reviewing','reviewing'],['r16-state-error','task_error'],['r17-state-stale','stale']])check(id+' resolves correct state',()=>assert.equal(emitted(id).at(-1).source.status,status));
+check('managed shell task start and current share native session id',()=>{const r=byId.get('r18-identity');assert.match(r.tools[0].result,new RegExp('dsh_'+r.sid));assert.match(r.tools[1].result,new RegExp('dsh_'+r.sid));});
+check('plain directory has no plugin messages',()=>assert.equal(emitted('r19-no-project').length,0));
+check('explicit Read delivers spec only after read completes',()=>{const rs=requests('r22-read-enabled');assert.ok(!rs[0].options.messages.some(m=>m.source?.form==='spec-context'));assert.ok(rs[1].options.messages.some(m=>m.source?.form==='spec-context'));});
+check('real command registry status/finish/doctor pass and arguments reject',()=>{const ps=load('x10-command-registry').filter(e=>e.kind==='command-probe');assert.equal(ps.length,4);assert.deepEqual(ps.map(e=>e.result.result.kind),['success','success','success','error']);assert.equal(load('x10-command-registry').filter(e=>e.kind==='event'&&e.event.type==='command/done').length,4);});
+const supplemental=JSON.parse(fs.readFileSync(`${ev}/supplement-results.json`));const xs=new Map(supplemental.map(x=>[x.id,x]));
+check('spec content change and corruption each re-teach',()=>{for(const id of ['x02-spec-changed','x03-corrupt-shard'])assert.match(xs.get(id).tools[0].result,/Trellis injected governing specs/);});
+check('aged unchanged spec refreshes with nonblocking ticket',()=>{assert.ok(xs.get('x04-ticket-aged').tools.every(t=>t.status==='completed'));assert.ok(requests('x04-ticket-aged').at(-1).options.messages.some(m=>m.content?.some(p=>p.text?.includes('<spec-ticket'))));});
+check('concurrent sessions teach independently and both finish writes',()=>{for(const id of ['x05-concurrent-a','x06-concurrent-b']){assert.equal(xs.get(id).tools[0].status,'error');assert.equal(xs.get(id).tools[1].status,'completed');}assert.notEqual(xs.get('x05-concurrent-a').sid,xs.get('x06-concurrent-b').sid);});
+check('native compaction commits and re-teaches full spec afterwards',()=>{const c=JSON.parse(fs.readFileSync(`${ev}/compact-result.json`));assert.ok(c.compact.shadowedTokenCount>0);const rs=requests('x07-native-compaction');assert.equal(rs.find(r=>r.n===4).options.purpose,'compaction');assert.ok(rs.find(r=>r.n===5).options.messages.some(m=>m.source?.form==='bootstrap'));assert.ok(rs.find(r=>r.n===6).options.messages.some(m=>m.role==='tool'&&m.content?.some(p=>p.text?.includes('Trellis injected governing specs'))));});
+check('same-version Trellis update and subsequent boot pass',()=>{assert.equal(xs.get('x08-trellis-update').status,0);assert.match(fs.readFileSync(`${ev}/x08-trellis-update.stdout`,'utf8'),/Already up to date/);assert.ok(emitted('x09-after-update').some(m=>m.source.form==='bootstrap'));});
+const summary={total:checks.length,pass:checks.filter(c=>c.status==='pass').length,fail:checks.filter(c=>c.status==='fail').length,checks};
+fs.writeFileSync(`${ev}/assertions.json`,JSON.stringify(summary,null,2));console.log(JSON.stringify(summary,null,2));if(summary.fail)process.exitCode=1;

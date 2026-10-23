@@ -1,0 +1,23 @@
+[
+  {
+    "name": "missing-source",
+    "exit": 1,
+    "fails": 2,
+    "diagnosticPresent": true,
+    "expectedFailureObserved": true
+  },
+  {
+    "name": "missing-push",
+    "exit": 1,
+    "fails": 1,
+    "diagnosticPresent": true,
+    "expectedFailureObserved": true
+  },
+  {
+    "name": "generic-label-became-role",
+    "exit": 1,
+    "fails": 1,
+    "diagnosticPresent": true,
+    "expectedFailureObserved": true
+  }
+]

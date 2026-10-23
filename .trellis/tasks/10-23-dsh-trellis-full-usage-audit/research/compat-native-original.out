@@ -1,0 +1,28 @@
+✖ a real child whose role only the dispatch label names still receives the push (45.991788ms)
+✖ a topical dispatch label stays generic in a real child (15.257226ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 0
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 65.28855
+
+✖ failing tests:
+
+test at test/native-subagent-push-original.js:54:1
+✖ a real child whose role only the dispatch label names still receives the push (45.991788ms)
+  TypeError: Cannot read properties of undefined (reading 'messages')
+      at requestText (file:///tmp/dsh-trellis-compat-0.2.1-rc.2-YOjjL4/test/native-subagent-push-original.js:28:12)
+      at TestContext.<anonymous> (file:///tmp/dsh-trellis-compat-0.2.1-rc.2-YOjjL4/test/native-subagent-push-original.js:83:16)
+      at async Test.run (node:internal/test_runner/test:1404:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+
+test at test/native-subagent-push-original.js:92:1
+✖ a topical dispatch label stays generic in a real child (15.257226ms)
+  TypeError: Cannot read properties of undefined (reading 'messages')
+      at requestText (file:///tmp/dsh-trellis-compat-0.2.1-rc.2-YOjjL4/test/native-subagent-push-original.js:28:12)
+      at TestContext.<anonymous> (file:///tmp/dsh-trellis-compat-0.2.1-rc.2-YOjjL4/test/native-subagent-push-original.js:119:16)
+      at async Test.run (node:internal/test_runner/test:1404:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7)

@@ -1,0 +1,893 @@
+{
+  "date": "2026-10-23",
+  "task": "10-23-dsh-trellis-full-usage-audit",
+  "versions": {
+    "plugin": "0.1.7",
+    "dsh": "0.2.1-rc.2",
+    "trellis": "0.7.0-beta.4",
+    "codex": "0.163.0",
+    "node": "24.20.0"
+  },
+  "model_evidence": "Real DSH CLI and tools driven by a deterministic local LlmAdapter; no remote model calls",
+  "installed_source_lib_sha256": {
+    "lib/bootstrap.js": "4a1932fcc405d28d6a9cca82d4f31001a6b95307acb5660f675d8d4951394360",
+    "lib/breadcrumb-projection.js": "c894b0054de8d2318b2094b0d786977a6b519c6d13be1415fb73e5984962330c",
+    "lib/breadcrumb.js": "611d95c5bf90d4a027c5c9a2d74d82a86a4f46bf688a8119970ceb5fde73af51",
+    "lib/client.js": "5aa59ce44c9aa950f563cefd3b383d1490e42e1aa41c33d0e7d105f77f0ed37f",
+    "lib/commands.js": "8adaabe168d9ef8d3c89ff144affb1c07b62fd785fc9c2f15b57aeb1771b5029",
+    "lib/config.js": "2f7dafab55414ea87eb4d41de64b64b6b8dfdea2f1d05f99858863b819df7639",
+    "lib/conflicts.js": "7fe62604137e3c59a05c715f96377d9a34236e1331748738fc0825b61ad2326a",
+    "lib/dispatch-guard.js": "81af178a81fd6c7eff8518df772c207d87e8b7af367f68ca0dd5512dfb084cc7",
+    "lib/doctor.js": "9e831a606c5422b465164bac04b66ec94ad2f6b6f0fa8f1bfffd39b2e043cc83",
+    "lib/index.js": "112f9ff4170e197cd05483134446c018870c70c87f39fb720bd0d238065c07a6",
+    "lib/message-projection.js": "33f69824a3c24a87b50523aad52429f9b7b6b6ae50527888c52145864f0702ed",
+    "lib/node-fs.js": "205f55627ff4695ca91af108868986c3103587a63c04065d0cf08e749d791f9e",
+    "lib/project.js": "384c3a28ff66e8c7dd465a22903864f2b3be1ad1e31038fca72caffd94916b2f",
+    "lib/role-contract.js": "a3d84493537cdd08d407ac5be3971da0fd2845eaaadfcea9c0a74135fced8d33",
+    "lib/session-composer.js": "5612db34eb8fb3ee6da25f115f01b00cca447148906dc474d74037a2c110fe76",
+    "lib/session-env.js": "444865ddb66d15806378f8f83fc46ee09d0d76356a10b5a919539e403df658bb",
+    "lib/settings-compat.js": "f61de405c40c53e4ff794f4f0ee57e5eed9894f1e309cf6961b4e24282054eb6",
+    "lib/spec-glob.js": "c5ad1d13fe916a76f79cceb9b07f50a6ad604c8642fa187ac8ac5eb59686ec94",
+    "lib/spec-index.js": "32a12431911fca8fa81cb77ff92d9320313bcc881213fbac007c709817088dea",
+    "lib/spec-inject.js": "c508a0e68da4c9c306970f79140ffbec8c1fcf7249d883b031b448c5970e05c3",
+    "lib/spec-policy.js": "f80e9ce3a63f1712ba81f1f8412ccbcdf5317b2da73e48c977fd55a068f6e314",
+    "lib/spec-state.js": "eefa85c25ce195306806273c58b1a6004d27175f8366c0fbb57fcdb0dbe9f67c",
+    "lib/subagent-context.js": "b88747e0dcf521cb4bf3454644a713e25b880bddb0ebabb1256150e4d3bc7f67",
+    "lib/subagent-identity.js": "085f40fcb0e5f4f6ea4856a927730a5a924c98ca067dc660ac019258016f3018",
+    "lib/text.js": "44f6a6894e17690622477986944d47e132c866025adf1f393446f3c6fa63c99d",
+    "lib/trellis-config.js": "0d4004fea308a1f17fcb9de7438f0ceb6f0cfc5cf194917000a77d5214db717f",
+    "lib/upstream.js": "e855146163ff0df9c2e6fb335d282cb14c366f738045382549cc3b507687afbc",
+    "lib/wait-tool.js": "67c121ff15393002f144445c98760bde2514ac83d77f9366a9561624a01ec3f1",
+    "lib/workflow.js": "068784ba71544e6be3feac0255c40290e3ba441ebc7b6fa4e9c83ec60630c902",
+    "lib/working-directory.js": "2dc476e01cbdc08ec53a14551496b3277a4295d10da6caa2d1cd611c54f9b64f"
+  },
+  "suite": [
+    {
+      "id": "r01-bootstrap",
+      "scenario": "smoke",
+      "profile": "trellis-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/project",
+      "status": 0,
+      "sid": "session-7cdffe91-649a-40b5-9da8-a94c7433cdbb",
+      "tools": [],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r02-resume",
+      "scenario": "smoke",
+      "profile": "trellis-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/project",
+      "status": 0,
+      "sid": "session-7cdffe91-649a-40b5-9da8-a94c7433cdbb",
+      "tools": [],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r03-skip",
+      "scenario": "read",
+      "profile": "trellis-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/project",
+      "status": 0,
+      "sid": "session-b4b95456-6de3-4ed7-96e9-7550b036b5af",
+      "tools": [
+        {
+          "type": "tool_result",
+          "callId": "audit-1",
+          "status": "completed",
+          "result": "<path>/tmp/dsh-trellis-full-usage-audit-1023/project/src/audit/target.js</path>\n<type>file</type>\n<content>\n1: export const target = \"AUDIT-SPEC-7F3A\";\n\n(End of file - total 1 lines)\n</content>"
+        }
+      ],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r04-spec",
+      "scenario": "write",
+      "profile": "trellis-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/project",
+      "status": 0,
+      "sid": "session-1793b9c9-c9e6-4805-86f5-cd594e7daf73",
+      "tools": [
+        {
+          "type": "tool_result",
+          "callId": "audit-1",
+          "status": "error",
+          "result": "Error: Trellis injected governing specs. Review them, then retry this tool call.\n\n<spec-context file=\"src/audit/r04-spec.js\" spec=\".trellis/spec/audit/dsh-parity.md\" sha256=\"7a23aebc416b\">\n---\npaths:\n  - \"src/audit/**\"\n---\n\n# Audit Fixture Rule\n\nAll files under `src/audit/` must retain the marker `AUDIT-SPEC-7F3A`.\n\n</spec-context>"
+        },
+        {
+          "type": "tool_result",
+          "callId": "audit-2",
+          "status": "completed",
+          "result": "<path>/tmp/dsh-trellis-full-usage-audit-1023/project/src/audit/r04-spec.js</path>\n<type>file</type>\n<content>\nUpdated file\n</content>"
+        }
+      ],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r05-spec-repeat",
+      "scenario": "write",
+      "profile": "trellis-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/project",
+      "status": 0,
+      "sid": "session-fc2d23e6-3260-42cc-89bb-b0c67a68149c",
+      "tools": [
+        {
+          "type": "tool_result",
+          "callId": "audit-1",
+          "status": "error",
+          "result": "Error: Trellis injected governing specs. Review them, then retry this tool call.\n\n<spec-context file=\"src/audit/r05-spec-repeat.js\" spec=\".trellis/spec/audit/dsh-parity.md\" sha256=\"7a23aebc416b\">\n---\npaths:\n  - \"src/audit/**\"\n---\n\n# Audit Fixture Rule\n\nAll files under `src/audit/` must retain the marker `AUDIT-SPEC-7F3A`.\n\n</spec-context>"
+        },
+        {
+          "type": "tool_result",
+          "callId": "audit-2",
+          "status": "completed",
+          "result": "<path>/tmp/dsh-trellis-full-usage-audit-1023/project/src/audit/r05-spec-repeat.js</path>\n<type>file</type>\n<content>\nUpdated file\n</content>"
+        }
+      ],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r06-spec-resume",
+      "scenario": "write",
+      "profile": "trellis-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/project",
+      "status": 0,
+      "sid": "session-fc2d23e6-3260-42cc-89bb-b0c67a68149c",
+      "tools": [
+        {
+          "type": "tool_result",
+          "callId": "audit-1",
+          "status": "completed",
+          "result": "<path>/tmp/dsh-trellis-full-usage-audit-1023/project/src/audit/r06-spec-resume.js</path>\n<type>file</type>\n<content>\nUpdated file\n</content>"
+        },
+        {
+          "type": "tool_result",
+          "callId": "audit-2",
+          "status": "completed",
+          "result": "<path>/tmp/dsh-trellis-full-usage-audit-1023/project/src/audit/r06-spec-resume.js</path>\n<type>file</type>\n<content>\nUpdated file\n</content>"
+        }
+      ],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r07-inline-guard",
+      "scenario": "guard",
+      "profile": "trellis-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/project",
+      "status": 0,
+      "sid": "session-91e193d8-279e-4058-b5ba-f8406dbf10d5",
+      "tools": [
+        {
+          "type": "tool_result",
+          "callId": "audit-1",
+          "status": "error",
+          "result": "Error: Trellis inline mode: the main session implements and checks directly, so trellis-agent-implement dispatch is refused.\n\nDo the work in this session. Leaving inline mode is the user's decision, not yours: only when the user explicitly asked for this delegation, ask them to switch `.trellis/config.yaml` to `dsh.dispatch_mode: auto` or to set `dsh.inline_allow_dispatch: true` themselves. Do not edit `.trellis/config.yaml` to get past this guard.\n\nCodex only documents inline mode and does not block dispatch; this plugin's guard is a prompt-level gate, not a security boundary."
+        }
+      ],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r08-invalid-wait",
+      "scenario": "invalid-wait",
+      "profile": "trellis-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/project",
+      "status": 0,
+      "sid": "session-cc789a2a-98e4-479c-9ba6-5faf227c119c",
+      "tools": [
+        {
+          "type": "tool_result",
+          "callId": "audit-1",
+          "status": "error",
+          "result": "Error: trellis_wait can only wait for a direct continuable subagent of this session: missing-audit-child"
+        }
+      ],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r09-bare-smoke",
+      "scenario": "smoke",
+      "profile": "bare-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/project",
+      "status": 0,
+      "sid": "session-f10e75a1-7d08-4745-805a-21490e42ee8c",
+      "tools": [],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r10-bare-write",
+      "scenario": "write",
+      "profile": "bare-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/project",
+      "status": 0,
+      "sid": "session-6f64d34f-22d4-4122-9b36-93e6f379abdf",
+      "tools": [
+        {
+          "type": "tool_result",
+          "callId": "audit-1",
+          "status": "completed",
+          "result": "<path>/tmp/dsh-trellis-full-usage-audit-1023/project/src/audit/r10-bare-write.js</path>\n<type>file</type>\n<content>\nUpdated file\n</content>"
+        },
+        {
+          "type": "tool_result",
+          "callId": "audit-2",
+          "status": "completed",
+          "result": "<path>/tmp/dsh-trellis-full-usage-audit-1023/project/src/audit/r10-bare-write.js</path>\n<type>file</type>\n<content>\nUpdated file\n</content>"
+        }
+      ],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r11-headless-text",
+      "scenario": "smoke",
+      "profile": "trellis-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/project",
+      "status": 0,
+      "sid": "session-7054fa0a-f553-4559-9797-47b803e0582e",
+      "tools": [],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r12-auto-child",
+      "scenario": "guard",
+      "profile": "trellis-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/auto-project-final",
+      "status": 0,
+      "sid": "session-09d3f074-7596-4f5c-a800-ce03eccdb6f4",
+      "tools": [
+        {
+          "type": "tool_result",
+          "callId": "audit-1",
+          "status": "completed",
+          "result": "started subagent d13611b0-eb39-4b4b-b4ff-b0e654b7c16b"
+        },
+        {
+          "type": "tool_result",
+          "callId": "audit-2",
+          "status": "completed",
+          "result": "subagent d13611b0-eb39-4b4b-b4ff-b0e654b7c16b completed; settlement notice delivery is unverified; inspect its report or transcript before passing a dependent gate"
+        }
+      ],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r13-auto-child-repeat",
+      "scenario": "guard",
+      "profile": "trellis-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/auto-project-final",
+      "status": 0,
+      "sid": "session-047a4cb7-d56b-4be2-b673-e97f52a6ec29",
+      "tools": [
+        {
+          "type": "tool_result",
+          "callId": "audit-1",
+          "status": "completed",
+          "result": "started subagent 69e00d2f-999c-4085-9468-696167ffaeeb"
+        },
+        {
+          "type": "tool_result",
+          "callId": "audit-2",
+          "status": "completed",
+          "result": "subagent 69e00d2f-999c-4085-9468-696167ffaeeb completed; settlement notice delivery is unverified; inspect its report or transcript before passing a dependent gate"
+        }
+      ],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r14-state-initial",
+      "scenario": "smoke",
+      "profile": "trellis-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/project",
+      "status": 0,
+      "sid": "session-fd21e4a0-ea20-46c8-882a-bcafe981ffb8",
+      "tools": [],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r15-state-planning",
+      "scenario": "smoke",
+      "profile": "trellis-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/project",
+      "status": 0,
+      "sid": "session-fd21e4a0-ea20-46c8-882a-bcafe981ffb8",
+      "tools": [],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r15-state-in_progress",
+      "scenario": "smoke",
+      "profile": "trellis-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/project",
+      "status": 0,
+      "sid": "session-fd21e4a0-ea20-46c8-882a-bcafe981ffb8",
+      "tools": [],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r15-state-completed",
+      "scenario": "smoke",
+      "profile": "trellis-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/project",
+      "status": 0,
+      "sid": "session-fd21e4a0-ea20-46c8-882a-bcafe981ffb8",
+      "tools": [],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r15-state-reviewing",
+      "scenario": "smoke",
+      "profile": "trellis-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/project",
+      "status": 0,
+      "sid": "session-fd21e4a0-ea20-46c8-882a-bcafe981ffb8",
+      "tools": [],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r16-state-error",
+      "scenario": "smoke",
+      "profile": "trellis-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/project",
+      "status": 0,
+      "sid": "session-fd21e4a0-ea20-46c8-882a-bcafe981ffb8",
+      "tools": [],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r17-state-stale",
+      "scenario": "smoke",
+      "profile": "trellis-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/project",
+      "status": 0,
+      "sid": "session-fd21e4a0-ea20-46c8-882a-bcafe981ffb8",
+      "tools": [],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r18-identity",
+      "scenario": "identity-start",
+      "profile": "trellis-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/project",
+      "status": 0,
+      "sid": "session-c8c94397-634a-4f11-9718-f2aa4bda4c6b",
+      "tools": [
+        {
+          "type": "tool_result",
+          "callId": "audit-1",
+          "status": "completed",
+          "result": "\u001b[0;32m✓ Current task set to: .trellis/tasks/00-bootstrap-guidelines\u001b[0m\nSource: session:dsh_session-c8c94397-634a-4f11-9718-f2aa4bda4c6b\n\n\u001b[0;34mThe hook will now inject context from this task's jsonl files.\u001b[0m\n[stderr]\n\u001b[1;33mNote: no checked-out branch (detached HEAD, or not a git repository); task branch not recorded.\u001b[0m\n"
+        },
+        {
+          "type": "tool_result",
+          "callId": "audit-2",
+          "status": "completed",
+          "result": "Current task: .trellis/tasks/00-bootstrap-guidelines\nSource: session:dsh_session-c8c94397-634a-4f11-9718-f2aa4bda4c6b\n"
+        }
+      ],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r20-read-spec",
+      "scenario": "read",
+      "profile": "trellis-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/project",
+      "status": 0,
+      "sid": "session-9aa9d470-a3b8-4f3f-a907-3b9af449182a",
+      "tools": [
+        {
+          "type": "tool_result",
+          "callId": "audit-1",
+          "status": "completed",
+          "result": "<path>/tmp/dsh-trellis-full-usage-audit-1023/project/src/audit/target.js</path>\n<type>file</type>\n<content>\n1: export const target = \"AUDIT-SPEC-7F3A\";\n\n(End of file - total 1 lines)\n</content>"
+        }
+      ],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r21-command-registry",
+      "scenario": "commands",
+      "profile": "trellis-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/project",
+      "status": 0,
+      "sid": "session-270b2394-9b85-414d-8f0d-1fdd873da3ce",
+      "tools": [],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "r19-no-project",
+      "scenario": "smoke",
+      "profile": "trellis-audit",
+      "cwd": "/tmp/dsh-trellis-full-usage-audit-1023/plain",
+      "status": 0,
+      "sid": "session-e1e9cefd-4c5c-464b-ac67-53a9ce16bd40",
+      "tools": [],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    }
+  ],
+  "supplement": [
+    {
+      "id": "x01-spec-seed",
+      "status": 0,
+      "sid": "session-f82bcf34-6fed-4206-bf82-4feb5851f954",
+      "tools": [
+        {
+          "type": "tool_result",
+          "callId": "audit-1",
+          "status": "error",
+          "result": "Error: Trellis injected governing specs. Review them, then retry this tool call.\n\n<spec-context file=\"src/audit/x01-spec-seed.js\" spec=\".trellis/spec/audit/dsh-parity.md\" sha256=\"7a23aebc416b\">\n---\npaths:\n  - \"src/audit/**\"\n---\n\n# Audit Fixture Rule\n\nAll files under `src/audit/` must retain the marker `AUDIT-SPEC-7F3A`.\n\n</spec-context>"
+        },
+        {
+          "type": "tool_result",
+          "callId": "audit-2",
+          "status": "completed",
+          "result": "<path>/tmp/dsh-trellis-full-usage-audit-1023/project/src/audit/x01-spec-seed.js</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+        }
+      ],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "x02-spec-changed",
+      "status": 0,
+      "sid": "session-f82bcf34-6fed-4206-bf82-4feb5851f954",
+      "tools": [
+        {
+          "type": "tool_result",
+          "callId": "audit-1",
+          "status": "error",
+          "result": "Error: Trellis injected governing specs. Review them, then retry this tool call.\n\n<spec-context file=\"src/audit/x02-spec-changed.js\" spec=\".trellis/spec/audit/dsh-parity.md\" sha256=\"0bf887f13bdf\">\n---\npaths:\n  - \"src/audit/**\"\n---\n\n# Audit Fixture Rule\n\nAll files under `src/audit/` must retain the marker `AUDIT-SPEC-7F3A`.\n\nSynthetic rule revision 2.\n\n</spec-context>"
+        },
+        {
+          "type": "tool_result",
+          "callId": "audit-2",
+          "status": "completed",
+          "result": "<path>/tmp/dsh-trellis-full-usage-audit-1023/project/src/audit/x02-spec-changed.js</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+        }
+      ],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "x03-corrupt-shard",
+      "status": 0,
+      "sid": "session-f82bcf34-6fed-4206-bf82-4feb5851f954",
+      "tools": [
+        {
+          "type": "tool_result",
+          "callId": "audit-1",
+          "status": "error",
+          "result": "Error: Trellis injected governing specs. Review them, then retry this tool call.\n\n<spec-context file=\"src/audit/x03-corrupt-shard.js\" spec=\".trellis/spec/audit/dsh-parity.md\" sha256=\"7a23aebc416b\">\n---\npaths:\n  - \"src/audit/**\"\n---\n\n# Audit Fixture Rule\n\nAll files under `src/audit/` must retain the marker `AUDIT-SPEC-7F3A`.\n\n</spec-context>"
+        },
+        {
+          "type": "tool_result",
+          "callId": "audit-2",
+          "status": "completed",
+          "result": "<path>/tmp/dsh-trellis-full-usage-audit-1023/project/src/audit/x03-corrupt-shard.js</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+        }
+      ],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "x04-ticket-aged",
+      "status": 0,
+      "sid": "session-f82bcf34-6fed-4206-bf82-4feb5851f954",
+      "tools": [
+        {
+          "type": "tool_result",
+          "callId": "audit-1",
+          "status": "completed",
+          "result": "<path>/tmp/dsh-trellis-full-usage-audit-1023/project/src/audit/x04-ticket-aged.js</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+        },
+        {
+          "type": "tool_result",
+          "callId": "audit-2",
+          "status": "completed",
+          "result": "<path>/tmp/dsh-trellis-full-usage-audit-1023/project/src/audit/x04-ticket-aged.js</path>\n<type>file</type>\n<content>\nUpdated file\n</content>"
+        }
+      ],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "x06-concurrent-b",
+      "status": 0,
+      "sid": "session-136ee8b9-6b28-4be1-94a0-fdb3001e9b5c",
+      "tools": [
+        {
+          "type": "tool_result",
+          "callId": "audit-1",
+          "status": "error",
+          "result": "Error: Trellis injected governing specs. Review them, then retry this tool call.\n\n<spec-context file=\"src/audit/x06-concurrent-b.js\" spec=\".trellis/spec/audit/dsh-parity.md\" sha256=\"7a23aebc416b\">\n---\npaths:\n  - \"src/audit/**\"\n---\n\n# Audit Fixture Rule\n\nAll files under `src/audit/` must retain the marker `AUDIT-SPEC-7F3A`.\n\n</spec-context>"
+        },
+        {
+          "type": "tool_result",
+          "callId": "audit-2",
+          "status": "completed",
+          "result": "<path>/tmp/dsh-trellis-full-usage-audit-1023/project/src/audit/x06-concurrent-b.js</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+        }
+      ],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "x05-concurrent-a",
+      "status": 0,
+      "sid": "session-5e53fd37-0e4d-426d-adb9-ea0a1c096b14",
+      "tools": [
+        {
+          "type": "tool_result",
+          "callId": "audit-1",
+          "status": "error",
+          "result": "Error: Trellis injected governing specs. Review them, then retry this tool call.\n\n<spec-context file=\"src/audit/x05-concurrent-a.js\" spec=\".trellis/spec/audit/dsh-parity.md\" sha256=\"7a23aebc416b\">\n---\npaths:\n  - \"src/audit/**\"\n---\n\n# Audit Fixture Rule\n\nAll files under `src/audit/` must retain the marker `AUDIT-SPEC-7F3A`.\n\n</spec-context>"
+        },
+        {
+          "type": "tool_result",
+          "callId": "audit-2",
+          "status": "completed",
+          "result": "<path>/tmp/dsh-trellis-full-usage-audit-1023/project/src/audit/x05-concurrent-a.js</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+        }
+      ],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "x07-native-compaction",
+      "status": 0,
+      "tools": []
+    },
+    {
+      "id": "x08-trellis-update",
+      "status": 0,
+      "tools": []
+    },
+    {
+      "id": "x09-after-update",
+      "status": 0,
+      "sid": "session-32799424-658d-4873-a69d-b923f9119248",
+      "tools": [],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "x10-command-registry",
+      "status": 0,
+      "sid": "session-9c785fc8-0348-4275-adb1-f913d7718d04",
+      "tools": [],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    },
+    {
+      "id": "x11-read-enabled",
+      "status": 0,
+      "sid": "session-576f7555-5321-4a34-af7d-5086e1a21246",
+      "tools": [
+        {
+          "type": "tool_result",
+          "callId": "audit-1",
+          "status": "completed",
+          "result": "<path>/tmp/dsh-trellis-full-usage-audit-1023/read-project/src/audit/target.js</path>\n<type>file</type>\n<content>\n1: export const target = \"AUDIT-SPEC-7F3A\";\n\n(End of file - total 1 lines)\n</content>"
+        }
+      ],
+      "final": {
+        "type": "final",
+        "text": "AUDIT_LOCAL_DONE"
+      }
+    }
+  ],
+  "assertions": {
+    "total": 29,
+    "pass": 29,
+    "fail": 0,
+    "checks": [
+      {
+        "name": "all 24 suite invocations have session and final events",
+        "status": "pass"
+      },
+      {
+        "name": "bootstrap exactly once on new root session",
+        "status": "pass"
+      },
+      {
+        "name": "resume does not duplicate bootstrap or breadcrumb",
+        "status": "pass"
+      },
+      {
+        "name": "skip remains silent through the tool continuation",
+        "status": "pass"
+      },
+      {
+        "name": "r04-spec denies once then writes",
+        "status": "pass"
+      },
+      {
+        "name": "r05-spec-repeat denies once then writes",
+        "status": "pass"
+      },
+      {
+        "name": "cross-process spec dedupe survives resume",
+        "status": "pass"
+      },
+      {
+        "name": "inline dispatch guard fires before child startup",
+        "status": "pass"
+      },
+      {
+        "name": "unknown wait id fails closed",
+        "status": "pass"
+      },
+      {
+        "name": "bare profile has no plugin messages or wait tool",
+        "status": "pass"
+      },
+      {
+        "name": "bare profile write has no spec denial",
+        "status": "pass"
+      },
+      {
+        "name": "headless slash text reaches model unchanged without command lifecycle",
+        "status": "pass"
+      },
+      {
+        "name": "r12-auto-child child receives role/spec/PRD and parent gets native notice",
+        "status": "pass"
+      },
+      {
+        "name": "r13-auto-child-repeat child receives role/spec/PRD and parent gets native notice",
+        "status": "pass"
+      },
+      {
+        "name": "r15-state-planning resolves correct state",
+        "status": "pass"
+      },
+      {
+        "name": "r15-state-in_progress resolves correct state",
+        "status": "pass"
+      },
+      {
+        "name": "r15-state-completed resolves correct state",
+        "status": "pass"
+      },
+      {
+        "name": "r15-state-reviewing resolves correct state",
+        "status": "pass"
+      },
+      {
+        "name": "r16-state-error resolves correct state",
+        "status": "pass"
+      },
+      {
+        "name": "r17-state-stale resolves correct state",
+        "status": "pass"
+      },
+      {
+        "name": "managed shell task start and current share native session id",
+        "status": "pass"
+      },
+      {
+        "name": "plain directory has no plugin messages",
+        "status": "pass"
+      },
+      {
+        "name": "explicit Read delivers spec only after read completes",
+        "status": "pass"
+      },
+      {
+        "name": "real command registry status/finish/doctor pass and arguments reject",
+        "status": "pass"
+      },
+      {
+        "name": "spec content change and corruption each re-teach",
+        "status": "pass"
+      },
+      {
+        "name": "aged unchanged spec refreshes with nonblocking ticket",
+        "status": "pass"
+      },
+      {
+        "name": "concurrent sessions teach independently and both finish writes",
+        "status": "pass"
+      },
+      {
+        "name": "native compaction commits and re-teaches full spec afterwards",
+        "status": "pass"
+      },
+      {
+        "name": "same-version Trellis update and subsequent boot pass",
+        "status": "pass"
+      }
+    ]
+  },
+  "codex_hooks": [
+    {
+      "name": "c01-bootstrap",
+      "status": 0,
+      "output": {
+        "hookSpecificOutput": {
+          "hookEventName": "UserPromptSubmit",
+          "additionalContext": "<trellis-bootstrap>\nIf you have not already loaded Trellis context this session, read the `trellis-start` skill once.\n</trellis-bootstrap>\n\n<codex-mode>auto: implement/check work defaults to Trellis sub-agents; native Codex context injection is preferred and child-side loading is the fallback. The main session still coordinates, clarifies, updates specs, commits, and finishes.</codex-mode>\n\n<workflow-state>\nStatus: no_task\nNo active task. First classify the current turn and ask for task-creation consent before creating any Trellis task.\nSimple conversation / small task: ask only whether this turn should create a Trellis task. If the user says no, skip Trellis for this session.\nComplex task: ask the user if you can create a Trellis task and enter the planning phase. If the user says no, explain, clarify scope, or suggest a smaller split.\n</workflow-state>"
+        }
+      }
+    },
+    {
+      "name": "c02-spec-first",
+      "status": 0,
+      "output": {
+        "hookSpecificOutput": {
+          "hookEventName": "PreToolUse",
+          "additionalContext": "<spec-context file=\"src/audit/target.js\" spec=\".trellis/spec/audit/dsh-parity.md\" sha256=\"7a23aebc416b\">\n---\npaths:\n  - \"src/audit/**\"\n---\n\n# Audit Fixture Rule\n\nAll files under `src/audit/` must retain the marker `AUDIT-SPEC-7F3A`.\n\n</spec-context>",
+          "permissionDecision": "deny",
+          "permissionDecisionReason": "Trellis injected governing specs. Review them, then retry this tool call."
+        }
+      }
+    },
+    {
+      "name": "c03-spec-repeat",
+      "status": 0,
+      "output": null
+    },
+    {
+      "name": "c04-skip",
+      "status": 0,
+      "output": null
+    }
+  ],
+  "compaction": {
+    "session": "audit-compact-1792752142095",
+    "before": {
+      "seq": 30,
+      "surface": 12
+    },
+    "compact": {
+      "compactionId": "9e08c63f-ba72-4810-aa7a-e623ccacee5f",
+      "startSeq": 30,
+      "summarySeq": 31,
+      "summary": [
+        {
+          "type": "text",
+          "text": "AUDIT_LOCAL_DONE"
+        }
+      ],
+      "shadowedRange": {
+        "start": 8,
+        "end": 24
+      },
+      "shadowedSeqs": [
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        17,
+        19,
+        22,
+        24
+      ],
+      "shadowedTokenCount": 12318,
+      "endSeq": 33
+    },
+    "after": {
+      "seq": 58,
+      "surface": 14
+    }
+  },
+  "test_outcomes": {
+    "source_pnpm_test": {
+      "tests": 350,
+      "pass": 346,
+      "fail": 0,
+      "skip": 4
+    },
+    "original_exact_host_compat": {
+      "tests": 350,
+      "pass": 348,
+      "fail": 2,
+      "skip": 0
+    },
+    "tmp_diagnostic_adjusted_exact_host": {
+      "tests": 350,
+      "pass": 350,
+      "fail": 0,
+      "skip": 0
+    },
+    "repo_fix_applied": false
+  },
+  "upstream": {
+    "head": "be9e19b269c25cb2787489eb81062bf96619442c",
+    "initial_dirty": false,
+    "final_diff": ".gitignore adds .bce-tool/; suspected retrieval side effect, not fully attributed; preserved"
+  },
+  "limits": [
+    "Web UI blocked by authentication; not bypassed",
+    "Codex hooks directly invoked, no full Codex model session",
+    "No real LLM compliance test",
+    "No cross-version Trellis upgrade, Windows, or clear test"
+  ]
+}

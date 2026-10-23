@@ -1,0 +1,42 @@
+✖ a real child whose role only the dispatch label names still receives the push (89.135598ms)
+✖ a topical dispatch label stays generic in a real child (24.274849ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 0
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 281.052431
+
+✖ failing tests:
+
+test at test/native-subagent-push.test.js:60:1
+✖ a real child whose role only the dispatch label names still receives the push (89.135598ms)
+  AssertionError [ERR_ASSERTION]: the child produced no model request
+      at requestText (file:///tmp/dsh-trellis-review-controls-XFm61j/missing-source/test/native-subagent-push.test.js:31:10)
+      at TestContext.<anonymous> (file:///tmp/dsh-trellis-review-controls-XFm61j/missing-source/test/native-subagent-push.test.js:89:16)
+      at async Test.run (node:internal/test_runner/test:1404:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test/native-subagent-push.test.js:98:1
+✖ a topical dispatch label stays generic in a real child (24.274849ms)
+  AssertionError [ERR_ASSERTION]: the child produced no model request
+      at requestText (file:///tmp/dsh-trellis-review-controls-XFm61j/missing-source/test/native-subagent-push.test.js:31:10)
+      at TestContext.<anonymous> (file:///tmp/dsh-trellis-review-controls-XFm61j/missing-source/test/native-subagent-push.test.js:125:16)
+      at async Test.run (node:internal/test_runner/test:1404:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

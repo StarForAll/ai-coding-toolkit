@@ -234,6 +234,10 @@ When reviewing DSH behavior in this repository, verify:
   task directories; that output is still model-composed, not a command result.
   Do not accept it as evidence that the command surface works, and do not
   treat a model's "plugin not installed" claim as installation state
+- `~/.dsh/profiles/headless` is a local test artifact scheduled for deletion,
+  not a Trellis runtime. Its missing `dsh-trellis` install is not a defect or a
+  deployment gap, and must not be re-reported as an F2-style finding. Trellis
+  in this environment runs through the `web` profile.
 - upstream Trellis findings (identity precedence, template/DSH.md staleness) are
   recorded as read-only observations only; never as actionable issues or
   upstream patches

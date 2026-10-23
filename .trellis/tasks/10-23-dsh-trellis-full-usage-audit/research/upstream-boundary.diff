@@ -1,0 +1,8 @@
+diff --git a/.gitignore b/.gitignore
+--- a/.gitignore
++++ b/.gitignore
+@@ -191,3 +191,4 @@ tmp1/
+ .playwright-mcp
+ .gitnexus
+ .codegraph/
++.bce-tool/

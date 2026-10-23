@@ -1,0 +1,66 @@
+✔ a real child whose role only the dispatch label names still receives the push (86.166135ms)
+✖ a topical dispatch label stays generic in a real child (21.001745ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 1
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 273.709714
+
+✖ failing tests:
+
+test at test/native-subagent-push.test.js:99:1
+✖ a topical dispatch label stays generic in a real child (21.001745ms)
+  AssertionError [ERR_ASSERTION]: The input was expected to not match the regular expression /Trellis Native Implement Subagent/. Input:
+
+  'You are an AI agent powered by DeepSeek Harness.\n' +
+    'Active task: .trellis/tasks/demo\n' +
+    'Summarise the change.\n' +
+    'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n' +
+    '\n' +
+    'Current working directory: "/tmp/dsh-trellis-push-PLk2lk".\n' +
+    '<!-- trellis-hook-injected -->\n' +
+    '# Trellis Native Implement Subagent\n' +
+    '\n' +
+    'You are the dispatched `trellis-implement` role for this task. Perform that role\n' +
+    'directly; do not follow main-session dispatch or wait instructions, and do not\n' +
+    'spawn another Trellis subagent.\n' +
+    '\n' +
+    'Active task: .trellis/tasks/demo\n' +
+    '\n' +
+    '## Role Instructions\n' +
+    '\n' +
+    'The task context was prepared by dsh-trellis before this message: do not run\n' +
+    '`task.py current`, do not ask the user for a task path, and do not re-read task\n' +
+    'artifacts to discover the task — they are included below.\n' +
+    '\n' +
+    'The complete `trellis-agent-implement` role skill is included immediately below. Do not load `.dsh/skills/trellis-agent-implement/SKILL.md` again, and ignore any "load the task context yourself" step inside it — this message already carries the task context.\n' +
+    '\n' +
+    '# Implement Agent\n' +
+    '\n' +
+    'Do the role.\n' +
+    '\n' +
+    'Apply the role instructions as written, and still read any additional specs\n' +
+    'they name.\n' +
+    '\n' +
+    '## Curated Context\n' +
+    '\n' +
+    '=== .trellis/spec/rules.md ===\n' +
+    'Spec rules.\n' +
+    '\n' +
+    '\n' +
+    '=== .trellis/tasks/demo/prd.md (Requirements) ===\n' +
+    'The requirement.\n'
+
+      at TestContext.<anonymous> (file:///tmp/dsh-trellis-review-controls-XFm61j/generic-label-became-role/test/native-subagent-push.test.js:127:10)
+      at async Test.run (node:internal/test_runner/test:1404:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'You are an AI agent powered by DeepSeek Harness.\nActive task: .trellis/tasks/demo\nSummarise the change.\nCurrent runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: "/tmp/dsh-trellis-push-PLk2lk".\n<!-- trellis-hook-injected -->\n# Trellis Native Implement Subagent\n\nYou are the dispatched `trellis-implement` role for this task. Perform that role\ndirectly; do not follow main-session dispatch or wait instructions, and do not\nspawn another Trellis subagent.\n\nActive task: .trellis/tasks/demo\n\n## Role Instructions\n\nThe task context was prepared by dsh-trellis before this message: do not run\n`task.py current`, do not ask the user for a task path, and do not re-read task\nartifacts to discover the task — they are included below.\n\nThe complete `trellis-agent-implement` role skill is included immediately below. Do not load `.dsh/skills/trellis-agent-implement/SKILL.md` again, and ignore any "load the task context yourself" step inside it — this message already carries the task context.\n\n# Implement Agent\n\nDo the role.\n\nApply the role instructions as written, and still read any additional specs\nthey name.\n\n## Curated Context\n\n=== .trellis/spec/rules.md ===\nSpec rules.\n\n\n=== .trellis/tasks/demo/prd.md (Requirements) ===\nThe requirement.\n',
+    expected: /Trellis Native Implement Subagent/,
+    operator: 'doesNotMatch',
+    diff: 'simple'
+  }

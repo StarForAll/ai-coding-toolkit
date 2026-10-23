@@ -1,0 +1,15 @@
+✔ resolveTrellisState: command refs in a state body are DSH-native (0.422518ms)
+✔ resolveTrellisState: a plain Git repository without .trellis stays silent (0.160848ms)
+✔ legacy directory fallback and late service attachment are resolved per invocation (1.197373ms)
+✔ agent-owned directory service and cancellation take priority over plugin context (0.693464ms)
+✔ directory service failures and invalid responses never fall back to the header (0.51172ms)
+✔ breadcrumbs and both commands follow A -> B -> A without changing native identity (19.909339ms)
+✔ commands expose directory validation failure without launching Python or git (0.316904ms)
+ℹ tests 350
+ℹ suites 0
+ℹ pass 350
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 710.01512

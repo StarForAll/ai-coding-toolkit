@@ -1,0 +1,34 @@
+✖ a real child whose role only the dispatch label names still receives the push (83.927487ms)
+✔ a topical dispatch label stays generic in a real child (18.388678ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 1
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 265.034321
+
+✖ failing tests:
+
+test at test/native-subagent-push.test.js:61:1
+✖ a real child whose role only the dispatch label names still receives the push (83.927487ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /# Trellis Native Implement Subagent/. Input:
+
+  'You are an AI agent powered by DeepSeek Harness.\n' +
+    'Active task: .trellis/tasks/demo\n' +
+    'Implement the task.\n' +
+    'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n' +
+    '\n' +
+    'Current working directory: "/tmp/dsh-trellis-push-cPOU9o".'
+
+      at TestContext.<anonymous> (file:///tmp/dsh-trellis-review-controls-XFm61j/missing-push/test/native-subagent-push.test.js:91:10)
+      at async Test.run (node:internal/test_runner/test:1404:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'You are an AI agent powered by DeepSeek Harness.\nActive task: .trellis/tasks/demo\nImplement the task.\nCurrent runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: "/tmp/dsh-trellis-push-cPOU9o".',
+    expected: /# Trellis Native Implement Subagent/,
+    operator: 'match',
+    diff: 'simple'
+  }
