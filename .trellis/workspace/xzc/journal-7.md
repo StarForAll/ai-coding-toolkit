@@ -1699,3 +1699,41 @@ Verify installed dsh-trellis 0.1.6 in an isolated /tmp project with ~30 real DSH
 ### Next Steps
 
 - F2 如 headless 会跑 Trellis 则安装插件；F1b/F3b 可选代码缓解，待用户决定
+
+
+## Session 357: dsh-trellis 全面对等性审计与修复复核完结
+<!-- trellis-session: v=2 fp=aa4e5f20851408dd -->
+
+**Date**: 2026-10-23
+**Task**: dsh-trellis 全面对等性审计与修复复核完结
+**Branch**: `main`
+
+### Summary
+
+完成唯一任务的实际 DSH/Trellis 对照审计及外部修复独立复核；F1 已修复，F2 按用途关闭，M1 接受现状。用户授权本地提交并完结，不推送，保留其他文件。
+
+### Main Changes
+
+- 已提交兼容测试夹具修复、headless 测试目录用途说明及完整任务证据。
+- 任务已归档至 .trellis/tasks/archive/2026-10/10-23-dsh-trellis-full-usage-audit；运行时代码和安装态未变。
+- 保留 Web UI、完整 Codex CLI 和真实模型行为的证据限制，以及上游 .gitignore 既有边界事件；未将上游作为修复对象。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3c9282f` | test(dsh-trellis): fix native message fixtures and record audit |
+
+### Testing
+
+- [OK] 原审计：24 次主批次调用及补充实验，29 项原始事件断言通过。
+- [OK] 修复后独立复跑 pnpm test：346 pass / 4 skip / 0 fail；test:compat 0.2.1-rc.2：350 pass / 0 skip / 0 fail。
+- [OK] 三组 /tmp 故障对照均按预期检出；源码与 web 安装态 lib 无差异，暂存差异检查通过。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 本任务无待执行修复；其他两份未跟踪文档保留原样，未推送。
