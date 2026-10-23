@@ -1640,3 +1640,25 @@ Verify dsh-trellis against Codex/Trellis mechanisms in a temp project; fix role 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 355: dsh-trellis 0.1.6 installed verification and 0.1.7 docs round
+<!-- trellis-session: v=2 fp=6e094570743bf201 -->
+
+**Date**: 2026-10-23
+**Task**: dsh-trellis 0.1.6 installed verification and 0.1.7 docs round
+**Branch**: `main`
+
+### Summary
+
+Verify installed dsh-trellis 0.1.6 in an isolated /tmp project with ~30 real DSH sessions (S1), installed-copy module loads (S2), source comparison (S3), and 350-test unit regression (S4): main parity chain green, C1/C2/C3/C6/C7 fixes confirmed, no P0-P2 defects; F1 (headless /trellis-* routing) and F2 (stale dsh-mode banner after mid-session switches) documented in README/repo spec/validation-0.1.7-local.md with 0.1.7 docs round (user-reverted a follow-up 0.1.8 attempt); F3 headless profile left bare by decision.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `72eba47` | docs(dsh-trellis): verify installed 0.1.6 and document F1/F2 boundaries as 0.1.7 |
+
+### Status
+
+[OK] **Completed**
