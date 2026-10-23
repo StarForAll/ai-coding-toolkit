@@ -20,12 +20,12 @@
 > 当前稳定版本为 **v1.1.1**。支持全局文件、项目工作区配置、Web 控制台实时预览与一键同步 OpenAI Codex 规则。
 
 > [!IMPORTANT]
-> **本目录是 ai-coding-toolkit 内的本地副本**：上游为
-> [new-Beginner/dsh-default-prompt](https://github.com/new-Beginner/dsh-default-prompt)，本副本带有
-> dsh-purge 联动开关、文本按钮、自定义文件路径等本地改动，不发布 npm。安装态用
-> `file:` / 仓库 git 子目录引用（见[方式四](#install-local-repo)）；`dsh plugin update`
-> 或 `pnpm install` 覆盖定制改动后，执行
-> [`scripts/reapply-local.sh`](scripts/reapply-local.sh) 从本目录还原。
+> **本目录是 ai-coding-toolkit 仓库里的插件源，安装态直接引用远程 git 子目录**：上游为
+> [new-Beginner/dsh-default-prompt](https://github.com/new-Beginner/dsh-default-prompt)，本目录带有
+> dsh-purge 联动开关、文本按钮、自定义文件路径等本地改动，不发布 npm。安装用
+> `ssh://git@forgejo.xzc.com/xzc/ai-coding-toolkit.git#path:dsh-plugins/dsh-default-prompt`（见[方式四](#install-local-repo)），
+> 改动需先 commit + push，再执行 `dsh plugin update` 才会进安装态；运行中的 DSH 加载的是已安装副本，
+> 与本机工作区改动无关。
 
 <a id="why"></a>
 
@@ -97,18 +97,24 @@ dsh plugin --profile web add ./dsh-default-prompt-1.1.1.tgz
 npx @dsh-1024store/cli add new-Beginner/dsh-default-prompt --profile web
 ```
 
-### 方式四：从本仓库本地副本安装
+### 方式四：从本仓库 git 子目录安装
 
 <a id="install-local-repo"></a>
 
-本目录既是本地改动来源，也是唯一的恢复源：
+正常交付走 forgejo 的 git 子目录引用，安装内容从远程拉取，与本机工作区无关：
 
 ```bash
-# 本地开发引用：直接指向本仓库目录
-dsh plugin --profile web add file:/home/xzc/projects/personal/ai-coding-toolkit/dsh-plugins/dsh-default-prompt
-
-# 推送到 forgejo 后，可像 dsh-trellis 一样改用仓库 git 子目录引用
 dsh plugin --profile web add 'ssh://git@forgejo.xzc.com/xzc/ai-coding-toolkit.git#path:dsh-plugins/dsh-default-prompt'
+
+# 改完插件源码后：提交并推送，再让安装态跟上
+git add dsh-plugins/dsh-default-prompt && git commit && git push
+dsh plugin --profile web update dsh-default-prompt
+```
+
+临时调试可以改用 `file:` 直指工作区，改动即时可见，但安装态会变成手工拷贝、脱离远程版本，调试完记得换回 git 引用：
+
+```bash
+dsh plugin --profile web add file:/home/xzc/projects/personal/ai-coding-toolkit/dsh-plugins/dsh-default-prompt
 ```
 
 > [!IMPORTANT]
