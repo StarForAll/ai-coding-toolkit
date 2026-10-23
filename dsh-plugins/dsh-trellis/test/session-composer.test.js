@@ -157,20 +157,18 @@ function messageText(message) {
   return message.content.map((part) => part.text ?? "").join("");
 }
 
-test("composer: bootstraps dsh.dispatch_mode before the first breadcrumb", async () => {
-  const fs = fsWithConfig("session_auto_commit: false\n");
+test("composer: defaults to inline without writing the project config", async () => {
+  const source = "session_auto_commit: false\n";
+  const fs = fsWithConfig(source);
   const composer = composerFor(fs);
   const composed = await composer.compose(agent, prompt("hello"));
   const crumb = composed.find((message) => messageText(message).includes("Trellis workflow state"));
   assert.ok(crumb, "breadcrumb expected");
   assert.match(messageText(crumb), /<dsh-mode>/);
-  assert.match(
-    await fs.readFile(proj(".trellis/config.yaml")),
-    /\ndsh:\n  dispatch_mode: inline\n$/,
-  );
+  assert.equal(await fs.readFile(proj(".trellis/config.yaml")), source);
 });
 
-test("composer: an explicit dispatch_mode is not overwritten", async () => {
+test("composer: an explicit auto mode is respected and not rewritten", async () => {
   const source = "dsh:\n  dispatch_mode: auto\n";
   const fs = fsWithConfig(source);
   const composed = await composerFor(fs).compose(agent, prompt("hello"));
@@ -180,11 +178,12 @@ test("composer: an explicit dispatch_mode is not overwritten", async () => {
   assert.equal(await fs.readFile(proj(".trellis/config.yaml")), source);
 });
 
-test("composer: a zero breadcrumb budget still bootstraps the project config", async () => {
-  const fs = fsWithConfig("a: 1\n");
+test("composer: a zero breadcrumb budget is render-only and never writes config", async () => {
+  const source = "a: 1\n";
+  const fs = fsWithConfig(source);
   const composed = await composerFor(fs, { maxBytes: 0 }).compose(agent, prompt("hello"));
   assert.deepEqual(composed, []);
-  assert.match(await fs.readFile(proj(".trellis/config.yaml")), /\ndsh:\n  dispatch_mode: inline\n$/);
+  assert.equal(await fs.readFile(proj(".trellis/config.yaml")), source);
 });
 
 test("composer: a Trellis project with a broken workflow still gets fallback + bootstrap", async () => {

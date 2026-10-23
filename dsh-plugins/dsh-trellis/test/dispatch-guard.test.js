@@ -46,8 +46,13 @@ const exec = (root, { callId = "call-1", name = "subagent", text = "" } = {}) =>
 
 test("parseDispatchRequest reads the role and the Active task prelude", () => {
   assert.deepEqual(
-    parseDispatchRequest("Load `.dsh/skills/trellis-agent-check/SKILL.md`.\nActive task: .trellis/tasks/x"),
+    parseDispatchRequest("Active task: .trellis/tasks/x\nRole: trellis-agent-check"),
     { role: "check", taskPath: ".trellis/tasks/x" },
+  );
+  // A path/prose mention is not a role declaration.
+  assert.deepEqual(
+    parseDispatchRequest("Read `.dsh/skills/trellis-agent-check/SKILL.md` and report its length."),
+    { role: null, taskPath: null },
   );
   assert.deepEqual(parseDispatchRequest("trellis-agent-research: find it"), {
     role: "research",
@@ -99,12 +104,13 @@ test("a stale parent pointer is not a readable task", async (t) => {
 
 test("an implement dispatch without evidence is denied with an actionable reason", async (t) => {
   const { root } = await project(t);
+  await writeFile(join(root, ".trellis", "config.yaml"), "dsh:\n  dispatch_mode: auto\n");
   const { ctx, listeners } = harness();
   const dispose = registerDispatchGuard(ctx, { projectRootMarkers: [".trellis"] });
   t.after(dispose);
 
   const decision = await listeners.get("tools/pre-execute")(
-    exec(root, { text: "Active: no task here. Load trellis-agent-implement." }),
+    exec(root, { text: "Role: trellis-agent-implement\nActive: no task here." }),
     async () => ({ kind: "allow" }),
   );
   assert.equal(decision.kind, "deny");
@@ -114,6 +120,7 @@ test("an implement dispatch without evidence is denied with an actionable reason
 
 test("a readable pointer or prelude allows the dispatch", async (t) => {
   const { root, task } = await project(t);
+  await writeFile(join(root, ".trellis", "config.yaml"), "dsh:\n  dispatch_mode: auto\n");
   const { ctx, listeners } = harness();
   t.after(registerDispatchGuard(ctx, { projectRootMarkers: [".trellis"] }));
   const pre = listeners.get("tools/pre-execute");
@@ -125,7 +132,7 @@ test("a readable pointer or prelude allows the dispatch", async (t) => {
     { kind: "allow" },
   );
 
-  const other = { ...exec(root, { callId: "c2", text: `Active task: ${task}\ntrellis-agent-check` }) };
+  const other = { ...exec(root, { callId: "c2", text: `Active task: ${task}\nRole: trellis-agent-check` }) };
   other.agent = { session: { header: { id: "unbound", cwd: root } } };
   assert.deepEqual(
     await pre(other, async () => ({ kind: "allow" })),
@@ -177,14 +184,14 @@ test("inline mode refuses implement/check dispatch even with a readable task", a
   const pre = listeners.get("tools/pre-execute");
 
   const implement = await pre(
-    exec(root, { text: `Active task: ${task}\ntrellis-agent-implement` }),
+    exec(root, { text: `Active task: ${task}\nRole: trellis-agent-implement` }),
     async () => ({ kind: "allow" }),
   );
   assert.equal(implement.kind, "deny");
   assert.equal(implement.reason, inlineDenyReason("implement"));
 
   const check = await pre(
-    exec(root, { callId: "c2", text: `Active task: ${task}\ntrellis-agent-check` }),
+    exec(root, { callId: "c2", text: `Active task: ${task}\nRole: trellis-agent-check` }),
     async () => ({ kind: "allow" }),
   );
   assert.equal(check.kind, "deny");
@@ -213,7 +220,7 @@ test("dsh.inline_allow_dispatch is the explicit escape hatch", async (t) => {
   t.after(registerDispatchGuard(ctx, { projectRootMarkers: [".trellis"] }));
   const pre = listeners.get("tools/pre-execute");
   assert.deepEqual(
-    await pre(exec(root, { text: `Active task: ${task}\ntrellis-agent-implement` }), async () => ({ kind: "allow" })),
+    await pre(exec(root, { text: `Active task: ${task}\nRole: trellis-agent-implement` }), async () => ({ kind: "allow" })),
     { kind: "allow" },
   );
 });
@@ -225,7 +232,7 @@ test("auto mode keeps dispatching allowed for a readable task", async (t) => {
   t.after(registerDispatchGuard(ctx, { projectRootMarkers: [".trellis"] }));
   const pre = listeners.get("tools/pre-execute");
   assert.deepEqual(
-    await pre(exec(root, { text: `Active task: ${task}\ntrellis-agent-implement` }), async () => ({ kind: "allow" })),
+    await pre(exec(root, { text: `Active task: ${task}\nRole: trellis-agent-implement` }), async () => ({ kind: "allow" })),
     { kind: "allow" },
   );
 });
@@ -284,6 +291,25 @@ test("a topical description is allowed just like a generic dispatch", async (t) 
   // No task and no role: this is a generic dispatch, so nothing is refused.
   assert.deepEqual(await pre(call, async () => ({ kind: "allow" })), { kind: "allow" });
 
+  await writeFile(join(root, ".trellis", "config.yaml"), "dsh:\n  dispatch_mode: inline\n");
+  assert.deepEqual(await pre(call, async () => ({ kind: "allow" })), { kind: "allow" });
+});
+
+test("a generic prompt that only mentions a role path is never refused", async (t) => {
+  const { root } = await project(t);
+  const { ctx, listeners } = harness();
+  t.after(registerDispatchGuard(ctx, { projectRootMarkers: [".trellis"] }));
+  const pre = listeners.get("tools/pre-execute");
+  const call = {
+    callId: "path-1",
+    name: "subagent",
+    arguments: {
+      prompt: "Read `.dsh/skills/trellis-agent-check/SKILL.md` and report its length.",
+      description: "docs reader",
+    },
+    agent: { session: { header: { id: "parent-1", cwd: root } } },
+  };
+  assert.deepEqual(await pre(call, async () => ({ kind: "allow" })), { kind: "allow" });
   await writeFile(join(root, ".trellis", "config.yaml"), "dsh:\n  dispatch_mode: inline\n");
   assert.deepEqual(await pre(call, async () => ({ kind: "allow" })), { kind: "allow" });
 });

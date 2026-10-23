@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { roleFromLabel, stripPullOnlyContext } from "../lib/role-contract.js";
+import { roleFromLabel, roleFromPrompt, stripPullOnlyContext } from "../lib/role-contract.js";
 
 test("roleFromLabel accepts only a whole role label", () => {
   assert.equal(roleFromLabel("trellis-agent-implement"), "implement");
@@ -33,6 +33,37 @@ test("roleFromLabel keeps topical mentions generic", () => {
     "trellis-agent-researcher",
   ]) {
     assert.equal(roleFromLabel(label), null, label);
+  }
+});
+
+test("roleFromPrompt requires a declaration, not a path or prose mention", () => {
+  assert.equal(roleFromPrompt("trellis-agent-implement"), "implement");
+  assert.equal(roleFromPrompt("trellis-implement: implement the plan"), "implement");
+  assert.equal(roleFromPrompt("trellis-check (round 3)"), "check");
+  assert.equal(roleFromPrompt("Active task: .trellis/tasks/x\nRole: trellis-agent-check"), "check");
+  assert.equal(roleFromPrompt("Agent：trellis-research"), "research");
+  assert.equal(
+    roleFromPrompt("You are the `trellis-implement` sub-agent.\nActive task: .trellis/tasks/x"),
+    "implement",
+  );
+  assert.equal(
+    roleFromPrompt("You are already the trellis-check role.\nActive task: .trellis/tasks/x"),
+    "check",
+  );
+  assert.equal(
+    roleFromPrompt("You are the dispatched `trellis-implement` role.\nActive task: .trellis/tasks/x"),
+    "implement",
+  );
+  for (const text of [
+    "Read .dsh/skills/trellis-agent-implement/SKILL.md and report its length.",
+    "Load `.dsh/skills/trellis-agent-check/SKILL.md` once.",
+    "Run the trellis-check skill after editing.",
+    "About trellis-agent-research plugin docs.",
+    "trellis-agent-implement plugin docs",
+    "",
+    null,
+  ]) {
+    assert.equal(roleFromPrompt(text), null, String(text));
   }
 });
 

@@ -24,6 +24,7 @@
  *
  * @module dsh-trellis/spec-policy
  */
+import { isAbsolute } from "node:path";
 import { createUserMessage } from "@deepseek-ai/dsh-llm";
 import { nodeFs } from "./node-fs.js";
 import { resolveTrellisProject } from "./project.js";
@@ -33,7 +34,13 @@ import {
   RETRY_NOTICE,
 } from "./spec-inject.js";
 import { matchSpecsForFile, readSpecBody } from "./spec-index.js";
+import {
+  compareSpecificity,
+  normalizeRepoRelative,
+  normalizeRepoRelativeFrom,
+} from "./spec-glob.js";
 import { findProjectRoot } from "./workflow.js";
+import { resolveWorkingDirectory } from "./working-directory.js";
 import {
   clearSpecState,
   loadSpecState,
@@ -49,6 +56,37 @@ export const SOURCE_FORM = "spec-context";
 
 /** A read-only tool may never be denied; it only receives post-execute context. */
 const MUTATING_TOOLS = new Set(["edit", "write"]);
+
+/**
+ * Resolve a tool's `file_path` into every plausible repo-relative path.
+ *
+ * DSH resolves a relative `file_path` against the agent's current working
+ * directory, which may be a subdirectory of the Trellis project. The same
+ * argument may also be written repo-relative by a model that has the project
+ * root as cwd. Both interpretations are candidates; callers union their spec
+ * matches (over-injection is the safe side of the asymmetry).
+ *
+ * @param {string} root - absolute project root.
+ * @param {string} cwd - absolute agent working directory.
+ * @param {string} filePath - raw tool argument.
+ * @returns {string[]} deduplicated repo-relative candidates, cwd-relative first.
+ */
+export function candidateRepoPaths(root, cwd, filePath) {
+  const candidates = [];
+  const add = (value) => {
+    if (typeof value === "string" && value !== "" && !candidates.includes(value)) {
+      candidates.push(value);
+    }
+  };
+  if (typeof filePath !== "string" || filePath.trim() === "") return candidates;
+  if (isAbsolute(filePath)) {
+    add(normalizeRepoRelative(root, filePath));
+    return candidates;
+  }
+  add(normalizeRepoRelativeFrom(root, cwd, filePath));
+  add(normalizeRepoRelative(root, filePath));
+  return candidates;
+}
 
 /**
  * Build the message attached after a ticket-only tool call.
@@ -75,7 +113,9 @@ export function specContextMessage(payload, specs) {
  *
  * @param {object} options
  * @param {string} options.root
- * @param {string} options.filePath
+ * @param {string[]} options.filePaths - repo-relative candidates (cwd first).
+ *   `filePath` is still accepted for callers/tests that have one canonical path.
+ * @param {string} [options.filePath]
  * @param {string} options.toolName
  * @param {string} options.sessionKey - empty means stateless (ticket-only).
  * @param {Map<string, Record<string, unknown>>} options.store - per-session records.
@@ -88,6 +128,7 @@ export function specContextMessage(payload, specs) {
 export async function planSpecInjection({
   root,
   filePath,
+  filePaths,
   toolName,
   sessionKey,
   store,
@@ -98,7 +139,30 @@ export async function planSpecInjection({
   if (!settings.enabled) return { kind: "none" };
   if (!settings.tools.includes(normalizeToolName(toolName))) return { kind: "none" };
 
-  const matches = await matchSpecsForFile(root, filePath, indexCache, nowSeconds * 1000);
+  const candidatePaths = Array.isArray(filePaths)
+    ? filePaths.filter((value) => typeof value === "string" && value !== "")
+    : typeof filePath === "string" && filePath !== ""
+      ? [filePath]
+      : [];
+  if (candidatePaths.length === 0) return { kind: "none" };
+
+  // Union matches from every plausible path interpretation, keeping the most
+  // specific match when two candidates reach the same spec.
+  const matchesBySpec = new Map();
+  for (const path of candidatePaths) {
+    const matches = await matchSpecsForFile(root, path, indexCache, nowSeconds * 1000);
+    for (const match of matches) {
+      const previous = matchesBySpec.get(match.specRel);
+      if (previous === undefined ||
+          compareSpecificity(match.rank, previous.rank) > 0) {
+        matchesBySpec.set(match.specRel, match);
+      }
+    }
+  }
+  const matches = [...matchesBySpec.values()].sort((left, right) => {
+    const byRank = compareSpecificity(left.rank, right.rank);
+    return byRank !== 0 ? byRank : left.specRel < right.specRel ? -1 : 1;
+  });
   if (matches.length === 0) return { kind: "none" };
 
   const stateless = sessionKey === "";
@@ -246,11 +310,21 @@ export function registerSpecPolicy(ctx, resolved) {
       if (!settings.enabled) return decision;
       const toolName = normalizeToolName(exec.name);
       if (!settings.tools.includes(toolName)) return decision;
+      let cwd = project.root;
+      try {
+        cwd = await resolveWorkingDirectory(ctx, exec.agent, exec.signal);
+      } catch (error) {
+        // A broken working-directory service must not silently skip spec
+        // injection; fall back to the project root (the old interpretation).
+        warn(error);
+      }
+      const filePaths = candidateRepoPaths(project.root, cwd, filePath);
+      if (filePaths.length === 0) return decision;
       const sessionKey = sessionKeyOf(exec.agent);
       const store = await storeFor(project.root, sessionKey);
       const plan = await planSpecInjection({
         root: project.root,
-        filePath,
+        filePaths,
         toolName,
         sessionKey,
         store,

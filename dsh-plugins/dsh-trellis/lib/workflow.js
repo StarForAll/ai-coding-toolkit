@@ -37,12 +37,15 @@ export function sanitizeContextKey(value) {
 
 /**
  * Mode banner appended whenever the project selects `dsh.dispatch_mode: inline`,
- * independent of which workflow-state block was chosen. The `*-inline` blocks
- * come from Trellis and are marked Codex-only; their phase contract is
- * platform-neutral, but they do not mention DSH-specific mechanics. This banner
- * restores exactly those mechanics for inline mode without forking the workflow
- * file, and it is the only signal that survives when a custom workflow variant
- * has no `*-inline` block.
+ * independent of which workflow-state block was chosen. `inline` is the default
+ * when the key is absent (the plugin never writes the project config). The
+ * `*-inline` blocks come from Trellis and are marked Codex-only; their phase
+ * contract is platform-neutral, but they do not mention DSH-specific mechanics.
+ * This banner restores exactly those mechanics for inline mode without forking
+ * the workflow file, and it is the only signal that survives when a custom
+ * workflow variant has no `*-inline` block. It also overrides the Trellis phase
+ * detail that still says "spawn the implement sub-agent", which DSH inline mode
+ * cannot follow.
  */
 export const DSH_INLINE_NOTE =
   "<dsh-mode>\n" +
@@ -51,9 +54,13 @@ export const DSH_INLINE_NOTE =
   "tool is not needed in this mode. Verify with the trellis-check skill, update " +
   "specs with trellis-update-spec, then commit (Phase 3.4) and run " +
   "/trellis-finish-work.\n" +
+  "This banner overrides any workflow phase detail, skill text, or breadcrumb " +
+  "that tells the main session to dispatch implement/check: while this banner is " +
+  "present, do not follow those dispatch instructions.\n" +
   "Inline task start: when implement.jsonl / check.jsonl are intentionally empty, " +
   "run `python3 ./.trellis/scripts/task.py start <task> --allow-empty-context`; " +
-  "do not curate jsonl in inline mode.\n" +
+  "the presence of .dsh still triggers Trellis's jsonl gate, and inline mode does " +
+  "not curate jsonl.\n" +
   "</dsh-mode>";
 
 /** The degrading fallback when workflow.md lacks a block for the resolved status. */
@@ -180,22 +187,23 @@ function developerWorkflowId(text) {
  * Normalize `dsh.dispatch_mode` to `"auto"` or `"inline"`.
  *
  * This is the DSH counterpart of Trellis's `codex.dispatch_mode` and is read
- * only from `.trellis/config.yaml` `dsh.dispatch_mode`. `auto` (the default)
- * keeps the base blocks and the sub-agent dispatch protocol; `inline` selects
- * the platform-neutral `*-inline` phase block plus the DSH mode banner.
- * Unknown values fall back to `auto` instead of silently changing how the main
- * session works.
+ * only from `.trellis/config.yaml` `dsh.dispatch_mode`. `inline` is the default
+ * when the section/key is absent: DSH works in the main session unless the
+ * project explicitly opts into sub-agent dispatch with `auto` (or the legacy
+ * `sub-agent` alias). Unknown values fall back to `inline` (fail-safe: do not
+ * start dispatching because of a typo).
  *
  * @param {string | null | undefined} configText
  * @returns {"auto" | "inline"}
  */
 export function dshDispatchMode(configText) {
   const section = parseSection(configText, "dsh");
-  if (section === null) return "auto";
+  if (section === null) return "inline";
   const raw = section.get("dispatch_mode");
-  if (raw === undefined) return "auto";
+  if (raw === undefined) return "inline";
   const mode = String(raw).trim().toLowerCase();
-  return mode === "inline" ? "inline" : "auto";
+  if (mode === "auto" || mode === "sub-agent") return "auto";
+  return "inline";
 }
 
 /**
@@ -450,9 +458,8 @@ export function mapStatus(status) {
  * @param {object} options.fs - filesystem shim ({exists, readFile, stat}).
  * @param {Map<string, {mtimeMs: number, content: string | null}>} options.cache
  * @param {string | null} [options.root] - an already-resolved project root.
- *   Callers that ran a project bootstrap (for example the session composer's
- *   `dsh.dispatch_mode` migration) reuse it so both layers agree on one root
- *   and the config re-read observes the write.
+ *   Callers that resolved the project (for example the session composer) reuse
+ *   it so both layers agree on one root; the plugin never writes the config.
  * @returns {Promise<{root: string, status: string, taskPath: string | null, body: string, digest: string} | null>}
  */
 export async function resolveTrellisState({

@@ -163,13 +163,11 @@ test("the skip keyword covers every step of its turn in a real agent loop", {
   );
 });
 
-test("a project skip keyword is turn-scoped and still lets the project bootstrap run", {
+test("a project skip keyword is turn-scoped and never writes the project config", {
   timeout: 20_000,
 }, async (t) => {
-  const root = await temporaryTrellisProject(
-    t,
-    "prompt_injection:\n  skip_keyword: skip-me\nsession_auto_commit: false\n",
-  );
+  const config = "prompt_injection:\n  skip_keyword: skip-me\nsession_auto_commit: false\n";
+  const root = await temporaryTrellisProject(t, config);
   const { adapter, agent } = await skippingRuntime(t, root);
   agent.followup(user("skip-me: just read the file"));
   await agent.whenIdle();
@@ -186,11 +184,9 @@ test("a project skip keyword is turn-scoped and still lets the project bootstrap
       `step ${index + 1} of the skipped turn must stay free of Trellis messages`,
     );
   }
-  // Skipping the breadcrumb must not skip the project defaults migration.
-  assert.match(
-    await readFile(join(root, ".trellis", "config.yaml"), "utf8"),
-    /\ndsh:\n {2}dispatch_mode: inline\n$/,
-  );
+  // The plugin is read-only with respect to the project config, even when a
+  // turn is skipped.
+  assert.equal(await readFile(join(root, ".trellis", "config.yaml"), "utf8"), config);
 
   // The project keyword is authoritative: the plugin fallback does not match.
   agent.followup(user("no-trellis is not this project's keyword"));

@@ -424,3 +424,31 @@ authoritative scope and manual checks.
 | `README.md` | 0.1.5 changelog, stale-pointer bullet, and the default `inline` vs Codex `auto` difference. | Docs must match behaviour. |
 | `.trellis/spec/platforms/dsh-workflow-behavior.md` | Workflow-state contract for `stale`. | Durable contract for future sessions. |
 | `package.json`, `lib/client.js` | Version `0.1.5`; rebuild client bundle. | Release bookkeeping. |
+
+## 0.1.6 — read-only mode default, declarative roles, cwd-relative specs (2026-10-23)
+
+### Added
+
+| File | Purpose |
+| --- | --- |
+| `docs/validation-0.1.6-local.md` | Verification record for this round. |
+| `test/spec-policy.test.js` | `candidateRepoPaths` + a subdirectory `registerSpecPolicy` deny case. |
+| `test/role-contract.test.js` | `roleFromPrompt` declaration tests and path/prose false-positive cases. |
+
+### Changed
+
+| File | Change | Reason |
+| --- | --- | --- |
+| `lib/project-defaults.js` (removed), `test/project-defaults.test.js` (removed) | The plugin no longer writes `dsh.dispatch_mode` into `.trellis/config.yaml`. | Writing a tracked config on first session dirtied the worktree, made `trellis update` flag the config, and `update -f` removed the section only for the next session to re-add it. |
+| `lib/workflow.js` | `dshDispatchMode` defaults to `inline` when the section/key is missing; unknown values fall back to `inline`. `DSH_INLINE_NOTE` explicitly overrides phase-detail dispatch instructions and explains the `.dsh` jsonl gate. | Default inline without a config migration; unknown values must fail safe instead of silently enabling dispatch. Trellis 0.7.0-beta.4 has no DSH-inline phase variant. |
+| `lib/session-composer.js` | Removed the project-defaults ensurer; project resolution stays read-only. | Same as the config-write removal. |
+| `lib/role-contract.js`, `lib/subagent-context.js`, `lib/dispatch-guard.js` | Role detection is declarative: first-line role prefix, dedicated `Role:`/`Agent:` line, `You are the <role> sub-agent/role` sentence, or strict `description` label. Path/prose mentions stay generic. | A generic child that only read `.dsh/skills/trellis-agent-*/SKILL.md` was pushed an implement role, and a no-task generic dispatch could be refused by the guard. |
+| `lib/spec-glob.js`, `lib/spec-policy.js` | Relative `file_path` is resolved against the agent cwd and the project root; spec matches are unioned (cwd first). | `edit`/`write` resolve relative paths against the session cwd; subdirectory sessions silently missed `src/**/*.js` specs. |
+| `test/workflow.test.js`, `test/session-composer.test.js`, `test/breadcrumb-skip-turn.test.js`, `test/index.test.js`, `test/subagent-context.test.js`, `test/dispatch-guard.test.js` | Fixtures updated for the new inline default, no config write, and declarative role markers. | Lock the new contracts. |
+| `README.md` | 0.1.6 changelog; mode/config/role/spec sections rewritten. | Docs must match behaviour. |
+| `package.json`, `lib/client.js` | Version `0.1.6`; rebuild client bundle. | Release bookkeeping. |
+
+### Not changed
+
+- No upstream Trellis changes; the DSH workflow/DSH.md staleness and the Codex-in-DSH identity
+  precedence remain recorded in the task report for a separate decision.

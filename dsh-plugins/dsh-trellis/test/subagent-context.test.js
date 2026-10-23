@@ -66,13 +66,26 @@ const childAgent = (root, { id = "child-1", parentSession = "parent-1" } = {}) =
 test("parseDispatchPrompt recovers the role and the Active task prelude", () => {
   assert.deepEqual(
     parseDispatchPrompt([
-      prompt("Active task: .trellis/tasks/10-19-demo\nLoad `.dsh/skills/trellis-agent-check/SKILL.md` once."),
+      prompt("Active task: .trellis/tasks/10-19-demo\nRole: trellis-agent-check"),
     ]),
     { role: "check", taskPath: ".trellis/tasks/10-19-demo", finish: false },
   );
   assert.equal(
     parseDispatchPrompt([prompt("trellis-implement: implement the plan")]).role,
     "implement",
+  );
+  assert.equal(
+    parseDispatchPrompt([prompt("You are the `trellis-check` sub-agent.\nActive task: .trellis/tasks/x")]).role,
+    "check",
+  );
+  // A path or prose mention is not a role declaration.
+  assert.equal(
+    parseDispatchPrompt([prompt("Read .dsh/skills/trellis-agent-implement/SKILL.md and report its length.")]).role,
+    null,
+  );
+  assert.equal(
+    parseDispatchPrompt([prompt("Run the trellis-check skill after editing.")]).role,
+    null,
   );
   assert.equal(
     parseDispatchPrompt([prompt("Active task: .trellis/tasks/x\n[finish] final check")]).finish,
@@ -264,7 +277,7 @@ test("registerSubagentContext pushes once, before the child's first request", as
   const decision = {
     kind: "enter",
     messages: [
-      prompt(`Active task: ${task}\nLoad \`.dsh/skills/trellis-agent-implement/SKILL.md\` once.`),
+      prompt(`Active task: ${task}\nRole: trellis-agent-implement\nLoad \`.dsh/skills/trellis-agent-implement/SKILL.md\` once.`),
     ],
   };
   const first = await pre(

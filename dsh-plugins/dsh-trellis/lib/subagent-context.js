@@ -20,22 +20,13 @@ import { isAbsolute, join, resolve, sep } from "node:path";
 import { createUserMessage } from "@deepseek-ai/dsh-llm";
 import { nodeFs } from "./node-fs.js";
 import { contextInjectionLimits } from "./trellis-config.js";
-import { roleFromLabel, stripPullOnlyContext } from "./role-contract.js";
+import { roleFromLabel, roleFromPrompt, stripPullOnlyContext } from "./role-contract.js";
 import { registerSubagentIdentity } from "./subagent-identity.js";
 import { findProjectRoot, resolveActiveTask, sanitizeContextKey } from "./workflow.js";
 import { resolveWorkingDirectory } from "./working-directory.js";
 
 export const SOURCE_KIND = "dsh-trellis";
 export const SOURCE_FORM = "subagent-context";
-
-/** `trellis-agent-<role>` first, then the bare `trellis-<role>` alias. */
-const AGENT_ROLE_RE = /\btrellis-agent-(implement|check|research)\b/;
-const BARE_ROLE_RE = /\btrellis-(implement|check|research)\b/;
-
-/** @param {string} text @returns {string | null} */
-function roleFrom(text) {
-  return AGENT_ROLE_RE.exec(text)?.[1] ?? BARE_ROLE_RE.exec(text)?.[1] ?? null;
-}
 
 /** Role name → curated manifest file inside the task directory. */
 const ROLE_MANIFEST = Object.freeze({
@@ -164,7 +155,7 @@ export function parseDispatchPrompt(messages, label = null) {
   let taskPath = taskMatch?.[1] ?? null;
   if (taskPath !== null) taskPath = taskPath.replace(/[.,;:]+$/, "");
   return {
-    role: roleFrom(text) ?? roleFromLabel(labelText),
+    role: roleFromPrompt(text) ?? roleFromLabel(labelText),
     taskPath,
     finish: /\[finish\]/i.test(text),
   };

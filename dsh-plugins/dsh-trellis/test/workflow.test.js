@@ -17,6 +17,14 @@ import { truncateUtf8 } from "../lib/breadcrumb.js";
 function memoryFs(initial = {}) {
   const files = new Map();
   for (const [key, value] of Object.entries(initial)) files.set(key, value);
+  // Most state-resolution tests exercise the non-DSH mode; keep those fixtures
+  // explicit about `auto` now that a missing dsh.dispatch_mode defaults to
+  // inline. Tests that want the default omit the config key and assert the
+  // banner themselves.
+  if (files.has(proj(join(".trellis", "workflow.md"))) &&
+      !files.has(proj(join(".trellis", "config.yaml")))) {
+    files.set(proj(join(".trellis", "config.yaml")), "dsh:\n  dispatch_mode: auto\n");
+  }
   const mtimes = new Map();
   let tick = 1;
   const info = (path) => {
@@ -283,7 +291,7 @@ test("resolveTrellisState: zero workflow-state blocks degrades visibly", async (
 test("resolveTrellisState: a missing workflow file also degrades visibly", async () => {
   const fs = memoryFs({
     [proj(".git")]: "",
-    [proj(join(".trellis", "config.yaml"))]: "",
+    [proj(join(".trellis", "config.yaml"))]: "dsh:\n  dispatch_mode: auto\n",
   });
   const state = await resolveTrellisState({
     cwd: proj(""),
@@ -622,7 +630,7 @@ test("resolveTrellisState: task workflow pin outranks personal/team defaults", a
     [proj(".trellis/workflows/personal.md")]:
       "[workflow-state:planning]\nPERSONAL\n[/workflow-state:planning]",
     [proj(".trellis/.developer")]: "name=x\nworkflow=personal\n",
-    [proj(".trellis/config.yaml")]: "default_workflow: personal\n",
+    [proj(".trellis/config.yaml")]: "default_workflow: personal\ndsh:\n  dispatch_mode: auto\n",
     [proj(".trellis/tasks/t/task.json")]: '{"status":"planning","workflow":"alt"}',
   });
   const state = await resolveTrellisState({
@@ -639,7 +647,7 @@ test("resolveTrellisState: personal workflow outranks the team default", async (
     [proj(".trellis/workflows/team.md")]:
       "[workflow-state:planning]\nTEAM\n[/workflow-state:planning]",
     [proj(".trellis/.developer")]: "workflow=personal\n",
-    [proj(".trellis/config.yaml")]: "default_workflow: team\n",
+    [proj(".trellis/config.yaml")]: "default_workflow: team\ndsh:\n  dispatch_mode: auto\n",
     [proj(".trellis/tasks/t/task.json")]: '{"status":"planning"}',
   });
   const state = await resolveTrellisState({
@@ -652,7 +660,7 @@ test("resolveTrellisState: team default applies, and a missing pin falls through
   const fs = variantProject({
     [proj(".trellis/workflows/team.md")]:
       "[workflow-state:planning]\nTEAM\n[/workflow-state:planning]",
-    [proj(".trellis/config.yaml")]: 'default_workflow: "team"  # team default\n',
+    [proj(".trellis/config.yaml")]: 'default_workflow: "team"  # team default\ndsh:\n  dispatch_mode: auto\n',
     [proj(".trellis/tasks/t/task.json")]: '{"status":"planning","workflow":"missing"}',
   });
   const state = await resolveTrellisState({
@@ -682,7 +690,7 @@ test("resolveTrellisState: DSH ignores the Codex-only dispatch_mode=inline varia
   const fs = memoryFs({
     [proj(".git")]: "",
     [proj(".trellis/workflow.md")]: inlineWorkflow,
-    [proj(".trellis/config.yaml")]: "codex:\n  dispatch_mode: inline\n",
+    [proj(".trellis/config.yaml")]: "codex:\n  dispatch_mode: inline\ndsh:\n  dispatch_mode: auto\n",
     [proj(".trellis/.runtime/sessions/dsh_me.json")]: '{"current_task":".trellis/tasks/t"}',
     [proj(".trellis/tasks/t/task.json")]: '{"status":"planning"}',
   });
@@ -702,7 +710,7 @@ test("resolveTrellisState: dispatch_mode=auto keeps the ordinary block", async (
   const fs = memoryFs({
     [proj(".git")]: "",
     [proj(".trellis/workflow.md")]: inlineWorkflow,
-    [proj(".trellis/config.yaml")]: "codex:\n  dispatch_mode: auto\n",
+    [proj(".trellis/config.yaml")]: "codex:\n  dispatch_mode: auto\ndsh:\n  dispatch_mode: auto\n",
     [proj(".trellis/.runtime/sessions/dsh_me.json")]: '{"current_task":".trellis/tasks/t"}',
     [proj(".trellis/tasks/t/task.json")]: '{"status":"planning"}',
   });
@@ -806,7 +814,7 @@ test("resolveTrellisState: dsh.dispatch_mode=auto keeps the base block", async (
   assert.equal(state.body, "Load trellis-brainstorm; stay in planning.");
 });
 
-test("resolveTrellisState: invalid dsh.dispatch_mode falls back to auto", async () => {
+test("resolveTrellisState: invalid dsh.dispatch_mode falls back to inline", async () => {
   const inlineWorkflow = WORKFLOW_MD +
     "[workflow-state:planning-inline]\nINLINE PLANNING\n[/workflow-state:planning-inline]";
   const fs = memoryFs({
@@ -819,14 +827,16 @@ test("resolveTrellisState: invalid dsh.dispatch_mode falls back to auto", async 
   const state = await resolveTrellisState({
     cwd: projectRoot, markers: [".git"], contextKey: "dsh_me", fs, cache: new Map(),
   });
-  assert.equal(state.status, "planning");
+  assert.equal(state.status, "planning-inline");
+  assert.match(state.body, /^INLINE PLANNING/);
+  assert.match(state.body, /<dsh-mode>/);
 });
 
-test("resolveTrellisState: dsh inline without a matching block keeps the base block but still announces the mode", async () => {
+test("resolveTrellisState: missing dsh.dispatch_mode defaults to inline without a config write", async () => {
   const fs = memoryFs({
     [proj(".git")]: "",
     [proj(".trellis/workflow.md")]: WORKFLOW_MD,
-    [proj(".trellis/config.yaml")]: "dsh:\n  dispatch_mode: inline\n",
+    [proj(".trellis/config.yaml")]: "session_auto_commit: false\n",
     [proj(".trellis/.runtime/sessions/dsh_me.json")]: '{"current_task":".trellis/tasks/t"}',
     [proj(".trellis/tasks/t/task.json")]: '{"status":"planning"}',
   });
@@ -836,6 +846,7 @@ test("resolveTrellisState: dsh inline without a matching block keeps the base bl
   assert.equal(state.status, "planning");
   assert.match(state.body, /^Load trellis-brainstorm; stay in planning\./);
   assert.match(state.body, /<dsh-mode>/);
+  assert.equal(await fs.readFile(proj(".trellis/config.yaml")), "session_auto_commit: false\n");
 });
 
 test("resolveTrellisState: dsh inline announces the mode for statuses without an inline variant", async () => {

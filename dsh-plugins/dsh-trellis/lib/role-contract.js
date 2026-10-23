@@ -51,6 +51,56 @@ export function roleFromLabel(label) {
   return LABEL_ROLE_RE.exec(stripped)?.[1] ?? null;
 }
 
+/**
+ * A dispatch prompt may declare its role on the first line by starting with
+ * the role name (`trellis-agent-implement`, `trellis-implement: …`,
+ * `trellis-implement (round 3)`). Plain prose after the name — including a
+ * path such as `.dsh/skills/trellis-agent-implement/SKILL.md` — does not
+ * declare the role.
+ */
+const PROMPT_ROLE_PREFIX_RE =
+  /^(?:[\s`'"\u201c\u201d\u2018\u2019(\[{<\uff08\u3010\u300a\u3008]*)(?:trellis-agent-|trellis-)(implement|check|research)(?=$|[\s]*[:：([【（\-–—《])/i;
+
+/**
+ * A dedicated marker line such as `Role: trellis-agent-implement` or
+ * `Agent: trellis-check`. This is the explicit, documented dispatch marker.
+ */
+const ROLE_MARKER_LINE_RE =
+  /^[ \t]*(?:Role|Agent|Subagent)[ \t]*[:：][ \t]*[`'"\u201c\u201d\u2018\u2019]*trellis(?:-agent)?-(implement|check|research)\b/im;
+
+/**
+ * The declarative sentence the Trellis dispatch instructions use:
+ * `You are the trellis-implement sub-agent` /
+ * `You are already the \`trellis-check\` role`. This is a role declaration,
+ * not a topical mention.
+ */
+const ROLE_DECLARATION_RE =
+  /^[ \t]*(?:You are|You're)(?: already)?(?: the)?(?: dispatched)?[ \t]+[`'"\u201c\u201d\u2018\u2019]*trellis(?:-agent)?-(implement|check|research)[`'"\u201c\u201d\u2018\u2019]*[ \t]+(?:sub-?agent|role)\b/im;
+
+/**
+ * Decide whether a dispatch prompt *declares* a Trellis role.
+ *
+ * This intentionally does not scan the whole prompt for a role name: a
+ * generic child that only reads `.dsh/skills/trellis-agent-<role>/SKILL.md`,
+ * or a prompt that discusses the `trellis-check` skill, must stay generic.
+ * Only a first-line role prefix, a dedicated `Role:`/`Agent:` line, or the
+ * "You are the <role> sub-agent/role" sentence selects a role. The dispatch
+ * `description` is handled by {@link roleFromLabel}.
+ *
+ * @param {unknown} text
+ * @returns {"implement" | "check" | "research" | null}
+ */
+export function roleFromPrompt(text) {
+  if (typeof text !== "string" || text.trim() === "") return null;
+  const firstLine = text.replace(/^\uFEFF/, "").split(/\r?\n/, 1)[0] ?? "";
+  const prefix = PROMPT_ROLE_PREFIX_RE.exec(firstLine);
+  if (prefix) return prefix[1].toLowerCase();
+  const marker = ROLE_MARKER_LINE_RE.exec(text);
+  if (marker) return marker[1].toLowerCase();
+  const declaration = ROLE_DECLARATION_RE.exec(text);
+  return declaration?.[1]?.toLowerCase() ?? null;
+}
+
 export const TASK_CONTEXT_SECTION = `## Task Context
 
 The curated task context is included at the end of this message under

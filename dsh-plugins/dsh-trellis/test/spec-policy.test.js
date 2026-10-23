@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { planSpecInjection, registerSpecPolicy } from "../lib/spec-policy.js";
+import { candidateRepoPaths, planSpecInjection, registerSpecPolicy } from "../lib/spec-policy.js";
 import { RETRY_NOTICE } from "../lib/spec-inject.js";
 import { specStatePath } from "../lib/spec-state.js";
 import { specInjectionSettings } from "../lib/trellis-config.js";
@@ -100,6 +100,31 @@ test("planSpecInjection promotes tickets only outside the refresh window", async
   const ticket = await planSpecInjection({ ...base, store, nowSeconds: 1000 + 2700 });
   assert.equal(ticket.kind, "context");
   assert.match(ticket.payload, /<spec-ticket/);
+});
+
+test("candidateRepoPaths keeps the cwd-relative path first and the root fallback", () => {
+  const root = "/repo";
+  assert.deepEqual(candidateRepoPaths(root, "/repo/src", "a.ts"), ["src/a.ts", "a.ts"]);
+  assert.deepEqual(candidateRepoPaths(root, "/repo", "src/a.ts"), ["src/a.ts"]);
+  assert.deepEqual(candidateRepoPaths(root, "/repo/src", "/repo/src/a.ts"), ["src/a.ts"]);
+  assert.deepEqual(candidateRepoPaths(root, "/repo/src", ""), []);
+});
+
+test("registerSpecPolicy resolves a cwd-relative file against the agent working directory", async (t) => {
+  const root = await project(t);
+  const { ctx, listeners } = harness();
+  disposeIn(t, registerSpecPolicy(ctx, { projectRootMarkers: [".trellis"] }));
+  const pre = listeners.get("tools/pre-execute");
+  const call = {
+    callId: "subdir-1",
+    name: "edit",
+    arguments: { file_path: "a.ts" },
+    agent: { session: { header: { id: "session-1", cwd: join(root, "src") } } },
+  };
+  const denied = await pre(call, async () => ({ kind: "allow" }));
+  assert.equal(denied.kind, "deny");
+  assert.match(denied.reason, /<spec-context file="src\/a\.ts"/);
+  assert.match(denied.reason, /Do the thing\./);
 });
 
 test("registerSpecPolicy denies an edit once, then allows the retry", async (t) => {

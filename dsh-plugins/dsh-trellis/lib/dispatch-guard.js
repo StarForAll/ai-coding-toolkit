@@ -28,7 +28,7 @@ import { nodeFs } from "./node-fs.js";
 import { dshDispatchMode, readTaskStatus, resolveActiveTask } from "./workflow.js";
 import { dshContextKey } from "./session-env.js";
 import { dshInlineDispatchAllowed } from "./trellis-config.js";
-import { roleFromLabel } from "./role-contract.js";
+import { roleFromLabel, roleFromPrompt } from "./role-contract.js";
 
 export const SOURCE_KIND = "dsh-trellis";
 export const SOURCE_FORM = "dispatch-guard";
@@ -36,18 +36,16 @@ export const SOURCE_FORM = "dispatch-guard";
 /** Dispatch tools whose prompt can select a Trellis role. */
 export const GUARDED_TOOLS = Object.freeze(["subagent", "subagent_fork"]);
 
-const ROLE_RE = /\btrellis-agent-(implement|check|research)\b/;
 const TASK_PRELUDE_RE = /Active task:\s*([^\s`'"<>]+)/;
 
 /**
  * Recover the role and task prelude from a dispatch request.
  *
- * The prompt is authoritative for the task prelude, and it is also the
- * preferred role signal. DSH records the `description` argument as the child's
- * durable label, so a dispatch whose description *is* the role still selects the
- * role — otherwise the guard would be bypassed by moving the role name there.
- * A description that merely mentions the role stays generic; see
- * {@link roleFromLabel}.
+ * The prompt is authoritative for the task prelude; the role must be
+ * *declared* there (first-line role prefix, dedicated `Role:` line, or the
+ * "You are the <role> sub-agent/role" sentence) or supplied as the dispatch
+ * `description`. A path or prose mention of a role stays generic — see
+ * {@link roleFromPrompt} and {@link roleFromLabel}.
  *
  * @param {unknown} prompt
  * @param {unknown} [description]
@@ -55,7 +53,7 @@ const TASK_PRELUDE_RE = /Active task:\s*([^\s`'"<>]+)/;
  */
 export function parseDispatchRequest(prompt, description) {
   const text = typeof prompt === "string" ? prompt : "";
-  const role = ROLE_RE.exec(text)?.[1] ?? roleFromLabel(description);
+  const role = roleFromPrompt(text) ?? roleFromLabel(description);
   const taskPath = TASK_PRELUDE_RE.exec(text)?.[1]?.replace(/[.,;:]+$/, "") ?? null;
   return { role, taskPath };
 }

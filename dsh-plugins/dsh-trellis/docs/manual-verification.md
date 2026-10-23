@@ -112,21 +112,22 @@ echo "compaction=$(zstd -dc "$f" | grep -c '"type":"compaction/end"')"
 
 **失败示例**：只有日志没有用户可见告警；两个插件共存但无通知/横幅；自动禁用了另一个插件；移除后仍一直告警。
 
-## M0. 项目级 `dsh.dispatch_mode` 自动引导
+## M0. 项目级 `dsh.dispatch_mode` 只读默认
 
-**目的**：确认插件启用后会把 Trellis 项目默认成 inline，且不覆盖显式配置。
+**目的**：确认插件把缺省的 Trellis 项目当作 inline，且**从不写**项目配置。
 
 **步骤**：
 
 1. 选一个 `.trellis/config.yaml` 里没有 `dsh:` 段的测试项目，发送一条普通消息（或重启后首次进入）。
-2. 打开 `.trellis/config.yaml`，确认文末/`dsh:` 段内新增 `dispatch_mode: inline`，原注释与其它键不变。
-3. 把该值改成 `auto`，再发一条消息；确认文件逐字不变、面包屑没有 `<dsh-mode>`。
-4. 对只读项目重复第 1 步，确认会话照常工作（auto 语义）且日志只有一次写入失败警告。
+2. 打开 `.trellis/config.yaml`，确认**没有新增任何内容**（`git status` 也不应出现该文件）。
+3. 确认第一轮面包屑末尾有 `<dsh-mode>`（缺省 inline）。
+4. 把该值改成 `auto`，再发一条消息；确认文件逐字不变、面包屑没有 `<dsh-mode>`。
+5. 对只读项目重复第 1 步，确认会话照常工作（缺省 inline）且没有写入尝试/警告。
 
 **正确效果**：
 
-- 首次会自动补键，且第一轮面包屑就带 `<dsh-mode>`；后续轮次不重复写文件。
-- 显式 `auto` 永远优先；插件不创建缺失的 `config.yaml`。
+- 缺省即 inline；插件只读配置，不追加键、不改注释/换行、不创建缺失的 `config.yaml`。
+- 显式 `auto` / `sub-agent` 永远优先；非法值回落 inline。
 
 ---
 

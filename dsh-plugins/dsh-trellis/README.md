@@ -5,13 +5,12 @@ DeepSeek Harness (dsh) host 插件：把 [Trellis](https://github.com/mindfold-a
 1. **每轮 workflow-state 面包屑注入** — 在每个 `agent/pre-step`，解析项目 `.trellis/workflow.md`（或任务/个人/团队选定的 workflow 变体）的 `[workflow-state:*]` 块 + 活跃任务状态（no_task / stale / task_error / planning / in_progress / completed / 团队自定义状态），把对应面包屑注入会话（与 `dsh-agent-instructions` 的注入管道相同）。未变化不重复注入；被压缩后自动重注入；提示词里出现独立单词 `no-trellis`（或项目 `prompt_injection.skip_keyword` 配置的词）可跳过该轮（turn）的全部请求，包括工具调用之后的后续 step（与 Codex 的 `UserPromptSubmit` 按轮判定一致）。
 2. **隔离的原生会话上下文身份** — 从当前 agent 的 DSH 原生 session header 生成受管的 `DSH_TRELLIS_CONTEXT_ID`，让 `task.py start/create/current` 解析到会话级 active-task 指针，并在子代理身份不同于 shell 自身 session 时优先使用被转发的身份；插件命令启动的子进程也显式使用同一个 DSH 身份。
 3. **原生子代理同步** — 安装插件后，Trellis 角色可用 DSH continuable 后台子代理；主会话先继续独立工作，耗尽后可调用事件驱动的 `trellis_wait`。它监听 DSH 的 `subagent/end`，利用 lifecycle 自带的 run/provider/output-block 元数据返回 `completed / failed / aborted / unknown` 的 fail-closed 结论。`error`、`max-tokens`、`refusal` 和未来未知失败原因都不会被误报成通过。rc.8 在父会话 idle 时也会用原生 settlement notice 唤醒，因此已经结束当前轮时无需额外调用 wait。
-4. **子代理首步上下文 push** — 在子代理第一个 `agent/pre-step` 注入角色契约（目标项目 `.dsh/skills/trellis-agent-<role>/SKILL.md` 正文，去掉 frontmatter）与 curated task context。任务路径优先取 dispatch prompt 的 `Active task:`，其次才是父会话指针；两者都取不到（父会话从未绑定任务）时不 push —— 与 Codex 在 task_dir 缺失时静默返回一致，research 另外会收到 dispatch-guard 的输出位置提醒。角色 skill 缺失时至少注入路径提示，不静默省略。
+4. **子代理首步上下文 push** — 在子代理第一个 `agent/pre-step` 注入角色契约（目标项目 `.dsh/skills/trellis-agent-<role>/SKILL.md` 正文，去掉 frontmatter）与 curated task context。任务路径优先取 dispatch prompt 的 `Active task:`，其次才是父会话指针；两者都取不到（父会话从未绑定任务）时不 push —— 与 Codex 在 task_dir 缺失时静默返回一致，research 另外会收到 dispatch-guard 的输出位置提醒。角色 skill 缺失时至少注入路径提示，不静默省略。**角色识别是声明式的**：dispatch prompt 的首行角色前缀（`trellis-agent-implement: …` / `trellis-implement (round 3)`）、独立标记行（`Role: trellis-agent-implement` / `Agent: trellis-check`）、或 Trellis 派发语（`You are the trellis-implement sub-agent/role`），以及 dispatch `description` 的严格角色前缀；只提到 `.dsh/skills/trellis-agent-*/SKILL.md` 路径或普通叙述（如「跑 trellis-check 技能」）不再触发 push/守卫。未命中时子代理走 child-pull 路径。
 5. **`/trellis` 命令** — `/trellis-status`（活跃任务 + git 状态）、`/trellis-finish`（只读检查 + 安全收尾清单，不提前清 active-task 指针）。任务读取优先使用 `task.py current --json`；旧版 Trellis（0.6.10 之前没有该参数）自动回退到 `current --source` 的文档化输出。命令输出不进模型历史；真正的会话收尾走技能面 `/trellis-finish-work`，由技能先归档再写 journal。rc.8 下两条零输入命令使用 `recordInput: false`，并显式拒绝参数和图片附件，避免静默忽略输入。
-6. **项目级模式引导** — 插件启用后，在首次解析某个 Trellis 项目的状态之前，自动确保
-   `.trellis/config.yaml` 含 `dsh.dispatch_mode: inline`（缺省即内联）。只补缺失键，
-   绝不覆盖显式 `auto`；保留注释、顺序与换行；文件缺失不凭空创建；写入是临时文件 +
-   rename 的原子替换并带目录锁；拿到锁后会重读当前文件再合并，失败时回落到库默认
-   `auto` 并只警告一次。
+6. **项目级模式（只读）** — `.trellis/config.yaml` 的 `dsh.dispatch_mode` 缺省为
+   `inline`（主会话直接实现/检查），显式 `auto` / `sub-agent` 才派发角色子代理。
+   插件**不写**项目配置：不追加键、不改注释/换行、不创建缺失的 config，也不再提供
+   “首次进入自动补 inline”的迁移；模式只从现有配置读取。
 7. **Web 配置菜单** — DSH `0.1.7-rc.1` 的“插件 → dsh-trellis”详情页直接显示全部六个配置项；保留 `0.1.6-alpha.2` 详情页与旧版 RC 卡片。新版支持带修订号的原子保存、恢复 profile 继承值和冲突时保留草稿。配置里的 `enabled=false` 会停用工作流功能但保留表单；插件管理器的整包或组件开关则会连同表单一起卸载。
 
 非 Trellis 项目不注入面包屑；命令只有被用户显式调用时才会检查并返回“未初始化 Trellis”。
@@ -20,7 +19,7 @@ DeepSeek Harness (dsh) host 插件：把 [Trellis](https://github.com/mindfold-a
 
 ## 对齐 Codex 的三项 Trellis 接线
 
-当前版本 **0.1.5**。普通修改按 `0.1.0 → 0.1.1 → 0.1.2 → 0.1.3 → 0.1.4 → 0.1.5` 递增；只有运行时/配置契约
+当前版本 **0.1.6**。普通修改按 `0.1.0 → 0.1.1 → 0.1.2 → 0.1.3 → 0.1.4 → 0.1.5 → 0.1.6` 递增；只有运行时/配置契约
 破坏或大改才提升次版本/主版本。三项主链路已经对齐，但 DSH 的事件形状仍带来下面的
 差异，因此本插件不宣称与 Codex 完全一致。
 
@@ -104,8 +103,9 @@ DeepSeek Harness (dsh) host 插件：把 [Trellis](https://github.com/mindfold-a
   插件冲突检测状态。doctor 只报告本地状态，不发起网络检查（版本检查在设置页）。
 - **派发守卫（默认开启）**：`trellis-agent-implement` / `trellis-agent-check` 派发
   时，父会话指针或 `Active task:` 前奏必须指向可读的 `task.json`，否则 deny；
-  角色同样从 prompt 或 dispatch `description` 识别（`description` 以角色名开头才
-  算，可带括号/冒号/破折号标注），把角色名写进 `description` 不会绕过守卫，话题型
+  角色从 prompt 的**声明**（首行角色前缀 / `Role:` 行 / `You are the <role>
+  sub-agent/role`）或 dispatch `description` 的严格角色前缀识别；只提到 role skill
+  路径或普通叙述不触发守卫。把角色名写进 `description` 不会绕过守卫，话题型
   `description` 也不会被误拦。
   `research` 允许无任务派发，并在下一请求提示确认输出位置。这比 Codex 的
   “silent return + 子代理无上下文运行”更严格，属于 DSH 增强；它是**提示性闸门**，
@@ -180,6 +180,22 @@ git 依赖不会执行 `prepack`（`pnpm pack`/`publish` 才会），因此 `lib
 
 运行时需要 profile 提供 `sessionProjections` 服务；该依赖由插件的 `inject` 声明。自定义或精简 profile 若未组装此服务，需先加载 `@deepseek-ai/dsh-session-projection`，否则插件会等待依赖，不会退回直接扫描历史。
 
+### 0.1.6：只读默认、严格角色识别、子目录 spec
+
+- **模式不再写项目文件**：移除首次进入项目自动补 `dsh.dispatch_mode: inline` 的迁移；
+  缺省即 inline，显式 `auto`/`sub-agent` 才派发，非法值回落 inline。插件不再修改
+  被跟踪的 `.trellis/config.yaml`，也不再让 `trellis update` 反复把 config 标为
+  “用户修改”。inline banner 明确覆盖 phase detail 中的派发指令，并说明 `.dsh` 仍会
+  触发 `task.py start` 的 jsonl 闸门（保留 `--allow-empty-context` 提示）。
+- **角色识别改为声明式**：只接受 dispatch prompt 首行角色前缀、独立 `Role:`/`Agent:`
+  行、`You are the <role> sub-agent/role` 语句，以及 dispatch `description` 的严格
+  角色前缀。只读 `.dsh/skills/trellis-agent-<role>/SKILL.md` 或普通叙述不再触发
+  subagent push / dispatch guard，修复 generic 子代理被误判的问题。
+- **子目录 spec 路径**：`edit`/`write` 的相对 `file_path` 按 agent 当前工作目录解析，
+  同时尝试项目根相对路径并取并集；session cwd 为子目录时不再漏掉
+  `src/**/*.js` 这类 spec 的 deny-once。
+- 版本：`0.1.5` → `0.1.6`；client bundle 已用 `pnpm run build:client` 重建。
+
 ### 0.1.5：stale 指针诊断与 bootstrap 补齐
 
 - **缺陷**：活动任务指针指向已删除/不存在的任务目录时，面包屑正文退化为
@@ -200,9 +216,9 @@ git 依赖不会执行 `prepack`（`pnpm pack`/`publish` 才会），因此 `lib
   调用工具后的 step 2 批次里没有带关键词的用户 prompt，于是同一轮仍然注入面包屑与
   bootstrap；README 与 Codex 的按轮语义都要求跳过整轮。
 - **修复**：composer 在命中关键词时记住该 `turn`（`WeakMap` 以 agent 为键，随会话
-  回收），同一 turn 的后续 step 直接静默；下一个 turn 重新判定。项目引导
-  （`dsh.dispatch_mode`）不受跳过影响，与 `maxBytes: 0` 一样仍会执行。宿主若不提供
-  `turn`，退化为原来的按 step 判定，不会记忆无法归属的决定。
+  回收），同一 turn 的后续 step 直接静默；下一个 turn 重新判定。跳过只影响消息
+  渲染，插件始终只读项目配置。宿主若不提供 `turn`，退化为原来的按 step 判定，
+  不会记忆无法归属的决定。
 - **文档更正**：子代理 push 的任务来源优先级是 dispatch prompt 的 `Active task:` 优先、
   父会话指针兜底（原 README 写反了）；两者都没有时不 push，这一点现在明说。
 - 版本：`0.1.3` → `0.1.4`；client bundle 已用 `pnpm run build:client` 重建。
@@ -264,27 +280,28 @@ git 依赖不会执行 `prepack`（`pnpm pack`/`publish` 才会），因此 `lib
 升级前备份 `settings.yaml` 和各 profile 配置。新版宿主会把旧文件改名为 `settings.yaml.imported`，并向**首次启动的 profile** 按 entry id 一次性导入；拒绝的 section 只保留在备份文件，不会自动重试。插件不会自行重命名、删除或跨 profile 复制配置；应先安装兼容插件，再启动迁移，并核对其他 profile 的需要。
 
 项目级执行模式不是插件配置，而是 `.trellis/config.yaml` 的 `dsh.dispatch_mode`。
-插件启用后会在首次进入项目时自动补上 `dispatch_mode: inline`（只补缺失键，显式值不动，
-注释与换行保持不变；详见下文）：
+插件**只读**该键，不写项目文件；缺省（没有 `dsh` section 或没有该键）即 `inline`：
 
 ```yaml
 dsh:
-  dispatch_mode: inline   # inline = 主会话直接实现/检查（插件引导的默认）；auto = 派发角色子代理
-  # 逃生口：inline 下若确实要显式委派 trellis-agent-implement / check，显式打开
+  dispatch_mode: inline   # 缺省值；inline = 主会话直接实现/检查
+  # dispatch_mode: auto    # 显式开启角色子代理派发
+  # 逃生口：inline 下若确实要显式委派 trellis-agent-implement / check
   # inline_allow_dispatch: true
 ```
 
-Codex 对应的 `codex.dispatch_mode` 不会被 DSH 读取；两个平台各用各的模式。
+Codex 对应的 `codex.dispatch_mode` 不会被 DSH 读取；两个平台各用各的模式。Trellis 脚本
+（`task.py start` 的 jsonl 闸门、`get_context.py` 的 phase 文本）仍只认识
+`codex.dispatch_mode`；插件不修改这些脚本，只通过面包屑/banner 提供 DSH 语义。
 
-**与 Codex 默认值的差异**：Trellis 的 Codex 侧默认 `auto`（派发角色子代理），本插件引导的
-默认是 `inline`（主会话直接实现/检查）。`auto` 在 DSH 上已实测可用；切换由用户显式设置，
-插件不覆盖显式值。
+**与 Codex 默认值的差异**：Trellis 的 Codex 侧默认 `auto`（派发角色子代理），本插件的
+DSH 默认是 `inline`（主会话直接实现/检查）。`auto` 在 DSH 上已实测可用；切换由用户显式
+设置，插件不覆盖、也不写入显式值。
 
 `inline` 的语义与边界（0.1.0 起）：
 
-- **自动引导**：插件在首次解析项目状态前确保键存在，因此第一轮就已按 inline 注入；
-  已有 `dispatch_mode: auto`、`dsh: {…}` 等显式写法不会被改写。只读项目或写入失败时
-  本次回落到 `auto` 并记录一次警告。
+- **只读默认**：缺省即 inline；插件不追加键、不修改注释/换行，也不创建缺失的
+  `.trellis/config.yaml`。显式 `auto` / `sub-agent` 才派发角色子代理。
 
 - **模式横幅与状态块解耦**：只要 `dsh.dispatch_mode: inline`，每轮面包屑末尾都追加
   `<dsh-mode>` 横幅，覆盖全部状态（含 `no_task` / `completed` / `stale` / `task_error` /
@@ -299,12 +316,17 @@ Codex 对应的 `codex.dispatch_mode` 不会被 DSH 读取；两个平台各用�
   `inline_allow_dispatch: true`；模型不应自行修改 `.trellis/config.yaml` 绕过守卫。
   因为模型对项目配置有写权限，守卫只能阻止“顺手派发”，不能强制一个可写配置的项目。
   Codex 只文档化 inline、不拦截，这里的拦截是 DSH 增强。
-- **非法值回落 `auto`**：`dispatch_mode` 只接受 `auto` / `inline`（`sub-agent` 视为
-  `auto`）；其他值（包括拼写错误）回落 `auto` 而不是 Codex 的 `inline`，避免一个笔误
-  把项目静默变成“禁止派发”。`/trellis-doctor` 会显示实际生效的模式。
-- **inline 下启动任务**：Trellis 的 `task.py start` 仍要求 `implement.jsonl` /
-  `check.jsonl` 非空，而 inline 工作流明确跳过 jsonl 策展；首次启动请用
+- **非法值回落 `inline`（fail-safe）**：`dispatch_mode` 只接受 `auto` / `inline`
+  （`sub-agent` 视为 `auto`）；其他值（包括拼写错误）回落 `inline`，避免一个笔误把
+  项目静默变成“自动派发”。`/trellis-doctor` 会显示实际生效的模式。
+- **inline 下启动任务**：Trellis 的 `task.py start` 把 `.dsh` 目录无条件视为
+  sub-agent-capable（`_SUBAGENT_CONFIG_DIRS` 含 `.dsh`），因此即使
+  `dsh.dispatch_mode: inline` 仍要求 `implement.jsonl` / `check.jsonl` 非空；inline
+  工作流跳过 jsonl 策展，首次启动请用
   `task.py start <task> --allow-empty-context`（Trellis CLI 契约，非插件行为）。
+- **phase detail 覆盖**：Trellis 0.7.0-beta.4 的 `get_context.py --platform dsh` 没有
+  DSH-inline 变体，phase detail 仍会写 “Spawn the implement sub-agent…”；`<dsh-mode>`
+  banner 明确覆盖这类派发指令，inline 下应以 banner 为准。
 - **迁移提示**：从 `auto` 切到 `inline`（或反向）会改变面包屑正文的 digest，下一轮自动
   重新注入；同模式同状态不会重复注入。子代理不接收 `<dsh-mode>`。
 
@@ -329,7 +351,7 @@ Headless、rc.6 或需要声明部署默认值时，仍可在 profile 的 `cordi
 
 ## 工作原理
 
-- **状态解析**（`lib/workflow.js`）：向上找项目根 → 按 Trellis 的优先级选择 workflow 文件（任务 `task.json workflow` → `.trellis/.developer` 的 `workflow=` → `config.yaml default_workflow` → 全局 `.trellis/workflow.md`）→ 解析状态块 → 只读当前会话指针 `.trellis/.runtime/sessions/dsh_<id>.json`，不枚举其他会话。指针缺失时返回 `no_task`；指针指向的目录已不存在时返回 `stale`；目录存在但任务记录不可读时返回 `task_error` 并保留路径。任务状态按原值匹配对应块（`completed`、团队自定义状态不会被改写成 `no_task`）。`codex.dispatch_mode` 是 Codex-only 设置，DSH 不读取；DSH 使用自己的 `.trellis/config.yaml` `dsh.dispatch_mode`（默认 `auto`）。`inline` 时每轮追加 `<dsh-mode>` 说明（主会话直接实现/检查、不派发 `trellis-agent-*`、无需 `trellis_wait`、用 `trellis-check` 技能验证），并在 `planning`/`in_progress` 且文件定义了对应 `*-inline` 块时选该块；块缺失只影响措辞，不影响模式声明。指针值按 Trellis 规则归一（`tasks/<slug>`、`./`、绝对路径），指向不存在或不是目录时降级为 `stale`。修复记录或重新绑定任务后会在下一轮重新解析。
+- **状态解析**（`lib/workflow.js`）：向上找项目根 → 按 Trellis 的优先级选择 workflow 文件（任务 `task.json workflow` → `.trellis/.developer` 的 `workflow=` → `config.yaml default_workflow` → 全局 `.trellis/workflow.md`）→ 解析状态块 → 只读当前会话指针 `.trellis/.runtime/sessions/dsh_<id>.json`，不枚举其他会话。指针缺失时返回 `no_task`；指针指向的目录已不存在时返回 `stale`；目录存在但任务记录不可读时返回 `task_error` 并保留路径。任务状态按原值匹配对应块（`completed`、团队自定义状态不会被改写成 `no_task`）。`codex.dispatch_mode` 是 Codex-only 设置，DSH 不读取；DSH 使用自己的 `.trellis/config.yaml` `dsh.dispatch_mode`（缺省 `inline`，显式 `auto`/`sub-agent` 才派发；非法值回落 `inline`；插件不写该键）。`inline` 时每轮追加 `<dsh-mode>` 说明（主会话直接实现/检查、不派发 `trellis-agent-*`、无需 `trellis_wait`、用 `trellis-check` 技能验证），并在 `planning`/`in_progress` 且文件定义了对应 `*-inline` 块时选该块；块缺失只影响措辞，不影响模式声明。指针值按 Trellis 规则归一（`tasks/<slug>`、`./`、绝对路径），指向不存在或不是目录时降级为 `stale`。修复记录或重新绑定任务后会在下一轮重新解析。
 - **注入去重**（`lib/breadcrumb-projection.js`）：投影仅保存面包屑的事件序号和 source/content 指纹，与 DSH 已维护的 `session.surface.nodes` 一起确定最后可见面包屑。恢复、分叉和重载均从 projection 重建；不缓存“本进程最后注入”的临时判断，也不扫描完整事件历史。
 - **会话身份**：DSH 原生提供 `DSH_SESSION_ID = agent.session.header.id`，并先丢弃环境中已有的 `DSH_*` 再重建受管命名空间。Trellis beta 因此会在同时看到 `DSH_SHELL=1` 与 `DSH_SESSION_ID` 时优先解析当前 DSH 身份，即使没有插件也不会被外层 host 继承的 `TRELLIS_CONTEXT_ID` 串任务。插件通过 `shellEnv` 为每次执行额外生成 `DSH_TRELLIS_CONTEXT_ID = dsh_<session-id>`，用于转发可能不同于 shell 自身 session 的子代理身份；主会话与子代理仍各自保留 DSH 身份，子代理通过派发 prompt 首行的 `Active task:` 和角色 prelude 取得父任务上下文。
 - **Headless 会话**：默认每次 `dsh --profile headless` 调用都会创建新 DSH session。需要跨轮保留 active-task 指针时，应保持同一会话，或在支持的宿主上用 `--session-id` 明确继续已有会话；不能把多个未指定身份的独立调用当成同一 session。

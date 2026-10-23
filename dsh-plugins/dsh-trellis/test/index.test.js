@@ -477,7 +477,7 @@ test("a delegated sub-agent first step carries only the pushed task context", as
   );
 
   const dispatch = prompt(
-    "Active task: .trellis/tasks/demo\nLoad `trellis-agent-implement` and implement the task.",
+    "Active task: .trellis/tasks/demo\nRole: trellis-agent-implement\nLoad `trellis-agent-implement` and implement the task.",
   );
   let decision = { kind: "enter", messages: [dispatch] };
   for (const entry of state.listeners.filter((item) => item.event === "agent/pre-step")) {

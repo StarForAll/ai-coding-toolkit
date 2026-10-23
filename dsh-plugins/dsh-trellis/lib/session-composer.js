@@ -29,7 +29,6 @@ import { breadcrumbMessage, hasSkipKeyword } from "./breadcrumb.js";
 import { bootstrapMessage } from "./bootstrap.js";
 import { nodeFs } from "./node-fs.js";
 import { resolveTrellisProject } from "./project.js";
-import { createDshDefaultsEnsurer } from "./project-defaults.js";
 import {
   readCached,
   resolveTrellisState,
@@ -72,17 +71,6 @@ export function createSessionComposer(resolved, ctx, dependencies = {}) {
   // bookkeeping is needed. Only the latest skipped turn is kept: turn numbers
   // are monotonic within one agent, so an equality check is enough.
   const skippedTurns = new WeakMap();
-  // One-time (per project, per changed state) migration: Trellis projects that
-  // install this plugin start in the mode the plugin documents. The ensurer is
-  // idempotent and refuses to overwrite an explicit value, so it is safe to
-  // attempt on every step; the session-local cache keeps the common case at one
-  // read and no writes.
-  const ensureProjectDefaults = createDshDefaultsEnsurer({
-    fs,
-    logger: ctx.logger,
-    cache,
-  });
-
   const compose = async (agent, messages, signal, position = {}) => {
     const cwd = await resolveWorkingDirectory(ctx, agent, signal);
     const subagent = isSubagentSession(agent);
@@ -90,9 +78,9 @@ export function createSessionComposer(resolved, ctx, dependencies = {}) {
     const contextKey =
       sessionId === "" ? "" : `dsh_${sanitizeContextKey(sessionId)}`;
     signal?.throwIfAborted();
-    // Bootstrap runs before state resolution so the very first turn already
-    // sees `dsh.dispatch_mode: inline`; the write also invalidates the shared
-    // read cache, which makes that re-read observe the new file.
+    // Resolve the project once so state resolution uses the same root. This is
+    // deliberately read-only: the plugin must not rewrite `.trellis/config.yaml`
+    // (the project's mode is read with an inline default).
     const project = await resolveTrellisProject({
       ctx,
       agent,
@@ -102,23 +90,14 @@ export function createSessionComposer(resolved, ctx, dependencies = {}) {
       cache,
       markers: resolved.projectRootMarkers,
     });
-    if (project !== null) {
-      try {
-        await ensureProjectDefaults(project);
-      } catch (error) {
-        ctx.logger?.warn?.("dsh-trellis project defaults failed: %o", error);
-      }
-    }
     signal?.throwIfAborted();
     // The skip keyword was already found earlier in this turn; only the batch
     // that carried it is visible to a later step, so the decision is remembered
-    // here instead of being re-derived from `messages`. The project bootstrap
-    // above still runs: skipping the breadcrumb is about workflow state, not
-    // about enabling the plugin.
+    // here instead of being re-derived from `messages`.
     const turn = position?.turn;
     if (Number.isInteger(turn) && skippedTurns.get(agent) === turn) return [];
-    // The project bootstrap is about enabling the plugin, not about rendering a
-    // breadcrumb: a zero byte budget still normalizes the project config.
+    // A zero budget disables every composed message. This is a rendering
+    // decision only; the plugin never normalizes or writes the project config.
     if (resolved.maxBytes <= 0 || !Number.isFinite(resolved.maxBytes)) return [];
     const state = await resolveTrellisState({
       cwd,

@@ -92,6 +92,31 @@ export function normalizeRepoRelative(root, filePath) {
 }
 
 /**
+ * Canonical repo-relative POSIX path for a tool argument interpreted against
+ * the agent's current working directory, or null when the file sits outside
+ * the repository. This is the DSH-correct interpretation: `edit`/`write`
+ * resolve a relative `file_path` against the agent's working directory, which
+ * may be a subdirectory of the Trellis project root.
+ *
+ * @param {string} root - absolute repository root.
+ * @param {string} base - absolute directory a relative path is resolved from.
+ * @param {string} filePath - absolute or base-relative path.
+ * @returns {string | null}
+ */
+export function normalizeRepoRelativeFrom(root, base, filePath) {
+  if (typeof filePath !== "string" || filePath.trim() === "") return null;
+  const rootResolved = resolve(root);
+  const baseResolved = resolve(base);
+  const candidate = isAbsolute(filePath)
+    ? resolve(filePath)
+    : resolve(baseResolved, filePath.replace(/\\/g, "/"));
+  const rel = relative(rootResolved, candidate);
+  if (rel === "" || rel === ".") return null;
+  if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return null;
+  return rel.split(sep).join("/").normalize("NFC");
+}
+
+/**
  * Specificity key used to order matches before the payload budget is spent.
  * Exact matches and narrow scopes outrank broad tree globs; the spec path is
  * the deterministic tie-break.
