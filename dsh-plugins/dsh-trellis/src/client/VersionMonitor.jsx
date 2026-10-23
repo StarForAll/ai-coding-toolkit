@@ -1,9 +1,11 @@
 import { useCallback, useState } from "react";
 import {
+  defaultStorage,
   notifyDesktop,
   requestNotificationPermission,
   runVersionCheck,
   tagSummary,
+  writeAck,
 } from "./version-check.js";
 import { PLUGIN_VERSION } from "./version.js";
 
@@ -59,6 +61,34 @@ export function VersionMonitor({ config, t, disabled }) {
 
   const running = state.phase === "running";
   const result = state.result;
+
+  // A manual acknowledgement only moves the local baseline. The next check
+  // recomputes the same values from the stored snapshot, so updating the row
+  // here is equivalent to re-running the lookup without the extra request.
+  const acknowledge = useCallback((row) => {
+    try {
+      writeAck(defaultStorage(), row.id, {
+        sha: row.latest?.sha ?? null,
+        tag: row.targetVersion ?? row.latestRelease?.tag ?? null,
+        signature: row.signature ?? null,
+      });
+    } catch {
+      // Storage unavailable: leave the row alone instead of claiming a skip.
+      return;
+    }
+    setState((current) => {
+      if (current.result === null) return current;
+      return {
+        ...current,
+        result: {
+          ...current.result,
+          results: current.result.results.map((entry) => (entry.id === row.id
+            ? { ...entry, isNew: false, updateAvailable: false, acknowledged: true }
+            : entry)),
+        },
+      };
+    });
+  }, []);
   return (
     <section className="dsh-trellis-monitor" aria-label={t("monitor.title")}>
       <div className="dsh-trellis-field-head">
@@ -104,10 +134,29 @@ export function VersionMonitor({ config, t, disabled }) {
                         ? t("monitor.firstSeen")
                         : t("monitor.upToDate")}
                   </span>
+                  {row.updateAvailable && row.targetVersion ? (
+                    <span className="dsh-trellis-monitor-status" data-new="true">
+                      {t("monitor.updateAvailable")} {row.channel} {row.targetVersion}
+                    </span>
+                  ) : null}
                   <a className="dsh-trellis-monitor-link" href={row.url} target="_blank" rel="noreferrer">
                     {tagSummary(row.npm.tags)}
                   </a>
-                  <span className="dsh-trellis-monitor-meta">{row.npm.name}</span>
+                  <span className="dsh-trellis-monitor-meta">
+                    {`${row.localVersion ? t("monitor.localVersion") + " " + row.localVersion : t("monitor.localUnknown")} · ${row.channel} ${row.targetVersion ?? t("monitor.missingTag")}`}
+                  </span>
+                  {row.isNew || row.updateAvailable ? (
+                    <button
+                      className="dsh-trellis-reset"
+                      type="button"
+                      disabled={disabled || running}
+                      onClick={() => { acknowledge(row); }}
+                    >
+                      {t("monitor.skip")}
+                    </button>
+                  ) : row.acknowledged ? (
+                    <span className="dsh-trellis-monitor-meta">{t("monitor.acknowledged")}</span>
+                  ) : null}
                 </>
               ) : row.ok && row.partial ? (
                 <>
@@ -156,6 +205,18 @@ export function VersionMonitor({ config, t, disabled }) {
                   <span className="dsh-trellis-monitor-meta">
                     {[row.latest.date, row.latest.message].filter(Boolean).join(" · ")}
                   </span>
+                  {row.isNew || row.updateAvailable ? (
+                    <button
+                      className="dsh-trellis-reset"
+                      type="button"
+                      disabled={disabled || running}
+                      onClick={() => { acknowledge(row); }}
+                    >
+                      {t("monitor.skip")}
+                    </button>
+                  ) : row.acknowledged ? (
+                    <span className="dsh-trellis-monitor-meta">{t("monitor.acknowledged")}</span>
+                  ) : null}
                 </>
               ) : row.skipped ? (
                 <span className="dsh-trellis-monitor-status">{t("monitor.disabledSource")}</span>
@@ -166,6 +227,14 @@ export function VersionMonitor({ config, t, disabled }) {
           ))}
         </ul>
       )}
+      {result?.local?.errors?.length ? (
+        <p className="dsh-trellis-hint" data-invalid="true">
+          {t("monitor.localProbeFailed")}: {result.local.errors.map((entry) => entry.message).join("; ")}
+        </p>
+      ) : null}
+      {result !== null && result.results.some((row) => row.isNew || row.updateAvailable || row.acknowledged) ? (
+        <p className="dsh-trellis-hint">{t("monitor.skipHint")}</p>
+      ) : null}
     </section>
   );
 }

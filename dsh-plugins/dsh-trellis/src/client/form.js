@@ -11,6 +11,7 @@ export const DEFAULTS = Object.freeze({
   versionCheck: true,
   versionCheckIntervalMinutes: 1440,
   versionCheckNotify: true,
+  versionCheckLocalProbe: true,
   versionCheckPluginRepo: "https://github.com/SajoLuo/dsh-trellis",
   versionCheckTrellisPackage: "@mindfoldhq/trellis",
   versionCheckDshPackage: "@deepseek-ai/dsh",
@@ -69,6 +70,7 @@ export function parseDraft(draft) {
     "dispatchGuard",
     "versionCheck",
     "versionCheckNotify",
+    "versionCheckLocalProbe",
   ];
   return {
     invalid:
@@ -91,6 +93,7 @@ export function parseDraft(draft) {
       versionCheck: draft.versionCheck.value,
       versionCheckIntervalMinutes: interval,
       versionCheckNotify: draft.versionCheckNotify.value,
+      versionCheckLocalProbe: draft.versionCheckLocalProbe.value,
       versionCheckPluginRepo: String(draft.versionCheckPluginRepo.value),
       versionCheckTrellisPackage: String(draft.versionCheckTrellisPackage.value),
       versionCheckDshPackage: String(draft.versionCheckDshPackage.value),

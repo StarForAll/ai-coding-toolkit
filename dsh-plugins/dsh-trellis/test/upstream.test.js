@@ -254,3 +254,36 @@ test("fetchReleaseFeed falls back to the REST API and treats 404 as no release",
   });
   assert.equal(none, null);
 });
+
+test("the handler serves probed local CLI versions", async () => {
+  const { req, res, response } = harness({ query: "?source=local" });
+  let received;
+  await createVersionCheckHandler({
+    probeImpl: async (options) => {
+      received = options;
+      return {
+        versions: { dsh: "0.2.1-rc.2" },
+        errors: [{ id: "trellis", message: "trellis was not found on PATH" }],
+      };
+    },
+    probeTimeoutMs: 1234,
+  })(req, res);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers["cache-control"], "no-store");
+  const payload = JSON.parse(response.body);
+  assert.equal(payload.ok, true);
+  assert.deepEqual(payload.local, { dsh: "0.2.1-rc.2" });
+  assert.equal(payload.errors[0].id, "trellis");
+  assert.equal(received.timeoutMs, 1234);
+});
+
+test("a throwing local probe becomes an error response, not a crash", async () => {
+  const { req, res, response } = harness({ query: "?source=local" });
+  await createVersionCheckHandler({
+    probeImpl: async () => { throw new Error("probe exploded"); },
+  })(req, res);
+  assert.equal(response.status, 500);
+  const payload = JSON.parse(response.body);
+  assert.equal(payload.ok, false);
+  assert.match(payload.error, /probe exploded/);
+});

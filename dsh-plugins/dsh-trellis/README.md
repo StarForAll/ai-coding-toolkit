@@ -21,7 +21,7 @@ DeepSeek Harness (dsh) host 插件：把 [Trellis](https://github.com/mindfold-a
 
 ## 对齐 Codex 的三项 Trellis 接线
 
-当前版本 **0.1.7**。普通修改按 `0.1.0 → 0.1.1 → … → 0.1.7` 递增；只有运行时/配置契约
+当前版本 **0.1.9**。普通修改按 `0.1.0 → 0.1.1 → … → 0.1.9` 递增；只有运行时/配置契约
 破坏或大改才提升次版本/主版本。三项主链路已经对齐，但 DSH 的事件形状仍带来下面的
 差异，因此本插件不宣称与 Codex 完全一致。
 
@@ -124,17 +124,28 @@ DeepSeek Harness (dsh) host 插件：把 [Trellis](https://github.com/mindfold-a
   其下是面包屑/命令行为，最后是版本监控。插件页不再渲染表单。
 - **版本监控**：设置页内按来源分别监控——
   - **来源仓库**（`versionCheckPluginRepo`，可自定义）：按 `owner/repo` 监控其 commit，
-    用于吸收改进；本插件有更新的 release 时同一行标出。
+    用于吸收改进；本插件有更新的 release 时同一行标出。该行出现新提交或更高版本时提供
+    **跳过（不合并）**：只在本浏览器记录当前 commit + release tag 作为复盘基线，不修改
+    仓库、也不代表上游已合并；上游之后出现新提交或更高 tag 时重新提示。
   - **Trellis 官方 npm 包**（`versionCheckTrellisPackage`，默认 `@mindfoldhq/trellis`）
     与 **DSH 官方 npm 包**（`versionCheckDshPackage`，默认 `@deepseek-ai/dsh`）：
-    按 `dist-tags` 监控官方发布版本（等同 `npm view <pkg> dist-tags`），任一线道版本变化即算更新。
+    按 `dist-tags` 监控官方发布，并与本机 CLI 版本比较——DSH 固定比 `latest`
+    （`next`/`alpha` 等先行通道不参与）；Trellis 按本地版本所在通道比：本地 `x.y.z-beta.N`
+    比 `beta`、`x.y.z-rc.N` 比 `rc`、其余（含正式版）比 `latest`。本地落后时标出
+    “有新版本 通道 版本号”，上游缺少该通道时显示“上游无该标签”。
+  - **本地 CLI 读取**（`versionCheckLocalProbe`，默认开）：Host 执行固定的
+    `dsh --version` 与 `trellis -v`（各 5 秒超时，Windows 经 shell 解析 `.cmd`）；
+    失败只显示“本地版本未知/探测失败”，不影响其他来源。自动检查也会执行这两个探测。
+  - npm 行同样可以 **跳过（不合并）**：点击后记录当前 dist-tags 签名与目标版本，
+    同一发布不再标新或标落后，直到上游发布新版本；它与来源仓库行各自独立，
+    不提供“一键跳过全部”。
   - 关闭“版本监控”开关会隐藏间隔、通知、三个来源地址与整个检查面板；自动检查间隔为 0
     时只保留手动检查；手动检查用当前草稿值，自动检查用已保存配置。
   - 检查由 **Host 侧**执行并通过同源路由 `/dsh-trellis/version-check` 提供给设置页：
     GitHub 的 Atom feed（`commits.atom` / `releases.atom`）没有 CORS 头；Host 优先读
     Atom，失败后才回退到 GitHub REST（未认证配额 60 次/小时），避免每次检查消耗配额。
-    Host 只访问由校验后的 `owner/repo` 拼出的地址，以及 npm registry 的 `dist-tags`，
-    不接受任意 URL。
+    Host 只访问由校验后的 `owner/repo` 拼出的地址、npm registry 的 `dist-tags`，以及
+    `source=local` 的固定 CLI 探测；不接受任意 URL 或请求指定的命令。
     新变化经 `Notification` 发桌面通知（未授权时只显示页内结果），手动检查另发一条本次汇总通知。
 
 ## 安装
@@ -181,6 +192,39 @@ git 依赖不会执行 `prepack`（`pnpm pack`/`publish` 才会），因此 `lib
 配套要求：项目的 Trellis 平台需包含 dsh（`trellis init --dsh`，见 Trellis-DeepSeekHarness 适配分支），且 `.trellis/scripts` 需包含读取原生 `DSH_SESSION_ID` 的适配（已含在同一分支）。当前源码的 Host peer 范围显式包含 `^0.2.0-rc.1` 和 `^0.2.1-alpha.2`，保留既有版本范围；开发基线固定为 `0.2.0-rc.1`；其它宿主版本用 `test:compat` 在临时副本中单独验证，不代表逐个重新验证所有历史版本。新版 DSH 的 peer 准入使用 `includePrerelease: true`，与 npm 默认匹配不同；通过准入不等于实际兼容，不应使用 `allow-version` 绕过缺失的 API。Web 配置只在具备对应 client surface 的 profile 中加载。
 
 运行时需要 profile 提供 `sessionProjections` 服务；该依赖由插件的 `inject` 声明。自定义或精简 profile 若未组装此服务，需先加载 `@deepseek-ai/dsh-session-projection`，否则插件会等待依赖，不会退回直接扫描历史。
+
+### 0.1.9：npm 行改为“本机 CLI 版本 vs 上游通道”
+
+- **DSH 行**：Host 执行 `dsh --version`，与上游 `latest` 比较（`next`/`alpha` 不参与）。
+- **Trellis 行**：Host 执行 `trellis -v`，按本地版本所在通道选择对比目标——本地
+  `x.y.z-beta.N` 比 `beta`，`x.y.z-rc.N` 比 `rc`，正式版或其它预发布比 `latest`；
+  上游缺少该通道时显示“上游无该标签”，不猜。
+- **探测边界**：固定命令、固定参数、各 5 秒超时；Windows 经 shell 解析 `.cmd`；失败
+  只在页内显示“本地版本未知/探测失败”，不影响其余来源。新增 `versionCheckLocalProbe`
+  开关（默认开），关闭后 npm 行退回“只报发布变化”。
+- **npm 行可跳过**：与来源仓库行同构的本地复盘基线（记录签名 + 目标版本），同一发布
+  不再提示，直到上游发布新版本；三行各自独立，没有“一键全跳过”。
+- **不改变**：npm 行仍然检测“官方发布变化”；版本比较是并列判据，不替代变化检测——
+  否则本地等于 `latest` 时 `next` 的新发布会被永久忽略。
+- 版本：`0.1.8` → `0.1.9`；client bundle 已用 `pnpm run build:client` 重建。
+
+### 0.1.8：上游更新判断可手动跳过
+
+- **“跳过（不合并）”基线**：版本监控的来源仓库行在“有新提交”/“有新版本”时给出按钮，
+  点击后把当前 commit 与 release tag 记入本浏览器
+  （`dsh-trellis:version-check:ack:plugin`）。同一快照之后不再标新、不再发通知，
+  “有新版本”徽章改为与会话内记录的 ack tag 比较，而不是与编译期 `PLUGIN_VERSION` 比较。
+- **重新提示条件**：上游出现新 commit（sha 变化）或 release tag 高于 ack 值。这样本地
+  版本方案重启后（本地 `0.1.x` 永远小于上游 `0.1.13`）常亮的徽章可以一次性收掉，等到
+  下一次真正需要判断时再出现。ack 只会抬高基线：若记录的 tag 低于本地版本，比较仍以
+  本地版本为准，不会复活已被超越的旧版本。
+- **预发布顺序**：ack 的比较使用新增的 `compareReleaseTags`，保留预发布优先级——ack
+  `0.2.0-rc.1` 后仍会被 `0.2.0` 正式版提示，而 ack `0.2.0` 不会被 `0.2.0-rc.2` 重新标出。
+  没有 ack 时仍按本地版本比较，`compareVersions` 的既有保守语义不变。
+- **边界**：ack 是浏览器级状态（`localStorage`），清缓存、换浏览器或换 profile 后需要
+  重新点一次；Host 不保存该状态，也不改变仓库内容。本轮不新增设置项，避免把“维护结论”
+  混进插件配置。
+- 版本：`0.1.7` → `0.1.8`；client bundle 已用 `pnpm run build:client` 重建。
 
 ### 0.1.7：headless 命令与模式切换的文档边界
 
@@ -381,6 +425,7 @@ Headless、rc.6 或需要声明部署默认值时，仍可在 profile 的 `cordi
     versionCheck: true      # 设置页内的来源版本监控
     versionCheckIntervalMinutes: 1440  # 自动检查间隔；0 = 仅手动
     versionCheckNotify: true           # 新提交时发浏览器桌面通知
+    versionCheckLocalProbe: true       # Host 执行 dsh --version / trellis -v 供 npm 行比较
     versionCheckTrellisPackage: "@mindfoldhq/trellis"
     versionCheckDshPackage: "@deepseek-ai/dsh"
 ```

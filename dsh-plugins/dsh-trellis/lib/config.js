@@ -106,6 +106,13 @@ const fields = {
     .description(
       "Show a browser notification when an upstream repository gains a new commit.",
     ),
+  /** Probe the local dsh/trellis CLIs so npm rows compare installed versions. */
+  versionCheckLocalProbe: z
+    .boolean()
+    .default(true)
+    .description(
+      "Run `dsh --version` and `trellis -v` on this machine so the npm sources compare installed versions with the published channel; a failed probe is reported as unknown, never guessed.",
+    ),
   /** Upstream fork whose improvements this plugin absorbs (commit watch). */
   versionCheckPluginRepo: z
     .string()

@@ -71,14 +71,23 @@ window.__ModuleLoader__.load({
 		* Three external dependencies can require updating this plugin or break it:
 		* the plugin's upstream fork (watched by commit), and the Trellis and DSH npm
 		* packages (watched by their published dist-tags — the same data `npm view
-		* <pkg> dist-tags` prints).
+		* <pkg> dist-tags` prints). The npm rows also compare the installed CLIs
+		* (`dsh --version`, `trellis -v`, probed by the Host) with the channel that
+		* matches the local version: DSH always against `latest`, Trellis against
+		* `beta` / `rc` when the local version is on that channel, otherwise `latest`.
 		*
 		* @module dsh-trellis/client/version-check
 		*/
 		const ROUTE_PATH = "/dsh-trellis/version-check";
 		const LAST_CHECK_KEY = "dsh-trellis:version-check:last";
 		const SEEN_PREFIX = "dsh-trellis:version-check:";
-		/** Upstream sources, in display order. */
+		/**
+		* Acknowledged upstream snapshot ("checked, no merge needed") for one source.
+		* This is the manually set baseline: it suppresses the commit hint and the
+		* release badge until upstream moves past it.
+		*/
+		const ACK_PREFIX = "dsh-trellis:version-check:ack:";
+		/** Upstream sources, in display order. The local CLI probe is not a source row. */
 		const SOURCES = Object.freeze([
 			{
 				id: "plugin",
@@ -138,6 +147,54 @@ window.__ModuleLoader__.load({
 			if (payload?.ok !== true) throw new Error(payload?.error ?? `version-check route returned ${response.status}`);
 			return payload;
 		}
+		/** Same-origin URL for the local CLI probe. */
+		function localRouteUrl() {
+			return `${ROUTE_PATH}?source=local`;
+		}
+		/**
+		* Ask the Host for the installed CLI versions.
+		*
+		* The Host runs fixed `dsh --version` / `trellis -v` commands; a failed probe is
+		* reported per source and never rejects the whole check.
+		*
+		* @param {object} [options]
+		* @param {typeof fetch} [options.fetchImpl]
+		* @returns {Promise<{versions: Record<string, string>, errors: Array<{id: string, message: string}>}>}
+		*/
+		async function requestLocalVersions({ fetchImpl = globalThis.fetch } = {}) {
+			if (typeof fetchImpl !== "function") throw new Error("fetch is not available");
+			const response = await fetchImpl(localRouteUrl(), { headers: { accept: "application/json" } });
+			let payload;
+			try {
+				payload = await response.json();
+			} catch {
+				throw new Error(`version-check route returned ${response.status}`);
+			}
+			if (payload?.ok !== true) throw new Error(payload?.error ?? `version-check route returned ${response.status}`);
+			const probed = payload.local !== null && typeof payload.local === "object" && !Array.isArray(payload.local) ? payload.local : {};
+			const versions = {};
+			for (const id of ["dsh", "trellis"]) if (typeof probed[id] === "string" && probed[id] !== "") versions[id] = probed[id];
+			return {
+				versions,
+				errors: Array.isArray(payload.errors) ? payload.errors : []
+			};
+		}
+		/**
+		* Dist-tag channel to compare for a local Trellis version.
+		*
+		* A stable local version compares against `latest`; a local `-beta.N` / `-rc.N`
+		* version compares against that same channel instead of a stable release it has
+		* already moved past. Any other prerelease falls back to `latest`.
+		*
+		* @param {string | null | undefined} version
+		* @returns {"latest" | "beta" | "rc"}
+		*/
+		function trellisTagChannel(version) {
+			const text = String(version ?? "").trim().replace(/^v/i, "");
+			if (/^\d+\.\d+\.\d+-beta(?:[-.]\d+)?$/i.test(text)) return "beta";
+			if (/^\d+\.\d+\.\d+-rc(?:[-.]\d+)?$/i.test(text)) return "rc";
+			return "latest";
+		}
 		/** In-memory storage used when `localStorage` is unavailable (SSR, tests). */
 		function memoryStorage(initial = {}) {
 			const map = new Map(Object.entries(initial));
@@ -162,6 +219,56 @@ window.__ModuleLoader__.load({
 				}
 			} catch {}
 			return memoryStorage();
+		}
+		/**
+		* Read the acknowledged snapshot for one source.
+		*
+		* A corrupt record is treated as "no acknowledgement" instead of throwing: the
+		* monitor must keep reporting rather than fail because one stored value is bad.
+		*
+		* @param {{getItem(key: string): string | null}} storage
+		* @param {string} id - source id.
+		* @returns {{sha: string | null, tag: string | null, signature: string | null} | undefined}
+		*/
+		function readAck(storage, id) {
+			let raw;
+			try {
+				raw = storage.getItem(`${ACK_PREFIX}${id}`);
+			} catch {
+				return;
+			}
+			if (raw === null || raw === void 0) return void 0;
+			let parsed;
+			try {
+				parsed = JSON.parse(raw);
+			} catch {
+				return;
+			}
+			if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return void 0;
+			const sha = typeof parsed.sha === "string" && parsed.sha !== "" ? parsed.sha : null;
+			const tag = typeof parsed.tag === "string" && parsed.tag !== "" ? parsed.tag : null;
+			const signature = typeof parsed.signature === "string" && parsed.signature !== "" ? parsed.signature : null;
+			if (sha === null && tag === null && signature === null) return void 0;
+			return {
+				sha,
+				tag,
+				signature
+			};
+		}
+		/**
+		* Record that the current upstream snapshot was reviewed and needs no merge.
+		*
+		* @param {{setItem(key: string, value: string): void}} storage
+		* @param {string} id - source id.
+		* @param {{sha?: string | null, tag?: string | null, signature?: string | null}} snapshot
+		*/
+		function writeAck(storage, id, { sha, tag, signature }) {
+			const record = {
+				sha: typeof sha === "string" && sha !== "" ? sha : null,
+				tag: typeof tag === "string" && tag !== "" ? tag : null,
+				signature: typeof signature === "string" && signature !== "" ? signature : null
+			};
+			storage.setItem(`${ACK_PREFIX}${id}`, JSON.stringify(record));
 		}
 		/**
 		* True when an automatic check is due.
@@ -219,6 +326,70 @@ window.__ModuleLoader__.load({
 			}
 			return 0;
 		}
+		/** Split a release tag into numeric core and prerelease identifiers. */
+		function parseReleaseTag(value) {
+			const text = String(value ?? "").trim().replace(/^v/i, "");
+			const dash = text.indexOf("-");
+			const core = dash === -1 ? text : text.slice(0, dash);
+			const pre = dash === -1 ? [] : text.slice(dash + 1).split(".");
+			return {
+				nums: core.split(".").map((part) => {
+					const parsed = Number.parseInt(part, 10);
+					return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+				}),
+				pre
+			};
+		}
+		/** Semver ordering for the prerelease suffix; an absent suffix is the stable one. */
+		function comparePrerelease(left, right) {
+			if (left.length === 0 && right.length === 0) return 0;
+			if (left.length === 0) return 1;
+			if (right.length === 0) return -1;
+			for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+				const a = left[index];
+				const b = right[index];
+				if (a === void 0) return -1;
+				if (b === void 0) return 1;
+				const aNumeric = /^\d+$/.test(a);
+				const bNumeric = /^\d+$/.test(b);
+				if (aNumeric && bNumeric) {
+					const diff = Number(a) - Number(b);
+					if (diff !== 0) return diff > 0 ? 1 : -1;
+				} else if (aNumeric !== bNumeric) return aNumeric ? -1 : 1;
+				else if (a !== b) return a.localeCompare(b) > 0 ? 1 : -1;
+			}
+			return 0;
+		}
+		/**
+		* Order two upstream release tags, keeping prerelease precedence.
+		*
+		* `compareVersions` drops prerelease suffixes (conservative for "a newer
+		* release exists"), but an acknowledged baseline needs the finer rule: after
+		* acking `0.2.0-rc.1`, the stable `0.2.0` is still newer, while acking `0.2.0`
+		* must not be re-flagged by a later `0.2.0-rc.2` tag.
+		*
+		* @param {string} left
+		* @param {string} right
+		* @returns {-1 | 0 | 1}
+		*/
+		function compareReleaseTags(left, right) {
+			const a = parseReleaseTag(left);
+			const b = parseReleaseTag(right);
+			for (let index = 0; index < Math.max(a.nums.length, b.nums.length); index += 1) {
+				const diff = (a.nums[index] ?? 0) - (b.nums[index] ?? 0);
+				if (diff !== 0) return diff > 0 ? 1 : -1;
+			}
+			return comparePrerelease(a.pre, b.pre);
+		}
+		/**
+		* True when `candidate` is a later upstream release tag than `baseline`.
+		* @param {string} candidate
+		* @param {string} baseline
+		* @returns {boolean}
+		*/
+		function isNewerReleaseTag(candidate, baseline) {
+			return compareReleaseTags(candidate, baseline) > 0;
+		}
 		/** Stable identity of a dist-tag map, used to detect any published change. */
 		function tagSignature(tags) {
 			return Object.entries(tags).sort(([left], [right]) => left.localeCompare(right)).map(([tag, version]) => `${tag}=${version}`).join(";");
@@ -239,10 +410,27 @@ window.__ModuleLoader__.load({
 		* @param {typeof notifyDesktop} [options.notifyImpl]
 		* @param {number} [options.now]
 		* @param {string} [options.localVersion] - used to flag a newer plugin release.
-		* @returns {Promise<{checkedAt: number, results: Array<object>}>}
+		* @param {Record<string, string>} [options.localVersions] - pre-resolved local CLI versions; probing is skipped when provided.
+		* @param {typeof requestLocalVersions} [options.localProbe] - Host probe implementation.
+		* @returns {Promise<{checkedAt: number, results: Array<object>, local: {versions: Record<string, string>, errors: Array<object>}}>}
 		*/
-		async function runVersionCheck({ config, fetchImpl = globalThis.fetch, storage = defaultStorage(), notify = false, labelOf = (source) => source.id, notifyImpl = notifyDesktop, now = Date.now(), localVersion }) {
+		async function runVersionCheck({ config, fetchImpl = globalThis.fetch, storage = defaultStorage(), notify = false, labelOf = (source) => source.id, notifyImpl = notifyDesktop, now = Date.now(), localVersion, localVersions, localProbe = requestLocalVersions }) {
 			const results = [];
+			const npmConfigured = SOURCES.some((source) => source.kind === "npm" && String(config?.[source.field] ?? "").trim() !== "");
+			let probedLocal = localVersions;
+			let localErrors = [];
+			if (probedLocal === void 0 && npmConfigured && config?.versionCheckLocalProbe !== false) try {
+				const probed = await localProbe({ fetchImpl });
+				probedLocal = probed.versions;
+				localErrors = probed.errors;
+			} catch (error) {
+				probedLocal = {};
+				localErrors = [{
+					id: "local",
+					message: error?.message ?? String(error)
+				}];
+			}
+			const local = probedLocal ?? {};
 			for (const source of SOURCES) {
 				const value = String(config?.[source.field] ?? "").trim();
 				if (value === "") {
@@ -265,8 +453,16 @@ window.__ModuleLoader__.load({
 					if (source.kind === "npm") {
 						const tags = payload.tags ?? {};
 						const signature = tagSignature(tags);
+						const channel = source.id === "trellis" ? trellisTagChannel(local[source.id]) : "latest";
+						const targetVersion = typeof tags[channel] === "string" && tags[channel] !== "" ? tags[channel] : null;
+						const installed = typeof local[source.id] === "string" && local[source.id] !== "" ? local[source.id] : null;
+						const ack = readAck(storage, source.id);
+						const acknowledged = ack !== void 0 && ack.signature !== null && ack.signature === signature;
 						const firstSeen = previous === null;
-						const isNew = !firstSeen && previous !== signature;
+						const isNew = !firstSeen && previous !== signature && !acknowledged;
+						let baseline = installed;
+						if (ack?.tag !== null && ack?.tag !== void 0 && (baseline === null || isNewerReleaseTag(ack.tag, baseline))) baseline = ack.tag;
+						const updateAvailable = targetVersion !== null && baseline !== null && isNewerReleaseTag(targetVersion, baseline);
 						storage.setItem(seenKey, signature);
 						results.push({
 							...source,
@@ -277,6 +473,13 @@ window.__ModuleLoader__.load({
 								name: value,
 								tags
 							},
+							signature,
+							channel,
+							targetVersion,
+							localVersion: installed,
+							updateAvailable,
+							acknowledged,
+							ack,
 							isNew,
 							firstSeen
 						});
@@ -300,9 +503,14 @@ window.__ModuleLoader__.load({
 						});
 						continue;
 					}
-					const updateAvailable = release !== null && localVersion !== void 0 ? compareVersions(release.tag, localVersion) > 0 : false;
+					const ack = readAck(storage, source.id);
+					let baselineTag = ack?.tag ?? null;
+					if (baselineTag !== null && localVersion !== void 0 && isNewerReleaseTag(localVersion, baselineTag)) baselineTag = localVersion;
+					let updateAvailable = false;
+					if (release !== null) updateAvailable = baselineTag !== null ? isNewerReleaseTag(release.tag, baselineTag) : localVersion !== void 0 && compareVersions(release.tag, localVersion) > 0;
 					const firstSeen = previous === null;
-					const isNew = !firstSeen && previous !== commit.sha;
+					const acknowledged = ack !== void 0 && ack.sha !== null && ack.sha === commit.sha;
+					const isNew = !firstSeen && previous !== commit.sha && !acknowledged;
 					storage.setItem(seenKey, commit.sha);
 					results.push({
 						...source,
@@ -312,6 +520,8 @@ window.__ModuleLoader__.load({
 						latest: commit,
 						latestRelease: release,
 						updateAvailable,
+						acknowledged,
+						ack,
 						warnings: errors,
 						isNew,
 						firstSeen
@@ -329,7 +539,11 @@ window.__ModuleLoader__.load({
 			storage.setItem(LAST_CHECK_KEY, String(now));
 			return {
 				checkedAt: now,
-				results
+				results,
+				local: {
+					versions: local,
+					errors: localErrors
+				}
 			};
 		}
 		//#endregion
@@ -475,6 +689,7 @@ window.__ModuleLoader__.load({
 			versionCheck: true,
 			versionCheckIntervalMinutes: 1440,
 			versionCheckNotify: true,
+			versionCheckLocalProbe: true,
 			versionCheckPluginRepo: "https://github.com/SajoLuo/dsh-trellis",
 			versionCheckTrellisPackage: "@mindfoldhq/trellis",
 			versionCheckDshPackage: "@deepseek-ai/dsh"
@@ -529,7 +744,8 @@ window.__ModuleLoader__.load({
 					"subagentContext",
 					"dispatchGuard",
 					"versionCheck",
-					"versionCheckNotify"
+					"versionCheckNotify",
+					"versionCheckLocalProbe"
 				].some((field) => typeof draft[field].value !== "boolean"),
 				value: {
 					enabled: draft.enabled.value,
@@ -544,6 +760,7 @@ window.__ModuleLoader__.load({
 					versionCheck: draft.versionCheck.value,
 					versionCheckIntervalMinutes: interval,
 					versionCheckNotify: draft.versionCheckNotify.value,
+					versionCheckLocalProbe: draft.versionCheckLocalProbe.value,
 					versionCheckPluginRepo: String(draft.versionCheckPluginRepo.value),
 					versionCheckTrellisPackage: String(draft.versionCheckTrellisPackage.value),
 					versionCheckDshPackage: String(draft.versionCheckDshPackage.value)
@@ -608,7 +825,7 @@ window.__ModuleLoader__.load({
 		* `__DSH_TRELLIS_VERSION__` is replaced by tsdown with the package version.
 		* Source-level tests and any unbundled load keep the literal fallback.
 		*/
-		const PLUGIN_VERSION = "0.1.7";
+		const PLUGIN_VERSION = "0.1.9";
 		//#endregion
 		//#region src/client/VersionMonitor.jsx
 		/**
@@ -663,6 +880,32 @@ window.__ModuleLoader__.load({
 			}, [config, t]);
 			const running = state.phase === "running";
 			const result = state.result;
+			const acknowledge = (0, react.useCallback)((row) => {
+				try {
+					writeAck(defaultStorage(), row.id, {
+						sha: row.latest?.sha ?? null,
+						tag: row.targetVersion ?? row.latestRelease?.tag ?? null,
+						signature: row.signature ?? null
+					});
+				} catch {
+					return;
+				}
+				setState((current) => {
+					if (current.result === null) return current;
+					return {
+						...current,
+						result: {
+							...current.result,
+							results: current.result.results.map((entry) => entry.id === row.id ? {
+								...entry,
+								isNew: false,
+								updateAvailable: false,
+								acknowledged: true
+							} : entry)
+						}
+					};
+				});
+			}, []);
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("section", {
 				className: "dsh-trellis-monitor",
 				"aria-label": t("monitor.title"),
@@ -730,6 +973,17 @@ window.__ModuleLoader__.load({
 									"data-new": row.isNew || void 0,
 									children: row.isNew ? t("monitor.versionChanged") : row.firstSeen ? t("monitor.firstSeen") : t("monitor.upToDate")
 								}),
+								row.updateAvailable && row.targetVersion ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+									className: "dsh-trellis-monitor-status",
+									"data-new": "true",
+									children: [
+										t("monitor.updateAvailable"),
+										" ",
+										row.channel,
+										" ",
+										row.targetVersion
+									]
+								}) : null,
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("a", {
 									className: "dsh-trellis-monitor-link",
 									href: row.url,
@@ -739,8 +993,20 @@ window.__ModuleLoader__.load({
 								}),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 									className: "dsh-trellis-monitor-meta",
-									children: row.npm.name
-								})
+									children: `${row.localVersion ? t("monitor.localVersion") + " " + row.localVersion : t("monitor.localUnknown")} · ${row.channel} ${row.targetVersion ?? t("monitor.missingTag")}`
+								}),
+								row.isNew || row.updateAvailable ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+									className: "dsh-trellis-reset",
+									type: "button",
+									disabled: disabled || running,
+									onClick: () => {
+										acknowledge(row);
+									},
+									children: t("monitor.skip")
+								}) : row.acknowledged ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: "dsh-trellis-monitor-meta",
+									children: t("monitor.acknowledged")
+								}) : null
 							] }) : row.ok && row.partial ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 									className: "dsh-trellis-monitor-status",
@@ -787,7 +1053,19 @@ window.__ModuleLoader__.load({
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 									className: "dsh-trellis-monitor-meta",
 									children: [row.latest.date, row.latest.message].filter(Boolean).join(" · ")
-								})
+								}),
+								row.isNew || row.updateAvailable ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+									className: "dsh-trellis-reset",
+									type: "button",
+									disabled: disabled || running,
+									onClick: () => {
+										acknowledge(row);
+									},
+									children: t("monitor.skip")
+								}) : row.acknowledged ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: "dsh-trellis-monitor-meta",
+									children: t("monitor.acknowledged")
+								}) : null
 							] }) : row.skipped ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 								className: "dsh-trellis-monitor-status",
 								children: t("monitor.disabledSource")
@@ -797,7 +1075,20 @@ window.__ModuleLoader__.load({
 								children: row.error
 							})]
 						}, row.id))
-					})
+					}),
+					result?.local?.errors?.length ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("p", {
+						className: "dsh-trellis-hint",
+						"data-invalid": "true",
+						children: [
+							t("monitor.localProbeFailed"),
+							": ",
+							result.local.errors.map((entry) => entry.message).join("; ")
+						]
+					}) : null,
+					result !== null && result.results.some((row) => row.isNew || row.updateAvailable || row.acknowledged) ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+						className: "dsh-trellis-hint",
+						children: t("monitor.skipHint")
+					}) : null
 				]
 			});
 		}
@@ -1129,6 +1420,16 @@ window.__ModuleLoader__.load({
 								t,
 								...field("versionCheckNotify")
 							}),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)(BooleanField, {
+								id: "dsh-trellis-version-local-probe",
+								label: t("versionCheckLocalProbe"),
+								hint: t("versionCheckLocalProbeHint"),
+								value: Boolean(draft.versionCheckLocalProbe.value),
+								disabled,
+								onChange: (value) => edit("versionCheckLocalProbe", value),
+								t,
+								...field("versionCheckLocalProbe")
+							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)(TextField, {
 								id: "dsh-trellis-plugin-repo",
 								label: t("versionCheckPluginRepo"),
@@ -1241,15 +1542,20 @@ window.__ModuleLoader__.load({
 			versionCheckIntervalInvalid: "请输入大于等于 0 的整数。",
 			versionCheckNotify: "新提交时通知",
 			versionCheckNotifyHint: "需要浏览器通知权限；未授权时只显示页内结果。",
+			versionCheckLocalProbe: "读取本机 CLI 版本",
+			versionCheckLocalProbeHint: "Host 执行 dsh --version 与 trellis -v，与上游版本比较；失败时只显示未知。",
 			versionCheckPluginRepo: "插件上游 fork 仓库",
 			versionCheckPluginRepoHint: "监控该 fork 的 commit，用于吸收其优点到本插件；支持 owner/repo 或完整 GitHub URL。",
 			versionCheckTrellisPackage: "Trellis 官方 npm 包",
 			versionCheckDshPackage: "DSH 官方 npm 包",
-			versionCheckPackageHint: "监控该包 dist-tags 的版本变化（等同 npm view）；留空表示不监控该来源。",
+			versionCheckPackageHint: "监控该包 dist-tags，并与本机 CLI 版本比较（dsh 比 latest；Trellis 按本地 beta/rc/latest 通道）；留空表示不监控该来源。",
 			"monitor.title": "上游版本",
 			"monitor.localVersion": "本地版本",
 			"monitor.description": "检查由 Host 执行，只发送仓库名或包名；不发送项目内容或凭据。",
-			"monitor.localNote": "本地 Trellis/DSH 版本由 /trellis-doctor 报告。",
+			"monitor.localNote": "本地 DSH/Trellis 版本由 Host 执行 dsh --version / trellis -v 读取；失败时显示未知，不影响其他来源。",
+			"monitor.localUnknown": "本地版本未知",
+			"monitor.missingTag": "（上游无该标签）",
+			"monitor.localProbeFailed": "本地版本探测失败",
 			"monitor.doneTitle": "Trellis 版本检查完成",
 			"monitor.doneBody": "已检查 {count} 个仓库，{changed} 个有更新。",
 			"monitor.permissionHint": "授予通知权限后，发现新提交会弹出桌面通知。",
@@ -1262,6 +1568,9 @@ window.__ModuleLoader__.load({
 			"monitor.upToDate": "已是最新",
 			"monitor.versionChanged": "官方版本有变化",
 			"monitor.updateAvailable": "有新版本",
+			"monitor.skip": "跳过（不合并）",
+			"monitor.acknowledged": "已跳过",
+			"monitor.skipHint": "跳过只在本浏览器记录复盘基线：不改变仓库内容，也不代表上游已合并；上游出现新提交或更高版本时重新提示。",
 			"monitor.disabledSource": "未配置（已跳过）",
 			"monitor.partial": "部分结果",
 			"monitor.partialHint": "可稍后重试；上次基线未被覆盖。",
@@ -1314,15 +1623,20 @@ window.__ModuleLoader__.load({
 			versionCheckIntervalInvalid: "Enter an integer greater than or equal to 0.",
 			versionCheckNotify: "Notify on a new commit",
 			versionCheckNotifyHint: "Needs browser notification permission; without it the result stays on the page.",
+			versionCheckLocalProbe: "Read local CLI versions",
+			versionCheckLocalProbeHint: "The Host runs dsh --version and trellis -v to compare with upstream; a failure shows unknown only.",
 			versionCheckPluginRepo: "Upstream fork repository",
 			versionCheckPluginRepoHint: "Watches the fork's commits so its improvements can be absorbed; accepts owner/repo or a full GitHub URL.",
 			versionCheckTrellisPackage: "Trellis official npm package",
 			versionCheckDshPackage: "DSH official npm package",
-			versionCheckPackageHint: "Watches the package dist-tags for version changes (what npm view reports); empty disables that source.",
+			versionCheckPackageHint: "Watches the package dist-tags and compares them with the local CLI version (dsh against latest; Trellis against the beta/rc/latest channel of the local version); empty disables that source.",
 			"monitor.title": "Upstream versions",
 			"monitor.localVersion": "Local version",
 			"monitor.description": "Checks run in the Host and send only repository or package names; no project content or credentials leave the machine.",
-			"monitor.localNote": "Local Trellis/DSH versions are reported by /trellis-doctor.",
+			"monitor.localNote": "Local DSH/Trellis versions are read by the Host through dsh --version / trellis -v; a failed probe shows unknown and never hides other sources.",
+			"monitor.localUnknown": "Local version unknown",
+			"monitor.missingTag": "(tag not published)",
+			"monitor.localProbeFailed": "Local version probe failed",
 			"monitor.doneTitle": "Trellis version check complete",
 			"monitor.doneBody": "Checked {count} repositories; {changed} with updates.",
 			"monitor.permissionHint": "Grant notification permission to receive a desktop notification when a new commit appears.",
@@ -1335,6 +1649,9 @@ window.__ModuleLoader__.load({
 			"monitor.upToDate": "Up to date",
 			"monitor.versionChanged": "Official version changed",
 			"monitor.updateAvailable": "Newer release",
+			"monitor.skip": "Skip (no merge)",
+			"monitor.acknowledged": "Skipped",
+			"monitor.skipHint": "Skipping records a review baseline in this browser only: it changes no repository content and does not mean upstream was merged. A new commit or a later release brings the hint back.",
 			"monitor.disabledSource": "Not configured (skipped)",
 			"monitor.partial": "Partial result",
 			"monitor.partialHint": "Retry later; the previous baseline was kept.",

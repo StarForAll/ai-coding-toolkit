@@ -485,3 +485,74 @@ final disposition: document only).
 - Installed web profile remains 0.1.6; this round has no runtime change, so reinstalling only
   for the documentation is unnecessary.
 
+
+## 0.1.8 — upstream update hints become manually skippable (2026-10-23)
+
+Feature round. The version monitor gains a manually set baseline, so a reviewed
+upstream snapshot can be skipped without merging. The local carrier's restarted
+`0.1.x` numbering can never exceed upstream's `0.1.13`, which made the "newer
+release" badge permanent; the acknowledgement now replaces the compiled
+`PLUGIN_VERSION` as that comparison baseline.
+
+### Added
+
+| File | Purpose |
+| --- | --- |
+| `docs/validation-0.1.8-local.md` | Verification record for this round (required by the version scheme). |
+
+### Changed
+
+| File | Change | Reason |
+| --- | --- | --- |
+| `src/client/version-check.js` | `ACK_PREFIX`, `readAck`, `writeAck`, `compareReleaseTags`, `isNewerReleaseTag`; the plugin row now reports `acknowledged`/`ack` and compares a release against the acknowledged tag when one exists. | A manual baseline must outrank the compiled `PLUGIN_VERSION` for the "newer release" hint. |
+| `src/client/VersionMonitor.jsx` | Per-row "跳过（不合并）" action plus the 已跳过 state; the local row update equals what the next lookup recomputes, so no refetch is needed. | The user decides when a snapshot needs no merge. |
+| `src/client/locales.js` | `monitor.skip`, `monitor.acknowledged`, `monitor.skipHint` (zh/en). | The new action needs copy in both locales. |
+| `test/version-check.test.js` | Ack suppression, commit-vs-release independence, prerelease→stable re-flag, corrupt-record tolerance, `compareReleaseTags` ordering. | Keep the new judgement covered, including the corrupt-state path. |
+| `README.md` | 0.1.8 changelog; the monitor bullet documents the skip baseline. | Docs must match behaviour. |
+| `package.json`, `lib/client.js`, `lib/client.js.map` | Version `0.1.8`; client bundle rebuilt. | Release bookkeeping. |
+
+### Not changed
+
+- No Host-side code: `lib/upstream.js` still only proxies the two validated
+  lookups; the acknowledgement is browser state, not server state.
+- No settings-schema field: the acknowledgement is a maintenance conclusion,
+  not plugin configuration.
+- `compareVersions` keeps its documented conservative prerelease handling; the
+  finer ordering lives in `compareReleaseTags` and is used only for ack
+  baselines.
+
+## 0.1.9 — npm rows compare the installed CLI with the published channel (2026-10-23)
+
+Feature round. The two npm rows no longer only report "the official package
+changed": the Host probes the installed CLIs and each row compares the installed
+version with the channel the machine is actually on. Requested semantics: DSH
+always against `latest`; Trellis against `beta` / `rc` when the local version is
+on that channel, otherwise `latest`.
+
+### Added
+
+| File | Purpose |
+| --- | --- |
+| `lib/local-version.js` | Fixed `dsh --version` / `trellis -v` probes: parse, 5 s timeout, per-probe errors, Windows shell for `.cmd`, no request input. |
+| `docs/validation-0.1.9-local.md` | Verification record for this round. |
+
+### Changed
+
+| File | Change | Reason |
+| --- | --- | --- |
+| `lib/upstream.js` | `source=local` branch returning `{local, errors}`; injectable `probeImpl` for tests. | The browser cannot spawn processes; the Host owns the probe. |
+| `src/client/version-check.js` | `localRouteUrl`, `requestLocalVersions`, `trellisTagChannel`; npm rows report `localVersion`, `channel`, `targetVersion`, `signature`, `updateAvailable`; ack records also carry the dist-tag signature. | Compare installed CLI with the published channel without replacing the change detection. |
+| `src/client/VersionMonitor.jsx` | npm rows show local/target versions, "newer release" badge, probe-failure hint, and the same per-row skip action. | The comparison must be actionable and suppressible per source. |
+| `src/client/locales.js`, `src/client/form.js`, `src/client/TrellisSettingsCard.jsx`, `lib/config.js` | `versionCheckLocalProbe` switch (default on) and updated monitor copy. | Automatic checks now spawn two CLIs; an explicit off switch is required. |
+| `test/version-check.test.js`, `test/local-version.test.js`, `test/upstream.test.js` | Channel mapping, npm comparison, probe failure/skip, probe skipping, local route responses. | Cover the new judgement end to end. |
+| `README.md` | 0.1.9 changelog; monitor bullet and config example include the probe and channel rules. | Docs must match behaviour. |
+| `package.json`, `lib/client.js`, `lib/client.js.map` | Version `0.1.9`; client bundle rebuilt. | Release bookkeeping. |
+
+### Not changed
+
+- The upstream-commit row keeps its own logic; only the shared ack record gained
+  an optional `signature` field.
+- npm rows still detect publish changes. The version comparison is an additional
+  criterion: dropping the change detection would hide `next`/`beta` releases
+  while the local version equals `latest`.
+- The Host still never accepts a request-selected command or URL.

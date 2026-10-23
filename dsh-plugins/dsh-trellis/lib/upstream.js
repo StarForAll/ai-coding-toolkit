@@ -18,6 +18,8 @@
  * @module dsh-trellis/upstream
  */
 
+import { probeLocalVersions } from "./local-version.js";
+
 export const ROUTE_PATH = "/dsh-trellis/version-check";
 /** The feeds are small; refuse anything that is not. */
 export const MAX_FEED_CHARS = 512 * 1024;
@@ -360,10 +362,15 @@ function sendJson(res, status, payload) {
  * URL is always constructed here from the validated value, never taken
  * verbatim from the request.
  *
- * @param {{fetchImpl?: typeof fetch, timeoutMs?: number}} [options]
+ * @param {{fetchImpl?: typeof fetch, timeoutMs?: number, probeImpl?: typeof probeLocalVersions, probeTimeoutMs?: number}} [options]
  * @returns {(req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) => Promise<void>}
  */
-export function createVersionCheckHandler({ fetchImpl, timeoutMs } = {}) {
+export function createVersionCheckHandler({
+  fetchImpl,
+  timeoutMs,
+  probeImpl = probeLocalVersions,
+  probeTimeoutMs,
+} = {}) {
   return async (req, res) => {
     try {
       if (req.method !== "GET" && req.method !== "HEAD") {
@@ -379,6 +386,13 @@ export function createVersionCheckHandler({ fetchImpl, timeoutMs } = {}) {
       }
       const url = new URL(req.url ?? "", "http://localhost");
       const source = url.searchParams.get("source");
+      if (source === "local") {
+        // Fixed `dsh --version` / `trellis -v` probes; nothing from the request
+        // selects a command. Failures are per probe and reported, not thrown.
+        const { versions, errors } = await probeImpl({ timeoutMs: probeTimeoutMs });
+        sendJson(res, 200, { ok: true, local: versions, errors });
+        return;
+      }
       if (source === "plugin") {
         const repo = parseRepoUrl(url.searchParams.get("url") ?? "");
         if (repo === null) {
