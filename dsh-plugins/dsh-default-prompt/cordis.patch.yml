@@ -1,0 +1,5 @@
+- insert:
+    - id: dsh-default-prompt
+      name: dsh-default-prompt
+    - id: dsh-default-prompt-web
+      name: dsh-default-prompt/web

@@ -1,0 +1,82 @@
+{
+  "name": "dsh-default-prompt",
+  "version": "1.1.1",
+  "description": "DeepSeek Harness 基础默认提示词插件，紧跟在系统提示词之后注入，像 Codex 一样提供核心指导与全局指令",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./web": "./src/web.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "src/",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ],
+      "platform": "web"
+    }
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "author": "new-Beginner",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/new-Beginner/dsh-default-prompt.git"
+  },
+  "bugs": {
+    "url": "https://github.com/new-Beginner/dsh-default-prompt/issues"
+  },
+  "homepage": "https://github.com/new-Beginner/dsh-default-prompt#readme",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0",
+    "@deepseek-ai/dsh-system-prompt": ">=0.1.0",
+    "@deepseek-ai/dsh-settings": ">=0.1.0",
+    "@deepseek-ai/schemastery": ">=3.18.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-system-prompt": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-settings": {
+      "optional": true
+    },
+    "@deepseek-ai/schemastery": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "pack:plugin": "npm pack --cache ./.npm-cache && node -e \"require('node:fs').rmSync('.npm-cache', {recursive:true, force:true})\""
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "cordis",
+    "plugin",
+    "system-prompt",
+    "prompt",
+    "codex",
+    "persona",
+    "developer-instructions"
+  ]
+}
