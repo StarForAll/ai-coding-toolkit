@@ -1662,3 +1662,40 @@ Verify installed dsh-trellis 0.1.6 in an isolated /tmp project with ~30 real DSH
 ### Status
 
 [OK] **Completed**
+
+
+## Session 356: dsh-trellis 0.1.7 installed parity re-verification
+<!-- trellis-session: v=2 fp=2feaea93f5e31d14 -->
+
+**Date**: 2026-10-23
+**Task**: dsh-trellis 0.1.7 installed parity re-verification
+**Branch**: `main`
+
+### Summary
+
+复验已安装 dsh-trellis 0.1.7（用户手动更新）对 Codex+Trellis 的对等性与 DSH 裸用补足：主链路全通过，无 P0/P1/P2；F1a/F3a 文档滞后已关闭，F1b headless 命令限制与 F2 headless profile 无插件仍存在；0.1.7 lib 与源码逐字节一致。
+
+### Main Changes
+
+- 记录 0.1.7 安装态、真实 DSH/Codex 会话与 S2/S4 证据到 verification-report/evidence-index
+- 补充 dsh-workflow-behavior spec：安装态 diff 复核、更新后 S1 抽样、headless 命令不可当命令输出
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6a9e2c6` | docs(spec): record dsh-trellis 0.1.7 installed-verification rules |
+| `7ace056` | chore(task): record 10-23-dsh-trellis-installed-parity-reverify |
+
+### Testing
+
+- [OK] plugin unit tests: 350 tests / 346 pass / 0 fail / 4 skip
+- [OK] S1: bootstrap/spec deny/guard/auto push/headless text; S2: doctor/commands/conflicts/version
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- F2 如 headless 会跑 Trellis 则安装插件；F1b/F3b 可选代码缓解，待用户决定

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-7.md`
-- **Total Sessions**: 355
+- **Total Sessions**: 356
 - **Last Active**: 2026-10-23
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-7.md` | ~1664 | Active |
+| `journal-7.md` | ~1701 | Active |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
@@ -35,6 +35,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 356 | 2026-10-23 | dsh-trellis 0.1.7 installed parity re-verification | `6a9e2c6`, `7ace056` | `main` |
 | 355 | 2026-10-23 | dsh-trellis 0.1.6 installed verification and 0.1.7 docs round | `72eba47` | `main` |
 | 354 | 2026-10-23 | dsh-trellis parity verification and 0.1.6 fixes | `8cf1e13`, `c2b87d1` | `main` |
 | 353 | 2026-10-22 | dsh-trellis 0.1.5 安装复核与 stale 勘误 | `ec7f48c` | `main` |
