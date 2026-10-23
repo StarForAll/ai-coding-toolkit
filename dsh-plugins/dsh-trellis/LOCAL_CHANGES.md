@@ -452,3 +452,36 @@ authoritative scope and manual checks.
 
 - No upstream Trellis changes; the DSH workflow/DSH.md staleness and the Codex-in-DSH identity
   precedence remain recorded in the task report for a separate decision.
+
+## 0.1.7 — docs round: headless command routing and mid-session mode switches (2026-10-23)
+
+Documentation + version re-stamp round. **No lib logic and no tests changed**;
+the only `lib/` difference from 0.1.6 is the `PLUGIN_VERSION` constant in
+`lib/client.js` re-stamped by the build. Both entries close the F1/F2 findings
+from the installed-0.1.6 verification round
+(`.trellis/tasks/10-23-dsh-trellis-016-installed-verify/research/verification-report.md`,
+final disposition: document only).
+
+### Added
+
+| File | Purpose |
+| --- | --- |
+| `docs/validation-0.1.7-local.md` | Verification record for this round (required by the version scheme: package.json/README/LOCAL_CHANGES/validation record must agree). |
+
+### Changed
+
+| File | Change | Reason |
+| --- | --- | --- |
+| `README.md` | New "headless 文本限制" note: `/trellis-*` commands only route through the interactive command surface (Web/TUI etc.); headless plain-text prompts are interpreted by the model, not executed; shell equivalents with Windows guidance. | F1 (P3, host limitation): a headless session given `/trellis-status` as text produced a model-improvised answer, once even claiming the plugin was not installed while it was actively injecting. |
+| `README.md` | New "避免同会话中途切换模式" note under the inline semantics list: old `<dsh-mode>` banners in session history are not rewritten after a config change; both stale-banner symptom directions (refusing dispatch, or quietly implementing inline), the `inline → auto` emphasis, and the `inline_allow_dispatch` guard-only caveat. | F2 (P3): after switching `dsh.dispatch_mode` mid-session, the model quoted the stale inline banner and refused a legitimate dispatch until corrected. The escape hatch changes only the guard, not the banner text (verified in `lib/workflow.js`: `DSH_INLINE_NOTE` is emitted on `inlineMode` regardless of `inline_allow_dispatch`). |
+| `README.md` | 0.1.7 changelog section pointing to `docs/validation-0.1.7-local.md`; notes the round is documentation + version re-stamp with no runtime change, updating installed copies is optional. | Docs must match the version scheme; version monitors may offer 0.1.7 and users should know it is optional. |
+| `.trellis/spec/platforms/dsh-workflow-behavior.md` | "Command routing surface" and "Mid-session mode switches" documented boundaries. | Durable cross-session contract. |
+| `package.json`, `lib/client.js` | Version `0.1.7`; client bundle re-stamped (`PLUGIN_VERSION` only). | Release bookkeeping for a docs round. |
+
+### Not changed
+
+- No lib logic, no tests: unit tests re-run and confirmed at the 0.1.6 baseline
+  (350 tests / 346 pass / 0 fail / 4 skip).
+- Installed web profile remains 0.1.6; this round has no runtime change, so reinstalling only
+  for the documentation is unnecessary.
+

@@ -102,6 +102,21 @@ While `auto`:
 - the dispatch guard refuses a task-less implement/check dispatch (fail-closed,
   stricter than Codex by design)
 
+### Mid-session mode switches (0.1.7, documented boundary)
+
+Old `<dsh-mode>` banners in session history are not rewritten when
+`dsh.dispatch_mode` changes; a model may keep quoting the stale banner (e.g.
+refusing a legitimate dispatch after the switch to `auto`, or quietly
+implementing inline instead of dispatching after that same switch). Guidance recorded in the plugin
+README (0.1.7): avoid switching the mode mid-session; if a switch is
+necessary, prefer a fresh session, or explicitly tell the model the old banner
+is obsolete and the current config wins. A new breadcrumb for the new mode is
+injected on the next turn (digest change), but the old banner stays in
+history. Related caveat: `dsh.inline_allow_dispatch: true` changes only the
+dispatch-guard decision, not the banner text — a model may still refuse to
+dispatch while the inline banner is present. This is documentation guidance,
+not new runtime behaviour.
+
 ---
 
 ## Workflow-State Contract
@@ -155,6 +170,20 @@ While `auto`:
 - Deny-once, ticket, refresh-window, persistence, and compaction reset are
   unchanged. The Codex hook has the same root-relative limitation; 0.1.6 fixes
   it on the DSH side only (upstream not changed).
+
+### Command routing surface (0.1.7, documented boundary)
+
+`/trellis-*` plugin commands execute only through the interactive command
+input surface (Web/TUI etc.). A headless plain-text prompt containing
+`/trellis-status` is an ordinary task for the model, not a command execution —
+this holds even with the plugin installed, and adding `--json` only changes
+the output format, not the input. Its answer is model-improvised and can be
+factually wrong (the verification round observed a headless session claiming
+the plugin was not installed while it was actively injecting). In headless
+sessions use the shell equivalents (`task.py current --source`,
+`get_context.py`, `task.py list`; `python3` or on Windows `py -3`/available
+Python). Recorded in the plugin README (0.1.7) and
+`docs/validation-0.1.7-local.md` as a host limitation; no runtime change.
 
 ---
 

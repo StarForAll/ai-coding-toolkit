@@ -15,11 +15,13 @@ DeepSeek Harness (dsh) host 插件：把 [Trellis](https://github.com/mindfold-a
 
 非 Trellis 项目不注入面包屑；命令只有被用户显式调用时才会检查并返回“未初始化 Trellis”。
 
+**headless 文本限制**：`/trellis-*` 命令由交互式命令输入面（Web/TUI 等）路由；headless 的纯文本 prompt 不会触发命令处理器，输入 `/trellis-status` 这样的文本只会被当作普通任务交给模型解释（模型自行拼装的结果不是命令输出，偶发失实；即使已安装本插件也一样）。headless 场景请直接用等价 shell（`python3`，Windows 用 `py -3` 或项目可用的 Python）：`python3 .trellis/scripts/task.py current --source`（人类可读输出；机器解析用 `current --json`）、`python3 .trellis/scripts/get_context.py`（已含 git 状态），或 `python3 .trellis/scripts/task.py list`。
+
 这是 Trellis DSH 适配的**可选伴侣插件**，不是使用 `trellis init --dsh` 的前置条件。存在 `trellis_wait` 时可使用 continuable 后台派发和事件汇合。未安装插件时，只有工具 schema 明确支持 `run_in_background` 的旧宿主才设置 `run_in_background: false`；DSH `0.2.1-alpha.2` 已移除该参数，统一立即返回 child ID，应让父会话结束当前轮、由原生完成通知唤醒，或直接在主会话完成工作。收到 child ID 不代表依赖步骤通过；没有可用的事件汇合或可靠原生通知路径时不要派发。所有路径都禁止 sleep 或轮询，Trellis CLI 不会自动安装任何 DSH profile 插件。
 
 ## 对齐 Codex 的三项 Trellis 接线
 
-当前版本 **0.1.6**。普通修改按 `0.1.0 → 0.1.1 → 0.1.2 → 0.1.3 → 0.1.4 → 0.1.5 → 0.1.6` 递增；只有运行时/配置契约
+当前版本 **0.1.7**。普通修改按 `0.1.0 → 0.1.1 → … → 0.1.7` 递增；只有运行时/配置契约
 破坏或大改才提升次版本/主版本。三项主链路已经对齐，但 DSH 的事件形状仍带来下面的
 差异，因此本插件不宣称与 Codex 完全一致。
 
@@ -180,6 +182,32 @@ git 依赖不会执行 `prepack`（`pnpm pack`/`publish` 才会），因此 `lib
 
 运行时需要 profile 提供 `sessionProjections` 服务；该依赖由插件的 `inject` 声明。自定义或精简 profile 若未组装此服务，需先加载 `@deepseek-ai/dsh-session-projection`，否则插件会等待依赖，不会退回直接扫描历史。
 
+### 0.1.7：headless 命令与模式切换的文档边界
+
+- **headless 文本不路由 `/trellis-*` 命令**（文档说明，行为不变）：命令只在交互式命令
+  输入面（Web/TUI 等）执行；headless 纯文本输入 `/trellis-*` 会被当作普通 prompt 交给
+  模型解释，不是命令输出。即使已安装本插件，headless 文本仍不路由（这与 headless
+  profile 是否安装插件是两回事）；加 `--json` 也只是改变输出格式，输入仍是任务文本。
+  headless 场景请直接用等价 shell（`python3`，Windows 用 `py -3` 或项目可用的 Python）：
+  `task.py current --source`（人类可读输出；机器解析用 `current --json`）、
+  `get_context.py`（已含 git 状态）、`task.py list`，或
+  `git status --short --branch`。
+- **同会话中途切换 `dsh.dispatch_mode` 的文档边界**：会话历史中的旧 `<dsh-mode>` banner
+  不会随配置变化改写，模型可能继续引用它（例如把已切到 `auto` 的项目当作 inline
+  拒绝派发；另一种表现是按旧 inline 语义直接在主会话执行，后者更隐蔽）。尤其是 `inline → auto`
+  方向；反向切换通常会被新的 inline banner 覆盖，但仍建议新会话。建议：同一会话内
+  避免中途切换；如必须切换，优先新开会话，或明确告诉模型旧 banner 已过期、以当前
+  配置为准。新模式会在下一轮注入一份新面包屑（digest 变化触发），但旧 banner 仍留在
+  会话历史里。
+- **`inline_allow_dispatch` 与 banner 的关系**：该逃生口只改变派发守卫的判定（不再拒绝
+  implement/check 派发），**不改变 banner 文案**——inline 的 `<dsh-mode>` 仍写着
+  “Do not dispatch”。用该开关代替切换模式时，模型仍可能因 banner 拒绝派发。
+- 本轮为文档 + 版本号变更，无 lib 逻辑/测试变更（仅 `lib/client.js` 的 `PLUGIN_VERSION`
+  版本 stamp 随构建变化），运行时行为不变；验证记录见
+  `docs/validation-0.1.7-local.md`。版本监控可能提示 0.1.7：本轮仅文档，无运行时
+  变化，可不更新；要让已安装用户看到新 README，需提交/推送后更新 profile。
+- 版本：`0.1.6` → `0.1.7`；client bundle 已用 `pnpm run build:client` 重印版本号。
+
 ### 0.1.6：只读默认、严格角色识别、子目录 spec
 
 - **模式不再写项目文件**：移除首次进入项目自动补 `dsh.dispatch_mode: inline` 的迁移；
@@ -329,6 +357,14 @@ DSH 默认是 `inline`（主会话直接实现/检查）。`auto` 在 DSH 上已
   banner 明确覆盖这类派发指令，inline 下应以 banner 为准。
 - **迁移提示**：从 `auto` 切到 `inline`（或反向）会改变面包屑正文的 digest，下一轮自动
   重新注入；同模式同状态不会重复注入。子代理不接收 `<dsh-mode>`。
+- **避免同会话中途切换模式**：会话历史里的旧 `<dsh-mode>` banner 不会随配置变化被
+  改写或删除，模型可能仍引用它——例如把已切到 `auto` 的项目当作 inline 拒绝派发，
+  也可能按旧 inline 语义直接在主会话执行（另一种表现，更隐蔽）；`inline → auto` 方向
+  尤其容易踩中，反向切换通常会被新的 inline banner 覆盖，但仍建议新会话。同一会话内
+  避免中途切换 `dsh.dispatch_mode`；如果必须切换，优先新开会话，或明确告诉模型旧
+  banner 已过期、以当前配置为准。新模式会在下一轮注入一份新面包屑（digest 变化触发），
+  但旧 banner 仍留在会话历史里。另注意 `inline_allow_dispatch: true` 只改变守卫判定，
+  不改变 banner 的“Do not dispatch”文案：用它代替切模式时，模型仍可能拒绝派发。
 
 Headless、rc.6 或需要声明部署默认值时，仍可在 profile 的 `cordis.patch.yml` 里覆盖（整行替换）；Web 卡片的“恢复配置文件值”会清除用户层字段并重新继承这里的值：
 

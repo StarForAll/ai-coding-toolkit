@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/archive/2026-10/10-23-dsh-trellis-parity-verify/research/verification-report.md", "reason": "上一轮 0.1.5→0.1.6 验证报告，本轮所有断言当作待复核清单"}
+{"file": ".trellis/tasks/archive/2026-10/10-23-dsh-trellis-parity-verify/research/remaining-issues-analysis.md", "reason": "上轮遗留问题分析，用于核对是否全部处置"}
+{"file": "dsh-plugins/dsh-trellis/README.md", "reason": "插件 0.1.6 声明的全部能力面与边界，验证对象清单来源"}
+{"file": "dsh-plugins/dsh-trellis/LOCAL_CHANGES.md", "reason": "本地副本相对上游 0.1.12 的变更清单与版本策略"}

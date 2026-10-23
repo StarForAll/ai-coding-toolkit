@@ -608,7 +608,7 @@ window.__ModuleLoader__.load({
 		* `__DSH_TRELLIS_VERSION__` is replaced by tsdown with the package version.
 		* Source-level tests and any unbundled load keep the literal fallback.
 		*/
-		const PLUGIN_VERSION = "0.1.6";
+		const PLUGIN_VERSION = "0.1.7";
 		//#endregion
 		//#region src/client/VersionMonitor.jsx
 		/**
