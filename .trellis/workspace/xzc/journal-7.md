@@ -1840,3 +1840,37 @@ Verify installed dsh-trellis 0.1.6 in an isolated /tmp project with ~30 real DSH
 ### Next Steps
 
 - 报告性开放项：流转图 pin v24、1.2-零补丁嵌入方案 pin v20 派生漂移未处理（按口径 6/8 仅报告）；后续修订可在 §9.1 说明区补一句点明行 1-3 为指针目标分类
+
+
+## Session 362: workflow-design v34 深度审查与判定源唯一化修复
+<!-- trellis-session: v=2 fp=07c1d6bbada6c3b7 -->
+
+**Date**: 2026-10-24
+**Task**: workflow-design v34 深度审查与判定源唯一化修复
+**Branch**: `main`
+
+### Summary
+
+按 §0.1 对 workflow-design.md v33 做第二轮深度审查：确认 4 条主发现（当前任务有效性双口径死行、§8.4 自带口径、满足判定两口径收尾侧无挡板、表 4-1 与 §4.5 不同步），按外部治理提案独立评估后执行 v34 修复（F1 案 B + 行 3 泛化、行 1 转 §3 引用式、满足判定收口 §4.3、防复发机制落 spec），两轮外部复核（L1–L5、R1–R4）全部核实采纳并修正。产物：主稿与配套文档 v34 同版、docs spec 谓词登记表 + 8 条探针、审查指南 Revision Protocol + checklist 两问、任务目录三份文档（review-report / remediation-plan / prd）。
+
+### Main Changes
+
+- docs/workflows/workflow-design.md v33→v34（判定源唯一化、满足判定收口、附录 C v34）；依赖机制设计说明.md 同版 v34（转引用式）；.trellis/spec/docs/index.md（谓词登记表+探针）；.trellis/spec/guides/design-review-thinking-guide.md（Revision Protocol+checklist 两问）
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f579f1d` | workflow-design v34：判定源唯一化审查修复——当前任务行改§3引用式（删正常但未归档当前任务行、按§3无效兜底）、满足判定收口§4.3（已归档且正常）、§8.4去自带口径、表4-1触发列改引用、活动区/归档区术语、§0两句写作纪律；配套文档同版转引用式；spec新增谓词登记表与探针、审查指南新增Revision Protocol |
+
+### Testing
+
+- [OK] spec 登记表 8 条探针全绿（7 条确定期望值 + 1 条人工 diff）：越权复述 0、旧条件式行 0、引用式行 9、定义式 3、§4.3 引用 5、配套清单枚举 0、版本 v34×2、例外式措辞 0；全量 diff 三轮复核
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 后续修订 workflow-design.md 时按 Revision Protocol（源→投影→探针→附录 C）执行并跑登记表探针；派生流转图仍标 v24 属版本漂移，仅报告项
