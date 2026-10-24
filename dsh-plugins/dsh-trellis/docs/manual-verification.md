@@ -1,6 +1,6 @@
-# dsh-trellis 手工验收清单（0.1.x）
+# dsh-trellis 手工验收清单
 
-本文件只列 **agent 不能替代用户确认** 的项目。已由自动化验证覆盖的 bootstrap、`no-trellis`、任务面包屑、spec deny-once、子代理 push、dispatch guard、shell 身份、命令处理器、冲突路由与通知代码路径、单元测试与构建，不再列入手工步骤；证据见 `validation-0.3.7-local.md` 和 `../../docs/capability-inventory.md`。
+本文件只列 **agent 不能替代用户确认** 的项目。已由自动化验证覆盖的 bootstrap、`no-trellis`、任务面包屑、spec deny-once、子代理 push、dispatch guard、shell 身份、命令处理器、冲突路由与通知代码路径、单元测试与构建，不再列入手工步骤。
 
 当前范围固定排除：项目级策略、vendored 自动同步脚本/补丁目录。排他只验收桌面通知警告；不自动禁用其他插件。
 
@@ -11,6 +11,13 @@
 **前提**：已安装插件并在 Web UI 打开一个 **无 active task** 的 Trellis 项目；浏览器通知与压缩功能正常。
 
 **步骤**：
+
+先准备测试项目（只需解压一次）：解压得到的 `/tmp/dsh-trellis-manual-test` 即“前提”中无 active task 的 Trellis 测试项目，在 Web UI 中打开它作为工作目录。
+
+```
+tar -xzvf ~/tmp/dsh-trellis-manual-test.tar.gz -C /
+cd /tmp/dsh-trellis-manual-test
+```
 
 1. 新建会话，连续发送 3 条普通消息（例如 `say one`、`say two`、`say three`）。如果 `/compact` 提示没有可压缩历史，继续多发几轮直到有可压缩内容。
 2. 在输入框执行 `/compact`，等待命令返回压缩结果。
@@ -40,7 +47,7 @@ echo "compaction=$(zstd -dc "$f" | grep -c '"type":"compaction/end"')"
 
 **不要把“首轮未开启 Trellis 后不再重复 bootstrap”记为失败**：当前设计就是每会话一次；需要再次提示请用 `trellis-start` 或压缩/clear。
 
-## M1b. 重启后 spec 去重状态（0.3.7）
+## M1b. 重启后 spec 去重状态
 
 **目的**：验证 spec 去重记录持久化：普通重启不重复 deny；压缩/clear 删除分片后重新 deny；损坏/只读时安全回退。
 
@@ -116,6 +123,20 @@ echo "compaction=$(zstd -dc "$f" | grep -c '"type":"compaction/end"')"
 
 **目的**：确认插件把缺省的 Trellis 项目当作 inline，且**从不写**项目配置。
 
+> 背景：`dsh.dispatch_mode` 未配置时缺省为 `inline`，这是有意设计：插件对项目配置只读，避免写入 `.trellis/config.yaml` 造成污染。
+
+辅助预检（agent 亦可代跑；本节验收仍以下列真实会话步骤为准）：在测试项目目录（`.trellis/config.yaml` 存在且无 `dsh:` 段）执行，预期输出 `inline`；如设置了 `DSH_HOME`，把代码里的 `$HOME/.dsh` 换成 `$DSH_HOME`；使用其他 profile 时把 `profiles/web` 替换为对应 profile 名。
+
+```bash
+# 在测试项目目录下执行
+node --input-type=module -e '
+import { readFile } from "node:fs/promises";
+const base = process.env.HOME + "/.dsh/profiles/web/node_modules/dsh-trellis/lib/";
+const { dshDispatchMode } = await import(base + "workflow.js");
+console.log(dshDispatchMode(await readFile(".trellis/config.yaml", "utf8")));
+'
+```
+
 **步骤**：
 
 1. 选一个 `.trellis/config.yaml` 里没有 `dsh:` 段的测试项目，发送一条普通消息（或重启后首次进入）。
@@ -133,19 +154,19 @@ echo "compaction=$(zstd -dc "$f" | grep -c '"type":"compaction/end"')"
 
 ## M4. 重启、安装态与重复注册
 
-**目的**：确认真实 host 重启后加载的是本地当前版本（0.1.x），且没有重复工具/命令/设置页。
+**目的**：确认真实 host 重启后加载的是本地当前版本，且没有重复工具/命令/设置页。
 
 **步骤**：
 
 1. 完全退出并重启 DSH Web。
-2. 打开插件/设置页，确认 `dsh-trellis` 版本显示为 `0.1.1`（或设置页显示的实际构建版本）。
+2. 打开插件/设置页，确认 `dsh-trellis` 版本显示为实际构建版本。
 3. 分别执行一次 `/trellis-status`、`/trellis-finish`。
 4. 检查可用工具中只有一份 `trellis_wait`，命令只有一组 `/trellis-status`、`/trellis-finish`。
 5. 查看启动日志/页面控制台，确认没有插件加载错误、重复注册错误或未捕获异常。
 
 **正确效果**：
 
-- 版本为 0.1.1；两个命令各执行一次并返回正常结果（无任务时也是 success）。
+- 版本与已安装插件 `package.json` 的 `version` 字段一致（如 `~/.dsh/profiles/web/node_modules/dsh-trellis/package.json`；设置了 `DSH_HOME` 或使用其他 profile 时相应替换路径），不要求具体版本号；两个命令各执行一次并返回正常结果（无任务时也是 success）。
 - 不出现重复命令、重复工具或重复设置页。
 - 启动日志无 `dsh-trellis` 相关错误；只有一份插件实例运行。
 
@@ -196,7 +217,7 @@ echo "compaction=$(zstd -dc "$f" | grep -c '"type":"compaction/end"')"
 
 以下已由 agent 自动验证，手工清单不重复：
 
-- 单元/集成测试、`0.2.1-rc.2` 兼容矩阵、客户端构建；
+- 单元/集成测试、`dsh 0.2.1-rc.2` 兼容矩阵、客户端构建；
 - 新会话 bootstrap 一次、`no-trellis` 跳过、非 Trellis 目录不注入；
 - 有任务面包屑、子代理首步 push（含角色契约）且无 no_task 消息；
 - spec deny-once / 重试放行、spec 状态 round-trip/损坏回退/重启与压缩重置、dispatch guard deny；
@@ -204,4 +225,4 @@ echo "compaction=$(zstd -dc "$f" | grep -c '"type":"compaction/end"')"
 - 冲突路由返回、冲突通知代码路径、页内横幅渲染；
 - 命令处理器在真实 Trellis 0.7.0-beta.4 项目上的无任务/有任务返回。
 
-已接受的非问题：旧 0.2.0 会话升级后的重复 bootstrap；本地副本无 LICENSE；版本监控通知（用户已确认正常）；**首轮未开启 Trellis 后，同会话后续不再重复 bootstrap（有意降噪）**。
+已接受的非问题：本地副本无 LICENSE；版本监控通知（用户已确认正常）；**首轮未开启 Trellis 后，同会话后续不再重复 bootstrap（有意降噪）**。
