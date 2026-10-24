@@ -163,6 +163,9 @@ If you can write it, drop or downgrade. If you cannot, the finding survives.
 - [ ] Rebuttal search done (document + companion + examples + appendix)?
 - [ ] Cheapest conforming implementation described and tested?
 - [ ] Scenario is honest-use, not external tampering/bypass?
+- [ ] Is the state in question produced by an entry action the document itself
+      allows? A legal entry action whose result another rule calls illegal is an
+      internal contradiction (core rule 1), not a blank.
 - [ ] Not a stated tradeoff?
 - [ ] Not merely a blank?
 - [ ] Author's rebuttal attempted and failed?
