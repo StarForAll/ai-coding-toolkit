@@ -150,6 +150,26 @@ If you can write it, drop or downgrade. If you cannot, the finding survives.
   mirror table). Before declaring a routing fix done, grep the old
   condition's keywords across the document.
 
+## Revision Protocol (For workflow-design.md Fixes)
+
+The v31→v33 history shows one defect family recurring: a predicate defined in
+one place, then restated with drifting conditions elsewhere. Fix order and
+record-keeping are therefore part of the fix:
+
+1. **Source first, projections second, probes third, revision note last.**
+   Edit the single definition (§3, §4.3, §7.5 …), then update every
+   referencing location **as a reference** — never as a restated condition —
+   then run the predicate probes (see the registry in
+   `.trellis/spec/docs/index.md`), then write the appendix revision entry.
+   Adding a routing row before its source condition exists is exactly how v33
+   reintroduced a restatement v32 had deleted.
+2. **Appendix revision entries record; they do not define.** Each entry may
+   only state: which source/cell changed, which references and mirrors
+   followed, and why. Restating conditions in the revision note creates the
+   next drift copy.
+3. **Main doc and companion doc change in the same commit**, and the probes
+   run against both.
+
 ## Step 4: Calibrate The Output
 
 - Main findings: only the four accepted sources, with a concrete impact (which
@@ -188,6 +208,11 @@ If you can write it, drop or downgrade. If you cannot, the finding survives.
 - [ ] Is the state in question produced by an entry action the document itself
       allows? A legal entry action whose result another rule calls illegal is an
       internal contradiction (core rule 1), not a blank.
+- [ ] For a routing-row change: is the row's shading recorded — which earlier
+      stage/row pre-empts it? A row that can never be reached must be widened
+      or removed (dead row).
+- [ ] Does the state the row covers have exactly one exit in its table? Two
+      exits for one cell means one of them is a stray copy.
 - [ ] Not a stated tradeoff?
 - [ ] Not merely a blank?
 - [ ] Author's rebuttal attempted and failed?

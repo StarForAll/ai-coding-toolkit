@@ -268,6 +268,39 @@ These rules have historically required cross-document propagation:
 - **command-source vs maintainer-doc boundary**: "阶段命令源文档只保留产品/runtime 语义；维护者专用说明不得混入 `commands/*.md`，而应同步落到 `装后隐藏目录与托管边界核对清单.md`、`CLI原生适配边界矩阵.md`、`目标项目兼容升级方案指导.md` 与必要的平台 README" — appears in command-doc authoring spec, maintenance docs, platform README, and any tests/assertions that verify deployed command content
 - **ordinary-use defect boundary**: "当前 workflow 的缺陷判定默认面向个人正常使用 / 诚实使用路径；只有通过刻意篡改文件、伪造状态、主动绕过命令约束等恶意方式才会触发，而正常使用链路下不会出现的问题，不按默认漏洞/缺陷口径处理" — appears in 总纲, 通俗版, 目标项目兼容升级方案指导, 结构性迁移设计, and `workflow-audit` spec
 
+### workflow-design.md Predicate Registry and Probes
+
+`docs/workflows/workflow-design.md` (v34+) defines each load-bearing
+predicate in exactly one place; every other occurrence must be a reference,
+not a restated condition (main doc §0 写作约定, added in v34). Registry —
+update the row when a source moves:
+
+| Predicate | Sole source | Sanctioned reference forms | Banned (defining restatement) |
+|---|---|---|---|
+| Current-task pointer validity | 主设计 §3 「当前任务」 | “按 §3 判定”“按 §3 有效（且非挂起）”“按 §3 无效”“视为无当前任务”；companion doc: “按主设计 §3 判定” | Any parenthetical restatement posing as “按 §3 有效（…）”; enumerating the invalid list anywhere outside 主设计 §3 (companion doc included) |
+| Dependency satisfied / ready | 主设计 §4.3 依赖满足 (§3 就绪 references §4.3) | Action sequences may reuse “前置全部为正常” verbatim | A second “依赖满足 = …” / “就绪 = …” definition or any competing satisfaction semantics |
+| Start-work legality | 主设计 §7.5 开工 | “按 §7.5 校验”; summary tables cite §4.5 / §7.5 (表 4-1 form) | Re-writing the full condition in a summary table |
+| Finish legality | 主设计 §7.5 完成 + §5.3 可见性顺序 | “按 §5.3 / §6.3 执行” | Same |
+
+Key distinction: **defining restatements are banned; action-condition
+references are allowed** — once the source definition fixes the semantics, a
+verbatim condition inside an action sequence inherits it and does not create a
+second predicate.
+
+Probes — run after any `workflow-design.md` revision, against both documents
+(expected values as of v34):
+
+```bash
+rg -n "按 §3 有效（" docs/workflows/workflow-design.md                 # 0 hits
+rg -n "有当前任务，且该任务未归档、账本为|有当前任务，但该任务未归档、账本为|有当前任务，但该任务已归档" docs/workflows/workflow-design.md   # 0 hits (old condition-style rows gone)
+rg -n "按 §3 有效|按 §3 无效" docs/workflows/workflow-design.md        # 9 lines as of v34: 6 normative (§8.4 ×1, §9.1 rows 1/2 ×4, §9.1 说明 ×1) + 3 record mentions (frontmatter status, version blockquote, appendix C entry — they name the form, they do not define it)
+rg -n "依赖满足 =|就绪.*前置集合全部为" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 3 lines as of v34: 主设计 §3 就绪 + §4.3 依赖满足 + 配套 §3 就绪 (all others must be references)
+rg -n "满足判定按 §4.3|按主设计 §4.3" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 5 lines as of v34: 主设计 §3 就绪；配套 §3 就绪、§5 判定规则、§6.7 建边（“该态按主设计 §4.3 视为未满足”）、§22 revision record
+rg -n "指向已归档、规划中且前置未满足" docs/workflows/依赖机制设计说明.md   # 0 hits (companion references 主设计 §3 instead)
+rg -n "或为“正常但未归档”的任务|前置未完工（或为" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 0 hits (satisfaction exception folded into 未完工 enumeration)
+rg -n "视为无当前任务" docs/workflows/workflow-design.md               # diff vs registry snapshot; new hits must be reference-form (historical appendix entries stay)
+```
+
 ---
 
 ## Code Examples
