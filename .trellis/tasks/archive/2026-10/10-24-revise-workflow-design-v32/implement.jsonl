@@ -1,0 +1,3 @@
+{"file": "docs/workflows/workflow-design.md", "reason": "修订对象主文档 v31"}
+{"file": "docs/workflows/依赖机制设计说明.md", "reason": "同版同步的配套文档"}
+{"file": ".trellis/spec/guides/design-review-thinking-guide.md", "reason": "修复模式约束：互斥改条件、镜像同段声明、同版同步"}
