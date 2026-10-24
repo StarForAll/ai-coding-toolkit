@@ -139,6 +139,16 @@ If you can write it, drop or downgrade. If you cannot, the finding survives.
   state both in the same paragraph; leaving one implicit re-creates the defect.
 - Change the main document and its companion in the same pass, including both
   version fields; a rule edit with a stale `design:` field is not done.
+- Enumerate and update the **same-condition copies** in the same pass: a
+  routing row's condition usually has a summary paragraph that restates it
+  (§8.4 in workflow-design.md), a mirror table (the other project-state
+  table), and related rule sections that reference the same state. Fixing
+  one copy and leaving the others re-creates the "same rule, two places"
+  defect one occurrence at a time — the v33 fix history hit this three
+  times (§9.1 row fix missed §6.8; first-row condition fix missed the
+  second row and the §8.4 summary; an archive-state swallow fix missed the
+  mirror table). Before declaring a routing fix done, grep the old
+  condition's keywords across the document.
 
 ## Step 4: Calibrate The Output
 
