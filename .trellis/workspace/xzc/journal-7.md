@@ -1805,3 +1805,38 @@ Verify installed dsh-trellis 0.1.6 in an isolated /tmp project with ~30 real DSH
 ### Status
 
 [OK] **Completed**
+
+
+## Session 361: workflow-design v33 审查修复：基线变更切分、入口表条件对齐 §3、插入时机对齐
+<!-- trellis-session: v=2 fp=0a2286e930cf7a8a -->
+
+**Date**: 2026-10-24
+**Task**: workflow-design v33 审查修复：基线变更切分、入口表条件对齐 §3、插入时机对齐
+**Branch**: `main`
+
+### Summary
+
+审查 workflow-design v32 并产出 R2 报告（主发现 0、措辞精确项 P1/P2 挂 B1），经用户确认后在本任务内执行 v33 修复；随后四轮对抗复核各消一组同构残留（重连范围双口径、§6.8/§3 插入时机、首行吞行三处、进行中分支无账本限定、类型 3 行吞已归档、放弃新建替代变体漏接续），trellis-check 8/8 通过
+
+### Main Changes
+
+- workflow-design.md v32→v33：§5.5 基线变更按工作是否成立互斥切分+适用输入+四种出口终点接续+重连范围单一判定；§9.1 两张项目层表当前任务行补维度与条件（账本公共条件）并与 §3 无效清单对齐；§6.8/§3 无关任务插入时机对齐。配套文档仅版本同步 v33
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dc33762` | workflow-design v33：基线变更互斥切分、入口两表当前任务行条件对齐 §3、无关任务插入时机对齐 |
+| `3bf9a3e` | chore(task): archive 10-24-review-workflow-design-v33 |
+
+### Testing
+
+- [OK] trellis-check 8/8 通过（版本一致性、两表穷尽互斥与 §3 对齐、出口接续无落空、交叉引用、配套零 diff）；每轮修复后 grep 残留清查+全指针状态穷尽推演
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 报告性开放项：流转图 pin v24、1.2-零补丁嵌入方案 pin v20 派生漂移未处理（按口径 6/8 仅报告）；后续修订可在 §9.1 说明区补一句点明行 1-3 为指针目标分类
