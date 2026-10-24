@@ -128,6 +128,18 @@ document alone. If it satisfies the document without changing it, drop.
 Write the one sentence the author would use to reject the finding, with a `§`.
 If you can write it, drop or downgrade. If you cannot, the finding survives.
 
+## When A Finding Survives: How To Fix Without A Patch Layer
+
+- Prefer making the two overlapping rules **mutually exclusive by condition**
+  (for example: split a flat table into ordered stages, and scope each stage's
+  rows) over declaring "rows are matched top-down". Row order is a cover; the
+  overlap stays underneath it.
+- When a boundary is narrowed on one side (a target must be active), also check
+  the mirror case (may an archived task still serve as the prerequisite?) and
+  state both in the same paragraph; leaving one implicit re-creates the defect.
+- Change the main document and its companion in the same pass, including both
+  version fields; a rule edit with a stale `design:` field is not done.
+
 ## Step 4: Calibrate The Output
 
 - Main findings: only the four accepted sources, with a concrete impact (which
