@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/guides/design-review-thinking-guide.md", "reason": "审查协议：证据门槛、四过滤器、对抗性验证、排除项要求与已知误报模式"}
+{"file": ".trellis/spec/docs/index.md", "reason": "docs 层规范：设计稿审查入口、版本漂移只报告、普通使用缺陷边界"}
