@@ -1737,3 +1737,25 @@ Verify installed dsh-trellis 0.1.6 in an isolated /tmp project with ~30 real DSH
 ### Next Steps
 
 - 本任务无待执行修复；其他两份未跟踪文档保留原样，未推送。
+
+
+## Session 358: 审查 workflow-design v30 设计稿
+<!-- trellis-session: v=2 fp=b0e6bfee99046969 -->
+
+**Date**: 2026-10-24
+**Task**: 审查 workflow-design v30 设计稿
+**Branch**: `main`
+
+### Summary
+
+按 §0.1 审查契约审查 v30：主要结论 3 条（建边到已归档正常任务产出非法组合、§9.1 缺行序导致同一状态两种修复、A4/B6 验收列引用 §10 不存在的要求）、措辞项 6 条、已排除 11 条、派生图 v24 版本漂移；design-review-thinking-guide 补一条候选检查项。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `db1106e` | 审查 workflow-design v30 设计稿（按 §0.1 审查契约） |
+
+### Status
+
+[OK] **Completed**

@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-7.md`
-- **Total Sessions**: 357
-- **Last Active**: 2026-10-23
+- **Total Sessions**: 358
+- **Last Active**: 2026-10-24
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-7.md` | ~1739 | Active |
+| `journal-7.md` | ~1761 | Active |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
@@ -35,6 +35,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 358 | 2026-10-24 | 审查 workflow-design v30 设计稿 | `db1106e` | `main` |
 | 357 | 2026-10-23 | dsh-trellis 全面对等性审计与修复复核完结 | `3c9282f` | `main` |
 | 356 | 2026-10-23 | dsh-trellis 0.1.7 installed parity re-verification | `6a9e2c6`, `7ace056` | `main` |
 | 355 | 2026-10-23 | dsh-trellis 0.1.6 installed verification and 0.1.7 docs round | `72eba47` | `main` |
