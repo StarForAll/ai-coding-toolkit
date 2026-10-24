@@ -1759,3 +1759,25 @@ Verify installed dsh-trellis 0.1.6 in an isolated /tmp project with ~30 real DSH
 ### Status
 
 [OK] **Completed**
+
+
+## Session 359: workflow-design v31 修订
+<!-- trellis-session: v=2 fp=4f954b8042003031 -->
+
+**Date**: 2026-10-24
+**Task**: workflow-design v31 修订
+**Branch**: `main`
+
+### Summary
+
+按审查 F1–F3 与补充说明修订主设计与配套文档到 v31：建边两端限活动区、进行中建边只阻收尾、入口三段路由（含指针为空）、类型 2 限未归档、组合表改判等待、§10 补升级 SOP 与迁移约束、R/SOP 术语；审查指南补三条修订期做法。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5479b26` | workflow-design v31：建边两端限活动区、入口改三段路由 |
+
+### Status
+
+[OK] **Completed**
