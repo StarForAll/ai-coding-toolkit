@@ -1781,3 +1781,27 @@ Verify installed dsh-trellis 0.1.6 in an isolated /tmp project with ~30 real DSH
 ### Status
 
 [OK] **Completed**
+
+
+## Session 360: workflow-design v32 修订：三轮审查与修复
+<!-- trellis-session: v=2 fp=89248645bf8d7025 -->
+
+**Date**: 2026-10-24
+**Task**: workflow-design v32 修订：三轮审查与修复
+**Branch**: `main`
+
+### Summary
+
+新开 review-workflow-design-v31 任务，按 §0.1 口径对 workflow-design.md v31 深度审查（2 主发现 F1 就绪定义未排除异常、F2 组合自检表缺已归档+无记录行；W1–W3 措辞项），经用户裁定后开 revise-workflow-design-v32 落实为 v32（两文档同版）。随后两轮外部复审再修：N1 死行（v32 补行方案推翻改删除）、N2 宽口径未就绪收敛 §3 单一定义、N3 归档前置来源四处补全、N4 导读失实重写、挂起清除统一为表 4-2 行 3 转移并单源化评估点枚举；第三轮统一删边/重连枚举并回填任务工件。trellis-check 子代理两轮复核通过。遗留：W2（§8.4/§9.1 第一段不对齐）、派生图 v24 与实现方案 v20 版本漂移仅报告。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2f97196` | workflow-design v32：就绪收口、指针单源化、组合表补行、挂起清除统一行 3 转移 |
+| `2bc816a` | chore(task): archive 10-24-review-workflow-design-v31 |
+| `24f67c5` | chore(task): archive 10-24-revise-workflow-design-v32 |
+
+### Status
+
+[OK] **Completed**
