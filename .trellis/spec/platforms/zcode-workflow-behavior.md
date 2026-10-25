@@ -66,6 +66,64 @@ resolving this duplication.
 
 ---
 
+## Verified Behavior: Hook Variables Bind the Live Session cwd (Drift Deadlock)
+
+Verified on 2026-10-25 against the ZCode host source
+`/opt/ZCode/resources/glm/zcode.cjs` (hook env construction:
+`ZCODE_PROJECT_DIR: t.cwd || n`) and the live failure in session
+`session_b6fd816ad7423725734fb309c8d8b7ec` (trace
+`24f60fda-5b66-43ca-b595-98dfe3896779`):
+
+- Template variables expanded in configuration-hook commands
+  (`.zcode/config.json`) bind the **session working directory at
+  hook-fire time**, not a fixed project root. On Claude Code the
+  same-named `CLAUDE_PROJECT_DIR` is fixed to the project root; the
+  ZCode variable has divergent semantics. No supported hook variable
+  on ZCode provides a fixed project root.
+- ZCode's Bash tool persists cwd across calls. After a persistent `cd`
+  moves the cwd to any directory other than the repository root itself
+  (subdirectories inside the repo included), every subsequent
+  configuration hook (`SessionStart`, `UserPromptSubmit`,
+  `PreToolUse`) resolves `${ZCODE_PROJECT_DIR}` to the drifted
+  directory and fails with "No such file or directory" (e.g. a turn
+  that ran `cd docs/workflows && rg ...` broke all hooks from the
+  next turn).
+- The failure mode is a **session deadlock**, not noise: the hook
+  command `python3 <missing script>` exits with code 2, which ZCode's
+  hook contract interprets as a deliberate block. A failing
+  `UserPromptSubmit` hook blocks the prompt itself, so the
+  "cd back to the repo root" instruction can never reach the model.
+  A session that ends a turn with drifted cwd is unrecoverable from
+  inside; the only in-session remedy is temporarily disabling hooks
+  to issue the restore instruction, then re-enabling them.
+
+### Operating Rules (cwd discipline)
+
+- The session cwd must remain **exactly the repository root directory
+  itself** at all times. Being "inside the repository" is not enough:
+  `${ZCODE_PROJECT_DIR}` is the verbatim cwd, and the hook scripts
+  exist only at `<repo-root>/.zcode/hooks/`, so a cwd parked in any
+  subdirectory — even one inside the repo, e.g. `docs/workflows` —
+  breaks every configuration hook.
+- Never run a bare `cd <subdir>` in a ZCode session. Use absolute
+  paths, or a subshell `(cd <subdir> && <cmd>)`, which does not
+  persist the cwd.
+- Before ending a turn, if the session cwd is not the repository root,
+  `cd` back to the repository root. A turn that ends with drifted cwd
+  bricks every following input of that session.
+- When a hook error names a subdirectory path
+  (`.../<subdir>/.zcode/hooks/...`), treat the session as deadlocked:
+  do not retry inputs; start a new session (cwd is per-session runtime
+  state and a new session starts at the workspace root).
+- Do not hand-patch the `.zcode/config.json` hook commands to work
+  around this: the file and hook scripts are Trellis-managed (tracked
+  in `.trellis/.template-hashes.json`), and any local patch is
+  unmanaged drift that `trellis update` reverts. The structural
+  fragility (cwd-bound variable + missing script exiting 2 = block)
+  is an upstream observation to record, not a local defect to patch.
+
+---
+
 ## Why This Rule Exists
 
 - Both layers are Trellis-deployed with deliberate per-directory flavoring:

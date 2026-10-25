@@ -31,7 +31,7 @@ Typical examples:
 | CLI command interface | `platforms/cli/command-interface/` | Generic CLI invocation and output contracts |
 | Codex workflow behavior | `platforms/codex-workflow-behavior.md` | Project rules for Codex execution behavior in this repository |
 | DSH workflow behavior | `platforms/dsh-workflow-behavior.md` | Project rules for DSH execution behavior and the local dsh-trellis carrier |
-| ZCode workflow behavior | `platforms/zcode-workflow-behavior.md` | Project rules for ZCode behavior: dual-directory skill discovery, shadowing, and command naming |
+| ZCode workflow behavior | `platforms/zcode-workflow-behavior.md` | Project rules for ZCode behavior: dual-directory skill discovery, shadowing, command naming, and hook-variable/cwd-drift deadlock discipline |
 
 ---
 
