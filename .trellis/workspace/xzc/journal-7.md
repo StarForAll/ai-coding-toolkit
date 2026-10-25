@@ -1896,3 +1896,25 @@ Verify installed dsh-trellis 0.1.6 in an isolated /tmp project with ~30 real DSH
 ### Status
 
 [OK] **Completed**
+
+
+## Session 364: 审查 workflow-design v35 并按 F1–F3 修复至 v36
+<!-- trellis-session: v=2 fp=bc29ba354632997d -->
+
+**Date**: 2026-10-25
+**Task**: 审查 workflow-design v35 并按 F1–F3 修复至 v36
+**Branch**: `main`
+
+### Summary
+
+按 §0.1 口径 10 做验收面全量扫后审查 v35：主发现 2 条（配套组合表缺就绪行、类型 1 的 P 继任撞已归档不可替换）+ 核后新增 F3（验收面对跨文档等价性与引用路径可达性零覆盖）；14 条分支疑问进排除表。修复：类型 1 补补建路径并把 §7.4 异常口径限定为未归档旧任务（散落引用归一）、配套表补齐 + 抬头版本、§0.1 加口径 11/12 并同步 guide 与 docs spec 探针、W2–W9 措辞。探针 9 条全绿，两表逐行一致，unittest 36 项通过。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5ea27cb` | workflow-design v36：类型 1 的 P 继任补建路径、配套组合表补齐、口径 11/12、异常处置归一 §7.4 |
+
+### Status
+
+[OK] **Completed**
