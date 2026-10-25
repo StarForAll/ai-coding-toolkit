@@ -214,6 +214,20 @@ record-keeping are therefore part of the fix:
 3. **Unmarked judgment fork.** A fork whose two branches have asymmetric
    irreversibility needs an explicit "由人决定", even when the surrounding
    section is human-led by tone.
+4. **One-sided edit.** A table or clause that is mirrored in the companion doc
+   (组合自检表, the lifecycle rules, the ledger transition table) is changed in
+   the main doc only. The companion is half the authority (§7.9: "机制细节冲突以
+   配套文档为准"), so a missing mirror row makes a conforming implementation run
+   into a hole. A version gate that only compares `design:` fields passes the
+   whole time. When a touched line has a mirror, state the sync result (synced, or
+   intentionally different with a reason); `rg` the changed line's characteristic
+   words across both docs and require matching counts.
+5. **A reference used as an exit.** "按 §6.5 执行" is written and counted as an
+   exit, but the target section opens with "只适用于未归档任务" and the caller is
+   an archived task. Naming an entry and an exit is not enough: walk every new
+   "按 §N" into its target and check each precondition against the calling
+   context; if it fails, add the exemption in the same version (type 5 carries
+   the template: "不重跑实施前静态校验").
 
 ## Known False-Positive Patterns In This Repo
 
@@ -252,6 +266,8 @@ record-keeping are therefore part of the fix:
 - [ ] Impact concrete and unavoidable, not speculative?
 - [ ] Wording-only items moved to the precision section?
 - [ ] Acceptance-surface sweep done (口径 10): human-judgment markers, all P dispositions, repair output legality?
+- [ ] Cross-doc equivalence checked for every touched mirrored line (口径 11): same-condition copies synced, or divergence justified?
+- [ ] Every new "按 §N" walked into its target section and its preconditions checked against the calling context (口径 12)?
 - [ ] For any role/orphan gap: is the mirrored sibling role's clause present, and is P's succession covered?
 - [ ] Does every touched 对账修复 type still produce a legal archive/ledger combination?
 

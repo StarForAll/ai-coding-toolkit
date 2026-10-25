@@ -95,7 +95,9 @@ When the task is to **review** (not edit) a design or contract document under
 `docs/workflows/` — especially `workflow-design.md` — read
 [Design-Doc Review Thinking Guide](../guides/design-review-thinking-guide.md)
 first. It defines the evidence bar, the four filters, the required "excluded
-candidates" section, and the known false-positive patterns.
+candidates" section, and the known false-positive patterns. Its structural
+blind-spot list covers one-sided edits (口径 11, cross-doc equivalence) and
+references used as exits (口径 12, walk the referenced preconditions).
 
 Version drift in derived docs (for example a flow diagram still labeled v24) is
 a report item, not a design defect.
@@ -282,6 +284,7 @@ update the row when a source moves:
 | Start-work legality | 主设计 §7.5 开工 | “按 §7.5 校验”; summary tables cite §4.5 / §7.5 (表 4-1 form) | Re-writing the full condition in a summary table |
 | Finish legality | 主设计 §7.5 完成 + §5.3 可见性顺序 | “按 §5.3 / §6.3 执行” | Same |
 | Project-layer role succession | 主设计 §6.5「替换 / 放弃项目层任务 P」 | “继任者即新的 P”（§6.6 放弃变体、§9.1 说明、配套 §6.0，均指向 §6.5） | Re-deciding who succeeds P elsewhere, or leaving a P disposition without a successor |
+| Disposition of an abnormal task’s downstream | 主设计 §7.4 | “按 §7.4 处置”（§9.1 两表、§8.4 第三段、§7.7 启动段、组合表行 10）；任务已归档时不可替换，只余删边 | Re-writing “替换 / 放弃或删边” anywhere and dropping the archived-task narrowing |
 
 Key distinction: **defining restatements are banned; action-condition
 references are allowed** — once the source definition fixes the semantics, a
@@ -301,6 +304,8 @@ rg -n "指向已归档、规划中且前置未满足" docs/workflows/依赖机�
 rg -n "或为“正常但未归档”的任务|前置未完工（或为" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 0 hits (satisfaction exception folded into 未完工 enumeration)
 rg -n "视为无当前任务" docs/workflows/workflow-design.md               # diff vs registry snapshot; new hits must be reference-form (historical appendix entries stay)
 rg -n "继任者即新的 P" docs/workflows/workflow-design.md                 # 2 hits as of v35: the §6.5 source + the v35 appendix record; every other place must point at §6.5, not restate it
+rg -n "异常前置走替换|前置为异常时按删边或替换" docs/workflows                  # 0 hits as of v36 (all point at §7.4)
+rg -n "按 §7.4 处置|按主设计 §7.4" docs/workflows                            # references only; the §7.4 table row is the sole definition
 ```
 
 ---
