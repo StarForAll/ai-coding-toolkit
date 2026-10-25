@@ -1874,3 +1874,25 @@ Verify installed dsh-trellis 0.1.6 in an isolated /tmp project with ~30 real DSH
 ### Next Steps
 
 - 后续修订 workflow-design.md 时按 Revision Protocol（源→投影→探针→附录 C）执行并跑登记表探针；派生流转图仍标 v24 属版本漂移，仅报告项
+
+
+## Session 363: workflow-design v35：审查修复 + 验收面全量审计口径
+<!-- trellis-session: v=2 fp=a47652c68a8dfebf -->
+
+**Date**: 2026-10-25
+**Task**: workflow-design v35：审查修复 + 验收面全量审计口径
+**Branch**: `main`
+
+### Summary
+
+按 v34 审查报告修复 F1/F2/F3 与 W1–W5：P 角色继任条款（含类型 1 的 P 继任守卫）、类型 3 重新归档前置守卫、§5.5 成立判定归人、id_scheme 纳组合表、§0 纪律加表例外、§9.3 卸载例外、术语补替换/替代任务、组合表补就绪行；按用户要求新增 §0.1 口径 10（审查前三项全量审计）并实际执行（扫出类型 1 的 P 继任缺口并同版修复）；配套文档同版 v35，spec 审查指南补全量审计步骤/结构盲点/checklist，docs spec 登记继任谓词与探针；9 条探针全绿。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e1becdf` | workflow-design v35：P 角色继任条款、类型 3 前置守卫、§5.5 判定归人、验收面全量审计口径；配套同版 + spec 补扫 |
+
+### Status
+
+[OK] **Completed**

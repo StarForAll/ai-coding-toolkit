@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-7.md`
-- **Total Sessions**: 362
-- **Last Active**: 2026-10-24
+- **Total Sessions**: 363
+- **Last Active**: 2026-10-25
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-7.md` | ~1876 | Active |
+| `journal-7.md` | ~1898 | Active |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
@@ -35,6 +35,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 363 | 2026-10-25 | workflow-design v35：审查修复 + 验收面全量审计口径 | `e1becdf` | `main` |
 | 362 | 2026-10-24 | workflow-design v34 深度审查与判定源唯一化修复 | `f579f1d` | `main` |
 | 361 | 2026-10-24 | workflow-design v33 审查修复：基线变更切分、入口表条件对齐 §3、插入时机对齐 | `dc33762`, `3bf9a3e` | `main` |
 | 360 | 2026-10-24 | workflow-design v32 修订：三轮审查与修复 | `2f97196`, `2bc816a`, `24f67c5` | `main` |
