@@ -1918,3 +1918,25 @@ Verify installed dsh-trellis 0.1.6 in an isolated /tmp project with ~30 real DSH
 ### Status
 
 [OK] **Completed**
+
+
+## Session 365: 深度审查 workflow-design v36 并按 §0.1 口径修复至 v37
+<!-- trellis-session: v=2 fp=ab591d3991101441 -->
+
+**Date**: 2026-10-25
+**Task**: 深度审查 workflow-design v36 并按 §0.1 口径修复至 v37
+**Branch**: `main`
+
+### Summary
+
+按 §0.1 口径 1–12 审查 v36：口径 10 三项全量审计 + 口径 11 镜像比对 + 口径 12 引用回放；产出 review-report（F1 类型 1 的 P 分支无崩溃语义、F2 §7.4 口径句丢失限定）+ 12 条排除候选。人工核对后按根因修复：类型 1 改为替换指向随「异常」同次预写并补四窗口、§7.7 增修复写入纪律、§7.4 补限定并把 §4.4 副本降为引用、新增口径 13/14、口径 11 扩到主稿内部、配套同版镜像、spec 登记表加探针与 guide 盲点；复核时再收掉「谓词登记表」等未定义术语。14 条探针全绿，v37 定稿并归档。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `682a4ba` | workflow-design v37：类型 1 的 P 分支预写标记与逐窗口、口径 13/14、§7.4 限定收口 |
+
+### Status
+
+[OK] **Completed**
