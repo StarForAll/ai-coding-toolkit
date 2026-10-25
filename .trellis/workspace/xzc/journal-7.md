@@ -1940,3 +1940,25 @@ Verify installed dsh-trellis 0.1.6 in an isolated /tmp project with ~30 real DSH
 ### Status
 
 [OK] **Completed**
+
+
+## Session 366: 审查并修复 workflow-design 至 v39（P 继任六面收口 + 副本清单）
+<!-- trellis-session: v=2 fp=42880db62cc279b3 -->
+
+**Date**: 2026-10-26
+**Task**: 审查并修复 workflow-design 至 v39（P 继任六面收口 + 副本清单）
+**Branch**: `main`
+
+### Summary
+
+按 §0.1 审查 v37：3 条主发现（§7.4 与 P 继任相撞、放弃-新建替代无继任标识、继任 P 等待态无入口）+ 9 条措辞；v38 修三条并做类级收口（B9/A1 去路径、§0 例外登记、口径 10 情形矩阵、口径 12 同版回放）；自审查修正方案三处不彻底；v39 补 §8.4 兄弟位点、§6.5「改为放弃」两路、副本清单强制化；配套与 spec/指南同版；14+5 条探针全绿。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4f3f6b9` | workflow-design v39（含 v38 未提交部分）：P 继任六面收口、改为放弃落地、副本清单强制化 |
+
+### Status
+
+[OK] **Completed**
