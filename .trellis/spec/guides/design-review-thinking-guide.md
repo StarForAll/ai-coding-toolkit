@@ -59,6 +59,22 @@ Read these first and treat them as constraints, not targets:
 If a finding asks to undo a recorded decision, it is not a finding. Record the
 decision and move on.
 
+## Step 0.5: Acceptance-Surface Sweep Before Candidates
+
+`workflow-design.md` §0.1 口径 10 requires the sweep **before** candidate
+collection, with the result written into the report. Three fixed scans:
+
+1. every human-judgment point, checked for a "由人决定" marker (B1);
+2. every reachable disposition of the project-layer task P, checked for an
+   entry and an exit (A1);
+3. the output state of every reconciliation repair type 1–5, checked against
+   the ledger/archive combination table (B9).
+
+A gap found by the sweep is fixed in the same version as anything else; it is
+not deferred. The sweep also stops the known blind spot where all three
+findings are "one unmirrored role", "one unmarked judgment", "one unguarded
+repair" and get found one version apart.
+
 ## Step 1: Collect Candidates Without Verdicts
 
 For each candidate, record:
@@ -169,6 +185,10 @@ record-keeping are therefore part of the fix:
    next drift copy.
 3. **Main doc and companion doc change in the same commit**, and the probes
    run against both.
+4. **When a fix adds a role or repair rule, write the mirror in the same
+   pass** — the sibling role clause, the summary-table row, and the companion
+   mirror — then add a probe for the new source phrase so the rule cannot
+   disappear silently.
 
 ## Step 4: Calibrate The Output
 
@@ -181,6 +201,19 @@ record-keeping are therefore part of the fix:
   for each below-threshold candidate. This is required, not optional.
 - Report version checks separately. A derived-doc version mismatch is a report
   item, not a design defect.
+
+## Known Structural Blind Spots In This Repo
+
+1. **Unmirrored role.** Every special role needs its exit written where the
+   role lives. 收尾任务 has "由人重新定义" (§6.7) and 返工任务 inherits its
+   marker (§6.5); P needs its own succession clause (§6.5). When one role's
+   clause exists and a sibling role's does not, that is a finding, not a blank.
+2. **Repair that breaks what it repairs.** Every 对账修复 type must be checked
+   against the combination table for its *output* state. Type 1 carries a
+   "前置须全正常" guard; type 3 re-archive must carry the same one.
+3. **Unmarked judgment fork.** A fork whose two branches have asymmetric
+   irreversibility needs an explicit "由人决定", even when the surrounding
+   section is human-led by tone.
 
 ## Known False-Positive Patterns In This Repo
 
@@ -218,6 +251,9 @@ record-keeping are therefore part of the fix:
 - [ ] Author's rebuttal attempted and failed?
 - [ ] Impact concrete and unavoidable, not speculative?
 - [ ] Wording-only items moved to the precision section?
+- [ ] Acceptance-surface sweep done (口径 10): human-judgment markers, all P dispositions, repair output legality?
+- [ ] For any role/orphan gap: is the mirrored sibling role's clause present, and is P's succession covered?
+- [ ] Does every touched 对账修复 type still produce a legal archive/ledger combination?
 
 ## Output Template
 

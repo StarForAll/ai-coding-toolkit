@@ -281,6 +281,7 @@ update the row when a source moves:
 | Dependency satisfied / ready | 主设计 §4.3 依赖满足 (§3 就绪 references §4.3) | Action sequences may reuse “前置全部为正常” verbatim | A second “依赖满足 = …” / “就绪 = …” definition or any competing satisfaction semantics |
 | Start-work legality | 主设计 §7.5 开工 | “按 §7.5 校验”; summary tables cite §4.5 / §7.5 (表 4-1 form) | Re-writing the full condition in a summary table |
 | Finish legality | 主设计 §7.5 完成 + §5.3 可见性顺序 | “按 §5.3 / §6.3 执行” | Same |
+| Project-layer role succession | 主设计 §6.5「替换 / 放弃项目层任务 P」 | “继任者即新的 P”（§6.6 放弃变体、§9.1 说明、配套 §6.0，均指向 §6.5） | Re-deciding who succeeds P elsewhere, or leaving a P disposition without a successor |
 
 Key distinction: **defining restatements are banned; action-condition
 references are allowed** — once the source definition fixes the semantics, a
@@ -288,7 +289,7 @@ verbatim condition inside an action sequence inherits it and does not create a
 second predicate.
 
 Probes — run after any `workflow-design.md` revision, against both documents
-(expected values as of v34):
+(expected values as of v35):
 
 ```bash
 rg -n "按 §3 有效（" docs/workflows/workflow-design.md                 # 0 hits
@@ -299,6 +300,7 @@ rg -n "满足判定按 §4.3|按主设计 §4.3" docs/workflows/workflow-design.
 rg -n "指向已归档、规划中且前置未满足" docs/workflows/依赖机制设计说明.md   # 0 hits (companion references 主设计 §3 instead)
 rg -n "或为“正常但未归档”的任务|前置未完工（或为" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 0 hits (satisfaction exception folded into 未完工 enumeration)
 rg -n "视为无当前任务" docs/workflows/workflow-design.md               # diff vs registry snapshot; new hits must be reference-form (historical appendix entries stay)
+rg -n "继任者即新的 P" docs/workflows/workflow-design.md                 # 2 hits as of v35: the §6.5 source + the v35 appendix record; every other place must point at §6.5, not restate it
 ```
 
 ---
