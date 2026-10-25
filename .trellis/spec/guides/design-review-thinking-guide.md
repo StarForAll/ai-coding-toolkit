@@ -222,7 +222,18 @@ record-keeping are therefore part of the fix:
    whole time. When a touched line has a mirror, state the sync result (synced, or
    intentionally different with a reason); `rg` the changed line's characteristic
    words across both docs and require matching counts.
-5. **A reference used as an exit.** "按 §6.5 执行" is written and counted as an
+5. **Multi-step write with no mid-state.** A new or rewritten "sequential +
+   recoverable" action (reconciliation repair type, replacement/abandon
+   implementation, rework) written only to its end state. Every window needs a
+   residual signature and a forward completion; the signature's marker must be
+   written with the first step. §7.7's 类型 1 P branch shipped without this in
+   v36: its crash residual (`archived + 异常 + no pointer + no reason`) was
+   neither re-detected as type 1 (input is 无记录/挂起) nor as type 5 (needs a
+   pointer or a reason), and the combination table called it legal (row 5).
+   Endpoint-only scans (口径 10) and reference replay (口径 12) both pass such a
+   path — 口径 13/14 exist for this class and its mirror (intra-document
+   duplicate copies).
+6. **A reference used as an exit.** "按 §6.5 执行" is written and counted as an
    exit, but the target section opens with "只适用于未归档任务" and the caller is
    an archived task. Naming an entry and an exit is not enough: walk every new
    "按 §N" into its target and check each precondition against the calling
@@ -266,8 +277,12 @@ record-keeping are therefore part of the fix:
 - [ ] Impact concrete and unavoidable, not speculative?
 - [ ] Wording-only items moved to the precision section?
 - [ ] Acceptance-surface sweep done (口径 10): human-judgment markers, all P dispositions, repair output legality?
-- [ ] Cross-doc equivalence checked for every touched mirrored line (口径 11): same-condition copies synced, or divergence justified?
+- [ ] Every copy of a touched rule compared — intra-document and cross-doc (口径 11): synced, demoted to a reference, or divergence justified?
 - [ ] Every new "按 §N" walked into its target section and its preconditions checked against the calling context (口径 12)?
+- [ ] For every new or rewritten multi-step action: crash windows enumerated, each residual has a unique
+      signature, and marker fields are written with the first step (口径 13)?
+- [ ] Each residual signature reachable from startup self-check, a table-row note, or a type-identification
+      sentence — not only from «报告阻塞» (口径 14)?
 - [ ] For any role/orphan gap: is the mirrored sibling role's clause present, and is P's succession covered?
 - [ ] Does every touched 对账修复 type still produce a legal archive/ledger combination?
 
