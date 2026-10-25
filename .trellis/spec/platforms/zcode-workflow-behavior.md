@@ -88,14 +88,20 @@ Verified on 2026-10-25 against the ZCode host source
   directory and fails with "No such file or directory" (e.g. a turn
   that ran `cd docs/workflows && rg ...` broke all hooks from the
   next turn).
-- The failure mode is a **session deadlock**, not noise: the hook
+- The failure mode was a **session deadlock**, not noise: the hook
   command `python3 <missing script>` exits with code 2, which ZCode's
   hook contract interprets as a deliberate block. A failing
-  `UserPromptSubmit` hook blocks the prompt itself, so the
-  "cd back to the repo root" instruction can never reach the model.
-  A session that ends a turn with drifted cwd is unrecoverable from
-  inside; the only in-session remedy is temporarily disabling hooks
-  to issue the restore instruction, then re-enabling them.
+  `UserPromptSubmit` hook blocked the prompt itself, so the
+  "cd back to the repo root" instruction could never reach the model.
+  Observed live in session `session_b6fd816ad7423725734fb309c8d8b7ec`
+  and `session_bdd26e0778875da7ca6089cc741ef257`: even when the agent
+  recognized the failure and attempted `cd` back, the PreToolUse hook
+  blocked that recovery command too. **As of 2026-10-25 the deadlock
+  is neutralized by the guarded hook commands** (see the local
+  hardening record below): resolution failures now exit 0 instead of 2,
+  so inputs are never blocked. Drift's secondary harms remain (see
+  operating rules), and the structural host-side causes are unfixed
+  upstream.
 
 ### Operating Rules (cwd discipline)
 
@@ -104,13 +110,20 @@ Verified on 2026-10-25 against the ZCode host source
   `${ZCODE_PROJECT_DIR}` is the verbatim cwd, and the hook scripts
   exist only at `<repo-root>/.zcode/hooks/`, so a cwd parked in any
   subdirectory — even one inside the repo, e.g. `docs/workflows` —
-  breaks every configuration hook.
+  breaks every configuration hook (before the hardening: fatally;
+  after: functionally tolerated by the git-root fallback).
 - Never run a bare `cd <subdir>` in a ZCode session. Use absolute
   paths, or a subshell `(cd <subdir> && <cmd>)`, which does not
   persist the cwd.
 - Before ending a turn, if the session cwd is not the repository root,
   `cd` back to the repository root. A turn that ends with drifted cwd
-  bricks every following input of that session.
+  degrades hook behavior and misresolves relative-path Bash commands
+  for the rest of the session.
+- If a hook degrades silently after drift (breadcrumb stops
+  appearing), suspect cwd drift first: check with `pwd` and restore
+  with `cd <repo-root>`. The guarded commands intentionally fail
+  silently (exit 0) outside the repository; silent loss of the
+  `<workflow-state>` breadcrumb is the observable symptom.
 - When a hook error names a subdirectory path
   (`.../<subdir>/.zcode/hooks/...`), treat the session as deadlocked:
   do not retry inputs; start a new session (cwd is per-session runtime
@@ -121,6 +134,65 @@ Verified on 2026-10-25 against the ZCode host source
   unmanaged drift that `trellis update` reverts. The structural
   fragility (cwd-bound variable + missing script exiting 2 = block)
   is an upstream observation to record, not a local defect to patch.
+
+---
+
+## Local Hardening Record: Guarded Hook Commands (2026-10-25)
+
+The operating rule above says "do not hand-patch the hook commands",
+and this section records the deliberate, registered exception that
+now exists. Read this before touching `.zcode/config.json` or running
+`trellis update`.
+
+**What changed.** All four hook commands in `.zcode/config.json`
+(`session-start.py`, `inject-workflow-state.py`,
+`inject-subagent-context.py`, `inject-shell-session-context.py`) were
+rewritten from the template form
+`python3 "${ZCODE_PROJECT_DIR}/.zcode/hooks/<script>.py"` to a
+guarded form:
+
+```sh
+f=".zcode/hooks/<script>.py"; d="${ZCODE_PROJECT_DIR:-}";
+if [ -z "$d" ] || [ ! -f "$d/$f" ]; then d="$(git rev-parse --show-toplevel 2>/dev/null)"; fi;
+if [ -n "$d" ] && [ -f "$d/$f" ]; then ZCODE_PROJECT_DIR="$d" exec python3 "$d/$f"; fi;
+exit 0
+```
+
+**Why.** The host resolves `${ZCODE_PROJECT_DIR}` to the live session
+cwd and spawns hooks with that same cwd (both verified in
+`/opt/ZCode/resources/glm/zcode.cjs`), so the template command fails
+whenever cwd drifts into a subdirectory, and the missing-script exit
+code 2 is interpreted by the host as a deliberate block, deadlocking
+the session. The guard (1) keeps the original fast path when the
+variable points at a directory that actually contains the script,
+(2) falls back to the git repository root — which resolves correctly
+from any in-repo subdirectory — when it does not, (3) rewrites
+`ZCODE_PROJECT_DIR` to the resolved root before `exec` because
+`session-start.py` consumes that variable as the project root
+(`project_dir / ".trellis"`) with no upward search, and (4) exits 0
+on any resolution failure so inputs are never blocked. The other
+three scripts locate `.trellis` by walking up from the payload cwd
+and only use the variable for platform detection, so the rewrite is
+harmless for them.
+
+**Debt.** `.zcode/config.json` is hash-tracked in
+`.trellis/.template-hashes.json`; after this edit `trellis update`
+classifies it as `skip-modified` — the guarded commands survive, but
+the file stops receiving upstream template updates automatically.
+After every `trellis update`, diff the new template's config.json
+against this file and port any upstream hook-related changes by hand.
+Upstream fix to track: the Trellis `templates/shared-hooks` command
+form (and/or a ZCode-side fixed project-root variable). When either
+lands and this file can return to the template form, remove this
+section and the guard together.
+
+**Verified behavior of the guard** (2026-10-25, simulated host
+invocation with drifted cwd and `ZCODE_PROJECT_DIR` set to the
+drifted value): SessionStart and UserPromptSubmit hooks produce their
+`additionalContext` JSON normally from a drifted cwd; all four
+commands exit 0 from an out-of-repo or foreign-repo cwd with no
+output; healthy-cwd behavior is byte-identical to the template form
+except for the added guard stat calls.
 
 ---
 

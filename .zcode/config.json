@@ -8,7 +8,7 @@
           "hooks": [
             {
               "type": "command",
-              "command": "python3 \"${ZCODE_PROJECT_DIR}/.zcode/hooks/session-start.py\"",
+              "command": "f=\".zcode/hooks/session-start.py\"; d=\"${ZCODE_PROJECT_DIR:-}\"; if [ -z \"$d\" ] || [ ! -f \"$d/$f\" ]; then d=\"$(git rev-parse --show-toplevel 2>/dev/null)\"; fi; if [ -n \"$d\" ] && [ -f \"$d/$f\" ]; then ZCODE_PROJECT_DIR=\"$d\" exec python3 \"$d/$f\"; fi; exit 0",
               "enabled": true,
               "timeout": 30
             }
@@ -20,7 +20,7 @@
           "hooks": [
             {
               "type": "command",
-              "command": "python3 \"${ZCODE_PROJECT_DIR}/.zcode/hooks/inject-workflow-state.py\"",
+              "command": "f=\".zcode/hooks/inject-workflow-state.py\"; d=\"${ZCODE_PROJECT_DIR:-}\"; if [ -z \"$d\" ] || [ ! -f \"$d/$f\" ]; then d=\"$(git rev-parse --show-toplevel 2>/dev/null)\"; fi; if [ -n \"$d\" ] && [ -f \"$d/$f\" ]; then ZCODE_PROJECT_DIR=\"$d\" exec python3 \"$d/$f\"; fi; exit 0",
               "enabled": true,
               "timeout": 15
             }
@@ -33,7 +33,7 @@
           "hooks": [
             {
               "type": "command",
-              "command": "python3 \"${ZCODE_PROJECT_DIR}/.zcode/hooks/inject-subagent-context.py\"",
+              "command": "f=\".zcode/hooks/inject-subagent-context.py\"; d=\"${ZCODE_PROJECT_DIR:-}\"; if [ -z \"$d\" ] || [ ! -f \"$d/$f\" ]; then d=\"$(git rev-parse --show-toplevel 2>/dev/null)\"; fi; if [ -n \"$d\" ] && [ -f \"$d/$f\" ]; then ZCODE_PROJECT_DIR=\"$d\" exec python3 \"$d/$f\"; fi; exit 0",
               "enabled": true,
               "timeout": 30
             }
@@ -44,7 +44,7 @@
           "hooks": [
             {
               "type": "command",
-              "command": "python3 \"${ZCODE_PROJECT_DIR}/.zcode/hooks/inject-shell-session-context.py\"",
+              "command": "f=\".zcode/hooks/inject-shell-session-context.py\"; d=\"${ZCODE_PROJECT_DIR:-}\"; if [ -z \"$d\" ] || [ ! -f \"$d/$f\" ]; then d=\"$(git rev-parse --show-toplevel 2>/dev/null)\"; fi; if [ -n \"$d\" ] && [ -f \"$d/$f\" ]; then ZCODE_PROJECT_DIR=\"$d\" exec python3 \"$d/$f\"; fi; exit 0",
               "enabled": true,
               "timeout": 5
             }
