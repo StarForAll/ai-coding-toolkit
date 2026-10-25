@@ -189,6 +189,15 @@ record-keeping are therefore part of the fix:
    pass** — the sibling role clause, the summary-table row, and the companion
    mirror — then add a probe for the new source phrase so the rule cannot
    disappear silently.
+5. **After a dedup, replay every consumer's exception.** Before deleting a
+   copy, list the callers of the collapsed rule, collect the exceptions each
+   caller relied on, and register them at the surviving source (§0 写作约定,
+   added in v38).
+6. **Enumerate the copies before editing, fill the sync result after.** For
+   every changed judgment, write down the copy sites (source, summary table,
+   handoff section, companion) in the fix notes and mark each one
+   synced / demoted to a reference / intentionally different with a reason.
+   A missing line is not done (§0 写作约定 + 口径 11, tightened in v39).
 
 ## Step 4: Calibrate The Output
 
@@ -239,6 +248,24 @@ record-keeping are therefore part of the fix:
    "按 §N" into its target and check each precondition against the calling
    context; if it fails, add the exemption in the same version (type 5 carries
    the template: "不重跑实施前静态校验").
+7. **角色换 ID 只补一面.** When a role's identity can change (P via
+   replacement, 放弃-新建替代, or type-1 rebuild), six faces must be restated
+   for the role: 规则面 (which disposition rules apply to the successor),
+   身份面 (where the successor's identity is persisted), 入口面 (which routing
+   row selects it), 验收面 (B9/A1 wording), 场景面 (§10 self-check), 镜像面
+   (companion copies). v38 found three of these missing across v35–v37
+   (F1/F2/F3) — one per version, because each round stopped after补了归属.
+8. **Dedup creates orphan exceptions.** 口径 11 tells you to collapse copies
+   into one surviving source. The surviving text must then carry every
+   exception that any caller relied on; otherwise an exception living in a
+   local clause becomes an orphan and collides with the collapsed source
+   (v38 F1: §7.4 collapsed, the P exception stayed local in §7.7).
+9. **Main-site-only fix.** A rule usually has summary copies: routing tables,
+   the handoff section (接手), and the companion. Editing only the source
+   leaves the summary stating the old disposition. v38 added the ready-task
+   row to §9.1 but left §8.4's third stage restating "等前置" — the same
+   rule, two versions. Before editing, list the copies; after editing, give
+   each one a sync result. 口径 11 now requires that list in the report.
 
 ## Known False-Positive Patterns In This Repo
 
@@ -284,6 +311,10 @@ record-keeping are therefore part of the fix:
 - [ ] Each residual signature reachable from startup self-check, a table-row note, or a type-identification
       sentence — not only from «报告阻塞» (口径 14)?
 - [ ] For any role/orphan gap: is the mirrored sibling role's clause present, and is P's succession covered?
+- [ ] For any role whose identity can change: are all six faces restated (rule / identity / entry / acceptance / scenario / mirror)?
+- [ ] For any collapsed duplicate: does the surviving source carry every caller's exception?
+- [ ] Did you enumerate every copy site of the changed rule (source / summary / handoff / companion) and fill a sync result for each?
+- [ ] For any two rules that can hit the same case: is there exactly one disposition (情形矩阵, 口径 10 ④)?
 - [ ] Does every touched 对账修复 type still produce a legal archive/ledger combination?
 
 ## Output Template
