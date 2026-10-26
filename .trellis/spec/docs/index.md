@@ -98,8 +98,11 @@ first. It defines the evidence bar, the four filters, the required "excluded
 candidates" section, and the known false-positive patterns. Its structural
 blind-spot list covers one-sided edits (口径 11, now intra-document as well
 as cross-doc), references used as exits (口径 12, walk the referenced
-preconditions), and multi-step writes with no mid-state (口径 13/14: enumerate
-windows, give every residual a unique signature).
+preconditions), multi-step writes with no mid-state (口径 13/14: enumerate
+windows, give every residual a unique signature), exceptions registered by
+source/role instead of by state (blind spot 10; v40 replaced §7.4's list with a
+field predicate), and one action sequence defined twice in different orders
+(blind spot 11; sole source is now §7.7 类型 5).
 
 Version drift in derived docs (for example a flow diagram still labeled v24) is
 a report item, not a design defect.
@@ -287,7 +290,8 @@ update the row when a source moves:
 | Finish legality | 主设计 §7.5 完成 + §5.3 可见性顺序 | “按 §5.3 / §6.3 执行” | Same |
 | Project-layer role succession | 主设计 §6.5「替换 / 放弃项目层任务 P」 | “继任者即新的 P”（§6.6 放弃变体、§9.1 说明、配套 §6.0，均指向 §6.5）；§6.6 放弃-新建替代与 §7.7 类型 1 补建亦以 §6.5 为归属源 | Re-deciding who succeeds P elsewhere, or leaving a P disposition without a successor |
 | Type-1 P succession markers | 主设计 §7.7 类型 1 | “替换指向随「异常」同次预写”“逐窗口”“P 改为放弃沿用预写标识、不置空”（配套 §8 类型 1 镜像，细则不重述） | Writing “回填替换指向” as the only timing, or a P successor path without per-window residual identification |
-| Disposition of an abnormal task’s downstream | 主设计 §7.4 | “按 §7.4 处置”（§9.1 两表、§8.4 第三段、§7.7 启动段、组合表行 10）；任务已归档时不可替换，只余删边（**一般任务**；P 的类型 1 继任见 §7.7） | Re-writing “替换 / 放弃或删边” anywhere and dropping either the archived-task narrowing or the P exception |
+| Disposition of an abnormal task’s downstream | 主设计 §7.4 | “按 §7.4 处置”（§9.1 两表、§8.4 第三段、§7.7 启动段、组合表行 10）；**字段句**：处分未完成（替换指向仍在 / 下游仍指向该任务 / 该任务未归档）→ §7.7 类型 5，已到终态（已归档 + 无指向 + 下游已不指向）→ 无需动作；P 的继任是角色条款（§6.5 / §7.7 类型 1） | 按来源 / 角色逐格追加例外（如 v38 的「一般任务 / P 例外」）；把「已归档时不可替换」写成无字段限定的绝对句；或把该处分写进 §6.5 的失败与修复 |
+| Forward-completion action sequence | 主设计 §7.7 类型 5 | “按 §7.7 类型 5 向前完成”“序列 / 顺序 / 窗口以主设计 §7.7 类型 5 为唯一源”（§6.5、§6.6、§7.9、配套 §6.4、配套 §8） | A second step list that changes the order (notably 归档 before 补建 / 重连 — v39's 「旧任务未归档 → 归档旧任务」), or restating the sequence anywhere other than a same-order mirror |
 | Successor identity（放弃-新建替代） | 主设计 §6.6 实施第 1 步 + §7.8 | “替换指向 = 发起时预生成的替代标识”“沿替换指向解析”（§9.1 说明、配套 §9） | Writing the pointer only after the successor task exists, or leaving 放弃-新建替代 with an empty pointer |
 | Selection when no current task | 主设计 §9.1 第三段两张表 | “按 §9.1 第三段两张表选择”“按 §9.1 选择”；§7.6、§8.4 第三段、配套 §7 均为引用 | Restating the branch conditions (等前置 / 最早就绪) outside §9.1 — v38's §8.4 miss |
 
@@ -297,7 +301,7 @@ verbatim condition inside an action sequence inherits it and does not create a
 second predicate.
 
 Probes — run after any `workflow-design.md` revision, against both documents
-(expected values as of v39):
+(expected values as of v40):
 
 ```bash
 rg -n "按 §3 有效（" docs/workflows/workflow-design.md                 # 0 hits
@@ -310,12 +314,15 @@ rg -n "或为“正常但未归档”的任务|前置未完工（或为" docs/wo
 rg -n "视为无当前任务" docs/workflows/workflow-design.md               # diff vs registry snapshot; new hits must be reference-form (historical appendix entries stay)
 rg -n "继任者即新的 P" docs/workflows/workflow-design.md                 # 2 hits: the §6.5 source + the v35 appendix record; every other place must point at §6.5, not restate it
 rg -n "异常前置走替换|前置为异常时按删边或替换" docs/workflows                  # 0 hits as of v36 (all point at §7.4)
-rg -n "按 §7.4 处置|按主设计 §7.4" docs/workflows                            # references only (9 main + 5 companion as of v39); the §7.4 table row is the sole definition
+rg -n "按 §7.4 处置|按主设计 §7.4" docs/workflows                            # references only (9 main + 4 companion as of v40); the §7.4 table row is the sole definition
 rg -n "或删边后不再等待$" docs/workflows                                     # 0 hits: no un-narrowed copy of the abnormal-downstream sentence
 rg -n "预生成.{0,4}新 P" docs/workflows                                     # 3 hits: 主稿 §7.7 类型 1 + 附录 v37 记录 + 配套 §8 类型 1 (marker written in the same step; every normative hit must be one of the two rule sites)
 rg -n "修复的写入纪律" docs/workflows                                        # 4 hits: main §7.7 + appendix v37/v38 records + companion §8 (demoted to a reference)
 rg -n "两种处置由人决定" docs/workflows                                  # 0 hits (variant is decided at 发起 since v38)
-rg -n "只余删边" docs/workflows | rg -v "一般任务"                      # 3 hits, all revision records (main appendix v36 + companion §24 ×2); every normative copy carries the 一般任务 / P-exception narrowing
+rg -n "只余删边" docs/workflows                                       # 7 hits as of v40, all in version-收口 blockquotes / revision records (judge by context, not line numbers — they shift每版); 0 normative hits — the disposition is now a field sentence
+rg -n "下游仍指向该任务、该任务未归档" docs/workflows               # 6 hits as of v40: 4 normative (main §7.4 row + 口径句, companion §5 row + 表后段) + 2 revision records
+rg -n "旧任务未归档 → 归档旧任务|边已重连但旧任务未归档" docs/workflows   # 0 hits — the forward-completion order lives only in §7.7 类型 5
+rg -n "先补建 / 重连、后归档" docs/workflows/workflow-design.md      # 2 hits: §7.7 类型 5 (sole source) + v40 record; the sequence wording must not appear in §6.5 / 配套 §6.4 / 配套 §8
 rg -n "替换指向为空" docs/workflows                                  # only 删边-variant lines: main §6.6 step 1 + companion §6.5 step 1
 rg -n "新建替代" docs/workflows                                     # every normative line names 预生成 / 第 1 步 or points at §6.6; revision records are historical
 rg -n "继任任务" docs/workflows                                     # 3 hits: §3 term + §9.1 note + v38 appendix record

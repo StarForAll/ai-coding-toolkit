@@ -266,6 +266,23 @@ record-keeping are therefore part of the fix:
    row to §9.1 but left §8.4's third stage restating "等前置" — the same
    rule, two versions. Before editing, list the copies; after editing, give
    each one a sync result. 口径 11 now requires that list in the report.
+10. **Exception registered by source or role.** A limitation that enumerates its
+   exceptions by provenance ("一般任务 / P 例外") goes stale the moment a new
+   producer appears: v36–v38 patched the same §7.4 cell once per version, and
+   v39 added a new disposition (改判放弃) the list did not cover, so the
+   archived-old-task cell ended up with two conflicting dispositions (§7.4
+   "只余删边" vs §7.7 类型 5 "补建"). Fix pattern: write the limitation as a
+   **state / field predicate** (v40: "处分未完成 = 替换指向仍在 / 下游仍指向
+   该任务 / 该任务未归档") and keep identification field-based — never a source
+   list. A role property (P must always have a successor) may stay a separate
+   sentence, written once.
+11. **Action sequence defined twice, in different orders.** The same forward
+   completion chain existed as an archive-first list (§6.5 / 配套 §6.4) and a
+   build-first sentence (§7.7 类型 5). Order is load-bearing: archiving first
+   makes the later 补建 look like "替换一个已归档任务", i.e. exactly the state
+   the disposition rule forbids. Fix pattern: exactly one declared source per
+   multi-step sequence (v40: §7.7 类型 5), mirrors stay same-order and
+   reference-only, and §0 now bans a second sequence with a different order.
 
 ## Known False-Positive Patterns In This Repo
 
@@ -314,6 +331,10 @@ record-keeping are therefore part of the fix:
 - [ ] For any role whose identity can change: are all six faces restated (rule / identity / entry / acceptance / scenario / mirror)?
 - [ ] For any collapsed duplicate: does the surviving source carry every caller's exception?
 - [ ] Did you enumerate every copy site of the changed rule (source / summary / handoff / companion) and fill a sync result for each?
+- [ ] Is every limitation a **state / field predicate** rather than a list of
+      sources or roles (blind spot 10)?
+- [ ] For every multi-step action: does exactly one place own the step order, and
+      is each mirror same-order and reference-only (blind spot 11)?
 - [ ] For any two rules that can hit the same case: is there exactly one disposition (情形矩阵, 口径 10 ④)?
 - [ ] Does every touched 对账修复 type still produce a legal archive/ledger combination?
 
