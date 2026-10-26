@@ -283,6 +283,20 @@ record-keeping are therefore part of the fix:
    the disposition rule forbids. Fix pattern: exactly one declared source per
    multi-step sequence (v40: §7.7 类型 5), mirrors stay same-order and
    reference-only, and §0 now bans a second sequence with a different order.
+12. **Predicate rewritten without reachability accounting.** When a limitation
+   is rewritten as a field predicate (v40 §7.4), the terminal shape must be
+   evaluated on every producing path of the state it judges; v40 induced
+   "pointer empty" from the 删边 variant alone while five paths keep the
+   pointer, so the terminal was unreachable on daily success paths. The
+   revision note claimed "一次覆盖四种形态" as an assertion, and every
+   text-level gate (copy list, reference replay, window table, same-order
+   mirror) passed — only a path-accounting table catches it. Fix pattern: the
+   revision note must carry a path-accounting table (each producing path →
+   predicate verdict); a coverage claim without the table is not done.
+   Companion obligations: register a probe for the predicate's characteristic
+   phrase and actually run the probes per revision — a registered probe with
+   a stale expected value that nobody runs is how this class escapes (v41
+   §0.1 口径 11③ added the run obligation).
 
 ## Known False-Positive Patterns In This Repo
 
