@@ -7,8 +7,8 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-7.md`
-- **Total Sessions**: 366
+- **Active File**: `journal-8.md`
+- **Total Sessions**: 367
 - **Last Active**: 2026-10-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-7.md` | ~1964 | Active |
+| `journal-8.md` | ~45 | Active |
+| `journal-7.md` | ~1964 | Archived |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
 | `journal-4.md` | ~1969 | Archived |
@@ -35,6 +36,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 367 | 2026-10-26 | workflow-design v39 审查 → v40 修订（异常处分字段句、向前完成单一源、写作闸口与自证边界） | `df7ab3f` | `main` |
 | 366 | 2026-10-26 | 审查并修复 workflow-design 至 v39（P 继任六面收口 + 副本清单） | `4f3f6b9` | `main` |
 | 365 | 2026-10-25 | 深度审查 workflow-design v36 并按 §0.1 口径修复至 v37 | `682a4ba` | `main` |
 | 364 | 2026-10-25 | 审查 workflow-design v35 并按 F1–F3 修复至 v36 | `5ea27cb` | `main` |
