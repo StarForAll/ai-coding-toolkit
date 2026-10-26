@@ -85,7 +85,8 @@ git diff -- docs/workflows/workflow-design.md docs/workflows/依赖机制设计�
 - [x] 人工审查 v42 的实际差异、42 项路径与副本清单。
 - [x] 用户明确“人工审查通过，继续后续操作”，已授权继续提交及 finish-work 流程。
 - [x] Phase 3.4 具体19路径提交计划已由用户明确“确认”；工作提交执行结果以Git历史为准。
-- [ ] 工作提交完成后执行 task.py archive 与 add_session.py，核对提交顺序和最终工作区。
+- [x] 工作提交 `9d30756` 已完成，四份源文件与十五份任务材料同次入库。
+- [ ] 工作提交后的 task.py archive 与 add_session.py 由原生收尾流程执行，结果以归档元数据和会话日志为准。
 
 ## Phase 3.4 提交计划（已确认）
 

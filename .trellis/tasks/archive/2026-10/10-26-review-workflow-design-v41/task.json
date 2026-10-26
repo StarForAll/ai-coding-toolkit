@@ -3,7 +3,7 @@
   "name": "review-workflow-design-v41",
   "title": "审查 workflow-design v41 的状态闭环与反复迭代根因",
   "description": "按 §0.1 审查设计稿并完成 v42 根因修复及关联反馈修正；人工审查已通过，按 Trellis 流程准备提交与归档。",
-  "status": "in_progress",
+  "status": "completed",
   "dev_type": null,
   "scope": null,
   "package": null,
@@ -11,11 +11,11 @@
   "creator": "xzc",
   "assignee": "xzc",
   "createdAt": "2026-10-26",
-  "completedAt": null,
+  "completedAt": "2026-10-26",
   "branch": "main",
   "base_branch": "main",
   "worktree_path": null,
-  "commit": null,
+  "commit": "9d30756817857d9ee1cea55189b32b2d16ddd2de",
   "pr_url": null,
   "subtasks": [],
   "children": [],
@@ -26,14 +26,15 @@
     ".trellis/spec/docs/index.md",
     ".trellis/spec/guides/design-review-thinking-guide.md"
   ],
-  "notes": "用户已通过人工审查并确认19路径具体提交计划；已授权按工作提交→任务归档→会话记录继续收尾，不推送。执行结果以Git提交及归档/会话记录为准。",
+  "notes": "人工审查及具体提交计划通过；工作提交9d30756已完成，口径11清单和修订已同时入库。中文路径扫描警告已用同一Sonar钩子的字面路径补扫通过；按原生finish-work归档并记录会话，不推送。真实项目自检未运行。",
   "meta": {
-    "review_status": "human_review_passed_commit_plan_approved",
+    "review_status": "human_review_passed_work_committed",
     "findings_confirmed": true,
     "d1_confirmed": true,
     "repair_authorized": true,
     "closeout_authorized": true,
     "human_review_passed": true,
-    "commit_plan_approved": true
+    "commit_plan_approved": true,
+    "work_commit": "9d30756817857d9ee1cea55189b32b2d16ddd2de"
   }
 }
