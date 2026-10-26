@@ -62,13 +62,23 @@ decision and move on.
 ## Step 0.5: Acceptance-Surface Sweep Before Candidates
 
 `workflow-design.md` §0.1 口径 10 requires the sweep **before** candidate
-collection, with the result written into the report. Three fixed scans:
+collection, with the result written into the report. Six fixed scans (follow the current main document if its contract evolves):
 
 1. every human-judgment point, checked for a "由人决定" marker (B1);
 2. every reachable disposition of the project-layer task P, checked for an
    entry and an exit (A1);
 3. the output state of every reconciliation repair type 1–5, checked against
-   the ledger/archive combination table (B9).
+   the ledger/archive combination table (B9);
+4. overlapping rules over the same case, including load-bearing field axes;
+5. closed assertions and the paths each assertion covers;
+6. identification fields × roles × repair entrances, including the intersection
+   of allowed writes and prohibitions.
+
+Replay repeated actions on the same object, not just one instance of each
+operation. Compare committed snapshots across recovery windows: identical
+readable facts cannot select opposite automatic recoveries. A native task may
+exist before mechanism metadata is committed; check how it is located and
+excluded from ordinary routing without assuming a cross-system transaction.
 
 A gap found by the sweep is fixed in the same version as anything else; it is
 not deferred. The sweep also stops the known blind spot where all three
@@ -298,6 +308,27 @@ record-keeping are therefore part of the fix:
    a stale expected value that nobody runs is how this class escapes (v41
    §0.1 口径 11③ added the run obligation).
 
+13. **Historical records mask a new registration.** A cumulative rework set
+    can be nonempty and fully archived while a second rework has not been
+    created. Enumerate prepare/create/publish/cancel windows and the current
+    intent that distinguishes them. A row or marker merely existing is not a
+    recovery proof; check replay, cancellation from an already suspended state,
+    and activation with old ambiguous data. The v42 source is 主稿 §6.4; mirrors
+    reference it instead of defining another sequence.
+14. **A reference calls a predicate outside its domain.** The v41 P parser
+    applied the abnormal-disposition terminal predicate to a normally completed
+    successor, whose legal downstream edges remain. Record input domain and
+    downstream quantifier for each reused predicate; same words or one source
+    do not imply the call is valid. Archived-but-unreconciled is distinct from
+    normally completed. Source: 主稿 §6.5 / §7.4.
+15. **Repair permission intersects a business prohibition.** A matrix saying
+    “sole clear point” while type 4 permits clearing is still inconsistent in
+    one table. Test allowed input/output tuples against every prohibition.
+    Preserve recovery of legitimate empty values, a prewritten successor ID
+    whose task does not exist yet, and archived rework-origin corruption, while
+    forbidding creation of new relationships or rollback to an obsolete one.
+    Source: 主稿 §7.8. Text-hit counts prove locations, not permission semantics.
+
 ## Known False-Positive Patterns In This Repo
 
 1. **Literal-phrase anchoring.** "Archived artifacts are handled by rework" was
@@ -334,11 +365,13 @@ record-keeping are therefore part of the fix:
 - [ ] Author's rebuttal attempted and failed?
 - [ ] Impact concrete and unavoidable, not speculative?
 - [ ] Wording-only items moved to the precision section?
-- [ ] Acceptance-surface sweep done (口径 10): human-judgment markers, all P dispositions, repair output legality?
+- [ ] All six acceptance scans done (口径 10), including field axes, closed assertions, and field/role/repair permissions?
 - [ ] Every copy of a touched rule compared — intra-document and cross-doc (口径 11): synced, demoted to a reference, or divergence justified?
 - [ ] Every new "按 §N" walked into its target section and its preconditions checked against the calling context (口径 12)?
 - [ ] For every new or rewritten multi-step action: crash windows enumerated, each residual has a unique
       signature, and marker fields are written with the first step (口径 13)?
+- [ ] Repeated-operation windows distinguishable by committed facts; native-created/unpublished tasks located and blocked; cancellation preserves earlier work?
+- [ ] Referenced predicates applied within their role/state domain; allowed repairs disjoint from business prohibitions except explicit source-owned recovery exceptions?
 - [ ] Each residual signature reachable from startup self-check, a table-row note, or a type-identification
       sentence — not only from «报告阻塞» (口径 14)?
 - [ ] For any role/orphan gap: is the mirrored sibling role's clause present, and is P's succession covered?

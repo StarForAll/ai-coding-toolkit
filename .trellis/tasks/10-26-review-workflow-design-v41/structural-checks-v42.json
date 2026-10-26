@@ -1,0 +1,160 @@
+[
+  {
+    "check": "persistence_single_source",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "complete_mechanism_scope",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "first_registration_carrier_bound",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "existing_record_change_bound",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "no_lifecycle_or_transaction_widening",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "main_fact_table_identity_row",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "companion_fact_table_identity_row",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "status_and_revision_entry_consistent",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "no_partial_current_persistence_enumerations",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "persistence_consumers_reference_source",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "companion_persistence_consumers_reference_source",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "P_type3_prerequisites_unrestricted",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "P_normal_selection_requires_unrecorded_ledger",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "8_route_predicate_substitutions",
+    "passed": true,
+    "detail": "Design condition substitution only; no runtime execution."
+  },
+  {
+    "check": "lightweight_uses_readiness_source",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "version_pair_v42",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "7_transition_rows_mirrored",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "11_combination_rows_mirrored",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "13_matrix_paths",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "source:返工登记（动作序列与窗口的唯一源）",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "source:P 角色解析（唯一源）",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "source:类型 4 恢复边界（唯一源）",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "36_probes_contexts_verified",
+    "passed": true,
+    "detail": "Previous P01–P34 and P36 counts unchanged. P35=13: exactly one added companion facts-table source reference; full scope source remains unique in main §3. Changed expectation was a retrieval count, not a mechanism behavior."
+  },
+  {
+    "check": "docs/workflows/workflow-design.md:reference_targets",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "check": "docs/workflows/依赖机制设计说明.md:reference_targets",
+    "passed": true,
+    "detail": "[]"
+  },
+  {
+    "check": "42_original_cases_preserved",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "one_task_stays_in_progress",
+    "passed": true,
+    "detail": "Still one in_progress task; user has now explicitly passed human review and authorized continuation of close-out. Specific Phase 3.4 commit plan remains unapproved."
+  },
+  {
+    "check": "no_staged_changes",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "check": "final_source_hashes",
+    "passed": true,
+    "detail": {
+      "docs/workflows/workflow-design.md": "f5608aa938458275f1353926ea02ba28f2ec7c026f8145585ed172a2aa899da1",
+      "docs/workflows/依赖机制设计说明.md": "b7ecdf9110e13f5c73f0dbc4dd410144270636dc2ea06b0c4fa69f14988e586b"
+    }
+  },
+  {
+    "check": "final_material_and_scope_review",
+    "passed": true,
+    "detail": "19 source/task files: applicable JSON/JSONL, links, fences, whitespace and no-index checks passed; inventory rows match current source; 36 saved query sets reproduced; 4 approved tracked paths and task-local untracked materials; no staged files."
+  },
+  {
+    "check": "pre_commit_final_verification",
+    "passed": true,
+    "detail": "Approved final source hashes unchanged; 36 registered queries re-executed and match saved sets; transition/combination mirrors and 13 matrix rows verified; 42 case IDs and source inventory current; all 19 prospective commit paths reviewed; no staged or unrecognized paths; human review passed, exact commit-plan confirmation pending."
+  }
+]

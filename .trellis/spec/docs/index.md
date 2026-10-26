@@ -288,14 +288,16 @@ update the row when a source moves:
 | Dependency satisfied / ready | 主设计 §4.3 依赖满足 (§3 就绪 references §4.3) | Action sequences may reuse “前置全部为正常” verbatim | A second “依赖满足 = …” / “就绪 = …” definition or any competing satisfaction semantics |
 | Start-work legality | 主设计 §7.5 开工 | “按 §7.5 校验”; summary tables cite §4.5 / §7.5 (表 4-1 form) | Re-writing the full condition in a summary table |
 | Finish legality | 主设计 §7.5 完成 + §5.3 可见性顺序 | “按 §5.3 / §6.3 执行” | Same |
-| Project-layer role succession | 主设计 §6.5「替换 / 放弃项目层任务 P」 | “继任者即新的 P”（§6.6 放弃变体、§9.1 说明、配套 §6.0，均指向 §6.5）；§6.6 放弃-新建替代与 §7.7 类型 1 补建亦以 §6.5 为归属源 | Re-deciding who succeeds P elsewhere, or leaving a P disposition without a successor |
+| Project-layer role succession and resolution | 主设计 §6.5 P 角色解析 | §5.6、§9.1、配套 §6.0/§8/§9 cite source; normal terminal uses §4.3 | Applying abnormal-disposition predicate to normal P; archived/unrecorded P counted as finished; missing P identity routed through general deletion |
 | Type-1 P succession markers | 主设计 §7.7 类型 1 | “替换指向随「异常」同次预写”“逐窗口”“P 改为放弃沿用预写标识、不置空”（配套 §8 类型 1 镜像，细则不重述） | Writing “回填替换指向” as the only timing, or a P successor path without per-window residual identification |
-| Replacement-pointer write matrix | 主设计 §7.8 写入矩阵（唯一源，9 行：8 条机制写入路径 + 类型 4 记录修复行及其校验——指向为空或可解析到已存在任务、不得借修复新建继任关系） | “按 §7.8 写入矩阵（<行名>）写入 / 置空 / 不新增写入”；各动作步与全部镜像（主稿 §6.5/§6.6/§7.7、配套 §5/§6.4/§6.5/§8/§9）只许引用、不得复述终值 | A pointer write/clear rule or terminal value stated outside the matrix (v41 first pass: companion §9 “不清空” without exception; v41 second pass: terminal values still restated at 6+ action-step sites, and the closed assertion 「已归档后不再有任何指向写入」 blocked matrix row 4); a second clearing point appearing without matrix registration |
-| Disposition of an abnormal task’s downstream | 主设计 §7.4 | “按 §7.4 处置”（§9.1 两表、§8.4 第三段、§7.7 启动段、组合表行 10）；字段谓词本身见下一行（Disposition-terminal predicate）——引用时不得复述旧形「替换指向仍在 / 已归档 + 无指向 + 下游已不指向」；P 的继任是角色条款（§6.5 / §7.7 类型 1） | 按来源 / 角色逐格追加例外（如 v38 的「一般任务 / P 例外」）；把「已归档时不可替换」写成无字段限定的绝对句；或把该处分写进 §6.5 的失败与修复 |
+| Identification-field writes and recovery | 主设计 §7.8 matrix + 类型 4 恢复边界 | Actions and companion cite matrix rows; business writes and restoration have distinct domains | A second field matrix; arbitrary relationship changes; rejecting original prewritten ID because target is unbuilt; unconditional post-archive bans |
+| Disposition of an abnormal task’s downstream | 主设计 §7.4 | 主稿 §6.5/§6.6/§7.7/§9.1 and companion reference source; P identity checked first at §6.5 | Unscoped downstream sets; damaged P pointer routed through general deletion; source/role exception lists replacing field rules |
 | Forward-completion action sequence | 主设计 §7.7 类型 5 | “按 §7.7 类型 5 向前完成”“序列 / 顺序 / 窗口以主设计 §7.7 类型 5 为唯一源”（§6.5、§6.6、§7.9、配套 §6.4、配套 §8） | A second step list that changes the order (notably 归档 before 补建 / 重连 — v39's 「旧任务未归档 → 归档旧任务」), or restating the sequence anywhere other than a same-order mirror |
-| Disposition-terminal predicate | 主设计 §7.4 表行（唯一源） | “处分已到终态（已归档，且下游已不指向它，且（无替换指向 或 继任者已建））”“处分未完成（有替换指向而继任者不存在、下游仍指向该任务、该任务未归档——三者任一）”；§7.7 窗口⑤ 为标注同口径的引用；主 §7.4 口径句、配套 §5 行 + 表后段、配套 §9 为**引用式**（“以主设计 §7.4 表行为唯一源，本处不复述”） | The v40 shape “已归档 + 替换指向为空 + 下游已不指向它”; restating the predicate at any of the reference sites (the v41-first-pass “four synchronized copies” — 口径 11 says a demoted-to-reference copy is the sanctioned sync form, a restated copy recreates the drift surface) |
+| Disposition-terminal predicate | 主设计 §7.4 abnormal row, unarchived downstream scope | Main §7.7 window ⑤ and companion §5/§8 reference source; invalid archive/ledger combinations checked separately | Requiring archived abnormal history edges to disappear; copying full predicate into summaries; calling it for normally completed P |
 | Successor identity（放弃-新建替代） | 主设计 §6.6 实施第 1 步 + §7.8 | “替换指向 = 发起时预生成的替代标识”“沿替换指向解析”（§9.1 说明、配套 §9） | Writing the pointer only after the successor task exists, or leaving 放弃-新建替代 with an empty pointer |
 | Selection when no current task | 主设计 §9.1 第三段两张表 | “按 §9.1 第三段两张表选择”“按 §9.1 选择”；§7.6、§8.4 第三段、配套 §7 均为引用 | Restating the branch conditions (等前置 / 最早就绪) outside §9.1 — v38's §8.4 miss |
+| Current rework registration and suspension clearing | 主设计 §6.4 (sequence, cancellation, windows, step-5 guard); fields at §7.8 | 表 4-2 rows 2/3/7, §7.5/§7.7/§8.4/§9.1 and companion §5/§6.3/§8/§9 cite sources | Clearing by historical R completion while a current registration remains; repeating an action order in the companion; deleting a native-created R as cancellation |
+| Persistence scope, ownership and commit groups | 主设计 §3 持久化 | Main §1.1/§4.2/§7.3/§7.7/§7.8/§8.1/§8.2 and companion §2/§3/§4/§8/§9/§10/§13 cite source | Independent field enumerations omitting dependency IDs, ledger explanation/registration intent, pointers, prerequisites or rework origins; confusing a commit group with a whole multi-step action or a cross-system transaction |
 
 Key distinction: **defining restatements are banned; action-condition
 references are allowed** — once the source definition fixes the semantics, a
@@ -303,42 +305,52 @@ verbatim condition inside an action sequence inherits it and does not create a
 second predicate.
 
 Probes — run after any `workflow-design.md` revision, against both documents
-(expected values as of v41). The run is mandatory, not optional: update expected
+(expected scopes as of v42). The run is mandatory, not optional: update expected
 values in the same pass as any predicate change — a registered probe with a
 stale expected value that nobody runs is exactly how v40's disposition-terminal
 defect escaped (see blind spot 12 in the design-review guide):
 
+Probe scope is the main design and its companion only; do not sweep unrelated
+implementation drafts to infer the design contract. Counts/locations are text
+evidence; domain, permission and recovery-window checks remain separate.
+
 ```bash
 rg -n "按 §3 有效（" docs/workflows/workflow-design.md                 # 0 hits
 rg -n "有当前任务，且该任务未归档、账本为|有当前任务，但该任务未归档、账本为|有当前任务，但该任务已归档" docs/workflows/workflow-design.md   # 0 hits (old condition-style rows gone)
-rg -n "按 §3 有效|按 §3 无效" docs/workflows/workflow-design.md        # 9 lines as of v34: 6 normative (§8.4 ×1, §9.1 rows 1/2 ×4, §9.1 说明 ×1) + 3 record mentions (frontmatter status, version blockquote, appendix C entry — they name the form, they do not define it)
+rg -n "按 §3 有效|按 §3 无效" docs/workflows/workflow-design.md   # 9 lines; source/reference/historical forms; a count alone does not prove the call domain
 rg -n "依赖满足 =|就绪.*前置集合全部为" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 3 lines as of v34: 主设计 §3 就绪 + §4.3 依赖满足 + 配套 §3 就绪 (all others must be references)
 rg -n "满足判定按 §4.3|按主设计 §4.3" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 5 lines: 主设计 §3 就绪；配套 §3 就绪、§5 判定规则、§6.7 建边（“该态按主设计 §4.3 视为未满足”）、§22 revision record (stable since v34; 主设计 §4.3's own bullet states the rule, not a reference, so it does not match this probe)
 rg -n "指向已归档、规划中且前置未满足" docs/workflows/依赖机制设计说明.md   # 0 hits (companion references 主设计 §3 instead)
 rg -n "或为“正常但未归档”的任务|前置未完工（或为" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 0 hits (satisfaction exception folded into 未完工 enumeration)
-rg -n "视为无当前任务" docs/workflows/workflow-design.md               # diff vs registry snapshot; new hits must be reference-form (historical appendix entries stay)
+rg -n "视为无当前任务" docs/workflows/workflow-design.md   # 14 lines in current main; check source/reference/historical context, not guessed invalid lists
 rg -n "继任者即新的 P" docs/workflows/workflow-design.md                 # 2 hits: the §6.5 source + the v35 appendix record; every other place must point at §6.5, not restate it
-rg -n "异常前置走替换|前置为异常时按删边或替换" docs/workflows                  # 0 hits as of v36 (all point at §7.4)
-rg -n "按 §7.4 处置|按主设计 §7.4" docs/workflows                            # references only (9 main + 4 companion as of v40); the §7.4 table row is the sole definition
-rg -n "或删边后不再等待$" docs/workflows                                     # 0 hits: no un-narrowed copy of the abnormal-downstream sentence
-rg -n "预生成.{0,4}新 P" docs/workflows                                     # 2 hits as of v41 third pass: main §7.8 写入矩阵行 (the sole rule site — the §7.7 action step was demoted to a matrix reference) + v37 appendix record; a hit anywhere else means a terminal-value restatement returned
-rg -n "修复的写入纪律" docs/workflows                                        # 4 hits: main §7.7 + appendix v37/v38 records + companion §8 (demoted to a reference)
-rg -n "两种处置由人决定" docs/workflows                                  # 0 hits (variant is decided at 发起 since v38)
-rg -n "只余删边" docs/workflows                                       # 7 hits as of v40, all in version-收口 blockquotes / revision records (judge by context, not line numbers — they shift每版); 0 normative hits — the disposition is now a field sentence
-rg -n "下游仍指向该任务、该任务未归档" docs/workflows               # 4 hits as of v41 second pass: 1 normative (main §7.4 表行, the predicate's sole defining site) + 3 historical revision records (main v41 + v40 appendix, companion §28 v40); a hit at main §7.4 口径句 or companion §5 表行/表后段 means the predicate got restated (the v41-first-pass four-copy shape)
-rg -n "旧任务未归档 → 归档旧任务|边已重连但旧任务未归档" docs/workflows   # 0 hits — the forward-completion order lives only in §7.7 类型 5
+rg -n '异常前置走替换|前置为异常时按删边或替换' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # 0 hits as of v36 (all point at §7.4)
+rg -n '按 §7.4 处置|按主设计 §7.4' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # source references and historical records; inspect all hits, since recovery/role classification may change their number
+rg -n '或删边后不再等待$' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # 0 hits: no un-narrowed copy of the abnormal-downstream sentence
+rg -n '预生成.{0,4}新 P' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # main matrix row + v37 historical record; action steps reference matrix
+rg -n '修复的写入纪律' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # main source + companion reference + historical records; inspect context
+rg -n '两种处置由人决定' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # 0 hits (variant is decided at 发起 since v38)
+rg -n '只余删边' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # 7 hits as of v40, all in version-收口 blockquotes / revision records (judge by context, not line numbers — they shift每版); 0 normative hits — the disposition is now a field sentence
+rg -n '下游仍指向该任务、该任务未归档' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # normative definition only at main §7.4; its qualifier is 未归档下游; remaining hits historical
+rg -n '旧任务未归档 → 归档旧任务|边已重连但旧任务未归档' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # 0 hits — the forward-completion order lives only in §7.7 类型 5
 rg -n "先补建 / 重连、后归档" docs/workflows/workflow-design.md      # 2 hits: §7.7 类型 5 (sole source) + v40 record; the sequence wording must not appear in §6.5 / 配套 §6.4 / 配套 §8
-rg -n "替换指向为空" docs/workflows                                  # ALLOWED: revision records only (v41/v40 appendix entries quoting the old shape); BANNED: any normative hit — the v41 terminal predicate uses 「无替换指向 / 继任者已建」 and the 删边-variant step lines now reference the §7.8 matrix instead of stating 「替换指向为空」; a normative hit here means the v40 terminal shape (or a step-level terminal-value restatement) returned
-rg -n "新建替代" docs/workflows                                     # every normative line names 预生成 / 第 1 步 or points at §6.6; revision records are historical
-rg -n "继任任务" docs/workflows                                     # 3 hits: §3 term + §9.1 note + v38 appendix record
-rg -n "无当前任务时：T 进行中或规划中但前置含非正常" docs/workflows    # 0 hits (the §8.4 summary copy is now a reference, v39)
-rg -n "无当前任务时按 §9.1" docs/workflows                            # 2 hits: §8.4 第三段 (normative) + v31 appendix record
-rg -n "继任者已建" docs/workflows                                      # ALLOWED: main §7.4 表行 (sole predicate definition) + §7.7 窗口⑤ (marked 同口径引用) + 口径 10④ 轴名 + action-branch conditions inside the forward-completion sequence (§7.7 补建「继任者已建时只补齐重连」— verbatim condition inside an action sequence inherits the source, registry principle) + revision records / companion §29; BANNED: any sentence outside these sites restating the terminal/incomplete field combination as a standalone judgment (esp. main §7.4 口径句, main §7.8, companion §5, companion §9)
-rg -n "唯一清空点" docs/workflows                                     # 2 hits as of v41 third pass: main §7.8 写入矩阵行 + v41 appendix record; companion carries no terminal values anymore (demoted to references) — any normative hit outside the matrix row means an unregistered clearing rule appeared
-rg -n "写入矩阵" docs/workflows                                        # 27 hits as of v41 sixth pass: main 17 (§7.8 唯一源句 + 矩阵引导句 + action-step references: §6.4 返工来源、§6.5/§6.6 step 1 ×2、类型 1 一般/P、类型 5 改判 ×2、类型 4、识别句双缺失出口 + §7.4 口径句指引 + 口径 10⑥ + frontmatter status + v41 record) + companion 10; ALLOWED: exactly one full matrix (main §7.8 识别字段写入矩阵, 10 rows × 3 field columns: 指向 + 说明 + 返工来源), every other hit must be a reference, not a restated terminal value; BANNED: a second full matrix, or a pointer/说明/返工来源 write/clear rule stated outside a reference
-rg -n "P 的指向不得置空" docs/workflows                            # 4 hits: main §7.8 矩阵行 9 (P guard, sole rule site) + v41 record + companion §9 / §29 references; the type-4 repair entrance must never strand P's successor chain (§6.6 role invariant) — losing this guard reopens the v35/v36 project-layer-object loss via a new entrance
-rg -n "唯一 / 不再 / 一律 / 只」" docs/workflows                     # GATE-EXISTENCE CHECK ONLY (not a sweep): this literal string only matches the gate's own wording in §0 写作约定 + 口径 10⑤ — it proves the closed-assertion gate exists, it cannot detect newly written closed assertions. The actual assertion × path enumeration is a human/LLM judgment done under 口径 10⑤ and recorded in the review report; do not treat this probe passing as that check having run
-rg -n "新建替代" docs/workflows/依赖机制设计说明.md                      # 发起 / 实施第1步 / 实施第2步 / §9；实施第2步必须含「继承旧任务当前的前置集合」（v41），缺句即 F2 回归
+rg -n '替换指向为空' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # historical old-shape wording only; current business clears and controlled repairs reference the §7.8 matrix/domain
+rg -n '新建替代' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # location scan: classify role/edge-origin/action/matrix/history hits; do not demand preallocation words at role or edge-origin sites
+rg -n '继任任务' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # 4 hits: §3 term + §9.1 uncompleted-project ready row + §9.1 note + v38 appendix record; readiness/ordering still owned by §3/§7.6
+rg -n '无当前任务时：T 进行中或规划中但前置含非正常' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # 0 hits (the §8.4 summary copy is now a reference, v39)
+rg -n '无当前任务时按 §9.1' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # 2 hits: §8.4 第三段 (normative) + v31 appendix record
+rg -n '继任者已建' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # main §7.4 sole abnormal predicate, §7.7 action branch, review-axis names and historical records; normal P parser must not call this predicate
+rg -n '唯一清空点' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # historical records only; no normative unconditional sole-clear rule
+rg -n '写入矩阵' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # exactly one full main matrix (13 rows: original 10 plus prepare/publish/cancel); remaining hits references/history; validate semantics separately
+rg -n 'P 的指向不得置空' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # historical only; current guard is 已确立的 P 继任关系不得置空, allowing legitimate original empty values
+rg -n '唯一 / 不再 / 一律 / 只」' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # GATE-EXISTENCE CHECK ONLY (not a sweep): this literal string only matches the gate's own wording in §0 写作约定 + 口径 10⑤ — it proves the closed-assertion gate exists, it cannot detect newly written closed assertions. The actual assertion × path enumeration is a human/LLM judgment done under 口径 10⑤ and recorded in the review report; do not treat this probe passing as that check having run
+rg -n "新建替代" docs/workflows/依赖机制设计说明.md   # action 第2步 inherits 当前前置集合; 发起校验 matches; role/history hits need no preallocation wording
+rg -n "已确立的 P 继任关系不得置空|类型 4 恢复边界" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # current guard defined in main §7.8; repair/read-only exceptions cite it
+rg -n "当前登记标记|返工登记准备|返工登记发布|返工登记取消" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # main matrix owns fields; §6.4 owns sequence/windows; mirror references; verify no completion-only clear path
+rg -n "P 角色解析|正常完成的 P 终点|角色完整性守卫" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # one parser at main §6.5, normal terminal must retain downstream dependency edges
+rg -n "下游范围为未归档下游|类型 4 恢复边界（唯一源）|返工登记（动作序列与窗口的唯一源）" docs/workflows/workflow-design.md   # three source anchors, one occurrence each
+rg -n '机制持久化范围（唯一源）|提交范围.*按.*§3|持久化.*主设计 §3' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # full mechanism field set at main §3 only; other matches reference source; group atomicity does not imply native-task transaction
+rg -n '账本 / 前置集合 / 替换指向 / 返工来源|账本与前置集合.*持久化|提交范围含账本' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # old enumerations allowed in metadata/history only, not current normative persistence definitions; inspect context, not counts
 ```
 
 ---
