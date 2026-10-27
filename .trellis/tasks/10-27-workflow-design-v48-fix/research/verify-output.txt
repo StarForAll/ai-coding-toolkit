@@ -1,0 +1,105 @@
+== 1. manifest rows ==
+-- fix-manifest.tsv
+M1	workflow-design.md	superseded
+M2a	workflow-design.md	436
+M2b	workflow-design.md	451
+M2c	workflow-design.md	452
+M2d	workflow-design.md	719
+M3a	workflow-design.md	superseded
+M3b	workflow-design.md	682
+M3c	workflow-design.md	superseded
+M3d	workflow-design.md	superseded
+M3e	依赖机制设计说明.md	superseded
+M3f	依赖机制设计说明.md	superseded
+M3g	workflow-design.md	superseded
+M4a	workflow-design.md	37
+M4b	workflow-design.md	66
+M4c	workflow-design.md	900
+M4d	workflow-design.md	911
+M5	依赖机制设计说明.md	13
+M6	workflow-design.md	superseded
+M7a	依赖机制设计说明.md	164
+M7b	依赖机制设计说明.md	194
+M3h	workflow-design.md	superseded
+-- fix-manifest-r2.tsv
+R1	workflow-design.md	superseded
+R2	依赖机制设计说明.md	superseded
+R3	workflow-design.md	675
+R4	workflow-design.md	911
+R5a	workflow-design.md	676
+R5b	workflow-design.md	682
+R5c	workflow-design.md	491
+R5d	依赖机制设计说明.md	181
+R5e	依赖机制设计说明.md	271
+R6c	workflow-design.md	948
+R6a	workflow-design.md	948
+R6b	workflow-design.md	superseded
+R7	依赖机制设计说明.md	503
+== 2. fix-notes backtick-phrase gate ==
+ok: 7 backticked phrases all found in 主稿/配套
+== 3. invariants ==
+matrix data rows = 14 (expect 14)
+combo table data rows = 12 (expect 12)
+表 4-2 data rows = 7 (expect 7)
+§6.4 window data rows = 9 (expect 9)
+§4.4 family table data rows = 4 (expect 4)
+三族 hits: 主稿=2（status v46 段 + 附录 v46，记录域）/ 配套=1（§34 v46 条目，记录域）/ spec=0（R8 后应为 0）
+ok: pre-existing 11 combo rows byte-identical to HEAD
+bare '| — |' cells in matrix = 0 (expect 0)
+ok: 主稿 changed lines paren-balanced (821 lines)
+ok: 配套 changed lines paren-balanced (20 lines)
+== 4. probes ==
+[ok] 按 §3 有效（ = 0 (expect 0)
+[ok] 有当前任务，且该任务未归档、账本为|有当前任务，但该任务未归档、账本为|有当前任务，但该任务已归 = 0 (expect 0)
+[ok] 按 §3 有效|按 §3 无效 = 9 (expect 9)
+[ok] 依赖满足 =|就绪.*前置集合全部为 = 3 (expect 3)
+[ok] 满足判定按 §4.3|按主设计 §4.3 = 5 (expect 5)
+[ok] 指向已归档、规划中且前置未满足 = 0 (expect 0)
+[ok] 或为“正常但未归档”的任务|前置未完工（或为 = 0 (expect 0)
+[ok] 视为无当前任务 = 14 (expect 14)
+[ok] 继任者即新的 P = 2 (expect 2)
+[ok] 异常前置走替换|前置为异常时按删边或替换 = 0 (expect 0)
+[ok] 或删边后不再等待$ = 0 (expect 0)
+[ok] 两种处置由人决定 = 0 (expect 0)
+[ok] 旧任务未归档 → 归档旧任务|边已重连但旧任务未归档 = 0 (expect 0)
+[ok] 先补建 / 重连、后归档 = 2 (expect 2)
+[ok] 继任任务 = 4 (expect 4)
+[ok] 无当前任务时：T 进行中或规划中但前置含非正常 = 0 (expect 0)
+[ok] 无当前任务时按 §9.1 = 2 (expect 2)
+[ok] 唯一 / 不再 / 一律 / 只」 = 2 (expect 2)
+[ok] 下游范围为未归档下游|类型 4 恢复边界（唯一源）|返工登记（动作序列与窗口的唯一源） = 3 (expect 3)
+[ok] 标识占用校验（唯一源） = 1 (expect 1)
+[ok] 移交完成的持久判据 = 2 (expect 2)
+[ok] 重新生成后重校验|已落盘的替换指向|原预写标识已被其他身份占用|按 §7.8 标识占用规则 = 7 (expect 7)
+[ok] 重连目标可为异常 = 0 (expect 0)
+[ok] 重连目标为异常时按 = 7 (expect 7)
+[ok] 建边目标\*\*账本为“异常” = 2 (expect 2)
+[ok] \*\*重连类\*\* = 1 (expect 1)
+[ok] 被重连的未归档下游 = 2 (expect 2)
+[ok] 重连只要求两端存在 = 3 (expect 3)
+[ok] 先按类型 5 补建 = 2 (expect 2)
+[ok] 自成一个提交组 = 2 (expect 2)
+[ok] 重连目标为“异常”仍补齐重连 = 1 (expect 1)
+[ok] 回指产生者位置 = 1 (expect 1)
+[ok] 字段矩阵行义务 = 4 (expect 4)
+[ok] 回指产生者（依据 = 0 (expect 0)
+[ok] v46 同步 = 0 (expect 0)
+[ok] 含已预写标识 = 6 (expect 6)
+[scan] 预生成.{0,4}新 P = 2
+[scan] 修复的写入纪律 = 4
+[scan] 下游仍指向该任务、该任务未归档 = 4
+[scan] 替换指向为空 = 2
+[scan] 新建替代 = 34
+[scan] 继任者已建 = 6
+[scan] 唯一清空点 = 1
+[scan] 写入矩阵 = 24
+[scan] P 的指向不得置空 = 2
+[scan] 已确立的 P 继任关系不得置空|类型 4 恢复边界 = 17
+[scan] 当前登记标记|返工登记准备|返工登记发布|返工登记取消 = 11
+[scan] P 角色解析|正常完成的 P 终点|角色完整性守卫 = 4
+[scan] 机制持久化范围（唯一源）|提交范围.*按.*§3|持久化.*主设计 §3 = 13
+[scan] 账本 / 前置集合 / 替换指向 / 返工来源|账本与前置集合.*持久化|提交范围含账本 = 3
+== 5. § label vs section range ==
+ok: 28 § label / line pairs all inside their section ranges
+
+RESULT: all green

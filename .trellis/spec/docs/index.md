@@ -302,7 +302,7 @@ update the row when a source moves:
 | Persistence scope, ownership and commit groups | 主设计 §3 持久化 | Main §1.1/§4.2/§7.3/§7.7/§7.8/§8.1/§8.2 and companion §2/§3/§4/§8/§9/§10/§13 cite source | Independent field enumerations omitting dependency IDs, ledger explanation/registration intent, pointers, prerequisites or rework origins; confusing a commit group with a whole multi-step action or a cross-system transaction |
 | Identity occupancy before pointer writes and successor creation | 主设计 §7.8 标识占用校验 | §6.5 / §6.6 发起按 §7.8 写入前校验并“重新生成后重校验”；§7.7 类型 5 补建按 §7.8 校验；已落盘指向冲突按 §7.7 类型 4；配套 §9 按 §7.8 引用；类型 4 可在原预写标识被他身份占用时改指本次新生成标识 | Overwriting another identity; treating existence alone as successor identity; using type 4 to invent an unrelated existing relationship; skipping regeneration before a pointer write |
 | Persistent completion of legacy rework handoff | 主设计 §6.4 旧口径移交 | 主稿 §7.7 cites “移交完成的持久判据”; §9.1 and companion §6.3/§8/§13 cite the handoff source | Inferring handoff completion from archived historical R tasks; automatic suspension clearing before the completion fact is persisted; defining a second handoff condition |
-| Archived-prerequisite source list（已归档前置合法来源） | 主设计 §4.4 归档终态约束（三族表） | “来源按 §4.4 判定”“按 §4.4 三族”“（含任务定义类，术语见 §3）”; companion: “按主设计 §4.4 判定”“来源按主设计 §4.4” | Restating the member enumeration (including the family-2 clause) in §7.5 / §0 / companion; a second producer list |
+| Archived-prerequisite source list（已归档前置合法来源） | 主设计 §4.4 归档终态约束（四族表） | “来源按 §4.4 判定”“按 §4.4 四族”“（含任务定义类，术语见 §3）”; companion: “按主设计 §4.4 判定”“来源按主设计 §4.4” | Restating the member enumeration (including the family-2 clause) in §7.5 / §0 / companion; a second producer list |
 | 收尾对象 / 收尾完成 | 主设计 §6.7 two definitions | “按 §6.7 判定”“（按 §6.7）”“以收尾对象为准”; companion: “按主设计 §6.7 判定” | Restating “已归档 + 正常” at :266/:531/:807/:815; using “无继任者” as an exclusion term |
 | 任务定义 | 主设计 §3 术语 | “见『任务定义』”“按 §4.4 任务定义类”; companion: “术语见主设计 §3”“主设计 §3『任务定义』” | A second definition outside the term table (the §7.5 reverse-pointing exemption is sanctioned) |
 
@@ -312,10 +312,14 @@ verbatim condition inside an action sequence inherits it and does not create a
 second predicate.
 
 Probes — run after any `workflow-design.md` revision, against both documents
-(expected scopes as of v46; re-verified unchanged after the v47 fix round —
-matrix row 14 rewrite, 待重定义行 field predicate, 口径 10⑥ gate rewording and
-§3 图内成员 addition moved no registered count; the `依赖标识写入` /
-`写入矩阵` counts now include appendix-record hits, judge by domain). The run
+(expected scopes as of v48; re-verified unchanged in the v47 and v48 fix rounds —
+v47: matrix row 14 rewrite, 待重定义行 field predicate, 口径 10⑥ gate rewording and
+§3 图内成员 addition moved no registered count; v48: the source-family and
+reconnection-scope additions below moved no pre-existing count; the `依赖标识写入` /
+`写入矩阵` counts now include appendix-record hits, judge by domain). The v48
+fix round added fourteen registered probes at the end of the block below, scoped to
+the two documents only so they survive task archival; record-domain hits
+(appendix / revision records) are judged by context, not counted. The run
 is mandatory, not optional: update expected
 values in the same pass as any predicate change — a registered probe with a
 stale expected value that nobody runs is exactly how v40's disposition-terminal
@@ -365,6 +369,21 @@ rg -n '账本 / 前置集合 / 替换指向 / 返工来源|账本与前置集合
 rg -n '标识占用校验（唯一源）' docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md # 1 hit, main §7.8; check other-identity conflict blocks type 4 without overwriting; confirmed-original restoration and same-successor continuation remain legal
 rg -n '移交完成的持久判据' docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md # 2 hits, main §6.4 source and §7.7 reference; missing/uncommitted completion fact must block automatic clearing even when historical R tasks are archived
 rg -n '重新生成后重校验|已落盘的替换指向|原预写标识已被其他身份占用|按 §7.8 标识占用规则' docs/workflows/workflow-design.md # 7 hits as of v46: §6.5 / §6.6 source calls, §7.7 type5 reference, §7.8 two-stage source and type4 exception, plus the v46 §6.4 位置/标识占用分域句 and the matrix dependency-ID row; all new calls replay to §7.8 preconditions
+# v48 additions (scope = the two documents only; record-domain hits are judged by context, not counted):
+rg -n "重连目标可为异常" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 0 hits as of r3: the pre-r3 license phrase was replaced by the pinned referent (see 被重连的未归档下游 below); a nonzero count means an unpinned copy returned
+rg -n "重连目标为异常时按" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 7 hits as of v48: action-side references (main §7.7 type1-P / type5 guard / §6.5 forward-completion conclusion, companion §6.4 conclusion + §8 type5) + B9 acceptance sentence + §7.7 window ④; below 7 means a reference site was lost
+rg -n "建边目标\*\*账本为“异常”" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 2 hits: main :618 + companion :219 (bold markers inside the phrase, matched verbatim); losing one leaves the 建边 condition unscoped
+rg -n "\*\*重连类\*\*" docs/workflows/workflow-design.md   # 1 hit: §4.4 family 4; the only family that lets an archived successor be a reconnect prerequisite
+rg -n "被重连的未归档下游" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 2 hits: §7.5 source + companion mirror; the license's referent must stay pinned at the source
+rg -n "重连只要求两端存在" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 3 hits: §7.5 source + companion mirror + §4.4 family-4 cell (same license, by design); the license's scope must stay single-phrased
+rg -n "先按类型 5 补建" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 2 hits as of v48: 1 normative (§10 self-check) + 1 record-domain (v47 appendix record, judged by context); losing the self-check hit drops the count and is the F1 failure mode
+rg -n "自成一个提交组" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 2 hits as of v48: §6.4 step 2 + matrix row 14; the rewrite-commit timing must stay single-phrased across both sites
+rg -n "重连目标为“异常”仍补齐重连" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 1 hit as of v48: §10 self-check scenario acceptance for the reconnection license
+rg -n "回指产生者位置" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 1 hit as of v48: §0 (sole source); after the v48 dedup no defining restatement may remain at :66/:899/:910
+rg -n "字段矩阵行义务" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 4 hits as of v48: §0 named clause + three reference sites (:66/:899/:910); count below 4 means a reference site was lost
+rg -n "回指产生者（依据" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 0 hits as of v48: the :899 short-form restatement is demoted to a §0 reference
+rg -n "v46 同步" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 0 hits as of v48: companion header version kept aligned with the design frontmatter
+rg -n "含已预写标识" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 6 hits as of v48: 5 normative (main 3: §6.5 / §6.6 发起 + §7.8 时点 1; companion 2: §6.4 / §6.5 发起) + 1 record-domain (companion §36); occupancy scope must include prewritten identifiers everywhere the check is invoked
 ```
 
 #### v46 probe table (five columns aligned with the registry template)
@@ -376,7 +395,7 @@ the “spec 10” batch in the fix inventory are the same work, not double-count
 
 | # | 对象 | 唯一源 | 允许的引用形式 | 禁止形态（Banned） | 验证方法与期望 |
 |---|---|---|---|---|---|
-| 1 | 来源清单 | 主设计 §4.4 归档终态约束 | “来源按 §4.4 判定”“按 §4.4 三族” | 在 §7.5、§0、配套复述成员枚举（含族 2 子句） | 规范位展开枚举仅 §4.4 一处。历史域注：附录收口块与 `:5` status 只登记 |
+| 1 | 来源清单 | 主设计 §4.4 归档终态约束 | “来源按 §4.4 判定”“按 §4.4 四族” | 在 §7.5、§0、配套复述成员枚举（含族 2 子句） | 规范位展开枚举仅 §4.4 一处。历史域注：附录收口块与 `:5` status 只登记 |
 | 2 | 收尾角色 | 主设计 §6.7 两条定义 | “按 §6.7 判定”“（按 §6.7）” | 在 §4.3 项目完成式、§6.7 收尾口径句、§9.1 已收尾表的收尾完成行与说明区复述“已归档+正常” | 同段两条定义（收尾对象 / 收尾完成）+ 四处引用（项目完成式 / 收尾完成即项目完成 / 已收尾表的收尾完成行与「收尾完成」说明）+ A1 + 自检。历史域注：v27 附录记录只登记 |
 | 3 | 任务定义 | 主设计 §3 术语 | “见『任务定义』”“按 §4.4 任务定义类”；配套侧“主设计 §3『任务定义』” | 出现第二个定义（只许术语表一处 + §7.5 反指豁免） | 定义 1（术语）+ 豁免 1（§7.5）+ 引用点若干（§4.4 族 3 / 自检场景 / 组合表新行 / 配套 :28/:216，逐条判域） |
 | 4 | 依赖标识 | 主设计 §7.8 占用校验时点 1 + 矩阵第 14 行 | “按占用校验时点 1 的全部产生者” | 第二份产生者清单 | 矩阵 14 行、第 14 行写入路径为引用式 |
@@ -388,6 +407,7 @@ the “spec 10” batch in the fix inventory are the same work, not double-count
 | 10 | N3 删边自检 | 主设计 §10 自检 | 引用 | 只建边无删边 | 自检含删边场景（修前 0 次） |
 | 11 | 矩阵行数 | 主设计 §7.8 矩阵 | — | — | 13 → 14 |
 | 12 | 四字段枚举 | 主设计 §7.8 矩阵定义句 | “（含依赖标识）” | 三处枚举不一致 | 三处均含依赖标识（§7.8 矩阵定义句、§10 类迁移义务句、口径 10⑥ 轴名） |
+| 13 | 字段矩阵行义务 | 主设计 §0 | “按 §0「字段矩阵行义务」逐格核对”（含「（唯一源）」变体） | 第二份完整判据 | §0 一处完整判据；其余三处仅引用（引用句含「字段矩阵行义务」；行号仅作现状括注） |
 
 ---
 
