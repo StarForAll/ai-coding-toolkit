@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/docs/index.md", "reason": "约束 docs/workflows 设计稿审查边界、唯一判定源注册表和必跑探针"}
+{"file": ".trellis/spec/guides/design-review-thinking-guide.md", "reason": "规定深度设计审查的缺陷门槛、过滤、反驳和输出格式"}
