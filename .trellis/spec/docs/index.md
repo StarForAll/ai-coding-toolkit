@@ -298,6 +298,8 @@ update the row when a source moves:
 | Selection when no current task | 主设计 §9.1 第三段两张表 | “按 §9.1 第三段两张表选择”“按 §9.1 选择”；§7.6、§8.4 第三段、配套 §7 均为引用 | Restating the branch conditions (等前置 / 最早就绪) outside §9.1 — v38's §8.4 miss |
 | Current rework registration and suspension clearing | 主设计 §6.4 (sequence, cancellation, windows, step-5 guard); fields at §7.8 | 表 4-2 rows 2/3/7, §7.5/§7.7/§8.4/§9.1 and companion §5/§6.3/§8/§9 cite sources | Clearing by historical R completion while a current registration remains; repeating an action order in the companion; deleting a native-created R as cancellation |
 | Persistence scope, ownership and commit groups | 主设计 §3 持久化 | Main §1.1/§4.2/§7.3/§7.7/§7.8/§8.1/§8.2 and companion §2/§3/§4/§8/§9/§10/§13 cite source | Independent field enumerations omitting dependency IDs, ledger explanation/registration intent, pointers, prerequisites or rework origins; confusing a commit group with a whole multi-step action or a cross-system transaction |
+| Identity occupancy before pointer writes and successor creation | 主设计 §7.8 标识占用校验 | §6.5 / §6.6 发起按 §7.8 写入前校验并“重新生成后重校验”；§7.7 类型 5 补建按 §7.8 校验；已落盘指向冲突按 §7.7 类型 4；配套 §9 按 §7.8 引用；类型 4 可在原预写标识被他身份占用时改指本次新生成标识 | Overwriting another identity; treating existence alone as successor identity; using type 4 to invent an unrelated existing relationship; skipping regeneration before a pointer write |
+| Persistent completion of legacy rework handoff | 主设计 §6.4 旧口径移交 | 主稿 §7.7 cites “移交完成的持久判据”; §9.1 and companion §6.3/§8/§13 cite the handoff source | Inferring handoff completion from archived historical R tasks; automatic suspension clearing before the completion fact is persisted; defining a second handoff condition |
 
 Key distinction: **defining restatements are banned; action-condition
 references are allowed** — once the source definition fixes the semantics, a
@@ -305,7 +307,7 @@ verbatim condition inside an action sequence inherits it and does not create a
 second predicate.
 
 Probes — run after any `workflow-design.md` revision, against both documents
-(expected scopes as of v42). The run is mandatory, not optional: update expected
+(expected scopes as of v44). The run is mandatory, not optional: update expected
 values in the same pass as any predicate change — a registered probe with a
 stale expected value that nobody runs is exactly how v40's disposition-terminal
 defect escaped (see blind spot 12 in the design-review guide):
@@ -351,6 +353,9 @@ rg -n "P 角色解析|正常完成的 P 终点|角色完整性守卫" docs/workf
 rg -n "下游范围为未归档下游|类型 4 恢复边界（唯一源）|返工登记（动作序列与窗口的唯一源）" docs/workflows/workflow-design.md   # three source anchors, one occurrence each
 rg -n '机制持久化范围（唯一源）|提交范围.*按.*§3|持久化.*主设计 §3' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # full mechanism field set at main §3 only; other matches reference source; group atomicity does not imply native-task transaction
 rg -n '账本 / 前置集合 / 替换指向 / 返工来源|账本与前置集合.*持久化|提交范围含账本' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # old enumerations allowed in metadata/history only, not current normative persistence definitions; inspect context, not counts
+rg -n '标识占用校验（唯一源）' docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md # 1 hit, main §7.8; check other-identity conflict blocks type 4 without overwriting; confirmed-original restoration and same-successor continuation remain legal
+rg -n '移交完成的持久判据' docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md # 2 hits, main §6.4 source and §7.7 reference; missing/uncommitted completion fact must block automatic clearing even when historical R tasks are archived
+rg -n '重新生成后重校验|已落盘的替换指向|原预写标识已被其他身份占用|按 §7.8 标识占用规则' docs/workflows/workflow-design.md # 5 hits: §6.5 / §6.6 source calls, §7.7 type5 reference, §7.8 two-stage source and type4 exception; all new calls replay to §7.8 preconditions
 ```
 
 ---
