@@ -164,3 +164,25 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 373: workflow-design v48 三轮修复：自检场景补落、改写即提交、重连守卫改源加域、闸口单源、族表四族
+<!-- trellis-session: v=2 fp=eb32d14fe551739b -->
+
+**Date**: 2026-10-27
+**Task**: workflow-design v48 三轮修复：自检场景补落、改写即提交、重连守卫改源加域、闸口单源、族表四族
+**Branch**: `main`
+
+### Summary
+
+按修复指令完成 v48 初轮（M1–M11），两轮独立复核并入：r2 修正轮（重连许可写入 §7.5 统一校验源位、五动作位降为引用、括号与 M1 前置修复）与 r3 重定级微修轮（族表四族、建边目标限定、指称写死、B9/窗口引用化、guide 盲点 22–24）。verify.py 机械验证全绿（manifest 计数、不变量、37 条 probe、括号平衡、§ 标签核对），A1–A8 与 C1–C6 复核 0 缺口，记录可逐句回查（fix-notes/residuals/review-report-r2 + 三份 manifest）。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `870d9d7` | workflow-design v48：自检场景补落与记录反写更正、改写即提交（三处同语境）、重连守卫加域改源（§7.5 统一校验括注为唯一源、五动作位降为引用）、闸口义务单源（§0 命名条款 + 三处引用位）、类型 1 分支去空归档、配套抬头与发起清单作用域、族表补重连类（四族）与建边目标限定、B9 与窗口引用化、guide 盲点 22-24、spec 探针与注册表同步（含三轮独立复核并入） |
+
+### Status
+
+[OK] **Completed**
