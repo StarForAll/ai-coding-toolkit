@@ -307,7 +307,7 @@ verbatim condition inside an action sequence inherits it and does not create a
 second predicate.
 
 Probes — run after any `workflow-design.md` revision, against both documents
-(expected scopes as of v44). The run is mandatory, not optional: update expected
+(expected scopes as of v45). The run is mandatory, not optional: update expected
 values in the same pass as any predicate change — a registered probe with a
 stale expected value that nobody runs is exactly how v40's disposition-terminal
 defect escaped (see blind spot 12 in the design-review guide):
