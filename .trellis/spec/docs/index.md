@@ -101,8 +101,10 @@ as cross-doc), references used as exits (口径 12, walk the referenced
 preconditions), multi-step writes with no mid-state (口径 13/14: enumerate
 windows, give every residual a unique signature), exceptions registered by
 source/role instead of by state (blind spot 10; v40 replaced §7.4's list with a
-field predicate), and one action sequence defined twice in different orders
-(blind spot 11; sole source is now §7.7 类型 5).
+field predicate), one action sequence defined twice in different orders
+(blind spot 11; sole source is now §7.7 类型 5), and review gates worded at a
+different granularity than the artifact they judge (blind spots 20/21, added
+from the v47 review rounds).
 
 Version drift in derived docs (for example a flow diagram still labeled v24) is
 a report item, not a design defect.
@@ -310,7 +312,11 @@ verbatim condition inside an action sequence inherits it and does not create a
 second predicate.
 
 Probes — run after any `workflow-design.md` revision, against both documents
-(expected scopes as of v46). The run is mandatory, not optional: update expected
+(expected scopes as of v46; re-verified unchanged after the v47 fix round —
+matrix row 14 rewrite, 待重定义行 field predicate, 口径 10⑥ gate rewording and
+§3 图内成员 addition moved no registered count; the `依赖标识写入` /
+`写入矩阵` counts now include appendix-record hits, judge by domain). The run
+is mandatory, not optional: update expected
 values in the same pass as any predicate change — a registered probe with a
 stale expected value that nobody runs is exactly how v40's disposition-terminal
 defect escaped (see blind spot 12 in the design-review guide):

@@ -351,6 +351,23 @@ record-keeping are therefore part of the fix:
     split, the two sentences contradict on the same case (v46: §6.4 now
     separates 位置占用 from 标识占用). Grep the action's verbs across both
     documents before declaring consistency.
+20. **A gate written stricter than the artifact it judges.** A new review
+    gate or writing obligation worded at a different granularity than the
+    existing artifact fails every conforming row when applied literally:
+    v47 mandated the literal phrase 「此路径不变」 the matrix never used (R2),
+    then per-cell producer references where the matrix's terminal-value cells
+    write values, not producers (R3) — each time the executor's reconciling
+    interpretation lived only in the task's fix-notes. Fix pattern: in the
+    introducing version, either align the artifact cells to the gate verbatim
+    or reword the gate to the artifact's actual granularity (write the
+    terminal value, or an unchanged-reason, or a provenance note), and merge
+    the reconciling口径 into the gate text itself. Source: 主稿 §0.1 口径 10⑥
+    × §7.8 矩阵.
+21. **Line numbers in records drift every round.** Editing a table above a
+    cited line shifts every later reference (v47: four consecutive rounds of
+    `:825 → :826` style drift). Locate edits by text anchors; cite line
+    numbers as reference-only and correct them in the same pass the record is
+    touched.
 
 ## Known False-Positive Patterns In This Repo
 
