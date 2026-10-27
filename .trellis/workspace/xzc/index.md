@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-8.md`
-- **Total Sessions**: 370
+- **Total Sessions**: 371
 - **Last Active**: 2026-10-27
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-8.md` | ~121 | Active |
+| `journal-8.md` | ~144 | Active |
 | `journal-7.md` | ~1964 | Archived |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
@@ -36,6 +36,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 371 | 2026-10-27 | workflow-design v46 深度审查修复（F1/F2/F3） | `d6f22a6`, `2fae1c4` | `main` |
 | 370 | 2026-10-27 | workflow-design v43/v44 提交收尾与任务归档 | `7ccc7cf` | `main` |
 | 369 | 2026-10-26 | workflow-design v42 深度审查、修复与人工验收收尾 | `9d30756817857d9ee1cea55189b32b2d16ddd2de` | `main` |
 | 368 | 2026-10-26 | workflow-design v40 深度审查与 v41 六轮修复 | `0c2c6c9` | `main` |

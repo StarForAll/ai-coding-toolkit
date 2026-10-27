@@ -119,3 +119,26 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 371: workflow-design v46 深度审查修复（F1/F2/F3）
+<!-- trellis-session: v=2 fp=caefcd1fbbd70c55 -->
+
+**Date**: 2026-10-27
+**Task**: workflow-design v46 深度审查修复（F1/F2/F3）
+**Branch**: `main`
+
+### Summary
+
+按 fix-plan-v9 执行 v46 修复三轮：①v9 全量（§4.4 来源清单唯一源三族表+任务定义类、§9.1 入口下沉分支、§7.8 依赖标识占用校验与矩阵第14行、§6.7 收尾对象/收尾完成定义、组合表待重定义行、N2/B1-B5/R-1…R-6）；②人工修正 M1（矩阵行单元格归位）/M2（无收尾对象触发语）+六小项；③配套 §8 镜像行同步、spec 探针行号改内容指称。验证：v9 十二条命令、A3 四例回归、既有+v46 探针全量、封闭断言逐条分类（fix-notes.md 落盘）。spec 注册表三行新起、矩阵行数 13→14、审查指南盲点 16–19。两笔提交后归档任务并记录本日志。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d6f22a6` | workflow-design v46：已归档前置来源唯一源（三族+任务定义类）、入口下沉分支、依赖标识占用校验与受控重生成、收尾对象/收尾完成定义、组合表待重定义行 |
+| `2fae1c4` | chore(task): record 10-27-workflow-design-deep-review research artifacts |
+
+### Status
+
+[OK] **Completed**
