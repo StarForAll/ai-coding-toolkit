@@ -328,6 +328,29 @@ record-keeping are therefore part of the fix:
     whose task does not exist yet, and archived rework-origin corruption, while
     forbidding creation of new relationships or rollback to an obsolete one.
     Source: 主稿 §7.8. Text-hit counts prove locations, not permission semantics.
+16. **Creation-time writes bypass mechanism validation.** Task creation writes
+    the prerequisite set directly and never passes §7.5's edge-change
+    validation (which covers 建边 / 返工加边 / 重连 only). A rule that is wrong
+    about creation-time sources survives every mechanism-path test because the
+    mechanism never sees the write. Enumerate the 任务定义 path family
+    （创建期写 deps / 收尾重定义 / 基线变更新建） as its own family in 口径 10⑤ —
+    never fold it into 继承 or 建边 (v46: §4.4 三族表 is the sole source).
+17. **“能跑通” ≠ “规则成立”.** A scenario passing only because no check runs
+    on it is evidence of a blind spot, not of correctness. When enumerating
+    paths for a closed assertion, verify the rule text against every
+    producing family — not only the families the mechanism intercepts.
+18. **A new permission must be scope-limited.** When an exception grants a new
+    permission (for example, regenerating an occupied identifier as a carrier
+    correction), state exactly which field and object it applies to; an
+    unscoped permission leaks into adjacent invariants (v46: §7.8 类型 4
+    恢复边界 now limits the regeneration license to 任务自身的依赖标识 and keeps
+    P succession outside it).
+19. **After editing one rule, search for the same-action opposite sentence.**
+    A restriction tightened on one line (“不另生成 ID”) can coexist with its
+    inverse permission elsewhere (“重新生成后重校验”); until the domains are
+    split, the two sentences contradict on the same case (v46: §6.4 now
+    separates 位置占用 from 标识占用). Grep the action's verbs across both
+    documents before declaring consistency.
 
 ## Known False-Positive Patterns In This Repo
 

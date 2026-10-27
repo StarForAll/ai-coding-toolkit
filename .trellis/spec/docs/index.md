@@ -300,6 +300,9 @@ update the row when a source moves:
 | Persistence scope, ownership and commit groups | 主设计 §3 持久化 | Main §1.1/§4.2/§7.3/§7.7/§7.8/§8.1/§8.2 and companion §2/§3/§4/§8/§9/§10/§13 cite source | Independent field enumerations omitting dependency IDs, ledger explanation/registration intent, pointers, prerequisites or rework origins; confusing a commit group with a whole multi-step action or a cross-system transaction |
 | Identity occupancy before pointer writes and successor creation | 主设计 §7.8 标识占用校验 | §6.5 / §6.6 发起按 §7.8 写入前校验并“重新生成后重校验”；§7.7 类型 5 补建按 §7.8 校验；已落盘指向冲突按 §7.7 类型 4；配套 §9 按 §7.8 引用；类型 4 可在原预写标识被他身份占用时改指本次新生成标识 | Overwriting another identity; treating existence alone as successor identity; using type 4 to invent an unrelated existing relationship; skipping regeneration before a pointer write |
 | Persistent completion of legacy rework handoff | 主设计 §6.4 旧口径移交 | 主稿 §7.7 cites “移交完成的持久判据”; §9.1 and companion §6.3/§8/§13 cite the handoff source | Inferring handoff completion from archived historical R tasks; automatic suspension clearing before the completion fact is persisted; defining a second handoff condition |
+| Archived-prerequisite source list（已归档前置合法来源） | 主设计 §4.4 归档终态约束（三族表） | “来源按 §4.4 判定”“按 §4.4 三族”“（含任务定义类，术语见 §3）”; companion: “按主设计 §4.4 判定”“来源按主设计 §4.4” | Restating the member enumeration (including the family-2 clause) in §7.5 / §0 / companion; a second producer list |
+| 收尾对象 / 收尾完成 | 主设计 §6.7 two definitions | “按 §6.7 判定”“（按 §6.7）”“以收尾对象为准”; companion: “按主设计 §6.7 判定” | Restating “已归档 + 正常” at :266/:531/:807/:815; using “无继任者” as an exclusion term |
+| 任务定义 | 主设计 §3 术语 | “见『任务定义』”“按 §4.4 任务定义类”; companion: “术语见主设计 §3”“主设计 §3『任务定义』” | A second definition outside the term table (the §7.5 reverse-pointing exemption is sanctioned) |
 
 Key distinction: **defining restatements are banned; action-condition
 references are allowed** — once the source definition fixes the semantics, a
@@ -307,7 +310,7 @@ verbatim condition inside an action sequence inherits it and does not create a
 second predicate.
 
 Probes — run after any `workflow-design.md` revision, against both documents
-(expected scopes as of v45). The run is mandatory, not optional: update expected
+(expected scopes as of v46). The run is mandatory, not optional: update expected
 values in the same pass as any predicate change — a registered probe with a
 stale expected value that nobody runs is exactly how v40's disposition-terminal
 defect escaped (see blind spot 12 in the design-review guide):
@@ -343,7 +346,7 @@ rg -n '无当前任务时：T 进行中或规划中但前置含非正常' docs/w
 rg -n '无当前任务时按 §9.1' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # 2 hits: §8.4 第三段 (normative) + v31 appendix record
 rg -n '继任者已建' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # main §7.4 sole abnormal predicate, §7.7 action branch, review-axis names and historical records; normal P parser must not call this predicate
 rg -n '唯一清空点' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # historical records only; no normative unconditional sole-clear rule
-rg -n '写入矩阵' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # exactly one full main matrix (13 rows: original 10 plus prepare/publish/cancel); remaining hits references/history; validate semantics separately
+rg -n '写入矩阵' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # exactly one full main matrix (14 rows as of v46: original 10 plus prepare/publish/cancel and the dependency-ID row); remaining hits references/history; validate semantics separately
 rg -n 'P 的指向不得置空' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # historical only; current guard is 已确立的 P 继任关系不得置空, allowing legitimate original empty values
 rg -n '唯一 / 不再 / 一律 / 只」' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # GATE-EXISTENCE CHECK ONLY (not a sweep): this literal string only matches the gate's own wording in §0 写作约定 + 口径 10⑤ — it proves the closed-assertion gate exists, it cannot detect newly written closed assertions. The actual assertion × path enumeration is a human/LLM judgment done under 口径 10⑤ and recorded in the review report; do not treat this probe passing as that check having run
 rg -n "新建替代" docs/workflows/依赖机制设计说明.md   # action 第2步 inherits 当前前置集合; 发起校验 matches; role/history hits need no preallocation wording
@@ -355,8 +358,30 @@ rg -n '机制持久化范围（唯一源）|提交范围.*按.*§3|持久化.*�
 rg -n '账本 / 前置集合 / 替换指向 / 返工来源|账本与前置集合.*持久化|提交范围含账本' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # old enumerations allowed in metadata/history only, not current normative persistence definitions; inspect context, not counts
 rg -n '标识占用校验（唯一源）' docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md # 1 hit, main §7.8; check other-identity conflict blocks type 4 without overwriting; confirmed-original restoration and same-successor continuation remain legal
 rg -n '移交完成的持久判据' docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md # 2 hits, main §6.4 source and §7.7 reference; missing/uncommitted completion fact must block automatic clearing even when historical R tasks are archived
-rg -n '重新生成后重校验|已落盘的替换指向|原预写标识已被其他身份占用|按 §7.8 标识占用规则' docs/workflows/workflow-design.md # 5 hits: §6.5 / §6.6 source calls, §7.7 type5 reference, §7.8 two-stage source and type4 exception; all new calls replay to §7.8 preconditions
+rg -n '重新生成后重校验|已落盘的替换指向|原预写标识已被其他身份占用|按 §7.8 标识占用规则' docs/workflows/workflow-design.md # 7 hits as of v46: §6.5 / §6.6 source calls, §7.7 type5 reference, §7.8 two-stage source and type4 exception, plus the v46 §6.4 位置/标识占用分域句 and the matrix dependency-ID row; all new calls replay to §7.8 preconditions
 ```
+
+#### v46 probe table (five columns aligned with the registry template)
+
+Added with main-design v46. Rows 1 and 2 carry a history-domain note — the only
+two rows that necessarily touch historical text; hits inside history domains
+are registered, not counted as defects. `spec` accounting note: this table and
+the “spec 10” batch in the fix inventory are the same work, not double-counted.
+
+| # | 对象 | 唯一源 | 允许的引用形式 | 禁止形态（Banned） | 验证方法与期望 |
+|---|---|---|---|---|---|
+| 1 | 来源清单 | 主设计 §4.4 归档终态约束 | “来源按 §4.4 判定”“按 §4.4 三族” | 在 §7.5、§0、配套复述成员枚举（含族 2 子句） | 规范位展开枚举仅 §4.4 一处。历史域注：附录收口块与 `:5` status 只登记 |
+| 2 | 收尾角色 | 主设计 §6.7 两条定义 | “按 §6.7 判定”“（按 §6.7）” | 在 §4.3 项目完成式、§6.7 收尾口径句、§9.1 已收尾表的收尾完成行与说明区复述“已归档+正常” | 同段两条定义（收尾对象 / 收尾完成）+ 四处引用（项目完成式 / 收尾完成即项目完成 / 已收尾表的收尾完成行与「收尾完成」说明）+ A1 + 自检。历史域注：v27 附录记录只登记 |
+| 3 | 任务定义 | 主设计 §3 术语 | “见『任务定义』”“按 §4.4 任务定义类”；配套侧“主设计 §3『任务定义』” | 出现第二个定义（只许术语表一处 + §7.5 反指豁免） | 定义 1（术语）+ 豁免 1（§7.5）+ 引用点若干（§4.4 族 3 / 自检场景 / 组合表新行 / 配套 :28/:216，逐条判域） |
+| 4 | 依赖标识 | 主设计 §7.8 占用校验时点 1 + 矩阵第 14 行 | “按占用校验时点 1 的全部产生者” | 第二份产生者清单 | 矩阵 14 行、第 14 行写入路径为引用式 |
+| 5 | 两表同格同步 | 主设计 §9.1 两表行 1 | 逐字同序镜像 | 一处补一处不补 | 两张表的当前任务行下沉措辞逐字一致 |
+| 6 | 组合表新行 | 主设计 §7.7 表尾 | “待重定义”行内注记 | 改动既有 11 行 | 新行存在、“收尾未完成”行有回指；配套 §8 同形行与同句尾行注记存在 |
+| 7 | C5 就绪集例外 | 主设计 §7.6 正文 | 引用 §7.6 | 在别处重述成员差 | §7.6 已登记 + 理由 |
+| 8 | N1 机制动作清单 | —（登记型） | — | 把三处写成同一清单 | 三处按“有意不同并附理由”登记 |
+| 9 | V2 基线变更 | 主设计 §5.5 + §10 自检 | 引用 | 无自检位 | 自检含两分支场景串 |
+| 10 | N3 删边自检 | 主设计 §10 自检 | 引用 | 只建边无删边 | 自检含删边场景（修前 0 次） |
+| 11 | 矩阵行数 | 主设计 §7.8 矩阵 | — | — | 13 → 14 |
+| 12 | 四字段枚举 | 主设计 §7.8 矩阵定义句 | “（含依赖标识）” | 三处枚举不一致 | 三处均含依赖标识（§7.8 矩阵定义句、§10 类迁移义务句、口径 10⑥ 轴名） |
 
 ---
 
