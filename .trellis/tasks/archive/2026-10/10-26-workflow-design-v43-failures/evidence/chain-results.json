@@ -1,0 +1,62 @@
+{
+  "S1": {
+    "result": "PASS",
+    "detail": "Native P lifecycle; baseline and graph persisted; T1 ready.",
+    "fixture": "/tmp/dep-mech-chain-20261026-v43-replay-run3",
+    "head": "462bc0d21b24d5fdd0bb4008d3a1a2ad9082098b"
+  },
+  "S2": {
+    "result": "PASS",
+    "detail": "Native T1 start/archive; T2 starts only after T1 normal.",
+    "fixture": "/tmp/dep-mech-chain-20261026-v43-replay-run3",
+    "head": "b69896c1068c6e3e3f1330834635d2cf4e5e9dc1"
+  },
+  "S7": {
+    "result": "PASS",
+    "detail": "Emulated source guards reject suspended finish and archived rework; zero writes.",
+    "fixture": "/tmp/dep-mech-chain-20261026-v43-replay-run3",
+    "head": "e6aa6ea2003cf17f0a4c1680f1d065377ffafa2f"
+  },
+  "S3": {
+    "result": "PASS",
+    "detail": "Prepare/create/publish/execute/clear completed; R1 has no self-edge.",
+    "fixture": "/tmp/dep-mech-chain-20261026-v43-replay-run3",
+    "head": "e211103ba70a64a4803e5ce56d744c196be725ba"
+  },
+  "S4": {
+    "result": "PASS",
+    "detail": "Restart reads committed marker despite historical R1 completion; R2=106 recovered.",
+    "fixture": "/tmp/dep-mech-chain-20261026-v43-replay-run3",
+    "head": "a6f2b7239a6dc493ed07b0c4d9742bf9b2398af3"
+  },
+  "S8": {
+    "result": "PASS",
+    "detail": "Native pointer empty/current rc1; after global exclusions stage2 clears T2.",
+    "fixture": "/tmp/dep-mech-chain-20261026-v43-replay-run3",
+    "head": "116c0157bee086b351c5b987950c85c092881ffd"
+  },
+  "S5": {
+    "result": "PASS",
+    "detail": "Replacement uses free107; R2=106 retained; all inherited deps and downstream updated.",
+    "fixture": "/tmp/dep-mech-chain-20261026-v43-replay-run3",
+    "head": "72041ad1959f7295551277ea3ef366f57cbf19dc"
+  },
+  "S6": {
+    "result": "PASS",
+    "detail": "Restart sees prewritten107 with missing successor; build/reconnect precede archive; terminal stable.",
+    "fixture": "/tmp/dep-mech-chain-20261026-v43-replay-run3-s6",
+    "head": "7f0ac3c16e5a5cc58ed395ec3ca346ad3c269fd7"
+  },
+  "S9": {
+    "result": "PASS",
+    "detail": "P resolves along established200->203; project remains unclosed and continues successor P.",
+    "fixture": "/tmp/dep-mech-chain-20261026-v43-replay-run3-p",
+    "head": "51d514e3c3fd928656981698a0f476e8d7350318"
+  },
+  "S10": {
+    "result": "PASS",
+    "detail": "Real201 continues in_progress; emulated finish guard blocks; archived200 edge rejected without writes.",
+    "fixture": "/tmp/dep-mech-chain-20261026-v43-replay-run3-p",
+    "head": "e88a9641570b9dd60dd7875f5b1a58cac8b731e9"
+  }
+}

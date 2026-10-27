@@ -1,0 +1,49 @@
+{
+  "fixture": "/tmp/dep-mech-chain-20261026-v43-replay-run3-p",
+  "head": "e88a9641570b9dd60dd7875f5b1a58cac8b731e9",
+  "tasks": {
+    "200": {
+      "dir": "10-26-p",
+      "deps": [],
+      "origin": null,
+      "created": 1
+    },
+    "201": {
+      "dir": "10-26-t1",
+      "deps": [
+        "203",
+        "202"
+      ],
+      "origin": null,
+      "created": 2
+    },
+    "202": {
+      "dir": "10-26-t2",
+      "deps": [
+        "203"
+      ],
+      "origin": null,
+      "created": 3
+    },
+    "203": {
+      "dir": "10-26-p2",
+      "deps": [],
+      "origin": null,
+      "created": 4
+    }
+  },
+  "ledger": {
+    "200": {
+      "status": "abnormal",
+      "note": "Tester input: replacement approved",
+      "replaced_by": "203"
+    }
+  },
+  "native_paths": {
+    "200": ".trellis/tasks/archive/2026-10/10-26-p",
+    "201": ".trellis/tasks/10-26-t1",
+    "202": ".trellis/tasks/10-26-t2",
+    "203": ".trellis/tasks/10-26-p2"
+  },
+  "identity_errors": []
+}

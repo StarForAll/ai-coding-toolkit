@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-27",
+  "sandbox": {
+    "command": "sonar auth status",
+    "exit_code": 1,
+    "result": "system_keychain_access_denied",
+    "error": "Operation not permitted (code: 14)"
+  },
+  "approved_outside_sandbox": {
+    "command": "sonar auth status",
+    "exit_code": 0,
+    "result": "Connected",
+    "credential_source": "OS Keychain"
+  },
+  "effective_git_hook_path": "/home/xzc/.sonar/sonarqube-cli/hooks",
+  "second_batch_status": "INVALIDATED",
+  "invalidated_snapshots": [
+    "second-abandon-delete.json",
+    "second-abandon-p-cross-cli.json",
+    "second-handoff-five-steps.json",
+    "second-queued-created-order.json",
+    "second-replace-suspended-t.json",
+    "second-replacement-abandon-restart.json",
+    "second-row6-rearchive.json",
+    "second-row6-revert-unrecorded.json",
+    "second-type1-general-p.json",
+    "second-type4-boundary.json",
+    "second-unrelated-timing.json"
+  ],
+  "author_repo_commit": false
+}

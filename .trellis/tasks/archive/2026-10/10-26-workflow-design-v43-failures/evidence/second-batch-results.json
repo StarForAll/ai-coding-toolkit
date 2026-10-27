@@ -1,0 +1,60 @@
+{
+  "version": "v44",
+  "scenarios": [
+    [
+      "abandon-delete",
+      "INVALIDATED",
+      "abnormal 102 archived; 103 edge deleted; terminal identity gate"
+    ],
+    [
+      "abandon-p-cross-cli",
+      "INVALIDATED",
+      "100->118 persisted; second CLI resolves P=118; no relaunch"
+    ],
+    [
+      "type1-general-p",
+      "INVALIDATED",
+      "general branch pointer empty deletes edges; P branch 100->119 builds/reconnects/archives"
+    ],
+    [
+      "replacement-abandon-restart",
+      "INVALIDATED",
+      "120 normal committed; restart sees terminal; no type5"
+    ],
+    [
+      "replace-suspended-t",
+      "INVALIDATED",
+      "R121 not reconnected; successor122 inherits T prereqs including R121"
+    ],
+    [
+      "type4-boundary",
+      "INVALIDATED",
+      "occupied106 rejected; 103->123 human-confirmed correction; established P pointer retained"
+    ],
+    [
+      "row6-two-exits",
+      "INVALIDATED",
+      "normal-unarchived rearchive and revert-unrecorded each legal, separate gates"
+    ],
+    [
+      "unrelated-timing",
+      "INVALIDATED",
+      "unrelated task created after P archive; no chain edge; switches after owned current"
+    ],
+    [
+      "handoff-five-steps",
+      "INVALIDATED",
+      "classify->view->ledger->records->mechanism sequence observed"
+    ],
+    [
+      "queued-created-order",
+      "INVALIDATED",
+      "multiple unfinished items ordered by old-task created timestamp"
+    ]
+  ],
+  "count": 10,
+  "all_pass": false,
+  "previous_all_pass": true,
+  "validation_status": "INVALIDATED",
+  "invalidation_reason": "INVALIDATED: hooks disabled; terminal gate and directory existence checks removed; dependency/pointer assertions bypassed with or True."
+}

@@ -1,0 +1,127 @@
+[
+  {
+    "name": "version alignment",
+    "result": "PASS",
+    "evidence": "Both version fields and companion design field."
+  },
+  {
+    "name": "disposition predicate unchanged",
+    "result": "PASS",
+    "evidence": "Main §7.4 byte-for-byte unchanged."
+  },
+  {
+    "name": "type4 boundary unchanged",
+    "result": "PASS",
+    "evidence": "Main §7.8 existing restoration and business-write domains byte-for-byte unchanged."
+  },
+  {
+    "name": "companion identity references unchanged",
+    "result": "PASS",
+    "evidence": "Companion §9 unchanged; source-owned references remain active."
+  },
+  {
+    "name": "section10 semantic boundary unchanged",
+    "result": "PASS",
+    "evidence": "Only current-version references changed in §10."
+  },
+  {
+    "name": "all registered text probes ran",
+    "result": "PASS",
+    "evidence": "38 commands; rc0/1 interpreted by expected match count; every numeric expectation matched."
+  },
+  {
+    "name": "P1 single source anchor",
+    "result": "PASS",
+    "evidence": "Only main §7.8."
+  },
+  {
+    "name": "P2 source and reference",
+    "result": "PASS",
+    "evidence": "Main §6.4 definition + §7.7 reference."
+  },
+  {
+    "name": "P1 rejects106 at §6.5 replace",
+    "result": "PASS",
+    "evidence": "Committed4307ccd assigns106 to r2t2fix; candidate rejected before pointer/state write."
+  },
+  {
+    "name": "P1 zero overwrite at §6.5 replace",
+    "result": "PASS",
+    "evidence": "Input identity map unchanged."
+  },
+  {
+    "name": "P1 rejects106 at §6.6 new replacement",
+    "result": "PASS",
+    "evidence": "Committed4307ccd assigns106 to r2t2fix; candidate rejected before pointer/state write."
+  },
+  {
+    "name": "P1 zero overwrite at §6.6 new replacement",
+    "result": "PASS",
+    "evidence": "Input identity map unchanged."
+  },
+  {
+    "name": "P1 rejects106 at §7.7 type1 P",
+    "result": "PASS",
+    "evidence": "Committed4307ccd assigns106 to r2t2fix; candidate rejected before pointer/state write."
+  },
+  {
+    "name": "P1 zero overwrite at §7.7 type1 P",
+    "result": "PASS",
+    "evidence": "Input identity map unchanged."
+  },
+  {
+    "name": "P1 free107 before prewrite",
+    "result": "PASS",
+    "evidence": "No107 identity in committed pre-replacement records."
+  },
+  {
+    "name": "P1 original restoration remains legal",
+    "result": "PASS",
+    "evidence": "Confirmed original102->107 from final-main committed facts, not inferred merely from existence."
+  },
+  {
+    "name": "P1 unrelated existing task rejected",
+    "result": "PASS",
+    "evidence": "106 remains R2 and cannot become the T2 successor."
+  },
+  {
+    "name": "P1 prewritten other identity blocked",
+    "result": "PASS",
+    "evidence": "Existing107 reservation belongs to102; tester rejects another owner103."
+  },
+  {
+    "name": "P1 same prewrite can resume",
+    "result": "PASS",
+    "evidence": "Same confirmed reservation102->107 can create its unbuilt successor."
+  },
+  {
+    "name": "P2 historical R completed input",
+    "result": "PASS",
+    "evidence": "Real S3 checkpoint: archived R1, suspended T, no registration marker."
+  },
+  {
+    "name": "P2 missing completion fact blocks",
+    "result": "PASS",
+    "evidence": "Even nonempty historical R set cannot establish project handoff completion."
+  },
+  {
+    "name": "P2 uncommitted fact blocks",
+    "result": "PASS",
+    "evidence": "Working-tree completion fact ignored; gate reads HEAD."
+  },
+  {
+    "name": "P2 confirmed persisted completion enables evaluation",
+    "result": "PASS",
+    "evidence": "Human decision represented as preset test input; carrier format is scaffold-only."
+  },
+  {
+    "name": "P2 new-round registration prevents clearing",
+    "result": "PASS",
+    "evidence": "Handoff fact does not erase newly recorded rework intent; history alone still cannot clear."
+  },
+  {
+    "name": "P2 zero status clearing during probes",
+    "result": "PASS",
+    "evidence": "All probe inputs retain suspended T; no unintended clearing happened."
+  }
+]

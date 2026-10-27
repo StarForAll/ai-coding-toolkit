@@ -1,0 +1,7 @@
+{
+  "text_probes": 38,
+  "semantic_checks": 25,
+  "truth_table_rows": 304,
+  "p2_probe_fixture": "/tmp/dep-mech-chain-20261026-v43-replay-run3-p2-probe",
+  "chain_scenarios": 10
+}

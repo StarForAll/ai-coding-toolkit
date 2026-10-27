@@ -1,0 +1,133 @@
+[
+  {
+    "root": "/tmp/dep-mech-chain-20261026-v43-replay-run3-p2-probe",
+    "args": [
+      "git",
+      "init",
+      "-b",
+      "probe"
+    ],
+    "rc": 0,
+    "stdout": "Initialized empty Git repository in /tmp/dep-mech-chain-20261026-v43-replay-run3-p2-probe/.git/\n",
+    "stderr": ""
+  },
+  {
+    "root": "/tmp/dep-mech-chain-20261026-v43-replay-run3-p2-probe",
+    "args": [
+      "git",
+      "config",
+      "user.name",
+      "Workflow Fixture Tester"
+    ],
+    "rc": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "root": "/tmp/dep-mech-chain-20261026-v43-replay-run3-p2-probe",
+    "args": [
+      "git",
+      "config",
+      "user.email",
+      "fixture@example.invalid"
+    ],
+    "rc": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "root": "/tmp/dep-mech-chain-20261026-v43-replay-run3-p2-probe",
+    "args": [
+      "git",
+      "add",
+      "."
+    ],
+    "rc": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "root": "/tmp/dep-mech-chain-20261026-v43-replay-run3-p2-probe",
+    "args": [
+      "git",
+      "commit",
+      "-m",
+      "P2 regression input from S3 committed checkpoint"
+    ],
+    "rc": 0,
+    "stdout": "[probe (root-commit) d529350] P2 regression input from S3 committed checkpoint\n 144 files changed, 24487 insertions(+)\n create mode 100644 .dep/ledger.json\n create mode 100644 .dep/project.json\n create mode 100644 .dep/tasks.json\n create mode 100644 .dep/view.json\n create mode 100644 .gitattributes\n create mode 100644 .trellis/.developer\n create mode 100644 .trellis/.template-hashes.json\n create mode 100644 .trellis/.version\n create mode 100644 .trellis/agents/check.md\n create mode 100644 .trellis/agents/implement.md\n create mode 100644 .trellis/config.yaml\n create mode 100755 .trellis/scripts/__init__.py\n create mode 100755 .trellis/scripts/add_session.py\n create mode 100755 .trellis/scripts/common/__init__.py\n create mode 100755 .trellis/scripts/common/active_task.py\n create mode 100755 .trellis/scripts/common/cli_adapter.py\n create mode 100755 .trellis/scripts/common/config.py\n create mode 100755 .trellis/scripts/common/developer.py\n create mode 100755 .trellis/scripts/common/git.py\n create mode 100755 .trellis/scripts/common/git_context.py\n create mode 100755 .trellis/scripts/common/io.py\n create mode 100755 .trellis/scripts/common/log.py\n create mode 100755 .trellis/scripts/common/packages_context.py\n create mode 100755 .trellis/scripts/common/paths.py\n create mode 100755 .trellis/scripts/common/safe_commit.py\n create mode 100755 .trellis/scripts/common/session_context.py\n create mode 100755 .trellis/scripts/common/spec_inject.py\n create mode 100755 .trellis/scripts/common/spec_match.py\n create mode 100755 .trellis/scripts/common/task_context.py\n create mode 100755 .trellis/scripts/common/task_queue.py\n create mode 100755 .trellis/scripts/common/task_store.py\n create mode 100755 .trellis/scripts/common/task_utils.py\n create mode 100755 .trellis/scripts/common/tasks.py\n create mode 100755 .trellis/scripts/common/trellis_config.py\n create mode 100755 .trellis/scripts/common/types.py\n create mode 100755 .trellis/scripts/common/workflow_phase.py\n create mode 100755 .trellis/scripts/common/workflow_selection.py\n create mode 100755 .trellis/scripts/get_context.py\n create mode 100755 .trellis/scripts/get_developer.py\n create mode 100755 .trellis/scripts/hooks/linear_sync.py\n create mode 100755 .trellis/scripts/init_developer.py\n create mode 100755 .trellis/scripts/task.py\n create mode 100644 .trellis/spec/backend/database-guidelines.md\n create mode 100644 .trellis/spec/backend/directory-structure.md\n create mode 100644 .trellis/spec/backend/error-handling.md\n create mode 100644 .trellis/spec/backend/index.md\n create mode 100644 .trellis/spec/backend/logging-guidelines.md\n create mode 100644 .trellis/spec/backend/quality-guidelines.md\n create mode 100644 .trellis/spec/frontend/component-guidelines.md\n create mode 100644 .trellis/spec/frontend/directory-structure.md\n create mode 100644 .trellis/spec/frontend/hook-guidelines.md\n create mode 100644 .trellis/spec/frontend/index.md\n create mode 100644 .trellis/spec/frontend/quality-guidelines.md\n create mode 100644 .trellis/spec/frontend/state-management.md\n create mode 100644 .trellis/spec/frontend/type-safety.md\n create mode 100644 .trellis/spec/guides/code-reuse-thinking-guide.md\n create mode 100644 .trellis/spec/guides/cross-layer-thinking-guide.md\n create mode 100644 .trellis/spec/guides/index.md\n create mode 100644 .trellis/tasks/00-bootstrap-guidelines/prd.md\n create mode 100644 .trellis/tasks/00-bootstrap-guidelines/task.json\n create mode 100644 .trellis/tasks/10-26-t2/check.jsonl\n create mode 100644 .trellis/tasks/10-26-t2/implement.jsonl\n create mode 100644 .trellis/tasks/10-26-t2/prd.md\n create mode 100644 .trellis/tasks/10-26-t2/task.json\n create mode 100644 .trellis/tasks/10-26-t3/check.jsonl\n create mode 100644 .trellis/tasks/10-26-t3/implement.jsonl\n create mode 100644 .trellis/tasks/10-26-t3/prd.md\n create mode 100644 .trellis/tasks/10-26-t3/task.json\n create mode 100644 .trellis/tasks/10-26-wrapup/check.jsonl\n create mode 100644 .trellis/tasks/10-26-wrapup/implement.jsonl\n create mode 100644 .trellis/tasks/10-26-wrapup/prd.md\n create mode 100644 .trellis/tasks/10-26-wrapup/task.json\n create mode 100644 .trellis/tasks/archive/2026-10/10-26-proj-p/check.jsonl\n create mode 100644 .trellis/tasks/archive/2026-10/10-26-proj-p/implement.jsonl\n create mode 100644 .trellis/tasks/archive/2026-10/10-26-proj-p/prd.md\n create mode 100644 .trellis/tasks/archive/2026-10/10-26-proj-p/task.json\n create mode 100644 .trellis/tasks/archive/2026-10/10-26-r1t2fix/check.jsonl\n create mode 100644 .trellis/tasks/archive/2026-10/10-26-r1t2fix/implement.jsonl\n create mode 100644 .trellis/tasks/archive/2026-10/10-26-r1t2fix/prd.md\n create mode 100644 .trellis/tasks/archive/2026-10/10-26-r1t2fix/task.json\n create mode 100644 .trellis/tasks/archive/2026-10/10-26-t1/check.jsonl\n create mode 100644 .trellis/tasks/archive/2026-10/10-26-t1/implement.jsonl\n create mode 100644 .trellis/tasks/archive/2026-10/10-26-t1/prd.md\n create mode 100644 .trellis/tasks/archive/2026-10/10-26-t1/task.json\n create mode 100644 .trellis/workflow.md\n create mode 100644 .trellis/workspace/index.md\n create mode 100644 .trellis/workspace/xzc/index.md\n create mode 100644 .trellis/workspace/xzc/journal-1.md\n create mode 100644 .zcode/agents/trellis-check.md\n create mode 100644 .zcode/agents/trellis-implement.md\n create mode 100644 .zcode/agents/trellis-research.md\n create mode 100644 .zcode/commands/trellis/continue.md\n create mode 100644 .zcode/commands/trellis/finish-work.md\n create mode 100644 .zcode/config.json\n create mode 100644 .zcode/hooks/inject-shell-session-context.py\n create mode 100644 .zcode/hooks/inject-subagent-context.py\n create mode 100644 .zcode/hooks/inject-workflow-state.py\n create mode 100644 .zcode/hooks/session-start.py\n create mode 100644 .zcode/skills/trellis-before-dev/SKILL.md\n create mode 100644 .zcode/skills/trellis-brainstorm/SKILL.md\n create mode 100644 .zcode/skills/trellis-break-loop/SKILL.md\n create mode 100644 .zcode/skills/trellis-channel/SKILL.md\n create mode 100644 .zcode/skills/trellis-channel/references/command-reference.md\n create mode 100644 .zcode/skills/trellis-channel/references/forum.md\n create mode 100644 .zcode/skills/trellis-channel/references/progress-debugging.md\n create mode 100644 .zcode/skills/trellis-channel/references/workers.md\n create mode 100644 .zcode/skills/trellis-channel/references/workflows.md\n create mode 100644 .zcode/skills/trellis-check/SKILL.md\n create mode 100644 .zcode/skills/trellis-meta/SKILL.md\n create mode 100644 .zcode/skills/trellis-meta/references/customize-local/add-project-local-conventions.md\n create mode 100644 .zcode/skills/trellis-meta/references/customize-local/change-agents.md\n create mode 100644 .zcode/skills/trellis-meta/references/customize-local/change-context-loading.md\n create mode 100644 .zcode/skills/trellis-meta/references/customize-local/change-hooks.md\n create mode 100644 .zcode/skills/trellis-meta/references/customize-local/change-skills-or-commands.md\n create mode 100644 .zcode/skills/trellis-meta/references/customize-local/change-spec-structure.md\n create mode 100644 .zcode/skills/trellis-meta/references/customize-local/change-task-lifecycle.md\n create mode 100644 .zcode/skills/trellis-meta/references/customize-local/change-workflow.md\n create mode 100644 .zcode/skills/trellis-meta/references/customize-local/overview.md\n create mode 100644 .zcode/skills/trellis-meta/references/local-architecture/bundled-skills.md\n create mode 100644 .zcode/skills/trellis-meta/references/local-architecture/context-injection.md\n create mode 100644 .zcode/skills/trellis-meta/references/local-architecture/generated-files.md\n create mode 100644 .zcode/skills/trellis-meta/references/local-architecture/multi-agent-channel.md\n create mode 100644 .zcode/skills/trellis-meta/references/local-architecture/overview.md\n create mode 100644 .zcode/skills/trellis-meta/references/local-architecture/spec-system.md\n create mode 100644 .zcode/skills/trellis-meta/references/local-architecture/task-system.md\n create mode 100644 .zcode/skills/trellis-meta/references/local-architecture/workflow.md\n create mode 100644 .zcode/skills/trellis-meta/references/local-architecture/workspace-memory.md\n create mode 100644 .zcode/skills/trellis-meta/references/platform-files/agents.md\n create mode 100644 .zcode/skills/trellis-meta/references/platform-files/hooks-and-settings.md\n create mode 100644 .zcode/skills/trellis-meta/references/platform-files/overview.md\n create mode 100644 .zcode/skills/trellis-meta/references/platform-files/platform-map.md\n create mode 100644 .zcode/skills/trellis-meta/references/platform-files/skills-and-commands.md\n create mode 100644 .zcode/skills/trellis-session-insight/SKILL.md\n create mode 100644 .zcode/skills/trellis-session-insight/references/cli-quick-reference.md\n create mode 100644 .zcode/skills/trellis-session-insight/references/triggering-patterns.md\n create mode 100644 .zcode/skills/trellis-spec-bootstrap/SKILL.md\n create mode 100644 .zcode/skills/trellis-spec-bootstrap/references/mcp-setup.md\n create mode 100644 .zcode/skills/trellis-spec-bootstrap/references/repository-analysis.md\n create mode 100644 .zcode/skills/trellis-spec-bootstrap/references/spec-task-planning.md\n create mode 100644 .zcode/skills/trellis-spec-bootstrap/references/spec-writing.md\n create mode 100644 .zcode/skills/trellis-update-spec/SKILL.md\n create mode 100644 AGENTS.md\n create mode 100644 docs/baseline.json\n create mode 100644 docs/spec.md\n",
+    "stderr": ""
+  },
+  {
+    "root": "/tmp/dep-mech-chain-20261026-v43-replay-run3-p2-probe",
+    "args": [
+      "git",
+      "add",
+      "--",
+      ".dep"
+    ],
+    "rc": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "root": "/tmp/dep-mech-chain-20261026-v43-replay-run3-p2-probe",
+    "args": [
+      "git",
+      "commit",
+      "-m",
+      "P2: no persisted completion fact"
+    ],
+    "rc": 0,
+    "stdout": "[probe 3f0c3bb] P2: no persisted completion fact\n 1 file changed, 1 insertion(+), 4 deletions(-)\n",
+    "stderr": ""
+  },
+  {
+    "root": "/tmp/dep-mech-chain-20261026-v43-replay-run3-p2-probe",
+    "args": [
+      "git",
+      "add",
+      "--",
+      ".dep"
+    ],
+    "rc": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "root": "/tmp/dep-mech-chain-20261026-v43-replay-run3-p2-probe",
+    "args": [
+      "git",
+      "commit",
+      "-m",
+      "P2: tester confirms handoff and persists completion fact"
+    ],
+    "rc": 0,
+    "stdout": "[probe cd23a5a] P2: tester confirms handoff and persists completion fact\n 1 file changed, 1 insertion(+), 1 deletion(-)\n",
+    "stderr": ""
+  },
+  {
+    "root": "/tmp/dep-mech-chain-20261026-v43-replay-run3-p2-probe",
+    "args": [
+      "git",
+      "add",
+      "--",
+      ".dep"
+    ],
+    "rc": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "root": "/tmp/dep-mech-chain-20261026-v43-replay-run3-p2-probe",
+    "args": [
+      "git",
+      "commit",
+      "-m",
+      "P2: tester confirms new round and persists intent before startup evaluation"
+    ],
+    "rc": 0,
+    "stdout": "[probe 9df27ec] P2: tester confirms new round and persists intent before startup evaluation\n 1 file changed, 7 insertions(+), 1 deletion(-)\n",
+    "stderr": ""
+  }
+]

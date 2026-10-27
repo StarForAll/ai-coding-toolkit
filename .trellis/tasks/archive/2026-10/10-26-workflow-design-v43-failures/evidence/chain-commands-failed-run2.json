@@ -1,0 +1,14 @@
+[
+  {
+    "root": "/tmp/dep-mech-chain-20261026-v43-replay-run2",
+    "command": [
+      "git",
+      "init",
+      "-b",
+      "fixture"
+    ],
+    "rc": 0,
+    "stdout": "Initialized empty Git repository in /tmp/dep-mech-chain-20261026-v43-replay-run2/.git/\n",
+    "stderr": ""
+  }
+]

@@ -1,0 +1,131 @@
+{
+  "branch": "replace-suspended-t",
+  "head": "6e7e715e60c23cfadeaee43c01fc1678857d0b76",
+  "tasks": {
+    "100": {
+      "dir": ".trellis/tasks/archive/2026-10/10-26-p-project",
+      "deps": [],
+      "origin": null,
+      "created": 1
+    },
+    "101": {
+      "dir": ".trellis/tasks/archive/2026-10/10-26-t1",
+      "deps": [
+        100
+      ],
+      "origin": null,
+      "created": 6
+    },
+    "102": {
+      "dir": ".trellis/tasks/archive/2026-10/10-26-t2",
+      "deps": [
+        101,
+        106,
+        107,
+        121
+      ],
+      "origin": null,
+      "created": 6
+    },
+    "103": {
+      "dir": ".trellis/tasks/10-26-t3",
+      "deps": [
+        122
+      ],
+      "origin": null,
+      "created": 6
+    },
+    "104": {
+      "dir": ".trellis/tasks/10-26-tail",
+      "deps": [
+        103
+      ],
+      "origin": null,
+      "created": 6
+    },
+    "106": {
+      "dir": ".trellis/tasks/archive/2026-10/10-26-r1",
+      "deps": [
+        101
+      ],
+      "origin": 102,
+      "created": 9
+    },
+    "121": {
+      "dir": "10-27-r2-published",
+      "deps": [
+        101,
+        106
+      ],
+      "origin": 102,
+      "created": 43
+    },
+    "122": {
+      "dir": "10-27-t2-replaced-suspended",
+      "deps": [
+        101,
+        106,
+        107,
+        121
+      ],
+      "origin": null,
+      "created": 44
+    }
+  },
+  "ledger": {
+    "100": {
+      "status": "normal",
+      "note": "",
+      "replaced_by": null
+    },
+    "101": {
+      "status": "normal",
+      "note": "",
+      "replaced_by": null
+    },
+    "102": {
+      "status": "abnormal",
+      "note": "替换挂起T",
+      "replaced_by": 122
+    },
+    "103": {
+      "status": "unrecorded",
+      "note": "",
+      "replaced_by": null
+    },
+    "104": {
+      "status": "unrecorded",
+      "note": "",
+      "replaced_by": null
+    },
+    "106": {
+      "status": "normal",
+      "note": "",
+      "replaced_by": null
+    },
+    "121": {
+      "status": "unrecorded",
+      "note": "",
+      "replaced_by": null
+    },
+    "122": {
+      "status": "unrecorded",
+      "note": "",
+      "replaced_by": null
+    }
+  },
+  "paths": {
+    "100": ".trellis/tasks/archive/2026-10/10-26-p-project",
+    "101": ".trellis/tasks/archive/2026-10/10-26-t1",
+    "102": ".trellis/tasks/archive/2026-10/10-26-t2",
+    "103": ".trellis/tasks/10-26-t3",
+    "104": ".trellis/tasks/10-26-tail",
+    "106": ".trellis/tasks/archive/2026-10/10-26-r1",
+    "121": "10-27-r2-published",
+    "122": "10-27-t2-replaced-suspended"
+  },
+  "validation_status": "INVALIDATED",
+  "invalidation_reason": "INVALIDATED: hooks disabled; terminal gate and directory existence checks removed; dependency/pointer assertions bypassed with or True.",
+  "previous_identity_errors": [],
+  "identity_errors": null
+}

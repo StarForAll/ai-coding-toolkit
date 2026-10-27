@@ -1,0 +1,17 @@
+[
+  [
+    "prewrite-collision",
+    "MODEL_ONLY",
+    "106 occupied -> no write -> regenerate 115"
+  ],
+  [
+    "repair-collision",
+    "MODEL_ONLY",
+    "landed 106 owned by R1 -> type4 + human-confirmed new 116"
+  ],
+  [
+    "same-original-relation",
+    "MODEL_ONLY",
+    "confirmed 102->115 target exists -> no collision"
+  ]
+]

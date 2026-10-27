@@ -1,0 +1,111 @@
+{
+  "fixture": "/tmp/dep-mech-chain-20261026-v43-replay-run3",
+  "head": "72041ad1959f7295551277ea3ef366f57cbf19dc",
+  "tasks": {
+    "100": {
+      "dir": "10-26-proj-p",
+      "deps": [],
+      "origin": null,
+      "created": 1
+    },
+    "101": {
+      "dir": "10-26-t1",
+      "deps": [
+        "100"
+      ],
+      "origin": null,
+      "created": 2
+    },
+    "102": {
+      "dir": "10-26-t2",
+      "deps": [
+        "101",
+        "105",
+        "106"
+      ],
+      "origin": null,
+      "created": 3
+    },
+    "103": {
+      "dir": "10-26-t3",
+      "deps": [
+        "107"
+      ],
+      "origin": null,
+      "created": 4
+    },
+    "104": {
+      "dir": "10-26-wrapup",
+      "deps": [
+        "103"
+      ],
+      "origin": null,
+      "created": 5
+    },
+    "105": {
+      "dir": "10-26-r1t2fix",
+      "deps": [
+        "101"
+      ],
+      "origin": "102",
+      "created": 6
+    },
+    "106": {
+      "dir": "10-26-r2t2fix",
+      "deps": [
+        "101",
+        "105"
+      ],
+      "origin": "102",
+      "created": 7
+    },
+    "107": {
+      "dir": "10-26-t2v2",
+      "deps": [
+        "101",
+        "105",
+        "106"
+      ],
+      "origin": null,
+      "created": 8
+    }
+  },
+  "ledger": {
+    "100": {
+      "status": "normal",
+      "note": "",
+      "replaced_by": null
+    },
+    "101": {
+      "status": "normal",
+      "note": "",
+      "replaced_by": null
+    },
+    "105": {
+      "status": "normal",
+      "note": "",
+      "replaced_by": null
+    },
+    "106": {
+      "status": "normal",
+      "note": "",
+      "replaced_by": null
+    },
+    "102": {
+      "status": "abnormal",
+      "note": "Tester input: replacement approved",
+      "replaced_by": "107"
+    }
+  },
+  "native_paths": {
+    "100": ".trellis/tasks/archive/2026-10/10-26-proj-p",
+    "101": ".trellis/tasks/archive/2026-10/10-26-t1",
+    "102": ".trellis/tasks/archive/2026-10/10-26-t2",
+    "103": ".trellis/tasks/10-26-t3",
+    "104": ".trellis/tasks/10-26-wrapup",
+    "105": ".trellis/tasks/archive/2026-10/10-26-r1t2fix",
+    "106": ".trellis/tasks/archive/2026-10/10-26-r2t2fix",
+    "107": ".trellis/tasks/10-26-t2v2"
+  },
+  "identity_errors": []
+}
