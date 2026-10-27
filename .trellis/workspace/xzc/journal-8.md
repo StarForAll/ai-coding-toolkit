@@ -97,3 +97,25 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 370: workflow-design v43/v44 提交收尾与任务归档
+<!-- trellis-session: v=2 fp=5febb2c8cfb6d3df -->
+
+**Date**: 2026-10-27
+**Task**: workflow-design v43/v44 提交收尾与任务归档
+**Branch**: `main`
+
+### Summary
+
+收尾 10-26-workflow-design-v43-failures：人工复核放行后提交主稿/配套 v44（含 v43 的标识占用唯一源与移交持久判据）及 spec 探针注册表；复跑项目三项检查、git diff --check 与 39 条注册探针全部通过；修复注册表中 v44 探针 pattern 缺少 §7.7 引用分支的缺陷（4→5 hits 对齐预期）；sonar pre-commit 门禁真实运行通过（会话内认证 Connected），未绕过。第二批行为链路复测维持 INVALIDATED 待重验，收尾记录见任务目录 validation-closeout.md。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7ccc7cf` | workflow-design v43/v44：标识占用校验唯一源、移交持久判据与类型 4 受控例外 |
+
+### Status
+
+[OK] **Completed**
