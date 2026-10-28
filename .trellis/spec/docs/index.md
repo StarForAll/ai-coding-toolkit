@@ -43,6 +43,7 @@ Key distinction:
 | Workflow docs | `docs/workflows/**` | Human-facing workflow notes and command references |
 | Workflow authoring spec | `docs/workflows/自定义工作流制作规范.md` | Cross-workflow authoring rules, including Trellis upgrade-compat baseline requirements |
 | Trellis spec docs | `.trellis/spec/**` | Repo-local maintenance guidance plus workflow-authoring rules used by this repo |
+| Workflow implementation constraints | `.trellis/spec/docs/workflow-implementation-constraints.md` | Guardrails to follow when implementing `docs/workflows/workflow-implementation.md` |
 | Library docs | `trellis-library/README.md`, `trellis-library/taxonomy.md` | Source-library architecture and taxonomy |
 
 ---
