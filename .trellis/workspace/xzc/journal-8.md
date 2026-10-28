@@ -295,3 +295,25 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 379: 旧模块与 1.2 退役收口
+<!-- trellis-session: v=2 fp=79f14d5d0e0df6c6 -->
+
+**Date**: 2026-10-28
+**Task**: 旧模块与 1.2 退役收口
+**Branch**: `main`
+
+### Summary
+
+按收敛后的参考范围清理仓库：提交旧模块（100 文件）与 1.2 的删除；退役四个维护 skill（222 文件）及其契约 spec，删前摘录 5 条通用误报守卫到 spec/docs/workflow-asset-audit-guards.md，并从 validate-skills.sh 移除对应校验块（31→25 skills）；实现方案删除附录 C 与全部 1.2 出处标注，§2.1/§2.5/附录 B.1 改为旧模块已退役，§8.2 与 §9.7 落定 M1/M2/M3，§9.5 追加四条裁决、§9.6 G3 改判；退役 commands/shell 的临时项目初始化脚本并同步 README 双语与 spec；移除 Trellis隐藏目录边界清单.md（待按当前 Trellis 源码重写）。验证：library validate、validate-skills、test_cli(36)、get_context 全过。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7fe5993` | chore(retire): 旧模块与 1.2 退役收口 |
+
+### Status
+
+[OK] **Completed**
