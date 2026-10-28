@@ -208,3 +208,25 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 375: workflow-design v50 措辞收口批次
+<!-- trellis-session: v=2 fp=f08b7f61da254b19 -->
+
+**Date**: 2026-10-28
+**Task**: workflow-design v50 措辞收口批次
+**Branch**: `main`
+
+### Summary
+
+对两份设计文档执行 v50 措辞收口（未升版，附录 C v50 块 in-line 补记）：路由引用一律改条件名（记录域除外），挂起递归措辞两文档归一并加 R 入口同式，前置分流镜像 3 位点逐字同序（子句顺序以 §9.1 源行为准），表 4-1 行 3 删无对应动作的「类型 4 放弃」标签，§6.6 发起校验与 §7.8 删边行排除 P。主稿/配套零行数变动（1193/526），diff 全为行内替换。spec 探针 84 条全量实跑通过（含 v50 收口批次 6 条新增），guide 追加盲点 27–29。经两轮外部复核修正（单数残留、子句顺序、探针注释行号、封闭断言划界），子句顺序收进 verify.py 机器断言。产物在 .trellis/tasks/10-28-workflow-design-v50-copyedit/research/（verify.py 全绿）。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `17d79fc` | workflow-design v50 措辞收口：路由引用条件名、递归措辞归一、镜像逐字同序 |
+
+### Status
+
+[OK] **Completed**
