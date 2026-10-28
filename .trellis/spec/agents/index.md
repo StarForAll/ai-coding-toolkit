@@ -316,7 +316,7 @@ So the right conclusion is:
 
 Verified by comparing deployed agents against Trellis 0.5.0-rc.5 native templates
 (`@mindfoldhq/trellis/dist/templates/{platform}/agents/`). Supporting evidence:
-- CLI boundary matrix: `docs/workflows/新项目开发工作流/CLI原生适配边界矩阵.md` §"当前真实边界"
+- Platform matrix: `docs/workflows/workflow-implementation.md` §4
 - Capability audit: `.trellis/tasks/archive/2026-05/05-06-workflow-capability-audit/capability-report.md`
 - Per-file diff results available on request via `diff` against the template paths above
 

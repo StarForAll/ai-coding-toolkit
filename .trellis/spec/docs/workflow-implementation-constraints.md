@@ -15,8 +15,9 @@
 | Implementation | `docs/workflows/workflow-implementation.md` | Paths, commands, gates, platform matrix, upgrade/uninstall |
 
 A conflict between the two must be registered in the plan's §9 register and decided
-by the operator. Never silently pick the more convenient side. `1.2-零补丁嵌入方案.md`
-is a superseded historical source that the operator plans to delete; it is not authority.
+by the operator. Never silently pick the more convenient side. The legacy implementation
+plan (v20-era zero-patch scheme) has been retired and removed from the repo; it is not
+authority and no document may cite it.
 
 ---
 
@@ -101,10 +102,10 @@ fall through to tier 2, do not treat it as an error and never skip the restore.
 
 ## Before implementation
 
-Move the existing old module (`docs/workflows/新项目开发工作流/`) into
-`tmp/新项目开发工作流/` (gitignored, read-only reference), then build the new module source at
-`docs/workflows/新项目开发工作流/`. See plan §2.1; without this step the paths in the plan point
-at the old assets.
+The old module has been retired (2026-10-28): its content left the repository, is not tracked,
+and no document may reference it. The module source is built fresh at
+`docs/workflows/新项目开发工作流/` — see plan §2.1. "Zero references to the old path anywhere in
+the repo" is part of the P0 exit criteria.
 
 ---
 
@@ -136,8 +137,8 @@ throwaway fixture on 2026-10-28. Do not re-derive them from the docs.
 | Slug collisions | `create` refuses an existing directory but happily creates the same slug under a different date | The module must enforce slug uniqueness across active + archive areas |
 | P creates tasks too early | `wf task new` requires an archived P, so nothing can be created during P | The tail task is defined in P's graph block, not as a pre-created directory |
 | Derived DAG file | A persisted `dag.md` would drift and add noise | There is no `dag.md`; use `wf dag` output |
-| P0 read-only commands need the ledger | §8.2 puts `route`/`state`/`dag`/`check` in P0 but "ledger read/write" in P1, while §3.7 and §3.8 both read the ledger | Plan §9.7 M1 (pending): ledger **read** moves into the first mechanism task; ledger **write** stays in P1 |
-| P0 roundtrip needs `wf close` | §8.2's P0 exit criterion is the §7.6 roundtrip "start through close", but `wf close` is P1 | Plan §9.7 M2 (pending): the minimal `wf close` belongs to the same task, or P0 ships a state where in-graph tasks can only be closed natively |
+| P0 read-only commands need the ledger | §8.2 puts `route`/`state`/`dag`/`check` in P0 but "ledger read/write" in P1, while §3.7 and §3.8 both read the ledger | **Decided 2026-10-28 (plan §9.5 / §9.7 M1)**: ledger **read** is in P0; ledger **write** stays in P1 |
+| P0 roundtrip needs `wf close` | §8.2's P0 exit criterion is the §7.6 roundtrip "start through close", but `wf close` is P1 | **Decided 2026-10-28 (plan §9.5 / §9.7 M2)**: the minimal `wf close` is in P0; a P0 that ships without it would violate invariant 5 |
 
 ---
 

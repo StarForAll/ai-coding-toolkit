@@ -20,12 +20,10 @@ that skill needs repo-specific behavioral rules beyond the generic guidance
 here, add a dedicated supplement document in this directory rather than
 bloating `index.md`.
 
-Current supplement:
-
-- [workflow-audit](./workflow-audit.md) - behavioral spec for the repo-local maintainer skill surfaces `.agents/skills/workflow-audit/` and `.claude/skills/workflow-audit/`
-- [workflow-capability-audit](./workflow-capability-audit.md) - behavioral spec for the repo-local maintainer skill surfaces `.agents/skills/workflow-capability-audit/` and `.claude/skills/workflow-capability-audit/`
-- [workflow-scan](./workflow-scan.md) - behavioral spec for the installable skill `skills/workflow-scan/` (scan half of coupled pair)
-- [workflow-repair](./workflow-repair.md) - behavioral spec for the installable skill `skills/workflow-repair/` (repair half of coupled pair)
+Current supplement: none. The legacy workflow maintenance skills (`workflow-audit`,
+`workflow-capability-audit`, `workflow-scan`, `workflow-repair`) and their supplements were
+retired on 2026-10-28 together with the legacy workflow module; see
+`docs/workflows/workflow-implementation.md` §2.1 and §9.5.
 
 ---
 
@@ -90,84 +88,6 @@ After editing either file:
 - read both diffs together before finishing
 - verify there is no protocol drift between reviewer output and action-side intake
 - verify task-level reviewer-id semantics remain aligned: slot letters in `reviewer-id`, actual CLI identity in `source-cli`
-
----
-
-Current mandatory coupled pair:
-
-- `skills/workflow-scan/SKILL.md`
-- `skills/workflow-repair/SKILL.md`
-
-These two files form the **workflow-scan-repair** coupled pair:
-
-- scan-side `WORKFLOW_QUESTIONS.md` emission contract (temp project)
-- repair-side `WORKFLOW_QUESTIONS.md` intake contract (source project)
-- shared document format defined in `skills/workflow-scan/references/scan-output-template.md`
-- repair-side auxiliary artifacts and memory surfaces:
-  `correction-plan-template.md`, `repair-log-template.md`,
-  `closure-round-template.md`, and optional
-  `issue-history-template.md` / `tmp/workflow-issues/` audit-shadow outputs
-- shared metadata fields: `protocol` (workflow-scan-repair-v4), `trellis-version`, `workflow-version`, `workflow-schema-version`, `scan-timestamp`, `temp-project-root`, `total-findings`, finding IDs (`WS-NNN`)
-- shared origin classification: `trellis-native` vs `workflow-source` (determines repair routing)
-- shared evidence-layer taxonomy: `generated-target-baseline`, `generated-target-installed`, `generated-target-runtime`
-- shared category values: `script-behavior`, `cli-adaptation`, `post-install-artifact`, `document-reference`, `residual`, `new`
-- shared repair-classification values: `confirmed-defect`, `design-debt`, `evidence-gap`
-- shared role boundaries: scan produces findings only (never edits source), repair consumes and fixes (only within `docs/workflows/新项目开发工作流/`)
-- scan-side success is gated on a read-back validation of the generated report's exact frontmatter and section schema
-- scan may run inline by default or with explicit `--agent` assistance, but the
-  execution mode must not alter the shared report schema or repair-side intake
-- scan-side helper handoff assets, if introduced for `--agent`, remain internal
-  to scan execution and must not leak into the shared scan/repair protocol
-
-### Required Rule
-
-If a change modifies **either** of these files in a way that can affect the
-shared protocol or contract format, the other file must be reviewed and updated
-in the **same change**.
-
-Treat this as a **bidirectional maintenance rule**, not a one-way reminder:
-
-- if `workflow-scan` changes, `workflow-repair` must receive the matching
-  intake/behavior/template adaptations in the same change
-- if `workflow-repair` changes, `workflow-scan` must receive the matching
-  emission/behavior/template adaptations in the same change
-- do not leave one side on the old contract and plan to "sync later"
-- if scan-side execution topology changes (for example inline vs explicit
-  `--agent` assistance), document in the same change whether repair-side intake
-  remains unaffected or requires adaptation
-- if scan-side execution topology introduces helper-only references or tests,
-  keep those assets clearly marked as internal scan-side machinery rather than
-  shared repair intake requirements
-
-Do not treat them as independently maintainable when changing:
-
-- WORKFLOW_QUESTIONS.md frontmatter fields or finding entry schema
-- protocol version (`workflow-scan-repair-v4`)
-- category, origin, or evidence-layer value sets
-- finding ID format (`WS-NNN`)
-- severity estimate semantics (P0/P1/P2)
-- role boundaries such as "scan only" vs "repair fixes"
-- temp project path resolution logic
-- repair-task bootstrap behavior
-- closure-round artifact schema or optional issue-history shadow schema
-
-### Minimum Verification For This Pair
-
-After editing either file:
-
-- confirm whether the paired skill also needs a matching change
-- if the initiating file changed any shared behavior or role boundary, make the
-  paired skill diff in the same change instead of relying on review notes alone
-- read both diffs together before finishing
-- verify there is no protocol drift between scan output format and repair intake expectations
-- verify finding entry schema fields remain aligned across both SKILL.md files and the shared template
-- verify the repo validation layer still checks the workflow-scan/workflow-repair critical shared field set
-- verify total/severity count semantics remain aligned between scan output,
-  repair intake, and the shared template
-- verify execution-mode wording does not accidentally reintroduce an inline-only
-  assumption on either side of the pair
-- verify any helper-handoff references stay outside the shared
-  `workflow-scan-repair-v4` protocol surface
 
 ---
 

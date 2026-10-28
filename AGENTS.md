@@ -22,7 +22,7 @@ Primary asset types:
 - `.claude/`, `.codex/`: current platform integration and deployment layer for this repository (the Trellis 0.7.0 upgrade retired `.opencode/` and `.qoder/`; `.kiro/` is not deployed here either). `.agents/skills/` above is the shared skill layer Codex consumes.
 - `agents/`: source agent asset layer with real repo-authored agent directories plus authoring templates; it is not the live source of truth for the managed Trellis native agent trio
 - `commands/`: repo-root command/source-helper layer; currently still mostly scaffold docs, but it already includes shared shell helper assets and should not be confused with the workflow-local command product source
-- current workflow product source tree: lives under `docs/workflows/新项目开发工作流/`; its command, installer, and CLI-adapter source assets live under `docs/workflows/新项目开发工作流/commands/`
+- current workflow product source tree: `docs/workflows/新项目开发工作流/` is the module-source path for the `wf` module; the legacy module that used to live there was retired on 2026-10-28 (content left the repo, no document references it), so the path is empty until the new module source is built
 - `.trellis/.template-hashes.json`: drift-tracking record for Trellis-managed deployment files across platform directories
 
 ## Common Commands

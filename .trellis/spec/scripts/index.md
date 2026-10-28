@@ -23,8 +23,6 @@ This project uses three script surfaces:
 |----------|-------------|
 | [python-conventions.md](./python-conventions.md) | Writing or modifying Python scripts |
 | [shell-conventions.md](./shell-conventions.md) | Writing or modifying Shell scripts |
-| [workflow-installer-upgrade-contracts.md](./workflow-installer-upgrade-contracts.md) | Modifying workflow installer / upgrade scripts under `docs/workflows/**/commands/` |
-| [workflow-command-doc-contracts.md](./workflow-command-doc-contracts.md) | Writing or modifying workflow command `.md` files under `docs/workflows/**/commands/` |
 
 ---
 

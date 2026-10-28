@@ -12,7 +12,7 @@
 
 **Source asset directories** are still incomplete:
 - `commands/claude/` and `commands/codex/` currently remain at top-level README scaffolding
-- `commands/shell/` is no longer empty; it already contains shared helper scripts such as `init-trellis-temp-project.sh`
+- `commands/shell/` is currently empty; its legacy temp-project initializer was retired with the old workflow module on 2026-10-28
 
 **Tool command directories** (`.claude/commands/`、`.opencode/commands/`) contain live commands,
 but are **not synchronized** from `commands/<tool>/` source.
@@ -184,15 +184,13 @@ Source layer `commands/` is still only partially populated: `commands/shell/` no
 | trellis-update-spec | ✓ | ✓ | none | Identical |
 | trellis-break-loop | ✓ | ✓ | none | Identical |
 | trellis-meta | ✓ | ✓ | none | Identical |
-| workflow-audit | ✓ | — | **shared-skill-surface** | Not an OpenCode command, but the repo carries shared maintainer skill surfaces under `.agents/skills/workflow-audit/` plus Claude-local deployment under `.claude/skills/workflow-audit/`. |
-| workflow-capability-audit | ✓ | — | **shared-skill-surface** | Same carrier pattern as `workflow-audit`: shared `.agents/skills/` surface plus Claude-local deployment. |
 
 ### Notes for Source Layer Task
 
 When `03-19-implement-commands-source` populates the source layer:
 - `record-session` has been retired — its functionality is absorbed by Trellis native `finish-work` / `add_session.py`. Deployed command files removed.
 - `create-command` has been retired — low-usage, unshipped. Deployed file removed.
-- `workflow-audit` and `workflow-capability-audit` are not ordinary command assets here; treat them as repo-local maintainer skill surfaces carried by `.agents/skills/` and `.claude/skills/`
+- `workflow-audit` / `workflow-capability-audit` were retired on 2026-10-28 together with the legacy workflow module; they are no longer carried under `.agents/skills/` or `.claude/skills/`
 
 ---
 

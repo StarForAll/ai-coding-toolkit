@@ -17,14 +17,14 @@ Reusable assets accumulated from AI-assisted programming work: specs, templates,
 ### Source Asset Layer
 
 > ⚠️ `agents/` now contains real source agent assets, but it is not yet the automatic sync source for every tool deployment file.
-> `commands/*` is still mostly scaffolded source surface; `commands/shell/` already contains a shared helper script, Claude/OpenCode live command assets are still mainly edited in deployment directories, and Codex is not a `.commands/`-style carrier model here.
+> `commands/*` is still mostly scaffolded source surface; `commands/shell/` is currently empty (its legacy temp-project initializer was retired with the old workflow module on 2026-10-28), Claude/OpenCode live command assets are still mainly edited in deployment directories, and Codex is not a `.commands/`-style carrier model here.
 
 | Directory | Description |
 |------|------|
 | `agents/` | Agent source assets (tool-agnostic system prompts, permission boundaries, workflow definitions); partially populated, see `agents/README.md` |
 | `commands/claude/` | Claude Code command source assets; still mostly README scaffolding |
 | `commands/codex/` | Codex CLI helper/source assets; still mostly README scaffolding and not equivalent to `.codex/commands/` |
-| `commands/shell/` | Shared shell scripts and helper entrypoints; already includes `init-trellis-temp-project.sh` |
+| `commands/shell/` | Shared shell scripts and helper entrypoints; currently empty (the legacy temp-project initializer was retired with the old workflow module) |
 
 ### Tool Deployments
 

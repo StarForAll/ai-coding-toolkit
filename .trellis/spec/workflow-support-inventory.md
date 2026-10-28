@@ -26,12 +26,12 @@ These assets are explicitly referenced by live workflow documents in
 
 | Asset | Path | Current Evidence |
 |------|------|------------------|
-| Acceptance criteria template | `.trellis/spec/templates/universal-domains/product-and-requirements/acceptance-criteria-template.md` | Referenced by `docs/workflows/自定义工作流制作规范.md` and `docs/workflows/新项目开发工作流/commands/start-patch-phase-router.md` |
-| Customer-facing PRD template | `.trellis/spec/templates/universal-domains/product-and-requirements/customer-facing-prd-template.md` | Referenced by `docs/workflows/自定义工作流制作规范.md`, `docs/workflows/新项目开发工作流/工作流总纲.md`, and `docs/workflows/新项目开发工作流/commands/start-patch-phase-router.md` |
-| Developer-facing PRD template | `.trellis/spec/templates/universal-domains/product-and-requirements/developer-facing-prd-template.md` | Referenced by `docs/workflows/自定义工作流制作规范.md`, `docs/workflows/新项目开发工作流/工作流总纲.md`, and `docs/workflows/新项目开发工作流/commands/start-patch-phase-router.md` |
-| Acceptance quality checklist | `.trellis/spec/checklists/universal-domains/product-and-requirements/acceptance-quality-checklist.md` | Referenced by `docs/workflows/自定义工作流制作规范.md` and `docs/workflows/新项目开发工作流/commands/start-patch-phase-router.md` |
-| Customer-facing PRD checklist | `.trellis/spec/checklists/universal-domains/product-and-requirements/customer-facing-prd-checklist.md` | Referenced by `docs/workflows/自定义工作流制作规范.md`, `docs/workflows/新项目开发工作流/工作流总纲.md`, and `docs/workflows/新项目开发工作流/commands/start-patch-phase-router.md` |
-| Developer-facing PRD checklist | `.trellis/spec/checklists/universal-domains/product-and-requirements/developer-facing-prd-checklist.md` | Referenced by `docs/workflows/自定义工作流制作规范.md`, `docs/workflows/新项目开发工作流/工作流总纲.md`, and `docs/workflows/新项目开发工作流/commands/start-patch-phase-router.md` |
+| Acceptance criteria template | `.trellis/spec/templates/universal-domains/product-and-requirements/acceptance-criteria-template.md` | Referenced by `docs/workflows/自定义工作流制作规范.md` |
+| Customer-facing PRD template | `.trellis/spec/templates/universal-domains/product-and-requirements/customer-facing-prd-template.md` | Referenced by `docs/workflows/自定义工作流制作规范.md` |
+| Developer-facing PRD template | `.trellis/spec/templates/universal-domains/product-and-requirements/developer-facing-prd-template.md` | Referenced by `docs/workflows/自定义工作流制作规范.md` |
+| Acceptance quality checklist | `.trellis/spec/checklists/universal-domains/product-and-requirements/acceptance-quality-checklist.md` | Referenced by `docs/workflows/自定义工作流制作规范.md` |
+| Customer-facing PRD checklist | `.trellis/spec/checklists/universal-domains/product-and-requirements/customer-facing-prd-checklist.md` | Referenced by `docs/workflows/自定义工作流制作规范.md` |
+| Developer-facing PRD checklist | `.trellis/spec/checklists/universal-domains/product-and-requirements/developer-facing-prd-checklist.md` | Referenced by `docs/workflows/自定义工作流制作规范.md` |
 
 ---
 
