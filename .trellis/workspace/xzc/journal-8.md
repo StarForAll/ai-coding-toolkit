@@ -273,3 +273,25 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 378: wf 变体正文与 P0 拆分裁决（G5/G6）
+<!-- trellis-session: v=2 fp=96e982c6dd17afb0 -->
+
+**Date**: 2026-10-28
+**Task**: wf 变体正文与 P0 拆分裁决（G5/G6）
+**Branch**: `main`
+
+### Summary
+
+交付 docs/workflows/wf-variant.md（187 行：哨兵 WF-VARIANT-SENTINEL:1d9c4b7e、三个 [workflow-state:*] 三值块、模块版本注释行、四段结构与三段入口映射、机制入口表、Phase 1-3 + 持续使用的步骤正文）；方案 §9.6 G5/G6 改为已裁决并新增 §9.7（T1/T2/T3 三段拆分、M1/M2 两处修正提案、N4/D5 传递项）；约束 spec 追加变体渲染的四条实测契约与两条 P0 陷阱。夹具验证 W1/W2 通过（索引 66 行、哨兵命中、--step 返回正文、--platform dsh 与不带平台一致），夹具已删，本仓库未启用 default_workflow。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b2a1bbc` | 工作流变体正文与 P0 拆分裁决（G5/G6）：哨兵+三值块+四段/三段映射，方案 §9.7 三段拆分 |
+
+### Status
+
+[OK] **Completed**
