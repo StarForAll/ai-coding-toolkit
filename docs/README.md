@@ -10,12 +10,14 @@
 
 ## 与 workflow 相关的推荐文档
 
-- `docs/workflows/<工作流名>/工作流总纲.md`：工作流主说明
-- `docs/workflows/<工作流名>/命令映射.md`：阶段和命令关系
-- `docs/workflows/<工作流名>/完整流程演练.md`：官方 walkthrough / 实例演练
-- `docs/workflows/完整流程演练模板.md`：为其他工作流复制 walkthrough 的骨架模板
+- `docs/workflows/workflow-design.md`：工作流整体设计（判定与流转的唯一权威）
+- `docs/workflows/依赖机制设计说明.md`：依赖机制细节
+- `docs/workflows/workflow-implementation.md`：实现方案（模块源、写入面与工程契约）
+- `docs/workflows/wf-variant.md`：流程变体正文（待迁入模块源模板）
+- `docs/workflows/新项目开发工作流/`：模块源（旧模块已退役，路径重建中）
+
+> 旧工作流产品的制作规范与演练模板已随旧模块退役（2026-10-28）；需要时按新模块结构重写。
 
 ## 其他可复用运行时修复指南
 
 - `docs/Trellis元数据自动提交失败恢复指南.md`：当 Trellis 的 archive / finish-work 自动提交因只读环境失败时，如何修改脚本链路与命令入口，让项目支持恢复命令与提权重试
-- `docs/Trellis隐藏目录边界清单.md`：说明当前 source repo 自身的隐藏目录应如何区分 `managed`、`manual`、`ignored runtime residue`，避免把目标项目清单误用于本仓库

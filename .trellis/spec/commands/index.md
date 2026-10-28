@@ -12,7 +12,7 @@
 
 **Source asset directories** are still incomplete:
 - `commands/claude/` and `commands/codex/` currently remain at top-level README scaffolding
-- `commands/shell/` is currently empty; its legacy temp-project initializer was retired with the old workflow module on 2026-10-28
+- `commands/shell/` currently holds one helper: `init-trellis-temp-project.sh` (creates a throwaway Trellis target project under /tmp; it does not install any workflow module)
 
 **Tool command directories** (`.claude/commands/`、`.opencode/commands/`) contain live commands,
 but are **not synchronized** from `commands/<tool>/` source.
@@ -149,7 +149,7 @@ Before finalizing a new command source asset:
 
 ## Platform Drift Status (as of 2026-05-28)
 
-Source layer `commands/` is still only partially populated: `commands/shell/` now has live helper content, while `commands/claude/` and `commands/codex/` remain mostly scaffold-only. Tool command directories still contain live content. Drift inventory below classifies differences for the source-layer convergence task (`03-19-implement-commands-source`).
+Source layer `commands/` is still only partially populated: `commands/shell/` now has one live helper (`init-trellis-temp-project.sh`), while `commands/claude/` and `commands/codex/` remain mostly scaffold-only. Tool command directories still contain live content. Drift inventory below classifies differences for the source-layer convergence task (`03-19-implement-commands-source`).
 
 ### Drift Classification
 

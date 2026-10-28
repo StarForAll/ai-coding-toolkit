@@ -17,14 +17,14 @@
 ### 源资产层（Source Assets）
 
 > ⚠️ `agents/` 已开始承载真实 source agent 资产，但尚未成为所有工具部署文件的自动同步源。
-> `commands/*` 源资产层仍以脚手架为主；`commands/shell/` 当前为空（原 `init-trellis-temp-project.sh` 随旧工作流模块于 2026-10-28 退役），Claude / OpenCode 的 live command 资产仍主要直接维护于对应工具部署层，Codex 也不是 `.commands/` 型承载模型。
+> `commands/*` 源资产层仍以脚手架为主；`commands/shell/` 现只有 `init-trellis-temp-project.sh`（创建 /tmp 下的 Trellis 临时目标项目，不安装任何工作流模块），Claude / OpenCode 的 live command 资产仍主要直接维护于对应工具部署层，Codex 也不是 `.commands/` 型承载模型。
 
 | 目录 | 说明 |
 |------|------|
 | `agents/` | Agent 源资产（tool-agnostic 的系统提示词、权限边界、工作流定义），已部分填充，详见 `agents/README.md` |
 | `commands/claude/` | Claude Code 命令源资产，当前仍以 README 骨架为主 |
 | `commands/codex/` | Codex CLI 辅助资产源层，当前仍以 README 骨架为主；不等于 `.codex/commands/` |
-| `commands/shell/` | 通用 shell 脚本与辅助入口；当前为空（旧工作流模块的临时项目初始化脚本已随模块退役） |
+| `commands/shell/` | 通用 shell 脚本与辅助入口；当前包含 `init-trellis-temp-project.sh`（`trellis init -y` + /tmp 目录管理，支持 `--dry-run`） |
 
 ### 工具部署层（Tool Deployments）
 

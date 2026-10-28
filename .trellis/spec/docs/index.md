@@ -28,10 +28,10 @@ Key distinction:
 | `docs/workflows/*/` | Product source assets to maintain | Does not exist (installed as tool commands) |
 | `docs/workflows/**/commands/*.md` | Source files to edit with authoring specs | Deployed copies managed by installer |
 | `docs/workflows/**/commands/*.py` | Installer/upgrade scripts to develop | Scripts run once during embed |
-| Workflow at runtime | Trellis native workflow (no Phase Router, no `workflow-installed.json`) | Workflow-enhanced Trellis (Phase Router, strong gates, `workflow-state.json`) |
-| Dev process | `/trellis:start` → Trellis native brainstorm/check/finish-work | `/trellis:start` → Phase Router → feasibility/brainstorm/design/plan/... |
+| Workflow at runtime | Trellis native workflow (source repo is not a target) | Installed `wf` module: `.trellis/workflows/wf.md` variant + `.trellis/scripts/wf/` CLI |
+| Dev process | `/trellis:start` → Trellis native brainstorm/check/finish-work | `wf route` → mechanism entries (`task new` / `start` / `close` / `repair`) |
 
-**Critical rule**: When modifying files under `docs/workflows/`, you are editing **product assets** — the stage gates, Phase Router, `workflow-state.json` state machine, outsourcing controls, and delivery protocols defined in those files are features of the product, not rules for how to develop in this project. The specs that govern your editing behavior are in `.trellis/spec/scripts/` (installer/upgrade contracts, command-doc authoring contracts), not in the workflow's own `阶段状态机与强门禁协议.md` or `工作流总纲.md`.
+**Critical rule**: When modifying files under `docs/workflows/`, you are editing **product assets** — the module source, the variant text, and the installer/CLI contracts described in `docs/workflows/workflow-implementation.md` are features of the product, not rules for how to develop in this project. The specs that govern your editing behavior are in `.trellis/spec/docs/` and `.trellis/spec/scripts/`.
 
 ---
 
@@ -41,7 +41,6 @@ Key distinction:
 | Repository README | `README.md`, `README.en.md` | Explain what this repo contains and how the asset layers relate; maintain the Chinese default plus aligned English companion |
 | Asset README | `agents/README.md`, `commands/*/README.md`, `docs/README.md` | Clarify scope and structure of one asset area |
 | Workflow docs | `docs/workflows/**` | Human-facing workflow notes and command references |
-| Workflow authoring spec | `docs/workflows/自定义工作流制作规范.md` | Cross-workflow authoring rules, including Trellis upgrade-compat baseline requirements |
 | Trellis spec docs | `.trellis/spec/**` | Repo-local maintenance guidance plus workflow-authoring rules used by this repo |
 | Workflow implementation constraints | `.trellis/spec/docs/workflow-implementation-constraints.md` | Guardrails to follow when implementing `docs/workflows/workflow-implementation.md` |
 | Library docs | `trellis-library/README.md`, `trellis-library/taxonomy.md` | Source-library architecture and taxonomy |
@@ -73,7 +72,6 @@ docs/
     workflow-implementation.md      ← implementation plan (module source, contracts)
     新项目开发工作流/                 ← module source; being rebuilt (legacy content retired 2026-10-28)
     旧项目重构工作流/
-      工作流总纲.md
 ```
 
 ---
@@ -149,7 +147,6 @@ For subdirectories:
 - **Keep source-repo AGENTS separate from install-time target-project AGENTS blocks**: Installer-managed target-project sections such as `workflow-nl-routing` should be described as target-project outputs, not mirrored into this source repository's own `AGENTS.md`, unless the authoring contract explicitly requires the source repo to carry the same block
 - **Use a clean Trellis baseline for source-workflow compatibility maintenance**: When documenting how this repository updates Trellis-based workflow source content after a Trellis upgrade, reference the `/tmp` fixture created by `trellis init`, not this repository's already customized `.trellis/` or CLI directories; do not present that rule as the target project's own upgrade-compat standard
 - **Keep pre-release workflow versions below 1.0**: For workflow source assets under `docs/workflows/**` that are not yet officially declared production-ready, the active version must use `0.x.y`; reserve `1.0.0+` for workflows explicitly declared formally available
-- **Keep active version references aligned**: When the current workflow version changes, update the single-source version in code plus every active-source reference together, including `commands/workflow_assets.py`, the workflow's `工作流总纲.md` title and current version-history row, `命令映射.md`, walkthrough docs, mindmap HTML title/root label, and installer tests that assert `workflow_version`
 
 ---
 
@@ -205,56 +202,6 @@ What belongs here and what does not.
 - **Target-project ambiguity**: Referencing paths like `docs/...` without saying whether they live in this repo, a task directory, or the installed target project
 - **Artifact conflation**: Treating task-local files such as `$TASK_DIR/prd.md` as equivalent to long-lived project requirement documents
 - **Version drift across workflow source files**: Updating `WORKFLOW_VERSION` or a workflow title without synchronizing the other active references, installer assertions, or generated companion docs
-
----
-
-## Workflow Rule Propagation
-
-When a workflow rule changes in a canonical command file (e.g., `commands/brainstorm.md`),
-the change must be verified across **all documents that reference the rule**. A rule change
-is not complete until every referencing document has been updated.
-
-### Propagation Checklist
-
-After changing a workflow rule in any command file:
-
-1. `grep` the entire `docs/workflows/<workflow-name>/` directory for the old wording
-2. Check these categories of referencing documents:
-   - Other command files (`commands/*.md`)
-   - `工作流总纲.md` (the authority layer)
-   - `工作流嵌入执行规范.md` (the embed-contract layer, when the workflow defines one)
-   - `命令映射.md` (the routing layer)
-   - `多CLI通用新项目完整流程演练.md` and `完整流程演练.md` (the walkthrough layer)
-   - `工作流全局流转说明（通俗版）.md` (the overview layer)
-   - Maintainer-facing boundary docs such as `装后隐藏目录与托管边界核对清单.md`, `CLI原生适配边界矩阵.md`, and `目标项目兼容升级方案指导.md`
-   - Platform README files (`commands/opencode/README.md`, `commands/codex/README.md`)
-   - Command-derived skill entrypoints (`.agents/skills/*/SKILL.md`, `.qoder/skills/*/SKILL.md`) when the workflow is consumed through skills
-   - `learn/README.md` (examples and gotchas)
-   - Test files (`test_workflow_installers.py`)
-   - Validation scripts (`shell/plan-validate.py`)
-   - HTML mindmap (`工作流思维导图.html`)
-3. Verify: no residual references to the old rule remain
-
-### Known Propagation-Prone Rules
-
-These rules have historically required cross-document propagation:
-
-- **sonar-scanner conditionalization**: "必须有明确质量平台门禁；采用 Sonar 的项目写真实命令，未采用时写替代门禁和原因" — appears in 总纲, design, plan, finish-work, brainstorm, 命令映射, walkthrough, test
-- **L0/Lite dual-PRD relaxation**: "L0 不强制双 PRD" — appears in brainstorm, 命令映射, walkthrough
-- **review-gate conditional trigger**: "check 默认进 finish-work，条件触发 review-gate" — appears in check, review-gate, start phase router, 总纲, walkthrough, 通俗版
-- **workflow close-out order**: for the installed target-project workflow, fresh-baseline close-out enters through Trellis native `finish-work`, using `task.py archive` plus `add_session.py`. This is a product/runtime contract for workflow-installed target projects.
-- **project-audit conditional generation**: "不是所有项目都强制" — appears in brainstorm, plan, project-audit, plan-validate.py
-- **ownership-proof workflow gate**: "`ownership_proof_required` 启用后，`source_watermark_channels` 决定实际验证范围，且 `visible` 是最低必选通道；若 design 声明了 `Protected Watermark Snippets`，后续改动还必须通过 `source-watermark-guard.py` 保持/修复检查" — appears in feasibility, design, plan, check, delivery, 总纲, 命令映射, walkthrough, 通俗版, platform README, validator tests
-- **first-entry feasibility gate**: "所有新实现任务首次入口都必须先经过 feasibility；只有仍有效且明确允许进入 brainstorm 的 assessment 才能被复用到 brainstorm，任何 profile 都不存在首次入口跳过 feasibility 的例外" — appears in feasibility, brainstorm, workflow phase router docs, workflow.md patch source, 总纲, 命令映射, walkthrough, AGENTS/NL routing text, installer-generated skill/session-start text, and validator tests
-- **execution authorization semantics**: "`checkpoints.execution_authorized` 表示用户已明确批准当前叶子任务进入真实 implementation/执行边界；未获批准前必须保持 false，离开执行态后自动重置" — appears in 阶段状态机与强门禁协议, workflow.md patch source, implementation/plan guidance, workflow-state validators, repair output, and tests
-- **repair confirmation output contract**: "`workflow-state.py repair` 在 `manual_confirmation_required` 时必须同时输出结构化的 `required_confirmation_args` 与 `missing_confirmation_items`，不能只把缺项埋在自然语言 message 里" — appears in workflow-state.py, start/continue phase-router guidance, workflow.md patch source, and tests
-- **embed-integrity semantic patch check**: "`embed_integrity.py` 对关键 runtime Python patches 不能只看 marker；至少要校验稳定的补丁语义片段，避免 marker 保留但补丁语义已漂移" — appears in embed_integrity.py, install/upgrade validation expectations, 装后核对清单, and tests
-- **breadcrumb status charset contract**: "workflow breadcrumb tag keys must stay within the parser-allowed status alphabet unless the workflow patch source, installed carrier regexes, and regression tests are widened together" — appears in workflow patch source, inject-workflow-state patch helpers, installed carrier parsers, and workflow-state tests
-- **OpenCode strong-gate hard-stop contract**: "当嵌入 workflow 声明 main-session-only 时，OpenCode 的 blocked subagent path 必须真正终止 Task 执行；仅改 prompt 或仅打印 blocked 提示不算有效强门禁" — appears in OpenCode subagent patch helper, embed_integrity.py, upgrade-compat.py, CLI 边界文档, workflow-audit evidence, and regression tests
-- **multi-cli reviewer command pairing**: "需要调用 `multi-cli-review` 时，按当前模式生成匹配的 reviewer 命令：`lite` 默认 1 条，`full` 默认至少 2 条且只在 `--reviewer-id` 上不同；需要进入汇总修复时，同时生成匹配的 `multi-cli-review-action` 聚合命令；task-level `reviewer-id` 默认使用 `a/b/c/d` 这类字母槽位，真实 CLI 身份记录在 `source-cli`" — appears in review-gate, project-audit, 总纲, walkthrough, platform instructions, and any reviewer command pack templates
-- **workflow embed execution contract**: "只有纯净初始态目标项目才允许执行首次嵌入；只要嵌入前置条件、初始态判定、非初始态阻断、完整/有效嵌入判定、托管资产范围、`install-workflow.py` / `upgrade-compat.py --check` 行为、`workflow-embed-attempt.json` / `workflow-installed.json` 语义、或 CLI 原生入口承载方式发生变化，就必须同步评估 `工作流嵌入执行规范.md` 是否需要更新" — appears in 嵌入执行规范, 总纲, 命令映射, walkthrough, CLI 边界矩阵, 装后核对清单, platform README, installer / checker scripts, and installer regression tests
-- **command-source vs maintainer-doc boundary**: "阶段命令源文档只保留产品/runtime 语义；维护者专用说明不得混入 `commands/*.md`，而应同步落到 `装后隐藏目录与托管边界核对清单.md`、`CLI原生适配边界矩阵.md`、`目标项目兼容升级方案指导.md` 与必要的平台 README" — appears in command-doc authoring spec, maintenance docs, platform README, and any tests/assertions that verify deployed command content
-- **ordinary-use defect boundary**: "当前 workflow 的缺陷判定默认面向个人正常使用 / 诚实使用路径；只有通过刻意篡改文件、伪造状态、主动绕过命令约束等恶意方式才会触发，而正常使用链路下不会出现的问题，不按默认漏洞/缺陷口径处理" — appears in 总纲, 通俗版, 目标项目兼容升级方案指导, 结构性迁移设计, and `workflow-audit` spec
 
 ---
 

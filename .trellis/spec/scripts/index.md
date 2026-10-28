@@ -68,12 +68,6 @@ trellis-library/
 scripts/
 └── validate-skills.sh              # Skill structure validation
 
-docs/workflows/**/commands/
-├── install-workflow.py             # Workflow embed installer
-├── uninstall-workflow.py           # Workflow removal / baseline restore
-├── upgrade-compat.py               # Workflow upgrade drift detection and recovery
-└── shell/
-    └── *.py                        # Workflow helper scripts copied into target projects
 ```
 
 ---
