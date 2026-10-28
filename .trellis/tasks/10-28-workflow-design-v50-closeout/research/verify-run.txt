@@ -1,0 +1,123 @@
+== 1. E1–E8 落位（count(old)==0, count(new)==1）==
+PASS R1a 前形态残留 0（实际 0） @ docs/workflows/workflow-design.md
+PASS R1a 现行串恰 1（实际 1） @ docs/workflows/workflow-design.md
+     R1a docs/workflows/workflow-design.md:547
+PASS R1b 前形态残留 0（实际 0） @ docs/workflows/workflow-design.md
+PASS R1b 现行串恰 1（实际 1） @ docs/workflows/workflow-design.md
+     R1b docs/workflows/workflow-design.md:78
+PASS R1c 前形态残留 0（实际 0） @ docs/workflows/依赖机制设计说明.md
+PASS R1c 现行串恰 1（实际 1） @ docs/workflows/依赖机制设计说明.md
+     R1c docs/workflows/依赖机制设计说明.md:127
+PASS E4 old 残留 0 处（实际 0） @ docs/workflows/workflow-design.md
+PASS E4 new 恰 1 处（实际 1） @ docs/workflows/workflow-design.md
+     E4 docs/workflows/workflow-design.md:792
+PASS E5 old 残留 0 处（实际 0） @ docs/workflows/workflow-design.md
+PASS E5 new 恰 1 处（实际 1） @ docs/workflows/workflow-design.md
+     E5 docs/workflows/workflow-design.md:49
+PASS E6 old 残留 0 处（实际 0） @ docs/workflows/workflow-design.md
+PASS E6 new 恰 1 处（实际 1） @ docs/workflows/workflow-design.md
+     E6 docs/workflows/workflow-design.md:899
+PASS E7 old 残留 0 处（实际 0） @ docs/workflows/workflow-design.md
+PASS E7 new 恰 1 处（实际 1） @ docs/workflows/workflow-design.md
+     E7 docs/workflows/workflow-design.md:950
+PASS E8 old 残留 0 处（实际 0） @ .trellis/spec/docs/index.md
+PASS E8 new 恰 1 处（实际 1） @ .trellis/spec/docs/index.md
+     E8 .trellis/spec/docs/index.md:398
+PASS R2 §10 ① 脚本位置短语恰 1
+     R2a docs/workflows/workflow-design.md:899
+PASS R2 §10 自检新建替代场景恰 1
+     R2b docs/workflows/workflow-design.md:911
+PASS E6 old 串余 1 处（v41 历史记录，预期）: 实际 1
+== 2. 零行数变动 ==
+PASS docs/workflows/workflow-design.md 行数 1193 == 1193
+PASS docs/workflows/依赖机制设计说明.md 行数 526 == 526
+PASS numstat 插入==删除: docs/workflows/workflow-design.md (7/7)
+PASS numstat 插入==删除: "docs/workflows/\344\276\235\350\265\226\346\234\272\345\210\266\350\256\276\350\256\241\350\257\264\346\230\216.md" (1/1)
+== 3. heading 集合与九张表行数 ==
+PASS 主稿 heading 集合不变
+PASS 配套 heading 集合不变
+PASS 表 第一段 行数 4 == 基线 4
+PASS 表 第二段 行数 4 == 基线 4
+PASS 表 未收尾 行数 7 == 基线 7
+PASS 表 已收尾 行数 5 == 基线 5
+PASS 表 表4-2 行数 7 == 基线 7
+PASS 表 组合表 行数 12 == 基线 12
+PASS 表 族表 行数 4 == 基线 4
+PASS 表 §7.4 行数 4 == 基线 4
+PASS 表 §6.4窗口 行数 9 == 基线 9
+PASS 表 §7.8矩阵 行数 14 == 基线 14
+== 4. anchors 全量回核（除被编辑行外 0 变化、0 缺失）==
+PASS docs/workflows/workflow-design.md 行数不变（anchors 不漂移前提）
+PASS docs/workflows/workflow-design.md 变化行 [49, 78, 547, 792, 899, 911, 950] == 被编辑行 [49, 78, 547, 792, 899, 911, 950]
+PASS docs/workflows/workflow-design.md anchors 引用行除被编辑行外 0 变化（异常 0）
+PASS docs/workflows/依赖机制设计说明.md 行数不变（anchors 不漂移前提）
+PASS docs/workflows/依赖机制设计说明.md 变化行 [127] == 被编辑行 [127]
+PASS docs/workflows/依赖机制设计说明.md anchors 引用行除被编辑行外 0 变化（异常 0）
+== 5. 括号平衡（被改动行全角/半角各自配对）==
+PASS docs/workflows/workflow-design.md:49 全角括号配对（2/2）
+PASS docs/workflows/workflow-design.md:49 半角括号配对（0/0）
+PASS docs/workflows/workflow-design.md:78 全角括号配对（7/7）
+PASS docs/workflows/workflow-design.md:78 半角括号配对（0/0）
+PASS docs/workflows/workflow-design.md:547 全角括号配对（4/4）
+PASS docs/workflows/workflow-design.md:547 半角括号配对（0/0）
+PASS docs/workflows/workflow-design.md:792 全角括号配对（2/2）
+PASS docs/workflows/workflow-design.md:792 半角括号配对（0/0）
+PASS docs/workflows/workflow-design.md:899 全角括号配对（1/1）
+PASS docs/workflows/workflow-design.md:899 半角括号配对（0/0）
+PASS docs/workflows/workflow-design.md:911 全角括号配对（32/32）
+PASS docs/workflows/workflow-design.md:911 半角括号配对（0/0）
+PASS docs/workflows/workflow-design.md:950 全角括号配对（4/4）
+PASS docs/workflows/workflow-design.md:950 半角括号配对（0/0）
+PASS docs/workflows/依赖机制设计说明.md:127 全角括号配对（3/3）
+PASS docs/workflows/依赖机制设计说明.md:127 半角括号配对（0/0）
+== 6. spec 探针全量实跑 ==
+     探针总数 84（数值期望比对通过 66，非数值/上下文判定 18）
+PASS 探针数值期望全部一致（0 处不符）
+PASS spec 含 v50 additions (17 probes; 标记行
+PASS v50 块探针实测 17 == 注释 (17 probes;)（E8 计数改对）
+== 7. D1 三条命令 ==
+PASS --check D1 GREEN（0.132s < 2s）
+PASS --check 运行时间 0.132s < 2s
+PASS --mutate=ALL 全部检出（清单驱动，数目以 MUTATIONS 为唯一源，不手写）
+PASS --mutate=ALL 检出计数自洽（7）
+PASS unittest OK
+== 7b. 账目层守卫（手写数字零容忍）==
+PASS scripts/design-statecheck.py 无手写数字注释 «M1–M5»
+PASS scripts/design-statecheck.py 无手写数字注释 «S1–S6»
+PASS scripts/design-statecheck.py 无手写数字注释 «个历史缺陷变异必须»
+PASS scripts/tests/test_design_statecheck.py 无手写数字注释 «M1–M5»
+PASS scripts/tests/test_design_statecheck.py 无手写数字注释 «S1–S6»
+PASS .trellis/spec/docs/index.md 无手写数字注释 «5 个历史缺陷变异»
+PASS .trellis/spec/docs/index.md 无手写数字注释 «6 个历史缺陷变异»
+PASS .trellis/spec/docs/index.md 无手写数字注释 «(18 probes;»
+PASS .trellis/spec/docs/index.md 无手写数字注释 «(15 probes;»
+PASS MUTATIONS 可从脚本导出
+     MUTATIONS 清单长度 = 7（唯一源，报告引用此值不手写）
+== 7c. 验证代码不得写被验证物 ==
+PASS verify.py 无文件写入调用（AST 扫描）
+PASS test_design_statecheck.py 无文件写入调用（AST 扫描）
+== 8. git diff --check 与逐 hunk 清点 ==
+PASS git diff --check 干净（）
+     diff hunk 数: 10（主稿 6 + 配套 1 + spec 3）
+     @@ -398 +398 @@ rg -n "前置不全正常时按挂起阶段的对账行" docs/workflows/workflow
+     @@ -429,0 +430,11 @@ rg -n "逐项分流：“异常”按 §7.4、“正常但未归档”按类型
+     @@ -49 +49 @@ id_scheme: 章节用 §N；表用表号；状态、关卡与组合自检表用
+     @@ -78 +78 @@ id_scheme: 章节用 §N；表用表号；状态、关卡与组合自检表用
+     @@ -547 +547 @@ P 是链头；所有 0→1 实现任务直接或间接依赖 P。P 对象及项
+     @@ -792 +792 @@ P 是链头；所有 0→1 实现任务直接或间接依赖 P。P 对象及项
+     @@ -899 +899 @@ P 是链头；所有 0→1 实现任务直接或间接依赖 P。P 对象及项
+     @@ -911 +911 @@ P 是链头；所有 0→1 实现任务直接或间接依赖 P。P 对象及项
+     @@ -950 +950 @@ R 正常归档后，T2 清除挂起，回到就绪（即使 T2 已开工），
+     @@ -127 +127 @@ status: 设计层说明
+     新增未跟踪文件:
+     ?? .trellis/tasks/10-28-workflow-design-v50-closeout/
+     ?? scripts/design-statecheck.py
+     ?? scripts/tests/
+== 9. 反向验证（把 §6.7 改回旧句必须红；全程内存注入，不写真实文档）==
+PASS 回退 §6.7 至 E1 时代串（内存注入）→ S7/S8 红
+     RED scenario S7: §6.7 收尾继任面缺「放弃且留有继任者（新建替代）」形态——S″ 正常归档后不被认作收尾对象，组合表待重定义行条件（尾端异常）又不命中，唯一出口退化为报告阻塞（红）
+     RED scenario S8_处置形态全集: 五形态 = {'替换': True, '放弃-删边': True, '放弃-新建替代': False, '类型 1 补建': True, '类型 5 补建': True}；缺出口形态: ['放弃-新建替代']
+PASS 现行文档同一路径（只读）全绿
+PASS 反向验证全程未写真实主稿（前后字节快照相等）
+
+VERIFY ALL GREEN

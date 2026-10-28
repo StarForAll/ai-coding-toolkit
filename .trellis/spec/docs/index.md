@@ -395,7 +395,7 @@ rg -n "已归档者不重复归档" docs/workflows/workflow-design.md   # 4 matc
 rg -n "本步不为旧任务新增出口" docs/workflows/workflow-design.md   # 1 hit: baseline-change local-scope sentence
 rg -n "完成旧口径移交确认后按同一条件补做" docs/workflows/依赖机制设计说明.md   # 1 hit: scenario-table handoff prerequisite
 rg -n "前置不全正常时按挂起阶段的对账行" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 0 hits: obsolete hanging-reconciliation exit
-# v50 additions (16 probes; scope = the two design documents only; per-action checks are anchored to type-5 branches):
+# v50 additions (17 probes; scope = the two design documents only; per-action checks are anchored to type-5 branches):
 rg -n "行内递归指定的挂起任务；递归只切换本次判定上下文" docs/workflows/workflow-design.md   # 1 hit: §9.1 declares the recursive context without writing the current pointer
 rg -n "按 §9.1 第二段「对应 T 有未归档返工任务 R」行处理 R" docs/workflows/workflow-design.md   # 1 hit: §8.4 delegates suspended rework handling to the same source row（v50 措辞收口：行号指称改条件名，原探针文本随源更新）
 rg -n "活动期建边 / 返工加边后随前置归档" docs/workflows/workflow-design.md   # 1 hit: family-2 title matches both members
@@ -426,6 +426,17 @@ rg -n "类型 4 放弃" docs/workflows/workflow-design.md   # 2 hits（均记录
 rg -n "第二段第 [0-9] 行|（第 [0-9] 行的下沉）|按第 [0-9] 行进入" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 0 hits（路由引用禁行号；记录域用“行 1/行 3”等旧形态不在此模式内）
 rg -n "逐项分流：“异常”按 §7.4、“正常但未归档”按类型 3" docs/workflows/workflow-design.md   # 3 hits: §9.1 挂起段「…前置集合不全正常」行（源）/ 同段「对应 T 有未归档返工任务 R」行括注 / §8.4 接手摘要（前置分流镜像逐字同序，顺序以源行为准，盲点 28）
 ```
+
+#### D1 状态枚举门（v50 收口批次；范围=两设计文档 + 脚本）
+
+```bash
+python3 scripts/design-statecheck.py --check          # 必须 D1 GREEN，退出码 0
+python3 scripts/design-statecheck.py --mutate=ALL     # 全部历史缺陷变异必须被检出（清单以脚本 MUTATIONS 列表为唯一源，本注释不写数目）
+python3 -m unittest scripts/tests/test_design_statecheck.py
+```
+
+白名单收尾语：`D1/D2/D3 全绿；已知精度项 N 条（见本轮报告）；基线 v50`。
+禁止使用：`彻底 / 完善 / 无残留 / 没有问题了`。
 
 #### v46 probe table (five columns aligned with the registry template)
 
