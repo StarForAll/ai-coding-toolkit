@@ -38,7 +38,6 @@ These guides help you **ask the right project-specific questions before making c
 | [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md) | Identify patterns and reduce duplication | When you notice repeated patterns |
 | [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md) | Think through repo boundary changes | Features spanning multiple layers |
 | [Workflow Repeat-Issue Triage Guide](./workflow-repeat-issue-triage.md) | Route repeated temp-project workflow findings without falling into scan/repair loops | When `workflow-scan` findings reappear or lineage/family routing is unclear |
-| [Design-Doc Review Thinking Guide](./design-review-thinking-guide.md) | Review design/contract docs without manufacturing false defects | When reviewing `docs/workflows/workflow-design.md` or any design/contract doc |
 
 ## Boundary
 
@@ -92,15 +91,6 @@ Keep guides here only when they are:
 - [ ] Closure looked clean, but the installed runtime behavior still seems wrong
 
 → Read [Workflow Repeat-Issue Triage Guide](./workflow-repeat-issue-triage.md)
-
-### When To Review A Design/Contract Doc
-
-- [ ] You are asked to review a design, contract, or protocol document
-- [ ] The review output is a defect list that may trigger document revisions
-- [ ] You are about to claim "the document is missing X"
-- [ ] You are reviewing `docs/workflows/workflow-design.md` or its companion
-
-→ Read [Design-Doc Review Thinking Guide](./design-review-thinking-guide.md)
 
 ---
 
