@@ -347,7 +347,7 @@ rg -n '或删边后不再等待$' docs/workflows/workflow-design.md 'docs/workfl
 rg -n '预生成.{0,4}新 P' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # main matrix row + v37 historical record; action steps reference matrix
 rg -n '修复的写入纪律' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # main source + companion reference + historical records; inspect context
 rg -n '两种处置由人决定' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # 0 hits (variant is decided at 发起 since v38)
-rg -n '只余删边' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # 7 hits as of v40, all in version-收口 blockquotes / revision records (judge by context, not line numbers — they shift每版); 0 normative hits — the disposition is now a field sentence
+rg -n '只余删边' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # 7 hits as of v40, all in version-收口 blockquotes / revision records (judge by context, not line numbers — they shift每版); 0 normative hits — the disposition is now a field sentence；2026-10 核查现状 7 处（主稿 5 + 配套 2），均在历史域（版本修订记录），规范位 0 命中不变
 rg -n '下游仍指向该任务、该任务未归档' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # normative definition only at main §7.4; its qualifier is 未归档下游; remaining hits historical
 rg -n '旧任务未归档 → 归档旧任务|边已重连但旧任务未归档' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # 0 hits — the forward-completion order lives only in §7.7 类型 5
 rg -n "先补建 / 重连、后归档" docs/workflows/workflow-design.md      # 2 hits: §7.7 类型 5 (sole source) + v40 record; the sequence wording must not appear in §6.5 / 配套 §6.4 / 配套 §8
@@ -397,22 +397,34 @@ rg -n "完成旧口径移交确认后按同一条件补做" docs/workflows/依�
 rg -n "前置不全正常时按挂起阶段的对账行" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 0 hits: obsolete hanging-reconciliation exit
 # v50 additions (16 probes; scope = the two design documents only; per-action checks are anchored to type-5 branches):
 rg -n "行内递归指定的挂起任务；递归只切换本次判定上下文" docs/workflows/workflow-design.md   # 1 hit: §9.1 declares the recursive context without writing the current pointer
-rg -n "按 §9.1 第二段第 1 行处理 R" docs/workflows/workflow-design.md   # 1 hit: §8.4 delegates suspended rework handling to the same source row
+rg -n "按 §9.1 第二段「对应 T 有未归档返工任务 R」行处理 R" docs/workflows/workflow-design.md   # 1 hit: §8.4 delegates suspended rework handling to the same source row（v50 措辞收口：行号指称改条件名，原探针文本随源更新）
 rg -n "活动期建边 / 返工加边后随前置归档" docs/workflows/workflow-design.md   # 1 hit: family-2 title matches both members
 rg -n "活动期建边后随前置归档" docs/workflows/workflow-design.md   # 0 hits: obsolete narrow family-2 title
 rg -n '最后归档旧任务（已归档者不重复归档）|补齐下游删边与旧任务归档（已归档者不重复归档）' docs/workflows/workflow-design.md   # 3 matching lines contain four type-5 sites; verify branch identity in the script
 rg -o "已归档者不重复归档" docs/workflows/workflow-design.md   # 5 occurrences: four type-5 guards plus the type-1 counterpart
 rg -n "旧任务已归档，不重复归档" docs/workflows/workflow-design.md   # 0 hits: inconsistent guard wording removed
-rg -n "前置本身挂起时，以它为“对应 T”回到本段并完整匹配本表" docs/workflows/workflow-design.md   # 1 hit: §9.1 second-stage row 3 re-enters the full table
-rg -n "R 自身挂起时以 R 为“对应 T”回到本段并匹配各行" docs/workflows/workflow-design.md   # 1 hit: §9.1 second-stage row 1 recursively handles a suspended rework task
-rg -n "递归处理该未完成前置（其本身挂起时以其为本段上下文）" docs/workflows/workflow-design.md "docs/workflows/依赖机制设计说明.md"   # 2 hits: §8.4 and companion §8 remain references to the main route
-rg -n "下沉是『当前任务』行与第二段第 3 行内的分支" docs/workflows/workflow-design.md   # 1 hit: explanation covers both downshift sites
+rg -n "前置本身挂起时，以它为“对应 T”回到本段并完整匹配本表" docs/workflows/workflow-design.md   # 3 hits: §9.1 挂起段「…前置集合不全正常」行 + 同段「对应 T 有未归档返工任务 R」行括注 + 说明区下沉句（修正轮后三处统一措辞；括注位在 F2 重排时从「未完成前置本身挂起时」并入本式）
+rg -n "R 自身挂起时以 R 为“对应 T”回到本段并匹配各行" docs/workflows/workflow-design.md   # 0 hits（v50 措辞收口：R 入口并入统一式，旧式墓碑）
+rg -n "R 自身挂起时以 R 为“对应 T”回到本段并完整匹配本表" docs/workflows/workflow-design.md   # 1 hit: §9.1 挂起段「对应 T 有未归档返工任务 R」行（R 入口本身，非镜像位）
+rg -n "以其为本段上下文|回本段重新匹配|第二段的“对应 T”递归匹配本段|回到本段并匹配各行" docs/workflows/workflow-design.md "docs/workflows/依赖机制设计说明.md"   # 0 hits as of v50 措辞收口：四种旧措辞已归一（改用下方统一措辞 probe）
+rg -n "下沉是『当前任务』行与第二段『存在返工任务记录、无未归档 R，但 T 的前置集合不全正常』行内的分支" docs/workflows/workflow-design.md   # 1 hit: explanation covers both downshift sites（v50 措辞收口：行号指称改条件名，原探针文本随源更新）
 rg -n "下沉是『当前任务』行内的分支" docs/workflows/workflow-design.md   # 0 hits: stale explanation removed
 rg -n "Q 自身挂起且有未归档 R_Q" docs/workflows/workflow-design.md   # 1 hit: §10 self-check exercises the recursive route
 rg -n "§9.1第二段（M5，唯一规则源）" docs/workflows/workflow-design.md   # 1 hit: corrected v49 source record
 rg -n "§8.4（M6）为引用式接手摘要" docs/workflows/workflow-design.md   # 1 hit: corrected v49 copy record
 rg -n "§9.1第二段（M5）、§8.4（M6）" docs/workflows/workflow-design.md   # 0 hits: obsolete source/copy classification removed
 
+```
+
+#### v50 措辞收口批次（6 条；范围=两设计文档，不绑任务路径）
+
+```bash
+rg -n "以它为“对应 T”回到本段并完整匹配本表" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 6 hits（判上下文不判行号）：主稿挂起递归五处位点（§7.7 组合行 / §8.4 接手摘要 / §9.1 挂起段「对应 T 有未归档返工任务 R」行与「…前置集合不全正常」行 / 说明区下沉句）各 1 次共 5 次；配套 §8 组合行 1 次。R 自身挂起入口（§9.1 挂起段首行）用「以 R 为“对应 T”回到本段并完整匹配本表」同款句式，由下方成对探针锁 1 hit；全部 6 位点须与源同措辞同子句顺序（盲点 28）
+rg -n "清除挂起（表 4-2 行 3），继续 T" docs/workflows/workflow-design.md   # 0 hits（墓碑：歧义读法已删）
+rg -n "T 回到就绪集" docs/workflows/workflow-design.md   # 2 hits: §8.4 挂起处置（满足 §6.4 第 5 步条目行）+ §9.1 挂起段「对应 T 满足 §6.4 第 5 步清除条件」行
+rg -n "类型 4 放弃" docs/workflows/workflow-design.md   # 2 hits（均记录域：附录 C v50 补记与 v35 历史记录；触发列标签已删，规范位 0 命中）
+rg -n "第二段第 [0-9] 行|（第 [0-9] 行的下沉）|按第 [0-9] 行进入" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 0 hits（路由引用禁行号；记录域用“行 1/行 3”等旧形态不在此模式内）
+rg -n "逐项分流：“异常”按 §7.4、“正常但未归档”按类型 3" docs/workflows/workflow-design.md   # 3 hits: §9.1 挂起段「…前置集合不全正常」行（源）/ 同段「对应 T 有未归档返工任务 R」行括注 / §8.4 接手摘要（前置分流镜像逐字同序，顺序以源行为准，盲点 28）
 ```
 
 #### v46 probe table (five columns aligned with the registry template)
