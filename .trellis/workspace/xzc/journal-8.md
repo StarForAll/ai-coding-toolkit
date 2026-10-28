@@ -361,3 +361,25 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 382: 登记 G7 审查强度分流待决
+<!-- trellis-session: v=2 fp=07e1d1d0db781d20 -->
+
+**Date**: 2026-10-29
+**Task**: 登记 G7 审查强度分流待决
+**Branch**: `main`
+
+### Summary
+
+在 workflow-implementation.md §9.6 增 G7（待定：任务级审查强度分流，含五条不得放宽的边界与两项待裁决），§8.3 末尾加指路句（定稿前复杂改动仍按 §8.4 + trellis-check）；本轮 channel vs multi-cli-review 分析、实测事实与 R-1～R-7 存入任务 research/ 供下一任务继承。diff 仅 3 行新增；library validate、validate-skills(25)、get_context 全过。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `999cc16` | chore(task): archive 10-29-review-intensity-deferred-note |
+
+### Status
+
+[OK] **Completed**
