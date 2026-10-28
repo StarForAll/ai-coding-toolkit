@@ -108,6 +108,25 @@ at the old assets.
 
 ---
 
+## Variant rendering (measured, 0.7.0-beta.4)
+
+These four facts come from `trellis/scripts/common/workflow_phase.py` and were re-checked in a
+throwaway fixture on 2026-10-28. Do not re-derive them from the docs.
+
+- **Index boundaries are literal.** `get_phase_index` starts at a line exactly `## Phase Index`
+  and stops at a line exactly `## Phase 1: Plan`. With no such terminator the whole rest of the
+  file (step bodies included) is injected as the index. A variant must contain that literal line.
+- **`--mode phase` never returns the state blocks.** Both `[workflow-state:*]` blocks and HTML
+  comments are stripped before output. Assert the sentinel through the phase output; assert the
+  three state blocks with a file-level regex (the platform channel is probe W7).
+- **Steps are `#### X.Y`.** A step body ends at the next `####`, the next `## `, or a column-0
+  `---`. No column-0 horizontal rules inside a variant.
+- **Marker-shaped lines are swallowed.** `filter_platform` treats any standalone line matching
+  `^\[<letter>…\]$` as a platform marker and drops it plus its block when the platform does not
+  match. Keep template lines out of that shape; the sentinel must be plain text.
+
+---
+
 ## Known traps
 
 | Trap | Why it bites | Rule |
@@ -117,6 +136,8 @@ at the old assets.
 | Slug collisions | `create` refuses an existing directory but happily creates the same slug under a different date | The module must enforce slug uniqueness across active + archive areas |
 | P creates tasks too early | `wf task new` requires an archived P, so nothing can be created during P | The tail task is defined in P's graph block, not as a pre-created directory |
 | Derived DAG file | A persisted `dag.md` would drift and add noise | There is no `dag.md`; use `wf dag` output |
+| P0 read-only commands need the ledger | §8.2 puts `route`/`state`/`dag`/`check` in P0 but "ledger read/write" in P1, while §3.7 and §3.8 both read the ledger | Plan §9.7 M1 (pending): ledger **read** moves into the first mechanism task; ledger **write** stays in P1 |
+| P0 roundtrip needs `wf close` | §8.2's P0 exit criterion is the §7.6 roundtrip "start through close", but `wf close` is P1 | Plan §9.7 M2 (pending): the minimal `wf close` belongs to the same task, or P0 ships a state where in-graph tasks can only be closed natively |
 
 ---
 
