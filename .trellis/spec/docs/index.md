@@ -302,7 +302,7 @@ update the row when a source moves:
 | Persistence scope, ownership and commit groups | 主设计 §3 持久化 | Main §1.1/§4.2/§7.3/§7.7/§7.8/§8.1/§8.2 and companion §2/§3/§4/§8/§9/§10/§13 cite source | Independent field enumerations omitting dependency IDs, ledger explanation/registration intent, pointers, prerequisites or rework origins; confusing a commit group with a whole multi-step action or a cross-system transaction |
 | Identity occupancy before pointer writes and successor creation | 主设计 §7.8 标识占用校验 | §6.5 / §6.6 发起按 §7.8 写入前校验并“重新生成后重校验”；§7.7 类型 5 补建按 §7.8 校验；已落盘指向冲突按 §7.7 类型 4；配套 §9 按 §7.8 引用；类型 4 可在原预写标识被他身份占用时改指本次新生成标识 | Overwriting another identity; treating existence alone as successor identity; using type 4 to invent an unrelated existing relationship; skipping regeneration before a pointer write |
 | Persistent completion of legacy rework handoff | 主设计 §6.4 旧口径移交 | 主稿 §7.7 cites “移交完成的持久判据”; §9.1 and companion §6.3/§8/§13 cite the handoff source | Inferring handoff completion from archived historical R tasks; automatic suspension clearing before the completion fact is persisted; defining a second handoff condition |
-| Archived-prerequisite source list（已归档前置合法来源） | 主设计 §4.4 归档终态约束（四族表） | “来源按 §4.4 判定”“按 §4.4 四族”“（含任务定义类，术语见 §3）”; companion: “按主设计 §4.4 判定”“来源按主设计 §4.4” | Restating the member enumeration (including the family-2 clause) in §7.5 / §0 / companion; a second producer list |
+| Archived-prerequisite source list（已归档前置合法来源） | 主设计 §4.4 归档终态约束（四族表；族2含建边与返工加边） | “来源按 §4.4 判定”“按 §4.4 四族”“（含任务定义类，术语见 §3）”; companion: “按主设计 §4.4 判定”“来源按主设计 §4.4” | Restating the member enumeration (including family 2’s edge/rework-edge members) in §7.5 / §0 / companion; a second producer list or treating the iteration-edge guard as the rework-edge guard |
 | 收尾对象 / 收尾完成 | 主设计 §6.7 two definitions | “按 §6.7 判定”“（按 §6.7）”“以收尾对象为准”; companion: “按主设计 §6.7 判定” | Restating “已归档 + 正常” at :266/:531/:807/:815; using “无继任者” as an exclusion term |
 | 任务定义 | 主设计 §3 术语 | “见『任务定义』”“按 §4.4 任务定义类”; companion: “术语见主设计 §3”“主设计 §3『任务定义』” | A second definition outside the term table (the §7.5 reverse-pointing exemption is sanctioned) |
 
@@ -312,11 +312,8 @@ verbatim condition inside an action sequence inherits it and does not create a
 second predicate.
 
 Probes — run after any `workflow-design.md` revision, against both documents
-(expected scopes as of v48; re-verified unchanged in the v47 and v48 fix rounds —
-v47: matrix row 14 rewrite, 待重定义行 field predicate, 口径 10⑥ gate rewording and
-§3 图内成员 addition moved no registered count; v48: the source-family and
-reconnection-scope additions below moved no pre-existing count; the `依赖标识写入` /
-`写入矩阵` counts now include appendix-record hits, judge by domain). The v48
+(expected scopes as of v50; unchanged in the v47/v48 fix rounds — v47 matrix row 14 rewrite, 待重定义行 field predicate, 口径 10⑥ gate rewording and §3 图内成员 addition moved no registered count; v48 source-family and reconnection-scope additions moved no pre-existing count; `依赖标识写入` / `写入矩阵` counts include appendix-record hits, judge by domain).
+The v48
 fix round added fourteen registered probes at the end of the block below, scoped to
 the two documents only so they survive task archival; record-domain hits
 (appendix / revision records) are judged by context, not counted. The run
@@ -324,6 +321,11 @@ is mandatory, not optional: update expected
 values in the same pass as any predicate change — a registered probe with a
 stale expected value that nobody runs is exactly how v40's disposition-terminal
 defect escaped (see blind spot 12 in the design-review guide):
+
+v49 adds six regression probes plus the family-enumeration command that was
+absent from the v48 spec block, and one supplemental scope-disambiguation
+probe. The full four-family phrase occurs once; the broader two-enumeration
+phrase occurs twice, because the first enumeration has no 四类 suffix.
 
 Probe scope is the main design and its companion only; do not sweep unrelated
 implementation drafts to infer the design contract. Counts/locations are text
@@ -384,6 +386,33 @@ rg -n "字段矩阵行义务" docs/workflows/workflow-design.md docs/workflows/�
 rg -n "回指产生者（依据" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 0 hits as of v48: the :899 short-form restatement is demoted to a §0 reference
 rg -n "v46 同步" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 0 hits as of v48: companion header version kept aligned with the design frontmatter
 rg -n "含已预写标识" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 6 hits as of v48: 5 normative (main 3: §6.5 / §6.6 发起 + §7.8 时点 1; companion 2: §6.4 / §6.5 发起) + 1 record-domain (companion §36); occupancy scope must include prewritten identifiers everywhere the check is invoked
+# v49 additions (scope = the two design documents only; no task-path dependency):
+rg -n "建边与返工加边 / 重连四类" docs/workflows/workflow-design.md   # 1 hit: only the second enumeration has 四类; the first ends after 重连
+rg -n "建边与返工加边 / 重连" docs/workflows/workflow-design.md   # 2 hits: both path-family enumerations; one includes 四类 and one does not
+rg -n "\*\*建边 / 返工加边\*\*" docs/workflows/workflow-design.md   # 1 hit: family-2 source cell
+rg -n "开工该未完成前置" docs/workflows/workflow-design.md   # 1 hit as of v50: the ordinary-predecessor branch; the recursive self-check starts with Q already suspended
+rg -n "已归档者不重复归档" docs/workflows/workflow-design.md   # 4 matching lines as of v50; one line contains both change-to-abandon branches
+rg -n "本步不为旧任务新增出口" docs/workflows/workflow-design.md   # 1 hit: baseline-change local-scope sentence
+rg -n "完成旧口径移交确认后按同一条件补做" docs/workflows/依赖机制设计说明.md   # 1 hit: scenario-table handoff prerequisite
+rg -n "前置不全正常时按挂起阶段的对账行" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 0 hits: obsolete hanging-reconciliation exit
+# v50 additions (16 probes; scope = the two design documents only; per-action checks are anchored to type-5 branches):
+rg -n "行内递归指定的挂起任务；递归只切换本次判定上下文" docs/workflows/workflow-design.md   # 1 hit: §9.1 declares the recursive context without writing the current pointer
+rg -n "按 §9.1 第二段第 1 行处理 R" docs/workflows/workflow-design.md   # 1 hit: §8.4 delegates suspended rework handling to the same source row
+rg -n "活动期建边 / 返工加边后随前置归档" docs/workflows/workflow-design.md   # 1 hit: family-2 title matches both members
+rg -n "活动期建边后随前置归档" docs/workflows/workflow-design.md   # 0 hits: obsolete narrow family-2 title
+rg -n '最后归档旧任务（已归档者不重复归档）|补齐下游删边与旧任务归档（已归档者不重复归档）' docs/workflows/workflow-design.md   # 3 matching lines contain four type-5 sites; verify branch identity in the script
+rg -o "已归档者不重复归档" docs/workflows/workflow-design.md   # 5 occurrences: four type-5 guards plus the type-1 counterpart
+rg -n "旧任务已归档，不重复归档" docs/workflows/workflow-design.md   # 0 hits: inconsistent guard wording removed
+rg -n "前置本身挂起时，以它为“对应 T”回到本段并完整匹配本表" docs/workflows/workflow-design.md   # 1 hit: §9.1 second-stage row 3 re-enters the full table
+rg -n "R 自身挂起时以 R 为“对应 T”回到本段并匹配各行" docs/workflows/workflow-design.md   # 1 hit: §9.1 second-stage row 1 recursively handles a suspended rework task
+rg -n "递归处理该未完成前置（其本身挂起时以其为本段上下文）" docs/workflows/workflow-design.md "docs/workflows/依赖机制设计说明.md"   # 2 hits: §8.4 and companion §8 remain references to the main route
+rg -n "下沉是『当前任务』行与第二段第 3 行内的分支" docs/workflows/workflow-design.md   # 1 hit: explanation covers both downshift sites
+rg -n "下沉是『当前任务』行内的分支" docs/workflows/workflow-design.md   # 0 hits: stale explanation removed
+rg -n "Q 自身挂起且有未归档 R_Q" docs/workflows/workflow-design.md   # 1 hit: §10 self-check exercises the recursive route
+rg -n "§9.1第二段（M5，唯一规则源）" docs/workflows/workflow-design.md   # 1 hit: corrected v49 source record
+rg -n "§8.4（M6）为引用式接手摘要" docs/workflows/workflow-design.md   # 1 hit: corrected v49 copy record
+rg -n "§9.1第二段（M5）、§8.4（M6）" docs/workflows/workflow-design.md   # 0 hits: obsolete source/copy classification removed
+
 ```
 
 #### v46 probe table (five columns aligned with the registry template)
