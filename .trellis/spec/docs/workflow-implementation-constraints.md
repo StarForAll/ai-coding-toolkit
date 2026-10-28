@@ -62,6 +62,20 @@ authority and no document may cite it.
 - The ledger commit always follows the archive commit — that ordering is what makes
   "downstream sees normal" imply "already archived".
 
+## Post-implementation real-run
+
+- Every implementation stage is **not done** until it has been exercised in a throwaway
+  target project under `/tmp` (plan §8.4): create it with
+  `commands/shell/init-trellis-temp-project.sh`, then `wf install` → one real
+  `task new → start → close` → `wf uninstall --module`.
+- **Never** use this repository's own `.trellis/` as the target project. It is the source of
+  the assets under test, not the thing under test.
+- Fixtures do not lower gates: human-only actions (`uninstall --full`, `repair` confirmation,
+  `upgrade --apply`) still need a TTY and the token. Delete the fixture afterwards — failures too,
+  after saving the output into the task artifacts.
+
+---
+
 ## Uninstall restore basis
 
 Managed-file restore (the `default_workflow` line and the four ZCode hook commands) resolves its
