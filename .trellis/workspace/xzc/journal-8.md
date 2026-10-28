@@ -317,3 +317,25 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 380: 退役残留清理与脚本瘦身
+<!-- trellis-session: v=2 fp=9c88e0256b2c1534 -->
+
+**Date**: 2026-10-28
+**Task**: 退役残留清理与脚本瘦身
+**Branch**: `main`
+
+### Summary
+
+清 A 级残留：spec/docs 删 Workflow Rule Propagation 整节并改述身份表、spec/scripts 删旧 commands 目录树、docs/README 旧结构改述并移除已删边界清单条目；退役《自定义工作流制作规范》《完整流程演练模板》并修两处工作流总纲链接与 support-inventory 六行；新增瘦身版 init-trellis-temp-project.sh（trellis --version + /tmp 目录 + trellis init -y，支持 --dry-run/--no-init，不碰工作流模块），README 双语与 spec/commands 同步。验证：脚本语法/帮助/dry-run/真实 init（夹具已删）、library validate、validate-skills(25)、get_context 全过。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a5a1af5` | chore(retire): 退役残留清理 —— A 级索引收口、旧产品文档退役、临时项目脚本瘦身 |
+
+### Status
+
+[OK] **Completed**
