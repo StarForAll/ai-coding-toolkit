@@ -230,3 +230,24 @@
 ### Status
 
 [OK] **Completed**
+
+## Session 376: workflow-design v50 收口批次（F1 收口 + D1 状态枚举门）
+<!-- trellis-session: v=2 fp=b1e29a67c3a4f5a2 -->
+
+**Date**: 2026-10-28
+**Task**: workflow-design v50 收口批次（路线 A）
+**Branch**: `main`
+
+### Summary
+
+按任务书执行 v50 收口：E1–E9 台账逐条落位（主稿/配套零行数变动 1193/526，numstat 插入==删除，anchors 97 条零漂移）；新建 scripts/design-statecheck.py 把「每个可达格有唯一向前动作」做成可执行断言——9 轴（含 succ/down 承重轴）25920 格全组合、链级场景 S1–S8（含处置形态全集断言）、历史缺陷变异全检出（清单以 MUTATIONS 为唯一源）、表行数元断言；spec 探针 84 条全量实跑通过、注册 D1 门小节。经三轮外部复核修正并留档：R1 补「放弃-新建替代」收尾继任形态（三处整句统一 + S7/S8/M6 机械锁）、门补承重轴与真 v41 谓词回归（M1 120 格翻转）、单测改内存注入；R2 账目层收口（手写数字零容忍，verify §7b 守卫）+ M7 锁文档谓词漂移；R3 verify.py 反向验证改内存注入（验证代码不得写被验证物，AST 守卫）。产物在 .trellis/tasks/10-28-workflow-design-v50-closeout/research/（verify.py 全绿）。收尾语：D1/D2/D3 全绿；已知精度项与边界见 known-residuals.md；基线 v50（in-line 补记）。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `782afdf` | workflow-design v50 收口批次：F1 收尾继任面全集 + D1 状态枚举门 |
+
+### Status
+
+[OK] **Completed**
