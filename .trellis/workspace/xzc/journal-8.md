@@ -186,3 +186,25 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 374: workflow-design v48 深度审查与 v49/v50 修复收尾
+<!-- trellis-session: v=2 fp=c1a4241dfcea5fb4 -->
+
+**Date**: 2026-10-28
+**Task**: workflow-design v48 深度审查与 v49/v50 修复收尾
+**Branch**: `main`
+
+### Summary
+
+按 §0.1 与审查规范完成主稿 v48 深度审查：六项验收面全量扫描后形成证据化报告（review-report.md），经人工复核获准修复。v49 落地首轮修复并同步 spec 探针与注册表；针对人工反馈 P1–P6 完成第二轮复核，v50 补齐类型 5 四分支终归档守卫（守卫与调用位逐位配对 4/4）、§9.1 挂起前置递归路由（被下沉的 Q 自身挂起时以 Q 为上下文重匹配第二段，递归后仍无就绪任务才报告阻塞）、族 2 标题同时覆盖建边与返工加边、附录 C 源/副本归类更正（§8.4 移入引用式副本）；主稿、配套与 spec 探针同版 v50，fix-notes-v50 共 30 项逐条由 verify_v50.py 核验全绿。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `822e372256168903f209e05c7c153d1fc3a81f3f` | workflow-design v50：补齐归档守卫与挂起递归路由 |
+
+### Status
+
+[OK] **Completed**

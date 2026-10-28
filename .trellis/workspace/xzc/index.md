@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-8.md`
-- **Total Sessions**: 373
-- **Last Active**: 2026-10-27
+- **Total Sessions**: 374
+- **Last Active**: 2026-10-28
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-8.md` | ~188 | Active |
+| `journal-8.md` | ~210 | Active |
 | `journal-7.md` | ~1964 | Archived |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
@@ -36,6 +36,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 374 | 2026-10-28 | workflow-design v48 深度审查与 v49/v50 修复收尾 | `822e372256168903f209e05c7c153d1fc3a81f3f` | `main` |
 | 373 | 2026-10-27 | workflow-design v48 三轮修复：自检场景补落、改写即提交、重连守卫改源加域、闸口单源、族表四族 | `870d9d7` | `main` |
 | 372 | 2026-10-27 | workflow-design v47 修复：依赖标识矩阵行重写、待重定义行字段谓词、口径 10⑥ 判据入闸口 | `f45d608` | `main` |
 | 371 | 2026-10-27 | workflow-design v46 深度审查修复（F1/F2/F3） | `d6f22a6`, `2fae1c4` | `main` |
