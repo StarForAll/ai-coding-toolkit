@@ -251,3 +251,25 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 377: 工作流实现方案定稿与裁决收口
+<!-- trellis-session: v=2 fp=be005fae65999214 -->
+
+**Date**: 2026-10-28
+**Task**: 工作流实现方案定稿与裁决收口
+**Branch**: `main`
+
+### Summary
+
+新建 docs/workflows/workflow-implementation.md（1447 行）：从设计稿与依赖机制说明落地实现层契约，抽取 1.2 约四成工程契约，显式支持 Claude Code/Codex/ZCode/Pi/DSH 五平台，ZCode hook 加固单列 T1c。经三轮外部审查修正：archive 分支门误判、版本误记、返工定位跨日失配、收尾任务与建任务门禁互锁、self-hash 矛盾、W18 判据、task new 前置两处冲突、新克隆卸载还原。16 条冲突全部裁决并留痕（§9.5），23 条探针，关键约束沉淀至 .trellis/spec/docs/workflow-implementation-constraints.md。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fb13ea8` | 工作流实现方案定稿：五平台嵌入契约、依赖账本实现与 16 条冲突裁决 |
+
+### Status
+
+[OK] **Completed**

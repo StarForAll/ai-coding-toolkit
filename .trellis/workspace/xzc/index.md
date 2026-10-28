@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-8.md`
-- **Total Sessions**: 375
+- **Total Sessions**: 377
 - **Last Active**: 2026-10-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-8.md` | ~232 | Active |
+| `journal-8.md` | ~275 | Active |
 | `journal-7.md` | ~1964 | Archived |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
@@ -36,6 +36,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 377 | 2026-10-28 | 工作流实现方案定稿与裁决收口 | `fb13ea8` | `main` |
 | 375 | 2026-10-28 | workflow-design v50 措辞收口批次 | `17d79fc` | `main` |
 | 374 | 2026-10-28 | workflow-design v48 深度审查与 v49/v50 修复收尾 | `822e372256168903f209e05c7c153d1fc3a81f3f` | `main` |
 | 373 | 2026-10-27 | workflow-design v48 三轮修复：自检场景补落、改写即提交、重连守卫改源加域、闸口单源、族表四族 | `870d9d7` | `main` |
