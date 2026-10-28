@@ -339,3 +339,25 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 381: 实现方案补充 /tmp 实机验收要求
+<!-- trellis-session: v=2 fp=996492f1eff3ba99 -->
+
+**Date**: 2026-10-28
+**Task**: 实现方案补充 /tmp 实机验收要求
+**Branch**: `main`
+
+### Summary
+
+在 workflow-implementation.md 新增 §8.4「实现后实机验收（/tmp 临时项目）」：何时做（每阶段提交前/整体完成/每次 upgrade --apply 后）、怎么做（init-trellis-temp-project.sh 建夹具 → wf install → task new/start/close → 断言 W1/W2 与 §7.6 → 清理）、四条硬纪律（只在 /tmp、夹具不降门槛、命名可区分用完即删、失败即阻断）；三处互引（§8.2 每阶段必跑、§7.6 执行环境、§8.1 探针纪律），§9.7 T3 验收指向 §8.4，constraints 新增 Post-implementation real-run 一节。验证：library validate、validate-skills(25)、get_context 全过。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7f9f418` | docs(plan): 新增 §8.4 实现后实机验收（/tmp 临时项目） |
+
+### Status
+
+[OK] **Completed**

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-8.md`
-- **Total Sessions**: 380
+- **Total Sessions**: 381
 - **Last Active**: 2026-10-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-8.md` | ~341 | Active |
+| `journal-8.md` | ~363 | Active |
 | `journal-7.md` | ~1964 | Archived |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
@@ -36,6 +36,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 381 | 2026-10-28 | 实现方案补充 /tmp 实机验收要求 | `7f9f418` | `main` |
 | 380 | 2026-10-28 | 退役残留清理与脚本瘦身 | `a5a1af5` | `main` |
 | 379 | 2026-10-28 | 旧模块与 1.2 退役收口 | `7fe5993` | `main` |
 | 378 | 2026-10-28 | wf 变体正文与 P0 拆分裁决（G5/G6） | `b2a1bbc` | `main` |
