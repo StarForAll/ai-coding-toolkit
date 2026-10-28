@@ -1,0 +1,452 @@
+PASS manifest IDs unique
+PASS V50-01 has concrete acceptance position
+PASS V50-01 docs/workflows/workflow-design.md:314 new=1 masked-old=0
+PASS V50-02 has concrete acceptance position
+PASS V50-02 docs/workflows/workflow-design.md:683 new=1 masked-old=0
+PASS V50-03 has concrete acceptance position
+PASS V50-03 docs/workflows/workflow-design.md:683 new=1 masked-old=0
+PASS V50-04 has concrete acceptance position
+PASS V50-04 docs/workflows/workflow-design.md:675 new=1 masked-old=0
+PASS V50-05 has concrete acceptance position
+PASS V50-05 docs/workflows/workflow-design.md:802 new=1 masked-old=0
+PASS V50-06 has concrete acceptance position
+PASS V50-06 docs/workflows/workflow-design.md:800 new=1 masked-old=0
+PASS V50-07 has concrete acceptance position
+PASS V50-07 docs/workflows/workflow-design.md:833 new=1 masked-old=0
+PASS V50-08 has concrete acceptance position
+PASS V50-08 docs/workflows/workflow-design.md:775 new=1 masked-old=0
+PASS V50-09 has concrete acceptance position
+PASS V50-09 docs/workflows/workflow-design.md:911 new=1 masked-old=0
+PASS V50-10 has concrete acceptance position
+PASS V50-10 docs/workflows/workflow-design.md:796 new=1 masked-old=0
+PASS V50-11 has concrete acceptance position
+PASS V50-11 docs/workflows/workflow-design.md:773 new=1 masked-old=0
+PASS V50-12 has concrete acceptance position
+PASS V50-12 docs/workflows/workflow-design.md:3 new=1 masked-old=0
+PASS V50-13 has concrete acceptance position
+PASS V50-13 docs/workflows/workflow-design.md:13 new=1 masked-old=0
+PASS V50-14 has concrete acceptance position
+PASS V50-14 docs/workflows/workflow-design.md:5 new=1 masked-old=0
+PASS V50-15 has concrete acceptance position
+PASS V50-15 docs/workflows/workflow-design.md:906 new=1 masked-old=0
+PASS V50-16 has concrete acceptance position
+PASS V50-16 docs/workflows/workflow-design.md:906 new=1 masked-old=0
+PASS V50-17 has concrete acceptance position
+PASS V50-17 docs/workflows/依赖机制设计说明.md:3 new=1 masked-old=0
+PASS V50-18 has concrete acceptance position
+PASS V50-18 docs/workflows/依赖机制设计说明.md:4 new=1 masked-old=0
+PASS V50-19 has concrete acceptance position
+PASS V50-19 docs/workflows/依赖机制设计说明.md:13 new=1 masked-old=0
+PASS V50-20 has concrete acceptance position
+PASS V50-20 docs/workflows/workflow-design.md:977 new=1 masked-old=0
+PASS V50-21 has concrete acceptance position
+PASS V50-21 docs/workflows/workflow-design.md:978 new=1 masked-old=0
+PASS V50-22 has concrete acceptance position
+PASS V50-22 docs/workflows/workflow-design.md:660 new=1 masked-old=0
+PASS V50-23 has concrete acceptance position
+PASS V50-23 docs/workflows/依赖机制设计说明.md:253 new=1 masked-old=0
+PASS V50-24 has concrete acceptance position
+PASS V50-24 .trellis/spec/docs/index.md:315 new=1 masked-old=0
+PASS V50-25 has concrete acceptance position
+PASS V50-25 .trellis/spec/docs/index.md:393 new=1 masked-old=0
+PASS V50-26 has concrete acceptance position
+PASS V50-26 .trellis/spec/docs/index.md:398 new=1 masked-old=0
+PASS V50-27 has concrete acceptance position
+PASS V50-27 .trellis/spec/guides/design-review-thinking-guide.md:375 new=1 masked-old=0
+PASS V50-28 has concrete acceptance position
+PASS V50-28 docs/workflows/workflow-design.md:946 new=1 masked-old=0
+PASS V50-29 has concrete acceptance position
+PASS V50-29 docs/workflows/依赖机制设计说明.md:1 new=1 masked-old=0
+PASS V50-30 has concrete acceptance position
+PASS V50-30 .trellis/spec/docs/index.md:394 new=1 masked-old=0
+PASS frozen v49 reverse SHA-256 docs/workflows/workflow-design.md: 4a96d98ab392b47f50eb4649afa65845dea17a2a1b8de15fdba0dbf63244fc20
+PASS frozen v49 reverse SHA-256 docs/workflows/依赖机制设计说明.md: d0f6385d671fc05b64d35efb5e1e89fe5d137123aa0fddd2258ea64c0e24999d
+PASS frozen v49 reverse SHA-256 .trellis/spec/docs/index.md: 419aae85285306b1018618696d770dcf73872e58ee1a841a2d4eec3dac30c828
+PASS frozen v49 reverse SHA-256 .trellis/spec/guides/design-review-thinking-guide.md: 39bdf9bd8816b4b5347bbde84c72ae6a60545edadbd072abb381af8ff22a363d
+PASS family data rows=4 expected=4
+PASS matrix data rows=14 expected=14
+PASS matrix rows byte-identical to v49
+PASS combination data rows=12 expected=12
+PASS transition data rows=7 expected=7
+PASS transition rows byte-identical to v49
+PASS window data rows=9 expected=9
+PASS window rows byte-identical to v49
+PASS docs/workflows/workflow-design.md combination changes=[7]; only hanging row=7
+PASS docs/workflows/workflow-design.md other 11 combination rows unchanged
+PASS docs/workflows/依赖机制设计说明.md combination changes=[7]; only hanging row=7
+PASS docs/workflows/依赖机制设计说明.md other 11 combination rows unchanged
+PASS two versions v50
+PASS companion current design pin v50
+PASS version histories present
+PASS changed-line parentheses balanced: []
+PASS archive site 补建: action=1 guard=1
+PASS archive site source row 补建: docs/workflows/workflow-design.md:682
+PASS archive site 改判放弃-一般: action=1 guard=1
+PASS archive site source row 改判放弃-一般: docs/workflows/workflow-design.md:683
+PASS archive site 改判放弃-P: action=1 guard=1
+PASS archive site source row 改判放弃-P: docs/workflows/workflow-design.md:683
+PASS archive site 无替换指向: action=1 guard=1
+PASS archive site source row 无替换指向: docs/workflows/workflow-design.md:684
+PASS type-5 terminal archive action set exactly four sites
+PASS four type-5 guards plus type-1 counterpart=5 occurrences
+PASS v50 probe group contains exactly 16 probes
+PASS probe scope limited to two design documents
+PASS probe 335 -n actual=0 expected=0: 按 §3 有效（
+PASS probe scope limited to two design documents
+PASS probe 336 -n actual=0 expected=0: 有当前任务，且该任务未归档、账本为|有当前任务，但该任务未归档、账本为|有当前任务，但该任务已归档
+PASS probe scope limited to two design documents
+PASS probe 337 -n actual=9 expected=9: 按 §3 有效|按 §3 无效
+PASS probe scope limited to two design documents
+PASS probe 338 -n actual=3 expected=3: 依赖满足 =|就绪.*前置集合全部为
+PASS probe scope limited to two design documents
+PASS probe 339 -n actual=5 expected=5: 满足判定按 §4.3|按主设计 §4.3
+PASS probe scope limited to two design documents
+PASS probe 340 -n actual=0 expected=0: 指向已归档、规划中且前置未满足
+PASS probe scope limited to two design documents
+PASS probe 341 -n actual=0 expected=0: 或为“正常但未归档”的任务|前置未完工（或为
+PASS probe scope limited to two design documents
+PASS probe 342 -n actual=14 expected=14: 视为无当前任务
+PASS probe scope limited to two design documents
+PASS probe 343 -n actual=2 expected=2: 继任者即新的 P
+PASS probe scope limited to two design documents
+PASS probe 344 -n actual=0 expected=0: 异常前置走替换|前置为异常时按删边或替换
+PASS probe scope limited to two design documents
+PASS probe 345 -n actual=11 expected=11: 按 §7.4 处置|按主设计 §7.4
+PASS probe scope limited to two design documents
+PASS probe 346 -n actual=0 expected=0: 或删边后不再等待$
+PASS probe scope limited to two design documents
+PASS probe 347 -n actual=2 expected=2: 预生成.{0,4}新 P
+PASS probe scope limited to two design documents
+PASS probe 348 -n actual=4 expected=4: 修复的写入纪律
+PASS probe scope limited to two design documents
+PASS probe 349 -n actual=0 expected=0: 两种处置由人决定
+PASS probe scope limited to two design documents
+PASS probe 350 -n actual=7 expected=7: 只余删边
+PASS probe scope limited to two design documents
+PASS probe 351 -n actual=4 expected=4: 下游仍指向该任务、该任务未归档
+PASS probe scope limited to two design documents
+PASS probe 352 -n actual=0 expected=0: 旧任务未归档 → 归档旧任务|边已重连但旧任务未归档
+PASS probe scope limited to two design documents
+PASS probe 353 -n actual=2 expected=2: 先补建 / 重连、后归档
+PASS probe scope limited to two design documents
+PASS probe 354 -n actual=2 expected=2: 替换指向为空
+PASS probe scope limited to two design documents
+PASS probe 355 -n actual=34 expected=34: 新建替代
+PASS probe scope limited to two design documents
+PASS probe 356 -n actual=4 expected=4: 继任任务
+PASS probe scope limited to two design documents
+PASS probe 357 -n actual=0 expected=0: 无当前任务时：T 进行中或规划中但前置含非正常
+PASS probe scope limited to two design documents
+PASS probe 358 -n actual=2 expected=2: 无当前任务时按 §9.1
+PASS probe scope limited to two design documents
+PASS probe 359 -n actual=6 expected=6: 继任者已建
+PASS probe scope limited to two design documents
+PASS probe 360 -n actual=1 expected=1: 唯一清空点
+PASS probe scope limited to two design documents
+PASS probe 361 -n actual=24 expected=24: 写入矩阵
+PASS probe scope limited to two design documents
+PASS probe 362 -n actual=2 expected=2: P 的指向不得置空
+PASS probe scope limited to two design documents
+PASS probe 363 -n actual=2 expected=2: 唯一 / 不再 / 一律 / 只」
+PASS probe scope limited to two design documents
+PASS probe 364 -n actual=8 expected=8: 新建替代
+PASS probe scope limited to two design documents
+PASS probe 365 -n actual=17 expected=17: 已确立的 P 继任关系不得置空|类型 4 恢复边界
+PASS probe scope limited to two design documents
+PASS probe 366 -n actual=11 expected=11: 当前登记标记|返工登记准备|返工登记发布|返工登记取消
+PASS probe scope limited to two design documents
+PASS probe 367 -n actual=4 expected=4: P 角色解析|正常完成的 P 终点|角色完整性守卫
+PASS probe scope limited to two design documents
+PASS probe 368 -n actual=3 expected=3: 下游范围为未归档下游|类型 4 恢复边界（唯一源）|返工登记（动作序列与窗口的唯一源）
+PASS probe scope limited to two design documents
+PASS probe 369 -n actual=13 expected=13: 机制持久化范围（唯一源）|提交范围.*按.*§3|持久化.*主设计 §3
+PASS probe scope limited to two design documents
+PASS probe 370 -n actual=3 expected=3: 账本 / 前置集合 / 替换指向 / 返工来源|账本与前置集合.*持久化|提交范围含账本
+PASS probe scope limited to two design documents
+PASS probe 371 -n actual=1 expected=1: 标识占用校验（唯一源）
+PASS probe scope limited to two design documents
+PASS probe 372 -n actual=2 expected=2: 移交完成的持久判据
+PASS probe scope limited to two design documents
+PASS probe 373 -n actual=7 expected=7: 重新生成后重校验|已落盘的替换指向|原预写标识已被其他身份占用|按 §7.8 标识占用规则
+PASS probe scope limited to two design documents
+PASS probe 375 -n actual=0 expected=0: 重连目标可为异常
+PASS probe scope limited to two design documents
+PASS probe 376 -n actual=7 expected=7: 重连目标为异常时按
+PASS probe scope limited to two design documents
+PASS probe 377 -n actual=2 expected=2: 建边目标\*\*账本为“异常”
+PASS probe scope limited to two design documents
+PASS probe 378 -n actual=1 expected=1: \*\*重连类\*\*
+PASS probe scope limited to two design documents
+PASS probe 379 -n actual=2 expected=2: 被重连的未归档下游
+PASS probe scope limited to two design documents
+PASS probe 380 -n actual=3 expected=3: 重连只要求两端存在
+PASS probe scope limited to two design documents
+PASS probe 381 -n actual=2 expected=2: 先按类型 5 补建
+PASS probe scope limited to two design documents
+PASS probe 382 -n actual=2 expected=2: 自成一个提交组
+PASS probe scope limited to two design documents
+PASS probe 383 -n actual=1 expected=1: 重连目标为“异常”仍补齐重连
+PASS probe scope limited to two design documents
+PASS probe 384 -n actual=1 expected=1: 回指产生者位置
+PASS probe scope limited to two design documents
+PASS probe 385 -n actual=4 expected=4: 字段矩阵行义务
+PASS probe scope limited to two design documents
+PASS probe 386 -n actual=0 expected=0: 回指产生者（依据
+PASS probe scope limited to two design documents
+PASS probe 387 -n actual=0 expected=0: v46 同步
+PASS probe scope limited to two design documents
+PASS probe 388 -n actual=6 expected=6: 含已预写标识
+PASS probe scope limited to two design documents
+PASS probe 390 -n actual=1 expected=1: 建边与返工加边 / 重连四类
+PASS probe scope limited to two design documents
+PASS probe 391 -n actual=2 expected=2: 建边与返工加边 / 重连
+PASS probe scope limited to two design documents
+PASS probe 392 -n actual=1 expected=1: \*\*建边 / 返工加边\*\*
+PASS probe scope limited to two design documents
+PASS probe 393 -n actual=1 expected=1: 开工该未完成前置
+PASS probe scope limited to two design documents
+PASS probe 394 -n actual=4 expected=4: 已归档者不重复归档
+PASS probe scope limited to two design documents
+PASS probe 395 -n actual=1 expected=1: 本步不为旧任务新增出口
+PASS probe scope limited to two design documents
+PASS probe 396 -n actual=1 expected=1: 完成旧口径移交确认后按同一条件补做
+PASS probe scope limited to two design documents
+PASS probe 397 -n actual=0 expected=0: 前置不全正常时按挂起阶段的对账行
+PASS probe scope limited to two design documents
+PASS probe 399 -n actual=1 expected=1: 行内递归指定的挂起任务；递归只切换本次判定上下文
+PASS probe scope limited to two design documents
+PASS probe 400 -n actual=1 expected=1: 按 §9.1 第二段第 1 行处理 R
+PASS probe scope limited to two design documents
+PASS probe 401 -n actual=1 expected=1: 活动期建边 / 返工加边后随前置归档
+PASS probe scope limited to two design documents
+PASS probe 402 -n actual=0 expected=0: 活动期建边后随前置归档
+PASS probe scope limited to two design documents
+PASS probe 403 -n actual=3 expected=3: 最后归档旧任务（已归档者不重复归档）|补齐下游删边与旧任务归档（已归档者不重复归档）
+PASS probe scope limited to two design documents
+PASS probe 404 -o actual=5 expected=5: 已归档者不重复归档
+PASS probe scope limited to two design documents
+PASS probe 405 -n actual=0 expected=0: 旧任务已归档，不重复归档
+PASS probe scope limited to two design documents
+PASS probe 406 -n actual=1 expected=1: 前置本身挂起时，以它为“对应 T”回到本段并完整匹配本表
+PASS probe scope limited to two design documents
+PASS probe 407 -n actual=1 expected=1: R 自身挂起时以 R 为“对应 T”回到本段并匹配各行
+PASS probe scope limited to two design documents
+PASS probe 408 -n actual=2 expected=2: 递归处理该未完成前置（其本身挂起时以其为本段上下文）
+PASS probe scope limited to two design documents
+PASS probe 409 -n actual=1 expected=1: 下沉是『当前任务』行与第二段第 3 行内的分支
+PASS probe scope limited to two design documents
+PASS probe 410 -n actual=0 expected=0: 下沉是『当前任务』行内的分支
+PASS probe scope limited to two design documents
+PASS probe 411 -n actual=1 expected=1: Q 自身挂起且有未归档 R_Q
+PASS probe scope limited to two design documents
+PASS probe 412 -n actual=1 expected=1: §9.1第二段（M5，唯一规则源）
+PASS probe scope limited to two design documents
+PASS probe 413 -n actual=1 expected=1: §8.4（M6）为引用式接手摘要
+PASS probe scope limited to two design documents
+PASS probe 414 -n actual=0 expected=0: §9.1第二段（M5）、§8.4（M6）
+PASS all registered probes executed: 77
+PASS second-stage table remains four rows
+PASS row1 recursive rework context hits same table
+PASS row3 reference/action: 前置本身挂起时，以它为“对应 T”回到本段并完整匹配本表
+PASS row3 reference/action: 有未归档 R 按第 1 行进入 R
+PASS row3 reference/action: 满足 §6.4 第 5 步按第 2 行清除该前置的挂起
+PASS row3 reference/action: 无返工任务记录按第 4 行处理
+PASS row3 reference/action: 递归处理后仍无就绪任务时报告阻塞
+PASS recursive no-record input hits row4/type2
+PASS recursive clearing points to unchanged §6.4 step5 guard
+PASS recursive context leaves pointer contract explicit
+PASS self-check orders Q suspension → R_T end → R_Q → Q clear → Q complete → T evaluation
+PASS self-check does not open suspended Q before routing its R_Q
+PASS S3 six states × two rework contexts = 12 populated cells
+PASS S3 state row 1: both cells name an action or unreachable condition
+PASS S3 state row 2: both cells name an action or unreachable condition
+PASS S3 state row 3: both cells name an action or unreachable condition
+PASS S3 state row 4: both cells name an action or unreachable condition
+PASS S3 state row 5: both cells name an action or unreachable condition
+PASS S3 state row 6: both cells name an action or unreachable condition
+PASS record line exists docs/workflows/workflow-design.md:314
+PASS record section §4.4 contains docs/workflows/workflow-design.md:314
+PASS D4 literal source claim docs/workflows/workflow-design.md:314
+PASS record line exists docs/workflows/workflow-design.md:682
+PASS record section §7.7 contains docs/workflows/workflow-design.md:682
+PASS D4 literal source claim docs/workflows/workflow-design.md:682
+PASS record line exists docs/workflows/workflow-design.md:683
+PASS record section §7.7 contains docs/workflows/workflow-design.md:683
+PASS D4 literal source claim docs/workflows/workflow-design.md:683
+PASS record line exists docs/workflows/workflow-design.md:684
+PASS record section §7.7 contains docs/workflows/workflow-design.md:684
+PASS D4 literal source claim docs/workflows/workflow-design.md:684
+PASS record line exists docs/workflows/workflow-design.md:675
+PASS record section §7.7 contains docs/workflows/workflow-design.md:675
+PASS D4 literal source claim docs/workflows/workflow-design.md:675
+PASS record line exists docs/workflows/workflow-design.md:800
+PASS record section §9.1 contains docs/workflows/workflow-design.md:800
+PASS D4 literal source claim docs/workflows/workflow-design.md:800
+PASS record line exists docs/workflows/workflow-design.md:802
+PASS record section §9.1 contains docs/workflows/workflow-design.md:802
+PASS D4 literal source claim docs/workflows/workflow-design.md:802
+PASS record line exists docs/workflows/workflow-design.md:775
+PASS record section §8.4 contains docs/workflows/workflow-design.md:775
+PASS D4 literal source claim docs/workflows/workflow-design.md:775
+PASS record line exists docs/workflows/workflow-design.md:660
+PASS record section §7.7 contains docs/workflows/workflow-design.md:660
+PASS D4 literal source claim docs/workflows/workflow-design.md:660
+PASS record line exists docs/workflows/依赖机制设计说明.md:253
+PASS record section §8 contains docs/workflows/依赖机制设计说明.md:253
+PASS D4 literal source claim docs/workflows/依赖机制设计说明.md:253
+PASS record line exists docs/workflows/workflow-design.md:911
+PASS record section §10 contains docs/workflows/workflow-design.md:911
+PASS D4 literal source claim docs/workflows/workflow-design.md:911
+PASS record line exists docs/workflows/workflow-design.md:833
+PASS record section §9.1 contains docs/workflows/workflow-design.md:833
+PASS D4 literal source claim docs/workflows/workflow-design.md:833
+PASS record line exists docs/workflows/workflow-design.md:802
+PASS record section §9.1 contains docs/workflows/workflow-design.md:802
+PASS D4 literal source claim docs/workflows/workflow-design.md:802
+PASS record line exists docs/workflows/workflow-design.md:800
+PASS record section §9.1 contains docs/workflows/workflow-design.md:800
+PASS D4 literal source claim docs/workflows/workflow-design.md:800
+PASS record line exists docs/workflows/workflow-design.md:977
+PASS D4 literal source claim docs/workflows/workflow-design.md:977
+PASS record line exists docs/workflows/workflow-design.md:978
+PASS D4 literal source claim docs/workflows/workflow-design.md:978
+PASS record line exists .trellis/spec/docs/index.md:398
+PASS D4 literal source claim .trellis/spec/docs/index.md:398
+PASS record line exists .trellis/spec/guides/design-review-thinking-guide.md:375
+PASS D4 literal source claim .trellis/spec/guides/design-review-thinking-guide.md:375
+PASS record line exists docs/workflows/workflow-design.md:906
+PASS record section §10 contains docs/workflows/workflow-design.md:906
+PASS D4 literal source claim docs/workflows/workflow-design.md:906
+PASS record line exists docs/workflows/workflow-design.md:906
+PASS record section §10 contains docs/workflows/workflow-design.md:906
+PASS D4 literal source claim docs/workflows/workflow-design.md:906
+PASS record line exists docs/workflows/workflow-design.md:802
+PASS D4 literal source claim docs/workflows/workflow-design.md:802
+PASS record line exists docs/workflows/依赖机制设计说明.md:253
+PASS D4 literal source claim docs/workflows/依赖机制设计说明.md:253
+PASS record line exists docs/workflows/workflow-design.md:660
+PASS D4 literal source claim docs/workflows/workflow-design.md:660
+PASS record line exists docs/workflows/workflow-design.md:775
+PASS record section §8.4 contains docs/workflows/workflow-design.md:775
+PASS D4 literal source claim docs/workflows/workflow-design.md:775
+PASS record line exists docs/workflows/workflow-design.md:682
+PASS D4 literal source claim docs/workflows/workflow-design.md:682
+PASS record line exists docs/workflows/依赖机制设计说明.md:13
+PASS D4 literal source claim docs/workflows/依赖机制设计说明.md:13
+PASS record line exists docs/workflows/workflow-design.md:314
+PASS record section §4.4 contains docs/workflows/workflow-design.md:314
+PASS D4 literal source claim docs/workflows/workflow-design.md:314
+PASS record line exists docs/workflows/workflow-design.md:66
+PASS record section §0.1 contains docs/workflows/workflow-design.md:66
+PASS D4 literal source claim docs/workflows/workflow-design.md:66
+PASS record line exists docs/workflows/workflow-design.md:72
+PASS record section §0.1 contains docs/workflows/workflow-design.md:72
+PASS D4 literal source claim docs/workflows/workflow-design.md:72
+PASS record line exists docs/workflows/workflow-design.md:802
+PASS record section §9.1 contains docs/workflows/workflow-design.md:802
+PASS D4 literal source claim docs/workflows/workflow-design.md:802
+PASS record line exists docs/workflows/workflow-design.md:775
+PASS record section §8.4 contains docs/workflows/workflow-design.md:775
+PASS D4 literal source claim docs/workflows/workflow-design.md:775
+PASS record line exists docs/workflows/workflow-design.md:660
+PASS record section §7.7 contains docs/workflows/workflow-design.md:660
+PASS D4 literal source claim docs/workflows/workflow-design.md:660
+PASS record line exists docs/workflows/依赖机制设计说明.md:253
+PASS D4 literal source claim docs/workflows/依赖机制设计说明.md:253
+PASS record line exists docs/workflows/workflow-design.md:832
+PASS record section §9.1 contains docs/workflows/workflow-design.md:832
+PASS D4 literal source claim docs/workflows/workflow-design.md:832
+PASS record line exists docs/workflows/workflow-design.md:911
+PASS record section §10 contains docs/workflows/workflow-design.md:911
+PASS D4 literal source claim docs/workflows/workflow-design.md:911
+PASS record line exists docs/workflows/workflow-design.md:682
+PASS record section §7.7 contains docs/workflows/workflow-design.md:682
+PASS D4 literal source claim docs/workflows/workflow-design.md:682
+PASS record line exists docs/workflows/workflow-design.md:389
+PASS record section §5.5 contains docs/workflows/workflow-design.md:389
+PASS D4 literal source claim docs/workflows/workflow-design.md:389
+PASS record line exists docs/workflows/依赖机制设计说明.md:317
+PASS record section §12 contains docs/workflows/依赖机制设计说明.md:317
+PASS D4 literal source claim docs/workflows/依赖机制设计说明.md:317
+PASS record line exists .trellis/spec/docs/index.md:389
+PASS D4 literal source claim .trellis/spec/docs/index.md:389
+PASS record line exists .trellis/spec/guides/design-review-thinking-guide.md:375
+PASS D4 literal source claim .trellis/spec/guides/design-review-thinking-guide.md:375
+PASS record line exists .trellis/spec/guides/design-review-thinking-guide.md:376
+PASS D4 literal source claim .trellis/spec/guides/design-review-thinking-guide.md:376
+PASS record line exists docs/workflows/依赖机制设计说明.md:253
+PASS record section §8 contains docs/workflows/依赖机制设计说明.md:253
+PASS D4 literal source claim docs/workflows/依赖机制设计说明.md:253
+PASS record line exists docs/workflows/依赖机制设计说明.md:317
+PASS record section §12 contains docs/workflows/依赖机制设计说明.md:317
+PASS D4 literal source claim docs/workflows/依赖机制设计说明.md:317
+PASS D4 record/body literal claims=43
+PASS fix-notes generated location V50-01
+PASS fix-notes anchor resolves V50-01
+PASS fix-notes generated location V50-02
+PASS fix-notes anchor resolves V50-02
+PASS fix-notes generated location V50-03
+PASS fix-notes anchor resolves V50-03
+PASS fix-notes generated location V50-04
+PASS fix-notes anchor resolves V50-04
+PASS fix-notes generated location V50-05
+PASS fix-notes anchor resolves V50-05
+PASS fix-notes generated location V50-06
+PASS fix-notes anchor resolves V50-06
+PASS fix-notes generated location V50-07
+PASS fix-notes anchor resolves V50-07
+PASS fix-notes generated location V50-08
+PASS fix-notes anchor resolves V50-08
+PASS fix-notes generated location V50-09
+PASS fix-notes anchor resolves V50-09
+PASS fix-notes generated location V50-10
+PASS fix-notes anchor resolves V50-10
+PASS fix-notes generated location V50-11
+PASS fix-notes anchor resolves V50-11
+PASS fix-notes generated location V50-12
+PASS fix-notes anchor resolves V50-12
+PASS fix-notes generated location V50-13
+PASS fix-notes anchor resolves V50-13
+PASS fix-notes generated location V50-14
+PASS fix-notes anchor resolves V50-14
+PASS fix-notes generated location V50-15
+PASS fix-notes anchor resolves V50-15
+PASS fix-notes generated location V50-16
+PASS fix-notes anchor resolves V50-16
+PASS fix-notes generated location V50-17
+PASS fix-notes anchor resolves V50-17
+PASS fix-notes generated location V50-18
+PASS fix-notes anchor resolves V50-18
+PASS fix-notes generated location V50-19
+PASS fix-notes anchor resolves V50-19
+PASS fix-notes generated location V50-20
+PASS fix-notes anchor resolves V50-20
+PASS fix-notes generated location V50-21
+PASS fix-notes anchor resolves V50-21
+PASS fix-notes generated location V50-22
+PASS fix-notes anchor resolves V50-22
+PASS fix-notes generated location V50-23
+PASS fix-notes anchor resolves V50-23
+PASS fix-notes generated location V50-24
+PASS fix-notes anchor resolves V50-24
+PASS fix-notes generated location V50-25
+PASS fix-notes anchor resolves V50-25
+PASS fix-notes generated location V50-26
+PASS fix-notes anchor resolves V50-26
+PASS fix-notes generated location V50-27
+PASS fix-notes anchor resolves V50-27
+PASS fix-notes generated location V50-28
+PASS fix-notes anchor resolves V50-28
+PASS fix-notes generated location V50-29
+PASS fix-notes anchor resolves V50-29
+PASS fix-notes generated location V50-30
+PASS fix-notes anchor resolves V50-30
+PASS v49 source/copy role corrected
+PASS git diff --check:
+PASS six untracked task metadata files predate frozen v50 baseline (timestamp evidence)
+PASS source/research writes scoped; pre-existing metadata enumerated separately: []
+PASS review-report.md preserved byte-for-byte
+PASS review-report-v2.md preserved byte-for-byte
+PASS Active task remains in_progress
+PASS HEAD unchanged; no commit performed
+RESULT all checks passed

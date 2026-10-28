@@ -1,0 +1,78 @@
+spec_line	mode	pattern	expected	actual	exit	judgment
+335	-n	按 §3 有效（	0	0	1	numeric-comment
+336	-n	有当前任务，且该任务未归档、账本为|有当前任务，但该任务未归档、账本为|有当前任务，但该任务已归档	0	0	1	numeric-comment
+337	-n	按 §3 有效|按 §3 无效	9	9	0	numeric-comment
+338	-n	依赖满足 =|就绪.*前置集合全部为	3	3	0	numeric-comment
+339	-n	满足判定按 §4.3|按主设计 §4.3	5	5	0	numeric-comment
+340	-n	指向已归档、规划中且前置未满足	0	0	1	numeric-comment
+341	-n	或为“正常但未归档”的任务|前置未完工（或为	0	0	1	numeric-comment
+342	-n	视为无当前任务	14	14	0	numeric-comment
+343	-n	继任者即新的 P	2	2	0	numeric-comment
+344	-n	异常前置走替换|前置为异常时按删边或替换	0	0	1	numeric-comment
+345	-n	按 §7.4 处置|按主设计 §7.4	11	11	0	location/domain; unchanged vs frozen v49
+346	-n	或删边后不再等待$	0	0	1	numeric-comment
+347	-n	预生成.{0,4}新 P	2	2	0	location/domain; unchanged vs frozen v49
+348	-n	修复的写入纪律	4	4	0	location/domain; unchanged vs frozen v49
+349	-n	两种处置由人决定	0	0	1	numeric-comment
+350	-n	只余删边	7	7	0	numeric-comment
+351	-n	下游仍指向该任务、该任务未归档	4	4	0	location/domain; unchanged vs frozen v49
+352	-n	旧任务未归档 → 归档旧任务|边已重连但旧任务未归档	0	0	1	numeric-comment
+353	-n	先补建 / 重连、后归档	2	2	0	numeric-comment
+354	-n	替换指向为空	2	2	0	location/domain; unchanged vs frozen v49
+355	-n	新建替代	34	34	0	location/domain; unchanged vs frozen v49
+356	-n	继任任务	4	4	0	numeric-comment
+357	-n	无当前任务时：T 进行中或规划中但前置含非正常	0	0	1	numeric-comment
+358	-n	无当前任务时按 §9.1	2	2	0	numeric-comment
+359	-n	继任者已建	6	6	0	location/domain; unchanged vs frozen v49
+360	-n	唯一清空点	1	1	0	location/domain; unchanged vs frozen v49
+361	-n	写入矩阵	24	24	0	location/domain; unchanged vs frozen v49
+362	-n	P 的指向不得置空	2	2	0	location/domain; unchanged vs frozen v49
+363	-n	唯一 / 不再 / 一律 / 只」	2	2	0	location/domain; unchanged vs frozen v49
+364	-n	新建替代	8	8	0	location/domain; unchanged vs frozen v49
+365	-n	已确立的 P 继任关系不得置空|类型 4 恢复边界	17	17	0	location/domain; unchanged vs frozen v49
+366	-n	当前登记标记|返工登记准备|返工登记发布|返工登记取消	11	11	0	location/domain; unchanged vs frozen v49
+367	-n	P 角色解析|正常完成的 P 终点|角色完整性守卫	4	4	0	location/domain; unchanged vs frozen v49
+368	-n	下游范围为未归档下游|类型 4 恢复边界（唯一源）|返工登记（动作序列与窗口的唯一源）	3	3	0	location/domain; unchanged vs frozen v49
+369	-n	机制持久化范围（唯一源）|提交范围.*按.*§3|持久化.*主设计 §3	13	13	0	location/domain; unchanged vs frozen v49
+370	-n	账本 / 前置集合 / 替换指向 / 返工来源|账本与前置集合.*持久化|提交范围含账本	3	3	0	location/domain; unchanged vs frozen v49
+371	-n	标识占用校验（唯一源）	1	1	0	numeric-comment
+372	-n	移交完成的持久判据	2	2	0	numeric-comment
+373	-n	重新生成后重校验|已落盘的替换指向|原预写标识已被其他身份占用|按 §7.8 标识占用规则	7	7	0	numeric-comment
+375	-n	重连目标可为异常	0	0	1	numeric-comment
+376	-n	重连目标为异常时按	7	7	0	numeric-comment
+377	-n	建边目标\*\*账本为“异常”	2	2	0	numeric-comment
+378	-n	\*\*重连类\*\*	1	1	0	numeric-comment
+379	-n	被重连的未归档下游	2	2	0	numeric-comment
+380	-n	重连只要求两端存在	3	3	0	numeric-comment
+381	-n	先按类型 5 补建	2	2	0	numeric-comment
+382	-n	自成一个提交组	2	2	0	numeric-comment
+383	-n	重连目标为“异常”仍补齐重连	1	1	0	numeric-comment
+384	-n	回指产生者位置	1	1	0	numeric-comment
+385	-n	字段矩阵行义务	4	4	0	numeric-comment
+386	-n	回指产生者（依据	0	0	1	numeric-comment
+387	-n	v46 同步	0	0	1	numeric-comment
+388	-n	含已预写标识	6	6	0	numeric-comment
+390	-n	建边与返工加边 / 重连四类	1	1	0	numeric-comment
+391	-n	建边与返工加边 / 重连	2	2	0	numeric-comment
+392	-n	\*\*建边 / 返工加边\*\*	1	1	0	numeric-comment
+393	-n	开工该未完成前置	1	1	0	numeric-comment
+394	-n	已归档者不重复归档	4	4	0	numeric-comment
+395	-n	本步不为旧任务新增出口	1	1	0	numeric-comment
+396	-n	完成旧口径移交确认后按同一条件补做	1	1	0	numeric-comment
+397	-n	前置不全正常时按挂起阶段的对账行	0	0	1	numeric-comment
+399	-n	行内递归指定的挂起任务；递归只切换本次判定上下文	1	1	0	numeric-comment
+400	-n	按 §9.1 第二段第 1 行处理 R	1	1	0	numeric-comment
+401	-n	活动期建边 / 返工加边后随前置归档	1	1	0	numeric-comment
+402	-n	活动期建边后随前置归档	0	0	1	numeric-comment
+403	-n	最后归档旧任务（已归档者不重复归档）|补齐下游删边与旧任务归档（已归档者不重复归档）	3	3	0	numeric-comment
+404	-o	已归档者不重复归档	5	5	0	numeric-comment
+405	-n	旧任务已归档，不重复归档	0	0	1	numeric-comment
+406	-n	前置本身挂起时，以它为“对应 T”回到本段并完整匹配本表	1	1	0	numeric-comment
+407	-n	R 自身挂起时以 R 为“对应 T”回到本段并匹配各行	1	1	0	numeric-comment
+408	-n	递归处理该未完成前置（其本身挂起时以其为本段上下文）	2	2	0	numeric-comment
+409	-n	下沉是『当前任务』行与第二段第 3 行内的分支	1	1	0	numeric-comment
+410	-n	下沉是『当前任务』行内的分支	0	0	1	numeric-comment
+411	-n	Q 自身挂起且有未归档 R_Q	1	1	0	numeric-comment
+412	-n	§9.1第二段（M5，唯一规则源）	1	1	0	numeric-comment
+413	-n	§8.4（M6）为引用式接手摘要	1	1	0	numeric-comment
+414	-n	§9.1第二段（M5）、§8.4（M6）	0	0	1	numeric-comment

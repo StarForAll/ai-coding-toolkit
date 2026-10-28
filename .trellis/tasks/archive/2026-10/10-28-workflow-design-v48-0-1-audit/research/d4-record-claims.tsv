@@ -1,0 +1,22 @@
+file_line	claim
+docs/workflows/workflow-design.md:314	**建边 / 返工加边**
+docs/workflows/workflow-design.md:318	族 2 覆盖建边与返工加边
+docs/workflows/workflow-design.md:72	建边与返工加边 / 重连四类
+docs/workflows/workflow-design.md:660	开工该未完成前置
+docs/workflows/workflow-design.md:682	已归档者不重复归档
+docs/workflows/workflow-design.md:389	本步不为旧任务新增出口
+docs/workflows/workflow-design.md:5	v49 修复：族表纳入返工加边
+docs/workflows/workflow-design.md:911	一次挂起任务在返工期间被加入未完工前置
+docs/workflows/依赖机制设计说明.md:253	前置不全正常时按主设计 §9.1 第二段对应行
+docs/workflows/依赖机制设计说明.md:317	完成旧口径移交确认后按同一条件补做
+docs/workflows/依赖机制设计说明.md:510	## 37. 本版修订（v49）
+.trellis/spec/guides/design-review-thinking-guide.md:375	25. **枚举成员全集
+.trellis/spec/guides/design-review-thinking-guide.md:376	26. **「按 §N」必须落到命中行
+.trellis/spec/docs/index.md:389	# v49 additions
+.trellis/spec/docs/index.md:305	Archived-prerequisite source list（已归档前置合法来源）
+.trellis/spec/docs/index.md:330	Probe scope is the main design
+docs/workflows/workflow-design.md:793	旧口径存量挂起尚未移交
+docs/workflows/workflow-design.md:3	version: v49
+docs/workflows/workflow-design.md:13	# 工作流整体设计（v49 · 修订）
+docs/workflows/依赖机制设计说明.md:4	design: workflow-design.md v49
+docs/workflows/依赖机制设计说明.md:13	(./workflow-design.md) v49 同步

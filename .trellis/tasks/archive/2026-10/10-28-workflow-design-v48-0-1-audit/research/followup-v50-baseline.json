@@ -1,0 +1,44 @@
+{
+  "git_status": " M .trellis/spec/docs/index.md\n M .trellis/spec/guides/design-review-thinking-guide.md\n M docs/workflows/workflow-design.md\n M docs/workflows/依赖机制设计说明.md\n?? .trellis/tasks/10-28-workflow-design-v48-0-1-audit/\n",
+  "head": "a82a54f2f2bd8f047be11cde703a19ce7b3ea2c0",
+  "sha256": {
+    "docs/workflows/workflow-design.md": "4a96d98ab392b47f50eb4649afa65845dea17a2a1b8de15fdba0dbf63244fc20",
+    "docs/workflows/依赖机制设计说明.md": "d0f6385d671fc05b64d35efb5e1e89fe5d137123aa0fddd2258ea64c0e24999d",
+    ".trellis/spec/docs/index.md": "419aae85285306b1018618696d770dcf73872e58ee1a841a2d4eec3dac30c828",
+    ".trellis/spec/guides/design-review-thinking-guide.md": "39bdf9bd8816b4b5347bbde84c72ae6a60545edadbd072abb381af8ff22a363d"
+  },
+  "versions": {
+    "main": "v49",
+    "companion": "v49"
+  },
+  "archive_action_call_count": 4,
+  "archive_action_guarded_count": 2,
+  "archive_actions": [
+    {
+      "line": 682,
+      "call": "最后归档旧任务",
+      "guard": true,
+      "clause": "最后归档旧任务（已归档者不重复归档）"
+    },
+    {
+      "line": 683,
+      "call": "最后归档旧任务",
+      "guard": false,
+      "clause": "     - **改判为放弃**（只在继任者不存在时，由人决定）：**一般任务**——说明与替换指向按 §7.8 识别字段写入矩阵（改判放弃-一般行）写入与置空，按 §6.6 实施第 2 步的删边变体删除未归档下游的前置边（只借用该步的删边动作，不重新发起放弃），最后归档旧任务"
+    },
+    {
+      "line": 683,
+      "call": "最后归档旧任务",
+      "guard": false,
+      "clause": "**项目层任务 P**——沿用已预写的替换指向建替代任务并重连（按 §7.8 识别字段写入矩阵，改判放弃-P 行不新增写入），最后归档旧任务"
+    },
+    {
+      "line": 684,
+      "call": "补齐下游删边与旧任务归档",
+      "guard": true,
+      "clause": "     - **无替换指向**（有原因、无指向）：补齐下游删边与旧任务归档（已归档者不重复归档）——识别按字段，不枚举来源"
+    }
+  ],
+  "review_v1_sha256": "f6d3a0c0c884ba4133963020beb88f8a74454519fbba3178ffc02ec33ac4abae",
+  "review_v2_sha256": "74a8198ec3b38ba73112ae83306ed07a4974f4a0a4e4687a105a9d620f24cdf6"
+}

@@ -1,0 +1,10 @@
+{
+  "pre_edit_report_sha256": "03afc27d800031a297027935551d4a19b3ea05d145c495269da1d3ad5c4c2ca0",
+  "reference_count": 44,
+  "source_sha256_before_edit": {
+    "docs/workflows/workflow-design.md": "a91d2f4d119734aa60e3fbad3b49cf2a1ca8372d9ebc5540e3e7cf9f7b87d18c",
+    "docs/workflows/依赖机制设计说明.md": "ebcc8e33c716c4e2af7fe50dd23adbb32b748df054c218a0d6e9974515a1576f",
+    ".trellis/spec/docs/index.md": "dd223a1fde07ecd95367ed60864386e9c3a9b493b2e5b6686c4f9a1fb487b781",
+    ".trellis/spec/guides/design-review-thinking-guide.md": "6cbb0c69aa41ad29883e8e52a6f3b1588c9608bd24ba31bc913baa5a9593924f"
+  }
+}

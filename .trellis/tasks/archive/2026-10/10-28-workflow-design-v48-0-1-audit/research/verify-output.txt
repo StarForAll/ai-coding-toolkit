@@ -1,0 +1,191 @@
+OK manifest rows=25 (expected 25)
+OK M1: old=0 new=1
+  M1	docs/workflows/workflow-design.md	314
+OK M2: old=0 new=1
+  M2	docs/workflows/workflow-design.md	318
+OK M3: old=0 new=1
+  M3	docs/workflows/workflow-design.md	66
+OK M4: old=0 new=1
+  M4	docs/workflows/workflow-design.md	72
+OK M5: old=0 new=1
+  M5	docs/workflows/workflow-design.md	802
+OK M6: old=0 new=1
+  M6	docs/workflows/workflow-design.md	775
+OK M7a: old=0 new=1
+  M7a	docs/workflows/workflow-design.md	660
+OK M7b: old=0 new=1
+  M7b	docs/workflows/依赖机制设计说明.md	253
+OK M8: old=0 new=1
+  M8	docs/workflows/workflow-design.md	832
+OK M9: complete new=1; old only as part of new=1; masked old=0
+  M9	docs/workflows/workflow-design.md	911
+OK M10a: old=0 new=1
+  M10a	docs/workflows/workflow-design.md	682
+OK M10b: old=0 new=1
+  M10b	docs/workflows/workflow-design.md	684
+OK M11: old=0 new=1
+  M11	docs/workflows/workflow-design.md	389
+OK M12: old=0 new=1
+  M12	docs/workflows/依赖机制设计说明.md	317
+OK M14: full spec probe block old=0 new=1
+  M14	.trellis/spec/docs/index.md	multi-line / duplicate-safe target checked above
+OK M15: guide methods 25/26 new=1, old heading masked=0
+  M15	.trellis/spec/guides/design-review-thinking-guide.md	multi-line / duplicate-safe target checked above
+OK M14b: old=0 new=1
+  M14b	.trellis/spec/docs/index.md	305
+OK M13a: scoped current version field new=1 (old may remain in history)
+OK M13b: scoped current version field new=1 (old may remain in history)
+OK M13c: scoped current version field new=1 (old may remain in history)
+OK M13d: scoped current version field new=1 (old may remain in history)
+OK M13f: scoped current version field new=1 (old may remain in history)
+OK M13g: scoped current version field new=1 (old may remain in history)
+OK M13h: scoped current version field new=1 (old may remain in history)
+OK M13e: scoped current version field new=1 (old may remain in history)
+OK family data rows=4 expected=4
+OK matrix data rows=14 expected=14
+OK combo data rows=12 expected=12
+OK transitions data rows=7 expected=7
+OK windows data rows=9 expected=9
+OK combination rows changed only M7 row: changed=[6], target_index=6
+OK combo row 1 unchanged
+OK combo row 2 unchanged
+OK combo row 3 unchanged
+OK combo row 4 unchanged
+OK combo row 5 unchanged
+OK combo row 6 unchanged
+OK combo row 8 unchanged
+OK combo row 9 unchanged
+OK combo row 10 unchanged
+OK combo row 11 unchanged
+OK combo row 12 unchanged
+OK family source remains four families
+OK family 2 includes both edge writers
+OK matrix has no bare dash cell
+OK main/companion versions v49; companion current+history design count=2
+OK version history appendix v49 and companion §37 exist
+OK fix-notes contains M1
+OK fix-notes contains M2
+OK fix-notes contains M3
+OK fix-notes contains M4
+OK fix-notes contains M5
+OK fix-notes contains M6
+OK fix-notes contains M7a
+OK fix-notes contains M7b
+OK fix-notes contains M8
+OK fix-notes contains M9
+OK fix-notes contains M10a
+OK fix-notes contains M10b
+OK fix-notes contains M11
+OK fix-notes contains M12
+OK fix-notes contains M13a
+OK fix-notes contains M13h
+OK fix-notes contains M14
+OK fix-notes contains M14b
+OK fix-notes contains M15
+Probe commands: 61
+OK 0 expected=0 rg -n "按 §3 有效（" docs/workflows/workflow-design.md                 # 0 hits
+OK 0 expected=0 rg -n "有当前任务，且该任务未归档、账本为|有当前任务，但该任务未归档、账本为|有当前任务，但该任务已归档" docs/workflows/workflow-design.md   # 0 hits (old condition-style rows gone)
+OK 9 expected=9 rg -n "按 §3 有效|按 §3 无效" docs/workflows/workflow-design.md   # 9 lines; source/reference/historical forms; a count alone does not prove the call domain
+OK 3 expected=3 rg -n "依赖满足 =|就绪.*前置集合全部为" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 3 lines as of v34: 主设计 §3 就绪 + §4.3 依赖满足 + 配套 §3 就绪 (all others must be references)
+OK 5 expected=5 rg -n "满足判定按 §4.3|按主设计 §4.3" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 5 lines: 主设计 §3 就绪；配套 §3 就绪、§5 判定规则、§6.7 建边（“该态按主设计 §4.3 视为未满足”）、§22 revision record (stable since v34; 主设计 §4.3's own bullet states the rule, not a reference, so it does not match this probe)
+OK 0 expected=0 rg -n "指向已归档、规划中且前置未满足" docs/workflows/依赖机制设计说明.md   # 0 hits (companion references 主设计 §3 instead)
+OK 0 expected=0 rg -n "或为“正常但未归档”的任务|前置未完工（或为" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 0 hits (satisfaction exception folded into 未完工 enumeration)
+OK 14 expected=14 rg -n "视为无当前任务" docs/workflows/workflow-design.md   # 14 lines in current main; check source/reference/historical context, not guessed invalid lists
+OK 2 expected=2 rg -n "继任者即新的 P" docs/workflows/workflow-design.md                 # 2 hits: the §6.5 source + the v35 appendix record; every other place must point at §6.5, not restate it
+OK 0 expected=0 rg -n '异常前置走替换|前置为异常时按删边或替换' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # 0 hits as of v36 (all point at §7.4)
+OK 11 expected=None rg -n '按 §7.4 处置|按主设计 §7.4' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # source references and historical records; inspect all hits, since recovery/role classification may change their number
+OK 0 expected=0 rg -n '或删边后不再等待$' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # 0 hits: no un-narrowed copy of the abnormal-downstream sentence
+OK 2 expected=None rg -n '预生成.{0,4}新 P' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # main matrix row + v37 historical record; action steps reference matrix
+OK 4 expected=None rg -n '修复的写入纪律' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # main source + companion reference + historical records; inspect context
+OK 0 expected=0 rg -n '两种处置由人决定' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # 0 hits (variant is decided at 发起 since v38)
+OK 7 expected=7 rg -n '只余删边' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # 7 hits as of v40, all in version-收口 blockquotes / revision records (judge by context, not line numbers — they shift每版); 0 normative hits — the disposition is now a field sentence
+OK 4 expected=None rg -n '下游仍指向该任务、该任务未归档' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # normative definition only at main §7.4; its qualifier is 未归档下游; remaining hits historical
+OK 0 expected=0 rg -n '旧任务未归档 → 归档旧任务|边已重连但旧任务未归档' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # 0 hits — the forward-completion order lives only in §7.7 类型 5
+OK 2 expected=2 rg -n "先补建 / 重连、后归档" docs/workflows/workflow-design.md      # 2 hits: §7.7 类型 5 (sole source) + v40 record; the sequence wording must not appear in §6.5 / 配套 §6.4 / 配套 §8
+OK 2 expected=None rg -n '替换指向为空' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # historical old-shape wording only; current business clears and controlled repairs reference the §7.8 matrix/domain
+OK 34 expected=None rg -n '新建替代' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # location scan: classify role/edge-origin/action/matrix/history hits; do not demand preallocation words at role or edge-origin sites
+OK 4 expected=4 rg -n '继任任务' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # 4 hits: §3 term + §9.1 uncompleted-project ready row + §9.1 note + v38 appendix record; readiness/ordering still owned by §3/§7.6
+OK 0 expected=0 rg -n '无当前任务时：T 进行中或规划中但前置含非正常' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # 0 hits (the §8.4 summary copy is now a reference, v39)
+OK 2 expected=2 rg -n '无当前任务时按 §9.1' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # 2 hits: §8.4 第三段 (normative) + v31 appendix record
+OK 6 expected=None rg -n '继任者已建' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # main §7.4 sole abnormal predicate, §7.7 action branch, review-axis names and historical records; normal P parser must not call this predicate
+OK 1 expected=None rg -n '唯一清空点' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # historical records only; no normative unconditional sole-clear rule
+OK 24 expected=None rg -n '写入矩阵' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # exactly one full main matrix (14 rows as of v46: original 10 plus prepare/publish/cancel and the dependency-ID row); remaining hits references/history; validate semantics separately
+OK 2 expected=None rg -n 'P 的指向不得置空' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # historical only; current guard is 已确立的 P 继任关系不得置空, allowing legitimate original empty values
+OK 2 expected=None rg -n '唯一 / 不再 / 一律 / 只」' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # GATE-EXISTENCE CHECK ONLY (not a sweep): this literal string only matches the gate's own wording in §0 写作约定 + 口径 10⑤ — it proves the closed-assertion gate exists, it cannot detect newly written closed assertions. The actual assertion × path enumeration is a human/LLM judgment done under 口径 10⑤ and recorded in the review report; do not treat this probe passing as that check having run
+OK 8 expected=None rg -n "新建替代" docs/workflows/依赖机制设计说明.md   # action 第2步 inherits 当前前置集合; 发起校验 matches; role/history hits need no preallocation wording
+OK 17 expected=None rg -n "已确立的 P 继任关系不得置空|类型 4 恢复边界" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # current guard defined in main §7.8; repair/read-only exceptions cite it
+OK 11 expected=None rg -n "当前登记标记|返工登记准备|返工登记发布|返工登记取消" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # main matrix owns fields; §6.4 owns sequence/windows; mirror references; verify no completion-only clear path
+OK 4 expected=None rg -n "P 角色解析|正常完成的 P 终点|角色完整性守卫" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # one parser at main §6.5, normal terminal must retain downstream dependency edges
+OK 3 expected=None rg -n "下游范围为未归档下游|类型 4 恢复边界（唯一源）|返工登记（动作序列与窗口的唯一源）" docs/workflows/workflow-design.md   # three source anchors, one occurrence each
+OK 13 expected=None rg -n '机制持久化范围（唯一源）|提交范围.*按.*§3|持久化.*主设计 §3' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # full mechanism field set at main §3 only; other matches reference source; group atomicity does not imply native-task transaction
+OK 3 expected=None rg -n '账本 / 前置集合 / 替换指向 / 返工来源|账本与前置集合.*持久化|提交范围含账本' docs/workflows/workflow-design.md 'docs/workflows/依赖机制设计说明.md' # old enumerations allowed in metadata/history only, not current normative persistence definitions; inspect context, not counts
+OK 1 expected=1 rg -n '标识占用校验（唯一源）' docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md # 1 hit, main §7.8; check other-identity conflict blocks type 4 without overwriting; confirmed-original restoration and same-successor continuation remain legal
+OK 2 expected=2 rg -n '移交完成的持久判据' docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md # 2 hits, main §6.4 source and §7.7 reference; missing/uncommitted completion fact must block automatic clearing even when historical R tasks are archived
+OK 7 expected=7 rg -n '重新生成后重校验|已落盘的替换指向|原预写标识已被其他身份占用|按 §7.8 标识占用规则' docs/workflows/workflow-design.md # 7 hits as of v46: §6.5 / §6.6 source calls, §7.7 type5 reference, §7.8 two-stage source and type4 exception, plus the v46 §6.4 位置/标识占用分域句 and the matrix dependency-ID row; all new calls replay to §7.8 preconditions
+OK 0 expected=0 rg -n "重连目标可为异常" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 0 hits as of r3: the pre-r3 license phrase was replaced by the pinned referent (see 被重连的未归档下游 below); a nonzero count means an unpinned copy returned
+OK 7 expected=7 rg -n "重连目标为异常时按" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 7 hits as of v48: action-side references (main §7.7 type1-P / type5 guard / §6.5 forward-completion conclusion, companion §6.4 conclusion + §8 type5) + B9 acceptance sentence + §7.7 window ④; below 7 means a reference site was lost
+OK 2 expected=2 rg -n "建边目标\*\*账本为“异常”" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 2 hits: main :618 + companion :219 (bold markers inside the phrase, matched verbatim); losing one leaves the 建边 condition unscoped
+OK 1 expected=1 rg -n "\*\*重连类\*\*" docs/workflows/workflow-design.md   # 1 hit: §4.4 family 4; the only family that lets an archived successor be a reconnect prerequisite
+OK 2 expected=2 rg -n "被重连的未归档下游" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 2 hits: §7.5 source + companion mirror; the license's referent must stay pinned at the source
+OK 3 expected=3 rg -n "重连只要求两端存在" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 3 hits: §7.5 source + companion mirror + §4.4 family-4 cell (same license, by design); the license's scope must stay single-phrased
+OK 2 expected=2 rg -n "先按类型 5 补建" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 2 hits as of v48: 1 normative (§10 self-check) + 1 record-domain (v47 appendix record, judged by context); losing the self-check hit drops the count and is the F1 failure mode
+OK 2 expected=2 rg -n "自成一个提交组" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 2 hits as of v48: §6.4 step 2 + matrix row 14; the rewrite-commit timing must stay single-phrased across both sites
+OK 1 expected=1 rg -n "重连目标为“异常”仍补齐重连" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 1 hit as of v48: §10 self-check scenario acceptance for the reconnection license
+OK 1 expected=1 rg -n "回指产生者位置" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 1 hit as of v48: §0 (sole source); after the v48 dedup no defining restatement may remain at :66/:899/:910
+OK 4 expected=4 rg -n "字段矩阵行义务" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 4 hits as of v48: §0 named clause + three reference sites (:66/:899/:910); count below 4 means a reference site was lost
+OK 0 expected=0 rg -n "回指产生者（依据" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 0 hits as of v48: the :899 short-form restatement is demoted to a §0 reference
+OK 0 expected=0 rg -n "v46 同步" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 0 hits as of v48: companion header version kept aligned with the design frontmatter
+OK 6 expected=6 rg -n "含已预写标识" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 6 hits as of v48: 5 normative (main 3: §6.5 / §6.6 发起 + §7.8 时点 1; companion 2: §6.4 / §6.5 发起) + 1 record-domain (companion §36); occupancy scope must include prewritten identifiers everywhere the check is invoked
+OK 1 expected=1 rg -n "建边与返工加边 / 重连四类" docs/workflows/workflow-design.md   # 1 hit: only the second enumeration has 四类; the first ends after 重连
+OK 2 expected=2 rg -n "建边与返工加边 / 重连" docs/workflows/workflow-design.md   # 2 hits: both path-family enumerations; one includes 四类 and one does not
+OK 1 expected=1 rg -n "\*\*建边 / 返工加边\*\*" docs/workflows/workflow-design.md   # 1 hit: family-2 source cell
+OK 4 expected=4 rg -n "开工该未完成前置" docs/workflows/workflow-design.md   # 4 hits: hanging-route row, handoff mirror, combination-row exit and self-check
+OK 2 expected=2 rg -n "已归档者不重复归档" docs/workflows/workflow-design.md   # 2 hits: type-5 build and no-pointer branches
+OK 1 expected=1 rg -n "本步不为旧任务新增出口" docs/workflows/workflow-design.md   # 1 hit: baseline-change local-scope sentence
+OK 1 expected=1 rg -n "完成旧口径移交确认后按同一条件补做" docs/workflows/依赖机制设计说明.md   # 1 hit: scenario-table handoff prerequisite
+OK 0 expected=0 rg -n "前置不全正常时按挂起阶段的对账行" docs/workflows/workflow-design.md docs/workflows/依赖机制设计说明.md   # 0 hits: obsolete hanging-reconciliation exit
+OK all registered probes executed (61 commands; expected >=60)
+OK all probe expectations match their comments / v49 annotations
+OK reference hit M5 §6.4 step-5: source and cited step/action present
+OK reference hit M6 §9.1 second-stage: source and cited step/action present
+OK reference hit M7a §9.1 second-stage: source and cited step/action present
+OK reference hit M7b mirror: source and cited step/action present
+OK reference hit M9 acceptance: source and cited step/action present
+OK F2 route statement preserves hit-stop semantics and clarifies only row-internal substep
+OK D4 grep-F claim present: docs/workflows/workflow-design.md :: **建边 / 返工加边**
+OK D4 grep-F claim present: docs/workflows/workflow-design.md :: 族 2 覆盖建边与返工加边
+OK D4 grep-F claim present: docs/workflows/workflow-design.md :: 建边与返工加边 / 重连四类
+OK D4 grep-F claim present: docs/workflows/workflow-design.md :: 开工该未完成前置
+OK D4 grep-F claim present: docs/workflows/workflow-design.md :: 已归档者不重复归档
+OK D4 grep-F claim present: docs/workflows/workflow-design.md :: 本步不为旧任务新增出口
+OK D4 grep-F claim present: docs/workflows/workflow-design.md :: v49 修复：族表纳入返工加边
+OK D4 grep-F claim present: docs/workflows/workflow-design.md :: 一次挂起任务在返工期间被加入未完工前置
+OK D4 grep-F claim present: docs/workflows/依赖机制设计说明.md :: 前置不全正常时按主设计 §9.1 第二段对应行
+OK D4 grep-F claim present: docs/workflows/依赖机制设计说明.md :: 完成旧口径移交确认后按同一条件补做
+OK D4 grep-F claim present: docs/workflows/依赖机制设计说明.md :: ## 37. 本版修订（v49）
+OK D4 grep-F claim present: .trellis/spec/guides/design-review-thinking-guide.md :: 25. **枚举成员全集
+OK D4 grep-F claim present: .trellis/spec/guides/design-review-thinking-guide.md :: 26. **「按 §N」必须落到命中行
+OK D4 grep-F claim present: .trellis/spec/docs/index.md :: # v49 additions
+OK D4 grep-F claim present: .trellis/spec/docs/index.md :: Archived-prerequisite source list（已归档前置合法来源）
+OK D4 grep-F claim present: .trellis/spec/docs/index.md :: Probe scope is the main design
+OK D4 grep-F claim present: docs/workflows/workflow-design.md :: 旧口径存量挂起尚未移交
+OK D4 grep-F claim present: docs/workflows/workflow-design.md :: version: v49
+OK D4 grep-F claim present: docs/workflows/workflow-design.md :: # 工作流整体设计（v49 · 修订）
+OK D4 grep-F claim present: docs/workflows/依赖机制设计说明.md :: design: workflow-design.md v49
+OK D4 grep-F claim present: docs/workflows/依赖机制设计说明.md :: (./workflow-design.md) v49 同步
+OK D4 claims tested=21
+Git status:
+ M .trellis/spec/docs/index.md
+ M .trellis/spec/guides/design-review-thinking-guide.md
+ M docs/workflows/workflow-design.md
+ M docs/workflows/依赖机制设计说明.md
+?? .trellis/tasks/10-28-workflow-design-v48-0-1-audit/
+
+OK no out-of-bound changed files: []
+OK git diff --check passes
+OK changed-line fullwidth/halfwidth parenthesis balance: []
+OK fix-notes generated locations resolve to their manifest anchors: []
+OK v49 appendix / companion § labels match cited source ranges: []
+OK first-round review-report.md preserved byte-for-byte
+OK active task retained
+RESULT all checks passed
