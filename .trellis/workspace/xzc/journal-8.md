@@ -383,3 +383,30 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 383: 审查 skill 内部化：提案定稿并落入实现方案
+<!-- trellis-session: v=2 fp=55729b54f7363aaf -->
+
+**Date**: 2026-10-29
+**Task**: 审查 skill 内部化：提案定稿并落入实现方案
+**Branch**: `main`
+
+### Summary
+
+把 check 阶段多 agent 辅助审查定为工作流内部 skill（wf-task-review / wf-task-review-action）：经五轮人审收敛为全人工、只对复杂任务、只在 check 阶段、不可跳过、报告随任务进库、只辅助不指挥、不可用须人声明才回退。契约写入 plan §8.5 与附录 C、新增 R1–R11 探针、§9-C17 放开 meta.wf.review/paused、G7 定稿并登记全局版移除。同批修掉缺口清单 A4–A10/B1–B3/C1–C10/D1–D2/E1–E5；A1/A2/A3/A11 留待另开任务。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f48ea3e` | docs(task): 登记检查阶段多 agent 审查 skill 内部化提案与实现方案文档缺口 |
+| `f53c7ab` | docs(task): 按裁决收紧审查提案（命名、任务标识入参、人工调用、辅助非指挥） |
+| `eb3cc85` | docs(task): 采纳第三轮裁决（全人工、复杂任务限定、全局版退役、报告随任务） |
+| `7e3ab2a` | docs(task): 采纳第四轮裁决（强制审查、不可用回退、两档分级、去 legacy） |
+| `3d97fd0` | docs(task): 定稿提案（Q1 meta 标记、Q2 不可弃权、Q3 人判不可用、Q4 doctor 统计） |
+| `ae0eeef` | docs(plan): 落地 check 阶段审查契约（§8.5）并修掉 A4-A10/B/C/D/E 字面缺陷 |
+
+### Status
+
+[OK] **Completed**
