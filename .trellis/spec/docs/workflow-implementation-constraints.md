@@ -142,6 +142,26 @@ throwaway fixture on 2026-10-28. Do not re-derive them from the docs.
 
 ---
 
+## Check-stage review (plan §8.5)
+
+- Scope is narrow on purpose: **complex tasks only**, **check stage only**, **manual invocation only**.
+  Reviewer side runs in a *different* CLI; same CLI with another model does not count.
+- The only input is a **task identifier** (dep id or slug). Rounds, task files, diff and focus are all
+  derived by the skill; never pass them in.
+- Reports live under `$TASK_DIR/review/round-{N}/` and travel with the task. They are **not** a record
+  type: no `task.json.status`, no ledger, no completion criterion.
+- Reports are **advice, not orders**. The main agent re-checks every finding, may fix differently or
+  reject it, and must record rejections and deviations in `action.md`.
+- Reviewing is **mandatory** for complex tasks: no review means no human judgment and no `wf close`.
+  The single exception is a human declaring "the auxiliary agent is unavailable"; the main agent may
+  only cite it, never infer it.
+- `meta.wf.review = complex` marks the judgment (plan §9-C17 opened `meta.wf.*` to three fixed keys:
+  `deps` / `review` / `paused`). Doctor reads it; nothing else does.
+- The pair `wf-task-review` / `wf-task-review-action` is module-owned (installed and uninstalled with
+  the module). Once it lands, the global `skills/multi-cli-review*` pair is removed everywhere.
+
+---
+
 ## Known traps
 
 | Trap | Why it bites | Rule |
@@ -159,5 +179,5 @@ throwaway fixture on 2026-10-28. Do not re-derive them from the docs.
 ## Where to read more
 
 - Plan: `docs/workflows/workflow-implementation.md` — §3 (state / ledger / entries), §4 (platforms),
-  §5 (ZCode hardening), §7 (upgrade / uninstall), §9 (conflicts and decisions).
+  §5 (ZCode hardening), §7 (upgrade / uninstall), §8.5 (check-stage review), §9 (conflicts and decisions).
 - Design: `docs/workflows/workflow-design.md` — §2 invariants, §4 states, §7 dependency mechanism.

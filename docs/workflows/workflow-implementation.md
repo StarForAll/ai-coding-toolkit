@@ -104,11 +104,11 @@ compatibility: Trellis >= 0.7.0-beta.0（变体链首次出现），实测基线
 
 “零补丁”指**上游受管文件**的正文不被改写：除上述一行与 ZCode 一个文件的命令串以外，上游生成物保持原样。模块全部语义在自有路径与 `meta` 自由区。
 
-### 1.3 零补丁地基（实测）
+### 1.3 零补丁地基（`实测`，2026-10-28，逐一在临时夹具里跑 `trellis update --dry-run` 并看 `changedFiles` / `unchangedFiles` 分类）
 
 三条实测结论构成地基，实现时任何“要不要改上游文件”的判断都以此为准：
 
-| 编辑动作 | `trellis update --dry-run` 结果 | 实现含义 |
+| 编辑动作 | `trellis update --dry-run` 结果（夹具回放，2026-10-28） | 实现含义 |
 |---|---|---|
 | 在 `AGENTS.md` 的 `<!-- TRELLIS:START/END -->` **块外**追加 | **无漂移**（块外字节原样保留，命中 `unchangedFiles`） | 块外追加是安全通道 |
 | 修改 `.trellis/config.yaml` 任意一行 | **有漂移**（`config.yaml` 在模板文件集内，哈希不符进入 `changedFiles`） | 那一行必然被看见，必须提供还原路径 |
@@ -127,7 +127,7 @@ compatibility: Trellis >= 0.7.0-beta.0（变体链首次出现），实测基线
 | **T1a 混合所有权（零漂移追加）** | `AGENTS.md` 块外 NL 路由段（带 `<!-- wf-nl-routing-start/end -->` 标记）；`.trellis/.developer` 的 `workflow=wf` 行 | 只追加，不修改块内与其他行 |
 | **T1b 官方旋钮（1 行）** | `.trellis/config.yaml` 的 `default_workflow: wf`；卸载时还原为上游注释行 | 期望它在 `trellis update` 的 “Modified by you” 中出现 |
 | **T1c 受管例外（仅 ZCode，1 文件）** | `.zcode/config.json` 的四条 hook 命令改为加固形态（§5.2） | 必须登记漂移债务；升级后人工比对上游模板；撤销条件见 §5.5 |
-| **T2 外星路径** | `.trellis/scripts/wf/**`、`.trellis/workflows/wf.md`、`.trellis/dependencies/**`、两个 skill 根下的 `wf*` 目录、`.trellis/.runtime/wf/install-record.json` | 全部模块自有，上游不扫不认 |
+| **T2 外星路径** | `.trellis/scripts/wf/**`、`.trellis/workflows/wf.md`、`.trellis/dependencies/**`、四个 skill 根下的 `wf*` 目录、`.trellis/.runtime/wf/install-record.json` | 全部模块自有，上游不扫不认 |
 | **T3 交付介质** | 模块源（本仓库的产品树）+ 安装器；升级时的**新版资产输入** | 安装从模块源运行；运行时自包含；升级必须显式传入模块源 |
 
 **T0b 的依据**（`实测`）：`.trellis/.template-hashes.json` 的 918 条受管路径中不含任何 `.trellis/spec/**` 或 `.trellis/tasks/**` 条目——上游不管这两棵树，因此它们既不是“受管写入面”，也不能算“零补丁”的破坏对象。设计稿要求 P 产出“规格骨架”（§5.2），落点正在这里。
@@ -145,9 +145,16 @@ module_owned_paths:                     # T2：安装/升级本来就要写
   - .trellis/dependencies/ledger.json
   - .agents/skills/wf/**
   - .agents/skills/wf-repair/**
+  - .agents/skills/wf-task-review/**
+  - .agents/skills/wf-task-review-action/**
   - .claude/skills/wf/**
   - .claude/skills/wf-repair/**
+  - .claude/skills/wf-task-review/**
+  - .claude/skills/wf-task-review-action/**
   - .trellis/.runtime/wf/install-record.json       # 本机态，.trellis/.gitignore 已忽略 .runtime/
+  - .trellis/.runtime/wf/pre-install/**            # 安装前快照（§2.4）
+  - .trellis/.runtime/wf/upgrade-backup-*/**       # 升级回滚快照（§7.4）
+  - .trellis/.runtime/wf/upgrade-attempt.json      # 升级 attempt 状态（§7.4）
 mixed_ownership_appends:                # T1a
   - { path: AGENTS.md, marker: "<!-- wf-nl-routing-start -->" }
   - { path: .trellis/.developer, line: "workflow=wf" }
@@ -159,7 +166,7 @@ guarded_local_fix:                      # T1c：ZCode 加固（仅当平台存�
       debt: "trellis update 后人工比对模板" }
 ```
 
-任务记录写入不在此清单里单列，因为它属于基底的任务文件：机制只写 `task.json` 的 `meta.wf` 键，不新增文件、不新增字段。
+任务记录写入不在此清单里单列，因为它属于基底的任务文件：机制只写 `task.json` 的 `meta.wf.*` 固定键（`deps` / `review` / `paused`，见 §6.3、§9-C17），不新增文件、不新增字段。审查报告写在 `$TASK_DIR/review/**`，属 T0b 任务产物，也不单列。
 
 ---
 
@@ -178,15 +185,19 @@ guarded_local_fix:                      # T1c：ZCode 加固（仅当平台存�
 ```
 docs/workflows/workflow-implementation.md        # 本文件：实现层规范
 docs/workflows/新项目开发工作流/                  # 模块源（下称 <MODULE_SRC>）
-  module.yaml                     # module_version + verified_trellis_range + implements_design + 资产哈希 + skill 根表
+  module.yaml                     # module_version + verified_trellis_range + implements_design + 资产哈希 + skill 根表 + 变体哨兵常量
   workflow.yaml                   # 机器可读的"账本状态 → 变体块 / 下一步"定义（render 与一致性检查共用）
   templates/
-    wf.md.tmpl                    # → 目标项目 .trellis/workflows/wf.md（文件名稳定，不含设计版本号）
+    wf.md.tmpl                    # → 目标项目 .trellis/workflows/wf.md（文件名稳定，不含设计版本号；含哨兵常量）
     nl-routing.md                 # → AGENTS.md 块外
     zcode-guard.json              # → .zcode/config.json 的加固命令串（占位符化）
+    review-protocol.md            # 审查编排契约（唯一源，§8.5）
     skills/wf/SKILL.md             # skill 正文源（含占位符；frontmatter 由渲染层注入）
     skills/wf-repair/SKILL.md
-  installer/{wf_install.py,wf_upgrade.py,skill_roots.py,render.py,doctor.py,zcode_guard.py}
+    skills/wf-task-review/SKILL.md
+    skills/wf-task-review-action/SKILL.md
+  installer/{wf_install.py,wf_upgrade.py,uninstall.py,skill_roots.py,render.py,doctor.py,zcode_guard.py}
+  capability-digest.md            # 各 Trellis 版本公开契约变动（人工维护，§7.2）
   tests/
 
 ```
@@ -197,26 +208,34 @@ docs/workflows/新项目开发工作流/                  # 模块源（下称 <
 
 ```
 .trellis/scripts/wf/                 # 模块 CLI（平台中立的 Python，仅标准库）
+.trellis/scripts/wf/wf.py            # CLI 入口（{{CLI_PATH}} 指向它）
 .trellis/workflows/wf.md             # 流程变体（含 [workflow-state:*] 块与模块版本注释行）
 .trellis/dependencies/ledger.json    # 依赖账本（状态事实源；DAG 视图由 wf dag 输出，不落盘）
+.trellis/tasks/<task>/review/        # 审查产物：round-{N}/{reviewer-id}.md、summary-round-{N}.md、action.md、unavailable.md
 .agents/skills/wf/SKILL.md           # codex / zcode / pi / dsh 共用
 .agents/skills/wf-repair/SKILL.md
+.agents/skills/wf-task-review/SKILL.md
+.agents/skills/wf-task-review-action/SKILL.md
 .claude/skills/wf/SKILL.md           # Claude Code
 .claude/skills/wf-repair/SKILL.md
+.claude/skills/wf-task-review/SKILL.md
+.claude/skills/wf-task-review-action/SKILL.md
 .trellis/.runtime/wf/install-record.json        # 本机态（.trellis/.gitignore 已忽略 .runtime/）
 AGENTS.md                            # 块外追加 NL 路由段
 .trellis/config.yaml                 # 唯一受管写入：default_workflow: wf
 .zcode/config.json                   # 仅 ZCode：四条加固命令（T1c）
 ```
 
-**为什么 skill 是 2 个**：
+**为什么 skill 是 4 个**：
 
 | skill | 触发意图 | 覆盖子命令 | 副作用 |
 |---|---|---|---|
-| `wf` | 下一步做什么 / 当前任务什么状态 / 能不能开工 / 要不要建任务 / 交接 | `route`、`state`、`dag`（只读）；`task new`、`start`、`close`、`edge`（有副作用） | 有 |
+| `wf` | 下一步做什么 / 当前任务什么状态 / 能不能开工 / 要不要建任务 / 交接 / 复杂任务该审查 | `route`、`state`、`dag`、`check`（只读）；`task new`、`start`、`close`、`edge`、`rename`（有副作用）；复杂任务在末段输出审查命令 | 有 |
 | `wf-repair` | 对账不一致 / 替换 / 放弃 / 返工登记 / 卸载 | `rework`、`replace`、`abandon`、`repair`（有副作用）；`check`（只读） | 有 |
+| `wf-task-review` | 复杂任务 check 阶段被另一个 CLI 人工调用，只出审查报告 | 无子命令（读任务、写自己那份报告） | 只写报告 |
+| `wf-task-review-action` | 主会话里人工点名后，复核 reviewer 报告并采纳修复 | 无子命令（读报告、写 summary/action、改源码） | 有 |
 
-拆分依据是**设计稿的职责边界**：日常流转（设计稿 §5.3/§6.3）与异常处分（§6.4–§6.6、§7.7）是两套判据，混在一份正文里门禁显著性会下降。**不设 `wf-verify`**：设计稿不设验证证据链（§1.3、§4.3），没有“验证并留证”这个动作。冲突登记见 §9-C1、§9-C11。
+拆分依据是**设计稿的职责边界**：日常流转（设计稿 §5.3/§6.3）与异常处分（§6.4–§6.6、§7.7）是两套判据，混在一份正文里门禁显著性会下降。**不设 `wf-verify`**：设计稿不设验证证据链（§1.3、§4.3），没有“验证并留证”这个动作。后两个 skill 不是入口，而是 check 阶段的一对辅助动作：契约见 §8.5，裁决见 §9-C17。冲突登记见 §9-C1、§9-C11。
 
 ### 2.3 进出版本库
 
@@ -225,11 +244,11 @@ AGENTS.md                            # 块外追加 NL 路由段
 | `.trellis/scripts/wf/**` | 是 | 不进库则克隆后没有 `wf` |
 | `.trellis/workflows/wf.md` | 是（生成物） | 由 `wf render` 产出 |
 | `.trellis/dependencies/ledger.json` | **是** | 设计稿 §3：账本是机制事实，必须持久化 |
-| 两个 skill 根 | 是 | 入口层 |
+| 四个 skill 根 | 是 | 入口层（`wf` / `wf-repair`）+ 审查辅助（`wf-task-review*`） |
 | `AGENTS.md` 块外段、`config.yaml` 那一行 | 是 | T1a / T1b |
-| `.trellis/tasks/**`（含 `meta.wf.*`） | 是 | 原生任务记录 |
+| `.trellis/tasks/**`（含 `meta.wf.*` 与 `review/**`） | 是 | 原生任务记录 + 随任务的审查产物 |
 | `.trellis/workspace/**` | 是 | 原生长期轨迹 |
-| `.trellis/.runtime/wf/install-record.json` | 否（gitignore） | 本机解释器路径、模块源路径、上次升级 |
+| `.trellis/.runtime/wf/install-record.json` | 否（gitignore） | 本机解释器路径、模块源路径、上次升级、`machine_id`（§3.3） |
 | `.trellis/.runtime/**`、`.trellis/.developer` | 否 | 上游既有的本机状态 |
 
 **账本进库的理由**（与旧实现方案相反）：设计稿把账本列为**唯一新增记录类型**且是状态事实源；不进库则跨机/重克隆后无法判定就绪，等于把状态寄存在本机。冲突登记见 §9-C12。
@@ -346,7 +365,7 @@ AGENTS.md                            # 块外追加 NL 路由段
 
 **写入纪律**：只由机制入口写；**禁止手改**。人在需要修复时走 `wf repair`（设计稿 §7.7 的唯一出口）。
 
-**DAG 视图不落盘**：视图由前置集合 + 账本实时派生，经 `wf dag`（`--json` / `--md`）输出，不写文件。理由：它是纯派生件，落盘会产生与状态变化不同步的副本，并在版本库里制造无意义 diff；设计稿 §8.3 要求的是“由机制生成、人只读”，命令输出即满足，且 `wf dag` 每次输出都可作为重建等价性的证据。
+**DAG 视图不落盘**：视图由前置集合 + 账本实时派生，经 `wf dag`（`--json` / `--dot` / `--check`）输出，不写文件。理由：它是纯派生件，落盘会产生与状态变化不同步的副本，并在版本库里制造无意义 diff；设计稿 §8.3 要求的是“由机制生成、人只读”，命令输出即满足，且 `wf dag` 每次输出都可作为重建等价性的证据。
 
 ### 3.3 标识、定位与占用校验
 
@@ -426,14 +445,17 @@ AGENTS.md                            # 块外追加 NL 路由段
 |---|---|---|---|---|---|
 | `wf task new` | 副作用 | **按入口类型**，见下方“四种参数化入口”的前置列（本节不重复） | `task.py create --workflow wf --base-branch <当前分支> --slug <slug>` | 整份 `task.json`（基底）+ `meta.wf.deps`（机制） | 基底组 → 机制组 |
 | `wf start` | 副作用 | 图内：前置全“正常” ∧ 账本“无记录”；图外：无 | `task.py start --allow-empty-context` → `task.py set-branch <task> <当前分支>` | `task.json`（status、branch） | 基底 |
-| `wf close` | 副作用 | 源状态合法（账本“无记录” ∧ 前置全“正常”）；P 还需任务图齐（§3.9）；`pr_url` 必须为空 | `task.py archive <task> --skip-branch-validation` → `add_session.py` | 原生归档 + 账本“正常” | 基底组 → 机制组 |
+| `wf close` | 副作用 | 源状态合法（账本“无记录” ∧ 前置全“正常”）；P 还需任务图齐（§3.9）；`pr_url` 必须为空；**复杂任务还需有 `review/` 或 `unavailable.md`**（§8.5，由 skill 层检查，不是 CLI 硬校验） | `task.py archive <task> --skip-branch-validation` → `add_session.py` | 原生归档 + 账本“正常” | 基底组 → 机制组 |
 | `wf edge add\|rm` | 副作用 | 建边：两端活动区 ∧ 前置未完工 ∧ 目标非异常；删边：目标可已归档 | 无 | 下游前置集合（+ 需要时补写该任务的 `meta.wf.deps`） | 机制组（暂存 → 后置校验 → 提交） |
 | `wf rework` | 副作用 | T 未归档 ∧ 账本 ∈ {无记录, 挂起} ∧ 无未完成登记 | 阶段内 `task.py create`（建 R） | 账本（挂起 + 登记）、R 的 `meta`、T 的前置集合 | 见 §3.12 的分步组 |
 | `wf replace` | 副作用 | 旧任务未归档 ∧ 账本 ∈ {无记录, 挂起}；静态校验通过 | `task.py create`（建继任者） | 账本（异常 + 指向）、下游前置集合、继任者 `meta` | 实施组 → 重连组 → 归档组 |
 | `wf abandon` | 副作用 | 同上 + 变体合法（P 只允许新建替代） | 删边变体不建任务；新建替代建任务 | 同 `replace`；删边变体 `replacement_target=null` | 同 `replace` |
 | `wf baseline --light` | 副作用 | 设计稿 §5.5 轻量用法：旧任务未归档 ∧ 账本 ∈ {无记录, 挂起}；人决定“工作仍然成立” | `task.py create`（建新任务） | 新任务 `meta`（继承前置）、下游前置集合（改指新任务） | 建任务组 → 重连组 |
 | `wf repair` | 副作用（**人类专用**） | 启动自检识别到类型 1–5 之一 | 视类型：`archive` / `set-meta` / 删边 | 账本 / 前置集合 / 说明字段 | 按类型分步（§3.8） |
-| `wf route` / `state` / `dag` / `check` / `doctor` | **只读** | — | 读 `get_context.py --mode phase`、`task.py list/current --json`、账本 | 无 | — |
+| `wf rename` | 副作用 | 目标未归档 | `task.py rename` | 账本 `task_dir` 与全部引用同步 | 机制组 |
+| `wf route` / `state` / `dag` / `check` / `doctor` / `version` | **只读** | — | 读 `get_context.py --mode phase`、`task.py list/current --json`、账本 | 无 | — |
+| `wf self-test` | 只读自检 | — | 模块自检（§6.2） | 无 | — |
+| `wf render` | 生成（源侧） | 模块源内运行 | — | 变体与 skill 文件 | — |
 
 **`wf task new` 的四种参数化入口**（这是 `task new` 前置条件的唯一源；主表不重复，避免两处不一致）：
 
@@ -473,7 +495,8 @@ skill 会被模型自动触发，而**没有任何平台能让 CLI 判断调用�
 1. **只读子命令**（`route` / `state` / `dag` / `check` / `doctor` / `embed-state`）自动触发无风险，允许；
 2. **有副作用子命令**的准入**只依赖状态**，不依赖调用者身份；
 3. **破坏性 / 不可逆动作**（`uninstall --full`、`repair` 的确认异常改写、`upgrade --apply`）要求**人在交互式终端**执行：双 `isatty`（stdin + stdout）+ 手输令牌（`UNINSTALL-FULL` / `REPAIR <type>` / `UPGRADE <M_inst> -> <M_src>`）。AI 不得代跑、不得设 env 绕过；
-4. 每个 skill 正文显式标注其子命令属“只读”或“有副作用”，并在有副作用处写明“需先满足的状态”。
+4. 每个 skill 正文显式标注其子命令属“只读”或“有副作用”，并在有副作用处写明“需先满足的状态”；
+5. 审查这一道是**过程强制**而非状态门：它由 `wf` skill 在 `wf close` 前检查（复杂任务缺审查则拦下），`wf close` 自身的硬校验不变（§8.5）。
 
 **为什么这套门禁够用**：设计稿 §1.3 明确本设计**不防对抗**，只防意外与误报。状态型门禁挡的是“顺序错位”（未满足前置就开工、无源状态就收尾），这正是机制承诺的部分。
 
@@ -502,7 +525,7 @@ is_ready = 任务未归档(未 completed)
 
 **选择规则**〔设计稿 §7.6〕：就绪集按**任务创建时间**升序取最早；不引入优先级字段。P 不在就绪集内（其推进由 §9.1 未收尾表的“只执行 P”行承担）。
 
-**下沉**〔设计稿 §9.1〕：当前任务进行中但前置不全正常时，工作不停、只挡收尾；沿未完成前置链下行取链上最早就绪的图内任务先开工，完成后回本任务收尾。下沉目标本身挂起时以它为“对应 T”回到挂起段（§3.8 第二段）。终止性由 DAG 无环保证。
+**下沉**〔设计稿 §9.1〕：当前任务进行中但前置不全正常时，工作不停、只挡收尾；沿未完成前置链下行取链上最早就绪的图内任务先开工，完成后回本任务收尾。下沉目标本身挂起时以它为“对应 T”回到挂起段（§3.7 第二段）。终止性由 DAG 无环保证。
 
 ### 3.8 启动自检与对账修复
 
@@ -532,7 +555,7 @@ is_ready = 任务未归档(未 completed)
 | 1 | 已归档但账本无记录 / 挂起 | 人确认正常/异常；确认异常先落账本（含标记）再动下游（一般任务删边；P 建继任者并重连） | 账本组 → 下游组 |
 | 2 | 返工登记未完成 / 挂起无返工记录 | 有标记按 §3.7 登记序列恢复或取消；无标记人确认补建或清挂起 | 按 §6.4 分步 |
 | 3 | 正常但未归档 | 人确认重新归档（前置须全正常）或改回无记录 | 单组 |
-| 4 | 无法解析 / 非法的记录或边 | 按 §6.1 恢复边界修字段，或删非法边 | 单组 |
+| 4 | 无法解析 / 非法的记录或边（含 `task.py create` 成功但机制组 `meta.wf.deps` 未写入的残缺任务） | 按 §6.1 恢复边界修字段或补写 `meta`，或删非法边 | 单组 |
 | 5 | 替换 / 放弃未完成 | 先补建/重连、后归档；改判放弃只在继任者不存在时由人决定 | 补建组 → 重连组 → 归档组 |
 
 **写入纪律**（设计稿 §7.7）：识别所依赖的标记（替换指向 / 原因 / 说明）必须与第一步状态写入**同次持久化**；逐窗口给出残留识别项；不回退、不重跑已完成确认。
@@ -583,7 +606,7 @@ tasks:
 
 **不设 `.wf/contract.yaml`**：契约内容（范围基线 + 验收面 + 受管资产清单 + 人确认）分别落在 P 的 `prd.md` / `design.md` 与设计稿 §5.5 的基线变更流程里；新增一个模块自有文件会造出**第二套项目级状态**，与设计稿不变量 2（单一状态源）冲突。冲突登记见 §9-C3。
 
-**“未定标不许开任务”的落点**：**除 `--role project`（建链头本身，见 §3.5 参数化入口的前置）外**，`wf task new` 一律要求“存在 `role=project` 且已归档、账本为正常的 P”。P 归档的前置是任务图齐（§4.5 项目层收尾关卡），因此“能建后续任务”⇒“图已齐”。不额外引入“契约确认”这一步。
+**“未定标不许开任务”的落点**：**除 `--role project`（建链头本身，见 §3.5 参数化入口的前置）外**，`wf task new` 一律要求“存在 `role=project` 且已归档、账本为正常的 P”。P 归档的前置是任务图齐（设计稿 §4.5 四道关卡中的项目层收尾关卡），因此“能建后续任务”⇒“图已齐”。不额外引入“契约确认”这一步。
 
 ### 3.10 状态派生与视图
 
@@ -597,7 +620,7 @@ tasks:
 | 已完成 | `completed` ∧ 账本正常 |
 | 异常归档 | `completed` ∧ 账本异常 |
 
-**收尾对象与项目完成**（设计稿 §6.7 的唯一源，实现落点）：**收尾对象** = 沿继任链取 `role=tail` 的末端任务，且（未归档且账本非异常）或（已归档且账本正常）；**收尾完成** = 存在收尾对象 ∧ 该对象已归档 ∧ 账本为“正常”。收尾任务被放弃且无继任者时，项目层判定失去对象，按 §3.8 组合表的“待重定义”行由人重建 tail 任务（`wf task new --prereq <最后实现任务> --role tail`）。
+**收尾对象与项目完成**（设计稿 §6.7 的唯一源，实现落点）：**收尾对象** = 沿继任链取 `role=tail` 的末端任务，且（未归档且账本非异常）或（已归档且账本正常）；**收尾完成** = 存在收尾对象 ∧ 该对象已归档 ∧ 账本为“正常”。收尾任务被放弃且无继任者时，项目层判定失去对象，按 §3.8 组合表的“项目层已收尾 ∧ 无收尾对象 ∧ 尾端异常已终态”行由人重建 tail 任务（`wf task new --prereq <最后实现任务> --role tail`）。
 
 **视图**：`wf dag` 输出就绪/阻塞与组件划分；`wf state` 输出当前任务的完整二元组；两者都 `--json`。视图由已提交事实重建，不反向写事实。
 
@@ -683,7 +706,7 @@ tasks:
 
 ### 4.1 平台矩阵（数据，不是代码）
 
-模块只承认**五平台显式支持**；其余 agent 走 §4.9 的通用路径。下表是本文件里**唯一**允许出现平台差异的位置：
+模块只承认**五平台显式支持**；其余 agent 走 §4.9 的通用路径。下表是平台差异的**登记处**——§4.4–§4.9 只写各平台细则，不得新增表外差异项：
 
 | 平台 | skill 根（投放） | 命令/提示根 | 注入通道 | `AGENTS.md` | 证据 |
 |---|---|---|---|---|---|
@@ -731,7 +754,7 @@ tasks:
 
 | 占位符 | 值 | 理由 |
 |---|---|---|
-| `{{PYTHON_CMD}}` | 目标项目解析出的解释器（Trellis 的 `TRELLIS_PYTHON_CMD` 同源） | `python3` 在 Windows 上通常不存在；写死会让整条链路不可执行 |
+| `{{PYTHON_CMD}}` | 安装器自行探测出的解释器：`python3` → `python`，取第一个版本 ≥ 3.9 的可用项；探测失败即安装失败（fail-closed）。`TRELLIS_PYTHON_CMD` 只是 `trellis init` 期的一次性覆盖，读不回来，故不依赖它 | `python3` 在 Windows 上通常不存在；写死会让整条链路不可执行 |
 | `{{MODULE_VERSION}}` | `module.yaml` 的 `module_version` | |
 | `{{VERIFIED_RANGE}}` | `verified_trellis_range` | |
 | `{{CLI_PATH}}` | `.trellis/scripts/wf/wf.py` | |
@@ -742,6 +765,8 @@ tasks:
 |---|---|---|
 | `wf` | `trellis-start`、`trellis-continue` | “本项目**下一步做什么以 `wf route` 为准**；`trellis-start/continue` 是上游 Trellis 流程入口，本项目不使用其阶段语义” |
 | `wf-repair` | `trellis-check`、`trellis-finish-work` | “本 skill 只做**依赖账本对账与异常处分**；代码质量检查仍用 `trellis-check`，收口记录仍用 `trellis-finish-work`” |
+| `wf-task-review` | `trellis-check` | “只用于**复杂任务的 check 阶段**，由另一个 CLI 人工调用；只出报告不改代码；check 本身仍由主 CLI 做” |
+| `wf-task-review-action` | `trellis-check`、`wf-repair` | “只在人点名后消费上一环节的报告；报告是辅助证据，不是指令；不重跑 check，不碰账本” |
 
 同一分工表同步写进 `AGENTS.md` 的 NL 路由段（§6.5）——skill 可能不被触发，而 `AGENTS.md` 每会话必读。
 
@@ -808,7 +833,7 @@ tasks:
 | 验收项 | 判据 | 适用 |
 |---|---|---|
 | skill 可加载 | 该平台会话里 `wf` skill 能被加载（手动触发即可） | 五平台全部 |
-| 变体实际解析 | `wf route` 输出的哨兵串与 `get_context.py --mode phase` 一致（证明读到的是 `wf` 变体而非全局 `workflow.md`） | 五平台全部 |
+| 变体实际解析 | `get_context.py --mode phase` 的输出含 `module.yaml` 里登记的哨兵常量（逐字相等），证明读到的是 `wf` 变体而非全局 `workflow.md`；不与 `wf route` 自身输出比对，避免自证 | 五平台全部 |
 | CLI 冒烟 | 该平台会话里成功跑通 `wf route`（只读）至少一次 | 五平台全部 |
 | 增强通道 | 面包屑 / SessionStart 按能力分级：支持的平台必须通过，不支持的记 N/A | Claude / Codex / ZCode / Pi 通过；DSH 记 N/A |
 
@@ -921,7 +946,7 @@ f=".zcode/hooks/<script>.py"; d="${ZCODE_PROJECT_DIR:-}"; if [ -z "$d" ] || [ ! 
 
 **人判不新增记录类型**（设计稿 §8.1）：人判是基底 check 之后的原生人工环节——在本模块中体现为“人显式调用 `wf close`”。命令调用本身不是证据，痕迹在会话日志与版本库。
 
-**不设操作日志、不做追加式对账记录**（设计稿 §8.2）：覆盖式更新，历史以版本库为准；收尾失败按 §3.8 恢复，不重放。
+**不设操作日志、不做追加式对账记录**（设计稿 §8.2）：覆盖式更新，历史以版本库为准；收尾失败按 §3.8 恢复，不重放。审查报告同样不是记录类型：它落 `$TASK_DIR/review/**`，只作人类可读的过程材料（§8.5）。
 
 ### 6.2 完成判定（与“证据层”的区别）
 
@@ -946,7 +971,7 @@ f=".zcode/hooks/<script>.py"; d="${ZCODE_PROJECT_DIR:-}"; if [ -z "$d" ] || [ ! 
 | 空间 | 归属 | 允许的用法 | 不允许的用法 |
 |---|---|---|---|
 | `task.json.status` | 上游字段，上游只解释 `planning` / `in_progress` / `completed` | 只用这三个值 | 写入 `wf-*` 或任何私有值 |
-| `task.json.meta` | 上游显式保留的自由区（`meta: Record<string, unknown>`） | `meta.wf.deps` 存依赖标识、前置集合、返工来源（序列化为 JSON 字符串，经 `task.py set-meta` 写入） | 用它承载“判定结果”或替代账本状态 |
+| `task.json.meta` | 上游显式保留的自由区（`meta: Record<string, unknown>`） | 只允许三个固定键：`meta.wf.deps`（依赖标识、前置集合、返工来源，JSON 字符串，经 `task.py set-meta` 写入）、`meta.wf.review`（=`complex`，§8.5 的判定标记）、`meta.wf.paused`（=`true`，§7.1 的暂停标记）。键集合固定，新增键须登记 §9 | 用它承载“判定结果”或替代账本状态 |
 
 **明确禁止的一张表**：
 
@@ -959,6 +984,8 @@ f=".zcode/hooks/<script>.py"; d="${ZCODE_PROJECT_DIR:-}"; if [ -z "$d" ] || [ ! 
 | `branch` / `base_branch` | — | 由原生 `start` / `set-branch` / `set-base-branch` 写，模块只调用不解释 |
 | `.trellis/config.yaml` 的其他键 | — | 除 `default_workflow` 那一行外一律不碰 |
 
+**三个键的边界**：`deps` 是机制事实，`review` 只是“判过复杂”的标记、不参与就绪与完成判定，`paused` 只挡 `wf upgrade --apply`。三者都经原生 `set-meta` 写，机制不新增子命令；放宽的裁决见 §9-C17。
+
 **“原生优先”与“原生字段纪律”是同一原则的两面**：前者管“别重实现”，后者管“别挪用”。只做前者，会出现“看起来零补丁、实际把耦合藏进字段语义”的写法。
 
 ### 6.4 提交归属与顺序可恢复
@@ -968,9 +995,11 @@ f=".zcode/hooks/<script>.py"; d="${ZCODE_PROJECT_DIR:-}"; if [ -z "$d" ] || [ ! 
 | 内容扫描（密钥/敏感串） | 不内置，只在 `wf doctor` 给一次建议 | 模块不接管 git hook；接管 `core.hooksPath` 会让 husky / lefthook 失效，单人自用场景下不是必需项 |
 | 非交互推送拦截 | 不保留 | 设计稿写明推送由人执行；该护栏对 AI 无效，只剩提醒价值，不足以引入整套 hook 机制 |
 | 分支纪律 / 推送纪律 | 不保留 | 设计稿 §1.1：单一工作线，推送由人执行 |
-| **零受管漂移防护** | **保留（唯一）** | 原生能力 + 一条解析断言：`wf doctor` 跑 `trellis update --dry-run`，断言 “Modified by you” 只含预期项（`config.yaml`，ZCode 项目再加 `config.json`），并断言当前解析结果确实是 `wf` 变体 |
+| **零受管漂移防护** | **保留（唯一）** | 原生能力 + 一条解析断言：`wf doctor` 跑 `trellis update --dry-run`，断言 “Modified by you” 只含**允许清单**内的项：`config.yaml`（ZCode 项目再加 `config.json`），外加安装后基线快照里已存在的项（见下）；并断言当前解析结果确实是 `wf` 变体 |
 | 探针写盘纪律 | 保留 | 凡写盘的检查在临时目录/临时 git 仓库中执行，用完即删（失败也删）；`wf doctor` **默认只读** |
 | 远端加固 | 只给建议命令 | 改远端是外部副作用；设计稿承认无法强制 |
+
+**漂移断言的允许清单**：清单 = 安装后立即抓的基线快照（`wf install` 写入 `install-record.json` 的 `drift_baseline`）里的 “Modified by you” 全集 ∪ `config.yaml`（ZCode 项目再加 `config.json`）。本仓库这类经过本地加固的仓库天然带 20+ 条既有项，硬编码“只含 config.yaml”必然误报；升级或 `trellis update` 之后比对的永远是**相对基线有无新增**。
 
 **顺序可恢复（不是“顺序无关”）**：
 
@@ -1036,7 +1065,7 @@ f=".zcode/hooks/<script>.py"; d="${ZCODE_PROJECT_DIR:-}"; if [ -z "$d" ] || [ ! 
 | 未安装 | ✅ | ✅（只读） | ❌ 应先 `install` |
 | 有效已安装 | ❌ 拒绝重复安装 | ✅ | ✅ |
 | 安装/升级不完整（attempt `status ∈ {in_progress, failed}`） | ❌ | ✅（只读，输出差异） | ❌ 先 `--rollback` 或人工清理，不提供绕过开关 |
-| 存在活动任务（`status ∉ {planning, completed}` 且未处于暂停） | —（新装无任务） | ✅（只读，列出活动任务） | ❌ 先收口，或显式暂停后重跑 |
+| 存在活动任务（`status ∉ {planning, completed}` 且无 `meta.wf.paused=true`） | —（新装无任务） | ✅（只读，列出活动任务） | ❌ 先收口，或用 `task.py set-meta wf.paused true` 显式暂停后重跑（恢复时置 `false`） |
 
 ### 7.2 契约探针与能力发现
 
@@ -1093,7 +1122,7 @@ f=".zcode/hooks/<script>.py"; d="${ZCODE_PROJECT_DIR:-}"; if [ -z "$d" ] || [ ! 
 
 | 对象 | 仅模块卸载（默认） | 完全卸载 | 说明 |
 |---|---|---|---|
-| `.agents/skills/{wf,wf-repair}/`、`.claude/skills/{同名}/` | 删除 | 删除 | 只删我们投放的目录；`trellis-*` 一律不动 |
+| `.agents/skills/{wf,wf-repair,wf-task-review,wf-task-review-action}/`、`.claude/skills/{同名}/` | 删除 | 删除 | 只删我们投放的目录；`trellis-*` 一律不动 |
 | `.trellis/scripts/wf/**`、`.trellis/workflows/wf.md` | 删除 | 删除 | 模块自有资产 |
 | `.trellis/dependencies/ledger.json` | **保留** | 删除 | 账本是项目数据；仅模块卸载后重装可继续用 |
 | `.trellis/.runtime/wf/install-record.json`、`upgrade-backup-*`、`upgrade-attempt.json` | 删除 | 删除 | 本机态，无保留价值 |
@@ -1113,7 +1142,7 @@ f=".zcode/hooks/<script>.py"; d="${ZCODE_PROJECT_DIR:-}"; if [ -z "$d" ] || [ ! 
 
 ### 7.6 往返验收
 
-两条必须全过：
+三条必须全过：
 
 1. **基本往返**：`install` → 建一个任务 → 走完开工/收尾 → `uninstall --module` → `trellis update --dry-run` 相对安装前基线**无新增漂移** → 该任务仍能被原生 `task.py archive` 正常归档；
 2. **跨版本往返**：`install` → `trellis update`（模拟上游改模板）→ `uninstall` → **无新增漂移**；若 `config.yaml` 已被上游改写，按 §7.5 的还原依据比对规则**停止 + 预览**，不强行还原。
@@ -1139,13 +1168,13 @@ f=".zcode/hooks/<script>.py"; d="${ZCODE_PROJECT_DIR:-}"; if [ -z "$d" ] || [ ! 
 | **W6** | 必需 | `wf self-test` 全绿：CLI 可执行、变体可渲染、账本可解析、`--json` 输出可被重新读入 | 自检 |
 | **W7** | 增强 | 该平台的 `inject-workflow-state` 通道能为三值状态取回对应块 | 平台能力（DSH 记 N/A） |
 | **W8** | 增强 | SessionStart 通道注入变体索引与 `Status:` 回显 | 同上 |
-| **W9** | 必需 | 按当期实际投放的 skill 集 × 实际存在的 skill 根，加 `AGENTS.md` 块外段与 `.developer` 行后，`trellis update --dry-run` 的 “Modified by you” **只含 `config.yaml`**（ZCode 项目另含 `config.json`） | 原生命令 |
+| **W9** | 必需 | （相对安装基线无新增漂移）按当期实际投放的 skill 集 × 实际存在的 skill 根，加 `AGENTS.md` 块外段与 `.developer` 行后，`trellis update --dry-run` 的 “Modified by you” **不新增**于允许清单之外（清单见 §6.4） | 原生命令 |
 | **W10** | 必需 | `wf close` 在源状态非法（账本非“无记录”或前置不全正常）时**拒绝**归档；合法时**在 `branch == base_branch` 的常态下仍能归档**（机制传 `--skip-branch-validation`，归档后 `status=completed`、账本为“正常”）；`pr_url` 非空时**拒绝**该 skip 路径 | 自测 + 原生 |
-| **W11** | 治理 | 每个 skill 根存在，且 skill 内引用的子命令都存在于 CLI `--help` | 自测 |
+| **W11** | 治理 | 四个 skill 根存在，且 skill 内引用的子命令都存在于 CLI `--help` | 自测 |
 | **W12** | 必需 | **就绪门**：前置未全正常时 `wf start` 拒绝；全正常后放行 | 自测 |
 | **W13** | 必需 | **账本转移门**：表 4-2 七行之外的任何转移被拒绝（含“异常 → 正常”、“已归档直接返工”） | 自测 |
 | **W14** | 必需 | **可见性顺序**：模拟“归档成功、账本提交失败”，下游必须仍视为未满足（`wf state` 报“归档待对账”） | 自测 + 模拟 |
-| **W15** | 必需 | **新克隆无快照**：全新克隆目录里 `trellis update --dry-run` 的 “Modified by you” 只含 `config.yaml` | 原生命令 |
+| **W15** | 必需 | **新克隆无快照**：全新克隆目录（无 `install-record.json`）里 `trellis update --dry-run` 不套用 `wf` 的漂移断言，只要求命令能跑通、不崩 | 原生命令 |
 | **W16** | 必需 | **卸载后基底可独立使用**：`uninstall --module` 后能 `task.py create/start/archive` 成功，且 `trellis update --dry-run` 无新增漂移 | 自测 |
 | **W17** | 必需 | **ZCode 加固**：§5.6 的 Z1–Z5 全过（四条加固形态、漂移不阻断、正常行为不变、卸载还原、债务可见） | 自测 + 会话实测 |
 | **W18** | 必需 | **图内 / 图外分流**：按 `meta.wf.deps.in_graph` 判定（不用字段存在性）；`in_graph=false` 的任务走原生流程不被拦；`in_graph=true` 的任务被机制门禁覆盖；`wf edge add` 给无标记任务加边后该任务被补写为图内 | 自测 |
@@ -1154,6 +1183,22 @@ f=".zcode/hooks/<script>.py"; d="${ZCODE_PROJECT_DIR:-}"; if [ -z "$d" ] || [ ! 
 | **W21** | 必需 | **选择性提交准入**：目标文件已有无关未提交变更时，机制写入被拒绝并给出指引；洁净时写入并只提交该文件 | 自测 |
 | **W22** | 必需 | **任务图门**：P 的 `design.md` 无图块、图块校验失败（key 重复 / 无 tail / 成环 / 引用块外 key）时 `wf close`（P）**拒绝**；图块齐全时放行，且 `wf task new --from-graph` 能按拓扑序建出全部任务 | 自测 |
 | **W23** | 必需 | **新克隆的卸载还原**：删除 `.trellis/.runtime/wf/`（模拟全新克隆）后执行 `uninstall --module`，两个受管修正（`config.yaml` 那一行、`.zcode/config.json` 四条命令）都能经 git 历史依据还原；历史定位不到时走第 3 级——输出预览且**不修改文件** | 自测 + 夹具 |
+
+**R 系列（审查专属，§8.5；全部必需）**
+
+| # | 类别 | 断言 | 判据来源 |
+|---|---|---|---|
+| **R1** | 必需 | 审查前后 `task.json.status` 与 `ledger.json` 字节不变 | 自测 |
+| **R2** | 必需 | 只传任务标识即可产出报告，落在匹配的 `round-1/`，frontmatter 合法 | 自测 + 夹具 |
+| **R3** | 必需 | 用实施者同 CLI 充当 reviewer 时，汇总侧拒绝；同 CLI 换模型同样拒绝 | 自测 |
+| **R4** | 必需 | 单 provider 时 `summary` 含 `degraded: single-provider`；无 provider 且人已声明不可用时走 §8.5.6 | 自测 + 夹具 |
+| **R5** | 必需 | 非 check 阶段调用被拒并给出正确阶段 | 自测 |
+| **R6** | 必需 | 主 agent 驳回某条并改法后，`action.md` 有理由记录 | 夹具 |
+| **R7** | 必需 | 复杂任务未审即 `wf close` 被拦下；报告非法时结论为 `fail` | 自测 |
+| **R8** | 必需 | `meta.wf.review` 只在判定为复杂时写入；`wf doctor` 据此报“复杂任务无审查” | 自测 |
+| **R9** | 必需 | 不可用声明场景：输出含固定句+"、`unavailable.md` 落盘、之后可正常收尾 | 夹具 |
+| **R10** | 必需 | 判定为复杂后，主 agent 最后一段输出含 reviewer 调用命令（skill + 任务标识） | 夹具 |
+| **R11** | 必需 | 全局 `multi-cli-review*` 已删除，`skills/`、`README*.md`、`.trellis/spec/` 中旧名引用为 0 | `grep` |
 
 **探针执行纪律**：① 凡写盘的探针一律在**隔离夹具**（临时目录 + 临时 git 仓库）中执行，绝不写目标项目，用完即删（失败也删）；② `wf doctor` 只读；③ `wf upgrade --check` 默认不写盘，落盘须显式 `--report <path>`；④ **探针夹具 ≠ 实机目标项目**：前者验证单点契约，后者验证端到端安装与流转，按 §8.4 单独建、单独删。
 
@@ -1164,7 +1209,7 @@ f=".zcode/hooks/<script>.py"; d="${ZCODE_PROJECT_DIR:-}"; if [ -z "$d" ] || [ ! 
 | 阶段 | 内容 | 完成判据 |
 |---|---|---|
 | **P0 骨架与零补丁** | ① **旧模块退役已完成**（2026-10-28：内容移出仓库、不入库、文档零引用），本阶段只在该路径**新建模块源骨架**；② 模块源骨架（`module.yaml` / `workflow.yaml` / `render.py` / `skill_roots.py` / `wf_install.py`）；③ 变体渲染（含 `[workflow-state:*]` 三值块与版本注释行）；④ `AGENTS.md` 块外 NL 路由；⑤ `wf route` / `state` / `dag` / `check` / `doctor` / `embed-state`（只读，全 `--json`；**依赖账本读取**：解析 `ledger.json`，键缺失按“无记录”处理）；⑥ `wf task new` / `start`（含 `--base-branch` 与 `set-branch`）；⑦ `wf install` / `uninstall`（两模式 + 安装前快照还原）；⑧ **ZCode 加固**（`zcode_guard.py` + §5.6 自检）；⑨ 投放 `wf` skill（`wf-repair` 留到 P2）；⑩ 探针 **W1–W6、W9–W12、W14–W17、W21–W23**；⑪ **五平台 G0**；⑫ 往返验收（§7.6 两条，**收尾走最小 `wf close`**） | 该阶段首次可执行的探针全绿；五平台各自完成“skill 可加载 / 变体解析 / CLI 冒烟”；`install → task new → start → close → uninstall → trellis update --dry-run 无新增漂移 → 原生 archive 正常` 往返通过；ZCode Z1–Z5 通过 |
-| **P1 账本与正常流转** | **账本写入**（读取已随 P0 落地）；`wf dag` 派生视图细化；任务图解析与 `wf task new --from-graph`；`wf edge add/rm`（含 **W18**）；`wf baseline --light`；`wf repair` 的类型 1 / 3；投放 `wf-repair` skill | W13、W18 全绿；一个真实项目从 P 建图到首个任务收尾；`wf dag --check` 无偏差 |
+| **P1 账本与正常流转** | **账本写入**（读取已随 P0 落地）；`wf dag` 派生视图细化；任务图解析与 `wf task new --from-graph`（含 **W22**）；`wf edge add/rm`（含 **W18**）；`wf baseline --light`；`wf rename`；`wf repair` 的类型 1 / 3；投放 `wf-repair` skill；**投放审查资产**（`review-protocol.md` + 两个 `wf-task-review*` skill，含 **R1–R11** 与全局版移除） | W13、W18、W22、R1–R11 全绿；一个真实项目从 P 建图到首个任务收尾；`wf dag --check` 无偏差 |
 | **P2 异常处分** | `wf rework`（§3.12 的五步序列与窗口表，含跨日恢复）；`wf replace`；`wf abandon`（两变体）；`wf repair` 的类型 2 / 4 / 5 | W19、W20 全绿；§3.12 窗口表的每一行都能被夹具复现并向前完成 |
 | **P3 真实项目走查 + 跨 CLI 接手** | 在一个真实项目上从 P 走到收尾；同一任务由 CLI-A 实施 → CLI-B 接手 | 全链走通；两端 `status` + `meta.wf.deps` + 账本条目 + `get_context.py` 输出一致 |
 | **P4 升级链路** | `wf upgrade --check/--plan/--apply/--verify/--rollback/--digest`；升级 skill；`capability-digest.md` | 入口 × 状态矩阵四行都可达；回滚后探针全绿；升级后在三个基线版本上通过 |
@@ -1180,7 +1225,7 @@ f=".zcode/hooks/<script>.py"; d="${ZCODE_PROJECT_DIR:-}"; if [ -z "$d" ] || [ ! 
 - **不新增的机制清单（实施时不要再加回来）**：分支与工作单元、合入链路、交集判定、验证证据链、准洁净分级、微变更白名单、git hook 接管、第二套记录存储。
 - **“不引入”不等于“不执行”**：设计稿的节点（项目层、任务层、收尾层、返工/替换/放弃）照常执行，只是由人或由基底承载。
 
-**任务级审查强度分流**（任务是否“复杂”、check 阶段是否引入多方审查）**尚未定稿**，边界与待决项见 §9.6 G7；定稿前，复杂改动仍按 §8.4 的实机验收 + `trellis-check` 执行。
+**任务级审查强度分流**（G7 已定稿）：**只有复杂任务**在 check 阶段插入多 agent 辅助审查，实现方式限定为工作流内部的两个 skill `wf-task-review` / `wf-task-review-action`；`trellis channel` 不再作为并列候选（理由见 §8.5.8）。全流程人工、不可跳过；判据、契约与探针见 §8.5。简单任务仍按基底流程 + `trellis-check` + §8.4 执行。裁决留痕见 §9.5。
 
 ---
 
@@ -1200,7 +1245,15 @@ f=".zcode/hooks/<script>.py"; d="${ZCODE_PROJECT_DIR:-}"; if [ -z "$d" ] || [ ! 
 
 1. **建夹具**：`commands/shell/init-trellis-temp-project.sh --platform <目标平台> --path /tmp/<唯一名>`（等价于空目录里跑 `trellis init -y --<平台>`；该脚本不装任何模块）。
 2. **装**：在夹具项目里 `wf install`，随后 `wf doctor` 无异常。
-3. **走一条真实闭环**：`wf task new --role project` → `wf start` → `wf close` →（需要时）`wf uninstall --module`。
+3. **走一条真实闭环**：`wf task new --role project` → `wf start` → `wf close` →（需要时）`wf uninstall --module`。样本按阶段取，不止 P→首个任务：
+
+   | 样本 | 适用阶段 | 必须覆盖的点 |
+   |---|---|---|
+   | P → 首任务 → 收尾 | P0 / P1 | 图块校验、`--from-graph` 拓扑建任务 |
+   | 返工 | P2 | 登记准备 → 建 R → 发布 → R 收尾 → 清挂起 |
+   | 替换 | P2 | 继任者建任务、下游重连、旧任务异常归档 |
+   | 复杂任务审查 | P1 | `meta.wf.review`、两份 reviewer 报告、驳回一条、`action.md` |
+   | 不可用回退 | P1 | `unavailable.md` 与固定句式 |
 4. **断言**：当期必需探针 + §7.6 往返 + `get_context.py` / `task.py` 在该项目内正常工作 + `trellis update --dry-run` 无新增漂移；从 P0 起还要断言 `get_context.py --mode phase` 在**真实目标项目**里返回本变体的哨兵串（W1 / W2 再验一次）。
 5. **清理**：删除夹具；失败也删——删前把关键输出落到任务产物（不新增记录类型，见 §6.3）。
 
@@ -1215,11 +1268,113 @@ f=".zcode/hooks/<script>.py"; d="${ZCODE_PROJECT_DIR:-}"; if [ -z "$d" ] || [ ! 
 
 ---
 
+### 8.5 check 阶段多 agent 辅助审查
+
+**定位**：这是**过程约定**，不是门禁：不改 `task.json.status`、不写账本、不构成完成判据（不变量 3/6）。它只服务于"复杂任务在 check 之后、人判之前多一双异 CLI 的眼睛"。
+
+**适用范围**：只对**复杂任务**、只在 **check（`trellis-check`）之后、人判之前**。其它阶段调用一律拒绝；简单任务根本不进这一步。
+
+**强制**：复杂任务不许缺审查、不许跳过，没有审查不进人判、不 `wf close`。唯一例外是 §8.5.6 的明确不可用。
+
+**复杂度判据**（命中任一即复杂，须可一眼核）：
+
+| 信号 | 判据 |
+|---|---|
+| 改动规模 | 增删文件 ≥ 3 个，或单文件净增/删 ≥ 80 行 |
+| 跨层 | 同时改两层及以上（spec / 文档 / skill / 脚本 / CLI / 安装器） |
+| 契约面 | 碰 `.trellis/spec/**`、`AGENTS.md`、`.trellis/config.yaml`、skill 正文、CLI 子命令、账本 schema |
+| 状态机 | 改动会改变判定、门禁或提交顺序 |
+| 前一轮 `fail` | 同一任务上一轮审查为 `fail`，本轮必须再审 |
+
+明确不算：只改一处措辞、单文件小补、纯注释或格式。判定为复杂时写 `meta.wf.review=complex`（原生 `task.py set-meta wf.review complex`），简单任务不写。
+
+#### 8.5.1 调用方式：全人工
+
+| 项 | 规定 |
+|---|---|
+| 谁发起 | 人。reviewer 侧：人在**另一个 CLI** 里说"审 `<任务标识>`"；汇总侧：人在主会话说"按 `wf-task-review-action` 处理 `<任务标识>`" |
+| 主 agent 做的事 | 判定复杂 → 在**最后一段输出**打出调用命令（`wf-task-review` + 任务标识）→ 被点名后执行汇总 |
+| 主 agent 不做的 | 不自动派发、不跑另一个 CLI、不因缺审查自行放行 |
+| 自动化 | 当前**做不到**，人工链路是唯一实现；等后续做出自动多方审计再让主 agent 代跑，契约留位 |
+
+#### 8.5.2 入参与任务解析
+
+- 唯一入参是**任务标识**（`meta.wf.deps.id` 或 slug，二者取一）。
+- 轮次、任务文件（`prd.md` / `design.md` / `implement.md`）、工作区改动、相关 spec、审查焦点，全部由 skill 从任务里自取，调用方不传。
+- 标识解析：扫活动区与归档区；命中 1 个即用；0 个或 ≥ 2 个则停。
+
+#### 8.5.3 轮次、人数与身份
+
+| 项 | 规定 |
+|---|---|
+| 轮次 | 不传参。reviewer 侧取现存最大轮次，无 `review/` 时为 1；汇总侧默认消费当前最大轮次，仅补判旧轮时由人给 `--round`。上限 2 轮 |
+| 人数 | 默认 2 个**不同 CLI**。该机确有第二个异 CLI 但没有第三个 → 1 个并记 `degraded: single-provider` |
+| 身份 | `source-cli` 必须 ≠ 实施者 CLI；**同一 CLI 换模型不算合格补位**。`reviewer-id` 是槽位字母 `a`–`d`，真实 CLI 只进 `source-cli` |
+| 焦点 | 不传。reviewer 按固定检查面派生：范围越界、验收口径、契约/规格违反、跨层影响与回归、可测性；不得扩焦 |
+
+#### 8.5.4 产物与写边界
+
+```
+$TASK_DIR/review/
+  round-{N}/{reviewer-id}.md      # reviewer 只写自己那一份
+  round-{N}/summary-round-{N}.md  # 只有主 agent 写
+  action.md                       # 只有主 agent 写
+  unavailable.md                  # 只有主 agent 写（§8.5.6）
+```
+
+- 进库，随任务归档移动；属 T0b 任务产物，**不是新记录类型**（不入 §6.1 记录表）。
+- 目录由主 agent 预建，reviewer 不建目录；四类文件的最小结构见附录 C。
+- reviewer 不写源码、不写 `task.json`、不写账本、不 commit；主 agent 是唯一写者。
+
+#### 8.5.5 权威关系、结论与出口
+
+**报告只是辅助，不指挥主 agent**：主 agent 逐条对代码、spec、任务边界复核后才决定；可以采纳、可以改法、可以驳回，驳回与改法必须写进 `action.md` 且理由具体到下一轮不会重炒。
+
+结论只有两档：
+
+| 结论 | 含义 | 出口 |
+|---|---|---|
+| `fail` | 有阻塞项，或审查没做成（报告缺失、frontmatter 非法、reviewer 与实施者同 CLI、槽位不足且未降级） | 就地修 → 重跑 check → 下一轮；到 2 轮仍 `fail` 转 `wf rework` |
+| `pass` | 无阻塞项，至多带建议 | 进人判，建议留档 |
+
+#### 8.5.6 不可用时的回退
+
+**只有人说了才算**，主 agent 不许自行推定；`command -v` 之类的探测只作佐证。
+
+成立情形与证据：该机无实施者以外的 CLI（人一句话说明）；skill 未装或加载不了（人贴报错）；CLI 起不来或会话报错（人贴原文）。
+
+回退动作：① 主 agent 在最后输出显式写"无法调用辅助 agent 进行辅助审查"并附情形与证据；② 同内容落 `$TASK_DIR/review/unavailable.md`；③ 按原生流程继续（check → 人判 → `wf close`），不得声称"已审查通过"。
+
+#### 8.5.7 资产与移除
+
+`review-protocol.md` 是编排契约的唯一源；两个 skill 随模块安装、随 `uninstall --module` 删除（§1.5、§7.5），`wf doctor` 检查四个 skill 根齐全并报"复杂任务无审查且无不可用声明"、"已声明不可用"提示与一行缺审统计。
+
+内部版落地后，全局 `skills/multi-cli-review*` **全面去除**：改 `README.md` / `README.en.md` 双语表行、`.trellis/spec/skills/index.md`、`.trellis/spec/guides/cross-layer-thinking-guide.md`、`.trellis/spec/commands/index.md`，最后全仓 `grep -r multi-cli-review` 清零（`tmp/` 与归档任务除外）。
+
+#### 8.5.8 为什么不用 `trellis channel`
+
+| 项 | channel（Pattern C） | 本方案 |
+|---|---|---|
+| worker 平台 | 仅 claude / codex | 五平台同构（skill 通道） |
+| 产物 | 频道日志，需另定报告格式 | 已有成对的报告 / 行动契约 |
+| 运行时 | 额外守护进程 | 纯文件 + 人工调用 |
+| 与"全人工" | 派 worker 即自动编排 | 人工调用天然符合 |
+
+保留为后续"自动多方审计"的可选实现，一期不做。
+
+#### 8.5.9 探针
+
+R1–R11 见 §8.1，夹具实测见 §8.4。
+
+---
+
 ## 9. 冲突登记与裁决
 
 > 本节**不是规范**：它登记三方（设计稿 / 旧实现方案契约 / 当前仓库事实）不一致的条目。全部条目已于 2026-10-28 裁决（§9.5），正文按裁决书写；本节保留选项与理由，供日后复核。正文中凡引用本节处均写 `§9-Cn`。
 >
 > 分类：**A 设计层互斥**（必须人裁决）；**B 事实不符**（按事实改写，仅登记）；**C 实现不可行 / 需偏离**（给近似实现 + 偏离登记）。
+>
+> 编号 C1–C17 按条目分配、不随类别重排，因此同一张表内可能出现跳号（如 §9.2 里 C11 之后直接是 C13，C12 在 §9.3）——这是编号稳定优先的结果，不是漏项。
 
 ### 9.1 A 类：设计层互斥
 
@@ -1251,6 +1406,7 @@ f=".zcode/hooks/<script>.py"; d="${ZCODE_PROJECT_DIR:-}"; if [ -z "$d" ] || [ ! 
 | **C14** | 准洁净验证 | 旧实现方案用 `git worktree` 做准洁净验证；本设计无验证环节 | 随 C1 连带失效 | **剔除**；不提供 `--level quasi-clean` | **已随 C1 裁决：剔除**（2026-10-28） |
 | **C15** | 卸载入口的独立性 | 设计稿 §1.2 约束 4：卸载入口**不得依赖**机制运行时、账本或机制入口脚本；旧实现方案的实现是 `wf uninstall`（在 CLI 内） | CLI 自身损坏时无法卸载 | **独立脚本** `uninstall.py`，不 import 账本模块（正文 §2.4、§7.5） | **已采纳①**（2026-10-28）。 ① 按建议；② 允许 `wf uninstall` 但要求它有“最小自检后降级为纯文件删除”的分支（复杂度更高） |
 | **C16** | 归档的分支元数据门与单工作线不兼容 | 上游 `task.py archive` 在 `branch == base_branch` 时**硬拒绝**归档（`_validate_branch_metadata` 返回 False），而单工作线下这两个字段必然相等；本设计不切分支、不建 PR，因此该门的前提（PR 档案）不成立 | 机制入口的收尾若不处理则该门必然命中，`wf close` 在主路径上跑不通 | **`wf close` 固定传 `--skip-branch-validation`**，调用前断言 `pr_url is None`；`wf doctor` 检出“有 PR 痕迹却被机制归档”的组合（正文 §3.5） | **已采纳①**（2026-10-28）。 ① 按建议（把该门定位为 PR 档案门）；② 让 `create` 不传 `--base-branch` 并把两个字段清空——不可行：`set-branch`/`set-base-branch` 拒绝空值；③ 向上游提出“单工作线豁免”——超出本仓库权限（上游只读） |
+| **C17** | `meta` 可写键范围 | §6.3 原定机制只写 `meta.wf.deps`；审查要在任务上留“判过复杂”标记（§8.5 的强制与 doctor 检查都需要它），暂停也缺标记（§7.1） | 决定是否放宽 §6.3 的字段纪律 | **扩为 `meta.wf.*` 的三个固定键**（`deps` / `review` / `paused`），新增键须登记本节；三者都经原生 `set-meta`，机制不新增子命令（正文 §6.3、§8.5） | **已采纳①**（2026-10-29）。 ① 三个固定键；② 只用 `notes` 自由文本（doctor 需要正则，脏）；③ 另建标记文件（多一个产物面） |
 
 ### 9.4 已判定不采纳的旧实现方案内容（汇总）
 
@@ -1275,7 +1431,10 @@ f=".zcode/hooks/<script>.py"; d="${ZCODE_PROJECT_DIR:-}"; if [ -z "$d" ] || [ ! 
 | 2026-10-28 | G3（模块源位置） | **改判**：旧模块已退役并移出仓库（不入库、文档不引用）；模块源沿用 `docs/workflows/新项目开发工作流/` 新建 |
 | 2026-10-28 | M1、M2、M3 | 采纳建议项 ①：账本**读取**与最小 `wf close` 并入 P0；W18 随 `wf edge` 归 P1，W10 / W12 / W14 归 P0；§8.2 两行与探针归属已同步改写 |
 | 2026-10-28 | 四个维护 skill | **退役删除**（`workflow-audit` / `workflow-capability-audit` / `workflow-repair` / `workflow-scan` 及其契约 spec）；等价能力由 `wf doctor` / `wf upgrade` / `embed-state` / W 系列探针承载；删前已摘录通用误报守卫 |
-| 2026-10-28 | `commands/shell/init-trellis-temp-project.sh` | **退役删除**：它只调用旧产品的 `commands/{detect-embed-state,install-workflow,upgrade-compat}.py`，且把仓库路径写死成已失效的绝对路径；README 双语与 `spec/commands` 同步改述 |
+| 2026-10-28 | `commands/shell/init-trellis-temp-project.sh` | **保留并改写**（原记录写“退役删除”，与事实不符，2026-10-29 更正）：已不再调用旧产品的 `commands/*.py`，改为直接 `trellis init -y --<平台>`；§8.4 继续使用它 |
+| 2026-10-29 | G7（审查强度分流） | **定稿**：只对复杂任务、只在 check 阶段；实现限定为内部 skill `wf-task-review` / `wf-task-review-action`；全人工、不可跳过；`trellis channel` 不采用；G7 边界③放宽为“§4.3 skill 面可改、变体不动” |
+| 2026-10-29 | C17 | 采纳①：`meta.wf.*` 固定三键 |
+| 2026-10-29 | 全局 `multi-cli-review*` | **全面去除**：内部版落地后删除目录并清 5 处外围引用（§8.5.7） |
 
 **裁决即生效**：正文各节已按上表书写，本节只作留痕。后续若要改变其中任一条，必须**同时**修改正文对应节与本节记录，不得只改一处——否则会出现“正文按 A 写、登记说 B”的静默漂移。
 
@@ -1283,15 +1442,15 @@ f=".zcode/hooks/<script>.py"; d="${ZCODE_PROJECT_DIR:-}"; if [ -z "$d" ] || [ ! 
 
 ### 9.6 治理与实施决策清单
 
-| 项 | 内容 | 状态（2026-10-28） |
+| 项 | 内容 | 状态（截至 2026-10-29） |
 |---|---|---|
-| G1 | 是否把本文件登记进仓库文档索引（`docs/README.md`；涉及根 `README.md` 时须双语同步） | **已裁决：不登记** |
+| G1 | 是否把本文件登记进仓库文档索引（`docs/README.md`；涉及根 `README.md` 时须双语同步） | **改判（2026-10-29 复核）：已登记**——`docs/README.md` 第 13/15/16 行已列 design / implementation / variant 三份；本条按事实更正 |
 | G2 | 旧实现方案的处置 | **已执行（2026-10-28）：已删除并从仓库移除**。本文件已去除对它的全部出处标注与来源映射表；正文自足，删除后无死链 |
 | G3 | 模块源位置 | **已改判（2026-10-28）**：旧模块已退役并移出仓库（内容不入库、文档不引用）；模块源沿用 `docs/workflows/新项目开发工作流/` 新建（§2.1） |
 | G4 | 关键约束是否沉淀进 `.trellis/spec/` | **已裁决：沉淀**，落 `.trellis/spec/docs/workflow-implementation-constraints.md`（本轮完成） |
 | G5 | 变体 `.trellis/workflows/wf.md` 的正文内容（Phase Index 与设计稿 §4.1 四段的映射、三段入口提示词） | **已裁决（2026-10-28）：正文已产出**，暂存 `docs/workflows/wf-variant.md`（该位置由 §9.7 的 T2 迁入 `templates/wf.md.tmpl`）；哨兵串、三值状态块、版本注释行与三层映射见 §9.7 |
 | G6 | 是否拆出 P0 实现任务（本文只交付方案，不含代码） | **已裁决（2026-10-28）：拆三段，资产先行**（T1 资产段 → T2 交接与骨架 → T3 最小闭环机制面），边界、依赖与验收见 §9.7 |
-| G7 | **任务级审查强度分流**（简单任务按基底流程执行；复杂任务在 check 阶段引入多方审查；编排方式 channel 与报告契约待比较） | **待定：本轮不实施，留到下一任务讨论**。下一任务不得放宽的五条边界：① 只能作**过程约定**，不得成为门禁——不改任务状态、不写账本、不构成完成判据（不变量 3/6、§3.6）；② 判据须用**可观察信号**，禁止“我觉得复杂/简单”；③ **目标项目侧不得依赖**（变体与 §4.3 skill 面不动，不变量 9）；④ reviewer 必须与实施者**不同 CLI/模型**；⑤ 审查失败不得视为通过。待裁决：`trellis channel` 编排（Pattern C，worker 仅支持 claude / codex）与 `multi-cli-review` 报告契约如何取舍，以及可用 provider 不足 2 家时的降级规则 |
+| G7 | **任务级审查强度分流** | **已定稿（2026-10-29）**：只对**复杂任务**、只在 check（`trellis-check`）之后、人判之前；实现限定为工作流内部 skill `wf-task-review` / `wf-task-review-action`（编排契约与探针见 §8.5）；`trellis channel` 不采用；**全人工**，自动化留待后续。五条边界处置：① 仍是过程约定，不写状态机（`meta.wf.review` 只是标记，不是状态）——满足；② 判据落为 §8.5 的可核信号表——满足；③ **放宽为“§4.3 skill 面可改、变体不动”**；④ reviewer 必须异 CLI，同 CLI 换模型不算——满足；⑤ 审查失败或没做成一律 `fail`——满足 |
 
 ### 9.7 P0 实施拆分（G6 裁决，2026-10-28）
 
@@ -1330,7 +1489,7 @@ f=".zcode/hooks/<script>.py"; d="${ZCODE_PROJECT_DIR:-}"; if [ -z "$d" ] || [ ! 
 
 ## 附录 A：命令面
 
-**类别**：只读 / 副作用 / 人类专用 / 生命周期 / 生成自检。全部子命令支持 `--json`。
+**类别**：只读 / 副作用 / 人类专用 / 生命周期 / 生成自检。全部子命令支持 `--json`。**审查不是 `wf` 子命令**：它由两个内部 skill 承载，入口与判定见 §8.5。
 
 | 子命令 | 类别 | 依赖的原生能力 | 写入 |
 |---|---|---|---|
@@ -1367,12 +1526,13 @@ f=".zcode/hooks/<script>.py"; d="${ZCODE_PROJECT_DIR:-}"; if [ -z "$d" ] || [ ! 
 
 | 路径 | 作用 |
 |---|---|
-| `docs/workflows/新项目开发工作流/module.yaml` | 版本 + 验证区间 + 实现的设计稿版本 + 资产哈希 + skill 根表 |
+| `docs/workflows/新项目开发工作流/module.yaml` | 版本 + 验证区间 + 实现的设计稿版本 + 资产哈希 + skill 根表 + 哨兵常量 |
 | `…/workflow.yaml` | 账本状态 → 变体块 / 下一步（render 与一致性检查共用） |
 | `…/templates/wf.md.tmpl` | 变体源（含哨兵串与三值状态块） |
 | `…/templates/nl-routing.md` | `AGENTS.md` 块外段源 |
 | `…/templates/zcode-guard.json` | ZCode 加固命令串（占位符化，§5.2） |
-| `…/templates/skills/{wf,wf-repair}/SKILL.md` | skill 正文源（占位符化） |
+| `…/templates/review-protocol.md` | 审查编排契约（唯一源，§8.5） |
+| `…/templates/skills/{wf,wf-repair,wf-task-review,wf-task-review-action}/SKILL.md` | skill 正文源（占位符化） |
 | `…/installer/wf_install.py` | 安装 / 卸载（调用 `uninstall.py`） |
 | `…/installer/wf_upgrade.py` | 升级（check / plan / apply / verify / rollback / digest） |
 | `…/installer/uninstall.py` | **独立卸载入口**（不 import 账本模块） |
@@ -1389,13 +1549,15 @@ f=".zcode/hooks/<script>.py"; d="${ZCODE_PROJECT_DIR:-}"; if [ -z "$d" ] || [ ! 
 | `.trellis/scripts/wf/**` | T2 | 是 |
 | `.trellis/workflows/wf.md` | T2 | 是 |
 | `.trellis/dependencies/ledger.json` | T2 | 是 |
-| `.agents/skills/{wf,wf-repair}/**` | T2 | 是 |
-| `.claude/skills/{wf,wf-repair}/**` | T2 | 是 |
+| `.agents/skills/{wf,wf-repair,wf-task-review,wf-task-review-action}/**` | T2 | 是 |
+| `.claude/skills/{wf,wf-repair,wf-task-review,wf-task-review-action}/**` | T2 | 是 |
+| `.trellis/tasks/<task>/review/**` | T0b（任务产物） | 是 |
 | `AGENTS.md` 块外段 | T1a | 是 |
 | `.trellis/.developer` 的 `workflow=wf` | T1a | 否 |
 | `.trellis/config.yaml` 的 `default_workflow: wf` | T1b | 是 |
 | `.zcode/config.json` 四条命令 | T1c | 是（带债务） |
 | `.trellis/.runtime/wf/install-record.json` | T2（本机态） | 否 |
+| `.trellis/.runtime/wf/pre-install/**`、`upgrade-backup-*/**`、`upgrade-attempt.json` | T2（本机态） | 否 |
 
 ### B.3 依赖关系
 
@@ -1409,6 +1571,46 @@ ledger.json.entries[*].replacement_target ──┘        │
 ```
 
 判定只读“任务记录的事实”与“账本”，视图永远可重建。
+
+---
+
+## 附录 C：审查产物模板（§8.5 的最小结构）
+
+**reviewer 报告** `$TASK_DIR/review/round-{N}/{reviewer-id}.md`：
+
+```markdown
+---
+dep-id: <依赖标识>
+slug: <任务 slug>
+round: <N>
+reviewer-id: <a|b|c|d>
+source-cli: <reviewer CLI 名>
+review-time: <ISO 8601>
+protocol: wf-task-review
+---
+
+# 缺陷报告
+
+## 检查面命中
+- 范围越界：<有/无 + 位置>
+- 验收口径：<…>
+- 契约/规格：<…>
+- 跨层与回归：<…>
+- 可测性：<…>
+
+## findings
+### F1 <标题>
+- 位置：<路径:行>
+- 问题：<具体事实>
+- 等级：阻塞 | 建议
+- 影响：<为什么算问题>
+- 建议方向：<提案，不是已批准>
+- 证据：<可核片段>
+```
+
+**summary**（主 agent 写）与 **action.md** 至少含：消费的报告清单、去重前后条数、冲突、逐条决定与理由（采纳 / 改法 / 驳回）、被改法的原建议、验证命令与结果。
+
+**unavailable.md**（主 agent 写）：不可用情形、人给的证据原文、回退后按原生流程继续的说明。
 
 ---
 
@@ -1434,3 +1636,8 @@ ledger.json.entries[*].replacement_target ──┘        │
 | §7.7 完整性分类（类型 1–5） | §3.8 的 `wf repair` 类型面 | 唯一修复入口 |
 | §9.1 三段入口 | §3.6、§3.7、§3.8 | `wf route` 判定顺序 |
 | §9.4 卸载五约束 | §2.4、§7.5 | 拆卸契约 |
+| §5.3 项目层任务产物 | §3.9（P 的产物与“齐”的判据） | 实现落点 |
+| §5.5 基线变更 | §3.5（`wf baseline --light`） | 实现入口 |
+| §5.6 0→1 任务依赖 P | §3.9（根节点前置写 P 的依赖标识） | 实现落点 |
+| §6.3 图外任务 | §3.5（`--unrelated`）、§3.7（不走就绪公式） | 旁路入口 |
+| §4.3 完成判据 | §6.2、§8.5（审查只是人判的输入） | 实现约束 |

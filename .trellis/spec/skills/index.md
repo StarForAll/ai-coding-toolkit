@@ -51,6 +51,8 @@ Current mandatory coupled pair:
 - `skills/multi-cli-review/SKILL.md`
 - `skills/multi-cli-review-action/SKILL.md`
 
+> 2026-10-29：这对 skill 将由工作流内部版本 `wf-task-review` / `wf-task-review-action` 取代（契约见 plan §8.5）；内部版落地后本段与下方路径一起改指新位置，全局副本删除。
+
 These two files must be treated as **one shared contract**:
 
 - reviewer-side report emission contract
