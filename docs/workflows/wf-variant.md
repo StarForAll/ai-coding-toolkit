@@ -41,7 +41,8 @@ WF-VARIANT-SENTINEL:1d9c4b7e
 
 | 入口 | 类别 | 什么时候用 | 不要做什么 |
 |---|---|---|---|
-| `wf route`、`wf state`、`wf dag`、`wf check`、`wf doctor`、`wf embed-state` | 只读 | 每次判定之前 | 不要自己按前置集合心算就绪或顺序 |
+| `wf route`、`wf check` | 只读 + 派生写入（唯一写入是清挂起，写完即提交） | 每次判定之前 | 不要自己按前置集合心算就绪或顺序 |
+| `wf state`、`wf dag`、`wf doctor`、`wf embed-state` | 只读 | 需要看状态时 | — |
 | `wf task new --role project` | 有副作用 | 启动项目层 | 不要用原生 `task.py create` 建图内任务 |
 | `wf task new --from-graph <key>`、`--prereq <id\|slug>`、`--unrelated` | 有副作用 | P 归档后按图建任务、重定义收尾任务、插入图外工作 | 不要早于 P 归档建实现任务；`--from-graph` 必须按拓扑序 |
 | `wf start` | 有副作用 | 图内任务开工 | 不要用原生 `task.py start` 开工图内任务 |
@@ -58,7 +59,7 @@ WF-VARIANT-SENTINEL:1d9c4b7e
 
 ### 自检与修复（方案 §3.8）
 
-- `wf check` 只读；`wf route` 内部先跑一遍。
+- `wf check` / `wf route` 只读为主，唯一例外是挂起清除（条件不全就不写）；`wf route` 内部先跑一遍 `wf check`。
 - 类型 1–5 的处分只能由人在交互式终端跑 `wf repair`（带令牌）；AI 不得代跑、不得设环境变量绕过。
 - 启动自检只识别与报告：除"派生清除挂起"外不写账本、不改任务状态。
 

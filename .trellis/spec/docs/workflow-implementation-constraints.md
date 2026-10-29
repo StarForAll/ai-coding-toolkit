@@ -36,6 +36,25 @@ authority and no document may cite it.
 
 ---
 
+## Command classes
+
+- Three classes, and the label must match behaviour: **read-only**, **read-only + derived write**
+  (`wf route` / `wf check`), and **side-effecting**.
+- The only derived write is clearing a suspension (table 4-2 row 3). It may happen only when all five
+  conditions hold (task not archived, ledger `suspended`, no unfinished rework registration, rework set
+  non-empty with no unarchived member, all prerequisites normal) **and** the §3.4 clean check passes.
+  It deletes the whole `entries[<task>]` key, commits `chore(wf): unsuspend <task>`, and on failure
+  reports and leaves the suspension for the next evaluation — never retries in the same instant.
+- Plan §4.3 says suspension clearing "is not a standalone action"; do not add a `wf unsuspend` command
+  without registering the deviation.
+
+## Reference convention
+
+- Bare `§x.y` means **this plan**; anything pointing at the design doc must be prefixed (`设计稿 §x.y`).
+  Appendix D's left column is design by table header. `scripts/check-doc-refs.py` enforces it (probe W25).
+
+---
+
 ## Mechanism entries
 
 - In-graph start/close go through the module CLI only. Direct `task.py` calls are **reported**
