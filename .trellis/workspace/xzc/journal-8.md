@@ -410,3 +410,25 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 384: 修四项实质缺口：基线入口分派、派生写入类别、§9.7 归位、引用约定
+<!-- trellis-session: v=2 fp=0008ee4cfd602467 -->
+
+**Date**: 2026-10-29
+**Task**: 修四项实质缺口：基线入口分派、派生写入类别、§9.7 归位、引用约定
+**Branch**: `main`
+
+### Summary
+
+按人审结论修 A1/A2/A3/A11：A1 保留 wf baseline --light 并让 route 按 §5.5 两分支分派（W24）；A2 新增'只读 + 派生写入'命令类别，五条件 fail-closed + 洁净检查 + 单独提交组，route/check 六处同步（W26）；A3 把 §9.7 并入 §8.2.1 后删除、M1–M3 留在 §9.5；A11 立引用约定、修 8 处含糊引用、新增 scripts/check-doc-refs.py 与 W25。校验：引用自检 0、trellis-library validate 0、validate-skills OK。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9193738` | docs(plan): 修 A1/A2/A3/A11（基线入口分派、只读+派生写入类别、§9.7 并入 §8.2.1、引用约定与自检脚本） |
+
+### Status
+
+[OK] **Completed**

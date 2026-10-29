@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-8.md`
-- **Total Sessions**: 383
+- **Total Sessions**: 384
 - **Last Active**: 2026-10-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-8.md` | ~412 | Active |
+| `journal-8.md` | ~434 | Active |
 | `journal-7.md` | ~1964 | Archived |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
@@ -36,6 +36,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 384 | 2026-10-29 | 修四项实质缺口：基线入口分派、派生写入类别、§9.7 归位、引用约定 | `9193738` | `main` |
 | 383 | 2026-10-29 | 审查 skill 内部化：提案定稿并落入实现方案 | `f48ea3e`, `f53c7ab`, `eb3cc85`, `7e3ab2a`, `3d97fd0`, `ae0eeef` | `main` |
 | 382 | 2026-10-29 | 登记 G7 审查强度分流待决 | `999cc16` | `main` |
 | 381 | 2026-10-28 | 实现方案补充 /tmp 实机验收要求 | `7f9f418` | `main` |
