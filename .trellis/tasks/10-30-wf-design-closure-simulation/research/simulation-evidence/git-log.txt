@@ -1,0 +1,51 @@
+9c1b46b8453e48a226471888347c646a3c31226d
+fixture baseline
+
+3c01deed0035444a0113cc4ab0d067594e46dfad
+fixture delivery
+
+wf-task: K-producer
+
+ad5dbc02672bbc82420508e38c1a37b4da7f7524
+fixture archive K-producer
+
+f15611e4ce1ec6e4be9ef532777efff1bbf361b2
+fixture A checkpoint
+
+wf-task: A-consumer
+
+8c0a28bb18f92d452c46aa6244e3ea2c8b38bcf4
+fixture control pause A
+
+ce059b82819f9b6b8d75c28c68f7eda3c68b7c0f
+fixture delivery
+
+wf-task: B-docs
+
+b71a71a939870bca4d0a4752a186e6675887a4bf
+fixture archive B-docs
+
+a64678777cda2a0f572bf4c3543b8ad51ffa5a37
+fixture control pause A again
+
+d5ed724d71b419ebcbc008481a353742a4d8bbdf
+fixture delivery
+
+wf-task: C-same-path
+
+48f21c9baed27b203b07a055bb23c95df7aa442d
+fixture archive C-same-path
+
+2fcec3b7a5ac1e32aa13a3db804f612c582a968e
+fixture external contract clarification
+
+05e7f8bd6cb5780ca56f80a77637a2ca4a7749bc
+fixture external emergency maintenance
+
+0f7427ca148cb0490758be3a52bec63953cd3d38
+fixture delivery
+
+wf-task: A-consumer
+
+e3e17488cda201e0ebd356ef35e39cc91f9b9da8
+fixture archive A-consumer

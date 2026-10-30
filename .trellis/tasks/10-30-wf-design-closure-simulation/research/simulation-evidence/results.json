@@ -1,0 +1,83 @@
+[
+  {
+    "scenario": "urgent-does-not-authorize",
+    "outcome": "pass",
+    "reason": "PLAN_UNAPPROVED",
+    "unchanged": true
+  },
+  {
+    "scenario": "producer-red-green-archive",
+    "outcome": "pass",
+    "red_exit": 1,
+    "green_exit": 0,
+    "spec_written": true
+  },
+  {
+    "scenario": "fresh-session-requires-reread",
+    "outcome": "pass",
+    "reason": "SPEC_UNREAD"
+  },
+  {
+    "scenario": "spec-violation-fails-business-check",
+    "outcome": "pass",
+    "test_exit": 1
+  },
+  {
+    "scenario": "cross-task-spec-consumption",
+    "outcome": "pass",
+    "consumer_pid": 140815,
+    "loader_pid": 140808,
+    "body": "---\npaths:\n  - src/quantity.py\nstatus: active\nverified_at: 2026-10-30\nschema_version: 1\nauthor: ai\ncounterexample: negative input accepted without ValueError\n---\n# Quantity contract\nAPI: validate_quantity(value)\nInteger inventory quantities are nonnegative. Zero and positive quantities are accepted.\nNegative input raises ValueError with negative_quantity. Aggregators call this validator for each value.\nGood: [2, 3] -> 5. Bad: [2, -1] must raise rather than return 1.\nVerified by: tests/test_quantity.py; the negative case failed before the fix and passed after it.\n",
+    "test_exit": 0,
+    "warning": "Scripted process; not a new AI session."
+  },
+  {
+    "scenario": "dirty-pause-is-blocked",
+    "outcome": "pass",
+    "reason": "DIRTY_WORKSPACE",
+    "worktree_preserved": true
+  },
+  {
+    "scenario": "pause-unrelated-insertion-resume",
+    "outcome": "pass",
+    "check_preserved": true,
+    "handoff": {
+      "goal": "quantity aggregation",
+      "next": "finish after insertion",
+      "head": "f15611e4ce1ec6e4be9ef532777efff1bbf361b2"
+    },
+    "implicit_resume_blocked": true
+  },
+  {
+    "scenario": "same-path-insertion-invalidates-check",
+    "outcome": "pass",
+    "check_preserved": false,
+    "finish_blocked": "CHECK_INVALID"
+  },
+  {
+    "scenario": "changed-spec-requires-reread",
+    "outcome": "pass",
+    "reason": "SPEC_CHANGED"
+  },
+  {
+    "scenario": "external-emergency-keeps-ownership",
+    "outcome": "pass",
+    "commit": "05e7f8bd6cb5780ca56f80a77637a2ca4a7749bc",
+    "check_invalidated": true,
+    "inferred_task_ownership": false,
+    "manual_impact": "Fixture comment-only change; no scope or acceptance change."
+  },
+  {
+    "scenario": "final-closure",
+    "outcome": "pass",
+    "archived": [
+      "A-consumer.json",
+      "B-docs.json",
+      "C-same-path.json",
+      "K-producer.json"
+    ],
+    "worktree_clean": true,
+    "active_pointer_absent": true,
+    "planning_only_rejection": "emergency remains unstarted; not completed"
+  }
+]

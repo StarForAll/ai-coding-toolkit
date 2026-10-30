@@ -1,0 +1,29 @@
+[
+  {
+    "command": [
+      "git",
+      "init",
+      "--initial-branch=main"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.008942,
+    "stdout": "Initialized empty Git repository in /tmp/wf-closure-sim-9d37yj8z/project/.git/\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "add",
+      "--",
+      ".gitignore",
+      ".wf/baseline.md",
+      ".wf/project-config.json",
+      "src/quantity.py",
+      "tests/test_quantity.py"
+    ],
+    "exit": 1,
+    "elapsed_seconds": 0.001527,
+    "stdout": "",
+    "stderr": "The following paths are ignored by one of your .gitignore files:\n.gitignore\nhint: Use -f if you really want to add them.\nhint: Disable this message with \"git config advice.addIgnoredFile false\"\n"
+  }
+]

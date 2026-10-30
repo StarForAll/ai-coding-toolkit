@@ -1,0 +1,1345 @@
+[
+  {
+    "command": [
+      "git",
+      "init",
+      "--initial-branch=main"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.001442,
+    "stdout": "Reinitialized existing Git repository in /tmp/wf-closure-sim-9d37yj8z/project/.git/\n",
+    "stderr": "warning: re-init: ignored --initial-branch=main\n"
+  },
+  {
+    "command": [
+      "git",
+      "add",
+      "--",
+      ".gitignore",
+      ".wf/baseline.md",
+      ".wf/project-config.json",
+      "src/quantity.py",
+      "tests/test_quantity.py"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.001238,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "-c",
+      "user.name=WF Simulation",
+      "-c",
+      "user.email=wf-simulation@example.invalid",
+      "commit",
+      "-m",
+      "fixture baseline"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.002981,
+    "stdout": "[main (root-commit) 9c1b46b] fixture baseline\n 5 files changed, 22 insertions(+)\n create mode 100644 .gitignore\n create mode 100644 .wf/baseline.md\n create mode 100644 .wf/project-config.json\n create mode 100644 src/quantity.py\n create mode 100644 tests/test_quantity.py\n",
+    "stderr": "hint: The '.git/hooks/post-commit' hook was ignored because it's not set as executable.\nhint: You can disable this warning with `git config advice.ignoredHook false`.\n"
+  },
+  {
+    "command": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.000898,
+    "stdout": "9c1b46b8453e48a226471888347c646a3c31226d\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "new",
+      "emergency",
+      "--data",
+      "{\"paths\": [\"src/quantity.py\"]}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.04303,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"new\", \"task\": \"emergency\", \"pid\": 140772, \"simulation_only\": true}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "start",
+      "emergency",
+      "--data",
+      "{\"urgent\": true}"
+    ],
+    "exit": 2,
+    "elapsed_seconds": 0.04375,
+    "stdout": "{\"tier\": \"blocked\", \"reason\": \"PLAN_UNAPPROVED\", \"fact\": \"Urgency does not change approval.\", \"next\": \"Approve the current fixture plan.\"}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "new",
+      "K-producer",
+      "--data",
+      "{\"paths\": [\"src/quantity.py\", \".wf/spec/index.md\", \".wf/spec/quantity-contract.md\"]}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.043583,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"new\", \"task\": \"K-producer\", \"pid\": 140774, \"simulation_only\": true}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "approve",
+      "K-producer",
+      "--data",
+      "{\"authority\": \"SIMULATED_HUMAN\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.050147,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"approve\", \"task\": \"K-producer\", \"pid\": 140775, \"simulation_only\": true}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "start",
+      "K-producer",
+      "--data",
+      "{}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.050873,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"start\", \"task\": \"K-producer\", \"pid\": 140776, \"simulation_only\": true}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-v"
+    ],
+    "exit": 1,
+    "elapsed_seconds": 0.047666,
+    "stdout": "",
+    "stderr": "test_negative_is_rejected (test_quantity.QuantityContract.test_negative_is_rejected) ... FAIL\ntest_positive_is_valid (test_quantity.QuantityContract.test_positive_is_valid) ... ok\ntest_zero_is_valid (test_quantity.QuantityContract.test_zero_is_valid) ... ok\n\n======================================================================\nFAIL: test_negative_is_rejected (test_quantity.QuantityContract.test_negative_is_rejected)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/wf-closure-sim-9d37yj8z/project/tests/test_quantity.py\", line 13, in test_negative_is_rejected\n    with self.assertRaises(ValueError):\n         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^\nAssertionError: ValueError not raised\n\n----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nFAILED (failures=1)\n"
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "load",
+      "K-producer",
+      "--data",
+      "{\"session\": \"producer\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.04431,
+    "stdout": "---\npaths:\n  - src/quantity.py\nstatus: active\nverified_at: 2026-10-30\nschema_version: 1\nauthor: ai\ncounterexample: negative input accepted without ValueError\n---\n# Quantity contract\nAPI: validate_quantity(value)\nInteger inventory quantities are nonnegative. Zero and positive quantities are accepted.\nNegative input raises ValueError with negative_quantity. Aggregators call this validator for each value.\nGood: [2, 3] -> 5. Bad: [2, -1] must raise rather than return 1.\nVerified by: tests/test_quantity.py; the negative case failed before the fix and passed after it.\n\n{\"tier\": \"pass\", \"operation\": \"load\", \"task\": \"K-producer\", \"pid\": 140780, \"simulation_only\": true, \"loaded\": [\".wf/spec/quantity-contract.md\"]}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "check",
+      "K-producer",
+      "--data",
+      "{\"session\": \"producer\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.096469,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"check\", \"task\": \"K-producer\", \"pid\": 140781, \"simulation_only\": true, \"command\": [\"/softwares/python/bin/python3\", \"-m\", \"unittest\", \"discover\", \"-s\", \"tests\", \"-v\"], \"test_exit\": 0, \"test_output\": \"test_negative_is_rejected (test_quantity.QuantityContract.test_negative_is_rejected) ... ok\\ntest_positive_is_valid (test_quantity.QuantityContract.test_positive_is_valid) ... ok\\ntest_zero_is_valid (test_quantity.QuantityContract.test_zero_is_valid) ... ok\\n\\n----------------------------------------------------------------------\\nRan 3 tests in 0.000s\\n\\nOK\\n\"}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "add",
+      "--",
+      "src/quantity.py",
+      ".wf/spec/index.md",
+      ".wf/spec/quantity-contract.md",
+      ".wf/tasks/K-producer.json"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.00173,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "-c",
+      "user.name=WF Simulation",
+      "-c",
+      "user.email=wf-simulation@example.invalid",
+      "commit",
+      "-m",
+      "fixture delivery\n\nwf-task: K-producer"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.003279,
+    "stdout": "[main 3c01dee] fixture delivery\n 4 files changed, 68 insertions(+)\n create mode 100644 .wf/spec/index.md\n create mode 100644 .wf/spec/quantity-contract.md\n create mode 100644 .wf/tasks/K-producer.json\n",
+    "stderr": "hint: The '.git/hooks/post-commit' hook was ignored because it's not set as executable.\nhint: You can disable this warning with `git config advice.ignoredHook false`.\n"
+  },
+  {
+    "command": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.00089,
+    "stdout": "3c01deed0035444a0113cc4ab0d067594e46dfad\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "finish",
+      "K-producer",
+      "--data",
+      "{\"authority\": \"SIMULATED_HUMAN\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.046038,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"finish\", \"task\": \"K-producer\", \"pid\": 140791, \"simulation_only\": true}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "add",
+      "--",
+      ".wf/tasks/K-producer.json",
+      ".wf/archive/K-producer.json"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.00136,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "-c",
+      "user.name=WF Simulation",
+      "-c",
+      "user.email=wf-simulation@example.invalid",
+      "commit",
+      "-m",
+      "fixture archive K-producer"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.002988,
+    "stdout": "[main ad5dbc0] fixture archive K-producer\n 1 file changed, 4 insertions(+), 3 deletions(-)\n rename .wf/{tasks => archive}/K-producer.json (89%)\n",
+    "stderr": "hint: The '.git/hooks/post-commit' hook was ignored because it's not set as executable.\nhint: You can disable this warning with `git config advice.ignoredHook false`.\n"
+  },
+  {
+    "command": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.000853,
+    "stdout": "ad5dbc02672bbc82420508e38c1a37b4da7f7524\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "new",
+      "A-consumer",
+      "--data",
+      "{\"paths\": [\"src/quantity.py\", \"tests/test_quantity.py\"]}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.048541,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"new\", \"task\": \"A-consumer\", \"pid\": 140798, \"simulation_only\": true}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "approve",
+      "A-consumer",
+      "--data",
+      "{\"authority\": \"SIMULATED_HUMAN\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.043851,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"approve\", \"task\": \"A-consumer\", \"pid\": 140799, \"simulation_only\": true}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "start",
+      "A-consumer",
+      "--data",
+      "{}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.046569,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"start\", \"task\": \"A-consumer\", \"pid\": 140800, \"simulation_only\": true}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "load",
+      "A-consumer",
+      "--data",
+      "{\"session\": \"initial\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.044739,
+    "stdout": "---\npaths:\n  - src/quantity.py\nstatus: active\nverified_at: 2026-10-30\nschema_version: 1\nauthor: ai\ncounterexample: negative input accepted without ValueError\n---\n# Quantity contract\nAPI: validate_quantity(value)\nInteger inventory quantities are nonnegative. Zero and positive quantities are accepted.\nNegative input raises ValueError with negative_quantity. Aggregators call this validator for each value.\nGood: [2, 3] -> 5. Bad: [2, -1] must raise rather than return 1.\nVerified by: tests/test_quantity.py; the negative case failed before the fix and passed after it.\n\n{\"tier\": \"pass\", \"operation\": \"load\", \"task\": \"A-consumer\", \"pid\": 140803, \"simulation_only\": true, \"loaded\": [\".wf/spec/quantity-contract.md\"]}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "check",
+      "A-consumer",
+      "--data",
+      "{\"session\": \"fresh\"}"
+    ],
+    "exit": 2,
+    "elapsed_seconds": 0.047202,
+    "stdout": "{\"tier\": \"blocked\", \"reason\": \"SPEC_UNREAD\", \"fact\": [\".wf/spec/quantity-contract.md\"], \"next\": \"Read the current spec in this simulated session.\"}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "load",
+      "A-consumer",
+      "--data",
+      "{\"session\": \"fresh\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.044343,
+    "stdout": "---\npaths:\n  - src/quantity.py\nstatus: active\nverified_at: 2026-10-30\nschema_version: 1\nauthor: ai\ncounterexample: negative input accepted without ValueError\n---\n# Quantity contract\nAPI: validate_quantity(value)\nInteger inventory quantities are nonnegative. Zero and positive quantities are accepted.\nNegative input raises ValueError with negative_quantity. Aggregators call this validator for each value.\nGood: [2, 3] -> 5. Bad: [2, -1] must raise rather than return 1.\nVerified by: tests/test_quantity.py; the negative case failed before the fix and passed after it.\n\n{\"tier\": \"pass\", \"operation\": \"load\", \"task\": \"A-consumer\", \"pid\": 140808, \"simulation_only\": true, \"loaded\": [\".wf/spec/quantity-contract.md\"]}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "check",
+      "A-consumer",
+      "--data",
+      "{\"session\": \"fresh\"}"
+    ],
+    "exit": 3,
+    "elapsed_seconds": 0.090061,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"check\", \"task\": \"A-consumer\", \"pid\": 140809, \"simulation_only\": true, \"command\": [\"/softwares/python/bin/python3\", \"-m\", \"unittest\", \"discover\", \"-s\", \"tests\", \"-v\"], \"test_exit\": 1, \"test_output\": \"test_aggregation_rejects_negative_quantity (test_quantity.AggregationContract.test_aggregation_rejects_negative_quantity) ... FAIL\\ntest_empty_is_zero (test_quantity.AggregationContract.test_empty_is_zero) ... ok\\ntest_sum_of_valid_quantities (test_quantity.AggregationContract.test_sum_of_valid_quantities) ... ok\\ntest_negative_is_rejected (test_quantity.QuantityContract.test_negative_is_rejected) ... ok\\ntest_positive_is_valid (test_quantity.QuantityContract.test_positive_is_valid) ... ok\\ntest_zero_is_valid (test_quantity.QuantityContract.test_zero_is_valid) ... ok\\n\\n======================================================================\\nFAIL: test_aggregation_rejects_negative_quantity (test_quantity.AggregationContract.test_aggregation_rejects_negative_quantity)\\n----------------------------------------------------------------------\\nTraceback (most recent call last):\\n  File \\\"/tmp/wf-closure-sim-9d37yj8z/project/tests/test_quantity.py\\\", line 28, in test_aggregation_rejects_negative_quantity\\n    with self.assertRaises(ValueError):\\n         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^\\nAssertionError: ValueError not raised\\n\\n----------------------------------------------------------------------\\nRan 6 tests in 0.001s\\n\\nFAILED (failures=1)\\n\"}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/consume.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.02041,
+    "stdout": "{\"pid\": 140815, \"selected\": \".wf/spec/quantity-contract.md\", \"full_body\": \"---\\npaths:\\n  - src/quantity.py\\nstatus: active\\nverified_at: 2026-10-30\\nschema_version: 1\\nauthor: ai\\ncounterexample: negative input accepted without ValueError\\n---\\n# Quantity contract\\nAPI: validate_quantity(value)\\nInteger inventory quantities are nonnegative. Zero and positive quantities are accepted.\\nNegative input raises ValueError with negative_quantity. Aggregators call this validator for each value.\\nGood: [2, 3] -> 5. Bad: [2, -1] must raise rather than return 1.\\nVerified by: tests/test_quantity.py; the negative case failed before the fix and passed after it.\\n\", \"derived_api\": \"validate_quantity\", \"simulation_only\": true}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "check",
+      "A-consumer",
+      "--data",
+      "{\"session\": \"fresh\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.089818,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"check\", \"task\": \"A-consumer\", \"pid\": 140816, \"simulation_only\": true, \"command\": [\"/softwares/python/bin/python3\", \"-m\", \"unittest\", \"discover\", \"-s\", \"tests\", \"-v\"], \"test_exit\": 0, \"test_output\": \"test_aggregation_rejects_negative_quantity (test_quantity.AggregationContract.test_aggregation_rejects_negative_quantity) ... ok\\ntest_empty_is_zero (test_quantity.AggregationContract.test_empty_is_zero) ... ok\\ntest_sum_of_valid_quantities (test_quantity.AggregationContract.test_sum_of_valid_quantities) ... ok\\ntest_negative_is_rejected (test_quantity.QuantityContract.test_negative_is_rejected) ... ok\\ntest_positive_is_valid (test_quantity.QuantityContract.test_positive_is_valid) ... ok\\ntest_zero_is_valid (test_quantity.QuantityContract.test_zero_is_valid) ... ok\\n\\n----------------------------------------------------------------------\\nRan 6 tests in 0.000s\\n\\nOK\\n\"}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "status",
+      "--porcelain"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.001589,
+    "stdout": " M src/quantity.py\n M tests/test_quantity.py\n?? .wf/tasks/\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "pause",
+      "A-consumer",
+      "--data",
+      "{\"authority\": \"SIMULATED_HUMAN\", \"goal\": \"quantity aggregation\", \"next\": \"finish after insertion\"}"
+    ],
+    "exit": 2,
+    "elapsed_seconds": 0.046215,
+    "stdout": "{\"tier\": \"blocked\", \"reason\": \"DIRTY_WORKSPACE\", \"fact\": [\"src/quantity.py\", \"tests/test_quantity.py\"], \"next\": \"Handle the fixture task paths explicitly; do not stash or include other work.\"}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "status",
+      "--porcelain"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.001612,
+    "stdout": " M src/quantity.py\n M tests/test_quantity.py\n?? .wf/tasks/\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "add",
+      "--",
+      "src/quantity.py",
+      "tests/test_quantity.py",
+      ".wf/tasks/A-consumer.json"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.001457,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "-c",
+      "user.name=WF Simulation",
+      "-c",
+      "user.email=wf-simulation@example.invalid",
+      "commit",
+      "-m",
+      "fixture A checkpoint\n\nwf-task: A-consumer"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.00409,
+    "stdout": "[main f15611e] fixture A checkpoint\n 3 files changed, 66 insertions(+)\n create mode 100644 .wf/tasks/A-consumer.json\n",
+    "stderr": "hint: The '.git/hooks/post-commit' hook was ignored because it's not set as executable.\nhint: You can disable this warning with `git config advice.ignoredHook false`.\n"
+  },
+  {
+    "command": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.000913,
+    "stdout": "f15611e4ce1ec6e4be9ef532777efff1bbf361b2\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "pause",
+      "A-consumer",
+      "--data",
+      "{\"authority\": \"SIMULATED_HUMAN\", \"goal\": \"quantity aggregation\", \"next\": \"finish after insertion\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.048013,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"pause\", \"task\": \"A-consumer\", \"pid\": 140830, \"simulation_only\": true}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "add",
+      "--",
+      ".wf/tasks/A-consumer.json",
+      ".wf/tasks/emergency.json"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.001456,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "-c",
+      "user.name=WF Simulation",
+      "-c",
+      "user.email=wf-simulation@example.invalid",
+      "commit",
+      "-m",
+      "fixture control pause A"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.003212,
+    "stdout": "[main 8c0a28b] fixture control pause A\n 2 files changed, 21 insertions(+), 2 deletions(-)\n create mode 100644 .wf/tasks/emergency.json\n",
+    "stderr": "hint: The '.git/hooks/post-commit' hook was ignored because it's not set as executable.\nhint: You can disable this warning with `git config advice.ignoredHook false`.\n"
+  },
+  {
+    "command": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.000933,
+    "stdout": "8c0a28bb18f92d452c46aa6244e3ea2c8b38bcf4\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "new",
+      "B-docs",
+      "--data",
+      "{\"paths\": [\"README.md\"]}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.043929,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"new\", \"task\": \"B-docs\", \"pid\": 140838, \"simulation_only\": true}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "approve",
+      "B-docs",
+      "--data",
+      "{\"authority\": \"SIMULATED_HUMAN\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.044173,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"approve\", \"task\": \"B-docs\", \"pid\": 140839, \"simulation_only\": true}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "start",
+      "B-docs",
+      "--data",
+      "{}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.050625,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"start\", \"task\": \"B-docs\", \"pid\": 140840, \"simulation_only\": true}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "check",
+      "B-docs",
+      "--data",
+      "{\"session\": \"docs\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.096349,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"check\", \"task\": \"B-docs\", \"pid\": 140843, \"simulation_only\": true, \"command\": [\"/softwares/python/bin/python3\", \"-m\", \"unittest\", \"discover\", \"-s\", \"tests\", \"-v\"], \"test_exit\": 0, \"test_output\": \"test_aggregation_rejects_negative_quantity (test_quantity.AggregationContract.test_aggregation_rejects_negative_quantity) ... ok\\ntest_empty_is_zero (test_quantity.AggregationContract.test_empty_is_zero) ... ok\\ntest_sum_of_valid_quantities (test_quantity.AggregationContract.test_sum_of_valid_quantities) ... ok\\ntest_negative_is_rejected (test_quantity.QuantityContract.test_negative_is_rejected) ... ok\\ntest_positive_is_valid (test_quantity.QuantityContract.test_positive_is_valid) ... ok\\ntest_zero_is_valid (test_quantity.QuantityContract.test_zero_is_valid) ... ok\\n\\n----------------------------------------------------------------------\\nRan 6 tests in 0.000s\\n\\nOK\\n\"}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "add",
+      "--",
+      "README.md",
+      ".wf/tasks/B-docs.json"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.001542,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "-c",
+      "user.name=WF Simulation",
+      "-c",
+      "user.email=wf-simulation@example.invalid",
+      "commit",
+      "-m",
+      "fixture delivery\n\nwf-task: B-docs"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.003054,
+    "stdout": "[main ce059b8] fixture delivery\n 2 files changed, 36 insertions(+)\n create mode 100644 .wf/tasks/B-docs.json\n create mode 100644 README.md\n",
+    "stderr": "hint: The '.git/hooks/post-commit' hook was ignored because it's not set as executable.\nhint: You can disable this warning with `git config advice.ignoredHook false`.\n"
+  },
+  {
+    "command": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.000915,
+    "stdout": "ce059b82819f9b6b8d75c28c68f7eda3c68b7c0f\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "finish",
+      "B-docs",
+      "--data",
+      "{\"authority\": \"SIMULATED_HUMAN\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.04977,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"finish\", \"task\": \"B-docs\", \"pid\": 140853, \"simulation_only\": true}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "add",
+      "--",
+      ".wf/tasks/B-docs.json",
+      ".wf/archive/B-docs.json"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.001381,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "-c",
+      "user.name=WF Simulation",
+      "-c",
+      "user.email=wf-simulation@example.invalid",
+      "commit",
+      "-m",
+      "fixture archive B-docs"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.003235,
+    "stdout": "[main b71a71a] fixture archive B-docs\n 1 file changed, 4 insertions(+), 3 deletions(-)\n rename .wf/{tasks => archive}/B-docs.json (83%)\n",
+    "stderr": "hint: The '.git/hooks/post-commit' hook was ignored because it's not set as executable.\nhint: You can disable this warning with `git config advice.ignoredHook false`.\n"
+  },
+  {
+    "command": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.000881,
+    "stdout": "b71a71a939870bca4d0a4752a186e6675887a4bf\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "resume",
+      "A-consumer",
+      "--data",
+      "{}"
+    ],
+    "exit": 2,
+    "elapsed_seconds": 0.048843,
+    "stdout": "{\"tier\": \"blocked\", \"reason\": \"AUTHORITY_REQUIRED\", \"fact\": \"Pause cannot be cleared by inference.\", \"next\": \"Supply explicit fixture authority.\"}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "resume",
+      "A-consumer",
+      "--data",
+      "{\"authority\": \"SIMULATED_HUMAN\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.049753,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"resume\", \"task\": \"A-consumer\", \"pid\": 140861, \"simulation_only\": true, \"handoff\": {\"goal\": \"quantity aggregation\", \"next\": \"finish after insertion\", \"head\": \"f15611e4ce1ec6e4be9ef532777efff1bbf361b2\"}, \"check_valid\": true}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "load",
+      "A-consumer",
+      "--data",
+      "{\"session\": \"after-docs\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.046975,
+    "stdout": "---\npaths:\n  - src/quantity.py\nstatus: active\nverified_at: 2026-10-30\nschema_version: 1\nauthor: ai\ncounterexample: negative input accepted without ValueError\n---\n# Quantity contract\nAPI: validate_quantity(value)\nInteger inventory quantities are nonnegative. Zero and positive quantities are accepted.\nNegative input raises ValueError with negative_quantity. Aggregators call this validator for each value.\nGood: [2, 3] -> 5. Bad: [2, -1] must raise rather than return 1.\nVerified by: tests/test_quantity.py; the negative case failed before the fix and passed after it.\n\n{\"tier\": \"pass\", \"operation\": \"load\", \"task\": \"A-consumer\", \"pid\": 140875, \"simulation_only\": true, \"loaded\": [\".wf/spec/quantity-contract.md\"]}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "pause",
+      "A-consumer",
+      "--data",
+      "{\"authority\": \"SIMULATED_HUMAN\", \"goal\": \"quantity aggregation\", \"next\": \"recheck after same-path insertion\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.047106,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"pause\", \"task\": \"A-consumer\", \"pid\": 140876, \"simulation_only\": true}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "add",
+      "--",
+      ".wf/tasks/A-consumer.json"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.001428,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "-c",
+      "user.name=WF Simulation",
+      "-c",
+      "user.email=wf-simulation@example.invalid",
+      "commit",
+      "-m",
+      "fixture control pause A again"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.003238,
+    "stdout": "[main a646787] fixture control pause A again\n 1 file changed, 2 insertions(+), 2 deletions(-)\n",
+    "stderr": "hint: The '.git/hooks/post-commit' hook was ignored because it's not set as executable.\nhint: You can disable this warning with `git config advice.ignoredHook false`.\n"
+  },
+  {
+    "command": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.000937,
+    "stdout": "a64678777cda2a0f572bf4c3543b8ad51ffa5a37\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "new",
+      "C-same-path",
+      "--data",
+      "{\"paths\": [\"src/quantity.py\"]}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.043762,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"new\", \"task\": \"C-same-path\", \"pid\": 140884, \"simulation_only\": true}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "approve",
+      "C-same-path",
+      "--data",
+      "{\"authority\": \"SIMULATED_HUMAN\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.043976,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"approve\", \"task\": \"C-same-path\", \"pid\": 140885, \"simulation_only\": true}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "start",
+      "C-same-path",
+      "--data",
+      "{}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.04701,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"start\", \"task\": \"C-same-path\", \"pid\": 140886, \"simulation_only\": true}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "load",
+      "C-same-path",
+      "--data",
+      "{\"session\": \"same-path\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.045014,
+    "stdout": "---\npaths:\n  - src/quantity.py\nstatus: active\nverified_at: 2026-10-30\nschema_version: 1\nauthor: ai\ncounterexample: negative input accepted without ValueError\n---\n# Quantity contract\nAPI: validate_quantity(value)\nInteger inventory quantities are nonnegative. Zero and positive quantities are accepted.\nNegative input raises ValueError with negative_quantity. Aggregators call this validator for each value.\nGood: [2, 3] -> 5. Bad: [2, -1] must raise rather than return 1.\nVerified by: tests/test_quantity.py; the negative case failed before the fix and passed after it.\n\n{\"tier\": \"pass\", \"operation\": \"load\", \"task\": \"C-same-path\", \"pid\": 140889, \"simulation_only\": true, \"loaded\": [\".wf/spec/quantity-contract.md\"]}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "check",
+      "C-same-path",
+      "--data",
+      "{\"session\": \"same-path\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.091885,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"check\", \"task\": \"C-same-path\", \"pid\": 140890, \"simulation_only\": true, \"command\": [\"/softwares/python/bin/python3\", \"-m\", \"unittest\", \"discover\", \"-s\", \"tests\", \"-v\"], \"test_exit\": 0, \"test_output\": \"test_aggregation_rejects_negative_quantity (test_quantity.AggregationContract.test_aggregation_rejects_negative_quantity) ... ok\\ntest_empty_is_zero (test_quantity.AggregationContract.test_empty_is_zero) ... ok\\ntest_sum_of_valid_quantities (test_quantity.AggregationContract.test_sum_of_valid_quantities) ... ok\\ntest_negative_is_rejected (test_quantity.QuantityContract.test_negative_is_rejected) ... ok\\ntest_positive_is_valid (test_quantity.QuantityContract.test_positive_is_valid) ... ok\\ntest_zero_is_valid (test_quantity.QuantityContract.test_zero_is_valid) ... ok\\n\\n----------------------------------------------------------------------\\nRan 6 tests in 0.000s\\n\\nOK\\n\"}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "add",
+      "--",
+      "src/quantity.py",
+      ".wf/tasks/C-same-path.json"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.0015,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "-c",
+      "user.name=WF Simulation",
+      "-c",
+      "user.email=wf-simulation@example.invalid",
+      "commit",
+      "-m",
+      "fixture delivery\n\nwf-task: C-same-path"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.003115,
+    "stdout": "[main d5ed724] fixture delivery\n 2 files changed, 43 insertions(+)\n create mode 100644 .wf/tasks/C-same-path.json\n",
+    "stderr": "hint: The '.git/hooks/post-commit' hook was ignored because it's not set as executable.\nhint: You can disable this warning with `git config advice.ignoredHook false`.\n"
+  },
+  {
+    "command": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.000846,
+    "stdout": "d5ed724d71b419ebcbc008481a353742a4d8bbdf\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "finish",
+      "C-same-path",
+      "--data",
+      "{\"authority\": \"SIMULATED_HUMAN\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.045752,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"finish\", \"task\": \"C-same-path\", \"pid\": 140900, \"simulation_only\": true}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "add",
+      "--",
+      ".wf/tasks/C-same-path.json",
+      ".wf/archive/C-same-path.json"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.001393,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "-c",
+      "user.name=WF Simulation",
+      "-c",
+      "user.email=wf-simulation@example.invalid",
+      "commit",
+      "-m",
+      "fixture archive C-same-path"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.00311,
+    "stdout": "[main 48f21c9] fixture archive C-same-path\n 1 file changed, 4 insertions(+), 3 deletions(-)\n rename .wf/{tasks => archive}/C-same-path.json (86%)\n",
+    "stderr": "hint: The '.git/hooks/post-commit' hook was ignored because it's not set as executable.\nhint: You can disable this warning with `git config advice.ignoredHook false`.\n"
+  },
+  {
+    "command": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.000911,
+    "stdout": "48f21c9baed27b203b07a055bb23c95df7aa442d\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "resume",
+      "A-consumer",
+      "--data",
+      "{\"authority\": \"SIMULATED_HUMAN\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.045916,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"resume\", \"task\": \"A-consumer\", \"pid\": 140907, \"simulation_only\": true, \"handoff\": {\"goal\": \"quantity aggregation\", \"next\": \"recheck after same-path insertion\", \"head\": \"b71a71a939870bca4d0a4752a186e6675887a4bf\"}, \"check_valid\": false}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "finish",
+      "A-consumer",
+      "--data",
+      "{\"authority\": \"SIMULATED_HUMAN\"}"
+    ],
+    "exit": 2,
+    "elapsed_seconds": 0.044642,
+    "stdout": "{\"tier\": \"blocked\", \"reason\": \"CHECK_INVALID\", \"fact\": \"No valid current Check.\", \"next\": \"Resume/recheck; do not reuse an obsolete pass.\"}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "load",
+      "A-consumer",
+      "--data",
+      "{\"session\": \"after-same-path\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.048673,
+    "stdout": "---\npaths:\n  - src/quantity.py\nstatus: active\nverified_at: 2026-10-30\nschema_version: 1\nauthor: ai\ncounterexample: negative input accepted without ValueError\n---\n# Quantity contract\nAPI: validate_quantity(value)\nInteger inventory quantities are nonnegative. Zero and positive quantities are accepted.\nNegative input raises ValueError with negative_quantity. Aggregators call this validator for each value.\nGood: [2, 3] -> 5. Bad: [2, -1] must raise rather than return 1.\nVerified by: tests/test_quantity.py; the negative case failed before the fix and passed after it.\n\n{\"tier\": \"pass\", \"operation\": \"load\", \"task\": \"A-consumer\", \"pid\": 140910, \"simulation_only\": true, \"loaded\": [\".wf/spec/quantity-contract.md\"]}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "check",
+      "A-consumer",
+      "--data",
+      "{\"session\": \"after-same-path\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.091247,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"check\", \"task\": \"A-consumer\", \"pid\": 140911, \"simulation_only\": true, \"command\": [\"/softwares/python/bin/python3\", \"-m\", \"unittest\", \"discover\", \"-s\", \"tests\", \"-v\"], \"test_exit\": 0, \"test_output\": \"test_aggregation_rejects_negative_quantity (test_quantity.AggregationContract.test_aggregation_rejects_negative_quantity) ... ok\\ntest_empty_is_zero (test_quantity.AggregationContract.test_empty_is_zero) ... ok\\ntest_sum_of_valid_quantities (test_quantity.AggregationContract.test_sum_of_valid_quantities) ... ok\\ntest_negative_is_rejected (test_quantity.QuantityContract.test_negative_is_rejected) ... ok\\ntest_positive_is_valid (test_quantity.QuantityContract.test_positive_is_valid) ... ok\\ntest_zero_is_valid (test_quantity.QuantityContract.test_zero_is_valid) ... ok\\n\\n----------------------------------------------------------------------\\nRan 6 tests in 0.000s\\n\\nOK\\n\"}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "add",
+      "--",
+      ".wf/spec/quantity-contract.md"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.001698,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "-c",
+      "user.name=WF Simulation",
+      "-c",
+      "user.email=wf-simulation@example.invalid",
+      "commit",
+      "-m",
+      "fixture external contract clarification"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.003051,
+    "stdout": "[main 2fcec3b] fixture external contract clarification\n 1 file changed, 2 insertions(+)\n",
+    "stderr": "hint: The '.git/hooks/post-commit' hook was ignored because it's not set as executable.\nhint: You can disable this warning with `git config advice.ignoredHook false`.\n"
+  },
+  {
+    "command": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.000966,
+    "stdout": "2fcec3b7a5ac1e32aa13a3db804f612c582a968e\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "check",
+      "A-consumer",
+      "--data",
+      "{\"session\": \"after-same-path\"}"
+    ],
+    "exit": 2,
+    "elapsed_seconds": 0.047431,
+    "stdout": "{\"tier\": \"blocked\", \"reason\": \"SPEC_CHANGED\", \"fact\": [\".wf/spec/quantity-contract.md\"], \"next\": \"Reload the current full spec before checking.\"}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "load",
+      "A-consumer",
+      "--data",
+      "{\"session\": \"after-same-path\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.044873,
+    "stdout": "---\npaths:\n  - src/quantity.py\nstatus: active\nverified_at: 2026-10-30\nschema_version: 1\nauthor: ai\ncounterexample: negative input accepted without ValueError\n---\n# Quantity contract\nAPI: validate_quantity(value)\nInteger inventory quantities are nonnegative. Zero and positive quantities are accepted.\nNegative input raises ValueError with negative_quantity. Aggregators call this validator for each value.\nGood: [2, 3] -> 5. Bad: [2, -1] must raise rather than return 1.\nVerified by: tests/test_quantity.py; the negative case failed before the fix and passed after it.\n\nPositive example: total_quantity([0, 3]) returns 3.\n\n{\"tier\": \"pass\", \"operation\": \"load\", \"task\": \"A-consumer\", \"pid\": 140925, \"simulation_only\": true, \"loaded\": [\".wf/spec/quantity-contract.md\"]}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "check",
+      "A-consumer",
+      "--data",
+      "{\"session\": \"after-same-path\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.090736,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"check\", \"task\": \"A-consumer\", \"pid\": 140926, \"simulation_only\": true, \"command\": [\"/softwares/python/bin/python3\", \"-m\", \"unittest\", \"discover\", \"-s\", \"tests\", \"-v\"], \"test_exit\": 0, \"test_output\": \"test_aggregation_rejects_negative_quantity (test_quantity.AggregationContract.test_aggregation_rejects_negative_quantity) ... ok\\ntest_empty_is_zero (test_quantity.AggregationContract.test_empty_is_zero) ... ok\\ntest_sum_of_valid_quantities (test_quantity.AggregationContract.test_sum_of_valid_quantities) ... ok\\ntest_negative_is_rejected (test_quantity.QuantityContract.test_negative_is_rejected) ... ok\\ntest_positive_is_valid (test_quantity.QuantityContract.test_positive_is_valid) ... ok\\ntest_zero_is_valid (test_quantity.QuantityContract.test_zero_is_valid) ... ok\\n\\n----------------------------------------------------------------------\\nRan 6 tests in 0.000s\\n\\nOK\\n\"}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "add",
+      "--",
+      "src/quantity.py"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.001428,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "-c",
+      "user.name=WF Simulation",
+      "-c",
+      "user.email=wf-simulation@example.invalid",
+      "commit",
+      "-m",
+      "fixture external emergency maintenance"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.002859,
+    "stdout": "[main 05e7f8b] fixture external emergency maintenance\n 1 file changed, 2 insertions(+)\n",
+    "stderr": "hint: The '.git/hooks/post-commit' hook was ignored because it's not set as executable.\nhint: You can disable this warning with `git config advice.ignoredHook false`.\n"
+  },
+  {
+    "command": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.000962,
+    "stdout": "05e7f8bd6cb5780ca56f80a77637a2ca4a7749bc\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "show",
+      "-s",
+      "--format=%B",
+      "05e7f8bd6cb5780ca56f80a77637a2ca4a7749bc"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.001183,
+    "stdout": "fixture external emergency maintenance\n\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "valid",
+      "A-consumer",
+      "--data",
+      "{}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.046251,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"valid\", \"task\": \"A-consumer\", \"pid\": 140937, \"simulation_only\": true, \"check_valid\": false, \"commits_since_base\": \"05e7f8bd6cb5780ca56f80a77637a2ca4a7749bc\\nfixture external emergency maintenance\\n\\n2fcec3b7a5ac1e32aa13a3db804f612c582a968e\\nfixture external contract clarification\\n\\n48f21c9baed27b203b07a055bb23c95df7aa442d\\nfixture archive C-same-path\\n\\nd5ed724d71b419ebcbc008481a353742a4d8bbdf\\nfixture delivery\\n\\nwf-task: C-same-path\\n\\na64678777cda2a0f572bf4c3543b8ad51ffa5a37\\nfixture control pause A again\\n\\nb71a71a939870bca4d0a4752a186e6675887a4bf\\nfixture archive B-docs\\n\\nce059b82819f9b6b8d75c28c68f7eda3c68b7c0f\\nfixture delivery\\n\\nwf-task: B-docs\\n\\n8c0a28bb18f92d452c46aa6244e3ea2c8b38bcf4\\nfixture control pause A\\n\\nf15611e4ce1ec6e4be9ef532777efff1bbf361b2\\nfixture A checkpoint\\n\\nwf-task: A-consumer\"}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "load",
+      "A-consumer",
+      "--data",
+      "{\"session\": \"after-external\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.0458,
+    "stdout": "---\npaths:\n  - src/quantity.py\nstatus: active\nverified_at: 2026-10-30\nschema_version: 1\nauthor: ai\ncounterexample: negative input accepted without ValueError\n---\n# Quantity contract\nAPI: validate_quantity(value)\nInteger inventory quantities are nonnegative. Zero and positive quantities are accepted.\nNegative input raises ValueError with negative_quantity. Aggregators call this validator for each value.\nGood: [2, 3] -> 5. Bad: [2, -1] must raise rather than return 1.\nVerified by: tests/test_quantity.py; the negative case failed before the fix and passed after it.\n\nPositive example: total_quantity([0, 3]) returns 3.\n\n{\"tier\": \"pass\", \"operation\": \"load\", \"task\": \"A-consumer\", \"pid\": 140939, \"simulation_only\": true, \"loaded\": [\".wf/spec/quantity-contract.md\"]}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "check",
+      "A-consumer",
+      "--data",
+      "{\"session\": \"after-external\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.090714,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"check\", \"task\": \"A-consumer\", \"pid\": 140940, \"simulation_only\": true, \"command\": [\"/softwares/python/bin/python3\", \"-m\", \"unittest\", \"discover\", \"-s\", \"tests\", \"-v\"], \"test_exit\": 0, \"test_output\": \"test_aggregation_rejects_negative_quantity (test_quantity.AggregationContract.test_aggregation_rejects_negative_quantity) ... ok\\ntest_empty_is_zero (test_quantity.AggregationContract.test_empty_is_zero) ... ok\\ntest_sum_of_valid_quantities (test_quantity.AggregationContract.test_sum_of_valid_quantities) ... ok\\ntest_negative_is_rejected (test_quantity.QuantityContract.test_negative_is_rejected) ... ok\\ntest_positive_is_valid (test_quantity.QuantityContract.test_positive_is_valid) ... ok\\ntest_zero_is_valid (test_quantity.QuantityContract.test_zero_is_valid) ... ok\\n\\n----------------------------------------------------------------------\\nRan 6 tests in 0.000s\\n\\nOK\\n\"}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "add",
+      "--",
+      ".wf/tasks/A-consumer.json"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.004242,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "-c",
+      "user.name=WF Simulation",
+      "-c",
+      "user.email=wf-simulation@example.invalid",
+      "commit",
+      "-m",
+      "fixture delivery\n\nwf-task: A-consumer"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.003172,
+    "stdout": "[main 0f7427c] fixture delivery\n 1 file changed, 3 insertions(+), 3 deletions(-)\n",
+    "stderr": "hint: The '.git/hooks/post-commit' hook was ignored because it's not set as executable.\nhint: You can disable this warning with `git config advice.ignoredHook false`.\n"
+  },
+  {
+    "command": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.001002,
+    "stdout": "0f7427ca148cb0490758be3a52bec63953cd3d38\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "/tmp/wf-closure-sim-9d37yj8z/control.py",
+      "/tmp/wf-closure-sim-9d37yj8z/project",
+      "finish",
+      "A-consumer",
+      "--data",
+      "{\"authority\": \"SIMULATED_HUMAN\"}"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.045738,
+    "stdout": "{\"tier\": \"pass\", \"operation\": \"finish\", \"task\": \"A-consumer\", \"pid\": 140950, \"simulation_only\": true}\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "add",
+      "--",
+      ".wf/tasks/A-consumer.json",
+      ".wf/archive/A-consumer.json"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.001391,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "-c",
+      "user.name=WF Simulation",
+      "-c",
+      "user.email=wf-simulation@example.invalid",
+      "commit",
+      "-m",
+      "fixture archive A-consumer"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.003195,
+    "stdout": "[main e3e1748] fixture archive A-consumer\n 1 file changed, 4 insertions(+), 3 deletions(-)\n rename .wf/{tasks => archive}/A-consumer.json (93%)\n",
+    "stderr": "hint: The '.git/hooks/post-commit' hook was ignored because it's not set as executable.\nhint: You can disable this warning with `git config advice.ignoredHook false`.\n"
+  },
+  {
+    "command": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.000869,
+    "stdout": "e3e17488cda201e0ebd356ef35e39cc91f9b9da8\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "status",
+      "--porcelain"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.001236,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "/softwares/python/bin/python3",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-v"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.043591,
+    "stdout": "",
+    "stderr": "test_aggregation_rejects_negative_quantity (test_quantity.AggregationContract.test_aggregation_rejects_negative_quantity) ... ok\ntest_empty_is_zero (test_quantity.AggregationContract.test_empty_is_zero) ... ok\ntest_sum_of_valid_quantities (test_quantity.AggregationContract.test_sum_of_valid_quantities) ... ok\ntest_negative_is_rejected (test_quantity.QuantityContract.test_negative_is_rejected) ... ok\ntest_positive_is_valid (test_quantity.QuantityContract.test_positive_is_valid) ... ok\ntest_zero_is_valid (test_quantity.QuantityContract.test_zero_is_valid) ... ok\n\n----------------------------------------------------------------------\nRan 6 tests in 0.000s\n\nOK\n"
+  },
+  {
+    "command": [
+      "git",
+      "log",
+      "--format=%H%n%B",
+      "--reverse"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.001907,
+    "stdout": "9c1b46b8453e48a226471888347c646a3c31226d\nfixture baseline\n\n3c01deed0035444a0113cc4ab0d067594e46dfad\nfixture delivery\n\nwf-task: K-producer\n\nad5dbc02672bbc82420508e38c1a37b4da7f7524\nfixture archive K-producer\n\nf15611e4ce1ec6e4be9ef532777efff1bbf361b2\nfixture A checkpoint\n\nwf-task: A-consumer\n\n8c0a28bb18f92d452c46aa6244e3ea2c8b38bcf4\nfixture control pause A\n\nce059b82819f9b6b8d75c28c68f7eda3c68b7c0f\nfixture delivery\n\nwf-task: B-docs\n\nb71a71a939870bca4d0a4752a186e6675887a4bf\nfixture archive B-docs\n\na64678777cda2a0f572bf4c3543b8ad51ffa5a37\nfixture control pause A again\n\nd5ed724d71b419ebcbc008481a353742a4d8bbdf\nfixture delivery\n\nwf-task: C-same-path\n\n48f21c9baed27b203b07a055bb23c95df7aa442d\nfixture archive C-same-path\n\n2fcec3b7a5ac1e32aa13a3db804f612c582a968e\nfixture external contract clarification\n\n05e7f8bd6cb5780ca56f80a77637a2ca4a7749bc\nfixture external emergency maintenance\n\n0f7427ca148cb0490758be3a52bec63953cd3d38\nfixture delivery\n\nwf-task: A-consumer\n\ne3e17488cda201e0ebd356ef35e39cc91f9b9da8\nfixture archive A-consumer\n\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "git",
+      "status",
+      "--porcelain"
+    ],
+    "exit": 0,
+    "elapsed_seconds": 0.001735,
+    "stdout": "",
+    "stderr": ""
+  }
+]
