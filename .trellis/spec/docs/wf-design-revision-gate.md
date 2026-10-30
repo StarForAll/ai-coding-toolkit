@@ -29,15 +29,39 @@ Applies to every future revision of:
    them ("a net with the mesh on the silent side is no net" applies to the checker itself).
    When extending the checker, extend its coverage output in the same change.
 
-3. **Index-table consumer column = machine-generated candidates + human confirmation.**
-   The checker diffs "sections where the key literally appears" against the column; gaps FAIL.
-   Same-name-different-sense candidates are rejected via **exclusion annotations**
-   (`排除：§X=reason`) recorded inside the cell — the section number stays in the line so the
-   checker counts it as human-adjudicated. Never hand-fill the column from memory.
+3. **Keep lexical candidates and semantic consumers separate.** The index has six columns:
+   ID, definition, lexical candidates, redefinition sites, semantic consumers with reasons,
+   and review state. The checker consumes the third column; regenerate only that column
+   from literal matches, preserving the fifth and sixth columns. A 100% lexical hit rate
+   does not establish semantic coverage. Same-name-different-sense candidates use
+   `排除：§X=reason`; never silently remove a match or hand-fill candidates from memory.
 
-4. **Non-P1 revision requests go to the candidate list** (design doc §8 item 7), not directly
-   into the document. When a candidate class is empty, the list must state where the previous
-   round's leftovers were disposed of (empty-table self-check).
+   Review state distinguishes `未核对`, `已核对·有消费`, and `已核对·仅定义节`.
+   No literal match is not evidence of no semantic consumer. For gates, states, pointers,
+   records, and assets, trace each claimed consumer back to an actual clause/action in
+   the current body. An intended action absent from the body is a gap, not a verified
+   consumer. Record the missing action or withdraw the claim; do not certify intent.
+
+4. **Optional improvements go to the candidate list** (design doc §8.3) unless the user
+   explicitly authorizes the concrete revision. User-authorized P2/P3 fixes are not blocked
+   by the default candidate rule. Keep dispositions in task records rather than appending
+   round histories to product rules.
+
+5. **Rewrites must preserve each retained rule's inputs and ownership.** For a statistic,
+   check which durable record supplies it and how missing data differs from zero. For a
+   managed document or project configuration, record the target path, writer, upgrade policy,
+   and consumers. Runtime caches must not silently become historical evidence. Compare
+   dependent clauses after changing these contracts; one locally correct sentence is insufficient.
+
+6. **Product evidence links must survive task archival.** Use the stable
+   `docs/workflows/wf-framework-design.sources.md` plus immutable commit/file identifiers;
+   do not point product docs at an active task directory that `task.py archive` will move.
+   Task-local reports may retain historical line anchors if they explicitly name the baseline.
+
+7. **Separate design acceptance from implementation validation.** Record the user's actual
+   review decision without inventing independent-session or runtime evidence. Run the checker
+   and review the changed contracts, then stop expanding text review when the agreed scope
+   is resolved. The next implementation stage owns executable fixtures and runtime claims.
 
 ---
 
