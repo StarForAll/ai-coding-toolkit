@@ -493,3 +493,26 @@
 ### Next Steps
 
 - 另开机制设计与实现单元规划任务，将已审定义映射到 schema、命令与三个隔离夹具的验收场景；先审方案再实现。
+
+
+## Session 387: wf 框架设计第五轮审查与三轮修正收尾
+<!-- trellis-session: v=2 fp=35b93ea9978ffcbf -->
+
+**Date**: 2026-10-30
+**Task**: wf 框架设计第五轮审查与三轮修正收尾
+**Branch**: `main`
+
+### Summary
+
+四路子代理深析 skills/Trellis/stop-that-shit/mcode-stack 后审查 wf-framework-design.md：发现 R1-R6（repair/spec 加载交付单元缺失、三夹具未绑定、归档核验范围、需人裁决档）并全量吸收 17 项上游纪律；随后按用户三轮判断修正审查输入边界互斥、验收矩阵三档化、巡检计数可重建语义、索引双向回扫（枚举规则连续命中 7 处漏扫）。机检全程 100% 通过、校验器零改动；spec 沉淀门禁 8-12 条（回扫枚举、判定输入可重建、导入约束互检、验收矩阵跟档位、吸收收敛）。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `777b9c5` | docs(wf): 闭合第五轮设计审查缺口并吸收上游纪律 |
+| `6427d1f` | docs(spec): 沉淀第五轮修订的回扫枚举与互检门禁 |
+
+### Status
+
+[OK] **Completed**
