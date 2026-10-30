@@ -43,6 +43,7 @@ Key distinction:
 | Workflow docs | `docs/workflows/**` | Human-facing workflow notes and command references |
 | Trellis spec docs | `.trellis/spec/**` | Repo-local maintenance guidance plus workflow-authoring rules used by this repo |
 | Workflow implementation constraints | `.trellis/spec/docs/workflow-implementation-constraints.md` | Guardrails to follow when implementing `docs/workflows/workflow-implementation.md` |
+| wf design revision gate | `.trellis/spec/docs/wf-design-revision-gate.md` | Machine-checker close-out gate plus index-table maintenance protocol for revising `docs/workflows/wf-framework-design.md` |
 | Library docs | `trellis-library/README.md`, `trellis-library/taxonomy.md` | Source-library architecture and taxonomy |
 
 ---
