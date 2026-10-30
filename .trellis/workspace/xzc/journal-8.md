@@ -432,3 +432,26 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 385: wf 框架设计六批实据审查修订与机检器门禁落地
+<!-- trellis-session: v=2 fp=5fdf6cf2b34e4de1 -->
+
+**Date**: 2026-10-30
+**Task**: wf 框架设计六批实据审查修订与机检器门禁落地
+**Branch**: `main`
+
+### Summary
+
+对 docs/workflows/wf-framework-design.md 完成六批实据审查与修订（554→631 行）：F1-F17+r3 结论、N/M/R、G、H、建工具、K 共 6 批判断全部裁决织入（对照见归档任务 implement.md）；配套新增唯一定义索引表（55 行，双向核对）与设计期机检器 scripts/validate-wf-design.py（四检查+三率阈值断言，消费点命中率 44%→100%），每轮修订以机检器通过为收尾条件；spec 层沉淀 .trellis/spec/docs/wf-design-revision-gate.md；待用户决策项 D-1~D-4 随归档任务保留。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `69f4580` | docs(spec): 沉淀 wf 设计文档修订门禁（机检器收尾 + 索引表维护协议） |
+| `902e894` | docs(wf): 按六批实据审查修订 wf 框架设计文档，配套机检器与索引表 |
+
+### Status
+
+[OK] **Completed**
