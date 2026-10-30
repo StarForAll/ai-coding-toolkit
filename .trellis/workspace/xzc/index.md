@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-8.md`
-- **Total Sessions**: 385
+- **Total Sessions**: 386
 - **Last Active**: 2026-10-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-8.md` | ~457 | Active |
+| `journal-8.md` | ~495 | Active |
 | `journal-7.md` | ~1964 | Archived |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
@@ -36,6 +36,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 386 | 2026-10-30 | wf 框架设计研究、整体修订与人工验收 | `9b51874`, `e10be72` | `main` |
 | 385 | 2026-10-30 | wf 框架设计六批实据审查修订与机检器门禁落地 | `69f4580`, `902e894` | `main` |
 | 384 | 2026-10-29 | 修四项实质缺口：基线入口分派、派生写入类别、§9.7 归位、引用约定 | `9193738` | `main` |
 | 383 | 2026-10-29 | 审查 skill 内部化：提案定稿并落入实现方案 | `f48ea3e`, `f53c7ab`, `eb3cc85`, `7e3ab2a`, `3d97fd0`, `ae0eeef` | `main` |
