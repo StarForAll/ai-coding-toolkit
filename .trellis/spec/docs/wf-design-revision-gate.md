@@ -1,9 +1,10 @@
 # wf Framework Design — Revision Gate
 
 > Distilled from the 2026-10-30 review/revise rounds on `docs/workflows/wf-framework-design.md`
-> (six batched judgments, ~35 accepted items). The recurring failure mode was not "we don't know
+> (r4: six batched judgments, ~35 accepted items; r5: three revision rounds, 6 core gaps +
+> 17 absorptions + follow-up corrections). The recurring failure mode is not "we don't know
 > what to check" but "we must check it in several places at once and human bandwidth cannot keep
-> up" — the fix is a machine gate, not more discipline text.
+> up" — the fix is a machine gate plus mechanical enumeration steps, not more discipline text.
 
 ---
 
@@ -63,6 +64,42 @@ Applies to every future revision of:
    and review the changed contracts, then stop expanding text review when the agreed scope
    is resolved. The next implementation stage owns executable fixtures and runtime claims.
 
+8. **Back-scan by enumeration, not by vigilance (r5).** At the end of every revision, list
+   each new cross-section `§` reference added to the body (and each new consumer claimed in
+   the index) and confirm the corresponding index rows are back-written — both the lexical
+   candidate column and the semantic-consumer column of the *consumed* entry. The checker
+   cannot catch semantic back-scans (the matched key does not appear in the consuming
+   section). r5 evidence: three consecutive rounds each found missed back-scans (4 rows,
+   then 2, then 1) *after* the sync protocol was already written; the enumeration list in
+   the revision record is what actually catches them.
+
+9. **A retained rule's judgment input needs a reconstructible source (r5).** When a rule
+   keeps a counting or trigger input, define source, ordering, and reset semantics so the
+   input is fully reconstructible from durable records; never park trigger state in runtime
+   markers. r5 evidence: "连续正常归档任务数" admitted three implementations with different
+   long-run behavior; fixed as "cumulative count reaching integer multiples of N, ordered by
+   archive time, abnormal archives neither count nor reset, manual runs don't change the
+   count — reconstructible from archive records, no runtime marker".
+
+10. **Imported constraints must be checked against co-located rules (r5).** When importing
+    a constraint from an upstream project (e.g., a reviewer's "exactly three inputs"), check
+    it against every rule in the same paragraph or contract before landing it (e.g., fixed
+    check axes that require spec text the input list doesn't carry). Upstream exactness does
+    not survive transplantation onto a different check surface; either widen the imported
+    rule or narrow the co-located one in the same change.
+
+11. **The acceptance matrix tracks the output model (r5).** When the gate output model gains
+    a tier (通过/阻断/需人裁决), the acceptance matrix gains that tier's assertion form in the
+    same change (tier + pending fact + exit, not folded into allow/deny columns); every new
+    judgment criterion added to the body gets its scenario row in the same change. Gates with
+    semantic boundaries get at least one third-tier assertion each.
+
+12. **Absorption is closed until a named gap reopens it (r5).** The four reference projects'
+    mechanism surface is covered; remaining differences are tradeoffs, not omissions. Do not
+    use "absorb from upstream" as a reason to expand text — a new absorption must first name
+    the current gap and the lowest-cost fix (product §8.3 closing rule, enforced at the
+    authoring level too).
+
 ---
 
 ## Why these and not others
@@ -72,3 +109,11 @@ section reference (`§8.5.3` with no owning document named on the line), 21 miss
 sections in the index (consume-hit rate 44%), an unclosed bold marker, a registration table
 whose own structure contradicted the rule it carries. They were all mechanical misses under
 human-only rescan of a 630-line document.
+
+r5 failures of the same family: an imported reviewer-input boundary that contradicted the
+fixed check axes in the same sentence (gate 10); a binary acceptance matrix left behind by
+a three-tier output model, plus two new judgment criteria with no scenario rows (gate 11);
+a trigger rule whose counting input had no source or reset definition (gate 9); seven index
+rows whose new consumers were added to the body but never back-written across three rounds
+(gate 8). The r5 rounds also confirmed the positive case: the enumeration list (gate 8)
+caught two back-scan misses the same day the rule was written.
