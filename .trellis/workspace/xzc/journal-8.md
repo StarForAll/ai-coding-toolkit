@@ -574,3 +574,42 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 390: wf 用户工作流契约修订与收尾
+<!-- trellis-session: v=2 fp=ecc07a5d9d755feb -->
+
+**Date**: 2026-10-31
+**Task**: wf 用户工作流契约修订与收尾
+**Branch**: `main`
+
+### Summary
+
+根据人工审查完成 wf 用户自定义工作流、实例终态与会话隔离设计的整体重写；同步唯一定义索引。补齐定义准备及空项目自举、分时验证、会话固定绑定成本观察、规划态实例异常终止、批量任务放弃/保留和自动依赖展开；保留未批准的显式解绑候选供后续按使用证据裁决。设计校验器与 git diff --check 通过后，经用户审查通过提交并归档任务。
+
+### Main Changes
+
+- 重写 wf-framework-design.md 的定义/实例、会话绑定、终态和自举契约，补充绑定成本速查与验收场景
+- 同步 wf-framework-design.index.md 的词面候选和语义消费回扫
+- 记录任务人工审查决定、历史 review 版本及验证证据
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `590e082` | docs(wf): 补充 wf 用户工作流终态与绑定成本契约 |
+| `54bd82c` | chore(task): archive 10-31-wf-framework-user-workflows |
+
+### Testing
+
+- [OK] /softwares/python/bin/python3 scripts/validate-wf-design.py: pass, 100% definition/lexical coverage, zero missing consumers
+- [OK] git diff --check: pass
+- [OK] 独立 runtime/跨会话验收: not run; this change is design-only
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 显式解绑/重绑是否值得实现，留待真实连续短任务使用成本证据后按 §8.3 决策
