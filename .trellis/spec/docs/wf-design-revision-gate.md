@@ -12,8 +12,9 @@
 
 Applies to every future revision of:
 
-- `docs/workflows/wf-framework-design.md` — the wf framework design document
-- `docs/workflows/wf-framework-design.index.md` — its unique-definition index table
+- `docs/workflows/wf-framework-design.md` — the wf framework design document (how to build and how to accept)
+- `docs/workflows/wf-framework-charter.md` — the charter (whether to build, where the boundary is, when to stop)
+- `docs/workflows/wf-framework-design.index.md` — the shared unique-definition index table for both documents
 - `scripts/validate-wf-design.py` — the design-stage machine checker itself
 
 ---
@@ -21,7 +22,7 @@ Applies to every future revision of:
 ## The gate
 
 1. **Every revision ends with a green checker run** (`python3 scripts/validate-wf-design.py`).
-   "Green" means: all four checks pass **and** coverage metrics meet thresholds —
+   "Green" means: all seven checks pass **and** coverage metrics meet thresholds —
    definition-hit rate and consume-hit rate ≥ 90%, reference-check residual reported
    (informational, no threshold). A checker run that merely executes is not a pass; coverage
    is part of the pass criteria.
@@ -92,13 +93,25 @@ Applies to every future revision of:
     a tier (通过/阻断/需人裁决), the acceptance matrix gains that tier's assertion form in the
     same change (tier + pending fact + exit, not folded into allow/deny columns); every new
     judgment criterion added to the body gets its scenario row in the same change. Gates with
-    semantic boundaries get at least one third-tier assertion each.
+    semantic boundaries get at least one third-tier assertion each, carried in a dedicated
+    table (tier, pending fact, exit) rather than folded into the binary rows; the checker
+    validates that table's header and per-row completeness.
 
 12. **Absorption is closed until a named gap reopens it (r5).** The four reference projects'
     mechanism surface is covered; remaining differences are tradeoffs, not omissions. Do not
     use "absorb from upstream" as a reason to expand text — a new absorption must first name
     the current gap and the lowest-cost fix (product §8.3 closing rule, enforced at the
     authoring level too).
+
+13. **A new judgment criterion lands in exactly one owner (charter split).** Before writing a rule,
+    decide whether it answers "whether/where/until when" (charter `Tn`) or "how/how to verify"
+    (design `§x.y`). The owner holds the definition; the other document holds a pointer plus the
+    action that consumes it. Moving a rule means deleting the definition sentence but keeping every
+    action, gate, and assertion that used it. A charter clause without a design consumer or an
+    acceptance row is a dead clause — delete it instead of keeping a principle that changes nothing.
+    The checker enforces this mechanically: charter chapters, `charter Tn` pointers, dangling
+    consumers, migration residue keywords, one registration row per definition site, and a §8.2
+    table row tagged `charter Tn` for every charter item — an index cell alone is not an assertion.
 
 ---
 
