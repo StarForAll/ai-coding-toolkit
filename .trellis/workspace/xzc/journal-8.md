@@ -552,3 +552,25 @@
 ### Next Steps
 
 - 当前任务已归档；后续正式机制设计或实现需另行明确范围
+
+
+## Session 389: wf 设计稿补充三条要求并过门禁 8 复核
+<!-- trellis-session: v=2 fp=e682d526f9bb5de3 -->
+
+**Date**: 2026-10-31
+**Task**: wf 设计稿补充三条要求并过门禁 8 复核
+**Branch**: `main`
+
+### Summary
+
+访谈裁决后向 wf-framework-design.md 补充三项规则：执行器解析（项目/全局/系统三级+卸载 repair 回退）、Trellis 互斥（start 阻断+安装提示，不影响其他框架共存）、固定流转程序化（固定清单+enforcement 核对）。索引表新增 108-110 行并同步回写；trellis-check 抓出门禁 8 语义回扫缺口与三格意图式标注，已修正后复跑 validate-wf-design.py 通过（100%/100%）。spec 处置留痕：无更新。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `80d17f4` | docs(wf): 补充执行器解析、Trellis 互斥与固定流转程序化 |
+
+### Status
+
+[OK] **Completed**
