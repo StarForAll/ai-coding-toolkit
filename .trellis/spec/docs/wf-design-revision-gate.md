@@ -117,6 +117,33 @@ Applies to every future revision of:
     consumers, migration residue keywords, one registration row per definition site, and a §8.2
     table row tagged `charter Tn` for every charter item — an index cell alone is not an assertion.
 
+14. **限定词复查 before calling a clause contradictory (r6).** Quote the sentence, circle its qualifiers
+    (means, scope, exceptions), and only then decide. A prohibition that names its means ("禁止通过符号链接
+    写出项目边界") forbids that means, not the whole class. Reading prohibitions maximally wide and
+    permissions maximally narrow makes a report look strict while manufacturing false positives.
+
+15. **Reverse-search before declaring a gap (r6).** Before writing "undefined / missing", search whether the
+    fact is already defined elsewhere (another section, the sibling implementation doc, or an established
+    practice such as the platform matrix). Evidence found during search must be used in both directions:
+    the same document that supports a conflict claim may also dissolve it.
+
+16. **Label the evidence type of every finding (r6).** Mark each item `正文自证` / `跨文档` / `既有实践` /
+    `推断`. An item supported only by inference may not be ranked above "需人裁决", and must say in the item
+    that it is withdrawn if the human already decided otherwise.
+
+17. **List the premises of every finding (r6).** One line per item: "此结论依赖的前提假设是 …". A premise
+    that is never written cannot be checked; it surfaces later as a wrong conclusion (e.g. assuming a
+    framework-owned copy keeps the generic skill name).
+
+18. **Apply the reviewed document's own output model to the review report (r6).** Design §1.5 defines
+    通过 / 阻断 / 需人裁决. The report uses the same three tiers. Reserve "阻断" for "two implementations are
+    mutually exclusive and both pass textual self-checks"; a rule that merely depends on an undecided human
+    choice is "需人裁决", not a blocker.
+
+19. **Ask before ranking (r6).** When a finding's severity depends on whether the human already holds a
+    decision outside the text, produce the pending-decision list first and rank afterwards. Ordering severity
+    before clarification is what produced three rounds of re-judgment on the same object.
+
 ---
 
 ## Why these and not others
@@ -134,3 +161,10 @@ a trigger rule whose counting input had no source or reset definition (gate 9); 
 rows whose new consumers were added to the body but never back-written across three rounds
 (gate 8). The r5 rounds also confirmed the positive case: the enumeration list (gate 8)
 caught two back-scan misses the same day the rule was written.
+
+r6 failures (2026-11-01, review of the same three documents): five misjudgments had to be withdrawn across
+three rounds — a symlink-qualified prohibition read as a blanket ban (gate 14), a fact distributed across
+§1.2/§7.1 read as absent (gate 15), a name-collision consequence built on an unstated premise (gate 17), and
+two "blocking" severity calls later reduced after the human clarified a decision the text left open (gates 18,
+19). The pattern is not "the document was wrong" but "the reviewer substituted inference for evidence and
+ranked before asking".

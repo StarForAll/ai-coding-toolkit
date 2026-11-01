@@ -22,11 +22,12 @@
 指标（低于阈值即 FAIL）：
   定义命中率、消费点命中率（两文档合并统计），引用检查残差（输出，不设阈值）。
 """
+import os
 import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(os.environ.get("WF_DESIGN_ROOT") or Path(__file__).resolve().parent.parent)
 DOC = ROOT / "docs/workflows/wf-framework-design.md"
 CHARTER = ROOT / "docs/workflows/wf-framework-charter.md"
 INDEX = ROOT / "docs/workflows/wf-framework-design.index.md"
@@ -98,8 +99,10 @@ def check_refs(lines, headings, cheads=()):
         if any(d in ln for d in EXTERNAL_DOCS) or "源 §" in ln:
             skipped += 1
             continue
-        for ref in re.findall(r"§(\d+(?:\.\d+)?)", ln):
-            if ref not in headings:
+        for ref in re.findall(r"§(\d+(?:\.\d+)*)", ln):
+            if ref.count(".") > 1:
+                errors.append(f"L{i}: 三级以下引用 §{ref} 不可解析（章节只到 N.N）")
+            elif ref not in headings:
                 errors.append(f"L{i}: 内部引用 §{ref} 不存在")
         for t in re.findall(r"charter (T\d+)", ln):
             if cheads and t not in cheads:
@@ -109,8 +112,11 @@ def check_refs(lines, headings, cheads=()):
 
 def check_charter_refs(lines, cheads, dheads):
     for i, ln in enumerate(lines, 1):
-        for m in re.finditer(r"§(\d+(?:\.\d+)?)", ln):
+        for m in re.finditer(r"§(\d+(?:\.\d+)*)", ln):
             ref, start = m.group(1), m.start()
+            if ref.count(".") > 1:
+                errors.append(f"charter L{i}: 三级以下引用 §{ref} 不可解析（章节只到 N.N）")
+                continue
             if not ln[:start].endswith(("设计 ", "设计稿 ", "依赖说明 ", "原 ")):
                 errors.append(f"charter L{i}: §{ref} 未带“设计稿 ”前缀")
             elif ref not in dheads:
@@ -176,12 +182,23 @@ def check_index(headings, cheads):
     for i, ln in enumerate(INDEX.read_text(encoding="utf-8").split("\n"), 1):
         if not ln.startswith("| ") or "---" in ln or "定义（名称" in ln:
             continue
-        if len(ln.strip("|").split("|")) < 4:
-            errors.append(f"index.md L{i}: 列数不足")
+        ncols = len(ln.strip("|").split("|"))
+        if ncols != 6:
+            errors.append(
+                f"index.md L{i}: 列数应为 6（当前 {ncols}，缺列或多列都会绕过核对状态校验）"
+            )
             continue
         rows.append(ln)
-        for ref in re.findall(r"§(\d+(?:\.\d+)?)", ln):
-            if ref not in headings:
+        cells = [c.strip() for c in ln.strip("|").split("|")]
+        state = cells[5]
+        if state not in ("未核对", "已核对·有消费", "已核对·仅定义节"):
+            errors.append(f"index.md L{i}: 核对状态「{state}」不在允许取值内")
+        elif state == "已核对·有消费" and "§" not in cells[4]:
+            errors.append(f"index.md L{i}: 标为已核对·有消费，但语义消费列没有节号")
+        for ref in re.findall(r"§(\d+(?:\.\d+)*)", ln):
+            if ref.count(".") > 1:
+                errors.append(f"index.md L{i}: 三级以下引用 §{ref} 不可解析（章节只到 N.N）")
+            elif ref not in headings:
                 errors.append(f"index.md L{i}: 引用 §{ref} 不存在")
         for t in re.findall(r"charter (T\d+)\b", ln):
             if t not in cheads:
@@ -343,10 +360,10 @@ def check_tier(sec_lines):
             errors.append(f"§8.2 三档断言表头缺「{need}」列")
     for ln in tri[1:]:
         cells = [c.strip() for c in ln.strip("|").split("|")]
-        if set(cells[0]) <= {"-", ":"}:
-            continue  # 分隔行
+        if all(c and set(c) <= {"-", ":"} for c in cells):
+            continue  # 分隔行：每一格都只由 - 或 : 组成
         name = cells[0] or "（无名行）"
-        if not name:
+        if not cells[0]:
             errors.append("§8.2 三档断言行缺场景名")
         if "需人裁决" not in cells[1]:
             errors.append(f"§8.2 三档行「{name}」档位不是需人裁决")
