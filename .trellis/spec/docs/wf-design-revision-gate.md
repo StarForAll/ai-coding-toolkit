@@ -95,7 +95,11 @@ Applies to every future revision of:
     judgment criterion added to the body gets its scenario row in the same change. Gates with
     semantic boundaries get at least one third-tier assertion each, carried in a dedicated
     table (tier, pending fact, exit) rather than folded into the binary rows; the checker
-    validates that table's header and per-row completeness.
+    validates that table's header and per-row completeness. Each binary row that can reach
+    human judgment must point to the exact third-tier scenario name; each third-tier scenario
+    must map back to at least one applicable binary row, or the revision record must explain
+    why it has no binary counterpart. At every revision, enumerate both directions and verify
+    the named links manually: a green structural check does not prove this semantic mapping.
 
 12. **Absorption is closed until a named gap reopens it (r5).** The four reference projects'
     mechanism surface is covered; remaining differences are tradeoffs, not omissions. Do not
