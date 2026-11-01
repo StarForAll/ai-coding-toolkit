@@ -613,3 +613,25 @@
 ### Next Steps
 
 - 显式解绑/重绑是否值得实现，留待真实连续短任务使用成本证据后按 §8.3 决策
+
+
+## Session 391: 完成 wf-framework-design 复审修订与归档
+<!-- trellis-session: v=2 fp=4f0c8745d92f36ea -->
+
+**Date**: 2026-11-01
+**Task**: 完成 wf-framework-design 复审修订与归档
+**Branch**: `main`
+
+### Summary
+
+在原任务完成第四轮 P2-1 至 P2-4 设计契约修订，更新 wf 设计修订门禁的二值/三档具名双向映射规则；本地设计检查通过，经人工审查后提交并归档。保留其他未跟踪用户文件。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4101ee9` | docs(wf): clarify maintenance persistence and tier links |
+
+### Status
+
+[OK] **Completed**
