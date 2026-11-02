@@ -189,7 +189,7 @@ step_results 的 kind 只取 satisfied/skipped/not_executed；尚未完成的步
 |---|---|---|
 | 人调用 start | 只读启用、准备定义、创建任务/实例、首次绑定、取得/接收写权 | Trellis 互斥事实、稳定身份；已绑定只恢复同对象 |
 | 人调用 bootstrap | 存量项目接入规划与基线初建 | 已启用、当前接入任务；开工仍核批准 |
-| continue | 批准、开工、Check、暂停/恢复/收工、绑定内定位（run.locate）、归属裁决（task.attribute）、策展记录（task.curate）、基线提案、边/返工/替换/放弃、实例推进/暂停/终止、审查记录、已绑定任务范围内的定义编辑与校验（definition.validate） | 已启用、绑定正确；项目写入核 holder/代次/范围 |
+| continue | 批准、开工、Check、暂停/恢复/收工、绑定内定位（run.locate）、归属裁决（task.attribute）、策展记录（task.curate）、复盘记录（task.retrospect）、基线提案、边/返工/替换/放弃、实例推进/暂停/终止、审查记录、已绑定任务范围内的定义编辑与校验（definition.validate） | 已启用、绑定正确；项目写入核 holder/代次/范围 |
 | spec-update | 知识编辑/索引同步与处置记录 | 当前批准范围；删除/合并等按既有人工裁决 |
 | 人调用 finish | 最终门禁、正常归档、必要实例同步 | 人了解结果与未核实项，且本文 §9.3 前置通过 |
 | 人直调维护 | 安装、upgrade、repair、uninstall | 预览/确认及本文 §4、§10；不以会话绑定授权维护 |
@@ -391,7 +391,7 @@ writer 的 state/generation/holder/handover/checkpoint/write_mark/action 是公�
 
 本文 §11.3 中会写控制状态的具名动作，不论单记录还是跨记录，都在现有主记录的 action 字段先登记意图，不另建事务账本。单记录 task.transition 同样有 action.id；若阶段迁移只是已登记 task.archive/run.advance 等动作的内部步骤，则纳入该父 action 的 targets/steps 和后置核验，不递归建立第二个 action。纯查询/只读断言按本文 §11.3 直接返回结果，不写 action。主记录选择：写权/首次绑定/维护和实例首次创建用 writer，普通任务动作和归档用 task，已有实例推进/批量终止用 run，准备动作使用准备记录（准备记录首次创建同样由 writer 承载）。主记录在动作中途保持不变，不把进度复制/迁移到新记录；关联目标只记录 action.id 作为写入来源。一个未完成动作占有其目标控制字段，后续冲突动作先恢复，不并行覆盖意图。
 
-主记录的具体归属：baseline.apply、spec.update、task.curate、task.knowledge-dispose、task.check、review.launch、review.import、review.decide 与 task.attribute 均使用发起且获批的当前 task；spec.update 的其他任务引用同步是该主动作的窄目标，不在目标任务另开嵌套动作。初始化配置生成也走 baseline.apply，由同一初始化 task 负责；首次任务创建由 writer 承载 task.create，实例内创建由原 run.advance 的固定步骤承载。挂起复评使用当前写者有权触及的任务作为 task.reassess 主记录；维护修复/安装/退出均用 writer 的维护动作，损坏 writer 独立卸载仅按本文 §10.5 的既定例外，不为该例外伪造记录。
+主记录的具体归属：baseline.apply、spec.update、task.curate、task.knowledge-dispose、task.retrospect、task.check、review.launch、review.import、review.decide 与 task.attribute 均使用发起且获批的当前 task；spec.update 的其他任务引用同步是该主动作的窄目标，不在目标任务另开嵌套动作。初始化配置生成也走 baseline.apply，由同一初始化 task 负责；首次任务创建由 writer 承载 task.create，实例内创建由原 run.advance 的固定步骤承载。挂起复评使用当前写者有权触及的任务作为 task.reassess 主记录；维护修复/安装/退出均用 writer 的维护动作，损坏 writer 独立卸载仅按本文 §10.5 的既定例外，不为该例外伪造记录。
 
 所有单记录控制写入也采用意图、原子替换、write_mark 和后置核验，不另造较弱协议。多个动作组合时由一个父 action 固定全部 targets/steps，内部操作按对应固定处理器核后置，不覆盖尚未结束的主 action；不得为了完成同一动作在同一记录递归另开 action。spec/基线的编辑仍可由 AI 在授权内起草，实际已编辑内容作为当前前像/候选，入口的原子恢复承诺覆盖其正式成组应用和关联控制记录，不伪称拦截编辑器的每次键入。
 
@@ -897,7 +897,7 @@ task.due 取 before_execute/before_check/before_archive/after_archive，表示�
 | `task.tdd-verified` | repeatable / tdd | before_archive / 当前检查 | 开关开启时核红绿证据；文档等对象核已批准的适用性与独立可观察验证，不人为造红命令 |
 | `task.review-passed` | repeatable / complex | before_archive / 当前检查 | 当前对象的两个异种审查通过；身份声明、导入报告和处置记录 |
 | `task.knowledge-disposed` | once / all | before_archive / 当前规划 + 当前知识处置及相关规范指纹 | knowledge 非空、curation 显式存在；无更新也是实际处置 |
-| `task.retrospective-done` | once / retrospective | before_archive / 当前触发事实集合 | 适用由触发事实集合决定，触发集合是 gate 时的派生视图、不落第二持久清单：从 rework_of 反向集合的全部成员、reviews 历史 result=fail 与 debug-ruling“同一问题”裁定条目及其 subject/证据引用的调试证据重建（调试证据不限定 check_history 条目类型：check_history 的 failed 最终结果条目、execution.actions 的 failed 结果及其 output_refs/verification_refs、handoff 材料均可承载，核对所引证据仍真实存在即可，Execute 期裁定凭原证据可重建）。返工（本任务 rework_of 反向集合的全部成员）与审查失败（reviews 历史 result=fail）语义机械可判，任一成立即适用且复盘 required。重复调试经两层判定：机械检测（本文 §8.1：同一 verification_id 的双源合并 failed 累计达到 debug_repeat_threshold，合并与判重规则唯一见本文 §1.3）只产生 WF_SEMANTIC_DECISION 待决项，不独自决定“同一问题”；裁定留痕位置为 execution.human_decisions 的 debug-ruling 条目（id 形式、结构、写者与消费判据见本文 §1.3）——人确认属同一问题重复调试后该待决项转正为触发事实、复盘 required；人裁定为不同问题时裁定条目留痕，该倍数不再追问，该 verification_id 的双源合并 failed 累计保留；合并累计每新跨过 debug_repeat_threshold 的整数倍（即合并累计数首次达到阈值，及其后每再增加 debug_repeat_threshold 次达到新的整数倍）时重新产生待决项，已裁定倍数留痕不重复追问，仅新跨过整数倍的累计待裁定。归档门禁核对 retrospective 适用条件时，要求机械检测已产生的各整数倍均有对应 debug-ruling 裁定条目，无裁定的新倍数即未裁定待决项、阻断归档（出口 WF_SEMANTIC_DECISION），不倒推为无触发。Execute 期漏计兜底：check_history 之外的重复调试由人/主会话在 continue/finish 声明，入口核其引用的调试证据（execution.actions 的 failed 结果及其 output_refs/verification_refs、handoff 材料）真实存在，逐项核对 counted 由证据引用支撑并写入 debug_declarations 条目，判重按本文 §1.3 的分工执行——脚本核证据引用与可比对字段一致，同一事件的剔除结果结构化保存为声明条目的 dedupe_refs，合并累计从结构化字段求和（判定结论属人判语义、依据文本入裁定 reason），核定次数并入双源合并累计、达到新整数倍后按同一 debug-ruling 条目形式留痕；verification_id 只作证据关联辅助。retrospective.evidence（本文 §1.3 既有字段）保存复盘所覆盖触发事实的引用（含对应裁定条目 id）；P 取当前全集（不剔除已被历史复盘覆盖的条目）：gate 要求 retrospective.evidence 引用覆盖 P 中每个 ref 且 conclusion 非空，复盘后新增事实使全集变大、P 与 occurrence 随之变化形成新期次，未覆盖项因此必须补做；“历史复盘不能覆盖新增触发事实”按整数倍与触发事实重建核对——复盘之后新跨过的倍数、新增的返工或审查失败事实不属于已覆盖范围，须另行满足。未产生任何触发事实时人仍可要求复盘（对齐设计稿 §4.4「其余任务可选」）：由人在 continue/finish 提出，入口记录 retrospective 但置 required=false，结论照记，**不进入 applies 判定**（可选复盘不构成门禁），也不新增独立声明字段 |
+| `task.retrospective-done` | once / retrospective | before_archive / 当前触发事实集合 | 适用由触发事实集合决定，触发集合是 gate 时的派生视图、不落第二持久清单：从 rework_of 反向集合的全部成员、reviews 历史 result=fail 与 debug-ruling“同一问题”裁定条目及其 subject/证据引用的调试证据重建（调试证据不限定 check_history 条目类型：check_history 的 failed 最终结果条目、execution.actions 的 failed 结果及其 output_refs/verification_refs、handoff 材料均可承载，核对所引证据仍真实存在即可，Execute 期裁定凭原证据可重建）。返工（本任务 rework_of 反向集合的全部成员）与审查失败（reviews 历史 result=fail）语义机械可判，任一成立即适用且复盘 required。重复调试经两层判定：机械检测（本文 §8.1：同一 verification_id 的双源合并 failed 累计达到 debug_repeat_threshold，合并与判重规则唯一见本文 §1.3）只产生 WF_SEMANTIC_DECISION 待决项，不独自决定“同一问题”；裁定留痕位置为 execution.human_decisions 的 debug-ruling 条目（id 形式、结构、写者与消费判据见本文 §1.3）——人确认属同一问题重复调试后该待决项转正为触发事实、复盘 required；人裁定为不同问题时裁定条目留痕，该倍数不再追问，该 verification_id 的双源合并 failed 累计保留；合并累计每新跨过 debug_repeat_threshold 的整数倍（即合并累计数首次达到阈值，及其后每再增加 debug_repeat_threshold 次达到新的整数倍）时重新产生待决项，已裁定倍数留痕不重复追问，仅新跨过整数倍的累计待裁定。归档门禁核对 retrospective 适用条件时，要求机械检测已产生的各整数倍均有对应 debug-ruling 裁定条目，无裁定的新倍数即未裁定待决项、阻断归档（出口 WF_SEMANTIC_DECISION），不倒推为无触发。Execute 期漏计兜底：check_history 之外的重复调试由人/主会话在 continue/finish 声明，入口核其引用的调试证据（execution.actions 的 failed 结果及其 output_refs/verification_refs、handoff 材料）真实存在，逐项核对 counted 由证据引用支撑并写入 debug_declarations 条目，判重按本文 §1.3 的分工执行——脚本核证据引用与可比对字段一致，同一事件的剔除结果结构化保存为声明条目的 dedupe_refs，合并累计从结构化字段求和（判定结论属人判语义、依据文本入裁定 reason），核定次数并入双源合并累计、达到新整数倍后按同一 debug-ruling 条目形式留痕；verification_id 只作证据关联辅助。retrospective.evidence（本文 §1.3 既有字段）保存复盘所覆盖触发事实的引用（含对应裁定条目 id）；P 取当前全集（不剔除已被历史复盘覆盖的条目）：gate 要求 retrospective.evidence 引用覆盖 P 中每个 ref 且 conclusion 非空，复盘后新增事实使全集变大、P 与 occurrence 随之变化形成新期次，未覆盖项因此必须补做；“历史复盘不能覆盖新增触发事实”按整数倍与触发事实重建核对——复盘之后新跨过的倍数、新增的返工或审查失败事实不属于已覆盖范围，须另行满足。未产生任何触发事实时人仍可要求复盘（对齐设计稿 §4.4「其余任务可选」）：由人在 continue/finish 提出，入口经 `task.retrospect`（本文 §11.3）记录 retrospective 并置 required=false，结论照记，**不进入 applies 判定**（可选复盘不构成门禁），也不新增独立声明字段 |
 | `task.changes-persisted` | repeatable / all | before_archive / 当前交付指纹及待提交组 | 本任务改动按许可持久化、无未处理业务 WIP；只读核 Git 与授权 |
 | `task.archived` | once / all | after_archive / 归档 action.id | 正常终态、移动及归档提交可核；本文 §5.3 的提交后只读后置 |
 
@@ -918,7 +918,7 @@ task.due 取 before_execute/before_check/before_archive/after_archive，表示�
 
 spec-loaded 只表示当前会话/内容的完整装载，不为每次 Check 创建新期次。每次接续/编辑前/Check/Finish 都重新核当前读取事实：同会话同内容可沿用完整装载事实，换会话或哈希变化必须重读；侧车缺失则重读或当次核全文交付。门禁 4 直接复用这一读取判据，不另建“Check 必须再读一次”的步骤。因而期次不含 check.id，调用该核验多次不等于伪造重复阅读。
 
-`execution.required_steps` 只保存适用 task 声明的归档前回执，其 id/mode 与相应声明逐项对应；after_archive 的 task.archived 只从本文 §5.3 的持久化后置派生，不要求也不追加 execution.required_steps 行。回执选择规则按上文分类执行：规则类回执的 rule_version 取本文 §10.2 的 `effective_rule_version`；内容类回执不按 rule_version 匹配、按其 P 主键（plan_version/内容摘要/触发事实集合）匹配，rule_version 字段记 null、不作为匹配键，不因发行规则字节变化失配。occurrence/anchor 按上表唯一公式生成，固定处理器核验对应证据。result 只取 completed/reused；尚未满足不写成功行。completed 由执行入口在后置成立时记录 completed_at、checked_at、evidence_refs，skip_basis=null。repeatable 每个新期次必须实际执行，已完成同一期次的中断重入只读核后置，不伪造第二次执行；输入或会话改变会产生新的期次或失效锚点。
+`execution.required_steps` 只保存适用 task 声明的归档前回执，其 id/mode 与相应声明逐项对应；after_archive 的 task.archived 只从本文 §5.3 的持久化后置派生，不要求也不追加 execution.required_steps 行。回执选择规则按上文分类执行：规则类回执的 rule_version 取本文 §10.2 的 `effective_rule_version`；内容类回执不按 rule_version 匹配、按其 P 主键（plan_version/内容摘要/触发事实集合）匹配，rule_version 字段记 null、不作为匹配键，不因发行规则字节变化失配。occurrence/anchor 按上表唯一公式生成，固定处理器核验对应证据。result 只取 completed/reused；尚未满足不写成功行。completed 由执行入口在后置成立时记录 completed_at、checked_at、evidence_refs，skip_basis=null；`task.retrospective-done` 的执行入口为 `task.retrospect`（本文 §11.3），它在同一 action 内写该步骤的 completed 行，旧回执按本节的 reused 规则重核。repeatable 每个新期次必须实际执行，已完成同一期次的中断重入只读核后置，不伪造第二次执行；输入或会话改变会产生新的期次或失效锚点。
 
 回执数组保留原 completed 条目，reused 是后续核验条目，不覆盖其 completed_ref 指向的原记录；查询按类选择本次可核的结果——规则类按 id/rule_version/occurrence，内容类按 id/occurrence，不能用最后一条未知 id 挤掉缺失项。P 中 plan_version 一律取经本文 §1.3 等价链归一后的批准版本（当前 plan.version 可沿链回溯到既有批准版本时取归一值，机械修订不改变 P/occurrence；链断开即语义变化、P 随之变化）——该规则适用于 P 含 plan_version 的全部内容类回执（task.plan-approved、task.work-satisfied、task.knowledge-disposed），不逐 id 另述；content_digest=本次按本文 §3.2 重算的全对象摘要（交付 ∪ 规则输入；项目 spec/基线/配置/定义快照变化即产生新期次、由状态动作重验，发行规则字节不进入该键）、check_id/check_anchor=当前 check.id 与其 anchor 的 check_anchor 部分（本文 §3.2 的定义）；知识摘要排除 required 回执。反例：原完成条目还未提交即被原位改成 reused，使其引用落空，属于非法回执，不允许用 Git 中尚不存在的版本解释。
 
@@ -940,7 +940,7 @@ skip_basis 为 `{completed_ref, checked_outputs, gate_result}`，completed_ref �
 |---|---|---|
 | 只读断言 | `gate.evaluate`、`run.locate`、`definition.validate`、`asset.compare`、`verification.resolve` | 本文 §2、§6.1、§7、§9.3、§10；返回当前 gate/建议定位/结构/三方比较/验证就绪事实，不更新阶段、游标、验证记录或所有权 |
 | 状态动作 | `task.create`、`task.transition`、`task.attribute` | 本文 §2、§3；创建规划/归属裁决及包含 entry_snapshot 的迁移后置 |
-| 状态动作 | `baseline.apply`、`spec.update`、`task.curate`、`task.knowledge-dispose` | 本文 §3.4、§8.3、§8.4；当前发起任务主记录，成组活文件/索引/窄引用更新或单任务策展/知识处置 |
+| 状态动作 | `baseline.apply`、`spec.update`、`task.curate`、`task.knowledge-dispose`、`task.retrospect` | 本文 §3.4、§8.3、§8.4、§11.2；当前发起任务主记录，成组活文件/索引/窄引用更新或单任务策展/知识处置/复盘记录 |
 | 状态动作 | `task.check`、`review.launch`、`review.import`、`review.decide`、`task.reassess` | 本文 §3.5、§9、§6.2；检查结果/审查记录与导入槽位/归档或启动后的挂起复评 |
 | 状态动作 | `session.bind` | 本文 §1.4、§6.1；唯一绑定、资格及必要首次所有权事实 |
 | 状态动作 | `task.pause`、`session.stop` | 本文 §4.3；实际 WIP、暂停与释放 |
@@ -950,6 +950,8 @@ skip_basis 为 `{completed_ref, checked_outputs, gate_result}`，completed_ref �
 | 状态动作 | `task.archive` | 本文 §5.3；碰撞预检、移动及提交后只读事实 |
 | 状态动作 | `dependency.change`、`task.rework`、`task.replace`、`task.abandon` | 本文 §6；完整候选图、来源和改动处置 |
 | 状态动作 | `asset.apply`、`repair.apply`、`uninstall.apply` | 本文 §5.4、§10；安装/升级投放或受控修复/退出；损坏 writer 卸载仅适用既有例外 |
+
+其中 `task.retrospect` 由当前任务入口在同一 action 中写 `task.retrospective` 的 `required`/`evidence`/`conclusion`（人主动要求的可选复盘置 `required=false`），并同时写该 required 步骤（`task.retrospective-done`）的 completed 回执；写入内容与判据沿用本文 §11.2 的 `task.retrospective-done` 行。
 
 状态动作统一 P 为 `{owner_ref, action_id, operation, inputs_digest, targets_digest}`，operation=action.kind，owner_ref 为本文 §1.2 所定义 owner 结构的规范 JSON（同 action.id 的输入取值），targets_digest 是 action.targets 去除回执/写入标记递归字段后的规范 JSON 哈希。`occurrence=H("wf-control-occurrence-v1", C(P))`；`anchor=H("wf-step-anchor-v1", C({rule_version, P}))`。纯断言不使用该公式，没有 action_id/occurrence/持久回执，无论调用会话是否持权都如此；下次查询重新读实际事实。需要写校验结论/改变游标时由对应状态动作消费断言结果并落盘，不能借查询接口写状态。
 
@@ -1124,7 +1126,7 @@ action.result 中的 control_assertion 为 `{step_id, rule_version, occurrence, 
 
 ### 12.4 后续交付与本稿收口
 
-实现方案以本文编码为输入，给出文件布局、实际脚本/子命令参数、版本化发行物、自有审查适配和单页使用速查；速查消费设计稿 §8.1，不复制另一套规则。实现阶段还须验证 Python 最低版本、支持文件系统、锁中断/恢复、host 身份持久性、可发现入口及成对审查协议。未核实能力明确报告，不从本稿的字段可解析推出可用。
+实现方案以本文编码为输入，给出文件布局、实际脚本/子命令参数、版本化发行物、自有审查适配和单页使用速查；速查消费设计稿 §8.1，不复制另一套规则。实现方案本体见 [wf 独立框架实现方案](./wf-framework-implementation.md)（本文委托的文件布局、命令面与发行物落点由该文档承载）。实现阶段还须验证 Python 最低版本、支持文件系统、锁中断/恢复、host 身份持久性、可发现入口及成对审查协议。未核实能力明确报告，不从本稿的字段可解析推出可用。
 
 **实现阶段的最小验证顺序与回修判据**：下列五项按顺序先跑通组合（与设计稿 §8.2 的分轮验收并列，不改变轮次划分），不以单条规则可读替代实际运行；每项失败的归因固定为「实现缺陷 → 修实现；实现正确但事实不足以判定 → 才回修本稿」。
 
