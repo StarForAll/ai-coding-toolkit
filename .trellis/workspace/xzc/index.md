@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-8.md`
-- **Total Sessions**: 394
+- **Total Sessions**: 395
 - **Last Active**: 2026-11-02
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-8.md` | ~718 | Active |
+| `journal-8.md` | ~741 | Active |
 | `journal-7.md` | ~1964 | Archived |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
@@ -36,6 +36,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 395 | 2026-11-02 | wf 机制设计文档审查与修复（12 轮复审） | `493c4f7`, `5c87e57` | `main` |
 | 394 | 2026-11-02 | wf 机制设计十轮复审与修复 | `dcfd732` | `main` |
 | 393 | 2026-11-02 | wf 机制设计人工确认与收尾 | `34e67ae` | `main` |
 | 392 | 2026-11-01 | wf 框架设计审查与契约修复 | `6f741c4` | `main` |

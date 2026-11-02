@@ -716,3 +716,26 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 395: wf 机制设计文档审查与修复（12 轮复审）
+<!-- trellis-session: v=2 fp=e00da7a7e75dcfdc -->
+
+**Date**: 2026-11-02
+**Task**: wf 机制设计文档审查与修复（12 轮复审）
+**Branch**: `main`
+
+### Summary
+
+对 docs/workflows/wf-framework-mechanism.md 做开发视角深度审查并完成 12 轮修复：含锚点双摘要与 check 指纹字段、治理面机读块与 Check 期声明核对、范围核对分类与外部变更/启动 WIP 作用域、原因码 WF_SCOPE_VIOLATION、判重键 (check_id, verification_id)、轮次口径回归上位、实现阶段验证顺序与组合夹具；机检全绿（引用 555，场景 91/91 与 13/13，输入摘要 4/4），任务归档。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `493c4f7` | docs(wf): 八轮复审修正机制设计（锚点/治理面/范围核对/判重键/启动校验） |
+| `5c87e57` | docs(wf): 机制稿人工审查通过，补齐 Check 期判定接线与实现验证组合 |
+
+### Status
+
+[OK] **Completed**
