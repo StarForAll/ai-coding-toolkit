@@ -657,3 +657,40 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 393: wf 机制设计人工确认与收尾
+<!-- trellis-session: v=2 fp=3c80c18cd56c590a -->
+
+**Date**: 2026-11-02
+**Task**: wf 机制设计人工确认与收尾
+**Branch**: `main`
+
+### Summary
+
+完成机制设计及多轮审查修订，人工审查通过；扩展机检并同步上位首次基线规则，提交后归档任务。
+
+### Main Changes
+
+- 交付 wf-framework-mechanism.md，人工通过状态作为后续实现方案基线。
+- 机检覆盖引用、场景双向映射与四输入摘要；保留无关目录，未推送。
+- 原生归档移动成功后，因未跟踪旧路径自动提交失败；核准范围后仅提交实际归档路径完成恢复。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `34e67ae` | docs(wf): 完成机制设计并扩展设计机检 |
+
+### Testing
+
+- [OK] 统一文档机检通过，19 项回归测试通过，Markdown 结构、Python AST 与 git diff --check 通过。
+- [OK] 独立会话轴声明未提供，框架/宿主/并发故障夹具尚未运行。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 基于已人工确认的设计与机制基线，另行规划实现方案。
