@@ -774,3 +774,41 @@
 ### Next Steps
 
 - 编码阶段另立任务：按实现方案落 .wf/bin、wflib、skill 副本；首轮开发态部署后再跑 V1–V5 与三夹具
+
+
+## Session 397: wf 实现方案修订轮收口（M1/M2 + 独立复审）
+<!-- trellis-session: v=2 fp=a94b646ab358c383 -->
+
+**Date**: 2026-11-02
+**Task**: wf 实现方案修订轮收口（M1/M2 + 独立复审）
+**Branch**: `main`
+
+### Summary
+
+处置复审两条中级发现（M1 实质规划变更缺调用形态、M2 task-abandon 输入仍是省略号），复核均判成立、按 A 类只改实现稿；复审轮在同工作树完成全文重审与不同 CLI 独立复审（高级 0/中级 0/低级 5，L1–L5 处置入 §9.2），文档冻结登记待核正文绑定。
+
+### Main Changes
+
+- 实现稿 §2.3 新增 task-replan 行与「阶段回退的承载与再入路径」段；按机制稿 §2.2 目标状态引用，不新增操作名
+- 实现稿 §2.3 拆出 task-abandon 并写明 --decision/--disposition 承载与 disposition.changes/targets/pending 记录映射
+- 实现稿 §2.2 代次列举、§8.2 速查两行、§9.2 修订/复审/处置/冻结登记；四份受保护文件与机制稿零改动
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ac6b2d8` | docs(wf): 实现方案复审收口（处置复审 M1/M2；独立复审记录与冻结登记） |
+
+### Testing
+
+- [OK] validate-wf-design.py：引用 559 / 二值 91/91 / 三档 13/13 / 输入摘要 4/4 + 七项检查 + 覆盖率断言通过
+- [OK] check-doc-refs.py 六份 wf-framework 文档各 0 problem；unittest scripts.tests.test_validate_wf_design 19 tests OK
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 待核：§9.2 冻结登记的正文绑定 sha256 051aade5… 无法从当前工作树（738 行 / 371fe74b…）复现，需确认其所绑版本
+- 首轮实现阶段：按冻结基线开工，另立任务补「建立 authoring 源树 + dev-manifest.json」清单缺项（L1）
