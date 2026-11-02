@@ -694,3 +694,25 @@
 ### Next Steps
 
 - 基于已人工确认的设计与机制基线，另行规划实现方案。
+
+
+## Session 394: wf 机制设计十轮复审与修复
+<!-- trellis-session: v=2 fp=b3f8bf0dbb31b9fe -->
+
+**Date**: 2026-11-02
+**Task**: wf 机制设计十轮复审与修复
+**Branch**: `main`
+
+### Summary
+
+从实现者视角深度审查 wf-framework-mechanism.md 及上位设计稿/charter：首轮产出 3B+5C 分级发现清单，随后十轮外部复审逐轮修复 40+ 项（等价链贯通锚点/P/occurrence、debug_declarations 双源计数 schema、码表 33 枚档位/适用事实单源、可达提交查证一处定义、处理器码映射二维分派、启动校验十步固定顺序、替代语义统一三类消费方、gitignore 托管段入清单、执行器确认子命令例外等），每轮经独立检查/主会话核验+机检全绿；两项复核点经用户裁决闭合（机检演进记 §0.2、未答面复用 WF_SEMANTIC_DECISION）；人工审查通过后提交 dcfd732 并归档任务。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dcfd732` | docs(wf): 十轮复审修正机制设计并闭合全部开放点 |
+
+### Status
+
+[OK] **Completed**
