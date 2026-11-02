@@ -2,7 +2,7 @@
 
 The checker is the only mechanical guard on the wf design contract, so it must
 prove it still catches the failures it claims to catch. Each test runs the real
-script against a mutated copy of the three documents (WF_DESIGN_ROOT override),
+script against mutated document copies (WF_DESIGN_ROOT override),
 never against the working tree.
 """
 import os
@@ -16,7 +16,11 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "scripts" / "validate-wf-design.py"
-FILES = ("wf-framework-design.md", "wf-framework-charter.md", "wf-framework-design.index.md")
+FILES = (
+    "wf-framework-design.md", "wf-framework-charter.md",
+    "wf-framework-design.index.md", "wf-framework-design.sources.md",
+    "wf-framework-mechanism.md",
+)
 
 
 class CheckerTest(unittest.TestCase):
@@ -144,6 +148,108 @@ class CheckerTest(unittest.TestCase):
         result = self.run_checker()
         self.assertEqual(result.returncode, 1)
         self.assertIn("核对状态", result.stdout)
+
+    def test_missing_mechanism_fails(self):
+        (self.tmp / "docs/workflows/wf-framework-mechanism.md").unlink()
+        result = self.run_checker()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("机制稿缺失", result.stdout)
+
+    def test_mechanism_references_resolve_by_owner(self):
+        path = self.tmp / "docs/workflows/wf-framework-mechanism.md"
+        original = path.read_text(encoding="utf-8")
+        cases = (
+            ("本文 §99.1", "引用不存在"),
+            # Section 12 exists only in the mechanism: wrong-owner references
+            # must not accidentally validate against its own headings.
+            ("设计稿 §12.1", "引用不存在"),
+            ("设计稿 §1.1、§12.1", "引用不存在"),
+            ("本文 §5.3.9", "引用不存在"),
+            ("charter T99", "引用不存在"),
+            ("见 §1.1", "引用缺所有者"),
+            ("本文 §1.1；另见 §1.2", "引用缺所有者"),
+        )
+        for reference, diagnostic in cases:
+            with self.subTest(reference=reference):
+                path.write_text(original + "\n" + reference + "\n", encoding="utf-8")
+                result = self.run_checker()
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(diagnostic, result.stdout)
+
+    def test_grouped_references_keep_their_explicit_owner(self):
+        path = self.tmp / "docs/workflows/wf-framework-mechanism.md"
+        with path.open("a", encoding="utf-8") as stream:
+            stream.write("\n本文 §1.1、§1.2；设计稿 §1.1、§4.2\n")
+        result = self.run_checker()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_mechanism_missing_binary_mapping_fails(self):
+        self.edit("wf-framework-mechanism.md", "`规划授权`；", "")
+        result = self.run_checker()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("二值场景缺映射", result.stdout)
+
+    def test_mechanism_unknown_binary_mapping_fails(self):
+        self.edit("wf-framework-mechanism.md", "`规划授权`", "`不存在的规划场景`")
+        result = self.run_checker()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("二值场景悬空", result.stdout)
+
+    def test_mechanism_missing_decision_mapping_fails(self):
+        path = self.tmp / "docs/workflows/wf-framework-mechanism.md"
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+        lines = [line for line in lines if not line.startswith("| `审查不可用` |")]
+        path.write_text("".join(lines), encoding="utf-8")
+        result = self.run_checker()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("三档场景缺映射", result.stdout)
+
+    def test_mechanism_unknown_decision_mapping_fails(self):
+        self.edit("wf-framework-mechanism.md", "| `审查不可用` |", "| `未知裁决场景` |")
+        result = self.run_checker()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("三档场景悬空", result.stdout)
+
+    def test_baseline_drift_fails_for_each_input(self):
+        for name in FILES[:-1]:
+            with self.subTest(name=name):
+                path = self.tmp / "docs/workflows" / name
+                original = path.read_bytes()
+                path.write_bytes(original + b"\n")
+                result = self.run_checker()
+                path.write_bytes(original)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("输入摘要不符", result.stdout)
+                self.assertIn(name, result.stdout)
+
+    def test_missing_baseline_row_fails(self):
+        path = self.tmp / "docs/workflows/wf-framework-mechanism.md"
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+        path.write_text("".join(line for line in lines if not line.startswith(
+            "| wf-framework-design.sources.md |"
+        )), encoding="utf-8")
+        result = self.run_checker()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("输入摘要缺项", result.stdout)
+
+    def test_malformed_baseline_digest_fails(self):
+        self.edit("wf-framework-mechanism.md", "| wf-framework-design.md | ",
+                  "| wf-framework-design.md | invalid-")
+        result = self.run_checker()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("输入摘要格式", result.stdout)
+
+    def test_missing_baseline_source_fails_cleanly(self):
+        (self.tmp / "docs/workflows/wf-framework-design.sources.md").unlink()
+        result = self.run_checker()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("输入文件不可读", result.stdout)
+        self.assertNotIn("Traceback", result.stderr)
+
+    def test_mechanism_metrics_are_reported(self):
+        result = self.run_checker()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertRegex(result.stdout, r"机制稿：引用 \d+；二值场景 \d+/\d+；三档场景 \d+/\d+；输入摘要 4/4")
 
 
 if __name__ == "__main__":

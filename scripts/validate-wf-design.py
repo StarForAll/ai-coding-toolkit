@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""wf 设计文档机检器（设计文档 + charter + 索引表）。
+"""wf 设计文档机检器（设计文档 + charter + 索引表 + 机制稿）。
 
 覆盖对象：
   A. wf-framework-design.md —— 框架契约正文
   B. wf-framework-charter.md —— 目标、边界与演进判据（"要不要做"的唯一事实源）
   C. wf-framework-design.index.md —— 唯一定义索引表（两文档共用）
+  D. wf-framework-mechanism.md —— 引用、场景映射及四份输入的内容摘要
 
 检查项（失败即 FAIL）：
   1. § 引用可解析：设计文档内部 §N.N 必须存在；charter 内部的 § 引用必须带"设计 "前缀且命中设计章节。
@@ -22,6 +23,8 @@
 指标（低于阈值即 FAIL）：
   定义命中率、消费点命中率（两文档合并统计），引用检查残差（输出，不设阈值）。
 """
+import argparse
+import hashlib
 import os
 import re
 import sys
@@ -31,6 +34,8 @@ ROOT = Path(os.environ.get("WF_DESIGN_ROOT") or Path(__file__).resolve().parent.
 DOC = ROOT / "docs/workflows/wf-framework-design.md"
 CHARTER = ROOT / "docs/workflows/wf-framework-charter.md"
 INDEX = ROOT / "docs/workflows/wf-framework-design.index.md"
+MECHANISM = ROOT / "docs/workflows/wf-framework-mechanism.md"
+BASELINE_FILES = (DOC, CHARTER, INDEX, ROOT / "docs/workflows/wf-framework-design.sources.md")
 EXTERNAL_DOCS = ("workflow-design.md", "workflow-implementation.md", "wf-variant.md")
 
 DEF_RATE_MIN = 0.90
@@ -380,7 +385,111 @@ def check_residue(doc_lines):
                 errors.append(f"L{i}: 迁移残留「{kw}」——该判据已由 charter 定义，设计文档不得重复")
 
 
+def table_cells(lines):
+    """Read the simple pipe tables used by the design's mapping contracts."""
+    for line in lines:
+        if not line.startswith("|"):
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if all(cell and set(cell) <= {"-", ":"} for cell in cells):
+            continue
+        yield cells
+
+
+def check_mechanism(dheads, cheads, design_sections):
+    """Check mechanical relationships only; do not certify semantic coverage."""
+    try:
+        lines, headings, owners = parse_doc(MECHANISM, r"^#{2,3} (\d+(?:\.\d+)?)\b")
+    except (OSError, UnicodeError) as exc:
+        errors.append(f"机制稿缺失或不可读: {MECHANISM.name}: {exc}")
+        return
+    sections = section_lines(lines, owners)
+    reference_count = 0
+    for number, line in enumerate(lines, 1):
+        for match in re.finditer(r"§(\d+(?:\.\d+)*)", line):
+            reference_count += 1
+            owner = re.search(
+                r"(本文|设计稿)\s*(?:§\d+(?:\.\d+)*\s*[、，–—-]\s*)*$",
+                line[:match.start()],
+            )
+            if owner is None:
+                errors.append(f"机制稿 L{number}: 引用缺所有者 §{match[1]}")
+                continue
+            target = headings if owner[1] == "本文" else dheads
+            if match[1] not in target:
+                errors.append(f"机制稿 L{number}: {owner[1]} 引用不存在 §{match[1]}")
+        for ref in re.findall(r"charter (T\d+)\b", line):
+            reference_count += 1
+            if ref not in cheads:
+                errors.append(f"机制稿 L{number}: charter 引用不存在 {ref}")
+
+    # The two source tables and their destination tables stay separate: mentioning
+    # a binary scenario in a recovery example cannot satisfy its mapping obligation.
+    expected_binary, expected_decisions = set(), set()
+    for cells in table_cells(design_sections.get("8.2", [])):
+        if cells[0] == "场景":
+            continue
+        if len(cells) == 3:
+            expected_binary.add(cells[0])
+        elif len(cells) == 4:
+            expected_decisions.add(cells[0])
+    mapped_binary, mapped_decisions = set(), set()
+    for cells in table_cells(sections.get("12.2", [])):
+        if len(cells) == 3 and cells[0].startswith("G"):
+            mapped_binary.update(re.findall(r"`([^`]+)`", cells[2]))
+    for cells in table_cells(sections.get("12.3", [])):
+        if len(cells) == 3 and re.fullmatch(r"`[^`]+`", cells[0]):
+            mapped_decisions.add(cells[0][1:-1])
+    for label, expected, mapped in (
+        ("二值", expected_binary, mapped_binary),
+        ("三档", expected_decisions, mapped_decisions),
+    ):
+        if not expected:
+            errors.append(f"机制稿: {label}场景来源为空")
+        for name in sorted(expected - mapped):
+            errors.append(f"机制稿: {label}场景缺映射「{name}」")
+        for name in sorted(mapped - expected):
+            errors.append(f"机制稿: {label}场景悬空「{name}」")
+
+    baselines = {}
+    for cells in table_cells(sections.get("0.1", [])):
+        if len(cells) != 2 or cells[0] == "文件":
+            continue
+        if cells[0] in baselines:
+            errors.append(f"机制稿: 输入摘要重复「{cells[0]}」")
+        baselines[cells[0]] = cells[1]
+    expected_names = {path.name for path in BASELINE_FILES}
+    for name in sorted(baselines.keys() - expected_names):
+        errors.append(f"机制稿: 输入摘要未知文件「{name}」")
+    matched = 0
+    for path in BASELINE_FILES:
+        digest = baselines.get(path.name)
+        if digest is None:
+            errors.append(f"机制稿: 输入摘要缺项「{path.name}」")
+            continue
+        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+            errors.append(f"机制稿: 输入摘要格式错误「{path.name}」")
+            continue
+        try:
+            actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        except OSError as exc:
+            errors.append(f"机制稿: 输入文件不可读「{path.name}」: {exc}")
+            continue
+        if digest != actual:
+            errors.append(f"机制稿: 输入摘要不符「{path.name}」；先核对影响再更新基线")
+        else:
+            matched += 1
+    print(
+        f"机制稿：引用 {reference_count}；"
+        f"二值场景 {len(expected_binary & mapped_binary)}/{len(expected_binary)}；"
+        f"三档场景 {len(expected_decisions & mapped_decisions)}/{len(expected_decisions)}；"
+        f"输入摘要 {matched}/{len(BASELINE_FILES)}（仅机械关系，不证明语义正确）"
+    )
+
+
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.parse_args()
     lines, headings, hlines = load()
     ch_lines, ch_heads, ch_hlines = load_charter()
     skipped = check_refs(lines, headings, ch_heads)
@@ -396,6 +505,7 @@ if __name__ == "__main__":
     secs = section_text(lines, hlines)
     sec_lines = section_lines(lines, hlines)
     check_tier(sec_lines)
+    check_mechanism(headings, ch_heads, sec_lines)
     ch_secs = section_text(ch_lines, ch_hlines) if ch_lines else {}
     def_rate = consume_rate = 0.0
     gaps = 0

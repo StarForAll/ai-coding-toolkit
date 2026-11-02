@@ -15,6 +15,7 @@ Applies to every future revision of:
 - `docs/workflows/wf-framework-design.md` — the wf framework design document (how to build and how to accept)
 - `docs/workflows/wf-framework-charter.md` — the charter (whether to build, where the boundary is, when to stop)
 - `docs/workflows/wf-framework-design.index.md` — the shared unique-definition index table for both documents
+- `docs/workflows/wf-framework-mechanism.md` — the mechanism design document (how the accepted contract is encoded for implementation)
 - `scripts/validate-wf-design.py` — the design-stage machine checker itself
 
 ---
