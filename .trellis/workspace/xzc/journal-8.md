@@ -739,3 +739,38 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 396: wf 实现方案定稿（含 15 轮外部审查闭环）
+<!-- trellis-session: v=2 fp=b9646e2c869d1d7c -->
+
+**Date**: 2026-11-02
+**Task**: wf 实现方案定稿（含 15 轮外部审查闭环）
+**Branch**: `main`
+
+### Summary
+
+产出 docs/workflows/wf-framework-implementation.md（700 行，A–I 全项）；机制稿登记 task.retrospect（7 处）；check-doc-refs 改严格所有者模式并另立任务落地
+
+### Main Changes
+
+- 新增实现方案文档；机制稿 3+4 处登记；引用自检严格化；归档两个任务
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `21d3aae` | docs(wf): 实现方案定稿（机制稿登记 task.retrospect、引用自检严格化） |
+| `7a81669` | chore(task): archive 11-02-wf-implementation-plan |
+
+### Testing
+
+- [OK] validate-wf-design 全绿（输入摘要 4/4）；check-doc-refs 七份 0 problem；unittest 19 OK；A–I 27 项验收审计全 PASS
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 编码阶段另立任务：按实现方案落 .wf/bin、wflib、skill 副本；首轮开发态部署后再跑 V1–V5 与三夹具
