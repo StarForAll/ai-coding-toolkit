@@ -487,6 +487,37 @@ def check_mechanism(dheads, cheads, design_sections):
     )
 
 
+def check_hash_domains(doc_lines):
+    """R2 硬规则机检：每个 H("wf-…") 哈希域名必须有对应的逐键定义段。
+
+    判定「有逐键定义」的机械口径：该域名在正文中出现 C({...}) 形态的键集合
+    定义（域名后 300 字符内出现 `C({` 且含键名列举），或出现在其定义段的
+    等价说明中。只核存在性，不核键集合语义正确性。
+    """
+    seen_domains = {}
+    for idx, line in enumerate(doc_lines, 1):
+        for m in re.finditer(r'H\("wf-[a-z0-9-]+"', line):
+            domain = m.group(0)[4:-1]
+            seen_domains.setdefault(domain, []).append(idx)
+    for domain, line_nos in sorted(seen_domains.items()):
+        has_keydef = False
+        for idx in line_nos:
+            window = "".join(doc_lines[idx - 1 : idx + 2])
+            pos = window.find(f'H("{domain}"')
+            if pos != -1 and "C({" in window[pos : pos + 400]:
+                has_keydef = True
+                break
+            # 定义段变体：域名附近出现「键集合」「逐键」「键名」说明
+            if any(kw in window for kw in ("键集合", "逐键", "键名与取值域")):
+                has_keydef = True
+                break
+        if not has_keydef:
+            errors.append(
+                f"机制稿: 哈希域「{domain}」缺逐键定义段（R2 硬规则：哈希输入结构须逐键给出名称与取值域）"
+            )
+    return len(seen_domains)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.parse_args()
@@ -501,6 +532,7 @@ if __name__ == "__main__":
     ch_sites = def_sites(ch_lines, ch_hlines) if ch_lines else []
     check_bidir(sites, ch_sites, parse_rows(raw_rows) if raw_rows else [])
     check_residue(lines)
+    domain_count = check_hash_domains(lines)
 
     secs = section_text(lines, hlines)
     sec_lines = section_lines(lines, hlines)
