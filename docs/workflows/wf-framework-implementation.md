@@ -2,7 +2,7 @@
 doc: wf 独立框架实现方案
 scope: 目标项目的文件布局、脚本接口、命令形态、发行物构成与单页使用速查
 audience: 框架实现者、安装者与日常使用者
-status: 首版草稿（2026-11-02）；未经未参与编写会话复审，不构成实现验收
+status: 首版（2026-11-02 编写；2026-11-02 经原 Codex 会话全文重审通过、经不同 CLI 独立复审（5 条低级发现，处置见本文 §9.2）；不构成实现验收；作为首轮实现阶段基线）
 baseline: 机制稿首版（2026-11-02 人工审查通过）与设计稿/charter 定稿
 normative: 本文件只定义文件布局、脚本接口、命令形态与发行物构成；记录 schema、判定编码、状态机与算法由机制稿定义，本文件不复制
 ---
@@ -203,7 +203,7 @@ docs/workflows/新项目开发工作流/
   - **允许省略（建立代次或根本不写项目判定字段）**：
     - 建立新代次：`writer acquire`、`bind`（在其写权获取动作内成组写入首次绑定）、`writer-handover accept`、`task-new` 内的首次 acquire、**`definition prepare`**（取得 preparation scope）、**`run create`**（取得实例写权并完成首次绑定）、维护类 `upgrade`/`repair`/`uninstall`。入口在这些动作结束时回显新代次。
     - 不写项目判定字段：不带信封的纯只读命令（`status`/`gate`/`inspect`/`version`）、只读断言子动作（`definition validate`、`run locate`）、只做启用检查的 `enable` 与只写本会话侧车的 `spec --file`。
-  - **必须携带**：其余会写项目判定字段、且**不建立新代次**的子动作——`task-approve`/`task-start`/`task-pause`/`task-resume`/`task-curate`/`task-check`/`task-knowledge`/`task-retrospect`/`task-attribute`/`task-rework`/`task-replace`/`task-abandon`/`task-reassess`、`dep`、`stop`、`archive`、`review-launch`/`review-import`/`review-decide`、`baseline-apply`、`spec-update`、`run advance`/`run pause`/`run terminate`。**未携带与不匹配同判** `WF_GENERATION_STALE`：facts 区分「未携带 generation」与「generation 不符」，出口都是重新读取当前代次后重试，不自行递增、不按当前 writer 补用新代次。
+  - **必须携带**：其余会写项目判定字段、且**不建立新代次**的子动作——`task-approve`/`task-start`/`task-replan`/`task-pause`/`task-resume`/`task-curate`/`task-check`/`task-knowledge`/`task-retrospect`/`task-attribute`/`task-rework`/`task-replace`/`task-abandon`/`task-reassess`、`dep`、`stop`、`archive`、`review-launch`/`review-import`/`review-decide`、`baseline-apply`、`spec-update`、`run advance`/`run pause`/`run terminate`。**未携带与不匹配同判** `WF_GENERATION_STALE`：facts 区分「未携带 generation」与「generation 不符」，出口都是重新读取当前代次后重试，不自行递增、不按当前 writer 补用新代次。
   - **不同写权期不共享代次**：准备写权（`definition prepare`）与实例写权（`run create`）是两个独立代次，创建实例前先完成准备释放与工作区处置，再在 acquire 中建立首次绑定（机制稿 §4.2 末段）；不得把准备代次用于创建，也不得在准备未释放时取得实例写权。
   - 由此，同一会话释放后重新 acquire 得到新代次时，旧调用材料里的旧代次会被判不符而拒绝，不会被套进新的授权期。
 - **重试语义**：结果中回显本次 `action_id`；携带 `retry_of_action` → 入口按该动作已保存的意图走重入四态（机制稿 §5.2），不携带 → 按当前 `revision` 建新 `action`（机制稿 §5.1 的幂等派生，不重放业务副作用）。
@@ -221,7 +221,7 @@ docs/workflows/新项目开发工作流/
 | `gate` | `--due before_execute\|before_check\|before_archive` | `gate.evaluate`（只读） | 只读断言 | 机制稿 §3.2（指纹）、机制稿 §3.5（范围） | 1 |
 | `spec` | `--file <RepoPath>`（信封必需） | 只读查询 + 本会话读取侧车 | 无（不写判定字段） | 机制稿 §3.1 | 1 |
 | `inspect` | `[--json]` | 只读巡检（机制稿 §8.5） | 无 | 全库只读视图 | 1 |
-| `enable` | 信封 | `gate.evaluate` 的只读形态（start 的只读段；不属固定操作集合） | 无迁移 | 机制稿 §3.1 | 1 |
+| `enable` | 信封 | 只读启用核对（Trellis 互斥、身份能力与 activation；不属固定操作集合，见机制稿 §2.1） | 无迁移 | 机制稿 §3.1 | 1 |
 | `bind` | `--task <id>` \| `--run <id>`（信封） | `session.bind`（在写权获取动作内成组写入；机制稿 §4.2「首次绑定按本文 §5 成组写入」） | 空闲态下新会话对**既有就绪对象**的首次绑定；**不承担首次创建**（见 `task-new`），**不承担交接接收**（见 `writer-handover accept`） | 机制稿 §3.1、机制稿 §4.4 工作区分类 | 1 |
 | `writer` | `acquire` \| `release` | `writer.acquire` / `writer.release` | 写权获取/释放 | 机制稿 §4.4 | 1 |
 | `writer-handover` | `begin --to <session-key>` \| `accept` | `writer.handover.begin` / `writer.handover.accept` | 两段交接：`begin` 由旧写者发起（失效旧代次、写接收者与待恢复）；**`accept` 由接收方一次性完成绑定核验与代次授予**，接收方不再单独调 `bind` | 机制稿 §4.3、§4.4 | 1 |
@@ -229,6 +229,7 @@ docs/workflows/新项目开发工作流/
 | `task-new` | `--kind ordinary\|initialize\|bootstrap --title <t> --template <path>`（信封） | `writer.acquire` + `session.bind` + `task.create`（**单一父 action**，主记录 writer） | 创建规划 + 首次绑定 | 机制稿 §3.1、机制稿 §5.2 目录防撞 | 1 |
 | `task-approve` | `--task <id> --decision <path>` | `task.transition` | 批准规划（含复杂度/TDD/plan-q 答复） | 机制稿 §2.3 提取、机制稿 §3.4 条件① | 1 |
 | `task-start` | `--task <id>` | `task.transition` | 首次开工 / 再入 Execute（写 `entry_snapshot`） | 机制稿 §3.1、§3.3 | 1 |
+| `task-replan` | `--task <id>` | `task.transition` | 实质规划变更（回 Plan；原批准/检查留历史但当前无效，`status` 不回未开工） | — | 1 |
 | `task-pause` / `task-resume` | `--task <id> [--reason]` | `task.pause` / `task.transition` | 暂停 / 恢复 | 机制稿 §4.4 | 1 |
 | `task-curate` | `--task <id> --spec <path> --purpose <text>` | `task.curate` | 策展写入 | 机制稿 §3.1 | 1 |
 | `task-check` | `--task <id> [--decision <path>] [--review-notes <path>]` | `task.check` | Check（固定五步，机制稿 §3.2）；并写 `task.work-satisfied` 的 completed 回执 | 机制稿 §3.5 范围核对 | 1 |
@@ -236,7 +237,8 @@ docs/workflows/新项目开发工作流/
 | `task-retrospect` | `--task <id> --evidence <path> [--decision <path>]` | `task.retrospect` | 复盘记录（人要求或触发后执行） | — | 1 |
 | `task-attribute` | `--task <id> --commit <oid>` | `task.attribute` | 归属裁决 | 机制稿 §3.3 | 1 |
 | `dep` | `add\|rm --task <id> --prereq <id>` | `dependency.change` | 建边/删边 | 机制稿 §6.1 图校验 | 2 |
-| `task-rework` / `task-replace` / `task-abandon` | `--task <id> …` | `task.rework` / `task.replace` / `task.abandon` | 返工/替换/放弃 | 机制稿 §6.2–§6.4 | 1（仅单任务放弃）、2（返工/替换/建删边） |
+| `task-rework` / `task-replace` | `--task <id> …` | `task.rework` / `task.replace` | 返工/替换 | 机制稿 §6.2、§6.3 | 2 |
+| `task-abandon` | `--task <id> --decision <path> [--disposition <path>]`（承载与记录映射见本节「结构化人工输入」） | `task.abandon` | 单任务放弃（异常归档） | 机制稿 §6.4 | 1 |
 | `task-reassess` | `--task <id>` | `task.reassess` | 挂起复评 | 机制稿 §6.2 | 2 |
 | `review-launch` | `--task <id> --launch-request <path>`（结构化声明，骨架见本节末） | `review.launch` | 审查发起；round/attempt/anchor/temp_paths 由入口生成并回显 | 机制稿 §3.5 前置 | 1 |
 | `review-import` | `--task <id> --round <n> --slot <id> --report <绝对路径>`（round/slot 取 launch 回显值） | `review.import` | 导入与锚点核对（机制稿 §9.2） | 机制稿 §3.2 锚点 | 1 |
@@ -252,16 +254,20 @@ docs/workflows/新项目开发工作流/
 | `confirm-executor` | `--scope system\|global\|project` | 引导层例外（机制稿 §8.2） | 无（只写 `~/.wf/interpreters.json`） | — | 1 |
 | `version` | `[--json]` | 只读 | 无 | — | 1 |
 
+**阶段回退的承载与再入路径（实质规划变更）**：机制稿 §2.2 的「实质规划变更」行只给目标状态（进入 `phase=plan`、原批准/检查留历史但当前无效、`status` 不回未开工）与失败出口（人澄清并重批），调用形态由本文补：`task-replan --task <id>`，机制操作 `task.transition`，与其他迁移同一固定处理器 `wflib/tasks.py::transition`（本文 §6.3）。它的边界是**只做这一行迁移**——不改写 PRD、不写 `touch_paths`、不产生新批准、不改既有 `entry_snapshot` 的内容；原批准/检查的留史与失效按机制稿 §1.3 的 `check_history` 与机制稿 §2.2 该行定义，本文不在命令面复述状态机。回 Plan 之后仍是既有两步：`task-approve`（批准规划，源态含 `in_progress/plan`）→ `task-start`（再入 Execute：重新提取 PRD 并与当前有效批准核对后替换 `entry_snapshot`，按机制稿 §2.3），不设第三个迁移入口，也不允许在 Execute/Check/Finish 直接改 `task.phase`。速查中「回 Plan 补可证包含条目」「回 Plan 扩范围重批」的出口即这条命令加上述两步（本文 §8.2）。
+
 **结构化人工输入（约定）**
 
 人的决定只有两种承载方式，其余一律不塞进命令行：
 
 - **封闭枚举（可留在命令行）**：取值由机制稿固定、不超过三个值的「选一个」开关——`task-knowledge --decision no-update|updated`——这两个值由**本文**定义，语义取设计稿 §6.3（「本次无更新」与「新增/更新/合并/改名/删除后的结论」），机制稿 §1.3 只登记 `knowledge` 的三个字段、未登记值域，因此扩展值域须先回机制稿登记；`run pause` 等带说明文本的子动作不在此列（它们有 `--reason`）。审查结论**不是**封闭枚举：pass/fail 由入口按机制稿 §9.2 的事实推导，只有「环境不可用」需要人声明（`--unavailable <path>`）。
 - **JSON 文件（承载具体内容）**：
-  - `--decision <path>`：单条 `Decision` 或其数组，结构照机制稿 §1.1；`subject` 写该决定覆盖的对象与具体路径，`choice` 取机制稿已登记的取值。用于 `task-approve`（批准）、`stop`（**收工选择一条** + 提交/反向修正授权若干条）、`archive`（finish 调用证据 + `commit_grants`）、`run advance`（人判答复）。
+  - `--decision <path>`：单条 `Decision` 或其数组，结构照机制稿 §1.1；`subject` 写该决定覆盖的对象与具体路径，`choice` 取机制稿已登记的取值。用于 `task-approve`（批准）、`task-abandon`（**停止决定一条** + 提交/反向修正授权若干条；`subject` 列覆盖路径或承接对象，与 `stop` 同一约定）、`stop`（**收工选择一条** + 提交/反向修正授权若干条）、`archive`（finish 调用证据 + `commit_grants`）、`run advance`（人判答复）。
   - `--plan <path>`：**对象级**批量处置计划，元素为 `{object|finding, decision_ref, reason}`；只用于实例批量终止（`run terminate`，元素是任务）与审查逐条处置（`review-decide`，元素是具名 finding）。它不表达「同一组路径各用不同处理」——收工是单一选择（机制稿 §4.3 的 `decision` 只有 commit/keep/reverse/transfer 四值，wip 记录的 `paths` 只存逐路径状态、不含 per-path choice），混合去向要先改机制稿该节的 wip schema，属机制侧变更。
 
-其余领域文件沿用各自名称（`--launch-request`、`--creation`、`--proposal`、`--changes`、`--review-notes`、`--evidence`）；文件只承载人的决定，不承载身份（身份只走信封）。
+  - `--disposition <path>`：单任务放弃（`task-abandon`）的**逐项去向**，元素为 `{object, decision_ref, reason}`——`object` 记被处置路径或具名承接对象，`decision_ref` 指向该去向的 `Decision`，`reason` 记风险与未落实依据。入口把它落到机制稿 §1.3 `disposition` 的 `changes`/`targets`/`pending`（`disposition.decision` 与 `commit_grants` 仍由 `--decision` 提供）；是否构成待决、什么算已落实一律取机制稿 §6.4，本文不另立判据。放弃要求**逐项**去向（机制稿 §6.4「每项给保留现状/反向修正/具名承接的实际去向」），与收工的单一选择（机制稿 §4.3）是两个不同的决定，因此不复用 `--plan` 的用途与边界。
+
+其余领域文件沿用各自名称（`--launch-request`、`--creation`、`--proposal`、`--changes`、`--review-notes`、`--evidence`、`--disposition`）；文件只承载人的决定，不承载身份（身份只走信封）。
 
 **证据与裁定的输入通道（Check / 复盘）**
 
@@ -297,7 +303,7 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 
 **`task.retrospect` 的登记说明**：2026-11-02 人裁「复盘作为独立机制操作」，机制稿 §11.3 的状态动作集合与机制稿 §5.1 的主记录归属已同批登记 `task.retrospect`（`control.task.retrospect` 随之按该节公式派生），门禁侧仍由机制稿 §11.2 的 `task.retrospective-done` 核验。本文只给命令与落点：处理器 `wflib/tasks.py::retrospect`，写入 `task.retrospective`，并在同一 action 内写 `task.retrospective-done` 的 completed 回执（机制稿 §11.2 的回执写者句；人裁 ①：该操作即该步骤的执行入口）。该操作不新增判定，只把一个已有记录字段提升为可独立期次化的动作。
 
-**没有公开子命令的机制操作**：`verification.resolve`、`asset.compare` 作为只读断言由内部调用（`task-start`/`task-check`/`archive`/`run` 内部步骤）暴露，不单设命令；`run` 的子动作按机制稿 §5.1、§7.2、§7.4 由 writer 主记录与 `run.advance` 承载（实例首次创建与暂停都不是独立操作名），第二轮随实例能力一起交付。**操作名不自动新增公开命令**：本表之外的任何操作名不因为存在于机制稿就成为命令；新增命令必须同时满足「映射到已登记机制操作或已定义只读查询」与「在本文与用户文档同批登记」。
+**没有公开子命令的机制操作**：`verification.resolve` 作为只读断言由内部调用（`task-start`/`task-check`/`archive`/`run` 内部步骤）暴露；`asset.compare` 同属只读断言，消费面是发行侧三方比较（安装/升级/卸载/自检，落点见本文 §6.2 D31、本文 §7.2 G16），两者都不单设命令；`run` 的子动作按机制稿 §5.1、§7.2、§7.4 由 writer 主记录与 `run.advance` 承载（实例首次创建与暂停都不是独立操作名），第二轮随实例能力一起交付。**操作名不自动新增公开命令**：本表之外的任何操作名不因为存在于机制稿就成为命令；新增命令必须同时满足「映射到已登记机制操作或已定义只读查询」与「在本文与用户文档同批登记」。
 
 ### 2.4 输出契约
 
@@ -638,6 +644,8 @@ G 编号沿用机制稿 §12.2（该表已给门禁与场景行的对应），�
 | 开工 | `wf-continue` → `wf.py task-start --task <id>` | 无（门禁自动） | `WF_SCOPE_UNRESOLVED` → 回 Plan 补可证包含条目；`WF_WORKSPACE_UNRESOLVED` → 逐路径核归属；`WF_WIP_UNRESOLVED` → 同对象核指纹恢复或实际处置；`WF_VERIFICATION_UNREADY` → 补来源/设施 |
 | 读规则 | `wf.py spec --file <RepoPath>` | 无 | `WF_SPEC_INCOMPLETE` → 分批读全文后重试 |
 | 检查 | `wf-continue` → `wf.py task-check --task <id>` | 无 | `WF_SCOPE_VIOLATION` → 回 Plan 扩范围重批；`WF_CHECK_FAILED` → 修复后重跑；`WF_CHECK_STALE` → 重算锚点后重检 |
+| 重新规划（实质变更） | `wf-continue` → `wf.py task-replan --task <id>`；随后 `task-approve` → `task-start` | 人决定改方案并说明变更范围；重批时确认范围/验收/取舍 | `WF_GENERATION_STALE` → 重读当前代次后重试；未重批即再入 → `WF_APPROVAL_MISSING` |
+| 放弃任务（异常归档） | `wf-continue` → `wf.py task-abandon --task <id> --decision <path> [--disposition <path>]` | 人给停止决定与逐项去向；未提交改动须先授权提交或由人实际处置 | `WF_COMMIT_NOT_AUTHORIZED` → 先取提交授权或改去向；`WF_WORKSPACE_UNRESOLVED` → 逐路径处置后再结案 |
 | 复杂任务审查发起 | `wf.py review-launch …`，再由人打开两个异种 CLI 会话 | 人声明实施 CLI、两个 reviewer CLI 与槽位；授权本次外发材料范围 | `WF_REVIEW_UNAVAILABLE` → 暂停或异常归档；`WF_REVIEW_INVALID` → 补真实审查 |
 | 审查导入与判定 | `wf.py review-import …` → `wf.py review-decide …` | 人核对报告与锚点 | `WF_REVIEW_INVALID` → 锚点失配则重审；报告缺失/身份矛盾不判 pass |
 | 完成门禁与归档 | 人调用 `wf-finish` → `wf.py archive --task <id> --decision <path>` | 人了解结果与未核实项后调用 finish；该 Decision 记调用证据与按精确路径的提交授权 | `WF_COMMIT_NOT_AUTHORIZED` → 等人处理；`WF_SEMANTIC_DECISION` → 裁定未决项；`WF_WORKSPACE_UNRESOLVED` → 处置工作区 |
@@ -690,11 +698,41 @@ G 编号沿用机制稿 §12.2（该表已给门禁与场景行的对应），�
 4. **复盘登记为独立机制操作 `task.retrospect`**（已落地）：机制稿 §11.3 的状态动作集合与机制稿 §5.1 的当前任务主记录归属同批登记，`control.task.retrospect` 按该节公式派生；处理器 `wflib/tasks.py::retrospect`（本文 §6.2 D36），门禁仍由机制稿 §11.2 的 `task.retrospective-done` 核验。该改动触及已审稿，须同批复审。
 5. **打包脚本不入发行清单，只写发行说明**（已落地，见本文 §1.5 的发行说明要求与理由）。**发行安装器 `install.py` 相反：它属发行资产**，按 `release_only` 登记进 `assets` 并计入 `rules_digest`；`target_class` 的取值域由本文定义（机制稿 §10.2 只给字段名，未定域），因此这一登记不需要改机制稿。作者机工具（打包、开发态部署）不属发行资产，两者不要混为一谈。
 
+**本轮修订（2026-11-02，处置复审两条中级发现）**
+
+| 编号 | 复审原文摘要 | 复核结论 | 证据（修订前绑定的行号） | 类 | 改动落点 | 联动 |
+|---|---|---|---|---|---|---|
+| M1 | 实质重新规划的状态动作没有明确调用形态 | 成立 | 本文 §2.3 原 230–231 行（只登记「批准规划」「首次开工／再入 Execute」）、原 300 行（本表外的操作名不因存在于机制稿就成为命令）、本文 §8.2 原 638/640 行（已把「回 Plan」当出口）；机制稿 §2.2 的「实质规划变更」行、机制稿 §11.3 的状态动作集合 | A | 本文 §2.3 新增 `task-replan` 行与「阶段回退的承载与再入路径」段；本文 §2.2 的代次列举；本文 §8.2 新增「重新规划（实质变更）」行 | 无：映射到已登记的 `task.transition`，不新增操作名、不改机制稿 |
+| M2 | 首轮 `task-abandon` 的人工输入接口仍是省略号 | 成立 | 本文 §2.3 原 239 行（`--task <id> …`）、原 261–262 行（`--decision` 用途表与 `--plan` 的「只用于」）、本文 §6.4 原 563 行（首轮「照常走 `task-abandon`」）；机制稿 §6.4 的停止决定与逐项去向、机制稿 §1.3 的 `disposition`/`commit_grants` | A | 本文 §2.3 拆出 `task-abandon` 行并写显式参数；`--decision` 用途补该命令、新增 `--disposition` 承载与记录映射；本文 §8.2 新增「放弃任务（异常归档）」行 | 无：字段、取值与落实判据均引用机制稿 §1.3、§6.4 |
+
+**本轮绑定**：修订前 700 行 / `sha256 75667055f3efbfe28824bc6d434af7cc26fefd799c5b05b809f010f8d989163e` / HEAD `fdc328b`，该绑定**作废**。修订后的行数与 sha256 由本轮修订回复与任务记录给出（文件内写自身哈希会自指）；HEAD 仍为 `fdc328b`（本轮未提交）。两条均属 A 类，无需同批复审，无「需人裁决」项；`task-rework`/`task-replace` 的参数仍按其第二轮交付轮次确定，本轮只拆行、不改其形态（复审原文允许）。
+
+**复审记录（2026-11-02）**
+
+| 来源 | 独立性边界 | 绑定 sha256 | 覆盖轴 | 结论 |
+|---|---|---|---|---|
+| 同模型同仓库会话（原 Codex 会话，全文重审） | 满足未参与编写与修订；不满足独立工具口径（同模型、同工作树，非新冷启动，不宣称防伪） | `b8eddf075af3ff3f773b2f82015db9df60e72958d9b81cc19ca145c88a4b09d8`（717 行） | 全文逐节不抽样、命令与记录接口闭合性、五条流程纸面推演、交付轮次、设计稿 §8.1 承接、审查写权边界；未覆盖：框架执行、三夹具、故障注入、打包与安装生命周期、宿主身份与 reviewer 非交互能力 | 可作为首轮实现阶段基线；高级 0 / 中级 0 / 低级 0；不构成实现验收 |
+| 不同 CLI（独立复审） | 满足未参与编写与修订；不同 CLI 口径成立，但同一操作者、同一工作树，不宣称防伪 | 同上 `b8eddf07…`（717 行）；其后 L2/L3 两处小修的 delta 复核通过，正文绑定更新为 `051aade5…` | 可执行性（五条流程纸面实例化）、闭合性、一致性、上位承接（设计稿 §8.1 逐子句）、定点核对九项；未覆盖：夹具实跑、宿主身份与 reviewer 可用性、任务记录逐条比对 | 可作为首轮实现阶段基线；高级 0 / 中级 0 / 低级 5（L1–L5，处置见本节「低级发现处置」）；不构成实现验收 |
+
+登记编辑仅改 `status:` 与本文 §9.2，正文条款未动，绑定 `051aade51681f9b33ba7fbf2e21c44f20045c273772f796caa72c4f1e7e4d952` 仍成立。
+
+**低级发现处置（2026-11-02）**
+
+分诊口径：① 真低级（措辞、示例或可自然补全，不影响照抄）；② 照抄会踩空（应重判为中级）；③ 与机制稿或已声明裁定不一致。
+
+| 编号 | 复审原文摘要 | 复核结论 | 分诊 | 改/不改 | 理由 |
+|---|---|---|---|---|---|
+| L1 | 本文 §0 四层表与本文 §1.5 把 authoring 源树 `docs/workflows/新项目开发工作流/` 写成既有形态（该目录 2026-10-28 已退役、当前不存在），且首轮清单无建立源树条目 | 成立（事实成立，影响限于清单缺项） | ① | 不改 | 首轮交付物清单缺「建立源树 + dev-manifest.json」，由首轮实现任务输入说明承接，本文 §9.2 剩余待办登记 |
+| L2 | 本文 §2.3 把 `asset.compare` 与 `verification.resolve` 并列写成由 `task-start`/`task-check`/`archive`/`run` 内部步骤暴露，消费面错置（机制稿 §11.3 中 `asset.compare` 的消费面是发行侧三方比较） | 成立（消费面错置） | ③ | 改 | 改动落点：本文 §2.3「没有公开子命令的机制操作」段（:306）拆句——`verification.resolve` 保留原内部步骤列举，`asset.compare` 写明消费面是发行侧三方比较，落点见本文 §6.2 D31、本文 §7.2 G16 |
+| L3 | 本文 §2.3 的 `enable` 行机制操作格写 `gate.evaluate` 的只读形态，而启用检查实为机制稿 §2.1 的 Trellis 互斥、身份与 activation 核验 | 成立（机制内容错标） | ③ | 改 | 改动落点：本文 §2.3 表 `enable` 行机制操作格（:224）改为「只读启用核对（Trellis 互斥、身份能力与 activation；不属固定操作集合，见机制稿 §2.1）」，其余五格不动 |
+| L4 | 本文 §7.1 的 V1 初态写 `session_profile.capability=unknown`，触发列又把 `wf-start` → `enable` → `task-new` 并列，核验出口未写入触发列 | 成立（编排缺口，判定无歧义） | ① | 不改 | 框架行为以机制稿 §1.4 为准且无歧义：`status=unknown` 时先经核验出口更新 `session_profile`，缺的只是 V1 触发序列首步，属实现阶段的测试编排，照抄不产生门禁分歧 |
+| L5 | 本文 §6.2 的 D28 行「由发行自检用固定向量比对」与本文 §4.5.1「不属于安装期自检，也不是运行期能力」存在措辞张力 | 部分成立（措辞张力，非事实冲突） | ① | 不改 | 「发行自检」可读作打包期自检，与本文 §4.5.1 的 authoring 发布前检查同指一场检查；该节已排除安装期与运行期两义，无验收分歧，属跨节词面统一 |
+
 **剩余待办**
 
 | 项 | 状态 | 出口 |
 |---|---|---|
 | 机制稿 §0.2 四项机检扩展的实现 | 后续项（不阻塞首轮） | 首轮实现收口后另立维护任务，按 charter T6.3 顺序落地并重跑机检 |
 | 索引表登记本文 | 未做（人裁「只加机制稿指针」） | 若日后要求，同批改索引、重算四份 SHA-256、写回机制稿 §0.1 摘要表并由人确认 |
-| 本文冻结 | 首版草稿，未经未参与编写会话复审 | 按设计稿 §0 的复审规则由独立会话按轴复审、声明覆盖轴与未覆盖项后，才可作为实现阶段基线 |
+| 本文冻结 | 已冻结（正文绑定 sha256 `051aade51681f9b33ba7fbf2e21c44f20045c273772f796caa72c4f1e7e4d952`） | 内容变更须重绑摘要并由未参与该次修订的会话复审 |
 | 三夹具、五条最小验证顺序、审查链路、宿主身份、reviewer 可用性 | 未运行（见本文 §9.1） | 实现阶段逐项运行并记录初态/触发/输出/归因 |
