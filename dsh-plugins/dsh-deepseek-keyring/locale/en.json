@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "DeepSeek Key Ring",
+    "description": "Rotates several official DeepSeek API keys, shows the active key's balance and the total of all usable keys at the bottom right, and adds keys in bulk from a popup."
+  }
+}

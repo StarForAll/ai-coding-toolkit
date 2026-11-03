@@ -1,0 +1,31 @@
+# dsh-deepseek-keyring —— DeepSeek 官方 Key 池。
+#
+# 每个配置项在 index.js 的 resolveConfig 里都有同名默认值：profile 的覆盖行是
+# 整块替换 config，所以本地默认值必须与这里保持一致。
+#
+#   provider          受管的官方 provider 路由（默认 deepseek-official）
+#   credentialRef     官方 provider 读取的凭证引用名（默认 DEEPSEEK_API_KEY）
+#   apiBase           余额接口的站点根（默认 https://api.deepseek.com）
+#   balancePath       余额接口路径（默认 /user/balance）
+#   pollIntervalMs    全池余额轮询间隔，5s 起（默认 20s）
+#   minRefreshGapMs   请求前那次刷新（只查当前 Key）的最小间隔（默认 5s）
+#   refreshOnActivity 是否在每次模型请求前做上面那次节流刷新（默认 true）
+#   requestTimeoutMs  单次余额请求超时（默认 15s）
+#   storePath         池元数据文件；留空 = $DSH_HOME/deepseek-keyring.json
+#   importExisting    首次启用时把当前在用的官方 Key 收进池子（默认 true）
+#   maxKeys           池子上限（默认 50）
+- insert:
+    - id: deepseek-keyring
+      name: 'dsh-deepseek-keyring'
+      config:
+        provider: deepseek-official
+        credentialRef: DEEPSEEK_API_KEY
+        apiBase: https://api.deepseek.com
+        balancePath: /user/balance
+        pollIntervalMs: 20000
+        minRefreshGapMs: 5000
+        refreshOnActivity: true
+        requestTimeoutMs: 15000
+        storePath: ''
+        importExisting: true
+        maxKeys: 50
