@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "project_id": null,
+  "tdd_default": false,
+  "review_file_hint": 3,
+  "review_line_hint": 80,
+  "split_file_hint": 8,
+  "split_line_hint": 400,
+  "merge_line_hint": 10,
+  "debug_repeat_threshold": 3,
+  "spec_verify_days": 90,
+  "spec_reclaim_tasks": 5,
+  "inspection_every_tasks": 10,
+  "spec_output_codepoints": 12000
+}

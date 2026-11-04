@@ -1,0 +1,26 @@
+"""wflib — wf 独立框架运行时包（仅标准库）。"""
+
+__all__ = [
+    "module_main",
+    "cli",
+    "records",
+    "paths",
+    "fingerprint",
+    "scope",
+    "actions",
+    "lock",
+    "writer",
+    "session",
+    "tasks",
+    "gates",
+    "check",
+    "curation",
+    "spec",
+    "runs",
+    "review",
+    "maintenance",
+    "assets",
+    "config",
+    "templates",
+    "codes",
+]

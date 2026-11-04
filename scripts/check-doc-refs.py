@@ -2,7 +2,7 @@
 """W25 引用自检：每个 `§x.y` 必须带所有者前缀；`本文 ` 前缀另核本文件章节。
 
 用法：
-  scripts/check-doc-refs.py                                  # 默认查 workflow-implementation.md
+  scripts/check-doc-refs.py                                  # 默认查当前 wf 四稿中的三稿（机制稿由 validate-wf-design 核）
   scripts/check-doc-refs.py <文件> [<文件> ...]                # 逐个查，末尾给总数
 退出码：0 干净；1 有问题（缺所有者前缀、本文引用指向不存在的章节、宽松文档的裸引用本地无此章节）。
 
@@ -38,7 +38,9 @@ HEADING = re.compile(r"^#{2,4} (\d+(?:\.\d+)*)")
 EXEMPT_SECTIONS = ("## 附录 D", "### 9.4")
 OWNER_PREFIXES = ("本文 ", "机制稿 ", "设计稿 ", "依赖说明 ", "原 ")
 PREFIX_WINDOW = max(len(p) for p in OWNER_PREFIXES)
-DEFAULT_PATHS = ("docs/workflows/workflow-implementation.md",)
+DEFAULT_PATHS = ("docs/workflows/wf-framework-implementation.md",
+                 "docs/workflows/wf-framework-charter.md",
+                 "docs/workflows/wf-framework-design.md")
 LOCAL_OWNER = "本文 "
 
 FILE_MODES = (

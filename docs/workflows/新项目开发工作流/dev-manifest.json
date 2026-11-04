@@ -1,0 +1,341 @@
+{
+  "assets": [
+    {
+      "executable": true,
+      "kind": "bin",
+      "required": true,
+      "source_path": "payload/bin/repair.py"
+    },
+    {
+      "executable": true,
+      "kind": "bin",
+      "required": true,
+      "source_path": "payload/bin/uninstall.py"
+    },
+    {
+      "executable": true,
+      "kind": "bin",
+      "required": true,
+      "source_path": "payload/bin/wf.py"
+    },
+    {
+      "executable": true,
+      "kind": "installer",
+      "required": true,
+      "source_path": "payload/install.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/__init__.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/actions.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/assets.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/check.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/cli.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/codes.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/config.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/curation.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/fingerprint.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/gates.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/lock.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/maintenance.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/module_main.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/paths.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/records.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/review.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/runs.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/scope.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/session.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/spec.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/tasks.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/templates.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/writer.py"
+    },
+    {
+      "executable": false,
+      "kind": "template",
+      "required": true,
+      "source_path": "payload/templates/baseline.md"
+    },
+    {
+      "executable": false,
+      "kind": "template",
+      "required": true,
+      "source_path": "payload/templates/project-config.skeleton.json"
+    },
+    {
+      "executable": false,
+      "kind": "template",
+      "required": true,
+      "source_path": "payload/templates/spec/index.md"
+    },
+    {
+      "executable": false,
+      "kind": "template",
+      "required": true,
+      "source_path": "payload/templates/spec/pre-dev-checklist.md"
+    },
+    {
+      "executable": false,
+      "kind": "template",
+      "required": true,
+      "source_path": "payload/templates/spec/quality-checklist.md"
+    },
+    {
+      "executable": false,
+      "kind": "template",
+      "required": true,
+      "source_path": "payload/templates/spec/rule.md"
+    },
+    {
+      "executable": false,
+      "kind": "template",
+      "required": true,
+      "source_path": "payload/templates/task/design.md"
+    },
+    {
+      "executable": false,
+      "kind": "template",
+      "required": true,
+      "source_path": "payload/templates/task/implement.md"
+    },
+    {
+      "executable": false,
+      "kind": "template",
+      "required": true,
+      "source_path": "payload/templates/task/prd.md"
+    },
+    {
+      "executable": false,
+      "kind": "template",
+      "required": true,
+      "source_path": "payload/templates/task/task-record.json"
+    },
+    {
+      "executable": false,
+      "kind": "template",
+      "required": true,
+      "source_path": "payload/templates/user-workflow.md"
+    },
+    {
+      "executable": false,
+      "kind": "workflow",
+      "required": true,
+      "source_path": "payload/workflows/instance-flow.md"
+    },
+    {
+      "executable": false,
+      "kind": "workflow",
+      "required": true,
+      "source_path": "payload/workflows/knowledge-flow.md"
+    },
+    {
+      "executable": false,
+      "kind": "workflow",
+      "required": true,
+      "source_path": "payload/workflows/maintenance-flow.md"
+    },
+    {
+      "executable": false,
+      "kind": "workflow",
+      "required": true,
+      "source_path": "payload/workflows/review-flow.md"
+    },
+    {
+      "executable": false,
+      "kind": "workflow",
+      "required": true,
+      "source_path": "payload/workflows/session-flow.md"
+    },
+    {
+      "executable": false,
+      "kind": "workflow",
+      "required": true,
+      "source_path": "payload/workflows/task-flow.md"
+    },
+    {
+      "executable": false,
+      "kind": "skill",
+      "required": true,
+      "source_path": "skills/wf-bootstrap/SKILL.md"
+    },
+    {
+      "executable": false,
+      "kind": "skill",
+      "required": true,
+      "source_path": "skills/wf-code-review/SKILL.md"
+    },
+    {
+      "executable": false,
+      "kind": "skill",
+      "required": true,
+      "source_path": "skills/wf-continue/SKILL.md"
+    },
+    {
+      "executable": false,
+      "kind": "skill",
+      "required": true,
+      "source_path": "skills/wf-diagnosing-bugs/SKILL.md"
+    },
+    {
+      "executable": false,
+      "kind": "skill",
+      "required": true,
+      "source_path": "skills/wf-finish/SKILL.md"
+    },
+    {
+      "executable": false,
+      "kind": "skill",
+      "required": true,
+      "source_path": "skills/wf-grilling/SKILL.md"
+    },
+    {
+      "executable": false,
+      "kind": "skill",
+      "required": true,
+      "source_path": "skills/wf-review-action/SKILL.md"
+    },
+    {
+      "executable": false,
+      "kind": "skill",
+      "required": true,
+      "source_path": "skills/wf-review/SKILL.md"
+    },
+    {
+      "executable": false,
+      "kind": "skill",
+      "required": true,
+      "source_path": "skills/wf-spec-update/SKILL.md"
+    },
+    {
+      "executable": false,
+      "kind": "skill",
+      "required": true,
+      "source_path": "skills/wf-start/SKILL.md"
+    },
+    {
+      "executable": false,
+      "kind": "skill",
+      "required": true,
+      "source_path": "skills/wf-tdd/SKILL.md"
+    }
+  ],
+  "note": "首轮开发态部署用：只登记资产清单、版本与必需标记；字节哈希由部署工具现算（实现稿 §4.6）",
+  "python_min": {
+    "major": 3,
+    "minor": 11
+  },
+  "schema_version": 1,
+  "version": "0.0.0-dev"
+}
