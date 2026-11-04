@@ -605,31 +605,46 @@ class DeepSeekKeyring {
    * 使这次请求直接用上新 Key。任何失败都不影响请求本身。
    * @returns 完成信号。
    */
-  async beforeRequest() {
-    if (this.disposed || !this.config.refreshOnActivity) return
+  /**
+   * 查一次当前 Key 的余额并写回；它若因此变得不可用就立即换 Key。
+   *
+   * 只是查询 + 记录，不做全池扫描，所以可以撑住界面几秒一次的轮询。
+   * @returns 是否真的查过。
+   */
+  async refreshActive() {
+    // 当前 Key 若已判为不可用（耗尽/过期），先让位再用新的那把。
+    if (!isUsable(this.activeEntry(), Date.now())) {
+      await this.reconcile()
+      await this.persist()
+    }
+    const current = this.activeEntry()
+    if (current === null) return false
+    const key = await this.keyOf(current)
+    if (typeof key !== 'string' || key.length === 0) return false
+    this.recordBalance(current, await this.queryBalance(key))
+    if (!isUsable(current, Date.now())) {
+      await this.reconcile()
+      await this.persist()
+    }
+    return true
+  }
+
+  /** 节流版的 {@link refreshActive}：界面轮询与请求前刷新共用这一个闸门。 */
+  async refreshActiveThrottled() {
+    if (this.disposed) return
     const now = Date.now()
     if (now - this.lastActiveCheckAt < this.config.minRefreshGapMs) return
     this.lastActiveCheckAt = now
     try {
-      await this.enqueue(async () => {
-        // 当前 Key 若已判为不可用（上一轮耗尽/过期），先让位，请求就能用上新的那把。
-        if (!isUsable(this.activeEntry(), Date.now())) {
-          await this.reconcile()
-          await this.persist()
-        }
-        const current = this.activeEntry()
-        if (current === null) return
-        const key = await this.keyOf(current)
-        if (typeof key !== 'string' || key.length === 0) return
-        this.recordBalance(current, await this.queryBalance(key))
-        if (!isUsable(current, Date.now())) {
-          await this.reconcile()
-          await this.persist()
-        }
-      })
+      await this.enqueue(() => this.refreshActive())
     } catch {
-      /* 请求前刷新只是尽力而为 */
+      /* 节流刷新只是尽力而为 */
     }
+  }
+
+  async beforeRequest() {
+    if (!this.config.refreshOnActivity) return
+    await this.refreshActiveThrottled()
   }
 
   // ---- 批量补充 -------------------------------------------------------------
@@ -703,6 +718,59 @@ class DeepSeekKeyring {
     const rotated = await this.reconcile()
     await this.persist()
     return { added, rejected: failed, rotated }
+  }
+
+  // ---- 复查隐藏条目 ---------------------------------------------------------
+
+  /**
+   * 逐个复查已隐藏的 Key：凡余额仍大于 0 的，恢复回可用队列；其余保持隐藏。
+   *
+   * 到期日已过但确实还有额度的，恢复时把到期日清掉——到期日说明它该作废，
+   * 余额说明官方仍在计它的额度，两者冲突时以余额为准，否则刚恢复就会被过期判定再藏回去。
+   * @returns 恢复的、仍隐藏的、以及失败的条目。
+   */
+  async recheckHidden() {
+    const targets = this.store.entries.filter((entry) => entry.hidden === true)
+    const restored = []
+    const kept = []
+    const failed = []
+    let cursor = 0
+
+    const worker = async () => {
+      while (cursor < targets.length) {
+        const entry = targets[cursor]
+        cursor += 1
+        const key = await this.keyOf(entry).catch(() => undefined)
+        if (typeof key !== 'string' || key.length === 0) {
+          failed.push({ id: entry.id, masked: '—', reason: 'missing-credential' })
+          continue
+        }
+        const probe = await this.queryBalance(key)
+        if (probe.ok === false) {
+          failed.push({ id: entry.id, masked: maskKey(key), reason: probe.error ?? 'unreachable' })
+          continue
+        }
+        if (probe.isAvailable === false || (probe.total ?? 0) <= 0) {
+          this.recordBalance(entry, probe)
+          kept.push({ id: entry.id, masked: maskKey(key), total: probe.total })
+          continue
+        }
+        const hadExpiry = typeof entry.expiry === 'string'
+        const expired = isExpired(entry, Date.now())
+        this.recordBalance(entry, probe)
+        entry.hidden = false
+        entry.exhaustedAt = null
+        entry.invalidAt = null
+        entry.error = null
+        if (expired) entry.expiry = null
+        restored.push({ id: entry.id, masked: maskKey(key), total: probe.total, clearedExpiry: expired && hadExpiry })
+      }
+    }
+
+    await Promise.all([worker(), worker(), worker()])
+    const rotated = await this.reconcile()
+    await this.persist()
+    return { restored, kept, failed, rotated, state: await this.snapshot() }
   }
 
   // ---- 快照 -----------------------------------------------------------------
@@ -784,6 +852,8 @@ class DeepSeekKeyring {
     const op = typeof body?.op === 'string' ? body.op : ''
     try {
       if (op === 'state') {
+        // 先按闸门查一次当前 Key 再取快照：前端轮询一次就是最新值，不用连点两次。
+        await this.refreshActiveThrottled()
         sendJson(res, 200, { ok: true, data: await this.enqueue(() => this.snapshot()) })
         return
       }
@@ -808,6 +878,10 @@ class DeepSeekKeyring {
             return { ...result, state: await this.snapshot() }
           }) },
         )
+        return
+      }
+      if (op === 'recheck') {
+        sendJson(res, 200, { ok: true, data: await this.enqueue(() => this.recheckHidden()) })
         return
       }
       if (op === 'export') {

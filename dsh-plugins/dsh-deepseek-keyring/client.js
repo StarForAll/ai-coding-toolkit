@@ -34,6 +34,15 @@ window.__ModuleLoader__.load({
         statusEmpty: '额度已用完',
         statusExpired: '已过期',
         grantedTag: '赠送额度',
+        pagePrev: '上一页',
+        pageNext: '下一页',
+        pageInfo: (a, b) => `第 ${a}/${b} 页`,
+        recheckBtn: '检查隐藏',
+        rechecking: '检查中…',
+        recheckHint: '逐个复查已隐藏的 Key，余额仍大于 0 的恢复到可用队列；到期日已过但仍有额度的会清掉到期日。',
+        expiryCleared: '已清掉过期的到期日',
+        recheckDone: (restored, kept) =>
+          `恢复 ${restored} 把` + (kept > 0 ? `，${kept} 把确实没有额度` : ''),
         addTitle: '批量补充 Key',
         addHint: '每行一个：sk-xxx 或 sk-xxx 2026-12-31 备注',
         exportTitle: '导出',
@@ -45,9 +54,8 @@ window.__ModuleLoader__.load({
         exported: (n) => `已导出 ${n} 条`,
         addButton: '添加',
         adding: '添加中…',
-        refresh: '刷新余额',
+        refresh: '刷新',
         refreshing: '刷新中…',
-        close: '关闭',
         empty: '还没有 Key。把官方 Key 粘贴到下面，一行一个。',
         noRoute: 'Host 半边未生效：路由不可用',
         addedCount: (n) => `已加入 ${n} 把`,
@@ -78,6 +86,15 @@ window.__ModuleLoader__.load({
         statusEmpty: 'Exhausted',
         statusExpired: 'Expired',
         grantedTag: 'Granted',
+        pagePrev: 'Prev',
+        pageNext: 'Next',
+        pageInfo: (a, b) => `Page ${a}/${b}`,
+        recheckBtn: 'Recheck',
+        rechecking: 'Checking…',
+        recheckHint: 'Rechecks every hidden key; any with a positive balance returns to the pool, and an expired date is cleared when the key still has quota.',
+        expiryCleared: '已清掉过期的到期日',
+        expiryCleared: 'expired dates cleared',
+        recheckDone: (restored, kept) => `${restored} restored` + (kept > 0 ? `, ${kept} really empty` : ''),
         addTitle: 'Add keys in bulk',
         addHint: 'One per line: sk-xxx or sk-xxx 2026-12-31 note',
         exportTitle: 'Export',
@@ -91,7 +108,6 @@ window.__ModuleLoader__.load({
         adding: 'Adding…',
         refresh: 'Refresh',
         refreshing: 'Refreshing…',
-        close: 'Close',
         empty: 'No keys yet. Paste official keys below, one per line.',
         noRoute: 'Host half is not active: route unavailable',
         addedCount: (n) => `${n} added`,
@@ -113,10 +129,9 @@ window.__ModuleLoader__.load({
       'border:.5px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary);',
       'font-size:12px;line-height:1.2;font-family:inherit;cursor:pointer;pointer-events:auto;',
       'box-shadow:0 6px 20px rgba(0,0,0,.16);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}',
-      '.dskr-badge{cursor:grab;touch-action:none;transition:opacity .16s,box-shadow .16s}',
+      '.dskr-badge{cursor:grab;touch-action:none;white-space:nowrap;transition:opacity .16s,box-shadow .16s}',
       '.dskr-badge.is-dragging{cursor:grabbing;transition:none;box-shadow:0 10px 26px rgba(0,0,0,.28)}',
-      '.dskr-badge.is-collapsed{width:14px;height:14px;padding:0;gap:0;justify-content:center;border-radius:999px;opacity:.6}',
-      '.dskr-badge.is-collapsed:hover{opacity:1}',
+      '.dskr-badge.is-collapsed{width:12px;min-width:0;height:30px;padding:0;gap:0;justify-content:center;overflow:hidden}',
       '.dskr-badge.is-collapsed .dskr-label,.dskr-badge.is-collapsed .dskr-amount,.dskr-badge.is-collapsed .dskr-sep{display:none}',
       '.dskr-badge:hover{border-color:var(--dsw-alias-brand-primary)}',
       '.dskr-badge:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}',
@@ -129,11 +144,12 @@ window.__ModuleLoader__.load({
       '.dskr-sep{color:var(--dsw-alias-border-l2)}',
       '.dskr-backdrop{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;',
       'background:rgba(0,0,0,.34);pointer-events:auto}',
-      '.dskr-panel{width:min(580px,calc(100vw - 32px));max-height:min(76vh,680px);overflow:auto;',
+      '.dskr-panel{position:relative;width:min(580px,calc(100vw - 32px));max-height:min(76vh,680px);overflow:auto;',
       'background:var(--dsw-alias-bg-overlay);color:var(--dsw-alias-label-primary);',
       'border:.5px solid var(--dsw-alias-border-l2);border-radius:14px;padding:18px 20px 16px;',
       'font-size:13px;line-height:1.5;box-shadow:0 24px 64px rgba(0,0,0,.3)}',
       '.dskr-head{display:flex;align-items:flex-start;gap:12px;justify-content:space-between}',
+      '.dskr-head-actions{display:flex;gap:8px;flex:none;flex-wrap:nowrap}',
       '.dskr-title{font-size:15px;font-weight:600;margin:0}',
       '.dskr-subtitle{margin:4px 0 0;color:var(--dsw-alias-label-secondary);font-size:12px}',
       '.dskr-summary{display:flex;flex-wrap:wrap;gap:10px 24px;margin:14px 0 4px}',
@@ -151,6 +167,14 @@ window.__ModuleLoader__.load({
       '.dskr-tag[data-status="active"]{color:var(--dsw-alias-state-success-primary);border-color:currentColor}',
       '.dskr-tag[data-status="empty"],.dskr-tag[data-status="expired"]{color:var(--dsw-alias-state-warn-primary);border-color:currentColor}',
       '.dskr-empty{margin:14px 0;color:var(--dsw-alias-label-secondary);font-size:12px}',
+      '.dskr-pager{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:8px}',
+      '.dskr-toast{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:min(420px,80%);',
+      'padding:8px 14px;border-radius:10px;background:var(--dsw-alias-bg-overlay);border:.5px solid var(--dsw-alias-border-l2);',
+      'box-shadow:0 10px 28px rgba(0,0,0,.24);font-size:12px;line-height:1.5;color:var(--dsw-alias-label-primary);',
+      'text-align:center;pointer-events:none;animation:dskr-toast-in .14s ease-out}',
+      '.dskr-toast[data-kind="error"]{color:var(--dsw-alias-state-error-primary);border-color:currentColor}',
+      '@keyframes dskr-toast-in{from{opacity:0}to{opacity:1}}',
+      '.dskr-page-info{font-size:11px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums}',
       '.dskr-field{margin-top:16px}',
       '.dskr-field-label{font-size:12px;font-weight:600;margin-bottom:6px}',
       '.dskr-hint{font-size:11px;color:var(--dsw-alias-label-secondary);margin:0 0 6px}',
@@ -204,6 +228,7 @@ window.__ModuleLoader__.load({
 
     const POS_KEY = 'dsh-deepseek-keyring.position'
     const EDGE = 26
+    const PAGE_SIZE = 5
 
     /** 读取持久化的胶囊位置；没有或已失效时返回 null（走 CSS 默认的右下角）。 */
     function readPosition() {
@@ -236,15 +261,48 @@ window.__ModuleLoader__.load({
       return { x: Math.min(Math.max(4, value.x), maxX), y: Math.min(Math.max(4, value.y), maxY) }
     }
 
-    /** 是否贴在某一条边上（四条边任一）。 */
-    function atEdge(value, width = 0, height = 0) {
-      if (value === null) return false
-      return (
-        value.x <= EDGE ||
-        value.y <= EDGE ||
-        window.innerWidth - (value.x + width) <= EDGE ||
-        window.innerHeight - (value.y + height) <= EDGE
-      )
+    /**
+     * 落点离哪条边最近（超过阈值返回 null）。
+     *
+     * 只在拖拽松手时用展开尺寸算一次，结果记下来；不能靠当前矩形反推，
+     * 因为收起后宽度变窄，右边/下边的距离会瞬间变大，判定就失效了。
+     * @param {{x: number, y: number}} value - 落点。
+     * @param {number} width - 元素宽。
+     * @param {number} height - 元素高。
+     * @returns {'left'|'right'|'top'|'bottom'|null} 命中的边。
+     */
+    function edgeOf(value, width, height) {
+      const gaps = {
+        left: value.x,
+        right: window.innerWidth - (value.x + width),
+        top: value.y,
+        bottom: window.innerHeight - (value.y + height),
+      }
+      let hit = null
+      let smallest = EDGE + 1
+      for (const [edge, gap] of Object.entries(gaps)) {
+        if (gap <= EDGE && gap < smallest) {
+          smallest = gap
+          hit = edge
+        }
+      }
+      return hit
+    }
+
+    /**
+     * 把坐标吸到指定边上，并按给定尺寸保证不出屏。
+     * @param {'left'|'right'|'top'|'bottom'|null} edge - 要贴的边。
+     * @param {number} width - 当前尺寸下的宽。
+     * @param {number} height - 当前尺寸下的高。
+     * @param {{x: number, y: number}} current - 当前位置。
+     * @returns 吸附后的坐标。
+     */
+    function snapToEdge(edge, width, height, current) {
+      const maxX = Math.max(0, window.innerWidth - width)
+      const maxY = Math.max(0, window.innerHeight - height)
+      const x = edge === 'left' ? 0 : edge === 'right' ? maxX : current.x
+      const y = edge === 'top' ? 0 : edge === 'bottom' ? maxY : current.y
+      return { x: Math.min(Math.max(0, x), maxX), y: Math.min(Math.max(0, y), maxY) }
     }
 
     /** 触发一次浏览器下载。 */
@@ -342,17 +400,28 @@ window.__ModuleLoader__.load({
         const [draft, setDraft] = React.useState('')
         const [busy, setBusy] = React.useState(null)
         const [notice, setNotice] = React.useState(null)
+        const [page, setPage] = React.useState(1)
+        const [toast, setToast] = React.useState(null)
+        const toastTimer = React.useRef(null)
         const [pos, setPos] = React.useState(readPosition)
         const [collapsed, setCollapsed] = React.useState(false)
         const [dragging, setDragging] = React.useState(false)
         const badgeRef = React.useRef(null)
         const dragState = React.useRef(null)
         const collapseTimer = React.useRef(null)
-        const suppressClick = React.useRef(false)
+        const dragEndAt = React.useRef(0)
+        const edgeRef = React.useRef(null)
+
+        // 页面刷新后位置从本地恢复：按恢复出来的落点重算它贴在哪条边。
+        React.useEffect(() => {
+          const element = badgeRef.current
+          if (pos === null || element === null) return
+          edgeRef.current = edgeOf(pos, element.offsetWidth, element.offsetHeight)
+        }, [])
 
         React.useEffect(() => {
           load('state')
-          const timer = setInterval(() => load('state'), 20000)
+          const timer = setInterval(() => load('state'), 5000)
           const onFocus = () => load('state')
           if (typeof window !== 'undefined') window.addEventListener('focus', onFocus)
           return () => {
@@ -375,28 +444,92 @@ window.__ModuleLoader__.load({
           if (open) {
             clearTimeout(collapseTimer.current)
             setCollapsed(false)
+            setPage(1)
           }
         }, [open])
 
-        React.useEffect(() => () => clearTimeout(collapseTimer.current), [])
-
-        // 贴边折叠：拖到边界就收成一条窄握把；再次点击展开后 5s 自动收回。
-        React.useEffect(() => {
-          if (open || pos === null) return
-          const element = badgeRef.current
-          setCollapsed(atEdge(pos, element?.offsetWidth ?? 180, element?.offsetHeight ?? 34))
-          const keepExpanded = () => setCollapsed(false)
-          window.addEventListener('resize', keepExpanded)
-          return () => window.removeEventListener('resize', keepExpanded)
-        }, [pos, open])
-
-        const armCollapse = (value) => {
+        React.useEffect(() => () => {
           clearTimeout(collapseTimer.current)
-          if (value === null) return
+          clearTimeout(toastTimer.current)
+        }, [])
+
+        /** 浮一条 2 秒后自动消失的提示。 */
+        const flash = (payload) => {
+          clearTimeout(toastTimer.current)
+          setToast(payload)
+          toastTimer.current = setTimeout(() => setToast(null), 2000)
+        }
+
+        // 指针在组件外松开（窗口失焦、被别的层抢走）时也要清掉拖拽态。
+        React.useEffect(() => {
+          if (!dragging) return undefined
+          const clear = () => {
+            dragState.current = null
+            setDragging(false)
+          }
+          window.addEventListener('pointerup', clear)
+          window.addEventListener('pointercancel', clear)
+          return () => {
+            window.removeEventListener('pointerup', clear)
+            window.removeEventListener('pointercancel', clear)
+          }
+        }, [dragging])
+
+        // 贴边不立刻收起：停在边界 5s 才折叠；离开边界立刻展开。
+        React.useEffect(() => {
+          if (pos === null && !collapsed) return
+          clearTimeout(collapseTimer.current)
+          if (open || edgeRef.current === null) {
+            setCollapsed(false)
+            return
+          }
+          collapseTimer.current = setTimeout(() => setCollapsed(true), 5000)
+          const refit = () => {
+            const element = badgeRef.current
+            const edge = edgeRef.current
+            if (element === null || edge === null) return
+            const box = element.getBoundingClientRect()
+            const snapped = snapToEdge(edge, box.width, box.height, { x: box.left, y: box.top })
+            setPos(snapped)
+            writePosition(snapped)
+            setCollapsed(true)
+          }
+          window.addEventListener('resize', refit)
+          return () => {
+            clearTimeout(collapseTimer.current)
+            window.removeEventListener('resize', refit)
+          }
+        }, [pos, open, collapsed])
+
+        // 收起时贴到那条边上（窄条不留缝）；重新展开时仍贴着同一条边，向屏内生长。
+        //
+        // 必须用 layout effect：展开后宽度会从 12px 变成自然宽，若等 paint 之后再量，
+        // 右边界会按旧宽度算出一个仍然溢出的位置，于是那一帧看起来又窄又挤。
+        React.useLayoutEffect(() => {
           const element = badgeRef.current
-          if (!atEdge(value, element?.offsetWidth ?? 180, element?.offsetHeight ?? 34)) return
+          const edge = edgeRef.current
+          if (element === null || edge === null) return
+          // 贴右边时元素先停在 left≈视口右侧，可用宽度只剩几像素，offsetWidth 会被压小；
+          // scrollWidth 才是内容实际需要的宽度，两者取大才能算出正确位置。
+          const width = Math.max(element.offsetWidth, element.scrollWidth)
+          const height = element.offsetHeight
+          const left = pos === null ? element.getBoundingClientRect().left : pos.x
+          const top = pos === null ? element.getBoundingClientRect().top : pos.y
+          const snapped = snapToEdge(edge, width, height, { x: left, y: top })
+          if (Math.abs(snapped.x - left) > 0.5 || Math.abs(snapped.y - top) > 0.5) {
+            setPos(snapped)
+            writePosition(snapped)
+          }
+        }, [collapsed])
+
+        /** 立即开始隐藏计时（只在贴着边时）。 */
+        const armCollapse = () => {
+          clearTimeout(collapseTimer.current)
+          if (edgeRef.current === null) return
           collapseTimer.current = setTimeout(() => setCollapsed(true), 5000)
         }
+
+        const clearPointerStyle = () => setDragging(false)
 
         const onPointerDown = (event) => {
           if (event.button !== 0) return
@@ -404,8 +537,11 @@ window.__ModuleLoader__.load({
           if (element === null) return
           const box = element.getBoundingClientRect()
           dragState.current = { id: event.pointerId, startX: event.clientX, startY: event.clientY, originX: box.left, originY: box.top, moved: false }
-          suppressClick.current = false
-          element.setPointerCapture?.(event.pointerId)
+          try {
+            element.setPointerCapture?.(event.pointerId)
+          } catch {
+            /* 合成事件可能没有可捕获的指针 */
+          }
         }
 
         const onPointerMove = (event) => {
@@ -415,7 +551,7 @@ window.__ModuleLoader__.load({
           const dy = event.clientY - drag.startY
           if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 4) return
           drag.moved = true
-          suppressClick.current = true
+          edgeRef.current = null
           setDragging(true)
           setCollapsed(false)
           setPos(clampPosition({ x: drag.originX + dx, y: drag.originY + dy }, badgeRef.current))
@@ -424,25 +560,33 @@ window.__ModuleLoader__.load({
         const onPointerUp = (event) => {
           const drag = dragState.current
           dragState.current = null
-          badgeRef.current?.releasePointerCapture?.(event.pointerId)
           setDragging(false)
-          if (drag === null || !drag.moved) return
+          try {
+            badgeRef.current?.releasePointerCapture?.(event.pointerId)
+          } catch {
+            /* 未捕获过的指针释放时会抛 NotFoundError */
+          }
+          if (drag === null || !drag.moved) {
+            clearPointerStyle()
+            return
+          }
+          dragEndAt.current = Date.now()
           const element = badgeRef.current
-          const settled = clampPosition({ x: drag.originX + (event.clientX - drag.startX), y: drag.originY + (event.clientY - drag.startY) }, element)
+          const raw = clampPosition({ x: drag.originX + (event.clientX - drag.startX), y: drag.originY + (event.clientY - drag.startY) }, element)
+          const edge = element === null ? null : edgeOf(raw, element.offsetWidth, element.offsetHeight)
+          edgeRef.current = edge
+          const settled = edge === null ? raw : snapToEdge(edge, element.offsetWidth, element.offsetHeight, raw)
           setPos(settled)
           writePosition(settled)
-          setCollapsed(atEdge(settled, element?.offsetWidth ?? 180, element?.offsetHeight ?? 34))
         }
 
         const onClick = () => {
-          if (suppressClick.current) {
-            suppressClick.current = false
-            return
-          }
-          // 折叠态点一下是展开并重新计时；正常态点开/收回弹窗。
+          // 刚拖完落下的那次 click 不算点击；用时间戳而不是布尔，避免标志残留卡住。
+          if (Date.now() - dragEndAt.current < 350) return
+          // 折叠态点一下只把余额摊开看，若仍在边上 5s 后再收起；展开态点击才开弹窗。
           if (collapsed) {
             setCollapsed(false)
-            armCollapse(pos)
+            requestAnimationFrame(() => armCollapse())
             return
           }
           setOpen((value) => !value)
@@ -463,6 +607,30 @@ window.__ModuleLoader__.load({
             setNotice({ kind: 'ok', exported: result.count, scope })
           } catch (failure) {
             setNotice({ kind: 'error', error: failure instanceof Error ? failure.message : String(failure) })
+          } finally {
+            setBusy(null)
+          }
+        }
+
+        const recheck = async () => {
+          if (busy !== null) return
+          setBusy('recheck')
+          setNotice(null)
+          try {
+            const result = await callHost('recheck')
+            if (result?.state) store.set({ data: result.state, error: null, loading: false })
+            const restored = result?.restored?.length ?? 0
+            const kept = result?.kept?.length ?? 0
+            const failed = result?.failed?.length ?? 0
+            flash({
+              kind: restored > 0 ? 'ok' : 'plain',
+              text:
+                t.recheckDone(restored, kept) +
+                (failed > 0 ? `，${failed} 把复查失败` : '') +
+                (result?.restored?.some((item) => item.clearedExpiry) ? `（${t.expiryCleared}）` : ''),
+            })
+          } catch (failure) {
+            flash({ kind: 'error', text: failure instanceof Error ? failure.message : String(failure) })
           } finally {
             setBusy(null)
           }
@@ -500,7 +668,10 @@ window.__ModuleLoader__.load({
           }
         }
 
-        const rows = keys.map((view) => {
+        const pageCount = Math.max(1, Math.ceil(keys.length / PAGE_SIZE))
+        const currentPage = Math.min(Math.max(1, page), pageCount)
+        const pageRows = keys.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+        const rows = pageRows.map((view) => {
           const statusText =
             view.status === 'active'
               ? t.statusActive
@@ -576,13 +747,23 @@ window.__ModuleLoader__.load({
                     ),
                     h(
                       'div',
-                      { className: 'dskr-actions', style: { marginTop: 0 } },
+                      { className: 'dskr-head-actions' },
                       h(
                         'button',
                         { className: 'dskr-btn', type: 'button', onClick: refresh, disabled: busy !== null },
                         busy === 'refresh' ? t.refreshing : t.refresh,
                       ),
-                      h('button', { className: 'dskr-btn', type: 'button', onClick: () => setOpen(false) }, t.close),
+                      h(
+                        'button',
+                        {
+                          className: 'dskr-btn',
+                          type: 'button',
+                          title: t.recheckHint,
+                          onClick: recheck,
+                          disabled: busy !== null,
+                        },
+                        busy === 'recheck' ? t.rechecking : t.recheckBtn,
+                      ),
                     ),
                   ),
                   h(
@@ -611,6 +792,28 @@ window.__ModuleLoader__.load({
                         h('tbody', null, rows),
                       )
                     : h('p', { className: 'dskr-empty' }, t.empty),
+                  pageCount > 1
+                    ? h(
+                        'div',
+                        { className: 'dskr-pager' },
+                        h(
+                          'button',
+                          { className: 'dskr-btn', type: 'button', disabled: currentPage <= 1, onClick: () => setPage((value) => Math.max(1, value - 1)) },
+                          t.pagePrev,
+                        ),
+                        h('span', { className: 'dskr-page-info' }, t.pageInfo(currentPage, pageCount)),
+                        h(
+                          'button',
+                          {
+                            className: 'dskr-btn',
+                            type: 'button',
+                            disabled: currentPage >= pageCount,
+                            onClick: () => setPage((value) => Math.min(pageCount, value + 1)),
+                          },
+                          t.pageNext,
+                        ),
+                      )
+                    : null,
                   h(
                     'div',
                     { className: 'dskr-field' },
@@ -655,7 +858,17 @@ window.__ModuleLoader__.load({
                     'div',
                     { className: 'dskr-field' },
                     h('div', { className: 'dskr-field-label' }, t.addTitle),
-                    h('p', { className: 'dskr-hint' }, t.addHint),
+                    h(
+                      'div',
+                      { className: 'dskr-actions', style: { marginTop: 0 } },
+                      h('p', { className: 'dskr-hint', style: { margin: 0 } }, t.addHint),
+                      h('span', { className: 'dskr-spacer' }),
+                      h(
+                        'span',
+                        { className: 'dskr-foot' },
+                        typeof data?.hiddenCount === 'number' && data.hiddenCount > 0 ? t.hiddenNote(data.hiddenCount) : null,
+                      ),
+                    ),
                     h('textarea', {
                       className: 'dskr-textarea',
                       value: draft,
@@ -707,6 +920,7 @@ window.__ModuleLoader__.load({
                             )
                           : null,
                       ),
+                  toast === null ? null : h('div', { className: 'dskr-toast', 'data-kind': toast.kind, role: 'status' }, toast.text),
                 ),
               )
 

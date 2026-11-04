@@ -321,6 +321,8 @@ async function fireRequest() {
   return await requestListener({ turn: 1, step: 1 }, async () => 'CONFIG')
 }
 setBalance(activeRef(), 5)
+// state 请求自己也会走同一条节流闸门，先等窗口过去再测请求前刷新。
+await new Promise((resolve) => setTimeout(resolve, 3300))
 const first = await fireRequest()
 check('请求前刷新不改配置', first === 'CONFIG' && balanceHits >= 1, { first, balanceHits })
 const hitsAfterFirst = balanceHits
@@ -356,6 +358,36 @@ check('全部导出两者都含', allOut.text.includes(g2Val) && allOut.text.inc
 check('导出带格式说明注释', allOut.text.startsWith('#') && allOut.text.includes('格式'), allOut.text.slice(0, 80))
 check('导出行数统计正确', allOut.count === allOut.text.trim().split('\n').filter((line) => !line.startsWith('#')).length, allOut.count)
 
+// ---- 11. 复查隐藏条目：有额度才恢复，过了到期日的清掉到期日 -----------------
+// 造一条「已过期但仍有额度」的隐藏记录，再确认余额为 0 的那条不会被恢复。
+const seeded2 = JSON.parse(await readFile(store2, 'utf8'))
+seeded2.entries.push({
+  id: 'r1',
+  ref: 'DEEPSEEK_KEYRING_R1',
+  label: '过期但有钱',
+  expiry: '2020-01-01',
+  addedAt: Date.now(),
+  hidden: true,
+  exhaustedAt: Date.now(),
+  invalidAt: null,
+  balance: { currency: 'CNY', total: 0, granted: 0, toppedUp: 0 },
+  checkedAt: null,
+  error: null,
+})
+refs.set('DEEPSEEK_KEYRING_R1', 'sk-revive-888888888888888')
+setBalance('sk-revive-888888888888888', 9)
+await writeState(join(workdir, 'state2.json'), JSON.stringify(seeded2))
+const { apply: applyForRecheck } = await import('./index.js')
+applyForRecheck(ctx, { apiBase: `http://127.0.0.1:${balancePort}`, storePath: store2, pollIntervalMs: 3600000, minRefreshGapMs: 3000, importExisting: false })
+await new Promise((resolve) => setTimeout(resolve, 60))
+
+const rechecked = (await rpc('recheck')).data
+const restoredIds = rechecked.restored.map((item) => item.id)
+check('有额度的隐藏 Key 被恢复', restoredIds.includes('r1'), rechecked.restored)
+check('恢复时清掉了已过的到期日', rechecked.restored.find((item) => item.id === 'r1')?.clearedExpiry === true, rechecked.restored)
+check('恢复后出现在可见列表', rechecked.state.keys.some((view) => view.id === 'r1'), rechecked.state.keys.map((view) => view.id))
+check('余额为 0 的隐藏 Key 保持隐藏', !rechecked.state.keys.some((view) => view.id === 'g2'), rechecked.state.keys.map((view) => view.id))
+check('没有额度的记入 kept', rechecked.kept.some((item) => item.id === 'g2'), rechecked.kept)
 await new Promise((resolve) => rpcServer.close(resolve))
 await new Promise((resolve) => balanceServer.close(resolve))
 
