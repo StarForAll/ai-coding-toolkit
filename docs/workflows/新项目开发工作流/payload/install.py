@@ -381,13 +381,26 @@ PLATFORM_ALIASES = {"claude": "claudecode", "gemini": "geminicli", "ghcopilot": 
 SHARED_SKILL_DIR = ".agents/skills"
 
 
+def _flatten_platforms(platforms):
+    """`--platform a --platform b`、`--platform a b`、`--platform a,b` 三种写法都接受。"""
+    flat = []
+    for item in platforms or []:
+        values = item if isinstance(item, (list, tuple)) else [item]
+        for value in values:
+            for part in str(value).split(","):
+                part = part.strip()
+                if part:
+                    flat.append(part)
+    return flat
+
+
 def resolve_skill_roots(target, platforms):
     """把 --platform 解析成项目内技能目录（绝对路径，已去重）。
 
     未知名不给猜测：直接拒绝并列出支持的平台。
     """
     roots, unknown = [], []
-    for name in platforms:
+    for name in _flatten_platforms(platforms):
         key = PLATFORM_ALIASES.get(name, name)
         entry = PLATFORMS.get(key)
         if entry is None:
@@ -405,7 +418,7 @@ def main(argv=None):
     parser.add_argument("--target", required=True)
     parser.add_argument("--release-ref", required=True)
     parser.add_argument("--source", required=True)
-    parser.add_argument("--platform", action="append", default=[],
+    parser.add_argument("--platform", action="append", nargs="+", default=[],
                         help="目标项目实际使用的 agent（可重复）：dsh|codex|cursor|geminicli|copilot|claudecode")
     parser.add_argument("--confirm", action="store_true")
     parser.add_argument("--host-id", default=None)
@@ -484,7 +497,7 @@ def main(argv=None):
                      "（声明式：需人给出实际观察证据才转 verified）"),
                   f"  evidence_refs={json.dumps(preview_evidence, ensure_ascii=False)}",
                   "托管段（.gitignore）：", "  " + managed_segment(manifest).replace("\n", "\n  "),
-                  f"平台：{json.dumps(sorted({PLATFORM_ALIASES.get(name, name) for name in args.platform}), ensure_ascii=False)}",
+                  f"平台：{json.dumps(sorted({PLATFORM_ALIASES.get(name, name) for name in _flatten_platforms(args.platform)}), ensure_ascii=False)}",
                   f"技能目录（目标项目内）：{json.dumps([os.path.relpath(root, args.target) for root in skill_roots], ensure_ascii=False)}"]
         if clues:
             lines.append("Trellis 线索（人确认后可继续，但本会话不得混跑两套流程）：")
@@ -556,7 +569,7 @@ def main(argv=None):
             "source_commit": commit,
             "version": manifest.get("version"),
             "manifest_digest": manifest_digest,
-            "platforms": sorted({PLATFORM_ALIASES.get(name, name) for name in args.platform}),
+            "platforms": sorted({PLATFORM_ALIASES.get(name, name) for name in _flatten_platforms(args.platform)}),
             "roots": [os.path.relpath(root, args.target).replace(os.sep, "/") for root in skill_roots],
             "assets": [{"target": relative, "root_ref": "project" if base == args.target else base,
                         "digest": asset.get("digest"), "source_path": asset.get("source_path")}

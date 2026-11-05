@@ -31,7 +31,7 @@
       "target_relative": ".wf/bin/wf.py"
     },
     {
-      "digest": "sha256:062e96680e8d9eaa319b2591927cab779190a60ac44041242be8a12905738038",
+      "digest": "sha256:52651a9e6a61e9e42b65440a44940bfe17145dd180ce2b011343b0d51f866618",
       "executable": true,
       "file_kind": "file",
       "kind": "installer",
@@ -611,7 +611,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:3e894077bd93067c414ce49b7d67b3d0c7a12fdbc63d8ef7c6d16d50517a2b75",
+    "rules_digest": "sha256:31522e42a85f30917506d11c9dba34dd797e532371778f69de1255c8b5b2081e",
     "systems": [
       "linux"
     ],

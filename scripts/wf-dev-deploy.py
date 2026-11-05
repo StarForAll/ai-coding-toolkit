@@ -71,9 +71,22 @@ PLATFORM_ALIASES = {"claude": "claudecode", "gemini": "geminicli", "ghcopilot": 
 SHARED_SKILL_DIR = ".agents/skills"
 
 
+def _flatten_platforms(platforms):
+    """`--platform a --platform b`、`--platform a b`、`--platform a,b` 三种写法都接受。"""
+    flat = []
+    for item in platforms or []:
+        values = item if isinstance(item, (list, tuple)) else [item]
+        for value in values:
+            for part in str(value).split(","):
+                part = part.strip()
+                if part:
+                    flat.append(part)
+    return flat
+
+
 def resolve_skill_roots(target, platforms):
     roots, unknown = [], []
-    for name in platforms:
+    for name in _flatten_platforms(platforms):
         key = PLATFORM_ALIASES.get(name, name)
         entry = PLATFORMS.get(key)
         if entry is None:
@@ -281,7 +294,7 @@ def deploy(args):
         lines.append("托管段（.gitignore）：")
         for line in managed_segment().splitlines():
             lines.append(f"  {line}")
-        lines.append(f"平台：{json.dumps(sorted({PLATFORM_ALIASES.get(n, n) for n in args.platform}), ensure_ascii=False)}")
+        lines.append(f"平台：{json.dumps(sorted({PLATFORM_ALIASES.get(n, n) for n in _flatten_platforms(args.platform)}), ensure_ascii=False)}")
         lines.append(f"技能目录（目标项目内）：{json.dumps([os.path.relpath(root, target) for root in skill_roots], ensure_ascii=False)}")
         if clues:
             lines.append("Trellis 线索（人确认后可继续安装，但本会话不得混跑两套流程）：")
@@ -465,7 +478,7 @@ def update_profile(target, existing, profile, args):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="wf 开发态部署（authoring 工具）")
     parser.add_argument("--target", required=True, help="目标项目绝对路径")
-    parser.add_argument("--platform", action="append", default=[],
+    parser.add_argument("--platform", action="append", nargs="+", default=[],
                         help="目标项目实际使用的 agent（可重复）：dsh|codex|cursor|geminicli|copilot|claudecode")
     parser.add_argument("--confirm", action="store_true", help="确认预览后执行投放")
     parser.add_argument("--host-id", default=None, help="人确认的宿主标识（[a-z][a-z0-9-]{0,63}）")

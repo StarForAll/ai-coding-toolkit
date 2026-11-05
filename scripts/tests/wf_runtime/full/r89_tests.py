@@ -102,5 +102,17 @@ rec("R92b 技能副本不被算作任务交付物", "落在 b 桶",
     f"b={len(buckets['b'])} c={len(buckets['c'])}",
     not buckets["c"] and any(p.startswith(".agents/skills/") for p in buckets["b"]))
 
+# 8) 三种写法等价：重复、空格多值、逗号分隔
+for label, extra in (("重复 flag", ["--platform", "codex", "--platform", "claudecode"]),
+                     ("空格多值", ["--platform", "codex", "claudecode"]),
+                     ("逗号分隔", ["--platform", "codex,claudecode"])):
+    t = fresh("form")
+    args = ["/softwares/python/bin/python3", os.path.join(RELEASE, "install.py"),
+            "--target", t, "--release-ref", "refs/tags/wf-v0.1.0", "--source", RELEASE] + extra + list(CONFIRM)
+    r = subprocess.run(args, capture_output=True, text=True)
+    ok = (r.returncode == 0 and os.path.isdir(os.path.join(t, ".agents/skills/wf-start"))
+          and os.path.isdir(os.path.join(t, ".claude/skills/wf-start")))
+    rec(f"R92 platform {label}", "两个目录都在", f"{r.returncode}/{'OK' if ok else r.stdout[-60:]}", ok)
+
 json.dump(results, open("/tmp/r89_results.json", "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

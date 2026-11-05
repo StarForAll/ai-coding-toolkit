@@ -515,7 +515,7 @@ python3 <目标>/.wf/bin/wf.py upgrade --apply --release-ref <refs/tags/wf-vX.Y.
     --source <已检出的发行目录> [--platform <平台>]
 ```
 
-`--target` 必填且为绝对路径（不把源码目录或 cwd 当目标）；`--release-ref` 只接受已登记发行引用，解析到 commit 后核 `wf-release.json` 与资产哈希；应用阶段把该清单**原样写入** `.wf/install/release-manifest.json`，再与 `installation.json.manifest_digest` 比对（不一致即 `WF_PERSISTENCE_FAILED`）；`--platform` 可重复（`dsh|codex|cursor|geminicli|copilot|claudecode`），至少一项；技能目录由平台表解析到目标项目内，未知名直接拒绝并列支持项；升级省略时用安装记录里已确认的平台；`--confirm` 表示人在终端确认预览（缺省时入口先出预览并要求交互确认）。升级不需要信封（维护入口，见本文 §2.2）。
+`--target` 必填且为绝对路径（不把源码目录或 cwd 当目标）；`--release-ref` 只接受已登记发行引用，解析到 commit 后核 `wf-release.json` 与资产哈希；应用阶段把该清单**原样写入** `.wf/install/release-manifest.json`，再与 `installation.json.manifest_digest` 比对（不一致即 `WF_PERSISTENCE_FAILED`）；`--platform` 至少一项，三种写法等价：`--platform a --platform b`、`--platform a b`、`--platform a,b`（别名 `claude`/`gemini`/`ghcopilot`）；技能目录由平台表解析到目标项目内，未知名直接拒绝并列支持项；升级省略时用安装记录里已确认的平台；`--host-id` 写入 `session_profile.host_id`，运行时信封的 `host_id` 必须与它一致，否则 `WF_IDENTITY_UNRESOLVED`；`--capability-evidence` 的 `kind` 只接受 `compaction|reentry|new-session|transport`，安装期即校验，未知种类直接拒绝；`--confirm` 表示人在终端确认预览（缺省时入口先出预览并要求交互确认）。升级不需要信封（维护入口，见本文 §2.2）。
 
 ### 4.2 `wf-release.json` 键表
 
