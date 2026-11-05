@@ -50,6 +50,8 @@ def head(root):
 
 
 def is_ancestor(root, ancestor, descendant="HEAD"):
+    """祖先判定**不缓存**：同进程调用方可能在进程内改 HEAD（多个套件直接 import 本模块后自行提交），
+    缓存会给出陈旧事实。可缓存的只有按提交 sha 定位的不可变对象（见 tasks._tree_entries）。"""
     code, _ = git(root, "merge-base", "--is-ancestor", ancestor, descendant)
     return code == 0
 

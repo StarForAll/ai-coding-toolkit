@@ -469,25 +469,57 @@ def current_plan_version(root, task):
 # --------------------------------------------------------------------------
 
 
+# 提交对象不可变：按 (root, sha) 缓存整棵树，按 (root, sha, path) 缓存内容摘要。
+# 之前是"每路径 2 次 git"，一次 Check 能起 500+ 子进程；批量化后降到每提交 1–2 次。
+_TREE_CACHE = {}
+_BLOB_CACHE = {}
+
+
+def _tree_entries(root, sha):
+    key = (str(root), sha)
+    if key in _TREE_CACHE:
+        return _TREE_CACHE[key]
+    proc = subprocess.run(["git", "-c", "core.quotePath=false", "ls-tree", "-r", "-z", "--full-tree", sha],
+                          cwd=str(root), capture_output=True, check=False)
+    entries = {}
+    if proc.returncode == 0:
+        for record in proc.stdout.split(b"\0"):
+            if not record:
+                continue
+            meta, _, raw_path = record.partition(b"\t")
+            parts = meta.split(b" ")
+            if len(parts) < 3:
+                continue
+            entries[raw_path.decode("utf-8", "surrogateescape")] = (parts[0].decode(), parts[2].decode())
+    _TREE_CACHE[key] = entries
+    return entries
+
+
+def _blob_digest(root, sha, blob):
+    key = (str(root), sha, blob)
+    if key in _BLOB_CACHE:
+        return _BLOB_CACHE[key]
+    proc = subprocess.run(["git", "-c", "core.quotePath=false", "cat-file", "blob", blob],
+                          cwd=str(root), capture_output=True, check=False)
+    digest = "sha256:" + hashlib.sha256(proc.stdout).hexdigest() if proc.returncode == 0 else None
+    _BLOB_CACHE[key] = digest
+    return digest
+
+
 def _committed_fingerprint(root, sha, path):
     """按候选提交树重建该路径的完整指纹：存在/删除、类型、可执行位、内容摘要（机制稿 §1.4）。"""
-    listed = subprocess.run(["git", "-c", "core.quotePath=false", "ls-tree", sha, "--", path],
-                            cwd=str(root), capture_output=True, text=True, check=False)
-    line = listed.stdout.strip()
-    if listed.returncode != 0 or not line:
+    entry = _tree_entries(root, sha).get(path)
+    if entry is None:
         return {"path": path, "exists": False, "kind": "deleted", "executable": False, "digest": None}
-    meta = line.split("\t", 1)[0]
-    mode = meta.split(" ")[0]
-    blob = subprocess.run(["git", "-c", "core.quotePath=false", "show", f"{sha}:{path}"],
-                          cwd=str(root), capture_output=True, check=False)
-    if blob.returncode != 0:
+    mode, blob = entry
+    digest = _blob_digest(root, sha, blob)
+    if digest is None:
         return {"path": path, "exists": False, "kind": "deleted", "executable": False, "digest": None}
     if mode == "120000":
         kind, executable = "symlink", False
     else:
         kind, executable = "file", bool(int(mode, 8) & 0o111)
-    return {"path": path, "exists": True, "kind": kind, "executable": executable,
-            "digest": "sha256:" + hashlib.sha256(blob.stdout).hexdigest()}
+    return {"path": path, "exists": True, "kind": kind, "executable": executable, "digest": digest}
 
 
 def _fp_matches(expected, actual):
