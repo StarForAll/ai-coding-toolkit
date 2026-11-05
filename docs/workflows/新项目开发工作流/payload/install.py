@@ -442,6 +442,12 @@ def main(argv=None):
     if problems:
         return blocked("WF_RELEASE_CONFLICT", "发行资产校验失败", {"problems": problems[:20]}, args.json)
 
+    bad_kinds, accepted_kinds = _invalid_evidence_kinds(
+        [_evidence_entry(item) for item in (getattr(args, "capability_evidence", None) or [])])
+    if bad_kinds:
+        return blocked("WF_IDENTITY_UNRESOLVED",
+                       "能力观察种类不认识：安装期就拒，不要等到 enable 才报 capability not verified",
+                       {"unknown_kinds": bad_kinds, "accepted_kinds": accepted_kinds}, args.json)
     skill_roots, unknown_platforms = resolve_skill_roots(args.target, args.platform)
     if unknown_platforms:
         return blocked("WF_PATH_INVALID", "未知平台，无法确定其 skill 发现层",
@@ -684,6 +690,14 @@ def plan_writes(target, skill_roots, manifest):
     return writes, problems
 
 
+
+
+def _invalid_evidence_kinds(entries):
+    """人给的观察种类必须是运行时认得的（session.OBSERVATION_KINDS）；
+    安装期不校验会变成"装得上、enable 时才报 capability not verified"。"""
+    kinds = ("compaction", "reentry", "new-session", "transport")
+    bad = [item.get("kind") for item in entries if item.get("kind") not in kinds]
+    return sorted(set(k for k in bad if k)), list(kinds)
 
 
 def _profile_evidence(args, stamp=None):
