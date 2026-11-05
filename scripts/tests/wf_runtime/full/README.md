@@ -93,3 +93,8 @@ WF_FIX=/tmp/wf-fixtures/f1 /softwares/python/bin/python3 r7r15_tests.py
 - 迭代期只跑相关套件：`WF_SUITES="r88_tests r89_tests" bash run_all.sh`（约 4.5s，跳过 f0/p5 流程）。
 - 8 个套件固定串行（权限失败注入、写全局配置、依赖宿主 `/tmp` 状态）：见 `run_all.sh` 的 `PARALLEL_SERIAL`。
 - 复用发行仓库：`WF_REBUILD_RELEASE=0`。
+
+## 性能
+
+- `tasks._committed_fingerprint` 按提交缓存树、按 blob 缓存摘要：单次 `task-check` 约 0.38s（改前 1.87s）。
+- 不要缓存祖先判定/提交列表：同进程调用方可能改 HEAD，会给出陈旧事实。
