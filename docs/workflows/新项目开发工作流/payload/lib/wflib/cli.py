@@ -189,6 +189,11 @@ class Context:
         entries = assets.installed_asset_entries(manifest, installation, self.root)
         return assets.effective_rule_version(manifest, entries)
 
+    def platforms(self):
+        """本项目已安装的平台（唯一身份事实，见机制稿 §1.4 修订后）。"""
+        installation = self.installation() or {}
+        return [item for item in (installation.get("platforms") or []) if isinstance(item, str)]
+
     def profile(self):
         return self.installation().get("session_profile")
 
@@ -565,7 +570,7 @@ def _trellis_state(root, host_id):
 def cmd_enable(ctx, args):
     _check_layout(ctx.root)
     session = ctx.session()
-    state = _trellis_state(ctx.root, (ctx.profile() or {}).get("host_id"))
+    state = _trellis_state(ctx.root, (ctx.session().get("identity") or {}).get("host_id"))
     host_id = state["host_id"]
     applicable = [item for item in state["host_files"] if item["host"] == host_id]
     unknown = [item for item in state["host_files"] if item["host"] != host_id]
@@ -588,9 +593,9 @@ def cmd_enable(ctx, args):
                        "确认仅是残留数据与历史引用后重入"]},
             next_="人核实适用性；已确认激活则清理后换新会话，仅残留可继续",
         )
-    code, profile_facts = session_mod.check_profile(ctx.profile(), session)
+    code, profile_facts = session_mod.check_platforms(ctx.platforms(), session)
     if code:
-        raise CliError(code, profile_facts, next_="核实宿主身份能力后更新 session_profile，或选择 wf 签发路径")
+        raise CliError(code, profile_facts, next_="install --platform <当前宿主> 后重试，或换用已安装的宿主")
     warnings = []
     if state["data"]:
         warnings.append({"clue": state["data"], "note": "仅数据线索；不构成当前激活指令"})
@@ -608,7 +613,7 @@ def cmd_enable(ctx, args):
             "activation": template,
             "activation_source": "carried" if activation else "formed_by_enable",
             "cache_hint": "把 facts.activation 原样缓存进本会话，并随每次请求放入 session.activation",
-            "capability": (ctx.profile() or {}).get("capability"),
+            "platforms": ctx.platforms(),
             "trellis_data": state["data"],
         },
         position=codes.position(scope="session"),
@@ -715,7 +720,7 @@ def cmd_bind(ctx, args, kind="task"):
         raise CliError("WF_PATH_INVALID", {"reason": "bind requires --task <id> or --run <id>"})
     session = ctx.session()
     key = ctx.key()
-    code, profile_facts = session_mod.check_profile(ctx.profile(), session)
+    code, profile_facts = session_mod.check_platforms(ctx.platforms(), session)
     if code:
         raise CliError(code, profile_facts, next_="先完成身份能力核实")
     existing = session_mod.load_binding(ctx.root, key)
@@ -957,11 +962,9 @@ def _require_instance_match(ctx, binding):
         raise CliError("WF_BINDING_MISMATCH",
                        {"reason": "instance_id differs from binding", "carried": carried, "bound": stored},
                        next_="新会话请走受控恢复/交接，不改绑既有对象")
-    capability = (ctx.profile() or {}).get("capability") or {}
-    if capability.get("status") != "verified":
-        raise CliError("WF_IDENTITY_UNRESOLVED",
-                       {"reason": "session capability not verified", "capability": capability},
-                       next_="人在安装/维护预览里核实宿主身份能力后重试")
+    code, platform_facts = session_mod.check_platforms(ctx.platforms(), ctx.session())
+    if code:
+        raise CliError(code, platform_facts, next_="install --platform <当前宿主> 后重试")
 
 
 def _writer_acquire(ctx):
@@ -971,7 +974,7 @@ def _writer_acquire(ctx):
         raise CliError("WF_BINDING_MISMATCH", {"reason": "no persistent binding", "session_key": key},
                        next_="先由人选择对象（bind / task-new）")
     session = ctx.session()
-    code, profile_facts = session_mod.check_profile(ctx.profile(), session)
+    code, profile_facts = session_mod.check_platforms(ctx.platforms(), session)
     if code:
         raise CliError(code, profile_facts)
     _require_instance_match(ctx, binding)
@@ -1098,7 +1101,7 @@ def _handover_begin(ctx, args):
 def _handover_accept(ctx):
     key = ctx.key()
     session = ctx.session()
-    code, profile_facts = session_mod.check_profile(ctx.profile(), session)
+    code, profile_facts = session_mod.check_platforms(ctx.platforms(), session)
     if code:
         raise CliError(code, profile_facts)
     with _lock(ctx.root, hint="handover accept"):

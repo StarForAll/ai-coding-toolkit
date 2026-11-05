@@ -81,11 +81,11 @@ rec("1b 正常获取成功或已由本会话持有", "WF_OK 或已持有时 WF_W
 install_path = os.path.join(F, ".wf/install/installation.json")
 backup = open(install_path, encoding="utf-8").read()
 install = json.loads(backup)
-install["session_profile"]["capability"]["status"] = "unknown"
+install["platforms"] = []   # 等价场景：本项目没有为任何平台安装 → 日常入口拒绝
 json.dump(install, open(install_path, "w", encoding="utf-8"), ensure_ascii=False)
 rc, payload, _ = wf(["task-curate", "--task", task1, "--spec", ".wf/spec/rules/r67.md",
                      "--purpose", "x", "--json"], {"generation": gen()}, "sess-M1")
-rec("1c 能力未核实 → 日常入口拒绝", "WF_IDENTITY_UNRESOLVED", (payload or {}).get("code"),
+rec("1c 宿主未在册 → 日常入口拒绝", "WF_IDENTITY_UNRESOLVED", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_IDENTITY_UNRESOLVED")
 open(install_path, "w", encoding="utf-8").write(backup)
 

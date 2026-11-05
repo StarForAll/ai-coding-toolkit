@@ -33,8 +33,7 @@ def fresh(name):
     return target
 
 
-CONFIRM = ("--confirm", "--host-id", "dsh", "--verify-capability",
-           "--capability-evidence", "kind=reentry;ref=r92;by=test")
+CONFIRM = ("--confirm",)
 
 # 1) 共享层平台：dsh → 项目内 .agents/skills
 t1 = fresh("dsh")

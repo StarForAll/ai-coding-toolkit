@@ -413,6 +413,59 @@ def resolve_skill_roots(target, platforms):
     return roots, unknown
 
 
+def add_platforms(args, commit, manifest, writes, skill_roots):
+    """已安装项目追加平台：只投放新平台的技能副本，不动 .wf 资产与项目数据。"""
+    installation_path = os.path.join(args.target, ".wf/install/installation.json")
+    installation = None
+    if os.path.isfile(installation_path):
+        with open(installation_path, "r", encoding="utf-8") as handle:
+            installation = json.load(handle)
+    if installation is None:
+        return blocked("WF_ASSET_DECISION", "安装记录缺失，不能追加平台", {"target": args.target}, args.json)
+    if installation.get("source_commit") != commit:
+        return blocked("WF_ASSET_DECISION",
+                       "已安装的发行引用与本次不同：追加平台只允许同引用；升级走 wf.py upgrade（第三轮）",
+                       {"installed": installation.get("release_ref"), "requested": args.release_ref,
+                        "installed_commit": installation.get("source_commit"), "requested_commit": commit},
+                       args.json)
+    current = [item for item in installation.get("platforms") or [] if isinstance(item, str)]
+    wanted = sorted({PLATFORM_ALIASES.get(name, name) for name in _flatten_platforms(args.platform)})
+    added = [name for name in wanted if name not in current]
+    deployed, skipped = [], []
+    for base, asset, relative in writes:
+        if asset.get("target_class") != "skill_root":
+            continue
+        destination = os.path.join(base, *relative.split("/"))
+        source_file = os.path.join(os.path.abspath(args.source), *str(asset.get("source_path") or "").split("/"))
+        if not os.path.isfile(source_file):
+            return blocked("WF_RELEASE_CONFLICT", "发行树缺该技能的源文件",
+                           {"source_path": asset.get("source_path")}, args.json)
+        with open(source_file, "rb") as handle:
+            data = handle.read()
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        if os.path.exists(destination):
+            with open(destination, "rb") as handle:
+                if handle.read() == data:
+                    skipped.append(destination)
+                    continue
+        with open(destination, "wb") as handle:
+            handle.write(data)
+        deployed.append(destination)
+    installation["platforms"] = sorted(set(current) | set(wanted))
+    installation["roots"] = sorted(set(installation.get("roots") or []) | {
+        os.path.relpath(root, args.target).replace(os.sep, "/") for root in skill_roots})
+    with open(installation_path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(installation, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
+    return ok("\n".join([
+        "OK  WF_OK",
+        f"目标：{args.target}",
+        f"新增平台：{json.dumps(added, ensure_ascii=False)}" + ("（无新增）" if not added else ""),
+        f"投放技能副本：{len(deployed)} 个（已一致跳过 {len(skipped)} 个）",
+        f"现有平台：{json.dumps(installation['platforms'], ensure_ascii=False)}",
+        "说明：.wf 资产与项目数据未改动。",
+    ]), {"platforms": installation["platforms"], "deployed": len(deployed)}, args.json)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="wf 发行根安装入口")
     parser.add_argument("--target", required=True)
@@ -421,11 +474,6 @@ def main(argv=None):
     parser.add_argument("--platform", action="append", nargs="+", default=[],
                         help="目标项目实际使用的 agent（可重复）：dsh|codex|cursor|geminicli|copilot|claudecode")
     parser.add_argument("--confirm", action="store_true")
-    parser.add_argument("--host-id", default=None)
-    parser.add_argument("--verify-capability", action="store_true")
-    parser.add_argument("--provider", choices=("host", "wf"), default=None)
-    parser.add_argument("--capability-evidence", action="append", default=[],
-                        metavar="kind", help="人给出的实际观察种类（压缩/重入/新会话/传递），可重复")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
@@ -455,12 +503,6 @@ def main(argv=None):
     if problems:
         return blocked("WF_RELEASE_CONFLICT", "发行资产校验失败", {"problems": problems[:20]}, args.json)
 
-    bad_kinds, accepted_kinds = _invalid_evidence_kinds(
-        [_evidence_entry(item) for item in (getattr(args, "capability_evidence", None) or [])])
-    if bad_kinds:
-        return blocked("WF_IDENTITY_UNRESOLVED",
-                       "能力观察种类不认识：安装期就拒，不要等到 enable 才报 capability not verified",
-                       {"unknown_kinds": bad_kinds, "accepted_kinds": accepted_kinds}, args.json)
     skill_roots, unknown_platforms = resolve_skill_roots(args.target, args.platform)
     if unknown_platforms:
         return blocked("WF_PATH_INVALID", "未知平台，无法确定其 skill 发现层",
@@ -483,19 +525,7 @@ def main(argv=None):
         ]
         for base, asset, relative in writes:
             lines.append(f"  - {os.path.join(base, *relative.split('/'))}")
-        # R50-11：预览必须展示将写入的完整 session_profile（身份来源声明要经人确认）
-        preview_evidence = _profile_evidence(args)
-        preview_status = ("verified" if args.verify_capability and _has_observation(args.capability_evidence)
-                          else ("unknown" if args.verify_capability else "unknown"))
         lines += ["另将创建：.wf-lock、.wf/、.wf/writer.json（初始维护持有）、.wf/install/*",
-                  "会话身份（session_profile）：",
-                  f"  host_id={args.host_id}",
-                  f"  provider={getattr(args, 'provider', None) or ('host' if args.host_id else None)}",
-                  "  transport=request_json",
-                  f"  capability.status={preview_status}"
-                  + ("" if preview_status == "verified" else
-                     "（声明式：需人给出实际观察证据才转 verified）"),
-                  f"  evidence_refs={json.dumps(preview_evidence, ensure_ascii=False)}",
                   "托管段（.gitignore）：", "  " + managed_segment(manifest).replace("\n", "\n  "),
                   f"平台：{json.dumps(sorted({PLATFORM_ALIASES.get(name, name) for name in _flatten_platforms(args.platform)}), ensure_ascii=False)}",
                   f"技能目录（目标项目内）：{json.dumps([os.path.relpath(root, args.target) for root in skill_roots], ensure_ascii=False)}"]
@@ -505,19 +535,15 @@ def main(argv=None):
         lines.append("确认后重跑并加 --confirm。")
         return ok("\n".join(lines),
                   {"preview": True, "clues": clues,
-                   "session_profile": {"host_id": args.host_id,
-                                       "provider": getattr(args, "provider", None) or ("host" if args.host_id else None),
-                                       "transport": "request_json",
-                                       "capability_status": preview_status,
-                                       "evidence_refs": preview_evidence}}, args.json)
+                   "platforms": sorted({PLATFORM_ALIASES.get(name, name)
+                                        for name in _flatten_platforms(args.platform)})}, args.json)
 
     if not skill_roots:
         return blocked("WF_PATH_INVALID", "至少需要一个 --platform（技能装在目标项目内）",
                        {"supported": sorted(PLATFORMS)}, args.json)
     if os.path.exists(os.path.join(args.target, ".wf/writer.json")):
-        return blocked("WF_ASSET_DECISION",
-                       "目标已有 wf 项目数据（writer.json 存在）：升级走 wf.py upgrade（第三轮），不按新装覆盖",
-                       {"target": args.target}, args.json)
+        # 已安装：同发行引用只允许"追加平台"；不同引用属升级（第三轮），不按新装覆盖
+        return add_platforms(args, commit, manifest, writes, skill_roots)
     lock_path = os.path.join(args.target, ".wf-lock")
     try:
         lock = Lock(lock_path)
@@ -575,20 +601,6 @@ def main(argv=None):
                         "digest": asset.get("digest"), "source_path": asset.get("source_path")}
                        for base, asset, relative in writes],
             "decisions": [],
-            "session_profile": {
-                "host_id": args.host_id,
-                "provider": getattr(args, "provider", None) or ("host" if args.host_id else None),
-                "transport": "request_json",
-                "capability": {
-                    # 只有人给出机制稿列举的观察证据（压缩/重入/新会话/传递）才算 verified；
-                    # 仅勾选 --verify-capability 属声明，落 unknown 并保留声明记录
-                    "status": ("verified"
-                               if args.verify_capability and _has_observation(getattr(args, "capability_evidence", None))
-                               else "unknown"),
-                    "verified_version": None,
-                    "evidence_refs": _profile_evidence(args, stamp=now_str()),
-                },
-            },
             "installed_at": now_str(),
             "tool": "install.py",
         }
@@ -705,29 +717,6 @@ def plan_writes(target, skill_roots, manifest):
 
 
 
-def _invalid_evidence_kinds(entries):
-    """人给的观察种类必须是运行时认得的（session.OBSERVATION_KINDS）；
-    安装期不校验会变成"装得上、enable 时才报 capability not verified"。"""
-    kinds = ("compaction", "reentry", "new-session", "transport")
-    bad = [item.get("kind") for item in entries if item.get("kind") not in kinds]
-    return sorted(set(k for k in bad if k)), list(kinds)
-
-
-def _profile_evidence(args, stamp=None):
-    """预览与落盘共用的证据清单：声明记录 + 人给的观察（同一构造，避免两处不一致）。"""
-    entries = []
-    if getattr(args, "verify_capability", False):
-        entry = {"declared_by": "installer preview", "kind": "declared-verification",
-                 "ref": f"preview: host_id={args.host_id}"}
-        if stamp:
-            entry["at"] = stamp
-        entries.append(entry)
-    for item in getattr(args, "capability_evidence", None) or []:
-        entry = _evidence_entry(item)
-        if stamp:
-            entry["at"] = stamp
-        entries.append(entry)
-    return entries
 
 def _evidence_entry(item):
     """`kind=<种类>;ref=<观察引用>;by=<声明人>` → 证据条目（与 dev-deploy 同解析）。"""
@@ -739,14 +728,6 @@ def _evidence_entry(item):
 
 OBSERVATION_KINDS = ("compaction", "reentry", "new-session", "transport")
 
-
-def _has_observation(items):
-    """按 `kind=…;ref=…` 判断是否有人给出的实际观察（不是"谁在何时声明"）。"""
-    for item in items or []:
-        fields = dict(part.split("=", 1) for part in str(item).split(";") if "=" in part)
-        if fields.get("kind") in OBSERVATION_KINDS and str(fields.get("ref") or "").strip():
-            return True
-    return False
 
 def target_of(target):
     return os.path.abspath(target)

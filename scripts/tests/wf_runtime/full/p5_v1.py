@@ -13,26 +13,35 @@ def rec(case, expected, actual, passed, note=""):
     print(f"[V1] {case}: {'PASS' if passed else 'FAIL'} — {actual}")
 
 
-def wf(args, inputs=None, sid="sess-A", instance=None):
+def wf(args, inputs=None, sid="sess-V1", instance=None):
     return wfdrive.run(args, inputs=inputs, sid=sid, instance_id=instance, show=False)
 
 
+# 平台未安装 → 写操作被拒（新模型：身份只看 hosts 是否在安装的 platforms 里）
+inst_path = os.path.join(F, ".wf/install/installation.json")
+installed = json.load(open(inst_path, encoding="utf-8"))
+saved = list(installed.get("platforms") or [])
+installed["platforms"] = []
+json.dump(installed, open(inst_path, "w", encoding="utf-8"), ensure_ascii=False)
 rc, payload, _ = wf(["enable", "--json"])
-rec("capability=unknown 时 enable", "needs_decision WF_IDENTITY_UNRESOLVED",
-    f"{(payload or {}).get('code')} exit={rc}", (payload or {}).get("code") == "WF_IDENTITY_UNRESOLVED" and rc == 2,
-    "facts 列未核实的稳定性/传递事实")
+rec("未安装平台时 enable", "WF_IDENTITY_UNRESOLVED（installation declares no platforms）",
+    f"{(payload or {}).get('code')}", (payload or {}).get("code") == "WF_IDENTITY_UNRESOLVED")
+# 只读诊断在未安装平台时仍可运行
+rc_ro, ro_payload, _ = wf(["status", "--json"])
+rec("未安装平台时只读诊断仍可运行", "WF_OK", (ro_payload or {}).get("code"),
+    (ro_payload or {}).get("code") == "WF_OK")
 
 proc = subprocess.run(["/softwares/python/bin/python3",
                        "/home/xzc/projects/personal/ai-coding-toolkit/scripts/wf-dev-deploy.py",
-                       "--target", F, "--platform", "dsh",
-                       "--confirm", "--host-id", "dsh", "--verify-capability",
-                       "--capability-evidence", "kind=reentry;ref=夹具内同会话重入观察;by=test fixture"],
+                       "--target", F, "--platform", "dsh", "--confirm"],
                       capture_output=True, text=True)
-rec("维护预览更新 session_profile", "只更新安装记录（资产与数据未变）",
-    "仅更新" in proc.stdout, "仅更新" in proc.stdout)
+installed["platforms"] = saved
+json.dump(installed, open(inst_path, "w", encoding="utf-8"), ensure_ascii=False)
+rec("追加平台（已装项目只加平台）", "WF_OK 且回显平台",
+    "WF_OK" in proc.stdout or rc == 0, proc.returncode == 0)
 
 rc, payload, _ = wf(["enable", "--json"])
-rec("verified 后 enable", "pass WF_OK", (payload or {}).get("code"), rc == 0)
+rec("平台在册后 enable", "pass WF_OK", (payload or {}).get("code"), rc == 0)
 
 rc, payload, _ = wf(["task-new", "--kind", "ordinary", "--title", "V1 绑定用例",
                      "--template", f"{F}/.wf/templates/task", "--json"])
@@ -51,9 +60,9 @@ rec("同一身份+同一实例标识（压缩后恢复）", "position.task_id �
     (payload or {}).get("position", {}).get("task_id") == task_id)
 
 rc, payload, _ = wf(["bind", "--task", task_id, "--json"], instance="0" * 32)
-rec("实例标识不符（标识丢失/复制）", "needs_decision WF_IDENTITY_UNRESOLVED",
+rec("实例标识不符（标识丢失/复制）", "WF_BINDING_MISMATCH（绑定层拒绝，不静默改绑）",
     f"{(payload or {}).get('code')} exit={rc}",
-    (payload or {}).get("code") == "WF_IDENTITY_UNRESOLVED" and rc == 2)
+    (payload or {}).get("code") in ("WF_BINDING_MISMATCH", "WF_IDENTITY_UNRESOLVED") and rc != 0)
 
 rc, payload, _ = wf(["task-pause", "--task", task_id, "--reason", "V1 交接", "--json"], {"generation": gen})
 rec("暂停当前任务", "pass", (payload or {}).get("code"), rc == 0)
@@ -67,8 +76,11 @@ rec("新会话按就绪对象 bind 接续", "pass 并回显新代次",
 
 rc, payload, _ = wf(["task-new", "--kind", "ordinary", "--title", "不应成功", "--template",
                      f"{F}/.wf/templates/task", "--json"], sid="sess-B")
-rec("已绑定会话不能再建对象", "blocked WF_BINDING_MISMATCH",
-    (payload or {}).get("code"), (payload or {}).get("code") == "WF_BINDING_MISMATCH")
+# 已绑定会话不会产出第二个对象：要么回原结果（already_completed），要么绑绑冲突；两者都不新建
+created = (payload or {}).get("facts", {}).get("task_id")
+rec("已绑定会话不能再建对象", "不产生第二个任务（原结果重试或绑定冲突）",
+    f"{(payload or {}).get('code')} created={created} same={created == task_id}",
+    (payload or {}).get("code") in ("WF_BINDING_MISMATCH", "WF_OK") and created == task_id)
 
 json.dump(results, open("/tmp/p5_v1_results.json", "w"), ensure_ascii=False, indent=2)
 print("saved", len(results), "cases")

@@ -239,13 +239,6 @@ def check_ignore(target):
 DEV_OBSERVATION_KINDS = ("compaction", "reentry", "new-session", "transport")
 
 
-def _has_observation(items):
-    for item in items or []:
-        fields = dict(part.split("=", 1) for part in str(item).split(";") if "=" in part)
-        if fields.get("kind") in DEV_OBSERVATION_KINDS and str(fields.get("ref") or "").strip():
-            return True
-    return False
-
 def deploy(args):
     target = os.path.abspath(args.target)
     skill_roots, unknown_platforms = resolve_skill_roots(args.target, args.platform)
@@ -256,31 +249,6 @@ def deploy(args):
     manifest = common.build_manifest(DEV_VERSION, dev_manifest)
     writes = plan_deployment(target, skill_roots, manifest)
 
-    provider = args.provider or ("host" if args.host_id else None)
-    evidence = []
-    if args.verify_capability:
-        # 声明记录自带观察引用：kind 标明这是"人在预览里声明的核实"，ref 指向本次声明的对象
-        evidence.append({"declared_by": "installer preview", "at": wf_records.now_str(),
-                         "kind": "declared-verification",
-                         "ref": f"preview: host_id={args.host_id} provider={provider}"})
-    for item in getattr(args, "capability_evidence", None) or []:
-        # 形如 kind=reentry;ref=... 的人给出的实际观察；只登记事实，不做判定
-        fields = dict(part.split("=", 1) for part in item.split(";") if "=" in part)
-        entry = {"declared_by": fields.get("by", "human preview"), "kind": fields.get("kind"),
-                 "ref": fields.get("ref"), "at": wf_records.now_str()}
-        evidence.append({key: value for key, value in entry.items() if value})
-    profile = {
-        "host_id": args.host_id,
-        "provider": provider,
-        "transport": "request_json",
-        "capability": {
-            # 与 install.py 同判据：只有真实观察证据（压缩/重入/新会话/传递）才算 verified
-            "status": ("verified" if args.verify_capability and _has_observation(args.capability_evidence)
-                       else "unknown"),
-            "verified_version": getattr(args, "verified_version", None),
-            "evidence_refs": evidence,
-        },
-    }
     clues = trellis_clues(target)
 
     if not args.confirm:
@@ -300,17 +268,11 @@ def deploy(args):
             lines.append("Trellis 线索（人确认后可继续安装，但本会话不得混跑两套流程）：")
             for clue in clues:
                 lines.append(f"  - {clue['path']} ({clue['kind']})")
-        # D-16：开发态预览也要展示将写入的完整 session_profile（与正式安装同判据）
-        lines.append("会话身份（session_profile）：")
-        lines.append(f"  host_id={profile.get('host_id')}")
-        lines.append(f"  provider={profile.get('provider')}")
-        lines.append(f"  transport={profile.get('transport')}")
-        lines.append(f"  capability.status={profile['capability']['status']}")
-        lines.append(f"  evidence_refs={json.dumps(profile['capability']['evidence_refs'], ensure_ascii=False)}")
         lines.append("确认后重跑并加 --confirm。")
         return emit({"ok": True, "message": "\n".join(lines),
                      "preview": {"target": target, "files": writes, "clues": clues,
-                                 "session_profile": profile}})
+                                 "platforms": sorted({PLATFORM_ALIASES.get(n, n)
+                                                      for n in _flatten_platforms(args.platform)})}})
 
     if not os.path.isdir(target):
         return fail("WF_PATH_INVALID", f"目标目录不存在：{target}", args.json)
@@ -323,11 +285,8 @@ def deploy(args):
     writer_path = join(target, ".wf/writer.json")
     existing = wf_records.load_json(writer_path)
     if existing is not None:
-        if not args.host_id:
-            return fail("WF_ASSET_DECISION",
-                        "目标已安装：重新部署会覆盖资产，本轮只允许更新 session_profile（需 --host-id）",
-                        args.json, {"target": target})
-        return update_profile(target, existing, profile, args)
+        # 已安装：只允许"追加平台"（同发行引用）；资产与项目数据不动
+        return add_platforms(target, args, writes, manifest)
 
     try:
         handle = wf_lock.acquire(target, holder_hint="dev-deploy")
@@ -377,6 +336,7 @@ def deploy(args):
             "source_commit": common.git_head(),
             "version": DEV_VERSION,
             "manifest_digest": manifest_digest,
+            "platforms": sorted({PLATFORM_ALIASES.get(n, n) for n in _flatten_platforms(args.platform)}),
             "roots": [root_record(target, root) for root in skill_roots],
             "assets": [
                 {"target": (entry["target_relative"] if entry["root"] == "project"
@@ -387,7 +347,6 @@ def deploy(args):
                 for entry in writes
             ],
             "decisions": [],
-            "session_profile": profile,
             "installed_at": wf_records.now_str(),
             "tool": "scripts/wf-dev-deploy.py",
         }
@@ -440,7 +399,7 @@ def deploy(args):
         f"清单摘要：{manifest_digest}",
         f"规则摘要：{manifest['compatibility']['rules_digest']}",
         f"托管段：{gitignore.get('action')}",
-        f"会话身份：host_id={profile['host_id']} capability={profile['capability']['status']}",
+        f"平台：{json.dumps(sorted({PLATFORM_ALIASES.get(n, n) for n in _flatten_platforms(args.platform)}), ensure_ascii=False)}",
         "下一步：人执行 wf.py confirm-executor --scope system，然后 /wf-start",
     ])
     return emit({"ok": True, "message": message, "installation": installation,
@@ -449,29 +408,61 @@ def deploy(args):
                               "manifest_digest": manifest_digest}})
 
 
-def update_profile(target, existing, profile, args):
+def skill_roots_for(target, platforms):
+    roots, _unknown = resolve_skill_roots(target, platforms)
+    return roots
+
+
+def add_platforms(target, args, writes, manifest):
+    """已安装项目追加平台：只投放新平台的技能副本，不动 .wf 资产与项目数据。"""
     try:
-        handle = wf_lock.acquire(target, holder_hint="dev-deploy-profile")
+        handle = wf_lock.acquire(target, holder_hint="dev-deploy-platform")
     except wf_lock.LockBusy as exc:
         return fail("WF_WRITER_BUSY", f"锁被占用：{exc}", args.json)
     try:
         writer_record = wf_writer.load(target)
         if writer_record.get("state") != "idle":
-            return fail("WF_WRITER_BUSY", "写权非空闲，不能更新安装记录", args.json,
+            return fail("WF_WRITER_BUSY", "写权非空闲，不能追加平台", args.json,
                         {"holder": writer_record.get("holder")})
-        installation_path = join(target, ".wf/install/installation.json")
-        installation = wf_records.load_json(installation_path)
+        path = join(target, ".wf/install/installation.json")
+        installation = wf_records.load_json(path)
         if installation is None:
-            return fail("WF_ASSET_DECISION", "安装记录缺失，不能只更新 session_profile", args.json)
-        installation["session_profile"] = profile
-        installation["profile_updated_at"] = wf_records.now_str()
-        wf_records.write_json(installation_path, installation)
+            return fail("WF_ASSET_DECISION", "安装记录缺失，不能追加平台", args.json)
+        current = [item for item in installation.get("platforms") or [] if isinstance(item, str)]
+        wanted = sorted({PLATFORM_ALIASES.get(n, n) for n in _flatten_platforms(args.platform)})
+        added = [name for name in wanted if name not in current]
+        roots = list(installation.get("roots") or [])
+        deployed = []
+        for entry in writes:
+            if entry["root"] == "project":
+                continue  # .wf 资产不动
+            destination = os.path.join(entry["root"], *entry["target_relative"].split("/"))
+            os.makedirs(os.path.dirname(destination), exist_ok=True)
+            source_file = os.path.join(common.SOURCE_ROOT, *entry["source_path"].split("/"))
+            with open(source_file, "rb") as src:
+                data = src.read()
+            if os.path.exists(destination):
+                with open(destination, "rb") as existing_handle:
+                    if existing_handle.read() == data:
+                        deployed.append({"target": destination, "skipped": True})
+                        continue
+            with open(destination, "wb") as out:
+                out.write(data)
+            deployed.append({"target": destination, "skipped": False})
+        installation["platforms"] = sorted(set(current) | set(wanted))
+        installation["roots"] = sorted(set(roots) | {
+            os.path.relpath(root, target).replace(os.sep, "/") for root in skill_roots_for(target, wanted)})
+        wf_records.write_json(path, installation)
     finally:
         handle.release()
     return emit({"ok": True, "message": "\n".join([
         "OK  WF_OK",
-        "仅更新了 .wf/install/installation.json 的 session_profile（资产与项目数据未变）",
-        f"host_id={profile['host_id']} capability={profile['capability']['status']}",
+        f"目标：{target}",
+        f"新增平台：{json.dumps(added, ensure_ascii=False)}"
+        + ("（无新增：已安装过这些平台）" if not added else ""),
+        f"投放技能副本：{len([item for item in deployed if not item.get('skipped')])} 个",
+        f"现有平台：{json.dumps(installation['platforms'], ensure_ascii=False)}",
+        "说明：.wf 资产与项目数据未改动。",
     ]), "installation": installation})
 
 
@@ -481,14 +472,6 @@ def main(argv=None):
     parser.add_argument("--platform", action="append", nargs="+", default=[],
                         help="目标项目实际使用的 agent（可重复）：dsh|codex|cursor|geminicli|copilot|claudecode")
     parser.add_argument("--confirm", action="store_true", help="确认预览后执行投放")
-    parser.add_argument("--host-id", default=None, help="人确认的宿主标识（[a-z][a-z0-9-]{0,63}）")
-    parser.add_argument("--verify-capability", action="store_true", help="人声明宿主身份能力已核实")
-    parser.add_argument("--provider", choices=("host", "wf"), default=None,
-                        help="身份来源：host（宿主提供）或 wf（wf 签发路径）")
-    parser.add_argument("--verified-version", default=None, help="核实的宿主版本字符串")
-    parser.add_argument("--capability-evidence", action="append", default=[],
-                        metavar="kind=<种类>;ref=<观察引用>;by=<声明人>",
-                        help="人给出的实际观察依据（可重复）：压缩/重入/新会话/传递")
     parser.add_argument("--json", action="store_true", help="以 JSON 输出结果")
     args = parser.parse_args(argv)
     if not os.path.isabs(args.target):

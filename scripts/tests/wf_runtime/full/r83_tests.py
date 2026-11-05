@@ -35,32 +35,21 @@ except Exception as exc:  # noqa: BLE001
     raised = getattr(exc, "code", None)
 rec("A1b 无理由仍被拒", "WF_SEMANTIC_DECISION", raised, raised == "WF_SEMANTIC_DECISION")
 
-# ---- A2：transport 只认 request_json ----
+# ---- A2：身份判定只看平台在册（transport/能力证据已随 §1.4 修订取消） ----
 sess = {"provider": "host", "identity": {"host_id": "dsh"}}
-base_profile = {"host_id": "dsh", "provider": "host", "transport": "request_json",
-                "capability": {"status": "verified",
-                               "evidence_refs": [{"kind": "reentry", "ref": "同一会话重入观察"}]}}
-rec("A2 request_json 放行", "None", wf_session.check_profile(base_profile, sess)[0],
-    wf_session.check_profile(base_profile, sess)[0] is None)
-for transport in ("stdio_json", "mcp_tool", "unsupported"):
-    prof = dict(base_profile, transport=transport)
-    code, facts = wf_session.check_profile(prof, sess)
-    rec(f"A2b {transport} 不被宣称支持", "WF_IDENTITY_UNRESOLVED", f"{code}/{facts.get('supported')}",
-        code == "WF_IDENTITY_UNRESOLVED")
-rec("A2c 支持集合只有 request_json", "1 项", list(wf_session.SUPPORTED_TRANSPORTS),
-    list(wf_session.SUPPORTED_TRANSPORTS) == ["request_json"])
-
-# ---- A3：声明式证据不得支撑 verified ----
-declared_only = dict(base_profile, capability={
-    "status": "verified", "evidence_refs": [{"kind": "declared-verification", "ref": "preview: host_id=dsh"}]})
-code, facts = wf_session.check_profile(declared_only, sess)
-rec("A3 自证证据被拒", "WF_IDENTITY_UNRESOLVED", f"{code}/{facts.get('reason', '')[:24]}",
-    code == "WF_IDENTITY_UNRESOLVED")
-rec("A3b 观察类别清单来自机制稿", "4 类", list(wf_session.OBSERVATION_KINDS),
-    list(wf_session.OBSERVATION_KINDS) == ["compaction", "reentry", "new-session", "transport"])
-rec("A3c 安装器只在有观察时给 verified", "含 _has_observation",
-    "def _has_observation" in open(wf_install.__file__, encoding="utf-8").read(),
-    "def _has_observation" in open(wf_install.__file__, encoding="utf-8").read())
+rec("A2 平台在册放行", "None", wf_session.check_platforms(["dsh"], sess)[0],
+    wf_session.check_platforms(["dsh"], sess)[0] is None)
+code, facts = wf_session.check_platforms(["codex"], sess)
+rec("A2b 宿主未安装被拒并给出出口", "WF_IDENTITY_UNRESOLVED + next",
+    f"{code}/{facts.get('next')}", code == "WF_IDENTITY_UNRESOLVED" and bool(facts.get("next")))
+code, facts = wf_session.check_platforms([], sess)
+rec("A2c 空平台清单被拒", "WF_IDENTITY_UNRESOLVED", code, code == "WF_IDENTITY_UNRESOLVED")
+rec("A2d 能力证据常量已删除", "无 SUPPORTED_TRANSPORTS/OBSERVATION_KINDS",
+    hasattr(wf_session, "SUPPORTED_TRANSPORTS"),
+    not hasattr(wf_session, "SUPPORTED_TRANSPORTS") and not hasattr(wf_session, "OBSERVATION_KINDS"))
+rec("A2e 安装器不再写 session_profile", "无 session_profile",
+    "session_profile" in open(wf_install.__file__, encoding="utf-8").read(),
+    "session_profile" not in open(wf_install.__file__, encoding="utf-8").read())
 
 # ---- A5：delete / disable / rename 的续做三态 ----
 root = tempfile.mkdtemp()

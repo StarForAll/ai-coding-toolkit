@@ -148,11 +148,11 @@ execution.required_steps 保存本文 §11.2 定义的执行回执，字段为 `
 
 **会话请求协议**：所有会话入口从同一结构化请求信封的 session 对象取得 `{provider, identity, instance_id, activation}`。provider 仅取 host/wf；host 的 identity 为 `{host_id, session_id}`，host_id 是安装时人确认的宿主标识（`[a-z][a-z0-9-]{0,63}`），session_id 是经验证稳定的原始非空字符串；wf 的 identity 为 `{issued_id}`，issued_id 是入口显式签发的 UUID4。哈希对该结构作 C 编码，不 trim/改大小写/临时拼接 CLI 名。binding.identity 按表中 `{provider, value}` 保存，provider 取请求 provider，value 原样取请求 identity；SessionKey 只用 `{provider, identity: value}` 计算。首次绑定前请求 instance_id 可为 null，绑定入口首次生成后返回给当前会话携带；既有绑定后的入口先按当前 provider/identity 定位持久绑定，读取其中 instance_id 与请求比对，定位缓存不参与身份证明。两者一致则继续既有检查，缓存缺失仅重建定位，不视为未绑定。请求 instance_id 缺失时只读返回“待核对携带标识”及人调用 start 的出口：start 在实际会话身份已可靠核实、人的同一会话恢复事实明确后，可读回原持久标识返回当前会话携带，不改绑定/对象/实例标识，不要求为重取缓存执行 repair。证据不足时保留 WF_IDENTITY_UNRESOLVED；持久绑定已知应有却缺失、不可解析或两侧实例标识不同，则保留事实并转本文 §5.4 的出口。provider 未知、身份缺失或宿主映射不符时阻断绑定与推进，不猜环境变量。
 
-身份来源声明作为安装记录的 session_profile 保存 `{host_id, provider, transport, capability}`；transport 首版只取 request_json，capability 为 `{status, verified_version, evidence_refs}`，status 只取 verified/unknown，verified_version 为核实的宿主版本字符串或 null，evidence_refs 指向压缩/重入/新会话的实际观察依据，未核实时 status=unknown；该声明由安装/维护预览的人确认后随本地安装记录写入，运行时不让模型自行修改。宿主/skill 适配层把实际上下文中的身份按此映射放入请求 JSON，由入口从标准输入解析；具体 CLI 外壳交实现方案，不另接受环境变量或命令行覆写身份。宿主无法保证稳定来源时由人选择 wf 签发路径，唯一 issued_id 由当前会话携带；丢失、复制到新会话或 provider 变化走明确恢复/新会话出口，不能自动签发新 id 绕过既有绑定。维护入口无需伪造 session。
+身份来源由安装记录的平台清单 `platforms` 声明（2026-11-05 修订：取消原 session_profile 的逐宿主声明、能力证据与逐字比对）。运行时按请求信封的 `provider/identity` 判定：`provider=host` 时 `identity.host_id` 必须属于该清单，否则 `WF_IDENTITY_UNRESOLVED` 并在 facts 里给出已装平台与登记出口；`provider=wf` 的签发路径在第二轮交付；只读诊断不受此限。宿主/skill 适配层把实际上下文中的身份按此映射放入请求 JSON，由入口从标准输入解析；具体 CLI 外壳交实现方案，不另接受环境变量或命令行覆写身份。宿主无法保证稳定来源时由人选择 wf 签发路径，唯一 issued_id 由当前会话携带；丢失、复制到新会话或 provider 变化走明确恢复/新会话出口，不能自动签发新 id 绕过既有绑定。维护入口无需伪造 session。
 
-**能力状态消费**：身份核验入口读取 session_profile.capability，而不是只核 provider 字面合法。status=unknown、证据缺失或当前宿主/传递方式与 verified_version/evidence_refs 不适用时，首次绑定与已有对象的恢复/推进均停止相关写入，输出 WF_IDENTITY_UNRESOLVED（需人裁决），列出未核实的稳定性/传递事实及出口；不允许“先绑定、压缩后再补核验”。只读诊断、能力核验和独立维护仍可运行，不把未知判成永久不支持。
+**身份判定与失败即报**（2026-11-05 修订，取代原「能力状态消费」）：入口只做平台清单成员判定，不要求人在每次使用前举证宿主能力；真实异常由各自路径立即阻断——实例标识缺失或与绑定不符、宿主换身份后绑定不成立、写权代次过期、检查锚点失效，分别输出 `WF_IDENTITY_UNRESOLVED`/`WF_BINDING_MISMATCH`/`WF_GENERATION_STALE`/`WF_CHECK_STALE`，不静默放行、不自动改绑、不以新签发标识绕过旧会话绑定。只读诊断与独立维护仍可运行。
 
-核验出口为：人在不推进业务绑定的环境中检查宿主的同会话重入/压缩稳定性、新会话区别与结构化请求传递，确认实际证据后通过已有安装/维护预览更新 session_profile；或显式选择并核实可可靠携带的 wf 签发路径。wf 路径同样要验证携带/恢复方式，不能因 provider=wf 自动当 verified。status=verified 只说明对应来源能力已核实，每次请求仍须核实际 provider/identity、instance_id 与持久绑定一致。已经确认当前实现不支持该传递能力且无可用路径时用 WF_CAPABILITY_UNAVAILABLE（阻断），而“尚未核实/证据不适用”仍是前一需人裁决档。更换 provider/host 不重命名或改写旧绑定；既有对象经原写权释放/受控恢复后由新会话显式接续，不能用新签发标识绕过旧会话绑定。
+核验出口为：确认宿主来源不稳定时，人显式选择并可可靠携带的 wf 签发路径；wf 路径同样要验证携带/恢复方式，不能因 provider=wf 自动当 verified。每次请求仍须核实际 provider/identity、instance_id 与持久绑定一致。已经确认当前实现不支持该传递能力且无可用路径时用 `WF_CAPABILITY_UNAVAILABLE`（阻断）。更换 provider/host 不重命名或改写旧绑定；既有对象经原写权释放/受控恢复后由新会话显式接续，不能用新签发标识绕过旧会话绑定。
 
 activation 是当前会话由宿主/skill 携带的可丢弃缓存，取 null 或 `{enabled: true, start_source, enabled_at}`，start_source 为人的实际调用来源定位。人显式调用 start 时允许 activation=null，不以已有启用缓存为前置；start 核互斥/身份并返回允许启用的结果后，由当前宿主/skill 根据这次实际调用更新缓存。检查不通过则不生成有效 activation；仅绑定、重建定位缓存、读取旧 writer 均不得生成它。缓存保存在宿主当前会话上下文，经请求信封传给独立 CLI 进程，不写进项目 Git、本机解释器确认记录或他人会话文件；无需项目写权即可保持“启用未绑定”。项目内定位缓存仍只缓存绑定/游标，不因新增此传输字段放宽无写权项目写入例外。
 
@@ -786,7 +786,7 @@ template_markers 为 `{formats: [{id, pattern}], uses: [{template_path, selector
 
 安装从设计稿 §7.5 固定私有源获得已检出的发行源码，入口本地解析指定 tag → commit → 清单/资产，不查询发布服务。校验 tag 版本与清单一致、每源路径处于发行根内且无越界/嵌套引用、资产实际哈希一致，记录解析出的 commit 与清单摘要。同一 version 已见不同 commit/清单视为冲突，即便引用名相同；首次没有既往观察时只能核当前身份一致，不声称证明远端 tag 从未移动。
 
-本地安装记录含 `{release_ref, source_commit, version, manifest_digest, roots, assets, decisions, session_profile}`，session_profile 按本文 §1.4 定义。roots 为安装时人确认的实际投放根，项目内根用相对路径、明确项目外根用绝对路径；assets 每项保存 target、旧模板 O 的哈希与可重取来源、必要本地模板副本、所见 N、接受偏离/删除决定。只从已登记目标判所有权，远端通用清单不证明本机曾安装到哪里。
+本地安装记录含 `{release_ref, source_commit, version, manifest_digest, platforms, roots, assets, decisions}`（2026-11-05 修订：`session_profile` 已取消，身份事实改为 `platforms` 清单，按本文 §1.4 判定）。roots 为安装时人确认的实际投放根，项目内根用相对路径、明确项目外根用绝对路径；assets 每项保存 target、旧模板 O 的哈希与可重取来源、必要本地模板副本、所见 N、接受偏离/删除决定。只从已登记目标判所有权，远端通用清单不证明本机曾安装到哪里。
 
 ### 10.3 预览令牌与应用
 

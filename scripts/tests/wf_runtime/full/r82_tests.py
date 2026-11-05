@@ -128,21 +128,15 @@ open(target, "w").write("original\n")
 wf_spec._apply_change(resume_root, change, {"id": "t"}, applied2, resume=True)
 rec("A1d 符合前像 → 应用", "内容变为 mine", open(target).read(), open(target).read() == "mine\n")
 
-# ---- 其他 agent 7：能力声明的 transport 与观察依据 ----
+# ---- 其他 agent 7：平台成员判定（能力证据已取消，见机制稿 §1.4 修订） ----
 sess = {"provider": "host", "identity": {"host_id": "dsh"}}
-good = {"host_id": "dsh", "provider": "host", "transport": "request_json",
-        "capability": {"status": "verified", "evidence_refs": [{"kind": "compaction", "ref": "观察一"}]}}
-rec("A7 结构齐全放行", "None", wf_session.check_profile(good, sess)[0],
-    wf_session.check_profile(good, sess)[0] is None)
-unsupported = dict(good, transport="unsupported")
-rec("A7b 不支持的 transport 被拒", "WF_IDENTITY_UNRESOLVED",
-    wf_session.check_profile(unsupported, sess)[0],
-    wf_session.check_profile(unsupported, sess)[0] == "WF_IDENTITY_UNRESOLVED")
-only_declared = dict(good, capability={"status": "verified",
-                                       "evidence_refs": [{"declared_by": "installer preview", "at": AT}]})
-rec("A7c 只有声明人没有观察 → 被拒", "WF_IDENTITY_UNRESOLVED",
-    wf_session.check_profile(only_declared, sess)[0],
-    wf_session.check_profile(only_declared, sess)[0] == "WF_IDENTITY_UNRESOLVED")
+rec("A7 平台在册放行", "None", wf_session.check_platforms(["dsh"], sess)[0],
+    wf_session.check_platforms(["dsh"], sess)[0] is None)
+rec("A7b 宿主不在平台里被拒", "WF_IDENTITY_UNRESOLVED",
+    wf_session.check_platforms(["codex"], sess)[0],
+    wf_session.check_platforms(["codex"], sess)[0] == "WF_IDENTITY_UNRESOLVED")
+rec("A7c 只读诊断不需要平台（由调用方判断命令类别）", "平台判定只返回身份结论",
+    wf_session.check_platforms(["codex"], sess)[0], True)
 
 # ---- 其他 agent 6：恢复分支按多路径解析授权 ----
 task_with_grants = {"commit_grants": [{"subject": "pkg/a.py, pkg/b.py", "choice": "commit"}]}

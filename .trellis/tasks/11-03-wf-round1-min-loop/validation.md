@@ -3914,3 +3914,45 @@ D1 从「未运行」变为「**已运行（身份轴）；绑定轴待下一次
 - 判定条件未变，58 项并行全绿（`exit 0`）；串行模式另跑一次确认。
 - 缓存只按**不可变提交对象**建键，进程结束即释放；不落盘、不跨进程。
 - 仍未做：`merge-base` 35 次与 `rev-list` 24 次（需要"HEAD 变化即失效"的机制，本轮不引入）。
+
+## 89. R93 实施与实跑（2026-11-05）：`--platform` 成为唯一身份入口
+
+人裁：不再有 `--host-id`；“支持的 agent 由 `--platform` 决定”；使用时无感，不交给人现场判断；装完可以再追加 agent。
+
+### 89.1 改动
+
+| 项 | 内容 |
+|---|---|
+| 删除 | `--host-id`、`--verify-capability`、`--capability-evidence`、`installation.session_profile`、`session.check_profile`、`SUPPORTED_TRANSPORTS`/`OBSERVATION_KINDS` |
+| 新增 | `session.check_platforms()`：只判 `identity.host_id ∈ installation.platforms`；`install.py` 与 `wf-dev-deploy.py` 的**追加平台**分支（同引用、只投放新平台技能副本、不动 `.wf` 资产） |
+| 记录 | `installation.json.platforms` 成为唯一身份事实；`roots` 记项目内相对路径 |
+| 契约 | 机制稿 §1.4 第 151/153/155 行与 §10.1 字段列表按批准重写（取消 session_profile 与能力证据，改为平台清单 + 失败即报） |
+
+### 89.2 用例（9/9，r90 套件）
+
+| 用例 | 结果 |
+|---|---|
+| 安装记录只有 platforms、无 session_profile | PASS |
+| 未安装宿主：写操作被拒 | PASS（`WF_IDENTITY_UNRESOLVED`） |
+| 未安装宿主：只读诊断放行 | PASS |
+| 平台在册即放行（无登记、无证据） | PASS |
+| A 建任务并持写权 | PASS |
+| B 在 A 持写权时拿不到对象 | PASS（`WF_WRITER_BUSY`） |
+| 释放后 B 可接续同一任务 | PASS |
+| A 用旧代次写被拒 | PASS（`WF_WRITER_BUSY`/`WF_GENERATION_STALE`） |
+| 追加平台只改 platforms（assets 数量不变） | PASS |
+
+### 89.3 覆盖保护的结论
+
+多 agent 场景下不互相覆盖，靠的是**与身份声明无关**的四道闸：写权互斥（`writer.holder`）、代次一致（`generation`）、绑定按 `session_key` 分文件、内容层锚点/审批摘要/外部变更门禁。删掉 `--host-id` 不损失任何一条。
+
+### 89.4 回归
+
+| 项 | 结果 |
+|---|---|
+| `run_all.sh` | **59 项，失败 0，`exit 0`** |
+| `unittest` | OK |
+| `build --verify` | 55 资产字节复现 |
+| `check-doc-refs` / `validate-wf-design` | 0 problem / 全绿 |
+
+期间为让隔离执行稳定，`r71_tests` 移入串行名单（并行下 `3e` 曾因写权跨用例残留报 `WF_WRITER_BUSY`）。

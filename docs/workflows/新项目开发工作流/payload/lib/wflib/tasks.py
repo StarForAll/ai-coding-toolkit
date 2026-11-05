@@ -982,9 +982,9 @@ def cmd_task_new(ctx, args):
         raise TaskError("WF_PATH_INVALID", {"reason": "task-new requires --template <tasks template dir>"})
     session = ctx.session()
     key = ctx.key()
-    code, profile_facts = session_mod.check_profile(ctx.profile(), session)
+    code, profile_facts = session_mod.check_platforms(ctx.platforms(), session)
     if code:
-        raise cli.CliError(code, profile_facts, next_="先完成身份能力核实")
+        raise cli.CliError(code, profile_facts, next_="install --platform <当前宿主> 后重试")
     with lock.acquire(ctx.root, holder_hint="task-new"):
         record = ctx.writer()
         # 中断恢复优先：writer 上的父动作未结案就按原意图续做，不看当前参数

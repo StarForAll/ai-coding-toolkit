@@ -154,9 +154,8 @@ class FakeCtx:
         return {"provider": "host", "identity": {"host_id": "dsh", "session_id": self._key},
                 "instance_id": "r32instance0000000000000000000000", "activation": None}
 
-    def profile(self):
-        return {"host_id": "dsh", "provider": "host", "transport": "request_json",
-                "capability": {"status": "verified", "verified_version": None, "evidence_refs": []}}
+    def platforms(self):
+        return ["dsh"]
 
     def inputs(self):
         return {}

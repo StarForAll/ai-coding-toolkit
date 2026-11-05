@@ -97,66 +97,26 @@ def new_instance_id() -> str:
     return uuid.uuid4().hex
 
 
-SUPPORTED_TRANSPORTS = ("request_json",)   # 机制稿 §1.4：transport 首版只取 request_json
-OBSERVATION_KINDS = ("compaction", "reentry", "new-session", "transport")
+def check_platforms(platforms, session: dict):
+    """运行期身份判定：只看**宿主是否在本项目已安装的平台里**。
 
-
-def check_profile(profile, session: dict):
-    """核 session_profile.capability（机制稿 §1.4 能力状态消费）。
-
-    返回 (code, facts)：code 为 None 表示通过。
+    机制稿 §1.4 修订后：能力由平台表静态声明，不再要求人现场提供证据，也不要求
+    "与安装时那一个宿主逐字相等"——项目不属于任何单个 agent。
+    真实异常（实例丢失、绑定不符、代次过期、检查锚点失效）由各自路径即时报错，fail-closed。
     """
-    if not isinstance(profile, dict) or not profile:
-        return "WF_IDENTITY_UNRESOLVED", {"reason": "session_profile missing", "host_id": None}
-    declared = profile.get("host_id")
-    provider = profile.get("provider")
-    transport = profile.get("transport")
-    capability = profile.get("capability") or {}
-    facts = {
-        "declared_host_id": declared,
-        "declared_provider": provider,
-        "declared_transport": transport,
-        "capability_status": capability.get("status"),
-    }
-    if session.get("provider") == "host" and declared and session["identity"].get("host_id") != declared:
-        facts["reason"] = "host_id does not match installed session_profile"
+    provider = session.get("provider")
+    host = (session.get("identity") or {}).get("host_id")
+    installed = [item for item in (platforms or []) if isinstance(item, str)]
+    facts = {"host_id": host, "provider": provider, "installed_platforms": installed}
+    if provider == "wf":
+        facts["reason"] = "wf 签发路径在第二轮交付；本轮只支持 host 身份"
         return "WF_IDENTITY_UNRESOLVED", facts
-    if provider and session.get("provider") != provider:
-        facts["reason"] = "provider does not match installed session_profile"
+    if not installed:
+        facts["reason"] = "installation declares no platforms"
+        facts["next"] = "install --platform <agent>"
         return "WF_IDENTITY_UNRESOLVED", facts
-    if capability.get("status") != "verified":
-        facts["reason"] = "capability not verified"
-        facts["unverified"] = ["same-session reentry/compaction", "new-session distinction", "structured request transport"]
-        return "WF_IDENTITY_UNRESOLVED", facts
-    # `status=verified` 是人的声明，但声明必须有结构：宿主映射、传递方式与观察依据缺一不可。
-    # 这不是要求脚本认证人的真实性（那是人判语义），而是核声明本身是否成立（机制稿 §1.4）。
-    missing = []
-    if not declared:
-        missing.append("host_id")
-    if not provider:
-        missing.append("provider")
-    if not transport:
-        missing.append("transport")
-    if transport and transport not in SUPPORTED_TRANSPORTS:
-        facts["reason"] = "transport is not a supported structured request channel"
-        facts["transport"] = transport
-        facts["supported"] = sorted(SUPPORTED_TRANSPORTS)
-        return "WF_IDENTITY_UNRESOLVED", facts
-    evidence = [item for item in capability.get("evidence_refs") or [] if isinstance(item, dict) and item]
-    if not evidence:
-        missing.append("capability.evidence_refs")
-    else:
-        # 每条须带可定位的观察引用（kind + ref），且 kind 属机制稿列举的观察类别；
-        # 安装器转写声明的 declared-verification 不算观察（否则等于自证）
-        observed = [item for item in evidence
-                    if item.get("kind") in OBSERVATION_KINDS and str(item.get("ref") or "").strip()]
-        if not observed:
-            facts["reason"] = "capability is declarative: no actual observation evidence"
-            facts["evidence_kinds"] = sorted({str(item.get("kind")) for item in evidence})
-            facts["accepted_kinds"] = list(OBSERVATION_KINDS)
-            return "WF_IDENTITY_UNRESOLVED", facts
-    if missing:
-        facts["reason"] = "capability verification is declarative but structurally incomplete"
-        facts["missing"] = missing
+    if host not in installed:
+        facts["reason"] = "host not installed for this project"
+        facts["next"] = f"install --platform {host}"
         return "WF_IDENTITY_UNRESOLVED", facts
     return None, facts

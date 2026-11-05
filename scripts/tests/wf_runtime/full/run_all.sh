@@ -5,7 +5,7 @@ set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 PY=/softwares/python/bin/python3
 FIX=${WF_FIX:-/tmp/wf-fixtures/rerun}
-SUITES="cp1_tests cp2_tests cp3_tests cp4_tests cp5_b345 r1r2_tests r7r15_tests r17r24_tests r25r30_tests r31r34_tests r35r37_tests r38r39_tests r40r42_tests r43r45_tests r46_tests r47r48_tests r49_tests r50_tests r51r52_tests r53_tests r54_tests r55_tests r56_tests r57_tests r58_tests r59_tests r60_tests r61_tests r62_tests r63_tests r64_tests r65_tests r66_tests r67_tests r68_tests r69_tests r70_tests r71_tests r74_tests r75_tests r76_tests r77_tests r79_tests r80_tests r81_tests r82_tests r83_tests r84_tests r85_tests r86_tests r87_tests r88_tests r89_tests"
+SUITES="cp1_tests cp2_tests cp3_tests cp4_tests cp5_b345 r1r2_tests r7r15_tests r17r24_tests r25r30_tests r31r34_tests r35r37_tests r38r39_tests r40r42_tests r43r45_tests r46_tests r47r48_tests r49_tests r50_tests r51r52_tests r53_tests r54_tests r55_tests r56_tests r57_tests r58_tests r59_tests r60_tests r61_tests r62_tests r63_tests r64_tests r65_tests r66_tests r67_tests r68_tests r69_tests r70_tests r71_tests r74_tests r75_tests r76_tests r77_tests r79_tests r80_tests r81_tests r82_tests r83_tests r84_tests r85_tests r86_tests r87_tests r88_tests r89_tests r90_tests"
 
 REPO_ROOT=$(cd "$HERE/../../../.." && pwd)
 RELEASE_REPO=${WF_RELEASE_REPO:-/tmp/wf-fixtures/release-repo}
@@ -16,7 +16,7 @@ REBUILD_RELEASE=${WF_REBUILD_RELEASE:-1}
 
 # 这些套件用"改成不可写目录"来模拟写入失败；在 user namespace 里我们是 root，chmod 不起作用，
 # 所以它们必须在宿主 /tmp 的串行阶段跑（改造方案：改用"父路径是普通文件"触发 ENOTDIR，见 validation §87）。
-PARALLEL_SERIAL="cp3_tests r1r2_tests r7r15_tests r67_tests r68_tests r69_tests r70_tests r89_tests"
+PARALLEL_SERIAL="cp3_tests r1r2_tests r7r15_tests r67_tests r68_tests r69_tests r70_tests r71_tests r89_tests r90_tests"
 
 prepare_release_repo() {
   # 依赖发行树的套件（f0 / d1 / r69 / r72）需要一份带 tag 的发行仓库。
@@ -91,7 +91,7 @@ run_suite() {
   fi
 }
 
-# 迭代期只跑相关套件：WF_SUITES="r88_tests r89_tests" bash run_all.sh
+# 迭代期只跑相关套件：WF_SUITES="r88_tests r89_tests r90_tests" bash run_all.sh
 SELECTED="${WF_SUITES:-}"
 if [ -n "$SELECTED" ]; then
   SUITES="$SELECTED"
@@ -150,8 +150,7 @@ run_f0() {
   rm -rf "$target"; mkdir -p "$target"
   if ! "$PY" "$RELEASE_REPO/install.py" --target "$target" --release-ref refs/tags/wf-v0.1.0 \
       --source "$RELEASE_REPO" --platform dsh \
-      --confirm --host-id dsh --verify-capability \
-      --capability-evidence "kind=reentry;ref=夹具内同会话重入观察;by=test fixture" >/dev/null 2>&1; then
+      --confirm      >/dev/null 2>&1; then
     printf '%-18s INSTALL-FAILED\n' f0; fail=$((fail+1)); return
   fi
   local out got

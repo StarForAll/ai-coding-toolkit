@@ -95,8 +95,9 @@ rec("R50-10b 符号引用不误判", "[]", wf_tasks.retrospective_evidence_probl
 # ---- R50-11：安装预览展示 session_profile ----
 install_src = open("/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/install.py",
                    encoding="utf-8").read()
-rec("R50-11 预览含会话身份", "含 session_profile 段", "会话身份（session_profile）" in install_src,
-    "会话身份（session_profile）" in install_src)
+rec("R50-11 预览含平台与技能目录", "含 平台： 与 技能目录（目标项目内）",
+    ("平台：" in install_src) and ("技能目录（目标项目内）" in install_src),
+    ("平台：" in install_src) and ("技能目录（目标项目内）" in install_src))
 
 # ---- P1-1：外部变更作为待核事实（不新增阻断判定，登记边界） ----
 check_src = open(wf_check.__file__, encoding="utf-8").read()

@@ -93,12 +93,14 @@ rec("D-14 引用检查带 unknown 分类", "含 unknown/status",
 # ---- D-15/D-16：预览与落盘证据同源 ----
 install_src = open("/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/install.py",
                    encoding="utf-8").read()
-rec("D-15 install 预览与落盘共用证据构造", "含 _profile_evidence",
-    "_profile_evidence" in install_src, "_profile_evidence" in install_src)
+rec("D-15 安装器预览与落盘共用平台解析", "含 resolve_skill_roots",
+    "resolve_skill_roots(args.target" in install_src,
+    "resolve_skill_roots(args.target" in install_src)
 dev_src = open("/home/xzc/projects/personal/ai-coding-toolkit/scripts/wf-dev-deploy.py",
                encoding="utf-8").read()
-rec("D-16 开发态预览含 session_profile", "含 session_profile",
-    "session_profile" in dev_src, "session_profile" in dev_src)
+rec("D-16 开发态预览含平台与技能目录", "含 平台：",
+    "平台：" in dev_src and "技能目录（目标项目内）" in dev_src,
+    "平台：" in dev_src and "技能目录（目标项目内）" in dev_src)
 
 # ---- D-17/D-18：字节复现按 sha256；版本单源 ----
 build_src = open("/home/xzc/projects/personal/ai-coding-toolkit/scripts/build-wf-release.py",

@@ -136,20 +136,18 @@ after = wf_assets.installed_asset_entries(asset_manifest, {"roots": [skills_a, s
 rec("A3b 第二个根改动反映到指纹", "指纹变化", before != json.dumps(after, sort_keys=True),
     before != json.dumps(after, sort_keys=True))
 
-# ---- 其他 agent 6：能力声明必须有结构 ----
-profile_bare = {"host_id": "dsh", "provider": "host", "transport": "request_json",
-                "capability": {"status": "verified"}}
-code, facts = wf_session.check_profile(profile_bare, {"provider": "host", "identity": {"host_id": "dsh"}})
-rec("A6 无证据的 verified 被拒", "WF_IDENTITY_UNRESOLVED",
-    f"{code}/{facts.get('missing')}", code == "WF_IDENTITY_UNRESOLVED")
-profile_full = dict(profile_bare)
-profile_full["capability"] = {"status": "verified", "verified_version": "v",
-                              "evidence_refs": [{"kind": "compaction", "ref": "x"}]}
-code2, _ = wf_session.check_profile(profile_full, {"provider": "host", "identity": {"host_id": "dsh"}})
-rec("A6b 结构齐全放行", "None", code2, code2 is None)
-profile_notransport = dict(profile_bare); profile_notransport.pop("transport")
-code3, _ = wf_session.check_profile(profile_notransport, {"provider": "host", "identity": {"host_id": "dsh"}})
-rec("A6c 缺 transport 被拒", "WF_IDENTITY_UNRESOLVED", code3, code3 == "WF_IDENTITY_UNRESOLVED")
+# ---- 其他 agent 6：身份判定只看"宿主是否在已安装平台里"（机制稿 §1.4 修订后） ----
+sess_dsh = {"provider": "host", "identity": {"host_id": "dsh"}}
+code, facts = wf_session.check_platforms(["codex"], sess_dsh)
+rec("A6 未安装的宿主被拒", "WF_IDENTITY_UNRESOLVED",
+    f"{code}/{facts.get('reason')}", code == "WF_IDENTITY_UNRESOLVED")
+code2, _ = wf_session.check_platforms(["codex", "dsh"], sess_dsh)
+rec("A6b 平台在册放行", "None", code2, code2 is None)
+code3, facts3 = wf_session.check_platforms([], sess_dsh)
+rec("A6c 没有任何平台被拒", "WF_IDENTITY_UNRESOLVED", code3, code3 == "WF_IDENTITY_UNRESOLVED")
+code4, _ = wf_session.check_platforms(["dsh"], {"provider": "wf", "identity": {"issued_id": "x"}})
+rec("A6d wf 签发路径本轮不带 host 身份", "WF_IDENTITY_UNRESOLVED", code4,
+    code4 == "WF_IDENTITY_UNRESOLVED")
 
 # ---- 其他 agent 5：项目键批准证据须对应已批准规划 ----
 draft = tempfile.mkdtemp()

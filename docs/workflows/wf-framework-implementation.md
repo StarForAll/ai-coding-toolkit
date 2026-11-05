@@ -405,20 +405,33 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 - **卸载入口的资产边界**（设计稿 §7.2、§7.3）：`uninstall.py` 先核 `installation.manifest_digest` 存在且等于清单实际摘要（缺失、空值、不符都阻断）；再对每个登记资产核「安全相对路径（拒绝对路径、`..`/`.`/空段、反斜杠、盘符）→ `realpath` 仍在项目根 / skill 根内 → 类别属白名单」。`release_only` 是发行侧资产、目标项目无落点，显式跳过；其余未知类别拒绝。任一条目不合规即汇总全部问题、**整批拒绝**——前置在任何读取与删除之前，令牌只授权预览范围、不能扩大资产边界。
 - **独立入口锁与运行时同契约**：`repair.py`/`uninstall.py` 只在 `O_CREAT|O_EXCL` 成功时写 `wf-lock-v1` 标记；已存在的锁文件标记为空或不认识一律拒绝，不认领「初始化未完成」的对象。
 
-### 2.3.10.1 平台表（技能发现层）
+### 2.3.10.1 平台表与身份判定
 
-安装器按平台确定技能副本落点，**一律在目标项目内**，不再接受任意投放根。平台能读共享层 `.agents/skills/` 就用它，否则用该平台自有目录。
+支持的 agent 由 `--platform` 声明，装完还可以再跑一次追加（同发行引用）。**平台清单就是本项目的身份事实**：不再有 `--host-id`、`--verify-capability`、`--capability-evidence`，安装记录里也不再有 `session_profile`。
 
-| 平台 | 自有目录 | 是否读共享层 | 依据 |
+| 平台 | 自有目录 | 是否读共享层 | 落地 |
 |---|---|---|---|
-| `dsh` | — | 是 → `.agents/skills/` | 本仓库 `.agents/skills/` 被运行时加载（实测） |
-| `codex` | `.codex/skills/` | 是 → `.agents/skills/` | 本仓库约定（Cursor 兼容层亦读 `.codex/skills/`） |
-| `cursor` | `.cursor/skills/` | 是 → `.agents/skills/` | Cursor 文档[技能目录表](https://cursor.com/docs/skills)：`.agents/skills/`、`.cursor/skills/` 均为项目级 |
-| `geminicli` | `.gemini/skills/` | 是 → `.agents/skills/` | Gemini CLI 文档[发现层级](https://geminicli.com/docs/cli/using-agent-skills)：`.gemini/skills/` 或 `.agents/skills/` 别名 |
-| `copilot` | `.github/skills/` | 是 → `.agents/skills/` | VS Code 文档[技能位置](https://learn.microsoft.com/en-us/visualstudio/ide/copilot-agent-skills)：`.github/skills/`、`.claude/skills/`、`.agents/skills/` |
-| `claudecode` | `.claude/skills/` | 否 → `.claude/skills/` | Claude Code 文档[skills](https://code.claude.com/docs/en/skills)：项目级 `.claude/skills/` |
+| `dsh` / `codex` | — | 是 | `.agents/skills/` |
+| `cursor` | `.cursor/skills` | 是 | `.agents/skills/` |
+| `geminicli` | `.gemini/skills` | 是 | `.agents/skills/` |
+| `copilot` | `.github/skills` | 是 | `.agents/skills/` |
+| `claudecode` | `.claude/skills` | 否 | `.claude/skills/` |
 
-别名为 `claude`→`claudecode`、`gemini`→`geminicli`、`ghcopilot`→`copilot`。未列入的平台不支持（入口直接拒绝并列支持项），**不按目录存在性猜测**——存在一个目录不等于该 agent 会读它。
+依据：[Cursor 技能目录](https://cursor.com/docs/skills)、[Gemini CLI 发现层级](https://geminicli.com/docs/cli/using-agent-skills)、[VS Code Copilot 技能位置](https://learn.microsoft.com/en-us/visualstudio/ide/copilot-agent-skills)、[Claude Code skills](https://code.claude.com/docs/en/skills)。
+
+**运行期判据**（`session.check_platforms`）：信封 `identity.host_id` 必须出现在 `installation.platforms` 里；未出现 → `WF_IDENTITY_UNRESOLVED`（`reason=host not installed for this project`，facts 带 `installed_platforms` 与 `next: install --platform <名字>`）。只读诊断（`status`/`inspect`/`gate`/`definition`）不受此限。
+
+**为什么把能力证据去掉**：机制稿 §1.4 的判据原文是"证据是否**适用**当前宿主"，而实现此前做成了"宿主是否**等于**安装时那一个"，等于把项目判给了单个 agent。修订后：能力是宿主属性、由平台表静态声明；真实异常（实例丢失、绑定不符、代次过期、检查锚点失效）由各自路径即时报错，属于 **fail-loud 而非事前让人举证**。
+
+**多 agent 的覆盖保护与身份无关**（全部建立在会话身份与代次之上）：
+
+| 机制 | 作用 |
+|---|---|
+| `.wf-lock` + 持有者存活探测 | 所有写入串行化 |
+| `writer.holder.id == session_key` 且 `scope=对象` | 别的会话进入即 `WF_WRITER_BUSY` |
+| `generation` 三处一致 + 请求携带 | 旧代次写入被 `WF_GENERATION_STALE` 拒绝（防丢更新） |
+| 绑定按 `session_key` 分文件、`bind` 要求写权空闲 | 同一时刻只有一个会话推进同一对象 |
+| 检查锚点 / 审批摘要 / 外部变更门禁 | 内容被别人改过就失效 |
 
 ### 2.3.11 已知边界与实现说明
 
@@ -755,7 +768,7 @@ G 编号沿用机制稿 §12.2（该表已给门禁与场景行的对应），�
 
 ### 7.3 实跑状态与仍未运行的项
 
-2026-11-03 首轮实现已实跑本文 §7.1 的五条最小验证顺序与三夹具；2026-11-04/05 又完成 44 轮评审与十二轮独立复审（R79–R92）的复核修订与回归；2026-11-05 按人裁把安装入口的 `--skill-root` 改为 `--platform`（技能装在目标项目内），并补跑 D1 的真实压缩观察（`validation.md` §21–§80），全量回归由 `run_all.sh` 一次跑完并按实际执行项计数：44 个套件脚本 + `r72`（卸载边界）+ `f0`（发行安装自举）+ 三个专项流程，当前 **55 项**；**默认每次都从源码重建发行仓库**（`WF_REBUILD_RELEASE=0` 可复用），失败即非零退出。实跑暴露的缺陷全部落在实现层并已修正，未回修机制稿。
+2026-11-03 首轮实现已实跑本文 §7.1 的五条最小验证顺序与三夹具；2026-11-04/05 又完成 44 轮评审与十二轮独立复审（R79–R92）的复核修订与回归；2026-11-05 按人裁把安装入口改为 `--platform` 单一入口（技能装在目标项目内），并取消 `--host-id`/能力证据：平台清单即身份事实，并补跑 D1 的真实压缩观察（`validation.md` §21–§80），全量回归由 `run_all.sh` 一次跑完并按实际执行项计数：44 个套件脚本 + `r72`（卸载边界）+ `f0`（发行安装自举）+ 三个专项流程，当前 **55 项**；**默认每次都从源码重建发行仓库**（`WF_REBUILD_RELEASE=0` 可复用），失败即非零退出。实跑暴露的缺陷全部落在实现层并已修正，未回修机制稿。
 
 仍未运行的项与原因分类：①**真实压缩事件的绑定轴**——2026-11-04 已观察到两次真实压缩且 `$DSH_SESSION_ID` 未变、绑定键可由标识确定性重算（`validation.md` §71）；但「压缩后绑定仍可读」的观察性证据需下一次压缩，判据与快照写在任务记录 `d1-compaction-checkpoint.md` §1；②单 reviewer「人数不合格」派生分支——已用 `pi`/`glm-5.3-flash` 复验关闭（`validation.md` §19）。原先未运行的「归档提交后被强杀的真实进程中断」「`dedupe_refs` 双扣」「spec 拆分」三项已在 2026-11-03 补跑并记录（`validation.md` §16）。
 

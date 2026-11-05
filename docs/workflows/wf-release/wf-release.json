@@ -31,7 +31,7 @@
       "target_relative": ".wf/bin/wf.py"
     },
     {
-      "digest": "sha256:52651a9e6a61e9e42b65440a44940bfe17145dd180ce2b011343b0d51f866618",
+      "digest": "sha256:c95bf59f0812d6364162c6c576103a67b6d6f5e18fd704f78103bfe1ece08172",
       "executable": true,
       "file_kind": "file",
       "kind": "installer",
@@ -81,7 +81,7 @@
       "target_relative": ".wf/lib/wflib/check.py"
     },
     {
-      "digest": "sha256:8bc57a08193ce438c310daa5d99903c7b659f281042eb622e930bce655f25146",
+      "digest": "sha256:34884bb521c8f7693d487297afb27671cca5ff110df0c623adf10f7e97eeaa00",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -221,7 +221,7 @@
       "target_relative": ".wf/lib/wflib/scope.py"
     },
     {
-      "digest": "sha256:b28a8431d758e826f2914d0f31ec72462337039cc15fa7b106d6cc12e174c7e6",
+      "digest": "sha256:d3d3a74d3ec70ce95c406a1bb8078bc85728a95809e01f891e31c1fd026eb1fd",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -241,7 +241,7 @@
       "target_relative": ".wf/lib/wflib/spec.py"
     },
     {
-      "digest": "sha256:aeae9c41b31de6f1d610d2c4581f0dcfeab256c69ae3dc455e61dc2a08bcbd26",
+      "digest": "sha256:d64ff94c8f45598d44afb41a4a72a61538eaeb04ec6e58b417eab8b2660a4546",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -611,7 +611,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:31522e42a85f30917506d11c9dba34dd797e532371778f69de1255c8b5b2081e",
+    "rules_digest": "sha256:f1ac78be0b89355fa65b183f46a1f374903dea32a047855b390f3aa2d4a01fb8",
     "systems": [
       "linux"
     ],

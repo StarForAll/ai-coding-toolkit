@@ -188,8 +188,7 @@ subprocess.run(["/softwares/python/bin/python3",
                 "--target", UN, "--release-ref", "refs/tags/wf-v0.1.0",
                 "--source", "/tmp/wf-fixtures/release-repo",
                 "--platform", "dsh",
-                "--confirm", "--host-id", "dsh", "--verify-capability",
-                "--capability-evidence", "kind=reentry;ref=夹具内同会话重入观察;by=test fixture"],
+                "--confirm", ],
                capture_output=True, text=True)
 
 

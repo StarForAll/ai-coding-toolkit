@@ -10,11 +10,7 @@ for name in d1host d1wf; do
 done
 rm -rf /tmp/wf-fixtures/skills-d1 /tmp/wf-fixtures/skills-d1w
 /softwares/python/bin/python3 "$ROOT/scripts/wf-dev-deploy.py" --target "$HOME/.cache/wf-fixtures/d1host" \
-  --platform dsh --confirm --host-id dsh --verify-capability \
-  --capability-evidence "kind=reentry;ref=夹具内同会话重入观察;by=test fixture" \
-  --verified-version "dsh-session-2026-11-04" \
-  --capability-evidence "kind=compaction;ref=2026-11-04 真实压缩后 \$DSH_SESSION_ID 仍为 session-826cbd83;by=human" >/dev/null
+  --platform dsh --confirm  --verified-version "dsh-session-2026-11-04" \
+  >/dev/null
 /softwares/python/bin/python3 "$ROOT/scripts/wf-dev-deploy.py" --target "$HOME/.cache/wf-fixtures/d1wf" \
-  --provider wf --platform dsh --confirm --host-id dsh --verify-capability \
-  --capability-evidence "kind=reentry;ref=夹具内同会话重入观察;by=test fixture" \
-  --verified-version "wf-issued-2026-11-04" >/dev/null
+  --provider wf --platform dsh --confirm  --verified-version "wf-issued-2026-11-04" >/dev/null
