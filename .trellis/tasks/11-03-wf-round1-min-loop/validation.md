@@ -3734,3 +3734,51 @@ D1 从「未运行」变为「**已运行（身份轴）；绑定轴待下一次
 ### 83.5 口径
 
 十二轮独立复审 + 其他 agent：**80 条已处置、9 条登记、0 条阻塞**。A1 修复可接受；未覆盖轴已如实列入实现稿状态行。
+
+## 84. R92 实施与实跑（2026-11-05）：`--skill-root` → `--platform`
+
+人裁：技能必须装在**目标项目内**；要区分 agent 发现层就按平台解析，不接受任意投放根。
+
+### 84.1 平台表（依据均为官方文档，见实现稿 §2.3.10.1）
+
+| 平台 | 自有目录 | 读共享层 | 落地 |
+|---|---|---|---|
+| `dsh` / `codex` / `cursor` / `geminicli` / `copilot` | 见文档表 | 是 | `.agents/skills/` |
+| `claudecode` | `.claude/skills/` | 否 | `.claude/skills/` |
+
+规则：能读共享层就用共享层，否则用自有目录；多平台取并集；未知名直接拒绝并列支持项，**不按目录存在性猜**。
+
+### 84.2 用例（9/9，r89 套件）
+
+| 用例 | 预期 | 实际 | 结果 |
+|---|---|---|---|
+| R92 dsh 装在项目内 .agents/skills | WF_OK | WF_OK | PASS |
+| R92b 记录里 roots 为相对路径、platforms 已写入 | ['.agents/skills'] / ['dsh'] | ['.agents/skills'] / ['dsh'] | PASS |
+| R92 claudecode 只落在 .claude/skills | 0/False | 0/False | PASS |
+| R92 多平台取并集 | True/True | True/True | PASS |
+| R92 未知平台被拒 | WF_PATH_INVALID/False | WF_PATH_INVALID/False | PASS |
+| R92 省略平台被拒 | WF_PATH_INVALID | WF_PATH_INVALID | PASS |
+| R92 --skill-root 已移除 | True | True | PASS |
+| R92 安装产物登记为项目内路径 | ['.agents/skills/wf-bootstrap/SKIL | ['.agents/skills/wf-bootstrap/SKIL | PASS |
+| R92b 技能副本不被算作任务交付物 | b=58 c=0 | b=58 c=0 | PASS |
+
+### 84.3 连带修正（都是这次改动暴露出来的）
+
+| # | 问题 | 事实 | 修正 |
+|---|---|---|---|
+| N-R108 | 技能副本进了项目后，Check 把它们当"未归属改动"挡住 | F0 的 Check 返回 `WF_WORKSPACE_UNRESOLVED`；fixture 里 5 个套件掉 PASS | `scope.installed_asset_paths()` 读 `installation.json` 的投放清单（含 `root_ref` 换算），把安装产物归入 b 桶（控制面），不按目录名猜 |
+| N-R109 | 维护组回执现在含 `.agents/skills/**`，夹具只提交 `.wf`+`.gitignore` | p5_v2v3 处置后仍 `WF_HISTORY_UNRESOLVED` | 夹具提交覆盖回执登记的全部路径（`.wf`、`.gitignore`、`.agents`） |
+| N-R110 | `installation.json.roots` 之前对项目内根记相对、对外部根记绝对 | 平台化后一律项目内 | 统一记相对路径，并新增 `platforms` 字段记录人声明的平台 |
+
+### 84.4 契约层影响
+
+设计稿 §1.2 原本要求"人声明 CLI 与其可读根，缺省候选 `.agents/skills/`"——`--platform` 正是这条的落地形态：人声明 CLI，根由平台表解析。机制稿 §10.1 提到的"项目外宿主 skill 根"因此**首轮不支持**（入口不再能表达），已在实现稿 §2.3.10.1 与 `pending-decisions.md` §4 登记为边界。
+
+### 84.5 回归
+
+| 项 | 结果 |
+|---|---|
+| `run_all.sh` | **58 项，失败 0，`exit 0`** |
+| `unittest` | OK |
+| `build --verify` / `--verify-token-parity` | 通过 / 通过 |
+| `check-doc-refs` | 0 problem |

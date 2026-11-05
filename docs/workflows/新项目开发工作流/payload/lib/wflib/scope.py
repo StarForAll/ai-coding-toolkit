@@ -279,13 +279,45 @@ def declaration_violations(actual_paths, touch_paths, root):
 # --------------------------------------------------------------------------
 
 
-def _is_control_record(path, task_id):
+def _is_control_record(path, task_id, installed=None):
+    """框架自身的控制面与**安装器投放的框架资产**不算任务交付物。
+
+    技能副本现在装在目标项目内（如 `.agents/skills/wf-start/SKILL.md`），它们是安装产物、
+    不是本任务改的业务文件；按 installation.json 登记的投放清单识别，不按目录名猜。
+    """
     if path.startswith(".wf/tasks/"):
         return f"/{task_id}-" in path
-    return path.startswith(
+    if path.startswith(
         (".wf/session-bindings/", ".wf/writer.json", ".wf/.runtime/", ".wf/workflow-runs/",
          ".wf/install/", ".wf/preparations/")
-    )
+    ):
+        return True
+    return path in (installed or ())
+
+
+def installed_asset_paths(root):
+    """安装记录里登记的投放路径（项目内相对路径）——框架资产，不是任务交付物。"""
+    from . import records as records_mod
+
+    installation = records_mod.load_json(os.path.join(str(root), ".wf/install/installation.json"), None)
+    if not isinstance(installation, dict):
+        return set()
+    found = set()
+    base_root = os.path.realpath(str(root))
+    for asset in installation.get("assets") or []:
+        target = (asset or {}).get("target")
+        if not isinstance(target, str) or not target:
+            continue
+        root_ref = (asset or {}).get("root_ref") or "project"
+        if root_ref == "project":
+            found.add(target.replace(os.sep, "/"))
+            continue
+        # 技能副本：root_ref 是投放根（可能在项目内），换算成项目内相对路径
+        absolute = os.path.join(str(root_ref), *target.split("/"))
+        relative = os.path.relpath(os.path.realpath(absolute), base_root).replace(os.sep, "/")
+        if not relative.startswith(".."):
+            found.add(relative)
+    return found
 
 
 def classify_candidates(root, task, receipts=None):
@@ -297,6 +329,7 @@ def classify_candidates(root, task, receipts=None):
     attributed = set(attributed_paths(root, task_id, task.get("baseline_head")))
     attributed |= set(attributed_by_decision(root, task))
     candidates = sorted(set(uncommitted) | attributed)
+    installed = installed_asset_paths(root)
     buckets = {"a": [], "b": [], "c": [], "d": [], "e": [], "f": []}
     receipt_paths = set()
     for receipt in receipts or []:
@@ -306,7 +339,7 @@ def classify_candidates(root, task, receipts=None):
         if path in receipt_paths:
             buckets["a"].append(path)
             continue
-        if _is_control_record(path, task_id):
+        if _is_control_record(path, task_id, installed):
             buckets["b"].append(path)
             continue
         owned = path in attributed or any(paths_mod.match_path(entry_pattern, path) for entry_pattern in touch_paths)

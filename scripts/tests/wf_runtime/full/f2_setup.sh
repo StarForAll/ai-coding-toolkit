@@ -14,7 +14,7 @@ git add -A && git commit -qm "legacy import"
 printf 'external note\n' > NOTES.md
 git add NOTES.md && git commit -qm "other process: add notes"
 cd /home/xzc/projects/personal/ai-coding-toolkit
-/softwares/python/bin/python3 scripts/wf-dev-deploy.py --target "$F" --skill-root "$F/.claude/skills" \
+/softwares/python/bin/python3 scripts/wf-dev-deploy.py --target "$F" --platform dsh \
   --confirm --host-id dsh --verify-capability \
   --capability-evidence "kind=reentry;ref=夹具内同会话重入观察;by=test fixture" >/tmp/deploy_f2.log 2>&1
 tail -2 /tmp/deploy_f2.log

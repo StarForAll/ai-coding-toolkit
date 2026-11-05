@@ -59,6 +59,32 @@ def trellis_clues(target):
     return clues
 
 
+PLATFORMS = {
+    "dsh": {"dir": ".agents/skills", "reads_shared": True},
+    "codex": {"dir": ".agents/skills", "reads_shared": True},
+    "cursor": {"dir": ".cursor/skills", "reads_shared": True},
+    "geminicli": {"dir": ".gemini/skills", "reads_shared": True},
+    "copilot": {"dir": ".github/skills", "reads_shared": True},
+    "claudecode": {"dir": ".claude/skills", "reads_shared": False},
+}
+PLATFORM_ALIASES = {"claude": "claudecode", "gemini": "geminicli", "ghcopilot": "copilot"}
+SHARED_SKILL_DIR = ".agents/skills"
+
+
+def resolve_skill_roots(target, platforms):
+    roots, unknown = [], []
+    for name in platforms:
+        key = PLATFORM_ALIASES.get(name, name)
+        entry = PLATFORMS.get(key)
+        if entry is None:
+            unknown.append(name)
+            continue
+        relative = SHARED_SKILL_DIR if entry["reads_shared"] else entry["dir"]
+        root = os.path.join(os.path.abspath(target), *relative.split("/"))
+        if root not in roots:
+            roots.append(root)
+    return roots, unknown
+
 def plan_deployment(target, skill_roots, manifest):
     writes = []
     for asset in manifest["assets"]:
@@ -209,7 +235,10 @@ def _has_observation(items):
 
 def deploy(args):
     target = os.path.abspath(args.target)
-    skill_roots = [os.path.abspath(item) for item in args.skill_root]
+    skill_roots, unknown_platforms = resolve_skill_roots(args.target, args.platform)
+    if unknown_platforms:
+        return fail("WF_PATH_INVALID",
+                    f"未知平台：{unknown_platforms}；支持 {sorted(PLATFORMS)}", args.json)
     dev_manifest = common.load_dev_manifest()
     manifest = common.build_manifest(DEV_VERSION, dev_manifest)
     writes = plan_deployment(target, skill_roots, manifest)
@@ -252,7 +281,8 @@ def deploy(args):
         lines.append("托管段（.gitignore）：")
         for line in managed_segment().splitlines():
             lines.append(f"  {line}")
-        lines.append(f"skill 根：{json.dumps([root_record(target, root) for root in skill_roots], ensure_ascii=False)}")
+        lines.append(f"平台：{json.dumps(sorted({PLATFORM_ALIASES.get(n, n) for n in args.platform}), ensure_ascii=False)}")
+        lines.append(f"技能目录（目标项目内）：{json.dumps([os.path.relpath(root, target) for root in skill_roots], ensure_ascii=False)}")
         if clues:
             lines.append("Trellis 线索（人确认后可继续安装，但本会话不得混跑两套流程）：")
             for clue in clues:
@@ -272,7 +302,8 @@ def deploy(args):
     if not os.path.isdir(target):
         return fail("WF_PATH_INVALID", f"目标目录不存在：{target}", args.json)
     if not skill_roots:
-        return fail("WF_PATH_INVALID", "至少需要一个 --skill-root（缺省候选 .agents/skills/ 只作提示）", args.json)
+        return fail("WF_PATH_INVALID",
+                    f"至少需要一个 --platform（技能装在目标项目内）；支持 {sorted(PLATFORMS)}", args.json)
     for root in skill_roots:
         os.makedirs(root, exist_ok=True)
 
@@ -434,7 +465,8 @@ def update_profile(target, existing, profile, args):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="wf 开发态部署（authoring 工具）")
     parser.add_argument("--target", required=True, help="目标项目绝对路径")
-    parser.add_argument("--skill-root", action="append", default=[], help="投放根绝对路径（可重复）")
+    parser.add_argument("--platform", action="append", default=[],
+                        help="目标项目实际使用的 agent（可重复）：dsh|codex|cursor|geminicli|copilot|claudecode")
     parser.add_argument("--confirm", action="store_true", help="确认预览后执行投放")
     parser.add_argument("--host-id", default=None, help="人确认的宿主标识（[a-z][a-z0-9-]{0,63}）")
     parser.add_argument("--verify-capability", action="store_true", help="人声明宿主身份能力已核实")

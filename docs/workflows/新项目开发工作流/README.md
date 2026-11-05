@@ -26,7 +26,7 @@
 - `scripts/build-wf-release.py --version 0.x.y`：校验源树完整性 → 生成发行根与清单 → 打印哈希清单。
   `--verify` 重建到临时目录并与现有发行树逐字节比较；`--verify-token-parity` 用固定 `--nonce`
   比对 `repair.py` / `uninstall.py` 两份自含实现的令牌四步输出。
-- `scripts/wf-dev-deploy.py --target <abs> --skill-root <abs> [--confirm]`：首轮开发态部署（预览 →
+- `scripts/wf-dev-deploy.py --target <abs> --platform <平台> [--confirm]`：首轮开发态部署（预览 →
   首装契约 → 投放 → 自检 → 释放为空闲）。`--host-id` / `--verify-capability` 是人确认宿主身份的
   承载；目标已安装时只允许更新 `installation.json` 的 `session_profile`，不覆盖资产与项目数据。
 - 两个工具：仅标准库、在作者机运行、**不进入发行清单**。发行根里的 `install.py` 才是安装入口，
@@ -53,7 +53,7 @@
 2. `python3 scripts/build-wf-release.py --version 0.x.y`，复核差异与哈希清单；
 3. 人按授权暂存精确路径并提交；
 4. 人创建 `refs/tags/wf-v0.x.y`；
-5. 安装：`python3 <发行根>/install.py --target <abs> --release-ref refs/tags/wf-v0.x.y --source <已检出发行目录> --skill-root <abs> [--confirm]`；
+5. 安装：`python3 <发行根>/install.py --target <abs> --release-ref refs/tags/wf-v0.x.y --source <已检出发行目录> --platform <平台> [--confirm]`；
 6. 升级：`python3 <目标>/.wf/bin/wf.py upgrade --apply --release-ref … --source …`（第三轮交付；
    当前返回 `WF_CAPABILITY_UNAVAILABLE`）。
 

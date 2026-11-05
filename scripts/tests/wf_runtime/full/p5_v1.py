@@ -24,7 +24,7 @@ rec("capability=unknown 时 enable", "needs_decision WF_IDENTITY_UNRESOLVED",
 
 proc = subprocess.run(["/softwares/python/bin/python3",
                        "/home/xzc/projects/personal/ai-coding-toolkit/scripts/wf-dev-deploy.py",
-                       "--target", F, "--skill-root", "/tmp/wf-fixtures/skills",
+                       "--target", F, "--platform", "dsh",
                        "--confirm", "--host-id", "dsh", "--verify-capability",
                        "--capability-evidence", "kind=reentry;ref=夹具内同会话重入观察;by=test fixture"],
                       capture_output=True, text=True)

@@ -104,7 +104,8 @@ rec("V3", "重叠任务开工", "blocked WF_WIP_UNRESOLVED",
 # ---------- V3(c)：人明确处置维护组 ----------
 writer = json.load(open(os.path.join(F, ".wf/writer.json")))
 operation = writer["maintenance_results"][0]["operation"]
-git("add", ".wf", ".gitignore")
+# 维护组现在也投放项目内技能副本（.agents/skills/**），提交要覆盖回执登记的全部路径
+git("add", ".wf", ".gitignore", ".agents")
 subprocess.run(["git", "commit", "-qm", "wf: maintenance install group"], cwd=F, capture_output=True)
 sha = git("rev-parse", "HEAD")
 decision = {"source": "human (terminal)", "at": "2026-11-03T04:20:00.000000Z",

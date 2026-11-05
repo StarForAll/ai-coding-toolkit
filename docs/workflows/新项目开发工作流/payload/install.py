@@ -364,12 +364,49 @@ def self_check(target, manifest, skill_roots):
 # --------------------------------------------------------------------------
 
 
+# 各 agent 的 skill 发现层（项目内相对目录）。依据（均取自各官方文档，见 §4.5）：
+#   .agents/skills   共享层：Cursor / Gemini CLI / GitHub Copilot / Codex / DSH 都会读
+#   .claude/skills   仅 Claude Code 读（Cursor 与 Copilot 为兼容另读它）
+#   .cursor/skills   Cursor 自有；.gemini/skills Gemini CLI 自有；.github/skills Copilot 自有
+# 规则：平台能读共享层就用共享层，否则用其自有目录；同一项目可给多个平台，取并集。
+PLATFORMS = {
+    "dsh": {"dir": ".agents/skills", "reads_shared": True},
+    "codex": {"dir": ".agents/skills", "reads_shared": True},
+    "cursor": {"dir": ".cursor/skills", "reads_shared": True},
+    "geminicli": {"dir": ".gemini/skills", "reads_shared": True},
+    "copilot": {"dir": ".github/skills", "reads_shared": True},
+    "claudecode": {"dir": ".claude/skills", "reads_shared": False},
+}
+PLATFORM_ALIASES = {"claude": "claudecode", "gemini": "geminicli", "ghcopilot": "copilot"}
+SHARED_SKILL_DIR = ".agents/skills"
+
+
+def resolve_skill_roots(target, platforms):
+    """把 --platform 解析成项目内技能目录（绝对路径，已去重）。
+
+    未知名不给猜测：直接拒绝并列出支持的平台。
+    """
+    roots, unknown = [], []
+    for name in platforms:
+        key = PLATFORM_ALIASES.get(name, name)
+        entry = PLATFORMS.get(key)
+        if entry is None:
+            unknown.append(name)
+            continue
+        relative = SHARED_SKILL_DIR if entry["reads_shared"] else entry["dir"]
+        root = os.path.join(os.path.abspath(target), *relative.split("/"))
+        if root not in roots:
+            roots.append(root)
+    return roots, unknown
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="wf 发行根安装入口")
     parser.add_argument("--target", required=True)
     parser.add_argument("--release-ref", required=True)
     parser.add_argument("--source", required=True)
-    parser.add_argument("--skill-root", action="append", default=[])
+    parser.add_argument("--platform", action="append", default=[],
+                        help="目标项目实际使用的 agent（可重复）：dsh|codex|cursor|geminicli|copilot|claudecode")
     parser.add_argument("--confirm", action="store_true")
     parser.add_argument("--host-id", default=None)
     parser.add_argument("--verify-capability", action="store_true")
@@ -405,7 +442,10 @@ def main(argv=None):
     if problems:
         return blocked("WF_RELEASE_CONFLICT", "发行资产校验失败", {"problems": problems[:20]}, args.json)
 
-    skill_roots = [os.path.abspath(item) for item in args.skill_root]
+    skill_roots, unknown_platforms = resolve_skill_roots(args.target, args.platform)
+    if unknown_platforms:
+        return blocked("WF_PATH_INVALID", "未知平台，无法确定其 skill 发现层",
+                       {"unknown": unknown_platforms, "supported": sorted(PLATFORMS)}, args.json)
     # 写入计划先整批核验：路径合法性、真实落点、类别白名单；任一越界即拒绝写入任何文件
     writes, plan_problems = plan_writes(args.target, skill_roots, manifest)
     if plan_problems:
@@ -438,7 +478,8 @@ def main(argv=None):
                      "（声明式：需人给出实际观察证据才转 verified）"),
                   f"  evidence_refs={json.dumps(preview_evidence, ensure_ascii=False)}",
                   "托管段（.gitignore）：", "  " + managed_segment(manifest).replace("\n", "\n  "),
-                  f"skill 根：{json.dumps(args.skill_root, ensure_ascii=False)}"]
+                  f"平台：{json.dumps(sorted({PLATFORM_ALIASES.get(name, name) for name in args.platform}), ensure_ascii=False)}",
+                  f"技能目录（目标项目内）：{json.dumps([os.path.relpath(root, args.target) for root in skill_roots], ensure_ascii=False)}"]
         if clues:
             lines.append("Trellis 线索（人确认后可继续，但本会话不得混跑两套流程）：")
             lines += [f"  - {clue['path']} ({clue['kind']})" for clue in clues]
@@ -452,7 +493,8 @@ def main(argv=None):
                                        "evidence_refs": preview_evidence}}, args.json)
 
     if not skill_roots:
-        return blocked("WF_PATH_INVALID", "至少需要一个 --skill-root", {}, args.json)
+        return blocked("WF_PATH_INVALID", "至少需要一个 --platform（技能装在目标项目内）",
+                       {"supported": sorted(PLATFORMS)}, args.json)
     if os.path.exists(os.path.join(args.target, ".wf/writer.json")):
         return blocked("WF_ASSET_DECISION",
                        "目标已有 wf 项目数据（writer.json 存在）：升级走 wf.py upgrade（第三轮），不按新装覆盖",
@@ -508,9 +550,8 @@ def main(argv=None):
             "source_commit": commit,
             "version": manifest.get("version"),
             "manifest_digest": manifest_digest,
-            "roots": [os.path.relpath(root, args.target).replace(os.sep, "/")
-                      if os.path.realpath(root).startswith(os.path.realpath(args.target) + os.sep)
-                      else root for root in skill_roots],
+            "platforms": sorted({PLATFORM_ALIASES.get(name, name) for name in args.platform}),
+            "roots": [os.path.relpath(root, args.target).replace(os.sep, "/") for root in skill_roots],
             "assets": [{"target": relative, "root_ref": "project" if base == args.target else base,
                         "digest": asset.get("digest"), "source_path": asset.get("source_path")}
                        for base, asset, relative in writes],

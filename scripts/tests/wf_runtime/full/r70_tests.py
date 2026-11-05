@@ -49,7 +49,7 @@ def make_project(name):
                     "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/install.py",
                     "--target", target, "--release-ref", "refs/tags/wf-v0.1.0",
                     "--source", "/tmp/wf-fixtures/release-repo",
-                    "--skill-root", os.path.join(target, "skills"),
+                    "--platform", "dsh",
                     "--confirm", "--host-id", "dsh", "--verify-capability",
                 "--capability-evidence", "kind=reentry;ref=夹具内同会话重入观察;by=test fixture"],
                    capture_output=True, text=True)
