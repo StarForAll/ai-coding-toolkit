@@ -9,8 +9,14 @@ SUITES="cp1_tests cp2_tests cp3_tests cp4_tests cp5_b345 r1r2_tests r7r15_tests 
 
 REPO_ROOT=$(cd "$HERE/../../../.." && pwd)
 RELEASE_REPO=${WF_RELEASE_REPO:-/tmp/wf-fixtures/release-repo}
+SHARED_RELEASE="$RELEASE_REPO"
+SOURCE_HOME="$HOME"
 
 REBUILD_RELEASE=${WF_REBUILD_RELEASE:-1}
+
+# 这些套件用"改成不可写目录"来模拟写入失败；在 user namespace 里我们是 root，chmod 不起作用，
+# 所以它们必须在宿主 /tmp 的串行阶段跑（改造方案：改用"父路径是普通文件"触发 ENOTDIR，见 validation §87）。
+PARALLEL_SERIAL="cp3_tests r1r2_tests r7r15_tests r67_tests r68_tests r69_tests r70_tests r89_tests"
 
 prepare_release_repo() {
   # 依赖发行树的套件（f0 / d1 / r69 / r72）需要一份带 tag 的发行仓库。
@@ -32,23 +38,47 @@ prepare_release_repo() {
 
 prepare_release_repo || echo "release repo unavailable: 依赖发行树的套件将失败"
 
+# ---- 并行执行（默认开启；WF_JOBS=1 退回串行） ----
+JOBS=${WF_JOBS:-4}
+RESULTS_DIR="${WF_RESULTS_DIR:-$HOME/.cache/wf-test-run/run-$$}"
+
+can_unshare() {
+  unshare -Urm bash -c 'mount -t tmpfs tmpfs /proc/self/fd >/dev/null 2>&1 || mount -t tmpfs tmpfs /tmp' >/dev/null 2>&1
+}
+
+run_suites_parallel() {
+  local list="$1"
+  mkdir -p "$RESULTS_DIR"
+  : > "$RESULTS_DIR/lines"
+  export FIX HERE PY SHARED_RELEASE="$RELEASE_REPO" RESULTS_DIR SOURCE_HOME="$HOME"
+  printf '%s\n' $list | xargs -P "$JOBS" -I{} unshare -Urm bash "$HERE/run_one.sh" {}
+  sort -t$'\t' -k1 "$RESULTS_DIR/lines" | awk -F'\t' '{printf "%-18s rc=%s %ss %s | %s\n", $1, $2, $3, $4, $5}'
+  local bad
+  bad=$(awk -F'\t' '$4!="ok"' "$RESULTS_DIR/lines" | wc -l)
+  ran=$((ran + $(printf '%s\n' $list | wc -w)))
+  fail=$((fail + bad))
+}
+
 fail=0
 ran=0
 
 run_suite() {
   local suite=$1
-  if ! bash "$HERE/wf_fixture.sh" "$FIX" >/dev/null 2>&1; then
+  mkdir -p "$RESULTS_DIR"
+  local log="$RESULTS_DIR/$suite.out"
+  if ! bash "$HERE/wf_fixture.sh" "$FIX" >"$log" 2>&1; then
     printf '%-18s FIXTURE-FAILED\n' "$suite"; fail=$((fail+1)); return
   fi
   if [ ! -f "$FIX/.wf/bin/wf.py" ]; then
     printf '%-18s FIXTURE-INCOMPLETE\n' "$suite"; fail=$((fail+1)); return
   fi
-  if ! WF_FIX="$FIX" "$PY" "$HERE/f1_init.py" >/dev/null 2>&1; then
+  if ! WF_FIX="$FIX" "$PY" "$HERE/f1_init.py" >>"$log" 2>&1; then
     printf '%-18s INIT-FAILED\n' "$suite"; fail=$((fail+1)); return
   fi
   local out rc line started elapsed
   started=$SECONDS
   out=$(WF_FIX="$FIX" "$PY" "$HERE/$suite.py" 2>&1); rc=$?
+  printf '%s\n' "$out" >> "$log"
   elapsed=$((SECONDS - started))
   line=$(printf '%s\n' "$out" | tail -1)
   printf '%-18s rc=%s %ss %s\n' "$suite" "$rc" "$elapsed" "$line"
@@ -69,15 +99,32 @@ if [ -n "$SELECTED" ]; then
 else
   SKIP_FLOWS=0
 fi
-for suite in $SUITES; do run_suite "$suite"; done
+PARALLEL_LIST=""
+SERIAL_LIST=""
+for suite in $SUITES; do
+  case " $PARALLEL_SERIAL " in
+    *" $suite "*) SERIAL_LIST="$SERIAL_LIST $suite" ;;
+    *) PARALLEL_LIST="$PARALLEL_LIST $suite" ;;
+  esac
+done
+
+if [ "$JOBS" -gt 1 ] && can_unshare; then
+  run_suites_parallel "$PARALLEL_LIST"
+  for suite in $SERIAL_LIST; do run_suite "$suite"; done
+else
+  [ "$JOBS" -gt 1 ] && echo "（unshare 不可用：退回串行）"
+  for suite in $SUITES; do run_suite "$suite"; done
+fi
 
 # 专项流程：同样要求退出码与 PASS 计数
 run_flow() {
   local name=$1 script=$2 expect=$3
-  if ! bash "$HERE/wf_fixture.sh" "$FIX" >/dev/null 2>&1; then
+  mkdir -p "$RESULTS_DIR"
+  local log="$RESULTS_DIR/$name.out"
+  if ! bash "$HERE/wf_fixture.sh" "$FIX" >"$log" 2>&1; then
     printf '%-18s FIXTURE-FAILED\n' "$name"; fail=$((fail+1)); return
   fi
-  if ! WF_FIX="$FIX" "$PY" "$HERE/f1_init.py" >/dev/null 2>&1; then
+  if ! WF_FIX="$FIX" "$PY" "$HERE/f1_init.py" >>"$log" 2>&1; then
     printf '%-18s INIT-FAILED\n' "$name"; fail=$((fail+1)); return
   fi
   local out rc got
@@ -116,6 +163,7 @@ run_f0() {
   if [ "$got" -ne 0 ] || [ "$passed" -ne 9 ]; then fail=$((fail+1)); fi
 }
 if [ "$SKIP_FLOWS" = "0" ]; then
+  # 流程只有 4 项（~10s），串行跑：它们都依赖共享 /tmp 里的发行仓库与 f0 目录
   run_f0
   run_flow p5_spec p5_spec 13
   run_flow p5_v2v3 p5_v2v3 12

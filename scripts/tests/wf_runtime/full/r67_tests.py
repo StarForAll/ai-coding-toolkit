@@ -211,10 +211,22 @@ shutil.rmtree(fake, ignore_errors=True)
 os.makedirs(fake)
 real = "/home/xzc/projects/personal/ai-coding-toolkit/scripts/tests/wf_runtime/full"
 shutil.copy(os.path.join(real, "run_all.sh"), fake)
+# run_all 的并行路径会调用 run_one.sh：假环境也要有可运行版本（否则并行段无结果行，失败无法传播）
+open(os.path.join(fake, "run_one.sh"), "w").write(
+    '#!/bin/bash\nset -uo pipefail\nsuite=$1\n'
+    'out="$RESULTS_DIR/$suite.out"\n'
+    '"$PY" "$HERE/$suite.py" >"$out" 2>&1\nrc=$?\n'
+    'bad=$(grep -c "\\[FAIL\\]" "$out" || true)\nline=$(tail -1 "$out")\n'
+    'status=ok\n'
+    'if [ "$rc" -ne 0 ] || [ "$bad" -ne 0 ] || printf "%s" "$line" | grep -qE "FAIL|(saved|total) 0"; then status=bad; fi\n'
+    'printf "%s\\t%s\\t%s\\t%s\\t%s\\n" "$suite" "$rc" "0" "$status" "$line" >> "$RESULTS_DIR/lines"\n')
 open(os.path.join(fake, "wf_fixture.sh"), "w").write(
     '#!/bin/bash\nset -e\nF=${1:-/tmp/fake}\nrm -rf "$F"; mkdir -p "$F/.wf/bin"\n'
     ': > "$F/.wf/bin/wf.py"\n')
 open(os.path.join(fake, "f1_init.py"), "w").write("print('ok')\n")
+open(os.path.join(fake, "wf_fixture.sh"), "w").write(
+    '#!/bin/bash\nset -e\nF=${1:-/tmp/fake}\nrm -rf "$F"; mkdir -p "$F/.wf/bin"\n'
+    ': > "$F/.wf/bin/wf.py"\n')
 open(os.path.join(fake, "cp1_tests.py"), "w").write("print('[FAIL] fake')\nprint('saved 0 cases; 0 passed')\nraise SystemExit(1)\n")
 # 依 run_all.sh 里的实际清单造同名假套件，避免清单变动后假环境缺文件
 import re as _re
@@ -236,7 +248,9 @@ open(os.path.join(fake_repo, "install.py"), "w").write("import sys; sys.exit(0)\
 for name, count in (("p5_spec", 13), ("p5_v2v3", 12), ("p5_v5", 12)):
     open(os.path.join(fake, f"{name}.py"), "w").write("print('PASS')\n" * count)
 proc = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_output=True, text=True,
-                      env={**os.environ, "WF_FIX": "/tmp/r67_fake_fix", "WF_RELEASE_REPO": "/tmp/r67_fake_release", "WF_REBUILD_RELEASE": "0"})
+                      env={**os.environ, "WF_FIX": "/tmp/r67_fake_fix", "WF_RELEASE_REPO": "/tmp/r67_fake_release",
+                           "WF_REBUILD_RELEASE": "0", "WF_JOBS": "2",
+                           "WF_RESULTS_DIR": "/tmp/r67_fake_results"})
 rec("4 有失败时脚本非零退出", "exit≠0 且汇总报失败", f"exit={proc.returncode}",
     proc.returncode != 0 and "失败 1 项" in proc.stdout)
 open(os.path.join(fake, "cp1_tests.py"), "w").write("print('saved 1 cases; 1 passed')\n")

@@ -86,3 +86,10 @@ WF_FIX=/tmp/wf-fixtures/f1 /softwares/python/bin/python3 r7r15_tests.py
 
 注意：这些脚本假定 `/tmp/wf-fixtures/` 下的夹具可重建；`r35_tests.py` 需要先用仓库外的发行树
 （`docs/workflows/wf-release/` 打 tag 后 `install.py`）准备 `/tmp/wf-fixtures/f5`。
+
+## 并行与子集
+
+- 默认 4 并发（`WF_JOBS`）：每个 worker 用 user namespace 私有 `/tmp`，只读挂共享发行仓库；`unshare` 不可用时自动退回串行。
+- 迭代期只跑相关套件：`WF_SUITES="r88_tests r89_tests" bash run_all.sh`（约 4.5s，跳过 f0/p5 流程）。
+- 8 个套件固定串行（权限失败注入、写全局配置、依赖宿主 `/tmp` 状态）：见 `run_all.sh` 的 `PARALLEL_SERIAL`。
+- 复用发行仓库：`WF_REBUILD_RELEASE=0`。

@@ -3833,3 +3833,48 @@ D1 从「未运行」变为「**已运行（身份轴）；绑定轴待下一次
 | `WF_REBUILD_RELEASE=0` 复用发行仓库 | 已有 | 省发行重建 |
 | 套件并行（每 worker 一个夹具目录） | 待办 | 预计全量 4min → ~1.5min（本机 4 核+） |
 | 合并 r68/r17r24 里的重复 git 提交与重复 CLI 调用 | 待办 | 可省 ~40s |
+
+## 87. 并行执行（2026-11-05）
+
+### 87.1 做法
+
+`run_all.sh` 默认 4 并发（`WF_JOBS`），每个 worker 用 **user namespace 私有 /tmp**（`unshare -Urm` + `mount -t tmpfs tmpfs /tmp`），
+再把共享发行仓库**只读 bind 挂**进 `/tmp/wf-fixtures/release-repo`。这样套件里写死的 `/tmp/...` 路径天然互不干扰，
+不需要改 67 个文件里的 431 处字面量。
+
+`unshare` 不可用时自动退回串行（有提示）。
+
+### 87.2 实测
+
+| 模式 | 用时 | 结果 |
+|---|---|---|
+| 串行（改前） | **4 分 10 秒** | 58 项全绿 |
+| 并行 `WF_JOBS=4` | **2 分 19 秒** | 58 项全绿（连续 3 次） |
+| 并行 `WF_JOBS=6` | 2 分 23 秒 | 58 项全绿（另一份串行尾段，提升不再明显） |
+| 子集 `WF_SUITES="r88_tests r89_tests"` | **4.5 秒** | 迭代期用这个 |
+
+### 87.3 必须在串行段跑的 8 个套件（已登记原因）
+
+| 套件 | 原因 |
+|---|---|
+| `cp3_tests` | 会写 `~/.wf/config.json`（故意写非法值再删），并行窗口内其他 worker 会读到它 → `WF_EXECUTOR_UNCONFIRMED` |
+| `r1r2_tests`、`r68_tests` | 用"把目录改成不可写"模拟写入失败；在 user namespace 里我们是 root，chmod 不生效 → 断言失效 |
+| `r69_tests`、`r70_tests`、`r89_tests`、`r67_tests`、`r7r15_tests` | 依赖宿主 `/tmp` 的跨套件状态或全局/系统级解释器记录 |
+
+**下一步（可选）**：把这几个的"权限失败注入"改成"父路径是普通文件 → ENOTDIR"（与 root 无关），即可并入并行池，
+预计全量再降到 ~60–70 秒。这是纯测试改造，判据不变。
+
+### 87.4 期间修的问题
+
+| # | 问题 | 修正 |
+|---|---|---|
+| N-R111 | `run_one.sh` 初版漏了 `unshare`，mount 报"必须以超级用户身份" | 由 `run_all.sh` 以 `unshare -Urm` 调用 |
+| N-R112 | 隔离后 6 个套件失败（root 使 chmod 失效、跨套件 `/tmp` 状态） | 独立出 `PARALLEL_SERIAL` 串行段 |
+| N-R113 | 曾试图用 per-worker `HOME` 隔离全局记录 → 全部 INIT-FAILED（`confirm-executor` 要求人在终端，不能脚本代填） | 回退；改由串行段处理 |
+| N-R114 | 批量把 `>/dev/null` 换成 `>>"$log"` 时误改 `run_flow`（`log` 未定义）→ 流程 INIT-FAILED | `run_flow` 自带 log |
+| N-R115 | `r67` 的假 `run_all.sh` 环境缺 `run_one.sh`，并行段无结果行 → 失败不传播 | 假环境补 `run_one.sh` 与 `wf_fixture.sh` |
+
+### 87.5 口径
+
+并行不改变判据：`run_one.sh` 与 `run_suite` 用同一套失败判定（rc、`[FAIL]` 计数、汇总行 0/FAIL）。
+串行模式仍可用 `WF_JOBS=1` 完整复现。
