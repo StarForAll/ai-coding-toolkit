@@ -20,6 +20,7 @@ window.__ModuleLoader__.load({
       zh: {
         badgeTitle: 'DeepSeek Key 余额',
         current: '当前',
+        poolNote: '池状态',
         total: '合计',
         noActive: '无可用 Key',
         loading: '读取中…',
@@ -55,6 +56,7 @@ window.__ModuleLoader__.load({
         addButton: '添加',
         adding: '添加中…',
         refresh: '刷新',
+        refreshed: '余额已刷新',
         refreshing: '刷新中…',
         empty: '还没有 Key。把官方 Key 粘贴到下面，一行一个。',
         noRoute: 'Host 半边未生效：路由不可用',
@@ -72,6 +74,7 @@ window.__ModuleLoader__.load({
       en: {
         badgeTitle: 'DeepSeek key balance',
         current: 'Current',
+        poolNote: 'Pool',
         total: 'Total',
         noActive: 'No usable key',
         loading: 'Loading…',
@@ -173,6 +176,8 @@ window.__ModuleLoader__.load({
       'box-shadow:0 10px 28px rgba(0,0,0,.24);font-size:12px;line-height:1.5;color:var(--dsw-alias-label-primary);',
       'text-align:center;pointer-events:none;animation:dskr-toast-in .14s ease-out}',
       '.dskr-toast[data-kind="error"]{color:var(--dsw-alias-state-error-primary);border-color:currentColor}',
+      '.dskr-toast ul{margin:6px 0 0;padding:0;list-style:none;font-size:11px;color:var(--dsw-alias-label-secondary);text-align:left}',
+      '.dskr-toast li{margin-top:2px;overflow-wrap:anywhere}',
       '@keyframes dskr-toast-in{from{opacity:0}to{opacity:1}}',
       '.dskr-page-info{font-size:11px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums}',
       '.dskr-field{margin-top:16px}',
@@ -399,7 +404,6 @@ window.__ModuleLoader__.load({
         const [open, setOpen] = React.useState(false)
         const [draft, setDraft] = React.useState('')
         const [busy, setBusy] = React.useState(null)
-        const [notice, setNotice] = React.useState(null)
         const [page, setPage] = React.useState(1)
         const [toast, setToast] = React.useState(null)
         const toastTimer = React.useRef(null)
@@ -453,12 +457,15 @@ window.__ModuleLoader__.load({
           clearTimeout(toastTimer.current)
         }, [])
 
-        /** 浮一条 2 秒后自动消失的提示。 */
+        /** 浮一条自动消失的提示：成功 2s，错误留久一点方便看清。 */
         const flash = (payload) => {
           clearTimeout(toastTimer.current)
           setToast(payload)
-          toastTimer.current = setTimeout(() => setToast(null), 2000)
+          toastTimer.current = setTimeout(() => setToast(null), payload.kind === 'error' ? 3000 : 2000)
         }
+
+        /** 把几行明细压成最多三行的附注。 */
+        const detailOf = (lines) => (lines.length === 0 ? undefined : lines.slice(0, 3))
 
         // 指针在组件外松开（窗口失焦、被别的层抢走）时也要清掉拖拽态。
         React.useEffect(() => {
@@ -600,13 +607,12 @@ window.__ModuleLoader__.load({
         const exportKeys = async (scope) => {
           if (busy !== null) return
           setBusy(`export:${scope}`)
-          setNotice(null)
           try {
             const result = await callHost('export', { scope })
             downloadText(result.filename, result.text)
-            setNotice({ kind: 'ok', exported: result.count, scope })
+            flash({ kind: 'ok', text: t.exported(result.count) })
           } catch (failure) {
-            setNotice({ kind: 'error', error: failure instanceof Error ? failure.message : String(failure) })
+            flash({ kind: 'error', text: failure instanceof Error ? failure.message : String(failure) })
           } finally {
             setBusy(null)
           }
@@ -615,7 +621,6 @@ window.__ModuleLoader__.load({
         const recheck = async () => {
           if (busy !== null) return
           setBusy('recheck')
-          setNotice(null)
           try {
             const result = await callHost('recheck')
             if (result?.state) store.set({ data: result.state, error: null, loading: false })
@@ -628,6 +633,7 @@ window.__ModuleLoader__.load({
                 t.recheckDone(restored, kept) +
                 (failed > 0 ? `，${failed} 把复查失败` : '') +
                 (result?.restored?.some((item) => item.clearedExpiry) ? `（${t.expiryCleared}）` : ''),
+              detail: detailOf((result?.failed ?? []).map((item) => `${item.masked} — ${item.reason}`)),
             })
           } catch (failure) {
             flash({ kind: 'error', text: failure instanceof Error ? failure.message : String(failure) })
@@ -641,14 +647,23 @@ window.__ModuleLoader__.load({
           const text = draft.trim()
           if (text.length === 0) return
           setBusy('add')
-          setNotice(null)
           try {
             const result = await callHost('add', { text })
             if (result?.state) store.set({ data: result.state, error: null, loading: false })
-            setNotice({ kind: 'ok', added: result?.added ?? [], rejected: result?.rejected ?? [] })
+            const added = result?.added ?? []
+            const rejected = result?.rejected ?? []
+            const hidden = added.filter((item) => item.hidden === true).length
+            flash({
+              kind: 'ok',
+              text:
+                t.addedCount(added.length) +
+                (rejected.length > 0 ? `，${t.rejectedCount(rejected.length)}` : '') +
+                (hidden > 0 ? `，${t.addedHidden(hidden)}` : ''),
+              detail: detailOf(rejected.map((item) => `${item.line} — ${item.reason}`)),
+            })
             setDraft('')
           } catch (failure) {
-            setNotice({ kind: 'error', error: failure instanceof Error ? failure.message : String(failure) })
+            flash({ kind: 'error', text: failure instanceof Error ? failure.message : String(failure) })
           } finally {
             setBusy(null)
           }
@@ -657,16 +672,24 @@ window.__ModuleLoader__.load({
         const refresh = async () => {
           if (busy !== null) return
           setBusy('refresh')
-          setNotice(null)
           try {
             const data2 = await callHost('refresh')
             if (data2) store.set({ data: data2, error: null, loading: false })
+            flash({ kind: 'plain', text: t.refreshed })
           } catch (failure) {
-            setNotice({ kind: 'error', error: failure instanceof Error ? failure.message : String(failure) })
+            flash({ kind: 'error', text: failure instanceof Error ? failure.message : String(failure) })
           } finally {
             setBusy(null)
           }
         }
+
+        const summary = (labelText, valueText) =>
+          h(
+            'div',
+            { className: 'dskr-summary-item' },
+            h('span', { className: 'dskr-summary-key' }, labelText),
+            h('span', { className: 'dskr-summary-value' }, valueText),
+          )
 
         const pageCount = Math.max(1, Math.ceil(keys.length / PAGE_SIZE))
         const currentPage = Math.min(Math.max(1, page), pageCount)
@@ -697,30 +720,6 @@ window.__ModuleLoader__.load({
             h('td', { className: 'dskr-num' }, money(view.balance)),
           )
         })
-
-        const summary = (labelText, valueText) =>
-          h(
-            'div',
-            { className: 'dskr-summary-item' },
-            h('span', { className: 'dskr-summary-key' }, labelText),
-            h('span', { className: 'dskr-summary-value' }, valueText),
-          )
-
-        const noticeText =
-          notice === null
-            ? null
-            : notice.kind === 'error'
-              ? notice.error
-              : typeof notice.exported === 'number'
-                ? t.exported(notice.exported)
-                : [t.addedCount(notice.added.length), notice.rejected.length > 0 ? t.rejectedCount(notice.rejected.length) : null]
-                    .filter((part) => part !== null)
-                    .join('，')
-
-        const hiddenAdded =
-          notice !== null && notice.kind === 'ok' && Array.isArray(notice.added)
-            ? notice.added.filter((item) => item.hidden === true).length
-            : 0
 
         const panel =
           open === false
@@ -769,8 +768,19 @@ window.__ModuleLoader__.load({
                   h(
                     'div',
                     { className: 'dskr-summary' },
-                    summary(t.current, active === null ? t.noActive : `${money(active.balance)} · ${active.masked}`),
+                    summary(t.current, active === null ? t.noActive : money(active.balance)),
                     summary(t.total, totalsText(data?.totals ?? [])),
+                    (data?.hiddenCount ?? 0) > 0 || (data?.unverified ?? 0) > 0
+                      ? summary(
+                          t.poolNote,
+                          [
+                            (data?.hiddenCount ?? 0) > 0 ? t.hiddenNote(data.hiddenCount) : null,
+                            (data?.unverified ?? 0) > 0 ? t.unverifiedNote(data.unverified) : null,
+                          ]
+                            .filter((part) => part !== null)
+                            .join(' · '),
+                        )
+                      : null,
                   ),
                   error !== null ? h('div', { className: 'dskr-notice', 'data-kind': 'error' }, error) : null,
                   rows.length > 0
@@ -862,12 +872,6 @@ window.__ModuleLoader__.load({
                       'div',
                       { className: 'dskr-actions', style: { marginTop: 0 } },
                       h('p', { className: 'dskr-hint', style: { margin: 0 } }, t.addHint),
-                      h('span', { className: 'dskr-spacer' }),
-                      h(
-                        'span',
-                        { className: 'dskr-foot' },
-                        typeof data?.hiddenCount === 'number' && data.hiddenCount > 0 ? t.hiddenNote(data.hiddenCount) : null,
-                      ),
                     ),
                     h('textarea', {
                       className: 'dskr-textarea',
@@ -890,37 +894,16 @@ window.__ModuleLoader__.load({
                         },
                         busy === 'add' ? t.adding : t.addButton,
                       ),
-                      h('span', { className: 'dskr-spacer' }),
-                      h(
-                        'span',
-                        { className: 'dskr-foot' },
-                        [
-                          typeof data?.hiddenCount === 'number' && data.hiddenCount > 0 ? t.hiddenNote(data.hiddenCount) : null,
-                          typeof data?.unverified === 'number' && data.unverified > 0 ? t.unverifiedNote(data.unverified) : null,
-                        ]
-                          .filter((part) => part !== null)
-                          .join(' · '),
-                      ),
                     ),
                   ),
-                  noticeText === null
+                  toast === null
                     ? null
                     : h(
                         'div',
-                        { className: 'dskr-notice', 'data-kind': notice.kind },
-                        noticeText,
-                        hiddenAdded > 0 ? h('div', null, t.addedHidden(hiddenAdded)) : null,
-                        notice.kind === 'ok' && Array.isArray(notice.rejected) && notice.rejected.length > 0
-                          ? h(
-                              'ul',
-                              null,
-                              notice.rejected.slice(0, 8).map((item, index) =>
-                                h('li', { key: `${index}-${item.reason}` }, `${item.line} — ${item.reason}`),
-                              ),
-                            )
-                          : null,
+                        { className: 'dskr-toast', 'data-kind': toast.kind, role: 'status' },
+                        toast.text,
+                        toast.detail === undefined ? null : h('ul', null, toast.detail.map((line, index) => h('li', { key: index }, line))),
                       ),
-                  toast === null ? null : h('div', { className: 'dskr-toast', 'data-kind': toast.kind, role: 'status' }, toast.text),
                 ),
               )
 
