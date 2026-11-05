@@ -3782,3 +3782,54 @@ D1 从「未运行」变为「**已运行（身份轴）；绑定轴待下一次
 | `unittest` | OK |
 | `build --verify` / `--verify-token-parity` | 通过 / 通过 |
 | `check-doc-refs` | 0 problem |
+
+## 85. D1 绑定轴：压缩后复核（2026-11-05，第三次真实压缩之后）
+
+### 85.1 观察
+
+| 项 | 值 |
+|---|---|
+| 压缩后 `$DSH_SESSION_ID` | `session-826cbd83-3b6e-4185-830e-2d87287e7c77`（与 §0 快照一致） |
+| 重算 `session_key()` | `7eeebb62…3d8ff7`，与磁盘绑定文件名一致 |
+| `status`（**不带** instance_id） | `WF_OK`；`facts.binding.object.id = 2026-1e1b84fdcff74a00bfc1b498b7215d78`、`facts.binding.instance_id = 48b3b8d9…521f7a`、`generation=3` |
+| `status`（带 instance_id） | 同上，结果一致 |
+| startup 自查 | `binding/record/graph/workspace` 四步均 `ok` |
+
+**判定：绑定轴成立**——压缩后标识未变，绑定键由标识确定性重算并命中同一对象，读写路径（startup 四项）无一项因压缩失败。
+
+### 85.2 口径（不夸大）
+
+- 成立的断言：**压缩不改变宿主身份标识，也不使绑定失效**。
+- 不成立的推论：不证明"模型记住了 instance_id"——本次 instance_id 是从会话侧车
+  （`~/.cache/wf-fixtures/d1host/.wf/session-bindings/*.json`）读的，不是从上下文回忆的；
+  也不证明进程重启/跨设备场景的稳定性（`$DSH_SESSION_ID` 在同一进程内本就稳定）。
+- 因此 `capability.status=verified` 的证据保持 `kind=compaction`，但不升级为"宿主身份稳定性已完全核实"。
+
+### 85.3 由此关闭的登记项
+
+`pending-decisions.md` 与实现稿状态行里的"未覆盖轴：D1 绑定轴"→ 本轮已覆盖，剩余未覆盖轴为：
+真实断电/并发竞争、`repair` 接管路径、dogfood 真实使用观察。
+
+## 86. 回归耗时剖析与迭代方式（2026-11-05）
+
+全量 `run_all.sh` 实测 **4 分 10 秒**（58 项）。逐项计时（`run_all.sh` 现在会打印每项耗时）：
+
+| 项 | 耗时 | 说明 |
+|---|---|---|
+| r68_tests | 42s | 83 次 CLI 调用（cProfile：38.8s 全在 `subprocess.run`） |
+| r17r24_tests | 39s | 同类 |
+| r7r15_tests | 21s | 同类 |
+| cp1_tests | 19s | 同类 |
+| 其余 49 项 | 87s | 平均 ~1.8s |
+
+单次 CLI 调用实测 60–70ms（裸解释器 9ms、导入 wflib 31ms、`status` 60ms），说明**耗时是"调用次数 × 每次进程启动 + 少量 git/子进程"**，不是框架算法慢。
+
+优化已做与可做：
+
+| 措施 | 状态 | 效果 |
+|---|---|---|
+| 逐项耗时打印 | 已加 | 慢项一眼可见 |
+| `WF_SUITES="r88_tests r89_tests"` 子集模式 | 已加 | 子集 4.5s，迭代期替代全量 |
+| `WF_REBUILD_RELEASE=0` 复用发行仓库 | 已有 | 省发行重建 |
+| 套件并行（每 worker 一个夹具目录） | 待办 | 预计全量 4min → ~1.5min（本机 4 核+） |
+| 合并 r68/r17r24 里的重复 git 提交与重复 CLI 调用 | 待办 | 可省 ~40s |

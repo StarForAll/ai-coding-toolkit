@@ -46,10 +46,12 @@ run_suite() {
   if ! WF_FIX="$FIX" "$PY" "$HERE/f1_init.py" >/dev/null 2>&1; then
     printf '%-18s INIT-FAILED\n' "$suite"; fail=$((fail+1)); return
   fi
-  local out rc line
+  local out rc line started elapsed
+  started=$SECONDS
   out=$(WF_FIX="$FIX" "$PY" "$HERE/$suite.py" 2>&1); rc=$?
+  elapsed=$((SECONDS - started))
   line=$(printf '%s\n' "$out" | tail -1)
-  printf '%-18s rc=%s %s\n' "$suite" "$rc" "$line"
+  printf '%-18s rc=%s %ss %s\n' "$suite" "$rc" "$elapsed" "$line"
   ran=$((ran+1))
   # 判定：退出码、汇总行里的失败数、输出中的 FAIL 都算失败
   local bad
@@ -59,6 +61,14 @@ run_suite() {
   fi
 }
 
+# 迭代期只跑相关套件：WF_SUITES="r88_tests r89_tests" bash run_all.sh
+SELECTED="${WF_SUITES:-}"
+if [ -n "$SELECTED" ]; then
+  SUITES="$SELECTED"
+  SKIP_FLOWS=1
+else
+  SKIP_FLOWS=0
+fi
 for suite in $SUITES; do run_suite "$suite"; done
 
 # 专项流程：同样要求退出码与 PASS 计数
@@ -105,11 +115,14 @@ run_f0() {
   ran=$((ran+1))
   if [ "$got" -ne 0 ] || [ "$passed" -ne 9 ]; then fail=$((fail+1)); fi
 }
-run_f0
-
-run_flow p5_spec p5_spec 13
-run_flow p5_v2v3 p5_v2v3 12
-run_flow p5_v5 p5_v5 12
+if [ "$SKIP_FLOWS" = "0" ]; then
+  run_f0
+  run_flow p5_spec p5_spec 13
+  run_flow p5_v2v3 p5_v2v3 12
+  run_flow p5_v5 p5_v5 12
+else
+  echo "（WF_SUITES 子集模式：跳过 f0 与 p5 流程）"
+fi
 
 echo "---- 运行 $ran 项，失败 $fail 项 ----"
 [ "$fail" -eq 0 ] || exit 1
