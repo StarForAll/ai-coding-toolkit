@@ -30,6 +30,11 @@ window.__ModuleLoader__.load({
         colKey: 'Key',
         colExpiry: '到期',
         colBalance: '余额',
+        colActions: '操作',
+        delBtn: '删除',
+        deleting: '删除中…',
+        removed: (masked, wasActive) => `已删除 ${masked}` + (wasActive ? '（原来是当前 Key）' : ''),
+        removeEmpty: '池里已没有可用 Key，请补充',
         statusActive: '使用中',
         statusReady: '可用',
         statusEmpty: '额度已用完',
@@ -84,6 +89,11 @@ window.__ModuleLoader__.load({
         colKey: 'Key',
         colExpiry: 'Expires',
         colBalance: 'Balance',
+        colActions: '',
+        delBtn: 'Delete',
+        deleting: 'Deleting…',
+        removed: (masked, wasActive) => `deleted ${masked}` + (wasActive ? ' (was the active key)' : ''),
+        removeEmpty: 'The pool has no usable key left; add one',
         statusActive: 'In use',
         statusReady: 'Ready',
         statusEmpty: 'Exhausted',
@@ -179,6 +189,9 @@ window.__ModuleLoader__.load({
       '.dskr-toast ul{margin:6px 0 0;padding:0;list-style:none;font-size:11px;color:var(--dsw-alias-label-secondary);text-align:left}',
       '.dskr-toast li{margin-top:2px;overflow-wrap:anywhere}',
       '@keyframes dskr-toast-in{from{opacity:0}to{opacity:1}}',
+      '.dskr-btn.dskr-del{padding:1px 2px;font-size:12px;line-height:1.4;border-color:transparent;background:transparent;color:var(--dsw-alias-label-secondary)}',
+      '.dskr-btn.dskr-del:hover{border-color:transparent;background:transparent;color:var(--dsw-alias-state-error-primary);text-decoration:underline}',
+      '.dskr-btn.dskr-del:disabled{opacity:.5}',
       '.dskr-page-info{font-size:11px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums}',
       '.dskr-field{margin-top:16px}',
       '.dskr-field-label{font-size:12px;font-weight:600;margin-bottom:6px}',
@@ -618,6 +631,27 @@ window.__ModuleLoader__.load({
           }
         }
 
+        const removeOne = async (view) => {
+          if (busy !== null) return
+          setBusy(`del:${view.id}`)
+          try {
+            const result = await callHost('remove', { id: view.id })
+            if (result?.state) store.set({ data: result.state, error: null, loading: false })
+            flash({
+              kind: result?.remaining === 0 ? 'plain' : 'ok',
+              text:
+                result?.removed === null
+                  ? t.removeEmpty
+                  : t.removed(result.removed.masked, result.wasActive === true) +
+                    (result.remaining === 0 ? `；${t.removeEmpty}` : ''),
+            })
+          } catch (failure) {
+            flash({ kind: 'error', text: failure instanceof Error ? failure.message : String(failure) })
+          } finally {
+            setBusy(null)
+          }
+        }
+
         const recheck = async () => {
           if (busy !== null) return
           setBusy('recheck')
@@ -718,6 +752,21 @@ window.__ModuleLoader__.load({
             ),
             h('td', null, view.expiry ?? t.neverExpire),
             h('td', { className: 'dskr-num' }, money(view.balance)),
+            h(
+              'td',
+              { style: { textAlign: 'right' } },
+              h(
+                'button',
+                {
+                  className: 'dskr-btn dskr-del',
+                  type: 'button',
+                  title: t.delBtn,
+                  disabled: busy !== null,
+                  onClick: () => removeOne(view),
+                },
+                busy === `del:${view.id}` ? t.deleting : t.delBtn,
+              ),
+            ),
           )
         })
 
@@ -797,6 +846,7 @@ window.__ModuleLoader__.load({
                             h('th', null, t.colKey),
                             h('th', null, t.colExpiry),
                             h('th', { style: { textAlign: 'right' } }, t.colBalance),
+                            h('th', { style: { textAlign: 'right' } }, t.colActions),
                           ),
                         ),
                         h('tbody', null, rows),

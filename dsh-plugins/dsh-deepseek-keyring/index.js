@@ -773,6 +773,39 @@ class DeepSeekKeyring {
     return { restored, kept, failed, rotated, state: await this.snapshot() }
   }
 
+  // ---- 删除条目 -------------------------------------------------------------
+
+  /**
+   * 真正删掉一条：从池里移除、回收它的凭证引用，并在删的是当前 Key 时立刻换下一把。
+   *
+   * 与「隐藏」不同，删除不可撤回；删掉当前 Key 后若池里已没有可用条目，
+   * `DEEPSEEK_API_KEY` 保持着被删那把的值（请求还能继续），只是不再受轮换管辖。
+   * @param {string} id - 条目 id。
+   * @returns 被删条目的概况、是否它当时在用、以及最新快照。
+   */
+  async removeEntry(id) {
+    const index = this.store.entries.findIndex((entry) => entry.id === id)
+    if (index < 0) return { removed: null, state: await this.snapshot() }
+    const [entry] = this.store.entries.splice(index, 1)
+    const key = await this.keyOf(entry).catch(() => undefined)
+    try {
+      await this.ctx.credentials.unset?.(entry.ref)
+    } catch {
+      /* 凭证服务不支持回收时留着不起眼的残留引用，不影响删除本身 */
+    }
+    const wasActive = this.store.activeId === entry.id
+    if (wasActive) this.store.activeId = null
+    const rotated = wasActive ? await this.reconcile() : false
+    await this.persist()
+    return {
+      removed: { id: entry.id, masked: maskKey(key) },
+      wasActive,
+      rotated,
+      remaining: this.store.entries.length,
+      state: await this.snapshot(),
+    }
+  }
+
   // ---- 快照 -----------------------------------------------------------------
 
   async viewOf(entry, activeId) {
@@ -878,6 +911,11 @@ class DeepSeekKeyring {
             return { ...result, state: await this.snapshot() }
           }) },
         )
+        return
+      }
+      if (op === 'remove') {
+        const id = typeof body?.id === 'string' ? body.id : ''
+        sendJson(res, 200, { ok: true, data: await this.enqueue(() => this.removeEntry(id)) })
         return
       }
       if (op === 'recheck') {

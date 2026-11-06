@@ -53,6 +53,9 @@ const credentials = {
   async set(ref, value) {
     refs.set(ref, value)
   },
+  async unset(ref) {
+    refs.delete(ref)
+  },
 }
 
 // ---- 假 ctx -----------------------------------------------------------------
@@ -388,6 +391,37 @@ check('恢复时清掉了已过的到期日', rechecked.restored.find((item) => 
 check('恢复后出现在可见列表', rechecked.state.keys.some((view) => view.id === 'r1'), rechecked.state.keys.map((view) => view.id))
 check('余额为 0 的隐藏 Key 保持隐藏', !rechecked.state.keys.some((view) => view.id === 'g2'), rechecked.state.keys.map((view) => view.id))
 check('没有额度的记入 kept', rechecked.kept.some((item) => item.id === 'g2'), rechecked.kept)
+// ---- 12. 删除条目：真删、回收凭证、删当前 Key 会自动换下一把 --------------
+const before12 = (await rpc('state')).data
+const victim = before12.keys.find((view) => view.status !== 'active')
+const activeBefore = before12.activeId
+const removedRaw = await rpc('remove', { id: victim.id })
+if (!removedRaw.data) console.log('  remove 响应：', JSON.stringify(removedRaw), 'victim=', victim?.id)
+const removed = removedRaw.data
+check('条目被删掉', removed.removed?.id === victim.id, removed.removed)
+check('凭证引用被回收', refs.get(`DEEPSEEK_KEYRING_${victim.id.toUpperCase()}`) === undefined, victim.id)
+check('删的不是当前 Key 时当前不变', removed.state.activeId === activeBefore, removed.state.activeId)
+
+const activeNow = (await rpc('state')).data.activeId
+const activeKeyVal = activeRef()
+const dropped = (await rpc('remove', { id: activeNow })).data
+check('可以删掉当前 Key', dropped.removed?.id === activeNow, dropped.removed)
+check('标记出删的是当前 Key', dropped.wasActive === true, dropped.wasActive)
+check('删掉当前 Key 后立刻换下一把', dropped.state.activeId !== null && dropped.state.activeId !== activeNow, dropped.state.activeId)
+check('生效凭证随之改写', activeRef() !== activeKeyVal, activeRef() === activeKeyVal ? 'unchanged' : 'ok')
+
+// 清空整池后不再有可用 Key
+let guard = 0
+while (((await rpc('state')).data.keys.length > 0) && guard < 40) {
+  const left = (await rpc('state')).data.keys[0]
+  await rpc('remove', { id: left.id })
+  guard += 1
+}
+const emptied = (await rpc('state')).data
+check('池清空后 active 为空', emptied.activeId === null && emptied.keys.length === 0, emptied.activeId)
+const extra = (await rpc('remove', { id: 'no-such-id' })).data
+check('删不存在的 id 不报错', extra.removed === null, extra.removed)
+
 await new Promise((resolve) => rpcServer.close(resolve))
 await new Promise((resolve) => balanceServer.close(resolve))
 
