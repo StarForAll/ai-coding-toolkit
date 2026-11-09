@@ -115,5 +115,19 @@ Check 才能拿结论。
 1. 决定文件的形状不对（应写成 `{"choice":"plan","plan":{"complexity":"complex"}}` 之类），批准侧宽松、归档侧严格；
 2. `task-approve` 收下了 complexity 却没落进 `decision.plan`，属**记录漏写**（若是这种，就是缺陷）。
 
-**这是下一轮的第一件事**：用一条最小夹具分别试两种决定形状，看 `decision.plan.complexity` 是否落盘。
-在它定位前，"归档成功路径"与"归档后工作树干净"这条 P4 判据仍未兑现。
+**定位结果（不需要夹具，读码即可定性）：是决定形状问题，不是记录漏写。**
+
+- `tasks.py:1625`：`plan_decision = approval.get("plan")` —— 分级只从**批准决定里的 `plan` 对象**读；
+- `tasks.py:1643`：`confirmed_source = "decision" if "complexity" in plan_decision else "inputs"`；
+- `gates.py:880`：complex 且 `confirmed_source != "decision"` → 阻断。
+
+我写的是独立条目 `{"choice":"complexity","value":"complex"}`，既不在 `plan` 里，也不在 `APPROVE_CHOICES`
+里，于是**被静默忽略**；批准时 `complexity` 回执来自"提案值"而非人工确认，归档才炸。
+
+正确形状：`{"choice":"approve", "plan": {"complexity": "complex"}, ...}`。
+
+**顺带修掉的缺陷**：未知 `choice` 原本被静默丢弃（同一类"不许静默通过"）。现在 `task-approve` 遇到
+未知 choice 直接 `WF_SEMANTIC_DECISION`，并在 hint 里写明分级该写在哪。回归断言 2 条。
+
+仍未兑现："归档成功路径 / 归档后工作树干净"——需要按正确形状重新批准一次（下一轮第一步），
+本条不是代码缺陷。

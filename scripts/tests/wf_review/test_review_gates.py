@@ -124,3 +124,18 @@ class CurationDigestTest(unittest.TestCase):
 
     def test_empty_before_is_not_changed(self):
         self.assertFalse(review.curation_changed(None, "sha256:rule", "sha256:f"))
+
+
+class UnknownDecisionChoiceTest(unittest.TestCase):
+    """决定文件里的未知 choice 必须报错，不能静默丢弃（演练实测：complexity 被无声吞掉）。"""
+
+    def test_approve_rejects_unknown_choice(self):
+        source = (REPO / "docs/workflows/wf/payload/lib/wflib/tasks.py").read_text(encoding="utf-8")
+        self.assertIn("unknown decision choice in approval file", source)
+        self.assertIn("plan:{complexity:...}", source)
+
+    def test_complexity_must_live_inside_the_approval_plan(self):
+        """`confirmed_source` 只在 `approval["plan"]` 里带 complexity 时才记 decision。"""
+        source = (REPO / "docs/workflows/wf/payload/lib/wflib/tasks.py").read_text(encoding="utf-8")
+        self.assertIn('plan_decision = approval.get("plan")', source)
+        self.assertIn('confirmed_source = "decision" if "complexity" in plan_decision else "inputs"', source)
