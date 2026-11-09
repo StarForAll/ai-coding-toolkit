@@ -139,3 +139,48 @@ class UnknownDecisionChoiceTest(unittest.TestCase):
         source = (REPO / "docs/workflows/wf/payload/lib/wflib/tasks.py").read_text(encoding="utf-8")
         self.assertIn('plan_decision = approval.get("plan")', source)
         self.assertIn('confirmed_source = "decision" if "complexity" in plan_decision else "inputs"', source)
+
+
+class AssertionRefFormsTest(unittest.TestCase):
+    """`d:`（drift）位置在 drift_diffs 里出现即合法；不属于集合才拒（v42 §6 逐条补）。"""
+
+    def test_ref_in_index_passes(self):
+        index = {"a1": {"kind": "acceptance"}, "v1#1": {"kind": "verification"}}
+        self.assertIsNone(review.assertion_ref_problem("a1", index, {}))
+        self.assertIsNone(review.assertion_ref_problem("v1#1", index, {}))
+
+    def test_unknown_ref_is_rejected(self):
+        problem = review.assertion_ref_problem("nope", {"a1": {}}, {})
+        self.assertIsNotNone(problem)
+        self.assertIn("不属于当前批准集合", problem["reason"])
+
+    def test_changed_rule_is_rejected_unless_broken_reference(self):
+        index = {"spec:x": {"kind": "rule"}}
+        changed = {"spec:x": {"curation_digest": "sha256:old"}}
+        self.assertIsNotNone(review.assertion_ref_problem("spec:x", index, changed))
+        self.assertIsNone(review.assertion_ref_problem("spec:x", index, changed,
+                                                      fix_kind="broken-reference"))
+
+    def test_fragment_ref_is_judged_by_base(self):
+        index = {"a1": {"kind": "acceptance"}}
+        self.assertIsNone(review.assertion_ref_problem("a1#second-clause", index, {}))
+
+
+class BrokenReferenceNeedsHumanTest(unittest.TestCase):
+    """`broken-reference` 豁免的每条 finding 都要有人复核（声明 + 人复核）。"""
+
+    def test_lifted_without_disposition_is_reported(self):
+        problems = review.broken_reference_problems(
+            [{"finding": "f1", "assertion_ref": "spec:x", "rule": "spec:x"}], [])
+        self.assertTrue(problems)
+        self.assertIn("f1", str(problems))
+
+    def test_disposition_must_be_human(self):
+        lifted = [{"finding": "f1", "assertion_ref": "spec:x", "rule": "spec:x"}]
+        problems = review.broken_reference_problems(
+            lifted, [{"finding_id": "f1", "recheck_by": "codex"}])
+        self.assertTrue(any("human" in str(p) for p in problems))
+        ok = review.broken_reference_problems(
+            lifted, [{"finding_id": "f1", "recheck_by": "human:xzc"}])
+        self.assertEqual(ok, [])
+

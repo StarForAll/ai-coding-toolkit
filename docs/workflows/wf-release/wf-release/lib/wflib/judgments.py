@@ -138,6 +138,11 @@ def validate(entry, facts):
         problems.append({"reason": "escalated 必须写清你判断不了的那个问题"})
     if entry.get("by") is not None and entry.get("by") not in BY:
         problems.append({"reason": "by 取 ai|human", "by": entry.get("by")})
+    # 豁免只能由人给出（v42 §6）：`waived_by` 必须带 human 前缀，AI 不得自行免检
+    waived_by = str(entry.get("waived_by") or "")
+    if waived_by and not waived_by.startswith("human:"):
+        problems.append({"reason": "豁免只能由人给出（waived_by 须为 human:<来源>）",
+                         "waived_by": waived_by})
     known = ref_ids(facts)
     for ref in entry.get("evidence_refs") or []:
         if str(ref) not in known and str(ref).split("@", 1)[0] not in known:

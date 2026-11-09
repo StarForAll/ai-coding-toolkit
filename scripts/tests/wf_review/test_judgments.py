@@ -91,3 +91,35 @@ class PreviewTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class JudgmentEvidenceRefTest(unittest.TestCase):
+    """判断里的 `evidence_refs` 只能引用骨架 id（v42 §6 逐条补：不属骨架 id 即拒）。"""
+
+    def test_unknown_ref_is_rejected(self):
+        facts = judgments.skeleton_ids(task())
+        problems = judgments.validate(base(evidence_refs=["v:not-in-skeleton"]), facts)
+        self.assertTrue(problems)
+        self.assertIn("骨架派生集合", str(problems))
+
+    def test_known_refs_pass(self):
+        facts = judgments.skeleton_ids(task())
+        self.assertEqual(judgments.validate(base(), facts), [])
+
+
+class JudgmentWaiverTest(unittest.TestCase):
+    """豁免只能由人给出：`waived` 条目必须带 human 前缀的 waived_by。"""
+
+    def test_waiver_needs_human(self):
+        facts = judgments.skeleton_ids(task())
+        problems = judgments.validate(
+            base(waived_by="codex", decision="不修", evidence_refs=["v:v1"]), facts)
+        self.assertTrue(problems, "非人豁免应被拒")
+        self.assertIn("human", str(problems))
+
+    def test_human_waiver_passes(self):
+        facts = judgments.skeleton_ids(task())
+        self.assertEqual(judgments.validate(
+            base(waived_by="human:xzc", decision="不修", evidence_refs=["v:v1"]), facts), [])
+
+
