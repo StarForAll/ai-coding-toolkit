@@ -1053,6 +1053,12 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
                         "report_path": os.path.relpath(target, str(ctx.root)).replace(os.sep, "/"),
                         "report_digest": digest, "anchor": {"check_id": (task.get("check") or {}).get("id"),
                                                             "check_anchor": anchor}}
+        # 标准漂移在**导入**这一侧也标成事实（判定侧才阻断）：让"这份报告提交时标准已变"可见，
+        # 又不因为"判断还没写"把正常顺序（导入 → 判断 → 判定）卡住。
+        standard_positions = standard_drift_positions(
+            anchor_drift(((task.get("check") or {}).get("anchor") or {}).get("parts"), _parts) or [])
+        if standard_positions:
+            entry_record["standard_drift"] = standard_positions
         if lifted:
             entry_record["broken_reference"] = {"declared": True, "lifted": lifted}
         if discovered:

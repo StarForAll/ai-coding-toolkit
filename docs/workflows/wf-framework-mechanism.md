@@ -395,7 +395,7 @@ writer 的 state/generation/holder/handover/checkpoint/write_mark/action 是公�
 
 本文 §11.3 中会写控制状态的具名动作，不论单记录还是跨记录，都在现有主记录的 action 字段先登记意图，不另建事务账本。单记录 task.transition 同样有 action.id；若阶段迁移只是已登记 task.archive/run.advance 等动作的内部步骤，则纳入该父 action 的 targets/steps 和后置核验，不递归建立第二个 action。纯查询/只读断言按本文 §11.3 直接返回结果，不写 action。主记录选择：写权/首次绑定/维护和实例首次创建用 writer，普通任务动作和归档用 task，已有实例推进/批量终止用 run，准备动作使用准备记录（准备记录首次创建同样由 writer 承载）。主记录在动作中途保持不变，不把进度复制/迁移到新记录；关联目标只记录 action.id 作为写入来源。一个未完成动作占有其目标控制字段，后续冲突动作先恢复，不并行覆盖意图。
 
-主记录的具体归属：baseline.apply、spec.update、task.curate、task.knowledge-dispose、task.retrospect、task.check、review.launch、review.import、review.decide 与 task.attribute 均使用发起且获批的当前 task；spec.update 的其他任务引用同步是该主动作的窄目标，不在目标任务另开嵌套动作。初始化配置生成也走 baseline.apply，由同一初始化 task 负责；首次任务创建由 writer 承载 task.create，实例内创建由原 run.advance 的固定步骤承载。挂起复评使用当前写者有权触及的任务作为 task.reassess 主记录；维护修复/安装/退出均用 writer 的维护动作，损坏 writer 独立卸载仅按本文 §10.5 的既定例外，不为该例外伪造记录。
+主记录的具体归属：baseline.apply、spec.update、task.curate、task.knowledge-dispose、task.retrospect、task.check、task.judge、task.sampling.freeze、task.sampling.evaluate、task.sampling.reviewed、review.launch、review.import、review.decide 与 task.attribute 均使用发起且获批的当前 task；spec.update 的其他任务引用同步是该主动作的窄目标，不在目标任务另开嵌套动作。初始化配置生成也走 baseline.apply，由同一初始化 task 负责；首次任务创建由 writer 承载 task.create，实例内创建由原 run.advance 的固定步骤承载。挂起复评使用当前写者有权触及的任务作为 task.reassess 主记录；维护修复/安装/退出均用 writer 的维护动作，损坏 writer 独立卸载仅按本文 §10.5 的既定例外，不为该例外伪造记录。
 
 所有单记录控制写入也采用意图、原子替换、write_mark 和后置核验，不另造较弱协议。多个动作组合时由一个父 action 固定全部 targets/steps，内部操作按对应固定处理器核后置，不覆盖尚未结束的主 action；不得为了完成同一动作在同一记录递归另开 action。spec/基线的编辑仍可由 AI 在授权内起草，实际已编辑内容作为当前前像/候选，入口的原子恢复承诺覆盖其正式成组应用和关联控制记录，不伪称拦截编辑器的每次键入。
 
@@ -751,6 +751,10 @@ attempts 每项为 `{number, rework_ref, round_ids, outcome}`；原 T 经返工 
 **标准面漂移与判定**：漂移位置落在 `spec_versions` / `assertions_digest` / `acceptance_digest` 三项上即记
 `standard_drift` 事实。此时若任务还没有 `kind=标准变更` 或 `kind=沿用` 的 judgment，判定入口输出
 `WF_SEMANTIC_DECISION` 并给两条出口（补判断 / `outcome=escalated` 交人）——框架只标事实，后果由判断承载。
+
+**judgment 记录字段**：`{id, kind, decision, basis, outcome, evidence_refs, at, by, escalated_question, supersedes, backfill, waived_by, finding, resolved_by}`；`kind` 取归属/关闭/沿用/扩面/标准变更/缺口/未核实/规模，`outcome` 取 applied|escalated，`by` 取 ai|human。写入动作 `task.judge`（追加，不改写；更正用 `supersedes` 指向旧条目）。
+
+**抽样记录字段**：`task.sampling = {seed, events, frozen_at, picks, results, reviewed_by_human}`——`seed/events` 由冻结写入，`picks` 由选样写入（`selection()` 是唯一读取面），`results` 由 `sampling evaluate` 写入，`reviewed_by_human` 由 `sampling reviewed` 写入。状态形状只在 `sampling.frozen()` 一处定义，门禁与命令都经 `selection()` 读取。
 
 **判断偏好只在本机**：`judgment_prefs = {kind: ask_always | ai_decides}` 存 `.wf/.runtime/prefs.json`，不入库、
 不登记协议键。`ask_always` 的类必须 `escalated` 交人，不得自行决定；`ai_decides` 下发生的越界升级必须写 `why`

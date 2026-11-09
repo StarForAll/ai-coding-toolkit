@@ -12,7 +12,7 @@
 
 | 项 | 值 |
 |---|---|
-| 源树 | `docs/workflows/新项目开发工作流/` |
+| 源树 | `docs/workflows/wf/` |
 | 发行根 | `docs/workflows/wf-release/`（生成物，**不手改**） |
 | 清单 | `<发行根>/wf-release.json` |
 | 目标版本 | 首发候选 `0.1.0`；正式发布前保持 `0.x.y` |

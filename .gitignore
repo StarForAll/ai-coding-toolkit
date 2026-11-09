@@ -1,0 +1,13 @@
+.ace-tool/
+tmp/
+*.backup
+.trellis/.pending-record-session/
+.claude/settings.local.json
+.bce-tool/
+thinking-effort-loaded.json
+# Local plugin development installs (never committed; see dsh-plugins/*/package.json)
+dsh-plugins/*/node_modules/
+
+# wf authoring source tree: 源树内 Python 字节码
+docs/workflows/wf/**/__pycache__/
+.unipi
