@@ -759,6 +759,10 @@ def maintenance_disposition_probe(root):
             usable_commit = isinstance(commit, str) and bool(commit) and scope.is_ancestor(root, commit)
             if not paths:
                 return usable_commit or bool(maintenance_persisted_probe(root)(entry))
+            # 与"已持久化"用**同一份证据**：账本已入提交且各路径终态一致时，处置同样是事实可核的。
+            # 否则两种判据会打架（一个说已入账、另一个说没见过提交），实测 r61 就是卡在这里。
+            if bool(maintenance_persisted_probe(root)(entry)):
+                return True
             for change in entry.get("changes") or []:
                 if not isinstance(change, dict) or not change.get("path"):
                     continue

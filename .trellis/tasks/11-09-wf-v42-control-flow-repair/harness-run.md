@@ -146,3 +146,16 @@
 
 D 的**基础设施**已落地（账本在提交层、探针读提交树、安装与开发部署都写账本），方向可行且比 B 严格；
 但 `r59–r61` **尚未全绿**，两处具体失败点已写明，不声称解决。
+
+## 继续排查（2026-11-09 末）
+
+改动：`commit` 处置分支也接受"账本已入提交 + 逐路径终态一致"这一份证据（与 `persisted` 同源），
+避免两种判据打架。**r61 未因此转绿**，仍是三条 `pending_check`。
+
+诊断进展：`pending_check` 在 `writer.receipt_state` 里有**四种**来源（回执不可解析 / 处置字段不全 /
+处置事实核对失败 / **探针抛异常**）。r61 的收据 `disposition: None`、`result` 合法，按代码应走
+"探针 → persisted/applied_pending_commit"，却得到 `pending_check` → **极可能是探针抛异常**。
+
+下一步（一行即可定位）：在该失败点打印 `facts.reason`（形如 `probe failed: <异常>`），
+即可知道是 `_committed_text`/`_committed_fingerprint`/`scope.commits_since` 哪一步炸。
+**本轮到此为止，不猜结论。**
