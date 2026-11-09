@@ -391,3 +391,28 @@ make_task(20b)    → WRITER_BUSY → KeyError
 | `r17r24` | 已把"静默失败"全部改成"失败即停"，剩余为**逐任务补读取留痕**（8 处） |
 
 下一步：按上面修法补 8 处，再整批重验 `cp2`/`cp4`/`cp5`/`r58`/`r75`（同样顺序）。
+
+## r17r24：已补 3 处读取留痕，仍差最后一格（2026-11-09 末）
+
+按上一节的修法，在 3 处 `task-curate` 之后各补了一次
+`wfok("spec", ["spec", "--file", <路径>, ...])`（`old.md` / `expired.md` / `nomatch.md`）。
+复跑后仍在 **R18 的 `task-check`** 卡 `WF_SPEC_INCOMPLETE`。
+
+剩余原因需要**看 `facts.missing` 的完整内容**才能定（`spec_read_state` 的三种 reason：
+`not read in this session` / `read incomplete` / 该 spec 文件不存在）。本轮 `wfok` 只打印了 2500 字符，
+被前面的 `buckets` 占满，没截到 `missing`。
+
+### 下一步（一行改动即可继续）
+
+把 `wfok` 的截断从 2500 提到足够长（或改成只打印 `facts.get("missing")`），跑一次即可看到
+R18 缺哪条留痕、为什么缺。**不再猜**。
+
+### 本轮总账（可核对）
+
+| 套件 | 状态 | 依据 |
+|---|---|---|
+| `r60` / `r61` | ✅ 全绿 | 提交层账本 + 探针 NameError 修复 |
+| `r31r34` | ✅ 全绿 | 正确复现顺序（deploy → f1_init → 套件）+ 显式 sid |
+| `r59` | ✅ 全绿 | 同上 |
+| `r17r24` | 未全绿 | 逐任务读取留痕已补 3 处，R18 仍差一格（待看 `facts.missing`） |
+| `cp2`/`cp4`/`cp5`/`r58`/`r75` | 未重验 | 需按正确顺序重跑后再定性 |
