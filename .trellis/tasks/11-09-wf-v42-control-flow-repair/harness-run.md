@@ -294,3 +294,28 @@ make_task(20b)    → WRITER_BUSY → KeyError
 在 `r17r24_tests.py:152` 与 `r31r34` 对应行的 `task-start` 后打印 `rc/payload`，即可看到它为什么失败
 （最可能是 `WF_SEMANTIC_DECISION` 的分级/依赖前置）。**本轮到此为止**：已把三处关键调用的诊断补齐
 （`r59` 的 task-new、`r17r24` 的 check 与 approve），并确认"静默失败连锁"是根因。
+
+## 关键更正：我之前的 r17r24 诊断全部无效（2026-11-09 末）
+
+给 `r17r24` 加了 fail-loud 包装（`wfok()`，失败即打印原文并退出）后，第一次 STOP 是：
+
+```
+[STOP] task-start 原文: WF_CAPABILITY_UNAVAILABLE {"missing": ".wf/project-config.json"}
+```
+
+**原因：我先前是直接跑套件，没有先跑 `f1_init`。** 真实 harness（`run_one.sh`）每个套件都会先跑
+`f1_init` 建基线与项目配置。所以：
+
+- “写权未释放”“一会话多对象”“能力门”这些结论，**都是在缺 project-config 的假环境里得出的**，全部无效；
+- 按正确顺序（deploy → `f1_init` → 套件）重跑，`r17r24` 一路走到 **`archive`** 才停：
+  `WF_SEMANTIC_DECISION` 且 facts 里带 before_archive 步骤清单（说明 check/knowledge 等都过了）。
+
+### 真正的教训（这次是我自己的方法错误，不是产品问题）
+
+**复现任何套件都必须走与 harness 相同的顺序**，否则拿到的是假失败。我为此浪费了多轮。
+
+### 下一步（正确起点）
+
+`r17r24` 现在唯一待查的是 archive 的 before_archive 步骤缺项：打印 facts 里
+`status == "missing"` 的那一项（大概率是 `task.review-passed` 或 `task.knowledge-disposed`），
+再决定是补调用还是迁移期望。
