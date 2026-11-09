@@ -161,7 +161,8 @@ rc, payload, _ = wf(["task-check", "--task", task20a, "--review-notes", NOTES, "
 json.dump((payload or {}).get("facts"), open("/tmp/r20_facts.json", "w"), ensure_ascii=False)
 rec("R20 准备：Check", "WF_OK", f"{(payload or {}).get('code')}", rc == 0)
 wf(["task-knowledge", "--task", task20a, "--decision", "no-update", "--json"], {"generation": gen20a}, "sess-U20a")
-wfdrive.freeze_sampling(task20a, gen20a)   # 归档前置：先冻结并落盘选样
+wf(["sampling", "pick", "--task", task20a, "--freeze", "--json"],
+                       {"generation": gen20a})   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wf(["archive", "--task", task20a, "--decision",
                      dfile("/tmp/r20_arch.json", [dec(f"finish {task20a}", "finish", d20a),
                                                   dec(".wf/spec/**", "commit", d20a)]),
@@ -328,7 +329,8 @@ open(os.path.join(F, "area23/r23.txt"), "w").write("r23\n")
 wf(["task-start", "--task", task23, "--json"], {"generation": gen23}, "sess-U23")
 wf(["task-check", "--task", task23, "--review-notes", NOTES, "--json"], {"generation": gen23}, "sess-U23")
 wf(["task-knowledge", "--task", task23, "--decision", "no-update", "--json"], {"generation": gen23}, "sess-U23")
-wfdrive.freeze_sampling(task23, gen23)   # 归档前置：先冻结并落盘选样
+wf(["sampling", "pick", "--task", task23, "--freeze", "--json"],
+                       {"generation": gen23})   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wf(["archive", "--task", task23, "--decision",
                      dfile("/tmp/r23_arch.json", [dec(f"finish {task23}", "finish", d23),
                                                   dec("area23/**", "commit", d23)]), "--json"],
@@ -339,19 +341,22 @@ subprocess.run(["git", "reset", "-q", "--mixed", "HEAD~1"], cwd=F, capture_outpu
 subprocess.run(["git", "checkout", "-q", "--", "."], cwd=F, capture_output=True)
 archived = wf_tasks.task_dir(F, task23)
 persisted_before = wf_tasks.archive_persisted(F, json.load(open(os.path.join(archived, "task.json"))))
-wfdrive.freeze_sampling(task23, gen23)   # 归档前置：先冻结并落盘选样
+wf(["sampling", "pick", "--task", task23, "--freeze", "--json"],
+                       {"generation": gen23})   # 归档前置：先冻结并落盘选样
 rc_norights, no_rights, _ = wf(["archive", "--task", task23, "--decision",
                                  dfile("/tmp/r23_arch2.json", [dec(f"finish {task23}", "finish", d23)]), "--json"],
                                 {"generation": gen23}, "sess-U23")
 wf(["writer", "release", "--json"], {"generation": gen23}, "sess-U23")
-wfdrive.freeze_sampling(task23, gen23)   # 归档前置：先冻结并落盘选样
+wf(["sampling", "pick", "--task", task23, "--freeze", "--json"],
+                       {"generation": gen23})   # 归档前置：先冻结并落盘选样
 rc_busy, busy_payload, _ = wf(["archive", "--task", task23, "--decision",
                                 dfile("/tmp/r23_arch2.json", [dec(f"finish {task23}", "finish", d23)]), "--json"],
                                {"generation": gen23}, "sess-U23")
 rec("R23 无写权不得续做", "WF_WRITER_BUSY", (busy_payload or {}).get("code"),
     (busy_payload or {}).get("code") == "WF_WRITER_BUSY")
 wf(["writer", "acquire", "--task", task23, "--json"], {"generation": gen23}, "sess-U23")
-wfdrive.freeze_sampling(task23, gen23)   # 归档前置：先冻结并落盘选样
+wf(["sampling", "pick", "--task", task23, "--freeze", "--json"],
+                       {"generation": gen23})   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wf(["archive", "--task", task23, "--decision",
                      dfile("/tmp/r23_arch2.json", [dec(f"finish {task23}", "finish", d23)]), "--json"],
                     {"generation": gen23}, "sess-U23")

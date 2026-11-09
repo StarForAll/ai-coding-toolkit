@@ -123,7 +123,8 @@ json.dump([{"source": "human (sess-F)", "at": at, "subject": f"finish {task_id}"
            {"source": "human (sess-F)", "at": at, "subject": ".wf/project-config.json,.wf/baseline.md,.wf/spec/index.md",
             "object_digest": digest, "choice": "commit", "reason": "授权提交初始化产物"}],
           open("/tmp/f0_archive.json", "w"), ensure_ascii=False)
-wfdrive.freeze_sampling(task_id, gen)   # 归档前置：先冻结并落盘选样
+wf(["sampling", "pick", "--task", task_id, "--freeze", "--json"],
+                       {"generation": gen})   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wf(["archive", "--task", task_id, "--decision", "/tmp/f0_archive.json", "--json"], inputs)
 rec("归档", "pass", (payload or {}).get("code"), rc == 0)
 json.dump(results, open("/tmp/p5_f0_results.json", "w"), ensure_ascii=False, indent=2)

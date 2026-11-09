@@ -45,8 +45,11 @@ def _binding_instance(sid, provider="host", issued=None):
 def freeze_sampling(task_id, generation, sid="sess-A", instance_id=None):
     """归档前置：冻结事件集并落盘选样（`task.sampled` 门禁要求）。
 
-    **一处实现、调用点显式**：不在 `run()` 里对 archive 静默注入——那会把门禁从测试视野里抹掉
-    （门禁漏接就再也测不出来），也会改掉负路径套件的前提。
+    **只在套件没有自己的 wrapper 时用**：套件通常有自己的 `wf(...)`/`wfk(...)` 封装（带该套件的
+    session id 与绑定）。若绕过它直接走本函数，写权会落在 sess-A 上，把套件真正的会话挡在
+    `WF_WRITER_BUSY` 外面——第一次迁移就是这样踩的。优先用套件自己的 wrapper：
+
+        wf(["sampling", "pick", "--task", task_id, "--freeze", "--json"], {"generation": gen})
     """
     return run(["sampling", "pick", "--task", task_id, "--freeze", "--json"],
                inputs={"generation": generation}, sid=sid, instance_id=instance_id, show=False)

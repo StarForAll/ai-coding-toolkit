@@ -151,7 +151,8 @@ declare = decision_file("/tmp/cp2_declare.json", [dec("debug-declaration:v1:coun
 wf(["task-check", "--task", task3, "--decision", declare, "--review-notes", NOTES, "--json"],
    {"generation": gen3}, "sess-P3")
 wf(["task-knowledge", "--task", task3, "--decision", "no-update", "--json"], {"generation": gen3}, "sess-P3")
-wfdrive.freeze_sampling(task3, gen3)   # 归档前置：先冻结并落盘选样
+wf(["sampling", "pick", "--task", task3, "--freeze", "--json"],
+                       {"generation": gen3})   # 归档前置：先冻结并落盘选样
 rc, payload, out = wf(["archive", "--task", task3, "--decision",
                        decision_file("/tmp/cp2_archive.json", [dec(f"finish {task3}", "finish", d3),
                                                                dec("src/p13.txt", "commit", d3)]),

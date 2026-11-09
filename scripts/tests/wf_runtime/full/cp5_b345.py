@@ -100,7 +100,8 @@ rc, payload, _ = wf(["task-check", "--task", task_b4, "--decision", declare2, "-
 rec("B4 同一失败事件重复计入被拒", "WF_SEMANTIC_DECISION", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_SEMANTIC_DECISION")
 wf(["task-knowledge", "--task", task_b4, "--decision", "no-update", "--json"], {"generation": gen_b4}, "sess-G1")
-wfdrive.freeze_sampling(task_b4, gen_b4)   # 归档前置：先冻结并落盘选样
+wf(["sampling", "pick", "--task", task_b4, "--freeze", "--json"],
+                       {"generation": gen_b4})   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wf(["archive", "--task", task_b4, "--decision",
                      dfile("/tmp/cp5_b4_arch.json", [dec(f"finish {task_b4}", "finish", d_b4),
                                                      dec("src/b4.txt", "commit", d_b4)]), "--json"],
@@ -201,7 +202,8 @@ proc.wait()
 rec("B3 归档提交后被强杀", "进程被 SIGKILL（提交已落地、结果未报告）",
     f"killed={killed} rc={proc.returncode}",
     killed and proc.returncode == -signal.SIGKILL)
-wfdrive.freeze_sampling(task_b3, gen_b3)   # 归档前置：先冻结并落盘选样
+wf(["sampling", "pick", "--task", task_b3, "--freeze", "--json"],
+                       {"generation": gen_b3})   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wf(["archive", "--task", task_b3, "--decision", archive_decision, "--json"],
                     {"generation": gen_b3}, "sess-G3")
 facts = (payload or {}).get("facts", {})

@@ -77,7 +77,8 @@ rec("A6 准备：Check 通过", "pass", (check_payload or {}).get("code"), check
 wf(["task-knowledge", "--task", task1, "--decision", "no-update", "--json"], {"generation": gen1}, "sess-Q1")
 open(os.path.join(F, "notes.txt"), "w").write("unrelated\n")
 subprocess.run(["git", "add", "notes.txt"], cwd=F, capture_output=True)
-wfdrive.freeze_sampling(task1, gen1)   # 归档前置：先冻结并落盘选样
+wf(["sampling", "pick", "--task", task1, "--freeze", "--json"],
+                       {"generation": gen1})   # 归档前置：先冻结并落盘选样
 rc, payload, out = wf(["archive", "--task", task1, "--decision",
                        dfile("/tmp/cp3_a6.json", [dec(f"finish {task1}", "finish", d1),
                                                   dec(["src/c6.txt"], "commit", d1)]),
@@ -109,7 +110,8 @@ open(os.path.join(F, "src/c6b.txt"), "w").write("c6b\n")
 wf(["task-start", "--task", task2, "--json"], {"generation": gen2}, "sess-Q2")
 wf(["task-check", "--task", task2, "--review-notes", NOTES, "--json"], {"generation": gen2}, "sess-Q2")
 wf(["task-knowledge", "--task", task2, "--decision", "no-update", "--json"], {"generation": gen2}, "sess-Q2")
-wfdrive.freeze_sampling(task2, gen2)   # 归档前置：先冻结并落盘选样
+wf(["sampling", "pick", "--task", task2, "--freeze", "--json"],
+                       {"generation": gen2})   # 归档前置：先冻结并落盘选样
 rc, payload, out = wf(["archive", "--task", task2, "--decision",
                        dfile("/tmp/cp3_a6b.json", [dec(f"finish {task2}", "finish", d2),
                                                   dec("src/*.py", "commit", d2)]), "--json"],

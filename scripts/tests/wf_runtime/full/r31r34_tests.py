@@ -71,7 +71,8 @@ open(os.path.join(F, "a31/x.txt"), "w").write("x\n")
 wf(["task-start", "--task", task1, "--json"], {"generation": gen1}, "sess-X1")
 wf(["task-check", "--task", task1, "--review-notes", NOTES, "--json"], {"generation": gen1}, "sess-X1")
 wf(["task-knowledge", "--task", task1, "--decision", "no-update", "--json"], {"generation": gen1}, "sess-X1")
-wfdrive.freeze_sampling(task1, gen1)   # 归档前置：先冻结并落盘选样
+wf(["sampling", "pick", "--task", task1, "--freeze", "--json"],
+                       {"generation": gen1})   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wf(["archive", "--task", task1, "--decision",
                      dfile("/tmp/r31_arch.json", [dec(f"finish {task1}", "finish", d1),
                                                   dec("a31/**", "commit", d1)]), "--json"],
@@ -85,7 +86,8 @@ shutil.move(archived_dir, active_dir)
 rec("R31 准备：目录回到活动位置", "活动目录存在、归档目录不存在",
     f"active={os.path.exists(active_dir)} archived={os.path.exists(archived_dir)}",
     os.path.exists(active_dir) and not os.path.exists(archived_dir))
-wfdrive.freeze_sampling(task1, gen1)   # 归档前置：先冻结并落盘选样
+wf(["sampling", "pick", "--task", task1, "--freeze", "--json"],
+                       {"generation": gen1})   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wf(["archive", "--task", task1, "--decision",
                      dfile("/tmp/r31_arch2.json", [dec(f"finish {task1}", "finish", d1),
                                                    dec("a31/**", "commit", d1)]), "--json"],
