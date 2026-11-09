@@ -18,13 +18,13 @@ baseline: 2026-11-01 人工确认的框架设计及 charter
 
 ### 0.1 输入版本与验证边界
 
-输入为 2026-11-01 的工作树定稿版本及 2026-11-02 用户明确批准的首次基线语义修订；本日同批人裁“必要验证由各任务步骤 verifications 承载”并同步设计稿 §5.7 措辞。基础提交为 `15318f56a9e1a2eba9772b887755449aeb7abb88`，其后存在人工确认状态与上述获批规则的未提交更新，故以文件内容摘要固定本稿输入。
+输入为 2026-11-01 的工作树定稿版本及 2026-11-02 用户明确批准的首次基线语义修订；2026-11-05 人裁把 skill 投放根收窄为「目标项目内」，同批改设计稿 §1.2、设计稿 §8.2 的资产落点行与本文 §10.1 并更新本摘要；同日另由人裁新增设计稿 §8.2 的「轮次串行门禁」（第一轮未完成、含 dogfood 未完成时不得开始第二轮实现），本摘要随同批更新；本日同批人裁“必要验证由各任务步骤 verifications 承载”并同步设计稿 §5.7 措辞；2026-11-06 人裁把轮次串行门禁③的 dogfood 开跑时点改为「门禁①成立后即可开跑，不必等待收口全绿」（只改该句，义务子句不变），本摘要随同批更新。2026-11-08 身份粒度人裁（C1=①执行边界）与自动身份模式交付，同批改设计稿 §1.3 会话身份定义句、frontmatter environment 与设计稿 §3「使用环境」句，本摘要随之更新；2026-11-08 另把入口命令形态改为以 `<解释器>` 指代（缺省系统 `python3`，可为已确认执行器或人给的绝对路径），同批更新本摘要。2026-11-09 人裁把身份取用次序改为「宿主会话标识优先、执行边界派生回落与冲突判据」（全部宿主，不只 dsh），同批改设计稿 §1.3 会话身份定义句、设计稿 §8.2「无稳定会话身份」行、本文 §1.4 映射段、本文 §12 的 D14 行与索引第 112 行，本摘要随同批更新。同日另由人裁 P2 的三处字段与一处删除：① 本文 §8.3 增 spec 规则的 `check` 与 `clauses`（只增不改、deprecated_summary ≤80）；② 本文 §3.5 的 check 记录增 `anchor.parts`（失配列差异的第二端，旧记录 null 时标 diff_unavailable）；③ 本文 §9.2 的 dispositions 定字段并要求`recheck_by` 非提出者；④ 删除两轮额度（本文 §9.1、本文 §9.2 与设计稿 §4.3、设计稿 §6.5 同批改），本摘要随同批更新；⑤ 本文 §9.2 增「规则不得自证」与 `broken-reference` 豁免的**声明 + 人复核**口径（2026-11-09 人裁 B），本摘要随同批更新。基础提交为 `15318f56a9e1a2eba9772b887755449aeb7abb88`，其后存在人工确认状态与上述获批规则的未提交更新，故以文件内容摘要固定本稿输入。
 
 | 文件 | SHA-256 |
 |---|---|
-| wf-framework-design.md | f41173d9c174ab787bf65504c9d97bade41c00d07109eec7e5323650acaa9b7a |
+| wf-framework-design.md | 7cd437423f6c7a8a0a0057c88e63b8534606ff9db7a69f0627f380a2e7efb296 |
 | wf-framework-charter.md | 8b816ee4cb1fad0341ad7b3806748622c6c66f26040ec894da49d43d2ba33c16 |
-| wf-framework-design.index.md | 1473942770bc336c0b592324b495622ce10208fcde6184bcb8cd2f9e80f1bdb2 |
+| wf-framework-design.index.md | cb641c689ae67cf1df8c53d5ff49d680d7fd9293ae376f3ac92f5a17d1f91d28 |
 | wf-framework-design.sources.md | 47484498fc23c6292c394fa1b4a7fa0b9eac5a9ca5c9aeb739916b1c16e4a25b |
 
 这些摘要只绑定审查输入，不是目标项目字段，也不要求把文档自身哈希写回自身。上位文件变化后按改变的句子及其中每个义务子句，分别核对输入、写入时点、记录载体、消费者与失败出口，并在任务修订记录列出对应关系，再评估本稿有效性；不以同一主题的一处说明代替整句义务落实。
@@ -70,7 +70,7 @@ authoring 机检统一使用 `scripts/validate-wf-design.py`：保留上位七�
 | `Digest` | `sha256:` 加 64 位小写十六进制 | 内容等同性检测，不作批准或身份认证 |
 | `GitOid` | Git 实际返回的完整对象 id；不固定为 40 位 | 只读可达性与归属检查；缺 HEAD 的安装标记可为 null |
 | `RepoPath` | 仓库相对、以 `/` 分段的 Unicode 路径，区分大小写，保留 Unicode 原码点 | 本文 §3 统一安全判定；不作 shell 字符串插值 |
-| `Decision` | `{source, at, subject, object_digest, choice, reason}`；source 记实际人答复来源的可核对定位 | 入口记录人的决定；脚本核对象/版本，不判断答复真伪 |
+| `Decision` | `{source, at, subject, object_digest, choice, reason}` 为必需键；批准类决定可另带 `plan` 块 `{complexity, tdd, downgrade{reason,evidence}, …}`——人名下的方案级取值，键集合由入口的注册表 `HUMAN_PLAN_KEYS` 解释；未登记的键**原样保留**并列入 `plan.unconfirmed_keys`（2026-11-07 增补，charter T7 同批口径） | 入口记录人的决定；脚本核对象/版本与取值合法性，不判断答复真伪；请求 inputs 中的同名取值只作提议 |
 | `ObjectRef` | `{kind, id}`；kind 为 task/run/preparation/writer/installation/config/spec | 定位唯一记录；不是授权可写范围 |
 
 `C(x)` 为 UTF-8 编码的规范 JSON：键按 Unicode 顺序排序，分隔符为 `,`、`:`，不转义非 ASCII，不加末尾换行。已知数字字段均为整数（布尔不算整数）；哈希输入中无浮点数。集合型数组先按元素规范 JSON 的 UTF-8 字节序排序去重（另在所属 schema 声明排序键的从其声明，如本文 §10.2），顺序步骤数组保留顺序。文件字节哈希直接取原始字节，不规范化换行。`H(domain, payload)` 返回 `sha256:` 加 `SHA256(UTF8(domain) + 零字节 + payload)` 的十六进制值；SessionKey 单独取表中哈希的无前缀十六进制，适合作文件名。
@@ -117,7 +117,7 @@ authoring 机检统一使用 `scripts/validate-wf-design.py`：保留上位七�
 | `prerequisites` | 去重 task id 数组，显式空允许 | 建任务/建删边/返工入口；唯一前置集合 |
 | `rework_of`、`successor_id` | task id 或 null | 返工/替换入口；反向集合及继承检查 |
 | `run_id`、`independent_resume` | run id 或 null；null 或 `{decision, termination_action}` | 实例创建/终止入口；归属与保留任务恢复 |
-| `plan` | `{version, artifacts, touch_paths, acceptance_digest, verifications, complexity, complexity_reasons, tdd, approval, equivalences}` | continue 从本文 §2.3 的 PRD 块提取并记录批准快照；开工、范围、检查/审查 |
+| `plan` | `{version, artifacts, touch_paths, acceptance_digest, acceptance_ids, verifications, complexity, complexity_reasons, tdd, approval, confirmed_source, human_inputs, unconfirmed_keys, equivalences}`；`confirmed_source` 取 `decision`/`inputs`（复杂分级必须为 `decision`），`human_inputs` 保存决定 `plan` 块原值，`unconfirmed_keys` 列出未登记的人判键（2026-11-07 增补） | continue 从本文 §2.3 的 PRD 块提取并记录批准快照；开工、范围、检查/审查 |
 | `entry_snapshot` | null 或本文 §2.3 的开工核对快照 | 首次开工/再入 Execute 由入口保存；范围/检查/Finish 消费，批准时不写 |
 | `baseline_head` | GitOid 或 null | 首次开工固定，按 2026-11-02 人裁同步的设计稿 §4.2；恢复与外部提交扫描 |
 | `attribution` | `{decisions: [{commit, decision}], inherited: [{source_task, commits, paths, decision}]}` | 归属/替换入口；本文 §3.3 |
@@ -148,13 +148,13 @@ execution.required_steps 保存本文 §11.2 定义的执行回执，字段为 `
 
 **会话请求协议**：所有会话入口从同一结构化请求信封的 session 对象取得 `{provider, identity, instance_id, activation}`。provider 仅取 host/wf；host 的 identity 为 `{host_id, session_id}`，host_id 是安装时人确认的宿主标识（`[a-z][a-z0-9-]{0,63}`），session_id 是经验证稳定的原始非空字符串；wf 的 identity 为 `{issued_id}`，issued_id 是入口显式签发的 UUID4。哈希对该结构作 C 编码，不 trim/改大小写/临时拼接 CLI 名。binding.identity 按表中 `{provider, value}` 保存，provider 取请求 provider，value 原样取请求 identity；SessionKey 只用 `{provider, identity: value}` 计算。首次绑定前请求 instance_id 可为 null，绑定入口首次生成后返回给当前会话携带；既有绑定后的入口先按当前 provider/identity 定位持久绑定，读取其中 instance_id 与请求比对，定位缓存不参与身份证明。两者一致则继续既有检查，缓存缺失仅重建定位，不视为未绑定。请求 instance_id 缺失时只读返回“待核对携带标识”及人调用 start 的出口：start 在实际会话身份已可靠核实、人的同一会话恢复事实明确后，可读回原持久标识返回当前会话携带，不改绑定/对象/实例标识，不要求为重取缓存执行 repair。证据不足时保留 WF_IDENTITY_UNRESOLVED；持久绑定已知应有却缺失、不可解析或两侧实例标识不同，则保留事实并转本文 §5.4 的出口。provider 未知、身份缺失或宿主映射不符时阻断绑定与推进，不猜环境变量。
 
-身份来源由安装记录的平台清单 `platforms` 声明（2026-11-05 修订：取消原 session_profile 的逐宿主声明、能力证据与逐字比对）。运行时按请求信封的 `provider/identity` 判定：`provider=host` 时 `identity.host_id` 必须属于该清单，否则 `WF_IDENTITY_UNRESOLVED` 并在 facts 里给出已装平台与登记出口；`provider=wf` 的签发路径在第二轮交付；只读诊断不受此限。宿主/skill 适配层把实际上下文中的身份按此映射放入请求 JSON，由入口从标准输入解析；具体 CLI 外壳交实现方案，不另接受环境变量或命令行覆写身份。宿主无法保证稳定来源时由人选择 wf 签发路径，唯一 issued_id 由当前会话携带；丢失、复制到新会话或 provider 变化走明确恢复/新会话出口，不能自动签发新 id 绕过既有绑定。维护入口无需伪造 session。
+身份来源由安装记录的平台清单 `platforms` 声明（2026-11-05 修订：取消原 session_profile 的逐宿主声明、能力证据与逐字比对）。运行时按请求信封的 `provider/identity` 判定：`provider=host` 时 `identity.host_id` 必须属于该清单，否则 `WF_IDENTITY_UNRESOLVED` 并在 facts 里给出已装平台与登记出口；`provider=wf` 的签发路径在第二轮交付；只读诊断不受此限。宿主/skill 适配层把实际上下文中的身份按此映射放入请求 JSON，由入口从标准输入解析；具体 CLI 外壳与适配层如何取得宿主会话标识（按安装期部署表逐宿主声明来源）交实现方案。**入口不读环境变量或命令行覆写身份**；适配层把宿主会话标识映射进信封不属于入口读取。取用次序为**宿主会话标识优先、进程锚回落**（2026-11-09 人裁：全部宿主先取宿主会话标识）；宿主提供标识时进程锚只作冲突判据与兜底，宿主未提供时须显式报告该宿主无法区分会话与 `/clear`。宿主无法保证稳定来源时由人选择 wf 签发路径，唯一 issued_id 由当前会话携带；丢失、复制到新会话或 provider 变化走明确恢复/新会话出口，不能自动签发新 id 绕过既有绑定。维护入口无需伪造 session。
 
 **身份判定与失败即报**（2026-11-05 修订，取代原「能力状态消费」）：入口只做平台清单成员判定，不要求人在每次使用前举证宿主能力；真实异常由各自路径立即阻断——实例标识缺失或与绑定不符、宿主换身份后绑定不成立、写权代次过期、检查锚点失效，分别输出 `WF_IDENTITY_UNRESOLVED`/`WF_BINDING_MISMATCH`/`WF_GENERATION_STALE`/`WF_CHECK_STALE`，不静默放行、不自动改绑、不以新签发标识绕过旧会话绑定。只读诊断与独立维护仍可运行。
 
 核验出口为：确认宿主来源不稳定时，人显式选择并可可靠携带的 wf 签发路径；wf 路径同样要验证携带/恢复方式，不能因 provider=wf 自动当 verified。每次请求仍须核实际 provider/identity、instance_id 与持久绑定一致。已经确认当前实现不支持该传递能力且无可用路径时用 `WF_CAPABILITY_UNAVAILABLE`（阻断）。更换 provider/host 不重命名或改写旧绑定；既有对象经原写权释放/受控恢复后由新会话显式接续，不能用新签发标识绕过旧会话绑定。
 
-activation 是当前会话由宿主/skill 携带的可丢弃缓存，取 null 或 `{enabled: true, start_source, enabled_at}`，start_source 为人的实际调用来源定位。人显式调用 start 时允许 activation=null，不以已有启用缓存为前置；start 核互斥/身份并返回允许启用的结果后，由当前宿主/skill 根据这次实际调用更新缓存。检查不通过则不生成有效 activation；仅绑定、重建定位缓存、读取旧 writer 均不得生成它。缓存保存在宿主当前会话上下文，经请求信封传给独立 CLI 进程，不写进项目 Git、本机解释器确认记录或他人会话文件；无需项目写权即可保持“启用未绑定”。项目内定位缓存仍只缓存绑定/游标，不因新增此传输字段放宽无写权项目写入例外。
+activation 是当前会话由宿主/skill 携带的可丢弃缓存，取 null 或 `{enabled: true, start_source, enabled_at}`，start_source 为人的实际调用来源定位。人显式调用 start 时允许 activation=null，不以已有启用缓存为前置；start 核互斥/身份并返回允许启用的结果后，由当前宿主/skill 根据这次实际调用更新缓存。检查不通过则不生成有效 activation；仅绑定、重建定位缓存、读取旧 writer 均不得生成它。**显式模式**下缓存保存在宿主当前会话上下文，经请求信封传给独立 CLI 进程，不写进项目 Git、本机解释器确认记录或他人会话文件；**自动模式**下由入口写入 `attachments/<session_key>.json` 的 `activation`/`activation_stale`（`.wf/.runtime/` 运行态、gitignore），不再经信封携带（2026-11-08 自动身份模式交付；语义变更见实现方案里身份方案的契约清单 C3）；无需项目写权即可保持“启用未绑定”。项目内定位缓存仍只缓存绑定/游标，不因新增此传输字段放宽无写权项目写入例外。
 
 continue/spec-update/bootstrap/finish 先由 skill 核实际调用上下文，再由入口核 activation 的结构、当前 session 对应关系；丢失/null/明确未启用时输出 WF_NOT_ENABLED 并提示人重新调用 start，不从持久绑定补 enabled。压缩可携带同一缓存，无法可靠携带就重新提示；重新 start 只恢复原对象，不产生改绑许可。该字段是可实现的会话间请求前置，不是人调用的机器证明；宿主或模型伪报缓存仍属设计稿 §1.5 的纪律边界，不宣称认证。纯只读诊断可在无 activation 下运行，不能借此推进业务。
 
@@ -190,7 +190,7 @@ step_results 的 kind 只取 satisfied/skipped/not_executed；尚未完成的步
 | 人调用 start | 只读启用、准备定义、创建任务/实例、首次绑定、取得/接收写权 | Trellis 互斥事实、稳定身份；已绑定只恢复同对象 |
 | 人调用 bootstrap | 存量项目接入规划与基线初建 | 已启用、当前接入任务；开工仍核批准 |
 | continue | 批准、开工、Check、暂停/恢复/收工、绑定内定位（run.locate）、归属裁决（task.attribute）、策展记录（task.curate）、复盘记录（task.retrospect）、基线提案、边/返工/替换/放弃、实例推进/暂停/终止、审查记录、已绑定任务范围内的定义编辑与校验（definition.validate） | 已启用、绑定正确；项目写入核 holder/代次/范围 |
-| spec-update | 知识编辑/索引同步与处置记录 | 当前批准范围；删除/合并等按既有人工裁决 |
+| spec-update | 知识编辑/索引同步与处置记录；**三段同批同步**：`index.md`、`pre-dev-checklist.md`、`quality-checklist.md` 的 `## spec 指针` 段——add 追加、rename 重写标签与路径、delete 移除（2026-11-07 增补，设计稿 §6.1） | 当前批准范围；删除/合并等按既有人工裁决 |
 | 人调用 finish | 最终门禁、正常归档、必要实例同步 | 人了解结果与未核实项，且本文 §9.3 前置通过 |
 | 人直调维护 | 安装、upgrade、repair、uninstall | 预览/确认及本文 §4、§10；不以会话绑定授权维护 |
 | 只读查询 | 状态/视图、`wf spec --file <path>` | 无项目写权前置；按本文 §8.3 仅可写本会话读取侧车，身份不可核时只读且不给完整读取回执 |
@@ -265,7 +265,7 @@ baseline_head 仅首次从 not_started 进入 Execute 时固定；in_progress �
 
 匹配前解析字面前缀，命中后解析现有路径各段；不存在目标取最近存在祖先的真实位置加剩余字面段。自仓库根向下核涉及祖先的 `.git` 目录或 gitfile，根自身 `.git` 合法，遇嵌套根停止，不读取其中内容。符号链接的目录目标须仍在同一仓库边界；文件内容指纹使用链接本身的目标字符串，不跟随读外部内容。坏链/无法确定边界只阻断相关操作，删除旧路径可用原提交的文件类型/路径事实核范围，但不把历史内容作为当前指纹。
 
-项目控制面 `.wf/` 内写入落点须能确定为本项目数据/资产，不通过符号链接把写入引出项目边界。明确授权的项目外宿主 skill 根按本文 §10.1 作为独立投放根核验，不允许借其内部符号链接转写未授权位置；这是声明根的投放，不等于允许从项目内符号链接越界。
+项目控制面 `.wf/` 内写入落点须能确定为本项目数据/资产，不通过符号链接把写入引出项目边界。宿主 skill 根一律落在目标项目内，不设项目外投放根（2026-11-05 人裁）；项目内根同样不允许借其内部符号链接转写未授权位置——声明根的投放不等于允许从项目内符号链接越界。
 
 touch_paths 任一非法条目拒绝批准/开工；spec.paths 非法项逐条失效并可见报告，整个 metadata 解析不可靠时该文件不可路由。无合法 paths 的 spec 仍可由索引/策展显式加载。语法命中而范围意图存疑输出需人裁决，不自动扩大 glob。
 
@@ -301,7 +301,7 @@ touch_paths 任一非法条目拒绝批准/开工；spec.paths 非法项逐条�
 
 ### 3.5 Check 记录与有效性
 
-check 结构为 `{id, anchor, paths_digest, content_digest, started_at, ended_at, result, commands, acceptance_results, internal_review, tdd_evidence, invalidation}`。anchor 为 `{check_anchor, rule_version}`：check_anchor 按本文 §3.2 的定义计算（哈希域名与键集合见该处，覆盖批准/entry_snapshot/触碰面/验收、触碰路径集合与指纹、相关 spec/基线/有效配置及影响执行的定义快照），rule_version 为本次检查所用的框架规则兼容标识、取本文 §10.2 的 effective_rule_version；本文 §11.2 回执 P 中的 check_anchor 指 anchor 的内容哈希部分。`paths_digest` 与 `content_digest` 为本次检查对象集合与指纹的摘要，与 check.anchor 的对应输入同源写入，单列保存以支持审查锚点核对、复盘与人工核对（设计稿 §4.2 要求 Check 保存内容指纹）。两者不参与新鲜度判定：新鲜度一律按本文 §3.2 重算 check_anchor 后与 check.anchor 比较，不一致即 `WF_CHECK_STALE`（旧结果失效、重检或重审，旧记录按原样作为当时证据保留），不得以当前工作树的重算值反判旧记录非法；`WF_RECORD_INVALID` 只用于 check 记录语法/必需字段不可解析。合法内容变化只使旧结果失效，不升级为结构修复。commands 每项包含 `{verification_id, invocation, cwd, input_refs, required, started_at, ended_at, exit_code, status, summary, evidence_ref}`；输入引用不复制凭据，日志摘要按秘密边界脱敏。
+check 结构为 `{id, anchor, paths_digest, content_digest, started_at, ended_at, result, commands, acceptance_results, internal_review, tdd_evidence, invalidation}`。anchor 为 `{check_anchor, rule_version, parts}`：check_anchor 按本文 §3.2 的定义计算（哈希域名与键集合见该处，覆盖批准/entry_snapshot/触碰面/验收、触碰路径集合与指纹、相关 spec/基线/有效配置及影响执行的定义快照），rule_version 为本次检查所用的框架规则兼容标识、取本文 §10.2 的 effective_rule_version；`parts` 为本次锚点各输入的取值快照（与 check_anchor 同源写入，只作"失配时列出差异"的第二端）。旧记录缺 `parts`（null）时差异不可得，输出 `diff_unavailable` 并只报失配事实，不得用当前工作树反推旧值。本文 §11.2 回执 P 中的 check_anchor 指 anchor 的内容哈希部分。`paths_digest` 与 `content_digest` 为本次检查对象集合与指纹的摘要，与 check.anchor 的对应输入同源写入，单列保存以支持审查锚点核对、复盘与人工核对（设计稿 §4.2 要求 Check 保存内容指纹）。两者不参与新鲜度判定：新鲜度一律按本文 §3.2 重算 check_anchor 后与 check.anchor 比较，不一致即 `WF_CHECK_STALE`（旧结果失效、重检或重审，旧记录按原样作为当时证据保留），不得以当前工作树的重算值反判旧记录非法；`WF_RECORD_INVALID` 只用于 check 记录语法/必需字段不可解析。合法内容变化只使旧结果失效，不升级为结构修复。commands 每项包含 `{verification_id, invocation, cwd, input_refs, required, started_at, ended_at, exit_code, status, summary, evidence_ref}`；输入引用不复制凭据，日志摘要按秘密边界脱敏。
 
 status 取 running/passed/failed/not_run/not_applicable；未结束的命令记 running 且 ended_at=null。必要项只有实际结束且成功才可判 passed；not_applicable 要有与批准验收对应的理由，不作为用无关测试补位的通道。internal_review 分别记录标准轴、需求轴的结论与依据；两轴均完成才可 pass。result 取 pass/fail，尚无完整结果则 null。
 
@@ -316,6 +316,8 @@ plan.tdd=true 且对象为可执行行为变更时，tdd_evidence 保存 `{asser
 **Check 范围核对（唯一定义）**：核对由三部分构成：候选路径分类、外部变更核对与治理面声明核对；结果都随 check 记录保存。
 
 **候选路径分类**：候选路径集合＝本文 §3.3 ¶2 的当前未提交路径全集（工作树与索引相对 HEAD 的并集，含未跟踪拟交付文件，扣除明确忽略项）∪ 本任务标记提交、归属裁决与继承所得的已提交触碰路径（含改名两端与删除路径）；批准面＝当前批准 entry_snapshot.touch_paths。最终触碰集合（本文 §3.3）是本集合中归属本任务的部分，归属仍按本文 §3.3 判定。逐路径按下述顺序分类（先命中者生效、每条路径恰好落入一类；次序与本文 §3.3 的既有核对一致——先判归属与特殊组，再判是否落在批准面内，不能用 glob 命中代替归属判定）：a) 属未结维护组（本文 §4.5 登记的精确路径组）→ 保留：不阻塞、不纳入本任务提交组、不得被本任务重分类，提交与其他处置按本文 §4.5；b) 属固定职责控制记录（成员范围见设计稿 §4.2 工作区边界段：本任务的规划/控制记录、当前实例/绑定/写权记录及本次依赖动作的关联控制记录；分类口径见本文 §4.4）→ 不阻塞，单列为待提交控制组；c) 不属于本任务的未提交改动（含其他任务与外来改动）→ `WF_WORKSPACE_UNRESOLVED` 交人处置（阻断）；d) 归属语义存疑 → `WF_SCOPE_UNRESOLVED` 交人裁决（阻断）；e) 归属本任务（标记提交、归属裁决、替换继承或当前明确归属）且命中批准触碰面 → 范围内；f) 归属本任务但不在批准触碰面（已提交或未提交，含改名新端与旧端、删除路径）→ 确定性越界，输出 `WF_SCOPE_VIOLATION` 阻断，出口是回 Plan 扩范围或经人确认必要变更后重新批准，不自动扩 glob、不追认提交。
+
+**首轮实现覆盖（2026-11-05 第二次复审后修正）**：首轮候选集为「未提交路径 ∪ 本任务归属路径」，归属判定为「归属标记/裁决 ∪ 命中批准触碰面」。由此：①未提交且命中批准面 → e 档（设计稿 §4.2 明定）；②归属但不在批准面 → f 档；③**未归属的候选必然未提交 → c 档**。因此 **d 档在首轮不可达**（候选集构造使「未归属 ⇒ 未提交」恒成立），该档保留给后续轮次引入「已提交但归属不可解析」的判定。已提交的外部提交**不进候选集**，由外部变更核对另行处理（本文 §3.3），所以既不落 d，也不因命中 glob 就自动算作本任务范围。早前两版说明（「d 恒空、存疑并入 f、不会误放行」与「d 会产生、外部提交落 e」）均与实现不符，一并撤回；「命中 glob 但归属存疑」在首轮没有专用出口，属已知偏差。
 
 **外部变更核对**（针对提交，不参与上述路径分类）：从任务基线到当前 HEAD 中触及批准触碰面却没有本任务归属的提交，按本文 §3.3 的外部变更处置核对内容影响——无影响时通过，并在报告中列明该提交与结论；影响范围或验收时回 Plan；影响既有检查时按内容指纹重检后再核。它不产生越界结论，也不阻断无影响的提交。
 
@@ -376,6 +378,8 @@ maintenance_results 承载尚需核实或处置的维护结果；Git 保存已�
 若路径已被后续合法工作修改，按本节开头的可达提交查证派生：区间下界取该操作登记的 head_before，登记结构为该操作回执（maintenance_results 单项）与完整路径组登记终态；查证成立即证明该次维护已持久化，后续同组路径差异按当前归属处理，不要求工作树当前与登记终态完全一致。
 
 已完成反向修正或具名承接时，原回执保存 disposition 及实际路径状态；其结案证明须包含该处置决定、核验事实和必要承接引用，不能仅凭文件内容碰巧相等。未结、冲突或仍被未完成 action 使用的回执始终完整保留。
+
+**处置类型（`disposition.kind`）与各自的核验事实**：`commit`（提交可达且各登记路径的树状态等于登记终态）、`reverse`（各登记路径当前指纹等于登记前像）、`transfer`（承接任务存在、未归档、有效批准且批准面覆盖全部路径）、`uninstall`（2026-11-06 增补：卸载移除的资产当前都不存在——卸载与 Git 提交无关，不以提交事实结案）。四类都由只读事实探针核验，字段齐但事实核不过一律落 `pending_check`，不得凭 disposition 非空结案。
 
 已结回执在下一次实际维护操作的预览中可列为收敛对象：逐项核对上述可达提交、完整处置事实，且相关路径当前无未处理工作树/索引差异，然后由维护入口移出当前集合；不在 writer 内永久累加一行摘要。该维护 action 记操作 id、原回执摘要与证据提交，移除前像已经在 Git 中，历史仍可追溯。收敛与 writer 整文件提交须各在原有授权范围内，不能为清理回执单独滥用 repair 或新增入口。没有收敛授权时保留回执并报告，不限制未结项数量来换取性能；因长期未提交而积累的真实待处理项仍须人处置。
 
@@ -604,6 +608,7 @@ actions 的判定进度与人判保存在所属 task.execution，叙述与证据
 | `schema_version` | 正整数 1 | 配置解释版本 |
 | `project_id` | UUID4；初始化随机生成，不在骨架给值 | 本机解释器确认匹配；repair 重建生成新值后与旧值比对、相同则重新生成；缺失只阻断依赖身份的判断 |
 | `python_executable` | 可选路径，无缺省值 | 本文 §8.2；设置但失效不得向下回退 |
+| `identity_path` | 枚举 P1/P2/P3，缺省 P1 | 身份兜底证据策略（仅宿主未提供会话标识时使用）：P1 终端/单聊天与为每聊天派生独立 shell 的多聊天；P2 排除 L1 维度的 l1-drift 处置；P3 tmux 只认 L1；非法值按 WF_RECORD_INVALID，不静默取 P1（本文 §1.4 的取用次序为先宿主会话标识、后进程锚） |
 | `tdd_default` | 布尔 false | Plan 按项目缺省提出任务取值，人批准 |
 | `review_file_hint`、`review_line_hint` | 正整数 3、80 | 提醒复评复杂度，不自动分类 |
 | `split_file_hint`、`split_line_hint`、`merge_line_hint` | 正整数 8、400、10 | 体积提示，不自动拆合任务 |
@@ -612,6 +617,7 @@ actions 的判定进度与人判保存在所属 task.execution，叙述与证据
 | `spec_reclaim_tasks` | 正整数 5 | 回收统计窗口 N |
 | `inspection_every_tasks` | 正整数 10 | 正常归档累计数整数倍触发巡检 |
 | `spec_output_codepoints` | 正整数 12000 | 每次 spec 加载/输出响应的软预算 |
+| `verification_timeout_seconds` | 整数 0（0 = 不设上界；正整数 = 单条验证命令超时秒数） | `check.py::_run_argv`；负数、布尔、非整数（含字符串）即 `WF_RECORD_INVALID`，不静默退为无界；0 合法且不视为非法值 |
 
 无完整配置的自举仅使用对应版本骨架的非身份参数；project_id 在初始化落盘时生成。旧 schema 缺失非授权类新增键可按版本表取发行缺省并可见报告；未知/非法键不静默当无限或 false。项目标识 clone/复制沿用，目录移动不重建；purge 后新初始化产生新标识，repair 重建按设计稿 §5.5 显式失效旧确认。
 
@@ -635,7 +641,9 @@ installed 入口从自身真实位置核 `.wf/bin` 与项目根；源码/重取�
 
 spec frontmatter 使用 `---` 分隔，内部采用标准库可解析的受限形式：每行 `key: <JSON值>`，key 为固定 ASCII 名称，字符串双引号、数组为 JSON 数组、整数为十进制；没有多行 YAML、alias、tag 或隐式类型。未知键保存原行，重复键/不支持结构可见标不可解析。只对本框架 spec 使用此格式，不要求改写其他流程规范。正文 Markdown 不作程序执行。
 
-首版字段：`paths` 为字符串数组；`status` 为 template/active/disabled；`verified_at` 为合法日期或 extracted（template 可为 null）；`schema_version=1`；`author` 为 human/ai；`counterexample` 为非空字符串或明确模板标记。active 才参与规则加载，模板不是已核实知识；extracted 永久待核实直至人实际核验转日期。
+首版字段：`paths` 为字符串数组；`status` 为 template/active/disabled；`verified_at` 为合法日期或 extracted（template 可为 null）；`schema_version=1`；`author` 为 human/ai；`counterexample` 为非空字符串或明确模板标记；`check` 为该规则的可执行判定（引用项目内验证命令或等价可判事实的字符串，可为 null）；`clauses` 为判定条件数组，每项 `{id, status, statement, deprecated_summary?}`。active 才参与规则加载，模板不是已核实知识；extracted 永久待核实直至人实际核验转日期。
+
+**clauses 写法（只增不改）**：`status` 取 active/deprecated；语义变化必须新建条目并把旧条置 `deprecated`，**不得原地改字**；`id` 在文件内唯一，同一 id 不得有两条 active；`deprecated` 条目必填 `deprecated_summary`（≤80 字符的一行摘要）；标准摘要只算 `status=active` 的条目，材料与预览只显示 active 全文并提示历史修订条数，`d:` 只能引用 active 条目。`check` 与 active `clauses` 构成该规则的实质输入：它们变化即标准变化（锚点失配），排版变化不算。
 
 合法组合：active 的 verified_at 必须为日期/extracted，counterexample 必须有实际内容；template 可用 null/模板标记，disabled 保留停用前的证据值而不参与当前路由。只有人实际核实的动作可将 extracted 变日期；单纯编辑/改名只改内容版本，不自动刷新核实时间。
 
@@ -667,7 +675,7 @@ index 与 metadata 同步是这些操作的后置，不单靠文件写成功判�
 
 周期清点是本文 §8.5 巡检中的知识治理部分，报告名称固定为“策展引用统计”；共享同一次记录遍历，从活动与归档 task.curation 重建引用，连同过期/extracted、路径漂移和需人工比对项输出。它统计任务选用/引用，不称“实际加载次数”，读取侧车清理/丢失不改变结果。历史曾选用但当前已解除仍计为该次任务引用，活动依赖阻止删除只看未解除项。计数与触发统一由巡检定义，不在知识清点另维护一份节奏或累计数。
 
-回收看该 spec 存在期间最近连续 N 个正常归档任务的完整清单且无当前活动依赖；窗口中任何一次引用即不列回收候选。存在起点、改名/合并映射从 Git 与知识变更记录核对；缺清单、样本不足或映射不明报告未知。候选只供人决策，删除仍走引用解除与准入/去留判断。`.wf/out-of-scope/` 一概念一文件：文件名为 `<concept>.md`，frontmatter 用本文 §8.3 的受限形式登记 `concept`（稳定概念名，与文件名一致）、`reason`（非空）、`reconsider_when`（非空）三项；正文固定 `## 既往请求` 段，重提时在该段追加一行 `- <YYYY-MM-DD> ｜ <请求摘要> ｜ <结论或裁决引用>`，不新建文件、不另起概念文件，同一 concept 出现多个文件由巡检报重复登记；写者为知识处置入口（spec-update），消费者为重提前的人工对照与巡检知识治理清单。临时困难放 task.handoff.pending，不伪装持久拒绝。
+回收看该 spec 存在期间最近连续 N 个正常归档任务的完整清单且无当前活动依赖；窗口中任何一次引用即不列回收候选。存在起点、改名/合并映射从 Git 与知识变更记录核对；缺清单、样本不足或映射不明报告未知。候选只供人决策，删除仍走引用解除与准入/去留判断。`.wf/out-of-scope/` 一概念一文件：文件名为 `<concept>.md`，frontmatter 用本文 §8.3 的受限形式登记 `concept`（稳定概念名，与文件名一致）、`reason`（非空）、`reconsider_when`（非空）三项；正文固定 `## 既往请求` 段，重提时在该段追加一行 `- <YYYY-MM-DD> ｜ <请求摘要> ｜ <结论或裁决引用>`，不新建文件、不另起概念文件，同一 concept 出现多个文件由巡检报重复登记；写者为知识处置入口（spec-update），消费者为重提前的人工对照与巡检知识治理清单。临时困难放 task.handoff.pending，不伪装持久拒绝。**启用前置**（设计稿 §6.3）：写入者（spec-update）、消费者（巡检重复登记核对与知识处置引用）、路径放行与一组正反用例先就绪；本轮该机制零实现，目录只作落点登记，不得据此宣称可用。
 
 ### 8.5 周期巡检
 
@@ -698,7 +706,7 @@ index 与 metadata 同步是这些操作的后置，不单靠文件写成功判�
 
 ### 9.1 发起、材料与报告 schema
 
-复杂任务 Check 有效后，由人声明实施 CLI 集合、两个异种 reviewer CLI 与槽位，并授权本次材料范围。入口在 task.reviews.launches 保存 `{round, attempt, decision, implementation_clis, slots, anchor, submitted_scope, readable_scope, exclusions, export_decision, temp_paths}`。round 从 last_round+1 分配，跨返工保持递增；attempt 引用当前实施尝试号，每个尝试内最多两轮，返工后新尝试的轮数从零计但全局 round 不归零，旧报告路径不复用。
+复杂任务 Check 有效后，由人声明实施 CLI 集合、两个异种 reviewer CLI 与槽位，并授权本次材料范围。入口在 task.reviews.launches 保存 `{round, attempt, decision, implementation_clis, slots, anchor, submitted_scope, readable_scope, exclusions, export_decision, temp_paths}`。round 从 last_round+1 分配，跨返工保持递增；attempt 引用当前实施尝试号，**轮次不设上限**（2026-11-09 人裁：删除两轮额度，收敛由设计稿 §6.5 的完成条件与判断清单决定），返工后新尝试的轮数从零计但全局 round 不归零，旧报告路径不复用。
 
 submitted_scope 只有 diff、需求、测试结果；readable_scope 分列允许只读的业务代码、spec 与需求 PRD。exclusions 明列凭据、私密配置、项目外非报告路径、其他任务目录；暂存报告目录是单独授权的输出位置，不开放它的父目录。项目配置/基线哈希属于对象锚点元数据，不因它在指纹里就授权 reviewer 读取私密配置。材料不够覆盖检查面时 reviewer 回报，不自行扩大；与检查有关的公开需求事实可在原授权范围内整理，新增外发范围仍需人确认。
 
@@ -710,7 +718,9 @@ submitted_scope 只有 diff、需求、测试结果；readable_scope 分列允�
 | `task-id`、`round`、`reviewer-id` | 本次任务、正整数轮次、已声明槽位；不从目录名猜 |
 | `source-cli`、`review-time`、`review-focus` | 自报 CLI、Time、固定检查轴及本次重点 |
 | `check-anchor` | check.id 与本文 §3.2 定义的 check_anchor 键集合取值；键集合与计算以本文 §3.2 为准，含开工快照摘要、批准触碰面摘要、实际触碰路径摘要、内容指纹、批准版本、验收摘要及 spec/基线/配置/定义快照哈希 |
-| `read-scope`、`excluded-scope`、`scope-exceptions` | 实际读取声明、排除声明、越界/缺材料事实 |
+| `read-scope`、`excluded-scope`、`scope-exceptions` | 实际读取声明、排除声明、越界/缺材料事实。**`excluded-scope` 必须覆盖四类敏感面**（凭据、私密配置、项目外路径、其他任务目录），只写非空不足以成立；`scope-exceptions` 非空即视为未覆盖事实，不得 pass（2026-11-07 审计后补，设计稿 §8.2「审查读取范围」） |
+
+**审查身份与人数（2026-11-07 修订）**：身份由**报告文件名** `review-<agent>.md` 承载，正文不再要求 `reviewer-id`/`source-cli`（写了就必须与文件名一致，两个事实源不许打架）。reviewer 侧只声明**任务与轮次**，其余事实由入口 `review-context` 提供（占位、材料、锚点、报告路径）；**同一 agent 同一轮只允许一次审查调用**（占位即闸门，出现即阻止后续审查）。人数与异种在 `review-decide` 按文件名 token 判定：至少两份、两两不同、且都不等于实施 CLI（实施 CLI 取 action 会话宿主身份并回写记录）。由此「事先声明审查 CLI」不再必需，中途更换 agent 只需报告如实署名。
 | `axes` | 范围、验收、契约/spec、跨层回归、可测性各自结果与未覆盖项 |
 | `findings`、`verdict` | 具名发现、位置/证据/影响；pass/fail/unavailable，仅建议可 pass |
 
@@ -722,11 +732,11 @@ reviewer 只在已给的项目树外暂存路径写报告。导入主会话持�
 
 暂存目录按 task/round/slot 隔离并由主会话输出其确切范围；源报告在导入成功、目标摘要/元数据均核对且 reviewer 已结束写入后才成为可清理项。主会话报告这些精确目录的导入/待决状态，由人确认后清理；默认保留尚未导入、冲突或恢复中的轮次，不静默删旧轮或全局临时根。项目卸载/purge 的清单不覆盖这些项目外目录，只列残留位置及人工清理出口，不授予删除权限；导入的项目内报告按任务归档/保留策略处理。正文和摘要均避凭据，需求/测试内容的外发和保留仍在原授权范围内。
 
-人工声明至少两个 reviewer CLI，彼此不同且不在任一实施 CLI 中。主会话对照实际调用、自报字段与声明来源核验；文件不能证明身份真实性，缺失/冲突不能 pass。同 CLI 换模型仍同 provider。单 reviewer 可作为 degraded 参考，不能满足复杂完成门禁。
+人工声明至少两个 reviewer CLI，彼此不同且不在任一实施 CLI 中。主会话对照实际调用、自报字段与声明来源核验；文件不能证明身份真实性，缺失/冲突不能 pass。同 CLI 换模型仍同 provider。单 reviewer 可发起并在 `launches` 记 `degraded: single-provider`，报告导入后留档供人参考；该轮**不产生判定结论**——`review-decide` 以 `WF_REVIEW_INVALID` 拒绝并给出已导入报告与两个出口（补第二家 CLI / 按设计稿 §6.5 的不可用处置 `--unavailable`），因此不能满足复杂完成门禁。
 
-task.reviews.imported 保存 `{round, slot, report_path, report_digest, anchor}`；dispositions 保存逐条接受/驳回理由、证据与后续动作，result 保存当前对象的 pass/fail/unavailable 和引用。存在阻塞项、未决人判、必要验证 fail/未跑、范围核对失败、报告/身份/人数不合格即 fail。驳回须本地核实，不把“作者不认可”当证据。审查 pass 后采纳纯建议（不影响 verdict 的建议项）一律先按本文 §3.2 重算当前锚点（触碰路径集合、内容指纹、相关 spec/基线/配置与定义快照），再与当前 check.anchor 比对：一致时——采纳内容既不进入交付、也不改变规则输入（例如只改任务内非判定叙述或审查处置记录）——dispositions 记采纳依据，报告继续有效、不追加轮次；不一致时——无论改动是否落在旧 check 对象内（新增获批 glob 内的交付文件、修改既有交付、改变 spec/配置或验收都属此类）——旧 Check 与旧审查同时失效，重跑 Check 并发起新轮次。「不在旧对象内」不构成保留依据：判断单位是当前对象集合与验收影响，不是旧集合的成员关系。
+task.reviews.imported 保存 `{round, slot, report_path, report_digest, anchor}`；dispositions 每项为 `{finding_id, decision, reason, evidence_refs, follow_up, recheck_by, at}`（decision 取 accepted/rejected/amended），result 保存当前对象的 pass/fail/unavailable 和引用。**关闭某条 finding 的复核不得由提出它的报告给出**：`recheck_by` 必须非空且不等于该 finding 所在报告的 slot/agent，缺失或相等的关闭视为未处置（不构成关闭，也不据此判 pass）；单 reviewer 场景退回人确认，人确认记 `recheck_by=human:<来源>`。**规则不得自证（K4c）**：报告 `findings[].assertion_ref` 必须属于当前批准集合（验收项 id、验证 id，或参与 spec 的路径与 `path#clause-id`）；**本任务内新增或修改过的规则不得充当判据**——判据是该规则在策展记录里的选用摘要与当前实质摘要是否相同（不同即改过），blocking finding 必须带引用。`check_fix_kind=broken-reference` 的声明可解除该禁令，但**豁免 = 声明 + 人复核**（2026-11-09 人裁 B：旧 check 原文不落盘，框架不假装能验证声明真伪）；被解除禁令的每条 finding 在判定时必须有一条 `recheck_by=human:<来源>` 的处置，否则拒绝并给出两条出口。输入不成立（报告缺失/元数据非法、身份声明缺失或冲突、人数不足含单 reviewer）先拒绝、不产生 verdict；输入成立后，存在阻塞项、未决人判、必要验证 fail/未跑、范围核对失败即 fail。驳回须本地核实，不把“作者不认可”当证据。审查 pass 后采纳纯建议（不影响 verdict 的建议项）一律先按本文 §3.2 重算当前锚点（触碰路径集合、内容指纹、相关 spec/基线/配置与定义快照），再与当前 check.anchor 比对：一致时——采纳内容既不进入交付、也不改变规则输入（例如只改任务内非判定叙述或审查处置记录）——dispositions 记采纳依据，报告继续有效、不追加轮次；不一致时——无论改动是否落在旧 check 对象内（新增获批 glob 内的交付文件、修改既有交付、改变 spec/配置或验收都属此类）——旧 Check 与旧审查同时失效，重跑 Check 并发起新轮次。「不在旧对象内」不构成保留依据：判断单位是当前对象集合与验收影响，不是旧集合的成员关系。
 
-实际 fail 后在范围内修复、重跑 Check，再发新轮次；同一实施尝试最多两轮（含审查通过后因采纳建议发起的重审），两轮用尽仍未 pass 由人发起返工，不再发起第三轮；返工后尝试计数重置、round 号继续递增（文件轮号不重置）。unavailable 只用于实际缺 CLI/适配/启动能力，不把两轮 fail 改成不可用；当前任务仍复杂时暂停或异常退出，只有事实范围变轻并获重新分级后才走轻量 Check。失效锚点一律重审，不能因旧文件仍在而复用。
+实际 fail 后在范围内修复、重跑 Check，再发新轮次；**不设轮次上限**（2026-11-09 人裁：删除两轮额度），是否继续由当前完成条件与未关闭项决定，"轮次用尽"不再是合法阻断理由；返工后尝试计数重置、round 号继续递增（文件轮号不重置）。unavailable 只用于实际缺 CLI/适配/启动能力，不把实际 fail 伪装成不可用；当前任务仍复杂时暂停或异常退出，只有事实范围变轻并获重新分级后才走轻量 Check。失效锚点一律重审，不能因旧文件仍在而复用。
 
 attempts 每项为 `{number, rework_ref, round_ids, outcome}`；原 T 经返工 R 恢复后只增加尝试号，T.last_round 不归零；`round_ids` 记录该尝试的全部轮次（含采纳建议后的重审），额度按总轮数计。R 自己作为普通任务有自己的 task-id 与审查序列，两者不能互借报告；同一任务的旧轮次路径永不覆写。任务替换后新任务采用自己的 task-id，旧任务报告只作来源参考。
 
@@ -774,7 +784,7 @@ task.archive 在本节前置中消费本文 §2.3 的 verification.resolve(finis
 
 专用发行引用定为 `refs/tags/wf-v<major>.<minor>.<patch>`，版本按三段非负整数解释，预正式发行使用 0.x.y。目标提交根的清单定位定为 `wf-release.json`；这是发行协议定位，authoring 的打包源码布局另由实现方案定义。清单不写包含自身的 Git SHA；源提交从人给的专用引用解析到 commit 获得。
 
-清单 schema：`{schema_version, version, compatibility, assets, required_steps, template_markers, gitignore_managed}`。compatibility 为 `{python_min, systems, filesystems, record_versions, workflow_versions, rules_digest}`；assets 为 `{source_path, target_class, target_relative, kind, required, file_kind, executable, digest}` 数组，kind 是资产类型，file_kind/executable/digest 采用本文 §3.2 的文件状态定义，required 缺失按 true。required_steps 的唯一字段定义与适用性算法在本文 §11.2，清单保存其实际条目；清单不复制 skill description。gitignore_managed 为 `{begin_marker, end_marker, lines}`：登记托管段标记串（首行 `# wf-managed-v1`、尾行 `# wf-managed-end`，见本文 §10.1 落点表）与首版段内容（框架运行态忽略行，含 `/.wf-lock` 保留行）；标记串与段内容属于判定物，随发行版本化、计入 rules_digest 输入，升级/卸载按其定位整段处理，不以散行匹配替代；卸载后保留的单行不属托管段登记内容，不参与段匹配。
+清单 schema：`{schema_version, version, delivery_round, compatibility, assets, required_steps, template_markers, gitignore_managed}`。`delivery_round` 为**发行侧的交付可达性**（正整数，当前交付到第几轮），不是人工验收状态：安装自检据此判定「声明为当前交付集内的步骤，其承接命令不得是能力不可用桩」，未交付轮次只报告不阻断；`required_steps` 每项的 `delivery_round` 进入 `rules_digest`，顶层字段不进入。缺失或非法时安装自检按 `WF_CAPABILITY_UNAVAILABLE` 拒绝启用，不静默放行。compatibility 为 `{python_min, systems, filesystems, record_versions, workflow_versions, rules_digest}`；assets 为 `{source_path, target_class, target_relative, kind, required, file_kind, executable, digest}` 数组，kind 是资产类型，file_kind/executable/digest 采用本文 §3.2 的文件状态定义，required 缺失按 true。required_steps 的唯一字段定义与适用性算法在本文 §11.2，清单保存其实际条目；清单不复制 skill description。gitignore_managed 为 `{begin_marker, end_marker, lines}`：登记托管段标记串（首行 `# wf-managed-v1`、尾行 `# wf-managed-end`，见本文 §10.1 落点表）与首版段内容（框架运行态忽略行，含 `/.wf-lock` 保留行）；标记串与段内容属于判定物，随发行版本化、计入 rules_digest 输入，升级/卸载按其定位整段处理，不以散行匹配替代；卸载后保留的单行不属托管段登记内容，不参与段匹配。
 
 compatibility 的取值域：python_min 为 `{major: 3, minor: 11}`；systems 为 `["linux"]`；filesystems 为 `{local_only: true, advisory_flock_required: true, network_or_sync_supported: false}`。record_versions 是对象类型到 `{read: [正整数], write: 正整数}` 的映射，首版键为 task/binding/preparation/run/writer/installation/config/spec，全部 read=[1]、write=1；未知版本仅阻断依赖判断。workflow_versions 为 `{read: [1], write: 1}`。这些字段表示发行支持声明，不替代安装机的实际能力验证。
 
@@ -786,7 +796,7 @@ template_markers 为 `{formats: [{id, pattern}], uses: [{template_path, selector
 
 安装从设计稿 §7.5 固定私有源获得已检出的发行源码，入口本地解析指定 tag → commit → 清单/资产，不查询发布服务。校验 tag 版本与清单一致、每源路径处于发行根内且无越界/嵌套引用、资产实际哈希一致，记录解析出的 commit 与清单摘要。同一 version 已见不同 commit/清单视为冲突，即便引用名相同；首次没有既往观察时只能核当前身份一致，不声称证明远端 tag 从未移动。
 
-本地安装记录含 `{release_ref, source_commit, version, manifest_digest, platforms, roots, assets, decisions}`（2026-11-05 修订：`session_profile` 已取消，身份事实改为 `platforms` 清单，按本文 §1.4 判定）。roots 为安装时人确认的实际投放根，项目内根用相对路径、明确项目外根用绝对路径；assets 每项保存 target、旧模板 O 的哈希与可重取来源、必要本地模板副本、所见 N、接受偏离/删除决定。只从已登记目标判所有权，远端通用清单不证明本机曾安装到哪里。
+本地安装记录含 `{release_ref, source_commit, version, manifest_digest, platforms, roots, assets, decisions}`（2026-11-05 修订：`session_profile` 已取消，身份事实改为 `platforms` 清单，按本文 §1.4 判定；同日人裁取消项目外投放根）。roots 为安装时人确认的实际投放根，**一律为目标项目内的相对路径**；assets 每项保存 target、旧模板 O 的哈希与可重取来源、必要本地模板副本、所见 N、接受偏离/删除决定。只从已登记目标判所有权，远端通用清单不证明本机曾安装到哪里。
 
 ### 10.3 预览令牌与应用
 
@@ -847,6 +857,8 @@ purge 另由人直调并确认数据丢失、备份位置和全部目标。应�
 | `WF_ACTION_INCOMPLETE` | blocked | 相关动作未完成且事实可定位 | 按原意图恢复；不另生成重复对象 |
 | `WF_HISTORY_UNRESOLVED` | needs_decision | 锚点/旧写者/记录来源待核 | 只读核 Git/原文，人确认后 repair；不改历史猜锚点 |
 | `WF_TARGET_COLLISION` | blocked | 创建/归档/移动目标已占用 | 保留双方并确认目标；不先改状态后覆盖 |
+| `WF_TARGET_MISSING` | blocked | 绑定的对象不存在（任务/实例记录缺失） | 核对 id 与目录后重试；不存在与「已占用」是相反事实，不复用 `WF_TARGET_COLLISION` |
+| `WF_UNRESOLVED_BLOCKING` | blocked | 审查报出了 `severity=blocking` 的 finding，但**没有任何处置动作**（`reviews.dispositions` 里没有以 `accepted` 关闭它的条目） | 按 K4b 由非提出者复核关闭；或由人确认重分类；或按设计稿 §5.6 异常归档。不把"不处置"当关闭；不靠自由文本理由关 blocking |
 | `WF_CHECK_FAILED` | blocked | 必要命令失败/未运行/未结束或内部审查未通过 | 修复并重跑相关项；不称基本通过 |
 | `WF_CHECK_STALE` | blocked | 当前路径/内容/规范/环境与检查不同 | 重新 Check/审查；不按归属豁免变化 |
 | `WF_SPEC_INCOMPLETE` | blocked | 必要正文未完整读取/版本不符 | 分批全文读取；不以摘要当已读 |
@@ -882,7 +894,7 @@ purge 另由人直调并确认数据丢失、备份位置和全部目标。应�
 
 发行清单的 `required_steps` 是应执行步骤的唯一机读来源，首轮开发态部署也须带同结构清单。流程 Markdown 以稳定 `id` 引用声明并写 `[required · once]` 或 `[required · repeatable]`；安装/升级自检双向核对 id、mode 和 enforcement，缺声明、重复 id、模式不符或找不到执行面均使相关流程不可用。任务中的执行回执不是步骤清单，不能用“已记录的步骤都成功”代替“应有步骤全部满足”。
 
-每项声明为 `{id, scope, workflow_ref, mode, applies, due}`：id 为发行集内唯一的稳定 ASCII 名称；scope 取 task/control；workflow_ref 定位发行流程文件及该 id 的步骤标记；mode 取 once/repeatable。task 的 applies 是 `{task_kinds, condition}`，task_kinds 为 ordinary/initialize/bootstrap 的非空子集，condition 只取 all/complex/tdd/retrospective，由当前批准分级、TDD 取值与实际复盘触发事实判定，不接受自然语言或可执行表达式。事实未知就给待核对出口，不能按不适用删除步骤。control 声明只应用于具名操作的本次 action，不加入每个普通任务的收尾清单。
+每项声明为 `{id, scope, workflow_ref, mode, applies, due, delivery_round}`（`delivery_round` 为该步骤的交付轮次，生成与消费见本文 §10.2）：id 为发行集内唯一的稳定 ASCII 名称；scope 取 task/control；workflow_ref 定位发行流程文件及该 id 的步骤标记；mode 取 once/repeatable。task 的 applies 是 `{task_kinds, condition}`，task_kinds 为 ordinary/initialize/bootstrap 的非空子集，condition 只取 all/complex/tdd/retrospective，由当前批准分级、TDD 取值与实际复盘触发事实判定，不接受自然语言或可执行表达式。事实未知就给待核对出口，不能按不适用删除步骤。control 声明只应用于具名操作的本次 action，不加入每个普通任务的收尾清单。
 
 task.due 取 before_execute/before_check/before_archive/after_archive，表示最迟满足时点，不是 task.phase 的新值；control.due 为 operation_end。id 同时是框架实现中的固定分派键，下表与本文 §11.3 给出每个键的核验算法和证据类型；不再让清单自由填写 gate/anchor_kind/evidence_kind 或函数名。实现须为每个声明 id 提供对应固定处理器，自检比较支持键集合与清单声明，未知 id 拒绝，不动态加载任意代码。新增阶段内细分步骤要同批增加固定键、投影和断言，不能只在 Markdown 增一句 required。
 
@@ -980,17 +992,17 @@ action.result 中的 control_assertion 为 `{step_id, rule_version, occurrence, 
 | D11 | 工作流格式、准备/自举、动作与验证边界、固定快照及版本维护 | 本文 §7.1、§7.2、§7.4 | 该轮交付·第二轮 |
 | D12 | 步骤人判/略过、动作消费、自动任务/边与幂等映射 | 本文 §7.3 | 该轮交付·第二轮 |
 | D13 | 实例正常结束、批量异常终止、保留任务独立接续 | 本文 §1.5、§7.4 | 该轮交付·第二轮 |
-| D14 | 稳定会话身份、持久绑定、历史按需读取 | 本文 §1.4、§2.1、§5.2 | 跨轮基础项 |
+| D14 | 稳定会话身份、持久绑定、历史按需读取 | 本文 §1.4、§2.1、§5.2 | 跨轮基础项（身份判定与持久绑定）；**wf 自签发身份路径已提前到第一轮**（2026-11-08 人裁 OD-7）；同一轮内**以宿主会话标识为主来源、执行边界派生为回落与冲突判据**（2026-11-09 人裁：全部宿主先取宿主会话标识）；未交付前的旧口径作废|
 | D15 | 会话/维护写者、原子获取/释放、两段交接与旧代次失效 | 本文 §4.1、§4.2 | 跨轮基础项 |
 | D16 | 同对象 WIP 收工/恢复限制 | 本文 §4.3、§4.4 | 跨轮基础项 |
 | D17 | 项目配置类型/范围/缺省、自举骨架 | 本文 §8.1 | 跨轮基础项 |
-| D18 | spec 预算键、计数范围、数值缺省及降级 | 本文 §8.1、§8.4 | 跨轮基础项 |
+| D18 | spec 预算键、计数范围、数值缺省及降级 | 本文 §8.1、§8.4 | 跨轮基础项（单文件读取与不截断自首轮成立）；其中多文件预算降级链与截断标记经 2026-11-06 人裁**延至第三轮**，见 pending-decisions.md 第 6 节；对应场景行 650/643 已移出首轮分母（见 denominator.md）|
 | D19 | 命令引导、installed/源码目标、坏配置独立恢复 | 本文 §8.2、§10.5 | 跨轮基础项 |
 | D20 | Python 三级解析、缺系统 Python 的已有配置出口 | 本文 §8.2 | 跨轮基础项 |
-| D21 | 执行器探测/确认、首次写入批准、项目标识匹配 | 本文 §3.4、§8.1、§8.2 | 跨轮基础项 |
-| D22 | 发行引用与本地清单解析 | 本文 §10.2 | 该轮交付·第三轮；首轮开发态也固定所用资产/模板版本 |
+| D21 | 执行器探测/确认、首次写入批准、项目标识匹配 | 本文 §3.4、§8.1、§8.2 | 跨轮基础项（**部分交付**；2026-11-06 人裁：集合语义负例已补 repro（`d21-executor-set-*`，见 pending-decisions.md 第 6 节），`repair` 重建标识与旧确认失效留第三轮）|
+| D22 | 发行引用与本地清单解析 | 本文 §10.2 | 跨轮基础项（**安装侧**：发行根 `install.py` 自含解析 tag→commit→清单→资产并核 `rules_digest`，首轮交付）；该轮交付·第三轮（**运行期升级侧** `wflib/assets.py::parse_release` 仍为桩） |
 | D23 | spec 三时点加载、策展/读取侧车、排序/预算 | 本文 §8.3、§8.4 | 跨轮基础项 |
-| D24 | 本地 spec 全部变更、持久引用统计/治理 | 本文 §8.4、§8.5 | 跨轮基础项 |
+| D24 | 本地 spec 全部变更、持久引用统计/治理 | 本文 §8.4、§8.5 | 跨轮基础项（spec 增删改拆合改名、策展、统计、周期触发）；**拒绝项 `.wf/out-of-scope/` 延至第三轮、巡检的「需人工比对」清单与 author 复核顺序延至第二轮** |
 | D25 | 审查身份声明、报告核对及新鲜度 | 本文 §9.1、§9.2 | 跨轮基础项：首轮允许初始化/治理面任务，可能属复杂，故成对适配须首轮就绪 |
 | D26 | 审查读取/外发范围、报告写权与导入 | 本文 §9.1、§9.2 | 跨轮基础项，与 D25 同批 |
 | D27 | writer 公共字段与维护回执隔离、整文件提交 | 本文 §1.4、§4.5 | 跨轮基础项 |
@@ -1003,7 +1015,7 @@ action.result 中的 control_assertion 为 `{step_id, rule_version, occurrence, 
 | D34 | 最终门禁与正常/异常完成边界 | 本文 §9.3、§6.4 | 跨轮基础项 |
 | D35 | 每条门禁到验收场景的映射 | 本文 §12.2、§12.3 | 跨轮基础项 |
 | D36 | 每个固定 required 步骤的执行/检查面 | 本文 §11.2、§11.3 | 跨轮基础项，步骤随交付增加 |
-| D37 | 最小安装/自检、完整安装/升级/退出 | 本文 §10 | 首轮最小安装/独立恢复为跨轮基础项；完整发行入口为第三轮交付 |
+| D37 | 最小安装/自检、完整安装/升级/退出 | 本文 §10 | 跨轮基础项（最小安装与自检：开发态 `wf-dev-deploy.py` + **发行入口 `install.py` 首装**）；该轮交付·第三轮（`upgrade --apply`、`uninstall --purge`、完整升级/卸载矩阵） |
 | D38 | 机制/实现分工、使用速查与后续验证责任 | 本文 §0、§12.4 | 跨轮基础项；实现方案产出实际布局/命令和速查 |
 
 首轮复杂审查按真实对象执行，D25 的提前交付选择来自初始化/治理面可能命中的既有判据；这不把所有任务预先判为复杂。若首轮实际范围只含已初始化项目的轻任务，可以在实现规划中明确缩小验收对象，但不能以审查未实现让复杂任务正常完成。
@@ -1019,7 +1031,7 @@ action.result 中的 control_assertion 为 `{step_id, rule_version, occurrence, 
 | 设计稿 §8.2 判定物（预览令牌） | 令牌的生成/校验/绑定 | 本文 §10.3（nonce 128 位、绑定预览摘要、同进程失效） |
 | 设计稿 §8.2 判定物（占位标记集） | 模板占位标记与使用位点 | 本文 §2.3、本文 §10.2（template_markers 的 formats/uses） |
 | 设计稿 §8.2 判定物（归属判定） | 提交归属的判定编码 | 本文 §3.3（trailer/裁决/继承）、本文 §5.1（action 的归属核验） |
-| 设计稿 §8.2 判定物（原因码） | 固定码表，只增不改义 | 本文 §11.1（首版 34 枚）与处理器映射表 |
+| 设计稿 §8.2 判定物（原因码） | 固定码表，只增不改义 | 本文 §11.1（首版 34 枚 + 后续 1 枚 `WF_TARGET_MISSING`，共 35 枚）与处理器映射表 |
 | 设计稿 §3 项目配置（project_id 格式与生成） | 随机生成、实际不重复、重建不复用旧值 | 本文 §1.1（UUID4）、本文 §5.4（重建比对）、本文 §8.1（project_id 行） |
 | 设计稿 §3 项目配置（预算键/计数范围/数值缺省） | 具体键与缺省值 | 本文 §8.1（全键表）与发行骨架 |
 | 设计稿 §4.4 项目写入权（维护标识派生） | 由操作和代次派生的具体编码 | 本文 §1.4（wf-maintenance-op-v1 公式） |

@@ -1,0 +1,508 @@
+--- source/check.py
++++ target/check.py
+@@ -10,7 +10,7 @@
+ import uuid
+ 
+ from . import config as config_mod, fingerprint, records, scope
+-from .paths import join
++from .paths import join, match_path
+ 
+ 
+ class CheckError(Exception):
+@@ -26,12 +26,18 @@
+ 
+ 
+ def object_paths(ctx, task):
+-    """本次 Check 对象的实际触碰路径集合（e 类）∪ 规则输入。"""
++    """业务交付、明确修改的控制面源码与规则输入；不含易变运行记录。"""
+     from . import tasks as tasks_mod
+ 
+     receipts = tasks_mod.task_receipts(ctx.root)
+     classified = scope.classify_candidates(ctx.root, task, receipts=receipts)
+     paths = set(classified["buckets"]["e"])
++    # 维护回执归 a 类、安装资产归 b 类；明确修改的源码都必须纳入锚点。
++    # writer、绑定、任务记录等记账字段仍排除，避免 Check 自己使自己失效。
++    for path in classified["buckets"]["a"] + classified["buckets"]["b"]:
++        if path.startswith((".wf/lib/", ".wf/bin/", ".wf/workflows/", ".agents/skills/")) and any(
++                match_path(pattern, path) for pattern in classified["touch_paths"]):
++            paths.add(path)
+     for entry in task.get("curation") or []:
+         if entry.get("released"):
+             continue
+@@ -168,6 +174,8 @@
+ 
+ SECRET_HEAD = re.compile(r"(?i)^(--?[a-z0-9_.-]*(?:token|secret|password|passwd|api[_-]?key)[a-z0-9_.-]*)"
+                          r"(\s*[=:]\s*|\s+)")
++URL_USERINFO = re.compile(r"(?i)(\b[a-z][a-z0-9+.-]*://)[^\s/@]+@")
++MAX_VERIFICATION_LOG_BYTES = 1024 * 1024
+ 
+ 
+ NON_SECRET_KEYS = frozenset({
+@@ -205,7 +213,7 @@
+             return head.group(0) + "***"
+         return "***"
+ 
+-    out = text
++    out = URL_USERINFO.sub(lambda match: match.group(1) + "***@", text)
+     for pattern in SECRET_PATTERNS:
+         out = pattern.sub(mask, out)
+     return out
+@@ -380,6 +388,7 @@
+         raise CheckError("WF_RECORD_INVALID", {"reason": "invalid verification timeout config",
+                                                "detail": problem})
+     timeout = value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
++    output = ""
+     try:
+         result = subprocess.run(argv, cwd=workdir, capture_output=True, text=True, check=False,
+                                 timeout=timeout)
+@@ -397,10 +406,19 @@
+     log_path = os.path.join(log_dir, f"{verification.get('id')}.log")
+     # 日志与 facts 都按秘密边界遮罩；命令参数一并过一遍（argv 可能带内联值）
+     masked_argv = redact_argv(argv)
+-    summary = redact_text(summary)
++    summary = redact_text(summary)[-2000:]
++    log_text = (f"argv: {records.canonical(masked_argv)}\ncwd: {cwd}\nexit_code: {exit_code}\n\n"
++                + (redact_text(output) if output else summary) + "\n")
++    encoded = log_text.encode("utf-8")
++    if len(encoded) > MAX_VERIFICATION_LOG_BYTES:
++        marker = b"\n[output truncated]\n"
++        remaining = MAX_VERIFICATION_LOG_BYTES - len(marker)
++        # 脱敏后再截断，避免切断敏感匹配；保留开头上下文和末尾测试结果。
++        start = encoded[:remaining // 2].decode("utf-8", errors="ignore")
++        end = encoded[-(remaining - remaining // 2):].decode("utf-8", errors="ignore")
++        log_text = start + marker.decode("ascii") + end
+     with open(log_path, "w", encoding="utf-8") as handle:
+-        handle.write(f"argv: {records.canonical(masked_argv)}\ncwd: {cwd}\nexit_code: {exit_code}\n\n")
+-        handle.write(summary + "\n")
++        handle.write(log_text)
+     status = "passed" if exit_code == 0 else ("not_run" if exit_code is None else "failed")
+     return {
+         "verification_id": verification.get("id"),
+
+--- source/cli.py
++++ target/cli.py
+@@ -829,10 +829,10 @@
+         ctx._session["instance_id"] = instance_id
+ 
+ 
+-def _establish_auto_session(ctx):
++def _establish_auto_session(ctx, previous=None):
+     """自动模式首次启用：签发身份、写附件、登记路由（§3.1/§2.2a）。
+ 
+-    只在"当前锚点没有任何路由"时调用；已有路由由 `_auto_resolve` 命中，不走这里。
++    无路由时首次签发；终态且写权已释放时轮换，保留原绑定。
+     """
+     from . import identity_store as store
+ 
+@@ -857,18 +857,61 @@
+         attachment["attached_l1"] = {"kind": "sid", "boot": l1["boot"], "sid": l1["sid"],
+                                      "sid_start": l1["sid_start"]}
+     routes = store.load_routes(ctx.root)
++    if previous:
++        routes, attachment = store.rotate(routes, previous["session_key"], session_key,
++                                           previous, attachment)
++        attachment["rotation_id"] = uuid.uuid4().hex
+     for item in candidates:
+         key = session_mod.anchor_key(item)
+         store.register(routes, key, session_key,
+                        "session" if item["kind"] == "sid" else "proc", item["boot"], at)
+     store.save_attachment(ctx.root, session_key, attachment)   # ① 先写附件
+     store.save_routes(ctx.root, routes)                        # ② 再提交路由（组原子）
++    if previous:
++        store.save_attachment(ctx.root, previous["session_key"],
++                              store.mark_superseded(previous, session_key))
++    ctx._key = None
+     ctx._auto_key = session_key
+     ctx._auto_attachment = attachment
+     ctx._session = {"provider": "wf", "identity": identity_value,
+                     "instance_id": None, "activation": activation, "source": "auto"}
+     ctx._envelope = {"session": None, "inputs": {}}
+     return {"session_key": session_key, "issued_id": issued_id, "roots": attachment["roots"]}
++
++
++def _terminal_auto_session_candidate(ctx):
++    """只读预筛：返回可能处于 S3 的会话，其他 enable 不必争写锁。"""
++    from . import identity_store as store, tasks
++
++    key, attachment = ctx._auto_resolve()
++    binding = session_mod.load_binding(ctx.root, key) if key else None
++    if not binding or not attachment:
++        return None
++    obj = binding.get("object") or {}
++    if obj.get("kind") != "task":
++        return None
++    task = tasks.load_task(ctx.root, obj.get("id"))
++    if not task or task.get("status") != "archived":
++        return None
++    writer = ctx.writer()
++    if writer.get("state") != "idle" or writer.get("holder") or writer.get("recovering"):
++        return None
++    return key, attachment, binding, writer
++
++
++def _renew_terminal_auto_session(ctx):
++    """显式 enable 的 S3 出口；候选在锁内复核后再轮换。"""
++    from . import identity_store as store, lock
++
++    if ctx.explicit_session() is not None or _terminal_auto_session_candidate(ctx) is None:
++        return
++    with lock.acquire(ctx.root, holder_hint="enable"):
++        candidate = _terminal_auto_session_candidate(ctx)
++        if candidate is None:
++            return
++        _key, attachment, binding, writer = candidate
++        if store.five_state(attachment, dict(binding, object_terminal=True), writer) == store.S3:
++            _establish_auto_session(ctx, previous=attachment)
+ 
+ 
+ def cmd_enable(ctx, args):
+@@ -907,6 +950,8 @@
+     code, profile_facts = session_mod.check_platforms(ctx.platforms(), session)
+     if code:
+         raise CliError(code, profile_facts, next_="install --platform <当前宿主> 后重试，或换用已安装的宿主")
++    _renew_terminal_auto_session(ctx)
++    session = ctx.session()
+     warnings = []
+     if state["data"]:
+         warnings.append({"clue": state["data"], "note": "仅数据线索；不构成当前激活指令"})
+@@ -1707,6 +1752,15 @@
+         task = tasks_mod.load_task(ctx.root, task_id)
+         if task is None:
+             raise CliError("WF_TARGET_MISSING", {"reason": "task not found", "task": task_id})
++        if kind in ("restart", "reauthorize"):
++            decision_path = args.value("--decision")
++            if not decision_path:
++                raise CliError("WF_SEMANTIC_DECISION", {"reason": f"review-{kind} requires --decision"})
++            try:
++                handler = review_mod.restart if kind == "restart" else review_mod.reauthorize
++                return handler(ctx, task, decision_path)
++            except review_mod.ReviewError as exc:
++                raise CliError(exc.code, exc.facts)
+         if kind == "launch":
+             request = args.value("--launch-request")
+             if not request:
+@@ -1813,6 +1867,25 @@
+                                                "new_paths": "新路径", "old_paths": "旧路径",
+                                                "content": "add/update 时的完整正文（含 frontmatter）"}},
+                     "example": "wf.py spec-update --task <id> --changes changes.json --json"},
++    "review-restart": {"purpose": "两轮失败返工，或两轮完成且最新判定通过后显式重开修订版本（允许保留历史fail）；均需人的新Check授权",
++                       "args": {"--task": "当前绑定任务 id（必填）", "--decision": "人的决定 JSON 数组（必填）"},
++                       "inputs": {"decision[]": {"choice": "restart-review（最新失败）|reopen-reviewed（两轮完成且最新通过）", "source": "human:<来源>",
++                                                   "at": "决定时间", "subject": "任务 id",
++                                                   "object_digest": "当前 Check 的 check_anchor",
++                                                   "check_id": "当前 Check id", "from_attempt": "当前尝试序号",
++                                                   "from_round": "当前最后轮次", "reason": "修正及重审原因",
++                                                   "previous_check_id": "reopen-reviewed 必填：上次通过 Check id",
++                                                   "previous_anchor": "reopen-reviewed 必填：上次通过 check_anchor"}},
++                       "example": "wf.py review-restart --task <id> --decision restart.json --json"},
++    "review-reauthorize": {"purpose": "修订后经人的精确新授权使用当前尝试剩余一轮；不增加额度、不修改历史",
++                           "args": {"--task": "当前绑定任务 id（必填）", "--decision": "人的决定 JSON 数组（必填）"},
++                           "inputs": {"decision[]": {"choice": "reauthorize-review", "source": "human:<来源>",
++                               "at": "决定时间", "subject": "任务 id", "reason": "修订原因",
++                               "from_attempt": "当前尝试序号", "from_round": "已判定的首轮",
++                               "next_round": "精确的下一全局轮次", "previous_check_id": "首轮 Check id",
++                               "previous_anchor": "首轮 check_anchor", "check_id": "新通过的 Check id",
++                               "object_digest": "新 Check 的 check_anchor"}},
++                           "example": "wf.py review-reauthorize --task <id> --decision reauthorize.json --json"},
+     "review-launch": {"purpose": "发起一轮审查（默认要两份；实施 CLI 由 --implementation-cli 声明）",
+                       "args": {"--task": "任务 id（必填）", "--launch-request": "请求 JSON（必填）",
+                                "--implementation-cli": "本次实施所用 CLI（必填，异种审查的判定输入）"},
+@@ -1894,6 +1967,8 @@
+     "task-replace": _unavailable(2, "task replace (D07)"),
+     "review-context": _review_command("context"),
+     "review-launch": _review_command("launch"),
++    "review-restart": _review_command("restart"),
++    "review-reauthorize": _review_command("reauthorize"),
+     "review-import": _review_command("import"),
+     "review-decide": _review_command("decide"),
+     "definition": _unavailable(2, "definition prepare/validate (D03/D11)"),
+@@ -1906,7 +1981,7 @@
+     "task-approve", "task-start", "task-replan", "task-pause", "task-resume", "task-curate",
+     "task-check", "task-knowledge", "task-retrospect", "task-attribute", "task-abandon",
+     "task-reassess", "archive", "baseline-apply", "spec-update", "stop",
+-    "review-launch", "review-import", "review-decide",
++    "review-launch", "review-import", "review-decide", "review-restart", "review-reauthorize",
+ })
+ 
+ 
+
+--- source/review.py
++++ target/review.py
+@@ -157,6 +157,184 @@
+     except check_mod.CheckError as exc:
+         raise ReviewError(exc.code, exc.facts)
+     return anchor, parts
++
++
++def restart(ctx, task, decision_path):
++    """普通任务的新尝试：失败返工或显式重开已通过版本，均保留旧判定。"""
++    from . import lock, tasks as tasks_mod
++
++    decisions = tasks_mod._load_decision_list(decision_path)
++    if len(decisions) != 1:
++        raise ReviewError("WF_SEMANTIC_DECISION", {"reason": "restart requires exactly one human decision"})
++    decision = decisions[0]
++    task_id = task.get("id")
++    reopen_passed = decision.get("choice") == "reopen-reviewed"
++    if (decision.get("choice") not in ("restart-review", "reopen-reviewed") or decision.get("subject") != task_id
++            or not str(decision.get("source") or "").startswith("human:")
++            or not decision.get("at") or not str(decision.get("reason") or "").strip()):
++        raise ReviewError("WF_SEMANTIC_DECISION", {"reason": "restart decision must identify this task and human authorization"})
++    decision_ref = records.plain_digest(decision)
++    with lock.acquire(ctx.root, holder_hint="review-restart"):
++        tasks_mod._require_binding(ctx, task_id)
++        _writer, holder = ctx.require_held(task=task_id)
++        path = _task_dir(ctx, task)
++        task = records.load_json(os.path.join(path, "task.json"))
++        if (task.get("status") != "in_progress" or task.get("phase") != "finish"
++                or task.get("paused") or task.get("suspended") or task.get("terminal")
++                or task.get("kind") != "ordinary" or task.get("run_id")
++                or (task.get("plan") or {}).get("complexity") != "complex"):
++            raise ReviewError("WF_SEMANTIC_DECISION", {"reason": "restart requires an active ordinary complex task after Check"})
++        check = task.get("check") or {}
++        if check.get("result") != "pass":
++            raise ReviewError("WF_CHECK_FAILED", {"reason": "restart requires a passed Check"})
++        anchor, _parts = _current_anchor(ctx, task)
++        if ((check.get("anchor") or {}).get("check_anchor") != anchor
++                or decision.get("object_digest") != anchor or decision.get("check_id") != check.get("id")):
++            raise ReviewError("WF_CHECK_STALE", {"reason": "restart decision or Check does not match current content"})
++        reviews = task.setdefault("reviews", {})
++        attempts = reviews.get("attempts") or []
++        inputs = {"task": task_id, "decision_ref": decision_ref, "check_id": check.get("id")}
++        existing = next((entry for entry in attempts if entry.get("rework_ref") == decision_ref), None)
++        if existing is not None:
++            # _start_task_action 原子保存了新尝试；中断后仅补完成回执。
++            action = task.get("action") or {}
++            if (action.get("kind") == "review.restart" and action.get("state") != "done"
++                    and (action.get("inputs") or {}).get("decision_ref") == decision_ref):
++                action["decision_refs"] = [decision_ref]
++                task, _assertion = tasks_mod._finish_task_action(
++                    ctx, path, task, "review.restart", holder, inputs, action, [decision_ref])
++            attempt_no = existing["number"]
++        else:
++            current = attempts[-1] if attempts else {}
++            result = reviews.get("result") or {}
++            last_round = reviews.get("last_round")
++            used = current.get("round_ids") or []
++            expected_verdict = "pass" if reopen_passed else "fail"
++            allowed_outcomes = ("pass", "fail") if reopen_passed else ("fail",)
++            if (len(used) != 2 or last_round != used[-1]
++                    or current.get("outcome") not in allowed_outcomes or result.get("verdict") != expected_verdict
++                    or result.get("round") != last_round
++                    or decision.get("from_attempt") != current.get("number")
++                    or decision.get("from_round") != last_round):
++                raise ReviewError("WF_SEMANTIC_DECISION", {
++                    "reason": "decision must cover the exhausted attempt and required verdict",
++                    "required_verdict": expected_verdict})
++            if reopen_passed and (not decision.get("previous_check_id") or not decision.get("previous_anchor")
++                    or decision.get("previous_check_id") != result.get("check_id")
++                    or decision.get("previous_anchor") != (result.get("anchor") or {}).get("check_anchor")):
++                raise ReviewError("WF_SEMANTIC_DECISION", {"reason": "reopen-reviewed must identify the previous passed Check"})
++            old_anchor = (result.get("anchor") or {}).get("check_anchor")
++            if not old_anchor or old_anchor == anchor or result.get("check_id") == check.get("id"):
++                raise ReviewError("WF_CHECK_STALE", {"reason": "restart needs a revised passed Check, not a rerun of unchanged content"})
++            attempt_no = current["number"] + 1
++            reviews.setdefault("result_history", []).append(dict(
++                result, superseded_by_round=last_round + 1, superseding_decision_ref=decision_ref,
++                superseded_at=decision["at"]))
++            reviews["result"] = None
++            attempts.append({"number": attempt_no, "rework_ref": decision_ref, "round_ids": [],
++                             "outcome": None, "check_id": check["id"], "check_anchor": anchor})
++            reviews["attempts"] = attempts
++            task.setdefault("execution", {}).setdefault("human_decisions", []).append(decision)
++            task, action = tasks_mod._start_task_action(
++                ctx, path, task, "review.restart", holder, inputs, ["authorize", "append_attempt"])
++            action["decision_refs"] = [decision_ref]
++            task["action"] = action
++            task, _assertion = tasks_mod._finish_task_action(
++                ctx, path, task, "review.restart", holder, inputs, action, [decision_ref])
++    from . import codes
++
++    return codes.result("WF_OK", object={"id": task_id, "name": task.get("title")},
++                        position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
++                        next_="用 review-launch 发起新审查；旧报告不跨轮复用",
++                        facts={"attempt": attempt_no, "decision_ref": decision_ref,
++                               "last_round": reviews.get("last_round"), "check_id": check["id"]})
++
++
++def reauthorize(ctx, task, decision_path):
++    """为当前尝试剩余一轮追加精确授权，不改变旧授权或两轮额度。"""
++    from . import lock, tasks as tasks_mod
++
++    decisions = tasks_mod._load_decision_list(decision_path)
++    if len(decisions) != 1:
++        raise ReviewError("WF_SEMANTIC_DECISION", {"reason": "reauthorization requires one human decision"})
++    decision = decisions[0]
++    task_id = task.get("id")
++    if (decision.get("choice") != "reauthorize-review" or decision.get("subject") != task_id
++            or not str(decision.get("source") or "").startswith("human:")
++            or not decision.get("at") or not str(decision.get("reason") or "").strip()):
++        raise ReviewError("WF_SEMANTIC_DECISION", {"reason": "reauthorization must identify the task and human decision"})
++    decision_ref = records.plain_digest(decision)
++    with lock.acquire(ctx.root, holder_hint="review-reauthorize"):
++        tasks_mod._require_binding(ctx, task_id)
++        _writer, holder = ctx.require_held(task=task_id)
++        path = _task_dir(ctx, task)
++        task = records.load_json(os.path.join(path, "task.json"))
++        if (task.get("status") != "in_progress" or task.get("phase") != "finish"
++                or task.get("paused") or task.get("suspended") or task.get("terminal")
++                or task.get("kind") != "ordinary" or task.get("run_id")
++                or (task.get("plan") or {}).get("complexity") != "complex"):
++            raise ReviewError("WF_SEMANTIC_DECISION", {"reason": "reauthorization requires an active ordinary complex task after Check"})
++        check = task.get("check") or {}
++        if check.get("result") != "pass":
++            raise ReviewError("WF_CHECK_FAILED", {"reason": "reauthorization requires a passed Check"})
++        anchor, _parts = _current_anchor(ctx, task)
++        if ((check.get("anchor") or {}).get("check_anchor") != anchor
++                or decision.get("check_id") != check.get("id") or decision.get("object_digest") != anchor):
++            raise ReviewError("WF_CHECK_STALE", {"reason": "reauthorization must match current passed Check and content"})
++        reviews = task.setdefault("reviews", {})
++        attempts = reviews.get("attempts") or []
++        current = attempts[-1] if attempts else {}
++        inputs = {"task": task_id, "decision_ref": decision_ref, "check_id": check["id"]}
++        authorizations = current.get("reauthorizations") or []
++        existing = next((entry for entry in authorizations if entry.get("decision_ref") == decision_ref), None)
++        if existing is not None:
++            action = task.get("action") or {}
++            if (action.get("kind") == "review.reauthorize" and action.get("state") != "done"
++                    and (action.get("inputs") or {}).get("decision_ref") == decision_ref):
++                action["decision_refs"] = [decision_ref]
++                task, _assertion = tasks_mod._finish_task_action(
++                    ctx, path, task, "review.reauthorize", holder, inputs, action, [decision_ref])
++            next_round = existing["round"]
++        else:
++            used = current.get("round_ids") or []
++            result = reviews.get("result") or {}
++            last_round = reviews.get("last_round")
++            if (len(used) != 1 or used[0] != last_round or result.get("round") != last_round
++                    or result.get("verdict") not in ("pass", "fail")
++                    or decision.get("from_attempt") != current.get("number")
++                    or decision.get("from_round") != last_round
++                    or decision.get("next_round") != last_round + 1
++                    or decision.get("previous_check_id") != result.get("check_id")
++                    or decision.get("previous_anchor") != (result.get("anchor") or {}).get("check_anchor")
++                    or not decision.get("previous_check_id") or not decision.get("previous_anchor")
++                    or authorizations):
++                raise ReviewError("WF_SEMANTIC_DECISION", {
++                    "reason": "decision must cover the completed first round and the one remaining round"})
++            if result.get("check_id") == check["id"] or (result.get("anchor") or {}).get("check_anchor") == anchor:
++                raise ReviewError("WF_CHECK_STALE", {"reason": "reauthorization requires revised content and a new Check"})
++            next_round = last_round + 1
++            current["reauthorizations"] = [{
++                "decision_ref": decision_ref, "decision": decision,
++                "from_round": last_round, "round": next_round,
++                "check_id": check["id"], "check_anchor": anchor}]
++            reviews.setdefault("result_history", []).append(dict(
++                result, superseded_by_round=next_round, superseding_decision_ref=decision_ref,
++                superseded_at=decision["at"]))
++            reviews["result"] = None
++            task.setdefault("execution", {}).setdefault("human_decisions", []).append(decision)
++            task, action = tasks_mod._start_task_action(
++                ctx, path, task, "review.reauthorize", holder, inputs, ["authorize_remaining_round", "preserve_history"])
++            action["decision_refs"] = [decision_ref]
++            task["action"] = action
++            task, _assertion = tasks_mod._finish_task_action(
++                ctx, path, task, "review.reauthorize", holder, inputs, action, [decision_ref])
++    from . import codes
++
++    return codes.result("WF_OK", object={"id": task_id, "name": task.get("title")},
++                        position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
++                        next_="review-launch 使用已授权的剩余轮次；必须真实重新审查",
++                        facts={"attempt": current.get("number"), "next_round": next_round,
++                               "check_id": check["id"], "decision_ref": decision_ref})
+ 
+ 
+ def launch(ctx, task, request_path, implementation_cli=None):
+@@ -225,6 +403,8 @@
+                                                   "check": check.get("id"),
+                                                   "result": check.get("result")})
+         anchor, _parts = _current_anchor(ctx, task)
++        if (check.get("anchor") or {}).get("check_anchor") != anchor:
++            raise ReviewError("WF_CHECK_STALE", {"reason": "launch requires Check matching current content in every attempt"})
+         reviews = task.setdefault("reviews", {})
+         round_no = int(reviews.get("last_round") or 0) + 1
+         attempts = list(reviews.get("attempts") or [])
+@@ -236,6 +416,19 @@
+             raise ReviewError("WF_SEMANTIC_DECISION",
+                               {"reason": "同一实施尝试最多两轮；两轮用尽须由人发起返工",
+                                "attempt": current_attempt.get("number"), "rounds": used})
++        round_authorizations = [entry for entry in current_attempt.get("reauthorizations") or []
++                                if entry.get("round") == round_no]
++        authorization_ref = current_attempt.get("rework_ref")
++        if current_attempt.get("rework_ref") or round_authorizations:
++            authorization = round_authorizations[-1] if round_authorizations else current_attempt
++            authorization_mismatch = (
++                authorization.get("check_id") != check.get("id")
++                or authorization.get("check_anchor") != anchor)
++            if authorization_mismatch or (check.get("anchor") or {}).get("check_anchor") != anchor:
++                raise ReviewError("WF_CHECK_STALE", {
++                    "reason": "every round must match restart authorization and current passed Check"})
++            if round_authorizations:
++                authorization_ref = authorization["decision_ref"]
+         attempt = current_attempt.get("number") or 1
+         temp_paths = []
+         for slot in slots:
+@@ -243,6 +436,7 @@
+             os.makedirs(directory, exist_ok=True)
+             request_payload = {
+                 "task-id": task.get("id"),
++                "authorization_ref": authorization_ref,
+                 "round": round_no,
+                 "reviewer-id": slot["slot"],
+                 "review-focus": REVIEW_FOCUS,
+@@ -256,6 +450,7 @@
+         entry = {
+             "round": round_no,
+             "attempt": attempt,
++            "authorization_ref": authorization_ref,
+             "decision": request.get("export_decision"),
+             # 单值口径（C6）；`implementation_clis` 保留为兼容读字段
+             "implementation_cli": impl,
+@@ -355,19 +550,42 @@
+     directory = round_dir(ctx, task_id, round_no)
+     materials = os.path.join(directory, "materials")
+     os.makedirs(materials, exist_ok=True)
+-    # 材料物化：diff 相对 HEAD；PRD 与 Check 记录直接复制；测试输出取 Check 的命令记录
++    # 材料只包含 Check 对象，补齐未跟踪交付物；不改索引、不导出任务记账与无关文件。
+     try:
+         import subprocess
+ 
+-        diff = subprocess.run(["git", "-c", "safe.directory=*", "diff", "HEAD"], cwd=ctx.root,
+-                              capture_output=True, text=True, check=False).stdout
+-    except OSError:
++        selected = check_mod.object_paths(ctx, record)
+         diff = ""
++        if selected:
++            tracked = subprocess.run(["git", "-c", "core.quotePath=false", "diff", "HEAD", "--", *selected], cwd=ctx.root,
++                                     capture_output=True, text=True, check=False)
++            if tracked.returncode:
++                raise ReviewError("WF_REVIEW_UNAVAILABLE", {"reason": "cannot generate tracked review diff"})
++            diff = tracked.stdout
++            listing = subprocess.run(["git", "-c", "core.quotePath=false", "ls-files", "--others", "--exclude-standard", "-z"],
++                                     cwd=ctx.root, capture_output=True, text=True, check=False)
++            if listing.returncode:
++                raise ReviewError("WF_REVIEW_UNAVAILABLE", {"reason": "cannot enumerate new deliverables"})
++            for relative in sorted(set(listing.stdout.split("\0")) & set(selected)):
++                if os.path.islink(join(ctx.root, relative)):
++                    raise ReviewError("WF_PATH_INVALID", {"reason": "review deliverable is a symlink", "path": relative})
++                added = subprocess.run(["git", "-c", "core.quotePath=false", "diff", "--no-index", "--", os.devnull, relative],
++                                       cwd=ctx.root, capture_output=True, text=True, check=False)
++                if added.returncode not in (0, 1):
++                    raise ReviewError("WF_REVIEW_UNAVAILABLE", {"reason": "cannot read new deliverable diff", "path": relative})
++                diff += added.stdout
++    except (OSError, UnicodeError):
++        raise ReviewError("WF_REVIEW_UNAVAILABLE", {"reason": "review diff generation failed"}) from None
+     records.atomic_write(os.path.join(materials, "diff.patch"), diff or "# 无工作树差异" + chr(10))
+     prd_text = tasks_mod.read_prd(ctx.root, record) if hasattr(tasks_mod, "read_prd") else ""
+     records.atomic_write(os.path.join(materials, "prd.md"), prd_text or "# PRD 不可读" + chr(10))
+     records.write_json(os.path.join(materials, "check.json"),
+-                       {"check": record.get("check") or {}, "anchor": {"check_anchor": anchor}})
++                       {"check": record.get("check") or {}, "anchor": {"check_anchor": anchor},
++                        "material_scope": {
++                            "description": "diff.patch covers Check object paths only; review scope buckets for changes outside it. Unrelated file contents are not exported.",
++                            "included_paths": selected,
++                            "scope_buckets": ((record.get("check") or {}).get("scope_check") or {}).get("buckets", {}),
++                        }})
+     commands = (record.get("check") or {}).get("commands") or []
+     records.write_json(os.path.join(materials, "tests.json"), {"commands": commands})
+     target = agent_report_path(ctx, task_id, round_no, agent)
