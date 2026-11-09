@@ -1856,6 +1856,10 @@ COMMAND_HELP = {
                                   "subject": "必须含任务 id 或对象摘要（必填）",
                                   "object_digest": "当前 PRD 的 sha256（必填）",
                                   "choice": "approve|approve-light|approve-complex|mechanical（必填）",
+                                  "生成代次": "inputs.generation 必填（从上条命令回显 facts.generation 取；"
+                                            "过期会报 WF_GENERATION_STALE 并在 facts 给 current_generation）",
+                                  "plan-q 答复": "PRD 里每个 plan-q-<n> 要一条 choice=\"plan-q\" 且 subject 含该编号的答复"
+                                               "（旧夹具的 choice=\"是\" 已不再接受）",
                                   "reason": "理由（必填）",
                                   "plan": "可选：{complexity: light|complex, tdd: bool, downgrade: {reason, evidence}}——"
                                           "复杂分级必须由人在此确认，未登记的键会原样留痕进 plan.human_inputs"}},
@@ -1887,7 +1891,8 @@ COMMAND_HELP = {
                                        "subject": "路径或承接对象", "reason": "理由",
                                        "object_digest": "可选"}},
              "example": "wf.py stop --decision stop.json --preview --json"},
-    "archive": {"purpose": "正常归档（最终门禁 + 提交授权）",
+    "archive": {"note": "commit 的 subject 可写数组，或用逗号/分号/换行/空格分隔的多路径字符串",
+"purpose": "正常归档（最终门禁 + 提交授权）",
                 "args": {"--task": "任务 id（必填）", "--decision": "决定文件（必填）"},
                 "inputs": {"decision[]": "至少一条 choice=finish；提交需 choice=commit 的授权条目"},
                 "example": "wf.py archive --task <id> --decision finish.json --json"},

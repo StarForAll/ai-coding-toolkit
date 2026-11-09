@@ -1670,7 +1670,8 @@ def cmd_task_approve(ctx, args):
                 raise TaskError(
                     "WF_SEMANTIC_DECISION",
                     {"reason": "complexity condition requires complex", "condition": reasons,
-                     "downgrade_required": ["reason", "evidence"]},
+                     "downgrade_required": ["reason", "evidence"],
+                     "hint": "存量项目请先建 bootstrap 任务（建基线+项目配置）再开普通任务"},
                 )
             # 降级条目属批准后追加事实，不进 plan 版本哈希域（机制稿 §1.1）
             downgrade_entry = {"downgrade": True, "reason": downgrade["reason"], "evidence": downgrade["evidence"]}
