@@ -163,18 +163,35 @@ class EntryPointContractTest(unittest.TestCase):
 
 
 class DeletedPathTest(unittest.TestCase):
-    """K6 第 2 类只认**真删除**（HEAD 有、工作树没有），否则每次归档都被要求补确认。"""
+    """K6 第 2 类只认**真删除**（HEAD 有、工作树没有），否则每次归档都被要求补确认。
+
+    用临时 Git 仓库做夹具：不依赖本仓库的工作区状态（否则干净 clone 里会红）。
+    """
+
+    def _repo(self, tmp):
+        import subprocess
+
+        subprocess.run(["git", "init", "-q"], cwd=tmp, check=True)
+        subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=tmp, check=True)
+        subprocess.run(["git", "config", "user.name", "t"], cwd=tmp, check=True)
+        (Path(tmp) / "keep.md").write_text("keep\n", encoding="utf-8")
+        (Path(tmp) / "gone.md").write_text("gone\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=tmp, check=True)
+        subprocess.run(["git", "commit", "-qm", "init"], cwd=tmp, check=True)
+        (Path(tmp) / "gone.md").unlink()
+        return tmp
 
     def test_only_real_deletions_count(self):
         from wflib import tasks
 
-        repo = str(REPO)
-        found = tasks._deleted_paths(repo, ["docs/README.md",        # 存在
-                                            "no/such/file.md",       # 从未存在
-                                            "skills/multi-cli-review/SKILL.md"])  # HEAD 有、已删
-        self.assertEqual(found, ["skills/multi-cli-review/SKILL.md"])
+        with tempfile.TemporaryDirectory() as tmp:
+            self._repo(tmp)
+            found = tasks._deleted_paths(tmp, ["keep.md", "no/such/file.md", "gone.md"])
+        self.assertEqual(found, ["gone.md"])
 
     def test_empty_input_returns_empty(self):
         from wflib import tasks
 
-        self.assertEqual(tasks._deleted_paths(str(REPO), []), [])
+        with tempfile.TemporaryDirectory() as tmp:
+            self._repo(tmp)
+            self.assertEqual(tasks._deleted_paths(tmp, []), [])
