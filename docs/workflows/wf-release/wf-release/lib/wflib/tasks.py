@@ -3080,6 +3080,7 @@ def _committed_text(root, sha, path):
 
 
 def cmd_archive(ctx, args):
+    persisted = None      # 首归档路径没有续做分支，必须先初始化（否则引用未定义变量）
     from . import cli, gates, lock
 
     task_id = args.value("--task")
@@ -3301,7 +3302,8 @@ def cmd_archive(ctx, args):
                "commit": commit_result, "control_assertion": assertion, "reassessment": reassessment,
                # 归档后"是否已持久化"要能被外部核对（续做路径会带 resumed_commit）：
                # 只给 stages 不够，调用方（含独立进程重入）无法判断终态是否落库。
-               "archive_persisted": dict(persisted or {}, resumed_commit=bool((persisted or {}).get("resumed_commit"))),
+               "archive_persisted": dict(persisted or {"available": False},
+                                          resumed_commit=bool((persisted or {}).get("resumed_commit"))),
                # K7：三段逐段回报（运行态按设计不入库，只报告它被排除）
                "stages": [
                    {"stage": "business", "paths": sorted(set(grant_paths)),
