@@ -1,0 +1,133 @@
+"""P5/K8·K9·S5b：可重建投影、写链与 trailer 三态、未核实项生命周期。
+
+防的失败（dogfood F3「同一事实两处存」与 H3「手工验证永不结案」）：
+投影散落在运行态缓存里 → 与记录漂移且无法区分；未处置的 blocking 与未核实项没有"结案"动作，
+只能靠自由文本宣称"已处理"。
+"""
+
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO / "docs" / "workflows" / "新项目开发工作流" / "payload" / "lib"))
+
+from wflib import projection  # noqa: E402
+
+
+class FakeCtx:
+    def __init__(self, root="."):
+        self.root = str(root)
+
+
+def task(**extra):
+    data = {"id": "t1", "status": "in_progress", "phase": "check",
+            "plan": {"acceptance": [{"id": "a1", "verification_ids": ["v1"]}],
+                     "verifications": [{"id": "v1", "required": True}]},
+            "check": {"acceptance_results": [{"acceptance_id": "a1", "conclusion": "pending"}]},
+            "actions": [{"id": "a1", "at": "t1"}, {"id": "a2", "at": "t2"}],
+            "write_mark": {"action_id": "a2"}}
+    data.update(extra)
+    return data
+
+
+class ProjectionTest(unittest.TestCase):
+    def test_projections_are_pure_functions_of_records(self):
+        for kind in ("open-items", "audit", "attribution", "skeleton"):
+            facts = projection.check(FakeCtx(), task(), kind)
+            self.assertTrue(facts["equal"], f"{kind}: {facts['problems']}")
+            self.assertFalse(facts["cached"], "投影不应落盘：没有缓存副本才对")
+
+    def test_open_items_lists_required_unverified_and_findings(self):
+        items = projection.open_items(FakeCtx(), task())
+        self.assertEqual([item["acceptance_id"] for item in items["unverified"]], ["a1"])
+        self.assertTrue(items["unverified"][0]["required"])
+
+    def test_cached_copy_drift_is_detected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx = FakeCtx(tmp)
+            path = Path(projection.cache_path(tmp, "t1", "audit"))
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('{"actions": 99}', encoding="utf-8")
+            facts = projection.check(ctx, task(), "audit")
+        self.assertFalse(facts["equal"])
+        self.assertTrue(any("缓存" in item["reason"] for item in facts["problems"]))
+
+
+class AuditChainTest(unittest.TestCase):
+    def test_clean_chain_passes(self):
+        self.assertEqual(projection.audit_chain(task())["problems"], [])
+
+    def test_write_mark_pointing_nowhere_is_reported(self):
+        facts = projection.audit_chain(task(write_mark={"action_id": "nope"}))
+        self.assertTrue(any("write_mark" in item["reason"] for item in facts["problems"]))
+
+    def test_time_going_backwards_is_reported(self):
+        facts = projection.audit_chain(task(actions=[{"id": "a1", "at": "t2"}, {"id": "a2", "at": "t1"}]))
+        self.assertTrue(any("backwards" in item["reason"] for item in facts["problems"]))
+
+    def test_guarantee_is_limited(self):
+        facts = projection.audit_chain(task())
+        self.assertIn("不承诺防伪造", facts["guarantee"])
+
+
+class UnverifiedLifecycleTest(unittest.TestCase):
+    def test_required_item_blocks_until_resolved(self):
+        data = task()
+        self.assertEqual([item["acceptance_id"]
+                          for item in projection.required_unverified(FakeCtx(), data)], ["a1"])
+
+    def test_narrow_requires_all_four_parts(self):
+        data = task()
+        _record, problems = projection.resolve(data, "a1", kind="narrow", evidence="e", reason="缺环境")
+        self.assertTrue(any("impact" in item["reason"] for item in problems))
+        self.assertTrue(any("compensation" in item["reason"] for item in problems))
+
+    def test_narrow_with_four_parts_resolves(self):
+        data = task()
+        record, problems = projection.resolve(data, "a1", kind="narrow", evidence="e",
+                                              reason="缺 Windows 主机", impact="放弃跨平台验证",
+                                              compensation="CI 矩阵待建")
+        self.assertEqual(problems, [])
+        self.assertEqual(record["kind"], "narrow")
+        self.assertEqual(projection.required_unverified(FakeCtx(), data), [])
+
+    def test_inspection_needs_evidence(self):
+        _record, problems = projection.resolve(task(), "a1", kind="inspection", evidence="")
+        self.assertTrue(any("证据" in item["reason"] for item in problems))
+
+    def test_archive_gate_consumes_it(self):
+        source = (REPO / "docs/workflows/新项目开发工作流/payload/lib/wflib/gates.py").read_text(encoding="utf-8")
+        self.assertIn("required_unverified", source)
+        self.assertIn("pending_required_unverified", source)
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+class ChainHeadTrailerTest(unittest.TestCase):
+    """K9：归档提交带 `wf-chain-head` trailer，投影侧可比对（只承诺可检出）。"""
+
+    def test_trailer_is_derived_from_write_mark(self):
+        from wflib import tasks
+
+        self.assertEqual(tasks._chain_trailer({"write_mark": {"action_id": "a9"}}),
+                         "\nwf-chain-head: a9")
+        self.assertEqual(tasks._chain_trailer({"action": {"id": "a1"}}), "\nwf-chain-head: a1")
+        self.assertEqual(tasks._chain_trailer({}), "")
+
+    def test_archive_commits_carry_the_trailer(self):
+        source = (REPO / "docs/workflows/新项目开发工作流/payload/lib/wflib/tasks.py").read_text(encoding="utf-8")
+        self.assertIn("_chain_trailer(task)", source)
+        self.assertGreaterEqual(source.count("wf-chain-head"), 1)
+
+    def test_check_reports_missing_trailer_instead_of_guessing(self):
+        class Ctx:
+            root = str(REPO)
+
+        facts = projection.chain_head_check(Ctx(), {"_record_path": "scripts"})
+        self.assertTrue(facts["available"])
+        self.assertFalse(facts["anchored"])
+        self.assertIn("wf-chain-head", facts["reason"])

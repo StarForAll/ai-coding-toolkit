@@ -66,6 +66,9 @@ def skeleton(ctx, task):
         "standard_changes": [],         # 新旧标准摘要（随 4.5 判断录入）
         "drift_diffs": [],              # 漂移差异（导入时计算，未持久化）
         "verifications": verifications,
+        # §0.2 的「未核实」事件源：未结案的验收项（S5b 的 unverified[]）
+        "unverified": [str(item.get("acceptance_id"))
+                       for item in (_required_unverified(ctx, task))],
         "cumulative": cumulative_facts(ctx, task),
         "rejected_unresolved": rejected,
         "unaddressed_findings": unaddressed,
@@ -86,6 +89,15 @@ def cumulative_facts(ctx, task):
             "historical_max": historical, "exceeds_history": described["exceeds_history"],
             "line": described["line"], "available": current.get("available", False),
             "reason": current.get("reason")}
+
+
+def _required_unverified(ctx, task):
+    from . import projection as projection_mod
+
+    try:
+        return projection_mod.required_unverified(ctx, task)
+    except Exception:
+        return []
 
 
 def _iter_all_tasks(ctx):

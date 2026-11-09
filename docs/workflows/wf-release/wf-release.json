@@ -91,7 +91,7 @@
       "target_relative": ".wf/lib/wflib/check.py"
     },
     {
-      "digest": "sha256:88f74f8f6b5f1ff3c71bf1e18086b769728213bbf3a65f32aeeaaf6a86e24570",
+      "digest": "sha256:20050be5a026fad5ca5fc2c0456e8ddd034ecf9fd0b2e8cd79ca307e9dc70db6",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -141,7 +141,7 @@
       "target_relative": ".wf/lib/wflib/fingerprint.py"
     },
     {
-      "digest": "sha256:fb964304a8e5194d6c8266f14bb9581e0d09ac8ad9b2a398d36e9df855ad2386",
+      "digest": "sha256:6afa7c96b43b26d0824c67d5b2821663e0c77b5defe98bc3736a660bb3271027",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -161,7 +161,7 @@
       "target_relative": ".wf/lib/wflib/identity_store.py"
     },
     {
-      "digest": "sha256:51de8c5240dd15da9f7c4f21399a4129a704ee86cf8ec95c29e6251f3eed895b",
+      "digest": "sha256:9a08644532848bf03f9afc7376963155f59395fee4459b0a09148401e0db6369",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -209,6 +209,16 @@
       "source_path": "wf-release/lib/wflib/paths.py",
       "target_class": "project_wf",
       "target_relative": ".wf/lib/wflib/paths.py"
+    },
+    {
+      "digest": "sha256:5db6661452389f99def6c9beb467e6e6f89fcc03a443c0979efb0365c470b659",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/projection.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/projection.py"
     },
     {
       "digest": "sha256:9889462b38c97e7917daac43561a5442d484e9b0d7967a16573238a5e66e4728",
@@ -311,7 +321,7 @@
       "target_relative": ".wf/lib/wflib/taskfiles.py"
     },
     {
-      "digest": "sha256:c058e9fd58d60bce839ebeb12ec18f4ef3b8aa9bfd041641bfff5c1132d46438",
+      "digest": "sha256:c1b637bf4f7a8604b17fa23d5093f2d112f28553e5589839c4b264e8d3739e94",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -741,7 +751,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:2ca549dec9400adfaea2dd5a8b8443c2eceae00dd7e058add71b73472f4a9259",
+    "rules_digest": "sha256:5b97eb6332591203db5b3a8de1fb7ac0ed9b17cf041e5cf5b049a9d5a3b68d69",
     "systems": [
       "linux"
     ],

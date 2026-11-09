@@ -850,6 +850,18 @@ def final_gate(ctx, task, ignore_action_id=None):
     check = task.get("check") or {}
     if check.get("result") != "pass":
         return False, "WF_CHECK_FAILED", {"reason": "current check is not pass", "check": check.get("id")}
+    # S5b/4.9：required 验收项未核实 → 阻断收工（只能收窄四项或异常归档，不接受"接受风险"）
+    from . import projection as projection_mod
+
+    pending_required = projection_mod.required_unverified(ctx, task)
+    if pending_required:
+        return False, "WF_SEMANTIC_DECISION", {
+            "pending_required_unverified": pending_required,
+            "reason": "required 验收项未核实：只能收窄（四项依据齐全）或异常归档",
+            "exits": ["`wf verify resolve --kind narrow` 给齐 id/原因/影响/补偿 后重入",
+                      "`wf verify resolve --kind inspection` 记录人工核验证据",
+                      "按设计稿 §5.6 异常归档"],
+        }
     # S6 的第 3/4 项：blocking 必须已被处置（"不处置"不是关闭，K10/K4b）
     from . import review as review_mod
 

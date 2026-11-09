@@ -2829,6 +2829,12 @@ def _moved_from(root, rel):
     return None
 
 
+def _chain_trailer(task):
+    """K9：把记录写链的链头写进提交 trailer（只承诺可检出，不承诺防伪造）。"""
+    head = ((task.get("write_mark") or {}).get("action_id")) or (task.get("action") or {}).get("id")
+    return f"\nwf-chain-head: {head}" if head else ""
+
+
 def _deleted_paths(root, paths):
     """本次提交范围内的删除路径（工作树相对 HEAD 已删除）。读不到 Git 时返回空并保持原判定。"""
     if not paths:
@@ -3174,8 +3180,9 @@ def cmd_archive(ctx, args):
                                  "reason": "提交范围含删除，但缺删除动作的确认（K6 第 2 类）",
                                  "exits": ["在决定文件里为这些路径写一条 delete 确认后重入",
                                            "把删除移出本次提交范围"]})
+        chain_head = _chain_trailer(task)
         business_commit = _commit_paths(ctx.root, sorted(set(grant_paths)),
-                                        f"wf: complete {task_id}\n\nwf-task: {task_id}") if grant_paths else {
+                                        f"wf: complete {task_id}\n\nwf-task: {task_id}{chain_head}") if grant_paths else {
             "committed": False, "reason": "no grant paths"}
         task = records.load_json(os.path.join(path, "task.json"))
         task["commit_grants"] = grants
@@ -3210,7 +3217,8 @@ def cmd_archive(ctx, args):
         save_task(ctx.root, moved, task)
         record_rel = os.path.relpath(moved, str(ctx.root)).replace(os.sep, "/")
         commit_paths = [record_rel]
-        commit_result = _commit_paths(ctx.root, commit_paths, f"wf: archive {task_id}\n\nwf-task: {task_id}",
+        commit_result = _commit_paths(ctx.root, commit_paths,
+                                      f"wf: archive {task_id}\n\nwf-task: {task_id}{chain_head}",
                                       moved_from=(_moved_from(ctx.root, old_rel)
                                                   or task.get("moved_from")))
         commit_result["business_commit"] = business_commit

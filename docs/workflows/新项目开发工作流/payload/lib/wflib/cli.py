@@ -1911,6 +1911,14 @@ COMMAND_HELP = {
                       "args": {"--task": "任务 id（必填）", "--round": "可选", "--slot": "可选（指定某个 agent）",
                                "--report": "可选（显式路径，兼容旧槽位制）"},
                       "example": "wf.py review-import --task <id> --json"},
+    "project": {"purpose": "可重建投影（K8）：open-items / attribution / audit / skeleton；--check 断言等值",
+                "args": {"--kind": "投影类型（必填）", "--task": "任务 id（必填）", "--check": "断言重建等值"},
+                "example": "wf.py project --kind open-items --task 2026-xxxx --check --json"},
+    "verify": {"purpose": "未核实项处置（S8/S5b）：resolve 收窄口径或记录人工核验",
+               "args": {"resolve": "子命令", "--task": "任务 id", "--id": "验收项 id",
+                        "--kind": "narrow|inspection", "--evidence": "证据",
+                        "--reason/--impact/--compensation": "收窄四项（narrow 必填）"},
+               "example": "wf.py verify resolve --task 2026-xxxx --id a5 --kind narrow --evidence ... --json"},
     "authorize": {"purpose": "K6 五类不可逆动作的确认入口：record 落盘（脱敏入库）/ show 查看已确认",
                   "args": {"record|show": "子命令", "--task": "任务 id（必填）",
                            "--file": "决定文件（record 必填，每条含 choice∈五类 + quote）"},
@@ -1933,6 +1941,74 @@ COMMAND_HELP = {
                                "--plan": "逐条 finding 处置", "--unavailable": "不可用声明"},
                       "example": "wf.py review-decide --task <id> --json"},
 }
+
+
+def cmd_project(ctx, args):
+    """`project --kind open-items|attribution|audit|skeleton --task [--check]`（K8 投影，`--check` 断言等值）。"""
+    from . import projection as projection_mod, tasks as tasks_mod
+
+    kind = args.value("--kind")
+    if kind not in ("open-items", "attribution", "audit", "skeleton"):
+        raise CliError("WF_PATH_INVALID", {"reason": "unknown projection kind", "kind": kind,
+                                          "known": ["open-items", "attribution", "audit", "skeleton"]})
+    task_id = args.value("--task")
+    if not task_id:
+        raise CliError("WF_PATH_INVALID", {"reason": "project requires --task <id>"})
+    task = tasks_mod.load_task(ctx.root, task_id)
+    if task is None:
+        raise CliError("WF_TARGET_MISSING", {"reason": "task not found", "task": task_id})
+    if not args.flag("--check"):
+        return codes.result("WF_OK", object={"id": task_id, "name": task.get("title")},
+                            position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
+                            next_="投影由记录派生、不落盘；`--check` 可断言重建等值",
+                            facts={"kind": kind, "projection": projection_mod.build(ctx, task, kind)})
+    facts = projection_mod.check(ctx, task, kind)
+    code = "WF_OK" if facts["equal"] else "WF_TARGET_COLLISION"
+    return codes.result(code, object={"id": task_id, "name": task.get("title")},
+                        position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
+                        next_="等值即投影未漂移；不等值说明缓存/记录已分叉" if facts["equal"]
+                        else "按 problems 核对缓存或记录后再重算",
+                        facts=facts)
+
+
+def cmd_verify(ctx, args):
+    """`verify resolve --task --id --kind narrow|inspection`（S8/S5b 未核实项处置）。"""
+    from . import projection as projection_mod, tasks as tasks_mod
+
+    sub = (args.positional() or [None])[0]
+    if sub != "resolve":
+        raise CliError("WF_PATH_INVALID", {"reason": "verify requires resolve", "known": ["resolve"]})
+    task_id = args.value("--task")
+    acceptance_id = args.value("--id")
+    if not task_id or not acceptance_id:
+        raise CliError("WF_PATH_INVALID", {"reason": "verify resolve requires --task <id> --id <acceptance-id>"})
+    task = tasks_mod.load_task(ctx.root, task_id)
+    if task is None:
+        raise CliError("WF_TARGET_MISSING", {"reason": "task not found", "task": task_id})
+    with _lock(ctx.root, hint="verify resolve"):
+        _record, holder = ctx.require_held(task=task_id)
+        directory = tasks_mod.task_dir(ctx.root, task_id)
+        fresh = records.load_json(os.path.join(directory, "task.json"))
+        record, problems = projection_mod.resolve(
+            fresh, acceptance_id, kind=args.value("--kind"), evidence=args.value("--evidence"),
+            reason=args.value("--reason"), impact=args.value("--impact"),
+            compensation=args.value("--compensation"), by=args.value("--by") or "human")
+        if problems:
+            raise CliError("WF_SEMANTIC_DECISION",
+                           {"problems": problems,
+                            "exits": ["补齐四项依据后重跑（required 不接受『接受风险』结案）",
+                                      "按设计稿 §5.6 异常归档"]})
+        fresh, action_ref = tasks_mod._start_task_action(
+            ctx, directory, fresh, "task.verify.resolve", holder,
+            {"task": task_id, "acceptance": acceptance_id}, ["resolve"])
+        fresh, assertion = tasks_mod._finish_task_action(
+            ctx, directory, fresh, "task.verify.resolve", holder,
+            {"task": task_id, "acceptance": acceptance_id}, action_ref,
+            evidence_refs=[str(acceptance_id)])
+    return codes.result("WF_OK", object={"id": task_id, "name": fresh.get("title")},
+                        position_=codes.position(scope="task", phase=fresh.get("phase"), task_id=task_id),
+                        next_="继续推进；required 未结案会阻断归档",
+                        facts={"resolution": record, "control_assertion": assertion})
 
 
 def cmd_authorize(ctx, args):
@@ -2255,6 +2331,8 @@ COMMANDS = {
     "judgments": cmd_judgments,
     "sampling": cmd_sampling,
     "authorize": cmd_authorize,
+    "project": cmd_project,
+    "verify": cmd_verify,
     "definition": _unavailable(2, "definition prepare/validate (D03/D11)"),
     "run": _unavailable(2, "workflow instances (D03/D11/D12/D13)"),
     "upgrade": _unavailable(3, "upgrade --apply / release identity (D22/D37)"),

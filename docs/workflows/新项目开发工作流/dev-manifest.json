@@ -130,6 +130,12 @@
    "executable": false,
    "kind": "lib",
    "required": true,
+   "source_path": "payload/lib/wflib/projection.py"
+  },
+  {
+   "executable": false,
+   "kind": "lib",
+   "required": true,
    "source_path": "payload/lib/wflib/protocol.py"
   },
   {
