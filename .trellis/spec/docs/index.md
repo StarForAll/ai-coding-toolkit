@@ -71,7 +71,7 @@ docs/
     workflow-design.md              ← judgments and transitions (authority)
     依赖机制设计说明.md               ← dependency-mechanism detail
     workflow-implementation.md      ← implementation plan (module source, contracts)
-    新项目开发工作流/                 ← module source; being rebuilt (legacy content retired 2026-10-28)
+    wf/                               ← module source; being rebuilt (legacy content retired 2026-10-28)
     旧项目重构工作流/
 ```
 
