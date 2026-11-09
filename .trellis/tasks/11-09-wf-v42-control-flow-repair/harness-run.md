@@ -580,3 +580,28 @@ part1 9/9、part2 17/17、R23 前两条 PASS，余 2 条待按上面顺序修夹
 ### 下次开工的第一条
 
 R23 段：`task-pause → release → archive(拒) → task-resume → writer acquire → archive(应 WF_OK 且 persisted)`。
+
+## r17r24 终态：27/28（2026-11-09 末）
+
+补 `task-resume` 后套件跑到 `rc=0`，仍有 1 条：`R23 重入按既有授权续做提交` 得
+`WF_SEMANTIC_DECISION`（`persisted=None`）。
+
+### 下一步（一行，沿用既定方法）
+
+把该次 `archive` 的 `facts.reason` 打出来（`WF_SEMANTIC_DECISION` 的可能来源：对象阶段不符、
+抽样缺失、写权空闲未持有……）。**先取事实，再判断**。
+
+## 本轮工作总结（可核对）
+
+| 套件 | 结果 |
+|---|---|
+| `r31r34_tests` | ✅ 13/13 |
+| `r59_tests` | ✅ 8/8 |
+| `r60_tests` | ✅ 6/6 |
+| `r61_tests` | ✅ 6/6 |
+| `r17r24_tests` | **27/28**（part1 9/9、part2 17/17、R23 3/4） |
+
+产品级修复：抽样门禁死锁、回执探针 NameError、回执证据来源矛盾（提交层账本）、
+项目数据集合改 protocol 声明、归档 pathspec、`WF_SPEC_INCOMPLETE` 透出缺项、未知 choice 静默丢弃。
+
+方法教训：**先取 code+facts 原文，再形成假设**；**改夹具先分清正向步骤与负路径断言**。
