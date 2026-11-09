@@ -24,14 +24,14 @@
 | 12 | 三段提交 | test_authorization.py::test_archive_reports_three_stages_and_guards | A |
 | 13 | 投影等值 | test_invariants.py::test_protocol_projections_are_equal + test_projection.py::test_projections_are_pure_functions_of_records | A |
 | 14 | 审计三态 | test_projection.py::test_three_states | A |
-| 15 | 被驳回判断只能 resolved | 无 —— 无专用断言 | X |
+| 15 | 被驳回判断只能 resolved | **实现缺失**：只有 `rejected_unresolved` 统计，没有拦截 | X |
 | 16 | waived 必须由人给出 | test_judgments.py::test_waiver_needs_human | A |
 | 17 | evidence_refs 不属骨架 id 时被拒 | test_judgments.py::test_unknown_ref_is_rejected | A |
-| 18 | `standard_drift` 报告无 judgment 时不能产出 pass | 无对应用例 | X |
-| 19 | 判「沿用」未引用 `d:` 位置视为未判断 | 无对应用例 | X |
+| 18 | `standard_drift` 报告无 judgment 时不能产出 pass | **实现缺失**：v42 出现 5 次、上位文档 0 次、代码 0 处 | X |
+| 19 | 判「沿用」未引用 `d:` 位置视为未判断 | **实现缺失**：v42 3 次、上位文档 0 次、代码 0 处 | X |
 | 20 | `escalated` 判断阻断其依赖动作 | test_judgments.py::test_escalated_needs_a_concrete_question（仅字段；挂起范围无断言） | B |
-| 21 | `ask_always` 强制升级 / `ai_decides` 越界升级须带 `why`（`pref_kind` 可选） | 无对应用例 | X |
-| 22 | `d:` 位置存在于 drift_diffs 即合法（各种形态均接受） | 无对应用例 | X |
+| 21 | `ask_always` 强制升级 / `ai_decides` 越界升级须带 `why`（`pref_kind` 可选） | **实现缺失**：v42 18 次、上位文档 0 次、代码 0 处 | X |
+| 22 | `d:` 位置存在于 drift_diffs 即合法（各种形态均接受） | **实现缺失**：`drift_diffs` 只是骨架里的空数组占位，无位置校验 | X |
 | 23 | digest 完整性（影响含义的字段变更必改 digest | test_assertions_digest.py::test_digest_changes_when_check_or_active_clause_changes | A |
 | 24 | 不影响的不变 | 无 —— 无专用断言 | X |
 | 25 | `clauses` 变更必改） | test_spec_rules.py::test_duplicate_clause_id_is_rejected | A |
@@ -97,3 +97,20 @@
 第一版按关键词打分（命中 37）、第二版按正文词干打分（命中 15）、第三版人工对照（A 56）。
 前两版的偏差原因：中文断言与英文用例名之间没有共同的表面形式，词干匹配既漏又乱。
 **教训**：映射这类"人知道答案"的工作不要交给打分，人工列 + 强度分级反而更省时间。
+
+## 重要发现（2026-11-09）：12 条 X 里 6 条是「实现缺失」，不是「缺测试」
+
+三处核对（v42 原文 / 机制稿+设计稿 / `payload/lib/wflib/*.py`）：
+
+| 机制 | v42 | 上位文档 | 代码 |
+|---|---|---|---|
+| `standard_drift` 标注 | 5 次 | 0 | 0 |
+| `judgment_prefs` / `ask_always` / `ai_decides` | 18 次 | 0 | 0 |
+| 【沿用】须引用 `d:` 位置 | 3 次 | 0 | 0 |
+| `d:` 位置须存在于 `drift_diffs` | 1 次 | 0 | 0 |
+| glob 展开为空视为 broken | 1 次 | 0 | 0 |
+| 被驳回判断只能 resolved | — | — | 只有统计，无拦截 |
+
+这些是 **v42 独有、未进入机制稿/设计稿、也未实现** 的概念。按权威顺序
+（charter > 设计稿 > 机制稿 > v42）它们**不自动具约束力**：要么先写进上位文档并实现，
+要么登记为「v42 独有、未采纳」。不能靠补测试把它们算成已覆盖。
