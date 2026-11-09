@@ -470,8 +470,10 @@ def compute_P(ctx, task, step_id, *, check=None, rule_version=None):
             "paths": sorted(check_mod.object_paths(ctx, task), key=lambda value: value.encode("utf-8")),
         }
     if step_id == "task.sampled":
-        frozen = (task.get("sampling") or {}).get("frozen") or {}
-        return {"seed": frozen.get("seed"), "picks": frozen.get("picks") or []}
+        from . import sampling as sampling_mod
+
+        selection = sampling_mod.selection(task)
+        return {"seed": selection["seed"], "picks": selection["picks"]}
     if step_id == "task.archived":
         return {"archive_action_id": (task.get("action") or {}).get("id")}
     raise KeyError(step_id)
@@ -739,13 +741,16 @@ def verify_step(ctx, task, step_id, *, rule_version=None):
             return False, "WF_SEMANTIC_DECISION", {"reason": "retrospective conclusion missing"}
         return True, None, {}
     if step_id == "task.sampled":
-        frozen = (task.get("sampling") or {}).get("frozen") or {}
-        if not frozen.get("picks"):
+        from . import sampling as sampling_mod
+
+        selection = sampling_mod.selection(task)
+        if not selection["picks"]:
             return False, "WF_SEMANTIC_DECISION", {
-                "reason": "收工前必须先跑 §0.2 抽样（事件由框架确定性选取）",
-                "exits": ["跑 `wf sampling pick --task <id>` 生成选样后重入"],
+                "reason": "收工前必须先跑试点期抽样（事件由框架确定性选取）",
+                # 一跳出口：这条命令会同时冻结事件集并落盘选样，不需要再试第二遍
+                "exits": ["跑 `wf sampling pick --task <id> --freeze`（一次完成冻结与选样）后重入"],
             }
-        return True, None, {"picks": len(frozen.get("picks") or [])}
+        return True, None, {"picks": len(selection["picks"])}
     if step_id == "task.changes-persisted":
         return tasks_mod.changes_persisted_fact(ctx, task)
     if step_id == "task.archived":

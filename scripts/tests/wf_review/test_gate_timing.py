@@ -31,10 +31,16 @@ class SamplingTimingTest(unittest.TestCase):
         self.assertNotIn("before_execute", dues)
         self.assertNotIn("before_check", dues)
 
-    def test_sampling_projection_is_the_frozen_selection(self):
-        task = {"id": "t1", "sampling": {"frozen": {"seed": "s1", "picks": [{"class": "关闭"}]}}}
+    def test_sampling_projection_comes_from_the_production_writer(self):
+        """用生产的写入口造状态，不手搓 dict（P1 的教训：手搓的形状没人写得出）。"""
+        from wflib import sampling
+
+        task = {"id": "t1"}
+        sampling.freeze(task, {"changed_paths": ["p:a"], "closures": ["f1"]}, seed="s1")
+        sampling.record_picks(task, [{"class": "关闭", "event": "f1"}])
         projection = gates.compute_P(None, task, "task.sampled")
-        self.assertEqual(projection, {"seed": "s1", "picks": [{"class": "关闭"}]})
+        self.assertEqual(projection["seed"], "s1")
+        self.assertEqual(projection["picks"][0]["event"], "f1")
 
     def test_missing_selection_blocks_with_an_exit(self):
         class Ctx:
@@ -56,7 +62,11 @@ class SamplingTimingTest(unittest.TestCase):
             def rule_version(self):
                 return 1
 
-        task = {"id": "t1", "sampling": {"frozen": {"seed": "s", "picks": [{"class": "关闭"}]}}}
+        from wflib import sampling
+
+        task = {"id": "t1"}
+        sampling.freeze(task, {"changed_paths": ["p:a"]}, seed="s")
+        sampling.record_picks(task, [{"class": "关闭", "event": "f1"}])
         ok, code, _facts = gates.verify_step(Ctx(), task, "task.sampled")
         self.assertTrue(ok, code)
 

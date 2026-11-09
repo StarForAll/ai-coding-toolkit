@@ -2121,9 +2121,24 @@ def cmd_sampling(ctx, args):
         [item for _directory, item in tasks_mod.iter_tasks(ctx.root)])
     open_items = __import__("wflib.review", fromlist=["review"]).open_findings(ctx, task)
     picks = sampling_mod.select_for(task, history, open_blocking=bool(open_items["blocking"]))
+    # 选样必须落盘：门禁 `task.sampled` 读的是记录里的 picks，只回显等于没抽（P1 死锁根因）
+    if (picks or {}).get("picks") and not sampling_mod.selection(task)["picks"]:
+        with _lock(ctx.root, hint="sampling picks"):
+            _record, holder = ctx.require_held(task=task_id)
+            directory = tasks_mod.task_dir(ctx.root, task_id)
+            task = records.load_json(os.path.join(directory, "task.json"))
+            sampling_mod.record_picks(task, picks["picks"])
+            task, action = tasks_mod._start_task_action(
+                ctx, directory, task, "task.sampling.freeze", holder,
+                {"task": task_id}, ["freeze_events", "record_picks"])
+            records.write_json(os.path.join(directory, "task.json"), task)
+            task, _assertion = tasks_mod._finish_task_action(
+                ctx, directory, task, "task.sampling.freeze", holder,
+                {"task": task_id}, action, evidence_refs=[str(len(picks["picks"]))])
+            state = sampling_mod.frozen(task)
     return codes.result("WF_OK", object={"id": task_id, "name": task.get("title")},
                         position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
-                        next_="人只评抽到的这两条（结论对/错 × 依据充分/不充分）",
+                        next_="人只评抽到的这两条（结论对/错 × 依据充分/不充分）；用 --evaluate 落结果",
                         facts={"seed": state.get("seed"), "selection": picks,
                                "backfill": sampling_mod.backfill_status(
                                    (picks or {}).get("picks") or [], task.get("judgments") or []),

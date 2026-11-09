@@ -153,7 +153,27 @@ def freeze(task, skeleton, seed=None):
 
 
 def frozen(task):
+    """抽样状态（**唯一形状**就在这里）：`{seed, events, frozen_at, picks, results, reviewed_by_human}`。
+
+    门禁与 CLI 一律经 `selection()` / 本函数读取，不各自拼键路径——这是 P1 死锁的根因
+    （门禁读 `sampling.frozen.picks`，而记录里根本没有 `frozen` 这层）。
+    """
     return (task.get("sampling") or {}) if isinstance(task.get("sampling"), dict) else {}
+
+
+def selection(task):
+    """选样投影（供门禁 P 与回显）：只有 seed/events/picks 三个键与选样有关。"""
+    state = frozen(task)
+    return {"seed": state.get("seed"), "events": state.get("events") or [],
+            "picks": list(state.get("picks") or []), "frozen_at": state.get("frozen_at")}
+
+
+def record_picks(task, picks):
+    """把**已算出的选样**写回记录（committed）：此前算完只回显、不落盘，门禁因此永远读不到。"""
+    state = dict(frozen(task))
+    state["picks"] = [dict(item) for item in (picks or [])]
+    task["sampling"] = state
+    return state
 
 
 def select_for(task, history=None, *, first_task=False, open_blocking=False):
