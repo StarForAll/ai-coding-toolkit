@@ -53,3 +53,30 @@
 
 基线要用**同一 harness** 才有效；而"同一 harness"在跨版本时本身就会因夹具契约漂移而失败。
 这也说明：**这些 legacy 套件缺的是"跟 harness 一起演进"的机制**，光靠一次性迁移补不上。
+
+## 10 个红的逐条定性（2026-11-09）
+
+| 套件 | 失败断言 | 现象 | 归类 | 判断 |
+|---|---|---|---|---|
+| `cp4_tests` | A1 归档门禁核前置（期望 `WF_DEPENDENCY_UNMET`） | 实得 `WF_SEMANTIC_DECISION` | **门禁组成变化** | 归档门禁新增了 `task.review-passed`/`task.sampled` 等步骤，前置不满足时先报"步骤缺失"而不是依赖错误。属**期望码需迁移**（改断言），不是缺陷 |
+| `cp4_tests` | A19 非 JSON 输出 / `--json` 结构 | `header=False`、`blocked has_content=False` | 待查 | 输出格式断言；需看是否与我的 CLI 改动有关 |
+| `r58_tests` | 阈值=1 时要求裁定 | 期望"debug 待决 pending"，实得 `task.sampled` missing | **门禁组成变化** | 已把 `task.sampled` 排到 before_archive **最后**；该套件仍需按新组成调整断言 |
+| `r59` / `r60` / `r61` | `applied_pending_commit` | 维护回执停在"已应用待提交" | **维护回执未处置** | 这三套件测维护持久化；需按当前口径补"处置/结案"步骤 |
+| `r17r24` / `r31r34` | `KeyError: 'directory'` | 同一会话建多个任务被 `WF_BINDING_MISMATCH` 拒 | **一会话一对象（v42 A3）** | 夹具需迁移成"每任务独立会话"；产品行为正确 |
+| `cp2_tests` | A3 带 activation 的开工 | `WF_CAPABILITY_UNAVAILABLE` | 待查 | 与 activation/平台能力有关 |
+| `cp2_tests` | A13 阈值 2 合并累计触发待决 | `threshold=None` | 待查 | 配置阈值读不到，可能是配置键口径变化 |
+| `cp5_b345` | B4 双扣后合并累计 / B3 强杀 | `merged=None` / `killed=False rc=2` | 待查 | 合并累计与故障注入 |
+| `r75_tests` | — | `IndexError: list index out of range` | 待查 | 缺前置产出 |
+
+### 结论
+
+- **两类已定性且都属"夹具/期望需迁移"**，不是产品缺陷：① 门禁组成变化（新增 `review-passed`/`sampled`，
+  负路径的期望码改变）；② 一会话一对象（v42 A3）。
+- **一类是维护回执语义**（r59–r61 的 `applied_pending_commit`）——需确认是夹具缺步骤还是处置口径变了。
+- **其余 5 条只是待查**，我没有猜结论。
+
+### 为什么不在本轮批量改
+
+这些迁移会**改动断言本身**（期望码从 `WF_DEPENDENCY_UNMET` 改成 `WF_SEMANTIC_DECISION` 等）。
+改断言必须逐条确认"新期望是否仍然是应该保证的行为"，否则等于把测试改成"迎合实现"——
+那正是 v42 元规则要防的事。所以留给下一轮逐套件处理，每条都要写清"改了期望，理由是什么"。

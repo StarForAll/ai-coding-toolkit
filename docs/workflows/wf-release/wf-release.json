@@ -141,7 +141,7 @@
       "target_relative": ".wf/lib/wflib/fingerprint.py"
     },
     {
-      "digest": "sha256:aeed959f32365308a1bd2d801403036cf3b0702cd3c4c6d1ac3195a62937be3d",
+      "digest": "sha256:e57795790f989f10e9f57d849d9b9330e86c9c71faae1a5caa9094098b254458",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -761,7 +761,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:01f085475e22caa6e1864f57f8afd295a5c5b9f474c1f7ee98e70247587a3305",
+    "rules_digest": "sha256:d16f08001f3e055e2746cd12bf786da5911298cb6208ad15509969cae87b7ca3",
     "systems": [
       "linux"
     ],

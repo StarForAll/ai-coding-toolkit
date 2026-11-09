@@ -21,7 +21,8 @@ TASK_STEP_SPECS = (
     ("task.knowledge-disposed", "once", "all", "before_archive"),
     ("task.retrospective-done", "once", "retrospective", "before_archive"),
     ("task.changes-persisted", "repeatable", "all", "before_archive"),
-    # §0.2 抽样只在收工前执行：归档前必须有一次已冻结的选样（AI 不可挑选事件）
+    # §0.2 抽样排在**最后**：先把真实问题（前置/依赖/审查/检查）报出来，抽样是收工前的最后一道。
+    # 若排前面，会让"依赖不满足"这类负路径变成"还没抽样"，把具体问题藏起来（cp4 A1 实测）。
     ("task.sampled", "repeatable", "all", "before_archive"),
     ("task.archived", "once", "all", "after_archive"),
 )
