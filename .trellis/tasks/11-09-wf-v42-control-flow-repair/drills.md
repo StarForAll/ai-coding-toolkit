@@ -93,3 +93,27 @@ Check 才能拿结论。
 `archive` 的**成功**路径（"归档后工作树干净"）与"归档编排失败"故障注入：本轮归档被 vendor 守卫
 正确拦下后就收尾了；成功路径需要一份不含 `.wf/**` 的 commit 面（记录由归档自己分三段提交），
 可在下一轮补。
+
+
+## 第四轮：归档三段（故障注入 → 恢复 → 收工）
+
+同一夹具内推进到 `task-check = WF_OK`（真验证命令）、审查 `decide = WF_OK`、`task-knowledge = WF_OK`。
+
+| # | 场景 | 期望 | 实测 | 判定 |
+|---|---|---|---|---|
+| 10 | **归档编排失败**（`.git/index.lock` 占位，让 `git add` 失败） | 失败**带恢复点**，不产生半成功 | `WF_PERSISTENCE_FAILED`（`git add` + stderr 原文）；动作结果里记 `failure`，重入被允许 | ✅ |
+| 10b | 恢复后重入 | 清掉故障即可重试，门槛只看未完成的步骤 | 清 lock → 重入 → 只报未完成步骤（`task.review-passed`/`task.knowledge-disposed`） | ✅ |
+| 10c | 三段回报（`changes-persisted`） | 三段 receipt 满足 | `task.changes-persisted = satisfied`（业务/记录两段都跑过） | ✅ |
+| 1 | **归档成功路径** | `WF_OK` + 工作树干净 | 未达成：最终卡在 `complex 分级须由人在批准决定中确认（decision.plan.complexity）` | ⏭ |
+
+### 第四轮发现（未修，待确认）：`complexity` 决定与归档门禁的口径不一致
+
+批准时我用 `{"choice": "complexity", "value": "complex"}`，`task-approve` **回执 `complexity: "complex"`**（即它认了这个值）；
+但归档门禁 `WF_SEMANTIC_DECISION` 仍要求 `decision.plan.complexity` 由人确认，`confirmed_source=inputs`、`human_inputs={}`。
+
+两种可能，需一次定位：
+1. 决定文件的形状不对（应写成 `{"choice":"plan","plan":{"complexity":"complex"}}` 之类），批准侧宽松、归档侧严格；
+2. `task-approve` 收下了 complexity 却没落进 `decision.plan`，属**记录漏写**（若是这种，就是缺陷）。
+
+**这是下一轮的第一件事**：用一条最小夹具分别试两种决定形状，看 `decision.plan.complexity` 是否落盘。
+在它定位前，"归档成功路径"与"归档后工作树干净"这条 P4 判据仍未兑现。
