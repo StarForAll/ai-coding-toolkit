@@ -48,3 +48,16 @@ python3 scripts/wf-evidence-snapshot.py --pack
 - 内容含目标项目（`traffic_monitor`）的源码片段与完整会话转录，属私有材料；只在本 authoring 仓库留存，不随发行投放、不外发。
 - 会话 JSONL 是宿主原始记录，可能含本机路径与命令输出；不做改写（改写即失去证据效力），只在 README 声明范围。
 - 证据只作**事实复算**用，不构成对目标项目的任何批准或验收。
+
+## 发布口径（2026-11-09 人裁）
+
+**不发布原始证据包**。原始 `*.tar.gz` 留在本机工作区，不入库（全局 ignore `*.tar.gz`）、
+不作为任何 release 附件（含自建 Forgejo）。理由：`sessions.tar.gz` 是完整会话日志，
+按形态扫到 `sk-` 类串 2 处、`password` 9 处、`api_key` 6 处、绝对路径 902 处；release 附件
+长期可下载且撤回不等于消失。
+
+**可校验面仍在库里**：`manifests/*.sha256`、`target-lib/lib.diff`、`target-lib/lib-files.sha256`。
+需要复算时在本机跑 `scripts/wf-evidence-snapshot.py --verify`（在线）或 `--offline-verify`（摘要）。
+
+若将来确需远程留存，只能走**脱敏包**（按 `authorize.redact` 口径重建 + 记 `original_digest`），
+且需重新取得覆盖该发布动作与可见性的授权。
