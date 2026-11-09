@@ -366,32 +366,35 @@ wf(["task-check", "--task", task23, "--review-notes", NOTES, "--json"], {"genera
 wf(["task-knowledge", "--task", task23, "--decision", "no-update", "--json"], {"generation": cur_gen()}, "sess-U23")
 wfok("sampling", ["sampling", "pick", "--task", task23, "--freeze", "--json"],
      {"generation": cur_gen()}, "sess-U23")   # 正常归档前必须冻结并落盘选样（task.sampled 前置）
-rc, payload, _ = wf(["archive", "--task", task23, "--decision",
-                     dfile("/tmp/r23_arch.json", [dec(f"finish {task23}", "finish", d23),
-                                                  dec("area23/**", "commit", d23)]), "--json"],
-                    {"generation": cur_gen()}, "sess-U23")
-rec("R23 准备：正常归档", "WF_OK", (payload or {}).get("code"), rc == 0)
-# 回退记录组提交，制造「已移动、未持久化」状态
-subprocess.run(["git", "reset", "-q", "--mixed", "HEAD~1"], cwd=F, capture_output=True)
-subprocess.run(["git", "checkout", "-q", "--", "."], cwd=F, capture_output=True)
-archived = wf_tasks.task_dir(F, task23)
-persisted_before = wf_tasks.archive_persisted(F, json.load(open(os.path.join(archived, "task.json"))))
-rc_norights, no_rights, _ = wf(["archive", "--task", task23, "--decision",
-                                 dfile("/tmp/r23_arch2.json", [dec(f"finish {task23}", "finish", d23)]), "--json"],
-                                {"generation": cur_gen()}, "sess-U23")
+# 制造「已移动、未持久化」：**首次**归档时注入故障，让记录段提交失败
+# （第二次归档会因"已归档"直接返回 WF_OK，故障注入只有落在首次才有意义）
+lock_path = os.path.join(F, ".git", "index.lock")
+open(lock_path, "w").write("")
+rc_fail, fail_payload, _ = wf(["archive", "--task", task23, "--decision",
+                               dfile("/tmp/r23_arch.json", [dec(f"finish {task23}", "finish", d23),
+                                                            dec("area23/**", "commit", d23)]), "--json"],
+                              {"generation": cur_gen()}, "sess-U23")
+os.remove(lock_path)
+rec("R23 归档记录段失败即持久化未完成", "WF_PERSISTENCE_FAILED",
+    (fail_payload or {}).get("code"), (fail_payload or {}).get("code") == "WF_PERSISTENCE_FAILED")
+archived_dir_before = wf_tasks.task_dir(F, task23)
+persisted_before = wf_tasks.archive_persisted(F, json.load(open(os.path.join(archived_dir_before, "task.json"))))
+rec("R23 未持久化状态已构造", "persisted=False", persisted_before.get("persisted"),
+    persisted_before.get("persisted") is False)
+
 wf(["writer", "release", "--json"], {"generation": cur_gen()}, "sess-U23")
 rc_busy, busy_payload, _ = wf(["archive", "--task", task23, "--decision",
-                                dfile("/tmp/r23_arch2.json", [dec(f"finish {task23}", "finish", d23)]), "--json"],
-                               {"generation": cur_gen()}, "sess-U23")
+                               dfile("/tmp/r23_arch2.json", [dec(f"finish {task23}", "finish", d23),
+                                                   dec("area23/**", "commit", d23)]), "--json"],
+                              {"generation": cur_gen()}, "sess-U23")
 rec("R23 无写权不得续做", "WF_WRITER_BUSY", (busy_payload or {}).get("code"),
     (busy_payload or {}).get("code") == "WF_WRITER_BUSY")
 wf(["writer", "acquire", "--task", task23, "--json"], {"generation": cur_gen()}, "sess-U23")
 rc, payload, _ = wf(["archive", "--task", task23, "--decision",
-                     dfile("/tmp/r23_arch2.json", [dec(f"finish {task23}", "finish", d23)]), "--json"],
+                     dfile("/tmp/r23_arch2.json", [dec(f"finish {task23}", "finish", d23),
+                                                   dec("area23/**", "commit", d23)]), "--json"],
                     {"generation": cur_gen()}, "sess-U23")
 facts = (payload or {}).get("facts", {})
-rec("R23 未持久化状态已构造", "persisted=False", persisted_before.get("persisted"),
-    persisted_before.get("persisted") is False)
 rec("R23 重入按既有授权续做提交", "WF_OK 且 persisted=true 且标记续做",
     f"{(payload or {}).get('code')} persisted={(facts.get('archive_persisted') or {}).get('persisted')} resumed={(facts.get('archive_persisted') or {}).get('resumed_commit')}",
     (payload or {}).get("code") == "WF_OK"
