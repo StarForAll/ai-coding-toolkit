@@ -483,6 +483,21 @@ def main(argv=None):
             if isinstance(writer, dict) and writer.get("state") in ("held", "recovering"):
                 return blocker("WF_WRITER_BUSY", "写权仍被持有：先确认旧写者停止并走 repair，或等其释放",
                                {"holder": writer.get("holder")}, args.json)
+            # 机制稿 §10.5：writer 合法时正常 acquire maintenance（登记持有 + 代次），
+            # 卸载结束后释放并留下可核回执（kind=uninstall，事实=登记资产已不存在）
+            held_generation = None
+            if isinstance(writer, dict):
+                held_generation = int(writer.get("generation") or 0) + 1
+                writer.update({
+                    "state": "held",
+                    "generation": held_generation,
+                    "holder": {"kind": "maintenance", "id": "uninstall",
+                               "generation": held_generation,
+                               "scope": {"maintenance": "uninstall"}},
+                    "revision": int(writer.get("revision") or 0) + 1,
+                    "updated_at": now_str(),
+                })
+                write_json(os.path.join(root, ".wf/writer.json"), writer)
             removed = []
             preserved = []
             deviating = {item["path"] for item in deviations}
@@ -528,6 +543,35 @@ def main(argv=None):
                 with open(note_path, "a", encoding="utf-8") as handle:
                     handle.write(f"\n\n卸载记录：{now_str()} 已移除 {len(removed)} 个发行资产；"
                                  "数据、安装记录与锁保留。\n")
+            # 释放维护持有并记录回执：changes 只列**真正被删掉**的路径（偏离项不算）
+            if isinstance(writer, dict) and held_generation is not None:
+                writer.update({
+                    "state": "idle",
+                    "generation": held_generation + 1,
+                    "holder": None,
+                    "revision": int(writer.get("revision") or 0) + 1,
+                    "updated_at": now_str(),
+                })
+                results = writer.get("maintenance_results")
+                if not isinstance(results, list):
+                    results = []
+                results.append({
+                    "operation": "uninstall",
+                    "preview_digest": token.digest(),
+                    "head_before": None,
+                    "changes": [{"path": item["path"], "before": item.get("digest"), "after": None}
+                                for item in removed],
+                    "receipt_git_state": {"head": None, "tracked_paths": len(removed)},
+                    "result": "applied_pending_commit",
+                    "disposition": {
+                        "kind": "uninstall",
+                        "decision": {"choice": "uninstall", "source": "human:terminal",
+                                     "at": now_str()},
+                        "evidence": {"removed": len(removed), "assets_absent": True},
+                    },
+                })
+                writer["maintenance_results"] = results
+                write_json(os.path.join(root, ".wf/writer.json"), writer)
     except RuntimeError as exc:
         return blocker("WF_WRITER_BUSY", str(exc), {"target": root}, args.json)
     except ValueError as exc:

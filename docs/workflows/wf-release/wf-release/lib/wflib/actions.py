@@ -119,6 +119,8 @@ def new_action(
         "base_revision": int(base_revision),
         "head_before": head_before,
         "inputs_digest": inputs_digest(inputs),
+        # 意图本体也要留：恢复时（如 identity/project_id）需要取值而不只是校验摘要
+        "inputs": dict(inputs or {}),
         "targets": targets or [],
         "steps": list(steps or []),
         "next_step": (steps or [None])[0] if steps else None,

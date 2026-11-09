@@ -106,6 +106,20 @@ CONTROL_STEP_COMMANDS = {
 # 由引导层转交、不在语义层 COMMANDS 表中的独立入口
 BOOTSTRAP_ENTRIES = ("repair", "uninstall")
 
+# 交付轮次（2026-11-05 人裁 B）：步骤 → 交付轮次；未列出的即首轮交付。
+# 判据：清单声明"本轮已交付"的步骤，其承接命令不得是能力不可用桩；
+# 声明为后续轮次的步骤只报告、不阻断启用（"未交付轮次的可预期不可达"）。
+STEP_DELIVERY_ROUND = {
+    "control.definition.prepare": 2,
+    "control.run.advance": 2,
+    "control.run.terminate": 2,
+    "control.dependency.change": 2,
+    "control.task.rework": 2,
+    "control.task.replace": 2,
+    "control.asset.apply": 3,
+}
+CURRENT_DELIVERY_ROUND = 1
+
 # 固定分派表：required step id → 处理器（task 走 verify_step；control 走对应子命令）
 HANDLERS = {step_id: "verify_step" for step_id, _mode, _condition, _due in TASK_STEP_SPECS}
 for _operation, _command in CONTROL_STEP_COMMANDS.items():
@@ -217,6 +231,7 @@ def required_step_specs():
             "applies": {"task_kinds": list(TASK_KINDS), "condition": condition},
             "due": due,
             "mode": mode,
+            "delivery_round": STEP_DELIVERY_ROUND.get(step_id, CURRENT_DELIVERY_ROUND),
         }
     for operation in CONTROL_OPERATIONS:
         specs[f"control.{operation}"] = {
@@ -224,6 +239,7 @@ def required_step_specs():
             "applies": {"operation": operation},
             "due": "operation_end",
             "mode": "repeatable",
+            "delivery_round": STEP_DELIVERY_ROUND.get(f"control.{operation}", CURRENT_DELIVERY_ROUND),
         }
     return specs
 
@@ -232,19 +248,64 @@ def supported_keys():
     return set(HANDLERS)
 
 
+def _stub_rounds(commands):
+    """从命令面取"能力不可用桩"的交付轮次（命令名 → 轮次）。"""
+    rounds = {}
+    if isinstance(commands, dict):
+        for name, handler in commands.items():
+            round_no = getattr(handler, "wf_delivery_round", None)
+            if isinstance(round_no, int):
+                rounds[name] = round_no
+    return rounds
+
+
 def support_report(manifest, commands, bootstrap_entries=()):
-    """核对发行声明的 required_steps 与固定分派表、命令面是否一一对应。"""
+    """核对发行声明的 required_steps 与固定分派表、命令面是否一一对应。
+
+    2026-11-05（人裁 B）：除"处理面存在"外，还核对**交付轮次可达**——
+    清单声明 `delivery_round <= manifest.delivery_round` 的步骤，其承接命令不得是
+    "能力不可用"桩；声明为后续轮次的步骤只报告覆盖情况，不阻断启用。
+    """
     available = set(commands) | set(bootstrap_entries)
+    stub_rounds = _stub_rounds(commands)
     problems = []
+    current_round = manifest.get("delivery_round")
+    if (not isinstance(current_round, int) or isinstance(current_round, bool)
+            or current_round <= 0):
+        problems.append({"required_step": "manifest.delivery_round",
+                         "reason": "missing or invalid; cannot decide delivery reachability"})
+        current_round = None
     declared = [step.get("id") for step in manifest.get("required_steps") or [] if step.get("id")]
-    for step_id in declared:
+    for step in manifest.get("required_steps") or []:
+        step_id = step.get("id")
+        if not step_id:
+            continue
         handler = HANDLERS.get(step_id)
         if handler is None:
             problems.append({"required_step": step_id, "reason": "no fixed handler"})
             continue
+        declared_round = step.get("delivery_round")
+        if (not isinstance(declared_round, int) or isinstance(declared_round, bool)
+                or declared_round <= 0):
+            problems.append({"required_step": step_id, "reason": "delivery_round missing or invalid"})
         if step_id.startswith("control."):
             if handler not in available:
-                problems.append({"required_step": step_id, "reason": f"handler entry missing: {handler}"})
+                if handler in BOOTSTRAP_ENTRIES:
+                    # 引导层独立入口（repair/uninstall）：不在语义层命令表里，属预期形状，
+                    # 报告时显式标注，避免被复审读成真缺口（2026-11-05 第七轮复审）。
+                    problems.append({"required_step": step_id, "reason": "bootstrap-layer entry (expected)",
+                                     "handler": handler})
+                else:
+                    problems.append({"required_step": step_id,
+                                     "reason": f"handler entry missing: {handler}"})
+            stub_round = stub_rounds.get(handler)
+            if (stub_round is not None and isinstance(declared_round, int) and current_round is not None
+                    and declared_round <= current_round):
+                problems.append({
+                    "required_step": step_id,
+                    "reason": (f"declared delivered in round {declared_round} but its command "
+                               f"`{handler}` is a capability stub (round {stub_round})"),
+                })
         elif not callable(globals().get(handler)):
             problems.append({"required_step": step_id, "reason": f"handler callable missing: {handler}"})
     for step_id in sorted(set(HANDLERS) - set(declared)):
@@ -789,8 +850,27 @@ def final_gate(ctx, task, ignore_action_id=None):
     check = task.get("check") or {}
     if check.get("result") != "pass":
         return False, "WF_CHECK_FAILED", {"reason": "current check is not pass", "check": check.get("id")}
+    # S6 的第 3/4 项：blocking 必须已被处置（"不处置"不是关闭，K10/K4b）
+    from . import review as review_mod
+
+    open_items = review_mod.open_findings(ctx, task)
+    if open_items["blocking"]:
+        return False, "WF_UNRESOLVED_BLOCKING", {
+            "unaddressed_blocking": open_items["blocking"],
+            "unavailable_reports": open_items["unavailable"],
+            "exits": ["按 K4b 由非提出者复核后以 dispositions 关闭（决策 + 证据 + recheck_by）",
+                      "由人确认重分类（改变 severity/类别的判断）",
+                      "按 §5.6 异常归档"],
+        }
     # 降级条目的齐全性在归档门禁核（不分轻量/复杂），不受 review-passed 的 complex 条件裁剪
     plan_now = task.get("plan") or {}
+    # 人工载体：复杂分级必须是**人确认**的（决定文件 plan 块），不能由请求自报（设计稿 §4.3/§4.4）
+    if plan_now.get("complexity") == "complex" and plan_now.get("confirmed_source") != "decision":
+        return False, "WF_SEMANTIC_DECISION", {
+            "reason": "complex 分级须由人在批准决定中确认（decision.plan.complexity）",
+            "confirmed_source": plan_now.get("confirmed_source"),
+            "human_inputs": plan_now.get("human_inputs"),
+        }
     if plan_now.get("complexity") != "complex":
         downgrades = [item for item in plan_now.get("complexity_reasons") or [] if item.get("downgrade")]
         incomplete = [item for item in downgrades if not item.get("reason") or not item.get("evidence")]

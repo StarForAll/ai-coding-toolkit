@@ -1,0 +1,139 @@
+{
+ "schema_version": 1,
+ "source": "设计稿 §1.3（任务状态/阶段位置）+ §4.1（主干四段）+ 机制稿 §2.2（合法状态与迁移）；2026-11-09 人裁定：保留上位四阶段，fixing 不落盘",
+ "status": {
+  "enum": ["not_started", "in_progress", "archived"],
+  "initial": "not_started",
+  "display": {"not_started": "未开工", "in_progress": "执行中", "archived": "已归档"}
+ },
+ "phase": {
+  "enum": ["plan", "execute", "check", "finish"],
+  "initial": "plan",
+  "display": {"plan": "Plan", "execute": "Execute", "check": "Check", "finish": "Finish"}
+ },
+ "phase_model": "任务阶段为 Plan → Execute → Check → Finish，与 status 三态（未开工/执行中/已归档）正交；暂停与挂起是独立标记，不是第四态；检查 fail 留在 check、修复回 execute，内容或规范变化使旧结果失效时回 check 或 execute。",
+ "legal_positions": {
+  "not_started": ["plan"],
+  "in_progress": ["plan", "execute", "check", "finish"],
+  "archived": []
+ },
+ "execution_candidate": "status == in_progress and not paused and not suspended；全项目至多一个",
+ "terminal": {
+  "status": "archived",
+  "enum": ["normal", "abnormal"],
+  "display": {"normal": "正常归档", "abnormal": "异常归档"},
+  "requires": ["terminal", "archived_at"],
+  "forbids": ["paused", "suspended"]
+ },
+ "transitions": [
+  {
+   "id": "approve-plan",
+   "action": "task-approve",
+   "from": [{"status": "not_started", "phase": "plan"}, {"status": "in_progress", "phase": "plan"}],
+   "to": [],
+   "keeps_position": true,
+   "notes": "人批准当前规划版本与复杂度/TDD；Plan 期人判问题一轮内作答后写入 execution.human_decisions；不改变开工事实",
+   "fail_codes": ["WF_APPROVAL_MISSING", "WF_SEMANTIC_DECISION", "WF_TEMPLATE_INCOMPLETE"]
+  },
+  {
+   "id": "start",
+   "action": "task-start",
+   "from": [{"status": "not_started", "phase": "plan"}],
+   "to": [{"status": "in_progress", "phase": "execute"}],
+   "notes": "首次开工：固定 baseline_head 并保存 entry_snapshot；核对 §2.3 开工顺序全部成立",
+   "fail_codes": ["WF_APPROVAL_MISSING", "WF_DEPENDENCY_UNMET", "WF_VERIFICATION_UNREADY", "WF_WIP_UNRESOLVED", "WF_SEMANTIC_DECISION"]
+  },
+  {
+   "id": "reenter-execute",
+   "action": "task-start",
+   "from": [{"status": "in_progress", "phase": "plan"}],
+   "to": [{"status": "in_progress", "phase": "execute"}],
+   "notes": "回 Plan 后再入 Execute：重新提取当前 PRD 与有效批准逐项核对，保存新 entry_snapshot，保留原 baseline_head",
+   "fail_codes": ["WF_APPROVAL_MISSING", "WF_SEMANTIC_DECISION"]
+  },
+  {
+   "id": "check",
+   "action": "task-check",
+   "from": [{"status": "in_progress", "phase": "execute"}, {"status": "in_progress", "phase": "check"}],
+   "to": [
+    {"status": "in_progress", "phase": "finish", "when": "结果 pass"},
+    {"status": "in_progress", "phase": "check", "when": "结果 fail（留在 check，等待修复）"},
+    {"status": "in_progress", "phase": "execute", "when": "修复完成后回 execute 重做工作"}
+   ],
+   "notes": "对象稳定（前后扫描比对）与范围合法（含治理面声明）通过后才执行验证与双轴，写结果后 pass 进入 finish",
+   "fail_codes": ["WF_SCOPE_VIOLATION", "WF_SCOPE_UNRESOLVED", "WF_WORKSPACE_UNRESOLVED", "WF_CHECK_FAILED", "WF_SEMANTIC_DECISION"]
+  },
+  {
+   "id": "finish-invalidate",
+   "action": "task-check",
+   "from": [{"status": "in_progress", "phase": "finish"}],
+   "to": [{"status": "in_progress", "phase": "check"}, {"status": "in_progress", "phase": "execute"}],
+   "notes": "Finish 中对象/规范变化使旧结果失效，回 check 或 execute；不沿用旧 pass",
+   "fail_codes": ["WF_CHECK_STALE"]
+  },
+  {
+   "id": "replan",
+   "action": "task-replan",
+   "from": [{"status": "in_progress", "phase": "execute"}, {"status": "in_progress", "phase": "check"}, {"status": "in_progress", "phase": "finish"}],
+   "to": [{"status": "in_progress", "phase": "plan"}],
+   "notes": "实质规划变更：原批准与检查留历史但当前无效，status 不回未开工",
+   "fail_codes": ["WF_SEMANTIC_DECISION", "WF_APPROVAL_MISSING"]
+  },
+  {
+   "id": "pause",
+   "action": "task-pause",
+   "from": [{"status": "not_started"}, {"status": "in_progress"}],
+   "to": [],
+   "keeps_position": true,
+   "notes": "人的休息决定；恢复核身份、写权、真实 WIP、候选和前置；不清挂起",
+   "fail_codes": ["WF_IDENTITY_UNRESOLVED", "WF_WRITER_BUSY", "WF_GENERATION_STALE"]
+  },
+  {
+   "id": "resume",
+   "action": "task-resume",
+   "from": [{"status": "not_started"}, {"status": "in_progress"}],
+   "to": [],
+   "keeps_position": true,
+   "notes": "恢复暂停；不改变 phase/status",
+   "fail_codes": ["WF_IDENTITY_UNRESOLVED", "WF_WRITER_BUSY"]
+  },
+  {
+   "id": "suspend",
+   "action": "task-reassess",
+   "from": [{"status": "not_started"}, {"status": "in_progress"}],
+   "to": [],
+   "keeps_position": true,
+   "notes": "返工/复评等挂起来源按机制稿 §6；不重写 phase/status，保留阻塞事实；清除挂起同样不改位置",
+   "fail_codes": ["WF_DEPENDENCY_UNMET", "WF_SEMANTIC_DECISION"]
+  },
+  {
+   "id": "archive-normal",
+   "action": "archive",
+   "from": [{"status": "in_progress", "phase": "finish"}],
+   "to": [{"status": "archived", "terminal": "normal"}],
+   "notes": "机制稿 §9.3 最终门禁与授权提交成立；人调用 finish",
+   "fail_codes": ["WF_COMMIT_NOT_AUTHORIZED", "WF_CHECK_STALE", "WF_REVIEW_INVALID", "WF_REVIEW_UNAVAILABLE", "WF_DEPENDENCY_UNMET", "WF_SEMANTIC_DECISION"]
+  },
+  {
+   "id": "archive-abnormal",
+   "action": "archive",
+   "from": [{"status": "not_started"}, {"status": "in_progress"}],
+   "to": [{"status": "archived", "terminal": "abnormal"}],
+   "notes": "放弃/替换决定与图/改动处置成立；只阻断结案，业务停止决定仍有效",
+   "fail_codes": ["WF_SEMANTIC_DECISION", "WF_WORKSPACE_UNRESOLVED"]
+  }
+ ],
+ "next_by_position": {
+  "session": "wf enable（人显式调用 start 完成启用）；未绑定时 wf bind 选择对象",
+  "not_started/plan": "wf task-approve（人批准当前规划与复杂度）",
+  "in_progress/plan": "wf task-start（核对批准与开工前置后进入 Execute）",
+  "in_progress/execute": "wf task-check（对象稳定且范围合法后执行检查）",
+  "in_progress/check": "wf task-check（按 fail 项修复后重新检查；修复回 execute）",
+  "in_progress/finish": "wf archive（人调用 finish：最终门禁 + 归档）",
+  "archived": "wf status（只读查看结果）；下一个对象由新会话经 wf bind 选择"
+ },
+ "next_by_mark": {
+  "paused": "wf task-resume（人恢复后再推进）",
+  "suspended": "wf task-reassess（按机制稿 §6 的返工/复评出口处置后清挂起）"
+ }
+}

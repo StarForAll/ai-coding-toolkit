@@ -32,6 +32,8 @@ def object_paths(ctx, task):
     receipts = tasks_mod.task_receipts(ctx.root)
     classified = scope.classify_candidates(ctx.root, task, receipts=receipts)
     paths = set(classified["buckets"]["e"])
+    # K5：vendor 不进检查对象（它的变动由 vendor_dirty 记录，不参与指纹与结论）
+    paths = {path for path in paths if not scope.is_vendor(path)}
     for entry in task.get("curation") or []:
         if entry.get("released"):
             continue
@@ -60,9 +62,53 @@ def spec_versions(ctx, task):
     matched, _unparsed = spec_mod.match(ctx.root, candidates)
     for entry in matched:
         paths.add(entry["path"])
-    versions = [{"path": path, "digest": records.file_digest(join(ctx.root, path))}
-                for path in sorted(paths)]
+    versions = []
+    for path in sorted(paths):
+        info = spec_mod.load_spec(ctx.root, path)
+        # 实质摘要优先（机制稿 §8.3：check + active clauses）；没有实质字段的规则退回整文件摘要，
+        # 这条 fallback 是显式的：无 check/clauses 的规则无法区分"改排版"与"改条件"。
+        digest = spec_mod.rule_digest(info.get("metadata") or {}) or records.file_digest(join(ctx.root, path))
+        versions.append({"path": path, "digest": digest})
     return sorted(versions, key=lambda item: str(item["path"]).encode("utf-8"))
+
+
+def assertions_digest(ctx, task):
+    """断言面摘要（K3b）：验收项实质字段 + 被引用的验证定义 + 参与规则的实质摘要。
+
+    只算实质字段（排版不计）：验收项 `statement`/`severity`/`verification_ids` 与 v42 的
+    `verify.*` 字段；被引用的验证定义的 `invocation`/`cwd`/`input_refs`（命令或参数变了，
+    标准的含义就变了）；每条参与 spec 规则的 `check` 与 active `clauses`。
+    """
+    from . import spec as spec_mod
+
+    plan = task.get("plan") or {}
+    acceptance = []
+    for item in plan.get("acceptance") or []:
+        if not isinstance(item, dict):
+            continue
+        verify = {key: item[key] for key in ("kind", "refs", "covers", "judged_by", "env") if key in item}
+        entry = {"id": item.get("id"), "statement": item.get("statement"),
+                 "severity": item.get("severity"),
+                 "verification_ids": list(item.get("verification_ids") or [])}
+        if verify:
+            entry["verify"] = verify
+        acceptance.append(entry)
+    wanted = {vid for item in acceptance for vid in item["verification_ids"]}
+    verifications = []
+    for verification in plan.get("verifications") or []:
+        if not isinstance(verification, dict) or verification.get("id") not in wanted:
+            continue
+        verifications.append({"id": verification.get("id"),
+                              "invocation": verification.get("invocation"),
+                              "cwd": verification.get("cwd"),
+                              "input_refs": verification.get("input_refs")})
+    rules = []
+    for entry in spec_versions(ctx, task):
+        info = spec_mod.load_spec(ctx.root, entry["path"])
+        rules.append({"path": entry["path"],
+                      "rule_digest": spec_mod.rule_digest(info.get("metadata") or {})})
+    return records.H("wf-assertions-v1",
+                     {"acceptance": acceptance, "verifications": verifications, "rules": rules})
 
 
 def object_content_digest(ctx, task):
@@ -83,6 +129,7 @@ def anchor_parts(ctx, task, *, check=None):
         "content_digest": fingerprint.content_digest(fingerprint.items(ctx.root, paths)),
         "acceptance_digest": plan.get("acceptance_digest"),
         "spec_versions": spec_versions(ctx, task),
+        "assertions_digest": assertions_digest(ctx, task),
         "baseline_digest": records.file_digest(join(ctx.root, ".wf/baseline.md")),
         "config_digest": records.file_digest(join(ctx.root, ".wf/project-config.json")),
         "workflow_snapshot_digest": None,
@@ -367,11 +414,28 @@ def _run_argv(ctx, task, verification, log_dir):
     cwd = verification.get("cwd") or "."
     workdir = ctx.root if cwd == "." else join(ctx.root, cwd)
     started = records.now_str()
+    # 验证命令跑在 OS 锁内（机制稿 §4.1 的已知偏差，见实现稿 §2.3.11）：至少给出超时上界，
+    # 避免挂起的命令无限期占锁（第二十三轮复审外部 P2-NEW 的部分缓解）。
+    cfg, problems = config_mod.load_project_config(ctx.root, allow_missing=True)
     try:
-        result = subprocess.run(argv, cwd=workdir, capture_output=True, text=True, check=False)
+        value, problem = config_mod.value_of(cfg, problems, "verification_timeout_seconds")
+    except config_mod.ConfigError as exc:
+        raise CheckError("WF_RECORD_INVALID", {"reason": "invalid verification timeout config", "detail": str(exc)})
+    # `value_of` 对非法值返回 (None, problem)：**必须消费 problem**，否则非法配置会静默退成无界
+    # （第二十五轮复审 N25-2）。
+    if problem:
+        raise CheckError("WF_RECORD_INVALID", {"reason": "invalid verification timeout config",
+                                               "detail": problem})
+    timeout = value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
+    try:
+        result = subprocess.run(argv, cwd=workdir, capture_output=True, text=True, check=False,
+                                timeout=timeout)
         exit_code = result.returncode
         output = (result.stdout or "") + (result.stderr or "")
         summary = output.strip().splitlines()[-1] if output.strip() else ""
+    except subprocess.TimeoutExpired as exc:
+        exit_code = None
+        summary = f"timed out after {timeout}s"
     except OSError as exc:
         exit_code = None
         summary = f"spawn failed: {exc}"
@@ -443,7 +507,9 @@ def _external_touches_task(item, task):
     """该外部提交是否触及本任务批准触碰面（未触及的不构成待决项）。"""
     from . import paths as paths_mod
 
-    touch = (task.get("plan") or {}).get("touch_paths") or []
+    from . import tasks as tasks_module
+
+    touch = tasks_module.approved_touch_paths(task)
     for path in (item or {}).get("paths") or []:
         for pattern in touch:
             if paths_mod.match_path(pattern, path):
@@ -676,8 +742,33 @@ def run_check(ctx, task, decisions, review_notes_path):
         "external_changes": external_findings,
         "external_pending": len(external_findings or []),
     }
+    # 任务基线不可达：设计稿 §4.2/§5.4 要求走记录锚点核对并由人裁决，不能静默通过
+    if (external or {}).get("unreachable"):
+        raise CheckError("WF_HISTORY_UNRESOLVED",
+                         dict(scope_facts, baseline=(external or {}).get("baseline"),
+                              reason="task baseline head is unreachable",
+                              exits=["按设计稿 §5.4 只读核对记录锚点后由人裁决",
+                                     "确认基线被重写后重做本任务的锚点/检查",
+                                     "如属历史迁移，先 repair 核旧写者与记录来源"]))
     if buckets["f"]:
-        raise CheckError("WF_SCOPE_VIOLATION", dict(scope_facts, out_of_scope=buckets["f"]))
+        # K6 第 4 类：越出批准面的修改必须**先确认后改**；已入库的 expand 确认覆盖这些路径时
+        # 视为已批准扩面（仍留事实，供预览与判断清单使用），否则阻断。
+        from . import authorize as authorize_mod
+        from . import tasks as tasks_mod
+
+        task_dir = tasks_mod.task_dir(ctx.root, task.get("id"))
+        covered, uncovered = authorize_mod.covers(task_dir, "expand", buckets["f"])
+        if covered:
+            scope_facts = dict(scope_facts,
+                               approved_expansion=buckets["f"],
+                               buckets=dict(scope_facts["buckets"], e=sorted(set(scope_facts["buckets"]["e"]) | set(buckets["f"])),
+                                            f=[]))
+        else:
+            raise CheckError("WF_SCOPE_VIOLATION",
+                             dict(scope_facts, out_of_scope=uncovered,
+                                  covered_by_authorization=sorted(set(buckets["f"]) - set(uncovered)),
+                                  exits=["回 Plan 扩范围并重新批准",
+                                         "先取得该路径的扩面确认（K6 第 4 类）后再改"]))
     if buckets["c"]:
         raise CheckError("WF_WORKSPACE_UNRESOLVED", dict(scope_facts, other_tasks=buckets["c"]))
     pending_external = [item for item in (external_findings or [])
@@ -790,7 +881,8 @@ def run_check(ctx, task, decisions, review_notes_path):
     check_id = f"{records.utc_now().strftime('%Y%m%d')}-{uuid.uuid4().hex}"
     check = {
         "id": check_id,
-        "anchor": {"check_anchor": anchor, "rule_version": ctx.rule_version()},
+        # parts 是"失配时列出差异"的第二端（机制稿 §3.5）：与 check_anchor 同源写入的快照。
+        "anchor": {"check_anchor": anchor, "rule_version": ctx.rule_version(), "parts": dict(parts)},
         "paths_digest": parts["paths_digest"],
         "content_digest": parts["content_digest"],
         "started_at": started,

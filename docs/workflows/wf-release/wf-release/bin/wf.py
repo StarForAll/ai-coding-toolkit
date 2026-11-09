@@ -283,6 +283,19 @@ def project_key_approved(root, value):
                     candidates.append(prd)
         except OSError:
             pass
+    # 归档区同样承载批准证据：初始化任务归档后其 PRD 仍须可核（§2.3.11 ③ 关闭）
+    archive = os.path.join(tasks_dir, "archive")
+    if os.path.isdir(archive):
+        try:
+            for dirpath, _dirnames, filenames in os.walk(archive):
+                if "prd.md" not in filenames or "task.json" not in filenames:
+                    continue
+                prd = os.path.join(dirpath, "prd.md")
+                record = os.path.join(dirpath, "task.json")
+                if _task_prd_is_approved(record, prd):
+                    candidates.append(prd)
+        except OSError:
+            pass
     for path in candidates:
         try:
             with open(path, "r", encoding="utf-8", errors="replace") as handle:
@@ -438,6 +451,8 @@ def executor_ready(root, scope, config_value, candidate):
         return False
     identity = path_identity(config_value, root)
     project_id = project_id_of(root) if scope == "project" else None
+    # 解释器升级但二进制元数据未变（或元数据被保留）时，版本必须重新确认（§2.3.11 ③ 关闭）
+    version_text = probe_version(candidate)
     for entry in load_confirmations():
         if matches(
             entry,
@@ -447,13 +462,22 @@ def executor_ready(root, scope, config_value, candidate):
             size=size,
             mtime_ns=mtime_ns,
             project_id=project_id,
-        ):
+        ) and entry.get("python_version") == version_text:
             return True
     return False
 
 
+MIN_PYTHON = (3, 10)
+
+
 def main(argv):
     json_mode = "--json" in argv
+    if sys.version_info < MIN_PYTHON:
+        return fail("WF_CAPABILITY_UNAVAILABLE",
+                    {"need": "python>=%d.%d" % MIN_PYTHON,
+                     "found": "%d.%d" % sys.version_info[:2]},
+                    "换一个 Python >= 3.11 的解释器启动本脚本后重入；引导层不能降级运行",
+                    json_mode)
     root, rest, error = locate_project(argv)
     if error:
         return fail(error[1], {"detail": error[0]}, "用 --project <绝对路径> 显式给目标，或按恢复说明重取入口", json_mode)
@@ -466,7 +490,12 @@ def main(argv):
                 "按恢复说明从对应发行重取该单文件入口",
                 json_mode,
             )
-        os.execv(sys.executable, [sys.executable, script] + rest[1:])
+        # 转交必须把已解析的 root 交给目标脚本：否则它在任何 cwd 下都拿不到项目根，
+        # 会退回"必须显式 --project"，使 wf repair/uninstall 短称形态实际不可用
+        # （第十九轮复审外部 N-1）。
+        env = dict(os.environ)
+        env["WF_PROJECT_ROOT"] = root
+        os.execve(sys.executable, [sys.executable, script] + rest[1:], env)
     if rest and rest[0] == "confirm-executor":
         return cmd_confirm_executor(root, rest[1:])
     scope, config_value, error = resolve_candidate(root)
@@ -492,7 +521,7 @@ def main(argv):
                 "config_value": config_value,
                 "reason": "no matching confirmation tuple",
             },
-            "人执行：python3 .wf/bin/wf.py confirm-executor --scope " + scope,
+            "人执行：" + sys.executable + " .wf/bin/wf.py confirm-executor --scope " + scope,
             json_mode,
         )
     lib_dir = os.path.join(root, ".wf", "lib")

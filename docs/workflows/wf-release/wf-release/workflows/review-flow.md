@@ -24,4 +24,4 @@
 - 时点：审查判定动作结束
 - enforcement: `wflib/review.py::decide`
 - 动作：按导入报告与人工声明推导 pass/fail/unavailable，并记录逐条处置。
-- 出口：单 reviewer 或 CLI 重叠 → fail（`WF_REVIEW_INVALID`）；缺 CLI → `WF_REVIEW_UNAVAILABLE`。
+- 出口：单 reviewer 或与实施 CLI 重叠 → 拒绝输入、不产生判定结论（`WF_REVIEW_INVALID`）；缺 CLI → `WF_REVIEW_UNAVAILABLE`。

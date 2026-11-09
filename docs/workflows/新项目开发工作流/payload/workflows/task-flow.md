@@ -15,7 +15,7 @@
 
 ### task.spec-loaded [required · repeatable]
 
-- 时点：开工与 Check、Finish 前（before_execute）
+- 时点：`before_execute`（开工前完成一期）。Check 与 Finish 是对**当前读到的内容**重核（版本/哈希/是否完整），不新开期次、不另建「Check 必须再读一次」的回执。
 - enforcement: `wflib/cli.py::cmd_spec`（写本会话读取侧车）＋ `wflib/tasks.py::spec_loaded_fact`（核验全文与版本）
 - 动作：按策展清单逐文件读取正文；日志/摘要不算完整读取。
 - 出口：正文未完整读取或哈希不符 → `WF_SPEC_INCOMPLETE`，分批读全后重试；换会话必须重读。

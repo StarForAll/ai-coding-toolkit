@@ -47,9 +47,15 @@ def new_task_id():
 
 
 def slugify(title: str) -> str:
-    cleaned = re.sub(r"[^\w\-]+", "-", title.strip(), flags=re.UNICODE)
-    cleaned = re.sub(r"-{2,}", "-", cleaned).strip("-")
-    return cleaned[:48] or "task"
+    """目录名 slug：**只保留 ASCII**（2026-11-07）。
+
+    真实 dogfood 里出现过 `2026-3ef38…-初始化-wf-基线-项目配置与-spec-骨架` 这种中文目录，
+    在转录里已经出现乱码、跨工具链也有风险。标题照旧存记录（`task.title`），只是不进路径。
+    """
+    ascii_only = title.encode("ascii", "ignore").decode("ascii")
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "-", ascii_only).strip("-")
+    cleaned = re.sub(r"-{2,}", "-", cleaned)
+    return cleaned[:48].strip("-") or "task"
 
 
 def dir_name(task_id, title):
@@ -78,17 +84,52 @@ def _task_dirs(root):
     return active, archived
 
 
+def broken_task_dirs(root):
+    """现扫任务目录层级：非空但缺 task.json 的任务目录（不含容器与任务内部子目录）。"""
+    found = []
+    active = join(root, ".wf/tasks")
+    archive = join(active, "archive")
+    candidates = []
+    if os.path.isdir(active):
+        candidates.extend(os.path.join(active, name) for name in os.listdir(active)
+                          if name != "archive" and os.path.isdir(os.path.join(active, name)))
+    if os.path.isdir(archive):
+        # 归档区固定两层：archive/<YYYY-MM>/<task-dir>
+        for month in os.listdir(archive):
+            month_path = os.path.join(archive, month)
+            if not os.path.isdir(month_path):
+                continue
+            candidates.extend(os.path.join(month_path, name) for name in os.listdir(month_path)
+                              if os.path.isdir(os.path.join(month_path, name)))
+    for path in candidates:
+        if os.path.isfile(os.path.join(path, "task.json")):
+            continue
+        try:
+            entries = os.listdir(path)
+        except OSError:
+            entries = []
+        if entries:
+            found.append({"path": path, "entries": sorted(entries)[:5]})
+    return found
+
+
 def locate_task_dirs(root, task_id):
     """完整 id 的全部匹配位置（活动区 + 归档区），供冲突诊断与定位使用。"""
     active, archived = _task_dirs(root)
     matches = []
     for path in active + archived:
         name = os.path.basename(path)
+        record_path = os.path.join(path, "task.json")
+        # 缺 task.json：**空壳**可忽略（移动中断留下的目录），非空目录则必须报出，
+        # 不能静默当成"没有这份记录"（第十六轮复审 F16-6）。
+        if not os.path.isfile(record_path):
+            # 缺记录：空壳跳过；非空由 `broken_task_dirs(root)` 现扫报告，不在此处抛错
+            continue
         if name == task_id or name.startswith(task_id + "-"):
             matches.append(path)
             continue
         if name.startswith(task_id):
-            record = records.load_json(os.path.join(path, "task.json"))
+            record = records.load_json(record_path)
             if isinstance(record, dict) and record.get("id") == task_id:
                 matches.append(path)
     return matches
@@ -330,6 +371,100 @@ def extract_plan_questions(text):
     return found
 
 
+PHASES_STARTED = ("execute", "check", "finish")
+
+
+def _is_approved_plan(task, root=None):
+    """批准是否成立：批准语义 + 规划版本 + **当前 PRD 仍对应批准版本**（含等价链）。
+
+    只查"非空 choice"会把失效批准、断裂等价链都当成已批准（第九轮 N9-2、第十轮 N10-1）。
+    给了 root 时按门禁同一判据复核：当前 PRD 重算版本必须命中批准版本或等价链。
+    """
+    plan = task.get("plan") or {}
+    approval = plan.get("approval")
+    if not isinstance(approval, dict) or not approval:
+        return False
+    approved = plan.get("approved_version") or plan.get("version")
+    if not approved:
+        return False
+    choice = approval.get("choice")
+    inner = approval.get("decision")
+    if choice not in APPROVE_CHOICES and not (isinstance(inner, dict)
+                                              and inner.get("choice") in APPROVE_CHOICES):
+        return False
+    if root is None:
+        return True
+    # 读不到 PRD 就是无法证明"当前 PRD 仍对应批准版本"：按未批准处理（第十一轮复审 N11-2）。
+    # 记录完整性另由 check/inspect 报，不在这里放行。
+    directory = task_dir(root, task.get("id")) if task.get("id") else None
+    if not directory or not os.path.isfile(os.path.join(directory, "prd.md")):
+        return False
+    current = current_plan_version(root, task)
+    if isinstance(current, dict) and "error" in current:
+        return False
+    version = (current or {}).get("version")
+    if version == approved:
+        return True
+    # 机械修订等价链：沿 `equivalences`（old_version → new_version）多跳归一到批准版本
+    probe = dict(task)
+    probe["plan"] = dict(plan, version=version)
+    return normalized_plan_version(probe) == approved
+
+
+def _normalized_paths(items):
+    """按批准侧的同一规则规范化（`pkg//**` → `pkg/**`），再做去重。"""
+    from . import paths as paths_mod
+
+    normalized = []
+    for item in items:
+        try:
+            normalized.append(paths_mod.validate_glob(item))
+        except Exception:  # noqa: BLE001 — 非法写法保留原样，由校验侧报原因码
+            normalized.append(item)
+    return normalized
+
+
+def _dedupe_paths(items):
+    """按原顺序去重（机制稿 §2.3：快照保存规范化后的触碰面）。"""
+    seen = set()
+    ordered = []
+    for item in items:
+        if item in seen:
+            continue
+        seen.add(item)
+        ordered.append(item)
+    return ordered
+
+
+def approved_touch_paths(task):
+    """当前批准触碰面（机制稿 §2.3）：以 entry_snapshot 为准，未开工才回退 plan。
+
+    三态判定按**是否已开工**分流，而不是按"快照是否为 dict"：
+    - 未开工（phase 仍在 plan 且没有 baseline_head / entry_snapshot 键）：回退 `plan.touch_paths`；
+    - 已开工（进入 execute/check/finish，或已固定 baseline_head，或已有 entry_snapshot 键）：
+      快照必须是对象且带 `touch_paths`；**空数组合法**，缺失/类型不符一律 `WF_RECORD_INVALID`，
+      不回退可变 plan（2026-11-05 第七轮复审 F7-1）。
+    """
+    snapshot = task.get("entry_snapshot")
+    started = task.get("phase") in PHASES_STARTED or bool(task.get("baseline_head"))
+    if snapshot is None and not started:
+        # 未开工：记录默认就带 `entry_snapshot: null`，此时才允许回退 plan
+        return list((task.get("plan") or {}).get("touch_paths") or [])
+    if not isinstance(snapshot, dict):
+        raise TaskError("WF_RECORD_INVALID",
+                        {"reason": "started task requires an entry_snapshot object",
+                         "task": task.get("id"), "entry_snapshot": snapshot})
+    if "touch_paths" not in snapshot:
+        raise TaskError("WF_RECORD_INVALID",
+                        {"reason": "entry_snapshot lacks touch_paths", "task": task.get("id")})
+    paths = snapshot.get("touch_paths")
+    if not isinstance(paths, list):
+        raise TaskError("WF_RECORD_INVALID",
+                        {"reason": "entry_snapshot.touch_paths must be a list",
+                         "task": task.get("id"), "touch_paths": paths})
+    return list(paths)
+
+
 def question_errors(questions):
     errors = []
     seen = set()
@@ -353,9 +488,17 @@ def plan_questions(root, task):
 def unanswered_plan_questions(root, task, decisions=None):
     if decisions is None:
         decisions = (task.get("execution") or {}).get("human_decisions") or []
-    subjects = [str(decision.get("subject", "")) for decision in decisions]
+    # 整词匹配（与 `check._decision_covers` 同款）：`plan-q-1` 不得被 `plan-q-10` 的答复覆盖
+    import re as _re
+
+    # 整词匹配：`plan-q-1` 不得被 `plan-q-10` 覆盖，但允许 `plan-q-1：说明` 这种带后缀写法
+    answered = set()
+    for decision in decisions:
+        subject = decision.get("subject", "")
+        text = " ".join(str(item) for item in subject) if isinstance(subject, list) else str(subject or "")
+        answered.update(f"plan-q-{number}" for number in _re.findall(r"(?<!\d)plan-q-(\d+)(?!\d)", text))
     return [question for question in plan_questions(root, task)
-            if not any(question in subject for subject in subjects)]
+            if question.split("-")[-1] not in {item.split("-")[-1] for item in answered}]
 
 
 
@@ -365,6 +508,16 @@ APPROVE_CHOICES = ("approve", "批准")
 # 设计稿 §4.3 的四个分级条件；机制稿 §2.3 要求逐项保存 true/false/unknown
 # 键名与批准入口的 complexity_conditions 一致（设计稿 §4.3 四项）
 COMPLEXITY_CONDITIONS = ("governance", "contract", "acceptance", "scope")
+
+# 决定文件里的「人已确认项」注册表（设计稿 §4.3/§4.4：复杂度与 TDD 由人确认并写入批准记录）。
+# 扩展方式：新增一项只需在此登记 {键: 校验函数}，消费点用 plan_decision.get(键) 取值；
+# **未登记的键不会被丢弃**——原样记入 plan.human_inputs 并产生 unconfirmed_keys 警告，
+# 这样"新的人判项"不会因为代码没跟上而静默消失（可扩展性的关键约束）。
+HUMAN_PLAN_KEYS = {
+    "complexity": lambda value: value in ("light", "complex"),
+    "tdd": lambda value: isinstance(value, bool),
+    "downgrade": lambda value: isinstance(value, dict) and bool(value.get("reason")) and bool(value.get("evidence")),
+}
 
 
 def normalized_plan_version(task):
@@ -432,6 +585,9 @@ def complex_artifact_problems(root, task, complexity):
 
 def artifact_digests(root, task):
     path = task_dir(root, task.get("id"))
+    if not path:
+        # 记录尚未落盘（构造中的迁移/夹具）时没有可核工件，返回空集而不是崩在 join(None)
+        return []
     entries = []
     for name in ("prd.md", "design.md", "implement.md"):
         absolute = os.path.join(path, name)
@@ -457,6 +613,15 @@ def current_plan_version(root, task):
     block, errors = parse_plan_block(text)
     if errors:
         return {"error": ("WF_TEMPLATE_INCOMPLETE", {"problems": errors})}
+    # 与批准侧同一规范化：`pkg//**` 之类的合法写法在批准时被规范化，
+    # 重算若用原始块就会与 plan.version 永久失配（2026-11-05 第十轮复审 N10-3）。
+    from . import paths as paths_mod
+
+    try:
+        block = dict(block)
+        block["touch_paths"] = [paths_mod.validate_glob(item) for item in block.get("touch_paths") or []]
+    except Exception:  # noqa: BLE001 — 规范化失败按原样参与哈希，由校验侧给出原因码
+        pass
     plan = task.get("plan") or {}
     # 哈希域只含条件条目：降级条目是批准后追加事实，重算时必须剔除（机制稿 §1.1）
     conditions = [item for item in plan.get("complexity_reasons") or [] if not item.get("downgrade")]
@@ -621,18 +786,32 @@ def maintenance_disposition_probe(root):
                 if not _fp_matches(change["before"], fingerprint.item(root, change["path"])):
                     return False
             return True
+        if kind == "uninstall":
+            # 卸载的可核事实：登记要移除的资产当前都不存在（不依赖 Git 提交，2026-11-06 人裁）
+            if not paths:
+                return False
+            for path in paths:
+                if fingerprint.item(root, path).get("exists"):
+                    return False
+            return True
         if kind == "transfer":
             target = disposition.get("target_task")
             task = load_task(root, target) if target else None
             if not isinstance(task, dict):
                 return False
-            approval = (task.get("plan") or {}).get("approval")
-            # 已批准须是**有效批准对象**：非空对象 + 决策 + 规划版本，不能用"非 null"代替
-            if not isinstance(approval, dict) or not approval:
+            # 与 stop 的承接核验同判据（2026-11-05 第八轮复审 F8-3）：
+            # 1) 有效批准对象——真实批准存的是 Decision 本身（有 choice，没有 `decision` 字段），
+            #    旧探针要求 `approval.decision` 会把合法承接判成未结案；
+            # 2) 批准面取 entry_snapshot（已开工），不读可变的 plan.touch_paths；
+            # 3) 已归档/终止的承接任务不具承接资格。
+            if task.get("status") == "archived" or task.get("terminal"):
                 return False
-            if not approval.get("decision") or not (task.get("plan") or {}).get("version"):
+            if not _is_approved_plan(task, root):
                 return False
-            touch = (task.get("plan") or {}).get("touch_paths") or []
+            try:
+                touch = approved_touch_paths(task)
+            except TaskError:
+                return False
             from . import paths as paths_mod
 
             return all(any(paths_mod.match_path(pattern, path) for pattern in touch)
@@ -685,8 +864,19 @@ def spec_loaded_fact(ctx, task):
 STARTUP_STEPS = (
     ("binding", "绑定与写者"),
     ("record", "记录可解释性"),
+    ("candidates", "执行候选唯一性"),
     ("graph", "对象与依赖"),
+    ("marker", "写者标记锚点"),
+    ("assets", "框架资产可用性"),
     ("workspace", "工作区边界"),
+)
+
+# 机制稿 §5.2 的启动固定顺序里，首轮不进入 startup_check 的项：
+# ④ 维护写者与本次预览范围的对应（只有维护入口有预览上下文，由维护入口自核）；
+# ⑥ 未结束实例的快照/游标/任务归属（实例属第二轮）。
+STARTUP_OUT_OF_SCOPE = (
+    ("maintenance", "维护写者与预览范围对应：仅维护入口有预览上下文，由该入口自核"),
+    ("instances", "未结束实例的快照/游标/任务归属：实例属于第二轮"),
 )
 
 
@@ -716,6 +906,21 @@ def startup_check(ctx, task=None):
         findings.append({"step": "record", "status": "blocked", "reason": "writer record unreadable"})
     else:
         findings.append({"step": "record", "status": "ok"})
+    # ③ 执行候选唯一性（机制稿 §5.2 ③）：多候选是记录集不变量破坏，不是写权占用
+    try:
+        active = [item.get("id") for _path, item in iter_tasks(ctx.root)
+                  if item.get("status") == "in_progress"
+                  and not item.get("paused") and not item.get("suspended")
+                  and (task is None or item.get("id") != task.get("id"))]
+    except Exception as exc:  # noqa: BLE001 — 活动记录不可读时以「候选未知」上报
+        findings.append({"step": "candidates", "status": "unknown",
+                         "code": "WF_HISTORY_UNRESOLVED", "reason": f"active records unreadable: {exc}"})
+    else:
+        if active:
+            findings.append({"step": "candidates", "status": "blocked",
+                             "code": "WF_RECORD_INVALID", "others": active})
+        else:
+            findings.append({"step": "candidates", "status": "ok"})
     if task is not None:
         blockers = dependency_blockers(ctx.root, task)
         findings.append({"step": "graph", "status": "blocked" if blockers else "ok", "unmet": blockers})
@@ -725,6 +930,34 @@ def startup_check(ctx, task=None):
         if reassessment.get("empty"):
             findings.append({"step": "graph", "status": "unknown", "reason": "empty retrospective set pending reassessment",
                              "reassessment": reassessment})
+        # ⑧ 写者标记按记录锚点核对（机制稿 §5.2 ⑧）：持有/恢复态必须有可识别的锁标记
+        state = record.get("state")
+        if state in ("held", "recovering"):
+            from . import lock as lock_mod
+
+            mark = None
+            try:
+                with open(lock_mod.lock_path(ctx.root), "r", encoding="utf-8") as handle:
+                    mark = (handle.readline() or "").strip()
+            except OSError:
+                mark = None
+            if mark != "wf-lock-v1":
+                findings.append({"step": "marker", "status": "blocked",
+                                 "code": "WF_HISTORY_UNRESOLVED",
+                                 "reason": "lock marker missing or unknown", "marker": mark})
+            else:
+                findings.append({"step": "marker", "status": "ok"})
+        else:
+            findings.append({"step": "marker", "status": "ok", "note": "writer idle"})
+        # ⑨ 框架资产可用性（机制稿 §5.2 ⑨）：必需资产缺失即报对应入口不可用
+        required = (".wf/bin/wf.py", ".wf/bin/repair.py", ".wf/bin/uninstall.py",
+                    ".wf/lib/wflib/module_main.py")
+        missing = [rel for rel in required if not os.path.isfile(join(ctx.root, rel))]
+        if missing:
+            findings.append({"step": "assets", "status": "blocked",
+                             "code": "WF_CAPABILITY_UNAVAILABLE", "missing": missing})
+        else:
+            findings.append({"step": "assets", "status": "ok"})
         from . import cli as cli_mod
 
         foreign = cli_mod.wip_blockers(ctx.root, exclude_id=task.get("id"))
@@ -737,8 +970,11 @@ def startup_check(ctx, task=None):
 
 
 def work_satisfied_fact(ctx, task):
-    entry = task.get("entry_snapshot") or {}
-    touch_paths = entry.get("touch_paths") or []
+    # 统一走批准面判定：快照缺失/损坏即 WF_RECORD_INVALID，不把损坏记录折叠成空批准面（第十二轮复审 M-1）
+    try:
+        touch_paths = approved_touch_paths(task)
+    except TaskError as exc:
+        return False, exc.code, exc.facts
     actions_declared = (task.get("execution") or {}).get("actions") or []
     pending = [item for item in actions_declared if item.get("result") in ("pending", None) and item.get("required", True)]
     if pending:
@@ -878,89 +1114,6 @@ def _prd_text(root, task):
 # --------------------------------------------------------------------------
 # 命令：task-new
 # --------------------------------------------------------------------------
-
-
-def _resume_task_create(ctx, key, session, pending):
-    """按原意图补完 task.create：索取写权 → 补绑定/运行态 → 结案，返回同一任务。"""
-    from . import cli, session as session_mod, writer as writer_mod
-
-    directory, task = pending
-    task_id = task.get("id")
-    record = ctx.writer()
-    holder = record.get("holder") or {}
-    if record.get("state") != "held" or holder.get("id") != key:
-        owner_scope = {"object": {"kind": "task", "id": task_id}, "preparation": None}
-        record = writer_mod.acquire(record, kind="session", ident=key, scope=owner_scope,
-                                    checkpoint={"step": "task-new:resume", "at": records.now_str()})
-        writer_mod.save(ctx.root, record)
-    # R50-06：恢复不是"把 state 改成 done"，逐项核后置
-    if not os.path.isdir(directory):
-        raise TaskError("WF_PERSISTENCE_FAILED",
-                        {"reason": "task directory missing during resume", "directory": directory},
-                        next_="按原意图重建目录与产物，或走受控恢复")
-    prd_path = os.path.join(directory, "prd.md")
-    if not os.path.isfile(prd_path):
-        raise TaskError("WF_PERSISTENCE_FAILED",
-                        {"reason": "template artifact missing during resume", "path": prd_path},
-                        next_="补齐模板产物后再续做")
-    existing = session_mod.load_binding(ctx.root, key)
-    if existing:
-        # 恢复不是特权通道：已有绑定就要过同一套实例核验（缺失/不符一律拒绝）
-        _require_instance_match(ctx, existing)
-        if (existing.get("object") or {}).get("id") != task_id:
-            raise TaskError("WF_BINDING_MISMATCH",
-                            {"bound": existing.get("object"), "intended": task_id},
-                            next_="按原意图续做同一对象；不改绑")
-        instance_id = existing.get("instance_id")
-        runtime = records.load_json(session_mod.runtime_path(ctx.root, key), None)
-        if runtime is None:
-            # 缓存缺失属可重建项：重建并留痕，不静默跳过（机制稿 §1.4）
-            session_mod.write_runtime(ctx.root, key, {
-                "binding_digest": records.plain_digest(existing),
-                "instance_id": instance_id,
-                "object": {"kind": "task", "id": task_id},
-                "current_task": task_id,
-                "cursor": None,
-            })
-    else:
-        instance_id = session.get("instance_id") or session_mod.new_instance_id()
-        binding = {
-            "schema_version": 1,
-            "id": key,
-            "revision": 0,
-            "created_at": records.now_str(),
-            "updated_at": records.now_str(),
-            "write_mark": None,
-            "action": None,
-            "identity": {"provider": session["provider"], "value": session["identity"]},
-            "instance_id": instance_id,
-            "object": {"kind": "task", "id": task_id},
-            "bound_at": records.now_str(),
-        }
-        session_mod.save_binding(ctx.root, key, binding)
-        session_mod.write_runtime(ctx.root, key, {
-            "binding_digest": records.plain_digest(binding),
-            "instance_id": instance_id,
-            "object": {"kind": "task", "id": task_id},
-            "current_task": task_id,
-            "cursor": None,
-        })
-    holder = record.get("holder") or {}
-    task, assertion = _finish_task_action(
-        ctx, directory, task, "task.create", holder,
-        {"task": task_id, "kind": task.get("kind"), "title": task.get("title")}, task.get("action") or {},
-        evidence_refs=[os.path.relpath(directory, str(ctx.root))],
-    )
-    return codes.result(
-        "WF_OK",
-        object={"id": task_id, "name": task.get("title")},
-        position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
-        next_="起草 PRD 机读块，然后由人批准规划（task-approve）",
-        facts={"task_id": task_id, "directory": os.path.relpath(directory, str(ctx.root)).replace(os.sep, "/"),
-               "kind": task.get("kind"), "generation": record.get("generation"),
-               "instance_id": instance_id, "resumed": True,
-               "control_assertion": assertion},
-    )
 
 
 def cmd_task_new(ctx, args):
@@ -1255,6 +1408,8 @@ def _ensure_creation_step(ctx, key, session, record, action, step, task_id):
         if binding is None:
             binding = _new_binding(key, session, instance_id, task_id)
             session_mod.save_binding(ctx.root, key, binding)
+            from . import identity_store as _identity_store
+            _identity_store.sync_attachment_instance(ctx.root, key, instance_id)   # §3.6
         elif (binding.get("object") or {}).get("id") != task_id:
             raise TaskError("WF_BINDING_MISMATCH",
                             {"bound": binding.get("object"), "intended": task_id},
@@ -1333,22 +1488,72 @@ def _resume_task_create(ctx, key, session, record, action):
     )
 
 def _complexity_proposal(ctx, task, block, extra_conditions=None):
-    """汇总四项条件后再给提议：任一 true/unknown 即提出 complex（机制稿 §1.3、设计稿 §4.3）。"""
+    """汇总四项条件后再给提议：任一 true/unknown 即提出 complex（机制稿 §1.3、设计稿 §4.3）。
+
+    2026-11-07：②③④ 从"调用方自报"改为**事实核对**——只有证据不可读时才落到 unknown，
+    且 unknown 同样按复杂处理（宁高不低）。调用方仍可补声明（`contract_changes`、
+    `acceptance_changed`），但不能用"不传"来关掉检查。
+    """
     reasons = []
-    value, fact = scope.governance_condition(ctx.root, block.get("touch_paths") or [])
-    if value in ("true", "unknown"):
-        reason = dict(fact)
-        reason["condition"] = "governance"
-        reason["value"] = value
-        reason["fact"] = fact.get("fact")
-        reasons.append(reason)
+    touch_paths = block.get("touch_paths") or []
+
+    def record(condition, value, fact):
+        if value not in ("true", "unknown"):
+            return
+        entry = dict(fact) if isinstance(fact, dict) else {}
+        entry["condition"] = condition
+        entry["value"] = value
+        reasons.append(entry)
+
+    # 2026-11-07 人裁：initialize/bootstrap 豁免机械条件——它要**创建**基线/配置/spec，
+    # 拿"还不存在的基线"去判①③④ 只会让每个新项目的第一步必然复杂。
+    # ①在基线缺失导致的 unknown 不算事实（bootstrap 场景不适用），③整条不参与；
+    # ②（契约面）仍参与：它不依赖基线。
+    bootstrap = (task.get("kind") in ("initialize", "bootstrap"))
+    value, fact = scope.governance_condition(ctx.root, touch_paths)
+    if bootstrap and value == "unknown" and fact.get("fact") == "governance-unavailable":
+        value, fact = "false", {"fact": "bootstrap-not-applicable", "detail": fact.get("problems")}
+    record("governance", value, fact)
+
     extra = extra_conditions or {}
+    declared = (extra.get("contract") or {}).get("contract_changes") if isinstance(extra.get("contract"), dict) else None
+    try:
+        value, fact = scope.contract_surface_condition(ctx.root, touch_paths, declared)
+    except Exception as exc:  # noqa: BLE001 — 证据不可读按 unknown（不静默放行）
+        value, fact = "unknown", {"fact": f"contract-surface-unavailable: {exc}"}
+    record("contract", value, fact)
+
+    acceptance_changed = None
+    previous_plan = task.get("plan") or {}
+    previous_acceptance = previous_plan.get("acceptance_ids")
+    current_acceptance = [item.get("id") for item in block.get("acceptance") or []
+                          if isinstance(item, dict) and item.get("id")]
+    if previous_acceptance is not None and sorted(previous_acceptance) != sorted(current_acceptance):
+        acceptance_changed = {"previous": previous_acceptance, "current": current_acceptance}
+    if bootstrap:
+        record("acceptance", "false", {"fact": "bootstrap-not-applicable"})
+    else:
+        try:
+            value, fact = scope.acceptance_surface_condition(ctx.root, touch_paths, acceptance_changed)
+        except Exception as exc:  # noqa: BLE001
+            value, fact = "unknown", {"fact": f"acceptance-surface-unavailable: {exc}"}
+        record("acceptance", value, fact)
+
+    if bootstrap:
+        record("scope", "false", {"fact": "bootstrap-not-applicable"})
+    else:
+        try:
+            value, fact = scope.expansion_condition(previous_plan.get("touch_paths"), touch_paths)
+        except Exception as exc:  # noqa: BLE001
+            value, fact = "unknown", {"fact": f"scope-expansion-unavailable: {exc}"}
+        record("scope", value, fact)
+
     for condition in COMPLEXITY_CONDITIONS:
-        if condition == "governance":
+        if condition in ("governance", "contract", "acceptance", "scope"):
             continue
         entry = extra.get(condition)
         if isinstance(entry, dict) and entry.get("value") in ("true", "unknown"):
-            reasons.append({"condition": condition, "value": entry["value"], "fact": entry.get("fact", "")})
+            record(condition, entry["value"], {"fact": entry.get("fact", "")})
     proposed = "complex" if reasons else "light"
     return proposed, reasons
 
@@ -1390,10 +1595,14 @@ def cmd_task_approve(ctx, args):
                              "decision_digest": approval.get("object_digest"), "current_digest": prd_digest},
                             next_="针对当前 PRD 重新出批准决定")
         subject = str(approval.get("subject") or "")
-        if subject and task_id not in subject and approval.get("object_digest") != prd_digest:
+        # 最低绑定：subject 必须写明任务 id，或 object_digest 精确等于当前 PRD 摘要；
+        # 两者都空的决定不得批准任何任务（第十九轮复审外部 N-2）。
+        if task_id not in subject and approval.get("object_digest") != prd_digest:
             raise TaskError("WF_APPROVAL_MISSING",
-                            {"reason": "approval decision subject does not name the task", "subject": subject},
-                            next_="在 subject 记任务 id 或当前 PRD 摘要")
+                            {"reason": "approval decision is not bound to this task",
+                             "subject": subject, "object_digest": approval.get("object_digest"),
+                             "expected_prd_digest": prd_digest},
+                            next_="在 subject 写明任务 id，或把 object_digest 设为当前 PRD 摘要")
         questions = extract_plan_questions(prd_text)
         q_errors = question_errors(questions)
         if q_errors:
@@ -1423,12 +1632,30 @@ def cmd_task_approve(ctx, args):
         # 四项条件先汇总，再定分级；人工指定只能降级且须给理由与证据
         extra = inputs.get("complexity_conditions") or {}
         proposed, reasons = _complexity_proposal(ctx, task, block, extra)
-        complexity = inputs.get("complexity") or proposed
+        # 人已确认项：优先取决定文件里的 plan 块（人写的），请求 inputs 只作提议；
+        # 未登记的键不丢弃，原样留痕并给出 unconfirmed_keys（新增人判项不必改结构）。
+        plan_decision = approval.get("plan")
+        if plan_decision is None:
+            plan_decision = {}
+        if not isinstance(plan_decision, dict):
+            raise TaskError("WF_SEMANTIC_DECISION",
+                            {"reason": "decision.plan must be an object", "plan": plan_decision})
+        unconfirmed = []
+        for key, value in plan_decision.items():
+            check = HUMAN_PLAN_KEYS.get(key)
+            if check is None:
+                unconfirmed.append(key)
+                continue
+            if not check(value):
+                raise TaskError("WF_SEMANTIC_DECISION",
+                                {"reason": "invalid human-confirmed value", "key": key, "value": value})
+        complexity = plan_decision.get("complexity") or inputs.get("complexity") or proposed
         if complexity not in ("light", "complex"):
-            raise TaskError("WF_PATH_INVALID", {"reason": "inputs.complexity must be light|complex"})
+            raise TaskError("WF_PATH_INVALID", {"reason": "complexity must be light|complex"})
+        confirmed_source = "decision" if "complexity" in plan_decision else "inputs"
         downgrade_entry = None
         if complexity == "light" and proposed == "complex":
-            downgrade = inputs.get("downgrade") or {}
+            downgrade = plan_decision.get("downgrade") or inputs.get("downgrade") or {}
             if not downgrade.get("reason") or not downgrade.get("evidence"):
                 raise TaskError(
                     "WF_SEMANTIC_DECISION",
@@ -1443,7 +1670,7 @@ def cmd_task_approve(ctx, args):
                             {"reason": "complex task requires complete design/implement",
                              "complexity": complexity, "artifacts": artifact_problems},
                             next_="补齐 design.md / implement.md 并填写必填占位后重新批准")
-        tdd = inputs.get("tdd")
+        tdd = plan_decision.get("tdd", inputs.get("tdd"))
         if tdd is None:
             project_config, config_problems = config.load_project_config(ctx.root, allow_missing=True)
             tdd, tdd_problem = config.value_of(project_config, config_problems, "tdd_default")
@@ -1480,6 +1707,11 @@ def cmd_task_approve(ctx, args):
             "complexity_reasons": reasons,
             "tdd": tdd,
             "approval": approval,
+            # 人工载体：谁的值、有哪些未登记的人判项（新增项不会静默消失）
+            "confirmed_source": confirmed_source,
+            "human_inputs": plan_decision,
+            "unconfirmed_keys": unconfirmed,
+            "acceptance_ids": [item.get("id") for item in block["acceptance"] if isinstance(item, dict)],
         })
         task["plan"] = plan
         execution = task.setdefault("execution", {})
@@ -1577,7 +1809,8 @@ def _block_overlapping_maintenance(ctx, task):
 
     # 走统一读取：含可达提交查证，已提交的维护组自动派生 persisted（机制稿 §4.5）
     receipts = task_receipts(ctx.root)
-    requested = (task.get("entry_snapshot") or {}).get("touch_paths") or (task.get("plan") or {}).get("touch_paths") or []
+    # 统一走批准面判定（严格三态）：损坏快照不得静默回退 plan（第十三轮复审外部 P2）
+    requested = approved_touch_paths(task)
     overlapping = []
     unverified = []
     for receipt in receipts:
@@ -1757,11 +1990,18 @@ def cmd_task_start(ctx, args):
         ]
         if others:
             raise TaskError("WF_RECORD_INVALID", {"other_candidates": [item.get("id") for item in others]})
+        # 触碰面按机制稿 §2.3「从该批准版本的 PRD 重提取并规范化」：
+        # 直接抄 plan.touch_paths 会让手改 task.json 的 plan 反向影响快照（PRD 未变、版本比对仍通过）。
+        _prd_source = _prd_text(ctx.root, task)   # 注意：不要用 _prd_text 作变量名，会遮蔽同名函数
+        _plan_block, _block_errors = parse_plan_block(_prd_source)
+        if _block_errors or not isinstance(_plan_block, dict):
+            raise TaskError("WF_TEMPLATE_INCOMPLETE",
+                            {"problems": _block_errors or ["plan block missing"]})
         entry = {
             "plan_version": (task.get("plan") or {}).get("version"),
             "approval_ref": records.plain_digest((task.get("plan") or {}).get("approval")),
             "prd_digest": records.file_digest(join(path, "prd.md")),
-            "touch_paths": (task.get("plan") or {}).get("touch_paths") or [],
+            "touch_paths": _dedupe_paths(_normalized_paths(_plan_block.get("touch_paths") or [])),
             "head_at_entry": head,
             "entered_at": records.now_str(),
         }
@@ -1805,12 +2045,43 @@ def cmd_task_start(ctx, args):
 # --------------------------------------------------------------------------
 
 
+def _load_decision_list(path):
+    """读 Decision 文件（对象或数组），核必需字段。"""
+    payload = records.load_json(path)
+    if payload is None:
+        raise TaskError("WF_PATH_INVALID", {"reason": "decision file missing", "path": path})
+    items = payload if isinstance(payload, list) else [payload]
+    required = ("source", "at", "subject", "object_digest", "choice", "reason")
+    for item in items:
+        if not isinstance(item, dict):
+            raise TaskError("WF_RECORD_INVALID", {"reason": "decision must be an object"})
+        missing = [key for key in required if key not in item]
+        if missing:
+            raise TaskError("WF_RECORD_INVALID", {"reason": "decision missing fields", "missing": missing,
+                                                  "hint": "object_digest 填当前 PRD 摘要或 plan.version"})
+    return items
+
+
 def cmd_task_replan(ctx, args):
     from . import lock
 
     task_id = args.value("--task")
     if not task_id:
         raise TaskError("WF_PATH_INVALID", {"reason": "task-replan requires --task <id>"})
+    # 打回 Plan 会让既有批准与 Check 失效，属"实质规划变更"：必须有人判证据
+    # （机制稿 §2.2 的出口是"人澄清并重批"，第十五轮复审外部 P1）。
+    decision_path = args.value("--decision")
+    if not decision_path:
+        raise TaskError("WF_SEMANTIC_DECISION", {
+            "reason": "task-replan 需要人判证据：--decision <文件>（choice=replan）",
+            "exits": ["由人出具 choice=replan 的 Decision 后重试",
+                      "继续沿用现有规划，不改回 Plan",
+                      "如需放弃任务，用 task-abandon（同样需要 Decision）"],
+        })
+    decisions = _load_decision_list(decision_path)
+    if not any(item.get("choice") in ("replan", "重新规划") for item in decisions):
+        raise TaskError("WF_SEMANTIC_DECISION",
+                        {"reason": "决定文件里没有 choice=replan", "choices": [d.get("choice") for d in decisions]})
     _require_binding(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="task-replan"):
         _record, holder = ctx.require_held(task=task_id)
@@ -1818,9 +2089,62 @@ def cmd_task_replan(ctx, args):
         task = records.load_json(os.path.join(path, "task.json"))
         if task.get("status") == "archived":
             raise TaskError("WF_BINDING_MISMATCH", {"reason": "task archived"})
+        decision = next(item for item in decisions if item.get("choice") in ("replan", "重新规划"))
+        # 决定必须指向本任务：subject 里要出现任务 id，或 object_digest 命中当前规划版本
+        subject = decision.get("subject")
+        subject_text = ",".join(subject) if isinstance(subject, list) else str(subject or "")
+        current = current_plan_version(ctx.root, task)
+        if isinstance(current, dict) and "error" in current:
+            code, facts = current["error"]
+            raise TaskError(code, dict(facts, reason="PRD 机读块不可解析，replan 无法核验当前规划",
+                                       task=task_id))
+        current_version = (current or {}).get("version")
+        if task_id not in subject_text:
+            raise TaskError("WF_SEMANTIC_DECISION", {
+                "reason": "replan 决定的 subject 未指向本任务", "task": task_id, "subject": subject,
+                "exits": ["重出决定，subject 写明任务 id",
+                          "继续沿用现有规划，不改回 Plan"],
+            })
+        prd_digest = records.file_digest(join(path, "prd.md"))
+        candidates = [item for item in (current_version, prd_digest) if item]
+        if not candidates:
+            raise TaskError("WF_TEMPLATE_INCOMPLETE", {
+                "reason": "无法从 PRD 重算规划版本，replan 不能以空摘要放行",
+                "task": task_id,
+                "exits": ["先修正 PRD 的机读块（wf-plan:v1）后重试", "继续沿用现有规划，不改回 Plan"],
+            })
+        if decision.get("object_digest") not in candidates:
+            raise TaskError("WF_SEMANTIC_DECISION", {
+                "reason": "replan 决定的 object_digest 不等于当前规划版本或 PRD 摘要",
+                "task": task_id, "object_digest": decision.get("object_digest"),
+                "current_plan_version": current_version, "current_prd_digest": prd_digest,
+                "exits": ["用当前 PRD 摘要或 plan.version 重出决定",
+                          "继续沿用现有规划，不改回 Plan"],
+            })
+        # 实质规划变更：旧批准必须失效（机制稿 §2.2），但历史保留可追
+        plan = dict(task.get("plan") or {})
+        history = list(plan.get("approval_history") or [])
+        if plan.get("approval") or plan.get("approved_version"):
+            history.append({"approval": plan.get("approval"),
+                            "approved_version": plan.get("approved_version") or plan.get("version"),
+                            "invalidated_at": records.now_str(),
+                            "reason": "task-replan"})
+        plan["approval_history"] = history
+        plan["approval"] = None
+        plan["approved_version"] = None
+        task["plan"] = plan
         task["phase"] = "plan"
         task, action = _start_task_action(ctx, path, task, "task.transition", holder,
-                                          {"task": task_id, "to": "plan"}, ["invalidate", "transition"])
+                                          {"task": task_id, "to": "plan"},
+                                          ["invalidate", "transition"])
+        # 消费证据：人判决定入执行记录，动作上留引用（机制稿 §1.1、§11.2）
+        execution = task.setdefault("execution", {})
+        execution.setdefault("human_decisions", []).append(decision)
+        action = dict(action or {})
+        refs = list(action.get("decision_refs") or [])
+        refs.append(records.plain_digest(decision))
+        action["decision_refs"] = refs
+        task["action"] = action
         task, assertion = _finish_task_action(ctx, path, task, "task.transition", holder,
                                               {"task": task_id, "to": "plan"}, action)
     return codes.result(
@@ -2077,6 +2401,15 @@ def cmd_task_check(ctx, args):
     with lock.acquire(ctx.root, holder_hint="task-check"):
         _record, holder = ctx.require_held(task=task_id)
         path = task_dir(ctx.root, task_id)
+        if not path:
+            # 记录已从工作树消失（历史里仍有）：给结构化原因与恢复出口，不拼 None 路径（N21-3）
+            raise TaskError("WF_RECORD_INVALID", {
+                "reason": "task record is missing from the worktree",
+                "task": task_id,
+                "exits": ["从 Git 恢复该任务目录（git checkout -- <path>）后重试",
+                          "确认记录确实作废后按 repair --dispose / task-abandon 处置",
+                          "不新建同 id 任务覆盖历史"],
+            })
         task = records.load_json(os.path.join(path, "task.json"))
         if task.get("status") != "in_progress":
             raise TaskError("WF_SEMANTIC_DECISION", {"reason": "check requires in_progress", "status": task.get("status")})
@@ -2130,7 +2463,7 @@ def cmd_task_knowledge(ctx, args):
     from . import lock
 
     task_id = args.value("--task")
-    decision = args.value("--decision")
+    decision = "no-update" if args.flag("--no-update") else args.value("--decision")
     changes_path = args.value("--changes")
     if not task_id or decision not in ("no-update", "updated"):
         raise TaskError("WF_PATH_INVALID", {"reason": "task-knowledge requires --task <id> --decision no-update|updated"})
@@ -2256,20 +2589,23 @@ def _abandon_resume(ctx, task_id):
     if not directory:
         return None
     record_rel = os.path.relpath(directory, str(ctx.root)).replace(os.sep, "/")
+    old_rel = None
     if not record_rel.startswith(".wf/tasks/archive/"):
         # 终态已写但目录未移动：先完成移动
         destination = _archive_destination(ctx.root, task)
         if os.path.exists(destination):
             raise TaskError("WF_TARGET_COLLISION",
                             {"destination": os.path.relpath(destination, str(ctx.root))})
-        moved = _move_task(ctx.root, directory, destination)
+        old_rel = os.path.relpath(directory, str(ctx.root)).replace(os.sep, "/")
+        moved = _move_task(ctx.root, directory, destination, task)
         task = records.load_json(os.path.join(moved, "task.json"))
         record_rel = os.path.relpath(moved, str(ctx.root)).replace(os.sep, "/")
     if _record_committed(ctx.root, record_rel):
         return codes.result("WF_OK", object={"id": task_id, "name": task.get("title")},
                             facts={"terminal": "abnormal", "record_persisted": True,
                                    "note": "放弃已结案，无需重复"})
-    _commit_paths(ctx.root, [record_rel], f"wf: abandon {task_id}\n\nwf-task: {task_id}")
+    _commit_paths(ctx.root, [record_rel], f"wf: abandon {task_id}\n\nwf-task: {task_id}",
+                  moved_from=(_moved_from(ctx.root, old_rel) or task.get("moved_from")))
     if not _record_committed(ctx.root, record_rel):
         raise TaskError("WF_PERSISTENCE_FAILED",
                         {"record": record_rel, "reason": "归档记录尚未进入提交"},
@@ -2370,9 +2706,11 @@ def cmd_task_abandon(ctx, args):
         task["archived_at"] = records.now_str()
         task, assertion = _finish_task_action(ctx, path, task, "task.abandon", holder, inputs, action)
         destination = _archive_destination(ctx.root, task)
-        _move_task(ctx.root, path, destination)
+        old_rel = os.path.relpath(path, str(ctx.root)).replace(os.sep, "/")
+        _move_task(ctx.root, path, destination, task)
         record_rel = os.path.relpath(destination, str(ctx.root)).replace(os.sep, "/")
-        _commit_paths(ctx.root, [record_rel], f"wf: abandon {task_id}\n\nwf-task: {task_id}")
+        _commit_paths(ctx.root, [record_rel], f"wf: abandon {task_id}\n\nwf-task: {task_id}",
+                      moved_from=_moved_from(ctx.root, old_rel))
         if not _record_committed(ctx.root, record_rel):
             raise TaskError("WF_PERSISTENCE_FAILED",
                             {"record": record_rel, "reason": "归档记录尚未进入提交",
@@ -2435,16 +2773,80 @@ def _archive_destination(root, task):
     return join(root, f"{ARCHIVE_REL}/{month}/{name}")
 
 
-def _move_task(root, source, destination):
+def _move_task(root, source, destination, task=None):
     if os.path.exists(destination):
         raise TaskError("WF_TARGET_COLLISION", {"destination": os.path.relpath(destination, str(root))})
     os.makedirs(os.path.dirname(destination), exist_ok=True)
     shutil.move(source, destination)
+    if isinstance(task, dict):
+        # 记录移动来源：续做时用它定位"该提交的删除"，不靠目录名/文件名猜测（F15-1）
+        task["moved_from"] = os.path.relpath(source, str(root)).replace(os.sep, "/")
+        save_task(root, destination, task)
     return destination
 
 
-def _commit_paths(root, paths, message):
-    """按精确路径暂存并提交：不捎带索引中的其他内容，提交后回读核对（机制稿 §5.3）。"""
+def _deleted_paths(root, rel):
+    """返回 `rel` 目录下**仍处于未提交删除**的精确文件路径（不含新增/修改）。"""
+    from . import scope as scope_mod
+
+    if not rel:
+        return []
+    _code, text = scope_mod.git(root, "status", "--porcelain", "-z", "--", rel)
+    fields = [item for item in (text or "").split("\0")]
+    deleted = []
+    index = 0
+    while index < len(fields):
+        item = fields[index]
+        if not item:
+            index += 1
+            continue
+        status, path = item[:2], item[3:]
+        # 改名/复制（R/C）在 -z 下把"源路径"放在紧随其后的独立字段里
+        if status[:1] in ("R", "C") or status[1:2] in ("R", "C"):
+            index += 2
+            if status[1:2] == "D" and path:
+                deleted.append(path)
+            continue
+        index += 1
+        if "D" in status and path:
+            deleted.append(path)
+    return deleted
+
+
+def _moved_from(root, rel):
+    """目录移动的源路径：只要 Git 侧仍有未提交删除就纳入提交。
+
+    "目录是否存在"不能代表"旧文件已恢复"——空目录或部分恢复都会让 exists() 骗过判定
+    （第十四轮复审 F14-1）。判据改为 `git status --porcelain` 是否报出删除。
+    """
+    if not rel:
+        return None
+    from . import scope as scope_mod
+
+    _code, text = scope_mod.git(root, "status", "--porcelain", "--", rel)
+    if any(line.strip().startswith(("D ", "D	", " D")) or " D " in line for line in text.splitlines()):
+        return rel
+    return None
+
+
+def _deleted_paths(root, paths):
+    """本次提交范围内的删除路径（工作树相对 HEAD 已删除）。读不到 Git 时返回空并保持原判定。"""
+    if not paths:
+        return []
+    deleted = []
+    for path in sorted(set(paths)):
+        target = os.path.join(str(root), path)
+        if not os.path.exists(target):
+            deleted.append(path)
+    return deleted
+
+
+def _commit_paths(root, paths, message, moved_from=None):
+    """按精确路径暂存并提交：不捎带索引中的其他内容，提交后回读核对（机制稿 §5.3）。
+
+    `moved_from`：目录移动的**源路径**。移动会让旧路径变成未提交删除，只 add 新路径
+    会把它留给项目（下一任务的 c 桶），所以删除必须进同一提交（第十三轮复审外部 P1）。
+    """
     from . import paths as paths_mod
 
     authorized = []
@@ -2471,21 +2873,56 @@ def _commit_paths(root, paths, message):
         return subprocess.run(["git", "-c", "core.quotePath=false", *args], cwd=str(root),
                               capture_output=True, text=True, check=False)
 
-    add = git("add", "--", *authorized)
+    # 目录移动的源路径：用 -A 把"旧路径删除"和新路径一起暂存，避免给项目留下无主删除
+    staging = list(authorized)
+    if moved_from:
+        # 只并入"确切的删除文件"，不并入目录：目录级 `git add -A` 会把同目录下
+        # 别的任务的未授权改动一起提交（第十五轮复审 F15-2）。
+        for token in ([moved_from] if isinstance(moved_from, str) else list(moved_from)):
+            for path in _deleted_paths(root, str(token or "").strip()):
+                try:
+                    staging.append(paths_mod.normalize(path))
+                except paths_mod.InvalidPath as exc:
+                    # 无法表示就整批拒绝：静默跳过会让"旧文件仍在 HEAD"却报成功（第二十三轮复审 N23-2）
+                    raise TaskError("WF_PATH_INVALID", {
+                        "reason": "移动源里的删除路径无法规范化，拒绝提交以免遗留旧文件",
+                        "path": path, "detail": str(exc),
+                        "exits": ["手工清理该路径后用同一命令重入",
+                                  "如属历史遗留，走 repair 处置"],
+                    })
+        staging = sorted(set(staging))
+    # 分类：已暂存的删除（索引里就是 D，工作树没有文件）不能再 add；未跟踪但已消失的路径也不能 add。
+    def _staged_deleted(path):
+        status = git("status", "--porcelain", "--", path)
+        line = (status.stdout or "").strip()
+        return bool(line) and line[0] == "D"
+
+    to_add = [path for path in staging if not _staged_deleted(path)]
+    add = git("add", "-A", "--", *to_add) if to_add else git("status", "--porcelain")
     if add.returncode != 0:
-        raise TaskError("WF_PERSISTENCE_FAILED", {"command": "git add", "stderr": add.stderr[-500:]})
-    staged = git("status", "--porcelain", "--", *authorized)
+        # 逐路径剔除"git 认为不匹配"的项后重试一次（未跟踪且已消失的旧路径）
+        keep = []
+        for path in to_add:
+            status = git("status", "--porcelain", "--", path)
+            if status.returncode == 0 and status.stdout.strip():
+                keep.append(path)
+        if keep != to_add and keep:
+            add = git("add", "-A", "--", *keep)
+            to_add = keep
+        if add.returncode != 0:
+            raise TaskError("WF_PERSISTENCE_FAILED", {"command": "git add", "stderr": add.stderr[-500:]})
+    staged = git("status", "--porcelain", "--", *staging)
     if staged.returncode == 0 and not staged.stdout.strip():
-        return {"committed": True, "already_clean": True, "paths": authorized, "head": scope.head(root)}
-    commit = git("commit", "-m", message, "--", *authorized)
+        return {"committed": True, "already_clean": True, "paths": staging, "head": scope.head(root)}
+    commit = git("commit", "-m", message, "--", *staging)
     if commit.returncode != 0:
         raise TaskError("WF_PERSISTENCE_FAILED", {"command": "git commit", "stderr": commit.stderr[-500:],
                                                   "stdout": commit.stdout[-500:]})
-    shown = git("show", "--name-only", "--format=", "HEAD")
-    committed = [line.strip() for line in shown.stdout.splitlines() if line.strip()]
+    shown = git("show", "--name-only", "-z", "--format=", "HEAD")
+    committed = [item for item in (shown.stdout or "").split("\0") if item.strip()]
     extra = [path for path in committed
              if not any(path == item or path.startswith(item + "/") or paths_mod.match_path(item, path)
-                        for item in authorized)]
+                        for item in staging)]
     if extra:
         raise TaskError("WF_COMMIT_NOT_AUTHORIZED",
                         {"reason": "提交包含授权路径之外的内容", "extra": extra, "authorized": authorized})
@@ -2614,13 +3051,15 @@ def cmd_archive(ctx, args):
             # 终态已写但目录未移动：先完成移动，再按提交事实判定
             current_dir = task_dir(ctx.root, task_id)
             rel_now = os.path.relpath(current_dir, str(ctx.root)).replace(os.sep, "/") if current_dir else ""
+            old_rel = None   # 续做分支：目录可能早已移动过，源路径只在本轮移动时才存在
             if current_dir and not rel_now.startswith(".wf/tasks/archive/"):
                 _record, _holder = ctx.require_held(task=task_id)
                 destination = _archive_destination(ctx.root, task)
                 if os.path.exists(destination):
                     raise TaskError("WF_TARGET_COLLISION",
                                     {"destination": os.path.relpath(destination, str(ctx.root))})
-                moved = _move_task(ctx.root, current_dir, destination)
+                old_rel = os.path.relpath(current_dir, str(ctx.root)).replace(os.sep, "/")
+                moved = _move_task(ctx.root, current_dir, destination, task)
                 task = records.load_json(os.path.join(moved, "task.json"))
             persisted = archive_persisted(ctx.root, task)
             if not persisted.get("persisted"):
@@ -2648,7 +3087,9 @@ def cmd_archive(ctx, args):
                     granted = sorted(set(granted))
                     business = _commit_paths(ctx.root, granted, f"wf: archive {task_id} (business)")
                     commit_result = _commit_paths(ctx.root, [record_rel],
-                                                  f"wf: archive {task_id}\n\nwf-task: {task_id}")
+                                                  f"wf: archive {task_id}\n\nwf-task: {task_id}",
+                                                  moved_from=(_moved_from(ctx.root, old_rel)
+                                                  or task.get("moved_from")))
                     # 记录组提交本身即下界：不再依赖 action.kind，避免"已提交却报失败"
                     bound = _parent_of(ctx.root, commit_result.get("head"))
                     persisted = archive_persisted(ctx.root, task, lower_override=bound)
@@ -2695,6 +3136,44 @@ def cmd_archive(ctx, args):
                                               ["preflight", "commit_business", "final_gate", "write_terminal",
                                                "move", "persist", "verify"])
         grant_paths = [path for grant in grants for path in _subject_paths(grant.get("subject"))]
+        # K5：含 vendor 的提交一律拒绝（框架自有资产不进业务提交）
+        vendor_hits = sorted(scope.vendor_paths(grant_paths))
+        if vendor_hits:
+            action = actions.fail(dict(task["action"]), "vendor in commit grant")
+            task["action"] = action
+            save_task(ctx.root, path, task)
+            raise TaskError("WF_SCOPE_VIOLATION",
+                            {"reason": "提交范围包含框架自有资产（vendor）",
+                             "vendor_paths": vendor_hits,
+                             "exits": ["从 --subject 里去掉 .wf/** 后重试",
+                                       "框架改动单独作为维护变更（install/upgrade/repair）处理"]})
+        # K6 第 5 类：仓库级规则文件要有该类动作的确认（脱敏原件入库后才算数）
+        from . import authorize as authorize_mod
+
+        rule_hits = authorize_mod.repo_rule_paths(ctx, grant_paths)
+        if rule_hits and not authorize_mod.require(path, "repo_rules"):
+            action = actions.fail(dict(task["action"]), "repo-level rule files without authorization")
+            task["action"] = action
+            save_task(ctx.root, path, task)
+            raise TaskError("WF_COMMIT_NOT_AUTHORIZED",
+                            {"missing_action": "repo_rules",
+                             "repo_rule_paths": rule_hits,
+                             "reason": "提交范围含仓库级规则文件，但缺该动作的确认（K6 第 5 类）",
+                             "exits": ["在本次决定文件里写一条 repo_rules 确认（路径 + 变化摘要 + 人 + quote）后重入",
+                                       "把这些路径移出本次提交范围"]})
+        # K6 第 2 类：本次提交范围里的**删除**要有一次确认（删除是不可逆动作）
+        deleted_in_grant = _deleted_paths(ctx.root, grant_paths)
+        if deleted_in_grant:
+            covered, uncovered = authorize_mod.covers(path, "delete", deleted_in_grant)
+            if not covered:
+                action = actions.fail(dict(task["action"]), "delete without authorization")
+                task["action"] = action
+                save_task(ctx.root, path, task)
+                raise TaskError("WF_COMMIT_NOT_AUTHORIZED",
+                                {"missing_action": "delete", "deleted_paths": uncovered,
+                                 "reason": "提交范围含删除，但缺删除动作的确认（K6 第 2 类）",
+                                 "exits": ["在决定文件里为这些路径写一条 delete 确认后重入",
+                                           "把删除移出本次提交范围"]})
         business_commit = _commit_paths(ctx.root, sorted(set(grant_paths)),
                                         f"wf: complete {task_id}\n\nwf-task: {task_id}") if grant_paths else {
             "committed": False, "reason": "no grant paths"}
@@ -2726,11 +3205,14 @@ def cmd_archive(ctx, args):
         task["paused"] = False
         task["suspended"] = False
         save_task(ctx.root, path, task)
-        moved = _move_task(ctx.root, path, destination)
+        old_rel = os.path.relpath(path, str(ctx.root)).replace(os.sep, "/")
+        moved = _move_task(ctx.root, path, destination, task)
         save_task(ctx.root, moved, task)
         record_rel = os.path.relpath(moved, str(ctx.root)).replace(os.sep, "/")
         commit_paths = [record_rel]
-        commit_result = _commit_paths(ctx.root, commit_paths, f"wf: archive {task_id}\n\nwf-task: {task_id}")
+        commit_result = _commit_paths(ctx.root, commit_paths, f"wf: archive {task_id}\n\nwf-task: {task_id}",
+                                      moved_from=(_moved_from(ctx.root, old_rel)
+                                                  or task.get("moved_from")))
         commit_result["business_commit"] = business_commit
         from . import paths as paths_mod
 
@@ -2760,12 +3242,57 @@ def cmd_archive(ctx, args):
                                  action_id=task["action"]["id"], action_state=task["action"]["state"]),
         next_="按 §4.4 处理写权释放；下一对象需在新会话选择",
         facts={"terminal": "normal", "archived_at": task["archived_at"], "moved_to": record_rel,
-               "commit": commit_result, "control_assertion": assertion, "reassessment": reassessment},
+               "commit": commit_result, "control_assertion": assertion, "reassessment": reassessment,
+               # K7：三段逐段回报（运行态按设计不入库，只报告它被排除）
+               "stages": [
+                   {"stage": "business", "paths": sorted(set(grant_paths)),
+                    "result": business_commit,
+                    "recovery": "业务段失败：按可达提交查证后重入；不改终态、不重复提交"},
+                   {"stage": "record", "paths": [record_rel], "result": commit_result,
+                    "recovery": "记录段失败：归档记录保持 persist_pending，按可达提交查证后重入"},
+                   {"stage": "runtime", "paths": [],
+                    "result": {"committed": False, "reason": "运行态按 S10 不入库（gitignore 托管段）"},
+                    "recovery": "无需恢复：运行态可丢弃重建"},
+               ],
+               # 巡检到点提示（设计稿 §5.4）：归档是"正常归档累计"的计数点，到点就在回显里提示
+               "inspection_hint": _inspection_hint(ctx.root)},
     )
 
 
+def _inspection_hint(root):
+    """归档后按整数倍口径给巡检提示；不阻断、只提示（外部 7）。"""
+    try:
+        every = 10
+        archived = 0
+        base = join(root, ".wf/tasks/archive")
+        for current, _dirs, files in os.walk(base):
+            if "task.json" in files:
+                archived += 1
+        if every > 0 and archived and archived % every == 0:
+            return {"due": True, "archived": archived, "every": every,
+                    "next": "按设计稿 §5.4 运行 inspect 完成本轮巡检"}
+        return {"due": False, "archived": archived}
+    except OSError:
+        return {"due": None, "reason": "archive scan failed"}
+
 def _reassess_empty_set(ctx, task_id):
-    """首轮不存在挂起任务：按空集合通过，不写记录、不返回不可用。"""
+    """首轮无返工集合时，复评只能是"无挂起任务"。
+
+    但若记录里残留 `suspended`（手工编辑/迁移/repair 重建都可能留下），必须先报未知事实，
+    不能谎报"没有"——"读不出 ≠ 没有"（第二十一轮复审外部 P1-2）。
+    """
+    found = []
+    for _path, task in iter_tasks(ctx.root):
+        if task.get("suspended") or task.get("paused") and task.get("suspended"):
+            found.append({"id": task.get("id"), "phase": task.get("phase"),
+                          "suspended": bool(task.get("suspended"))})
+    if found:
+        raise TaskError("WF_HISTORY_UNRESOLVED", {
+            "reason": "记录里存在挂起/暂停残留，首轮无法判定返工集合",
+            "pending": found,
+            "exits": ["由人核对并清理这些记录的 suspended 标记后重试",
+                      "确认属于历史迁移残留时走 repair 处置"],
+        })
     return {"suspended_tasks": [], "reassessed": [], "note": "首轮无返工能力，挂起集合为空"}
 
 
@@ -2795,14 +3322,98 @@ def _reenter_check_from_finish(ctx, path, task, action, operation):
 # --------------------------------------------------------------------------
 
 
+def _finalize_project_config(root, content, generated=None):
+    """把 project_id 在**提案内容**阶段定稿：缺则生成一次，已存在则保留。
+
+    这样"写入后重入"能判为已完成（内容一致），也不会由入口静默重建已有标识
+    （第十六/十七轮复审 N17-2、N17-3）。
+    """
+    try:
+        payload = json.loads(content)
+    except ValueError:
+        return content
+    if not isinstance(payload, dict):
+        return content
+    existing = records.load_json(join(root, ".wf/project-config.json")) or {}
+    site_id = existing.get("project_id") if isinstance(existing, dict) else None
+    if payload.get("project_id"):
+        return content            # 提案自带标识：尊重提案
+    # 身份优先级：**意图值**（记录/未结案动作）> 现场配置 > 新生成。
+    # 现场被外部改成别的 id 时，不得用它替换意图值——否则同一提案会被算成"不同提案"
+    # （第二十二轮复审 N22-2）；真正的差异留给前像冲突去报。
+    identity = generated or site_id
+    if not identity:
+        identity = uuid.uuid4().hex   # 初始化随机生成（机制稿 §8.1）
+    payload["project_id"] = identity
+    return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+
+
 def cmd_baseline_apply(ctx, args):
     from . import lock
 
     task_id = args.value("--task")
     proposal_path = args.value("--proposal")
-    if not task_id or not proposal_path:
-        raise TaskError("WF_PATH_INVALID", {"reason": "baseline-apply requires --task <id> --proposal <path>"})
-    proposal = records.load_json(proposal_path)
+    files_arg = args.value("--files")
+    decision_path = args.value("--decision")
+    if not task_id:
+        raise TaskError("WF_PATH_INVALID", {"reason": "baseline-apply requires --task <id>"})
+    if not proposal_path:
+        # 2026-11-07：提案是机械结构（哪些文件、什么内容、前像是什么），不该由人/模型手写。
+        # 给出 `--files <a,b,c> --decision <人的批准文件>` 即可，由入口读工作树生成提案。
+        preview_only = args.flag("--preview")
+        if not files_arg or (not decision_path and not preview_only):
+            raise TaskError("WF_PATH_INVALID",
+                            {"reason": "baseline-apply needs --proposal <json>, or --files <a,b,c> --decision <approve.json>",
+                             "hint": "wf.py help baseline-apply 看结构"},
+                            next_="用 --files + --decision 让入口生成提案（推荐），或提供既有格式的 --proposal")
+        approval = None
+        if decision_path:
+            from . import cli as cli_mod
+
+            decisions = cli_mod._load_decision(decision_path)
+            approvals = [item for item in decisions if item.get("choice") in APPROVE_CHOICES]
+            if not approvals:
+                raise TaskError("WF_SEMANTIC_DECISION",
+                                {"reason": "decision file has no approval entry",
+                                 "choices": [item.get("choice") for item in decisions]})
+            approval = approvals[0]
+        wanted = [item.strip() for item in str(files_arg).split(",") if item.strip()]
+        if not wanted:
+            raise TaskError("WF_PATH_INVALID", {"reason": "--files is empty"})
+        entries = []
+        for relative in wanted:
+            absolute = join(ctx.root, relative)
+            if not os.path.isfile(absolute):
+                raise TaskError("WF_PATH_INVALID", {"reason": "file missing in worktree", "path": relative})
+            with open(absolute, "r", encoding="utf-8") as handle:
+                content = handle.read()
+            # 前像＝当前工作树内容（应用前的真实状态），用来发现"生成后文件又被改过"
+            before = "sha256:" + records.sha256_hex(content.encode("utf-8"))
+            entries.append({"path": relative, "before": before, "content": content})
+        proposal = {"files": entries}
+        if approval is not None:
+            proposal["approval"] = {"choice": approval.get("choice"),
+                                    "subject": approval.get("subject"),
+                                    "at": approval.get("at"), "source": approval.get("source"),
+                                    "object_digest": approval.get("object_digest")}
+        # 批准必须绑定到**提案内容**：人先看 --preview 给的结构摘要并据此写下 object_digest，
+        # 避免"先批准再生成内容"（机制稿 §3.4）。这里把摘要算好回显，供人确认。
+        proposal_digest = records.plain_digest({"files": entries})
+        if args.flag("--preview"):
+            from . import codes as codes_mod
+
+            return codes_mod.result(
+                "WF_OK",
+                object={"id": task_id},
+                position_=codes_mod.position(scope="task", task_id=task_id),
+                next_="把 proposal_digest 写进人的批准决定（object_digest）后重跑（去掉 --preview）",
+                facts={"preview": True, "proposal_digest": proposal_digest,
+                       "files": [{"path": item["path"], "before": item["before"],
+                                  "digest": "sha256:" + records.sha256_hex(item["content"].encode("utf-8"))}
+                                 for item in entries]},
+            )
+    else:
+        proposal = records.load_json(proposal_path)
     if not isinstance(proposal, dict):
         raise TaskError("WF_PATH_INVALID", {"reason": "proposal file missing or not an object"})
     files = proposal.get("files")
@@ -2833,7 +3444,7 @@ def cmd_baseline_apply(ctx, args):
         approved_ok, approved_code, approved_facts = gates_mod.verify_step(ctx, task, "task.plan-approved")
         if not approved_ok:
             raise TaskError(approved_code, approved_facts)
-        touch_paths = list((task.get("plan") or {}).get("touch_paths") or [])
+        touch_paths = approved_touch_paths(task)
         root_real = os.path.realpath(str(ctx.root))
         # 提案须带针对本次变更的批准引用（机制稿 §3.4）：规划获批不足以证明任意版本提案已获批
         approval = proposal.get("approval") or proposal.get("decision")
@@ -2859,6 +3470,7 @@ def cmd_baseline_apply(ctx, args):
 
         # 整批预校验：任一非法条目都不产生写入
         planned = []
+        generated = None
         for entry in files:
             if not isinstance(entry, dict):
                 raise TaskError("WF_SEMANTIC_DECISION", {"reason": "file entry must be an object"})
@@ -2900,26 +3512,72 @@ def cmd_baseline_apply(ctx, args):
             violation = paths_mod.boundary_violation(ctx.root, normalized)
             if violation:
                 raise TaskError("WF_PATH_INVALID", {"reason": violation, "path": normalized})
+            if normalized == ".wf/project-config.json":
+                existing_cfg = records.load_json(join(ctx.root, ".wf/project-config.json")) or {}
+                # ① 先解析**本任务**可恢复身份（memo → 未结案动作 → 现场）：
+                #    解析必须在跨任务历史检查之前，否则"只有 pending 身份"的任务会
+                #    被自己的历史挡住（第二十五轮复审 N25-1）。
+                generated = task.get("project_config_project_id")
+                if not generated:
+                    _pending = actions.pending(task) or {}
+                    generated = (_pending.get("inputs") or {}).get("project_id")
+                if not generated and (existing_cfg or {}).get("project_id"):
+                    generated = existing_cfg.get("project_id")
+                # ② 本任务没有可恢复身份，且现场也缺失时才查历史痕迹：命中即要求 repair
+                if not generated and not (existing_cfg or {}).get("project_id"):
+                    traces = []
+                    for _p, item in iter_tasks(ctx.root):
+                        if item.get("id") == task_id:
+                            continue
+                        if item.get("project_config_project_id"):
+                            traces.append(item.get("id"))
+                            continue
+                        _pending_other = actions.pending(item) or {}
+                        if (_pending_other.get("inputs") or {}).get("project_id"):
+                            traces.append(item.get("id"))
+                    if traces:
+                        raise TaskError("WF_HISTORY_UNRESOLVED", {
+                            "reason": "项目曾有身份记录但现场与本任务都没有：重建须走 repair，入口不静默生成",
+                            "traces": traces[:5],
+                            "exits": ["从 Git 恢复 .wf/project-config.json（旧值仍在历史里时）后重试",
+                                      "等 repair 重建能力交付（第三轮，见机制稿 D09）；在此之前不得静默生成新 id"],
+                        })
+                # 提案自带 id：也纳入身份（与 memo 同值），避免"现场 A / memo B"分叉
+                try:
+                    _proposed = json.loads(content)
+                except ValueError:
+                    _proposed = None
+                if isinstance(_proposed, dict) and _proposed.get("project_id"):
+                    if generated and generated != _proposed["project_id"]:
+                        raise TaskError("WF_SEMANTIC_DECISION", {
+                            "reason": "提案标识与已生成身份不一致",
+                            "proposed": _proposed["project_id"], "known": generated,
+                            "exits": ["用与既有身份一致的标识重出提案",
+                                      "需要重建身份时走 repair（不由入口静默改）"],
+                        })
+                    generated = _proposed["project_id"]
+                if not (existing_cfg or {}).get("project_id") and not generated:
+                    # 只算不写：整批校验通过、动作登记之后才持久化（N20-1）
+                    generated = uuid.uuid4().hex
+                content = _finalize_project_config(ctx.root, content, generated)
             planned.append((normalized, content))
+        # 1) 先在内存里算好计划与生成值（不写任何记录、不登记意图）
         inputs = {"task": task_id, "files": [item[0] for item in planned],
                   "content_digests": [records.plain_digest(item[1]) for item in planned]}
+        if generated:
+            inputs["project_id"] = generated
         pending = actions.pending(task)
         if pending is not None and pending.get("kind") != "baseline.apply":
             raise TaskError("WF_ACTION_INCOMPLETE", {"action": pending.get("id"), "state": pending.get("state"),
                                                      "kind": pending.get("kind")},
                             next_="先按原动作意图恢复，再发起基线应用")
+        # 2) 与未结案意图比对：不同提案不得覆盖（这条要早于前像冲突，语义更具体）
         if pending is not None:
             if pending.get("inputs_digest") != actions.inputs_digest(inputs):
                 raise TaskError("WF_ACTION_INCOMPLETE", {"action": pending.get("id"),
                                                          "reason": "proposal differs from the pending action"},
                                 next_="用同一提案重入以续做，或先核对未完成动作")
-            action = pending
-            task["action"] = action
-            save_task(ctx.root, path, task)
-        else:
-            task, action = _start_task_action(ctx, path, task, "baseline.apply", holder, inputs,
-                                              ["verify_proposal", "apply", "verify_result"])
-        # 整批预检：先对全部条目分类，确认没有冲突后才写入任何文件
+        # 3) 整批前像预检：任何冲突都在登记意图之前判定（N20-1/N21-1）
         before_of = {}
         for entry in files:
             if isinstance(entry, dict) and entry.get("path"):
@@ -2943,6 +3601,21 @@ def cmd_baseline_apply(ctx, args):
                             {"reason": "proposal before-state does not match current files",
                              "conflicts": conflicts},
                             next_="按当前内容重新生成提案后再次请人批准")
+        # 4) 校验通过后才登记/续做动作；生成值随意图同次持久化
+        if pending is not None:
+            action = pending
+            task["action"] = action
+            if not task.get("project_config_project_id"):
+                carried = (pending.get("inputs") or {}).get("project_id")
+                if carried:
+                    task["project_config_project_id"] = carried
+            save_task(ctx.root, path, task)
+        else:
+            if generated:
+                # 记录字段与动作输入同时落：重入先取记录、再取意图（N21-1/N22-1）
+                task["project_config_project_id"] = generated
+            task, action = _start_task_action(ctx, path, task, "baseline.apply", holder, inputs,
+                                              ["verify_proposal", "apply", "verify_result"])
         written = []
         skipped = []
         for kind, normalized, content, current, before in classification:
@@ -2998,7 +3671,7 @@ def cmd_spec_update(ctx, args):
             raise TaskError(approved_code, approved_facts)
         from . import paths as paths_mod
 
-        touch_paths = list((task.get("plan") or {}).get("touch_paths") or [])
+        touch_paths = approved_touch_paths(task)
         for change in changes:
             for raw in (change.get("old_paths") or []) + (change.get("new_paths") or []):
                 try:
@@ -3138,7 +3811,8 @@ def stop_work(ctx, decisions, choice):
                 items.append(fingerprint.item(ctx.root, relative))
             except records.RecordInvalid as exc:
                 raise TaskError("WF_PATH_INVALID", {"reason": str(exc), "path": relative})
-        touch = (task.get("entry_snapshot") or {}).get("touch_paths") or []
+        # 损坏的快照必须显式拒绝：静默折叠成空批准面会放行越界 keep
+        touch = approved_touch_paths(task)
         receipts = task_receipts(ctx.root)
         classified = scope.classify_candidates(ctx.root, task, receipts=receipts)
         pending = sorted(set(classified["buckets"]["e"]) & set(scope.uncommitted_paths(ctx.root)))
@@ -3181,15 +3855,62 @@ def stop_work(ctx, decisions, choice):
                                 {"reason": "反向修正尚未实际完成（路径仍有差异）", "dirty": dirty})
             commit_result = {"reversed": True, "paths": paths}
         else:  # transfer
-            target = paths[0] if paths else str(decisions[0].get("object_digest") or "")
-            if not TASK_ID_RE.match(target):
-                raise TaskError("WF_SEMANTIC_DECISION",
-                                {"reason": "transfer 的 subject 首项须是承接任务 id", "target": target})
+            # 承接对象用**专用字段** `target_task`（与 repair 的 disposition 同一约定，机制稿 §5.6）；
+            # subject 只列待承接路径。早期实现把 subject 首项当 id，导致 id 与路径混在一张清单里
+            # 被逐项指纹化，实际无法表达"承接任务 + 待承接路径"（2026-11-05 第七轮复审后续查证）。
+            declared = decisions[0]
+            target = str(declared.get("target_task") or "").strip()
+            # 不做"subject 首项即 id"的兼容回退：真实 WIP 路径可能与任务 id 同形，
+            # 回退会把它从核验面里静默移走（2026-11-05 第八轮复审 F8-1）。
+            wip_paths = paths
+            if not target or not TASK_ID_RE.match(target):
+                raise TaskError("WF_SEMANTIC_DECISION", {
+                    "reason": "transfer 须在 Decision.target_task 给出承接任务 id",
+                    "target_task": declared.get("target_task"), "subject": declared.get("subject"),
+                    "exits": ["补 Decision.target_task 后重试",
+                              "改选 keep 保留 WIP（当前批准范围内）",
+                              "由人实际处置这些改动后重试"],
+                })
             target_task = load_task(ctx.root, target)
             if target_task is None or target == task_id:
-                raise TaskError("WF_SEMANTIC_DECISION",
-                                {"reason": "transfer 须给出存在的具名承接任务 id", "target": target})
-            commit_result = {"transferred_to": target}
+                raise TaskError("WF_SEMANTIC_DECISION", {
+                    "reason": "transfer 须给出存在且不同于本任务的具名承接任务 id",
+                    "target": target, "is_self": target == task_id,
+                    "exits": ["补一个存在且属于其他任务的 Decision.target_task 后重试",
+                              "先新建并批准承接任务，再重试本次收工",
+                              "改选 keep 保留 WIP（当前批准范围内）"],
+                })
+            # 「选择不等于已落实」（设计稿 §4.4）：承接必须可核——任务未归档、已批准，
+            # 且批准触碰面覆盖待承接的全部路径；否则保留待决，不写 resolved。
+            if target_task.get("status") == "archived" or target_task.get("terminal"):
+                raise TaskError("WF_SEMANTIC_DECISION", {
+                    "reason": "承接任务已归档/终止，不能承接 WIP",
+                    "target": target, "status": target_task.get("status"),
+                    "terminal": target_task.get("terminal"),
+                    "exits": ["改选一个未归档、已批准且覆盖这些路径的任务承接",
+                              "由人实际处置这些改动后重试",
+                              "改选 keep 保留 WIP（当前批准范围内）"],
+                })
+            # 承接范围与写入口同一判定（F7-2）：已开工任务不回退可变 plan，空数组照用
+            target_approved = approved_touch_paths(target_task)
+            target_plan = target_task.get("plan") or {}
+            target_approval = target_plan.get("approval")
+            target_approval_valid = _is_approved_plan(target_task, ctx.root)
+            uncovered_transfer = [item for item in wip_paths
+                                  if not covered(item, target_approved)]
+            if not target_approval_valid or uncovered_transfer:
+                raise TaskError("WF_SEMANTIC_DECISION", {
+                    "reason": "承接任务尚未有效批准，或批准触碰面未覆盖待承接路径",
+                    "target": target, "approved": target_approved,
+                    "approval_valid": target_approval_valid,
+                    "uncovered": uncovered_transfer,
+                    "exits": ["先让承接任务批准并覆盖这些路径后重试",
+                              "改选另一个已批准且覆盖这些路径的承接任务",
+                              "由人实际处置这些改动，或改选 keep 保留 WIP"],
+                })
+            commit_result = {"transferred_to": target,
+                             "approved": target_approved,
+                             "approval": target_approval}
         task.setdefault("handoff", {})["wip"] = {
             "decision": decisions[0],
             "object": object_ref,
@@ -3341,6 +4062,7 @@ def inspect(ctx):
     for path, task in tasks:
         ids.setdefault(task.get("id"), []).append(os.path.relpath(path, str(ctx.root)))
     duplicates = {key: value for key, value in ids.items() if len(value) > 1}
+    broken_dirs = broken_task_dirs(ctx.root)
     writer = writer_mod.load(ctx.root) or {}
     receipts = task_receipts(ctx.root)  # 巡检同样消费可达提交查证（机制稿 §4.5）
     bindings_dir = join(ctx.root, ".wf/session-bindings")
@@ -3348,11 +4070,17 @@ def inspect(ctx):
     facts = {
         "tasks": {"active": len(active), "archived": len(archived), "total": len(tasks)},
         "duplicate_ids": duplicates,
+        "broken_task_dirs": broken_dirs,
         "writer": {"state": writer.get("state"), "generation": writer.get("generation"),
                    "receipts": receipts},
         "bindings": bindings,
         "spec": _spec_summary(ctx.root),
         "governance": _governance_summary(ctx.root, tasks, archived),
+        # A5：治理面明确声明本轮**未输出**的类别，避免读者把四类当成全量覆盖
+        "governance_omitted": [
+            {"category": "manual_compare", "note": "「需人工比对」清单（witnessed/potential 模式对）延至第二轮"},
+            {"category": "author_order", "note": "author 复核顺序（ai 优先、extracted 前置）延至第二轮"},
+        ],
     }
     warnings = []
     for receipt in receipts:

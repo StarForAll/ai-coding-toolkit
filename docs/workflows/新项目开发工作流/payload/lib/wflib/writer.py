@@ -200,7 +200,7 @@ def owner_ref(kind, ident, scope_ref):
 # 维护回执派生（只读；首个写者读取时不回写 writer）
 # --------------------------------------------------------------------------
 
-DISPOSED_KINDS = ("commit", "reverse", "transfer")
+DISPOSED_KINDS = ("commit", "reverse", "transfer", "uninstall")
 
 
 def _disposition_complete(entry):

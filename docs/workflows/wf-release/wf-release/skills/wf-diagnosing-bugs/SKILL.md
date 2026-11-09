@@ -25,15 +25,20 @@ disable-model-invocation: false
 - 身份只在请求信封里：不读环境变量、不从命令行或文件猜身份；信封缺失就报 `WF_IDENTITY_UNRESOLVED`。
 - 不代人作答、不代跑终端确认与令牌；人的决定只经 `--decision` / `--plan` / `--disposition` 文件承载。
 - 入口输出的 `tier` / `code` / `facts` / `next` 是唯一判定源；不自行改写状态或补写门禁结论。
-- 命令一律形如 `python3 <项目根>/.wf/bin/wf.py <子命令>`；不装 PATH、不做 shell shim。
+- 命令形如 `<python> <项目根>/.wf/bin/wf.py <子命令>`。`<python>` 按此顺序取，**取到能跑的就整会话固定复用**：
+  ① `.wf/project-config.json` 的 `python_executable`（未设置再读 `~/.wf/config.json` 同名键，可直接读文件取值，不必先执行）；
+  ② 你自身运行时的 Python 可执行文件；
+  ③ 系统 `python3`。
+  若宿主执行策略要求审批或不在白名单（`WF_EXECUTOR_UNCONFIRMED` / 审批拒绝），改用策略允许的已核实 Python 绝对路径并固定下来；
+  **不要每条命令换解释器**，也不要因为被拒就改成手写信封或换路径重试同一效果。不装 PATH、不做 shell shim。
 
 ## 来源与差异
 
 | 项 | 值 |
 |---|---|
-| 来源 | 全局 skill `diagnosing-bugs`（`~/.claude/skills/diagnosing-bugs`，含 agents/scripts） |
-| 许可 | 跟随本仓库（内部私有源，无第三方 NOTICE 义务；上游为同作者资产） |
-| 基线 | 适配基线＝本仓库上述源文件；本副本为唯一发行件，上游改动不自动流入 |
+| 来源 | 同作者的通用 skill `diagnosing-bugs`（**非本仓库资产**，位于用户全局 skill 库；路径随机器而异，不以路径作基线） |
+| 许可 | 跟随本仓库（内部私有源；同作者资产，无第三方 NOTICE 义务） |
+| 基线 | 适配基线＝该上游 `SKILL.md` 的内容摘要 `sha256:849198df88cdb65fd0d97236604c1fca7ff2f22d2f705f9724a800d0266b118d`；本副本为唯一发行件，上游改动不自动流入。换机或上游更新时先按摘要核对差异，再决定是否吸收（设计稿 §7.4、§7.5） |
 | 差异 | 只保留可被判据消费的复现-最小化-验证三段，脚本工具不随发行投放 |
 | 最近正例 | 重复失败带 `dedupe_refs` 指向真实 check 失败，不重复计数 |
 | 最近反例 | 反复猜修；缺失时 dedupe 声明容易拍脑袋 |

@@ -55,14 +55,6 @@ def marker_uses(path: str, text: str, *, json_targets=()) -> list:
     return uses
 
 
-def check_markers(path, text, *, allow_any=False) -> list:
-    """模板必填位是否仍待填；返回 violation 列表（空 = 通过）。"""
-    violations = []
-    for field, _offset in find_markers(text):
-        violations.append({"template": path, "field": field, "kind": "required-field"})
-    return violations
-
-
 def json_value_marker_violations(path, value) -> list:
     return [{"template": path, "pointer": pointer, "kind": "required-value"} for pointer in find_value_markers(value)]
 

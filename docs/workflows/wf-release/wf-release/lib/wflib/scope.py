@@ -96,10 +96,11 @@ def commit_trailer_task(message):
 
 
 def commit_paths(root, sha):
-    code, out = git(root, "diff-tree", "-r", "--no-commit-id", "--name-only", "--no-renames", sha)
+    # `-z`：普通按行读取会把带引号/制表符/换行的路径转义，归属与外部变更都会漏核（第十八轮复审 N18-4）
+    code, out = git(root, "diff-tree", "-r", "--no-commit-id", "--name-only", "-z", "--no-renames", sha)
     if code != 0:
         return None
-    return [line for line in out.splitlines() if line]
+    return [item for item in out.split("\0") if item]
 
 
 def commits_since(root, start):
@@ -231,24 +232,78 @@ def governance_condition(root, touch_paths):
     if block is None:
         return "unknown", {"fact": "governance-unavailable", "problems": problems}
     tree = _enumerate_tree(root)
+    # 两种写法（字面/通配）走同一枚举：判据是"治理 pattern 命中的真实文件也被触碰面命中"，
+    # 分支差异不改变行为，故合并为一条路径（2026-11-05 第九轮复审：去掉冗余分支）。
     for pattern in block["paths"]:
-        if not paths_mod.has_wild(pattern) or any(segment == "**" for segment in pattern.split("/")):
-            for actual in tree:
-                if paths_mod.match_path(pattern, actual):
-                    for touch in touch_paths or []:
-                        if paths_mod.match_path(touch, actual):
-                            return "true", {"fact": "witnessed", "path": actual, "governance": pattern}
-            continue
         for actual in tree:
-            if paths_mod.match_path(pattern, actual):
-                for touch in touch_paths or []:
-                    if paths_mod.match_path(touch, actual):
-                        return "true", {"fact": "witnessed", "path": actual, "governance": pattern}
+            if not paths_mod.match_path(pattern, actual):
+                continue
+            for touch in touch_paths or []:
+                if paths_mod.match_path(touch, actual):
+                    return "true", {"fact": "witnessed", "path": actual, "governance": pattern}
     for governance_pattern in block["paths"]:
         for touch in touch_paths or []:
             if not paths_mod.provably_disjoint(governance_pattern, touch):
                 return "true", {"fact": "prefix-unexcluded", "governance": governance_pattern, "touch": touch}
     return "false", {"fact": "disjoint"}
+
+
+# 契约面（复杂度条件②）：改这些文件就改变框架对外行为（设计稿 §4.3 ②）
+CONTRACT_SURFACE = (".wf/bin/**", ".wf/lib/**", ".wf/templates/**", ".wf/workflows/**")
+# 验收口径来源（复杂度条件③）：这些是"验收口径/回退方案/审查面"的载体
+# 只收「验收口径的载体」：改 spec 正文属知识更新，不等于验收口径变化（设计稿 §4.3 ③说的是"变化"）；
+# 验收 id 集合变化另由调用方作为事实传入（tasks._complexity_proposal）。
+ACCEPTANCE_SURFACE = (".wf/baseline.md", ".wf/project-config.json")
+# AGENTS.md 的托管块属于②（安装器写入的流程路由块，改它就改变 AI 路由行为）
+AGENTS_BLOCK_MARKER = "TRELLIS:START"
+
+
+def _overlaps(pattern, touch):
+    return not paths_mod.provably_disjoint(pattern, touch)
+
+
+def contract_surface_condition(root, touch_paths, declared=None):
+    """条件②：触碰面命中契约面，或 Plan 显式声明 contract_changes。"""
+    if declared:
+        return "true", {"fact": "declared", "contract_changes": list(declared)}
+    for touch in touch_paths or []:
+        for pattern in CONTRACT_SURFACE:
+            if _overlaps(pattern, touch):
+                return "true", {"fact": "contract-surface", "pattern": pattern, "touch": touch}
+        if _overlaps("AGENTS.md", touch):
+            path = os.path.join(root, "AGENTS.md")
+            try:
+                with open(path, "r", encoding="utf-8") as handle:
+                    text = handle.read()
+            except OSError:
+                text = ""
+            if AGENTS_BLOCK_MARKER in text:
+                return "true", {"fact": "agents-managed-block", "touch": touch}
+    return "false", {"fact": "no-contract-surface"}
+
+
+def acceptance_surface_condition(root, touch_paths, acceptance_changed=None):
+    """条件③：触碰验收口径来源，或（再次批准时）验收 id 集合发生变化。"""
+    if acceptance_changed:
+        return "true", {"fact": "acceptance-changed", "detail": acceptance_changed}
+    for touch in touch_paths or []:
+        for pattern in ACCEPTANCE_SURFACE:
+            if _overlaps(pattern, touch):
+                return "true", {"fact": "acceptance-surface", "pattern": pattern, "touch": touch}
+    return "false", {"fact": "no-acceptance-surface"}
+
+
+def expansion_condition(previous_touch_paths, touch_paths):
+    """条件④：再次批准时触碰面覆盖上一版批准面之外的路径。"""
+    previous = list(previous_touch_paths or [])
+    if not previous:
+        return "false", {"fact": "no-previous-approval"}
+    for touch in touch_paths or []:
+        if not any(not paths_mod.provably_disjoint(old, touch) for old in previous):
+            return "true", {"fact": "scope-expanded", "touch": touch, "previous": previous}
+    # 新面覆盖了旧面没覆盖到的具体路径也视为扩张（用旧面里已批准的路径反查不含 touch 时的情形略过：
+    # 这里只判"新增条目未被旧面包含"，宁高不低）
+    return "false", {"fact": "within-previous"}
 
 
 def declaration_violations(actual_paths, touch_paths, root):
@@ -281,7 +336,42 @@ def declaration_violations(actual_paths, touch_paths, root):
 # --------------------------------------------------------------------------
 
 
-def _is_control_record(path, task_id, installed=None):
+GITIGNORE_BEGIN = "# wf-managed-v1"
+GITIGNORE_END = "# wf-managed-end"
+
+
+def _gitignore_is_framework_only(root):
+    """`.gitignore` 若只含安装器托管段（未被人改动），属框架控制面。
+
+    背景（2026-11-08 R1 回归）：全新安装会新建 `.gitignore`，它是未跟踪文件；
+    若按普通业务文件归类，第一次 Check 就会把它报成"未归属改动"。
+    唯一判据是**内容**：去掉托管段后必须没有其它行——用户自行加过内容时不隐藏。
+    """
+    if not root:
+        return False
+    try:
+        with open(os.path.join(str(root), ".gitignore"), "r", encoding="utf-8") as handle:
+            text = handle.read()
+    except OSError:
+        return False
+    if GITIGNORE_BEGIN not in text or GITIGNORE_END not in text:
+        return False
+    rest = []
+    inside = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped == GITIGNORE_BEGIN:
+            inside = True
+            continue
+        if stripped == GITIGNORE_END:
+            inside = False
+            continue
+        if not inside and stripped:
+            rest.append(stripped)
+    return not rest
+
+
+def _is_control_record(path, task_id, installed=None, root=None):
     """框架自身的控制面与**安装器投放的框架资产**不算任务交付物。
 
     技能副本现在装在目标项目内（如 `.agents/skills/wf-start/SKILL.md`），它们是安装产物、
@@ -293,6 +383,8 @@ def _is_control_record(path, task_id, installed=None):
         (".wf/session-bindings/", ".wf/writer.json", ".wf/.runtime/", ".wf/workflow-runs/",
          ".wf/install/", ".wf/preparations/")
     ):
+        return True
+    if path == ".gitignore" and _gitignore_is_framework_only(root):
         return True
     return path in (installed or ())
 
@@ -322,26 +414,45 @@ def installed_asset_paths(root):
     return found
 
 
+# K5：框架自有资产（`vendor`）。它不进交付面、不进审查材料、不进业务提交；
+# 它的改动只作为 `vendor_dirty` 事实记录，不参与归属/范围/检查结论。
+VENDOR_PREFIX = ".wf/"
+
+
+def is_vendor(path):
+    return str(path).startswith(VENDOR_PREFIX)
+
+
+def vendor_paths(paths):
+    return sorted(path for path in paths or [] if is_vendor(path))
+
+
 def classify_candidates(root, task, receipts=None):
     """返回 {a: [...], b: [...], c: [...], d: [...], e: [...], f: [...], facts...}。"""
     task_id = task.get("id")
+    # 与写入口同一判定（2026-11-05 第七轮复审 F7-3）：未开工回退 plan，已开工一律以快照为准，
+    # 快照缺失/类型不符抛 WF_RECORD_INVALID，不在本函数里另写一套回退口径。
+    from . import tasks as tasks_mod
+    touch_paths = tasks_mod.approved_touch_paths(task)
     entry = task.get("entry_snapshot") or {}
-    touch_paths = entry.get("touch_paths") or (task.get("plan") or {}).get("touch_paths") or []
     uncommitted = uncommitted_paths(root)
     attributed = set(attributed_paths(root, task_id, task.get("baseline_head")))
     attributed |= set(attributed_by_decision(root, task))
     candidates = sorted(set(uncommitted) | attributed)
     installed = installed_asset_paths(root)
-    buckets = {"a": [], "b": [], "c": [], "d": [], "e": [], "f": []}
+    buckets = {"a": [], "b": [], "c": [], "d": [], "e": [], "f": [], "v": []}
     receipt_paths = set()
     for receipt in receipts or []:
         if receipt["state"] in ("applied_pending_commit", "pending_check"):
             receipt_paths.update(receipt["facts"].get("paths") or [])
     for path in candidates:
+        if is_vendor(path):
+            buckets["v"].append(path)      # K5：框架自有资产，不进交付面/审查/业务提交
+            continue
         if path in receipt_paths:
             buckets["a"].append(path)
             continue
-        if _is_control_record(path, task_id, installed):
+        if _is_control_record(path, task_id, installed, root):
             buckets["b"].append(path)
             continue
         owned = path in attributed or any(paths_mod.match_path(entry_pattern, path) for entry_pattern in touch_paths)
@@ -361,7 +472,19 @@ def classify_candidates(root, task, receipts=None):
         "candidates": candidates,
         "touch_paths": touch_paths,
         "entry_snapshot": entry,
+        "vendor_dirty": buckets["v"],
     }
+
+
+def _wip_path_strings(items):
+    """把 `handoff.wip.paths` 的指纹对象/字符串统一成路径字符串。"""
+    paths = []
+    for item in items:
+        if isinstance(item, str):
+            paths.append(item)
+        elif isinstance(item, dict) and item.get("path"):
+            paths.append(str(item["path"]))
+    return paths
 
 
 def cross_task_conflicts(root, task):
@@ -371,8 +494,9 @@ def cross_task_conflicts(root, task):
     `handoff.wip.paths` 声明"这些改动我还没处置"时，才算当前争抢。
     """
     task_id = task.get("id")
-    touch_paths = (task.get("entry_snapshot") or {}).get("touch_paths") \
-        or (task.get("plan") or {}).get("touch_paths") or []
+    from . import tasks as tasks_mod
+
+    touch_paths = tasks_mod.approved_touch_paths(task)
     live = set(uncommitted_paths(root))
     conflicts = []
     for _path, other in _iter_task_records(root):
@@ -384,7 +508,9 @@ def cross_task_conflicts(root, task):
         wip = ((other.get("handoff") or {}).get("wip") or {})
         if wip.get("resolved"):
             continue
-        for path in wip.get("paths") or []:
+        # `handoff.wip.paths` 存的是 fingerprint.item() 的对象（stop 写入），也可能是字符串；
+        # 直接拿对象做集合判断会抛 unhashable type: 'dict'（第十三轮复审 F13-1）。
+        for path in _wip_path_strings(wip.get("paths") or []):
             if path not in live:
                 continue
             if any(paths_mod.match_path(pattern, path) for pattern in touch_paths):
@@ -417,7 +543,9 @@ def external_changes(root, task):
     commits = commits_since(root, baseline)
     if commits is None:
         return {"baseline": baseline, "commits": [], "unreachable": True}, []
-    touch_paths = (task.get("entry_snapshot") or {}).get("touch_paths") or []
+    from . import tasks as tasks_mod
+
+    touch_paths = tasks_mod.approved_touch_paths(task)
     findings = []
     for sha in commits:
         message = commit_message(root, sha)

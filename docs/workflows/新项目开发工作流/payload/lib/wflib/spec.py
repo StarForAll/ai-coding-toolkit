@@ -78,6 +78,36 @@ def validate_metadata(metadata):
             problems.append("active spec requires verified_at (date or extracted)")
         if not metadata.get("counterexample"):
             problems.append("active spec requires counterexample")
+    check = metadata.get("check")
+    if check is not None and (not isinstance(check, str) or not check.strip()):
+        problems.append("check must be a non-empty string or null")
+    clauses = metadata.get("clauses")
+    if clauses is not None:
+        if not isinstance(clauses, list):
+            problems.append("clauses must be an array")
+        else:
+            seen = set()
+            for index, clause in enumerate(clauses):
+                if not isinstance(clause, dict):
+                    problems.append(f"clauses[{index}] must be an object")
+                    continue
+                clause_id = clause.get("id")
+                if not isinstance(clause_id, str) or not clause_id.strip():
+                    problems.append(f"clauses[{index}] requires a non-empty id")
+                    continue
+                if clause_id in seen:
+                    # 只增不改：语义变化必须新建 id 并把旧条置 deprecated，不得复用同一个 id
+                    problems.append(f"clauses[{clause_id}] id 重复（只增不改）")
+                seen.add(clause_id)
+                status = clause.get("status")
+                if status not in ("active", "deprecated"):
+                    problems.append(f"clauses[{clause_id}] status must be active|deprecated")
+                if status == "deprecated":
+                    summary = clause.get("deprecated_summary")
+                    if not isinstance(summary, str) or not summary.strip():
+                        problems.append(f"clauses[{clause_id}] deprecated 条目必须带 deprecated_summary")
+                    elif len(summary) > 80:
+                        problems.append(f"clauses[{clause_id}] deprecated_summary 超过 80 字符")
     raw_paths = metadata.get("paths")
     valid_paths = []
     path_problems = []
@@ -97,6 +127,22 @@ def validate_metadata(metadata):
 def path_violation(root, relative):
     """统一边界判定（项目包含性 + 字面/真实祖先的嵌套仓库）：读写入口共用。"""
     return paths_mod.boundary_violation(root, relative)
+
+
+def rule_digest(metadata):
+    """规则实质摘要：只算 `check` 与 active `clauses`（机制稿 §8.3、v42 K3b「排版不计」）。
+
+    返回 `sha256:` 字符串；规则不可解释（无 check 且无 active clauses）时返回 None，
+    由调用方决定是"无实质标准"还是阻断。
+    """
+    metadata = metadata or {}
+    clauses = [{"id": clause.get("id"), "statement": clause.get("statement")}
+               for clause in (metadata.get("clauses") or [])
+               if isinstance(clause, dict) and clause.get("status") == "active"]
+    payload = {"check": metadata.get("check"), "clauses": clauses}
+    if not payload["check"] and not clauses:
+        return None
+    return records.H("wf-spec-rule-v1", payload)
 
 
 def load_spec(root, relative):
@@ -256,6 +302,55 @@ def _sync_curation_paths(root, old_path, new_path, current_task_id=None):
             records.write_json(os.path.join(directory, "task.json"), task)
 
 
+CHECKLISTS = (".wf/spec/pre-dev-checklist.md", ".wf/spec/quality-checklist.md")
+POINTER_SECTION = "## spec 指针"
+
+
+def _sync_one_checklist(path, *, add=None, remove=None, rename=None):
+    """把 per-spec 指针同步进 checklist 的固定段（设计稿 §6.1 的三段之一）。"""
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            text = handle.read()
+    except FileNotFoundError:
+        return
+    lines = text.splitlines()
+    if POINTER_SECTION not in lines:
+        lines.extend(["", POINTER_SECTION, "",
+                      "> 本节由 `spec-update` 自动维护，与 `index.md` 的规则条目一一对应。"])
+    head = lines.index(POINTER_SECTION)
+    tail = len(lines)
+    for index in range(head + 1, len(lines)):
+        if lines[index].startswith("## "):
+            tail = index
+            break
+    body = lines[head + 1:tail]
+    if remove:
+        body = [line for line in body if f"]({remove})" not in line]
+    if rename:
+        replaced = False
+        for index, line in enumerate(body):
+            if f"]({rename[0]})" in line:
+                body[index] = f"- [{os.path.basename(rename[1])}]({rename[1]})"
+                replaced = True
+        if not replaced:
+            add = rename[1]
+    if add and not any(f"]({add})" in line for line in body):
+        body.append(f"- [{os.path.basename(add)}]({add})")
+    lines[head + 1:tail] = body
+    records.atomic_write(path, "\n".join(lines).rstrip("\n") + "\n")
+
+
+def _sync_checklists(root, *, add=None, remove=None, rename=None):
+    for rel in CHECKLISTS:
+        _sync_one_checklist(join(root, rel), add=add, remove=remove, rename=rename)
+
+
+def _sync_all(root, *, add=None, remove=None, rename=None):
+    """三段同批同步：索引表 + 两份 checklist（设计稿 §6.1）。"""
+    _sync_index(root, add=add, remove=remove, rename=rename)
+    _sync_checklists(root, add=add, remove=remove, rename=rename)
+
+
 def _index_path(root):
     return join(root, ".wf/spec/index.md")
 
@@ -278,7 +373,7 @@ def _sync_index(root, *, add=None, remove=None, rename=None):
     replaced = False
     for index, line in enumerate(lines):
         if rename and f"]({rename[0]})" in line:
-            lines[index] = line.replace(f"]({rename[0]})", f"]({rename[1]})")
+            lines[index] = f"- [{os.path.basename(rename[1])}]({rename[1]})"
             replaced = True
     if rename and not replaced:
         # 索引里本来就没有旧条目（初始化骨架/被手工改乱/上次同步失败）：
@@ -560,7 +655,7 @@ def _apply_change(root, change, task, applied, resume=False):
             if resume:
                 action = _resume_decision_removal(root, change, relative, index, operation)
                 if action == "skip":
-                    _sync_index(root, remove=relative)
+                    _sync_all(root, remove=relative)
                     continue
             if operation == "delete" and os.path.exists(absolute):
                 os.unlink(absolute)
@@ -573,7 +668,7 @@ def _apply_change(root, change, task, applied, resume=False):
                     raise SpecError("WF_RECORD_INVALID",
                                     {"reason": "disabled spec is not parseable after rewrite",
                                      "path": relative, "problems": problems_after})
-            _sync_index(root, remove=relative)
+            _sync_all(root, remove=relative)
         applied.append({"operation": operation, "old_paths": old_paths, "new_paths": [],
                         "before_digests": change.get("before_digests") or [],
                         "after_digests": [], "reference_dispositions": []})
@@ -583,7 +678,7 @@ def _apply_change(root, change, task, applied, resume=False):
         if resume:
             action = _resume_decision_rename(root, change, source, target)
             if action == "skip":
-                _sync_index(root, rename=(source, target))
+                _sync_all(root, rename=(source, target))
                 _sync_curation_paths(root, source, target, (task or {}).get("id"))
                 applied.append({"operation": operation, "old_paths": old_paths, "new_paths": new_paths,
                                 "before_digests": [records.file_digest(join(root, target))],
@@ -593,7 +688,7 @@ def _apply_change(root, change, task, applied, resume=False):
         if os.path.exists(join(root, source)):
             os.makedirs(os.path.dirname(join(root, target)), exist_ok=True)
             os.rename(join(root, source), join(root, target))
-        _sync_index(root, rename=(source, target))
+        _sync_all(root, rename=(source, target))
         _sync_curation_paths(root, source, target, (task or {}).get("id"))
         applied.append({"operation": operation, "old_paths": old_paths, "new_paths": new_paths,
                         "before_digests": [records.file_digest(join(root, target))],
@@ -606,10 +701,10 @@ def _apply_change(root, change, task, applied, resume=False):
             action = _resume_decision(root, change, relative, content, index)
             if action == "skip":
                 # 正文已是本动作后像，但索引可能还没补：后置条件要分别核实，不能一起跳过
-                _sync_index(root, add=relative)
+                _sync_all(root, add=relative)
                 continue
         records.atomic_write(join(root, relative), content)
-        _sync_index(root, add=relative)
+        _sync_all(root, add=relative)
     applied.append({"operation": operation, "old_paths": old_paths, "new_paths": new_paths,
                     "before_digests": change.get("before_digests") or [],
                     "after_digests": [records.file_digest(join(root, relative)) for relative in new_paths],

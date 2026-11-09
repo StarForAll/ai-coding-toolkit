@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import re
 
+from . import protocol as protocol_mod
 from . import records
 from .paths import join
 
@@ -16,34 +17,19 @@ GLOBAL_CONFIG_REL = (".wf", "config.json")
 CONFIRMATIONS_REL = (".wf", "interpreters.json")
 PROJECT_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 
+# 阈值缺省与类型不在本模块：唯一存放处是 `protocol/thresholds.json`（机制稿 §8.1）。
+_THRESHOLDS = protocol_mod.thresholds()
+CONFIG_SCHEMA_VERSION = _THRESHOLDS["schema_version"]["default"]
 DEFAULTS = {
-    "tdd_default": False,
-    "review_file_hint": 3,
-    "review_line_hint": 80,
-    "split_file_hint": 8,
-    "split_line_hint": 400,
-    "merge_line_hint": 10,
-    "debug_repeat_threshold": 3,
-    "spec_verify_days": 90,
-    "spec_reclaim_tasks": 5,
-    "inspection_every_tasks": 10,
-    "spec_output_codepoints": 12000,
+    name: entry["default"]
+    for name, entry in _THRESHOLDS.items()
+    if entry.get("in_skeleton") and name != "schema_version"
 }
-
-POSITIVE_INT_KEYS = (
-    "review_file_hint",
-    "review_line_hint",
-    "split_file_hint",
-    "split_line_hint",
-    "merge_line_hint",
-    "debug_repeat_threshold",
-    "spec_verify_days",
-    "spec_reclaim_tasks",
-    "inspection_every_tasks",
-    "spec_output_codepoints",
-)
-
-KNOWN_KEYS = set(DEFAULTS) | {"schema_version", "project_id", "python_executable"}
+POSITIVE_INT_KEYS = tuple(name for name, entry in _THRESHOLDS.items() if entry.get("type") == "positive_int")
+# 取值为 0 表示"不设上界"的键：其余整型键仍要求正整数（机制稿 §8.1）
+ZERO_ALLOWED_KEYS = tuple(name for name, entry in _THRESHOLDS.items() if entry.get("type") == "int_zero_unbounded")
+ENUM_KEYS = {name: tuple(entry.get("values") or ()) for name, entry in _THRESHOLDS.items() if entry.get("type") == "enum"}
+KNOWN_KEYS = set(_THRESHOLDS)
 
 
 class ConfigError(Exception):
@@ -51,8 +37,12 @@ class ConfigError(Exception):
 
 
 def skeleton():
-    """发行骨架：缺省值齐全，不含 project_id 与 python_executable 的值。"""
-    payload = {"schema_version": 1, "project_id": None}
+    """发行骨架：缺省值齐全；不含 project_id 与 python_executable 的键。
+
+    `project_id` 由初始化/接入生成后才写入（机制稿 §8.1「不在骨架给值」），
+    `python_executable` 未设置即回落系统 python3；两者都保留已知键名以便校验放行。
+    """
+    payload = {"schema_version": CONFIG_SCHEMA_VERSION}
     payload.update(DEFAULTS)
     return payload
 
@@ -86,6 +76,16 @@ def load_project_config(root, *, allow_missing=False):
             value = config[key]
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
                 problems.append({"level": "field", "key": key, "message": f"{key} must be a positive integer"})
+    for key in ZERO_ALLOWED_KEYS:
+        if key in config:
+            value = config[key]
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                problems.append({"level": "field", "key": key,
+                                 "message": f"{key} must be an integer >= 0 (0 = no upper bound)"})
+    for key, allowed in ENUM_KEYS.items():
+        if key in config and config[key] not in allowed:
+            problems.append({"level": "field", "key": key,
+                             "message": f"{key} must be one of {list(allowed)}"})
     if "tdd_default" in config and not isinstance(config["tdd_default"], bool):
         problems.append({"level": "field", "key": "tdd_default", "message": "tdd_default must be a boolean"})
     executable = config.get("python_executable")
@@ -126,8 +126,15 @@ def value_of(config, problems, key):
         if not isinstance(value, bool):
             return None, f"{key} must be a boolean"
         return value, None
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-        return None, f"{key} must be a positive integer"
+    if key in ENUM_KEYS:
+        if value not in ENUM_KEYS[key]:
+            return None, f"{key} must be one of {list(ENUM_KEYS[key])}"
+        return value, None
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None, f"{key} must be an integer"
+    if value < 0 or (value == 0 and key not in ZERO_ALLOWED_KEYS):
+        return None, (f"{key} must be an integer >= 0 (0 = no upper bound)"
+                      if key in ZERO_ALLOWED_KEYS else f"{key} must be a positive integer")
     return value, None
 
 
