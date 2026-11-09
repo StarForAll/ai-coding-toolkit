@@ -127,7 +127,7 @@ Before finalizing a new command source asset:
 - [ ] Script has shebang, error handling, `--help` support
 - [ ] Follows [shell-conventions.md](../scripts/shell-conventions.md) for shell scripts
 - [ ] Has been deployed to target tool and verified working
-- [ ] If the command orchestrates external reviewer CLIs (for example `multi-cli-review` / `multi-cli-review-action`), the source docs explicitly include:
+- [ ] If the command orchestrates external reviewer CLIs, the source docs explicitly include:
   - reviewer task-dir root
   - review round number
   - how many reviewer commands the current mode emits by default (`lite` vs `full`)
@@ -144,7 +144,7 @@ Before finalizing a new command source asset:
 - **Hardcoded paths**: Use environment variables or config, not absolute paths
 - **Silent failures**: Always report status to stdout/stderr
 - **Mixed tool concerns**: Don't put Claude-specific logic in `commands/shell/`
-- **Unpaired reviewer handoff**: Commands that ask other CLIs to run reviewer work but fail to emit the matching `multi-cli-review-action` command for the current CLI
+- **Unpaired reviewer handoff**: Commands that ask other CLIs to run reviewer work but fail to emit the matching aggregator command for the current CLI
 - **Divergent reviewer prompts**: Default reviewer command pairs that differ in review description or `--review-focus` when the only intended difference is `--reviewer-id`
 
 ## Platform Drift Status (as of 2026-05-28)

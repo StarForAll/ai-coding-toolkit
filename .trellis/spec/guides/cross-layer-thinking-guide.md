@@ -59,7 +59,7 @@ source asset -> tool deployment copy -> README / skill instructions -> verificat
 ```
 
 ```text
-skills/multi-cli-review/SKILL.md -> reviewer report contract -> skills/multi-cli-review-action/SKILL.md -> aggregation / fix flow
+docs/workflows/wf/skills/wf-review/SKILL.md -> reviewer report contract -> docs/workflows/wf/skills/wf-review-action/SKILL.md -> aggregation / fix flow
 ```
 
 For each arrow, ask:
@@ -134,8 +134,8 @@ text still describe the old workflow
 
 ### Mistake 3.5: Paired Skill Drift
 
-**Bad**: Updating `skills/multi-cli-review/SKILL.md` or
-`skills/multi-cli-review-action/SKILL.md` alone when the shared multi-reviewer
+**Bad**: Updating `docs/workflows/wf/skills/wf-review/SKILL.md` or
+`docs/workflows/wf/skills/wf-review-action/SKILL.md` alone when the shared multi-reviewer
 protocol changed
 
 **Good**: Treat the reviewer skill and action skill as one contract; if either
@@ -177,7 +177,7 @@ After implementation:
 - [ ] Verified related docs/instructions were updated if behavior changed
 - [ ] Verified task-local artifacts are not the only memory surface when the
       workflow can loop across multiple tasks
-- [ ] If `multi-cli-review` or `multi-cli-review-action` changed, verified the paired skill was reviewed and updated when needed
+- [ ] If the workflow review pair (`wf-review` / `wf-review-action`) changed, verified the paired skill was reviewed and updated in the same change
 - [ ] Verified ambiguous paths are labeled as source repo, task runtime, or target project
 - [ ] Verified the relevant command/test path still passes end to end
 - [ ] Verified source-to-target drift detection checks content when the deployment contract depends on exact command/helper text, not just file presence

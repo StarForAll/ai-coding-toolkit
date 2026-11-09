@@ -137,7 +137,7 @@ fall through to tier 2, do not treat it as an error and never skip the restore.
 
 The old module has been retired (2026-10-28): its content left the repository, is not tracked,
 and no document may reference it. The module source is built fresh at
-`docs/workflows/新项目开发工作流/` — see plan §2.1. "Zero references to the old path anywhere in
+`docs/workflows/wf/` — see plan §2.1. "Zero references to the old path anywhere in
 the repo" is part of the P0 exit criteria.
 
 ---
@@ -176,8 +176,10 @@ throwaway fixture on 2026-10-28. Do not re-derive them from the docs.
   only cite it, never infer it.
 - `meta.wf.review = complex` marks the judgment (plan §9-C17 opened `meta.wf.*` to three fixed keys:
   `deps` / `review` / `paused`). Doctor reads it; nothing else does.
-- The pair `wf-task-review` / `wf-task-review-action` is module-owned (installed and uninstalled with
-  the module). Once it lands, the global `skills/multi-cli-review*` pair is removed everywhere.
+- The reviewer pair is workflow-owned (installed and uninstalled with its owning workflow). The retired
+  embedded module shipped it as `wf-task-review` / `wf-task-review-action`; the independent wf framework
+  ships `wf-review` / `wf-review-action`. The global `skills/multi-cli-review*` pair was removed from this
+  repository and from the user-level skill store on 2026-11-05.
 
 ---
 

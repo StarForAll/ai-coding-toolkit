@@ -41,55 +41,27 @@ skills/
 
 ---
 
-## Coupled Skill Contracts (CRITICAL)
+## Retired Coupled Skill Pair
 
-Some skills in this repository form a **single protocol surface** even though
-they live in separate directories.
+`skills/multi-cli-review/` and `skills/multi-cli-review-action/` were a mandatory
+coupled pair (one shared reviewer/aggregator protocol surface) until 2026-11-05.
+They are **retired and removed** from this repository and from the user-level skill
+store.
 
-Current mandatory coupled pair:
+The replacement pair lives in the wf module source, not here:
 
-- `skills/multi-cli-review/SKILL.md`
-- `skills/multi-cli-review-action/SKILL.md`
+- `docs/workflows/wf/skills/wf-review/`
+- `docs/workflows/wf/skills/wf-review-action/`
 
-> 2026-10-29：这对 skill 将由工作流内部版本 `wf-task-review` / `wf-task-review-action` 取代（契约见 plan §8.5）；内部版落地后本段与下方路径一起改指新位置，全局副本删除。
+Those two copies are **release assets** of the wf framework: they follow the
+framework's own contract (`docs/workflows/wf-framework-design.md` §6.5, §7.4) and
+its release/upgrade rules, not a repo-level paired-contract rule. When their shared
+protocol changes, change both copies in the same change and re-run
+`scripts/build-wf-release.py`.
 
-These two files must be treated as **one shared contract**:
-
-- reviewer-side report emission contract
-- aggregator-side report intake contract
-- shared path layout under `tmp/multi-cli-review/`
-- shared metadata fields such as `task-id`, `round`, `reviewer-id`, and `protocol`
-- shared role boundaries between reviewer and fixer
-- shared legacy compatibility expectations
-
-Keep this paired core contract workflow-agnostic. Coordinator-specific defaults
-such as reviewer-count defaults, round strategy, or command packaging belong in
-upstream workflow or command docs, not in the paired skills' core contract.
-
-### Required Rule
-
-If a change modifies **either** of these files in a way that can affect the
-shared protocol or role boundary, the other file must be reviewed and updated
-in the **same change**.
-
-Do not treat them as independently maintainable when changing:
-
-- path shapes or filenames
-- frontmatter / metadata fields
-- protocol names or protocol selection rules
-- reviewer-id or round handling
-- role boundaries such as "reviewer only" vs "current CLI only"
-- legacy compatibility parameters
-- output artifacts consumed by the paired skill
-
-### Minimum Verification For This Pair
-
-After editing either file:
-
-- confirm whether the paired skill also needs a matching change
-- read both diffs together before finishing
-- verify there is no protocol drift between reviewer output and action-side intake
-- verify task-level reviewer-id semantics remain aligned: slot letters in `reviewer-id`, actual CLI identity in `source-cli`
+Do not re-add a generic `multi-cli-review*` copy to `skills/`; workflow-specific
+review behavior belongs in the wf module source. The historical contract text is
+recoverable from Git history before the retirement commit.
 
 ---
 
@@ -290,7 +262,6 @@ npx skills add https://github.com/<owner>/<repo>
 - Forgetting to update version when making changes
 - Not specifying input format → users don't know what to provide
 - Making it tool-specific when it could be generic
-- Updating `multi-cli-review` or `multi-cli-review-action` alone when the shared protocol changed
 
 ---
 
