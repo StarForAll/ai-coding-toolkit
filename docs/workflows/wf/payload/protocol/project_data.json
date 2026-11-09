@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "note": "项目数据 ≠ 框架自有资产：这些路径由本项目管理（任务记录、项目自己的 spec、安装记录），升级不覆盖、可提交可归档。集合只在此声明，代码不另写前缀清单。",
+  "prefixes": [".wf/tasks/", ".wf/install/", ".wf/spec/"],
+  "files": [".wf/baseline.md", ".wf/project-config.json"]
+}

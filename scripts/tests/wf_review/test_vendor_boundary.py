@@ -102,3 +102,36 @@ class ProjectSpecIsNotVendorTest(unittest.TestCase):
         self.assertNotIn(".wf/spec/index.md", found)
         self.assertNotIn(".wf/spec/core/a.md", found)
         self.assertIn(".wf/lib/wflib/scope.py", found)
+
+
+class ProjectDataDeclarationTest(unittest.TestCase):
+    """项目数据集合只来自 protocol（前缀清单漏过 `.wf/spec/`，那类洞只能靠声明表堵住）。"""
+
+    def test_declaration_lists_the_project_data_paths(self):
+        from wflib import protocol
+
+        data = protocol.project_data()
+        self.assertIn(".wf/tasks/", data["prefixes"])
+        self.assertIn(".wf/spec/", data["prefixes"])
+        self.assertIn(".wf/baseline.md", data["files"])
+
+    def test_scope_reads_the_declaration_not_a_local_list(self):
+        source = (REPO / "docs/workflows/wf/payload/lib/wflib/scope.py").read_text(encoding="utf-8")
+        self.assertIn("protocol_mod.project_data()", source)
+        self.assertNotIn('data_prefixes = (".wf/tasks/"', source)
+
+    def test_spec_changes_reach_the_classifier_not_the_vendor_bucket(self):
+        import subprocess
+        import tempfile
+
+        from wflib import scope
+
+        with tempfile.TemporaryDirectory() as tmp:
+            subprocess.run(["git", "init", "-q"], cwd=tmp, check=True)
+            task = {"id": "2026-x", "entry_snapshot": {"touch_paths": [".wf/spec/**"]},
+                    "plan": {"touch_paths": [".wf/spec/**"]}}
+            (Path(tmp) / ".wf/spec").mkdir(parents=True)
+            (Path(tmp) / ".wf/spec/index.md").write_text("x", encoding="utf-8")
+            classified = scope.classify_candidates(tmp, task, receipts=())
+        self.assertEqual(classified["buckets"]["v"], [],
+                         "项目自己的 spec 不能进 vendor 桶")

@@ -221,7 +221,7 @@
       "target_relative": ".wf/lib/wflib/projection.py"
     },
     {
-      "digest": "sha256:9889462b38c97e7917daac43561a5442d484e9b0d7967a16573238a5e66e4728",
+      "digest": "sha256:433bc1a155018040a0b68a71e51d0db152fe253d31cd248a76421e6bff384432",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -281,7 +281,7 @@
       "target_relative": ".wf/lib/wflib/scale.py"
     },
     {
-      "digest": "sha256:15c6bfe1d815faab069db0bcf13d618680fa60e96ba1f726a6e98defdc3f0012",
+      "digest": "sha256:01e7889503dadd0459bee756871857e29ed70c8f4635a8957ecc5697153f04ff",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -359,6 +359,16 @@
       "source_path": "wf-release/protocol/codes.json",
       "target_class": "project_wf",
       "target_relative": ".wf/protocol/codes.json"
+    },
+    {
+      "digest": "sha256:5b85ef48ef96c83b90ef5aa93bcd04a6ed8cb7c3cf5e4594e2ca6bc629d0d9e9",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "protocol",
+      "required": true,
+      "source_path": "wf-release/protocol/project_data.json",
+      "target_class": "project_wf",
+      "target_relative": ".wf/protocol/project_data.json"
     },
     {
       "digest": "sha256:34a5e19ceed177ff1575d4d49343d742d6157715c588cad40eaa2817768ce127",
@@ -751,7 +761,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:85077250c6c1725cd2659e4dc6529f224d95ac2dbcd9fe235d7f0fe3db3de16d",
+    "rules_digest": "sha256:a851baa39f01ec63ae4cd7b11f8b8471690a6df2a878e85b1cf30990bdccc54b",
     "systems": [
       "linux"
     ],

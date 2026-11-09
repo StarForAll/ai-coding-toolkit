@@ -263,6 +263,19 @@ def thresholds(root=None):
     return _THRESHOLDS
 
 
+def project_data(root=None):
+    """项目数据（不是框架自有资产）的路径集合：前缀 + 具体文件。
+
+    集合只在本文件声明一次——此前散在 `scope.vendor_assets` 的前缀元组里，
+    已因此漏过 `.wf/spec/`（第二轮审查）。新增一类项目数据只改 protocol，不改代码。
+    """
+    payload = _load("project_data", root) or {}
+    return {
+        "prefixes": tuple(payload.get("prefixes") or ()),
+        "files": tuple(payload.get("files") or ()),
+    }
+
+
 def redaction(root=None):
     global _REDACTION
     if _REDACTION is None or root is not None:

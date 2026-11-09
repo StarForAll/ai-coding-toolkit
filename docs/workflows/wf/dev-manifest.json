@@ -220,6 +220,12 @@
    "executable": false,
    "kind": "protocol",
    "required": true,
+   "source_path": "payload/protocol/project_data.json"
+  },
+  {
+   "executable": false,
+   "kind": "protocol",
+   "required": true,
    "source_path": "payload/protocol/redaction.baseline.json"
   },
   {

@@ -454,8 +454,9 @@ def classify_candidates(root, task, receipts=None):
         if _is_control_record(path, task_id, installed, root):
             buckets["b"].append(path)
             continue
-        if is_vendor(path):
-            buckets["v"].append(path)      # K5：框架自有资产，不进交付面/审查/业务提交
+        if is_vendor(path) and not is_project_data(path):
+            # K5：框架自有资产不进交付面/审查/业务提交；**项目数据**（`.wf/spec/**` 等）照常参与分类
+            buckets["v"].append(path)
             continue
         owned = path in attributed or any(paths_mod.match_path(entry_pattern, path) for entry_pattern in touch_paths)
         in_scope = any(paths_mod.match_path(entry_pattern, path) for entry_pattern in touch_paths)
@@ -571,6 +572,19 @@ def workspace_groups(root, task):
     return classify_candidates(root, task)
 
 
+def is_project_data(path, root=None):
+    """该路径属**项目数据**（任务记录/项目自己的 spec/安装记录/基线/配置），不是框架自有资产。
+
+    集合来自 `protocol.project_data()`，代码里不另写前缀清单——前缀清单一度漏了 `.wf/spec/`，
+    那类洞只能靠"声明表"堵住。
+    """
+    from . import protocol as protocol_mod
+
+    data = protocol_mod.project_data()      # protocol 目录由加载器自己定位，不传项目根
+    text = str(path)
+    return text.startswith(tuple(data["prefixes"])) or text in tuple(data["files"])
+
+
 def vendor_assets(root, task, paths):
     """提交面里的**框架自有资产**：`.wf/**` 且不属于本任务控制记录/维护组。
 
@@ -583,13 +597,13 @@ def vendor_assets(root, task, paths):
     # 项目数据（不是框架自有资产）：任务记录、**项目自己的 spec**、安装记录。
     # `.wf/spec/**` 由 spec.update 写入、不被升级覆盖（实现方案 §"项目数据落点表"），
     # 漏了它会让初始化任务与日常 spec 更新都归不了档。
-    data_prefixes = (".wf/tasks/", ".wf/install/", ".wf/spec/")
-    data_files = (".wf/baseline.md", ".wf/project-config.json", ".wf/writer.json")
+    task_id = (task or {}).get("id")
+    installed = installed_asset_paths(root)
     found = []
     for path in paths or []:
         if not is_vendor(path):
             continue
-        if path.startswith(data_prefixes) or path in data_files:
+        if is_project_data(path):              # 集合只来自 protocol，不在这里列前缀
             continue
         if _is_control_record(path, task_id, installed, root):
             continue
