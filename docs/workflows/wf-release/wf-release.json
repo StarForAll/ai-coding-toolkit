@@ -81,7 +81,7 @@
       "target_relative": ".wf/lib/wflib/authorize.py"
     },
     {
-      "digest": "sha256:3ce731c6f2583fe5ffb2dac68dd4ff9d7c003e6e3ad86cd4621350551821d7ae",
+      "digest": "sha256:4b571b0d8bf9a2df5388f0176eb5be0341ca9f5b3bea63c6700e877c9848092d",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -761,7 +761,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:622026f53aaa3dea04f4f867cf3b2afb2a5f4516fd004245f253d42c119c230e",
+    "rules_digest": "sha256:6c985e1f87b19df8273c6a42de1f6c130fc8d2a1974be1634b0cb929c8c38a6e",
     "systems": [
       "linux"
     ],

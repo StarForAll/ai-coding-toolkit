@@ -808,7 +808,20 @@ def run_check(ctx, task, decisions, review_notes_path):
     # ①' 知识兜底：按真实触碰路径重匹配，漏策展/未核实一律阻断
     coverage = _spec_coverage(ctx, task, decisions)
     if coverage["missing_curation"] or coverage["unresolved"] or coverage["period_problems"]:
-        raise CheckError("WF_SPEC_INCOMPLETE", dict(scope_facts, spec=coverage))
+        # 出口要可执行，先得说清缺什么：把"缺哪几条"提到 facts 顶层（否则 AI 只看到一句
+        # "分批读取全文后重试"，不知道读哪条——这是 K10 的落实，不是措辞偏好）。
+        missing_paths = sorted({item.get("path") if isinstance(item, dict) else str(item)
+                                for item in (coverage.get("missing_curation") or [])}
+                               | {item.get("path") if isinstance(item, dict) else str(item)
+                                  for item in (coverage.get("unresolved") or [])})
+        exits = ["对缺策展的 spec 先 `task-curate --spec <路径>`",
+                 "对未核实的 spec 用 `spec --file <路径>` 完成读取留痕，或按设计稿 §6.2 处置",
+                 "到期/待核项按 `verify resolve` 或重新核实后重入 Check"]
+        raise CheckError("WF_SPEC_INCOMPLETE",
+                         dict(scope_facts, spec=coverage, missing=missing_paths,
+                              missing_curation=coverage.get("missing_curation"),
+                              unresolved=coverage.get("unresolved"),
+                              period_problems=coverage.get("period_problems"), exits=exits))
 
     scan_before = fingerprint.items(ctx.root, object_paths(ctx, task))
     anchor, parts = current_anchor(ctx, task)

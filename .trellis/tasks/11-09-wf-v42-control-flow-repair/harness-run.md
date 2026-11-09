@@ -444,3 +444,24 @@ R18 缺哪条留痕、为什么缺。**不再猜**。
 | **乙** | 只在夹具侧绕过（直接读侧车判断） | 不改产品，但 AI 在真实使用中仍然看不到缺哪条 |
 
 我倾向 **甲**：这是"出口可执行性"的真实缺口，不是测试问题。
+
+## 甲方案落地：`WF_SPEC_INCOMPLETE` 现在说清缺哪一条（2026-11-09 末）
+
+check 的抛出点补齐为（`check.py` 的 `_spec_coverage` 分支）：
+
+```json
+{"code": "WF_SPEC_INCOMPLETE",
+ "facts": {"missing": [".wf/spec/expired.md"],
+           "missing_curation": [...], "unresolved": [...], "period_problems": [...],
+           "exits": ["对缺策展的 spec 先 `task-curate --spec <路径>`",
+                     "对未核实的 spec 用 `spec --file <路径>` 完成读取留痕，或按设计稿 §6.2 处置",
+                     "到期/待核项按 `verify resolve` 或重新核实后重入 Check"]}}
+```
+
+实测（r17r24）：**原来的"分批读取全文后重试"变成了"缺 `.wf/spec/expired.md` + 三条可执行出口"**。
+这正是 K10 要的效果：AI 不必试错就能知道下一步做什么。
+
+### 顺带得到 r17r24 的精确剩余项
+
+`missing: [".wf/spec/expired.md"]` —— 该 spec 是"到期规则"场景，按设计稿 §6.2 需要
+`verify resolve` 或重新核实；属**夹具要按新口径补一步**，不是产品缺陷。
