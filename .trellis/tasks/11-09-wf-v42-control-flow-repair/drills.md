@@ -21,6 +21,9 @@
 
 ## 发现 1（已修）：删除 `task-rework` 会让**部署自检失败**
 
+> 更正：v42 全文**没有**提到 `task-rework`（0 次）。我当时以为"v42 §4 要求删除"，属**误判出处**；
+> 该命令是 `wf-framework-implementation.md` 的**第二轮交付项**。详见 `rework-conflict.md`。
+
 我按 v42 §4 删掉了 `task-rework` 命令桩，结果部署自检报
 `handler entry missing: task-rework / required_step: control.task.rework` → `WF_CAPABILITY_UNAVAILABLE`，
 **writer 停在维护持有**，之后所有普通命令都 `WF_WRITER_BUSY`。
