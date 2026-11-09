@@ -756,6 +756,8 @@ attempts 每项为 `{number, rework_ref, round_ids, outcome}`；原 T 经返工 
 不登记协议键。`ask_always` 的类必须 `escalated` 交人，不得自行决定；`ai_decides` 下发生的越界升级必须写 `why`
 （为什么判断不了）。`pref_kind` 属可选展示信息，不校验。
 
+**试点期抽样**：每个任务收工时由框架按固定种子从骨架事件集里确定性选取 2 条（首个任务 1 条，优先关闭类；缺该事件类时改抽归属类）供人复核；冻结后补写只增不改骨架与选样结果，AI 不得自行挑选事件。缺选样即阻断归档（`task.sampled` 步骤），出口是跑一次选样。
+
 **展开为空的确认不可用**：K6 确认里声明的模式若在仓库中匹配不到任何实际文件（glob 展开为空），该条确认不算覆盖，
 按"确认不可用"处理并在 facts 里列出空展开的模式——人确认了一片不存在的区域，不能当作已确认。
 
@@ -930,6 +932,7 @@ task.due 取 before_execute/before_check/before_archive/after_archive，表示�
 | `task.knowledge-disposed` | once / all | before_archive / 当前规划 + 当前知识处置及相关规范指纹 | knowledge 非空、curation 显式存在；无更新也是实际处置 |
 | `task.retrospective-done` | once / retrospective | before_archive / 当前触发事实集合 | 适用由触发事实集合决定，触发集合是 gate 时的派生视图、不落第二持久清单：从 rework_of 反向集合的全部成员、reviews 历史 result=fail 与 debug-ruling“同一问题”裁定条目及其 subject/证据引用的调试证据重建（调试证据不限定 check_history 条目类型：check_history 的 failed 最终结果条目、execution.actions 的 failed 结果及其 output_refs/verification_refs、handoff 材料均可承载，核对所引证据仍真实存在即可，Execute 期裁定凭原证据可重建）。返工（本任务 rework_of 反向集合的全部成员）与审查失败（reviews 历史 result=fail）语义机械可判，任一成立即适用且复盘 required。重复调试经两层判定：机械检测（本文 §8.1：同一 verification_id 的双源合并 failed 累计达到 debug_repeat_threshold，合并与判重规则唯一见本文 §1.3）只产生 WF_SEMANTIC_DECISION 待决项，不独自决定“同一问题”；裁定留痕位置为 execution.human_decisions 的 debug-ruling 条目（id 形式、结构、写者与消费判据见本文 §1.3）——人确认属同一问题重复调试后该待决项转正为触发事实、复盘 required；人裁定为不同问题时裁定条目留痕，该倍数不再追问，该 verification_id 的双源合并 failed 累计保留；合并累计每新跨过 debug_repeat_threshold 的整数倍（即合并累计数首次达到阈值，及其后每再增加 debug_repeat_threshold 次达到新的整数倍）时重新产生待决项，已裁定倍数留痕不重复追问，仅新跨过整数倍的累计待裁定。归档门禁核对 retrospective 适用条件时，要求机械检测已产生的各整数倍均有对应 debug-ruling 裁定条目，无裁定的新倍数即未裁定待决项、阻断归档（出口 WF_SEMANTIC_DECISION），不倒推为无触发。Execute 期漏计兜底：check_history 之外的重复调试由人/主会话在 continue/finish 声明，入口核其引用的调试证据（execution.actions 的 failed 结果及其 output_refs/verification_refs、handoff 材料）真实存在，逐项核对 counted 由证据引用支撑并写入 debug_declarations 条目，判重按本文 §1.3 的分工执行——脚本核证据引用与可比对字段一致，同一事件的剔除结果结构化保存为声明条目的 dedupe_refs，合并累计从结构化字段求和（判定结论属人判语义、依据文本入裁定 reason），核定次数并入双源合并累计、达到新整数倍后按同一 debug-ruling 条目形式留痕；verification_id 只作证据关联辅助。retrospective.evidence（本文 §1.3 既有字段）保存复盘所覆盖触发事实的引用（含对应裁定条目 id）；P 取当前全集（不剔除已被历史复盘覆盖的条目）：gate 要求 retrospective.evidence 引用覆盖 P 中每个 ref 且 conclusion 非空，复盘后新增事实使全集变大、P 与 occurrence 随之变化形成新期次，未覆盖项因此必须补做；“历史复盘不能覆盖新增触发事实”按整数倍与触发事实重建核对——复盘之后新跨过的倍数、新增的返工或审查失败事实不属于已覆盖范围，须另行满足。未产生任何触发事实时人仍可要求复盘（对齐设计稿 §4.4「其余任务可选」）：由人在 continue/finish 提出，入口经 `task.retrospect`（本文 §11.3）记录 retrospective 并置 required=false，结论照记，**不进入 applies 判定**（可选复盘不构成门禁），也不新增独立声明字段 |
 | `task.changes-persisted` | repeatable / all | before_archive / 当前交付指纹及待提交组 | 本任务改动按许可持久化、无未处理业务 WIP；只读核 Git 与授权 |
+| `task.sampled` | repeatable / all | before_archive / 已冻结选样（种子 + 事件集） | 收工前必须跑过一次试点期抽样（事件由框架确定性选取，AI 不可挑选）；AI 不可挑选事件，缺选样即阻断并给「跑 sampling pick」出口 |
 | `task.archived` | once / all | after_archive / 归档 action.id | 正常终态、移动及归档提交可核；本文 §5.3 的提交后只读后置 |
 
 下表定义 task 分派键的唯一投影 P；字段名是规范 JSON 键，值从已有记录读取。通用 `occurrence=H("wf-step-occurrence-v1", C({task_id, step_id, P}))`；回执按**可核判据**分两类——gate 处理器是否读取 rule_version 或规则正文：读取者为规则类，不读者为内容类。规则类（task.check-passed、task.tdd-verified、task.review-passed、task.changes-persisted——changes-persisted 的门禁核查 rules_digest 与发行规则兼容，属规则行为）为 `anchor=H("wf-step-anchor-v1", C({rule_version, P}))`，内容类（task.plan-approved、task.knowledge-disposed、task.retrospective-done、task.spec-loaded、task.work-satisfied——后两者的 gate 分别只读会话侧车/全文读取事实与批准目标/实际交付/execution.actions，不读规则内容）为 `anchor=H("wf-step-anchor-v1", C(P))`：内容类 P 只含内容键（plan_version、内容摘要、读取事实、触发事实集合等），不含发行规则标识（`effective_rule_version`），发行规则字节变化不改变其期次与锚点；项目内 spec/基线/配置/定义快照属本文 §3.2 的规则输入，是内容键的一部分，其变化经 content_digest 产生新期次（见本节 P 说明）。P 不包含本回执自身、临时路径、渲染文本或时钟。items/refs/paths 按稳定 id/路径排序；缺所需值即未满足，不以 null 摘要补齐。check_anchor 按本文 §3.2 的定义取值（哈希域名与键集合见该处），输出摘要不包含 check.result/该步骤回执。
@@ -944,6 +947,7 @@ task.due 取 before_execute/before_check/before_archive/after_archive，表示�
 | `task.review-passed` | `{check_id, check_anchor}` | 当前 reviews.result、CLI 声明与报告锚点 |
 | `task.knowledge-disposed` | `{plan_version, knowledge_digest, specs: [{path, digest}]}` | knowledge、curation 和实际规范；knowledge_digest 取 knowledge 的规范 JSON 哈希 |
 | `task.retrospective-done` | `{triggers: [{kind, ref}]}` | triggers 取当前全集（不剔除历史复盘已覆盖项），按 kind+ref 排序去重；retrospective 与派生的触发集合（按本文 §11.2 gate 格从既有判定记录重建，不落第二持久清单）：kind 为 rework/review_fail/debug_repeat，ref 为任务/轮次/check 历史（check_history）条目或裁定条目证据引用（execution.actions 的 failed 结果及其 output_refs/verification_refs、handoff 材料）；debug_repeat 触发核 execution.human_decisions 的 debug-ruling 裁定条目（本文 §1.3）及其证据引用的调试证据（不限定 check_history 条目类型，核对所引证据仍真实存在即可），机械检测已产生的各整数倍均有对应裁定条目 |
+| `task.sampled` | `{seed, picks: [Event]}` | 已冻结的选样；冻结后补写只增不改骨架与选样结果 |
 | `task.changes-persisted` | `{content_digest, paths: [RepoPath]}` | 本任务精确路径组的 Git 持久化与授权，不把本回执写入列为自身前置 |
 | `task.archived` | `{archive_action_id}` | 归档记录、移动目标和提交后只读断言；只派生后置，不追加任务回执 |
 

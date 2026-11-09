@@ -21,6 +21,8 @@ TASK_STEP_SPECS = (
     ("task.knowledge-disposed", "once", "all", "before_archive"),
     ("task.retrospective-done", "once", "retrospective", "before_archive"),
     ("task.changes-persisted", "repeatable", "all", "before_archive"),
+    # §0.2 抽样只在收工前执行：归档前必须有一次已冻结的选样（AI 不可挑选事件）
+    ("task.sampled", "repeatable", "all", "before_archive"),
     ("task.archived", "once", "all", "after_archive"),
 )
 
@@ -29,6 +31,7 @@ RULE_CLASS_STEPS = (
     "task.tdd-verified",
     "task.review-passed",
     "task.changes-persisted",
+    "task.sampled",
 )
 
 # 机制稿 §11.3 状态动作的固定名称（scope=control）
@@ -466,6 +469,9 @@ def compute_P(ctx, task, step_id, *, check=None, rule_version=None):
             "content_digest": check_mod.object_content_digest(ctx, task),
             "paths": sorted(check_mod.object_paths(ctx, task), key=lambda value: value.encode("utf-8")),
         }
+    if step_id == "task.sampled":
+        frozen = (task.get("sampling") or {}).get("frozen") or {}
+        return {"seed": frozen.get("seed"), "picks": frozen.get("picks") or []}
     if step_id == "task.archived":
         return {"archive_action_id": (task.get("action") or {}).get("id")}
     raise KeyError(step_id)
@@ -732,6 +738,14 @@ def verify_step(ctx, task, step_id, *, rule_version=None):
         if not retrospective.get("conclusion"):
             return False, "WF_SEMANTIC_DECISION", {"reason": "retrospective conclusion missing"}
         return True, None, {}
+    if step_id == "task.sampled":
+        frozen = (task.get("sampling") or {}).get("frozen") or {}
+        if not frozen.get("picks"):
+            return False, "WF_SEMANTIC_DECISION", {
+                "reason": "收工前必须先跑 §0.2 抽样（事件由框架确定性选取）",
+                "exits": ["跑 `wf sampling pick --task <id>` 生成选样后重入"],
+            }
+        return True, None, {"picks": len(frozen.get("picks") or [])}
     if step_id == "task.changes-persisted":
         return tasks_mod.changes_persisted_fact(ctx, task)
     if step_id == "task.archived":
@@ -850,6 +864,17 @@ def final_gate(ctx, task, ignore_action_id=None):
     check = task.get("check") or {}
     if check.get("result") != "pass":
         return False, "WF_CHECK_FAILED", {"reason": "current check is not pass", "check": check.get("id")}
+    # 「判断不了」只挂起最终结论，不冻结中途动作（v42 §5.3）：在归档口拦下即可
+    escalated = [item for item in (task.get("judgments") or [])
+                 if isinstance(item, dict) and item.get("outcome") == "escalated"]
+    if escalated:
+        return False, "WF_SEMANTIC_DECISION", {
+            "escalated": [{"kind": item.get("kind"), "question": item.get("escalated_question")}
+                          for item in escalated],
+            "reason": "有判断被 escalated 交人：最终结论挂起，等人回答",
+            "exits": ["人回答后用 kind 相同的新 judgment 收口（supersedes 指向被挂起那条）",
+                      "人直接裁定本轮不继续，按设计稿 §5.6 异常归档"],
+        }
     # S5b/4.9：required 验收项未核实 → 阻断收工（只能收窄四项或异常归档，不接受"接受风险"）
     from . import projection as projection_mod
 
