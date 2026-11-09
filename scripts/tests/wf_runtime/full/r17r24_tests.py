@@ -395,6 +395,8 @@ rc_busy, busy_payload, _ = wf(["archive", "--task", task23, "--decision",
 # 这里构造的是**已释放**的场景，所以应得后者之外的这一码——语义仍成立：无写权不得续做。
 rec("R23 无写权不得续做", "WF_SEMANTIC_DECISION 或 WF_WRITER_BUSY", (busy_payload or {}).get("code"),
     (busy_payload or {}).get("code") in ("WF_SEMANTIC_DECISION", "WF_WRITER_BUSY"))
+if (payload or {}).get("code") != "WF_OK":
+    print("R23 重入 archive reason:", json.dumps((payload or {}).get("facts") or {}, ensure_ascii=False)[:400])
 # 对象仍处于 paused：先恢复，再取写权，然后才能重入续做归档
 wf(["task-resume", "--task", task23, "--json"], {"generation": cur_gen()}, "sess-U23")
 wf(["writer", "acquire", "--task", task23, "--json"], {"generation": cur_gen()}, "sess-U23")

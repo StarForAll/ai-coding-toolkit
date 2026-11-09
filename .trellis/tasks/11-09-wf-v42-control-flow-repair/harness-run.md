@@ -605,3 +605,37 @@ R23 段：`task-pause → release → archive(拒) → task-resume → writer ac
 项目数据集合改 protocol 声明、归档 pathspec、`WF_SPEC_INCOMPLETE` 透出缺项、未知 choice 静默丢弃。
 
 方法教训：**先取 code+facts 原文，再形成假设**；**改夹具先分清正向步骤与负路径断言**。
+
+## R23 末条：拿到真实原因（2026-11-09 末）
+
+打印该次 archive 的 facts，得到：
+
+```json
+{"internal_review": null, "internal_review_axes": [],
+ "tdd": {"reason": "red and green must reference different runs", "ref": "v2"},
+ "object_paths": [".wf/baseline.md", ".wf/project-config.json", "area22/r22.txt"]}
+```
+
+**两个具体成因**（都不是归档本身的问题，而是前置 Check 不成立）：
+
+1. `internal_review: null` —— 该 Check 没有有效的内部审查两轴（`--review-notes` 未生效或被覆盖）；
+2. `tdd` 拒绝：**red 与 green 引用了同一次运行**（`ref: v2`）——这恰好是 R22 段
+   `/tmp/r22_notes_same.json` 构造的"红绿同一条"场景，被 R23 的 Check 继承了下来；
+3. `object_paths` 里出现 `area22/r22.txt`，说明当前对象集合仍含上一段的内容。
+
+### 结论
+
+R23 的末条**不是"归档续做"的问题**，而是**前置 Check 状态被上一段污染**：
+夹具在 R22→R23 之间没有把 review notes 与 TDD 证据重置干净。
+
+### 下一步（明确）
+
+在 R23 段开头补一份**干净的 review notes**（`standard/requirement` 都 pass，且不带 `tdd_evidence`），
+并确认 `clean()` 之后对象集合只含 `area23/**`，再重跑。这属夹具状态隔离问题。
+
+## 至此的套件总账
+
+| 套件 | 结果 |
+|---|---|
+| r31r34 / r59 / r60 / r61 | ✅ 全绿 |
+| r17r24 | 27/28，末条成因已定位（前置 Check 被上一段污染） |
