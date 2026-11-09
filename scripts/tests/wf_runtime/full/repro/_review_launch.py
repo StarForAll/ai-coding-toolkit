@@ -85,5 +85,13 @@ def launch(project, root, sid, task_id):
                             "subject": ["授权外发审查材料"], "choice": "export"},
         "submitted_scope": {"diff": True, "requirement": True, "test_results": True},
     }, open(request, "w", encoding="utf-8"), ensure_ascii=False)
+    # K6 第 3 类：外发要以"确认入库"为准，请求里的 export_decision 只是声明
+    auth = os.path.join(root, "export-auth.json")
+    json.dump([{"choice": "export", "paths": ["pkg/**"], "quote": "人同意把材料外发给审查 CLI"}],
+              open(auth, "w"), ensure_ascii=False)
+    rc_auth, payload_auth = H.cli(project, ["authorize", "record", "--task", task_id, "--file", auth, "--json"],
+                                  sid=sid, inputs={"generation": H.generation(project)})
+    if rc_auth != 0:
+        raise H.Precondition(f"authorize record(export) 失败：{payload_auth}")
     return H.cli(project, ["review-launch", "--task", task_id, "--launch-request", request, "--json"],
                  sid=sid, inputs={"generation": H.generation(project)})

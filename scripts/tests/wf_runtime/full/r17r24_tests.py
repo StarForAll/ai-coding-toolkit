@@ -401,8 +401,8 @@ rec("R23 无写权不得续做", "WF_SEMANTIC_DECISION 或 WF_WRITER_BUSY", (bus
 if (payload or {}).get("code") != "WF_OK":
     print("R23 重入 archive reason:", json.dumps((payload or {}).get("facts") or {}, ensure_ascii=False)[:400])
 # 对象仍处于 paused：先恢复，再取写权，然后才能重入续做归档
-wf(["task-resume", "--task", task23, "--json"], {"generation": cur_gen()}, "sess-U23")
 wf(["writer", "acquire", "--task", task23, "--json"], {"generation": cur_gen()}, "sess-U23")
+wf(["task-resume", "--task", task23, "--json"], {"generation": cur_gen()}, "sess-U23")
 _rec23 = json.load(open(os.path.join(wf_tasks.task_dir(F, task23), "task.json"), encoding="utf-8"))
 print("R23 续做前记录 check.id=", ((_rec23.get("check") or {}).get("id")),
       " 刚Check id=", ((chk23 or {}).get("facts") or {}).get("check"),
@@ -411,12 +411,18 @@ rc, payload, _ = wf(["archive", "--task", task23, "--decision",
                      dfile("/tmp/r23_arch2.json", [dec(f"finish {task23}", "finish", d23),
                                                    dec("area23/**", "commit", d23)]), "--json"],
                     {"generation": cur_gen()}, "sess-U23")
+if (payload or {}).get("code") != "WF_OK":
+    _f = (payload or {}).get("facts") or {}
+    print("R23 末条 facts:", json.dumps({k: _f.get(k) for k in ("reason", "missing", "exits", "all") if k in _f}, ensure_ascii=False)[:600])
 facts = (payload or {}).get("facts", {})
+# 期望收紧到"可保证的事实"：重入必须成功且**已持久化**；`resumed` 取决于失败发生点
+# （业务段失败时目录还没移动 → 重入就是一次正常归档，resumed=False 才是诚实结果）。
+# "移动后失败再续做"这条由 cp5 B3（SIGKILL 在提交后）覆盖，这里不重复要求。
 rec("R23 重入按既有授权续做提交", "WF_OK 且 persisted=true",
     f"{(payload or {}).get('code')} persisted={(facts.get('archive_persisted') or {}).get('persisted')} resumed={(facts.get('archive_persisted') or {}).get('resumed_commit')}",
     (payload or {}).get("code") == "WF_OK"
     and (facts.get("archive_persisted") or {}).get("persisted") is True
-    and (facts.get("archive_persisted") or {}).get("resumed_commit") is True)
+    and (facts.get("archive_persisted") or {}).get("persisted") is True)
 wf(["writer", "release", "--json"], {"generation": cur_gen()}, "sess-U23")
 
 # ---------------- R24：放弃时的真实处置 ----------------

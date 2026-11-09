@@ -6,6 +6,7 @@ obligation（设计稿 §8.2「判定物与原因码」）：每一枚码都必�
 
 注入形态：把一枚码的档位改成非法值（档位是判定物的一部分，不是注释）。
 """
+import json
 import os
 import sys
 
@@ -24,8 +25,9 @@ def check():
     from wflib import codes as C
 
     problems = []
-    if len(C.CODES) != 35:
-        problems.append(f"码表不是 35 枚：{len(C.CODES)}")
+    expected = len(json.load(open(os.path.join(H.PAYLOAD, "protocol", "codes.json"), encoding="utf-8"))["codes"])
+    if len(C.CODES) != expected:
+        problems.append(f"码表与 protocol 不一致：{len(C.CODES)} vs {expected}")
     for code, spec in C.CODES.items():
         if not isinstance(code, str) or not code.startswith("WF_"):
             problems.append(f"码名不合规：{code!r}")

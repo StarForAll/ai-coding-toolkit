@@ -1169,6 +1169,10 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None):
         imported = [entry for entry in reviews.get("imported") or [] if int(entry.get("round") or 0) == int(round_no)]
         anchor, _parts = _current_anchor(ctx, task)
         distinct = []
+        problems = []       # 输入不成立：报告/身份/锚点/材料不合规 → 拒绝，不写结论
+        failures = []       # 有效审查给出的未通过结论 → 记 fail，成为复盘触发事实
+        proposers = {}      # finding id → 提出它的报告（K4b：关闭不得自证）
+        gaps_out = []       # uncovered 轴形成的缺口（走 4.8/4.9，不进 failures）
         if unavailable:
             verdict = "unavailable"
             facts = {"unavailable": unavailable}
@@ -1219,10 +1223,6 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None):
             declared_slots = {slot.get("slot"): slot.get("reviewer_cli")
                               for slot in (launch or {}).get("slots") or []
                               if isinstance(slot, dict) and slot.get("slot")}
-            problems = []       # 输入不成立：报告/身份/锚点/材料不合规 → 拒绝，不写结论
-            failures = []       # 有效审查给出的未通过结论 → 记 fail，成为复盘触发事实
-            proposers = {}      # finding id → 提出它的报告（K4b：关闭不得自证）
-            gaps_out = []       # uncovered 轴形成的缺口（走 4.8/4.9，不进 failures）
             for entry in imported:
                 rel = entry.get("report_path")
                 if not rel:

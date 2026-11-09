@@ -86,6 +86,14 @@ def run_review(project, root, task_id, task_dir, slot_clis, sid="sess-R", axes=N
                "readable_scope": {"paths": ["pkg/**"]}, "exclusions": []}
     launch_path = os.path.join(root, "launch.json")
     json.dump(request, open(launch_path, "w"), ensure_ascii=False)
+    # K6 第 3 类：材料外发必须有对应确认入库（请求里的 export_decision 只是声明）
+    auth = os.path.join(root, "export.json")
+    json.dump([{"choice": "export", "paths": ["pkg/**"], "quote": "人同意把材料外发给审查 CLI"}],
+              open(auth, "w"), ensure_ascii=False)
+    rc, payload = H.cli(project, ["authorize", "record", "--task", task_id, "--file", auth, "--json"],
+                        sid=sid, inputs={"generation": H.generation(project)})
+    if rc != 0:
+        raise H.Precondition(f"authorize record(export) failed: {payload}")
     rc, payload = H.cli(project, ["review-launch", "--task", task_id,
                                   "--launch-request", launch_path, "--json"],
                         sid=sid, inputs={"generation": H.generation(project)})
