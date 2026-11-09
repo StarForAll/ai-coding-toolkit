@@ -343,3 +343,25 @@ make_task(20b)    → WRITER_BUSY → KeyError
 - 回执链路：`r60`/`r61` 全绿；
 - 会话/顺序类问题：`r31r34`、`r59` 全绿（靠**正确复现顺序** + 显式 sid）；
 - `r17r24`：从“KeyError 连锁”推进到明确的单点卡（`spec-loaded`）。
+
+## r17r24 的 `spec-loaded` 卡点：已查清"怎么满足"（2026-11-09 末）
+
+`task.spec-loaded` 的判定读的是**会话侧车** `.wf/.runtime/spec-reads/<session_key>.json`：
+
+- 写入者：`spec.record_read(root, key, path, complete=..., deliver_codepoints=..., budget=...)`
+- 判定：`tasks.spec_read_state()` 要求策展清单里**每条未释放的 spec 都有 `complete=True` 的读取记录**
+- 缺任何一条 → `WF_SPEC_INCOMPLETE`（exit：分批读取全文后重试）
+
+所以 r17r24 需要的夹具动作是：**按当前口径"分批读取 spec 全文"并记录**（走产生该侧车的入口），
+而不是只 `spec --file` 看一眼。这也说明 `spec` 命令与"读取留痕"是两件事——
+夹具必须显式完成"读取留痕"。
+
+### 状态收口
+
+| 套件 | 状态 |
+|---|---|
+| `r60` / `r61`（回执链路） | ✅ 全绿 |
+| `r31r34` / `r59` | ✅ 全绿（正确复现顺序 + 显式 sid） |
+| `r17r24` | 单点：缺 `spec-loaded` 的读取留痕 |
+
+下一轮：给 r17r24 补读取留痕，再按同一方法重验 `cp2`/`cp4`/`cp5`/`r58`/`r75`。
