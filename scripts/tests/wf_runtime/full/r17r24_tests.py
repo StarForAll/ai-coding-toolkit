@@ -46,7 +46,7 @@ def wfok(label, args, inputs=None, sid="sess-U1"):
     """
     rc, payload, out = wf(args, inputs, sid)
     if rc != 0:
-        print(f"[STOP] {label} 原文:", (out or "")[:600])
+        print(f"[STOP] {label} 原文:", (out or "")[:2500])
         raise SystemExit(1)
     return rc, payload, out
 
@@ -178,8 +178,8 @@ rc, payload, _ = wfok("task-check", ["task-check", "--task", task20a, "--review-
 json.dump((payload or {}).get("facts"), open("/tmp/r20_facts.json", "w"), ensure_ascii=False)
 rec("R20 准备：Check", "WF_OK", f"{(payload or {}).get('code')} facts={json.dumps((payload or {}).get('facts'), ensure_ascii=False)[:400]}", rc == 0)
 wf(["task-knowledge", "--task", task20a, "--decision", "no-update", "--json"], {"generation": gen20a}, "sess-U20a")
-wf(["sampling", "pick", "--task", task20a, "--freeze", "--json"],
-                       {"generation": gen20a})   # 归档前置：先冻结并落盘选样
+wfok("sampling", ["sampling", "pick", "--task", task20a, "--freeze", "--json"],
+                       {"generation": gen20a}, "sess-U20a")   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wfok("archive", ["archive", "--task", task20a, "--decision",
                      dfile("/tmp/r20_arch.json", [dec(f"finish {task20a}", "finish", d20a),
                                                   dec(".wf/spec/**", "commit", d20a)]),
@@ -346,8 +346,8 @@ open(os.path.join(F, "area23/r23.txt"), "w").write("r23\n")
 wfok("task-start", ["task-start", "--task", task23, "--json"], {"generation": gen23}, "sess-U23")
 wfok("task-check", ["task-check", "--task", task23, "--review-notes", NOTES, "--json"], {"generation": gen23}, "sess-U23")
 wf(["task-knowledge", "--task", task23, "--decision", "no-update", "--json"], {"generation": gen23}, "sess-U23")
-wf(["sampling", "pick", "--task", task23, "--freeze", "--json"],
-                       {"generation": gen23})   # 归档前置：先冻结并落盘选样
+wfok("sampling", ["sampling", "pick", "--task", task23, "--freeze", "--json"],
+                       {"generation": gen23}, "sess-U22")   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wfok("archive", ["archive", "--task", task23, "--decision",
                      dfile("/tmp/r23_arch.json", [dec(f"finish {task23}", "finish", d23),
                                                   dec("area23/**", "commit", d23)]), "--json"],
@@ -358,22 +358,22 @@ subprocess.run(["git", "reset", "-q", "--mixed", "HEAD~1"], cwd=F, capture_outpu
 subprocess.run(["git", "checkout", "-q", "--", "."], cwd=F, capture_output=True)
 archived = wf_tasks.task_dir(F, task23)
 persisted_before = wf_tasks.archive_persisted(F, json.load(open(os.path.join(archived, "task.json"))))
-wf(["sampling", "pick", "--task", task23, "--freeze", "--json"],
-                       {"generation": gen23})   # 归档前置：先冻结并落盘选样
+wfok("sampling", ["sampling", "pick", "--task", task23, "--freeze", "--json"],
+                       {"generation": gen23}, "sess-U23")   # 归档前置：先冻结并落盘选样
 rc_norights, no_rights, _ = wfok("archive", ["archive", "--task", task23, "--decision",
                                  dfile("/tmp/r23_arch2.json", [dec(f"finish {task23}", "finish", d23)]), "--json"],
                                 {"generation": gen23}, "sess-U23")
 wfok("release", ["writer", "release", "--json"], {"generation": gen23}, "sess-U23")
-wf(["sampling", "pick", "--task", task23, "--freeze", "--json"],
-                       {"generation": gen23})   # 归档前置：先冻结并落盘选样
+wfok("sampling", ["sampling", "pick", "--task", task23, "--freeze", "--json"],
+                       {"generation": gen23}, "sess-U23")   # 归档前置：先冻结并落盘选样
 rc_busy, busy_payload, _ = wfok("archive", ["archive", "--task", task23, "--decision",
                                 dfile("/tmp/r23_arch2.json", [dec(f"finish {task23}", "finish", d23)]), "--json"],
                                {"generation": gen23}, "sess-U23")
 rec("R23 无写权不得续做", "WF_WRITER_BUSY", (busy_payload or {}).get("code"),
     (busy_payload or {}).get("code") == "WF_WRITER_BUSY")
 wf(["writer", "acquire", "--task", task23, "--json"], {"generation": gen23}, "sess-U23")
-wf(["sampling", "pick", "--task", task23, "--freeze", "--json"],
-                       {"generation": gen23})   # 归档前置：先冻结并落盘选样
+wfok("sampling", ["sampling", "pick", "--task", task23, "--freeze", "--json"],
+                       {"generation": gen23}, "sess-U23")   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wfok("archive", ["archive", "--task", task23, "--decision",
                      dfile("/tmp/r23_arch2.json", [dec(f"finish {task23}", "finish", d23)]), "--json"],
                     {"generation": gen23}, "sess-U23")

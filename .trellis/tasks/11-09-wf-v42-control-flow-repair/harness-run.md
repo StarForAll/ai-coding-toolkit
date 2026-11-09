@@ -319,3 +319,27 @@ make_task(20b)    → WRITER_BUSY → KeyError
 `r17r24` 现在唯一待查的是 archive 的 before_archive 步骤缺项：打印 facts 里
 `status == "missing"` 的那一项（大概率是 `task.review-passed` 或 `task.knowledge-disposed`），
 再决定是补调用还是迁移期望。
+
+## 按正确顺序重验三个套件（2026-11-09 末）——两个已全绿
+
+方法：`wf_fixture.sh` → `f1_init.py` → 套件（与 `run_one.sh` 同序）。
+
+| 套件 | 结果 |
+|---|---|
+| `r31r34_tests` | **13/13 全绿 ✅** |
+| `r59_tests` | **8/8 全绿 ✅** |
+| `r17r24_tests` | 前进到 `task-check`，停在 `WF_SPEC_INCOMPLETE` |
+
+也就是说：先前那些“红”里至少两个是**我的复现方法错误**造成的假失败。
+
+### r17r24 当前唯一卡点
+
+给 `wfok()` 覆盖 `sampling/task-start/task-check/archive/release` 并补上**显式 sid**后，
+链条推进到：`task-check → WF_SPEC_INCOMPLETE {"exit":"分批读取全文后重试"}`。
+即 `task.spec-loaded` 这一步没做（该套件没有“分批读取 spec 全文”的动作）。属夹具迁移，需按当前口径补这一步。
+
+### 本轮净结果
+
+- 回执链路：`r60`/`r61` 全绿；
+- 会话/顺序类问题：`r31r34`、`r59` 全绿（靠**正确复现顺序** + 显式 sid）；
+- `r17r24`：从“KeyError 连锁”推进到明确的单点卡（`spec-loaded`）。
