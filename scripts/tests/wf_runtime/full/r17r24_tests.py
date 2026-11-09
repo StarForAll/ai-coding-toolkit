@@ -172,7 +172,7 @@ add20 = dfile("/tmp/r20_add.json", [{"operation": "add", "new_paths": [".wf/spec
 wf(["spec-update", "--task", task20a, "--changes", add20, "--json"], {"generation": gen20a}, "sess-U20a")
 wf(["task-curate", "--task", task20a, "--spec", ".wf/spec/old.md", "--purpose", "旧规则", "--json"],
    {"generation": gen20a}, "sess-U20a")
-wf(["spec", "--file", ".wf/spec/old.md", "--json"], {"generation": gen20a}, "sess-U20a")
+wfok("spec", ["spec", "--file", ".wf/spec/old.md", "--json"], {"generation": gen20a}, "sess-U20a")
 rc, payload, _ = wfok("task-check", ["task-check", "--task", task20a, "--review-notes", NOTES, "--json"],
                     {"generation": gen20a}, "sess-U20a")
 json.dump((payload or {}).get("facts"), open("/tmp/r20_facts.json", "w"), ensure_ascii=False)
@@ -221,7 +221,7 @@ wf(["spec-update", "--task", task18, "--changes", add18, "--json"], {"generation
 open(os.path.join(F, "lib/r18.txt"), "w") if os.path.isdir(os.path.join(F, "lib")) else None
 wf(["task-curate", "--task", task18, "--spec", ".wf/spec/expired.md", "--purpose", "到期规则", "--json"],
    {"generation": gen18}, "sess-U18")
-wf(["spec", "--file", ".wf/spec/expired.md", "--json"], {"generation": gen18}, "sess-U18")
+wfok("spec", ["spec", "--file", ".wf/spec/expired.md", "--json"], {"generation": gen18}, "sess-U18")
 rc, payload, _ = wfok("task-check", ["task-check", "--task", task18, "--review-notes", NOTES, "--json"],
                     {"generation": gen18}, "sess-U18")
 needs = [item.get("reason") for item in (((payload or {}).get("facts") or {}).get("spec") or {}).get("needs") or []]
@@ -230,7 +230,7 @@ rec("R18 到期条目阻断", "WF_SPEC_INCOMPLETE 且 needs 含 expired",
     (payload or {}).get("code") == "WF_SPEC_INCOMPLETE" and "expired" in needs)
 wf(["task-curate", "--task", task18, "--spec", ".wf/spec/nomatch.md", "--purpose", "未被命中但已策展", "--json"],
    {"generation": gen18}, "sess-U18")
-wf(["spec", "--file", ".wf/spec/nomatch.md", "--json"], {"generation": gen18}, "sess-U18")
+wfok("spec", ["spec", "--file", ".wf/spec/nomatch.md", "--json"], {"generation": gen18}, "sess-U18")
 rc, payload, _ = wfok("task-check", ["task-check", "--task", task18, "--decision",
                      dfile("/tmp/r18_dec.json", [dec(".wf/spec/expired.md", "passed", d18)]),
                      "--review-notes", NOTES, "--json"], {"generation": gen18}, "sess-U18")
