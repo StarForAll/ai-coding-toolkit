@@ -183,7 +183,7 @@ envelope = json.dumps({"session": {"provider": "host",
                        "inputs": {"generation": gen_b3}})
 proc = subprocess.Popen(["/usr/bin/python3", WF, "archive", "--task", task_b3,
                          "--decision", archive_decision, "--json"],
-                        stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 proc.stdin.write(envelope.encode()); proc.stdin.close()
 killed = False
 deadline = time.time() + 15
@@ -198,12 +198,26 @@ while time.time() < deadline and proc.poll() is None:
             pass
         break
     time.sleep(0.002)
+_out = proc.stdout.read().decode("utf-8", "replace") if proc.stdout else ""
+_err = proc.stderr.read().decode("utf-8", "replace") if proc.stderr else ""
 proc.wait()
+if proc.returncode != 0 and not killed:
+    try:
+        _payload = json.loads(_out.strip().splitlines()[-1])
+    except Exception:
+        _payload = {}
+    _steps = [s for s in ((_payload.get("facts") or {}).get("all") or [])
+              if s.get("status") != "completed"]
+    print("B3 未完成步骤:", json.dumps(_steps, ensure_ascii=False)[:400])
 rec("B3 归档提交后被强杀", "进程被 SIGKILL（提交已落地、结果未报告）",
     f"killed={killed} rc={proc.returncode}",
     killed and proc.returncode == -signal.SIGKILL)
-wf(["sampling", "pick", "--task", task_b3, "--freeze", "--json"],
-                       {"generation": gen_b3})   # 归档前置：先冻结并落盘选样
+rc_s, s_payload, s_out = wf(["sampling", "pick", "--task", task_b3, "--freeze", "--json"],
+                       {"generation": json.load(open(os.path.join(F, ".wf/writer.json"),
+                                                     encoding="utf-8")).get("generation")},
+                        "sess-G3")   # 归档前置：用**实时代次**冻结并落盘选样
+if rc_s != 0:
+    print("B3 sampling 原文:", (s_out or "")[:300])
 rc, payload, _ = wf(["archive", "--task", task_b3, "--decision", archive_decision, "--json"],
                     {"generation": gen_b3}, "sess-G3")
 facts = (payload or {}).get("facts", {})
