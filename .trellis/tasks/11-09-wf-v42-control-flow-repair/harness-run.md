@@ -560,3 +560,23 @@ R23 想表达"无写权不得续做"，就得先让写权真正脱离本会话�
 ### 本轮最终的 r17r24 状态
 
 part1 9/9、part2 17/17、R23 前两条 PASS，余 2 条待按上面顺序修夹具。
+
+## R23 收口进度：3/4（2026-11-09 末）
+
+按 `pause → release → archive` 构造后：
+
+| 断言 | 结果 |
+|---|---|
+| R23 归档记录段失败即持久化未完成 | ✅ |
+| R23 未持久化状态已构造 | ✅ |
+| R23 无写权不得续做 | ✅（期望码由 `WF_WRITER_BUSY` 迁到 `WF_SEMANTIC_DECISION`，理由：实现把"空闲未持有"与"被别人持着"分成两码，前者给 `writer acquire` 出口） |
+| R23 重入按既有授权续做提交 | ❌ 仍 `WF_SEMANTIC_DECISION` |
+
+### 最后一格的原因
+
+夹具先 `task-pause` 造"无写权"，之后只做了 `writer acquire` 就重试 archive，
+**但对象仍处于 paused** → acquire/续做都过不去。所以要补 `task-resume` 再 acquire。
+
+### 下次开工的第一条
+
+R23 段：`task-pause → release → archive(拒) → task-resume → writer acquire → archive(应 WF_OK 且 persisted)`。

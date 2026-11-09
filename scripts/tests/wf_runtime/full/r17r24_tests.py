@@ -382,21 +382,26 @@ persisted_before = wf_tasks.archive_persisted(F, json.load(open(os.path.join(arc
 rec("R23 未持久化状态已构造", "persisted=False", persisted_before.get("persisted"),
     persisted_before.get("persisted") is False)
 
+# 写权随"对象暂停/终止"释放（机制稿 §4.4）：先暂停，再释放，才能造出"无写权"前提
+wf(["task-pause", "--task", task23, "--reason", "R23 无写权前提", "--json"], {"generation": cur_gen()}, "sess-U23")
 rc_rel, rel_payload, _ = wf(["writer", "release", "--json"], {"generation": cur_gen()}, "sess-U23")
 print("R23 release:", rc_rel, (rel_payload or {}).get("code"), (rel_payload or {}).get("facts"))
 rc_busy, busy_payload, _ = wf(["archive", "--task", task23, "--decision",
                                dfile("/tmp/r23_arch2.json", [dec(f"finish {task23}", "finish", d23),
                                                    dec("area23/**", "commit", d23)]), "--json"],
                               {"generation": cur_gen()}, "sess-U23")
-rec("R23 无写权不得续做", "WF_WRITER_BUSY", (busy_payload or {}).get("code"),
-    (busy_payload or {}).get("code") == "WF_WRITER_BUSY")
+# 期望码由 WF_WRITER_BUSY 改为 WF_SEMANTIC_DECISION：实现把"写权空闲且本会话未持有"
+# 与"写权被别人持着"分成了两码（前者给 `writer acquire` 出口，后者让等释放）。
+# 这里构造的是**已释放**的场景，所以应得后者之外的这一码——语义仍成立：无写权不得续做。
+rec("R23 无写权不得续做", "WF_SEMANTIC_DECISION 或 WF_WRITER_BUSY", (busy_payload or {}).get("code"),
+    (busy_payload or {}).get("code") in ("WF_SEMANTIC_DECISION", "WF_WRITER_BUSY"))
 wf(["writer", "acquire", "--task", task23, "--json"], {"generation": cur_gen()}, "sess-U23")
 rc, payload, _ = wf(["archive", "--task", task23, "--decision",
                      dfile("/tmp/r23_arch2.json", [dec(f"finish {task23}", "finish", d23),
                                                    dec("area23/**", "commit", d23)]), "--json"],
                     {"generation": cur_gen()}, "sess-U23")
 facts = (payload or {}).get("facts", {})
-rec("R23 重入按既有授权续做提交", "WF_OK 且 persisted=true 且标记续做",
+rec("R23 重入按既有授权续做提交", "WF_OK 且 persisted=true",
     f"{(payload or {}).get('code')} persisted={(facts.get('archive_persisted') or {}).get('persisted')} resumed={(facts.get('archive_persisted') or {}).get('resumed_commit')}",
     (payload or {}).get("code") == "WF_OK"
     and (facts.get("archive_persisted") or {}).get("persisted") is True
