@@ -65,12 +65,13 @@ def skeleton(ctx, task):
         "closures": closures,
         "fix_scope": [],                # 扩面条目：v42 4.4 的路径→问题映射（随判断录入）
         "standard_changes": [],         # 新旧标准摘要（随 4.5 判断录入）
-        "drift_diffs": [],              # 漂移差异（导入时计算，未持久化）
+        "drift_diffs": _drift_diffs(ctx, task),   # 漂移位置：保存时的 parts vs 当前 parts（K8 可重建）
         "verifications": verifications,
         # §0.2 的「未核实」事件源：未结案的验收项（S5b 的 unverified[]）
         "unverified": [str(item.get("acceptance_id"))
                        for item in (_required_unverified(ctx, task))],
         "cumulative": cumulative_facts(ctx, task),
+        "rejected": [dict(item) for item in disposals if item.get("decision") == "rejected"],
         "rejected_unresolved": rejected,
         "unaddressed_findings": unaddressed,
         "waived_count": len(waived),
@@ -90,6 +91,23 @@ def cumulative_facts(ctx, task):
             "historical_max": historical, "exceeds_history": described["exceeds_history"],
             "line": described["line"], "available": current.get("available", False),
             "reason": current.get("reason")}
+
+
+def _drift_diffs(ctx, task):
+    """漂移差异（位置级）：拿 check 锚点里保存的 parts 与当前 parts 比，产出 `d:<字段>` 列表。
+
+    这是 K8 的可重建投影——不落盘、不依赖导入时算的那份。
+    """
+    from . import check as check_mod
+    from . import review as review_mod
+
+    saved = ((task.get("check") or {}).get("anchor") or {}).get("parts")
+    try:
+        current = check_mod.anchor_parts(ctx, task)
+    except Exception:            # 记录不完整时不给差异（调用方按"差异不可得"处理）
+        return []
+    diffs = review_mod.anchor_drift(saved, current)
+    return diffs or []
 
 
 def _required_unverified(ctx, task):
@@ -119,6 +137,10 @@ def ref_ids(facts):
             ids.add(f"f:{finding['id']}")
     for path in facts.get("changed_paths") or []:
         ids.add(f"p:{path}")
+    # 漂移位置也是可引用的骨架事实（v42：`d:` 指漂移差异中的一个具体位置）
+    for item in facts.get("drift_diffs") or []:
+        if isinstance(item, dict) and item.get("id"):
+            ids.add(str(item["id"]))
     return ids
 
 
@@ -143,6 +165,22 @@ def validate(entry, facts):
     if waived_by and not waived_by.startswith("human:"):
         problems.append({"reason": "豁免只能由人给出（waived_by 须为 human:<来源>）",
                          "waived_by": waived_by})
+    # 判「沿用」必须引用一个**存在**的漂移位置（`d:`）：位置存不存在是事实，相关性是判断
+    drift_ids = {str(item.get("id")) for item in (facts.get("drift_diffs") or [])
+                 if isinstance(item, dict) and item.get("id")}
+    refs = [str(item) for item in entry.get("evidence_refs") or []]
+    if entry.get("kind") == "沿用" and not any(r.startswith("d:") for r in refs):
+        problems.append({"reason": "判「沿用」必须引用漂移差异中的一个位置（d:<字段>）",
+                         "known_positions": sorted(drift_ids)[:20]})
+    for ref in refs:
+        if ref.startswith("d:") and ref not in drift_ids:
+            problems.append({"reason": "漂移位置不在 drift_diffs 里（位置存不存在是事实）",
+                             "ref": ref, "known_positions": sorted(drift_ids)[:20]})
+    rejected = {str(item.get("finding_id")) for item in (facts.get("rejected") or [])
+                if isinstance(item, dict)}
+    if str(entry.get("finding") or "") in rejected and not str(entry.get("resolved_by") or "").strip():
+        problems.append({"reason": "被驳回的 finding 只能以 resolved 收口（须写 resolved_by）",
+                         "finding": entry.get("finding")})
     known = ref_ids(facts)
     for ref in entry.get("evidence_refs") or []:
         if str(ref) not in known and str(ref).split("@", 1)[0] not in known:
