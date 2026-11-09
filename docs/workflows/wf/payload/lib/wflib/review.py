@@ -395,6 +395,18 @@ def status_of_round(ctx, task, round_no=None):
             "ready_to_decide": bool(declared) and not missing}
 
 
+def curation_changed(before, current_rule_digest, current_file_digest):
+    """策划摘要（选用时）与当前是否不同。
+
+    策展记录里的摘要可能是**整文件摘要**（旧记录）或**规则实质摘要**（现行 `spec_versions`）——
+    与当前任一形态相等即"没改过"。只看单一形态会把所有策划规则误判为"本任务改过"，
+    让 K4c 变成一律阻断。
+    """
+    if not before:
+        return False
+    return before not in (current_rule_digest, current_file_digest)
+
+
 def assertion_index(ctx, task):
     """当前批准集合 + 本任务内被改过的规则（K3b 引用校验、K4c 规则不得自证）。
 
@@ -424,8 +436,11 @@ def assertion_index(ctx, task):
             if isinstance(clause, dict) and clause.get("status") == "active" and clause.get("id"):
                 index[f"{spec_path}#{clause['id']}"] = "spec-clause"
         before = curated.get(spec_path)
-        if before and before != entry["digest"]:
-            changed[spec_path] = {"curation_digest": before, "current_digest": entry["digest"]}
+        if before:
+            file_digest = records.file_digest(join(ctx.root, spec_path))
+            if curation_changed(before, entry["digest"], file_digest):
+                changed[spec_path] = {"curation_digest": before, "current_digest": entry["digest"],
+                                      "current_file_digest": file_digest}
     return index, changed
 
 
@@ -1297,3 +1312,38 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None):
         facts={"result": result, "reviewer_clis": result.get("reviewer_clis"),
                "control_assertion": assertion},
     )
+
+
+def all_findings(ctx, task):
+    """报告里的**全部** findings（含已处置），`unaddressed` 只是它的子集。
+
+    骨架需要"全部"（v42 §5.1 的 `findings[]` + 单列 `closures[]`）；把只含未处置的集合
+    当成全部，会让"已关闭"的缺陷从清单里消失，也让两个字段变成同一份东西。
+    """
+    reviews = task.get("reviews") or {}
+    closers = {str(item.get("finding_id")) for item in reviews.get("dispositions") or []
+               if isinstance(item, dict) and item.get("decision") == "accepted"}
+    found = []
+    for entry in reviews.get("imported") or []:
+        if not isinstance(entry, dict):
+            continue
+        rel = entry.get("report_path")
+        if not rel:
+            continue
+        path_abs = join(ctx.root, rel)
+        if records.file_digest(path_abs) != entry.get("report_digest"):
+            continue
+        try:
+            with open(path_abs, "r", encoding="utf-8") as handle:
+                payload, _problems = read_report(handle.read())
+        except OSError:
+            continue
+        if payload is None:
+            continue
+        for finding in payload.get("findings") or []:
+            if isinstance(finding, dict) and finding.get("id"):
+                found.append({"id": finding.get("id"), "severity": finding.get("severity"),
+                              "class": finding.get("class"), "slot": entry.get("slot"),
+                              "closed": str(finding["id"]) in closers,
+                              "assertion_ref": finding.get("assertion_ref")})
+    return found

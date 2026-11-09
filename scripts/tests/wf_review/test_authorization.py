@@ -160,3 +160,21 @@ class EntryPointContractTest(unittest.TestCase):
         self.assertIn('"export"', source)
         self.assertIn("authorize_mod.require", source)
         self.assertIn("missing_action", source)
+
+
+class DeletedPathTest(unittest.TestCase):
+    """K6 第 2 类只认**真删除**（HEAD 有、工作树没有），否则每次归档都被要求补确认。"""
+
+    def test_only_real_deletions_count(self):
+        from wflib import tasks
+
+        repo = str(REPO)
+        found = tasks._deleted_paths(repo, ["docs/README.md",        # 存在
+                                            "no/such/file.md",       # 从未存在
+                                            "skills/multi-cli-review/SKILL.md"])  # HEAD 有、已删
+        self.assertEqual(found, ["skills/multi-cli-review/SKILL.md"])
+
+    def test_empty_input_returns_empty(self):
+        from wflib import tasks
+
+        self.assertEqual(tasks._deleted_paths(str(REPO), []), [])

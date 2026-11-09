@@ -35,10 +35,11 @@ def skeleton(ctx, task):
         classified = {"unavailable": True}
     from . import review as review_mod
 
-    findings = [{"id": item["finding_id"], "severity": item.get("severity")}
-                for item in review_mod.open_findings(ctx, task)["unaddressed"]]
     disposals = [item for item in reviews.get("dispositions") or [] if isinstance(item, dict)]
-    closed = {str(item.get("finding_id")) for item in disposals if item.get("decision") == "accepted"}
+    # 全部 findings（含已处置）进骨架；未处置的是它的子集，不是同一份东西
+    findings = [{"id": item["id"], "severity": item.get("severity"), "class": item.get("class"),
+                 "closed": item.get("closed")}
+                for item in review_mod.all_findings(ctx, task)]
     closures = [{"finding_id": item.get("finding_id"), "cited_verification": item.get("evidence_refs"),
                  "recheck_by": item.get("recheck_by")}
                 for item in disposals if item.get("decision") == "accepted"]

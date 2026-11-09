@@ -89,3 +89,19 @@ class OpenFindingsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AllFindingsTest(unittest.TestCase):
+    """骨架的 `findings` 必须是**全部**（含已处置），`unaddressed` 只是子集。"""
+
+    def test_closed_findings_stay_in_the_full_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            task = task_with(tmp, [{"id": "f1", "severity": "blocking"},
+                                   {"id": "f2", "severity": "suggestion"}],
+                             dispositions=[{"finding_id": "f1", "decision": "accepted",
+                                            "reason": "已修", "recheck_by": "dsh"}])
+            full = review.all_findings(FakeCtx(tmp), task)
+            open_items = review.open_findings(FakeCtx(tmp), task)
+        self.assertEqual(sorted(item["id"] for item in full), ["f1", "f2"])
+        self.assertTrue(next(item for item in full if item["id"] == "f1")["closed"])
+        self.assertEqual([item["finding_id"] for item in open_items["unaddressed"]], ["f2"])

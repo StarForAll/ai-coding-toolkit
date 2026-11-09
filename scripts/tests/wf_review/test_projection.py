@@ -131,3 +131,28 @@ class ChainHeadTrailerTest(unittest.TestCase):
         self.assertTrue(facts["available"])
         self.assertFalse(facts["anchored"])
         self.assertIn("wf-chain-head", facts["reason"])
+
+
+class CommitClassificationTest(unittest.TestCase):
+    """K9 的提交三态解析：记录分隔必须与 git 输出对齐（旧实现把多条压成一条）。"""
+
+    RAW = ("a1b2c3\x1f"
+           "feat: 有标记\n\nwf-task: t1\n\x1e"
+           "d4e5f6\x1ffeat: 无标记\n\x1e"
+           "0a1b2c\x1ffeat: 有裁决\n\x1e")
+
+    def test_three_states(self):
+        attributed, adjudicated, external = projection.classify_commits(
+            self.RAW, "t1", {"attribution": {"decisions": [{"commit": "0a1b2c9"}]}})
+        self.assertEqual(attributed, ["a1b2c3"])
+        self.assertEqual(adjudicated, ["0a1b2c"])
+        self.assertEqual(external, ["d4e5f6"])
+
+    def test_multiple_commits_are_not_collapsed(self):
+        raw = "aa\x1ffeat: 1\n\nwf-task: t1\n\x1ebb\x1ffeat: 2\n\nwf-task: t1\n\x1e"
+        attributed, _adjudicated, external = projection.classify_commits(raw, "t1")
+        self.assertEqual(attributed, ["aa", "bb"])
+        self.assertEqual(external, [])
+
+    def test_empty_output(self):
+        self.assertEqual(projection.classify_commits("", "t1"), ([], [], []))

@@ -2836,13 +2836,22 @@ def _chain_trailer(task):
 
 
 def _deleted_paths(root, paths):
-    """本次提交范围内的删除路径（工作树相对 HEAD 已删除）。读不到 Git 时返回空并保持原判定。"""
+    """本次提交范围内**真正的删除**：HEAD 里有、工作树里没有。
+
+    只按"工作树不存在"判会把从未存在过的路径（glob 展开结果、拼错的路径）也算成删除，
+    于是每次归档都被要求补一条 delete 确认——那是假阻断。
+    """
     if not paths:
+        return []
+    code, _out = scope.git(root, "rev-parse", "--verify", "HEAD")
+    if code != 0:
         return []
     deleted = []
     for path in sorted(set(paths)):
-        target = os.path.join(str(root), path)
-        if not os.path.exists(target):
+        if os.path.exists(os.path.join(str(root), path)):
+            continue
+        code, _out = scope.git(root, "cat-file", "-e", f"HEAD:{path}")
+        if code == 0:                      # HEAD 里有、工作树里没有 = 真删除
             deleted.append(path)
     return deleted
 

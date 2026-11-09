@@ -27,7 +27,7 @@ def open_items(ctx, task):
     for entry in ((task.get("check") or {}).get("acceptance_results") or []):
         if not isinstance(entry, dict):
             continue
-        if entry.get("conclusion") in ("passed", None) and entry.get("conclusion") == "passed":
+        if entry.get("conclusion") == "passed":
             continue
         acceptance_id = entry.get("acceptance_id")
         resolution = (task.get("unverified_resolutions") or {}).get(str(acceptance_id))
@@ -51,26 +51,38 @@ def attribution(ctx, task):
     base = task.get("baseline_head")
     task_id = task.get("id")
     attributed, adjudicated, external = [], [], []
-    output = _git(ctx.root, ["log", "--format=%H%x00%B%x00", f"{base}..HEAD"]) if base else None
+    output = _git(ctx.root, ["log", "--format=%H%x1f%B%x1e", f"{base}..HEAD"]) if base else None
     if output:
-        for chunk in output.split("\x00\x00"):
-            chunk = chunk.strip()
-            if not chunk:
-                continue
-            parts = chunk.split("\x00")
-            sha = parts[0].strip()
-            body = parts[1] if len(parts) > 1 else ""
-            markers = [line.split("wf-task:", 1)[1].strip()
-                       for line in body.splitlines() if "wf-task:" in line]
-            if task_id and task_id in markers:
-                attributed.append(sha)
-            elif task_id and _adjudicated(task, sha):
-                adjudicated.append(sha)
-            else:
-                external.append(sha)
+        attributed, adjudicated, external = classify_commits(output, task_id, task)
     return {"base": base, "attributed": attributed, "adjudicated": adjudicated,
             "external": external, "available": output is not None,
             "unattributed_paths": [] if output else []}
+
+
+def classify_commits(raw, task_id, task=None):
+    """把 `git log` 输出（`%H%x1f%B%x1e`）分成 attributed / adjudicated / external 三态。
+
+    用 `\x1f`（字段）与 `\x1e`（记录）作分隔，不用 `\x00\x00`——后者与 git 的输出不齐，
+    会把多提交压成一条（实测：5 条本任务提交被判成 1 条 external）。
+    """
+    attributed, adjudicated, external = [], [], []
+    for record in (raw or "").split("\x1e"):
+        record = record.strip("\n\x00 ")
+        if not record:
+            continue
+        sha, _sep, body = record.partition("\x1f")
+        sha = sha.strip()
+        if not sha:
+            continue
+        markers = [line.split("wf-task:", 1)[1].strip()
+                   for line in body.splitlines() if "wf-task:" in line]
+        if task_id and task_id in markers:
+            attributed.append(sha)
+        elif task_id and task and _adjudicated(task, sha):
+            adjudicated.append(sha)
+        else:
+            external.append(sha)
+    return attributed, adjudicated, external
 
 
 def _adjudicated(task, sha):

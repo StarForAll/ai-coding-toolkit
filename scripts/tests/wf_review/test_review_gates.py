@@ -108,3 +108,19 @@ class BrokenReferenceExemptionTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CurationDigestTest(unittest.TestCase):
+    """K4c 的"改过没有"必须容忍两种摘要形态，否则会把所有策划规则判成自证。"""
+
+    def test_file_digest_form_is_recognised(self):
+        self.assertFalse(review.curation_changed("sha256:f", "sha256:rule", "sha256:f"))
+
+    def test_rule_digest_form_is_recognised(self):
+        self.assertFalse(review.curation_changed("sha256:rule", "sha256:rule", "sha256:f"))
+
+    def test_neither_form_means_changed(self):
+        self.assertTrue(review.curation_changed("sha256:old", "sha256:rule", "sha256:f"))
+
+    def test_empty_before_is_not_changed(self):
+        self.assertFalse(review.curation_changed(None, "sha256:rule", "sha256:f"))
