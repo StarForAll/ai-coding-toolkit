@@ -25,7 +25,6 @@ REPORT_FIELDS = (
     "check-anchor",
     "read-scope",
     "excluded-scope",
-    "scope-exceptions",
     "axes",
     "findings",
     "verdict",
@@ -627,7 +626,6 @@ def launch(ctx, task, request_path, implementation_cli=None):
             request_payload = {
                 "task-id": task.get("id"),
                 "round": round_no,
-                "reviewer-id": slot["slot"],
                 "review-focus": REVIEW_FOCUS,
                 "check-anchor": {"check_id": check.get("id"), "check_anchor": anchor},
                 "submitted_scope": request.get("submitted_scope") or {},
@@ -1185,9 +1183,11 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None):
                     problems.append({"slot": entry.get("slot"),
                                      "reason": "excluded-scope does not cover sensitive surfaces",
                                      "missing": gaps})
-                # 报告自身声明的未覆盖/例外项即未决事实，不能只看总 verdict（机制稿 §9.2）
+                # v42 B1：报告声明过的"未覆盖项"不再一义三用（既不判 fail 也不再是必填字段），
+                # 统一按**缺口**呈现；三态结论由 axes 的 uncovered 承载。
                 for item in payload.get("scope-exceptions") or []:
-                    failures.append({"slot": entry.get("slot"), "reason": "report declares an uncovered exception",
+                    gaps_out.append({"slot": entry.get("slot"),
+                                     "reason": "报告声明的未覆盖项（按缺口处置，不判 fail）",
                                      "exception": item})
                 axes = payload.get("axes") or {}
                 if not isinstance(axes, dict):

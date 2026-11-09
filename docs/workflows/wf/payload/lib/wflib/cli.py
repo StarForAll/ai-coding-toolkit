@@ -2320,7 +2320,6 @@ COMMANDS = {
     "baseline-apply": _task_command("cmd_baseline_apply"),
     "spec-update": _task_command("cmd_spec_update"),
     "dep": _unavailable(2, "dependency edges (D07)"),
-    "task-rework": _unavailable(2, "task rework (D07)"),
     "task-replace": _unavailable(2, "task replace (D07)"),
     "review-context": _review_command("context"),
     "review-launch": _review_command("launch"),

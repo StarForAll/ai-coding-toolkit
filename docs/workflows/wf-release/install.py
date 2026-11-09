@@ -558,6 +558,18 @@ PLATFORMS = {
         # Codex SessionStart hook 提供会话标识；/clear 之后会话标识真实变化（2026-11-09 用户实测）
         "session_identity": {"value": "host-hook:SessionStart", "source": "user-declared", "clear_resets": True},
     },
+    # v42 S12 口径 A：部署表 8 项。`zcode`/`pi` 的技能根由用户声明（读共享根），
+    # 其"会话标识来源"**未核实**——按口径不猜，适配层遇到它们只能走 WF_SEMANTIC_DECISION。
+    "zcode": {
+        "dir": ".agents/skills",
+        "reads_shared": True,
+        "session_identity": {"value": None, "source": "unknown", "clear_resets": None},
+    },
+    "pi": {
+        "dir": ".agents/skills",
+        "reads_shared": True,
+        "session_identity": {"value": None, "source": "unknown", "clear_resets": None},
+    },
     "cursor": {"dir": ".cursor/skills", "reads_shared": True,
                "session_identity": {"value": None, "source": "unknown", "clear_resets": None}},
     "geminicli": {"dir": ".gemini/skills", "reads_shared": True,

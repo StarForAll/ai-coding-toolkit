@@ -1151,25 +1151,13 @@ def cmd_task_new(ctx, args):
             if unfinished is not None:
                 return _resume_task_create(ctx, key, session, record, unfinished)
         if bound:
-            bound_object = (bound.get("object") or {}).get("id")
-            bound_task = load_task(ctx.root, bound_object) if bound_object else None
-            if isinstance(bound_task, dict):
-                # 响应丢失的重试：已完成则返回原结果，不产生第二个任务
-                return codes.result(
-                    "WF_OK",
-                    object={"id": bound_object, "name": bound_task.get("title")},
-                    position_=codes.position(scope="task", phase=bound_task.get("phase"),
-                                             task_id=bound_object),
-                    next_="继续当前对象（本条为重试返回的原结果）",
-                    facts={"task_id": bound_object,
-                           "directory": os.path.relpath(task_dir(ctx.root, bound_object), str(ctx.root)).replace(os.sep, "/")
-                           if task_dir(ctx.root, bound_object) else None,
-                           "kind": bound_task.get("kind"),
-                           "already_completed": True,
-                           "instance_id": bound.get("instance_id")},
-                )
-            raise TaskError("WF_BINDING_MISMATCH", {"reason": "session already bound"},
-                            next_="原对象结束后由新会话选择下一对象")
+            # v42 §4 / dogfood A3：`task-new` 不得把"已绑定的旧任务"当成功返回。
+            # 中断后的续做由 writer 上的 `task.create` 父动作承载（上面 `_writer_create_intent`），
+            # 不靠一个 `already_completed` 标记；绑定终身，第二对象只能由新会话选择。
+            raise TaskError("WF_BINDING_MISMATCH",
+                            {"reason": "session already bound",
+                             "object": bound.get("object")},
+                            next_="继续当前对象用 continue/bind；要开新任务请在新会话里选")
         cli.assert_no_foreign_wip(ctx, exclude_id=None)
         # 未完成的父动作不能被任何会话越过（写权空闲不等于没有遗留动作）
         leftover = (record.get("action") or {})
