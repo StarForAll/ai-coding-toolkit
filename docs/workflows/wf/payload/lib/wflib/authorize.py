@@ -100,7 +100,28 @@ def require(task_dir, action):
     return payload
 
 
-def covers(task_dir, action, paths):
+def _pattern_hits(pattern, root):
+    """该模式在仓库里能不能落到任何实际文件（glob 展开是否为空）。"""
+    if root is None:
+        return True                       # 没给仓库根就不判空，保持旧行为
+    from . import scope as scope_mod
+
+    listed = None
+    try:
+        _code, listed = scope_mod.git(root, "-c", "core.quotePath=false", "ls-files", "-z")
+        files = [item for item in (listed or "").split("\x00") if item] if listed else []
+    except Exception:
+        files = []
+    if not files:
+        for base, _dirs, names in os.walk(str(root)):
+            for name in names:
+                files.append(os.path.relpath(os.path.join(base, name), str(root)).replace(os.sep, "/"))
+    from . import paths as paths_mod
+
+    return any(paths_mod.match_path(str(pattern), item) for item in files)
+
+
+def covers(task_dir, action, paths, *, root=None):
     """已入库的确认是否覆盖这些路径（K6 第 2/4 类：删除数据、越出批准面的修改）。
 
     返回 `(covered: bool, uncovered: list)`：路径按 glob 匹配确认里登记的路径；
@@ -119,7 +140,10 @@ def covers(task_dir, action, paths):
                             if isinstance(item, (str, dict)))
     declared = [item.get("path") if isinstance(item, dict) else item for item in declared]
     declared = [str(item) for item in declared if item]
+    # 展开为空的模式视为**确认不可用**：人确认了一片不存在的区域，不能算覆盖
+    broken = [pattern for pattern in declared if not _pattern_hits(pattern, root)]
+    usable = [pattern for pattern in declared if pattern not in broken]
     uncovered = [path for path in paths or []
                  if not any(path == pattern or paths_mod.match_path(pattern, path)
-                            for pattern in declared)]
-    return (not uncovered), sorted(uncovered)
+                            for pattern in usable)]
+    return (not uncovered and not broken), sorted(uncovered)

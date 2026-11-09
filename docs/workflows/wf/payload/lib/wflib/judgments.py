@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+import os
+
 from . import codes, records
 
 # v42 §5.2：只记三类，种类取既有判断类（`by=human` 只是字段，不新增第十类）
@@ -144,6 +146,33 @@ def ref_ids(facts):
     return ids
 
 
+PREFS = ("ask_always", "ai_decides")
+
+
+def prefs_path(root):
+    """偏好只在本机（v42 §5.3）：`.wf/.runtime/prefs.json`，不入库、不登记 protocol。"""
+    return os.path.join(str(root), ".wf", ".runtime", "prefs.json")
+
+
+def load_prefs(root):
+    payload = records.load_json(prefs_path(root))
+    if not isinstance(payload, dict):
+        return {}
+    return {str(k): v for k, v in payload.items() if v in PREFS}
+
+
+def set_pref(root, kind, value):
+    """人设定某类判断的偏好：`ask_always`（每次都问）/ `ai_decides`（自己定）。"""
+    if kind not in KINDS:
+        raise ValueError(f"unknown judgment kind: {kind}")
+    if value not in PREFS:
+        raise ValueError(f"preference must be one of {PREFS}")
+    payload = dict(load_prefs(root))
+    payload[str(kind)] = value
+    records.write_json(prefs_path(root), payload)
+    return payload
+
+
 def validate(entry, facts):
     """单条 judgment 的机械校验（§5.4：只核引用是否属骨架派生集合、字段是否成立）。"""
     problems = []
@@ -158,6 +187,14 @@ def validate(entry, facts):
         problems.append({"reason": "outcome 取 applied|escalated", "outcome": outcome})
     if outcome == "escalated" and not str(entry.get("escalated_question") or "").strip():
         problems.append({"reason": "escalated 必须写清你判断不了的那个问题"})
+    kind = entry.get("kind")
+    prefs = facts.get("prefs") or {}
+    if prefs.get(kind) == "ask_always" and outcome != "escalated":
+        problems.append({"reason": "该类判断设为 ask_always：必须 escalated 交人，不得自己定",
+                         "kind": kind})
+    if outcome == "escalated" and prefs.get(kind) == "ai_decides" and not str(entry.get("why") or "").strip():
+        problems.append({"reason": "ai_decides 下的越界升级必须写 why（为什么判断不了）",
+                         "kind": kind})
     if entry.get("by") is not None and entry.get("by") not in BY:
         problems.append({"reason": "by 取 ai|human", "by": entry.get("by")})
     # 豁免只能由人给出（v42 §6）：`waived_by` 必须带 human 前缀，AI 不得自行免检

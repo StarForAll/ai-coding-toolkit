@@ -3189,7 +3189,7 @@ def cmd_archive(ctx, args):
         # K6 第 2 类：本次提交范围里的**删除**要有一次确认（删除是不可逆动作）
         deleted_in_grant = _deleted_paths(ctx.root, grant_paths)
         if deleted_in_grant:
-            covered, uncovered = authorize_mod.covers(path, "delete", deleted_in_grant)
+            covered, uncovered = authorize_mod.covers(path, "delete", deleted_in_grant, root=ctx.root)
             if not covered:
                 action = actions.fail(dict(task["action"]), "delete without authorization")
                 task["action"] = action

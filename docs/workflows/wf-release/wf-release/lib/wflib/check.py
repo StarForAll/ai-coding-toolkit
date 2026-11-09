@@ -757,7 +757,7 @@ def run_check(ctx, task, decisions, review_notes_path):
         from . import tasks as tasks_mod
 
         task_dir = tasks_mod.task_dir(ctx.root, task.get("id"))
-        covered, uncovered = authorize_mod.covers(task_dir, "expand", buckets["f"])
+        covered, uncovered = authorize_mod.covers(task_dir, "expand", buckets["f"], root=ctx.root)
         if covered:
             scope_facts = dict(scope_facts,
                                approved_expansion=buckets["f"],
