@@ -2,7 +2,7 @@
 """第二十轮 R57：配置非法一律阻断依赖判断（统一取值器 + 全消费者回扫）。"""
 import datetime, hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
 from wflib import config as wf_config
 
@@ -72,8 +72,8 @@ cfg = json.loads(backup); cfg["spec_output_codepoints"] = 0
 json.dump(cfg, open(config_path, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 clean()
 rc, payload, _ = wf(["spec", "--file", ".wf/spec/index.md", "--json"], {"generation": write_gen()}, "sess-B2")
-rec("R57 预算 0 → spec 读取被拒", "WF_CAPABILITY_UNAVAILABLE", (payload or {}).get("code"),
-    (payload or {}).get("code") == "WF_CAPABILITY_UNAVAILABLE")
+rec("R57 预算 0 → spec 读取被拒（配置错误用记录类原因码）", "WF_RECORD_INVALID", (payload or {}).get("code"),
+    (payload or {}).get("code") == "WF_RECORD_INVALID")
 open(config_path, "w", encoding="utf-8").write(backup)
 
 json.dump(results, open("/tmp/r57_results.json", "w"), ensure_ascii=False, indent=2)

@@ -3,7 +3,7 @@
 import json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
 from wflib import tasks as wf_tasks
 
@@ -15,7 +15,7 @@ json.dump({"standard": {"conclusion": "pass", "basis": "b"},
 
 
 def rec(name, expected, actual, ok):
-    results.append({"case": name, "expected": actual, "actual": actual, "pass": bool(ok)})
+    results.append({"case": name, "expected": expected, "actual": actual, "pass": bool(ok)})
     print(f"[{'PASS' if ok else 'FAIL'}] {name}: {actual}")
 
 
@@ -46,15 +46,25 @@ rec("A3 目标固定（writer/task/binding/runtime）", "四类齐全", sorted(t
 task_record = json.load(open(os.path.join(F, facts["directory"], "task.json"), encoding="utf-8"))
 rec("A4 任务记录不再承载创建动作", "task.action 为空",
     task_record.get("action"), not task_record.get("action"))
-binding = json.load(open(os.path.join(F, ".wf/session-bindings",
-                                      os.listdir(os.path.join(F, ".wf/session-bindings"))[0]),
-                         encoding="utf-8"))
+def _binding_for(session_id):
+    """按会话标识选绑定：目录顺序不稳定，取错会把别的会话 instance 带进恢复请求（第十轮复审 N10-6）。"""
+    directory = os.path.join(F, ".wf/session-bindings")
+    for name in sorted(os.listdir(directory)):
+        try:
+            data = json.load(open(os.path.join(directory, name), encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        value = (data.get("identity") or {}).get("value") or {}
+        if value.get("session_id") == session_id:
+            return data, name
+    raise SystemExit(f"no binding for {session_id}")
+
+
+binding, binding_name = _binding_for("sess-R89")
 rec("A5 绑定与运行态齐备", "binding 有 instance_id 且运行态存在",
     bool(binding.get("instance_id")),
-    bool(binding.get("instance_id")) and os.path.isfile(os.path.join(
-        F, ".wf/.runtime/sessions", os.path.basename(
-            os.path.join(F, ".wf/session-bindings")) and
-        os.listdir(os.path.join(F, ".wf/session-bindings"))[0])))
+    bool(binding.get("instance_id"))
+    and os.path.isfile(os.path.join(F, ".wf/.runtime/sessions", binding_name)))
 
 # ---- 中断恢复：父动作退回未结案后重入续做同一任务 ----
 writer = json.load(open(os.path.join(F, ".wf/writer.json"), encoding="utf-8"))

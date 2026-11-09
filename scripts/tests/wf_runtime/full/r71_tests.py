@@ -2,7 +2,7 @@
 """第三十五轮 R71：交接实例核验、dispose 锁内重核、审查五轴齐全。"""
 import hashlib, json, os, re, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
 
 F = wfdrive.FIX
@@ -183,7 +183,7 @@ def reset_writer():
     proc.wait(timeout=90)
 
 
-def review_case(name, axes, expect_code, expect_verdict=None):
+def review_case(name, axes, expect_code, expect_verdict=None, single=False, slot_specs=None):
     reset_writer()
     task_id, directory, sid = build_task(f"R71 轴 {name}", f"sess-Y{abs(hash(name)) % 1000}")
     rc_c, payload_c, _ = wf(["task-check", "--task", task_id, "--review-notes", NOTES,
@@ -194,9 +194,10 @@ def review_case(name, axes, expect_code, expect_verdict=None):
               json.dumps((payload_c or {}).get("facts"), ensure_ascii=False)[:200])
     check = json.load(open(os.path.join(directory, "task.json"), encoding="utf-8")).get("check") or {}
     anchor = (check.get("anchor") or {}).get("check_anchor")
+    if slot_specs is None:
+        slot_specs = [("slot-a", "codex")] if single else [("slot-a", "codex"), ("slot-b", "pi")]
     request = {"implementation_clis": ["dsh"],
-               "slots": [{"slot": "slot-a", "reviewer_cli": "codex"},
-                         {"slot": "slot-b", "reviewer_cli": "pi"}],
+               "slots": [{"slot": slot, "reviewer_cli": cli} for slot, cli in slot_specs],
                "export_decision": dec("export", "approve"), "submitted_scope": {"diff": "git diff", "requirement": ["prd"], "test_results": ["v1"]},
                "readable_scope": {"paths": ["pkg/**"]}, "exclusions": []}
     launch_path = f"/tmp/r71_launch_{name}.json"
@@ -210,11 +211,11 @@ def review_case(name, axes, expect_code, expect_verdict=None):
 
     found = _glob.glob(f"/tmp/wf-review/*/{task_id}/round-1")
     staging = found[0] if found else f"/tmp/wf-review/unknown/{task_id}/round-1"
-    for slot in ("slot-a", "slot-b"):
+    for slot, cli in slot_specs:
         body = {"protocol": "wf-review-v1", "task-id": task_id, "round": 1, "reviewer-id": slot,
-                "source-cli": {"slot-a": "codex", "slot-b": "pi"}[slot], "review-time": AT,
+                "source-cli": cli, "review-time": AT,
                 "review-focus": "x", "check-anchor": {"check_id": check.get("id"), "check_anchor": anchor},
-                "read-scope": ["pkg/**"], "excluded-scope": ["node_modules/**"], "scope-exceptions": [],
+                "read-scope": ["pkg/**"], "excluded-scope": ["node_modules/**", ".env", "*.pem", ".codex/**", "../**", ".wf/tasks/**"], "scope-exceptions": [],
                 "axes": axes, "findings": [], "verdict": "pass"}
         slot_dir = os.path.join(staging, slot)
         os.makedirs(slot_dir, exist_ok=True)
@@ -234,24 +235,115 @@ def review_case(name, axes, expect_code, expect_verdict=None):
     verdict = ((record.get("reviews") or {}).get("result") or {}).get("verdict")
     wf(["task-pause", "--task", task_id, "--reason", "收尾", "--json"], {"generation": gen()}, sid)
     wf(["writer", "release", "--json"], {"generation": gen()}, sid)
-    return (payload or {}).get("code"), verdict
+    return (payload or {}).get("code"), verdict, (payload or {}).get("facts") or {}, record
 
 
 all_pass = {axis: {"conclusion": "pass", "basis": "b"} for axis in AXES}
-code, verdict = review_case("all", all_pass, "WF_OK", "pass")
+code, verdict, facts, record = review_case("all", all_pass, "WF_OK", "pass")
 rec("3 五轴齐全且通过 → pass", "WF_OK/pass", f"{code}/{verdict}", code == "WF_OK" and verdict == "pass")
-code, verdict = review_case("empty", {}, "WF_REVIEW_INVALID")
+code, verdict, facts, record = review_case("empty", {}, "WF_REVIEW_INVALID")
 rec("3b axes 为空被拒", "WF_REVIEW_INVALID", code, code == "WF_REVIEW_INVALID")
-code, verdict = review_case("only", {"range": {"conclusion": "pass", "basis": "b"}}, "WF_REVIEW_INVALID")
+code, verdict, facts, record = review_case("only", {"range": {"conclusion": "pass", "basis": "b"}}, "WF_REVIEW_INVALID")
 rec("3c 只报一轴被拒", "WF_REVIEW_INVALID", code, code == "WF_REVIEW_INVALID")
 partial = dict(all_pass)
 partial.pop("testability")
-code, verdict = review_case("missing", partial, "WF_REVIEW_INVALID")
+code, verdict, facts, record = review_case("missing", partial, "WF_REVIEW_INVALID")
 rec("3d 缺可测性轴被拒", "WF_REVIEW_INVALID", code, code == "WF_REVIEW_INVALID")
 unknown_axis = dict(all_pass)
 unknown_axis["extra"] = {"conclusion": "pass", "basis": "b"}
-code, verdict = review_case("extra", unknown_axis, "WF_REVIEW_INVALID")
-rec("3e 未知轴被拒", "WF_REVIEW_INVALID", code, code == "WF_REVIEW_INVALID")
+extra_code, extra_verdict, extra_facts, extra_record = review_case("extra", unknown_axis, "WF_REVIEW_INVALID")
+rec("3e 未知轴被拒且不写判定", "WF_REVIEW_INVALID + result 为空 + 无 fail 历史",
+    f"{extra_code} result={((extra_record.get('reviews') or {}).get('result'))}",
+    extra_code == "WF_REVIEW_INVALID"
+    and ((extra_record.get("reviews") or {}).get("result")) is None
+    and not any((a.get("outcome") == "fail") for a in ((extra_record.get("reviews") or {}).get("attempts") or [])))
+
+single_code, single_verdict, single_facts, single_record = review_case("single", all_pass, "WF_REVIEW_INVALID", None, single=True)
+rec("3f 单 reviewer 不产生判定结论", "WF_REVIEW_INVALID + degraded + 两个出口",
+    f"{single_code} degraded={single_facts.get('degraded')} exits={len(single_facts.get('exits') or [])}",
+    single_code == "WF_REVIEW_INVALID" and single_verdict is None
+    and single_facts.get("degraded") == "single-provider"
+    and len(single_facts.get("exits") or []) == 2
+    and single_facts.get("imported_reports")
+    and ((single_record.get("reviews") or {}).get("result")) is None
+    and not any((a.get("outcome") == "fail") for a in ((single_record.get("reviews") or {}).get("attempts") or [])))
+
+# 有效输入但审查结论 fail：必须写 verdict=fail 并留可重建的历史（§91 曾错指 3b）
+fail_axes = {axis: {"conclusion": "fail", "basis": "b"} for axis in AXES}
+fail_code, fail_verdict, fail_facts, fail_record = review_case("real-fail", fail_axes, "WF_REVIEW_INVALID", "fail")
+_fail_reviews = fail_record.get("reviews") or {}
+rec("3h 有效审查 fail 落判定且历史可重建", "WF_REVIEW_INVALID + verdict=fail + attempts.outcome=fail",
+    f"{fail_code}/{fail_verdict}/"
+    f"{[a.get('outcome') for a in (_fail_reviews.get('attempts') or [])]}",
+    fail_code == "WF_REVIEW_INVALID" and fail_verdict == "fail"
+    and ((_fail_reviews.get("result") or {}).get("verdict")) == "fail"
+    and any(a.get("outcome") == "fail" for a in (_fail_reviews.get("attempts") or [])))
+
+same_code, same_verdict, same_facts, same_record = review_case(
+    "samecli", all_pass, "WF_REVIEW_INVALID", None,
+    slot_specs=[("slot-a", "codex"), ("slot-b", "codex")])
+rec("3g 同 CLI 双槽位不产生判定结论", "WF_REVIEW_INVALID + result 为空 + 无 fail 历史",
+    f"{same_code} result={((same_record.get('reviews') or {}).get('result'))}",
+    same_code == "WF_REVIEW_INVALID"
+    and ((same_record.get("reviews") or {}).get("result")) is None
+    and not any((a.get("outcome") == "fail")
+                for a in ((same_record.get("reviews") or {}).get("attempts") or [])))
+
+
+# ---------- 4. 两段显式交接 E2E（旧代次失效 → 接收者 accept → 新代次生效） ----------
+ho_id, ho_dir, ho_sid = build_task("R71 交接 E2E", "sess-H1")
+wf(["task-pause", "--task", ho_id, "--reason", "交接 E2E", "--json"], {"generation": gen()}, ho_sid)
+json.dump([dec(f"handover {ho_id}", "handover")], open("/tmp/r71_ho2.json", "w"))
+_old_gen = gen()
+# receiver 按 session-key 核（不是裸会话名）：先按同一身份派生 H2 的 key
+sys.path.insert(0, os.path.join(F, ".wf/lib"))
+try:
+    from wflib import session as _wf_session
+    _h2_key = _wf_session.session_key({"provider": "host",
+                                       "identity": {"host_id": "dsh", "session_id": "sess-H2"}})
+finally:
+    sys.path.pop(0)
+rc, payload, _ = wf(["writer-handover", "begin", "--to", _h2_key, "--decision", "/tmp/r71_ho2.json",
+                     "--json"], {"generation": _old_gen}, ho_sid)
+rec("4 交接 begin 成功", "WF_OK", (payload or {}).get("code"), rc == 0)
+_ho_state = json.load(open(os.path.join(F, ".wf/writer.json"), encoding="utf-8"))
+rec("4b begin 后进入 recovering 且旧代次失效",
+    "state=recovering，代次已递增",
+    f"{_ho_state.get('state')}/{_ho_state.get('generation')}",
+    _ho_state.get("state") == "recovering"
+    and isinstance(_ho_state.get("generation"), int)
+    and _ho_state.get("generation") > _old_gen)
+
+rc, payload, _ = wf(["task-resume", "--task", ho_id, "--json"], {"generation": _old_gen}, ho_sid)
+rec("4c 交接中间态旧会话不可写", "非 WF_OK（WF_GENERATION_STALE/WF_WRITER_BUSY/WF_IDENTITY_UNRESOLVED）",
+    (payload or {}).get("code"),
+    rc != 0 and (payload or {}).get("code") in
+    ("WF_GENERATION_STALE", "WF_WRITER_BUSY", "WF_IDENTITY_UNRESOLVED", "WF_BINDING_MISMATCH"))
+
+# 接收者 accept 之前也不能推进（中间态双方不可写）
+rc_pre, payload_pre, _ = wfdrive.run(["task-resume", "--task", ho_id, "--json"],
+                                     {"generation": _old_gen}, "sess-H2", show=False)
+rec("4c2 accept 前接收者不可推进", "非 WF_OK",
+    (payload_pre or {}).get("code"),
+    rc_pre != 0 and (payload_pre or {}).get("code") in
+    ("WF_BINDING_MISMATCH", "WF_WRITER_BUSY", "WF_GENERATION_STALE", "WF_IDENTITY_UNRESOLVED"))
+
+rc, payload, _ = wfdrive.run(["writer-handover", "accept", "--json"], {}, "sess-H2", show=False)
+_accept_gen = ((payload or {}).get("facts") or {}).get("generation")
+rec("4d 接收者 accept 获得新代次", "WF_OK 且代次大于 begin 前",
+    f"{(payload or {}).get('code')}/{_accept_gen}",
+    rc == 0 and isinstance(_accept_gen, int) and _accept_gen > _old_gen)
+
+rc, payload, _ = wf(["task-resume", "--task", ho_id, "--json"], {"generation": _accept_gen}, "sess-H2")
+rec("4e 接收者持新代次可推进", "WF_OK", (payload or {}).get("code"), rc == 0)
+# accept 之后旧会话（含旧代次）必须失效
+rc_old, payload_old, _ = wf(["task-resume", "--task", ho_id, "--json"],
+                            {"generation": _old_gen}, ho_sid)
+rec("4f accept 后旧会话/旧代次失效", "非 WF_OK",
+    (payload_old or {}).get("code"),
+    rc_old != 0 and (payload_old or {}).get("code") in
+    ("WF_WRITER_BUSY", "WF_GENERATION_STALE", "WF_BINDING_MISMATCH", "WF_IDENTITY_UNRESOLVED"))
+wf(["writer", "release", "--json"], {"generation": _accept_gen}, "sess-H2")
 
 json.dump(results, open("/tmp/r71_results.json", "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """R5（install.py 记录形态下的卸载）与 R3（锁部分标记的人工出口）。"""
 import json, os, re, subprocess, sys
-sys.path.insert(0, "/tmp")
-import wfdrive
-
+HERE = os.path.dirname(os.path.abspath(__file__))
 F5 = "/tmp/wf-fixtures/f5"
-SKILLS = "/tmp/wf-fixtures/skills-f5"
-REPO = "/tmp/wf-fixtures/release-repo"
+F3 = "/tmp/wf-fixtures/f3"
+REPO = os.environ.get("WF_RELEASE_REPO") or "/tmp/wf-fixtures/release-repo"
+# 孤儿套件回接（2026-11-06 W1）：两个夹具都自带，不依赖兄弟套件或固定 /tmp 路径
+for _target in (F5, F3):
+    subprocess.run(["bash", os.path.join(HERE, "wf_fixture.sh"), _target], check=True, capture_output=True)
+SKILLS = os.path.join(F5, ".agents/skills")
 results = []
 
 
@@ -51,7 +53,6 @@ rec("R5 托管段移除但保留 /.wf-lock 行", "无托管标记且含 /.wf-loc
     "wf-managed-v1" not in gitignore and "/.wf-lock" in gitignore.splitlines())
 
 # ---------------- R3：锁部分标记 ----------------
-F3 = "/tmp/wf-fixtures/f3"
 lock_path = os.path.join(F3, ".wf-lock")
 with open(lock_path, "wb") as handle:
     handle.write(b"wf-lock")  # 部分标记（缺 -v1 与换行）

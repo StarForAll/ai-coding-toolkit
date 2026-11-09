@@ -8,7 +8,7 @@
 
 ## 2. 决策记录（唯一）
 
-`docs/workflows/新项目开发工作流/analysis/solution-review-v42.md`（v42 全文，逐字节复制）。
+`docs/workflows/wf/analysis/solution-review-v42.md`（v42 全文，逐字节复制）。
 后续一切争议以该文件 + 其 §7.1「已删除机制的防线对照」为准；本 PRD 不复制它的条款（避免第二份机器事实）。
 
 权威顺序（冲突时不自行裁决）：`docs/workflows/wf-framework-charter.md` > `wf-framework-design.md` > `wf-framework-mechanism.md` > v42。冲突按设计稿 §1.5 输出阻断三要素交人裁定。

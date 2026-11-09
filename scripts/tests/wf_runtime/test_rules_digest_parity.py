@@ -10,8 +10,8 @@ import os
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-PAYLOAD = os.path.join(ROOT, "docs", "workflows", "新项目开发工作流", "payload")
-MANIFEST = os.path.join(ROOT, "docs", "workflows", "新项目开发工作流", "dev-manifest.json")
+PAYLOAD = os.path.join(ROOT, "docs", "workflows", "wf", "payload")
+MANIFEST = os.path.join(ROOT, "docs", "workflows", "wf", "dev-manifest.json")
 
 
 def _load(name, path):

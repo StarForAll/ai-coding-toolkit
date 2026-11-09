@@ -2,7 +2,7 @@
 """CP4（A1 前置核验 / A4 spec 模板 / A8 卸载偏离 / A19 spec 输出）回归用例。"""
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
 from wflib import spec as wf_spec
 
@@ -115,7 +115,7 @@ wf(["writer", "release", "--json"], {"generation": gen_b}, "sess-R2")
 
 # ---------------- T2 / A4：spec 模板可被解析 ----------------
 meta, problems = wf_spec.parse_frontmatter(os.path.join(
-    "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/templates/spec/rule.md"))
+    "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/templates/spec/rule.md"))
 errors, paths, path_problems = wf_spec.validate_metadata(meta)
 rec("A4 模板 frontmatter 可解析", "problems 为空且 metadata 含 status/author",
     f"problems={problems} errors={errors} path_problems={path_problems}",

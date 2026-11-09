@@ -13,7 +13,7 @@ import subprocess
 import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SOURCE_ROOT = os.path.join(REPO_ROOT, "docs", "workflows", "新项目开发工作流")
+SOURCE_ROOT = os.path.join(REPO_ROOT, "docs", "workflows", "wf")
 PAYLOAD = os.path.join(SOURCE_ROOT, "payload")
 LIB_DIR = os.path.join(PAYLOAD, "lib")
 

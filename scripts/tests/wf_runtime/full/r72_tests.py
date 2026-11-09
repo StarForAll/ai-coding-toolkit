@@ -16,9 +16,9 @@ def make_project(name):
     os.makedirs(target)
     subprocess.run(["git", "init", "-q"], cwd=target, capture_output=True)
     subprocess.run(["/softwares/python/bin/python3",
-                    "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/install.py",
+                    "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/install.py",
                     "--target", target, "--release-ref", "refs/tags/wf-v0.1.0",
-                    "--source", "/tmp/wf-fixtures/release-repo",
+                    "--source", os.environ.get("WF_RELEASE_REPO") or "/tmp/wf-fixtures/release-repo",
                     "--platform", "dsh",
                     "--confirm", ],
                    capture_output=True, text=True)

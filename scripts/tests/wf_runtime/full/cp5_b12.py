@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
 """CP5 / B1+B2：F2 上的 Trellis 两分支与「共存 + 外部提交处置」。"""
 import hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
+HERE = os.path.dirname(os.path.abspath(__file__))
+F = "/tmp/wf-fixtures/f2"
+# 孤儿套件回接（2026-11-06 W1）：自带 F2 夹具（含 .trellis 残留言据与无交集外部提交）
+subprocess.run(["bash", os.path.join(HERE, "f2_setup.sh")], check=True, capture_output=True)
+# F2 初始态还包含一个已归档的初始化任务（与历史 V2/V3 用例同构），否则 F 无基线/无确认
+_environ = {**os.environ, "WF_FIX": F, "PYTHONPATH": HERE}
+subprocess.run([sys.executable, os.path.join(HERE, "f1_init.py")], check=True, capture_output=True, env=_environ)
+os.environ["WF_FIX"] = F
+sys.path.insert(0, HERE)
 import wfdrive
-
-F = wfdrive.FIX
+wfdrive.FIX = F
+wfdrive.WF = os.path.join(F, ".wf/bin/wf.py")
 results = []
 AT = "2026-11-03T13:00:00.000000Z"
 
@@ -91,8 +99,11 @@ external = git("rev-parse", "HEAD")
 json.dump({"standard": {"conclusion": "pass", "basis": "单函数"},
            "requirement": {"conclusion": "pass", "basis": "a1 覆盖"}},
           open("/tmp/cp5_notes.json", "w"))
-rc, payload, out = wf(["task-check", "--task", task_id, "--review-notes", "/tmp/cp5_notes.json", "--json"],
-                      inputs, "sess-F2")
+json.dump([{"source": "human (test)", "at": AT, "subject": f"已核对无影响 {external}",
+            "object_digest": "sha256:" + "0" * 64, "choice": "checked", "reason": "CP5 外部提交处置"}],
+          open("/tmp/cp5_ext.json", "w"))
+rc, payload, out = wf(["task-check", "--task", task_id, "--review-notes", "/tmp/cp5_notes.json",
+                       "--decision", "/tmp/cp5_ext.json", "--json"], inputs, "sess-F2")
 rec("B2 外部提交（触碰面内）不阻断 Check", "pass", (payload or {}).get("code"), rc == 0)
 record = json.load(open(os.path.join(directory, "task.json")))
 external_list = (record.get("check") or {}).get("scope_check", {}).get("external_changes") or []

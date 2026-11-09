@@ -26,7 +26,10 @@ import tarfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SOURCE_ROOT = REPO_ROOT / "docs" / "workflows" / "新项目开发工作流"
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+import wf_release_common as _common  # noqa: E402  （SOURCE_ROOT 的唯一来源）
+
+SOURCE_ROOT = Path(_common.SOURCE_ROOT)
 EVIDENCE_ROOT = SOURCE_ROOT / "analysis" / "evidence"
 
 TARGET_PROJECT = Path.home() / "projects" / "personal" / "traffic_monitor"

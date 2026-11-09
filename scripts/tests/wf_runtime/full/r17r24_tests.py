@@ -2,7 +2,7 @@
 """第四轮 R17–R24 用例（隔离夹具）。"""
 import hashlib, json, os, shutil, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
 from wflib import tasks as wf_tasks
 
@@ -246,7 +246,9 @@ probe_block["verifications"] = ver21
 prd21 = f"# R21 结束前重算\n\n<!-- wf-plan:v1 -->\n```json\n{json.dumps(probe_block, ensure_ascii=False, indent=2)}\n```\n"
 open(os.path.join(dir21, "prd.md"), "w", encoding="utf-8").write(prd21)
 d21b = "sha256:" + hashlib.sha256(prd21.encode()).hexdigest()
-wf(["task-replan", "--task", task21, "--json"], {"generation": gen21}, "sess-U21")
+json.dump([dec(f"replan {task21}", "replan", d21b)], open("/tmp/r21_replan.json", "w"))
+wf(["task-replan", "--task", task21, "--decision", "/tmp/r21_replan.json", "--json"],
+   {"generation": gen21}, "sess-U21")
 approve(task21, d21b, gen21, "sess-U21")
 rc, payload, _ = wf(["task-check", "--task", task21, "--review-notes", NOTES, "--json"],
                     {"generation": gen21}, "sess-U21")
@@ -291,7 +293,9 @@ block["verifications"] = [
 prd22 = f"# R22 TDD 结构\n\n<!-- wf-plan:v1 -->\n```json\n{json.dumps(block, ensure_ascii=False, indent=2)}\n```\n"
 open(os.path.join(dir22, "prd.md"), "w", encoding="utf-8").write(prd22)
 d22b = "sha256:" + hashlib.sha256(prd22.encode()).hexdigest()
-wf(["task-replan", "--task", task22, "--json"], {"generation": gen22}, "sess-U22")
+json.dump([dec(f"replan {task22}", "replan", d22b)], open("/tmp/r22_replan.json", "w"))
+wf(["task-replan", "--task", task22, "--decision", "/tmp/r22_replan.json", "--json"],
+   {"generation": gen22}, "sess-U22")
 approve(task22, d22b, gen22, "sess-U22", extra={"tdd": True})
 # 制造历史红运行：文件内容不满足 v1 → Check fail
 open(os.path.join(F, "area22/r22.txt"), "w").write("bad\n")

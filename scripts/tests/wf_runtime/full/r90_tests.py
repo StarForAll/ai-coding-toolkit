@@ -10,7 +10,7 @@ results = []
 
 
 def rec(name, expected, actual, ok):
-    results.append({"case": name, "expected": actual, "actual": actual, "pass": bool(ok)})
+    results.append({"case": name, "expected": expected, "actual": actual, "pass": bool(ok)})
     print(f"[{'PASS' if ok else 'FAIL'}] {name}: {actual}")
 
 
@@ -69,7 +69,7 @@ rec("R93 A 用旧代次写被拒", "WF_GENERATION_STALE 或 WF_WRITER_BUSY",
 
 # 4) 装完再追加 agent：只加平台，不动既有资产（要求写权空闲）
 wf(["writer", "release", "--json"], {"generation": gen()}, sid="sess-R93-B")
-install_py = "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/install.py"
+install_py = "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/install.py"
 before_assets = len(installation.get("assets") or [])
 # 夹具是 dev 部署（release_ref=dev:...）：追加平台用开发态部署工具，正式发行用 install.py
 dev_deploy = "/home/xzc/projects/personal/ai-coding-toolkit/scripts/wf-dev-deploy.py"
@@ -78,10 +78,90 @@ proc = subprocess.run(["/softwares/python/bin/python3", dev_deploy, "--target", 
 after = json.load(open(inst_path, encoding="utf-8"))
 if proc.returncode != 0:
     print("   add-platform stdout:", (proc.stdout or proc.stderr)[-300:])
-rec("R93 追加平台只改 platforms", "platforms 增加且 assets 数量不变",
-    f"{sorted(set(after.get('platforms') or []) - set(installation.get('platforms') or []))}/"
-    f"{len(after.get('assets') or []) == before_assets}",
-    "cursor" in (after.get("platforms") or []) and len(after.get("assets") or []) == before_assets)
+# 2026-11-05 第二轮复审 R2：cursor 与 dsh 共用 `.agents/skills` 根，追加平台不改文件、
+# 也不应改 assets 数量；但安装记录本身发生变化，必须留非空维护回执（复审 #8）。
+after_assets = len(after.get("assets") or [])
+_writer_after = json.load(open(os.path.join(F, ".wf/writer.json"), encoding="utf-8"))
+_receipt = (_writer_after.get("maintenance_results") or [{}])[-1]
+_receipt_paths = [item.get("path") for item in _receipt.get("changes") or []]
+_added_platforms = sorted(set(after.get('platforms') or []) - set(installation.get('platforms') or []))
+rec("R93 追加平台共享根：平台增加、资产不变、回执含安装记录",
+    "platforms 增加 cursor；assets 数量不变；changes 含 .wf/install/installation.json",
+    f"added={_added_platforms} assets={before_assets}->{after_assets} changes={_receipt_paths}",
+    _added_platforms == ["cursor"] and after_assets == before_assets
+    and ".wf/install/installation.json" in _receipt_paths)
+
+# ---- R4-1/R4-2（2026-11-05 第四/五轮复审）：来源一致性、零写入、代次类型 ----
+_writer_path = os.path.join(F, ".wf/writer.json")
+_inst_snap = open(inst_path, encoding="utf-8").read()
+_writer_snap = open(_writer_path, encoding="utf-8").read()
+
+
+def _json_fact(text):
+    for line in reversed((text or "").splitlines()):
+        line = line.strip()
+        if line.startswith("{"):
+            try:
+                return json.loads(line)
+            except ValueError:
+                return None
+    return None
+
+
+def _tree_snapshot():
+    """目标项目内的相对路径集合（目录 + 文件），用于证明拒绝路径没有创建任何新对象。"""
+    found = []
+    for base, dirs, files in os.walk(F):
+        dirs[:] = [d for d in dirs if d not in (".git",)]
+        rel_base = os.path.relpath(base, F).replace(os.sep, "/")
+        found.append(rel_base)
+        for name in files:
+            found.append(f"{rel_base}/{name}")
+    return sorted(found)
+
+
+# R4-1：篡改来源 → 拒绝；拒绝前后**逐字节**与目录树都不变
+bad_inst = json.load(open(inst_path, encoding="utf-8"))
+bad_inst["source_commit"] = "deadbeef" * 5
+json.dump(bad_inst, open(inst_path, "w"), ensure_ascii=False, indent=2)
+_tampered_inst = open(inst_path, encoding="utf-8").read()
+_writer_before = open(_writer_path, encoding="utf-8").read()
+_dir_before = _tree_snapshot()
+proc_src = subprocess.run(["/softwares/python/bin/python3", dev_deploy, "--target", F,
+                           "--platform", "claudecode", "--confirm", "--json"], capture_output=True, text=True)
+_dir_after = _tree_snapshot()
+rec("R4-1 不同来源追加平台被拒且零写入",
+    "WF_ASSET_DECISION；安装记录/writer 逐字节不变；目录树不变",
+    f"rc={proc_src.returncode} code={(_json_fact(proc_src.stdout) or {}).get('code')} "
+    f"dirs_delta={sorted(set(_dir_after) - set(_dir_before))}",
+    proc_src.returncode != 0
+    and (_json_fact(proc_src.stdout) or {}).get("code") == "WF_ASSET_DECISION"
+    and open(inst_path, encoding="utf-8").read() == _tampered_inst
+    and open(_writer_path, encoding="utf-8").read() == _writer_before
+    and _dir_after == _dir_before)
+json.dump(json.loads(_inst_snap), open(inst_path, "w"), ensure_ascii=False, indent=2)
+
+# R4-2：generation 非整数 → 拒绝；布尔同样不合法
+for label, value in (("broken", "broken"), ("true", True), ("false", False)):
+    bad_writer = json.load(open(_writer_path, encoding="utf-8"))
+    bad_writer["generation"] = value
+    json.dump(bad_writer, open(_writer_path, "w"), ensure_ascii=False, indent=2)
+    broken_snap = open(_writer_path, encoding="utf-8").read()
+    inst_before_gen = open(inst_path, encoding="utf-8").read()
+    _dir_before = _tree_snapshot()
+    proc_gen = subprocess.run(["/softwares/python/bin/python3", dev_deploy, "--target", F,
+                               "--platform", "claudecode", "--confirm", "--json"], capture_output=True, text=True)
+    _dir_after = _tree_snapshot()
+    rec(f"R4-2 generation={label} 结构化拒绝且零写入",
+        "WF_RECORD_INVALID；无 traceback；writer/安装记录/目录树不变",
+        f"rc={proc_gen.returncode} code={(_json_fact(proc_gen.stdout) or {}).get('code')}",
+        proc_gen.returncode != 0
+        and (_json_fact(proc_gen.stdout) or {}).get("code") == "WF_RECORD_INVALID"
+        and "Traceback" not in (proc_gen.stderr or "")
+        and open(_writer_path, encoding="utf-8").read() == broken_snap
+        and open(inst_path, encoding="utf-8").read() == inst_before_gen
+        and _dir_after == _dir_before)
+open(_writer_path, "w", encoding="utf-8").write(_writer_snap)
 
 json.dump(results, open("/tmp/r90_results.json", "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

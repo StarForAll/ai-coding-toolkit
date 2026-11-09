@@ -2,7 +2,7 @@
 """第三十一轮 R68：审查判定输入、repair 预览漂移与锁、基线批准与前像、续做分类。"""
 import hashlib, json, os, re, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
 
 F = wfdrive.FIX
@@ -129,7 +129,7 @@ def write_report(staging, slot, task_id, check, anchor, **over):
             "source-cli": {"slot-a": "codex", "slot-b": "pi"}[slot],
             "review-time": AT, "review-focus": "x",
             "check-anchor": {"check_id": (check or {}).get("id"), "check_anchor": anchor},
-            "read-scope": ["pkg/**"], "excluded-scope": ["node_modules/**"], "scope-exceptions": [],
+            "read-scope": ["pkg/**"], "excluded-scope": ["node_modules/**", ".env", "*.pem", ".codex/**", "../**", ".wf/tasks/**"], "scope-exceptions": [],
             "axes": {axis: {"conclusion": "pass", "basis": "b"} for axis in ("range", "acceptance", "contract", "regression", "testability")},
             "findings": [], "verdict": "pass"}
     body.update(over)

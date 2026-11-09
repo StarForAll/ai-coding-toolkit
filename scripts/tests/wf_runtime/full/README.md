@@ -7,7 +7,7 @@
 ## 前置
 
 1. 解释器：`/softwares/python/bin/python3`（authoring 侧）。
-2. 夹具：`bash wf_fixture.sh [夹具目录] [nocap]` 会从 `docs/workflows/新项目开发工作流/payload`
+2. 夹具：`bash wf_fixture.sh [夹具目录] [nocap]` 会从 `docs/workflows/wf/payload`
    部署开发态运行时（调用 `scripts/wf-dev-deploy.py --confirm --verify-capability`，会写 `~/.wf/`）。
 3. 环境变量 `WF_FIX`：夹具根（默认 `/tmp/wf-fixtures/f1`）。
 
@@ -45,8 +45,8 @@
 | `r63_tests.py` | 第二十六轮 R63（日志与 facts 秘密边界脱敏、副本来源登记） |
 | `r64_tests.py` | 第二十七轮 R64（P3：spec facts 收缩、generation 校验、未知 step 留痕、源树卫生等） |
 | `r65_tests.py` | 第二十八轮 R65（review-passed 恢复 complex、降级核验入 final_gate、outcome 单调、调查判据收紧） |
-| `d1_tests.py` | D1 实跑（真实 `$DSH_SESSION_ID` 绑定/重入/压缩边界/新会话/wf 身份拒绝面） |
-| `d1_wf_tests.py` | D1 的 wf 签发路径（`provider=wf` 携带/恢复/复制到新会话/丢失） |
+| `d1_tests.py` | D1 实跑（真实 `$DSH_SESSION_ID` 绑定/重入/压缩边界/新会话/wf 身份拒绝面）；**手动执行，需真实宿主压缩，不计入 `run_all.sh` 分母** |
+| `d1_wf_tests.py` | D1 的 wf 签发路径（`provider=wf` 携带/恢复/复制到新会话/丢失）；**同上，手动执行、不计入分母** |
 | `r66_tests.py` | 第二十九轮 R66（实例标识、写者结构、终态、义务来源、重复记录） |
 | `r67_tests.py` | 第三十轮 R67（写权入口实例/能力、baseline 状态与提案、清单声明、聚合脚本退出码） |
 | `r90_tests.py` | 第五十八轮 R93（平台清单即身份事实：未装宿主只读放行/写阻断、多 agent 交替不覆盖、追加平台） |
@@ -85,8 +85,12 @@ WF_FIX=/tmp/wf-fixtures/f1 /softwares/python/bin/python3 f1_ordinary.py
 WF_FIX=/tmp/wf-fixtures/f1 /softwares/python/bin/python3 r7r15_tests.py
 ```
 
-注意：这些脚本假定 `/tmp/wf-fixtures/` 下的夹具可重建；`r35_tests.py` 需要先用仓库外的发行树
-（`docs/workflows/wf-release/` 打 tag 后 `install.py`）准备 `/tmp/wf-fixtures/f5`。
+注意：这些脚本假定 `/tmp/wf-fixtures/` 下的夹具可重建。
+
+**套件自带夹具（2026-11-06 W1）**：`cp4_a8` / `cp5_b12` / `r35_tests` 曾因写死 `/tmp/wf-fixtures/{fu,f5,f3,f2}`
+且无人创建而脱离 `run_all.sh`（cp5_b12 当时已红 4 条而无人知晓）。现在它们在脚本内自己调用
+`wf_fixture.sh` / `f2_setup.sh`（cp5_b12 另跑 `f1_init.py` 补初始化任务），不依赖兄弟套件或调用方的 `FIX`。
+新增套件若需要非 F1 夹具，按同一方式自带，不要假设某个固定 `/tmp` 目录已存在。
 
 ## 并行与子集
 

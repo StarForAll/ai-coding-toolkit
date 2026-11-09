@@ -2,7 +2,7 @@
 """第十二轮 R47–R48：spec 读取/写入的真实落点与嵌套仓库边界。"""
 import hashlib, json, os, shutil, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
 
 F = wfdrive.FIX

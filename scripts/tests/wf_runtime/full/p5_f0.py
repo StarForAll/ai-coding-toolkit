@@ -67,8 +67,22 @@ subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=F, check
 subprocess.run(["git", "config", "user.name", "tester"], cwd=F, check=False)
 subprocess.run(["git", "add", ".wf", ".gitignore"], cwd=F, check=False)
 subprocess.run(["git", "commit", "-qm", "wf: initial skeleton"], cwd=F, check=False)
-head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=F, capture_output=True, text=True).stdout.strip()
-rec("人授权建立首个 HEAD", "HEAD 存在且只含骨架", head[:8], bool(head))
+# 断言必须核退出码与可解析的提交对象：空仓里 rev-parse HEAD 会打印 "HEAD" 并以 128 退出，
+# 只看 stdout 非空会把「没有提交」误判为通过（2026-11-05 第三轮复审 N7）。
+probe = subprocess.run(["git", "rev-parse", "HEAD"], cwd=F, capture_output=True, text=True)
+verify = subprocess.run(["git", "rev-parse", "--verify", "HEAD^{commit}"], cwd=F,
+                        capture_output=True, text=True)
+head = probe.stdout.strip() if probe.returncode == 0 else ""
+# core.quotepath=false：中文任务目录否则会被 git 加引号，前缀判断失真
+_tree = subprocess.run(["git", "-c", "core.quotepath=false", "ls-tree", "-r", "--name-only", "HEAD"],
+                       cwd=F, capture_output=True, text=True)
+_tree_paths = [line for line in (_tree.stdout or "").splitlines() if line.strip()]
+rec("人授权建立首个 HEAD", "rev-parse 退出 0、HEAD^{commit} 可解析、提交树只含骨架",
+    f"rc={probe.returncode} verify={verify.returncode} head={head[:8]} "
+    f"skeleton_only={all(p.startswith(('.wf/', '.gitignore')) for p in _tree_paths)}",
+    probe.returncode == 0 and verify.returncode == 0 and bool(head)
+    and _tree.returncode == 0
+    and all(path.startswith((".wf/", ".gitignore")) for path in _tree_paths))
 
 rc, payload, _ = wf(["task-start", "--task", task_id, "--json"], inputs)
 rec("Git 就绪后开工", "pass", (payload or {}).get("code"), rc == 0)
@@ -87,7 +101,7 @@ proposal = {"files": [
     {"path": ".wf/baseline.md", "content": baseline, "before": None},
     {"path": ".wf/spec/index.md", "content": open(f"{F}/.wf/templates/spec/index.md", encoding="utf-8").read(), "before": None},
 ]}
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 from wflib import records as _wf_records
 
 proposal["approval"] = {"source": "human terminal", "at": "2026-11-07T00:00:00.000000Z",

@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO / "docs" / "workflows" / "新项目开发工作流" / "payload" / "lib"))
+sys.path.insert(0, str(REPO / "docs" / "workflows" / "wf" / "payload" / "lib"))
 
 from wflib import projection  # noqa: E402
 
@@ -98,7 +98,7 @@ class UnverifiedLifecycleTest(unittest.TestCase):
         self.assertTrue(any("证据" in item["reason"] for item in problems))
 
     def test_archive_gate_consumes_it(self):
-        source = (REPO / "docs/workflows/新项目开发工作流/payload/lib/wflib/gates.py").read_text(encoding="utf-8")
+        source = (REPO / "docs/workflows/wf/payload/lib/wflib/gates.py").read_text(encoding="utf-8")
         self.assertIn("required_unverified", source)
         self.assertIn("pending_required_unverified", source)
 
@@ -119,7 +119,7 @@ class ChainHeadTrailerTest(unittest.TestCase):
         self.assertEqual(tasks._chain_trailer({}), "")
 
     def test_archive_commits_carry_the_trailer(self):
-        source = (REPO / "docs/workflows/新项目开发工作流/payload/lib/wflib/tasks.py").read_text(encoding="utf-8")
+        source = (REPO / "docs/workflows/wf/payload/lib/wflib/tasks.py").read_text(encoding="utf-8")
         self.assertIn("_chain_trailer(task)", source)
         self.assertGreaterEqual(source.count("wf-chain-head"), 1)
 

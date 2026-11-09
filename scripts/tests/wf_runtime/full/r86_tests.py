@@ -3,7 +3,7 @@
 import json, os, subprocess, sys, tempfile
 sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
 from wflib import check as wf_check, scope as wf_scope, tasks as wf_tasks
 
@@ -91,7 +91,7 @@ rec("D-14 引用检查带 unknown 分类", "含 unknown/status",
     sorted(refs_summary), {"dangling", "unknown", "status"} <= set(refs_summary))
 
 # ---- D-15/D-16：预览与落盘证据同源 ----
-install_src = open("/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/install.py",
+install_src = open("/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/install.py",
                    encoding="utf-8").read()
 rec("D-15 安装器预览与落盘共用平台解析", "含 resolve_skill_roots",
     "resolve_skill_roots(args.target" in install_src,
@@ -112,8 +112,12 @@ rec("D-18 版本一致性有断言", "含 _assert_version_consistency",
 
 # ---- 收尾：stdin 不静默挂起 ----
 cli_src = open(wf_check.__file__.replace("check.py", "cli.py"), encoding="utf-8").read()
-rec("stdin 无管道时明确报错", "含 must be piped on stdin",
-    "must be piped on stdin" in cli_src, "must be piped on stdin" in cli_src)
+# 2026-11-08 契约变更（identity-redesign §4.1/§4.2）：无显式信封不再一律 WF_PATH_INVALID，
+# 改为进入**自动身份模式**；解析不到执行边界时明确报 WF_IDENTITY_UNRESOLVED 并给出口。
+# 断言随之改为"不静默挂起"这一意图本身：要么解析出边界，要么给出结构化错误与出口。
+rec("stdin 无显式信道时不静默挂起", "解析失败报 WF_IDENTITY_UNRESOLVED（不再是 WF_PATH_INVALID）",
+    "no execution boundary resolved" in cli_src and "must be piped on stdin" not in cli_src,
+    "no execution boundary resolved" in cli_src and "must be piped on stdin" not in cli_src)
 
 
 

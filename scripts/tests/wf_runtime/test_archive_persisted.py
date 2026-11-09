@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..",
-                                "docs", "workflows", "新项目开发工作流", "payload", "lib"))
+                                "docs", "workflows", "wf", "payload", "lib"))
 
 from wflib import tasks  # noqa: E402
 

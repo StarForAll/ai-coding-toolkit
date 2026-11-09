@@ -2,7 +2,7 @@
 """CP3（A6 提交范围 / A7 审查 attempt / A9 执行器 / A16 处理器表 / A17 rules_digest）回归用例。"""
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
 from wflib import assets as wf_assets, cli as wf_cli, gates as wf_gates
 
@@ -186,16 +186,36 @@ rec("A9 项目配置损坏不静默回退", "WF_EXECUTOR_UNCONFIRMED", f"{(paylo
 open(project_config, "w").write(backup)
 
 # ---------------- T5 / A16：固定分派表 ----------------
-manifest = {"required_steps": [{"id": step} for step in sorted(wf_gates.supported_keys())]}
+# 交付轮次（2026-11-05 人裁 B）：清单必须声明 delivery_round，安装自检据此判可达
+_specs = wf_gates.required_step_specs()
+manifest = {"delivery_round": wf_gates.CURRENT_DELIVERY_ROUND,
+            "required_steps": [{"id": step, "delivery_round": _specs[step]["delivery_round"]}
+                               for step in sorted(wf_gates.supported_keys())]}
 problems = wf_gates.support_report(manifest, wf_cli.COMMANDS,
-                                  [name for name in wf_gates.BOOTSTRAP_ENTRIES
-                                   if os.path.isfile(os.path.join(F, ".wf/bin", f"{name}.py"))])
+                                   [name for name in wf_gates.BOOTSTRAP_ENTRIES
+                                    if os.path.isfile(os.path.join(F, ".wf/bin", f"{name}.py"))])
 rec("A16 分派表与命令面一致", "无问题", f"{len(problems)} problems", not problems)
-bad = {"required_steps": manifest["required_steps"] + [{"id": "task.unknown-step"}]}
+overclaimed = {"delivery_round": wf_gates.CURRENT_DELIVERY_ROUND,
+               "required_steps": [dict(step, delivery_round=(wf_gates.CURRENT_DELIVERY_ROUND
+                                                             if step["id"] == "control.run.advance"
+                                                             else step["delivery_round"]))
+                                  for step in manifest["required_steps"]]}
+claimed_problems = wf_gates.support_report(overclaimed, wf_cli.COMMANDS)
+rec("A16 已交付步骤不得是能力桩", "报 capability stub",
+    claimed_problems[:1],
+    any(p.get("required_step") == "control.run.advance" and "capability stub" in p.get("reason", "")
+        for p in claimed_problems))
+missing_round = {"required_steps": [{"id": "task.archived"}]}
+rec("A16 缺交付轮次被拒", "报 delivery_round missing",
+    wf_gates.support_report(missing_round, wf_cli.COMMANDS)[:1],
+    any("delivery_round" in p.get("reason", "") for p in wf_gates.support_report(missing_round, wf_cli.COMMANDS)))
+bad = {"delivery_round": wf_gates.CURRENT_DELIVERY_ROUND,
+       "required_steps": manifest["required_steps"] + [{"id": "task.unknown-step", "delivery_round": 1}]}
 rec("A16 未登记步骤被拒", "报 no fixed handler",
     wf_gates.support_report(bad, wf_cli.COMMANDS),
     any(p.get("required_step") == "task.unknown-step" for p in wf_gates.support_report(bad, wf_cli.COMMANDS)))
-fewer = {"required_steps": [item for item in manifest["required_steps"] if item["id"] != "control.task.archive"]}
+fewer = {"delivery_round": wf_gates.CURRENT_DELIVERY_ROUND,
+         "required_steps": [item for item in manifest["required_steps"] if item["id"] != "control.task.archive"]}
 rec("A16 未声明处理器被拒", "报 handler not declared",
     len(wf_gates.support_report(fewer, wf_cli.COMMANDS)),
     any(p.get("required_step") == "control.task.archive"
@@ -212,7 +232,7 @@ sample = {"schema_version": 1,
                                 "lines": ["/.wf-lock"]}}
 import importlib.util
 spec = importlib.util.spec_from_file_location(
-    "wf_install", "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/install.py")
+    "wf_install", "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/install.py")
 install_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(install_mod)
 rec("A17 两处 rules_digest 一致（含非 ASCII 路径）", "相同摘要",

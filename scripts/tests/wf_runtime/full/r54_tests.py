@@ -2,7 +2,7 @@
 """第十七轮 R54：四项条件汇总后统一提议复杂度。"""
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
 
 F = wfdrive.FIX
@@ -67,8 +67,9 @@ os.makedirs(os.path.join(F, "pkg"), exist_ok=True)
 
 # ① 仅 contract=true，不显式指定 complexity → 提议 complex，缺产物被拒
 clean()
-task1, gen1, dir1, d1 = make_task("R54 contract", ["pkg/**", ".wf/spec/**"], "sess-Y1")
-rc, payload, _ = approve(task1, d1, gen1, {"complexity_conditions": {"contract": {"value": "true", "fact": "changes public API contract"}}})
+task1, gen1, dir1, d1 = make_task("R54 contract", ["pkg/**", ".wf/lib/wflib/gates.py"], "sess-Y1")
+# 2026-11-07：②③④ 改为按事实核对，不再由 inputs 声明；触碰面命中 .wf/lib/** 即②成立
+rc, payload, _ = approve(task1, d1, gen1, {})
 rec("R54 contract=true 未指定分级 → 要求复杂产物", "WF_TEMPLATE_INCOMPLETE",
     (payload or {}).get("code"), (payload or {}).get("code") == "WF_TEMPLATE_INCOMPLETE")
 rec("R54 报告按 complex 要求", "facts.complexity=complex",
@@ -86,20 +87,32 @@ rec("R54 分级落为 complex", "plan.complexity=complex", plan.get("plan", {}).
 conds = [r.get("condition") for r in plan.get("plan", {}).get("complexity_reasons") or []]
 rec("R54 条件事实入库", "reasons 含 contract", conds, "contract" in conds)
 
-# ③ 仅 scope 条件也复现同一行为（不只 contract 一条路径）
+# ③ 范围扩张（④）用单元级事实断言：旧面已批准的路径之外新增即成立
 clean()
+from wflib import scope as scope_mod  # noqa: E402  （sys.path 已由夹具注入）
+
+_expanded, _fact_expanded = scope_mod.expansion_condition(["pkg/**"], ["docs/**"])
+rec("R54 ④范围扩张：旧面之外新增即成立", "true", _expanded, _expanded == "true")
+_same, _ = scope_mod.expansion_condition(["pkg/**"], ["pkg/a.py"])
+rec("R54 ④未扩张：被旧面包含", "false", _same, _same == "false")
+_no_prev, _ = scope_mod.expansion_condition(None, ["pkg/**"])
+rec("R54 ④首次批准不算扩张", "false", _no_prev, _no_prev == "false")
+_acc, _ = scope_mod.acceptance_surface_condition(F, [".wf/baseline.md"])
+rec("R54 ③验收口径来源命中", "true", _acc, _acc == "true")
+_cmp, _ = scope_mod.contract_surface_condition(F, [".wf/lib/wflib/check.py"])
+rec("R54 ②契约面命中", "true", _cmp, _cmp == "true")
+_none, _ = scope_mod.contract_surface_condition(F, ["pkg/a.py"])
+rec("R54 ②普通业务路径不命中", "false", _none, _none == "false")
+
 wf(["task-pause", "--task", task1, "--reason", "R54 收尾", "--json"],
    {"generation": json.load(open(os.path.join(F, ".wf/writer.json"), encoding="utf-8")).get("generation")}, "sess-Y1")
 wf(["writer", "release", "--json"],
    {"generation": json.load(open(os.path.join(F, ".wf/writer.json"), encoding="utf-8")).get("generation")}, "sess-Y1")
-task2, gen2, dir2, d2 = make_task("R54 scope", ["pkg/**"], "sess-Y2")
-rc2, payload2, _ = approve(task2, d2, gen2, {"complexity_conditions": {"scope": {"value": "unknown", "fact": "范围可能扩张"}}}, "sess-Y2")
-rec("R54 scope=unknown 同样要求产物", "WF_TEMPLATE_INCOMPLETE", (payload2 or {}).get("code"),
-    (payload2 or {}).get("code") == "WF_TEMPLATE_INCOMPLETE")
+task2, gen2, dir2, d2 = make_task("R54 降级", ["pkg/**", ".wf/baseline.md"], "sess-Y2")
 
 # ④ 条件为 true 但人工显式 light 且给理由证据 → 允许降级
-rc, payload, _ = approve(task2, d2, gen2, {"complexity": "light", "complexity_conditions": {"scope": {"value": "unknown"}},
-                                           "downgrade": {"reason": "只改一个内部函数", "evidence": "无对外签名变化"}}, "sess-Y2")
+rc, payload, _ = approve(task2, d2, gen2, {"complexity": "light",
+                                           "downgrade": {"reason": "只改 spec 索引一条", "evidence": "无验收口径变化"}}, "sess-Y2")
 rec("R54 有理由可降级为 light", "WF_OK", (payload or {}).get("code"), rc == 0)
 plan2 = plan_of(task2)
 downgraded = [r for r in plan2.get("plan", {}).get("complexity_reasons") or [] if r.get("downgrade")]
@@ -111,9 +124,8 @@ wf(["task-pause", "--task", task2, "--reason", "R54 收尾", "--json"],
    {"generation": json.load(open(os.path.join(F, ".wf/writer.json"), encoding="utf-8")).get("generation")}, "sess-Y2")
 wf(["writer", "release", "--json"],
    {"generation": json.load(open(os.path.join(F, ".wf/writer.json"), encoding="utf-8")).get("generation")}, "sess-Y2")
-task3, gen3, dir3, d3 = make_task("R54 无理由降级", ["pkg/**"], "sess-Y3")
-rc, payload, _ = approve(task3, d3, gen3, {"complexity": "light",
-                                           "complexity_conditions": {"contract": {"value": "true"}}}, "sess-Y3")
+task3, gen3, dir3, d3 = make_task("R54 无理由降级", ["pkg/**", ".wf/baseline.md"], "sess-Y3")
+rc, payload, _ = approve(task3, d3, gen3, {"complexity": "light"}, "sess-Y3")
 rec("R54 无理由降级被拒", "WF_SEMANTIC_DECISION", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_SEMANTIC_DECISION")
 

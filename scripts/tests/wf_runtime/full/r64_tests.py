@@ -2,7 +2,7 @@
 """第二十七轮 R64：P3 改进项。"""
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
 from wflib import gates as wf_gates
 
@@ -89,18 +89,18 @@ rec("P3-8 未知 step 留痕", "有 __unknown_steps__ 条目", bool(unknown), bo
 
 # P3-1：源树无 pycache
 import shutil
-for base, dirs, files in list(os.walk(os.path.join(ROOT, "docs/workflows/新项目开发工作流"))):
+for base, dirs, files in list(os.walk(os.path.join(ROOT, "docs/workflows/wf"))):
     if os.path.basename(base) == "__pycache__":
         shutil.rmtree(base, ignore_errors=True)
 found = []
-for base, dirs, files in os.walk(os.path.join(ROOT, "docs/workflows/新项目开发工作流")):
+for base, dirs, files in os.walk(os.path.join(ROOT, "docs/workflows/wf")):
     if os.path.basename(base) == "__pycache__":
         found.append(base)
 rec("P3-1 源树无 __pycache__", "空", found, not found)
 
 # P3-3：改名同步 bump 包络
 rec("P3-3 同步与释放 bump 包络", "源码含 revision bump",
-    "revision" in open(os.path.join(ROOT, "docs/workflows/新项目开发工作流/payload/lib/wflib/spec.py"), encoding="utf-8").read(),
+    "revision" in open(os.path.join(ROOT, "docs/workflows/wf/payload/lib/wflib/spec.py"), encoding="utf-8").read(),
     True)
 
 json.dump(results, open("/tmp/r64_results.json", "w"), ensure_ascii=False, indent=2)

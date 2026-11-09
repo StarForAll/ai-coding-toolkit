@@ -2,7 +2,7 @@
 """第二十三轮 R60：查证须核提交树终态、按路径排序、待核进入门禁。"""
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
 from wflib import tasks as wf_tasks
 
@@ -78,7 +78,7 @@ writer["maintenance_results"] = [{"operation": "op-60", "result": "unknown-state
 json.dump(writer, open(writer_path, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 rec("R60 不可核回执为 pending_check", "pending_check", states().get("op-60"),
     states().get("op-60") == "pending_check")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 from wflib import cli as wf_cli
 env = "/tmp/r60_env.json"
 json.dump(wfdrive.envelope({}, "sess-E9"), open(env, "w"), ensure_ascii=False)

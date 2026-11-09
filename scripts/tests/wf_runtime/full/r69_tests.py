@@ -2,7 +2,7 @@
 """第三十三轮 R69：前像结构与整批预检、审查导入冲突、卸载内容重核。"""
 import hashlib, json, os, re, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
 
 F = wfdrive.FIX
@@ -128,7 +128,7 @@ def report_body(slot, **over):
     body = {"protocol": "wf-review-v1", "task-id": task_id, "round": 1, "reviewer-id": slot,
             "source-cli": {"slot-a": "codex", "slot-b": "pi"}[slot], "review-time": AT, "review-focus": "x",
             "check-anchor": {"check_id": check.get("id"), "check_anchor": anchor},
-            "read-scope": ["pkg/**"], "excluded-scope": ["node_modules/**"], "scope-exceptions": [],
+            "read-scope": ["pkg/**"], "excluded-scope": ["node_modules/**", ".env", "*.pem", ".codex/**", "../**", ".wf/tasks/**"], "scope-exceptions": [],
             "axes": {axis: {"conclusion": "pass", "basis": "b"} for axis in ("range", "acceptance", "contract", "regression", "testability")},
             "findings": [], "verdict": "pass"}
     body.update(over)
@@ -184,9 +184,9 @@ shutil.rmtree(UN, ignore_errors=True)
 os.makedirs(UN)
 subprocess.run(["git", "init", "-q"], cwd=UN, capture_output=True)
 subprocess.run(["/softwares/python/bin/python3",
-                "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/install.py",
+                "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/install.py",
                 "--target", UN, "--release-ref", "refs/tags/wf-v0.1.0",
-                "--source", "/tmp/wf-fixtures/release-repo",
+                "--source", os.environ.get("WF_RELEASE_REPO") or "/tmp/wf-fixtures/release-repo",
                 "--platform", "dsh",
                 "--confirm", ],
                capture_output=True, text=True)

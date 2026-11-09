@@ -2,7 +2,7 @@
 """第三轮 R7–R15 用例（隔离夹具）。"""
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
 from wflib import tasks as wf_tasks
 
@@ -11,7 +11,7 @@ results = []
 
 def _pd(files):
     import sys as _s
-    _s.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+    _s.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
     from wflib import records as _r
     return _r.plain_digest({"files": files})
 
@@ -239,7 +239,9 @@ rc, payload, _ = wf(["spec-update", "--task", task9, "--changes", rename, "--jso
 index_text = open(index_path, encoding="utf-8").read()
 rec("R9 同变更集重入完成剩余步骤", "WF_OK 且索引含 r9b.md",
     f"{(payload or {}).get('code')} index={'r9b.md' in index_text}",
-    rc == 0 and "r9b.md" in index_text and index_text.count("r9b.md") == 1)
+    # 2026-11-06：索引条目改成 `- [新文件名](新路径)`，文本里 "r9b.md" 会出现两次（标签+路径）；
+    # 这里要断言的是「只有一条条目」，改为按路径计数。
+    rc == 0 and index_text.count("](.wf/spec/r9b.md)") == 1)
 wf(["task-pause", "--task", task9, "--reason", "R9 收尾", "--json"], {"generation": gen9}, "sess-T9")
 wf(["writer", "release", "--json"], {"generation": gen9}, "sess-T9")
 

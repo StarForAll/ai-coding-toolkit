@@ -10,7 +10,7 @@ results = []
 
 def _pd(files):
     import sys as _s
-    _s.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+    _s.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
     from wflib import records as _r
     return _r.plain_digest({"files": files})
 

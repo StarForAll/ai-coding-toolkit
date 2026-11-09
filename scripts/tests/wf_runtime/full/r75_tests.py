@@ -3,7 +3,7 @@
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
 from wflib import gates as wf_gates, tasks as wf_tasks, lock as wf_lock, cli as wf_cli
 
@@ -104,7 +104,7 @@ def report(staging, slot, cli_name, **over):
     body = {"protocol": "wf-review-v1", "task-id": task_id, "round": 1, "reviewer-id": slot,
             "source-cli": cli_name, "review-time": AT, "review-focus": "x",
             "check-anchor": {"check_id": check.get("id"), "check_anchor": anchor},
-            "read-scope": ["pkg/**"], "excluded-scope": ["node_modules/**"], "scope-exceptions": [],
+            "read-scope": ["pkg/**"], "excluded-scope": ["node_modules/**", ".env", "*.pem", ".codex/**", "../**", ".wf/tasks/**"], "scope-exceptions": [],
             "axes": {axis: {"conclusion": "pass", "basis": "b"} for axis in AXES},
             "findings": [], "verdict": "pass"}
     body.update(over)

@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
-PAYLOAD = REPO / "docs" / "workflows" / "新项目开发工作流" / "payload"
+PAYLOAD = REPO / "docs" / "workflows" / "wf" / "payload"
 SCRIPTS = REPO / "scripts"
 sys.path.insert(0, str(PAYLOAD / "lib"))
 sys.path.insert(0, str(SCRIPTS))

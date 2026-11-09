@@ -2,7 +2,7 @@
 """第三十轮 R67：写权入口实例/能力核验、baseline 状态与提案、清单声明、聚合脚本退出码。"""
 import hashlib, json, os, shutil, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
 from wflib import gates as wf_gates, cli as wf_cli
 
@@ -11,7 +11,7 @@ results = []
 
 
 def _proposal_digest(files):
-    sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+    sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
     from wflib import records as _r
 
     return _r.plain_digest({"files": files})
@@ -239,23 +239,42 @@ for name in suites_line.group(1).split():
 open(os.path.join(fake, "r72_tests.py"), "w").write(
     "print('\\n'.join('[PASS] case %d' % i for i in range(1, 8)))\nprint('saved 7 / 7')\n")
 open(os.path.join(fake, "p5_f0.py"), "w").write("print('PASS')\n" * 9)
+# repro 一键入口的桩：run_all 的 run_repro 会调用 $HERE/repro/run.sh，
+# 假环境没有该目录时会被判为"汇总缺失"而失败（2026-11-05 第八轮复审 F8-5 之后）
+os.makedirs(os.path.join(fake, "repro"), exist_ok=True)
+open(os.path.join(fake, "repro", "run.sh"), "w").write(
+    '#!/bin/bash\n'
+    'echo "ok   fake-case"\n'
+    'echo "REPRO_TOTAL=1"\n'
+    'echo "REPRO_PASSED=1"\n'
+    'echo "REPRO_FAILED=0"\n'
+    'echo "repro 用例：1/1"\n'
+    'exit 0\n')
+os.chmod(os.path.join(fake, "repro", "run.sh"), 0o755)
 # 发行仓库桩：run_all 的 run_f0 会调用 $RELEASE_REPO/install.py
 fake_repo = "/tmp/r67_fake_release"
 shutil.rmtree(fake_repo, ignore_errors=True)
 os.makedirs(fake_repo)
 open(os.path.join(fake_repo, "wf-release.json"), "w").write("{}")
 open(os.path.join(fake_repo, "install.py"), "w").write("import sys; sys.exit(0)\n")
-for name, count in (("p5_spec", 13), ("p5_v2v3", 12), ("p5_v5", 12)):
-    open(os.path.join(fake, f"{name}.py"), "w").write("print('PASS')\n" * count)
+# 流程的期望计数同样以 run_all.sh 为准，避免清单/用例数变动后假环境与判据脱节
+for _name, _script, _count in _re.findall(r"run_flow\s+(\S+)\s+(\S+)\s+(\d+)",
+                                        open(os.path.join(real, "run_all.sh"), encoding="utf-8").read()):
+    open(os.path.join(fake, f"{_name}.py"), "w").write("print('PASS')\n" * int(_count))
 proc = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_output=True, text=True,
                       env={**os.environ, "WF_FIX": "/tmp/r67_fake_fix", "WF_RELEASE_REPO": "/tmp/r67_fake_release",
                            "WF_REBUILD_RELEASE": "0", "WF_JOBS": "2",
-                           "WF_RESULTS_DIR": "/tmp/r67_fake_results"})
-rec("4 有失败时脚本非零退出", "exit≠0 且汇总报失败", f"exit={proc.returncode}",
-    proc.returncode != 0 and "失败 1 项" in proc.stdout)
+                           "WF_RESULTS_DIR": "/tmp/r67_fake_results1"})
+_summary = [ln for ln in proc.stdout.splitlines() if ln.startswith("---- ")]
+rec("4 有失败时脚本非零退出", "exit≠0 且汇总报失败",
+    f"exit={proc.returncode} summary={_summary[-1] if _summary else None}",
+    proc.returncode != 0 and any("失败 1 项" in ln for ln in _summary))
 open(os.path.join(fake, "cp1_tests.py"), "w").write("print('saved 1 cases; 1 passed')\n")
 proc2 = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_output=True, text=True,
-                       env={**os.environ, "WF_FIX": "/tmp/r67_fake_fix", "WF_RELEASE_REPO": "/tmp/r67_fake_release", "WF_REBUILD_RELEASE": "0"})
+                       env={**os.environ, "WF_FIX": "/tmp/r67_fake_fix", "WF_RELEASE_REPO": "/tmp/r67_fake_release",
+                            "WF_REBUILD_RELEASE": "0",
+                            # 必须显式隔离：外层 run_all 会 export RESULTS_DIR，内层若沿用会把外层结果行覆盖/清空
+                            "WF_RESULTS_DIR": "/tmp/r67_fake_results2"})
 rec("4b 无失败时零退出", "exit=0", f"exit={proc2.returncode}", proc2.returncode == 0)
 
 json.dump(results, open("/tmp/r67_results.json", "w"), ensure_ascii=False, indent=2)

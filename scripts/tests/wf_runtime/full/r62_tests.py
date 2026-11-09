@@ -2,7 +2,7 @@
 """第二十五轮 R62：P1/P2 批量修正。"""
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
 from wflib import gates as wf_gates, tasks as wf_tasks
 
@@ -89,7 +89,7 @@ rc, payload, _ = wf(["task-new", "--kind", "ordinary", "--title", "R62 降级哈
 facts = (payload or {}).get("facts", {})
 task_id, gen = facts.get("task_id"), facts.get("generation")
 directory = os.path.join(F, facts["directory"])
-block = {"schema_version": 1, "touch_paths": ["pkg/**"],
+block = {"schema_version": 1, "touch_paths": ["pkg/**", ".wf/baseline.md"],
          "acceptance": [{"id": "a1", "statement": "x", "verification_ids": ["v1"]}],
          "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
                             "cwd": ".", "input_refs": [], "required": True, "consume_at": "check"}]}
@@ -99,8 +99,7 @@ digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
 json.dump([dec("approve", "approve", digest)], open("/tmp/r62_a.json", "w"))
 rc, payload, _ = wf(["task-approve", "--task", task_id, "--decision", "/tmp/r62_a.json", "--json"],
                     {"generation": gen, "complexity": "light",
-                     "complexity_conditions": {"scope": {"value": "unknown"}},
-                     "downgrade": {"reason": "只改内部", "evidence": "无对外签名"}}, "sess-G2")
+                     "downgrade": {"reason": "只改索引一条", "evidence": "无验收口径变化"}}, "sess-G2")
 rec("P2-4 降级批准通过", "WF_OK", (payload or {}).get("code"), rc == 0)
 plan = plan_of(task_id).get("plan", {})
 version_with = plan.get("version")

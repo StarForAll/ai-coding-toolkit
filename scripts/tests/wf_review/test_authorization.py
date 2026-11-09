@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO / "docs" / "workflows" / "新项目开发工作流" / "payload" / "lib"))
+sys.path.insert(0, str(REPO / "docs" / "workflows" / "wf" / "payload" / "lib"))
 
 from wflib import authorize, protocol  # noqa: E402
 
@@ -124,7 +124,7 @@ class CoverageTest(unittest.TestCase):
 
 class ArchiveContractTest(unittest.TestCase):
     def test_archive_reports_three_stages_and_guards(self):
-        source = (REPO / "docs/workflows/新项目开发工作流/payload/lib/wflib/tasks.py").read_text(encoding="utf-8")
+        source = (REPO / "docs/workflows/wf/payload/lib/wflib/tasks.py").read_text(encoding="utf-8")
         self.assertIn('"stage": "business"', source)
         self.assertIn('"stage": "record"', source)
         self.assertIn('"stage": "runtime"', source)
@@ -156,7 +156,7 @@ class EntryPointContractTest(unittest.TestCase):
                 self.assertIsNotNone(authorize.require(tmp, action))
 
     def test_export_guard_is_wired_into_launch(self):
-        source = (REPO / "docs/workflows/新项目开发工作流/payload/lib/wflib/review.py").read_text(encoding="utf-8")
+        source = (REPO / "docs/workflows/wf/payload/lib/wflib/review.py").read_text(encoding="utf-8")
         self.assertIn('"export"', source)
         self.assertIn("authorize_mod.require", source)
         self.assertIn("missing_action", source)

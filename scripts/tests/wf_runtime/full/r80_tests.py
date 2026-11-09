@@ -3,7 +3,7 @@
 import json, os, re, subprocess, sys
 sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
 from wflib import check as wf_check, gates as wf_gates, tasks as wf_tasks, writer as wf_writer
 
@@ -125,10 +125,31 @@ os.makedirs(target_dir, exist_ok=True)
 
 
 def write_target(touch_paths, approval):
-    json.dump({"schema_version": 1, "id": target_id, "title": "承接", "status": "in_progress",
-               "plan": {"version": "sha256:" + "e" * 64, "touch_paths": touch_paths,
-                        "approval": approval}},
-              open(os.path.join(target_dir, "task.json"), "w", encoding="utf-8"), ensure_ascii=False)
+    """承接任务夹具：写 PRD + 让 plan.version 等于按 PRD 重算的版本。
+
+    第十一轮复审 N11-2 起，"读不到 PRD 就按未批准处理"，因此夹具必须给出真实可重算的
+    PRD 与版本，否则测的是"无 PRD"的退化路径。
+    """
+    block = {"schema_version": 1, "touch_paths": touch_paths,
+             "acceptance": [{"id": "a1", "statement": "x", "verification_ids": ["v1"]}],
+             "verifications": [{"id": "v1",
+                                "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+                                "cwd": ".", "input_refs": [], "required": True, "consume_at": "check"}]}
+    prd = ("# 承接\n\n<!-- wf-plan:v1 -->\n```json\n"
+           + json.dumps(block, ensure_ascii=False, indent=2) + "\n```\n")
+    open(os.path.join(target_dir, "prd.md"), "w", encoding="utf-8").write(prd)
+    record = {"schema_version": 1, "id": target_id, "title": "承接", "status": "in_progress",
+              "directory": os.path.relpath(target_dir, F).replace(os.sep, "/"),
+              "plan": {"version": None, "approved_version": None,
+                       "complexity": "complex", "tdd": False,
+                       "touch_paths": touch_paths, "approval": approval}}
+    json.dump(record, open(os.path.join(target_dir, "task.json"), "w", encoding="utf-8"),
+              ensure_ascii=False)
+    version = wf_tasks.compute_plan_version(F, record, block, "complex", [], False)
+    record["plan"]["version"] = version
+    record["plan"]["approved_version"] = version
+    json.dump(record, open(os.path.join(target_dir, "task.json"), "w", encoding="utf-8"),
+              ensure_ascii=False)
 
 
 approved = {"decision": {"choice": "approve"}, "at": AT}

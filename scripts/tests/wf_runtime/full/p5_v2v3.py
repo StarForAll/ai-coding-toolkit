@@ -41,6 +41,11 @@ def new_task(title, touch_paths, sid="sess-C", argv=("print(1)",)):
 ```
 """
     open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
+    # 2026-11-07：触碰 .wf/workflows/** 属契约面（复杂度②）→ 需三件套；用例本意是「维护组重叠」，
+    # 不是「轻量任务」，所以补齐 design/implement，保持断言对象不变。
+    for name in ("design.md", "implement.md"):
+        open(os.path.join(directory, name), "w", encoding="utf-8").write(
+            f"# {name}\n\n用例夹具：说明本次只改工作流正文一处。\n")
     digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
     return task_id, gen, digest
 
@@ -105,7 +110,11 @@ rec("V3", "重叠任务开工", "blocked WF_WIP_UNRESOLVED",
 writer = json.load(open(os.path.join(F, ".wf/writer.json")))
 operation = writer["maintenance_results"][0]["operation"]
 # 维护组现在也投放项目内技能副本（.agents/skills/**），提交要覆盖回执登记的全部路径
-git("add", ".wf", ".gitignore", ".agents")
+# 2026-11-07：维护组提交只含"维护组登记的路径"——不能用 `git add .wf` 把 .wf/tasks/** 与
+# .wf/writer.json 一起扫进来（那会让本用例自己的提交被自己的断言判红；旧版靠中文路径被 git 引号化
+# 而"意外通过"，ASCII 化后暴露）。
+git("add", ".wf", ":!.wf/tasks",
+    ".gitignore", ".agents")   # 维护组提交：整组 .wf 但**排除**任务目录（任务目录只由任务动作提交）
 subprocess.run(["git", "commit", "-qm", "wf: maintenance install group"], cwd=F, capture_output=True)
 sha = git("rev-parse", "HEAD")
 decision = {"source": "human (terminal)", "at": "2026-11-03T04:20:00.000000Z",

@@ -26,9 +26,12 @@
 - `scripts/build-wf-release.py --version 0.x.y`：校验源树完整性 → 生成发行根与清单 → 打印哈希清单。
   `--verify` 重建到临时目录并与现有发行树逐字节比较；`--verify-token-parity` 用固定 `--nonce`
   比对 `repair.py` / `uninstall.py` 两份自含实现的令牌四步输出。
-- `scripts/wf-dev-deploy.py --target <abs> --platform <平台> [--confirm]`：首轮开发态部署（预览 →
-  首装契约 → 投放 → 自检 → 释放为空闲）。`--host-id` / `--verify-capability` 是人确认宿主身份的
-  承载；目标已安装时只允许更新 `installation.json` 的 `session_profile`，不覆盖资产与项目数据。
+- `scripts/wf-dev-deploy.py --target <abs> --platform <平台> [--platform <另一个平台>] [--confirm]`：首轮开发态部署（预览 →
+  首装契约 → 投放 → 自检 → 释放为空闲）。`--platform` 可重复、至少一项，解析出的**目标项目内**技能目录写入
+  `installation.json.roots`（相对路径），平台名写入 `installation.platforms`——**平台清单即身份事实**；R93（commit `20e3ae8`）
+  已删除 `--host-id`、`--verify-capability` 与 `installation.json.session_profile`，不要按旧口径描述它们。
+  目标已安装时的处理：**同发行引用只允许追加平台**（`install.py` 亦然），资产与项目数据不动；不同发行引用属升级，
+  走 `wf.py upgrade --apply`（第三轮），开发态工具不按新装覆盖。
 - 两个工具：仅标准库、在作者机运行、**不进入发行清单**。发行根里的 `install.py` 才是安装入口，
   它按 `target_class=release_only` 计入 `rules_digest`。
 
@@ -39,6 +42,11 @@
 源树 `dev-manifest.json` 的 `version`、清单 `wf-release.json` 的 `version`、发行 tag
 `refs/tags/wf-v<X.Y.Z>` 三者必须同批修改。清单 `version` 与 tag 不一致时安装器按
 `WF_RELEASE_CONFLICT` 拒绝。
+
+**唯一例外（开发态占位符）**：`dev-manifest.json` 的 `version` 取占位值 `0.0.0-dev`
+（`DEV_VERSION_PLACEHOLDER`）时，打包脚本不要求它与 `--version` 相同——版本源唯一在
+`--version` 参数，占位符只表示"这是开发态源树、尚未声明发行号"。占位符以外的任何值都必须
+与 `--version` 一致，否则 `scripts/build-wf-release.py` 直接 `SystemExit`（`_assert_version_consistency`）。
 
 ## 4. 产物校验
 
@@ -64,7 +72,7 @@
 ```
 payload/bin/{wf.py, repair.py, uninstall.py}   # 引导层与两个自含独立入口
 payload/install.py                             # 发行根安装入口（不投放）
-payload/lib/wflib/*.py                         # 运行时包（23 个模块，仅标准库）
+payload/lib/wflib/*.py                         # 运行时包（23 个 .py 文件，含 `__init__.py`；仅标准库）
 payload/workflows/*.md                         # 6 份流程文档（每个 required 步骤带 enforcement 行）
 payload/templates/**                           # 配置/spec/任务/基线/用户定义模板
 skills/<11 个>/SKILL.md                        # 宿主 skill 副本
@@ -73,7 +81,7 @@ dev-manifest.json                              # 资产登记（打包与开发�
 
 目标项目侧的落点、升级/卸载覆盖与项目数据分区见实现方案 §1.1–§1.3。
 
-## 6. 原语与审查副本的来源登记
+## 7. 原语与审查副本的来源登记
 
 `skills/` 下 11 个副本中，6 个是改编件（`wf-grilling`、`wf-tdd`、`wf-diagnosing-bugs`、`wf-code-review`、`wf-review`、`wf-review-action`），
 其余（`wf-start`、`wf-continue`、`wf-finish`、`wf-bootstrap`、`wf-spec-update`）为本项目原创。

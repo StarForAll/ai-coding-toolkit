@@ -2,7 +2,7 @@
 """第十九轮 R56：spec_verify_days 非法时阻断依赖它的判断。"""
 import datetime, hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
 
 F = wfdrive.FIX
@@ -16,7 +16,7 @@ if not os.path.exists(EXTERNAL_ACK):
               open(EXTERNAL_ACK, "w"), ensure_ascii=False)
 
 import sys as _sys
-_sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+_sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 from wflib import records as _wf_records
 
 

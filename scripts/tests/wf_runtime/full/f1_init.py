@@ -130,7 +130,7 @@ proposal = {"files": files,
             "decision": {"source": "human terminal", "at": at, "subject": "baseline proposal for initialize task",
                          "object_digest": None, "choice": "approve",
                          "reason": "初始化任务按已批准 PRD 生成骨架"}}
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 from wflib import records as _records
 proposal["decision"]["object_digest"] = _records.plain_digest({"files": files})
 json.dump(proposal, open("/tmp/proposal_init.json", "w"), ensure_ascii=False, indent=2)

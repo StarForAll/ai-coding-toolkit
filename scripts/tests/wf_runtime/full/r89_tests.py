@@ -5,7 +5,7 @@ sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wfdrive
 
-RELEASE = "/tmp/wf-fixtures/release-repo"
+RELEASE = os.environ.get("WF_RELEASE_REPO") or "/tmp/wf-fixtures/release-repo"
 results = []
 
 
@@ -89,7 +89,7 @@ rec("R92 --skill-root 已移除", "argparse 拒绝",
 # 7) 技能副本算框架资产：安装后 Check 不被判成未归属改动
 t7 = fresh("scope")
 install(t7, "dsh", extra=CONFIRM)
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/新项目开发工作流/payload/lib")
+sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 from wflib import scope as wf_scope
 
 installed = wf_scope.installed_asset_paths(t7)

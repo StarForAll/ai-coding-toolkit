@@ -9,8 +9,8 @@
 
 ## S1 决策记录入库
 
-- [ ] 复制 v42 到 `docs/workflows/新项目开发工作流/analysis/solution-review-v42.md`（逐字节，`sha256sum` 两侧比对）
-- 验证：`sha256sum /tmp/wf-solution-review-2026-11-09.md docs/workflows/新项目开发工作流/analysis/solution-review-v42.md` 一致
+- [ ] 复制 v42 到 `docs/workflows/wf/analysis/solution-review-v42.md`（逐字节，`sha256sum` 两侧比对）
+- 验证：`sha256sum /tmp/wf-solution-review-2026-11-09.md docs/workflows/wf/analysis/solution-review-v42.md` 一致
 
 ## S2 证据固化
 

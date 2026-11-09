@@ -6,7 +6,7 @@
 
 | 承载物 | 落点 | 是否发行资产 | 理由 |
 |---|---|---|---|
-| v42 决策记录 | `docs/workflows/新项目开发工作流/analysis/solution-review-v42.md` | 否（authoring） | 决策记录属 authoring 文档族，不投放目标项目 |
+| v42 决策记录 | `docs/workflows/wf/analysis/solution-review-v42.md` | 否（authoring） | 决策记录属 authoring 文档族，不投放目标项目 |
 | 证据包 + 说明 | `.../analysis/evidence/` | 否（authoring） | 证据是 authoring 侧的复算材料 |
 | protocol 机器事实 | `.../payload/protocol/{states,codes,thresholds,redaction}.json` | 是 → `.wf/protocol/` | `wf help`/`wf status` 在目标项目运行期消费，必须随发行投放 |
 | protocol 加载器 | `.../payload/lib/wflib/protocol.py` | 是 → `.wf/lib/wflib/` | 语义层读取唯一事实源 |
