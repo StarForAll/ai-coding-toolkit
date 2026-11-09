@@ -80,3 +80,40 @@
 这些迁移会**改动断言本身**（期望码从 `WF_DEPENDENCY_UNMET` 改成 `WF_SEMANTIC_DECISION` 等）。
 改断言必须逐条确认"新期望是否仍然是应该保证的行为"，否则等于把测试改成"迎合实现"——
 那正是 v42 元规则要防的事。所以留给下一轮逐套件处理，每条都要写清"改了期望，理由是什么"。
+
+## `applied_pending_commit` 深查（2026-11-09）
+
+### 语义（读码确认）
+
+| 环节 | 事实 |
+|---|---|
+| 谁写 | `install` / `upgrade` / `repair` / `uninstall` / `dev-deploy` 维护动作往 `.wf/writer.json` 的 `maintenance_results` 追加一条回执：`{operation, preview_digest, head_before, changes[{path,before,after}], result, disposition}` |
+| `result=applied_pending_commit` 的意思 | 改动**已落工作树**，但还没被任何提交永久收账 |
+| 四种派生状态（`writer.receipt_state`） | `persisted`（探针确认已入账）/ `applied_pending_commit`（未入账或没探针）/ `disposed`（有完整处置**且**事实可核）/ `pending_check`（不可解析或探测失败） |
+| 会挡什么 | `writer.blocking_receipts()` 把与请求路径重叠的未结案回执算作未处置 → `WF_WIP_UNRESOLVED` |
+
+### 查出的真问题：**证据来源自相矛盾**（我上一轮引入）
+
+`maintenance_persisted_probe` 判"已持久化"的方式是：**在提交树里读 `.wf/writer.json`**，找到同名 `operation` 的回执，再逐路径比对终态。
+
+但我上一轮按 v42 S10 把 `/.wf/writer.json` 加进了托管忽略段 → **它再也不会进提交** → 探针永远返回 False → **所有维护回执永久停在 `applied_pending_commit`**。
+
+这就是 `r59`/`r60`/`r61` 一起红的原因，也是我上一轮"修干净树"引入的第二个连带缺陷（第一个是归档 pathspec）。
+
+### 我试过的替代方案与为什么撤回
+
+改成"只核项目内容（不看回执是否在提交里）"后：`r59` 5→7/8，但 `r60` 出现两条反例：
+- `仅提交文件、回执未提交 → 期望 applied_pending_commit`，实得 `persisted`
+- `提交树内容与登记不符 → 期望 applied_pending_commit`，实得 `persisted`（**疑似我的比较过于宽松**）
+
+第二条意味着新探针可能**误判为已持久化**（fail-open）。按既定原则"宁可交人，不可默认通过"，我**已撤回**该改动，恢复严格探针（fail-closed）。
+
+### 需要你裁的口径（三选一）
+
+| 方案 | 做法 | 代价 |
+|---|---|---|
+| **A 回执随内容一起提交**（最贴近原设计） | 维护动作把 `.wf/writer.json` 与项目文件**放进同一次提交**，探针不变 | 与 v42 S10（writer 属运行态、应忽略）冲突；归档后工作树会再脏一次 |
+| **B 内容为准 + 回执自证**（推荐） | 探针只核项目内容；但"已持久化"另需回执里出现动作自身写的 `persisted_at`（维护入口在提交后回写，运行态不入库） | 需要新增一个回执字段与一次回写；好处：不再依赖 writer 进库，且保留"哪次操作"的绑定 |
+| **C 改为人工处置** | 一律要 `disposition`（commit/reverse/transfer/uninstall）才结案 | 最严，但每次维护都要人写处置决定 |
+
+无论选哪个，`r60` 那两条断言的期望值都要按新口径重写——**这是改断言，需要你点头**。
