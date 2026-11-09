@@ -90,6 +90,12 @@ anchor = (check.get("anchor") or {}).get("check_anchor")
 
 
 def launch(slots):
+    # K6 第 3 类：材料外发要有对应的确认入库（只在请求里写 export_decision 不够）
+    _auth = "/tmp/r75_export.json"
+    json.dump([{"choice": "export", "paths": ["pkg/**"], "quote": "人同意把材料外发给审查 CLI"}],
+              open(_auth, "w"), ensure_ascii=False)
+    wf(["authorize", "record", "--task", task_id, "--file", _auth, "--json"],
+       {"generation": gen()}, "sess-A1")
     request = {"implementation_clis": ["dsh"],
                "slots": [{"slot": s, "reviewer_cli": c} for s, c in slots],
                "export_decision": dec("export", "approve"), "submitted_scope": {"diff": "git diff", "requirement": ["prd"], "test_results": ["v1"]},
