@@ -2656,7 +2656,19 @@ def cmd_task_abandon(ctx, args):
         if task.get("status") == "archived":
             raise TaskError("WF_BINDING_MISMATCH", {"reason": "task archived"})
         preview = _abandon_preview(ctx, task)
-        if not disposition:
+        # 输入形态归一：`--disposition` 传 JSON 数组（AI 首用的高概率写法）按 {"changes": [...]} 解释；
+        # 否则 `(disposition or {}).get(...)` 会在 list 上抛裸 AttributeError（K10：不得裸异常）。
+        if isinstance(disposition, list):
+            disposition = {"changes": disposition}
+        elif disposition is not None and not isinstance(disposition, dict):
+            raise TaskError("WF_PATH_INVALID",
+                            {"reason": '--disposition 须为对象 {"changes": [...]} 或数组 [...]',
+                             "got": type(disposition).__name__,
+                             "example": {"changes": [{"path": "x", "action": "deleted"}]}})
+        # 空处置（工作树干净 / 无必须处置项）应放行，而不是卡在预览态：
+        # 「没给处置」与「处置为空」是两回事，前者要预览、后者是有效结论。
+        needs_disposition = bool(preview.get("uncommitted")) or bool(preview.get("required_disposition_for"))
+        if disposition is None and needs_disposition:
             return codes.result(
                 "WF_SEMANTIC_DECISION",
                 object={"id": task_id, "name": task.get("title")},
@@ -3717,7 +3729,15 @@ def cmd_spec_update(ctx, args):
 
         touch_paths = approved_touch_paths(task)
         for change in changes:
-            for raw in (change.get("old_paths") or []) + (change.get("new_paths") or []):
+            # 路径清单统一走 paths.path_list：字符串形态在这里也不能炸（此前这处裸拼接抛 internal error）
+            declared = []
+            for key in ("old_paths", "new_paths"):
+                try:
+                    declared.extend(paths_mod.path_list(change, key))
+                except paths_mod.InvalidPath as exc:
+                    raise TaskError("WF_PATH_INVALID", {"reason": str(exc), "key": key,
+                                                        "change": change.get("operation")})
+            for raw in declared:
                 try:
                     normalized = paths_mod.normalize(raw)
                 except paths_mod.InvalidPath as exc:

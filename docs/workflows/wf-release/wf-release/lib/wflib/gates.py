@@ -929,8 +929,10 @@ def final_gate(ctx, task, ignore_action_id=None):
         return False, "WF_DEPENDENCY_UNMET", {"unmet": blockers}
     debug = debug_pending(task, ctx.debug_threshold())
     if debug["pending"]:
+        # 把判定所用的阈值一并给出：AI 才知道"到第几次算重复"，否则只看到 pending 列表
         return False, "WF_SEMANTIC_DECISION", {"unruled_debug_multiples": debug["pending"],
                                                "merged": debug["merged"],
+                                               "threshold": ctx.debug_threshold(),
                                                "next": "对每个倍数裁定「同一问题/不同问题」"}
     pending = actions.pending(task)
     if pending and pending.get("id") == ignore_action_id:

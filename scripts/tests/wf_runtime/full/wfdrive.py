@@ -49,7 +49,7 @@ def freeze_sampling(task_id, generation, sid="sess-A", instance_id=None):
     session id 与绑定）。若绕过它直接走本函数，写权会落在 sess-A 上，把套件真正的会话挡在
     `WF_WRITER_BUSY` 外面——第一次迁移就是这样踩的。优先用套件自己的 wrapper：
 
-        wf(["sampling", "pick", "--task", task_id, "--freeze", "--json"], {"generation": gen})
+        wf(["sampling", "pick", "--task", task_id, "--freeze", "--json"], {"generation": gen}, "sess-A")
     """
     return run(["sampling", "pick", "--task", task_id, "--freeze", "--json"],
                inputs={"generation": generation}, sid=sid, instance_id=instance_id, show=False)

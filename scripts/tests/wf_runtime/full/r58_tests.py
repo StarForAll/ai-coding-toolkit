@@ -103,6 +103,11 @@ def run_final_gate():
     ctx = wf_cli.Context(F, ["--envelope", env_path])
     import glob
     task = json.load(open(glob.glob(os.path.join(F, ".wf/tasks", "*R58*", "task.json"))[0], encoding="utf-8"))
+    # 本套件测的是"重复调试达阈值要求裁定"，不是抽样；把 task.sampled 前置满足掉，
+    # 否则门禁会在抽样步骤先拦（抽样顺序已排到最后，但仍早于本函数要验的分支结论）。
+    task.setdefault("sampling", {})
+    if not task["sampling"].get("picks"):
+        task["sampling"].update({"seed": "r58-fixed-seed", "events": [], "picks": [{"class": "关闭", "event": "f58"}]})
     ok, code, facts = gates_mod.final_gate(ctx, task)
     return ok, code, facts
 

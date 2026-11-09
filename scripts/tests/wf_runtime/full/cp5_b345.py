@@ -101,7 +101,7 @@ rec("B4 同一失败事件重复计入被拒", "WF_SEMANTIC_DECISION", (payload 
     (payload or {}).get("code") == "WF_SEMANTIC_DECISION")
 wf(["task-knowledge", "--task", task_b4, "--decision", "no-update", "--json"], {"generation": gen_b4}, "sess-G1")
 wf(["sampling", "pick", "--task", task_b4, "--freeze", "--json"],
-                       {"generation": gen_b4})   # 归档前置：先冻结并落盘选样
+                       {"generation": gen_b4}, "sess-G1")   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wf(["archive", "--task", task_b4, "--decision",
                      dfile("/tmp/cp5_b4_arch.json", [dec(f"finish {task_b4}", "finish", d_b4),
                                                      dec("src/b4.txt", "commit", d_b4)]), "--json"],

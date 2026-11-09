@@ -78,7 +78,7 @@ wf(["task-knowledge", "--task", task1, "--decision", "no-update", "--json"], {"g
 open(os.path.join(F, "notes.txt"), "w").write("unrelated\n")
 subprocess.run(["git", "add", "notes.txt"], cwd=F, capture_output=True)
 wf(["sampling", "pick", "--task", task1, "--freeze", "--json"],
-                       {"generation": gen1})   # 归档前置：先冻结并落盘选样
+                       {"generation": gen1}, "sess-Q1")   # 归档前置：先冻结并落盘选样
 rc, payload, out = wf(["archive", "--task", task1, "--decision",
                        dfile("/tmp/cp3_a6.json", [dec(f"finish {task1}", "finish", d1),
                                                   dec(["src/c6.txt"], "commit", d1)]),
@@ -111,7 +111,7 @@ wf(["task-start", "--task", task2, "--json"], {"generation": gen2}, "sess-Q2")
 wf(["task-check", "--task", task2, "--review-notes", NOTES, "--json"], {"generation": gen2}, "sess-Q2")
 wf(["task-knowledge", "--task", task2, "--decision", "no-update", "--json"], {"generation": gen2}, "sess-Q2")
 wf(["sampling", "pick", "--task", task2, "--freeze", "--json"],
-                       {"generation": gen2})   # 归档前置：先冻结并落盘选样
+                       {"generation": gen2}, "sess-Q1")   # 归档前置：先冻结并落盘选样
 rc, payload, out = wf(["archive", "--task", task2, "--decision",
                        dfile("/tmp/cp3_a6b.json", [dec(f"finish {task2}", "finish", d2),
                                                   dec("src/*.py", "commit", d2)]), "--json"],

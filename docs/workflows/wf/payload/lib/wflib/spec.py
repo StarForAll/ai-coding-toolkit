@@ -153,16 +153,14 @@ def _path_list(change, key):
     AI 首用很容易写成单个字符串（"new_paths": ".wf/spec/x.md"）；以前会在
     `old_paths + new_paths` 处抛裸 TypeError（internal error，违反 K10），现在自动拆分并给类型错误出口。
     """
-    value = change.get(key)
-    if value is None:
-        return []
-    if isinstance(value, str):
-        return [token for token in re.split(r"[,;\s]+", value) if token]
-    if isinstance(value, (list, tuple)):
-        return [str(item) for item in value if str(item).strip()]
-    raise SpecError("WF_PATH_INVALID",
-                    {"reason": f"{key} 须为数组或分隔字符串", "key": key, "value": value,
-                     "example": {"new_paths": [".wf/spec/rules/x.md"]}})
+    from . import paths as paths_mod
+
+    try:
+        return paths_mod.path_list(change, key)
+    except paths_mod.InvalidPath as exc:
+        raise SpecError("WF_PATH_INVALID",
+                        {"reason": str(exc), "key": key, "value": change.get(key),
+                         "example": {"new_paths": [".wf/spec/rules/x.md"]}})
 
 
 def load_spec(root, relative):

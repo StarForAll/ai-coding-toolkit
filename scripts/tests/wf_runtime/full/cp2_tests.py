@@ -152,13 +152,14 @@ wf(["task-check", "--task", task3, "--decision", declare, "--review-notes", NOTE
    {"generation": gen3}, "sess-P3")
 wf(["task-knowledge", "--task", task3, "--decision", "no-update", "--json"], {"generation": gen3}, "sess-P3")
 wf(["sampling", "pick", "--task", task3, "--freeze", "--json"],
-                       {"generation": gen3})   # 归档前置：先冻结并落盘选样
+                       {"generation": gen3}, "sess-P3")   # 归档前置：先冻结并落盘选样
 rc, payload, out = wf(["archive", "--task", task3, "--decision",
                        decision_file("/tmp/cp2_archive.json", [dec(f"finish {task3}", "finish", d3),
                                                                dec("src/p13.txt", "commit", d3)]),
                        "--json"], {"generation": gen3}, "sess-P3")
 facts = (payload or {}).get("facts", {})
 pending = facts.get("unruled_debug_multiples") or []
+print("A13 facts:", json.dumps(facts, ensure_ascii=False)[:500])
 rec("A13 阈值 2 时合并累计 2 触发待决", "WF_SEMANTIC_DECISION 且 threshold=2",
     f"{(payload or {}).get('code')} threshold={pending[0].get('threshold') if pending else None}",
     (payload or {}).get("code") == "WF_SEMANTIC_DECISION" and pending and pending[0].get("threshold") == 2)

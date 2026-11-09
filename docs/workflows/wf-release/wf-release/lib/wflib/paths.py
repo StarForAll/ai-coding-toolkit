@@ -32,6 +32,26 @@ def _reject_shape(raw: str) -> None:
         raise InvalidPath(f"home-relative path: {raw}")
 
 
+
+def path_list(mapping, key, *, separator=r"[,;\s]+"):
+    """把 `old_paths`/`new_paths` 这类"路径清单"字段归一成字符串数组。
+
+    **唯一实现**：调用链上任何一处自己写 `(a or []) + (b or [])` 都会在字符串形态下抛裸
+    TypeError（internal error，违反 K10）。已出现三处，故收敛到这里，谁都不许再手动拼。
+    接受：None → []；字符串 → 按 `,;/空白` 拆分；list/tuple → 逐项 strip。
+    """
+    import re as _re
+
+    value = (mapping or {}).get(key)
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [token for token in _re.split(separator, value) if token]
+    if isinstance(value, (list, tuple)):
+        return [str(item) for item in value if str(item).strip()]
+    raise InvalidPath(f"{key} 须为数组或按逗号/分号/空白分隔的字符串（例：{key}: [\"a.md\"]）")
+
+
 def normalize(raw: str) -> str:
     """仓库相对路径规范化：消去 `.` 与重复分隔符，不改大小写/Unicode。"""
     _reject_shape(raw)

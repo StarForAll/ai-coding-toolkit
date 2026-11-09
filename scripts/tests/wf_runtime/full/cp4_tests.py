@@ -105,7 +105,7 @@ record = json.load(open(os.path.join(dir_b, "task.json")))
 record["prerequisites"] = [task_a]
 json.dump(record, open(os.path.join(dir_b, "task.json"), "w"), ensure_ascii=False)
 wf(["sampling", "pick", "--task", task_b, "--freeze", "--json"],
-                       {"generation": gen_b})   # 归档前置：先冻结并落盘选样
+                       {"generation": gen_b}, "sess-R2")   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wf(["archive", "--task", task_b, "--decision",
                      dfile("/tmp/cp4_b.json", [dec(f"finish {task_b}", "finish", d_b),
                                                dec("src/pb.txt", "commit", d_b)]), "--json"],

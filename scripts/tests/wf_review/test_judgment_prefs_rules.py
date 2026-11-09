@@ -195,3 +195,27 @@ class BrokenPatternTest(unittest.TestCase):
             covered, uncovered = authorize.covers(root, "expand", ["src/x.py"], root=root)
         self.assertTrue(covered)
         self.assertEqual(uncovered, [])
+
+
+class PathListTest(unittest.TestCase):
+    """路径清单只有一处实现：字符串/数组两种形态都接受，非法类型给结构化拒绝（审查 N1）。"""
+
+    def test_string_array_and_none(self):
+        from wflib import paths
+
+        self.assertEqual(paths.path_list({"p": ".wf/spec/a.md"}, "p"), [".wf/spec/a.md"])
+        self.assertEqual(paths.path_list({"p": "a.md, b.md"}, "p"), ["a.md", "b.md"])
+        self.assertEqual(paths.path_list({"p": ["a.md", "b.md"]}, "p"), ["a.md", "b.md"])
+        self.assertEqual(paths.path_list({}, "p"), [])
+
+    def test_bad_type_raises_invalid_path(self):
+        from wflib import paths
+
+        with self.assertRaises(paths.InvalidPath):
+            paths.path_list({"p": 42}, "p")
+
+    def test_no_raw_concatenation_remains(self):
+        """调用链上不得再出现裸拼接（三处历史炸点都收敛到 paths.path_list）。"""
+        for name in ("spec.py", "tasks.py"):
+            source = (REPO / "docs" / "workflows" / "wf" / "payload" / "lib" / "wflib" / name).read_text(encoding="utf-8")
+            self.assertNotIn('(change.get("old_paths") or []) + (change.get("new_paths") or [])', source)
