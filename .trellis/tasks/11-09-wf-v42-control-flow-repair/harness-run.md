@@ -218,3 +218,28 @@ D 的**基础设施**已落地（账本在提交层、探针读提交树、安�
 
 **先打印原文再判断。** 这轮我三次先猜后验，三次都错（删除类指纹 / 历史摘要 / 能力门）；
 每次都是"打印 facts 原文"一步定案。后续排查固定第一步：拿到 `code + facts` 原文。
+
+## r17r24 / r31r34 定性修正（2026-11-09 末）
+
+上一节把它们的 `KeyError 'directory'` 归为"一会话多任务"——**这个归因也是错的**。
+用同样的办法（打印原文）拿到事实：
+
+```
+task-new → WF_WRITER_BUSY, holder.kind=session, holder.scope.object=2026-8df5…
+```
+
+即：**调用 `task-new` 时写权还被上一个任务（`sess-U20a`）持有**，所以 `facts` 里没有 `directory`，
+`make_task` 于是 KeyError。判据是"写权未释放"，不是会话绑定。
+
+### 三类失败的真实归属（第三次修正后）
+
+| 现象 | 真实原因 | 位置 |
+|---|---|---|
+| `r59` | **一会话一对象**（`session already bound`） | 该套件同会话建两个任务 |
+| `r17r24` / `r31r34` | **上一任务的写权未释放**（`WF_WRITER_BUSY`） | 各自 `writer release` 那一步没生效（需看第 150–176 行的 archive/release 返回码） |
+| `cp2/cp4/cp5/r58` 等 | 门禁组成变化 → 期望码需迁移 | 断言层 |
+
+### 下一步（精确到行）
+
+把 `r17r24_tests.py:150–176` 与 `r31r34` 对应的段落里 `archive` 与 `writer release` 的 `rc/payload`
+打出来，确认是 archive 失败导致后续 release 无效，还是 release 本身的代次不匹配。**先取原文，再动手。**
