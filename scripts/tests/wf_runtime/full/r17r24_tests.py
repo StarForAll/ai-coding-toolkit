@@ -382,7 +382,8 @@ persisted_before = wf_tasks.archive_persisted(F, json.load(open(os.path.join(arc
 rec("R23 未持久化状态已构造", "persisted=False", persisted_before.get("persisted"),
     persisted_before.get("persisted") is False)
 
-wf(["writer", "release", "--json"], {"generation": cur_gen()}, "sess-U23")
+rc_rel, rel_payload, _ = wf(["writer", "release", "--json"], {"generation": cur_gen()}, "sess-U23")
+print("R23 release:", rc_rel, (rel_payload or {}).get("code"), (rel_payload or {}).get("facts"))
 rc_busy, busy_payload, _ = wf(["archive", "--task", task23, "--decision",
                                dfile("/tmp/r23_arch2.json", [dec(f"finish {task23}", "finish", d23),
                                                    dec("area23/**", "commit", d23)]), "--json"],

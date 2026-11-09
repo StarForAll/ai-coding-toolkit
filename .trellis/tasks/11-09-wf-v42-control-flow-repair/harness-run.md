@@ -538,3 +538,25 @@ part3（R23「归档提交失败后按既有授权续做」）剩两处 FAIL：
 
 判据一行：把那次 `release` 的 `rc/payload` 打出来——成功则说明是**实现漏洞**，失败则是**夹具问题**。
 这一步留给下一轮，先取事实再判定（本轮教训）。
+
+## R23 最后两条：判据落地——是夹具问题（2026-11-09 末）
+
+打印那次 `release` 的返回：
+
+```
+R23 release: 2 WF_SEMANTIC_DECISION {"reason": "release requires paused or terminal object", "status": "in_progress", "phase": "finish"}
+```
+
+**结论：release 没成功**（对象还在 `in_progress`，而 release 要求对象已暂停或终止），
+所以写权仍在手上，随后的 archive 自然 `WF_OK`。→ **夹具问题，不是实现漏洞。**
+
+### 下一步（明确）
+
+R23 想表达"无写权不得续做"，就得先让写权真正脱离本会话；按机制稿 §4.4，写权随**对象暂停/终止**释放。
+因此夹具应先 `task-pause` 再 `writer release`，然后再试 archive：
+- 若 archive 报 `WF_WRITER_BUSY` → 断言成立（原期望正确）；
+- 若 archive 因"对象已暂停"报别的码 → 该断言的**前提**需要重新设计（这条要继续判断，不预设结论）。
+
+### 本轮最终的 r17r24 状态
+
+part1 9/9、part2 17/17、R23 前两条 PASS，余 2 条待按上面顺序修夹具。
