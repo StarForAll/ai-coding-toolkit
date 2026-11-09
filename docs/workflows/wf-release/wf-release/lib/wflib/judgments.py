@@ -68,6 +68,7 @@ def skeleton(ctx, task):
         "fix_scope": [],                # 扩面条目：v42 4.4 的路径→问题映射（随判断录入）
         "standard_changes": [],         # 新旧标准摘要（随 4.5 判断录入）
         "drift_diffs": _drift_diffs(ctx, task),   # 漂移位置：保存时的 parts vs 当前 parts（K8 可重建）
+        "anchor_parts": _anchor_part_names(ctx, task),   # 实质字段清单（预览「不变」行用）
         "verifications": verifications,
         # §0.2 的「未核实」事件源：未结案的验收项（S5b 的 unverified[]）
         "unverified": [str(item.get("acceptance_id"))
@@ -110,6 +111,16 @@ def _drift_diffs(ctx, task):
         return []
     diffs = review_mod.anchor_drift(saved, current)
     return diffs or []
+
+
+def _anchor_part_names(ctx, task):
+    """锚点的实质字段名清单：直接取 `check.anchor_parts` 的键，不另写一份。"""
+    from . import check as check_mod
+
+    try:
+        return sorted(check_mod.anchor_parts(ctx, task))
+    except Exception:
+        return []
 
 
 def _required_unverified(ctx, task):
@@ -274,6 +285,16 @@ def render_preview(task, facts=None, sampling_line=None):
         f"[验证]    本次实际跑过 {len(facts.get('verifications') or [])} 项",
         f"[豁免]    waived {facts.get('waived_count', 0)} 条（只能由人给出）",
     ]
+    # 「不影响的不变」：没漂移的实质字段也要照列，否则人只看见变化、以为其余都动过（v42 §5.3）
+    drift_where = {str(item.get("where")) for item in (facts.get("drift_diffs") or [])
+                   if isinstance(item, dict)}
+    parts = []
+    for name in (facts.get("anchor_parts") or []):
+        if name not in drift_where:
+            parts.append(name)
+    if parts:
+        lines.append(f"[不变]    {len(parts)} 项实质字段未变：{'、'.join(sorted(parts)[:6])}"
+                     + ("…" if len(parts) > 6 else ""))
     vendor = facts.get("vendor_dirty") or []
     if vendor:
         lines.append(f"[vendor]  {len(vendor)} 项框架自有改动（不计入交付、不进审查、不进业务提交）")

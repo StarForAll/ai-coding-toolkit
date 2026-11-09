@@ -81,3 +81,69 @@ class EscalatedHangsOnlyTheEndingTest(unittest.TestCase):
         escalate_index = source.index('item.get("outcome") == "escalated"')
         final_gate_index = source.index("def final_gate")
         self.assertGreater(escalate_index, final_gate_index, "escalated 判定必须落在 final_gate 内")
+
+
+class UnchangedFactsTest(unittest.TestCase):
+    """预览要照列「不影响的不变」，否则人只看见变化（v42 §5.3）。"""
+
+    def test_preview_lists_unchanged_parts(self):
+        from wflib import judgments
+
+        facts = {"drift_diffs": [{"id": "d:spec_versions", "where": "spec_versions"}],
+                 "anchor_parts": ["spec_versions", "paths_digest", "content_digest"],
+                 "changed_paths": [], "closures": [], "unaddressed_findings": [],
+                 "verifications": [], "waived_count": 0, "vendor_dirty": []}
+        text = judgments.render_preview({"id": "t1"}, facts)
+        self.assertIn("[不变]", text)
+        self.assertIn("paths_digest", text)
+        self.assertNotIn("spec_versions、", text.split("[不变]")[1].split("\n")[0])
+
+    def test_no_parts_means_no_line(self):
+        from wflib import judgments
+
+        text = judgments.render_preview({"id": "t1"}, {"anchor_parts": [], "changed_paths": [],
+                                                      "closures": [], "unaddressed_findings": [],
+                                                      "verifications": [], "waived_count": 0})
+        self.assertNotIn("[不变]", text)
+
+
+class FrameworkDoesNotVerifyTest(unittest.TestCase):
+    """框架不检测声明真伪：只要求"声明 + 人复核"，不假装能验证（v42 已声明边界）。"""
+
+    def test_false_declaration_still_needs_only_human_recheck(self):
+        from wflib import review
+
+        lifted = [{"finding": "f1", "assertion_ref": "spec:x", "rule": "spec:x"}]
+        # 声明内容真假框架不核：只要有人复核过就放行
+        self.assertEqual(review.broken_reference_problems(
+            lifted, [{"finding_id": "f1", "recheck_by": "human:xzc"}]), [])
+
+    def test_no_human_recheck_is_rejected_even_with_declaration(self):
+        from wflib import review
+
+        lifted = [{"finding": "f1", "assertion_ref": "spec:x", "rule": "spec:x"}]
+        self.assertTrue(review.broken_reference_problems(lifted, [{"finding_id": "f1", "recheck_by": "ai"}]))
+
+
+class SemanticTriggerTest(unittest.TestCase):
+    """K4c 的触发面：只看实质摘要，机械纠错（改排版）不触发。"""
+
+    def test_assertion_index_compares_rule_digest_not_whole_file(self):
+        """规则摘要取自 spec 的实质字段（check/clauses），不是整文件摘要。"""
+        check_src = (REPO / "docs/workflows/wf/payload/lib/wflib/check.py").read_text(encoding="utf-8")
+        review_src = (REPO / "docs/workflows/wf/payload/lib/wflib/review.py").read_text(encoding="utf-8")
+        self.assertIn('spec_mod.rule_digest(info.get("metadata") or {})', check_src)
+        self.assertIn("curation_changed(before", review_src)
+
+    def test_formatting_only_change_does_not_change_rule_digest(self):
+        from wflib import spec
+
+        before = {"schema_version": 1, "status": "active", "author": "human", "verified_at": "2026-11-09",
+                  "counterexample": "反例", "check": "grep -n x",
+                  "clauses": [{"id": "c1", "status": "active", "statement": "条件一"}]}
+        # 同一内容、不同键序/新增无关键 → 摘要不变（机械纠错不触发标准变更）
+        after = {"clauses": [{"statement": "条件一", "status": "active", "id": "c1"}],
+                 "check": "grep -n x", "counterexample": "反例", "verified_at": "2026-11-09",
+                 "author": "human", "status": "active", "schema_version": 1, "note": "无关备注"}
+        self.assertEqual(spec.rule_digest(before), spec.rule_digest(after),
+                         "键序或无关字段不得改变实质摘要")

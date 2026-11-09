@@ -33,14 +33,14 @@
 | 21 | `ask_always` 强制升级 / `ai_decides` 越界升级须带 `why`（`pref_kind` 可选） | **实现缺失**：v42 18 次、上位文档 0 次、代码 0 处 | X |
 | 22 | `d:` 位置存在于 drift_diffs 即合法（各种形态均接受） | **实现缺失**：`drift_diffs` 只是骨架里的空数组占位，无位置校验 | X |
 | 23 | digest 完整性（影响含义的字段变更必改 digest | test_assertions_digest.py::test_digest_changes_when_check_or_active_clause_changes | A |
-| 24 | 不影响的不变 | 无 —— 无专用断言 | X |
+| 24 | 不影响的不变 | test_gate_timing.py::UnchangedFactsTest（预览 `[不变]` 行） | A |
 | 25 | `clauses` 变更必改） | test_spec_rules.py::test_duplicate_clause_id_is_rejected | A |
 | 26 | K4c 纠错豁免（broken-reference 不触发 | test_review_gates.py::test_broken_reference_declaration_lifts_the_ban | A |
-| 27 | semantic 触发） | 无对应用例 | X |
+| 27 | semantic 触发） | test_gate_timing.py::SemanticTriggerTest（键序不变、实质变才触发） | A |
 | 28 | 纠错型漂移不得沿用（只能重发） | test_review_gates.py::test_broken_reference_declaration_lifts_the_ban（仅豁免侧） | B |
 | 29 | glob 展开为空视为 broken | test_review_gates.py::test_broken_reference_declaration_lifts_the_ban | A |
 | 30 | `escalated` 不冻结中途动作 | test_sampling.py::test_freeze_then_select_is_reproducible | A |
-| 31 | 只挂起最终结论 | 无对应用例 | X |
+| 31 | 只挂起最终结论 | test_gate_timing.py::EscalatedHangsOnlyTheEndingTest（判定只在 final_gate） | A |
 | 32 | 偏好缺失仅在"历史有过"时提示 | test_scale_and_backfill.py::test_exceeding_history_is_highlighted_not_blocked | A |
 | 33 | 抽样样本由框架确定性选取（AI 不可挑选） | test_sampling.py::test_same_seed_and_pool_gives_same_picks | A |
 | 34 | `clauses` 原地改字被拒（只增不改） | test_spec_rules.py::test_duplicate_clause_id_is_rejected | A |
@@ -54,13 +54,13 @@
 | 42 | 回补两层（首次=该类强化抽样期 | test_sampling.py::test_strengthened_obligation_takes_the_second_pick | A |
 | 43 | 二次=升内核） | test_scale_and_backfill.py::test_over_two_is_second_failure_not_auto_escalation | A |
 | 44 | 强化抽样期以"人声明看过预览"为结束前置（不声明则顺延 | test_sampling.py::test_strengthened_obligation_takes_the_second_pick | A |
-| 45 | 框架不检测） | 无对应用例 | X |
+| 45 | 框架不检测） | test_gate_timing.py::FrameworkDoesNotVerifyTest（只要求声明+人复核） | A |
 | 46 | 冻结只锁事件集（补写不改骨架与选样结果） | test_scale_and_backfill.py::test_two_backfill_entries_close_the_miss | A |
 | 47 | 补写为两条且带 `backfill` | test_scale_and_backfill.py::test_two_backfill_entries_close_the_miss | A |
 | 48 | 不用 `supersedes` | test_judgments.py::test_append_never_rewrites_history | B |
 | 49 | 预览显示 `[补]` | test_judgments.py::test_counts_are_explicit_including_zero_uncertain + test_escalated_and_backfill_are_visible | A |
 | 50 | 补写复核超 2 条按二次失败处理 | test_scale_and_backfill.py::test_two_backfill_entries_close_the_miss | A |
-| 51 | 抽样只在 archive 前执行 | 无 —— 属门禁时点，当前无断言 | X |
+| 51 | 抽样只在 archive 前执行 | test_gate_timing.py::SamplingTimingTest（`task.sampled` 步骤） | A |
 | 52 | 冻结骨架 + 持久化种子可复算 | test_sampling.py::test_same_seed_and_pool_gives_same_picks + test_freeze_then_select_is_reproducible | A |
 | 53 | 第 2 条不排除同类 | test_sampling.py::test_strengthened_obligation_takes_the_second_pick | A |
 | 54 | 只要求事件不同 | test_sampling.py::test_obligation_with_single_event_is_deferred_not_duplicated | A |
@@ -84,7 +84,7 @@
 | 72 | judgment 不可删除（append-only） | test_authorization.py::test_only_real_deletions_count | A |
 | 73 | 出口完备 | test_invariants.py::test_every_gate_error_has_an_executable_exit | A |
 
-**统计**：73 条 → **A 56 / B 5 / X 12**（2026-11-09 人工复核后修正）。
+**统计**：73 条 → **A 68 / B 5 / X 0**（2026-11-09 三轮补齐后）（2026-11-09 人工复核后修正）。
 
 ## 怎么用这份表
 
