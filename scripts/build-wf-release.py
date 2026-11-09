@@ -67,11 +67,14 @@ def file_digest(path):
     return "sha256:" + digest.hexdigest()
 
 
-def build(version, destination_root):
-    dev_manifest = common.load_dev_manifest()
-    _assert_version_consistency(dev_manifest, version)
-    manifest = common.build_manifest(version, dev_manifest)
+def preflight():
+    """打包前预检（**必须在删除发行树之前**跑）：源树与 dev-manifest 必须一致。
 
+    2026-11-09 两次实测：新增 lib 文件忘登记时，旧实现先 `shutil.rmtree(RELEASE_ROOT)` 再
+    检查，于是"校验失败"顺带把已提交的发行树删了（随后只能重建恢复）。检查与破坏的顺序
+    不能反。
+    """
+    dev_manifest = common.load_dev_manifest()
     declared = {entry["source_path"] for entry in dev_manifest.get("assets") or []}
     actual = set(common.source_tree_files())
     unlisted = sorted(actual - declared)
@@ -80,6 +83,13 @@ def build(version, destination_root):
         raise BuildError("source tree has unlisted files:\n- " + "\n- ".join(unlisted))
     if missing:
         raise BuildError("dev manifest declares missing files:\n- " + "\n- ".join(missing))
+    return dev_manifest
+
+
+def build(version, destination_root, dev_manifest=None):
+    dev_manifest = dev_manifest or preflight()
+    _assert_version_consistency(dev_manifest, version)
+    manifest = common.build_manifest(version, dev_manifest)
 
     os.makedirs(destination_root, exist_ok=True)
     rewritten = []
@@ -226,9 +236,11 @@ def main(argv=None):
             if not args.version.count(".") == 2:
                 print("FAIL  --version must be 0.x.y")
                 return 1
+            # 预检失败就退出，绝不动现有发行树
+            dev_manifest = preflight()
             if os.path.isdir(RELEASE_ROOT):
                 shutil.rmtree(RELEASE_ROOT)
-            manifest, manifest_path = build(args.version, RELEASE_ROOT)
+            manifest, manifest_path = build(args.version, RELEASE_ROOT, dev_manifest)
             print_summary(manifest, manifest_path)
             print("OK  release tree written（提交与 tag 由人执行）")
         if not (args.version or args.verify or args.verify_token_parity):

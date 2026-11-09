@@ -31,6 +31,7 @@ ENFORCEMENT_LINE = re.compile(r"^-\s+`?enforcement`?\s*[:：]\s*(?P<value>.+)$")
 PROJECT_CLASSES = (
     ("payload/bin/", "project_wf", ".wf/bin/", "bin", True),
     ("payload/lib/wflib/", "project_wf", ".wf/lib/wflib/", "lib", False),
+    ("payload/protocol/", "project_wf", ".wf/protocol/", "protocol", False),
     ("payload/workflows/", "project_wf", ".wf/workflows/", "workflow", False),
     ("payload/templates/", "project_wf", ".wf/templates/", "template", False),
 )
@@ -207,6 +208,7 @@ def build_required_steps(source_root=SOURCE_ROOT):
                 "mode": step["mode"],
                 "applies": spec["applies"],
                 "due": spec["due"],
+                "delivery_round": spec["delivery_round"],
             }
         )
     if not parsed and not specs:
@@ -280,6 +282,8 @@ def compatibility_block(dev_manifest):
 
 
 def build_manifest(version, dev_manifest, source_root=SOURCE_ROOT):
+    from wflib import gates
+
     assets = expand_assets(dev_manifest, source_root)
     required_steps, problems = build_required_steps(source_root)
     if problems:
@@ -287,6 +291,10 @@ def build_manifest(version, dev_manifest, source_root=SOURCE_ROOT):
     manifest = {
         "schema_version": 1,
         "version": version,
+        # 交付轮次（2026-11-05 人裁 B）：安装自检按"清单声明的当前交付集"判可达；
+        # 每步的交付轮次落在 required_steps 条目内并因此进入 rules_digest，
+        # 本顶层字段只表达"这份清单交付到第几轮"，不参与摘要（改它必伴随步骤变化或版本递增）。
+        "delivery_round": gates.CURRENT_DELIVERY_ROUND,
         "compatibility": compatibility_block(dev_manifest),
         "assets": assets,
         "required_steps": required_steps,
