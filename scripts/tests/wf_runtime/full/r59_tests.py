@@ -90,8 +90,11 @@ rec("R59 回执本身未被改写（不写 writer）", "result 仍是 applied_pe
 
 # 重叠任务可开工
 clean_gen = json.load(open(writer_path, encoding="utf-8")).get("generation")
-rc, payload, _ = wf(["task-new", "--kind", "ordinary", "--title", "R59 重叠任务",
-                     "--template", f"{F}/.wf/templates/task", "--json"], None, "sess-D2")
+rc, payload, out59 = wf(["task-new", "--kind", "ordinary", "--title", "R59 重叠任务",
+                         "--template", f"{F}/.wf/templates/task", "--json"], None, "sess-D2")
+if rc != 0:
+    # 失败时把原文打出来：排查第一步永远是拿事实，不是猜（本文件曾经的教训）
+    print("task-new 原文:", (out59 or "")[:600])
 facts = (payload or {}).get("facts", {})
 task_id, gen = facts.get("task_id"), facts.get("generation")
 rec("R59 重叠任务创建", "创建成功", (task_id or "")[:12], bool(task_id))
