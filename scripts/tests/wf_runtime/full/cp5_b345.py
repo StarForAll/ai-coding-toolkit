@@ -174,6 +174,12 @@ open(os.path.join(F, "src/b3.txt"), "w").write("b3\n")
 wf(["task-start", "--task", task_b3, "--json"], {"generation": gen_b3}, "sess-G3")
 wf(["task-check", "--task", task_b3, "--review-notes", NOTES, "--json"], {"generation": gen_b3}, "sess-G3")
 wf(["task-knowledge", "--task", task_b3, "--decision", "no-update", "--json"], {"generation": gen_b3}, "sess-G3")
+rc_s, s_payload, s_out = wf(["sampling", "pick", "--task", task_b3, "--freeze", "--json"],
+                       {"generation": json.load(open(os.path.join(F, ".wf/writer.json"),
+                                                     encoding="utf-8")).get("generation")},
+                        "sess-G3")   # 归档前置：用**实时代次**冻结并落盘选样
+if rc_s != 0:
+    print("B3 sampling 原文:", (s_out or "")[:300])
 archive_decision = dfile("/tmp/cp5_b3_arch.json", [dec(f"finish {task_b3}", "finish", d_b3),
                                                    dec("src/b3.txt", "commit", d_b3)])
 envelope = json.dumps({"session": {"provider": "host",
@@ -186,38 +192,27 @@ proc = subprocess.Popen(["/usr/bin/python3", WF, "archive", "--task", task_b3,
                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 proc.stdin.write(envelope.encode()); proc.stdin.close()
 killed = False
+# 轮询"提交计数变化"而不是匹配提交标题：采样步骤加上后归档更快，按标题匹配容易错过窗口
+def _count():
+    out = subprocess.run(["git", "rev-list", "--count", "HEAD"], cwd=F,
+                         capture_output=True, text=True).stdout.strip()
+    return int(out or 0)
+base_count = _count()
 deadline = time.time() + 15
 while time.time() < deadline and proc.poll() is None:
-    subjects = subprocess.run(["git", "log", "-3", "--format=%s"], cwd=F,
-                              capture_output=True, text=True).stdout
-    if f"wf: archive {task_b3}" in subjects:
+    if _count() > base_count:
         try:
             os.kill(proc.pid, signal.SIGKILL)
             killed = True
         except ProcessLookupError:
             pass
         break
-    time.sleep(0.002)
 _out = proc.stdout.read().decode("utf-8", "replace") if proc.stdout else ""
 _err = proc.stderr.read().decode("utf-8", "replace") if proc.stderr else ""
 proc.wait()
-if proc.returncode != 0 and not killed:
-    try:
-        _payload = json.loads(_out.strip().splitlines()[-1])
-    except Exception:
-        _payload = {}
-    _steps = [s for s in ((_payload.get("facts") or {}).get("all") or [])
-              if s.get("status") != "completed"]
-    print("B3 未完成步骤:", json.dumps(_steps, ensure_ascii=False)[:400])
 rec("B3 归档提交后被强杀", "进程被 SIGKILL（提交已落地、结果未报告）",
     f"killed={killed} rc={proc.returncode}",
     killed and proc.returncode == -signal.SIGKILL)
-rc_s, s_payload, s_out = wf(["sampling", "pick", "--task", task_b3, "--freeze", "--json"],
-                       {"generation": json.load(open(os.path.join(F, ".wf/writer.json"),
-                                                     encoding="utf-8")).get("generation")},
-                        "sess-G3")   # 归档前置：用**实时代次**冻结并落盘选样
-if rc_s != 0:
-    print("B3 sampling 原文:", (s_out or "")[:300])
 rc, payload, _ = wf(["archive", "--task", task_b3, "--decision", archive_decision, "--json"],
                     {"generation": gen_b3}, "sess-G3")
 facts = (payload or {}).get("facts", {})
