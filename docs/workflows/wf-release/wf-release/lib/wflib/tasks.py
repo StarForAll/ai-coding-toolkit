@@ -738,7 +738,7 @@ def maintenance_persisted_probe(root):
                     [path for path, _after in wanted]:
                 continue
             # 逐项按提交树重建完整状态后比较，不看 diff、不只看摘要
-            if all(_fp_matches(after, _committed_fingerprint(root, sha, path)) for path, _after in wanted):
+            if all(_fp_matches(after, _committed_fingerprint(root, sha, path)) for path, after in wanted):
                 return True
         return False
 

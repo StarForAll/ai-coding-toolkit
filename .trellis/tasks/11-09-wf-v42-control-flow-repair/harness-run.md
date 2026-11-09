@@ -159,3 +159,27 @@ D 的**基础设施**已落地（账本在提交层、探针读提交树、安�
 下一步（一行即可定位）：在该失败点打印 `facts.reason`（形如 `probe failed: <异常>`），
 即可知道是 `_committed_text`/`_committed_fingerprint`/`scope.commits_since` 哪一步炸。
 **本轮到此为止，不猜结论。**
+
+## 定位并修复探针异常（2026-11-09 末）
+
+打印 `facts.reason` 得到确凿答案：**`probe failed: name 'after' is not defined`**。
+
+原因：我之前把探针改成"只核内容"又撤回时，`all(... for path, _after in wanted)` 的循环变量写成了
+`_after`，表达式里却仍用 `after` → 一旦走到该分支就抛 `NameError` → `receipt_state` 归为
+`pending_check`（这就是 r61 三条 `pending_check` 的真因，与"删除类/可执行位"无关——我上一轮
+的猜测是错的，代价花在瞎猜上）。
+
+修好后用最小复现验证：同一收据 → **`persisted`**。
+
+### 复跑结果
+
+| 套件 | 现状 | 剩余失败 |
+|---|---|---|
+| `r61` | **5/6** | `历史摘要登记兼容`（历史摘要形态与当前比对口径不符） |
+| `r60` | **5/6** | `后续提交树已含完整结果→persisted`（账本行是在提交**之后**写的，探针如实判 pending） |
+| `r59` | 7/8 | `重叠任务可开工` → `WF_CAPABILITY_UNAVAILABLE`（属第二轮能力，与本链路无关） |
+
+### 教训（第二次同型）
+
+**先取异常原文，再猜原因**。上一轮我先怀疑"删除类指纹"、又怀疑"处置分支"，两轮都白费；
+`facts.reason` 一行就能给出答案。这条已写进本文件，作为后续排查的固定第一步。
