@@ -223,3 +223,26 @@ class CliEntryPointsTest(unittest.TestCase):
         self.assertIn("prefs", cli.COMMAND_HELP)
         source = (REPO / "docs/workflows/wf/payload/lib/wflib/cli.py").read_text(encoding="utf-8")
         self.assertIn("judgments_mod.set_pref", source)
+
+
+class PreferenceLineTest(unittest.TestCase):
+    """预览要显示偏好（只在本机），否则"每次都问你"与"自己定"对人不可见。"""
+
+    def test_prefs_are_shown(self):
+        from wflib import judgments
+
+        text = judgments.render_preview({"id": "t1"}, {"prefs": {"标准变更": "ask_always"},
+                                                      "anchor_parts": [], "changed_paths": [],
+                                                      "closures": [], "unaddressed_findings": [],
+                                                      "verifications": [], "waived_count": 0})
+        self.assertIn("[偏好]", text)
+        self.assertIn("标准变更=ask_always", text)
+
+    def test_no_prefs_means_no_line(self):
+        from wflib import judgments
+
+        text = judgments.render_preview({"id": "t1"}, {"prefs": {}, "anchor_parts": [],
+                                                      "changed_paths": [], "closures": [],
+                                                      "unaddressed_findings": [], "verifications": [],
+                                                      "waived_count": 0})
+        self.assertNotIn("[偏好]", text)

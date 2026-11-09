@@ -74,7 +74,8 @@ def skeleton(ctx, task):
                              for item in (task.get("judgments") or [])
                              if isinstance(item, dict) and item.get("kind") == "标准变更"],
         "drift_diffs": _drift_diffs(ctx, task),   # 漂移位置：保存时的 parts vs 当前 parts（K8 可重建）
-        "anchor_parts": _anchor_part_names(ctx, task),   # 实质字段清单；None = 不可得（预览要照实说）
+        "anchor_parts": _anchor_part_names(ctx, task),
+        "prefs": load_prefs(ctx.root),   # 偏好只在本机；预览照实显示，缺失不提示（除非历史有过）   # 实质字段清单；None = 不可得（预览要照实说）
         "verifications": verifications,
         # §0.2 的「未核实」事件源：未结案的验收项（S5b 的 unverified[]）
         "unverified": [str(item.get("acceptance_id"))
@@ -319,6 +320,10 @@ def render_preview(task, facts=None, sampling_line=None):
     if parts:
         lines.append(f"[不变]    {len(parts)} 项实质字段未变：{'、'.join(sorted(parts)[:6])}"
                      + ("…" if len(parts) > 6 else ""))
+    prefs = facts.get("prefs") or {}
+    if prefs:
+        shown = "、".join(f"{kind}={value}" for kind, value in sorted(prefs.items()))
+        lines.append(f"[偏好]    {shown}（仅本机）")
     vendor = facts.get("vendor_dirty") or []
     if vendor:
         lines.append(f"[vendor]  {len(vendor)} 项框架自有改动（不计入交付、不进审查、不进业务提交）")

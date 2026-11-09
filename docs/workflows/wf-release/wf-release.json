@@ -161,7 +161,7 @@
       "target_relative": ".wf/lib/wflib/identity_store.py"
     },
     {
-      "digest": "sha256:2673789ae240e7e9dbbca19aea734ac96169699425e8d31cbabfdd8ca86b4781",
+      "digest": "sha256:2a299def0d106605eedd8a2a58bba49c085c5282a1caf193f67d6dab1f54c1a9",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -751,7 +751,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:ecbcf6ea0e703df48310779d276c2e630f72d2512b0a2c38e1c7252b92776cda",
+    "rules_digest": "sha256:12222db651ec9701690687eb22e334b7662270e9070501d93ff90c48784baa60",
     "systems": [
       "linux"
     ],
