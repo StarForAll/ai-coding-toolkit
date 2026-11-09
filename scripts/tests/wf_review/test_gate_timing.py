@@ -157,3 +157,27 @@ class SemanticTriggerTest(unittest.TestCase):
                  "author": "human", "status": "active", "schema_version": 1, "note": "无关备注"}
         self.assertEqual(spec.rule_digest(before), spec.rule_digest(after),
                          "键序或无关字段不得改变实质摘要")
+
+
+class SkeletonPoolsTest(unittest.TestCase):
+    """扩面/标准变更两类事件池必须能从记录派生（此前硬编码 []，抽样永远抽不到它们）。"""
+
+    def test_events_of_reads_fix_scope_and_standard_changes(self):
+        from wflib import sampling
+
+        pool = sampling.events_of({"changed_paths": ["p:a"], "closures": ["f1"],
+                                   "fix_scope": [{"paths": ["src/x"]}],
+                                   "standard_changes": [{"decision": "改了"}]})
+        self.assertIn("扩面", pool)
+        self.assertIn("标准变更", pool)
+
+    def test_skeleton_derives_them_from_judgments(self):
+        source = (REPO / "docs/workflows/wf/payload/lib/wflib/judgments.py").read_text(encoding="utf-8")
+        self.assertIn('item.get("kind") == "扩面"', source)
+        self.assertIn('item.get("kind") == "标准变更"', source)
+        self.assertNotIn('"fix_scope": [],', source)
+        self.assertNotIn('"standard_changes": [],', source)
+
+    def test_repo_rule_files_come_from_protocol(self):
+        source = (REPO / "docs/workflows/wf/payload/lib/wflib/judgments.py").read_text(encoding="utf-8")
+        self.assertIn("authorize_mod.repo_rule_paths", source)

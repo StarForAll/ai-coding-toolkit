@@ -61,12 +61,18 @@ def skeleton(ctx, task):
     return {
         "changed_paths": sorted(owned),
         "excluded_paths": sorted(excluded),
-        "repo_rule_files": [],          # K6 的仓库级规则文件集合由 protocol 声明（P4）
+        "repo_rule_files": _repo_rule_files(ctx, task),
         "vendor_dirty": list(classified.get("vendor_dirty") or []),
         "findings": findings,
         "closures": closures,
-        "fix_scope": [],                # 扩面条目：v42 4.4 的路径→问题映射（随判断录入）
-        "standard_changes": [],         # 新旧标准摘要（随 4.5 判断录入）
+        # 扩面/标准变更两类事件池由**判断记录**派生，不再恒空（否则抽样永远抽不到它们）
+        "fix_scope": [{"paths": item.get("paths") or [], "decision": item.get("decision"),
+                       "basis": item.get("basis")}
+                      for item in (task.get("judgments") or [])
+                      if isinstance(item, dict) and item.get("kind") == "扩面"],
+        "standard_changes": [{"decision": item.get("decision"), "basis": item.get("basis")}
+                             for item in (task.get("judgments") or [])
+                             if isinstance(item, dict) and item.get("kind") == "标准变更"],
         "drift_diffs": _drift_diffs(ctx, task),   # 漂移位置：保存时的 parts vs 当前 parts（K8 可重建）
         "anchor_parts": _anchor_part_names(ctx, task),   # 实质字段清单（预览「不变」行用）
         "verifications": verifications,
@@ -111,6 +117,17 @@ def _drift_diffs(ctx, task):
         return []
     diffs = review_mod.anchor_drift(saved, current)
     return diffs or []
+
+
+def _repo_rule_files(ctx, task):
+    """命中的仓库级规则文件（集合只来自 protocol，不在代码里另写一份）。"""
+    from . import authorize as authorize_mod
+    from . import check as check_mod
+
+    try:
+        return authorize_mod.repo_rule_paths(ctx, check_mod.object_paths(ctx, task))
+    except Exception:
+        return []
 
 
 def _anchor_part_names(ctx, task):
