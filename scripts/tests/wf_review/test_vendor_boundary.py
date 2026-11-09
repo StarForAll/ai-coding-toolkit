@@ -48,3 +48,39 @@ class VendorBoundaryTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VendorVsControlRecordTest(unittest.TestCase):
+    """`.wf/tasks/**`、`.wf/baseline.md` 是项目数据，不是 vendor——顺序错了会把归档提交挡住。"""
+
+    def test_control_records_are_not_vendor_assets(self):
+        from wflib import scope
+
+        with tempfile_dir() as root:
+            task = {"id": "2026-x"}
+            found = scope.vendor_assets(str(root), task,
+                                        [".wf/tasks/2026-x", ".wf/tasks/2026-x/task.json",
+                                         ".wf/baseline.md", ".wf/lib/wflib/scope.py"])
+        self.assertIn(".wf/lib/wflib/scope.py", found)
+        self.assertNotIn(".wf/tasks/2026-x/task.json", found)
+
+    def test_classifier_puts_records_before_vendor(self):
+        import inspect
+
+        source = inspect.getsource(scope.classify_candidates) if False else None
+        import wflib.scope as scope_mod
+
+        body = inspect.getsource(scope_mod.classify_candidates)
+        self.assertLess(body.index("_is_control_record"), body.index("is_vendor(path)"),
+                        "控制记录必须在 vendor 之前判定")
+
+
+def tempfile_dir():
+    import contextlib, tempfile
+
+    @contextlib.contextmanager
+    def _cm():
+        with tempfile.TemporaryDirectory() as tmp:
+            yield tmp
+
+    return _cm()

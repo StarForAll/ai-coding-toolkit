@@ -61,3 +61,35 @@ Check 才能拿结论。
 | ~~扩面（`expand` 确认前后）~~ | ✅ 已演练（见"第二轮"） |
 | 标准变更（`assertions_digest` 漂移 + `drift_diffs`） | 同上，且需要改 spec 规则并重跑 Check |
 | 框架缺陷就地修 / 归档编排失败 | 需要把任务推进到 `finish`（Check pass + 复杂任务审查 pass）+ 故障注入 |
+
+
+## 第三轮：完整链路（Check pass → 4 轮审查 → 归档守卫）
+
+搭出了能真正跑通的复杂任务：`task-start` 后改一个范围内的文件、`task-check --review-notes` 给内部
+审查两轴 → **Check = WF_OK**（`acceptance_results[0].conclusion=passed`，跑的是真验证命令）。
+
+| # | 场景 | 期望 | 实测 | 判定 |
+|---|---|---|---|---|
+| 4 | **审查失败后继续修**：launch 第 1 轮报告不合规（缺四类敏感面 + 无 status=done）→ 拒 → 第 2/3 轮仍有输入问题 → 第 4 轮补齐后通过 | 不被"两轮用尽"驳回，能在新轮次修好后通过 | 第 1–3 轮 `WF_REVIEW_INVALID`/`WF_PATH_INVALID`，第 4 轮 `review-decide = WF_OK` | ✅ **额度已删属实** |
+| 4b | 审查输入合规性 | 缺 `excluded-scope` 四类敏感面即拒 | 拒并列出 `missing: [credentials, private-config, outside-project, other-task-dirs]` | ✅ |
+| 7 | **标准变更/锚点**：每轮 launch 都核对 `check_anchor` | 锚点不一致即拒 | 4 轮 launch 的 `check_anchor` 恒为同一摘要 | ✅（同锚点） |
+| 9 | **vendor 提交守卫**：`archive` 的 commit 面里放 `.wf/lib/wflib/scope.py` | `WF_SCOPE_VIOLATION` + 出口两条 | `WF_SCOPE_VIOLATION`，`vendor_paths=[".wf/lib/wflib/scope.py"]` | ✅ |
+
+### 第三轮发现（已修）：vendor 判定把**项目数据**也当成框架资产
+
+第一次用 `.wf/tasks/**`、`.wf/baseline.md`、`.wf/project-config.json` 做提交面时，归档仍报
+`WF_SCOPE_VIOLATION`——因为 `is_vendor` 只看 `.wf/` 前缀，把任务记录/基线/项目配置一起算成 vendor。
+后果：**归档提交永远过不去**（记录本身就在 `.wf/tasks/**` 下）。
+
+修法：
+- 分类器里**控制记录（b 桶）先于 vendor 判定**（顺序错了会把记录打成 vendor）；
+- 新增 `scope.vendor_assets(root, task, paths)`：排除 `.wf/tasks/**`、`.wf/install/**`、
+  `.wf/baseline.md`、`.wf/project-config.json`、`.wf/writer.json` 与已识别控制记录；
+  `cmd_archive` 改用它。
+- 回归断言：`test_vendor_boundary.py` 增 2 条（记录不算 vendor、分类顺序）。
+
+### 仍未演练
+
+`archive` 的**成功**路径（"归档后工作树干净"）与"归档编排失败"故障注入：本轮归档被 vendor 守卫
+正确拦下后就收尾了；成功路径需要一份不含 `.wf/**` 的 commit 面（记录由归档自己分三段提交），
+可在下一轮补。

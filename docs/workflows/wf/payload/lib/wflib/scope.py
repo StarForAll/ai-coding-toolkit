@@ -446,14 +446,16 @@ def classify_candidates(root, task, receipts=None):
         if receipt["state"] in ("applied_pending_commit", "pending_check"):
             receipt_paths.update(receipt["facts"].get("paths") or [])
     for path in candidates:
-        if is_vendor(path):
-            buckets["v"].append(path)      # K5：框架自有资产，不进交付面/审查/业务提交
-            continue
+        # 顺序要紧：记录/维护组（a/b）先判——`.wf/tasks/**`、`.wf/baseline.md` 是项目数据，
+        # 不是框架自有资产；先判 vendor 会把记录一起打成 vendor（演练实测：归档提交被自己挡住）。
         if path in receipt_paths:
             buckets["a"].append(path)
             continue
         if _is_control_record(path, task_id, installed, root):
             buckets["b"].append(path)
+            continue
+        if is_vendor(path):
+            buckets["v"].append(path)      # K5：框架自有资产，不进交付面/审查/业务提交
             continue
         owned = path in attributed or any(paths_mod.match_path(entry_pattern, path) for entry_pattern in touch_paths)
         in_scope = any(paths_mod.match_path(entry_pattern, path) for entry_pattern in touch_paths)
@@ -567,3 +569,26 @@ def external_changes(root, task):
 def workspace_groups(root, task):
     """工作区分类：用于开工/换对象/释放前的边界核对。"""
     return classify_candidates(root, task)
+
+
+def vendor_assets(root, task, paths):
+    """提交面里的**框架自有资产**：`.wf/**` 且不属于本任务控制记录/维护组。
+
+    归档提交要带上 `.wf/tasks/**`、`.wf/baseline.md` 等项目数据，它们不是 vendor；
+    只看前缀会把记录一起挡住。
+    """
+    task_id = (task or {}).get("id")
+    installed = installed_asset_paths(root)
+    # 项目数据（不是框架自有资产）：任务记录、基线、项目配置、安装记录
+    data_prefixes = (".wf/tasks/", ".wf/install/")
+    data_files = (".wf/baseline.md", ".wf/project-config.json", ".wf/writer.json")
+    found = []
+    for path in paths or []:
+        if not is_vendor(path):
+            continue
+        if path.startswith(data_prefixes) or path in data_files:
+            continue
+        if _is_control_record(path, task_id, installed, root):
+            continue
+        found.append(path)
+    return sorted(found)

@@ -3140,7 +3140,7 @@ def cmd_archive(ctx, args):
                                                "move", "persist", "verify"])
         grant_paths = [path for grant in grants for path in _subject_paths(grant.get("subject"))]
         # K5：含 vendor 的提交一律拒绝（框架自有资产不进业务提交）
-        vendor_hits = sorted(scope.vendor_paths(grant_paths))
+        vendor_hits = scope.vendor_assets(ctx.root, task, grant_paths)
         if vendor_hits:
             action = actions.fail(dict(task["action"]), "vendor in commit grant")
             task["action"] = action
