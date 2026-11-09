@@ -74,7 +74,7 @@ def skeleton(ctx, task):
                              for item in (task.get("judgments") or [])
                              if isinstance(item, dict) and item.get("kind") == "标准变更"],
         "drift_diffs": _drift_diffs(ctx, task),   # 漂移位置：保存时的 parts vs 当前 parts（K8 可重建）
-        "anchor_parts": _anchor_part_names(ctx, task),   # 实质字段清单（预览「不变」行用）
+        "anchor_parts": _anchor_part_names(ctx, task),   # 实质字段清单；None = 不可得（预览要照实说）
         "verifications": verifications,
         # §0.2 的「未核实」事件源：未结案的验收项（S5b 的 unverified[]）
         "unverified": [str(item.get("acceptance_id"))
@@ -131,13 +131,17 @@ def _repo_rule_files(ctx, task):
 
 
 def _anchor_part_names(ctx, task):
-    """锚点的实质字段名清单：直接取 `check.anchor_parts` 的键，不另写一份。"""
+    """锚点的实质字段名清单：直接取 `check.anchor_parts` 的键，不另写一份。
+
+    算不出来时返回 `None`（不是 `[]`）：`[]` 会让预览看起来"没有不变项"，
+    把"清单不可得"静默成"没有变化"——这正是本次审查点出的 P2。
+    """
     from . import check as check_mod
 
     try:
         return sorted(check_mod.anchor_parts(ctx, task))
     except Exception:
-        return []
+        return None
 
 
 def _required_unverified(ctx, task):
@@ -305,10 +309,13 @@ def render_preview(task, facts=None, sampling_line=None):
     # 「不影响的不变」：没漂移的实质字段也要照列，否则人只看见变化、以为其余都动过（v42 §5.3）
     drift_where = {str(item.get("where")) for item in (facts.get("drift_diffs") or [])
                    if isinstance(item, dict)}
-    parts = []
-    for name in (facts.get("anchor_parts") or []):
-        if name not in drift_where:
-            parts.append(name)
+    listed = facts.get("anchor_parts")
+    if listed is None:
+        # 不是"没有不变项"，是"清单不可得"——两种状态不能长得一样
+        lines.append("[不变]    字段清单不可得（锚点计算失败）；不代表没有变化")
+        parts = []
+    else:
+        parts = [name for name in listed if name not in drift_where]
     if parts:
         lines.append(f"[不变]    {len(parts)} 项实质字段未变：{'、'.join(sorted(parts)[:6])}"
                      + ("…" if len(parts) > 6 else ""))

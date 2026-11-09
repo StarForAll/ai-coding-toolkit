@@ -181,3 +181,45 @@ class SkeletonPoolsTest(unittest.TestCase):
     def test_repo_rule_files_come_from_protocol(self):
         source = (REPO / "docs/workflows/wf/payload/lib/wflib/judgments.py").read_text(encoding="utf-8")
         self.assertIn("authorize_mod.repo_rule_paths", source)
+
+
+class UnavailableIsNotEmptinessTest(unittest.TestCase):
+    """锚点算不出来时，预览必须说「清单不可得」，不能长得像「没有不变项」（审查 a.P2）。"""
+
+    def test_none_renders_explicit_unavailable(self):
+        from wflib import judgments
+
+        text = judgments.render_preview({"id": "t1"}, {"anchor_parts": None, "changed_paths": [],
+                                                      "closures": [], "unaddressed_findings": [],
+                                                      "verifications": [], "waived_count": 0})
+        self.assertIn("不可得", text)
+        self.assertNotIn("[不变]    0 项", text)
+
+    def test_empty_list_is_still_silent(self):
+        from wflib import judgments
+
+        text = judgments.render_preview({"id": "t1"}, {"anchor_parts": [], "changed_paths": [],
+                                                      "closures": [], "unaddressed_findings": [],
+                                                      "verifications": [], "waived_count": 0})
+        self.assertNotIn("不可得", text)
+
+
+class CliEntryPointsTest(unittest.TestCase):
+    """P2：评价/人已看过/偏好都必须有 CLI 入口，否则强化期与降级门槛永远空转。"""
+
+    def test_sampling_evaluate_and_reviewed_exist(self):
+        from wflib import cli
+
+        source = (REPO / "docs/workflows/wf/payload/lib/wflib/cli.py").read_text(encoding="utf-8")
+        self.assertIn('sub == "evaluate"', source)
+        self.assertIn('sub == "reviewed"', source)
+        self.assertIn("sampling_mod.record_result", source)
+        self.assertIn("sampling_mod.mark_reviewed", source)
+
+    def test_prefs_command_exists(self):
+        from wflib import cli
+
+        self.assertIn("prefs", cli.COMMANDS)
+        self.assertIn("prefs", cli.COMMAND_HELP)
+        source = (REPO / "docs/workflows/wf/payload/lib/wflib/cli.py").read_text(encoding="utf-8")
+        self.assertIn("judgments_mod.set_pref", source)

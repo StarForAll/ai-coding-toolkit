@@ -1923,6 +1923,10 @@ COMMAND_HELP = {
                   "args": {"record|show": "子命令", "--task": "任务 id（必填）",
                            "--file": "决定文件（record 必填，每条含 choice∈五类 + quote）"},
                   "example": "wf.py authorize record --task 2026-xxxx --file decisions.json --json"},
+    "prefs": {"purpose": "判断偏好（只在本机）：ask_always 强制交人 / ai_decides 自己定",
+              "args": {"set|show": "子命令", "--kind": "判断类（归属/关闭/沿用/扩面/标准变更/缺口/未核实/规模）",
+                       "--value": "ask_always|ai_decides"},
+              "example": "wf.py prefs set --kind 标准变更 --value ask_always --json"},
     "sampling": {"purpose": "试点期判断抽样：pick 冻结事件集与种子并选样 / report 出按类统计",
                   "args": {"pick|report": "子命令", "--task": "任务 id（pick 必填）",
                            "--freeze": "首次选样前冻结事件集与种子（写任务记录）"},
@@ -2087,9 +2091,63 @@ def cmd_sampling(ctx, args):
         return codes.result("WF_OK", position_=codes.position(scope="task"),
                             next_="按统计决定保留/降频/取消；样本不足时门槛不激活",
                             facts={"report": sampling_mod.report(history), "history": history})
+    if sub == "evaluate":
+        task_id = args.value("--task")
+        file_value = args.value("--file")
+        if not task_id or not file_value:
+            raise CliError("WF_PATH_INVALID",
+                           {"reason": "sampling evaluate requires --task <id> --file <评价.json>"})
+        task = tasks_mod.load_task(ctx.root, task_id)
+        if task is None:
+            raise CliError("WF_TARGET_MISSING", {"reason": "task not found", "task": task_id})
+        evaluations = records.load_json(file_value if os.path.isabs(file_value) else join(ctx.root, file_value))
+        selection = sampling_mod.selection(task)
+        if not selection["picks"]:
+            raise CliError("WF_SEMANTIC_DECISION",
+                           {"reason": "还没有落盘的选样：先跑 sampling pick --freeze",
+                            "exits": ["跑 `wf sampling pick --task %s --freeze` 后重入" % task_id]})
+        with _lock(ctx.root, hint="sampling evaluate"):
+            _record, holder = ctx.require_held(task=task_id)
+            directory = tasks_mod.task_dir(ctx.root, task_id)
+            task = records.load_json(os.path.join(directory, "task.json"))
+            state = sampling_mod.record_result(task, sampling_mod.selection(task)["picks"],
+                                               evaluations if isinstance(evaluations, dict) else {})
+            task, action = tasks_mod._start_task_action(
+                ctx, directory, task, "task.sampling.evaluate", holder,
+                {"task": task_id}, ["record_evaluations"])
+            records.write_json(os.path.join(directory, "task.json"), task)
+            task, _assertion = tasks_mod._finish_task_action(
+                ctx, directory, task, "task.sampling.evaluate", holder,
+                {"task": task_id}, action)
+        return codes.result("WF_OK", object={"id": task_id, "name": task.get("title")},
+                            position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
+                            next_="强化期由人的声明结束（sampling reviewed）",
+                            facts={"results": state.get("results")})
+    if sub == "reviewed":
+        task_id = args.value("--task")
+        if not task_id:
+            raise CliError("WF_PATH_INVALID", {"reason": "sampling reviewed requires --task <id>"})
+        task = tasks_mod.load_task(ctx.root, task_id)
+        if task is None:
+            raise CliError("WF_TARGET_MISSING", {"reason": "task not found", "task": task_id})
+        with _lock(ctx.root, hint="sampling reviewed"):
+            _record, holder = ctx.require_held(task=task_id)
+            directory = tasks_mod.task_dir(ctx.root, task_id)
+            task = records.load_json(os.path.join(directory, "task.json"))
+            declaration = sampling_mod.mark_reviewed(task, quote=args.value("--quote"))
+            task, action = tasks_mod._start_task_action(
+                ctx, directory, task, "task.sampling.reviewed", holder,
+                {"task": task_id}, ["record_review"])
+            records.write_json(os.path.join(directory, "task.json"), task)
+            task, _assertion = tasks_mod._finish_task_action(
+                ctx, directory, task, "task.sampling.reviewed", holder,
+                {"task": task_id}, action)
+        return codes.result("WF_OK", object={"id": task_id, "name": task.get("title")},
+                            position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
+                            next_="强化期由本次人声明结束", facts={"reviewed": declaration})
     if sub != "pick":
-        raise CliError("WF_PATH_INVALID", {"reason": "sampling requires pick|report",
-                                          "known": ["pick", "report"]})
+        raise CliError("WF_PATH_INVALID", {"reason": "sampling requires pick|report|evaluate|reviewed",
+                                          "known": ["pick", "report", "evaluate", "reviewed"]})
     task_id = args.value("--task")
     if not task_id:
         raise CliError("WF_PATH_INVALID", {"reason": "sampling pick requires --task <id>"})
@@ -2144,6 +2202,33 @@ def cmd_sampling(ctx, args):
                                    (picks or {}).get("picks") or [], task.get("judgments") or []),
                                "preview_line": "本次抽样：" + "、".join(
                                    f"{item['class']}（{item['rule']}）" for item in (picks or {}).get("picks") or [])})
+
+
+def cmd_prefs(ctx, args):
+    """`prefs set --kind <类> --value ask_always|ai_decides` / `prefs show`（偏好只在本机）。"""
+    from . import judgments as judgments_mod
+
+    sub = (args.positional() or [None])[0]
+    if sub == "show":
+        prefs = judgments_mod.load_prefs(ctx.root)
+        return codes.result("WF_OK", position_=codes.position(scope="task"),
+                            next_="缺失的类按默认（ai_decides）处理；ask_always 的类一律交人",
+                            facts={"prefs": prefs, "kinds": list(judgments_mod.KINDS),
+                                   "path": judgments_mod.prefs_path(ctx.root)})
+    if sub != "set":
+        raise CliError("WF_PATH_INVALID", {"reason": "prefs requires set|show", "known": ["set", "show"]})
+    kind = args.value("--kind")
+    value = args.value("--value")
+    if not kind or not value:
+        raise CliError("WF_PATH_INVALID", {"reason": "prefs set requires --kind <类> --value <值>"})
+    try:
+        prefs = judgments_mod.set_pref(ctx.root, kind, value)
+    except ValueError as exc:
+        raise CliError("WF_PATH_INVALID", {"reason": str(exc), "kinds": list(judgments_mod.KINDS),
+                                          "values": list(judgments_mod.PREFS)})
+    return codes.result("WF_OK", position_=codes.position(scope="task"),
+                        next_="偏好只在本机，不入库；ask_always 的类会强制交人",
+                        facts={"prefs": prefs})
 
 
 def cmd_judgments(ctx, args):
@@ -2348,6 +2433,7 @@ COMMANDS = {
     "lint": cmd_lint,
     "judgments": cmd_judgments,
     "sampling": cmd_sampling,
+    "prefs": cmd_prefs,
     "authorize": cmd_authorize,
     "project": cmd_project,
     "verify": cmd_verify,
