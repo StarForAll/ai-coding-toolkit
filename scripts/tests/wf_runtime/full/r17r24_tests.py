@@ -58,6 +58,11 @@ def wfok(label, args, inputs=None, sid="sess-U1"):
     return rc, payload, out
 
 
+def cur_gen():
+    """当前写者代次（每次变更都会 bump；夹具里写死旧代次会得到 WF_GENERATION_STALE）。"""
+    return json.load(open(os.path.join(F, ".wf/writer.json"), encoding="utf-8")).get("generation")
+
+
 def make_task(title, touch, sid="sess-U1", prd_extra=None):
     rc, payload, out = wf(["task-new", "--kind", "ordinary", "--title", title,
                            "--template", f"{F}/.wf/templates/task", "--json"], None, sid)
@@ -125,7 +130,7 @@ rec("R19 拒绝时零写入", "a.md 与 c.md 都还在",
     f"a={os.path.exists(os.path.join(F, '.wf/spec/a.md'))} c={os.path.exists(os.path.join(F, '.wf/spec/c.md'))}",
     os.path.exists(os.path.join(F, ".wf/spec/a.md")) and os.path.exists(os.path.join(F, ".wf/spec/c.md")))
 wf(["task-pause", "--task", task19, "--reason", "R19 收尾", "--json"], {"generation": gen19}, "sess-U19")
-wfok("release", ["writer", "release", "--json"], {"generation": gen19}, "sess-U19")
+wf(["writer", "release", "--json"], {"generation": gen19}, "sess-U19")
 
 # ---------------- R17：spec-update 动作授权 ----------------
 clean()
@@ -147,7 +152,7 @@ wf(["task-resume", "--task", task17, "--json"], {"generation": gen17}, "sess-U17
 rc, payload, _ = wf(["spec-update", "--task", task17, "--changes", early, "--json"], {"generation": gen17}, "sess-U17")
 rec("R17 恢复后可写", "WF_OK", (payload or {}).get("code"), rc == 0)
 wf(["task-pause", "--task", task17, "--reason", "R17 收尾", "--json"], {"generation": gen17}, "sess-U17")
-wfok("release", ["writer", "release", "--json"], {"generation": gen17}, "sess-U17")
+wf(["writer", "release", "--json"], {"generation": gen17}, "sess-U17")
 
 # R26：spec 目标须在批准触碰面内
 clean()
@@ -164,7 +169,7 @@ rec("R26 spec 目标不在触碰面内", "WF_SCOPE_UNRESOLVED", (payload or {}).
 rec("R26 拒绝时零写入", "outside-face.md 不存在", os.path.exists(os.path.join(F, ".wf/spec/outside-face.md")),
     not os.path.exists(os.path.join(F, ".wf/spec/outside-face.md")))
 wf(["task-pause", "--task", task17b, "--reason", "R26 收尾", "--json"], {"generation": gen17b}, "sess-U17b")
-wfok("release", ["writer", "release", "--json"], {"generation": gen17b}, "sess-U17b")
+wf(["writer", "release", "--json"], {"generation": gen17b}, "sess-U17b")
 
 json.dump(results, open("/tmp/r17r24_results.json", "w"), ensure_ascii=False, indent=2)
 print("part1", sum(1 for r in results if r["pass"]), "/", len(results))
@@ -189,12 +194,12 @@ rec("R20 准备：Check", "WF_OK", f"{(payload or {}).get('code')} facts={json.d
 wf(["task-knowledge", "--task", task20a, "--decision", "no-update", "--json"], {"generation": gen20a}, "sess-U20a")
 wfok("sampling", ["sampling", "pick", "--task", task20a, "--freeze", "--json"],
                        {"generation": gen20a}, "sess-U20a")   # 归档前置：先冻结并落盘选样
-rc, payload, _ = wfok("archive", ["archive", "--task", task20a, "--decision",
+rc, payload, _ = wf(["archive", "--task", task20a, "--decision",
                      dfile("/tmp/r20_arch.json", [dec(f"finish {task20a}", "finish", d20a),
                                                   dec(".wf/spec/**", "commit", d20a)]),
                      "--json"], {"generation": gen20a}, "sess-U20a")
 rec("R20 准备：归档任务", "WF_OK", f"{(payload or {}).get('code')} facts={json.dumps((payload or {}).get('facts'), ensure_ascii=False)[:300]}", rc == 0)
-wfok("release", ["writer", "release", "--json"], {"generation": gen20a}, "sess-U20a")
+wf(["writer", "release", "--json"], {"generation": gen20a}, "sess-U20a")
 archived_dir = wf_tasks.task_dir(F, task20a)
 before = open(os.path.join(archived_dir, "task.json"), encoding="utf-8").read()
 
@@ -213,7 +218,7 @@ rec("R20 归档仍引用旧路径", ".wf/spec/old.md 仍在归档策展里",
     ".wf/spec/old.md" in json.loads(after).get("curation", [{}])[0].get("path", ""),
     ".wf/spec/old.md" in after)
 wf(["task-pause", "--task", task20b, "--reason", "R20 收尾", "--json"], {"generation": gen20b}, "sess-U20b")
-wfok("release", ["writer", "release", "--json"], {"generation": gen20b}, "sess-U20b")
+wf(["writer", "release", "--json"], {"generation": gen20b}, "sess-U20b")
 
 # ---------------- R18：到期与策展并集 ----------------
 clean()
@@ -257,7 +262,7 @@ rc, payload, _ = wf(["task-check", "--task", task18, "--decision",
                      "--review-notes", NOTES, "--json"], {"generation": gen18}, "sess-U18")
 rec("R18 人判覆盖后通过", "WF_OK", f"{(payload or {}).get('code')} spec={json.dumps(((payload or {}).get('facts') or {}).get('spec'), ensure_ascii=False)[:160]}", rc == 0)
 wf(["task-pause", "--task", task18, "--reason", "R18 收尾", "--json"], {"generation": gen18}, "sess-U18")
-wfok("release", ["writer", "release", "--json"], {"generation": gen18}, "sess-U18")
+wf(["writer", "release", "--json"], {"generation": gen18}, "sess-U18")
 
 json.dump(results, open("/tmp/r17r24_results.json", "w"), ensure_ascii=False, indent=2)
 print("part2", sum(1 for r in results if r["pass"]), "/", len(results))
@@ -290,7 +295,7 @@ rec("R21 验证期间新增范围外文件", "WF_CHECK_STALE 或 WF_WORKSPACE_UN
 if os.path.exists(os.path.join(F, "rogue.txt")):
     os.remove(os.path.join(F, "rogue.txt"))
 wf(["task-pause", "--task", task21, "--reason", "R21 收尾", "--json"], {"generation": gen21}, "sess-U21")
-wfok("release", ["writer", "release", "--json"], {"generation": gen21}, "sess-U21")
+wf(["writer", "release", "--json"], {"generation": gen21}, "sess-U21")
 
 # ---------------- R22：TDD 证据结构 ----------------
 clean()
@@ -348,7 +353,7 @@ rc, payload, _ = wf(["task-check", "--task", task22, "--review-notes", "/tmp/r22
 rec("R22 红绿同一条不得通过", "WF_CHECK_FAILED", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_CHECK_FAILED")
 wf(["task-pause", "--task", task22, "--reason", "R22 收尾", "--json"], {"generation": gen22}, "sess-U22")
-wfok("release", ["writer", "release", "--json"], {"generation": gen22}, "sess-U22")
+wf(["writer", "release", "--json"], {"generation": gen22}, "sess-U22")
 
 # ---------------- R23：归档提交失败后按既有授权续做 ----------------
 clean()
@@ -356,40 +361,34 @@ os.makedirs(os.path.join(F, "area23"), exist_ok=True)
 task23, gen23, dir23, d23 = make_task("R23 归档续做", ["area23/**"], "sess-U23")
 approve(task23, d23, gen23, "sess-U23")
 open(os.path.join(F, "area23/r23.txt"), "w").write("r23\n")
-wfok("task-start", ["task-start", "--task", task23, "--json"], {"generation": gen23}, "sess-U23")
-wf(["task-check", "--task", task23, "--review-notes", NOTES, "--json"], {"generation": gen23}, "sess-U23")
-wf(["task-knowledge", "--task", task23, "--decision", "no-update", "--json"], {"generation": gen23}, "sess-U23")
+wfok("task-start", ["task-start", "--task", task23, "--json"], {"generation": cur_gen()}, "sess-U23")
+wf(["task-check", "--task", task23, "--review-notes", NOTES, "--json"], {"generation": cur_gen()}, "sess-U23")
+wf(["task-knowledge", "--task", task23, "--decision", "no-update", "--json"], {"generation": cur_gen()}, "sess-U23")
 wfok("sampling", ["sampling", "pick", "--task", task23, "--freeze", "--json"],
-                       {"generation": gen23}, "sess-U23")   # 归档前置：先冻结并落盘选样
-rc, payload, _ = wfok("archive", ["archive", "--task", task23, "--decision",
+     {"generation": cur_gen()}, "sess-U23")   # 正常归档前必须冻结并落盘选样（task.sampled 前置）
+rc, payload, _ = wf(["archive", "--task", task23, "--decision",
                      dfile("/tmp/r23_arch.json", [dec(f"finish {task23}", "finish", d23),
                                                   dec("area23/**", "commit", d23)]), "--json"],
-                    {"generation": gen23}, "sess-U23")
+                    {"generation": cur_gen()}, "sess-U23")
 rec("R23 准备：正常归档", "WF_OK", (payload or {}).get("code"), rc == 0)
 # 回退记录组提交，制造「已移动、未持久化」状态
 subprocess.run(["git", "reset", "-q", "--mixed", "HEAD~1"], cwd=F, capture_output=True)
 subprocess.run(["git", "checkout", "-q", "--", "."], cwd=F, capture_output=True)
 archived = wf_tasks.task_dir(F, task23)
 persisted_before = wf_tasks.archive_persisted(F, json.load(open(os.path.join(archived, "task.json"))))
-wfok("sampling", ["sampling", "pick", "--task", task23, "--freeze", "--json"],
-                       {"generation": gen23}, "sess-U23")   # 归档前置：先冻结并落盘选样
-rc_norights, no_rights, _ = wfok("archive", ["archive", "--task", task23, "--decision",
+rc_norights, no_rights, _ = wf(["archive", "--task", task23, "--decision",
                                  dfile("/tmp/r23_arch2.json", [dec(f"finish {task23}", "finish", d23)]), "--json"],
-                                {"generation": gen23}, "sess-U23")
-wfok("release", ["writer", "release", "--json"], {"generation": gen23}, "sess-U23")
-wfok("sampling", ["sampling", "pick", "--task", task23, "--freeze", "--json"],
-                       {"generation": gen23}, "sess-U23")   # 归档前置：先冻结并落盘选样
-rc_busy, busy_payload, _ = wfok("archive", ["archive", "--task", task23, "--decision",
+                                {"generation": cur_gen()}, "sess-U23")
+wf(["writer", "release", "--json"], {"generation": cur_gen()}, "sess-U23")
+rc_busy, busy_payload, _ = wf(["archive", "--task", task23, "--decision",
                                 dfile("/tmp/r23_arch2.json", [dec(f"finish {task23}", "finish", d23)]), "--json"],
-                               {"generation": gen23}, "sess-U23")
+                               {"generation": cur_gen()}, "sess-U23")
 rec("R23 无写权不得续做", "WF_WRITER_BUSY", (busy_payload or {}).get("code"),
     (busy_payload or {}).get("code") == "WF_WRITER_BUSY")
-wf(["writer", "acquire", "--task", task23, "--json"], {"generation": gen23}, "sess-U23")
-wfok("sampling", ["sampling", "pick", "--task", task23, "--freeze", "--json"],
-                       {"generation": gen23}, "sess-U23")   # 归档前置：先冻结并落盘选样
-rc, payload, _ = wfok("archive", ["archive", "--task", task23, "--decision",
+wf(["writer", "acquire", "--task", task23, "--json"], {"generation": cur_gen()}, "sess-U23")
+rc, payload, _ = wf(["archive", "--task", task23, "--decision",
                      dfile("/tmp/r23_arch2.json", [dec(f"finish {task23}", "finish", d23)]), "--json"],
-                    {"generation": gen23}, "sess-U23")
+                    {"generation": cur_gen()}, "sess-U23")
 facts = (payload or {}).get("facts", {})
 rec("R23 未持久化状态已构造", "persisted=False", persisted_before.get("persisted"),
     persisted_before.get("persisted") is False)
@@ -398,7 +397,7 @@ rec("R23 重入按既有授权续做提交", "WF_OK 且 persisted=true 且标记
     (payload or {}).get("code") == "WF_OK"
     and (facts.get("archive_persisted") or {}).get("persisted") is True
     and (facts.get("archive_persisted") or {}).get("resumed_commit") is True)
-wfok("release", ["writer", "release", "--json"], {"generation": gen23}, "sess-U23")
+wf(["writer", "release", "--json"], {"generation": cur_gen()}, "sess-U23")
 
 # ---------------- R24：放弃时的真实处置 ----------------
 clean()
