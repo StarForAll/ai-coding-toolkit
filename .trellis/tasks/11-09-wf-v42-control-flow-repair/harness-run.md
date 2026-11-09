@@ -243,3 +243,32 @@ task-new → WF_WRITER_BUSY, holder.kind=session, holder.scope.object=2026-8df5�
 
 把 `r17r24_tests.py:150–176` 与 `r31r34` 对应的段落里 `archive` 与 `writer release` 的 `rc/payload`
 打出来，确认是 archive 失败导致后续 release 无效，还是 release 本身的代次不匹配。**先取原文，再动手。**
+
+## r17r24 失败链（2026-11-09 末，逐步取证后确定）
+
+不是"写权没释放"这么一句，而是**一串静默失败**。逐层打印原文后得到的链条：
+
+```
+make_task(task20a)          → 成功（任务建了）
+approve / task-start        → 静默失败（rc 未检查）→ task.status 仍是 not_started
+task-check                  → WF_SEMANTIC_DECISION {"reason": "check requires in_progress"}
+archive                     → WF_SEMANTIC_DECISION {"reason": "normal archive requires finish phase", "status": "not_started"}
+writer release              → 拿错状态，未真正释放
+make_task(task20b)          → WF_WRITER_BUSY → facts 无 directory → KeyError 'directory'
+```
+
+同时该套件前段的 `R19` 已有一处 `WF_SEMANTIC_DECISION` 失败（同批同目标被拒），说明**最上游**的那一步
+就已经不成立，后面的全是连锁。
+
+### 结论与下一步（精确）
+
+- 这些套件的通病：**大量 `wf(...)` 调用不检查返回码**，一步失败后靠后面的 KeyError/怪码暴露，
+  排查者（我）就会去猜错误的层。这是**夹具质量问题**，不是产品缺陷。
+- 修法（机械但要逐步）：给 `make_task / approve / start / check / archive / release` 各加返回码检查
+  （失败即 `raise SystemExit(1)` 并打印原文），再逐个把真实失败修掉。
+- 我这一轮只完成了**诊断工具化**（`r17r24` 的 check/approve 打印、`r59` 的 task-new 打印），
+  没有把这些套件改到绿。
+
+### 一行经验
+
+**"静默失败 + 后置异常"是这类套件排查成本高的根源**；夹具里每个 `wf(...)` 都该检查 rc。

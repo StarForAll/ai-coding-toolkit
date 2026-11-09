@@ -159,7 +159,7 @@ wf(["spec", "--file", ".wf/spec/old.md", "--json"], {"generation": gen20a}, "ses
 rc, payload, _ = wf(["task-check", "--task", task20a, "--review-notes", NOTES, "--json"],
                     {"generation": gen20a}, "sess-U20a")
 json.dump((payload or {}).get("facts"), open("/tmp/r20_facts.json", "w"), ensure_ascii=False)
-rec("R20 准备：Check", "WF_OK", f"{(payload or {}).get('code')}", rc == 0)
+rec("R20 准备：Check", "WF_OK", f"{(payload or {}).get('code')} facts={json.dumps((payload or {}).get('facts'), ensure_ascii=False)[:400]}", rc == 0)
 wf(["task-knowledge", "--task", task20a, "--decision", "no-update", "--json"], {"generation": gen20a}, "sess-U20a")
 wf(["sampling", "pick", "--task", task20a, "--freeze", "--json"],
                        {"generation": gen20a})   # 归档前置：先冻结并落盘选样
