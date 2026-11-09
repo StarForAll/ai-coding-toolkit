@@ -455,9 +455,72 @@ def anchor_drift(saved_parts, current_parts):
     return diffs
 
 
-def assertion_ref_problem(ref, index, changed, fix_kind=None):
-    """单条引用的判定（K3b 引用属当前集合、K4c 规则不得自证）；返回问题字典或 None。"""
+STANDARD_PARTS = ("spec_versions", "assertions_digest", "acceptance_digest")
+
+
+def deprecated_clause_refs(ctx, task):
+    """已停用子句的位置集合（`<规则路径>#<子句 id>`），供引用校验直接拒掉。
+
+    与 `spec.rule_digest` 同口径：只看 active 判据的是摘要，deprecated 不再作依据。
+    """
+    from . import check as check_mod
+    from . import spec as spec_mod
+
+    refs = set()
+    try:
+        versions = check_mod.spec_versions(ctx, task)
+    except Exception:
+        return refs
+    for entry in versions:
+        info = spec_mod.load_spec(ctx.root, entry.get("path"))
+        for clause in (info or {}).get("metadata", {}).get("clauses") or []:
+            if isinstance(clause, dict) and clause.get("status") != "active" and clause.get("id"):
+                refs.add(f"{entry.get('path')}#{clause['id']}")
+    return refs
+
+
+def standard_drift_gate(ctx, task):
+    """标准面变了却没做判断 → 不能产出 pass（v42 §4.7：框架只标事实，后果是判断）。"""
+    from . import check as check_mod
+
+    saved = ((task.get("check") or {}).get("anchor") or {}).get("parts")
+    try:
+        current = check_mod.anchor_parts(ctx, task)
+    except Exception:
+        return []
+    positions = standard_drift_positions(anchor_drift(saved, current) or [])
+    if not positions:
+        return []
+    kinds = {str(item.get("kind")) for item in (task.get("judgments") or []) if isinstance(item, dict)}
+    if kinds & {"标准变更", "沿用"}:
+        return positions
+    raise ReviewError("WF_SEMANTIC_DECISION",
+                      {"standard_drift": positions,
+                       "reason": "标准面已变，但还没有「标准变更/沿用」判断",
+                       "exits": ["补一条 kind=标准变更 的 judgment（写清改了哪条、为什么）",
+                                 "判不了就用 outcome=escalated 交人"]})
+
+
+def standard_drift_positions(diffs):
+    """漂移里属于**标准面**的位置（v42 §4.7/§5.3）：标准集合与断言面的摘要变了才算。
+
+    框架只标事实（`standard_drift`）；"还能不能沿用"是判断，由「标准变更/沿用」judgment 承载。
+    """
+    return [dict(item) for item in (diffs or [])
+            if isinstance(item, dict) and item.get("where") in STANDARD_PARTS]
+
+
+def assertion_ref_problem(ref, index, changed, fix_kind=None, deprecated=None):
+    """单条引用的判定（K3b 引用属当前集合、K4c 规则不得自证）；返回问题字典或 None。
+
+    `deprecated` 是已停用子句的位置集合（`<规则>#<子句>`）：引用停用判据等于用旧尺子量新活，
+    直接拒（v42 §4.5「`d:` 引用 deprecated 条目被拒」同型）。
+    """
     base = str(ref).split("#", 1)[0]
+    if deprecated and str(ref) in deprecated:
+        return {"reason": "引用指向已停用的判据子句（只增不改：停用后不得再作依据）",
+                "assertion_ref": ref,
+                "exits": ["换用当前 active 的子句或验收项", "若确需恢复该条件，重新加一条新子句"]}
     if base in changed and fix_kind != "broken-reference":
         return {"reason": "assertion_ref 指向本任务内修改过的规则（规则不得自证）",
                 "assertion_ref": ref, "changed_rule": changed[base],
@@ -921,6 +984,7 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
                                "slot": slot})
         # 引用必须属于当前批准集合；本任务内改过的规则不得当判据（机制稿 §9.2、K3c）
         index, changed = assertion_index(ctx, task)
+        deprecated_refs = deprecated_clause_refs(ctx, task)
         fix_kind = payload.get("check_fix_kind")
         lifted = []
         for finding in payload.get("findings") or []:
@@ -935,7 +999,8 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
                                        "finding": finding.get("id"), "slot": slot,
                                        "known": sorted(index)})
                 continue
-            problem = assertion_ref_problem(ref, index, changed, fix_kind)
+            problem = assertion_ref_problem(ref, index, changed, fix_kind,
+                                            deprecated=deprecated_refs)
             if problem:
                 problem["finding"] = finding.get("id")
                 problem["slot"] = slot
@@ -1059,6 +1124,7 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None):
             raise ReviewError("WF_SEMANTIC_DECISION", {"reason": "no review round was launched"})
         round_no = max(int(entry.get("round") or 0) for entry in _launches)
     round_no = int(round_no)
+    standard_drift_gate(ctx, task)
     from . import cli, lock
 
     dispositions = []

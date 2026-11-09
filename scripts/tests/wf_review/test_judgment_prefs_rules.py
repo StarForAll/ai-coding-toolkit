@@ -59,3 +59,61 @@ class RejectedNeedsResolutionTest(unittest.TestCase):
             entry(kind="关闭", finding="f1", resolved_by="human:xzc", evidence_refs=[]),
             facts(rejected=[{"finding_id": "f1", "decision": "rejected"}]))
         self.assertEqual([p for p in problems if "resolved" in p["reason"]], [])
+
+
+class StandardDriftTest(unittest.TestCase):
+    """标准面变了却未判断 → 不能产出 pass；框架只标事实（v42 §4.7）。"""
+
+    def test_only_standard_parts_count(self):
+        from wflib import review
+
+        diffs = [{"id": "d:spec_versions", "where": "spec_versions"},
+                 {"id": "d:assertions_digest", "where": "assertions_digest"},
+                 {"id": "d:paths_digest", "where": "paths_digest"},
+                 {"id": "d:baseline_digest", "where": "baseline_digest"}]
+        got = [item["where"] for item in review.standard_drift_positions(diffs)]
+        self.assertEqual(got, ["spec_versions", "assertions_digest"])
+
+    def test_no_standard_change_returns_empty(self):
+        from wflib import review
+
+        self.assertEqual(review.standard_drift_positions(
+            [{"id": "d:paths_digest", "where": "paths_digest"}]), [])
+
+    def test_gate_blocks_without_judgment(self):
+        from wflib import check as check_mod, review
+
+        class Ctx:
+            root = str(REPO)
+
+        original = check_mod.anchor_parts
+        check_mod.anchor_parts = lambda ctx, task, check=None: {"spec_versions": [{"path": "a", "digest": "2"}],
+                                                               "paths_digest": "p"}
+        try:
+            task = {"id": "t1", "judgments": [],
+                    "check": {"anchor": {"parts": {"spec_versions": [{"path": "a", "digest": "1"}],
+                                                  "paths_digest": "p"}}}}
+            with self.assertRaises(Exception) as caught:
+                review.standard_drift_gate(Ctx(), task)
+            self.assertIn("WF_SEMANTIC_DECISION", str(caught.exception))
+
+            task_with_judgment = dict(task, judgments=[{"kind": "标准变更", "decision": "接受"}])
+            positions = review.standard_drift_gate(Ctx(), task_with_judgment)
+            self.assertEqual([p["where"] for p in positions], ["spec_versions"])
+        finally:
+            check_mod.anchor_parts = original
+
+    def test_gate_passes_when_nothing_on_the_standard_face_changed(self):
+        from wflib import check as check_mod, review
+
+        class Ctx:
+            root = str(REPO)
+
+        original = check_mod.anchor_parts
+        check_mod.anchor_parts = lambda ctx, task, check=None: {"paths_digest": "p2"}
+        try:
+            task = {"id": "t1", "judgments": [],
+                    "check": {"anchor": {"parts": {"paths_digest": "p1"}}}}
+            self.assertEqual(review.standard_drift_gate(Ctx(), task), [])
+        finally:
+            check_mod.anchor_parts = original
