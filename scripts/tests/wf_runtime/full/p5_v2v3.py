@@ -79,6 +79,7 @@ json.dump([{"source": "human (sess-C)", "at": at, "subject": f"finish {task_v2}"
            {"source": "human (sess-C)", "at": at, "subject": "docs/v2.txt", "object_digest": digest_v2,
             "choice": "commit", "reason": "授权提交 docs/v2.txt"}],
           open("/tmp/decision_v2_archive.json", "w"), ensure_ascii=False)
+wfdrive.freeze_sampling(task_v2, gen_v2)   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wf(["archive", "--task", task_v2, "--decision", "/tmp/decision_v2_archive.json", "--json"],
                     {"generation": gen_v2})
 commit_ok = (payload or {}).get("facts", {}).get("commit", {}).get("committed") is True
@@ -88,6 +89,7 @@ rec("V3", "不重叠任务归档（维护组仍待提交）", "pass 且提交成
 # ---------- V2：归档提交后的持久化派生 ----------
 rc, payload, _ = wf(["writer", "release", "--json"], {"generation": gen_v2})
 rec("V2", "归档后释放写权（另一合法动作改写公共字段）", "pass", (payload or {}).get("code"), rc == 0)
+wfdrive.freeze_sampling(task_v2, gen_v2)   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wf(["archive", "--task", task_v2, "--decision", "/tmp/decision_v2_archive.json", "--json"],
                     {"generation": gen_v2})
 facts = (payload or {}).get("facts", {})

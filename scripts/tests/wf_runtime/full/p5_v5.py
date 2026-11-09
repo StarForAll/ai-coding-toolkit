@@ -93,6 +93,7 @@ decision("/tmp/v5_archive.json", [{"source": "human (sess-E)", "at": at, "subjec
                                   {"source": "human (sess-E)", "at": at, "subject": "flag.txt",
                                    "object_digest": digest, "choice": "commit", "reason": "授权提交"}])
 wf(["task-knowledge", "--task", task_id, "--decision", "no-update", "--json"], inputs)
+wfdrive.freeze_sampling(task_id, gen)   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wf(["archive", "--task", task_id, "--decision", "/tmp/v5_archive.json", "--json"], inputs)
 facts = (payload or {}).get("facts", {})
 print("   missing:", json.dumps([m for m in (facts.get("missing") or [])], ensure_ascii=False)[:800])
@@ -107,6 +108,7 @@ rc, payload, _ = wf(["task-check", "--task", task_id, "--decision", "/tmp/v5_rul
                      "--review-notes", "/tmp/v5_notes_pass.json", "--json"], inputs)
 rec("裁定「同一问题」留痕", "pass 且写入 human_decisions",
     (payload or {}).get("code"), rc == 0)
+wfdrive.freeze_sampling(task_id, gen)   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wf(["archive", "--task", task_id, "--decision", "/tmp/v5_archive.json", "--json"], inputs)
 facts = (payload or {}).get("facts", {})
 missing = facts.get("missing") or []
@@ -122,6 +124,7 @@ json.dump({"conclusion": "重复失败源于验收文件未创建；改为先建
 rc, payload, _ = wf(["task-retrospect", "--task", task_id, "--evidence", "/tmp/v5_evidence.json",
                      "--json"], inputs)
 rec("复盘记录覆盖触发集合", "pass", (payload or {}).get("code"), rc == 0)
+wfdrive.freeze_sampling(task_id, gen)   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wf(["archive", "--task", task_id, "--decision", "/tmp/v5_archive.json", "--json"], inputs)
 rec("复盘后归档", "pass", f"{(payload or {}).get('code')}", rc == 0)
 

@@ -194,6 +194,7 @@ json.dump([{"source": "human (sess-G)", "at": at, "subject": f"finish {task_id}"
            {"source": "human (sess-G)", "at": at, "subject": ".wf/spec/**", "object_digest": digest,
             "choice": "commit", "reason": "授权提交 spec 变更"}],
           open("/tmp/spec_archive.json", "w"), ensure_ascii=False)
+wfdrive.freeze_sampling(task_id, gen)   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wf(["archive", "--task", task_id, "--decision", "/tmp/spec_archive.json", "--json"], inputs)
 rec("归档", "pass", (payload or {}).get("code"), rc == 0)
 wf(["writer", "release", "--json"], inputs)

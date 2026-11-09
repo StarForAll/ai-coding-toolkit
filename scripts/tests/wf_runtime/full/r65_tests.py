@@ -78,6 +78,7 @@ record["plan"]["complexity_reasons"] = [item for item in reasons_now if not item
 json.dump(record, open(record_path, "w", encoding="utf-8"), ensure_ascii=False)
 json.dump([dec(f"finish {task_id}", "finish", digest), dec("pkg/a.py", "commit", digest)],
           open("/tmp/r65_arch.json", "w"))
+wfdrive.freeze_sampling(task_id, gen)   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wfk(["archive", "--task", task_id, "--decision", "/tmp/r65_arch.json", "--json"],
                      {"generation": write_gen()})
 rec("R3 轻量任务缺证据的降级仍被归档门禁挡住", "WF_SEMANTIC_DECISION", (payload or {}).get("code"),

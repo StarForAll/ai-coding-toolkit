@@ -213,6 +213,7 @@ open(os.path.join(F, "src/a18.txt"), "w").write("a18\n")
 start(task6, gen6, sid)
 check(task6, gen6, sid, PASS_NOTES)
 wf(["task-knowledge", "--task", task6, "--decision", "no-update", "--json"], {"generation": gen6}, sid)
+wfdrive.freeze_sampling(task6, gen6)   # 归档前置：先冻结并落盘选样
 rc, payload, out = wf(["archive", "--task", task6, "--decision",
                        decision_file("/tmp/cp1_a18_archive.json", [dec(f"finish {task6}", "finish", d6),
                                                                    dec("src/a18.txt", "commit", d6)]),

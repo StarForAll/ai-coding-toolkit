@@ -42,6 +42,16 @@ def _binding_instance(sid, provider="host", issued=None):
     return None
 
 
+def freeze_sampling(task_id, generation, sid="sess-A", instance_id=None):
+    """归档前置：冻结事件集并落盘选样（`task.sampled` 门禁要求）。
+
+    **一处实现、调用点显式**：不在 `run()` 里对 archive 静默注入——那会把门禁从测试视野里抹掉
+    （门禁漏接就再也测不出来），也会改掉负路径套件的前提。
+    """
+    return run(["sampling", "pick", "--task", task_id, "--freeze", "--json"],
+               inputs={"generation": generation}, sid=sid, instance_id=instance_id, show=False)
+
+
 def run(args, inputs=None, sid="sess-A", activation=True, instance_id=None, show=True):
     args = [str(item) for item in args]
     merged = {}
