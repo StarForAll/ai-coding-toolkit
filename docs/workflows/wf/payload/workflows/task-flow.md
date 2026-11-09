@@ -62,6 +62,13 @@
 - 动作：复盘结论覆盖当前触发集合（返工、审查失败、已确认的重复调试）。
 - 出口：触发事实未被覆盖 → `WF_SEMANTIC_DECISION`；复盘后新增事实形成新期次。
 
+### task.sampled [required · repeatable]
+
+- 时点：归档前（before_archive）
+- enforcement: `wflib/gates.py`（P = `{seed, picks}`）＋ `wflib/sampling.py::freeze`
+- 动作：本任务已跑过一次试点期抽样并冻结选样（种子 + 事件集），AI 不可挑选事件。
+- 出口：无冻结选样 → `WF_SEMANTIC_DECISION`，出口是跑一次 `wf sampling pick --task <id>`。
+
 ### task.changes-persisted [required · repeatable]
 
 - 时点：归档前（before_archive）

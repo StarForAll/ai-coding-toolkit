@@ -1,0 +1,1516 @@
+{
+  "assets": [
+    {
+      "digest": "sha256:736b16b44b480acfeb7378912092fd5b718bf4ad6453b21071c5d38dd1ffcd4a",
+      "executable": true,
+      "file_kind": "file",
+      "kind": "bin",
+      "required": true,
+      "source_path": "wf-release/bin/repair.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/bin/repair.py"
+    },
+    {
+      "digest": "sha256:760dc68ef0d3b876665d1dc7a38cf8f62c122e998d877e62539e38edb655a99d",
+      "executable": true,
+      "file_kind": "file",
+      "kind": "bin",
+      "required": true,
+      "source_path": "wf-release/bin/uninstall.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/bin/uninstall.py"
+    },
+    {
+      "digest": "sha256:bd6a01b1040de60c701fe757d7a4c1ed474f1dd35c4b834501880653498b7e6f",
+      "executable": true,
+      "file_kind": "file",
+      "kind": "bin",
+      "required": true,
+      "source_path": "wf-release/bin/wf.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/bin/wf.py"
+    },
+    {
+      "digest": "sha256:2a93ec75eb30a0a75777bc353b22256c68c8809dc767886b0aebbb72c98e1f17",
+      "executable": true,
+      "file_kind": "file",
+      "kind": "installer",
+      "required": true,
+      "source_path": "install.py",
+      "target_class": "release_only",
+      "target_relative": null
+    },
+    {
+      "digest": "sha256:5acf7609a0446c6c6a42af8ff3536b0de78f925cbe53ad7e788c6a87abf01b50",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/__init__.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/__init__.py"
+    },
+    {
+      "digest": "sha256:6edcb787ff9068ce6f35de4bbe4464b3d9d0869da9941427b25dec6098149801",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/actions.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/actions.py"
+    },
+    {
+      "digest": "sha256:c64f0119457702dd83267b95d2cdeaed2ac41a6e8d8bb4ce9382e37c1f1d0cb8",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/assets.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/assets.py"
+    },
+    {
+      "digest": "sha256:c5972391ab3145bbb2cfac1cfae1609ac7016ee678514060effcc208ff71bd09",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/authorize.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/authorize.py"
+    },
+    {
+      "digest": "sha256:38ae90eb20e45be78bf71879b1bef1e0a02fc06a9d8dc966c2d5971ea1100af1",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/check.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/check.py"
+    },
+    {
+      "digest": "sha256:dbc84f6de514fdd875bee3086e2869ba8dfcc5d71e853e7dc2d14a93c5309ead",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/cli.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/cli.py"
+    },
+    {
+      "digest": "sha256:d54d8432f3a03c97eeacda1fc7043a080eb591312cfd9548d335f370d687d9ed",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/codes.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/codes.py"
+    },
+    {
+      "digest": "sha256:30c436b6ef5f2eb4998d2e98a5f567fcfbca6c146ee9977ff2d940ddfd111c55",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/config.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/config.py"
+    },
+    {
+      "digest": "sha256:fb1bf7b54a0786e8802bb4563c6b1cb2145d7a145f8204e0f87fb8c4361f6383",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/curation.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/curation.py"
+    },
+    {
+      "digest": "sha256:e1da0372d84349115e7d04c3486d9c7c6f5e280d98c2e4272f608f79137d0f82",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/fingerprint.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/fingerprint.py"
+    },
+    {
+      "digest": "sha256:48e62c93b2639cb24540ebf05d7160356f70351911f6b8b45d88915e8732405d",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/gates.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/gates.py"
+    },
+    {
+      "digest": "sha256:aa8d028664fc3e454aaa5b8c64b79f6be72af7df1e1e2de52f73653003a405c6",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/identity_store.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/identity_store.py"
+    },
+    {
+      "digest": "sha256:bb525757ababe127418c8f7ca3d4d1c7c43626c89bff9317710d1bec53400c6f",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/judgments.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/judgments.py"
+    },
+    {
+      "digest": "sha256:4269af259f0f7a07c405a5ef0baeb9673558a2dd1528f1a324a713aadeefca71",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/lock.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/lock.py"
+    },
+    {
+      "digest": "sha256:3ecf31d34fed99bd4b52bb88d70963e847e446e3ce97cbd8d104baa22a9c48af",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/maintenance.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/maintenance.py"
+    },
+    {
+      "digest": "sha256:308afecf8133a57899072be477f3b6b28c68aa5e4fc81efc78d635163d32c722",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/module_main.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/module_main.py"
+    },
+    {
+      "digest": "sha256:832e3c17d4feb07510c66b262a524a0c2ad1e63dbd25d25ba8063f67ac3fbb17",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/paths.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/paths.py"
+    },
+    {
+      "digest": "sha256:ea3c0b5a2a85e41ea9bb5a3b4a74dc362e815836731938d914ec373096612bf7",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/projection.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/projection.py"
+    },
+    {
+      "digest": "sha256:9889462b38c97e7917daac43561a5442d484e9b0d7967a16573238a5e66e4728",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/protocol.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/protocol.py"
+    },
+    {
+      "digest": "sha256:62831124270292d3b60b2a233e4f85349876ccd1a9dd74db0bd02676fa1a0f90",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/records.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/records.py"
+    },
+    {
+      "digest": "sha256:b4ee2b25d271045be2a18e38d889fe744c2847368a242842e4ce011a52d915b2",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/review.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/review.py"
+    },
+    {
+      "digest": "sha256:4103456bc32c332d800a1040f963412b6d0f3bacf5008c3f307b591b82c8de4b",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/runs.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/runs.py"
+    },
+    {
+      "digest": "sha256:651d49395269dd816c2c8d174e059e6c45e3e42759f27e10cf02f7c85f4dbe45",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/sampling.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/sampling.py"
+    },
+    {
+      "digest": "sha256:8aa95235dbce6f97d2983cce5e64e028aab631e281b910d0e8dd24a8cdb3daf3",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/scale.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/scale.py"
+    },
+    {
+      "digest": "sha256:d3fb95db3a3d95318a6de56e890710bc93ce1a4cd52b69aab1eb0b0cbddcdc19",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/scope.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/scope.py"
+    },
+    {
+      "digest": "sha256:b477946b8a7ad52ef9ea6160c387b90f7d62b103f821d6291f7a497928306163",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/session.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/session.py"
+    },
+    {
+      "digest": "sha256:3590d93886421c6fc4edd02691adb09eed7c5485b91e2633b2a9f02e66040fbf",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/spec.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/spec.py"
+    },
+    {
+      "digest": "sha256:cf341fb005bea162de4cdbe24d4304d15d0a57a608152555f6cbabffb5d9adcb",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/taskfiles.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/taskfiles.py"
+    },
+    {
+      "digest": "sha256:9ce8c400c4232e5691b19c480990fe167b2cf302a2c1e61d39c449d2b02064f7",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/tasks.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/tasks.py"
+    },
+    {
+      "digest": "sha256:638bb0da720e581cb6f90aa9465c2a75808f8087aab4407d315123da49998f49",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/templates.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/templates.py"
+    },
+    {
+      "digest": "sha256:5e9331f4bf0a3bf4684fa3ef96e332e3cd3293a652b2e09b90e7d3bba0e493a9",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/writer.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/writer.py"
+    },
+    {
+      "digest": "sha256:83e9c75c982ce8177ec8b680cfc6a140570e15783079cc908578e00d692b06c3",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "protocol",
+      "required": true,
+      "source_path": "wf-release/protocol/codes.json",
+      "target_class": "project_wf",
+      "target_relative": ".wf/protocol/codes.json"
+    },
+    {
+      "digest": "sha256:34a5e19ceed177ff1575d4d49343d742d6157715c588cad40eaa2817768ce127",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "protocol",
+      "required": true,
+      "source_path": "wf-release/protocol/redaction.baseline.json",
+      "target_class": "project_wf",
+      "target_relative": ".wf/protocol/redaction.baseline.json"
+    },
+    {
+      "digest": "sha256:34a5e19ceed177ff1575d4d49343d742d6157715c588cad40eaa2817768ce127",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "protocol",
+      "required": true,
+      "source_path": "wf-release/protocol/redaction.json",
+      "target_class": "project_wf",
+      "target_relative": ".wf/protocol/redaction.json"
+    },
+    {
+      "digest": "sha256:d90fcdb846f27e5c696a978c0ab7b5343eae0dcb25a744343039c4fda4bc5a2a",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "protocol",
+      "required": true,
+      "source_path": "wf-release/protocol/repo_rules.json",
+      "target_class": "project_wf",
+      "target_relative": ".wf/protocol/repo_rules.json"
+    },
+    {
+      "digest": "sha256:bac30d06ab6e66fc8870524bed8705fd2be3555135fd794155d7311e711032ce",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "protocol",
+      "required": true,
+      "source_path": "wf-release/protocol/states.json",
+      "target_class": "project_wf",
+      "target_relative": ".wf/protocol/states.json"
+    },
+    {
+      "digest": "sha256:921889bad9b9125feff67035d19df325e91a470e2cc5767c1f8dec47a73eceeb",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "protocol",
+      "required": true,
+      "source_path": "wf-release/protocol/thresholds.json",
+      "target_class": "project_wf",
+      "target_relative": ".wf/protocol/thresholds.json"
+    },
+    {
+      "digest": "sha256:d5e695f421aa0513470aa25104a12cd0ac22bcf0e7d17d838cdd126d75e9d5ee",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "template",
+      "required": true,
+      "source_path": "wf-release/templates/baseline.md",
+      "target_class": "project_wf",
+      "target_relative": ".wf/templates/baseline.md"
+    },
+    {
+      "digest": "sha256:7643ab5d08c4c3225c4d745264a9c9d3b1fe67586faf002621c7ac13bbb0ebf8",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "template",
+      "required": true,
+      "source_path": "wf-release/templates/project-config.skeleton.json",
+      "target_class": "project_wf",
+      "target_relative": ".wf/templates/project-config.skeleton.json"
+    },
+    {
+      "digest": "sha256:abea01d1b1f1948e2596b4b8f56fcff0886088363151e1c63210e88df2bef518",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "template",
+      "required": true,
+      "source_path": "wf-release/templates/spec/index.md",
+      "target_class": "project_wf",
+      "target_relative": ".wf/templates/spec/index.md"
+    },
+    {
+      "digest": "sha256:70932dda0ae639826912c59c7ae2c5e347ce0e685e9d1b55ac22c593f3ab137a",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "template",
+      "required": true,
+      "source_path": "wf-release/templates/spec/pre-dev-checklist.md",
+      "target_class": "project_wf",
+      "target_relative": ".wf/templates/spec/pre-dev-checklist.md"
+    },
+    {
+      "digest": "sha256:e7a37de37f9a9999566267cd0202ee57ce146012ef0e01d42740e380e3326bbc",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "template",
+      "required": true,
+      "source_path": "wf-release/templates/spec/quality-checklist.md",
+      "target_class": "project_wf",
+      "target_relative": ".wf/templates/spec/quality-checklist.md"
+    },
+    {
+      "digest": "sha256:0a622742e5089ce5bf75d611b977a243e33104c899452c11311fffd3c683f10c",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "template",
+      "required": true,
+      "source_path": "wf-release/templates/spec/rule.md",
+      "target_class": "project_wf",
+      "target_relative": ".wf/templates/spec/rule.md"
+    },
+    {
+      "digest": "sha256:678fd551f35f07538612def4b9aae928c44e607012be1a55165857f01567a1a5",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "template",
+      "required": true,
+      "source_path": "wf-release/templates/task/design.md",
+      "target_class": "project_wf",
+      "target_relative": ".wf/templates/task/design.md"
+    },
+    {
+      "digest": "sha256:b54806821f16f0a25ee8f9e264c26eaab79450ce7498978a2c3e3e6f4ab64c53",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "template",
+      "required": true,
+      "source_path": "wf-release/templates/task/implement.md",
+      "target_class": "project_wf",
+      "target_relative": ".wf/templates/task/implement.md"
+    },
+    {
+      "digest": "sha256:a7bd89d59d79ebf2c7a452b300d98419717040b25ba34458c043f094adbd9874",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "template",
+      "required": true,
+      "source_path": "wf-release/templates/task/prd.md",
+      "target_class": "project_wf",
+      "target_relative": ".wf/templates/task/prd.md"
+    },
+    {
+      "digest": "sha256:63151801bcd8655c8d0337cc787698ea0c70ddaf17741ff63fdc8765d1bc1596",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "template",
+      "required": true,
+      "source_path": "wf-release/templates/task/task-record.json",
+      "target_class": "project_wf",
+      "target_relative": ".wf/templates/task/task-record.json"
+    },
+    {
+      "digest": "sha256:f27e878f2d522eaf32cd54fade70e06ea81424bf26070083693ac644234a0e66",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "template",
+      "required": true,
+      "source_path": "wf-release/templates/user-workflow.md",
+      "target_class": "project_wf",
+      "target_relative": ".wf/templates/user-workflow.md"
+    },
+    {
+      "digest": "sha256:cbde2fb6fa4c4de306f695f09e79f14e6690f23941a5d6151b2ab8cdb543060d",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "workflow",
+      "required": true,
+      "source_path": "wf-release/workflows/instance-flow.md",
+      "target_class": "project_wf",
+      "target_relative": ".wf/workflows/instance-flow.md"
+    },
+    {
+      "digest": "sha256:e6336e11ef1077d8c3f64c8b5e175c0dd17325de5078f68872dee5979efed09a",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "workflow",
+      "required": true,
+      "source_path": "wf-release/workflows/knowledge-flow.md",
+      "target_class": "project_wf",
+      "target_relative": ".wf/workflows/knowledge-flow.md"
+    },
+    {
+      "digest": "sha256:91bcddf8f5a9b9eb94670751251af4f0587051ed6ddf9254311a257800f2b739",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "workflow",
+      "required": true,
+      "source_path": "wf-release/workflows/maintenance-flow.md",
+      "target_class": "project_wf",
+      "target_relative": ".wf/workflows/maintenance-flow.md"
+    },
+    {
+      "digest": "sha256:74f01e1f1ded5387cdb3f7609693677d937d05f8226144df674b7fcc43538c6f",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "workflow",
+      "required": true,
+      "source_path": "wf-release/workflows/review-flow.md",
+      "target_class": "project_wf",
+      "target_relative": ".wf/workflows/review-flow.md"
+    },
+    {
+      "digest": "sha256:839b57c3c93bcb9b5553f7765eff9beb0af893ab9b09e6c27ead4c9ad54933d4",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "workflow",
+      "required": true,
+      "source_path": "wf-release/workflows/session-flow.md",
+      "target_class": "project_wf",
+      "target_relative": ".wf/workflows/session-flow.md"
+    },
+    {
+      "digest": "sha256:502ff3e7353a9527b8b27fcfea0421f7dc990bea786dd5ccda87c79bea4ec5b6",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "workflow",
+      "required": true,
+      "source_path": "wf-release/workflows/task-flow.md",
+      "target_class": "project_wf",
+      "target_relative": ".wf/workflows/task-flow.md"
+    },
+    {
+      "digest": "sha256:955ddf172ba55289c7b76830bb41aceaf2b519b43fb0daef3d68084bca9bcbd5",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "skill",
+      "required": true,
+      "source_path": "wf-release/skills/wf-bootstrap/SKILL.md",
+      "target_class": "skill_root",
+      "target_relative": "wf-bootstrap/SKILL.md"
+    },
+    {
+      "digest": "sha256:e804becd50dbd90664133db69fc9e2781519aba16c24c3265c5bfb98abeb6e6f",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "skill",
+      "required": true,
+      "source_path": "wf-release/skills/wf-code-review/SKILL.md",
+      "target_class": "skill_root",
+      "target_relative": "wf-code-review/SKILL.md"
+    },
+    {
+      "digest": "sha256:256f6ae3a3019c2a2482096422383c8ec164ca275f61f65afac5e19f4b244f1f",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "skill",
+      "required": true,
+      "source_path": "wf-release/skills/wf-continue/SKILL.md",
+      "target_class": "skill_root",
+      "target_relative": "wf-continue/SKILL.md"
+    },
+    {
+      "digest": "sha256:ef6f16767f485c5b173a8ec3788cfecfe3bc444b8633352878e0efd9ea9dc488",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "skill",
+      "required": true,
+      "source_path": "wf-release/skills/wf-diagnosing-bugs/SKILL.md",
+      "target_class": "skill_root",
+      "target_relative": "wf-diagnosing-bugs/SKILL.md"
+    },
+    {
+      "digest": "sha256:2b53ec5c3e7b5bc76c60e3719167044e84720d799432503fe672428adc12fe96",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "skill",
+      "required": true,
+      "source_path": "wf-release/skills/wf-finish/SKILL.md",
+      "target_class": "skill_root",
+      "target_relative": "wf-finish/SKILL.md"
+    },
+    {
+      "digest": "sha256:ef919a088c7bb253ecaefc416784ff1c72f35f96690ed584b0c4120a56c4643e",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "skill",
+      "required": true,
+      "source_path": "wf-release/skills/wf-grilling/SKILL.md",
+      "target_class": "skill_root",
+      "target_relative": "wf-grilling/SKILL.md"
+    },
+    {
+      "digest": "sha256:bbae01ce47fe978c9ddc087a22e988abb23386d6c2ad548651300006d578ca65",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "skill",
+      "required": true,
+      "source_path": "wf-release/skills/wf-review-action/SKILL.md",
+      "target_class": "skill_root",
+      "target_relative": "wf-review-action/SKILL.md"
+    },
+    {
+      "digest": "sha256:de41d249db0c7c42bb3813347c11a0b124d534662b7d3349938517ffeae84c81",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "skill",
+      "required": true,
+      "source_path": "wf-release/skills/wf-review/SKILL.md",
+      "target_class": "skill_root",
+      "target_relative": "wf-review/SKILL.md"
+    },
+    {
+      "digest": "sha256:b798b140deb29d9aa4e79c5996ef98acff4a120248827219546ba6e6e38ecb5e",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "skill",
+      "required": true,
+      "source_path": "wf-release/skills/wf-spec-update/SKILL.md",
+      "target_class": "skill_root",
+      "target_relative": "wf-spec-update/SKILL.md"
+    },
+    {
+      "digest": "sha256:3d04dbc60892879086f8ef49de42fa375995ff63edfadf3d6c37959288a12101",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "skill",
+      "required": true,
+      "source_path": "wf-release/skills/wf-start/SKILL.md",
+      "target_class": "skill_root",
+      "target_relative": "wf-start/SKILL.md"
+    },
+    {
+      "digest": "sha256:0dc11bcc4b3d349e3107fd51c2f0f41d9213ef5d359c93d19a12fd3c23050657",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "skill",
+      "required": true,
+      "source_path": "wf-release/skills/wf-tdd/SKILL.md",
+      "target_class": "skill_root",
+      "target_relative": "wf-tdd/SKILL.md"
+    }
+  ],
+  "compatibility": {
+    "filesystems": {
+      "advisory_flock_required": true,
+      "local_only": true,
+      "network_or_sync_supported": false
+    },
+    "python_min": {
+      "major": 3,
+      "minor": 11
+    },
+    "record_versions": {
+      "binding": {
+        "read": [
+          1
+        ],
+        "write": 1
+      },
+      "config": {
+        "read": [
+          1
+        ],
+        "write": 1
+      },
+      "installation": {
+        "read": [
+          1
+        ],
+        "write": 1
+      },
+      "preparation": {
+        "read": [
+          1
+        ],
+        "write": 1
+      },
+      "run": {
+        "read": [
+          1
+        ],
+        "write": 1
+      },
+      "spec": {
+        "read": [
+          1
+        ],
+        "write": 1
+      },
+      "task": {
+        "read": [
+          1
+        ],
+        "write": 1
+      },
+      "writer": {
+        "read": [
+          1
+        ],
+        "write": 1
+      }
+    },
+    "rules_digest": "sha256:fbc6416c15c73d77bd81214fc8ac0e0859dff7867993c96d56b6f386dcc523dc",
+    "systems": [
+      "linux"
+    ],
+    "workflow_versions": {
+      "read": [
+        1
+      ],
+      "write": 1
+    }
+  },
+  "delivery_round": 1,
+  "gitignore_managed": {
+    "begin_marker": "# wf-managed-v1",
+    "end_marker": "# wf-managed-end",
+    "lines": [
+      "/.wf/.runtime/",
+      "/.wf-lock"
+    ]
+  },
+  "required_steps": [
+    {
+      "applies": {
+        "operation": "definition.prepare"
+      },
+      "delivery_round": 2,
+      "due": "operation_end",
+      "id": "control.definition.prepare",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/instance-flow.md#control.definition.prepare"
+    },
+    {
+      "applies": {
+        "operation": "run.advance"
+      },
+      "delivery_round": 2,
+      "due": "operation_end",
+      "id": "control.run.advance",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/instance-flow.md#control.run.advance"
+    },
+    {
+      "applies": {
+        "operation": "run.terminate"
+      },
+      "delivery_round": 2,
+      "due": "operation_end",
+      "id": "control.run.terminate",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/instance-flow.md#control.run.terminate"
+    },
+    {
+      "applies": {
+        "operation": "dependency.change"
+      },
+      "delivery_round": 2,
+      "due": "operation_end",
+      "id": "control.dependency.change",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/instance-flow.md#control.dependency.change"
+    },
+    {
+      "applies": {
+        "operation": "task.rework"
+      },
+      "delivery_round": 2,
+      "due": "operation_end",
+      "id": "control.task.rework",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/instance-flow.md#control.task.rework"
+    },
+    {
+      "applies": {
+        "operation": "task.replace"
+      },
+      "delivery_round": 2,
+      "due": "operation_end",
+      "id": "control.task.replace",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/instance-flow.md#control.task.replace"
+    },
+    {
+      "applies": {
+        "operation": "spec.update"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.spec.update",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/knowledge-flow.md#control.spec.update"
+    },
+    {
+      "applies": {
+        "operation": "task.curate"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.task.curate",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/knowledge-flow.md#control.task.curate"
+    },
+    {
+      "applies": {
+        "operation": "task.knowledge-dispose"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.task.knowledge-dispose",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/knowledge-flow.md#control.task.knowledge-dispose"
+    },
+    {
+      "applies": {
+        "operation": "asset.apply"
+      },
+      "delivery_round": 3,
+      "due": "operation_end",
+      "id": "control.asset.apply",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/maintenance-flow.md#control.asset.apply"
+    },
+    {
+      "applies": {
+        "operation": "repair.apply"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.repair.apply",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/maintenance-flow.md#control.repair.apply"
+    },
+    {
+      "applies": {
+        "operation": "uninstall.apply"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.uninstall.apply",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/maintenance-flow.md#control.uninstall.apply"
+    },
+    {
+      "applies": {
+        "operation": "review.launch"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.review.launch",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/review-flow.md#control.review.launch"
+    },
+    {
+      "applies": {
+        "operation": "review.import"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.review.import",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/review-flow.md#control.review.import"
+    },
+    {
+      "applies": {
+        "operation": "review.decide"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.review.decide",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/review-flow.md#control.review.decide"
+    },
+    {
+      "applies": {
+        "operation": "session.bind"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.session.bind",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/session-flow.md#control.session.bind"
+    },
+    {
+      "applies": {
+        "operation": "writer.acquire"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.writer.acquire",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/session-flow.md#control.writer.acquire"
+    },
+    {
+      "applies": {
+        "operation": "writer.release"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.writer.release",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/session-flow.md#control.writer.release"
+    },
+    {
+      "applies": {
+        "operation": "writer.handover.begin"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.writer.handover.begin",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/session-flow.md#control.writer.handover.begin"
+    },
+    {
+      "applies": {
+        "operation": "writer.handover.accept"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.writer.handover.accept",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/session-flow.md#control.writer.handover.accept"
+    },
+    {
+      "applies": {
+        "operation": "task.reassess"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.task.reassess",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/session-flow.md#control.task.reassess"
+    },
+    {
+      "applies": {
+        "condition": "all",
+        "task_kinds": [
+          "ordinary",
+          "initialize",
+          "bootstrap"
+        ]
+      },
+      "delivery_round": 1,
+      "due": "before_execute",
+      "id": "task.plan-approved",
+      "mode": "once",
+      "scope": "task",
+      "workflow_ref": "wf-workflows/task-flow.md#task.plan-approved"
+    },
+    {
+      "applies": {
+        "condition": "all",
+        "task_kinds": [
+          "ordinary",
+          "initialize",
+          "bootstrap"
+        ]
+      },
+      "delivery_round": 1,
+      "due": "before_execute",
+      "id": "task.spec-loaded",
+      "mode": "repeatable",
+      "scope": "task",
+      "workflow_ref": "wf-workflows/task-flow.md#task.spec-loaded"
+    },
+    {
+      "applies": {
+        "condition": "all",
+        "task_kinds": [
+          "ordinary",
+          "initialize",
+          "bootstrap"
+        ]
+      },
+      "delivery_round": 1,
+      "due": "before_check",
+      "id": "task.work-satisfied",
+      "mode": "once",
+      "scope": "task",
+      "workflow_ref": "wf-workflows/task-flow.md#task.work-satisfied"
+    },
+    {
+      "applies": {
+        "condition": "all",
+        "task_kinds": [
+          "ordinary",
+          "initialize",
+          "bootstrap"
+        ]
+      },
+      "delivery_round": 1,
+      "due": "before_archive",
+      "id": "task.check-passed",
+      "mode": "repeatable",
+      "scope": "task",
+      "workflow_ref": "wf-workflows/task-flow.md#task.check-passed"
+    },
+    {
+      "applies": {
+        "condition": "tdd",
+        "task_kinds": [
+          "ordinary",
+          "initialize",
+          "bootstrap"
+        ]
+      },
+      "delivery_round": 1,
+      "due": "before_archive",
+      "id": "task.tdd-verified",
+      "mode": "repeatable",
+      "scope": "task",
+      "workflow_ref": "wf-workflows/task-flow.md#task.tdd-verified"
+    },
+    {
+      "applies": {
+        "condition": "complex",
+        "task_kinds": [
+          "ordinary",
+          "initialize",
+          "bootstrap"
+        ]
+      },
+      "delivery_round": 1,
+      "due": "before_archive",
+      "id": "task.review-passed",
+      "mode": "repeatable",
+      "scope": "task",
+      "workflow_ref": "wf-workflows/task-flow.md#task.review-passed"
+    },
+    {
+      "applies": {
+        "condition": "all",
+        "task_kinds": [
+          "ordinary",
+          "initialize",
+          "bootstrap"
+        ]
+      },
+      "delivery_round": 1,
+      "due": "before_archive",
+      "id": "task.knowledge-disposed",
+      "mode": "once",
+      "scope": "task",
+      "workflow_ref": "wf-workflows/task-flow.md#task.knowledge-disposed"
+    },
+    {
+      "applies": {
+        "condition": "retrospective",
+        "task_kinds": [
+          "ordinary",
+          "initialize",
+          "bootstrap"
+        ]
+      },
+      "delivery_round": 1,
+      "due": "before_archive",
+      "id": "task.retrospective-done",
+      "mode": "once",
+      "scope": "task",
+      "workflow_ref": "wf-workflows/task-flow.md#task.retrospective-done"
+    },
+    {
+      "applies": {
+        "condition": "all",
+        "task_kinds": [
+          "ordinary",
+          "initialize",
+          "bootstrap"
+        ]
+      },
+      "delivery_round": 1,
+      "due": "before_archive",
+      "id": "task.sampled",
+      "mode": "repeatable",
+      "scope": "task",
+      "workflow_ref": "wf-workflows/task-flow.md#task.sampled"
+    },
+    {
+      "applies": {
+        "condition": "all",
+        "task_kinds": [
+          "ordinary",
+          "initialize",
+          "bootstrap"
+        ]
+      },
+      "delivery_round": 1,
+      "due": "before_archive",
+      "id": "task.changes-persisted",
+      "mode": "repeatable",
+      "scope": "task",
+      "workflow_ref": "wf-workflows/task-flow.md#task.changes-persisted"
+    },
+    {
+      "applies": {
+        "condition": "all",
+        "task_kinds": [
+          "ordinary",
+          "initialize",
+          "bootstrap"
+        ]
+      },
+      "delivery_round": 1,
+      "due": "after_archive",
+      "id": "task.archived",
+      "mode": "once",
+      "scope": "task",
+      "workflow_ref": "wf-workflows/task-flow.md#task.archived"
+    },
+    {
+      "applies": {
+        "operation": "task.create"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.task.create",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/task-flow.md#control.task.create"
+    },
+    {
+      "applies": {
+        "operation": "task.transition"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.task.transition",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/task-flow.md#control.task.transition"
+    },
+    {
+      "applies": {
+        "operation": "task.attribute"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.task.attribute",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/task-flow.md#control.task.attribute"
+    },
+    {
+      "applies": {
+        "operation": "baseline.apply"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.baseline.apply",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/task-flow.md#control.baseline.apply"
+    },
+    {
+      "applies": {
+        "operation": "task.retrospect"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.task.retrospect",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/task-flow.md#control.task.retrospect"
+    },
+    {
+      "applies": {
+        "operation": "task.check"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.task.check",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/task-flow.md#control.task.check"
+    },
+    {
+      "applies": {
+        "operation": "task.pause"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.task.pause",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/task-flow.md#control.task.pause"
+    },
+    {
+      "applies": {
+        "operation": "session.stop"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.session.stop",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/task-flow.md#control.session.stop"
+    },
+    {
+      "applies": {
+        "operation": "task.archive"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.task.archive",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/task-flow.md#control.task.archive"
+    },
+    {
+      "applies": {
+        "operation": "task.abandon"
+      },
+      "delivery_round": 1,
+      "due": "operation_end",
+      "id": "control.task.abandon",
+      "mode": "repeatable",
+      "scope": "control",
+      "workflow_ref": "wf-workflows/task-flow.md#control.task.abandon"
+    }
+  ],
+  "schema_version": 1,
+  "template_markers": {
+    "formats": [
+      {
+        "id": "required-field",
+        "pattern": "{{WF_REQUIRED:<field>}}"
+      },
+      {
+        "id": "required-value",
+        "pattern": "__WF_REQUIRED__"
+      }
+    ],
+    "uses": [
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:acceptance}}"
+        },
+        "template_path": ".wf/templates/baseline.md"
+      },
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:architecture}}"
+        },
+        "template_path": ".wf/templates/baseline.md"
+      },
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:non-goals}}"
+        },
+        "template_path": ".wf/templates/baseline.md"
+      },
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:risks}}"
+        },
+        "template_path": ".wf/templates/baseline.md"
+      },
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:scope}}"
+        },
+        "template_path": ".wf/templates/baseline.md"
+      },
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:verification-commands}}"
+        },
+        "template_path": ".wf/templates/baseline.md"
+      },
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:convention}}"
+        },
+        "template_path": ".wf/templates/spec/rule.md"
+      },
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:example-bad}}"
+        },
+        "template_path": ".wf/templates/spec/rule.md"
+      },
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:example-good}}"
+        },
+        "template_path": ".wf/templates/spec/rule.md"
+      },
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:rationale}}"
+        },
+        "template_path": ".wf/templates/spec/rule.md"
+      },
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:contract}}"
+        },
+        "template_path": ".wf/templates/task/design.md"
+      },
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:data-flow}}"
+        },
+        "template_path": ".wf/templates/task/design.md"
+      },
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:title}}"
+        },
+        "template_path": ".wf/templates/task/design.md"
+      },
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:tradeoffs}}"
+        },
+        "template_path": ".wf/templates/task/design.md"
+      },
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:steps}}"
+        },
+        "template_path": ".wf/templates/task/implement.md"
+      },
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:title}}"
+        },
+        "template_path": ".wf/templates/task/implement.md"
+      },
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:verification}}"
+        },
+        "template_path": ".wf/templates/task/implement.md"
+      },
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:approach}}"
+        },
+        "template_path": ".wf/templates/task/prd.md"
+      },
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:goal}}"
+        },
+        "template_path": ".wf/templates/task/prd.md"
+      },
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:non-goals}}"
+        },
+        "template_path": ".wf/templates/task/prd.md"
+      },
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:scope}}"
+        },
+        "template_path": ".wf/templates/task/prd.md"
+      },
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:title}}"
+        },
+        "template_path": ".wf/templates/task/prd.md"
+      },
+      {
+        "format_id": "required-field",
+        "required": true,
+        "selector": {
+          "kind": "markdown_marker",
+          "value": "{{WF_REQUIRED:notes}}"
+        },
+        "template_path": ".wf/templates/user-workflow.md"
+      }
+    ]
+  },
+  "version": "0.1.0"
+}
