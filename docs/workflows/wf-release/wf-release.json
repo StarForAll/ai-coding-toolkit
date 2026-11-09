@@ -31,7 +31,7 @@
       "target_relative": ".wf/bin/wf.py"
     },
     {
-      "digest": "sha256:2a93ec75eb30a0a75777bc353b22256c68c8809dc767886b0aebbb72c98e1f17",
+      "digest": "sha256:169d0dc464c94652495eb3a0b15913726a8858dafe0d1b4c5913502f73b9a091",
       "executable": true,
       "file_kind": "file",
       "kind": "installer",
@@ -181,7 +181,7 @@
       "target_relative": ".wf/lib/wflib/lock.py"
     },
     {
-      "digest": "sha256:3ecf31d34fed99bd4b52bb88d70963e847e446e3ce97cbd8d104baa22a9c48af",
+      "digest": "sha256:835a15fd3497d61d3054d2965b8b0380aaa53ed3fb60fc2aea30aa2e512cd383",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -321,7 +321,7 @@
       "target_relative": ".wf/lib/wflib/taskfiles.py"
     },
     {
-      "digest": "sha256:1593d6f2a78f184eb340cd794b21d16458679debfe38106b8196927ff75d1bb2",
+      "digest": "sha256:981ef799ac69407a87f403dd603a407a2ffec4e4481d8a2691cd1b67414c0d0e",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -761,7 +761,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:d16f08001f3e055e2746cd12bf786da5911298cb6208ad15509969cae87b7ca3",
+    "rules_digest": "sha256:d894ec9f8c5c324925c01b0684bcf0b0587b24206fbcc638f89c3e73f9ba36ae",
     "systems": [
       "linux"
     ],

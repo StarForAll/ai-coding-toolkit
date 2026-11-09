@@ -22,6 +22,7 @@ from wflib import config as wf_config  # noqa: E402
 from wflib import lock as wf_lock  # noqa: E402
 from wflib import records as wf_records  # noqa: E402
 from wflib import fingerprint as wf_fingerprint
+from wflib import maintenance as wf_maintenance  # noqa: E402
 from wflib import writer as wf_writer  # noqa: E402
 from wflib.paths import join, safe_write_target  # noqa: E402
 
@@ -391,6 +392,9 @@ def deploy(args):
         })
         writer_record = wf_writer.bump(writer_record, maintenance_results=receipts)
         wf_writer.save(target, writer_record)
+        # 回执账本写进**提交层**（`.wf/install/maintenance.jsonl`）：writer.json 是运行态，
+        # 拿它当持久化证据会让探针永远 pending（实测 r59–r61）
+        wf_maintenance.append(target, receipts[-1])
         if problems:
             wf_writer.save(target, wf_writer.bump(writer_record, checkpoint={"phase": "self-check-failed",
                                                                             "problems": problems}))

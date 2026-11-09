@@ -30,6 +30,25 @@ MIN_VERSION = (3, 11)
 # --------------------------------------------------------------------------
 
 
+def append_maintenance_journal(target: str, receipt: dict) -> None:
+    """把回执写进**提交层**账本 `.wf/install/maintenance.jsonl`（机制稿 §4.5）。
+
+    自含实现：本文件不 import wflib（安装前就要能跑），算法与 `wflib.maintenance.append` 同一形状。
+    `.wf/writer.json` 是运行态（v42 S10 忽略），不能拿它当"已持久化"的证据。
+    """
+    record = {
+        "operation": receipt.get("operation"),
+        "preview_digest": receipt.get("preview_digest"),
+        "head_before": receipt.get("head_before"),
+        "changes": [dict(item) for item in receipt.get("changes") or [] if isinstance(item, dict)],
+        "at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+    }
+    path = os.path.join(target, ".wf", "install", "maintenance.jsonl")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+
+
 def canonical(obj) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
@@ -807,6 +826,7 @@ def add_platforms(args, commit, manifest, writes, skill_roots, branch_findings=N
                 "disposition": None,
             }]
             _dump_json(writer_path, writer)
+            append_maintenance_journal(args.target, writer["maintenance_results"][-1])
     except LockRejected as exc:
         return blocked("WF_ASSET_DECISION", f"锁对象冲突：{exc}", {"path": lock_path}, args.json)
     except LockBusy as exc:
@@ -1051,6 +1071,7 @@ def main(argv=None):
             writer["revision"] = 1
             with open(os.path.join(args.target, ".wf/writer.json"), "w", encoding="utf-8", newline="\n") as handle:
                 handle.write(json.dumps(writer, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
+            append_maintenance_journal(args.target, writer["maintenance_results"][-1])
 
     except LockRejected as exc:
         return blocked("WF_ASSET_DECISION", f"锁对象冲突：{exc}", {"path": lock_path}, args.json)

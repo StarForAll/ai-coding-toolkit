@@ -723,26 +723,22 @@ def maintenance_persisted_probe(root):
         if not scope.is_ancestor(root, lower):
             return False
         for sha in scope.commits_since(root, lower) or []:
-            # 回执本身须在该提交里（不要求与其他路径同一次 diff）
-            blob = _committed_text(root, sha, ".wf/writer.json")
+            # 回执账本在**提交层**（`.wf/install/maintenance.jsonl`，项目数据），
+            # 不是运行态的 writer.json——后者被忽略后读不到，探针会永远 pending（实测 r59–r61）。
+            from . import maintenance as maintenance_mod
+
+            blob = _committed_text(root, sha, maintenance_mod.JOURNAL_REL)
             if blob is None:
                 continue
-            try:
-                committed = json.loads(blob)
-            except ValueError:
-                continue
-            matched = None
-            for saved in committed.get("maintenance_results") or []:
-                if isinstance(saved, dict) and saved.get("operation") == operation:
-                    matched = saved
-                    break
+            entries, _problems = maintenance_mod.parse(blob)
+            matched = maintenance_mod.find(entries, operation)
             if matched is None:
                 continue
             if [path for path, _after in _changes_by_path(matched.get("changes"))] != \
                     [path for path, _after in wanted]:
                 continue
             # 逐项按提交树重建完整状态后比较，不看 diff、不只看摘要
-            if all(_fp_matches(after, _committed_fingerprint(root, sha, path)) for path, after in wanted):
+            if all(_fp_matches(after, _committed_fingerprint(root, sha, path)) for path, _after in wanted):
                 return True
         return False
 

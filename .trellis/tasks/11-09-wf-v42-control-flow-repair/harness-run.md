@@ -117,3 +117,32 @@
 | **C 改为人工处置** | 一律要 `disposition`（commit/reverse/transfer/uninstall）才结案 | 最严，但每次维护都要人写处置决定 |
 
 无论选哪个，`r60` 那两条断言的期望值都要按新口径重写——**这是改断言，需要你点头**。
+
+## 方案 D 实施（2026-11-09）
+
+| 位点 | 改动 |
+|---|---|
+| `wflib/maintenance.py`（新） | 提交层账本 `.wf/install/maintenance.jsonl`：`append` / `parse`（坏行跳过并计数）/ `load` / `find`（同操作以最后一条为准） |
+| `tasks.maintenance_persisted_probe` | 改为在**提交树**里读该账本，按 `operation` 找记录再逐路径比对终态——不再读运行态的 `writer.json` |
+| `install.py` | 自含实现 `append_maintenance_journal()`（该文件不 import wflib），两处回执写入后追加账本 |
+| `scripts/wf-dev-deploy.py` | 回执写入后追加账本 |
+| `r59/r60/r61` 夹具 | 新增 `sync_journal()`：写 `writer.json` 后把最后一条回执同步进账本（**断言未改**，只让模拟与真实入口同构） |
+
+### 实跑结果（未达全绿，如实记录）
+
+| 套件 | 改前 | 现在 |
+|---|---|---|
+| `r60` | 4/6 | **5/6**（剩「后续提交树已含完整结果→persisted」仍 pending） |
+| `r61` | 5/6 | 由 `applied_pending_commit` 变为 **`pending_check`**（换了失败面，不是通过） |
+| `r59` | 7/8 | 仍有「完整提交后派生 persisted」pending |
+
+### 剩下两处待修（下一轮）
+
+1. **`r60` 那条**：账本进了提交，但探针仍判 pending —— 需要看该用例构造的 `committed` 与 `after` 是否一致（可能是比较口径问题，不是账本问题）。
+2. **`r61` 的 `pending_check`**：说明走到了**处置分支**（`_disposition_complete` 为真但 `disposition_probe` 判否），
+   与"登记删除/可执行位/历史摘要"三种变更形态有关——需要按删除类（`after.exists=false`）逐形态核对。
+
+### 结论
+
+D 的**基础设施**已落地（账本在提交层、探针读提交树、安装与开发部署都写账本），方向可行且比 B 严格；
+但 `r59–r61` **尚未全绿**，两处具体失败点已写明，不声称解决。
