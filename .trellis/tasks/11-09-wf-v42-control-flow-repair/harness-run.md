@@ -639,3 +639,35 @@ R23 的末条**不是"归档续做"的问题**，而是**前置 Check 状态被�
 |---|---|
 | r31r34 / r59 / r60 / r61 | ✅ 全绿 |
 | r17r24 | 27/28，末条成因已定位（前置 Check 被上一段污染） |
+
+## R23 末条：最新事实（2026-11-09 末）
+
+给 R23 的 `task-check` 加了失败打印后复跑：**check 本身成功**（没有打印），但归档门禁仍报
+
+```json
+{"internal_review": null, "internal_review_axes": [],
+ "tdd": {"reason": "red and green must reference different runs", "ref": "v2"},
+ "object_paths": [".wf/baseline.md", ".wf/project-config.json", "area22/r22.txt"]}
+```
+
+即：**归档门禁看到的 `task.check` 没有内部审查两轴，且对象集合还带着 `area22`** ——
+而刚跑完的 Check 是成功的。两者不一致，说明**续做分支读到的记录不是刚 Check 过的那份**
+（很可能读的是故障注入那次移动后落盘的旧快照），或者 `clean()` 没有把对象集合清到只含 `area23`。
+
+### 下一轮只需两步验证（不做猜测）
+
+1. 打印续做分支实际加载的 `task.json` 的 `check.id` 与 `object_paths`，与刚 Check 的对照；
+2. 若确认是"旧快照"，说明续做应**以归档目录里那份记录为准**并重新核门禁，或夹具应确保
+   故障注入发生在记录写入之后（当前顺序可能相反）。
+
+这条属夹具与续做分支的时序对齐，不是收工链路的机制缺陷。
+
+## 长轮收尾
+
+| 套件 | 结果 |
+|---|---|
+| r31r34 / r59 / r60 / r61 | ✅ 全绿 |
+| r17r24 | 27/28；末条已定位到"续做分支读到的记录与刚 Check 的不一致" |
+
+产品修复 7 项（抽样门禁、回执账本、探针 NameError、项目数据声明、归档 pathspec、
+WF_SPEC_INCOMPLETE 缺项、未知 choice 静默丢弃）。

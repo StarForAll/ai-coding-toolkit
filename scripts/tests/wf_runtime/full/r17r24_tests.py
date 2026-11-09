@@ -362,7 +362,10 @@ task23, gen23, dir23, d23 = make_task("R23 归档续做", ["area23/**"], "sess-U
 approve(task23, d23, gen23, "sess-U23")
 open(os.path.join(F, "area23/r23.txt"), "w").write("r23\n")
 wfok("task-start", ["task-start", "--task", task23, "--json"], {"generation": cur_gen()}, "sess-U23")
-wf(["task-check", "--task", task23, "--review-notes", NOTES, "--json"], {"generation": cur_gen()}, "sess-U23")
+rc_chk23, chk23, _ = wf(["task-check", "--task", task23, "--review-notes", NOTES, "--json"],
+                                 {"generation": cur_gen()}, "sess-U23")
+if rc_chk23 != 0:
+    print("R23 check 原文:", json.dumps((chk23 or {}).get("facts") or {}, ensure_ascii=False)[:400])
 wf(["task-knowledge", "--task", task23, "--decision", "no-update", "--json"], {"generation": cur_gen()}, "sess-U23")
 wfok("sampling", ["sampling", "pick", "--task", task23, "--freeze", "--json"],
      {"generation": cur_gen()}, "sess-U23")   # 正常归档前必须冻结并落盘选样（task.sampled 前置）
