@@ -3299,6 +3299,9 @@ def cmd_archive(ctx, args):
         next_="按 §4.4 处理写权释放；下一对象需在新会话选择",
         facts={"terminal": "normal", "archived_at": task["archived_at"], "moved_to": record_rel,
                "commit": commit_result, "control_assertion": assertion, "reassessment": reassessment,
+               # 归档后"是否已持久化"要能被外部核对（续做路径会带 resumed_commit）：
+               # 只给 stages 不够，调用方（含独立进程重入）无法判断终态是否落库。
+               "archive_persisted": dict(persisted or {}, resumed_commit=bool((persisted or {}).get("resumed_commit"))),
                # K7：三段逐段回报（运行态按设计不入库，只报告它被排除）
                "stages": [
                    {"stage": "business", "paths": sorted(set(grant_paths)),

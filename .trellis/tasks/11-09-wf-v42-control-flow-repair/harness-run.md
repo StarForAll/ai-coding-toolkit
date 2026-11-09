@@ -740,3 +740,15 @@ WF_SPEC_INCOMPLETE 缺项、未知 choice 静默丢弃）。
 
 `cp1` `cp2` `cp4` `r31r34` `r58` `r59` `r60` `r61`。
 待收：`cp3`（15/19）、`cp5`（7/8）、`r17r24`（27/28）。
+
+### cp5「重入报告已持久化」的处置（产品侧改进，2026-11-10 初）
+
+该断言读 `facts.archive_persisted.persisted`，而归档成功路径只返回 `stages`（三段回报），
+**没有**"是否已持久化"这个事实——外部（含独立进程重入）无法核对终态。
+
+已在成功 facts 里补 `archive_persisted`（含 `resumed_commit`）：
+调用方不必再靠 infer 判断"这次是首次归档还是续做且已落库"。
+
+⚠️ **验证未完成**：我这几次 ad-hoc 复跑 cp5 时，`f1_init` 之后 `task-new` 直接 `WF_WRITER_BUSY`
+（前置未释放），说明我的复现脚本在 cp5 这条上还没稳定，**不能据此声称 cp5 转绿**。
+下一轮先用 `run_all.sh`（它自己处理夹具与先后顺序）复跑 cp5，再判断该断言是否满足。
