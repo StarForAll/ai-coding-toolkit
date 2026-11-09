@@ -272,3 +272,25 @@ make_task(task20b)          → WF_WRITER_BUSY → facts 无 directory → KeyEr
 ### 一行经验
 
 **"静默失败 + 后置异常"是这类套件排查成本高的根源**；夹具里每个 `wf(...)` 都该检查 rc。
+
+### 收尾：诊断已就位，链条再缩一格（2026-11-09 末）
+
+给 `approve()` 加了"失败即打印原文"后复跑：**approve 没有失败**（无输出）→ 说明 `task20a` 的
+`approve` 是成功的，卡点在紧随其后的 **`task-start`**（该调用同样不检查 rc）。
+
+因此链条进一步收敛为：
+
+```
+approve(task20a)  ✅
+task-start        ← 未检查 rc，疑似此处失败（事实层面：status 仍 not_started）
+task-check        → "check requires in_progress"
+archive           → "requires finish phase"
+release           → 无效
+make_task(20b)    → WRITER_BUSY → KeyError
+```
+
+### 下一步只差一行
+
+在 `r17r24_tests.py:152` 与 `r31r34` 对应行的 `task-start` 后打印 `rc/payload`，即可看到它为什么失败
+（最可能是 `WF_SEMANTIC_DECISION` 的分级/依赖前置）。**本轮到此为止**：已把三处关键调用的诊断补齐
+（`r59` 的 task-new、`r17r24` 的 check 与 approve），并确认"静默失败连锁"是根因。

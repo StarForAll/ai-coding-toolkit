@@ -60,8 +60,12 @@ def approve(task_id, digest, gen, sid="sess-U1", extra=None):
               "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}
     if extra:
         inputs.update(extra)
-    return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(f"/tmp/r17_{task_id}_a.json", [dec("approve", "approve", digest)]), "--json"], inputs, sid)
+    rc, payload, out = wf(["task-approve", "--task", task_id, "--decision",
+                           dfile(f"/tmp/r17_{task_id}_a.json", [dec("approve", "approve", digest)]), "--json"],
+                          inputs, sid)
+    if rc != 0:
+        print(f"approve 原文({task_id}):", (out or "")[:400])
+    return rc, payload, out
 
 
 NOTES = "/tmp/r17_notes.json"
