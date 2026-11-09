@@ -161,7 +161,51 @@ class CommitClassificationTest(unittest.TestCase):
 class ArchiveStagesContractTest(unittest.TestCase):
     """K7 + P4 退出判据：记录段要连旧位置删除一起提交，否则归档后工作树不干净。"""
 
-    def test_record_commit_includes_the_move_out(self):
+    def test_record_commit_includes_only_tracked_move_out(self):
+        """记录段要带上旧位置的删除，但只限 HEAD 里**已跟踪**的路径。
+
+        首次归档的任务目录从未入库，把它当 pathspec 会让 git add 直接失败
+        （"did not match any file(s) known to git"）——第三轮审查的 P1。
+        """
         source = (REPO / "docs/workflows/wf/payload/lib/wflib/tasks.py").read_text(encoding="utf-8")
-        self.assertIn("commit_paths.append(old_rel)", source)
-        self.assertIn("旧位置的删除", source)
+        self.assertIn("_tracked_under(ctx.root, old_rel)", source)
+        self.assertIn("ls-tree", source)
+        self.assertNotIn("commit_paths.append(old_rel)", source)
+
+
+class TrackedUnderTest(unittest.TestCase):
+    """首次归档的任务目录从未入库 → 记录段不能拿它当 pathspec（第三轮审查 P1）。"""
+
+    def test_untracked_dir_yields_no_pathspec(self):
+        import subprocess
+        import tempfile
+
+        from wflib import tasks
+
+        with tempfile.TemporaryDirectory() as tmp:
+            subprocess.run(["git", "init", "-q"], cwd=tmp, check=True)
+            subprocess.run(["git", "config", "user.email", "t@e"], cwd=tmp, check=True)
+            subprocess.run(["git", "config", "user.name", "t"], cwd=tmp, check=True)
+            Path(tmp, ".wf/tasks/2026-x").mkdir(parents=True)
+            Path(tmp, ".wf/tasks/2026-x/task.json").write_text("{}", encoding="utf-8")
+            Path(tmp, "README.md").write_text("r\n", encoding="utf-8")
+            subprocess.run(["git", "add", "README.md"], cwd=tmp, check=True)
+            subprocess.run(["git", "commit", "-qm", "init"], cwd=tmp, check=True)
+            self.assertEqual(tasks._tracked_under(tmp, ".wf/tasks/2026-x"), [])
+
+    def test_tracked_dir_yields_its_paths(self):
+        import subprocess
+        import tempfile
+
+        from wflib import tasks
+
+        with tempfile.TemporaryDirectory() as tmp:
+            subprocess.run(["git", "init", "-q"], cwd=tmp, check=True)
+            subprocess.run(["git", "config", "user.email", "t@e"], cwd=tmp, check=True)
+            subprocess.run(["git", "config", "user.name", "t"], cwd=tmp, check=True)
+            Path(tmp, ".wf/tasks/2026-y").mkdir(parents=True)
+            Path(tmp, ".wf/tasks/2026-y/task.json").write_text("{}", encoding="utf-8")
+            subprocess.run(["git", "add", "-A"], cwd=tmp, check=True)
+            subprocess.run(["git", "commit", "-qm", "init"], cwd=tmp, check=True)
+            self.assertEqual(tasks._tracked_under(tmp, ".wf/tasks/2026-y"),
+                             [".wf/tasks/2026-y/task.json"])

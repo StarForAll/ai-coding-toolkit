@@ -2846,6 +2846,17 @@ def _chain_trailer(task):
     return f"\nwf-chain-head: {head}" if head else ""
 
 
+def _tracked_under(root, relative):
+    """HEAD 里该目录下的**已跟踪**路径（未跟踪目录返回空：没有删除可提交）。"""
+    if not relative:
+        return []
+    code, out = scope.git(root, "-c", "core.quotePath=false", "ls-tree", "-r", "--name-only",
+                          "HEAD", "--", relative)
+    if code != 0:
+        return []
+    return [line for line in (out or "").splitlines() if line.strip()]
+
+
 def _deleted_paths(root, paths):
     """本次提交范围内**真正的删除**：HEAD 里有、工作树里没有。
 
@@ -3236,11 +3247,10 @@ def cmd_archive(ctx, args):
         moved = _move_task(ctx.root, path, destination, task)
         save_task(ctx.root, moved, task)
         record_rel = os.path.relpath(moved, str(ctx.root)).replace(os.sep, "/")
-        # 记录段必须连**旧位置的删除**一起提交：只提交新路径会把 `D .wf/tasks/<旧任务目录>/*`
-        # 留在工作树里，"归档后工作树干净"就不成立（演练实测）。
-        commit_paths = [record_rel]
-        if old_rel and old_rel != record_rel:
-            commit_paths.append(old_rel)
+        # 记录段要连**旧位置的删除**一起提交（否则 `D .wf/tasks/<旧任务目录>/*` 留在工作树里），
+        # 但只能提交 HEAD 里**确实存在**的旧路径：首次归档的任务目录从未入库，
+        # 把它当 pathspec 会让 `git add` 直接失败（"did not match any file(s) known to git"）。
+        commit_paths = [record_rel] + _tracked_under(ctx.root, old_rel)
         commit_result = _commit_paths(ctx.root, commit_paths,
                                       f"wf: archive {task_id}\n\nwf-task: {task_id}{chain_head}",
                                       moved_from=(_moved_from(ctx.root, old_rel)

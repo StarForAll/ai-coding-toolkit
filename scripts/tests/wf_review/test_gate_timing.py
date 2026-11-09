@@ -302,3 +302,27 @@ class AttributionConsumptionTest(unittest.TestCase):
         task = {"attribution": {"decisions": [{"commit": "abcdef1234"}]}}
         self.assertTrue(check._external_checked({"commit": "abcdef1234"}, [], task))
         self.assertFalse(check._external_checked({"commit": "9999999"}, [], task))
+
+
+class SpecPathListTest(unittest.TestCase):
+    """spec-update 的 old_paths/new_paths：接受数组或分隔字符串，非法类型给结构化拒绝（审查 b-R1）。"""
+
+    def test_string_is_split(self):
+        from wflib import spec
+
+        self.assertEqual(spec._path_list({"new_paths": ".wf/spec/a.md"}, "new_paths"),
+                         [".wf/spec/a.md"])
+        self.assertEqual(spec._path_list({"new_paths": ".wf/spec/a.md, .wf/spec/b.md"}, "new_paths"),
+                         [".wf/spec/a.md", ".wf/spec/b.md"])
+
+    def test_array_is_kept(self):
+        from wflib import spec
+
+        self.assertEqual(spec._path_list({"old_paths": ["a.md", "b.md"]}, "old_paths"), ["a.md", "b.md"])
+
+    def test_bad_type_is_a_structured_rejection(self):
+        from wflib import spec
+
+        with self.assertRaises(Exception) as caught:
+            spec._path_list({"new_paths": 42}, "new_paths")
+        self.assertIn("WF_PATH_INVALID", str(caught.exception))

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import datetime
 import hashlib
 import json
@@ -143,6 +145,24 @@ def rule_digest(metadata):
     if not payload["check"] and not clauses:
         return None
     return records.H("wf-spec-rule-v1", payload)
+
+
+def _path_list(change, key):
+    """`old_paths` / `new_paths` 归一：接受数组，或按 `,;/空白` 分隔的字符串。
+
+    AI 首用很容易写成单个字符串（"new_paths": ".wf/spec/x.md"）；以前会在
+    `old_paths + new_paths` 处抛裸 TypeError（internal error，违反 K10），现在自动拆分并给类型错误出口。
+    """
+    value = change.get(key)
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [token for token in re.split(r"[,;\s]+", value) if token]
+    if isinstance(value, (list, tuple)):
+        return [str(item) for item in value if str(item).strip()]
+    raise SpecError("WF_PATH_INVALID",
+                    {"reason": f"{key} 须为数组或分隔字符串", "key": key, "value": value,
+                     "example": {"new_paths": [".wf/spec/rules/x.md"]}})
 
 
 def load_spec(root, relative):
@@ -520,8 +540,8 @@ def validate_changes(root, changes, resume=False, current_task_id=None):
         operation = change.get("operation")
         if operation not in ("add", "update", "merge", "rename", "delete", "disable"):
             raise SpecError("WF_DEFINITION_INVALID", {"reason": f"unknown spec operation: {operation}"})
-        old_paths = change.get("old_paths") or []
-        new_paths = change.get("new_paths") or []
+        old_paths = _path_list(change, "old_paths")
+        new_paths = _path_list(change, "new_paths")
         root_real = os.path.realpath(str(root))
         for relative in old_paths + new_paths:
             try:
