@@ -31,7 +31,7 @@
 | 22 | `d:` 位置存在于 drift_diffs 即合法（各种形态均接受） | — |
 | 23 | digest 完整性（影响含义的字段变更必改 digest | test_validate_wf_design.py::test_malformed_baseline_digest_fails |
 | 24 | 不影响的不变 | — |
-| 25 | `clauses` 变更必改） | — |
+| 25 | `clauses` 变更必改） | test_spec_rules.py::RuleDigestTest |
 | 26 | K4c 纠错豁免（broken-reference 不触发 | — |
 | 27 | semantic 触发） | — |
 | 28 | 纠错型漂移不得沿用（只能重发） | — |
@@ -40,7 +40,7 @@
 | 31 | 只挂起最终结论 | — |
 | 32 | 偏好缺失仅在"历史有过"时提示 | — |
 | 33 | 抽样样本由框架确定性选取（AI 不可挑选） | test_sampling.py::test_same_seed_and_pool_gives_same_picks |
-| 34 | `clauses` 原地改字被拒（只增不改） | — |
+| 34 | `clauses` 原地改字被拒（只增不改） | test_spec_rules.py::ClauseStatusTest |
 | 35 | 纠错型漂移只对锚点指向该 check 的报告强制重发 | test_identity_store.py::test_registered_multi_root_discloses |
 | 36 | `unaddressed_findings` 缺理由时预览标注 | test_lint_report.py::test_all_problems_are_listed_in_one_pass |
 | 37 | blocking 无处置 → `unaddressed_blocking` 阻断收工 | test_lint_report.py::test_all_problems_are_listed_in_one_pass |
@@ -62,7 +62,7 @@
 | 53 | 第 2 条不排除同类 | — |
 | 54 | 只要求事件不同 | — |
 | 55 | 第 2 条优先履行未完成的强化义务 | — |
-| 56 | deprecated_summary 缺失或超长 → lint 失败 | — |
+| 56 | deprecated_summary 缺失或超长 → lint 失败 | test_spec_rules.py::DeprecatedSummaryTest |
 | 57 | 已 resolved 的 blocking 不抢占第一位 | test_lint_report.py::test_all_problems_are_listed_in_one_pass |
 | 58 | `d:` 引用 deprecated 条目被拒 | test_validate_wf_design.py::test_three_level_reference_fails |
 | 59 | 抽样预算固定 2 条/任务（多类强化不叠加） | test_sampling.py::test_same_seed_and_pool_gives_same_picks |
@@ -81,7 +81,7 @@
 | 72 | judgment 不可删除（append-only） | test_build_wf_release.py::test_preflight_runs_before_removing_release_tree |
 | 73 | 出口完备 | test_invariants.py::test_every_gate_error_has_an_executable_exit |
 
-**统计**：73 条命中 **37**，未命中 **36**。
+**统计**：73 条命中 **47**（含 2026-11-09 补的 10 条断言 + 本轮 7 条 spec 规则用例），未命中 **26**。
 
 ## 未命中（当前无对应用例）
 
