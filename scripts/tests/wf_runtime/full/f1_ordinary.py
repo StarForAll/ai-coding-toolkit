@@ -71,6 +71,33 @@ prd = '''# 新增 multiply 函数
 plan-q-1：是否按轻量处理（仅一个纯函数与一条测试，验收由本任务自行定义）？推荐答案：是。
 '''
 open(os.path.join(task_dir, "prd.md"), "w", encoding="utf-8").write(prd)
+
+# 复杂任务要求 design/implement 填完（模板占位符不得残留）：本夹具照实写两份，保持"复杂场景"
+open(os.path.join(task_dir, "design.md"), "w", encoding="utf-8").write("""# 设计：新增 multiply
+
+## 契约
+
+`multiply(a, b)` 返回两数乘积；不改既有 `add` 的签名与语义。
+
+## 数据流
+
+调用方 → `multiply` → 返回结果；不引入状态、无副作用。
+
+## 取舍
+
+直接实现为纯函数而非扩展 `add`：两个函数的取值域不同，合并会让 `add` 承担两种语义。
+""")
+open(os.path.join(task_dir, "implement.md"), "w", encoding="utf-8").write("""# 实施：新增 multiply
+
+## 步骤
+
+1. 在 `src/calc.py` 增加 `multiply`
+2. 在 `tests/test_calc.py` 增加正数与负数两组断言
+
+## 验证
+
+`/usr/bin/python3 -c "from src.calc import multiply; assert multiply(3,4)==12 and multiply(-2,5)==-10"`
+""")
 prd_digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
 at = "2026-11-03T02:00:00.000000Z"
 json.dump([
