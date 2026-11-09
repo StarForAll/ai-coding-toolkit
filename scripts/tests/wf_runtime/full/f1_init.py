@@ -150,6 +150,11 @@ rc, payload, _ = wf(["task-knowledge", "--task", task_id, "--decision", "no-upda
 payload = step("task-knowledge", rc, payload)
 
 grant_paths = [item["path"] for item in files]
+# 归档前置（v42 §0.2）：试点期抽样必须在收工前冻结并落盘，否则 task.sampled 门禁会阻断
+rc, payload, _ = wf(["sampling", "pick", "--task", task_id, "--freeze", "--json"], inputs)
+payload = step("sampling pick", rc, payload)
+print("   sampling:", json.dumps((payload.get("facts") or {}).get("selection") or {}, ensure_ascii=False)[:300])
+
 archive_decisions = [
     {"source": "human terminal (session A)", "at": "2026-11-03T01:20:00.000000Z",
      "subject": f"finish {task_id}: 人已了解结果与未核实项", "object_digest": prd_digest,

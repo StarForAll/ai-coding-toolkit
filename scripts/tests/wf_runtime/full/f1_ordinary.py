@@ -109,6 +109,11 @@ print("   anchor:", payload["facts"]["anchor"]["check_anchor"])
 rc, payload, _ = wf(["task-knowledge", "--task", task_id, "--decision", "no-update", "--json"], inputs)
 step("task-knowledge", rc, payload)
 
+# 归档前置（v42 §0.2）：试点期抽样必须在收工前冻结并落盘，否则 task.sampled 门禁会阻断
+rc, payload, _ = wf(["sampling", "pick", "--task", task_id, "--freeze", "--json"], inputs)
+payload = step("sampling pick", rc, payload)
+print("   sampling:", json.dumps((payload.get("facts") or {}).get("selection") or {}, ensure_ascii=False)[:300])
+
 json.dump([
     {"source": "human terminal (session B)", "at": "2026-11-03T02:10:00.000000Z",
      "subject": f"finish {task_id}: 人已了解检查结果与未核实项", "object_digest": prd_digest,

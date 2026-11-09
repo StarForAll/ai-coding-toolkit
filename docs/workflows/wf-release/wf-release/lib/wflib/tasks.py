@@ -1569,22 +1569,24 @@ def cmd_task_approve(ctx, args):
             raise TaskError("WF_SEMANTIC_DECISION", {"reason": "approval only in plan phase",
                                                      "status": task.get("status"), "phase": task.get("phase")})
         prd_text = _prd_text(ctx.root, task)
-        # 决定文件里出现**未知 choice** 时不得静默忽略：那会让人以为"我说了"，而记录里什么都没有
-        # （演练实测：写 `{"choice":"complexity","value":"complex"}` 被无声丢弃，直到归档门禁才炸）。
-        known = set(APPROVE_CHOICES) | {MECHANICAL_REVISION, "plan-q", "risk-accept"}
-        unknown = [item.get("choice") for item in decisions
-                   if isinstance(item, dict) and item.get("choice") not in known]
-        if unknown:
-            raise TaskError("WF_SEMANTIC_DECISION",
-                            {"reason": "unknown decision choice in approval file", "unknown": unknown,
-                             "known": sorted(known),
-                             "hint": "分级要写在批准决定的 plan 对象里：{choice=approve, plan:{complexity:...}}"},
-                            next_="改决定文件后重新批准（未知 choice 一律拒绝，不猜意图）")
         # 未知 choice 不得静默忽略：否则人以为"我说了"，记录里却什么都没有
         # （演练实测：{"choice":"complexity","value":"complex"} 被无声丢弃，直到归档门禁才炸）。
         _known_choices = set(APPROVE_CHOICES) | {MECHANICAL_REVISION, "plan-q", "risk-accept"}
+
+        def _answers_plan_q(item):
+            """plan-q 的答复靠 **subject 里的编号**识别，choice 写什么都成立（"是"/"是，按推荐"/"plan-q"）。
+
+            审查询问过：旧夹具写 `choice="是"` 被新守卫拒了。守卫的本意是"别静默丢掉我的意图"，
+            而 plan-q 答复的意图已经在 subject 里，不该再要求一个特定词。
+            """
+            subject = item.get("subject")
+            text = " ".join(str(x) for x in subject) if isinstance(subject, list) else str(subject or "")
+            import re as _re
+            return bool(_re.search(r"(?<!\d)plan-q-(\d+)(?!\d)", text))
+
         _unknown = [item.get("choice") for item in decisions
-                    if isinstance(item, dict) and item.get("choice") not in _known_choices]
+                    if isinstance(item, dict) and item.get("choice") not in _known_choices
+                    and not _answers_plan_q(item)]
         if _unknown:
             raise TaskError("WF_SEMANTIC_DECISION",
                             {"reason": "unknown decision choice in approval file",
