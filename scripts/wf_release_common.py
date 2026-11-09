@@ -20,7 +20,9 @@ LIB_DIR = os.path.join(PAYLOAD, "lib")
 GITIGNORE_MANAGED = {
     "begin_marker": "# wf-managed-v1",
     "end_marker": "# wf-managed-end",
-    "lines": ["/.wf/.runtime/", "/.wf-lock"],
+    # v42 S10 的五项：运行态与锁不进库（writer/绑定/缓存都是可丢弃重建的运行态）
+    "lines": ["/.wf/.runtime/", "/.wf/session-bindings/", "/.wf/writer.json",
+              "/.wf/.cache/", "/.wf-lock"],
 }
 
 STEP_LINE = re.compile(

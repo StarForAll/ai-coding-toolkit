@@ -246,3 +246,59 @@ class PreferenceLineTest(unittest.TestCase):
                                                       "unaddressed_findings": [], "verifications": [],
                                                       "waived_count": 0})
         self.assertNotIn("[偏好]", text)
+
+
+class DriftUnavailableTest(unittest.TestCase):
+    """锚点算不出来时，门禁必须交人，不能折叠成"没有漂移"（审查 a-P1）。"""
+
+    def test_missing_parts_is_a_decision_not_a_pass(self):
+        from wflib import review
+
+        class Ctx:
+            root = str(REPO)
+
+        with self.assertRaises(Exception) as caught:
+            review.standard_drift_gate(Ctx(), {"id": "t1", "check": {"anchor": {}}})
+        self.assertIn("WF_SEMANTIC_DECISION", str(caught.exception))
+
+    def test_anchor_error_is_a_decision(self):
+        from wflib import check as check_mod, review
+
+        class Ctx:
+            root = str(REPO)
+
+        original = check_mod.anchor_parts
+        check_mod.anchor_parts = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom"))
+        try:
+            with self.assertRaises(Exception) as caught:
+                review.standard_drift_gate(Ctx(), {"id": "t1",
+                                                   "check": {"anchor": {"parts": {"spec_versions": []}}}})
+            self.assertIn("WF_SEMANTIC_DECISION", str(caught.exception))
+        finally:
+            check_mod.anchor_parts = original
+
+
+class SubjectAndWriterTest(unittest.TestCase):
+    """多路径 subject 允许空格分隔；写权空闲未持有要给出可执行出口（审查 b-N2/N3）。"""
+
+    def test_subject_accepts_whitespace_separated_paths(self):
+        from wflib import tasks
+
+        self.assertEqual(tasks._subject_paths("src/a.py tests/b.py"), ["src/a.py", "tests/b.py"])
+        self.assertEqual(tasks._subject_paths("src/a.py, tests/b.py"), ["src/a.py", "tests/b.py"])
+
+    def test_idle_writer_raises_with_acquire_exit(self):
+        source = (REPO / "docs/workflows/wf/payload/lib/wflib/cli.py").read_text(encoding="utf-8")
+        self.assertIn("先取得写权", source)
+        self.assertIn("writer acquire --task", source)
+
+
+class AttributionConsumptionTest(unittest.TestCase):
+    """`task-attribute` 登记过的归属要能解除 external pending（否则出口 2 走不到终点）。"""
+
+    def test_attribution_decision_counts_as_checked(self):
+        from wflib import check
+
+        task = {"attribution": {"decisions": [{"commit": "abcdef1234"}]}}
+        self.assertTrue(check._external_checked({"commit": "abcdef1234"}, [], task))
+        self.assertFalse(check._external_checked({"commit": "9999999"}, [], task))

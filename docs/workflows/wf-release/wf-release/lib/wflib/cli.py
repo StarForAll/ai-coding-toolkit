@@ -449,9 +449,20 @@ class Context:
         key = self.key()
         record = self.writer()
         if record.get("state") != "held":
+            holder = record.get("holder") or {}
+            if record.get("state") == "idle" and not holder:
+                # 空闲但没持有：这不是"被别人占着"，给一条能直接执行的出口
+                # （审查询问过：绑定了任务、writer 空闲时 AI 只能靠读源码猜出路）
+                hint = f"writer acquire --task {task}" if task else "writer acquire --task <id>"
+                raise CliError(
+                    "WF_SEMANTIC_DECISION",
+                    {"writer_state": "idle", "reason": "写权空闲且本会话未持有",
+                     "exits": [f"先取得写权：`wf {hint}` 后重入"]},
+                    next_=f"`wf {hint}` 取得写权后重入本条命令",
+                )
             raise CliError(
                 "WF_WRITER_BUSY",
-                {"writer_state": record.get("state"), "holder": record.get("holder")},
+                {"writer_state": record.get("state"), "holder": holder},
                 next_="等待写权释放，或走已确认的交接/恢复出口",
             )
         holder = record.get("holder") or {}

@@ -84,3 +84,21 @@ def tempfile_dir():
             yield tmp
 
     return _cm()
+
+
+class ProjectSpecIsNotVendorTest(unittest.TestCase):
+    """`.wf/spec/**` 是项目数据（spec.update 写入、升级不覆盖），不是框架 vendor。
+
+    审查实测：漏了它会让**初始化任务**与日常 spec 更新都无法归档（提交面被判 vendor）。
+    """
+
+    def test_project_spec_paths_are_project_data(self):
+        from wflib import scope
+
+        with tempfile_dir() as root:
+            found = scope.vendor_assets(str(root), {"id": "2026-x"},
+                                        [".wf/spec/index.md", ".wf/spec/core/a.md",
+                                         ".wf/lib/wflib/scope.py"])
+        self.assertNotIn(".wf/spec/index.md", found)
+        self.assertNotIn(".wf/spec/core/a.md", found)
+        self.assertIn(".wf/lib/wflib/scope.py", found)

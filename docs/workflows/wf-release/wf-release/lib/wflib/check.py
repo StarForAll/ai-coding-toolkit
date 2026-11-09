@@ -520,6 +520,13 @@ def _external_touches_task(item, task):
 def _external_checked(item, decisions, task):
     """是否已有"已核对无影响"的人判：按提交 OID 精确匹配，或用 external-changes 整体声明。"""
     commit = (item or {}).get("commit")
+    # `task-attribute` 登记过的归属也算"已核对"：否则检查侧给出的出口 2 走不到终点
+    # （审查实测：登记进 attribution 后 external_findings 原样重现，因为只看了 trailer）
+    for entry in (task or {}).get("attribution", {}).get("decisions") or []:
+        if not isinstance(entry, dict):
+            continue
+        if commit and str(entry.get("commit", "")).startswith(str(commit)[:7]):
+            return True
     for decision in decisions or []:
         if decision.get("choice") not in EXTERNAL_CHECKED_CHOICES:
             continue

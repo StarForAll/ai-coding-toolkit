@@ -580,7 +580,10 @@ def vendor_assets(root, task, paths):
     task_id = (task or {}).get("id")
     installed = installed_asset_paths(root)
     # 项目数据（不是框架自有资产）：任务记录、基线、项目配置、安装记录
-    data_prefixes = (".wf/tasks/", ".wf/install/")
+    # 项目数据（不是框架自有资产）：任务记录、**项目自己的 spec**、安装记录。
+    # `.wf/spec/**` 由 spec.update 写入、不被升级覆盖（实现方案 §"项目数据落点表"），
+    # 漏了它会让初始化任务与日常 spec 更新都归不了档。
+    data_prefixes = (".wf/tasks/", ".wf/install/", ".wf/spec/")
     data_files = (".wf/baseline.md", ".wf/project-config.json", ".wf/writer.json")
     found = []
     for path in paths or []:

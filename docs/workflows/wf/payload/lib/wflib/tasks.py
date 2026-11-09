@@ -3983,7 +3983,8 @@ def _subject_paths(subject):
         return []
     import re
 
-    return [token.strip() for token in re.split(r"[,;\n]", subject) if token.strip()]
+    # 空格也算分隔：help 示例是单路径，AI 很容易写成空格分隔；拒收只会浪费一轮试错
+    return [token.strip() for token in re.split(r"[,;\n\s]+", subject) if token.strip()]
 
 
 def _removal_attributed(ctx, path, task, receipts):

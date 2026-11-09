@@ -484,10 +484,20 @@ def standard_drift_gate(ctx, task):
     from . import check as check_mod
 
     saved = ((task.get("check") or {}).get("anchor") or {}).get("parts")
+    if not isinstance(saved, dict):
+        # 旧记录没有 parts：差异不可得。不可得**不是**"没有漂移"，按待决事实交人
+        raise ReviewError("WF_SEMANTIC_DECISION",
+                          {"reason": "Check 锚点没有 parts，标准面是否变化无法计算",
+                           "exits": ["重跑 Check 生成带 parts 的锚点后重新发起审查",
+                                     "由人确认按当前标准继续并记录该事实（kind=标准变更）"]})
     try:
         current = check_mod.anchor_parts(ctx, task)
-    except Exception:
-        return []
+    except Exception as exc:
+        raise ReviewError("WF_SEMANTIC_DECISION",
+                          {"reason": "锚点重算失败：标准面是否变化无法计算",
+                           "error": str(exc)[:200],
+                           "exits": ["修好 Check 可重算的前置（记录/spec 可读）后重试",
+                                     "由人确认按当前标准继续并记录该事实（kind=标准变更）"]})
     positions = standard_drift_positions(anchor_drift(saved, current) or [])
     if not positions:
         return []

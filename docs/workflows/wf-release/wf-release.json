@@ -81,7 +81,7 @@
       "target_relative": ".wf/lib/wflib/authorize.py"
     },
     {
-      "digest": "sha256:38ae90eb20e45be78bf71879b1bef1e0a02fc06a9d8dc966c2d5971ea1100af1",
+      "digest": "sha256:3ce731c6f2583fe5ffb2dac68dd4ff9d7c003e6e3ad86cd4621350551821d7ae",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -91,7 +91,7 @@
       "target_relative": ".wf/lib/wflib/check.py"
     },
     {
-      "digest": "sha256:853c9209de9e52c9dece88b7c30a2cf9a16d8f43a9c0c11e4114379e547ff077",
+      "digest": "sha256:fd34bdcba9ce9d9a0a2c91bf006b7c420da48c10e11af9a32f09ec6b187a8318",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -241,7 +241,7 @@
       "target_relative": ".wf/lib/wflib/records.py"
     },
     {
-      "digest": "sha256:66abfdea93f7337d562993ea1e02facfca0da5cfde293b263c0a6a5df9d237c3",
+      "digest": "sha256:43fd178ca455581514b7945ea2332447b9317d1e4d63dbe77d3288f5973c23e6",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -281,7 +281,7 @@
       "target_relative": ".wf/lib/wflib/scale.py"
     },
     {
-      "digest": "sha256:d3fb95db3a3d95318a6de56e890710bc93ce1a4cd52b69aab1eb0b0cbddcdc19",
+      "digest": "sha256:15c6bfe1d815faab069db0bcf13d618680fa60e96ba1f726a6e98defdc3f0012",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -321,7 +321,7 @@
       "target_relative": ".wf/lib/wflib/taskfiles.py"
     },
     {
-      "digest": "sha256:9ce8c400c4232e5691b19c480990fe167b2cf302a2c1e61d39c449d2b02064f7",
+      "digest": "sha256:45cb1308758fcb54506fa12e08094a40f546337aabc6b47cf6fa86c5a8da3107",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -751,7 +751,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:12222db651ec9701690687eb22e334b7662270e9070501d93ff90c48784baa60",
+    "rules_digest": "sha256:65e8f2565157a8b3ab624dcf42e51d96eb6882413dfba8363fc7df3eee7fd8c1",
     "systems": [
       "linux"
     ],
@@ -768,6 +768,9 @@
     "end_marker": "# wf-managed-end",
     "lines": [
       "/.wf/.runtime/",
+      "/.wf/session-bindings/",
+      "/.wf/writer.json",
+      "/.wf/.cache/",
       "/.wf-lock"
     ]
   },
