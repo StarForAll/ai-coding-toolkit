@@ -416,3 +416,31 @@ R18 缺哪条留痕、为什么缺。**不再猜**。
 | `r59` | ✅ 全绿 | 同上 |
 | `r17r24` | 未全绿 | 逐任务读取留痕已补 3 处，R18 仍差一格（待看 `facts.missing`） |
 | `cp2`/`cp4`/`cp5`/`r58`/`r75` | 未重验 | 需按正确顺序重跑后再定性 |
+
+## 诊断再进一步：`WF_SPEC_INCOMPLETE` 的 facts 里没有 `missing` 顶层键（2026-11-09 末）
+
+`wfok` 改成"只打印关键字段"后复跑 r17r24，得到：
+
+```
+[STOP] task-check: code=WF_SPEC_INCOMPLETE
+       关键 facts: {}            ← missing/reason/exits 都不在顶层
+       原文: {"buckets": {...}, "e": [".wf/spec/expired.md", ".wf/spec/nomatch.md", ...], ...}
+```
+
+也就是说：check 抛 `WF_SPEC_INCOMPLETE` 时，facts 被 `dict(scope_facts, ...)` 包了一层，
+**spec-loaded 的 `missing` 明细没有透出来**（只有 buckets）。
+
+### 这本身是个可改进点（产品侧）
+
+`task.spec-loaded` 的失败 facts 应该把 `missing`（缺哪条留痕、为什么缺）**放到顶层**——
+否则 AI 只看到 "分批读取全文后重试"，不知道该读哪一条。这与 K10「每个拒绝至少一条可执行出口」
+的精神一致：出口要可执行，先得说清缺什么。
+
+### 下一步（二选一，都需要你点头）
+
+| 选项 | 做法 | 影响面 |
+|---|---|---|
+| **甲** | 修 check 的抛出点，让 `missing`/`reason` 出现在 facts 顶层（同时保留 buckets） | 产品侧小改动 + 1 条断言；对 AI 的可用性有实际提升 |
+| **乙** | 只在夹具侧绕过（直接读侧车判断） | 不改产品，但 AI 在真实使用中仍然看不到缺哪条 |
+
+我倾向 **甲**：这是"出口可执行性"的真实缺口，不是测试问题。

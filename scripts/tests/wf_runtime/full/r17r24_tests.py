@@ -46,7 +46,14 @@ def wfok(label, args, inputs=None, sid="sess-U1"):
     """
     rc, payload, out = wf(args, inputs, sid)
     if rc != 0:
-        print(f"[STOP] {label} 原文:", (out or "")[:2500])
+        # 关键字段优先：把 facts 里最能定位问题的几项单独打印（整包会被无关字段占满）
+        facts = (payload or {}).get("facts") or {}
+        keys = ("missing", "reason", "exits", "problems", "uncovered", "other_tasks", "suspended")
+        brief = {k: facts[k] for k in keys if k in facts}
+        print(f"[STOP] {label}: code={(payload or {}).get('code')}")
+        print("       关键 facts:", json.dumps(brief, ensure_ascii=False)[:800])
+        if not brief:
+            print("       原文:", (out or "")[:800])
         raise SystemExit(1)
     return rc, payload, out
 
