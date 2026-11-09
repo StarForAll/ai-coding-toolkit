@@ -3271,6 +3271,9 @@ def cmd_archive(ctx, args):
                                       moved_from=(_moved_from(ctx.root, old_rel)
                                                   or task.get("moved_from")))
         commit_result["business_commit"] = business_commit
+        # 首归档路径同样要能回答"是否已持久化"：以记录组提交本身为下界做可达提交查证
+        persisted = archive_persisted(ctx.root, task,
+                                      lower_override=_parent_of(ctx.root, commit_result.get("head")))
         from . import paths as paths_mod
 
         dirty = scope.uncommitted_paths(ctx.root)
