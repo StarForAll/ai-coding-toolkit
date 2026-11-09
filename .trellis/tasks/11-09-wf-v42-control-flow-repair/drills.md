@@ -154,5 +154,5 @@ Check 才能拿结论。
 修法：记录段的 `commit_paths` 追加 `old_rel`（旧目录的相对路径），让移动的"删+增"落在同一个提交里。
 回归断言 1 条（`ArchiveStagesContractTest`）。
 
-**未能复测**：修复后没有重跑一遍归档（上下文用尽）。下一次跑夹具时需确认 `git status --porcelain`
-为空——这条仍标注为"已修未复测"。
+**复测结果（同日补跑）**：`archive = WF_OK`，`git status --porcelain` **为空**（干净）；
+日志为 `wf: archive … | feat: 支持负数 | install`，三段回报齐全。→ P4 判据"归档后工作树干净"**兑现**。
