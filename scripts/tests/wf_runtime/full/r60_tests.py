@@ -76,7 +76,8 @@ rec("R60 仅提交文件、回执未提交时为待提交", "applied_pending_com
 # ② 内容与登记不符（改内容后再提交回执）→ 不得 persisted
 open(os.path.join(F, "pkg/a.txt"), "w").write("aX\n")
 git("add", "pkg/a.txt"); git("commit", "-qm", "内容偏离登记")
-git("add", ".wf/writer.json"); git("commit", "-qm", "提交回执（树与登记不符）")
+# 账本在提交层：回执与账本必须一起进提交，否则探针读不到（方案 D）
+git("add", ".wf/writer.json", ".wf/install/maintenance.jsonl"); git("commit", "-qm", "提交回执（树与登记不符）")
 rec("R60 提交树内容与登记不符→仍待提交", "applied_pending_commit", states().get("op-60"),
     states().get("op-60") == "applied_pending_commit")
 

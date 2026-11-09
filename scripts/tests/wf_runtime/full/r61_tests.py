@@ -61,7 +61,7 @@ after = wf_fp.item(F, "pkg/f.txt")
 set_receipt([{"path": "pkg/f.txt", "before": None, "after": after}], head=git("rev-parse", "HEAD"))
 os.chmod(os.path.join(F, "pkg/f.txt"), 0o644)
 git("add", "-A"); git("commit", "-qm", "去掉可执行位")
-git("add", ".wf/writer.json"); git("commit", "-qm", "回执（可执行位不符）")
+git("add", ".wf/writer.json", ".wf/install/maintenance.jsonl"); git("commit", "-qm", "回执（可执行位不符）")
 rec("R61 可执行位不符→仍待提交", "applied_pending_commit", states().get("op-61"),
     states().get("op-61") == "applied_pending_commit")
 
@@ -76,7 +76,7 @@ os.remove(os.path.join(F, "pkg/f.txt"))
 deleted_fp = wf_fp.item(F, "pkg/f.txt")
 set_receipt([{"path": "pkg/f.txt", "before": None, "after": deleted_fp}], head=git("rev-parse", "HEAD"))
 git("add", "-A"); git("commit", "-qm", "删除文件")
-git("add", ".wf/writer.json"); git("commit", "-qm", "回执（登记删除）")
+git("add", ".wf/writer.json", ".wf/install/maintenance.jsonl"); git("commit", "-qm", "回执（登记删除）")
 rec("R61 登记删除且确实删除→persisted", "persisted", states().get("op-61"),
     states().get("op-61") == "persisted")
 
@@ -85,7 +85,8 @@ open(os.path.join(F, "pkg/g.txt"), "w").write("g\n")
 git("add", "-A"); git("commit", "-qm", "g")
 legacy = "sha256:" + hashlib.sha256(b"g\n").hexdigest()
 set_receipt([{"path": "pkg/g.txt", "before": None, "after": legacy}], head=git("rev-parse", "HEAD"))
-git("add", ".wf/writer.json"); git("commit", "-qm", "回执（历史摘要）")
+# 账本在提交层：回执与账本一起进提交（方案 D）
+git("add", ".wf/writer.json", ".wf/install/maintenance.jsonl"); git("commit", "-qm", "回执（历史摘要）")
 rec("R61 历史摘要登记兼容", "persisted", states().get("op-61"), states().get("op-61") == "persisted")
 
 # ⑤ probe 抛异常时仍可定位路径并被门禁阻断
