@@ -37,11 +37,27 @@
 writer 卡在维护持有"被伪装成"平台：["dsh"] 下一步…"。演练第一轮就因此卡住。
 建议：脚本改为 `grep -q "WF_OK" || { cat; exit 1; }`。
 
+## 第二轮：复杂任务夹具（额外跑通 2 个场景）
+
+搭出了"已开工的复杂任务"夹具：`task-new` → PRD 机读块（`touch_paths` / `acceptance` / `verifications`）
+→ `design.md`/`implement.md` 去占位 → `task-approve`（complexity=complex）→ `task-start` = **WF_OK**。
+（过程中补齐了夹具缺的 `.wf/project-config.json` 与 `.wf/baseline.md`，并把部署与初始记录提交进夹具 Git。）
+
+| # | 场景 | 期望 | 实测 | 判定 |
+|---|---|---|---|---|
+| 6 | **扩面（未确认）**：越界路径按本任务提交（带 `wf-task:` trailer）→ `task-check` | `WF_SCOPE_VIOLATION` 且列出 `out_of_scope` | `WF_SCOPE_VIOLATION`，`f=["docs-extra.md"]`，出口两条 | ✅ |
+| 6b | **扩面（人确认后）**：`authorize record --choice expand --paths docs-extra.md` → 再 `task-check` | 越界消失（进入 e 桶） | e 桶含该路径、f 为空；本次 Check 因前后快照变化判 `WF_CHECK_STALE`（正确的重检语义） | ✅ |
+| 9 | **vendor 提交守卫**（`archive` grant 里塞 `.wf/lib/...`） | `WF_SCOPE_VIOLATION` | 未到达该段：`archive` 首先要求 `phase=finish`（本夹具只到 execute/check） | ⏭ |
+
+**关于 6b 的语义**：确认文件本身落在任务目录里，改变了检查对象的快照 → 同一次 Check 的前后比对不一致，
+按设计判 `WF_CHECK_STALE`（"检查期间对象变化即本次不判 pass"）。这不是缺陷，而是要求重跑一次
+Check 才能拿结论。
+
 ## 未演练的 4 个场景（原因）
 
 | 场景 | 缺什么 |
 |---|---|
 | 审查失败后继续修（含"额度已删"） | 需要完整审查链路夹具：两份 reviewer 报告要带五轴 + 锚点 + 材料，本轮未搭 |
-| 扩面（`expand` 确认前后） | 需要**已开工**任务（`entry_snapshot`）才能走 `task-check` 的候选分类 |
+| ~~扩面（`expand` 确认前后）~~ | ✅ 已演练（见"第二轮"） |
 | 标准变更（`assertions_digest` 漂移 + `drift_diffs`） | 同上，且需要改 spec 规则并重跑 Check |
-| 框架缺陷就地修 / 归档编排失败 | 需要已开工任务的归档链路 + 故障注入 |
+| 框架缺陷就地修 / 归档编排失败 | 需要把任务推进到 `finish`（Check pass + 复杂任务审查 pass）+ 故障注入 |
