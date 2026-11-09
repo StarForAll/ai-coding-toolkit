@@ -156,3 +156,12 @@ class CommitClassificationTest(unittest.TestCase):
 
     def test_empty_output(self):
         self.assertEqual(projection.classify_commits("", "t1"), ([], [], []))
+
+
+class ArchiveStagesContractTest(unittest.TestCase):
+    """K7 + P4 退出判据：记录段要连旧位置删除一起提交，否则归档后工作树不干净。"""
+
+    def test_record_commit_includes_the_move_out(self):
+        source = (REPO / "docs/workflows/wf/payload/lib/wflib/tasks.py").read_text(encoding="utf-8")
+        self.assertIn("commit_paths.append(old_rel)", source)
+        self.assertIn("旧位置的删除", source)

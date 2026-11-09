@@ -3235,7 +3235,11 @@ def cmd_archive(ctx, args):
         moved = _move_task(ctx.root, path, destination, task)
         save_task(ctx.root, moved, task)
         record_rel = os.path.relpath(moved, str(ctx.root)).replace(os.sep, "/")
+        # 记录段必须连**旧位置的删除**一起提交：只提交新路径会把 `D .wf/tasks/<旧任务目录>/*`
+        # 留在工作树里，"归档后工作树干净"就不成立（演练实测）。
         commit_paths = [record_rel]
+        if old_rel and old_rel != record_rel:
+            commit_paths.append(old_rel)
         commit_result = _commit_paths(ctx.root, commit_paths,
                                       f"wf: archive {task_id}\n\nwf-task: {task_id}{chain_head}",
                                       moved_from=(_moved_from(ctx.root, old_rel)

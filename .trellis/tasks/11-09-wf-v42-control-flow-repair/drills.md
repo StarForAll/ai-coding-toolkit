@@ -131,3 +131,28 @@ Check 才能拿结论。
 
 仍未兑现："归档成功路径 / 归档后工作树干净"——需要按正确形状重新批准一次（下一轮第一步），
 本条不是代码缺陷。
+
+
+## 第五轮：归档成功路径（P4 判据兑现）
+
+按正确形状 `{"choice":"approve","plan":{"complexity":"complex"}}` 重新批准，全链路一次跑通：
+
+`enable → task-new → approve(plan.complexity) → start → 改 src/calc.py → check = WF_OK
+→ task-knowledge = WF_OK → authorize export = WF_OK → review-launch → 两份报告 import
+→ review-decide = WF_OK → archive = WF_OK`
+
+| 判据 | 实测 | 判定 |
+|---|---|---|
+| 三段回报 | `business`（committed, head=141c52b）/ `record`（committed，含归档后全部记录）/ `runtime`（不入库，S10） | ✅ |
+| 归档后工作树干净 | **不干净**：`D .wf/tasks/<旧目录>/{prd,design,implement}.md`、`task.json` 残留未暂存 | ❌ → 已修 |
+
+### 第五轮发现（已修）：记录段没带上"旧位置的删除"
+
+`archive` 的记录段只提交了新路径（`.wf/tasks/archive/...`），没有把旧任务目录的删除加入同一提交，
+于是 `git status` 留下 4 条 `D`——"归档后工作树干净"这条判据不成立。
+
+修法：记录段的 `commit_paths` 追加 `old_rel`（旧目录的相对路径），让移动的"删+增"落在同一个提交里。
+回归断言 1 条（`ArchiveStagesContractTest`）。
+
+**未能复测**：修复后没有重跑一遍归档（上下文用尽）。下一次跑夹具时需确认 `git status --porcelain`
+为空——这条仍标注为"已修未复测"。
