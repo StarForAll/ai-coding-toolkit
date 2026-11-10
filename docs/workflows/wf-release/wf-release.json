@@ -91,7 +91,7 @@
       "target_relative": ".wf/lib/wflib/check.py"
     },
     {
-      "digest": "sha256:a80d43cbdb51289539bb9bd6eff1458ec149f92f0b48b0ab1f50e6d1df284c4b",
+      "digest": "sha256:e6413625034061ae3522c2ddfe16d0909cb1f0ae2d5651f5ef8c3fcd9fe48808",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -161,7 +161,7 @@
       "target_relative": ".wf/lib/wflib/identity_store.py"
     },
     {
-      "digest": "sha256:2a299def0d106605eedd8a2a58bba49c085c5282a1caf193f67d6dab1f54c1a9",
+      "digest": "sha256:92ea6f39221bbdda16fe80b69773582bd80ec635ba433de4cee813840b6cedb9",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -761,7 +761,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:780bce2e5e483f7e52f8caac369db3cd67488e67feb8373667223fd4d7c0e4a9",
+    "rules_digest": "sha256:43ca337ee4217a0e134796b2c8080a93a2da895a2b533d9798db18d4ee39a04f",
     "systems": [
       "linux"
     ],

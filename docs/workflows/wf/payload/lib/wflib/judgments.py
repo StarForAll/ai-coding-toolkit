@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import os
 
+from os.path import join
+
 from . import codes, records
 
 # v42 §5.2：只记三类，种类取既有判断类（`by=human` 只是字段，不新增第十类）
@@ -73,6 +75,10 @@ def skeleton(ctx, task):
         "standard_changes": [{"decision": item.get("decision"), "basis": item.get("basis")}
                              for item in (task.get("judgments") or [])
                              if isinstance(item, dict) and item.get("kind") == "标准变更"],
+        # [扩面]：本次新增的文件（相对归档/基线不存在者），来源取触发它的判断或 finding
+        "new_paths": [{"path": path, "from": source} for path, source in _new_paths(ctx, task)],
+        # [未核实]：required 但这次没跑到、或被标成 supporting 的验收项，必须带原因与补偿
+        "unverified": _unverified(ctx, task),
         "drift_diffs": _drift_diffs(ctx, task),   # 漂移位置：保存时的 parts vs 当前 parts（K8 可重建）
         "anchor_parts": _anchor_part_names(ctx, task),
         "prefs": load_prefs(ctx.root),   # 偏好只在本机；预览照实显示，缺失不提示（除非历史有过）   # 实质字段清单；None = 不可得（预览要照实说）
@@ -279,6 +285,44 @@ def append(task, entry, facts=None):
     return record, []
 
 
+
+
+def _new_paths(ctx, task):
+    """本次新增的文件 + 来源。来源只能来自任务记录（判断/发现的引用），不猜。"""
+    sources = {}
+    for item in task.get("judgments") or []:
+        if not isinstance(item, dict):
+            continue
+        for path in item.get("paths") or []:
+            sources.setdefault(str(path), item.get("kind") or "判断")
+    for entry in ((task.get("reviews") or {}).get("imported") or []):
+        for finding in entry.get("findings") or []:
+            if isinstance(finding, dict) and finding.get("path"):
+                sources.setdefault(str(finding["path"]), finding.get("id") or "finding")
+    result = []
+    for path in (task.get("new_paths") or []):
+        result.append((str(path), sources.get(str(path))))
+    return result
+
+
+def _unverified(ctx, task):
+    """required 未跑 / supporting 未验证的验收项：必须给原因与补偿（缺了就照实说缺）。"""
+    entries = []
+    plan = task.get("plan") or {}
+    for item in plan.get("verifications") or []:
+        if not isinstance(item, dict):
+            continue
+        if item.get("required") is False or item.get("supporting"):
+            entries.append({"id": item.get("id"), "reason": item.get("reason") or "未说明",
+                            "compensation": item.get("compensation") or "未给"})
+    for item in task.get("unverified") or []:
+        if isinstance(item, dict):
+            entries.append({"id": item.get("id"), "reason": item.get("reason") or "未说明",
+                            "compensation": item.get("compensation") or "未给"})
+    return entries
+
+
+
 def skeleton_ids(task):
     """无 ctx 的轻量骨架（只用于引用校验）；完整骨架见 `skeleton(ctx, task)`。"""
     findings = [finding for entry in ((task.get("reviews") or {}).get("imported") or [])
@@ -288,7 +332,127 @@ def skeleton_ids(task):
     return {"findings": findings, "verifications": verifications, "changed_paths": []}
 
 
-def render_preview(task, facts=None, sampling_line=None):
+
+
+# ---- v42 §5.3：判断质量对照 / 依据对照 -------------------------------------
+# 前提是「只增不撤」：judgments[] 是 append-only，所以"这类判断有没有少报"才可比。
+# 设计上**不算分、不设阈值、不据此判退步**——只把差异与新旧依据摆出来，是否退步由人看。
+HUNK_ONLY_MARKERS = ("hunk", "只引 hunk", "仅 hunk", "diff-hunk")
+
+
+def _archive_records(root):
+    """读归档任务记录（.wf/tasks/archive/<月>/<dir>/task.json）。读不到就返回空。"""
+    base = join(root, ".wf/tasks/archive")
+    found = []
+    if not os.path.isdir(base):
+        return found
+    for month in sorted(os.listdir(base)):
+        month_dir = join(base, month)
+        if not os.path.isdir(month_dir):
+            continue
+        for name in sorted(os.listdir(month_dir)):
+            record = records.load_json(join(month_dir, name, "task.json"), None)
+            if isinstance(record, dict) and record.get("id"):
+                record["_archived_dir"] = name
+                found.append(record)
+    return found
+
+
+def _top_dirs(task):
+    """顶层目录集合：§5.3 的"同类任务"按目录重叠判断，取 task 记录里的改动路径。"""
+    dirs = set()
+    for path in task.get("changed_paths") or []:
+        parts = str(path).split("/")
+        dirs.add(parts[0] if len(parts) > 1 else ".")
+    return dirs
+
+
+def _overlap(a, b):
+    if not a or not b:
+        return 0.0
+    return len(a & b) / float(len(a | b))
+
+
+def _shared_kind_items(task, kind):
+    return [item for item in task.get("judgments") or []
+            if isinstance(item, dict) and item.get("kind") == kind]
+
+
+def _counts(task):
+    """对照用三类计数（§5.3）：waived / escalated / 结构化差异只引 hunk。"""
+    items = [item for item in task.get("judgments") or [] if isinstance(item, dict)]
+    waived = [item for item in items if item.get("waived_by")]
+    escalated = [item for item in items if item.get("outcome") == "escalated"]
+    hunk_only = []
+    for item in items:
+        basis = str(item.get("basis") or "").lower()
+        if any(marker in basis for marker in HUNK_ONLY_MARKERS):
+            hunk_only.append(item)
+    return {"waived": len(waived), "escalated": len(escalated), "hunk_only": len(hunk_only)}
+
+
+def quality_comparison(root, task):
+    """返回 §5.3 的两段行：`[判断质量]` 与 `[依据对照]`。
+
+    找不到"上次同类任务"时**显式说明**（而不是假装没有退化）：全新项目首次收工就是这种情况。
+    """
+    current_dirs = _top_dirs(task)
+    candidates = []
+    for record in _archive_records(root):
+        if record.get("id") == task.get("id"):
+            continue
+        candidates.append((_overlap(current_dirs, _top_dirs(record)), record))
+    candidates.sort(key=lambda item: (-item[0], str(item[1].get("id"))))
+    if not candidates or candidates[0][0] <= 0:
+        return ["[判断质量] 无同类任务可比（首次收工或没有重叠目录的归档任务）；本项不产生对照",
+                "[依据对照] 同上：无历史依据可并列"]
+
+    overlap, previous = candidates[0]
+    now_kinds = {item.get("kind") for item in task.get("judgments") or [] if isinstance(item, dict)}
+    then_kinds = {item.get("kind") for item in previous.get("judgments") or [] if isinstance(item, dict)}
+    added = sorted(k for k in now_kinds - then_kinds if k)
+    gone = sorted(k for k in then_kinds - now_kinds if k)
+
+    now_counts, then_counts = _counts(task), _counts(previous)
+    weaker = []
+    for kind in sorted(now_kinds & then_kinds):
+        now_basis = [str(item.get("basis") or "") for item in _shared_kind_items(task, kind)]
+        then_basis = [str(item.get("basis") or "") for item in _shared_kind_items(previous, kind)]
+        if not now_basis or not then_basis:
+            continue
+        # "依据变弱"只作可核的事实：本次同类判断的最长依据比上次的最长依据更短（信息量下降）
+        if max(len(x) for x in now_basis) < max(len(x) for x in then_basis):
+            weaker.append(kind)
+
+    lines = [
+        f"[判断质量] 与上次同类任务（{previous.get('id')}，目录重叠 {overlap * 100:.0f}%）相比："
+        f"新增 {len(added)} 类{'（' + '、'.join(added) + '）' if added else ''} / "
+        f"消失 {len(gone)} 类{'（' + '、'.join(gone) + '）' if gone else ''} / "
+        f"依据变弱 {len(weaker)} 条{'（' + '、'.join(weaker) + '）' if weaker else ''}",
+        f"          waived {now_counts['waived']}（上次 {then_counts['waived']}）/ "
+        f"escalated {now_counts['escalated']}（上次 {then_counts['escalated']}）/ "
+        f"结构化差异只引 hunk {now_counts['hunk_only']} 次（上次 {then_counts['hunk_only']}）",
+        "          ↑ 以上只是提示，不算分、不设阈值；是否退步由你看下面的新旧依据对照",
+    ]
+    # 依据对照：basis **全文**并列，不摘要化（§5.3 明确要求）
+    lines.append("[依据对照] 同类判断的依据全文（直接读归档记录，不摘要化）：")
+    shared = sorted(now_kinds & then_kinds)
+    if not shared:
+        lines.append("          无同类判断可比")
+    for kind in shared:
+        now_items = _shared_kind_items(task, kind)
+        then_items = _shared_kind_items(previous, kind)
+        now_item = now_items[-1] if now_items else {}
+        then_item = then_items[-1] if then_items else {}
+        lines.append(f"          · {kind}")
+        lines.append(f"            上次 basis：{then_item.get('basis')}")
+        lines.append(f"            本次 basis：{now_item.get('basis')}")
+        lines.append(f"            refs：上次 {then_item.get('refs')} → 本次 {now_item.get('refs')}")
+    return lines
+
+
+
+def render_preview(task, facts=None, sampling_line=None, root=None):
     """收工预览（一屏）：计数必须显式（含"不确定 0"），AI 的说法不替代计数。"""
     facts = facts or skeleton_ids(task)
     judgments = [item for item in task.get("judgments") or [] if isinstance(item, dict)]
@@ -299,6 +463,9 @@ def render_preview(task, facts=None, sampling_line=None):
               if item.get("kind") == "归属" and str(item.get("decision") or "").lower().startswith("不确定")]
     rejected = facts.get("rejected_unresolved") or []
     escalated = [item for item in judgments if item.get("outcome") == "escalated"]
+    rule_files_approved = any(
+        str(item.get("decision") or "").startswith("人确认") for item in judgments
+        if isinstance(item, dict) and item.get("kind") == "规则文件")
     lines = [
         f"本次任务判断清单（{len(judgments)} 条；需你复核 {len(escalated)} 条；被驳回未处置 {len(rejected)} 条）",
         "",
@@ -338,6 +505,41 @@ def render_preview(task, facts=None, sampling_line=None):
         lines.append(f"[升级]    {len(escalated)} 条判断判断不了：")
         for item in escalated:
             lines.append(f"          - {item.get('kind')}：{item.get('escalated_question')}")
+    # ---- §5.3 预览余下五段（数据都来自任务记录，属展示层）----------------------
+    # [扩面]：本次新增的文件，标注来源（哪条判断/哪个 finding 带出来的）
+    added_paths = [item for item in (facts.get("new_paths") or []) if item]
+    if added_paths:
+        lines.append(f"[扩面]    {len(added_paths)} 个新文件："
+                     + "、".join(str(item.get("path")) + (f"←{item['from']}" if item.get("from") else "")
+                                 for item in added_paths[:6])
+                     + ("…" if len(added_paths) > 6 else ""))
+    else:
+        lines.append("[扩面]    0 个新文件")
+    # [规则文件]：仓库级规则文件一旦改动会影响后续所有任务，必须单列（集合来自 protocol）
+    rule_files = [item for item in (facts.get("repo_rule_files") or []) if item]
+    if rule_files:
+        lines.append(f"[规则文件] {len(rule_files)} 项：{'、'.join(rule_files[:6])}"
+                     "——改变后续所有任务的环境" + ("  ← 需你复核" if not rule_files_approved else ""))
+    # [缺口]：审查缺口（uncovered 轴 / 未覆盖项）不是失败，但必须可见
+    gaps = [item for entry in ((task.get("reviews") or {}).get("imported") or [])
+            for item in (entry.get("gaps") or []) if item]
+    if gaps:
+        lines.append(f"[缺口]    {len(gaps)} 条："
+                     + "、".join(str(item.get("axis") or item.get("reason")) for item in gaps[:4]))
+    else:
+        lines.append("[缺口]    无")
+    # [未核实]：标注为 supporting / 未跑到的验收项必须写原因与补偿
+    unverified = [item for item in (facts.get("unverified") or []) if item]
+    if unverified:
+        lines.append(f"[未核实]  {len(unverified)} 项：" + "；".join(
+            f"{item.get('id')}（原因={item.get('reason')}；补偿={item.get('compensation')}）"
+            for item in unverified[:3]) + "  ← 需你复核")
+    # [有效性]：本轮报告是否仍有效（内容变了/锚点失效 → 作废）
+    rounds = [entry for entry in ((task.get("reviews") or {}).get("launches") or []) if isinstance(entry, dict)]
+    invalid = [entry for entry in rounds if entry.get("invalidated") or entry.get("stale")]
+    if rounds:
+        lines.append(f"[有效性]  {len(rounds)} 轮报告；作废 {len(invalid)} 轮"
+                     + (f"（轮次 {'、'.join(str(item.get('round')) for item in invalid)}）" if invalid else ""))
     for kind in KINDS:
         entries = by_kind.get(kind)
         if not entries:
@@ -346,4 +548,6 @@ def render_preview(task, facts=None, sampling_line=None):
         for item in entries:
             flag = " [补]" if item.get("backfill") else ""
             lines.append(f"          · {item.get('decision')}{flag} ← {item.get('basis')}")
+    if root:
+        lines.extend(quality_comparison(root, task))
     return "\n".join(lines) + "\n"

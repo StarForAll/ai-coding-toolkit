@@ -219,3 +219,84 @@ class PathListTest(unittest.TestCase):
         for name in ("spec.py", "tasks.py"):
             source = (REPO / "docs" / "workflows" / "wf" / "payload" / "lib" / "wflib" / name).read_text(encoding="utf-8")
             self.assertNotIn('(change.get("old_paths") or []) + (change.get("new_paths") or [])', source)
+
+
+class QualityComparisonTest(unittest.TestCase):
+    """v42 §5.3：判断质量对照与依据对照（提示，不算分、不设阈值）。"""
+
+    def _repo(self, archived, current):
+        import json, os, tempfile
+        from pathlib import Path
+
+        root = tempfile.mkdtemp(prefix="wf-qc-")
+        month = Path(root) / ".wf" / "tasks" / "archive" / "2026-11"
+        month.mkdir(parents=True)
+        for record in archived:
+            slot = month / record["id"]
+            slot.mkdir()
+            (slot / "task.json").write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+        (Path(root) / "current.json").write_text(json.dumps(current, ensure_ascii=False), encoding="utf-8")
+        return root
+
+    def test_no_history_is_stated_not_faked(self):
+        from wflib import judgments
+
+        root = self._repo([], {"id": "t1", "changed_paths": ["pkg/a.py"], "judgments": []})
+        lines = judgments.quality_comparison(root, {"id": "t1", "changed_paths": ["pkg/a.py"]})
+        self.assertTrue(lines[0].startswith("[判断质量]"), lines)
+        self.assertIn("无同类任务可比", lines[0])
+
+    def test_diff_counts_and_basis_side_by_side(self):
+        from wflib import judgments
+
+        previous = {"id": "old", "changed_paths": ["pkg/x.py", "pkg/y.py"],
+                    "judgments": [{"kind": "关闭", "decision": "d1",
+                                   "basis": "v1 全量通过，覆盖 pkg/x.py 与 pkg/y.py 两个文件",
+                                   "refs": ["v:1"]}]}
+        current = {"id": "new", "changed_paths": ["pkg/x.py"],
+                   "judgments": [{"kind": "关闭", "decision": "d2", "basis": "已通过", "refs": ["d:2"]},
+                                 {"kind": "扩面", "decision": "d3", "basis": "新增文件", "refs": []}]}
+        root = self._repo([previous], current)
+        lines = judgments.quality_comparison(root, current)
+        text = "\n".join(lines)
+        self.assertIn("上次同类任务（old", text)
+        self.assertIn("新增 1 类", text)          # 扩面 是本次新增的类别
+        self.assertIn("依据变弱 1 条", text)       # 关闭 的依据明显短了
+        self.assertIn("上次 basis：v1 全量通过", text)
+        self.assertIn("本次 basis：已通过", text)
+        self.assertIn("v:1", text)                 # refs 对照
+        self.assertIn("不算分、不设阈值", text)     # 明确只是提示
+
+
+class PreviewBlocksTest(unittest.TestCase):
+    """§5.3 预览的 13 段：缺的段落要么给事实，要么明说不可得，不能长得像"没有问题"。"""
+
+    def _facts(self, **over):
+        base = {"changed_paths": ["pkg/a.py"], "closures": [], "verifications": [], "waived_count": 0,
+                "drift_diffs": [], "anchor_parts": ["anchor"], "prefs": {}, "vendor_dirty": [],
+                "rejected_unresolved": [], "new_paths": [], "repo_rule_files": [], "unverified": []}
+        base.update(over)
+        return base
+
+    def test_blocks_present_with_facts(self):
+        from wflib import judgments
+
+        task = {"id": "t", "judgments": [{"kind": "扩面", "decision": "d1", "basis": "b1", "refs": []}]}
+        text = judgments.render_preview(task, self._facts(
+            new_paths=[{"path": "pkg/b.py", "from": "扩面"}],
+            repo_rule_files=[".gitignore"],
+            unverified=[{"id": "v2", "reason": "无 Windows", "compensation": "CI 矩阵"}],
+        ))
+        for marker in ("[扩面]", "[规则文件]", "[缺口]", "[未核实]", "[归属]", "[关闭]", "[不变]"):
+            self.assertIn(marker, text, marker)
+        self.assertIn("pkg/b.py←扩面", text)
+        self.assertIn("需你复核", text)      # 规则文件/未核实都要人看
+        self.assertIn("[缺口]    无", text)  # 没有缺口要显式写"无"，不是省略
+
+    def test_rounds_validity_reported(self):
+        from wflib import judgments
+
+        task = {"id": "t", "judgments": [],
+                "reviews": {"launches": [{"round": 1}, {"round": 2, "invalidated": True}]}}
+        text = judgments.render_preview(task, self._facts())
+        self.assertIn("[有效性]  2 轮报告；作废 1 轮", text)

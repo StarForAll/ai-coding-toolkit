@@ -2287,7 +2287,8 @@ def cmd_judgments(ctx, args):
             "WF_OK", object={"id": task_id, "name": task.get("title")},
             position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
             next_="按预览逐条核对；被驳回未处置项只能 resolved 或由你 waived",
-            facts={"preview": judgments_mod.render_preview(task, facts, sampling_line=sampling_line),
+            facts={"preview": judgments_mod.render_preview(task, facts, sampling_line=sampling_line,
+                                                                    root=ctx.root),
                    "judgments": task.get("judgments") or [], "skeleton": facts},
         )
     if sub != "add":
