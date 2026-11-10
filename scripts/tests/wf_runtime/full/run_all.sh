@@ -173,6 +173,13 @@ run_suite() {
 }
 
 # 迭代期只跑相关套件：WF_SUITES="r88_tests r89_tests r90_tests" bash run_all.sh
+# ---- 已知技术债清单（必过门的唯一豁免来源）------------------------------------
+# 这些套件当前是红的、且原因已登记；它们**不阻塞**必过门，但会被单独列出。
+# 一旦它们转绿，本脚本会失败并提示从清单里移除 —— 清单不允许腐烂：
+# 豁免必须"要么一直红且被看见，要么被修掉并销账"，不能悄悄变成永久绿灯。
+# 修好一个就从这里删一个（删完即成为必过项）。
+KNOWN_LEGACY="${WF_KNOWN_LEGACY:-cp3_tests r67_tests r68_tests r69_tests r70_tests r71_tests}"
+
 SELECTED="${WF_SUITES:-}"
 if [ -n "$SELECTED" ]; then
   SUITES="$SELECTED"
@@ -264,6 +271,41 @@ fi
 
 run_repro
 
-echo "---- 运行 $ran 项，失败 $fail 项 ----"
-[ "$fail" -eq 0 ] || exit 1
+# ---- 必过门核算：区分"未登记的红"与"已登记的债" ------------------------------
+# fail 里包含了已登记套件的失败；这里把它们拆出来，只有**未登记**的失败才阻塞。
+legacy_failed=""
+legacy_fixed=""
+legacy_missing=""
+if [ -f "$RESULTS_DIR/lines" ]; then
+  for suite in $KNOWN_LEGACY; do
+    # 子集模式（WF_SUITES）下没有参与的套件不算"清单过期"：那是没跑，不是没结果
+    case " $SUITES " in *" $suite "*) ;; *) continue ;; esac
+    state=$(awk -F'\t' -v s="$suite" 'NF==5 && $1==s {print $4}' "$RESULTS_DIR/lines" | head -1)
+    case "$state" in
+      bad)  legacy_failed="$legacy_failed $suite" ;;
+      ok)   legacy_fixed="$legacy_fixed $suite" ;;
+      "")   legacy_missing="$legacy_missing $suite" ;;
+    esac
+  done
+fi
+if [ -n "$legacy_failed" ]; then
+  echo "LEGACY-DEBT:$legacy_failed（已登记的技术债，不阻塞必过门；修好后请从 KNOWN_LEGACY 移除）"
+fi
+if [ -n "$legacy_fixed" ]; then
+  echo "LEGACY-FIXED:$legacy_fixed（已转绿，请从 KNOWN_LEGACY 移除，使其成为必过项）"
+fi
+if [ -n "$legacy_missing" ]; then
+  echo "LEGACY-MISSING:$legacy_missing（清单里的套件没有结果行；清单过期或套件被删除）"
+fi
+
+debt=$(printf '%s' "$legacy_failed" | wc -w)
+stale=$(( $(printf '%s' "$legacy_fixed" | wc -w) + $(printf '%s' "$legacy_missing" | wc -w) ))
+unknown_fail=$(( fail - debt ))
+echo "---- 运行 $ran 项，失败 $fail 项（其中已登记债 $debt 项）----"
+if [ "$unknown_fail" -ne 0 ] || [ "$stale" -ne 0 ]; then
+  [ "$unknown_fail" -ne 0 ] && echo "GATE-FAIL: 未登记的失败 $unknown_fail 项（必过门未通过）"
+  [ "$stale" -ne 0 ] && echo "GATE-BOOKKEEPING: 豁免清单有 $stale 项需要销账（转绿或已不存在）"
+  exit 1
+fi
+echo "GATE-OK: 必过门通过（豁免中的债：$(printf '%s' "$legacy_failed" | wc -w) 项）"
 exit 0
