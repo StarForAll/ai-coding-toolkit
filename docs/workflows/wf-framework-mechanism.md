@@ -742,6 +742,12 @@ attempts 每项为 `{number, rework_ref, round_ids, outcome}`；原 T 经返工 
 
 ### 9.4 标准面漂移、位置引用与判断偏好（2026-11-09 采纳 v42 独有概念）
 
+**判断指引的位置（本文 §9.4）**：十条判断指引（交付面 / blocking 关闭 / 影响面 / 扩面 / 标准变更 / 规模 /
+报告有效性 / 标准缺失 / 未核实 / 与用户限制冲突）以 **skill 形态**随发行投放到目标项目
+（`skills/wf-judging/SKILL.md`），`wf help judgments` 只给「去哪读 + 十条清单」的指针。
+按 v42 分析稿的判断指引要求，这些指引**不写进代码**——代码只保留机械事实（字段、引用校验、门禁），
+写得好不好由人与 AI 判断；单份正文 + 指针，避免多处漂移。
+
 **漂移位置是事实**：`check.anchor.parts` 里保存的实质字段与当前重算的 parts 逐项比较，差异项产出位置 `d:<字段>`
 （`spec_versions`、`assertions_digest`、`acceptance_digest`、`paths_digest` 等）。位置列表由记录重建、不落盘（K8）。
 

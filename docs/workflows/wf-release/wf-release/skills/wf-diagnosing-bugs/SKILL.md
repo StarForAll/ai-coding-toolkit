@@ -6,6 +6,8 @@ disable-model-invocation: false
 
 # wf-diagnosing-bugs
 
+> **判断指引**：判定"这条缺陷是否真的修好"时读 `wf-judging` 4.2：关闭证据要指回问题本身。
+
 用于 Execute 期的调试循环。重复失败达到 `debug_repeat_threshold` 时，入口会产生待决项，由人裁定「同一问题/不同问题」。
 
 ## 做法

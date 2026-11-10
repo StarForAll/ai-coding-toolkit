@@ -91,7 +91,7 @@
       "target_relative": ".wf/lib/wflib/check.py"
     },
     {
-      "digest": "sha256:48f161c943f7a2d63ebddbe686091e515960a91f701756ccda27330cdf68c5ca",
+      "digest": "sha256:28759b487120599cea76b5cbc3a4f025fadf74202dadf0be7f61553efb7a16de",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -611,7 +611,7 @@
       "target_relative": "wf-code-review/SKILL.md"
     },
     {
-      "digest": "sha256:256f6ae3a3019c2a2482096422383c8ec164ca275f61f65afac5e19f4b244f1f",
+      "digest": "sha256:73c2ed8f85ca5aac4b3b097daf0d42e51fbf895a547c2af6628d656323b85269",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -621,7 +621,7 @@
       "target_relative": "wf-continue/SKILL.md"
     },
     {
-      "digest": "sha256:ef6f16767f485c5b173a8ec3788cfecfe3bc444b8633352878e0efd9ea9dc488",
+      "digest": "sha256:06c7213f203703694a28bb55180be1ce086c2b60e54154509a463eb2bea87a7e",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -631,7 +631,7 @@
       "target_relative": "wf-diagnosing-bugs/SKILL.md"
     },
     {
-      "digest": "sha256:2b53ec5c3e7b5bc76c60e3719167044e84720d799432503fe672428adc12fe96",
+      "digest": "sha256:4edf8b750438dffc88291412778ef35be87c9265ecc22e637c95c02eeb8a9d9d",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -641,7 +641,7 @@
       "target_relative": "wf-finish/SKILL.md"
     },
     {
-      "digest": "sha256:ef919a088c7bb253ecaefc416784ff1c72f35f96690ed584b0c4120a56c4643e",
+      "digest": "sha256:054685bdb5d321f10f51a581b520f4eb55ec4ced9137d631a4dc7c4039b9d86f",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -649,6 +649,16 @@
       "source_path": "wf-release/skills/wf-grilling/SKILL.md",
       "target_class": "skill_root",
       "target_relative": "wf-grilling/SKILL.md"
+    },
+    {
+      "digest": "sha256:0147735d4dd26f5cdf352f7f50b7aaeea3986e6b330bff35b8cb917de0785001",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "skill",
+      "required": true,
+      "source_path": "wf-release/skills/wf-judging/SKILL.md",
+      "target_class": "skill_root",
+      "target_relative": "wf-judging/SKILL.md"
     },
     {
       "digest": "sha256:bbae01ce47fe978c9ddc087a22e988abb23386d6c2ad548651300006d578ca65",
@@ -661,7 +671,7 @@
       "target_relative": "wf-review-action/SKILL.md"
     },
     {
-      "digest": "sha256:de41d249db0c7c42bb3813347c11a0b124d534662b7d3349938517ffeae84c81",
+      "digest": "sha256:54dba187d36e383de9005d2ef5be93458f8bbeaa0bc1e84a4da6a461bd040ba0",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -681,7 +691,7 @@
       "target_relative": "wf-spec-update/SKILL.md"
     },
     {
-      "digest": "sha256:3d04dbc60892879086f8ef49de42fa375995ff63edfadf3d6c37959288a12101",
+      "digest": "sha256:c769e70510e52e595c08aa146a9cbc9389381ae66645f8acdf886cd3dd338003",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -761,7 +771,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:732a5e75fae95ebb7926eec83a4444e83c7fdb213221614298009be2cf36161c",
+    "rules_digest": "sha256:d6c42920dd19666ccd6074ed4f7a474450c26acce33583a1240eadf5322ce1c8",
     "systems": [
       "linux"
     ],

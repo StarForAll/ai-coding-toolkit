@@ -6,6 +6,8 @@ disable-model-invocation: false
 
 # wf-grilling
 
+> **判断指引**：追问需求时对照 `wf-judging` 的 4.3 / 4.8：缺口影响谁、检索了哪些标准。
+
 用于 Plan 期澄清。它是原语，不是入口：不建任务、不批准、不写判定字段。
 
 ## 做法

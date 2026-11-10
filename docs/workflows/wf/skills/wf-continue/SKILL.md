@@ -6,6 +6,8 @@ disable-model-invocation: false
 
 # wf-continue
 
+> **判断指引**：需要写 judgment 或被人挑战依据时读 `wf-judging`（十条：交付面/关闭/影响面/扩面/标准变更/规模/报告有效性/标准缺失/未核实/冲突）。
+
 已启用会话内的推进入口。先确认本会话已 `wf-start` 启用且绑定一致，再按当前状态路由。
 门禁规则在 `.wf/workflows/task-flow.md` 与 `session-flow.md`，本 skill 只做路由。
 
