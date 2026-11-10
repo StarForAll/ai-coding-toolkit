@@ -68,11 +68,12 @@ def skeleton(ctx, task):
         "findings": findings,
         "closures": closures,
         # 扩面/标准变更两类事件池由**判断记录**派生，不再恒空（否则抽样永远抽不到它们）
-        "fix_scope": [{"paths": item.get("paths") or [], "decision": item.get("decision"),
-                       "basis": item.get("basis")}
+        "fix_scope": [{"judgment_id": item.get("id"), "paths": item.get("paths") or [],
+                       "decision": item.get("decision"), "basis": item.get("basis")}
                       for item in (task.get("judgments") or [])
                       if isinstance(item, dict) and item.get("kind") == "扩面"],
-        "standard_changes": [{"decision": item.get("decision"), "basis": item.get("basis")}
+        "standard_changes": [{"judgment_id": item.get("id"), "decision": item.get("decision"),
+                              "basis": item.get("basis")}
                              for item in (task.get("judgments") or [])
                              if isinstance(item, dict) and item.get("kind") == "标准变更"],
         # [扩面]：本次新增的文件（相对归档/基线不存在者），来源取触发它的判断或 finding
@@ -82,6 +83,8 @@ def skeleton(ctx, task):
         "deleted_paths": _deleted_paths(ctx, task),
         # [未核实]：required 但这次没跑到、或被标成 supporting 的验收项，必须带原因与补偿
         "unverified": _unverified(ctx, task),
+        # [缺口]/缺口事件源：取**判定结果**里的 gaps（此前读 imported[].gaps，导入流程从不写）
+        "requirement_gap_findings": _review_gaps(task),
         "drift_diffs": _drift_diffs(ctx, task),   # 漂移位置：保存时的 parts vs 当前 parts（K8 可重建）
         "anchor_parts": _anchor_part_names(ctx, task),
         "prefs": load_prefs(ctx.root),   # 偏好只在本机；预览照实显示，缺失不提示（除非历史有过）   # 实质字段清单；None = 不可得（预览要照实说）
@@ -186,7 +189,14 @@ def pending_escalations(task):
 
 
 def ref_ids(facts):
-    """骨架里可被引用的 id 集合：`v:`/`f:`/`p:`/`d:`（v42 §5.1「引用从事实派生」）。"""
+    """骨架里可被引用的 id 集合（v42 §5.1「引用从事实派生」）。
+
+    **单一 id 空间**：`v:`验收 `f:`finding `p:`路径 `d:`漂移位置，
+    以及抽样事件的 `j:`判断 `a:`验收项 `s:`规模 `g:`缺口 `h:`内容摘要。
+    抽样与 validate 必须共用这一处，否则"抽中了却无法补写"（历史缺陷）。
+    """
+    from . import sampling as sampling_mod
+
     ids = set()
     for verification in facts.get("verifications") or []:
         identifier = verification.get("id") or verification.get("verification_id")
@@ -201,6 +211,8 @@ def ref_ids(facts):
     for item in facts.get("drift_diffs") or []:
         if isinstance(item, dict) and item.get("id"):
             ids.add(str(item["id"]))
+    for pool in (sampling_mod.events_of(facts) or {}).values():
+        ids.update(str(item) for item in pool)
     return ids
 
 
@@ -306,6 +318,22 @@ def append(task, entry, facts=None):
     task["judgments"] = judgments
     return record, []
 
+
+
+
+
+
+def _review_gaps(task):
+    """审查缺口（uncovered 轴 / 未覆盖项）：不是失败，但必须可见、可被抽样到。"""
+    gaps = (((task.get("reviews") or {}).get("result") or {}).get("facts") or {}).get("gaps") or []
+    result = []
+    for index, item in enumerate(gaps if isinstance(gaps, list) else []):
+        if not isinstance(item, dict):
+            continue
+        label = item.get("axis") or item.get("reason") or f"gap-{index + 1}"
+        result.append({"gap_id": str(label), "axis": item.get("axis"), "reason": item.get("reason"),
+                       "slot": item.get("slot")})
+    return result
 
 
 
@@ -627,8 +655,7 @@ def render_preview(task, facts=None, sampling_line=None, root=None):
         lines.append(f"[规则文件] {len(rule_files)} 项：{'、'.join(rule_files[:6])}"
                      "——改变后续所有任务的环境" + ("  ← 需你复核" if not rule_files_approved else ""))
     # [缺口]：审查缺口（uncovered 轴 / 未覆盖项）不是失败，但必须可见
-    gaps = [item for entry in ((task.get("reviews") or {}).get("imported") or [])
-            for item in (entry.get("gaps") or []) if item]
+    gaps = [item for item in (facts.get("requirement_gap_findings") or []) if item]
     if gaps:
         lines.append(f"[缺口]    {len(gaps)} 条："
                      + "、".join(str(item.get("axis") or item.get("reason")) for item in gaps[:4]))

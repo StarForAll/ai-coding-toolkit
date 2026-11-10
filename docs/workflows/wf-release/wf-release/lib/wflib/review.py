@@ -568,6 +568,30 @@ def broken_reference_problems(lifted, dispositions):
     return problems
 
 
+
+
+def proposers_from_history(imported_entries):
+    """从**全部历史**导入记录里取 finding → 提出者（K4b 的独立事实，跨轮有效）。"""
+    proposers = {}
+    for entry in imported_entries:
+        if not isinstance(entry, dict):
+            continue
+        proposer = normalize_agent(entry.get("agent") or entry.get("source_cli")
+                                   or entry.get("slot"))
+        for finding in entry.get("findings") or []:
+            if isinstance(finding, dict) and finding.get("id"):
+                proposers.setdefault(str(finding["id"]), proposer)
+    return proposers
+
+
+def known_finding_ids(imported_entries):
+    return {fid for entry in imported_entries if isinstance(entry, dict)
+            for finding in entry.get("findings") or []
+            if isinstance(finding, dict) and finding.get("id")
+            for fid in [str(finding["id"])]}
+
+
+
 def dispositions_problems(dispositions, proposers):
     """dispositions 的结构校验与"关闭不得自证"（机制稿 §9.2、K4b）。纯函数，便于单测。"""
     problems = []
@@ -583,6 +607,12 @@ def dispositions_problems(dispositions, proposers):
             problems.append({"index": index, "reason": "disposition requires a non-empty reason"})
         finding_id = item.get("finding_id")
         if finding_id is None:
+            continue
+        if str(finding_id) not in proposers:
+            # 任意 id 都能被"关闭"等于关闭一个不存在的发现：必须拒绝并给出可选集合
+            problems.append({"index": index, "finding_id": finding_id,
+                             "reason": "finding_id 不属任何已导入报告",
+                             "known": sorted(proposers)[:12]})
             continue
         proposer = proposers.get(str(finding_id))
         recheck_by = normalize_agent(item.get("recheck_by")) if item.get("recheck_by") else None
@@ -780,6 +810,49 @@ def _task_dir(ctx, task):
     return directory
 
 
+
+
+def _material_diff(ctx, task):
+    """审查材料用的 diff：任务交付面内、含未跟踪文件（审查者不该自己再算一遍）。"""
+    from . import scope as scope_mod
+    from . import tasks as tasks_mod
+
+    try:
+        classified = scope_mod.classify_candidates(ctx.root, task,
+                                                   receipts=tasks_mod.task_receipts(ctx.root))
+        owned = sorted(set(classified["buckets"].get("e") or []) | set(classified["buckets"].get("f") or []))
+    except Exception:
+        owned = []
+    if not owned:
+        return ""
+    chunks = []
+    for path in owned:
+        if os.path.exists(join(ctx.root, path)):
+            piece = _git_diff_one(ctx.root, path)
+            if piece:
+                chunks.append(piece)
+                continue
+        # 已删除的文件：取反向 diff，审查者仍能看到删除了什么
+        piece = _git_diff_one(ctx.root, path, rev="HEAD")
+        if piece:
+            chunks.append(piece)
+    return "\n".join(chunks)
+
+
+def _git_diff_one(root, path, rev=None):
+    import subprocess
+
+    args = ["git", "-c", "safe.directory=*", "diff", "--no-color"]
+    if rev:
+        args.append(rev)
+    args += ["--", path]
+    try:
+        return subprocess.run(args, cwd=root, capture_output=True, text=True, check=False).stdout
+    except OSError:
+        return ""
+
+
+
 def context(ctx, task, round_no=None, reset=False, as_value=None):
     """reviewer 侧入口（2026-11-07）：只给 task id（+ 轮次），其余由本命令提供。
 
@@ -809,14 +882,10 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
     directory = round_dir(ctx, task_id, round_no)
     materials = os.path.join(directory, "materials")
     os.makedirs(materials, exist_ok=True)
-    # 材料物化：diff 相对 HEAD；PRD 与 Check 记录直接复制；测试输出取 Check 的命令记录
-    try:
-        import subprocess
-
-        diff = subprocess.run(["git", "-c", "safe.directory=*", "diff", "HEAD"], cwd=ctx.root,
-                              capture_output=True, text=True, check=False).stdout
-    except OSError:
-        diff = ""
+    # 材料物化：只给**本任务交付面**的内容，且必须含未跟踪新文件
+    # （裸 `git diff HEAD` 漏未跟踪文件——这正是 v42 §4.8 点名的历史反例——还会把 `.wf/**`
+    #   这类框架资产/控制记录塞进审查材料）
+    diff = _material_diff(ctx, record)
     records.atomic_write(os.path.join(materials, "diff.patch"), diff or "# 无工作树差异" + chr(10))
     prd_text = tasks_mod.read_prd(ctx.root, record) if hasattr(tasks_mod, "read_prd") else ""
     records.atomic_write(os.path.join(materials, "prd.md"), prd_text or "# PRD 不可读" + chr(10))
@@ -1171,7 +1240,9 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None):
         distinct = []
         problems = []       # 输入不成立：报告/身份/锚点/材料不合规 → 拒绝，不写结论
         failures = []       # 有效审查给出的未通过结论 → 记 fail，成为复盘触发事实
-        proposers = {}      # finding id → 提出它的报告（K4b：关闭不得自证）
+        # 提出者要**跨轮累积**：只在"关闭所在轮"里找 proposer，会让第 1 轮提出的 finding
+        # 在第 2 轮被同一份报告复核关闭而查不出来（隔一轮自证 = K4b 可绕过）。
+        proposers = proposers_from_history(reviews.get("imported") or [])   # finding id → 提出者
         gaps_out = []       # uncovered 轴形成的缺口（走 4.8/4.9，不进 failures）
         if unavailable:
             verdict = "unavailable"

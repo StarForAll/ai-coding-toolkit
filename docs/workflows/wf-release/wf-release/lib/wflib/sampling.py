@@ -47,23 +47,50 @@ def _pick(seed, name, index, events):
     return events[int(_digest(seed, name, index), 16) % len(events)]
 
 
+def event_id(cls, item):
+    """把一个事件压成**稳定、可被 judgment 引用**的 id。
+
+    历史缺陷：这里曾对 dict 直接 `str(item)`，于是扩面/标准变更的"事件"是整段 dict 文本，
+    而 `judgments.validate` 只认 `v:/f:/p:/d:` 前缀——两套规则互不相认，
+    四类事件一旦被抽中必然报"漏报失败"，且 AI 无法用任何合法 judgment 补写。
+    现在统一成一个 id 空间：`j:`(判断派生) `f:`(finding) `a:`(验收项) `s:`(规模) `g:`(缺口) `d:`(漂移位置)
+    """
+    if not isinstance(item, dict):
+        return str(item)
+    for key, prefix in (("judgment_id", "j:"), ("finding_id", "f:"), ("acceptance_id", "a:"),
+                        ("gap_id", "g:"), ("id", ""), ("where", "")):
+        value = item.get(key)
+        if value is None or str(value).strip() == "":
+            continue
+        text = str(value)
+        if prefix and not text.startswith(prefix):
+            return prefix + text
+        if text.startswith(("j:", "f:", "a:", "s:", "g:", "d:", "v:", "p:")):
+            return text
+        if prefix == "" and key in ("id", "where"):
+            return text
+    # 兜底：内容摘要，保证"同一事件稳定可得"，而不是整段 dict
+    import hashlib
+    import json as _json
+
+    digest = hashlib.sha256(_json.dumps(item, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:12]
+    return f"h:{digest}"
+
+
 def events_of(skeleton):
     """从事实骨架取事件池（AI 不能决定事件是否进池）。"""
     pool = {}
     for name, source in EVENT_SOURCES.items():
         value = skeleton.get(source)
         if source == "cumulative":
-            pool[name] = [] if value is None else [f"cumulative:{value}"]
+            # 规模事件：用可读且稳定的 id（`s:<净增行>`），不落到内容摘要
+            if value is None:
+                pool[name] = []
+            else:
+                net = value.get("net") if isinstance(value, dict) else value
+                pool[name] = [f"s:{net}" if net is not None else f"s:{value}"]
         elif isinstance(value, list):
-            entries = []
-            for item in value:
-                if isinstance(item, dict):
-                    identifier = (item.get("finding_id") or item.get("id") or item.get("where")
-                                  or item.get("path") or item.get("id"))
-                    entries.append(str(identifier if identifier is not None else item))
-                else:
-                    entries.append(str(item))
-            pool[name] = entries
+            pool[name] = [event_id(name, item) for item in value]
         else:
             pool[name] = []
     return pool
@@ -74,15 +101,15 @@ def priority(classes, history, open_blocking):
     history = history or {}
 
     def rank(name):
-        strengthened = 0 if (history.get(name) or {}).get("strengthened") else 1
         failures = (history.get(name) or {}).get("failures") or 0
+        strengthened = 1 if (history.get(name) or {}).get("strengthened") else 0
+        # 伤口优先（v42 §0.2 L42）：收尾有 open blocking 时，关闭类**凌驾一切**，
+        # 强化期也不例外——此前的排序把 strengthened 放在 tier 之上，等于推翻了这条例外。
         if open_blocking and name == "关闭":
-            tier = 0
-        elif name in DEFAULT_PRIORITY:
-            tier = 1 + DEFAULT_PRIORITY.index(name)
-        else:
-            tier = 10
-        return (strengthened, tier, -failures, name)
+            return (0, 0, 0, 0, name)
+        tier = 1 + DEFAULT_PRIORITY.index(name) if name in DEFAULT_PRIORITY else 10
+        # 强化期只是**同级加权**：先把 tier 排好，再用它做同类内优先，避免"强化永久占位"。
+        return (1, tier, -strengthened, -failures, name)
 
     return sorted(classes, key=rank)
 
@@ -113,29 +140,42 @@ def select(seed, pool, history=None, *, first_task=False, open_blocking=False):
         picks.append({"class": name, "event": event, "rule": reason})
 
     if budget >= 2 and classes:
-        obligation = [name for name in ordered if (history.get(name) or {}).get("strengthened") and pool.get(name)]
+        first = picks[0] if picks else {}
+        # 义务只在"第 1 条没有抽到该类"时才轮到第 2 条：否则同一个类会独占两条预算，
+        # 强化期变成永久占位（v42：强化类**在下一个有该类事件的任务**强制占 1 条，不是占满）
+        obligation = [name for name in ordered
+                      if (history.get(name) or {}).get("strengthened") and pool.get(name)
+                      and name != first.get("class")]
         if obligation:
             name = obligation[0]
-            taken = picks[0]["event"] if picks and picks[0]["class"] == name else None
+            taken = first.get("event") if first.get("class") == name else None
             candidate, shift = _pick(seed, name, 1, pool[name]), 2
             while candidate is not None and candidate == taken and shift < 6:
                 candidate = _pick(seed, name, shift, pool[name])
                 shift += 1
             if candidate is None or candidate == taken:
-                picks.append({"class": name, "event": None,
-                              "rule": "强化义务无可履行事件（该类只有一个事件且已被抽走）："
-                                      "顺延到下一个任务，不重复抽、不阻塞归档"})
+                # 该类只有一个事件且已被抽走 → 顺延到下一个任务，但**别把这条预算烧掉**
+                others = [item for item in ordered if item != name and item != first.get("class")]
+                name = others[0] if others else name
+                candidate = _pick(seed, name, 1, pool.get(name) or [])
+                picks.append({"class": name, "event": candidate,
+                              "rule": "强化义务无第二个事件：顺延到下一个任务，本条改抽其它类"})
             else:
                 picks.append({"class": name, "event": candidate,
                               "rule": "第 2 条履行尚未完成的强化义务（取该类的另一个事件）"})
         else:
-            index = int(_digest(seed, "class-2", 0), 16) % len(classes)
-            name = classes[index]
-            candidate = _pick(seed, name, 1, pool[name])
-            shift = 2
-            while picks and candidate is not None and candidate == picks[0]["event"] and shift < 5:
-                candidate = _pick(seed, name, shift, pool[name])
-                shift += 1
+            # 第 2 条要抽到**与第 1 条不同的事件**：先把"已经被抽走的事件"排除，
+            # 只剩单事件的类整体回避（否则会对同一条事件抽两次，样本重复计数）。
+            taken = {item.get("event") for item in picks if item.get("event")}
+            remaining = [name for name in classes if any(event not in taken for event in pool[name])]
+            if not remaining:
+                picks.append({"class": None, "event": None,
+                              "rule": "没有第二个可抽事件：本轮只抽 1 条（不重复抽同一条）"})
+                return {"seed": seed, "budget": budget, "picks": picks, "uncovered": uncovered,
+                        "classes_with_events": classes}
+            index = int(_digest(seed, "class-2", 0), 16) % len(remaining)
+            name = remaining[index]
+            candidate = next((event for event in pool[name] if event not in taken), None)
             picks.append({"class": name, "event": candidate,
                           "rule": "第 2 条按 sha256(seed+\"class-2\") 选类，再按序号 1 取事件（与第 1 条只要求事件不同）"})
     return {"seed": seed, "budget": budget, "picks": picks, "uncovered": uncovered,
@@ -174,6 +214,23 @@ def record_picks(task, picks):
     state["picks"] = [dict(item) for item in (picks or [])]
     task["sampling"] = state
     return state
+
+
+
+
+def is_first_task(tasks):
+    """项目里是否还没有**已收工**的任务（§0.2 首任务口径）。
+
+    `first_task` 是两个调用点都没传的死参数，规则等于不存在。判定放在这里：
+    只看"有没有归档任务"，不把当前任务自己算进去。
+    """
+    for task in tasks or []:
+        if not isinstance(task, dict):
+            continue
+        if task.get("status") == "archived" or task.get("archived_at"):
+            return False
+    return True
+
 
 
 def select_for(task, history=None, *, first_task=False, open_blocking=False):
@@ -266,6 +323,14 @@ def history_from_tasks(tasks):
 # --------------------------------------------------------------------------
 
 
+
+
+def _bare(identifier):
+    text = str(identifier)
+    return text.split(":", 1)[1] if ":" in text else text
+
+
+
 def judgment_for(pick, judgments):
     """该事件下是否存在对应判断（按 kind 匹配 + evidence_refs 指向该事件）。"""
     if not pick.get("event"):
@@ -274,7 +339,9 @@ def judgment_for(pick, judgments):
         if not isinstance(item, dict) or item.get("kind") != pick.get("class"):
             continue
         refs = [str(ref).split("@", 1)[0] for ref in item.get("evidence_refs") or []]
-        if str(pick["event"]) in refs or f"f:{pick['event']}" in refs or f"p:{pick['event']}" in refs:
+        wanted = str(pick["event"])
+        # 容错：`f:f1` 与 `f1` 视为同一事件（前缀是 id 空间的写法，不该因为少写前缀就判漏报）
+        if any(ref == wanted or _bare(ref) == _bare(wanted) for ref in refs):
             return item
     return None
 

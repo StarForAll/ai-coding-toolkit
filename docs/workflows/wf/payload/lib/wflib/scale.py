@@ -40,6 +40,27 @@ def _count_lines(path):
 
 
 
+
+
+def _owned_paths(root, task):
+    """本任务交付面（分类器口径）：`e`=面内交付、`f`=面外交付。
+
+    与 `[扩面]`/归档门禁共用同一分类器——三处各写一套口径必然漂移（历史缺陷）。
+    分类不可用时返回 None（按全仓统计），但会在 facts 里标出来，不静默装作正常。
+    """
+    from . import scope as scope_mod
+    from . import tasks as tasks_mod
+
+    try:
+        classified = scope_mod.classify_candidates(root, task,
+                                                   receipts=tasks_mod.task_receipts(root))
+    except Exception:
+        return None
+    buckets = (classified or {}).get("buckets") or {}
+    return set(buckets.get("e") or []) | set(buckets.get("f") or [])
+
+
+
 def changes_since(ctx, task):
     """自任务基线（首次开工的 baseline_head）到当前工作树的累计变化。
 
@@ -51,10 +72,16 @@ def changes_since(ctx, task):
     output = _git(ctx.root, ["diff", "--numstat", str(base)])
     if output is None:
         return {"available": False, "reason": "git diff 不可用（基线不可达或非仓库）", "base": base}
+    # 只统计**本任务交付面内**的路径：全仓扫描会把框架安装资产与任务控制记录算进规模
+    # （实测：只改两个文件的任务被报成 22519 行 / 78 个新文件）。
+    owned = _owned_paths(ctx.root, task)
     added = deleted = files = 0
     for line in output.splitlines():
         parts = line.split("\t")
         if len(parts) < 3:
+            continue
+        path = parts[-1]
+        if owned is not None and path not in owned:
             continue
         plus, minus = parts[0], parts[1]
         if plus.isdigit():
@@ -64,7 +91,8 @@ def changes_since(ctx, task):
         files += 1
     # 未跟踪的新文件不计入 numstat：补一次数量，避免"净增删行"把新交付算成 0
     untracked = _git(ctx.root, ["ls-files", "--others", "--exclude-standard"]) or ""
-    new_files = [line for line in untracked.splitlines() if line.strip()]
+    new_files = [line for line in untracked.splitlines() if line.strip()
+                 and (owned is None or line.strip() in owned)]
     # 未跟踪文件的**内容**也要计入：只补数量会让"新增 1000 行"显示成净增 0，规模判断失真。
     for relative in new_files:
         added += _count_lines(os.path.join(ctx.root, relative))

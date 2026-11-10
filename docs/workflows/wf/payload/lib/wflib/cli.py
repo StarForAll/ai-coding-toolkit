@@ -2140,6 +2140,34 @@ def cmd_sampling(ctx, args):
                             position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
                             next_="强化期由人的声明结束（sampling reviewed）",
                             facts={"results": state.get("results")})
+    if sub == "confirm":
+        # 4.6/S6：规模确认此前**没有任何入口**（`scale.record` 是死代码，`history_max` 永远为 None，
+        # 预览永远提示"首个任务收工须确认一次"却无从确认）。这里补上唯一的写入路径。
+        task_id = args.value("--task")
+        if not task_id:
+            raise CliError("WF_PATH_INVALID", {"reason": "sampling confirm requires --task <id>"})
+        task = tasks_mod.load_task(ctx.root, task_id)
+        if task is None:
+            raise CliError("WF_TARGET_MISSING", {"reason": "task not found", "task": task_id})
+        with _lock(ctx.root, hint="sampling confirm"):
+            _record, holder = ctx.require_held(task=task_id)
+            directory = tasks_mod.task_dir(ctx.root, task_id)
+            task = records.load_json(os.path.join(directory, "task.json"))
+            from . import scale as scale_mod
+
+            current = scale_mod.changes_since(ctx, task)
+            payload = scale_mod.record(task, current, by="human",
+                                       quote=args.value("--quote") or "人在预览中确认本次规模")
+            task, action = tasks_mod._start_task_action(
+                ctx, directory, task, "task.scale.confirm", holder,
+                {"net": payload.get("confirmed_net")}, ["record_confirm"])
+            records.write_json(os.path.join(directory, "task.json"), task)
+            task, _assertion = tasks_mod._finish_task_action(
+                ctx, directory, task, "task.scale.confirm", holder,
+                {"net": payload.get("confirmed_net")}, action)
+            task = records.load_json(os.path.join(directory, "task.json"))
+        return codes.result("WF_OK", facts={"cumulative": payload})
+
     if sub == "reviewed":
         task_id = args.value("--task")
         if not task_id:
@@ -2163,8 +2191,8 @@ def cmd_sampling(ctx, args):
                             position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
                             next_="强化期由本次人声明结束", facts={"reviewed": declaration})
     if sub != "pick":
-        raise CliError("WF_PATH_INVALID", {"reason": "sampling requires pick|report|evaluate|reviewed",
-                                          "known": ["pick", "report", "evaluate", "reviewed"]})
+        raise CliError("WF_PATH_INVALID", {"reason": "sampling requires pick|report|evaluate|reviewed|confirm",
+                                          "known": ["pick", "report", "evaluate", "reviewed", "confirm"]})
     task_id = args.value("--task")
     if not task_id:
         raise CliError("WF_PATH_INVALID", {"reason": "sampling pick requires --task <id>"})
@@ -2192,10 +2220,11 @@ def cmd_sampling(ctx, args):
             task, _assertion = tasks_mod._finish_task_action(
                 ctx, directory, task, "task.sampling.freeze", holder,
                 {"task": task_id}, action)
-    history = sampling_mod.history_from_tasks(
-        [item for _directory, item in tasks_mod.iter_tasks(ctx.root)])
+    _all_tasks = [item for _directory, item in tasks_mod.iter_tasks(ctx.root)]
+    history = sampling_mod.history_from_tasks(_all_tasks)
     open_items = __import__("wflib.review", fromlist=["review"]).open_findings(ctx, task)
-    picks = sampling_mod.select_for(task, history, open_blocking=bool(open_items["blocking"]))
+    picks = sampling_mod.select_for(task, history, first_task=sampling_mod.is_first_task(_all_tasks),
+                                    open_blocking=bool(open_items["blocking"]))
     # 选样必须落盘：门禁 `task.sampled` 读的是记录里的 picks，只回显等于没抽（P1 死锁根因）
     if (picks or {}).get("picks") and not sampling_mod.selection(task)["picks"]:
         with _lock(ctx.root, hint="sampling picks"):
@@ -2266,9 +2295,10 @@ def cmd_judgments(ctx, args):
         state = sampling_mod.frozen(task)
         sampling_line = None
         if state.get("seed"):
+            _all = [item for _d, item in tasks_mod.iter_tasks(ctx.root)]
             picked = sampling_mod.select_for(
-                task, sampling_mod.history_from_tasks(
-                    [item for _d, item in tasks_mod.iter_tasks(ctx.root)]),
+                task, sampling_mod.history_from_tasks(_all),
+                first_task=sampling_mod.is_first_task(_all),
                 open_blocking=bool(review_mod.open_findings(ctx, task)["blocking"]))
             if picked and picked.get("picks"):
                 sampling_line = "本次抽样：" + "、".join(
