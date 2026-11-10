@@ -27,7 +27,7 @@
 
 | 命令 | 结果 |
 |---|---|
-| `python3 -m unittest discover -s scripts/tests -t . -q` | **290 OK** |
+| `python3 -m unittest discover -s scripts/tests -t . -q` | **294 OK** |
 | `python3 scripts/tests/wf_runtime/full/run_all.sh` | **132 项 / 失败 0 / GATE-OK（豁免 0）**；repro 68/68 |
 | `python3 scripts/build-wf-release.py --verify` | **OK 字节复现（70 assets）** |
 | `python3 scripts/validate-wf-design.py` | **OK**（定义命中 100% / 消费点缺项 0） |
@@ -39,7 +39,7 @@
 
 | v42 条目 | 偏差 | 原因 | 影响面 |
 |---|---|---|---|
-| §5.3「判断质量对照 / 依据对照」预览 | **未实现** | 需要跨任务历史机制，且要上位文档先定口径（谁与谁对照、什么算依据不足） | 判断预览少两块内容；其余预览行已实现 |
+| §5.3「判断质量对照 / 依据对照」预览 | **已实现（2026-11-10 补齐）** | —— | 预览现含 13 段中全部条目：`[判断质量]` 按顶层目录重叠选"上次同类任务"、`[依据对照]` 并列 basis 全文与 refs；另补 `[扩面]/[规则文件]/[缺口]/[未核实]/[有效性]` |
 | A7 类「轮次上限」 | 不做机械拒绝 | 代码里 `round_ids` 明确"只作观察与历史重建，不再作为拒绝依据" | 再开一轮由人/判定决定，不靠计数拦 |
 | 报告声明的"未覆盖项" | 按**缺口**留痕，不判 fail | v42 B1 三态判定：fail 仅当存在 blocking finding | 缺口进 4.8/4.9，不进 failures |
 | 阶段模型 | 保留四阶段，`fixing` 不落盘 | 人裁定出口 A | 与 v42 S5 的差异已登记 |
@@ -48,7 +48,7 @@
 
 | 项 | 状态 | 原因 / 下一步 |
 |---|---|---|
-| §5.3 判断质量对照预览 | 未做 | 需先在上位文档定义口径；实现依赖跨任务历史读取 |
+| §5.3 判断质量对照预览 | **已完成**（`judgments.quality_comparison`） | —— |
 | `trellis-finish-work` | 未跑 | 任务仍 `in_progress`；归档与 workspace journal 待执行 |
 | 证据原始 tar.gz | 不发布 | 已决定（README 已写明），非遗漏 |
 | `.trellis` 历史路径回填 | 有意不做 | S11 只要求脚本/测试从清单取路径 |
