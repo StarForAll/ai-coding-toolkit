@@ -252,19 +252,19 @@ class QualityComparisonTest(unittest.TestCase):
         previous = {"id": "old", "changed_paths": ["pkg/x.py", "pkg/y.py"],
                     "judgments": [{"kind": "关闭", "decision": "d1",
                                    "basis": "v1 全量通过，覆盖 pkg/x.py 与 pkg/y.py 两个文件",
-                                   "refs": ["v:1"]}]}
+                                   "evidence_refs": ["v:1"]}]}
         current = {"id": "new", "changed_paths": ["pkg/x.py"],
-                   "judgments": [{"kind": "关闭", "decision": "d2", "basis": "已通过", "refs": ["d:2"]},
-                                 {"kind": "扩面", "decision": "d3", "basis": "新增文件", "refs": []}]}
+                   "judgments": [{"kind": "关闭", "decision": "d2", "basis": "已通过", "evidence_refs": []},
+                                 {"kind": "扩面", "decision": "d3", "basis": "新增文件", "evidence_refs": []}]}
         root = self._repo([previous], current)
         lines = judgments.quality_comparison(root, current)
         text = "\n".join(lines)
         self.assertIn("上次同类任务（old", text)
         self.assertIn("新增 1 类", text)          # 扩面 是本次新增的类别
-        self.assertIn("依据变弱 1 条", text)       # 关闭 的依据明显短了
+        self.assertIn("依据变弱 1 条", text)       # 上次有引用、这次没有 → 依据变弱（可核事实）
         self.assertIn("上次 basis：v1 全量通过", text)
         self.assertIn("本次 basis：已通过", text)
-        self.assertIn("v:1", text)                 # refs 对照
+        self.assertIn("v:1", text)                 # evidence_refs 对照
         self.assertIn("不算分、不设阈值", text)     # 明确只是提示
 
 
@@ -306,29 +306,29 @@ class EscalatedSupersedeTest(unittest.TestCase):
     """审查 a1：人被回答过的 escalated 判断不能继续挡归档（诚实求助不是死路）。"""
 
     def test_superseded_escalation_no_longer_blocks(self):
-        from wflib import gates
+        from wflib import judgments
 
         task = {"judgments": [
             {"id": "j1", "kind": "关闭", "outcome": "escalated", "escalated_question": "算不算关闭？"},
             {"id": "j2", "kind": "关闭", "outcome": "applied", "supersedes": "j1", "decision": "算"}]}
-        self.assertEqual(gates.pending_escalations(task), [], "回答过的不应再算待决")
+        self.assertEqual(judgments.pending_escalations(task), [], "回答过的不应再算待决")
         self.assertEqual(len(task["judgments"]), 2, "历史必须保留（append-only）")
 
     def test_unanswered_escalation_still_blocks(self):
-        from wflib import gates
+        from wflib import judgments
 
         task = {"judgments": [{"id": "j1", "kind": "关闭", "outcome": "escalated",
                                "escalated_question": "算不算关闭？"}]}
-        self.assertEqual(len(gates.pending_escalations(task)), 1)
+        self.assertEqual(len(judgments.pending_escalations(task)), 1)
 
     def test_supersede_only_closes_the_named_item(self):
-        from wflib import gates
+        from wflib import judgments
 
         task = {"judgments": [
             {"id": "j1", "kind": "关闭", "outcome": "escalated"},
             {"id": "j2", "kind": "标准变更", "outcome": "escalated"},
             {"id": "j3", "kind": "关闭", "outcome": "applied", "supersedes": "j1"}]}
-        pending = gates.pending_escalations(task)
+        pending = judgments.pending_escalations(task)
         self.assertEqual([item["id"] for item in pending], ["j2"], "只关掉被指向的那条")
 
 
@@ -414,3 +414,52 @@ class SpecStringPathsTest(unittest.TestCase):
             self.assertNotIn("empty path", str(exc.facts))
         except Exception as exc:                           # 但不许出 TypeError/单字符垃圾
             self.fail(f"字符串形态不应导致非结构化异常：{exc!r}")
+
+
+class AskAlwaysAcceptsHumanTest(unittest.TestCase):
+    """审查 a1：ask_always 只约束"AI 不得自己定"，不能拒绝人给出的有效答复。"""
+
+    def _entry(self, **over):
+        entry = {"kind": "关闭", "decision": "算关闭", "basis": "人判断", "outcome": "applied",
+                 "evidence_refs": []}
+        entry.update(over)
+        return entry
+
+    def test_ai_self_decision_still_rejected_under_ask_always(self):
+        from wflib import judgments
+
+        problems = judgments.validate(self._entry(by="ai"), {"prefs": {"关闭": "ask_always"}})
+        self.assertTrue(any("ask_always" in item.get("reason", "") for item in problems), problems)
+
+    def test_human_answer_passes_under_ask_always(self):
+        from wflib import judgments
+
+        problems = judgments.validate(self._entry(by="human", supersedes="j1"),
+                                      {"prefs": {"关闭": "ask_always"}})
+        self.assertEqual([item for item in problems if "ask_always" in item.get("reason", "")], [],
+                         "人的答复就是该偏好的目的，不能反过来拦住它")
+
+
+class NoProjectionRecursionTest(unittest.TestCase):
+    """审查 a2：open_items 不得回头调用 skeleton（环会让"未核实"算 199 层再返回空）。"""
+
+    def test_open_items_does_not_depend_on_skeleton(self):
+        from types import SimpleNamespace
+
+        from wflib import judgments, projection
+
+        called = {"skeleton": 0}
+        original = judgments.skeleton
+
+        def boom(*args, **kwargs):
+            called["skeleton"] += 1
+            raise AssertionError("open_items 不应调用 skeleton（会形成环）")
+
+        judgments.skeleton = boom
+        try:
+            facts = projection.open_items(SimpleNamespace(root="/tmp", key=lambda required=True: "k"),
+                                          {"id": "t", "judgments": []})
+        finally:
+            judgments.skeleton = original
+        self.assertEqual(called["skeleton"], 0)
+        self.assertIn("rejected_unresolved", facts)

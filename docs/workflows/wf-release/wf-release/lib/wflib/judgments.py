@@ -77,15 +77,13 @@ def skeleton(ctx, task):
                              if isinstance(item, dict) and item.get("kind") == "标准变更"],
         # [扩面]：本次新增的文件（相对归档/基线不存在者），来源取触发它的判断或 finding
         "new_paths": [{"path": path, "from": source} for path, source in _new_paths(ctx, task)],
+        "deleted_paths": _deleted_paths(ctx, task),
         # [未核实]：required 但这次没跑到、或被标成 supporting 的验收项，必须带原因与补偿
         "unverified": _unverified(ctx, task),
         "drift_diffs": _drift_diffs(ctx, task),   # 漂移位置：保存时的 parts vs 当前 parts（K8 可重建）
         "anchor_parts": _anchor_part_names(ctx, task),
         "prefs": load_prefs(ctx.root),   # 偏好只在本机；预览照实显示，缺失不提示（除非历史有过）   # 实质字段清单；None = 不可得（预览要照实说）
         "verifications": verifications,
-        # §0.2 的「未核实」事件源：未结案的验收项（S5b 的 unverified[]）
-        "unverified": [str(item.get("acceptance_id"))
-                       for item in (_required_unverified(ctx, task))],
         "cumulative": cumulative_facts(ctx, task),
         "rejected": [dict(item) for item in disposals if item.get("decision") == "rejected"],
         "rejected_unresolved": rejected,
@@ -151,19 +149,38 @@ def _anchor_part_names(ctx, task):
         return None
 
 
-def _required_unverified(ctx, task):
+def required_unverified_items(ctx, task):
+    """required 且未结案的验收项（S5b/4.9）。
+
+    **单向依赖**：judgments → projection，projection **不得**回头 import skeleton，
+    否则会形成 `skeleton → required_unverified → open_items → skeleton` 的环
+    （此前靠 `except Exception` 兜底，结果是算 199 层、3.67 秒、返回空列表）。
+    """
     from . import projection as projection_mod
 
-    try:
-        return projection_mod.required_unverified(ctx, task)
-    except Exception:
-        return []
+    return projection_mod.required_unverified(ctx, task)
 
 
 def _iter_all_tasks(ctx):
     from . import tasks as tasks_mod
 
     return tasks_mod.iter_tasks(ctx.root)
+
+
+
+
+def pending_escalations(task):
+    """仍未被回答的 escalated 判断（v42 §5.3：只按当前有效判断算待决）。
+
+    `judgments[]` 是 append-only：人回答后用新条目 `supersedes` 指向被挂起那条。
+    历史必须保留，但**已被替代的条目不再算"还没回答"**——否则诚实求助会变成死路。
+    门禁与预览必须共用这一处实现，否则"预览说 2 条待复核、门禁说 0 条"各说各话。
+    """
+    items = [item for item in (task.get("judgments") or []) if isinstance(item, dict)]
+    superseded = {str(item.get("supersedes")) for item in items if item.get("supersedes")}
+    return [item for item in items
+            if item.get("outcome") == "escalated" and str(item.get("id")) not in superseded]
+
 
 
 def ref_ids(facts):
@@ -228,7 +245,10 @@ def validate(entry, facts):
         problems.append({"reason": "escalated 必须写清你判断不了的那个问题"})
     kind = entry.get("kind")
     prefs = facts.get("prefs") or {}
-    if prefs.get(kind) == "ask_always" and outcome != "escalated":
+    # ask_always 约束的是"AI 不得自己定"，**不是"不许人回答"**：
+    # 人给出的答复（by=human）本身就是该偏好的目的，拦住它会让求助再次变成死路。
+    by_human = str(entry.get("by") or "") == "human"
+    if prefs.get(kind) == "ask_always" and outcome != "escalated" and not by_human:
         problems.append({"reason": "该类判断设为 ask_always：必须 escalated 交人，不得自己定",
                          "kind": kind})
     if outcome == "escalated" and prefs.get(kind) == "ai_decides" and not str(entry.get("why") or "").strip():
@@ -288,7 +308,18 @@ def append(task, entry, facts=None):
 
 
 def _new_paths(ctx, task):
-    """本次新增的文件 + 来源。来源只能来自任务记录（判断/发现的引用），不猜。"""
+    """本次新增的文件 + 来源。文件列表取 **git 事实**（基线以来 A 状态 + 未跟踪），
+    来源仍只从任务记录（判断/finding）取；两者都不猜。"""
+    paths = []
+    base = task.get("baseline_head")
+    if base:
+        out = _git(ctx.root, ["diff", "--name-status", str(base)])
+        for line in (out or "").splitlines():
+            parts = line.split("\t")
+            if len(parts) >= 2 and parts[0].startswith("A"):
+                paths.append(parts[-1])
+    untracked = _git(ctx.root, ["ls-files", "--others", "--exclude-standard"]) or ""
+    paths.extend(line.strip() for line in untracked.splitlines() if line.strip())
     sources = {}
     for item in task.get("judgments") or []:
         if not isinstance(item, dict):
@@ -299,10 +330,28 @@ def _new_paths(ctx, task):
         for finding in entry.get("findings") or []:
             if isinstance(finding, dict) and finding.get("path"):
                 sources.setdefault(str(finding["path"]), finding.get("id") or "finding")
-    result = []
-    for path in (task.get("new_paths") or []):
-        result.append((str(path), sources.get(str(path))))
+    seen, result = set(), []
+    for path in paths:
+        if path in seen:
+            continue
+        seen.add(path)
+        result.append((path, sources.get(path)))
     return result
+
+
+def _deleted_paths(ctx, task):
+    base = task.get("baseline_head")
+    if not base:
+        return []
+    out = _git(ctx.root, ["diff", "--name-status", str(base)])
+    return [line.split("\t")[-1] for line in (out or "").splitlines()
+            if line.split("\t")[0].startswith("D")]
+
+
+def _git(root, args):
+    from .projection import _git as _projection_git
+
+    return _projection_git(root, args)
 
 
 def _unverified(ctx, task):
@@ -416,12 +465,11 @@ def quality_comparison(root, task):
     now_counts, then_counts = _counts(task), _counts(previous)
     weaker = []
     for kind in sorted(now_kinds & then_kinds):
-        now_basis = [str(item.get("basis") or "") for item in _shared_kind_items(task, kind)]
-        then_basis = [str(item.get("basis") or "") for item in _shared_kind_items(previous, kind)]
-        if not now_basis or not then_basis:
-            continue
-        # "依据变弱"只作可核的事实：本次同类判断的最长依据比上次的最长依据更短（信息量下降）
-        if max(len(x) for x in now_basis) < max(len(x) for x in then_basis):
+        # 「依据变弱」只认**可核事实**：上次有引用、这次没有（引用在不在是事实，字数不是）。
+        # 比字数会鼓励堆字——正好与"提高判断质量"相反。
+        then_refs = sum(len(item.get("evidence_refs") or []) for item in _shared_kind_items(previous, kind))
+        now_refs = sum(len(item.get("evidence_refs") or []) for item in _shared_kind_items(task, kind))
+        if then_refs and not now_refs:
             weaker.append(kind)
 
     lines = [
@@ -447,7 +495,8 @@ def quality_comparison(root, task):
         lines.append(f"          · {kind}")
         lines.append(f"            上次 basis：{then_item.get('basis')}")
         lines.append(f"            本次 basis：{now_item.get('basis')}")
-        lines.append(f"            refs：上次 {then_item.get('refs')} → 本次 {now_item.get('refs')}")
+        lines.append(f"            evidence_refs：上次 {then_item.get('evidence_refs') or []}"
+                     f" → 本次 {now_item.get('evidence_refs') or []}")
     return lines
 
 
@@ -462,7 +511,7 @@ def render_preview(task, facts=None, sampling_line=None, root=None):
     unsure = [item for item in judgments
               if item.get("kind") == "归属" and str(item.get("decision") or "").lower().startswith("不确定")]
     rejected = facts.get("rejected_unresolved") or []
-    escalated = [item for item in judgments if item.get("outcome") == "escalated"]
+    escalated = pending_escalations(task)
     rule_files_approved = any(
         str(item.get("decision") or "").startswith("人确认") for item in judgments
         if isinstance(item, dict) and item.get("kind") == "规则文件")

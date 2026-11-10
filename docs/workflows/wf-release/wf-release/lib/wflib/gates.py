@@ -862,19 +862,6 @@ def _cli_error(code, facts):
 
 
 
-def pending_escalations(task):
-    """仍未被回答的 escalated 判断（v42 §5.3：只按当前有效判断算待决）。
-
-    `judgments[]` 是 append-only：人回答后用新条目 `supersedes` 指向被挂起那条。
-    历史必须保留，但**已被替代的条目不再算"还没回答"**——否则诚实求助会变成流程死路。
-    """
-    items = [item for item in (task.get("judgments") or []) if isinstance(item, dict)]
-    superseded = {str(item.get("supersedes")) for item in items if item.get("supersedes")}
-    return [item for item in items
-            if item.get("outcome") == "escalated" and str(item.get("id")) not in superseded]
-
-
-
 def final_gate(ctx, task, ignore_action_id=None):
     """返回 (ok, code, facts)；第 8 项的人调用与归档提交由 archive 动作核。"""
     rule_version = ctx.rule_version()
@@ -888,7 +875,9 @@ def final_gate(ctx, task, ignore_action_id=None):
     # 「判断不了」只挂起最终结论，不冻结中途动作（v42 §5.3）：在归档口拦下即可
     # 只按**当前有效**判断算待决：被人回答/更正过的条目由新条目 supersedes 承接，
     # 历史照留（append-only），但不再算"还没回答"。否则诚实求助会变成流程死路。
-    escalated = pending_escalations(task)
+    from . import judgments as judgments_mod
+
+    escalated = judgments_mod.pending_escalations(task)
     if escalated:
         return False, "WF_SEMANTIC_DECISION", {
             "escalated": [{"kind": item.get("kind"), "question": item.get("escalated_question")}

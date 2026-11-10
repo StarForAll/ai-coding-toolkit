@@ -19,10 +19,14 @@ from . import records
 
 def open_items(ctx, task):
     """未结事项（S8/S5b 的可重建投影）：未核实项、未处置 finding、被驳回未处置判断。"""
-    from . import judgments as judgments_mod
     from . import review as review_mod
 
-    facts = judgments_mod.skeleton(ctx, task)
+    # 只从任务记录直接派生，**不调用 skeleton**：open_items ← skeleton 是环的一部分
+    rejected = [{"at": item.get("at"), "kind": item.get("kind"), "decision": item.get("decision")}
+                for item in (task.get("judgments") or [])
+                if isinstance(item, dict)
+                and (item.get("challenged") or {}).get("conclusion") == "rejected"
+                and not item.get("resolved_by") and not item.get("waived_by")]
     unverified = []
     for entry in ((task.get("check") or {}).get("acceptance_results") or []):
         if not isinstance(entry, dict):
@@ -41,8 +45,8 @@ def open_items(ctx, task):
         "unverified": unverified,
         "unaddressed_findings": findings["unaddressed"],
         "unaddressed_blocking": findings["blocking"],
-        "rejected_unresolved": facts["rejected_unresolved"],
-        "count": len(unverified) + len(findings["unaddressed"]) + len(facts["rejected_unresolved"]),
+        "rejected_unresolved": rejected,
+        "count": len(unverified) + len(findings["unaddressed"]) + len(rejected),
     }
 
 

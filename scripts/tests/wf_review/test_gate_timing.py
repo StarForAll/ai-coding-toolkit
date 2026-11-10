@@ -80,17 +80,31 @@ class SamplingTimingTest(unittest.TestCase):
 
 
 class EscalatedHangsOnlyTheEndingTest(unittest.TestCase):
-    def test_escalated_judgment_is_visible_in_gate_source(self):
-        source = (REPO / "docs/workflows/wf/payload/lib/wflib/gates.py").read_text(encoding="utf-8")
-        self.assertIn('item.get("outcome") == "escalated"', source)
-        self.assertIn("最终结论挂起", source)
+    """escalated 只挂在**归档口**（final_gate），不冻结中途动作（v42 §5.3）。
 
-    def test_escalated_does_not_appear_in_mid_action_gates(self):
-        """escalated 只出现在 final_gate（归档口），不进入 before_execute/before_check 的判定。"""
-        source = (REPO / "docs/workflows/wf/payload/lib/wflib/gates.py").read_text(encoding="utf-8")
-        escalate_index = source.index('item.get("outcome") == "escalated"')
-        final_gate_index = source.index("def final_gate")
-        self.assertGreater(escalate_index, final_gate_index, "escalated 判定必须落在 final_gate 内")
+    断言锚**行为**，不锚文件排版：此前用"源码里某个字符串出现在 `def final_gate` 之后"
+    来判位置，重构把判定抽成 helper 就假红——断言写的是实现布局，不是契约。
+    """
+
+    def test_pending_escalations_is_the_single_concept(self):
+        from wflib import judgments
+
+        task = {"judgments": [{"id": "j1", "kind": "关闭", "outcome": "escalated"}]}
+        self.assertEqual([item["id"] for item in judgments.pending_escalations(task)], ["j1"])
+
+    def test_only_the_ending_gate_consults_escalations(self):
+        import inspect
+
+        from wflib import judgments
+
+        self.assertIn("pending_escalations(", inspect.getsource(gates.final_gate),
+                      "归档口必须按当前有效判断算待决")
+        for name in ("evaluate", "_step_satisfied", "step_satisfied", "_check_step"):
+            func = getattr(gates, name, None)
+            if func is None:
+                continue
+            self.assertNotIn("escalated", inspect.getsource(func),
+                             f"{name} 属中途动作判定，不得因 escalated 而挂起")
 
 
 class UnchangedFactsTest(unittest.TestCase):
