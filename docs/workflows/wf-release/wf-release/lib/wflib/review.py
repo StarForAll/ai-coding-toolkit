@@ -362,6 +362,17 @@ def status_of_round(ctx, task, round_no=None):
             continue
         if unmatched:
             positional[slot] = unmatched.pop(0)
+    # 发现式暂存文件：round 目录里 review-<agent>.md 中既未被导入、也未被槽位名占用的那些
+    claimed = {os.path.basename(agent_report_path(ctx, task_id, round_no, slot)) for slot in declared}
+    discovered_pending = {}
+    directory = round_dir(ctx, task_id, round_no)
+    if os.path.isdir(directory):
+        pending_files = sorted(name for name in os.listdir(directory)
+                               if AGENT_REPORT.match(name) and name not in claimed)
+        free_slots = [slot for slot in declared if slot not in imported_by_slot and slot not in positional]
+        for slot, name in zip(free_slots, pending_files):
+            discovered_pending[slot] = os.path.join(directory, name)
+
     for slot in declared:
         entry = imported_by_slot.get(slot) or positional.get(slot)
         record = {"slot": slot}
@@ -387,6 +398,11 @@ def status_of_round(ctx, task, round_no=None):
         else:
             staged = agent_report_path(ctx, task_id, round_no, slot)
             record["imported"] = False
+            # 发现模式下报告按**实际 reviewer 名**产出（review-codex.md…），
+            # 而声明槽位是 s1/s2：只按槽位名找暂存文件会把"已完成未导入"误报成 missing，
+            # AI 于是去等一份已经存在的报告。这里补一层"未被认领的发现式暂存文件"位置对应。
+            if not os.path.isfile(staged):
+                staged = discovered_pending.get(slot) or staged
             if os.path.isfile(staged):
                 record["state"] = "staged"
                 record["staged_path"] = staged

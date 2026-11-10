@@ -683,3 +683,33 @@ class ImportEvidenceIdentityTest(unittest.TestCase):
         recorded = {"round": 1, "slot": "s1", "report_digest": "sha256:SAME"}
         incoming = "sha256:SAME"
         self.assertFalse(recorded.get("report_digest") not in (None, incoming))
+
+
+class StagedDiscoveryTest(unittest.TestCase):
+    """第十四轮 a：发现模式下"已完成未导入"必须是 staged，不能报 missing。
+
+    声明槽位是 s1/s2，而发现式报告按实际 reviewer 名产出（review-codex.md），
+    只按槽位名找暂存文件会让 AI 去等一份已经存在的报告。
+    """
+
+    def test_discovered_staged_reports_are_counted(self):
+        import os, tempfile
+        from types import SimpleNamespace
+        from wflib import review
+
+        root = tempfile.mkdtemp(prefix="wf-staged-")
+        task_id = "2026-abc"
+        task = {"id": task_id, "check": {"id": "c1", "anchor": {"check_anchor": "sha256:0"}},
+                "reviews": {"launches": [{"round": 1, "slots": [{"slot": "s1"}, {"slot": "s2"}]}],
+                            "imported": [], "result": None}}
+        ctx = SimpleNamespace(root=root, key=lambda required=True: "k")
+        directory = review.round_dir(ctx, task_id, 1)          # 暂存目录由 review 自己决定
+        os.makedirs(directory, exist_ok=True)
+        for name in ("review-codex.md", "review-gemini.md"):
+            with open(os.path.join(directory, name), "w", encoding="utf-8") as handle:
+                handle.write("---\nstatus: done\n---\n")
+        status = review.status_of_round(ctx, task)
+        states = [item["state"] for item in status["slots"]]
+        self.assertEqual(states, ["staged", "staged"], f"实际: {status}")
+        self.assertEqual(status["arrived"], 2)
+        self.assertEqual(status["missing"], [])
