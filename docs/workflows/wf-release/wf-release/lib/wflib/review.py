@@ -352,8 +352,18 @@ def status_of_round(ctx, task, round_no=None):
         anchor = None
     task_id = task.get("id")
     slots = []
+    # 发现模式下导入记录用**实际 reviewer 名**（codex/gemini…），而 launch 的默认槽位是 s1/s2；
+    # 只按名字匹配会让"两份真实报告都已导入"显示成 missing=两缺（实测）。
+    # 这里补一层位置对应：声明槽位按顺序接收未被名称匹配的导入记录。
+    unmatched = [entry for key, entry in sorted(imported_by_slot.items()) if key not in declared]
+    positional = {}
+    for index, slot in enumerate(declared):
+        if slot in imported_by_slot:
+            continue
+        if unmatched:
+            positional[slot] = unmatched.pop(0)
     for slot in declared:
-        entry = imported_by_slot.get(slot)
+        entry = imported_by_slot.get(slot) or positional.get(slot)
         record = {"slot": slot}
         if entry:
             path = join(ctx.root, entry.get("report_path") or "")
