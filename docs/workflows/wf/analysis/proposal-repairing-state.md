@@ -1,202 +1,175 @@
-# 提案：以「修复中」显式事实替代 `fixing` 阶段（⑥-乙）
+# 提案（v2）：以「不可结案原因」显式事实替代 `fixing` 阶段
 
-> 状态：**待审**（不是定稿）。供外部审查用；审查结论回来后再决定是否落地。
-> 关联：v42 分析稿 `solution-review-2026-11-09.md`（§4.6/§7.1 与 S5）、机制稿 §2.2 阶段模型、
-> 设计稿 §1.3、`protocol/states.json`；2026-11-09 人裁（四阶段保留、`fixing` 不落盘）。
+> 状态：**待审 v2**。v1 被两份审查否掉了三处根基（收敛、派生充分性、文档改法），本版逐条修。
+> 本文件只是决策提案，不是定稿；实现未开始。
 
 ---
 
-## 1. 事实基线（都有代码/文档位置）
+## 0. v1 错在哪（先认账，避免"打补丁"）
 
-### 1.1 当前落盘形态
-
-| 事实 | 位置 |
-|---|---|
-| 阶段枚举 = `plan/execute/check/finish` | `protocol/states.json` 的 `phase.enum`；`protocol.py:20` |
-| 阶段模型原文：「检查 fail 留在 check、修复回 execute，内容或规范变化使旧结果失效时回 check 或 execute」 | `protocol/states.json` 的 `phase_model` |
-| `check` 迁移行有三个去向：pass→finish / fail→**留在 check** / 修复完成→execute | `protocol/states.json` 的 `check` 迁移 `to[]` |
-| `fixing` 全库不存在 | 全仓 grep 无该枚举值 |
-
-### 1.2 与 v42 的冲突点
-
-| v42 位置 | 原文 | 与本仓库现状 |
+| v1 主张 | 审查反驳 | 结论 |
 |---|---|---|
-| K10（L107） | 「阶段只有 `plan/execute/fixing/finish`」 | 枚举不同 |
-| S5（L123） | 「`plan → execute → fixing → finish`；**内容变化或 review 判 fail 进入 `fixing`**，由下一次 `task-check` 退出」 | 当前 review fail 不改变 phase |
-| §7.1（L401） | 「持久阶段 `check`（v10）→ `fixing` 阶段 + revision（K3a）｜**不漏**：`check` 是动作不是状态，产物是 revision」 | **把当前做法登记为"已删除机制"** |
+| 「6 处读 `check.result` 收敛为 1 处」 | 六处是**六个不同命题**：结构完整性校验（`check.py:304`）、历史触发枚举（`gates.py:339`）、当前可用性含锚点比较（`gates.py:647`）、归档准入（`gates.py:873`）、审查发起前置（`review.py:710`）、刚写入 check 的局部事实（`tasks.py:2456`） | **撤回**。不再声称收敛，`repair_state` 只是**附加可见性事实** |
+| 「只凭 check/check_history/reviews 派生」 | 最常见失效是**内容变化**（普通交付文件/spec/基线变了但记录没变）；现有实现靠重算锚点并比较（`check.py:118` + `gates.py:631`）才能发现 | **撤回**。派生必须带 `ctx` 并能重算锚点 |
+| 「review fail 后新 pass check ⇒ repairing=None」 | `task-check` 不触碰 reviews；`open_findings()` 独立计算未处置 finding → 会出现"检查通过但 blocking 未关闭"，此时清除"修复中"是假状态 | **撤回**。改为由 `open_findings.blocking` 决定 |
+| 「`since`/`revision` 可派生」 | `reviews.result` **没有时间戳**（`review.py:1425`）；`revision` 是保存计数器（`tasks.py:170`）不是内容版本 | **删除这两个字段** |
+| 「改 v42 §7.1 那条登记」 | v42 是**逐字节冻结的外部决策记录**（仓库副本与 /tmp 原件 sha256 同为 `d06c57e7…cadd`）；且 K10/S4/S5 三处也写着 `fixing` | **改为不改原文**：新增带日期的人裁登记 + 指针 |
+| 「position 只需约 3 处注入」 | 实测 `cli.py` 有 **32 处**直接 `codes.position(`，只有 **2 处**走 `_position_for` | **重写**接入方案，见 §4 |
 
-即：**不是文档滞后，而是两份权威对同一事实的相反登记**（人裁 vs v42 §7.1）。
-
-### 1.3 现在怎么判断"正在修"——6 处分散推断（全部实测）
-
-| 位置 | 代码 | 它在读什么 |
-|---|---|---|
-| `check.py:304` | `if check.get("result") != "pass"` | check 记录自身完整性 |
-| `gates.py:339` | `if result.get("verdict") == "fail"` | 把 review fail 记成"复盘触发事实" |
-| `gates.py:647` | `if current_check.get("result") != "pass" or not anchor` | 收工前核 check 可用（含 `invalidated`） |
-| `gates.py:873` | `if check.get("result") != "pass"` | 归档口拦截 |
-| `review.py:710` | `if check.get("result") != "pass"` | 发起审查前要求 check pass |
-| `tasks.py:2456` | `if check["result"] == "pass"` | 写 `task.check-passed` 回执 |
-
-**六个点各自解释"fail 意味着什么"**。这就是本任务的重复缺陷类型（同一事实多处推断 → 口径漂移）。
+数据勘误（v1 错、本版已改）：测试文件数实为 **73**（不是 12）；测试条数以 §7 为准（**7 条**，v1 的 §6 写 3 条是笔误）；v42 仓库文件名是 `solution-review-v42.md`（带日期名是 /tmp 侧原件）。
 
 ---
 
-## 2. 问题陈述
+## 1. 新定义：`repairing` 不是一个状态，而是「当前不可结案的原因集合」
 
-采用 `fixing` 阶段能带来四件事：
-
-1. **可观测**：状态一眼可见（`phase == fixing`），预览/`status` 不必推断；
-2. **单一字段判断**：门禁只查 `phase`，不再各自读 `check.result`；
-3. **文档一致**：与 v42 的 K10/S4/S5 对齐，审查不再重复报这条漂移；
-4. **迁移表有落点**：`states.json` 可以声明"修复期允许/禁止哪些动作"。
-
-不采用它的理由：枚举从 4 变 5 会牵动 **`phase` 引用 102 行**、`"check"/"execute"` 字面量 **61 处**、`states.json` **11 条迁移**、12 个测试文件；且**线性枚举与"多 reviewer 陆续交报告 + 你已在按首批 finding 修"并发场景天然冲突**（一个 `phase` 装不下"评审进行中"与"修复中"两件事）。
-
-**本提案的目标：把上面 1–4 全部拿到，但不动枚举、不推翻人裁。**
-
----
-
-## 3. 方案：`repairing` 作为显式派生事实
-
-### 3.1 定义
-
-> **修复中（repairing）**＝最近一次检查判 fail（可含被判失效），**或**最近一轮审查结论为 fail，
-> 且此后尚未产生一次新的通过结果。
-
-两个触发源都算：v42 说"内容变化或 review 判 fail 进入 fixing"——两者目的相同（有待修的失败）。
-
-### 3.2 数据形状（派生，不落盘）
-
-```json
-"repairing": {
-  "since": "<触发那一刻的时间>",
-  "source": "check | review",
-  "check_id": "<失败/失效的 check id>",
-  "review_round": 2,          // source=review 时
-  "revision": 7,              // 触发时的任务 revision
-  "failed": [{"verification_id": "v1"}, {"finding_id": "f1"}],   // 已知失败项（可空）
-  "exits": ["修复后重跑 task-check 产生新的通过结果",
-            "按设计稿 §5.6 异常归档（人确认）"]
+```
+repair_state(ctx, task) -> {
+  "repairing": bool,
+  "reasons": [ {"kind": "check", ...} | {"kind": "review", ...} ],
+  "exits": [ ... ]
 }
 ```
 
-**为什么派生而不落盘**（这是本方案最关键的选择）：
+`repairing = reasons 非空`。每个 reason **只引用已存在的投影**，不新增推断：
 
-- 落盘会形成**第二个真相**：`check.result` 与 `repairing` 可能不一致（谁先写、谁后改），而本任务已经反复踩"同一事实两处存"的坑（抽样死锁、回执账本都是这一类）；
-- 派生保证"删掉再算必须等值"（K8 可重建）：`repairing` 完全由 `check` / `check_history` / `reviews` 导出，而这三者都在 committed 记录里；
-- 若将来真的要落盘成 `phase=fixing`，**派生函数可以直接变成阶段推进器**，不需要重写判断逻辑。
+| reason.kind | 构成 | 来源（已有投影） |
+|---|---|---|
+| `check` | `state ∈ {no_check, not_pass, invalidated, anchor_mismatch, rule_version_mismatch}` | 把 `gates.py:631-650` 的判定**提取为函数**（行为不变），`repair_state` 复用同一实现 |
+| `review` | `open_blocking[]`（未处置的 blocking finding）、`unavailable[]`（报告被改后不可用）、`verdict == unavailable` | `review.open_findings()` 原样复用 |
 
-### 3.3 单一实现（唯一判定处）
+### 为什么这样定义能自动覆盖审查提的反例
 
-```python
-# tasks.py
-def repair_state(task):
-    """修复中的显式事实；全库只在这里判定。返回 None 或 3.2 形状的 dict。"""
+| 审查反例 | 新定义下的结果 |
+|---|---|
+| 从未跑 check（a-1 反例 1） | `check.state = no_check` → `repairing = true`（`reasons` 非空），不再与门禁矛盾 |
+| 内容改了、没重跑 check（a-2） | `anchor_mismatch` → `repairing = true` |
+| review fail 后新 pass check、blocking 未处置（b-4 / a-3） | `open_blocking` 仍非空 → **仍为 true**，不会出现假"已修复" |
+| 单份报告已导入、轮次尚未判定（a-5 边审边修） | 导入即计入 `open_findings`，blocking 未处置 → `repairing = true`（不需要 verdict 存在） |
+| 审查不可用（`unavailable`） | 单独 reason，出口是"补真实审查 / 人确认异常归档" |
+| 误报 finding 被 disposition 掉、未重跑 check | `open_blocking` 变空，但 `check.state` 仍 pass → `repairing = false`（正确：无需再改代码） |
+
+### 明确不做的
+
+- **不替换任何现有判断**（撤回 v1 的"六处收敛"与源码扫描断言）。六个点位语义不变，`repair_state` 只被"展示"与"下一步指引"消费。
+- **不落盘**（仍是派生，避免第二真相）。
+- **不加修复期准入规则**（拒绝扩面/改标准之类）——同类风险已由 K6 第五类与"改标准要 judgment"覆盖。
+- **不改阶段枚举**（`phase` 引用 102 行、`"check"/"execute"` 字面量 61 处、`states.json` 11 条迁移、73 个测试文件含相关字面量）。
+
+---
+
+## 2. 数据形状（只保留可导出的字段）
+
+```json
+{
+  "repairing": true,
+  "reasons": [
+    {"kind": "check", "state": "anchor_mismatch", "check_id": "20261110-…",
+     "check_ended_at": "2026-11-10T12:00:00Z"},
+    {"kind": "review", "open_blocking": [{"finding_id": "f1", "severity": "blocker"}],
+     "round": 2}
+  ],
+  "exits": ["修复后重跑 task-check，使 check 重新可用",
+            "对 blocking finding 按 K4b 关闭（非提出者复核）",
+            "人确认按设计稿异常路径归档"]
+}
 ```
 
-所有展示与门禁都调它，不再各写 `check.get("result") != "pass"`。
-
-### 3.4 落点（三处，都是"读一处"）
-
-| 落点 | 做法 | 为什么需要 |
-|---|---|---|
-| **结果对象 `position`** | `codes.position(..., repairing=None)`；`cli._position_for()` 与 `tasks.py` 的 position 生成点注入 | 66 处 `position(...)` 调用**不逐个改**，只在少数生成点注入；任何驱动方（含未来的多 agent 编排器）读 `position.repairing` 就知道"现在该修" |
-| **`wf status` 与收工预览** | 各显示一行：`[修复中] check <id> 判 fail（第 2 轮审查 fail）；出口：修复后重跑 task-check / 人确认异常归档` | 人只看一屏；这是 `fixing` 的可观测性来源 |
-| **`states.json` 迁移表** | 在 `check` 迁移行补子句：`from: {phase: check, condition: "结果 fail 或结果被判定失效"} → to: {phase: check, repairing: true}`；并写明出口 | 让"修复中"作为**迁移事实**有权威落点（这是 `fixing` 唯一的硬优势，不能不补） |
-
-### 3.5 退出与边界（必须写死，避免又一处推断）
-
-| 情形 | `repairing` |
-|---|---|
-| 从未跑过 check | `None` |
-| 最新 check = pass，且无 fail 审查结论 | `None` |
-| 最新 check = fail | **有**（`source=check`） |
-| 最新 check 被后续变化判失效（`invalidated`） | **有**（`source=check`） |
-| 最新一轮 review 结论 = fail | **有**（`source=review`） |
-| review fail 后又跑了一次 pass check | `None`（已有新通过结果） |
-| 任务暂停/挂起 | **仍为有**（暂停不消除失败事实），`status` 显示"暂停（修复中）" |
-| 已归档（正常/异常） | `None` |
-| 已重新规划（replan） | 由新 check 结果决定；replan 本身不清除失败事实 |
-
-### 3.6 文档同批改（否则每轮审查重复报）
-
-| 文档 | 改动 |
-|---|---|
-| 机制稿 §2.2 阶段模型段 | 增一句：「`check` 是阶段值；**修复中**是由 check 结果与审查结论派生的显式事实（不落盘），见 §9.4」 |
-| 机制稿 §9.4 | 增一段：`repairing` 的派生依据、退出条件、三个落点 |
-| **v42 分析稿 §7.1（L401）** | 把「持久阶段 `check`」从"已删除机制"改为**人裁口径**：`check` 是阶段值、`fixing` 不落盘、修复中由派生事实表达。**这一步必须做**，否则 v42 会把正确实现登记为"回归" |
+**已删除**：`since`（审查侧无时间戳，无法重建；写入当前值会让派生结果随无关操作变化）、`revision`（保存计数器，不是内容版本）、`failed`（与 `open_findings` 的"未处置"语义混同）。
+**保留** `check_ended_at`：`check` 记录自带 `started_at/ended_at`（`check.py` 结果写入处），属真实现有事实。
 
 ---
 
-## 4. 明确不做（避免僵硬）
+## 3. 退出条件（唯一）
 
-| 不做 | 理由 |
+> `repairing = false` ⇔ `check.state` 为 `ok` **且** `open_blocking` 为空 **且** 无 `unavailable` 报告。
+
+按 §1 的构成，这等价于"当前检查可复用、且没有未关闭的阻断问题"。措辞上不再说"修复完成"——因为**检查通过不等于审查提的问题已解决**（a-3）。
+
+---
+
+## 4. `position` 接入（重写）
+
+v1 说"少数生成点注入"与实测不符（32 处直接构造、仅 2 处走 `_position_for`）。本版改为**明确的两段式**：
+
+1. **新增统一构造器** `tasks.position_for(ctx, task, **overrides)`：内部调 `codes.position(...)` 并填 `repairing`。
+2. **只改任务级结果点位**（实测 18 处 `scope="task"` 构造在 `cli.py`，另有 `tasks.py` 内的任务级结果）：全部改用 `tasks.position_for`。**非任务级**结果（install / maintenance / session 等）**不带**该字段。
+3. **缺省语义写死**：任务级结果**总是带** `position.repairing`（bool），非任务级**总是没有**；文档与测试各固定一条，杜绝"缺席 = 不在修"的歧义。
+4. `review.py` 的 launch/context/import/decide（含 `review.py:1459` 的 fail 返回）属任务级，一并改用构造器——这是"修复中"最该出现的返回时刻。
+
+---
+
+## 5. `next` 指引联动（v1 缺失，b-6）
+
+`protocol.next_for` 现在只看 挂起 > 暂停 > 位置 > 会话。接入后必须给出优先级，否则会出现"修复中 + 下一步归档"：
+
+> 挂起 > 暂停 > **重新规划中（phase=plan）** > **修复中** > 位置 > 会话
+
+- `phase=plan` 优先于修复中：replan 后旧 fail check 仍在，但人的决定是重新规划，此时横幅不应说"去修"（b-6 / a-6 的 replan 情形）；
+- 修复中的 `next` 文案直接取 `repair_state.exits[0]`，不再另写一套。
+
+---
+
+## 6. `states.json` 的落点（改为正交声明）
+
+v1 想在 `check` 迁移行加子句，但 `repairing` 为真时可处于 **plan（replan 后）/ execute（修复回做）/ check / finish（review fail 在 pass 之后）** 四种位置，写进 `check` 行会把事实登记窄（b-5）。
+
+改为：在 `phase_model` 段落增一句——**「修复中与阶段正交：它由 check 可用性与未关闭 blocking 派生，可同时出现在 plan/execute/check/finish 任一处；阶段迁移表不因它新增边」**。迁移表仍是唯一权威，且不再被写窄。
+
+---
+
+## 7. 文档同步（不改 v42 原文）
+
+| 动作 | 说明 |
 |---|---|
-| **不加"修复期准入规则"**（如修复期禁止扩面/禁止改标准） | 那层是 v42 反复警告的机械僵硬；同类风险已由 K6 第五类（扩面须人确认）与"改标准要 judgment"覆盖。`repairing` 已是显式事实，将来要加规则不必再改数据模型 |
-| **不落盘、不改枚举** | 见 3.2；保持单一真相与 K8 可重建 |
-| **不用 `repairing` 阻断任何动作** | 它的用途是**可见与可驱动**，不是新的门禁。归档口仍按现有 `check.result != pass` 拦（`gates.py:873` 不动） |
+| **新增** `analysis/ruling-repairing-vs-fixing.md` | 带日期的人裁登记：为什么选"派生事实"而非 `fixing` 阶段；逐条列出与 v42 **K10（L107）/ S4（L122）/ S5（L123）/ §7.1（L401）** 的差异与理由；文末给"若将来改回 `fixing`，本派生函数即阶段推进器"的迁移说明 |
+| 机制稿 §2.2 阶段模型段 | 增一句「修复中与阶段正交」+ 指向上面那份裁定 |
+| 机制稿 §9.4 | 增「`repair_state` 的构成、退出条件、三个落点（position / status+预览 / next）」 |
+| v42 原文 | **一个字节都不改**（逐字节冻结的外部决策记录；仓库副本与 /tmp 原件 sha256 同为 `d06c57e7…cadd`） |
 
 ---
 
-## 5. 兼容性论证（未来多 agent 审查）
-
-未来形态大概率是**并行的、交错的**：A 交报告 → C 还没交 → 你已按 A 的 finding 修 → B 又提新 finding。
-
-| 需要 | 线性 `fixing` | 本方案（正交标记） |
-|---|---|---|
-| 同时"评审进行中 + 修复中" | 装不下（`phase` 只能一个值） | 装得下：`reviews` 记评审，`repairing` 记修复 |
-| 再加 `awaiting-review` / `disputed` 等 | 枚举膨胀，11 条迁移逐条改 | 加标记或 `reviews` 字段即可 |
-| 驱动方读"该谁动" | 读 `phase` | 读 `position.repairing`（同样一处） |
-| 每轮审查绑定哪次 check | 无关（靠 anchor） | 无关（靠 anchor） |
-
-**真正的扩展性接缝不在阶段枚举**，而在：`anchor{check_id, check_anchor}` + `revision`（评审绑定）、`rounds[].round_ids` + `attempts[].outcome`（历史可重建）、`launch.slots[]`（多 reviewer 身份）、dispositions + 跨轮 proposers（K4b）。这些都已存在。
-
----
-
-## 6. 影响面与工作量（实测）
+## 8. 影响面与工作量（实测）
 
 | 项 | 数量 | 说明 |
 |---|---|---|
-| 新增判定函数 | 1 个 | `tasks.repair_state` |
-| 收敛分散推断 | 6 处 → 1 处 | 见 1.3；其中 `gates.py:873` 的**拦截行为不变**，只把"为什么拦"的说明改为读同一事实 |
-| `codes.position` | 加 1 个可选参数 | 66 处调用点不用逐个改 |
-| `position` 注入点 | `cli._position_for` + `tasks.py` 少数生成点 | 约 3 处 |
-| `states.json` | 1 处子句 | `check` 迁移行 |
-| 文档 | 机制稿 2 段 + v42 §7.1 1 条改口径 | 见 3.6 |
-| 测试 | 新增 3 条 | 见 §7 |
+| 新增 | `tasks.repair_state(ctx, task)` + `tasks.position_for(ctx, task)` | 2 个函数 |
+| 提取 | `gates` 的 check 可用性判定 → 函数（行为不变） | 1 处重构 |
+| 改点位 | `cli.py` 任务级 18 处 + `tasks.py` 任务级结果 + `review.py` 4 处 | 全部走 `position_for` |
+| `protocol.next_for` | 加 `repairing`/`phase=plan` 优先级 | 1 处 |
+| `states.json` | `phase_model` 一句 | 不加迁移边 |
+| 文档 | 新增裁定 1 份 + 机制稿 2 段 | 不改 v42 |
+| 测试 | **7 条**（见 §9） | —— |
 
 ---
 
-## 7. 验收标准（每条都能回答"它防的失败真实存在"）
+## 9. 验收标准（7 条，每条对得上一个真实失败）
 
-| 测试 | 防的失败 |
-|---|---|
-| check fail 后 `wf status` 与预览出现「修复中」 | 之前人看不出"在修"，只能靠猜 |
-| 同一状态下 `position.repairing.source == "check"` | 驱动方要自己推断 |
-| review fail（无新 check）也进「修复中」，`source == "review"` | v42 说 review fail 进入 fixing；当前完全不可见 |
-| 跑出一次 pass check 后 `repairing is None` | 修完了还挂着"修复中"（假状态） |
-| 暂停期间仍显示「暂停（修复中）」 | 暂停把失败事实抹掉（丢事实） |
-| 归档后 `repairing is None` | 归档后仍标"在修" |
-| 归档口仍拒非 pass check（行为不变） | 有人把"可见事实"误当"门禁替代" |
+| # | 断言 | 防的失败 |
+|---|---|---|
+| 1 | 无 check 时 `repair_state(ctx, task).repairing is True`，`reasons[0].state == "no_check"` | v1 会把"没跑过"当"没在修" |
+| 2 | 内容改动后（未重跑 check）`state == "anchor_mismatch"` 且 `repairing is True` | 最常见失效漏报 |
+| 3 | review fail + 重跑 pass check + blocking 未处置 → `repairing is True` | "检查通过"被当成"问题已解决" |
+| 4 | 单份报告已导入、轮次未判定、有未处置 blocking → `repairing is True` | 边审边修场景不可见 |
+| 5 | blocking 全部按 K4b 关闭 且 check 可用 → `repairing is False` | 修完了还挂着 |
+| 6 | `phase=plan`（replan 后）时 `next` 指向批准而非修复 | 与人的决定冲突的横幅 |
+| 7 | 任务级结果都带 `position.repairing`（bool）；`install`/`maintenance` 结果不带 | "缺席"被读成"不在修" |
 
 ---
 
-## 8. 风险与缓解
+## 10. 风险与缓解
 
 | 风险 | 缓解 |
 |---|---|
-| 派生函数与既有 6 处判断出现口径差 | 6 处全部改为调它；新增一条断言"任一处不得再直接比较 check.result"（可用源码扫描，但只扫**函数级**、不扫排版——避免重演"锚排版"的假红） |
-| `repairing` 被误用为门禁 | 文档与测试各写一条"它不是门禁"；归档口逻辑不动 |
-| 未来真的要改成 `fixing` | 派生函数即阶段推进器，改枚举时把它接到 `phase` 上即可，判断逻辑不重写 |
-| 与 v42 §7.1 的对立没销账 | 3.6 要求同批改 v42；不销账就每次审查重报 |
+| 展示层事实被误当门禁 | 归档口、审查前置、check 结构校验**一律不改**；文档与测试各固定一条"它不是门禁" |
+| 两个来源（`gates` 判定 vs `repair_state`）漂移 | 提取为**同一个函数**，`gates` 与 `repair_state` 都调它 |
+| 73 处相关测试受 position 变化影响 | 任务级结果多一个 bool 字段，不改既有字段；先跑全量确认 |
+| 未来真要改回 `fixing` | `repair_state` 即阶段推进器：把它接到 `phase` 上，其余判断不重写 |
 
 ---
 
-## 9. 留给审查者的问题（请重点质疑）
+## 11. 留给审查者的问题（本轮新提，请重点质疑）
 
-1. **`review fail` 也算"修复中"是否过头？** 有些 fail 结论可能只需改判断、不需改代码；把它标"修复中"会不会误导。
-2. **"新的通过结果"作为唯一退出条件是否足够？** 例如人工核验结案（`verify resolve`）后在没重跑 check 的情况下应否退出。
-3. **派生 vs 落盘**：本条选择了派生（单一真相）；若审查方认为"可观测性必须以持久字段呈现"，请给出如何避免第二真相。
-4. **不加入准规则**是否会在多 agent 场景下失控（多个 agent 同时改）——注意 K2 单写者已经排除并发写。
-5. **`position.repairing` 会让结果对象变大**：66 处调用点中绝大多数是错误结果，是否需要在"只在修复中才带该字段"（当前方案）与"始终带 null"之间选择。
+1. §1 用"不可结案原因集合"取代"是否在修复"——**这个改名是否掩盖了语义膨胀**（现在要维护 check 五种状态 + review 三种情形）？
+2. §5 的优先级把"重新规划"排在"修复中"之前：若人 replan 后又想修，是否会被横幅误导？
+3. §4 要求"任务级结果总带该字段"，会让错误返回体变大一档（66 处 position 中约 40 处是任务级）——是否值得？
+4. §9 第 3 条依赖 `open_findings` 的 blocking 判定；若审查报告本身失效（`unavailable`）而 finding 不再可读，是否存在"越修越绿"的空档？
