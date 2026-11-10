@@ -63,6 +63,19 @@ run_suites_parallel() {
   export FIX HERE PY SHARED_RELEASE="$RELEASE_REPO" WF_RELEASE_REPO="$RELEASE_REPO" RESULTS_DIR SOURCE_HOME="$HOME"
   local xargs_rc=0
   printf '%s\n' $list | xargs -P "$JOBS" -I{} unshare -Urm bash "$HERE/run_one.sh" {} || xargs_rc=$?
+  # 并行下 unshare 偶发失败会让某个套件"跑了但没有结果行"。这类缺行是**测量失败**，
+  # 不该直接当成套件失败放过：先串行重跑一次拿到确定结果，重跑仍缺再按失败计。
+  local pre_missing="" suite0
+  for suite0 in $list; do
+    awk -F'\t' -v s="$suite0" 'NF==5 && $1==s && $2 ~ /^-?[0-9]+$/ && $4 ~ /^(ok|bad)$/ {found=1} END{exit !found}' \
+      "$RESULTS_DIR/lines" || pre_missing="$pre_missing $suite0"
+  done
+  if [ -n "$pre_missing" ]; then
+    echo "RETRY-SERIAL:$pre_missing（并行下未产出结果行，串行重跑）"
+    for suite0 in $pre_missing; do
+      link_release; WF_RELEASE_REPO="$RELEASE_REPO" run_suite "$suite0"
+    done
+  fi
   sort -t$'\t' -k1 "$RESULTS_DIR/lines" | awk -F'\t' '{printf "%-18s rc=%s %ss %s | %s\n", $1, $2, $3, $4, $5}'
   local bad malformed missing dup extra
   # 行必须正好 5 段、rc 为整数、状态只取 ok/bad；畸形行单独计失败，
@@ -148,11 +161,15 @@ run_suite() {
   printf '%-18s rc=%s %ss %s\n' "$suite" "$rc" "$elapsed" "$line"
   ran=$((ran+1))
   # 判定：退出码、汇总行里的失败数、输出中的 FAIL 都算失败
-  local bad
+  local bad status
   bad=$(printf '%s\n' "$out" | grep -c '\[FAIL\]')
+  status=ok
   if [ "$rc" -ne 0 ] || [ "$bad" -ne 0 ] || printf '%s' "$line" | grep -qE 'FAIL|(saved|total) 0'; then
-    fail=$((fail+1))
+    fail=$((fail+1)); status=bad
   fi
+  # 串行路径同样落一行结果：否则"跑了但没记录"，汇总只能靠 stdout 猜（结果不可机读）
+  mkdir -p "$RESULTS_DIR"
+  printf '%s\t%s\t%s\t%s\t%s\n' "$suite" "$rc" "$elapsed" "$status" "$line" >> "$RESULTS_DIR/lines"
 }
 
 # 迭代期只跑相关套件：WF_SUITES="r88_tests r89_tests r90_tests" bash run_all.sh

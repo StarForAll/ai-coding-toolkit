@@ -52,6 +52,14 @@ def check():
                                    "subject": ["授权外发"], "choice": "export"},
                "submitted_scope": {"diff": True, "requirement": True, "test_results": True}},
               open(request, "w", encoding="utf-8"), ensure_ascii=False)
+    _auth = os.path.join(root, "export.json")
+    json.dump([{"choice": "export", "paths": ["pkg/**"], "quote": "人同意外发审查材料"}],
+              open(_auth, "w"), ensure_ascii=False)
+    _rc_auth, _payload_auth = H.cli(project, ["authorize", "record", "--task", task_id,
+                                               "--file", _auth, "--json"],
+                                     sid=SID, inputs={"generation": H.generation(project)})
+    if _rc_auth != 0:
+        raise H.Precondition(f"authorize record(export) 失败：{_payload_auth}")
     rc, payload = H.cli(project, ["review-launch", "--task", task_id, "--launch-request", request,
                                   "--implementation-cli", "dsh", "--json"],
                         sid=SID, inputs={"generation": H.generation(project)})
