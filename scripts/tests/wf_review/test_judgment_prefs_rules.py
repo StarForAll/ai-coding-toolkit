@@ -300,3 +300,117 @@ class PreviewBlocksTest(unittest.TestCase):
                 "reviews": {"launches": [{"round": 1}, {"round": 2, "invalidated": True}]}}
         text = judgments.render_preview(task, self._facts())
         self.assertIn("[有效性]  2 轮报告；作废 1 轮", text)
+
+
+class EscalatedSupersedeTest(unittest.TestCase):
+    """审查 a1：人被回答过的 escalated 判断不能继续挡归档（诚实求助不是死路）。"""
+
+    def test_superseded_escalation_no_longer_blocks(self):
+        from wflib import gates
+
+        task = {"judgments": [
+            {"id": "j1", "kind": "关闭", "outcome": "escalated", "escalated_question": "算不算关闭？"},
+            {"id": "j2", "kind": "关闭", "outcome": "applied", "supersedes": "j1", "decision": "算"}]}
+        self.assertEqual(gates.pending_escalations(task), [], "回答过的不应再算待决")
+        self.assertEqual(len(task["judgments"]), 2, "历史必须保留（append-only）")
+
+    def test_unanswered_escalation_still_blocks(self):
+        from wflib import gates
+
+        task = {"judgments": [{"id": "j1", "kind": "关闭", "outcome": "escalated",
+                               "escalated_question": "算不算关闭？"}]}
+        self.assertEqual(len(gates.pending_escalations(task)), 1)
+
+    def test_supersede_only_closes_the_named_item(self):
+        from wflib import gates
+
+        task = {"judgments": [
+            {"id": "j1", "kind": "关闭", "outcome": "escalated"},
+            {"id": "j2", "kind": "标准变更", "outcome": "escalated"},
+            {"id": "j3", "kind": "关闭", "outcome": "applied", "supersedes": "j1"}]}
+        pending = gates.pending_escalations(task)
+        self.assertEqual([item["id"] for item in pending], ["j2"], "只关掉被指向的那条")
+
+
+class SamplingUnevaluatedTest(unittest.TestCase):
+    """审查 a2：没评价的抽样不能算成功样本。"""
+
+    def test_unevaluated_pick_is_not_a_sample(self):
+        from wflib import sampling
+
+        task = {}
+        picks = [{"class": "关闭", "event": "e1"}]
+        state = sampling.record_result(task, picks, evaluations={})   # 空评价
+        self.assertEqual(len(state["results"]), 1)
+        self.assertIs(state["results"][0].get("evaluated"), False)
+        history = sampling.history_from_tasks([task])
+        self.assertEqual(history["关闭"]["samples"], 0, "未评价不能计入样本")
+        self.assertEqual(history["关闭"]["consecutive_ok"], 0)
+
+    def test_evaluated_ok_counts(self):
+        from wflib import sampling
+
+        task = {}
+        sampling.record_result(task, [{"class": "关闭", "event": "e1"}], evaluations={"关闭:e1": "ok"})
+        history = sampling.history_from_tasks([task])
+        self.assertEqual(history["关闭"]["samples"], 1)
+        self.assertEqual(history["关闭"]["consecutive_ok"], 1)
+
+
+class ScaleUntrackedLinesTest(unittest.TestCase):
+    """审查 a3：未跟踪新文件的内容行数要计入规模。"""
+
+    def test_untracked_file_lines_counted(self):
+        import json, os, subprocess, tempfile
+        from pathlib import Path
+        from types import SimpleNamespace
+        from wflib import scale
+
+        root = tempfile.mkdtemp(prefix="wf-scale-")
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=root, check=True)
+        subprocess.run(["git", "config", "user.name", "t"], cwd=root, check=True)
+        (Path(root) / "a.txt").write_text("a\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=root, check=True)
+        subprocess.run(["git", "commit", "-qm", "init"], cwd=root, check=True)
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True,
+                              text=True).stdout.strip()
+        (Path(root) / "big.txt").write_text("x\n" * 1000, encoding="utf-8")
+
+        facts = scale.changes_since(SimpleNamespace(root=root), {"baseline_head": head})
+        self.assertTrue(facts["available"], facts)
+        self.assertEqual(facts["new_files"], 1)
+        self.assertEqual(facts["added"], 1000, "未跟踪文件的 1000 行必须计入 added")
+        self.assertEqual(facts["net"], 1000)
+
+
+class SpecStringPathsTest(unittest.TestCase):
+    """审查 b-F2：字符串形态的 old_paths/new_paths 必须在入口归一，不能被逐字符迭代。"""
+
+    def test_normalize_turns_strings_into_arrays(self):
+        from wflib import spec
+
+        changes = [{"operation": "add", "new_paths": ".wf/spec/rules/calc.md", "content": "x"},
+                   {"operation": "rename", "old_paths": "a.md", "new_paths": "b.md"}]
+        normalized = spec.normalize_changes(changes)
+        self.assertEqual(normalized[0]["new_paths"], [".wf/spec/rules/calc.md"])
+        self.assertEqual(normalized[1]["old_paths"], ["a.md"])
+        # 关键：不再是无 . 前缀时把字符串拆成单字符（静默垃圾校验的来源）
+        self.assertEqual(normalized[1]["new_paths"], ["b.md"],
+                         "字符串必须整体作为一个路径，而不是逐字符")
+
+    def test_validate_does_not_iterate_characters(self):
+        import tempfile
+        from pathlib import Path
+        from wflib import spec
+
+        root = tempfile.mkdtemp(prefix="wf-spec-")
+        (Path(root) / ".wf" / "spec").mkdir(parents=True)
+        (Path(root) / ".wf" / "spec" / "index.md").write_text("---\nschema_version: 1\n---\n", encoding="utf-8")
+        changes = [{"operation": "add", "new_paths": "wf/spec/x.md", "content": "---\nschema_version: 1\n---\n"}]
+        try:
+            spec.validate_changes(root, changes)
+        except spec.SpecError as exc:                      # 允许"目录不存在"这类正常拒绝
+            self.assertNotIn("empty path", str(exc.facts))
+        except Exception as exc:                           # 但不许出 TypeError/单字符垃圾
+            self.fail(f"字符串形态不应导致非结构化异常：{exc!r}")

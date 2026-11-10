@@ -522,6 +522,31 @@ def _check_reference_conflicts(root, old_paths, current_task_id=None):
                                                  "pending": pending})
 
 
+
+
+def normalize_changes(changes):
+    """把每条变更的路径字段归一成数组，作为**唯一事实**往下传。
+
+    历史炸点：`validate_changes` 与 `_apply_change` 各自 `change.get("new_paths") or []`，
+    字符串形态下 `for path in "..."` 会逐字符迭代——轻则 normalize(".") 报空路径，
+    重则把 12 个单字符当目标做冲突检查（静默垃圾校验）。归一必须在入口做一次。
+    """
+    if not isinstance(changes, list):
+        return changes
+    normalized = []
+    for change in changes:
+        if not isinstance(change, dict):
+            normalized.append(change)
+            continue
+        item = dict(change)
+        for key in ("old_paths", "new_paths"):
+            if key in item:
+                item[key] = _path_list(item, key)
+        normalized.append(item)
+    return normalized
+
+
+
 def validate_changes(root, changes, resume=False, current_task_id=None):
     """整批预校验：结构、路径、重命名源目标、删除前的依赖解除目标；不写任何文件。
 
@@ -532,6 +557,7 @@ def validate_changes(root, changes, resume=False, current_task_id=None):
 
     if not isinstance(changes, list):
         raise SpecError("WF_RECORD_INVALID", {"reason": "changes must be an array"})
+    changes = normalize_changes(changes)      # 唯一事实：下游不再碰原始字段
     for change in changes:
         if not isinstance(change, dict):
             raise SpecError("WF_RECORD_INVALID", {"reason": "change entry must be an object"})
@@ -612,7 +638,7 @@ def validate_changes(root, changes, resume=False, current_task_id=None):
 
     # R19：整批候选冲突（源唯一、目标唯一、目标不得是另一变更的源）
     sources, targets = [], []
-    for index, change in enumerate(changes):
+    for index, change in enumerate(changes):     # change 已在入口归一为数组
         for path in change.get("old_paths") or []:
             sources.append((index, paths_mod.normalize(path)))
         for path in change.get("new_paths") or []:
@@ -654,6 +680,10 @@ def apply_changes(root, changes, task, resume=False, current_task_id=None):
 
 
 def _apply_change(root, change, task, applied, resume=False):
+    change = dict(change or {})
+    for key in ("old_paths", "new_paths"):
+        if key in change:
+            change[key] = _path_list(change, key)   # 应用前再归一一次（本函数也可能被单独调用）
     operation = change.get("operation")
     old_paths = change.get("old_paths") or []
     new_paths = change.get("new_paths") or []

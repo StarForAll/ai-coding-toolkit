@@ -1971,11 +1971,14 @@ def cmd_task_start(ctx, args):
                                                    "current": current.get("version")})
         if task.get("kind") == "ordinary":
             config_record, problems = config.load_project_config(ctx.root, allow_missing=True)
-            if config_record is None:
-                raise TaskError("WF_CAPABILITY_UNAVAILABLE", {"missing": ".wf/project-config.json",
-                                                             "reason": "ordinary task requires project config"})
-            if not os.path.exists(join(ctx.root, ".wf/baseline.md")):
-                raise TaskError("WF_CAPABILITY_UNAVAILABLE", {"missing": ".wf/baseline.md"})
+            if config_record is None or not os.path.exists(join(ctx.root, ".wf/baseline.md")):
+                # 与 task-approve 同口径：新项目冷启动要给可执行出口，不能只报"缺文件"让人猜
+                missing = (".wf/project-config.json" if config_record is None else ".wf/baseline.md")
+                raise TaskError("WF_CAPABILITY_UNAVAILABLE",
+                                {"missing": missing, "reason": "ordinary task requires project config and baseline",
+                                 "exits": ["先建一个 bootstrap 任务，用维护入口生成 .wf/project-config.json 与 .wf/baseline.md",
+                                           "存量项目：按项目既有配置补齐这两个文件后重试"]},
+                                next_="建 bootstrap 任务生成基线与配置（与 task-approve 的提示一致）")
         if not scope.has_git(ctx.root):
             raise TaskError("WF_CAPABILITY_UNAVAILABLE", {"reason": "Git HEAD required", "missing": "git HEAD"})
         head = scope.head(ctx.root)

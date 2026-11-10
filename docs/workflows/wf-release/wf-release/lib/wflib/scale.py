@@ -25,6 +25,21 @@ def _git(root, args):
     return proc.stdout
 
 
+
+
+def _count_lines(path):
+    """二进制或不可读按 0 行计（只影响规模提示，不阻断）；不猜内容。"""
+    try:
+        with open(path, "rb") as handle:
+            data = handle.read()
+    except OSError:
+        return 0
+    if b"\x00" in data[:8192]:
+        return 0
+    return data.count(b"\n") + (1 if data and not data.endswith(b"\n") else 0)
+
+
+
 def changes_since(ctx, task):
     """自任务基线（首次开工的 baseline_head）到当前工作树的累计变化。
 
@@ -50,6 +65,9 @@ def changes_since(ctx, task):
     # 未跟踪的新文件不计入 numstat：补一次数量，避免"净增删行"把新交付算成 0
     untracked = _git(ctx.root, ["ls-files", "--others", "--exclude-standard"]) or ""
     new_files = [line for line in untracked.splitlines() if line.strip()]
+    # 未跟踪文件的**内容**也要计入：只补数量会让"新增 1000 行"显示成净增 0，规模判断失真。
+    for relative in new_files:
+        added += _count_lines(os.path.join(ctx.root, relative))
     return {"available": True, "base": base, "files": files + len(new_files),
             "new_files": len(new_files), "added": added, "deleted": deleted,
             "net": added - deleted}

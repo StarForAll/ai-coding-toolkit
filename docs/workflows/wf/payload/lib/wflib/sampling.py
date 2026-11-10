@@ -220,6 +220,9 @@ def record_result(task, picks, evaluations=None):
             entry["reason"] = "结论或依据不成立"
         elif verdict == "ok":
             entry["failed"] = False
+        else:
+            # 没有评价就是没有评价：留在记录里（事实），但**不进**成功率统计
+            entry["evaluated"] = False
         results.append(entry)
     state["results"] = results
     task["sampling"] = state
@@ -236,6 +239,8 @@ def history_from_tasks(tasks):
             name = entry.get("class")
             if name not in history:
                 continue
+            if entry.get("evaluated") is False:
+                continue      # 未评价的选样不构成样本：不能把"没看"算成"通过"
             item = history[name]
             item["samples"] += 1
             if entry.get("failed"):
