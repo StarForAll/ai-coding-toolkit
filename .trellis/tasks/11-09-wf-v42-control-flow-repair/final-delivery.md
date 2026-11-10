@@ -27,7 +27,7 @@
 
 | 命令 | 结果 |
 |---|---|
-| `python3 -m unittest discover -s scripts/tests -t . -q` | **294 OK** |
+| `python3 -m unittest discover -s scripts/tests -t . -q` | **305 OK**（每次改动后**重跑全文**，不再只跑子集） |
 | `python3 scripts/tests/wf_runtime/full/run_all.sh` | **132 项 / 失败 0 / GATE-OK（豁免 0）**；repro 68/68 |
 | `python3 scripts/build-wf-release.py --verify` | **OK 字节复现（70 assets）** |
 | `python3 scripts/validate-wf-design.py` | **OK**（定义命中 100% / 消费点缺项 0） |
