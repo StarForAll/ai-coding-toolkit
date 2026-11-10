@@ -178,7 +178,9 @@ run_suite() {
 # 一旦它们转绿，本脚本会失败并提示从清单里移除 —— 清单不允许腐烂：
 # 豁免必须"要么一直红且被看见，要么被修掉并销账"，不能悄悄变成永久绿灯。
 # 修好一个就从这里删一个（删完即成为必过项）。
-KNOWN_LEGACY="${WF_KNOWN_LEGACY-cp3_tests r67_tests r68_tests r69_tests r70_tests r71_tests}"
+# 2026-11-10：cp3/r67/r68/r69/r70/r71 已全部修绿，清单清空——现在**没有豁免**。
+# 以后要加条目，必须同时在 task 记录里写明"为什么现在修不了、谁来修"，否则不许进清单。
+KNOWN_LEGACY="${WF_KNOWN_LEGACY-}"
 
 SELECTED="${WF_SUITES:-}"
 if [ -n "$SELECTED" ]; then

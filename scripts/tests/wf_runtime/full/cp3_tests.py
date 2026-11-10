@@ -135,6 +135,11 @@ launch = {"implementation_clis": ["dsh"],
           "readable_scope": {"code": ["src/**"], "spec": [".wf/spec/**"], "prd": [".wf/tasks/**/prd.md"]},
           "exclusions": [".env"], "export_decision": "human (test)"}
 json.dump(launch, open("/tmp/cp3_launch.json", "w"), ensure_ascii=False)
+# K6 第 3 类：外发以"确认入库"为准（请求里的 export_decision 只是声明）
+json.dump([{"choice": "export", "paths": ["src/**"], "quote": "人同意把材料外发给审查 CLI"}],
+          open("/tmp/cp3_export.json", "w"), ensure_ascii=False)
+wf(["authorize", "record", "--task", task3, "--file", "/tmp/cp3_export.json", "--json"],
+   {"generation": gen3}, "sess-Q3")
 rc, payload, _ = wf(["review-launch", "--task", task3, "--launch-request", "/tmp/cp3_launch.json", "--json"],
                     {"generation": gen3}, "sess-Q3")
 rec("A7 round 1 发起", "pass", (payload or {}).get("code"), rc == 0)
@@ -147,8 +152,11 @@ rec("A7 两轮落在同一 attempt", "attempts=[{number:1,round_ids:[1,2]}]",
     json.dumps(attempts, ensure_ascii=False), len(attempts) == 1 and attempts[0]["round_ids"] == [1, 2])
 rc, payload, _ = wf(["review-launch", "--task", task3, "--launch-request", "/tmp/cp3_launch.json", "--json"],
                     {"generation": gen3}, "sess-Q3")
-rec("A7 第三轮被拒", "WF_SEMANTIC_DECISION", (payload or {}).get("code"),
-    (payload or {}).get("code") == "WF_SEMANTIC_DECISION")
+# round_ids 现在只作观察与历史重建，不再作为拒绝依据（见 review.py 对应注释）：
+# 轮次上限不是机械门禁，是否再开一轮由人/判定决定。故第三轮应放行并继续记在同一 attempt。
+rec("A7 第三轮放行且继续记在同一 attempt", "WF_OK 且 round_ids 含 3", (payload or {}).get("code"),
+    (payload or {}).get("code") == "WF_OK"
+    and 3 in ((json.load(open(os.path.join(dir3, "task.json")))["reviews"]["attempts"][0].get("round_ids")) or []))
 wf(["task-pause", "--task", task3, "--reason", "CP3 收尾", "--json"], {"generation": gen3}, "sess-Q3")
 wf(["writer", "release", "--json"], {"generation": gen3}, "sess-Q3")
 
