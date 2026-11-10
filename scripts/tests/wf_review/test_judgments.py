@@ -119,7 +119,12 @@ class JudgmentWaiverTest(unittest.TestCase):
 
     def test_human_waiver_passes(self):
         facts = judgments.skeleton_ids(task())
+        # 乙口径：豁免除 `human:` 前缀外还要带人给出的确认摘要（前缀只是字符串约定）
         self.assertEqual(judgments.validate(
-            base(waived_by="human:xzc", decision="不修", evidence_refs=["v:v1"]), facts), [])
+            base(waived_by="human:xzc", decision="不修", evidence_refs=["v:v1"],
+                 waiver={"attestation_digest": "sha256:" + "0" * 64}), facts), [])
+        self.assertTrue(any("确认摘要" in p.get("reason", "") for p in judgments.validate(
+            base(waived_by="human:xzc", decision="不修", evidence_refs=["v:v1"]), facts)),
+            "只写 human: 前缀不构成豁免")
 
 

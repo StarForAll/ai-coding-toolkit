@@ -425,6 +425,12 @@
       "kind": "skill",
       "required": true,
       "source_path": "skills/wf-tdd/SKILL.md"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
+      "source_path": "payload/lib/wflib/attestation.py"
     }
   ],
   "note": "首轮开发态部署用：只登记资产清单、版本与必需标记；字节哈希由部署工具现算（实现稿 §4.6）",

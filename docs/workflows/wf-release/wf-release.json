@@ -71,6 +71,16 @@
       "target_relative": ".wf/lib/wflib/assets.py"
     },
     {
+      "digest": "sha256:fce7ca80f4bfda835d5a2e5853af38a608eff69bf821ce6b6f8869cc4698532a",
+      "executable": false,
+      "file_kind": "file",
+      "kind": "lib",
+      "required": true,
+      "source_path": "wf-release/lib/wflib/attestation.py",
+      "target_class": "project_wf",
+      "target_relative": ".wf/lib/wflib/attestation.py"
+    },
+    {
       "digest": "sha256:c5972391ab3145bbb2cfac1cfae1609ac7016ee678514060effcc208ff71bd09",
       "executable": false,
       "file_kind": "file",
@@ -91,7 +101,7 @@
       "target_relative": ".wf/lib/wflib/check.py"
     },
     {
-      "digest": "sha256:28759b487120599cea76b5cbc3a4f025fadf74202dadf0be7f61553efb7a16de",
+      "digest": "sha256:1d81a6c2fabc52e112364991a651c335a941362c63d62bf59ec8762312856333",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -161,7 +171,7 @@
       "target_relative": ".wf/lib/wflib/identity_store.py"
     },
     {
-      "digest": "sha256:1292dda7d93e3cda7fa7dec478d8b524f04286d2d8c21f784e37f9f3400f15e9",
+      "digest": "sha256:80b3395fbff844cc29af7932a152fc8d2b2825f260d6d0111b793c86a364954f",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -261,7 +271,7 @@
       "target_relative": ".wf/lib/wflib/runs.py"
     },
     {
-      "digest": "sha256:2706107d00a9bd09d0338ca91575f3afcd342a7eb38747b70d5c7d7456b65b1c",
+      "digest": "sha256:57dd7e9f34e45b9ab535f04d56a49ac76d233c9e5ae64d2acdf42e2290c5eae6",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -771,7 +781,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:d6c42920dd19666ccd6074ed4f7a474450c26acce33583a1240eadf5322ce1c8",
+    "rules_digest": "sha256:3bbbe1a75dbadba422f5ec08122885f0e5112063e85e76647d9e23797bd3dc59",
     "systems": [
       "linux"
     ],

@@ -520,3 +520,47 @@ class PreviewRealFactsTest(unittest.TestCase):
         paths = [path for path, _source in judgments._new_paths(ctx, task)]
         self.assertIn("other/new_out.py", paths)
         self.assertNotIn("pkg/new_in.py", paths, "批准面内的新增不算扩面")
+
+
+class HumanAttestationTest(unittest.TestCase):
+    """审查 A4（乙口径）：四处"只能由人给出"的事实都不能只靠字符串前缀。"""
+
+    def _file(self, payload):
+        import json, tempfile
+        from pathlib import Path
+
+        path = Path(tempfile.mkdtemp(prefix="wf-att-")) / "attest.json"
+        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        return str(path)
+
+    def test_rejects_ai_self_assertion(self):
+        from wflib import attestation
+
+        problems = attestation.problems_of({"by": "ai", "at": "t", "quote": "q",
+                                            "source": "user-declared"}, action="waive")
+        self.assertTrue(any("human:" in item["reason"] for item in problems))
+
+    def test_rejects_missing_fields(self):
+        from wflib import attestation
+
+        problems = attestation.problems_of({"by": "human:xzc"}, action="waive")
+        self.assertEqual({item.get("field") for item in problems}, {"at", "quote", "source"})
+
+    def test_accepts_human_declaration_and_stamps_digest(self):
+        from wflib import attestation
+
+        path = self._file({"by": "human:xzc", "at": "2026-11-10T00:00:00Z",
+                           "quote": "我确认这些文件由我处置", "source": "user-declared"})
+        payload, digest, problems = attestation.load(path, action="waive")
+        self.assertEqual(problems, [])
+        self.assertTrue(str(digest).startswith("sha256:"))
+        stamped = attestation.stamp(payload, digest)
+        self.assertEqual(stamped["by"], "human:xzc")
+        self.assertEqual(stamped["attestation_digest"], digest)
+
+    def test_missing_file_is_a_refusal_with_exits(self):
+        from wflib import attestation
+
+        payload, digest, problems = attestation.load(None, action="sampling.reviewed")
+        self.assertIsNone(payload)
+        self.assertTrue(any(item.get("exits") for item in problems))

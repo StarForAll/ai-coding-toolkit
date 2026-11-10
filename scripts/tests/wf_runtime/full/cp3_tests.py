@@ -136,7 +136,9 @@ launch = {"implementation_clis": ["dsh"],
           "exclusions": [".env"], "export_decision": "human (test)"}
 json.dump(launch, open("/tmp/cp3_launch.json", "w"), ensure_ascii=False)
 # K6 第 3 类：外发以"确认入库"为准（请求里的 export_decision 只是声明）
-json.dump([{"choice": "export", "paths": ["src/**"], "quote": "人同意把材料外发给审查 CLI"}],
+json.dump([{"choice": "export", "paths": ["src/**"], "quote": "人同意把材料外发给审查 CLI",
+                "by": "human:test", "at": "2026-11-10T00:00:00.000000Z",
+                "source": "user-declared"}],
           open("/tmp/cp3_export.json", "w"), ensure_ascii=False)
 wf(["authorize", "record", "--task", task3, "--file", "/tmp/cp3_export.json", "--json"],
    {"generation": gen3}, "sess-Q3")

@@ -177,7 +177,9 @@ def launch(round_no):
     json.dump(request, open(path, "w"), ensure_ascii=False)
     # K6 第 3 类：外发以"确认入库"为准（请求里的 export_decision 只是声明）
     export_path = f"/tmp/r70_export_{round_no}.json"
-    json.dump([{"choice": "export", "paths": ["pkg/**"], "quote": "人同意把材料外发给审查 CLI"}],
+    json.dump([{"choice": "export", "paths": ["pkg/**"], "quote": "人同意把材料外发给审查 CLI",
+                "by": "human:test", "at": "2026-11-10T00:00:00.000000Z",
+                "source": "user-declared"}],
               open(export_path, "w"), ensure_ascii=False)
     wf(["authorize", "record", "--task", task_id, "--file", export_path, "--json"],
        {"generation": gen()}, "sess-W1")

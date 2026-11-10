@@ -373,9 +373,14 @@ def backfill_status(picks, judgments, backfill_limit=2):
                      if over_limit else "")}
 
 
-def mark_reviewed(task, *, by="human", quote=None):
-    """人的声明"已看过预览"——强化抽样期的**结束前置**（框架不机械检测）。"""
+def mark_reviewed(task, *, by="human", quote=None, attestation=None):
+    """人的声明"已看过预览"——强化抽样期的**结束前置**。
+
+    必须带**人给出的确认摘要**（乙口径）：没有它，"人已看过"就只是 AI 的自述。
+    框架仍不机械检测人是否真看了（不追踪停留/翻页），但能核"这话出自人给的确认文件"。
+    """
     state = dict(frozen(task))
-    state["reviewed_by_human"] = {"at": records.now_str(), "by": by, "quote": quote}
+    state["reviewed_by_human"] = {"at": records.now_str(), "by": by, "quote": quote,
+                                  "attestation": attestation or {}}
     task["sampling"] = state
     return state["reviewed_by_human"]

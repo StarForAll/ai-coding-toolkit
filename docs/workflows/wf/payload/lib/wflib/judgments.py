@@ -275,6 +275,11 @@ def validate(entry, facts):
     if waived_by and not waived_by.startswith("human:"):
         problems.append({"reason": "豁免只能由人给出（waived_by 须为 human:<来源>）",
                          "waived_by": waived_by})
+    if waived_by and not (entry.get("waiver") or {}).get("attestation_digest"):
+        # 前缀只是字符串约定：AI 自己写 human: 就能"免检"。必须附人给出的确认摘要（乙口径）。
+        problems.append({"reason": "豁免要带人给出的确认摘要（waiver.attestation_digest）",
+                         "waived_by": waived_by,
+                         "exits": ["由人把确认写成 JSON（by/at/quote/source）后用 --attestation 传入"]})
     # 判「沿用」必须引用一个**存在**的漂移位置（`d:`）：位置存不存在是事实，相关性是判断
     drift_ids = {str(item.get("id")) for item in (facts.get("drift_diffs") or [])
                  if isinstance(item, dict) and item.get("id")}

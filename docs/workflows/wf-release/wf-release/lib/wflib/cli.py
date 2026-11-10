@@ -12,7 +12,7 @@ import sys
 import traceback
 import uuid
 
-from . import actions, assets, codes, config, lock, protocol as protocol_mod, records, session as session_mod, writer as writer_mod
+from . import actions, assets, attestation as attestation_mod, codes, config, lock, protocol as protocol_mod, records, session as session_mod, writer as writer_mod
 from .paths import join
 
 
@@ -2096,6 +2096,18 @@ def cmd_authorize(ctx, args):
                 raise CliError("WF_SEMANTIC_DECISION",
                                {"reason": "确认必须带人的 quote（谁在什么范围确认了什么）",
                                 "action": action})
+            # 乙口径：K6 的信任根不能只靠"决定文件里有 quote"。要求显式的来源声明
+            # （`source: user-declared` + `by: human:<来源>`），并在入库副本里留下摘要可审计。
+            _problems = attestation_mod.problems_of(
+                {"by": entry.get("by") or (entry.get("source") and "human:" + str(entry.get("source"))),
+                 "at": entry.get("at"), "quote": entry.get("quote"),
+                 "source": entry.get("source") or "user-declared"}, action=action)
+            if _problems:
+                raise CliError("WF_SEMANTIC_DECISION",
+                               {"reason": '授权确认要能指明"谁给的"（乙口径：by=human:<来源>）',
+                                "action": action, "problems": _problems,
+                                "exits": ["在决定文件里补 by: human:<来源> 与 source: user-declared",
+                                          "由人重写该决定文件（AI 不得代写）"]})
             info = authorize_mod.record_authorization(
                 directory, action, entry,
                 raw_copy_dir=join(ctx.root, ".wf/.runtime/decisions"))
@@ -2142,6 +2154,17 @@ def cmd_sampling(ctx, args):
             _record, holder = ctx.require_held(task=task_id)
             directory = tasks_mod.task_dir(ctx.root, task_id)
             task = records.load_json(os.path.join(directory, "task.json"))
+            _payload, _digest, _problems = attestation_mod.load(
+                args.value("--attestation"), action="sampling.evaluate")
+            if _problems:
+                raise CliError("WF_SEMANTIC_DECISION",
+                               {"reason": "抽样评价要有人确认（否则等于 AI 给自己打分）",
+                                "problems": _problems,
+                                "exits": ["让人确认评价结果后用 --attestation 传入确认文件",
+                                          "没有人确认就不写结果：未评价的选样不会计入样本（不会变成假成功）"]},
+                               next_="由人给出确认文件后再执行本命令")
+            evaluations = dict(evaluations or {})
+            evaluations["__attestation__"] = attestation_mod.stamp(_payload, _digest)
             state = sampling_mod.record_result(task, sampling_mod.selection(task)["picks"],
                                                evaluations if isinstance(evaluations, dict) else {})
             task, action = tasks_mod._start_task_action(
@@ -2194,7 +2217,18 @@ def cmd_sampling(ctx, args):
             _record, holder = ctx.require_held(task=task_id)
             directory = tasks_mod.task_dir(ctx.root, task_id)
             task = records.load_json(os.path.join(directory, "task.json"))
-            declaration = sampling_mod.mark_reviewed(task, quote=args.value("--quote"))
+            _payload, _digest, _problems = attestation_mod.load(
+                args.value("--attestation"), action="sampling.reviewed")
+            if _problems:
+                raise CliError("WF_SEMANTIC_DECISION",
+                               {"reason": "'人已看过预览'必须由人给出确认文件（乙口径）",
+                                "problems": _problems,
+                                "exits": ["让人把确认写成 JSON（by/at/quote/source）后用 --attestation 传入",
+                                          "无人可确认时不要结束强化期：按 §0.2 顺手记失败并写根因"]},
+                               next_="由人给出确认文件后再执行本命令")
+            declaration = sampling_mod.mark_reviewed(
+                task, quote=_payload.get("quote"),
+                attestation=attestation_mod.stamp(_payload, _digest))
             task, action = tasks_mod._start_task_action(
                 ctx, directory, task, "task.sampling.reviewed", holder,
                 {"task": task_id}, ["record_review"])
@@ -2349,6 +2383,19 @@ def cmd_judgments(ctx, args):
         directory = tasks_mod.task_dir(ctx.root, task_id)
         fresh = records.load_json(os.path.join(directory, "task.json"))
         facts = judgments_mod.skeleton(ctx, fresh)
+        # 豁免要带人给出的确认摘要（乙口径）：`waived_by: human:` 只是字符串约定
+        if isinstance(entry, dict) and str(entry.get("waived_by") or "").startswith("human:"):
+            _payload, _digest, _problems = attestation_mod.load(
+                args.value("--attestation"), action="waive")
+            if _problems:
+                raise CliError("WF_SEMANTIC_DECISION",
+                               {"reason": "豁免必须由人给出确认文件（乙口径）",
+                                "problems": _problems,
+                                "exits": ["让人把确认写成 JSON（by/at/quote/source）后用 --attestation 传入",
+                                          "人认为无需豁免就删掉 waived_by 字段"]},
+                               next_="由人给出确认文件后重跑本命令")
+            entry = dict(entry)
+            entry["waiver"] = attestation_mod.stamp(_payload, _digest)
         record, problems = judgments_mod.append(fresh, entry, facts)
         if problems:
             raise CliError("WF_SEMANTIC_DECISION",
