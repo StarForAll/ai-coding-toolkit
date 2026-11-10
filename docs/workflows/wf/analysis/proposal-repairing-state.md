@@ -1,126 +1,117 @@
-# 提案（v3）：改用 `fixing` 持久阶段（撤回 v2 的"派生事实"路线）
+# 提案（v4）：不做阶段、不做派生——用「事件写入的修复标记」
 
-> 状态：**待审 v3**。v1、v2 被两轮审查否掉，本版不是打补丁，而是**换掉方案本身**：
-> 结论是「派生可见性事实」这条路走不通，改回 v42 的 `fixing` 阶段。
+> 状态：**待审 v4**。前三版被三轮审查否掉，本版换掉方案形态本身，并把"选哪个模型"讲清。
 > 本文件是决策提案，实现未开始。
 
 ---
 
-## 0. 为什么撤回 v2（不修补的判据）
+## 0. 三轮审查的净结论（决定了 v4 的形态）
 
-两轮审查合起来证明了一件事：**只要"修复中"是"从记录派生"，它就必须复制门禁的判定逻辑**，于是每轮都被抓出新的分叉：
-
-| v2 的定义 | 审查抓到的反例 | 本质 |
+| 轮次 | 被否的点 | 教训 |
 |---|---|---|
-| check 五态（no_check/not_pass/invalidated/anchor_mismatch/rule_version_mismatch） | 还漏两类：**锚点重算失败**（`tasks.py:1018` 返回 error 三元组）、**结构复核不过**（`gates.py:651` 的 `check_result_problems`） | 派生态要复制 `gates.py:631-654` 的全部分支，且**没有错误通道** |
-| review = open_blocking + unavailable 报告 + verdict=unavailable | 还有：**材料缺口导致的正式 fail**（`review.py:1356`，可无 blocking）、**复杂任务审查未绑定当前 check**（`gates.py:682` 的 `result.check_id != check.id`） | 同上 |
-| 「不可结案原因集合」 | `final_gate` 还拦 escalated 待答、required 未核实、依赖未满足、debug 未裁、action 未完成… | 名字承诺了一个它做不到的问题 |
-| 退出条件只看"无 unavailable 报告" | `--unavailable` 可在**没有导入报告**时写结论（`review.py:1248`），`open_findings` 不读它 → 同一记录 §1 判 true、§3 判 false | **自相矛盾** |
-| "任务级结果总带 repairing" | `task-check` 失败时 `raise TaskError`（`tasks.py:2465`），根本不走结果构造器 → 最该带的时候没有 | 注入面覆盖不到异常链路 |
-| "误报 disposition 掉后 → false" | `open_findings` 的 closed **只认 `decision=="accepted"`**（`review.py:173`）；rejected/amended 不闭环 | 我的反例表写错了事实 |
-| no_check → true | 新建任务、刚进 execute 就恒显示"修复中"，`next` 指向"重跑 check" | 矫枉过正 |
+| v1 | 派生"修复中"自称能收敛 6 处判断；只凭任务记录派生覆盖不到内容变化；改 v42 原文破坏冻结核查 | 派生要复制门禁 |
+| v2 | 派生定义与退出条件自相矛盾（`--unavailable` 无报告）；check 五态装不下（锚点重算失败/结构复核）；review 原因不全（材料缺口 fail、审查未绑定当前 check）；`no_check` 矫枉过正；误报 disposition 事实写错 | 派生态持续不完备 |
+| v3 | "五档"实为含 `check` 的五值、与"v42 原样"自相矛盾；recheck 与验收 2 互斥；漏 `PHASE_VALUES`/`legal_positions` 两个**加载即崩**的硬校验；S5 的"内容变化→fixing"未实现；check fail 的错误返回仍无 position；把"锚点失配"当 fail 混淆输入失效与缺陷；材料缺口 fail 进 fixing 会逼出重复 check+重审；不迁移在途任务造成同一事实两种表示 | 改状态机把 AI 推向重复验证 |
 
-**判断：这条路线要么持续复制门禁（第二真相），要么持续不完备。** 两轮修正都没能收敛，按"不引入新问题、不遗留问题"的要求，应换方案而不是继续补。
+**共同结论：无论是"派生事实"还是"新增阶段"，都在把 AI 推向"为了满足状态而多做一遍"**——这与本轮的硬要求（指导 AI 运行、不以复杂逻辑限定 AI）相反。
 
 ---
 
-## 1. v3 方案：`fixing` 作为**持久阶段**（v42 K10/S4/S5 原样）
+## 1. v4 方案：四阶段不动 + 一个"事件写入"的修复标记
 
-`phase` 枚举变五档：`plan → execute → fixing → finish`。
-
-**关键区别**：`fixing` 不是"派生出来的事实"，而是**在事件发生的那一刻由知道结果的代码写下的状态**：
-
-| 事件 | 谁写 | 写入内容 |
-|---|---|---|
-| `task-check` 产生 fail 结果 | check 写入路径（已知道 fail） | `phase = fixing` |
-| `review-decide` 判 fail | decide 写入路径（已知道 fail） | `phase = fixing` |
-| `task-check` 产生 pass 结果 | check 写入路径 | `phase = check`（退出修复） |
-| 修复中决定重做工作 | `replan`/显式动作（现有 `check` 迁移第三去向） | `phase = execute` |
-| 异常归档 | `task-abandon` | `status = archived` |
-
-**因此它不需要**：枚举 check 状态、复制门禁判定、注入每个结果、定义"不可结案原因集合"。**门禁一律不改**（归档口仍看 `check.result`、审查门仍看 `verdict` 与 `check_id` 绑定）——`fixing` 不是"能否结案"的镜像，是"当前处在修复"这一状态。
-
-### 1.1 直接消掉的审查反例
-
-| 审查反例 | 在 v3 下 |
+| 维度 | 做法 |
 |---|---|
-| 无报告时 `--unavailable` 造成的 true/false 矛盾 | 不存在："是否在修"由 `phase` 一个字段回答，不做派生 |
-| check fail 返回不带状态（A2） | `position.phase` **本来就有**，无需注入 |
-| 命令硬编码 next 提示 finish（A3） | `phase=fixing` 后 `next_by_position["in_progress/fixing"]` 生效；`task-check` 的提示文案改为读 phase |
-| 归档终态被重新标成修复中（A4） | `next_for` 的**终态优先**不变（`protocol.py:134` 先判 terminal），且归档不改 phase 但 `status=archived` 优先展示 |
-| check 五态装不下（A5） | 不需要枚举：状态是"发生过 fail"，不是"现在是否可用" |
-| review fail 无 blocking（A6） | decide 一旦判 fail 就写 `fixing`，与 blocking 无关 |
-| 新任务恒显示修复中（B1） | 新任务 `phase=execute`，不是 fixing |
-| 复杂任务"审查未绑定当前 check"（B2） | 仍由既有门禁拦（`gates.py:682`），`fixing` **不声称**能替代它 |
+| 阶段枚举 | **保持 `plan/execute/check/finish`**（与 2026-11-09 人裁一致；`protocol.py:20 PHASE_VALUES`、`legal_positions`、迁移表**全部不动**） |
+| 新增 | `task.repair`：**由事件写入**的一小段事实（不是派生、不是阶段值） |
+| 门禁 | **一律不改**：归档仍要求 `phase=finish` 且 check/review 门照旧；标记存在与否不改变任何准入 |
+| 用途 | 只回答一个问题：**"最近一次失败是什么、该做什么才能继续"**，给 `wf status`、收工预览、以及命令返回的 `position.repair` |
 
----
+### 1.1 写入与清除（生命周期写死，单一写点）
 
-## 2. 需要动的地方（实测，比 v1/v2 说的少）
-
-> 勘误：v1 说"`phase` 引用 102 行"容易误读——那 102 行包含**传递 phase 参数**的代码；
-> 真正**按 phase 值分支**的只有 6 处 + 2 个元组常量。
-
-| 类别 | 实测位置 | 改法 |
+| 事件 | 写点（已知道结果的那段代码） | 动作 |
 |---|---|---|
-| 按 phase 值分支 | `tasks.py:449`（`PHASES_STARTED`）、`1568`、`1956`、`3167`、`3371`、`3508`、`3728` | 把 `fixing` 加进该进的白名单（`PHASES_STARTED` 与两处 `("execute","check","finish")` 元组）；`== "finish"` 的两处（3167/3371）需判断"修复中能否归档"——按 §3 结论：**不能**，保持只认 finish |
-| 常量 | `tasks.py:374 PHASES_STARTED` | 加 `fixing` |
-| 协议 | `protocol/states.json` 的 `phase.enum`、`phase_model`、`next_by_position` 增 `in_progress/fixing`、迁移表 | 见 §3 |
-| 展示 | `states.json` 的 `phase.display`；`wf status`/预览读 phase 即可 | 加 `fixing: Fixing` |
-| position | **不动**（`codes.position` 已经带 phase） | —— |
+| `task-check` 产生 **fail** 结果 | check 写入路径 | 写 `repair = {kind: "check_failed", check_id, at, exit}` |
+| `task-check` 产生 **pass** 结果 | 同上 | **清除** `repair`（若 `kind == "check_failed"`） |
+| `review-decide` 判 **fail**（含材料缺口导致的 fail） | decide 写入路径 | 写 `repair = {kind: "review_failed", round, check_id, at, exit}` |
+| 同一 check 上**重审通过** | 同上 | **清除** `repair`（若 `kind == "review_failed"` 且 `check_id` 相同） |
+| `review` 结论被 **invalidated**（实施 CLI 变更） | launch 路径（`review.py:767` 已有该写点） | **不写** `repair`；只写一行提示"既有结论已失效，需重发审查"（**输入失效 ≠ 交付缺陷**，见 §4） |
+| 锚点失配/输入不成立（`WF_REVIEW_INVALID` 且未产生 verdict） | —— | **不写** `repair`（同上） |
+
+**关键：清除不要求重跑 check。** 材料缺口型 fail 的退出是"补齐材料 → 在同一 check 上重审通过"，不需要新 `check_id`，也不会触发"审查绑定当前 check"的连锁重审（这正是 v3 被否的 a-2）。
+
+### 1.2 与"派生"的区别（为什么这次不会自相矛盾）
+
+- 标记**只在事件发生的那一刻写**，不重算 → 不存在"同一记录两种判定"（v2 的 A1）；
+- 它**不声称**表达"能否结案"→ 不会被拿来和 `final_gate` 的条件比完备性（v2 的 B2）；
+- 它**不复制** check 的五态/门禁分支 → 不会漏"锚点重算失败""结构复核"（v2 的 A5）；
+- 它是**当前态**（不是历史事实），因此可以安全地为存量任务补写（§5）。
 
 ---
 
-## 3. 状态机设计（唯一权威：`states.json`）
+## 2. 需要动的地方（清单含"漏了就崩"的项，虽然本版不动它们）
 
-新增/修改的迁移（`from → to`，均 `status=in_progress`）：
+> 本版**不碰**协议：`protocol.py:20 PHASE_VALUES`、`protocol.py:88` 的枚举比对、
+> `protocol.py:104-113` 的 `legal_positions` 白名单、`states.json` 的迁移表与 `next_by_position` **全部不变**。
+> （v3 漏掉的这两处硬校验会让加载直接 `ProtocolError`；v4 因为不动枚举，风险为零。）
 
-| id | from | to | when |
-|---|---|---|---|
-| `check`（改） | `execute` / `check` | `finish`（pass）/ **`fixing`（fail）** / `execute`（修复完成回做） | 现有三去向里"fail 留在 check"改为"fail 进 fixing" |
-| `review-fail`（新增） | `execute` / `check` / `finish` | `fixing` | 审查判 fail（含 fail 由材料缺口产生、或复杂任务审查未绑定当前 check 的重发要求） |
-| `recheck`（新增） | `fixing` | `check` | 修复后重跑 `task-check` 产生新结果（pass 或 fail 都由 check 迁移处理） |
-| `repair-rework`（新增） | `fixing` | `execute` | 修复需要重做工作（等价于现有"修复完成回 execute"） |
-| `repair-replan`（新增） | `fixing` | `plan` | 人决定重新规划 |
-| `archive-abnormal`（现有） | 任意 | 归档 | 不变：异常路径不看 phase |
-
-**归档仍只允许 `phase=finish`**（`tasks.py:3167` 的 `!= "finish"` 不改）——修复中不能正常归档，这正是 v42 S5 的语义。
-
----
-
-## 4. 与 2026-11-09 人裁的关系（必须显式推翻）
-
-那次人裁是「保留四阶段、`fixing` 不落盘」。v3 与之相反，理由必须写进裁定文件而不是悄悄改：
-
-1. 人裁的动机是"`fixing` 会增加机械复杂度、`check` 已能满足 fail→修复的语义"；
-2. 两轮审查证明替代方案（派生事实）**复杂度更高、且无法自洽**（§0）；
-3. `fixing` 的实际代码成本只有 **6 处条件 + 2 个常量 + 迁移表**（§2），不是当初估计的"处处加一支"。
-
-→ 建议新增 `analysis/ruling-fixing-phase.md`：记录"推翻 2026-11-09 人裁、采用 v42 K10/S4/S5"，附上述三条理由与两轮审查的反例清单。**v42 原文一字不改**（逐字节冻结，sha256 `d06c57e7…cadd`）；K10/S4/S5 与实现从此一致，不再需要"差异表"。
+| 类别 | 位置 | 改动 |
+|---|---|---|
+| 写点 | `tasks.py` 的 check 写入（fail/pass 两分支） | 写/清 `repair` |
+| 写点 | `review.py` decide 的 fail/pass 两分支 | 写/清 `repair` |
+| 清点 | `review.py:767`（invalidated） | 只写提示，不写 repair |
+| 结果填充 | `cli.py:2628-2637` 的错误转结果 | **任务级命令的错误返回补 `position`**（当前为空）；这是 v3 的 a-4 缺口，本版正面解决 |
+| 展示 | `wf status`、`judgments show`（收工预览） | 各加一行 `[修复中] …` 或"无" |
+| 命令 | 新增 `wf repair show`（只读）/ `wf repair sync`（为存量任务补写，一次性、幂等） | 见 §5 |
+| 测试 | 见 §6 | —— |
 
 ---
 
-## 5. 在途任务与兼容
+## 3. 为什么不选"加 `fixing` 阶段"（v3 被否的三条硬理由）
 
-| 情形 | 处理 |
+1. **方案身份无法自洽**：v42 K10 的枚举 `plan/execute/fixing/finish` **不含 `check`**，而现有实现与 `protocol.py` 硬校验都把 `check` 当正式阶段值。要么删 `check`（迁移表重排 + `in_progress/check` 的 next + 存量记录兼容 + 一批行为测试），要么承认是"第三种模型"——v3 两头占，因此被否。
+2. **正常完成路径无闭环**：pass 之后是 `check` 还是 `finish`，v3 两处写反；若落 `check`，通往 finish 的唯一出口是**再跑一次同样的 check**（v38 元规则明确要砍的机械绕弯）。
+3. **把 AI 推向重复验证**：材料缺口型 fail 进 fixing 后，退出需重跑 check → 新 `check_id` → 审查绑定失配 → 再重审一遍。这条是"复杂逻辑限定 AI"的典型。
+
+**若将来仍要引入 `fixing`**：只需把 §1 的写点接到 `phase` 上，标记的生命周期即阶段迁移器；本方案不挡这条路。
+
+---
+
+## 4. 边界：哪些"失败"不进修复标记
+
+| 情形 | 为什么不进 |
 |---|---|
-| 现在处于 `check` 且 `check.result=fail` 的任务 | **不迁移**：保持 phase=check（行为与今天一致）；下次 `review-decide fail` 或新的 `task-check fail` 才进入 fixing。理由是迁移会改写历史记录 |
-| 现在处于 `finish` 且审查 fail 的任务 | 同上：下一次 decide 才进 fixing |
-| 工具读取 | 任何只认四阶段的旧读取方（若有）需同时接受第五值；本仓库内没有此类外部读取方 |
-| 未来要多 agent 并行 | `fixing` 是"当前在做修复"的状态；"多份报告陆续到达"由 `reviews.imported/launches` 表达，两者不冲突（与 v2 主张不同，这里不再声称正交优势） |
+| 报告锚点失配 / 输入不成立（`WF_REVIEW_INVALID`，未产生 verdict） | 旧报告不适用只证明**需要重新审查**，不证明代码要返修 |
+| `verdict = invalidated`（实施 CLI 变更，`review.py:767`） | 同上；它是输入失效。**但必须可见**：单独一行"既有审查结论已失效（实施 CLI 变更），需重发审查" |
+| `verdict = unavailable` | 出口是"补真实审查 / 人确认异常归档"，不是返修 |
+| 从未跑 check / 新任务 | 正确信号是"该做工作、该检查"，不是"该修"（v2 的 B1） |
+| 已归档（含异常归档） | 终态优先；`status=archived` 时标记不展示 |
 
 ---
 
-## 6. 验收标准（每条对应一个真实失败）
+## 5. 存量任务（正面回答 v3 被否的 b-6 / a-6）
+
+**做一次性幂等补写**，而不是"让两套表示长期并存"：
+
+- `wf repair sync`：扫描所有 `in_progress` 任务；若最新 check 结果 fail 或最新 review 结论 fail，且无 `repair` 标记 → 补写（`at` 取记录的 `check.ended_at` / 审查结论已有时间；**没有时间的就留空并标 `at_unknown`，不编造**）。
+- 幂等：已有标记不动；已通过的不写。
+- 不改历史事实：`repair` 是当前态，不写入 `check_history`、不改既有 phase/result。
+- 运行时机：升级后由人执行一次（或 `wf status` 首次运行时提示"建议执行 repair sync"）。
+
+---
+
+## 6. 验收标准（每条对得上一个真实失败）
 
 | # | 断言 | 防的失败 |
 |---|---|---|
-| 1 | `task-check` 产生 fail → `task.phase == "fixing"`，且返回 `position.phase == "fixing"` | check fail 后无状态（v2 的 A2） |
-| 2 | 修复后重跑 `task-check` pass → `phase == "check"` | 修完不退出修复 |
-| 3 | `review-decide` 判 fail（含**材料缺口产生的 fail**、**无 blocking finding**）→ `phase == "fixing"` | 审查失败不进修复态（v2 的 A6） |
-| 4 | `phase=fixing` 时 `archive` 被拒（只认 finish），`next` 指向修复出口 | 修复中能直接归档 |
-| 5 | `status=archived` 时展示与 `next` 仍以终态优先 | 归档后仍显示修复中（v2 的 A4） |
-| 6 | 新模式任务（`phase=execute`，从未 check）不显示修复中 | 新任务恒"修复中"（v2 的 B1） |
-| 7 | `--unavailable` 判定的任务**不进入** fixing（出口是补审查/异常归档） | 不可用被当成待修复（v2 的 A1 矛盾） |
+| 1 | `task-check` fail → 任务记录出现 `repair.kind == "check_failed"`，**且该命令的错误返回里 `position.repair` 非空** | check fail 后无状态（v3 的 a-4） |
+| 2 | 随后 `task-check` pass → `repair` 被清除 | 修完还挂着 |
+| 3 | `review-decide` 判 fail（**材料缺口型、无 blocking finding**）→ `repair.kind == "review_failed"` | 审查失败不可见（v2 的 A6） |
+| 4 | 补齐材料、**同一 check** 上重审通过 → `repair` 清除，且 `check_id` 未变 | 被迫重跑 check 的重复验证（v3 的 a-2） |
+| 5 | `verdict=invalidated` / 锚点失配 → **不写** `repair`，但 status 有一行"结论失效，需重发审查" | 输入失效被当返修（v3 的 a-3） |
+| 6 | 存在 `repair` 时归档仍被既有门禁按原规则拦（标记不参与准入） | 标记被误当许可 |
+| 7 | 新任务（从未 check）无 `repair` 标记 | 新任务恒"修复中"（v2 的 B1） |
+| 8 | `wf repair sync` 幂等：跑两次标记不变 | 补写制造重复/漂移 |
+| 9 | 协议层零改动：`protocol.py` 与 `states.json` 未变，加载校验仍通过 | 撞 `PHASE_VALUES`/`legal_positions` 硬校验（v3 的 a-5/b-3） |
 
 ---
 
@@ -128,16 +119,16 @@
 
 | 风险 | 缓解 |
 |---|---|
-| 推翻人裁 | 用 §4 的裁定文件显式记录，不静默改 |
-| 第五阶段被写成"修复期准入规则"（禁扩面等） | 明确不做：`fixing` 只表示状态，准入仍由既有门禁承担 |
-| 旧记录（四阶段）与新代码混存 | 读取方一律"白名单式"接受（未知 phase 按 check 处理并提示），不因历史值报错 |
-| 与 v42 §7.1（把 check 当"已删除机制"）的对立 | 采用 v42 后这条自然成立，无需改 v42 |
+| 标记与 `check` 记录不一致（第二真相） | 写点只有两处（check/review 的写入路径），清除也在这两处；加一条不变量测试：**存在 `repair=check_failed` 而当前 check 为 pass ⇒ 判实现错误**（暴露漂移，不静默） |
+| 与 v42 K10/S4/S5 的差异未销账 | 新增裁定文件 `analysis/ruling-repair-marker.md`：说明"不采用 `fixing` 阶段、改用事件标记"的理由（三轮审查证据）；**v42 原文一字不改**（逐字节冻结） |
+| 标记被当成门禁 | 归档/审查前置/check 结构校验一律不改；§6 第 6 条固化 |
+| 体积/成本 | 只在任务级结果上带一个可选字段；错误返回补 position 是一次性通用改进（也让所有任务级错误更有用） |
 
 ---
 
 ## 8. 留给审查者的问题
 
-1. §3 的 `review-fail` 允许从 **finish** 进入 fixing：这是否会让"已 pass 的任务"退回修复态，与"finish 只差归档"的直觉冲突？
-2. §5 决定**不迁移**在途任务，会不会造成"同类任务处于两种 phase"的长期并存？
-3. §2 只改 6 处条件，是否还有按 phase 语义隐式分支的地方（例如模板/预览文案里写死"Check 阶段"）？
-4. 推翻人裁的门槛：是否应由你重新确认一次（而不是由这份提案自行改口径）？
+1. `repair` 与既有 `check.result` / `reviews.result` 毕竟**同源**：单写点能否真正避免漂移？是否需要"读时校验 + 不一致即报错"而不只是测试覆盖？
+2. §5 的 `at_unknown`（历史记录没有时间戳时留空）会不会让审计缺一环？是否接受"不编造时间"这个取舍？
+3. 材料缺口型 fail 在同一 check 上重审通过即可清标记——**是否应该同时要求补的材料写入任务记录**（否则人无法复核"补了什么"）？
+4. §4 把 `invalidated` 排除在标记外，只给一行提示：是否足够？它同样会让复杂任务"被拦但看不见"（只是改为看见了提示）。
