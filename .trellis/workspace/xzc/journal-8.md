@@ -812,3 +812,36 @@
 
 - 待核：§9.2 冻结登记的正文绑定 sha256 051aade5… 无法从当前工作树（738 行 / 371fe74b…）复现，需确认其所绑版本
 - 首轮实现阶段：按冻结基线开工，另立任务补「建立 authoring 源树 + dev-manifest.json」清单缺项（L1）
+
+
+## Session 398: wf v42 控制流修复收口：四轮评审 + 全量测试转绿
+<!-- trellis-session: v=2 fp=73aad97cbcb59d3d -->
+
+**Date**: 2026-11-10
+**Task**: wf v42 控制流修复收口：四轮评审 + 全量测试转绿
+**Branch**: `main`
+
+### Summary
+
+按 v42 完成 P0-P6 控制流修复，并经四轮外部审查（12 条问题）逐条核实后按根因修正：求助死路（escalated 已被 supersedes 仍挡归档 / ask_always 拒人答复）、投影递归与预览 AttributeError、路径清单第 3+4 处消费点、未评价抽样算成功、规模漏算未跟踪行数、预览三段未接真实记录事实、扩面语义混同。测试侧：run_all 增加必过门与豁免清单（现已清空），串行也记结果行、并行缺行改串行重跑；6 个红套件与 8 条 repro 全部转绿。最终全量 132 项零失败、repro 68/68、单测 308 全绿、发行字节复现 70 assets。方法与教训沉淀到 .trellis/spec/guides/diagnosis-and-fixture-hygiene.md（先取事实再假设、复现与 harness 同序、正向步骤 vs 负路径断言、断言锚行为不锚排版、挪结构后必须复跑全文、测试夹具必须用生产真实字段）。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3e94f2a` | fix(wf): 第三轮评审——预览真正接上记录事实（未核实/同类对照/扩面语义） |
+| `fbf18cc` | docs(spec): 补两条规则——断言锚行为不锚排版、挪结构后必须复跑全文（含我这次的假绿教训） |
+| `941881a` | fix(wf): 第二轮评审四项按根因修 + 修我上轮留下的假绿测试 |
+| `d9ee872` | fix(wf): 五处评审问题按根因修（求助死路 / 假成功样本 / 规模漏算 / 第 4 处路径消费点 / task-start 无出口） |
+| `f559eac` | docs(task): §5.3 预览补记（13 段齐备），测试计数更新为 294 |
+| `b40ad0c` | feat(wf): 收工预览补齐 §5.3 的判断质量对照、依据对照与五段事实 |
+| `12110a5` | test(wf): 全部套件转绿——豁免清单清空，全量 132 项零失败 |
+| `6a1c50c` | test(wf): run_all 增加必过门（KNOWN_LEGACY 单一豁免清单，清单不许腐烂） |
+| `c272a56` | test(wf): repro 三例修好（green+red 双过）；run_all 串行也记录结果行、并行缺行改串行重跑 |
+| `54a3e76` | fix(wf): 修 review 的 proposers 未绑定（unavailable 路径必崩）+ r17r24 30/30 + repro 跟上门禁 |
+| `7c628a5` | fix(wf): 首归档路径也计算 persisted（cp5 8/8） |
+| `cd8c875` | feat(wf): 归档成功 facts 补 archive_persisted（外部可核对终态） |
+
+### Status
+
+[OK] **Completed**
