@@ -1,128 +1,162 @@
-# 提案（v5）：不新增任何状态——⑥ 只做"文档裁定 + 两行只读事实"
+# 提案（v6）：⑥ 只做「结构化未结事实」两行 + 文档裁定
 
-> 状态：**待审 v5**。前四版（派生事实 / 派生原因集合 / `fixing` 阶段 / 事件标记）被四轮审查逐一否掉。
-> 本版不再尝试表达"是否在修复"，只解决最初那个问题：**人和 AI 看不见"还有哪些事没结"**。
+> 状态：**待审 v6**。前五版被五轮审查逐一否掉；本版按第五轮修正：补审查绑定、修优先级、
+> 撤回不可靠的"出口见 next"、把"机器可读"落成明确 schema、区分两种"检查失效"。
 > 本文件是决策提案，实现未开始。
 
 ---
 
-## 0. 四轮审查的净结论
+## 0. 五轮审查的净结论
 
-| 版本 | 形态 | 被否的致命点（均已核实） |
+| 版本 | 形态 | 致命点（已核实） |
 |---|---|---|
-| v1 | 派生"修复中"，自称收敛 6 处判断 | 六处是六个不同命题；只凭任务记录覆盖不到内容变化；改 v42 原文破坏冻结核查 |
-| v2 | 派生"不可结案原因集合" | 与退出条件自相矛盾（`--unavailable` 无报告）；check 五态装不下（锚点重算失败/结构复核）；review 原因不全；`no_check` 矫枉过正；误报处置事实写错 |
-| v3 | 新增 `fixing` 阶段 | 身份自相矛盾（"五档"实为含 check 的五值，与"v42 原样"互斥）；漏 `PHASE_VALUES`/`legal_positions` 两个**加载即崩**的硬校验；pass 落 check 会逼出"再跑一次同样的 check"；材料缺口 fail 进 fixing 造成重复验证 |
-| v4 | 事件写入的 `repair` 标记 | **主路径清不掉**：改代码 → 新 check C2 → C2 上重审 pass，因"要求同一 check_id"而永不清除；disposition 路径也无清除事件；两失败源共用一个可覆盖槽位（运行时清空 / `sync` 又补回）；`wf repair` 与既有维护命令 `repair.py` 撞名；`reviews.result` 无时间戳，"sync 取已有时间"不成立 |
+| v1 | 派生"修复中"+自称收敛 6 处判断 | 六处是六个命题；只凭记录覆盖不到内容变化；改 v42 原文破坏冻结核查 |
+| v2 | 派生"不可结案原因集合" | 与退出条件自相矛盾；check 五态装不下；review 原因不全；`no_check` 矫枉过正 |
+| v3 | 新增 `fixing` 阶段 | 身份矛盾（"五档"实为含 check 的五值）；漏 `PHASE_VALUES`/`legal_positions` 硬校验；pass 落 check 逼出重复 check |
+| v4 | 事件写入 `repair` 标记 | 主路径清不掉（改码→C2→重审 pass 仍不清）；两失败源共用槽位；撞名 `repair.py`；无时间戳 |
+| v5 | 两行只读事实 | 缺"结论是否绑定当前 check"；"轻量=未要求"会遮住已存在 blocking；"出口见 next"不成立 |
 
-**净结论：任何"存下来的修复态"（派生或写入）都要自己走完一条与两个失败源、十几种出口等价的闭环——这条闭环的复杂度不低于它想汇总的门禁，且每漏一条就留下僵尸标记或错误指引。** 这与本轮硬要求（指导 AI 运行、不以复杂逻辑限定执行）方向相反。
-
----
-
-## 1. v5 方案：不存状态、不加命令、不改门禁
-
-### 1.1 改什么
-
-只加**两行只读事实**，显示在 `wf status`（含 `--short`）与收工预览（`judgments show`）里：
-
-```
-检查：不可复用（原因：内容变化后失效）/ 可复用
-审查：未关闭 blocking 2 条（f1,f2）/ 既有结论已失效（实施 CLI 变更，需重发）/ 不可用（需补审查或异常归档）/ 未要求
-```
-
-两行都**由既有投影在读取时算出**，用的是门禁本来就在用的同一批函数（见 §2）；**不落任何字段**。
-
-### 1.2 为什么这次不会重演前四版的失败
-
-| 前版失败原因 | v5 为什么不适用 |
-|---|---|
-| 生命周期漏事件（v4 主路径清不掉） | **没有生命周期**：每次读取现算，不存在"该清没清" |
-| 派生要与门禁比完备（v2 的名字问题） | 不叫"修复中"、不叫"不可结案"，只说两条**具体事实**，不承诺完备 |
-| 派生要复制 check 五态/门禁分支（v2 的 A5） | 直接**调用**门禁同一个函数（提取为共享函数，门禁与展示共用一份） |
-| 与 `final_gate` 条件比完备（v2 的 B2） | 不声称"能结案"；`next` 与门禁判断一律不动 |
-| 逼 AI 重跑 check（v3 的 a-2） | 展示不参与准入，也不产生任何待办 |
-| 命令撞名（v4 的 a-6） | **不新增命令** |
-| `position` 携带面/缺省语义（v2/v4） | **不加字段**，所以没有这个问题 |
-| 存量任务两套表示（v3 的 b-6） | 读取时现算，存量任务立刻正确，无需迁移 |
-| 时间戳不可得（v4 的 b-7） | 不需要时间 |
+**scope 声明（修正 v5 的过度概括）**：以上五轮否掉的是**五个具体设计**，不能据此断言"机器可读的未结态不可能"。本版把事实做成结构化输出，正是要保留机器可读这条路。
 
 ---
 
-## 2. 两行内容的确切来源（都是既有代码）
+## 1. 交付物：一个结构化事实 `unresolved` + 由它渲染的两行文本
 
-| 行 | 来源 | 说明 |
+### 1.1 事实 schema（机器可读的唯一形态）
+
+```json
+"unresolved": {
+  "check": {
+    "usable": false,
+    "reason": "invalidated_content_changed | anchor_mismatch | not_passed | no_check | rule_changed | anchor_unavailable | structure_incomplete",
+    "check_id": "20261110-…",
+    "scope": "archive_gate",              // 本判定按"收工/归档门口径"（check-passed 门）
+    "detail": null                         // anchor_unavailable / structure_incomplete 时放错误码或问题列表
+  },
+  "review": {
+    "state": "open_blocking | verdict_fail | verdict_unavailable | stale_verdict | invalidated | ok | none",
+    "open_blocking": [{"finding_id": "f1", "severity": "blocker"}],
+    "verdict": "pass | fail | invalidated | unavailable | null",
+    "verdict_check_id": "20261110-C1",
+    "bound_to_current": false,             // 结论是否绑定当前 check
+    "unavailable_reports": [{"slot": "slot-a", "path": "…"}]
+  }
+}
+```
+
+渲染文本（`wf status`、`judgments show`）**完全由该结构生成**，不再另写一套判定。
+
+### 1.2 两行的取值优先级（把 v5 的"未要求"漏洞写死）
+
+**审查行**（从上到下，命中即停）：
+
+| 序 | 条件 | 显示 |
 |---|---|---|
-| **检查** | 把 `gates.py:631-654` 的判定**提取为共享函数** `check_usability(ctx, task)`（行为一字不改，`gates` 与展示都调它） | 它已覆盖：无 check / 未通过 / 规则版本变化 / 被内容变化判失效（`check.invalidated`）/ 锚点失配 / 锚点重算失败 / 结构复核不过。**这正好补上 b-3 指出的"check 侧失效在 v4 三处皆空"** |
-| **审查** | `review.open_findings(ctx, task)`（已有）+ `reviews.result.verdict`（已有：pass/fail/invalidated/unavailable） | 未关闭 blocking、报告不可读、结论失效、不可用，各有明确措辞；轻量任务显示"未要求" |
+| 1 | `unavailable_reports` 非空 | `审查：N 份报告不可读（导入后被改动），需重新导入` |
+| 2 | `open_blocking` 非空 | `审查：未关闭 blocking N 条（id…）` |
+| 3 | `verdict == "fail"` | `审查：本轮结论 fail（第 r 轮）` |
+| 4 | `verdict == "invalidated"` | `审查：既有结论已失效（实施 CLI 变更），需重发` |
+| 5 | `verdict == "unavailable"` | `审查：不可用（需补真实审查或人确认异常归档）` |
+| 6 | `verdict == "pass"` 且 **`bound_to_current == false`** | `审查：结论来自旧检查（C1），当前检查未审查，需重发` |
+| 7 | `verdict == "pass"` 且 `bound_to_current` | `审查：已通过（绑定当前检查）` |
+| 8 | 无任何 reviews，且 `complexity != "complex"` | `审查：未要求` |
 
-**不做**：不改 `next`（`protocol.next_for` 仍是"挂起 > 暂停 > 终态 > 位置 > 会话"的唯一来源）；不改任何门禁；不改 `phase` 语义。
+**关键修正**：`未要求` **不再按复杂度直接给**——只要有 reviews 事实就按 1–7 显示。理由：`final_gate` 的 open-blocking 拦截不分复杂度（`gates.py:903`），轻量任务完全可能带着未关闭 blocking；把这类任务显示成"未要求"会直接与门禁矛盾。
 
----
-
-## 3. ⑥ 的实质处置：文档裁定，而非代码
-
-原问题是"v42 写 `fixing`、代码没有"。v5 的答案是**记录分歧**，不是改实现：
-
-| 动作 | 内容 |
-|---|---|
-| 新增 `analysis/ruling-repair-vs-fixing.md` | ① 结论：**不引入 `fixing` 阶段**，维持 2026-11-09 人裁的四阶段；② 理由：四轮审查证据（§0 表）；③ 与 v42 的差异逐条登记：K10（L107 枚举）、S4（L122 三态含 fail→fixing）、S5（L123 主干）、§7.1（L401 把持久 check 登记为已删除）；④ 说明"修复中的可见性"由 §1 的两行承担，不由状态机承担 |
-| v42 原文 | **一个字节不改**（逐字节冻结，仓库副本与 /tmp 原件 sha256 同为 `d06c57e7…cadd`） |
-| 机制稿 | §2.2 阶段模型段加一句"修复状态不落盘、不设阶段；可见性由 status 的两行事实承担"；§9.4 加一段指向该裁定 |
+**检查行**：`usable` 决定文案；`reason` 逐值对应一句人话（见 §3）。`scope` 固定为 `archive_gate`，避免"可复用"这种全称判断跨越两个口径。
 
 ---
 
-## 4. 明确不做（逐条对应前四版被否的形态）
+## 2. 数据来源（都是既有函数，不复制逻辑）
+
+| 事实 | 来源 | 说明 |
+|---|---|---|
+| `check.*` | 把 `gates.py:631-654`（`task.check-passed` 门的判定）**整段提取**为 `check_usability(ctx, task)`，门禁改为调它 | 行为一字不改；覆盖 无检查/未通过/规则版本变/`check.invalidated`/**锚点失配**/**锚点重算失败**/**结构复核不过** |
+| `review.open_blocking` / `unavailable_reports` | `review.open_findings(ctx, task)` | 原样复用 |
+| `review.verdict` / `verdict_check_id` | `reviews.result` | 已有字段 |
+| `review.bound_to_current` | `result.check_id == (task.check or {}).id` | 与 `gates.py:690` 同一判据（仅比较，不复用其分支） |
+
+**两种"检查失效"的区分**（v5 混淆处）：`invalidated_content_changed` 来自记录内事实（受控回 check 时写入 `check.invalidated`）；`anchor_mismatch` 来自**读取时现场重算**。二者的 `reason` 不同、测试分别构造。
+
+---
+
+## 3. 文案与"next"的关系（撤回 v5 的错误承诺）
+
+v5 写"出口见 next"，这不成立：`next` 是**位置驱动**（`states.json` 的 `next_by_position`），不感知失败事实。例如 `in_progress/finish` 的 next 固定指向 `wf archive`，而此刻可能 check 不可复用或有未关闭 blocking。
+
+**改为明确契约**（写进提案、裁定与机制稿）：
+
+> `unresolved` 是**事实**；`next` 是**位置指引**；两者冲突时以**门禁返回的 code + exits** 为准。
+> 典型情形：`phase=finish` + 未关闭 blocking → `next` 仍说 archive，但 archive 会返回 `WF_UNRESOLVED_BLOCKING` 并自带出口。这是既有设计（门禁自带 exits），不是需要路由的新问题。
+
+---
+
+## 4. 展示点与成本（给实测数字，不再二元化）
+
+| 展示点 | 内容 | 实测成本 |
+|---|---|---|
+| `wf status`（完整） | `unresolved` 结构 + 两行文本 | 锚点重算 **≈40 ms**（git 调用为主）+ `open_findings` **<1 ms**（5 份小报告实测 0.1 ms） |
+| `wf status --short` | 同上（两行 + `unresolved`） | 同上，单次 **<50 ms**；`--short` 的初衷是"避免整份 task.json 进上下文"，与这两行不冲突 |
+| `judgments show`（收工预览） | 两行 | 同上 |
+
+**降级约定**：报告很多时 `open_findings` 的成本随份数线性上升；若实测超出 200 ms，`--short` 可只带 `check` 行（`--short` 的 JSON 中 `unresolved.review` 置 `null` 并标 `"omitted": "cost"`），而不是让两行永远缺席。
+
+---
+
+## 5. ⑥ 的实质处置：文档裁定（v42 不动）
+
+新增 `analysis/ruling-repair-vs-fixing.md`：
+
+1. **结论**：不引入 `fixing` 阶段；维持 2026-11-09 人裁的四阶段；"未结事实"由 `unresolved` 承担；
+2. **理由**：五轮审查证据（§0 表）；
+3. **与 v42 的差异逐条登记**：K10（L107 枚举）、S4（L122 三态含 fail→fixing）、S5（L123 主干）、§7.1（L401 把持久 check 登记为已删除）；
+4. **不写"单一布尔不可能"这类过度结论**，只记录"本仓库选定事实展示 + 门禁权威"这一取舍。
+
+`v42` 原文一个字节不改（逐字节冻结，sha256 `d06c57e7…cadd`）。机制稿 §2.2/§9.4 各加一段指向该裁定，并写入 §3 的"事实 / next / 门禁"三者关系。
+
+---
+
+## 6. 明确不做
 
 | 不做 | 对应审查 |
 |---|---|
-| 不新增 `fixing` 阶段 | v3 的 a-1/b-1/b-2（身份矛盾、无闭环） |
-| 不新增 `repair` 字段 | v4 的 a-1/b-1/b-2（生命周期漏洞、sync 与运行时矛盾） |
-| 不新增 `wf repair …` 命令 | v4 的 a-6（与 `bin/wf.py:484` 维护入口 `repair.py` 撞名） |
-| 不改 `templates/task/task-record.json` | v4 的 b-6（字段骨架未列） |
-| 不改 `position`（不加 `repair`/不加阶段值） | v2 的 §4.3、v4 的 a-5/b-5（携带面与缺省语义） |
-| **不在此提案里修"错误返回 position 为空"** | v4 的 a-4/b-4：通用 except 层（`cli.py:2638-2644`）没有任务上下文，需把 position 沿 `TaskError` 传递或在命令层包装，属**独立缺口**，单独提案处理；本提案不依赖它 |
+| 不新增阶段 / 不新增持久标记 / 不新增命令 | v3 a-1、v4 a-1/b-1、v4 a-6 |
+| 不改 `position`（不加字段） | v2 §4.3、v4 a-5/b-5 |
+| 不改 `next` | 本文 §3（改的是契约表述，不是实现） |
+| 不在此提案修"错误返回 position 为空" | v4 a-4/b-4：独立缺口，单独提案 |
 
 ---
 
-## 5. 影响面（实测）
+## 7. 验收标准（按第五轮要求逐个可构造）
 
-| 项 | 数量 | 说明 |
-|---|---|---|
-| 提取共享函数 | 1（`check_usability`） | 行为不变，`gates` 改调它 |
-| 展示点 | 2（`wf status` 含 `--short`；`judgments show` 预览） | `cmd_status` 已有 task 在作用域内（`cli.py:711-737`） |
-| 协议 / 门禁 / 模板 | **0** | 不动 |
-| 测试 | 6 条（§6） | —— |
-| 文档 | 1 份裁定 + 机制稿 2 段 | v42 不动 |
-
----
-
-## 6. 验收标准（每条对一个真实失败）
-
-| # | 断言 | 防的失败 |
-|---|---|---|
-| 1 | 无 check 时显示"检查：不可复用（原因：尚未检查）"，且归档仍被拦 | 把"没跑过"当"没问题" |
-| 2 | 内容改动后显示"不可复用（原因：内容变化后失效）" | `check.invalidated`/锚点失配 **在展示层三处皆空**（v4 的 b-3） |
-| 3 | review 有未关闭 blocking 时显示条数与 id | 审查失败看不见（v2 的 A6） |
-| 4 | `verdict=invalidated` 显示"既有结论已失效，需重发审查" | 它既不进 fixing 也不可见（v3/v4 的遗留盲区） |
-| 5 | 归档准入与未加展示前**完全一致**（同一批用例结果不变） | 展示被误当门禁 |
-| 6 | 任务记录里**没有新增字段**（task.json 与模板不变） | 又引入需要维护生命周期的状态 |
+| # | 断言 | 构造方式 | 防的失败 |
+|---|---|---|---|
+| 1 | `in_progress` 任务、无 check → `check.reason == "no_check"`、`usable == false`，归档仍被拦 | 新建任务直接 status | 把"没检查"当"没问题"；**限定 in_progress，避免把 plan 期噪声固化为断言** |
+| 2 | 受控回 check（`task-check` 后内容变化触发失效写入）→ `reason == "invalidated_content_changed"` | 走 `finish-invalidate` 路径 | 记录内失效事实看不见 |
+| 3 | execute 期改文件但不重跑 check → `reason == "anchor_mismatch"` | 改文件后直接 status | 现场失效看不见（与 #2 是不同分支） |
+| 4 | 轻量任务 + 已导入 blocking 报告 → 显示 `open_blocking`，**不是"未要求"** | 轻量任务发起审查并判 fail | 轻量任务被"未要求"遮住（v5 a-2/b-1） |
+| 5 | `verdict=pass` 但 `verdict_check_id != 当前 check` → `bound_to_current == false`，显示"需重发" | 审查通过后改码重跑 check | 旧结论被当成新结论（v5 a-1） |
+| 6 | `verdict=invalidated` → 显示"结论已失效" | 改实施 CLI 后 status | 既不进 fixing 也不可见 |
+| 7 | 归档准入与改动前**完全一致**（同一批用例结果不变） | 跑全量套件 | 展示被当门禁 |
+| 8 | 任务记录与模板**无新增字段** | 检查 task.json 与模板 | 又引入需要生命周期维护的状态 |
+| 9 | 5 份报告任务上 `wf status --short` 单次 < 200 ms | 计时断言 | 高频轮询退化 |
 
 ---
 
-## 7. 风险与缓解
+## 8. 风险与缓解
 
 | 风险 | 缓解 |
 |---|---|
-| 展示两行被 AI 当唯一答案，忽略 `next` 与门禁 | 文案明确写"只是事实，出口见 next"；`next` 不变 |
-| 提取 `check_usability` 改变门禁行为 | 纯提取（把现有分支整段搬出），门禁侧调用后**先跑全量**再改展示；这是一次性重构，不夹带语义变更 |
-| 与 v42 的分歧长期存在 | §3 的裁定文件 + 机制稿指针，把分歧变成**已登记的裁定**，而不是每轮审查重报的漂移 |
-| 有人仍想要机器可读的"是否在修复" | 明确回答：四轮审查证明单一布尔无法正确；需要时读这两条事实（它们各自可机器读） |
+| 提取 `check_usability` 动了门禁 | 纯提取（整段搬出），门禁侧先跑全量再改展示；不夹带语义变更 |
+| 两行与 `next` 冲突仍会诱使无效调用 | §3 的契约 + 门禁自带 exits；裁定文件与机制稿同批写入 |
+| `unresolved` 结构成为"第二套判定" | 它只复用门禁函数与既有投影；加一条不变量测试：`check.usable != gates` 在同一 task 上的判定结果不一致即失败 |
+| 报告多时 `--short` 变慢 | §4 的降级约定 + 验收 9 的计时门槛 |
 
 ---
 
-## 8. 留给审查者的问题
+## 9. 留给审查者的问题
 
-1. 只给"事实两行"是否足以指导 AI？还是必须给一个可执行的 `next`？（本提案刻意不改 `next`，避免把展示做成第二套指引）
-2. `check_usability` 提取时把"锚点重算失败"这类**错误三元组**如何映射成展示文案：显示为"不可复用（原因：锚点无法计算）"是否足够，还是要把错误码也给出？
-3. `--short` 也要带这两行吗？带了会增加上下文，不带则"最短视图"仍看不见。
-4. §3 用裁定文件登记分歧、v42 不动——是否可接受"文档内长期存在两种表述"这一状态？
+1. 优先级表把 `open_blocking` 排在 `verdict_fail` 之前：同一任务既有 fail 结论又有未关闭 blocking 时，先报哪个更有用？
+2. `scope: "archive_gate"` 是否足够说明"这是收工口径，不是 review-launch 口径"？还是要另出一行 `review_launch_ok`（发起口径）？
+3. §4 的降级约定（`--short` 省略 review 行）会不会让"最短视图"重新出现盲区？
+4. 裁定文件里不写"单一布尔不可能"，只记取舍——是否足够挡住未来"好心加回状态机"的回归？
