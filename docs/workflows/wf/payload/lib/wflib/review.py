@@ -570,18 +570,48 @@ def broken_reference_problems(lifted, dispositions):
 
 
 
-def proposers_from_history(imported_entries):
-    """从**全部历史**导入记录里取 finding → 提出者（K4b 的独立事实，跨轮有效）。"""
-    proposers = {}
-    for entry in imported_entries:
+def proposers_from_imported(ctx, imported_entries):
+    """从**全部历史**导入记录取 finding → 提出者（K4b 的独立事实，跨轮有效）。
+
+    **必须重解析报告文件**：`reviews.imported[]` 只持久化
+    `round/slot/report_path/report_digest/anchor`（`import_report` 的 entry_record），
+    **不含 findings**——早期实现从记录里读 `entry["findings"]` 恒为空，导致
+    `dispositions_problems` 把任何带真实 finding_id 的处置都判成"不属任何已导入报告"，
+    K4b 的关闭路径整条走不通（回归，已由测试固化）。
+    记录里若已有 `findings`（将来的持久化形态）则直接用，避免重复解析。
+    返回 `(proposers, unreadable)`；`unreadable` 用于给出"无法核对"的准确出口。
+    """
+    proposers, unreadable = {}, []
+    for entry in imported_entries or []:
         if not isinstance(entry, dict):
             continue
-        proposer = normalize_agent(entry.get("agent") or entry.get("source_cli")
-                                   or entry.get("slot"))
-        for finding in entry.get("findings") or []:
+        findings = entry.get("findings")
+        proposer = normalize_agent(entry.get("agent") or entry.get("source_cli") or entry.get("slot"))
+        if not isinstance(findings, list):
+            rel = entry.get("report_path")
+            if not rel:
+                unreadable.append({"slot": entry.get("slot"), "round": entry.get("round"),
+                                   "reason": "imported entry lacks report_path"})
+                continue
+            path = join(ctx.root, rel)
+            if records.file_digest(path) != entry.get("report_digest"):
+                unreadable.append({"slot": entry.get("slot"), "round": entry.get("round"),
+                                   "path": rel, "reason": "report changed or missing after import"})
+                continue
+            try:
+                with open(path, "r", encoding="utf-8") as handle:
+                    payload, _problems = read_report(handle.read())
+            except OSError as exc:
+                unreadable.append({"slot": entry.get("slot"), "round": entry.get("round"),
+                                   "path": rel, "reason": str(exc)})
+                continue
+            findings = (payload or {}).get("findings") or []
+            proposer = normalize_agent((payload or {}).get("source-cli")
+                                       or entry.get("agent") or entry.get("slot"))
+        for finding in findings:
             if isinstance(finding, dict) and finding.get("id"):
                 proposers.setdefault(str(finding["id"]), proposer)
-    return proposers
+    return proposers, unreadable
 
 
 def known_finding_ids(imported_entries):
@@ -592,7 +622,7 @@ def known_finding_ids(imported_entries):
 
 
 
-def dispositions_problems(dispositions, proposers):
+def dispositions_problems(dispositions, proposers, unreadable=None):
     """dispositions 的结构校验与"关闭不得自证"（机制稿 §9.2、K4b）。纯函数，便于单测。"""
     problems = []
     for index, item in enumerate(dispositions):
@@ -609,10 +639,17 @@ def dispositions_problems(dispositions, proposers):
         if finding_id is None:
             continue
         if str(finding_id) not in proposers:
-            # 任意 id 都能被"关闭"等于关闭一个不存在的发现：必须拒绝并给出可选集合
-            problems.append({"index": index, "finding_id": finding_id,
-                             "reason": "finding_id 不属任何已导入报告",
-                             "known": sorted(proposers)[:12]})
+            # 两种情形要分清：报告不可读（无法核对） vs 真的没有这个 finding
+            if unreadable:
+                problems.append({"index": index, "finding_id": finding_id,
+                                 "reason": "该 finding 所在的报告不可读，无法核对（不是\"不存在\"）",
+                                 "unreadable": unreadable,
+                                 "exits": ["重发该轮（新的报告可核对）",
+                                           "按 review-decide --unavailable 留痕后由人处置"]})
+            else:
+                problems.append({"index": index, "finding_id": finding_id,
+                                 "reason": "finding_id 不属任何已导入报告",
+                                 "known": sorted(proposers)[:12]})
             continue
         proposer = proposers.get(str(finding_id))
         recheck_by = normalize_agent(item.get("recheck_by")) if item.get("recheck_by") else None
@@ -1242,7 +1279,8 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None):
         failures = []       # 有效审查给出的未通过结论 → 记 fail，成为复盘触发事实
         # 提出者要**跨轮累积**：只在"关闭所在轮"里找 proposer，会让第 1 轮提出的 finding
         # 在第 2 轮被同一份报告复核关闭而查不出来（隔一轮自证 = K4b 可绕过）。
-        proposers = proposers_from_history(reviews.get("imported") or [])   # finding id → 提出者
+        proposers, proposer_unreadable = proposers_from_imported(
+        ctx, reviews.get("imported") or [])   # finding id → 提出者（跨轮、重解析报告）
         gaps_out = []       # uncovered 轴形成的缺口（走 4.8/4.9，不进 failures）
         if unavailable:
             verdict = "unavailable"
@@ -1410,7 +1448,8 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None):
                     facts.update({key: value for key, value in reasons[0].items() if key != "reason"})
                     facts["reason"] = reasons[0]["reason"]
         # disposition 结构与其"关闭不得自证"（机制稿 §9.2、K4b）
-        problems = dispositions_problems(dispositions, proposers)
+        problems = dispositions_problems(dispositions, proposers,
+                                         unreadable=proposer_unreadable)
         lifted = [item for entry in imported
                   for item in ((entry.get("broken_reference") or {}).get("lifted") or [])]
         problems = problems + broken_reference_problems(lifted, dispositions)

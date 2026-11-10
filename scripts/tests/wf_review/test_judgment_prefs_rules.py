@@ -564,3 +564,97 @@ class HumanAttestationTest(unittest.TestCase):
         payload, digest, problems = attestation.load(None, action="sampling.reviewed")
         self.assertIsNone(payload)
         self.assertTrue(any(item.get("exits") for item in problems))
+
+
+class K4bClosureChainTest(unittest.TestCase):
+    """第十一轮审查 F1/F2 的回归：关闭链必须真的能用。
+
+    `reviews.imported[]` 只持久化 round/slot/report_path/report_digest/anchor（**没有 findings**），
+    所以提出者必须**重解析报告**。此前从记录里读 `entry["findings"]` 恒为空 →
+    任何带真实 finding_id 的处置都被判"不属任何已导入报告"，K4b 关闭整条走不通。
+    """
+
+    REPORT = """---
+status: done
+---
+
+<!-- wf-review-report:v1 -->
+
+```json
+{"protocol": "wf-review-v1", "task-id": "t", "round": 1, "reviewer-id": "slot-a",
+ "source-cli": "codex", "review-time": "2026-11-10T00:00:00Z", "review-focus": "x",
+ "check-anchor": {"check_id": "c1", "check_anchor": "sha256:0"}, "read-scope": ["pkg/**"],
+ "excluded-scope": ["node_modules/**", ".env", "*.pem", ".codex/**", "../**", ".wf/tasks/**"],
+ "scope-exceptions": [], "axes": {"acceptance": {"conclusion": "fail", "basis": "b"}},
+ "findings": [{"id": "F1", "severity": "blocker", "axis": "acceptance", "summary": "真失败"}],
+ "verdict": "fail"}
+```
+"""
+
+    def _fixture(self):
+        import json, tempfile
+        from pathlib import Path
+        from types import SimpleNamespace
+        from wflib import records
+
+        root = tempfile.mkdtemp(prefix="wf-k4b-")
+        rel = "review/report.md"
+        path = Path(root) / rel
+        path.parent.mkdir(parents=True)
+        path.write_text(self.REPORT, encoding="utf-8")
+        entry = {"round": 1, "slot": "slot-a", "report_path": rel,
+                 "report_digest": records.file_digest(str(path)), "agent": "codex"}
+        ctx = SimpleNamespace(root=root, key=lambda required=True: "k")
+        return ctx, entry
+
+    def test_proposers_come_from_reparsed_report(self):
+        from wflib import review
+
+        ctx, entry = self._fixture()
+        proposers, unreadable = review.proposers_from_imported(ctx, [entry])
+        self.assertEqual(proposers, {"F1": "codex"})
+        self.assertEqual(unreadable, [])
+
+    def test_disposition_with_real_finding_id_is_accepted(self):
+        from wflib import review
+
+        ctx, entry = self._fixture()
+        proposers, unreadable = review.proposers_from_imported(ctx, [entry])
+        problems = review.dispositions_problems(
+            [{"finding_id": "F1", "decision": "accepted", "reason": "已修", "recheck_by": "pi"}],
+            proposers, unreadable=unreadable)
+        self.assertEqual(problems, [])
+
+    def test_self_review_still_rejected(self):
+        from wflib import review
+
+        ctx, entry = self._fixture()
+        proposers, unreadable = review.proposers_from_imported(ctx, [entry])
+        problems = review.dispositions_problems(
+            [{"finding_id": "F1", "decision": "accepted", "reason": "已修", "recheck_by": "codex"}],
+            proposers, unreadable=unreadable)
+        self.assertTrue(any("自证" in item.get("reason", "") for item in problems))
+
+    def test_unknown_finding_still_rejected(self):
+        from wflib import review
+
+        ctx, entry = self._fixture()
+        proposers, unreadable = review.proposers_from_imported(ctx, [entry])
+        problems = review.dispositions_problems(
+            [{"finding_id": "F9", "decision": "accepted", "reason": "x", "recheck_by": "pi"}],
+            proposers, unreadable=unreadable)
+        self.assertTrue(any("不属任何已导入报告" in item.get("reason", "") for item in problems))
+
+    def test_unreadable_report_gives_accurate_exit(self):
+        from wflib import review
+
+        ctx, entry = self._fixture()
+        import os
+        os.remove(os.path.join(ctx.root, entry["report_path"]))
+        proposers, unreadable = review.proposers_from_imported(ctx, [entry])
+        self.assertTrue(unreadable)
+        problems = review.dispositions_problems(
+            [{"finding_id": "F1", "decision": "accepted", "reason": "已修", "recheck_by": "pi"}],
+            proposers, unreadable=unreadable)
+        self.assertTrue(any("无法核对" in item.get("reason", "") for item in problems),
+                        "不可读不能报成'不存在'")
