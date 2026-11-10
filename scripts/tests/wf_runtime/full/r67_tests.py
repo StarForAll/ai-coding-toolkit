@@ -264,6 +264,9 @@ for _name, _script, _count in _re.findall(r"run_flow\s+(\S+)\s+(\S+)\s+(\d+)",
 proc = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_output=True, text=True,
                       env={**os.environ, "WF_FIX": "/tmp/r67_fake_fix", "WF_RELEASE_REPO": "/tmp/r67_fake_release",
                            "WF_REBUILD_RELEASE": "0", "WF_JOBS": "2",
+                           # 假环境里没有真实技术债：清空豁免清单，
+                           # 否则"假套件全绿"会触发 LEGACY-FIXED 的销账失败（那是真环境的规则）
+                           "WF_KNOWN_LEGACY": "",
                            "WF_RESULTS_DIR": "/tmp/r67_fake_results1"})
 _summary = [ln for ln in proc.stdout.splitlines() if ln.startswith("---- ")]
 rec("4 有失败时脚本非零退出", "exit≠0 且汇总报失败",
@@ -274,7 +277,10 @@ proc2 = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_outpu
                        env={**os.environ, "WF_FIX": "/tmp/r67_fake_fix", "WF_RELEASE_REPO": "/tmp/r67_fake_release",
                             "WF_REBUILD_RELEASE": "0",
                             # 必须显式隔离：外层 run_all 会 export RESULTS_DIR，内层若沿用会把外层结果行覆盖/清空
+                            "WF_KNOWN_LEGACY": "",
                             "WF_RESULTS_DIR": "/tmp/r67_fake_results2"})
+if proc2.returncode != 0:
+    print("4b fake 输出尾部:", "\n".join(proc2.stdout.splitlines()[-6:])[:500])
 rec("4b 无失败时零退出", "exit=0", f"exit={proc2.returncode}", proc2.returncode == 0)
 
 json.dump(results, open("/tmp/r67_results.json", "w"), ensure_ascii=False, indent=2)

@@ -202,6 +202,12 @@ def review_case(name, axes, expect_code, expect_verdict=None, single=False, slot
                "readable_scope": {"paths": ["pkg/**"]}, "exclusions": []}
     launch_path = f"/tmp/r71_launch_{name}.json"
     json.dump(request, open(launch_path, "w"), ensure_ascii=False)
+    # K6 第 3 类：外发以"确认入库"为准，请求里的 export_decision 只是声明
+    export_path = f"/tmp/r71_export_{name}.json"
+    json.dump([{"choice": "export", "paths": ["pkg/**"], "quote": "人同意把材料外发给审查 CLI"}],
+              open(export_path, "w"), ensure_ascii=False)
+    wf(["authorize", "record", "--task", task_id, "--file", export_path, "--json"],
+       {"generation": gen()}, sid)
     rc, payload, _ = wf(["review-launch", "--task", task_id, "--launch-request", launch_path, "--json"],
                         {"generation": gen()}, sid)
     if rc != 0:
@@ -211,12 +217,20 @@ def review_case(name, axes, expect_code, expect_verdict=None, single=False, slot
 
     found = _glob.glob(f"/tmp/wf-review/*/{task_id}/round-1")
     staging = found[0] if found else f"/tmp/wf-review/unknown/{task_id}/round-1"
+    # v42 B1：`fail` 轴必须配 blocking finding，申报 verdict 也要与推导一致——
+    # 否则报告本身不成立（WF_REVIEW_INVALID），测的就不是判定链路了。
+    _failing = [axis for axis, value in (axes or {}).items()
+                if (value.get("conclusion") if isinstance(value, dict) else value) == "fail"]
+    _findings = [{"id": f"f-{i}", "severity": "blocking", "axis": axis,
+                  "assertion_ref": "a1", "summary": f"{axis} 未满足"}
+                 for i, axis in enumerate(_failing, start=1)]
+    _verdict = "fail" if _failing else "pass"
     for slot, cli in slot_specs:
         body = {"protocol": "wf-review-v1", "task-id": task_id, "round": 1, "reviewer-id": slot,
                 "source-cli": cli, "review-time": AT,
                 "review-focus": "x", "check-anchor": {"check_id": check.get("id"), "check_anchor": anchor},
                 "read-scope": ["pkg/**"], "excluded-scope": ["node_modules/**", ".env", "*.pem", ".codex/**", "../**", ".wf/tasks/**"], "scope-exceptions": [],
-                "axes": axes, "findings": [], "verdict": "pass"}
+                "axes": axes, "findings": list(_findings), "verdict": _verdict}
         slot_dir = os.path.join(staging, slot)
         os.makedirs(slot_dir, exist_ok=True)
         path = os.path.join(slot_dir, "report.md")
@@ -272,6 +286,8 @@ rec("3f 单 reviewer 不产生判定结论", "WF_REVIEW_INVALID + degraded + 两
 fail_axes = {axis: {"conclusion": "fail", "basis": "b"} for axis in AXES}
 fail_code, fail_verdict, fail_facts, fail_record = review_case("real-fail", fail_axes, "WF_REVIEW_INVALID", "fail")
 _fail_reviews = fail_record.get("reviews") or {}
+if fail_verdict != "fail":
+    print("3h facts:", json.dumps(fail_facts, ensure_ascii=False)[:500])
 rec("3h 有效审查 fail 落判定且历史可重建", "WF_REVIEW_INVALID + verdict=fail + attempts.outcome=fail",
     f"{fail_code}/{fail_verdict}/"
     f"{[a.get('outcome') for a in (_fail_reviews.get('attempts') or [])]}",
