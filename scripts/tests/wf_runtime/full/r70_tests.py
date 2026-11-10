@@ -40,18 +40,38 @@ def gen():
 
 
 # ---------- 1. 卸载：既有偏离不被误判，确认期变化才失效 ----------
+def _release_source():
+    """发行目录：优先 WF_RELEASE_REPO（harness 提供），否则用仓库内已构建的发行树。
+
+    两处都可能不存在（未构建/未挂载）——那就明确报出来，而不是让卸载步骤连锁失败。
+    """
+    candidates = [os.environ.get("WF_RELEASE_REPO"), "/tmp/wf-fixtures/release-repo",
+                  "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf-release"]
+    for path in candidates:
+        # install.py 要求"已检出的发行目录"：既要有清单，也要有 wf-release/ 实体assets
+        if (path and os.path.exists(os.path.join(path, "wf-release.json"))
+                and os.path.isdir(os.path.join(path, "wf-release"))):
+            return path
+    raise SystemExit("r70: 需要有效的发行目录（WF_RELEASE_REPO，含 wf-release.json 与 wf-release/ 实体）；"
+                     "单独运行请先 bash scripts/build-wf-release.py 并用 run_all.sh 提供该路径")
+
+
 def make_project(name):
     target = f"/tmp/wf-fixtures/r70-{name}"
     shutil.rmtree(target, ignore_errors=True)
     os.makedirs(target)
     subprocess.run(["git", "init", "-q"], cwd=target, capture_output=True)
-    subprocess.run(["/softwares/python/bin/python3",
-                    "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/install.py",
-                    "--target", target, "--release-ref", "refs/tags/wf-v0.1.0",
-                    "--source", os.environ.get("WF_RELEASE_REPO") or "/tmp/wf-fixtures/release-repo",
-                    "--platform", "dsh",
-                    "--confirm", ],
-                   capture_output=True, text=True)
+    proc = subprocess.run(["/softwares/python/bin/python3",
+                           "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/install.py",
+                           "--target", target, "--release-ref", "refs/tags/wf-v0.1.0",
+                           "--source", _release_source(),
+                           "--platform", "dsh",
+                           "--confirm", ],
+                          capture_output=True, text=True)
+    if not os.path.exists(os.path.join(target, ".wf/bin/uninstall.py")):
+        # 安装没落地时后面全是连锁失败：把安装输出带出来，别让它静默
+        print(f"make_project({name}) 安装未落地 rc={proc.returncode}:",
+              ((proc.stdout or "") + (proc.stderr or ""))[-300:].replace("\n", " | "))
     return target
 
 
@@ -66,10 +86,19 @@ def run_uninstall(target, mutator=None):
             break
         buffer += char
     token = re.search(r"令牌：([0-9a-f]{32})", buffer)
+    # 进程可能在提示前就退出（前置不成立/已无内容可卸）：此时写管道会 BrokenPipe 掩盖真实原因。
+    # 直接把它已输出的内容带回去，由断言显示事实。
+    if token is None and proc.poll() is not None:
+        rest = proc.stdout.read()
+        proc.wait(timeout=120)
+        return proc.returncode, buffer + rest
     if mutator:
         mutator()
-    proc.stdin.write((token.group(1) if token else "0" * 32) + "\n")
-    proc.stdin.flush()
+    try:
+        proc.stdin.write((token.group(1) if token else "0" * 32) + "\n")
+        proc.stdin.flush()
+    except BrokenPipeError:
+        pass
     rest = proc.stdout.read()
     proc.wait(timeout=120)
     return proc.returncode, buffer + rest
@@ -85,6 +114,8 @@ def first_asset(target):
 # ① 干净资产：卸载成功
 clean_target = make_project("clean")
 rc, out = run_uninstall(clean_target)
+if rc != 0:
+    print("① 卸载输出:", out[-400:].replace("\n", " | "))
 rec("1 干净资产可卸载", "WF_OK", f"rc={rc}", rc == 0 and "WF_OK" in out)
 
 # ② 预览前已有本地偏离、确认期间未变：应成功（保留偏离）
@@ -144,6 +175,12 @@ def launch(round_no):
                "readable_scope": {"paths": ["pkg/**"]}, "exclusions": []}
     path = f"/tmp/r70_launch_{round_no}.json"
     json.dump(request, open(path, "w"), ensure_ascii=False)
+    # K6 第 3 类：外发以"确认入库"为准（请求里的 export_decision 只是声明）
+    export_path = f"/tmp/r70_export_{round_no}.json"
+    json.dump([{"choice": "export", "paths": ["pkg/**"], "quote": "人同意把材料外发给审查 CLI"}],
+              open(export_path, "w"), ensure_ascii=False)
+    wf(["authorize", "record", "--task", task_id, "--file", export_path, "--json"],
+       {"generation": gen()}, "sess-W1")
     return wf(["review-launch", "--task", task_id, "--launch-request", path, "--json"],
               {"generation": gen()}, "sess-W1")
 
@@ -183,13 +220,17 @@ found = _glob.glob(f"/tmp/wf-review/*/{task_id}/round-1")
 staging1 = found[0] if found else f"/tmp/wf-review/unknown/{task_id}/round-1"
 for slot in ("slot-a", "slot-b"):
     import_report(staging1, slot, 1, check, anchor,
-                  **({"findings": [{"id": "F1", "severity": "blocker", "summary": "真失败"}], "verdict": "fail"}
+                  # v42 B1：blocking finding 必须落在具体轴上，否则"输入不成立"而非"判定 fail"
+                  **({"findings": [{"id": "F1", "severity": "blocker", "axis": "acceptance",
+                                    "assertion_ref": "a1", "summary": "真失败"}], "verdict": "fail"}
                      if slot == "slot-a" else {}))
 rc, payload, _ = wf(["review-decide", "--task", task_id, "--round", "1", "--json"],
                     {"generation": gen()}, "sess-W1")
 record = json.load(open(os.path.join(directory, "task.json"), encoding="utf-8"))
 first = (record.get("reviews") or {}).get("result") or {}
 outcome = ((record.get("reviews") or {}).get("attempts") or [{}])[0].get("outcome")
+if (payload or {}).get("code") != "WF_OK":
+    print("② decide 原文:", json.dumps(payload or {}, ensure_ascii=False)[:400])
 rec("2 首轮真失败被记录", "result.verdict=fail 且 outcome=fail",
     f"code={(payload or {}).get('code')} verdict={first.get('verdict')} outcome={outcome}",
     first.get("verdict") == "fail" and outcome == "fail")
