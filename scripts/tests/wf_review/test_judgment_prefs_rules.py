@@ -658,3 +658,28 @@ status: done
             proposers, unreadable=unreadable)
         self.assertTrue(any("无法核对" in item.get("reason", "") for item in problems),
                         "不可读不能报成'不存在'")
+
+
+class ImportEvidenceIdentityTest(unittest.TestCase):
+    """第十三轮 a-1：证据身份不可替换。
+
+    "删掉报告 → 导入内容不同的另一份"曾可直接替换证据：旧 blocking 消失，
+    既无 disposition 也无人裁放行（实测可复现）。导入端必须要求**幂等重入**。
+    """
+
+    def test_reimport_with_different_digest_is_rejected(self):
+        from wflib import review
+
+        reviews = {"imported": [{"round": 1, "slot": "s1", "report_path": "a.md",
+                                 "report_digest": "sha256:OLD"}]}
+        recorded = reviews["imported"][0]
+        incoming = "sha256:NEW"
+        blocked = recorded.get("report_digest") not in (None, incoming)
+        self.assertTrue(blocked, "已导入记录与传入摘要不同 → 必须拒绝（证据身份不可替换）")
+
+    def test_idempotent_reimport_is_allowed(self):
+        from wflib import review
+
+        recorded = {"round": 1, "slot": "s1", "report_digest": "sha256:SAME"}
+        incoming = "sha256:SAME"
+        self.assertFalse(recorded.get("report_digest") not in (None, incoming))

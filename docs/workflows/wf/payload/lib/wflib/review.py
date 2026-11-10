@@ -1161,6 +1161,21 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
             target = legacy
         existing_digest = records.file_digest(target)
         incoming_digest = "sha256:" + records.sha256_hex(text.encode("utf-8"))
+        # 证据身份：**该轮该槽位一旦有导入记录，就只能幂等重入**。
+        # 否则"删掉文件 → 导入一份内容不同的报告"可以直接替换证据，
+        # 旧 blocking 就此消失（既无 disposition 也无人裁放行）——实测可复现。
+        recorded = next((entry for entry in (reviews.get("imported") or [])
+                         if int(entry.get("round") or 0) == int(round_no)
+                         and normalize_agent(entry.get("agent") or entry.get("slot"))
+                         == normalize_agent(slot)), None)
+        if recorded and recorded.get("report_digest") not in (None, incoming_digest):
+            raise ReviewError("WF_REVIEW_INVALID",
+                              {"reason": "该轮该槽位已有导入记录，内容不同：证据身份不可替换",
+                               "slot": slot, "round": int(round_no),
+                               "recorded": recorded.get("report_digest"),
+                               "incoming": incoming_digest,
+                               "exits": ["另开新一轮（新报告在新轮可核对）",
+                                         "按 review-decide --unavailable 留痕后由人处置"]})
         if existing_digest and existing_digest != incoming_digest:
             # 同路径不同摘要即冲突：不覆盖、不留旧结论（机制稿 §9.2）
             raise ReviewError("WF_REVIEW_INVALID",
