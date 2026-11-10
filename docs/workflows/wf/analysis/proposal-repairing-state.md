@@ -32,7 +32,7 @@
   "check": {"usable": false,
             "reason": "archived|no_check|not_passed|invalidated_content_changed|anchor_mismatch|rule_changed|anchor_unavailable|structure_incomplete",
             "check_id": "A", "scope": "archive_gate", "detail": null},
-  "review": {"state": "<下表 13 档之一>",
+  "review": {"state": "<下表 13 档之一，或兜底的 inconsistent>",
              "round": 2, "launched": 2, "imported": 2, "declared": 2,
              "slots_missing": [], "slots_stale": [], "single_provider": false,
              "open_blocking": [{"finding_id": "f1", "severity": "blocker", "round": 1}],
@@ -49,7 +49,7 @@
 
 `nonstep` 七项**全部是记录级只读**（`gates.py:166` 的 debug、`tasks.py:2990` 的依赖、`plan.confirmed_source` 的复杂确认、judgments 的 escalated、`check.acceptance_results` 的 required 未核实、`task.action`/`paused`/`suspended`），**不复制门禁分支**，只是把同一批事实取出来。
 
-### 1.2 取值优先级（**13 档（0–12）**，含固定归档行与兜底行）
+### 1.2 取值优先级（**13 档（0–12）+ 1 条兜底行**）
 
 判据：
 ```
