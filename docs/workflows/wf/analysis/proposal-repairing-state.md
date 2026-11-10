@@ -12,7 +12,8 @@
 | 事实 | 位置 |
 |---|---|
 | `changes_persisted_fact` 在业务文件未提交时返回缺项，**即使已有授权**（`WF_WIP_UNRESOLVED`） | `tasks.py:1012` |
-| `imported` 条目**记录了 `findings`**（可用于核对"已处置但不可核实"） | `review.py:1163` |
+| **`imported` 条目不含 findings**（只有 round/slot/report_path/report_digest/anchor） | `review.py:1131-1144`（本轮更正 v11 的错误引用） |
+| 提出者只能**重解析报告**得到（已修，见 commit 7752520）；报告不可读时给出"无法核对"而非"不存在" | `review.py:573` `proposers_from_imported` |
 | `dependency_blockers(root, task)` 只读任务记录 | `tasks.py:2990` |
 | `debug_pending(task, threshold)` 只读任务记录（`execution.debug_declarations` + `check_history`） | `gates.py:166` |
 | `status_of_round` 的 `stale` 不计入 `arrived`；单 provider 轮 `required:1, arrived:1` 看起来"齐"；函数内直接算摘要（`PermissionError` 会冲出） | `review.py:359/385` |
@@ -34,7 +35,8 @@
             "check_id": "A", "scope": "archive_gate", "detail": null},
   "review": {"state": "<下表 13 档之一，或兜底的 inconsistent>",
              "round": 2, "launched": 2, "imported": 2, "declared": 2,
-             "slots_missing": [], "slots_stale": [], "single_provider": false,
+             "slots_missing": [], "slots_staged": [], "slots_stale": [], "slots_unreadable": [],
+             "single_provider": false,
              "open_blocking": [{"finding_id": "f1", "severity": "blocker", "round": 1}],
              "blocking_unknown": [{"slot": "a", "path": "…", "round": 1, "cause": "changed|missing|unreadable",
                                    "recorded_findings": ["f1"], "all_closed": false}],
@@ -49,7 +51,7 @@
 
 `nonstep` 七项**全部是记录级只读**（`gates.py:166` 的 debug、`tasks.py:2990` 的依赖、`plan.confirmed_source` 的复杂确认、judgments 的 escalated、`check.acceptance_results` 的 required 未核实、`task.action`/`paused`/`suspended`），**不复制门禁分支**，只是把同一批事实取出来。
 
-### 1.2 取值优先级（**13 档（0–12）+ 1 条兜底行**）
+### 1.2 取值优先级（**14 档（0–13）+ 1 条兜底行**）
 
 判据：
 ```
@@ -65,20 +67,21 @@ slots        = 该轮 slot 状态（来自 status_of_round：missing / staged / 
 | 0 | `status == "archived"` | `archived` | 已归档，不再评估 | —— |
 | 1 | 结论引用报告不可读 | `reports_unreadable` | 第 r 轮结论引用的 M 份报告不可读 | 见 §3 |
 | 2 | `undecided` 且该轮有不可读报告 | `reports_unreadable` | 第 N 轮 M 份报告不可读 | 见 §3 |
-| 3 | `undecided` 且存在 `missing`/`staged` 槽位 | `awaiting_reports` | 第 N 轮报告 i/m（缺 k） | 等报告（前置：槽位尚未产出） |
-| 4 | `undecided` 且**存在 `stale` 槽位**（无 missing/staged） | `reports_stale` | 第 N 轮报告已到但锚点失效（k 份） | **重发新一轮**（前置：当前检查可用）；不能"继续等" |
-| 5 | `undecided` 且全部 `imported` 且 `declared ≥ 2` | `imported_not_decided` | 第 N 轮报告到位（i/m），尚未判定 | 执行判定（前置：≥2 份 imported 且锚点一致） |
-| 6 | `undecided` 且 `declared == 1` | `degraded_single` | 第 N 轮为单 provider（退化） | 补第二个异种 reviewer 后重发，或按不可用处置 |
-| 7 | `blocking` 或 `blocking_unknown`（未降级）非空 | `open_blocking` | 未关闭 blocking N 条；另有 M 份报告不可核实 | 见 §4（两类**分别**列出口） |
-| 8 | `verdict == "fail"` | `verdict_fail` | 第 r 轮判 fail（绑定：当前/旧检查） | 事实 + 候选（重查 / 重发），顺序由 AI 判断 |
-| 9 | `verdict == "unavailable"` | `verdict_unavailable` | 不可用 | 补审查 / 人确认异常归档（**需放弃授权**，见 §6） |
-| 10 | `verdict == "pass"` 且 `bound_to_current` | `pass_bound` | 已通过（绑定当前检查） | —— |
-| 11 | `verdict == "pass"` 且 `!bound_to_current` | `pass_unbound` | 结论来自旧检查，当前检查未审查 | 重发（前置：检查可用）/ 先重查（前置：检查不可用） |
-| 12 | 无 `launches` | `not_started`（complex）/ `none_required`（其他） | 见文案 | `review-launch` / —— |
+| 3 | `undecided` 且存在 `missing` 槽位（无 staged/stale） | `awaiting_reports` | 第 N 轮报告 i/m（缺 k） | 等报告（前置：仍可联系到该 reviewer / 暂存目录仍在）；**永久等不到时 `review-decide --unavailable`（零导入亦可用）** |
+| 4 | `undecided` 且存在 `staged` 槽位（无 stale） | `report_staged` | 第 N 轮有 k 份报告已产出未导入 | **执行导入**（前置：暂存目录在且 agent 标 done）；等待不会让它自己变成 imported |
+| 5 | `undecided` 且**存在 `stale` 槽位**（无 missing/staged） | `reports_stale` | 第 N 轮报告已到但锚点失效（k 份） | **重发新一轮**（前置：当前检查可用）；不能"继续等" |
+| 6 | `undecided` 且全部 `imported` 且 `declared ≥ 2` | `imported_not_decided` | 第 N 轮报告到位（i/m），尚未判定 | 执行判定（前置：≥2 份 imported 且锚点一致） |
+| 7 | `undecided` 且 `declared == 1` | `degraded_single` | 第 N 轮为单 provider（退化） | 补第二个异种 reviewer 后重发，或按不可用处置 |
+| 8 | `blocking` 或 `blocking_unknown`（未降级）非空 | `open_blocking` | 未关闭 blocking N 条；另有 M 份报告不可核实 | 见 §4（两类**分别**列出口） |
+| 9 | `verdict == "fail"` | `verdict_fail` | 第 r 轮判 fail（绑定：当前/旧检查） | 事实 + 候选（重查 / 重发），顺序由 AI 判断 |
+| 10 | `verdict == "unavailable"` | `verdict_unavailable` | 不可用 | 补审查 / 人确认异常归档（**需放弃授权**，见 §6） |
+| 11 | `verdict == "pass"` 且 `bound_to_current` | `pass_bound` | 已通过（绑定当前检查） | —— |
+| 12 | `verdict == "pass"` 且 `!bound_to_current` | `pass_unbound` | 结论来自旧检查，当前检查未审查 | 重发（前置：检查可用）/ 先重查（前置：检查不可用） |
+| 13 | 无 `launches` | `not_started`（complex）/ `none_required`（其他） | 见文案 | `review-launch` / —— |
 | — | **兜底行**：以上均不命中（脏数据，如 `verdict=invalidated` 且 `active_round == result.round`） | `inconsistent` | 记录组合不自洽（列判据值） | 交人核对记录；**不得据此归档** |
 
 **三处修正**：
-- **`stale` 单列（第 4 档）**：`status_of_round` 的 `stale` 不计入 `arrived`，若与 `missing` 合并会显示"继续等"——而 anchor 失效的报告**等不到**任何新报告，正确动作是重发。材料缺失 / 材料失效 / 材料齐是三个不同机械事实。
+- **`stale` 单列（第 5 档）**：`status_of_round` 的 `stale` 不计入 `arrived`，若与 `missing` 合并会显示"继续等"——而 anchor 失效的报告**等不到**任何新报告，正确动作是重发。材料缺失 / 材料失效 / 材料齐是三个不同机械事实。
 - **单 provider 单列（第 6 档）**：`status_of_round` 在单 provider 轮返回 `required:1, arrived:1`（看起来齐），但 `decide` 必拒（`review.py:1272`）→ 若落第 5 档会给出注定失败的候选。
 - **兜底行 `inconsistent`**：性质测试会立刻打出 `verdict=invalidated` 且 `active_round == result.round` 这类无行命中的组合；没有兜底行，性质测试第一批输入就打回表设计。
 
@@ -86,23 +89,32 @@ slots        = 该轮 slot 状态（来自 status_of_round：missing / staged / 
 
 ---
 
-## 2. 机制修补：`blocking_unknown` 必须有真正的退出路径
+## 2. 机制修补：不可读报告不能被当成"没有缺陷"，但**退出只能由人给**
 
-问题：`open_findings` 对不可读报告直接 `continue`（`review.py:184`），其 findings 不计入 `blocking`；`review-passed` 只核结论引用报告；`final_gate` 只在 `blocking` 非空时阻断 → **删掉带 blocking 的旧轮报告即可归档**（逃逸口，实测可构造）。
+**为什么必须补**：`open_findings` 对不可读报告直接 `continue`（`review.py:184`），其 findings 不计入
+`blocking`；`review-passed` 只核结论引用报告；`final_gate` 只在 `blocking` 非空时阻断 →
+**删掉带 blocking 的旧轮报告即可归档**（实测可构造）。
 
-修补：`open_findings` 增出 `blocking_unknown`；`final_gate` 在其非空时阻断（复用 `WF_REVIEW_INVALID`，exit 三条）。
+**为什么退出只能由人给**（第十一轮把我 v11 的三条自动退出全部否掉，理由已核实）：
 
-**v10 的三个出口有两个其实解不开**（第十轮指出）：新一轮只追加记录、不移除旧导入；`--unavailable` 只写判定结果、不处置旧报告。本版给出**三条真实退出**：
-
-| 退出 | 判定规则（全部记录级、可复算） |
+| v11 的自动退出 | 被否的理由（我核实属实） |
 |---|---|
-| ① 被后续轮次取代 | 若 `max(pass_round) > unknown.round`（该轮结论 pass 且绑定当次 check），则该 unknown **降级为留痕、不再阻断**——更新证据已接管旧证据 |
-| ② 声明不可用 | 该轮 `verdict == "unavailable"`（`--unavailable` 留痕）→ 降级为留痕、不阻断；出口是补审查或人确认异常归档 |
-| ③ 已处置且可核对 | 报告不可读，但 `imported` 条目**记录过它的 findings**（`review.py:1163`）；若这些 finding id **全部**被 dispositions 以 `accepted` 关闭 → 降级为留痕（"已处置但不可核实"不再强制重发） |
+| ① 被后续 pass 轮取代 | `reviews.result` **只保留最新一轮**（`review.py:1425`），`attempts.outcome` 是尝试级摘要且单调保留 fail，**无法还原"每轮 verdict 与其 check 绑定"** → "`max(pass_round) > unknown.round`" 无数据可算；而且"新轮 pass"并不等于"旧轮的 blocking 已被处置"——它会被用来**绕开关闭** |
+| ② `--unavailable` 即降级 | unavailable 只证明"审查做不成"，**不证明缺陷已关闭**；一条 unavailable 解除全部未知 = 又一条绕过路径 |
+| ③ 已处置且可核对 | 依据"imported 记录过 findings"**是错的**（记录里没有）；即便将来持久化，也只对**今后**的导入生效，而该场景恰恰是**旧轮**报告已丢 → 对它最需要服务的历史数据永久失效 |
 
-③ 正是"误伤面"的收窄：v10 会把"findings 早已关闭、只是文件没了"也判成必须重发。三者任一成立即不再阻断，阻断时 `blocking_unknown[].all_closed`/`cause`/`round` 都随事实输出，便于人核对。
+**本版定案**：
 
----
+1. `open_findings` 增出 `blocking_unknown = [{slot, path, round, cause}]`；
+2. `final_gate` 在 `blocking_unknown` 非空时阻断（复用 `WF_REVIEW_INVALID`）；
+3. 出口**只有两条**：
+   - **重发该轮**（新报告可核对）——但它**不自动解除**旧 unknown，因为"新证据是否足以承接旧问题"是判断不是比较；
+   - **人裁留痕**：决定文件里写一条放行记录（`authorize record --choice review_unknown_accept`，走既有 K6 授权通道），
+     记录内容含 `round/slot/path/原因/人/quote`；`open_findings` 见该记录即把对应 unknown 降级为留痕。
+4. 出口只有两条是**有意的保守**：证据不可核实 ≠ 没有缺陷；解除必须有人签字。
+
+这样 §2 从"造新的判定逻辑"变成"**加一条阻断 + 走既有授权通道**"，与本提案"机制只做事实、判断留人"的定位一致；
+F1/F2（记录里没有 findings、关闭链历史数据不可识别）也就不再是阻塞项——它们作为**独立缺口**另案处理（见 §8）。
 
 ## 3. `cause` 与健壮性
 
@@ -164,7 +176,7 @@ v10 写"status 与 gate 都无阻断再请求收工"——但 `changes_persisted
 
 | 技能 | 加一行 |
 |---|---|
-| `wf-finish` | 收工前读 `wf status` 的 `unresolved`（**非步骤**事实：blocking / blocking_unknown / escalated / required 未核实 / 复杂确认 / 依赖 / debug / 动作）；有则先处理。**`wf gate` 的 `changes-persisted` 缺项由收工动作本身完成，不作为"请求确认"的前置** |
+| `wf-finish` | ① 读 `wf status` 的 `unresolved`（非步骤事实：blocking/blocking_unknown/escalated/required 未核实/复杂确认/依赖/debug/动作），有则先处理；② **仍要跑 `wf gate --due before_archive`**，其步骤缺项按下列规则处理：`changes-persisted` **不算前置**（由收工动作本身完成）；`sampled`、`knowledge-disposed`、`retrospective-done`、`review-passed`、`spec-loaded` **算前置**，缺则先补 |
 | `wf-continue` | `in_progress/finish` 路由前先看 `unresolved`；有未结事实时先处理，不要直接引导收工 |
 
 ---
@@ -197,16 +209,18 @@ v10 写"status 与 gate 都无阻断再请求收工"——但 `changes_persisted
 | 1 | 无 check → `no_check`；受控失效 → `invalidated_content_changed`；execute 期改文件 → `anchor_mismatch` |
 | 2 | 无 `launches` 的复杂任务 → `not_started`；非 complex → `none_required` |
 | 3 | 判定完成后引用报告被改 → `reports_unreadable`（不是 `pass_bound`） |
-| 4 | 报告**缺失** → `awaiting_reports`；报告**锚点失效** → `reports_stale`（两者必须分开） |
-| 5 | 单 provider 轮（`declared==1`）→ `degraded_single`（不是 `imported_not_decided`） |
-| 6 | 已判定 pass 绑定 C1 → 改码重查 → `pass_unbound` |
-| 7 | 旧轮 blocking 未关、新轮 pass → 仍 `open_blocking` |
-| 8 | **删掉带 blocking 的旧轮报告 → `blocking_unknown` 非空且归档被拒；随后（a）新轮 pass（b）`--unavailable`（c）findings 已全关，三者任一 → 降级留痕且可归档** |
-| 9 | 权限不足（`PermissionError`）不再让 `status`/`review-status` 崩溃，而归入 `unreadable` |
-| 10 | `wf gate` 输出结构未变；`unresolved.nonstep` 七类齐全（含复杂确认/依赖/debug） |
-| 11 | 归档准入与改动前一致（除 §2 的修补外）；`archived` → `archived` 档；`usable` 与 `gates` 不一致即失败；`--short` 的 `task.check` 已派生 |
-| 12 | 收工流程：业务文件未提交时 `wf-finish` **仍可请求确认**（`changes-persisted` 不算前置） |
-| 13 | `verdict=invalidated` 在 `active_round > result.round` 时作为后缀显示；**不再有永不触发的分支** |
+| 5 | 报告**缺失** → `awaiting_reports`；报告**锚点失效** → `reports_stale`（两者必须分开） |
+| 6 | 单 provider 轮（`declared==1`）→ `degraded_single`（不是 `imported_not_decided`） |
+| 7 | 已判定 pass 绑定 C1 → 改码重查 → `pass_unbound` |
+| 8 | 旧轮 blocking 未关、新轮 pass → 仍 `open_blocking` |
+| 9 | **删掉带 blocking 的旧轮报告 → `blocking_unknown` 非空且归档被拒；新轮 pass 与 `--unavailable` 均**不**自动解除；只有 `authorize record --choice review_unknown_accept`（人裁留痕）后降级并放行** |
+| 9b | `staged` 槽位 → `report_staged` 且候选是"执行导入"；`missing` 槽位 → `awaiting_reports` 且带 `--unavailable` 逃逸 |
+| 9c | 发现模式（真实 reviewer 名）两份报告已导入 → `status_of_round` 不报 missing；第 6 档可命中 |
+| 10 | 权限不足（`PermissionError`）不再让 `status`/`review-status` 崩溃，而归入 `unreadable` |
+| 11 | `wf gate` 输出结构未变；`unresolved.nonstep` 七类齐全（含复杂确认/依赖/debug） |
+| 12 | 归档准入与改动前一致（除 §2 的修补外）；`archived` → `archived` 档；`usable` 与 `gates` 不一致即失败；`--short` 的 `task.check` 已派生 |
+| 13 | 收工流程：业务文件未提交时 `wf-finish` **仍可请求确认**（`changes-persisted` 不算前置） |
+| 13b | `verdict=invalidated` 在 `active_round > result.round` 时作为后缀显示；**不再有永不触发的分支** |
 | 14 | **性质测试**：对判据全组合（launches 有无 × undecided × slot 状态四值 × blocking/unknown × verdict 四值 × bound × complexity）穷举，断言**必命中且仅命中一档**（兜底行吸收脏组合） |
 
 ---
