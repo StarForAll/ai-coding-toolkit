@@ -20,8 +20,11 @@ def check():
     root, lib, payload = H.stage()
     H.load(lib)
     if os.environ.get("WF_REPRO_INJECT") == "1":
+        # 码表已改为 protocol 投影（codes.py 不再持有枚举字面量），注入点随之改变：
+        # 覆盖一枚码的档位为非法值，判定物一旦错就必须红。
         H.patch(os.path.join(payload, "lib", "wflib", "codes.py"),
-                '"WF_OK": (', '"WF_OK": ("ok", ')
+                "CODES = _protocol_codes()",
+                'CODES = _protocol_codes()\nCODES["WF_OK"] = ("ok", CODES["WF_OK"][1])')
     from wflib import codes as C
 
     problems = []
