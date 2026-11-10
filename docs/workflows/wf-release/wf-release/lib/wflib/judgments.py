@@ -76,7 +76,9 @@ def skeleton(ctx, task):
                              for item in (task.get("judgments") or [])
                              if isinstance(item, dict) and item.get("kind") == "标准变更"],
         # [扩面]：本次新增的文件（相对归档/基线不存在者），来源取触发它的判断或 finding
-        "new_paths": [{"path": path, "from": source} for path, source in _new_paths(ctx, task)],
+        "new_paths": [{"path": path, "from": source}
+                      for path, source in _new_paths(ctx, task, classified)],
+        "new_in_scope": _new_in_scope(task, classified),
         "deleted_paths": _deleted_paths(ctx, task),
         # [未核实]：required 但这次没跑到、或被标成 supporting 的验收项，必须带原因与补偿
         "unverified": _unverified(ctx, task),
@@ -307,9 +309,29 @@ def append(task, entry, facts=None):
 
 
 
-def _new_paths(ctx, task):
-    """本次新增的文件 + 来源。文件列表取 **git 事实**（基线以来 A 状态 + 未跟踪），
-    来源仍只从任务记录（判断/finding）取；两者都不猜。"""
+def _new_paths(ctx, task, classified=None):
+    """本次新增的**面外**文件 + 来源。
+
+    语义（v42 §4.4/§5.3）：`[扩面]` 只表示"修下去要碰批准面之外的文件——需你复核"。
+    所以这里必须按分类过滤：
+      - 框架自有资产 / 控制记录（`.wf/tasks/**`、安装收据…）→ 完全不计（不是本任务交付）；
+      - 批准面**之内**的新增 → 归 `[规模]`，不算扩面（把面内新增写进扩面会让"9 个新文件"
+        这种噪声淹没真正的越界）；
+      - 批准面**之外**的新增 → 进 `[扩面]`，保留来源标注。
+    """
+    from . import scope as scope_mod
+    from . import tasks as tasks_mod
+
+    if classified is None:
+        try:
+            classified = scope_mod.classify_candidates(ctx.root, task,
+                                                       receipts=tasks_mod.task_receipts(ctx.root))
+        except Exception:
+            classified = {}
+    buckets = (classified or {}).get("buckets") or {}
+    # f：已提交但不在批准面；c：未提交且未归属。两者都只取"新增文件"
+    candidates = set(buckets.get("f") or []) | set(buckets.get("c") or [])
+    in_scope = list(buckets.get("e") or [])
     paths = []
     base = task.get("baseline_head")
     if base:
@@ -332,11 +354,16 @@ def _new_paths(ctx, task):
                 sources.setdefault(str(finding["path"]), finding.get("id") or "finding")
     seen, result = set(), []
     for path in paths:
-        if path in seen:
+        if path in seen or path not in candidates:
             continue
         seen.add(path)
         result.append((path, sources.get(path)))
     return result
+
+
+def _new_in_scope(task, classified):
+    """批准面之内的新增数量（归 `[规模]`，不进 `[扩面]`）。"""
+    return len(list(((classified or {}).get("buckets") or {}).get("e") or []))
 
 
 def _deleted_paths(ctx, task):
@@ -355,17 +382,35 @@ def _git(root, args):
 
 
 def _unverified(ctx, task):
-    """required 未跑 / supporting 未验证的验收项：必须给原因与补偿（缺了就照实说缺）。"""
+    """未结案的验收项：**从真实验收结果与处置记录派生**，不猜。
+
+    此前的实现只读 plan 里的 required=False 项，导致"必需验证真失败"这种最该给人看的事实
+    在预览里消失（门禁仍拦得住，但人审的那一屏漏了关键信息）。
+    """
+    from . import tasks as tasks_mod
+
+    resolutions = task.get("unverified_resolutions") or {}
     entries = []
-    plan = task.get("plan") or {}
-    for item in plan.get("verifications") or []:
+    for item in ((task.get("check") or {}).get("acceptance_results") or []):
         if not isinstance(item, dict):
             continue
-        if item.get("required") is False or item.get("supporting"):
-            entries.append({"id": item.get("id"), "reason": item.get("reason") or "未说明",
-                            "compensation": item.get("compensation") or "未给"})
+        if item.get("conclusion") == "passed":
+            continue
+        acceptance_id = item.get("acceptance_id")
+        resolution = resolutions.get(str(acceptance_id)) or {}
+        if resolution:
+            continue      # 已由人处置（verify resolve）的不再列为"未核实"
+        try:
+            required = tasks_mod.is_required(task, acceptance_id) if hasattr(tasks_mod, "is_required") else True
+        except Exception:
+            required = True
+        entries.append({"id": acceptance_id,
+                        "reason": f"验收结论={item.get('conclusion') or '未通过'}",
+                        "compensation": ("必需项：只能收窄口径或异常归档"
+                                         if required else "非必需：可记录为 supporting"),
+                        "required": required})
     for item in task.get("unverified") or []:
-        if isinstance(item, dict):
+        if isinstance(item, dict) and not resolutions.get(str(item.get("id"))):
             entries.append({"id": item.get("id"), "reason": item.get("reason") or "未说明",
                             "compensation": item.get("compensation") or "未给"})
     return entries
@@ -408,11 +453,21 @@ def _archive_records(root):
 
 
 def _top_dirs(task):
-    """顶层目录集合：§5.3 的"同类任务"按目录重叠判断，取 task 记录里的改动路径。"""
+    """顶层目录集合：§5.3 的"同类任务"按目录重叠判断。
+
+    取**归档记录里真实存在**的批准触碰面（`entry_snapshot.touch_paths`，未开工回退 plan）——
+    此前读 `task.changed_paths`，而正常流程从不写这个字段，导致对照永远"无同类任务可比"。
+    """
+    paths = ((task.get("entry_snapshot") or {}).get("touch_paths")
+             or (task.get("plan") or {}).get("touch_paths") or [])
     dirs = set()
-    for path in task.get("changed_paths") or []:
-        parts = str(path).split("/")
-        dirs.add(parts[0] if len(parts) > 1 else ".")
+    for path in paths:
+        text = str(path)
+        parts = text.split("/")
+        if len(parts) > 1:
+            dirs.add(parts[0])
+        elif "*" in text:
+            dirs.add(".")
     return dirs
 
 
@@ -563,7 +618,9 @@ def render_preview(task, facts=None, sampling_line=None, root=None):
                                  for item in added_paths[:6])
                      + ("…" if len(added_paths) > 6 else ""))
     else:
-        lines.append("[扩面]    0 个新文件")
+        in_scope = facts.get("new_in_scope") or 0
+        lines.append("[扩面]    0 个面外新文件"
+                     + (f"（面内新增 {in_scope} 个，见 [规模]）" if in_scope else ""))
     # [规则文件]：仓库级规则文件一旦改动会影响后续所有任务，必须单列（集合来自 protocol）
     rule_files = [item for item in (facts.get("repo_rule_files") or []) if item]
     if rule_files:

@@ -241,19 +241,20 @@ class QualityComparisonTest(unittest.TestCase):
     def test_no_history_is_stated_not_faked(self):
         from wflib import judgments
 
-        root = self._repo([], {"id": "t1", "changed_paths": ["pkg/a.py"], "judgments": []})
-        lines = judgments.quality_comparison(root, {"id": "t1", "changed_paths": ["pkg/a.py"]})
+        task = {"id": "t1", "entry_snapshot": {"touch_paths": ["pkg/a.py"]}, "judgments": []}
+        root = self._repo([], task)
+        lines = judgments.quality_comparison(root, task)
         self.assertTrue(lines[0].startswith("[判断质量]"), lines)
         self.assertIn("无同类任务可比", lines[0])
 
     def test_diff_counts_and_basis_side_by_side(self):
         from wflib import judgments
 
-        previous = {"id": "old", "changed_paths": ["pkg/x.py", "pkg/y.py"],
+        previous = {"id": "old", "entry_snapshot": {"touch_paths": ["pkg/x.py", "pkg/y.py"]},
                     "judgments": [{"kind": "关闭", "decision": "d1",
                                    "basis": "v1 全量通过，覆盖 pkg/x.py 与 pkg/y.py 两个文件",
                                    "evidence_refs": ["v:1"]}]}
-        current = {"id": "new", "changed_paths": ["pkg/x.py"],
+        current = {"id": "new", "entry_snapshot": {"touch_paths": ["pkg/x.py"]},
                    "judgments": [{"kind": "关闭", "decision": "d2", "basis": "已通过", "evidence_refs": []},
                                  {"kind": "扩面", "decision": "d3", "basis": "新增文件", "evidence_refs": []}]}
         root = self._repo([previous], current)
@@ -463,3 +464,59 @@ class NoProjectionRecursionTest(unittest.TestCase):
             judgments.skeleton = original
         self.assertEqual(called["skeleton"], 0)
         self.assertIn("rejected_unresolved", facts)
+
+
+class PreviewRealFactsTest(unittest.TestCase):
+    """审查第三轮：预览必须消费**真实**记录字段，否则"代码在、永不生效"。"""
+
+    def test_unverified_comes_from_acceptance_results(self):
+        from types import SimpleNamespace
+
+        from wflib import judgments
+
+        task = {"id": "t", "judgments": [],
+                "check": {"acceptance_results": [{"acceptance_id": "a1", "conclusion": "failed"}]}}
+        facts = judgments.skeleton(SimpleNamespace(root="/tmp", key=lambda required=True: "k"), task)
+        ids = [item.get("id") for item in facts["unverified"]]
+        self.assertIn("a1", ids, "必需的失败验收项必须出现在预览事实里")
+
+    def test_resolved_unverified_is_dropped(self):
+        from types import SimpleNamespace
+
+        from wflib import judgments
+
+        task = {"id": "t", "judgments": [],
+                "check": {"acceptance_results": [{"acceptance_id": "a1", "conclusion": "failed"}]},
+                "unverified_resolutions": {"a1": {"kind": "narrow", "reason": "无环境"}}}
+        facts = judgments.skeleton(SimpleNamespace(root="/tmp", key=lambda required=True: "k"), task)
+        self.assertEqual([item for item in facts["unverified"] if item.get("id") == "a1"], [])
+
+    def test_scope_filtered_new_paths(self):
+        """面内新增不进 [扩面]；批准面之外的新增才进（审查 a3/b1）。"""
+        import subprocess, tempfile
+        from pathlib import Path
+        from types import SimpleNamespace
+        from wflib import judgments
+
+        root = tempfile.mkdtemp(prefix="wf-scope-")
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        for key, value in (("user.email", "t@e.com"), ("user.name", "t")):
+            subprocess.run(["git", "config", key, value], cwd=root, check=True)
+        (Path(root) / "pkg").mkdir()
+        (Path(root) / "pkg" / "a.py").write_text("a\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=root, check=True)
+        subprocess.run(["git", "commit", "-qm", "i"], cwd=root, check=True)
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root,
+                              capture_output=True, text=True).stdout.strip()
+
+        (Path(root) / "pkg" / "new_in.py").write_text("x\n", encoding="utf-8")   # 面内新增
+        (Path(root) / "other").mkdir()
+        (Path(root) / "other" / "new_out.py").write_text("y\n", encoding="utf-8")  # 面外新增
+        subprocess.run(["git", "add", "."], cwd=root, check=True)
+
+        task = {"id": "t", "baseline_head": head,
+                "entry_snapshot": {"touch_paths": ["pkg/**"]}}
+        ctx = SimpleNamespace(root=root, key=lambda required=True: "k")
+        paths = [path for path, _source in judgments._new_paths(ctx, task)]
+        self.assertIn("other/new_out.py", paths)
+        self.assertNotIn("pkg/new_in.py", paths, "批准面内的新增不算扩面")
