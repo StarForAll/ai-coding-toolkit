@@ -146,6 +146,11 @@ def scenario(title, sid, mutate=None):
                "export_decision": dec("export", "approve"), "submitted_scope": {"diff": "git diff", "requirement": ["prd"], "test_results": ["v1"]},
                "readable_scope": {"paths": ["pkg/**"]}, "exclusions": []}
     json.dump(request, open("/tmp/r68_launch.json", "w"), ensure_ascii=False)
+    # K6 第 3 类：外发以"确认入库"为准，请求里的 export_decision 只是声明
+    json.dump([{"choice": "export", "paths": ["pkg/**"], "quote": "人同意把材料外发给审查 CLI"}],
+              open("/tmp/r68_export.json", "w"), ensure_ascii=False)
+    wf(["authorize", "record", "--task", task_id, "--file", "/tmp/r68_export.json", "--json"],
+       {"generation": gen()}, sid)
     rc, payload, _ = wf(["review-launch", "--task", task_id, "--launch-request", "/tmp/r68_launch.json",
                          "--json"], {"generation": gen()}, sid)
     if rc != 0:
@@ -207,7 +212,9 @@ code = scenario("R68 轴失败", "sess-T6",
                                      "testability": {"conclusion": "fail", "basis": "缺可测性"}}}})
 rec("6 审查轴 fail → 判定拒绝", "WF_REVIEW_INVALID", code, code == "WF_REVIEW_INVALID")
 code = scenario("R68 未覆盖例外", "sess-T7", {"slot-b": {"scope-exceptions": ["验收用例缺失"]}})
-rec("7 声明未覆盖例外 → 判定拒绝", "WF_REVIEW_INVALID", code, code == "WF_REVIEW_INVALID")
+# v42 B1 改变了这条：报告声明的"未覆盖项"不再一义三用（既不判 fail，也不再阻断），
+# 统一按**缺口**呈现并由三态结论承载（见 review.py 对应注释）。故此处应放行且留痕。
+rec("7 声明未覆盖例外 → 按缺口留痕（不阻断）", "WF_OK", code, code == "WF_OK")
 
 # ---- 8. repair：确认等待窗口内写者变化 ----
 def bump(path):

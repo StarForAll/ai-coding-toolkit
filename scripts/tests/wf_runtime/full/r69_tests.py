@@ -120,6 +120,11 @@ def launch():
                "export_decision": dec("export", "approve"), "submitted_scope": {"diff": "git diff", "requirement": ["prd"], "test_results": ["v1"]},
                "readable_scope": {"paths": ["pkg/**"]}, "exclusions": []}
     json.dump(request, open("/tmp/r69_launch.json", "w"), ensure_ascii=False)
+    # K6 第 3 类：外发以"确认入库"为准，请求里的 export_decision 只是声明
+    json.dump([{"choice": "export", "paths": ["pkg/**"], "quote": "人同意把材料外发给审查 CLI"}],
+              open("/tmp/r69_export.json", "w"), ensure_ascii=False)
+    wf(["authorize", "record", "--task", task_id, "--file", "/tmp/r69_export.json", "--json"],
+       {"generation": gen()}, "sess-V1")
     return wf(["review-launch", "--task", task_id, "--launch-request", "/tmp/r69_launch.json", "--json"],
               {"generation": gen()}, "sess-V1")
 
@@ -139,7 +144,14 @@ rc, payload, _ = launch()
 import glob
 
 found = re.search(r'"(/tmp/wf-review/[^"]*/' + re.escape(task_id) + r'/round-1)"', json.dumps(payload or {}))
-staging = found.group(1) if found else glob.glob(f"/tmp/wf-review/*/{task_id}/round-1")[0]
+if not found:
+    _cand = glob.glob(f"/tmp/wf-review/*/{task_id}/round-1")
+    if not _cand:
+        print("r69 launch 原文:", json.dumps(payload or {}, ensure_ascii=False)[:400])
+        raise SystemExit("r69: review-launch 未产出暂存目录（先看上一行原文）")
+    staging = _cand[0]
+else:
+    staging = found.group(1)
 for slot in ("slot-a", "slot-b"):
     os.makedirs(os.path.join(staging, slot), exist_ok=True)
     open(os.path.join(staging, slot, "report.md"), "w", encoding="utf-8").write(report_body(slot))
