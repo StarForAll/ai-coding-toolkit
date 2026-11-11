@@ -249,3 +249,64 @@ class Round20FactsTest(unittest.TestCase):
             review._current_anchor = original
         self.assertTrue(status["reports_ready"], f"材料应就绪: {status}")
         self.assertTrue(status["eligibility_hints"], "单 provider 应作为资格提示单列")
+
+
+class Round21BoundariesTest(unittest.TestCase):
+    """第二十一轮：缺摘要不可替换、遗留裸 id 不扩张、declared==0 有原因。"""
+
+    def test_record_without_digest_cannot_be_replaced(self):
+        """缺登记摘要 = 身份不可证明 → 普通导入必须拒绝（否则删档换报告即绕过）。"""
+        from wflib import review
+
+        recorded = {"round": 1, "slot": "s1", "report_digest": None}
+        incoming = "sha256:NEW"
+        blocked = recorded.get("report_digest") is None
+        self.assertTrue(blocked, "缺摘要的记录不允许就地替换")
+        self.assertNotIn(recorded.get("report_digest"), (incoming,))
+
+    def test_legacy_bare_id_closes_only_earliest_round(self):
+        import tempfile
+        from pathlib import Path
+        from types import SimpleNamespace
+        from wflib import records, review
+
+        root = tempfile.mkdtemp(prefix="wf-legacy-")
+        Path(root, "review").mkdir()
+        bodies = {"review/c1.md": ("f1", "旧问题"), "review/r2.md": ("f1", "另一个问题")}
+        for rel, (_fid, summary) in bodies.items():
+            Path(root, rel).write_text(
+                "<!-- wf-review-report:v1 -->\n```json\n"
+                + '{"protocol":"wf-review-v1","task-id":"t","round":1,"reviewer-id":"x",'
+                  '"source-cli":"codex","review-time":"2026-11-11T00:00:00Z","review-focus":"x",'
+                  '"check-anchor":{"check_id":"c1","check_anchor":"sha256:0"},"read-scope":["pkg/**"],'
+                  '"excluded-scope":["node_modules/**",".env","*.pem",".codex/**","../**",".wf/tasks/**"],'
+                  '"scope-exceptions":[],"axes":{"acceptance":{"conclusion":"fail","basis":"b"}},'
+                  f'"findings":[{{"id":"{_fid}","severity":"blocker","axis":"acceptance","summary":"{summary}"}}],'
+                  '"verdict":"fail"}\n```\n', encoding="utf-8")
+        imported = []
+        for round_no, (rel, _body) in enumerate(bodies.items(), start=1):
+            imported.append({"round": round_no, "slot": f"a{round_no}", "report_path": rel,
+                             "report_digest": records.file_digest(str(Path(root, rel))),
+                             "anchor": {"check_anchor": "sha256:0"}})
+        task = {"id": "t", "reviews": {"imported": imported,
+                                       "dispositions": [{"finding_id": "f1", "decision": "accepted",
+                                                         "reason": "旧问题已修", "recheck_by": "pi"}]}}
+        ctx = SimpleNamespace(root=root, key=lambda required=True: "k")
+        out = review.open_findings(ctx, task)
+        # 遗留裸 id 只固定到最早一轮：第 2 轮的另一个 f1 不能被它关掉
+        self.assertEqual([item["finding_id"] for item in out["blocking"]], ["f1"])
+        self.assertEqual(out["blocking"][0]["slot"], "a2")
+
+    def test_declared_zero_has_reason(self):
+        import tempfile
+        from types import SimpleNamespace
+        from wflib import review
+
+        root = tempfile.mkdtemp(prefix="wf-zero-")
+        ctx = SimpleNamespace(root=root, key=lambda required=True: "k")
+        task = {"id": "t", "check": {"id": "c1", "anchor": {"check_anchor": "sha256:0"}},
+                "reviews": {"launches": [], "imported": [], "result": None}}
+        status = review.status_of_round(ctx, task)
+        kinds = [item["kind"] for item in status["material_blockers"]]
+        self.assertIn("no_declared_slots", kinds, status)
+        self.assertFalse(status["reports_ready"])

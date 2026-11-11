@@ -192,10 +192,25 @@ def open_findings(ctx, task):
             continue
         _fid = str(_item.get("finding_id"))
         if _item.get("round") is None or not _item.get("slot"):
-            closed_legacy.add(_fid)
+            closed_legacy.add(_fid)      # 记下裸 id，具体绑定在读完 imported 后固定到最早一轮
         else:
             closed.add((int(_item.get("round")), normalize_agent(_item.get("slot")), _fid))
     unaddressed, unavailable = [], []
+    # 遗留裸 id 的固定规则：只关**最早一轮**里同名的 finding（写记录当时的对象），
+    # 之后新增的轮次不会因为"字符串相同"被继承关闭——否则旧记录会随未来报告集合扩大关闭范围。
+    if closed_legacy:
+        first_by_id = {}
+        for _entry in reviews.get("imported") or []:
+            if not isinstance(_entry, dict):
+                continue
+            _slot_key = normalize_agent(_entry.get("slot"))
+            _round_key = int(_entry.get("round") or 0)
+            for _fid in list(closed_legacy):
+                key = (_round_key, _slot_key, _fid)
+                if key not in first_by_id and _fid:
+                    first_by_id.setdefault(_fid, key)
+        for _fid, _key in first_by_id.items():
+            closed.add(_key)
     for entry in reviews.get("imported") or []:
         if not isinstance(entry, dict):
             continue
@@ -234,7 +249,7 @@ def open_findings(ctx, task):
             if not isinstance(finding, dict) or not finding.get("id"):
                 continue
             _key = (int(entry.get("round") or 0), normalize_agent(entry.get("slot")), str(finding["id"]))
-            if _key in closed or str(finding["id"]) in closed_legacy:
+            if _key in closed:
                 continue
             unaddressed.append({"finding_id": finding["id"], "severity": finding.get("severity"),
                                 "slot": entry.get("slot"), "assertion_ref": finding.get("assertion_ref")})
@@ -254,7 +269,7 @@ def open_findings(ctx, task):
             "unavailable": unavailable,            # 兼容既有消费方（5 处）
             "blocking_unknown": unknown,           # 已放行的带 accepted=True
             "pending_unknown": [item for item in unknown if not item.get("accepted")],
-            "closed": sorted(key[2] for key in closed) + sorted(closed_legacy)}
+            "closed": sorted({key[2] for key in closed} | closed_legacy)}
 
 
 def lint_report(ctx, task, text):
@@ -515,6 +530,9 @@ def status_of_round(ctx, task, round_no=None):
                      and not extra_problems
                      and all(item["state"] == "imported" for item in slots))
     material_blockers = []
+    if not declared:
+        material_blockers.append({"kind": "no_declared_slots",
+                                  "note": "本轮没有声明任何槽位：只能重新发起审查"})
     if anchor is None:
         material_blockers.append({"kind": "anchor_unavailable"})
     if not anchor_checked_all:
@@ -1218,7 +1236,17 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
                               {"reason": "no finished report in this round", "round": round_no,
                                "agent": wanted, "directory": directory,
                                "exits": ["先由 reviewer 会话运行 review-context 并写完报告（status=done）"]})
-        results = [import_report(ctx, task, round_no, agent, candidate, _from_discovery=True)
+        # 发现模式：该轮该槽位**已有登记**时按恢复处理（保留原登记锚点/摘要）；
+        # 首次导入绝不传 restore —— 否则会撞上"恢复要求已登记"的前置而被全部拒绝。
+        def _has_record(round_no, slot_name):
+            return any(int(entry.get("round") or 0) == int(round_no)
+                       and normalize_agent(entry.get("agent") or entry.get("slot"))
+                       == normalize_agent(slot_name)
+                       for entry in (task.get("reviews") or {}).get("imported") or []
+                       if isinstance(entry, dict))
+
+        results = [import_report(ctx, task, round_no, agent, candidate, _from_discovery=True,
+                                 restore=_has_record(round_no, agent))
                    for agent, candidate in targets]
         last = results[-1]
         facts = dict((last or {}).get("facts") or {})
@@ -1351,6 +1379,15 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
                                "recorded": (recorded or {}).get("report_digest"),
                                "incoming": incoming_digest,
                                "exits": ["摘要不一致说明不是同一份证据：另开新一轮"]})
+        if recorded and recorded.get("report_digest") is None:
+            # 缺摘要的历史记录无法证明身份：普通导入不能"重建"它（否则删档换报告即可绕过），
+            # 只能用 --restore 且**必须给出与登记一致的字节**——而登记摘要为空时连这个也不成立，
+            # 因此出口是"另开新一轮"或 task-abandon（与 §2.1 的封闭口径一致）。
+            raise ReviewError("WF_REVIEW_INVALID",
+                              {"reason": "该轮该槽位的导入记录缺登记摘要：身份不可证明，不能就地替换",
+                               "slot": slot, "round": int(round_no),
+                               "exits": ["另开新一轮（报告在新轮可核对）",
+                                         "按 §5.6 异常归档（不再需要证明）"]})
         if recorded and recorded.get("report_digest") not in (None, incoming_digest):
             raise ReviewError("WF_REVIEW_INVALID",
                               {"reason": "该轮该槽位已有导入记录，内容不同：证据身份不可替换",

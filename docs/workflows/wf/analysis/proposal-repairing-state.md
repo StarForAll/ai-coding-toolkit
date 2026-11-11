@@ -1,13 +1,13 @@
-# 提案（v22）：⑥ 只做「结构化未结事实」+ 一条人裁放行记录 + 文档裁定
+# 提案（v23）：⑥ 只做「结构化未结事实」+ 一条人裁放行记录 + 文档裁定
 
-> 状态：**待审 v22**（第二十轮修正；Q1/Q2 已定）。
-> 前二十一版的形态与致命点见 §0。**边界**：机制修补已先行落地若干项（见 §8"已完成"行），
+> 状态：**待审 v23**（第二十一轮修正；Q1/Q2 已定）。
+> 前二十二版的形态与致命点见 §0。**边界**：机制修补已先行落地若干项（见 §8"已完成"行），
 > 其中**证据身份约束**与 **`review-status` 判定语义**已改变门禁/查询行为；
-> 展示层（`unresolved` 档位与挂载）与**人裁放行记录尚未实现**。
+> **尚未实现**：`unresolved` 的组装与挂载（三处展示）、`review-accept-unknown` 与放行记录、`final_gate` 消费 `pending_unknown`、`check_usability` 提取。其余机制项已落地（见 §8）。
 
 ---
 
-## 0. 二十一轮审查的形态演进与净结论
+## 0. 二十二轮审查的形态演进与净结论
 
 | 版本 | 形态 | 致命点 |
 |---|---|---|
@@ -29,6 +29,7 @@
 | **v20** | 删表 + 原子事实 + `--restore` + finding 身份 | Q1（批量放行形状）、Q2（两类阻断分列）未定，schema 与验收无法定稿；`bound_to_current`、撤销/信任模型、`blocking_unknown` 产生范围仍缺 |
 | **v21** | Q1/Q2 已定并落位 | 本版：§2.1 批次全有或全无、§2.2 code 优先级、§9 扩到 22 项、`open_findings` 增 `blocking_unknown`/`pending_unknown`（纯增量，门禁消费待批准） |
 | **v22** | 材料/资格分列 + restore 保原锚点 + 关闭需精确身份 | 本版：`reports_ready` 去资格化、`material_blockers`/`eligibility_hints` 分列；`--restore` 保留原登记锚点（含默认扫描路径）；不可读条目保住登记摘要（否则放行死锁）；新增 disposition 歧义即拒、`all_findings` 同步精确身份；`gate` 缺项带 `fulfilled_by`；撤销不删记录；`task-abandon` 定位为终局出口；验收 26 项 |
+| **v23** | 缺摘要不可替换 + 裸 id 固定 + schema 对齐 | 本版：§1.1 schema 与本版事实全面对齐（去 `accepted_by`、补 `pending_unknown`/`material_blockers`/`eligibility_hints`）；缺登记摘要的记录拒绝就地替换；遗留裸 id 只固定最早一轮；`declared==0` 给 `no_declared_slots`；发现式 restore 仅在已登记时传；§9 稠密编号 **36 项**（自计数） |
 **已核实的产品级事实（含对 v11 错误引用的更正）**
 
 | 事实 | 位置 |
@@ -53,22 +54,24 @@
   "check": {"usable": false,
             "reason": "archived|no_check|not_passed|invalidated_content_changed|anchor_mismatch|rule_changed|anchor_unavailable|structure_incomplete",
             "check_id": "A", "scope": "archive_gate", "detail": null},
-  "review": {   // 只有原子事实，没有档位分类
-             "reports_ready": false, "round_ready_blockers": [{"kind": "declared_lt_2"}],
+  "review": {                         // 只有原子事实，没有档位分类
              "round": 2, "launched": 2, "imported": 2, "declared": 2,
-             "slots": [{"slot": "s1", "state": "imported|staged|stale|missing|unreadable", "round": 2}],
-             "open_blocking": [{"finding_id": "f1", "severity": "blocker", "round": 1}],
+             "slots": [{"slot": "s1", "state": "imported|staged|stale|missing|unreadable",
+                        "round": 2, "reason": null, "importable": null}],
+             "reports_ready": false,                       // 只讲材料，不含资格
+             "material_blockers": [{"kind": "no_declared_slots|anchor_unavailable|anchor_unchecked|extra_report_stale|slot_not_imported",
+                                    "slot": "s1", "state": null, "round": null}],
+             "eligibility_hints": [{"kind": "declared_lt_2", "declared": 1}],   // 资格提示，非材料事实
+             "open_blocking": [{"finding_id": "f1", "severity": "blocker", "round": 1, "slot": "s1"}],
              "blocking_unknown": [{"slot": "s1", "path": "…", "report_digest": "sha256:…",
-                                   "round": 1, "cause": "changed|missing|unreadable",
-                                   "accepted_by": null}],
+                                   "round": 1, "cause": "changed|missing|unreadable", "accepted": false}],
+             "pending_unknown": ["<blocking_unknown 中 accepted=false 的条目，结构相同>"],
              "verdict": "pass|fail|unavailable|invalidated|null",
              "verdict_round": 1, "verdict_check_id": "A",
-             // 绑定口径 ≡ gates.review-passed：check_id 相等 **且** 引用报告三重摘要一致
-             "bound_to_current": true, "bind_problems": []},
+             "bound_to_current": true, "bind_problems": []},   // 口径 ≡ gates.review-passed
   "nonstep": {"escalated": 0, "required_unverified": 0, "complexity_unconfirmed": false,
-              "downgrade_incomplete": false,
-              "dependencies_unmet": [], "debug_unruled": [], "action_incomplete": null,
-              "paused": false, "suspended": false}
+              "downgrade_incomplete": false, "dependencies_unmet": [], "debug_unruled": [],
+              "action_incomplete": null, "paused": false, "suspended": false}
 }
 ```
 
@@ -96,14 +99,14 @@ AI 拿到原子事实后**完全有能力自行分类与排动作**——文档�
 | `review.slots[]` | 每个槽位 `imported/staged/stale/missing/unreadable` + `importable` + `reason` | `review.status_of_round` |
 | `review.reports_ready` | **只讲材料**：全部 `imported` + 锚点已核 + 无额外报告问题（**不含**人数/资格条件） | `review.status_of_round` |
 | `review.material_blockers[]` | 材料不就绪的原因：`anchor_unavailable` / `anchor_unchecked` / `extra_report_stale` / `slot_not_imported` | 同上 |
-| `review.eligibility_hints[]` | **资格提示，不是材料事实**（当前只有 `declared_lt_2`） | 同上 |
+| `review.eligibility_hints[]` | **资格提示，不是材料事实**（当前只有 `declared_lt_2`）。边界：只放**机械可算**的提示，**不得**把 `decide` 的判定逐步复制进来 | 同上 |
 | `review.open_blocking[]` | 未关闭 blocking（finding 身份 = `(round, slot, id)`） | `review.open_findings` |
-| `review.blocking_unknown[]` | 已导入但不可核实的报告（`cause`/`round`/`accepted_by`） | 同上 |
+| `review.blocking_unknown[]` | 已导入但不可核实的报告（`cause`/`round`/`accepted`） | 同上 |
 | `review.verdict` / `verdict_round` / `verdict_check_id` | 最新结论及其**绑定口径 ≡ `gates.review-passed`**（`check_id` 相等 **且** 引用报告三重摘要一致） | `reviews.result` + 同一摘要核 |
 | `nonstep.*` | 九项非步骤事实（见 §1.1 表） | 各自既有投影 |
 
 **为什么删表**（正面回答"会不会更难用"）：AI 需要的不是"第几档"，而是"哪些事实不成立、各自的原因"。原子事实已经带原因
-（`reason` / `round_ready_blockers` / `cause` / `bind 口径`），比"命中第 6 档"信息量更大且不会互相遮蔽
+（`reason` / `material_blockers` / `cause` / `bind 口径`），比"命中第 6 档"信息量更大且不会互相遮蔽
 （v19 的 `degraded_single` 被"报告齐但不可判"吞掉、归因还写成"锚点算不出"，就是表遮蔽事实的例子）。
 **判定资格**（人数、非实施者、单 provider、输入成立性）仍由 `review-decide` 自己判——机制**不复制**这些条件。
 
@@ -176,7 +179,7 @@ v12 写"走既有 K6 授权通道"，实测三处都不成立：`ACTIONS` 固定
 | code 优先级（Q2=甲） | 两类同时命中时，**先**返回 `WF_UNRESOLVED_BLOCKING`（可关闭路径优先），`facts` 里同时带 `unavailable_reports` 与 `blocking_unknown`；处理完 blocking 再归档才会遇到 unknown |
 | 放行 | 存在与 `(round, slot, report_digest)` **三者全等**的 acceptance → 该条降级为留痕，不再阻断 |
 | 不放行 | **新轮 pass 与 `--unavailable` 都不解除**（第十一轮否掉的理由：前者绕开关闭、后者只证明做不成审查） |
-| 显示 | `blocking_unknown[].accepted_by` 为 null 表示未放行；放行的在显示里标"已由人放行（quote 摘要）" |
+| 显示 | `blocking_unknown[].accepted` 为 false 表示未放行（`pending_unknown` 即其子集）；放行的标"已由人放行（quote 摘要）" |
 
 ### 2.2a 撤销与信任模型（必须声明）
 
@@ -216,7 +219,7 @@ v12 写"走既有 K6 授权通道"，实测三处都不成立：`ACTIONS` 固定
 
 ## 4. 只读门禁：不重构 `final_gate`
 
-- `evaluate_cli` **保持原样**（步骤面只读预检，输出结构不变）；
+- `evaluate_cli` **保持原样**（步骤面只读预检）：**信封结构不变**，但 `facts.missing[]` 条目新增 `fulfilled_by` 字段（见 §8 ②）——这是可见变化，不假装没有；
 - 非步骤阻断由 `unresolved.nonstep`（九项）提供；
 - **契约**：`wf gate --due before_archive` 是**步骤面**预检；非步骤阻断见 `unresolved`；两者**并读**才是归档前的完整依据；**gate 通过 ≠ 归档必成**（归档内还有 `repo_rules`/`delete` 确认、业务提交先于门禁）；**不要用"试归档"探路**（`tasks.py:3233` 会先做业务提交）。
 
@@ -240,14 +243,14 @@ v19 的档位表承担了"排顺序"的职责，结果每版都在表上翻车�
 
 | 技能 | 加一行 |
 |---|---|
-| `wf-finish` | ① 读 `unresolved`：**区分**"阻断完成声明"与"允许续做原动作"——`action_incomplete` 若正是 **archive 自身**未完成，**应续做该动作**（门禁会排除本次动作），不得当作"必须先清空才能进入归档"；其余未结项先处理；② 仍跑 `wf gate --due before_archive`：**缺项由机制输出**（`facts.missing` + `unresolved`），skill 只写"按缺项处理"，**不复制**步骤集合与例外规则（避免门禁一变就漂移） |
+| `wf-finish` | ① 读 `unresolved`：**区分**"阻断完成声明"与"允许续做原动作"——`action_incomplete` 先看 `gate` 给的 **`fulfilled_by`/`ignore` 事实**（机制输出）：标为"由目标动作完成"的缺项**不是前置**，可直接续做；其余未结项先处理；② 仍跑 `wf gate --due before_archive`：**缺项由机制输出**（`facts.missing` + `unresolved`），skill 只写"按缺项处理"，**不复制**步骤集合与例外规则（避免门禁一变就漂移） |
 | `wf-continue` | `in_progress/finish` 路由前先看 `unresolved`；有未结事实先处理，不直接引导收工 |
 
 ---
 
 ## 7. ⑥ 的实质处置：文档裁定（v42 不动）
 
-新增 `analysis/ruling-repair-vs-fixing.md`：不引入 `fixing` 阶段（维持 2026-11-09 人裁）；**二十一轮**审查证据摘要（§0 表）；与 v42 K10（L107）/S4（L122）/S5（L123）/§7.1（L401）差异逐条登记；记录两处语义压缩（`--short` 的 `task.check` 压成 `usable/reason`；`unresolved` 只报事实不报"能否结案"）；登记 §2 的放行记录与其绑定规则。
+新增 `analysis/ruling-repair-vs-fixing.md`：不引入 `fixing` 阶段（维持 2026-11-09 人裁）；**二十二轮**审查证据摘要（§0 表）；与 v42 K10（L107）/S4（L122）/S5（L123）/§7.1（L401）差异逐条登记；记录两处语义压缩（`--short` 的 `task.check` 压成 `usable/reason`；`unresolved` 只报事实不报"能否结案"）；登记 §2 的放行记录与其绑定规则。
 
 ---
 
@@ -265,48 +268,51 @@ v19 的档位表承担了"排顺序"的职责，结果每版都在表上翻车�
 | 展示点 | 3 |
 | skill 文本 | 2 |
 | 协议码表 / `final_gate` 结构 / `authorize.ACTIONS` | **0** |
-| 测试 | **26 项**（§9，全部针对原子事实；字母行各计一项） |
-| **已完成**（机制侧）：`7752520`/`d6266c4`/`8b252db`/`d198266`/`436b9d9`/`d6bfb71`/`adb4715`/`fbb40b5` + 本轮 **`open_findings` 增出 `blocking_unknown`/`pending_unknown`（纯增量，门禁尚未消费）** | K4b 关闭链重解析报告（`7752520`）；`status_of_round` 发现模式槽位对应（`d6266c4`/`8b252db`）；**导入端证据身份约束**（`d198266`）；**同一报告不得二次认领 + `ready_to_decide` 与五档口径对齐**（本轮） |
+| 测试 | **36 项**（§9，稠密编号，逐项一条断言） |
+| **已完成**（机制侧，commit 见括号） | K4b 关闭链重解析（`7752520`）；`status_of_round` 槽位对应（`d6266c4`/`8b252db`）；证据身份约束（`d198266`）；`all_findings` 元组返回 + 5 处读取健壮（`adb4715`/`d6bfb71`）；finding 身份精确化 + `reports_ready` 去伪（`fbb40b5`/`158c589`）；`blocking_unknown`/`pending_unknown`（`1a504c9`）；**本轮：缺摘要不可替换、遗留裸 id 固定最早一轮、`no_declared_slots`、发现式 restore 仅在已登记时传**（`158c589`+本轮） |
 
 ---
 
-## 9. 验收标准（26 项：编号字母行各计一项）
+## 9. 验收标准（**36 项**，全部针对原子事实）
 
 | # | 断言 |
 |---|---|
 | 1 | `check.usable/reason` 与 `gates` 判定逐值一致（8 个 reason 的映射表随实现给出） |
-| 2 | 槽位五值可达（`imported`/`staged`(带 `importable`)/`stale`(区分删除与改写)/`missing`/`unreadable`） |
+| 2 | 槽位五值可达（`imported`/`staged`(带 `importable`)/`stale`(区分删除改写)/`missing`/`unreadable`） |
 | 3 | 同一份报告不被二次认领（`arrived` 不虚增） |
-| 4 | 混合槽位任意子集都能如实列出；`reports_ready == false` 且 `material_blockers` 给出逐项原因 |
-| 5 | **`reports_ready` 不含资格**：单 provider 轮、实施者重叠时它**可以**为 true；CLI 文案**不出现"可判"** |
-| 6 | 单 provider → `eligibility_hints` 含 `declared_lt_2`；**不**写进 `material_blockers` |
+| 4 | 混合槽位任意子集都能如实列出；`reports_ready == false` 且 `material_blockers` 逐项给原因 |
+| 5 | **`reports_ready` 不含资格**：单 provider、实施者重叠时它**可以**为 true；CLI 文案**不出现"可判"** |
+| 6 | 单 provider → `eligibility_hints` 含 `declared_lt_2`，**不**写进 `material_blockers` |
 | 7 | 未认领的额外导入报告失效 → `material_blockers` 含 `extra_report_stale`；恢复原字节后消失（对照组） |
-| 8 | `bound_to_current` ≡ `gates.review-passed`（`check_id` 相等 **且** 引用报告三重摘要一致）；被改写时 `bind_problems` 非空 |
-| 9 | finding 身份 = `(round, slot, id)`：第 1 轮关闭不影响第 2 轮同名 finding；`open_findings` 条目带 `round`/`slot` |
-| 9b | **新增 disposition 必须精确**：同名 finding 出现在多轮时只给裸 id → **拒绝**并列出候选（遗留裸 id 仅对"本就不歧义"的记录生效） |
-| 9c | `all_findings` 的 `closed` 同样按精确身份计算（不再把两轮同名 finding 一起标已关闭） |
-| 10a | 批量放行成功：一次文件写 2 项（各带 `quote`）→ 同 `batch`，`pending_unknown` 清空 |
-| 10b | 任一项坏 → **整批拒绝、零写入**，返回 `bad_items`（`expected`/`actual`/`reason`） |
-| 10c | 子集放行：只列 1 份 → 该项 `accepted`，另一项仍在 `pending_unknown` |
-| 10d | 撤销：`--revoke --round/--slot` 与 `--revoke --batch` 均置 `revoked: true`（**不删记录**）并恢复阻断 |
-| 11 | 摘要不同**不匹配**（记录级单测，不构造非法路径） |
-| 11b | **权限故障的不可读条目也带登记摘要** → 精确匹配的人裁放行**能**解除（否则是死锁） |
-| 11c | 缺 `report_digest` 的遗留记录：任何放行都不匹配 → 出口只有 `task-abandon` 或重建该轮（文档已声明） |
-| 12 | 证据身份不可替换：删文件后导入同轮同槽位另一份报告被拒；`--restore` 仅当摘要与登记一致时放行 |
-| 12b | **`--restore` 保留原登记锚点**：check 已换代时恢复 → 记录仍是旧 `(check_id, anchor)`，`status` 据此判 `stale`（不显示 imported）；默认扫描路径也传 `restore=True` |
-| 13 | 权限故障不让 `status`/`review-status`/`review-decide`/`wf gate` 崩溃 |
-| 14 | **不变量（报告粒度）**：同一 `(round, slot)` 不会既进 `blocking`（可解析出 finding）又进 `blocking_unknown` |
-| 15 | 两类同时存在时 `final_gate` 先返回 `WF_UNRESOLVED_BLOCKING`，`facts` 同时带 `unavailable_reports` 与 `blocking_unknown` |
-| 16 | `stale.reason` 区分删除/改写；`file_digest_or_raise` 存在且新调用点必须用它或自行归因 |
-| 17 | `nonstep` **九项**齐全（含 `downgrade_incomplete`），`required_unverified` 复用 `projection` 口径 |
-| 18 | 归档准入基线写明：**口径 = 本次 finding 身份收紧之后**（该收紧本身会拦下"旧裸 id 跨轮关闭"的任务） |
-| 19 | `action_incomplete` 为 archive 自身时允许续做；`gate` 的该缺项带 `fulfilled_by: "archive_commit"`（机制事实，skill 不复制例外清单） |
-| 19b | 续做安全：业务提交先于门禁；门禁失败后重入按 `commit_grants` 幂等跳过已提交路径（断言重复提交不发生） |
-| 20 | 性质测试（靶子=原子事实）：槽位五值任意子集 × `declared∈{0,1,2,3}` × 锚点三态 × 额外报告三态 → `reports_ready == (全 imported ∧ 锚点已核 ∧ 无额外问题)`；`declared_lt_2` 只进 `eligibility_hints` |
-| 21 | 放行记录的**字段完备性**：`by` 必须 `human:` 前缀、`source` 必填、`attestation_digest` 入库；**不宣称"无法自签"**（信任模型见 §2.2a） |
-| 22 | `task-abandon` 定位：不跑 `final_gate`、不解除 `pending_unknown`，只以 `terminal=abnormal` 收尾 |
-| 23 | schema 与实现对齐：`blocking_unknown[].accepted`（bool）+ `pending_unknown[]` 均出现在 §1.1；`accepted_by` 已删除 |
-| 24 | 计数自洽：本表 26 项 = §8 的测试行（§11 #2） |
+| 8 | `declared == 0` → `material_blockers` 含 `no_declared_slots`（不得出现"不就绪且无原因"） |
+| 9 | `bound_to_current` ≡ `gates.review-passed`（`check_id` 相等 **且** 引用报告三重摘要一致）；被改写时 `bind_problems` 非空 |
+| 10 | finding 身份 = `(round, slot, id)`；`open_findings` 条目带 `round`/`slot` |
+| 11 | 新增 disposition 同名跨轮时只给裸 id → **拒绝**并列候选 |
+| 12 | **遗留裸 id 只固定到最早一轮**：旧记录不随未来新增轮次扩大关闭范围（第 2 轮同名 finding 仍 blocking） |
+| 13 | `all_findings` 的 `closed` 同样按精确身份计算 |
+| 14 | 批量放行成功：一次写 2 项（各带 `quote`）→ 同 `batch`，`pending_unknown` 清空 |
+| 15 | 任一项坏 → **整批拒绝、零写入**，返回 `bad_items`（`expected`/`actual`/`reason`） |
+| 16 | 子集放行：只列 1 份 → 该项 `accepted`，另一项仍在 `pending_unknown` |
+| 17 | 撤销：`--revoke --round/--slot` 与 `--revoke --batch` 均置 `revoked: true`（不删记录）并恢复阻断 |
+| 18 | 摘要不同**不匹配**（记录级单测，不构造非法路径） |
+| 19 | **权限故障的不可读条目也带登记摘要** → 精确匹配的放行**能**解除（否则死锁） |
+| 20 | 缺 `report_digest` 的遗留记录：普通导入**被拒**（身份不可证明），出口只有 `task-abandon` 或另开新一轮 |
+| 21 | 证据身份不可替换：删档后导入同轮同槽位另一份被拒；`--restore` 仅当摘要与登记一致时放行 |
+| 22 | **`--restore` 保留原登记锚点**：check 换代后恢复 → 记录仍旧 `(check_id, anchor)`，`status` 判 `stale` |
+| 23 | **发现式导入的 restore 只在已登记时传**：首次导入绝不传（否则撞"恢复要求已登记"前置，全部被拒） |
+| 24 | 权限故障不让 `status`/`review-status`/`review-decide`/`wf gate` 崩溃 |
+| 25 | 不变量（报告粒度）：同一 `(round, slot)` 不会既进 `blocking` 又进 `blocking_unknown` |
+| 26 | 两类同时存在时 `final_gate` 先返回 `WF_UNRESOLVED_BLOCKING`，`facts` 同时带两者 |
+| 27 | `stale.reason` 区分删除/改写；`file_digest_or_raise` 存在且新调用点必须用它或自行归因 |
+| 28 | `nonstep` 九项齐全（含 `downgrade_incomplete`），`required_unverified` 复用 `projection` 口径 |
+| 29 | 归档准入基线写明：**口径 = finding 身份收紧之后**（该收紧本身会拦下旧裸 id 跨轮任务） |
+| 30 | archive 自身未完成时允许续做；`gate` 该项带 `fulfilled_by`（机制事实，skill 不复述规则） |
+| 31 | 续做安全：业务提交先于门禁；门禁失败后重入按 `commit_grants` 幂等跳过（断言不重复提交） |
+| 32 | 性质测试（靶子=原子事实）：槽位五值任意子集 × `declared∈{0,1,2,3}` × 锚点三态 × 额外报告三态 → `reports_ready == (全 imported ∧ 锚点已核 ∧ 无额外问题 ∧ 有声明槽位)`；`declared_lt_2` 只进 `eligibility_hints` |
+| 33 | 放行记录字段完备性：`by` 必须 `human:` 前缀、`source` 必填、`attestation_digest` 入库；**不宣称"无法自签"** |
+| 34 | `task-abandon` 定位：不跑 `final_gate`、不解除 `pending_unknown`，只以 `terminal=abnormal` 收尾 |
+| 35 | schema 与实现对齐：`blocking_unknown[].accepted`（bool）+ `pending_unknown[]` + `material_blockers`/`eligibility_hints` 均在 §1.1；**无 `accepted_by`** |
+| 36 | **计数自洽**：本表条目数 = §8 测试行 = 本节标题数字（改表必须同时改三处） |
 
 ## 10. 已定项与剩余问题
 
@@ -325,7 +331,7 @@ v19 的档位表承担了"排顺序"的职责，结果每版都在表上翻车�
 
 ## 11. 定稿前固定核对清单（每次改版必跑）
 
-这份文档连续六版的翻车点全部落在这四项上，不是设计问题——把它们固化成清单：
+从 v15 到 v23 共八版，翻车点全部落在这四项上（v21/v22/v23 的 schema 残留、计数错误、账本滞后也不例外）——把它固化成清单：
 
 | # | 核对项 | 具体做法 |
 |---|---|---|
