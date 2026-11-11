@@ -181,9 +181,18 @@ def open_findings(ctx, task):
         if not rel:
             continue
         path = join(ctx.root, rel)
-        if records.file_digest(path) != entry.get("report_digest"):
+        try:
+            current_digest = records.file_digest(path)
+        except OSError as exc:
             unavailable.append({"slot": entry.get("slot"), "path": rel,
-                                "reason": "report changed after import"})
+                                "cause": "unreadable", "round": entry.get("round"),
+                                "reason": str(exc)})
+            continue
+        if current_digest != entry.get("report_digest"):
+            cause = "missing" if current_digest is None else "changed"
+            unavailable.append({"slot": entry.get("slot"), "path": rel, "cause": cause,
+                                "round": entry.get("round"),
+                                "reason": "报告导入后被删除" if cause == "missing" else "报告导入后被改写"})
             continue
         try:
             with open(path, "r", encoding="utf-8") as handle:
@@ -385,9 +394,16 @@ def status_of_round(ctx, task, round_no=None):
         record = {"slot": slot}
         if entry:
             path = join(ctx.root, entry.get("report_path") or "")
-            current = records.file_digest(path) if entry.get("report_path") else None
             record["imported"] = True
             record["report_path"] = entry.get("report_path")
+            try:
+                current = records.file_digest(path) if entry.get("report_path") else None
+            except OSError as exc:
+                # 权限/IO 故障不能把查询入口带崩：归入 unreadable（第五值真实存在于此）
+                record["state"] = "unreadable"
+                record["reason"] = str(exc)
+                slots.append(record)
+                continue
             if entry.get("report_digest") != current:
                 record["state"] = "stale"
                 record["reason"] = ("报告导入后被删除" if current is None else "报告导入后被改写")
@@ -425,7 +441,10 @@ def status_of_round(ctx, task, round_no=None):
     unreadable = [item["slot"] for item in slots if item["state"] == "unreadable"]
     # "可判"必须与判定入口同一口径（v15 档位表 5/6/7）：
     # 缺报告、锚点失效（decide 核锚点必拒）、只有单 provider（decide 明确拒绝）都不算可判。
-    ready = bool(declared) and not missing and not stale and not unreadable and len(declared) >= 2
+    # 只有"全部 **imported**"才算可判：staged 只表示文件存在（甚至可能 status=in-progress），
+    # 锚点尚未核验、导入记录为零时 decide 会拒。文件存在 / 报告完成 / 导入完成是三件不同的事。
+    ready = (bool(declared) and len(declared) >= 2
+             and all(item["state"] == "imported" for item in slots))
     return {"round": round_no, "required": len(declared), "arrived": len(arrived),
             "arrived_slots": [item["slot"] for item in arrived], "missing": missing,
             "stale": stale, "unreadable": unreadable,

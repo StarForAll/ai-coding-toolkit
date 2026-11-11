@@ -762,3 +762,56 @@ class SlotClaimTest(unittest.TestCase):
                             "imported": [], "result": None}}
         status = review.status_of_round(ctx, task)
         self.assertFalse(status["ready_to_decide"], "单 provider 轮必然判不了")
+
+
+class ReadinessSemanticsTest(unittest.TestCase):
+    """第十六轮 a/H2：文件存在 ≠ 报告完成 ≠ 导入完成；unreadable 必须是真实可达的第五值。"""
+
+    def test_staged_reports_are_not_ready_to_decide(self):
+        import os, tempfile, uuid
+        from types import SimpleNamespace
+        from wflib import review
+
+        root = tempfile.mkdtemp(prefix="wf-ready-")
+        ctx = SimpleNamespace(root=root, key=lambda required=True: "k")
+        task_id = "2026-" + uuid.uuid4().hex[:8]
+        directory = review.round_dir(ctx, task_id, 1)
+        os.makedirs(directory, exist_ok=True)
+        for name in ("review-codex.md", "review-gemini.md"):
+            with open(os.path.join(directory, name), "w", encoding="utf-8") as handle:
+                handle.write("---\nstatus: in-progress\n---\n")
+        task = {"id": task_id, "check": {"id": "c1", "anchor": {"check_anchor": "sha256:0"}},
+                "reviews": {"launches": [{"round": 1, "slots": [{"slot": "s1"}, {"slot": "s2"}]}],
+                            "imported": [], "result": None}}
+        status = review.status_of_round(ctx, task)
+        self.assertEqual([item["state"] for item in status["slots"]], ["staged", "staged"])
+        self.assertFalse(status["ready_to_decide"], "staged 不等于可判（还没导入、锚点未核）")
+
+    def test_unreadable_state_is_reachable(self):
+        """权限/IO 故障时 status_of_round 必须归入 unreadable，而不是把入口带崩。"""
+        import os, stat, tempfile, uuid
+        from types import SimpleNamespace
+        from wflib import records, review
+
+        root = tempfile.mkdtemp(prefix="wf-unread-")
+        ctx = SimpleNamespace(root=root, key=lambda required=True: "k")
+        task_id = "2026-" + uuid.uuid4().hex[:8]
+        directory = review.round_dir(ctx, task_id, 1)
+        os.makedirs(directory, exist_ok=True)
+        path = os.path.join(directory, "review-codex.md")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("---\nstatus: done\n---\n")
+        digest = records.file_digest(path)
+        os.chmod(path, 0)
+        rel = os.path.relpath(path, ctx.root).replace(os.sep, "/")
+        task = {"id": task_id, "check": {"id": "c1", "anchor": {"check_anchor": "sha256:0"}},
+                "reviews": {"launches": [{"round": 1, "slots": [{"slot": "s1"}, {"slot": "s2"}]}],
+                            "imported": [{"round": 1, "slot": "codex", "report_path": rel,
+                                          "report_digest": digest, "agent": "codex"}],
+                            "result": None}}
+        try:
+            status = review.status_of_round(ctx, task)
+        finally:
+            os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+        states = [item["state"] for item in status["slots"]]
+        self.assertIn("unreadable", states, f"实际: {status}")
