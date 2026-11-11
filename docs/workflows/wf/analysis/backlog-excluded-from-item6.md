@@ -20,6 +20,8 @@
 | A6 | 缺 `report_digest` 的遗留记录无法放行、无法恢复 | `imported[]` 历史记录 | 属导入链/迁移 | 明确出口（另开新一轮 / abandon） | 独立 |
 | A7 | **K4b 关闭链断裂**：`proposers_from_history` 从 `imported[].findings` 读提出者，而导入记录**不保存 findings**（`review.py:573` vs `1131`）→ 带真实 `finding_id` 的 disposition 被判"不属任何已导入报告"，**真实修复后无法正常关闭** | `review.py:573/611/1131`；`analysis/evidence/archived-task.tar.gz` 里 35 条 dispositions 全是 `finding_id=None` 的另一套形状 | 属关闭链身份 | 提出者须**重解析报告**（或持久化 findings 快照）并给出可核对的出口 | **⑥ 的 C2 依赖**：见 ⑥ §5 落地前提 |
 | A9 | **finding 精确身份缺失**：关闭匹配只按裸 `finding_id`（`review.py:173`），旧关闭会静默关掉他轮/他槽位的同名新问题；提出者索引同样按裸 id | `review.py:173` / `573` | 属关闭链身份 | 关闭与提出者按 `(round, slot, finding_id)` 绑定；旧记录歧义时**保留不关闭**并列入待裁 | **⑥ 的 C2 依赖**：见 ⑥ §5 前提 |
+| A10 | **逐轮决策/失效事实缺失**：`reviews.result` 只留最新一轮、`attempts.outcome` 是尝试级汇总、无 launch 级 `invalidated`、`result.round` 会因显式重判回退 → 无法判断「某轮是否已判、判成什么、是否失效」 | `review.py:765-770/1435` | 属审查记录模型 | 增 `rounds[]`（每轮 verdict/失效原因/决策时间）或等价的逐轮事实 | **⑥ 撤回 `reusable_rounds` 的原因**：缺它就硬算会错 |
+| A11 | **恢复事件未持久化**：报告恢复/再损坏的历史不落盘 → 「任何恢复都结束豁免」无法机械保证，只能保证「受控写点观察到恢复即失效」 | `review.py`（无记录） | 属记录模型/信任模型 | 增 `unverifiable_events[]`（进入/离开不可核实的时点）或更强信任模型 | ⑥ 已如实限缩保证范围 |
 | A8 | **关闭入口耦合完整审查**：写入 dispositions 的唯一入口是 `review-decide`，它先做人数/资格校验（`review.py:1272`），不区分复杂度 → light 任务要关闭 C2 也得凑齐整轮审查 | 同上 | 属入口设计 | 提供"仅登记复核关闭"的轻量入口，或明确该固定成本 | 独立（⑥ 已如实写为现状成本） |
 
 ### B. 查询与展示
