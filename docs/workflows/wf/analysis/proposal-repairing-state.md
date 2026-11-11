@@ -1,6 +1,6 @@
-# ⑥ 修复态的表达：不新增阶段，用「事实 + 清除动作」吸收 `fixing` 的收益（v48）
+# ⑥ 修复态的表达：不新增阶段，用「事实 + 清除动作」吸收 `fixing` 的收益（v49）
 
-> 状态：**待审 v48**。阶段：**方案审查阶段，实现零改动**（`review-phase-discipline.md`）。
+> 状态：**待审 v49**。阶段：**方案审查阶段，实现零改动**（`review-phase-discipline.md`）。
 > §6 是**待实施清单（全部未实施）**，**不是已完成的工作**；当前 `docs/workflows/wf/payload/` 与基线 `8da2f23`
 > **逐字节一致**（`git diff` 为空）。
 > **本文只回答 ⑥**：`fixing` 的收益如何在四阶段内表达。范围边界见 §8。
@@ -58,7 +58,8 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
   "conclusion": {"decided": true, "verdict": "pass", "round": 1, "check_id": "C1",
                  "binding": false, "binding_blockers": ["check_id_changed"],
                  "check_valid": true, "check_blockers": []},
-  "exits": [{"condition": "C4", "action": "resume_inflight", "round": 2, "when": null},
+  "exits": [{"condition": "C4", "action": "await_material", "round": 2, "when": null},
+            {"condition": "C4", "action": "relaunch_review", "round": null, "when": null},
             {"condition": "C4", "action": "redecide_round", "round": 1, "when": null}]
 }
 }
@@ -72,7 +73,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | `open_blocking` | `open_findings(...)["blocking"]`（**门禁同源、全轮次**）；条目须带 `round`（见 §6 ①）。**只含 blocking severity**；`unaddressed` 里的非 blocking 项**不在本文范围**（它们是判断骨架的输入，不是归档阻断） |
 | `unverifiable` | `open_findings(...)["unavailable"]`（唯一来源，条目带 `cause/round/report_digest`） |
 | `rounds[]` | **新增的逐轮决策事实**（`decide` 追加，append-only）：`{round, verdict, check_id, decided_at, invalidated_reason}`。**消费规则（同轮取最新）**：同一轮可能有多条（重判、失效追加）——所有消费方一律取该轮 `decided_at` 最大的一条，**禁止各自实现**。**失效同步（写点 `review-launch`）**：实施 CLI 变更时不能只处理当前 `result` 那一轮——**要对所有 `launch.implementation_cli` 与新 CLI 不同的轮各追加一条失效记录**（`invalidated_reason: "implementation CLI changed"`），否则旧的 pass 记录会永远是 pass 并被 `redecidable_rounds` 选中；而重判旧轮用的是**该轮 launch 保存的 CLI**（`review.py:1255`），根本发现不了与当前实施者的冲突。**失效优先级高于 verdict**：该轮最新记录带 `invalidated_reason` 即不可复用。**存量回退（无迁移）**：`rounds[]` 为空时按 `result` 推断一条 `{round: result.round, verdict: result.verdict ∈ {pass, fail} 时原值，否则 null, invalidated_reason: result.verdict == "invalidated" ? "implementation CLI changed" : null, decided_at: null, inferred: true}`，并在**下一次 `decide` 追加新记录时先把这条推断记录落盘**，避免 `result` 被覆盖后旧事实丢失。**消费排序**：`decided_at == null`（推断）视为最早，真实记录优先。<br>| `conclusion.binding` | **`review_binding`**（自 `review-passed` 提取）：`result.check_id == check.id` ∧ **结论至少引用一份已导入报告** ∧ 引用报告 `result_digest == recorded == 文件当前摘要`。<br>**"至少引用一份"必须写进判据**：门禁对 `cited` 为空是独立拒绝（`gates.py:695-696`），漏掉它会让空引用的结论算出 `binding == true` |
-| `launches[]` | **逐轮事实，每轮一行**（不替 AI 挑轮）：`{round, form, imported, declared, undecided, redecidable, usable, usable_blockers}`。<br>· `form` = `discovered`（该轮导入记录带 `agent`）／`legacy`（显式 `--report/--slot`）／`null`（尚无导入，无法判定）<br>· `undecided` = 该轮在 `rounds[]` 中**没有记录**<br>· `usable`（**只判该轮材料与资格，与历史无关；不含标准漂移**）：① 任一硬失败（`report_invalid`／`anchor_stale`／`implementer_overlap`）→ `false`；② 无硬失败且该轮已可判（`discovered` 按去重 CLI ≥2；`legacy` 按声明槽位齐）→ `true`；③ 已导入不足、仍有槽位未到 → `null`；④ 已导入不足、槽位已齐 → `false`（`insufficient_reviewers`）<br>· `redecidable` = 该轮最新记录 `verdict == pass` ∧ 报告摘要与锚点仍匹配 ∧ `invalidated_reason == null` ∧ 该轮 launch 的 `implementation_cli` == 当前实施 CLI（**不要求 check 换代**——同 check 的旧 pass 轮在`result` 被后来的 unavailable 覆盖时同样值得重判）<br>**`usable_blockers` 内容**：列出**全部**成立项（含 `material_missing`），硬失败在前；`usable` 取值只由 ①–④ 决定。<br>：列出**全部**成立项（含 `material_missing`），硬失败在前；`usable` 的取值只由 ①–④ 的优先级决定，不由列表长度决定。 |
+| `launches[]` | **逐轮事实，每轮一行**（不替 AI 挑轮）：`{round, form, imported, declared, undecided, redecidable, usable, usable_blockers}`。<br>· `form` = `discovered`（该轮导入记录带 `agent`）／`legacy`（显式 `--report/--slot`）／`null`（尚无导入，无法判定）<br>· `undecided` = 该轮在 `rounds[]` 中**没有记录**<br>· `usable`（**只判该轮材料与资格；不含标准漂移**）。**两类事实分开成立，槽位数不能代替资格**：<br>　**资格**（`review_eligibility`）：`implementer_overlap`（任一已导入报告的 CLI == 实施 CLI）、`insufficient_reviewers`（**按 CLI 去重**后 < 2）——**两种形态都要判**，`legacy` 槽位齐也一样<br>　**材料**（`launches[].imported/declared` 直接得出，不新增判定逻辑）：`material_missing` = 该轮已导入槽位 < 声明槽位<br>　**报告质量**（`review_report_problems`）：`report_invalid`、`anchor_stale`<br>合成：① 任一**资格硬失败**或**报告硬失败** → `false`；② 无硬失败且 `material_missing == false` → `true`；③ 无硬失败且 `material_missing == true` → `null`；④ 无硬失败、材料齐但资格不足（`insufficient_reviewers`）→ `false`（此条已在 ① 覆盖，保留编号以便对照）<br>**第三个输入（如实）**：`material` 事实由 `launch.slots` 与 `imported` 计数直接得出，**不在上述两个共享函数里**——它是计数而非判定，但仍是一个独立输入源，A26/A34 之外另有 A35 专门盯它<br>· `redecidable` = 该轮最新记录 `verdict == pass` ∧ 报告摘要与锚点仍匹配 ∧ `invalidated_reason == null` ∧ 该轮 launch 的 `implementation_cli` == **最新 launch 的 CLI**（纯派生；真实会话身份由 `decide` 入口把关）∧ **该轮当前 `usable == true`**（历史上判过 pass 不等于现在仍可重判——判定轮仍可继续导入报告，补入一份与实施 CLI 重叠的报告就会让该轮资格失效）。**不要求 check 换代**：同 check 的旧 pass 轮在 `result` 被后来的 `unavailable` 覆盖时同样值得重判<br>**`usable_blockers` 内容**：列出**全部**成立项（含 `material_missing`），硬失败在前；`usable` 取值只由 ①–④ 决定。<br>：列出**全部**成立项（含 `material_missing`），硬失败在前；`usable` 的取值只由 ①–④ 的优先级决定，不由列表长度决定。 |
 | `conclusion.check_valid` | **`check_validity`**（自 `check-passed` 提取，逐分支对齐 `gates.py:631-660`）：**`rule_version` 相符**（`check.anchor.rule_version` 存在且 ≠ 当前版本即 `WF_CHECK_STALE`，`gates.py:633-638`）∧ 当前锚点**可算**（`current_check_anchor` 无 `error`）∧ **未 `invalidated`** ∧ `result == pass` 且 **anchor 存在** ∧ 保存的 `check_anchor` == 当前内容锚点 ∧ **结构复核 `check_result_problems` 为空**。（v46 曾以「门禁不比较 `rule_version`」为由删掉该条——那是我读代码时**从 639 行起截取**、漏看 633-638 所致；该修正作废，v47 恢复） |
 | 便利派生 | `applicable = binding && check_valid` **仅作展示便利**，不作为任何完成条件（条件用 C1/C4 各自的原始事实） |
 
@@ -155,7 +156,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | 条件 | 清除动作（`exits` 机制枚举：`{condition, action, round, when}`，skill 只渲染不判断）。**`round` = 该动作的目标轮**（`redecide_round`/`resume_inflight`/`await_material` 必带；无轮次语境的动作为 `null`）。**`when`** = 该动作可执行的前置事实表达式，`null` 表示无条件。**不设 `preferred`**：偏好属于 AI 结合上下文的判断 |
 |---|---|
 | **C1 失效** | `rerun_check`（重跑 `task-check` 产生新 check） |
-| **C2 未空** | 逐项处置（修复代码 / 经复核否定或重分类）→ 由非提出者复核后补 disposition（**`decision` 必须写 `accepted`**，B5）→ `record_disposition` |
+| **C2 未空** | 逐项处置（修复代码 / 经复核否定或重分类）→ 由非提出者复核后补 disposition（**`decision` 必须写 `accepted`**，B5）→ `record_disposition`。**时机约束（机制事实，必须进指引）**：`decide` 按**当前工作区内容**重算锚点（`check.py:118`），代码改过之后旧轮报告就失配、在旧轮补处置必被 `WF_REVIEW_INVALID` 拒；合法路径只有两条——① 随 fail 轮那次 `decide` 一并写（内容未变时）；② 随**修好 + 重查后的新一轮** `decide` 捎带 |
 | **C3 未放行** | ① `restore_bytes`（找回原字节，不依赖身份）<br>② `human_release`（`release_allowed == true` 时）——**放行的语义边界（本版新增）**：某份报告不可核实时，它里面的 findings 也随之无法枚举（`open_findings` 跳过整份报告），因此放行**必然同时豁免该报告中未知的 findings**。决定文件必须显式承认这一点（`waive_unknown_findings: true`），缺失即拒；**且不得把放行描述成"缺陷已处置"**——C2 不会因此被满足，只是那部分问题从此不可枚举<br>③ `relaunch_review`——改变事实而不是硬闯：complex 的 `cited` 损坏不可放行，但可完成一次新审查；新结论引用新报告后，旧报告变成**非引用**证据 → 下一轮 `human_release` 即可用<br>④ 只有"上述全部不可行"才 `abandon_task`（**不得把"当前不能放行"直接推成"应放弃"**） |
 | **C4 不成立** | **按 `launches[]` 逐轮给出口，每条带 `round` 目标；机制不表达优先级**（无 `preferred` 字段）：<br>· 对每个 `undecided == true` 的轮：`usable == true` → `resume_inflight{round}`；`usable == false` → `relaunch_review`（`usable_blockers` 一并给出）；`usable == null` → `await_material{round}` 与 `relaunch_review` 并列<br>· 对每个 `redecidable == true` 的轮：`redecide_round{round}`——**与上面并行给出，不互斥**（重判旧轮与新轮推进可同时进行）<br>· 无任何轮可用（既无 undecided-usable，也无 redecidable）→ `relaunch_review`<br>· 审查做不成（`unavailable` / 环境凑不齐）→ `pause_for_human` / `abandon_task`（B4）<br>**为什么去掉 `preferred`**：材料是否够判是机制事实，**先重查、先修复还是先续判属于结合上下文的判断**。`check_valid == false ∧ usable == true` 就是典型：先续判会绑到旧 check，重查后又失绑——这个取舍机制无权代决。<br>**事实提示（非顺序强制）**：`check_valid == false` 只说明当前检查不能用于完成任务，不证明在途轮作废；结论绑定判定那一刻的 check（`review.py:1425`）。**已知盲区**：`usable` 不含标准漂移（导入时标记是历史事件，`standard_drift_gate` 在 decide 时重算，`review.py:482`），`decide` 始终是权威 |
 
@@ -220,10 +221,24 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 
 | 文件 | 状态 | 改动 |
 |---|---|---|
-| `gates.py` | 未实施 | ① 提取 `review_binding`（含 **cited 非空**）与 `check_validity`（含结构复核），步骤行为不变；② 两处摘要读取包 `except OSError`；③ `final_gate` 追加 `unverifiable` 阻断，`exits` 用 §4.2 的**枚举 token**（`restore_bytes`/`human_release`/`relaunch_review`/`resume_inflight`/`pause_for_human`/`abandon_task`），并带 `facts.reason = "unverifiable_evidence"` |
-| `review.py` | 未实施 | ① `open_findings` 的 `blocking`/`unaddressed` 条目补 **`round`**、`unavailable` 条目补 `cause/round/report_digest`，摘要读取包 `except OSError`；② `review-decide` **新增入口校验**：目标轮最新 `rounds[]`（**含按 `result` 推断出来的那条**——推断规则里已有 `invalidated_reason` 映射，判据现成）带 `invalidated_reason` → 拒绝（`WF_REVIEW_INVALID`，出口＝发起新一轮）；**校验必须发生在推断落盘之后、追加新记录之前**，否则存量任务会从推断路径重新打开这个洞；随后 **追加 `reviews.rounds[]`**；`review-launch` 在实施 CLI 变更时**对所有 `launch.implementation_cli` 不同的轮各追加一条失效记录**（不只是 `result` 那轮）（消费方「同轮取最新」，见 §2.1）；`rounds[]` 为空时按 `result` 推断一条并在**首次写入前落盘**（`{round, verdict, check_id, decided_at, invalidated_reason}`，与 `attempts` 同一写路径）；并对同批 `decision != accepted` 的 open finding 在 `facts.not_closing` 里回报（「已驳回但未关闭」）；`review-import` 与 `review-decide` 各加**消费检查**（对应报告当前可核实 → 置 `consumed`）； ④ 提取**两个**共享函数（对应 `review-decide` 的两个既有通道，不合并、不混态）：**`review_eligibility`** ← `input_problems`（人数/异种/与实施 CLI 重叠）、**`review_report_problems`** ← `problems`（该通道含：申报 verdict 与推导不一致、**报告锚点失配**、报告事后改写、缺 `read-scope`/`excluded-scope`、敏感面缺口、未覆盖全部审查轴等）；`undecided.usable` 只用这两个，不自行判资格；⑤ 新增 `repair_scope`（纯派生）与 **`exits_for(facts)`（唯一出口实现）**：返回 `[{condition, action, preferred, when}]`，`action ∈ {rerun_check, record_disposition, restore_bytes, human_release, relaunch_review, resume_inflight, redecide_round, await_material, pause_for_human, abandon_task}`（**十个**），每条带 `round`（可空）与 `when`；⑥ `unknown_acceptances` 读写与撤销（含决定文件 schema 校验、`release_allowed` 校验） |
-| `tasks.py` | 未实施 | ① **D4-minimal（纳入实施范围；当前未实施）**：`cmd_archive` 在**业务提交之前**跑只读预检 = **C1–C4 ∧ `nonstep` 十项 ∧ 步骤面 ∧ `changes-persisted` 的可前置部分**（步骤面复用只读的 `gates.evaluate(ctx, task, "before_archive")`，`gates.py:765`；`changes-persisted` 拆两问：**「本次授权是否覆盖全部待持久化路径」可在提交前判**——`pending ⊄ 本次提交路径集` → 拒（`WF_WIP_UNRESOLVED`，`tasks.py:1009-1015`），只有「是否已经提交」这一问天然要等提交）；**预检须沿用 `ignore_action_id=task.action.id` 的自我豁免**（`tasks.py:3239`）——否则 `action_incomplete` 会看到本次归档动作本身，永远拒绝归档（自我死锁）。任一不满足即返回（**不提交**）。**`nonstep` 定义（**严格按 `final_gate` 的判定顺序**，`gates.py:865-952`）**：① 当前 check 非 pass（`WF_CHECK_FAILED`）② `escalated` 待答 ③ `pending_required_unverified` ④ `open_blocking` 非空（`WF_UNRESOLVED_BLOCKING`）⑤ complex 未经人确认（`decision.plan.complexity`）⑥ `incomplete_downgrade` ⑦ 依赖未满足（`WF_DEPENDENCY_UNMET`）⑧ `unruled_debug_multiples` ⑨ `action_incomplete`（须带 `ignore_action_id` 豁免本次归档动作）⑩ `paused`/`suspended`。这十项**全部不依赖业务提交**，可在提交前完整判定。 **仍未覆盖（按代码事实修正）**：`repo_rules`（`tasks.py:3208`）与 `delete`（`tasks.py:3219`）确认**本就在业务提交之前**、`final_gate` 也不检查它们，故不存在「提交后被拒」的窗口（上版把它们列为未覆盖是多报了风险）。真正残留的只有 `changes-persisted` 的**第二问**「是否已经提交」（天然要等提交）；其第一问「本次授权是否覆盖全部待持久化路径」已在预检里（见上）。（v46 一度把步骤面也列为未覆盖，属无理由收窄——`evaluate` 只读、预检无障碍，v47 已恢复。） | `cli.py` | 未实施 | ① `wf status` 输出 `repair_scope`，`unverifiable` 条目**渲染三态标签**、`open_blocking` 中「已驳回但未关闭」单独标注；（未放行＝阻断 / `released`＝「已豁免（未知）」）；② `--short` 输出四条件是否满足 + `repair_scope.exits` 原样（按 `condition` 过滤，不重新推导）；③ 新增 `wf review-accept-unknown`（`--revoke`，含 `consumed` 标记逻辑） | | `skills/`（**AI 指引交付**） | 未实施 | ① `wf-continue`：`in_progress/finish` 前先读 `repair_scope`，按 §4.2 处理，不直接引导收工；② `wf-finish`：收工前读 `repair_scope`；**不要试归档探路**；③ `wf-review-action`：处置形状从现状 `{finding, decision_ref, reason}`（`SKILL.md:26`）改为 `{finding_id, round, slot, decision, reason, recheck_by}`，并写明**`decision` 必须 `accepted` 才清零**（B5）；`round/slot` 是 A9 落地后的必填字段（A9 是可执行性前提，见 §5）——指引按 post-A9 形态写 | |
+| `gates.py` | 未实施 | ① 提取 `review_binding`（含 **cited 非空**）与 `check_validity`（含 `rule_version`、结构复核）供 `repair_scope` 复用，步骤行为不变；② 两处摘要读取包 `except OSError`；③ `final_gate` 追加 `unverifiable` 阻断，`exits` 用 §4.2 的 token 并带 `facts.reason = "unverifiable_evidence"` |
+| `review.py` | 未实施 | ① `open_findings` 的 `blocking`/`unaddressed` 条目补 `round`、`unavailable` 条目补 `cause/round/report_digest`（`cause` 须**区分 `missing`（`file_digest` 返回 `None`）与 `changed`（摘要不符）**），摘要读取包 `except OSError`；② `review-decide` 入口校验：**先落盘按 `result` 推断的记录**，再做两条拒绝——目标轮最新记录带 `invalidated_reason`，**或**该轮 launch 的 `implementation_cli` ≠ 本次会话实施 CLI（`WF_REVIEW_INVALID`，出口＝发起新一轮）；③ 追加 `reviews.rounds[]`；④ 提取 `review_eligibility`（←`input_problems`）与 `review_report_problems`（←`problems`）两个共享函数，不合并；⑤ `repair_scope` 纯派生 + `exits_for`（**唯一出口实现**，返回 `[{condition, action, round, when}]`，**无 `preferred`**） |
+| `tasks.py` | 未实施 | ① **D4-minimal**：`cmd_archive` 在业务提交前跑只读预检 = **C1–C4 ∧ `nonstep` 十项 ∧ 步骤面（跳过 `changes-persisted` 步骤，改用下述覆盖判定）∧ 授权覆盖判定**；② 预检调用 `evaluate` 时传 `ignore_action_id=task.action.id`；③ `changes-persisted` 的**可前置那一问**单独判：`pending ⊄ 本次提交路径集` → 拒（`WF_WIP_UNRESOLVED`，`tasks.py:1009-1015`）；④ `unknown_acceptances` 消费钩子（`final_gate` 之前） |
+| `cli.py` | 未实施 | ① `wf status` 输出 `repair_scope`，`unverifiable` 条目渲染三态、`open_blocking` 标「已驳回未关闭」、**`launches[]` 标 `inferred` 边界**；② `--short` 原样输出四条件 + `exits`（含 `round`），不重新推导；③ 新增 `wf review-accept-unknown`（`--revoke`，含 `consumed`）；④ **归档与 `status` 强制回显当前放行清单**（A12 的最小缓解，见 §6a） |
+| `skills/` | 未实施 | 见 **§6a 指引交付大纲**（独立交付物，含验收 B1–B6） |
 
+### 6a. 指引交付（与机制同批，不是附属品）
+
+机制给事实，指引负责「拿到事实后怎么合法行动」。交付四份改动 + 一份新增 **`wf-repair-loop`**（新指引，落地时加入 `skills/`）：
+
+| # | 文件 | 必须讲清的内容 |
+|---|---|---|
+| G1 | `wf-review-action` | 处置形状 `{finding_id, round, slot, decision, reason, recheck_by}`；**只有 `accepted` 清零**（`rejected`/`amended` 只记录）；**`--round` 必须显式传**——`decide` 默认取最大 launch 轮，与 `exits.round` 可能不同 |
+| G2 | `wf-review-action` | **处置的时机约束**：`decide` 会按**当前工作区内容**重算锚点，代码一旦改动，旧轮报告即失配 → 在旧轮补处置会撞 `WF_REVIEW_INVALID`。合法路径只有两条：随 fail 轮那次 decide 写；或随**修好+重查后的新一轮** decide 捎带 |
+| G3 | `wf-repair-loop`（新） | 读 `repair_scope` 的顺序与判读：`launches[]` 逐轮看 `usable/redecidable`；`undecided` 在存量任务里可能是**推断残缺**（`inferred`），不代表可续判；`check_valid == false` 时「先重查还是先续判」由 AI 判断，并给出两条路径各自的后果 |
+| G4 | `wf-repair-loop` | **动作空间**：十个 token 的含义、哪些需要 `round`、哪些是终局；并列出口时如何选（机制不排序，AI 选定后说明理由） |
+| G5 | `wf-continue` / `wf-finish` | `in_progress/finish` 路由前先读 `repair_scope`；收工前读 `gate` 与 `repair_scope`，**不要试归档探路** |
+| G6 | `wf-review-accept-unknown` | 人机交互：何时问人、呈现什么（哪些证据不可核实、`release_allowed` 为何值、未知 findings 一并豁免意味着什么）、`quote` 如何采集、决定文件如何写 |
 
 **不做第二套口径**：`cause`/`round` 只在 `open_findings`；`binding`/`check_valid` 只在两个共享函数。
 
@@ -233,7 +248,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 
 **分两档**：A 档=机制可测（代码/事实/门禁行为，可自动化）；B 档=文档审查（指引措辞，需人读，**不计入自动化计数**）。上一版把两档混在一张 49 项表里，导致「承诺名实不符」。
 
-### A 档：机制可测（56 项）
+### A 档：机制可测（62 项）
 
 | # | 断言 |
 |---|---|
@@ -245,7 +260,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | A6 | 重查产生新 check → `binding == false`（`check_id_changed`），`open_blocking` 不消失（B5） |
 | A7 | **只写 `accepted` 才清零**：`decision == "rejected"`/`"amended"` 后 `open_blocking` 仍非空（B5 反直觉语义） |
 | A8 | `verdict == "fail"` ∧ `binding` ∧ `open_blocking` 已清 → C4 未满足，`exits` 含 `relaunch_review` / `resume_inflight` |
-| A9 | `undecided.usable == true` 时**默认出口**是 `resume_inflight`（即使 `verdict` 仍是上一轮 fail）；`usable == false` 时才给 `relaunch_review` |
+| A9 | **`exits` 是集合、无序**：某轮 `undecided ∧ usable == true` 时 `exits` **必须包含** `resume_inflight{round}`（可与 `redecide_round{round}` 等并存，不排优先级） |
 | A10 | complex：`cited` 损坏 → `release_allowed == false`，`human_release` 不在 `exits` |
 | A11 | light：`cited` 损坏 → 仍阻断，且 `release_allowed == true`，`human_release` 在 `exits`；放行后 C3 满足 |
 | A12 | 非引用损坏 + 摘要全等放行 → C3 满足；撤销后恢复；匹配需三元组全等 |
@@ -263,7 +278,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | A24 | 协议零改动：`phase.enum`、迁移数、`next_by_position` 逐字节一致；`repair_scope` 不参与 `next`；`task-abandon` 仍可终止且不解除阻断 |
 | A25 | `usable` 三态合成：**硬失败**（`report_invalid` / `anchor_stale` / `implementer_overlap`）→ `false`；无硬失败且**发现式轮次**里已导入材料足够（≥2 个互异 reviewer CLI）→ `true`；已导入不足且仍有槽位未到 → `null`；已导入不足且槽位已齐 → `false`（`insufficient_reviewers`）；**旧槽位形态**下声明槽位未齐 → `null` |
 | A26 | `usable` 与 decide 同源：`implementer_overlap`/`insufficient_reviewers` 来自 `review_eligibility`（`input_problems` 通道），`report_invalid`/`anchor_stale` 来自 `review_report_problems`（`problems` 通道）；两通道不得合并 |
-| A27 | C3 有「改变事实」的出口：complex 的 `cited` 损坏时 `exits` 含 `relaunch_review`（新结论落地后旧报告变非引用）；`abandon_task` 不得作为首选 |
+| A27 | `pause_for_human`/`abandon_task` 只在审查做不成时出现；二者不因其它动作可用而缺席（`exits` 无序） |
 | A28 | C4 的事实提示**准确**：只说「结论写入后再重查会失绑」，**不得**声称「发起早就会失绑」；先重查是建议而非机制事实 |
 | A29 | `usable` 吸收输入无效：已导入报告存在「申报 verdict 与推导不一致」→ `usable == false`、`usable_blockers` 含 `report_invalid`（判据来自 `review_report_problems`，与 `review-decide` 的 `problems` 通道同源） |
 | A30 | **`check_valid == false` 不进 `usable_blockers`**：它只说明"当前检查不能用于完成任务"，不证明在途轮作废；此时 `exits` 必须给出「先重查，再核对材料后继续用原轮」的依据，而不是强制 `relaunch_review` |
@@ -293,14 +308,23 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | A54 | D4 预检调用 `evaluate` 时传 `ignore_action_id=task.action.id`（否则 `action_incomplete` 自我死锁） |
 | A55 | **`check_valid` 含 `rule_version`**：`check.anchor.rule_version` 与当前版本不等 → `check_valid == false`（C1 未满足）；D4 预检据此不会在规则换代后放行提交 |
 | A56 | **A6 成为前置**：缺 `report_digest` 的遗留导入记录在 C3 下**无法恢复也无法放行** → 必须在开工前明确处置（迁移补摘要 / 或先归档排除），不得留作「互不阻塞的独立事项」 |
+| A57 | **`usable` 的第三个输入**：`material`（`launch.slots` 与 `imported` 计数）不属两个共享函数；`legacy` 槽位齐但两个 reviewer CLI 相同 → `usable == false`（`insufficient_reviewers`） |
+| A58 | **`redecidable` 与 `usable` 一致**：`usable == false` 的轮不得 `redecidable == true`（如 pass 后又补入与实施 CLI 重叠的报告） |
+| A59 | **存量 `undecided` 是推断残缺**：其余历史轮显示 `undecided` 但历史不可知；`status`/`--short` 须标 `inferred` 边界 |
+| A60 | **`release_allowed` 随 complexity 漂移**：取当前 `plan.complexity`；complex→light 降级后同一 `cited` 损坏证据的放行资格会翻转，须如实说明 |
+| A61 | **`cause` 三分可判**：`file_digest` 返回 `None` → `missing`；摘要 ≠ 登记摘要 → `changed`；读取抛 `OSError` → `unreadable` |
+| A62 | **归档回显放行清单**（A12 最小缓解）：`wf archive` 与 `wf status` 强制列出当前生效的 `unknown_acceptances`（含 `by/at/quote`） |
 
-### B 档：文档审查（3 项，人读勾选；不计入自动化计数）
+### B 档：文档审查（6 项，人读勾选；不计入自动化计数）
 
 | # | 要求 |
 |---|---|
-| B1 | `wf-review-action` 的处置形状说明与代码一致（`{finding_id, round, slot, decision, reason, recheck_by}`），并写明**只有 `accepted` 清零** |
-| B2 | 指引说明「部分导入时 decide 的报错是 single reviewer」，不得与「材料缺失」混为一谈 |
-| B3 | 本文引用可达、计数一致、路径声明属实（只声明实际存在且 `git diff` 为空的路径） |
+| B1 | `wf-review-action`：处置形状正确、**只有 `accepted` 清零**、**必须显式传 `--round`**（默认取最大 launch 轮，与 `exits.round` 可能不同） |
+| B2 | `wf-review-action`：写明**处置时机**——代码改动后旧轮报告失配，在旧轮补处置会被拒；只能随 fail 轮那次 decide 或随新一轮 decide 捎带 |
+| B3 | `wf-repair-loop`（新）：读 `repair_scope` 的判读顺序、`launches[]` 逐轮看、存量 `inferred` 边界、`check_valid == false` 的两种走法及后果 |
+| B4 | `wf-repair-loop`（新）：十个 token 的含义与目标轮、终局动作、并列出口如何选（机制不排序，AI 选定后说明理由） |
+| B5 | `wf-continue` / `wf-finish`：路由与收工前先读 `repair_scope` 与 `gate`，**不要试归档探路** |
+| B6 | `wf-review-accept-unknown`：人与机制的分工——何时问人、呈现哪些不可核实证据、`release_allowed` 取值含义、未知 findings 一并豁免意味着什么、`quote` 如何采集 |
 
 ## 8. 范围边界（防跑偏，硬约束）
 
@@ -343,6 +367,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | **v46** | 全维度自查：`nonstep` 按 `final_gate` 十项重写、`check_validity` 去掉 `rule_version`、`when`/`preferred` 通用规则、D4 未覆盖清单按代码改正、A11/A12 前缀消歧 | 本文 |
 | **v47** | 恢复 `rule_version` 判据（v46 误删）、D4 恢复步骤面、`preferred` 枚举化、④ 限制归因改正 | 本文 |
 | **v48** | 逐轮 `launches[]`（每轮一行的 usable/redecidable）、出口带 `round` 且去掉 `preferred`、`changes-persisted` 拆两问、A6 升为前置、`nonstep` 顺序按代码 | 本文 |
+| **v49** | 逐轮 `launches[]` 的资格/材料分开、`decide` 入口加 CLI 一致性、§6 重写 + §6a 指引交付、A12 最小缓解进交付、处置时机约束 | 本文 |
 
 ## 10. 已定项（2026-11-11 人裁）
 
