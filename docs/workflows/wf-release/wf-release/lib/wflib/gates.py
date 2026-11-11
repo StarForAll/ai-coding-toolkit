@@ -658,12 +658,11 @@ def review_binding(ctx, task, *, result=None):
         actual = None
         rel = paths.get(key)
         if rel:
-            try:
-                actual = records.file_digest(join(ctx.root, rel))
-            except OSError as exc:
+            actual, read_cause, read_reason = records.file_digest_state(join(ctx.root, rel))
+            if read_cause == "unreadable":
                 # ⑥ C1：摘要读取的权限/IO 故障按「读不到」归因，不抛出
                 unreadable.append({"slot": entry.get("slot"), "round": key[0], "path": rel,
-                                   "reason": str(exc)})
+                                   "reason": read_reason})
                 continue
         if recorded != entry.get("report_digest") or actual != entry.get("report_digest"):
             stale.append({"slot": entry.get("slot"), "round": key[0],

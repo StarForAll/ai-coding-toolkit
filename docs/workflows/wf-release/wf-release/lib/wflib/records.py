@@ -71,6 +71,25 @@ def file_digest(path) -> str | None:
         return None
 
 
+def file_digest_state(path):
+    """读取摘要并**归因**：返回 `(digest, cause, reason)`，不抛 OSError。
+
+    `cause`：`None`（读到）/ `"missing"`（不存在）/ `"unreadable"`（存在但读不了：
+    权限、IO 故障、路径是目录等）。
+
+    C1：报告与规格文件的摘要读取都走这里。调用点只决定"读不到"怎么呈现
+    （`unavailable` 的 `cause`、门禁的 `unreadable`、status 的槽位状态），
+    不各自重新解释 `OSError`——否则同一个故障在不同命令里会被说成不同的事。
+    """
+    try:
+        digest = file_digest(path)
+    except OSError as exc:          # 权限、IO、路径是目录……（不存在已由 file_digest 收敛成 None）
+        return None, "unreadable", str(exc)
+    if digest is None:
+        return None, "missing", "文件不存在"
+    return digest, None, None
+
+
 # --------------------------------------------------------------------------
 # 严格读取：拒绝重复键、NaN/Infinity 与语法损坏
 # --------------------------------------------------------------------------

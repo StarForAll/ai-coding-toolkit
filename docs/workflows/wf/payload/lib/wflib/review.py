@@ -338,10 +338,9 @@ def read_imported_report(ctx, entry):
     """
     rel = entry.get("report_path")
     path = join(ctx.root, rel)
-    try:
-        current_digest = records.file_digest(path)
-    except OSError as exc:
-        return None, "unreadable", str(exc)
+    current_digest, cause, reason = records.file_digest_state(path)
+    if cause:
+        return None, cause, reason
     if current_digest != entry.get("report_digest"):
         cause = "missing" if current_digest is None else "changed"
         return None, cause, ("报告导入后被删除" if cause == "missing" else "报告导入后被改写")
@@ -619,10 +618,16 @@ def status_of_round(ctx, task, round_no=None):
             record["recorded_slot"] = (entry or {}).get("slot")
         if entry:
             path = join(ctx.root, entry.get("report_path") or "")
-            current = records.file_digest(path) if entry.get("report_path") else None
+            current, cause, reason = (records.file_digest_state(path)
+                                      if entry.get("report_path") else (None, None, None))
             record["imported"] = True
             record["report_path"] = entry.get("report_path")
-            if entry.get("report_digest") != current:
+            if cause == "unreadable":
+                # C1：读不到不等于被改写，也不等于没有——如实单列，不假装新鲜、不抛栈
+                record["state"] = "unreadable"
+                record["cause"] = "unreadable"
+                record["reason"] = f"报告无法读取：{reason}"
+            elif entry.get("report_digest") != current:
                 record["state"] = "stale"
                 record["reason"] = "报告导入后被改写"
             elif anchor is None:
@@ -698,7 +703,8 @@ def assertion_index(ctx, task):
                 index[f"{spec_path}#{clause['id']}"] = "spec-clause"
         before = curated.get(spec_path)
         if before:
-            file_digest = records.file_digest(join(ctx.root, spec_path))
+            file_digest, _file_cause, _file_reason = records.file_digest_state(
+                join(ctx.root, spec_path))
             if curation_changed(before, entry["digest"], file_digest):
                 changed[spec_path] = {"curation_digest": before, "current_digest": entry["digest"],
                                       "current_file_digest": file_digest}
@@ -1453,7 +1459,11 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
         legacy = os.path.join(path, "review", f"review-round-{int(round_no)}", f"{identity}.md")
         if not os.path.exists(target) and os.path.exists(legacy):
             target = legacy
-        existing_digest = records.file_digest(target)
+        existing_digest, existing_cause, existing_reason = records.file_digest_state(target)
+        if existing_cause == "unreadable":
+            raise ReviewError("WF_REVIEW_INVALID",
+                              {"reason": "报告路径无法读取", "path": target,
+                               "error": existing_reason, "slot": record_slot})
         incoming_digest = "sha256:" + records.sha256_hex(text.encode("utf-8"))
         # A4：登记摘要优先于文件字节——删掉文件再导另一份，不能顶掉已登记的证据
         previous = next((entry for entry in reviews.get("imported") or []
@@ -1478,7 +1488,12 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
             pass
         else:
             records.atomic_write(target, text)
-        digest = records.file_digest(target)
+        digest, digest_cause, digest_reason = records.file_digest_state(target)
+        if digest_cause:
+            # 写后读不回来：宁可拒绝，也不留一条 `report_digest: null` 的"遗留记录"
+            raise ReviewError("WF_REVIEW_INVALID",
+                              {"reason": "报告写入后无法读取", "path": target,
+                               "error": digest_reason, "slot": record_slot})
         imported = [entry for entry in reviews.get("imported") or []
                     if not (int(entry.get("round") or 0) == int(round_no) and entry.get("slot") == record_slot)]
         entry_anchor = {"check_id": (task.get("check") or {}).get("id"), "check_anchor": anchor}
@@ -1575,11 +1590,10 @@ def review_report_problems(ctx, task, *, round_no, launch, imported, anchor):
             continue
         report_abs = join(ctx.root, rel)
         # 导入端防住"同路径换内容"，判定端必须同样重核摘要：否则报告文件可被事后改写
-        try:
-            current_digest = records.file_digest(report_abs)
-        except OSError as exc:
+        current_digest, cause, reason = records.file_digest_state(report_abs)
+        if cause == "unreadable":
             problems.append({"slot": entry.get("slot"), "reason": "report file unreadable",
-                             "path": rel, "error": str(exc)})
+                             "path": rel, "error": reason})
             blockers.append("report_invalid")
             continue
         if entry.get("report_digest") != current_digest:
@@ -1699,12 +1713,10 @@ def consume_recovered(ctx, task):
     for entry in (task.get("reviews") or {}).get("imported") or []:
         if not isinstance(entry, dict) or not entry.get("report_path"):
             continue
-        try:
-            digest = records.file_digest(join(ctx.root, entry.get("report_path")))
-        except OSError:
-            digest = None
+        digest, cause, _reason = records.file_digest_state(join(ctx.root, entry.get("report_path")))
+        # 读不到 ⇒ 未观察到恢复（不放行失效）；与"文件被改"同处理，不把 IO 故障当成恢复
         verified[(int(entry.get("round") or 0), entry.get("slot"))] = (
-            digest is not None and digest == entry.get("report_digest"))
+            cause is None and digest == entry.get("report_digest"))
     consumed = []
     for item in entries:
         if item.get("revoked") or item.get("consumed"):
