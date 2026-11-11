@@ -18,6 +18,8 @@ The focus here is repo maintenance:
   只登记进方案不改代码；回退的判据是 `git diff` 为空而不是测试绿
 - `proposal-self-review.md` — **改方案前先按十条清单自查**（唯一产生函数/反向规则/身份域/三态/
   事实归属/出口真解除/阻断作用域/读取归因/迁移规则/引用可达）；外部审查只作纠错辅助
+- `main-agent-initiative.md` — **主 agent 掌握闭环与节奏**：每轮先自查后读评审；评审意见三分类
+  （成立/不成立/超范围）；审查不得扩权；任何流程不得以"等外部结论"作为推进前提
 
 - source-of-truth versus deployed copies
 - path, ID, and metadata drift
@@ -45,6 +47,7 @@ These guides help you **ask the right project-specific questions before making c
 |-------|---------|-------------|
 | [Review-Phase Discipline](./review-phase-discipline.md) | 方案审查阶段：只改文档、禁改实现、禁跑实现级验证 | **每次"按审查意见修改"之前** |
 | [Proposal Self-Review](./proposal-self-review.md) | 方案质量自查十条（自驱动收敛，不依赖外部审查） | **每次改方案/交付方案之前** |
+| [Main-Agent Initiative](./main-agent-initiative.md) | 审查是纠错辅助；闭环/节奏/范围由主 agent 负责 | **每次进入审查回路之前与每轮之间** |
 | [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md) | Identify patterns and reduce duplication | When you notice repeated patterns |
 | [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md) | Think through repo boundary changes | Features spanning multiple layers |
 

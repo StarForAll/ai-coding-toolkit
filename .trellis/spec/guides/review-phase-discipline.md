@@ -1,5 +1,7 @@
 # Review-Phase Discipline（方案审查阶段的纪律）
 
+> 相关：[`main-agent-initiative.md`](./main-agent-initiative.md)（谁掌握闭环与节奏）、[`proposal-self-review.md`](./proposal-self-review.md)（方案自查十条）。
+>
 > 来源：2026-11-11 的 wf ⑥「修复中」方案审查。审查期间我做了两类越界动作：
 > **改实现代码**（13 个提交，事后整批回退 `e49da16`）、**跑实现级验证**（单元测试、
 > 全量 repro、release 重建）。两次都是"我判断这在帮你"，实际都在破坏审查阶段的意义。
