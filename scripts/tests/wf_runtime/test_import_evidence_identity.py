@@ -29,7 +29,9 @@ class Ctx:
         return {"id": "sess-test"}, {"id": "human:test"}
 
 
-class ImportIdentityTest(unittest.TestCase):
+class ImportHarness(unittest.TestCase):
+    """导入端夹具：真实 task 记录 + 真实锁 + 打桩的 action/anchor（只测身份判定）。"""
+
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.root = self._tmp.name
@@ -91,6 +93,9 @@ class ImportIdentityTest(unittest.TestCase):
             entry.pop("report_digest", None)
         records.write_json(self.task_dir / "task.json", task)
 
+class ImportIdentityTest(ImportHarness):
+    """A4：已登记摘要就是证据身份，删档后换一份不能顶掉它。"""
+
     def test_same_bytes_reimport_after_deletion_is_idempotent(self):
         self.write_report()
         self.import_report()
@@ -139,6 +144,33 @@ class ImportIdentityTest(unittest.TestCase):
             self.import_report(restore=True)
         self.assertIn("首次导入", caught.exception.facts["reason"])
         self.assertEqual(self.imported(), [])
+
+
+class RestoreSemanticsTest(ImportHarness):
+    """A5：`--restore` 只还原原身份（round/slot/report_path），**不改写 anchor**。"""
+
+    def test_restore_keeps_the_recorded_anchor(self):
+        self.write_report()
+        self.import_report()
+        task = records.load_json(self.task_dir / "task.json")
+        entry = task["reviews"]["imported"][0]
+        entry.pop("report_digest", None)
+        # 原记录绑定的是旧 check（同一 anchor，不同 check_id）：restore 不得把它改成当前 check
+        entry["anchor"] = {"check_id": "c0", "check_anchor": ANCHOR}
+        records.write_json(self.task_dir / "task.json", task)
+        self.imported_copy.unlink()
+        self.write_report("正文第二版")
+        self.import_report(restore=True)
+        restored = self.imported()[0]
+        self.assertEqual(restored["anchor"], {"check_id": "c0", "check_anchor": ANCHOR})
+        self.assertEqual((restored["round"], restored["slot"]), (1, "s1"))
+        self.assertTrue(restored["report_digest"])
+
+    def test_normal_import_still_binds_the_current_check(self):
+        self.write_report()
+        self.import_report()
+        self.assertEqual(self.imported()[0]["anchor"],
+                         {"check_id": "c1", "check_anchor": ANCHOR})
 
 
 if __name__ == "__main__":

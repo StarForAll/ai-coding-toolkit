@@ -1208,11 +1208,16 @@ def evidence_identity_problem(previous, incoming_digest, file_digest, *, restore
     """A4：导入端的证据身份判定（纯函数）。返回 None（放行）或问题 facts（拒绝）。
 
     判据只有一条主线：**已登记摘要就是这份证据的身份**。
-    - 已登记摘要 ≠ 来件 → 拒绝，任何参数都不放行（顶替证据不是"恢复"）；
-    - 已登记摘要 = 来件 → 幂等，允许重入（文件被删时按原字节重建）；
-    - 记录缺登记摘要（遗留形状）：磁盘上的字节与来件相同 → 允许（等价于补摘要）；
-      否则必须显式 `--restore`（承认"这份字节无法被机制核实"），未传即拒绝；
-    - `--restore` 只对**已存在的记录**有意义：首次导入就传 ⇒ 拒绝。
+
+    | 情形 | 已登记摘要 | 磁盘字节 | 结果 |
+    |---|---|---|---|
+    | 普通首次导入 | 无记录 | 任意 | 写入并登记（传 `--restore` 直接拒） |
+    | 幂等重入 | = 来件 | = 来件 | 不重复写；字节被删则按原字节重建 |
+    | 顶替（删档换报告） | ≠ 来件 | 任意 | **拒绝**，任何参数都不放行 |
+    | 遗留补摘要 | 缺 | = 来件 | 放行，并把摘要补登记上 |
+    | restore（遗留重导） | 缺 | ≠ 来件 | 显式放行；**保留原身份与原 anchor**（A5） |
+
+    `--restore` 只对**已存在的记录**有意义：首次导入就传 ⇒ 拒绝。
     """
     if previous:
         registered = previous.get("report_digest")
@@ -1469,10 +1474,14 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
         digest = records.file_digest(target)
         imported = [entry for entry in reviews.get("imported") or []
                     if not (int(entry.get("round") or 0) == int(round_no) and entry.get("slot") == record_slot)]
+        entry_anchor = {"check_id": (task.get("check") or {}).get("id"), "check_anchor": anchor}
+        if restore and previous is not None:
+            # A5：restore 只还原"这条记录原本的身份"，不把 anchor 换成当前 check——
+            # 否则等于替人补一句"当时就是按这个标准审的"，而机制无法为那句话作证。
+            entry_anchor = previous.get("anchor")
         entry_record = {"round": int(round_no), "slot": record_slot,
                         "report_path": os.path.relpath(target, str(ctx.root)).replace(os.sep, "/"),
-                        "report_digest": digest, "anchor": {"check_id": (task.get("check") or {}).get("id"),
-                                                            "check_anchor": anchor}}
+                        "report_digest": digest, "anchor": entry_anchor}
         # 标准漂移在**导入**这一侧也标成事实（判定侧才阻断）：让"这份报告提交时标准已变"可见，
         # 又不因为"判断还没写"把正常顺序（导入 → 判断 → 判定）卡住。
         standard_positions = standard_drift_positions(
