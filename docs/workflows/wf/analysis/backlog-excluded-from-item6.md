@@ -25,7 +25,7 @@
 | A12 | **放行通道缺信任缓解**：`review-accept-unknown` 的决定文件由持写权会话提交，机制无法区分人与 AI；而 ⑥ 新增的 C3 阻断越强、伪造激励越强（**乘积关系**） | ⑥ §2.2 披露 | 属信任模型/审计 | 把放行纳入归档回显的强制展示项，或挂到 `task.sampled` 抽样事件池供人事后核验 | ⑥ 已登记为该模型「暴露面最大」用途 |
 | E3 | **（已裁定：甲，维持现状）** **fail 轮无法被 AI 否定到完成条件层**：`verdict` 由报告载荷推导，`dispositions` 不参与；复杂任务即使把 blocking 全部处置，归档仍要求一次 pass → 「AI 可否定」只在处置层成立 | `review.py:317/1351`、`gates.py:681` | 属门禁语义 | 二选一：维持现状（⑥ 已如实说明）／允许「fail ∧ 全部 blocking 已处置 ∧ binding ∧ eligible」满足归档（**改 `review-passed`，需人裁**） |
 | A13 | **结论未绑定「判定时的导入集」**：判定后再导入的报告不使旧 pass 失效——即使它会令重判变 fail，出现「重判会 fail、直接归档却 pass」的分叉 | `review.py:1356`、`gates.py:681` | 属审查记录模型 | 在 `rounds[]` 记录里存判定时的导入集摘要，C4 追加「导入集未变」 | ⑥ 已如实披露该残余 |
-| A14 | **`--unavailable` 可写 dispositions**：该路径跳过资格检查后仍走 disposition 校验与写入，等于用「审查做不成」登记关闭 | `review.py:1247` | 属判定入口 | 可选收紧：`--unavailable` 同批带 dispositions 即拒 | ⑥ 不新增（收紧会与既有用法冲突，先登记） |
+| A14 | **`--unavailable` 可写 dispositions**：该路径跳过资格检查后仍走 disposition 校验与写入，等于用「审查做不成」登记关闭 | `review.py:1247` | 属判定入口 | 可选收紧：`--unavailable` 同批带 dispositions 即拒 | ⑥ 不新增（收紧会与既有用法冲突）——**第三选项**：`recheck_by ∈ 已导入 agent ∪ human: 前缀`，既堵「随便编个 agent 名」又不堵人工路径 |
 | A8 | **关闭入口耦合完整审查**：写入 dispositions 的唯一入口是 `review-decide`，它先做人数/资格校验（`review.py:1272`），不区分复杂度 → light 任务要关闭 C2 也得凑齐整轮审查 | 同上 | 属入口设计 | 提供"仅登记复核关闭"的轻量入口，或明确该固定成本 | 独立（⑥ 已如实写为现状成本） |
 
 ### B. 查询与展示
