@@ -2467,10 +2467,15 @@ def cmd_review_status(ctx, args):
     except review_mod.ReviewError as exc:
         raise CliError(exc.code, exc.facts)
     if facts["ready_to_decide"]:
-        next_ = f"{facts['required']} 份都到位且锚点一致：review-decide 可判"
+        next_ = f"{facts['required']} 份已导入且锚点已核：review-decide 可判"
     elif facts.get("stale") or facts.get("unreadable"):
         next_ = (f"{len(facts.get('stale') or []) + len(facts.get('unreadable') or [])} 份报告失效/不可读："
                  "重发新一轮（decide 会核锚点并拒绝）")
+    elif facts.get("anchor_current") is None:
+        next_ = "当前锚点算不出（任务记录不完整）：先修记录，判定会因此抛错"
+    elif facts.get("extra_reports"):
+        next_ = (f"另有 {len(facts['extra_reports'])} 份导入报告失效/不可读："
+                 "该轮判定会检查全部导入报告并拒绝")
     elif facts["required"] < 2:
         next_ = "单 provider 轮不产生判定结论：补第二个异种 reviewer 后重发"
     else:

@@ -198,11 +198,12 @@ def open_findings(ctx, task):
             with open(path, "r", encoding="utf-8") as handle:
                 payload, _problems = read_report(handle.read())
         except OSError as exc:
-            unavailable.append({"slot": entry.get("slot"), "path": rel, "reason": str(exc)})
+            unavailable.append({"slot": entry.get("slot"), "path": rel, "cause": "unreadable",
+                                "round": entry.get("round"), "reason": str(exc)})
             continue
         if payload is None:
-            unavailable.append({"slot": entry.get("slot"), "path": rel,
-                                "reason": "report unreadable after import"})
+            unavailable.append({"slot": entry.get("slot"), "path": rel, "cause": "unreadable",
+                                "round": entry.get("round"), "reason": "report unreadable after import"})
             continue
         for finding in payload.get("findings") or []:
             if not isinstance(finding, dict) or not finding.get("id"):
@@ -432,6 +433,8 @@ def status_of_round(ctx, task, round_no=None):
                 status = read_agent_status(staged)
                 if status:
                     record["agent_status"] = status
+                # 文件存在 ≠ 报告写完：只有头部 status=done 才可导入（与 import 的前置一致）
+                record["importable"] = (status == "done")
             else:
                 record["state"] = "missing"
         slots.append(record)
@@ -441,13 +444,38 @@ def status_of_round(ctx, task, round_no=None):
     unreadable = [item["slot"] for item in slots if item["state"] == "unreadable"]
     # "可判"必须与判定入口同一口径（v15 档位表 5/6/7）：
     # 缺报告、锚点失效（decide 核锚点必拒）、只有单 provider（decide 明确拒绝）都不算可判。
-    # 只有"全部 **imported**"才算可判：staged 只表示文件存在（甚至可能 status=in-progress），
-    # 锚点尚未核验、导入记录为零时 decide 会拒。文件存在 / 报告完成 / 导入完成是三件不同的事。
+    # 只有"全部 **imported** 且锚点已核验"才算可判：
+    # - staged 只表示文件存在（可能 status=in-progress），锚点未核、导入记录为零 → decide 会拒；
+    # - anchor is None 表示当前锚点算不出，decide 会抛错 → 不能宣称"锚点一致"；
+    # - decide 会检查该轮**全部已导入报告**，包括没被声明槽位"认领"的那些（三份导入两份声明）。
+    declared_keys = {normalize_agent(slot) for slot in declared}
+    extra = [entry for key, entry in imported_by_slot.items() if key not in declared_keys]
+    extra_problems = []
+    for entry in extra:
+        rel = entry.get("report_path")
+        path_extra = join(ctx.root, rel) if rel else None
+        try:
+            current_extra = records.file_digest(path_extra) if path_extra else None
+        except OSError as exc:
+            extra_problems.append({"slot": entry.get("slot"), "round": round_no,
+                                   "state": "unreadable", "reason": str(exc)})
+            continue
+        if current_extra != entry.get("report_digest"):
+            extra_problems.append({"slot": entry.get("slot"), "round": round_no,
+                                   "state": "stale",
+                                   "reason": "被删除" if current_extra is None else "被改写"})
+        elif anchor is not None and (entry.get("anchor") or {}).get("check_anchor") != anchor:
+            extra_problems.append({"slot": entry.get("slot"), "round": round_no,
+                                   "state": "stale", "reason": "锚点已失效"})
+    anchor_checked_all = all(item.get("anchor_checked") is not False for item in slots)
     ready = (bool(declared) and len(declared) >= 2
-             and all(item["state"] == "imported" for item in slots))
+             and all(item["state"] == "imported" for item in slots)
+             and anchor_checked_all and anchor is not None and not extra_problems)
     return {"round": round_no, "required": len(declared), "arrived": len(arrived),
             "arrived_slots": [item["slot"] for item in arrived], "missing": missing,
             "stale": stale, "unreadable": unreadable,
+            "anchor_checked_all": anchor_checked_all,
+            "extra_reports": extra_problems,
             "slots": slots, "anchor_current": anchor,
             "ready_to_decide": ready}
 
@@ -652,9 +680,16 @@ def proposers_from_imported(ctx, imported_entries):
                                    "reason": "imported entry lacks report_path"})
                 continue
             path = join(ctx.root, rel)
-            if records.file_digest(path) != entry.get("report_digest"):
+            try:
+                current = records.file_digest(path)
+            except OSError as exc:
                 unreadable.append({"slot": entry.get("slot"), "round": entry.get("round"),
-                                   "path": rel, "reason": "report changed or missing after import"})
+                                   "path": rel, "cause": "unreadable", "reason": str(exc)})
+                continue
+            if current != entry.get("report_digest"):
+                unreadable.append({"slot": entry.get("slot"), "round": entry.get("round"),
+                                   "path": rel, "reason": "report changed or missing after import",
+                                   "cause": "missing" if current is None else "changed"})
                 continue
             try:
                 with open(path, "r", encoding="utf-8") as handle:
@@ -1589,6 +1624,7 @@ def all_findings(ctx, task):
     closers = {str(item.get("finding_id")) for item in reviews.get("dispositions") or []
                if isinstance(item, dict) and item.get("decision") == "accepted"}
     found = []
+    unreadable = []       # 摘要读不到就跳过该报告，但要把事实带出去（不能让查询入口崩）
     for entry in reviews.get("imported") or []:
         if not isinstance(entry, dict):
             continue
@@ -1596,14 +1632,25 @@ def all_findings(ctx, task):
         if not rel:
             continue
         path_abs = join(ctx.root, rel)
-        if records.file_digest(path_abs) != entry.get("report_digest"):
+        try:
+            if records.file_digest(path_abs) != entry.get("report_digest"):
+                unreadable.append({"slot": entry.get("slot"), "path": rel,
+                                   "round": entry.get("round"), "cause": "changed|missing"})
+                continue
+        except OSError as exc:
+            unreadable.append({"slot": entry.get("slot"), "path": rel, "round": entry.get("round"),
+                               "cause": "unreadable", "reason": str(exc)})
             continue
         try:
             with open(path_abs, "r", encoding="utf-8") as handle:
                 payload, _problems = read_report(handle.read())
-        except OSError:
+        except OSError as exc:
+            unreadable.append({"slot": entry.get("slot"), "path": rel, "round": entry.get("round"),
+                               "cause": "unreadable", "reason": str(exc)})
             continue
         if payload is None:
+            unreadable.append({"slot": entry.get("slot"), "path": rel, "round": entry.get("round"),
+                               "cause": "unreadable", "reason": "report unreadable after import"})
             continue
         for finding in payload.get("findings") or []:
             if isinstance(finding, dict) and finding.get("id"):
@@ -1611,4 +1658,5 @@ def all_findings(ctx, task):
                               "class": finding.get("class"), "slot": entry.get("slot"),
                               "closed": str(finding["id"]) in closers,
                               "assertion_ref": finding.get("assertion_ref")})
+    all_findings.last_unreadable = unreadable   # 查询方需要时取走（不让入口崩，也不静默）
     return found

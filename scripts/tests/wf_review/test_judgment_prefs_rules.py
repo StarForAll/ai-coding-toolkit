@@ -815,3 +815,60 @@ class ReadinessSemanticsTest(unittest.TestCase):
             os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
         states = [item["state"] for item in status["slots"]]
         self.assertIn("unreadable", states, f"实际: {status}")
+
+
+class RoundReadinessFactsTest(unittest.TestCase):
+    """第十六轮的 a-3/K4/a-6：可判必须基于"该轮全部导入报告 + 锚点已核"，
+    且 staged 要区分"文件在"与"可导入"。"""
+
+    def _ctx(self, files):
+        import os, tempfile, uuid
+        from types import SimpleNamespace
+        from wflib import review
+
+        root = tempfile.mkdtemp(prefix="wf-round-")
+        ctx = SimpleNamespace(root=root, key=lambda required=True: "k")
+        self.task_id = "2026-" + uuid.uuid4().hex[:8]
+        directory = review.round_dir(ctx, self.task_id, 1)
+        os.makedirs(directory, exist_ok=True)
+        paths = {}
+        for name, body in files.items():
+            paths[name] = os.path.join(directory, name)
+            with open(paths[name], "w", encoding="utf-8") as handle:
+                handle.write(body)
+        return ctx, review, paths
+
+    def test_extra_imported_report_blocks_readiness(self):
+        import os
+        from wflib import records
+
+        ctx, review, paths = self._ctx({
+            "review-codex.md": "---\nstatus: done\n---\n",
+            "review-gemini.md": "---\nstatus: done\n---\n",
+            "review-pi.md": "---\nstatus: done\n---\n",
+        })
+        imported = []
+        for name in ("review-codex.md", "review-gemini.md", "review-pi.md"):
+            rel = os.path.relpath(paths[name], ctx.root).replace(os.sep, "/")
+            imported.append({"round": 1, "slot": name[7:-3], "report_path": rel,
+                             "report_digest": records.file_digest(paths[name]),
+                             "anchor": {"check_anchor": "sha256:0"}})
+        # 第三份被改写 → decide 会拒绝，展示也不能说可判
+        with open(paths["review-pi.md"], "a", encoding="utf-8") as handle:
+            handle.write("tampered\n")
+        task = {"id": self.task_id, "check": {"id": "c1", "anchor": {"check_anchor": "sha256:0"}},
+                "reviews": {"launches": [{"round": 1, "slots": [{"slot": "s1"}, {"slot": "s2"}]}],
+                            "imported": imported, "result": None}}
+        status = review.status_of_round(ctx, task)
+        self.assertTrue(status["extra_reports"], f"实际: {status}")
+        self.assertFalse(status["ready_to_decide"])
+
+    def test_staged_in_progress_is_not_importable(self):
+        ctx, review, _paths = self._ctx({"review-codex.md": "---\nstatus: in-progress\n---\n"})
+        task = {"id": self.task_id, "check": {"id": "c1", "anchor": {"check_anchor": "sha256:0"}},
+                "reviews": {"launches": [{"round": 1, "slots": [{"slot": "s1"}, {"slot": "s2"}]}],
+                            "imported": [], "result": None}}
+        status = review.status_of_round(ctx, task)
+        staged = [item for item in status["slots"] if item["state"] == "staged"]
+        self.assertTrue(staged)
+        self.assertFalse(staged[0].get("importable"), "status != done 不可导入")
