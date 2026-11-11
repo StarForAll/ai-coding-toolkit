@@ -329,24 +329,72 @@ def latest_decision(task, round_no):
     return max(entries, key=lambda item: str(item.get("decided_at") or ""))
 
 
+def finding_key(round_no, slot, finding_id):
+    """finding 的精确身份：`(round, slot, finding_id)`。
+
+    A9：`finding_id` 只在**同一份报告内**唯一；跨轮/跨槽位同名的「新问题」与旧问题
+    是两个身份。关闭匹配与提出者索引都只认这个三元组。
+    """
+    return (int(round_no or 0), str(slot or ""), str(finding_id))
+
+
+def disposition_keys(dispositions, known):
+    """把 dispositions 归到 finding 精确身份：`(resolved, ambiguous, unknown)`。
+
+    - 处置显式写了 `round` + `slot` → 按它定位（唯一无歧义的写法）；
+    - 只写 `finding_id` 且只命中一个身份 → 就是它（兼容既有写法）；
+    - 命中多个身份 → **歧义**：不关闭，列入待裁，由人补 `round`+`slot` 后再登记；
+    - 命中零个 → 未知（不属任何已导入报告）。
+
+    `known` 是身份集合；`resolved` 是 `{身份: decision}`（三值都收，关闭判定由调用方按
+    `accepted` 过滤）。`finding_id` 为空的条目直接跳过（F2：历史形状，读取端容忍）。
+    """
+    resolved, ambiguous, unknown = {}, [], []
+    for item in dispositions or []:
+        if not isinstance(item, dict):
+            continue
+        decision = item.get("decision")
+        finding_id = item.get("finding_id")
+        if finding_id is None:
+            continue
+        slot = item.get("slot")
+        try:
+            round_no = int(item.get("round") or 0)
+        except (TypeError, ValueError):
+            round_no = 0
+        if round_no and slot:
+            key = finding_key(round_no, slot, finding_id)
+            if key in known:
+                resolved[key] = decision
+            else:
+                unknown.append({"finding_id": finding_id, "round": round_no, "slot": slot,
+                                "decision": decision})
+            continue
+        matches = sorted(key for key in known if key[2] == str(finding_id))
+        if len(matches) == 1:
+            resolved[matches[0]] = decision
+        elif matches:
+            ambiguous.append({"finding_id": finding_id, "decision": decision,
+                              "candidates": [{"round": key[0], "slot": key[1]} for key in matches],
+                              "reason": "同一 finding_id 出现在多轮/多槽位，处置未声明 round+slot"})
+        else:
+            unknown.append({"finding_id": finding_id, "decision": decision})
+    return resolved, ambiguous, unknown
+
+
 def open_findings(ctx, task):
     """未处置 findings（K8 投影）：重解析已导入报告，按 dispositions 派生。
 
     报告有 digest、导入后不可改（K4a），所以"重解析"不会与当时的事实分叉；findings 因此
-    不需要另存一份（同一事实两处存）。返回 `{unaddressed, blocking, unavailable, closed}`。
+    不需要另存一份（同一事实两处存）。返回
+    `{unaddressed, blocking, unavailable, closed, ambiguous}`（A9：`closed` 按
+    `(round, slot, finding_id)` 精确身份；`ambiguous` 是归属不明的历史处置，待人裁）。
 
     ⑥：`blocking`/`unaddressed` 条目带 `round`；`unavailable` 条目带 `cause`（三分的唯一产出点）/
     `round`/`report_digest`，摘要读取的 OSError 归因也在这一处（`cause: "unreadable"`）。
     """
     reviews = task.get("reviews") or {}
-    closed = {str(item.get("finding_id"))
-              for item in reviews.get("dispositions") or []
-              if isinstance(item, dict) and item.get("decision") == "accepted"}
-    # 已写 rejected/amended 但**不关闭**的处置：如实标注，供 status 显示"已驳回未关闭"（B5）
-    unclosed = {str(item.get("finding_id")): item.get("decision")
-                for item in reviews.get("dispositions") or []
-                if isinstance(item, dict) and item.get("decision") in ("rejected", "amended")}
-    unaddressed, unavailable = [], []
+    unaddressed, unavailable, found = [], [], []
     for entry in reviews.get("imported") or []:
         if not isinstance(entry, dict):
             continue
@@ -386,17 +434,29 @@ def open_findings(ctx, task):
         for finding in payload.get("findings") or []:
             if not isinstance(finding, dict) or not finding.get("id"):
                 continue
-            if str(finding["id"]) in closed:
-                continue
             item = {"finding_id": finding["id"], "severity": finding.get("severity"),
                     "slot": entry.get("slot"), "round": round_no,
                     "assertion_ref": finding.get("assertion_ref")}
-            if str(finding["id"]) in unclosed:
-                item["disposition"] = unclosed[str(finding["id"])]
-            unaddressed.append(item)
+            found.append((finding_key(round_no, entry.get("slot"), finding["id"]), item))
+    known = {key for key, _item in found}
+    # A9：关闭按精确身份，不按裸 finding_id；歧义条目不关闭、列入待裁
+    resolved, ambiguous, _unknown = disposition_keys(reviews.get("dispositions") or [], known)
+    closed = {key for key, decision in resolved.items() if decision == "accepted"}
+    # 已写 rejected/amended 但**不关闭**的处置：如实标注，供 status 显示"已驳回未关闭"（B5）
+    unclosed = {key: decision for key, decision in resolved.items()
+                if decision in ("rejected", "amended")}
+    for key, item in found:
+        if key in closed:
+            continue
+        if key in unclosed:
+            item["disposition"] = unclosed[key]
+        unaddressed.append(item)
     return {"unaddressed": unaddressed,
             "blocking": [item for item in unaddressed if item.get("severity") in BLOCKING_SEVERITIES],
-            "unavailable": unavailable, "closed": sorted(closed)}
+            "unavailable": unavailable,
+            "closed": [{"round": key[0], "slot": key[1], "finding_id": key[2]}
+                       for key in sorted(closed)],
+            "ambiguous": ambiguous}
 
 
 def lint_report(ctx, task, text):
@@ -770,16 +830,22 @@ def broken_reference_problems(lifted, dispositions):
 
 
 def proposers_from_history(imported_entries):
-    """从**全部历史**导入记录里取 finding → 提出者（K4b 的独立事实，跨轮有效）。"""
+    """从**全部历史**导入记录里取「finding 精确身份 → 提出者」（K4b 的独立事实，跨轮有效）。
+
+    A9：键是 `(round, slot, finding_id)`——同名 id 在不同轮/槽位是不同问题，
+    不能用裸 id 合并提出者。
+    """
     proposers = {}
     for entry in imported_entries:
         if not isinstance(entry, dict):
             continue
         proposer = normalize_agent(entry.get("agent") or entry.get("source_cli")
                                    or entry.get("slot"))
+        round_no = int(entry.get("round") or 0)
         for finding in entry.get("findings") or []:
             if isinstance(finding, dict) and finding.get("id"):
-                proposers.setdefault(str(finding["id"]), proposer)
+                proposers.setdefault(finding_key(round_no, entry.get("slot"), finding["id"]),
+                                     proposer)
     return proposers
 
 
@@ -792,7 +858,12 @@ def known_finding_ids(imported_entries):
 
 
 def dispositions_problems(dispositions, proposers):
-    """dispositions 的结构校验与"关闭不得自证"（机制稿 §9.2、K4b）。纯函数，便于单测。"""
+    """dispositions 的结构校验与"关闭不得自证"（机制稿 §9.2、K4b）。纯函数，便于单测。
+
+    A9：提出者与关闭匹配都按 `(round, slot, finding_id)`。只写 `finding_id` 且同时命中
+    多轮/多槽位时**不猜**：拒绝并给出候选，要求显式补 `round`+`slot` 后重跑。
+    """
+    known = set(proposers)
     problems = []
     for index, item in enumerate(dispositions):
         if not isinstance(item, dict):
@@ -807,20 +878,31 @@ def dispositions_problems(dispositions, proposers):
         finding_id = item.get("finding_id")
         if finding_id is None:
             continue
-        if str(finding_id) not in proposers:
+        keys, ambiguous, unknown = disposition_keys([item], known)
+        if unknown:
             # 任意 id 都能被"关闭"等于关闭一个不存在的发现：必须拒绝并给出可选集合
             problems.append({"index": index, "finding_id": finding_id,
                              "reason": "finding_id 不属任何已导入报告",
-                             "known": sorted(proposers)[:12]})
+                             "known": [{"round": key[0], "slot": key[1], "finding_id": key[2]}
+                                       for key in sorted(known)][:12]})
             continue
-        proposer = proposers.get(str(finding_id))
+        if ambiguous:
+            problems.append({"index": index, "finding_id": finding_id,
+                             "reason": "同一 finding_id 出现在多轮/多槽位，处置需声明 round+slot",
+                             "candidates": ambiguous[0]["candidates"],
+                             "exits": ["在处置里补 round（finding 提出时的轮次）与 slot（该轮的槽位）后重跑"]})
+            continue
+        key = next(iter(keys))
+        proposer = proposers.get(key)
         recheck_by = normalize_agent(item.get("recheck_by")) if item.get("recheck_by") else None
         if recheck_by is None:
             problems.append({"index": index, "finding_id": finding_id,
+                             "round": key[0], "slot": key[1],
                              "reason": "关闭需复核人：recheck_by 缺失",
                              "exits": ["补 recheck_by（不得由提出该 finding 的报告复核）"]})
         elif proposer and recheck_by == proposer:
             problems.append({"index": index, "finding_id": finding_id,
+                             "round": key[0], "slot": key[1],
                              "reason": "关闭复核不得自证：复核人与提出者是同一份报告",
                              "proposer": proposer, "recheck_by": recheck_by})
     return problems
@@ -1468,7 +1550,8 @@ def review_report_problems(ctx, task, *, round_no, launch, imported, anchor, pro
         source_clis.append(proposer)
         for finding in payload.get("findings") or []:
             if isinstance(finding, dict) and finding.get("id"):
-                proposers.setdefault(str(finding["id"]), proposer)
+                proposers.setdefault(finding_key(round_no, entry.get("slot"), finding["id"]),
+                                     proposer)
         report_anchor = payload.get("check-anchor")
         if not isinstance(report_anchor, dict) or report_anchor.get("check_anchor") != anchor:
             # 失效锚点一律重审，不能因旧文件仍在而复用（机制稿 §9.2）
@@ -2103,6 +2186,17 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None):
                                "exits": ["按问题清单补 disposition 字段与复核人后重跑 review-decide",
                                          "把该 finding 标为不处置并在判断清单里写理由（不构成关闭）"]})
 
+        # A9：把本次登记的关闭**定到精确身份**上（round+slot）。此前只写 finding_id 的
+        # 记录靠"唯一命中"解析；一旦他轮出现同名问题就会变成歧义，所以写入时就固化。
+        resolved_keys, _ambiguous_keys, _unknown_keys = disposition_keys(
+            dispositions, set(proposers))
+        for item in dispositions:
+            if item.get("decision") != "accepted" or (item.get("round") and item.get("slot")):
+                continue
+            matches = [key for key, decision in resolved_keys.items()
+                       if decision == "accepted" and key[2] == str(item.get("finding_id"))]
+            if len(matches) == 1:
+                item["round"], item["slot"] = matches[0][0], matches[0][1]
         # ⑥：`facts.not_closing` 如实回报**未关闭**项（closed 集不改，仍只收 accepted；B5）
         not_closing = [{"finding_id": item.get("finding_id"), "decision": item.get("decision")}
                        for item in dispositions
@@ -2169,8 +2263,6 @@ def all_findings(ctx, task):
     当成全部，会让"已关闭"的缺陷从清单里消失，也让两个字段变成同一份东西。
     """
     reviews = task.get("reviews") or {}
-    closers = {str(item.get("finding_id")) for item in reviews.get("dispositions") or []
-               if isinstance(item, dict) and item.get("decision") == "accepted"}
     found = []
     for entry in reviews.get("imported") or []:
         if not isinstance(entry, dict):
@@ -2188,10 +2280,18 @@ def all_findings(ctx, task):
             continue
         if payload is None:
             continue
+        round_no = int(entry.get("round") or 0)
         for finding in payload.get("findings") or []:
             if isinstance(finding, dict) and finding.get("id"):
                 found.append({"id": finding.get("id"), "severity": finding.get("severity"),
                               "class": finding.get("class"), "slot": entry.get("slot"),
-                              "closed": str(finding["id"]) in closers,
-                              "assertion_ref": finding.get("assertion_ref")})
+                              "round": round_no,
+                              "assertion_ref": finding.get("assertion_ref"),
+                              "_key": finding_key(round_no, entry.get("slot"), finding["id"])})
+    # A9：关闭按精确身份（(round, slot, finding_id)），不按裸 id
+    resolved, _ambiguous, _unknown = disposition_keys(reviews.get("dispositions") or [],
+                                                      {item["_key"] for item in found})
+    closers = {key for key, decision in resolved.items() if decision == "accepted"}
+    for item in found:
+        item["closed"] = item.pop("_key") in closers
     return found

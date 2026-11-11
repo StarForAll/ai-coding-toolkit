@@ -2533,6 +2533,8 @@ def cmd_review_status(ctx, args):
         facts = review_mod.status_of_round(ctx, task, int(round_no) if round_no else None)
     except review_mod.ReviewError as exc:
         raise CliError(exc.code, exc.facts)
+    # A9：无法归属到精确身份的历史处置**不关闭**任何 finding，在这里单列待人裁
+    facts["pending_dispositions"] = review_mod.open_findings(ctx, task)["ambiguous"]
     next_ = ("两份都到位：review-decide 可判" if facts["ready_to_decide"]
              else f"缺 {len(facts['missing'])} 份报告：等 reviewer 产出后 review-import")
     return codes.result(

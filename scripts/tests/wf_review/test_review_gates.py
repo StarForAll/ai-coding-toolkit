@@ -42,7 +42,8 @@ class AssertionRefTest(unittest.TestCase):
 
 
 class DispositionTest(unittest.TestCase):
-    PROPOSERS = {"f1": "zcode", "f2": "dsh"}
+    # A9：提出者索引按 (round, slot, finding_id)；这里用显式三元组作契约
+    PROPOSERS = {(1, "s1", "f1"): "zcode", (1, "s2", "f2"): "dsh"}
 
     def test_close_by_proposer_is_rejected(self):
         problems = review.dispositions_problems(

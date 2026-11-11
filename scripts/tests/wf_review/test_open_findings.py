@@ -61,7 +61,8 @@ class OpenFindingsTest(unittest.TestCase):
                                             "reason": "已修", "recheck_by": "dsh"}])
             result = review.open_findings(FakeCtx(tmp), task)
         self.assertEqual(result["blocking"], [])
-        self.assertEqual(result["closed"], ["f1"])
+        self.assertEqual(result["closed"],
+                         [{"round": 1, "slot": "zcode", "finding_id": "f1"}])
 
     def test_rejected_disposition_does_not_close(self):
         with tempfile.TemporaryDirectory() as tmp:
