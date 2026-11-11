@@ -1204,8 +1204,41 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
     )
 
 
+def evidence_identity_problem(previous, incoming_digest, file_digest, *, restore=False):
+    """A4：导入端的证据身份判定（纯函数）。返回 None（放行）或问题 facts（拒绝）。
+
+    判据只有一条主线：**已登记摘要就是这份证据的身份**。
+    - 已登记摘要 ≠ 来件 → 拒绝，任何参数都不放行（顶替证据不是"恢复"）；
+    - 已登记摘要 = 来件 → 幂等，允许重入（文件被删时按原字节重建）；
+    - 记录缺登记摘要（遗留形状）：磁盘上的字节与来件相同 → 允许（等价于补摘要）；
+      否则必须显式 `--restore`（承认"这份字节无法被机制核实"），未传即拒绝；
+    - `--restore` 只对**已存在的记录**有意义：首次导入就传 ⇒ 拒绝。
+    """
+    if previous:
+        registered = previous.get("report_digest")
+        if registered:
+            if registered != incoming_digest:
+                return {"reason": "报告摘要在导入后不可替换",
+                        "recorded": registered, "incoming": incoming_digest,
+                        "exits": ["换一份报告必须换一轮：先 review-launch 重新发起审查",
+                                  "只想恢复被删掉的原文件时，重新导入**同一份**报告即可"]}
+            return None
+        if file_digest == incoming_digest:
+            return None        # 磁盘上就是这份字节：补登记摘要，不算替换
+        if restore:
+            return None
+        return {"reason": "该记录缺登记摘要，且磁盘字节与来件不同：重导需显式 --restore",
+                "file_digest": file_digest, "incoming": incoming_digest,
+                "exits": ["确认来件就是当初导入的那份报告后，加 --restore 重跑",
+                          "无法确认时换一轮：review-launch 重新发起审查"]}
+    if restore:
+        return {"reason": "首次导入不得使用 --restore（没有原身份可恢复）",
+                "exits": ["去掉 --restore 直接导入"]}
+    return None
+
+
 def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_discovery=False,
-                  as_value=None, agent=None):
+                  as_value=None, agent=None, restore=False):
     """导入报告（2026-11-07）：可只给 task id——轮次取当前打开的轮，身份取文件名/本会话。
 
     `report_path` 显式给出时保持旧语义（槽位制），供既有夹具与迁移期使用。
@@ -1410,6 +1443,17 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
             target = legacy
         existing_digest = records.file_digest(target)
         incoming_digest = "sha256:" + records.sha256_hex(text.encode("utf-8"))
+        # A4：登记摘要优先于文件字节——删掉文件再导另一份，不能顶掉已登记的证据
+        previous = next((entry for entry in reviews.get("imported") or []
+                         if isinstance(entry, dict)
+                         and int(entry.get("round") or 0) == int(round_no)
+                         and entry.get("slot") == record_slot), None)
+        identity_problem = evidence_identity_problem(previous, incoming_digest, existing_digest,
+                                                     restore=restore)
+        if identity_problem:
+            raise ReviewError("WF_REVIEW_INVALID",
+                              dict(identity_problem, slot=record_slot, round=int(round_no),
+                                   report_path=os.path.relpath(target, str(ctx.root)).replace(os.sep, "/")))
         if existing_digest and existing_digest != incoming_digest:
             # 同路径不同摘要即冲突：不覆盖、不留旧结论（机制稿 §9.2）
             raise ReviewError("WF_REVIEW_INVALID",

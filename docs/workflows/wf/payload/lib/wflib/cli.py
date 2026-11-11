@@ -1866,7 +1866,8 @@ def _review_command(kind):
             try:
                 return review_mod.import_report(ctx, task, int(round_no) if round_no else None,
                                                 args.value("--slot"), args.value("--report"),
-                                                as_value=args.value("--as"))
+                                                as_value=args.value("--as"),
+                                                restore=args.flag("--restore"))
             except review_mod.ReviewError as exc:
                 raise CliError(exc.code, exc.facts)
         round_no = args.value("--round")
@@ -1971,7 +1972,8 @@ COMMAND_HELP = {
                        "example": "wf.py review-context --task <id> --round 1 --as pi --json"},
     "review-import": {"purpose": "导入本轮已完成的报告（按文件名发现，免路径）",
                       "args": {"--task": "任务 id（必填）", "--round": "可选", "--slot": "可选（指定某个 agent）",
-                               "--report": "可选（显式路径，兼容旧槽位制）"},
+                               "--report": "可选（显式路径，兼容旧槽位制）",
+                               "--restore": "只在恢复**已存在的记录**时用（缺登记摘要的遗留记录重导）"},
                       "example": "wf.py review-import --task <id> --json"},
     "project": {"purpose": "可重建投影（K8）：open-items / attribution / audit / skeleton；--check 断言等值",
                 "args": {"--kind": "投影类型（必填）", "--task": "任务 id（必填）", "--check": "断言重建等值"},
