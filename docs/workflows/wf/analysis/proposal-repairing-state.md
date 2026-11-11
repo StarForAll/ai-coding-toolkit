@@ -1,6 +1,6 @@
-# ⑥ 修复态的表达：不新增阶段，用「事实 + 清除动作」吸收 `fixing` 的收益（v30）
+# ⑥ 修复态的表达：不新增阶段，用「事实 + 清除动作」吸收 `fixing` 的收益（v31）
 
-> 状态：**待审 v30**。阶段：**方案审查阶段，实现零改动**（规则见 `.trellis/spec/guides/review-phase-discipline.md`）。
+> 状态：**待审 v31**。阶段：**方案审查阶段，实现零改动**（规则见 `.trellis/spec/guides/review-phase-discipline.md`）。
 > **本文只回答 ⑥**；范围边界见 §8，被排除条目见 `analysis/backlog-excluded-from-item6.md`。
 
 ---
@@ -59,8 +59,8 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | **可放行条件** | `release_allowed = !(cited && review_required)`：<br>· complex 任务 + 当前结论引用的报告 → **不能放行**（它是归档依据，必须重发审查）<br>· **light 任务** + 被引用 → **可以放行**（light 的归档不依赖审查结论）。如实说明：**义务没有消失，只是换了承担者**——字节找不回时仍需**人裁放行**（或放弃）；对自愿证据而言这仍是一次收尾成本，取舍是「证据完整性优先」<br>· 非引用报告 → 可放行 |
 | 批次 | 一次一批、全有或全无；任一项不合法 → 整批拒绝、零写入，返回 `bad_items` |
 | 不做预放行 | 指向当前不存在的不可核实项 → 拒绝 |
-| 幂等 | 同一键重复放行 → 不新增，回报 `already_accepted` |
-| 撤销 | `--revoke --batch`，或 `--revoke --round --slot --digest`（必须带 digest）；置 `revoked: true`（不删记录） |
+| 幂等与重新批准 | 只有当**存在同一键的未撤销放行**时才回报 `already_accepted` 且不新增；若该键唯一记录已被撤销，**再次批准要新增一条记录**（新 `batch`）——生效匹配看「存在未撤销记录」 |
+| 撤销 | `--revoke --batch`，或 `--revoke --round --slot --digest`（必须带 digest）；置 `revoked: true`（不删记录）；撤销只影响被撤销的那些记录，同证据的其他未撤销放行继续有效 |
 | 信任模型（定案） | 沿用 attestation 四件套 + 摘要入库；**不引入签名**（全仓无签名设施，`authorize`/`attestation` 同级） |
 
 **命令**：`wf review-accept-unknown --task <id> --file <决定.json>`（含 `--revoke`）。
@@ -97,6 +97,8 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 **light 任务（`review_required == false`）不承担 C4**：不产生「必须取得新的审查结论」这项义务。
 但其自愿审查的 blocking findings **仍受 C2 约束**（`WF_UNRESOLVED_BLOCKING` 不分复杂度）、其报告损坏**仍受 C3 约束**：义务收窄到「处置已发现的问题」，**不是「无义务」**。
 
+**现状成本（如实）**：写入 dispositions 的唯一入口是 `review-decide`，它先做人数/资格校验且**不分复杂度**——因此 light 要关闭 C2 仍需组织一轮（可判的）审查；「不承担 C4」只免除「必须取得 pass 结论」，不免除「写入关闭所需的入口成本」。入口改造属另案（backlog A8）。
+
 ### 4.2 每个条件的清除动作
 
 | 条件 | 清除动作 | 禁用 / 注意 |
@@ -104,7 +106,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | **C1 失效** | 重跑 `task-check` 产生新 check（内容变了必须重查） | —— |
 | **C2 未空** | 逐项处置（修复代码，或经复核**否定 / 重分类**该项）→ **由非提出者复核后补 dispositions**（B5，唯一清零路径） | 「处置」不等于「必须改代码」；重查、重审 pass 都**不**清 findings |
 | **C3 未放行** | ① **找回原字节**（恢复即不再不可核实，B1，不依赖身份）<br>② **人裁放行**（`release_allowed == true` 时） | · complex 且 `cited` 损坏：**不可放行**——先让新结论落地（届时它变成非引用，转入 ②）<br>· 字节不可得且不可放行 → `task-abandon` |
-| **C4 不成立** | ① **默认先用好在途轮次**（`invalidated` 只证明「曾发起过新一轮」，不等于该轮仍可用）<br>② 若该轮**材料 / 资格 / 锚点已不可用**（reviewer 与实施 CLI 重叠、人数不足被判不合格）→ **按既有出口重新发起** `review-launch`（`review.py:1389` 原文即「重新发起新一轮」）<br>③ 审查做不成（`unavailable` / 环境凑不齐）→ **暂停（人决定）或经人授权异常归档**（`review.py:1396`，B4） | 不得据此判 pass；根因在规划时可用 `task-replan`（B3）；`check_valid == false` 时先做 C1 |
+| **C4 不成立** | **默认动作：发起新一轮审查并完成它**（`review-launch` → 导入 → 判定）；以下为其细分：<br>① `verdict == "invalidated"` 且**在途轮仍可用** → 优先完成在途那一轮（`invalidated` 只证明「曾发起过新一轮」）<br>② 在途轮**材料 / 资格 / 锚点已不可用**（reviewer 与实施 CLI 重叠、人数不足被判不合格）→ **重新发起**（`review.py:1389` 原文即「重新发起新一轮」）<br>③ 审查做不成（`unavailable` / 环境凑不齐）→ **暂停（人决定）或经人授权异常归档**（`review.py:1396`，B4） | 不得据此判 pass；根因在规划时可用 `task-replan`（B3）；`check_valid == false` 时先做 C1 |
 
 ### 4.3 并存时的行为
 
@@ -124,14 +126,16 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | `final_gate` 结构 | **只加一条**：存在 `released == false` 的 `unverifiable` 时阻断；出口按 `cited && review_required` 分列（见 §6） |
 | `task-abandon` | **不改**：终局、不解除 |
 
-**硬前置依赖**
+**落地前提（四项，缺一 ⑥ 不可执行；均属另案，见 backlog）**
 
-| 依赖 | 为什么硬 | 未就绪时 |
+| 前提 | 为什么必须先做 | 未就绪时 |
 |---|---|---|
-| **A1 `slot` 身份稳定**（backlog） | 放行键 `(round, slot, digest)`；`slot`/`agent` 混用会导致匹配不上 | 放行不可用 → **先找回原字节**（不依赖身份）；字节不可得才 `task-abandon`。不把"重发"当降级出口 |
-| **C1 读取归因**（backlog） | `open_findings` 与 `review_binding` 都会读摘要，权限故障会抛出 | ⑥ 自带这两处归因（见 §6）；其余五处仍属 C1 |
+| **A1 `slot` 身份稳定** | 放行键是 `(round, slot, digest)`；`slot`/`agent` 混用会匹配不上 | 放行不可用 → 先找回原字节（不依赖身份）；字节不可得才 `task-abandon` |
+| **A4 导入端证据身份** | 现在可「删档后导入同轮同槽位另一份报告」顶掉历史证据 → 没有恢复、没有放行、没有 disposition，C2/C3 却被清空 | ⑥ 的 C3 形同虚设，必须先修 |
+| **A7 K4b 关闭链** | `proposers_from_history` 从 `imported[].findings` 读提出者，而记录**不保存 findings** → 真实修复后 disposition 被拒（「finding_id 不属任何已导入报告」） | ⑥ 的 C2 清除动作执行不了，必须先修 |
+| **C1 读取归因** | `open_findings` 与 `review_binding` 都读摘要，权限故障会抛出 | ⑥ 自带这两处归因（见 §6）；其余五处仍属 C1 |
 
----
+> 这四项在 backlog 里，但**顺序上必须先于 ⑥ 实施**——否则 ⑥ 给出的事实与清除动作都不成立。
 
 ## 6. 实现落点（批准后执行；本轮不动代码）
 
@@ -140,13 +144,14 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | `gates.py` | ① 把 `review-passed` 的**绑定核验**与 `check-passed` 的**有效性核验**各自提取为共享函数（`review_binding` / `check_validity`），步骤行为不变；② 两个函数内的摘要读取包 `except OSError`（`PermissionError` 不再外溢）；③ `final_gate` 末尾追加 `unverifiable` 阻断，出口按 `cited && review_required` 分列：<br>· 该情形 → 「找回原字节」「重发审查」「放弃任务」<br>· 其余 → 「找回原字节」「人裁放行」「放弃任务」 |
 | `review.py` | ① `open_findings` 的 `unavailable` 条目补 `cause/round/report_digest`，并把摘要读取包进 `except OSError`（唯一来源 + 最小兜底）；② 新增 `repair_scope(ctx, task)`：`findings`/`unverifiable` 取上述两处，`conclusion` 调 `review_binding`+`check_validity`；③ `unknown_acceptances` 读写与撤销（含 `release_allowed` 校验） |
 | `cli.py` | `wf status`（含 `--short`）输出 `repair_scope`；新增 `wf review-accept-unknown`（`--revoke`） |
+| `skills/`（**AI 指引交付，属 ⑥ 范围**） | ① `wf-continue`：`in_progress/finish` 路由前先读 `repair_scope`，有未满足的 C1–C4 时按 §4.2 处理，不要直接引导收工；② `wf-finish`：收工前读 `repair_scope` 与 `wf gate`，**不要用试归档探路**（会先业务提交）；③ `wf-review-action`：disposition 形状改为**代码要求的形态** `{decision, finding_id, round, slot, reason, recheck_by}`——现状 guidance 是 `{finding, decision_ref, reason}`，会被 `dispositions_problems` 拒绝 |
 | `templates/` | 不改 |
 
 **不做第二套口径**：`cause` 三分只在 `open_findings`；`binding`/`check_valid` 只在两个共享函数；`repair_scope` 只搬运。
 
 ---
 
-## 7. 验收（21 项，全部属于 ⑥）
+## 7. 验收（26 项，全部属于 ⑥）
 
 | # | 断言 |
 |---|---|
@@ -171,6 +176,11 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | 19 | **C4 的 `unavailable` 出口存在**：审查做不成时清除动作含「暂停（人决定）」与「经人授权异常归档」，且**不含**「判 pass」 |
 | 20 | **C1 与 C4 分离**：`verdict == "pass"` 但 `check_valid == false` 时，指引必须含「重查」（不得只写「可选重审」） |
 | 21 | 协议零改动：`phase.enum`、迁移数、`next_by_position` 逐字节一致；`repair_scope` 不参与 `next`；`task-abandon` 仍可终止且不解除阻断 |
+| 22 | **C4 默认动作存在**：`verdict == "fail"`（无在途轮、资格正常、非 unavailable）时，导出动作是「发起新一轮并完成它」——不在 §4.2 留空 |
+| 23 | **C4 的 unavailable 出口存在**：审查做不成时含「暂停（人决定）」与「经人授权异常归档」，且不含「判 pass」 |
+| 24 | **撤销后可以重新批准**：批准 → 撤销 → 再次批准同一证据，`released` 必须回到 true（幂等只在「存在未撤销记录」时生效） |
+| 25 | **撤销范围**：`--revoke --batch` 只影响该批，其他批的未撤销放行继续有效 |
+| 26 | **技能层交付**：`wf-continue`/`wf-finish` 的正文含「先读 `repair_scope`」与「不要试归档探路」；`wf-review-action` 的 disposition 形状与 `dispositions_problems` 要求一致（含 `decision`/`finding_id`/`recheck_by`） |
 
 ## 8. 范围边界（防跑偏，硬约束）
 
@@ -188,8 +198,9 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | v26 | 三组事实 + 出口表 | `bound_to_current` 漏内容变化；`cited` 排除使 light 漏检；无清零路径；依赖写成"可降级" |
 | v27 | 加 `check_valid`、cited 不再排除阻断 | **`binding` 误用整个 `review-passed` 返回值**（fail 时被 false、light 时恒 true）；`check_valid` 枚举漏结构复核；出口表行间重叠；light 的 `cited` 被禁止放行 → 可选审查衍生重审义务；R2 出口缺"重发审查" |
 | **v28** | 两个共享子判定 + `release_allowed` + 互斥出口表 | 出口表仍是固定优先级：light 的 fail/unavailable 被写成义务；`invalidated`+cited 被顺序遮住（应完成在途轮）；`fail ∧ !binding ∧ findings 空` 落入兜底；「恰好命中一行」性质测试恒真 |
-| **v29** | **完成条件 C1–C4 + 每条件的清除动作**（不再排序） | 本文 |
+| **v29** | 完成条件 C1–C4 + 每条件的清除动作（不再排序） | C4 用 ①②③ 替换时**丢了默认动作**（最常见的 `fail` 无在途轮情形无出口）；light 写成「无义务」漏掉 C2/C3；`invalidated` 被写成禁止重新发起 |
 | **v30** | C4 出口恢复既有语义 + light 义务收窄 | `invalidated` 被写成「禁止重新发起」，与 `review.py:1389` 的既有出口（重新发起新一轮）冲突；C4 缺 `unavailable` 的暂停/异常归档出口；light 表述说成「不产生义务」，漏了 C2/C3 仍成立 |
+| **v31** | C4 默认动作 + 落地前提四项 + 技能交付 | 本文 |
 
 ---
 
