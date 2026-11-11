@@ -1,67 +1,61 @@
-# ⑥ 修复态的表达：不新增阶段，用「事实 + 出口」吸收 `fixing` 的收益（v26）
+# ⑥ 修复态的表达：不新增阶段，用「事实 + 出口」吸收 `fixing` 的收益（v27）
 
-> 状态：**待审 v26**。阶段：**方案审查阶段，实现零改动**（规则见 `.trellis/spec/guides/review-phase-discipline.md`）。
-> **本文只回答 ⑥**：`fixing` 阶段的收益如何在四阶段内表达。范围边界见 §8，超出范围不作为通过条件。
+> 状态：**待审 v27**。阶段：**方案审查阶段，实现零改动**（规则见 `.trellis/spec/guides/review-phase-discipline.md`）。
+> **本文只回答 ⑥**；范围边界见 §8，被排除的条目登记在 `analysis/backlog-excluded-from-item6.md`。
 
 ---
 
 ## 1. ⑥ 的问题
 
-v42 要求"审查失败进入修复态"，三处原文：
+v42 要求"审查失败进入修复态"：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → execute → fixing → finish`；
+**内容变化或 review 判 fail 进入 `fixing`**；由下一次 `task-check` 退出；**审查失败不再需要 replan/approve**）。
 
-| v42 | 要点 |
+人裁：保留四阶段、`fixing` 不落盘（2026-11-09）；吸收其收益，人裁通道用于"人不在场"（2026-11-11 乙）。
+
+`fixing` 提供三样东西，以及本方案的替代：
+
+| `fixing` 提供 | 替代 |
 |---|---|
-| K10（L107） | 阶段只有 `plan/execute/**fixing**/finish`；`escalated` 只阻断最终结论与归档 |
-| S4（L122） | `decide` 三态：`fail → **fixing**`、`pass → finish`、`unavailable`（异常归档） |
-| S5（L123） | `plan → execute → **fixing** → finish`；**内容变化或 review 判 fail 进入 `fixing`**，由下一次 `task-check` 退出；**审查失败不再需要 replan/approve** |
+| ① "在修"的位置 | `findings`（要修什么）+ `applicable`（旧结论是否仍适用于当前内容） |
+| ② fail 不强制 replan 的默认 | **指引**（不是机制常量）：fail 不触发 replan；根因在规划时 `task-replan` 仍可用（协议已有 `check/finish → plan`） |
+| ③ 修完由下一次 `task-check` 退出 | 事实：`check.valid` 与 `conclusion.binding`；**是否重查由 AI 判断**（轻量任务不因旧结论失效而承担重审义务） |
 
-人裁：**保留四阶段、`fixing` 不落盘**（2026-11-09）；在该前提下**吸收收益**、人裁通道用于"人不在场"（2026-11-11 乙）。
-
-`fixing` 作为阶段实际提供三样东西：
-
-| `fixing` 提供 | 本方案用什么替代 |
-|---|---|
-| ① 明确的"在修"位置 | `findings` 事实（要修哪些项）+ `conclusion` 事实（结论是否仍成立） |
-| ② "fail 不强制 replan"的默认 | **指引**（不是机制常量）：`fail` 不触发 replan；**根因在规划时 `task-replan` 仍可用**（协议已有 `check/finish → plan` 的 `replan` 迁移） |
-| ③ 修完由下一次 `task-check` 退出 | 事实：`conclusion.bound_to_current` 与 `check` 的现状；是否重查由 AI 判断（见 §4 出口表） |
-
-**S5 的另一个触发（内容变化）** 一并纳入：它使旧结论不再绑定当前 check，体现为 `conclusion.bound_to_current=false`（判据与既有 `review-passed` 门禁一致，不新写条件）。
+**S5 的"内容变化"触发**必须可见——但它的判据在 `task.check-passed`，不在 `review-passed`（见 §2.1）。
 
 ---
 
 ## 2. 机制给什么：三组事实 + 一条人裁记录
 
-### 2.1 `repair_scope`（派生，不落盘；**没有单一状态枚举**）
+### 2.1 `repair_scope`（派生，不落盘；**无单一状态枚举**）
 
 ```json
 "repair_scope": {
   "findings": [{"round": 1, "slot": "codex", "finding_id": "f1", "severity": "blocker"}],
   "unverifiable": [{"round": 1, "slot": "codex", "path": "…", "report_digest": "sha256:…",
-                    "cause": "changed|missing|unreadable",
-                    "cited": false,        // 是否为当前结论所引用的报告
-                    "released": false}],   // 是否已有人裁放行（且 cited=false）
+                    "cause": "changed|missing|unreadable", "cited": false, "released": false}],
   "conclusion": {"verdict": "fail", "round": 2, "check_id": "C2",
-                 "bound_to_current": false,
-                 "bind_problems": ["check_id_changed", "cited_report_digest_mismatch"]}
+                 "binding": false,          // ≡ task.review-passed 判据
+                 "check_valid": true,       // ≡ task.check-passed 判据
+                 "applicable": false,       // = binding && check_valid
+                 "blockers": ["binding:cited_report_digest_mismatch"]}
 }
 ```
 
-**计算规则（一个函数实现；三组事实彼此独立，不用单值枚举互相遮蔽）**
+| 事实 | 判据（**复用既有函数，不另写条件**） |
+|---|---|
+| `findings` | 门禁用的同一份 `open_findings(...)["blocking"]`（**全轮次**，不做 check 过滤），补 `round/slot` |
+| `unverifiable` | **直接来自 `open_findings(...)["unavailable"]`**（唯一来源；其条目须带 `cause/round/report_digest`，见 §6）。`cited` = 该 `(round, slot)` 是否出现在 `reviews.result.imported`；`released` = 存在 `(round, slot, report_digest)` 全等且未撤销的放行 **且** `cited == false` |
+| `conclusion.binding` | `task.review-passed` 的判定（`check_id` 相等 **且** 结论引用报告三重摘要一致） |
+| `conclusion.check_valid` | `task.check-passed` 的判定（`check.result == pass` 且 `saved anchor == 当前 anchor` 且 `check.invalidated` 为空 且 `rule_version` 相符） |
+| `conclusion.applicable` | `binding && check_valid` |
 
-| 事实 | 公式 | 与既有代码的关系 |
-|---|---|---|
-| `findings` | 直接取门禁用的同一份 `open_findings(...)["blocking"]`（**全轮次、不做 check 过滤**），并补 `round/slot` | **与 `final_gate` 同源**：两处口径必须逐项一致（上一版另立"针对当前 check"的过滤，导致 `repair_scope` 说无项可修而归档被拒） |
-| `unverifiable` | 已导入报告中**当前核对不上**的：`cause` 取 `changed/missing/unreadable`；`report_digest` 取**登记摘要**（不是现场摘要）；`cited` = 该 `(round, slot)` 是否出现在 `reviews.result.imported` 中；`released` = 存在 `(round, slot, report_digest)` 全等且未撤销的放行记录 **且** `cited == false` | 只读既有记录；不新增身份 |
-| `conclusion` | `verdict/round/check_id` 来自 `reviews.result`；`bound_to_current` **≡ 既有 `review-passed` 门禁的判据**（`check_id` 相等 **且** 结论引用报告的 `result_digest == recorded == 文件当前摘要`）；不满足时 `bind_problems` 逐项给原因 | **不复制条件**：直接复用该判定 |
+**为什么必须两层**：只复用 `review-passed` 无法发现"内容改了但没重跑 check"——那时 `check_id` 与报告摘要都没变，
+`binding` 为 true，而结论对当前内容其实已不适用。内容变化由 `check-passed` 的 anchor 比对发现（`gates.py:639-654`）。
+**两层都是既有判定，本文只做合取，不新增条件。**
 
-**为什么不用 `reason` 单值**：`fail` 与"某份报告损坏"可以同时成立；单值只能隐藏其中一个（上一版的 `reason` 优先序会遮住另一条事实）。
+### 2.2 人裁记录（乙通道）
 
-**不放进 JSON 的东西**（避免把指引伪装成事实）：`replan_not_needed`、`phase_unchanged`、`recheck_required`、`active`。
-这些要么是常量（零信息），要么是 AI 的判断（是否重查、是否 replan），应写在 §4 的指引里。
-
-### 2.2 人裁记录（乙通道，只在"无法恢复的可核实性"时使用）
-
-**记录**（新增，落盘）：`reviews.unknown_acceptances[]`
+**记录**：`reviews.unknown_acceptances[]`
 
 ```json
 {"batch": "b-1", "round": 1, "slot": "codex", "report_digest": "sha256:…",
@@ -73,64 +67,64 @@ v42 要求"审查失败进入修复态"，三处原文：
 | 规则 | 语义 |
 |---|---|
 | 匹配 | `(round, slot, report_digest)` **三者全等**；摘要不同不匹配 |
-| **只对非引用证据有效** | `cited == true` 的报告（当前结论引用的）**不接受放行**：归档依据必须是可核实证据 → 只能重发新一轮（见 §3 B2） |
+| 只对**非引用**证据有效 | `cited == true` 不接受放行：它直接支撑当前归档依据，必须重发新一轮 |
+| `released` 的封闭性 | 一旦某报告被新结论引用（成为当前轮），它就不再是"旧证据"；旧轮报告不会被未来结论引用，故"已放行后又变 cited"不可达 |
 | 批次 | 一次一批、**全有或全无**；任一项不匹配 → 整批拒绝、零写入，返回 `bad_items` |
-| 不做预放行 | 指向当前不存在的不可核实项 → 拒绝（避免将来自动生效） |
+| 不做预放行 | 指向当前不存在的不可核实项 → 拒绝 |
 | 幂等 | 同一键重复放行 → 不新增，回报 `already_accepted` |
-| 撤销 | `--revoke --batch <id>`；或 `--revoke --round --slot --digest`（**必须带 digest**，否则同槽多条时不唯一，报错列出候选） |
-| 信任模型（**定案：不引入签名**） | 沿用既有 attestation：`by/at/quote/source` + 摘要入库。**机制不引入任何密钥/签名步骤**——全仓没有任何签名/验签设施（`grep signature|gpg|hmac|keyring` 于 `payload/` 为空），`authorize`（删除/外发/提交授权）与 `attestation` 都是这个级别。机制只保证：绑定到具体证据、留痕可审计、撤销留痕。**不宣称"AI 无法自签"** |
+| 撤销 | `--revoke --batch`，或 `--revoke --round --slot --digest`（必须带 digest，否则同槽多条时报错列候选）；置 `revoked: true`（不删记录） |
+| 信任模型（**定案：不引入签名**） | 沿用 attestation 四件套 + 摘要入库；全仓无签名设施，`authorize`/`attestation` 同级；机制只保证绑定证据、留痕、撤销留痕 |
 
 **命令**：`wf review-accept-unknown --task <id> --file <决定.json>`（含 `--revoke`）。
 
 ---
 
-## 3. 四条语义边界（上一版写错的三处已纠正）
+## 3. 五条语义边界
 
 | # | 边界 | 说明 |
 |---|---|---|
-| **B1** | **可核实性是"当前状态"，不是历史事件** | 报告短暂不可读后恢复、或找回了与登记摘要完全相同的字节 → 它**不再**是不可核实 → 阻断**自然消失**。这不是"解除阻断"，是事实变化。人裁只用于**无法恢复**的情形（如原字节已不可得）。上一版 B1 写"恢复也不能解除"，会逼出"客观已恢复仍要人签字"的无谓流程 |
-| **B2** | **当前结论所引用的证据必须可核实** | `cited == true` 的损坏报告**不能靠人裁解除**：既有 `review-passed` 门禁会先做三重摘要核对并拒绝。出口是**重发新一轮**（新结论 + 新证据）；人裁放行只消化"非引用"的历史证据 |
-| **B3** | **`fail` 不强制 replan，但不是禁止 replan** | 机制只表达"fail 不自动回到 plan"这一默认；若根因是规划缺陷（验收标准不成立、路线不可行），`task-replan` 仍是合法出口（协议已有 `check/finish → plan` 迁移，代价：原批准失效）。**不由机制断言"不需要 replan"** |
-| **B4** | **`unavailable` ≠ 异常归档** | `--unavailable` 只表示"这次审查做不成"；`task-abandon` 是不跑最终门禁的**终局**出口，不解除任何阻断事实 |
+| **B1** | 可核实性是**当前状态** | 报告恢复（原字节、摘要一致）→ 不再出现在 `unverifiable`。这不是"解除"，是事实变化；人裁只用于**无法恢复**的情形 |
+| **B2** | **归档依据必须可核实** | `cited` 报告损坏：**complex** 由既有 `review-passed` 拦（它做三重摘要核对）；**light 由本方案的新增分支拦**（因为 `review-passed` 对 light 任务直接返回满足，见 `gates.py:671-680`）。放行只适用非引用证据 |
+| **B3** | fail 不强制 replan，**但不是禁止** | 机制只表达"fail 不自动回 plan"；根因在规划时 `task-replan` 仍合法（代价：原批准失效） |
+| **B4** | `unavailable` ≠ 异常归档 | `--unavailable` 只表示审查做不成；`task-abandon` 是不跑最终门禁的终局出口 |
+| **B5** | **`findings` 只能由 dispositions 清零** | 代码修复、`task-check`、重审 pass 都**不**清旧轮报告的 blocking：`decide` 的 verdict 由**报告载荷**推导（`review.py:1351`），不读 dispositions，所以同一轮重跑仍是 fail。清除路径只有 K4b：非提出者复核后补 `dispositions(decision=accepted)` |
 
 ---
 
-## 4. 出口表（**指引**，不是机制；给事实与可选动作，不排顺序）
+## 4. 出口表（**指引**；给事实与可选动作，不排顺序）
 
-| 事实组合 | 可做的事（AI 自行选序） | 不该被理解成 |
+| 事实组合 | 可做的事 | 明确不是 |
 |---|---|---|
-| `findings` 非空 | 按项修复 →（需要时）重跑 `task-check` → 重发审查 | "必须先 replan" |
-| `findings` 为空，但 `conclusion.bound_to_current == false` | 重发审查（结论已不适用）；若根因在规划，可用 `task-replan` | "已经结清" |
-| `unverifiable` 有 `cited == false` 且 `released == false` | 找回原字节（恢复即可核实）/ 人裁放行 / 放弃任务 | "重发新一轮就已解除" |
-| `unverifiable` 有 `cited == true` | **重发新一轮**（新报告 + 新结论）；人裁放行不适用 | "放行后即可归档" |
-| `verdict == "invalidated"` | **完成已在途的那一轮**（`invalidated` 只在新 `review-launch` 时写入，此时新一轮已发起） | "再发一次审查" |
-| `phase == "finish"` 且存在上述任一未结事实 | 以事实为准，先把未结项处理完再归档（`next` 是位置驱动、不感知失败事实） | "位置说归档就可以归档" |
+| `findings` 非空 | 修 → 由**非提出者复核后补 dispositions** 关闭该项（B5，这是唯一清零路径）→（需要时）重查 → 重发审查 | "修完代码 findings 就没了" |
+| `findings` 为空，`conclusion.applicable == true` | 按常规推进（归档 / 或人要求的其他动作） | —— |
+| `findings` 为空，`verdict == "fail"` 但已全部处置（`binding == true`） | 重发审查（新报告不再携带这些 finding，才会得到新结论） | "重跑同一轮 decide"（仍 fail） |
+| `binding == true`、`check_valid == false`（内容已变） | 重跑 `task-check` 产生新 check → 重发审查 | "旧结论仍适用" |
+| `binding == false`、`check_valid == true`（check 换代/CLI 变化） | 重发审查；若根因在规划，`task-replan` 可用 | "必须 replan" |
+| **light 任务**且只有旧结论失效（findings 空、无未放行 unknown） | **是否重审取决于任务要求**：light 不因"旧结论不能复用"而承担收尾义务 | "必须重发审查" |
+| `unverifiable` 有 `cited == false` 且未放行 | 找回原字节 / 人裁放行 / 放弃任务 | "重发新一轮就已解除" |
+| `unverifiable` 有 `cited == true` | 重发新一轮（新检查 + 新结论）；人裁放行不适用 | "放行后即可归档" |
+| `verdict == "invalidated"` | 完成**已在途**的那一轮（`invalidated` 只在 launch 时写入） | "再发一次审查" |
+| 其他组合（含 `phase == "finish"` 但存在上述未结事实） | 按事实逐项处理，处理完再归档 | "位置说归档就可以归档" |
 
-**唯一硬约束**：不要用"试归档"探路（`tasks.py:3233` 会先做业务提交）。需要"能不能归档"的只读答案时，并读 `gate`（步骤面）与 `repair_scope`。
+**唯一硬约束**：不要用"试归档"探路（`tasks.py:3233` 会先业务提交）。需要"能不能归档"的只读答案时并读 `wf gate`（步骤面，已只读）与 `repair_scope`。
 
 ---
 
-## 5. 与既有机制的关系（**不改的东西 + 依赖声明**）
+## 5. 与既有机制的关系（不改的东西 + **硬前置依赖**）
 
 | 机制 | 关系 |
 |---|---|
-| `phase` 枚举（`plan/execute/check/finish`） | **不改**，不新增 `fixing` |
-| `protocol/states.json`（36 码 / 16 配置键 / 11 迁移 / `next_by_position`） | **不改**；`repair_scope` 不参与 `next` |
-| `review-decide` 的判定资格 | **不改**，`repair_scope` 只读它的结论 |
-| `task-check` 的 fail 语义与 revision | **不改** |
-| `final_gate` 结构 | **只加一条**：存在 `unverifiable` 中 `released == false` **且 `cited == false`** 的条目时阻断归档（`WF_REVIEW_INVALID` + `facts.reason = "unverifiable_evidence"`）；`cited == true` 的情形由既有 `review-passed` 拒绝，不新增分支 |
+| `phase` 枚举 / `protocol/states.json` / `next_by_position` | **不改**；`repair_scope` 不参与 `next` |
+| `review-decide` 判定资格、`task-check` 语义 | **不改**；只读它们的结论 |
+| `final_gate` 结构 | **只加一条**：存在**未放行的 `unverifiable`（不区分 `cited`）** 时阻断（`WF_REVIEW_INVALID` + `facts.reason = "unverifiable_evidence"`）。`cited` 只影响"能否放行"，不影响"是否阻断"——否则 light 任务的引用报告损坏会**无人拦截** |
 | `task-abandon` | **不改**：终局、不解除 |
 
-**已知限制（登记，不解决）**：人裁放行是**人的声明**，由持写权的 AI 会话转录；机制无法证明"人真的说过"。
-不引入签名的理由：① 全仓无签名设施，`authorize`/`attestation` 都是声明式；② 要求人持密钥/硬件是反人性的流程负担，
-人不一定在终端；③ 真要升级属"整体信任模型"议题，不应在 ⑥ 里点状加码。
+**硬前置依赖（不是"降级可用"）**
 
-**依赖声明（必须写清，否则 ⑥ 的落地会踩另案的坑）**
-
-| 依赖 | 影响 | 未就绪时的行为 |
+| 依赖 | 为什么是硬的 | 未就绪的后果 |
 |---|---|---|
-| 读取归因（`OSError` 归类，另案） | `cause` 能否正确区分 `missing` 与 `unreadable` | 退化为"不可读"，仍可阻断；`cause` 精度不足 |
-| `slot` 身份稳定（另案） | 人裁键 `(round, slot, digest)` 是否稳定 | 现状下若 `slot` 与 `agent` 混用，放行可能匹配不上；此时出口是"重发新一轮"（不依赖放行） |
+| **A1 `slot` 身份稳定**（backlog A1） | 放行键是 `(round, slot, digest)`；`slot` 与 `agent` 混用会匹配不上，而**重发新一轮不会解除**非引用 unknown（B1/B2） | 未就绪时，唯一收尾路径是 `task-abandon`；本文不再把"重发"列为降级出口 |
+| **C1 读取归因**（backlog C1） | `open_findings` 在 try 之外调 `records.file_digest`（`review.py:185`），权限故障会直接抛出；`unverifiable` 与门禁分支都靠它 | ⑥ **自带这一处**的最小归因（见 §6），其余五处仍属 C1 |
 
 ---
 
@@ -138,49 +132,43 @@ v42 要求"审查失败进入修复态"，三处原文：
 
 | 文件 | 改动 |
 |---|---|
-| `review.py` | 新增 `repair_scope(ctx, task)`（纯派生，单一实现）；复用 `open_findings` 的 blocking 集与 `review-passed` 的绑定判据；`unknown_acceptances` 读写与撤销 |
-| `gates.py` | `final_gate` 末尾追加一条：未放行的**非引用**不可核实项 → 阻断（附三条出口） |
-| `cli.py` | `wf status`（含 `--short`）输出 `repair_scope`；新增 `wf review-accept-unknown`（`--revoke` 需 `--batch` 或 `--digest`） |
-| `templates/` | 不改（`repair_scope` 派生；`unknown_acceptances` 可选） |
+| `review.py` | ① `open_findings` 的 `unavailable` 条目补 `cause/round/report_digest`，并把该处 `file_digest` 包进 `except OSError`（**唯一来源 + 最小兜底**）；② 新增 `repair_scope(ctx, task)`（纯派生）：`findings` 取 `blocking`、`unverifiable` 取 `unavailable`、`conclusion` 由 `review-passed`/`check-passed` 两个既有判定合取；③ `unknown_acceptances` 读写与撤销 |
+| `gates.py` | `final_gate` 末尾追加一条：存在未放行的 `unverifiable` → 阻断（附三条出口：找回原字节并恢复 / 人裁放行（仅非引用）/ 放弃任务） |
+| `cli.py` | `wf status`（含 `--short`）输出 `repair_scope`；新增 `wf review-accept-unknown`（`--revoke`） |
+| `templates/` | 不改 |
 
-**迁移影响**：无历史改写（全派生）。
+**不复用为第二套口径**：`cause` 三分只在 `open_findings` 一处产出，`repair_scope` 只搬运（自查清单第 1 条）。
 
 ---
 
-## 7. 验收（12 项，全部属于 ⑥）
+## 7. 验收（15 项，全部属于 ⑥）
 
 | # | 断言 |
 |---|---|
-| 1 | `findings` 与 `final_gate` 的 `unaddressed_blocking` **逐项一致**（同一函数产出；不做 check 过滤） |
-| 2 | 审查判 `fail` 且绑定当前 check → `conclusion.verdict == "fail"`、`bound_to_current == true`、`findings` 列出未关闭 blocking |
-| 3 | 修复后重跑 `task-check` 产生新 check（**不改 `reviews.result`**）→ `conclusion.bound_to_current == false`、`bind_problems` 含 `check_id_changed`；**不得**因为"verdict 仍是 fail"而让 `findings` 消失 |
-| 4 | 内容变化使旧结论失效 → `bound_to_current == false`（S5 的第二触发可见） |
-| 5 | `verdict == "invalidated"` → 出口指引为"完成已在途那一轮"，**不是**"再发一次" |
-| 6 | 非引用报告损坏 → `unverifiable[].cited == false`；人裁放行（摘要全等）后 `released == true`，归档不再因此阻断 |
-| 7 | **引用**报告损坏 → `cited == true`；人裁放行**不**解除（`released` 保持 false），归档被既有 `review-passed` 拒绝，出口是重发 |
-| 8 | 报告恢复（原字节找回，摘要与登记一致）→ 该项**不再出现在** `unverifiable`（B1：事实变化，不是解除） |
-| 9 | 撤销放行 → `released` 回到 false 并恢复阻断；同槽多条放行时 `--revoke` 必须带 `--digest`，否则报错列候选 |
-| 10 | `fail` 之外的路径不改 phase：无论 fail 发生在 `check` 还是 `finish`（`task-check` 通过后会置 `finish`），phase 都不由本方案改写 |
-| 11 | 协议零改动：`phase.enum`、迁移数、`next_by_position` 逐字节一致；`repair_scope` 不参与 `next` 计算 |
-| 12 | `task-abandon` 仍可终止任务，且不把任何 `unverifiable` 标为 `released`（B4） |
+| 1 | `findings` 与 `final_gate` 的 `unaddressed_blocking` 逐项一致（同源、不做 check 过滤） |
+| 2 | 审查判 fail 且 `binding` 为真（check 未换代）→ `conclusion.verdict == "fail"`、`applicable == true`（当 `check_valid` 亦真） |
+| 3 | **内容改动但未重跑 `task-check`** → `check_valid == false`、`applicable == false`、`blockers` 指明 `check` 侧原因（S5 的"内容变化"可见） |
+| 4 | 重跑 `task-check` 产生新 check（不改 `reviews.result`）→ `binding == false`、`blockers` 含 `check_id_changed`；`findings` **不消失**（B5） |
+| 5 | **`findings` 只能由 dispositions 清零**：修复代码 + 重跑 check + 重审 pass 后，若未补 dispositions，`findings` 仍非空（验收 4 的延伸） |
+| 6 | `verdict == "fail"`、`binding == true`、`findings` 已全部处置 → 出口指引为"重发审查"，且重跑同一轮 `decide` 仍为 fail（不被误当作已完成） |
+| 7 | **complex** 任务：`cited` 报告损坏 → 归档被既有 `review-passed` 拒绝（三重摘要核对） |
+| 8 | **light** 任务：`cited` 报告损坏 → 归档被**本方案新增分支**拒绝（`review-passed` 对 light 短路，不得据此认为已覆盖） |
+| 9 | 非引用报告损坏 + 摘要全等放行 → 不再阻断；撤销后恢复阻断；放行键匹配需 `(round, slot, digest)` 全等 |
+| 10 | 报告恢复（原字节、摘要一致）→ 该项不再出现在 `unverifiable`（B1） |
+| 11 | `cause` 三分**只**由 `open_findings` 产出；`repair_scope.unverifiable` 与其逐项一致（无第二套分类） |
+| 12 | 权限故障（`PermissionError`）不再从 `open_findings` 抛出：该条归入 `unverifiable`（`cause=unreadable`），`status` 与 `gate` 均不崩 |
+| 13 | `verdict == "invalidated"` → 出口为"完成已在途那一轮"，不是"再发一次" |
+| 14 | **light 任务**仅有旧结论失效（无 findings、无未放行 unknown）→ 出口含"是否重审取决于任务要求"，不把重审写成义务 |
+| 15 | 协议零改动：`phase.enum`、迁移数、`next_by_position` 逐字节一致；`repair_scope` 不参与 `next`；`task-abandon` 仍可终止且不解除任何阻断 |
 
 ---
 
 ## 8. 范围边界（防跑偏，硬约束）
 
-> 被排除的条目已登记在 `analysis/backlog-excluded-from-item6.md`（含证据位置、与 ⑥ 的依赖关系、建议顺序），
-> **⑥ 解决前不处理**。本文只保留边界说明，不复述条目细节。
-
-**本文只回答 ⑥。以下均不在本文范围**，不作为通过条件：
-
-| 不属 ⑥ | 归属 |
-|---|---|
-| `slot`/`agent` 身份域、finding 跨轮同名 | 另案（本文只声明依赖） |
-| 导入端证据身份、`--restore`、幂等重入三态 | 另案 |
-| `review-status` 的 `reports_ready`/`material_blockers` 等语义 | 另案 |
-| 六处读取健壮、`file_digest_or_raise` | 另案（本文只声明依赖） |
-| `gate` 的 `fulfilled_by`、`changes-persisted` 语义 | 另案 |
-| `--short` 字段派生、展示分组 | 另案 |
+**本文只回答 ⑥。** 以下不在本文范围，不作为通过条件（详见 `analysis/backlog-excluded-from-item6.md`）：
+`slot`/`agent` 身份域与 finding 跨轮同名（**但 A1 是本文硬前置**）、导入端证据身份与 `--restore`、
+`review-status` 的 ready/material 语义、六处读取健壮中的另外五处、`gate` 的 `fulfilled_by`、
+`--short` 字段派生与展示分组、维护入口令牌交互、码表新增（⑦）、历史 dispositions 迁移。
 
 ---
 
@@ -189,19 +177,19 @@ v42 要求"审查失败进入修复态"，三处原文：
 | 版本 | 形态 | 为什么被否 |
 |---|---|---|
 | v3 | 新增 `fixing` 阶段 | 与 v42 枚举冲突；牵动协议与迁移 |
-| v4 | 事件写入 `repair` 标记 | 主路径清不掉；两失败源共用槽位互相覆盖 |
-| v20–v24 | 大 schema 表达"全部未结事实" | 偏题（装进其它组件缺陷）；事实过载 |
-| v25 | 单值 `reason` + 常量字段 | fail 与损坏并存时互相遮蔽；`replan_not_needed`/`phase_unchanged` 是指引伪装成事实；cited 损坏时人裁出口是死路 |
-| **v26** | **三组独立事实 + 一条人裁记录 + 出口表（指引）** | 只回答 ⑥；不新增阶段、不改协议、不改 `next`、不把判断写成常量 |
+| v4 | 事件写入 `repair` 标记 | 主路径清不掉；两失败源共用槽位 |
+| v20–v24 | 大 schema 表达全部未结事实 | 偏题；事实过载 |
+| v25 | 单值 `reason` + 常量字段 | 并存事实互相遮蔽；指引伪装成事实；cited 损坏无出口 |
+| v26 | 三组独立事实 + 出口表 | **`bound_to_current` 只比 check_id 与摘要，发现不了内容变化**；`cited` 排除让 light 任务漏检；出口表未写"findings 靠 dispositions 清零"；依赖被写成"可降级"（实际两条是硬前置） |
+| **v27** | 三层事实（findings / unverifiable / conclusion=binding∧check_valid）+ 出口表含清零路径 | 本文；`cause` 单一来源；cited 只影响放行不影响阻断 |
 
 ---
 
-## 10. 已定项（原 D1/D2，2026-11-11 人裁）
+## 10. 已定项（2026-11-11 人裁）
 
-| # | 问题 | 裁定 | 落点 |
-|---|---|---|---|
-| D1 | 非引用不可核实证据的阻断：复用 `WF_REVIEW_INVALID` 还是新增协议码？ | **复用 `WF_REVIEW_INVALID` + `facts.reason = "unverifiable_evidence"`**（协议零改动） | §5 `final_gate` 那一条分支、验收 6/7 |
-| D2 | 人裁信任模型：是否引入签名？ | **不引入签名**——沿用既有声明式信任（`by/at/quote/source` + 摘要），如实登记为已知限制 | §2.2 信任模型行、§5 已知限制 |
+| # | 问题 | 裁定 |
+|---|---|---|
+| D1 | 非引用不可核实证据的阻断用哪个码 | **复用 `WF_REVIEW_INVALID` + `facts.reason = "unverifiable_evidence"`**（协议零改动） |
+| D2 | 人裁是否引入签名 | **不引入**：沿用声明式 attestation（`by/at/quote/source` + 摘要），如实登记为已知限制 |
 
-> 早期 **Q1=乙**（放行批次形状）与 **Q2=甲**（两类阻断分列）同样已定，见 §2。
-> 本文现已无待决项。
+> 早期 **Q1=乙**（放行批次形状）、**Q2=甲**（两类阻断分列）亦已定。本文无待决项。
