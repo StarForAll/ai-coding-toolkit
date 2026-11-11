@@ -773,26 +773,22 @@ class DeepSeekKeyring {
     return { restored, kept, failed, rotated, state: await this.snapshot() }
   }
 
-  // ---- 删除条目 -------------------------------------------------------------
+  // ---- 删除条目（移出待用，不真删） -----------------------------------------
 
   /**
-   * 真正删掉一条：从池里移除、回收它的凭证引用，并在删的是当前 Key 时立刻换下一把。
+   * 把一条移出待用列表：只打隐藏标记，凭证与记录都留着，可被「检查隐藏」找回。
    *
-   * 与「隐藏」不同，删除不可撤回；删掉当前 Key 后若池里已没有可用条目，
-   * `DEEPSEEK_API_KEY` 保持着被删那把的值（请求还能继续），只是不再受轮换管辖。
+   * 移出的如果是当前 Key，立刻换下一把；池里再无可用条目时 `DEEPSEEK_API_KEY`
+   * 保持着被移出那把的值（请求还能继续），只是不再受轮换管辖。
    * @param {string} id - 条目 id。
-   * @returns 被删条目的概况、是否它当时在用、以及最新快照。
+   * @returns 被移出条目的概况、是否它当时在用、以及最新快照。
    */
   async removeEntry(id) {
-    const index = this.store.entries.findIndex((entry) => entry.id === id)
-    if (index < 0) return { removed: null, state: await this.snapshot() }
-    const [entry] = this.store.entries.splice(index, 1)
+    const entry = this.store.entries.find((item) => item.id === id)
+    if (entry === undefined) return { removed: null, state: await this.snapshot() }
     const key = await this.keyOf(entry).catch(() => undefined)
-    try {
-      await this.ctx.credentials.unset?.(entry.ref)
-    } catch {
-      /* 凭证服务不支持回收时留着不起眼的残留引用，不影响删除本身 */
-    }
+    entry.hidden = true
+    entry.error = 'hidden-by-user'
     const wasActive = this.store.activeId === entry.id
     if (wasActive) this.store.activeId = null
     const rotated = wasActive ? await this.reconcile() : false
@@ -801,7 +797,7 @@ class DeepSeekKeyring {
       removed: { id: entry.id, masked: maskKey(key) },
       wasActive,
       rotated,
-      remaining: this.store.entries.length,
+      remaining: this.store.entries.filter((item) => item.hidden !== true).length,
       state: await this.snapshot(),
     }
   }

@@ -33,8 +33,9 @@ window.__ModuleLoader__.load({
         colActions: '操作',
         delBtn: '删除',
         deleting: '删除中…',
-        removed: (masked, wasActive) => `已删除 ${masked}` + (wasActive ? '（原来是当前 Key）' : ''),
-        removeEmpty: '池里已没有可用 Key，请补充',
+        removed: (masked, wasActive) =>
+          `已移出待用 ${masked}` + (wasActive ? '（原来是当前 Key）' : '') + '，可用「检查隐藏」找回',
+        removeEmpty: '待用列表已空，请补充',
         statusActive: '使用中',
         statusReady: '可用',
         statusEmpty: '额度已用完',
@@ -92,8 +93,9 @@ window.__ModuleLoader__.load({
         colActions: '',
         delBtn: 'Delete',
         deleting: 'Deleting…',
-        removed: (masked, wasActive) => `deleted ${masked}` + (wasActive ? ' (was the active key)' : ''),
-        removeEmpty: 'The pool has no usable key left; add one',
+        removed: (masked, wasActive) =>
+          `${masked} moved out of the pool` + (wasActive ? ' (was the active key)' : '') + '; use "Recheck" to bring it back',
+        removeEmpty: 'nothing left in the pool; add a key',
         statusActive: 'In use',
         statusReady: 'Ready',
         statusEmpty: 'Exhausted',
