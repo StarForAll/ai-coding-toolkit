@@ -329,6 +329,32 @@ def latest_decision(task, round_no):
     return max(entries, key=lambda item: str(item.get("decided_at") or ""))
 
 
+def read_imported_report(ctx, entry):
+    """重读一条已导入报告：返回 `(payload, cause, reason)`。
+
+    唯一的重读/归因点（`open_findings` / `all_findings` / `proposers_from_history` 共用）：
+    `cause` 三分——`None`（可读且摘要一致）/ `missing`（文件不在了）/ `changed`（摘要不符）/
+    `unreadable`（权限或解析失败）；`payload` 只在 `cause is None` 时是报告对象。
+    """
+    rel = entry.get("report_path")
+    path = join(ctx.root, rel)
+    try:
+        current_digest = records.file_digest(path)
+    except OSError as exc:
+        return None, "unreadable", str(exc)
+    if current_digest != entry.get("report_digest"):
+        cause = "missing" if current_digest is None else "changed"
+        return None, cause, ("报告导入后被删除" if cause == "missing" else "报告导入后被改写")
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            payload, _problems = read_report(handle.read())
+    except OSError as exc:
+        return None, "unreadable", str(exc)
+    if payload is None:
+        return None, "unreadable", "report unreadable after import"
+    return payload, None, None
+
+
 def finding_key(round_no, slot, finding_id):
     """finding 的精确身份：`(round, slot, finding_id)`。
 
@@ -402,34 +428,11 @@ def open_findings(ctx, task):
         if not rel:
             continue
         round_no = int(entry.get("round") or 0)
-        path = join(ctx.root, rel)
-        try:
-            current_digest = records.file_digest(path)
-        except OSError as exc:
+        payload, cause, reason = read_imported_report(ctx, entry)
+        if cause:
             unavailable.append({"slot": entry.get("slot"), "round": round_no,
                                 "report_digest": entry.get("report_digest"), "path": rel,
-                                "cause": "unreadable", "reason": str(exc)})
-            continue
-        if current_digest != entry.get("report_digest"):
-            # cause 三分：文件不存在 → missing；摘要不符 → changed（读取失败在上/下面归 unreadable）
-            cause = "missing" if current_digest is None else "changed"
-            unavailable.append({"slot": entry.get("slot"), "round": round_no,
-                                "report_digest": entry.get("report_digest"), "path": rel,
-                                "cause": cause,
-                                "reason": "报告导入后被删除" if cause == "missing" else "报告导入后被改写"})
-            continue
-        try:
-            with open(path, "r", encoding="utf-8") as handle:
-                payload, _problems = read_report(handle.read())
-        except OSError as exc:
-            unavailable.append({"slot": entry.get("slot"), "round": round_no,
-                                "report_digest": entry.get("report_digest"), "path": rel,
-                                "cause": "unreadable", "reason": str(exc)})
-            continue
-        if payload is None:
-            unavailable.append({"slot": entry.get("slot"), "round": round_no,
-                                "report_digest": entry.get("report_digest"), "path": rel,
-                                "cause": "unreadable", "reason": "report unreadable after import"})
+                                "cause": cause, "reason": reason})
             continue
         for finding in payload.get("findings") or []:
             if not isinstance(finding, dict) or not finding.get("id"):
@@ -829,20 +832,24 @@ def broken_reference_problems(lifted, dispositions):
 
 
 
-def proposers_from_history(imported_entries):
-    """从**全部历史**导入记录里取「finding 精确身份 → 提出者」（K4b 的独立事实，跨轮有效）。
+def proposers_from_history(ctx, task):
+    """从**全部历史**已导入报告里取「finding 精确身份 → 提出者」（K4b 的独立事实，跨轮有效）。
 
-    A9：键是 `(round, slot, finding_id)`——同名 id 在不同轮/槽位是不同问题，
-    不能用裸 id 合并提出者。
+    A7：导入记录**不保存 findings**（只存路径/摘要/锚点），所以提出者只能重解析报告；
+    读取/归因走 `read_imported_report`，与 `open_findings` 同一处，不会与门禁的事实分叉。
+    A9：键是 `(round, slot, finding_id)`——同名 id 在不同轮/槽位是不同问题，不能合并。
     """
     proposers = {}
-    for entry in imported_entries:
-        if not isinstance(entry, dict):
+    for entry in (task.get("reviews") or {}).get("imported") or []:
+        if not isinstance(entry, dict) or not entry.get("report_path"):
             continue
-        proposer = normalize_agent(entry.get("agent") or entry.get("source_cli")
+        payload, cause, _reason = read_imported_report(ctx, entry)
+        if cause:
+            continue
+        proposer = normalize_agent(entry.get("agent") or payload.get("source-cli")
                                    or entry.get("slot"))
         round_no = int(entry.get("round") or 0)
-        for finding in entry.get("findings") or []:
+        for finding in payload.get("findings") or []:
             if isinstance(finding, dict) and finding.get("id"):
                 proposers.setdefault(finding_key(round_no, entry.get("slot"), finding["id"]),
                                      proposer)
@@ -1549,7 +1556,7 @@ def exclusion_gaps(payload):
     return gaps
 
 
-def review_report_problems(ctx, task, *, round_no, launch, imported, anchor, proposers):
+def review_report_problems(ctx, task, *, round_no, launch, imported, anchor):
     """报告与锚点问题（`problems` 通道）：逐份重核摘要、锚点、范围与轴。
 
     ⑥ 提取（原 `decide` 内的循环原样搬出）：`decide` 与 `repair_scope` 共用同一判据。
@@ -1601,10 +1608,6 @@ def review_report_problems(ctx, task, *, round_no, launch, imported, anchor, pro
             continue
         proposer = normalize_agent(entry.get("agent") or payload.get("source-cli") or entry.get("slot"))
         source_clis.append(proposer)
-        for finding in payload.get("findings") or []:
-            if isinstance(finding, dict) and finding.get("id"):
-                proposers.setdefault(finding_key(round_no, entry.get("slot"), finding["id"]),
-                                     proposer)
         report_anchor = payload.get("check-anchor")
         if not isinstance(report_anchor, dict) or report_anchor.get("check_anchor") != anchor:
             # 失效锚点一律重审，不能因旧文件仍在而复用（机制稿 §9.2）
@@ -1761,7 +1764,7 @@ def launch_facts(ctx, task):
         blocked = []
         if imported and anchor is not None:
             report_facts = review_report_problems(ctx, task, round_no=round_no, launch=entry,
-                                                 imported=imported, anchor=anchor, proposers={})
+                                                 imported=imported, anchor=anchor)
             blocked.extend(report_facts["blockers"])
         eligibility = review_eligibility(reviewers, {implementer} if implementer else set(),
                                          imported_count=len(imported), declared_slots=declared_slots)
@@ -2144,7 +2147,8 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None):
         failures = []       # 有效审查给出的未通过结论 → 记 fail，成为复盘触发事实
         # 提出者要**跨轮累积**：只在"关闭所在轮"里找 proposer，会让第 1 轮提出的 finding
         # 在第 2 轮被同一份报告复核关闭而查不出来（隔一轮自证 = K4b 可绕过）。
-        proposers = proposers_from_history(reviews.get("imported") or [])   # finding id → 提出者
+        # A7：提出者从**全部历史报告重解析**取（导入记录不存 findings），跨轮有效
+        proposers = proposers_from_history(ctx, task)   # (round, slot, finding_id) → 提出者
         gaps_out = []       # uncovered 轴形成的缺口（走 4.8/4.9，不进 failures）
         if unavailable:
             verdict = "unavailable"
@@ -2194,7 +2198,7 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None):
                                    "imported": imported_slots})
             # 报告/锚点问题与人数/异种问题**分列**（矩阵 #28）：两个共享函数不合并。
             report_facts = review_report_problems(ctx, task, round_no=round_no, launch=launch,
-                                                 imported=imported, anchor=anchor, proposers=proposers)
+                                                 imported=imported, anchor=anchor)
             problems = report_facts["problems"]
             failures = report_facts["failures"]
             gaps_out = report_facts["gaps_out"]
@@ -2335,15 +2339,8 @@ def all_findings(ctx, task):
         rel = entry.get("report_path")
         if not rel:
             continue
-        path_abs = join(ctx.root, rel)
-        if records.file_digest(path_abs) != entry.get("report_digest"):
-            continue
-        try:
-            with open(path_abs, "r", encoding="utf-8") as handle:
-                payload, _problems = read_report(handle.read())
-        except OSError:
-            continue
-        if payload is None:
+        payload, cause, _reason = read_imported_report(ctx, entry)
+        if cause:
             continue
         round_no = int(entry.get("round") or 0)
         for finding in payload.get("findings") or []:

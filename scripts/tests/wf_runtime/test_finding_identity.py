@@ -106,13 +106,11 @@ class FindingIdentityTest(unittest.TestCase):
 
 class ProposerIdentityTest(unittest.TestCase):
     def test_proposers_are_indexed_by_identity(self):
-        entries = [{"round": 1, "slot": "s1", "agent": "zcode",
-                    "findings": [{"id": "f1"}]},
-                   {"round": 2, "slot": "s2", "agent": "dsh",
-                    "findings": [{"id": "f1"}]}]
-        proposers = review.proposers_from_history(entries)
-        self.assertEqual(proposers[(1, "s1", "f1")], "zcode")
-        self.assertEqual(proposers[(2, "s2", "f1")], "dsh")
+        with tempfile.TemporaryDirectory() as tmp:
+            task = task_with(Path(tmp), [(1, "s1", [{"id": "f1"}]), (2, "s2", [{"id": "f1"}])])
+            proposers = review.proposers_from_history(FakeCtx(tmp), task)
+        self.assertEqual(proposers[(1, "s1", "f1")], "s1")
+        self.assertEqual(proposers[(2, "s2", "f1")], "s2")
 
     def test_ambiguous_disposition_needs_round_and_slot(self):
         proposers = {(1, "s1", "f1"): "zcode", (2, "s2", "f1"): "dsh"}

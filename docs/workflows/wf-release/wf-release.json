@@ -251,7 +251,7 @@
       "target_relative": ".wf/lib/wflib/records.py"
     },
     {
-      "digest": "sha256:906047c716aa8cf20e0461a38dceb4e36fcf6866b2fd9f68ec1a2dc20e72506f",
+      "digest": "sha256:39a1f432d5306030aa874100cd014844ce79522a0b9736c03dea07e05440f395",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -801,7 +801,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:27d03cb5ea8371208c616f731c7b61d721fada02b2a8f0d27999c865e6e0cdf3",
+    "rules_digest": "sha256:521e2d9a2532f591368e8fdfdffc70983b9fbf1c29d1668f59a1c4eb70feba66",
     "systems": [
       "linux"
     ],

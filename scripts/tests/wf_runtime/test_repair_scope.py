@@ -499,7 +499,7 @@ class RepairScopeTest(unittest.TestCase):
         with anchor_patch(anchor="sha256:other"):
             report_facts = review.review_report_problems(
                 self.ctx, task, round_no=1, launch=launch(1),
-                imported=task["reviews"]["imported"], anchor="sha256:other", proposers={})
+                imported=task["reviews"]["imported"], anchor="sha256:other")
         self.assertEqual(report_facts["blockers"], ["anchor_stale"])
         eligibility = review.review_eligibility(["codex"], {"codex"}, imported_count=2, declared_slots=2)
         self.assertEqual(eligibility["blockers"], ["implementer_overlap", "insufficient_reviewers"])
@@ -743,7 +743,7 @@ class RepairScopeTest(unittest.TestCase):
                 mock.patch.object(review, "_current_anchor", return_value=(ANCHOR, {})):
             facts = review.review_report_problems(
                 self.ctx, task, round_no=1, launch=launch(1),
-                imported=task["reviews"]["imported"], anchor=ANCHOR, proposers={})
+                imported=task["reviews"]["imported"], anchor=ANCHOR)
             scope = review.repair_scope(self.ctx, task)
         self.assertIn("report_invalid", facts["blockers"])
         self.assertIn("report_invalid", scope["launches"][0]["blocked"])
