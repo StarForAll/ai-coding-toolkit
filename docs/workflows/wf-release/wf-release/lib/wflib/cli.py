@@ -729,7 +729,7 @@ def cmd_status(ctx, args):
                     return ok(facts={"task": {"id": task_id, "title": task.get("title"),
                                               "status": task.get("status"), "phase": task.get("phase"),
                                               "complexity": plan.get("complexity"), "tdd": plan.get("tdd"),
-                                              "check": (task.get("check") or {}).get("result")},
+                                              **_short_check(ctx, task)},
                                      "repair_scope": _short_repair(
                                          review_mod.repair_scope(ctx, task), precheck,
                                          review_mod.acceptance_echo(task)),
@@ -2518,6 +2518,24 @@ def cmd_review_accept_unknown(ctx, args):
             slot=args.value("--slot"), digest=args.value("--digest"))
     except review_mod.ReviewError as exc:
         raise CliError(exc.code, exc.facts)
+
+
+def _short_check(ctx, task):
+    """`--short` 的 check 投影（B2）：报"能不能用"，不报记录的 `result`。
+
+    记录的 `result` 是**当时**的结论；锚点漂移/失效之后它仍是 `pass`，直接显示会与事实
+    矛盾。派生值来自 `gates.check_validity`（与门禁同一个函数），原始值另列 `check_result`
+    供追溯。
+    """
+    from . import gates as gates_mod
+
+    validity = gates_mod.check_validity(ctx, task)
+    if validity["valid"]:
+        token = "usable"
+    else:
+        token = ((validity.get("blockers") or [None])[0]
+                 or validity.get("code") or "invalid")
+    return {"check": token, "check_result": (task.get("check") or {}).get("result")}
 
 
 def cmd_review_status(ctx, args):
