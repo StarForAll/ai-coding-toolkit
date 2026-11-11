@@ -163,19 +163,6 @@ def parse_report(text):
     return payload
 
 
-def accepted_unknown_keys(task):
-    """人裁放行记录 → 已放行的 (round, slot, report_digest) 集合（Q1=乙：批量写入，逐项撤销）。"""
-    accepted = set()
-    for item in ((task.get("reviews") or {}).get("unknown_acceptances") or []):
-        if not isinstance(item, dict):
-            continue
-        if item.get("revoked"):
-            continue
-        accepted.add((int(item.get("round") or 0), normalize_agent(item.get("slot")),
-                      item.get("report_digest")))
-    return accepted
-
-
 def open_findings(ctx, task):
     """未处置 findings（K8 投影）：重解析已导入报告，按 dispositions 派生。
 
@@ -183,34 +170,10 @@ def open_findings(ctx, task):
     不需要另存一份（同一事实两处存）。返回 `{unaddressed, blocking, unavailable, closed}`。
     """
     reviews = task.get("reviews") or {}
-    # finding 身份 = (round, slot, id)：模板里各轮都用 f1，只按裸 id 汇总会让
-    # "第 1 轮 codex 的 f1 已关闭"把"第 2 轮 gemini 的 f1（另一个问题）"也标成已关闭（实测可复现）。
-    # 老记录的 disposition 可能没有 round/slot：那时退回裸 id（登记为遗留形态，不假装精确）。
-    closed, closed_legacy = set(), set()
-    for _item in reviews.get("dispositions") or []:
-        if not isinstance(_item, dict) or _item.get("decision") != "accepted":
-            continue
-        _fid = str(_item.get("finding_id"))
-        if _item.get("round") is None or not _item.get("slot"):
-            closed_legacy.add(_fid)      # 记下裸 id，具体绑定在读完 imported 后固定到最早一轮
-        else:
-            closed.add((int(_item.get("round")), normalize_agent(_item.get("slot")), _fid))
+    closed = {str(item.get("finding_id"))
+              for item in reviews.get("dispositions") or []
+              if isinstance(item, dict) and item.get("decision") == "accepted"}
     unaddressed, unavailable = [], []
-    # 遗留裸 id 的固定规则：只关**最早一轮**里同名的 finding（写记录当时的对象），
-    # 之后新增的轮次不会因为"字符串相同"被继承关闭——否则旧记录会随未来报告集合扩大关闭范围。
-    if closed_legacy:
-        first_by_id = {}
-        for _entry in reviews.get("imported") or []:
-            if not isinstance(_entry, dict):
-                continue
-            _slot_key = normalize_agent(_entry.get("slot"))
-            _round_key = int(_entry.get("round") or 0)
-            for _fid in list(closed_legacy):
-                key = (_round_key, _slot_key, _fid)
-                if key not in first_by_id and _fid:
-                    first_by_id.setdefault(_fid, key)
-        for _fid, _key in first_by_id.items():
-            closed.add(_key)
     for entry in reviews.get("imported") or []:
         if not isinstance(entry, dict):
             continue
@@ -218,58 +181,30 @@ def open_findings(ctx, task):
         if not rel:
             continue
         path = join(ctx.root, rel)
-        try:
-            current_digest = records.file_digest(path)
-        except OSError as exc:
+        if records.file_digest(path) != entry.get("report_digest"):
             unavailable.append({"slot": entry.get("slot"), "path": rel,
-                                "cause": "unreadable", "round": entry.get("round"),
-                                "report_digest": entry.get("report_digest"),
-                                "reason": str(exc)})
-            continue
-        if current_digest != entry.get("report_digest"):
-            cause = "missing" if current_digest is None else "changed"
-            unavailable.append({"slot": entry.get("slot"), "path": rel, "cause": cause,
-                                "round": entry.get("round"), "report_digest": entry.get("report_digest"),
-                                "reason": "报告导入后被删除" if cause == "missing" else "报告导入后被改写"})
+                                "reason": "report changed after import"})
             continue
         try:
             with open(path, "r", encoding="utf-8") as handle:
                 payload, _problems = read_report(handle.read())
         except OSError as exc:
-            unavailable.append({"slot": entry.get("slot"), "path": rel, "cause": "unreadable",
-                                "round": entry.get("round"), "report_digest": entry.get("report_digest"),
-                                "reason": str(exc)})
+            unavailable.append({"slot": entry.get("slot"), "path": rel, "reason": str(exc)})
             continue
         if payload is None:
-            unavailable.append({"slot": entry.get("slot"), "path": rel, "cause": "unreadable",
-                                "round": entry.get("round"), "report_digest": entry.get("report_digest"),
+            unavailable.append({"slot": entry.get("slot"), "path": rel,
                                 "reason": "report unreadable after import"})
             continue
         for finding in payload.get("findings") or []:
             if not isinstance(finding, dict) or not finding.get("id"):
                 continue
-            _key = (int(entry.get("round") or 0), normalize_agent(entry.get("slot")), str(finding["id"]))
-            if _key in closed:
+            if str(finding["id"]) in closed:
                 continue
             unaddressed.append({"finding_id": finding["id"], "severity": finding.get("severity"),
                                 "slot": entry.get("slot"), "assertion_ref": finding.get("assertion_ref")})
-    blocking_now = [item for item in unaddressed if item.get("severity") in BLOCKING_SEVERITIES]
-    # Q2=甲：两类阻断**分列**（出口不同：blocking 可走 K4b 关闭；unknown 只能人裁放行）
-    accepted = accepted_unknown_keys(task)
-    unknown = []
-    for item in unavailable:
-        entry_key = (int(item.get("round") or 0), normalize_agent(item.get("slot")),
-                     item.get("report_digest"))
-        if item.get("report_digest") is None:
-            # 记不到摘要就无法核对放行（例如 imported 条目缺摘要）：保持未放行，交人裁
-            entry_key = None
-        unknown.append(dict(item, accepted=entry_key in accepted if entry_key else False))
     return {"unaddressed": unaddressed,
-            "blocking": blocking_now,
-            "unavailable": unavailable,            # 兼容既有消费方（5 处）
-            "blocking_unknown": unknown,           # 已放行的带 accepted=True
-            "pending_unknown": [item for item in unknown if not item.get("accepted")],
-            "closed": sorted({key[2] for key in closed} | closed_legacy)}
+            "blocking": [item for item in unaddressed if item.get("severity") in BLOCKING_SEVERITIES],
+            "unavailable": unavailable, "closed": sorted(closed)}
 
 
 def lint_report(ctx, task, text):
@@ -417,52 +352,17 @@ def status_of_round(ctx, task, round_no=None):
         anchor = None
     task_id = task.get("id")
     slots = []
-    # 发现模式下导入记录用**实际 reviewer 名**（codex/gemini…），而 launch 的默认槽位是 s1/s2；
-    # 只按名字匹配会让"两份真实报告都已导入"显示成 missing=两缺（实测）。
-    # 这里补一层位置对应：声明槽位按顺序接收未被名称匹配的导入记录。
-    unmatched = [entry for key, entry in sorted(imported_by_slot.items()) if key not in declared]
-    positional = {}
-    for index, slot in enumerate(declared):
-        if slot in imported_by_slot:
-            continue
-        if unmatched:
-            positional[slot] = unmatched.pop(0)
-    # 发现式暂存文件：round 目录里 review-<agent>.md 中既未被导入、也未被槽位名占用的那些
-    claimed = {os.path.basename(agent_report_path(ctx, task_id, round_no, slot)) for slot in declared}
-    # 已导入的报告（按实际 reviewer 名或路径）不能被"暂存发现"再认领一次——
-    # 否则一份 codex 报告会同时算 imported(s1) 与 staged(s2)：arrived=2、ready_to_decide=True，
-    # AI 会重复导入同一份，且判定其实会因人数不足被拒（实测）。
-    for entry in imported_by_slot.values():
-        rel = entry.get("report_path")
-        if rel:
-            claimed.add(os.path.basename(rel))
-    discovered_pending = {}
-    directory = round_dir(ctx, task_id, round_no)
-    if os.path.isdir(directory):
-        pending_files = sorted(name for name in os.listdir(directory)
-                               if AGENT_REPORT.match(name) and name not in claimed)
-        free_slots = [slot for slot in declared if slot not in imported_by_slot and slot not in positional]
-        for slot, name in zip(free_slots, pending_files):
-            discovered_pending[slot] = os.path.join(directory, name)
-
     for slot in declared:
-        entry = imported_by_slot.get(slot) or positional.get(slot)
+        entry = imported_by_slot.get(slot)
         record = {"slot": slot}
         if entry:
             path = join(ctx.root, entry.get("report_path") or "")
+            current = records.file_digest(path) if entry.get("report_path") else None
             record["imported"] = True
             record["report_path"] = entry.get("report_path")
-            try:
-                current = records.file_digest(path) if entry.get("report_path") else None
-            except OSError as exc:
-                # 权限/IO 故障不能把查询入口带崩：归入 unreadable（第五值真实存在于此）
-                record["state"] = "unreadable"
-                record["reason"] = str(exc)
-                slots.append(record)
-                continue
             if entry.get("report_digest") != current:
                 record["state"] = "stale"
-                record["reason"] = ("报告导入后被删除" if current is None else "报告导入后被改写")
+                record["reason"] = "报告导入后被改写"
             elif anchor is None:
                 # 锚点算不出来（任务记录不完整）：到位但不核锚点，如实标注，不假装新鲜也不假装失效
                 record["state"] = "imported"
@@ -477,92 +377,21 @@ def status_of_round(ctx, task, round_no=None):
         else:
             staged = agent_report_path(ctx, task_id, round_no, slot)
             record["imported"] = False
-            # 发现模式下报告按**实际 reviewer 名**产出（review-codex.md…），
-            # 而声明槽位是 s1/s2：只按槽位名找暂存文件会把"已完成未导入"误报成 missing，
-            # AI 于是去等一份已经存在的报告。这里补一层"未被认领的发现式暂存文件"位置对应。
-            if not os.path.isfile(staged):
-                staged = discovered_pending.get(slot) or staged
             if os.path.isfile(staged):
                 record["state"] = "staged"
                 record["staged_path"] = staged
                 status = read_agent_status(staged)
                 if status:
                     record["agent_status"] = status
-                # 文件存在 ≠ 报告写完：只有头部 status=done 才可导入（与 import 的前置一致）
-                record["importable"] = (status == "done")
             else:
                 record["state"] = "missing"
         slots.append(record)
     arrived = [item for item in slots if item["state"] in ("imported", "staged")]
     missing = [item["slot"] for item in slots if item["state"] == "missing"]
-    stale = [item["slot"] for item in slots if item["state"] == "stale"]
-    unreadable = [item["slot"] for item in slots if item["state"] == "unreadable"]
-    # "可判"必须与判定入口同一口径（v15 档位表 5/6/7）：
-    # 缺报告、锚点失效（decide 核锚点必拒）、只有单 provider（decide 明确拒绝）都不算可判。
-    # 只有"全部 **imported** 且锚点已核验"才算可判：
-    # - staged 只表示文件存在（可能 status=in-progress），锚点未核、导入记录为零 → decide 会拒；
-    # - anchor is None 表示当前锚点算不出，decide 会抛错 → 不能宣称"锚点一致"；
-    # - decide 会检查该轮**全部已导入报告**，包括没被声明槽位"认领"的那些（三份导入两份声明）。
-    declared_keys = {normalize_agent(slot) for slot in declared}
-    extra = [entry for key, entry in imported_by_slot.items() if key not in declared_keys]
-    extra_problems = []
-    for entry in extra:
-        rel = entry.get("report_path")
-        path_extra = join(ctx.root, rel) if rel else None
-        try:
-            current_extra = records.file_digest(path_extra) if path_extra else None
-        except OSError as exc:
-            extra_problems.append({"slot": entry.get("slot"), "round": round_no,
-                                   "state": "unreadable", "reason": str(exc)})
-            continue
-        if current_extra != entry.get("report_digest"):
-            extra_problems.append({"slot": entry.get("slot"), "round": round_no,
-                                   "state": "stale",
-                                   "reason": "被删除" if current_extra is None else "被改写"})
-        elif anchor is not None and (entry.get("anchor") or {}).get("check_anchor") != anchor:
-            extra_problems.append({"slot": entry.get("slot"), "round": round_no,
-                                   "state": "stale", "reason": "锚点已失效"})
-    anchor_checked_all = all(item.get("anchor_checked") is not False for item in slots)
-    # 只回答"**材料**是否就绪"：全部 imported、锚点已核、无额外报告问题。
-    # **不含任何判定资格**（人数、单 provider、实施者重叠都由 decide 判）；
-    # 资格相关的机械提示单列在 eligibility_hints，不进本布尔。
-    reports_ready = (bool(declared) and anchor_checked_all and anchor is not None
-                     and not extra_problems
-                     and all(item["state"] == "imported" for item in slots))
-    material_blockers = []
-    if not declared:
-        material_blockers.append({"kind": "no_declared_slots",
-                                  "note": "本轮没有声明任何槽位：只能重新发起审查"})
-    if anchor is None:
-        material_blockers.append({"kind": "anchor_unavailable"})
-    if not anchor_checked_all:
-        for item in slots:
-            if item.get("anchor_checked") is False:
-                material_blockers.append({"kind": "anchor_unchecked", "slot": item["slot"]})
-    for item in extra_problems:
-        material_blockers.append({"kind": "extra_report_stale", "slot": item.get("slot"),
-                                  "round": item.get("round"), "state": item.get("state")})
-    if not all(item["state"] == "imported" for item in slots):
-        for item in slots:
-            if item["state"] != "imported":
-                material_blockers.append({"kind": "slot_not_imported", "slot": item["slot"],
-                                          "state": item["state"]})
-    eligibility_hints = []
-    if len(declared) < 2:
-        eligibility_hints.append({"kind": "declared_lt_2", "declared": len(declared),
-                                  "note": "单 provider 轮不产生判定结论（decide 会拒）；材料仍可能就是齐的"})
     return {"round": round_no, "required": len(declared), "arrived": len(arrived),
             "arrived_slots": [item["slot"] for item in arrived], "missing": missing,
-            "stale": stale, "unreadable": unreadable,
-            "anchor_checked_all": anchor_checked_all,
-            "extra_reports": extra_problems,
-            "declared_count": len(declared),
             "slots": slots, "anchor_current": anchor,
-            "reports_ready": reports_ready,
-            "material_blockers": material_blockers,
-            "eligibility_hints": eligibility_hints,
-            # 兼容旧名：值语义 = reports_ready（材料就绪），**不表示判定一定成立**
-            "ready_to_decide": reports_ready}
+            "ready_to_decide": bool(declared) and not missing}
 
 
 def curation_changed(before, current_rule_digest, current_file_digest):
@@ -741,57 +570,18 @@ def broken_reference_problems(lifted, dispositions):
 
 
 
-def proposers_from_imported(ctx, imported_entries):
-    """从**全部历史**导入记录取 finding → 提出者（K4b 的独立事实，跨轮有效）。
-
-    **必须重解析报告文件**：`reviews.imported[]` 只持久化
-    `round/slot/report_path/report_digest/anchor`（`import_report` 的 entry_record），
-    **不含 findings**——早期实现从记录里读 `entry["findings"]` 恒为空，导致
-    `dispositions_problems` 把任何带真实 finding_id 的处置都判成"不属任何已导入报告"，
-    K4b 的关闭路径整条走不通（回归，已由测试固化）。
-    记录里若已有 `findings`（将来的持久化形态）则直接用，避免重复解析。
-    返回 `(proposers, unreadable)`；`unreadable` 用于给出"无法核对"的准确出口。
-    """
-    proposers, unreadable = {}, []
-    for entry in imported_entries or []:
+def proposers_from_history(imported_entries):
+    """从**全部历史**导入记录里取 finding → 提出者（K4b 的独立事实，跨轮有效）。"""
+    proposers = {}
+    for entry in imported_entries:
         if not isinstance(entry, dict):
             continue
-        findings = entry.get("findings")
-        proposer = normalize_agent(entry.get("agent") or entry.get("source_cli") or entry.get("slot"))
-        if not isinstance(findings, list):
-            rel = entry.get("report_path")
-            if not rel:
-                unreadable.append({"slot": entry.get("slot"), "round": entry.get("round"),
-                                   "reason": "imported entry lacks report_path"})
-                continue
-            path = join(ctx.root, rel)
-            try:
-                current = records.file_digest(path)
-            except OSError as exc:
-                unreadable.append({"slot": entry.get("slot"), "round": entry.get("round"),
-                                   "path": rel, "cause": "unreadable", "reason": str(exc)})
-                continue
-            if current != entry.get("report_digest"):
-                unreadable.append({"slot": entry.get("slot"), "round": entry.get("round"),
-                                   "path": rel, "reason": "report changed or missing after import",
-                                   "cause": "missing" if current is None else "changed"})
-                continue
-            try:
-                with open(path, "r", encoding="utf-8") as handle:
-                    payload, _problems = read_report(handle.read())
-            except OSError as exc:
-                unreadable.append({"slot": entry.get("slot"), "round": entry.get("round"),
-                                   "path": rel, "reason": str(exc)})
-                continue
-            findings = (payload or {}).get("findings") or []
-            proposer = normalize_agent((payload or {}).get("source-cli")
-                                       or entry.get("agent") or entry.get("slot"))
-        for finding in findings:
+        proposer = normalize_agent(entry.get("agent") or entry.get("source_cli")
+                                   or entry.get("slot"))
+        for finding in entry.get("findings") or []:
             if isinstance(finding, dict) and finding.get("id"):
-                _key = (int(entry.get("round") or 0), normalize_agent(entry.get("slot")),
-                        str(finding["id"]))
-                proposers.setdefault(_key, proposer)
-    return proposers, unreadable
+                proposers.setdefault(str(finding["id"]), proposer)
+    return proposers
 
 
 def known_finding_ids(imported_entries):
@@ -802,7 +592,7 @@ def known_finding_ids(imported_entries):
 
 
 
-def dispositions_problems(dispositions, proposers, unreadable=None):
+def dispositions_problems(dispositions, proposers):
     """dispositions 的结构校验与"关闭不得自证"（机制稿 §9.2、K4b）。纯函数，便于单测。"""
     problems = []
     for index, item in enumerate(dispositions):
@@ -818,44 +608,13 @@ def dispositions_problems(dispositions, proposers, unreadable=None):
         finding_id = item.get("finding_id")
         if finding_id is None:
             continue
-        # proposers 支持两种形态：{(round, slot, id): proposer}（新）与 {id: proposer}（遗留/调用方简写）
-        legacy_map = {key: value for key, value in proposers.items() if isinstance(key, str)}
-        exact = ((int(item.get("round") or 0), normalize_agent(item.get("slot")), str(finding_id))
-                 if item.get("round") is not None and item.get("slot") else None)
-        # 新增 disposition 必须精确到 (round, slot, id)：模板各轮都写 f1，
-        # 只给裸 id 会把"另一个轮的另一个问题"一起关掉（实测）。歧义时直接拒，不做猜测。
-        if exact is None and len({key for key in proposers if not isinstance(key, str)
-                                  and key[2] == str(finding_id)}) > 1:
+        if str(finding_id) not in proposers:
+            # 任意 id 都能被"关闭"等于关闭一个不存在的发现：必须拒绝并给出可选集合
             problems.append({"index": index, "finding_id": finding_id,
-                             "reason": "同名 finding 出现在多轮/多槽位：必须给 round 与 slot 才能确定关闭对象",
-                             "candidates": [list(key) for key in sorted(
-                                 (key for key in proposers if not isinstance(key, str)
-                                  and key[2] == str(finding_id)))]})
+                             "reason": "finding_id 不属任何已导入报告",
+                             "known": sorted(proposers)[:12]})
             continue
-        known_ids = {key[2] for key in proposers if not isinstance(key, str)} | set(legacy_map)
-        hit = (exact in proposers) if exact is not None else (str(finding_id) in known_ids)
-        if not hit:
-            # 两种情形要分清：报告不可读（无法核对） vs 真的没有这个 finding
-            if unreadable:
-                problems.append({"index": index, "finding_id": finding_id,
-                                 "reason": "该 finding 所在的报告不可读，无法核对（不是\"不存在\"）",
-                                 "unreadable": unreadable,
-                                 "exits": ["重发该轮（新的报告可核对）",
-                                           "按 review-decide --unavailable 留痕后由人处置"]})
-            else:
-                problems.append({"index": index, "finding_id": finding_id,
-                                 "reason": "finding_id 不属任何已导入报告",
-                                 "known": sorted(known_ids)[:12],
-                                 "exits": ["按 (round, slot, finding_id) 精确指定（推荐）",
-                                           "或只给 finding_id（遗留形态，可能命中他轮同名 finding）"]})
-            continue
-        if exact is not None and exact in proposers:
-            proposer = proposers[exact]
-        elif str(finding_id) in legacy_map:
-            proposer = legacy_map[str(finding_id)]
-        else:
-            proposer = next((value for key, value in proposers.items()
-                             if not isinstance(key, str) and key[2] == str(finding_id)), None)
+        proposer = proposers.get(str(finding_id))
         recheck_by = normalize_agent(item.get("recheck_by")) if item.get("recheck_by") else None
         if recheck_by is None:
             problems.append({"index": index, "finding_id": finding_id,
@@ -1173,7 +932,7 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
 
 
 def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_discovery=False,
-                  as_value=None, restore=False):
+                  as_value=None):
     """导入报告（2026-11-07）：可只给 task id——轮次取当前打开的轮，身份取文件名/本会话。
 
     `report_path` 显式给出时保持旧语义（槽位制），供既有夹具与迁移期使用。
@@ -1236,17 +995,7 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
                               {"reason": "no finished report in this round", "round": round_no,
                                "agent": wanted, "directory": directory,
                                "exits": ["先由 reviewer 会话运行 review-context 并写完报告（status=done）"]})
-        # 发现模式：该轮该槽位**已有登记**时按恢复处理（保留原登记锚点/摘要）；
-        # 首次导入绝不传 restore —— 否则会撞上"恢复要求已登记"的前置而被全部拒绝。
-        def _has_record(round_no, slot_name):
-            return any(int(entry.get("round") or 0) == int(round_no)
-                       and normalize_agent(entry.get("agent") or entry.get("slot"))
-                       == normalize_agent(slot_name)
-                       for entry in (task.get("reviews") or {}).get("imported") or []
-                       if isinstance(entry, dict))
-
-        results = [import_report(ctx, task, round_no, agent, candidate, _from_discovery=True,
-                                 restore=_has_record(round_no, agent))
+        results = [import_report(ctx, task, round_no, agent, candidate, _from_discovery=True)
                    for agent, candidate in targets]
         last = results[-1]
         facts = dict((last or {}).get("facts") or {})
@@ -1345,7 +1094,7 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
             raise ReviewError("WF_REVIEW_INVALID",
                               {"reason": "report check-anchor must be an object",
                                "report": report_anchor})
-        if report_anchor.get("check_anchor") != anchor and not restore:
+        if report_anchor.get("check_anchor") != anchor:
             saved = ((task.get("check") or {}).get("anchor") or {})
             drift = anchor_drift(saved.get("parts"), _parts)
             facts = {"reason": "check-anchor mismatch", "report": payload.get("check-anchor"),
@@ -1365,37 +1114,6 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
             target = legacy
         existing_digest = records.file_digest(target)
         incoming_digest = "sha256:" + records.sha256_hex(text.encode("utf-8"))
-        # 证据身份：**该轮该槽位一旦有导入记录，就只能幂等重入**。
-        # 否则"删掉文件 → 导入一份内容不同的报告"可以直接替换证据，
-        # 旧 blocking 就此消失（既无 disposition 也无人裁放行）——实测可复现。
-        recorded = next((entry for entry in (reviews.get("imported") or [])
-                         if int(entry.get("round") or 0) == int(round_no)
-                         and normalize_agent(entry.get("agent") or entry.get("slot"))
-                         == normalize_agent(slot)), None)
-        if restore and not (recorded and recorded.get("report_digest") == incoming_digest):
-            raise ReviewError("WF_REVIEW_INVALID",
-                              {"reason": "恢复要求与登记的导入摘要完全一致（恢复身份，不重绑当前 check）",
-                               "slot": slot, "round": int(round_no),
-                               "recorded": (recorded or {}).get("report_digest"),
-                               "incoming": incoming_digest,
-                               "exits": ["摘要不一致说明不是同一份证据：另开新一轮"]})
-        if recorded and recorded.get("report_digest") is None:
-            # 缺摘要的历史记录无法证明身份：普通导入不能"重建"它（否则删档换报告即可绕过），
-            # 只能用 --restore 且**必须给出与登记一致的字节**——而登记摘要为空时连这个也不成立，
-            # 因此出口是"另开新一轮"或 task-abandon（与 §2.1 的封闭口径一致）。
-            raise ReviewError("WF_REVIEW_INVALID",
-                              {"reason": "该轮该槽位的导入记录缺登记摘要：身份不可证明，不能就地替换",
-                               "slot": slot, "round": int(round_no),
-                               "exits": ["另开新一轮（报告在新轮可核对）",
-                                         "按 §5.6 异常归档（不再需要证明）"]})
-        if recorded and recorded.get("report_digest") not in (None, incoming_digest):
-            raise ReviewError("WF_REVIEW_INVALID",
-                              {"reason": "该轮该槽位已有导入记录，内容不同：证据身份不可替换",
-                               "slot": slot, "round": int(round_no),
-                               "recorded": recorded.get("report_digest"),
-                               "incoming": incoming_digest,
-                               "exits": ["另开新一轮（新报告在新轮可核对）",
-                                         "按 review-decide --unavailable 留痕后由人处置"]})
         if existing_digest and existing_digest != incoming_digest:
             # 同路径不同摘要即冲突：不覆盖、不留旧结论（机制稿 §9.2）
             raise ReviewError("WF_REVIEW_INVALID",
@@ -1410,26 +1128,16 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
         digest = records.file_digest(target)
         imported = [entry for entry in reviews.get("imported") or []
                     if not (int(entry.get("round") or 0) == int(round_no) and entry.get("slot") == slot)]
-        # restore：保留**原登记**的锚点与摘要（身份不变），当前适用性由 status 按实际锚点重算；
-        # 否则"恢复"会偷偷把旧报告重绑到当前 check，status 恒显示 imported，而 decide 核正文又会拒。
-        if restore and recorded:
-            entry_record = {"round": int(round_no), "slot": slot,
-                            "report_path": os.path.relpath(target, str(ctx.root)).replace(os.sep, "/"),
-                            "report_digest": recorded.get("report_digest") or digest,
-                            "anchor": recorded.get("anchor") or {}}
-        else:
-            entry_record = {"round": int(round_no), "slot": slot,
-                            "report_path": os.path.relpath(target, str(ctx.root)).replace(os.sep, "/"),
-                            "report_digest": digest, "anchor": {"check_id": (task.get("check") or {}).get("id"),
-                                                                "check_anchor": anchor}}
+        entry_record = {"round": int(round_no), "slot": slot,
+                        "report_path": os.path.relpath(target, str(ctx.root)).replace(os.sep, "/"),
+                        "report_digest": digest, "anchor": {"check_id": (task.get("check") or {}).get("id"),
+                                                            "check_anchor": anchor}}
         # 标准漂移在**导入**这一侧也标成事实（判定侧才阻断）：让"这份报告提交时标准已变"可见，
         # 又不因为"判断还没写"把正常顺序（导入 → 判断 → 判定）卡住。
         standard_positions = standard_drift_positions(
             anchor_drift(((task.get("check") or {}).get("anchor") or {}).get("parts"), _parts) or [])
         if standard_positions:
             entry_record["standard_drift"] = standard_positions
-        if restore:
-            entry_record["restored"] = True       # 身份已恢复；当前适用性由 status 按锚点重算
         if lifted:
             entry_record["broken_reference"] = {"declared": True, "lifted": lifted}
         if discovered:
@@ -1534,8 +1242,7 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None):
         failures = []       # 有效审查给出的未通过结论 → 记 fail，成为复盘触发事实
         # 提出者要**跨轮累积**：只在"关闭所在轮"里找 proposer，会让第 1 轮提出的 finding
         # 在第 2 轮被同一份报告复核关闭而查不出来（隔一轮自证 = K4b 可绕过）。
-        proposers, proposer_unreadable = proposers_from_imported(
-        ctx, reviews.get("imported") or [])   # finding id → 提出者（跨轮、重解析报告）
+        proposers = proposers_from_history(reviews.get("imported") or [])   # finding id → 提出者
         gaps_out = []       # uncovered 轴形成的缺口（走 4.8/4.9，不进 failures）
         if unavailable:
             verdict = "unavailable"
@@ -1594,12 +1301,7 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None):
                     continue
                 report_abs = join(ctx.root, rel)
                 # 导入端防住"同路径换内容"，判定端必须同样重核摘要：否则报告文件可被事后改写
-                try:
-                    current_digest = records.file_digest(report_abs)
-                except OSError as exc:
-                    problems.append({"slot": entry.get("slot"), "reason": "report file unreadable",
-                                     "path": rel, "error": str(exc)})
-                    continue
+                current_digest = records.file_digest(report_abs)
                 if entry.get("report_digest") != current_digest:
                     problems.append({"slot": entry.get("slot"), "reason": "report file changed after import",
                                      "recorded": entry.get("report_digest"), "current": current_digest,
@@ -1708,8 +1410,7 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None):
                     facts.update({key: value for key, value in reasons[0].items() if key != "reason"})
                     facts["reason"] = reasons[0]["reason"]
         # disposition 结构与其"关闭不得自证"（机制稿 §9.2、K4b）
-        problems = dispositions_problems(dispositions, proposers,
-                                         unreadable=proposer_unreadable)
+        problems = dispositions_problems(dispositions, proposers)
         lifted = [item for entry in imported
                   for item in ((entry.get("broken_reference") or {}).get("lifted") or [])]
         problems = problems + broken_reference_problems(lifted, dispositions)
@@ -1767,25 +1468,15 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None):
 
 
 def all_findings(ctx, task):
-    """报告里的**全部** findings（含已处置），返回 `(findings, unreadable)`。
-
-    `unaddressed` 只是它的子集。
+    """报告里的**全部** findings（含已处置），`unaddressed` 只是它的子集。
 
     骨架需要"全部"（v42 §5.1 的 `findings[]` + 单列 `closures[]`）；把只含未处置的集合
     当成全部，会让"已关闭"的缺陷从清单里消失，也让两个字段变成同一份东西。
     """
     reviews = task.get("reviews") or {}
-    closers, closers_legacy = set(), set()
-    for _item in reviews.get("dispositions") or []:
-        if not isinstance(_item, dict) or _item.get("decision") != "accepted":
-            continue
-        if _item.get("round") is None or not _item.get("slot"):
-            closers_legacy.add(str(_item.get("finding_id")))
-        else:
-            closers.add((int(_item.get("round")), normalize_agent(_item.get("slot")),
-                         str(_item.get("finding_id"))))
+    closers = {str(item.get("finding_id")) for item in reviews.get("dispositions") or []
+               if isinstance(item, dict) and item.get("decision") == "accepted"}
     found = []
-    unreadable = []       # 摘要读不到就跳过该报告，但要把事实带出去（不能让查询入口崩）
     for entry in reviews.get("imported") or []:
         if not isinstance(entry, dict):
             continue
@@ -1793,34 +1484,19 @@ def all_findings(ctx, task):
         if not rel:
             continue
         path_abs = join(ctx.root, rel)
-        try:
-            if records.file_digest(path_abs) != entry.get("report_digest"):
-                unreadable.append({"slot": entry.get("slot"), "path": rel, "round": entry.get("round"),
-                                   "cause": "missing" if records.file_digest(path_abs) is None else "changed"})
-                continue
-        except OSError as exc:
-            unreadable.append({"slot": entry.get("slot"), "path": rel, "round": entry.get("round"),
-                               "cause": "unreadable", "reason": str(exc)})
+        if records.file_digest(path_abs) != entry.get("report_digest"):
             continue
         try:
             with open(path_abs, "r", encoding="utf-8") as handle:
                 payload, _problems = read_report(handle.read())
-        except OSError as exc:
-            unreadable.append({"slot": entry.get("slot"), "path": rel, "round": entry.get("round"),
-                               "cause": "unreadable", "reason": str(exc)})
+        except OSError:
             continue
         if payload is None:
-            unreadable.append({"slot": entry.get("slot"), "path": rel, "round": entry.get("round"),
-                               "cause": "unreadable", "reason": "report unreadable after import"})
             continue
         for finding in payload.get("findings") or []:
             if isinstance(finding, dict) and finding.get("id"):
                 found.append({"id": finding.get("id"), "severity": finding.get("severity"),
                               "class": finding.get("class"), "slot": entry.get("slot"),
-                              "closed": ((int(entry.get("round") or 0),
-                                          normalize_agent(entry.get("slot")),
-                                          str(finding["id"])) in closers
-                                         or str(finding["id"]) in closers_legacy),
-                              "round": entry.get("round"),
+                              "closed": str(finding["id"]) in closers,
                               "assertion_ref": finding.get("assertion_ref")})
-    return found, unreadable
+    return found

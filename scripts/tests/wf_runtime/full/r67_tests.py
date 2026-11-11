@@ -267,7 +267,6 @@ proc = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_output
                            # 假环境里没有真实技术债：清空豁免清单，
                            # 否则"假套件全绿"会触发 LEGACY-FIXED 的销账失败（那是真环境的规则）
                            "WF_KNOWN_LEGACY": "",
-                           "WF_SUITES": "",
                            "WF_RESULTS_DIR": "/tmp/r67_fake_results1"})
 _summary = [ln for ln in proc.stdout.splitlines() if ln.startswith("---- ")]
 rec("4 有失败时脚本非零退出", "exit≠0 且汇总报失败",
@@ -279,7 +278,6 @@ proc2 = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_outpu
                             "WF_REBUILD_RELEASE": "0",
                             # 必须显式隔离：外层 run_all 会 export RESULTS_DIR，内层若沿用会把外层结果行覆盖/清空
                             "WF_KNOWN_LEGACY": "",
-                            "WF_SUITES": "",
                             "WF_RESULTS_DIR": "/tmp/r67_fake_results2"})
 if proc2.returncode != 0:
     print("4b fake 输出尾部:", "\n".join(proc2.stdout.splitlines()[-6:])[:500])

@@ -101,7 +101,7 @@
       "target_relative": ".wf/lib/wflib/check.py"
     },
     {
-      "digest": "sha256:1ec0e18924f713e4076346d5a5defa02e8d6f697a0f1e06ca0fb9a272a512e8f",
+      "digest": "sha256:1d81a6c2fabc52e112364991a651c335a941362c63d62bf59ec8762312856333",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -151,7 +151,7 @@
       "target_relative": ".wf/lib/wflib/fingerprint.py"
     },
     {
-      "digest": "sha256:edeb272dce2ee3b11414bfcaf389aaf2e9d494a0152228517d8c4a9e1f45040a",
+      "digest": "sha256:3381e57a47522b3b01a76ce9c65f0bba33b7bf9218413bf65098c75fd79d8f20",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -171,7 +171,7 @@
       "target_relative": ".wf/lib/wflib/identity_store.py"
     },
     {
-      "digest": "sha256:a51a8dcfacef25b754552900dd8c4c13bf1c77080b8e4178e856156f47889cb7",
+      "digest": "sha256:80b3395fbff844cc29af7932a152fc8d2b2825f260d6d0111b793c86a364954f",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -241,7 +241,7 @@
       "target_relative": ".wf/lib/wflib/protocol.py"
     },
     {
-      "digest": "sha256:d5b0f3f3fe1ee927fec21a3daa5041168f78c70835e5aec419bbb3b4e9e28b91",
+      "digest": "sha256:62831124270292d3b60b2a233e4f85349876ccd1a9dd74db0bd02676fa1a0f90",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -251,7 +251,7 @@
       "target_relative": ".wf/lib/wflib/records.py"
     },
     {
-      "digest": "sha256:7b887fea0cc72239802de75ab5c096e53550d354c31623af8c60cc6779d05f6c",
+      "digest": "sha256:76c2759e89ed99f72f7fc256ff30651c63d24b33cc9f969fbc4c14c494dff293",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -781,7 +781,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:496d30e4297c5cfd20f86630936e4021bef159b6cf4c0e6d3228c1bd7117a842",
+    "rules_digest": "sha256:3bbbe1a75dbadba422f5ec08122885f0e5112063e85e76647d9e23797bd3dc59",
     "systems": [
       "linux"
     ],

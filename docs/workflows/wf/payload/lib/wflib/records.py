@@ -59,21 +59,8 @@ def plain_digest(obj) -> str | None:
     return "sha256:" + sha256_hex(canonical_bytes(obj))
 
 
-def file_digest_or_raise(path) -> str | None:
-    """同 `file_digest`，但**不吞任何 OSError**：调用方必须自己决定归因（不可读 vs 缺失）。
-
-    新增调用点一律用这个（或自己包 try），避免"默认裸奔"——`file_digest` 只捕
-    `FileNotFoundError`，权限故障会直接冲出查询/门禁入口（本轮已修 5 处历史调用点）。
-    """
-    with open(path, "rb") as handle:
-        digest = hashlib.sha256()
-        for chunk in iter(lambda: handle.read(65536), b""):
-            digest.update(chunk)
-        return "sha256:" + digest.hexdigest()
-
-
 def file_digest(path) -> str | None:
-    """文件原始字节哈希；不存在返回 None（其余 OSError 仍会上抛，调用方需按 §3 归类）。"""
+    """文件原始字节哈希；不存在返回 None。"""
     try:
         with open(path, "rb") as handle:
             digest = hashlib.sha256()

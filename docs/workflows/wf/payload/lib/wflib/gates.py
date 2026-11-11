@@ -704,14 +704,7 @@ def verify_step(ctx, task, step_id, *, rule_version=None):
             actual = None
             rel = paths.get(key)
             if rel:
-                try:
-                    actual = records.file_digest(join(ctx.root, rel))
-                except OSError as exc:
-                    # 读不动不等于没变：按"失效"处理并带上原因，不能让门禁抛内部错误
-                    stale.append({"slot": entry.get("slot"), "round": key[0],
-                                  "result_digest": entry.get("report_digest"),
-                                  "unreadable": str(exc), "path": rel})
-                    continue
+                actual = records.file_digest(join(ctx.root, rel))
             if recorded != entry.get("report_digest") or actual != entry.get("report_digest"):
                 stale.append({"slot": entry.get("slot"), "round": key[0],
                               "result_digest": entry.get("report_digest"),
@@ -768,15 +761,6 @@ def verify_step(ctx, task, step_id, *, rule_version=None):
     return True, None, {}
 
 
-def _fulfilled_by(step_id):
-    """步骤缺项与"已授权目标动作"的关系（机制事实，不是文案）。
-
-    `task.changes-persisted` 由归档动作自己完成的业务提交满足——把它标成 `fulfilled_by`，
-    AI 就不会把"先提交"当成进入归档的前置（也不会因缺项反复预检/额外提交）。
-    """
-    return "archive_commit" if step_id == "task.changes-persisted" else None
-
-
 def evaluate(ctx, task, due, *, rule_version=None):
     """按门禁点收集缺项；只读，不写回执。"""
     rule_version = rule_version or ctx.rule_version()
@@ -802,13 +786,7 @@ def evaluate(ctx, task, due, *, rule_version=None):
         # 门禁重核完成判据：回执只是证据，不能替代对当前事实的核验（机制稿 §11.2）
         satisfied, code, facts = verify_step(ctx, task, step["id"], rule_version=rule_version)
         if not satisfied:
-            _by = _fulfilled_by(step["id"])
-            entry = dict(base, status="missing", code=code, facts=facts)
-            if _by:
-                # 机制事实：这一步由"已授权的目标动作"完成（归档会做业务提交），
-                # 不是"进入该动作前必须先做完"的前置。AI 据此决定顺序，不必复制例外清单。
-                entry["fulfilled_by"] = _by
-            findings.append(entry)
+            findings.append(dict(base, status="missing", code=code, facts=facts))
         elif state == "completed":
             findings.append(dict(base, status="completed", receipt=receipt.get("anchor")))
         elif state == "reused":

@@ -1821,8 +1821,7 @@ def _review_command(kind):
             try:
                 return review_mod.import_report(ctx, task, int(round_no) if round_no else None,
                                                 args.value("--slot"), args.value("--report"),
-                                                as_value=args.value("--as"),
-                                                restore=bool(args.flag("--restore")))
+                                                as_value=args.value("--as"))
             except review_mod.ReviewError as exc:
                 raise CliError(exc.code, exc.facts)
         round_no = args.value("--round")
@@ -1925,7 +1924,7 @@ COMMAND_HELP = {
                                 "--reset": "清掉本 agent 本轮的占位/报告"},
                        "args_extra": {"--as": "本次审查的 CLI（自动身份模式必填）"},
                        "example": "wf.py review-context --task <id> --round 1 --as pi --json"},
-    "review-import": {"purpose": "导入本轮已完成的报告（按文件名发现，免路径）；--restore 只恢复历史登记身份，不重绑当前 check",
+    "review-import": {"purpose": "导入本轮已完成的报告（按文件名发现，免路径）",
                       "args": {"--task": "任务 id（必填）", "--round": "可选", "--slot": "可选（指定某个 agent）",
                                "--report": "可选（显式路径，兼容旧槽位制）"},
                       "example": "wf.py review-import --task <id> --json"},
@@ -2467,34 +2466,8 @@ def cmd_review_status(ctx, args):
         facts = review_mod.status_of_round(ctx, task, int(round_no) if round_no else None)
     except review_mod.ReviewError as exc:
         raise CliError(exc.code, exc.facts)
-    if facts["reports_ready"] and facts.get("eligibility_hints"):
-        next_ = (f"{facts['required']} 份已导入且锚点已核：**材料就绪**；"
-                 "但 " + "、".join(item["kind"] for item in facts["eligibility_hints"]) +
-                 "（判定资格不足，decide 会拒）；可补第二个异种 reviewer 后重发，或按不可用处置")
-    elif facts["reports_ready"]:
-        next_ = (f"{facts['required']} 份已导入且锚点已核：材料就绪，可执行 review-decide；"
-                 "**判定是否成立由 decide 给**（人数/非实施者/输入成立性它自己判）")
-    elif facts.get("stale") or facts.get("unreadable"):
-        next_ = (f"{len(facts.get('stale') or []) + len(facts.get('unreadable') or [])} 份报告失效/不可读："
-                 "重发新一轮（decide 会核锚点并拒绝）")
-    elif facts.get("anchor_current") is None:
-        next_ = "当前锚点算不出（任务记录不完整）：先修记录，判定会因此抛错"
-    elif facts.get("material_blockers"):
-        kinds = "、".join(sorted({item["kind"] for item in facts["material_blockers"]}))
-        next_ = f"材料不就绪（{kinds}）：按 facts.material_blockers 逐项处理"
-    elif facts["required"] < 2:
-        next_ = ("单 provider 轮不产生判定结论（材料已就绪但资格不足）："
-                 "补第二个异种 reviewer 后重发，或按不可用处置")
-    else:
-        staged = [item for item in facts["slots"] if item["state"] == "staged"]
-        ready_staged = [item for item in staged if item.get("importable")]
-        if ready_staged:
-            next_ = (f"{len(ready_staged)} 份已产出且 status=done：可 review-import；"
-                     + (f"另缺 {len(facts['missing'])} 份" if facts["missing"] else "其余已到位"))
-        elif staged:
-            next_ = f"{len(staged)} 份报告仍在撰写（status 未 done）：等写完或联系 reviewer"
-        else:
-            next_ = f"缺 {len(facts['missing'])} 份报告：等 reviewer 产出后 review-import"
+    next_ = ("两份都到位：review-decide 可判" if facts["ready_to_decide"]
+             else f"缺 {len(facts['missing'])} 份报告：等 reviewer 产出后 review-import")
     return codes.result(
         "WF_OK",
         object={"id": task.get("id"), "name": task.get("title")},
