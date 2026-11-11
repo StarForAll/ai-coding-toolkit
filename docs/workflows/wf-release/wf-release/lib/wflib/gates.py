@@ -793,7 +793,13 @@ def evaluate(ctx, task, due, *, rule_version=None):
         # 门禁重核完成判据：回执只是证据，不能替代对当前事实的核验（机制稿 §11.2）
         satisfied, code, facts = verify_step(ctx, task, step["id"], rule_version=rule_version)
         if not satisfied:
-            findings.append(dict(base, status="missing", code=code, facts=facts))
+            _by = _fulfilled_by(step["id"])
+            entry = dict(base, status="missing", code=code, facts=facts)
+            if _by:
+                # 机制事实：这一步由"已授权的目标动作"完成（归档会做业务提交），
+                # 不是"进入该动作前必须先做完"的前置。AI 据此决定顺序，不必复制例外清单。
+                entry["fulfilled_by"] = _by
+            findings.append(entry)
         elif state == "completed":
             findings.append(dict(base, status="completed", receipt=receipt.get("anchor")))
         elif state == "reused":

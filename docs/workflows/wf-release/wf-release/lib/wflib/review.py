@@ -208,6 +208,7 @@ def open_findings(ctx, task):
         except OSError as exc:
             unavailable.append({"slot": entry.get("slot"), "path": rel,
                                 "cause": "unreadable", "round": entry.get("round"),
+                                "report_digest": entry.get("report_digest"),
                                 "reason": str(exc)})
             continue
         if current_digest != entry.get("report_digest"):
@@ -507,19 +508,42 @@ def status_of_round(ctx, task, round_no=None):
             extra_problems.append({"slot": entry.get("slot"), "round": round_no,
                                    "state": "stale", "reason": "锚点已失效"})
     anchor_checked_all = all(item.get("anchor_checked") is not False for item in slots)
-    # 只回答"材料是否就绪"：全部 imported、锚点已核、无 extra 问题。
-    # **不等于判定资格**——decide 还会拒：审查者与实施者重叠、单 provider、输入不成立等。
-    reports_ready = (bool(declared) and len(declared) >= 2
-                     and all(item["state"] == "imported" for item in slots)
-                     and anchor_checked_all and anchor is not None and not extra_problems)
+    # 只回答"**材料**是否就绪"：全部 imported、锚点已核、无额外报告问题。
+    # **不含任何判定资格**（人数、单 provider、实施者重叠都由 decide 判）；
+    # 资格相关的机械提示单列在 eligibility_hints，不进本布尔。
+    reports_ready = (bool(declared) and anchor_checked_all and anchor is not None
+                     and not extra_problems
+                     and all(item["state"] == "imported" for item in slots))
+    material_blockers = []
+    if anchor is None:
+        material_blockers.append({"kind": "anchor_unavailable"})
+    if not anchor_checked_all:
+        for item in slots:
+            if item.get("anchor_checked") is False:
+                material_blockers.append({"kind": "anchor_unchecked", "slot": item["slot"]})
+    for item in extra_problems:
+        material_blockers.append({"kind": "extra_report_stale", "slot": item.get("slot"),
+                                  "round": item.get("round"), "state": item.get("state")})
+    if not all(item["state"] == "imported" for item in slots):
+        for item in slots:
+            if item["state"] != "imported":
+                material_blockers.append({"kind": "slot_not_imported", "slot": item["slot"],
+                                          "state": item["state"]})
+    eligibility_hints = []
+    if len(declared) < 2:
+        eligibility_hints.append({"kind": "declared_lt_2", "declared": len(declared),
+                                  "note": "单 provider 轮不产生判定结论（decide 会拒）；材料仍可能就是齐的"})
     return {"round": round_no, "required": len(declared), "arrived": len(arrived),
             "arrived_slots": [item["slot"] for item in arrived], "missing": missing,
             "stale": stale, "unreadable": unreadable,
             "anchor_checked_all": anchor_checked_all,
             "extra_reports": extra_problems,
+            "declared_count": len(declared),
             "slots": slots, "anchor_current": anchor,
             "reports_ready": reports_ready,
-            # 兼容旧名：值语义已收窄为"材料就绪"，不再宣称判定一定成立
+            "material_blockers": material_blockers,
+            "eligibility_hints": eligibility_hints,
+            # 兼容旧名：值语义 = reports_ready（材料就绪），**不表示判定一定成立**
             "ready_to_decide": reports_ready}
 
 
@@ -780,6 +804,16 @@ def dispositions_problems(dispositions, proposers, unreadable=None):
         legacy_map = {key: value for key, value in proposers.items() if isinstance(key, str)}
         exact = ((int(item.get("round") or 0), normalize_agent(item.get("slot")), str(finding_id))
                  if item.get("round") is not None and item.get("slot") else None)
+        # 新增 disposition 必须精确到 (round, slot, id)：模板各轮都写 f1，
+        # 只给裸 id 会把"另一个轮的另一个问题"一起关掉（实测）。歧义时直接拒，不做猜测。
+        if exact is None and len({key for key in proposers if not isinstance(key, str)
+                                  and key[2] == str(finding_id)}) > 1:
+            problems.append({"index": index, "finding_id": finding_id,
+                             "reason": "同名 finding 出现在多轮/多槽位：必须给 round 与 slot 才能确定关闭对象",
+                             "candidates": [list(key) for key in sorted(
+                                 (key for key in proposers if not isinstance(key, str)
+                                  and key[2] == str(finding_id)))]})
+            continue
         known_ids = {key[2] for key in proposers if not isinstance(key, str)} | set(legacy_map)
         hit = (exact in proposers) if exact is not None else (str(finding_id) in known_ids)
         if not hit:
@@ -1339,10 +1373,18 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
         digest = records.file_digest(target)
         imported = [entry for entry in reviews.get("imported") or []
                     if not (int(entry.get("round") or 0) == int(round_no) and entry.get("slot") == slot)]
-        entry_record = {"round": int(round_no), "slot": slot,
-                        "report_path": os.path.relpath(target, str(ctx.root)).replace(os.sep, "/"),
-                        "report_digest": digest, "anchor": {"check_id": (task.get("check") or {}).get("id"),
-                                                            "check_anchor": anchor}}
+        # restore：保留**原登记**的锚点与摘要（身份不变），当前适用性由 status 按实际锚点重算；
+        # 否则"恢复"会偷偷把旧报告重绑到当前 check，status 恒显示 imported，而 decide 核正文又会拒。
+        if restore and recorded:
+            entry_record = {"round": int(round_no), "slot": slot,
+                            "report_path": os.path.relpath(target, str(ctx.root)).replace(os.sep, "/"),
+                            "report_digest": recorded.get("report_digest") or digest,
+                            "anchor": recorded.get("anchor") or {}}
+        else:
+            entry_record = {"round": int(round_no), "slot": slot,
+                            "report_path": os.path.relpath(target, str(ctx.root)).replace(os.sep, "/"),
+                            "report_digest": digest, "anchor": {"check_id": (task.get("check") or {}).get("id"),
+                                                                "check_anchor": anchor}}
         # 标准漂移在**导入**这一侧也标成事实（判定侧才阻断）：让"这份报告提交时标准已变"可见，
         # 又不因为"判断还没写"把正常顺序（导入 → 判断 → 判定）卡住。
         standard_positions = standard_drift_positions(
@@ -1696,8 +1738,15 @@ def all_findings(ctx, task):
     当成全部，会让"已关闭"的缺陷从清单里消失，也让两个字段变成同一份东西。
     """
     reviews = task.get("reviews") or {}
-    closers = {str(item.get("finding_id")) for item in reviews.get("dispositions") or []
-               if isinstance(item, dict) and item.get("decision") == "accepted"}
+    closers, closers_legacy = set(), set()
+    for _item in reviews.get("dispositions") or []:
+        if not isinstance(_item, dict) or _item.get("decision") != "accepted":
+            continue
+        if _item.get("round") is None or not _item.get("slot"):
+            closers_legacy.add(str(_item.get("finding_id")))
+        else:
+            closers.add((int(_item.get("round")), normalize_agent(_item.get("slot")),
+                         str(_item.get("finding_id"))))
     found = []
     unreadable = []       # 摘要读不到就跳过该报告，但要把事实带出去（不能让查询入口崩）
     for entry in reviews.get("imported") or []:
@@ -1731,6 +1780,10 @@ def all_findings(ctx, task):
             if isinstance(finding, dict) and finding.get("id"):
                 found.append({"id": finding.get("id"), "severity": finding.get("severity"),
                               "class": finding.get("class"), "slot": entry.get("slot"),
-                              "closed": str(finding["id"]) in closers,
+                              "closed": ((int(entry.get("round") or 0),
+                                          normalize_agent(entry.get("slot")),
+                                          str(finding["id"])) in closers
+                                         or str(finding["id"]) in closers_legacy),
+                              "round": entry.get("round"),
                               "assertion_ref": finding.get("assertion_ref")})
     return found, unreadable

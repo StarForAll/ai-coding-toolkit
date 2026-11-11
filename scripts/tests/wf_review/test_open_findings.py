@@ -172,3 +172,80 @@ class BlockingUnknownTest(unittest.TestCase):
         out = review.open_findings(self._ctx(), self._task())
         self.assertEqual({item["finding_id"] for item in out["blocking"]} &
                          {item.get("finding_id") for item in out["blocking_unknown"]}, set())
+
+
+class Round20FactsTest(unittest.TestCase):
+    """第二十轮：登记摘要 / restore 锚点 / 裸 id 歧义 / reports_ready 去资格化。"""
+
+    def test_unreadable_entry_keeps_recorded_digest(self):
+        """权限故障也必须带**登记摘要**，否则人裁放行永远匹配不上（死锁）。"""
+        import os, stat, tempfile
+        from pathlib import Path
+        from types import SimpleNamespace
+        from wflib import records, review
+
+        root = tempfile.mkdtemp(prefix="wf-perm-")
+        Path(root, "review").mkdir()
+        path = Path(root, "review", "s1.md")
+        path.write_text("body", encoding="utf-8")
+        digest = records.file_digest(str(path))
+        os.chmod(str(path), 0)
+        task = {"id": "t", "reviews": {"imported": [
+            {"round": 1, "slot": "s1", "report_path": "review/s1.md", "report_digest": digest}]}}
+        ctx = SimpleNamespace(root=root, key=lambda required=True: "k")
+        try:
+            out = review.open_findings(ctx, task)
+        finally:
+            os.chmod(str(path), stat.S_IRUSR | stat.S_IWUSR)
+        unknown = out["blocking_unknown"][0]
+        self.assertEqual(unknown["cause"], "unreadable")
+        self.assertEqual(unknown["report_digest"], digest, "不可读也要保住登记摘要")
+
+    def test_legacy_bare_id_is_rejected_when_ambiguous(self):
+        from wflib import review
+
+        proposers = {(1, "codex", "f1"): "codex", (2, "gemini", "f1"): "gemini"}
+        problems = review.dispositions_problems(
+            [{"finding_id": "f1", "decision": "accepted", "reason": "x", "recheck_by": "pi"}],
+            proposers)
+        self.assertTrue(any("必须给 round 与 slot" in item.get("reason", "") for item in problems),
+                        problems)
+
+    def test_exact_identity_still_passes(self):
+        from wflib import review
+
+        proposers = {(1, "codex", "f1"): "codex", (2, "gemini", "f1"): "gemini"}
+        problems = review.dispositions_problems(
+            [{"finding_id": "f1", "round": 1, "slot": "codex", "decision": "accepted",
+              "reason": "x", "recheck_by": "pi"}], proposers)
+        self.assertEqual(problems, [])
+
+    def test_reports_ready_excludes_eligibility(self):
+        """单 provider：材料可能齐，但资格不足 → reports_ready 不因它变 false。"""
+        import os, tempfile, uuid
+        from types import SimpleNamespace
+        from wflib import review
+
+        root = tempfile.mkdtemp(prefix="wf-elig-")
+        ctx = SimpleNamespace(root=root, key=lambda required=True: "k")
+        task_id = "2026-" + uuid.uuid4().hex[:8]
+        directory = review.round_dir(ctx, task_id, 1)
+        os.makedirs(directory, exist_ok=True)
+        with open(os.path.join(directory, "review-codex.md"), "w", encoding="utf-8") as handle:
+            handle.write("<!-- status=done -->\n")
+        from wflib import records
+        rel = os.path.relpath(os.path.join(directory, "review-codex.md"), root).replace(os.sep, "/")
+        task = {"id": task_id, "check": {"id": "c1", "anchor": {"check_anchor": "sha256:0"}},
+                "reviews": {"launches": [{"round": 1, "slots": [{"slot": "s1"}]}],
+                            "imported": [{"round": 1, "slot": "codex", "report_path": rel,
+                                          "report_digest": records.file_digest(os.path.join(root, rel)),
+                                          "anchor": {"check_anchor": "sha256:0"}, "agent": "codex"}],
+                            "result": None}}
+        original = review._current_anchor
+        review._current_anchor = lambda ctx, task: ("sha256:0", {})
+        try:
+            status = review.status_of_round(ctx, task)
+        finally:
+            review._current_anchor = original
+        self.assertTrue(status["reports_ready"], f"材料应就绪: {status}")
+        self.assertTrue(status["eligibility_hints"], "单 provider 应作为资格提示单列")

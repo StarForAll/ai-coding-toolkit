@@ -2467,17 +2467,21 @@ def cmd_review_status(ctx, args):
         facts = review_mod.status_of_round(ctx, task, int(round_no) if round_no else None)
     except review_mod.ReviewError as exc:
         raise CliError(exc.code, exc.facts)
-    if facts["ready_to_decide"]:
-        next_ = (f"{facts['required']} 份已导入且锚点已核：材料就绪，执行 review-decide；"
-                 "判定结论由 decide 给（人数/非实施者等资格它自己判）")
+    if facts["reports_ready"] and facts.get("eligibility_hints"):
+        next_ = (f"{facts['required']} 份已导入且锚点已核：**材料就绪**；"
+                 "但 " + "、".join(item["kind"] for item in facts["eligibility_hints"]) +
+                 "（判定资格不足，decide 会拒）；可补第二个异种 reviewer 后重发，或按不可用处置")
+    elif facts["reports_ready"]:
+        next_ = (f"{facts['required']} 份已导入且锚点已核：材料就绪，可执行 review-decide；"
+                 "**判定是否成立由 decide 给**（人数/非实施者/输入成立性它自己判）")
     elif facts.get("stale") or facts.get("unreadable"):
         next_ = (f"{len(facts.get('stale') or []) + len(facts.get('unreadable') or [])} 份报告失效/不可读："
                  "重发新一轮（decide 会核锚点并拒绝）")
     elif facts.get("anchor_current") is None:
         next_ = "当前锚点算不出（任务记录不完整）：先修记录，判定会因此抛错"
-    elif facts.get("extra_reports"):
-        next_ = (f"另有 {len(facts['extra_reports'])} 份导入报告失效/不可读："
-                 "该轮判定会检查全部导入报告并拒绝")
+    elif facts.get("material_blockers"):
+        kinds = "、".join(sorted({item["kind"] for item in facts["material_blockers"]}))
+        next_ = f"材料不就绪（{kinds}）：按 facts.material_blockers 逐项处理"
     elif facts["required"] < 2:
         next_ = ("单 provider 轮不产生判定结论（材料已就绪但资格不足）："
                  "补第二个异种 reviewer 后重发，或按不可用处置")
