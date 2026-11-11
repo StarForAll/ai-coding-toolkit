@@ -768,6 +768,15 @@ def verify_step(ctx, task, step_id, *, rule_version=None):
     return True, None, {}
 
 
+def _fulfilled_by(step_id):
+    """步骤缺项与"已授权目标动作"的关系（机制事实，不是文案）。
+
+    `task.changes-persisted` 由归档动作自己完成的业务提交满足——把它标成 `fulfilled_by`，
+    AI 就不会把"先提交"当成进入归档的前置（也不会因缺项反复预检/额外提交）。
+    """
+    return "archive_commit" if step_id == "task.changes-persisted" else None
+
+
 def evaluate(ctx, task, due, *, rule_version=None):
     """按门禁点收集缺项；只读，不写回执。"""
     rule_version = rule_version or ctx.rule_version()
