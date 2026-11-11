@@ -17,7 +17,7 @@
 | A3 | 暂存报告按 reviewer 名产出、查询按槽位名找 → "已产出未导入"曾报 `missing` | `agent_report_path` vs `status_of_round` | 同上 | 两层对应（名称 + 位置） | 独立 |
 | A4 | 证据身份可被替换：删档后导入同轮同槽位另一份报告即顶掉旧证据 | `import_report` 的摘要校验只对现文件 | 属导入链 | 拒绝对已登记槽位的摘要变更；缺登记摘要的记录也不可替换 | 独立（但影响 ⑥ 的 `unverifiable` 可信度） |
 | A5 | `--restore` 语义：只恢复原身份、不改写 `anchor`；首次导入不得传 restore | v20 曾实现，已随回退移除 | 属导入链 | 三态差异表（普通/幂等/restore） | 独立 |
-| A6 | 缺 `report_digest` 的遗留记录无法放行、无法恢复 | `imported[]` 历史记录 | 属导入链/迁移 | 明确出口（另开新一轮 / abandon） | 独立 |
+| A6 | 缺 `report_digest` 的遗留记录无法放行、无法恢复（**⑥ 的前置**：C3 覆盖全轮次，这类记录会阻断正常收尾） | `imported[]` 历史记录 | 属导入链/迁移 | 明确出口（另开新一轮 / abandon） | 独立 |
 | A7 | **K4b 关闭链断裂**：`proposers_from_history` 从 `imported[].findings` 读提出者，而导入记录**不保存 findings**（`review.py:573` vs `1131`）→ 带真实 `finding_id` 的 disposition 被判"不属任何已导入报告"，**真实修复后无法正常关闭** | `review.py:573/611/1131`；`analysis/evidence/archived-task.tar.gz` 里 35 条 dispositions 全是 `finding_id=None` 的另一套形状 | 属关闭链身份 | 提出者须**重解析报告**（或持久化 findings 快照）并给出可核对的出口 | **⑥ 的 C2 依赖**：见 ⑥ §5 落地前提 |
 | A9 | **finding 精确身份缺失**：关闭匹配只按裸 `finding_id`（`review.py:173`），旧关闭会静默关掉他轮/他槽位的同名新问题；提出者索引同样按裸 id | `review.py:173` / `573` | 属关闭链身份 | 关闭与提出者按 `(round, slot, finding_id)` 绑定；旧记录歧义时**保留不关闭**并列入待裁 | **⑥ 的 C2 依赖**：见 ⑥ §5 前提 |
 | A10 | **逐轮决策/失效事实缺失**：`reviews.result` 只留最新一轮、`attempts.outcome` 是尝试级汇总、无 launch 级 `invalidated`、`result.round` 会因显式重判回退 → 无法判断「某轮是否已判、判成什么、是否失效」 | `review.py:765-770/1435` | 属审查记录模型 | 增 `rounds[]`（每轮 verdict/失效原因/决策时间）或等价的逐轮事实 | **⑥ 撤回 `reusable_rounds` 的原因**：缺它就硬算会错 |
@@ -68,9 +68,9 @@
 
 | 状态 | 条目 |
 |---|---|
-| **⑥ 的前置依赖**（先做才谈 ⑥ 落地） | A1（slot 身份）、A4（证据身份）、A7（关闭链）、**A9（finding 精度）**、C1（读取归因） |
+| **⑥ 的前置依赖**（先做才谈 ⑥ 落地） | A1（slot 身份）、A4（证据身份）、A6（缺摘要遗留记录）、A7（关闭链）、**A9（finding 精度）**、C1（读取归因） |
 | **建议先做（影响体验但 ⑥ 可先落地）** | A8（light 关闭 C2 仍要一轮审查）、D4（归档提交前预检） |
-| 独立缺陷（可与 ⑥ 并行，互不阻塞） | A2–A6、B1–B3、D1、D3、E1–E2 |
+| 独立缺陷（可与 ⑥ 并行，互不阻塞） | A2–A5、B1–B3、D1、D3、E1–E2 |
 | **已裁定（2026-11-11）** | E1=乙（预览短指纹）、F1=复用 `WF_CHECK_FAILED`、BD2/D2=暂不动（⑥ 已自带 D4-minimal）、F2=兼容读、A8=后补（与 ⑥ 的 D3=选 A 联动） |
 
 ## 3. 建议顺序（⑥ 解决后）
