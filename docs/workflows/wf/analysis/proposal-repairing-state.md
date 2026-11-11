@@ -1,9 +1,11 @@
 # 提案（v23）：⑥ 只做「结构化未结事实」+ 一条人裁放行记录 + 文档裁定
 
 > 状态：**待审 v23**（第二十一轮修正；Q1/Q2 已定）。
-> 前二十二版的形态与致命点见 §0。**边界**：机制修补已先行落地若干项（见 §8"已完成"行），
-> 其中**证据身份约束**与 **`review-status` 判定语义**已改变门禁/查询行为；
-> **尚未实现**：`unresolved` 的组装与挂载（三处展示）、`review-accept-unknown` 与放行记录、`final_gate` 消费 `pending_unknown`、`check_usability` 提取。其余机制项已落地（见 §8）。
+> 前二十二版的形态与致命点见 §0。
+>
+> **阶段声明（2026-11-11 人裁）**：本文件处于**方案审查阶段**——**实现零改动**。
+> 审查期间曾误改的实现已全部回退（`e49da16`，回退到 `8da2f23`）；下文凡提到"实现"均为**要求与验收**，
+> 不代表已落地。**未经人明确"审查通过"，不得修改任何实现代码**（`payload/`、`release/`、`scripts/tests/`）。
 
 ---
 
@@ -35,7 +37,7 @@
 | 事实 | 位置 |
 |---|---|
 | `reviews.imported[]` **不含 findings**（只有 round/slot/report_path/report_digest/anchor） | `review.py:1131-1144` |
-| 提出者只能**重解析报告**得到（已修，commit `7752520`）：`proposers_from_imported` | `review.py:573` |
+| 提出者只能**重解析报告**得到（既有实现从记录读 findings 恒为空 → 关闭链断；本提案要求修） | `review.py:573` |
 | `reviews.result` **只保留最新一轮**（旧结果被覆盖） | `review.py:1484` |
 | `authorize.ACTIONS` 固定五类；授权按动作一文件、后写覆盖 | `authorize.py:20-26 / 73` |
 | `status_of_round` 的槽位可同时是 `stale` 与 `missing`（合法组合） | `review.py:355-390` |
@@ -110,7 +112,7 @@ AI 拿到原子事实后**完全有能力自行分类与排动作**——文档�
 （v19 的 `degraded_single` 被"报告齐但不可判"吞掉、归因还写成"锚点算不出"，就是表遮蔽事实的例子）。
 **判定资格**（人数、非实施者、单 provider、输入成立性）仍由 `review-decide` 自己判——机制**不复制**这些条件。
 
-### 1.2a 槽位发现口径（已实现）
+### 1.2a 槽位发现口径（本提案要求，未实现）
 
 暂存文件按**实际 reviewer 名**产出（`review-codex.md`），声明槽位是 `s1/s2`。`status_of_round` 做两层对应：
 
@@ -175,7 +177,7 @@ v12 写"走既有 K6 授权通道"，实测三处都不成立：`ACTIONS` 固定
 
 | 环节 | 行为 |
 |---|---|
-| 阻断 | `open_findings` 增出 `blocking_unknown` / `pending_unknown`（**已实现，纯增量**）；`final_gate` 在 `pending_unknown` 非空时阻断（`WF_REVIEW_INVALID`；门禁改动**待批准后落**） |
+| 阻断 | `open_findings` 增出 `blocking_unknown` / `pending_unknown`（纯增量）；`final_gate` 在 `pending_unknown` 非空时阻断（`WF_REVIEW_INVALID`）——**均属待实现项** |
 | code 优先级（Q2=甲） | 两类同时命中时，**先**返回 `WF_UNRESOLVED_BLOCKING`（可关闭路径优先），`facts` 里同时带 `unavailable_reports` 与 `blocking_unknown`；处理完 blocking 再归档才会遇到 unknown |
 | 放行 | 存在与 `(round, slot, report_digest)` **三者全等**的 acceptance → 该条降级为留痕，不再阻断 |
 | 不放行 | **新轮 pass 与 `--unavailable` 都不解除**（第十一轮否掉的理由：前者绕开关闭、后者只证明做不成审查） |
@@ -197,7 +199,7 @@ v12 写"走既有 K6 授权通道"，实测三处都不成立：`ACTIONS` 固定
 入口返回 `WF_OK` 并覆盖该槽位的导入摘要 → `blocking` 与 `unreadable` 同时清零，**既无 disposition 也无人裁放行**。
 放行记录管不到这一步：此时不是"旧放行被复用"，而是**旧证据被替换**。
 
-修法（机制侧，已实现）：`import_report` 在写入前查"该轮该槽位是否已有导入记录"，
+修法（机制侧，待实现）：`import_report` 在写入前查"该轮该槽位是否已有导入记录"，
 **已有则只允许幂等重入（摘要相同）**；摘要不同即拒，出口两条：另开新一轮 / `--unavailable` 留痕后由人处置。
 这条约束把它从"AI 指引能否遵守"升级为"机械不可能"。
 
@@ -258,18 +260,18 @@ v19 的档位表承担了"排顺序"的职责，结果每版都在表上翻车�
 
 | 项 | 数量 |
 |---|---|
-| 机制修补（K 级） | 2（① `blocking_unknown` + 放行记录 + `final_gate` 阻断；② **导入端证据身份约束**——已实现并回归） |
+| 机制修补（K 级） | 2（① `blocking_unknown` + 放行记录 + `final_gate` 阻断；② **导入端证据身份约束**）——**均为待实现项** |
 | **新增命令** | 2：`wf review-accept-unknown`（一次一批、全有或全无；`--revoke` 撤销）；**`wf review-import --restore`**（恢复历史身份） |
 | **任务记录新增字段** | 2：`reviews.unknown_acceptances[]`（摘要绑定 + `batch` + `revoked`）；**`imported[].restored`** |
 | **门禁/查询行为变化（单独标注）** | ① finding 身份收紧（旧裸 id 不再跨轮关闭同名 finding）→ 归档准入变严；② `gate` 的 `changes-persisted` 缺项新增 `fulfilled_by` 事实 |
-| 读取健壮 5 处（含 `gates.review-passed`）+ `all_findings` 元组返回 + **`file_digest_or_raise` 根因变体** | **已实现** |
+| 读取健壮 5 处（含 `gates.review-passed`）+ `all_findings` 元组返回 + **`file_digest_or_raise` 根因变体** | 待实现 |
 | 提取共享函数 | 1（`check_usability`） |
 | `unresolved.nonstep` 九项事实 | 1 处（记录级读取） |
 | 展示点 | 3 |
 | skill 文本 | 2 |
 | 协议码表 / `final_gate` 结构 / `authorize.ACTIONS` | **0** |
 | 测试 | **36 项**（§9，稠密编号，逐项一条断言） |
-| **已完成**（机制侧，commit 见括号） | K4b 关闭链重解析（`7752520`）；`status_of_round` 槽位对应（`d6266c4`/`8b252db`）；证据身份约束（`d198266`）；`all_findings` 元组返回 + 5 处读取健壮（`adb4715`/`d6bfb71`）；finding 身份精确化 + `reports_ready` 去伪（`fbb40b5`/`158c589`）；`blocking_unknown`/`pending_unknown`（`1a504c9`）；**本轮：缺摘要不可替换、遗留裸 id 固定最早一轮、`no_declared_slots`、发现式 restore 仅在已登记时传**（`158c589`+本轮） |
+| **既有缺陷（非本审查阶段的改动）** | 本次审查发现的产品级缺陷记录在 §0 与各节「为什么必须补」中；它们与本提案的实施项一并待批准后修。审查阶段的临时实现已全部回退（`e49da16`） |
 
 ---
 
@@ -337,5 +339,5 @@ v19 的档位表承担了"排顺序"的职责，结果每版都在表上翻车�
 |---|---|---|
 | 1 | **版本表时序** | §0 表按 v1→vN 递增排列，最新版在最后且加粗；新增行必须与本版一致 |
 | 2 | **计数一致** | 头注"前 N 版"、§0 标题"N 轮"、§7"第 N 轮"、档位数与表行数、验收条数与 §8 测试数——全部对齐 |
-| 3 | **影响面登记** | 凡已落地的机制变更（commit 号）必须出现在 §8；门禁/查询行为变化要单独标注 |
-| 4 | **边界声明** | 头部"实现未开始/部分落地"必须与 §8 的"已完成"行一致 |
+| 3 | **影响面登记** | 凡实现项（不论是否待实现）必须出现在 §8；门禁/查询行为变化要单独标注 |
+| 4 | **阶段与实现状态** | 头部阶段声明必须与 §8 的实现状态一致；**审查阶段一律"零改动"**，任何实现 diff 都必须先回退 |
