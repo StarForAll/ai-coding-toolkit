@@ -170,9 +170,18 @@ def open_findings(ctx, task):
     不需要另存一份（同一事实两处存）。返回 `{unaddressed, blocking, unavailable, closed}`。
     """
     reviews = task.get("reviews") or {}
-    closed = {str(item.get("finding_id"))
-              for item in reviews.get("dispositions") or []
-              if isinstance(item, dict) and item.get("decision") == "accepted"}
+    # finding 身份 = (round, slot, id)：模板里各轮都用 f1，只按裸 id 汇总会让
+    # "第 1 轮 codex 的 f1 已关闭"把"第 2 轮 gemini 的 f1（另一个问题）"也标成已关闭（实测可复现）。
+    # 老记录的 disposition 可能没有 round/slot：那时退回裸 id（登记为遗留形态，不假装精确）。
+    closed, closed_legacy = set(), set()
+    for _item in reviews.get("dispositions") or []:
+        if not isinstance(_item, dict) or _item.get("decision") != "accepted":
+            continue
+        _fid = str(_item.get("finding_id"))
+        if _item.get("round") is None or not _item.get("slot"):
+            closed_legacy.add(_fid)
+        else:
+            closed.add((int(_item.get("round")), normalize_agent(_item.get("slot")), _fid))
     unaddressed, unavailable = [], []
     for entry in reviews.get("imported") or []:
         if not isinstance(entry, dict):
@@ -208,13 +217,15 @@ def open_findings(ctx, task):
         for finding in payload.get("findings") or []:
             if not isinstance(finding, dict) or not finding.get("id"):
                 continue
-            if str(finding["id"]) in closed:
+            _key = (int(entry.get("round") or 0), normalize_agent(entry.get("slot")), str(finding["id"]))
+            if _key in closed or str(finding["id"]) in closed_legacy:
                 continue
             unaddressed.append({"finding_id": finding["id"], "severity": finding.get("severity"),
                                 "slot": entry.get("slot"), "assertion_ref": finding.get("assertion_ref")})
     return {"unaddressed": unaddressed,
             "blocking": [item for item in unaddressed if item.get("severity") in BLOCKING_SEVERITIES],
-            "unavailable": unavailable, "closed": sorted(closed)}
+            "unavailable": unavailable,
+            "closed": sorted(key[2] for key in closed) + sorted(closed_legacy)}
 
 
 def lint_report(ctx, task, text):
@@ -468,16 +479,20 @@ def status_of_round(ctx, task, round_no=None):
             extra_problems.append({"slot": entry.get("slot"), "round": round_no,
                                    "state": "stale", "reason": "锚点已失效"})
     anchor_checked_all = all(item.get("anchor_checked") is not False for item in slots)
-    ready = (bool(declared) and len(declared) >= 2
-             and all(item["state"] == "imported" for item in slots)
-             and anchor_checked_all and anchor is not None and not extra_problems)
+    # 只回答"材料是否就绪"：全部 imported、锚点已核、无 extra 问题。
+    # **不等于判定资格**——decide 还会拒：审查者与实施者重叠、单 provider、输入不成立等。
+    reports_ready = (bool(declared) and len(declared) >= 2
+                     and all(item["state"] == "imported" for item in slots)
+                     and anchor_checked_all and anchor is not None and not extra_problems)
     return {"round": round_no, "required": len(declared), "arrived": len(arrived),
             "arrived_slots": [item["slot"] for item in arrived], "missing": missing,
             "stale": stale, "unreadable": unreadable,
             "anchor_checked_all": anchor_checked_all,
             "extra_reports": extra_problems,
             "slots": slots, "anchor_current": anchor,
-            "ready_to_decide": ready}
+            "reports_ready": reports_ready,
+            # 兼容旧名：值语义已收窄为"材料就绪"，不再宣称判定一定成立
+            "ready_to_decide": reports_ready}
 
 
 def curation_changed(before, current_rule_digest, current_file_digest):
@@ -703,7 +718,9 @@ def proposers_from_imported(ctx, imported_entries):
                                        or entry.get("agent") or entry.get("slot"))
         for finding in findings:
             if isinstance(finding, dict) and finding.get("id"):
-                proposers.setdefault(str(finding["id"]), proposer)
+                _key = (int(entry.get("round") or 0), normalize_agent(entry.get("slot")),
+                        str(finding["id"]))
+                proposers.setdefault(_key, proposer)
     return proposers, unreadable
 
 
@@ -731,7 +748,13 @@ def dispositions_problems(dispositions, proposers, unreadable=None):
         finding_id = item.get("finding_id")
         if finding_id is None:
             continue
-        if str(finding_id) not in proposers:
+        # proposers 支持两种形态：{(round, slot, id): proposer}（新）与 {id: proposer}（遗留/调用方简写）
+        legacy_map = {key: value for key, value in proposers.items() if isinstance(key, str)}
+        exact = ((int(item.get("round") or 0), normalize_agent(item.get("slot")), str(finding_id))
+                 if item.get("round") is not None and item.get("slot") else None)
+        known_ids = {key[2] for key in proposers if not isinstance(key, str)} | set(legacy_map)
+        hit = (exact in proposers) if exact is not None else (str(finding_id) in known_ids)
+        if not hit:
             # 两种情形要分清：报告不可读（无法核对） vs 真的没有这个 finding
             if unreadable:
                 problems.append({"index": index, "finding_id": finding_id,
@@ -742,9 +765,17 @@ def dispositions_problems(dispositions, proposers, unreadable=None):
             else:
                 problems.append({"index": index, "finding_id": finding_id,
                                  "reason": "finding_id 不属任何已导入报告",
-                                 "known": sorted(proposers)[:12]})
+                                 "known": sorted(known_ids)[:12],
+                                 "exits": ["按 (round, slot, finding_id) 精确指定（推荐）",
+                                           "或只给 finding_id（遗留形态，可能命中他轮同名 finding）"]})
             continue
-        proposer = proposers.get(str(finding_id))
+        if exact is not None and exact in proposers:
+            proposer = proposers[exact]
+        elif str(finding_id) in legacy_map:
+            proposer = legacy_map[str(finding_id)]
+        else:
+            proposer = next((value for key, value in proposers.items()
+                             if not isinstance(key, str) and key[2] == str(finding_id)), None)
         recheck_by = normalize_agent(item.get("recheck_by")) if item.get("recheck_by") else None
         if recheck_by is None:
             problems.append({"index": index, "finding_id": finding_id,
@@ -1062,7 +1093,7 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
 
 
 def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_discovery=False,
-                  as_value=None):
+                  as_value=None, restore=False):
     """导入报告（2026-11-07）：可只给 task id——轮次取当前打开的轮，身份取文件名/本会话。
 
     `report_path` 显式给出时保持旧语义（槽位制），供既有夹具与迁移期使用。
@@ -1224,7 +1255,7 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
             raise ReviewError("WF_REVIEW_INVALID",
                               {"reason": "report check-anchor must be an object",
                                "report": report_anchor})
-        if report_anchor.get("check_anchor") != anchor:
+        if report_anchor.get("check_anchor") != anchor and not restore:
             saved = ((task.get("check") or {}).get("anchor") or {})
             drift = anchor_drift(saved.get("parts"), _parts)
             facts = {"reason": "check-anchor mismatch", "report": payload.get("check-anchor"),
@@ -1251,6 +1282,13 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
                          if int(entry.get("round") or 0) == int(round_no)
                          and normalize_agent(entry.get("agent") or entry.get("slot"))
                          == normalize_agent(slot)), None)
+        if restore and not (recorded and recorded.get("report_digest") == incoming_digest):
+            raise ReviewError("WF_REVIEW_INVALID",
+                              {"reason": "恢复要求与登记的导入摘要完全一致（恢复身份，不重绑当前 check）",
+                               "slot": slot, "round": int(round_no),
+                               "recorded": (recorded or {}).get("report_digest"),
+                               "incoming": incoming_digest,
+                               "exits": ["摘要不一致说明不是同一份证据：另开新一轮"]})
         if recorded and recorded.get("report_digest") not in (None, incoming_digest):
             raise ReviewError("WF_REVIEW_INVALID",
                               {"reason": "该轮该槽位已有导入记录，内容不同：证据身份不可替换",
@@ -1283,6 +1321,8 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
             anchor_drift(((task.get("check") or {}).get("anchor") or {}).get("parts"), _parts) or [])
         if standard_positions:
             entry_record["standard_drift"] = standard_positions
+        if restore:
+            entry_record["restored"] = True       # 身份已恢复；当前适用性由 status 按锚点重算
         if lifted:
             entry_record["broken_reference"] = {"declared": True, "lifted": lifted}
         if discovered:

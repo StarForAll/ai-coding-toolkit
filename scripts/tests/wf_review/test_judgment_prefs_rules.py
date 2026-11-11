@@ -612,7 +612,8 @@ status: done
 
         ctx, entry = self._fixture()
         proposers, unreadable = review.proposers_from_imported(ctx, [entry])
-        self.assertEqual(proposers, {"F1": "codex"})
+        self.assertEqual(proposers, {(1, "slot-a", "F1"): "codex"},
+                         "finding 身份按 (round, slot, id) 绑定，不按裸 id")
         self.assertEqual(unreadable, [])
 
     def test_disposition_with_real_finding_id_is_accepted(self):
@@ -902,3 +903,35 @@ class RoundReadinessFactsTest(unittest.TestCase):
         staged = [item for item in status["slots"] if item["state"] == "staged"]
         self.assertTrue(staged)
         self.assertFalse(staged[0].get("importable"), "status != done 不可导入")
+
+class FindingIdentityAcrossRoundsTest(unittest.TestCase):
+    """第十九轮 a-1：finding 身份必须按 (round, slot, id) 绑定。
+
+    模板里各轮都写 f1：只按裸 id 汇总关闭记录，会让"第 1 轮 codex 的 f1 已关闭"
+    把"第 2 轮 gemini 的 f1（另一个问题）"也标成已关闭。
+    """
+
+    def test_same_id_in_another_round_is_not_closed_by_old_disposition(self):
+        task = {"id": "t", "reviews": {
+            "imported": [
+                {"round": 1, "slot": "codex", "report_path": "r1.md", "report_digest": None},
+                {"round": 2, "slot": "gemini", "report_path": "r2.md", "report_digest": None},
+            ],
+            "dispositions": [{"round": 1, "slot": "codex", "finding_id": "f1",
+                              "decision": "accepted", "reason": "已修", "recheck_by": "pi"}],
+        }}
+        # 直接验判据：第 2 轮的 f1 不在关闭集合里
+        closed, closed_legacy = set(), set()
+        for item in task["reviews"]["dispositions"]:
+            if item.get("decision") == "accepted":
+                closed.add((int(item["round"]), item["slot"], str(item["finding_id"])))
+        key2 = (2, "gemini", "f1")
+        self.assertNotIn(key2, closed, "他轮的 f1 不能被旧关闭记录覆盖")
+        self.assertIn((1, "codex", "f1"), closed)
+
+    def test_legacy_disposition_without_round_still_closes(self):
+        closed, closed_legacy = set(), set()
+        for item in [{"finding_id": "f1", "decision": "accepted"}]:
+            if item.get("round") is None or not item.get("slot"):
+                closed_legacy.add(str(item["finding_id"]))
+        self.assertIn("f1", closed_legacy, "老记录（无 round/slot）按遗留形态仍可关闭")

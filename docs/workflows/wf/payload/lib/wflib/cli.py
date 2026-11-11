@@ -1821,7 +1821,8 @@ def _review_command(kind):
             try:
                 return review_mod.import_report(ctx, task, int(round_no) if round_no else None,
                                                 args.value("--slot"), args.value("--report"),
-                                                as_value=args.value("--as"))
+                                                as_value=args.value("--as"),
+                                                restore=bool(args.flag("--restore")))
             except review_mod.ReviewError as exc:
                 raise CliError(exc.code, exc.facts)
         round_no = args.value("--round")
@@ -1924,7 +1925,7 @@ COMMAND_HELP = {
                                 "--reset": "清掉本 agent 本轮的占位/报告"},
                        "args_extra": {"--as": "本次审查的 CLI（自动身份模式必填）"},
                        "example": "wf.py review-context --task <id> --round 1 --as pi --json"},
-    "review-import": {"purpose": "导入本轮已完成的报告（按文件名发现，免路径）",
+    "review-import": {"purpose": "导入本轮已完成的报告（按文件名发现，免路径）；--restore 只恢复历史登记身份，不重绑当前 check",
                       "args": {"--task": "任务 id（必填）", "--round": "可选", "--slot": "可选（指定某个 agent）",
                                "--report": "可选（显式路径，兼容旧槽位制）"},
                       "example": "wf.py review-import --task <id> --json"},
@@ -2467,7 +2468,8 @@ def cmd_review_status(ctx, args):
     except review_mod.ReviewError as exc:
         raise CliError(exc.code, exc.facts)
     if facts["ready_to_decide"]:
-        next_ = f"{facts['required']} 份已导入且锚点已核：review-decide 可判"
+        next_ = (f"{facts['required']} 份已导入且锚点已核：材料就绪，执行 review-decide；"
+                 "判定结论由 decide 给（人数/非实施者等资格它自己判）")
     elif facts.get("stale") or facts.get("unreadable"):
         next_ = (f"{len(facts.get('stale') or []) + len(facts.get('unreadable') or [])} 份报告失效/不可读："
                  "重发新一轮（decide 会核锚点并拒绝）")
@@ -2477,7 +2479,8 @@ def cmd_review_status(ctx, args):
         next_ = (f"另有 {len(facts['extra_reports'])} 份导入报告失效/不可读："
                  "该轮判定会检查全部导入报告并拒绝")
     elif facts["required"] < 2:
-        next_ = "单 provider 轮不产生判定结论：补第二个异种 reviewer 后重发"
+        next_ = ("单 provider 轮不产生判定结论（材料已就绪但资格不足）："
+                 "补第二个异种 reviewer 后重发，或按不可用处置")
     else:
         staged = [item for item in facts["slots"] if item["state"] == "staged"]
         ready_staged = [item for item in staged if item.get("importable")]
