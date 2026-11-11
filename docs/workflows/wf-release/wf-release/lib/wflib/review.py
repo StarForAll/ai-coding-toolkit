@@ -364,6 +364,13 @@ def status_of_round(ctx, task, round_no=None):
             positional[slot] = unmatched.pop(0)
     # 发现式暂存文件：round 目录里 review-<agent>.md 中既未被导入、也未被槽位名占用的那些
     claimed = {os.path.basename(agent_report_path(ctx, task_id, round_no, slot)) for slot in declared}
+    # 已导入的报告（按实际 reviewer 名或路径）不能被"暂存发现"再认领一次——
+    # 否则一份 codex 报告会同时算 imported(s1) 与 staged(s2)：arrived=2、ready_to_decide=True，
+    # AI 会重复导入同一份，且判定其实会因人数不足被拒（实测）。
+    for entry in imported_by_slot.values():
+        rel = entry.get("report_path")
+        if rel:
+            claimed.add(os.path.basename(rel))
     discovered_pending = {}
     directory = round_dir(ctx, task_id, round_no)
     if os.path.isdir(directory):
@@ -383,7 +390,7 @@ def status_of_round(ctx, task, round_no=None):
             record["report_path"] = entry.get("report_path")
             if entry.get("report_digest") != current:
                 record["state"] = "stale"
-                record["reason"] = "报告导入后被改写"
+                record["reason"] = ("报告导入后被删除" if current is None else "报告导入后被改写")
             elif anchor is None:
                 # 锚点算不出来（任务记录不完整）：到位但不核锚点，如实标注，不假装新鲜也不假装失效
                 record["state"] = "imported"
@@ -414,10 +421,16 @@ def status_of_round(ctx, task, round_no=None):
         slots.append(record)
     arrived = [item for item in slots if item["state"] in ("imported", "staged")]
     missing = [item["slot"] for item in slots if item["state"] == "missing"]
+    stale = [item["slot"] for item in slots if item["state"] == "stale"]
+    unreadable = [item["slot"] for item in slots if item["state"] == "unreadable"]
+    # "可判"必须与判定入口同一口径（v15 档位表 5/6/7）：
+    # 缺报告、锚点失效（decide 核锚点必拒）、只有单 provider（decide 明确拒绝）都不算可判。
+    ready = bool(declared) and not missing and not stale and not unreadable and len(declared) >= 2
     return {"round": round_no, "required": len(declared), "arrived": len(arrived),
             "arrived_slots": [item["slot"] for item in arrived], "missing": missing,
+            "stale": stale, "unreadable": unreadable,
             "slots": slots, "anchor_current": anchor,
-            "ready_to_decide": bool(declared) and not missing}
+            "ready_to_decide": ready}
 
 
 def curation_changed(before, current_rule_digest, current_file_digest):

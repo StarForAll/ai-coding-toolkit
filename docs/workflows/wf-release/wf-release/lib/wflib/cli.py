@@ -2466,8 +2466,15 @@ def cmd_review_status(ctx, args):
         facts = review_mod.status_of_round(ctx, task, int(round_no) if round_no else None)
     except review_mod.ReviewError as exc:
         raise CliError(exc.code, exc.facts)
-    next_ = ("两份都到位：review-decide 可判" if facts["ready_to_decide"]
-             else f"缺 {len(facts['missing'])} 份报告：等 reviewer 产出后 review-import")
+    if facts["ready_to_decide"]:
+        next_ = f"{facts['required']} 份都到位且锚点一致：review-decide 可判"
+    elif facts.get("stale") or facts.get("unreadable"):
+        next_ = (f"{len(facts.get('stale') or []) + len(facts.get('unreadable') or [])} 份报告失效/不可读："
+                 "重发新一轮（decide 会核锚点并拒绝）")
+    elif facts["required"] < 2:
+        next_ = "单 provider 轮不产生判定结论：补第二个异种 reviewer 后重发"
+    else:
+        next_ = f"缺 {len(facts['missing'])} 份报告：等 reviewer 产出后 review-import"
     return codes.result(
         "WF_OK",
         object={"id": task.get("id"), "name": task.get("title")},

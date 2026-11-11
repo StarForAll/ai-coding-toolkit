@@ -697,8 +697,9 @@ class StagedDiscoveryTest(unittest.TestCase):
         from types import SimpleNamespace
         from wflib import review
 
+        import uuid
         root = tempfile.mkdtemp(prefix="wf-staged-")
-        task_id = "2026-abc"
+        task_id = "2026-" + uuid.uuid4().hex[:8]      # 暂存目录全局共享 → 每测唯一
         task = {"id": task_id, "check": {"id": "c1", "anchor": {"check_anchor": "sha256:0"}},
                 "reviews": {"launches": [{"round": 1, "slots": [{"slot": "s1"}, {"slot": "s2"}]}],
                             "imported": [], "result": None}}
@@ -713,3 +714,51 @@ class StagedDiscoveryTest(unittest.TestCase):
         self.assertEqual(states, ["staged", "staged"], f"实际: {status}")
         self.assertEqual(status["arrived"], 2)
         self.assertEqual(status["missing"], [])
+
+
+class SlotClaimTest(unittest.TestCase):
+    """第十五轮 a/G1：同一份报告不能被"已导入"与"暂存发现"各认领一次。"""
+
+    def _ctx(self, files):
+        import os, tempfile
+        from types import SimpleNamespace
+        from wflib import review
+
+        import uuid
+        root = tempfile.mkdtemp(prefix="wf-claim-")
+        ctx = SimpleNamespace(root=root, key=lambda required=True: "k")
+        self.task_id = "2026-" + uuid.uuid4().hex[:8]   # 暂存目录全局共享 → 每测唯一
+        directory = review.round_dir(ctx, self.task_id, 1)
+        os.makedirs(directory, exist_ok=True)
+        for name, body in files.items():
+            with open(os.path.join(directory, name), "w", encoding="utf-8") as handle:
+                handle.write(body)
+        return ctx, review
+
+    def _task(self, imported):
+        return {"id": self.task_id, "check": {"id": "c1", "anchor": {"check_anchor": "sha256:0"}},
+                "reviews": {"launches": [{"round": 1, "slots": [{"slot": "s1"}, {"slot": "s2"}]}],
+                            "imported": imported, "result": None}}
+
+    def test_imported_report_is_not_also_counted_as_staged(self):
+        ctx, review = self._ctx({"review-codex.md": "---\nstatus: done\n---\n"})
+        import os
+        rel = os.path.relpath(os.path.join(review.round_dir(ctx, self.task_id, 1), "review-codex.md"),
+                              ctx.root).replace(os.sep, "/")
+        from wflib import records
+        digest = records.file_digest(os.path.join(ctx.root, rel))
+        task = self._task([{"round": 1, "slot": "codex", "report_path": rel,
+                            "report_digest": digest, "agent": "codex"}])
+        status = review.status_of_round(ctx, task)
+        states = [item["state"] for item in status["slots"]]
+        self.assertEqual(states.count("imported"), 1, f"实际: {status}")
+        self.assertNotIn("staged", states, "同一份报告不能被再次认领为 staged")
+        self.assertEqual(status["arrived"], 1)
+
+    def test_single_provider_is_not_ready_to_decide(self):
+        ctx, review = self._ctx({})
+        task = {"id": self.task_id, "check": {"id": "c1", "anchor": {"check_anchor": "sha256:0"}},
+                "reviews": {"launches": [{"round": 1, "slots": [{"slot": "s1"}]}],
+                            "imported": [], "result": None}}
+        status = review.status_of_round(ctx, task)
+        self.assertFalse(status["ready_to_decide"], "单 provider 轮必然判不了")
