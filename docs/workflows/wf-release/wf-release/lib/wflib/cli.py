@@ -2479,7 +2479,15 @@ def cmd_review_status(ctx, args):
     elif facts["required"] < 2:
         next_ = "单 provider 轮不产生判定结论：补第二个异种 reviewer 后重发"
     else:
-        next_ = f"缺 {len(facts['missing'])} 份报告：等 reviewer 产出后 review-import"
+        staged = [item for item in facts["slots"] if item["state"] == "staged"]
+        ready_staged = [item for item in staged if item.get("importable")]
+        if ready_staged:
+            next_ = (f"{len(ready_staged)} 份已产出且 status=done：可 review-import；"
+                     + (f"另缺 {len(facts['missing'])} 份" if facts["missing"] else "其余已到位"))
+        elif staged:
+            next_ = f"{len(staged)} 份报告仍在撰写（status 未 done）：等写完或联系 reviewer"
+        else:
+            next_ = f"缺 {len(facts['missing'])} 份报告：等 reviewer 产出后 review-import"
     return codes.result(
         "WF_OK",
         object={"id": task.get("id"), "name": task.get("title")},

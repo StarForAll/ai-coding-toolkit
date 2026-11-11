@@ -100,7 +100,7 @@ class AllFindingsTest(unittest.TestCase):
                                    {"id": "f2", "severity": "suggestion"}],
                              dispositions=[{"finding_id": "f1", "decision": "accepted",
                                             "reason": "已修", "recheck_by": "dsh"}])
-            full = review.all_findings(FakeCtx(tmp), task)
+            full, _unreadable = review.all_findings(FakeCtx(tmp), task)
             open_items = review.open_findings(FakeCtx(tmp), task)
         self.assertEqual(sorted(item["id"] for item in full), ["f1", "f2"])
         self.assertTrue(next(item for item in full if item["id"] == "f1")["closed"])

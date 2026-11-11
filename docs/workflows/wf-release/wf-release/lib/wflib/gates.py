@@ -704,7 +704,14 @@ def verify_step(ctx, task, step_id, *, rule_version=None):
             actual = None
             rel = paths.get(key)
             if rel:
-                actual = records.file_digest(join(ctx.root, rel))
+                try:
+                    actual = records.file_digest(join(ctx.root, rel))
+                except OSError as exc:
+                    # 读不动不等于没变：按"失效"处理并带上原因，不能让门禁抛内部错误
+                    stale.append({"slot": entry.get("slot"), "round": key[0],
+                                  "result_digest": entry.get("report_digest"),
+                                  "unreadable": str(exc), "path": rel})
+                    continue
             if recorded != entry.get("report_digest") or actual != entry.get("report_digest"):
                 stale.append({"slot": entry.get("slot"), "round": key[0],
                               "result_digest": entry.get("report_digest"),

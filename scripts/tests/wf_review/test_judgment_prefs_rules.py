@@ -859,9 +859,39 @@ class RoundReadinessFactsTest(unittest.TestCase):
         task = {"id": self.task_id, "check": {"id": "c1", "anchor": {"check_anchor": "sha256:0"}},
                 "reviews": {"launches": [{"round": 1, "slots": [{"slot": "s1"}, {"slot": "s2"}]}],
                             "imported": imported, "result": None}}
-        status = review.status_of_round(ctx, task)
-        self.assertTrue(status["extra_reports"], f"实际: {status}")
-        self.assertFalse(status["ready_to_decide"])
+        # 隔离失败原因：把"当前锚点"固定住，让 ready 只取决于 extra_reports
+        original = review._current_anchor
+        review._current_anchor = lambda ctx, task: ("sha256:0", {})
+        try:
+            tampered = review.status_of_round(ctx, task)
+            self.assertTrue(tampered["extra_reports"], f"实际: {tampered}")
+            self.assertFalse(tampered["ready_to_decide"], "第三份失效必须阻止可判")
+            # 对照：把被改写的那份恢复原字节，同一场景应当变为可判
+            with open(paths["review-pi.md"], "w", encoding="utf-8") as handle:
+                handle.write("---\nstatus: done\n---\n")
+            import wflib.records as records_mod
+            for entry in task["reviews"]["imported"]:
+                if entry["slot"] == "pi":
+                    entry["report_digest"] = records_mod.file_digest(paths["review-pi.md"])
+            clean = review.status_of_round(ctx, task)
+            self.assertEqual(clean["extra_reports"], [])
+            self.assertTrue(clean["ready_to_decide"], f"对照组应可判: {clean}")
+        finally:
+            review._current_anchor = original
+
+    def test_staged_done_is_importable_and_in_progress_is_not(self):
+        ctx, review, paths = self._ctx({"review-codex.md": "<!-- status=done -->\n"})
+        task = {"id": self.task_id, "check": {"id": "c1", "anchor": {"check_anchor": "sha256:0"}},
+                "reviews": {"launches": [{"round": 1, "slots": [{"slot": "s1"}, {"slot": "s2"}]}],
+                            "imported": [], "result": None}}
+        done = review.status_of_round(ctx, task)
+        staged_done = [item for item in done["slots"] if item["state"] == "staged"]
+        self.assertTrue(staged_done and staged_done[0].get("importable"), "status=done 应可导入")
+        with open(paths["review-codex.md"], "w", encoding="utf-8") as handle:
+            handle.write("<!-- status=in-progress -->\n")
+        writing = review.status_of_round(ctx, task)
+        staged_wip = [item for item in writing["slots"] if item["state"] == "staged"]
+        self.assertTrue(staged_wip and not staged_wip[0].get("importable"), "in-progress 不可导入")
 
     def test_staged_in_progress_is_not_importable(self):
         ctx, review, _paths = self._ctx({"review-codex.md": "---\nstatus: in-progress\n---\n"})

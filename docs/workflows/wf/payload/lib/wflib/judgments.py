@@ -43,7 +43,7 @@ def skeleton(ctx, task):
     # 全部 findings（含已处置）进骨架；未处置的是它的子集，不是同一份东西
     findings = [{"id": item["id"], "severity": item.get("severity"), "class": item.get("class"),
                  "closed": item.get("closed")}
-                for item in review_mod.all_findings(ctx, task)]
+                for item in review_mod.all_findings(ctx, task)[0]]
     closures = [{"finding_id": item.get("finding_id"), "cited_verification": item.get("evidence_refs"),
                  "recheck_by": item.get("recheck_by")}
                 for item in disposals if item.get("decision") == "accepted"]

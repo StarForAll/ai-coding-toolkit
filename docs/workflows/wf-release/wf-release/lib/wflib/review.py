@@ -1447,7 +1447,12 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None):
                     continue
                 report_abs = join(ctx.root, rel)
                 # 导入端防住"同路径换内容"，判定端必须同样重核摘要：否则报告文件可被事后改写
-                current_digest = records.file_digest(report_abs)
+                try:
+                    current_digest = records.file_digest(report_abs)
+                except OSError as exc:
+                    problems.append({"slot": entry.get("slot"), "reason": "report file unreadable",
+                                     "path": rel, "error": str(exc)})
+                    continue
                 if entry.get("report_digest") != current_digest:
                     problems.append({"slot": entry.get("slot"), "reason": "report file changed after import",
                                      "recorded": entry.get("report_digest"), "current": current_digest,
@@ -1615,7 +1620,9 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None):
 
 
 def all_findings(ctx, task):
-    """报告里的**全部** findings（含已处置），`unaddressed` 只是它的子集。
+    """报告里的**全部** findings（含已处置），返回 `(findings, unreadable)`。
+
+    `unaddressed` 只是它的子集。
 
     骨架需要"全部"（v42 §5.1 的 `findings[]` + 单列 `closures[]`）；把只含未处置的集合
     当成全部，会让"已关闭"的缺陷从清单里消失，也让两个字段变成同一份东西。
@@ -1634,8 +1641,8 @@ def all_findings(ctx, task):
         path_abs = join(ctx.root, rel)
         try:
             if records.file_digest(path_abs) != entry.get("report_digest"):
-                unreadable.append({"slot": entry.get("slot"), "path": rel,
-                                   "round": entry.get("round"), "cause": "changed|missing"})
+                unreadable.append({"slot": entry.get("slot"), "path": rel, "round": entry.get("round"),
+                                   "cause": "missing" if records.file_digest(path_abs) is None else "changed"})
                 continue
         except OSError as exc:
             unreadable.append({"slot": entry.get("slot"), "path": rel, "round": entry.get("round"),
@@ -1658,5 +1665,4 @@ def all_findings(ctx, task):
                               "class": finding.get("class"), "slot": entry.get("slot"),
                               "closed": str(finding["id"]) in closers,
                               "assertion_ref": finding.get("assertion_ref")})
-    all_findings.last_unreadable = unreadable   # 查询方需要时取走（不让入口崩，也不静默）
-    return found
+    return found, unreadable

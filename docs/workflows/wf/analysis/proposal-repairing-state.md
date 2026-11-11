@@ -1,13 +1,13 @@
-# 提案（v18）：⑥ 只做「结构化未结事实」+ 一条人裁放行记录 + 文档裁定
+# 提案（v19）：⑥ 只做「结构化未结事实」+ 一条人裁放行记录 + 文档裁定
 
-> 状态：**待审 v18**（第十七轮修正）。
-> 前十七版的形态与致命点见 §0。**边界**：机制修补已先行落地若干项（见 §8"已完成"行），
+> 状态：**待审 v19**（第十八轮修正）。
+> 前十八版的形态与致命点见 §0。**边界**：机制修补已先行落地若干项（见 §8"已完成"行），
 > 其中**证据身份约束**与 **`review-status` 判定语义**已改变门禁/查询行为；
 > 展示层（`unresolved` 档位与挂载）与**人裁放行记录尚未实现**。
 
 ---
 
-## 0. 十七轮审查的形态演进与净结论
+## 0. 十八轮审查的形态演进与净结论
 
 | 版本 | 形态 | 致命点 |
 |---|---|---|
@@ -22,8 +22,9 @@
 | v13 | 人裁放行改为独立记录 + 混槽位并列 | **证据可被替换**：删文件后导入同轮同槽位另一份报告即可顶掉旧证据；`launches` 实为 `[]`；行 8 引用断链；性质测试枚举域与 schema 不一致 |
 | v14 | 证据身份约束 + 混槽位并列 + 拆档 | 发现模式"已完成未导入"仍报 missing；验收 4 与 13d 相反；计数与 attestation 字段不一致；行 8 未标"重发不解除"；性质测试缺"轮次关系" |
 | v15 | 暂存发现口径 | **同一份已导入报告被二次认领**（一份算两份到位、`ready_to_decide=True`）；挂载点 `next_` 在 stale/单 provider 轮仍提示"可判" |
-| **v17** | `ready` 收紧 + 历史读取健壮 | 只修两处 OSError：`all_findings`/`proposers_from_imported`/`review-passed` 仍会让判定与 `--unavailable` 一起失效；`ready` 未要求锚点已核、也忽略“声明槽位之外”的导入报告；`staged` 与“可导入”混同；`unavailable` 两套形状 |
 | **v16** | 同一报告只认领一次 + `ready_to_decide` 对齐 | 仍漏两处：`ready` **没要求"已导入"**（staged 就算可判）；`unreadable` 被引用却无产出路径；边界声明与账本失真 |
+| **v17** | `ready` 收紧 + 历史读取健壮 | 只修两处 OSError：`all_findings`/`proposers_from_imported`/`review-passed` 仍会让判定与 `--unavailable` 一起失效；`ready` 未要求锚点已核、也忽略“声明槽位之外”的导入报告；`staged` 与“可导入”混同；`unavailable` 两套形状 |
+| **v18** | 全链路读取健壮 + `ready` 已核锚点 | **`gates.py` 一处未修**（`review-passed` 仍抛 `PermissionError`，`wf gate` 会崩）；第 6 档未用 `round_ready`、`extra_reports` 无承载；`staged` 文案没接 `importable`；「等来的报告可复用」与报告协议冲突；恢复后一律 `stale` 过绝；两条新测试失败原因相互遮蔽 |
 **已核实的产品级事实（含对 v11 错误引用的更正）**
 
 | 事实 | 位置 |
@@ -51,7 +52,9 @@
   "review": {"state": "<§1.2 的 15 档之一，或 inconsistent>",
              "round": 2, "launched": 2, "imported": 2, "declared": 2,
              "slots": [{"slot": "s1", "state": "imported|staged|stale|missing|unreadable", "round": 2}],
-             "round_ready": "当前轮是否已 imported 且锚点已核（与 wf review-status 的 ready_to_decide 同口径）",
+             "round_ready": false,   // bool；= wf review-status 的 ready_to_decide（全部 imported 且锚点已核）
+             "round_ready_blockers": [{"kind": "extra_report_stale|anchor_unavailable|anchor_unchecked",
+                                       "slot": "pi", "round": 1}],
              "open_blocking": [{"finding_id": "f1", "severity": "blocker", "round": 1}],
              "blocking_unknown": [{"slot": "s1", "path": "…", "report_digest": "sha256:…",
                                    "round": 1, "cause": "changed|missing|unreadable",
@@ -97,7 +100,8 @@ slots        = 该轮槽位状态集合（可同时含多种，见 §1.3）
 | 3 | `undecided` 且槽位含 `staged` | `report_staged` | 第 N 轮有 k 份已产出未导入 | **先导入**（前置：暂存目录在且 agent 标 done）；同时列出其余槽位事实（缺 / 失效） |
 | 4 | `undecided` 且槽位含 `missing`（无 `stale`） | `awaiting_reports` | 第 N 轮缺 k 份 | 主：等（前置：仍可联系到该 reviewer）；并列：`--unavailable`（持续等不到时）、先导入 staged（若有） |
 | 5 | `undecided` 且槽位含 `stale`（**无论是否另有 missing/staged**） | `reports_stale` | 第 N 轮 k 份锚点失效 | 主：**重发新一轮**（前置：当前检查可用）——stale 槽位使该轮**永远判不了**（`decide` 核锚点即拒）；并列：先导入 staged（若有）、`--unavailable` |
-| 6 | `undecided` 且全部 `imported` 且 `declared ≥ 2` | `imported_not_decided` | 第 N 轮到位（i/m） | 执行判定（前置：≥2 份 imported 且锚点一致） |
+| 6 | `undecided` 且**全部 imported 且锚点已核且无 extra_reports 问题**（= `round_ready`） | `imported_not_decided` | 第 N 轮可判（i/m） | 执行判定 |
+| 6b | `undecided` 且全部 imported 但 **`round_ready == false`** | `imported_not_ready` | 第 N 轮报告齐但**不可判**：`reason` 说明（锚点算不出 / 锚点未核 / 另有 extra_reports 失效） | 按 `reason` 处理（修记录 / 重发 / 先恢复） |
 | 7 | `undecided` 且 `declared == 1` | `degraded_single` | 第 N 轮为单 provider | 补异种 reviewer 重发（前置：可取第二个 CLI）/ `--unavailable` |
 | 8 | `blocking` 或未放行的 `blocking_unknown` 非空 | `open_blocking` | 未关闭 blocking N 条；另有 M 份不可核实 | **可读 blocking**：K4b 复核关闭 / 人重分类 / 异常归档；**blocking_unknown**：`review-accept-unknown` 人裁放行（**只有它解除本条**）；"重发该轮"可并行推进工作但**不解除**，归档前仍需放行（见 §2） |
 | 9 | `verdict == "fail"` | `verdict_fail` | 第 r 轮判 fail（绑定：当前/旧） | 事实 + 候选（重查 / 重发），顺序由 AI 判断 |
@@ -108,13 +112,12 @@ slots        = 该轮槽位状态集合（可同时含多种，见 §1.3）
 | 14 | `no_launch` 且非 complex | `none_required` | 未要求（可按需发起） | —— |
 | — | 以上均不命中 | `inconsistent` | 记录组合不自洽（列判据值） | 交人核对；**不得据此归档** |
 
-> 注：第 12 档按 `no_launch` 判定，**先把 12 拆成两档**（见下）：`not_started`（complex）与 `none_required`（其他）各占一档，避免"共用编号 + 隐式优先级"让性质测试的"仅命中一档"出现歧义（第十三轮指出）。
 
 **历史与当前分开**（第十七轮）：档位只决定**先看哪一行事实**，**不排执行顺序**。
 
 - 旧轮的阻断（如第 1 档：结论引用报告不可读）**不遮住**当前轮的可执行进展——若当前轮已 `imported` 且锚点已核，
   `unresolved.review` 同时给出 `round_ready: true`，AI 可直接推进判定；旧轮的恢复/放行是**并行**事项；
-- 同理 `staged + stale` 时第 5 档胜出（建议起点是重发），但"先导入 staged"仍是**并列可执行项**（等来的报告可在新轮复用）；
+- 同理 `staged + stale` 时第 5 档胜出（建议起点是重发），但"先导入 staged"仍是**并列可执行项**（**不要**把旧轮报告直接导入新轮：报告绑定 round 与 check-anchor，会被 round/anchor 校验拒绝；可复用的是"分析内容"，不是"原报告作为新轮有效证据"）；
 - 候选里的"主/并列"只是**建议起点**，AI 可按当前进展自行选择顺序（§5）。
 
 **关键修正**：第 3/4/5 档的条件是"**含**某类槽位"而不是"**只有**某类槽位"——`stale + missing`、`staged + stale` 都是合法组合（实测 `status_of_round` 会返回 `['stale','missing']`）。v12 把它们写成互斥，正常组合会掉进 `inconsistent`，把 AI 本可自处的情形升级成人审。
@@ -182,7 +185,7 @@ v12 写"走既有 K6 授权通道"，实测三处都不成立：`ACTIONS` 固定
 | `cause` | 出口 |
 |---|---|
 | `changed` | 重发新一轮（同路径不同摘要被拒，`review.py:1117`） |
-| `missing` | 取回原始字节后**恢复**：摘要与登记摘要一致即**按原身份恢复**（不要求与当前 check 锚点一致），恢复后标 `stale`（身份可用、当前不适用）；摘要不一致才需要新轮 / `--unavailable` |
+| `missing` | 取回原始字节后**恢复**：摘要与登记摘要一致即**按原身份恢复**（不要求与当前 check 锚点一致）；恢复后**由 `status_of_round` 按摘要 + 实际锚点重算**——内容与锚点都没变则回到 `imported`，锚点已变才是 `stale`（身份可用、当前不适用）；摘要不一致才需要新轮 / `--unavailable` |
 | `unreadable` | 恢复可读后重导；否则新轮 / `--unavailable` |
 
 健壮性：`open_findings` 与 `status_of_round` 都在函数内直接算摘要，而 `records.file_digest` 只捕获 `FileNotFoundError`（`records.py:62`）→ 权限不足会 `PermissionError` 冲出查询入口。两处统一 `except OSError` 并归入 `unreadable`。
@@ -192,7 +195,7 @@ v12 写"走既有 K6 授权通道"，实测三处都不成立：`ACTIONS` 固定
 ## 4. 只读门禁：不重构 `final_gate`
 
 - `evaluate_cli` **保持原样**（步骤面只读预检，输出结构不变）；
-- 非步骤阻断由 `unresolved.nonstep`（七类）提供；
+- 非步骤阻断由 `unresolved.nonstep`（八类）提供；
 - **契约**：`wf gate --due before_archive` 是**步骤面**预检；非步骤阻断见 `unresolved`；两者**并读**才是归档前的完整依据；**gate 通过 ≠ 归档必成**（归档内还有 `repo_rules`/`delete` 确认、业务提交先于门禁）；**不要用"试归档"探路**（`tasks.py:3233` 会先做业务提交）。
 
 ---
@@ -218,7 +221,7 @@ v12 写"走既有 K6 授权通道"，实测三处都不成立：`ACTIONS` 固定
 
 ## 7. ⑥ 的实质处置：文档裁定（v42 不动）
 
-新增 `analysis/ruling-repair-vs-fixing.md`：不引入 `fixing` 阶段（维持 2026-11-09 人裁）；**十五轮**审查证据摘要（§0 表）；与 v42 K10（L107）/S4（L122）/S5（L123）/§7.1（L401）差异逐条登记；记录两处语义压缩（`--short` 的 `task.check` 压成 `usable/reason`；`unresolved` 只报事实不报"能否结案"）；登记 §2 的放行记录与其绑定规则。
+新增 `analysis/ruling-repair-vs-fixing.md`：不引入 `fixing` 阶段（维持 2026-11-09 人裁）；**十八轮**审查证据摘要（§0 表）；与 v42 K10（L107）/S4（L122）/S5（L123）/§7.1（L401）差异逐条登记；记录两处语义压缩（`--short` 的 `task.check` 压成 `usable/reason`；`unresolved` 只报事实不报"能否结案"）；登记 §2 的放行记录与其绑定规则。
 
 ---
 
@@ -229,9 +232,9 @@ v12 写"走既有 K6 授权通道"，实测三处都不成立：`ACTIONS` 固定
 | 机制修补（K 级） | 2（① `blocking_unknown` + 放行记录 + `final_gate` 阻断；② **导入端证据身份约束**——已实现并回归） |
 | **新增命令** | 1（`wf review-accept-unknown`，走既有 attestation 通道） |
 | **任务记录新增字段** | 1（`reviews.unknown_acceptances[]`，逐报告 + 摘要绑定） |
-| `open_findings` / `status_of_round` / `all_findings` / `proposers_from_imported` 结构化 + OSError 健壮 | **4 处（已实现）** |
+| 读取健壮（`open_findings` / `status_of_round` / `all_findings` / `proposers_from_imported` / **`gates.review-passed`**）+ `all_findings` 改元组返回 | **5 处（已实现）** |
 | 提取共享函数 | 1（`check_usability`） |
-| `unresolved.nonstep` 七类事实 | 1 处（记录级读取） |
+| `unresolved.nonstep` 八类事实 | 1 处（记录级读取） |
 | 展示点 | 3 |
 | skill 文本 | 2 |
 | 协议码表 / `final_gate` 结构 / `authorize.ACTIONS` | **0** |
@@ -261,7 +264,7 @@ v12 写"走既有 K6 授权通道"，实测三处都不成立：`ACTIONS` 固定
 | 13c | **`reviews.launches == []` 的任务 → `not_started`/`none_required`，不得落 `inconsistent`** |
 | 13d | **`stale + missing` 混合 → 落 `reports_stale`、主候选是"重发新一轮"（"等"降为并列），且 `slots` 并列显示两种事实、不得落 `inconsistent`** |
 | 14 | 两份不同报告的放行记录**并存**（不互相覆盖） |
-| 15 | 权限不足（`PermissionError`）不再让 `status`/`review-status` 崩溃，归入 `unreadable` |
+| 15 | 权限不足（`PermissionError`）不再让 `status`/`review-status`/**`review-decide`**/**`wf gate --due before_archive`** 崩溃：前者归入 `unreadable`，后两者给出 `WF_REVIEW_INVALID` + 原因/出口 |
 | 16 | `wf gate` 输出结构未变；`unresolved.nonstep` 七类齐全 |
 | 17 | **性质测试**：枚举域**与 schema 值域严格一致**——`launches` 有无（falsy 判定）× **轮次关系四值**（无 result / result 落后于 active / 相等 / 超前）× 槽位**五值**（`imported/staged/stale/missing/unreadable`）的**所有子集** × `blocking` 有无 × 未放行 `blocking_unknown` 有无 × `verdict` **五值（含 null 与 invalidated）** × `bound_to_current` × `complexity`；断言**合法组合必命中非兜底档**、仅**真不自洽**（如 `verdict=invalidated` 且 `active==result`）落 `inconsistent`；"一档"按 `state` 口径（编号已不共用） |
 
