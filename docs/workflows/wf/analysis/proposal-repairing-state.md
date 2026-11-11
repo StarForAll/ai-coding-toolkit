@@ -1,6 +1,6 @@
-# ⑥ 修复态的表达：不新增阶段，用「事实 + 清除动作」吸收 `fixing` 的收益（v54）
+# ⑥ 修复态的表达：不新增阶段，用「事实 + 清除动作」吸收 `fixing` 的收益（v55）
 
-> 状态：**待审 v54**。阶段：**方案审查阶段，实现零改动**（`review-phase-discipline.md`）。
+> 状态：**待审 v55**。阶段：**方案审查阶段，实现零改动**（`review-phase-discipline.md`）。
 > §6 是**待实施清单（全部未实施）**，**不是已完成的工作**；当前 `docs/workflows/wf/payload/` 与基线 `8da2f23`
 > **逐字节一致**（`git diff` 为空）。
 > **本文只回答 ⑥**：`fixing` 的收益如何在四阶段内表达。范围边界见 §8。
@@ -158,7 +158,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | **C1 失效** | `rerun_check`（重跑 `task-check` 产生新 check） |
 | **C2 未空** | **关闭的前提是「处置结果已成立并经非提出者复核」**，不是「同意某种修法」——① 已修复且已重查通过 ② 经复核认定误报（无需改代码）③ 已重分类（本就不是问题）；**「同意修法但还没做」不得写 `accepted`**（finding 会立刻从 `open_blocking` 消失，light 无 C4 兜底）→ 保持 open，或写 `amended` + 理由（不关闭）。**在锚点仍匹配时**补 disposition（**处置结果已成立时** `decision` 写 `accepted`，B5）→ `record_disposition`。**时机约束（机制事实，必须进指引）**：`decide` 按**当前工作区内容**重算锚点（`check.py:118`），代码改过之后旧轮报告就失配、在旧轮补处置必被 `WF_REVIEW_INVALID` 拒。两条合法路径**各自对应不同处置类型**：① 随 fail 轮那次 `decide` 一并写——**只适用于「误报 / 重分类」**（处置结果无需改代码即成立、内容未变）；② 随**修好 + 重查后的新一轮** `decide` 捎带——**「已修复」只能走这条**（内容必然已变）。**「同意修法但还没做」不得写 `accepted`**（见 A67）。**复核人的可核验要求**：`recheck_by` 必须是**该轮已导入报告的 reviewer**（`report-<agent>.md` 的 agent）且 ≠ 提出者——现有校验只查「非空且异于提出者」（`review.py:595-625`），不查它是否真的提交过报告；⑥ 要把它收紧为「`recheck_by ∈ 该轮（或跨轮）已导入报告的 agent 集合`」。**`--unavailable` 路径不得写 disposition**：该路径不产生判定，若同批带 dispositions 应**拒绝**（现在会照常写入，等于用「审查做不成」绕过复核） |
 | **C3 未放行** | ① `restore_bytes`（找回原字节，不依赖身份）<br>② `human_release`（`release_allowed == true` 时）——**放行的语义边界（本版新增）**：某份报告不可核实时，它里面的 findings 也随之无法枚举（`open_findings` 跳过整份报告），因此放行**必然同时豁免该报告中未知的 findings**。决定文件必须显式承认这一点（`waive_unknown_findings: true`），缺失即拒；**且不得把放行描述成"缺陷已处置"**——C2 不会因此被满足，只是那部分问题从此不可枚举<br>③ `relaunch_review`——改变事实而不是硬闯：complex 的 `cited` 损坏不可放行，但可完成一次新审查；新结论引用新报告后，旧报告变成**非引用**证据 → 下一轮 `human_release` 即可用<br>④ 只有"上述全部不可行"才 `abandon_task`（**不得把"当前不能放行"直接推成"应放弃"**） |
-**AI 能否定审查结论到什么程度（如实）**：`verdict` 由**报告载荷**推导（`review.py:317`、`1351`），`dispositions` 不参与，所以一个判 fail 的轮**重判仍是 fail**；AI 否定误报只能清空 C2，**不能替代 complex 的 C4**——归档仍需一次 pass 结论。因此「审查结论是输入、AI 可否定」在**处置层**成立，在**完成条件层不成立**（这是既有门禁 `review-passed` 的语义，⑥ 不改）。若要让「已全部处置的 fail」也满足归档，属**改门禁**，见 backlog **E3**（需人裁）。<br>| **C4 不成立** | **按 `launches[]` 逐轮给出口，每条带 `round` 目标；机制不表达优先级**（无 `preferred` 字段）：<br>· 对每个 `undecided == true` 的轮：`usable == true` → `resume_inflight{round}`；`usable == false` → `relaunch_review`（`usable_blockers` 一并给出）；`usable == null` → `await_material{round}` 与 `relaunch_review` 并列<br>· 对每个 `redecidable == true` 的轮：`redecide_round{round}`——**与上面并行给出，不互斥**（重判旧轮与新轮推进可同时进行）<br>· 无任何轮可用（既无 undecided-usable，也无 redecidable）→ `relaunch_review`<br>· **`pause_for_human` / `abandon_task` 始终给出**：它们是「需人/终局」选项，不依赖可派生事实（`unavailable` 是记录事实，「环境凑不齐」派生不出来——所以不做条件化，常列即可）。**护栏**：常列不等于推荐——`abandon_task` 与 C3 ④ 同一口径，**不得把「当前推进不动」推成「应放弃」**；G4 指引必须写明这一点<br>**为什么去掉 `preferred`**：材料是否够判是机制事实，**先重查、先修复还是先续判属于结合上下文的判断**。`check_valid == false ∧ usable == true` 就是典型：先续判会绑到旧 check，重查后又失绑——这个取舍机制无权代决。<br>**事实提示（非顺序强制）**：`check_valid == false` 只说明当前检查不能用于完成任务，不证明在途轮作废；结论绑定判定那一刻的 check（`review.py:1425`）。**已知盲区**：`usable` 不含标准漂移（导入时标记是历史事件，`standard_drift_gate` 在 decide 时重算，`review.py:482`），`decide` 始终是权威 |
+**AI 能否定审查结论到什么程度（如实）**：`verdict` 由**报告载荷**推导（`review.py:317`、`1351`），`dispositions` 不参与，所以一个判 fail 的轮**重判仍是 fail**；AI 否定误报只能清空 C2，**不能替代 complex 的 C4**——归档仍需一次 pass 结论。因此「审查结论是输入、AI 可否定」在**处置层**成立，在**完成条件层不成立**（这是既有门禁 `review-passed` 的语义，⑥ 不改）。**E3 已裁：甲（维持现状）**——不让「已全部处置的 fail」满足归档：`review-passed` 语义不变，复杂任务仍需一次 pass；AI 的否定只体现为 C2 清零，不改变 verdict。理由：否则等于允许 AI 自己判自己没错，与 ⑥「可核实性优先」冲突。<br>| **C4 不成立** | **按 `launches[]` 逐轮给出口，每条带 `round` 目标；机制不表达优先级**（无 `preferred` 字段）：<br>· 对每个 `undecided == true` 的轮：`usable == true` → `resume_inflight{round}`；`usable == false` → `relaunch_review`（`usable_blockers` 一并给出）；`usable == null` → `await_material{round}` 与 `relaunch_review` 并列<br>· 对每个 `redecidable == true` 的轮：`redecide_round{round}`——**与上面并行给出，不互斥**（重判旧轮与新轮推进可同时进行）<br>· 无任何轮可用（既无 undecided-usable，也无 redecidable）→ `relaunch_review`<br>· **`pause_for_human` / `abandon_task` 始终给出**：它们是「需人/终局」选项，不依赖可派生事实（`unavailable` 是记录事实，「环境凑不齐」派生不出来——所以不做条件化，常列即可）。**护栏**：常列不等于推荐——`abandon_task` 与 C3 ④ 同一口径，**不得把「当前推进不动」推成「应放弃」**；G4 指引必须写明这一点<br>**为什么去掉 `preferred`**：材料是否够判是机制事实，**先重查、先修复还是先续判属于结合上下文的判断**。`check_valid == false ∧ usable == true` 就是典型：先续判会绑到旧 check，重查后又失绑——这个取舍机制无权代决。<br>**事实提示（非顺序强制）**：`check_valid == false` 只说明当前检查不能用于完成任务，不证明在途轮作废；结论绑定判定那一刻的 check（`review.py:1425`）。**已知盲区**：`usable` 不含标准漂移（导入时标记是历史事件，`standard_drift_gate` 在 decide 时重算，`review.py:482`），`decide` 始终是权威 |
 
 ### 4.3 并存与顺序
 
@@ -380,6 +380,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | **v52** | D4 改为「提取 `final_gate_nonstep` + 过滤后的 `evaluate` + 授权覆盖」三段、C2 关闭语义（`accepted` 仅表示结果已成立）、G4/B4 补齐 | 本文 |
 | **v53** | 预检判据改「`status == missing` 为空」、C3 分支归入 `final_gate_nonstep`、提取行为等价断言、C2 两条路径按处置类型限定 | 本文 |
 | **v54** | C4 追加 `eligible`、复核人可核验收紧、`--unavailable` 禁写 disposition、预检断言合并为一条、G2 同步 | 本文 |
+| **v55** | 记录人裁 **E3 = 甲**（维持 `review-passed` 语义，复杂任务仍需一次 pass） | 本文 |
 
 ## 10. 已定项（2026-11-11 人裁）
 
@@ -387,6 +388,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 |---|---|---|
 | D1 | 不可核实证据阻断用哪个码 | 复用 `WF_REVIEW_INVALID` + `facts.reason = "unverifiable_evidence"` |
 | D2 | 人裁是否引入签名 | 不引入；沿用声明式 attestation（残余风险见 §2.2） |
+| **E3（已定：甲）** | 「已全部处置的 fail」是否也满足 complex 归档？ | **不满足**：`review-passed` 语义不变，复杂任务仍需一次 pass；AI 的否定只清 C2、不改 verdict |
 | **D3（已定：选 A）** | light 关闭单个问题是否必须整轮审查？ | **接受成本**：A8 归 backlog 后补；⑥ 不声称交付「light 自主闭环修复」，该口径已写进 §4.1 |
 
-> Q1=乙、Q2=甲 亦已定；D3 已于 2026-11-11 裁为**选 A**。**本文无待决项。**
+> Q1=乙、Q2=甲 亦已定；D3 裁为**选 A**、E3 裁为**甲**（2026-11-11）。**本文无待决项。**
