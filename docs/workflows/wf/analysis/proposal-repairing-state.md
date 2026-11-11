@@ -1,6 +1,6 @@
-# ⑥ 修复态的表达：不新增阶段，用「事实 + 清除动作」吸收 `fixing` 的收益（v29）
+# ⑥ 修复态的表达：不新增阶段，用「事实 + 清除动作」吸收 `fixing` 的收益（v30）
 
-> 状态：**待审 v29**。阶段：**方案审查阶段，实现零改动**（规则见 `.trellis/spec/guides/review-phase-discipline.md`）。
+> 状态：**待审 v30**。阶段：**方案审查阶段，实现零改动**（规则见 `.trellis/spec/guides/review-phase-discipline.md`）。
 > **本文只回答 ⑥**；范围边界见 §8，被排除条目见 `analysis/backlog-excluded-from-item6.md`。
 
 ---
@@ -94,17 +94,17 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | **C3** | 无未放行的不可核实证据 | `unverifiable` 中 `released == false` 为空 |
 | **C4** | **复杂任务**的审查结论存在、绑定当前 check 且为 pass | `review_required == true` 时要求 `verdict == "pass"` 且 `binding` |
 
-**light 任务（`review_required == false`）不承担 C4**：自愿审查的 `fail` / `unavailable` / `invalidated` 都**不产生**完成义务；
-但若那份自愿证据损坏，C3 仍然成立（见 §2.2 的如实表述）。
+**light 任务（`review_required == false`）不承担 C4**：不产生「必须取得新的审查结论」这项义务。
+但其自愿审查的 blocking findings **仍受 C2 约束**（`WF_UNRESOLVED_BLOCKING` 不分复杂度）、其报告损坏**仍受 C3 约束**：义务收窄到「处置已发现的问题」，**不是「无义务」**。
 
 ### 4.2 每个条件的清除动作
 
 | 条件 | 清除动作 | 禁用 / 注意 |
 |---|---|---|
 | **C1 失效** | 重跑 `task-check` 产生新 check（内容变了必须重查） | —— |
-| **C2 未空** | 按项修复 → **由非提出者复核后补 dispositions**（B5，唯一清零路径） | 代码修复、重查、重审 pass 都**不**清 findings |
+| **C2 未空** | 逐项处置（修复代码，或经复核**否定 / 重分类**该项）→ **由非提出者复核后补 dispositions**（B5，唯一清零路径） | 「处置」不等于「必须改代码」；重查、重审 pass 都**不**清 findings |
 | **C3 未放行** | ① **找回原字节**（恢复即不再不可核实，B1，不依赖身份）<br>② **人裁放行**（`release_allowed == true` 时） | · complex 且 `cited` 损坏：**不可放行**——先让新结论落地（届时它变成非引用，转入 ②）<br>· 字节不可得且不可放行 → `task-abandon` |
-| **C4 不成立** | **重发审查**；若 `verdict == "invalidated"` → **完成已在途的那一轮**（该状态必有一轮在途，再 launch 会重复） | 根因在规划时可用 `task-replan`（B3）；`check_valid == false` 时先做 C1 |
+| **C4 不成立** | ① **默认先用好在途轮次**（`invalidated` 只证明「曾发起过新一轮」，不等于该轮仍可用）<br>② 若该轮**材料 / 资格 / 锚点已不可用**（reviewer 与实施 CLI 重叠、人数不足被判不合格）→ **按既有出口重新发起** `review-launch`（`review.py:1389` 原文即「重新发起新一轮」）<br>③ 审查做不成（`unavailable` / 环境凑不齐）→ **暂停（人决定）或经人授权异常归档**（`review.py:1396`，B4） | 不得据此判 pass；根因在规划时可用 `task-replan`（B3）；`check_valid == false` 时先做 C1 |
 
 ### 4.3 并存时的行为
 
@@ -146,7 +146,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 
 ---
 
-## 7. 验收（19 项，全部属于 ⑥）
+## 7. 验收（21 项，全部属于 ⑥）
 
 | # | 断言 |
 |---|---|
@@ -163,12 +163,14 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | 11 | 报告恢复（原字节、摘要一致）→ 不再出现在 `unverifiable`（C3 自动满足，B1） |
 | 12 | `cause` 三分只由 `open_findings` 产出；`repair_scope.unverifiable` 与其逐项一致 |
 | 13 | **权限故障不崩**：`PermissionError` 时 `open_findings`、`review_binding`、`status`、`wf gate` 全部走归因分支 |
-| 14 | `verdict == "invalidated"` → C4 的清除动作是**完成已在途那一轮**，不得含「再发一次审查」（定向用例） |
+| 14 | `verdict == "invalidated"` → C4 的清除动作**首选完成在途那一轮**；当该轮被判资格不合格（reviewer 与实施 CLI 重叠等）时，**必须允许**重新发起（定向用例：指引含两者，且不出现「禁止重新发起」） |
 | 15 | **并存无遮蔽**：`findings` 非空 + 存在未放行 `unverifiable` 时，两组事实**同时**出现在 `repair_scope`（不以任一为另一的替代） |
 | 16 | **条件覆盖性**：任一未满足的 C1–C4 都能在 §4.2 找到对应清除动作；每个事实都能映射到某个 C（无孤立事实） |
-| 17 | **light 任务不承担 C4**：自愿审查 `fail`/`unavailable`/`invalidated` 且 `findings` 空、C1/C3 满足 → **无审查义务**，出口不含「必须重发审查」 |
-| 18 | **C1 与 C4 分离**：`verdict == "pass"` 但 `check_valid == false` 时，指引必须含「重查」（不得只写「可选重审」） |
-| 19 | 协议零改动：`phase.enum`、迁移数、`next_by_position` 逐字节一致；`repair_scope` 不参与 `next`；`task-abandon` 仍可终止且不解除阻断 |
+| 17 | **light 任务不承担 C4**：自愿审查 `fail`/`unavailable`/`invalidated` 且 `findings` 空、C1/C3 满足 → 不产生「必须取得新审查结论」义务 |
+| 18 | **但 light 的 C2/C3 仍成立**：自愿审查带 blocking findings → 未补 dispositions 时归档被 `WF_UNRESOLVED_BLOCKING` 拒绝；其报告损坏 → C3 阻断（不得因"不承担 C4"而跳过） |
+| 19 | **C4 的 `unavailable` 出口存在**：审查做不成时清除动作含「暂停（人决定）」与「经人授权异常归档」，且**不含**「判 pass」 |
+| 20 | **C1 与 C4 分离**：`verdict == "pass"` 但 `check_valid == false` 时，指引必须含「重查」（不得只写「可选重审」） |
+| 21 | 协议零改动：`phase.enum`、迁移数、`next_by_position` 逐字节一致；`repair_scope` 不参与 `next`；`task-abandon` 仍可终止且不解除阻断 |
 
 ## 8. 范围边界（防跑偏，硬约束）
 
@@ -187,6 +189,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | v27 | 加 `check_valid`、cited 不再排除阻断 | **`binding` 误用整个 `review-passed` 返回值**（fail 时被 false、light 时恒 true）；`check_valid` 枚举漏结构复核；出口表行间重叠；light 的 `cited` 被禁止放行 → 可选审查衍生重审义务；R2 出口缺"重发审查" |
 | **v28** | 两个共享子判定 + `release_allowed` + 互斥出口表 | 出口表仍是固定优先级：light 的 fail/unavailable 被写成义务；`invalidated`+cited 被顺序遮住（应完成在途轮）；`fail ∧ !binding ∧ findings 空` 落入兜底；「恰好命中一行」性质测试恒真 |
 | **v29** | **完成条件 C1–C4 + 每条件的清除动作**（不再排序） | 本文 |
+| **v30** | C4 出口恢复既有语义 + light 义务收窄 | `invalidated` 被写成「禁止重新发起」，与 `review.py:1389` 的既有出口（重新发起新一轮）冲突；C4 缺 `unavailable` 的暂停/异常归档出口；light 表述说成「不产生义务」，漏了 C2/C3 仍成立 |
 
 ---
 
