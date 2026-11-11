@@ -1,6 +1,8 @@
 # ⑥ 修复态的表达：不新增阶段，用「事实 + 清除动作」吸收 `fixing` 的收益（v42）
 
 > 状态：**待审 v42**。阶段：**方案审查阶段，实现零改动**（`review-phase-discipline.md`）。
+> §6 是**批准后要做什么**的实施清单，**不是已完成的工作**；当前 `payload/`、`release/`、`scripts/tests/`
+> 与基线 `8da2f23` **逐字节一致**（`git diff` 为空）。
 > **本文只回答 ⑥**：`fixing` 的收益如何在四阶段内表达。范围边界见 §8。
 
 ---
@@ -187,7 +189,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | **A7 K4b 关闭链** | `proposers_from_history` 从 `imported[].findings` 读提出者（记录不保存 findings）→ 真实修复后 disposition 被拒 |
 | **A9 finding 精确身份**（新增） | 关闭匹配只按**裸 `finding_id`**（`review.py:173`）→ 旧关闭会静默关掉他轮/他槽位的同名新问题。**A7 只解决"读得到提出者"，不解决"关的是哪一个"** |
 | **C1 读取归因** | `open_findings` / `review_binding` 都读摘要，权限故障会抛出；⑥ 自带这两处，其余五处属 C1 |
-| **D4 归档提交前预检** | ⑥ 新增的 C3 阻断挂在 `final_gate` 尾部，而业务提交在其之前；没有 D4 就存在「业务已提交、归档才被拒」的窗口，指引无法替代这条机制保证 |
+| ~~D4~~（**已纳入 §6 实施范围**） | 原本确实需要它（C3 阻断挂在 `final_gate` 尾部、业务提交在前）。本版把 **D4-minimal** 写进 §6 的实施清单，**批准后**才做，因此不再是外部前提 |
 | ~~A8~~（归入「成本前提」，见本节末） | A8 不属可执行性前提：没有它 light 关 C2 贵但能走通 |
 
 **前提分层（本版明确，消除上一版的计数与性质混乱）**
@@ -195,7 +197,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | 层 | 项 | 缺了会怎样 |
 |---|---|---|
 | **可执行性前提** | A1、A4、A7、A9、C1 | ⑥ 的事实或清除动作**算不出来**，必须先做。（A10「逐轮决策事实」仅当要恢复「复用旧轮」能力时才成为前提——本文已撤回该能力，故不列） |
-| **安全前提** | D4（归档提交前预检） | ⑥ 新增的 C3 阻断可能发生在业务提交**之后**——不是体验问题，是门禁不安全；⑥ 不声称能替代 |
+| **本方案自带（非外部前提）** | D4-minimal（归档提交前预检） | 已写进 §6 实施清单；**批准后**实施，当前未实施 |
 | **成本前提** | A8（轻量关闭入口） | light 关 C2 需要一整轮审查（贵但能走通）；建议先做，不作前置 |
 
 **披露（机制自洽但不免费）**
@@ -215,7 +217,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | `gates.py` | ① 提取 `review_binding`（含 **cited 非空**）与 `check_validity`（含结构复核），步骤行为不变；② 两处摘要读取包 `except OSError`；③ `final_gate` 追加 `unverifiable` 阻断，`exits` 用 §4.2 的**枚举 token**（`restore_bytes`/`human_release`/`relaunch_review`/`resume_inflight`/`pause_for_human`/`abandon_task`），并带 `facts.reason = "unverifiable_evidence"` |
 | `review.py` | ① `open_findings` 的 `blocking`/`unaddressed` 条目补 **`round`**、`unavailable` 条目补 `cause/round/report_digest`，摘要读取包 `except OSError`；② `review-decide` **追加 `reviews.rounds[]`**（`{round, verdict, check_id, decided_at, invalidated_reason}`，与 `attempts` 同一写路径）；并对同批 `decision != accepted` 的 open finding 在 `facts.not_closing` 里回报（「已驳回但未关闭」）；`review-import` 与 `review-decide` 各加**消费检查**（对应报告当前可核实 → 置 `consumed`）；
 ③ 提取**两个**共享函数（对应 `review-decide` 的两个既有通道，不合并、不混态）：**`review_eligibility`** ← `input_problems`（人数/异种/与实施 CLI 重叠）、**`review_report_problems`** ← `problems`（该通道含：申报 verdict 与推导不一致、**报告锚点失配**、报告事后改写、缺 `read-scope`/`excluded-scope`、敏感面缺口、未覆盖全部审查轴等）；`latest_launch.usable` 只用这两个，不自行判资格；③ 新增 `repair_scope`（纯派生）与 **`exits_for(facts)`（唯一出口实现）**：返回 `[{condition, action, preferred, when}]`，`action ∈ {rerun_check, record_disposition, restore_bytes, human_release, relaunch_review, resume_inflight, await_material, pause_for_human, abandon_task}`；④ `unknown_acceptances` 读写与撤销（含决定文件 schema 校验、`release_allowed` 校验） |
-| `tasks.py` | ① **D4-minimal（本方案交付，不再是另案）**：`cmd_archive` 在**业务提交之前**跑只读预检——`open_blocking` 为空 ∧ 无未放行 `unverifiable` ∧ `nonstep` 无阻断；任一不满足即返回（**不提交**）；② `cmd_archive` 在业务提交与 `final_gate` **之前**加钩子：扫描 `unknown_acceptances`，凡对应报告**当前可核实**者置 `consumed: true`（消费写点 ①）；该钩子只写任务记录，不影响归档顺序 |
+| `tasks.py` | ① **D4-minimal（纳入本方案实施范围，批准后实施；当前未实施）**：`cmd_archive` 在**业务提交之前**跑只读预检——`open_blocking` 为空 ∧ 无未放行 `unverifiable` ∧ `nonstep` 无阻断；任一不满足即返回（**不提交**）；② `cmd_archive` 在业务提交与 `final_gate` **之前**加钩子：扫描 `unknown_acceptances`，凡对应报告**当前可核实**者置 `consumed: true`（消费写点 ①）；该钩子只写任务记录，不影响归档顺序 |
 | `cli.py` | ① `wf status` 输出 `repair_scope`，`unverifiable` 条目**渲染三态标签**、`open_blocking` 中「已驳回但未关闭」单独标注；（未放行＝阻断 / `released`＝「已豁免（未知）」）；② `--short` 输出四条件是否满足 + `repair_scope.exits` 原样（按 `condition` 过滤，不重新推导）；③ 新增 `wf review-accept-unknown`（`--revoke`，含 `consumed` 标记逻辑） |
 | `skills/`（**AI 指引交付**） | ① `wf-continue`：`in_progress/finish` 前先读 `repair_scope`，按 §4.2 处理，不直接引导收工；② `wf-finish`：收工前读 `repair_scope`；**不要试归档探路**；③ `wf-review-action`：处置形状从现状 `{finding, decision_ref, reason}`（`SKILL.md:26`）改为 `{finding_id, round, slot, decision, reason, recheck_by}`，并写明**`decision` 必须 `accepted` 才清零**（B5）；`round/slot` 是 A9 落地后的必填字段（A9 是可执行性前提，见 §5）——指引按 post-A9 形态写 |
 
@@ -291,7 +293,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 `slot`/`agent` 身份域（**A1 为前提**）、导入端证据身份与 `--restore`（**A4 为前提**）、
 关闭链提出者（**A7**）、**finding 精确身份（A9）**、`review-status` 的 ready/material 语义、
 六处读取健壮中的其余五处（**C1**）、`gate` 的 `fulfilled_by`、其余 `--short` 字段派生与展示分组、
-维护入口令牌交互、码表新增（⑦）、历史 dispositions 迁移、归档提交前预检（**D4**）、
+维护入口令牌交互、码表新增（⑦）、历史 dispositions 迁移、~~归档提交前预检（D4）~~（已纳入 §6 实施范围）、
 仅登记复核关闭的轻量入口（**A8**）。
 
 ---
@@ -319,7 +321,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | v39 | 消费写点三处、`reusable_rounds` 收窄、`usable` 按已导入材料判、前提分层 | `reusable_rounds` 依赖的逐轮事实不存在（无 launch 级 invalidated、result 只留最新、round 会回退）；消费保证写成「任何恢复都失效」，实际只覆盖受控写点 |
 | **v40** | 撤回 `reusable_rounds`（登记 A10）、消费保证范围精确化（登记 A11）、`usable` 区分轮次形态、§6 补 `tasks.py` 归档钩子 | 本文 |
 | **v41** | `latest_launch.certain`、`redecidable_rounds` 窄口径、C4 出口接新事实 | 本文 |
-| **v42** | `rounds[]`（A10 最小形态）取代 `certain`、`form` 事实、D4-minimal 进交付、exits 加 `redecide_round`、验收分两档 | 本文 |
+| **v42** | `rounds[]`（A10 最小形态）取代 `certain`、`form` 事实、D4-minimal 纳入实施范围、exits 加 `redecide_round`、验收分两档 | 本文 |
 
 ## 10. 已定项（2026-11-11 人裁）
 
