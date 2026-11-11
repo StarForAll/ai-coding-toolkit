@@ -125,6 +125,101 @@ def read_agent_status(path):
     return match.group(1) if match else None
 
 
+# --------------------------------------------------------------------------
+# A1 槽位身份：`slot` 是**声明名**（记录里的身份键），`agent` 只作展示与文件名。
+# 分配/推导只在 `slot_assignment` 里做一次；写入端（review-import）与读取端
+# （status_of_round）都只消费它，不得各自实现一套"哪份报告算哪个槽位"。
+# --------------------------------------------------------------------------
+
+
+def declared_slots(launch):
+    """本轮声明槽位（声明顺序）：`[(slot, reviewer_cli|None)]`。
+
+    声明顺序即位置分配顺序；`reviewer_cli` 声明了就让槽位与 reviewer 绑定。
+    """
+    found = []
+    for item in (launch or {}).get("slots") or []:
+        if isinstance(item, dict) and item.get("slot"):
+            found.append((str(item["slot"]), review_cli(item.get("reviewer_cli"))))
+    return found
+
+
+def staged_agents(ctx, task_id, round_no):
+    """本轮暂存目录里已出现的报告身份（文件名 token），按名字排序。
+
+    身份由文件名承载。这里数的文件与 `review-import` 扫描的是同一批，所以
+    「status 说到位的槽位」与「导入会占用哪个槽位」不会分叉。
+    """
+    directory = round_dir(ctx, task_id, round_no)
+    found = []
+    if os.path.isdir(directory):
+        for name in sorted(os.listdir(directory)):
+            path = os.path.join(directory, name)
+            if os.path.isfile(path):
+                agent = agent_from_path(path)
+                if agent:
+                    found.append(agent)
+    return found
+
+
+def slot_assignment(launch, imported, agents=()):
+    """声明槽位 → 身份 的唯一分配点（`review-import` 与 `status_of_round` 共用）。
+
+    规则固定三档，不随调用点变化：
+    ① 已导入记录的 `slot` 本身就是声明槽位 → 直接绑定（粘性：重导入不换槽位）；
+    ② 声明了 `reviewer_cli` 的槽位按该声明绑定（已导入记录与暂存报告同等对待）；
+    ③ 其余身份按名字排序，依次占满剩余的声明槽位（位置分配顺序）。
+
+    返回 `{slot: {"agent", "entry", "derived"}}`。`derived=True` 表示这条绑定是从
+    「`slot` 记的是 reviewer 名」的旧记录推导出来的——**只用于展示，不回写记录，
+    也不进放行匹配键**（放行键仍取 `imported[].slot` 原值）。没有声明槽位时
+    （旧记录 / 未 launch）退化为「槽位 = 身份原值」。
+    """
+    declared = declared_slots(launch)
+    names = [slot for slot, _cli in declared]
+    identities = []
+    for entry in imported:
+        if isinstance(entry, dict):
+            identities.append((normalize_agent(entry.get("agent") or entry.get("slot")), entry))
+    seen = {name for name, _entry in identities}
+    for agent in agents:
+        name = normalize_agent(agent)
+        if name and name not in seen:
+            identities.append((name, None))
+            seen.add(name)
+    bound, consumed = {}, set()
+    if not names:
+        for index, (name, entry) in enumerate(identities):
+            if name and name not in bound:
+                bound[name] = {"agent": name, "entry": entry, "derived": False}
+                consumed.add(index)
+        return bound
+    for index, (name, entry) in enumerate(identities):
+        slot = entry.get("slot") if entry else None
+        if slot in names and slot not in bound:
+            bound[slot] = {"agent": normalize_agent(entry.get("agent") or name),
+                           "entry": entry, "derived": False}
+            consumed.add(index)
+    for slot, cli in declared:
+        if slot in bound or not cli:
+            continue
+        match = next((index for index, (name, _entry) in enumerate(identities)
+                      if name == cli and index not in consumed), None)
+        if match is None:
+            continue
+        bound[slot] = {"agent": identities[match][0], "entry": identities[match][1],
+                       "derived": False}
+        consumed.add(match)
+    pending = sorted((index for index in range(len(identities)) if index not in consumed),
+                     key=lambda index: identities[index][0])
+    free = [slot for slot in names if slot not in bound]
+    for index, slot in zip(pending, free):
+        name, entry = identities[index]
+        bound[slot] = {"agent": name, "entry": entry,
+                       "derived": entry is not None and entry.get("slot") != slot}
+    return bound
+
+
 def read_report(text):
     """宽松解析：返回 `(payload, problems)`。结构坏了 payload 为 None；只是字段缺失则两者都有。
 
@@ -428,6 +523,9 @@ def status_of_round(ctx, task, round_no=None):
     人不必再当传声筒（dogfood D3）：一眼看到"本轮已到 n/2、缺哪份、那份文件现在是什么状态"。
     每槽位的 `state` 取 `missing`（没有文件）/`staged`（已产出未导入）/
     `imported`（已导入且摘要一致）/`stale`（导入后被改写或锚点已失效）。
+
+    A1：槽位取**声明名**（分配只走 `slot_assignment`），`agent` 只作展示；旧记录
+    （`slot` 记的是 reviewer 名）在读取时按位置推导并标 `slot_derived`，不回写。
     """
     reviews = task.get("reviews") or {}
     rounds = [entry for entry in reviews.get("launches") or [] if isinstance(entry, dict)]
@@ -437,21 +535,25 @@ def status_of_round(ctx, task, round_no=None):
     launch = next((entry for entry in rounds if int(entry.get("round") or 0) == round_no), None)
     imported = [entry for entry in reviews.get("imported") or []
                 if int(entry.get("round") or 0) == round_no]
-    imported_by_slot = {normalize_agent(entry.get("agent") or entry.get("slot")): entry
-                        for entry in imported}
-    declared = [normalize_agent(slot.get("slot")) for slot in (launch or {}).get("slots") or []
-                if isinstance(slot, dict) and slot.get("slot")]
-    if not declared and imported_by_slot:
-        declared = sorted(imported_by_slot)
+    task_id = task.get("id")
+    assignment = slot_assignment(launch, imported, staged_agents(ctx, task_id, round_no))
+    declared = [slot for slot, _cli in declared_slots(launch)] or sorted(assignment)
     try:
         anchor, _parts = _current_anchor(ctx, task)
     except Exception:
         anchor = None
-    task_id = task.get("id")
     slots = []
     for slot in declared:
-        entry = imported_by_slot.get(slot)
+        bound = assignment.get(slot) or {}
+        entry = bound.get("entry")
+        agent = bound.get("agent")
         record = {"slot": slot}
+        if agent:
+            record["agent"] = agent
+        if bound.get("derived"):
+            # 旧记录读时推导：`slot` 记的是 reviewer 名，这里只按位置映射到声明槽位
+            record["slot_derived"] = True
+            record["recorded_slot"] = (entry or {}).get("slot")
         if entry:
             path = join(ctx.root, entry.get("report_path") or "")
             current = records.file_digest(path) if entry.get("report_path") else None
@@ -472,9 +574,9 @@ def status_of_round(ctx, task, round_no=None):
                 record["state"] = "imported"
                 record["anchor_checked"] = True
         else:
-            staged = agent_report_path(ctx, task_id, round_no, slot)
             record["imported"] = False
-            if os.path.isfile(staged):
+            staged = (agent_report_path(ctx, task_id, round_no, agent) if agent else None)
+            if staged and os.path.isfile(staged):
                 record["state"] = "staged"
                 record["staged_path"] = staged
                 status = read_agent_status(staged)
@@ -1021,7 +1123,7 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
 
 
 def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_discovery=False,
-                  as_value=None):
+                  as_value=None, agent=None):
     """导入报告（2026-11-07）：可只给 task id——轮次取当前打开的轮，身份取文件名/本会话。
 
     `report_path` 显式给出时保持旧语义（槽位制），供既有夹具与迁移期使用。
@@ -1037,6 +1139,9 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
             raise ReviewError("WF_REVIEW_INVALID",
                               {"reason": "--as conflicts with --slot", "as": declared, "slot": slot})
         slot = declared
+    # A1：`slot` 是声明槽位（记录身份键），`agent` 是 reviewer 名（只作展示与文件名）。
+    # 这里只确定**身份 token**；槽位在锁内由 `slot_assignment` 的唯一分配点给出。
+    identity = normalize_agent(agent) if agent else normalize_agent(slot)
     if scan:
         # 扫描本轮暂存目录里所有**已完成**的 `review-<agent>.md`（导入由持写权的主会话执行，
         # 因此不能用调用方身份定位报告——那是 reviewer 侧的事）。
@@ -1057,12 +1162,12 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
                 candidate = os.path.join(directory, name)
                 if not os.path.isfile(candidate):
                     continue
-                agent = agent_from_path(candidate)
-                if not agent or (wanted and agent != wanted):
+                found = agent_from_path(candidate)
+                if not found or (wanted and found != wanted):
                     continue
                 if read_agent_status(candidate) != "done":
                     continue
-                targets.append((agent, candidate))
+                targets.append((found, candidate))
         if declared:
             # 占位 = context 写下的 `review-<X>.md` 骨架（身份在文件名）。两因判别（协议 §2）：
             #   目录整体消失，或该文件不存在 ⇒ no_claim（与"从未调用 context"不可区分）；
@@ -1084,11 +1189,12 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
                               {"reason": "no finished report in this round", "round": round_no,
                                "agent": wanted, "directory": directory,
                                "exits": ["先由 reviewer 会话运行 review-context 并写完报告（status=done）"]})
-        results = [import_report(ctx, task, round_no, agent, candidate, _from_discovery=True)
-                   for agent, candidate in targets]
+        results = [import_report(ctx, task, round_no, None, candidate, _from_discovery=True,
+                                 agent=found)
+                   for found, candidate in targets]
         last = results[-1]
         facts = dict((last or {}).get("facts") or {})
-        facts["imported_agents"] = [agent for agent, _p in targets]
+        facts["imported_agents"] = [found for found, _p in targets]
         last["facts"] = facts
         return last
     if not os.path.isabs(report_path):
@@ -1104,7 +1210,7 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
     if int(payload.get("round") or 0) != int(round_no):
         raise ReviewError("WF_REVIEW_INVALID", {"reason": "round mismatch", "report": payload.get("round")})
     # 身份优先看文件名；正文写了就要一致（2026-11-07：正文不再要求该字段）
-    if payload.get("reviewer-id") and normalize_agent(payload.get("reviewer-id")) != normalize_agent(slot):
+    if payload.get("reviewer-id") and normalize_agent(payload.get("reviewer-id")) != identity:
         raise ReviewError("WF_REVIEW_INVALID", {"reason": "reviewer-id mismatch", "report": payload.get("reviewer-id")})
     from . import lock
 
@@ -1135,6 +1241,23 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
                 raise ReviewError("WF_PATH_INVALID", {"reason": "report must come from its staging directory",
                                                       "expected": staging, "actual": real_report})
         anchor, _parts = _current_anchor(ctx, task)
+        record_slot = slot
+        if discovered:
+            # A1 写路径：槽位只从唯一分配点取（记录原值 → reviewer_cli 声明 → 位置顺序），
+            # 不再把 reviewer 名当槽位写进记录。
+            round_imported = [item for item in reviews.get("imported") or []
+                              if int(item.get("round") or 0) == int(round_no)]
+            assignment = slot_assignment(launch, round_imported,
+                                         staged_agents(ctx, task.get("id"), round_no))
+            record_slot = next((name for name, item in assignment.items()
+                                if item.get("agent") == identity), None)
+            if not record_slot:
+                raise ReviewError("WF_REVIEW_INVALID", {
+                    "reason": "no declared slot left for this reviewer",
+                    "agent": identity, "round": int(round_no),
+                    "declared": [name for name, _cli in declared_slots(launch)],
+                    "imported": [item.get("slot") for item in round_imported],
+                    "exits": ["按已声明的槽位数减少本轮报告，或用 review-launch 重新发起足够槽位的轮次"]})
         # 导入端先做字段完备性核验（机制稿 §9.2「先读完整报告并核元数据，再导入」）：
         # 缺 excluded-scope 之类的报告不再"导入成功、判定才拒"（第十一轮复审外部项）。
         _missing = [key for key in ("protocol", "task-id", "round",
@@ -1142,16 +1265,16 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
                                     "excluded-scope", "axes", "verdict")
                     if key not in payload]
         # 身份由文件名承载（仅发现模式）：正文若仍写 source-cli / reviewer-id 必须与文件名一致
-        for field, expected in ((("source-cli", slot), ("reviewer-id", slot)) if discovered else ()):
-            if payload.get(field) and normalize_agent(payload.get(field)) != normalize_agent(expected):
+        for field in (("source-cli", "reviewer-id") if discovered else ()):
+            if payload.get(field) and normalize_agent(payload.get(field)) != identity:
                 raise ReviewError("WF_REVIEW_INVALID",
                                   {"reason": f"report {field} differs from its file name",
                                    "field": field, "report": payload.get(field),
-                                   "file_agent": normalize_agent(expected), "slot": slot})
+                                   "file_agent": identity, "slot": record_slot})
         if _missing:
             raise ReviewError("WF_REVIEW_INVALID",
                               {"reason": "report missing required fields", "missing": _missing,
-                               "slot": slot})
+                               "slot": record_slot})
         # 引用必须属于当前批准集合；本任务内改过的规则不得当判据（机制稿 §9.2、K3c）
         index, changed = assertion_index(ctx, task)
         deprecated_refs = deprecated_clause_refs(ctx, task)
@@ -1166,14 +1289,14 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
                 if severity in BLOCKING_SEVERITIES:
                     raise ReviewError("WF_REVIEW_INVALID",
                                       {"reason": "blocking finding must cite an assertion_ref",
-                                       "finding": finding.get("id"), "slot": slot,
+                                       "finding": finding.get("id"), "slot": record_slot,
                                        "known": sorted(index)})
                 continue
             problem = assertion_ref_problem(ref, index, changed, fix_kind,
                                             deprecated=deprecated_refs)
             if problem:
                 problem["finding"] = finding.get("id")
-                problem["slot"] = slot
+                problem["slot"] = record_slot
                 raise ReviewError("WF_REVIEW_INVALID", problem)
             if str(ref).split("#", 1)[0] in changed and fix_kind == "broken-reference":
                 # 豁免 = 声明 + 人复核（2026-11-09 人裁 B）：旧 check 原文没有落盘，
@@ -1199,8 +1322,8 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
         # （与暂存目录同名同构，少一层"哪份是哪份"的解释）。旧名仍可读。
         target_dir = os.path.join(path, "review", f"round-{int(round_no)}")
         os.makedirs(target_dir, exist_ok=True)
-        target = os.path.join(target_dir, f"review-{normalize_agent(slot)}.md")
-        legacy = os.path.join(path, "review", f"review-round-{int(round_no)}", f"{slot}.md")
+        target = os.path.join(target_dir, f"review-{identity}.md")
+        legacy = os.path.join(path, "review", f"review-round-{int(round_no)}", f"{identity}.md")
         if not os.path.exists(target) and os.path.exists(legacy):
             target = legacy
         existing_digest = records.file_digest(target)
@@ -1209,7 +1332,8 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
             # 同路径不同摘要即冲突：不覆盖、不留旧结论（机制稿 §9.2）
             raise ReviewError("WF_REVIEW_INVALID",
                               {"reason": "report digest differs from the imported one",
-                               "slot": slot, "existing": existing_digest, "incoming": incoming_digest},
+                               "slot": record_slot, "existing": existing_digest,
+                               "incoming": incoming_digest},
                               )
         if existing_digest:
             # 同摘要重入：幂等，不重复写
@@ -1218,8 +1342,8 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
             records.atomic_write(target, text)
         digest = records.file_digest(target)
         imported = [entry for entry in reviews.get("imported") or []
-                    if not (int(entry.get("round") or 0) == int(round_no) and entry.get("slot") == slot)]
-        entry_record = {"round": int(round_no), "slot": slot,
+                    if not (int(entry.get("round") or 0) == int(round_no) and entry.get("slot") == record_slot)]
+        entry_record = {"round": int(round_no), "slot": record_slot,
                         "report_path": os.path.relpath(target, str(ctx.root)).replace(os.sep, "/"),
                         "report_digest": digest, "anchor": {"check_id": (task.get("check") or {}).get("id"),
                                                             "check_anchor": anchor}}
@@ -1232,11 +1356,11 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
         if lifted:
             entry_record["broken_reference"] = {"declared": True, "lifted": lifted}
         if discovered:
-            entry_record["agent"] = normalize_agent(slot)
+            entry_record["agent"] = identity
         imported.append(entry_record)
         reviews["imported"] = imported
         task["reviews"] = reviews
-        inputs = {"task": task.get("id"), "round": int(round_no), "slot": slot}
+        inputs = {"task": task.get("id"), "round": int(round_no), "slot": record_slot}
         task, action = tasks_mod._start_task_action(
             ctx, path, task, "review.import", holder, inputs, ["verify_metadata", "verify_anchor", "publish"]
         )
@@ -1250,8 +1374,9 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
         object={"id": task.get("id"), "name": task.get("title")},
         position_=codes.position(scope="task", phase=task.get("phase"), task_id=task.get("id")),
         next_="导入另一槽位报告后 review-decide",
-        facts={"round": int(round_no), "slot": slot, "report_digest": digest,
+        facts={"round": int(round_no), "slot": record_slot, "report_digest": digest,
                "verdict": payload.get("verdict"), "findings": payload.get("findings"),
+               **(dict(agent=identity) if discovered else {}),
                "control_assertion": assertion},
     )
 
