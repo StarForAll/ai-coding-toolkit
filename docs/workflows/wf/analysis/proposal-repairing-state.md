@@ -5,7 +5,7 @@
 >
 > **阶段声明（2026-11-11 人裁）**：本文件处于**方案审查阶段**——**实现零改动**。
 > 审查期间曾误改的实现已全部回退（`e49da16`，回退到 `8da2f23`）；下文凡提到"实现"均为**要求与验收**，
-> 不代表已落地。**未经人明确"审查通过"，不得修改任何实现代码**（`payload/`、`release/`、`scripts/tests/`）。
+> 不代表已落地。**未经人明确"审查通过"，不得修改任何实现代码**（`payload/`、`release/`、`scripts/tests/`），也不得以跑测试/repro/release 重建来"确认"——规则见 `.trellis/spec/guides/review-phase-discipline.md`。
 
 ---
 

@@ -14,6 +14,9 @@ The focus here is repo maintenance:
 - `diagnosis-and-fixture-hygiene.md` — 取证顺序（先取事实再假设）、复现必须与 harness 同序、
   正向步骤与负路径断言的区别、批量修改逐个验证、测量失败与失败分开、静默失败必须出声
 
+- `review-phase-discipline.md` — **方案审查阶段只改文档、只跑只读校验**；评审报出的实现缺陷
+  只登记进方案不改代码；回退的判据是 `git diff` 为空而不是测试绿
+
 - source-of-truth versus deployed copies
 - path, ID, and metadata drift
 - keeping `.trellis/spec/library-assets/` aligned with live `trellis-library/` authoring rules
@@ -38,6 +41,7 @@ These guides help you **ask the right project-specific questions before making c
 
 | Guide | Purpose | When to Use |
 |-------|---------|-------------|
+| [Review-Phase Discipline](./review-phase-discipline.md) | 方案审查阶段：只改文档、禁改实现、禁跑实现级验证 | **每次"按审查意见修改"之前** |
 | [Code Reuse Thinking Guide](./code-reuse-thinking-guide.md) | Identify patterns and reduce duplication | When you notice repeated patterns |
 | [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md) | Think through repo boundary changes | Features spanning multiple layers |
 
