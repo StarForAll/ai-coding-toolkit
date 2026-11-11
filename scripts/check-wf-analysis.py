@@ -33,11 +33,17 @@ def main():
             i += 1
 
     # 2) 引用可达
-    heads = set(re.findall(r"^(?:##|###) (\d+[a-z]?(?:\.\d+[a-z]?)?)\.", text, re.M))
+    heads = set(re.findall(r"^(?:##|###) (\d+[a-z]?(?:\.\d+[a-z]?)?)(?:\.|\s)", text, re.M))
     refs = set(re.findall(r"§(\d+(?:\.\d+)?[a-z]?)", text))
+    live = "\n".join(lines[:hist_start])
     for r in sorted(refs):
-        if r not in heads and r.split(".")[0] not in heads:
-            problems.append(("引用", 0, "§%s 不存在" % r))
+        if r not in heads and ("§" + r) in live and hist_start == 0:
+            problems.append(("引用", 0, "§%s 不存在（不回退到上级小节）" % r))
+    # 逐行检查：历史小节之前出现的 §N.M 必须存在
+    for i, l in enumerate(lines[:hist_start]):
+        for mm in re.finditer(r"§(\d+\.\d+[a-z]?)", l):
+            if mm.group(1) not in heads:
+                problems.append(("引用", i + 1, "§%s 不存在（历史小节前）" % mm.group(1)))
 
     # 3) 跨视图字段：schema 顶层字段 ↔ 判据表行
     m = re.search(r"```json\n(.*?)```", text, re.S)
@@ -105,9 +111,25 @@ def main():
         if declared != toks:
             problems.append(("token", 0, "枚举与使用不一致：多 %s / 少 %s" % (declared - toks, toks - declared)))
 
+    # 10) 标签引用：矩阵行号必须存在；已废弃的「X 档」与 G 编号不得出现在正文
+    body = "\n".join(lines[:hist_start])
+    total = len(re.findall(r"^\| (\d+) \| (?:机制|文档) \|", body, re.M))
+    for mm in re.finditer(r"矩阵 #(\d+)", body):
+        if int(mm.group(1)) > total:
+            problems.append(("标签", 0, "矩阵 #%s 超出矩阵范围（共 %d 行）" % (mm.group(1), total)))
+    for pat in ("A 档", "B 档", "G 档"):
+        if pat in body:
+            problems.append(("标签", 0, "`%s` 已不存在（v60 合并），应指 §7 矩阵" % pat))
+    for mm in re.finditer(r"\bG(\d)\b", body):
+        problems.append(("标签", 0, "G%s 已废弃（G 档并入 §7 矩阵）" % mm.group(1)))
+
     print("== wf 方案文档 lint ==")
     if not problems:
         print("OK：0 问题")
+        print("检查范围：表格渲染 / 小节引用（严格） / schema↔判据 / 计数与编号 / 行号边界 / JSON / "
+              "撤回词 / C1–C4 / token 枚举 / 标签引用（A/B/G）")
+        print("**未覆盖**：语义级一致性（判据与代码是否真的同源）、矩阵断言与 §4/§2.1 的语义对应、"
+              "指引文本质量——这些仍需人读或评审")
         return 0
     for cat, ln, msg in problems:
         print("[%s]%s %s" % (cat, (" L%d" % ln) if ln else "", msg))
