@@ -1,6 +1,6 @@
-# ⑥ 修复态的表达：不新增阶段，用「事实 + 出口」吸收 `fixing` 的收益（v28）
+# ⑥ 修复态的表达：不新增阶段，用「事实 + 清除动作」吸收 `fixing` 的收益（v29）
 
-> 状态：**待审 v28**。阶段：**方案审查阶段，实现零改动**（规则见 `.trellis/spec/guides/review-phase-discipline.md`）。
+> 状态：**待审 v29**。阶段：**方案审查阶段，实现零改动**（规则见 `.trellis/spec/guides/review-phase-discipline.md`）。
 > **本文只回答 ⑥**；范围边界见 §8，被排除条目见 `analysis/backlog-excluded-from-item6.md`。
 
 ---
@@ -56,7 +56,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | 规则 | 语义 |
 |---|---|
 | 匹配 | `(round, slot, report_digest)` 三者全等；摘要不同不匹配 |
-| **可放行条件** | `release_allowed = !(cited && review_required)`：<br>· complex 任务 + 当前结论引用的报告 → **不能放行**（它是归档依据，必须重发审查）<br>· **light 任务** + 被引用 → **可以放行**（light 的归档不依赖审查结论，那份报告只是自愿证据，不能因此衍生重审义务）<br>· 非引用报告 → 可放行 |
+| **可放行条件** | `release_allowed = !(cited && review_required)`：<br>· complex 任务 + 当前结论引用的报告 → **不能放行**（它是归档依据，必须重发审查）<br>· **light 任务** + 被引用 → **可以放行**（light 的归档不依赖审查结论）。如实说明：**义务没有消失，只是换了承担者**——字节找不回时仍需**人裁放行**（或放弃）；对自愿证据而言这仍是一次收尾成本，取舍是「证据完整性优先」<br>· 非引用报告 → 可放行 |
 | 批次 | 一次一批、全有或全无；任一项不合法 → 整批拒绝、零写入，返回 `bad_items` |
 | 不做预放行 | 指向当前不存在的不可核实项 → 拒绝 |
 | 幂等 | 同一键重复放行 → 不新增，回报 `already_accepted` |
@@ -79,22 +79,39 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 
 ---
 
-## 4. 出口表（**指引**；10 行**叶子条件互斥**、命中即停；行内动作顺序由 AI 决定）
+## 4. 完成条件与清除动作（**事实 → 必须满足什么 → 怎么让它成立**）
 
-| # | 条件（互斥，按序匹配） | 指引 |
+**原则**：机制只保证三件事——每个未满足条件**都可见**、每个条件都有**可执行的清除动作**、放行**权限明确**。
+**不排顺序、不拆并行**：条件可同时不满足，AI 可自行合并或并行（例：一轮新审查可同时完成"复核关闭"与"补充证据"；
+根因在规划时可直接 `task-replan`）。
+
+### 4.1 ⑥ 相关的四个完成条件
+
+| # | 条件（归档时必须成立） | 事实来源 |
 |---|---|---|
-| R1 | `findings` 非空 | 按项修复 → **由非提出者复核后补 dispositions 关闭**（B5，唯一清零路径）→ 内容变了就重查 → 需要时重发审查 |
-| R2 | 有 `unverifiable` 且 `released == false`，**且** 该条 `cited && review_required` | **重发审查**（在同一有效 check 上；只有内容也变了才需要重查）；放行不适用 |
-| R3 | 有 `unverifiable` 且 `released == false`，其余（含 light 的 `cited`、非引用报告） | 找回原字节（恢复即不再不可核实）/ **人裁放行** / 放弃任务 |
-| R4 | `verdict == "invalidated"` | 完成**已在途**的那一轮（`invalidated` 只在 launch 时写入） |
-| R5 | `verdict == "fail"` 且 `binding == true` | 重发审查（同轮重跑仍 fail）；若 `check_valid == false` 先重查 |
-| R6 | `verdict == "unavailable"` | 补真实审查，或经人授权异常归档 |
-| R7 | `verdict == "pass"` 且 `applicable == true` | 常规推进（归档） |
-| R8 | `verdict == "pass"` 且 `applicable == false` 且 `review_required == true` | `check_valid == false` 先重查；然后**重发审查** |
-| R9 | `verdict == "pass"` 且 `applicable == false` 且 `review_required == false`（light） | **可选**：是否重审取决于任务要求；旧结论失效不构成收尾义务 |
-| R10 | 其他（无结论、`phase == "finish"` 但仍有上述未结事实等） | 按事实逐项处理，处理完再归档 |
+| **C1** | 检查有效 | `conclusion.check_valid`（≡ `check_validity`） |
+| **C2** | 无未关闭 blocking | `findings == []` |
+| **C3** | 无未放行的不可核实证据 | `unverifiable` 中 `released == false` 为空 |
+| **C4** | **复杂任务**的审查结论存在、绑定当前 check 且为 pass | `review_required == true` 时要求 `verdict == "pass"` 且 `binding` |
 
-**说明**：表格是**指引**，按"阻断归档的第一原因"排序并**命中即停**——这解决同一状态匹配多行、指引互相矛盾的毛病；具体执行顺序仍由 AI 决定。
+**light 任务（`review_required == false`）不承担 C4**：自愿审查的 `fail` / `unavailable` / `invalidated` 都**不产生**完成义务；
+但若那份自愿证据损坏，C3 仍然成立（见 §2.2 的如实表述）。
+
+### 4.2 每个条件的清除动作
+
+| 条件 | 清除动作 | 禁用 / 注意 |
+|---|---|---|
+| **C1 失效** | 重跑 `task-check` 产生新 check（内容变了必须重查） | —— |
+| **C2 未空** | 按项修复 → **由非提出者复核后补 dispositions**（B5，唯一清零路径） | 代码修复、重查、重审 pass 都**不**清 findings |
+| **C3 未放行** | ① **找回原字节**（恢复即不再不可核实，B1，不依赖身份）<br>② **人裁放行**（`release_allowed == true` 时） | · complex 且 `cited` 损坏：**不可放行**——先让新结论落地（届时它变成非引用，转入 ②）<br>· 字节不可得且不可放行 → `task-abandon` |
+| **C4 不成立** | **重发审查**；若 `verdict == "invalidated"` → **完成已在途的那一轮**（该状态必有一轮在途，再 launch 会重复） | 根因在规划时可用 `task-replan`（B3）；`check_valid == false` 时先做 C1 |
+
+### 4.3 并存时的行为
+
+- 条件可**同时**不满足；`repair_scope` 会**同时**给出全部事实，**不做优先级遮蔽**；
+- 动作顺序、是否合并、先修哪一项，全部由 AI 按任务要求判断（机制不排调度）；
+- 旧结论能否复用由 C4 的事实判断，**不由任何表格顺序判断**。
+
 **唯一硬约束**：不要用"试归档"探路（`tasks.py:3233` 会先业务提交）；需要只读答案时并读 `wf gate`（步骤面）与 `repair_scope`。
 
 ## 5. 与既有机制的关系（不改的东西 + 硬前置依赖）
@@ -134,26 +151,24 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | # | 断言 |
 |---|---|
 | 1 | `findings` 与 `final_gate` 的 `unaddressed_blocking` 逐项一致（同源、不做 check 过滤） |
-| 2 | **`binding` 是子判定**：`verdict == "fail"` 且 check 未换代、引用报告摘要一致 → `binding == true`（**不得**因 `verdict != pass` 而为 false）；light 任务无审查结论时 `binding` 由事实计算，**不得**恒为 true |
-| 3 | **`check_valid` 与门禁逐分支一致**（含结构复核 `check_result_problems`、`invalidated`、anchor 计算失败、rule_version） |
-| 4 | 内容改动但未重跑 `task-check` → `check_valid == false`、`applicable == false`、`check_blockers` 指明 anchor 漂移（S5 的"内容变化"可见） |
-| 5 | 重跑 `task-check` 产生新 check（不改 `reviews.result`）→ `binding == false`、`binding_blockers` 含 `check_id_changed`；`findings` **不消失**（B5） |
-| 6 | `findings` 只能由 dispositions 清零：修复+重查+重审 pass 后未补 dispositions → `findings` 仍非空 |
-| 7 | `verdict == "fail"` 且 `binding == true` 且 `findings` 已全部处置 → 出口为 **R5**"重发审查"；重跑同一轮 `decide` 仍 fail |
-| 8 | **complex**：`cited` 报告损坏 → 归档被既有 `review-passed` 拒绝；`release_allowed == false`，放行被拒 |
-| 9 | **light**：`cited` 报告损坏 → 归档被**新增分支**拒绝；**`release_allowed == true`**（可人裁放行），放行后不再阻断 |
-| 10 | 非引用报告损坏 + 摘要全等放行 → 不再阻断；撤销后恢复阻断；匹配需三元组全等 |
-| 11 | 报告恢复（原字节、摘要一致）→ 不再出现在 `unverifiable`（B1） |
+| 2 | **`binding` 是子判定**：`verdict == "fail"`、check 未换代、引用报告摘要一致 → `binding == true`（不得因 `verdict != pass` 而为 false）；light 无审查结论时由事实计算，不得恒为 true |
+| 3 | **`check_valid` 与门禁逐分支一致**（含结构复核 `check_result_problems`、`invalidated`、anchor 计算失败、`rule_version`） |
+| 4 | 内容改动但未重跑 `task-check` → `check_valid == false`、`applicable == false`、`check_blockers` 指明 anchor 漂移（C1 未满足，必须重查） |
+| 5 | 重跑 `task-check` 产生新 check → `binding == false`（`check_id_changed`）；`findings` **不消失**（B5） |
+| 6 | **`findings` 只能由 dispositions 清零**：修复+重查+重审 pass 后未补 dispositions → `findings` 仍非空（C2 未满足） |
+| 7 | `verdict == "fail"` 且 `binding == true` 且 `findings` 已全部处置 → C4 未满足，指引为**重发审查**；重跑同一轮 `decide` 仍 fail |
+| 8 | **complex**：`cited` 报告损坏 → 归档被既有 `review-passed` 拒绝；`release_allowed == false`，放行被拒（C3 未满足且不可放行） |
+| 9 | **light**：`cited` 报告损坏 → 归档被**新增分支**拒绝；`release_allowed == true`（可人裁放行），放行后 C3 满足 |
+| 10 | 非引用报告损坏 + 摘要全等放行 → C3 满足；撤销后恢复；匹配需三元组全等 |
+| 11 | 报告恢复（原字节、摘要一致）→ 不再出现在 `unverifiable`（C3 自动满足，B1） |
 | 12 | `cause` 三分只由 `open_findings` 产出；`repair_scope.unverifiable` 与其逐项一致 |
-| 13 | **权限故障不崩**：`PermissionError` 时 `open_findings`、`review_binding`、`status`、`wf gate` 全部走归因分支（不抛内部错误） |
-| 14 | `verdict == "invalidated"` → **R4**"完成已在途那一轮"，不是"再发一次" |
-| 15 | 出口表**行间互斥**（性质测试：对事实组合穷举，断言**恰好命中一行**） |
-| 16 | **R2** 的指引**不强制新检查**：`cited && review_required` 且 `check_valid == true` 时，出口只要求重发审查 |
-| 17 | **light 任务**仅旧结论失效、无 findings、无未放行 unknown → 命中 **R9**（可选重审），不出现"必须重审" |
-| 18 | **门禁出口内容**：`cited && review_required` 的阻断出口含「重发审查」且**不含**「人裁放行」；其余阻断出口含「找回原字节」与「人裁放行」 |
+| 13 | **权限故障不崩**：`PermissionError` 时 `open_findings`、`review_binding`、`status`、`wf gate` 全部走归因分支 |
+| 14 | `verdict == "invalidated"` → C4 的清除动作是**完成已在途那一轮**，不得含「再发一次审查」（定向用例） |
+| 15 | **并存无遮蔽**：`findings` 非空 + 存在未放行 `unverifiable` 时，两组事实**同时**出现在 `repair_scope`（不以任一为另一的替代） |
+| 16 | **条件覆盖性**：任一未满足的 C1–C4 都能在 §4.2 找到对应清除动作；每个事实都能映射到某个 C（无孤立事实） |
+| 17 | **light 任务不承担 C4**：自愿审查 `fail`/`unavailable`/`invalidated` 且 `findings` 空、C1/C3 满足 → **无审查义务**，出口不含「必须重发审查」 |
+| 18 | **C1 与 C4 分离**：`verdict == "pass"` 但 `check_valid == false` 时，指引必须含「重查」（不得只写「可选重审」） |
 | 19 | 协议零改动：`phase.enum`、迁移数、`next_by_position` 逐字节一致；`repair_scope` 不参与 `next`；`task-abandon` 仍可终止且不解除阻断 |
-
----
 
 ## 8. 范围边界（防跑偏，硬约束）
 
@@ -170,7 +185,9 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | v25 | 单值 `reason` + 常量字段 | 并存事实互相遮蔽；指引伪装成事实 |
 | v26 | 三组事实 + 出口表 | `bound_to_current` 漏内容变化；`cited` 排除使 light 漏检；无清零路径；依赖写成"可降级" |
 | v27 | 加 `check_valid`、cited 不再排除阻断 | **`binding` 误用整个 `review-passed` 返回值**（fail 时被 false、light 时恒 true）；`check_valid` 枚举漏结构复核；出口表行间重叠；light 的 `cited` 被禁止放行 → 可选审查衍生重审义务；R2 出口缺"重发审查" |
-| **v28** | 两个共享子判定 + `release_allowed` + 互斥出口表 | 本文 |
+| **v28** | 两个共享子判定 + `release_allowed` + 互斥出口表 | 出口表仍是固定优先级：light 的 fail/unavailable 被写成义务；`invalidated`+cited 被顺序遮住（应完成在途轮）；`fail ∧ !binding ∧ findings 空` 落入兜底；「恰好命中一行」性质测试恒真 |
+| **v29** | **完成条件 C1–C4 + 每条件的清除动作**（不再排序） | 本文 |
+| **v29** | 完成条件 + 清除动作（去掉优先级表） | 固定优先级把参考指引变成调度规则；light 的 fail/unavailable 被误写成义务；`invalidated`+cited 的正确动作被顺序遮住（应完成在途轮）；`fail ∧ !binding ∧ findings 空` 落入兜底；「恰好命中一行」性质测试恒真 |
 
 ---
 
