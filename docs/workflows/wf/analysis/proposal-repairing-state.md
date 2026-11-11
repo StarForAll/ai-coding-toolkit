@@ -187,7 +187,6 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | v27 | 加 `check_valid`、cited 不再排除阻断 | **`binding` 误用整个 `review-passed` 返回值**（fail 时被 false、light 时恒 true）；`check_valid` 枚举漏结构复核；出口表行间重叠；light 的 `cited` 被禁止放行 → 可选审查衍生重审义务；R2 出口缺"重发审查" |
 | **v28** | 两个共享子判定 + `release_allowed` + 互斥出口表 | 出口表仍是固定优先级：light 的 fail/unavailable 被写成义务；`invalidated`+cited 被顺序遮住（应完成在途轮）；`fail ∧ !binding ∧ findings 空` 落入兜底；「恰好命中一行」性质测试恒真 |
 | **v29** | **完成条件 C1–C4 + 每条件的清除动作**（不再排序） | 本文 |
-| **v29** | 完成条件 + 清除动作（去掉优先级表） | 固定优先级把参考指引变成调度规则；light 的 fail/unavailable 被误写成义务；`invalidated`+cited 的正确动作被顺序遮住（应完成在途轮）；`fail ∧ !binding ∧ findings 空` 落入兜底；「恰好命中一行」性质测试恒真 |
 
 ---
 
