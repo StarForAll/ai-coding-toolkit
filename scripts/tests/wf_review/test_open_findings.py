@@ -105,3 +105,70 @@ class AllFindingsTest(unittest.TestCase):
         self.assertEqual(sorted(item["id"] for item in full), ["f1", "f2"])
         self.assertTrue(next(item for item in full if item["id"] == "f1")["closed"])
         self.assertEqual([item["finding_id"] for item in open_items["unaddressed"]], ["f2"])
+
+
+class BlockingUnknownTest(unittest.TestCase):
+    """Q2=甲：blocking 与 blocking_unknown 分列，出口不同、互不混淆。
+    Q1=乙：放行按 (round, slot, report_digest) 逐项匹配；批量写入、逐项撤销。"""
+
+    def _ctx(self):
+        import tempfile
+        from pathlib import Path
+        from types import SimpleNamespace
+
+        root = tempfile.mkdtemp(prefix="wf-unknown-")
+        Path(root, "review").mkdir()
+        Path(root, "review", "s1.md").write_text("changed", encoding="utf-8")
+        return SimpleNamespace(root=root, key=lambda required=True: "k")
+
+    def _task(self, extra=None):
+        task = {"id": "t", "reviews": {"imported": [
+            {"round": 1, "slot": "s1", "report_path": "review/s1.md",
+             "report_digest": "sha256:ORIGINAL"}]}}
+        if extra:
+            task["reviews"].update(extra)
+        return task
+
+    def test_unknown_is_separate_from_blocking(self):
+        from wflib import review
+
+        out = review.open_findings(self._ctx(), self._task())
+        self.assertEqual(out["blocking"], [])
+        self.assertEqual(len(out["blocking_unknown"]), 1)
+        self.assertEqual(len(out["pending_unknown"]), 1)
+        self.assertEqual(out["blocking_unknown"][0]["cause"], "changed")
+        self.assertEqual(out["blocking_unknown"][0]["report_digest"], "sha256:ORIGINAL")
+
+    def test_acceptance_must_match_digest(self):
+        from wflib import review
+
+        accepted = {"unknown_acceptances": [{"round": 1, "slot": "s1", "report_digest": "sha256:OTHER",
+                                            "by": "human:x", "quote": "q"}]}
+        out = review.open_findings(self._ctx(), self._task(accepted))
+        self.assertEqual(len(out["pending_unknown"]), 1, "摘要不同不得匹配")
+
+    def test_matching_acceptance_clears_only_that_entry(self):
+        from wflib import review
+
+        accepted = {"unknown_acceptances": [{"round": 1, "slot": "s1",
+                                            "report_digest": "sha256:ORIGINAL",
+                                            "by": "human:x", "quote": "q"}]}
+        out = review.open_findings(self._ctx(), self._task(accepted))
+        self.assertEqual(out["pending_unknown"], [])
+        self.assertTrue(out["blocking_unknown"][0]["accepted"])
+
+    def test_revoked_acceptance_blocks_again(self):
+        from wflib import review
+
+        accepted = {"unknown_acceptances": [{"round": 1, "slot": "s1",
+                                            "report_digest": "sha256:ORIGINAL", "revoked": True}]}
+        out = review.open_findings(self._ctx(), self._task(accepted))
+        self.assertEqual(len(out["pending_unknown"]), 1)
+
+    def test_unknown_and_blocking_never_overlap(self):
+        """不变量：同一个 (round, slot, id) 不会同时在两类里。"""
+        from wflib import review
+
+        out = review.open_findings(self._ctx(), self._task())
+        self.assertEqual({item["finding_id"] for item in out["blocking"]} &
+                         {item.get("finding_id") for item in out["blocking_unknown"]}, set())

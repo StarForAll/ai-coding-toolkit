@@ -163,6 +163,19 @@ def parse_report(text):
     return payload
 
 
+def accepted_unknown_keys(task):
+    """人裁放行记录 → 已放行的 (round, slot, report_digest) 集合（Q1=乙：批量写入，逐项撤销）。"""
+    accepted = set()
+    for item in ((task.get("reviews") or {}).get("unknown_acceptances") or []):
+        if not isinstance(item, dict):
+            continue
+        if item.get("revoked"):
+            continue
+        accepted.add((int(item.get("round") or 0), normalize_agent(item.get("slot")),
+                      item.get("report_digest")))
+    return accepted
+
+
 def open_findings(ctx, task):
     """未处置 findings（K8 投影）：重解析已导入报告，按 dispositions 派生。
 
@@ -200,7 +213,7 @@ def open_findings(ctx, task):
         if current_digest != entry.get("report_digest"):
             cause = "missing" if current_digest is None else "changed"
             unavailable.append({"slot": entry.get("slot"), "path": rel, "cause": cause,
-                                "round": entry.get("round"),
+                                "round": entry.get("round"), "report_digest": entry.get("report_digest"),
                                 "reason": "报告导入后被删除" if cause == "missing" else "报告导入后被改写"})
             continue
         try:
@@ -208,11 +221,13 @@ def open_findings(ctx, task):
                 payload, _problems = read_report(handle.read())
         except OSError as exc:
             unavailable.append({"slot": entry.get("slot"), "path": rel, "cause": "unreadable",
-                                "round": entry.get("round"), "reason": str(exc)})
+                                "round": entry.get("round"), "report_digest": entry.get("report_digest"),
+                                "reason": str(exc)})
             continue
         if payload is None:
             unavailable.append({"slot": entry.get("slot"), "path": rel, "cause": "unreadable",
-                                "round": entry.get("round"), "reason": "report unreadable after import"})
+                                "round": entry.get("round"), "report_digest": entry.get("report_digest"),
+                                "reason": "report unreadable after import"})
             continue
         for finding in payload.get("findings") or []:
             if not isinstance(finding, dict) or not finding.get("id"):
@@ -222,9 +237,22 @@ def open_findings(ctx, task):
                 continue
             unaddressed.append({"finding_id": finding["id"], "severity": finding.get("severity"),
                                 "slot": entry.get("slot"), "assertion_ref": finding.get("assertion_ref")})
+    blocking_now = [item for item in unaddressed if item.get("severity") in BLOCKING_SEVERITIES]
+    # Q2=甲：两类阻断**分列**（出口不同：blocking 可走 K4b 关闭；unknown 只能人裁放行）
+    accepted = accepted_unknown_keys(task)
+    unknown = []
+    for item in unavailable:
+        entry_key = (int(item.get("round") or 0), normalize_agent(item.get("slot")),
+                     item.get("report_digest"))
+        if item.get("report_digest") is None:
+            # 记不到摘要就无法核对放行（例如 imported 条目缺摘要）：保持未放行，交人裁
+            entry_key = None
+        unknown.append(dict(item, accepted=entry_key in accepted if entry_key else False))
     return {"unaddressed": unaddressed,
-            "blocking": [item for item in unaddressed if item.get("severity") in BLOCKING_SEVERITIES],
-            "unavailable": unavailable,
+            "blocking": blocking_now,
+            "unavailable": unavailable,            # 兼容既有消费方（5 处）
+            "blocking_unknown": unknown,           # 已放行的带 accepted=True
+            "pending_unknown": [item for item in unknown if not item.get("accepted")],
             "closed": sorted(key[2] for key in closed) + sorted(closed_legacy)}
 
 

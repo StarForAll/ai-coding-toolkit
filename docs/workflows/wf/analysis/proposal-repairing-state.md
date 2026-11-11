@@ -1,13 +1,13 @@
-# 提案（v20）：⑥ 只做「结构化未结事实」+ 一条人裁放行记录 + 文档裁定
+# 提案（v21）：⑥ 只做「结构化未结事实」+ 一条人裁放行记录 + 文档裁定
 
-> 状态：**待审 v20**（第十九轮修正）。
-> 前十九版的形态与致命点见 §0。**边界**：机制修补已先行落地若干项（见 §8"已完成"行），
+> 状态：**待审 v21**（第十九轮修正 + Q1/Q2 已定）。
+> 前二十版的形态与致命点见 §0。**边界**：机制修补已先行落地若干项（见 §8"已完成"行），
 > 其中**证据身份约束**与 **`review-status` 判定语义**已改变门禁/查询行为；
 > 展示层（`unresolved` 档位与挂载）与**人裁放行记录尚未实现**。
 
 ---
 
-## 0. 十九轮审查的形态演进与净结论
+## 0. 二十轮审查的形态演进与净结论
 
 | 版本 | 形态 | 致命点 |
 |---|---|---|
@@ -24,8 +24,10 @@
 | v15 | 暂存发现口径 | **同一份已导入报告被二次认领**（一份算两份到位、`ready_to_decide=True`）；挂载点 `next_` 在 stale/单 provider 轮仍提示"可判" |
 | **v16** | 同一报告只认领一次 + `ready_to_decide` 对齐 | 仍漏两处：`ready` **没要求"已导入"**（staged 就算可判）；`unreadable` 被引用却无产出路径；边界声明与账本失真 |
 | **v17** | `ready` 收紧 + 历史读取健壮 | 只修两处 OSError：`all_findings`/`proposers_from_imported`/`review-passed` 仍会让判定与 `--unavailable` 一起失效；`ready` 未要求锚点已核、也忽略“声明槽位之外”的导入报告；`staged` 与“可导入”混同；`unavailable` 两套形状 |
-| **v19** | 全链路读取健壮 + 第 6 档接 `round_ready` | **档位表自身不自洽**（staged/stale 三处两个答案；`degraded_single` 被 6b 吞且归因错误）；`round_ready` 把"材料就绪"升格成"可判定资格"（实施者重叠、单 provider 都被漏）；finding 身份按裸 id 汇总（他轮同名 f1 被旧关闭覆盖）；恢复无执行通道；`file_digest` 根因未修；`bound_to_current` 口径未定义 |
 | **v18** | 全链路读取健壮 + `ready` 已核锚点 | **`gates.py` 一处未修**（`review-passed` 仍抛 `PermissionError`，`wf gate` 会崩）；第 6 档未用 `round_ready`、`extra_reports` 无承载；`staged` 文案没接 `importable`；「等来的报告可复用」与报告协议冲突；恢复后一律 `stale` 过绝；两条新测试失败原因相互遮蔽 |
+| **v19** | 原子事实取代档位表 | 档位表相互矛盾/死档/归因错误；`round_ready` 混淆"材料就绪"与"判定资格"；finding 按裸 id 汇总；恢复无通道 |
+| **v20** | 删表 + 原子事实 + `--restore` + finding 身份 | Q1（批量放行形状）、Q2（两类阻断分列）未定，schema 与验收无法定稿；`bound_to_current`、撤销/信任模型、`blocking_unknown` 产生范围仍缺 |
+| **v21** | Q1/Q2 已定并落位 | 本版：§2.1 批次全有或全无、§2.2 code 优先级、§9 扩到 22 项、`open_findings` 增 `blocking_unknown`/`pending_unknown`（纯增量，门禁消费待批准） |
 **已核实的产品级事实（含对 v11 错误引用的更正）**
 
 | 事实 | 位置 |
@@ -130,23 +132,42 @@ AI 拿到原子事实后**完全有能力自行分类与排动作**——文档�
 
 v12 写"走既有 K6 授权通道"，实测三处都不成立：`ACTIONS` 固定五类（无 `review_unknown_accept`）、命令无 `--choice` 标志、授权**按动作一文件后写覆盖**（两份放行会互相覆盖）。因此改为**专用记录**：
 
-### 2.1 记录形状（`reviews.unknown_acceptances[]`，逐报告、绑定摘要）
+### 2.1 记录形状（Q1=乙：**一次一批，全有或全无**）
+
+**命令**：`wf review-accept-unknown --task <id> --file <决定.json>`（需持写权）
 
 ```json
-{"round": 1, "slot": "s1", "path": "review/…/s1.md", "report_digest": "sha256:…",
- "cause": "changed", "at": "…", "by": "human:xzc", "quote": "…",
- "source": "user-declared", "attestation_digest": "sha256:…"}
+{"batch": "b-20261111-1",
+ "acceptances": [
+   {"round": 1, "slot": "s1", "report_digest": "sha256:…", "quote": "这份报告丢失的风险我认，已核对本地副本"},
+   {"round": 2, "slot": "codex", "report_digest": "sha256:…", "quote": "改写过但内容我已通读"}
+ ]}
 ```
 
-- **必须绑定 `report_digest`**：同位置重新导入内容不同的报告会换摘要 → 旧放行**自动失效**（v12 只绑 round/slot/path，可被后续同位置报告复用）；
-- 写入走**已实现的人通道** `wflib/attestation.py`（乙口径：`by/at/quote/source` + 摘要入库），与 `sampling confirm` / `judgments add --attestation` 同一套；
-- 新命令：`wf review-accept-unknown --task <id> --file <确认.json>`（写入上面这条记录，需持写权）。
+写入 `reviews.unknown_acceptances[]` 的**每项一条**：
+
+```json
+{"batch": "b-20261111-1", "round": 1, "slot": "s1", "path": "review/…/s1.md",
+ "report_digest": "sha256:…", "cause": "changed", "quote": "…",
+ "by": "human:xzc", "at": "…", "source": "user-declared", "attestation_digest": "sha256:…",
+ "revoked": false}
+```
+
+**规则**：
+
+| 规则 | 语义 |
+|---|---|
+| 原子性 | 任一项的 `(round, slot, report_digest)` 与该轮该槽位**登记摘要不等** → **整批拒绝、零写入**，返回 `bad_items[{round,slot,expected,actual,reason}]` |
+| 允许子集 | 人可只列 2 份；未列出的 `blocking_unknown` **继续阻断**（不放行不等于放行） |
+| 批级共享 | `by/at/source/attestation_digest/batch` 批内共享；**`quote` 必须逐项**（每项是一份具体证据） |
+| 撤销 | `--revoke --round N --slot S`（逐项）/ `--revoke --batch <id>`（整批）→ 置 `revoked: true`，**不删记录**（留痕） |
 
 ### 2.2 阻断与解除
 
 | 环节 | 行为 |
 |---|---|
-| 阻断 | `open_findings` 增出 `blocking_unknown`；`final_gate` 在其**未放行**条目非空时阻断（`WF_REVIEW_INVALID`） |
+| 阻断 | `open_findings` 增出 `blocking_unknown` / `pending_unknown`（**已实现，纯增量**）；`final_gate` 在 `pending_unknown` 非空时阻断（`WF_REVIEW_INVALID`；门禁改动**待批准后落**） |
+| code 优先级（Q2=甲） | 两类同时命中时，**先**返回 `WF_UNRESOLVED_BLOCKING`（可关闭路径优先），`facts` 里同时带 `unavailable_reports` 与 `blocking_unknown`；处理完 blocking 再归档才会遇到 unknown |
 | 放行 | 存在与 `(round, slot, report_digest)` **三者全等**的 acceptance → 该条降级为留痕，不再阻断 |
 | 不放行 | **新轮 pass 与 `--unavailable` 都不解除**（第十一轮否掉的理由：前者绕开关闭、后者只证明做不成审查） |
 | 显示 | `blocking_unknown[].accepted_by` 为 null 表示未放行；放行的在显示里标"已由人放行（quote 摘要）" |
@@ -227,56 +248,63 @@ v19 的档位表承担了"排顺序"的职责，结果每版都在表上翻车�
 | 项 | 数量 |
 |---|---|
 | 机制修补（K 级） | 2（① `blocking_unknown` + 放行记录 + `final_gate` 阻断；② **导入端证据身份约束**——已实现并回归） |
-| **新增命令** | 1（`wf review-accept-unknown`，走既有 attestation 通道） |
-| **任务记录新增字段** | 1（`reviews.unknown_acceptances[]`，逐报告 + 摘要绑定） |
+| **新增命令** | 1（`wf review-accept-unknown`：**一次一批、全有或全无**；另有 `--revoke` 子命令） |
+| **任务记录新增字段** | 1（`reviews.unknown_acceptances[]`，逐报告 + 摘要绑定 + `batch` + `revoked`） |
 | 读取健壮 5 处（含 `gates.review-passed`）+ `all_findings` 元组返回 + **`file_digest_or_raise` 根因变体** | **已实现** |
 | 提取共享函数 | 1（`check_usability`） |
 | `unresolved.nonstep` 九项事实 | 1 处（记录级读取） |
 | 展示点 | 3 |
 | skill 文本 | 2 |
 | 协议码表 / `final_gate` 结构 / `authorize.ACTIONS` | **0** |
-| 测试 | **18 项**（§9，全部针对原子事实） |
-| **已完成**（机制侧，均已有回归测试；含 `d6bfb71`、`adb4715` 与本轮的 finding 身份绑定 / `reports_ready` 去伪 / `--restore` / `file_digest_or_raise`） | K4b 关闭链重解析报告（`7752520`）；`status_of_round` 发现模式槽位对应（`d6266c4`/`8b252db`）；**导入端证据身份约束**（`d198266`）；**同一报告不得二次认领 + `ready_to_decide` 与五档口径对齐**（本轮） |
+| 测试 | **22 项**（§9，全部针对原子事实） |
+| **已完成**（机制侧）：`7752520`/`d6266c4`/`8b252db`/`d198266`/`436b9d9`/`d6bfb71`/`adb4715`/`fbb40b5` + 本轮 **`open_findings` 增出 `blocking_unknown`/`pending_unknown`（纯增量，门禁尚未消费）** | K4b 关闭链重解析报告（`7752520`）；`status_of_round` 发现模式槽位对应（`d6266c4`/`8b252db`）；**导入端证据身份约束**（`d198266`）；**同一报告不得二次认领 + `ready_to_decide` 与五档口径对齐**（本轮） |
 
 ---
 
-## 9. 验收标准（全部针对**原子事实**，不再针对档位）
+## 9. 验收标准（**22 项**，全部针对原子事实）
 
-| # | 断言（机制侧可复算） |
+| # | 断言 |
 |---|---|
-| 1 | `check.usable/reason` 与 `gates` 判定逐值一致（`no_check`/`not_passed`/`invalidated_content_changed`/`anchor_mismatch`/`rule_changed`/`anchor_unavailable`/`structure_incomplete`）——**该映射表随实现给出**，不允许"照感觉命名" |
-| 2 | 槽位五值可达：`imported`/`staged`（`importable` 取决 `status=done`）/`stale`（区分删除与改写）/`missing`/`unreadable`（权限故障归此，不崩入口） |
-| 3 | 同一份报告不被二次认领：已导入记录的基名计入 `claimed` → `arrived` 不虚增 |
-| 4 | **混合槽位**（`missing+staged+stale` 任意子集）都能被如实列出，且 `reports_ready` 为 false、`round_ready_blockers` 给出对应原因 |
-| 5 | `reports_ready` **不宣称判定资格**：实施者重叠、单 provider 两种情形下，`reports_ready` 不因它们变 false，但 CLI 文案**不出现"可判"** |
+| 1 | `check.usable/reason` 与 `gates` 判定逐值一致（8 个 reason 的**映射表随实现给出**） |
+| 2 | 槽位五值可达：`imported` / `staged`（`importable` 取决 `status=done`）/ `stale`（区分删除与改写）/ `missing` / `unreadable`（权限故障归此，不崩入口） |
+| 3 | 同一份报告不被二次认领（已导入记录的基名计入 `claimed`） |
+| 4 | 混合槽位任意子集都能如实列出，`reports_ready == false` 且 `round_ready_blockers` 给出对应原因 |
+| 5 | `reports_ready` **不宣称判定资格**：实施者重叠、单 provider 时它不因这两点变 false，但 CLI 文案**不出现"可判"** |
 | 6 | `declared == 1` → `round_ready_blockers` 含 `declared_lt_2`（不写成"锚点算不出"） |
-| 7 | 未认领的额外导入报告失效 → `round_ready_blockers` 含 `extra_report_stale`；恢复该报告原字节后事实消失（对照组） |
-| 8 | `bound_to_current` ≡ `gates.review-passed`：`check_id` 相等但引用报告被改写时，`bind_problems` 非空、`bound_to_current == false` |
-| 9 | `open_blocking` 的 finding 身份 = `(round, slot, id)`：第 1 轮关闭不影响第 2 轮同名 finding；无 `round/slot` 的老记录按遗留形态仍可关闭 |
-| 10 | `blocking_unknown` 只在**未放行**时阻断；`review-accept-unknown` 写入 `(round, slot, report_digest)` 全等记录后降级；摘要不同不匹配（记录级单测） |
-| 11 | 证据身份不可替换：删文件后导入同轮同槽位另一份报告被拒（两条出口）；`--restore` 只在"摘要与登记一致"时放行且标 `restored`，不重绑当前 check |
-| 12 | 权限故障（`PermissionError`）不让 `status`/`review-status`/`review-decide`/`wf gate` 崩溃：前两处归 `unreadable`，后两处给 `WF_REVIEW_INVALID` + 原因/出口 |
-| 13 | `records.file_digest_or_raise` 存在且语义明确（不吞 OSError）；新调用点用安全变体或自行归因（§3） |
-| 14 | `stale` 的 `reason` 区分"被删除"与"被改写" |
-| 15 | `nonstep` **九项**齐全（含 `downgrade_incomplete`），`required_unverified` 复用 `projection` 口径 |
-| 16 | 归档准入除 §2 的修补外与改动前一致；`--short` 的 `task.check` 已派生 |
-| 17 | `action_incomplete` 为 archive 自身时**允许续做**（门禁排除本次动作），不构成"进入归档前必须清空"的循环 |
-| 18 | **性质测试**（靶子=原子事实，不是档位）：槽位五值任意子集 × `declared∈{0,1,2,3}` × 锚点三态 × 额外报告三态 → 断言 `reports_ready == (全部 imported ∧ 锚点已核 ∧ 无额外问题 ∧ declared≥2)`；合法域由 `status_of_round` 的输出域定义（不引用展示分组） |
+| 7 | 未认领的额外导入报告失效 → `round_ready_blockers` 含 `extra_report_stale`；恢复其原字节后消失（对照组） |
+| 8 | `bound_to_current` ≡ `gates.review-passed`（`check_id` 相等 **且** 引用报告三重摘要一致）；被改写时 `bind_problems` 非空、`bound_to_current == false` |
+| 9 | `open_blocking` 的 finding 身份 = `(round, slot, id)`；第 1 轮关闭不影响第 2 轮同名 finding；无 `round/slot` 的老记录按遗留形态仍可关闭 |
+| 10a | **批量放行成功**：一次文件写 2 项（各带 `quote`）→ 两条记录同 `batch`，`pending_unknown` 清空 |
+| 10b | **任一项坏 → 整批拒绝、零写入**：返回 `bad_items`（含 `expected`/`actual`/`reason`），`unknown_acceptances` 不变 |
+| 10c | **子集放行**：只列 1 份 → 该项 `accepted=true`，另一项仍在 `pending_unknown` |
+| 10d | **逐项撤销**：`--revoke --round N --slot S` 后该项回到 `pending_unknown`；`--revoke --batch` 撤销整批 |
+| 11 | 摘要不同**不匹配**（记录级单测：`(round, slot, report_digest)` 全等才生效） |
+| 12 | 证据身份不可替换：删文件后导入同轮同槽位另一份报告被拒（两条出口）；`--restore` 只在摘要与登记一致时放行并标 `restored`，不重绑当前 check |
+| 13 | 权限故障不让 `status`/`review-status`/`review-decide`/`wf gate` 崩溃：前两处归 `unreadable`，后两处给 `WF_REVIEW_INVALID` + 原因/出口 |
+| 14 | **不变量**：`blocking` 与 `blocking_unknown` 的 `(round, slot, id)` 集合不相交 |
+| 15 | 两类同时存在时，`final_gate` 先返回 `WF_UNRESOLVED_BLOCKING`，且 `facts` 同时带 `unavailable_reports` 与 `blocking_unknown` |
+| 16 | `stale` 的 `reason` 区分"被删除"与"被改写"；`records.file_digest_or_raise` 存在且新调用点必须用它或自行归因 |
+| 17 | `nonstep` **九项**齐全（含 `downgrade_incomplete`），`required_unverified` 复用 `projection` 口径 |
+| 18 | 归档准入除 §2 的修补外与改动前一致；`--short` 的 `task.check` 已派生 |
+| 19 | `action_incomplete` 为 archive 自身时**允许续做**（门禁排除本次动作），不构成循环 |
+| 20 | **性质测试**（靶子=原子事实）：槽位五值任意子集 × `declared∈{0,1,2,3}` × 锚点三态 × 额外报告三态 → `reports_ready == (全 imported ∧ 锚点已核 ∧ 无额外问题 ∧ declared≥2)`；合法域由 `status_of_round` 输出域定义 |
+| 21 | 放行记录**不因批量而变宽**：`attestation` 四件套齐备，`by` 必须是 `human:` 前缀；AI 会话无法自签（缺 `source` 即拒） |
+| 22 | 计数自洽：本表 22 项 = §8 的"测试"行（§11 #2） |
 
-**计数核对**：本表 18 项；§8 的"测试"行必须与此一致（§11 #2）。
+## 10. 已定项与剩余问题
 
-## 10. 留给审查者的问题（**标注是否阻塞落笔**）
+**已定（2026-11-11 人裁）**
 
-> 阻塞项（未闭合则 §9 无法定稿）：Q1（一次确认能否覆盖多份 → 决定 §2 命令形状）、Q2（`blocking` 与 `blocking_unknown`
-> 是否分列 → 决定 schema 与验收 10/11 的写法）。
+| 项 | 决定 | 落点 |
+|---|---|---|
+| Q1 | **乙：一次一批、全有或全无**；逐项 `quote`；子集允许；逐项/整批撤销 | §2.1 记录形状、§2.2 规则、验收 10a–10d |
+| Q2 | **甲：两类阻断分列**（`blocking` / `blocking_unknown` / `pending_unknown`）+ 不变量 + code 优先级 | §1.1 schema、§2.2 code 优先级、验收 14/15 |
 
+**剩余（不阻塞落笔）**
 
-1. §2 的放行记录要求人签一次/每份不可读报告；若同时有 3 份不可读，是否允许**一次确认覆盖多份**（决定文件里写多条）？
-2. 第 8 档把 `blocking`（可关闭）与 `blocking_unknown`（只能重发/人裁放行）合档但出口分列——是否该拆两档？
-3. `unresolved.nonstep` 复述了 `final_gate` 一半事实，算"该定死的口径"还是"复制门禁"？
-4. `wf-review` 是否也需"先读 unresolved"的接入？`wf-finish` 的封闭规则（除 changes-persisted 外全算前置）是否要写进 `wf-continue`？
-
----
+1. `coordination`：`wf-review` 是否也需"先读 `unresolved`"接入？
+2. `nonstep` 九项是否足够，还是应改为直接复用 `final_gate` 的事实集合？
+3. `check` 的 8 个 reason 与 `gates` 分支的映射表，是否要与 `check_usability` 提取同批交付？（本提案要求"随实现给出"）
 
 ## 11. 定稿前固定核对清单（每次改版必跑）
 
