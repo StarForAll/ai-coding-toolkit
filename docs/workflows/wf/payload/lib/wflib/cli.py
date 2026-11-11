@@ -717,12 +717,24 @@ def cmd_status(ctx, args):
                 from . import tasks as tasks_mod  # noqa: F811  (上面已局部导入)
                 facts["startup"] = tasks_mod.startup_check(ctx, task)
                 if ctx.args.flag("--short"):
-                    # 只回"我该知道什么"，避免整份 task.json 进上下文（dogfood：13 次全量 cat）
+                    # 只回"我该知道什么"，避免整份 task.json 进上下文（dogfood：13 次全量 cat）。
+                    # ⑥：四条件 + `exits`（原样，含 round）+ 与 D4 预检**同一个函数**给出的确定阻断。
+                    from . import review as review_mod
+
                     plan = task.get("plan") or {}
+                    # D4 预检只在 finish 阶段求值：其他阶段它会把"还没做"报成"确定阻断"，
+                    # 等于用 status 试归档探路（wf-repair-loop 明令禁止）。
+                    precheck = (tasks_mod.archive_precheck(ctx, task)
+                                if task.get("phase") == "finish" else {"blocking": []})
                     return ok(facts={"task": {"id": task_id, "title": task.get("title"),
                                               "status": task.get("status"), "phase": task.get("phase"),
                                               "complexity": plan.get("complexity"), "tdd": plan.get("tdd"),
-                                              "check": (task.get("check") or {}).get("result")}},
+                                              "check": (task.get("check") or {}).get("result")},
+                                     "repair_scope": _short_repair(
+                                         review_mod.repair_scope(ctx, task), precheck,
+                                         review_mod.acceptance_echo(task)),
+                                     # A6 裁定：缺登记摘要的遗留记录不计入 C3 阻断，单列在 status
+                                     "legacy_unverifiable": review_mod.legacy_unverifiable(ctx, task)},
                               position=position,
                               next_=protocol_mod.states().next_for(
                                   task.get("status"), task.get("phase"),
@@ -736,6 +748,12 @@ def cmd_status(ctx, args):
                     "terminal": task.get("terminal"),
                     "title": task.get("title"),
                 }
+                # ⑥：修复态事实集（纯派生，不落盘）+ 当前生效的放行清单（强制回显）
+                from . import review as review_mod
+
+                facts["repair_scope"] = review_mod.repair_scope(ctx, task)
+                facts["unknown_acceptances"] = review_mod.acceptance_echo(task)
+                facts["legacy_unverifiable"] = review_mod.legacy_unverifiable(ctx, task)
             else:
                 from . import runs as runs_mod
 
@@ -759,6 +777,33 @@ def cmd_status(ctx, args):
               next_=protocol_mod.states().next_for(
                   task_facts.get("status"), task_facts.get("phase"),
                   paused=bool(task_facts.get("paused")), suspended=bool(task_facts.get("suspended"))))
+
+
+def _short_repair(scope, precheck, acceptances=()):
+    """`--short` 的修复态投影：四条件 + `exits` 原样 + D4 预检的确定阻断。
+
+    不重新推导任何判据：条件取自 `repair_scope`（本身来自共享子判定），`exits` 原样过滤。
+    """
+    conclusion = scope.get("conclusion") or {}
+    unreleased = [item for item in scope.get("unverifiable") or [] if not item.get("released")]
+    conditions = {
+        "C1_check_valid": bool(conclusion.get("check_valid")),
+        "C2_no_open_blocking": not scope.get("open_blocking"),
+        "C3_no_unreleased_evidence": not unreleased,
+        "C4_review_bound_pass": (not scope.get("review_required")) or (
+            conclusion.get("verdict") == "pass" and bool(conclusion.get("binding"))),
+    }
+    return {"conditions": conditions,
+            "exits": scope.get("exits") or [],
+            "blocking": precheck.get("blocking") or [],
+            "blocking_scope": "finish",
+            "open_blocking": scope.get("open_blocking") or [],
+            "unverifiable": scope.get("unverifiable") or [],
+            "rounds": [{"round": item.get("round"), "verdict": item.get("verdict"),
+                        "inferred": bool(item.get("inferred"))}
+                       for item in scope.get("rounds") or []],
+            # 放行清单是"强制回显"（§6 cli ④/#46），--short 也列（by/at/quote 都很短）
+            "unknown_acceptances": list(acceptances)}
 
 
 def cmd_gate(ctx, args):
@@ -2451,6 +2496,28 @@ def cmd_lint(ctx, args):
     )
 
 
+def cmd_review_accept_unknown(ctx, args):
+    """人裁放行（⑥）：决定文件整批提交或撤销；只标记，不删除。"""
+    from . import review as review_mod
+    from . import tasks as tasks_mod
+
+    task_id = args.value("--task")
+    if not task_id:
+        raise CliError("WF_PATH_INVALID", {"reason": "review-accept-unknown requires --task <id>"})
+    task = tasks_mod.load_task(ctx.root, task_id)
+    if task is None:
+        raise CliError("WF_TARGET_MISSING", {"reason": "task not found", "task": task_id})
+    round_no = args.value("--round")
+    try:
+        return review_mod.accept_unknown(
+            ctx, task, args.value("--file"),
+            revoke=bool(args.flag("--revoke")), batch=args.value("--batch"),
+            round_no=int(round_no) if round_no not in (None, "") else None,
+            slot=args.value("--slot"), digest=args.value("--digest"))
+    except review_mod.ReviewError as exc:
+        raise CliError(exc.code, exc.facts)
+
+
 def cmd_review_status(ctx, args):
     """`review-status`：审查到位状态（S9；只读，人不必再当传声筒）。"""
     from . import review as review_mod, tasks as tasks_mod
@@ -2539,6 +2606,7 @@ COMMANDS = {
     "review-launch": _review_command("launch"),
     "review-import": _review_command("import"),
     "review-decide": _review_command("decide"),
+    "review-accept-unknown": cmd_review_accept_unknown,
     "review-status": cmd_review_status,
     "lint": cmd_lint,
     "judgments": cmd_judgments,
@@ -2557,7 +2625,7 @@ ACTIVATION_REQUIRED = frozenset({
     "task-approve", "task-start", "task-replan", "task-pause", "task-resume", "task-curate",
     "task-check", "task-knowledge", "task-retrospect", "task-attribute", "task-abandon",
     "task-reassess", "archive", "baseline-apply", "spec-update", "stop",
-    "review-launch", "review-import", "review-decide",
+    "review-launch", "review-import", "review-decide", "review-accept-unknown",
 })
 
 

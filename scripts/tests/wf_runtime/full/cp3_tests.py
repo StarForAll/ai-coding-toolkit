@@ -111,7 +111,7 @@ wf(["task-start", "--task", task2, "--json"], {"generation": gen2}, "sess-Q2")
 wf(["task-check", "--task", task2, "--review-notes", NOTES, "--json"], {"generation": gen2}, "sess-Q2")
 wf(["task-knowledge", "--task", task2, "--decision", "no-update", "--json"], {"generation": gen2}, "sess-Q2")
 wf(["sampling", "pick", "--task", task2, "--freeze", "--json"],
-                       {"generation": gen2}, "sess-Q1")   # 归档前置：先冻结并落盘选样
+                       {"generation": gen2}, "sess-Q2")   # 归档前置：先冻结并落盘选样（本任务会话）
 rc, payload, out = wf(["archive", "--task", task2, "--decision",
                        dfile("/tmp/cp3_a6b.json", [dec(f"finish {task2}", "finish", d2),
                                                   dec("src/*.py", "commit", d2)]), "--json"],

@@ -13,7 +13,15 @@ user-invoked: true
 
 ## 步骤
 
-1. 呈现给人：Check 结果与锚点、验收逐项结论、未核实项、复杂任务的审查结论、知识处置状态、待提交路径。
+0. **先读修复态，不要试归档探路**：
+   ```bash
+   <python> <项目根>/.wf/bin/wf.py status --short --json              # 四条件 + exits + 确定阻断
+   <python> <项目根>/.wf/bin/wf.py gate --due before_archive --json   # 步骤面缺口
+   ```
+   `repair_scope` 的读法见 `wf-repair-loop`；`unverifiable` 未放行时按 `wf-review-accept-unknown`
+   找人裁（先呈现事实、再由人写 quote）。预检通过不等于可以归档：本 skill 只呈现事实，不宣告结论。
+1. 呈现给人：Check 结果与锚点、验收逐项结论、未核实项、复杂任务的审查结论、知识处置状态、待提交路径，
+   以及当前生效的放行清单（`unknown_acceptances`，归档回显会再列一次）。
 2. 人确认后，把「finish 调用证据 + 按精确路径的提交授权」写入决定文件数组：
    - 一条 `choice=finish` 的 Decision（subject 记本任务与“已了解结果与未核实项”）；
    - 若干 `choice=commit` 的 Decision，`subject` 列出本次授权提交的精确路径。

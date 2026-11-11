@@ -5,7 +5,9 @@ obligation（2026-11-08 C6 交付）：
 - 实施 CLI 必须在 `review-launch --implementation-cli` 时**声明**；缺失即拒绝（不能等判定时从会话猜）；
 - reviewer 用 `--as <cli>` 声明身份，**它优先于信封里的 host_id**（同一会话不能靠换信封冒充另一个 CLI）；
 - `--as` 必须等于本轮报告文件名 token；从未调用过 `review-context --as X` ⇒ `no_claim`；
-- 实施 CLI 实质变化 ⇒ 既有 `reviews.result.verdict` 同批改 `invalidated`（不新增第二状态字段）。
+- 实施 CLI 实质变化 ⇒ **不改写** `reviews.result.verdict`（v66：失效判定唯一落点是
+  `review_binding` 的 CLI 校验，`rounds[]` 不记失效）；门禁须以
+  `review result was produced under a different implementation CLI` 拒绝 `review-passed`。
 
 注入形态：让 `context` 忽略 `--as`、退回 host_id（旧的"身份取自信封"行为）。
 """
@@ -137,15 +139,23 @@ def check():
     if result_of(project, task_id).get("verdict") != "pass":
         problems.append(f"判定未给出 pass：{result_of(project, task_id).get('verdict')}")
 
-    # ⑥ 实施 CLI 实质变化 ⇒ 结论失效；且只能有 verdict 一个状态字段
+    # ⑥ 实施 CLI 实质变化 ⇒ 结论**不被改写**（v66），门禁侧拒：失效判定唯一落点是 binding 的 CLI 校验
     rc, payload = launch(project, task_id, root, "pi")
     if (payload or {}).get("code") != "WF_OK":
         problems.append(f"补录式 relaunch 失败：{(payload or {}).get('code')}")
     result = result_of(project, task_id)
-    if result.get("verdict") != "invalidated":
-        problems.append(f"实施 CLI 变化未使结论失效：{result.get('verdict')}")
+    if result.get("verdict") != "pass":
+        problems.append(f"launch 不应改写结论 verdict：{result.get('verdict')}")
     if "status" in result:
         problems.append("引入了第二状态字段 status（协议要求只保留 verdict）")
+    rc, payload = H.cli(project, ["gate", "--due", "before_archive", "--json"], sid=SID,
+                        inputs={"generation": H.generation(project)})
+    missing = ((payload or {}).get("facts") or {}).get("missing") or []
+    hit = next((item for item in missing if item.get("id") == "task.review-passed"), None)
+    if not hit or hit.get("code") != "WF_REVIEW_INVALID" or \
+            (hit.get("facts") or {}).get("reason") != \
+            "review result was produced under a different implementation CLI":
+        problems.append(f"换实施 CLI 后 review-passed 未被门禁拒绝：{hit}")
 
     if problems:
         raise H.TargetFailure("；".join(problems))

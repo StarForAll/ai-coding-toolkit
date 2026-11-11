@@ -570,6 +570,131 @@ def write_receipt(task, step_id, *, mode, projection, rule_version, evidence_ref
 
 
 # --------------------------------------------------------------------------
+# 共享子判定（⑥）：步骤面与 repair_scope 共用，判据只在这里实现一次
+# --------------------------------------------------------------------------
+
+
+def _judgment(valid, code, facts, blocker, **extra):
+    return dict({"valid": valid, "code": code, "facts": facts,
+                 "blockers": [blocker] if blocker else []}, **extra)
+
+
+def check_validity(ctx, task, *, rule_version=None):
+    """Check 是否仍然有效（自 check-passed 原样提取，逐分支对齐 `gates.py:631-660`）。
+
+    返回 `{valid, code, facts, blockers}`：`blockers` 是短原因 token，供
+    `repair_scope.conclusion.check_blockers` 直接呈现——不另设第二套判据。
+    """
+    from . import tasks as tasks_mod
+
+    current_check = task.get("check") or {}
+    saved_rule = (current_check.get("anchor") or {}).get("rule_version")
+    current_rule = rule_version or ctx.rule_version()
+    if saved_rule and saved_rule != current_rule:
+        return _judgment(False, "WF_CHECK_STALE", {
+            "reason": "check was produced under different framework rules",
+            "saved_rule_version": saved_rule,
+            "current_rule_version": current_rule}, "rule_version")
+    anchor = (current_check.get("anchor") or {}).get("check_anchor")
+    now_anchor = tasks_mod.current_check_anchor(ctx, task)
+    if now_anchor.get("error"):
+        code, facts = now_anchor["error"]
+        return _judgment(False, code, facts, "anchor_unavailable")
+    if (current_check.get("invalidated") or {}).get("at"):
+        # 受控回 check 时登记的失效事实：旧 pass 不再有效，必须重新 Check
+        return _judgment(False, "WF_CHECK_STALE", {
+            "reason": "check was invalidated by a later change",
+            "invalidated": current_check.get("invalidated")}, "invalidated")
+    if current_check.get("result") != "pass" or not anchor:
+        return _judgment(False, "WF_CHECK_FAILED",
+                         {"check": current_check.get("id"), "result": current_check.get("result")},
+                         "result_not_pass" if current_check.get("result") != "pass" else "anchor_missing")
+    if anchor != now_anchor.get("anchor"):
+        return _judgment(False, "WF_CHECK_STALE",
+                         {"saved": anchor, "current": now_anchor.get("anchor")}, "anchor_drift")
+    # 结构复核：pass + 锚点一致不等于"检查真的做过"（机制稿 §3.5、§11.2 证据列）
+    problems = check_result_problems(task)
+    if problems:
+        return _judgment(False, "WF_CHECK_FAILED", {"reason": "check result lacks required evidence",
+                                                    "problems": problems}, "structure_problems")
+    return _judgment(True, None, {}, None)
+
+
+def review_binding(ctx, task, *, result=None):
+    """审查结论是否仍绑定当前 Check（自 review-passed 原样提取 + ⑥ 新增 CLI 校验）。
+
+    `binding` = `result.check_id == check.id`
+                 ∧ 结论至少引用一份已导入报告
+                 ∧ 引用报告 `result_digest == recorded == 文件当前摘要`
+                 ∧ 结论所在轮的 `implementation_cli` == 最新 launch 的 `implementation_cli`
+
+    不含 `verdict == "pass"`：verdict 是独立事实（判 fail 的结论也可能仍绑定当前 Check）。
+    """
+    from . import review as review_mod
+
+    reviews = task.get("reviews") or {}
+    result = result if result is not None else (reviews.get("result") or {})
+    check = task.get("check") or {}
+    if result.get("check_id") != check.get("id"):
+        return _judgment(False, "WF_REVIEW_INVALID",
+                         {"reason": "review result is not bound to current check"}, "check_id_changed",
+                         binding=False)
+    # 结论引用的报告必须仍是该轮/该槽位的有效导入：换了报告，旧 pass 不再有效（机制稿 §9.2）
+    imported = {(int(entry.get("round") or 0), entry.get("slot")): entry.get("report_digest")
+                for entry in reviews.get("imported") or []}
+    cited = result.get("imported") or []
+    if not cited:
+        # 门禁对空引用是独立拒绝；漏掉它会让空引用的结论算出 binding == true
+        return _judgment(False, "WF_REVIEW_INVALID",
+                         {"reason": "review result cites no imported reports"}, "no_cited_reports",
+                         binding=False)
+    # 三重核对：结论引用的摘要 == 记录里的导入摘要 == **报告文件当前实际摘要**
+    paths = {(int(item.get("round") or 0), item.get("slot")): item.get("report_path")
+             for item in reviews.get("imported") or []}
+    stale, unreadable = [], []
+    for entry in cited:
+        key = (int(result.get("round") or 0), entry.get("slot"))
+        recorded = imported.get(key)
+        actual = None
+        rel = paths.get(key)
+        if rel:
+            try:
+                actual = records.file_digest(join(ctx.root, rel))
+            except OSError as exc:
+                # ⑥ C1：摘要读取的权限/IO 故障按「读不到」归因，不抛出
+                unreadable.append({"slot": entry.get("slot"), "round": key[0], "path": rel,
+                                   "reason": str(exc)})
+                continue
+        if recorded != entry.get("report_digest") or actual != entry.get("report_digest"):
+            stale.append({"slot": entry.get("slot"), "round": key[0],
+                          "result_digest": entry.get("report_digest"),
+                          "recorded_digest": recorded, "file_digest": actual})
+    if stale:
+        return _judgment(False, "WF_REVIEW_INVALID", {
+            "reason": "review result cites reports that are no longer the imported ones",
+            "stale": stale}, "digest_mismatch", binding=False, stale=stale)
+    if unreadable:
+        return _judgment(False, "WF_REVIEW_INVALID", {
+            "reason": "review result cites reports that cannot be read",
+            "unreadable": unreadable}, "unreadable", binding=False, unreadable=unreadable)
+    # ⑥ 新增：结论所在轮的实施 CLI 必须等于**最新** launch 的实施 CLI。
+    # 把「已发起过新 launch 时旧 pass 仍可归档」堵在门禁上；换宿主但未 launch 看不到（§5 已披露）。
+    launches = [item for item in reviews.get("launches") or [] if isinstance(item, dict)]
+    conclusion_round = int(result.get("round") or 0)
+    conclusion_launch = next((item for item in launches if int(item.get("round") or 0) == conclusion_round), None)
+    latest_launch = max(launches, key=lambda item: int(item.get("round") or 0), default=None)
+    conclusion_cli = review_mod.review_cli((conclusion_launch or {}).get("implementation_cli"))
+    latest_cli = review_mod.review_cli((latest_launch or {}).get("implementation_cli"))
+    if conclusion_cli and latest_cli and conclusion_cli != latest_cli:
+        return _judgment(False, "WF_REVIEW_INVALID", {
+            "reason": "review result was produced under a different implementation CLI",
+            "round": conclusion_round, "implementation_cli": conclusion_cli,
+            "latest_round": int((latest_launch or {}).get("round") or 0),
+            "latest_implementation_cli": latest_cli}, "implementation_cli_changed", binding=False)
+    return _judgment(True, None, {}, None, binding=True)
+
+
+# --------------------------------------------------------------------------
 # 逐步骤核验
 # --------------------------------------------------------------------------
 
@@ -629,31 +754,9 @@ def verify_step(ctx, task, step_id, *, rule_version=None):
     if step_id == "task.work-satisfied":
         return tasks_mod.work_satisfied_fact(ctx, task)
     if step_id == "task.check-passed":
-        current_check = task.get("check") or {}
-        saved_rule = (current_check.get("anchor") or {}).get("rule_version")
-        current_rule = rule_version or ctx.rule_version()
-        if saved_rule and saved_rule != current_rule:
-            return False, "WF_CHECK_STALE", {"reason": "check was produced under different framework rules",
-                                             "saved_rule_version": saved_rule,
-                                             "current_rule_version": current_rule}
-        anchor = (current_check.get("anchor") or {}).get("check_anchor")
-        now_anchor = tasks_mod.current_check_anchor(ctx, task)
-        if now_anchor.get("error"):
-            return False, now_anchor["error"][0], now_anchor["error"][1]
-        if (current_check.get("invalidated") or {}).get("at"):
-            # 受控回 check 时登记的失效事实：旧 pass 不再有效，必须重新 Check
-            return False, "WF_CHECK_STALE", {"reason": "check was invalidated by a later change",
-                                             "invalidated": current_check.get("invalidated")}
-        if current_check.get("result") != "pass" or not anchor:
-            return False, "WF_CHECK_FAILED", {"check": current_check.get("id"), "result": current_check.get("result")}
-        if anchor != now_anchor.get("anchor"):
-            return False, "WF_CHECK_STALE", {"saved": anchor, "current": now_anchor.get("anchor")}
-        # 结构复核：pass + 锚点一致不等于"检查真的做过"（机制稿 §3.5、§11.2 证据列）
-        problems = check_result_problems(task)
-        if problems:
-            return False, "WF_CHECK_FAILED", {"reason": "check result lacks required evidence",
-                                              "problems": problems}
-        return True, None, {}
+        # 判据与 repair_scope 共用 `check_validity`（⑥）：这里只做投影，不另写条件
+        verdict = check_validity(ctx, task, rule_version=rule_version)
+        return verdict["valid"], verdict["code"], verdict["facts"]
     if step_id == "task.tdd-verified":
         check = task.get("check") or {}
         evidence = check.get("tdd_evidence")
@@ -685,35 +788,10 @@ def verify_step(ctx, task, step_id, *, rule_version=None):
             if result.get("unavailable") or result.get("verdict") == "unavailable":
                 return False, "WF_REVIEW_UNAVAILABLE", {"result": result}
             return False, "WF_REVIEW_INVALID", {"result": result}
-        check = task.get("check") or {}
-        if result.get("check_id") != check.get("id"):
-            return False, "WF_REVIEW_INVALID", {"reason": "review result is not bound to current check"}
-        # 结论引用的报告必须仍是该轮/该槽位的有效导入：换了报告，旧 pass 不再有效（机制稿 §9.2）
-        imported = {(int(entry.get("round") or 0), entry.get("slot")): entry.get("report_digest")
-                    for entry in reviews.get("imported") or []}
-        cited = result.get("imported") or []
-        if not cited:
-            return False, "WF_REVIEW_INVALID", {"reason": "review result cites no imported reports"}
-        # 三重核对：结论引用的摘要 == 记录里的导入摘要 == **报告文件当前实际摘要**
-        paths = {(int(item.get("round") or 0), item.get("slot")): item.get("report_path")
-                 for item in reviews.get("imported") or []}
-        stale = []
-        for entry in cited:
-            key = (int(result.get("round") or 0), entry.get("slot"))
-            recorded = imported.get(key)
-            actual = None
-            rel = paths.get(key)
-            if rel:
-                actual = records.file_digest(join(ctx.root, rel))
-            if recorded != entry.get("report_digest") or actual != entry.get("report_digest"):
-                stale.append({"slot": entry.get("slot"), "round": key[0],
-                              "result_digest": entry.get("report_digest"),
-                              "recorded_digest": recorded, "file_digest": actual})
-        if stale:
-            return False, "WF_REVIEW_INVALID", {
-                "reason": "review result cites reports that are no longer the imported ones",
-                "stale": stale}
-        return True, None, {}
+        # 绑定判据（含引用非空、三重摘要、结论轮 vs 最新 launch 的 CLI 校验）与
+        # repair_scope 共用 `review_binding`（⑥）
+        binding = review_binding(ctx, task, result=result)
+        return binding["binding"], binding["code"], binding["facts"]
     if step_id == "task.knowledge-disposed":
         knowledge = task.get("knowledge")
         if not isinstance(knowledge, dict) or not knowledge.get("decision"):
@@ -869,6 +947,18 @@ def final_gate(ctx, task, ignore_action_id=None):
     blocking = [item for item in findings if item["status"] == "missing"]
     if blocking:
         return False, blocking[0]["code"] or "WF_CHECK_FAILED", {"missing": blocking, "all": findings}
+    ok, code, facts = final_gate_nonstep(ctx, task, ignore_action_id=ignore_action_id)
+    if not ok:
+        return ok, code, facts
+    return True, None, {"steps": findings}
+
+
+def final_gate_nonstep(ctx, task, ignore_action_id=None):
+    """最终门禁的 nonstep 段（⑥ 提取：原 `final_gate` 的第 1–10 项原样搬出）。
+
+    步骤面由 `final_gate` 先跑（顺序短路，见 `gates.py:865-871`）；这里是**步骤面之外**
+    的全部阻断。归档命令与归档提交前的只读预检（D4）调同一个函数——不是第二套实现。
+    """
     check = task.get("check") or {}
     if check.get("result") != "pass":
         return False, "WF_CHECK_FAILED", {"reason": "current check is not pass", "check": check.get("id")}
@@ -949,4 +1039,19 @@ def final_gate(ctx, task, ignore_action_id=None):
                                                "paused": task.get("paused"), "suspended": task.get("suspended")}
     if pending:
         return False, "WF_ACTION_INCOMPLETE", {"action": pending.get("id"), "state": pending.get("state")}
-    return True, None, {"steps": findings}
+    # C3（⑥）：仍承载未完成义务、且未被放行的不可核实证据 → 阻断。
+    # **必须在这里**（nonstep 段内）：归档前的只读预检才能在业务提交之前看到它，
+    # 否则"业务已提交、归档因 C3 被拒"无法避免。
+    unreleased = review_mod.exiting_evidence(ctx, task)
+    if unreleased:
+        releasable = any(item.get("release_allowed") for item in unreleased)
+        return False, "WF_REVIEW_INVALID", {
+            "reason": "unverifiable_evidence",
+            "unverifiable": unreleased,
+            "exits": ["找回原字节（restore_bytes）：报告重新可核实后该条离开 unverifiable",
+                      "由人裁放行（human_release）：决定文件写 quote 与 waive_unknown_findings: true"
+                      if releasable else
+                      "本条的引用证据不可放行（complex）：完成一次新审查，使旧报告变成非引用证据后再人裁放行",
+                      "按设计稿 §5.6 异常归档（不把放弃当成满足条件的手段）"],
+        }
+    return True, None, {}

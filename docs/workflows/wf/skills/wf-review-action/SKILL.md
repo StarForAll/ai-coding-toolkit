@@ -16,15 +16,45 @@ disable-model-invocation: false
 # 1) 导入：按文件名发现本轮已完成（status=done）的报告，重复调用幂等
 <python> <项目根>/.wf/bin/wf.py review-import --task <任务 id> --envelope <本会话信封> --json
 
-# 2) 判定：轮次缺省＝当前打开的轮；实施 CLI 取本会话宿主身份
-<python> <项目根>/.wf/bin/wf.py review-decide --task <任务 id> --envelope <本会话信封> --json
+# 2) 判定：**必须显式传 --round**（缺省取最大 launch 轮，可能与 exits.round 不同）
+<python> <项目根>/.wf/bin/wf.py review-decide --task <任务 id> --round <n> --plan <处置.json> --json
 ```
 
 1. 导入后读 `facts.imported_agents`（本轮报告来自哪些 agent）；报告正文在任务目录 `review/` 下。
 2. 先汇总：按轴列出共识、分歧与互相矛盾的事实，标明来源 agent 与 finding id。
-3. 逐条给出处置建议：接受并修复 / 驳回（须给本地核实方式与证据）/ 转下轮。
-4. 把处置计划写成 `--plan` 文件元素 `{finding, decision_ref, reason}`，再交 `review-decide`。
+3. 逐条给出处置：关闭 / 误报 / 重分类 / 不处置（见下节）。
+4. 把处置写成 `--plan` 文件的元素数组，再交 `review-decide`。
 5. 驳回必须本地核实；「作者不认可」不是证据。
+
+## 处置形状（只有 `accepted` 清零）
+
+`--plan` 的每个元素：
+
+```json
+{"finding_id": "f1", "decision": "accepted", "reason": "已修复并重查通过 / 经复核认定误报 / 已重分类",
+ "recheck_by": "human:xzc"}
+```
+
+- **只有 `decision == "accepted"` 会关闭**（`open_blocking` 里消失）。
+  `rejected` / `amended` 只记录、**不关闭**：写入后 `open_blocking` 仍在，
+  `facts.not_closing` 会如实回报"未关闭"，别把"已答复"当成"已了结"。
+- **误报也写 `accepted`**，并在 `reason` 里写明性质（"经复核认定误报，无需改代码"）。
+  不要用 `rejected` 表达"我不同意"——那不会关闭，机制也不追溯翻转历史。
+- `recheck_by` 必填且**不得等于提出者**（同一份报告不能自证）；它可以带 `human:` 前缀
+  （人工复核路径），这条路径与"必须 ∈ 已导入 agent 集合"不冲突。
+- `accepted` 只能表示「**处置结果已成立**」：① 已修复且已重查通过 ② 经复核认定误报 ③ 已重分类。
+  **「同意某种修法但还没做」不得写 `accepted`**——finding 会立刻从 `open_blocking` 消失，
+  light 任务又没有 C4 兜底；此时保持 open，或写 `amended` + 理由（不关闭）。
+
+## 处置时机与类型的对应
+
+`review-decide` 按**当前工作区内容**重算锚点；代码改过之后旧轮报告就失配，在旧轮补处置必被拒。
+两条合法路径各自对应不同处置类型：
+
+| 路径 | 只适用于 | 为什么 |
+|---|---|---|
+| 随 **fail 轮**那次 `review-decide` 一并写 | 误报 / 重分类（处置结果无需改代码即成立） | 内容未变，锚点仍匹配 |
+| 随**修好 + 重查之后的新一轮** `review-decide` 捎带 | 「已修复」 | 内容必然已变，必须在新锚点下判 |
 
 > 人数与异种由**报告文件名**判定（`review-<agent>.md`）；两个报告同名即视为同一 CLI，会被拒。
 

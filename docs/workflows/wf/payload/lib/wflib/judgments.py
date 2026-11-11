@@ -81,8 +81,9 @@ def skeleton(ctx, task):
                       for path, source in _new_paths(ctx, task, classified)],
         "new_in_scope": _new_in_scope(task, classified),
         "deleted_paths": _deleted_paths(ctx, task),
-        # [未核实]：required 但这次没跑到、或被标成 supporting 的验收项，必须带原因与补偿
-        "unverified": _unverified(ctx, task),
+        # [未核实]：required 但这次没跑到、或被标成 supporting 的验收项，必须带原因与补偿；
+        # ⑥：人裁放行的不可核实证据也进这一池（同一批"未核实"事件，与 C3 阻断同批）
+        "unverified": _unverified(ctx, task) + _unknown_acceptances(task),
         # [缺口]/缺口事件源：取**判定结果**里的 gaps（此前读 imported[].gaps，导入流程从不写）
         "requirement_gap_findings": _review_gaps(task),
         "drift_diffs": _drift_diffs(ctx, task),   # 漂移位置：保存时的 parts vs 当前 parts（K8 可重建）
@@ -96,6 +97,17 @@ def skeleton(ctx, task):
         "waived_count": len(waived),
         "scope_available": not classified.get("unavailable", False),
     }
+
+
+def _unknown_acceptances(task):
+    """⑥ 放行记录并入事实骨架：人裁接受的风险同样要能被抽到（不是另一个抽样池）。"""
+    from . import review as review_mod
+
+    return [{"id": f"accept:{item.get('round')}:{item.get('slot')}",
+             "round": item.get("round"), "slot": item.get("slot"),
+             "report_digest": item.get("report_digest"), "batch": item.get("batch"),
+             "revoked": bool(item.get("revoked")), "consumed": bool(item.get("consumed"))}
+            for item in review_mod.acceptance_records(task)]
 
 
 def cumulative_facts(ctx, task):

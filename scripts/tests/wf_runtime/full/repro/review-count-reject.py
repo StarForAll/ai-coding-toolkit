@@ -21,7 +21,7 @@ def check():
         # 只保留可观测的注入点；"把人数不足写回 reasons"这一半在提前拒绝存在时被遮蔽，
         # 不能算作可证伪（第九轮复审 N9-3）
         H.patch(os.path.join(project, ".wf/lib/wflib/review.py"),
-                "if input_problems:",
+                "if eligibility[\"problems\"]:",
                 "if False:  # 注入：不提前拒绝")
     task_id, task_dir = F.build_task(project, root)
     rc, payload, record = F.run_review(project, root, task_id, task_dir, ["codex", "codex"])

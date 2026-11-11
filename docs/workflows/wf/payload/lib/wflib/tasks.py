@@ -1015,6 +1015,63 @@ def changes_persisted_fact(ctx, task):
     return False, "WF_WIP_UNRESOLVED", {"pending_paths": pending, "grants": len(grants)}
 
 
+def archive_precheck(ctx, task):
+    """D4 预检（只读）：归档**业务提交之前**就能看到全部确定阻断。
+
+    组成（矩阵 #37）：
+    ① `final_gate_nonstep(ctx, task, ignore_action_id=<当前动作>)`（含 ⑥ 的 C3）；
+    ② `evaluate(ctx, task, "before_archive", rule_version=…)` 先按 `id` 排除
+       `task.changes-persisted`，再取 `status == "missing"` 的条目必须为空
+       （`evaluate` 对每个适用步骤都返回条目、`status ∈ {missing, completed, reused, satisfied}`，
+       "列表为空"是错的判据）；
+    ③ 授权覆盖：本任务的未提交工作 `pending ⊄ 本次提交路径集` → `WF_WIP_UNRESOLVED`。
+
+    **不得只调一次 `final_gate`**：它是顺序短路结构（先跑步骤面，任一步 missing 即返回），
+    而预检发生在提交之前 → `changes-persisted` 必 missing → nonstep 十项一次都不会跑。
+    返回 `{ok, code, facts, blocking}`；`blocking` 供 `--short` 原样列出"还有哪些确定阻断"。
+    """
+    from . import gates as gates_mod
+    from . import paths as paths_mod
+    from . import scope as scope_mod
+
+    ok, code, facts = gates_mod.final_gate_nonstep(
+        ctx, task, ignore_action_id=(task.get("action") or {}).get("id"))
+    if not ok:
+        return {"ok": False, "code": code, "facts": facts,
+                "blocking": [{"stage": "final_gate_nonstep", "code": code, "facts": facts}]}
+    findings = gates_mod.evaluate(ctx, task, "before_archive", rule_version=ctx.rule_version())
+    missing = [item for item in findings
+               if item.get("id") != "task.changes-persisted" and item.get("status") == "missing"]
+    if missing:
+        return {"ok": False, "code": missing[0].get("code") or "WF_CHECK_FAILED",
+                "facts": {"missing": missing, "all": findings},
+                "blocking": [{"stage": "steps", "id": item.get("id"), "code": item.get("code"),
+                              "facts": item.get("facts")} for item in missing]}
+    grants = task.get("commit_grants") or []
+    granted = []
+    for grant in grants:
+        if isinstance(grant, dict):
+            granted.extend(_subject_paths(grant.get("subject")))
+    # 与 `changes_persisted_fact` 同一桶定义（e ∩ 未提交），但比的是**授权集合**：
+    # 提交前存在待提交路径是正常的，只有"授权没覆盖到"才是阻断。
+    classified = scope_mod.classify_candidates(ctx.root, task, receipts=task_receipts(ctx.root))
+    pending = sorted(set(classified["buckets"]["e"]) & set(scope_mod.uncommitted_paths(ctx.root)))
+
+    def covered(item):
+        return any(item == grant or item.startswith(grant + "/") or paths_mod.match_path(grant, item)
+                   for grant in granted if grant)
+
+    uncovered = [item for item in pending if not covered(item)]
+    if uncovered:
+        return {"ok": False, "code": "WF_WIP_UNRESOLVED",
+                "facts": {"pending_paths": uncovered, "granted": sorted(set(granted)),
+                          "reason": ("尚未提供提交授权：决定文件里需要 choice=commit"
+                                     if not granted else "授权未覆盖全部待提交路径")},
+                "blocking": [{"stage": "authorization", "code": "WF_WIP_UNRESOLVED",
+                              "facts": {"pending_paths": uncovered}}]}
+    return {"ok": True, "code": None, "facts": {"steps": findings, "pending": pending}, "blocking": []}
+
+
 def current_check_anchor(ctx, task):
     from . import check as check_mod
 
@@ -3082,6 +3139,13 @@ def _committed_text(root, sha, path):
     return proc.stdout if proc.returncode == 0 else None
 
 
+def review_acceptance_echo(task):
+    """当前生效的放行清单（归档回显）：机制自身的读取点，不复制 `review` 的判据。"""
+    from . import review as review_mod
+
+    return review_mod.acceptance_echo(task)
+
+
 def cmd_archive(ctx, args):
     persisted = None      # 首归档路径没有续做分支，必须先初始化（否则引用未定义变量）
     from . import cli, gates, lock
@@ -3161,7 +3225,9 @@ def cmd_archive(ctx, args):
                                          action_state=(task.get("action") or {}).get("state")),
                 next_="归档已持久化：无需重复归档或重复提交" if persisted.get("persisted")
                 else "按可达提交查证结果交人核对（不重复归档）",
-                facts={"archive_persisted": persisted, "terminal": task.get("terminal")},
+                facts={"archive_persisted": persisted, "terminal": task.get("terminal"),
+                       # ⑥：归档强制回显当前生效的放行清单（人裁接受的风险必须跟着终态可见）
+                       "unknown_acceptances": review_acceptance_echo(task)},
             )
         _record, holder = ctx.require_held(task=task_id)
         if task.get("status") != "in_progress" or task.get("phase") != "finish":
@@ -3229,6 +3295,18 @@ def cmd_archive(ctx, args):
                                  "reason": "提交范围含删除，但缺删除动作的确认（K6 第 2 类）",
                                  "exits": ["在决定文件里为这些路径写一条 delete 确认后重入",
                                            "把删除移出本次提交范围"]})
+        # ⑥ D4：业务提交**之前**跑只读预检（否则"业务已提交、归档因 C3 被拒"无法避免）。
+        # 消费钩子先跑：受控写点观察到"放行记录对应的报告已恢复可核实"即让该放行失效。
+        from . import review as review_mod
+
+        if review_mod.consume_recovered(ctx, task):
+            save_task(ctx.root, path, task)
+        precheck = archive_precheck(ctx, task)
+        if not precheck["ok"]:
+            action = actions.fail(dict(task["action"]), f"archive precheck: {precheck['code']}")
+            task["action"] = action
+            save_task(ctx.root, path, task)
+            raise TaskError(precheck["code"], precheck["facts"])
         chain_head = _chain_trailer(task)
         business_commit = _commit_paths(ctx.root, sorted(set(grant_paths)),
                                         f"wf: complete {task_id}\n\nwf-task: {task_id}{chain_head}") if grant_paths else {
@@ -3322,7 +3400,9 @@ def cmd_archive(ctx, args):
                     "recovery": "无需恢复：运行态可丢弃重建"},
                ],
                # 巡检到点提示（设计稿 §5.4）：归档是"正常归档累计"的计数点，到点就在回显里提示
-               "inspection_hint": _inspection_hint(ctx.root)},
+               "inspection_hint": _inspection_hint(ctx.root),
+               # ⑥：归档强制回显当前生效的放行清单
+               "unknown_acceptances": review_acceptance_echo(task)},
     )
 
 

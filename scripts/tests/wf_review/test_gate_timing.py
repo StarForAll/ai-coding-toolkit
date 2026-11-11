@@ -97,7 +97,10 @@ class EscalatedHangsOnlyTheEndingTest(unittest.TestCase):
 
         from wflib import judgments
 
-        self.assertIn("pending_escalations(", inspect.getsource(gates.final_gate),
+        # ⑥ 把归档口的 nonstep 段提取为 `final_gate_nonstep`（同一实现，供 D4 预检复用）。
+        # 这里断言的是"归档口这条链"读 escalations，不是某个函数体的排版。
+        ending_gate = inspect.getsource(gates.final_gate) + inspect.getsource(gates.final_gate_nonstep)
+        self.assertIn("pending_escalations(", ending_gate,
                       "归档口必须按当前有效判断算待决")
         for name in ("evaluate", "_step_satisfied", "step_satisfied", "_check_step"):
             func = getattr(gates, name, None)

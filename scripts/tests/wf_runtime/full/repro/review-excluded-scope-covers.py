@@ -18,8 +18,8 @@ import _harness as H
 import _review_launch as L
 
 SID = "sess-665"
-FROM = '                gaps = exclusion_gaps(payload)\n'
-TO = '                gaps = []  # 注入：不核覆盖\n'
+FROM = '        gaps = exclusion_gaps(payload)\n'
+TO = '        gaps = []  # 注入：不核覆盖\n'
 COVERED = ["node_modules/**", ".env", "*.pem", ".codex/**", "../**", ".wf/tasks/**"]
 NARROW = ["node_modules/**"]
 

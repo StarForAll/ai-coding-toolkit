@@ -19,13 +19,28 @@ disable-model-invocation: false
 | 已批准，未开工 | `task-start --task <id>` |
 | in_progress/execute | 在批准触碰面内实施；读规则用 `spec --file <path>`；需要时 `task-curate` |
 | in_progress/check | `task-check --task <id> [--decision …] [--review-notes …]` |
-| in_progress/finish | 请人核对结果后由人调用 `wf-finish` |
+| in_progress/finish | **先读修复态**（见下节），再请人核对结果后由人调用 `wf-finish` |
 | 人**明确要求**改方案 | 先取人签的 `choice=replan` 决定文件 → `task-replan --decision <文件>` → 重新 `task-approve` → `task-start`（缺决定即 `WF_SEMANTIC_DECISION`） |
 | 暂停 / 恢复 | `task-pause --task <id> [--reason]` / `task-resume --task <id>` |
 | 收工 | `stop --decision <path>`（一个去向：commit/keep/reverse/transfer） |
 | 放弃 | `task-abandon --task <id> --decision <path> [--disposition <path>]` |
 | `status=archived` 但记录仍在活动区（归档中断：终态已写、目录未移） | **重入 `archive --task <id> --decision <同一决定>` 续做**；该入口会补做目录移动，不另开恢复命令 |
 | 归档成功后写权仍 held | `writer release`（对象已终态，`ensure_releasable` 放行）；完成后再结束会话 |
+
+## 修复态先读什么（⑥）
+
+进入 finish、或收到 `fail` / `unavailable` / 报告损坏 / 换实施宿主的信号时，先读事实再动作：
+
+```bash
+<python> <项目根>/.wf/bin/wf.py status --short --json    # 四条件 + exits + 确定阻断
+<python> <项目根>/.wf/bin/wf.py gate --due before_archive --json   # 步骤面缺口
+```
+
+- `repair_scope` 的四组事实与 `exits` 怎么读：见 `wf-repair-loop`。
+- **不要用 `archive` 试归档探路**：归档会先做业务提交（现在有提交前只读预检，但它通过不代表
+  可以归档——步骤面、escalated、required、依赖、debug 各有自己的门禁）。
+- 要人裁放行不可核实证据时，用 `wf-review-accept-unknown`（先按 `wf-review-accept-unknown`
+  skill 呈现事实与采集 quote）。
 
 ## 复杂任务审查
 
