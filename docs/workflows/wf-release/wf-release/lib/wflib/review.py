@@ -1785,17 +1785,24 @@ def launch_facts(ctx, task):
                             for item in imported if item.get("slot")})
         implementer = review_cli(entry.get("implementation_cli"))
         blocked = []
+        problems = []
         if imported and anchor is not None:
             report_facts = review_report_problems(ctx, task, round_no=round_no, launch=entry,
                                                  imported=imported, anchor=anchor)
             blocked.extend(report_facts["blockers"])
+            problems = report_facts["problems"]
         eligibility = review_eligibility(reviewers, {implementer} if implementer else set(),
                                          imported_count=len(imported), declared_slots=declared_slots)
         blocked.extend(eligibility["blockers"])
+        # B3：`blocked` 是组标签（report_invalid / anchor_stale / material_missing /
+        # insufficient_reviewers / implementer_overlap）。标签命中时**并排**给出它概括的事实行，
+        # 否则"哪一份、因为什么"就被 token 遮住了。
         out.append({"round": round_no, "form": form, "imported": len(imported),
                     "declared": declared_slots,
                     "decided": latest_decision(task, round_no) is not None,
-                    "blocked": sorted(set(blocked))})
+                    "blocked": sorted(set(blocked)),
+                    "problems": problems,
+                    "eligibility": eligibility})
     return out
 
 
