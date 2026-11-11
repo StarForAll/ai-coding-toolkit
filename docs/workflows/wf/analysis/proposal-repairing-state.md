@@ -1,6 +1,6 @@
-# ⑥ 修复态的表达：不新增阶段，用「事实 + 清除动作」吸收 `fixing` 的收益（v40）
+# ⑥ 修复态的表达：不新增阶段，用「事实 + 清除动作」吸收 `fixing` 的收益（v41）
 
-> 状态：**待审 v40**。阶段：**方案审查阶段，实现零改动**（`review-phase-discipline.md`）。
+> 状态：**待审 v41**。阶段：**方案审查阶段，实现零改动**（`review-phase-discipline.md`）。
 > **本文只回答 ⑥**：`fixing` 的收益如何在四阶段内表达。范围边界见 §8。
 
 ---
@@ -43,9 +43,11 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
   "unverifiable": [{"round": 1, "slot": "s1", "path": "…", "report_digest": "sha256:…",
                     "cause": "changed|missing|unreadable",
                     "cited": false, "release_allowed": true, "released": false}],
-  "in_flight": {"round": 2, "imported": 2, "declared": 2,
-                "usable": true,              // true | false | null(=无法判定)
-                "usable_blockers": ["report_invalid|anchor_stale|implementer_overlap|insufficient_reviewers|material_missing"]},
+  "latest_launch": {"round": 2, "imported": 2, "declared": 2,
+                    "certain": true,           // false = 无法区分「新轮未判」与「重判旧轮致指针回退」
+                    "usable": true,            // true | false | null
+                    "usable_blockers": ["report_invalid|anchor_stale|implementer_overlap|insufficient_reviewers|material_missing"]},
+  "redecidable_rounds": [1],              // 仅 result.round 那轮且 pass + 报告锚点仍匹配
   "exits": [{"condition": "C3", "action": "human_release", "preferred": true, "when": null}],
   "conclusion": {"verdict": "fail", "round": 1, "check_id": "C2",
                  "binding": true, "binding_blockers": [],
@@ -60,8 +62,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | `review_required` | `plan.complexity == "complex"`（与 `review-passed` 的短路条件同源） |
 | `open_blocking` | `open_findings(...)["blocking"]`（**门禁同源、全轮次**）；条目须带 `round`（见 §6 ①）。**只含 blocking severity**；`unaddressed` 里的非 blocking 项**不在本文范围**（它们是判断骨架的输入，不是归档阻断） |
 | `unverifiable` | `open_findings(...)["unavailable"]`（唯一来源，条目带 `cause/round/report_digest`） |
-| `in_flight` | **轮次**：`reviews.launches` 中大于 `result.round` 的最大轮；`result` 缺席时取全部 launches 的最大轮；无 launches 则 `in_flight = null`。<br>**`reusable_rounds`：本文不提供（第 35 轮撤回）**。理由（已核代码）：① 实施 CLI 变更的失效标记写在 **`reviews.result`**、且只在新 launch 时触发（`review.py:765-770`），不存在 launch 级 `invalidated`；② `reviews.result` 只保留最新一轮、`attempts.outcome` 是尝试级汇总，无法还原「每轮是否已判、判成什么」；③ `result.round` 不能当「已判边界」——允许显式重判旧轮后它会回退。因此「排除已判 fail」「排除 CLI 变更失效」「识别尚未判定轮」三个承诺今天都缺可靠事实来源，硬算只会得到错结论。该能力登记为 backlog **A10**（逐轮决策/失效事实）；在其就绪前 C4 只给 `relaunch_review`，**AI 自己仍可对旧轮重新 `review-decide`**（机制不禁止），但 ⑥ 不基于不可靠数据作推荐。
-
+| `latest_launch` | 最新一轮 = `max(reviews.launches.round)`；带 `imported/declared` 计数。**`latest_launch.certain`**：`true` 仅当 `result == null`（全新未判）或 `result.round == latest`；否则 `false`——此时「最新轮尚未判定」与「重判旧轮导致指针回退」**无法区分**，**不得**把 `certain == false` 当作「确在途」来驱动 `resume_inflight`（第 36 轮修正：撤回 `reusable_rounds` 并未消除该来源问题）。<br>**`redecidable_rounds[]`（窄口径，可算）**：只含 `result.round` 指向的那一轮，且满足 ① `result.verdict == "pass"`、② 该轮已导入报告的**摘要一致且锚点匹配当前内容**。这两条只用 `result` + `imported` 就能判定，**不需要逐轮历史**（A10）。用途：上轮已 pass、仅 check 换代失绑时，可对该轮**重新 `review-decide`**（`decide(..., round_no=…)` 支持显式轮次，`review.py:1201`），不必新开一轮。**已判 fail 的轮不列入**（verdict 由报告载荷推导，重判仍 fail）。<br>**`usable` 三态合成**（`usable` 的轮次范围：`certain == true` 时对 `latest_launch` 判；`certain == false` 时 `usable = null` 并注明「无法判断是否有在途轮」）<br>
 **`usable` 三态合成（硬失败优先，且以「已导入材料能否判定」为准）**：<br>① 任一**硬失败** → `false`：`report_invalid`（←`review_report_problems`：verdict 与推导不一致、锚点失配、事后改写、缺 read-scope/excluded-scope、敏感面缺口等）、`anchor_stale`（同函数）、`implementer_overlap`（←`review_eligibility`：某份已导入报告的 reviewer CLI 与实施 CLI 相同，**逐报告即可判定**）<br>② 无硬失败且**已导入材料已足够**（去重后 ≥2 个互异 reviewer CLI）→ **`true`**，但**仅限发现式轮次**——发现模式下 `review-decide` 只按已导入报告判人数（`review.py:1264`），不会因「声明 3 位只到 2 位」而拒；**旧槽位形态**（显式 `--report` 的历史轮）仍会以 `declared slots missing reports` 拒，故该形态下声明槽位未齐 → `null`（不改 decide 语义的投影，仅对发现式成立）<br>③ 无硬失败、已导入不足、但还有声明槽位未到 → `null`（可等，也可现在重发）<br>④ 无硬失败、已导入不足、且声明槽位已到齐 → `false`（`insufficient_reviewers`）<br>**`usable_blockers` 内容**：列出**全部**成立的项（含 `material_missing`），按严重度排序（硬失败在前）；`usable` 的取值只由上面的优先级决定，不由列表长度决定。<br>**如实说明（P3）**：部分导入时若强行 `review-decide`，报错是「single reviewer cannot produce a decision」（新形态下 `missing_slots` 恒为空，不报「声明槽位缺报告」）——AI 看到的是人数问题而非材料问题，两者不同源，指引不得混为一谈 |
 | `conclusion.binding` | **`review_binding`**（自 `review-passed` 提取）：`result.check_id == check.id` ∧ **结论至少引用一份已导入报告** ∧ 引用报告 `result_digest == recorded == 文件当前摘要`。<br>**"至少引用一份"必须写进判据**：门禁对 `cited` 为空是独立拒绝（`gates.py:695-696`），漏掉它会让空引用的结论算出 `binding == true` |
 | `conclusion.check_valid` | **`check_validity`**（自 `check-passed` 提取）：`result == pass` ∧ anchor 相符 ∧ 未 `invalidated` ∧ `rule_version` 相符 ∧ **结构复核 `check_result_problems`** ∧ anchor 可算 |
@@ -78,7 +79,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
                   "quote": "这份报告丢失的风险我认",
                   "by": "human:xzc", "at": "2026-11-11T14:00:00.000000Z",
                   "source": "user-declared",
-                  "waive_unknown_findings": true}]}   // 必填：承认该报告未知 findings 一并豁免；恢复可核实后该放行自动 consumed
+                  "waive_unknown_findings": true}]}   // 必填：承认该报告未知 findings 一并豁免；恢复可核实后经受控写点置 consumed
 ```
 
 | 规则 | 语义 |
@@ -139,7 +140,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 **light 任务（`review_required == false`）不承担 C4**，但 `open_blocking` 仍受 **C2**、报告损坏仍受 **C3** 约束。
 **现状成本（如实）**：`dispositions` 只能经 `review-decide` 写入，而它先做人数/资格校验且**不分复杂度**——
 所以 light 要关闭 C2 仍需组织一轮可判审查。**这个成本是真实负担**（也抑制自愿审查的意愿），
-入口改造见 backlog **A8**（建议先做，但不是 ⑥ 的前置）。
+**这是 ⑥ 唯一不交付「AI 自主闭环」的地方**：单项处置已有依据与复核，仍被整轮审查卡住。是否接受该成本见待裁 D3；不接受就把 A8 提升为前置（本版不擅自决定）。
 
 ### 4.2 每个条件的清除动作
 
@@ -148,7 +149,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | **C1 失效** | `rerun_check`（重跑 `task-check` 产生新 check） |
 | **C2 未空** | 逐项处置（修复代码 / 经复核否定或重分类）→ 由非提出者复核后补 disposition（**`decision` 必须写 `accepted`**，B5）→ `record_disposition` |
 | **C3 未放行** | ① `restore_bytes`（找回原字节，不依赖身份）<br>② `human_release`（`release_allowed == true` 时）——**放行的语义边界（本版新增）**：某份报告不可核实时，它里面的 findings 也随之无法枚举（`open_findings` 跳过整份报告），因此放行**必然同时豁免该报告中未知的 findings**。决定文件必须显式承认这一点（`waive_unknown_findings: true`），缺失即拒；**且不得把放行描述成"缺陷已处置"**——C2 不会因此被满足，只是那部分问题从此不可枚举<br>③ `relaunch_review`——改变事实而不是硬闯：complex 的 `cited` 损坏不可放行，但可完成一次新审查；新结论引用新报告后，旧报告变成**非引用**证据 → 下一轮 `human_release` 即可用<br>④ 只有"上述全部不可行"才 `abandon_task`（**不得把"当前不能放行"直接推成"应放弃"**） |
-| **C4 不成立** | 先看 `in_flight`：<br>· `usable == true` → 默认出口 `resume_inflight`（续接，不新开）<br>· `usable == false` → `relaunch_review`（`usable_blockers` 逐项给原因）<br>· `usable == null`（已导入不足、仍有槽位未到）→ `await_material` 与 `relaunch_review` 并列、均非默认<br>· `in_flight == null`（没有任何已发起轮）→ `relaunch_review`（没有材料可等）<br>· 审查做不成（`unavailable` / 环境凑不齐）→ `pause_for_human` / `abandon_task`（B4）<br>**事实提示（非顺序强制）**：`check_valid == false` 只说明「当前检查不能用于完成任务」，不证明在途轮作废——结论绑定的是判定那一刻的 check（`review.py:1425`），报告锚点只比内容锚点（`check.py:118`）；可以先重查、再核对材料是否仍适用后继续用原轮；只有结论写入之后再重查才会失绑 |
+| **C4 不成立** | 先看 `latest_launch`：<br>· `certain == false` → 不判断「确有在途轮」：`resume_inflight` 与 `relaunch_review` 并列、均非默认，并提示先用 `wf review-status` 核实该轮材料（无法区分「新轮未判」与「指针回退」）<br>· `certain == true` 且 `usable == true` → 默认 `resume_inflight`<br>· `certain == true` 且 `usable == false` → `relaunch_review`（`usable_blockers` 逐项给原因）<br>· `certain == true` 且 `usable == null` → `await_material` 与 `relaunch_review` 并列<br>· 无任何 launch → `relaunch_review`<br>· `redecidable_rounds` 非空（上轮 pass、仅 check 换代失绑）→ `resume_inflight`：对那轮重新 `review-decide`，不必新开<br>· 审查做不成（`unavailable` / 环境凑不齐）→ `pause_for_human` / `abandon_task`（B4）<br>**事实提示（非顺序强制）**：`check_valid == false` 只说明当前检查不能用于完成任务，不证明在途轮作废——结论绑定判定那一刻的 check（`review.py:1425`）；可先重查再核对材料后继续用原轮，只有结论写入后再重查才失绑 |
 
 ### 4.3 并存与顺序
 
@@ -212,7 +213,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 |---|---|
 | `gates.py` | ① 提取 `review_binding`（含 **cited 非空**）与 `check_validity`（含结构复核），步骤行为不变；② 两处摘要读取包 `except OSError`；③ `final_gate` 追加 `unverifiable` 阻断，`exits` 用 §4.2 的**枚举 token**（`restore_bytes`/`human_release`/`relaunch_review`/`resume_inflight`/`pause_for_human`/`abandon_task`），并带 `facts.reason = "unverifiable_evidence"` |
 | `review.py` | ① `open_findings` 的 `blocking`/`unaddressed` 条目补 **`round`**、`unavailable` 条目补 `cause/round/report_digest`，摘要读取包 `except OSError`；② `review-import` 与 `review-decide` 各加**消费检查**（对应报告当前可核实 → 置 `consumed`）；
-③ 提取**两个**共享函数（对应 `review-decide` 的两个既有通道，不合并、不混态）：**`review_eligibility`** ← `input_problems`（人数/异种/与实施 CLI 重叠）、**`review_report_problems`** ← `problems`（该通道含：申报 verdict 与推导不一致、**报告锚点失配**、报告事后改写、缺 `read-scope`/`excluded-scope`、敏感面缺口、未覆盖全部审查轴等）；`in_flight.usable` 只用这两个，不自行判资格；③ 新增 `repair_scope`（纯派生）与 **`exits_for(facts)`（唯一出口实现）**：返回 `[{condition, action, preferred, when}]`，`action ∈ {rerun_check, record_disposition, restore_bytes, human_release, relaunch_review, resume_inflight, await_material, pause_for_human, abandon_task}`；④ `unknown_acceptances` 读写与撤销（含决定文件 schema 校验、`release_allowed` 校验） |
+③ 提取**两个**共享函数（对应 `review-decide` 的两个既有通道，不合并、不混态）：**`review_eligibility`** ← `input_problems`（人数/异种/与实施 CLI 重叠）、**`review_report_problems`** ← `problems`（该通道含：申报 verdict 与推导不一致、**报告锚点失配**、报告事后改写、缺 `read-scope`/`excluded-scope`、敏感面缺口、未覆盖全部审查轴等）；`latest_launch.usable` 只用这两个，不自行判资格；③ 新增 `repair_scope`（纯派生）与 **`exits_for(facts)`（唯一出口实现）**：返回 `[{condition, action, preferred, when}]`，`action ∈ {rerun_check, record_disposition, restore_bytes, human_release, relaunch_review, resume_inflight, await_material, pause_for_human, abandon_task}`；④ `unknown_acceptances` 读写与撤销（含决定文件 schema 校验、`release_allowed` 校验） |
 | `tasks.py` | `cmd_archive` 在业务提交与 `final_gate` **之前**加钩子：扫描 `unknown_acceptances`，凡对应报告**当前可核实**者置 `consumed: true`（消费写点 ①）；该钩子只写任务记录，不影响归档顺序 |
 | `cli.py` | ① `wf status` 输出 `repair_scope`，并把 `unverifiable` 条目**渲染成三态标签**（未放行＝阻断 / `released`＝「已豁免（未知）」）；② `--short` 输出四条件是否满足 + `repair_scope.exits` 原样（按 `condition` 过滤，不重新推导）；③ 新增 `wf review-accept-unknown`（`--revoke`，含 `consumed` 标记逻辑） |
 | `skills/`（**AI 指引交付**） | ① `wf-continue`：`in_progress/finish` 前先读 `repair_scope`，按 §4.2 处理，不直接引导收工；② `wf-finish`：收工前读 `repair_scope`；**不要试归档探路**；③ `wf-review-action`：处置形状从现状 `{finding, decision_ref, reason}`（`SKILL.md:26`）改为 `{finding_id, round, slot, decision, reason, recheck_by}`，并写明**`decision` 必须 `accepted` 才清零**（B5）；`round/slot` 是 A9 落地后的必填字段（A9 是可执行性前提，见 §5）——指引按 post-A9 形态写 |
@@ -221,7 +222,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 
 ---
 
-## 7. 验收（47 项，全部属于 ⑥）
+## 7. 验收（49 项，全部属于 ⑥）
 
 | # | 断言 |
 |---|---|
@@ -233,7 +234,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | 6 | 重查产生新 check → `binding == false`（`check_id_changed`），`open_blocking` 不消失（B5） |
 | 7 | **只写 `accepted` 才清零**：`decision == "rejected"`/`"amended"` 后 `open_blocking` 仍非空（B5 反直觉语义） |
 | 8 | `verdict == "fail"` ∧ `binding` ∧ `open_blocking` 已清 → C4 未满足，`exits` 含 `relaunch_review` / `resume_inflight` |
-| 9 | `in_flight.usable == true` 时**默认出口**是 `resume_inflight`（即使 `verdict` 仍是上一轮 fail）；`usable == false` 时才给 `relaunch_review` |
+| 9 | `latest_launch.usable == true` 时**默认出口**是 `resume_inflight`（即使 `verdict` 仍是上一轮 fail）；`usable == false` 时才给 `relaunch_review` |
 | 10 | complex：`cited` 损坏 → `release_allowed == false`，`human_release` 不在 `exits` |
 | 11 | light：`cited` 损坏 → 仍阻断，且 `release_allowed == true`，`human_release` 在 `exits`；放行后 C3 满足 |
 | 12 | 非引用损坏 + 摘要全等放行 → C3 满足；撤销后恢复；匹配需三元组全等 |
@@ -243,14 +244,14 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | 16 | `cause` 三分只由 `open_findings` 产出，`repair_scope.unverifiable` 与之逐项一致 |
 | 17 | 权限故障不崩：`open_findings`、`review_binding`、`status`、`wf gate` 全部走归因分支 |
 | 18 | 并存无遮蔽：`open_blocking` 非空同时有未放行 `unverifiable` 时，两组事实**同时**出现 |
-| 19 | 条件覆盖性：任一未满足的 C1–C4 都有 `exits`（非空枚举）；**每个事实要么映射到某个 C，要么用于选择某个 C 的清除动作**（`in_flight` 属后者；`applicable` 仅便利派生，不算事实） |
+| 19 | 条件覆盖性：任一未满足的 C1–C4 都有 `exits`（非空枚举）；**每个事实要么映射到某个 C，要么用于选择某个 C 的清除动作**（`latest_launch` 属后者；`applicable` 仅便利派生，不算事实） |
 | 20 | **light 不承担 C4**：自愿审查 `fail`/`unavailable`/`invalidated` 且 `open_blocking` 空、C1/C3 满足 → 不产生"必须取得新审查结论"义务 |
 | 21 | 但 light 的 C2/C3 仍成立：自愿审查带 blocking → 未关闭时归档被 `WF_UNRESOLVED_BLOCKING` 拒；报告损坏 → C3 阻断 |
 | 22 | **C4 的 unavailable 出口**：审查做不成 → `exits` 含 `pause_for_human` 与 `abandon_task`，且不含"判 pass"类出口 |
 | 23 | 主动性约束：`repair_scope` 不含"等待评审/待评审确认"类状态；除 complex C4 外，未满足条件都能在不取得新审查结论的前提下推进 |
 | 24 | `--short` 输出四条件+`exits`，不输出完整事实集；`task.check` 字段派生等其余 `--short` 改动仍属 backlog |
 | 25 | 协议零改动：`phase.enum`、迁移数、`next_by_position` 逐字节一致；`repair_scope` 不参与 `next`；`task-abandon` 仍可终止且不解除阻断 |
-| 26 | `in_flight.usable` 三态合成：**硬失败**（`report_invalid` / `anchor_stale` / `implementer_overlap`）→ `false`；无硬失败且已导入材料足够（≥2 个互异 reviewer CLI）→ `true`（**声明槽位未齐也可判**）；已导入不足且仍有槽位未到 → `null`；已导入不足且槽位已齐 → `false`（`insufficient_reviewers`） |
+| 26 | `latest_launch.usable` 三态合成：**硬失败**（`report_invalid` / `anchor_stale` / `implementer_overlap`）→ `false`；无硬失败且**发现式轮次**里已导入材料足够（≥2 个互异 reviewer CLI）→ `true`；已导入不足且仍有槽位未到 → `null`；已导入不足且槽位已齐 → `false`（`insufficient_reviewers`）；**旧槽位形态**下声明槽位未齐 → `null` |
 | 27 | `usable` 与 decide 同源：`implementer_overlap`/`insufficient_reviewers` 来自 `review_eligibility`（`input_problems` 通道），`report_invalid`/`anchor_stale` 来自 `review_report_problems`（`problems` 通道）；两通道不得合并 |
 | 28 | C3 有「改变事实」的出口：complex 的 `cited` 损坏时 `exits` 含 `relaunch_review`（新结论落地后旧报告变非引用）；`abandon_task` 不得作为首选 |
 | 29 | C4 的事实提示**准确**：只说「结论写入后再重查会失绑」，**不得**声称「发起早就会失绑」；先重查是建议而非机制事实 |
@@ -269,9 +270,11 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | 42 | **`usable_blockers` 内容**：硬失败与 `material_missing` 并存时**全部列出**（硬失败在前），`usable` 取值只由优先级决定 |
 | 43 | **部分导入时 decide 的报错形态**：指引须说明报错是「single reviewer cannot produce a decision」，不是「声明槽位缺报告」 |
 | 44 | **`released` 三条件**：未撤销 **且未消费** 才算已放行；`consumed: true` 的旧记录不再解除 C3 |
-| 45 | **消费写点**：`wf archive` 的 `final_gate` 前置钩子、`review-import`、`review-decide` 三处发现"记录对应报告当前可核实"即置 `consumed`；残余窗口（恢复后未发生写命令又损坏）如实登记，且归档钩子兜住最终结果 |
+| 45 | **消费写点**：`wf archive` 的 `final_gate` 前置钩子、`review-import`、`review-decide` 三处发现「记录对应报告当前可核实」即置 `consumed`；**残余窗口（恢复后未发生写命令又损坏）不在保证内**，归档钩子只兜住「归档时报告仍可核实」那一支 |
 | 46 | **`reusable_rounds` 已撤回**：`repair_scope` 不含该字段；C4 的 `exits` 不出现基于「旧轮可复用」的推荐（逐轮决策/失效事实缺失，见 backlog A10） |
 | 47 | **消费保证的范围**：只保证「受控写点观察到恢复即失效」；「恢复后在无写命令期间再次损坏」**不在保证内**，归档钩子只兜住「归档时报告仍可核实」那一支 |
+| 48 | **`latest_launch.certain`**：`result == null` 或 `result.round == latest` → `true`；否则 `false`，且 `certain == false` 时 `resume_inflight` **不得**作为默认出口（只能与 `relaunch_review` 并列 + 提示核实材料） |
+| 49 | **`redecidable_rounds` 窄口径**：只含 `result.round` 那轮且 `verdict == pass`、其报告摘要与锚点仍匹配 → 可对该轮重新 decide；已判 fail 的轮不列入 |
 
 ## 8. 范围边界（防跑偏，硬约束）
 
@@ -298,14 +301,15 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | v30 | 恢复 C4 出口 + light 义务收窄 | 前提漏 A7/A9；技能层未交付；撤销后重新批准未定义 |
 | v31 | 落地前提**四项**（A1/A4/A7/C1）+ 技能交付 | `binding` 缺「引用非空」；`decision` 语义未交代；`open_blocking` 缺 `round`；示例把 `agent` 当 `slot`；决定文件 schema 未定义 |
 | v32 | 增「主动性」设计约束（§1a） | 规范本身要求固定顺序与产出数量，反而制造工作 |
-| v33 | `binding` 含引用非空、`in_flight`、`exits` 枚举、决定文件 schema、B5、前提增 A9（五项） | 「gate + repair_scope 是完整依据」过度承诺；决定文件缺 `by/at`；C3 把「暂时不能放行」推成「应放弃」；`usable` 无判据 |
+| v33 | `binding` 含引用非空、`latest_launch`、`exits` 枚举、决定文件 schema、B5、前提增 A9（五项） | 「gate + repair_scope 是完整依据」过度承诺；决定文件缺 `by/at`；C3 把「暂时不能放行」推成「应放弃」；`usable` 无判据 |
 | v34 | `usable` 三态 + `review_eligibility`、C3 补「改事实」出口、完整性口径三段、`by/at` 入 schema | `usable` 未吸收「输入无效」与「检查过期」；`exits` 形状与落点未定（第三份出口表风险）；「先重查否则白做」的依据与实现不符；§4.3 引错 backlog 条目 |
 | v35 | `usable` 五项判据、`exits_for` 单点产出、事实提示纠正 | `check_stale` 被塞进 `usable` 是**过度收紧**：`check_valid == false` 只说明当前检查不能用于完成任务，不证明在途轮作废（含 rule_version 变化等非内容原因），会把仍可续接的轮次误杀成 `relaunch_review`；两种 null 仍被合并在同一分支 |
 | v36 | 放行语义边界、共享函数二分、`check_stale` 移出 `usable`、C4 拆两种 null | C2 的语义仍未闭环（放行后「C2 是否满足」两解）；`usable` 的「按序」会让材料未齐遮住已确认的硬失败；#30 仍用旧名 `input_invalid`/`review_input_problems`；`anchor_stale` 无判据来源 |
 | v37 | 三态语义表、`usable` 硬失败优先合成、`anchor_stale` 归 `review_report_problems` | `usable` 以「声明槽位未齐」为不可判条件，比 decide 更严（发现模式 2/3 已可判） |
 | v38 | 放行一次一事件、`reusable_rounds`、资格拆两类、D4 升为前提 | `consumed` 无写点（只读查询与纯派生无法记录恢复事件）；`reusable_rounds` 混同「锚点新鲜」与「重判能解除阻断」；C4 出口把旧轮复用锁在 `in_flight == null` 一种情形 |
-| v39 | 消费写点三处、`reusable_rounds` 收窄、`usable` 按已导入材料判、前提分层 | `reusable_rounds` 依赖的逐轮事实不存在（无 launch 级 invalidated、result 只留最新、round 会回退）；消费保证写成「任何恢复都失效」，实际只覆盖受控写点；A8 降级后 light 关闭成本未真正解决 |
+| v39 | 消费写点三处、`reusable_rounds` 收窄、`usable` 按已导入材料判、前提分层 | `reusable_rounds` 依赖的逐轮事实不存在（无 launch 级 invalidated、result 只留最新、round 会回退）；消费保证写成「任何恢复都失效」，实际只覆盖受控写点 |
 | **v40** | 撤回 `reusable_rounds`（登记 A10）、消费保证范围精确化（登记 A11）、`usable` 区分轮次形态、§6 补 `tasks.py` 归档钩子 | 本文 |
+| **v41** | `latest_launch.certain`、`redecidable_rounds` 窄口径、C4 出口接新事实 | 本文 |
 
 ## 10. 已定项（2026-11-11 人裁）
 
