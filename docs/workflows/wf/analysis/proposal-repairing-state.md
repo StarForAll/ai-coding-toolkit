@@ -1,6 +1,6 @@
-# ⑥ 修复态的表达：不新增阶段，用「事实 + 清除动作」吸收 `fixing` 的收益（v34）
+# ⑥ 修复态的表达：不新增阶段，用「事实 + 清除动作」吸收 `fixing` 的收益（v35）
 
-> 状态：**待审 v34**。阶段：**方案审查阶段，实现零改动**（`review-phase-discipline.md`）。
+> 状态：**待审 v35**。阶段：**方案审查阶段，实现零改动**（`review-phase-discipline.md`）。
 > **本文只回答 ⑥**：`fixing` 的收益如何在四阶段内表达。范围边界见 §8。
 
 ---
@@ -143,7 +143,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 1. **不要用"试归档"探路**（`tasks.py:3233` 会先业务提交；提交前预检见 backlog **D4**）；
 2. **不得把"四条件满足"说成"可以归档"**：`wf gate` 只跑步骤面，`repair_scope` 只覆盖 ⑥ 的 C1–C4；
    escalated 待答、required 未核实、依赖未满足、debug 未裁、降级材料不完整**都不在这两处**，
-   且**没有只读等价物**（见 §8 与 backlog D1）；
+   且当前**没有只读等价物**（见 §8；消除该空缺需先做 backlog **D4「归档提交前预检」**，本文不依赖它）；
 3. 因此完整判断只能是"步骤面 + ⑥ 四条件 + 各自投影"，**并读三者仍不等于归档一定成功**——如实告知，不用措辞补足。
 
 ---
@@ -183,15 +183,15 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | 文件 | 改动 |
 |---|---|
 | `gates.py` | ① 提取 `review_binding`（含 **cited 非空**）与 `check_validity`（含结构复核），步骤行为不变；② 两处摘要读取包 `except OSError`；③ `final_gate` 追加 `unverifiable` 阻断，`exits` 用 §4.2 的**枚举 token**（`restore_bytes`/`human_release`/`relaunch_review`/`resume_inflight`/`pause_for_human`/`abandon_task`），并带 `facts.reason = "unverifiable_evidence"` |
-| `review.py` | ① `open_findings` 的 `blocking`/`unaddressed` 条目补 **`round`**、`unavailable` 条目补 `cause/round/report_digest`，摘要读取包 `except OSError`；② 新增 `repair_scope`（纯派生，调用上面两个共享函数；`in_flight` 由 `launches` 推出）；③ `unknown_acceptances` 读写与撤销（含决定文件 schema 校验、`release_allowed` 校验） |
-| `cli.py` | `wf status` 输出 `repair_scope`；**`--short` 输出四条件是否满足 + 未满足项的 `exits`（不输出完整事实集）**；新增 `wf review-accept-unknown`（`--revoke`） |
+| `review.py` | ① `open_findings` 的 `blocking`/`unaddressed` 条目补 **`round`**、`unavailable` 条目补 `cause/round/report_digest`，摘要读取包 `except OSError`；② 提取 **`review_input_problems`**（自 `review-decide` 的 `input_problems`，含人数/异种/重叠/verdict 一致性/材料缺口）供 `in_flight.usable` 复用；③ 新增 `repair_scope`（纯派生）与 **`exits_for(facts)`（唯一出口实现）**：返回 `[{condition, action, preferred, when}]`，`action ∈ {rerun_check, record_disposition, restore_bytes, human_release, relaunch_review, resume_inflight, await_material, pause_for_human, abandon_task}`；④ `unknown_acceptances` 读写与撤销（含决定文件 schema 校验、`release_allowed` 校验） |
+| `cli.py` | `wf status` 输出 `repair_scope`；**`--short` 输出四条件是否满足 + `repair_scope.exits` 原样（按 `condition` 过滤，不重新推导）**；新增 `wf review-accept-unknown`（`--revoke`） |
 | `skills/`（**AI 指引交付**） | ① `wf-continue`：`in_progress/finish` 前先读 `repair_scope`，按 §4.2 处理，不直接引导收工；② `wf-finish`：收工前读 `repair_scope`；**不要试归档探路**；③ `wf-review-action`：处置形状从现状 `{finding, decision_ref, reason}`（`SKILL.md:26`）改为 `{finding_id, round, slot, decision, reason, recheck_by}`，并写明**`decision` 必须 `accepted` 才清零**（B5）；`round/slot` 是**A9 落地后**的必填字段（A9 是本文落地前提，见 §5）——指引按 post-A9 形态写 |
 
 **不做第二套口径**：`cause`/`round` 只在 `open_findings`；`binding`/`check_valid` 只在两个共享函数。
 
 ---
 
-## 7. 验收（29 项，全部属于 ⑥）
+## 7. 验收（34 项，全部属于 ⑥）
 
 | # | 断言 |
 |---|---|
@@ -223,7 +223,12 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | 26 | `in_flight.usable` 三态：`material_missing` → `null`（不得算失效）；资格不合格 / 锚点失效 → `false`；皆无 → `true`；`result` 缺席时轮次取 launches 最大值；无 launches 时 `in_flight == null` |
 | 27 | `usable` 与 decide 同源：`eligibility_failed` 的判据来自 `review_eligibility`（自 `review-decide` 的 `input_problems` 提取），不得另写一套 |
 | 28 | C3 有「改变事实」的出口：complex 的 `cited` 损坏时 `exits` 含 `relaunch_review`（新结论落地后旧报告变非引用）；`abandon_task` 不得作为首选 |
-| 29 | C4 的事实提示：`check_valid == false` 时必须给出「新结论会立刻失绑，宜先重查」的依据，但不强制顺序 |
+| 29 | C4 的事实提示**准确**：只说「结论写入后再重查会失绑」，**不得**声称「发起早就会失绑」；先重查是建议而非机制事实 |
+| 30 | `usable` 吸收输入无效：已导入报告存在"申报 verdict 与推导不一致"→ `usable == false` 且 `usable_blockers` 含 `input_invalid`（判据来自 `review_input_problems`，与 `review-decide` 同源） |
+| 31 | `usable` 吸收检查过期：`check_valid == false`（内容已变未重查）→ `usable == false`、`usable_blockers` 含 `check_stale`，此时**不得**以 `resume_inflight` 作默认出口 |
+| 32 | `exits` 形状与落点：`[{condition, action, preferred, when}]`，**只由 `exits_for` 产出**；`--short` 原样过滤输出，不重新推导（无第二份出口表） |
+| 33 | `in_flight == null`（无任何已发起轮）时 `exits` 不含 `await_material`；`usable == null`（材料未到齐）时 `await_material` 与 `relaunch_review` 并列且**均非默认** |
+| 34 | 决定文件四件套：缺 `by`/`at`/`quote`/`source` 任一 → 拒绝（`by` 必须 `human:` 前缀） |
 
 ## 8. 范围边界（防跑偏，硬约束）
 
@@ -248,10 +253,11 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | v28 | 共享子判定 + `release_allowed` | 出口表仍是固定优先级；light 的 fail/unavailable 写成义务 |
 | v29 | 完成条件 C1–C4 | C4 丢默认动作；light 写成「无义务」；`invalidated` 被写成禁止重新发起 |
 | v30 | 恢复 C4 出口 + light 义务收窄 | 前提漏 A7/A9；技能层未交付；撤销后重新批准未定义 |
-| v31 | 落地前提五项 + 技能交付 + 主动性约束 | `binding` 缺「引用非空」；`decision` 语义未交代；`open_blocking` 缺 `round`；示例把 `agent` 当 `slot`；决定文件 schema 未定义；在途轮未作为事实 |
-| v32 | 增「主动性」设计约束 | 规范本身要求固定顺序与产出数量，反而制造工作；`in_flight.usable` 无判据 |
-| v33 | `binding` 含引用非空、`in_flight`、`exits` 枚举、决定文件 schema、B5 语义、前提增 A9 | 「gate + repair_scope 是完整依据」仍是过度承诺；决定文件缺 `by/at`；C3 把「暂时不能放行」推成「应放弃」；`usable` 无判据 |
-| **v34** | `usable` 三态 + `review_eligibility` 同源、C3 补「改事实」出口、完整性口径改三段、`by/at` 入 schema、版本史归因修正 | 本文 |
+| v31 | 落地前提**四项**（A1/A4/A7/C1）+ 技能交付 | `binding` 缺「引用非空」；`decision` 语义未交代；`open_blocking` 缺 `round`；示例把 `agent` 当 `slot`；决定文件 schema 未定义 |
+| v32 | 增「主动性」设计约束（§1a） | 规范本身要求固定顺序与产出数量，反而制造工作 |
+| v33 | `binding` 含引用非空、`in_flight`、`exits` 枚举、决定文件 schema、B5、前提增 A9（五项） | 「gate + repair_scope 是完整依据」过度承诺；决定文件缺 `by/at`；C3 把「暂时不能放行」推成「应放弃」；`usable` 无判据 |
+| v34 | `usable` 三态 + `review_eligibility`、C3 补「改事实」出口、完整性口径三段、`by/at` 入 schema | `usable` 未吸收「输入无效」与「检查过期」；`exits` 形状与落点未定（第三份出口表风险）；「先重查否则白做」的依据与实现不符；§4.3 引错 backlog 条目 |
+| **v35** | `usable` 五项判据（含 `input_invalid`/`check_stale`）、`exits_for` 单点产出 + 对象形状、`await_material` token、事实提示纠正、引用改正 | 本文 |
 
 ## 10. 已定项（2026-11-11 人裁）
 
