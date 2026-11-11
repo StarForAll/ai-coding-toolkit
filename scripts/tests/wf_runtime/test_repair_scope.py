@@ -668,6 +668,11 @@ class RepairScopeTest(unittest.TestCase):
             legacy = review.legacy_unverifiable(self.ctx, task)
         self.assertEqual(len(legacy), 1)
         self.assertIn("缺登记摘要", legacy[0]["note"])
+        # A6 需要的产出：明确出口（补摘要 / 另开新一轮 / abandon）
+        self.assertEqual(len(legacy[0]["exits"]), 3)
+        self.assertIn("review-import", legacy[0]["exits"][0])
+        self.assertIn("review-launch", legacy[0]["exits"][1])
+        self.assertIn("task-abandon", legacy[0]["exits"][2])
         # 既不进 unverifiable，也不产生做不到的出口
         self.assertEqual(scope["unverifiable"], [])
         actions = {item["action"] for item in scope["exits"]}

@@ -1805,10 +1805,22 @@ def legacy_unverifiable(ctx, task):
     它们**不计入 C3 阻断**（否则旧任务永久卡死）。补摘要的唯一路径是用现有
     `review-import` 对同轮同槽位重导一次；重导合法性依赖"文件内容未被篡改"，
     机制无法证明——属遗留风险，如实登记在 `note` 里。
+
+    每条都带**明确出口**（A6 需要的产出）：补摘要 / 另开新一轮 / 放弃任务。出口只写
+    人可执行的文本，不复用门禁的 `{condition, action}` 词表——那些是 `exits_for` 的
+    唯一产出，这里不是门禁条件。
     """
-    return [dict(item, note="缺登记摘要，机制既不能核验也不能放行")
-            for item in open_findings(ctx, task)["unavailable"]
-            if item.get("report_digest") is None]
+    out = []
+    for item in open_findings(ctx, task)["unavailable"]:
+        if item.get("report_digest") is not None:
+            continue
+        out.append(dict(item, note="缺登记摘要，机制既不能核验也不能放行", exits=[
+            "补登记摘要：对同轮同槽位重导同一份报告（`wf review-import --task <id>`；"
+            "磁盘字节已变时加 `--restore`）",
+            "换一轮重新审查：`wf review-launch --task <id> ...`，由新轮结论覆盖这条遗留证据",
+            "任务不再继续：`wf task-abandon --task <id>`",
+        ]))
+    return out
 
 
 def exiting_evidence(ctx, task):
