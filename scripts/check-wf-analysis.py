@@ -114,6 +114,13 @@ def main():
     # 10) 标签引用：矩阵行号必须存在；已废弃的「X 档」与 G 编号不得出现在正文
     body = "\n".join(lines[:hist_start])
     total = len(re.findall(r"^\| (\d+) \| (?:机制|文档) \|", body, re.M))
+    rowtype = dict(re.findall(r"^\| (\d+) \| (机制|文档) \|", body, re.M))
+    for mm in re.finditer(r"矩阵 #(\d+)\s*（([^）]*)）", body):
+        n, qual = mm.group(1), mm.group(2)
+        if n not in rowtype:
+            problems.append(("标签", 0, "矩阵 #%s 不存在" % n)); continue
+        if "文档项" in qual and rowtype[n] != "文档":
+            problems.append(("标签", 0, "矩阵 #%s 被称作「文档项」，但类型是 %s" % (n, rowtype[n])))
     for mm in re.finditer(r"矩阵 #(\d+)", body):
         if int(mm.group(1)) > total:
             problems.append(("标签", 0, "矩阵 #%s 超出矩阵范围（共 %d 行）" % (mm.group(1), total)))

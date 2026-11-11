@@ -1,6 +1,6 @@
-# ⑥ 修复态的表达：不新增阶段，用「事实 + 清除动作」吸收 `fixing` 的收益（v61）
+# ⑥ 修复态的表达：不新增阶段，用「事实 + 清除动作」吸收 `fixing` 的收益（v62）
 
-> 状态：**待审 v61**。阶段：**方案审查阶段，实现零改动**（`review-phase-discipline.md`）。
+> 状态：**待审 v62**。阶段：**方案审查阶段，实现零改动**（`review-phase-discipline.md`）。
 > §6 是**待实施清单（全部未实施）**，**不是已完成的工作**；当前 `docs/workflows/wf/payload/` 与基线 `8da2f23`
 > **逐字节一致**（`git diff` 为空）。
 > **本文只回答 ⑥**：`fixing` 的收益如何在四阶段内表达。范围边界见 §8。
@@ -292,22 +292,22 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | 54 | 机制 | **`legacy` 形态**：槽位齐但两份报告同一 CLI → `usable == false`（`insufficient_reviewers`）；槽位未齐 → `null`（等得起） |
 | 55 | 机制 | **`redecidable` 与 `usable` 一致**：`usable == false` 的轮不得 `redecidable == true`；`redecidable` 判据 = 最新记录 `pass` ∧ 报告匹配 ∧ 未失效 ∧ 该轮 launch CLI == 最新 launch CLI ∧ 该轮 `usable == true` |
 | 56 | 机制 | **存量 `undecided` 是推断残缺**：其余历史轮显示 `undecided` 但历史不可知；`status`/`--short` 须标 `inferred` 边界 |
-| 57 | 机制 | **`release_allowed` 随 complexity 漂移**：定义取**当前** `plan.complexity`；complex→light 降级后同一 `cited` 损坏证据的放行资格会翻转——**归属**：`status` 渲染须显示该条目的 `release_allowed` 现值；**该条目的文档项（§7 矩阵 #57）须说明降级会改变它** |
+| 57 | 机制 | **`release_allowed` 随 complexity 漂移**：定义取**当前** `plan.complexity`；complex→light 降级后同一 `cited` 损坏证据的放行资格会翻转——**归属**：`status` 渲染须显示该条目的 `release_allowed` 现值 |
 | 58 | 机制 | **`cause` 三分可判**：`file_digest` 返回 `None` → `missing`；摘要 ≠ 登记摘要 → `changed`；读取抛 `OSError` → `unreadable` |
 | 59 | 机制 | **归档回显放行清单**（A12 最小缓解）：`wf archive` 与 `wf status` 强制列出当前生效的 `unknown_acceptances`（含 `by/at/quote`） |
 | 60 | 机制 | **`decide` 入口两条拒绝**：目标轮最新记录带 `invalidated_reason` → 拒；该轮 launch CLI ≠ 最新 launch CLI → 拒（`WF_REVIEW_INVALID`，出口＝新一轮）。**不用会话身份**（自动身份模式无宿主 CLI） |
 | 61 | 机制 | **退出口径一致**：`exits` 里的 `redecide_round{round}` 与 `decide` 入口校验用**同一口径**（该轮 launch CLI vs 最新 launch CLI），不得分叉 |
-| 62 | 机制 | **`usable_blockers` 非空 ≠ 不可用**：`usable == true` 时该列表仍可能含 `material_missing` 等**事实**（如发现式 2/3）；§7 矩阵 #62（读法条目）须写明（看 `usable` 取值，`blockers` 是事实清单而非阻断清单） |
+| 62 | 机制 | **`usable_blockers` 非空 ≠ 不可用**：`usable == true` 时该列表仍可能含 `material_missing` 等**事实**（如发现式 2/3）；§7 矩阵 #70（读法条目）须写明（看 `usable` 取值，`blockers` 是事实清单而非阻断清单） |
 | 63 | 机制 | **C2 的关闭语义**：`accepted` 只能表示「**处置结果已成立并经非提出者复核**」——① 已修复且已重查通过、② 经复核认定误报（无需改代码）、③ 已重分类（本就不是问题）。**「同意某种修法但还没做」不得写 `accepted`**（否则 finding 立刻从 `open_blocking` 消失，light 又没有 C4 兜底）；此时保持 open，或写 `amended` + 理由（不关闭） |
 | 64 | 机制 | **提取行为等价**：`final_gate_nonstep` 提取后，既有失败场景（escalated/required/complex 未确认/降级不完整/依赖/`unruled_debug_multiples`/`action_incomplete`/`paused`）返回的 `code` 与 `facts` 与提取前**逐字段相同**；`paused` 与 `action_incomplete` 的交织顺序不变 |
 | 65 | 机制 | **C3 分支归属**：新增的 `unverifiable` 阻断位于 `final_gate_nonstep` 内——预检在提交前即可看到它（否则「业务已提交、归档因 C3 被拒」） |
 | 66 | 机制 | **C4 只核 verdict + binding**（不追加资格条件）；判定后新增的已导入报告由 `conclusion.stale_extra` **作为事实呈现**：非空时 AI 知道「重判可能变 fail」，可自行选择重判或说明为何不重判——**门禁语义不变**（E3=甲） |
 | 67 | 文档 | `wf-review-action`：处置形状正确、**只有 `accepted` 清零**、**必须显式传 `--round`**（默认取最大 launch 轮，与 `exits.round` 可能不同） |
 | 68 | 文档 | `wf-review-action`：写明**处置时机与类型的对应**——① 路径（随 fail 轮同批）**只用于误报/重分类**；② 「已修复」只能随**修好+重查后的新一轮** decide 捎带；「同意修法但还没做」不写 `accepted` |
-| 69 | 文档 | `wf-repair-loop`（新）：读 `repair_scope` 的判读顺序、`launches[]` 逐轮看、存量 `inferred` 边界、`check_valid == false` 的两种走法及后果 |
-| 70 | 文档 | `wf-repair-loop`（新）：十个 token 的含义与目标轮、终局动作、并列出口如何选，以及**三条读法**（`usable_blockers` 非空≠不可用、`abandon_task` 常列≠推荐、`accepted` 仅表示结果已成立） |
+| 69 | 文档 | `wf-repair-loop`（新）：读 `repair_scope` 的判读顺序、`launches[]` 逐轮看、存量 `inferred` 边界、`check_valid == false` 的两种走法、**fail 轮重判仍 fail**、**否定只清 C2**及后果 |
+| 70 | 文档 | `wf-repair-loop`（新）：十个 token 的含义与目标轮、终局动作、并列出口如何选，以及**五条读法**：① `usable_blockers` 非空≠不可用；② `abandon_task` 常列≠推荐，但**目标已变/继续成本不合理时可基于任务价值建议终止**（不要求先证其他出口不可行，但须说明 C3 未满足）；③ `accepted` 仅表示结果已成立；④ **判 fail 的轮重判仍是 fail**（verdict 由报告载荷推导）；⑤ **否定只清 C2、不改 verdict** |
 | 71 | 文档 | `wf-continue` / `wf-finish`：路由与收工前先读 `repair_scope` 与 `gate`，**不要试归档探路** |
-| 72 | 文档 | `wf-review-accept-unknown`：人与机制的分工——何时问人、呈现哪些不可核实证据、`release_allowed` 取值含义、未知 findings 一并豁免意味着什么、`quote` 如何采集 |
+| 72 | 文档 | `wf-review-accept-unknown`：人与机制的分工——何时问人、呈现哪些不可核实证据、`release_allowed` 取值含义（含 **complex→light 降级会翻转它**）、未知 findings 一并豁免意味着什么、`quote` 如何采集 |
 | 73 | 文档 | `wf-repair-loop`：写明 `stale_extra` 非空时**先读新增报告**再决定（重判 / 说明理由），不得跳过实质检查 |
 
 ## 8. 范围边界（防跑偏，硬约束）
@@ -364,6 +364,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | **v59** | 引入只读 doc-lint 并修其报出的 4 处真实缺陷（两处表格列数、判据表缺 `exits` 行） | 本文 |
 | **v60** | 结构减负：A/B/G 三处合并为**一张验收矩阵**、§4.1+§4.2 合并为**一张条件表**；副本从 8 处降到 3 处（事实契约 / 条件+出口 / 验收矩阵） | 本文 |
 | **v61** | 修 v60 合并留下的死引用、lint 加严（严格 §引用 + 标签检查 + 覆盖声明）、补回 E3 两条机制事实、C3 的 `abandon_task` 不设技术前置 | 本文 |
+| **v62** | 修 #57/#62 自指、#70 扩为五条读法（含 C3 放弃授权与 E3 两条事实）、#72 补降级翻转、lint 增类型限定语校验 | 本文 |
 
 ## 10. 已定项（2026-11-11 人裁）
 
