@@ -1,6 +1,6 @@
-# ⑥ 修复态的表达：不新增阶段，用「事实 + 清除动作」吸收 `fixing` 的收益（v44）
+# ⑥ 修复态的表达：不新增阶段，用「事实 + 清除动作」吸收 `fixing` 的收益（v45）
 
-> 状态：**待审 v44**。阶段：**方案审查阶段，实现零改动**（`review-phase-discipline.md`）。
+> 状态：**待审 v45**。阶段：**方案审查阶段，实现零改动**（`review-phase-discipline.md`）。
 > §6 是**待实施清单（全部未实施）**，**不是已完成的工作**；当前 `docs/workflows/wf/payload/` 与基线 `8da2f23`
 > **逐字节一致**（`git diff` 为空）。
 > **本文只回答 ⑥**：`fixing` 的收益如何在四阶段内表达。范围边界见 §8。
@@ -70,9 +70,9 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | `open_blocking` | `open_findings(...)["blocking"]`（**门禁同源、全轮次**）；条目须带 `round`（见 §6 ①）。**只含 blocking severity**；`unaddressed` 里的非 blocking 项**不在本文范围**（它们是判断骨架的输入，不是归档阻断） |
 | `unverifiable` | `open_findings(...)["unavailable"]`（唯一来源，条目带 `cause/round/report_digest`） |
 | `rounds[]` | **新增的逐轮决策事实**（`decide` 追加，append-only）：`{round, verdict, check_id, decided_at, invalidated_reason}`。**消费规则（同轮取最新）**：同一轮可能有多条（重判、失效追加）——所有消费方一律取该轮 `decided_at` 最大的一条，**禁止各自实现**。**失效同步（写点 `review-launch`）**：实施 CLI 变更时不能只处理当前 `result` 那一轮——**要对所有 `launch.implementation_cli` 与新 CLI 不同的轮各追加一条失效记录**（`invalidated_reason: "implementation CLI changed"`），否则旧的 pass 记录会永远是 pass 并被 `redecidable_rounds` 选中；而重判旧轮用的是**该轮 launch 保存的 CLI**（`review.py:1255`），根本发现不了与当前实施者的冲突。**失效优先级高于 verdict**：该轮最新记录带 `invalidated_reason` 即不可复用。**存量回退（无迁移）**：`rounds[]` 为空时按 `result` 推断一条 `{round: result.round, verdict: result.verdict ∈ {pass, fail} 时原值，否则 null, invalidated_reason: result.verdict == "invalidated" ? "implementation CLI changed" : null, decided_at: null, inferred: true}`，并在**下一次 `decide` 追加新记录时先把这条推断记录落盘**，避免 `result` 被覆盖后旧事实丢失。**消费排序**：`decided_at == null`（推断）视为最早，真实记录优先。<br>| `conclusion.binding` | **`review_binding`**（自 `review-passed` 提取）：`result.check_id == check.id` ∧ **结论至少引用一份已导入报告** ∧ 引用报告 `result_digest == recorded == 文件当前摘要`。<br>**"至少引用一份"必须写进判据**：门禁对 `cited` 为空是独立拒绝（`gates.py:695-696`），漏掉它会让空引用的结论算出 `binding == true` |
-| `latest_launch` | 最新一轮 = `max(launches.round)`；`imported/declared` 为该轮已导入 slot 数与声明槽位数；**`form`** = `discovered`（该轮导入记录带 `agent`）／`legacy`（显式 `--report/--slot`，记录无 `agent`）。 |
-| `undecided` | `{rounds: [尚无判定记录的 launch 轮], round: 最大者, imported, declared, usable, usable_blockers}`；**`usable` 只判 `round` 那一轮**（多轮未判定时其余仅列出）。合成：① 任一硬失败（`report_invalid`／`anchor_stale`／`implementer_overlap`）→ `false`；② 无硬失败且该轮已可判（`discovered` 按去重 CLI ≥2；`legacy` 按声明槽位齐）→ `true`；③ 已导入不足、仍有槽位未到 → `null`；④ 已导入不足、槽位已齐 → `false`（`insufficient_reviewers`）。 |
-| `redecidable_rounds[]` | `rounds[]`（同轮取最新）中满足四条：① `verdict == pass`；② `check_id != 当前 check`；③ 报告摘要一致且锚点匹配当前内容；④ `invalidated_reason == null` **且**该轮 launch 的 `implementation_cli` == 当前实施 CLI。 |
+| `latest_launch` | 最新一轮 = `max(launches.round)`；`imported/declared` 为该轮已导入 slot 数与声明槽位数；**`form`** = `discovered`（该轮导入记录带 `agent`）／`legacy`（显式 `--report/--slot`，记录无 `agent`）／**`null`（该轮尚无任何导入记录，无法判定）**——此时 `usable` 必落 ③（材料不足）。 |
+| `undecided` | `{rounds: [尚无判定记录的 launch 轮], round: 最大者, imported, declared, usable, usable_blockers}`；**`usable` 只判 `round` 那一轮**（多轮未判定时其余仅列出）。合成：① 任一硬失败（`report_invalid`／`anchor_stale`／`implementer_overlap`）→ `false`；② 无硬失败且该轮已可判（`discovered` 按去重 CLI ≥2；`legacy` 按声明槽位齐）→ `true`；③ 已导入不足、仍有槽位未到 → `null`；④ 已导入不足、槽位已齐 → `false`（`insufficient_reviewers`）。**`usable_blockers` 内容**：列出**全部**成立项（含 `material_missing`），硬失败在前；`usable` 的取值只由 ①–④ 的优先级决定，不由列表长度决定。 |
+| `redecidable_rounds[]` | `rounds[]`（同轮取最新）中满足四条：① `verdict == pass`；② `check_id != 当前 check`；③ 报告摘要一致且锚点匹配当前内容；④ `invalidated_reason == null` **且**该轮 launch 的 `implementation_cli` == **当前实施 CLI**。**当前实施 CLI 的定义**：`max(launches)` 那条 launch 记录的 `implementation_cli`（记录内可复算，保证 `repair_scope` 仍是纯派生）；**已知限制**：会话换了 CLI 但没发起新 launch 时该参照不变，判据看不见——这条由 `decide` 入口校验与失效同步兜底，不在此伪装成已覆盖。 |
 | `conclusion.check_valid` | **`check_validity`**（自 `check-passed` 提取）：`result == pass` ∧ anchor 相符 ∧ 未 `invalidated` ∧ `rule_version` 相符 ∧ **结构复核 `check_result_problems`** ∧ anchor 可算 |
 | 便利派生 | `applicable = binding && check_valid` **仅作展示便利**，不作为任何完成条件（条件用 C1/C4 各自的原始事实） |
 
@@ -180,7 +180,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | 机制 | 关系 |
 |---|---|
 | `phase` 枚举 / `protocol/states.json` / `next_by_position` | **不改**；`repair_scope` 不参与 `next` |
-| `review-decide` 判定资格、`task-check` 语义 | **不改** |
+| `review-decide` 判定资格、`task-check` 语义 | **资格判定不改**，但 `decide` **新增一条入口校验**（见 §6 ②）：目标轮最新 `rounds[]` 记录带 `invalidated_reason` 时**拒绝重判**（`WF_REVIEW_INVALID`，出口＝发起新一轮）；否则按 §2.1 的自述，重判会用该轮旧 launch 的 CLI 校验、把失效静默挤掉。<br>**理由**：出口层不推荐 ≠ 机制保证——§4.2 宣称「decide 始终是权威」，权威命令就必须拦这条。 |
 | `review-passed` / `check-passed` | 行为不变，内部判定**提取为共享函数**（`review_binding` / `check_validity`），并在这两处做 OSError 归因 |
 | `final_gate` | **只加一条**：存在 `released == false` 的 `unverifiable` → 阻断；出口按 `release_allowed` 分列 |
 | `task-abandon` | **不改**：终局、不解除 |
@@ -220,8 +220,8 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | 文件 | 状态 | 改动 |
 |---|---|---|
 | `gates.py` | 未实施 | ① 提取 `review_binding`（含 **cited 非空**）与 `check_validity`（含结构复核），步骤行为不变；② 两处摘要读取包 `except OSError`；③ `final_gate` 追加 `unverifiable` 阻断，`exits` 用 §4.2 的**枚举 token**（`restore_bytes`/`human_release`/`relaunch_review`/`resume_inflight`/`pause_for_human`/`abandon_task`），并带 `facts.reason = "unverifiable_evidence"` |
-| `review.py` | 未实施 | ① `open_findings` 的 `blocking`/`unaddressed` 条目补 **`round`**、`unavailable` 条目补 `cause/round/report_digest`，摘要读取包 `except OSError`；② `review-decide` **追加 `reviews.rounds[]`**；`review-launch` 在实施 CLI 变更使既有结论失效时**追加一条同轮失效记录**（消费方「同轮取最新」，见 §2.1）；`rounds[]` 为空时按 `result` 推断一条（不回写）（`{round, verdict, check_id, decided_at, invalidated_reason}`，与 `attempts` 同一写路径）；并对同批 `decision != accepted` 的 open finding 在 `facts.not_closing` 里回报（「已驳回但未关闭」）；`review-import` 与 `review-decide` 各加**消费检查**（对应报告当前可核实 → 置 `consumed`）； ③ 提取**两个**共享函数（对应 `review-decide` 的两个既有通道，不合并、不混态）：**`review_eligibility`** ← `input_problems`（人数/异种/与实施 CLI 重叠）、**`review_report_problems`** ← `problems`（该通道含：申报 verdict 与推导不一致、**报告锚点失配**、报告事后改写、缺 `read-scope`/`excluded-scope`、敏感面缺口、未覆盖全部审查轴等）；`undecided.usable` 只用这两个，不自行判资格；③ 新增 `repair_scope`（纯派生）与 **`exits_for(facts)`（唯一出口实现）**：返回 `[{condition, action, preferred, when}]`，`action ∈ {rerun_check, record_disposition, restore_bytes, human_release, relaunch_review, resume_inflight, redecide_round, await_material, pause_for_human, abandon_task}`（**十个**，含 `redecide_round`）；④ `unknown_acceptances` 读写与撤销（含决定文件 schema 校验、`release_allowed` 校验） |
-| `tasks.py` | 未实施 | ① **D4-minimal（纳入实施范围；当前未实施）**：`cmd_archive` 在**业务提交之前**跑只读预检 = **C1–C4 ∧ `nonstep` 九项无阻断 ∧ `before_archive` 中不依赖提交的步骤**（`knowledge-disposed`／`retrospective-done`／`sampled`／`tdd-verified`）；任一不满足即返回（**不提交**）。**`nonstep` 定义**：⑥ 的九项非步骤事实（`escalated`／`required_unverified`／`complexity_unconfirmed`／`downgrade_incomplete`／`dependencies_unmet`／`debug_unruled`／`action_incomplete`／`paused`／`suspended`）。**仍未覆盖（如实）**：`repo_rules`／`delete` 确认（需人/规则）、`changes-persisted`（本就由提交满足）——这两类仍可能在提交后由 `final_gate` 拒；② `cmd_archive` 在业务提交与 `final_gate` **之前**加钩子：扫描 `unknown_acceptances`，凡对应报告**当前可核实**者置 `consumed: true`（消费写点 ①）；该钩子只写任务记录，不影响归档顺序 |
+| `review.py` | 未实施 | ① `open_findings` 的 `blocking`/`unaddressed` 条目补 **`round`**、`unavailable` 条目补 `cause/round/report_digest`，摘要读取包 `except OSError`；② `review-decide` **追加 `reviews.rounds[]`**；`review-launch` 在实施 CLI 变更时**对所有 `launch.implementation_cli` 不同的轮各追加一条失效记录**（不只是 `result` 那轮）（消费方「同轮取最新」，见 §2.1）；`rounds[]` 为空时按 `result` 推断一条（不回写）（`{round, verdict, check_id, decided_at, invalidated_reason}`，与 `attempts` 同一写路径）；并对同批 `decision != accepted` 的 open finding 在 `facts.not_closing` 里回报（「已驳回但未关闭」）；`review-import` 与 `review-decide` 各加**消费检查**（对应报告当前可核实 → 置 `consumed`）； ③ 提取**两个**共享函数（对应 `review-decide` 的两个既有通道，不合并、不混态）：**`review_eligibility`** ← `input_problems`（人数/异种/与实施 CLI 重叠）、**`review_report_problems`** ← `problems`（该通道含：申报 verdict 与推导不一致、**报告锚点失配**、报告事后改写、缺 `read-scope`/`excluded-scope`、敏感面缺口、未覆盖全部审查轴等）；`undecided.usable` 只用这两个，不自行判资格；③ 新增 `repair_scope`（纯派生）与 **`exits_for(facts)`（唯一出口实现）**：返回 `[{condition, action, preferred, when}]`，`action ∈ {rerun_check, record_disposition, restore_bytes, human_release, relaunch_review, resume_inflight, redecide_round, await_material, pause_for_human, abandon_task}`（**十个**，含 `redecide_round`）；④ `unknown_acceptances` 读写与撤销（含决定文件 schema 校验、`release_allowed` 校验） |
+| `tasks.py` | 未实施 | ① **D4-minimal（纳入实施范围；当前未实施）**：`cmd_archive` 在**业务提交之前**跑只读预检 = **C1–C4 ∧ `nonstep` 九项无阻断 ∧ `before_archive` 中不依赖提交的步骤**（`knowledge-disposed`／`retrospective-done`／`sampled`／`tdd-verified`）；**预检须沿用 `ignore_action_id=task.action.id` 的自我豁免**（`tasks.py:3239`）——否则 `action_incomplete` 会看到本次归档动作本身，永远拒绝归档（自我死锁）。任一不满足即返回（**不提交**）。**`nonstep` 定义**：⑥ 的九项非步骤事实（`escalated`／`required_unverified`／`complexity_unconfirmed`／`downgrade_incomplete`／`dependencies_unmet`／`debug_unruled`／`action_incomplete`／`paused`／`suspended`）。**仍未覆盖（按代码事实修正）**：`repo_rules`（`tasks.py:3208`）与 `delete`（`tasks.py:3219`）确认**本就在业务提交之前**、`final_gate` 也不检查它们，故**不存在提交后被拒的窗口**（上一版列为未覆盖是多报了风险）；真正残留的只有 `changes-persisted`（由提交本身满足）。② `cmd_archive` 在业务提交与 `final_gate` **之前**加钩子：扫描 `unknown_acceptances`，凡对应报告**当前可核实**者置 `consumed: true`（消费写点 ①）；该钩子只写任务记录，不影响归档顺序 |
 | `cli.py` | 未实施 | ① `wf status` 输出 `repair_scope`，`unverifiable` 条目**渲染三态标签**、`open_blocking` 中「已驳回但未关闭」单独标注；（未放行＝阻断 / `released`＝「已豁免（未知）」）；② `--short` 输出四条件是否满足 + `repair_scope.exits` 原样（按 `condition` 过滤，不重新推导）；③ 新增 `wf review-accept-unknown`（`--revoke`，含 `consumed` 标记逻辑） |
 | `skills/`（**AI 指引交付**） | 未实施 | ① `wf-continue`：`in_progress/finish` 前先读 `repair_scope`，按 §4.2 处理，不直接引导收工；② `wf-finish`：收工前读 `repair_scope`；**不要试归档探路**；③ `wf-review-action`：处置形状从现状 `{finding, decision_ref, reason}`（`SKILL.md:26`）改为 `{finding_id, round, slot, decision, reason, recheck_by}`，并写明**`decision` 必须 `accepted` 才清零**（B5）；`round/slot` 是 A9 落地后的必填字段（A9 是可执行性前提，见 §5）——指引按 post-A9 形态写 |
 
@@ -233,7 +233,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 
 **分两档**：A 档=机制可测（代码/事实/门禁行为，可自动化）；B 档=文档审查（指引措辞，需人读，**不计入自动化计数**）。上一版把两档混在一张 49 项表里，导致「承诺名实不符」。
 
-### A 档：机制可测（51 项）
+### A 档：机制可测（54 项）
 
 | # | 断言 |
 |---|---|
@@ -276,14 +276,21 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | A37 | **豁免后原字节恢复**：报告重新可核实 → 离开 `unverifiable`、findings 重新枚举 → C2 重新可能不满足；此前的 `waive` 记录**不**覆盖新枚举出的 findings（B1 的"事实变化"对偶面） |
 | A38 | **一次一事件**：丢失→放行→恢复（离开 `unverifiable`）后该放行标 `consumed`；再次损坏时**旧放行不再生效**，C3 重新阻断，需新的放行决定 |
 | A39 | **资格拆两类**：已导入报告的 reviewer CLI 与实施 CLI 相同 → 材料未齐时也立即 `usable == false`（`implementer_overlap`）；仅"去重人数不足"才等到材料齐后判定（`insufficient_reviewers`） |
-| A43 | **消费保证的范围**：只保证「受控写点观察到恢复即失效」；「恢复后在无写命令期间再次损坏」**不在保证内**，归档钩子只兜住「归档时报告仍可核实」那一支 |
-| A45 | `rounds[]` 生命周期：同轮多条取 `decided_at` 最新；`review-launch` 遇 CLI 变更**追加同轮失效记录**；`rounds[]` 为空时按 `result` 推断一条（`inferred: true`），不回写 |
-| A46 | `undecided` 语义：只有「尚无判定记录」的 launch 轮；**被放弃的坏轮也算未判定**，但不得因此把 `redecide_round` 藏起来 |
-| A47 | `redecide_round` 与 `undecided` 并存：`undecided` 非空且 `redecidable_rounds` 非空时，`exits` **同时**含 `resume_inflight`/`relaunch_review`/`await_material` 与 `redecide_round` |
-| A48 | `usable` **不含**标准漂移判断（导入时标记是历史事件、`standard_drift_gate` 在 decide 时重算），且 `decide` 为权威 |
-| A49 | `redecidable_rounds` 定义 = `rounds[]`（同轮取最新）中 `verdict == pass` ∧ `check_id != 当前 check` ∧ 报告摘要与锚点仍匹配 ∧ `invalidated_reason == null` |
-| A50 | `rounds[]` 新增字段与失效同步出现在 §6 待实施清单（`review-decide` 追加、`review-launch` 追加失效记录） |
-| A51 | D4-minimal 覆盖 **C1–C4 ∧ nonstep**；未覆盖项（`repo_rules`/`delete` 确认、`changes-persisted`）如实列出 |
+| A40 | **消费保证的范围**：只保证「受控写点观察到恢复即失效」；「恢复后在无写命令期间再次损坏」**不在保证内**，归档钩子只兜住「归档时报告仍可核实」那一支 |
+| A41 | `rounds[]` 生命周期：同轮多条取 `decided_at` 最新；`review-launch` 遇 CLI 变更**对所有受影响轮各追加失效记录**；`rounds[]` 为空时按 `result` 推断一条（`inferred: true`），**并在第一次写入前先把它落盘** |
+| A42 | `undecided` 语义：只有「尚无判定记录」的 launch 轮；**被放弃的坏轮也算未判定**，但不得因此把 `redecide_round` 藏起来 |
+| A43 | `redecide_round` 与 `undecided` 并存：`undecided` 非空且 `redecidable_rounds` 非空时，`exits` **同时**含 `resume_inflight`/`relaunch_review`/`await_material` 与 `redecide_round` |
+| A44 | `usable` **不含**标准漂移判断（导入时标记是历史事件、`standard_drift_gate` 在 decide 时重算），且 `decide` 为权威 |
+| A45 | `redecidable_rounds` 定义 = `rounds[]`（同轮取最新）中 `verdict == pass` ∧ `check_id != 当前 check` ∧ 报告摘要与锚点仍匹配 ∧ `invalidated_reason == null` |
+| A46 | `rounds[]` 新增字段与失效同步出现在 §6 待实施清单（`review-decide` 追加、`review-launch` 追加失效记录） |
+| A47 | D4-minimal 覆盖 **C1–C4 ∧ nonstep**；未覆盖项（`repo_rules`/`delete` 确认、`changes-persisted`）如实列出 |
+| A48 | `usable_blockers` 内容：硬失败与 `material_missing` 并存时**全部列出**（硬失败在前），`usable` 取值只由 ①–④ 优先级决定 |
+| A49 | `released` 三条件：存在 `(round, slot, report_digest)` 全等、**未撤销且未消费**的放行记录；缺一即不算已放行 |
+| A50 | 消费写点三处：`wf archive` 的 `final_gate` 前置钩子、`review-import`、`review-decide` 发现「记录对应报告当前可核实」即置 `consumed` |
+| A51 | **`decide` 拒绝重判已失效轮**：目标轮最新 `rounds[]` 记录带 `invalidated_reason` → `WF_REVIEW_INVALID`（出口＝发起新一轮），不得静默产出 pass |
+| A52 | 失效同步范围：`review-launch` 遇实施 CLI 变更时，对**所有** `launch.implementation_cli` 不同的轮各追加失效记录 |
+| A53 | 存量回填：`rounds[]` 为空时按 `result` 推断一条并在**首次写入前落盘**（`inferred: true`，`decided_at: null` 视为最早） |
+| A54 | D4 预检须带 `ignore_action_id` 自我豁免（否则 `action_incomplete` 自我死锁）；未覆盖项仅 `changes-persisted` |
 
 ### B 档：文档审查（3 项，人读勾选；不计入自动化计数）
 
@@ -330,6 +337,7 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | **v42** | `rounds[]`（A10 最小形态）取代 `certain`、`form` 事实、D4-minimal 纳入实施范围、exits 加 `redecide_round`、验收分两档 | 本文 |
 | **v43** | `rounds[]` 生命周期与消费规则、`undecided` 取代 `in_flight`、`redecide_round` 与在途轮并行、D4 覆盖 C1–C4、标准漂移移出硬失败 | 本文 |
 | **v44** | 失效同步覆盖全部旧轮、判据行补回、示例自洽、`nonstep` 定义、存量回填衔接、A12 登记 | 本文 |
+| **v45** | `decide` 拒绝重判已失效轮、失效同步覆盖全部受影响轮、回填统一为「落盘」、D4 未覆盖清单按代码修正 | 本文 |
 
 ## 10. 已定项（2026-11-11 人裁）
 
