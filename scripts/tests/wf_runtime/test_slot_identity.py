@@ -69,7 +69,7 @@ class SlotStatusTest(unittest.TestCase):
         self.assertEqual(by_slot["s1"]["state"], "staged")
         self.assertEqual(by_slot["s1"]["agent"], "pi")
         self.assertEqual(by_slot["s2"]["agent"], "zcode")
-        self.assertTrue(facts["ready_to_decide"])
+        self.assertTrue(facts["material_ready"])
 
     def test_legacy_entries_are_derived_positionally_without_rewrite(self):
         """旧记录（`slot` 记的是 reviewer 名）读取时推导到声明槽位，不回写。"""

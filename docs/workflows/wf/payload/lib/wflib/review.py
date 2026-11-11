@@ -655,10 +655,21 @@ def status_of_round(ctx, task, round_no=None):
         slots.append(record)
     arrived = [item for item in slots if item["state"] in ("imported", "staged")]
     missing = [item["slot"] for item in slots if item["state"] == "missing"]
+    stale = [item["slot"] for item in slots if item["state"] == "stale"]
+    unreadable = [item["slot"] for item in slots if item["state"] == "unreadable"]
+    # B1：材料事实与判定资格**分列**。这里只说"材料齐不齐、能不能用"，
+    # 不承诺"能不能判"——那由 `review_eligibility`（与 review-decide 同一个函数）给出提示。
+    reviewers = sorted({normalize_agent(item.get("agent") or item.get("slot"))
+                        for item in imported if item.get("slot")})
+    implementation = {review_cli((launch or {}).get("implementation_cli"))} - {None}
     return {"round": round_no, "required": len(declared), "arrived": len(arrived),
             "arrived_slots": [item["slot"] for item in arrived], "missing": missing,
-            "slots": slots, "anchor_current": anchor,
-            "ready_to_decide": bool(declared) and not missing}
+            "stale": stale, "unreadable": unreadable,
+            "material_ready": bool(declared) and not missing and not stale and not unreadable,
+            "eligibility": review_eligibility(reviewers, implementation,
+                                             imported_count=len(imported),
+                                             declared_slots=len(declared)),
+            "slots": slots, "anchor_current": anchor}
 
 
 def curation_changed(before, current_rule_digest, current_file_digest):

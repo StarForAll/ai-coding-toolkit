@@ -76,7 +76,7 @@ class ClaimOnceTest(unittest.TestCase):
         self.assertEqual(facts["required"], 2)
         self.assertEqual(facts["arrived"], 1)
         self.assertEqual(facts["missing"], ["s2"])
-        self.assertFalse(facts["ready_to_decide"])
+        self.assertFalse(facts["material_ready"])
         self.assertEqual([(slot["slot"], slot["state"]) for slot in facts["slots"]],
                          [("s1", "imported"), ("s2", "missing")])
 

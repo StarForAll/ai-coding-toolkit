@@ -41,7 +41,7 @@ class ReviewStatusTest(unittest.TestCase):
         self.assertEqual(facts["required"], 2)
         self.assertEqual(facts["arrived"], 0)
         self.assertEqual(sorted(facts["missing"]), ["dsh", "zcode"])
-        self.assertFalse(facts["ready_to_decide"])
+        self.assertFalse(facts["material_ready"])
 
     def test_imported_and_missing_are_distinguished(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -58,7 +58,7 @@ class ReviewStatusTest(unittest.TestCase):
             self.assertFalse(slots["zcode"]["anchor_checked"])
             self.assertEqual(slots["dsh"]["state"], "missing")
             self.assertEqual(facts["arrived"], 1)
-            self.assertFalse(facts["ready_to_decide"])
+            self.assertFalse(facts["material_ready"])
 
     def test_report_changed_after_import_is_stale(self):
         with tempfile.TemporaryDirectory() as tmp:

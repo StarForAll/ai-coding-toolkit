@@ -2537,8 +2537,15 @@ def cmd_review_status(ctx, args):
         raise CliError(exc.code, exc.facts)
     # A9：无法归属到精确身份的历史处置**不关闭**任何 finding，在这里单列待人裁
     facts["pending_dispositions"] = review_mod.open_findings(ctx, task)["ambiguous"]
-    next_ = ("两份都到位：review-decide 可判" if facts["ready_to_decide"]
-             else f"缺 {len(facts['missing'])} 份报告：等 reviewer 产出后 review-import")
+    # B1：status 只报材料与资格，不承诺判定资格（结论只能由 review-decide 产生）
+    if not facts["material_ready"]:
+        next_ = (f"材料未齐（已到 {facts['arrived']}/{facts['required']}）："
+                 "等 reviewer 产出后 review-import")
+    elif facts["eligibility"]["problems"]:
+        next_ = ("材料已齐，但判定资格不足："
+                 + "；".join(item["reason"] for item in facts["eligibility"]["problems"]))
+    else:
+        next_ = "材料已齐、资格检查通过：下一步 review-decide（结论以判定为准）"
     return codes.result(
         "WF_OK",
         object={"id": task.get("id"), "name": task.get("title")},
