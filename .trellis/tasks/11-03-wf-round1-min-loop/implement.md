@@ -9,7 +9,7 @@
 ```bash
 /softwares/python/bin/python3 scripts/validate-wf-design.py     # 期望：输入摘要 4/4 + 七项检查通过
 /softwares/python/bin/python3 scripts/check-doc-refs.py         # 期望：0 problem(s)
-/softwares/python/bin/python3 -m unittest discover -s scripts/tests -v   # 期望：Ran 19 tests ... OK
+/softwares/python/bin/python3 -m unittest discover -s scripts/tests -v   # 期望：全部通过（数量随用例增补变化，以实跑为准）
 ```
 
 ## P1 底座

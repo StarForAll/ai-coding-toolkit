@@ -1,11 +1,13 @@
 # 首轮实现验证记录（P5）
 
 - 运行日期：2026-11-03（Asia/Shanghai）
-- 宿主：单人本机；本会话宿主标识 `host_id=dsh`（wf 会话身份路径按机制稿 §1.4 由人声明 capability=verified）
+- 宿主：单人本机；安装平台 `platforms=[dsh]`（R93 起身份事实＝平台清单，不再有 `--host-id`／`capability` 声明）
 - 解释器：目标项目解析到系统 `/usr/bin/python3`（Python 3.13.5）；authoring 工具用 `/softwares/python/bin/python3`（Python 3.14.7）
 - git：git version 2.47.3
 - 发行：`dev:a35ae34`（开发态部署）/ 打包发行 `0.1.0`，`rules_digest` 见下
 - 夹具：/tmp 下临时目录（仓库外），F0=`/tmp/wf-fixtures/f0`、F1=`/tmp/wf-fixtures/f1`、F2=`/tmp/wf-fixtures/f2`；每个夹具均由脚本从零重建
+
+> **版本语境**：本文件按时间顺序记录。R93（commit `20e3ae8`，2026-11-05）之前的命令示例含已删除的 `--host-id` / `--verify-capability` / `--skill-root` / `session_profile`，仅作当时证据保留，**不代表当前用法**；当前入口见 §10 的复现块与模块 README。
 
 ## 0. 环境探测（审查 CLI）
 
@@ -59,7 +61,7 @@ F0 汇总：9/9。归因：首轮实现缺陷已在这轮前修正（自检处�
 | 归档 | pass | WF_OK | True |
 
 汇总：13/13。覆盖新增（extracted）/更新为 active/改名（索引与活动策展同步）/合并写入/删除未解除依赖被拒（`WF_SEMANTIC_DECISION`，给出三个出口）/解除依赖后删除（`spec.update` 的 `reference_dispositions`）。
-未运行：拆分（split）未单独跑——本轮实现把拆分与合并都落成 `reference_dispositions` + 旧文件处置，合并已实跑；拆分的旧文件保留/停用分支未单独断言（原因分类：尚未安排）。
+拆分与合并：合并已实跑（见上表）；拆分的**「原文件移除」分支**已在本文 §16（B5）补跑；拆分的**「旧文件停用并保留」分支**在 2026-11-05 补跑（§16.6，`p5_spec` 6 条用例），两支均已覆盖。
 
 ## 3. V1 宿主会话身份能力（F1v，capability 初值 unknown）
 
@@ -165,7 +167,7 @@ python3 scripts/build-wf-release.py --version 0.1.0     # 产物见 docs/workflo
 python3 scripts/build-wf-release.py --verify           # OK: byte reproduction (0.1.0, 55 assets)
 python3 scripts/build-wf-release.py --verify-token-parity  # OK
 python3 install.py --target <abs> --release-ref refs/tags/wf-v0.1.0 \
-    --source <已检出发行目录> --skill-root <abs> --confirm --host-id dsh --verify-capability
+    --source <已检出发行目录> --platform dsh --confirm
 ```
 
 最终发行标识（本次生成，凡源树改动须重建）：`rules_digest = sha256:c6239b9b685cec29c3514a4dfbf816ee5f49d01e3473686784249c58ad293502`。
@@ -189,7 +191,7 @@ python3 install.py --target <abs> --release-ref refs/tags/wf-v0.1.0 \
 | 真实压缩事件 / wf 签发路径 | 未运行 | 以「同身份同实例标识重入」等价观察 | 宿主能力未验证 | 待宿主核实 |
 | 真实进程崩溃点（归档提交后未报告） | 未运行 | 以动作停留 `persist_pending` 后重入的等价事实观察 | 尚未安排 | 首轮收口前补故障注入 |
 | `dedupe_refs` 双扣冲突构造 | 未运行 | 实现已按 `WF_SEMANTIC_DECISION` 拒绝，未构造用例 | 尚未安排 | 首轮收口前补 |
-| spec 拆分（split）的旧文件停用/保留分支 | 未运行 | 合并已实跑；拆分沿用同一 `reference_dispositions` 面 | 尚未安排 | 首轮收口前补 |
+| spec 拆分（split）的旧文件停用/保留分支 | **已补跑（2026-11-05）** | `p5_spec` 新增 6 条用例：建待拆分条目、拆分前 active 正对照、停用+新建两条（applied=3）、旧文件保留且 `status=disabled`、索引同步、停用条目不被 `match` 加载；详见本文 §16.6 | — | 已关闭 |
 
 ## 12. CP1（结构核验与交接/收工/放弃前置）实跑记录（2026-11-03）
 
@@ -452,6 +454,23 @@ python3 install.py --target <abs> --release-ref refs/tags/wf-v0.1.0 \
 | D | 真实压缩事件 / wf 签发路径 | 等宿主能力核实（不阻塞收口，按「未运行 + 原因」保留） |
 | D | 单 reviewer「人数不合格」派生分支 | 等第二个可用非交互 reviewer（外部阻塞） |
 | E | 独立复审 | 待未参与修订的会话执行 |
+
+### 16.6 拆分「旧文件停用并保留」分支补跑（2026-11-05，第四轮复审后回填）
+
+背景：§16.1 的 B5 只断言「原文件移除」；停用分支原登记为未运行。本轮补齐，用例并入 `p5_spec`。
+
+| 用例 | 预期 | 实际 | 结果 |
+|---|---|---|---|
+| 拆分前置：建待拆分条目 | pass | WF_OK | PASS |
+| 拆分前对照：active 条目可被 `src/calc.py` 命中 | 命中 combined.md | matched 含 combined.md | PASS |
+| 拆分（停用旧文件并新建两条） | pass 且 applied=3 | WF_OK applied=3 | PASS |
+| 拆分后旧文件保留且 `status=disabled` | 文件存在、frontmatter status 为 disabled | exists=True status='disabled' | PASS |
+| 拆分后索引同步 | 含 calc-pure/calc-side，不含 combined | pure=True side=True combined=False | PASS |
+| 停用条目不再作为规则被加载 | `src/calc.py` 命中 calc-pure/calc-side，不含 combined.md | matched 为新两条、无 combined | PASS |
+
+汇总：6/6；`p5_spec` 用例 13 → 19，`run_all.sh` 的期望计数同步为 19。
+
+口径修正（第四轮复审 R4-5）：早前本节记录的是 `match(F, ["src/**"])` 的 `matched=[]`——那次候选与规则 `paths`（`src/calc.py`）不匹配、且夹具 frontmatter 用了非 JSON 裸值，导致 spec 一直不可路由，属**空断言**。现已改用规则真实路径并加 active 正对照；停用过滤被移除时该断言会变红（已做负向注入验证）。
 
 ## 17. N8 裁定落地：`repair --dispose` 纳入令牌（2026-11-03）
 
@@ -3956,3 +3975,305 @@ D1 从「未运行」变为「**已运行（身份轴）；绑定轴待下一次
 | `check-doc-refs` / `validate-wf-design` | 0 problem / 全绿 |
 
 期间为让隔离执行稳定，`r71_tests` 移入串行名单（并行下 `3e` 曾因写权跨用例残留报 `WF_WRITER_BUSY`）。
+
+## 90. 第二轮独立复审修正批的实跑（2026-11-05）
+
+覆盖：`install.py::add_platforms` 重写（锁内重读、资产登记、冲突整批不写、writer 判据、代次、相对路径回执、幂等）、`Lock` 判据与运行期同源、单 reviewer 拒绝 facts、分支来源核对、r71 断言错绑修正。
+
+| 用例（套件） | 预期 | 结果 |
+|---|---|---|
+| A1 追加平台登记新根资产（r83） | assets 增加且含新根技能 | PASS |
+| A1 回执路径为项目相对且含安装记录（r83） | changes 含 `.cursor/skills/wf-start/SKILL.md` 与 `.wf/install/installation.json` | PASS |
+| A1 授予与撤销各递增代次（r83） | generation 2 → 4 | PASS |
+| A1 重复同平台幂等（r83） | writer 不变、无空回执 | PASS |
+| A1 内容冲突整批不写（r83） | `WF_ASSET_DECISION` 且 writer 与文件未变 | PASS |
+| A2 writer schema 非法即拒（r83） | `WF_RECORD_INVALID` 且零写入 | PASS |
+| B2 分支来源四项（r83） | 命中报分支、已存在/任何分支都没有不算、前置成立 | PASS |
+| 单 reviewer 不产生判定结论（r71 3f） | `WF_REVIEW_INVALID` + degraded + 两出口 | PASS |
+| R93 追加平台共享根（r90） | platforms 增加、assets 不变、回执含安装记录 | PASS |
+
+全量：`run_all.sh` 59 项、失败 0（r83 30/30、r90 9/9、r71 11/11、f0 9/9）。
+
+## 91. 第三/四轮独立复审修正批的实跑（2026-11-05）
+
+覆盖：审查输入不成立的拒绝路径、开发态追加平台的来源与代次校验、并行汇总的行校验、spec 拆分断言修正、F0 HEAD 断言、r83/r90 断言增强，以及本批资产/文档改动（骨架不再给 `project_id`、四个改编 skill 的来源改内容摘要、`task-flow` 时点表述、README 编号、源树 pyc 清理、Trellis 六平台扫描面）。
+
+| 用例（套件） | 预期 | 结果 |
+|---|---|---|
+| 单 reviewer → 拒绝且不落 verdict（r71 3f） | `WF_REVIEW_INVALID`、result 为空、attempts 无 fail | PASS |
+| 有效两异种报告 → pass（r71 3） | `WF_OK/pass` | PASS |
+| 追加平台来源一致（r90 正向） | 平台增加、assets 不变、回执含 installation.json | PASS |
+| 不同来源追加被拒且零写入（r90 R4-1） | `WF_ASSET_DECISION`、记录与 writer 不变 | PASS |
+| writer 代次非整数结构化拒绝（r90 R4-2） | `WF_RECORD_INVALID`、无 traceback、记录不变 | PASS |
+| 内容冲突整批零写入 / schema 非法零写入（r83） | 原因码正确、writer+安装记录+双目标均未变 | PASS |
+| spec 拆分：active 正对照 + 停用后不命中（p5_spec） | 正对照命中、停用后不命中（负向注入会变红） | PASS |
+| 删除未解除依赖给三个出口（p5_spec） | `WF_SEMANTIC_DECISION` 且 `facts.exits` 三条 | PASS |
+| F0 首装 + HEAD 可解析（f0 / p5_f0） | 安装成功；`rev-parse` 退出 0 且 `HEAD^{commit}` 可解析 | PASS |
+
+全量：`run_all.sh` 59 项、失败 0（p5_spec 19/19、r83 30/30、r90 11/11、r71 11/11、f0 9/9）。
+
+资产/文档改动未单列夹具，由机检与发行校验覆盖：`build --verify` 字节复现（0.1.0/55 资产）、`validate-wf-design` OK、`check-doc-refs` 0、`validate-skills` 24。
+
+## 92. 第五轮独立复审修正批的实跑（2026-11-05）
+
+覆盖：批准范围取自 `entry_snapshot`、bind 恢复进锁、transfer 承接可核、审视下 `inspect` 声明未输出类别、dev-deploy 内容级来源与目录副作用、generation 布尔、review 报告锚点类型、测试断言强度。
+
+| 用例（套件） | 预期 | 结果 |
+|---|---|---|
+| 同 CLI 双槽位 → 拒绝且不落 verdict（r71 3g） | `WF_REVIEW_INVALID`、result 空、attempts 无 fail | PASS |
+| 单 reviewer → 拒绝且不落 verdict（r71 3f） | 同上 | PASS |
+| 未知轴 → 拒绝且不写判定（r71 3e） | `WF_REVIEW_INVALID`、result 空 | PASS |
+| 不同来源追加平台被拒且零写入（r90 R4-1） | 原因码正确；安装记录/writer 逐字节不变；**目录树不变** | PASS |
+| generation=broken/true/false 结构化拒绝（r90 R4-2） | `WF_RECORD_INVALID`、无 traceback、记录与目录树不变 | PASS |
+| 追加平台正向（r90） | 平台增加、assets 不变、回执含 installation.json | PASS |
+| 内容冲突整批零写 / schema 非法零写（r83） | 原因码正确、记录与目标均未变 | PASS |
+| spec 拆分正对照 + 删除三出口（p5_spec） | 正对照命中；停用后不命中；`facts.exits` 三条 | PASS |
+
+全量：`run_all.sh` 59 项、失败 0（r71 12/12、r90 13/13、r83 30/30、p5_spec 19/19、f0 9/9）。
+
+本批代码改动的说明：
+- `spec-update` / `baseline-apply` 的批准范围改取 `entry_snapshot.touch_paths`（未开工回退 `plan`），对齐机制稿 §2.3；
+- `cmd_bind` 的「绑定已写、动作未结案」恢复路径纳入同一把 `.wf-lock`（与 `_writer_release` 同款锁外快检 + 锁内重核）；
+- `stop` 的 transfer 分支要求承接任务未归档、已批准、且批准触碰面覆盖待承接路径，否则保留待决并给三个出口；
+- `inspect` 的 facts 新增 `governance_omitted`，显式声明本轮未输出的两类治理输出；
+- `import_report` 对非对象 `check-anchor` 返回 `WF_REVIEW_INVALID`（不再 internal error）；
+- dev-deploy 追加平台以 `rules_digest` 判同源（覆盖同一 HEAD 下的 dirty 内容变化）、拒绝路径不再创建目录、`generation` 排除 JSON 布尔。
+
+## 93. 第六轮独立复审修正批的实跑（2026-11-05）
+
+覆盖：批准范围「空数组 vs 缺键」区分、来源判据粒度、拒绝路径目录副作用、transfer 归档分支出口、审查 fail 历史重建、两段显式交接 E2E。
+
+| 用例（套件） | 预期 | 结果 |
+|---|---|---|
+| 有效审查 fail 落判定且历史可重建（r71 3h，本轮新增） | `WF_REVIEW_INVALID` + `verdict=fail` + attempts.outcome=fail | PASS |
+| 两段显式交接：begin 进 recovering、旧会话不可写、接收者 accept 得新代次、新代次可推进（r71 第 4 组，本轮新增） | 4a–4e 全通过 | PASS |
+| 同 CLI 双槽位 / 单 reviewer / 未知轴 → 拒绝且不落 verdict（r71 3g/3f/3e） | result 为空、attempts 无 fail | PASS |
+| 不同来源追加被拒且零写入（r90 R4-1；改用**不存在的根** claudecode，目录树含文件） | 原因码正确；记录、writer、**目录+文件路径集合**均不变 | PASS |
+| generation=broken/true/false 结构化拒绝（r90 R4-2） | 同上 | PASS |
+| spec 拆分正对照 / 删除三出口（p5_spec） | 命中与不命中可区分；`facts.exits` 三条 | PASS |
+
+全量：`run_all.sh` 59 项、失败 0（r71 **18/18**、r90 13/13、r83 30/30、p5_spec 19/19、f0 9/9）。
+
+本批代码/文档改动：
+- `approved_touch_paths()` 统一两入口与 `scope.classify_candidates`：**已开工且快照带 `touch_paths` 时即使为空数组也照用**；快照缺该键按 `WF_RECORD_INVALID` 待核，不回退可变 plan。
+- dev-deploy 同源判据改为「HEAD + `rules_digest`」，`dev:<describe>[-dirty]` 只作描述不参与判定（避免无关文件变脏阻断追加平台）。
+- transfer 的归档/终止分支补齐三个出口。
+- r90 的目录快照纳入文件路径，改用尚不存在的新根。
+- `writer-handover begin --to` 必须是接收者 session-key；E2E 已在 r71 第 4 组实跑。
+
+未运行（本轮登记）：
+- **执行器确认的集合语义与失效传播负例**（多 clone 元组并存的"不覆盖"、目录移动不失效、venv 重建沿用、purge 后重建须重确认、repair 重建 project_id 时旧记录显式失效）：现有证据只覆盖首次确认与元组失配。出口：按设计稿 §8.2「执行器配置可信」行补一组夹具用例，或在下一轮登记为未运行。
+- 双执行候选的 startup 探针（A6 的四步缩减已登记，不据此宣称完整启动校验）。
+
+## 94. 第七轮独立复审修正批的实跑（2026-11-05）
+
+覆盖：批准面三态严格化（未开工/已开工/快照异常）、承接任务批准面同源判定、scope 统一接线、交接中间态与失效断言、F0 提交树断言、夹具登记回填。
+
+| 用例（套件） | 预期 | 结果 |
+|---|---|---|
+| 交接：accept 前接收者不可推进（r71 4c2，本轮新增） | 非 WF_OK | PASS |
+| 交接：accept 后旧会话/旧代次失效（r71 4f，本轮新增） | 非 WF_OK | PASS |
+| 交接正向四步（r71 4/4b/4c/4d/4e） | 全部通过 | PASS |
+| F0 提交树只含骨架（p5_f0，本轮新增 `git ls-tree` 断言） | `.wf/` 与 `.gitignore` 之外无路径 | PASS |
+| 既有审查与拆分断言（r71 20/20、r90 13/13、p5_spec 19/19） | 全通过 | PASS |
+
+全量：`run_all.sh` 59 项、失败 0（r71 **20/20**、r90 13/13、r83 30/30、p5_spec 19/19、f0 9/9）。
+
+本批代码改动：
+- `approved_touch_paths()` 按**是否已开工**分流：仅「快照为 null 且未开工」回退 plan；已开工的 null/非对象/缺键/非列表一律 `WF_RECORD_INVALID`。
+- `scope.classify_candidates` 与 transfer 的承接面判定都改走同一函数（此前 scope 另写一套回退口径）。
+- `support_report` 对 `repair`/`uninstall` 报「bootstrap-layer entry (expected)」，不再与真缺口同文。
+
+未运行（登记）：
+- spec 多文件预算降级阶梯与截断标记（夹具 §4 已登记，归属待裁）。
+- 执行器确认集合语义负例（§93 已登记）。
+
+## 95. 修复的可证伪用例（方案 A，2026-11-05）
+
+问题：此前"已修复"的证据是"套件绿灯"，而多轮复审证明它无法区分"修好了"和"没修"（空断言、`expected==actual`、只记目录的快照、`!=` 比较）。
+
+做法：每条修复配一个 `--expect green` / `--expect red` 双模用例（`scripts/tests/wf_runtime/full/repro/`）：
+red 模式把 payload 复制到临时目录、**注入退回修复前的那一处**、再跑同一 check，必须变红；green 模式在当前树上必须成立。`run_all.sh` 汇总两模式。
+
+当前覆盖（58 条，均已过 green+red，且每条只有一个注入点）：
+
+| 用例 | 证明的断言 | 注入点 |
+|---|---|---|
+| `f7-1-touch-paths` | 已开工缺快照必拒、空批准面不回退 plan、未开工才回退 | `started = phase in PHASES_STARTED or baseline_head` → `started = False` |
+| `f7-3-scope-single-source` | `scope.classify_candidates` 与写入口共用同一判定 | 把 helper 调用换回自带的 `snapshot or plan` 回退 |
+| `f5-4-generation-bool` | `generation: true` 结构化拒绝且零写入 | `... or isinstance(generation, bool)` 去掉布尔排除 |
+| `r4-1-source-mismatch` | 来源不同整批拒绝、目录树/writer 不变 | `if installation.get("source_commit") != commit` → `if False` |
+| `install-lock-foreign-object` | 空文件/未知标记不被认领 | 去掉标记前缀核验 |
+| `inspect-declares-omitted` | `inspect` 显式声明两类未输出的治理输出 | `"governance_omitted": [` → 换键名 |
+| `review-count-reject`（CLI 级） | 同一 CLI 双槽位 → `WF_REVIEW_INVALID`、result 为空、attempts 无 fail、给出口 | 去掉 `if input_problems:` 提前拒绝 |
+| `bind-instance-mismatch`（CLI 级） | 实例标识不符 → `WF_BINDING_MISMATCH` 且写权代次不变 | `_require_instance_match` 直接 return |
+| `handover-two-stage`（CLI 级） | begin 进 recovering；中间态旧会话与接收者都不可写；accept 后以 **begin 后**为基线递增代次，旧会话失效 | `handover_accept` 不递增代次 |
+| `transfer-target-task-field`（CLI 级） | 承接对象取自 `Decision.target_task` 并回显；不存在与自承接都被拒且给出口 | 退回 subject 首项即 id 的旧实现 |
+| `bind-resume-under-lock`（CLI 级） | 另一进程持 `.wf-lock` 时，bind 的恢复分支取锁失败（`WF_WRITER_BUSY`）且不改写 writer；锁释放后同一意图可结案（`resumed`、`action.state=done`） | 恢复分支改为不取锁（`nullcontext`） |
+| `install-generation-bumps` | 代次 2→4 | 释放不增代次 |
+| `install-receipt-relative` | 回执 `changes[].path` 项目相对 | 回执写绝对路径 |
+| `install-receipt-metadata` | 安装记录进回执 | 元数据不计入变更 |
+| `install-lock-realpath` | 项目外符号链接不被认领，且项目内锁仍可用 | 去掉真实落点核验 |
+| `stop-under-lock`（CLI 级） | 另一进程持 `.wf-lock` 时 `stop` 取锁失败（`WF_WRITER_BUSY`），writer 与 task 记录逐字节不变 | 把 `stop_work` 的锁去掉 |
+| `wf-repair-handoff`（CLI 级） | `wf.py repair` 从项目根与外部 cwd 都能进入预览（`WF_OK`）；缺 root 时退化为 `WF_PATH_INVALID` | 转交时去掉 `WF_PROJECT_ROOT`（`execv` 不传 env） |
+| `history-anchor-unreachable`（CLI 级） | 基线被 `git commit --amend` 重写 → `WF_HISTORY_UNRESOLVED`（JSON 带三出口）；`git reset --soft` 恢复可达后同一检查通过 | check 的不可达判定改 `if False`（静默放行） |
+| `record-missing-in-worktree`（CLI 级） | 工作树缺 task.json（历史里有）→ `WF_RECORD_INVALID`（JSON 带 exit 与三出口）、`inspect` 列 `broken_task_dirs`；恢复文件后正常 | 缺记录分支改静默返回 `WF_OK`（静默忽略形态） |
+| `d21-executor-set-multi-clone` | 同项目两个 clone 各确认不同解释器：两条 project 作用域记录并存不覆盖，双方 `executor_ready` | 写入改按 project_id 去重（后写覆盖先写） |
+| `d21-executor-set-move` | 项目键相对路径（`.venv/bin/python`）确认后整体移动项目目录，确认不失效 | 相对键改按绝对真实路径登记身份（移动即失效） |
+| `d21-executor-set-venv-rebuild` | venv 重建：元数据不变（同大小同 mtime）沿用；mtime 变化即失配、须重新人确认 | 去掉大小/mtime 轻量指纹比对 |
+| `d21-executor-set-purge-reconfirm` | purge 重建得到新 project_id 后旧确认不套用、须重新确认 | 比对改不核项目标识 |
+
+**transfer 阻塞已定位并修正**：`stop` 的 transfer 分支原先从 `subject` 首项取承接任务 id，而同一次 `stop` 又要求 subject 覆盖全部未提交路径，id 与路径混在同一清单里被逐项指纹化，承接核验（存在/未归档/已批准/覆盖）实际不可达。现改为 `Decision.target_task` 指定承接对象、subject 只列路径，并补该分支的三个出口；用例 `transfer-target-task-field` 覆盖「不存在」与「自承接」。
+
+CLI 级用例的基础设施：`_harness.deploy()` 用真实发行树部署临时项目、`_harness.cli()` 以真实 envelope 调项目内 `wf.py` 并自动携带绑定实例标识；`_review_flow.py` 提供「建任务→批准→开工→Check→launch→import→decide」公共步骤。
+
+一键入口：`bash scripts/tests/wf_runtime/full/repro/run.sh`（自动重建发行，支持 `--no-build` / `--only` / `--list`，输出 `REPRO_TOTAL/PASSED/FAILED` 机器行，失败非零退出）；`run_all.sh` 已改为委托它。
+
+契约强化（第十/十一轮）：每条用例「目标断言被击中」必须抛 `TargetFailure`，前置/环境问题抛 `Precondition`；CLI 用例的门禁 `require_business_code` 要求返回**码表内**的 `WF_*` 原因码。返回字符串、内部错误、未知码都不算通过。
+
+
+第十三轮补记：目标/前置分流的加固点——`f7-1` 只把 `WF_RECORD_INVALID` 当目标、非业务异常归前置；`f7-3` 对内部码与非 `WF_*` 一律前置；`inspect` 先核 `WF_OK`；`f5-4`/`r4-1` 对异常退出与无业务码直接判前置；`handover`/`bind-resume`/`lock-realpath`/`stop-under-lock`/`transfer`/`review-count` 的门禁为码表内 `WF_*`。已实测：目标调用抛 `RuntimeError` 或返回内部错误时，red 非零退出。
+
+第十四轮补记：用例判据收敛为**只有两种合法结局**——命中期望码（修复成立）或成功（缺陷复现）；其它原因码（内部码、未知码、无关业务码）一律前置失败。`f5-4`/`r4-1`/`f7-1`/`f7-3` 与五条 CLI 用例都改用 `only_two_outcomes`，实测无关 `WF_PATH_INVALID`、`WF_BOGUS`、`WF_INTERNAL_ERROR` 不再使 red 通过。
+
+全量：`run_all.sh` **122 项、失败 0**（64 既有套件/专项 + 58 repro；**串行 WF_JOBS=1 为权威**，并行模式在本机受限）。
+
+**2026-11-06 第 28 轮记录修复（分母入库）**：验收分母从 `/var/tmp` 证据移入仓库——`11-05-…/denominator.md` 与 `denominator.json`（104 行场景表）。按 `docs/workflows/wf-framework-design.md` §8.2 门禁①，延至后续轮次的行逐行登记为「等该轮交付」并**移出首轮分母**：650（spec 预算）、643（读取留痕完整性）经 2026-11-06 人裁顺延第三轮，已移出。**正式口径 x/N = 23/84（27.4%）**；若按延期前口径则为 23/86（含上述两行）。四行自第 27 轮后升级为「已断言」：623、624、671、674。
+
+**2026-11-06 W3 批 A + 拆行（第 28 轮末）**：新增 2 条 repro——`executor-tuple-mismatch`（668 执行器配置可信：确认元组绑定 size/mtime，同路径替换后 ready=False 且 CLI 返 `WF_EXECUTOR_UNCONFIRMED`）、`executor-approval-chain`（673 执行器首次写入：未批准键 → `WF_APPROVAL_MISSING` 且零写入）。按人裁把粗行拆成子行：设计行 629（机读触碰面）的义务是 §96 ① 的 4 状态 × 11 消费点 = 44 格，已拆为 `629.s*.c*`，原单行不再计入。**新口径 x/N = 27/127（21.3%）**——分母与分子同时变大，比例下降是拆行计价的结果，不是退步。
+
+**2026-11-06 s1 可达性判定（同批）**：拆完 44 格后逐格判可达性（读代码，不做推测）：s1 的 `c1/c2/c3/c4/c6/c7/c11` **可达**、`c5/c8/c9/c10` **不可达**（外部变更与两种 check 期判定只在 Check 发生，`work_satisfied_fact` 只在 finish 门禁，`cross_task_conflicts` 无开工期调用点）。不可达 4 格标「不适用」并移出分母，**N 127 → 123，x/N = 27/123（22.0%）**。结论：s1 不是「11 格待补」，而是 5 格可在首轮施工（`c1`、`c6` 已断言；`c4`、`c7`、`c11` 待补），`c2`/`c3` 需第二个任务承接 → 等第二轮（首轮 task-new 只产出一个任务），`c5/c8/c9/c10` 不可达。2026-11-06 批 B：`c1` 已补 `repro/stop-unstarted-surface.py`（漏列拒绝 / 越界项只点名 `notes.txt` / 批准面内 keep 成立）。
+
+**2026-11-06 批 C（c4/c11）**：`c4` 补 `repro/task-start-surface.py`（面外未归属改动 → `WF_WORKSPACE_UNRESOLVED` 且只点名 `notes.txt`；面内未提交改动可开工）；`c11` 经查 `baseline-apply`（`tasks.py:3170`）与 `spec-update`（`tasks.py:3378`）都要求 phase∈execute/check/finish，未开工时该写入口不存在 → 改判**不适用**并移出分母。**x/N = 29/120（24.2%）**；s1 现余 1 格待补（`c7`）。
+
+**2026-11-06 批 D（c7）**：`c7` 补 `repro/maintenance-disposition-s1.py`（未结维护组 → `WF_WIP_UNRESOLVED` 且点名 `pkg/b.py`；处置字段齐但事实对不上 → `WF_HISTORY_UNRESOLVED`；真正提交后派生 `persisted` 且开工成立）。**s1 的 11 格全部定论**（3 已断言 + 2 等第二轮 + 6 不适用），**x/N = 30/120（25.0%）**。
+
+**2026-11-06 批 E（s3：快照缺键）**：s3 的义务是「缺键即拒、不得回退可变 plan」，三处入口各一条 repro——`snapshot-missing-stop.py`（收工）、`snapshot-missing-check.py`（Check 期四类消费点）、`snapshot-missing-write.py`（spec-update；baseline-apply 共用同一批准面判定）。s3 判定：**已断言** c1/c4/c5/c9/c10/c11（c4 此前由 f7-3 覆盖）；**仅有原因码** c2/c3/c7（同一守卫先行拒绝，各自的核验未走到）；**不适用** c6（开工期门禁，s3 已开工）、c8（finish 需 Check 通过，链式不可达）。**x/N = 35/118（29.7%）**。
+
+注意：`87 项、失败 0` 是**套件层**绿灯，与场景行覆盖无关；不得用前者替代后者（第 26 轮前的教训）。
+
+**2026-11-06 W4 批次（第 27 轮审查后人裁落地，见 `pending-decisions.md` §6）**：新增 6 条 repro——`history-anchor-unreachable`、`record-missing-in-worktree`（夹具 §4 的两行首轮夹具，双模可证伪，正例分别为 `git reset --soft` 恢复可达、`git checkout` 恢复记录）；`d21-executor-set-{multi-clone,move,venv-rebuild,purge-reconfirm}`（D21 集合语义负例，确认集合隔离到夹具临时 `HOME`，确认动作用伪终端在进程内驱动、不证明真人确认）。构造边界如实登记：purge 用 project_id 重建做**等价构造**（`uninstall --purge` 入口属第三轮，实现稿 §2.3.11），真实 purge 链路第三轮补；「venv 重建元数据不变 → 沿用」是设计稿 §1.1 同一句的另一半，不另设注入点，由同一夹具断言；`record-missing-in-worktree` 的 `inspect`/`broken_task_dirs` 断言与 check 断言共享同一注入点（注入打在 check 分支上）。
+
+**2026-11-06 W1 分母修复（承接第 27 轮复审对 D611/D613/D661 的证据质疑）**：`cp4_a8`、`cp5_b12`、`r35_tests`、`f1_ordinary`、`p5_v1` 五个套件此前**不在 `SUITES` 里**（`d1_tests`/`d1_wf_tests` 同样不在，属宿主前置、手动执行，已在 README 标注不计入分母），因此「76 项、失败 0」从未覆盖它们。回接实测：`cp5_b12` **5/9 红**（B2 三条未跟上外部变更人判规则、B1 当时无夹具无确认）、`cp4_a8`/`r35_tests` 因写死 `/tmp/wf-fixtures/{fu,f5,f3}` 无人创建而**直接崩溃**；`f1_ordinary`/`p5_v1` 本就绿。三套件已改为自带夹具（`wf_fixture.sh` / `f2_setup.sh` + `f1_init.py`），`cp5_b12` 的 B2 按 P1-1 契约补人判输入。`cp4_a8` 9/9、`cp5_b12` 9/9、`r35_tests` 10/10。观察：回接后首次全量出现过一次 4 项 `INIT-FAILED`（r7r15/r67/r68/r69，隔离与配对复跑均绿），连续两次全量 81/0，暂记为偶发，未定位。
+
+尚无 repro 的已修项：`scope` 的 d 档不可达（属定义性断言，无注入点，不强行造用例）——它们需要完整 CLI 夹具（绑定/写权/launches/imported），当前仅有套件级 `r71` 覆盖；按同一契约单独成脚本前，不得把它们记为"已被可证伪用例覆盖"。
+
+边界：只能证明"已声明的修复被验证过"，不能证明"没有未发现的缺陷"；注入点写死源码片段，实现改动后脚本会报 `repro stale`，必须同批更新。
+
+## 96. 状态矩阵登记面（2026-11-06，第 23 次复审 N23-4）
+
+规则：**"未测"必须显式登记**，不能靠"通用 helper 测过"充抵入口级证据；「未登记」一栏为空的格表示已在此表列明状态。承接责任缺省为本轮实施方，标 HUMAN 的需人裁/人跑。
+
+### ① 批准触碰面（4 状态 × 11 消费点）
+
+| 状态 | stop-keep | stop-transfer 源 | transfer 目标 | scope 分类 | 外部变更 | 维护重叠 |
+|---|---|---|---|---|---|---|
+| 未开工 + 合法 plan | 未测（helper 覆盖回退） | 未测 | 未测 | 未测 | 未测 | 已测（`r60`/`r61`） |
+| 已开工 + 空数组 | 未测 | 未测 | 未测 | 未测 | 未测 | 未测 |
+| 已开工 + 快照缺键 | 未测 | 未测 | 未测 | 已测（`f7-3`） | 未测 | 未测 |
+| 已开工 + 损坏类型 | 未测 | 未测 | 未测 | 未测 | 未测 | 未测 |
+
+helper 级已有证据：`f7-1`（null/空数组/未开工三态）。入口级交叉格多数未测。
+
+**与分母的对应（2026-11-06）**：本矩阵的 4 状态 × 11 消费点已按人裁拆成 44 个子行（`11-05-…/denominator.md` 的 `629.s1..s4.c1..c11`），原「629 机读触碰面」单行不再计入分母。状态序：`s1` 未开工+合法 plan／`s2` 已开工+空数组／`s3` 已开工+快照缺键／`s4` 已开工+损坏类型；消费点序：`c1` stop-keep／`c2` stop-transfer 源／`c3` transfer 目标／`c4` scope 分类／`c5` 外部变更／`c6` 维护重叠／`c7` 维护处置承接／`c8` work_satisfied_fact／`c9` cross_task_conflicts／`c10` check 外部变更再判定／`c11` baseline/spec 写入口。2026-11-06 起 s1 的 11 格**全部定论**：已断言 `c1`（`repro/stop-unstarted-surface.py`）、`c4`（`repro/task-start-surface.py`）、`c6`（r60/r61）、`c7`（`repro/maintenance-disposition-s1.py`）；等第二轮 `c2`/`c3`（需第二个任务承接）；不适用 `c5`/`c8`/`c9`/`c10`（只在 Check 或 finish 期消费）、`c11`（baseline-apply / spec-update 要求 phase∈execute/check/finish）。s3（已开工+快照缺键）已于 2026-11-06 定论：**已断言** `c1`/`c4`/`c5`/`c9`/`c10`/`c11`（`repro/snapshot-missing-stop.py`、`snapshot-missing-check.py`、`snapshot-missing-write.py`）；**仅有原因码** `c2`/`c3`/`c7`（同一批准面守卫先行拒绝，各自核验未走到）；**不适用** `c6`（开工期门禁）、`c8`（finish 需 Check 通过，链式不可达）。s2（已开工+空数组）2026-11-06 判定：**已断言** `c1`（`repro/snapshot-empty-stop.py`）、`c11`（`repro/snapshot-empty-write.py`）；**仅有原因码** `c2`/`c3`（需第二任务承接）；**未测** `c4`/`c5`/`c9`/`c10`（单任务夹具跑 Check 会先被 `task.work-satisfied` 拦下，未隔离到范围核对，如实登记）；**不适用** `c6`（开工期门禁）、`c7`（请求面为空，回执不可能重叠）、`c8`（finish 链式不可达）。**s2 追加（批 G）**：`c4` 补 `repro/snapshot-empty-check.py`（空面下本任务文件归 c 桶、e 桶必须为空）；`c9` 改「仅有原因码」（跨任务冲突需另一任务 WIP＝第二轮）；`c5`/`c10` 仍为未测（空面下无可判对象，未单独隔离）。
+
+**s4（已开工+损坏类型）2026-11-06 判定**：`repro/snapshot-broken-type.py` 三入口共用同一守卫——收工 / Check / spec-update 均 `WF_RECORD_INVALID`（注入=类型不符当单条路径收下，收工变 `WF_OK`）。**已断言** c1/c4/c5/c9/c10/c11；**仅有原因码** c2/c3/c7；**不适用** c6/c8。**x/N = 44/113（38.9%）**。§96 ① 的 44 格至此**全部定论**。
+
+**2026-11-06 批 H（688 + 两条残余缺口）**：①`688 历史锚点或旧写者事实待核对` 升「已断言」——`repro/stale-writer-facts.py`（写权仍 held 而锁持有者 pid 不存在时，收工与写入口均 `WF_WRITER_BUSY`、理由「他人持有」、出口指向交接/恢复；注入=不再核他人持有则收工变 `WF_OK`）；②`668` 残余缺口关闭：`executor_ready` 纳入 `python_version` 比对（`repro/executor-version-change.py`）；③`673` 残余缺口关闭：`project_key_approved` 扩到 `.wf/tasks/archive/**`（`repro/project-key-archived-evidence.py`），语义级键值解析仍留第二轮。**x/N = 66/99（66.7%）；断言分母 80 行内为 66/80 = 82.5%**（670 改判等第三轮）。
+**人判口径（2026-11-07）：成立 15（586–594、655、665、682–685）/ 不成立 1（595，已补正待复核）/ 宣告不审 1（659）/ 待 2（612、656）**；595 的三处同批义务缺口已同批补正（实现稿命令表补 `ready`、`stop --preview`；机制稿补 `plan` 新字段、`Decision.plan` 块与 checklist 三段同步登记），按 T7 口径记为「本轮未履行、已补正、待下一轮复核」，不计入达成。。2026-11-06 人裁：C 类 19 行改「以人判为验收出口」，仍留在分母但不计入断言分子；**门禁①拆成两段**——断言口径 81 行全绿 + 人判口径 19 行逐行有登记（当前 53/81 与 0/19）。（DEFER 落盘后分母 113→100；`660 判定物与原因码` 由 `repro/reason-code-table.py` 升档）。本批另登记 `repair`/`uninstall` 令牌闸门无 TTY 校验、与 `confirm-executor` 口径不一致（待裁，未改行为）。
+
+补充消费点（此前漏列，第 24 次复审 N24-4）：除上表 6 列外，`approved_touch_paths` 还在 5 处被消费，均无状态交叉夹具：维护处置承接核验、`work_satisfied_fact`、`cross_task_conflicts`、`check` 的外部变更再判定、基线/spec 两个写入口。第 24 轮临时探针验证了其中三处（缺键/坏类型均拒绝），但仓库内无夹具，故仍记未测。
+
+
+### ② 目录移动与提交（9 态 × 4 调用点）
+
+| 状态 | 仓库证据 | 备注 |
+|---|---|---|
+| 正常移动 | 归档/放弃回归覆盖 | — |
+| 移动完成后再跑 | `r17r24` R23 覆盖 | — |
+| `reset --mixed` 后重入 | **部分覆盖**：`r17r24` R23 做 mixed reset 后断言持久化；未断言「旧删除已进 HEAD 且无残留」 | 待补终态断言 |
+| `git add -A` 后重入 | **未测**（仅临时探针） | 待补 |
+| R 状态两字段 | **未测** | 解析已实现 |
+| C 状态 / 双状态列 | **未测** | 解析已实现 |
+| 引号路径 | **未测**（仅临时探针） | 归档整链待补 |
+| 制表符路径 | **未测**；现为"整批拒绝"（N23-2） | 预期：`WF_PATH_INVALID` |
+| 未跟踪源 | **未测** | — |
+调用点轴（此前漏列）：`abandon` 首跑/恢复、`archive` 首跑/恢复是四条独立路径（4 个 `_commit_paths` 调用点）。上表只按状态登记，未按调用点交叉——每态是否在四条路径上都覆盖，未测/未登记。
+
+
+### ③ 身份值生命周期（10 态）
+
+| 状态 | 证据 | 备注 |
+|---|---|---|
+| 首次生成 | **证据收窄**：`f1_init`/`p5_f0` 夹具先填了 id，不能证明运行时自行生成 | 运行时生成仅由临时探针覆盖 |
+| 提案自带 id | **未测** | 现要求与已知身份一致，否则拒绝 |
+| 前像冲突后重试 | **未测** | 预期沿用同值 |
+| 写入失败后重试 | **未测** | 预期从 inputs/记录复原 |
+| 仅靠未结案动作恢复 | **未测** | 本轮修复后应可达 |
+| 外部改现场 id（生成来源） | **未测** | 预期报前像冲突 |
+| 外部改现场 id（现场来源） | **未测** | 预期报前像冲突（N22-2 后） |
+| 删配置同任务重入 | **未测** | 预期复用记录值 |
+| 删配置跨任务重建 | **未测**；现拒绝并要求 repair（N23-1） | 预期 `WF_HISTORY_UNRESOLVED` |
+| repair 重建 + 旧确认失效 | **HUMAN**（未交付） | 已裁（2026-11-06，`pending-decisions.md` §6）：repair 重建留第三轮；集合语义负例已补 repro（见 §95），`repair` 交付后另补旧记录失效负例 |
+
+### ④ 入口拒绝路径零写入（5 入口 × 状态）
+
+| 入口 | 已测代表格 | 仍缺 |
+|---|---|---|
+| `bind --run` | 已绑定态拒绝 | 未绑定/恢复中逐格快照 |
+| `task-replan` | 无效决定拒绝 | 错对象/错摘要/坏 PRD 的零写断言 |
+| `task-approve` | 非批准决定拒绝 | 空绑定/陈旧摘要/坏机读块 |
+| `spec-update` | 越界路径拒绝 | 各语义拒绝 + 待恢复意图不符 |
+| `baseline-apply` | 按格分档：**未开工** ②（原因码 + `ok.md` 未生成，`r7r15`）；**控制记录目标** ①（仅原因码）；**业务路径目标** ①（仅原因码）；**符号链接逃逸** ②（原因码 + 项目外 `x.md` 未生成）。**没有任何一格达到 ③**（完整逐字节不变快照） | ③ 需要受保护状态快照；身份来源交叉格 |
+
+说明：本轮只做到逐格登记，未补齐夹具；任何「未测」格不得被读作已覆盖。
+
+证据强度三档，登记必须写明档位：①拒绝已验证（拿到预期原因码）②局部后置已验证（个别文件/路径未生成）③完整零写入已验证（受保护状态逐字节不变）。此前把②写成③的格已在上表降级。
+
+## 97. 收口记录（2026-11-12）：口径 B「记录 + 订正实现稿事实表述」
+
+**人裁**：收尾 11-03 时只改任务记录 + 订正实现稿里已失实的事实表述（执行项计数、独立复审与 dogfood 状态），不改 wf 的 payload/代码/发行树，不改 charter／设计稿／机制稿，不改任何判定、码表与门禁顺序。
+
+### 97.1 机检与回归（全部在本次待提交内容上实跑）
+
+| 门 | 命令 | 结果 |
+|---|---|---|
+| 设计机检 | `scripts/validate-wf-design.py` | OK：引用 590；二值 91/91；三档 13/13；**输入摘要 4/4**；定义位点 51+7；索引 143 行；消费点缺项 0；三率 100%；七项检查 + 覆盖率断言通过 |
+| 引用检查 | `scripts/check-doc-refs.py` | 0 problem（strict + local） |
+| 单测（脚本层） | `-m unittest discover -s scripts/tests` | Ran **457** tests，OK |
+| 单测（运行时层） | `-m unittest discover -s scripts/tests/wf_runtime` | Ran **154** tests，OK |
+| 全量功能回归 | `bash scripts/tests/wf_runtime/full/run_all.sh` | **132 项 0 失败**（必过门 GATE-OK，豁免中的债 0 项）；`repro` **68/68**（green/red 双模） |
+| 发行字节复现 | `scripts/build-wf-release.py --verify` | OK byte reproduction（0.1.0，**74 assets**） |
+| 令牌一致 | `--verify-token-parity` | OK |
+| 回归副作用核对 | `git status --porcelain docs/workflows/wf-release` | 空——`run_all.sh` 默认重建发行树（`WF_REBUILD_RELEASE=1`），重建结果与已提交内容逐字节相同 |
+
+### 97.2 实现稿绑定（与工作区实况对齐）
+
+| 阶段 | 行数 | sha256 |
+|---|---|---|
+| 此前记录（`round1-closure-plan.md` §3、`11-05-…/review-packet.md`） | 947 | `616201278862ea3911af48d7c69362f97da282d23521174e30803848ac664c02`（已作废：与工作区不符） |
+| 收口前实测 | 974 | `d9039228d8ae42c7…` |
+| **收口订正后（当前）** | **974** | **`987aef40cd3add047c886eec8373dfbefcec7ef3da9de9bdb354d7f756a4636c`** |
+
+订正范围（仅事实表述，5 行）：§7.3 执行项计数（76→132，套件 54→59，repro 17→68）与收口实跑结果；§7.3 独立复审/ dogfood 状态；§9.1 计数；§9.2「本文冻结」与「三夹具…」两行状态。frontmatter `status:` 与任何判定条款**未动**（保留历史轮次口径）。本文不在机制稿 §0.1 的四份摘要基线内，`输入摘要 4/4` 未变。
+
+### 97.3 三处自相矛盾的记录，本次裁定并统一
+
+1. **E 独立复审**：`round1-closure-plan.md` §5 与 `pending-decisions.md` §4 写「按人决定暂不执行」，与 `e-review-packet.md` §5（已执行 `codex exec`）、本文件 §90–§95（六轮修正批实跑）、`11-05-…/execution-log.md`（三十九批）矛盾。**裁定：已执行**；定稿口径为「按已覆盖轴」，未覆盖轴（真实断电/fsync、并发竞争、`repair` 接管路径的完整负例矩阵）如实保留。
+2. **执行器确认负例组**：`round1-closure-plan.md` §3 曾记「§93 已登记未运行」。实际 2026-11-06 人裁后已补 `repro/d21-executor-set-{multi-clone,move,venv-rebuild,purge-reconfirm}.py` 四条并进入全量回归。**记为已覆盖**；`repair` 重建标识后的旧确认失效仍留第三轮。
+3. **dogfood**：设计稿 §8.2 ③ 的完整 dogfood 已跑首次（2026-11-09～10，8 轮，产出 `docs/workflows/wf/analysis/solution-review-v42.md`），其结论引出 v42 控制流修复与 ⑥ 修复态。**v42/⑥ 之后的机制变更尚未再 dogfood**，属第二轮串行门禁的复跑，不在本轮。
+
+### 97.4 未运行项（保留，不构成收口阻塞）
+
+| 项 | 原因分类 | 触发/出口 |
+|---|---|---|
+| 真实压缩的绑定轴增量观察 | 等事件（宿主能力） | 下次真实压缩后按 `d1-compaction-checkpoint.md` §1 复核 |
+| `repair` 重建标识后旧确认失效的负例 | 等第三轮交付 | 第三轮实现后另补 |
+| dogfood 复跑（v42/⑥ 之后） | 人工步骤 | 人选定真实项目后按 `11-05-…/dogfood-plan.md` 跑 |
+
+### 97.5 记录债（如实登记，不冒充已清）
+
+1. `11-05-…/denominator.md` 的账停在 **2026-11-07**：`x/N = 66/99`（断言分母 66/80 = 82.5%）、以人判为出口 19 行（成立 15／不成立 1／宣告不审 1／待 2）。11-08～11-12 的修复**未逐行回写**该表；本收口不据此宣称覆盖率提升，如需逐行账目须重算并给出「修复条目 → 场景行」映射。
+2. 11-11～11-12 的 ⑥/backlog 修复（`6ea191b9..235d180d` 共 112 个提交）证据为提交本身与 `docs/workflows/wf/analysis/` 两文档，未在本任务目录留逐批记录。
+3. `round1-closure-plan.md` §3 与本文 §96 的「进度」段曾长期停留在 11-07，本次仅按已核实的实况订正，未重写历史段落。
+

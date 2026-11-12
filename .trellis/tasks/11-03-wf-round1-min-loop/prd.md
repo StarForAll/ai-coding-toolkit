@@ -32,7 +32,7 @@
 
 | 项 | 判据 |
 |---|---|
-| 机检 | `scripts/validate-wf-design.py` 全绿 + 「输入摘要 4/4」；`check-doc-refs.py` 0 problem；`unittest` 19 tests OK（全程保持） |
+| 机检 | `scripts/validate-wf-design.py` 全绿 + 「输入摘要 4/4」；`check-doc-refs.py` 0 problem；`unittest` 全部通过（数量以最新实跑为准；2026-11-06 由 19 增至 30，属合法增补） |
 | P2 出口 | 真实普通任务完整闭环：`task-new → task-approve → task-start → task-check（五步）→ task-knowledge → 人调用 finish → archive` |
 | P4 出口 | F0 从零安装可跑：`install.py` 从打包发行树装到空项目，`wf.py status` 可达 |
 | P5 | F0/F1/F2 与 V1–V5 有实际结果；未运行必须写「未运行 + 原因分类」；三夹具专属场景不互相替代；记录版本与环境 |
