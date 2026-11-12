@@ -85,6 +85,12 @@ def check():
                 problems.append(f"准备记录缺字段：{field}")
         if not (record.get("validation") or {}).get("ok"):
             problems.append("准备记录未记录校验结果")
+        # 机制稿 §5.1：准备动作要在主记录（准备记录）上登记意图并结案
+        action = record.get("action") or {}
+        if action.get("kind") != "definition.prepare":
+            problems.append(f"准备记录未登记 definition.prepare 动作：{action.get('kind')}")
+        elif action.get("state") != "done":
+            problems.append(f"准备动作未结案：{action.get('state')}")
 
     # 目标断言：保留前缀必须被拒
     _write(project, _document("plan-q-1"))

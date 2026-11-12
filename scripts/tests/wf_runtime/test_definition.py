@@ -188,3 +188,29 @@ class DefinitionStaticCheckTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+class PrepareActionTest(unittest.TestCase):
+    """准备动作的结案形状（机制稿 §5.1：具名动作在主记录上登记意图并核后置）。"""
+
+    def test_done_action_marks_both_steps(self):
+        from wflib import runs
+
+        action = runs._prepare_action_done(
+            {"id": "act-1", "kind": "definition.prepare", "state": "applying",
+             "steps": [{"id": "static_check", "state": "pending"},
+                       {"id": "write_preparation", "state": "pending"}],
+             "result": None, "next_step": "write_preparation"}, True)
+        self.assertEqual(action["state"], "done")
+        self.assertEqual([step["state"] for step in action["steps"]], ["done", "done"])
+        self.assertEqual(action["result"]["summary"], "definition.prepare ok")
+
+    def test_draft_only_action_is_labelled(self):
+        from wflib import runs
+
+        action = runs._prepare_action_done(
+            {"id": "act-2", "kind": "definition.prepare", "state": "applying",
+             "steps": [], "result": None, "next_step": None}, False)
+        self.assertEqual(action["state"], "done")
+        self.assertEqual(action["result"]["summary"], "definition.prepare draft-only")

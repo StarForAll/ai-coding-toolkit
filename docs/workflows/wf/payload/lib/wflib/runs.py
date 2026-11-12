@@ -18,7 +18,7 @@ import re
 import subprocess
 import uuid
 
-from . import assets, codes, decisions as decisions_mod, records
+from . import actions as actions_mod, assets, codes, decisions as decisions_mod, records
 from .paths import join
 
 ROUND = 2
@@ -695,6 +695,18 @@ def _rel(root, path):
     return os.path.relpath(path, str(root)).replace(os.sep, "/")
 
 
+def _prepare_action_done(action, ok):
+    """准备动作的结案：步骤状态按事实标，结果摘要区分「通过」与「只留草稿」。"""
+    from . import actions as actions_mod
+
+    action = actions_mod.complete(
+        action, summary=("definition.prepare ok" if ok else "definition.prepare draft-only"))
+    action = dict(action)
+    action["steps"] = [{"id": "static_check", "state": "done"},
+                       {"id": "write_preparation", "state": "done"}]
+    return action
+
+
 def prepare(ctx, args):
     """`definition prepare --id <workflow-id>`：建立/更新准备记录（机制稿 §1.4、§7.2）。
 
@@ -729,6 +741,20 @@ def prepare(ctx, args):
                           "problems": problems}
             digest = "sha256:" + records.sha256_hex(text.encode("utf-8"))
         previous = records.load_json(preparation_path(ctx.root, workflow_id), {}) or {}
+        # 机制稿 §5.1：具名动作先在**主记录**登记意图——准备动作的主记录是准备记录本身。
+        # 未通过校验时同样登记（草稿也是准备动作的结果），steps 按事实标 applied 与否。
+        action = actions_mod.new_action(
+            "definition.prepare",
+            {"kind": "session", "id": key,
+             "scope": {"object": {"kind": "preparation", "id": workflow_id},
+                       "preparation": None}},
+            int(previous.get("revision", 0)),
+            {"workflow_id": workflow_id,
+             "definition": f"{USER_WORKFLOWS_REL}/{workflow_id}.md",
+             "digest": digest, "problems": len(validation.get("problems") or [])},
+            steps=["static_check", "write_preparation"],
+            head_before=actions_mod.head_of(ctx.root),
+            targets=[{"kind": "preparation", "id": workflow_id}])
         preparation = {
             "schema_version": 1,
             "id": workflow_id,
@@ -746,10 +772,13 @@ def prepare(ctx, args):
             "wip": previous.get("wip"),
             "ended_at": None,
             "updated_at": records.now_str(),
+            "action": _prepare_action_done(action, validation["ok"]),
         }
         records.write_json(preparation_path(ctx.root, workflow_id), preparation)
     facts = {"workflow_id": workflow_id, "preparation": _rel(ctx.root, preparation_path(ctx.root, workflow_id)),
-             "validation": validation, "progress": preparation["progress"]}
+             "validation": validation, "progress": preparation["progress"],
+             "action": {"id": preparation["action"]["id"],
+                        "state": preparation["action"]["state"]}}
     if not validation["ok"]:
         raise DefinitionError("WF_DEFINITION_INVALID",
                               dict(facts, reason="preparation kept as draft; static validation failed"),
