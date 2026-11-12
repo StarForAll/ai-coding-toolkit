@@ -75,8 +75,8 @@
 
 | # | 能力 | 改哪里 | 用例 | 状态 |
 |---|---|---|---|---|
-| B4-1 | `definition prepare/validate` | `lib/wflib/runs.py::prepare/validate/load_definition`（新实现，复用 `records`/`paths`/`templates`） | `scripts/tests/wf_runtime/test_definition.py` + `repro/definition-static-check.py` | [ ] |
-| B4-2 | 准备记录 | `runs.py::prepare` 写准备记录（机制稿 §1.4 字段） | 同上 | [ ] |
+| B4-1 | `definition prepare/validate` | `runs.py` 实装：`parse_definition`（标记唯一 + 紧邻 json 围栏）、`validate_definition`（六阶段：`_schema_problems`/`_local_id_problems`/`_reference_problems`/`_path_problems`/`_skip_problems`/`_completion_problems`）、`prepare`（准备记录 + 未通过草稿保留）、`validate`（只读）；`cli.COMMANDS["definition"]` 换 `_runs_command` | `test_definition.py`（新，18 例）+ `repro/definition-static-check.py`（新，双模） | 单测 18/18 + repro 双模绿 | [x] |
+| B4-2 | 准备记录 | `runs.py::prepare` 写 `.wf/preparations/<id>.json`（`session_key`/`scope_paths`/`authorization`/`definition_refs`/`validation`/`progress`/`wip`/`ended_at`），该目录已是 `scope._is_control_record` 的固定职责控制记录；别的会话持写权 → `WF_WRITER_BUSY` | 同上（断言字段齐全与 drafts 保留） | repro 断言覆盖 | [x] |
 | B5-1 | `run create/locate/pause` | `runs.py::create/locate/pause` + `cli.COMMANDS["run"]` 子动作分派 | `repro/run-create-advance.py`（双模） | [ ] |
 | B5-2 | `run advance`（含人判/略过/自动建任务与顺序边） | `runs.py::advance` | 同上 + `scripts/tests/wf_runtime/test_run_advance.py` | [ ] |
 | B5-3 | `run terminate` + `finish` | `runs.py::terminate/finish` | `repro/run-terminate.py` | [ ] |
@@ -209,3 +209,10 @@ B3–B5（P1 七项能力）、B6 的发行树提交与其余文档同步。原�
 - 动作：`dependency.change`，steps `validate_graph` → `write_prerequisites`，**targets 覆盖两端任务**（D08 的依赖侧要求）。
 - 判定：自环显式守卫 + 环检测（两层）；建边要求前置在活动区且未归档；删边只改未归档持有侧、目标可在归档区（死引用交 repair）；重复 add/rm 幂等返回。
 - 用例：`test_dep_edges.py`（4 例）、`repro/dep-edges.py`（双模）。**注入教训**：首版只退回自环守卫，断言仍成立——因为环检测独立拦住了自环，于是「红不掉」。改成把**两层都**退回后才真正变红；这条写进用例注释，免得后人再写一个测不到东西的注入。
+
+### B4 —— `definition` 准备与静态校验（2026-11-12）
+
+- 落点：`runs.parse_definition` / `validate_definition`（六阶段 + 按 `stage` 排序）/ `prepare` / `validate`；`cli.COMMANDS["definition"]` 由桩换成 `_runs_command("definition")`（位置参数取子动作）。
+- 分界：结构/id 唯一与保留前缀/引用存在与顺序/路径边界/跳过替代下游一致性/必要验证的步骤承载 → 机制；「定义写得清不清楚」「skip 条件该不该认」→ 人判；`completion` 自然语言不求值。
+- **仍未交付并登记**：`run *`（实例创建/推进/暂停/终止）仍是桩；准备范围未登记到 `writer.holder.scope`（以准备记录承载，建实例时重核）；`prepare` 未写 `definition.prepare` 的动作意图（准备期只有记录级恢复）。
+- 用例：`test_definition.py`（18 例：标记唯一/紧邻/非法 JSON/保留前缀/重复 id/引用前向/prior_step 落点/step_artifact 根/skip 与 required 冲突/未知 consumer/步骤无验证/问题按阶段排序），`repro/definition-static-check.py`（双模）。
