@@ -15,9 +15,10 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import uuid
 
-from . import assets, codes, records
+from . import assets, codes, decisions as decisions_mod, records
 from .paths import join
 
 ROUND = 2
@@ -617,15 +618,11 @@ def _consumer_index(doc):
 def _completion_problems(doc):
     """第 6 阶段：完成/验证/人判声明（机制稿 §7.2 末段）。"""
     problems = []
-    total_verifications = sum(len(step.get("verifications") or [])
-                              for step in doc.get("steps") or [] if isinstance(step, dict))
     completion = doc.get("completion") or []
     if not any(isinstance(item, str) and item.strip() for item in completion):
         problems.append(_problem(6, "completion must state the finish condition", "completion"))
-    if total_verifications == 0:
-        # 定义级「必要验证」由任务步骤的 verifications 共同承载；一条都没有即空壳声明
-        problems.append(_problem(6, "definition declares no verification; the necessary checks "
-                                    "must be carried by task steps", "verifications"))
+    # 定义级「必要验证」由**任务步骤**的 verifications 共同承载，因此只在存在任务步骤时要求；
+    # 纯 human 步骤的流程没有交付物，硬要一条验证只会逼人写个假任务步骤（下面对每条任务步骤逐条核）。
     for index, step in enumerate(doc.get("steps") or []):
         if not isinstance(step, dict) or step.get("type") != "task":
             continue
@@ -1580,6 +1577,183 @@ TERMINATE_DISPOSITIONS = {"放弃": "abandon", "abandon": "abandon",
                           "保留": "keep", "keep": "keep"}
 
 
+FINISH_STEPS = ("check_steps", "write_normal", "persist_record")
+
+
+def finish(ctx, args):
+    """`run finish --run <id> [--decision <path>]`：实例正常结束（机制稿 §7.4）。
+
+    前置全是**事实核对**，不替人判断：所有**必需**步骤已 `satisfied`、可略步骤的 `skipped` 成立、
+    `task_map` 里每个任务都正常归档且持久化可核、human 步骤有人判答复、工作区没有未处置的保留 WIP。
+    任一不成立即 `WF_SEMANTIC_DECISION`/`WF_WORKSPACE_UNRESOLVED` 并列出缺什么——**不代调**
+    任务的 `finish`（机制稿 §7.4：任务 finish 由人调用）。
+
+    持久化：给了 `--decision` 且其中的 `commit` 授权覆盖实例记录路径时，按精确路径提交并只读复核；
+    没给授权就停在 `persist_pending`，如实说明「记录组尚未提交」。
+    """
+    from . import actions as actions_mod, cli, lock, session as session_mod, tasks as tasks_mod, writer as writer_mod
+
+    run_id = args.value("--run")
+    decision_path = args.value("--decision")
+    if not run_id:
+        raise DefinitionError("WF_PATH_INVALID", {"reason": "run finish requires --run <id>"})
+    decisions = cli._load_decision(decision_path) if decision_path else []
+    key = ctx.key()
+    with lock.acquire(ctx.root, holder_hint="run finish"):
+        record = ctx.writer() or {}
+        holder = record.get("holder") or {}
+        if record.get("state") != "held" or holder.get("id") != key:
+            raise cli.CliError("WF_WRITER_BUSY", {"holder": holder},
+                               next_="由绑定该实例的会话结束实例；他人持有写权时先走交接/恢复出口")
+        scope = (holder.get("scope") or {}).get("object") or {}
+        if scope.get("kind") != "run" or scope.get("id") != run_id:
+            raise DefinitionError("WF_BINDING_MISMATCH",
+                                  {"reason": "writer scope is not this run", "scope": scope})
+        binding = session_mod.load_binding(ctx.root, key) or {}
+        if ((binding.get("object") or {}).get("kind") != "run"
+                or (binding.get("object") or {}).get("id") != run_id):
+            raise DefinitionError("WF_BINDING_MISMATCH",
+                                  {"reason": "session is not bound to this run",
+                                   "binding": binding.get("object")})
+        run = load_run(ctx.root, run_id)
+        if not isinstance(run, dict):
+            raise DefinitionError("WF_HISTORY_UNRESOLVED", {"reason": "run record missing",
+                                                           "run": run_id})
+        if run.get("terminal"):
+            raise DefinitionError("WF_BINDING_MISMATCH",
+                                  {"reason": "run already ended", "terminal": run.get("terminal")})
+        if run.get("paused"):
+            raise DefinitionError("WF_SEMANTIC_DECISION",
+                                  {"reason": "run is paused", "exit": "先 run resume 再结束"})
+        doc, _problems = parse_definition(
+            open(join(ctx.root, f"{RUNS_REL}/{run_id}/definition.md"), "rb").read().decode("utf-8"))
+        if doc is None:
+            raise DefinitionError("WF_HISTORY_UNRESOLVED",
+                                  {"reason": "fixed snapshot is not statically valid"})
+        step_results = run.get("step_results") or {}
+        task_map = run.get("task_map") or {}
+        creation = run.get("creation_decision") or {}
+        applicability = _applicability(creation, doc)
+
+        # ① 步骤面：必需步骤 satisfied；可略步骤的 skipped 必须有声明/决定
+        unsatisfied, illegal_skips = [], []
+        for step in _ordered_steps(doc):
+            step_id = step["id"]
+            result = step_results.get(step_id) or {}
+            kind = result.get("kind")
+            declared_skipped = applicability.get(step_id) == "skipped"
+            if declared_skipped or step.get("required") is False:
+                if kind in ("skipped", "satisfied"):
+                    continue
+                if step.get("required") is False and kind is None:
+                    continue      # 可略但未走到：不算未完，也不记满足
+                illegal_skips.append({"step": step_id, "kind": kind})
+                continue
+            if kind != "satisfied":
+                unsatisfied.append({"step": step_id, "kind": kind})
+        # ② 任务面：每个已生成任务都正常归档且持久化可核
+        bad_tasks = []
+        for step_id, mapping in sorted(task_map.items()):
+            task_id = (mapping or {}).get("task_id")
+            task = tasks_mod.load_task(ctx.root, task_id) if task_id else None
+            if not isinstance(task, dict):
+                bad_tasks.append({"step": step_id, "task": task_id, "reason": "missing"})
+                continue
+            if task.get("terminal") != "normal":
+                bad_tasks.append({"step": step_id, "task": task_id,
+                                  "terminal": task.get("terminal")})
+                continue
+            persisted = tasks_mod.archive_persisted(ctx.root, task)
+            if not persisted.get("persisted"):
+                bad_tasks.append({"step": step_id, "task": task_id,
+                                  "reason": persisted.get("reason") or "archive not persisted"})
+        if unsatisfied or illegal_skips or bad_tasks:
+            raise DefinitionError("WF_SEMANTIC_DECISION",
+                                  {"reason": "instance is not ready to finish normally",
+                                   "unsatisfied_steps": unsatisfied,
+                                   "illegal_skips": illegal_skips,
+                                   "tasks_not_normal": bad_tasks},
+                                  next_="把缺口对应的步骤/任务做完（任务 finish 由人调用），或改用 run terminate")
+        # ③ 真实工作区：本实例任务不得留下未处置的保留 WIP
+        from . import scope as scope_mod
+
+        dirty = set(scope_mod.uncommitted_paths(ctx.root))
+        sticky = []
+        for task_id in sorted({(m or {}).get("task_id") for m in task_map.values() if (m or {}).get("task_id")}):
+            task = tasks_mod.load_task(ctx.root, task_id) or {}
+            retained = [path for path in tasks_mod.wip_paths(task) if path in dirty]
+            if retained:
+                sticky.append({"task": task_id, "paths": retained})
+        if sticky:
+            raise DefinitionError("WF_WORKSPACE_UNRESOLVED",
+                                  {"reason": "run tasks keep undisposed WIP", "blocked": sticky},
+                                  next_="先处置这些路径（提交/反向修正/承接）后重入")
+
+        record_rel = f"{RUNS_REL}/{run_id}.json"
+        action = actions_mod.new_action("run.finish",
+                                        writer_mod.owner_ref("session", key, scope),
+                                        int(run.get("revision", 0)),
+                                        {"run": run_id, "mode": "normal"},
+                                        steps=list(FINISH_STEPS),
+                                        head_before=actions_mod.head_of(ctx.root),
+                                        targets=[{"kind": "run", "id": run_id}])
+        run = dict(run, action=action,
+                   closing={"mode": "normal", "at": records.now_str(),
+                            "decision": decisions, "task_dispositions": {}, "next_step": None})
+        records.write_json(run_path(ctx.root, run_id), run)
+        run = dict(run, terminal="normal", ended_at=records.now_str(),
+                   action=dict(action, state="persist_pending", next_step=None))
+        records.write_json(run_path(ctx.root, run_id), run)
+
+        # ④ 持久化：有覆盖该路径的提交授权才提交；否则停在 persist_pending 并如实说明
+        grants = [item for item in decisions if isinstance(item, dict)
+                  and decisions_mod.accepts("commit_grant", item.get("choice"))]
+        from . import paths as paths_mod
+
+        covered = any(path == record_rel or paths_mod.match_path(path, record_rel)
+                      for grant in grants for path in _grant_paths(grant.get("subject")))
+        persisted = False
+        commit_result = None
+        if covered:
+            commit_result = tasks_mod._commit_paths(
+                ctx.root, [record_rel], f"wf: run finish {run_id}\n\nwf-task: {run_id}")
+            status = subprocess.run(["git", "ls-files", "--error-unmatch", record_rel],
+                                    cwd=str(ctx.root), capture_output=True, text=True, check=False)
+            dirty_record = subprocess.run(["git", "status", "--porcelain", "--", record_rel],
+                                          cwd=str(ctx.root), capture_output=True, text=True,
+                                          check=False).stdout.strip()
+            persisted = status.returncode == 0 and dirty_record == ""
+            if persisted:
+                run = dict(run, action=actions_mod.complete(
+                    run["action"], summary="run.finish",
+                    control_assertion=cli._control_assertion(
+                        ctx, "run.finish", writer_mod.owner_ref("session", key, scope),
+                        action, [f"run:{run_id}"])))
+                records.write_json(run_path(ctx.root, run_id), run)
+    next_ = ("实例已正常结束并持久化：可 writer release 结束会话"
+             if persisted else
+             "实例已正常结束，但**记录组尚未提交**：给出覆盖该路径的 commit 授权后重入 run finish 续做")
+    return codes.result(
+        "WF_OK",
+        object={"id": run_id},
+        position_=codes.position(scope="run",
+                                 action_id=run["action"]["id"],
+                                 action_state=run["action"]["state"]),
+        next_=next_,
+        facts={"run": run_id, "terminal": "normal", "ended_at": run["ended_at"],
+               "closing": run["closing"], "persisted": persisted,
+               "record": record_rel, "commit": commit_result,
+               "note": "任务 finish 由人实际调用；实例结束入口不代调"})
+
+
+def _grant_paths(subject):
+    if isinstance(subject, list):
+        return [str(item) for item in subject if isinstance(item, str)]
+    if isinstance(subject, str):
+        return [subject]
+    return []
+
+
 def terminate(ctx, args):
     """`run terminate --run <id> --plan <path>`：实例异常终止 + 逐任务处置（机制稿 §7.4）。
 
@@ -1981,5 +2155,3 @@ def load_definition(*_args, **_kwargs):
     raise assets.CapabilityUnavailable("workflow definition loading (D11)", ROUND)
 
 
-def finish(*_args, **_kwargs):
-    raise assets.CapabilityUnavailable("run finish (D13)", ROUND)
