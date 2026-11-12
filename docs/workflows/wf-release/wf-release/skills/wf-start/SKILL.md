@@ -25,8 +25,10 @@ user-invoked: true
      （准备与创建都在本入口，见下节）。**`bind --run <id>` 尚未交付**（命令面接受参数但返回
      `WF_CAPABILITY_UNAVAILABLE`）：实例的首次绑定由 `run create` 完成；已有实例换到新会话接续的入口还没开。
 4. 需要重新取得已被释放的写权时：`writer acquire`。
-5. **自动模式下不需要手写信封**（2026-11-08 起）：直接 `wf.py enable --json`，身份由执行边界派生
+5. **自动模式下不手写 session 信封**（2026-11-08 起）：直接 `wf.py enable --json`，身份由执行边界派生
    （会话 leader + 进程链），`activation`/`instance_id` 由入口写进运行态附件并由后续命令自动读取。
+   **写权代次同样不用手填**：取得写权时入口把代次记进本会话运行态，后续写命令缺省取它；
+   显式 `inputs.generation` 仍可覆盖（过期会被 `WF_GENERATION_STALE` 拒）。
    只有在**拿不到执行边界**（容器逐命令、跨命名空间读不到 `/proc`）或需要兼容旧项目时，才用显式信封。
 6. **把本次启用的结果变成会话缓存**（显式模式；机制稿 §1.4：由适配层按本次真实调用形成缓存，不是让运行时猜）：
    `enable` 的 `facts.activation` 就是可缓存的启用事实——`activation_source=carried` 表示请求里已带，

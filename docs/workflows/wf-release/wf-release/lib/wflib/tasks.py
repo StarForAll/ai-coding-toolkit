@@ -1005,12 +1005,14 @@ def work_satisfied_fact(ctx, task):
 
 
 def pending_delivery_paths(ctx, task):
-    """本任务交付面里**未提交**的路径（`e` 桶 ∩ 未提交）。
+    """本任务交付面里**未提交**的路径（`delivery_set` ∩ 未提交）。
 
-    `changes-persisted` 与归档预检消费的是同一个桶——只在这里算一次，避免两处各算一套。
+    `changes-persisted` 与归档预检消费的是同一个集合——只在这里算一次，避免两处各算一套。
+    交付集合含已获 `expand` 确认的路径，因此获批的越界改动同样进入待提交面（否则它会被
+    归档留在工作区，下一次 Check 变成 c 桶阻断）。
     """
-    classified = scope.classify_candidates(ctx.root, task, receipts=task_receipts(ctx.root))
-    return sorted(set(classified["buckets"]["e"]) & set(scope.uncommitted_paths(ctx.root)))
+    delivery = scope.delivery_set(ctx.root, task, receipts=task_receipts(ctx.root))
+    return sorted(set(delivery["paths"]) & set(scope.uncommitted_paths(ctx.root)))
 
 
 def commit_grant_paths(task):
@@ -2552,6 +2554,19 @@ def cmd_task_curate(ctx, args):
                         facts={"curation": curation, "control_assertion": assertion})
 
 
+def check_next_hint(task, check):
+    """Check 成功后的下一跳（唯一实现）：复杂任务先审查，light 直接收工。
+
+    此前固定写 "finish"，模型要么读文档、要么撞一次 `WF_REVIEW_INVALID` 才知道要先
+    `review-launch`（dogfood 的"首次学费"）。
+    """
+    if (check or {}).get("result") != "pass":
+        return "Check 未通过：按 facts 与 wf-repair-loop 处置后重查"
+    if (task.get("plan") or {}).get("complexity") == "complex":
+        return "复杂任务：先 review-launch 发起一轮审查（wf-review），导入/判定通过后再请人调用 finish"
+    return "人了解结果后调用 finish（wf-finish）"
+
+
 def cmd_task_check(ctx, args):
     """Check 的固定五步（机制稿 §3.5），**验证命令在锁外执行**（机制稿 §4.1）。
 
@@ -2637,12 +2652,13 @@ def cmd_task_check(ctx, args):
                                               evidence_refs=[check["id"]])
     if code:
         raise TaskError(code, dict(facts, check=check["id"]))
+    next_hint = check_next_hint(task, check)
     return codes.result(
         "WF_OK",
         object={"id": task_id, "name": task.get("title")},
         position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id,
                                  action_id=task["action"]["id"], action_state=task["action"]["state"]),
-        next_="人了解结果后调用 finish（wf-finish）",
+        next_=next_hint,
         facts={"check": check["id"], "anchor": check["anchor"], "object_paths": facts.get("object_paths"),
                "acceptance_results": check["acceptance_results"], "commands": check["commands"],
                "control_assertion": assertion},
