@@ -12,8 +12,16 @@ import sys
 import traceback
 import uuid
 
-from . import actions, assets, attestation as attestation_mod, codes, config, lock, protocol as protocol_mod, records, session as session_mod, writer as writer_mod
+from . import actions, assets, attestation as attestation_mod, codes, config, decisions as decisions_mod, lock, protocol as protocol_mod, records, session as session_mod, writer as writer_mod
 from .paths import join
+
+# 身份出口的唯一文案（机制稿 §1.4）：显式 `provider=wf` 信封**会被拒**（无本地证据），
+# 唯一可用的显式通道是 `provider=host` 且宿主能给出稳定 `session_id`。
+# 此前四处出口写「用显式信封」而未点明 provider，读者会以为 wf 信封可行（实现稿 §2.3.11 文案债）。
+EXPLICIT_ENVELOPE_EXIT = (
+    "改用 provider=host 的显式信封（--envelope/stdin，需宿主提供 session_id；"
+    "provider=wf 的显式信封会被拒）"
+)
 
 
 class CliError(Exception):
@@ -187,7 +195,7 @@ class Context:
                             "owners": l2_owners,
                             "exits": ["人调 /wf-start 显式登记当前调用者",
                                       "结束另一个调用者后重试",
-                                      "无法判断时改用显式信封"]},
+                                      EXPLICIT_ENVELOPE_EXIT]},
                            next_="按 facts.reason 的出口处置后重试")
         return None, None
 
@@ -322,7 +330,7 @@ class Context:
             raise CliError(
                 "WF_IDENTITY_UNRESOLVED",
                 {"reason": "no execution boundary resolved",
-                 "exits": ["在保留的终端里重跑 /wf-start", "用显式信封（--envelope/stdin）"]},
+                 "exits": ["在保留的终端里重跑 /wf-start", EXPLICIT_ENVELOPE_EXIT]},
                 next_="人调 /wf-start 建立执行会话后重试",
             )
         return self._session
@@ -359,7 +367,7 @@ class Context:
                 next_ = "按 C2 分级：未登记的调用者不得自动继承会话"
             else:
                 facts["exits"] = ["人核实旧调用者是否停止；确认后 repair --mark-root-gone",
-                                  "或用显式信封"]
+                                  EXPLICIT_ENVELOPE_EXIT]
                 next_ = "证据未知：先人核实再重试"
             raise CliError("WF_IDENTITY_UNRESOLVED", facts, next_=next_)
         if verdict["action"] == "stale":
@@ -916,7 +924,7 @@ def _establish_auto_session(ctx):
         raise CliError(
             "WF_IDENTITY_UNRESOLVED",
             {"reason": "no execution boundary resolved",
-             "exits": ["在保留的终端里重试", "用显式信封（--envelope/stdin）"]},
+             "exits": ["在保留的终端里重试", EXPLICIT_ENVELOPE_EXIT]},
             next_="换到支持的终端形态后重跑 /wf-start",
         )
     issued_id = uuid.uuid4().hex
@@ -1656,8 +1664,9 @@ def cmd_stop(ctx, args):
     if not choices:
         # 空决定文件是业务输入错误，不能走到 IndexError/退出 70（第二十五轮复审外部 2）
         raise CliError("WF_SEMANTIC_DECISION", {"reason": "收工决定文件为空，需要一条 choice",
-                                                "choices": [], "accepted": ["commit", "keep", "reverse", "transfer"]})
-    if choices[0] not in ("commit", "keep", "reverse", "transfer"):
+                                                "choices": [],
+                                                "accepted": list(decisions_mod.domain("stop_choice"))})
+    if not decisions_mod.accepts("stop_choice", choices[0]):
         raise CliError("WF_SEMANTIC_DECISION", {"choices": choices, "reason": "收工选择必须是 commit/keep/reverse/transfer"})
     if args.flag("--preview"):
         # 只读预览（设计稿 §4.4）：逐路径给出归属/状态/待验证项，不写任何记录

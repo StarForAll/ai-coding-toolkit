@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import uuid
 
-from . import actions, codes, config, fingerprint, records, scope, session as session_mod, writer as writer_mod
+from . import actions, codes, config, decisions as decisions_mod, fingerprint, records, scope, session as session_mod, writer as writer_mod
 from .paths import join
 
 TASKS_REL = ".wf/tasks"
@@ -503,8 +503,9 @@ def unanswered_plan_questions(root, task, decisions=None):
 
 
 
-MECHANICAL_REVISION = "机械修订"
-APPROVE_CHOICES = ("approve", "批准")
+# 取值域只在 `wflib/decisions.py` 登记（实现稿 §2.3.11 ①）；这里只做别名，不另写元组。
+MECHANICAL_REVISION = decisions_mod.domain("mechanical_revision")[0]
+APPROVE_CHOICES = decisions_mod.domain("plan_approval")
 # 设计稿 §4.3 的四个分级条件；机制稿 §2.3 要求逐项保存 true/false/unknown
 # 键名与批准入口的 complexity_conditions 一致（设计稿 §4.3 四项）
 COMPLEXITY_CONDITIONS = ("governance", "contract", "acceptance", "scope")
@@ -2177,7 +2178,7 @@ def cmd_task_replan(ctx, args):
                       "如需放弃任务，用 task-abandon（同样需要 Decision）"],
         })
     decisions = _load_decision_list(decision_path)
-    if not any(item.get("choice") in ("replan", "重新规划") for item in decisions):
+    if not any(decisions_mod.accepts("replan", item.get("choice")) for item in decisions):
         raise TaskError("WF_SEMANTIC_DECISION",
                         {"reason": "决定文件里没有 choice=replan", "choices": [d.get("choice") for d in decisions]})
     _require_binding(ctx, task_id)
@@ -2187,7 +2188,7 @@ def cmd_task_replan(ctx, args):
         task = records.load_json(os.path.join(path, "task.json"))
         if task.get("status") == "archived":
             raise TaskError("WF_BINDING_MISMATCH", {"reason": "task archived"})
-        decision = next(item for item in decisions if item.get("choice") in ("replan", "重新规划"))
+        decision = next(item for item in decisions if decisions_mod.accepts("replan", item.get("choice")))
         # 决定必须指向本任务：subject 里要出现任务 id，或 object_digest 命中当前规划版本
         subject = decision.get("subject")
         subject_text = ",".join(subject) if isinstance(subject, list) else str(subject or "")
@@ -2369,6 +2370,30 @@ def _evidence_exists(root, task, ref):
     return ref in known
 
 
+def _debug_idempotency_key(entry):
+    """声明/裁定的幂等键（实现稿 §2.3.11 ④）。
+
+    同一决定文件重入不得重复累计：键取**结构化字段**，不比原文措辞，
+    因此"把同一事实写成另一句话"仍是两条（那是第二次声明，须由人的 dedupe/裁定处置）。
+    """
+    import json as _json
+
+    def freeze(value):
+        return _json.dumps(value, sort_keys=True, ensure_ascii=False, default=str)
+
+    if "verification_id" in entry:
+        return freeze({
+            "kind": "declaration",
+            "verification_id": entry.get("verification_id"),
+            "counted": entry.get("counted"),
+            "evidence_refs": sorted(entry.get("evidence_refs") or []),
+            "dedupe_refs": sorted(freeze(pair) for pair in (entry.get("dedupe_refs") or [])),
+        })
+    return freeze({"kind": "ruling", "subject": entry.get("subject"),
+                   "choice": entry.get("choice"),
+                   "evidence_refs": sorted(entry.get("evidence_refs") or [])})
+
+
 def _apply_debug_inputs(task, decisions, root=None):
     """把 Execute 期重复调试声明与 debug-ruling 裁定落到 execution（机制稿 §1.3）。"""
     execution = task.setdefault("execution", {})
@@ -2409,8 +2434,12 @@ def _apply_debug_inputs(task, decisions, root=None):
                 if missing:
                     raise TaskError("WF_HISTORY_UNRESOLVED",
                                     {"subject": subject, "reason": "evidence_refs not found", "missing": missing})
-            declarations.append({"verification_id": verification_id, "counted": counted,
-                                 "evidence_refs": evidence, "dedupe_refs": dedupe})
+            entry = {"verification_id": verification_id, "counted": counted,
+                     "evidence_refs": evidence, "dedupe_refs": dedupe}
+            # 幂等：同一决定文件重入不得重复累计（实现稿 §2.3.11 ④）
+            if _debug_idempotency_key(entry) in {_debug_idempotency_key(item) for item in declarations}:
+                continue
+            declarations.append(entry)
             continue
         if subject.startswith("debug-ruling-"):
             from . import gates as gates_mod
@@ -2419,10 +2448,11 @@ def _apply_debug_inputs(task, decisions, root=None):
                 raise TaskError("WF_RECORD_INVALID",
                                 {"subject": subject,
                                  "reason": "debug-ruling subject must be debug-ruling-<verification_id>-<multiple>"})
-            if decision.get("choice") not in ("同一问题", "不同问题"):
+            if not decisions_mod.accepts("debug_ruling", decision.get("choice")):
                 raise TaskError("WF_SEMANTIC_DECISION", {"subject": subject,
                                                          "reason": "ruling choice must be 同一问题/不同问题"})
-            rulings.append(decision)
+            if _debug_idempotency_key(decision) not in {_debug_idempotency_key(item) for item in rulings}:
+                rulings.append(decision)
     # 证据必须真实存在，且 counted 不得少于去重后仍成立的证据条目（机制稿 §1.3、§11.2）
     known_checks = {entry.get("id") for entry in task.get("check_history") or []} | {(task.get("check") or {}).get("id")}
     for entry in declarations:
@@ -2775,7 +2805,8 @@ def cmd_task_abandon(ctx, args):
         # R24：未提交改动须「已授权提交」或「由人实际处置」，不遗留无主 WIP（机制稿 §6.4）
         from . import paths as paths_mod
 
-        grants = [item for item in decisions[1:] if item.get("choice") == "commit"]
+        grants = [item for item in decisions[1:]
+                  if decisions_mod.accepts("commit_grant", item.get("choice"))]
         grant_paths = [path for grant in grants for path in _subject_paths(grant.get("subject"))]
         preview_uncommitted = list(preview["uncommitted"])
         to_commit = [path for path in preview_uncommitted
@@ -2801,7 +2832,8 @@ def cmd_task_abandon(ctx, args):
             "targets": (disposition or {}).get("targets") or [],
             "pending": pending,
         }
-        task["commit_grants"] = [item for item in decisions[1:] if item.get("choice") == "commit"]
+        task["commit_grants"] = [item for item in decisions[1:]
+                                 if decisions_mod.accepts("commit_grant", item.get("choice"))]
         inputs = {"task": task_id, "kind": "abandon"}
         task, action = _start_task_action(ctx, path, task, "task.abandon", holder, inputs,
                                           ["record_decision", "apply_disposition"])
@@ -3185,8 +3217,8 @@ def cmd_archive(ctx, args):
     if not task_id or not decision_path:
         raise TaskError("WF_PATH_INVALID", {"reason": "archive requires --task <id> --decision <path>"})
     decisions = cli._load_decision(decision_path)
-    finish = [item for item in decisions if item.get("choice") in ("finish", "完成", "pass")]
-    grants = [item for item in decisions if item.get("choice") == "commit"]
+    finish = [item for item in decisions if decisions_mod.accepts("archive_finish", item.get("choice"))]
+    grants = [item for item in decisions if decisions_mod.accepts("commit_grant", item.get("choice"))]
     if not finish:
         raise TaskError("WF_SEMANTIC_DECISION", {"reason": "finish decision required",
                                                  "choices": [item.get("choice") for item in decisions]})
@@ -3430,27 +3462,38 @@ def cmd_archive(ctx, args):
                     "recovery": "无需恢复：运行态可丢弃重建"},
                ],
                # 巡检到点提示（设计稿 §5.4）：归档是"正常归档累计"的计数点，到点就在回显里提示
-               "inspection_hint": _inspection_hint(ctx.root),
+               "inspection_hint": _inspection_hint(ctx),
                # ⑥：归档强制回显当前生效的放行清单
                "unknown_acceptances": review_acceptance_echo(task)},
     )
 
 
-def _inspection_hint(root):
-    """归档后按整数倍口径给巡检提示；不阻断、只提示（外部 7）。"""
+def _inspection_hint(ctx):
+    """归档后按整数倍口径给巡检提示；不阻断、只提示（外部 7）。
+
+    到点判定只有**一处实现**：`_governance_summary` 的 `inspection`。此前本函数硬编码
+    `every = 10` 并数**全部**归档（含异常归档与不可解析记录），与机制稿 §8.5 的
+    「按正常归档累计、异常归档不计也不重置、键取自项目配置 `inspection_every_tasks`」
+    不一致（实现稿 §2.3.11 未做项）。这里复用同一判定，另写一份就会两处漂移。
+    """
     try:
-        every = 10
-        archived = 0
-        base = join(root, ".wf/tasks/archive")
-        for current, _dirs, files in os.walk(base):
-            if "task.json" in files:
-                archived += 1
-        if every > 0 and archived and archived % every == 0:
-            return {"due": True, "archived": archived, "every": every,
-                    "next": "按设计稿 §5.4 运行 inspect 完成本轮巡检"}
-        return {"due": False, "archived": archived}
+        _active, archived = _task_dirs(ctx.root)
+        inspection = _governance_summary(ctx.root, list(iter_tasks(ctx.root)), archived)["inspection"]
     except OSError:
         return {"due": None, "reason": "archive scan failed"}
+    facts = {"archived": inspection.get("normal_archived"),
+             "abnormal": inspection.get("abnormal_archived"),
+             "every": inspection.get("every_tasks")}
+    if inspection.get("problem"):
+        facts["problem"] = inspection.get("problem")
+    if inspection.get("due") is None:
+        facts["due"] = None
+        facts["reason"] = "normal-archive count or inspection_every_tasks is unknown; no conclusion"
+        return facts
+    facts["due"] = bool(inspection.get("due"))
+    if facts["due"]:
+        facts["next"] = "按设计稿 §5.4 运行 inspect 完成本轮巡检"
+    return facts
 
 def _reassess_empty_set(ctx, task_id):
     """首轮无返工集合时，复评只能是"无挂起任务"。
@@ -4019,7 +4062,8 @@ def stop_work(ctx, decisions, choice):
             commit_result = None
         elif choice == "commit":
             # decisions[0] 是收工选择本身；授权必须是其后的独立 Decision（机制稿 §4.3）
-            grants = [item for item in decisions[1:] if item.get("choice") == "commit"]
+            grants = [item for item in decisions[1:]
+                  if decisions_mod.accepts("commit_grant", item.get("choice"))]
             grant_paths = [path for grant in grants for path in _subject_paths(grant.get("subject"))]
             uncovered = [item for item in paths if not covered(item, grant_paths)]
             if not grants or uncovered:
@@ -4407,8 +4451,12 @@ def _governance_summary(root, tasks, archived):
             candidates.append({"path": path, "reason": "unreferenced in recent normal archives"})
 
     due = None
-    if not every_problem and every and not unknown:
-        # 记录不完整时正常归档计数不可信：不给触发结论（未知不当零）
+    # 到点判定只看**让「正常归档累计」变不可信**的因素：归档记录不完整、配置键非法。
+    # 知识回收窗口的样本不足/路径失联属 `spec_usage` 的未知，不改变归档计数（机制稿 §8.5
+    # 的触发只依赖正常归档累计；§2.3.11 的未知纪律针对「归档记录事实不完整」）。
+    # 此前把整张 `unknown` 列表都算进来，会让一个年轻项目的巡检永远不到点——与机制稿相反。
+    count_unreliable = bool(incomplete) or bool(every_problem)
+    if not count_unreliable and every:
         due = bool(len(normal) and len(normal) % every == 0)
 
     return {

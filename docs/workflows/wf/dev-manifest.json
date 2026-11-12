@@ -76,6 +76,12 @@
       "executable": false,
       "kind": "lib",
       "required": true,
+      "source_path": "payload/lib/wflib/decisions.py"
+    },
+    {
+      "executable": false,
+      "kind": "lib",
+      "required": true,
       "source_path": "payload/lib/wflib/curation.py"
     },
     {

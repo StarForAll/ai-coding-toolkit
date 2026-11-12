@@ -440,6 +440,12 @@ def classify_candidates(root, task, receipts=None):
     attributed |= set(attributed_by_decision(root, task))
     candidates = sorted(set(uncommitted) | attributed)
     installed = installed_asset_paths(root)
+    # 归属语义存疑（机制稿 §3.5 d 档）：命中批准触碰面、却被**另一个任务**显式登记为未处置 WIP。
+    # 判定只有一处实现（本函数调 `cross_task_conflicts`），不在这里另写一套争抢判定。
+    conflicts = cross_task_conflicts(root, task, touch_paths)
+    claimed_by = {}
+    for item in conflicts:
+        claimed_by.setdefault(item["path"], []).append(item.get("claimed_by"))
     buckets = {"a": [], "b": [], "c": [], "d": [], "e": [], "f": [], "v": []}
     receipt_paths = set()
     for receipt in receipts or []:
@@ -457,6 +463,10 @@ def classify_candidates(root, task, receipts=None):
         if is_vendor(path) and not is_project_data(path):
             # K5：框架自有资产不进交付面/审查/业务提交；**项目数据**（`.wf/spec/**` 等）照常参与分类
             buckets["v"].append(path)
+            continue
+        if path in claimed_by:
+            # 先判存疑再判归属：宽 glob 命中不能覆盖他任务已显式登记的归属（机制稿 §3.3）
+            buckets["d"].append(path)
             continue
         owned = path in attributed or any(paths_mod.match_path(entry_pattern, path) for entry_pattern in touch_paths)
         in_scope = any(paths_mod.match_path(entry_pattern, path) for entry_pattern in touch_paths)
@@ -476,6 +486,8 @@ def classify_candidates(root, task, receipts=None):
         "touch_paths": touch_paths,
         "entry_snapshot": entry,
         "vendor_dirty": buckets["v"],
+        # d 档的展开事实（谁在争抢）：交人裁决时要看到双方，不能只给一个裸路径
+        "conflicts": conflicts,
     }
 
 
@@ -490,16 +502,20 @@ def _wip_path_strings(items):
     return paths
 
 
-def cross_task_conflicts(root, task):
+def cross_task_conflicts(root, task, touch_paths=None):
     """活冲突：当前未提交的路径被**另一个任务显式记为 WIP**（停/交接时保存的指纹）。
 
     历史提交曾改过同一文件不等于永久拥有它（机制稿 §3.3）：只有另一任务明确留下
     `handoff.wip.paths` 声明"这些改动我还没处置"时，才算当前争抢。
+
+    `touch_paths` 由调用方传入时**直接使用**，不再自行重算：批准触碰面只推导一次，
+    否则同一判定在两处各算一遍，注入点也会被第二处掩盖（`f7-3` 的双模探针因此失效）。
     """
     task_id = task.get("id")
     from . import tasks as tasks_mod
 
-    touch_paths = tasks_mod.approved_touch_paths(task)
+    if touch_paths is None:
+        touch_paths = tasks_mod.approved_touch_paths(task)
     live = set(uncommitted_paths(root))
     conflicts = []
     for _path, other in _iter_task_records(root):
