@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-8.md`
-- **Total Sessions**: 398
-- **Last Active**: 2026-11-10
+- **Total Sessions**: 399
+- **Last Active**: 2026-11-12
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-8.md` | ~847 | Active |
+| `journal-8.md` | ~873 | Active |
 | `journal-7.md` | ~1964 | Archived |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
@@ -36,6 +36,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 399 | 2026-11-12 | wf 首轮实现收口（口径 B：记录 + 实现稿事实订正） | `d15beb16`, `a7e6fd39`, `02c994fd`, `2acdc05e`, `922efd66` | `main` |
 | 398 | 2026-11-10 | wf v42 控制流修复收口：四轮评审 + 全量测试转绿 | `3e94f2a`, `fbf18cc`, `941881a`, `d9ee872`, `f559eac`, `b40ad0c`, `12110a5`, `6a1c50c`, `c272a56`, `54a3e76`, `7c628a5`, `cd8c875` | `main` |
 | 397 | 2026-11-02 | wf 实现方案修订轮收口（M1/M2 + 独立复审） | `ac6b2d8` | `main` |
 | 396 | 2026-11-02 | wf 实现方案定稿（含 15 轮外部审查闭环） | `21d3aae`, `7a81669` | `main` |

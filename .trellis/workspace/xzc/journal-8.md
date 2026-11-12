@@ -845,3 +845,29 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 399: wf 首轮实现收口（口径 B：记录 + 实现稿事实订正）
+<!-- trellis-session: v=2 fp=54e187763c3d4663 -->
+
+**Date**: 2026-11-12
+**Task**: wf 首轮实现收口（口径 B：记录 + 实现稿事实订正）
+**Branch**: `main`
+
+### Summary
+
+按人裁「口径 B」收尾 11-03：先复跑验证（设计机检输入摘要 4/4、引用检查 0 problem、单测 457+154、全量回归 132 项 0 失败 + repro 68/68、发行字节复现 74 assets、令牌一致），再把实现稿 §7.3/§9.1/§9.2 的失实事实订正（执行项计数 76→132、套件 54→59、repro 17→68；独立复审已执行；dogfood 首轮已跑），绑定重算为 974 行 / sha256 987aef40…；裁定并统一三处自相矛盾的记录（E 复审、执行器负例组、dogfood），未运行项（真实压缩绑定轴、repair 重建旧确认失效、dogfood 复跑）与记录债（denominator 停在 11-07 的 66/80、⑥/backlog 无任务台账）如实登记在 validation.md §97；spec 新增「收尾验证会隐式重建产物目录」；同批退役 multi-cli-review 仓库副本并同步引用、模块源路径改为 docs/workflows/wf/。任务已归档，剩下 11-05 待结项裁决。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d15beb16` | docs(wf): 实现稿执行项计数与复审/dogfood 状态订正（首轮收口） |
+| `a7e6fd39` | docs(task): 11-03 首轮收口记录、绑定重算与矛盾裁定 |
+| `02c994fd` | docs(spec): 收尾验证会隐式重建产物目录（先证字节复现再跑全量回归） |
+| `2acdc05e` | chore(skills): 退役 multi-cli-review 仓库副本并清理引用 |
+| `922efd66` | docs: 模块源路径改为 docs/workflows/wf/ |
+
+### Status
+
+[OK] **Completed**
