@@ -881,14 +881,6 @@ def proposers_from_history(ctx, task):
     return proposers
 
 
-def known_finding_ids(imported_entries):
-    return {fid for entry in imported_entries if isinstance(entry, dict)
-            for finding in entry.get("findings") or []
-            if isinstance(finding, dict) and finding.get("id")
-            for fid in [str(finding["id"])]}
-
-
-
 def dispositions_problems(dispositions, proposers):
     """dispositions 的结构校验与"关闭不得自证"（机制稿 §9.2、K4b）。纯函数，便于单测。
 
