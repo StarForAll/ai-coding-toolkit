@@ -115,8 +115,6 @@ npx skills add . -g -y
 |----------|------|
 | `collaborating-with-claude` | Collaborate through the Claude Code CLI for prototyping, debugging, and code review, with multi-turn session support |
 | `demand-risk-assessment` | Requirement risk assessment for outsourcing, projects, or requests, including structured scoring and risk matrices |
-| `multi-cli-review` | Multi-CLI review workflow that outputs structured defect reports, supporting both single-reviewer and multi-reviewer protocols |
-| `multi-cli-review-action` | Multi-CLI review aggregation that reads multiple reviewer reports, deduplicates findings, detects conflicts, and applies a unified fix plan |
 
 ### Skill Directory Conventions
 

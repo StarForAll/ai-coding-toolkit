@@ -115,8 +115,6 @@ npx skills add . -g -y
 |----------|------|
 | `collaborating-with-claude` | 通过 Claude Code CLI 协作，委托原型/调试/代码审查，支持多轮会话 |
 | `demand-risk-assessment` | 需求风险评估：外包/项目/需求的接/谈判/暂停/拒绝判断，含结构化评分与风险矩阵 |
-| `multi-cli-review` | 多 CLI 协作问题审查，输出结构化缺陷报告（支持单 reviewer 与多 reviewer 两种协议） |
-| `multi-cli-review-action` | 多 CLI 审查汇总：读取多份 reviewer 报告，聚合去重、检测冲突、统一执行修复 |
 
 ### skills 目录约定
 
