@@ -3,8 +3,10 @@
 `task-check` 必须 `WF_RECORD_INVALID`（结构化 JSON、带恢复出口），
 `inspect` 必须把该目录列入 `broken_task_dirs`；恢复文件后同一检查通过。
 
-注入形态：把 `cmd_task_check` 的「记录缺失」分支改成静默返回 `WF_OK`——
-即夹具未覆盖清单点名的缺陷形态「静默忽略，而非报记录缺失待核」。
+注入形态（2026-11-12 调整）：把「记录缺失」分支的原因码换掉（`WF_RECORD_INVALID` →
+`WF_TARGET_MISSING`）。原先注的是「静默忽略」，但 `task-check` 拆两段锁后缺记录出口抽成
+`_require_task_dir()`、下游两步都假设记录是 dict，静默跳过只会得到内部错误 70 而不是业务结论——
+该缺陷形态在新结构下已不可达。换原因码的注入仍能证明：本用例核的是**具体码 + 恢复出口**。
 """
 import json
 import os
@@ -20,12 +22,15 @@ def check():
     root, _lib, _payload = H.stage()
     project = H.deploy(root)
     if os.environ.get("WF_REPRO_INJECT") == "1":
+        # 2026-11-12：`task-check` 拆两段锁后，缺记录出口抽成 `_require_task_dir()` 供两段共用。
+        # 「静默忽略」这个旧缺陷形态**已不可达**——下游两步都假设记录是 dict，跳过守卫只会
+        # 得到内部错误 70（不是业务结论）。所以注入改为「守卫在，但报错的原因码不对」：
+        # 这仍然证明本用例核的是**具体原因码 + 恢复出口**，而不是"随便报个错就算过"。
         H.patch(os.path.join(project, ".wf/lib/wflib/tasks.py"),
-                '            raise TaskError("WF_RECORD_INVALID", {\n'
-                '                "reason": "task record is missing from the worktree",',
-                '            return codes.result("WF_OK", facts={"reason": "record missing silently ignored (injected defect)"})  # 注入：缺记录静默当通过\n'
-                '            raise TaskError("WF_RECORD_INVALID", {\n'
-                '                "reason": "task record is missing from the worktree",')
+                '    raise TaskError("WF_RECORD_INVALID", {\n'
+                '        "reason": "task record is missing from the worktree",',
+                '    raise TaskError("WF_TARGET_MISSING", {  # 注入：原因码不对\n'
+                '        "reason": "task record is missing from the worktree",')
     task_id, task_dir = F.build_task(project, root, title="记录缺失负例")
     notes = os.path.join(root, "notes.json")
     json.dump(F.NOTE, open(notes, "w"), ensure_ascii=False)
@@ -42,8 +47,6 @@ def check():
                                   "--decision", ack, "--json"],
                         inputs={"generation": H.generation(project)})
     H.require_business_code(payload, rc)
-    H.only_two_outcomes((payload or {}).get("code") if rc != 0 else "WF_OK",
-                        "WF_RECORD_INVALID", "record-missing-in-worktree")
     facts = (payload or {}).get("facts") or {}
     problems = []
     if rc == 0:

@@ -51,7 +51,7 @@
 | B2-4 | P2-10 start 期验证证据入 action | `tasks.py` 新增 `_start_verification_ids`/`_start_verification_evidence`/`_missing_start_verification_evidence`；结果并入 `action.inputs["start_verifications"]`，动作启动后与结案前各核一次真实后置 | `test_start_verification_action.py`（新，5 例） | 单测 5/5 + `task-start-surface` 双模绿 | [x] |
 | B2-5 | P2-11 D08 依赖/实例目标碰撞 | `dep` 侧已交付：`cmd_dep` 的 `new_action(targets=[{task},{prereq}])` 覆盖两端；实例侧（`run create/advance`）随 B4/B5 | `repro/dep-edges.py` 断言动作含双端目标（经 facts/prerequisites 可见） | — | [~] 依赖侧完成、实例侧待 B4/B5 |
 | B2-6 | P2-12 R93 注入式双模反例 | 新增 `repro/identity-platform-fact.py`：未安装宿主写操作被拒（facts 带 `installed_platforms` 与登记出口）+ 只读不受限；注入=去掉平台成员判定 | 双模 | `--expect green`/`--expect red` 均 PASS | [x] |
-| B2-7 | P2-6 `task-check` 执行移出锁（**结构改动，单独一批**） | `lib/wflib/check.py::run_check` 拆三段 + `lib/wflib/tasks.py::cmd_task_check` 的锁段重排 | `test_check_lock_window.py`（新） | 单测 + 既有套件全绿 | [!] 顺延到独立批次（`run_check` 重组要连带锚点重核与检查点语义，不与本批混做） |
+| B2-7 | P2-6 `task-check` 执行移出锁（**结构改动，单独一批**） | `check.py` 拆 `run_check_scope`/`run_check_execute`/`run_check_finish`（`run_check` 保留为兼容入口）；`tasks.py::cmd_task_check` 改两段锁 + 中间锁外执行，回锁后重核 holder/代次并**重算锚点**；新增 `_require_task_dir()` 复用记录缺失出口 | `test_check_lock_window.py`（新，3 例） | 单测 3/3 + 既有 28 个 `task-check` 套件全绿 + run_all 全绿 | [x] |
 
 **批末门禁**：同 B1 + `run_all.sh`（本轮首次全量）。
 **回滚点**：按文件回滚本批改动；P2-6 单独提交，失败只回滚该提交。
@@ -216,3 +216,10 @@ B3–B5（P1 七项能力）、B6 的发行树提交与其余文档同步。原�
 - 分界：结构/id 唯一与保留前缀/引用存在与顺序/路径边界/跳过替代下游一致性/必要验证的步骤承载 → 机制；「定义写得清不清楚」「skip 条件该不该认」→ 人判；`completion` 自然语言不求值。
 - **仍未交付并登记**：`run *`（实例创建/推进/暂停/终止）仍是桩；准备范围未登记到 `writer.holder.scope`（以准备记录承载，建实例时重核）；`prepare` 未写 `definition.prepare` 的动作意图（准备期只有记录级恢复）。
 - 用例：`test_definition.py`（18 例：标记唯一/紧邻/非法 JSON/保留前缀/重复 id/引用前向/prior_step 落点/step_artifact 根/skip 与 required 冲突/未知 consumer/步骤无验证/问题按阶段排序），`repro/definition-static-check.py`（双模）。
+
+### B2-7 —— `task-check` 验证执行移出锁（2026-11-12，口径 A）
+
+- 结构：`check.run_check` 拆成 `run_check_scope`（锁内准备：范围/知识兜底/`resolve_verifications`/锚点与扫描快照）→ `run_check_execute`（**锁外**：跑命令取证）→ `run_check_finish`（锁内定稿：双轴审查、结束前重算范围、扫描前后比对、组装记录）；`run_check` 保留为三段顺序调用的兼容入口。
+- `cmd_task_check`：两段 `lock.acquire`，回锁后 `require_held` 重核 holder 与代次，并**重算 `check_anchor`**（与准备段不等即 `WF_CHECK_STALE`，facts 并列 before/after）；记录缺失出口抽成 `_require_task_dir()` 供两段共用（不拼 None 路径）。
+- **口径选择**：按 A 落地（不加 `writer.checkpoint` 摘要字段、不升格其为「对象稳定性判据」）。B 的价值（锁定窗口内改动的**差异清单**）由 `WF_CHECK_STALE` 的 before/after 摘要与既有的 `changed` 列表承载，已够定位；真要持久化摘要，须先回机制稿 §1.4 登记 `checkpoint` 字段，属另案。
+- 用例：`test_check_lock_window.py` 3 例（含线程用例：执行段期间另一会话能取得项目锁——这是「不占锁」的直接证明）。

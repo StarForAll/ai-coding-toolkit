@@ -2553,6 +2553,17 @@ def cmd_task_curate(ctx, args):
 
 
 def cmd_task_check(ctx, args):
+    """Check 的固定五步（机制稿 §3.5），**验证命令在锁外执行**（机制稿 §4.1）。
+
+    三段：
+    ① 锁内准备——绑定/写权/状态核验、调试声明落点、开工门禁、范围核对与锚点固定；
+    ② **锁外执行**——逐条跑已批准的验证命令（长操作不长期持 OS 锁）；
+    ③ 锁内定稿——重取锁后重核 holder 与代次、重算锚点（变了即 `WF_CHECK_STALE`）、
+       结束前重算范围核对，然后组装记录、写 check_history 与回执、结案动作。
+
+    「锁外窗口期间对象被改」不靠新判据兜底：锚点重算与 `run_check_finish` 里既有的
+    扫描前后比对（`scan_after != scan_before` → `WF_CHECK_STALE`）本就是同一件事。
+    """
     from . import check as check_mod, cli, gates, lock
 
     task_id = args.value("--task")
@@ -2564,16 +2575,7 @@ def cmd_task_check(ctx, args):
     _require_binding(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="task-check"):
         _record, holder = ctx.require_held(task=task_id)
-        path = task_dir(ctx.root, task_id)
-        if not path:
-            # 记录已从工作树消失（历史里仍有）：给结构化原因与恢复出口，不拼 None 路径（N21-3）
-            raise TaskError("WF_RECORD_INVALID", {
-                "reason": "task record is missing from the worktree",
-                "task": task_id,
-                "exits": ["从 Git 恢复该任务目录（git checkout -- <path>）后重试",
-                          "确认记录确实作废后按 repair --dispose / task-abandon 处置",
-                          "不新建同 id 任务覆盖历史"],
-            })
+        path = _require_task_dir(ctx, task_id)
         task = records.load_json(os.path.join(path, "task.json"))
         if task.get("status") != "in_progress":
             raise TaskError("WF_SEMANTIC_DECISION", {"reason": "check requires in_progress", "status": task.get("status")})
@@ -2585,7 +2587,31 @@ def cmd_task_check(ctx, args):
         if blocking:
             raise TaskError(blocking[0]["code"] or "WF_SEMANTIC_DECISION", {"missing": blocking})
         try:
-            check, code, facts = check_mod.run_check(ctx, task, decisions, review_notes)
+            state = check_mod.run_check_scope(ctx, task, decisions, review_notes)
+        except check_mod.CheckError as exc:
+            raise TaskError(exc.code, exc.facts)
+
+    # ② 锁外执行：这一段可能跑几分钟，不能占着 OS 锁
+    try:
+        commands = check_mod.run_check_execute(ctx, task, state)
+    except check_mod.CheckError as exc:
+        raise TaskError(exc.code, exc.facts)
+
+    # ③ 锁内定稿：重核写权与代次，重算锚点（期间对象被改 → 本次不判 pass）
+    with lock.acquire(ctx.root, holder_hint="task-check"):
+        _record, holder = ctx.require_held(task=task_id)
+        path = _require_task_dir(ctx, task_id)
+        # **不重读记录**：写权全程未释放（holder 仍是本会话），别的会话无法改这条记录；
+        # 而准备段已经把调试声明等输入写进了内存态，重读会把它们丢掉（cp2-A13 / cp5-B4 实测）。
+        # 锁外期间真正会变的是**工作树内容**，那由下面的锚点重算与 finish 的扫描比对判。
+        anchor_now, _parts_now = check_mod.current_anchor(ctx, task)
+        if anchor_now != state["anchor"]:
+            raise TaskError("WF_CHECK_STALE",
+                            {"reason": "锚点在锁外执行期间发生变化",
+                             "before": state["anchor"], "after": anchor_now,
+                             "exits": ["按当前内容重新 Check", "确认变化不影响结论后重新批准并重检"]})
+        try:
+            check, code, facts = check_mod.run_check_finish(ctx, task, state, commands)
         except check_mod.CheckError as exc:
             raise TaskError(exc.code, exc.facts)
         history = list(task.get("check_history") or [])
@@ -2621,6 +2647,20 @@ def cmd_task_check(ctx, args):
                "acceptance_results": check["acceptance_results"], "commands": check["commands"],
                "control_assertion": assertion},
     )
+
+
+def _require_task_dir(ctx, task_id):
+    """任务记录目录；记录从工作树消失时给结构化原因与恢复出口，不拼 None 路径（N21-3）。"""
+    path = task_dir(ctx.root, task_id)
+    if path:
+        return path
+    raise TaskError("WF_RECORD_INVALID", {
+        "reason": "task record is missing from the worktree",
+        "task": task_id,
+        "exits": ["从 Git 恢复该任务目录（git checkout -- <path>）后重试",
+                  "确认记录确实作废后按 repair --dispose / task-abandon 处置",
+                  "不新建同 id 任务覆盖历史"],
+    })
 
 
 def cmd_task_knowledge(ctx, args):

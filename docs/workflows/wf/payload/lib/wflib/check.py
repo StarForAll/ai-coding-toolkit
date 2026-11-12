@@ -738,8 +738,12 @@ def tdd_evidence_problem(evidence, commands, history_commands=None):
     return None
 
 
-def run_check(ctx, task, decisions, review_notes_path):
-    """执行固定五步；返回 (check_record, code, facts)。"""
+def run_check_scope(ctx, task, decisions, review_notes_path):
+    """Check 的**锁内准备段**：范围核对、知识兜底、锚点固定（机制稿 §3.5 ①②）。
+
+    这一段只读文件与记录，**不执行任何外部命令**——长操作留给 `run_check_execute()` 在锁外跑
+    （机制稿 §4.1「长操作不长期持 OS 锁」）。返回的 state 是后面两段的唯一输入。
+    """
     task_dir = _task_dir(ctx, task)
     # ① 范围核对
     receipts = _receipts(ctx)
@@ -829,15 +833,38 @@ def run_check(ctx, task, decisions, review_notes_path):
     scan_before = fingerprint.items(ctx.root, object_paths(ctx, task))
     anchor, parts = current_anchor(ctx, task)
     plan = task.get("plan") or {}
+    started = records.now_str()      # 本次 Check 的起点（`check.started_at`），供两段共用
 
     # ② verification.resolve(check)
     unresolved = resolve_verifications(ctx, task, "check")
     if unresolved:
         raise CheckError("WF_VERIFICATION_UNREADY", {"unresolved": unresolved})
 
-    # ③ 执行验证
-    started = records.now_str()
-    log_dir = os.path.join(task_dir, "check-logs", records.now_str().replace(":", "").replace(".", ""))
+    return {
+        "scope_facts": scope_facts,
+        "coverage": coverage,
+        "governance_violations": governance_violations,
+        "anchor": anchor,
+        "parts": parts,
+        "plan": plan,
+        "scan_before": scan_before,
+        "started": started,
+        "decisions": decisions,
+        "review_notes_path": review_notes_path,
+    }
+
+
+def run_check_execute(ctx, task, state):
+    """Check 的**锁外执行段**：逐条跑已批准的验证命令（机制稿 §4.1）。
+
+    只做执行与取证；不判 pass、不写记录。何时回锁、回锁后如何重核由调用方负责。
+    """
+    anchor = state["anchor"]
+    plan = state["plan"]
+    decisions = state["decisions"]
+    task_dir = _task_dir(ctx, task)
+    log_dir = os.path.join(task_dir, "check-logs",
+                           state["started"].replace(":", "").replace(".", ""))
     commands = []
     declared = (task.get("plan") or {}).get("verifications") or []
     referenced = set()
@@ -853,7 +880,21 @@ def run_check(ctx, task, decisions, review_notes_path):
         else:
             commands.append(_run_argv(ctx, task, verification, log_dir))
 
-    # ④ 双轴内部审查
+    return commands
+
+
+def run_check_finish(ctx, task, state, commands):
+    """Check 的**锁内定稿段**：双轴审查、结束前重算范围与锚点、组装检查记录（机制稿 §3.5 ④⑤）。"""
+    scope_facts = state["scope_facts"]
+    coverage = state["coverage"]
+    governance_violations = state["governance_violations"]
+    anchor = state["anchor"]
+    parts = state["parts"]
+    plan = state["plan"]
+    scan_before = state["scan_before"]
+    started = state["started"]
+    decisions = state["decisions"]
+    review_notes_path = state["review_notes_path"]
     internal_review, review_problem = _parse_review_notes(review_notes_path)
     tdd_evidence = (internal_review or {}).get("tdd_evidence")
     history_entries = list(task.get("check_history") or [])
@@ -932,6 +973,16 @@ def run_check(ctx, task, decisions, review_notes_path):
     if passed:
         return check, None, facts
     return check, "WF_CHECK_FAILED", facts
+
+
+def run_check(ctx, task, decisions, review_notes_path):
+    """固定五步的兼容入口：三段顺序执行（不需要拆锁的调用方用它）。
+
+    `cmd_task_check` 不用它——它必须在执行段前后各取/放一次锁。
+    """
+    state = run_check_scope(ctx, task, decisions, review_notes_path)
+    commands = run_check_execute(ctx, task, state)
+    return run_check_finish(ctx, task, state, commands)
 
 
 def _task_dir(ctx, task):
