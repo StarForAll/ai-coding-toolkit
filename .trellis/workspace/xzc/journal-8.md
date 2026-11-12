@@ -919,3 +919,46 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 402: wf 第二轮：能力交付、机制稿对齐与三轮深度审计
+<!-- trellis-session: v=2 fp=c602822723c0a516 -->
+
+**Date**: 2026-11-12
+**Task**: wf 第二轮：能力交付、机制稿对齐与三轮深度审计
+**Branch**: `main`
+
+### Summary
+
+交付第二轮全部能力：run 全族（create/locate/advance/pause/resume/terminate/finish）、definition prepare/validate、dep、task-rework/replace/reassess、inspect 治理输出+四类三态、.wf/out-of-scope、bind --run+实例释放、step_results 产物引用。按人裁删除 wf-judging 并把十条判断指引就地安放、把「指引不成层」写进设计稿 §1.1 核心原则。三轮深度审计（能力清单→机制义务逐句核→实现核对底稿）共发现并修复 10 处：gate 实例分支缺失、load_definition 死桩、ready 未列实例候选、复评后游标不回 T、可略步骤免 skip 声明、acceptance 引用未核、答复无快照哈希、terminate 无「只读接收停止请求」、定义未知键静默接受、返工普通分支漏 handoff.wip；另修 _previous_task_step 不过滤略过步骤。门禁：run_all 149 项 0 失败、repro 85/85、单测 534/291、--verify 74 assets、设计稿七项通过。剩余 5 处「有实现无断言」已在审计底稿登记。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `19aee32b` | feat(wf): run pause 交付（受控暂停：写原因与当前步骤、暂停当前任务、不动游标） |
+| `7f66ac88` | docs(wf): 补指引层——机制/指引分界落进 skill，实例与知识变更的判读口径就位 |
+| `f3a7c3d3` | feat(wf): run resume 交付（方案 B：只解除实例暂停，不恢复任务、不动游标） |
+| `e45759a7` | refactor(wf): 删除 wf-judging skill，判断指引就地安放；把「指引不成层」写进核心要求 |
+| `eb18036f` | feat(wf): run terminate 交付（批量异常终止：放弃复用既有实现、保留写 independent_resume） |
+| `ef6ffcc4` | feat(wf): run finish 交付（实例正常结束；任务 finish 仍由人调用） |
+| `90b3c1f8` | feat(wf): task-rework + task-reassess 交付（返工与挂起复评的完整路径） |
+| `8d898823` | feat(wf): task-replace 交付（继任者、继承登记、下游重连、异常归档 T） |
+| `4060e841` | feat(wf): bind --run 交付 + 实例写权释放（跨会话接续闭环） |
+| `f5f0a7ee` | feat(wf): step_results 产物引用 + run create 续做不依赖 creation 文件 |
+| `4dd13358` | docs(wf): 机制稿口径统一——persist_pending 纳入 run.finish（B1-甲）、d 档语义按实接入（A2-甲）+ 轮次与动作表同步 |
+| `6430b940` | fix(wf): run terminate 补预览与固定提交步骤（机制稿 §7.4/§5.1 的过程义务） |
+| `fdbc9db4` | fix(wf): 补三处过程义务——返工入口内 release、替换预览、复评"待复评"事实 |
+| `a2594373` | fix(wf): 巡检补四类三态结论（机制稿 §8.5） |
+| `c94294ea` | fix(wf): definition prepare 登记 definition.prepare 动作意图（机制稿 §5.1） |
+| `d5aa5575` | feat(wf): D 类三处收紧到机制稿（id 字符集 / 逐步骤表态 / 只读信息字段） |
+| `51cbdd17` | docs(wf): C 类补齐后同步机制稿 D 表与任务记录 |
+| `d58dec6b` | fix(wf): 补齐第二轮三处未完成面 + 登记"不做定义版本迁移" |
+| `52056274` | fix(wf): 第二轮二次审计补齐六处（返工返回定位、可略声明、acceptance 引用、快照哈希、停止请求、定义闭集） |
+| `2fbd5468` | docs(wf): 第二轮实现核对底稿（逐条义务 → 实现位置 → 用例） |
+| `5cb9611c` | fix(wf): 返工普通分支补 handoff.wip；三处"有实现无断言"补上用例 |
+| `45908a3a` | docs(spec): 沉淀 wf 模块交付纪律（新增 spec + 两处既有文件补条） |
+
+### Status
+
+[OK] **Completed**
