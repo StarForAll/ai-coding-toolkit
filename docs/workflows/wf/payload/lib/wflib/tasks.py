@@ -1899,6 +1899,31 @@ def _run_start_verifications(ctx, task):
 
 
 
+def _start_verification_ids(task):
+    """`consume_at=start` 的验证 id 列表（机制稿 §7.1 验证声明的首个消费时点）。"""
+    return [item.get("id") for item in (task.get("plan") or {}).get("verifications") or []
+            if isinstance(item, dict) and item.get("consume_at") == "start"]
+
+
+def _start_verification_evidence(task, action):
+    """动作内已固定下来的 start 期验证证据（`{verification_id: entry}`）。"""
+    entries = (action or {}).get("inputs") or {}
+    fixed = entries.get("start_verifications")
+    if not isinstance(fixed, list):
+        return {}
+    return {item.get("verification_id"): item for item in fixed if isinstance(item, dict)}
+
+
+def _missing_start_verification_evidence(task, action):
+    """真实后置：每个 `consume_at=start` 验证都必须在动作内留下结果，缺即未完成。
+
+    此前证据只进命令 facts（打印一次就没了），归档/复盘时无从核对「开工时那条验证真的跑过」；
+    机制稿 §5.1 要求把跨记录写入固定在动作意图与后置里。
+    """
+    fixed = _start_verification_evidence(task, action)
+    return [vid for vid in _start_verification_ids(task) if vid not in fixed]
+
+
 def _block_overlapping_maintenance(ctx, task):
     """与本次请求范围重叠的未结维护组阻断开工（机制稿 §4.5、§5.2 第⑩项）。"""
     from . import paths as paths_mod
@@ -2109,11 +2134,17 @@ def cmd_task_start(ctx, args):
             task["baseline_head"] = head
         task["status"] = "in_progress"
         task["phase"] = "execute"
+        start_inputs = {"task": task_id, "to": "execute", "plan_version": entry["plan_version"],
+                        "start_verifications": start_results}
         task, action = _start_task_action(
-            ctx, path, task, "task.transition", holder,
-            {"task": task_id, "to": "execute", "plan_version": entry["plan_version"]},
+            ctx, path, task, "task.transition", holder, start_inputs,
             ["verify_approval", "resolve_start_verifications", "write_entry_snapshot", "transition"],
         )
+        missing_evidence = _missing_start_verification_evidence(task, action)
+        if missing_evidence:
+            raise TaskError("WF_ACTION_INCOMPLETE",
+                            {"reason": "start verifications not fixed in the action",
+                             "missing": missing_evidence})
         rule_version = ctx.rule_version()
         for item in findings:
             if item["status"] != "satisfied":
@@ -2124,9 +2155,14 @@ def cmd_task_start(ctx, args):
                 rule_version=rule_version,
                 evidence_refs=[f"task-start:{task_id}"],
             )
+        missing_evidence = _missing_start_verification_evidence(task, action)
+        if missing_evidence:
+            # 结案前按真实后置重核：手工把步骤标 done 不能代替证据
+            raise TaskError("WF_ACTION_INCOMPLETE",
+                            {"reason": "start verifications missing before closing the action",
+                             "missing": missing_evidence, "action": action.get("id")})
         task, assertion = _finish_task_action(
-            ctx, path, task, "task.transition", holder,
-            {"task": task_id, "to": "execute", "plan_version": entry["plan_version"]}, action,
+            ctx, path, task, "task.transition", holder, start_inputs, action,
         )
     return codes.result(
         "WF_OK",

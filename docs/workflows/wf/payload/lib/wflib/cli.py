@@ -1085,31 +1085,33 @@ def cmd_enable(ctx, args):
 
 
 def _eligible_task_bind(ctx, task):
-    """独立接续资格（机制稿 §6.1）的绑定面。"""
-    if task.get("status") == "archived":
-        raise CliError("WF_BINDING_MISMATCH", {"reason": "task archived", "task": task.get("id")})
-    run_id = task.get("run_id")
-    if not run_id:
-        return None
+    """独立接续资格（机制稿 §6.1）的绑定面。
+
+    判定本体在 `runs.binding_state`（唯一实现）：本函数只把状态映射成原因码与出口，
+    `cmd_ready` 用同一状态做归组与阻断项，两处不各写一套「在途/保留/无许可」的判断。
+    """
     from . import runs as runs_mod
 
-    run = runs_mod.load_run(ctx.root, run_id)
-    if run is None:
-        raise CliError("WF_HISTORY_UNRESOLVED", {"reason": "run record missing", "run_id": run_id})
-    terminal = run.get("terminal")
-    if terminal == "normal":
-        raise CliError("WF_BINDING_MISMATCH", {"reason": "run ended normally", "run_id": run_id})
-    if terminal == "abnormal":
-        permission = task.get("independent_resume") or {}
-        if permission.get("decision") and permission.get("termination_action"):
-            return permission
-        raise CliError(
-            "WF_BINDING_MISMATCH",
-            {"reason": "no independent resume permission", "run_id": run_id},
-        )
+    if task.get("status") == "archived":
+        raise CliError("WF_BINDING_MISMATCH", {"reason": "task archived", "task": task.get("id")})
+    state = runs_mod.binding_state(ctx.root, task)
+    kind = state["state"]
+    if kind == runs_mod.BINDING_NONE:
+        return None
+    if kind == runs_mod.BINDING_MISSING:
+        raise CliError("WF_HISTORY_UNRESOLVED",
+                       {"reason": "run record missing", "run_id": state["run_id"]})
+    if kind == runs_mod.BINDING_NORMAL:
+        raise CliError("WF_BINDING_MISMATCH",
+                       {"reason": "run ended normally", "run_id": state["run_id"]})
+    if kind == runs_mod.BINDING_ABNORMAL_LICENSED:
+        return state["permission"]
+    if kind == runs_mod.BINDING_ABNORMAL_UNLICENSED:
+        raise CliError("WF_BINDING_MISMATCH",
+                       {"reason": "no independent resume permission", "run_id": state["run_id"]})
     raise CliError(
         "WF_BINDING_MISMATCH",
-        {"reason": "task belongs to an in-flight run; bind the run instead", "run_id": run_id},
+        {"reason": "task belongs to an in-flight run; bind the run instead", "run_id": state["run_id"]},
         next_="由绑定该实例的会话推进当前任务",
     )
 
@@ -1705,15 +1707,32 @@ def cmd_ready(ctx, args):
     """
     from . import tasks as tasks_mod
 
+    from . import runs as runs_mod
+
     entries = []
+    run_of = {}
+    unreadable_runs = []
+    run_records = []
+    for record, path in runs_mod.iter_runs(ctx.root):
+        if not isinstance(record, dict):
+            unreadable_runs.append(os.path.relpath(path, str(ctx.root)).replace(os.sep, "/"))
+            continue
+        run_records.append(record)
     for _path, task in tasks_mod.iter_tasks(ctx.root):
         if task.get("status") == "archived":
             continue
+        if task.get("run_id"):
+            run_of[task.get("id")] = task.get("run_id")
         blockers = []
         try:
             _eligible_task_bind(ctx, task)
         except CliError as exc:
             blockers.append(exc.code)
+            # 实例轴上的细分事实：`WF_BINDING_MISMATCH` 同时覆盖在途实例、正常结束、
+            # 无许可的异常结束，人看不出该找实例还是该走 repair（机制稿 §6.1）
+            state = runs_mod.binding_state(ctx.root, task)
+            if state["state"] == runs_mod.BINDING_IN_FLIGHT:
+                blockers.append("run_in_flight")
         if not tasks_mod._is_approved_plan(task, ctx.root):
             blockers.append("WF_APPROVAL_MISSING")
         # 「进行中且未暂停」不是可接续对象：它仍被原会话推进（设计稿 §5.6）
@@ -1734,11 +1753,39 @@ def cmd_ready(ctx, args):
             "blockers": blockers,
         })
     entries.sort(key=lambda item: (str(item.get("created_at") or ""), str(item.get("id") or "")))
+
+    # 实例归组（机制稿 §6.1）：人要先看清「这些任务属于哪个实例、那个实例到哪一步」，
+    # 才知道该绑实例还是绑普通任务。只做实例归组——**不按子仓库归组**：嵌套仓库是
+    # charter T3 B2 的硬边界（触碰面、spec 与检查对象一律以本仓库工作树为界）。
+    by_run = {}
+    for task_id, run_id in run_of.items():
+        by_run.setdefault(run_id, []).append(task_id)
+    groups = []
+    for record in run_records:
+        run_id = record.get("id")
+        groups.append({
+            "run_id": run_id,
+            "workflow_id": record.get("workflow_id"),
+            "terminal": record.get("terminal"),
+            "paused": record.get("paused"),
+            "tasks": sorted(by_run.pop(run_id, [])),
+        })
+    for run_id in sorted(by_run):
+        # 悬空的 run_id 不静默丢弃：它可能正是「记录被移动/删除」的现场
+        groups.append({"run_id": run_id, "workflow_id": None, "terminal": None,
+                       "paused": None, "tasks": sorted(by_run[run_id]),
+                       "unknown": "run record missing or unreadable"})
+
     suggested = next((item["id"] for item in entries if item.get("ready")), None)
+    facts = {"tasks": entries, "suggested": suggested, "runs": groups}
+    warnings = []
+    if unreadable_runs:
+        warnings.append({"area": "runs", "unreadable": unreadable_runs})
     return ok(
-        facts={"tasks": entries, "suggested": suggested},
+        facts=facts,
         position=codes.position(scope="session"),
         next_="用 bind --task <id> 绑定建议对象；或按 blockers 先解除阻断",
+        warnings=warnings,
     )
 
 
