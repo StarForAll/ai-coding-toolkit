@@ -4254,6 +4254,22 @@ def cmd_task_reassess(ctx, args):
     if not task_id:
         raise TaskError("WF_PATH_INVALID", {"reason": "task-reassess requires --task <id>"})
     _scope_kind, _run, holder = bind_task_for_write(ctx, task_id)
+    # 机制稿 §6.2：未持写权**只报告待复评**（不是阻断）——它不影响任何已成立的归档，
+    # 原 T 会话取得写权后可补做。
+    record = ctx.writer() or {}
+    mine = (record.get("state") == "held"
+            and (record.get("holder") or {}).get("id") == ctx.key())
+    if not mine:
+        current = records.load_json(os.path.join(_require_task_dir(ctx, task_id), "task.json"))
+        return codes.result(
+            "WF_OK",
+            object={"id": task_id, "name": current.get("title")},
+            position_=codes.position(scope="task", phase=current.get("phase"), task_id=task_id),
+            next_="写权不在本会话：只报告待复评，由持有写权的会话补做（不影响已成立的归档）",
+            facts={"reassessed": False, "waiting": True, "pending_reassessment": True,
+                   "writer_state": record.get("state"),
+                   "writer_holder": (record.get("holder") or {}).get("id"),
+                   "conditions": reassess_problems(ctx.root, current)})
     with lock.acquire(ctx.root, holder_hint="task-reassess"):
         holder = ctx.require_held(**({"task": task_id} if _scope_kind == "task"
                                     else {"run": (_run or {}).get("id")}))[1]
@@ -4302,6 +4318,55 @@ def cmd_task_reassess(ctx, args):
                "control_assertion": assertion})
 
 
+def _replace_preview(ctx, task, decision, successor_paths, decision_path):
+    """替换的只读预览（机制稿 §6.3：预览固定 S id、原前置、来源提交/路径、返工来源、下游重连、实例映射）。
+
+    只读：不建 S、不改 T、不写任何记录。人据此确认 `touch_paths` 是否覆盖继承路径。
+    """
+    from . import paths as paths_mod
+
+    task_id = task.get("id")
+    imported = scope.installed_asset_paths(ctx.root)
+    inherited = sorted(
+        path for path in (set(scope.attributed_paths(ctx.root, task_id, task.get("baseline_head")))
+                          | set(scope.attributed_by_decision(ctx.root, task)))
+        if not scope._is_control_record(path, task_id, imported, ctx.root))
+    uncovered = [item for item in inherited
+                 if not any(paths_mod.match_path(pattern, item) for pattern in successor_paths)]
+    downstream = [other.get("id") for _path, other in iter_tasks(ctx.root)
+                  if task_id in (other.get("prerequisites") or [])
+                  and other.get("status") != "archived"]
+    unfinished = [other.get("id") for _path, other in iter_tasks(ctx.root)
+                  if other.get("rework_of") == task_id and other.get("status") != "archived"]
+    run_map = None
+    if task.get("run_id"):
+        from . import runs as runs_mod
+
+        run = runs_mod.load_run(ctx.root, task["run_id"]) or {}
+        step_id = next((sid for sid, mapping in (run.get("task_map") or {}).items()
+                        if (mapping or {}).get("task_id") == task_id), None)
+        run_map = {"run": task.get("run_id"), "step_id": step_id,
+                   "would_point_to_successor": bool(step_id),
+                   "cursor": run.get("cursor"), "run_terminal": run.get("terminal")}
+    return codes.result(
+        "WF_OK",
+        object={"id": task_id, "name": task.get("title")},
+        position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
+        next_=("确认 touch_paths 覆盖 inherited 后带 --decision 重入（会被固定的 S id 届时生成）"
+               if not uncovered else
+               "当前 touch_paths 未覆盖 uncovered 中的继承路径：回 Plan 补齐后再替换"),
+        facts={"preview": True, "task": task_id,
+               "successor_id": "（届时生成：new_task_record 的 2026-<32hex>）",
+               "predecessor_prerequisites": task.get("prerequisites") or [],
+               "inherited_paths": inherited, "uncovered_by_touch_paths": uncovered,
+               "touch_paths": successor_paths,
+               "downstream_to_repoint": downstream,
+               "unfinished_rework": unfinished,
+               "run_mapping": run_map,
+               "decision": decision_path, "paused": bool(task.get("paused")),
+               "suspended": bool(task.get("suspended"))})
+
+
 REPLACE_CHOICES = ("replace", "替换")
 
 
@@ -4326,6 +4391,9 @@ def cmd_task_replace(ctx, args):
                         {"reason": "replace decision choice must be 替换/replace",
                          "got": decision.get("choice"), "accepted": list(REPLACE_CHOICES)})
     successor_paths = [path for path in (decision.get("touch_paths") or []) if isinstance(path, str)]
+    if args.flag("--preview"):
+        task = _load_or_fail(ctx, task_id)
+        return _replace_preview(ctx, task, decision, successor_paths, decision_path)
     _scope_kind, _run, holder = bind_task_for_write(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="task-replace"):
         holder = ctx.require_held(**({"task": task_id} if _scope_kind == "task"
@@ -4520,11 +4588,32 @@ def cmd_task_rework(ctx, args):
             ctx, path, task, "task.rework", holder, inputs, action,
             evidence_refs=[f"rework:{rework_id}"])
     paused_for_handover = not same_instance
+    released = False
+    assertion_tail = None
     if paused_for_handover:
         task = dict(task, paused=True,
                     pause_reason={"reason": "rework handover", "at": records.now_str(),
                                   "by": "task.rework", "rework": rework_id})
         save_task(ctx.root, path, task)
+        # 机制稿 §6.2：普通任务绑定分支由本入口完成 release（新会话才能绑定 R）。
+        # 释放与「暂停已落盘」同一原子段：暂停没落盘就释放，等于把 T 的进度交给一个不知道要暂停的会话。
+        with lock.acquire(ctx.root, holder_hint="task-rework release"):
+            ctx.require_held(task=task_id)
+            from . import writer as writer_mod
+
+            updated = writer_mod.release(ctx.writer())
+            writer_mod.save(ctx.root, updated)
+            from . import cli as cli_mod
+
+            assertion_tail = cli_mod._atomic_writer_action(
+                ctx, updated, "writer.release",
+                {"kind": "session", "id": ctx.key(),
+                 "scope": {"object": {"kind": "task", "id": task_id}}},
+                {"session_key": ctx.key(), "via": "task-rework"},
+                ["verify_scope", "release"],
+                lambda current: True,
+            )
+        released = True
     return codes.result(
         "WF_OK",
         object={"id": task_id, "name": task.get("title")},
@@ -4533,12 +4622,13 @@ def cmd_task_rework(ctx, args):
                                  action_state=task["action"]["state"]),
         next_=("同一实例：cursor 已临时定位到 R，完成 R 后 task-reassess 恢复 T"
                if same_instance else
-               "T 已暂停：释放写权后在新会话绑定 R（R 须独立批准与开工，不消费 T 的批准）"),
+               "T 已暂停且写权已释放：在新会话绑定 R（R 须独立批准与开工，不消费 T 的批准）"),
         facts={"task": task_id, "rework": rework_id,
                "directory": os.path.relpath(directory, str(ctx.root)).replace(os.sep, "/"),
                "prerequisites": task["prerequisites"], "suspended": True,
                "same_instance": same_instance, "sequence_changes": sequence,
-               "paused_for_handover": paused_for_handover,
+               "paused_for_handover": paused_for_handover, "released": released,
+               "release_assertion": assertion_tail,
                "control_assertion": assertion})
 
 
