@@ -2684,7 +2684,7 @@ COMMANDS = {
     "archive": _task_command("cmd_archive"),
     "baseline-apply": _task_command("cmd_baseline_apply"),
     "spec-update": _task_command("cmd_spec_update"),
-    "dep": _unavailable(2, "dependency edges (D07)"),
+    "dep": _task_command("cmd_dep"),
     # v42 §4 要求删除 `task-rework`，但机制稿 §6.2 与 `workflows/instance-flow.md` 仍把
     # `control.task.rework` 声明为 [required] 的两轮交付步骤；删命令会让部署自检
     # （handler entry 必须存在）失败。属权威冲突，先保留桩并登记待裁，不单方面删步骤。
@@ -2710,6 +2710,7 @@ COMMANDS = {
 
 
 ACTIVATION_REQUIRED = frozenset({
+    "dep",
     "task-approve", "task-start", "task-replan", "task-pause", "task-resume", "task-curate",
     "task-check", "task-knowledge", "task-retrospect", "task-attribute", "task-abandon",
     "task-reassess", "archive", "baseline-apply", "spec-update", "stop",
