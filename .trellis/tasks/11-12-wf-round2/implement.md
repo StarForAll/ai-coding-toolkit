@@ -223,3 +223,55 @@ B3–B5（P1 七项能力）、B6 的发行树提交与其余文档同步。原�
 - `cmd_task_check`：两段 `lock.acquire`，回锁后 `require_held` 重核 holder 与代次，并**重算 `check_anchor`**（与准备段不等即 `WF_CHECK_STALE`，facts 并列 before/after）；记录缺失出口抽成 `_require_task_dir()` 供两段共用（不拼 None 路径）。
 - **口径选择**：按 A 落地（不加 `writer.checkpoint` 摘要字段、不升格其为「对象稳定性判据」）。B 的价值（锁定窗口内改动的**差异清单**）由 `WF_CHECK_STALE` 的 before/after 摘要与既有的 `changed` 列表承载，已够定位；真要持久化摘要，须先回机制稿 §1.4 登记 `checkpoint` 字段，属另案。
 - 用例：`test_check_lock_window.py` 3 例（含线程用例：执行段期间另一会话能取得项目锁——这是「不占锁」的直接证明）。
+
+---
+
+## 11. B5 拆解：`run create` + `run locate`（下一批的执行清单）
+
+> 依据：机制稿 §1.5（实例记录字段）、§5.1（内嵌动作与幂等键）、§7.2（准备/创建校验）、
+> §7.3（推进与任务映射）；实现稿 §2.3 的 `run` 行。代码基线：本文件 §10 的 B4（`definition`
+> 已交付）+ `tasks.cmd_task_new`（**同一形状的 writer 主记录创建**，可直接照抄结构）。
+
+### 11.1 为什么先只做 `create` + `locate`
+
+- `create` 是实例能力的**唯一入口**：没有实例记录，`advance/pause/terminate` 无从测起。
+- `create` 同时是 §2.3.11 登记的第 ② 项（**准备范围 -> writer scope**）必须落地的地方：机制稿 §1.4
+  要求 writer 的 holder scope 是「绑定对象**或**已授权准备范围」，而 B4 只把准备记在
+  `.wf/preparations/<id>.json`（`session_key` + `scope_paths`）。`run create` 必须在锁内**重核**
+  「本会话确有该定义的准备记录且未结束」，再以 `scope={object:{kind:run,id}, preparation:{...}}`
+  取得写权——这一步做完，第 ② 项登记才可关闭。
+- `locate` 只读、零风险，用来给 `advance` 之后的人工核对与巡检一个稳定入口。
+
+### 11.2 `run create --creation <path>` 的固定步骤（照 `cmd_task_new` 的形状）
+
+| 步 | 做什么 | 判据 / 关键点 |
+|---|---|---|
+| 0 | 解析 creation 文件 | `{definition_id, definition_digest, inputs, steps:{<step-id>: applicable\|skipped}, expansion:{...}}`；缺项、未知 step id、类型不符 → `WF_SEMANTIC_DECISION`（列可选值） |
+| 1 | 载入定义并复核静态校验 | `runs.parse_definition` + `runs.validate_definition`；任何问题 → `WF_DEFINITION_INVALID`（不建实例） |
+| 2 | 版本一致性 | 文件当前 `sha256` 必须等于 `definition_digest`；不等 → `WF_SEMANTIC_DECISION`（facts 给两版摘要，出口：按当前内容重新确认） |
+| 3 | 输入校验 | 按 `inputs` 声明：required 缺值 → `WF_SEMANTIC_DECISION`；`secret_ref` 只接受引用对象、**不得**出现明文；`path` 走 `paths.normalize` + 边界 |
+| 4 | 准备范围重核（**关闭 §2.3.11 第 ② 项**） | 读 `.wf/preparations/<id>.json`：`session_key` 必须是本会话、`scope_paths` 含该定义、`validation.ok=true`、`ended_at` 为 null；任一不成立 → `WF_SEMANTIC_DECISION`/`WF_APPROVAL_MISSING` |
+| 5 | 目标预检 | `.wf/workflow-runs/<run-id>.json`、`.wf/workflow-runs/<run-id>/`、绑定文件三者都不存在；碰撞 → `WF_TARGET_COLLISION` |
+| 6 | **锁内**取写权 + 固定意图 | `writer.acquire(scope={object:{kind:run,id}, preparation:{id, scope_paths}})`，随后 `actions.new_action("run.create", targets=[writer, run, snapshot, binding, instance, definition-digest, inputs-digest])`，**同一次写入**（照 `cmd_task_new` 的「意图与写权授予同一次写入」） |
+| 7 | 逐步推进 | steps = `write_snapshot`（原字节落 `definition.md`）→ `write_run`（§1.5 全字段）→ `acquire_writer`（已在上一步完成，这步只核后置）→ `bind`（`session.bind` 的首次绑定，`object={kind:run}`，写 `instance_id`）；每步先核真实后置、缺什么补什么 |
+| 8 | 结案 | `_finish_writer_action` 前**重核每步后置**（快照摘要 = 定义摘要、run 记录可解析且 `terminal=null`、绑定指向该 run、holder scope 匹配） |
+
+**不做什么**：不代批准业务（实例创建只取得「规划权限」，任务仍要自己批）、不创建任何任务、不推进 cursor。
+
+### 11.3 `run locate --run <id>`（只读）
+
+返回 `{run: {id, workflow_id, terminal, paused}, cursor, task_map, step_results, tasks: [{id, status, phase}], binding_state}`；
+`tasks` 的状态一律**查 task**（不抄进实例记录）；未知/不可解析 → `WF_HISTORY_UNRESOLVED`，不当「没有」。
+
+### 11.4 用例清单（每条都要能红）
+
+1. `test_run_create.py`：creation 缺字段/未知 step → `WF_SEMANTIC_DECISION`；定义校验不过 → `WF_DEFINITION_INVALID`；digest 不符 → `WF_SEMANTIC_DECISION`。
+2. `test_run_create.py`：**没有准备记录**（B4 的 prepare 未跑）→ 拒绝；准备记录属于别的会话 → 拒绝；`validation.ok=false` → 拒绝（这三条是 §2.3.11 第 ② 项的验收）。
+3. `repro/run-create-once.py`（双模）：同一会话重入 `run create` → 按固定意图续做、**不建第二个实例**；注入=重入时按当前参数重建 → 红（出现两个 run 记录）。
+4. `test_run_locate.py`：只读不改任何字段；悬空 run_id → `WF_HISTORY_UNRESOLVED`。
+5. 快照固定：创建后改定义源文件 → `run locate` 仍报创建时的 digest；`advance`（下一批）据此判「定义已变」。
+
+### 11.5 风险与回滚
+
+- 风险：`writer.acquire` 的 preparation scope 是**首次**在运行期被真实使用，`writer.require_supported()` 只核结构不核语义；要另加一条断言「scope.object 与 scope.preparation 不能同时为空」。
+- 回滚点：`run` 解封单独一次提交；失败只回滚该提交（`git checkout -- payload/lib/wflib/runs.py payload/lib/wflib/cli.py`）。
