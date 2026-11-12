@@ -2146,6 +2146,12 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
     if register_only and not plan_path:
         raise ReviewError("WF_SEMANTIC_DECISION",
                           {"reason": "--register-only 需要 --plan <逐条处置>（没有处置就没有可登记的内容）"})
+    if unavailable_path and plan_path:
+        # A14：审查做不成 ≠ 问题已关闭。同批登记等于用"不可用"顺手关掉 finding。
+        raise ReviewError("WF_SEMANTIC_DECISION", {
+            "reason": "审查不可用与登记关闭不能同批：这是两件不同的事实",
+            "exits": ["先 `wf review-decide --register-only --plan <处置>` 登记复核关闭",
+                      "再 `wf review-decide --unavailable <声明>` 声明本轮审查不可用"]})
     if round_no is None:
         _path = _task_dir(ctx, task)
         _record = records.load_json(os.path.join(_path, "task.json"))

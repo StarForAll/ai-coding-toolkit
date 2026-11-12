@@ -2022,7 +2022,7 @@ COMMAND_HELP = {
                       "example": "wf.py review-status --task 2026-xxxx --json"},
     "review-decide": {"purpose": "判定本轮审查（人数/异种按报告文件名，实施 CLI 取本会话）",
                       "args": {"--task": "任务 id（必填）", "--round": "缺省＝当前轮",
-                               "--plan": "逐条 finding 处置", "--unavailable": "不可用声明",
+                               "--plan": "逐条 finding 处置", "--unavailable": "不可用声明（与 --plan 互斥）",
                                "--register-only": "只登记复核关闭：不产生结论、不校验人数/异种"
                                                   "（仍需 --plan；关闭的硬条件照旧）"},
                       "example": "wf.py review-decide --task <id> --json"},
