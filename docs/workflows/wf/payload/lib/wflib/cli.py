@@ -1871,7 +1871,7 @@ def config_mod():
 # `definition` 与 `run` 的子动作（未交付的仍由 runs.py 抛 `WF_CAPABILITY_UNAVAILABLE`）
 SUBACTIONS = {
     "definition": ("prepare", "validate"),
-    "run": ("create", "advance", "pause", "resume", "locate", "terminate"),
+    "run": ("create", "advance", "pause", "resume", "locate", "terminate", "finish"),
 }
 
 
