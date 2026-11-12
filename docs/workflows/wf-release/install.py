@@ -481,6 +481,46 @@ def runtime_support(target):
         return {"error": f"unparsable runtime report: {exc}"}
 
 
+SKILL_REQUIRED_FIELDS = ("name", "description")
+
+
+def skill_frontmatter_problems(path):
+    """投放后的 `SKILL.md` frontmatter 必须可解析（设计稿 §1.2）。
+
+    只核**结构与必填**：起止 `---` 成对、`name`/`description` 非空。
+    不核语义（写得对不对是人的判断），也不改文件——问题一律返回给调用方汇总。
+    """
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as handle:
+            lines = handle.read().splitlines()
+    except OSError as exc:
+        return [f"unreadable: {exc}"]
+    if not lines or lines[0].strip() != "---":
+        return ["frontmatter missing"]
+    fields = {}
+    problems = []
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        if not line.strip() or line.strip().startswith("#"):
+            continue
+        if ":" not in line:
+            problems.append(f"invalid frontmatter line: {line[:40]!r}")
+            continue
+        key, raw = line.split(":", 1)
+        key = key.strip()
+        if key in fields:
+            problems.append(f"duplicate key: {key}")
+            continue
+        fields[key] = raw.strip()
+    else:
+        problems.append("frontmatter not closed")
+    for field in SKILL_REQUIRED_FIELDS:
+        if not fields.get(field):
+            problems.append(f"frontmatter field missing or empty: {field}")
+    return problems
+
+
 def self_check(target, manifest, skill_roots):
     problems = []
     for index, asset in enumerate(manifest.get("assets") or []):
@@ -498,6 +538,10 @@ def self_check(target, manifest, skill_roots):
         for path in targets:
             if file_digest(path) != asset.get("digest"):
                 problems.append({"target": path, "reason": "digest mismatch after deploy"})
+            elif asset.get("kind") == "skill":
+                # 设计稿 §1.2 要求投放后 frontmatter 可解析；此前自检只核摘要与运行时
+                for detail in skill_frontmatter_problems(path):
+                    problems.append({"target": path, "reason": f"skill frontmatter: {detail}"})
     support = runtime_support(target)
     if support.get("error"):
         problems.append({"runtime": "not importable", "detail": support["error"]})

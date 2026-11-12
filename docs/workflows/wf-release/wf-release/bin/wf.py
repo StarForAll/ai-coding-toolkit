@@ -269,8 +269,45 @@ def _task_prd_is_approved(task_record_path, prd_path):
     return False
 
 
+KEY_VALUE_SEPARATORS = (":", "=")
+
+
+def declared_values(text, key):
+    """逐行解析「键 值」成对出现的位置：`key = v`、`key: v`、`"key": "v"`。
+
+    机制稿 §3.4 要求「`python_executable` 首次写入须在批准 PRD/基线提案**逐项列键和值**」。
+    此前判据是 `key in text and value in text`——键与取值各自出现在文件任意位置（例如键名
+    出现在说明句、取值出现在另一处举例）就成立，等于没有「成对」这一事实。
+    本函数只做结构解析，不判断这个值是否必要（那是人的判断）。
+    """
+    found = []
+    for line in text.splitlines():
+        position = line.find(key)
+        if position < 0:
+            continue
+        before = line[position - 1:position]
+        # 键前必须是分隔符或行首：避免 `my_python_executable` 之类的子串误命中
+        if before and (before.isalnum() or before in "_-."):
+            continue
+        rest = line[position + len(key):].lstrip().lstrip('"').lstrip("'")
+        if not rest or rest[0] not in KEY_VALUE_SEPARATORS:
+            continue
+        raw = rest[1:].strip().rstrip(",").rstrip()
+        if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in "\"'":
+            raw = raw[1:-1]
+        else:
+            raw = raw.strip('"').strip("'")
+        if raw:
+            found.append(raw)
+    return found
+
+
 def project_key_approved(root, value):
-    """核 Git 侧的键名与配置值：基线，或**已批准**任务的 PRD 中能查到同一键与值。"""
+    """核 Git 侧的键名与配置值：基线，或**已批准**任务的 PRD 中能查到同一键与值。
+
+    判定取 `declared_values()` 的**成对**结果（实现稿 §2.3.11 ③ 的语义级键值解析），
+    不再用「键与取值各自出现」的文本包含。
+    """
     candidates = [os.path.join(root, ".wf", "baseline.md")]
     tasks_dir = os.path.join(root, ".wf", "tasks")
     if os.path.isdir(tasks_dir):
@@ -302,7 +339,7 @@ def project_key_approved(root, value):
                 text = handle.read()
         except OSError:
             continue
-        if "python_executable" in text and value in text:
+        if value in declared_values(text, "python_executable"):
             return path
     return None
 

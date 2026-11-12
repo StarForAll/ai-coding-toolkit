@@ -21,7 +21,7 @@
       "target_relative": ".wf/bin/uninstall.py"
     },
     {
-      "digest": "sha256:bd6a01b1040de60c701fe757d7a4c1ed474f1dd35c4b834501880653498b7e6f",
+      "digest": "sha256:f2abc6b1e508bf005fda6cee174e97f05aca81632aaeff8a75d43a6233ee2bbd",
       "executable": true,
       "file_kind": "file",
       "kind": "bin",
@@ -31,7 +31,7 @@
       "target_relative": ".wf/bin/wf.py"
     },
     {
-      "digest": "sha256:169d0dc464c94652495eb3a0b15913726a8858dafe0d1b4c5913502f73b9a091",
+      "digest": "sha256:b633e0968e6b9295df373bc9d0b35ebb134d4c913bd344bd51142b80912ba985",
       "executable": true,
       "file_kind": "file",
       "kind": "installer",
@@ -101,7 +101,7 @@
       "target_relative": ".wf/lib/wflib/check.py"
     },
     {
-      "digest": "sha256:27afab6d8a78371f770aa1313c21b8c57894421283683bec2f866414536cb2e3",
+      "digest": "sha256:89ebfb618ca07a0dd811e7dd875ba2e372df76ec06d96044dd39f7d8215f65f1",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -271,7 +271,7 @@
       "target_relative": ".wf/lib/wflib/review.py"
     },
     {
-      "digest": "sha256:4103456bc32c332d800a1040f963412b6d0f3bacf5008c3f307b591b82c8de4b",
+      "digest": "sha256:755a55da850d10ea56f23357b9977a2b2e3a9dce53eabd6356681bb094ced104",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -341,7 +341,7 @@
       "target_relative": ".wf/lib/wflib/taskfiles.py"
     },
     {
-      "digest": "sha256:dfa5751cdec2032d06ea051002a4bba7557d870e0cf400e07e2e2f8c00d75d78",
+      "digest": "sha256:443061c95839e0cf2ee74b4bd7ef65148620192fd50024ce4fa57d03ae8a1583",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -811,7 +811,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:26e6388baa03829e442a6e88e1a90527fcc48e274ad820f53fc9dc1cfc8cf068",
+    "rules_digest": "sha256:a26ba292e16559d07ee885f8cb653ea11e38a4eabfd9b8a68dd3eb4ba25bcd3b",
     "systems": [
       "linux"
     ],
