@@ -2820,6 +2820,13 @@ def _abandon_resume(ctx, task_id):
 
 
 def cmd_task_abandon(ctx, args):
+    """单任务放弃（机制稿 §6.4）。
+
+    绑定、写权与「已异常归档但记录组未提交」的续做入口留在这里；
+    放弃本体（预览 → 逐项去向 → 提交授权 → 异常终态 → 目录移动 → 记录组提交）
+    在 `_apply_abandon()`，供本入口与 `run terminate` 共用（两个入口的绑定对象不同：
+    任务 vs 实例，但「放弃一个任务」的判定只有一处）。
+    """
     from . import cli, lock
 
     task_id = args.value("--task")
@@ -2846,101 +2853,108 @@ def cmd_task_abandon(ctx, args):
         task = records.load_json(os.path.join(path, "task.json"))
         if task.get("status") == "archived":
             raise TaskError("WF_BINDING_MISMATCH", {"reason": "task archived"})
-        preview = _abandon_preview(ctx, task)
-        # 输入形态归一：`--disposition` 传 JSON 数组（AI 首用的高概率写法）按 {"changes": [...]} 解释；
-        # 否则 `(disposition or {}).get(...)` 会在 list 上抛裸 AttributeError（K10：不得裸异常）。
-        if isinstance(disposition, list):
-            disposition = {"changes": disposition}
-        elif disposition is not None and not isinstance(disposition, dict):
-            raise TaskError("WF_PATH_INVALID",
-                            {"reason": '--disposition 须为对象 {"changes": [...]} 或数组 [...]',
-                             "got": type(disposition).__name__,
-                             "example": {"changes": [{"path": "x", "action": "deleted"}]}})
-        # 空处置（工作树干净 / 无必须处置项）应放行，而不是卡在预览态：
-        # 「没给处置」与「处置为空」是两回事，前者要预览、后者是有效结论。
-        needs_disposition = bool(preview.get("uncommitted")) or bool(preview.get("required_disposition_for"))
-        if disposition is None and needs_disposition:
-            return codes.result(
-                "WF_SEMANTIC_DECISION",
-                object={"id": task_id, "name": task.get("title")},
-                position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
-                next_="人逐项给出 --disposition（object/decision_ref/reason）后重入",
-                facts={"preview": preview,
-                       "need": ["--disposition 覆盖 preview.uncommitted 的每一项"],
-                       "note": "预览只读；本次未写入任何记录"},
-            )
-        uncovered = _uncovered_paths(preview["uncommitted"], disposition)
-        if uncovered:
-            return codes.result(
-                "WF_WORKSPACE_UNRESOLVED",
-                object={"id": task_id, "name": task.get("title")},
-                position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
-                next_="在 disposition.changes 中为每个未提交路径给出实际去向后重入",
-                facts={"preview": preview, "uncovered": uncovered},
-            )
-        # R24：未提交改动须「已授权提交」或「由人实际处置」，不遗留无主 WIP（机制稿 §6.4）
-        from . import paths as paths_mod
+        return _apply_abandon(ctx, task_id, task, path, decisions, disposition, holder)
 
-        grants = [item for item in decisions[1:]
-                  if decisions_mod.accepts("commit_grant", item.get("choice"))]
-        grant_paths = [path for grant in grants for path in _subject_paths(grant.get("subject"))]
-        preview_uncommitted = list(preview["uncommitted"])
-        to_commit = [path for path in preview_uncommitted
-                     if any(path == grant_path or paths_mod.match_path(grant_path, path)
-                            for grant_path in grant_paths)]
-        if to_commit:
-            _commit_paths(ctx.root, sorted(to_commit), f"wf: abandon {task_id}\n\nwf-task: {task_id}")
-        leftover = [path for path in scope.uncommitted_paths(ctx.root) if path in set(preview_uncommitted)]
-        if leftover:
-            return codes.result(
-                "WF_WORKSPACE_UNRESOLVED",
-                object={"id": task_id, "name": task.get("title")},
-                position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
-                next_="为残留路径补提交授权，或由人实际处置（提交/反向修正/承接）后重入",
-                facts={"leftover": leftover, "granted": sorted(to_commit), "preview": preview},
-            )
-        changes = (disposition or {}).get("changes") or []
-        pending = (disposition or {}).get("pending") or []
-        task["disposition"] = {
-            "kind": "abandon",
-            "decision": decisions[0],
-            "changes": changes,
-            "targets": (disposition or {}).get("targets") or [],
-            "pending": pending,
-        }
-        task["commit_grants"] = [item for item in decisions[1:]
-                                 if decisions_mod.accepts("commit_grant", item.get("choice"))]
-        inputs = {"task": task_id, "kind": "abandon"}
-        task, action = _start_task_action(ctx, path, task, "task.abandon", holder, inputs,
-                                          ["record_decision", "apply_disposition"])
-        if task["disposition"]["pending"]:
-            task, assertion = _finish_task_action(ctx, path, task, "task.abandon", holder, inputs, action)
-            raise TaskError("WF_WORKSPACE_UNRESOLVED",
-                            {"pending": task["disposition"]["pending"], "reason": "改动去向未落实"})
-        task["paused"] = False
-        task["suspended"] = False
-        task["terminal"] = "abnormal"
-        task["status"] = "archived"
-        task["archived_at"] = records.now_str()
+
+def _apply_abandon(ctx, task_id, task, path, decisions, disposition, holder):
+    """放弃本体（机制稿 §6.4）：调用方负责绑定/写权/锁与「任务未归档」的前置。"""
+    from . import cli  # noqa: F401  （保留入口层引用，便于调试时同源调用）
+
+    preview = _abandon_preview(ctx, task)
+    # 输入形态归一：`--disposition` 传 JSON 数组（AI 首用的高概率写法）按 {"changes": [...]} 解释；
+    # 否则 `(disposition or {}).get(...)` 会在 list 上抛裸 AttributeError（K10：不得裸异常）。
+    if isinstance(disposition, list):
+        disposition = {"changes": disposition}
+    elif disposition is not None and not isinstance(disposition, dict):
+        raise TaskError("WF_PATH_INVALID",
+                        {"reason": '--disposition 须为对象 {"changes": [...]} 或数组 [...]',
+                         "got": type(disposition).__name__,
+                         "example": {"changes": [{"path": "x", "action": "deleted"}]}})
+    # 空处置（工作树干净 / 无必须处置项）应放行，而不是卡在预览态：
+    # 「没给处置」与「处置为空」是两回事，前者要预览、后者是有效结论。
+    needs_disposition = bool(preview.get("uncommitted")) or bool(preview.get("required_disposition_for"))
+    if disposition is None and needs_disposition:
+        return codes.result(
+            "WF_SEMANTIC_DECISION",
+            object={"id": task_id, "name": task.get("title")},
+            position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
+            next_="人逐项给出 --disposition（object/decision_ref/reason）后重入",
+            facts={"preview": preview,
+                   "need": ["--disposition 覆盖 preview.uncommitted 的每一项"],
+                   "note": "预览只读；本次未写入任何记录"},
+        )
+    uncovered = _uncovered_paths(preview["uncommitted"], disposition)
+    if uncovered:
+        return codes.result(
+            "WF_WORKSPACE_UNRESOLVED",
+            object={"id": task_id, "name": task.get("title")},
+            position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
+            next_="在 disposition.changes 中为每个未提交路径给出实际去向后重入",
+            facts={"preview": preview, "uncovered": uncovered},
+        )
+    # R24：未提交改动须「已授权提交」或「由人实际处置」，不遗留无主 WIP（机制稿 §6.4）
+    from . import paths as paths_mod
+
+    grants = [item for item in decisions[1:]
+              if decisions_mod.accepts("commit_grant", item.get("choice"))]
+    grant_paths = [path for grant in grants for path in _subject_paths(grant.get("subject"))]
+    preview_uncommitted = list(preview["uncommitted"])
+    to_commit = [path for path in preview_uncommitted
+                 if any(path == grant_path or paths_mod.match_path(grant_path, path)
+                        for grant_path in grant_paths)]
+    if to_commit:
+        _commit_paths(ctx.root, sorted(to_commit), f"wf: abandon {task_id}\n\nwf-task: {task_id}")
+    leftover = [path for path in scope.uncommitted_paths(ctx.root) if path in set(preview_uncommitted)]
+    if leftover:
+        return codes.result(
+            "WF_WORKSPACE_UNRESOLVED",
+            object={"id": task_id, "name": task.get("title")},
+            position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
+            next_="为残留路径补提交授权，或由人实际处置（提交/反向修正/承接）后重入",
+            facts={"leftover": leftover, "granted": sorted(to_commit), "preview": preview},
+        )
+    changes = (disposition or {}).get("changes") or []
+    pending = (disposition or {}).get("pending") or []
+    task["disposition"] = {
+        "kind": "abandon",
+        "decision": decisions[0],
+        "changes": changes,
+        "targets": (disposition or {}).get("targets") or [],
+        "pending": pending,
+    }
+    task["commit_grants"] = [item for item in decisions[1:]
+                             if decisions_mod.accepts("commit_grant", item.get("choice"))]
+    inputs = {"task": task_id, "kind": "abandon"}
+    task, action = _start_task_action(ctx, path, task, "task.abandon", holder, inputs,
+                                      ["record_decision", "apply_disposition"])
+    if task["disposition"]["pending"]:
         task, assertion = _finish_task_action(ctx, path, task, "task.abandon", holder, inputs, action)
-        destination = _archive_destination(ctx.root, task)
-        old_rel = os.path.relpath(path, str(ctx.root)).replace(os.sep, "/")
-        _move_task(ctx.root, path, destination, task)
-        record_rel = os.path.relpath(destination, str(ctx.root)).replace(os.sep, "/")
-        _commit_paths(ctx.root, [record_rel], f"wf: abandon {task_id}\n\nwf-task: {task_id}",
-                      moved_from=_moved_from(ctx.root, old_rel))
-        if not _record_committed(ctx.root, record_rel):
-            raise TaskError("WF_PERSISTENCE_FAILED",
-                            {"record": record_rel, "reason": "归档记录尚未进入提交",
-                             "resume": "持有写权重入 task-abandon 可续做记录提交"},
-                            next_="持写权重入以续做记录提交")
+        raise TaskError("WF_WORKSPACE_UNRESOLVED",
+                        {"pending": task["disposition"]["pending"], "reason": "改动去向未落实"})
+    task["paused"] = False
+    task["suspended"] = False
+    task["terminal"] = "abnormal"
+    task["status"] = "archived"
+    task["archived_at"] = records.now_str()
+    task, assertion = _finish_task_action(ctx, path, task, "task.abandon", holder, inputs, action)
+    destination = _archive_destination(ctx.root, task)
+    old_rel = os.path.relpath(path, str(ctx.root)).replace(os.sep, "/")
+    _move_task(ctx.root, path, destination, task)
+    record_rel = os.path.relpath(destination, str(ctx.root)).replace(os.sep, "/")
+    _commit_paths(ctx.root, [record_rel], f"wf: abandon {task_id}\n\nwf-task: {task_id}",
+                  moved_from=_moved_from(ctx.root, old_rel))
+    if not _record_committed(ctx.root, record_rel):
+        raise TaskError("WF_PERSISTENCE_FAILED",
+                        {"record": record_rel, "reason": "归档记录尚未进入提交",
+                         "resume": "持有写权重入 task-abandon 可续做记录提交"},
+                        next_="持写权重入以续做记录提交")
     return codes.result("WF_OK", object={"id": task_id, "name": task.get("title")},
-                        position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
-                        next_="写权释放后可结束会话",
-                        facts={"terminal": "abnormal", "archived_at": task["archived_at"],
-                               "record_persisted": True,
-                               "control_assertion": assertion,
-                               "note": "只报告退出完成与保留风险，不报告业务验收通过"})
+                    position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
+                    next_="写权释放后可结束会话",
+                    facts={"terminal": "abnormal", "archived_at": task["archived_at"],
+                           "record_persisted": True,
+                           "control_assertion": assertion,
+                           "note": "只报告退出完成与保留风险，不报告业务验收通过"})
 
 
 
