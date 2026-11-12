@@ -49,7 +49,7 @@
 | B2-2 | P2-4 自检解析 SKILL frontmatter | `install.py` 新增自含的 `skill_frontmatter_problems()`（起止 `---`、`name`/`description` 非空、重复键），`self_check` 对 `kind=skill` 逐份核 | `repro/skill-frontmatter-selfcheck.py`（新，双模；把清单摘要改成与新内容一致，只留 frontmatter 检查能抓到） | green/red 均 PASS | [x] |
 | B2-3 | P2-8 键值语义解析 | `bin/wf.py` 新增 `declared_values(text, key)`（行内键值成对，键前须为分隔符/行首），`project_key_approved` 改用它；`config.project_python_key` 零调用方 → 登记进 §2.3.11「运行时死代码」（不删） | `test_project_key_semantic.py`（新，5 例） | 单测 5/5 + `executor-approval-chain`、`project-key-archived-evidence` 双模均绿 | [x] |
 | B2-4 | P2-10 start 期验证证据入 action | `tasks.py` 新增 `_start_verification_ids`/`_start_verification_evidence`/`_missing_start_verification_evidence`；结果并入 `action.inputs["start_verifications"]`，动作启动后与结案前各核一次真实后置 | `test_start_verification_action.py`（新，5 例） | 单测 5/5 + `task-start-surface` 双模绿 | [x] |
-| B2-5 | P2-11 D08 依赖/实例目标碰撞 | **依赖 B3-1（`cmd_dep`）与 B4/B5（`run create/advance`）——本轮尚无这两个处理器，targets 无处可挂** | `test_targets_dependency_run.py`（待 B3-1 后补） | — | [!] 顺延到 B3-1/B5，同批做 |
+| B2-5 | P2-11 D08 依赖/实例目标碰撞 | `dep` 侧已交付：`cmd_dep` 的 `new_action(targets=[{task},{prereq}])` 覆盖两端；实例侧（`run create/advance`）随 B4/B5 | `repro/dep-edges.py` 断言动作含双端目标（经 facts/prerequisites 可见） | — | [~] 依赖侧完成、实例侧待 B4/B5 |
 | B2-6 | P2-12 R93 注入式双模反例 | 新增 `repro/identity-platform-fact.py`：未安装宿主写操作被拒（facts 带 `installed_platforms` 与登记出口）+ 只读不受限；注入=去掉平台成员判定 | 双模 | `--expect green`/`--expect red` 均 PASS | [x] |
 | B2-7 | P2-6 `task-check` 执行移出锁（**结构改动，单独一批**） | `lib/wflib/check.py::run_check` 拆三段 + `lib/wflib/tasks.py::cmd_task_check` 的锁段重排 | `test_check_lock_window.py`（新） | 单测 + 既有套件全绿 | [!] 顺延到独立批次（`run_check` 重组要连带锚点重核与检查点语义，不与本批混做） |
 
@@ -62,7 +62,7 @@
 
 | # | 能力 | 改哪里 | 用例 | 验证 | 状态 |
 |---|---|---|---|---|---|
-| B3-1 | `dep add\|rm` | `lib/wflib/tasks.py::cmd_dep`（新）、`cli.COMMANDS["dep"]` 换真实处理器 | `scripts/tests/wf_runtime/test_dep_edges.py`（新） | 单测 + repro | [ ] 未开工（下一批；与 B2-5 的 targets 同批） |
+| B3-1 | `dep add\|rm` | `tasks.py` 增 `_prerequisite_graph`/`_find_cycle`/`cmd_dep`；`cli.COMMANDS["dep"]` 换真实处理器并把 `dep` 纳入 `ACTIVATION_REQUIRED` | `test_dep_edges.py`（新，4 例）+ `repro/dep-edges.py`（新，双模，两层注入） | 单测 4/4 + repro green/red 均 PASS | [x] |
 | B3-2 | `task-reassess` 完整路径 | `lib/wflib/tasks.py::cmd_task_reassess` + `_reassess_empty_set` 改造为条件核验 | `test_task_reassess.py`（新） | 单测 | [ ] 未开工（返工集合要有 `rework_of` 生产者才有意义 → 与 B5-4 同批） |
 | B3-3 | `inspect` 两项治理输出 | `tasks.py` 增 `_scan_repo_paths`/`_manual_compare`/`_author_order`；`inspect()` 的 `governance_omitted` 清空（空列表＝断言） | `test_inspect_governance.py`（新，6 例）+ `inspect-declares-omitted.py` 断言改强（双模） | 单测 6/6 + repro 双模绿 | [x] |
 | B3-4 | `.wf/out-of-scope/` 四项前置 | `paths.WRITE_TARGET_PREFIXES` += 该目录；`protocol/project_data.json` 前缀 += 该目录；`spec.py` 增 `parse_frontmatter_text`（与 `parse_frontmatter` 同源）+ `out_of_scope_problems`（schema、文件名一致、只增不改、追加行形态），在 `validate_changes` 整批校验段调用；`tasks.py` 增 `_out_of_scope_duplicates` 并接进 `governance`，`governance_omitted` 清空 | `test_out_of_scope.py`（新，10 例，覆盖 PRD 五项验收 + 「改写既往内容被拒」「未知不当零」「声明清空」） | 单测 10/10 | [x] |
@@ -202,3 +202,10 @@ B3–B5（P1 七项能力）、B6 的发行树提交与其余文档同步。原�
 3. **同批声明变更**：`governance_omitted` 清空；机制稿两处**状态表述**事实订正（§8.4 末句与 D24 轮次列），只改状态、不改判据。
 
 门禁（本批跑完后）：见 §9 的 `run_all` 结果与 `--verify`。
+
+### B3-1 —— `dep` 建删边（2026-11-12）
+
+- 落点：`tasks._prerequisite_graph`（只收活动记录）、`tasks._find_cycle`（DFS 三色）、`tasks.cmd_dep`；`cli.COMMANDS["dep"]` 由桩换成 `_task_command("cmd_dep")`，并把 `dep` 纳入 `ACTIVATION_REQUIRED`。
+- 动作：`dependency.change`，steps `validate_graph` → `write_prerequisites`，**targets 覆盖两端任务**（D08 的依赖侧要求）。
+- 判定：自环显式守卫 + 环检测（两层）；建边要求前置在活动区且未归档；删边只改未归档持有侧、目标可在归档区（死引用交 repair）；重复 add/rm 幂等返回。
+- 用例：`test_dep_edges.py`（4 例）、`repro/dep-edges.py`（双模）。**注入教训**：首版只退回自环守卫，断言仍成立——因为环检测独立拦住了自环，于是「红不掉」。改成把**两层都**退回后才真正变红；这条写进用例注释，免得后人再写一个测不到东西的注入。

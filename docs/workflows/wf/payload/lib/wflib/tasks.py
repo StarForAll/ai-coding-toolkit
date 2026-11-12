@@ -3142,6 +3142,134 @@ def _commit_paths(root, paths, message, moved_from=None):
 
 
 
+def _prerequisite_graph(root):
+    """活动任务的 `{task_id: [prereq]}`（环检测只看活动记录；归档成员按 §6.1 只作就绪判定）。"""
+    graph = {}
+    for _path, task in iter_tasks(root):
+        if task.get("status") == "archived" or task.get("terminal"):
+            continue
+        task_id = task.get("id")
+        if task_id:
+            graph[task_id] = [item for item in task.get("prerequisites") or [] if item]
+    return graph
+
+
+def _find_cycle(graph, start):
+    """从 `start` 出发的 DFS 三色；返回参与环的 id 序列，无环返回 None。"""
+    WHITE, GREY, BLACK = 0, 1, 2
+    colour = {}
+    stack = []
+
+    def walk(node):
+        colour[node] = GREY
+        stack.append(node)
+        for child in graph.get(node) or []:
+            state = colour.get(child, WHITE)
+            if state == GREY:
+                index = stack.index(child)
+                return stack[index:] + [child]
+            if state == WHITE:
+                found = walk(child)
+                if found:
+                    return found
+        stack.pop()
+        colour[node] = BLACK
+        return None
+
+    return walk(start)
+
+
+def cmd_dep(ctx, args):
+    """`dep add|rm --task <id> --prereq <id>`（机制稿 §6.1：唯一 prerequisites 集合）。
+
+    只做四件事：两端存在性、自环/环（DFS 三色）、活动区约束、写回 `prerequisites`。
+    建边/删边都是 `dependency.change` 状态动作，targets 同时覆盖两端——
+    跨任务目标碰撞因此走既有判定，而不是各入口另写一份。
+    """
+    from . import lock
+
+    task_id = args.value("--task")
+    prereq = args.value("--prereq")
+    sub = args.value("--op") or (args.positional() or [None])[0]
+    if sub not in ("add", "rm") or not task_id or not prereq:
+        raise TaskError("WF_PATH_INVALID",
+                        {"reason": "dep requires add|rm --task <id> --prereq <id>",
+                         "got": {"op": sub, "task": task_id, "prereq": prereq}})
+    if task_id == prereq:
+        raise TaskError("WF_DEPENDENCY_UNMET", {"reason": "self edge", "task": task_id})
+    _require_binding(ctx, task_id)
+    with lock.acquire(ctx.root, holder_hint=f"dep {sub}"):
+        _record, holder = ctx.require_held(task=task_id)
+        path = task_dir(ctx.root, task_id)
+        if not path:
+            raise TaskError("WF_TARGET_MISSING", {"reason": "task record missing", "task": task_id})
+        task = records.load_json(os.path.join(path, "task.json"))
+        if not isinstance(task, dict):
+            raise TaskError("WF_RECORD_INVALID", {"task": task_id})
+        if task.get("status") == "archived" or task.get("terminal"):
+            raise TaskError("WF_BINDING_MISMATCH",
+                            {"reason": "archived object does not accept dependency writes",
+                             "task": task_id})
+        current = [item for item in task.get("prerequisites") or [] if item]
+        if sub == "add":
+            other = load_task(ctx.root, prereq)
+            if other is None:
+                raise TaskError("WF_TARGET_MISSING",
+                                {"reason": "prerequisite task not found", "prereq": prereq},
+                                next_="核对 id 与目录后重试；不猜 id、不自动建对象")
+            if other.get("status") == "archived" or other.get("terminal"):
+                # §6.1：独立建边要求两端都在活动区且前置未归档；已归档历史前置只可由定义引用
+                raise TaskError("WF_DEPENDENCY_UNMET",
+                                {"reason": "prerequisite already archived", "prereq": prereq,
+                                 "terminal": other.get("terminal")})
+            if prereq in current:
+                return codes.result("WF_OK", object={"id": task_id, "name": task.get("title")},
+                                    position_=codes.position(scope="task", phase=task.get("phase"),
+                                                             task_id=task_id),
+                                    next_="边已存在（幂等，不重复写入）",
+                                    facts={"edge": {"task": task_id, "prereq": prereq},
+                                           "prerequisites": current})
+            candidate = current + [prereq]
+            graph = _prerequisite_graph(ctx.root)
+            graph[task_id] = candidate
+            cycle = _find_cycle(graph, task_id)
+            if cycle:
+                raise TaskError("WF_DEPENDENCY_UNMET",
+                                {"reason": "candidate graph has a cycle", "cycle": cycle,
+                                 "exits": ["换一个前置", "先删掉环上的边", "由人确认返工/重连"]})
+            task["prerequisites"] = candidate
+        else:
+            if prereq not in current:
+                return codes.result("WF_OK", object={"id": task_id, "name": task.get("title")},
+                                    position_=codes.position(scope="task", phase=task.get("phase"),
+                                                             task_id=task_id),
+                                    next_="边不存在（幂等）",
+                                    facts={"edge": {"task": task_id, "prereq": prereq},
+                                           "prerequisites": current})
+            # 删边只改未归档持有侧；目标可在归档区（死引用由 repair 处置，不在这里追认）
+            task["prerequisites"] = [item for item in current if item != prereq]
+        inputs = {"task": task_id, "prereq": prereq, "operation": sub}
+        targets = [{"kind": "task", "id": task_id}, {"kind": "task", "id": prereq}]
+        task, action = _start_task_action(
+            ctx, path, task, "dependency.change", holder, inputs,
+            ["validate_graph", "write_prerequisites"], targets=targets,
+        )
+        task, assertion = _finish_task_action(
+            ctx, path, task, "dependency.change", holder, inputs, action,
+            evidence_refs=[f"dep:{task_id}:{prereq}"],
+        )
+    return codes.result(
+        "WF_OK",
+        object={"id": task_id, "name": task.get("title")},
+        position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id,
+                                 action_id=task["action"]["id"], action_state=task["action"]["state"]),
+        next_="前置变化只挡收尾；首次开工/恢复/重入 Execute 仍各自核前置",
+        facts={"edge": {"task": task_id, "prereq": prereq},
+               "prerequisites": task.get("prerequisites") or [],
+               "control_assertion": assertion},
+    )
+
+
 def dependency_blockers(root, task):
     """前置任务必须正常归档且归档持久化可核（机制稿 §6.1、§9.3 门禁 6）。"""
     blockers = []

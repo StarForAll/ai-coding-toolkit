@@ -256,7 +256,7 @@ docs/workflows/wf/
 | `task-knowledge` | `--task <id> --decision no-update\|updated`（`updated` 的具体操作由 `changes` 按机制稿 §8.4 的 `{operation, …}` 记录） | `task.knowledge-dispose` | 知识处置留痕 | 机制稿 §3.1 | 1 |
 | `task-retrospect` | `--task <id> --evidence <path> [--decision <path>]` | `task.retrospect` | 复盘记录（人要求或触发后执行） | — | 1 |
 | `task-attribute` | `--task <id> --commit <oid>` | `task.attribute` | 归属裁决 | 机制稿 §3.3 | 1 |
-| `dep` | `add\|rm --task <id> --prereq <id>` | `dependency.change` | 建边/删边 | 机制稿 §6.1 图校验 | 2 |
+| `dep` | `add\|rm --task <id> --prereq <id>` | `dependency.change` | 建边/删边 | 机制稿 §6.1 图校验 | 2（2026-11-12 已交付） |
 | `task-rework` / `task-replace` | `--task <id> …` | `task.rework` / `task.replace` | 返工/替换 | 机制稿 §6.2、§6.3 | 2 |
 | `task-abandon` | `--task <id> --decision <path> [--disposition <path>]`（承载与记录映射见本节「结构化人工输入」） | `task.abandon` | 单任务放弃（异常归档） | 机制稿 §6.4 | 1 |
 | `task-reassess` | `--task <id>` | `task.reassess` | 挂起复评 | 机制稿 §6.2 | 2 |
@@ -481,6 +481,7 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 - **单 reviewer 的「参考性执行」（2026-11-05 人裁 B）**：设计稿 §6.5 允许「只能凑一个时执行单 reviewer 并标 `degraded: single-provider`」，其口径已在同批修订中明确为「**发起与报告导入照常留档供参考，但不产生判定结论**」：`review-launch` 记 `degraded` 与槽位；`review-import` 照常导入报告；`review-decide` 以 `WF_REVIEW_INVALID` 拒绝，facts 带出已导入报告与两个出口（补第二家 CLI / `--unavailable` 不可用处置）。因此不存在「degraded 结论」，也不得把单 reviewer 的报告当作审查 pass；要归档必须满足两个彼此不同、且均异于实施 CLI 的 reviewer。
 
 - **跨任务碰撞预检**：没有集中的 `preflight_collisions`，各入口就地判定（`task-new`/`archive`/`task-abandon`/`spec` 的 `WF_TARGET_COLLISION`）；新增入口需自行调用同一判定，不得另写。
+- **`dep` 的建删边（2026-11-12 交付）**：`tasks.cmd_dep` 只做四件事——两端存在性（`WF_TARGET_MISSING`）、自环与环（`_prerequisite_graph` + `_find_cycle` 的 DFS 三色）、活动区约束（建边要求前置未归档，删边只改未归档持有侧、目标可在归档区由 repair 处置死引用）、写回 `prerequisites`。动作是 `dependency.change`，**targets 覆盖两端任务**（D08「第二轮加入全部依赖/实例目标」），因此跨任务目标碰撞走既有 `WF_TARGET_COLLISION` 判定而不是新写一份。幂等：重复 `add`/`rm` 返回 `WF_OK` 且注明「幂等」，不重复写入、不产生新动作。用例：`repro/dep-edges.py`（双模：注入把自环守卫与环检测**两层都**退回 → 自环被接受）、`test_dep_edges.py`（环/菱形/只收活动记录）。
 - **日界时钟**：核实周期按 `records.utc_now().date()` 计日（UTC），用例与实现须同源；用本地 `date.today()` 会跨日误判。
 - **「补结构」不等于「补词表」**：规范未登记取值域时（如 `released.decision.choice`），实现只核结构、不自造白名单；规范登记了的观察类别（压缩/重入/新会话/传递）必须真被消费，安装器转写声明的 `declared-verification` 不得支撑 `capability.status=verified`。
 - **续做三态覆盖全部写入类操作**：add/modify/delete/disable/rename 都要「符合前像→执行、已是本动作后像→跳过（并补齐索引等后置）、都不符→冲突并保留现场」；disable 的后像识别靠 frontmatter `status=disabled` 而非摘要比对，rename 的后像识别要同时核目标内容。
@@ -805,7 +806,7 @@ python3 install.py --target <目标项目绝对路径> --release-ref <refs/tags/
 
 | 轮次 | 条目 | 未交付时的行为 |
 |---|---|---|
-| 第二轮 | 定义准备与静态校验、实例创建/推进/暂停/终止、步骤人判与略过、自动建任务与顺序边、返工/替换/建删边、挂起复评、**巡检的「需人工比对」清单与 `author` 复核顺序（D24 的两个治理输出）——2026-11-12 已交付**、**`.wf/out-of-scope/` 知识拒绝项（D24 的另一延期子项，2026-11-12 人裁 A 由第三轮提前到本轮并已交付）**（~~wf 自签发身份路径~~ **已于 2026-11-08 随自动身份模式交付，不属本轮**，见本节后「身份路径」段与机制稿 §1.4） | `definition`/`run`/`dep`/`task-rework`/`task-replace`/`task-reassess` 返回 `WF_CAPABILITY_UNAVAILABLE`，facts 记「第二轮交付」，exit 记「等第二轮」；已可用的单任务放弃路径照常走 `task-abandon`。**身份路径已交付（2026-11-08）**：`provider=wf` 由入口在执行边界上派生并自动签发 `issued_id`（附件承载 activation），显式 wf 信封按设计拒绝（`WF_IDENTITY_UNRESOLVED` + 两条出口）；解析不出执行边界的形态（无锚点宿主、容器逐命令、leader 先死）按 `WF_CAPABILITY_UNAVAILABLE` 阻断，不得由模型自行签发 id 绕过 |
+| 第二轮 | 定义准备与静态校验、实例创建/推进/暂停/终止、步骤人判与略过、自动建任务与顺序边（**建删边 `dep` 2026-11-12 已交付**）、返工/替换/建删边、挂起复评、**巡检的「需人工比对」清单与 `author` 复核顺序（D24 的两个治理输出）——2026-11-12 已交付**、**`.wf/out-of-scope/` 知识拒绝项（D24 的另一延期子项，2026-11-12 人裁 A 由第三轮提前到本轮并已交付）**（~~wf 自签发身份路径~~ **已于 2026-11-08 随自动身份模式交付，不属本轮**，见本节后「身份路径」段与机制稿 §1.4） | `definition`/`run`/`dep`/`task-rework`/`task-replace`/`task-reassess` 返回 `WF_CAPABILITY_UNAVAILABLE`，facts 记「第二轮交付」，exit 记「等第二轮」；已可用的单任务放弃路径照常走 `task-abandon`。**身份路径已交付（2026-11-08）**：`provider=wf` 由入口在执行边界上派生并自动签发 `issued_id`（附件承载 activation），显式 wf 信封按设计拒绝（`WF_IDENTITY_UNRESOLVED` + 两条出口）；解析不出执行边界的形态（无锚点宿主、容器逐命令、leader 先死）按 `WF_CAPABILITY_UNAVAILABLE` 阻断，不得由模型自行签发 id 绕过 |
 | 第三轮 | 正式发行引用与清单解析（D22 的升级侧）、~~`.wf/out-of-scope/` 知识拒绝项~~（**2026-11-12 提前到第二轮并已交付**）、完整升级/卸载生命周期（D31，含三方升级矩阵与卸载覆盖验收）、`upgrade --apply` 与 `uninstall --purge` 的令牌路径（D28）、落点表全部适用分支验收（D33）、全部资产修复验收（D09） | `upgrade` 返回 `WF_CAPABILITY_UNAVAILABLE`；`repair` 只做写权/绑定/锚点最小恢复，资产缺失类修复杂交第三轮；`uninstall` 只做开发态退出（`--purge` 不可用）。**`install.py` 的首次安装不在此列**：它已在首轮交付并通过 `p5_f0` 实跑（2026-11-05 人裁） |
 
 **首轮与复评触发的关系**：机制稿 §5.3、§5.4 要求每次归档持久化核实成功、以及每次启动校验通过后触发挂起复评。首轮不会出现挂起任务（挂起源于返工，属第二轮），因此这两处触发在首轮按**空挂起集合**处理：直接通过、不写记录、不产生待决项，也不得返回 `WF_CAPABILITY_UNAVAILABLE`（否则每次归档/启动都会留下无法补做的待复评）。`task-reassess` 的完整路径与有挂起任务时的复评属第二轮。
