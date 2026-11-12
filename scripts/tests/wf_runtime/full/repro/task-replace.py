@@ -46,6 +46,15 @@ def check():
     subprocess.run(["git", "commit", "-qm", f"wf: deliver\n\nwf-task: {task_id}"],
                    cwd=project, check=True, capture_output=True)
 
+    # 下游任务：直接落一条以 T 为前置的活动任务记录（夹具即可——本步只核"重连"这一行为本身）
+    downstream = "2026-" + "d" * 32
+    downstream_dir = os.path.join(project, ".wf/tasks", f"{downstream}-downstream")
+    os.makedirs(downstream_dir, exist_ok=True)
+    json.dump({"schema_version": 1, "id": downstream, "title": "下游任务",
+               "status": "not_started", "phase": "plan", "prerequisites": [task_id],
+               "action": None}, open(os.path.join(downstream_dir, "task.json"), "w"),
+              ensure_ascii=False)
+
     problems = []
     # ① 不覆盖继承路径 → 拒且零写入
     narrow = os.path.join(root, "narrow.json")
@@ -93,6 +102,18 @@ def check():
             problems.append(f"T 终态不是 abnormal：{record.get('terminal')}")
         if record.get("successor_id") != successor_id:
             problems.append(f"T 未登记 successor_id：{record.get('successor_id')}")
+
+    # 下游重连：原本以 T 为前置的任务改挂 S（死引用不留）
+    if problems == []:
+        downstream_dir = [n for n in os.listdir(os.path.join(project, ".wf/tasks"))
+                          if n.startswith(downstream)]
+        if not downstream_dir:
+            problems.append("下游任务目录不见了")
+        else:
+            record = json.load(open(os.path.join(project, ".wf/tasks", downstream_dir[0], "task.json"),
+                                    encoding="utf-8"))
+            if record.get("prerequisites") != [successor_id]:
+                problems.append(f"下游未重连到 S：{record.get('prerequisites')}")
 
     if problems:
         raise H.TargetFailure("；".join(problems))

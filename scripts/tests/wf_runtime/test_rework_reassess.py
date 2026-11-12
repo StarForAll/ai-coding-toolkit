@@ -91,3 +91,43 @@ class ReworkSetTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+class ReassessWriteRightTest(unittest.TestCase):
+    """复评的写权事实：未持权只报告待复评，不阻断（机制稿 §6.2）。
+
+    分支判定抽成 `reassess_write_right()`，因此这里核**判定本身**——
+    "别人持权 / 空闲 / 本会话持权"三种事实各自得到什么结论。
+    """
+
+    class _Ctx:
+        def __init__(self, record, key="mine"):
+            self._record = record
+            self._key = key
+
+        def writer(self):
+            return self._record
+
+        def key(self, **_kwargs):
+            return self._key
+
+    def test_held_by_other_reports_not_mine(self):
+        mine, facts = tasks_mod.reassess_write_right(
+            self._Ctx({"state": "held", "holder": {"id": "other"}}))
+        self.assertFalse(mine)
+        self.assertEqual(facts["writer_holder"], "other")
+
+    def test_idle_reports_not_mine(self):
+        mine, facts = tasks_mod.reassess_write_right(self._Ctx({"state": "idle", "holder": None}))
+        self.assertFalse(mine)
+        self.assertEqual(facts["writer_state"], "idle")
+
+    def test_held_by_me_reports_mine(self):
+        mine, _facts = tasks_mod.reassess_write_right(
+            self._Ctx({"state": "held", "holder": {"id": "mine"}}))
+        self.assertTrue(mine)
+
+
+if __name__ == "__main__":
+    unittest.main()

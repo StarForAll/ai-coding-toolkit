@@ -4220,6 +4220,14 @@ def rework_set(root, task_id):
     return members
 
 
+def reassess_write_right(ctx):
+    """复评的写权事实：`(是否本会话持有, facts)`（机制稿 §6.2「未持权只报告待复评」）。"""
+    record = ctx.writer() or {}
+    holder = record.get("holder") or {}
+    mine = record.get("state") == "held" and holder.get("id") == ctx.key()
+    return mine, {"writer_state": record.get("state"), "writer_holder": holder.get("id")}
+
+
 def reassess_problems(root, task):
     """挂起复评的四条条件（机制稿 §6.2，逐条给事实，不做优先级遮蔽）。"""
     task_id = task.get("id")
@@ -4256,9 +4264,7 @@ def cmd_task_reassess(ctx, args):
     _scope_kind, _run, holder = bind_task_for_write(ctx, task_id)
     # 机制稿 §6.2：未持写权**只报告待复评**（不是阻断）——它不影响任何已成立的归档，
     # 原 T 会话取得写权后可补做。
-    record = ctx.writer() or {}
-    mine = (record.get("state") == "held"
-            and (record.get("holder") or {}).get("id") == ctx.key())
+    mine, writer_facts = reassess_write_right(ctx)
     if not mine:
         current = records.load_json(os.path.join(_require_task_dir(ctx, task_id), "task.json"))
         return codes.result(
@@ -4267,8 +4273,7 @@ def cmd_task_reassess(ctx, args):
             position_=codes.position(scope="task", phase=current.get("phase"), task_id=task_id),
             next_="写权不在本会话：只报告待复评，由持有写权的会话补做（不影响已成立的归档）",
             facts={"reassessed": False, "waiting": True, "pending_reassessment": True,
-                   "writer_state": record.get("state"),
-                   "writer_holder": (record.get("holder") or {}).get("id"),
+                   **writer_facts,
                    "conditions": reassess_problems(ctx.root, current)})
     with lock.acquire(ctx.root, holder_hint="task-reassess"):
         holder = ctx.require_held(**({"task": task_id} if _scope_kind == "task"
@@ -4591,9 +4596,19 @@ def cmd_task_rework(ctx, args):
     released = False
     assertion_tail = None
     if paused_for_handover:
+        # 机制稿 §6.2：「T 显式暂停、**保存交接/工作区**并 release」——三件都要做。
+        # 只暂停不存 WIP，会让新会话看不到"T 还留着哪些未提交改动"，也让 disposition 无处落地。
+        preview = _abandon_preview(ctx, task)
+        retained = sorted(preview.get("uncommitted") or [])
         task = dict(task, paused=True,
                     pause_reason={"reason": "rework handover", "at": records.now_str(),
-                                  "by": "task.rework", "rework": rework_id})
+                                  "by": "task.rework", "rework": rework_id},
+                    handoff=dict(task.get("handoff") or {},
+                                 wip={"decision": decision, "object": {"kind": "task", "id": task_id},
+                                      "task_id": task_id, "step_id": task.get("phase"),
+                                      "paths": retained, "risks": [], "pending": [],
+                                      "resolved": None,
+                                      "note": "rework handover：T 暂停并把工作区交给 R 会话处置"}))
         save_task(ctx.root, path, task)
         # 机制稿 §6.2：普通任务绑定分支由本入口完成 release（新会话才能绑定 R）。
         # 释放与「暂停已落盘」同一原子段：暂停没落盘就释放，等于把 T 的进度交给一个不知道要暂停的会话。

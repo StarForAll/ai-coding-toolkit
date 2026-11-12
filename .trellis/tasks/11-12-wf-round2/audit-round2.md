@@ -29,14 +29,14 @@
 | 返工：R 继承原前置 + `rework_of`；T 前置增 R 且 suspended | `tasks.py:4514 cmd_task_rework` | `repro/task-rework` | 覆盖 |
 | 返工：**先预检候选图**（成环即拒） | `tasks.py cmd_task_rework`（`_find_cycle`） | `test_dep_edges` 覆盖 `_find_cycle` 本身；**rework 入口的环拒绝无用例** | 部分 |
 | 返工（同实例）：`sequence_changes` + cursor 临时定位 + T 不 paused | `tasks.py:4514`、`runs.py:1356` | `repro/task-rework` | 覆盖 |
-| 返工（普通任务）：T 显式暂停 + **入口内 release** | `tasks.py:4514` 尾部 | **无用例** | 未覆盖 |
+| 返工（普通任务）：T 显式暂停 + **保存交接/工作区** + 入口内 release | `tasks.py:4514` 尾部 | `repro/task-rework-handover`（双模） | 覆盖 |
 | 复评：五条件、清挂起保留 paused、第二候选则 paused+等待 | `tasks.py:4223 reassess_problems`、`tasks.py:4245 cmd_task_reassess` | `test_rework_reassess`(5) | 覆盖（第二候选分支无用例） |
-| 复评：**未持权只报告待复评**（不是阻断） | `tasks.py:4245` 前置分支 | **无用例** | 未覆盖 |
+| 复评：**未持权只报告待复评**（不是阻断） | `tasks.py reassess_write_right` | `test_rework_reassess::ReassessWriteRightTest`(3) | 覆盖 |
 | 复评后按登记返回 T | `runs.py:1356 _return_from_rework` | `test_rework_cursor`(4) | 覆盖 |
 | 替换：预览（S 前置/继承路径/未覆盖项/下游/实例映射） | `tasks.py cmd_task_replace` → `_replace_preview` | `repro/task-replace-preview` | 覆盖 |
 | 替换：`touch_paths` 未覆盖继承路径 → 拒且零写入 | `tasks.py:4373 cmd_task_replace` | `repro/task-replace` | 覆盖 |
 | 替换：登记继承（`attribution.inherited`）+ T 异常归档 + `successor_id` | `tasks.py:4373` | `repro/task-replace` | 覆盖 |
-| 替换：下游重连；在途实例 `task_map`/`superseded_ids`/cursor 改指 S | `tasks.py:4373` | **无用例**（repro 只跑普通任务、无下游任务） | 未覆盖 |
+| 替换：下游重连；在途实例 `task_map`/`superseded_ids`/cursor 改指 S | `tasks.py:4373` | `repro/task-replace`（下游重连已断言）；**实例映射仍无用例** | 部分 |
 
 ## 三、机制稿 §7.1（有限定义格式）
 
@@ -115,14 +115,19 @@
 
 ## 八、诚实清单：有实现但**没有能区分的断言**（复核者应重点看这些）
 
-1. 替换的**下游重连**与**实例映射改指 S**（`tasks.py:4373` 内两段）——`repro/task-replace` 只跑普通任务、无下游任务。
-2. 返工**普通任务分支**的入口内 `release`（`tasks.py:4514` 尾部）——`repro/task-rework` 只跑同实例分支。
+2026-11-12 补过一轮，已从 8 项降到 5 项（下面的编号即当前状态）：
+
+1. ~~替换的下游重连~~ → **已补**（`repro/task-replace` 加了以 T 为前置的下游任务并断言改挂 S）；
+   **实例映射改指 S（`task_map`/`superseded_ids`/cursor）仍未覆盖**。
+2. ~~返工普通任务分支的入口内 release~~ → **已补**（`repro/task-rework-handover`，双模）。
+   **连带补齐一个真缺口**：该分支此前只 `paused`，没按机制稿 §6.2 的「保存交接/工作区」写 `handoff.wip`。
 3. 返工/替换的**候选图成环拒绝**（入口层）——只有 `_find_cycle` 本身的单元测试。
 4. 可略步骤的**端到端**路径（记 `skipped` + 决定 + 快照哈希、不建任务）——只有 `_applicability` 单测。
 5. 终止的「**已归档任务不再次放弃**」分支。
-6. 复评「**未持权只报告待复评**」与「**第二候选则 paused + 等待人恢复**」两个分支。
+6. ~~复评未持权只报告待复评~~ → **已补**（抽 `reassess_write_right()` + 3 条判定用例）；
+   **「第二候选则 paused + 等待人恢复」仍未覆盖**。
 7. 创建时的**目标碰撞**与**锁内重核**。
-8. 「每个具名入口都登记 action 意图」——目前靠分散的 repro 间接覆盖，没有统一断言。
+8. 「每个具名入口都登记 action 意图」——靠分散的 repro 间接覆盖，没有统一断言。
 
 ## 九、复核者可直接跑的命令
 
