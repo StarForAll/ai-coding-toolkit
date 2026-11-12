@@ -2980,6 +2980,11 @@ def _deleted_paths(root, paths):
 def _commit_paths(root, paths, message, moved_from=None):
     """按精确路径暂存并提交：不捎带索引中的其他内容，提交后回读核对（机制稿 §5.3）。
 
+    **幂等判据（D3，归档失败后重入靠它）**：同一批路径第二次提交时，暂存区为空 →
+    返回 `{"committed": True, "already_clean": True}` 且 **HEAD 不变**；也就是说重入
+    不会重复提交。提交只用**精确路径**（授权里的 glob 先展开），所以重入也不会顺手
+    带走别人的改动。
+
     `moved_from`：目录移动的**源路径**。移动会让旧路径变成未提交删除，只 add 新路径
     会把它留给项目（下一任务的 c 桶），所以删除必须进同一提交（第十三轮复审外部 P1）。
     """
