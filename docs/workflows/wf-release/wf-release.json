@@ -271,7 +271,7 @@
       "target_relative": ".wf/lib/wflib/review.py"
     },
     {
-      "digest": "sha256:94e69d363bec2db7edd087f42f0e1057698df73bc70b33b1ce12dbe00092ba4d",
+      "digest": "sha256:8c0cbff590306304549f6a325e54bfed350d275c25f8cef208cd98684ae7d35e",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -801,7 +801,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:9b541b661ce7242ba86437433575326a200fcf387dfc4418d7be87bb1ec51ef1",
+    "rules_digest": "sha256:2fbfd5504faa9fc0094a374accd0d9326ad80c10f56383b2316d4ec6f5ee5e38",
     "systems": [
       "linux"
     ],
