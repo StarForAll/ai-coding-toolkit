@@ -829,6 +829,12 @@ def creation_problems(creation, doc=None):
             if value not in APPLICABILITY:
                 problems.append({"reason": f"steps value must be one of {list(APPLICABILITY)}",
                                  "step": step_id, "got": value})
+        # 逐步骤表态（机制稿 §7.2）：未出现的步骤不推断为 applicable——
+        # 「人确认它适用」与「人没看它」在事后追责上不是一回事。
+        missing = sorted(declared - set(steps))
+        if missing:
+            problems.append({"reason": "steps must declare every step of the definition",
+                             "missing": missing})
     expansion = creation.get("expansion")
     if expansion is not None and not isinstance(expansion, dict):
         problems.append({"reason": "expansion must be an object when present", "field": "expansion"})

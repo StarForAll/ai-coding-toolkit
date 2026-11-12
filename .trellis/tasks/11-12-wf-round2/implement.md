@@ -367,7 +367,7 @@ B3–B5（P1 七项能力）、B6 的发行树提交与其余文档同步。原�
 | **A 机制稿过时** | A1 §12.1 D 表轮次列；A2 §3.5 d 档设想；A3 §11.3 状态动作表缺 run 家族 | 纯事实同步 |
 | **B 机制稿自相矛盾** | B1 `persist_pending` 白名单（§5.1/§11.3 vs §7.4） | 人裁 **甲**：白名单加入 `run.finish` |
 | **C 稿子对、实现没做** | C1 准备动作未登记 action；C2 `run.terminate` 无固定提交步骤；C3 巡检缺四类三态；C4 返工普通分支未 release；C5 替换无预览；C6 终止无预览；C7 复评未持权报阻断而非待复评 | **都在第二轮交付面内**（D03/D07/D11/D13/D24 + §6.2/§6.3/§7.2/§7.4/§8.5），不是第三轮；按 4 批补 |
-| **D 实现更严/多写字段** | D1 人判点/验证 id 的字符集；D2 `paused_reason`/`resumed`/`closing.pending`；D3 `creation.steps` 必须逐项表态 | 待裁（我倾向收紧 §7.1/§7.2 并把 D2 登记为只读信息字段） |
+| **D 实现更严/多写字段** | D1 人判点/验证 id 的字符集；D2 `paused_reason`/`resumed`/`closing.at`/`closing.pending`；D3 `creation.steps` 必须逐项表态 | **2026-11-12 人裁丙：三处全部收紧到机制稿**——§7.1 字符集纳入这两类 id；§7.2 要求逐步骤声明（实现同批补覆盖核）；§1.5 登记为只读信息字段（判定只读 `paused`/`closing.mode`） |
 
 **本轮已落地（B1-甲 + A2-甲 + A 类同步）**：机制稿 §5.1/§11.3 的 `persist_pending` 加入 `run.finish`；§3.5 的 d 档语义改写为「命中批准触碰面却被另一活动任务显式登记为未处置 WIP」，并写明「已提交但归属不可解析」不在其范围；§12.1 的 D03/D07/D08/D11/D12/D13 轮次列改为已交付（D07/D11/D13 括注待补的过程义务）；§11.3 状态动作表补 `run.create/pause/resume/finish`、`definition.prepare`、`task.rework/replace`、`dependency.change`；§0.1 叙述同批记录。
 
