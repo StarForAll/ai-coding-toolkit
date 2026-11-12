@@ -1837,15 +1837,42 @@ def cmd_ready(ctx, args):
                        "paused": None, "tasks": sorted(by_run[run_id]),
                        "unknown": "run record missing or unreadable"})
 
+    # 实例作为**可绑定候选**（`bind --run` 交付后）：人要先看到"这个实例现在能不能接"，
+    # 而不只是"这个实例下有哪些任务"。资格与阻断项按 `_eligible_run_bind` 的同一判据。
+    run_candidates = []
+    for record in run_records:
+        run_id = record.get("id")
+        blockers_for_run = []
+        try:
+            _eligible_run_bind(ctx, run_id)
+        except CliError as exc:
+            blockers_for_run.append(exc.code)
+        if record.get("paused"):
+            blockers_for_run.append("paused")
+        run_candidates.append({
+            "id": run_id,
+            "workflow_id": record.get("workflow_id"),
+            "terminal": record.get("terminal"),
+            "paused": record.get("paused"),
+            "created_at": (record.get("creation_decision") or {}).get("at"),
+            "steps_settled": sorted((record.get("step_results") or {}).keys()),
+            "ready": not blockers_for_run,
+            "blockers": blockers_for_run,
+        })
+    run_candidates.sort(key=lambda item: (str(item.get("created_at") or ""), str(item.get("id") or "")))
     suggested = next((item["id"] for item in entries if item.get("ready")), None)
-    facts = {"tasks": entries, "suggested": suggested, "runs": groups}
+    suggested_run = next((item["id"] for item in run_candidates if item.get("ready")), None)
+    facts = {"tasks": entries, "suggested": suggested,
+             "run_candidates": run_candidates, "suggested_run": suggested_run,
+             "runs": groups}
     warnings = []
     if unreadable_runs:
         warnings.append({"area": "runs", "unreadable": unreadable_runs})
     return ok(
         facts=facts,
         position=codes.position(scope="session"),
-        next_="用 bind --task <id> 绑定建议对象；或按 blockers 先解除阻断",
+        next_=("用 bind --task <id> 绑定建议任务，或用 bind --run <id> 接续在途实例"
+               "（见 run_candidates.suggested_run）；或按 blockers 先解除阻断"),
         warnings=warnings,
     )
 

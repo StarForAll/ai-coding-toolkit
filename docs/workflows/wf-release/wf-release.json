@@ -101,7 +101,7 @@
       "target_relative": ".wf/lib/wflib/check.py"
     },
     {
-      "digest": "sha256:8202d2f978d3ecfef5c9083e73528a7873cc9a0855c644566e6d1be1f8a5f334",
+      "digest": "sha256:61bb57dfcf38ff62512323d3a65da7b41842f5ef5ec6b6281f62b72c097e6006",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -161,7 +161,7 @@
       "target_relative": ".wf/lib/wflib/fingerprint.py"
     },
     {
-      "digest": "sha256:0dc8b6f264da68d6e3c9e30f8cd24c2f83c0a8f8a59fd8661c44b3299384eda3",
+      "digest": "sha256:9f92e3e6b7695d59701a0945ef3475c206b3734a065691efce9dfcac5ff0c5b1",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -271,7 +271,7 @@
       "target_relative": ".wf/lib/wflib/review.py"
     },
     {
-      "digest": "sha256:8c0cbff590306304549f6a325e54bfed350d275c25f8cef208cd98684ae7d35e",
+      "digest": "sha256:1113d81c178932a6fd5b6c3253ee360654bf8305d519eb8182b63c899ae47a01",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -801,7 +801,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:2fbfd5504faa9fc0094a374accd0d9326ad80c10f56383b2316d4ec6f5ee5e38",
+    "rules_digest": "sha256:56d3b06f688daf93fca8a7e3fc178e54cb0bc4c40e4d7aa5acde94f9946498a3",
     "systems": [
       "linux"
     ],

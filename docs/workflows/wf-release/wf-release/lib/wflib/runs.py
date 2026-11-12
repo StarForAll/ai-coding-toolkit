@@ -669,12 +669,11 @@ def validate(ctx, args):
     from . import codes
 
     workflow_id = _require_workflow_id(args)
-    text, path = _definition_text(ctx.root, workflow_id)
+    doc, problems, text, path = load_definition(ctx.root, workflow_id)
     if text is None:
         raise DefinitionError("WF_PATH_INVALID",
                               {"reason": "definition file missing", "path": _rel(ctx.root, path),
                                "expected": f"{USER_WORKFLOWS_REL}/{workflow_id}.md"})
-    doc, problems = parse_definition(text)
     if doc is not None:
         problems = validate_definition(doc, ctx.root, workflow_id=workflow_id)
     stages = sorted({item.get("stage") for item in problems})
@@ -734,7 +733,7 @@ def prepare(ctx, args):
                                                 expected=f"{USER_WORKFLOWS_REL}/{workflow_id}.md")]}
             digest = None
         else:
-            doc, problems = parse_definition(text)
+            doc, problems, _text, _path = load_definition(ctx.root, workflow_id)
             if doc is not None:
                 problems = validate_definition(doc, ctx.root, workflow_id=workflow_id)
             validation = {"ok": not problems, "checked_at": records.now_str(),
@@ -978,12 +977,11 @@ def create(ctx, args):
         raise DefinitionError("WF_SEMANTIC_DECISION",
                               {"problems": creation_problems(creation)})
     workflow_id = creation.get("definition_id")
-    text, definition_abs = _definition_text(ctx.root, workflow_id or "")
+    doc, problems, text, definition_abs = load_definition(ctx.root, workflow_id or "")
     if text is None:
         raise DefinitionError("WF_PATH_INVALID",
                               {"reason": "definition file missing",
                                "expected": f"{USER_WORKFLOWS_REL}/{workflow_id}.md"})
-    doc, problems = parse_definition(text)
     if doc is not None:
         problems = validate_definition(doc, ctx.root, workflow_id=workflow_id)
     problems = problems + creation_problems(creation, doc)
@@ -2330,7 +2328,17 @@ def locate(ctx, args):
                                "tasks": tasks})
 
 
-def load_definition(*_args, **_kwargs):
-    raise assets.CapabilityUnavailable("workflow definition loading (D11)", ROUND)
+def load_definition(root, workflow_id):
+    """定位并解析定义：返回 `(doc, problems, text, path)`（机制稿 §7.2 的唯一定义加载入口）。
+
+    `doc` 为 None 表示**不可解析**（文件缺失/无标记/非 JSON），`problems` 给出结构问题；
+    两者都为 None/空表示可解析且结构成立。只读：不写任何记录。
+    """
+    text, path = _definition_text(root, workflow_id or "")
+    if text is None:
+        return None, [_problem(0, "definition file missing",
+                               expected=f"{USER_WORKFLOWS_REL}/{workflow_id}.md")], None, path
+    doc, problems = parse_definition(text)
+    return doc, problems, text, path
 
 
