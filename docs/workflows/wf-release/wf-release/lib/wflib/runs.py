@@ -64,6 +64,12 @@ def load_run(root, run_id):
     return records.load_json(run_path(root, run_id))
 
 
+def save_run(root, run):
+    """写回实例记录（调用方负责锁与绑定核验）。"""
+    records.write_json(run_path(root, run.get("id")), run)
+    return run
+
+
 def iter_runs(root):
     """枚举实例记录（只读）。
 
