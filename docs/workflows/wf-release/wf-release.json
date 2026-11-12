@@ -101,7 +101,7 @@
       "target_relative": ".wf/lib/wflib/check.py"
     },
     {
-      "digest": "sha256:b5d41d6e22b9510f1fbd43147dc172f0684fd58b03825bd0766e4aef4eba2870",
+      "digest": "sha256:8202d2f978d3ecfef5c9083e73528a7873cc9a0855c644566e6d1be1f8a5f334",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -801,7 +801,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:4d4f6f9ea227ffbe67c0299ce5e15852b60fc364741fece407cbd790a0dd500a",
+    "rules_digest": "sha256:daca82865d6dcb587aadbd2c8aecad661885a731331bf9a77c37b6f1805fef2e",
     "systems": [
       "linux"
     ],
