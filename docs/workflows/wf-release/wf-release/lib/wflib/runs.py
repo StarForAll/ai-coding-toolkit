@@ -1573,6 +1573,144 @@ def pause(ctx, args):
     )
 
 
+RESUME_STEPS = ("clear_paused", "record_resume")
+
+
+def resume(ctx, args):
+    """`run resume --run <id> [--decision <path>]`：解除**实例**暂停（机制稿 §2.2、§7.3）。
+
+    只做三件机制该做的事：核事实（绑定/写权/确实处于暂停）、**清 `paused`**、**记录依据**
+    （谁、何时、可选的决定引用）。明确不做：**不恢复当前任务**（那是 `task-resume` 的另一个决定，
+    它自核 WIP 指纹/身份/前置）、**不动 `cursor`**、**不推进**、不判断"是否该恢复"。
+
+    `--decision` 是可选的：单纯解除不必写决定文件（恢复不属机制稿 §2 授权边界里的五类不可逆动作）；
+    给了就存进 `resumed.decision`，并核 `subject` 含本实例 id 与**当前暂停时点**
+    （拿上一次的决定来清这一次的暂停会被拒）。
+    """
+    from . import actions as actions_mod, cli, lock, session as session_mod, writer as writer_mod
+
+    run_id = args.value("--run")
+    decision_path = args.value("--decision")
+    if not run_id:
+        raise DefinitionError("WF_PATH_INVALID", {"reason": "run resume requires --run <id>"})
+    decisions = cli._load_decision(decision_path) if decision_path else []
+    key = ctx.key()
+    with lock.acquire(ctx.root, holder_hint="run resume"):
+        record = ctx.writer() or {}
+        holder = record.get("holder") or {}
+        if record.get("state") != "held" or holder.get("id") != key:
+            raise cli.CliError("WF_WRITER_BUSY", {"holder": holder},
+                               next_="由绑定该实例的会话解除暂停；他人持有写权时先走交接/恢复出口")
+        scope = (holder.get("scope") or {}).get("object") or {}
+        if scope.get("kind") != "run" or scope.get("id") != run_id:
+            raise DefinitionError("WF_BINDING_MISMATCH",
+                                  {"reason": "writer scope is not this run", "scope": scope})
+        binding = session_mod.load_binding(ctx.root, key) or {}
+        if ((binding.get("object") or {}).get("kind") != "run"
+                or (binding.get("object") or {}).get("id") != run_id):
+            raise DefinitionError("WF_BINDING_MISMATCH",
+                                  {"reason": "session is not bound to this run",
+                                   "binding": binding.get("object")})
+        run = load_run(ctx.root, run_id)
+        if not isinstance(run, dict):
+            raise DefinitionError("WF_HISTORY_UNRESOLVED", {"reason": "run record missing",
+                                                           "run": run_id})
+        if run.get("terminal"):
+            raise DefinitionError("WF_BINDING_MISMATCH",
+                                  {"reason": "run already ended", "terminal": run.get("terminal")})
+        paused_reason = run.get("paused_reason") or {}
+        if not run.get("paused"):
+            return codes.result("WF_OK", object={"id": run_id},
+                                position_=codes.position(scope="run"),
+                                next_="实例本不在暂停态（幂等，不写记录）",
+                                facts={"run": run_id, "paused": False,
+                                       "resumed": run.get("resumed")})
+        # 可选决定：给了就核「这份决定是不是针对**当前这次**暂停」
+        decision = None
+        if decisions:
+            decision = decisions[0]
+            subject = decision.get("subject")
+            text = " ".join(str(item) for item in subject) if isinstance(subject, list) else str(subject or "")
+            problems = []
+            if run_id not in text:
+                problems.append({"reason": "decision subject must name this run", "run": run_id})
+            if paused_reason.get("at") and paused_reason["at"] not in text:
+                problems.append({"reason": "decision must bind the pause it lifts (subject must "
+                                           "contain paused_reason.at)", "paused_at": paused_reason.get("at")})
+            if not str(decision.get("choice") or "").strip():
+                problems.append({"reason": "decision requires a non-empty choice"})
+            if problems:
+                raise DefinitionError("WF_SEMANTIC_DECISION",
+                                      {"reason": "resume decision does not match the current pause",
+                                       "problems": problems},
+                                      next_="用针对本次暂停（含 paused_reason.at）的新决定重试，或不传 --decision")
+        action = actions_mod.new_action("run.resume",
+                                        writer_mod.owner_ref("session", key, scope),
+                                        int(run.get("revision", 0)),
+                                        {"run": run_id, "paused_at": paused_reason.get("at"),
+                                         "decision": bool(decision)},
+                                        steps=list(RESUME_STEPS),
+                                        head_before=actions_mod.head_of(ctx.root),
+                                        targets=[{"kind": "run", "id": run_id},
+                                                 {"kind": "step", "id": (run.get("cursor") or {}).get("step_id")}])
+        run = dict(run, action=action)
+        records.write_json(run_path(ctx.root, run_id), run)
+        resumed = {"at": records.now_str(), "session_key": key,
+                   "lifted_paused_at": paused_reason.get("at")}
+        if decision is not None:
+            resumed["decision"] = {"choice": decision.get("choice"),
+                                   "subject": decision.get("subject"),
+                                   "reason": decision.get("reason"),
+                                   "source": decision.get("source"),
+                                   "at": decision.get("at")}
+        # `paused_reason` 留作历史（历史事实不抹）；`paused=false` 是权威
+        run = dict(run, paused=False, resumed=resumed,
+                   action=actions_mod.complete(
+                       action, summary="run.resume",
+                       control_assertion=cli._control_assertion(
+                           ctx, "run.resume", writer_mod.owner_ref("session", key, scope),
+                           action, [f"run:{run_id}"])))
+        records.write_json(run_path(ctx.root, run_id), run)
+    stale = [step for step in RESUME_STEPS if not _resume_step_done(ctx, run_id, step)]
+    if stale:
+        raise DefinitionError("WF_PERSISTENCE_FAILED",
+                              {"reason": "run.resume step postcondition missing", "steps": stale},
+                              next_="重入 run resume（幂等）")
+    return codes.result(
+        "WF_OK",
+        object={"id": run_id},
+        position_=codes.position(scope="run", step_id=(run.get("cursor") or {}).get("step_id"),
+                                 action_id=run["action"]["id"],
+                                 action_state=run["action"]["state"]),
+        next_="实例已解除暂停。**当前任务仍是暂停态**：要不要恢复它另跑 task-resume（那是另一个决定）；"
+              "继续推进用 run advance，从 cursor 走",
+        facts={"run": run_id, "paused": False, "resumed": run["resumed"],
+               "cursor": run.get("cursor"),
+               "current_task_paused": _current_task_paused(ctx, run),
+               "control_assertion": run["action"]["result"]["control_assertion"]},
+    )
+
+
+def _resume_step_done(ctx, run_id, step):
+    run = load_run(ctx.root, run_id) or {}
+    if step == "clear_paused":
+        return run.get("paused") is False
+    if step == "record_resume":
+        return bool((run.get("resumed") or {}).get("at"))
+    return False
+
+
+def _current_task_paused(ctx, run):
+    """当前步骤的任务是否仍暂停（解除实例暂停**不会**动它）。"""
+    from . import tasks as tasks_mod
+
+    task_id = (run.get("cursor") or {}).get("task_id")
+    if not task_id:
+        return None
+    record = tasks_mod.load_task(ctx.root, task_id)
+    return None if record is None else bool(record.get("paused"))
+
+
 def locate(ctx, args):
     """`run locate --run <id>`：只读定位（机制稿 §2.1 的绑定内定位）。"""
     from . import codes, tasks as tasks_mod

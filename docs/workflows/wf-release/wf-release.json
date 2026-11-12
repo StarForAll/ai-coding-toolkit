@@ -101,7 +101,7 @@
       "target_relative": ".wf/lib/wflib/check.py"
     },
     {
-      "digest": "sha256:cf0d3a65890e30a0ae7f1c4cda4ca293900361dddbe37ee9d17567c280cb1e23",
+      "digest": "sha256:6719276b99a5865afd159b6cc79d4a7c6dc2abc3606e228ac592014e47c9eb36",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -271,7 +271,7 @@
       "target_relative": ".wf/lib/wflib/review.py"
     },
     {
-      "digest": "sha256:6e4ffb53b4c91a997afefd6bad80a93932dc36941f77f173a7dd1c9b66394a86",
+      "digest": "sha256:00d70302f30feb403e2fe71e8fc2732e8d1341db4794da08325d8e79af37c24f",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -631,7 +631,7 @@
       "target_relative": "wf-code-review/SKILL.md"
     },
     {
-      "digest": "sha256:7193646689ec25976a01da39dc67aea5482051319dd02e7ae56976022c8c7d9c",
+      "digest": "sha256:d3a83bb7f71a28a5083281dbdcc1e3f802556cff15b13a48512c61fcee86f642",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -671,7 +671,7 @@
       "target_relative": "wf-grilling/SKILL.md"
     },
     {
-      "digest": "sha256:0147735d4dd26f5cdf352f7f50b7aaeea3986e6b330bff35b8cb917de0785001",
+      "digest": "sha256:f7b6fb08b00f33cf8fb33d2e22d67cb673988a73130ac975b72b6b9987794706",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -721,7 +721,7 @@
       "target_relative": "wf-review/SKILL.md"
     },
     {
-      "digest": "sha256:b798b140deb29d9aa4e79c5996ef98acff4a120248827219546ba6e6e38ecb5e",
+      "digest": "sha256:95806f55686df781d08cf6dd6f8c5e127bf63a3b7aa39ac64fcd7b8c7fe07813",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -731,7 +731,7 @@
       "target_relative": "wf-spec-update/SKILL.md"
     },
     {
-      "digest": "sha256:c769e70510e52e595c08aa146a9cbc9389381ae66645f8acdf886cd3dd338003",
+      "digest": "sha256:1869a3679506223cc148622121b1833fbbf81a4bf1cbf81696c449708cde5d7f",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -811,7 +811,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:bb8e0ac6f6b68d2f75e7cfea55c232b174c63eb5e63101b0a6fd86b25da91c80",
+    "rules_digest": "sha256:37494d784f34f37e4c9ee34d6c0680ec48f45b2f0d03a22e658f2a2072a2a14c",
     "systems": [
       "linux"
     ],

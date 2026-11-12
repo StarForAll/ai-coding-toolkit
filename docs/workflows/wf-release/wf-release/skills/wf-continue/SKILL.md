@@ -21,7 +21,9 @@ disable-model-invocation: false
 | in_progress/check | `task-check --task <id> [--decision …] [--review-notes …]` |
 | in_progress/finish | **先读修复态**（见下节），再请人核对结果后由人调用 `wf-finish` |
 | 人**明确要求**改方案 | 先取人签的 `choice=replan` 决定文件 → `task-replan --decision <文件>` → 重新 `task-approve` → `task-start`（缺决定即 `WF_SEMANTIC_DECISION`） |
-| 暂停 / 恢复 | `task-pause --task <id> [--reason]` / `task-resume --task <id>` |
+| 暂停 / 恢复（任务） | `task-pause --task <id> [--reason]` / `task-resume --task <id>` |
+| 绑定对象是**实例**（`run locate` 显示 `terminal=null`） | `run advance --run <id> [--decision <path>]` 推进；`run pause --run <id> --reason <text>` 受控暂停；只读回读用 `run locate --run <id>` |
+| 实例处于暂停态（`paused=true`） | 先读 `paused_reason`（原因/时间/停在哪一步）；解除与继续的判读见下节「实例暂停之后」 |
 | 收工 | `stop --decision <path>`（一个去向：commit/keep/reverse/transfer） |
 | 放弃 | `task-abandon --task <id> --decision <path> [--disposition <path>]` |
 | `status=archived` 但记录仍在活动区（归档中断：终态已写、目录未移） | **重入 `archive --task <id> --decision <同一决定>` 续做**；该入口会补做目录移动，不另开恢复命令 |
@@ -41,6 +43,37 @@ disable-model-invocation: false
   可以归档——步骤面、escalated、required、依赖、debug 各有自己的门禁）。
 - 要人裁放行不可核实证据时，用 `wf-review-accept-unknown`（先按 `wf-review-accept-unknown`
   skill 呈现事实与采集 quote）。
+
+## 实例推进怎么读（`run advance`）
+
+`run advance` 每次只做一件确定的事，并按机制稿的分工把**判断留给你**。先读 `facts`，再决定下一步：
+
+| `facts` | 含义 | 你该做什么 |
+|---|---|---|
+| 有 `task`、无 `waiting` | 首达该任务步骤，已建任务（`run_id`=本实例、顺序前置=上一个未略过 task 步骤的任务），游标指向它 | 在那个任务上走四阶段（Plan→批准→开工→Check→Finish→由人归档）。**实例不代批准、不代归档** |
+| `waiting: true` | 当前步骤的任务还没正常归档（含"还在做"与"异常归档"两种，异常归档会另报 `WF_SEMANTIC_DECISION`） | 回到那个任务推进；异常归档时按 4.3/4.9 与机制稿 §6.4 的出口处置，**不要**靠再 advance 一次绕过 |
+| `skipped: true` | 该步骤按 `creation.steps` 声明略过，决定已记录 | 继续 `advance`；若你认为这个决定此时不成立（条件变了），回人确认，不要自己改记录 |
+| `answer: <choice>` | human 步骤的答复已记录 | 继续 `advance`；答复内容由人给，不要代答 |
+| `settled: <step>` | 上一任务已正常归档且持久化可核，该步骤记 `satisfied` | 继续 `advance` 推进下一步 |
+| `WF_DEPENDENCY_UNMET` | 顺序前置（上一个未略过 task 步骤的任务）尚未正常归档 | 先把那个任务做完并归档；不要删边绕过，也不要把异常归档当满足 |
+| 所有步骤都有结果 | 实例的业务步骤都记了结果 | 收口走 `run terminate`（尚在交付中）；不要用 `advance` 反复试探 |
+
+**你负责的判断**：某步骤的产物够不够用、能不能记"复用"（机制目前不生成复用事实，需要你自己在任务里核）、
+某个可略步骤此时是否还成立、当前任务的缺口是否该回 Plan。
+
+## 实例暂停之后
+
+`run pause` 会把实例标 `paused` **并暂停当前步骤的任务**（否则那个任务还是执行候选，别人能接着干），
+**不动游标**。所以解除时有两件事，它们是**两个决定**：
+
+1. **解除实例暂停**：`run resume --run <id>`（可选 `--decision`，见下）。机制只清 `paused` 并记录谁/何时/依据，
+   **不恢复任务、不动游标、不推进**。
+2. **是否恢复当前任务**：另跑 `task-resume --task <id>`（它会核真实 WIP 指纹、身份与前置）。**不要顺手替人做第二个决定**：
+   人可能只想先解除实例暂停、让任务继续停着。
+
+恢复后从 `cursor` 继续 `advance`，**不要跳到下一步**（跳过该步的合法路径只有 `creation.steps` 声明 + 决定）。
+`--decision` 是**可选**的：单纯解除不必写决定文件；当人有附加约束（"先恢复但 task X 别动"）或这次恢复需要留痕时，
+用决定文件记录——机制会把它存进 `resumed.decision`，并核 `subject` 与本实例当前暂停时点匹配（拿旧决定清新暂停会被拒）。
 
 ## 复杂任务审查
 
