@@ -90,8 +90,9 @@ for text, label in (('{"a":1', "截断"), ("{oops}", "非法"), ("NaN", "常量"
 # ---- B4-1：d 桶的处置（登记为已知边界或实现） ----
 doc = open("/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf-framework-implementation.md",
            encoding="utf-8").read()
-rec("B4-1 d 桶在实现稿登记", "含归属语义存疑的边界说明",
-    "d 桶" in doc or "归属存疑" in doc, ("d 桶" in doc) or ("归属存疑" in doc))
+rec("B4-1 d 档在实现稿登记为已交付（不是「已知边界」）", "含「d 档」且标 2026-11-12 交付",
+    f"d档={'d 档' in doc} 交付={'d 档（归属语义存疑，2026-11-12 交付）' in doc}",
+    "d 档" in doc and "d 档（归属语义存疑，2026-11-12 交付）" in doc)
 
 # ---- 其他 agent 3：恢复入口不得绕过实例一致性 ----
 rc, payload, _ = wfdrive.run(["task-new", "--kind", "ordinary", "--title", "R84 恢复",
