@@ -94,6 +94,14 @@ def write_runtime(root, key: str, payload: dict):
         return False
 
 
+def load_runtime(root, key: str):
+    """读本会话侧车（可丢弃定位缓存）；缺失或不可解析返回 None，不阻断读取。"""
+    try:
+        return records.load_json(runtime_path(root, key))
+    except OSError:
+        return None
+
+
 def new_instance_id() -> str:
     return uuid.uuid4().hex
 

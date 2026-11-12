@@ -120,13 +120,22 @@ def check():
     if (run_record.get("cursor") or {}).get("task_id") != rework_id:
         problems.append(f"cursor 未临时定位到 R：{run_record.get('cursor')}")
 
-    # ④ R 未归档 → 复评 waiting（游标此刻在 R 上，先回到 T 才能对它复评）
+    # ④ R 未归档 → 游标在 R 上，advance 必须报等待且不把 R 当步骤完成
     rc, payload = run(["run", "locate", "--run", run_id])
     facts_locate = (payload or {}).get("facts") or {}
     if (facts_locate.get("cursor") or {}).get("task_id") != rework_id:
         problems.append(f"locate 未反映临时游标：{facts_locate.get('cursor')}")
+    rc, payload = run(["run", "advance", "--run", run_id])
+    facts_advance = (payload or {}).get("facts") or {}
+    if facts_advance.get("controlled_rework") != rework_id:
+        problems.append(f"advance 未识别受控返工：{facts_advance}")
+    if (facts_advance.get("rework_status") or "") == "archived":
+        problems.append("R 未归档却报已归档")
     run_path = os.path.join(project, ".wf/workflow-runs", f"{run_id}.json")
     record = json.load(open(run_path, encoding="utf-8"))
+    if (record.get("cursor") or {}).get("task_id") != rework_id:
+        problems.append("advance 把游标从 R 上挪走了（应保持并报等待）")
+    # 复评本身要针对 T：把游标按登记返回（R 未归档时 advance 只报等待，这里手工置回以测复评）
     record["cursor"] = {"step_id": (record.get("cursor") or {}).get("step_id"), "task_id": parent}
     json.dump(record, open(run_path, "w"), ensure_ascii=False, indent=2)
     rc, payload = run(["task-reassess", "--task", parent])
