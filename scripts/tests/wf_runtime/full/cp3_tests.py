@@ -209,15 +209,26 @@ problems = wf_gates.support_report(manifest, wf_cli.COMMANDS,
                                    [name for name in wf_gates.BOOTSTRAP_ENTRIES
                                     if os.path.isfile(os.path.join(F, ".wf/bin", f"{name}.py"))])
 rec("A16 分派表与命令面一致", "无问题", f"{len(problems)} problems", not problems)
+# 桩不再是固定的某个子命令（2026-11-12：`run` 已部分交付，命令本身不再是桩，
+# 但它的 `advance/pause/terminate` 子动作仍报能力不可用）。这里**按当前命令面动态找**
+# 一个仍是桩的承接命令，再挑一个声明为它的 control 步骤——断言核的是检查器本身，
+# 不应绑死在某一个命令名上（绑死的话每次解封一处就要改这条用例）。
+_stub_handlers = sorted(name for name, handler in wf_cli.COMMANDS.items()
+                        if getattr(handler, "wf_delivery_round", None))
+_stub_steps = sorted(step for step, handler in wf_gates.HANDLERS.items()
+                     if handler in _stub_handlers and step.startswith("control."))
+if not _stub_steps:
+    raise SystemExit("A16 前置失败：当前命令面已没有能力桩，这条断言需要改写")
+_stub_step = _stub_steps[0]
 overclaimed = {"delivery_round": wf_gates.CURRENT_DELIVERY_ROUND,
                "required_steps": [dict(step, delivery_round=(wf_gates.CURRENT_DELIVERY_ROUND
-                                                             if step["id"] == "control.run.advance"
+                                                             if step["id"] == _stub_step
                                                              else step["delivery_round"]))
                                   for step in manifest["required_steps"]]}
 claimed_problems = wf_gates.support_report(overclaimed, wf_cli.COMMANDS)
-rec("A16 已交付步骤不得是能力桩", "报 capability stub",
+rec("A16 已交付步骤不得是能力桩", f"报 capability stub（{_stub_step}）",
     claimed_problems[:1],
-    any(p.get("required_step") == "control.run.advance" and "capability stub" in p.get("reason", "")
+    any(p.get("required_step") == _stub_step and "capability stub" in p.get("reason", "")
         for p in claimed_problems))
 missing_round = {"required_steps": [{"id": "task.archived"}]}
 rec("A16 缺交付轮次被拒", "报 delivery_round missing",

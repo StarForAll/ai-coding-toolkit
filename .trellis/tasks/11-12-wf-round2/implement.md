@@ -77,7 +77,7 @@
 |---|---|---|---|---|
 | B4-1 | `definition prepare/validate` | `runs.py` 实装：`parse_definition`（标记唯一 + 紧邻 json 围栏）、`validate_definition`（六阶段：`_schema_problems`/`_local_id_problems`/`_reference_problems`/`_path_problems`/`_skip_problems`/`_completion_problems`）、`prepare`（准备记录 + 未通过草稿保留）、`validate`（只读）；`cli.COMMANDS["definition"]` 换 `_runs_command` | `test_definition.py`（新，18 例）+ `repro/definition-static-check.py`（新，双模） | 单测 18/18 + repro 双模绿 | [x] |
 | B4-2 | 准备记录 | `runs.py::prepare` 写 `.wf/preparations/<id>.json`（`session_key`/`scope_paths`/`authorization`/`definition_refs`/`validation`/`progress`/`wip`/`ended_at`），该目录已是 `scope._is_control_record` 的固定职责控制记录；别的会话持写权 → `WF_WRITER_BUSY` | 同上（断言字段齐全与 drafts 保留） | repro 断言覆盖 | [x] |
-| B5-1 | `run create/locate/pause` | `runs.py::create/locate/pause` + `cli.COMMANDS["run"]` 子动作分派 | `repro/run-create-advance.py`（双模） | [ ] |
+| B5-1 | `run create` / `run locate` | `runs.py`：`creation_problems`/`input_value_problems`（纯判定）、`create`（writer 主记录 + 8 步 + 续做）、`locate`（只读）；`cli.COMMANDS["run"]` 换 `_runs_command`，`SUBACTIONS` 表登记子动作，`definition` 纳入 `ACTIVATION_REQUIRED` | `test_run_create.py`（10 例）、`test_run_locate.py`（4 例）、`repro/run-create-once.py`（双模） | 单测 14/14 + repro 双模绿 + run_all 全绿 | [x]（`pause` 未做，见 B5-3） |
 | B5-2 | `run advance`（含人判/略过/自动建任务与顺序边） | `runs.py::advance` | 同上 + `scripts/tests/wf_runtime/test_run_advance.py` | [ ] |
 | B5-3 | `run terminate` + `finish` | `runs.py::terminate/finish` | `repro/run-terminate.py` | [ ] |
 | B5-4 | `task-rework` | `tasks.py::cmd_task_rework`（新；机制稿 §6.2 全段） | `repro/task-rework.py`（双模：图非法/未完成动作/批准不继承） | [ ] |
@@ -275,3 +275,14 @@ B3–B5（P1 七项能力）、B6 的发行树提交与其余文档同步。原�
 
 - 风险：`writer.acquire` 的 preparation scope 是**首次**在运行期被真实使用，`writer.require_supported()` 只核结构不核语义；要另加一条断言「scope.object 与 scope.preparation 不能同时为空」。
 - 回滚点：`run` 解封单独一次提交；失败只回滚该提交（`git checkout -- payload/lib/wflib/runs.py payload/lib/wflib/cli.py`）。
+
+### B5-1 —— `run create` + `run locate`（2026-11-12）
+
+- 落点：`runs.creation_problems` / `input_value_problems`（纯判定）/ `create` / `_advance_run_create` / `_resume_run_create` / `locate`；`cli` 的 `SUBACTIONS` 表登记 `run` 的子动作，`definition` 进 `ACTIVATION_REQUIRED`。
+- **关闭 §2.3.11 第 ② 项**：`create` 锁内重核准备记录（`session_key` 属本会话、`scope_paths` 覆盖定义、`validation.ok`、未 `ended_at`），再以 `scope={object:{kind:run}, preparation:{...}}` 取写权。
+- 快照 = **原字节**；摘要进实例记录；重入按原意图续做，定义字节变则拒（快照不可重建）。
+- 三个过程中踩到的坑（都记进用例注释）：
+  ① `locate` 的桩函数在文件后面覆盖了新实现（Python 后者生效）——已删桩；
+  ② `_advance_run_create` 里 `actions`/`codes` 未导入（内部错误 70，被 repro 抓到）；
+  ③ repro 的注入一度选「重入建第二个实例」，但那条路被**未结案意图/已绑定/writer 非 idle** 三层同时挡着，任何单点注入都不可达 → 改成「把快照写成非原字节」，目标断言落在**快照必须等于确认的原字节**（机制稿 §7.1）。
+- 未做：`run advance/pause/terminate`（B5-2/B5-3）；`_resume_run_create` 在 creation 文件缺失时以空值续做（登记为后续项）。
