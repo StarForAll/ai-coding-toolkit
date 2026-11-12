@@ -1868,6 +1868,23 @@ def config_mod():
     return config_mod
 
 
+def _runs_command(prefix):
+    """`definition <子动作>` 的分派：子动作取自位置参数，处理器固定在该模块里。"""
+
+    def handler(ctx, args):
+        from . import runs as runs_mod
+
+        sub = (args.positional() or [None])[0]
+        name = f"{sub}" if sub else None
+        if name not in ("prepare", "validate"):
+            raise CliError("WF_PATH_INVALID",
+                           {"reason": f"{prefix} requires a subaction: prepare|validate",
+                            "got": sub})
+        return getattr(runs_mod, name)(ctx, args)
+
+    return handler
+
+
 def _task_command(name):
     def handler(ctx, args):
         from . import tasks as tasks_mod
@@ -2703,7 +2720,7 @@ COMMANDS = {
     "authorize": cmd_authorize,
     "project": cmd_project,
     "verify": cmd_verify,
-    "definition": _unavailable(2, "definition prepare/validate (D03/D11)"),
+    "definition": _runs_command("definition"),
     "run": _unavailable(2, "workflow instances (D03/D11/D12/D13)"),
     "upgrade": _unavailable(3, "upgrade --apply / release identity (D22/D37)"),
 }
