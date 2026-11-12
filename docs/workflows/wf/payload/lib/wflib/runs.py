@@ -1461,6 +1461,118 @@ def _advance_step_done(ctx, run_id, run, step):
     return False
 
 
+PAUSE_STEPS = ("record_reason", "pause_task", "write_run")
+
+
+def pause(ctx, args):
+    """`run pause --run <id> --reason <text>`：受控暂停（机制稿 §7.3、§1.5 的 `paused`）。
+
+    保存**暂停原因与当前步骤**，并把当前步骤的任务一并暂停（清掉它的执行候选）——
+    机制稿 §7.3 明确「实例暂停须保存当前任务的暂停或等待原因及当前步骤，
+    不能只移动游标绕过任务门禁」，所以这里不动 `cursor`。
+
+    **解除路径不在本命令**：机制稿 §2.2 只为任务定义了「暂停/恢复」，实例的解除没有出处
+    （`run` 的子动作表里也没有 resume）。当前 paused 实例的出口是 `run terminate`；
+    是否新增解除入口见任务记录里的待裁项。
+    """
+    from . import actions as actions_mod, cli, lock, session as session_mod, tasks as tasks_mod, writer as writer_mod
+
+    run_id = args.value("--run")
+    reason = args.value("--reason")
+    if not run_id or not isinstance(reason, str) or not reason.strip():
+        raise DefinitionError("WF_PATH_INVALID",
+                              {"reason": "run pause requires --run <id> --reason <text>"})
+    key = ctx.key()
+    with lock.acquire(ctx.root, holder_hint="run pause"):
+        record = ctx.writer() or {}
+        holder = record.get("holder") or {}
+        if record.get("state") != "held" or holder.get("id") != key:
+            raise cli.CliError("WF_WRITER_BUSY", {"holder": holder},
+                               next_="由绑定该实例的会话暂停；他人持有写权时先走交接/恢复出口")
+        scope = (holder.get("scope") or {}).get("object") or {}
+        if scope.get("kind") != "run" or scope.get("id") != run_id:
+            raise DefinitionError("WF_BINDING_MISMATCH",
+                                  {"reason": "writer scope is not this run", "scope": scope})
+        binding = session_mod.load_binding(ctx.root, key) or {}
+        if ((binding.get("object") or {}).get("kind") != "run"
+                or (binding.get("object") or {}).get("id") != run_id):
+            raise DefinitionError("WF_BINDING_MISMATCH",
+                                  {"reason": "session is not bound to this run",
+                                   "binding": binding.get("object")})
+        run = load_run(ctx.root, run_id)
+        if not isinstance(run, dict):
+            raise DefinitionError("WF_HISTORY_UNRESOLVED", {"reason": "run record missing",
+                                                           "run": run_id})
+        if run.get("terminal"):
+            raise DefinitionError("WF_BINDING_MISMATCH",
+                                  {"reason": "run already ended", "terminal": run.get("terminal")})
+        if run.get("paused"):
+            return codes.result("WF_OK", object={"id": run_id},
+                                position_=codes.position(scope="run"),
+                                next_="实例已在暂停态（幂等，不重复写入）",
+                                facts={"run": run_id, "paused": True,
+                                       "paused_reason": run.get("paused_reason")})
+        cursor = run.get("cursor") or {}
+        task_id = cursor.get("task_id")
+        action = actions_mod.new_action("run.pause",
+                                        writer_mod.owner_ref("session", key, scope),
+                                        int(run.get("revision", 0)),
+                                        {"run": run_id, "reason": reason,
+                                         "step": cursor.get("step_id"), "task": task_id},
+                                        steps=list(PAUSE_STEPS),
+                                        head_before=actions_mod.head_of(ctx.root),
+                                        targets=[{"kind": "run", "id": run_id},
+                                                 {"kind": "step", "id": cursor.get("step_id")},
+                                                 {"kind": "task", "id": task_id}])
+        run = dict(run, action=action)
+        records.write_json(run_path(ctx.root, run_id), run)
+        # 当前任务一并暂停（只清执行候选，不改 phase/status、不动游标）
+        paused_task = None
+        if task_id:
+            directory = tasks_mod.task_dir(ctx.root, task_id)
+            task = tasks_mod.load_task(ctx.root, task_id) if directory else None
+            if task is None:
+                raise DefinitionError("WF_HISTORY_UNRESOLVED",
+                                      {"reason": "current task missing", "task": task_id})
+            if not task.get("paused"):
+                task = dict(task, paused=True,
+                            pause_reason={"reason": reason, "at": records.now_str(),
+                                          "by": "run.pause", "run": run_id})
+                tasks_mod.save_task(ctx.root, directory, task)
+            paused_task = task_id
+        run = dict(run, paused=True,
+                   paused_reason={"reason": reason, "at": records.now_str(),
+                                  "session_key": key, "step": cursor.get("step_id")},
+                   action=actions_mod.complete(
+                       action, summary="run.pause",
+                       control_assertion=cli._control_assertion(
+                           ctx, "run.pause", writer_mod.owner_ref("session", key, scope),
+                           action, [f"run:{run_id}"])))
+        records.write_json(run_path(ctx.root, run_id), run)
+    stale = []
+    if not run.get("paused"):
+        stale.append("write_run")
+    if paused_task and not (tasks_mod.load_task(ctx.root, paused_task) or {}).get("paused"):
+        stale.append("pause_task")
+    if not stale and not run.get("paused_reason", {}).get("reason"):
+        stale.append("record_reason")
+    if stale:
+        raise DefinitionError("WF_PERSISTENCE_FAILED",
+                              {"reason": "run.pause step postcondition missing", "steps": stale},
+                              next_="重入 run pause（幂等）")
+    return codes.result(
+        "WF_OK",
+        object={"id": run_id},
+        position_=codes.position(scope="run", step_id=cursor.get("step_id"), task_id=paused_task,
+                                 action_id=run["action"]["id"],
+                                 action_state=run["action"]["state"]),
+        next_="解除路径未定义（机制稿只为任务定义暂停/恢复）：当前出口是 run terminate",
+        facts={"run": run_id, "paused": True, "paused_reason": run["paused_reason"],
+               "paused_task": paused_task, "cursor": cursor,
+               "control_assertion": run["action"]["result"]["control_assertion"]},
+    )
+
+
 def locate(ctx, args):
     """`run locate --run <id>`：只读定位（机制稿 §2.1 的绑定内定位）。"""
     from . import codes, tasks as tasks_mod
@@ -1491,10 +1603,6 @@ def locate(ctx, args):
                                "task_map": run.get("task_map") or {},
                                "sequence_changes": run.get("sequence_changes") or [],
                                "tasks": tasks})
-
-
-def pause(*_args, **_kwargs):
-    raise assets.CapabilityUnavailable("run pause (D13)", ROUND)
 
 
 def terminate(*_args, **_kwargs):
