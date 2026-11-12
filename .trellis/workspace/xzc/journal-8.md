@@ -962,3 +962,26 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 403: wf 第二轮 dogfood 缺陷修正（材料/交付集合/代次/契约一致性）
+<!-- trellis-session: v=2 fp=41390c64dd497f59 -->
+
+**Date**: 2026-11-12
+**Task**: wf 第二轮 dogfood 缺陷修正（材料/交付集合/代次/契约一致性）
+**Branch**: `main`
+
+### Summary
+
+按两份 dogfood 报告的质疑复核结果修正 wf 确定性缺陷：scope.delivery_set 收敛交付集合（含已获批扩面）；review.materialize_delivery 含未跟踪文件、失败进 problems 不再伪装无差异；写权代次记入会话运行态由 require_held 缺省消费；check pass 按复杂度路由 review-launch；review-context 落完整报告骨架；task-approve 帮助取值域改由 decisions.DOMAINS 生成；gitignore 忽略集合以清单为唯一枚举、install 缺字段拒绝。新增 5 组区分性用例并做回退注入自检；两套 unittest 620/315 全绿，full run_all 149 项 0 失败（repro 85/85 green+red），设计与文档检查通过。B/C 两项（脱敏白名单、未提交越界归属通道）登记为后续。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `57afbbbb` | fix(wf): 材料/交付集合/代次与契约一致性（第二轮 dogfood 修正） |
+| `535f3492` | chore(wf): 重建发行树（0.1.0） |
+
+### Status
+
+[OK] **Completed**
