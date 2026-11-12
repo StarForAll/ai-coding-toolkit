@@ -176,17 +176,17 @@ guarded_local_fix:                      # T1c：ZCode 加固（仅当平台存�
 
 ### 2.1 模块源（本仓库）
 
-**模块源占用 `docs/workflows/新项目开发工作流/`**。旧模块已退役（2026-10-28），该路径现为空，由本模块直接新建：
+**模块源占用 `docs/workflows/wf/`**。旧模块已退役（2026-10-28），该路径现为空，由本模块直接新建：
 
 | 状态 | 事实 |
 |---|---|
 | 旧模块 | **已退役**：内容移出仓库、不入库、文档不再引用；版本库保留历史提交以备回溯 |
 | 四个维护 skill | **已退役删除**（`workflow-audit` / `workflow-capability-audit` / `workflow-repair` / `workflow-scan` 及其契约 spec）。等价能力由 `wf doctor`（漂移 / 哨兵 / 债务）、`wf upgrade`、`wf embed-state` 与 W 系列探针承载（§9.5） |
-| 新模块源 | 在 `docs/workflows/新项目开发工作流/` 新建；"仓库内旧路径零残留"是 P0 的完成判据之一 |
+| 新模块源 | 在 `docs/workflows/wf/` 新建；"仓库内旧路径零残留"是 P0 的完成判据之一 |
 
 ```
 docs/workflows/workflow-implementation.md        # 本文件：实现层规范
-docs/workflows/新项目开发工作流/                  # 模块源（下称 <MODULE_SRC>）
+docs/workflows/wf/                  # 模块源（下称 <MODULE_SRC>）
   module.yaml                     # module_version + verified_trellis_range + implements_design + 资产哈希 + skill 根表 + 变体哨兵常量
   workflow.yaml                   # 机器可读的"账本状态 → 变体块 / 下一步"定义（render 与一致性检查共用）
   templates/
@@ -1233,7 +1233,7 @@ f=".zcode/hooks/<script>.py"; d="${ZCODE_PROJECT_DIR:-}"; if [ -z "$d" ] || [ ! 
 | 任务 | 边界（对应 §8.2 的 P0 条目） | 依赖 | 验收要点 | 完成时仍不可用的能力 |
 |---|---|---|---|---|
 | **T1 资产段**（已完成） | ③ 的正文内容（变体）；不建模块源、不写 CLI | — | 临时夹具内 `get_context.py --mode phase` 含哨兵串（W1）、`--mode phase --step <X.Y>` 返回变体正文（W2）；三值块仅 `planning` / `in_progress` / `completed`；含 `<!-- wf:module_version=… -->`；无平台分支、无证据链环节 | 无渲染器、无安装器、无 CLI |
-| **T2 骨架与迁入** | ①② 的"新建模块源骨架"部分；把 T1 的变体迁入 `templates/wf.md.tmpl` | T1 | `docs/workflows/新项目开发工作流/` 只有新模块源，且仓库内旧路径**零残留**；`render` 幂等，渲染物在夹具内 W1/W2 复跑通过 | 有变体源与渲染器、无机制：`wf` 的判定与生命周期命令全部不可用 |
+| **T2 骨架与迁入** | ①② 的"新建模块源骨架"部分；把 T1 的变体迁入 `templates/wf.md.tmpl` | T1 | `docs/workflows/wf/` 只有新模块源，且仓库内旧路径**零残留**；`render` 幂等，渲染物在夹具内 W1/W2 复跑通过 | 有变体源与渲染器、无机制：`wf` 的判定与生命周期命令全部不可用 |
 | **T3 最小闭环机制面** | ⑤⑥⑦⑧⑨⑩⑪⑫，含 M1（账本读取）与 M2（最小 `wf close`） | T2 | 临时目标项目上一条闭环（§8.4 实机验收）`install → task new → start → close → uninstall`，`trellis update --dry-run` 无新增漂移，原生 `archive` 仍可用；当期必需探针全绿；五平台 G0 各自通过 | 任务内部"只读命令面先绿、写命令面后绿"，但首个可见里程碑即"能装能收尾" |
 
 **为什么切在这里**：
@@ -1471,7 +1471,7 @@ R1–R11 见 §8.1，夹具实测见 §8.4。
 | 2026-10-28 | C4、C5、C8、C12、C15 | 采纳建议项 ①：写前洁净 + 文件级即时提交／完全卸载取窄解释（只删模块数据）／ZCode 受管例外 T1c（接受 1 个文件的漂移债务）／账本单文件进库／独立 `uninstall.py` |
 | 2026-10-28 | C14 | 随 C1 裁决：剔除准洁净验证 |
 | 2026-10-28 | C9、C10、C11、C13 | 事实类，已按实测与设计稿改写，无需裁决 |
-| 2026-10-28 | G3（模块源位置） | **改判**：旧模块已退役并移出仓库（不入库、文档不引用）；模块源沿用 `docs/workflows/新项目开发工作流/` 新建 |
+| 2026-10-28 | G3（模块源位置） | **改判**：旧模块已退役并移出仓库（不入库、文档不引用）；模块源沿用 `docs/workflows/wf/` 新建 |
 | 2026-10-28 | M1、M2、M3 | 采纳建议项 ①：账本**读取**与最小 `wf close` 并入 P0；W18 随 `wf edge` 归 P1，W10 / W12 / W14 归 P0；§8.2 两行与探针归属已同步改写 |
 | 2026-10-28 | 四个维护 skill | **退役删除**（`workflow-audit` / `workflow-capability-audit` / `workflow-repair` / `workflow-scan` 及其契约 spec）；等价能力由 `wf doctor` / `wf upgrade` / `embed-state` / W 系列探针承载；删前已摘录通用误报守卫 |
 | 2026-10-28 | `commands/shell/init-trellis-temp-project.sh` | **保留并改写**（原记录写“退役删除”，与事实不符，2026-10-29 更正）：已不再调用旧产品的 `commands/*.py`，改为直接 `trellis init -y --<平台>`；§8.4 继续使用它 |
@@ -1493,7 +1493,7 @@ R1–R11 见 §8.1，夹具实测见 §8.4。
 |---|---|---|
 | G1 | 是否把本文件登记进仓库文档索引（`docs/README.md`；涉及根 `README.md` 时须双语同步） | **改判（2026-10-29 复核）：已登记**——`docs/README.md` 第 13/15/16 行已列 design / implementation / variant 三份；本条按事实更正 |
 | G2 | 旧实现方案的处置 | **已执行（2026-10-28）：已删除并从仓库移除**。本文件已去除对它的全部出处标注与来源映射表；正文自足，删除后无死链 |
-| G3 | 模块源位置 | **已改判（2026-10-28）**：旧模块已退役并移出仓库（内容不入库、文档不引用）；模块源沿用 `docs/workflows/新项目开发工作流/` 新建（§2.1） |
+| G3 | 模块源位置 | **已改判（2026-10-28）**：旧模块已退役并移出仓库（内容不入库、文档不引用）；模块源沿用 `docs/workflows/wf/` 新建（§2.1） |
 | G4 | 关键约束是否沉淀进 `.trellis/spec/` | **已裁决：沉淀**，落 `.trellis/spec/docs/workflow-implementation-constraints.md`（本轮完成） |
 | G5 | 变体 `.trellis/workflows/wf.md` 的正文内容（Phase Index 与设计稿 §4.1 四段的映射、三段入口提示词） | **已裁决（2026-10-28）：正文已产出**，暂存 `docs/workflows/wf-variant.md`（该位置由 §8.2.1 的 T2 迁入 `templates/wf.md.tmpl`）；哨兵串、三值状态块、版本注释行与三层映射见 §8.2.1 |
 | G6 | 是否拆出 P0 实现任务（本文只交付方案，不含代码） | **已裁决（2026-10-28）：拆三段，资产先行**（T1 资产段 → T2 交接与骨架 → T3 最小闭环机制面），边界、依赖与验收见 §8.2.1 |
@@ -1536,11 +1536,11 @@ R1–R11 见 §8.1，夹具实测见 §8.4。
 
 ## 附录 B：路径清单
 
-### B.1 模块源（`docs/workflows/新项目开发工作流/`，旧模块退役后由本模块新建）
+### B.1 模块源（`docs/workflows/wf/`，旧模块退役后由本模块新建）
 
 | 路径 | 作用 |
 |---|---|
-| `docs/workflows/新项目开发工作流/module.yaml` | 版本 + 验证区间 + 实现的设计稿版本 + 资产哈希 + skill 根表 + 哨兵常量 |
+| `docs/workflows/wf/module.yaml` | 版本 + 验证区间 + 实现的设计稿版本 + 资产哈希 + skill 根表 + 哨兵常量 |
 | `…/workflow.yaml` | 账本状态 → 变体块 / 下一步（render 与一致性检查共用） |
 | `…/templates/wf.md.tmpl` | 变体源（含哨兵串与三值状态块） |
 | `…/templates/nl-routing.md` | `AGENTS.md` 块外段源 |
