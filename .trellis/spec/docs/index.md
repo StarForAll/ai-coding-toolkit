@@ -16,6 +16,14 @@ Use this document for:
 
 ---
 
+## wf 模块交付纪律
+
+- [wf Delivery Discipline](./wf-delivery-discipline.md)：轮次收口的逐行核对、机制义务逐句核、
+  双模 repro 契约、单实现纪律、新资产/字段登记链、"有实现无断言"的处理、`run_all` 并行纪律。
+- [wf Design Revision Gate](./wf-design-revision-gate.md)：改机制稿/设计稿的审批闸门。
+
+---
+
 ## Project Identity
 
 This project is a **workflow authoring toolkit** — it creates, maintains, and distributes AI-assisted development workflows. It is not a target project that uses those workflows.
