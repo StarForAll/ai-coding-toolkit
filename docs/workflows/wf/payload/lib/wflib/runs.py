@@ -1798,6 +1798,61 @@ def _grant_paths(subject):
     return []
 
 
+def _terminate_decisions(entries):
+    """批量计划里的全部内联决定（含每条任务附带的提交授权）。"""
+    found = []
+    for entry in entries.values():
+        found.extend(item for item in entry.get("decisions") or [] if isinstance(item, dict))
+    return found
+
+
+def _terminate_preview(ctx, run_id):
+    """异常终止的只读预览（机制稿 §7.4：逐个列出已生成任务、返工/继任者、未生成步骤、已有改动、外部依赖）。
+
+    只读：不写任何记录。人据此填 `--plan`（每个已生成任务一条 `{object, decision_ref, reason}`）。
+    """
+    from . import codes, scope as scope_mod, tasks as tasks_mod
+
+    run = load_run(ctx.root, run_id)
+    if not isinstance(run, dict):
+        raise DefinitionError("WF_HISTORY_UNRESOLVED", {"reason": "run record missing", "run": run_id})
+    if run.get("terminal"):
+        raise DefinitionError("WF_BINDING_MISMATCH",
+                              {"reason": "run already ended", "terminal": run.get("terminal")})
+    text = open(join(ctx.root, f"{RUNS_REL}/{run_id}/definition.md"), "rb").read().decode("utf-8")
+    doc, _problems = parse_definition(text)
+    task_map = run.get("task_map") or {}
+    tasks = []
+    for step_id, mapping in sorted(task_map.items()):
+        task_id = (mapping or {}).get("task_id")
+        task = tasks_mod.load_task(ctx.root, task_id) if task_id else None
+        if not isinstance(task, dict):
+            tasks.append({"step_id": step_id, "task_id": task_id, "unknown": True})
+            continue
+        preview = tasks_mod._abandon_preview(ctx, task)
+        tasks.append({"step_id": step_id, "task_id": task_id,
+                      "status": task.get("status"), "terminal": task.get("terminal"),
+                      "paused": bool(task.get("paused")), "suspended": bool(task.get("suspended")),
+                      "uncommitted": preview.get("uncommitted") or [],
+                      "existing_commits": (preview.get("existing_commits") or [])[:5],
+                      "downstream": preview.get("downstream") or [],
+                      "unfinished_rework": preview.get("unfinished_rework") or []})
+    generated = set(task_map)
+    not_executed = [step["id"] for step in _ordered_steps(doc or {}) if step["id"] not in generated]
+    return codes.result(
+        "WF_OK",
+        object={"id": run_id},
+        position_=codes.position(scope="run", step_id=(run.get("cursor") or {}).get("step_id")),
+        next_="按本预览为每个已生成任务填一条 {object, decision_ref, reason} 后带 --plan 重入；"
+              "有未提交改动的任务需在决定里给 disposition（逐路径去向），否则会被拒且零写入",
+        facts={"run": run_id, "mode": "abnormal", "preview": True,
+               "tasks": tasks, "not_executed_steps": not_executed,
+               "sequence_changes": run.get("sequence_changes") or [],
+               "cursor": run.get("cursor"), "task_map": task_map,
+               "external_dependencies": [{"step": step, "task": (mapping or {}).get("task_id")}
+                                         for step, mapping in sorted(task_map.items())]})
+
+
 def terminate(ctx, args):
     """`run terminate --run <id> --plan <path>`：实例异常终止 + 逐任务处置（机制稿 §7.4）。
 
@@ -1811,9 +1866,13 @@ def terminate(ctx, args):
 
     run_id = args.value("--run")
     plan_path = args.value("--plan")
-    if not run_id or not plan_path:
+    preview_only = args.flag("--preview")
+    if not run_id or (not plan_path and not preview_only):
         raise DefinitionError("WF_PATH_INVALID",
-                              {"reason": "run terminate requires --run <id> --plan <path>"})
+                              {"reason": "run terminate requires --run <id> --plan <path> "
+                                         "（或 --preview 只读列出待处置清单）"})
+    if preview_only:
+        return _terminate_preview(ctx, run_id)
     plan = records.load_json(plan_path)
     if plan is None:
         raise DefinitionError("WF_PATH_INVALID", {"reason": "plan file missing", "path": plan_path})
@@ -1861,9 +1920,17 @@ def terminate(ctx, args):
             if task_id in entries:
                 problems.append({"entry": where, "reason": "duplicate task in plan", "task": task_id})
                 continue
-            decision = item.get("decision_ref")
-            if not isinstance(decision, dict) or not decision.get("choice"):
-                problems.append({"entry": where, "reason": "decision_ref must be an inline Decision",
+            # `decision_ref` 可以是单个 Decision，也可以是 Decision 数组：
+            # 与 `task-abandon` 的 `--decision` 同形——首项是处置决定，其余可带提交授权
+            raw = item.get("decision_ref")
+            candidates = raw if isinstance(raw, list) else [raw]
+            decision = next((entry for entry in candidates
+                             if isinstance(entry, dict)
+                             and TERMINATE_DISPOSITIONS.get(str(entry.get("choice")))), None)
+            if decision is None:
+                problems.append({"entry": where,
+                                 "reason": "decision_ref must contain an inline Decision whose "
+                                           "choice is 放弃/abandon or 保留/keep",
                                  "task": task_id})
                 continue
             disposition = TERMINATE_DISPOSITIONS.get(str(decision.get("choice")))
@@ -1876,7 +1943,8 @@ def terminate(ctx, args):
                 continue
             entries[task_id] = {"decision": decision, "disposition": disposition,
                                 "reason": item["reason"],
-                                "wip": item.get("disposition")}
+                                "wip": item.get("disposition"),
+                                "decisions": [entry for entry in candidates if isinstance(entry, dict)]}
         generated = sorted({(mapping or {}).get("task_id")
                             for mapping in (run.get("task_map") or {}).values()
                             if (mapping or {}).get("task_id")})
@@ -1920,7 +1988,8 @@ def terminate(ctx, args):
                                         int(run.get("revision", 0)),
                                         {"run": run_id, "mode": "abnormal",
                                          "tasks": sorted(entries)},
-                                        steps=["save_closing", "apply_tasks", "write_terminal"],
+                                        steps=["save_closing", "apply_tasks", "write_terminal",
+                                               "persist_record"],
                                         head_before=actions_mod.head_of(ctx.root),
                                         targets=[{"kind": "run", "id": run_id}]
                                                 + [{"kind": "task", "id": task_id}
@@ -1944,8 +2013,10 @@ def terminate(ctx, args):
                 continue
             if entry["disposition"] == "abandon":
                 path = tasks_mod.task_dir(ctx.root, task_id)
+                pass_through = [entry["decision"]] + [item for item in entry["decisions"]
+                                                       if item is not entry["decision"]]
                 payload = tasks_mod._apply_abandon(ctx, task_id, task, path,
-                                                   [entry["decision"]], entry["wip"], holder)
+                                                   pass_through, entry["wip"], holder)
                 if isinstance(payload, dict) and payload.get("code") not in (None, "WF_OK"):
                     # `_apply_abandon` 的软停（缺去向/缺授权）原样上抛；实例保持 closing 待决
                     run = dict(run, closing=dict(run["closing"],
@@ -1979,16 +2050,42 @@ def terminate(ctx, args):
             if step["id"] in step_results:
                 continue
             step_results[step["id"]] = {"kind": "not_executed", "at": records.now_str()}
+        # 终态先落盘：`persist_pending` 表达"目标已成立、固定提交步骤未完成"（机制稿 §5.1）
         run = dict(run, step_results=step_results, terminal="abnormal",
                    ended_at=records.now_str(),
-                   action=actions_mod.complete(
-                       action, summary="run.terminate",
-                       control_assertion=cli._control_assertion(
-                           ctx, "run.terminate", writer_mod.owner_ref("session", key, scope),
-                           action, [f"run:{run_id}"])))
+                   action=dict(action, state="persist_pending", next_step="persist_record"))
         records.write_json(run_path(ctx.root, run_id), run)
+        # ④ 固定提交步骤：有覆盖实例记录的 commit 授权才提交，否则停在 persist_pending
+        record_rel = f"{RUNS_REL}/{run_id}.json"
+        grants = [item for item in _terminate_decisions(entries) if isinstance(item, dict)
+                  and decisions_mod.accepts("commit_grant", item.get("choice"))]
+        from . import paths as paths_mod
+
+        covered = any(path == record_rel or paths_mod.match_path(path, record_rel)
+                      for grant in grants for path in _grant_paths(grant.get("subject")))
+        persisted, commit_result = False, None
+        if covered:
+            commit_result = tasks_mod._commit_paths(
+                ctx.root, [record_rel], f"wf: run terminate {run_id}\n\nwf-task: {run_id}")
+            tracked = subprocess.run(["git", "ls-files", "--error-unmatch", record_rel],
+                                     cwd=str(ctx.root), capture_output=True, text=True, check=False)
+            dirty = subprocess.run(["git", "status", "--porcelain", "--", record_rel],
+                                   cwd=str(ctx.root), capture_output=True, text=True,
+                                   check=False).stdout.strip()
+            persisted = tracked.returncode == 0 and dirty == ""
+        if persisted:
+            run = dict(run, action=actions_mod.complete(
+                dict(run["action"], steps=[{"id": step, "state": "done"}
+                                           for step in run["action"]["steps"]]),
+                summary="run.terminate",
+                control_assertion=cli._control_assertion(
+                    ctx, "run.terminate", writer_mod.owner_ref("session", key, scope),
+                    action, [f"run:{run_id}"])))
+            records.write_json(run_path(ctx.root, run_id), run)
     stale = [step for step in ("save_closing", "apply_tasks", "write_terminal")
              if not _terminate_step_done(ctx, run_id, step, entries)]
+    if not persisted:
+        stale = [step for step in stale if step != "persist_record"]
     if stale:
         raise DefinitionError("WF_PERSISTENCE_FAILED",
                               {"reason": "run.terminate step postcondition missing", "steps": stale},
@@ -1998,12 +2095,15 @@ def terminate(ctx, args):
         object={"id": run_id},
         position_=codes.position(scope="run", action_id=run["action"]["id"],
                                  action_state=run["action"]["state"]),
-        next_="实例已异常终止：保留任务在新会话按 independent_resume 独立接续；"
-              "**只报告退出完成与保留风险，不报告业务验收通过**",
+        next_=("实例已异常终止并持久化：保留任务在新会话按 independent_resume 独立接续；"
+               "**只报告退出完成与保留风险，不报告业务验收通过**"
+               if persisted else
+               "实例已异常终止，但**记录组尚未提交**：给出覆盖该路径的 commit 授权后重入续做"),
         facts={"run": run_id, "terminal": "abnormal", "ended_at": run["ended_at"],
                "closing": run["closing"], "applied": applied,
-               "step_results": run["step_results"],
-               "control_assertion": run["action"]["result"]["control_assertion"]},
+               "step_results": run["step_results"], "persisted": persisted,
+               "record": record_rel, "commit": commit_result,
+               "control_assertion": (run["action"].get("result") or {}).get("control_assertion")},
     )
 
 

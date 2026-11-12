@@ -107,13 +107,25 @@ def check():
 
     # ② 完整计划：A 放弃、B 保留（B 不存在——本实例只生成一个任务，故计划只含它）
     second = os.path.join(root, "second.json")
-    json.dump([{"object": first_task, "decision_ref": _decision("放弃", first_task, digest),
-                "reason": "实例终止，这项工作不再需要"}], open(second, "w"), ensure_ascii=False)
+    record_rel = f".wf/workflow-runs/{run_id}.json"
+    grant = {"object": first_task,
+             "decision_ref": _decision("放弃", first_task, digest),
+             "reason": "实例终止，这项工作不再需要"}
+    # 放弃决定里带上覆盖实例记录的提交授权（`commit`）”的约定：另给一条 commit 决定
+    commit_grant = {"source": "human", "at": "2026-11-12T00:00:00.000000Z",
+                    "subject": [record_rel], "object_digest": digest,
+                    "choice": "commit", "reason": "提交实例终止记录"}
+    json.dump([dict(grant, decision_ref=[grant["decision_ref"], commit_grant])],
+              open(second, "w"), ensure_ascii=False)
     rc, payload = run(["run", "terminate", "--run", run_id, "--plan", second])
     if rc != 0:
         raise H.TargetFailure(f"terminate 失败：{(payload or {}).get('code')} {(payload or {}).get('facts')}")
     facts = (payload or {}).get("facts") or {}
     record = json.load(open(run_path, encoding="utf-8"))
+    if facts.get("persisted") is not True:
+        problems.append(f"有提交授权却未持久化：{facts.get('persisted')} {facts.get('commit')}")
+    if (record.get("action") or {}).get("state") != "done":
+        problems.append(f"提交完成后动作应 done：{(record.get('action') or {}).get('state')}")
     # 目标断言：实例必须落成异常终态
     if record.get("terminal") != "abnormal":
         problems.append("实例未写 terminal=abnormal（目标断言）")
