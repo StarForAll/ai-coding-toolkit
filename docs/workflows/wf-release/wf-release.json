@@ -331,7 +331,7 @@
       "target_relative": ".wf/lib/wflib/taskfiles.py"
     },
     {
-      "digest": "sha256:7fe8b6305c28a0343ce1ebf9ec4f2f73184a6b1f95125e5d71c448c9e2215bc4",
+      "digest": "sha256:cd68a640f48e3125bd4baa519d377ac9061075872dd6f5d38545c0aa3ac538ee",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -801,7 +801,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:31f91ad63fa2de23d913f0798838a3eafcb3011d1df67742aa0469d43f8d0656",
+    "rules_digest": "sha256:b4279c326b9634e1cdbeeaf982a9a110dc13bf09be269a813dc265831e48fe5c",
     "systems": [
       "linux"
     ],

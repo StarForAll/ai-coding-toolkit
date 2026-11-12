@@ -1003,16 +1003,53 @@ def work_satisfied_fact(ctx, task):
     return True, None, {"objects": existing}
 
 
+def pending_delivery_paths(ctx, task):
+    """本任务交付面里**未提交**的路径（`e` 桶 ∩ 未提交）。
+
+    `changes-persisted` 与归档预检消费的是同一个桶——只在这里算一次，避免两处各算一套。
+    """
+    classified = scope.classify_candidates(ctx.root, task, receipts=task_receipts(ctx.root))
+    return sorted(set(classified["buckets"]["e"]) & set(scope.uncommitted_paths(ctx.root)))
+
+
+def commit_grant_paths(task):
+    """本任务提交授权（`commit_grants[].subject`）覆盖的路径集合。"""
+    granted = []
+    for grant in task.get("commit_grants") or []:
+        if isinstance(grant, dict):
+            granted.extend(_subject_paths(grant.get("subject")))
+    return sorted({item for item in granted if item})
+
+
+def uncovered_commit_paths(pending, granted):
+    """待提交路径里没被授权覆盖的那些（唯一口径：完全相等 / 目录前缀 / glob）。"""
+    from . import paths as paths_mod
+
+    def covered(item):
+        return any(item == grant or item.startswith(grant + "/") or paths_mod.match_path(grant, item)
+                   for grant in granted)
+
+    return [item for item in pending if not covered(item)]
+
+
 def changes_persisted_fact(ctx, task):
-    receipts = task_receipts(ctx.root)
-    classified = scope.classify_candidates(ctx.root, task, receipts=receipts)
-    pending = sorted(set(classified["buckets"]["e"]) & set(scope.uncommitted_paths(ctx.root)))
+    pending = pending_delivery_paths(ctx, task)
     if not pending:
         return True, None, {"paths": []}
-    grants = task.get("commit_grants") or []
-    if not grants:
+    granted = commit_grant_paths(task)
+    if not granted:
         return False, "WF_COMMIT_NOT_AUTHORIZED", {"pending_paths": pending}
-    return False, "WF_WIP_UNRESOLVED", {"pending_paths": pending, "grants": len(grants)}
+    uncovered = uncovered_commit_paths(pending, granted)
+    if uncovered:
+        return False, "WF_WIP_UNRESOLVED", {
+            "pending_paths": pending, "uncovered_paths": uncovered, "grants": len(granted)}
+    # D1：授权已覆盖全部待提交路径 ⇒ 这一步**由归档动作完成**（业务提交在 archive 内发生）。
+    # 报 WIP_UNRESOLVED 会把 AI 推向"先手工提交再归档"，而归档自己就会提交同一批路径。
+    return False, "WF_ACTION_INCOMPLETE", {
+        "pending_paths": pending, "granted": granted,
+        "fulfilled_by": "archive_commit", "resumable": True,
+        "exits": ["直接 `wf archive --task <id> --file <提交授权决定>`：归档会提交这些路径并完成本步骤",
+                  "不要先手工提交再归档——归档的提交授权已覆盖同一批路径"]}
 
 
 def archive_precheck(ctx, task):
@@ -1031,8 +1068,6 @@ def archive_precheck(ctx, task):
     返回 `{ok, code, facts, blocking}`；`blocking` 供 `--short` 原样列出"还有哪些确定阻断"。
     """
     from . import gates as gates_mod
-    from . import paths as paths_mod
-    from . import scope as scope_mod
 
     ok, code, facts = gates_mod.final_gate_nonstep(
         ctx, task, ignore_action_id=(task.get("action") or {}).get("id"))
@@ -1047,21 +1082,11 @@ def archive_precheck(ctx, task):
                 "facts": {"missing": missing, "all": findings},
                 "blocking": [{"stage": "steps", "id": item.get("id"), "code": item.get("code"),
                               "facts": item.get("facts")} for item in missing]}
-    grants = task.get("commit_grants") or []
-    granted = []
-    for grant in grants:
-        if isinstance(grant, dict):
-            granted.extend(_subject_paths(grant.get("subject")))
-    # 与 `changes_persisted_fact` 同一桶定义（e ∩ 未提交），但比的是**授权集合**：
+    # 与 `changes_persisted_fact` 同一桶与同一覆盖口径（D1 提取为共享函数）：
     # 提交前存在待提交路径是正常的，只有"授权没覆盖到"才是阻断。
-    classified = scope_mod.classify_candidates(ctx.root, task, receipts=task_receipts(ctx.root))
-    pending = sorted(set(classified["buckets"]["e"]) & set(scope_mod.uncommitted_paths(ctx.root)))
-
-    def covered(item):
-        return any(item == grant or item.startswith(grant + "/") or paths_mod.match_path(grant, item)
-                   for grant in granted if grant)
-
-    uncovered = [item for item in pending if not covered(item)]
+    granted = commit_grant_paths(task)
+    pending = pending_delivery_paths(ctx, task)
+    uncovered = uncovered_commit_paths(pending, granted)
     if uncovered:
         return {"ok": False, "code": "WF_WIP_UNRESOLVED",
                 "facts": {"pending_paths": uncovered, "granted": sorted(set(granted)),
