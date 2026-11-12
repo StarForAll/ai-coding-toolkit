@@ -824,26 +824,34 @@ def assertion_ref_problem(ref, index, changed, fix_kind=None, deprecated=None):
 def broken_reference_problems(lifted, dispositions):
     """`check_fix_kind=broken-reference` 的豁免必须有人复核（2026-11-09 人裁 B）。
 
-    `lifted` 为 import 记录里被声明的 finding（`{finding, assertion_ref, rule}`）；
-    每条都需要同名 disposition 且 `recheck_by` 以 `human:` 开头——框架不验证声明真伪，
-    只保证"声明过的事实一定经过人"。纯函数，便于单测。
+    `lifted` 为 import 记录里被声明的 finding（`{finding, assertion_ref, rule}`，调用方补
+    `round`/`slot`）；每条都需要**同一条 finding** 的 disposition 且 `recheck_by` 以
+    `human:` 开头——框架不验证声明真伪，只保证"声明过的事实一定经过人"。
+
+    A9 的相邻面：匹配按 `(round, slot, finding_id)` 精确身份，不按裸 id——否则同一轮两个
+    槽位报同名 finding 时，一次人复核会把另一条也"顺带豁免"。处置只写 `finding_id` 且
+    命中多条身份时按歧义处理（不豁免），与关闭链同一套 `disposition_keys` 口径。
     """
     if not lifted:
         return []
-    human = set()
-    for item in dispositions or []:
-        if not isinstance(item, dict):
-            continue
-        recheck = item.get("recheck_by")
-        if isinstance(recheck, str) and recheck.strip().lower().startswith("human:"):
-            human.add(str(item.get("finding_id")))
+    keys = [finding_key(item.get("round") or 0, item.get("slot"), item.get("finding"))
+            for item in lifted if isinstance(item, dict)]
+    human_dispositions = [item for item in dispositions or []
+                          if isinstance(item, dict)
+                          and isinstance(item.get("recheck_by"), str)
+                          and item["recheck_by"].strip().lower().startswith("human:")]
+    resolved, _ambiguous, _unknown = disposition_keys(human_dispositions, set(keys))
+    human = set(resolved)
     problems = []
-    for item in lifted:
-        if str(item.get("finding")) not in human:
-            problems.append({"finding": item.get("finding"), "assertion_ref": item.get("assertion_ref"),
-                             "reason": "broken-reference 豁免需人复核：缺 recheck_by=human:<来源>",
-                             "exits": ["为该 finding 补一条 dispositions（decision=accepted，recheck_by=human:<来源>）",
-                                       "或撤回豁免声明，改用未被本任务修改的判据"]})
+    for item, key in zip([entry for entry in lifted if isinstance(entry, dict)], keys):
+        if key in human:
+            continue
+        problems.append({"finding": item.get("finding"), "assertion_ref": item.get("assertion_ref"),
+                         "round": key[0], "slot": key[1],
+                         "reason": "broken-reference 豁免需人复核：缺 recheck_by=human:<来源>",
+                         "exits": ["为该 finding 补一条 dispositions（decision=accepted，recheck_by=human:<来源>）",
+                                   "同一 finding_id 出现在多个槽位时，处置需同时写 round 与 slot",
+                                   "或撤回豁免声明，改用未被本任务修改的判据"]})
     return problems
 
 
@@ -2334,8 +2342,11 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                     facts["reason"] = reasons[0]["reason"]
         # disposition 结构与其"关闭不得自证"（机制稿 §9.2、K4b）
         problems = dispositions_problems(dispositions, proposers)
-        lifted = [item for entry in imported
-                  for item in ((entry.get("broken_reference") or {}).get("lifted") or [])]
+        # A7/A9 相邻面：豁免匹配要带精确身份，读时把条目上的 round/slot 补进 lifted
+        lifted = [dict(item, round=int(entry.get("round") or 0), slot=entry.get("slot"))
+                  for entry in imported
+                  for item in ((entry.get("broken_reference") or {}).get("lifted") or [])
+                  if isinstance(item, dict)]
         problems = problems + broken_reference_problems(lifted, dispositions)
         if problems:
             raise ReviewError("WF_REVIEW_INVALID",
