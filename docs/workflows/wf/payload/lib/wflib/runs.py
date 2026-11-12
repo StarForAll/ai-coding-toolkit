@@ -1576,6 +1576,240 @@ def pause(ctx, args):
 RESUME_STEPS = ("clear_paused", "record_resume")
 
 
+TERMINATE_DISPOSITIONS = {"放弃": "abandon", "abandon": "abandon",
+                          "保留": "keep", "keep": "keep"}
+
+
+def terminate(ctx, args):
+    """`run terminate --run <id> --plan <path>`：实例异常终止 + 逐任务处置（机制稿 §7.4）。
+
+    人的批量计划一次确认：每个已生成任务给一条 `{object, decision_ref, reason}`，
+    `decision_ref` 是内联 `Decision`，其 `choice` 声明处置（`放弃/abandon` 或 `保留/keep`）。
+    **先整批预检、再逐个应用**——任何一项不成立就零写入（含"放弃的任务还有未处置 WIP"）。
+    放弃复用 `tasks._apply_abandon()`（与 `task-abandon` 同一实现）；保留写 `independent_resume`，
+    执行中的先 `paused`；未生成的步骤记 `not_executed`，不建空壳任务。
+    """
+    from . import actions as actions_mod, cli, lock, session as session_mod, tasks as tasks_mod, writer as writer_mod
+
+    run_id = args.value("--run")
+    plan_path = args.value("--plan")
+    if not run_id or not plan_path:
+        raise DefinitionError("WF_PATH_INVALID",
+                              {"reason": "run terminate requires --run <id> --plan <path>"})
+    plan = records.load_json(plan_path)
+    if plan is None:
+        raise DefinitionError("WF_PATH_INVALID", {"reason": "plan file missing", "path": plan_path})
+    if isinstance(plan, dict):
+        plan = [plan]
+    if not isinstance(plan, list) or not plan:
+        raise DefinitionError("WF_SEMANTIC_DECISION",
+                              {"reason": "plan must be a non-empty array of {object, decision_ref, reason}"})
+    key = ctx.key()
+    with lock.acquire(ctx.root, holder_hint="run terminate"):
+        record = ctx.writer() or {}
+        holder = record.get("holder") or {}
+        if record.get("state") != "held" or holder.get("id") != key:
+            raise cli.CliError("WF_WRITER_BUSY", {"holder": holder},
+                               next_="由绑定该实例的会话终止；他人持有写权时先走交接/恢复出口")
+        scope = (holder.get("scope") or {}).get("object") or {}
+        if scope.get("kind") != "run" or scope.get("id") != run_id:
+            raise DefinitionError("WF_BINDING_MISMATCH",
+                                  {"reason": "writer scope is not this run", "scope": scope})
+        binding = session_mod.load_binding(ctx.root, key) or {}
+        if ((binding.get("object") or {}).get("kind") != "run"
+                or (binding.get("object") or {}).get("id") != run_id):
+            raise DefinitionError("WF_BINDING_MISMATCH",
+                                  {"reason": "session is not bound to this run",
+                                   "binding": binding.get("object")})
+        run = load_run(ctx.root, run_id)
+        if not isinstance(run, dict):
+            raise DefinitionError("WF_HISTORY_UNRESOLVED", {"reason": "run record missing",
+                                                           "run": run_id})
+        if run.get("terminal"):
+            raise DefinitionError("WF_BINDING_MISMATCH",
+                                  {"reason": "run already ended", "terminal": run.get("terminal")})
+
+        # ① 计划归一与覆盖核对（未知任务/漏项/重复一律拒，零写入）
+        entries, problems = {}, []
+        for position, item in enumerate(plan):
+            where = f"plan[{position}]"
+            if not isinstance(item, dict):
+                problems.append({"entry": where, "reason": "entry must be an object"})
+                continue
+            task_id = item.get("object")
+            if not isinstance(task_id, str) or not task_id:
+                problems.append({"entry": where, "reason": "object must be a task id"})
+                continue
+            if task_id in entries:
+                problems.append({"entry": where, "reason": "duplicate task in plan", "task": task_id})
+                continue
+            decision = item.get("decision_ref")
+            if not isinstance(decision, dict) or not decision.get("choice"):
+                problems.append({"entry": where, "reason": "decision_ref must be an inline Decision",
+                                 "task": task_id})
+                continue
+            disposition = TERMINATE_DISPOSITIONS.get(str(decision.get("choice")))
+            if disposition is None:
+                problems.append({"entry": where, "reason": "choice must be 放弃/abandon or 保留/keep",
+                                 "task": task_id, "got": decision.get("choice")})
+                continue
+            if not isinstance(item.get("reason"), str) or not item["reason"].strip():
+                problems.append({"entry": where, "reason": "reason must be non-empty", "task": task_id})
+                continue
+            entries[task_id] = {"decision": decision, "disposition": disposition,
+                                "reason": item["reason"],
+                                "wip": item.get("disposition")}
+        generated = sorted({(mapping or {}).get("task_id")
+                            for mapping in (run.get("task_map") or {}).values()
+                            if (mapping or {}).get("task_id")})
+        missing = [task_id for task_id in generated if task_id not in entries]
+        unknown = sorted(set(entries) - set(generated))
+        if missing:
+            problems.append({"reason": "every generated task needs a disposition", "missing": missing})
+        if unknown:
+            problems.append({"reason": "plan names tasks that are not part of this run",
+                             "unknown": unknown, "generated": generated})
+        if problems:
+            raise DefinitionError("WF_SEMANTIC_DECISION",
+                                  {"reason": "termination plan is incomplete or invalid",
+                                   "problems": problems},
+                                  next_="按 problems 补齐计划后重入；本次未写入任何记录")
+
+        # ② 整批预检：放弃项的 WIP 去向必须覆盖，否则零写入（机制稿 §7.4「先校改动处置」）
+        preflight = []
+        for task_id, entry in entries.items():
+            task = tasks_mod.load_task(ctx.root, task_id)
+            if not isinstance(task, dict):
+                raise DefinitionError("WF_HISTORY_UNRESOLVED",
+                                      {"reason": "task record missing", "task": task_id})
+            if task.get("status") == "archived":
+                # 中断后已归档的任务不再次放弃（机制稿 §7.4）
+                preflight.append({"task": task_id, "status": "already_archived",
+                                  "terminal": task.get("terminal")})
+                continue
+            if entry["disposition"] == "abandon":
+                preview = tasks_mod._abandon_preview(ctx, task)
+                uncovered = tasks_mod._uncovered_paths(preview["uncommitted"], entry["wip"])
+                if uncovered:
+                    raise DefinitionError("WF_WORKSPACE_UNRESOLVED",
+                                          {"reason": "abandoned task has un-disposed WIP",
+                                           "task": task_id, "uncovered": uncovered,
+                                           "preview": preview},
+                                          next_="给该任务补 disposition（逐路径去向）后重入；本次未写入任何记录")
+        # ③ 固定关闭意图（closing.mode=abnormal）与动作
+        action = actions_mod.new_action("run.terminate",
+                                        writer_mod.owner_ref("session", key, scope),
+                                        int(run.get("revision", 0)),
+                                        {"run": run_id, "mode": "abnormal",
+                                         "tasks": sorted(entries)},
+                                        steps=["save_closing", "apply_tasks", "write_terminal"],
+                                        head_before=actions_mod.head_of(ctx.root),
+                                        targets=[{"kind": "run", "id": run_id}]
+                                                + [{"kind": "task", "id": task_id}
+                                                   for task_id in sorted(entries)])
+        run = dict(run, action=action,
+                   closing={"mode": "abnormal", "at": records.now_str(),
+                            "decision": [entry["decision"] for entry in entries.values()],
+                            "task_dispositions": {task_id: entry["disposition"]
+                                                   for task_id, entry in entries.items()},
+                            "next_step": None})
+        records.write_json(run_path(ctx.root, run_id), run)
+
+        # ④ 逐 task 应用（放弃复用 `_apply_abandon`；保留写 independent_resume）
+        applied = {}
+        for task_id in sorted(entries):
+            entry = entries[task_id]
+            task = tasks_mod.load_task(ctx.root, task_id)
+            if task.get("status") == "archived":
+                applied[task_id] = {"disposition": entry["disposition"],
+                                    "status": "already_archived", "terminal": task.get("terminal")}
+                continue
+            if entry["disposition"] == "abandon":
+                path = tasks_mod.task_dir(ctx.root, task_id)
+                payload = tasks_mod._apply_abandon(ctx, task_id, task, path,
+                                                   [entry["decision"]], entry["wip"], holder)
+                if isinstance(payload, dict) and payload.get("code") not in (None, "WF_OK"):
+                    # `_apply_abandon` 的软停（缺去向/缺授权）原样上抛；实例保持 closing 待决
+                    run = dict(run, closing=dict(run["closing"],
+                                                 pending={"task": task_id,
+                                                          "code": payload.get("code"),
+                                                          "facts": payload.get("facts")}))
+                    records.write_json(run_path(ctx.root, run_id), run)
+                    return payload
+                applied[task_id] = {"disposition": "abandon", "terminal": "abnormal"}
+            else:
+                directory = tasks_mod.task_dir(ctx.root, task_id)
+                task = dict(task,
+                            independent_resume={"decision": entry["decision"],
+                                                "termination_action": action["id"],
+                                                "reason": entry["reason"]})
+                if task.get("status") == "in_progress" and not task.get("paused"):
+                    task["paused"] = True
+                    task["pause_reason"] = {"reason": "instance terminated; task kept",
+                                            "at": records.now_str(),
+                                            "by": "run.terminate", "run": run_id}
+                tasks_mod.save_task(ctx.root, directory, task)
+                applied[task_id] = {"disposition": "keep", "paused": bool(task.get("paused"))}
+
+        # ⑤ 未生成的步骤记 not_executed（不建空壳任务）
+        doc, _problems = parse_definition(open(join(ctx.root, f"{RUNS_REL}/{run_id}/definition.md"),
+                                               "rb").read().decode("utf-8"))
+        step_results = dict(run.get("step_results") or {})
+        for step in _ordered_steps(doc or {}):
+            if step["id"] in (run.get("task_map") or {}):
+                continue
+            if step["id"] in step_results:
+                continue
+            step_results[step["id"]] = {"kind": "not_executed", "at": records.now_str()}
+        run = dict(run, step_results=step_results, terminal="abnormal",
+                   ended_at=records.now_str(),
+                   action=actions_mod.complete(
+                       action, summary="run.terminate",
+                       control_assertion=cli._control_assertion(
+                           ctx, "run.terminate", writer_mod.owner_ref("session", key, scope),
+                           action, [f"run:{run_id}"])))
+        records.write_json(run_path(ctx.root, run_id), run)
+    stale = [step for step in ("save_closing", "apply_tasks", "write_terminal")
+             if not _terminate_step_done(ctx, run_id, step, entries)]
+    if stale:
+        raise DefinitionError("WF_PERSISTENCE_FAILED",
+                              {"reason": "run.terminate step postcondition missing", "steps": stale},
+                              next_="持写权重入 run terminate（已归档任务不重复放弃）")
+    return codes.result(
+        "WF_OK",
+        object={"id": run_id},
+        position_=codes.position(scope="run", action_id=run["action"]["id"],
+                                 action_state=run["action"]["state"]),
+        next_="实例已异常终止：保留任务在新会话按 independent_resume 独立接续；"
+              "**只报告退出完成与保留风险，不报告业务验收通过**",
+        facts={"run": run_id, "terminal": "abnormal", "ended_at": run["ended_at"],
+               "closing": run["closing"], "applied": applied,
+               "step_results": run["step_results"],
+               "control_assertion": run["action"]["result"]["control_assertion"]},
+    )
+
+
+def _terminate_step_done(ctx, run_id, step, entries):
+    from . import tasks as tasks_mod
+
+    run = load_run(ctx.root, run_id) or {}
+    if step == "save_closing":
+        return (run.get("closing") or {}).get("mode") == "abnormal"
+    if step == "apply_tasks":
+        for task_id, entry in entries.items():
+            task = tasks_mod.load_task(ctx.root, task_id)
+            if not isinstance(task, dict):
+                return False
+            if entry["disposition"] == "abandon" and task.get("status") != "archived":
+                return False
+            if entry["disposition"] == "keep" and not task.get("independent_resume"):
+                return False
+        return True
+    if step == "write_terminal":
+        return run.get("terminal") == "abnormal" and bool(run.get("ended_at"))
+    return False
+
+
 def resume(ctx, args):
     """`run resume --run <id> [--decision <path>]`：解除**实例**暂停（机制稿 §2.2、§7.3）。
 
@@ -1741,10 +1975,6 @@ def locate(ctx, args):
                                "task_map": run.get("task_map") or {},
                                "sequence_changes": run.get("sequence_changes") or [],
                                "tasks": tasks})
-
-
-def terminate(*_args, **_kwargs):
-    raise assets.CapabilityUnavailable("run terminate (D13)", ROUND)
 
 
 def load_definition(*_args, **_kwargs):

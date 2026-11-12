@@ -16,8 +16,9 @@ import _snapshot as S
 import _review_flow as F
 
 SID = "sess-A637"
-FROM = '        uncovered = _uncovered_paths(preview["uncommitted"], disposition)\n'
-TO = '        uncovered = []  # 注入：不核去向覆盖\n'
+# 2026-11-12：放弃本体抽进 `_apply_abandon()` 供 `run terminate` 共用，缩进随之下调一级。
+FROM = '    uncovered = _uncovered_paths(preview["uncommitted"], disposition)\n'
+TO = '    uncovered = []  # 注入：不核去向覆盖\n'
 
 
 def task_record(project, task_id):
