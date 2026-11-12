@@ -1868,6 +1868,13 @@ def config_mod():
     return config_mod
 
 
+# `definition` 与 `run` 的子动作（未交付的仍由 runs.py 抛 `WF_CAPABILITY_UNAVAILABLE`）
+SUBACTIONS = {
+    "definition": ("prepare", "validate"),
+    "run": ("create", "advance", "pause", "locate", "terminate"),
+}
+
+
 def _runs_command(prefix):
     """`definition <子动作>` 的分派：子动作取自位置参数，处理器固定在该模块里。"""
 
@@ -1875,12 +1882,11 @@ def _runs_command(prefix):
         from . import runs as runs_mod
 
         sub = (args.positional() or [None])[0]
-        name = f"{sub}" if sub else None
-        if name not in ("prepare", "validate"):
+        if sub not in SUBACTIONS[prefix]:
             raise CliError("WF_PATH_INVALID",
-                           {"reason": f"{prefix} requires a subaction: prepare|validate",
-                            "got": sub})
-        return getattr(runs_mod, name)(ctx, args)
+                           {"reason": f"{prefix} requires a subaction: "
+                                      f"{'|'.join(SUBACTIONS[prefix])}", "got": sub})
+        return getattr(runs_mod, sub)(ctx, args)
 
     return handler
 
@@ -2721,13 +2727,14 @@ COMMANDS = {
     "project": cmd_project,
     "verify": cmd_verify,
     "definition": _runs_command("definition"),
-    "run": _unavailable(2, "workflow instances (D03/D11/D12/D13)"),
+    "run": _runs_command("run"),
     "upgrade": _unavailable(3, "upgrade --apply / release identity (D22/D37)"),
 }
 
 
 ACTIVATION_REQUIRED = frozenset({
     "dep",
+    "definition",
     "task-approve", "task-start", "task-replan", "task-pause", "task-resume", "task-curate",
     "task-check", "task-knowledge", "task-retrospect", "task-attribute", "task-abandon",
     "task-reassess", "archive", "baseline-apply", "spec-update", "stop",

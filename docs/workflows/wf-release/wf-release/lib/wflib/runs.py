@@ -15,8 +15,9 @@ import hashlib
 import json
 import os
 import re
+import uuid
 
-from . import assets, records
+from . import assets, codes, records
 from .paths import join
 
 ROUND = 2
@@ -756,8 +757,417 @@ def prepare(ctx, args):
                         facts=dict(facts, ok=True))
 
 
-def create(*_args, **_kwargs):
-    raise assets.CapabilityUnavailable("run creation (D03/D11)", ROUND)
+CREATION_FIELDS = ("definition_id", "definition_digest", "inputs", "steps")
+APPLICABILITY = ("applicable", "skipped")
+
+
+def creation_problems(creation, doc=None):
+    """创建输入的结构校验（只做机械判定：缺字段、未知键、取值域）。
+
+    「这个展开规则合不合理」「这步该不该略过」是人的判断，命令只要求它们**被明确声明**。
+    """
+    problems = []
+    if not isinstance(creation, dict):
+        return [{"reason": "creation file must be a JSON object"}]
+    for field in CREATION_FIELDS:
+        if field not in creation:
+            problems.append({"reason": f"creation requires `{field}`", "field": field})
+    workflow_id = creation.get("definition_id")
+    if not isinstance(workflow_id, str) or not ID_RE.match(workflow_id):
+        problems.append({"reason": "definition_id must match [a-z][a-z0-9-]{0,63}",
+                         "field": "definition_id", "got": workflow_id})
+    digest = creation.get("definition_digest")
+    if not isinstance(digest, str) or not digest.startswith("sha256:"):
+        problems.append({"reason": "definition_digest must be a sha256 Digest",
+                         "field": "definition_digest", "got": digest})
+    inputs = creation.get("inputs")
+    if not isinstance(inputs, dict):
+        problems.append({"reason": "inputs must be an object", "field": "inputs"})
+    steps = creation.get("steps")
+    if not isinstance(steps, dict) or not steps:
+        problems.append({"reason": "steps must be a non-empty object of step id -> applicability",
+                         "field": "steps"})
+    elif doc is not None:
+        declared = {step.get("id") for step in doc.get("steps") or []
+                    if isinstance(step, dict) and step.get("id")}
+        for step_id, value in steps.items():
+            if step_id not in declared:
+                problems.append({"reason": "steps names an undeclared step", "step": step_id,
+                                 "declared": sorted(declared)})
+            if value not in APPLICABILITY:
+                problems.append({"reason": f"steps value must be one of {list(APPLICABILITY)}",
+                                 "step": step_id, "got": value})
+    expansion = creation.get("expansion")
+    if expansion is not None and not isinstance(expansion, dict):
+        problems.append({"reason": "expansion must be an object when present", "field": "expansion"})
+    return problems
+
+
+def input_value_problems(doc, values):
+    """按定义的 `inputs` 声明核实际取值（机制稿 §7.2 的「绑定后的实际输入」）。"""
+    problems = []
+    declared = doc.get("inputs") or {}
+    for name, spec in declared.items():
+        required = isinstance(spec, dict) and spec.get("required")
+        if name not in values:
+            if required:
+                problems.append({"reason": "required input missing", "input": name})
+            continue
+        value = values[name]
+        kind = spec.get("type") if isinstance(spec, dict) else None
+        if kind == "text":
+            if not isinstance(value, str):
+                problems.append({"reason": "text input must be a string", "input": name})
+        elif kind == "path":
+            if not isinstance(value, str) or not value.strip():
+                problems.append({"reason": "path input must be a non-empty string", "input": name})
+            else:
+                from . import paths as paths_mod
+
+                try:
+                    paths_mod.normalize(value)
+                except paths_mod.InvalidPath as exc:
+                    problems.append({"reason": f"path input invalid: {exc}", "input": name})
+        elif kind in ("artifact_ref",):
+            if not isinstance(value, dict) or value.get("from") not in ("project", "step"):
+                problems.append({"reason": "artifact_ref must be a project/step reference",
+                                 "input": name, "got": value})
+        elif kind == "secret_ref":
+            if not isinstance(value, dict) or value.get("from") != "secret_ref":
+                problems.append({"reason": "secret_ref input must be a secret reference object "
+                                            "(never a plaintext value)", "input": name,
+                                 "got": type(value).__name__})
+            elif value.get("provider") not in ("env", "host_store"):
+                problems.append({"reason": "secret_ref provider must be env or host_store",
+                                 "input": name, "got": value.get("provider")})
+    unknown = sorted(set(values) - set(declared))
+    if unknown:
+        problems.append({"reason": "inputs not declared by the definition", "inputs": unknown,
+                         "declared": sorted(declared)})
+    return problems
+
+
+def _creation_file(args):
+    from . import records as records_mod
+
+    path = args.value("--creation")
+    if not path:
+        raise DefinitionError("WF_PATH_INVALID", {"reason": "run create requires --creation <path>"})
+    loaded = records_mod.load_json(path)
+    if loaded is None:
+        raise DefinitionError("WF_PATH_INVALID", {"reason": "creation file missing", "path": path})
+    return loaded
+
+
+def _preparation_problems(root, workflow_id, key, definition_rel):
+    """准备范围重核（机制稿 §1.4、§7.2）：本会话确有该定义的有效准备记录。"""
+    problems = []
+    record = records.load_json(preparation_path(root, workflow_id), None)
+    if not isinstance(record, dict):
+        problems.append({"reason": "no preparation record for this definition",
+                         "exit": f"先跑 definition prepare --id {workflow_id}"})
+        return problems
+    if record.get("session_key") != key:
+        problems.append({"reason": "preparation belongs to another session",
+                         "exit": "由原会话创建实例，或在新会话重跑 definition prepare"})
+    if record.get("ended_at"):
+        problems.append({"reason": "preparation already ended",
+                         "exit": f"重新跑 definition prepare --id {workflow_id}"})
+    if definition_rel not in (record.get("scope_paths") or []):
+        problems.append({"reason": "preparation scope does not cover this definition",
+                         "scope_paths": record.get("scope_paths")})
+    if not (record.get("validation") or {}).get("ok"):
+        problems.append({"reason": "preparation validation did not pass",
+                         "problems": (record.get("validation") or {}).get("problems")})
+    return problems
+
+
+RUN_STEPS = ("write_snapshot", "write_run", "acquire_writer", "bind")
+
+
+def _run_step_done(ctx, key, targets, step):
+    """各步的真实后置（不看步骤字段）：文件/记录存在且内容对得上。"""
+    run_id = targets.get("run")
+    if not run_id:
+        return False
+    if step == "write_snapshot":
+        snapshot = join(ctx.root, f"{RUNS_REL}/{run_id}/definition.md")
+        digest = targets.get("definition-digest")
+        return os.path.isfile(snapshot) and (
+            "sha256:" + records.sha256_hex(open(snapshot, "rb").read()) == digest)
+    if step == "write_run":
+        record = load_run(ctx.root, run_id)
+        return isinstance(record, dict) and record.get("terminal", "missing") is None
+    if step == "acquire_writer":
+        record = ctx.writer() or {}
+        holder = record.get("holder") or {}
+        scope = (holder.get("scope") or {}).get("object") or {}
+        return (record.get("state") == "held" and holder.get("id") == key
+                and scope.get("kind") == "run" and scope.get("id") == run_id)
+    if step == "bind":
+        from . import session as session_mod
+
+        binding = session_mod.load_binding(ctx.root, key) or {}
+        return ((binding.get("object") or {}).get("kind") == "run"
+                and (binding.get("object") or {}).get("id") == run_id)
+    return False
+
+
+def _write_run_snapshot(ctx, run_id, text):
+    """完整快照：原字节落 `definition.md`（机制稿 §1.5 的 `snapshot_path`）。"""
+    directory = join(ctx.root, f"{RUNS_REL}/{run_id}")
+    os.makedirs(directory, exist_ok=True)
+    path = os.path.join(directory, "definition.md")
+    records.atomic_write(path, text)
+    return path
+
+
+def create(ctx, args):
+    """`run create --creation <path>`：建立实例、固定定义快照、首次绑定（机制稿 §7.2）。
+
+    writer 上的**单一 `run.create` 父动作**承载：意图与写权授予同一次写入，中断按原意图续做
+    （目标一次固定，不从当前请求重建）。实例创建只取得「规划权限」——不代批准业务、不建任务。
+    """
+    from . import actions as actions_mod, cli, lock, session as session_mod, writer as writer_mod
+
+    creation = _creation_file(args)
+    session = ctx.session()
+    key = ctx.key()
+    code, profile_facts = session_mod.check_platforms(ctx.platforms(), session)
+    if code:
+        raise cli.CliError(code, profile_facts, next_="install --platform <当前宿主> 后重试")
+    if not isinstance(creation, dict):
+        raise DefinitionError("WF_SEMANTIC_DECISION",
+                              {"problems": creation_problems(creation)})
+    workflow_id = creation.get("definition_id")
+    text, definition_abs = _definition_text(ctx.root, workflow_id or "")
+    if text is None:
+        raise DefinitionError("WF_PATH_INVALID",
+                              {"reason": "definition file missing",
+                               "expected": f"{USER_WORKFLOWS_REL}/{workflow_id}.md"})
+    doc, problems = parse_definition(text)
+    if doc is not None:
+        problems = validate_definition(doc, ctx.root, workflow_id=workflow_id)
+    problems = problems + creation_problems(creation, doc)
+    if problems:
+        raise DefinitionError("WF_DEFINITION_INVALID",
+                              {"problems": problems, "reason": "creation or definition invalid"})
+    digest = "sha256:" + records.sha256_hex(text.encode("utf-8"))
+    if creation.get("definition_digest") != digest:
+        raise DefinitionError("WF_SEMANTIC_DECISION",
+                              {"reason": "definition content changed since it was confirmed",
+                               "confirmed": creation.get("definition_digest"), "current": digest,
+                               "exits": ["按当前内容重新确认后重试", "把定义改回已确认的版本"]})
+    value_problems = input_value_problems(doc, creation.get("inputs") or {})
+    if value_problems:
+        raise DefinitionError("WF_SEMANTIC_DECISION",
+                              {"reason": "bound inputs do not satisfy the definition",
+                               "problems": value_problems})
+    definition_rel = f"{USER_WORKFLOWS_REL}/{workflow_id}.md"
+    problems = _preparation_problems(ctx.root, workflow_id, key, definition_rel)
+    if problems:
+        raise DefinitionError("WF_SEMANTIC_DECISION",
+                              {"reason": "preparation scope does not authorise this creation",
+                               "problems": problems},
+                              next_=f"先跑 definition prepare --id {workflow_id}（校验通过后重试）")
+
+    with lock.acquire(ctx.root, holder_hint="run create"):
+        record = ctx.writer() or {}
+        pending = record.get("action") or {}
+        if pending.get("kind") == "run.create" and pending.get("state") != "done":
+            if (record.get("holder") or {}).get("id") != key:
+                raise cli.CliError("WF_WRITER_BUSY",
+                                   {"reason": "unfinished run.create intent owned by another session"},
+                                   next_="由原会话重入续做，或走受控恢复")
+            return _resume_run_create(ctx, key, session, record, pending, text)
+        if session_mod.load_binding(ctx.root, key):
+            raise DefinitionError("WF_BINDING_MISMATCH",
+                                  {"reason": "session already bound",
+                                   "object": (session_mod.load_binding(ctx.root, key) or {}).get("object")},
+                                  next_="继续当前对象用 continue/bind；要开新实例请在新会话里选")
+        cli.assert_no_foreign_wip(ctx, exclude_id=None)
+        if record.get("state") != "idle":
+            raise cli.CliError("WF_WRITER_BUSY", {"holder": record.get("holder")})
+
+        run_id = uuid.uuid4().hex
+        record_rel = f"{RUNS_REL}/{run_id}.json"
+        snapshot_rel = f"{RUNS_REL}/{run_id}/definition.md"
+        for candidate in (join(ctx.root, record_rel), join(ctx.root, f"{RUNS_REL}/{run_id}")):
+            if os.path.exists(candidate):
+                raise cli.CliError("WF_TARGET_COLLISION", {"path": _rel(ctx.root, candidate)})
+        instance_id = session.get("instance_id") or session_mod.new_instance_id()
+        inputs = {"run": run_id, "definition": definition_rel, "digest": digest,
+                  "inputs_digest": records.plain_digest(creation.get("inputs") or {})}
+        owner_scope = {"object": {"kind": "run", "id": run_id},
+                       "preparation": {"id": workflow_id, "scope_paths": [definition_rel]}}
+        updated = writer_mod.acquire(record, kind="session", ident=key, scope=owner_scope,
+                                     checkpoint={"step": "run-create", "at": records.now_str()})
+        action = actions_mod.new_action("run.create", writer_mod.owner_ref(
+            "session", key, owner_scope), int(updated.get("revision", 0)), inputs,
+            steps=list(RUN_STEPS), head_before=actions_mod.head_of(ctx.root),
+            targets=[{"kind": "writer", "id": "writer"},
+                     {"kind": "run", "id": run_id},
+                     {"kind": "binding", "id": key},
+                     {"kind": "instance", "id": instance_id},
+                     {"kind": "definition", "id": workflow_id},
+                     {"kind": "definition-digest", "id": digest}])
+        action["steps"] = [{"id": step, "state": "pending"} for step in RUN_STEPS]
+        updated = dict(updated)
+        updated["action"] = action
+        writer_mod.save(ctx.root, updated)
+        return _advance_run_create(ctx, key, session, updated, action, text, creation,
+                                   workflow_id, digest, instance_id)
+
+
+def _advance_run_create(ctx, key, session, record, action, text, creation,
+                        workflow_id, digest, instance_id):
+    from . import actions as actions_mod, cli, session as session_mod, writer as writer_mod
+
+    targets = {item.get("kind"): item.get("id") for item in action.get("targets") or []
+               if isinstance(item, dict)}
+    run_id = targets.get("run")
+    # ① 快照与记录：内容来自**本次确认的定义字节**（digest 已在锁外核过，这里再核一次防漂移）
+    current = "sha256:" + records.sha256_hex(text.encode("utf-8"))
+    if current != digest:
+        raise DefinitionError("WF_SEMANTIC_DECISION",
+                              {"reason": "definition changed between confirmation and creation",
+                               "confirmed": digest, "current": current})
+    _write_run_snapshot(ctx, run_id, text)
+    run_record = {
+        "schema_version": 1,
+        "id": run_id,
+        "workflow_id": workflow_id,
+        "definition": {"workflow_id": workflow_id,
+                       "content_version": (parse_definition(text)[0] or {}).get("content_version"),
+                       "format_version": 1,
+                       "snapshot_path": f"{RUNS_REL}/{run_id}/definition.md",
+                       "digest": digest},
+        "inputs": creation.get("inputs") or {},
+        "creation_decision": {"source": "human", "at": records.now_str(),
+                              "steps": creation.get("steps") or {},
+                              "expansion": creation.get("expansion")},
+        "cursor": None,
+        "step_results": {},
+        "task_map": {},
+        "sequence_changes": [],
+        "pending": None,
+        "paused": False,
+        "closing": None,
+        "terminal": None,
+        "ended_at": None,
+    }
+    records.write_json(run_path(ctx.root, run_id), run_record)
+    # ② 绑定（首次绑定；`bind` 不承担首次创建，这里由 run.create 父动作承载）
+    binding = {
+        "schema_version": 1,
+        "id": key,
+        "revision": 0,
+        "created_at": records.now_str(),
+        "updated_at": records.now_str(),
+        "write_mark": None,
+        "action": None,
+        "identity": {"provider": session["provider"], "value": session["identity"]},
+        "instance_id": instance_id,
+        "object": {"kind": "run", "id": run_id},
+        "bound_at": records.now_str(),
+    }
+    session_mod.save_binding(ctx.root, key, binding)
+    cli._sync_attachment_instance(ctx, key, instance_id)
+    session_mod.write_runtime(ctx.root, key, {
+        "binding_digest": records.plain_digest(binding),
+        "instance_id": instance_id,
+        "object": {"kind": "run", "id": run_id},
+        "current_task": None,
+        "cursor": None,
+    })
+    # ③ 步骤后置逐个核（手工标 done 不能代替产物）
+    action = dict(action)
+    action["steps"] = [{"id": step, "state": "done"} for step in RUN_STEPS]
+    action = dict(action, state="applying", next_step=None)
+    record = dict(record)
+    record["action"] = action
+    writer_mod.save(ctx.root, record)
+    stale = [step for step in RUN_STEPS if not _run_step_done(ctx, key, targets, step)]
+    if stale:
+        raise DefinitionError("WF_PERSISTENCE_FAILED",
+                              {"reason": "run.create step postcondition missing", "steps": stale},
+                              next_="重入 run create 续做缺失后置（不按当前参数重建）")
+    assertion = cli._control_assertion(
+        ctx, "run.create", writer_mod.owner_ref("session", key, (record.get("holder") or {}).get("scope")),
+        action, [f"run:{run_id}"])
+    action = actions_mod.complete(action, summary="run.create", control_assertion=assertion)
+    record["action"] = action
+    record["write_mark"] = cli._write_mark(
+        ctx, "run.create", writer_mod.owner_ref("session", key, (record.get("holder") or {}).get("scope")),
+        (record.get("holder") or {}).get("generation"), action.get("head_before"),
+        ["run"], action)
+    writer_mod.save(ctx.root, record)
+    return codes.result(
+        "WF_OK",
+        object={"id": run_id},
+        position_=codes.position(scope="run", step_id=None, action_id=action.get("id"),
+                                 action_state=action.get("state")),
+        next_="下一步 run advance 推进首个适用步骤（当前仍是未交付能力）",
+        facts={"run": {"id": run_id, "workflow_id": workflow_id, "digest": digest,
+                       "snapshot": f"{RUNS_REL}/{run_id}/definition.md"},
+               "generation": record.get("generation"),
+               "instance_id": instance_id,
+               "binding": {"kind": "run", "id": run_id},
+               "steps": [step for step in RUN_STEPS],
+               "control_assertion": assertion},
+    )
+
+
+def _resume_run_create(ctx, key, session, record, action, text):
+    """按**原意图**续做：目标取自 action.targets，定义字节若已变则拒（快照不可重建）。"""
+    targets = {item.get("kind"): item.get("id") for item in action.get("targets") or []
+               if isinstance(item, dict)}
+    digest = targets.get("definition-digest")
+    current = "sha256:" + records.sha256_hex(text.encode("utf-8"))
+    if current != digest:
+        raise DefinitionError("WF_SEMANTIC_DECISION",
+                              {"reason": "definition changed after the interrupted creation",
+                               "intent": digest, "current": current,
+                               "exits": ["把定义改回原版本后重入", "放弃该意图后重新 create"]})
+    workflow_id = targets.get("definition")
+    creation = records.load_json(join(ctx.root, f"{RUNS_REL}/{targets.get('run')}.creation.json"), {}) or {}
+    if not creation:
+        # 意图里的输入摘要与步骤适用性取自本次动作固定值；不再要求 creation 文件仍在
+        creation = {"inputs": {}, "steps": {}, "definition_id": workflow_id}
+    return _advance_run_create(ctx, key, session, record, action, text, creation,
+                               workflow_id, digest, targets.get("instance"))
+
+
+def locate(ctx, args):
+    """`run locate --run <id>`：只读定位（机制稿 §2.1 的绑定内定位）。"""
+    from . import codes, tasks as tasks_mod
+
+    run_id = args.value("--run")
+    if not run_id:
+        raise DefinitionError("WF_PATH_INVALID", {"reason": "run locate requires --run <id>"})
+    run = load_run(ctx.root, run_id)
+    if not isinstance(run, dict):
+        raise DefinitionError("WF_HISTORY_UNRESOLVED",
+                              {"reason": "run record missing or unreadable", "run": run_id})
+    tasks = []
+    for step_id, mapping in sorted((run.get("task_map") or {}).items()):
+        task_id = (mapping or {}).get("task_id")
+        record = tasks_mod.load_task(ctx.root, task_id) if task_id else None
+        tasks.append({"step_id": step_id, "task_id": task_id,
+                      "status": (record or {}).get("status"),
+                      "phase": (record or {}).get("phase"),
+                      "unknown": record is None})
+    return codes.result("WF_OK", object={"id": run_id},
+                        position_=codes.position(scope="run"),
+                        next_="按 cursor 与 step_results 判断下一步",
+                        facts={"run": {key: run.get(key) for key in
+                                       ("id", "workflow_id", "terminal", "paused", "ended_at")},
+                               "definition": run.get("definition"),
+                               "cursor": run.get("cursor"),
+                               "step_results": run.get("step_results") or {},
+                               "task_map": run.get("task_map") or {},
+                               "sequence_changes": run.get("sequence_changes") or [],
+                               "tasks": tasks})
 
 
 def advance(*_args, **_kwargs):
@@ -766,10 +1176,6 @@ def advance(*_args, **_kwargs):
 
 def pause(*_args, **_kwargs):
     raise assets.CapabilityUnavailable("run pause (D13)", ROUND)
-
-
-def locate(*_args, **_kwargs):
-    raise assets.CapabilityUnavailable("run locate (D13)", ROUND)
 
 
 def terminate(*_args, **_kwargs):
