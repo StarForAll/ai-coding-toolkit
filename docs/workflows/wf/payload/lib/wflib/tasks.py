@@ -4172,19 +4172,236 @@ def cmd_spec_update(ctx, args):
 # --------------------------------------------------------------------------
 
 
+def bind_task_for_write(ctx, task_id):
+    """任务的写入口绑定核验：普通任务绑任务本身；**实例内的任务**绑实例且 `cursor.task_id` 指向它。
+
+    机制稿 §6.1：在途实例的任务只可由绑定该实例且游标正确的会话推进，不得直接以 task 绑定选取。
+    返回 `("task"|"run", run_or_None, holder)`，供决策类入口（返工/复评）共用。
+    """
+    from . import session as session_mod
+
+    key = ctx.key()
+    binding = session_mod.load_binding(ctx.root, key)
+    if not binding:
+        raise TaskError("WF_BINDING_MISMATCH", {"reason": "no binding", "session_key": key},
+                        next_="由人先用 wf-start 选择对象")
+    object_ref = binding.get("object") or {}
+    if object_ref.get("id") == task_id and object_ref.get("kind") == "task":
+        _require_instance_match(ctx, binding)
+        return "task", None, ctx.require_held(task=task_id)
+    task = load_task(ctx.root, task_id) or {}
+    run_id = task.get("run_id")
+    if run_id and object_ref.get("kind") == "run" and object_ref.get("id") == run_id:
+        from . import runs as runs_mod
+
+        run = runs_mod.load_run(ctx.root, run_id)
+        if not isinstance(run, dict):
+            raise TaskError("WF_HISTORY_UNRESOLVED", {"reason": "run record missing", "run": run_id})
+        if run.get("terminal"):
+            raise TaskError("WF_BINDING_MISMATCH",
+                            {"reason": "run already ended", "terminal": run.get("terminal")})
+        cursor = run.get("cursor") or {}
+        if cursor.get("task_id") != task_id:
+            raise TaskError("WF_BINDING_MISMATCH",
+                            {"reason": "instance cursor is not on this task",
+                             "cursor": cursor, "task": task_id},
+                            next_="只推进游标所指的任务；换任务先 run advance")
+        _require_instance_match(ctx, binding)
+        return "run", run, ctx.require_held(run=run_id)
+    raise TaskError("WF_BINDING_MISMATCH", {"bound": object_ref, "requested": task_id})
+
+
+def rework_set(root, task_id):
+    """返工集合：所有 `rework_of=T` 的活动与归档记录（机制稿 §6.2）。"""
+    members = []
+    for _path, other in iter_tasks(root):
+        if other.get("rework_of") == task_id:
+            members.append(other)
+    return members
+
+
+def reassess_problems(root, task):
+    """挂起复评的四条条件（机制稿 §6.2，逐条给事实，不做优先级遮蔽）。"""
+    task_id = task.get("id")
+    members = rework_set(root, task_id)
+    conditions = [
+        {"condition": "task_suspended", "ok": bool(task.get("suspended")),
+         "fact": {"suspended": bool(task.get("suspended"))}},
+        {"condition": "rework_set_non_empty", "ok": bool(members),
+         "fact": {"members": sorted(item.get("id") for item in members)}},
+        {"condition": "rework_set_all_archived", "ok": bool(members) and all(
+            item.get("status") == "archived" for item in members),
+         "fact": {"unarchived": sorted(item.get("id") for item in members
+                                       if item.get("status") != "archived")}},
+        {"condition": "prerequisites_satisfied", "ok": not dependency_blockers(root, task),
+         "fact": {"unmet": dependency_blockers(root, task)}},
+        {"condition": "no_pending_action", "ok": actions.pending(task) is None,
+         "fact": {"action": (task.get("action") or {}).get("kind"),
+                  "state": (task.get("action") or {}).get("state")}},
+    ]
+    return conditions
+
+
 def cmd_task_reassess(ctx, args):
-    """首轮：挂起集合为空，直接通过；第二轮交付完整复评路径。"""
+    """挂起复评（机制稿 §6.2）：条件逐条核，满足则清 `suspended`（保留 `paused`）。
+
+    未持写权只报「待复评」，不夺权；条件不满足不是失败——那正是"还在等返工"的正常状态，
+    所以返回 `waiting` 与逐条事实，而不是造一个原因码。
+    """
+    from . import lock
+
     task_id = args.value("--task")
     if not task_id:
         raise TaskError("WF_PATH_INVALID", {"reason": "task-reassess requires --task <id>"})
-    task = _load_or_fail(ctx, task_id)
+    _scope_kind, _run, holder = bind_task_for_write(ctx, task_id)
+    with lock.acquire(ctx.root, holder_hint="task-reassess"):
+        holder = ctx.require_held(**({"task": task_id} if _scope_kind == "task"
+                                    else {"run": (_run or {}).get("id")}))[1]
+        path = _require_task_dir(ctx, task_id)
+        task = records.load_json(os.path.join(path, "task.json"))
+        if task.get("status") == "archived":
+            raise TaskError("WF_BINDING_MISMATCH", {"reason": "task archived", "task": task_id})
+        if not task.get("suspended"):
+            return codes.result(
+                "WF_OK", object={"id": task_id, "name": task.get("title")},
+                position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
+                next_="该任务未挂起，无需复评（幂等）",
+                facts={"reassessed": False, "suspended": False,
+                       "conditions": reassess_problems(ctx.root, task)})
+        conditions = reassess_problems(ctx.root, task)
+        unmet = [item["condition"] for item in conditions if not item["ok"]]
+        if unmet:
+            return codes.result(
+                "WF_OK", object={"id": task_id, "name": task.get("title")},
+                position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
+                next_="返工尚未全部归档或前置未满足：保持挂起，待复评（清挂起只在这些条件成立时发生）",
+                facts={"reassessed": False, "waiting": True, "unmet": unmet,
+                       "conditions": conditions})
+        task["suspended"] = False
+        # 清挂起保留 paused；若因此会出现第二个执行候选，同时记 paused + 等待人恢复（机制稿 §6.2）
+        others = [other for _p, other in iter_tasks(ctx.root)
+                  if other.get("id") != task_id and other.get("status") == "in_progress"
+                  and not other.get("paused") and not other.get("suspended")]
+        waiting_for_human = bool(others) and not task.get("paused")
+        if waiting_for_human:
+            task["paused"] = True
+            task["pause_reason"] = {"reason": "reassessment done; another candidate is running",
+                                    "at": records.now_str(), "by": "task.reassess"}
+        inputs = {"task": task_id, "cleared": True}
+        task, action = _start_task_action(ctx, path, task, "task.transition", holder, inputs,
+                                          ["recheck_conditions", "clear_suspended"])
+        task, assertion = _finish_task_action(ctx, path, task, "task.transition", holder, inputs,
+                                              action, evidence_refs=[f"reassess:{task_id}"])
+    return codes.result(
+        "WF_OK", object={"id": task_id, "name": task.get("title")},
+        position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
+        next_=("已清挂起；因另有执行候选，本任务同时置暂停，等待人恢复"
+               if waiting_for_human else "已清挂起；按就绪选择恢复"),
+        facts={"reassessed": True, "suspended": False, "paused": bool(task.get("paused")),
+               "waiting_for_human": waiting_for_human, "conditions": conditions,
+               "control_assertion": assertion})
+
+
+REWORK_CHOICES = ("rework", "返工")
+
+
+def cmd_task_rework(ctx, args):
+    """返工（机制稿 §6.2）：建 R 并让 T 挂起，R 独立批准/开工，不消费 T 的批准。
+
+    在 T 的动作里**一次固定完整候选**（R 继承 T 的原前置与 `rework_of=T`、T 的 `prerequisites`
+    增 R 且 `suspended=true`）；先预检目标碰撞与候选图，再落盘。同实例时在 `sequence_changes`
+    登记并让 `cursor.task_id` 临时定位 R（T 不自动 paused）；普通任务绑定则 T 显式暂停并释放写权，
+    由新会话绑定 R。
+    """
+    from . import cli, lock
+
+    task_id = args.value("--task")
+    decision_path = args.value("--decision")
+    if not task_id or not decision_path:
+        raise TaskError("WF_PATH_INVALID", {"reason": "task-rework requires --task <id> --decision <path>"})
+    decisions = cli._load_decision(decision_path)
+    decision = decisions[0]
+    if str(decision.get("choice") or "") not in REWORK_CHOICES:
+        raise TaskError("WF_SEMANTIC_DECISION",
+                        {"reason": "rework decision choice must be 返工/rework",
+                         "got": decision.get("choice"), "accepted": list(REWORK_CHOICES)})
+    _scope_kind, _run, holder = bind_task_for_write(ctx, task_id)
+    with lock.acquire(ctx.root, holder_hint="task-rework"):
+        holder = ctx.require_held(**({"task": task_id} if _scope_kind == "task"
+                                    else {"run": (_run or {}).get("id")}))[1]
+        path = _require_task_dir(ctx, task_id)
+        task = records.load_json(os.path.join(path, "task.json"))
+        if task.get("status") == "archived" or task.get("terminal"):
+            raise TaskError("WF_BINDING_MISMATCH",
+                            {"reason": "archived object does not accept rework", "task": task_id})
+        if task.get("suspended"):
+            raise TaskError("WF_SEMANTIC_DECISION",
+                            {"reason": "task already suspended by another rework", "task": task_id})
+        # 预检：R 的目标、候选图（T 的新前置集合 = 原前置 + R）
+        rework = new_task_record("ordinary", f"{task.get('title') or task_id}（返工）")
+        rework_id = rework["id"]
+        rework["rework_of"] = task_id
+        rework["prerequisites"] = list(task.get("prerequisites") or [])
+        directory = join(ctx.root, f"{TASKS_REL}/{dir_name(rework_id, rework['title'])}")
+        staging = join(ctx.root, f"{TASKS_REL}/.staging-{rework_id}")
+        if os.path.exists(directory) or os.path.exists(staging):
+            raise cli.CliError("WF_TARGET_COLLISION", {"path": directory})
+        graph = _prerequisite_graph(ctx.root)
+        graph[task_id] = list(task.get("prerequisites") or []) + [rework_id]
+        graph[rework_id] = list(rework["prerequisites"])
+        cycle = _find_cycle(graph, task_id)
+        if cycle:
+            raise TaskError("WF_DEPENDENCY_UNMET",
+                            {"reason": "candidate graph has a cycle", "cycle": cycle})
+        same_instance = bool(task.get("run_id"))
+        inputs = {"task": task_id, "rework": rework_id, "same_instance": same_instance,
+                  "decision": decision}
+        task, action = _start_task_action(
+            ctx, path, task, "task.rework", holder, inputs,
+            ["preflight_graph", "create_rework", "suspend_task", "update_sequence"])
+        tasks_mod_publish = _publish_task_tree
+        tasks_mod_publish(ctx, directory, staging,
+                          join(ctx.root, ".wf/templates/task"), rework)
+        task["prerequisites"] = list(task.get("prerequisites") or []) + [rework_id]
+        task["suspended"] = True
+        sequence = []
+        if same_instance:
+            from . import runs as runs_mod
+
+            run = runs_mod.load_run(ctx.root, task["run_id"])
+            if isinstance(run, dict) and not run.get("terminal"):
+                step_id = next((sid for sid, mapping in (run.get("task_map") or {}).items()
+                                if (mapping or {}).get("task_id") == task_id), None)
+                sequence = list(run.get("sequence_changes") or []) + [{
+                    "kind": "rework", "step_id": step_id, "source_task": task_id,
+                    "task_id": rework_id, "resume_task": task_id, "decision": decision}]
+                run = dict(run, sequence_changes=sequence,
+                           cursor={"step_id": step_id, "task_id": rework_id})
+                runs_mod.save_run(ctx.root, run)
+        task, assertion = _finish_task_action(
+            ctx, path, task, "task.rework", holder, inputs, action,
+            evidence_refs=[f"rework:{rework_id}"])
+    paused_for_handover = not same_instance
+    if paused_for_handover:
+        task = dict(task, paused=True,
+                    pause_reason={"reason": "rework handover", "at": records.now_str(),
+                                  "by": "task.rework", "rework": rework_id})
+        save_task(ctx.root, path, task)
     return codes.result(
         "WF_OK",
         object={"id": task_id, "name": task.get("title")},
-        position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
-        next_="无挂起任务；继续当前步骤",
-        facts=_reassess_empty_set(ctx, task_id),
-    )
+        position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id,
+                                 action_id=task["action"]["id"],
+                                 action_state=task["action"]["state"]),
+        next_=("同一实例：cursor 已临时定位到 R，完成 R 后 task-reassess 恢复 T"
+               if same_instance else
+               "T 已暂停：释放写权后在新会话绑定 R（R 须独立批准与开工，不消费 T 的批准）"),
+        facts={"task": task_id, "rework": rework_id,
+               "directory": os.path.relpath(directory, str(ctx.root)).replace(os.sep, "/"),
+               "prerequisites": task["prerequisites"], "suspended": True,
+               "same_instance": same_instance, "sequence_changes": sequence,
+               "paused_for_handover": paused_for_handover,
+               "control_assertion": assertion})
 
 
 def wip_paths(task):
