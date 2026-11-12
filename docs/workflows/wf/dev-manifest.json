@@ -400,12 +400,6 @@
       "executable": false,
       "kind": "skill",
       "required": true,
-      "source_path": "skills/wf-judging/SKILL.md"
-    },
-    {
-      "executable": false,
-      "kind": "skill",
-      "required": true,
       "source_path": "skills/wf-repair-loop/SKILL.md"
     },
     {

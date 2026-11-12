@@ -2078,20 +2078,18 @@ COMMAND_HELP = {
     "judgments": {"purpose": "判断清单：add 追加一条（append-only）/ show 渲染收工预览",
                   "args": {"add|show": "子命令", "--task": "任务 id（必填）", "--file": "判断 JSON（add 必填）"},
                   "example": "wf.py judgments show --task 2026-xxxx --json",
-                  # v42 §4：判断指引写进 SKILL 与 help，不写进代码逻辑。
-                  # 这里只放"去哪读 + 十条的清单"，正文在 skill `wf-judging`，避免两份漂移。
+                  # v42 §4：判断指引写进 skill 与 help，不写进代码逻辑。
+                  # 2026-11-12 人裁：**不单独成 skill**——十条散在"用得上它的那一步"的流程 skill 判据位上，
+                  # 这里只给「哪条口径在哪」的指针；同一口径的完整论述只写一处，不跨文件复制。
                   "guidance": {
-                      "where": "skill `wf-judging`（十条，每条：目标/判断什么/留什么依据/人怎么挑战/本项目反例）",
-                      "topics": ["4.1 交付面：哪些文件算本次交付",
-                                 "4.2 blocking 关闭：证据要指回那个问题",
-                                 "4.3 影响面：缺口能不能接受风险（required 不行）",
-                                 "4.4 扩面：碰批准面之外的文件（先确认再改）",
-                                 "4.5 标准变更：改的是尺子还是判断",
-                                 "4.6 变化规模：一次看见累计量（首任务必确认）",
-                                 "4.7 报告有效性：沿用必须点名 d: 位置",
-                                 "4.8 标准缺失：检索范围 + 影响 + 建议",
-                                 "4.9 未核实项：收窄要四项依据，required 不得接受风险",
-                                 "4.10 与用户限制冲突：停下报告，不自行取舍"],
+                      "where": "各流程 skill 的判据位点（不另设指引 skill）",
+                      "topics": ["交付面 → `wf-continue` 实施期要自己判的几件事",
+                                 "扩面（先确认再改）→ `wf-continue` 同上",
+                                 "与人的限制冲突（停下报告）→ `wf-continue` 同上 / 各 skill「纪律」",
+                                 "blocking 关闭：证据指回问题 → `wf-repair-loop` 0 节",
+                                 "报告有效性：沿用必须点名 d: 位置 → `wf-review-action`",
+                                 "影响面 / 规模 / 计划没覆盖的缺口 / 未核实项 → `wf-finish` 收工四项",
+                                 "标准变更：改的是尺子还是判断 → `wf-spec-update`"],
                       "escalate": "判断不了就 write outcome=escalated + 一个具体问题；人回答后用新条目 supersedes 收口"}},
     "lint": {"purpose": "报告一次性全量预检（格式/轴/verdict 一致性/引用/回执），不是门禁",
              "args": {"report": "子命令（唯一支持值）", "--file": "报告路径", "--task": "任务 id（给定时可核批准集合与规则状态）"},
